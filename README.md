@@ -7,7 +7,7 @@ Simple but Strong Deep Baseline Algorithms for NLP
 A few strong, deep baseline algorithms for several common NLP tasks,
 including sentence classification and tagging problems.  Considerations are conceptual simplicity, efficiency and accuracy.
 
-After considering other strong, shallow baselines, we have found that even incredibly simple, moderately deep models perform better.  These models are only slightly more complex to implement than strong baselines such as shingled SVMs and NBSVMs, and support multi-class output easily.
+After considering other strong, shallow baselines, we have found that even incredibly simple, moderately deep models often perform better.  These models are only slightly more complex to implement than strong baselines such as shingled SVMs and NBSVMs, and support multi-class output easily.
 
 # Sentence Classification using CMOT Model
 
@@ -17,18 +17,16 @@ This code provides (at the moment) a pure Lua/Torch7 implementation -- no prepro
 
 *Details*
 
-This is essentially the Collobert "Sentence Level Approach" architecture, but using off-the-shelf Word2Vec embeddings.  It comes in two flavors, static and dynamic.  This is inspired by Yoon Kim's paper "Convolutional Neural Networks for Sentence Classification", and differs only in its use of a single filter size.
+This is essentially the Collobert "Sentence Level Approach" architecture, but using off-the-shelf Word2Vec embeddings.  It comes in two flavors, static and dynamic.  This is inspired by Yoon Kim's paper "Convolutional Neural Networks for Sentence Classification", and differs in that it uses a single filter size, doesnt bother with random initialized weights, and doesnt do the multi-channel embeddings.
 
-Hidden unit sizes are configurable.  This code offers several optimization options (adagrad, adadelta, adam and vanilla sgd).  The Kim paper uses adadelta, which seems to work best for fine-tuning.  Input signals are always padded to account for the filter width, so edges are still handled.
+Hidden unit sizes are configurable.  This code offers several optimization options (adagrad, adadelta, adam and vanilla sgd).  The Kim paper uses adadelta, which seems to work best for fine-tuning, but vanilla SGD often works great for static embeddings.  Input signals are always padded to account for the filter width, so edges are still handled.
 
-Despite the simplicity of these approaches, we have found that on many datasets this performs better than other strong baselines such as NBSVM, ad often performs as well as the multiple filter approach. It seems that the optimization method and the embeddings matter quite a bit: for example, on the Trec QA, we have seen accuracy as high as 94% on static and 94.8% on fine tuning -- much higher than what is reported in the Kim paper, and on par with the SVM (Silva et al. 2011).  This is important since the QA dataset was one of the only sets reported in Kim where shallow methods out-performed deep methods.
-
-Additionally, we have used this on a fair split (descending rank sampled) version of the politeness Wiki corpus, and have beaten the baseline and extended implementations (https://github.com/sudhof/politeness), as well as a very competitive NBSVM implementation, even using static embeddings.
+Despite the simplicity of these approaches, we have found that on many datasets this performs better than other strong baselines such as NBSVM, ad often performs just as well as the multiple filter approach given by Kim. It seems that the optimization method and the embeddings matter quite a bit: for example, on the Trec QA, we have seen accuracy as high as 94% on static and 94.8% on fine tuning -- much higher than what is reported in the Kim paper, and on par with the SVM (Silva et al. 2011).  This is important since the QA dataset was one of the only sets reported in Kim where shallow methods out-performed deep methods.
 
 Here are some places where CMOT is known to perform well
 
   - Binary classification of sentences (SST binary task)
-  - Binary classification of Tweets (SemEval binary splits)
+  - Binary classification of Tweets (SemEval balanced binary splits)
   - Stanford Politeness Corpus
   - Language Detection
   - Question Categorization (QA trec)
