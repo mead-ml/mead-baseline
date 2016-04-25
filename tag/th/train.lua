@@ -104,8 +104,8 @@ function trainTaggerEpoch(crit, model, ts, optmeth, options)
 	  local pred = model:forward(x)
 	  local err = crit:forward(pred, y)
 	  epochErr = epochErr + err
-	  local dEdy = crit:backward(pred, y)
-	  model:backward(x, dEdy)
+	  local grad = crit:backward(pred, y)
+	  model:backward(x, grad)
 
 	  if options.clip and options.clip > 0 then
 	     dEdw:clamp(-options.clip, options.clip)

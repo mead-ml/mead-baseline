@@ -41,8 +41,8 @@ function trainEpoch(crit, model, ts, optmeth, confusion, options)
 	     confusion:add(pred[j], y[j])
 	  end
   
-	  local dEdy = crit:backward(pred, y)
-	  model:backward(x, dEdy)
+	  local grad = crit:backward(pred, y)
+	  model:backward(x, grad)
 	  return err, dEdw
        end
        
