@@ -28,7 +28,7 @@ Here are some places where CMOT is known to perform well
   - Binary classification of sentences (SST2 - SST binary task)
     - Consistently beats RNTN using static embeddings, much simpler model
   - Binary classification of Tweets (SemEval balanced binary splits)
-    - Consistent improvement over NBSVM even with char-ngrams included and distance lexicons (using [NBSVM-XL](https://github.com/dpressel/nbsvm-xl))
+    - Consistent improvement over NBSVM even with char-ngrams included and distance lexicons (compared using [NBSVM-XL](https://github.com/dpressel/nbsvm-xl))
   - Stanford Politeness Corpus
     - Consistent improvement over [extended algorithm](https://github.com/sudhof/politeness) from authors using a fair split (descending rank heldout)
   - Language Detection (using word and char embeddings)
