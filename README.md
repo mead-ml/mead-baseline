@@ -46,7 +46,7 @@ Also note that for static implementations, batch size and optimization methods c
 
 ## Dynamic - Fine Tuning Lookup Tables pretrained with Word2Vec
 
-The fine-tuning approach uses the expected LookupTable layer.  It seems that when using fine-tuning, adadelta performs best.  As in the Kim paper suggests, it seems that the Dynamic models do not always out-perform static models, and they have additional baggage due to LookupTable size which may make them cumbersome to use as baselines.
+The fine-tuning approach uses the expected LookupTable layer.  It seems that when using fine-tuning, adadelta performs best.  As we can see from the Kim paper, it seems that the dynamic fine-tuning models do not always out-perform static models, and they have additional baggage due to LookupTable size which may make them cumbersome to use as baselines.  However, if tuned properly, they often can out-perform the static models slightly.
 
 We provide an option to cull non-attested features from the LookupTable for efficiency.
 
