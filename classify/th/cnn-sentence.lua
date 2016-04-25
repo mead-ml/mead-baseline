@@ -23,7 +23,7 @@ torch.setdefaulttensortype('torch.FloatTensor')
 -- provide reasonable args for any algorithm a user selects
 -----------------------------------------------------
 DEF_TSF = './data/TREC.train.all'
-DEF_EST = './data/TREC.test.all'
+DEF_ESF = './data/TREC.test.all'
 DEF_BATCHSZ = 10
 DEF_OPTIM = 'sgd'
 DEF_ETA = 0.01

@@ -25,7 +25,7 @@ torch.setdefaulttensortype('torch.FloatTensor')
 -- provide reasonable args for any algorithm a user selects
 -----------------------------------------------------
 DEF_TSF = './data/TREC.train.all'
-DEF_EST = './data/TREC.test.all'
+DEF_ESF = './data/TREC.test.all'
 DEF_BATCHSZ = 10
 DEF_OPTIM = 'adadelta'
 DEF_ETA = 0.001
@@ -33,9 +33,9 @@ DEF_MOM = 0.0
 DEF_DECAY = 1e-9
 DEF_MXLEN = 100
 DEF_ESZ = 300
-DEF_CONV_ESZ = 200
+DEF_HSZ = 200
 DEF_EMBED = './data/GoogleNews-vectors-negative300.bin'
-EEF_FILE_OUT = './cnn-sentence.model';
+DEF_FILE_OUT = './cnn-sentence.model'
 DEF_FSZ = 5
 DEF_PATIENCE = 50
 DEF_EPOCHS = 1000

@@ -21,15 +21,18 @@ This is essentially the Collobert "Sentence Level Approach" architecture, but us
 
 Hidden unit sizes are configurable.  This code offers several optimization options (adagrad, adadelta, adam and vanilla sgd).  The Kim paper uses adadelta, which seems to work best for fine-tuning, but vanilla SGD often works great for static embeddings.  Input signals are always padded to account for the filter width, so edges are still handled.
 
-Despite the simplicity of these approaches, we have found that on many datasets this performs better than other strong baselines such as NBSVM, ad often performs just as well as the multiple filter approach given by Kim. It seems that the optimization method and the embeddings matter quite a bit: for example, on the Trec QA, we have seen accuracy as high as 94% on static and 94.8% on fine tuning -- much higher than what is reported in the Kim paper, and on par with the SVM (Silva et al. 2011).  This is important since the QA dataset was one of the only sets reported in Kim where shallow methods out-performed deep methods.
+Despite the simplicity of these approaches, we have found that on many datasets this performs better than other strong baselines such as NBSVM, and often performs just as well as the multiple filter approach given by Kim. It seems that the optimization method and the embeddings matter quite a bit: for example, on the Trec QA, we tend to see the exact same performance for fine-tuning (93.6%), but have seen accuracy as high as 94% on static and 94.8% on fine tuning -- much higher than what is reported in the Kim paper.
 
 Here are some places where CMOT is known to perform well
 
-  - Binary classification of sentences (SST binary task)
+  - Binary classification of sentences (SST2 - SST binary task)
+    - Consistently beats RNTN with static embeddings, much simpler model
   - Binary classification of Tweets (SemEval balanced binary splits)
+    - Consistent improvement over NBSVM even with char-ngrams included and distance lexicons (using [NBSVM-XL](https://github.com/dpressel/nbsvm-xl)
   - Stanford Politeness Corpus
-  - Language Detection
-  - Question Categorization (QA trec)
+    - Consistent improvement over [extended algorithm](https://github.com/sudhof/politeness) from authors using a fair split (descending rank heldout)
+  - Language Detection (using word and char embeddings)
+  - Question Categorization (QA trec) (93-94% static, 93.6-94.8% dynamic)
   
 ## cnn-sentence -- static, no LookupTable layer
 
@@ -37,13 +40,20 @@ This is an efficient implementation of static embeddings, a separate program and
 
 For handling data with high word sparsity, and for data where morphological features are useful, we also provide a very simple solution that occasionally does improve results -- we simply use the average of character vectors generated using word2vec and concatenate this vector.  This is an option in the fixed embeddings version only.  This is useful for problems like Language Detection, for example
 
-For static implementations, batch size and optimization methods can be quite simple.  Often batch sizes of 1-10 with vanilla SGD produce terrific results.
+There is another project on Github from Harvard NLP which recreates the Kim model (https://github.com/harvardnlp/sent-conv-torch) -- if you are going for a high-quality, albeit more complex algorithm, you should look there.  Note that if you are going to use static embeddings though, their code is not likely as efficient for since it uses the same code as for dynamic models, which requires that torch backpprogates through the weights, after which they zero out the gradients.
+
+Also note that for static implementations, batch size and optimization methods can be quite simple.  Often batch sizes of 1-10 with vanilla SGD produce terrific results.
 
 ## Dynamic - Fine Tuning Lookup Tables pretrained with Word2Vec
 
 The fine-tuning approach uses the expected LookupTable layer.  It seems that when using fine-tuning, adadelta performs best.  As in the Kim paper suggests, it seems that the Dynamic models do not always out-perform static models, and they have additional baggage due to LookupTable size which may make them cumbersome to use as baselines.
 
 We provide an option to cull non-attested features from the LookupTable for efficiency.
+
+## Running It
+
+You can get some sample data from the Harvard NLP [sent-conv-torch project](https://github.com/harvardnlp/sent-conv-torch).
+
 
 # Structured Prediction using RNNs
 
