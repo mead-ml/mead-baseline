@@ -17,7 +17,7 @@ This code provides (at the moment) a pure Lua/Torch7 implementation -- no prepro
 
 *Details*
 
-This is essentially the Collobert "Sentence Level Approach" architecture, but using off-the-shelf Word2Vec embeddings.  It comes in two flavors, static and dynamic.  This is inspired by Yoon Kim's paper "Convolutional Neural Networks for Sentence Classification", and differs in that it uses a single filter size, doesnt bother with random initialized weights, and doesnt do the multi-channel embeddings.
+This is essentially the Collobert "Sentence Level Approach" architecture, but using off-the-shelf Word2Vec embeddings.  It comes in two flavors, static and dynamic.  This is inspired by Yoon Kim's paper "Convolutional Neural Networks for Sentence Classification", and differs in that it uses a single filter size, doesn't bother with random initialized embeddings options, and doesn't do the multi-channel embeddings.
 
 Hidden unit sizes are configurable.  This code offers several optimization options (adagrad, adadelta, adam and vanilla sgd).  The Kim paper uses adadelta, which seems to work best for fine-tuning, but vanilla SGD often works great for static embeddings.  Input signals are always padded to account for the filter width, so edges are still handled.
 
