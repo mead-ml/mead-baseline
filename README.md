@@ -21,7 +21,7 @@ This is essentially the Collobert "Sentence Level Approach" architecture, but us
 
 Hidden unit sizes are configurable.  This code offers several optimization options (adagrad, adadelta, adam and vanilla sgd).  The Kim paper uses adadelta, which seems to work best for fine-tuning, but vanilla SGD often works great for static embeddings.  Input signals are always padded to account for the filter width, so edges are still handled.
 
-Despite the simplicity of these approaches, we have found that on many datasets this performs better than other strong baselines such as NBSVM, and often performs just as well as the multiple filter approach given by Kim. It seems that the optimization method and the embeddings matter quite a bit: for example, on the Trec QA, we tend to see the exact same performance for fine-tuning (93.6%), but also get the same using SGD with no fine tuning, but have seen accuracy as high as 94% on static and 94.8% on fine tuning -- much higher than what is reported in the Kim paper.
+Despite the simplicity of these approaches, we have found that on many datasets this performs better than other strong baselines such as NBSVM, and often performs just as well as the multiple filter approach given by Kim. It seems that the optimization method and the embeddings matter quite a bit. For example, on the Trec QA, we tend to see the exact same performance for fine-tuning as the Kim paper (93.6%), but also get the same using SGD with no fine tuning.  Due to random shuffling, we have seen accuracy as high as 94% on static and 94.8% on fine tuning -- much higher than what is reported in the Kim paper.
 
 Here are some places where CMOT is known to perform well
 
