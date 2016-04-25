@@ -1,4 +1,5 @@
 require 'nn'
+require 'optim'
 require 'xlua'
 
 function createCrit(gpu)

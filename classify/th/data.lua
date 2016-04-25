@@ -16,10 +16,26 @@ function labelSent(line)
    return label,text
 end
 
--- Convert a table to a batch, where width is longest sentence,
--- and shorter sentences are zero-padded at end.  
--- Doesnt have to be full size if
--- not enough data to fill: our code supports partial batches
+-- Average letter vectors over word
+function word2chvec(w2cv, w)
+
+    local csz = w2cv.dsz
+    local wcv = torch.zeros(csz)
+    local sf = 1./(#w + 1)
+    for i=1,#w do
+        local ch = w:sub(i, i)
+        local z = w2cv:lookup(ch) * sf
+	wcv = wcv + z
+    end
+    return wcv
+end
+
+--[[
+  Convert a table to a batch, where width is longest sentence,
+  and shorter sentences are zero-padded at end.  
+  Doesnt have to be full size if
+  not enough data to fill: our code supports partial batches
+--]]
 function convertToBatch(tx, ty)
    local tlen = 0
    local dsz = tx[1]:size(2)
@@ -36,10 +52,13 @@ function convertToBatch(tx, ty)
    return bx, by
 end
 
--- Convert a table to a batch index, where width is longest sentence,
--- and shorter sentences are padded using special token <PADDING>
--- Doesnt have to be full size if
--- not enough data to fill: our code supports partial batches
+--[[
+  Convert a table to a batch index, where width is longest sentence,
+  and shorter sentences are padded using special token <PADDING>
+  Doesnt have to be full size if
+  not enough data to fill: our code supports partial batches
+--]]
+
 function convertToBatchIndices(w2v, tx, ty)
    local tlen = 0
    for i=1,#tx do
@@ -63,8 +82,10 @@ function convertToBatchIndices(w2v, tx, ty)
    return torch.Tensor(bx), by
 end
 
--- Build a vocab by processing all these files and generating a table
--- of form {["hello"]=1, ..., ["world"]=1}
+--[[
+  Build a vocab by processing all these files and generating a table
+  of form {["hello"]=1, ..., ["world"]=1}
+--]]
 function buildVocab(files)
     local vocab = {}
 
@@ -192,9 +213,11 @@ function loadTemporalEmb(file, w2v, f2i, options)
     return ts, f2i
 end
 
--- Same code as above, but here we generate indices for sparse vectors
--- Not fully formed dense representation feature vectors
--- This is used by Dynamic CNN
+--[[
+  Same code as above, but here we generate indices for sparse vectors
+  Not fully formed dense representation feature vectors
+  This is used by dynamic embedding (fine-tuned) CNN
+--]]
 function loadTemporalIndices(file, w2v, f2i, options)
     local ts = {}
     local yt = {}

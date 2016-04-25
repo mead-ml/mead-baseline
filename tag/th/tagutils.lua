@@ -5,7 +5,9 @@ require 'xlua'
 function optimMethod(opt)
 
    print('Trying to use optim method: ' .. opt.optim)
-   state = {
+   local optmeth = nil
+
+   local state = {
       learningRate = opt.eta,
       weightDecay = opt.decay
    }
@@ -15,7 +17,7 @@ function optimMethod(opt)
       optmeth = optim.sgd
    elseif opt.optim == 'adagrad' then
       optmeth = optim.adagrad
-   elseif opt.optim == 'adadelta' then
+  elseif opt.optim == 'adadelta' then
       state.rho = 0.95
       state.eps = 1e-6
       optmeth = optim.adadelta
@@ -48,7 +50,6 @@ function saveModel(model, file, gpu)
    torch.save(file, model)
    if gpu then model:cuda() end
 end
-   
 
 -- NaNs?
 function hasNaN(t)
@@ -61,3 +62,4 @@ function exists(name)
    local f=io.open(name,"r")
    if f~=nil then io.close(f) return true else return false end
 end
+

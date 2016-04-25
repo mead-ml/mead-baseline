@@ -56,7 +56,7 @@ end
 --------------------------
 -- Command line handling
 --------------------------
-cmd = torch.CmdLine()
+local cmd = torch.CmdLine()
 cmd:text('Parameters for Static CMOT Network')
 cmd:text()
 cmd:text('Options:')
