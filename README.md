@@ -65,7 +65,7 @@ th cnn-sentence.lua -eta 0.01 -batchsz 10 -decay 1e-9 -epochs 200 -train /home/d
 Here is an example of parameterization of dynamic fine tuning (cnn-sentence-fine.lua) with SGD achieving final accuracy of *93.6-94.8%*
 
 ```
-th cnn-sentence-fine.lua -cullunused -eta 0.001 -optim adadelta -patience 50 -batchsz 10 -decay 1e-9 -epochs 1000 -train /home/dpressel/dev/work/sent-conv-torch/data/TREC.train.all -eval /home/dpressel/dev/work/sent-conv-torch/data/TREC.test.all -embed /data/xdata/GoogleNews-vectors-negative300.bin
+th cnn-sentence-fine.lua -cullunused -optim adadelta -patience 50 -batchsz 10 -decay 1e-9 -epochs 1000 -train /home/dpressel/dev/work/sent-conv-torch/data/TREC.train.all -eval /home/dpressel/dev/work/sent-conv-torch/data/TREC.test.all -embed /data/xdata/GoogleNews-vectors-negative300.bin
 ```
 
 # Structured Prediction using RNNs
