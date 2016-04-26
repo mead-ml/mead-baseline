@@ -1,0 +1,600 @@
+1	Are you sure to have more than 4 images node ? Also are you the one behind http www.drupality.be ?
+1	Thanks ! Why not in refrigerator ? Does that do harm ?
+1	Why the hell was this migrated from SO What made them think it belonged here ?
+1	@George what the key thing needed to make the widgets ? And how do the wf_ functions work ?
+1	What an interesting idea . I'll ponder it more . Have you ever seen this done for real ?
+1	Thanks @BMitch would you suggest the spray insulation sorry not sure of the correct term . Or would that be too compact and not work for sound proofing ?
+1	At what point in this process did you discover the MBP was unplugged ? Is the problem continuing to happen after the MBP is fully recharged ?
+1	Gradient of a velocity vector ? Do you expect a rank-2 tensor
+1	Why 5 things ? Why not 3 or 7 ?
+1	Any particular reason you're after a Nikon ? Is it just so you can borrow your friend lenses ?
+1	Are you sure it WordPress autocomplete ? Do you get a different result with a different browser ?
+1	Hey can this thing emit human language ? I mean like words ?
+1	What FTP software are you use ? What authentication methods ?
+1	why do you want to view the code ? Maybe if you give a better description of what you want to do :)
+1	What happens if you export the layer to a gdb featureclass does it have coordinates ? Does the exported fc spatialreference match that of zlevels ?
+1	But still what do you want to measure with CV and in what purpose ? To get a cutoff of attribute number ?
+1	Depends do you want it to actually respond to commands ? Or just gauge yelling ?
+1	Hello Narendra . What is your question exactly ?
+1	Knives where are you ?
+1	A clarification Do you want generalisations in the sense that feasible solutions are matchings but your objective function is different from the usual max weight matchings something like the case of stable marriages ? Or generalisations in the sense that feasible solutions are also some kind of generalisations or relaxations of matchings something like independent sets or fractional matchings ?
+1	Good point . What about in non sushi applications ? Should I always rinse rice ? or is it OK not to rinse when I'm not making sushi ?
+1	How about this Probably a lot I had better get started pull out a pad and pencil What will you be eating for dinner tonight ? start writing Okay well I better get on the phone to find out about everyone else what is the long distance code for your phones
+1	@andrej can you accept g s answer http apple.stackexchange.com questions/8491/mail app and multiple copies of emails/8580#8580 ?
+1	What platform ? PC or XBox ?
+1	@noldorin then the physicists in question really should start reading up on it or be prepared to get left behind ! What standards are we expecting from physicists that they strive to be the very best in what they do or that they be satisfied with mediocrity ?
+1	Hello bkildow and welcome to _Drupal Answers_ . To which Drupal version are you interested ?
+1	+1 for Python . Maybe consider doing this for some other SE sites ?
+1	It might be good to give some more context What kind of computer ? What operating system version ?
+1	@Charles Can you elaborate on the idea with the tagged PDFs ? Could it be possible to export the annotations from a tagged PDF and then use this to make changes to my original LaTeX sources ?
+1	Matt H comment covers the how . As for Is it legal ...
+1	A photo might help . Into what does the vent screw ?
+1	Your question is phrased badly as it is both a double negative and infers that we can read your mind . What you meant to say I think is Can you help me understand the meaning of this quote
+1	What exactly do you mean by platform ? Are you looking for product you will run on servers framework library to incorporate into own web app or 3rd party service ?
+1	Great question too bad none of the answers have any clues to the origin though . There must be countless words which can approximate one second so why the name of a southern US state ?
+1	I've created another question to track the single speed portion of the question . http bicycles.stackexchange.com questions/1983  Here we can talk about why no freewheel
+1	If all you want is just to make money you'd better stay off from programming . How about becoming a popular actress ?
+1	@conmulligan thanks for the heads up are there any plans to let people login ? slos I noticed that when i searched a tag and and selected it i got old topics that had new answers first rather than just the newest topics is that intentional ?
+1	Note that this fix is only for the US Captivate and Vibrant Galaxy S variants . Presumably Samsung are releasing this as a stop gap until they or the networks get round to releasing 2.2 for those Galaxy S variants ?
+1	These are the SC1 hotkeys but it is tagged and titled with SC2 . Which one is the mistake ?
+1	Does it occur only when they are plugged into the same circuit as the lighting ? Or any time they are in close proximity to the lighting ?
+1	I find it interesting claim that when using film size gives any other advantage than resolution . If the emulsion is the same how can it have more dynamic range ?
+1	You never said why you want to do this . What the problem with the current setup ?
+1	I don't think it needs the Homework tag as even though this is homework the question and answer would be the same regardless of the source . Do other people have to tag their questions in regards to their current occupation on the project ?
+1	ps ef shows all foreground processes for me . Which OS are you running on ?
+1	Welcome to IT Security . Do you have any security concern questions about SLIP ?
+1	Surprising how many examples are about topology and geometry . Are we just more surprised by these two topics ?
+1	This doesn't really make any sense . Are the word documents going to be downloaded from links on the site or do they just contain text FOR the site ?
+1	Are you absolutely sure that you want to do this in Latex ? What about writing a simple script in Python Perl or whatever scripting language you prefer that reads your report and generates Latex code ?
+1	@user12739 Give us more information please . What problem are you having exactly ?
+1	The link you gave isn't a repository but a page with links to the repositories for various fedora versions . Did you try those links or did you somehow try to use the link you gave as though it was the repository ?
+1	Initrd requires at least one file system driver be compiled into the kernel .. I dint get much idea on this . Could you please explain this ??
+1	I think I need some more sleep did anyone else read this as Please take this question seriously . I have some monkeys and ideas ?
+1	Could you please describe in more detail what do you mean ? Perhaps include a drawing ?
+1	I don't understand how a folder based file system is not a hierarchical system . Could you please explain further ?
+1	Could you precise your idea please ? Which expression of weights should I consider ?
+1	I think that this question may be a bit to far off topic even for me . But why not try the Biostar SE http biostar.stackexchange.com ?
+1	I'm strongly considering closing this as a duplicate of Taking it to the next level http cooking.stackexchange.com q/10317/41  which was itself a duplicate of Books that explain the science of cooking http cooking.stackexchange.com q/9657/41 . Anyone have any comments on what distinguishes this one from the others ?
+1	How would you represent your distribution ? alternatively are you looking for a specific solution for gaussian distribution ?
+1	One way permutations are believed to exist eg RSA . I suppose you are looking for negative results ?
+1	Sorry what does set your exposure such that that is properly exposed mean ? Visually comparing the result of the camera with the colour of the card ?
+1	It not clear to me how I can do this using the lex an the yacc . Can you be more specific ?
+1	The project page you linked provides a fairly specific overview of what the module does . Do you have specific questions about why a module would depend on it other than what they lay out there ?
+1	Do they all have the same size and orientation ? Can you pivote them or should they conserve both proportion and orientation ?
+1	Could you please check the solutions for hyperref ? Also how can I put something one time only that is formatted like a chapter in the toc but without the page number ?
+1	My brain has been scrambled a bit by your sentence Essentially there is no way to distinguish between an object at rest or moving at a constant velocity  can you elaborate please ?
+1	It depends on the hash function . What hash functions are you thinking of ?
+1	I've never seen a key between Shift and Z either . Could that be European thing ?
+1	Is it that the browser itself is taking a long time to load the page ? Or is the dev server process itself just taking an abnormally long time to load ?
+1	Assuming the original pronunciation uses s I think there a more interesting question why are English speakers using z instead ? Does English have a tendency to voice between voiced segments ?
+1	How did they get there to begin with ? Via the official Facebook app or something else ?
+1	Could you please elaborate for me RDB are not my strongest suit so forgive my ignorance How can I normalize when there is only one table and no relationships ?
+1	Should be a community wiki question then ? There isn't a right answer I believe ?
+1	Can you post a representative data set ? Are you okay with getting no matches back if there is a distance of more than 2 or 5 or between the closest pairs ?
+1	It could be the way you are saving your photo for web use . Are you using Photoshop Save for Web option ?
+1	What server OS Windows Linux Mac are you running ? If it is Linux then is there a reason a cron job would not work ?
+1	Are you trying to create some type of tile system or are you just wanting to draw different parts of the image at a time . What are you using it for ?
+1	Hello picxelplay welcome on _Drupal Answers_ . Did you try changing the theme used by the website ?
+1	I'm sorry but your example only makes me more confused . Why don't you first put the first r into the first container the second b into the second container and the next two r into the first container getting the sum of 0 ?
+1	I haven't used those features much yet can you explain what effect you'd like them to have on your blog ? Should ignored tags make it so the user never even sees those posts does it just affect the tag cloud or something else ?
+1	@Aaronut Hi . Private message ?
+1	@Dave I'm also voting to close as a duplicate and it is indeed annoying that as a newcomer you can't vote on questions yet but this is done to prevent gaming the system . I solved the original question but it seems you did too http wordpress.stackexchange.com questions/4782/overwriting core wordpress functions with plugins ?
+1	Will do that . As an aside and please I'm sorry if I should not ask this here is it possible to add code blocks in a comment ?
+1	I would like to hear how this can be done with python . Can windows be resized and repositioned by command line ?
+1	smalltalk is something I am looking into . Does Smalltalk X work as in interpreter until you compile ?
+1	Avogadro number $6.02 times 10^ 23 mathrm mol ^ 1 $ and Boltzmann constant $1.38 times 10^ 23 mathrm J mathrm K ^ 1 $ are two totally unrelated constants . You want to estimate both ?
+1	Any chance the wire between the switch and the ceiling is 2000ft . long ? p
+1	I don't understand this question . Which dictionary exactly doesn't define ain't ?
+1	@Mark ie a perfect question for this StackExchange eh ?
+1	Since you are using a process supervisor you should not need pid files . Can you configure apache2 and postgres not to create them ?
+1	This is a big discussion Neil said and then a small question Please state the stand and then its advantages  A better question might be What the best kind of kickstand for lifting the rear wheel loading groceries etc
+1	I agree how did you come up with the problem in the first place ? I would have thought the idea for a thesis would have come from a real world problem that needs solving ?
+1	I wonder why this is not possible by default probably because the categories usage didn't need that in the past . Have you considered to add a feature request in wordpress trac http core.trac.wordpress.org ?
+1	Hah yea I know there isn't a good option . The aversion is fallout from all those Can somebody suggest a good walk around lens
+1	I'm still seeing the clear link on my profile page . Is this a change that they're still rolling out ?
+1	Thank you . Could you please describe it more in detail or send some link dealing with logos in this software ?
+1	I'm not sure I understand what you mean by the first bullet item . Can you elaborate ?
+1	What happens if you put water into the drain pipe without the dishwasher installed . Does it drain ?
+1	I presume you have no access to the ESRI REST server cannot make changes . Do you have rights to download and modify the data ?
+1	Is the image an animated gif which finishes in less than a second ? Or is it corrupted ?
+1	If you need a command to do that you better provide us at least with the language package you use . Are we talking SAS SPSS Stata SPlus Minitab R ?
+1	I think we need a bit more context here . Exactly what type of graph do you want ?
+1	This question is a forum style post looking to start a discussion and not ask a specific question . Can yo be more specific about what you need to know about patch kits or indicate what problem you're looking to solve ?
+1	@wooble I might need some help here what your calculation ? I get something like 56.8 billion combinations ?
+1	More important than how they work is how to shut them down . Any tips on what the recipient of such a message should do ?
+1	Could you clarify what you mean by #4 ? Does this mean that the lists of objects on each edge leading away from node _X_ are always a subset of the list of objects on the edge leading towards _X_ ?
+1	@GoodEnough It not about other people reading your mail but about giving Google all your data . You now Do be evil or how was their slogan .
+1	Do you have any code we can look at ? What have you tried so far that isn't working ?
+1	What error did you get ? Also can you provide what code your using to connect ?
+1	It might be useful to clarify the meaning of good in the title of the question . What is wrong with using BNF to describe a DCFL ?
+1	seems fine in Chrome . How exactly does one reproduce the problem ?
+1	@Zelimir As answer provided by you MODE.CLEAR not working with xfermode . Can you please let me know why is it so ?
+1	POST implies you want to send some data to the server . Why wouldn't you just use GET when all you want to do is GET data ?
+1	What a kill 9 ? Can you explain your answer please ?
+1	What kind of processing will you perform ? Is it just a matter of setting up data structures to model a family tree ?
+1	Hi Serith sorry my question was badly worded I've amended it now . I am looking to delete bookmarks within folders in the bookmarks bar any ideas ?
+1	Ah I see . If you don't mind I've more or less understood everything but just wish to inquire about 2 things 1 could you please explain the $form_state variable a bit more and 2 I'm guessing that $job_node field_number 0 value writes that value to the first webform field ?
+1	Ozan asks a good question below . Out of curiosity is this just a logic puzzle or is there a reason someone would need to avoid basic language constructs ?
+1	Hi thanks for the bounty . I wonder did things turn out OK ?
+1	Please elaborate UI design or general software architecture design ? Or anything else ?
+1	Thanks for the reply . Could you please elloborate on long as you keep the dependencies clean no cycles and you already know where to cut to divide prob with an example ?
+1	To clarify the question You have say 5 schedules and 10 meetings each with 5+ non overlapping meeting times and you want all 5 schedules to contain all 10 meetings with no overlapping times in any one schedule . Is this correct ?
+1	@Colin Fine I think it a good example especially for the use case described . Could you please add your comment as an answer ?
+1	Good advice @Spacedman . Care to write that down in a form of an answer so I can upvote you ?
+1	How are you accessing the image ? Loaded via Request ?
+1	can you describe the problem with your first approach more clearly ? what is the meaning of elements with close statistical probability of selection and distant selection percentages ?
+1	Pk Please give me a idea . If we define primary menu like secondary menu then primary menus default will be displayed or not ?
+1	Please read this again you can use the amount of time it takes for it to invalidate you help guess if part of your credentials are correct . Aren't you missing something there ?
+1	@hakre I don't agree with the tag you added work for free for me . I don't want to remove it without discussing it so could you please explain the reason why you added this tag and what it adds to the question ?
+1	$N$ is not know ? Could you please confirm ?
+1	@svante I'm fine with that ! Care to give any feedback on what I SHOULD be using ?
+1	Ok the table has few nvarchar columns couple float columns a ntext column I observerd that the error is caused when I am filtering for the columns but couldnt find which column or row ?
+1	Please could show the variant with alignat too align both relation symbols and equation numbers ?
+1	Are you looking for a total ordering ? or just an ordering ?
+1	Thanks for the pointer but now I am not sure to understand your problem . Could you add a drawing ?
+1	Does this happen in one kind of debugging session or is it random . For example if you are trying to debug a running service by attaching to process or are you just trying to run code in the debugger ?
+1	I believe your question could have some validity can you please elaborate on the scope of your question . Are you speaking in reference to the exchange of electrons or are you speaking in more of a supernatural aspect ?
+1	Do the squares have to be the same size ? Do they have to be axis aligned ie have the same orientation as the rectangle ?
+1	what happens if you print before exporting ? or is that the order already ?
+1	Also I just tested in chrome and it does exactly as I said above . No resize handles around the image when it is placed in the containment div and as soon as you click the image it jumps directly into the containment div there is no smooth drag animation ....?
+1	Do you get any sort of error in Instruments when you plugin your iOS device ? Is your iPhone Developer Program Membership up to date ?
+1	I've had a problem like this where it would just try to find the image by path and not from the Route . Have you tried debugging to see if the application goes into the controller ?
+1	There is something that is not clear to me . Do you want to stop the assembly execution for debugging purposes and inspect the code at an arbitrary location ?
+1	@Firebrandt Could you please add the clarification what you meant by better in your question . What do you mean by outlining the solution how to fill table entries in the table from Garey and Johnson book ?
+1	you should post your xml layout here . What you have implemented so far ?
+1	by downloading by code I meant downloading the picture bytes using a webservice and assigning it to the Image element . This could be the subject of another question but what technique would you use to control the download sequesce by preserving the browser cache ?
+1	Just out of curiosity how did you do the eye tracking ? Are you open sourcing this code ?
+1	This sounds a lot like a machine learning algorithm you're trying to find some function of those five parameters that estimates the goodness of the stock . I'm no machine learning expert but perhaps someone else here is ?
+1	With the detail you've given that sounds OK to me though you should note that MAC addresses can be changed spoofed so I guess it a risk based on how tech savvy desperate your client is . If you trust your clients anyway why not just use an honesty approach where they tell you how many times they have it installed and pay the correct fee ?
+1	@Neil All data is input onto a screen before so there is no actual input data . Would it help if put the whole program here ?
+1	I like your idea of relativ dimensions and positions . What didn't work well ?
+1	For #2 May there ever be two edges directly connecting node _X_ to node _Y_ ? For #5 does this mean that properties A and B are numeric summable ?
+1	Are your buildings all rectangular ? Or do they have more complex shapes ?
+1	You have change the intent of the question considerably . Can you post a new code example to show the problem ?
+1	I agree with viksit it sounds like a hashtable is what you want . Is there a reason you want to use a B tree ?
+1	please clarify the scenario please . What exactly is the purpose of finding out ?
+1	i know this doesn't help your problem but it another corner case what if two different cells want to swap with the same one ? will one swap and then the other swap with the one it didn't intend to ?
+1	Maybe it not the best idea if that actions gonna generate html for user . Describe more what this actions do maybe you can replace them with observer class or delayed_job ?
+1	@shane87 How did you generate the managed type of the photo variable you are calling through ? What is the IDL of the COM method ?
+1	What E Mail library are you using ? Can you show the full code ?
+1	hi Gabe what is your reason to activate the USB Debug with fastboot ? why don't use Settings Application settings Development USB debugging ???
+1	That a pretty simple way . Does it work ?
+1	In the sample there a space after another_question ? . Does the space exist in the original code ?
+1	How are you setting the label text ? Can you paste the code snippet in the problem ?
+1	What environment are you running the code on ? Could you enclose the code as it would make it easier to help you for us SO'ers ?
+1	You say we are given a set S . Can we modify its contents while still providing an answer relative to the original S ?
+1	What have you tried so far ? Is this homework ?
+1	I have an interesting proposal assuming the common tail of the list is infinitely long . How can you find the node intersection using constant memory ?
+1	Hi @OZ_ can you educate me as to why ? Is there a better way to store images ?
+1	I'm having trouble following your question . Can you illustrate what you mean by modular configuration preferably by means of an example ?
+1	I'm not seeing a reason why it should be much slower then the 9 seconds . Can you provide a sample of the file you are reading ?
+1	I have the same issue .. This has worked for me in the past . Did you find a solution yet ?
+1	After rereading the second code fragment I changed my assumption to O N O N-1 instead of O N O N+1 because the nested loop gets iterated one less time than the first loop is this correct ? So it would be O N N-1 O N^2-N O N^2 ?
+1	It likely m_cAppIdMap has been over released . Can you check that ?
+1	Damn it i didn't notice that thank you . Is there another way to get the RGB value of individual pixels in android ?
+1	i didn't think to look for the borders it a nice idea . but how can i distinguish between other borders that the image contains ?
+1	I cannot see a problem with this . Do you get a completely blank cell of a missing image icon ?
+1	What platform are you coding for ? iPhone iPad or Mac in general ?
+1	Who is the author where do you cite it from ? Maybe he is known ?
+1	For what country ? Could the data from openstreetmap be complete enough for your locality ?
+1	Do the repeats have to be contiguous is 5,1,4,1 allowed if R 2 ?
+1	Is there any chance you could post some of the code with an indication of where your break point is ? Is it possible that the break point is in a non executing code path in an if else block etc ?
+1	It still under determined . Is for example 2 10 before or after 4 5 or should it be that once a value of 20 is used it never used again ?
+1	What have you tried so far ? What problems have you encountered ?
+1	Is this for a one time transaction or something you want to be convenient for repeated use ? If you use a password based scheme how do you plan to get the password to them ?
+1	How did u feed the html to the browser ? Is there a base element in the HTML ?
+1	is this the case only for this particular project ? can you try this out on a brand new test project ?
+1	DO you see any problem or any thing missing in my script . As I am new in python its fun working with it but running against time Does any one want me to add anything more in the script ??
+1	it sounds like HTML Agility pack will probably work for me . Are there any other options ????
+1	What do you mean by tracing letters ? Could you give an example please ?
+1	I think the question could bring some good answers . But maybe it more fitting to make it a CW ?
+1	Not what commonly observed on the contrary an often heard complaint is that print statements from various threads get all mixed up . What platform OS and version Python version etc ?
+1	Is your current code snippet working for you ? If not do you have a simple sample config file you could post ?
+1	Can you please clarify your goals ? Is pure Perl what important to you or is zero installation important ?
+1	I'm a StatEt user but I'm not aware of a debugger built into Statet . Do you mean the debugging tools built into core R or some other aspect ?
+1	Could you give us more information ? What kind of OS and compiler are you using ?
+1	@user705414 What platform are you using ? Linux Unix Windows ?
+1	Its related to an algorithm for finding unique sets of a given number of items so I just wanted to know if that had a name or if I was already looking at it . Is my question still off topic ?
+1	@kostya LOL . I guess we don't want this site to turn into national enquirer.se  right :)
+1	Have you looked at free GUI automation tools like AutoIt http www.autoitscript.com site autoit ? Maybe it can do what you need ?
+1	That a big topic . Is there something specific you're having trouble with or do you need ideas of where to start ?
+1	@anony Nice question ! Can you share the site where you found the question ?
+1	Please post the actual compiler message . Does the error occur with minimal source files just the mentioned lines without the stuff implied by ?
+1	You have Firebug ? Is it reporting any JS errors when you load the page ?
+1	Dijkstra algorithm finds the shortest path . Negating the weights would cause it to find the longest path but that won't work if the graph contains cycles right ?
+1	@George I have started a project which uses your wrapper it appears that the site name is hard coded but can easily be passed in as a parameter . Do you have plans to change this to be configurable ?
+1	What programming language does this regard ? Could you elaborate on Get the same parts between ?
+1	Usually you'd specify language in the tags for example HTML CSS PHP etc What language are you using ?
+1	I wonder if your instance s of Persist are in a local scope that gets destroyed upon exiting that scope . Have you looked into that ?
+1	Is it possible that you're caching values that some code paths don't actually use ? Could you be caching things that are only used once ?
+1	Your title talks about arrays but in your code sample you're applying gsub to a single string you're applying it to the whole string btw and then taking the first line of that string . Could you please clarify ?
+1	I'm sure also . Would you show me a better way to do this ?
+1	I think your best option would be to redesign so that you don't have to do this . What is this design intended to accomplish ?
+1	@PeterAllenWebb can you define Not in the list . If I have 2 3 5 is the answer 1 or 4 ?
+1	What kind of input are you looking for give little more details . CommonDialog http msdn.microsoft.com en us library system.windows.forms.commondialog.aspx  look at the classes inheriting it do any of them look right for you ?
+1	Check if the text simply contains some Chinese characters with other non Chinese characters ? or is comprised entirely of Chinese characters ?
+1	I've had usb debugging mode enabled since this fix was first mentioned and other than the annoying missing driver popup from Windows when I plug it in I've not noticed amy adverse effects . Why do you need to toggle it on and off ?
+1	@Rob Fox thanks ! BTW why won't you post it as an answer ? ;)
+1	Rainer thanks . Perhaps you could post an answer with your changes made so that I could see them ?
+1	You may want to define efficient clean . Do you mean simplest in terms of expression or efficient in terms of processing speed or most generic in terms of possible strings handled ?
+-1	Why're you referring to Jon Skeet as it ? Are you alleging he not human ? :)
+1	please provide a more detailed example because I don't understand what you mean by concatenating objects . I know what it means for strings a + b ab But what should the resulting Object Person look like ?
+1	What version of SQL server are you using ? Could you post your database.yml ?
+1	@Juan yeah i figured it was something like that . Where is this magical chat room anyway ?
+1	@deceze Good point . Have you used it before and for what ?
+-1	Anyone know if this just for the galaxy s ? I don't think I've ever seen this in stock Android or cyanogenmod ?
+1	Setareh I'm not sure if you mean that PRINCE2 suits large projects but not small ones or vice versa . Can you edit to clarify ?
+-1	Maybe this should be two questions ? I didn't even realize until I looked at the answers but it seems to completely change direction after Which window manager would you suggest
+1	Yea I deleted my line numbers request comment when I read the log again I was on completely the wrong track with that ! However I still would consider the xib a suspect it might be NSDecoding properties that don't exist anymore in the class ?
+1	Could it be that you're adding same transaction observer more than once ie for each addPayment statement ?
+1	Which logs ? The logs in the question are my Nginx ones which Passenger is set to write to are there any others around I should check ? :)
+-1	What kind of riding will you be doing ? Does it have to be on the bike ?
+1	TSOP is a series of IR receivers by Vishay http www.vishay.com ir receiver modules  here it doesn't mean thin small outline package or something like that . Right gomek ?
+1	Problem description has only inputs defined not what the program is supposed to solve . What kind of optimization is needed here ?
+1	think this is too time localised to be on topic . Any other thoughts ?
+-1	Do you mean malware once installed setting up a backdoor which requires portknocking to open ? I can't think that this questionmakes any sense otherwise ?
+1	@fatih You don't happen to have a demo example project you could share ? To see which files need to be added and how to call the functions ?
+-1	Why do you not want the cookies to be there ? Does it matter as long as the content isn't being tracked ?
+1	It could simply be that the previous owner of your domain had questionable content . Did you dig wayback cache to check ?
+-1	What virtual machine software are you using e.g . QEMU or VMware ?
+1	It looks like its not processing the imports in the WSDL . Have you confirmed suds works with external imports ?
+1	Are you wanting a single array when this algorithm finishes ? Eg an array which stores all elements from a b and c in a sorted order ?
+1	lte IE 8 means less than equal IE 8 so this seems to work as designed . Can you clarify what the problem is ?
+1	Can you let us know what error you got or in what way its failing to load . Also can you copy&paste a NSLog output of the full URL String for both the and the %7C version of the string ?
+-1	I need an answer to this question but I cannot see which question it is meant to be a duplicate of . Where do I see that ?
+1	Sorry about that clicked on that box without thinking . Can I remove that status at this point though ?
+1	Do you release the gameViewController later on ? And are resetLevel and resetTheGame methods clean ?
+1	Sure it possible . Do you have any prior experience in Python ?
+1	Query please can you add to your question which version of ubuntu you are using . Have you tried either WiCD or NetworkManager ?
+1	sorry folks i didn't know how to use the community wiki box . can this be reopened as i've moved it over ?
+-1	I + have proper agreement she + is agreement she + would agreement . Am I missing something ?
+1	ooops sorry i re edited my post . can you please validate it with the xml  doc i just posted it ?
+1	Please elaborate on what you mean by calling directly and from another class . Which object is making this call in the first case ?
+1	ahhhh please this is so common its not even funny . Why do managers think that testing can be optional just cause their getting fire from above ?
+1	Should I use EBNF and then compile it using http pyparsing.wikispaces.com file view ebnf.py to generate pyparsing grammar ? Or should I write pyparsing grammar directly ?
+1	I believe that would be different on different hardware . What architecture ?
+-1	@Steven I don't know how good WordPress is with future revisions of already published pages . Can you save them without publishing them even ignoring the permissions issue ?
+1	Are you getting valid numbers back when using the +1 trick ? Are you using warnings ?
+-1	I'm not 100% clear on what you're asking but I suspect there one crucial idea that when you get everything will fall into place . Are you aware that even empty space posses a vacuum energy due to the Heisenberg uncertainty principle and particle antiparticle pairs can in fact be generated out of nothing for very short time periods ?
+1	Well solution non withstanding the news story you linked to was great read . Some people huh :)
+1	I let it accepted for the computation but it seems the link is not the good one as they're not talking about levels in this thread . Could you check please ?
+-1	There are many general purpose languages . What your problem with that ?
+1	Is the linkQuantite element a child of the tr element ? Does it work when you do $ this parent tr attr class ?
+1	I remember having a similar problem . However the link to the full code seems broken could you update it ?
+1	How are you closing the connection on the server ? close or shutdown ?
+1	It works without errors . Can you please add a minimal example http meta.tex.stackexchange.com q/228/1235  that illustrates your problem ?
+1	Can you explain your question a bit more since if each node keeps track of nodes it is connected to it looks like you have a graph that has connnected components and for each node type find the number of connected components that node type is found in the one present in most connected components is the type that has the longest unconnected chain . is that what you meant ?
+1	Yes but making it cross browser will be headache . I have old code somewhere untested for long time want me to post it anyway ?
+-1	My only qualm then is that your question seems extremely specific as I doubt anyone will be able to give you an answer without having experienced the exact same situation . Did you try to check what http cyri.systemrequirementslab.com CYRI think of your machine ?
+1	@Alan Good . Can someone verify for Debian repositories don't have 5.12.x  Mac OS X MacPorts has 5.12.2 and Windows ActiveState Perl 5.12.3 ?
+-1	Of course it does and the damage is irreparable too close to that from a large scale nukular explosion . I gather you had a disagreement with your parents over this and you want someone to prove them wrong ?
+1	Writing your own utility to parse this would not take long at all probably 15-20 minutes is that an option ? What language would you use ?
+1	can you be a little more specific and perhaps give some examples of the current vs desired interface ?
+-1	I am having the same problem . Anyone have any other ideas ?
+1	Which part are you having trouble with ? Do you need help determining if there are new items or do you need to know how to start an executable once you've determined that there are new items ?
+-1	You could always repartition and then restore home from backup . You do have backups don't you ?
+1	This is a duplicate question with 2536194 . Can they be combined ?
+-1	I'm doing this all the time and it works out of the box . Could you post a minimal example ?
+1	What language platform are you using for parsing ? What library ?
+1	Perhaps this is not a good candidate for binding to a property grid . Can you set the property save the result have that return instantly and then later on based on some user action run your long running operation ?
+-1	Can you make the raw file available ? Also what software are you using for conversion and what dSLR is it ?
+1	Is it possible that it could be a passenger issue ? Does devise warden cache the current_user variable ?
+1	I'm not sure I understand exactly what you want . Could you clarify ?
+-1	AC or DC power supply ? What is the power supply voltage ?
+1	My end goal is to get a list of rows with unique data as determined by a combination of 3 cells in a row however I need all the cells of the unique rows . Maybe an array of hashes would be better suited for this task ?
+-1	Welcome but you might want to rephrase your question there is a rule of not asking how to make an entire game . Maybe What resources exist for solitaire like games
+-1	I don't understand the comments below arguing against this style . I think it can be quite attractive in certain designs furthermore to counterpoint the what about nested lists comment how common are nested lists really ?
+1	Altering the top level structure moving elements between top level arrays ? How does your sort need to function in the higher dimension ?
+1	Hmmm still don't quite see what you're aiming for . Could you perhaps explain where you think things can be generalised abstracted at least verbally in pseudocode ?
+-1	I don't see why the trivial greedy algorithm does not work ? Am I missing something ?
+1	What value does CreateProcessAsUser return ? If it returns zero indicating an error what does the GetLastError function return ?
+-1	@David it is owned by MICROSOFT . what do you expect ?
+-1	I am not sure why you feel that in regression you will get R2 1 if you try to predict the predicted variable . Can you clarify ?
+1	For what its worth I have chrome 7 Is it possible that greasemonkey support was added at 7 ?
+-1	Are you referring to loading them using the iPad Camera Connection Kit ? If so are you unable to delete the JPEG preview or the RAW image the JPEG was rendered from ?
+-1	First time I hear about this can you please supply more information I'm curies how this thing works . You mean my CPU has a GPU inside of it ?
+1	IB can be a pain with UITableView sizing . Have you considered doing this programmatically initializing the tableView with a style and then setting the frame to a specified frame with CGRectMake x y w h ?
+1	i've checked the values at the return statement they're valid but once it actually returns i get nothing . is this something to do with scope ?
+1	+1 from me just for posting a SO problem on SO :) Not that I could help with the problem but seeing this I was asking myself what happens to the GC when a dispose function throws
+-1	What about Please use other paper ? Paper could be both plural and non plural but it still grammatically correct I think ?
+-1	Couldn't this have been appended to that discussion ? Or googled ?
+-1	@Nikita I'm only seeing math.SE SO and meta.SO for mine none of my other accounts rep . When I paste in a profile URL is it only using that site or is it getting all associated accounts ?
+-1	I like your hypothesis however a more sinister option could be that they were attempting to use the tethering feature of their iPhone to take files off your network without them passing through your gateway . Although I think your hypothesis is more likely do you work somewhere that people would go so such lengths to steal data
+1	It kind of hard to understand what you are asking . Maybe you could clarify it a little bit ?
+-1	What part of the country are you in ? Does it freeze in the winter ?
+-1	@user2924 I must be missing something but I'm unclear still what you mean by like this  Can you also please specify your basic requirements ?
+-1	40 kbps is fast enough to load the full facebook.com  in about a minute . Is that even worth it ?
+-1	So you want to be able to specify a footnote that will be attached to _every_ occurrence of a given word in your document and will appear on every page where the word does ? Should all these footnotes have different numbers ?
+-1	I saw the exact same thing last week and I've been verified well over a year . Solar flares ?
+-1	Do you mean you want to have companyA.blogspot.com  appear identical to companyb.blogspot.com ? Or have the email postings etc be synonymous ?
+1	I guess you know how a template looks for everything something like from the small thumbnails to the big backgrounds as you said . I will give you some ideas tech management industry computers food can you picture what i m trying to say ?
+1	Since no third party app knows about any other what possible touch up of reverse are you doing ? Is this something that better done with a TemplateContext ?
+-1	Sorry I know you wrote this awhile ago but could you explain what the last part about electrostatic vs electromotive means ?
+-1	Advantages in comparison with what ? Unbalanced trees AVL trees hash tables ...?
+-1	@cowgod I'm not sure what the benefit would be because I haven't played any of those . Is it the added realism or something ?
+1	I don't know about Eclipse but Visual Studio puts it on the right button menu . Perhaps Eclipse is the same ?
+-1	Probably it is still integrated with your browser . What browser are you using ?
+-1	+0 neutral:( Not enough has been said . Are you really claiming that even a TODO list isn't useful ?
+-1	Could you please look at your dmesg try to find any radeon related line . Other question you are using Ubuntu 32 or 64 bits ?
+1	What kind of system did you develop the script on and the make file ? Did the actual files come from a Windows system originally ?
+-1	I ll send you some User Agent headers and server logs . What would you like them to say ?
+-1	Never needed to coat the inside of a frame WD40 is useful to get any water out . I suppose car wax could work ?
+-1	Please make your question more clear preferably with examples . Is this a question about philosophy or about language ?
+1	Correct the ranges are intended to be discontinuous . I think if ranges were continuous then it would really be just one range without any breaks gaps correct ?
+-1	We need more information . What are you trying to do ?
+-1	There a lot of not Mac OS X specific answers which is a requirement outlined in the question . Should the answers be revisited or the question edited ?
+1	Well when you call new Class it returns a pointer to the location of that instance of the class . Is that what you are referring to ?
+-1	I like this idea . Do you have that library posted or can you please point me to a few of those photos ?
+-1	@dan and sri Sorry if this is too far from the original question but is there a manner of linking ie the type of URL I use in my post I can use to attempt to maintain the header I'm imagining some rel attribute to the effect of the capturing it or does HTTPS always strip it out ?
+1	What language is this ? apologies for ignorance assuming C#
+-1	Newer SIM cards should have anti tamper protection that makes it useless if you try to clone it . Have you already succeeded in cloning one ?
+-1	link http android.stackexchange.com questions/2968/google account on htc desire galaxy tab  this guy seems to be forced to fill a captcha forever and could not login using his account on a second phone . Does anyone have the same problem ?
+1	What happens when you just use a different algorithm to determine file names ? Does OpenOffice.org care ?
+-1	in Mauritanian Ouguiya it أوقية 0.00 Wait Mauritania has an app store ? :)
+-1	There no apparent reason for the warnings to be caused by the cite commands . Can you please add the exact warning message that you are getting ?
+1	first thank you all for your answers second i cant understend jim why you think i try to make fun of you and last how i mark that the problem solved ?
+-1	Define brute force . Ar you OK with iterating all values of A starting from 1 and trying to find P in O 1 for each of these ?
+-1	Interesting . Do you know a proof that those axioms are inconsistent that more elementary no transfinite induction ?
+-1	Please define the problem you are trying to solve . For example what is a restricted read twice BDD ?
+1	Is it acceptable to build an auxiliary data structure to guide the decision process ? Could that data structure have size O n of the original list ?
+-1	Transport protocol right above the data link layer ? You sure ?
+1	With highlighting you mean selecting it or do you want to wrap it in eg a span tag ?
+-1	I had some issues that where solved by making sure that garbage collection don't remove objects that are sharing state between COM object . You could try making some of the variables static and release those after you finishing the whole operation ?
+-1	@BlueRaja the distance function is only part of the problem . How do you pick the colors from the color space so that the distance between them is maximal ?
+-1	I agree this is subjective but on the other hand I think this is a good topic to talk about . Perhaps if we elaborate a bit on the why part in the answers it might be generally useful enough ?
+-1	Equal area or equal size i.e . similar width and height ?
+1	What swaps would be required to get your original list to its reordered state ? Is that number of swaps proportional to the 100 swaps out of several hundred to a thousand original lines of data ?
+-1	@AndrejaKo Electrical fields are 3 dimensional yes . But a 3D wave form ?
+-1	Looks like you're passing null to an API parameter particularly a null Overlay somewhere in a mapview probably . How are we supposed to know ?
+-1	You need to narrow the problem down . Is your question actually how do I update an entity reference in EF ?
+-1	If this was your keyboard you should know what it was connected to . What was it ?
+1	Where your public key token for the assembly ? Are you adding these manually to your config file or through the IDE ?
+-1	Are the cross sections always convex polygons ? Or can they be concave ?
+-1	Is this a practical or a theoretical question ? Do you have an actual 8086 that you're using for this ?
+-1	Not sure I understand the question 1 wireshark will look at packets as they come from the wire so iptables rules for incoming packets do not apply 2 your iptables rules apply to UDP but you state that you open a raw socket . Could you please clarify what you are trying to achieve and what does not work as expected ?
+-1	What is that paper doing on PubMed anyway ? Are there any health issues associated with building possessives ?
+1	Ok then your own code seems cleanest . And although this is offtopic how did you generate those images ? :)
+-1	i have same problem my linked account stop working i tried redoing the link with gmail but an error appears and i cant go on with the procedure any ideas ?
+-1	Can you clarify guy in a tube ? Like a tube raft ?
+-1	Well I got it to return the correct height by returning findHeight node 1 in my public method . However I just feel like this is sloppy code any suggestions on a revamp ?
+-1	I'm sorry I can't follow . How is that related to what I said ?
+-1	I'd prefer it to be more generic but that it SHOULD include the UK . Surely there must be Mint.com  clones that have worldwide coverage ?
+-1	In the fnv_func the type of p i is char what will happen with h after the first iteration ? Was it done in purpose ?
+1	javascript problem I suspect . very strange maybe some conflict with libraries or plugins in safari only ?
+-1	This depends almost entirely on what language framework and application you're talking about . What are you using ?
+-1	Please add more information what exactly is your problem ? What have you tried ?
+-1	To quote Barak Obama Yes We Can Now what have you tried and where have you failed ?
+-1	I assume you have artwork that is actually of a higher resolution ? Or would you just be scaling up the lower resolution ones ?
+-1	Why are your gradients 1024x768 ? Have you tried making them like 16x16 or something ?
+-1	Your question is great unfortunately it very similar to a previous very highly rated question http stats.stackexchange.com questions/3 . Perhaps you could change your question to just ask about websites ?
+1	@Derek Beattie I checked ASP.NET and Silverlight are checked . Should I also check Enable Edit and Continue ?
+-1	You mean _orthogonal_ forms ? right ?
+-1	@bigp Trying to nail down your definition of evenly distributed . Do you mean the distance between consecutive points is constant ?
+-1	What is not working ? The speed or any of it ?
+-1	Answer is very subjective . Is the bacon going to be used in a recipe or just to be eaten or breakfast ?
+-1	@Amplify91 I'm sorry but this is plain common sense ! What is the use of an example that I can not show to anyone because it violates rights of a third party ?
+-1	Sorry but i won't use a module for that task . So you have no idea about this ?
+-1	hmm i mean are they used as containers or for styling purposes ?
+1	I found this little recipe http code.activestate.com recipes/576420-get a posix timestamp from a type-1-uuid in Python . Since I'm not good at Ruby could someone make this for Ruby please ?
+-1	Which shell ? How have you tried to do this so far ?
+-1	Seems like you could end up deleting quite a few rows as one row could match different rows in different ways . Are you sure of what you want here ?
+-1	@Jacques M is the disjoint union of the level set approximations to the complement of the Mandelbrot set  Yes if by disjoint union you mean discriminated union disjoint union sometimes means the usual union of pairwise disjoint sets and I want to avoid this ambiguity . Have I ever suggested otherwise ?
+-1	Can you please be more specific instead of saying often said . Can you cite references and also expand on why the issue is relevant ?
+1	Did you run any individual tests ? If so how ?
+-1	could you please tell what is your cpu and amount of your ram and how many apps you install ?
+-1	Ok now you got me . Where do I get the stack trace ?
+-1	Just out of interest how long is incredibly long ? How fast does the program run for other puzzles ?
+-1	This is a standard homework problem for an undergrad QM course . Do we really want questions like this and answers to them on MO ?
+-1	Umm what means it is connected to GPRS Sorry I lost you which part of the question are you referring to ?
+-1	Please tell us more about your prototype . Do you want to prototype a web application or a desktop application ?
+1	@Zimbabao Cached MySQL is our front runner at the moment . Has that worked well for you ?
+-1	Not clear ! Can you please little bit technical ?
+-1	I have updated question . Can you please look at it ?
+-1	What about 1,5 and 3,5 ? Are you really finding inversions inverted according to an incomplete order defined by the array A2 ?
+-1	maybe you can start with useing code tags . and i don't see how the frame loads the pics ?
+1	That code looks good . What isn't it doing that you want it to ?
+-1	that is some data ? any hint ?
+-1	Yeah funny I'd write that while looking at the book Wasnt Mitch McConnell Pres . Bush chief of staff ?
+-1	If your numbers fit in a 32-bit signed int nothing going to beat a moderately clever lookup table . How bit are your numbers really ?
+-1	@Tal Galili http en.wikipedia.org wiki/Love_means_never_having_to_say_you%27re_sorry . My favorite is the line from What Up Doc
+-1	Sorry for maybe stupid question but what do you mean by commandline command ? You mean that one in psql ?
+-1	This question is almost word for word the same as http stackoverflow.com questions/3624056 . Is this homework ?
+-1	Can you tell me if there are _any_ other constraints ? Like a finite set of possible values ?
+-1	Are there also $2 bills ? If not where do the 2 s come from ?
+-1	What are typical values of N and K Over under one million ?
+-1	Do you know the frequency ? Some bound on the frequency ?
+-1	Is it homework ? Why not return a Maybe a in pop and top ?
+-1	This is actually a question about recovering deleted files it doesn't really make any differene that they are images . Perhaps would fit better on superuser ?
+1	In numpy your array is 2 x 5 isn't it ? And am I understanding that you want to extract a column slice as a column matrix rather than a vector ?
+-1	Not enough details . What programming problem do you have ?
+-1	Why do you need the javax.microedition.lcdui.Image ? Will Bitmap not work for you ?
+1	Hmmm it works Any reasonable explanation to why ??
+-1	I can't figure this one out adding the values of int pointers makes sense but adding two char pointers together doesn't make sense for values or addresses . What is the outcome you're expecting ?
+-1	what a binding ? And in what way is it temporal ?
+-1	my problem is not really to solve this bug but to know how to find the line of a bug in a proxy . I don't think you need additional information about it isn't it ?
+-1	@user5563 the gam gam function does not support cubic spline and I am not able to get mgcv gam to do so . Could you please provide an example ?
+1	what problem are you having ? what error are you getting ?
+-1	i cant see that map service . I assume its dynamic and not cached ?
+-1	Which part are you trying to debug ? Content script background page popup ?
+-1	OK fair enough . But it still not a SO question ?
+-1	I have no idea what to tag this . Ideas ?
+-1	Which images specifically ? Did you look in the F12 Network tab or Fiddler to see if there are any networking failures ?
+1	That what I thought . :) Well what is solution for safe managing lua_State ?
+-1	I can but it is written in Lithuanian language so I think you woun't understand . Anyway where should I put it ?
+-1	Let me rephrase your question . Whats the difference between fixed function rendering and Shaders ?
+-1	Binary shift ? Divide ?
+-1	What about simply running Clang or if you want to punish the user with bad error messages CC from a Ruby script ? What have you tried ?
+-1	How much is way faster ? Have you accounted for the time difference needed to read the files in your measurements you'll likely need a bigger read buffer for the 64MB files and the larger files are more likely to be fragmented ?
+-1	I find the documentation for Net HTTP pretty hard to navigate and understand compared to curl manpage . Is there something wrong with trying to delegate work from a Ruby program to another unix program ?
+-1	Are those regexps ? Otherwise you should probably use str_replace instead and see if that works better ?
+-1	While I answered your question to the best of my ability I fear that you are going down the wrong path . Are you explicitly closing your SqlConnections in the same function that opens them ?
+-1	mod_rewrite enabled ? htaccess  created ?
+1	Could you clarify what you mean by zoom  Are you referring to the effects of Ctrl + and Ctrl ?
+-1	Since there is a loop there is an infinite number of paths . How do you wan to deal with it ?
+-1	if your series is non stationnary the ACF will decline very slowly to the point of being useless it essentially a constant . What do you mean by have any meaning ?
+-1	Cubic Bezier curve ALWAYS depends on exactly 4 control points . Maybe you want to make a http en.wikipedia.org wiki Spline_ mathematics  from several curves or something ?
+1	Welcome to SO . What is a Try It Editor ?
+-1	I don't understand at all . What is link a certain image in my project to a certain page ?
+-1	Your description of guess needs improvement . Does it return true when you guess is less or equal to the answer ?
+-1	Can you put here the links to do it ? Please ? D
+1	What do you know about the type already ? Could you provide a sample context ?
+-1	Seems strange to me that you'd include no less than five tags and yet not select one that indicate the language you're using . Is that some sort of Pascal ?
+-1	Why are the results bad Can you elaborate on what you did ?
+-1	@marknt15 Sounds like a poor design to mix arbitrary XML like tags with real HTML . Where are you putting this text that the HTML is dangerous but the arbitrary tags are not ?
+-1	No reason what so ever . But what storage backend should I use that fits the bill ?
+-1	compact framework and there are no line numbers Huh ? What language is this ?
+-1	Is the graph that the MST is created from a unit graph meanining all edges have a weight of 1 ? Is the graph directional ?
+-1	Why are you subclassing UIScrollView ? Why don't you just add subviews to it ?
+-1	You say sorted but your example isn't sorted using normal lexical ordering . Is this a mistake ?
+-1	Is sub edit called as a method ? ie $thing edit ?
+-1	@Deepak key path ? What that ?
+-1	Could you try clarifying your grouping rules ? Also are you only trying to get a set of pairs or is it possible for a group to contain 3 or more b type objects ?
+-1	So you're trying to use remote debugging ? Have you set that up in VS 2010 ?
+-1	What will hapen when you remove anything but print print from loop Do you get equal files ?
+-1	Sorry about not being clear but I was talking about an idealised case where air resistance is negligible and the tires are perfectly rigid and there is no internal friction at play . So then why is it 0 ?
+-1	I resisted making this comment when your question first appeared but since it gone two days without an answer I've gotta ask why ? What end behavior are you trying to achieve with this ?
+-1	Ok but can django and html5 coexist ? isn't django serving html4 ?
+-1	the heavier coin + the lighter coin is the same as a normal coin cannot be true if heavier normal lighter have you meant heavier+lighter 2 normal ?
+-1	For code security I should want a language that compiles and is run in a virtual machine  How a virtual machine is going to help with security ?
+-1	What exactly do you mean by a build ? How does the legacy part change your question ?
+-1	Could you be more precise about what you mean by cross tabulating the ORs ? Your factors have more than two levels ?
+-1	@kaiser Sorry not meaning to be harsh . I just don't understand for what real world reason you would advocate just sticking to those terms ?
+-1	You want all the paths ? You want all simple paths containing at least two members of the subset ?
+-1	What are you trying to get exactly ? If the list is just 2 tickets with priorities 3 and 5 what do you want to find ?
+-1	@Nightfirecat Well the normal hr isn't enough contrast from the background to provide me with what I need . So creating a 1x3 image and a 100x3 image doesn't really change the speed at all ?
+-1	Something is wonky somewhere I've used the wininet libraries several times and they behave as the documentation describes . perhaps expand your troubleshooting to the wininet setup or the contents of the response ?
+-1	What language ? Or do you want to do this with an application such as Photoshop ?
+-1	Only VideoCode returns undefined ? Have you tried not using capital letters ?
+-1	it depends . Are these featured links derived from the DB or are they just arbitrary links ?
+-1	Why do you change from print to printf when you print to a filehandle ? Also why are you still using global FILEHANDLE s instead of lexically scoped variables
+-1	Sorry forgot to prefix your name . Also is there some reason you are not using yum or similar to do the installation since it does dependency handling ?
+-1	Electron charge doesn't change . Are you talking about voltage drops ?
+-1	It not the homework problem of anyone I know but I suppose it could be . How does one write a challenge problem to be documented on stackoverflow that doesn't appear to be a homework problem ?
+-1	I've made it more pro by indenting with four spaces to format it as code . Does that count ?
+-1	From what I can understand it not clear what is the response variable and the explanatory variable . Can you please clarify this ?
+-1	@sepp2k isn't fnc declaration and worded postcondition sufficient for this task I wasn't given definition at all by the way ? What for would one need to see guts of a fnc in order to be able to give formal proof for postcondition ?
+-1	Ok it turns out that taking the advice from the log and using Serial instead of Integer serial true fixes it . But my question still stands Why did this work locally and not on Heroku server ?
+-1	In this case its the finite line segment . Is line called something else depending on if its finite or infinite ?
+-1	@user1567 You add the function to the wp_ajax_myaction and wp_ajax_admin_myaction hooks . Should that not be wp_ajax_myaction for logged in users and wp_ajax_nopriv_myaction for anonymous users ?
+-1	Are the objects with the same name the same objects ? Or do they differ in some other property ?
+-1	mozilla orders events differently to IE though doesn't it ? I assumed my way didn't work because the clicked element will process the event before the document in IE ?
+-1	Why are you passing an image object into jQuery . Shouldn't this be $ img instead of $ img ?
+-1	what do you want to do after adding them ? re concatenate ?
+-1	You are building a xFA for the _byte_ input ? Wouldn't it be a lot easier and more reliable to operate on Utf16 chars ?
+-1	You shouldn't need to do any of that stuff in code if your MVC app has a correct system.servicemodel  web.config entry . Can you post it ?
+-1	OK @Juan the meta question has established unequivocally that questions like this are definitely allowed . Could you un close it now ?
+-1	What does it doesn't work means ? Do you get any kind of error if necessary you should try enabling error_reporting ?
+-1	What wrong with the silly way ? What problem does it create ?
+-1	Aha Can I also give you an answer which is not coded ??? You and me need codes Okay ?
+-1	Was there an exception thrown ? Some type of error encountered ?
+-1	The question seems to be ill defined . Do you mean that you want to find min abs t i t j :( i j ?
+-1	actually the application crashes We need the crash info . Is it a BAD ACCESS ?
+-1	After reading I still cannot figure out the question you are asking . Are you looking for SCO Unix printing conventions ?
+-1	So the request does actually make it to your update method i.e . gets routed via the mappings with the PUT method correctly ?
+-1	Are you asking if there is some Automatic way to do this ? Or if its possible at all ?
+-1	Exactly ! If I am to implement another interpreter using R do parsing tools exist ?
+-1	Try to get the terminology right there really isn't such a thing as POST and GET variables especially not on the client side which I assume you are referring to . So what exactly do you mean ?
+-1	It still not clear . Does the URL have to contain com ?
+-1	I do not understand . Do you like to show your view inside a UIScrollView so it can go down or up together or you like to set the frame when you rotate your device ?
+-1	Maybe gae setup works up on django or parallel . But what is the final uri for an image which is located to http localhost 8080/templates images background.jpg ?
+-1	Not to start a war but I can see another side to that . Why develop test deploy maintain two solutions where one will do ?
+-1	I am not super familiar with android development . Can't you use java util Preferences http download.oracle.com javase/1.4.2/docs api java util prefs Preferences.html  ?
+-1	This is not really enough to tell what can be the problem . Have you tried debug you code for example trace something in the conditions so the function what have to be called is called properly or not ?
+-1	Annotations aren't executable code so this is unlikely . What are you really trying to do in what conditions would you want a test to be run or not run ?
+-1	This looks suspiciously like homework . Could you elaborate a little more ?
+-1	The question is how many ? or do you need to find them ?
+-1	What the question ? Do you want to know what the minimum X for a given N can be and what the associated algorithm is ?
+-1	S.Lott I wasn't aware that this is desired behaviour and not simply default behaviour . Again why would this feature make a developer life easier and not harder ?
+-1	That not clear what kind of distance ? You mean orthogonal distance from a side of original rectangle to another one ?
+-1	How are you calling those modules ? Can you provide some code or some example ?
+-1	@Qiang Li okay . Is this question drawn from a specific programming challenge ?
+-1	what is the problem with the query you used are you trying to get all ticks for an industry in just one row ?
+-1	Quite unclear . Maybe my_hash.each k  v puts k ?
+-1	Did you add C Ruby19 bin to path ? What say path and ruby v commands ?
+-1	updated the question . can i do that in a scope ?
+-1	Why do you use mysql 2.8.1 ? I think you can't use both for one application do you have this 2 gems in your GemFile ?
+-1	Does that mean I am allowed to create my own version of the algorithms ? or should I need to follow a pseudo code from a standard governing body like NSIT ?
+-1	Are you actually wanting it to become part of the standard library on your system or are you just wanting it to work in your project ? To phrase it another way what is the actual problem you have right now using the code you posted ?
+-1	I am not sure a staggered array is a way to go here what if you need to do something like _3 F_2 left begin matrix a-b+1 b+a-1 c+d-1 d-a+1 e+d b-1 end matrix middle z right even if you make the the array tighter there will still be a lot of space left . How about something like this _3 F_2 left begin matrix a quad b quad c d quad e end matrix middle z right ?
+-1	This is just the name hiding issue . Why can't you just use the using A foo clause ?
+-1	ok so 100 arrays . If multiple users are loading a page with 100 arrays would that have any major performance problems ?
+-1	Did you start the JLink remote server that talks to GDB Did you tell GDB to connect to a remote target ?
+-1	I'm not sure if this question is really specific to PHP . Do people think the answer to this is dependent on conventions that vary substantially from language to language ?
+-1	@Nick Usually they are div class section but sometimes there are other classes . Does that matter ?
+-1	Title could be a bit better . Just to be clear are you asking What is the difference between C++ and Java on the Android Phone
+-1	Im not really sure what you are up to . Chances are that you would like to do something as asked in this question http stackoverflow.com questions/4924350 ?
+-1	what does contentText contain after the $.ajax call ? Could you post this in a jsfiddle or in this question ?
+-1	argmax on what ? A function a dictionary ?
+-1	Yes I think you can . Did you try creating a new gmail account and apply for a new adsense account ?!
+-1	@S.Lott No I'm saying that looking up the function is far from easy if the obvious search terms don't readily yield any insights . Am I missing something ?
+-1	Can you describe awkward result a bit more detailed ? Also how many images to you have ?
+-1	Do you ever see Your PotatoHead varibles have been successfully created get printed ?
+-1	Do you absolutely _have_ to concatenate ? Can't you use parameters instead ?
+-1	What documentation ? Can you provide the link or an example ?
+-1	please clarify in your question are you trying to install ubuntu with this card ? Is ubuntu already installed and you are changing the graphics card ?
+-1	What kind of games ? Any in particular ?
+-1	If you wrote the CGI script then you know how that script determines where to put the files and how to name them . What is stopping you from adding that information to a database ?
+-1	not sure how the table is storing the tuples or if i'm understanding correctly but don't you already have that information ? if there is a table with the tuples say tuple_table with tuples kn gm and you want which k element coming from set A maps to which g element coming from set B wouldn't a simple select on the tuple_table do it ?
+-1	Sorry to be daft but where do I find the community wiki ? Is that another name for the Metas site or is it something completely different ?
+-1	What this statement do is giving you no hire on interview and severe pay cut if found in production code . May be professor will like this answer ? :)
+-1	Are they tied to specific users or just generic ? Are they grouped in any fashion ?
+-1	Use headers like cstdio not stdio.h  for C library headers in C++ . And what wrong with std vector ?
+-1	no depending on the flag count i wanted to print the values of flag the first case should print aaa and the next case should print aaa bbb ccc . is it possible to do that in a single line of code ?
+-1	@Toad Ok . Sorry for the last clarification does calls to land line or mobile from Skype client count towards data limit ?
+-1	Why do you think the call to the database will be too slow ? Have you measured it ?
+-1	Are you sure you actually need to implement your own iterators ? Isn't typedef typename std vector T iterator iterator good enough ?
+-1	@Yiannis Can you please expand on the spacing after punctuation ? What could go wrong without the xspace ?
+-1	@Milo I'm confused about why you have a non overrideable function call a virtual function rather than directly calling the virtual function . Is there a reason for this ?
+-1	What does efficient mean here ? What size data set are you most commonly expecting to work with ?
+-1	can you say more about undeleteable ? Why would you want to do such ?
+-1	okey doke . do you need more than that ?
+-1	Why 2 is not the answer ? Do you need any number or the largest number or just found not found will do ?
+-1	Sorry I thought you were looking for a connected subgraph which will necessarily be a tree appearing in a given set of trees . Could you clarify in what aspects your problem differs from this description ?
+-1	Don't use the javascript pseudo protocol in inline event handler attributes you're merely adding a useless JavaScript label there . Moreover this should work as expected what exactly does not work ?
+-1	My concern would be that the doWork procedure will finish going on to workComplete while your timer is still running calling the OnTimerEvent . Are you sure you just don't want a loop with thread.Sleep in the do work method ?
+-1	Cannot implicitly convert type object to System.Web.UI.DataVisualization.Charting.SeriesChartType . An explicit conversion exists are you missing a cast
+-1	During this update I have the chance to turn the AI controlled entity or make it accelerate  Did you really mean OR or did you mean and or ?
+-1	If you know nothing about the structure of the URLs then it impossible to do . How should the algorithm find out whether to group a b c with a d c or a b e ?
+-1	Could you share the relevant information with us irrespective of whether it is an exception and error or something else ? Also what does because I must there KeyPairValuOfStringAndCarType mean ?
+-1	@Roger set the LocalSqlServer connection string to attach that db . Do you know how to do it ?
+-1	What method serialized a Boolean to true and false ? Or are you simply talking about producing a String from a Boolean ?
+-1	You'll have to give more information such as what type of data are you rendering ? do you have complex loops in your erb ?
+-1	So you have duplicated records in the database right ? Also why do you need insertable false updatable false in join column ?
+-1	I'd suggest you get an iPod Touch to develop on then . Don't tell me you need something iPhone specific for your application like GPS :)
+-1	When you say it fails what happens ? Does it truncate the field or fail to insert and if it fails what is the relevant error message ?
+-1	You mean Properties or the Autos Locals Watch window ?
+-1	Do you have different PHP versions in Eclipse and on your server ? Also different error reporting settings ?
+-1	Why design a config file syntax that is very difficult to parse ? Why not just set the relevant bash variables and source it ?
+-1	no just added it in question too . Should it has to be debug build ?
+-1	What about in this method IBAction saveNewCharacter:(id sender if you NSLog self newCharacter firstName what do you see In other words is it correct when your are inside NewCharacterViewController ??
+-1	I don't understand how it is related with row numbers So does Lieven answer is not fully correct ? Or what do you think about Lieven answer ?
+-1	Your function doesn't actually return anything . When you say it just returns the matrix what do you mean ?
+-1	Are you asking for a tool that does this ? Or an idea how to do this in python ?
+-1	I don't understand how you're getting 2 3 4 6 from that array . There are five elements from the array shouldn't it be 3 3 2 4 6 ?
+-1	Why voted down ? Fair enough question yes ?
+-1	You need to show the declaration of Patient . Are you sure you're not writing pointers instead of complete strings into the file ?
+-1	I don't understand the go all the way until the end part . Why wasn't 4 highlighted in the third line in your second example and why wasn't 2 highlighted in the second line in the same example ?
+-1	I'm still wondering why nobody ever recommends cin.get . Is there something wrong with it ?
+-1	It looks like a bg image behind an actual image . Are you sure the img isn't a broken link ?
+-1	YUI Compressor can compress JS and CSS What error did you get using packer Have you followed these rules while writing JS http javascriptcompressor.com content CompressedExample.aspx  ?
+-1	Do you mean debugging YOUR jquery code or debugging the actual jquery library ?
+-1	Interview question then ? If not can you explain what this will be used for I can't think of an application for this right now ?
+-1	The language here is a little ambiguous . When you say Web Application Project do you mean loading the project in Visual Studio or are you referring to the startup time of the application in IIS on the initial hit ?
+-1	What version of Oracle ? Frankly working on the full name for string manipulation is not recommended what if someone has a last name with a space between two words ?
+-1	i just want to know the logic of how this can be done . or if anybody can show with simple example for this calculation ?
+-1	Ok so 1,2 N is not allowed because it is a run itself . Then how about N 2,1 ?
+-1	What servletcontainer are you using targeting ? What the reason that you don't use 3rd party libraries for this ?
+-1	Why do you need to create static images for the pages at all ? Why not re render the PDF page as needed at the higher zoom scale ?
+-1	for whatever reason adding a irbrc like most people are suggesting isn't working for me . any other tips ?
+-1	could we get some column names and what do the id reference ? there is no ID you have given us on any other column and what do you mean by somehow combine them ?
+-1	Why are you putting control characters into the string ? And don't they count to whatever length limits apply ?
+-1	is it NSLog @ %@ self.data ; i thought you said self.data was an array ? maybe try fast enumeration ?
+-1	By doesn't work do you mean that you left off the self  that would make the various values part of the object ? Can you provide any error message or traceback ?
+-1	mod_perl ? Plack ?
+-1	Because different different languages have different strengths and libraries already written for them . If I wanted to write lots of set up code for this problem why would I pick a dynamic language why not give myself more work and code in Java or C ?
+-1	Why are you storing the first second iterators in another circular buffer ? There could be arbitrarily many of those why not put those into a linear container preferably a container of pairs ?
+-1	Fair enough I didn't notice that the question was over a year old O.K do you even remember what you meant by according to my profiler ? What profiler are you using ?
+-1	@ammar Isn't the entire purpose of internationalization with a resource bundle that your application display a number of languages correctly ? Why would you then want to dictate to the user what language they should use ?
+-1	What about DefaultListBoxItemStyle Are you sure that isn't the culprit ?
+-1	What about a little more information ? What is your question ?
+-1	side comment why don't you use the latest Eclipse ? Is there any particular reason ?
