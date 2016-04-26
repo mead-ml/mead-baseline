@@ -76,6 +76,7 @@ cmd:option('-mxlen', DEF_MXLEN, 'Max number of tokens to use')
 cmd:option('-patience', DEF_PATIENCE, 'How many failures to improve until quitting')
 cmd:option('-hsz', DEF_HSZ, 'Depth of convolutional/max-over-time output')
 cmd:option('-filtsz', DEF_FSZ, 'Convolution filter width')
+cmd:option('-lower', false, 'Lower case words')
 
 local opt = cmd:parse(arg)
 

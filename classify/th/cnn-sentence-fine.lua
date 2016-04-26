@@ -80,6 +80,7 @@ cmd:option('-patience', DEF_PATIENCE, 'How many failures to improve until quitti
 cmd:option('-hsz', DEF_HSZ, 'Depth of convolutional/max-over-time output')
 cmd:option('-filtsz', DEF_FSZ, 'Convolution filter width')
 -- Strongly recommend its set to 'true' for non-massive GPUs
+cmd:option('-lower', false, 'Lower case words')
 cmd:option('-cullunused', false, 'Cull unattested words from Lookup Table')
 local opt = cmd:parse(arg)
 

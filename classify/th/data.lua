@@ -5,13 +5,17 @@
   <label>\s+<sentence>
 
 --]]
-function labelSent(line)
+function labelSent(line, lower)
    local labelText = line:split('%s+')
    if #labelText < 2 then return nil, nil end
    local label = labelText[1]
    local text = labelText[2]
    for i=3,#labelText do
-      text = text .. ' ' .. labelText[i]
+      local w = labelText[i]
+      if lower then
+	 w = w:lower()
+      end
+      text = text .. ' ' .. w
    end
    return label,text
 end
@@ -86,7 +90,7 @@ end
   Build a vocab by processing all these files and generating a table
   of form {["hello"]=1, ..., ["world"]=1}
 --]]
-function buildVocab(files)
+function buildVocab(files, lower)
     local vocab = {}
 
     for i=1,#files do
@@ -94,7 +98,7 @@ function buildVocab(files)
 
        for line in tsfile:lines() do  
 	  
-	  _, text = labelSent(line)
+	  _, text = labelSent(line, lower)
 	  
 	  local toks = text:split(' ')
 	  
@@ -152,7 +156,7 @@ function loadTemporalEmb(file, w2v, f2i, options)
     -- We will expand the data on demand for each batch (zero padding)
     for line in tsfile:lines() do  
 
-       label, text = labelSent(line)
+       label, text = labelSent(line, options.lower)
 
        if label == nil then
 	  print('Skipping invalid line ' .. line .. " " .. linenum)
@@ -247,7 +251,7 @@ function loadTemporalIndices(file, w2v, f2i, options)
     -- We will expand the data on demand for each batch (zero padding)
     for line in tsfile:lines() do  
 
-       label, text = labelSent(line)
+       label, text = labelSent(line, options.lower)
 
        if label == nil then
 	  print('Skipping invalid line ' .. line .. " " .. linenum)
