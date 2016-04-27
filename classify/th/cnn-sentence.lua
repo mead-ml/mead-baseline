@@ -88,7 +88,7 @@ cmd:option('-cmotsz', DEF_CMOTSZ, 'Depth of convolutional/max-over-time output')
 cmd:option('-cactive', DEF_CACTIVE, 'Activation function following conv')
 cmd:option('-filtsz', DEF_FSZ, 'Convolution filter width')
 cmd:option('-lower', false, 'Lower case words')
-DEF_CACTIVE = 'ident'
+DEF_CACTIVE = 'relu'
 DEF_HACTIVE = 'relu'
 
 local opt = cmd:parse(arg)

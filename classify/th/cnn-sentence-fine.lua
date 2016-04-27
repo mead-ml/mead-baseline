@@ -43,8 +43,6 @@ DEF_EPOCHS = 1000
 DEF_PROC = 'gpu'
 DEF_CACTIVE = 'relu'
 DEF_HACTIVE = 'relu'
-DEF_CACTIVE = 'ident'
-DEF_HACTIVE = 'none'
 
 ---------------------------------------------------------------------
 -- Make a Softmax output CMOT with Dropout and a word2vec LookupTable
