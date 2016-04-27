@@ -43,6 +43,7 @@ DEF_EPOCHS = 1000
 DEF_PROC = 'gpu'
 DEF_CACTIVE = 'relu'
 DEF_HACTIVE = 'relu'
+DEF_EMBUNIF = 0.01
 
 ---------------------------------------------------------------------
 -- Make a Softmax output CMOT with Dropout and a word2vec LookupTable
@@ -75,7 +76,7 @@ cmd:text()
 cmd:text('Options:')
 cmd:option('-save', DEF_FILE_OUT, 'Save model to')
 cmd:option('-embed', DEF_EMBED, 'Word2Vec embeddings')
-cmd:option('-embunif', 0.0, 'Word2Vec initialization for non-attested attributes')
+cmd:option('-embunif', DEF_EMBUNIF, 'Word2Vec initialization for non-attested attributes')
 cmd:option('-eta', DEF_ETA, 'Initial learning rate')
 cmd:option('-optim', DEF_OPTIM, 'Optimization method (sgd|adagrad|adam)')
 cmd:option('-decay', DEF_DECAY, 'Weight decay')
