@@ -17,9 +17,9 @@ This code provides (at the moment) a pure Lua/Torch7 implementation -- no prepro
 
 *Details*
 
-This is very similar to the Collobert "Sentence Level Approach", though slightly different by default.  It also uses off-the-shelf Word2Vec embeddings.  It comes in two flavors, static embeddings and dynamic lookup table tuning.  This is inspired by Yoon Kim's paper "Convolutional Neural Networks for Sentence Classification", and differs in that it uses a single filter size, doesn't bother with random initialized embeddings options, and doesn't do the multi-channel embeddings.  By default, this model follows the Kim approach of connecting the Max Over Time directly to the final layer (though it supports the Collobert Sentence Level Approach as well).
+This is very similar to the Collobert "Sentence Level Approach", with one less layer and a ReLU default activation(you can add that layer back by passing -hsz parameter).  It also uses off-the-shelf Word2Vec embeddings.  It comes in two flavors, static embeddings and dynamic lookup table tuning.  This is inspired by Yoon Kim's paper "Convolutional Neural Networks for Sentence Classification"  -- its almost exactly the same but differs in that it uses a single filter size, doesn't bother with random initialized embeddings options, and doesn't do the multi-channel embeddings.  This makes the model very simple, lightweight, and esay to implement.
 
-Hidden unit sizes are configurable.  This code offers several optimization options (adagrad, adadelta, adam and vanilla sgd).  The Kim paper uses adadelta, which seems to work best for fine-tuning, but vanilla SGD often works great for static embeddings.  Input signals are always padded to account for the filter width, so edges are still handled.
+Temporal convolutional output feature map sizes are configurable (this is also, then, the same size as the max over time layer).  This code offers several optimization options (adagrad, adadelta, adam and vanilla sgd).  The Kim paper uses adadelta, which seems to work best for fine-tuning, but vanilla SGD often works great for static embeddings.  Input signals are always padded to account for the filter width, so edges are still handled.
 
 Despite the simplicity of these approaches, we have found that on many datasets this performs better than other strong baselines such as NBSVM, and often performs just as well as the multiple filter approach given by Kim. It seems that the optimization method and the embeddings matter quite a bit. For example, on the Trec QA, we tend to see around the same performance for fine-tuning as the Kim paper (93.6%-93.8%), but also get the same (or higher) using SGD with no fine tuning.
 
@@ -30,10 +30,12 @@ Here are some places where CMOT is known to perform well
   - Binary classification of Tweets (SemEval balanced binary splits)
     - Consistent improvement over NBSVM even with char-ngrams included and distance lexicons (compared using [NBSVM-XL](https://github.com/dpressel/nbsvm-xl))
   - Stanford Politeness Corpus
-    - Consistent improvement over [extended algorithm](https://github.com/sudhof/politeness) from authors using a fair split (descending rank heldout)
+    - Consistent improvement over [extended algorithm](https://github.com/sudhof/politeness) from authors using a decimation split (descending rank heldout)
   - Language Detection (using word and char embeddings)
   - Question Categorization (QA trec) (93.6-94% static using SGD, 93.6-94.8% dynamic using adadelta)
-  
+
+This architecture doesn't perform especially well on long posts compared to NBSVM or even SVM.  However, this pattern is used to good effect as a compositional portion of larger models by various researchers.
+
 ## cnn-sentence -- static, no LookupTable layer
 
 This is an efficient implementation of static embeddings, a separate program and routines are provided to preprocess the feature vectors.  Unlike approaches that try to reuse code and then zero gradients on updates, this code preprocesses the training data directly to word vectors.  This means that the first layer of the network is simply TemporalConvolution.  This keeps memory usage on the GPU estremely low, which means it can scale to larger problems.  This model is usually competitive with fine-tuning (it sometimes out-performs fine-tuning), and the code is very simple to implement from scratch (with no deep learning frameworks).
