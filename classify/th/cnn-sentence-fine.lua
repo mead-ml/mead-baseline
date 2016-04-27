@@ -177,16 +177,13 @@ for i=1,opt.epochs do
     print('Training epoch ' .. i)
     confusion = optim.ConfusionMatrix(i2f)
     trainEpoch(crit, model, ts, optmeth, confusion, opt)
-    collectgarbage()
     confusion = optim.ConfusionMatrix(i2f)
     local erate = test(model, es, confusion, opt)
-    collectgarbage()
     if erate < errmin then
        errmin = erate
        lastImproved = i
        print('Lowest error achieved yet -- writing model')
        saveModel(model, opt.save, opt.gpu)
-       collectgarbage()
     end
     if (i - lastImproved) > opt.patience then
        print('Stopping due to persistent failures to improve')
