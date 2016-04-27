@@ -4,15 +4,10 @@ require 'xlua'
 
 function activationFor(name)
    if name == 'ident' then
-      print('Using ident')
       return nn.Identity()
    elseif name == 'relu' then
-      print('Using relu')
-      print('relu!')
       return nn.ReLU()
-      
    end
-   print('Using tanh')
    return nn.Tanh()
 end
 
