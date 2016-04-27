@@ -26,7 +26,7 @@ torch.setdefaulttensortype('torch.FloatTensor')
 -----------------------------------------------------
 DEF_TSF = './data/TREC.train.all'
 DEF_ESF = './data/TREC.test.all'
-DEF_BATCHSZ = 10
+DEF_BATCHSZ = 20
 DEF_OPTIM = 'adadelta'
 DEF_ETA = 0.001
 DEF_MOM = 0.0
@@ -34,33 +34,36 @@ DEF_DECAY = 1e-9
 DEF_MXLEN = 100
 DEF_ESZ = 300
 DEF_CMOTSZ = 200
-DEF_HSZ = 200
+DEF_HSZ = -1 -- No additional projection layer
 DEF_EMBED = './data/GoogleNews-vectors-negative300.bin'
 DEF_FILE_OUT = './cnn-sentence.model'
 DEF_FSZ = 5
 DEF_PATIENCE = 50
 DEF_EPOCHS = 1000
 DEF_PROC = 'gpu'
+DEF_CACTIVE = 'relu'
+DEF_HACTIVE = 'relu'
+DEF_CACTIVE = 'ident'
+DEF_HACTIVE = 'none'
 
 ---------------------------------------------------------------------
 -- Make a Softmax output CMOT with Dropout and a word2vec LookupTable
 ---------------------------------------------------------------------
-function createModel(lookupTable, cmotsz, hsz, filtsz, gpu, nc)
+function createModel(lookupTable, cmotsz, cactive, hsz, hactive, filtsz, gpu, nc)
     local dsz = lookupTable.dsz
     local seq = nn.Sequential()
     seq:add(lookupTable)
-    tconv = nn.TemporalConvolution(dsz, cmotsz, filtsz)
-    seq:add(tconv)
+    seq:add(nn.TemporalConvolution(dsz, cmotsz, filtsz))
+    seq:add(activationFor(cactive))
     seq:add(nn.Max(2))
     seq:add(nn.Dropout(0.5))
     if hsz > 0 then
        seq:add(nn.Linear(cmotsz, hsz))
-       seq:add(nn.Tanh())
+       seq:add(activationFor(hactive))
+       seq:add(nn.Linear(hsz, nc))
     else
-       print('Skipping hidden layer')
-       hsz = cmotsz
-    end
-    seq:add(nn.Linear(hsz, nc))
+       seq:add(nn.Linear(cmotsz, nc))
+    end    
     seq:add(nn.LogSoftMax())
     return gpu and seq:cuda() or seq
 end
@@ -87,6 +90,7 @@ cmd:option('-mxlen', DEF_MXLEN, 'Max number of tokens to use')
 cmd:option('-patience', DEF_PATIENCE, 'How many failures to improve until quitting')
 cmd:option('-hsz', DEF_HSZ, 'Depth of additional hidden layer')
 cmd:option('-cmotsz', DEF_CMOTSZ, 'Depth of convolutional/max-over-time output') 
+cmd:option('-cactive', DEF_CACTIVE, 'Activation function following conv')
 cmd:option('-filtsz', DEF_FSZ, 'Convolution filter width')
 -- Strongly recommend its set to 'true' for non-massive GPUs
 cmd:option('-lower', false, 'Lower case words')
@@ -165,7 +169,7 @@ print(#i2f)
 -- Build model and criterion
 ---------------------------------------
 local crit = createCrit(opt.gpu, #i2f)
-local model = createModel(w2v, opt.cmotsz, opt.hsz, opt.filtsz, opt.gpu, #i2f)
+local model = createModel(w2v, opt.cmotsz, opt.cactive, opt.hsz, opt.hactive, opt.filtsz, opt.gpu, #i2f)
 
 local errmin = 1
 local lastImproved = 0

@@ -1,5 +1,17 @@
+require 'nn'
 require 'optim'
 require 'xlua'
+
+function activationFor(name)
+   if name == 'ident' then
+      return nn.Identity()
+   elseif name == 'relu' then
+      print('relu!')
+      return nn.ReLU()
+      
+   end
+   return nn.Tanh()
+end
 
 -- From the option list, pick one of [sgd, adagrad, adadelta, adam]
 function optimMethod(opt)
