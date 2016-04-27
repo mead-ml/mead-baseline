@@ -33,6 +33,7 @@ DEF_MOM = 0.0
 DEF_DECAY = 1e-9
 DEF_MXLEN = 100
 DEF_ESZ = 300
+DEF_CMOTSZ = 200
 DEF_HSZ = 200
 DEF_EMBED = './data/GoogleNews-vectors-negative300.bin'
 DEF_FILE_OUT = './cnn-sentence.model'
@@ -44,14 +45,21 @@ DEF_PROC = 'gpu'
 ---------------------------------------------------------------------
 -- Make a Softmax output CMOT with Dropout and a word2vec LookupTable
 ---------------------------------------------------------------------
-function createModel(lookupTable, hsz, filtsz, gpu, nc)
+function createModel(lookupTable, cmotsz, hsz, filtsz, gpu, nc)
     local dsz = lookupTable.dsz
     local seq = nn.Sequential()
     seq:add(lookupTable)
-    tconv = nn.TemporalConvolution(dsz, hsz, filtsz)
+    tconv = nn.TemporalConvolution(dsz, cmotsz, filtsz)
     seq:add(tconv)
     seq:add(nn.Max(2))
     seq:add(nn.Dropout(0.5))
+    if hsz > 0 then
+       seq:add(nn.Linear(cmotsz, hsz))
+       seq:add(nn.Tanh())
+    else
+       print('Skipping hidden layer')
+       hsz = cmotsz
+    end
     seq:add(nn.Linear(hsz, nc))
     seq:add(nn.LogSoftMax())
     return gpu and seq:cuda() or seq
@@ -77,7 +85,8 @@ cmd:option('-proc', DEF_PROC, 'Backend (gpu|cpu)')
 cmd:option('-batchsz', DEF_BATCHSZ, 'Batch size')
 cmd:option('-mxlen', DEF_MXLEN, 'Max number of tokens to use')
 cmd:option('-patience', DEF_PATIENCE, 'How many failures to improve until quitting')
-cmd:option('-hsz', DEF_HSZ, 'Depth of convolutional/max-over-time output')
+cmd:option('-hsz', DEF_HSZ, 'Depth of additional hidden layer')
+cmd:option('-cmotsz', DEF_CMOTSZ, 'Depth of convolutional/max-over-time output') 
 cmd:option('-filtsz', DEF_FSZ, 'Convolution filter width')
 -- Strongly recommend its set to 'true' for non-massive GPUs
 cmd:option('-lower', false, 'Lower case words')
@@ -156,7 +165,7 @@ print(#i2f)
 -- Build model and criterion
 ---------------------------------------
 local crit = createCrit(opt.gpu, #i2f)
-local model = createModel(w2v, opt.hsz, opt.filtsz, opt.gpu, #i2f)
+local model = createModel(w2v, opt.cmotsz, opt.hsz, opt.filtsz, opt.gpu, #i2f)
 
 local errmin = 1
 local lastImproved = 0
