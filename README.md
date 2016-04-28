@@ -25,7 +25,7 @@ This code doesn't implement multi-channel, as this probably does not make sense 
 
 Temporal convolutional output total number of feature maps is configurable (this is also defines the size of the max over time layer, by definition).  This code offers several optimization options (adagrad, adadelta, adam and vanilla sgd).  The Kim paper uses adadelta, which seems to work best for fine-tuning, but vanilla SGD often works great for static embeddings.  Input signals are always padded to account for the filter width, so edges are still handled.
 
-Despite the simplicity of these approaches, we have found that on many datasets this performs better than other strong baselines such as NBSVM, and often performs just as well as the multiple filter approach given by Kim. It seems that the optimization method and the embeddings matter quite a bit. For example, on the Trec QA, we tend to see around the same performance for fine-tuning as the Kim paper (93.6%-93.8%), but also get the same (or higher) using SGD with no fine tuning.
+Despite the simplicity of these approaches, we have found that on many datasets this performs better than other strong baselines such as NBSVM.
 
 Here are some places where this code is known to perform well:
 
