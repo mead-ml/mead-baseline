@@ -44,9 +44,9 @@ This architecture doesn't seem to perform especially well on long posts compared
 
 This is an efficient implementation of static embeddings.  Unlike approaches that try to reuse the main code and then zero gradients on updates, this code preprocesses the training data directly to word vectors.  This means that the first layer of the network is simply TemporalConvolution.  This keeps memory usage on the GPU estremely low, which means it can scale to larger problems.  This model is usually competitive with fine-tuning (it sometimes out-performs fine-tuning), and the code is very simple to implement from scratch (with no deep learning frameworks).
 
-For handling data with high word sparsity, and for data where morphological features are useful, we also provide a very simple solution that occasionally does improve results -- we simply use the average of character vectors generated using word2vec and concatenate this vector.  This is an option in the fixed embeddings version only.  This is useful for problems like Language Detection, for example
+For handling data with high word sparsity, and for data where morphological features are useful, we also provide a very simple solution that occasionally does improve results -- we simply use the average of character vectors passed in from a word2vec-style binary file and concatenate this word representation to the word2vec vector.  This is an option in the fixed embeddings version only.  This is useful for problems like Language Detection in Twitter, for example.
 
-If you are looking specifically for Yoon Kim's multi-channel model, his code is open source (https://github.com/yoonkim/CNN_sentence) and there is another project on Github from Harvard NLP which recreates it in Torch (https://github.com/harvardnlp/sent-conv-torch).  By focusing on the static and non-static models, we are able to keep this code lean, easy to understand, and applicable as a baseline to a broad range of problems.  Unlike other versions, we treat fine tuning and static as different implementations, which removes a LookupTable from the static method.
+If you are looking specifically for Yoon Kim's multi-channel model, his code is open source (https://github.com/yoonkim/CNN_sentence) and there is another project on Github from Harvard NLP which recreates it in Torch (https://github.com/harvardnlp/sent-conv-torch).  By focusing on the static and non-static models, we are able to keep this code lean, easy to understand, and applicable as a baseline to a broad range of problems.
 
 Also note that for static implementations, batch size and optimization methods can be quite simple.  Often batch sizes of 1-10 with vanilla SGD produce terrific results.
 
@@ -54,9 +54,9 @@ The code supports multiple activation functions, but defaults to ReLU.
 
 ## Dynamic - Fine Tuning Lookup Tables pretrained with Word2Vec
 
-The fine-tuning approach uses the expected LookupTable layer.  It seems that when using fine-tuning, adadelta performs best.  As we can see from the Kim paper, it seems that the dynamic fine-tuning models do not always out-perform static models, and they have additional baggage due to LookupTable size which may make them more cumbersome to use as baselines.  However, if tuned properly, they often can out-perform the static models slightly.
+The fine-tuning approach loads the word2vec weight matrix into an Lookup Table.  It seems that when using fine-tuning, adadelta performs best.  As we can see from the Kim paper, non-satic/fine-tuning models do not always out-perform static models, and they have additional baggage due to LookupTable size which may make them more cumbersome to use as baselines.  However, if tuned properly, they often can out-perform the static models.
 
-We provide an option to cull non-attested features from the LookupTable for efficiency, and randomly initialize unattested words in the LUT.
+We provide an option to cull non-attested features (-cullunused) from the Lookup Table for efficiency, and randomly initialize unattested words and add them to the weight matrix for the Lookup Table.
 
 ## Running It
 
@@ -71,13 +71,12 @@ th cnn-sentence.lua -eta 0.01 -batchsz 10 -decay 1e-9 -epochs 200 -train ../data
 Here is an example of parameterization of dynamic fine tuning (cnn-sentence-fine.lua) with SGD achieving final accuracy of *93.6-94.8%*
 
 ```
-th cnn-sentence-fine.lua -cullunused -optim adadelta -patience 20 -batchsz 10 -decay 1e-9 -epochs 1000 -train ../data/TREC.train.all -eval ../data/TREC.test.all -embed /data/xdata/GoogleNews-vectors-negative300.bin
+th cnn-sentence-fine.lua -cullunused -optim adadelta -patience 20 -batchsz 10 -epochs 200 -train ../data/TREC.train.all -eval ../data/TREC.test.all -embed /data/xdata/GoogleNews-vectors-negative300.bin
 ```
 
 # Structured Prediction using RNNs
 
-This code is useful for tagging tasks, e.g., POS tagging, chunking and NER tagging.  Recently, several researchers have proposed using RNNs for tagging, 
-particularly LSTMs.  These models do back-propagation through time (BPTT)
+This code is useful for tagging tasks, e.g., POS tagging, chunking and NER tagging.  Recently, several researchers have proposed using RNNs for tagging, particularly LSTMs.  These models do back-propagation through time (BPTT)
 and then apply a shared fully connected layer per RNN output to produce a label.
 A common modification is to use Bidirectional LSTMs -- one in the forward direction, and one in the backward direction.  This usually improves the resolution of the tagger significantly.
 
@@ -85,7 +84,7 @@ This code is intended to be as simple as possible, and can utilize Justin Johnso
 
 ## rnn-tag: Static implementation, input is a temporal feature vector of dense representations
 
-Twitter is challenging to build a tagger for.  The [TweetNLP project](http://www.cs.cmu.edu/~ark/TweetNLP) includes hand annotated POS data. The original taggers used for this task are described [here](http://www.cs.cmu.edu/~ark/TweetNLP/gimpel+etal.acl11.pdf).  The baseline that they compared their algorithm against got 83.38% accuracy.  The final model got 89.37% accuracy with many custom features.  Below, our simple BLSTM baseline with no custom features, and no fine tuning of embeddings gets *88.67%* accuracy.  Without any character vectors, the model still gets 88.27% accuracy.
+Twitter is challenging data source for tagging problems.  The [TweetNLP project](http://www.cs.cmu.edu/~ark/TweetNLP) includes hand annotated POS data. The original taggers used for this task are described [here](http://www.cs.cmu.edu/~ark/TweetNLP/gimpel+etal.acl11.pdf).  The baseline that they compared their algorithm against got 83.38% accuracy.  The final model got 89.37% accuracy with many custom features.  Below, our simple BLSTM baseline with no custom features, and no fine tuning of embeddings gets *88.67%* accuracy.  Without any character vectors, the model still gets 88.27% accuracy.
 
 This has been tested on oct27 train+dev and test splits (http://www.cs.cmu.edu/~ark/TweetNLP), using custom word2vec embedddings generated from ~32M tweets including s140 and the oct27 train+dev data.  Some of the data was sampled and preprocessed to have placeholder words for hashtags, mentions and URLs to be used as backoffs for words of those classes which are not found.  It also employs character vectors taken from splitting oct27 train+dev and s140 data and uses them to build averaged word vectors over characters.  This is a simple way of accounting for morphology and sparse terms while being simple enough to be a strong baseline.
 
