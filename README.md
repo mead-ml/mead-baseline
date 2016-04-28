@@ -42,7 +42,7 @@ This architecture doesn't seem to perform especially well on long posts compared
 
 ## cnn-sentence -- static, no LookupTable layer
 
-This is an efficient implementation of static embeddings, a separate program and routines are provided to preprocess the feature vectors.  Unlike approaches that try to reuse code and then zero gradients on updates, this code preprocesses the training data directly to word vectors.  This means that the first layer of the network is simply TemporalConvolution.  This keeps memory usage on the GPU estremely low, which means it can scale to larger problems.  This model is usually competitive with fine-tuning (it sometimes out-performs fine-tuning), and the code is very simple to implement from scratch (with no deep learning frameworks).
+This is an efficient implementation of static embeddings.  Unlike approaches that try to reuse the main code and then zero gradients on updates, this code preprocesses the training data directly to word vectors.  This means that the first layer of the network is simply TemporalConvolution.  This keeps memory usage on the GPU estremely low, which means it can scale to larger problems.  This model is usually competitive with fine-tuning (it sometimes out-performs fine-tuning), and the code is very simple to implement from scratch (with no deep learning frameworks).
 
 For handling data with high word sparsity, and for data where morphological features are useful, we also provide a very simple solution that occasionally does improve results -- we simply use the average of character vectors generated using word2vec and concatenate this vector.  This is an option in the fixed embeddings version only.  This is useful for problems like Language Detection, for example
 
