@@ -137,10 +137,11 @@ function loadTemporalEmb(file, w2v, f2i, options)
        dsz = dsz + options.w2cv.dsz
     end
     options = options or {}
-    local filtsz = options.filtsz or 0
+
+    local mxfiltsz = torch.max(torch.LongTensor(options.filtsz))
     local mxlen = options.mxlen or 1000
     -- for zeropadding the ends of the signal (AKA wide conv)
-    local halffiltsz = math.floor(filtsz / 2)
+    local halffiltsz = math.floor(mxfiltsz / 2)
 
     -- Read in training data
     local tsfile = io.open(file, 'r')
@@ -232,10 +233,10 @@ function loadTemporalIndices(file, w2v, f2i, options)
     local dsz = w2v.dsz
 
     options = options or {}
-    local filtsz = options.filtsz or 0
+    local mxfiltsz = torch.max(torch.LongTensor(options.filtsz))
     local mxlen = options.mxlen or 1000
     -- for zeropadding the ends of the signal (AKA wide conv)
-    local halffiltsz = math.floor(filtsz / 2)
+    local halffiltsz = math.floor(mxfiltsz / 2)
 
     -- Read in training data
     local tsfile = io.open(file, 'r')

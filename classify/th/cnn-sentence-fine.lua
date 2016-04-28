@@ -31,13 +31,14 @@ DEF_OPTIM = 'adadelta'
 DEF_ETA = 0.001
 DEF_MOM = 0.0
 DEF_DECAY = 1e-9
+DEF_DROP = 0.5
 DEF_MXLEN = 100
 DEF_ESZ = 300
 DEF_CMOTSZ = 200
 DEF_HSZ = -1 -- No additional projection layer
 DEF_EMBED = './data/GoogleNews-vectors-negative300.bin'
 DEF_FILE_OUT = './cnn-sentence.model'
-DEF_FSZ = 5
+DEF_FSZ = '{5}'
 DEF_PATIENCE = 50
 DEF_EPOCHS = 1000
 DEF_PROC = 'gpu'
@@ -48,20 +49,32 @@ DEF_EMBUNIF = 0.01
 ---------------------------------------------------------------------
 -- Make a Softmax output CMOT with Dropout and a word2vec LookupTable
 ---------------------------------------------------------------------
-function createModel(lookupTable, cmotsz, cactive, hsz, hactive, filtsz, gpu, nc)
+function createModel(lookupTable, cmotsz, cactive, hsz, hactive, filts, gpu, nc, pdrop)
     local dsz = lookupTable.dsz
     local seq = nn.Sequential()
+
     seq:add(lookupTable)
-    seq:add(nn.TemporalConvolution(dsz, cmotsz, filtsz))
-    seq:add(activationFor(cactive))
-    seq:add(nn.Max(2))
-    seq:add(nn.Dropout(0.5))
+
+    local concat = nn.Concat(2)
+    -- Normally just one filter, but allow more if need be
+    for i=1,#filts do
+       local filtsz = filts[i]
+       print('Creating filter of size ' .. filtsz)
+       local subseq = nn.Sequential()
+       subseq:add(nn.TemporalConvolution(dsz, cmotsz, filtsz))
+       subseq:add(activationFor(cactive))
+       subseq:add(nn.Max(2))
+       subseq:add(nn.Dropout(pdrop))
+       concat:add(subseq)
+    end
+    seq:add(concat)
+    -- If you wanted another hidden layer
     if hsz > 0 then
-       seq:add(nn.Linear(cmotsz, hsz))
+       seq:add(nn.Linear(#filts * cmotsz, hsz))
        seq:add(activationFor(hactive))
        seq:add(nn.Linear(hsz, nc))
     else
-       seq:add(nn.Linear(cmotsz, nc))
+       seq:add(nn.Linear(#filts * cmotsz, nc))
     end    
     seq:add(nn.LogSoftMax())
     return gpu and seq:cuda() or seq
@@ -80,6 +93,7 @@ cmd:option('-embunif', DEF_EMBUNIF, 'Word2Vec initialization for non-attested at
 cmd:option('-eta', DEF_ETA, 'Initial learning rate')
 cmd:option('-optim', DEF_OPTIM, 'Optimization method (sgd|adagrad|adam)')
 cmd:option('-decay', DEF_DECAY, 'Weight decay')
+cmd:option('-dropout', DEF_DROP, 'Dropout prob')
 cmd:option('-mom', DEF_MOM, 'Momentum for SGD')
 cmd:option('-train', DEF_TSF, 'Training file')
 cmd:option('-eval', DEF_ESF, 'Testing file')
@@ -96,8 +110,7 @@ cmd:option('-filtsz', DEF_FSZ, 'Convolution filter width')
 cmd:option('-lower', false, 'Lower case words')
 cmd:option('-cullunused', false, 'Cull unattested words from Lookup Table')
 local opt = cmd:parse(arg)
-
-
+opt.filtsz = loadstring("return " .. opt.filtsz)()
 ----------------------------------------
 -- Optimization
 ----------------------------------------
@@ -169,7 +182,7 @@ print(#i2f)
 -- Build model and criterion
 ---------------------------------------
 local crit = createCrit(opt.gpu, #i2f)
-local model = createModel(w2v, opt.cmotsz, opt.cactive, opt.hsz, opt.hactive, opt.filtsz, opt.gpu, #i2f)
+local model = createModel(w2v, opt.cmotsz, opt.cactive, opt.hsz, opt.hactive, opt.filtsz, opt.gpu, #i2f, opt.dropout)
 
 local errmin = 1
 local lastImproved = 0
