@@ -60,9 +60,7 @@ We provide an option to cull non-attested features (-cullunused) from the Lookup
 
 ## Running It
 
-Early stopping with patience is used.  There are many hyper-parameters that you can tune, which may yield many different models.  Due to random shuffling performed during training, runs may achieve slightly different performance each run.  Therefore multiple runs are suggested for each configuration.
-
-Here is an example of parameterization of static embeddings (cnn-sentence.lua) with SGD and a single filter width of 5, achieving final accuracy of *93.6-94.2%*
+Early stopping with patience is used.  There are many hyper-parameters that you can tune, which may yield many different models.  Here is an example of parameterization of static embeddings (cnn-sentence.lua) with SGD and a single filter width of 5, achieving final accuracy of *93.6-94.2%*
 
 ```
 th cnn-sentence.lua -eta 0.01 -batchsz 10 -decay 1e-9 -epochs 200 -train ../data/TREC.train.all -eval ../data/TREC.test.all -embed /data/xdata/GoogleNews-vectors-negative300.bin
