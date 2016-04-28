@@ -21,10 +21,7 @@ This is inspired by Yoon Kim's paper "Convolutional Neural Networks for Sentence
 
 To use multiple filter widths at the same time, like in the Kim paper (they use 3,4 and 5), pass in -filtsz {3,4,5} at the command line.  By default, the model uses a single filter, which probably makes more sense as a baseline implementation and is slightly easier to replicate from scratch.
 
-This code doesn't implement multi-channel, as this probably does not make sense as a baseline.  You could also think of it as the Collobert model, without the last hidden projection layer, and using word2vec initializations upfront.
-The algorithm comes in two flavors, static embeddings and dynamic lookup table tuning.
-
-This code also supports adding a hidden projection layer (if you pass hsz), like the "Sentence Level Approach" in the Collobert et al. paper, "Natural Language Processing (Almost) from Scratch"
+This code doesn't implement multi-channel, as this probably does not make sense as a baseline. It does also support adding a hidden projection layer (if you pass hsz), which is kind of like the "Sentence Level Approach" in the Collobert et al. paper, "Natural Language Processing (Almost) from Scratch"
 
 Temporal convolutional output total number of feature maps is configurable (this is also defines the size of the max over time layer, by definition).  This code offers several optimization options (adagrad, adadelta, adam and vanilla sgd).  The Kim paper uses adadelta, which seems to work best for fine-tuning, but vanilla SGD often works great for static embeddings.  Input signals are always padded to account for the filter width, so edges are still handled.
 
