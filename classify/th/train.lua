@@ -46,7 +46,7 @@ function trainEpoch(crit, model, ts, optmeth, confusion, options)
 	  return err, dEdw
        end
        
-       optmeth(evalf, w, state)
+       optmeth(evalf, w, config)
        if options.afteroptim then
 	  options.afteroptim()
        end
@@ -61,7 +61,7 @@ function trainEpoch(crit, model, ts, optmeth, confusion, options)
 
 end
 
-function test(model, es, confusion, options)
+function test(crit, model, es, confusion, options)
 
     local xt = es.x
     local yt = es.y
@@ -73,6 +73,7 @@ function test(model, es, confusion, options)
         local y = options.gpu and yt[i]:cuda() or yt[i]
 	local thisBatchSz = x:size(1)
 	local pred = model:forward(x)
+--	local err = crit:forward(pred, y)
 
 	for j = 1,thisBatchSz do
 	   confusion:add(pred[j], y[j])
@@ -81,9 +82,11 @@ function test(model, es, confusion, options)
 	xlua.progress(i, #xt)
 
     end
+
     time = sys.clock() - time
     print(confusion)
     print('Test error ' .. (1-confusion.totalValid))
     print("Time to test " .. time .. 's')
+
     return (1-confusion.totalValid)
 end

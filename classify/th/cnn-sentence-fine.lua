@@ -25,6 +25,7 @@ torch.setdefaulttensortype('torch.FloatTensor')
 -- provide reasonable args for any algorithm a user selects
 -----------------------------------------------------
 DEF_TSF = './data/TREC.train.all'
+DEF_VSF = 'none'
 DEF_ESF = './data/TREC.test.all'
 DEF_BATCHSZ = 20
 DEF_OPTIM = 'adadelta'
@@ -34,17 +35,20 @@ DEF_DECAY = 1e-9
 DEF_DROP = 0.5
 DEF_MXLEN = 100
 DEF_ESZ = 300
-DEF_CMOTSZ = 200
+DEF_CMOTSZ = 100
 DEF_HSZ = -1 -- No additional projection layer
 DEF_EMBED = './data/GoogleNews-vectors-negative300.bin'
-DEF_FILE_OUT = './cnn-sentence.model'
+DEF_FILE_OUT = './cnn-sentence-fine.model'
 DEF_FSZ = '{5}'
-DEF_PATIENCE = 50
-DEF_EPOCHS = 1000
+DEF_PATIENCE = 10
+DEF_EPOCHS = 25
 DEF_PROC = 'gpu'
 DEF_CACTIVE = 'relu'
 DEF_HACTIVE = 'relu'
-DEF_EMBUNIF = 0.01
+DEF_EMBUNIF = 0.25
+DEF_VALSPLIT = 0.15
+
+linear = nil
 
 ---------------------------------------------------------------------
 -- Make a Softmax output CMOT with Dropout and a word2vec LookupTable
@@ -61,8 +65,9 @@ function createModel(lookupTable, cmotsz, cactive, hsz, hactive, filts, gpu, nc,
        local filtsz = filts[i]
        print('Creating filter of size ' .. filtsz)
        local subseq = nn.Sequential()
-       subseq:add(nn.TemporalConvolution(dsz, cmotsz, filtsz))
-       subseq:add(activationFor(cactive))
+
+       subseq:add(newConv1D(dsz, cmotsz, filtsz, gpu))
+       subseq:add(activationFor(cactive, gpu))
        subseq:add(nn.Max(2))
        subseq:add(nn.Dropout(pdrop))
        concat:add(subseq)
@@ -70,13 +75,14 @@ function createModel(lookupTable, cmotsz, cactive, hsz, hactive, filts, gpu, nc,
     seq:add(concat)
     -- If you wanted another hidden layer
     if hsz > 0 then
-       seq:add(nn.Linear(#filts * cmotsz, hsz))
-       seq:add(activationFor(hactive))
-       seq:add(nn.Linear(hsz, nc))
+       seq:add(newLinear(#filts * cmotsz, hsz))
+       seq:add(activationFor(hactive, gpu))
+       seq:add(newLinear(hsz, nc))
     else
-       seq:add(nn.Linear(#filts * cmotsz, nc))
+       seq:add(newLinear(#filts * cmotsz, nc))
     end    
-    seq:add(nn.LogSoftMax())
+    seq:add(activationFor('lsoftmax', gpu))
+    
     return gpu and seq:cuda() or seq
 end
 
@@ -96,25 +102,27 @@ cmd:option('-decay', DEF_DECAY, 'Weight decay')
 cmd:option('-dropout', DEF_DROP, 'Dropout prob')
 cmd:option('-mom', DEF_MOM, 'Momentum for SGD')
 cmd:option('-train', DEF_TSF, 'Training file')
-cmd:option('-eval', DEF_ESF, 'Testing file')
+cmd:option('-valid', DEF_VSF, 'Validation file (optional)')
+cmd:option('-eval', DEF_ESF, 'Test file')
 cmd:option('-epochs', DEF_EPOCHS, 'Number of epochs')
 cmd:option('-proc', DEF_PROC, 'Backend (gpu|cpu)')
 cmd:option('-batchsz', DEF_BATCHSZ, 'Batch size')
 cmd:option('-mxlen', DEF_MXLEN, 'Max number of tokens to use')
 cmd:option('-patience', DEF_PATIENCE, 'How many failures to improve until quitting')
 cmd:option('-hsz', DEF_HSZ, 'Depth of additional hidden layer')
-cmd:option('-cmotsz', DEF_CMOTSZ, 'Depth of convolutional/max-over-time output') 
+cmd:option('-cmotsz', DEF_CMOTSZ, 'Depth of convolutional/max-over-time output')
 cmd:option('-cactive', DEF_CACTIVE, 'Activation function following conv')
 cmd:option('-filtsz', DEF_FSZ, 'Convolution filter width')
--- Strongly recommend its set to 'true' for non-massive GPUs
-cmd:option('-lower', false, 'Lower case words')
+cmd:option('-clean', false, 'Cleanup tokens')
 cmd:option('-cullunused', false, 'Cull unattested words from Lookup Table')
+cmd:option('-valsplit', DEF_VALSPLIT, 'Fraction training used for validation if no set is given')
+
 local opt = cmd:parse(arg)
 opt.filtsz = loadstring("return " .. opt.filtsz)()
 ----------------------------------------
 -- Optimization
 ----------------------------------------
-state, optmeth = optimMethod(opt)
+config, optmeth = optimMethod(opt)
 
 ----------------------------------------
 -- Processing on GPU or CPU
@@ -124,6 +132,7 @@ if opt.proc == 'gpu' then
    opt.gpu = true
    require 'cutorch'
    require 'cunn'
+   require 'cudnn'
 else
    opt.proc = 'cpu'
 end
@@ -142,8 +151,9 @@ print('Processing on ' .. opt.proc)
 local vocab = nil
 
 if opt.cullunused then
-   vocab = buildVocab({opt.train, opt.eval})
+   vocab = buildVocab({opt.train, opt.eval, opt.valid}, opt.clean)
    print('Removing unattested words')
+
 end
 
 ---------------------------------------
@@ -155,8 +165,8 @@ print('Using batch size ' .. opt.batchsz)
 -- Load Word2Vec Model and provide a hook for 
 -- zero-ing the weights after each iteration
 -----------------------------------------------
-
 w2v = Word2VecLookupTable(opt.embed, vocab, opt.embunif)
+
 function afterhook() 
       w2v.weight[w2v.vocab["<PADDING>"]]:zero()
 end
@@ -172,11 +182,21 @@ print('Vocab size ' .. w2v.vsz)
 local f2i = {}
 ts,f2i = loadTemporalIndices(opt.train, w2v, f2i, opt)
 print('Loaded training data')
+
+if opt.valid ~= 'none' then
+   print('Using provided validation data')
+   vs,f2i = loadTemporalIndices(opt.valid, w2v, f2i, opt)
+else
+   ts,vs = validSplit(ts, opt.valsplit)
+   print('Created validation split')
+end
 es,f2i = loadTemporalIndices(opt.eval, w2v, f2i, opt)
-print('Loaded test data')
+
+print('Using ' .. #(ts.x) .. ' batches for training')
+print('Using ' .. #(vs.x) .. ' batches for validation')
+print('Using ' .. #(es.x) .. ' batches for test')
+
 local i2f = revlut(f2i)
-print(f2i)
-print(#i2f)
 
 ---------------------------------------
 -- Build model and criterion
@@ -192,7 +212,7 @@ for i=1,opt.epochs do
     confusion = optim.ConfusionMatrix(i2f)
     trainEpoch(crit, model, ts, optmeth, confusion, opt)
     confusion = optim.ConfusionMatrix(i2f)
-    local erate = test(model, es, confusion, opt)
+    local erate = test(crit, model, vs, confusion, opt)
     if erate < errmin then
        errmin = erate
        lastImproved = i
@@ -205,4 +225,11 @@ for i=1,opt.epochs do
     end
 end
 
+
+
 print('Highest test acc: ' .. (100 * (1. - errmin)))
+print('=====================================================')
+print('Evaluating best model on test data')
+model = loadModel(opt.save, opt.gpu)
+confusion = optim.ConfusionMatrix(i2f)
+local _ = test(crit, model, es, confusion, opt)

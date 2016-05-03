@@ -1,3 +1,25 @@
+require 'classutils'
+function validSplit(ts, splitfrac)
+   local train = {x={},y={}}
+   local valid = {x={},y={}}
+   local numinst = #(ts.x)
+   local heldout = numinst * splitfrac
+   local holdidx = numinst - heldout
+   for i,x in ipairs(ts.x) do
+      local y = ts.y[i]
+      if i < holdidx then
+	 table.insert(train.x, x)
+	 table.insert(train.y, y)
+      else
+	 table.insert(valid.x, x)
+	 table.insert(valid.y, y)
+      end
+      
+   end
+   
+   return train, valid
+end
+
 --[[
 
   Data loader code for label followed by text TSVs.
@@ -5,19 +27,51 @@
   <label>\s+<sentence>
 
 --]]
-function labelSent(line, lower)
+function labelSent(line, clean)
+
    local labelText = line:split('%s+')
    if #labelText < 2 then return nil, nil end
    local label = labelText[1]
-   local text = labelText[2]
-   for i=3,#labelText do
+   local text = ''
+   for i=2,#labelText do
       local w = labelText[i]
-      if lower then
-	 w = w:lower()
+      if clean then
+	 w = doClean(w:lower())
       end
       text = text .. ' ' .. w
    end
    return label,text
+end
+
+VALID_TOKENS = revlut({
+      'A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z', 'a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z','(',')',',', '!','?',"'","`", '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'})
+
+
+-- Bottom-up token cleanup
+function doClean(l)
+   
+   local clean = ''
+   -- preproc the line
+   l,_ = l.gsub(l, "%'s", " 's ")
+   l,_ = l.gsub(l, "%'ve", " 've ")
+   l,_ = l.gsub(l, "n%'t", " n't ")
+   l,_ = l.gsub(l, "%'re", " 're ")
+   l,_ = l.gsub(l, "%'d", " 'd ")
+   l,_ = l.gsub(l, "%'ll", " 'll ")
+--   l,_ = l.gsub(l, ',', ' , ')
+--   l,_ = l.gsub(l, '%?', ' ? ')
+--   l,_ = l.gsub(l, '%!', ' ! ')
+--   l,_ = l.gsub(l, '%(', ' ( ')
+--   l,_ = l.gsub(l, '%)', ' ) ')
+   
+   for i=1,#l do
+      local ch = l:sub(i, i)
+      local append = VALID_TOKENS[ch] == nil and ' ' or ch
+      clean = clean .. append
+   end
+-- not necessary, this gets resplit on 's+'
+--   clean,_ = string.gsub(clean, '%s+', ' ')
+   return clean
 end
 
 -- Average letter vectors over word
@@ -90,23 +144,27 @@ end
   Build a vocab by processing all these files and generating a table
   of form {["hello"]=1, ..., ["world"]=1}
 --]]
-function buildVocab(files, lower)
+function buildVocab(files, clean)
     local vocab = {}
 
     for i=1,#files do
-       local tsfile = io.open(files[i], 'r')
-
-       for line in tsfile:lines() do  
+       if files[i] ~= nil and files[i] ~= 'none' then
+	  local tsfile = io.open(files[i], 'r')
 	  
-	  _, text = labelSent(line, lower)
-	  
-	  local toks = text:split(' ')
-	  
-	  local siglen = #toks
-	  for i=1,siglen do
-	     local w = toks[i]
-	     vocab[w] = vocab[w] or 1
+	  for line in tsfile:lines() do  
+	     
+	     _, text = labelSent(line, clean)
+	     
+	     local toks = text:split(' ')
+	     
+	     local siglen = #toks
+	     for i=1,siglen do
+		local w = toks[i]
+		vocab[w] = vocab[w] or 1
+	     end
 	  end
+       else
+	  print('Warn: skipping file ' .. files[i])
        end
     end
     return vocab
@@ -157,7 +215,7 @@ function loadTemporalEmb(file, w2v, f2i, options)
     -- We will expand the data on demand for each batch (zero padding)
     for line in tsfile:lines() do  
 
-       label, text = labelSent(line, options.lower)
+       label, text = labelSent(line, options.clean)
 
        if label == nil then
 	  print('Skipping invalid line ' .. line .. " " .. linenum)
@@ -252,7 +310,7 @@ function loadTemporalIndices(file, w2v, f2i, options)
     -- We will expand the data on demand for each batch (zero padding)
     for line in tsfile:lines() do  
 
-       label, text = labelSent(line, options.lower)
+       label, text = labelSent(line, options.clean)
 
        if label == nil then
 	  print('Skipping invalid line ' .. line .. " " .. linenum)
@@ -277,7 +335,12 @@ function loadTemporalIndices(file, w2v, f2i, options)
        end
        for i=1,mx do
 	  local w = toks[i]
-	  local key = w2v.vocab[w] or w2v.vocab['<PADDING>']
+	  local key = w2v.vocab[w] -- or w2v.vocab['<PADDING>']
+
+	  --if key == nil then
+	  ---print('Unexpected word ' .. w)
+	  --end
+	  
 	  table.insert(xo, key)
        end
        for i=1,halffiltsz do

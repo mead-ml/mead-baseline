@@ -15,6 +15,8 @@ After considering other strong, shallow baselines, we have found that even incre
 
 This code provides (at the moment) a pure Lua/Torch7 implementation -- no preprocessing of the dataset with python, nor HDF5 is required!  It depends on a tiny module that can load word2vec in Torch (https://github.com/dpressel/emb) either as a model, or as an nn.LookupTable.  It is important to note that these models can easily be implemented with other deep learning frameworks, and without much work, can also be implemented from scratch!  Over time, this package will hopefully provide alternate implementations in other DL Frameworks and programming languages.
 
+When the GPU is used, the code *assumes that cudnn (R4) is available* and installed. This is because the performance gains over the 'cunn' implementation are significant (e.g., 3 minutes -> 30 seconds).
+
 *Details*
 
 This is inspired by Yoon Kim's paper "Convolutional Neural Networks for Sentence Classification", and before that Collobert's "Sentence Level Approach."  The implementations provided here are basically the Kim static and non-static models.
