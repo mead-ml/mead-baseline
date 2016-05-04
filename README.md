@@ -38,7 +38,7 @@ Here are some places where this code is known to perform well:
   - Stanford Politeness Corpus
     - Consistent improvement over [extended algorithm](https://github.com/sudhof/politeness) from authors using a decimation split (descending rank heldout)
   - Language Detection (using word and char embeddings)
-  - Question Categorization (QA trec) (93.6-94% static using SGD, 93.6-94.8% dynamic using adadelta)
+  - Question Categorization (QA trec)
 
 This architecture doesn't seem to perform especially well on long posts compared to NBSVM or even SVM.  However, this pattern is used to good effect as a compositional portion of larger models by various researchers.
 
@@ -62,16 +62,28 @@ We provide an option to cull non-attested features (-cullunused) from the Lookup
 
 ## Running It
 
-Early stopping with patience is used.  There are many hyper-parameters that you can tune, which may yield many different models.  Here is an example of parameterization of static embeddings (cnn-sentence.lua) with SGD and a single filter width of 5, achieving final accuracy of *93.6-94.2%*
+Early stopping with patience is used.  There are many hyper-parameters that you can tune, which may yield many different models.  Here is an example of parameterization of static embeddings (cnn-sentence.lua) with SGD and a single filter width of 5:
 
 ```
 th cnn-sentence.lua -eta 0.01 -batchsz 10 -decay 1e-9 -epochs 200 -train ../data/TREC.train.all -eval ../data/TREC.test.all -embed /data/xdata/GoogleNews-vectors-negative300.bin
 ```
 
-Here is an example of parameterization of dynamic fine tuning (cnn-sentence-fine.lua) with SGD achieving final accuracy of *93.6-94.8%*
+Here is an example of parameterization of dynamic fine tuning (cnn-sentence-fine.lua) with SGD
 
 ```
 th cnn-sentence-fine.lua -cullunused -optim adadelta -patience 20 -batchsz 10 -epochs 200 -train ../data/TREC.train.all -eval ../data/TREC.test.all -embed /data/xdata/GoogleNews-vectors-negative300.bin
+```
+
+Binary Kim model, static:
+
+```
+th cnn-sentence.lua -clean -optim adadelta -batchsz 50 -patience 10 -epochs 25 -train ./data/stsa.binary.phrases.train -valid ./data/stsa.binary.dev -eval ./data/stsa.binary.test -embed /data/xdata/GoogleNews-vectors-negative300.bin -filtsz "{3,4,5}"
+```
+
+Binary Kim model, non-static (fine-tunings):
+
+```
+th cnn-sentence-fine.lua -clean -cullunused -optim adadelta -batchsz 50 -epochs 25 -patience 25 -train ./data/stsa.binary.phrases.train -valid ./data/stsa.binary.dev -eval ./data/stsa.binary.test -embed /data/xdata/GoogleNews-vectors-negative300.bin -filtsz "{3,4,5}"
 ```
 
 # Structured Prediction using RNNs
