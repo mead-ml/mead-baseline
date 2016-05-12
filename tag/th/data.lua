@@ -161,7 +161,7 @@ function conllSentsToIndices(file, w2v, f2i, options)
 	  end
 	  b = b + 1
 	  thisBatchSz = math.min(batchsz, #txts - i + 1)
-	  xs = torch.LongTensor(thisBatchSz, siglen):fill(0)
+	  xs = torch.LongTensor(thisBatchSz, siglen):fill(1)
 	  ys = torch.LongTensor(thisBatchSz, siglen):fill(0)
        end
 
@@ -270,7 +270,7 @@ function conllSentsToVectors(file, w2v, f2i, options)
     local linenum = 1
 
     local wsz = w2v.dsz
-    local csz = w2cv and w2cv.dsz or 0
+    local csz = options.w2cv and options.w2cv.dsz or 0
     local batchsz = options.batchsz or 1
     local mxlen = options.mxlen or 40
 
