@@ -3,9 +3,9 @@
 Dynamic (Fine Tuned Word Embeddings LookupTable) CMOT.
 When we fine-tune, we make a LookupTable, and set its value to a Word2Vec
 dataset.  This is augmented with a '<PADDING>' feature which is forced to
-zero, even during optimization.  For any non-massive GPU, you will want
-to pass -cullunused, which will trim the LookupTable down to contain only
-attested features
+zero, even during optimization.  By default this code will trim out words
+from the vocab. that are unattested during training.  This keeps the model
+compact, but it might not be what you want.  To avoid this, pass -keepunused
 
 ]]--
 
@@ -114,7 +114,7 @@ cmd:option('-cmotsz', DEF_CMOTSZ, 'Depth of convolutional/max-over-time output')
 cmd:option('-cactive', DEF_CACTIVE, 'Activation function following conv')
 cmd:option('-filtsz', DEF_FSZ, 'Convolution filter width')
 cmd:option('-clean', false, 'Cleanup tokens')
-cmd:option('-cullunused', false, 'Cull unattested words from Lookup Table')
+cmd:option('-keepunused', false, 'Keep unattested words in Lookup Table')
 cmd:option('-valsplit', DEF_VALSPLIT, 'Fraction training used for validation if no set is given')
 
 local opt = cmd:parse(arg)
@@ -150,7 +150,7 @@ print('Processing on ' .. opt.proc)
 ------------------------------------------------------------------------
 local vocab = nil
 
-if opt.cullunused then
+if opt.keepunused == false then
    vocab = buildVocab({opt.train, opt.eval, opt.valid}, opt.clean)
    print('Removing unattested words')
 

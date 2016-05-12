@@ -114,75 +114,82 @@ end
   Read in CONLL data and produce an index for each word.  Used for
   fine-tuning taggers
 --]]
-function conllSentsToIndices(file, w2v, zp, f2i, options)
+function conllSentsToIndices(file, w2v, f2i, options)
    
     local tsfile = io.open(file, 'r')
     local linenum = 1
+    
+    local wsz = w2v.dsz
+    local batchsz = options.batchsz or 1
+    local mxlen = options.mxlen or 40
 
-    local lbl = {}
-    local lbls = {}
+    local zp = options.zp or 0
+
+    print('Word vector sz ' .. wsz)
+
     local ts = {}
-    local txt = {}
-    local txts = {}
     local xt = {}
     local yt = {}
-    local x = {}
-    local y = {}
+    
+    local non = 0
+    local tot = 0
+
+    local txts = {}
+    local lbls = {}
+
+    txts, lbls = conllLines(tsfile)
+
+    local thisBatchSz = nil
+    local xs = nil
+    local ys = nil
+
     local idx = 0
-    local wsz = w2v.dsz
-    print('Word vector sz ' .. wsz)
-    for line in tsfile:lines() do
-       local state = line:split('%s+')
-       if #state == 0 then
-	  -- time to return the set
+    local b = 0
+    -- make batches
+    -- for each training example
+    for i,v in pairs(txts) do
+
+       local lv = lbls[i]
+       local offset = (i - 1) % batchsz
+       local wozp = batchsz == 1 and #v or mxlen
+       local siglen = wozp + 2*zp
+
+       if offset == 0 then
+	  if b > 0 then
+	     xt[b] = xs
+	     yt[b] = ys
+	  end
+	  b = b + 1
+	  thisBatchSz = math.min(batchsz, #txts - i + 1)
+	  xs = torch.LongTensor(thisBatchSz, siglen):fill(0)
+	  ys = torch.LongTensor(thisBatchSz, siglen):fill(0)
+       end
+
+       for j=1,siglen do -- tok in pairs(v) do
 	  
-	  table.insert(txts, txt)
-	  table.insert(lbls, lbl)
-	  table.insert(yt, torch.Tensor(y))
-	  txt = {}
-	  lbl = {}
-	  y = {}
-       else
-	  local label = state[#state]
+	  if j > #v then
+	     break
+	  end
+
+	  local tok = v[j]
+	  local label = lv[j]
 	  if not f2i[label] then
 	     idx = idx + 1
 	     f2i[label] = idx
-	     -- print('Label ' .. label)
 	  end
-
-	  local word = state[1]
-	  table.insert(txt, word)
-	  table.insert(lbl, label)
-	  table.insert(y, f2i[label])
-       end
-    end
-
-    local non = 0
-    local tot = 0
-    local idx = 0
-    -- for each training example
-    for i,v in pairs(txts) do
-       local siglen = #v + 2*zp
-       local vect = {}
-       for z=1,zp do
-	  table.insert(0)
-       end
-       for j,tok in pairs(v) do
+	  
+	  ys[{offset+1, j+zp}] = f2i[label]
 	  local z, lnon = idxFor(w2v, tok)
 	  non = non + lnon
 	  tot = tot + 1.0
-	  table.insert(vect, z)
+	  xs[{offset+1,j+zp}] = z
+	  
        end
-       for z=1,zp do
-	  table.insert(0)
-       end
-       -- this creates a batch of size 1 for now
-       local tab = {vect}
-       xt[i] = torch.LongTensor(tab)
-       if options.batch2ndDim then
-	  xt[i] = xt[i]:t()
-       end
+    end
 
+    if thisBatchSz > 0 then
+       xt[b] = xs
+       yt[b] = ys
     end
 
     print('Sparsity ' .. (non/tot))
@@ -229,76 +236,124 @@ end
   This assumes we are not fine-tuning
 --]]
 
-function conllSentsToVectors(file, w2v, zp, f2i, w2cv)
-   
-    local tsfile = io.open(file, 'r')
-    local linenum = 1
+function conllLines(tsfile)
 
     local lbl = {}
     local lbls = {}
-    local ts = {}
     local txt = {}
     local txts = {}
-    local xt = {}
-    local yt = {}
-    local x = {}
-    local y = {}
-    local idx = 0
-    local wsz = w2v.dsz
-    local csz = w2cv and w2cv.dsz or 0
-    print('Word vector sz ' .. wsz)
-    print('Char vector sz ' .. csz)
+   
     for line in tsfile:lines() do
        local state = line:split('%s+')
+
+       -- end of sentence
        if #state == 0 then
 	  -- time to return the set
 	  
 	  table.insert(txts, txt)
 	  table.insert(lbls, lbl)
-	  table.insert(yt, torch.Tensor(y))
 	  txt = {}
 	  lbl = {}
-	  y = {}
        else
 	  local label = state[#state]
-	  if not f2i[label] then
-	     idx = idx + 1
-	     f2i[label] = idx
-	     print('Label ' .. label)
-	  end
-
 	  local word = state[1]
 	  table.insert(txt, word)
 	  table.insert(lbl, label)
-	  table.insert(y, f2i[label])
        end
     end
+    return txts, lbls
+end
+
+function conllSentsToVectors(file, w2v, f2i, options)
+   
+    local tsfile = io.open(file, 'r')
+    local linenum = 1
+
+    local wsz = w2v.dsz
+    local csz = w2cv and w2cv.dsz or 0
+    local batchsz = options.batchsz or 1
+    local mxlen = options.mxlen or 40
+
+    local zp = options.zp or 0
+
+    print('Word vector sz ' .. wsz)
+    print('Char vector sz ' .. csz)
+
+    local ts = {}
+    local xt = {}
+    local yt = {}
 
     local non = 0
     local tot = 0
+
+    local txts = {}
+    local lbls = {}
+
+    txts, lbls = conllLines(tsfile)
+
+    local thisBatchSz = nil
+    local xs = nil
+    local ys = nil
+
     local idx = 0
+    local b = 0
+    -- make batches
     -- for each training example
     for i,v in pairs(txts) do
-       local siglen = #v + 2*zp
-       local vec = torch.zeros(1, siglen, wsz + csz)
-       for j,tok in pairs(v) do
+
+       local lv = lbls[i]
+       -- This will give us our batch address (b)
+       -- and our batch sz (thisBatchSz)
+       local offset = (i - 1) % batchsz
+
+       -- If its a single post per batch, let it be exactly the size
+       -- This will often be faster than padding
+       local wozp = batchsz == 1 and #v or mxlen
+       local siglen = wozp + 2*zp
+
+       if offset == 0 then
+	  if b > 0 then
+	     xt[b] = xs
+	     yt[b] = ys
+	  end
+	  b = b + 1
+	  thisBatchSz = math.min(batchsz, #txts - i + 1)
+	  xs = torch.zeros(thisBatchSz, siglen, wsz + csz)
+	  ys = torch.zeros(thisBatchSz, siglen)
+       end
+       
+       for j=1,siglen do
+
+	  if j > #v then
+	     break
+	  end
+
+	  local tok = v[j]
+	  local label = lv[j]
+	  if not f2i[label] then
+	     idx = idx + 1
+	     f2i[label] = idx
+	  end
+
+	  ys[{offset+1, j+zp}] = f2i[label]
 	  local z, lnon = vecFor(w2v, tok)
 	  non = non + lnon
 	  tot = tot + 1.0
 	  local cat = 0
-	  if w2cv then
-	     local q = word2chvec(w2cv, tok)
+	  if options.w2cv then
+	     local q = word2chvec(options.w2cv, tok)
 	     cat = torch.cat(z, q)
 	  else
 	     cat = z
 	  end
-	  if hasNaN(z) then
-	     print('word ' .. tok .. ' has nan in vec')
-	  else
-	     vec[{{},(j+zp)}] = cat
-	  end
+	  xs[{offset+1,j+zp}] = cat
+
        end
-       xt[i] = vec
+    end
+
+    if thisBatchSz > 0 then
+       xt[b] = xs
+       yt[b] = ys
     end
 
     print('Sparsity ' .. (non/tot))

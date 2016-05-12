@@ -194,7 +194,6 @@ function loadTemporalEmb(file, w2v, f2i, options)
     if options.w2cv then
        dsz = dsz + options.w2cv.dsz
     end
-    options = options or {}
 
     local mxfiltsz = torch.max(torch.LongTensor(options.filtsz))
     local mxlen = options.mxlen or 1000

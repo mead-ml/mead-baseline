@@ -1,6 +1,19 @@
 require 'optim'
 require 'xlua'
 
+
+function newConv1D(ifm, ofm, filtsz, gpu)
+   local tconv = gpu and cudnn.TemporalConvolution(ifm, ofm, filtsz) or nn.TemporalConvolution(ifm, ofm, filtsz)
+   return tconv
+end
+
+function newLinear(inputSz, outputSz)
+   local linear = nn.Linear(inputSz, outputSz)
+   linear.weight:normal():mul(0.01)
+   linear.bias:zero()
+   return linear
+end
+
 -- From the option list, pick one of [sgd, adagrad, adadelta, adam]
 function optimMethod(opt)
 

@@ -21,11 +21,12 @@ require 'data'
 -- is selected, and may be unused for others.  Try to
 -- provide reasonable args for any algorithm a user selects
 -----------------------------------------------------
+DEF_BATCHSZ = 8
 DEF_TSF = './data/twpos-data-v0.3/oct27.splits/oct27.train'
 DEF_ESF = './data/twpos-data-v0.3/oct27.splits/oct27.test'
 DEF_EMBED = './data/GoogleNews-vectors-negative300.bin'
 DEF_FILE_OUT = 'rnn-tagger.model'
-DEF_PATIENCE = 6
+DEF_PATIENCE = 10
 DEF_RNN = 'blstm'
 DEF_OPTIM = 'adadelta'
 DEF_EPOCHS = 60
@@ -35,7 +36,7 @@ DEF_PROC = 'gpu'
 DEF_CLIP = 5
 DEF_DECAY = 1e-7
 DEF_MOM = 0.0
-
+DEF_EMBUNIF = 0.25
 
 torch.setdefaulttensortype('torch.FloatTensor')
 
@@ -47,80 +48,31 @@ torch.setdefaulttensortype('torch.FloatTensor')
 -- Linear projection layer beneath the RNN.  If its the former, we
 -- use a TemporalConvolution to weight share this layer
 --------------------------------------------------------------------
-function createTaggerModel(w2v, hsz, gpu, nc, trnn, usernnpkg)
+function createTaggerModel(w2v, hsz, gpu, nc, rnntype)
 
     -- Create a processing chain
     local seq = nn.Sequential()
     local dsz = w2v.dsz
+
     seq:add(w2v)
-    -- hidden unit depth
-    local tsz = hsz
 
-    if trnn == 'blstm' then
-       -- For BSLTM twice as many hidden units
-       tsz = 2 * hsz
-    end
 
-    if usernnpkg then
-
-       -- RNN package makes sequencing very easy
-       if trnn == 'blstm' then
-	  seq:add(nn.SplitTable(1))
-	  local rnnfwd = nn.FastLSTM(dsz, hsz)
-	  local rnnbwd = nn.FastLSTM(dsz, hsz)
-	  seq:add(nn.BiSequencer(rnnfwd, rnnbwd))
-       else
-	  print('Using Seq LSTM (no matter what you asked for)')
-	  seq:add(nn.SeqLSTM(dsz, hsz))
-	  seq:add(nn.SplitTable(1))
-       end
-       local subseq = nn.Sequential()
-       subseq:add(nn.Dropout(0.5))
-       subseq:add(nn.Linear(tsz, nc))
-       seq:add(nn.Sequencer(subseq))
+    if rnntype == 'blstm' then
+       seq:add(nn.SplitTable(1))
+       local rnnfwd = nn.FastLSTM(dsz, hsz):maskZero(1)
+       local rnnbwd = nn.FastLSTM(dsz, hsz):maskZero(1)
+       seq:add(nn.BiSequencer(rnnfwd, rnnbwd, nn.CAddTable()))
     else
-       -- Use jcjohnson's torch-rnn
-       if trnn == 'blstm' then
-	  
-	  -- Make two RNN units, one for forward direction, one for backward
-	  local rnnfwd = nn.LSTM(dsz, hsz)
-	  local rnnbwd = nn.LSTM(dsz, hsz)
-	  
-	  -- This will feed the same input, and will join
-	  -- results along the 3rd dimension
-	  local concat = nn.Concat(3)
-	  
-	  -- Add forward
-	  concat:add(rnnfwd)
-	  
-	  -- Create a sub-chain for reverse
-	  local subseq = nn.Sequential()
-	  
-	  -- Flip the signal so time is descending
-	  subseq:add(nn.ReversedCopy())
-	  subseq:add(rnnbwd)
-	  
-	  -- Flip the signal again when done
-	  subseq:add(nn.ReversedCopy())
-	  concat:add(subseq)
-	  
-	  -- Now add the BLSTM to the chain
-	  seq:add(concat)
-	  
-       else
-	  local rnn = trnn == 'lstm' and nn.LSTM(dsz, hsz) or nn.VanillaRNN(dsz, hsz)
-	  seq:add(rnn)
-       end
-       
-       -- Dropout before convolution
-       seq:add(nn.Dropout(0.5))
-       
-       -- The convolution is now twice the depth due to the Concat
-       -- The signal length is the same as before, and we are producing
-       -- a depth of nc which allows us to predict output using shared weights
-       seq:add(nn.TemporalConvolution(tsz, nc, 1))
+       print('Using FastLSTM (no matter what you asked for)')
+       local rnnfwd = nn.FastLSTM(dsz, hsz):maskZero(1)
+       seq:add(nn.Sequencer(rnnfwd))
     end
-
+    
+    local subseq = nn.Sequential()
+    subseq:add(nn.Dropout(0.5))
+    subseq:add(newLinear(hsz, nc))
+    subseq:add(nn.LogSoftMax())
+    seq:add(nn.Sequencer(nn.MaskZero(subseq, 1)))
     -- GPU if possible
     return gpu and seq:cuda() or seq
 end
@@ -129,11 +81,13 @@ end
 -- Command line handling
 --------------------------
 local cmd = torch.CmdLine()
+cmd:option('-batchsz', DEF_BATCHSZ, 'Batch size')
 cmd:option('-save', DEF_FILE_OUT, 'Save model to')
 cmd:option('-rnn', DEF_RNN)
 cmd:option('-train', DEF_TSF, 'Training file')
 cmd:option('-eval', DEF_ESF, 'Testing file')
 cmd:option('-embed', DEF_EMBED, 'Word embeddings')
+cmd:option('-embunif', DEF_EMBUNIF, 'Word2Vec initialization for non-attested attributes')
 cmd:option('-optim', DEF_OPTIM, 'Optimization methodx (sgd|adagrad|adadelta|adam)')
 cmd:option('-epochs', DEF_EPOCHS)
 cmd:option('-eta', DEF_ETA)
@@ -143,9 +97,8 @@ cmd:option('-mom', DEF_MOM, 'Momentum for SGD')
 cmd:option('-hsz', DEF_HSZ, 'Hidden layer units')
 cmd:option('-proc', DEF_PROC)
 cmd:option('-patience', DEF_PATIENCE)
-cmd:option('-usernnpkg', false)
 -- Strongly recommend its set to 'true' for non-massive GPUs
-cmd:option('-cullunused', false, 'Cull unattested words from Lookup Table')
+cmd:option('-keepunused', false, 'Keep unattested words in Lookup Table')
 
 local opt = cmd:parse(arg)
 
@@ -169,24 +122,11 @@ else
 end
 print('Processing on ' .. opt.proc)
 
-
 ----------------------------------------
--- RNN package to use
--- ElementResearch 'rnn' uses more common
--- (T, B, H)
--- torch-rnn uses (B, T, H)
+-- ElementResearch 'rnn' uses (T, B, H)
 ----------------------------------------
-if opt.usernnpkg then
-   print('Using ElementResearch RNN package')
-   require 'nnx'
-   require 'rnn'
-   opt.batch2ndDim = true
-else
-   require 'torch-rnn'
-end
-
-
-
+require 'nnx'
+require 'rnn'
 
 ------------------------------------------------------------------------
 -- This option is to clip unattested features from the LookupTable, for
@@ -198,7 +138,7 @@ end
 ------------------------------------------------------------------------
 local vocab = nil
 
-if opt.cullunused then
+if opt.keepunused == false then
    vocab = conllBuildVocab({opt.train, opt.eval})
    print('Removing unattested words')
 end
@@ -206,27 +146,32 @@ end
 -- Load Word2Vec Model(s)
 ---------------------------------------
 local f2i = {}
-local w2v = Word2VecLookupTable(opt.embed, vocab)
+local w2v = Word2VecLookupTable(opt.embed, vocab, opt.embunif)
+
 print('Loaded word embeddings: ' .. opt.embed)
+
+function afterhook() 
+      w2v.weight[1]:zero()
+end
+
+opt.afteroptim = afterhook
 
 ---------------------------------------
 -- Load Feature Vectors
 ---------------------------------------
-ts = conllSentsToIndices(opt.train, w2v, 0, f2i, opt)
-es = conllSentsToIndices(opt.eval, w2v, 0, ts.f2i, opt)
-opt.batch2ndDim = false
+ts = conllSentsToIndices(opt.train, w2v, f2i, opt)
+es = conllSentsToIndices(opt.eval, w2v, ts.f2i, opt)
 
 local i2f = revlut(es.f2i)
 local nc = #i2f
 print('Number of classes ' .. nc)
 
-
 ---------------------------------------
 -- Build model and criterion
 ---------------------------------------
-local crit = createTaggerCrit(opt.gpu, opt.usernnpkg)
+local crit = createTaggerCrit(opt.gpu)
 local dsz = w2v.dsz
-local model = createTaggerModel(w2v, opt.hsz, opt.gpu, nc, opt.rnn, opt.usernnpkg)
+local model = createTaggerModel(w2v, opt.hsz, opt.gpu, nc, opt.rnn)
 
 local errmin = 1;
 local lastImproved = 0
@@ -235,16 +180,13 @@ for i=1,opt.epochs do
     print('Training epoch ' .. i)
     confusion = optim.ConfusionMatrix(i2f)
     trainTaggerEpoch(crit, model, ts, optmeth, opt)
-    collectgarbage()
     local erate = testTagger(model, es, crit, confusion, opt)
-    collectgarbage()
 
     if erate < errmin then
        lastImproved = i
        errmin = erate
        print('Lowest error achieved yet -- writing model')
        saveModel(model, opt.save, opt.gpu)
-       collectgarbage()
     end
     if (i - lastImproved) > opt.patience then
        print('Stopping due to persistent failures to improve')

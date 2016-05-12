@@ -2,18 +2,8 @@ require 'nn'
 require 'optim'
 require 'xlua'
 
----------------------------------------------------------
--- Create a cross-entropy loss function, using sequencer
--- if we are using ElementResearch's rnn
----------------------------------------------------------
 function createTaggerCrit(gpu, usernnpkg)
-   local crit = nil
-
-   if usernnpkg then
-      crit = nn.SequencerCriterion(nn.CrossEntropyCriterion())
-   else
-      crit = nn.CrossEntropyCriterion()
-   end
+   local crit = nn.SequencerCriterion(nn.MaskZeroCriterion(nn.ClassNLLCriterion(), 1))
    return gpu and crit:cuda() or crit
 end
 
@@ -28,43 +18,44 @@ function testTagger(model, es, crit, confusion, options)
     local epochErr = 0
     for i=1,#xt do
  	local x = options.gpu and xt[i]:cuda() or xt[i]
-	if options.batch2ndDim then
-	   x = x:reshape(x:size(2), x:size(1), x:size(3))
-	end
-
         local y = options.gpu and yt[i]:cuda() or yt[i]
+	x = x:transpose(1, 2)
+	y = y:transpose(1, 2)
 
-	-- Safety check on crazy test data
-	if y:dim() > 0 then
-	   
-	   local cy = y:int()	      
-	   local seqlen = cy:size(1)
+	local pred = model:forward(x)
 
-	   local pred = model:forward(x)
-	   local err = crit:forward(pred, y)
-	   epochErr = epochErr + err
+	local err = crit:forward(pred, y)
+	epochErr = epochErr + err
+	
+	local thisBatchSz = x:size(2)
+	local seqlen = x:size(1)
 
-	   -- ER rnn package likes a table
-	   if type(pred) == 'table' then
-	      pred = torch.cat(pred)
-	   end
+	-- Turn this from a table back into a tensor
+	pred = torch.cat(pred, 1)
+	local outcomes = pred:size(2)
 
-	   pred = pred:reshape(seqlen, confusion.nclasses)
-	      
-	   _, path = pred:max(2)
-	   local cpath = path:int()
+	pred = pred:reshape(seqlen, thisBatchSz, outcomes)
+	pred = pred:transpose(1, 2)
+	x = x:transpose(1, 2)
+	y = y:transpose(1, 2)
 
+	for b=1,thisBatchSz do
+	   local seq = pred[b]
+	   local cy = y[b]:int()
+	   _, path = seq:max(2)
+	   local cpath = path:int():reshape(seqlen)
 	   for j=1,seqlen do
-	      local guessj = cpath[j][1]
+	      local guessj = cpath[j]
 	      local truthj = cy[j]
-	      confusion:add(guessj, truthj)
+	      if truthj ~= 0 then
+		 confusion:add(guessj, truthj)
+	      end
 	   end
-
 	end
-
+	
 	xlua.progress(i, #xt)
     end
-
+    
     print(confusion)
     local err = (1-confusion.totalValid)
     local avgEpochErr = epochErr / #xt
@@ -95,15 +86,15 @@ function trainTaggerEpoch(crit, model, ts, optmeth, options)
 	  
 	  dEdw:zero()
 	  local x = options.gpu and xt[si]:cuda() or xt[si]
-	  -- ER rnn library prefers
-	  if options.batch2ndDim then
-	     x = x:reshape(x:size(2), x:size(1), x:size(3))
-	  end
-
 	  local y = options.gpu and yt[si]:cuda() or yt[si]
+
+	  x = x:transpose(1, 2)
+	  y = y:transpose(1, 2)
+
 	  local pred = model:forward(x)
 	  local err = crit:forward(pred, y)
 	  epochErr = epochErr + err
+
 	  local grad = crit:backward(pred, y)
 	  model:backward(x, grad)
 
@@ -115,6 +106,10 @@ function trainTaggerEpoch(crit, model, ts, optmeth, options)
        end
 
        optmeth(evalf, w, state)
+       if options.afteroptim then
+	  options.afteroptim()
+       end
+
        xlua.progress(i, #xt)
 
     end

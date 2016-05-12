@@ -26,17 +26,17 @@ DEF_TSF = './data/twpos-data-v0.3/oct27.splits/oct27.train'
 DEF_ESF = './data/twpos-data-v0.3/oct27.splits/oct27.test'
 DEF_EMBED = './data/GoogleNews-vectors-negative300.bin'
 DEF_FILE_OUT = 'rnn-tagger.model'
-DEF_PATIENCE = 6
+DEF_PATIENCE = 10
 DEF_RNN = 'blstm'
 DEF_OPTIM = 'adadelta'
 DEF_EPOCHS = 60
-DEF_ETA = 0.32
+DEF_ETA = 0.4
 DEF_HSZ = 100
 DEF_PROC = 'gpu'
 DEF_CLIP = 5
 DEF_DECAY = 1e-7
 DEF_MOM = 0.0
-
+DEF_BATCHSZ = 8
 torch.setdefaulttensortype('torch.FloatTensor')
 
 --------------------------------------------------------------------
@@ -46,83 +46,40 @@ torch.setdefaulttensortype('torch.FloatTensor')
 -- Linear projection layer beneath the RNN.  If its the former, we
 -- use a TemporalConvolution to weight share this layer
 --------------------------------------------------------------------
-function createTaggerModel(dsz, hsz, gpu, nc, trnn, usernnpkg)
+function createTaggerModel(dsz, hsz, gpu, nc, rnntype)
 
     -- Create a processing chain
     local seq = nn.Sequential()
 
-    -- hidden unit depth
-    local tsz = hsz
 
-    if trnn == 'blstm' then
-       -- For BSLTM twice as many hidden units
-       tsz = 2 * hsz
-    end
+    -- Make RNN type
+    --[[
+       rnnmod = rnntype == 'blstm' and nn.SeqBRNN(dsz, hsz) or rnn.SeqLSTM(dsz, hsz)
+       -- Force it to mask zeros
+       rnnmod.maskzero = true
+       seq:add(rnnmod)
+       seq:add(nn.SplitTable(1))
+    --]]
+     if rnntype == 'blstm' then
+	seq:add(nn.SplitTable(1))
+	local rnnfwd = nn.FastLSTM(dsz, hsz):maskZero(1)
+	local rnnbwd = nn.FastLSTM(dsz, hsz):maskZero(1)
+	seq:add(nn.BiSequencer(rnnfwd, rnnbwd, nn.CAddTable()))
+     else
+	print('Using FastLSTM (no matter what you asked for)')
+	local rnnfwd = nn.FastLSTM(dsz, hsz):maskZero(1)
+	seq:add(nn.Sequencer(rnnfwd))
+     end
+     
+     local subseq = nn.Sequential()
+     subseq:add(nn.Dropout(0.5))
+     subseq:add(newLinear(hsz, nc))
+     subseq:add(nn.LogSoftMax())
+     seq:add(nn.Sequencer(nn.MaskZero(subseq, 1)))
 
-    if usernnpkg then
-       -- RNN package makes sequencing very easy
-       if trnn == 'blstm' then
-	  seq:add(nn.SplitTable(1))
-	  local rnnfwd = nn.FastLSTM(dsz, hsz)
-	  local rnnbwd = nn.FastLSTM(dsz, hsz)
-	  seq:add(nn.BiSequencer(rnnfwd, rnnbwd))
-       else
-	  print('Using Seq LSTM (no matter what you asked for)')
-	  seq:add(nn.SeqLSTM(dsz, hsz))
-	  seq:add(nn.SplitTable(1))
-       end
-       local subseq = nn.Sequential()
-       subseq:add(nn.Dropout(0.5))
-       subseq:add(nn.Linear(tsz, nc))
-       seq:add(nn.Sequencer(subseq))
-    else
-       -- Use jcjohnson's torch-rnn
-       if trnn == 'blstm' then
-	  
-	  -- Make two RNN units, one for forward direction, one for backward
-	  local rnnfwd = nn.LSTM(dsz, hsz)
-	  local rnnbwd = nn.LSTM(dsz, hsz)
-	  
-	  -- This will feed the same input, and will join
-	  -- results along the 3rd dimension
-	  local concat = nn.Concat(3)
-	  
-	  -- Add forward
-	  concat:add(rnnfwd)
-	  
-	  -- Create a sub-chain for reverse
-	  local subseq = nn.Sequential()
-	  
-	  -- Flip the signal so time is descending
-	  subseq:add(nn.ReversedCopy())
-	  subseq:add(rnnbwd)
-	  
-	  -- Flip the signal again when done
-	  subseq:add(nn.ReversedCopy())
-	  concat:add(subseq)
-	  
-	  -- Now add the BLSTM to the chain
-	  seq:add(concat)
-	  
-       else
-	  local rnn = trnn == 'lstm' and nn.LSTM(dsz, hsz) or nn.VanillaRNN(dsz, hsz)
-	  seq:add(rnn)
-       end
-       
-       -- Dropout before convolution
-       seq:add(nn.Dropout(0.5))
-       
-       -- The convolution is now twice the depth due to the Concat
-       -- The signal length is the same as before, and we are producing
-       -- a depth of nc which allows us to predict output using shared weights
-       seq:add(nn.TemporalConvolution(tsz, nc, 1))
-    end
-
-    -- GPU if possible
-    return gpu and seq:cuda() or seq
+     -- GPU if possible
+     return gpu and seq:cuda() or seq
 end
-
-
 
 --------------------------
 -- Command line handling
@@ -132,6 +89,7 @@ cmd:text('Parameters for RNN-based tagger')
 cmd:text()
 cmd:text('Options:')
 
+cmd:option('-batchsz', DEF_BATCHSZ, 'Batch size')
 cmd:option('-save', DEF_FILE_OUT, 'Save model to')
 cmd:option('-rnn',  DEF_RNN)
 cmd:option('-train', DEF_TSF, 'Training file')
@@ -147,10 +105,7 @@ cmd:option('-mom', DEF_MOM, 'Momentum for SGD')
 cmd:option('-hsz', DEF_HSZ, 'Hidden layer units')
 cmd:option('-proc', DEF_PROC)
 cmd:option('-patience', DEF_PATIENCE)
-cmd:option('-usernnpkg', false)
-
 local opt = cmd:parse(arg)
-
 
 ----------------------------------------
 -- Optimization
@@ -173,20 +128,10 @@ print('Processing on ' .. opt.proc)
 
 
 ----------------------------------------
--- RNN package to use
--- ElementResearch 'rnn' uses more common
--- (T, B, H)
--- torch-rnn uses (B, T, H)
+-- ElementResearch 'rnn' uses (T, B, H)
 ----------------------------------------
-if opt.usernnpkg then
-   print('Using ElementResearch RNN package')
-   require 'nnx'
-   require 'rnn'
-   opt.batch2ndDim = true
-else
-   require 'torch-rnn'
-end
-
+require 'nnx'
+require 'rnn'
 
 ---------------------------------------
 -- Load Word2Vec Model(s)
@@ -205,15 +150,17 @@ end
 
 -- If they included word and char vectors, use both
 local dsz = w2v.dsz
+
 if w2cv then
    dsz = dsz + w2cv.dsz
+   opt.w2cv = w2cv
 end
 
 ---------------------------------------
 -- Load Feature Vectors
 ---------------------------------------
-ts = conllSentsToVectors(opt.train, w2v, 0, f2i, w2cv)
-es = conllSentsToVectors(opt.eval, w2v, 0, ts.f2i, w2cv)
+ts = conllSentsToVectors(opt.train, w2v, f2i, opt)
+es = conllSentsToVectors(opt.eval, w2v, ts.f2i, opt)
 
 local i2f = revlut(es.f2i)
 local nc = #i2f
@@ -222,8 +169,8 @@ print('Number of classes ' .. nc)
 ---------------------------------------
 -- Build model and criterion
 ---------------------------------------
-local crit = createTaggerCrit(opt.gpu, opt.usernnpkg)
-local model = createTaggerModel(dsz, opt.hsz, opt.gpu, nc, opt.rnn, opt.usernnpkg)
+local crit = createTaggerCrit(opt.gpu)
+local model = createTaggerModel(dsz, opt.hsz, opt.gpu, nc, opt.rnn)
 
 local errmin = 1;
 local lastImproved = 0
