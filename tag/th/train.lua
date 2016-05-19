@@ -2,7 +2,7 @@ require 'nn'
 require 'optim'
 require 'xlua'
 
-function createTaggerCrit(gpu, usernnpkg)
+function createTaggerCrit(gpu)
    local crit = nn.SequencerCriterion(nn.MaskZeroCriterion(nn.ClassNLLCriterion(), 1))
    return gpu and crit:cuda() or crit
 end

@@ -11,7 +11,6 @@ require 'nn'
 require 'optim'
 require 'tagutils'
 require 'emb'
-require 'ReversedCopy'
 require 'train'
 require 'data'
 

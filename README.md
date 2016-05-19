@@ -107,3 +107,13 @@ th rnn-tag.lua -usernnpkg -rnn blstm -eta .32 -optim adagrad -epochs 60 -embed /
 ## rnn-tag-fine: Dynamic (fine-tuning) implementation, input is a sparse vector
 
 Right now, the fine tuning version only supports word based tagging -- no character level backoff yet.  This will hopefully be fixed in the near future.
+
+# Seq2Seq
+
+Seq2seq is useful for a variety of tasks, from Statistical Machine Translation to Neural Conversation Modeling.  The code provided is a simple implementation, and currently does not stack LSTMs.
+
+## seq2seq: Phrase in, phrase-out, 2 lookup table implementation, input is a temporal vector, and so is output
+
+This code implements seq2seq with mini-batching (as in other examples) using adagrad, adadelta, sgd or adam.  It supports two vocabularies, and takes word2vec pre-trained models as input, filling in words that are attested in the dataset but not found in the pre-trained models.  It uses dropout for regularization.
+
+This model takes multiple epochs before it really starts performing, and really needs to run on the GPU for realistic training times.
