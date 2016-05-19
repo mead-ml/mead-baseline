@@ -116,4 +116,4 @@ Seq2seq is useful for a variety of tasks, from Statistical Machine Translation t
 
 This code implements seq2seq with mini-batching (as in other examples) using adagrad, adadelta, sgd or adam.  It supports two vocabularies, and takes word2vec pre-trained models as input, filling in words that are attested in the dataset but not found in the pre-trained models.  It uses dropout for regularization.
 
-This model takes multiple epochs before it really starts performing, and really needs to run on the GPU for realistic training times.
+For any reasonable size data, this really needs to run on the GPU for realistic training times.
