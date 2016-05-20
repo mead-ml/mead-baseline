@@ -4,7 +4,7 @@ require 'xlua'
 require 'seq2sequtils'
 
 -- Decoder beam
-SAMPLE_BEAMSZ = 4
+SAMPLE_BEAM_INIT = 5
 
 function trainSeq2SeqEpoch(crit, model, ts, optmeth, options)
     local srcs = ts.src
@@ -94,7 +94,8 @@ function decodeStep(model, srcIn, predSent, j, sample)
 
       local probs = predDst:squeeze():exp()
       -- Get the topk
-      local best, ids = probs:topk(SAMPLE_BEAMSZ, 1, true, true)
+      local beamsz = math.max(SAMPLE_BEAM_INIT - j, 1)
+      local best, ids = probs:topk(beamsz, 1, true, true)
       -- log soft max, exponentiate to get probs
       probs:zero()
       probs:indexCopy(1, ids, best)
