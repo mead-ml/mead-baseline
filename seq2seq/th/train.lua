@@ -3,6 +3,9 @@ require 'optim'
 require 'xlua'
 require 'seq2sequtils'
 
+-- Decoder beam
+SAMPLE_BEAMSZ = 4
+
 function trainSeq2SeqEpoch(crit, model, ts, optmeth, options)
     local srcs = ts.src
     local dsts = ts.dst
@@ -75,7 +78,6 @@ function trainSeq2SeqEpoch(crit, model, ts, optmeth, options)
 
 end
 
-
 function decodeStep(model, srcIn, predSent, j, sample)
    forgetModelState(model)
 
@@ -89,12 +91,16 @@ function decodeStep(model, srcIn, predSent, j, sample)
    local predDst = dec:forward(predT)[j]
    local word = nil
    if sample then
+
+      local probs = predDst:squeeze():exp()
+      -- Get the topk
+      local best, ids = probs:topk(SAMPLE_BEAMSZ, 1, true, true)
       -- log soft max, exponentiate to get probs
-      local probs = predDst:exp()
-      -- should not need this
-      -- probs = probs / probs:norm()
+      probs:zero()
+      probs:indexCopy(1, ids, best)
+      probs:div(torch.sum(probs))
       word = torch.multinomial(probs, 1):squeeze()
-      
+      --print('word ' .. word)
    else
       local _, ids = predDst:max(2)
       word = ids:squeeze()
