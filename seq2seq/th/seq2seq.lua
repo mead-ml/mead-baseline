@@ -48,6 +48,7 @@ DEF_DECAY = 1e-7
 DEF_MOM = 0.0
 DEF_BATCHSZ = 8
 DEF_EMBUNIF = 0.25
+DEF_SAMPLE = false
 torch.setdefaulttensortype('torch.FloatTensor')
 
 --------------------------
@@ -74,6 +75,7 @@ cmd:option('-mom', DEF_MOM, 'Momentum for SGD')
 cmd:option('-hsz', DEF_HSZ, 'Hidden layer units')
 cmd:option('-proc', DEF_PROC)
 cmd:option('-patience', DEF_PATIENCE)
+cmd:option('-sample', DEF_SAMPLE, 'Perform sampling to find candidate decodes')
 local opt = cmd:parse(arg)
 
 ----------------------------------------
@@ -140,7 +142,7 @@ local errmin = 1000;
 local lastImproved = 0
 
 -- If you show this it'll be random
--- showBatch(model, es, rlut1, rlut2, embed2)
+-- showBatch(model, es, rlut1, rlut2, embed2, opt)
 
 for i=1,opt.epochs do
     print('Training epoch ' .. i)
@@ -149,7 +151,7 @@ for i=1,opt.epochs do
     if erate < errmin then
        lastImproved = i
        errmin = erate
-       showBatch(model, es, rlut1, rlut2, embed2)
+       showBatch(model, es, rlut1, rlut2, embed2, opt)
 
 
        print('Lowest error achieved yet -- writing model')

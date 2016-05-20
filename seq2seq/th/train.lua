@@ -76,7 +76,7 @@ function trainSeq2SeqEpoch(crit, model, ts, optmeth, options)
 end
 
 
-function decodeStep(model, srcIn, predSent, j)
+function decodeStep(model, srcIn, predSent, j, sample)
    forgetModelState(model)
 
    local enc = model:get(1)
@@ -87,16 +87,26 @@ function decodeStep(model, srcIn, predSent, j)
    local dec = model:get(2)
    local predT = torch.LongTensor(predSent):reshape(j, 1)
    local predDst = dec:forward(predT)[j]
-   -- TODO: beam, sample
-   local _, ids = predDst:topk(1, 2, true, true)
-   return ids[1][1]
+   local word = nil
+   if sample then
+      -- log soft max, exponentiate to get probs
+      local probs = predDst:exp()
+      -- should not need this
+      -- probs = probs / probs:norm()
+      word = torch.multinomial(probs, 1):squeeze()
+      
+   else
+      local _, ids = predDst:max(2)
+      word = ids:squeeze()
+   end
+   return word
 end
 
-function decode(model, srcIn, GO, EOS)
+function decode(model, srcIn, sample, GO, EOS)
 
    local predSent = {GO}
    for j = 1,100 do
-      local word = decodeStep(model, srcIn, predSent, j)
+      local word = decodeStep(model, srcIn, predSent, j, sample)
       if word == EOS then
 	 break
       end
@@ -106,7 +116,7 @@ function decode(model, srcIn, GO, EOS)
    return predSent
 end
 
-function showBatch(model, ts, rlut1, rlut2, embed2, gpu)
+function showBatch(model, ts, rlut1, rlut2, embed2, opt)
    -- When a batch comes in, it will be BxT
    -- so to print a batch input, walk the batch and 
 
@@ -125,8 +135,8 @@ function showBatch(model, ts, rlut1, rlut2, embed2, gpu)
 
    local batchsz = src:size(1)
 
-   print('Showing examples from batch #' .. rnum)
-      
+   local method = opt.sample and 'Sampling' or 'Showing best'
+   print(method .. ' sentences from batch #' .. rnum)
    -- Run whole batch through
 
    for i=1,batchsz do
@@ -139,9 +149,9 @@ function showBatch(model, ts, rlut1, rlut2, embed2, gpu)
 
       local srclen = src[i]:size(1)
       local srcIn = src[i]:reshape(srclen, 1)
-      srcIn = gpu and srcIn:cuda() or srcIn
+      srcIn = opt.gpu and srcIn:cuda() or srcIn
       
-      predSent = decode(model, srcIn, GO, EOS)
+      predSent = decode(model, srcIn, opt.sample, GO, EOS)
       sent = lookupSent(rlut2, torch.LongTensor(predSent))
       print('Guess: ', sent)
       print('------------------------------------------------------------------------')
