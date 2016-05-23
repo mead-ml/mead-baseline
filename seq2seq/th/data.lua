@@ -1,3 +1,33 @@
+
+--[[
+  Total hack: FIXME!
+  To make this work, I replaced some samples with special tokens prior to
+  running word2vec.  This is fairly specific code below for producing
+  Twitter taggers using word2vec embeddings.
+--]] 
+function newWord(word)
+   if word:match('^http') then
+      return 'URL'
+   elseif word:match('^@') then
+      return '@@@@'
+   elseif word:match('^#') then
+      return '####'
+
+   elseif word == '"' then
+      return ','
+   elseif word == ':)' or word == ':(((' or word == ':D' or word == '=)' or word == ':-)' or word == '=(' then
+      return ';)'
+   elseif word == '<3' then
+      return '&lt;3'
+   elseif word:match('^[0-9]+$') then
+      return '0000';
+   elseif word:match('^[A-Z]') and word:match('\'s') then
+      return 'John\'s'
+   else
+      return word
+   end
+end
+
 function buildVocab(idx, files)
     local vocab = {['<GO>']=1,
                    ['<EOS>']=1,

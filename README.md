@@ -9,6 +9,8 @@ including sentence classification and tagging problems.  Considerations are conc
 
 After considering other strong, shallow baselines, we have found that even incredibly simple, moderately deep models often perform better.  These models are only slightly more complex to implement than strong baselines such as shingled SVMs and NBSVMs, and support multi-class output easily.  Additionally, they are (hopefully) the first "deep learning" thing you might think of for a certain type of problem.  Using these stronger baselines as a reference point hopefully yields more productive algorithms and experimentation.
 
+Each algorithm is in a separate sub-directory, and is fully contained, even though this means that there is some overlap in the routines.  This is done for ease of use and experimentation.
+
 # Sentence Classification using CMOT Model
 
 ## Convolution - Max Over Time Architecture (CMOT)
