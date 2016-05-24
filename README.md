@@ -126,7 +126,14 @@ Siamese networks have been shown to be useful for tasks such as paraphrase detec
 
 # siamese-fine: Parallel CNNs with shared weights, using Word2Vec input + fine-tuning with an L2 loss function
 
+This example shows how to use a simple flat CNN with fine-tuning and ReLU activation (with dropout):
+
 ```
 th siamese-fine.lua -optim adagrad -epochs 50 -patience 25 -cmotsz 100 -embed /data/xdata/oct-s140clean-uber.cbow-bin -train /data/xdata/para/tw/train.txt -valid /data/xdata/para/tw/dev.txt -eval /data/xdata/para/tw/test.txt
 ```
+Same, but with an additional linear hidden layer
 
+```
+th siamese-fine.lua -optim adagrad -epochs 50 -patience 25 -cmotsz 100 -hsz 80 -embed /data/xdata/oct-s140clean-uber.cbow-bin -train /data/xdata/para/tw/train.txt -valid /data/xdata/para/tw/dev.txt -eval /data/xdata/para/tw/test.txt
+
+```

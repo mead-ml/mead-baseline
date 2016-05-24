@@ -47,7 +47,6 @@ DEF_PROC = 'gpu'
 DEF_CACTIVE = 'relu'
 DEF_HACTIVE = 'relu'
 DEF_EMBUNIF = 0.25
-DEF_VALSPLIT = 0.15
 
 linear = nil
 
@@ -64,11 +63,19 @@ function createModel(lookupTable, cmotsz, cactive, hsz, hactive, filtsz, gpu, pd
     seq:add(activationFor(cactive, gpu))
     seq:add(nn.Max(2))
     seq:add(nn.Dropout(pdrop))
+
+    if hsz > 0 then
+       seq:add(newLinear(cmotsz, hsz))
+       seq:add(activationFor(hactive, gpu))
+    end
+
     local par = nn.ParallelTable(1,1)
     
     par:add(seq)
     par:add(seq:clone('weight','bias', 'gradWeight','gradBias'))
     
+
+
     local siamese = nn.Sequential()
     siamese:add(par)
 
@@ -106,7 +113,6 @@ cmd:option('-cactive', DEF_CACTIVE, 'Activation function following conv')
 cmd:option('-filtsz', DEF_FSZ, 'Convolution filter width')
 cmd:option('-clean', false, 'Cleanup tokens')
 cmd:option('-keepunused', false, 'Keep unattested words in Lookup Table')
-cmd:option('-valsplit', DEF_VALSPLIT, 'Fraction training used for validation if no set is given')
 
 local opt = cmd:parse(arg)
 ----------------------------------------
