@@ -3,7 +3,7 @@ require 'optim'
 require 'xlua'
 
 function createCrit(gpu)
-   local crit = nn.HingeEmbeddingCriterion()
+   local crit = nn.HingeEmbeddingCriterion(1)
    return gpu and crit:cuda() or crit
 end
 

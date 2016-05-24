@@ -122,7 +122,7 @@ For any reasonable size data, this really needs to run on the GPU for realistic 
 
 # Paraphrase Detection using Siamese Networks
 
-Siamese networks have been shown to be useful for tasks such as paraphrase detection, and are generally helpful for learning learning similarity.  The siamese network provided here is a convolutional neural net, based on the cnn-sentence model above.  It uses an L2 metric function and a hinge loss function to make a binary prediction based on two sentence's input.  For example, for a paraphrase corpus, the data will include 2 sentences and a label (0,1) stating whether or not the two documents are paraphases.
+Siamese networks have been shown to be useful for tasks such as paraphrase detection, and are generally helpful for learning similarity.  The siamese network provided here is a convolutional neural net, based on the cnn-sentence model above.  It uses an L2 metric function and a contrastive loss function to make a binary prediction based on two sentence's input.  For example, for a paraphrase corpus, the data will include 2 sentences and a label (0,1) stating whether or not the two documents are paraphases.
 
 # siamese-fine: Parallel CNNs with shared weights, using Word2Vec input + fine-tuning with an L2 loss function
 
