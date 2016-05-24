@@ -119,3 +119,14 @@ Seq2seq is useful for a variety of tasks, from Statistical Machine Translation t
 This code implements seq2seq with mini-batching (as in other examples) using adagrad, adadelta, sgd or adam.  It supports two vocabularies, and takes word2vec pre-trained models as input, filling in words that are attested in the dataset but not found in the pre-trained models.  It uses dropout for regularization.
 
 For any reasonable size data, this really needs to run on the GPU for realistic training times.
+
+# Paraphrase Detection using Siamese Networks
+
+Siamese networks have been shown to be useful for tasks such as paraphrase detection, and are generally helpful for learning learning similarity.  The siamese network provided here is a convolutional neural net, based on the cnn-sentence model above.  It uses an L2 metric function and a hinge loss function to make a binary prediction based on two sentence's input.  For example, for a paraphrase corpus, the data will include 2 sentences and a label (0,1) stating whether or not the two documents are paraphases.
+
+# siamese-fine: Parallel CNNs with shared weights, using Word2Vec input + fine-tuning with an L2 loss function
+
+```
+th siamese-fine.lua -optim adagrad -epochs 50 -patience 25 -cmotsz 100 -embed /data/xdata/oct-s140clean-uber.cbow-bin -train /data/xdata/para/tw/train.txt -valid /data/xdata/para/tw/dev.txt -eval /data/xdata/para/tw/test.txt
+```
+
