@@ -2,12 +2,12 @@ require 'nn'
 require 'optim'
 require 'xlua'
 
-function createCrit(gpu)
-   local crit = nn.HingeEmbeddingCriterion(1)
+function createDistanceCrit(gpu)
+   local crit = nn.HingeEmbeddingCriterion()
    return gpu and crit:cuda() or crit
 end
 
-function trainEpoch(crit, model, ts, optmeth, confusion, options)
+function trainEpoch(crit, model, ts, optmeth, options)
     local xt = ts.x
     local yt = ts.y
 
@@ -16,6 +16,9 @@ function trainEpoch(crit, model, ts, optmeth, confusion, options)
 
     local shuffle = torch.randperm(#xt)
     w,dEdw = model:getParameters()
+
+    local epochErr = 0
+
     for i=1,#xt do
 
        -- batch size is the first dimension
@@ -38,13 +41,8 @@ function trainEpoch(crit, model, ts, optmeth, confusion, options)
 	  dEdw:zero()
 
 	  local pred = model:forward(x)
-	  local err = crit:forward(pred, y)
-
-	  for j = 1,thisBatchSz do
-	     local yg = pred[j] > 0 and 1 or 0
-	     confusion:add(yg + 1, y[j] + 1)
-	  end
-  
+	  local err = crit:forward(pred, y)  
+	  epochErr = epochErr + err
 	  local grad = crit:backward(pred, y)
 	  model:backward(x, grad)
 	  return err, dEdw
@@ -59,19 +57,20 @@ function trainEpoch(crit, model, ts, optmeth, confusion, options)
        
     end
     time = sys.clock() - time
-    print(confusion)
-    print('Training error ' .. (1-confusion.totalValid))
+    local avgEpochErr = epochErr / #xt
+    print('Train avg loss ' .. avgEpochErr)
     print("Time to learn epoch " .. time .. 's')
 
 end
 
-function test(crit, model, es, confusion, options)
+function test(crit, model, es, options)
 
     local xt = es.x
     local yt = es.y
     model:evaluate()
     time = sys.clock()
 
+    local epochErr = 0
     for i=1,#xt do
        local x = xt[i]
        if options.gpu then
@@ -82,21 +81,16 @@ function test(crit, model, es, confusion, options)
         local y = options.gpu and yt[i]:cuda() or yt[i]
 	local thisBatchSz = y:size(1)
 	local pred = model:forward(x)
---	local err = crit:forward(pred, y)
-
-	for j = 1,thisBatchSz do
-	   local yg = pred[j] > 0 and 1 or 0
-	   confusion:add(yg + 1, y[j] + 1)
-	end
-  
+	local err = crit:forward(pred, y)
+	epochErr = epochErr + err
 	xlua.progress(i, #xt)
 
     end
 
     time = sys.clock() - time
-    print(confusion)
-    print('Test error ' .. (1-confusion.totalValid))
-    print("Time to test " .. time .. 's')
+    local avgEpochErr = epochErr / #xt
+    print('Test avg loss ' .. avgEpochErr)
+    print("Time to run test " .. time .. 's')
 
-    return (1-confusion.totalValid)
+    return avgEpochErr
 end

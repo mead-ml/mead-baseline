@@ -9,7 +9,7 @@ from the vocab. that are unattested during training.  This keeps the model
 compact, but it might not be what you want.  To avoid this, pass -keepunused
 
 ]]--
-
+require 'rnn'
 require 'nn'
 require 'xlua'
 require 'optim'
@@ -17,6 +17,7 @@ require 'siameseutils'
 require 'data'
 require 'train'
 require 'emb'
+require 'PrintIt'
 torch.setdefaulttensortype('torch.FloatTensor')
 
 -----------------------------------------------------
@@ -53,7 +54,7 @@ linear = nil
 ---------------------------------------------------------------------
 -- Make a Softmax output CMOT with Dropout and a word2vec LookupTable
 ---------------------------------------------------------------------
-function createModel(lookupTable, cmotsz, cactive, hsz, hactive, filtsz, gpu, pdrop)
+function createDistanceModel(lookupTable, cmotsz, cactive, hsz, hactive, filtsz, gpu, pdrop)
     local dsz = lookupTable.dsz
     local seq = nn.Sequential()
 
@@ -78,7 +79,6 @@ function createModel(lookupTable, cmotsz, cactive, hsz, hactive, filtsz, gpu, pd
 
     local siamese = nn.Sequential()
     siamese:add(par)
-
     siamese:add(nn.PairwiseDistance(2))
 
     return gpu and siamese:cuda() or siamese
@@ -191,18 +191,16 @@ print('Using ' .. #(es.x) .. ' batches for test')
 ---------------------------------------
 -- Build model and criterion
 ---------------------------------------
-local crit = createCrit(opt.gpu)
-local model = createModel(w2v, opt.cmotsz, opt.cactive, opt.hsz, opt.hactive, opt.filtsz, opt.gpu, opt.dropout)
+local crit = createDistanceCrit(opt.gpu)
+local model = createDistanceModel(w2v, opt.cmotsz, opt.cactive, opt.hsz, opt.hactive, opt.filtsz, opt.gpu, opt.dropout)
 
 local errmin = 1
 local lastImproved = 0
 
 for i=1,opt.epochs do
     print('Training epoch ' .. i)
-    confusion = optim.ConfusionMatrix({0,1})
-    trainEpoch(crit, model, ts, optmeth, confusion, opt)
-    confusion = optim.ConfusionMatrix({0,1})
-    local erate = test(crit, model, vs, confusion, opt)
+    trainEpoch(crit, model, ts, optmeth, opt)
+    local erate = test(crit, model, vs, opt)
     if erate < errmin then
        errmin = erate
        lastImproved = i
@@ -216,10 +214,11 @@ for i=1,opt.epochs do
 end
 
 
-
-print('Highest test acc: ' .. (100 * (1. - errmin)))
+print('Lowest loss seen in validation: ' .. errmin)
 print('=====================================================')
+
 print('Evaluating best model on test data')
 model = loadModel(opt.save, opt.gpu)
-confusion = optim.ConfusionMatrix({0,1})
-local _ = test(crit, model, es, confusion, opt)
+local errmin = test(crit, model, es, opt)
+print('Test loss: ' .. errmin)
+print('=====================================================')

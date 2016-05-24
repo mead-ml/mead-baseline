@@ -120,9 +120,9 @@ This code implements seq2seq with mini-batching (as in other examples) using ada
 
 For any reasonable size data, this really needs to run on the GPU for realistic training times.
 
-# Paraphrase Detection using Siamese Networks
+# Distance metrics using Siamese Networks
 
-Siamese networks have been shown to be useful for tasks such as paraphrase detection, and are generally helpful for learning similarity.  The siamese network provided here is a convolutional neural net, based on the cnn-sentence model above.  It uses an L2 metric function and a contrastive loss function to make a binary prediction based on two sentence's input.  For example, for a paraphrase corpus, the data will include 2 sentences and a label (0,1) stating whether or not the two documents are paraphases.
+Siamese networks have been shown to be useful for tasks such as paraphrase detection, and are generally helpful for learning similarity/distance metrics.  The siamese network provided here is a convolutional neural net, based on the cnn-sentence model above.  It uses an L2 (pairwise distance) metric function and a contrastive loss function to determine a distance between pairs.  For example, for a paraphrase corpus, the data will include 2 sentences and a label (0,1) stating whether or not the two documents are paraphases.  The Siamese network then learns a distance mapping from this data.
 
 # siamese-fine: Parallel CNNs with shared weights, using Word2Vec input + fine-tuning with an L2 loss function
 
