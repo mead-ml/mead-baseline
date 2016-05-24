@@ -1,6 +1,7 @@
 --[[
 
-Dynamic (Fine Tuned Word Embeddings LookupTable) CMOT.
+Dynamic (Fine Tuned Word Embeddings LookupTable) CMOT-based Siamese Network
+
 When we fine-tune, we make a LookupTable, and set its value to a Word2Vec
 dataset.  This is augmented with a '<PADDING>' feature which is forced to
 zero, even during optimization.  By default this code will trim out words
