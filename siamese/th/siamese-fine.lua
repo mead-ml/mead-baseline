@@ -48,7 +48,7 @@ DEF_PROC = 'gpu'
 DEF_CACTIVE = 'relu'
 DEF_HACTIVE = 'relu'
 DEF_EMBUNIF = 0.25
-
+DEF_SHOW = 20
 linear = nil
 
 ---------------------------------------------------------------------
@@ -79,7 +79,8 @@ function createDistanceModel(lookupTable, cmotsz, cactive, hsz, hactive, filtsz,
 
     local siamese = nn.Sequential()
     siamese:add(par)
-    siamese:add(nn.PairwiseDistance(2))
+    siamese:add(nn.CosineDistance())
+--    siamese:add(nn.PairwiseDistance(2))
 
     return gpu and siamese:cuda() or siamese
 end
@@ -95,6 +96,7 @@ cmd:option('-save', DEF_FILE_OUT, 'Save model to')
 cmd:option('-embed', DEF_EMBED, 'Word2Vec embeddings')
 cmd:option('-embunif', DEF_EMBUNIF, 'Word2Vec initialization for non-attested attributes')
 cmd:option('-eta', DEF_ETA, 'Initial learning rate')
+cmd:option('-show', DEF_SHOW, '# results to show in test')
 cmd:option('-optim', DEF_OPTIM, 'Optimization method (sgd|adagrad|adam|adadelta)')
 cmd:option('-decay', DEF_DECAY, 'Weight decay')
 cmd:option('-dropout', DEF_DROP, 'Dropout prob')
@@ -162,6 +164,7 @@ print('Using batch size ' .. opt.batchsz)
 -- zero-ing the weights after each iteration
 -----------------------------------------------
 w2v = Word2VecLookupTable(opt.embed, vocab, opt.embunif)
+local rlut = revlut(w2v.vocab)
 
 function afterhook() 
       w2v.weight[w2v.vocab["<PADDING>"]]:zero()
@@ -200,7 +203,7 @@ local lastImproved = 0
 for i=1,opt.epochs do
     print('Training epoch ' .. i)
     trainEpoch(crit, model, ts, optmeth, opt)
-    local erate = test(crit, model, vs, opt)
+    local erate = test(crit, model, rlut, vs, opt)
     if erate < errmin then
        errmin = erate
        lastImproved = i
@@ -219,6 +222,6 @@ print('=====================================================')
 
 print('Evaluating best model on test data')
 model = loadModel(opt.save, opt.gpu)
-local errmin = test(crit, model, es, opt)
+local errmin = test(crit, model, rlut, es, opt)
 print('Test loss: ' .. errmin)
 print('=====================================================')

@@ -2,6 +2,19 @@ require 'nn'
 require 'optim'
 require 'xlua'
 
+
+function lookupSent(rlut, lu)
+   local words = {}
+   for i=1,lu:size(1) do
+      local word = rlut[lu[i]]
+      if word ~= '<PADDING>' then
+--	 print(word)
+	 table.insert(words, word)
+      end
+   end
+   return table.concat(words, " ")
+end
+
 function newConv1D(ifm, ofm, filtsz, gpu)
    local tconv = gpu and cudnn.TemporalConvolution(ifm, ofm, filtsz) or nn.TemporalConvolution(ifm, ofm, filtsz)
    return tconv
