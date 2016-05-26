@@ -9,16 +9,15 @@ end
 
 function testTagger(model, es, crit, confusion, options)
 
-    local xt = es.x
-    local yt = es.y
-
     model:evaluate()
     time = sys.clock()
+    local sz = es:size()
 
     local epochErr = 0
-    for i=1,#xt do
- 	local x = options.gpu and xt[i]:cuda() or xt[i]
-        local y = options.gpu and yt[i]:cuda() or yt[i]
+    for i=1,sz do
+        local xy = es:get(i)
+ 	local x = options.gpu and xy.x:cuda() or xy.x
+        local y = options.gpu and xy.y:cuda() or xy.y
 	x = x:transpose(1, 2)
 	y = y:transpose(1, 2)
 
@@ -53,12 +52,12 @@ function testTagger(model, es, crit, confusion, options)
 	   end
 	end
 	
-	xlua.progress(i, #xt)
+	xlua.progress(i, sz)
     end
     
     print(confusion)
     local err = (1-confusion.totalValid)
-    local avgEpochErr = epochErr / #xt
+    local avgEpochErr = epochErr / sz
     time = sys.clock() - time
     print('Test avg loss ' .. avgEpochErr)
     print('Test accuracy (error) ' .. err)
@@ -67,15 +66,14 @@ function testTagger(model, es, crit, confusion, options)
 end
 
 function trainTaggerEpoch(crit, model, ts, optmeth, options)
-    local xt = ts.x
-    local yt = ts.y
     model:training()
     local time = sys.clock()
 
-    local shuffle = torch.randperm(#xt)
+    local sz = ts:size()
+    local shuffle = torch.randperm(sz)
     w,dEdw = model:getParameters()
     local epochErr = 0
-    for i=1,#xt do
+    for i=1,sz do
        local si = shuffle[i]
 	    
        local evalf = function(wt)
@@ -85,8 +83,9 @@ function trainTaggerEpoch(crit, model, ts, optmeth, options)
 	  end
 	  
 	  dEdw:zero()
-	  local x = options.gpu and xt[si]:cuda() or xt[si]
-	  local y = options.gpu and yt[si]:cuda() or yt[si]
+	  local xy = ts:get(si)
+	  local x = options.gpu and xy.x:cuda() or xy.x
+	  local y = options.gpu and xy.y:cuda() or xy.y
 
 	  x = x:transpose(1, 2)
 	  y = y:transpose(1, 2)
@@ -110,11 +109,11 @@ function trainTaggerEpoch(crit, model, ts, optmeth, options)
 	  options.afteroptim()
        end
 
-       xlua.progress(i, #xt)
+       xlua.progress(i, sz)
 
     end
     time = sys.clock() - time
-    local avgEpochErr = epochErr / #xt
+    local avgEpochErr = epochErr / sz
     print('Train avg loss ' .. avgEpochErr)
     print("Time to learn epoch " .. time .. 's')
 

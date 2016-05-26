@@ -1,4 +1,4 @@
-require 'siameseutils'
+require 'utils'
 
 
 --[[
@@ -59,28 +59,6 @@ function buildVocab(files)
     return vocab
 end
 
-function readLines(tsfile)
-   local srcs = {}
-   local dsts = {}
-   local ys = {}
-   for line in tsfile:lines() do
-      local splits = line:split('\t')
-      local y = splits[1]:split('%s+')
-      local src = splits[2]:split('%s+')
-      local dst = splits[3]:split('%s+')
-      if #src < 1 or #dst < 1 then
-	 print(#src)
-	 print(#dst)
-      end
-      table.insert(ys, y)
-      table.insert(srcs, src)
-      table.insert(dsts, dst)
-   end
-   
-   return srcs, dsts, ys
-end
-
-
 -- Try to get an index using multiple approaches
 function tryGetWordIdx(w2v, word)
    z = w2v.vocab[word]
@@ -122,37 +100,32 @@ function sentsToIndices(file, embed, options)
     -- Pad is always at 1!
     local PAD = embed.vocab['<PADDING>']
 
-    local ts =  {}
-    local srcs = {}
-    local dsts = {}
-    local tgts = {}
-
-    srcs, dsts, tgts = readLines(tsfile)
+    local ts = options.ooc and FileBackedStore() or TableBackedStore()
+    local n = numLines(file)
 
     local thisBatchSz = nil
     local xs = nil
     local ys = nil
-    local bx = {}
-    local by = {}
     local idx = 0
     local b = 0
-
-    -- for each line
-    for i,src in pairs(srcs) do
-
+    local i = 1
+    
+    for line in tsfile:lines() do
+       local splits = line:split('\t')
+       local label = splits[1]
+       local src = splits[2]:split('%s+')
+       local dst = splits[3]:split('%s+')
+       
        -- dst line
-       local dst = dsts[i]
        -- label
-       local label = tgts[i][1]
        local offset = (i - 1) % batchsz
 
        if offset == 0 then
 	  if b > 0 then
-	     bx[b] = xs
-	     by[b] = ys
+	     ts:put({x=xs,y=ys})
 	  end
 	  b = b + 1
-	  thisBatchSz = math.min(batchsz, #srcs - i + 1)
+	  thisBatchSz = math.min(batchsz, n - i + 1)
 	  local siglen = mxlen + 2*zp
 	  xs = {torch.LongTensor(thisBatchSz, siglen):fill(PAD),torch.LongTensor(thisBatchSz, siglen):fill(PAD)}
 	  ys = torch.LongTensor(thisBatchSz)
@@ -175,17 +148,14 @@ function sentsToIndices(file, embed, options)
 	  
        end
        ys[offset+1] = label
-	  
+       i = i + 1
     end
 
 
     if thisBatchSz > 0 then
-       bx[b] = xs
-       by[b] = ys
+       ts:put({x=xs,y=ys})
     end
 
-    ts.x = bx
-    ts.y = by
     return ts
 
 end

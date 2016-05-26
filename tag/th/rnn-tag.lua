@@ -11,7 +11,7 @@ It's influenced by "Finding Function in Form: Compositional Character Models for
 require 'torch'
 require 'nn'
 require 'optim'
-require 'tagutils'
+require 'utils'
 require 'torchure'
 require 'train'
 require 'data'
@@ -36,6 +36,7 @@ DEF_CLIP = 5
 DEF_DECAY = 1e-7
 DEF_MOM = 0.0
 DEF_BATCHSZ = 8
+DEF_OUT_OF_CORE = false
 torch.setdefaulttensortype('torch.FloatTensor')
 
 --------------------------------------------------------------------
@@ -104,6 +105,8 @@ cmd:option('-mom', DEF_MOM, 'Momentum for SGD')
 cmd:option('-hsz', DEF_HSZ, 'Hidden layer units')
 cmd:option('-proc', DEF_PROC)
 cmd:option('-patience', DEF_PATIENCE)
+cmd:option('-ooc', DEF_OUT_OF_CORE, 'Should data batches be file-backed?')
+
 local opt = cmd:parse(arg)
 
 ----------------------------------------
@@ -158,10 +161,10 @@ end
 ---------------------------------------
 -- Load Feature Vectors
 ---------------------------------------
-ts = conllSentsToVectors(opt.train, w2v, f2i, opt)
-es = conllSentsToVectors(opt.eval, w2v, ts.f2i, opt)
+ts,f2i = conllSentsToVectors(opt.train, w2v, f2i, opt)
+es,f2i = conllSentsToVectors(opt.eval, w2v, f2i, opt)
 
-local i2f = revlut(es.f2i)
+local i2f = revlut(f2i)
 local nc = #i2f
 print('Number of classes ' .. nc)
 

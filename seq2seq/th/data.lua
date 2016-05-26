@@ -1,4 +1,3 @@
-
 --[[
   Total hack: FIXME!
   To make this work, I replaced some samples with special tokens prior to
@@ -61,25 +60,6 @@ function buildVocab(idx, files)
     return vocab
 end
 
-function readLines(tsfile)
-   local srcs = {}
-   local dsts = {}
-   for line in tsfile:lines() do
-      local splits = line:split('\t')
-      local src = splits[1]:split('%s+')
-      local dst = splits[2]:split('%s+')
-      if #src < 1 or #dst < 1 then
-	 print(#src)
-	 print(#dst)
-      end
-      table.insert(srcs, src)
-      table.insert(dsts, dst)
-   end
-   
-   return srcs, dsts
-end
-
-
 -- Try to get an index using multiple approaches
 function tryGetWordIdx(w2v, word)
    z = w2v.vocab[word]
@@ -111,7 +91,6 @@ end
 
 function sentsToIndices(file, embed1, embed2, options)
 
-    local tsfile = io.open(file, 'r')
     local linenum = 1
     
     local wsz = embed1.dsz
@@ -121,39 +100,32 @@ function sentsToIndices(file, embed1, embed2, options)
     -- Pad is always at 1!
     local PAD = embed1.vocab['<PADDING>']
     local GO = embed2.vocab['<GO>']
---    print(embed2:lookup('<GO>'))
     local EOS = embed2.vocab['<EOS>']
-
-    local ts =  {}
-    local srcs = {}
-    local dsts = {}
-    local tgts = {}
-
-    srcs, dsts = readLines(tsfile)
+    local ts = options.ooc and FileBackedStore() or TableBackedStore()
+    local n = numLines(file)
 
     local thisBatchSz = nil
     local srcl = nil
     local dstl = nil
     local tgtl = nil
-    local srct = {}
-    local dstt = {}
-    local tgtt = {}
 
     local idx = 0
     local b = 0
-    for i,src in pairs(srcs) do
+    local i = 1
+    local tsfile = io.open(file, 'r')
 
-       local dst = dsts[i]
+    for line in tsfile:lines() do
+       local splits = line:split('\t')
+       local src = splits[1]:split('%s+')
+       local dst = splits[2]:split('%s+')
        local offset = (i - 1) % batchsz
 
        if offset == 0 then
 	  if b > 0 then
-	     srct[b] = srcl
-	     dstt[b] = dstl
-	     tgtt[b] = tgtl
+	     ts:put({src=srcl,dst=dstl,tgt=tgtl})
 	  end
 	  b = b + 1
-	  thisBatchSz = math.min(batchsz, #srcs - i + 1)
+	  thisBatchSz = math.min(batchsz, n - i + 1)
 	  srcl = torch.LongTensor(thisBatchSz, mxlen):fill(PAD)
 	  dstl = torch.LongTensor(thisBatchSz, mxlen + 1):fill(PAD)
 	  tgtl = torch.LongTensor(thisBatchSz, mxlen + 1):fill(0)
@@ -177,21 +149,17 @@ function sentsToIndices(file, embed1, embed2, options)
 	  dstl[{offset+1, j + 1}] = idx2
 	  tgtl[{offset+1, j}] = idx2 == PAD and 0 or idx2
 	  
+
        end
        tgtl[{offset+1, end2 + 1}] = EOS
-    
+       i = i + 1
     end
 
 
     if thisBatchSz > 0 then
-       srct[b] = srcl
-       dstt[b] = dstl
-       tgtt[b] = tgtl
+       ts:put({src=srcl,dst=dstl,tgt=tgtl})
     end
 
-    ts.dst = dstt
-    ts.src = srct
-    ts.tgt = tgtt
     return ts
 
 end

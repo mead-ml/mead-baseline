@@ -1,47 +1,6 @@
-require 'classutils'
-function validSplit(ts, splitfrac)
-   local train = {x={},y={}}
-   local valid = {x={},y={}}
-   local numinst = #(ts.x)
-   local heldout = numinst * splitfrac
-   local holdidx = numinst - heldout
-   for i,x in ipairs(ts.x) do
-      local y = ts.y[i]
-      if i < holdidx then
-	 table.insert(train.x, x)
-	 table.insert(train.y, y)
-      else
-	 table.insert(valid.x, x)
-	 table.insert(valid.y, y)
-      end
-      
-   end
-   
-   return train, valid
-end
+require 'utils'
+require 'torchure'
 
---[[
-
-  Data loader code for label followed by text TSVs.
-  This actually supports
-  <label>\s+<sentence>
-
---]]
-function labelSent(line, clean)
-
-   local labelText = line:split('%s+')
-   if #labelText < 2 then return nil, nil end
-   local label = labelText[1]
-   local text = ''
-   for i=2,#labelText do
-      local w = labelText[i]
-      if clean then
-	 w = doClean(w:lower())
-      end
-      text = text .. ' ' .. w
-   end
-   return label,text
-end
 
 VALID_TOKENS = revlut({
       'A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z', 'a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z','(',')',',', '!','?',"'","`", '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'})
@@ -140,6 +99,22 @@ function convertToBatchIndices(w2v, tx, ty)
    return torch.Tensor(bx), by
 end
 
+function labelSent(line, clean)
+
+   local labelText = line:split('%s+')
+   if #labelText < 2 then return nil, nil end
+   local label = labelText[1]
+   local text = ''
+   for i=2,#labelText do
+      local w = labelText[i]
+      if clean then
+        w = doClean(w:lower())
+      end
+      text = text .. ' ' .. w
+   end
+   return label,text
+end
+
 --[[
   Build a vocab by processing all these files and generating a table
   of form {["hello"]=1, ..., ["world"]=1}
@@ -183,9 +158,8 @@ and for morphological support (for things like tagging).
 --]]
 
 function loadTemporalEmb(file, w2v, f2i, options)
-    local ts = {}
-    local yt = {}
-    local xt = {}
+    local ts = options.ooc and FileBackedStore() or TableBackedStore()
+
     local batchsz = options.batchsz or 1
 
     local vsz = w2v.vsz
@@ -253,9 +227,7 @@ function loadTemporalEmb(file, w2v, f2i, options)
 	  bx, by = convertToBatch(batchx, batchy)
 	  batchx = {}
 	  batchy = {}
-	  
-	  table.insert(xt, bx)
-	  table.insert(yt, by)
+	  ts:put({x=bx,y=by})
 	  
        end
        
@@ -266,13 +238,32 @@ function loadTemporalEmb(file, w2v, f2i, options)
     if #batchx > 0 then
        -- evict the old batch, add a new one
        bx, by = convertToBatch(batchx, batchy)
-       table.insert(xt, bx)
-       table.insert(yt, by)
+       ts:put({x=bx, y=by})
     end
 
-    ts.y = yt
-    ts.x = xt
     return ts, f2i
+end
+
+
+-- Create a valid split of this data store, splitting on a fraction
+function validSplit(dataStore, splitfrac, ooc)
+   local train = ooc and FileBackedStore() or TableBackedStore()
+   local valid = ooc and FileBackedStore() or TableBackedStore()
+   local numinst = dataStore:size()
+   local heldout = numinst * splitfrac
+   local holdidx = numinst - heldout
+   
+   for i=1,numinst do
+      local txy = dataStore:get(i)
+      if i < holdidx then
+	 train:put(txy)
+      else
+	 valid:put(txy)
+      end
+      
+   end
+   
+   return train, valid
 end
 
 --[[
@@ -281,9 +272,7 @@ end
   This is used by dynamic embedding (fine-tuned) CNN
 --]]
 function loadTemporalIndices(file, w2v, f2i, options)
-    local ts = {}
-    local yt = {}
-    local xt = {}
+    local ts = options.ooc and FileBackedStore() or TableBackedStore()
     local batchsz = options.batchsz or 1
 
     local vsz = w2v.vsz
@@ -355,9 +344,7 @@ function loadTemporalIndices(file, w2v, f2i, options)
 	  bx, by = convertToBatchIndices(w2v, batchx, batchy)
 	  batchx = {}
 	  batchy = {}
-	  
-	  table.insert(xt, bx)
-	  table.insert(yt, by)
+	  ts:put({x=bx,y=by})
 	  
        end
        
@@ -368,12 +355,9 @@ function loadTemporalIndices(file, w2v, f2i, options)
     if #batchx > 0 then
        -- evict the old batch, add a new one
        bx, by = convertToBatchIndices(w2v, batchx, batchy)
-       table.insert(xt, bx)
-       table.insert(yt, by)
+       ts:put({x=bx,y=by})
     end
 
-    ts.y = yt
-    ts.x = xt
     return ts, f2i
 end
 

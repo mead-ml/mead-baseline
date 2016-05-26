@@ -116,6 +116,7 @@ end
 --]]
 function conllSentsToIndices(file, w2v, f2i, options)
    
+    local ts = options.ooc and FileBackedStore() or TableBackedStore()
     local tsfile = io.open(file, 'r')
     local linenum = 1
     
@@ -126,10 +127,6 @@ function conllSentsToIndices(file, w2v, f2i, options)
     local zp = options.zp or 0
 
     print('Word vector sz ' .. wsz)
-
-    local ts = {}
-    local xt = {}
-    local yt = {}
     
     local non = 0
     local tot = 0
@@ -156,8 +153,7 @@ function conllSentsToIndices(file, w2v, f2i, options)
 
        if offset == 0 then
 	  if b > 0 then
-	     xt[b] = xs
-	     yt[b] = ys
+	     ts:put({x=xs,y=ys})
 	  end
 	  b = b + 1
 	  thisBatchSz = math.min(batchsz, #txts - i + 1)
@@ -188,16 +184,11 @@ function conllSentsToIndices(file, w2v, f2i, options)
     end
 
     if thisBatchSz > 0 then
-       xt[b] = xs
-       yt[b] = ys
+       ts:put({x=xs,y=ys})
     end
 
     print('Sparsity ' .. (non/tot))
-    ts.f2i = f2i
-    ts.y = yt
-    ts.x = xt
-    ts.txts = txts
-    return ts
+    return ts, f2i
 
 end
 
@@ -266,6 +257,7 @@ end
 
 function conllSentsToVectors(file, w2v, f2i, options)
    
+    local ts = options.ooc and FileBackedStore() or TableBackedStore()
     local tsfile = io.open(file, 'r')
     local linenum = 1
 
@@ -278,10 +270,6 @@ function conllSentsToVectors(file, w2v, f2i, options)
 
     print('Word vector sz ' .. wsz)
     print('Char vector sz ' .. csz)
-
-    local ts = {}
-    local xt = {}
-    local yt = {}
 
     local non = 0
     local tot = 0
@@ -313,8 +301,7 @@ function conllSentsToVectors(file, w2v, f2i, options)
 
        if offset == 0 then
 	  if b > 0 then
-	     xt[b] = xs
-	     yt[b] = ys
+	     ts:put({x=xs,y=ys})
 	  end
 	  b = b + 1
 	  thisBatchSz = math.min(batchsz, #txts - i + 1)
@@ -352,15 +339,10 @@ function conllSentsToVectors(file, w2v, f2i, options)
     end
 
     if thisBatchSz > 0 then
-       xt[b] = xs
-       yt[b] = ys
+       ts:put({x=xs,y=ys})
     end
 
     print('Sparsity ' .. (non/tot))
-    ts.f2i = f2i
-    ts.y = yt
-    ts.x = xt
-    ts.txts = txts
-    return ts
+    return ts, f2i
 
 end

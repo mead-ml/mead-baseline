@@ -9,7 +9,7 @@ use either ElementResearch's rnn package, or Justin Johnson's torch-rnn.
 require 'torch'
 require 'nn'
 require 'optim'
-require 'tagutils'
+require 'utils'
 require 'torchure'
 require 'train'
 require 'data'
@@ -36,7 +36,7 @@ DEF_CLIP = 5
 DEF_DECAY = 1e-7
 DEF_MOM = 0.0
 DEF_EMBUNIF = 0.25
-
+DEF_OUT_OF_CORE = false
 torch.setdefaulttensortype('torch.FloatTensor')
 
 
@@ -98,6 +98,7 @@ cmd:option('-proc', DEF_PROC)
 cmd:option('-patience', DEF_PATIENCE)
 -- Strongly recommend its set to 'true' for non-massive GPUs
 cmd:option('-keepunused', false, 'Keep unattested words in Lookup Table')
+cmd:option('-ooc', DEF_OUT_OF_CORE, 'Should data batches be file-backed?')
 
 local opt = cmd:parse(arg)
 
@@ -158,10 +159,10 @@ opt.afteroptim = afterhook
 ---------------------------------------
 -- Load Feature Vectors
 ---------------------------------------
-ts = conllSentsToIndices(opt.train, w2v, f2i, opt)
-es = conllSentsToIndices(opt.eval, w2v, ts.f2i, opt)
+ts,f2i = conllSentsToIndices(opt.train, w2v, f2i, opt)
+es,f2i = conllSentsToIndices(opt.eval, w2v, f2i, opt)
 
-local i2f = revlut(es.f2i)
+local i2f = revlut(f2i)
 local nc = #i2f
 print('Number of classes ' .. nc)
 

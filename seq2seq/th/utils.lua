@@ -1,44 +1,8 @@
 require 'nn'
 require 'optim'
 require 'xlua'
+require 'torchure'
 
--- Take a map[key] = index table, and make a map[index] = key
-function revlut(f2i)
-   local i2f = {}
-   for k,v in pairs(f2i) do
-      i2f[v] = k
-   end
-   return i2f
-end
-
-function revtab(tab)
-    local size = #tab
-    local newTable = {}
-
-    for i,v in ipairs ( tab ) do
-        newTable[size-i] = v
-    end
-    return newTable
-end
-
-function lookupSent(rlut, lu, rev)
-   
-   local words = {}
-   for i=1,lu:size(1) do
-      local word = rlut[lu[i]]
-      if word == '<EOS>' then
-	 table.insert(words, word)
-	 break
-      end
-      if word ~= '<PADDING>' then
-	 table.insert(words, word)
-      end
-   end
-   if rev then
-      words = revtab(words)
-   end
-   return table.concat(words, " ")
-end
 
 function createSeq2SeqCrit(gpu)
    local crit = nn.SequencerCriterion(nn.MaskZeroCriterion(nn.ClassNLLCriterion(), 1))
@@ -185,8 +149,3 @@ function optimMethod(opt)
    return state, optmeth
 end
 
-function saveModel(model, file, gpu)
-   if gpu then model:float() end
-   torch.save(file, model)
-   if gpu then model:cuda() end
-end

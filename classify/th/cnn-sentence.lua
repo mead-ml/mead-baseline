@@ -10,7 +10,7 @@ frameworks, assuming a good SGD implementation.
 require 'nn'
 require 'xlua'
 require 'optim'
-require 'classutils'
+require 'utils'
 require 'data'
 require 'train'
 require 'torchure'
@@ -44,7 +44,7 @@ DEF_PROC = 'gpu'
 DEF_CACTIVE = 'relu'
 DEF_HACTIVE = 'none'
 DEF_VALSPLIT = 0.15
-
+DEF_OUT_OF_CORE = false
 ----------------------------------------------
 -- Make a Softmax output CMOT with Dropout
 ----------------------------------------------
@@ -104,6 +104,7 @@ cmd:option('-cactive', DEF_CACTIVE, 'Activation function following conv')
 cmd:option('-filtsz', DEF_FSZ, 'Convolution filter width')
 cmd:option('-clean', false, 'Cleanup tokens')
 cmd:option('-valsplit', DEF_VALSPLIT, 'Fraction training used for validation if no set is given')
+cmd:option('-ooc', DEF_OUT_OF_CORE, 'Should data batches be file-backed?')
 DEF_CACTIVE = 'relu'
 DEF_HACTIVE = 'relu'
 
@@ -158,15 +159,15 @@ if opt.valid ~= 'none' then
    print('Using provided validation data')
    vs,f2i = loadTemporalEmb(opt.valid, w2v, f2i, opt)
 else
-   ts,vs = validSplit(ts, opt.valsplit)
+   ts,vs = validSplit(ts, opt.valsplit, opt.ooc)
    print('Created validation split')
 end
 es,f2i = loadTemporalEmb(opt.eval, w2v, f2i, opt)
 print('Loaded test data')
 
-print('Using ' .. #(ts.x) .. ' batches for training')
-print('Using ' .. #(vs.x) .. ' batches for validation')
-print('Using ' .. #(es.x) .. ' batches for test')
+print('Using ' .. ts:size() .. ' batches for training')
+print('Using ' .. vs:size() .. ' batches for validation')
+print('Using ' .. es:size() .. ' batches for test')
 local i2f = revlut(f2i)
 
 ---------------------------------------

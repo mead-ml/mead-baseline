@@ -8,27 +8,27 @@ function createDistanceCrit(gpu)
 end
 
 function trainEpoch(crit, model, ts, optmeth, options)
-    local xt = ts.x
-    local yt = ts.y
 
     model:training()
     time = sys.clock()
 
-    local shuffle = torch.randperm(#xt)
+    local sz = ts:size()
+    local shuffle = torch.randperm(sz)
     w,dEdw = model:getParameters()
 
     local epochErr = 0
 
-    for i=1,#xt do
+    for i=1,sz do
 
        -- batch size is the first dimension
        local si = shuffle[i]
-       local x = xt[si]
+       local batch = ts:get(si)
+       local x = batch.x
        if options.gpu then
 	  x[1] = x[1]:cuda()
 	  x[2] = x[2]:cuda()
        end
-       local y = options.gpu and yt[si]:cuda() or yt[si]
+       local y = options.gpu and batch.y:cuda() or batch.y
        local thisBatchSz = y:size(1)
 
        local evalf = function(wt)
@@ -53,11 +53,11 @@ function trainEpoch(crit, model, ts, optmeth, options)
 	  options.afteroptim()
        end
 
-       xlua.progress(i, #xt)
+       xlua.progress(i, sz)
        
     end
     time = sys.clock() - time
-    local avgEpochErr = epochErr / #xt
+    local avgEpochErr = epochErr / sz
     print('Train avg loss ' .. avgEpochErr)
     print("Time to learn epoch " .. time .. 's')
 
@@ -65,8 +65,6 @@ end
 
 function test(crit, model, rlut, es, options)
 
-    local xt = es.x
-    local yt = es.y
     local show = options.show and options.show or 20
     model:evaluate()
     time = sys.clock()
@@ -74,14 +72,17 @@ function test(crit, model, rlut, es, options)
     local epochErr = 0
     local i, j
     local ranks = {}
-    for i=1,#xt do
-       local x = xt[i]
+    local sz = es:size()
+    for i=1,sz do
+
+       local batch = es:get(i)
+       local x = batch.x
        if options.gpu then
 	  x[1] = x[1]:cuda()
 	  x[2] = x[2]:cuda()
        end
 
-        local y = options.gpu and yt[i]:cuda() or yt[i]
+        local y = options.gpu and batch.y:cuda() or batch.y
 	local thisBatchSz = y:size(1)
 	local pred = model:forward(x)
 	local err = crit:forward(pred, y)
@@ -90,7 +91,7 @@ function test(crit, model, rlut, es, options)
 	   table.insert(ranks, {i, j, score})
 	end
 	epochErr = epochErr + err
-	xlua.progress(i, #xt)
+	xlua.progress(i, sz)
 
     end
 
@@ -103,19 +104,21 @@ function test(crit, model, rlut, es, options)
        if j > show then break end
        j = j + 1
        local idx = v[1]
+
+       local batch = es:get(idx)
        local bidx = v[2]
        local score = string.format('%.2f', v[3])
        print('===========================================================')
        
-       print('[' .. score .. '] (' .. yt[idx][bidx] .. ')')
-       s1 = lookupSent(rlut, xt[idx][1][bidx])
-       s2 = lookupSent(rlut, xt[idx][2][bidx])
+       print('[' .. score .. '] (' .. batch.y[bidx] .. ')')
+       s1 = lookupSent(rlut, batch.x[1][bidx])
+       s2 = lookupSent(rlut, batch.x[2][bidx])
        print(s1)
        print(s2)
        print('-----------------------------------------------------------')
     end
 
-    local avgEpochErr = epochErr / #xt
+    local avgEpochErr = epochErr / sz
     print('Test avg loss ' .. avgEpochErr)
     print("Time to run test " .. time .. 's')
 

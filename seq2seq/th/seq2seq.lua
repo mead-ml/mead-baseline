@@ -22,7 +22,7 @@ LookupTable for each end of the data.  This makes it possible to load pretrained
 require 'torch'
 require 'nn'
 require 'optim'
-require 'seq2sequtils'
+require 'utils'
 require 'torchure'
 require 'train'
 require 'data'
@@ -49,6 +49,7 @@ DEF_MOM = 0.0
 DEF_BATCHSZ = 8
 DEF_EMBUNIF = 0.25
 DEF_SAMPLE = false
+DEF_OUT_OF_CORE = false
 torch.setdefaulttensortype('torch.FloatTensor')
 
 --------------------------
@@ -76,6 +77,8 @@ cmd:option('-hsz', DEF_HSZ, 'Hidden layer units')
 cmd:option('-proc', DEF_PROC)
 cmd:option('-patience', DEF_PATIENCE)
 cmd:option('-sample', DEF_SAMPLE, 'Perform sampling to find candidate decodes')
+cmd:option('-ooc', DEF_OUT_OF_CORE, 'Should data batches be file-backed?')
+
 local opt = cmd:parse(arg)
 
 ----------------------------------------

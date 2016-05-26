@@ -9,20 +9,26 @@ end
 
 
 function trainEpoch(crit, model, ts, optmeth, confusion, options)
-    local xt = ts.x
-    local yt = ts.y
+--    local xt = ts.x
+--    local yt = ts.y
 
     model:training()
     time = sys.clock()
 
-    local shuffle = torch.randperm(#xt)
+    local sz = ts:size()
+    local shuffle = torch.randperm(sz)
     w,dEdw = model:getParameters()
-    for i=1,#xt do
+    for i=1,sz do
 
        -- batch size is the first dimension
        local si = shuffle[i]
-       local x = options.gpu and xt[si]:cuda() or xt[si]
-       local y = options.gpu and yt[si]:cuda() or yt[si]
+       local txy = ts:get(si)
+       local x = txy.x
+       local y = txy.y
+       if options.gpu then
+	  x = x:cuda()
+	  y = y:cuda()
+       end
        local thisBatchSz = x:size(1)
 
        local evalf = function(wt)
@@ -51,7 +57,7 @@ function trainEpoch(crit, model, ts, optmeth, confusion, options)
 	  options.afteroptim()
        end
 
-       xlua.progress(i, #xt)
+       xlua.progress(i, sz)
        
     end
     time = sys.clock() - time
@@ -63,14 +69,19 @@ end
 
 function test(crit, model, es, confusion, options)
 
-    local xt = es.x
-    local yt = es.y
+    
     model:evaluate()
     time = sys.clock()
+    local sz = es:size()
 
-    for i=1,#xt do
- 	local x = options.gpu and xt[i]:cuda() or xt[i]
-        local y = options.gpu and yt[i]:cuda() or yt[i]
+    for i=1,sz do
+        local exy = es:get(i) 
+ 	local x = exy.x
+        local y = exy.y
+	if options.gpu then
+	   x = x:cuda()
+	   y = y:cuda()
+	end
 	local thisBatchSz = x:size(1)
 	local pred = model:forward(x)
 --	local err = crit:forward(pred, y)
@@ -79,7 +90,7 @@ function test(crit, model, es, confusion, options)
 	   confusion:add(pred[j], y[j])
 	end
   
-	xlua.progress(i, #xt)
+	xlua.progress(i, sz)
 
     end
 

@@ -13,7 +13,7 @@ require 'rnn'
 require 'nn'
 require 'xlua'
 require 'optim'
-require 'siameseutils'
+require 'utils'
 require 'data'
 require 'train'
 require 'torchure'
@@ -49,6 +49,7 @@ DEF_CACTIVE = 'relu'
 DEF_HACTIVE = 'relu'
 DEF_EMBUNIF = 0.25
 DEF_SHOW = 20
+DEF_OUT_OF_CORE = false
 linear = nil
 
 ---------------------------------------------------------------------
@@ -115,6 +116,7 @@ cmd:option('-cactive', DEF_CACTIVE, 'Activation function following conv')
 cmd:option('-filtsz', DEF_FSZ, 'Convolution filter width')
 cmd:option('-clean', false, 'Cleanup tokens')
 cmd:option('-keepunused', false, 'Keep unattested words in Lookup Table')
+cmd:option('-ooc', DEF_OUT_OF_CORE, 'Should data batches be file-backed?')
 
 local opt = cmd:parse(arg)
 ----------------------------------------
@@ -187,9 +189,9 @@ vs = sentsToIndices(opt.valid, w2v, opt)
 
 es = sentsToIndices(opt.eval, w2v, opt)
 
-print('Using ' .. #(ts.x) .. ' batches for training')
-print('Using ' .. #(vs.x) .. ' batches for validation')
-print('Using ' .. #(es.x) .. ' batches for test')
+print('Using ' .. ts:size() .. ' batches for training')
+print('Using ' .. vs:size() .. ' batches for validation')
+print('Using ' .. es:size() .. ' batches for test')
 
 ---------------------------------------
 -- Build model and criterion

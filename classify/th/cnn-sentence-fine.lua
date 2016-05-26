@@ -12,7 +12,7 @@ compact, but it might not be what you want.  To avoid this, pass -keepunused
 require 'nn'
 require 'xlua'
 require 'optim'
-require 'classutils'
+require 'utils'
 require 'data'
 require 'train'
 require 'torchure'
@@ -47,7 +47,7 @@ DEF_CACTIVE = 'relu'
 DEF_HACTIVE = 'relu'
 DEF_EMBUNIF = 0.25
 DEF_VALSPLIT = 0.15
-
+DEF_OUT_OF_CORE = false
 linear = nil
 
 ---------------------------------------------------------------------
@@ -116,7 +116,7 @@ cmd:option('-filtsz', DEF_FSZ, 'Convolution filter width')
 cmd:option('-clean', false, 'Cleanup tokens')
 cmd:option('-keepunused', false, 'Keep unattested words in Lookup Table')
 cmd:option('-valsplit', DEF_VALSPLIT, 'Fraction training used for validation if no set is given')
-
+cmd:option('-ooc', DEF_OUT_OF_CORE, 'Should data batches be file-backed?')
 local opt = cmd:parse(arg)
 opt.filtsz = loadstring("return " .. opt.filtsz)()
 ----------------------------------------
@@ -175,7 +175,11 @@ opt.afteroptim = afterhook
 print('Loaded word embeddings')
 print('Vocab size ' .. w2v.vsz)
 
-
+if opt.ooc then
+   print('Doing file-backed processing')
+else
+   print('Doing in-core processing')
+end
 ---------------------------------------
 -- Load Feature Vectors
 ---------------------------------------
@@ -187,14 +191,14 @@ if opt.valid ~= 'none' then
    print('Using provided validation data')
    vs,f2i = loadTemporalIndices(opt.valid, w2v, f2i, opt)
 else
-   ts,vs = validSplit(ts, opt.valsplit)
+   ts,vs = validSplit(ts, opt.valsplit, opt.ooc)
    print('Created validation split')
 end
 es,f2i = loadTemporalIndices(opt.eval, w2v, f2i, opt)
 
-print('Using ' .. #(ts.x) .. ' batches for training')
-print('Using ' .. #(vs.x) .. ' batches for validation')
-print('Using ' .. #(es.x) .. ' batches for test')
+print('Using ' .. ts:size() .. ' batches for training')
+print('Using ' .. vs:size() .. ' batches for validation')
+print('Using ' .. es:size() .. ' batches for test')
 
 local i2f = revlut(f2i)
 

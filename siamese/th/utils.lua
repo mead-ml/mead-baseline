@@ -2,30 +2,9 @@ require 'nn'
 require 'optim'
 require 'xlua'
 
-
-function lookupSent(rlut, lu)
-   local words = {}
-   for i=1,lu:size(1) do
-      local word = rlut[lu[i]]
-      if word ~= '<PADDING>' then
---	 print(word)
-	 table.insert(words, word)
-      end
-   end
-   return table.concat(words, " ")
-end
-
 function newConv1D(ifm, ofm, filtsz, gpu)
    local tconv = gpu and cudnn.TemporalConvolution(ifm, ofm, filtsz) or nn.TemporalConvolution(ifm, ofm, filtsz)
    return tconv
-end
-
-function writeTable(t, name)
-   local df = torch.DiskFile(name, 'w')
-   for k, v in pairs(t) do
-      df:writeString(k .. '\t' .. v .. '\n')
-   end
-   df:close()
 end
 
 function activationFor(name, gpu)
@@ -76,33 +55,6 @@ function optimMethod(opt)
       optmeth = optim.sgd
    end
    return config, optmeth
-end
-
--- Take a map[key] = index table, and make a map[index] = key
-function revlut(f2i)
-   local i2f = {}
-   for k,v in pairs(f2i) do
-      i2f[v] = k
-   end
-   return i2f
-end
-
--- WIP
-function saveModel(model, file, gpu)
-   if gpu then model:float() end
-   torch.save(file, model)
-   if gpu then model:cuda() end
-end
-
-function loadModel(file, gpu)
-   local model = torch.load(file)
-   return gpu and model:cuda() or model
-end
-
--- NaNs?
-function hasNaN(t)
-   mx = torch.max(t)
-   return mx ~= mx
 end
 
 -- Does this file exist

@@ -1,28 +1,25 @@
 require 'nn'
 require 'optim'
 require 'xlua'
-require 'seq2sequtils'
+require 'utils'
 
 -- Decoder beam
 SAMPLE_BEAM_INIT = 5
 
 function trainSeq2SeqEpoch(crit, model, ts, optmeth, options)
-    local srcs = ts.src
-    local dsts = ts.dst
-    local tgts = ts.tgt
 
     local enc = model:get(1)
     local dec = model:get(2)
     enc:training()
     dec:training()
-
+    local sz = ts:size()
     local time = sys.clock()
 
-    local shuffle = torch.randperm(#tgts)
+    local shuffle = torch.randperm(sz)
     w,dEdw = getModelParameters(model)
 
     local epochErr = 0
-    for i=1,#tgts do
+    for i=1,sz do
        local si = shuffle[i]
 	    
        local evalf = function(wt)
@@ -33,9 +30,17 @@ function trainSeq2SeqEpoch(crit, model, ts, optmeth, options)
 	  
 	  dEdw:zero()
 
-	  local src = options.gpu and srcs[si]:cuda() or srcs[si]
-	  local dst = options.gpu and dsts[si]:cuda() or dsts[si]
-	  local tgt = options.gpu and tgts[si]:cuda() or tgts[si]
+	  local batch = ts:get(si)
+	  
+	  local src = batch.src
+	  local dst = batch.dst
+	  local tgt = batch.tgt
+
+	  if options.gpu then
+	     src = src:cuda()
+	     dst = dst:cuda()
+	     tgt = tgt:cuda()
+	  end
 
 	  src = src:transpose(1, 2)
 	  dst = dst:transpose(1, 2)
@@ -68,11 +73,11 @@ function trainSeq2SeqEpoch(crit, model, ts, optmeth, options)
 	  options.afteroptim()
        end
 
-       xlua.progress(i, #tgts)
+       xlua.progress(i, sz)
 
     end
     time = sys.clock() - time
-    local avgEpochErr = epochErr / #tgts
+    local avgEpochErr = epochErr / sz
     print('Train avg loss ' .. avgEpochErr)
     print("Time to learn epoch " .. time .. 's')
 
@@ -129,16 +134,15 @@ function showBatch(model, ts, rlut1, rlut2, embed2, opt)
 
    local GO = embed2.vocab['<GO>']
    local EOS = embed2.vocab['<EOS>']
-   local srcs = ts.src
-   local tgts = ts.tgt
-   local dsts = ts.dst
 
+   local sz = ts:size()
 
    gen = torch.Generator()
-   local rnum = torch.random(gen, 1, #srcs)
-   local src = srcs[rnum]
-   local dst = dsts[rnum]
-   local tgt = tgts[rnum]
+   local rnum = torch.random(gen, 1, sz)
+   local batch = ts:get(rnum)
+   local src = batch.src
+   local dst = batch.dst
+   local tgt = batch.tgt
 
    local batchsz = src:size(1)
 
@@ -169,32 +173,32 @@ function showBatch(model, ts, rlut1, rlut2, embed2, opt)
 end
 
 function testSeq2Seq(model, ts, crit, options)
-    local srcs = ts.src
-    local dsts = ts.dst
-    local tgts = ts.tgt
 
     local enc = model:get(1)
     local dec = model:get(2)
     enc:evaluate()
     dec:evaluate()
-
+    local sz = ts:size()
     local time = sys.clock()
 
-    local shuffle = torch.randperm(#tgts)
     local epochErr = 0
-    for i=1,#tgts do
-       local si = shuffle[i]
+    for i=1,sz do
 
-       local src = options.gpu and srcs[si]:cuda() or srcs[si]
-       local dst = options.gpu and dsts[si]:cuda() or dsts[si]
-       local tgt = options.gpu and tgts[si]:cuda() or tgts[si]
-       
+       local batch = ts:get(i)
+       local src = batch.src
+       local dst = batch.dst
+       local tgt = batch.tgt
+
+       if options.gpu then
+	  src = src:cuda()
+	  dst = dst:cuda()
+	  tgt = tgt:cuda()
+       end
        src = src:transpose(1, 2)
        dst = dst:transpose(1, 2)
        tgt = tgt:transpose(1, 2)
 	  
        local predSrc = enc:forward(src)
-       
        local srclen = src:size(1)
        forwardConnect(model, srclen)
        
@@ -202,13 +206,13 @@ function testSeq2Seq(model, ts, crit, options)
        
        local err = crit:forward(predDst, tgt)
        epochErr = epochErr + err
-       xlua.progress(i, #tgts)
+       xlua.progress(i, sz)
 
        forgetModelState(model)
 
     end
     time = sys.clock() - time
-    local avgEpochErr = epochErr / #tgts
+    local avgEpochErr = epochErr / sz
     print('Test avg loss ' .. avgEpochErr)
     print("Time to run test " .. time .. 's')
 
