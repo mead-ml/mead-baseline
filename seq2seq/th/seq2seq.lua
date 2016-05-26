@@ -23,7 +23,7 @@ require 'torch'
 require 'nn'
 require 'optim'
 require 'seq2sequtils'
-require 'emb'
+require 'torchure'
 require 'train'
 require 'data'
 -----------------------------------------------------

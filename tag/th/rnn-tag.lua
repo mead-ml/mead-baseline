@@ -12,7 +12,7 @@ require 'torch'
 require 'nn'
 require 'optim'
 require 'tagutils'
-require 'emb'
+require 'torchure'
 require 'train'
 require 'data'
 -----------------------------------------------------

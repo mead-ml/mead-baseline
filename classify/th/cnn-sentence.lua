@@ -13,7 +13,7 @@ require 'optim'
 require 'classutils'
 require 'data'
 require 'train'
-require 'emb'
+require 'torchure'
 torch.setdefaulttensortype('torch.FloatTensor')
 
 -----------------------------------------------------

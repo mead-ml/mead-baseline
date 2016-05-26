@@ -16,8 +16,8 @@ require 'optim'
 require 'siameseutils'
 require 'data'
 require 'train'
-require 'emb'
-require 'PrintIt'
+require 'torchure'
+--require 'PrintIt'
 torch.setdefaulttensortype('torch.FloatTensor')
 
 -----------------------------------------------------
