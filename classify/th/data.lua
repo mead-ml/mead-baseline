@@ -47,58 +47,6 @@ function word2chvec(w2cv, w)
     return wcv
 end
 
---[[
-  Convert a table to a batch, where width is longest sentence,
-  and shorter sentences are zero-padded at end.  
-  Doesnt have to be full size if
-  not enough data to fill: our code supports partial batches
---]]
-function convertToBatch(tx, ty)
-   local tlen = 0
-   local dsz = tx[1]:size(2)
-   for i=1,#tx do
-      tlen = math.max(tlen, tx[i]:size(1))
-   end
-
-   local bx = torch.zeros(#tx, tlen, dsz)
-   local by = torch.zeros(#ty)
-   for i=1,#tx do
-      bx[{i, {1,tx[i]:size(1)}}] = tx[i]
-      by[i] = ty[i]
-   end
-   return bx, by
-end
-
---[[
-  Convert a table to a batch index, where width is longest sentence,
-  and shorter sentences are padded using special token <PADDING>
-  Doesnt have to be full size if
-  not enough data to fill: our code supports partial batches
---]]
-
-function convertToBatchIndices(w2v, tx, ty)
-   local tlen = 0
-   for i=1,#tx do
-      local txi = tx[i]
-      tlen = math.max(tlen, #txi)
-   end
-
-   local bx = {}
-   local by = torch.zeros(#ty)
-   for i=1,#tx do
-      local txi = tx[i]
-      
-      local start = #txi + 1
-      for j=start,tlen do
-	 table.insert(txi, w2v.vocab['<PADDING>'])
-      end
-
-      table.insert(bx, txi)
-      by[i] = ty[i]
-   end
-   return torch.Tensor(bx), by
-end
-
 function labelSent(line, clean)
 
    local labelText = line:split('%s+')
@@ -173,72 +121,55 @@ function loadTemporalEmb(file, w2v, f2i, options)
     local mxlen = options.mxlen or 1000
     -- for zeropadding the ends of the signal (AKA wide conv)
     local halffiltsz = math.floor(mxfiltsz / 2)
-
-    -- Read in training data
-    local tsfile = io.open(file, 'r')
-    local linenum = 0
-
     local labelIdx = #f2i + 1
 
-
-    local batchx = {}
-    local batchy = {}
-    local bx = nil
-    local by = nil
+    local n = numLines(file)
+    local x = nil
+    local y = nil
+    local tsfile = io.open(file, 'r')
+    local b = 0
+    local i = 1
     -- We will expand the data on demand for each batch (zero padding)
     for line in tsfile:lines() do  
 
        label, text = labelSent(line, options.clean)
-
-       if label == nil then
-	  print('Skipping invalid line ' .. line .. " " .. linenum)
-	  
-	  -- no continue's in lua :(
-	  goto continue 
-       end
        
        if f2i[label] == nil then
 	  f2i[label] = labelIdx
 	  labelIdx = labelIdx + 1
        end
+
+       local offset = (i - 1) % batchsz
        
-       local y = torch.FloatTensor({f2i[label]})
+       if offset == 0 then
+	  if b > 0 then
+	     ts:put({x=x,y=y})
+	  end
+	  b = b + 1
+	  thisBatchSz = math.min(batchsz, n - i + 1)
+	  x = torch.FloatTensor(thisBatchSz, mxlen + mxfiltsz, dsz):fill(0)
+	  y = torch.LongTensor(thisBatchSz):fill(0)
+       end
+       y[offset+1] = f2i[label]
        local toks = text:split(' ')
        
        local mx = math.min(#toks, mxlen)
-       local siglen = mx + (2*halffiltsz)
-       local x = torch.zeros(siglen, dsz)
-       for i=1,mx do
-	  local w = toks[i]
+       for j=1,mx do
+	  local w = toks[j]
 	  local z = w2v:lookup(w)
 	  if options.w2cv then
 	     local q = word2chvec(options.w2cv, w)
 	     z = torch.cat(z, q)
 	  end
-	  x[{i + halffiltsz}] = z
+	  x[{offset+1, j+halffiltsz}] = z
        end
-       linenum = linenum + 1
-       
-       table.insert(batchy, y)
-       table.insert(batchx, x)
-       
-       if #batchy % batchsz == 0 then
-	  -- evict the old batch, add a new one
-	  bx, by = convertToBatch(batchx, batchy)
-	  batchx = {}
-	  batchy = {}
-	  ts:put({x=bx,y=by})
-	  
-       end
-       
-       ::continue::
 
+       i = i + 1
     end
-    
-    if #batchx > 0 then
+
+    if thisBatchSz > 0 then
        -- evict the old batch, add a new one
-       bx, by = convertToBatch(batchx, batchy)
-       ts:put({x=bx, y=by})
+       ts:put({x=x,y=y})
     end
 
     return ts, f2i
@@ -266,11 +197,6 @@ function validSplit(dataStore, splitfrac, ooc)
    return train, valid
 end
 
---[[
-  Same code as above, but here we generate indices for sparse vectors
-  Not fully formed dense representation feature vectors
-  This is used by dynamic embedding (fine-tuned) CNN
---]]
 function loadTemporalIndices(file, w2v, f2i, options)
     local ts = options.ooc and FileBackedStore() or TableBackedStore()
     local batchsz = options.batchsz or 1
@@ -278,84 +204,58 @@ function loadTemporalIndices(file, w2v, f2i, options)
     local vsz = w2v.vsz
     local dsz = w2v.dsz
 
-    options = options or {}
+    local PAD = w2v.vocab['<PADDING>']
     local mxfiltsz = torch.max(torch.LongTensor(options.filtsz))
     local mxlen = options.mxlen or 1000
     -- for zeropadding the ends of the signal (AKA wide conv)
     local halffiltsz = math.floor(mxfiltsz / 2)
-
-    -- Read in training data
-    local tsfile = io.open(file, 'r')
-    local linenum = 0
-
     local labelIdx = #f2i + 1
 
+    local n = numLines(file)
+    local x = nil
+    local y = nil
+    local tsfile = io.open(file, 'r')
+    local b = 0
+    local i = 1
 
-    local batchx = {}
-    local batchy = {}
-    local bx = nil
-    local by = nil
     -- We will expand the data on demand for each batch (zero padding)
     for line in tsfile:lines() do  
 
        label, text = labelSent(line, options.clean)
-
-       if label == nil then
-	  print('Skipping invalid line ' .. line .. " " .. linenum)
-	  
-	  -- no continue's in lua :(
-	  goto continue 
-       end
        
        if f2i[label] == nil then
 	  f2i[label] = labelIdx
 	  labelIdx = labelIdx + 1
        end
+
+
+       local offset = (i - 1) % batchsz
        
-       local y = torch.FloatTensor({f2i[label]})
+       if offset == 0 then
+	  if b > 0 then
+	     ts:put({x=x,y=y})
+	  end
+	  b = b + 1
+	  thisBatchSz = math.min(batchsz, n - i + 1)
+	  x = torch.LongTensor(thisBatchSz, mxlen + mxfiltsz):fill(PAD)
+	  y = torch.LongTensor(thisBatchSz):fill(0)
+       end
+
+       y[offset+1] = f2i[label]
        local toks = text:split(' ')
        
        local mx = math.min(#toks, mxlen)
-       local siglen = mx + (2*halffiltsz)
-       local xo = {}
-       for i=1,halffiltsz do
-	  table.insert(xo, w2v.vocab['<PADDING>'])
-       end
-       for i=1,mx do
-	  local w = toks[i]
+       for j=1,mx do
+	  local w = toks[j]
 	  local key = w2v.vocab[w] -- or w2v.vocab['<PADDING>']
-
-	  --if key == nil then
-	  ---print('Unexpected word ' .. w)
-	  --end
-	  
-	  table.insert(xo, key)
+	  x[{offset+1,j+halffiltsz}] = key
        end
-       for i=1,halffiltsz do
-	  table.insert(xo, w2v.vocab['<PADDING>'])
-       end
-       linenum = linenum + 1
-       
-       table.insert(batchy, y)
-       table.insert(batchx, xo)
-       
-       if #batchy % batchsz == 0 then
-	  -- evict the old batch, add a new one
-	  bx, by = convertToBatchIndices(w2v, batchx, batchy)
-	  batchx = {}
-	  batchy = {}
-	  ts:put({x=bx,y=by})
-	  
-       end
-       
-       ::continue::
-
+       i = i + 1
     end
     
-    if #batchx > 0 then
+    if thisBatchSz > 0 then
        -- evict the old batch, add a new one
-       bx, by = convertToBatchIndices(w2v, batchx, batchy)
-       ts:put({x=bx,y=by})
+       ts:put({x=x,y=y})
     end
 
     return ts, f2i
