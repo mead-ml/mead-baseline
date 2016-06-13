@@ -15,7 +15,7 @@ Each algorithm is in a separate sub-directory, and is fully contained, even thou
 
 ## Convolution - Max Over Time Architecture (CMOT)
 
-This code provides (at the moment) a pure Lua/Torch7 implementation -- no preprocessing of the dataset with python, nor HDF5 is required!  It depends on a tiny module that can load word2vec in Torch (https://github.com/dpressel/emb) either as a model, or as an nn.LookupTable.  It is important to note that these models can easily be implemented with other deep learning frameworks, and without much work, can also be implemented from scratch!  Over time, this package will hopefully provide alternate implementations in other DL Frameworks and programming languages.
+This code provides (at the moment) a pure Lua/Torch7 and a pure Python/Tensorflow implementation -- no preprocessing of the dataset with python, nor HDF5 is required!  The Torch code depends on a tiny module that can load word2vec in Torch (https://github.com/dpressel/emb) either as a model, or as an nn.LookupTable.  It is important to note that these models can easily be implemented with other deep learning frameworks, and without much work, can also be implemented from scratch!  Over time, this package will hopefully provide alternate implementations in other DL Frameworks and programming languages.
 
 When the GPU is used, the code *assumes that cudnn (R4) is available* and installed. This is because the performance gains over the 'cunn' implementation are significant (e.g., 3 minutes -> 30 seconds).
 
@@ -64,16 +64,27 @@ We provide an option to cull non-attested features (-cullunused) from the Lookup
 
 ## Running It
 
-Early stopping with patience is used.  There are many hyper-parameters that you can tune, which may yield many different models.  Here is an example of parameterization of static embeddings (cnn-sentence.lua) with SGD and a single filter width of 5:
+Early stopping with patience is used.  There are many hyper-parameters that you can tune, which may yield many different models.  Here is an example of parameterization of static embeddings (cnn-sentence.lua) with SGD and a single filter width of 5 (with Torch):
 
 ```
-th cnn-sentence.lua -eta 0.01 -batchsz 10 -decay 1e-9 -epochs 200 -train ../data/TREC.train.all -eval ../data/TREC.test.all -embed /data/xdata/GoogleNews-vectors-negative300.bin
+th cnn-sentence.lua -eta 0.01 -batchsz 10 -decay 1e-9 -epochs 20 -train ../data/TREC.train.all -eval ../data/TREC.test.all -embed /data/xdata/GoogleNews-vectors-negative300.bin
+```
+
+And with Tensorflow
+```
+python cnn-sentence.py --eta0 0.01 --batchsz 10 -epochs 20 --train ../data/TREC.train.all --test ../data/TREC.test.all --embed /data/xdata/GoogleNews-vectors-negative300.bin
 ```
 
 Here is an example of parameterization of dynamic fine tuning (cnn-sentence-fine.lua) with SGD
 
 ```
-th cnn-sentence-fine.lua -cullunused -optim adadelta -patience 20 -batchsz 10 -epochs 200 -train ../data/TREC.train.all -eval ../data/TREC.test.all -embed /data/xdata/GoogleNews-vectors-negative300.bin
+th cnn-sentence-fine.lua -optim adadelta -patience 20 -batchsz 10 -epochs 20 -train ../data/TREC.train.all -eval ../data/TREC.test.all -embed /data/xdata/GoogleNews-vectors-negative300.bin
+```
+
+And in Tensorflow:
+
+```
+python cnn-sentence-fine.py --optim adam -batchsz 10 -epochs 20 --train ../data/TREC.train.all --test ../data/TREC.test.all -embed /data/xdata/GoogleNews-vectors-negative300.bin
 ```
 
 Binary Kim model, static:
@@ -82,10 +93,18 @@ Binary Kim model, static:
 th cnn-sentence.lua -clean -optim adadelta -batchsz 50 -patience 10 -epochs 25 -train ./data/stsa.binary.phrases.train -valid ./data/stsa.binary.dev -eval ./data/stsa.binary.test -embed /data/xdata/GoogleNews-vectors-negative300.bin -filtsz "{3,4,5}"
 ```
 
+```
+python cnn-sentence.py  --optim adam --batchsz 50 --epochs 25 --train ./data/stsa.binary.phrases.train --test ./data/stsa.binary.test --embed /data/xdata/GoogleNews-vectors-negative300.bin --filtsz "3,4,5"
+```
+
 Binary Kim model, non-static (fine-tunings):
 
 ```
 th cnn-sentence-fine.lua -clean -cullunused -optim adadelta -batchsz 50 -epochs 25 -patience 25 -train ./data/stsa.binary.phrases.train -valid ./data/stsa.binary.dev -eval ./data/stsa.binary.test -embed /data/xdata/GoogleNews-vectors-negative300.bin -filtsz "{3,4,5}"
+```
+
+```
+python cnn-sentence.py  --optim adam --batchsz 50 --epochs 25 --train ./data/stsa.binary.phrases.train --test ./data/stsa.binary.test --embed /data/xdata/GoogleNews-vectors-negative300.bin --filtsz "3,4,5"
 ```
 
 # Structured Prediction using RNNs
