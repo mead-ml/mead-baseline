@@ -1,6 +1,8 @@
 baseline
 =========
-Simple but Strong Deep Baseline Algorithms for NLP
+Simple, Strong Deep-Learning Baselines for NLP in Torch and Tensorflow
+
+Stand-alone baselines implemented with multiple deep learning tools, including CNN sentence modeling, RNN/LSTM-based tagging, seq2seq, and siamese networks for similarity analysis.
 
 # Overview
 
