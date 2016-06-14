@@ -42,12 +42,22 @@ def numLines(filename):
 def buildVocab(files, clean=False):
     vocab = Counter()
     for file in files:
+        if file is None:
+            continue
         with open(file, "r") as f:
             for line in f:
                 _, text = labelSent(line, clean)
                 for w in re.split("\s", text):
                     vocab[w] += 1
     return vocab
+
+def validSplit(data, splitfrac):
+    train = []
+    valid = []
+    numinst = len(data)
+    heldout = int(math.floor(numinst * (1-splitfrac)))
+    return data[1:heldout], data[heldout:]
+
 
 def loadTemporalIndices(filename, w2v, f2i, options):
     ts = []
