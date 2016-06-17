@@ -129,7 +129,7 @@ def train(ts, sess, summary_writer, train_op, global_step, summary_op, loss, acc
 
     duration = time.time() - start_time
 
-    print('Train (Loss %.2f) (Acc %d/%d = %.2f) (%.3f sec)' % (float(total_loss)/total, total_corr, total, float(total_corr)/total, duration))
+    print('Train (Loss %.4f) (Acc %d/%d = %.4f) (%.3f sec)' % (float(total_loss)/total, total_corr, total, float(total_corr)/total, duration))
 
 def test(ts, sess, loss, acc):
 
@@ -148,7 +148,7 @@ def test(ts, sess, loss, acc):
 
     duration = time.time() - start_time
 
-    print('Test (Loss %.2f) (Acc %d/%d = %.2f) (%.3f sec)' % (float(total_loss)/total, total_corr, total, float(total_corr)/total, duration))
+    print('Test (Loss %.4f) (Acc %d/%d = %.4f) (%.3f sec)' % (float(total_loss)/total, total_corr, total, float(total_corr)/total, duration))
     return float(total_corr)/total
 
 
@@ -212,7 +212,7 @@ with tf.Graph().as_default():
 
 
         print("-----------------------------------------------------")
-        print('Highest test acc %.2f' % max_acc)
+        print('Highest test acc %.4f' % max_acc)
         print('=====================================================')
         print('Evaluating best model on test data')
         
