@@ -34,7 +34,6 @@ DEF_MOM = 0.0
 DEF_DECAY = 1e-9
 DEF_DROP = 0.5
 DEF_MXLEN = 100
-DEF_ESZ = 300
 DEF_CMOTSZ = 100
 DEF_HSZ = -1 -- No additional projection layer
 DEF_EMBED = './data/GoogleNews-vectors-negative300.bin'
@@ -115,6 +114,7 @@ cmd:option('-cactive', DEF_CACTIVE, 'Activation function following conv')
 cmd:option('-filtsz', DEF_FSZ, 'Convolution filter width')
 cmd:option('-clean', false, 'Cleanup tokens')
 cmd:option('-keepunused', false, 'Keep unattested words in Lookup Table')
+cmd:option('-chars', false, 'Use characters instead of words')
 cmd:option('-valsplit', DEF_VALSPLIT, 'Fraction training used for validation if no set is given')
 cmd:option('-ooc', DEF_OUT_OF_CORE, 'Should data batches be file-backed?')
 local opt = cmd:parse(arg)
@@ -151,11 +151,10 @@ print('Processing on ' .. opt.proc)
 local vocab = nil
 
 if opt.keepunused == false then
-   vocab = buildVocab({opt.train, opt.eval, opt.valid}, opt.clean)
+   vocab = buildVocab({opt.train, opt.eval, opt.valid}, opt.clean, opt.chars)
    print('Removing unattested words')
 
 end
-
 ---------------------------------------
 -- Minibatches
 ---------------------------------------

@@ -24,6 +24,7 @@ flags.DEFINE_integer('cmotsz', 100, 'Hidden layer size')
 flags.DEFINE_string('outdir', 'out', 'Directory to put the output')
 flags.DEFINE_string('filtsz', '3,4,5', 'Filter sizes')
 flags.DEFINE_boolean('clean', True, 'Do cleaning')
+flags.DEFINE_boolean('chars', False, 'Use characters instead of words')
 flags.DEFINE_float('valsplit', 0.15, 'Validation split if no valid set')
 
 def createModel(nc, model):
@@ -156,12 +157,14 @@ def test(ts, sess, loss, acc):
     return float(total_corr)/total
 
 
-vocab = buildVocab([FLAGS.train, FLAGS.test, FLAGS.valid], True)
+vocab = buildVocab([FLAGS.train, FLAGS.test, FLAGS.valid], FLAGS.clean, FLAGS.chars)
+
 w2vModel = w2v.Word2VecModel(FLAGS.embed, vocab, FLAGS.unif)
 
 f2i = {}
 opts = { 'batchsz': FLAGS.batchsz,
          'clean': FLAGS.clean,
+         'chars': FLAGS.chars,
          'filtsz': [int(filt) for filt in FLAGS.filtsz.split(',')],
          'mxlen': FLAGS.mxlen }
 ts, f2i = loadTemporalIndices(FLAGS.train, w2vModel, f2i, opts)

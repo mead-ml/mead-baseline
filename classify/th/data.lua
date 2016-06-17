@@ -47,7 +47,7 @@ function word2chvec(w2cv, w)
     return wcv
 end
 
-function labelSent(line, clean)
+function labelSent(line, clean, chars)
 
    local labelText = line:split('%s+')
    if #labelText < 2 then return nil, nil end
@@ -58,7 +58,15 @@ function labelSent(line, clean)
       if clean then
         w = doClean(w:lower())
       end
-      text = text .. ' ' .. w
+      if chars then
+	 wspc = ''
+	 for j=1,#w do
+	    local ch = w:sub(j, j)
+	    text = text .. ' ' .. ch
+	 end
+      else
+	 text = text .. ' ' .. w
+      end
    end
    return label,text
 end
@@ -67,7 +75,7 @@ end
   Build a vocab by processing all these files and generating a table
   of form {["hello"]=1, ..., ["world"]=1}
 --]]
-function buildVocab(files, clean)
+function buildVocab(files, clean, chars)
     local vocab = {}
 
     for i=1,#files do
@@ -76,7 +84,7 @@ function buildVocab(files, clean)
 	  
 	  for line in tsfile:lines() do  
 	     
-	     _, text = labelSent(line, clean)
+	     _, text = labelSent(line, clean, chars)
 	     
 	     local toks = text:split(' ')
 	     
@@ -132,7 +140,7 @@ function loadTemporalEmb(file, w2v, f2i, options)
     -- We will expand the data on demand for each batch (zero padding)
     for line in tsfile:lines() do  
 
-       label, text = labelSent(line, options.clean)
+       label, text = labelSent(line, options.clean, options.chars)
        
        if f2i[label] == nil then
 	  f2i[label] = labelIdx
@@ -221,7 +229,7 @@ function loadTemporalIndices(file, w2v, f2i, options)
     -- We will expand the data on demand for each batch (zero padding)
     for line in tsfile:lines() do  
 
-       label, text = labelSent(line, options.clean)
+       label, text = labelSent(line, options.clean, options.chars)
        
        if f2i[label] == nil then
 	  f2i[label] = labelIdx

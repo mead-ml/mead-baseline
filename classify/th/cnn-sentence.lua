@@ -32,7 +32,6 @@ DEF_MOM = 0.0
 DEF_DECAY = 1e-9
 DEF_DROP = 0.5
 DEF_MXLEN = 100
-DEF_ESZ = 300
 DEF_CMOTSZ = 100
 DEF_HSZ = -1 -- No additional projection layer
 DEF_EMBED = './data/GoogleNews-vectors-negative300.bin'

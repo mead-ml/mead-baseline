@@ -3,6 +3,7 @@ import numpy as np
 from collections import Counter
 import re
 import math
+import codecs
 
 def revlut(lut):
     return {v: k for k, v in lut.items()}
@@ -24,29 +25,33 @@ def doClean(l):
         l = l.replace(k, v)
     return l.strip()
 
-def labelSent(line, clean):
+def labelSent(line, clean, chars):
     labelText = re.split('[\t\s]+', line)
     label = labelText[0]
     text = labelText[1:]
+    if chars is True:
+        text = ' '.join([ch for ch in ''.join(text)])
     if clean is True:
         text = ' '.join([doClean(w.lower()) for w in text]).replace('  ', ' ')
+    else:
+        text = ' '.join(text).replace('  ', ' ')
     return label, text
 
 def numLines(filename):
     lines = 0
-    with open(filename, "r") as f:
+    with codecs.open(filename, encoding='utf-8', mode='r') as f:
         for line in f:
             lines = lines + 1
     return lines
 
-def buildVocab(files, clean=False):
+def buildVocab(files, clean=False, chars=False):
     vocab = Counter()
     for file in files:
         if file is None:
             continue
-        with open(file, "r") as f:
+        with codecs.open(file, encoding='utf-8', mode='r') as f:
             for line in f:
-                _, text = labelSent(line, clean)
+                _, text = labelSent(line, clean, chars)
                 for w in re.split("\s", text):
                     vocab[w] += 1
     return vocab
@@ -63,6 +68,7 @@ def loadTemporalIndices(filename, w2v, f2i, options):
     ts = []
     batchsz = options.get("batchsz", 1)
     clean = options.get("clean", True)
+    chars = options.get("chars", False)
     vsz = w2v.vsz
     dsz = w2v.dsz
     PAD = w2v.vocab['<PADDING>']
@@ -78,10 +84,10 @@ def loadTemporalIndices(filename, w2v, f2i, options):
     x = y = None
     b = i = 0
     thisBatchSz = 0
-    with open(filename, "r") as f:
 
+    with codecs.open(filename, encoding='utf-8', mode='r') as f:
         for line in f:
-            label, text = labelSent(line, clean)
+            label, text = labelSent(line, clean, chars)
             if not label in f2i:
                 f2i[label] = labelIdx
                 labelIdx += 1
@@ -114,6 +120,7 @@ def loadTemporalEmb(filename, w2v, f2i, options):
     ts = []
     batchsz = options.get("batchsz", 1)
     clean = options.get("clean", True)
+    chars = options.get("chars", False)
     vsz = w2v.vsz
     dsz = w2v.dsz
         
@@ -127,10 +134,10 @@ def loadTemporalEmb(filename, w2v, f2i, options):
     x = y = None
     b = i = 0
     thisBatchSz = 0
-    with open(filename, "r") as f:
+    with codecs.open(filename, encoding='utf-8', mode='r') as f:
 
         for line in f:
-            label, text = labelSent(line, clean)
+            label, text = labelSent(line, clean, chars)
             if not label in f2i:
                 f2i[label] = labelIdx
                 labelIdx += 1
