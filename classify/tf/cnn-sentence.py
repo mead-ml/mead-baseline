@@ -208,6 +208,7 @@ with tf.Graph().as_default():
                 saver.save(sess, FLAGS.outdir + "/train/cnn-sentence-model", global_step=global_step)
             if (i - last_improved) > FLAGS.patience:
                 print('Stopping due to persistent failures to improve')
+                break
 
 
         print("-----------------------------------------------------")
@@ -218,4 +219,4 @@ with tf.Graph().as_default():
         best_model = tf.train.latest_checkpoint(FLAGS.outdir + "/train/")
         print("Reloading " + best_model)
         saver.restore(sess, best_model)
-        test(vs, sess, loss, acc)
+        test(es, sess, loss, acc)
