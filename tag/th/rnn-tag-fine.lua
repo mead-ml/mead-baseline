@@ -47,7 +47,7 @@ torch.setdefaulttensortype('torch.FloatTensor')
 -- Linear projection layer beneath the RNN.  If its the former, we
 -- use a TemporalConvolution to weight share this layer
 --------------------------------------------------------------------
-function createTaggerModel(w2v, hsz, gpu, nc, rnntype)
+function createTaggerModel(w2v, hsz, gpu, nc, rnntype, pdrop)
 
     -- Create a processing chain
     local seq = nn.Sequential()
@@ -68,7 +68,7 @@ function createTaggerModel(w2v, hsz, gpu, nc, rnntype)
     end
     
     local subseq = nn.Sequential()
-    subseq:add(nn.Dropout(0.5))
+    subseq:add(nn.Dropout(pdrop))
     subseq:add(newLinear(hsz, nc))
     subseq:add(nn.LogSoftMax())
     seq:add(nn.Sequencer(nn.MaskZero(subseq, 1)))
@@ -98,6 +98,7 @@ cmd:option('-proc', DEF_PROC)
 cmd:option('-patience', DEF_PATIENCE)
 -- Strongly recommend its set to 'true' for non-massive GPUs
 cmd:option('-keepunused', false, 'Keep unattested words in Lookup Table')
+cmd:option('-pdrop', 0.5, 'Dropout probability')
 cmd:option('-ooc', DEF_OUT_OF_CORE, 'Should data batches be file-backed?')
 
 local opt = cmd:parse(arg)
@@ -171,7 +172,7 @@ print('Number of classes ' .. nc)
 ---------------------------------------
 local crit = createTaggerCrit(opt.gpu)
 local dsz = w2v.dsz
-local model = createTaggerModel(w2v, opt.hsz, opt.gpu, nc, opt.rnn)
+local model = createTaggerModel(w2v, opt.hsz, opt.gpu, nc, opt.rnn, opt.pdrop)
 
 local errmin = 1;
 local lastImproved = 0

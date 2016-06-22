@@ -158,7 +158,6 @@ def loadTemporalEmb(filename, w2v, f2i, options):
             for j in range(len(toks)):
                 w = toks[j]
                 z = w2v.lookup(w, False)
-#                print(z)
                 x[offset][j + halffiltsz] = z
             i = i + 1
     if thisBatchSz > 0:
