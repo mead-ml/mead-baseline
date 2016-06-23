@@ -91,12 +91,11 @@ def conllSentsToVectors(filename, w2v, f2i, options):
     ts = []
     idx = 0
     txts, lbls = conllLines(filename)
+
     for i in range(len(txts)):
         lv = lbls[i]
         v = txts[i]
-
-        offset = i % batchsz
-        
+        offset = i % batchsz        
         siglen = mxlen + 2*zp
         
         if offset == 0:
@@ -106,9 +105,8 @@ def conllSentsToVectors(filename, w2v, f2i, options):
             b += 1
             thisBatchSz = min(batchsz, len(txts) - i)
             xs = np.zeros((thisBatchSz, siglen, wsz))
-            ys = np.zeros((thisBatchSz, siglen), dtype=int)
+            ys = np.zeros((thisBatchSz, siglen))
 
-        
         for j in range(min(siglen, len(v))):
             tok = v[j]
             label = lv[j]
@@ -116,7 +114,6 @@ def conllSentsToVectors(filename, w2v, f2i, options):
                 idx += 1
                 f2i[label] = idx
             ys[offset][j+zp] = f2i[label]
-#            print(f2i[label])
             xs[offset][j+zp] = w2v.lookup(tok)
     if thisBatchSz > 0:
         ts.append({"x":xs,"y":ys})

@@ -50,6 +50,7 @@ DEF_BATCHSZ = 8
 DEF_EMBUNIF = 0.25
 DEF_SAMPLE = false
 DEF_OUT_OF_CORE = false
+DEF_RESET = 0
 torch.setdefaulttensortype('torch.FloatTensor')
 
 --------------------------
@@ -78,7 +79,7 @@ cmd:option('-proc', DEF_PROC)
 cmd:option('-patience', DEF_PATIENCE)
 cmd:option('-sample', DEF_SAMPLE, 'Perform sampling to find candidate decodes')
 cmd:option('-ooc', DEF_OUT_OF_CORE, 'Should data batches be file-backed?')
-
+cmd:option('-nreset', DEF_RESET, 'How many times should we lower eta after patience fails')
 local opt = cmd:parse(arg)
 
 ----------------------------------------
@@ -147,6 +148,7 @@ local lastImproved = 0
 -- If you show this it'll be random
 -- showBatch(model, es, rlut1, rlut2, embed2, opt)
 
+reset = 0
 for i=1,opt.epochs do
     print('Training epoch ' .. i)
     trainSeq2SeqEpoch(crit, model, ts, optmeth, opt)
@@ -154,15 +156,25 @@ for i=1,opt.epochs do
     if erate < errmin then
        lastImproved = i
        errmin = erate
-       showBatch(model, es, rlut1, rlut2, embed2, opt)
-
+       if i % 5 == 0 then
+	  showBatch(model, es, rlut1, rlut2, embed2, opt)
+       end
 
        print('Lowest error achieved yet -- writing model')
        saveModel(model, opt.save, opt.gpu)
     end
     if (i - lastImproved) > opt.patience then
-       print('Stopping due to persistent failures to improve')
-       break
+       
+       if reset < opt.nreset then
+	  reset = reset + 1
+	  opt.eta = opt.eta * 0.5
+	  lastImproved = i
+	  print('Patience exhausted, trying again with eta=' .. opt.eta)
+	  state, optmeth = optimMethod(opt)
+       else
+	  print('Stopping due to persistent failures to improve')       
+	  break
+       end
     end
 end
 
