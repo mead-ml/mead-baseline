@@ -168,7 +168,7 @@ for i=1,opt.epochs do
     trainSeq2SeqEpoch(crit, model, ts, optmeth, opt)
     local erate = testSeq2Seq(model, es, crit, opt)
 
-    if i % 5 == 0 and opt.showex then
+    if i % 5 == 0 and opt.showex == true then
        showBatch(model, es, rlut1, rlut2, embed2, opt)
     end
 
