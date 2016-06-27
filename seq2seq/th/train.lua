@@ -61,6 +61,8 @@ function trainSeq2SeqEpoch(crit, model, ts, optmeth, options)
 	  
 	  enc:backward(src, predSrc:zero())
 
+	  forgetModelState(model)
+
 	  if options.clip and options.clip > 0 then
 	     dEdw:clamp(-options.clip, options.clip)
 	  end
@@ -72,7 +74,6 @@ function trainSeq2SeqEpoch(crit, model, ts, optmeth, options)
        if options.afteroptim then
 	  options.afteroptim()
        end
-
        xlua.progress(i, sz)
 
     end

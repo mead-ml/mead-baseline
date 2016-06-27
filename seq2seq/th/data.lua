@@ -1,14 +1,6 @@
 function buildVocab(indices, files)
     local vocab = {['<GO>']=1,
-                   ['<EOS>']=1,
-		   ['URL']=1,
-                   ['@@@@']=1,
-		   ['####']=1,
-		   [',']=1,
-		   [';)']=1,
-		   ['&lt;3']=1,
-		   ['0000']=1,
-		   ['John\'s']=1}
+                   ['<EOS>']=1}
 
 
     for i=1,#files do
