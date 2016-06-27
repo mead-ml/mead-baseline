@@ -4,7 +4,7 @@ require 'xlua'
 require 'utils'
 
 -- Decoder beam
-SAMPLE_BEAM_INIT = 5
+SAMPLE_PRUNE_INIT = 5
 
 function trainSeq2SeqEpoch(crit, model, ts, optmeth, options)
 
@@ -99,7 +99,7 @@ function decodeStep(model, srcIn, predSent, j, sample)
 
       local probs = predDst:squeeze():exp()
       -- Get the topk
-      local beamsz = math.max(SAMPLE_BEAM_INIT - j, 1)
+      local beamsz = math.max(SAMPLE_PRUNE_INIT - j, 1)
       local best, ids = probs:topk(beamsz, 1, true, true)
       -- log soft max, exponentiate to get probs
       probs:zero()
@@ -127,6 +127,13 @@ function decode(model, srcIn, sample, GO, EOS)
    end
    return predSent
 end
+
+-- To really do this during decoding, you want a beam search over multiple words
+-- to maximize probability of the sentence.  This is fairly straightforward,
+-- but slow and not really required during training.
+-- Here, for speed and simplicity, just show some examples by pruning 
+-- vocab down to most likely words and
+-- doing a single independent multinomial draw greedily.
 
 function showBatch(model, ts, rlut1, rlut2, embed2, opt)
    -- When a batch comes in, it will be BxT

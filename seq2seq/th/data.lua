@@ -1,4 +1,4 @@
-function buildVocab(idx, files)
+function buildVocab(indices, files)
     local vocab = {['<GO>']=1,
                    ['<EOS>']=1,
 		   ['URL']=1,
@@ -15,15 +15,15 @@ function buildVocab(idx, files)
        local tsfile = io.open(files[i], 'r')
        for line in tsfile:lines() do
 	  local cols = line:split('\t')
-	  local sent = cols[idx]
+	  for _, idx in pairs(indices) do
+	     local sent = cols[idx]
 	  
-	  local words = sent:split('%s+')
-	  for j=1,#words do
-	     local w = words[j]
-	     -- Allow either case for backoff
-	     vocab[w] = vocab[w] or 1
-	     w = w:lower()
-	     vocab[w] = vocab[w] or 1
+	     local words = sent:split('%s+')
+	     for j=1,#words do
+		local w = words[j]
+		-- Allow either case for backoff
+		vocab[w] = vocab[w] or 1
+	     end
 	  end
        end
     end

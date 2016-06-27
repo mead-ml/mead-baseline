@@ -50,6 +50,8 @@ DEF_BATCHSZ = 8
 DEF_EMBUNIF = 0.25
 DEF_SAMPLE = false
 DEF_OUT_OF_CORE = false
+DEF_SHARED_VOCAB = false
+DEF_SHOW_EX = false
 DEF_RESET = 0
 torch.setdefaulttensortype('torch.FloatTensor')
 
@@ -65,6 +67,7 @@ cmd:option('-batchsz', DEF_BATCHSZ, 'Batch size')
 cmd:option('-save', DEF_FILE_OUT, 'Save model to')
 cmd:option('-train', DEF_TSF, 'Training file')
 cmd:option('-eval', DEF_ESF, 'Testing file')
+cmd:option('-sharedv', DEF_SHARED_VOCAB, 'Pair should share a vocab (default to false)')
 cmd:option('-embed1', DEF_EMBED1, 'Word embeddings (1)')
 cmd:option('-embed2', DEF_EMBED2, 'Word embeddings (2)')
 cmd:option('-embunif', DEF_EMBUNIF, 'Word2Vec initialization for non-attested attributes')
@@ -77,6 +80,7 @@ cmd:option('-mom', DEF_MOM, 'Momentum for SGD')
 cmd:option('-hsz', DEF_HSZ, 'Hidden layer units')
 cmd:option('-proc', DEF_PROC)
 cmd:option('-patience', DEF_PATIENCE)
+cmd:option('-showex', DEF_SHOW_EX, 'Show test examples')
 cmd:option('-sample', DEF_SAMPLE, 'Perform sampling to find candidate decodes')
 cmd:option('-ooc', DEF_OUT_OF_CORE, 'Should data batches be file-backed?')
 cmd:option('-nreset', DEF_RESET, 'How many times should we lower eta after patience fails')
@@ -113,8 +117,16 @@ require 'rnn'
 ---------------------------------------
 local f2i = {}
 
-local vocab1 = buildVocab(1, {opt.train, opt.eval})
-local vocab2 = buildVocab(2, {opt.train, opt.eval})
+v1 = {1}
+v2 = {2}
+if opt.sharedv then
+   print('Sharing vocab')
+   v1 = {1,2}
+   v2 = {1,2}
+end
+
+local vocab1 = buildVocab(v1, {opt.train, opt.eval})
+local vocab2 = buildVocab(v2, {opt.train, opt.eval})
 
 local embed1 = Word2VecLookupTable(opt.embed1, vocab1, opt.embunif)
 print('Loaded word embeddings: ' .. opt.embed1)
@@ -153,12 +165,14 @@ for i=1,opt.epochs do
     print('Training epoch ' .. i)
     trainSeq2SeqEpoch(crit, model, ts, optmeth, opt)
     local erate = testSeq2Seq(model, es, crit, opt)
+
+    if i % 5 == 0 and opt.showex then
+       showBatch(model, es, rlut1, rlut2, embed2, opt)
+    end
+
     if erate < errmin then
        lastImproved = i
        errmin = erate
-       if i % 5 == 0 then
-	  showBatch(model, es, rlut1, rlut2, embed2, opt)
-       end
 
        print('Lowest error achieved yet -- writing model')
        saveModel(model, opt.save, opt.gpu)
