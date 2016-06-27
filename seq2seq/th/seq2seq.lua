@@ -53,6 +53,7 @@ DEF_OUT_OF_CORE = false
 DEF_SHARED_VOCAB = false
 DEF_SHOW_EX = false
 DEF_RESET = 0
+DEF_LAYERS = 1
 torch.setdefaulttensortype('torch.FloatTensor')
 
 --------------------------
@@ -81,6 +82,7 @@ cmd:option('-hsz', DEF_HSZ, 'Hidden layer units')
 cmd:option('-proc', DEF_PROC)
 cmd:option('-patience', DEF_PATIENCE)
 cmd:option('-showex', DEF_SHOW_EX, 'Show test examples')
+cmd:option('-layers', DEF_LAYERS, 'Number of RNN layers')
 cmd:option('-sample', DEF_SAMPLE, 'Perform sampling to find candidate decodes')
 cmd:option('-ooc', DEF_OUT_OF_CORE, 'Should data batches be file-backed?')
 cmd:option('-nreset', DEF_RESET, 'How many times should we lower eta after patience fails')
@@ -152,7 +154,7 @@ local rlut2 = revlut(embed2.vocab)
 -- Build model and criterion
 ---------------------------------------
 local crit = createSeq2SeqCrit(opt.gpu)
-local model = createSeq2SeqModel(embed1, embed2, opt.hsz, opt.gpu)
+local model = createSeq2SeqModel(embed1, embed2, opt.hsz, opt.gpu, opt.layers)
 
 local errmin = 1000;
 local lastImproved = 0

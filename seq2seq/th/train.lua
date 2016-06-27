@@ -48,7 +48,7 @@ function trainSeq2SeqEpoch(crit, model, ts, optmeth, options)
 
 	  local predSrc = enc:forward(src)
 	  local srclen = src:size(1)
-	  forwardConnect(model, srclen)
+	  forwardConnect(model, srclen, options.layers)
 	  
 	  local predDst = dec:forward(dst)
 	  local err = crit:forward(predDst, tgt)
@@ -57,7 +57,7 @@ function trainSeq2SeqEpoch(crit, model, ts, optmeth, options)
 	  local grad = crit:backward(predDst, tgt)
 	  dec:backward(dst, grad)
 
-	  backwardConnect(model)
+	  backwardConnect(model, options.layers)
 	  
 	  enc:backward(src, predSrc:zero())
 
@@ -83,13 +83,13 @@ function trainSeq2SeqEpoch(crit, model, ts, optmeth, options)
 
 end
 
-function decodeStep(model, srcIn, predSent, j, sample)
+function decodeStep(model, srcIn, predSent, j, sample, layers)
    forgetModelState(model)
 
    local enc = model:get(1)
    local predSrc = enc:forward(srcIn)
 
-   forwardConnect(model, srcIn:size(1))
+   forwardConnect(model, srcIn:size(1), layers)
 
    local dec = model:get(2)
    local predT = torch.LongTensor(predSent):reshape(j, 1)
@@ -114,11 +114,11 @@ function decodeStep(model, srcIn, predSent, j, sample)
    return word
 end
 
-function decode(model, srcIn, sample, GO, EOS)
+function decode(model, srcIn, sample, GO, EOS, layers)
 
    local predSent = {GO}
    for j = 1,100 do
-      local word = decodeStep(model, srcIn, predSent, j, sample)
+      local word = decodeStep(model, srcIn, predSent, j, sample, layers)
       if word == EOS then
 	 break
       end
@@ -169,7 +169,7 @@ function showBatch(model, ts, rlut1, rlut2, embed2, opt)
       local srcIn = src[i]:reshape(srclen, 1)
       srcIn = opt.gpu and srcIn:cuda() or srcIn
       
-      predSent = decode(model, srcIn, opt.sample, GO, EOS)
+      predSent = decode(model, srcIn, opt.sample, GO, EOS, opt.layers)
       sent = lookupSent(rlut2, torch.LongTensor(predSent))
       print('Guess: ', sent)
       print('------------------------------------------------------------------------')
@@ -207,7 +207,7 @@ function testSeq2Seq(model, ts, crit, options)
 	  
        local predSrc = enc:forward(src)
        local srclen = src:size(1)
-       forwardConnect(model, srclen)
+       forwardConnect(model, srclen, options.layers)
        
        local predDst = dec:forward(dst)
        

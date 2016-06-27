@@ -17,47 +17,52 @@ function newLinear(inputSz, outputSz)
    return linear
 end
 
+function newLSTMCells(seq, input, output, layers)
 
-function newBLSTMCell(seq, input, output)
-
-   local blstm = nn.SeqBRNN(input, output, false, nn.CAddTable())
-   seq:add(nn.SplitTable(1))
-   seq:add(blstm)
-   return blstm
-end
-
-function newLSTMCell(seq, input, output)
-   local lstm = nn.SeqLSTM(input, output)
-   lstm.maskzero = true
-   seq:add(lstm)
+   from = input
+   to = output
+   for i=1,layers do
+      local lstm = nn.SeqLSTM(from, to)
+      from = to
+      lstm.maskzero = true
+      seq:add(lstm)
+   end
    seq:add(nn.SplitTable(1, 3))
    return lstm
 end
 
 -- https://github.com/Element-Research/rnn/blob/master/examples/encoder-decoder-coupling.lua
 
-function forwardConnect(model, len)
+function forwardConnect(model, len, layers)
    local encodes = model:get(1)
    local decodes = model:get(2)
 
    -- First module after LUT (FIXME for stacked LSTMs)
-   local encodesLSTM = encodes:get(2)
-   local decodesLSTM = decodes:get(2)
-   decodesLSTM.userPrevOutput = nn.rnn.recursiveCopy(decodesLSTM.userPrevOutput, encodesLSTM.output[len])
-   decodesLSTM.userPrevCell = nn.rnn.recursiveCopy(decodesLSTM.userPrevCell, encodesLSTM.cell[len])
+   start = 1
+   for i=1,layers do
+      j = start + i
+      local encodesLSTM = encodes:get(j)
+      local decodesLSTM = decodes:get(j)
+      decodesLSTM.userPrevOutput = nn.rnn.recursiveCopy(decodesLSTM.userPrevOutput, encodesLSTM.output[len])
+      decodesLSTM.userPrevCell = nn.rnn.recursiveCopy(decodesLSTM.userPrevCell, encodesLSTM.cell[len])
+   end
 end
 
-function backwardConnect(model, len)
+function backwardConnect(model, layers)
 
    local encodes = model:get(1)
    local decodes = model:get(2)
 
    -- First module after LUT (FIXME for stacked LSTMs)
-   local encodesLSTM = encodes:get(2)
-   local decodesLSTM = decodes:get(2)
+   start = 1
 
-   encodesLSTM.userNextGradCell = nn.rnn.recursiveCopy(encodesLSTM.userNextGradCell, decodesLSTM.userGradPrevCell)
-   encodesLSTM.gradPrevOutput = nn.rnn.recursiveCopy(encodesLSTM.gradPrevOutput, decodesLSTM.userGradPrevOutput)
+   for i = 1,layers do
+      j = start + i
+      local decodesLSTM = decodes:get(j)
+      local encodesLSTM = encodes:get(j)      
+      encodesLSTM.userNextGradCell = nn.rnn.recursiveCopy(encodesLSTM.userNextGradCell, decodesLSTM.userGradPrevCell)
+      encodesLSTM.gradPrevOutput = nn.rnn.recursiveCopy(encodesLSTM.gradPrevOutput, decodesLSTM.userGradPrevOutput)
+   end
 end
 
 
@@ -75,7 +80,7 @@ end
 --------------------------------------------------------------------
 -- Create a seq2seq model, with connected decoder and encoder
 --------------------------------------------------------------------
-function createSeq2SeqModel(embed1, embed2, hsz, gpu)
+function createSeq2SeqModel(embed1, embed2, hsz, gpu, layers)
 
     -- Just holds both, makes it easier to read, write, update
     local model = nn.Container()
@@ -93,10 +98,10 @@ function createSeq2SeqModel(embed1, embed2, hsz, gpu)
     -- TODO: add stacking
 
     -- Cell added, and returned as well
-    newLSTMCell(encodes, dsz, hsz)
+    newLSTMCells(encodes, dsz, hsz, layers)
     encodes:add(nn.SelectTable(-1))
 
-    newLSTMCell(decodes, dsz, hsz)
+    newLSTMCells(decodes, dsz, hsz, layers)
     -- Encoder picks last output, passes this on
 
 
