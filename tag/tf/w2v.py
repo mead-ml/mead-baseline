@@ -32,17 +32,31 @@ class Word2VecModel:
             self.weights = np.random.uniform(-uw, uw, (self.vsz+1, self.dsz))
             width = 4 * self.dsz
             k = 1
+            # All attested word vectors
             for i in range(vsz-1):
                 word = readtospc(f)
                 raw = f.read(width)
-                if knownvocab is not None and not word in knownvocab:
-                    continue
-                
+                # If vocab list, not in: dont add, in:add, drop from list
+                if knownvocab is not None:
+                    if word not in knownvocab:
+                        continue
+
+                    # Otherwise drop freq to 0, for later
+                    knownvocab[word] = 0
+
                 vec = np.fromstring(raw, dtype=np.float32)
 
                 self.weights[k] = vec
                 self.vocab[word] = k
                 k = k + 1
+
+            # Anything left over, unattested in w2v model, just use a random
+            # initialization
+            if knownvocab is not None:
+                unknown = {v: f for v,f in knownvocab.iteritems() if f > 0}
+                for v in unknown:
+                    self.vocab[v] = k
+                    k = k + 1
 
         self.nullv = np.zeros(self.dsz, dtype=np.float32)
         self.weights[0] = self.nullv
