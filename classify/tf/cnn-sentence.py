@@ -152,8 +152,7 @@ def test(ts, sess, loss, acc):
     return float(total_corr)/total
 
 
-vocab = buildVocab([FLAGS.train, FLAGS.test], True)
-w2vModel = w2v.Word2VecModel(FLAGS.embed, vocab, FLAGS.unif)
+w2vModel = w2v.Word2VecModel(FLAGS.embed)
 
 f2i = {}
 opts = { 'batchsz': FLAGS.batchsz,
@@ -212,10 +211,10 @@ with tf.Graph().as_default():
 
 
         print("-----------------------------------------------------")
-        print('Highest test acc %.4f' % max_acc)
+        print('Highest validation acc %.4f' % max_acc)
         print('=====================================================')
-        print('Evaluating best model on test data')
-        
+        print('Evaluating best model on test data:')
+        print('=====================================================')
         best_model = tf.train.latest_checkpoint(FLAGS.outdir + "/train/")
         print("Reloading " + best_model)
         saver.restore(sess, best_model)

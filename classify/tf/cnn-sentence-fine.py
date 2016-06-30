@@ -217,10 +217,10 @@ with tf.Graph().as_default():
 
 
         print("-----------------------------------------------------")
-        print('Highest test acc %.4f' % max_acc)
+        print('Highest validation acc %.4f' % max_acc)
         print('=====================================================')
-        print('Evaluating best model on test data')
-        
+        print('Evaluating best model on test data:')
+        print('=====================================================')
         best_model = tf.train.latest_checkpoint(FLAGS.outdir + "/train/")
         print("Reloading " + best_model)
         saver.restore(sess, best_model)
