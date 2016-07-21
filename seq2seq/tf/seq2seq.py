@@ -6,6 +6,8 @@ from data import revlut
 from data import sentsToIndices
 
 import time
+MAX_EXAMPLES = 5
+SAMPLE_PRUNE_INIT = 5
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 flags.DEFINE_float('eta', 0.001, 'Initial learning rate.')
@@ -179,16 +181,16 @@ def lookupSent(rlut, seq, reverse=False):
     return ' '.join([rlut[idx] if rlut[idx] != '<PADDING>' else '' for idx in s])
 
 # Get a sparse index (dictionary) of top values
+# Note: mutates input for efficiency
 def topk(k, probs):
 
-    copy = probs
     lut = {}
     i = 0
 
     while i < k:
-        idx = np.argmax(copy)
-        lut[idx] = copy[idx]
-        copy[idx] = 0
+        idx = np.argmax(probs)
+        lut[idx] = probs[idx]
+        probs[idx] = 0
         i += 1
     return lut
 
@@ -225,7 +227,7 @@ def showBatch(es, sess, probs, rlut1, rlut2, embed2, sample):
     i = 0
     for src_i,tgt_i in zip(src_array, tgt_array):
 
-        if i > 5:
+        if i > MAX_EXAMPLES:
             break
         i += 1
 
@@ -245,9 +247,11 @@ def showBatch(es, sess, probs, rlut1, rlut2, embed2, sample):
             })
 
             output = preds[j].squeeze()
-            output[output < np.median(output)] = 0
-            output /= (np.sum(output) + 1e-12)
-            next_value = beamMultinomial(5, output)
+            # This method cuts low probability words out of the distributions
+            # dynamically.  Ideally, we would also use a beam over several
+            # paths and pick the most likely path at the end, but this
+            # can be done in a separate program, not necessary to train
+            next_value = beamMultinomial(SAMPLE_PRUNE_INIT, output)
             if next_value == EOS:
                 break
 
