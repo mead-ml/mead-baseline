@@ -61,7 +61,7 @@ def createModel(nc, model):
         # Primitive will wrap the fwd and bwd, reverse signal for bwd, unroll
         rnnseq, _, __ = tf.nn.bidirectional_rnn(rnnfwd, rnnbwd, embedseq, dtype=tf.float32)
     else:
-        rnnfwd = rnn_cell.BasicLSTMCell(FLAGS.hsz)
+        rnnfwd = tf.nn.rnn_cell.BasicLSTMCell(FLAGS.hsz)
         # Primitive will wrap RNN and unroll in time
         rnnseq, _ = tf.nn.rnn(rnnfwd, embedseq, dtype=tf.float32)
 
