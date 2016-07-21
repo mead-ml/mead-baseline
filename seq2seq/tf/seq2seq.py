@@ -302,7 +302,9 @@ with tf.Graph().as_default():
 
         err_min = 0
         last_improved = 0
+        reset = 0
 #        showBatch(es, sess, probs, rlut1, rlut2, embed2, True)
+
         for i in range(FLAGS.epochs):
 
             train(ts, sess, train_writer, train_op, global_step, summary_op, loss, errs, tot)
