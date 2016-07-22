@@ -285,7 +285,8 @@ es = sentsToIndices(FLAGS.test, embed1, embed2, opts)
 rlut1 = revlut(embed1.vocab)
 rlut2 = revlut(embed2.vocab)
 
-
+# train_op = None
+# global_step = None
 
 with tf.Graph().as_default():
     sess = tf.Session()
@@ -322,14 +323,14 @@ with tf.Graph().as_default():
 
             if (i - last_improved) > FLAGS.patience:
 
-                if reset < FLAGS.nreset:
-                    reset += 1
-                    FLAGS.eta *= 0.5
-                    last_improved = i
-                    print('Patience exhausted, trying again with eta=' + FLAGS.eta)
-                    train_op, global_step = createTrainer(loss)
-                else:
-                    print('Stopping due to persistent failures to improve')
-                    break
+#                if reset < FLAGS.nreset:
+#                    reset += 1
+#                    FLAGS.eta *= 0.5
+#                    last_improved = i
+#                    print('Patience exhausted, trying again with eta=%f' % FLAGS.eta)
+#                    train_op, global_step = createTrainer(loss)
+#                else:
+                print('Stopping due to persistent failures to improve')
+                break
 
 
