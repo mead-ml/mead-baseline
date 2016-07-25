@@ -105,8 +105,9 @@ Binary Kim model, non-static (fine-tunings):
 th cnn-sentence-fine.lua -clean -cullunused -optim adadelta -batchsz 50 -epochs 25 -patience 25 -train ./data/stsa.binary.phrases.train -valid ./data/stsa.binary.dev -eval ./data/stsa.binary.test -embed /data/xdata/GoogleNews-vectors-negative300.bin -filtsz "{3,4,5}"
 ```
 
+In Tensorflow:
 ```
-python cnn-sentence.py  --optim adam --batchsz 50 --epochs 25 --train ./data/stsa.binary.phrases.train --test ./data/stsa.binary.test --embed /data/xdata/GoogleNews-vectors-negative300.bin --filtsz "3,4,5"
+python2.7 cnn-sentence-fine.py --clean --optim adam --eta 0.001 --batchsz 50 --epochs 25 --patience 25 --train ./data/stsa.binary.phrases.train --valid ./data/stsa.binary.dev --test ./data/stsa.binary.test --embed /data/xdata/GoogleNews-vectors-negative300.bin --filtsz "3,4,5" --dropout 0.5
 ```
 
 # Structured Prediction using RNNs
