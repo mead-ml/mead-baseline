@@ -110,6 +110,7 @@ In Tensorflow:
 python2.7 cnn-sentence-fine.py --clean --optim adam --eta 0.001 --batchsz 50 --epochs 25 --patience 25 --train ./data/stsa.binary.phrases.train --valid ./data/stsa.binary.dev --test ./data/stsa.binary.test --embed /data/xdata/GoogleNews-vectors-negative300.bin --filtsz "3,4,5" --dropout 0.5
 ```
 
+
 # Structured Prediction using RNNs
 
 This code is useful for tagging tasks, e.g., POS tagging, chunking and NER tagging.  Recently, several researchers have proposed using RNNs for tagging, particularly LSTMs.  These models do back-propagation through time (BPTT)

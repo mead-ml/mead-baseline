@@ -5,9 +5,6 @@ import re
 import math
 import codecs
 
-def revlut(lut):
-    return {v: k for k, v in lut.items()}
-
 REPLACE = { "'s": " 's ",
             "'ve": " 've ",
             "n't": " n't ",
@@ -64,14 +61,12 @@ def validSplit(data, splitfrac):
     return data[1:heldout], data[heldout:]
 
 
-def loadTemporalIndices(filename, w2v, f2i, options):
+def loadTemporalIndices(filename, index, f2i, options):
     ts = []
     batchsz = options.get("batchsz", 1)
     clean = options.get("clean", True)
     chars = options.get("chars", False)
-    vsz = w2v.vsz
-    dsz = w2v.dsz
-    PAD = w2v.vocab['<PADDING>']
+    PAD = index['<PADDING>']
     mxfiltsz = np.max(options["filtsz"])
     mxlen = options.get("mxlen", 1000)
     mxsiglen = mxlen - mxfiltsz
@@ -109,7 +104,7 @@ def loadTemporalIndices(filename, w2v, f2i, options):
             toks = toks[:mx]
             for j in range(len(toks)):
                 w = toks[j]
-                key = w2v.vocab.get(w, PAD)
+                key = index.get(w, PAD)
                 x[offset][j+halffiltsz] = key
             i = i + 1
     if thisBatchSz > 0:
