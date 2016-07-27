@@ -1,6 +1,18 @@
 require 'utils'
 require 'torchure'
 
+function splits(tbl)
+     local newtbl = {}
+     toks = tbl:split('%s+')
+     for i,v in pairs(toks) do
+         if #v > 0 then
+	     newtbl[i]=v
+         end
+     end
+     return newtbl
+ end
+
+
 
 VALID_TOKENS = revlut({
       'A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z', 'a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z','(',')',',', '!','?',"'","`", '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'})
@@ -86,7 +98,7 @@ function buildVocab(files, clean, chars)
 	     
 	     _, text = labelSent(line, clean, chars)
 	     
-	     local toks = text:split(' ')
+	     local toks = splits(text)
 	     
 	     local siglen = #toks
 	     for i=1,siglen do
@@ -245,14 +257,14 @@ function loadTemporalIndices(file, w2v, f2i, options)
 	  end
 	  b = b + 1
 	  thisBatchSz = math.min(batchsz, n - i + 1)
-	  x = torch.LongTensor(thisBatchSz, mxlen + mxfiltsz):fill(PAD)
+	  x = torch.LongTensor(thisBatchSz, mxlen):fill(PAD)
 	  y = torch.LongTensor(thisBatchSz):fill(0)
        end
 
        y[offset+1] = f2i[label]
-       local toks = text:split(' ')
+       local toks = splits(text)
        
-       local mx = math.min(#toks, mxlen)
+       local mx = math.min(#toks, mxlen - 2*halffiltsz)
        for j=1,mx do
 	  local w = toks[j]
 	  local key = w2v.vocab[w] -- or w2v.vocab['<PADDING>']

@@ -4,7 +4,7 @@ from google.protobuf import text_format
 from tensorflow.python.platform import gfile
 from utils import fill_y
 import json
-
+import math
 class ConvModel:
 
     def save(self, sess, outdir, base):

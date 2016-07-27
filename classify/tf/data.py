@@ -16,6 +16,9 @@ REPLACE = { "'s": " 's ",
         }
           
   
+def splits(text):
+    return filter(lambda s: len(s) != 0, re.split('\s+', text))
+
 def doClean(l):
     l = re.sub(r"[^A-Za-z0-9(),!?\'\`]", " ", l)
     for k,v in REPLACE.items():
@@ -49,7 +52,7 @@ def buildVocab(files, clean=False, chars=False):
         with codecs.open(file, encoding='utf-8', mode='r') as f:
             for line in f:
                 _, text = labelSent(line, clean, chars)
-                for w in re.split("\s", text):
+                for w in splits(text):
                     vocab[w] += 1
     return vocab
 
@@ -94,12 +97,12 @@ def loadTemporalIndices(filename, index, f2i, options):
                     ts.append({"x":x, "y":y})
                 b = b + 1
                 thisBatchSz = min(batchsz, n - i)
-                x = np.empty((thisBatchSz, mxlen), dtype=np.float32)
+                x = np.empty((thisBatchSz, mxlen), dtype=int)
                 x.fill(PAD)
                 y = np.zeros((thisBatchSz), dtype=int)
  
             y[offset] = f2i[label]
-            toks = re.split("\s+", text)
+            toks = splits(text)
             mx = min(len(toks), mxsiglen)
             toks = toks[:mx]
             for j in range(len(toks)):
@@ -147,7 +150,7 @@ def loadTemporalEmb(filename, w2v, f2i, options):
                 x = np.zeros((thisBatchSz, mxlen, dsz), dtype=np.float32)
                 y = np.zeros((thisBatchSz), dtype=int)
             y[offset] = f2i[label]
-            toks = re.split("\s+", text)
+            toks = splits(text)
             mx = min(len(toks), mxsiglen)
             toks = toks[:mx]
             for j in range(len(toks)):
