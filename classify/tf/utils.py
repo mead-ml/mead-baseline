@@ -10,7 +10,7 @@ def revlut(lut):
 # Fill out the y matrix with 0s for other labels
 def fill_y(nc, yidx):
     xidx = np.arange(0, yidx.shape[0], 1)
-    dense = np.zeros((yidx.shape[0], nc))
+    dense = np.zeros((yidx.shape[0], nc), dtype=int)
     dense[xidx, yidx] = 1
     return dense
 

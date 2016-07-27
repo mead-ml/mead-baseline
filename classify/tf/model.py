@@ -53,7 +53,7 @@ class ConvModel:
     def createLoss(self):
 
         with tf.name_scope("loss"):
-            loss = tf.nn.softmax_cross_entropy_with_logits(self.lin, self.y)
+            loss = tf.nn.softmax_cross_entropy_with_logits(self.lin, tf.cast(self.y, "float"))
             all_loss = tf.reduce_sum(loss)
 
 
@@ -128,7 +128,7 @@ class ConvModelStatic(ConvModel):
         dsz = w2v.dsz
         nc = len(labels)
         self.x = tf.placeholder(tf.float32, [None, maxlen, dsz], name="x")
-        self.y = tf.placeholder(tf.float32, [None, nc], name="y")
+        self.y = tf.placeholder(tf.int32, [None, nc], name="y")
         
         with tf.name_scope('expand'):
             expanded = tf.expand_dims(self.x, -1)
@@ -143,7 +143,7 @@ class ConvModelFineTune(ConvModel):
         dsz = w2v.dsz
         nc = len(labels)
         self.x = tf.placeholder(tf.int32, [None, maxlen], name="x")
-        self.y = tf.placeholder(tf.float32, [None, nc], name="y")
+        self.y = tf.placeholder(tf.int32, [None, nc], name="y")
         
         with tf.name_scope("LUT"):
             W = tf.Variable(tf.constant(w2v.weights, dtype=tf.float32), name = "W")
