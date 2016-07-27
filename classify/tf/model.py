@@ -36,7 +36,8 @@ class ConvModel:
             self.x = tf.get_default_graph().get_tensor_by_name('x:0')
             self.y = tf.get_default_graph().get_tensor_by_name('y:0')
             self.pkeep = tf.get_default_graph().get_tensor_by_name('pkeep:0')
-            self.model = tf.get_default_graph().get_tensor_by_name('output/best:0')
+            self.best = tf.get_default_graph().get_tensor_by_name('output/best:0')
+            self.probs = tf.get_default_graph().get_tensor_by_name('output/probs:0')
         with open(basename + '.labels', 'r') as f:
             self.labels = json.load(f)
 
@@ -57,15 +58,16 @@ class ConvModel:
 
 
         with tf.name_scope("accuracy"):
-            correct = tf.equal(self.model, tf.argmax(self.y, 1))
+            correct = tf.equal(self.best, tf.argmax(self.y, 1))
             all_right = tf.reduce_sum(tf.cast(correct, "float"), name="accuracy")
 
         return all_loss, all_right
 
-    def inference(self, sess, batch):
-         feed_dict = {self.x: batch["x"], self.pkeep: 1.0}
-         out = sess.run(self.model, feed_dict=feed_dict)
-         return out
+    def inference(self, sess, batch, probs=False):
+        feed_dict = {self.x: batch["x"], self.pkeep: 1.0}
+        if probs is True:
+            return sess.run(self.probs, feed_dict=feed_dict)
+        return sess.run(self.best, feed_dict=feed_dict)
 
     def ex2dict(self, example, pkeep):
         return {self.x: example["x"], self.y: fill_y(len(self.labels), example["y"]), self.pkeep: pkeep}
@@ -113,7 +115,8 @@ class ConvModel:
                                                 stddev = 0.1), name="W")
             b = tf.Variable(tf.constant(0.0, shape=[1,nc]), name="b")
             self.lin = tf.matmul(drop, W) + b
-            self.model = tf.argmax(self.lin, 1, name="best")
+            self.probs = tf.nn.softmax(self.lin, name="probs")
+            self.best = tf.argmax(self.lin, 1, name="best")
 
     def input2expanded(self, labels, w2v, maxlen):
         pass
