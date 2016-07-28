@@ -107,9 +107,15 @@ th cnn-sentence-fine.lua -clean -cullunused -optim adadelta -batchsz 50 -epochs 
 
 In Tensorflow:
 ```
-python2.7 cnn-sentence-fine.py --clean --optim adam --eta 0.001 --batchsz 50 --epochs 25 --patience 25 --train ./data/stsa.binary.phrases.train --valid ./data/stsa.binary.dev --test ./data/stsa.binary.test --embed /data/xdata/GoogleNews-vectors-negative300.bin --filtsz "3,4,5" --dropout 0.5
+python2.7 cnn-sentence-fine.py --clean --optim adadelta --eta 0.001 --batchsz 50 --epochs 25 --patience 25 --train ./data/stsa.binary.phrases.train --valid ./data/stsa.binary.dev --test ./data/stsa.binary.test --embed /data/xdata/GoogleNews-vectors-negative300.bin --filtsz "3,4,5" --dropout 0.5
 ```
 
+## Restoring the Model
+
+In Torch, restoring the model is trivial, but with TensorFlow there is a little more work.  The CNN classes are set up to handle this save and restore, which includes reloading the graph, and then reinitializing the model, along with labels and feature index.
+
+[Here is a gist](https://gist.github.com/dpressel/767db3d1b5b6bf263ebfd7fed716be96) for performing classification on a previously trained cnn-sentence-fine model
+And [here is one](https://gist.github.com/dpressel/61ccf0e89c5a5c3e801d7eb15246b78f) for restoring the static model.
 
 # Structured Prediction using RNNs
 
