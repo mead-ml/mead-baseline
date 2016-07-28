@@ -114,8 +114,7 @@ python2.7 cnn-sentence-fine.py --clean --optim adadelta --eta 0.001 --batchsz 50
 
 In Torch, restoring the model is trivial, but with TensorFlow there is a little more work.  The CNN classes are set up to handle this save and restore, which includes reloading the graph, and then reinitializing the model, along with labels and feature index.
 
-[Here is a gist](https://gist.github.com/dpressel/767db3d1b5b6bf263ebfd7fed716be96) for performing classification on a previously trained cnn-sentence-fine model
-And [here is one](https://gist.github.com/dpressel/61ccf0e89c5a5c3e801d7eb15246b78f) for restoring the static model.
+[Here is a gist](https://gist.github.com/dpressel/767db3d1b5b6bf263ebfd7fed716be96) for performing classification on a previously trained cnn-sentence-fine model, and [here is one](https://gist.github.com/dpressel/61ccf0e89c5a5c3e801d7eb15246b78f) for restoring the static model.
 
 # Structured Prediction using RNNs
 
