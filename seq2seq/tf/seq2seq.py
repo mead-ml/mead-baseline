@@ -2,9 +2,10 @@ import tensorflow as tf
 import numpy as np
 from w2v import Word2VecModel
 from data import buildVocab
-from data import revlut
 from data import sentsToIndices
-
+from utils import *
+from model import Seq2SeqModel
+from train import Trainer
 import time
 MAX_EXAMPLES = 5
 SAMPLE_PRUNE_INIT = 5
@@ -32,189 +33,8 @@ flags.DEFINE_boolean('sharedv', False, 'Share vocab between source and destinati
 flags.DEFINE_boolean('showex', True, 'Show generated examples every few epochs')
 flags.DEFINE_boolean('sample', True, 'If showing examples, sample?')
 
-def tensorToSeq(tensor):
-    return tf.unpack(tf.transpose(tensor, perm=[1, 0, 2]))
-
-def seqToTensor(sequence):
-    return tf.transpose(tf.pack(sequence), perm=[1, 0, 2])
-
-def createSeq2SeqModel(embed1, embed2):
-
-    # These are going to be (B,T)
-    src = tf.placeholder(tf.int32, [None, FLAGS.mxlen], name="src")
-    dst = tf.placeholder(tf.int32, [None, FLAGS.mxlen], name="dst")
-    tgt = tf.placeholder(tf.int32, [None, FLAGS.mxlen], name="tgt")
-    pkeep = tf.placeholder(tf.float32, name="pkeep")
-
-    with tf.name_scope("LUT"):
-        Wi = tf.Variable(tf.constant(embed1.weights, dtype=tf.float32), name = "W")
-        Wo = tf.Variable(tf.constant(embed2.weights, dtype=tf.float32), name = "W")
-
-        ei0 = tf.scatter_update(Wi, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, embed1.dsz]))
-        eo0 = tf.scatter_update(Wo, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, embed1.dsz]))
-        
-        with tf.control_dependencies([ei0]):
-            embed_in = tf.nn.embedding_lookup(Wi, src)
-
-
-        with tf.control_dependencies([eo0]):
-            embed_out = tf.nn.embedding_lookup(Wo, dst)
-
-    with tf.name_scope("Recurrence"):
-        # List to tensor, reform as (T, B, W)
-        embed_in_seq = tensorToSeq(embed_in)
-        embed_out_seq = tensorToSeq(embed_out)
-
-        rnn_enc = tf.nn.rnn_cell.BasicLSTMCell(FLAGS.hsz)
-        rnn_dec = tf.nn.rnn_cell.BasicLSTMCell(FLAGS.hsz)
-        # Primitive will wrap RNN and unroll in time
-        rnn_enc_seq, final_encoder_state = tf.nn.rnn(rnn_enc, embed_in_seq, scope='rnn_enc', dtype=tf.float32)
-        # Provides the link between the encoder final state and the decoder
-        rnn_dec_seq, _ = tf.nn.rnn(rnn_dec, embed_out_seq, initial_state=final_encoder_state, scope='rnn_dec', dtype=tf.float32)
-
-    with tf.name_scope("output"):
-        # Leave as a sequence of (T, B, W)
-        hsz = FLAGS.hsz
-
-        W = tf.Variable(tf.truncated_normal([hsz, embed2.vsz],
-                                            stddev = 0.1), name="W")
-        b = tf.Variable(tf.constant(0.0, shape=[1, embed2.vsz]), name="b")
-
-        preds = [(tf.matmul(rnn_dec_i, W) + b) for rnn_dec_i in rnn_dec_seq]
-        probs = [tf.nn.softmax(pred) for pred in preds]
-    
-    return src, dst, tgt, pkeep, preds, probs #s, best
-
-
-def createLoss(guess, targets):
-
-    tsparse = tf.unpack(tf.transpose(targets, perm=[1, 0]))
-
-    with tf.name_scope("Loss"):
-
-        log_perp_list = []
-        error_list = []
-        totalSz = 0
-        # For each t in T
-        for guess_i, target_i in zip(guess, tsparse):
-
-            # Mask against (B)
-            mask = tf.cast(tf.sign(target_i), tf.float32)
-            # guess_i = (B, V)
-            best_i = tf.cast(tf.argmax(guess_i, 1), tf.int32)
-            err = tf.cast(tf.not_equal(best_i, target_i), tf.float32)
-            # Gives back (B, V)
-            xe = tf.nn.sparse_softmax_cross_entropy_with_logits(guess_i, target_i)
-
-            log_perp_list.append(xe * mask)
-            error_list.append(err * mask)
-            totalSz += tf.reduce_sum(mask)
-
-        log_perps = tf.add_n(log_perp_list)
-        error_all = tf.add_n(error_list)
-        log_perps /= totalSz
-
-        cost = tf.reduce_sum(log_perps)
-        all_error = tf.reduce_sum(error_all)
-
-        batchSz = tf.cast(tf.shape(tsparse[0])[0], tf.float32)
-        return cost/batchSz, all_error, totalSz
-
-def createTrainer(loss):
-    
-    global_step = tf.Variable(0, name='global_step', trainable=False)
-    if FLAGS.optim == 'adadelta':
-        optimizer = tf.train.AdadeltaOptimizer(FLAGS.eta, 0.95, 1e-6)
-    elif FLAGS.optim == 'adam':
-        optimizer = tf.train.AdamOptimizer(FLAGS.eta)
-    else:
-        optimizer = tf.train.GradientDescentOptimizer(FLAGS.eta)
-
-    train_op = optimizer.minimize(loss, global_step=global_step)
-    return train_op, global_step
-
-def train(ts, sess, summary_writer, train_op, global_step, summary_op, loss, errs, tot):
-    total = 0
-    total_loss = 0
-    total_err = 0
-    seq = np.random.permutation(len(ts))
-    start_time = time.time()
-        
-    for j in seq:
-        feed_dict = {src: ts[j]["src"], dst: ts[j]["dst"], tgt: ts[j]["tgt"], pkeep: (1-FLAGS.dropout)}
-        
-        _, step, lossv, errv, totv = sess.run([train_op, global_step, loss, errs, tot], feed_dict=feed_dict)
-        total_loss += lossv
-        total_err += errv
-        total += totv
-
-    duration = time.time() - start_time
-
-    acc = 1.0 - (total_err/total)
-
-    print('Train (Loss %.4f, Acc %.4f) (%.3f sec)' % (float(total_loss)/len(seq), acc, duration))
-
-
-def test(ts, sess, loss, errs, tot):
-
-    total_loss = total_err = total = 0
-    start_time = time.time()
-    for j in range(len(ts)):
-            
-        feed_dict = {src: ts[j]["src"], dst: ts[j]["dst"], tgt: ts[j]["tgt"], pkeep: 1}
-        
-        
-        lossv, errv, totv = sess.run([loss, errs, tot], feed_dict=feed_dict)
-        total_loss += lossv
-        total_err += errv
-        total += totv
-        
-    duration = time.time() - start_time
-
-    err = total_err/total
-
-    print('Test (Loss %.4f, Acc %.4f) (%.3f sec)' % (float(total_loss)/len(ts), 1.0 - err, duration))
-
-    return err
-
-def lookupSent(rlut, seq, reverse=False):
-    s = seq[::-1] if reverse else seq
-    return ' '.join([rlut[idx] if rlut[idx] != '<PADDING>' else '' for idx in s])
-
-# Get a sparse index (dictionary) of top values
-# Note: mutates input for efficiency
-def topk(k, probs):
-
-    lut = {}
-    i = 0
-
-    while i < k:
-        idx = np.argmax(probs)
-        lut[idx] = probs[idx]
-        probs[idx] = 0
-        i += 1
-    return lut
-
-#  Prune all elements in a large probability distribution below the top K
-#  Renormalize the distribution with only top K, and then sample n times out of that
-def beamMultinomial(k, probs):
-    
-    tops = topk(k, probs)
-    i = 0
-    n = len(tops.keys())
-    ary = np.zeros((n))
-    idx = []
-    for abs_idx,v in tops.iteritems():
-        ary[i] = v
-        idx.append(abs_idx)
-        i += 1
-
-    ary /= np.sum(ary)
-    sample_idx = np.argmax(np.random.multinomial(1, ary))
-    return idx[sample_idx]
-
 # TODO: Allow best path, not just sample path
-def showBatch(es, sess, probs, rlut1, rlut2, embed2, sample):
+def showBatch(model, es, sess, rlut1, rlut2, embed2, sample):
     sz = len(es)
     rnum = int((sz - 1) * np.random.random_sample())
     GO = embed2.vocab['<GO>']
@@ -243,11 +63,8 @@ def showBatch(es, sess, probs, rlut1, rlut2, embed2, sample):
         src_i = src_i.reshape(1, -1)
         for j in range(FLAGS.mxlen):
             dst_i[0,j] = next_value
-            preds = sess.run(probs, feed_dict={
-                src:src_i, dst:dst_i
-            })
-
-            output = preds[j].squeeze()
+            probv = model.step(sess, src_i, dst_i)
+            output = probv[j].squeeze()
             # This method cuts low probability words out of the distributions
             # dynamically.  Ideally, we would also use a beam over several
             # paths and pick the most likely path at the end, but this
@@ -280,46 +97,42 @@ print('Loaded word embeddings: ' + FLAGS.embed2)
 
 opts = { 'batchsz': FLAGS.batchsz,
          'mxlen': FLAGS.mxlen }
-ts = sentsToIndices(FLAGS.train, embed1, embed2, opts)
-es = sentsToIndices(FLAGS.test, embed1, embed2, opts)
+ts = sentsToIndices(FLAGS.train, embed1.vocab, embed2.vocab, opts)
+es = sentsToIndices(FLAGS.test, embed1.vocab, embed2.vocab, opts)
 rlut1 = revlut(embed1.vocab)
 rlut2 = revlut(embed2.vocab)
 
-# train_op = None
-# global_step = None
-
+seq2seq = Seq2SeqModel()
 with tf.Graph().as_default():
     sess = tf.Session()
     with sess.as_default():
-        src, dst, tgt, pkeep, model, probs = createSeq2SeqModel(embed1, embed2)
-        loss, errs, tot = createLoss(model, tgt)
-        
-        train_op, global_step = createTrainer(loss)
-        
-        summary_op = tf.merge_all_summaries()
+        seq2seq.params(embed1, embed2, FLAGS.mxlen, FLAGS.hsz)
+
+        trainer = Trainer(seq2seq, FLAGS.optim, FLAGS.eta)
         train_writer = tf.train.SummaryWriter(FLAGS.outdir + "/train", sess.graph)
         init = tf.initialize_all_variables()
-        saver = tf.train.Saver()
         sess.run(init)
 
-        err_min = 0
+        trainer.prepare(tf.train.Saver())
+
+        err_min = 1
         last_improved = 0
         reset = 0
-#        showBatch(es, sess, probs, rlut1, rlut2, embed2, True)
+        #showBatch(seq2seq, es, sess, rlut1, rlut2, embed2, True)
 
         for i in range(FLAGS.epochs):
 
-            train(ts, sess, train_writer, train_op, global_step, summary_op, loss, errs, tot)
+            trainer.train(ts, sess, train_writer, FLAGS.dropout)
             if FLAGS.showex:
-                showBatch(es, sess, probs, rlut1, rlut2, embed2, FLAGS.sample)
+                showBatch(seq2seq, es, sess, rlut1, rlut2, embed2, FLAGS.sample)
 
-            err_rate = test(es, sess, loss, errs, tot)
+            err_rate = trainer.test(es, sess)
 
             if err_rate < err_min:
                 last_improved = i
                 err_min = err_rate
                 print('Lowest error achieved yet -- writing model')
-                saver.save(sess, FLAGS.outdir + "/train/seq2seq.model", global_step=global_step)
+                seq2seq.save(sess, FLAGS.outdir, 'seq2seq')
 
             if (i - last_improved) > FLAGS.patience:
 
@@ -333,4 +146,4 @@ with tf.Graph().as_default():
                 print('Stopping due to persistent failures to improve')
                 break
 
-
+#        seq2seq.save(sess, FLAGS.outdir, 'seq2seq')
