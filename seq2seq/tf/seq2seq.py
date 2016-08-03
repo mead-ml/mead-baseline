@@ -65,10 +65,15 @@ def showBatch(model, es, sess, rlut1, rlut2, embed2, sample):
             dst_i[0,j] = next_value
             probv = model.step(sess, src_i, dst_i)
             output = probv[j].squeeze()
-            # This method cuts low probability words out of the distributions
-            # dynamically.  Ideally, we would also use a beam over several
-            # paths and pick the most likely path at the end, but this
-            # can be done in a separate program, not necessary to train
+            if sample is False:
+                next_value = np.argmax(output)
+            else:
+                # This method cuts low probability words out of the dists
+                # dynamically.  Ideally, we would also use a beam over several
+                # paths and pick the most likely path at the end, but this
+                # can be done in a separate program, not necessary to train
+                next_value = beamMultinomial(SAMPLE_PRUNE_INIT, output)
+            
             next_value = beamMultinomial(SAMPLE_PRUNE_INIT, output)
             if next_value == EOS:
                 break

@@ -38,6 +38,8 @@ class Seq2SeqModel:
             gd.ParseFromString(f.read())
             sess.graph.as_default()
             tf.import_graph_def(gd, name='')
+            print('restore_op_name %s' % saver_def.restore_op_name)
+            print('filename_tensor_name %s' % saver_def.filename_tensor_name)
             sess.run(saver_def.restore_op_name, {saver_def.filename_tensor_name: basename + '.model'})
             self.src = tf.get_default_graph().get_tensor_by_name('src:0')
             self.dst = tf.get_default_graph().get_tensor_by_name('dst:0')
