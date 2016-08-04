@@ -31,7 +31,7 @@ flags.DEFINE_boolean('clean', True, 'Do cleaning')
 flags.DEFINE_float('clip', 5, 'Gradient clipping')
 flags.DEFINE_boolean('sharedv', False, 'Share vocab between source and destination')
 flags.DEFINE_boolean('showex', True, 'Show generated examples every few epochs')
-flags.DEFINE_boolean('sample', True, 'If showing examples, sample?')
+flags.DEFINE_boolean('sample', False, 'If showing examples, sample?')
 
 # TODO: Allow best path, not just sample path
 def showBatch(model, es, sess, rlut1, rlut2, embed2, sample):
@@ -74,7 +74,6 @@ def showBatch(model, es, sess, rlut1, rlut2, embed2, sample):
                 # can be done in a separate program, not necessary to train
                 next_value = beamMultinomial(SAMPLE_PRUNE_INIT, output)
             
-            next_value = beamMultinomial(SAMPLE_PRUNE_INIT, output)
             if next_value == EOS:
                 break
 
@@ -126,7 +125,7 @@ with tf.Graph().as_default():
         #showBatch(seq2seq, es, sess, rlut1, rlut2, embed2, True)
 
         for i in range(FLAGS.epochs):
-
+            print('Training epoch %d' % (i+1))
             trainer.train(ts, sess, train_writer, FLAGS.dropout)
             if FLAGS.showex:
                 showBatch(seq2seq, es, sess, rlut1, rlut2, embed2, FLAGS.sample)
