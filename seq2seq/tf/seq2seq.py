@@ -29,6 +29,7 @@ flags.DEFINE_integer('hsz', 100, 'Hidden layer size')
 flags.DEFINE_string('outdir', 'out', 'Directory to put the output')
 flags.DEFINE_boolean('clean', True, 'Do cleaning')
 flags.DEFINE_float('clip', 5, 'Gradient clipping')
+flags.DEFINE_integer('layers', 1, 'Number of LSTM layers for encoder/decoder')
 flags.DEFINE_boolean('sharedv', False, 'Share vocab between source and destination')
 flags.DEFINE_boolean('showex', True, 'Show generated examples every few epochs')
 flags.DEFINE_boolean('sample', False, 'If showing examples, sample?')
@@ -110,7 +111,7 @@ seq2seq = Seq2SeqModel()
 with tf.Graph().as_default():
     sess = tf.Session()
     with sess.as_default():
-        seq2seq.params(embed1, embed2, FLAGS.mxlen, FLAGS.hsz)
+        seq2seq.params(embed1, embed2, FLAGS.mxlen, FLAGS.hsz, FLAGS.layers)
 
         trainer = Trainer(seq2seq, FLAGS.optim, FLAGS.eta)
         train_writer = tf.train.SummaryWriter(FLAGS.outdir + "/train", sess.graph)

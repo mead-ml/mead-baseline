@@ -65,7 +65,13 @@ class Seq2SeqModel:
                 self.tgt: example["tgt"], 
                 self.pkeep: pkeep}
 
-    def params(self, embed1, embed2, maxlen, hsz):
+    def makeCell(self, hsz, nlayers):
+        cell = tf.nn.rnn_cell.BasicLSTMCell(hsz, state_is_tuple=True)
+        if nlayers > 1:
+            cell = tf.nn.rnn_cell.MultiRNNCell([cell] * nlayers, state_is_tuple=True)
+        return cell
+
+    def params(self, embed1, embed2, maxlen, hsz, nlayers=1):
         # These are going to be (B,T)
         self.src = tf.placeholder(tf.int32, [None, maxlen], name="src")
         self.dst = tf.placeholder(tf.int32, [None, maxlen], name="dst")
@@ -94,8 +100,9 @@ class Seq2SeqModel:
             embed_in_seq = tensorToSeq(embed_in)
             embed_out_seq = tensorToSeq(embed_out)
 
-            rnn_enc = tf.nn.rnn_cell.BasicLSTMCell(hsz)
-            rnn_dec = tf.nn.rnn_cell.BasicLSTMCell(hsz)
+            rnn_enc = self.makeCell(hsz, nlayers)
+            rnn_dec = self.makeCell(hsz, nlayers)
+
             # Primitive will wrap RNN and unroll in time
             rnn_enc_seq, final_encoder_state = tf.nn.rnn(rnn_enc, embed_in_seq, scope='rnn_enc', dtype=tf.float32)
             # Provides the link between the encoder final state and the decoder
