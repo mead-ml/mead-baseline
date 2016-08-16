@@ -4,7 +4,7 @@ from w2v import Word2VecModel
 from data import buildVocab
 from data import sentsToIndices
 from utils import *
-from model import Seq2SeqModel
+from model import *
 from train import Trainer
 import time
 MAX_EXAMPLES = 5
@@ -33,6 +33,8 @@ flags.DEFINE_integer('layers', 1, 'Number of LSTM layers for encoder/decoder')
 flags.DEFINE_boolean('sharedv', False, 'Share vocab between source and destination')
 flags.DEFINE_boolean('showex', True, 'Show generated examples every few epochs')
 flags.DEFINE_boolean('sample', False, 'If showing examples, sample?')
+flags.DEFINE_boolean('seq2seqlib', False, 'Use seq2seq library underneath')
+flags.DEFINE_boolean('attn', False, 'Use attention')
 
 # TODO: Allow best path, not just sample path
 def showBatch(model, es, sess, rlut1, rlut2, embed2, sample):
@@ -107,11 +109,18 @@ es = sentsToIndices(FLAGS.test, embed1.vocab, embed2.vocab, opts)
 rlut1 = revlut(embed1.vocab)
 rlut2 = revlut(embed2.vocab)
 
-seq2seq = Seq2SeqModel()
+# For now, if attention is on, use library
+if FLAGS.attn:
+    print('Forcing library option')
+    FLAGS.seq2seqlib = True
+
+# Use library-backed seq2seq routine
+seq2seq = Seq2SeqLib() if FLAGS.seq2seqlib else Seq2SeqModel()
+
 with tf.Graph().as_default():
     sess = tf.Session()
     with sess.as_default():
-        seq2seq.params(embed1, embed2, FLAGS.mxlen, FLAGS.hsz, FLAGS.layers)
+        seq2seq.params(embed1, embed2, FLAGS.mxlen, FLAGS.hsz, FLAGS.layers, FLAGS.attn)
 
         trainer = Trainer(seq2seq, FLAGS.optim, FLAGS.eta)
         train_writer = tf.train.SummaryWriter(FLAGS.outdir + "/train", sess.graph)
