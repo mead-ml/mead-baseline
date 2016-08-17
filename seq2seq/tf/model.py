@@ -10,9 +10,10 @@ import math
 class Seq2SeqBase:
 
     def makeCell(self, hsz, nlayers):
-        cell = tf.nn.rnn_cell.BasicLSTMCell(hsz, state_is_tuple=True)
+        st = False if nlayers > 1 else True
+        cell = tf.nn.rnn_cell.BasicLSTMCell(hsz, state_is_tuple=st)
         if nlayers > 1:
-            cell = tf.nn.rnn_cell.MultiRNNCell([cell] * nlayers, state_is_tuple=True)
+            cell = tf.nn.rnn_cell.MultiRNNCell([cell] * nlayers, state_is_tuple=st)
         return cell
 
     def save(self, sess, outdir, base):
