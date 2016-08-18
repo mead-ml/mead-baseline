@@ -9,9 +9,11 @@ import math
     
 class Seq2SeqBase:
 
-    def makeCell(self, hsz, nlayers):
+    def makeCell(self, hsz, nlayers, rnntype):
         st = False if nlayers > 1 else True
-        cell = tf.nn.rnn_cell.BasicLSTMCell(hsz, state_is_tuple=st)
+        
+        cell = tf.nn.rnn_cell.BasicLSTMCell(hsz, state_is_tuple=st) if rnntype == 'lstm' else tf.nn.rnn_cell.GRUCell(hsz)
+        
         if nlayers > 1:
             cell = tf.nn.rnn_cell.MultiRNNCell([cell] * nlayers, state_is_tuple=st)
         return cell
@@ -120,7 +122,7 @@ class Seq2SeqModel(Seq2SeqBase):
     def __init__(self):
         pass
 
-    def params(self, embed1, embed2, maxlen, hsz, nlayers=1, attn=False):
+    def params(self, embed1, embed2, maxlen, hsz, nlayers=1, attn=False, rnntype='lstm'):
         # These are going to be (B,T)
         self.src = tf.placeholder(tf.int32, [None, maxlen], name="src")
         self.dst = tf.placeholder(tf.int32, [None, maxlen], name="dst")
@@ -149,8 +151,8 @@ class Seq2SeqModel(Seq2SeqBase):
             embed_in_seq = tensorToSeq(embed_in)
             embed_out_seq = tensorToSeq(embed_out)
 
-            rnn_enc = self.makeCell(hsz, nlayers)
-            rnn_dec = self.makeCell(hsz, nlayers)
+            rnn_enc = self.makeCell(hsz, nlayers, rnntype)
+            rnn_dec = self.makeCell(hsz, nlayers, rnntype)
 
             # Primitive will wrap RNN and unroll in time
             rnn_enc_seq, final_encoder_state = tf.nn.rnn(rnn_enc, embed_in_seq, scope='rnn_enc', dtype=tf.float32)

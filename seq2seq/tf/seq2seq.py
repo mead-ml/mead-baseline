@@ -14,6 +14,7 @@ FLAGS = flags.FLAGS
 flags.DEFINE_float('eta', 0.001, 'Initial learning rate.')
 flags.DEFINE_string('embed1', None, 'Word2Vec embeddings file (1)')
 flags.DEFINE_string('embed2', None, 'Word2Vec embeddings file (2)')
+flags.DEFINE_string('rnntype', 'lstm', '(lstm|gru)')
 flags.DEFINE_string('optim', 'adam', 'Optim method')
 flags.DEFINE_float('dropout', 0.5, 'Dropout probability')
 flags.DEFINE_string('train', None, 'Training file')
@@ -120,7 +121,7 @@ seq2seq = Seq2SeqLib() if FLAGS.seq2seqlib else Seq2SeqModel()
 with tf.Graph().as_default():
     sess = tf.Session()
     with sess.as_default():
-        seq2seq.params(embed1, embed2, FLAGS.mxlen, FLAGS.hsz, FLAGS.layers, FLAGS.attn)
+        seq2seq.params(embed1, embed2, FLAGS.mxlen, FLAGS.hsz, FLAGS.layers, FLAGS.attn, FLAGS.rnntype)
 
         trainer = Trainer(seq2seq, FLAGS.optim, FLAGS.eta)
         train_writer = tf.train.SummaryWriter(FLAGS.outdir + "/train", sess.graph)
