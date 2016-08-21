@@ -176,7 +176,7 @@ class Seq2SeqLib(Seq2SeqBase):
     def __init__(self):
         pass
 
-    def params(self, embed1, embed2, maxlen, hsz, nlayers=1, attn=False):
+    def params(self, embed1, embed2, maxlen, hsz, nlayers=1, attn=False, rnntype='lstm'):
         # These are going to be (B,T)
         self.src = tf.placeholder(tf.int32, [None, maxlen], name="src")
         self.dst = tf.placeholder(tf.int32, [None, maxlen], name="dst")
