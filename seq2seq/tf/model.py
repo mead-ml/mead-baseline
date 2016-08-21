@@ -204,7 +204,7 @@ class Seq2SeqLib(Seq2SeqBase):
             embed_in_seq = tensorToSeq(embed_in)
             embed_out_seq = tensorToSeq(embed_out)
 
-            cell = self.makeCell(hsz, nlayers)
+            cell = self.makeCell(hsz, nlayers, rnntype)
             if attn:
                 print('With attention')
                 rnn_dec_seq, _ = attn_rnn_seq2seq(embed_in_seq, embed_out_seq, cell)
