@@ -72,7 +72,7 @@ class ConvModel:
     def ex2dict(self, example, pkeep):
         return {self.x: example["x"], self.y: fill_y(len(self.labels), example["y"]), self.pkeep: pkeep}
 
-    def params(self, labels, w2v, maxlen, filtsz, cmotsz):
+    def params(self, labels, w2v, maxlen, filtsz, cmotsz, hsz):
         vsz = w2v.vsz
         dsz = w2v.dsz
 
@@ -107,13 +107,28 @@ class ConvModel:
             
         cmotsz_all = cmotsz * len(mots)
         combine = tf.reshape(tf.concat(3, mots), [-1, cmotsz_all])
+        
+        last_sz = cmotsz_all
         with tf.name_scope("dropout"):
             drop = tf.nn.dropout(combine, self.pkeep)
+        
+        with tf.name_scope("proj"):
+            if hsz > 0:
+                print('Adding a projection layer between MOT and output')
+                W_p = tf.Variable(tf.truncated_normal([cmotsz_all, hsz],
+                                                      stddev = 0.1), name="W")
+                b_p = tf.Variable(tf.constant(0.0, shape=[1, hsz]), name="b")
+
+                proj = tf.nn.relu(tf.matmul(drop, W_p) + b_p, "proj")
+                drop = tf.nn.dropout(proj, self.pkeep)
+                last_sz = hsz
 
         with tf.name_scope("output"):
-            W = tf.Variable(tf.truncated_normal([cmotsz_all, nc],
+
+            W = tf.Variable(tf.truncated_normal([last_sz, nc],
                                                 stddev = 0.1), name="W")
             b = tf.Variable(tf.constant(0.0, shape=[1,nc]), name="b")
+
             self.lin = tf.matmul(drop, W) + b
             self.probs = tf.nn.softmax(self.lin, name="probs")
             self.best = tf.argmax(self.lin, 1, name="best")

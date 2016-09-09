@@ -25,6 +25,7 @@ flags.DEFINE_integer('batchsz', 50, 'Batch size')
 flags.DEFINE_integer('mxlen', 100, 'Max length')
 flags.DEFINE_integer('patience', 10, 'Patience')
 flags.DEFINE_integer('cmotsz', 100, 'Hidden layer size')
+flags.DEFINE_integer('hsz', -1, 'Projection layer size')
 flags.DEFINE_string('outdir', 'out', 'Directory to put the output')
 flags.DEFINE_string('filtsz', '3,4,5', 'Filter sizes')
 flags.DEFINE_boolean('clean', True, 'Do cleaning')
@@ -64,7 +65,7 @@ model = ConvModelFineTune()
 with tf.Graph().as_default():
     sess = tf.Session()
     with sess.as_default():
-        model.params(f2i, w2vModel, FLAGS.mxlen, FLAGS.filtsz, FLAGS.cmotsz)
+        model.params(f2i, w2vModel, FLAGS.mxlen, FLAGS.filtsz, FLAGS.cmotsz, FLAGS.hsz)
         
         trainer = Trainer(model, FLAGS.optim, FLAGS.eta)
         train_writer = tf.train.SummaryWriter(FLAGS.outdir + "/train", sess.graph)
@@ -78,7 +79,7 @@ with tf.Graph().as_default():
         last_improved = 0
 
         for i in range(FLAGS.epochs):
-
+            print('Training epoch %d' % (i+1))
             trainer.train(ts, sess, train_writer, FLAGS.dropout)
             this_acc = trainer.test(vs, sess)
             if this_acc > max_acc:

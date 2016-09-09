@@ -6,6 +6,22 @@ require 'utils'
 -- Decoder beam
 SAMPLE_PRUNE_INIT = 5
 
+
+-- Assume the data is in (B,T,H) form and transpose it
+function toTable(orig, from, to)
+   local response = orig:transpose(1, 2)
+   local response_table = {}
+   local T = response:size()[1]
+   local start = from or 1
+   local upto = to or T
+   if upto < 1 or upto > T then upto = T end
+   for i=start,upto do
+      table.insert(response_table, response[i])
+   end
+   return response_table
+end
+
+
 function trainSeq2SeqEpoch(crit, model, ts, optmeth, options)
 
     local enc = model:get(1)
@@ -44,17 +60,16 @@ function trainSeq2SeqEpoch(crit, model, ts, optmeth, options)
 
 	  src = src:transpose(1, 2)
 	  dst = dst:transpose(1, 2)
-	  tgt = tgt:transpose(1, 2)
-
+	  tgtTable = toTable(tgt)
 	  local predSrc = enc:forward(src)
 	  local srclen = src:size(1)
 	  forwardConnect(model, srclen, options.layers)
 	  
 	  local predDst = dec:forward(dst)
-	  local err = crit:forward(predDst, tgt)
+	  local err = crit:forward(predDst, tgtTable)
 	  epochErr = epochErr + err
 
-	  local grad = crit:backward(predDst, tgt)
+	  local grad = crit:backward(predDst, tgtTable)
 	  dec:backward(dst, grad)
 
 	  backwardConnect(model, options.layers)
@@ -204,7 +219,7 @@ function testSeq2Seq(model, ts, crit, options)
        end
        src = src:transpose(1, 2)
        dst = dst:transpose(1, 2)
-       tgt = tgt:transpose(1, 2)
+       local tgtTable = toTable(tgt)
 	  
        local predSrc = enc:forward(src)
        local srclen = src:size(1)
@@ -212,7 +227,7 @@ function testSeq2Seq(model, ts, crit, options)
        
        local predDst = dec:forward(dst)
        
-       local err = crit:forward(predDst, tgt)
+       local err = crit:forward(predDst, tgtTable)
        epochErr = epochErr + err
        xlua.progress(i, sz)
 
