@@ -107,7 +107,7 @@ function sentsToIndices(file, embed1, embed2, options)
 	  
 
        end
-       dstl[{offset+1, end2}] = EOS
+
        tgtl[{offset+1, end2 + 1}] = EOS
        i = i + 1
     end

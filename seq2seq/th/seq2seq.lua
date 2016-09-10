@@ -34,8 +34,10 @@ require 'data'
 -----------------------------------------------------
 DEF_TSF = '/data/pairs-train.txt'
 DEF_ESF = '/data/pairs-test.txt'
-DEF_EMBED1 = '/data/xdata/oct-s140clean-uber.cbow-bin'
-DEF_EMBED2 = '/data/xdata/oct-s140clean-uber.cbow-bin'
+--DEF_EMBED1 = '/data/xdata/oct-s140clean-uber.cbow-bin'
+--DEF_EMBED2 = '/data/xdata/oct-s140clean-uber.cbow-bin'
+DEF_EMBED1 = ''
+DEF_EMBED2 = ''
 DEF_FILE_OUT = 'seq2seq.model'
 DEF_PATIENCE = 10
 DEF_OPTIM = 'adadelta'
@@ -51,7 +53,9 @@ DEF_EMBUNIF = 0.25
 DEF_SAMPLE = false
 DEF_OUT_OF_CORE = false
 DEF_SHARED_VOCAB = false
-DEF_SHOW_EX = false
+DEF_SHOW_EX = 0
+DEF_DSZ = 300
+DEF_MAX_EX = 32
 DEF_RESET = 0
 DEF_LAYERS = 1
 torch.setdefaulttensortype('torch.FloatTensor')
@@ -82,6 +86,7 @@ cmd:option('-hsz', DEF_HSZ, 'Hidden layer units')
 cmd:option('-proc', DEF_PROC)
 cmd:option('-patience', DEF_PATIENCE)
 cmd:option('-showex', DEF_SHOW_EX, 'Show test examples')
+cmd:option('-dsz', DEF_DSZ, 'Embedding size (if no pre-trained embeddings provided)')
 cmd:option('-layers', DEF_LAYERS, 'Number of RNN layers')
 cmd:option('-sample', DEF_SAMPLE, 'Perform sampling to find candidate decodes')
 cmd:option('-ooc', DEF_OUT_OF_CORE, 'Should data batches be file-backed?')
@@ -130,15 +135,28 @@ end
 local vocab1 = buildVocab(v1, {opt.train, opt.eval})
 local vocab2 = buildVocab(v2, {opt.train, opt.eval})
 
-local embed1 = Word2VecLookupTable(opt.embed1, vocab1, opt.embunif)
-print('Loaded word embeddings: ' .. opt.embed1)
+local embed1
+if opt.embed1 == '' then
+   embed1 = VocabLookupTable(vocab1, opt.dsz, opt.embunif)
+   print('Initialized word embeddings')
+else
+   embed1 = Word2VecLookupTable(opt.embed1, vocab1, opt.embunif)
+   print('Loaded word embeddings: ' .. opt.embed1)
+end
 
-local embed2 = Word2VecLookupTable(opt.embed2, vocab2, opt.embunif)
-print('Loaded word embeddings: ' .. opt.embed2)
+local embed2
+if opt.embed2 == '' then
+   embed2 = VocabLookupTable(vocab2, opt.dsz, opt.embunif)
+   print('Initialized word embeddings')
+else
+   embed2 = Word2VecLookupTable(opt.embed2, vocab2, opt.embunif)
+   print('Loaded word embeddings: ' .. opt.embed2)
+end
+
 
 function afterhook() 
-      embed1.weight[1]:zero()
-      embed2.weight[1]:zero()
+   embed1.weight[1]:zero()
+   embed2.weight[1]:zero()
 end
 
 opt.afteroptim = afterhook
@@ -169,7 +187,7 @@ for i=1,opt.epochs do
     local erate = testSeq2Seq(model, es, crit, opt)
 
 --    if i % 5 == 0 and opt.showex == true then
-    if opt.showex == true then
+    if opt.showex > 0 then
        showBatch(model, es, rlut1, rlut2, embed2, opt)
     end
 

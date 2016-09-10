@@ -6,22 +6,6 @@ require 'utils'
 -- Decoder beam
 SAMPLE_PRUNE_INIT = 5
 
-
--- Assume the data is in (B,T,H) form and transpose it
-function toTable(orig, from, to)
-   local response = orig:transpose(1, 2)
-   local response_table = {}
-   local T = response:size()[1]
-   local start = from or 1
-   local upto = to or T
-   if upto < 1 or upto > T then upto = T end
-   for i=start,upto do
-      table.insert(response_table, response[i])
-   end
-   return response_table
-end
-
-
 function trainSeq2SeqEpoch(crit, model, ts, optmeth, options)
 
     local enc = model:get(1)
@@ -60,7 +44,8 @@ function trainSeq2SeqEpoch(crit, model, ts, optmeth, options)
 
 	  src = src:transpose(1, 2)
 	  dst = dst:transpose(1, 2)
-	  tgtTable = toTable(tgt)
+	  tgt = tgt:transpose(1, 2)
+	  tgtTable = tab1st(tgt)
 	  local predSrc = enc:forward(src)
 	  local srclen = src:size(1)
 	  forwardConnect(model, srclen, options.layers)
@@ -168,17 +153,18 @@ function showBatch(model, ts, rlut1, rlut2, embed2, opt)
    local tgt = batch.tgt
 
    local batchsz = src:size(1)
+   local num = math.min(batchsz, opt.showex)
 
    local method = opt.sample and 'Sampling' or 'Showing best'
    print(method .. ' sentences from batch #' .. rnum)
    -- Run whole batch through
 
-   for i=1,batchsz do
+   for i=1,num do
 
-      local sent = lookupSent(rlut1, src[i], true)
+      local sent = indices2sent(rlut1, src[i], true)
       print('========================================================================')
       print('[OP]', sent)
-      sent = lookupSent(rlut2, tgt[i], false)
+      sent = indices2sent(rlut2, tgt[i], false)
       print('[Actual]', sent)
 
       local srclen = src[i]:size(1)
@@ -186,7 +172,7 @@ function showBatch(model, ts, rlut1, rlut2, embed2, opt)
       srcIn = opt.gpu and srcIn:cuda() or srcIn
       
       predSent = decode(model, srcIn, opt.sample, GO, EOS, opt.layers)
-      sent = lookupSent(rlut2, torch.LongTensor(predSent))
+      sent = indices2sent(rlut2, torch.LongTensor(predSent))
       print('Guess: ', sent)
       print('------------------------------------------------------------------------')
 
@@ -219,7 +205,8 @@ function testSeq2Seq(model, ts, crit, options)
        end
        src = src:transpose(1, 2)
        dst = dst:transpose(1, 2)
-       local tgtTable = toTable(tgt)
+       tgt = tgt:transpose(1, 2)
+       local tgtTable = tab1st(tgt)
 	  
        local predSrc = enc:forward(src)
        local srclen = src:size(1)
