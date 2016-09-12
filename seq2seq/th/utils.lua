@@ -25,25 +25,27 @@ function newLSTMCells(seq, input, output, layers)
       local lstm = nn.SeqLSTM(from, to)
       from = to
       lstm.maskzero = true
+      lstm.batchfirst = true
       seq:add(lstm)
    end
-   seq:add(nn.SplitTable(1, 3))
+   seq:add(nn.SplitTable(2, 3))
    return lstm
 end
 
 -- https://github.com/Element-Research/rnn/blob/master/examples/encoder-decoder-coupling.lua
 
-function forwardConnect(model, len, layers)
+function forwardConnect(model, layers)
    local encodes = model:get(1)
    local decodes = model:get(2)
 
-   -- First module after LUT (FIXME for stacked LSTMs)
    start = 1
    for i=1,layers do
       j = start + i
       local encodesLSTM = encodes:get(j)
       local decodesLSTM = decodes:get(j)
-      decodesLSTM.userPrevOutput = encodesLSTM.output[len]
+      local len = encodesLSTM.cell:size(1)
+      local outputT = encodesLSTM.output:transpose(1,2)
+      decodesLSTM.userPrevOutput = outputT[len]
       decodesLSTM.userPrevCell = encodesLSTM.cell[len]
    end
 end
@@ -53,7 +55,6 @@ function backwardConnect(model, layers)
    local encodes = model:get(1)
    local decodes = model:get(2)
 
-   -- First module after LUT (FIXME for stacked LSTMs)
    start = 1
 
    for i = 1,layers do

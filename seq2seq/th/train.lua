@@ -42,13 +42,10 @@ function trainSeq2SeqEpoch(crit, model, ts, optmeth, options)
 	     tgt = tgt:cuda()
 	  end
 
-	  src = src:transpose(1, 2)
-	  dst = dst:transpose(1, 2)
-	  tgt = tgt:transpose(1, 2)
-	  tgtTable = tab1st(tgt)
+	  tgtTable = tab1st(tgt:transpose(1, 2))
 	  local predSrc = enc:forward(src)
-	  local srclen = src:size(1)
-	  forwardConnect(model, srclen, options.layers)
+	  local srclen = src:size(2)
+	  forwardConnect(model, options.layers)
 	  
 	  local predDst = dec:forward(dst)
 	  local err = crit:forward(predDst, tgtTable)
@@ -90,10 +87,10 @@ function decodeStep(model, srcIn, predSent, j, sample, layers)
    local enc = model:get(1)
    local predSrc = enc:forward(srcIn)
 
-   forwardConnect(model, srcIn:size(1), layers)
+   forwardConnect(model, layers)
 
    local dec = model:get(2)
-   local predT = torch.LongTensor(predSent):reshape(j, 1)
+   local predT = torch.LongTensor(predSent):reshape(1, j)
    local predDst = dec:forward(predT)[j]
    local word = nil
    if sample then
@@ -168,7 +165,7 @@ function showBatch(model, ts, rlut1, rlut2, embed2, opt)
       print('[Actual]', sent)
 
       local srclen = src[i]:size(1)
-      local srcIn = src[i]:reshape(srclen, 1)
+      local srcIn = src[i]:reshape(1, srclen)
       srcIn = opt.gpu and srcIn:cuda() or srcIn
       
       predSent = decode(model, srcIn, opt.sample, GO, EOS, opt.layers)
@@ -203,14 +200,12 @@ function testSeq2Seq(model, ts, crit, options)
 	  dst = dst:cuda()
 	  tgt = tgt:cuda()
        end
-       src = src:transpose(1, 2)
-       dst = dst:transpose(1, 2)
-       tgt = tgt:transpose(1, 2)
-       local tgtTable = tab1st(tgt)
+
+       local tgtTable = tab1st(tgt:transpose(1,2))
 	  
        local predSrc = enc:forward(src)
-       local srclen = src:size(1)
-       forwardConnect(model, srclen, options.layers)
+       local srclen = src:size(2)
+       forwardConnect(model, options.layers)
        
        local predDst = dec:forward(dst)
        
