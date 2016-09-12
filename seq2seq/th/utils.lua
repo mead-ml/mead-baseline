@@ -43,8 +43,8 @@ function forwardConnect(model, len, layers)
       j = start + i
       local encodesLSTM = encodes:get(j)
       local decodesLSTM = decodes:get(j)
-      decodesLSTM.userPrevOutput = nn.rnn.recursiveCopy(decodesLSTM.userPrevOutput, encodesLSTM.output[len])
-      decodesLSTM.userPrevCell = nn.rnn.recursiveCopy(decodesLSTM.userPrevCell, encodesLSTM.cell[len])
+      decodesLSTM.userPrevOutput = encodesLSTM.output[len]
+      decodesLSTM.userPrevCell = encodesLSTM.cell[len]
    end
 end
 
@@ -60,8 +60,8 @@ function backwardConnect(model, layers)
       j = start + i
       local decodesLSTM = decodes:get(j)
       local encodesLSTM = encodes:get(j)      
-      encodesLSTM.userNextGradCell = nn.rnn.recursiveCopy(encodesLSTM.userNextGradCell, decodesLSTM.userGradPrevCell)
-      encodesLSTM.gradPrevOutput = nn.rnn.recursiveCopy(encodesLSTM.gradPrevOutput, decodesLSTM.userGradPrevOutput)
+      encodesLSTM.userNextGradCell = decodesLSTM.userGradPrevCell
+      encodesLSTM.gradPrevOutput = decodesLSTM.userGradPrevOutput
    end
 end
 
