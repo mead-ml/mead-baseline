@@ -140,7 +140,7 @@ Right now, the fine tuning version only supports word based tagging -- no charac
 
 # Seq2Seq
 
-Seq2seq is useful for a variety of tasks, from Statistical Machine Translation to Neural Conversation Modeling.  The code provided is a simple implementation, and currently does not stack LSTMs.
+Encoder-decoder frameworks have been used for Statistical Machine Translation, Image Captioning, ASR, Conversation Modeling, Formula Generation and many other applications.  Seq2seq is a type of encoder-decoder implementation, where the encoder is some sort of RNN, and the memories (sometimes known as the "thought vector") are transferred over to the decoder, also an RNN.  The code as it is written here is with text in mind, and supports multiple types of RNNs, including GRUs and LSTMs, as well as stacked layers.  The TensorFlow version also supports attention.
 
 ## seq2seq: Phrase in, phrase-out, 2 lookup table implementation, input is a temporal vector, and so is output
 
