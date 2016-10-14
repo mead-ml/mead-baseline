@@ -1,6 +1,6 @@
 baseline
 =========
-Simple, Strong Deep-Learning Baselines for NLP in Torch and Tensorflow
+Simple, Strong Deep-Learning Baselines for NLP in several frameworks
 
 Stand-alone baselines implemented with multiple deep learning tools, including CNN sentence modeling, RNN/LSTM-based tagging, seq2seq, and siamese networks for similarity analysis.
 
@@ -17,7 +17,7 @@ Each algorithm is in a separate sub-directory, and is fully contained, even thou
 
 ## Convolution - Max Over Time Architecture (CMOT)
 
-This code provides (at the moment) a pure Lua/Torch7 and a pure Python/Tensorflow implementation -- no preprocessing of the dataset with python, nor HDF5 is required!  The Torch code depends on a tiny module that can load word2vec in Torch (https://github.com/dpressel/emb) either as a model, or as an nn.LookupTable.  It is important to note that these models can easily be implemented with other deep learning frameworks, and without much work, can also be implemented from scratch!  Over time, this package will hopefully provide alternate implementations in other DL Frameworks and programming languages.
+This code provides (at the moment) a pure Lua/Torch7 and pure Python Tensorflow and Keras implementations -- no preprocessing of the dataset with python, nor HDF5 is required!  The Torch code depends on a tiny module that can load word2vec in Torch (https://github.com/dpressel/emb) either as a model, or as an nn.LookupTable.  It is important to note that these models can easily be implemented with other deep learning frameworks, and without much work, can also be implemented from scratch!  Over time, this package will hopefully provide alternate implementations in other DL Frameworks and programming languages.
 
 When the GPU is used, the code *assumes that cudnn (R4) is available* and installed. This is because the performance gains over the 'cunn' implementation are significant (e.g., 3 minutes -> 30 seconds).
 
@@ -83,7 +83,7 @@ Here is an example of parameterization of dynamic fine tuning (cnn-sentence-fine
 th cnn-sentence-fine.lua -optim adadelta -patience 20 -batchsz 10 -epochs 20 -train ../data/TREC.train.all -eval ../data/TREC.test.all -embed /data/xdata/GoogleNews-vectors-negative300.bin
 ```
 
-And in Tensorflow:
+And in Tensorflow and Keras versions:
 
 ```
 python cnn-sentence-fine.py --optim adam -batchsz 10 -epochs 20 --train ../data/TREC.train.all --test ../data/TREC.test.all -embed /data/xdata/GoogleNews-vectors-negative300.bin
@@ -105,7 +105,7 @@ Binary Kim model, non-static (fine-tunings):
 th cnn-sentence-fine.lua -clean -cullunused -optim adadelta -batchsz 50 -epochs 25 -patience 25 -train ./data/stsa.binary.phrases.train -valid ./data/stsa.binary.dev -eval ./data/stsa.binary.test -embed /data/xdata/GoogleNews-vectors-negative300.bin -filtsz "{3,4,5}"
 ```
 
-In Tensorflow:
+In Tensorflow or Keras:
 ```
 python2.7 cnn-sentence-fine.py --clean --optim adadelta --eta 0.001 --batchsz 50 --epochs 25 --patience 25 --train ./data/stsa.binary.phrases.train --valid ./data/stsa.binary.dev --test ./data/stsa.binary.test --embed /data/xdata/GoogleNews-vectors-negative300.bin --filtsz "3,4,5" --dropout 0.5
 ```
