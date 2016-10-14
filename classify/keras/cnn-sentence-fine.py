@@ -13,6 +13,22 @@ from data import loadTemporalIndices
 from utils import revlut
 import os.path
 import os
+
+# We need to keep around our vector maps to preserve lookups of words
+def mdsave(labels, vocab, outdir):
+    basename = '%s/cnn-sentence-fine' % outdir
+    
+    label_file = basename + '.labels'
+    print("Saving attested labels '%s'" % label_file)
+    with open(label_file, 'w') as f:
+        json.dump(labels, f)
+
+    vocab_file = basename + '.vocab'
+    print("Saving attested vocabulary '%s'" % vocab_file)
+    with open(vocab_file, 'w') as f:
+        json.dump(vocab, f)
+
+
 # Use the functional API since we support parallel convolutions
 def create(embeddings, nc, filtsz, cmotsz, hsz, maxlen, pdrop):
     x = Input(shape=(maxlen,), dtype='int32', name='input')
@@ -98,6 +114,10 @@ X_test, y_test, f2i = loadTemporalIndices(args.test, embeddings.vocab, f2i, args
 print('Loaded test data')
 
 nc = len(f2i)
+
+
+mdsave(f2i, embeddings.vocab, args.outdir)
+
 model = create(embeddings, nc, args.filtsz, args.cmotsz, args.hsz, args.mxlen, args.dropout)
 
 model.compile(args.optim, 'categorical_crossentropy' , metrics=['accuracy'])
