@@ -48,7 +48,11 @@ This architecture doesn't seem to perform especially well on long posts compared
 
 ## cnn-sentence -- static, no LookupTable layer
 
-This is an efficient implementation of static embeddings.  Unlike approaches that try to reuse the main code and then zero gradients on updates, this code preprocesses the training data directly to word vectors.  This means that the first layer of the network is simply TemporalConvolution.  This keeps memory usage on the GPU estremely low, which means it can scale to larger problems.  This model is usually competitive with fine-tuning (it sometimes out-performs fine-tuning), and the code is very simple to implement from scratch (with no deep learning frameworks).
+There are several ways to do static embeddings.  One way would be to load a temporal tensor of word2vec vectors.  This can be done by loading the model, and then looking up each word and building a temporal vector of each lookup.  This will expand the vector in the training data, which will take up more space upfront, but then bypasses the lookup table altogther.  This means that the first layer of the network is simply TemporalConvolution.  This keeps memory usage on the GPU estremely low, which means it can scale to larger problems.  The TensorFlow and Torch models currently do this.  
+
+The other approach is simply to "freeze" the layer, not allowing the error to back-propagate and update the weights.  The Keras static model currently does that.
+
+The static (no fine-tuning) model is usually competitive with fine-tuning (it occasionally even out-performs it), and the code is very simple to implement from scratch (with no deep learning frameworks).
 
 For handling data with high word sparsity, and for data where morphological features are useful, we also provide a very simple solution that occasionally does improve results -- we simply use the average of character vectors passed in from a word2vec-style binary file and concatenate this word representation to the word2vec vector.  This is an option in the fixed embeddings version only.  This is useful for problems like Language Detection in Twitter, for example.
 
