@@ -87,36 +87,3 @@ def loadTemporalIndices(filename, index, f2i, clean=False, chars=False, mxlen=10
                 x[offset][j+halffiltsz] = key
     return x, y, f2i    
 
-def loadTemporalEmb(filename, w2v, f2i, clean=False, chars=False, mxlen=1000, mxfiltsz=5):
-    ts = []
-    vsz = w2v.vsz
-    dsz = w2v.dsz
-        
-    mxsiglen = mxlen - mxfiltsz
-    halffiltsz = int(math.floor(mxfiltsz / 2))
-    labelIdx = len(f2i)
-
-    n = numLines(filename)
-
-    n = numLines(filename)
-    x = np.zeros((n, mxlen, dsz), dtype=np.float32)
-    y = np.zeros(n, dtype=int)
-
-    with codecs.open(filename, encoding='utf-8', mode='r') as f:
-
-        for offset, line in enumerate(f):
-            label, text = labelSent(line, clean, chars)
-            if not label in f2i:
-                f2i[label] = labelIdx
-                labelIdx += 1
-
-            y[offset] = f2i[label]
-            toks = splits(text)
-            mx = min(len(toks), mxsiglen)
-            toks = toks[:mx]
-            for j in range(len(toks)):
-                w = toks[j]
-                z = w2v.lookup(w, False)
-                x[offset][j + halffiltsz] = z
-            i = i + 1
-    return x, y, f2i
