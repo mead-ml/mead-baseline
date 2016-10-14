@@ -62,7 +62,7 @@ The code supports multiple activation functions, but defaults to ReLU.
 
 The fine-tuning approach loads the word2vec weight matrix into an Lookup Table.  It seems that when using fine-tuning, adadelta performs best.  As we can see from the Kim paper, non-satic/fine-tuning models do not always out-perform static models, and they have additional baggage due to LookupTable size which may make them more cumbersome to use as baselines.  However, if tuned properly, they often can out-perform the static models.
 
-We provide an option to cull non-attested features (-cullunused) from the Lookup Table for efficiency, and randomly initialize unattested words and add them to the weight matrix for the Lookup Table.
+We randomly initialize unattested words and add them to the weight matrix for the Lookup Table.  This can be controlled with the embunif param in Torch, and the unif param in Tensorflow or Keras versions.
 
 ## Running It
 
@@ -112,7 +112,7 @@ python2.7 cnn-sentence-fine.py --clean --optim adadelta --eta 0.001 --batchsz 50
 
 ## Restoring the Model
 
-In Torch, restoring the model is trivial, but with TensorFlow there is a little more work.  The CNN classes are set up to handle this save and restore, which includes reloading the graph, and then reinitializing the model, along with labels and feature index.
+In Torch and in Keras, restoring the model is trivial, but with TensorFlow there is a little more work.  The CNN classes are set up to handle this save and restore, which includes reloading the graph, and then reinitializing the model, along with labels and feature index.
 
 [Here is a gist](https://gist.github.com/dpressel/767db3d1b5b6bf263ebfd7fed716be96) for performing classification on a previously trained cnn-sentence-fine model, and [here is one](https://gist.github.com/dpressel/61ccf0e89c5a5c3e801d7eb15246b78f) for restoring the static model.
 
