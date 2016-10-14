@@ -48,7 +48,7 @@ This architecture doesn't seem to perform especially well on long posts compared
 
 ## cnn-sentence -- static, no LookupTable layer
 
-There are several ways to do static embeddings.  One way would be to load a temporal tensor of word2vec vectors.  This can be done by loading the model, and then looking up each word and building a temporal vector of each lookup.  This will expand the vector in the training data, which will take up more space upfront, but then bypasses the lookup table altogther.  This means that the first layer of the network is simply TemporalConvolution.  This keeps memory usage on the GPU estremely low, which means it can scale to larger problems.  The TensorFlow and Torch models currently do this.  
+There are several ways to do static embeddings.  One way would be to load a temporal signal comprised of word2vec vectors at each tick.  This can be done by loading the model, and then looking up each word and building a temporal vector of each lookup.  This will expand the vector in the training data, which will take up more space upfront, but then bypasses the lookup table altogther.  This means that the first layer of the network is simply TemporalConvolution.  This keeps memory usage on the GPU estremely low, which means it can scale to larger problems.  The TensorFlow and Torch models currently do this.  
 
 The other approach is simply to "freeze" the layer, not allowing the error to back-propagate and update the weights.  The Keras static model currently does that.
 
