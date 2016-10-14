@@ -64,7 +64,7 @@ The code supports multiple activation functions, but defaults to ReLU.
 
 ## Dynamic - Fine Tuning Lookup Tables pretrained with Word2Vec
 
-The fine-tuning approach loads the word2vec weight matrix into an Lookup Table.  It seems that when using fine-tuning, adadelta performs best.  As we can see from the Kim paper, non-satic/fine-tuning models do not always out-perform static models, and they have additional baggage due to LookupTable size which may make them more cumbersome to use as baselines.  However, if tuned properly, they often can out-perform the static models.
+The fine-tuning approach loads the word2vec weight matrix into an Lookup Table.  As we can see from the Kim paper, non-satic/fine-tuning models do not always out-perform static models, and they have additional baggage due to LookupTable size which may make them more cumbersome to use as baselines.  However, if tuned properly, they often can out-perform the static models.
 
 We randomly initialize unattested words and add them to the weight matrix for the Lookup Table.  This can be controlled with the embunif param in Torch, and the unif param in Tensorflow or Keras versions.
 
