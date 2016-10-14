@@ -1,6 +1,6 @@
 from keras.models import Model, load_model
 from keras.layers import Dense, Activation, Convolution1D, Embedding, Input, merge, GlobalMaxPooling1D, Dropout
-from keras.utils.visualize_util import plot, model_to_dot
+#from keras.utils.visualize_util import plot, model_to_dot
 from keras.callbacks import EarlyStopping, ModelCheckpoint
 import numpy as np
 from keras.utils import np_utils
