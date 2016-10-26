@@ -1,13 +1,15 @@
 import tensorflow as tf
 import numpy as np
 import w2v
-from data import loadTemporalEmb
-from model import ConvModelStatic
-from data import buildVocab
-from data import validSplit
-from utils import revlut
-from train import Trainer
 import time
+import json
+
+from model import ConvModel
+from data import buildVocab
+from data import loadTemporalIndices
+from data import validSplit
+from utils import revlut, fill_y
+from train import Trainer
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 flags.DEFINE_float('eta', 0.001, 'Initial learning rate.')
@@ -29,43 +31,46 @@ flags.DEFINE_string('filtsz', '3,4,5', 'Filter sizes')
 flags.DEFINE_boolean('clean', True, 'Do cleaning')
 flags.DEFINE_float('valsplit', 0.15, 'Validation split if no valid set')
 
-w2vModel = w2v.Word2VecModel(FLAGS.embed)
+
+vocab = buildVocab([FLAGS.train, FLAGS.test, FLAGS.valid], FLAGS.clean, False)
+
+w2vModel = w2v.Word2VecModel(FLAGS.embed, vocab, 0)
 
 f2i = {}
 opts = { 'batchsz': FLAGS.batchsz,
          'clean': FLAGS.clean,
+         'chars': False,
          'filtsz': [int(filt) for filt in FLAGS.filtsz.split(',')],
          'mxlen': FLAGS.mxlen }
-ts, f2i = loadTemporalEmb(FLAGS.train, w2vModel, f2i, opts)
-es, f2i = loadTemporalEmb(FLAGS.test, w2vModel, f2i, opts)
+ts, f2i = loadTemporalIndices(FLAGS.train, w2vModel.vocab, f2i, opts)
 print('Loaded  training data')
 
 if FLAGS.valid is not None:
     print('Using provided validation data')
-    vs, f2i = loadTemporalEmb(FLAGS.valid, w2vModel, f2i, opts)
+    vs, f2i = loadTemporalIndices(FLAGS.valid, w2vModel.vocab, f2i, opts)
 else:
     ts, vs = validSplit(ts, FLAGS.valsplit)
     print('Created validation split')
 
-es, f2i = loadTemporalEmb(FLAGS.test, w2vModel, f2i, opts)
+es, f2i = loadTemporalIndices(FLAGS.test, w2vModel.vocab, f2i, opts)
 print('Loaded test data')
-
-
 
 """
 Train convolutional sentence model
 """
 
-model = ConvModelStatic()
+model = ConvModel()
 
 with tf.Graph().as_default():
     sess = tf.Session()
     with sess.as_default():
-        model.params(f2i, w2vModel, FLAGS.mxlen, FLAGS.filtsz, FLAGS.cmotsz, FLAGS.hsz)
-   
+        model.params(f2i, w2vModel, FLAGS.mxlen, FLAGS.filtsz, FLAGS.cmotsz, FLAGS.hsz, finetune=False)
+        
         trainer = Trainer(model, FLAGS.optim, FLAGS.eta)
         train_writer = tf.train.SummaryWriter(FLAGS.outdir + "/train", sess.graph)
+        
         init = tf.initialize_all_variables()
+
         sess.run(init)
         trainer.prepare(tf.train.Saver())
 
@@ -79,7 +84,7 @@ with tf.Graph().as_default():
             if this_acc > max_acc:
                 max_acc = this_acc
                 last_improved = i
-                trainer.checkpoint(sess, FLAGS.outdir, "cnn-sentence")
+                trainer.checkpoint(sess, FLAGS.outdir, 'cnn-sentence')
 
             if (i - last_improved) > FLAGS.patience:
                 print('Stopping due to persistent failures to improve')
@@ -95,4 +100,4 @@ with tf.Graph().as_default():
         trainer.test(es, sess)
 
         # Write out model, graph and saver for future inference
-        model.save(sess, FLAGS.outdir, 'cnn-sentence')
+        model.save(sess, FLAGS.outdir, 'cnn-sentence-fine')

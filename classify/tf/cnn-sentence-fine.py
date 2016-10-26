@@ -4,11 +4,11 @@ import w2v
 import time
 import json
 
-from model import ConvModelFineTune
+from model import ConvModel
 from data import buildVocab
 from data import loadTemporalIndices
 from data import validSplit
-from utils import revlut
+from utils import revlut, fill_y
 from train import Trainer
 flags = tf.app.flags
 FLAGS = flags.FLAGS
@@ -60,7 +60,7 @@ print('Loaded test data')
 Train convolutional sentence model
 """
 
-model = ConvModelFineTune()
+model = ConvModel()
 
 with tf.Graph().as_default():
     sess = tf.Session()

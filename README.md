@@ -17,19 +17,19 @@ Each algorithm is in a separate sub-directory, and is fully contained, even thou
 
 ## Convolution - Max Over Time Architecture (CMOT)
 
-This code provides (at the moment) a pure Lua/Torch7 and pure Python Tensorflow and Keras implementations -- no preprocessing of the dataset with python, nor HDF5 is required!  The Torch code depends on a tiny module that can load word2vec in Torch (https://github.com/dpressel/emb) either as a model, or as an nn.LookupTable.  It is important to note that these models can easily be implemented with other deep learning frameworks, and without much work, can also be implemented from scratch!  Over time, this package will hopefully provide alternate implementations in other DL Frameworks and programming languages.
+This code provides a pure Lua/Torch7 and pure Python Tensorflow and Keras implementations -- no preprocessing of the dataset with python, nor HDF5 is required.  The Torch code depends on a tiny module that can load word2vec in Torch (https://github.com/dpressel/emb) either as a model, or as an nn.LookupTable.  It is important to note that these models can easily be implemented with other deep learning frameworks, and without much work, can also be implemented from scratch!  Over time, this package will hopefully provide alternate implementations in other DL Frameworks and programming languages.
 
-When the GPU is used, the code *assumes that cudnn (R4) is available* and installed. This is because the performance gains over the 'cunn' implementation are significant (e.g., 3 minutes -> 30 seconds).
+When the GPU is used, the code *assumes that cudnn (>= R4) is available* and installed. This is because the performance gains over the 'cunn' implementation are significant (e.g., 3 minutes -> 30 seconds).
 
 *Details*
 
 This is inspired by Yoon Kim's paper "Convolutional Neural Networks for Sentence Classification", and before that Collobert's "Sentence Level Approach."  The implementations provided here are basically the Kim static and non-static models.
 
-To use multiple filter widths at the same time, like in the Kim paper (they use 3,4 and 5), pass in -filtsz {3,4,5} at the command line.  By default, the model uses a single filter, which probably makes more sense as a baseline implementation and is slightly easier to replicate from scratch.
+To use multiple filter widths at the same time, like in the Kim paper (they use 3,4 and 5), pass in -filtsz {3,4,5} at the command line.
 
 This code doesn't implement multi-channel, as this probably does not make sense as a baseline. It does also support adding a hidden projection layer (if you pass hsz), which is kind of like the "Sentence Level Approach" in the Collobert et al. paper, "Natural Language Processing (Almost) from Scratch"
 
-Temporal convolutional output total number of feature maps is configurable (this is also defines the size of the max over time layer, by definition).  This code offers several optimization options (adagrad, adadelta, adam and vanilla sgd).  The Kim paper uses adadelta, which seems to work best for fine-tuning, but vanilla SGD often works great for static embeddings.  Input signals are always padded to account for the filter width, so edges are still handled.
+Temporal convolutional output total number of feature maps is configurable (this is also defines the size of the max over time layer, by definition).  This code offers several optimization options (adagrad, adadelta, adam and vanilla sgd).  The Kim paper uses adadelta, which works well, but vanilla SGD often works great for static embeddings.  Input signals are always padded to account for the filter width, so edges are still handled.
 
 Despite the simplicity of these approaches, we have found that on many datasets this performs better than other strong baselines such as NBSVM.
 
@@ -48,19 +48,17 @@ This architecture doesn't seem to perform especially well on long posts compared
 
 ## cnn-sentence -- static, no LookupTable layer
 
-There are several ways to do static embeddings.  One way would be to load a temporal signal comprised of word2vec vectors at each tick.  This can be done by loading the model, and then looking up each word and building a temporal vector of each lookup.  This will expand the vector in the training data, which will take up more space upfront, but then bypasses the lookup table altogther.  This means that the first layer of the network is simply TemporalConvolution.  This keeps memory usage on the GPU estremely low, which means it can scale to larger problems.  The TensorFlow and Torch models currently do this.  
+There are several ways to do static embeddings.  One way would be to load a temporal signal comprised of word2vec vectors at each tick.  This can be done by loading the model, and then looking up each word and building a temporal vector of each lookup.  This will expand the vector in the training data, which will take up more space upfront, but then bypasses the lookup table altogther.  This means that the first layer of the network is simply TemporalConvolution.  This keeps memory usage on the GPU estremely low, which means it can scale to larger problems.  The Torch model currently does this.
 
-The other approach is simply to "freeze" the layer, not allowing the error to back-propagate and update the weights.  The Keras static model currently does that.
+The other approach is simply to "freeze" the layer, not allowing the error to back-propagate and update the weights.  The Keras and Tensorflow static models do that.  To do this, they prune the embeddings down to only "active" ones (the ones that have attested words).
 
-The static (no fine-tuning) model is usually competitive with fine-tuning (it occasionally even out-performs it), and the code is very simple to implement from scratch (with no deep learning frameworks).
+The static (no fine-tuning) model is usually competitive with fine-tuning, and the code is very simple to implement from scratch, as long as you have access to a fast convolution operator.
 
 For handling data with high word sparsity, and for data where morphological features are useful, we also provide a very simple solution that occasionally does improve results -- we simply use the average of character vectors passed in from a word2vec-style binary file and concatenate this word representation to the word2vec vector.  This is an option in the fixed embeddings version only.  This is useful for problems like Language Detection in Twitter, for example.
 
 If you are looking specifically for Yoon Kim's multi-channel model, his code is open source (https://github.com/yoonkim/CNN_sentence) and there is another project on Github from Harvard NLP which recreates it in Torch (https://github.com/harvardnlp/sent-conv-torch).  By focusing on the static and non-static models, we are able to keep this code lean, easy to understand, and applicable as a baseline to a broad range of problems.
 
-Also note that for static implementations, batch size and optimization methods can be quite simple.  Often batch sizes of 1-10 with vanilla SGD produce terrific results.
-
-The code supports multiple activation functions, but defaults to ReLU.
+There are some options in each implementation that might vary slightly, but each approach implementation has been tested separately.
 
 ## Dynamic - Fine Tuning Lookup Tables pretrained with Word2Vec
 
@@ -70,7 +68,7 @@ We randomly initialize unattested words and add them to the weight matrix for th
 
 ## Running It
 
-Early stopping with patience is used.  There are many hyper-parameters that you can tune, which may yield many different models.  Here is an example of parameterization of static embeddings (cnn-sentence.lua) with SGD and a single filter width of 5 (with Torch):
+Early stopping with patience is supported.  There are many hyper-parameters that you can tune, which may yield many different models.  Here is an example of parameterization of static embeddings (cnn-sentence.lua) with SGD and a single filter width of 5 (with Torch):
 
 ```
 th cnn-sentence.lua -eta 0.01 -batchsz 10 -decay 1e-9 -epochs 20 -train ../data/TREC.train.all -eval ../data/TREC.test.all -embed /data/xdata/GoogleNews-vectors-negative300.bin

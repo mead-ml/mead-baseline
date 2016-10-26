@@ -2,9 +2,11 @@ import tensorflow as tf
 import numpy as np
 from google.protobuf import text_format
 from tensorflow.python.platform import gfile
-from utils import fill_y
 import json
 import math
+from tensorflow.contrib.layers import convolution2d, max_pool2d, fully_connected, flatten, xavier_initializer
+from utils import fill_y
+
 class ConvModel:
 
     def save(self, sess, outdir, base):
@@ -46,7 +48,6 @@ class ConvModel:
 
         self.saver = tf.train.Saver(saver_def=saver_def)
 
-
     def __init__(self):
         pass
 
@@ -55,7 +56,6 @@ class ConvModel:
         with tf.name_scope("loss"):
             loss = tf.nn.softmax_cross_entropy_with_logits(self.lin, tf.cast(self.y, "float"))
             all_loss = tf.reduce_sum(loss)
-
 
         with tf.name_scope("accuracy"):
             correct = tf.equal(self.best, tf.argmax(self.y, 1))
@@ -72,103 +72,63 @@ class ConvModel:
     def ex2dict(self, example, pkeep):
         return {self.x: example["x"], self.y: fill_y(len(self.labels), example["y"]), self.pkeep: pkeep}
 
-    def params(self, labels, w2v, maxlen, filtsz, cmotsz, hsz):
+    def params(self, labels, w2v, maxlen, filtsz, cmotsz, hsz, finetune = True):
         vsz = w2v.vsz
         dsz = w2v.dsz
 
         self.labels = labels
         nc = len(labels)
         self.vocab = w2v.vocab
-        expanded = self.input2expanded(labels, w2v, maxlen)
         self.pkeep = tf.placeholder(tf.float32, name="pkeep")
-        
-
-        filtsz = [int(filt) for filt in filtsz.split(',') ]
-
-        mots = []
-        for i, fsz in enumerate(filtsz):
-            with tf.name_scope('cmot-%s' % fsz):
-                siglen = maxlen - fsz + 1
-                W = tf.Variable(tf.truncated_normal([fsz, dsz, 1, cmotsz],
-                                                    stddev = 0.1), name="W")
-                b = tf.Variable(tf.constant(0.0, shape=[cmotsz], dtype=tf.float32), name="b")
-                conv = tf.nn.conv2d(expanded, 
-                                    W, strides=[1,1,1,1], 
-                                    padding="VALID", name="conv")
-                
-                activation = tf.nn.relu(tf.nn.bias_add(conv, b), "activation")
-
-                mot = tf.nn.max_pool(activation,
-                                     ksize=[1, siglen, 1, 1],
-                                     strides=[1,1,1,1],
-                                     padding="VALID",
-                                     name="pool")
-                mots.append(mot)
-            
-        cmotsz_all = cmotsz * len(mots)
-        combine = tf.reshape(tf.concat(3, mots), [-1, cmotsz_all])
-        
-        last_sz = cmotsz_all
-        with tf.name_scope("dropout"):
-            drop = tf.nn.dropout(combine, self.pkeep)
-        
-        with tf.name_scope("proj"):
-            if hsz > 0:
-                print('Adding a projection layer between MOT and output')
-                W_p = tf.Variable(tf.truncated_normal([cmotsz_all, hsz],
-                                                      stddev = 0.1), name="W")
-                b_p = tf.Variable(tf.constant(0.0, shape=[1, hsz]), name="b")
-
-                proj = tf.nn.relu(tf.matmul(drop, W_p) + b_p, "proj")
-                drop = tf.nn.dropout(proj, self.pkeep)
-                last_sz = hsz
-
-        with tf.name_scope("output"):
-
-            W = tf.Variable(tf.truncated_normal([last_sz, nc],
-                                                stddev = 0.1), name="W")
-            b = tf.Variable(tf.constant(0.0, shape=[1,nc]), name="b")
-
-            self.lin = tf.matmul(drop, W) + b
-            self.probs = tf.nn.softmax(self.lin, name="probs")
-            self.best = tf.argmax(self.lin, 1, name="best")
-
-    def input2expanded(self, labels, w2v, maxlen):
-        pass
-
-class ConvModelStatic(ConvModel):
-
-    def input2expanded(self, labels, w2v, maxlen):
-        vsz = w2v.vsz
-        dsz = w2v.dsz
-        nc = len(labels)
-        self.x = tf.placeholder(tf.float32, [None, maxlen, dsz], name="x")
-        self.y = tf.placeholder(tf.int32, [None, nc], name="y")
-        
-        with tf.name_scope('expand'):
-            expanded = tf.expand_dims(self.x, -1)
-
-        return expanded
-
-class ConvModelFineTune(ConvModel):
-
-    def input2expanded(self, labels, w2v, maxlen):
-
-        vsz = w2v.vsz
-        dsz = w2v.dsz
-        nc = len(labels)
         self.x = tf.placeholder(tf.int32, [None, maxlen], name="x")
         self.y = tf.placeholder(tf.int32, [None, nc], name="y")
-        
-        with tf.name_scope("LUT"):
-            W = tf.Variable(tf.constant(w2v.weights, dtype=tf.float32), name = "W")
 
+        # Use pre-trained embeddings from word2vec
+        with tf.name_scope("LUT"):
+            W = tf.Variable(tf.constant(w2v.weights, dtype=tf.float32), name = "W", trainable=finetune)
             e0 = tf.scatter_update(W, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, dsz]))
-        
             with tf.control_dependencies([e0]):
                 lut = tf.nn.embedding_lookup(W, self.x)
                 expanded = tf.expand_dims(lut, -1)
 
-        return expanded
+        filtsz = [int(filt) for filt in filtsz.split(',') ]
+        mots = []
 
+        seed = np.random.randint(10e8)
+        #init = tf.truncated_normal_initializer(stddev=0.1)
+        init = tf.random_uniform_initializer(-0.05, 0.05, dtype=tf.float32, seed=seed)
+        xavier_init = xavier_initializer(True, seed)
 
+        # Create parallel filter operations of different sizes
+        with tf.contrib.slim.arg_scope(
+                [convolution2d, fully_connected],
+                weights_initializer=init,
+                biases_initializer=tf.constant_initializer(0)):
+
+            for i, fsz in enumerate(filtsz):
+                with tf.name_scope('cmot-%s' % fsz) as scope:
+                    siglen = maxlen - fsz + 1
+                    conv = convolution2d(expanded, cmotsz, [fsz, dsz], [1, 1], padding='VALID', scope=scope)
+                    mot = max_pool2d(conv, [siglen, 1], 1, padding='VALID', scope=scope)
+                mots.append(mot)
+            combine = flatten(tf.concat(3, mots))
+
+            # Definitely drop out
+            with tf.name_scope("dropout"):
+                drop = tf.nn.dropout(combine, self.pkeep)
+
+                # For fully connected layers, use xavier (glorot) transform
+                with tf.contrib.slim.arg_scope(
+                        [fully_connected],
+                        weights_initializer=xavier_init):
+
+                    # This makes it more like C/W 2011
+                    if hsz > 0:
+                        print('Adding a projection layer after MOT pooling')
+                        proj = fully_connected(hsz, scope='proj')
+                        drop = tf.nn.dropout(proj, self.pkeep)
+
+                    with tf.name_scope("output"):
+                        self.lin = fully_connected(drop, nc)
+                        self.probs = tf.nn.softmax(self.lin, name="probs")
+                        self.best = tf.argmax(self.lin, 1, name="best")

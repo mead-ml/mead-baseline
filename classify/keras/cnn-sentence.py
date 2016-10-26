@@ -102,7 +102,7 @@ if os.path.exists(args.outdir) is False:
     os.makedirs(args.outdir)
 vocab = buildVocab([args.train, args.test, args.valid], args.clean, args.chars)
 
-embeddings = w2v.Word2VecModel(args.embed, vocab, args.unif)
+embeddings = w2v.Word2VecModel(args.embed, vocab, 0)
 
 
 mxfiltsz = np.max(args.filtsz)
