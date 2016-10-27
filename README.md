@@ -17,7 +17,7 @@ Each algorithm is in a separate sub-directory, and is fully contained, even thou
 
 ## Convolution - Max Over Time Architecture (CMOT)
 
-This code provides a pure Lua/Torch7 and pure Python Tensorflow and Keras implementations -- no preprocessing of the dataset with python, nor HDF5 is required.  The Torch code depends on a tiny module that can load word2vec in Torch (https://github.com/dpressel/emb) either as a model, or as an nn.LookupTable.  It is important to note that these models can easily be implemented with other deep learning frameworks, and without much work, can also be implemented from scratch!  Over time, this package will hopefully provide alternate implementations in other DL Frameworks and programming languages.
+This code provides a pure Lua/Torch7 and pure Python Tensorflow and Keras implementations -- no preprocessing of the dataset with python, nor HDF5 is required.  The Torch code depends on a tiny module that can load word2vec in Torch (https://github.com/dpressel/torchure) either as a model, or as an nn.LookupTable.  It is important to note that these models can easily be implemented with other deep learning frameworks, and without much work, can also be implemented from scratch!  Over time, this package will hopefully provide alternate implementations in other DL Frameworks and programming languages.
 
 When the GPU is used, the code *assumes that cudnn (>= R4) is available* and installed. This is because the performance gains over the 'cunn' implementation are significant (e.g., 3 minutes -> 30 seconds).
 
@@ -25,9 +25,9 @@ When the GPU is used, the code *assumes that cudnn (>= R4) is available* and ins
 
 This is inspired by Yoon Kim's paper "Convolutional Neural Networks for Sentence Classification", and before that Collobert's "Sentence Level Approach."  The implementations provided here are basically the Kim static and non-static models.
 
-To explicitly specify filter widths at the same time, pass in -filtsz {3,4,5} at the command line for the Torch driver, or "3,4,5" for the Python drivers.
+To explicitly specify filter widths at the same time, pass in -filtsz {3,4,5} at the command line for the Torch driver, or "3,4,5" for the Python drivers (these values are the default for the driver programs, so you do not have to pass them if these are the filter sizes you desire.
 
-This code doesn't implement multi-channel, as this probably does not make sense as a baseline. It does also support adding a hidden projection layer (if you pass hsz), which is kind of like the "Sentence Level Approach" in the Collobert et al. paper, "Natural Language Processing (Almost) from Scratch"
+This code doesn't implement multi-channel, as this probably does not make sense as a baseline. It does support adding a hidden projection layer (if you pass hsz), which is kind of like the "Sentence Level Approach" in the Collobert et al. paper, "Natural Language Processing (Almost) from Scratch"
 
 Temporal convolutional output total number of feature maps is configurable (this is also defines the size of the max over time layer, by definition).  This code offers several optimization options (adagrad, adadelta, adam and vanilla sgd).  The Kim paper uses adadelta, which works well, but vanilla SGD often works great for static embeddings.  Input signals are always padded to account for the filter width, so edges are still handled.
 
@@ -51,21 +51,21 @@ If you are looking specifically for Yoon Kim's multi-channel model, his code is 
 There are some options in each implementation that might vary slightly, but each approach implementation has been tested separately.
 
 ## Fine-tuning Embedding (LookupTable) layer
-The (default) fine-tuning approach loads the word2vec weight matrix into an Lookup Table.  As we can see from the Kim paper, non-satic/fine-tuning models do not always out-perform static models, However, if tuned properly, they often can out-perform the static models.
+The (default) fine-tuning approach loads the word2vec weight matrix into an Lookup Table.  As we can see from the Kim paper, dynamic/fine-tuning embedding models do not always out-perform static models, However, they tend to do better.
 
-We randomly initialize unattested words and add them to the weight matrix for the Lookup Table.  This can be controlled with the 'unif' param in all versions.
+We randomly initialize unattested words and add them to the weight matrix for the Lookup Table.  This can be controlled with the 'unif' parameter in the driver program.
 
 ## Static, "frozen" Embedding (LookupTable) layer
 
 There are several ways to do static embeddings.  One way would be to load a temporal signal comprised of word2vec vectors at each tick.  This can be done by loading the model, and then looking up each word and building a temporal vector of each lookup.  This will expand the vector in the training data, which will take up more space upfront, but then bypasses the lookup table altogther.  If you are not fine-tuning, this means you could pre-compute your feature vectors all the way to post-embedding layer.  This would mean that the first layer of the network would simply be a 1D Convolution.  This could keep memory usage on the GPU estremely low, which means it could potentially scale to larger problems.  I used to have separate programs for demonstrating this directly, but for the purposes of demonstration, this isnt probably necessary, and created a lot more redundant code.  Instead, I eventually made all programs support a 'static' command-line option that "freezes" the embedding (LUT) layer, not allowing the error to back-propagate and update the weights. When this is exercised currently, the 'unif' parameter is ignored, forcing unattested vectors to zeros.
 
-The static (no fine-tuning) model is usually competitive with fine-tuning, and the code is very simple to implement from scratch, as long as you have access to a fast convolution operator.
+The static (no fine-tuning) model usually has decent performance, and the code is very simple to implement from scratch, as long as you have access to a fast convolution operator.
 
 For handling data with high word sparsity, and for data where morphological features are useful, we also provide a very simple solution that occasionally does improve results -- we simply use the average of character vectors passed in from a word2vec-style binary file and concatenate this word representation to the word2vec vector.  This is an option in the fixed embeddings version only.  This is useful for problems like Language Detection in Twitter, for example.
 
 ## Running It
 
-Early stopping with patience is supported.  There are many hyper-parameters that you can tune, which may yield many different models.  Here is a Torch example of parameterization of static embeddings with SGD and a three filter sizes (3, 4, and 5):
+Early stopping with patience is supported.  There are many hyper-parameters that you can tune, which may yield many different models.  Here is a Torch example of parameterization of static embeddings with SGD and the default three filter sizes (3, 4, and 5):
 
 ```
 th classify_sentence.lua -static -eta 0.01 -batchsz 10 -decay 1e-9 -epochs 20 -train ../data/TREC.train.all -eval ../data/TREC.test.all -embed /data/xdata/GoogleNews-vectors-negative300.bin
