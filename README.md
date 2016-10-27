@@ -25,7 +25,7 @@ When the GPU is used, the code *assumes that cudnn (>= R4) is available* and ins
 
 This is inspired by Yoon Kim's paper "Convolutional Neural Networks for Sentence Classification", and before that Collobert's "Sentence Level Approach."  The implementations provided here are basically the Kim static and non-static models.
 
-To use multiple filter widths at the same time, like in the Kim paper (they use 3,4 and 5), pass in -filtsz {3,4,5} at the command line.
+To explicitly specify filter widths at the same time, pass in -filtsz {3,4,5} at the command line for the Torch driver, or "3,4,5" for the Python drivers.
 
 This code doesn't implement multi-channel, as this probably does not make sense as a baseline. It does also support adding a hidden projection layer (if you pass hsz), which is kind of like the "Sentence Level Approach" in the Collobert et al. paper, "Natural Language Processing (Almost) from Scratch"
 
