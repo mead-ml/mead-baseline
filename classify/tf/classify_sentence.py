@@ -30,12 +30,13 @@ flags.DEFINE_string('outdir', 'out', 'Directory to put the output')
 flags.DEFINE_string('filtsz', '3,4,5', 'Filter sizes')
 flags.DEFINE_boolean('clean', True, 'Do cleaning')
 flags.DEFINE_boolean('chars', False, 'Use characters instead of words')
+flags.DEFINE_boolean('static', False, 'Fix pre-trained embeddings weights')
 flags.DEFINE_float('valsplit', 0.15, 'Validation split if no valid set')
-
-
+flags.DEFINE_string('save', 'classify_sentence_tf', 'Save basename')
 vocab = buildVocab([FLAGS.train, FLAGS.test, FLAGS.valid], FLAGS.clean, FLAGS.chars)
 
-w2vModel = w2v.Word2VecModel(FLAGS.embed, vocab, FLAGS.unif)
+unif = 0 if FLAGS.static else FLAGS.unif
+w2vModel = w2v.Word2VecModel(FLAGS.embed, vocab, unif)
 
 f2i = {}
 opts = { 'batchsz': FLAGS.batchsz,
@@ -65,7 +66,7 @@ model = ConvModel()
 with tf.Graph().as_default():
     sess = tf.Session()
     with sess.as_default():
-        model.params(f2i, w2vModel, FLAGS.mxlen, FLAGS.filtsz, FLAGS.cmotsz, FLAGS.hsz)
+        model.params(f2i, w2vModel, FLAGS.mxlen, FLAGS.filtsz, FLAGS.cmotsz, FLAGS.hsz, not FLAGS.static)
         
         trainer = Trainer(model, FLAGS.optim, FLAGS.eta)
         train_writer = tf.train.SummaryWriter(FLAGS.outdir + "/train", sess.graph)
@@ -85,7 +86,7 @@ with tf.Graph().as_default():
             if this_acc > max_acc:
                 max_acc = this_acc
                 last_improved = i
-                trainer.checkpoint(sess, FLAGS.outdir, 'cnn-sentence-fine')
+                trainer.checkpoint(sess, FLAGS.outdir, '%s' % FLAGS.save)
 
             if (i - last_improved) > FLAGS.patience:
                 print('Stopping due to persistent failures to improve')
@@ -101,4 +102,4 @@ with tf.Graph().as_default():
         trainer.test(es, sess)
 
         # Write out model, graph and saver for future inference
-        model.save(sess, FLAGS.outdir, 'cnn-sentence-fine')
+        model.save(sess, FLAGS.outdir, FLAGS.save)

@@ -1,14 +1,5 @@
-# For Keras impl. of non-fine-tuned embedding, I just "froze" the embedding 
-# layer, so if you want to see how to load and use full word2vec models
-# by expanding each into a temporal continuous tensor, take a look at the 
-# Tensorflow version or the Torch one.
-#
-# Other than that one line, change, only the model names differ from 
-# cnn-sentence-fine here
-
 from keras.models import Model, load_model
 from keras.layers import Dense, Activation, Convolution1D, Embedding, Input, merge, GlobalMaxPooling1D, Dropout
-#from keras.utils.visualize_util import plot, model_to_dot
 from keras.callbacks import EarlyStopping, ModelCheckpoint
 import numpy as np
 from keras.utils import np_utils
@@ -23,8 +14,8 @@ import os.path
 import os
 
 # We need to keep around our vector maps to preserve lookups of words
-def mdsave(labels, vocab, outdir):
-    basename = '%s/cnn-sentence' % outdir
+def mdsave(labels, vocab, outdir, save_base):
+    basename = '%s/%s' % (outdir, save_base)
     
     label_file = basename + '.labels'
     print("Saving attested labels '%s'" % label_file)
@@ -38,13 +29,13 @@ def mdsave(labels, vocab, outdir):
 
 
 # Use the functional API since we support parallel convolutions
-def create(embeddings, nc, filtsz, cmotsz, hsz, maxlen, pdrop):
+def create(embeddings, nc, filtsz, cmotsz, hsz, maxlen, pdrop, finetune):
     x = Input(shape=(maxlen,), dtype='int32', name='input')
 
     vocab_size = embeddings.weights.shape[0]
     embedding_dim = embeddings.dsz
     
-    lut = Embedding(input_dim=vocab_size, output_dim=embedding_dim, weights=[embeddings.weights], input_length=maxlen, trainable=False)
+    lut = Embedding(input_dim=vocab_size, output_dim=embedding_dim, weights=[embeddings.weights], input_length=maxlen, trainable=finetune)
     
     embed = lut(x)
 
@@ -69,7 +60,6 @@ def create(embeddings, nc, filtsz, cmotsz, hsz, maxlen, pdrop):
 
     dense = Dense(output_dim=nc, input_dim=input_dim, activation='softmax')(last_layer)
     model = Model(input=[x], output=[dense])
-#    plot(model, 'model.png')
     return model
 
 parser = argparse.ArgumentParser(description='Process some integers.')
@@ -78,7 +68,7 @@ parser.add_argument('--embed', help='Word2Vec embeddings file', required=True)
 parser.add_argument('--train', help='Training file', required=True)
 parser.add_argument('--valid', help='Validation file')
 parser.add_argument('--test', help='Test file', required=True)
-
+parser.add_argument('--save', help='Save basename', default='classify_sentence_keras')
 
 parser.add_argument('--optim', help='Optim method', default='adam', choices=['adam', 'adagrad', 'adadelta', 'sgd'])
 parser.add_argument('--dropout', help='Dropout probability', default=0.5, type=float)
@@ -91,6 +81,7 @@ parser.add_argument('--cmotsz', help='Hidden layer size', default=100, type=int)
 parser.add_argument('--hsz', help='Projection layer size', default=-1, type=int)
 parser.add_argument('--filtsz', help='Filter sizes', nargs='+', default=[3,4,5], type=int)
 parser.add_argument('--clean', help='Do cleaning', action='store_true')
+parser.add_argument('--static', help='Fix pre-trained embeddings weights', action='store_true')
 parser.add_argument('--chars', help='Use characters instead of words', action='store_true')
 parser.add_argument('--valsplit', help='Validation split if no valid set', default=0.15, type=float)
 parser.add_argument('--outdir', help='Output directory', default='./train')
@@ -102,8 +93,9 @@ if os.path.exists(args.outdir) is False:
     os.makedirs(args.outdir)
 vocab = buildVocab([args.train, args.test, args.valid], args.clean, args.chars)
 
-embeddings = w2v.Word2VecModel(args.embed, vocab, 0)
 
+unif = 0 if args.static else args.unif
+embeddings = w2v.Word2VecModel(args.embed, vocab, unif)
 
 mxfiltsz = np.max(args.filtsz)
 f2i = {}
@@ -124,9 +116,9 @@ print('Loaded test data')
 nc = len(f2i)
 
 
-mdsave(f2i, embeddings.vocab, args.outdir)
+mdsave(f2i, embeddings.vocab, args.outdir, args.save)
 
-model = create(embeddings, nc, args.filtsz, args.cmotsz, args.hsz, args.mxlen, args.dropout)
+model = create(embeddings, nc, args.filtsz, args.cmotsz, args.hsz, args.mxlen, args.dropout, not args.static)
 
 model.compile(args.optim, 'categorical_crossentropy' , metrics=['accuracy'])
 
@@ -137,13 +129,15 @@ if args.valid is not None:
 
 early_stopping = EarlyStopping(monitor='val_loss', patience=args.patience, verbose=1, mode='auto')
 
-checkpoint = ModelCheckpoint('%s/cnn-sentence.model' % args.outdir, monitor='val_loss', verbose=1, save_best_only=True, save_weights_only=False, mode='auto')
+outname = '%s/%s.model' % (args.outdir, args.save)
+checkpoint = ModelCheckpoint(outname, monitor='val_loss', verbose=1, save_best_only=True, save_weights_only=False, mode='auto')
+
 model.fit(X_train, y_train, args.batchsz, args.epochs, verbose=1, callbacks=[checkpoint, early_stopping], validation_split=valsplit, validation_data=valdata, shuffle=True)
 
 print('=====================================================')
 print('Evaluating best model on test data:')
 print('=====================================================')
-model = load_model('%s/cnn-sentence.model' % args.outdir)
+model = load_model(outname)
 start_time = time.time()
 
 score = model.evaluate(X_test, y_test, args.batchsz, verbose=1)

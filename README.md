@@ -46,77 +46,67 @@ Here are some places where this code is known to perform well:
 
 This architecture doesn't seem to perform especially well on long posts compared to NBSVM or even SVM.  However, this pattern is used to good effect as a compositional portion of larger models by various researchers.
 
-## cnn-sentence -- static, no LookupTable layer
+If you are looking specifically for Yoon Kim's multi-channel model, his code is open source (https://github.com/yoonkim/CNN_sentence) and there is another project on Github from Harvard NLP which recreates it in Torch (https://github.com/harvardnlp/sent-conv-torch).  By focusing on the static and non-static models, we are able to keep this code lean, easy to understand, and applicable as a baseline to a broad range of problems.
 
-There are several ways to do static embeddings.  One way would be to load a temporal signal comprised of word2vec vectors at each tick.  This can be done by loading the model, and then looking up each word and building a temporal vector of each lookup.  This will expand the vector in the training data, which will take up more space upfront, but then bypasses the lookup table altogther.  This means that the first layer of the network is simply TemporalConvolution.  This keeps memory usage on the GPU estremely low, which means it can scale to larger problems.  The Torch model currently does this.
+There are some options in each implementation that might vary slightly, but each approach implementation has been tested separately.
 
-The other approach is simply to "freeze" the layer, not allowing the error to back-propagate and update the weights.  The Keras and Tensorflow static models do that.  To do this, they prune the embeddings down to only "active" ones (the ones that have attested words).
+## Fine-tuning Embedding (LookupTable) layer
+The (default) fine-tuning approach loads the word2vec weight matrix into an Lookup Table.  As we can see from the Kim paper, non-satic/fine-tuning models do not always out-perform static models, However, if tuned properly, they often can out-perform the static models.
+
+We randomly initialize unattested words and add them to the weight matrix for the Lookup Table.  This can be controlled with the 'unif' param in all versions.
+
+## Static, "frozen" Embedding (LookupTable) layer
+
+There are several ways to do static embeddings.  One way would be to load a temporal signal comprised of word2vec vectors at each tick.  This can be done by loading the model, and then looking up each word and building a temporal vector of each lookup.  This will expand the vector in the training data, which will take up more space upfront, but then bypasses the lookup table altogther.  If you are not fine-tuning, this means you could pre-compute your feature vectors all the way to post-embedding layer.  This would mean that the first layer of the network would simply be a 1D Convolution.  This could keep memory usage on the GPU estremely low, which means it could potentially scale to larger problems.  I used to have separate programs for demonstrating this directly, but for the purposes of demonstration, this isnt probably necessary, and created a lot more redundant code.  Instead, I eventually made all programs support a 'static' command-line option that "freezes" the embedding (LUT) layer, not allowing the error to back-propagate and update the weights. When this is exercised currently, the 'unif' parameter is ignored, forcing unattested vectors to zeros.
 
 The static (no fine-tuning) model is usually competitive with fine-tuning, and the code is very simple to implement from scratch, as long as you have access to a fast convolution operator.
 
 For handling data with high word sparsity, and for data where morphological features are useful, we also provide a very simple solution that occasionally does improve results -- we simply use the average of character vectors passed in from a word2vec-style binary file and concatenate this word representation to the word2vec vector.  This is an option in the fixed embeddings version only.  This is useful for problems like Language Detection in Twitter, for example.
 
-If you are looking specifically for Yoon Kim's multi-channel model, his code is open source (https://github.com/yoonkim/CNN_sentence) and there is another project on Github from Harvard NLP which recreates it in Torch (https://github.com/harvardnlp/sent-conv-torch).  By focusing on the static and non-static models, we are able to keep this code lean, easy to understand, and applicable as a baseline to a broad range of problems.
-
-There are some options in each implementation that might vary slightly, but each approach implementation has been tested separately.
-
-## Dynamic - Fine Tuning Lookup Tables pretrained with Word2Vec
-
-The fine-tuning approach loads the word2vec weight matrix into an Lookup Table.  As we can see from the Kim paper, non-satic/fine-tuning models do not always out-perform static models, and they have additional baggage due to LookupTable size which may make them more cumbersome to use as baselines.  However, if tuned properly, they often can out-perform the static models.
-
-We randomly initialize unattested words and add them to the weight matrix for the Lookup Table.  This can be controlled with the embunif param in Torch, and the unif param in Tensorflow or Keras versions.
-
 ## Running It
 
-Early stopping with patience is supported.  There are many hyper-parameters that you can tune, which may yield many different models.  Here is an example of parameterization of static embeddings (cnn-sentence.lua) with SGD and a single filter width of 5 (with Torch):
+Early stopping with patience is supported.  There are many hyper-parameters that you can tune, which may yield many different models.  Here is a Torch example of parameterization of static embeddings with SGD and a three filter sizes (3, 4, and 5):
 
 ```
-th cnn-sentence.lua -eta 0.01 -batchsz 10 -decay 1e-9 -epochs 20 -train ../data/TREC.train.all -eval ../data/TREC.test.all -embed /data/xdata/GoogleNews-vectors-negative300.bin
+th classify_sentence.lua -static -eta 0.01 -batchsz 10 -decay 1e-9 -epochs 20 -train ../data/TREC.train.all -eval ../data/TREC.test.all -embed /data/xdata/GoogleNews-vectors-negative300.bin
 ```
 
-And with Tensorflow
+And with Tensorflow or Keras
 ```
-python cnn-sentence.py --eta0 0.01 --batchsz 10 -epochs 20 --train ../data/TREC.train.all --test ../data/TREC.test.all --embed /data/xdata/GoogleNews-vectors-negative300.bin
-```
-
-Here is an example of parameterization of dynamic fine tuning (cnn-sentence-fine.lua) with SGD
-
-```
-th cnn-sentence-fine.lua -optim adadelta -patience 20 -batchsz 10 -epochs 20 -train ../data/TREC.train.all -eval ../data/TREC.test.all -embed /data/xdata/GoogleNews-vectors-negative300.bin
+python classify_sentence.py  --static --eta 0.01 --batchsz 10 -epochs 20 --train ../data/TREC.train.all --test ../data/TREC.test.all --embed /data/xdata/GoogleNews-vectors-negative300.bin
 ```
 
-And in Tensorflow and Keras versions:
+Here is an example of parameterization of dynamic fine tuning (classify_sentence.lua) with SGD to train TREC QA set
 
 ```
-python cnn-sentence-fine.py --optim adam -batchsz 10 -epochs 20 --train ../data/TREC.train.all --test ../data/TREC.test.all -embed /data/xdata/GoogleNews-vectors-negative300.bin
+th classify_sentence.lua -optim adadelta -patience 20 -batchsz 50 -epochs 25 -train ../data/TREC.train.all -eval ../data/TREC.test.all -embed /data/xdata/GoogleNews-vectors-negative300.bin
 ```
 
-Binary Kim model, static:
+And in Tensorflow and Keras versions, its basically the same
 
 ```
-th cnn-sentence.lua -clean -optim adadelta -batchsz 50 -patience 10 -epochs 25 -train ./data/stsa.binary.phrases.train -valid ./data/stsa.binary.dev -eval ./data/stsa.binary.test -embed /data/xdata/GoogleNews-vectors-negative300.bin -filtsz "{3,4,5}"
+python classify_sentence.py --optim adadelta --batchsz 50 --epochs 25 --patience 25 --train ../data/TREC.train.all --test ../data/TREC.test.all -embed /data/xdata/GoogleNews-vectors-negative300.bin
 ```
 
-```
-python cnn-sentence.py  --optim adam --batchsz 50 --epochs 25 --train ./data/stsa.binary.phrases.train --test ./data/stsa.binary.test --embed /data/xdata/GoogleNews-vectors-negative300.bin --filtsz "3,4,5"
-```
-
-Binary Kim model, non-static (fine-tunings):
+Here is an example running Stanford Sentiment Treebank 2 data with adadelta
 
 ```
-th cnn-sentence-fine.lua -clean -cullunused -optim adadelta -batchsz 50 -epochs 25 -patience 25 -train ./data/stsa.binary.phrases.train -valid ./data/stsa.binary.dev -eval ./data/stsa.binary.test -embed /data/xdata/GoogleNews-vectors-negative300.bin -filtsz "{3,4,5}"
-```
 
+th classify_sentence.lua -clean -optim adadelta -batchsz 50 -epochs 25 -patience 25 -train ./data/stsa.binary.phrases.train -valid ./data/stsa.binary.dev -eval ./data/stsa.binary.test -embed /data/xdata/GoogleNews-vectors-negative300.bin -filtsz "{3,4,5}"
+```
 In Tensorflow or Keras:
+
 ```
-python2.7 cnn-sentence-fine.py --clean --optim adadelta --eta 0.001 --batchsz 50 --epochs 25 --patience 25 --train ./data/stsa.binary.phrases.train --valid ./data/stsa.binary.dev --test ./data/stsa.binary.test --embed /data/xdata/GoogleNews-vectors-negative300.bin --filtsz "3,4,5" --dropout 0.5
+python2.7 classify_sentence.py --clean --optim adadelta --eta 0.004 --batchsz 50 --epochs 25 --patience 25 --train ./data/stsa.binary.phrases.train --valid ./data/stsa.binary.dev --test ./data/stsa.binary.test --embed /data/xdata/GoogleNews-vectors-negative300.bin --filtsz "3,4,5" --dropout 0.5
 ```
+
+All of the models should typically achieve the dynamic fine-tune results on SST from the Kim paper, though there is variation between runs.  I have found that random uniform initialization of the convolutional layers with Glorot initializatoin on the fully-connected layers tends to work well, so that is what happens here in Tensorflow (and is default in Keras).
 
 ## Restoring the Model
 
 In Torch and in Keras, restoring the model is trivial, but with TensorFlow there is a little more work.  The CNN classes are set up to handle this save and restore, which includes reloading the graph, and then reinitializing the model, along with labels and feature index.
 
-[Here is a gist](https://gist.github.com/dpressel/767db3d1b5b6bf263ebfd7fed716be96) for performing classification on a previously trained cnn-sentence-fine model, and [here is one](https://gist.github.com/dpressel/61ccf0e89c5a5c3e801d7eb15246b78f) for restoring the static model.
+[Here is a gist](https://gist.github.com/dpressel/767db3d1b5b6bf263ebfd7fed716be96) for performing classification on a previously trained classify_sentence model, and [here is one](https://gist.github.com/dpressel/61ccf0e89c5a5c3e801d7eb15246b78f) for restoring the static model.
 
 # Structured Prediction using RNNs
 
@@ -152,7 +142,7 @@ For any reasonable size data, this really needs to run on the GPU for realistic 
 
 # Distance metrics using Siamese Networks
 
-Siamese networks have been shown to be useful for tasks such as paraphrase detection, and are generally helpful for learning similarity/distance metrics.  The siamese network provided here is a convolutional neural net, based on the cnn-sentence model above.  It uses an L2 (pairwise distance) metric function and a contrastive loss function to determine a distance between pairs.  For example, for a paraphrase corpus, the data will include 2 sentences and a label (0,1) stating whether or not the two documents are paraphases.  The Siamese network then learns a distance mapping from this data.
+Siamese networks have been shown to be useful for tasks such as paraphrase detection, and are generally helpful for learning similarity/distance metrics.  The siamese network provided here is a convolutional neural net, based on the classify_sentence model above.  It uses an L2 (pairwise distance) metric function and a contrastive loss function to determine a distance between pairs.  For example, for a paraphrase corpus, the data will include 2 sentences and a label (0,1) stating whether or not the two documents are paraphases.  The Siamese network then learns a distance mapping from this data.
 
 # siamese-fine: Parallel CNNs with shared weights, using Word2Vec input + fine-tuning with an L2 loss function
 
