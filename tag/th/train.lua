@@ -19,11 +19,11 @@ function testTagger(model, es, crit, confusion, options)
  	local x = options.gpu and xy.x:cuda() or xy.x
         local y = options.gpu and xy.y:cuda() or xy.y
 	x = x:transpose(1, 2)
-	y = y:transpose(1, 2)
+	yt = tab1st(y:transpose(1, 2))
 
 	local pred = model:forward(x)
 
-	local err = crit:forward(pred, y)
+	local err = crit:forward(pred, yt)
 	epochErr = epochErr + err
 	
 	local thisBatchSz = x:size(2)
@@ -36,7 +36,6 @@ function testTagger(model, es, crit, confusion, options)
 	pred = pred:reshape(seqlen, thisBatchSz, outcomes)
 	pred = pred:transpose(1, 2)
 	x = x:transpose(1, 2)
-	y = y:transpose(1, 2)
 
 	for b=1,thisBatchSz do
 	   local seq = pred[b]
@@ -88,13 +87,14 @@ function trainTaggerEpoch(crit, model, ts, optmeth, options)
 	  local y = options.gpu and xy.y:cuda() or xy.y
 
 	  x = x:transpose(1, 2)
-	  y = y:transpose(1, 2)
+	  yt = tab1st(y:transpose(1, 2))
 
+	  
 	  local pred = model:forward(x)
-	  local err = crit:forward(pred, y)
+	  local err = crit:forward(pred, yt)
 	  epochErr = epochErr + err
 
-	  local grad = crit:backward(pred, y)
+	  local grad = crit:backward(pred, yt)
 	  model:backward(x, grad)
 
 	  if options.clip and options.clip > 0 then

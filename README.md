@@ -118,12 +118,12 @@ This code is intended to be as simple as possible, and can utilize Justin Johnso
 
 ## rnn-tag: Static implementation, input is a temporal feature vector of dense representations
 
-Twitter is challenging data source for tagging problems.  The [TweetNLP project](http://www.cs.cmu.edu/~ark/TweetNLP) includes hand annotated POS data. The original taggers used for this task are described [here](http://www.cs.cmu.edu/~ark/TweetNLP/gimpel+etal.acl11.pdf).  The baseline that they compared their algorithm against got 83.38% accuracy.  The final model got 89.37% accuracy with many custom features.  Below, our simple BLSTM baseline with no custom features, no fine tuning of embeddings, and a very coarse approach to compositional character to word modeling still gets *88.67%* accuracy.  Without any character vectors, the model still gets 88.27% accuracy.
+Twitter is challenging data source for tagging problems.  The [TweetNLP project](http://www.cs.cmu.edu/~ark/TweetNLP) includes hand annotated POS data. The original taggers used for this task are described [here](http://www.cs.cmu.edu/~ark/TweetNLP/gimpel+etal.acl11.pdf).  The baseline that they compared their algorithm against got 83.38% accuracy.  The final model got 89.37% accuracy with many custom features.  Below, our simple BLSTM baseline with no custom features, no fine tuning of embeddings, and a very coarse approach to compositional character to word modeling still gets *89%* accuracy.  Without any character vectors, the model still gets 88.27% accuracy.
 
 This has been tested on oct27 train+dev and test splits (http://www.cs.cmu.edu/~ark/TweetNLP), using custom word2vec embedddings generated from ~32M tweets including s140 and the oct27 train+dev data.  Some of the data was sampled and preprocessed to have placeholder words for hashtags, mentions and URLs to be used as backoffs for words of those classes which are not found.  It also employs character vectors taken from splitting oct27 train+dev and s140 data and uses them to build averaged word vectors over characters.  This is a simple way of accounting for morphology and sparse terms while being simple enough to be a strong baseline.
 
 ```
-th rnn-tag.lua -usernnpkg -rnn blstm -eta .32 -optim adagrad -epochs 60 -embed /data/xdata/oct-s140clean-uber.cbow-bin -cembed /data/xdata/oct27-s140-char2vec-cbow-50.bin -hsz 100 -train /data/xdata/twpos-data-v0.3/oct27.splits/oct27.traindev -eval /data/xdata/twpos-data-v0.3/oct27.splits/oct27.test
+th rnn-tag.lua -rnn blstm -eta .3 -optim adagrad -epochs 60 -embed /data/xdata/oct-s140clean-uber.cbow-bin -cembed /data/xdata/oct27-s140-char2vec-cbow-50.bin -hsz 100 -train /data/xdata/twpos-data-v0.3/oct27.splits/oct27.traindev -eval /data/xdata/twpos-data-v0.3/oct27.splits/oct27.test
 ```
 
 ## rnn-tag-fine: Dynamic (fine-tuning) implementation, input is a sparse vector

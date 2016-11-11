@@ -140,7 +140,7 @@ if opt.embed1 == '' then
    embed1 = VocabLookupTable(vocab1, opt.dsz, opt.embunif)
    print('Initialized word embeddings')
 else
-   embed1 = Word2VecLookupTable(opt.embed1, vocab1, opt.embunif)
+   embed1 = Word2VecLookupTable(opt.embed1, vocab1, opt.embunif, false, true)
    print('Loaded word embeddings: ' .. opt.embed1)
 end
 
@@ -149,7 +149,7 @@ if opt.embed2 == '' then
    embed2 = VocabLookupTable(vocab2, opt.dsz, opt.embunif)
    print('Initialized word embeddings')
 else
-   embed2 = Word2VecLookupTable(opt.embed2, vocab2, opt.embunif)
+   embed2 = Word2VecLookupTable(opt.embed2, vocab2, opt.embunif, false, true)
    print('Loaded word embeddings: ' .. opt.embed2)
 end
 
