@@ -170,8 +170,13 @@ if opt.static then
    finetune = false
    print('static weights requested (no fine-tuning)')
 end
-w2v = Word2VecLookupTable(opt.embed, vocab, opt.unif, false, finetune)
 
+if opt.embed == 'NONE' then
+   print('Warning: no pre-trained embeddings provided.  This will almost definitely cause degraded performance')
+   w2v = VocabLookupTable(vocab, 300, opt.unif)
+else
+   w2v = Word2VecLookupTable(opt.embed, vocab, opt.unif, false, finetune)
+end
 function afterhook() 
       w2v.weight[w2v.vocab["<PADDING>"]]:zero()
 end
