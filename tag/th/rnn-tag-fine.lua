@@ -54,10 +54,10 @@ function createTaggerModel(w2v, hsz, gpu, nc, rnntype, pdrop)
     local dsz = w2v.dsz
 
     seq:add(w2v)
-
+    seq:add(nn.SplitTable(1))
 
     if rnntype == 'blstm' then
-       seq:add(nn.SplitTable(1))
+       
        local rnnfwd = nn.FastLSTM(dsz, hsz):maskZero(1)
        local rnnbwd = nn.FastLSTM(dsz, hsz):maskZero(1)
        seq:add(nn.BiSequencer(rnnfwd, rnnbwd, nn.CAddTable()))

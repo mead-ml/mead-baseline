@@ -25,11 +25,12 @@ torch.setdefaulttensortype('torch.FloatTensor')
 -- provide reasonable args for any algorithm a user selects
 -----------------------------------------------------
 DEF_TSF = './data/TREC.train.all'
-DEF_VSF = 'none'
+DEF_VSF = 'NONE'
 DEF_ESF = './data/TREC.test.all'
 DEF_BATCHSZ = 20
 DEF_OPTIM = 'adadelta'
 DEF_ETA = 0.001
+DEF_DSZ = 300
 DEF_MOM = 0.0
 DEF_DECAY = 1e-9
 DEF_DROP = 0.5
@@ -73,6 +74,7 @@ function createModel(lookupTable, cmotsz, cactive, hsz, hactive, filts, gpu, nc,
        concat:add(subseq)
     end
     seq:add(concat)
+
     -- If you wanted another hidden layer
     if hsz > 0 then
        seq:add(newLinear(#filts * cmotsz, hsz))
@@ -110,6 +112,7 @@ cmd:option('-proc', DEF_PROC, 'Backend (gpu|cpu)')
 cmd:option('-batchsz', DEF_BATCHSZ, 'Batch size')
 cmd:option('-mxlen', DEF_MXLEN, 'Max number of tokens to use')
 cmd:option('-patience', DEF_PATIENCE, 'How many failures to improve until quitting')
+cmd:option('-dsz', DEF_DSZ, 'Word vector size (only used if not pre-trained embeddings)')
 cmd:option('-hsz', DEF_HSZ, 'Depth of additional hidden layer')
 cmd:option('-cmotsz', DEF_CMOTSZ, 'Depth of convolutional/max-over-time output')
 cmd:option('-cactive', DEF_CACTIVE, 'Activation function following conv')
@@ -170,10 +173,10 @@ if opt.static then
    finetune = false
    print('static weights requested (no fine-tuning)')
 end
-
+print(opt.unif)
 if opt.embed == 'NONE' then
    print('Warning: no pre-trained embeddings provided.  This will almost definitely cause degraded performance')
-   w2v = VocabLookupTable(vocab, 300, opt.unif)
+   w2v = VocabLookupTable(vocab, opt.dsz, opt.unif)
 else
    w2v = Word2VecLookupTable(opt.embed, vocab, opt.unif, false, finetune)
 end
@@ -197,7 +200,7 @@ local f2i = {}
 ts,f2i = loadTemporalIndices(opt.train, w2v, f2i, opt)
 print('Loaded training data')
 
-if opt.valid ~= 'none' then
+if opt.valid ~= 'NONE' then
    print('Using provided validation data')
    vs,f2i = loadTemporalIndices(opt.valid, w2v, f2i, opt)
 else
@@ -242,7 +245,7 @@ end
 
 
 
-print('Highest test acc: ' .. (100 * (1. - errmin)))
+print('Highest validation acc: ' .. (100 * (1. - errmin)))
 print('=====================================================')
 print('Evaluating best model on test data')
 model = loadModel(outname, opt.gpu)

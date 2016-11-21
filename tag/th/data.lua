@@ -123,7 +123,6 @@ function conllSentsToIndices(file, w2v, f2i, options)
     local wsz = w2v.dsz
     local batchsz = options.batchsz or 1
     local mxlen = options.mxlen or 40
-
     local zp = options.zp or 0
 
     print('Word vector sz ' .. wsz)
@@ -210,7 +209,6 @@ function idxFor(w2v, tok)
    z = tryGetWordIdx(w2v, tok)
 
    if z == nil then
-
       local alt = newWord(tok) -- w2v:lookup(tok, true)
       z = tryGetWordIdx(w2v, alt)
 

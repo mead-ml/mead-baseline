@@ -91,7 +91,7 @@ function buildVocab(files, clean, chars)
     local vocab = {}
 
     for i=1,#files do
-       if files[i] ~= nil and files[i] ~= 'none' then
+       if files[i] ~= nil and files[i] ~= 'NONE' then
 	  local tsfile = io.open(files[i], 'r')
 	  
 	  for line in tsfile:lines() do  
