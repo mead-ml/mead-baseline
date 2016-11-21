@@ -100,7 +100,7 @@ In Tensorflow or Keras:
 python2.7 classify_sentence.py --clean --optim adadelta --eta 0.004 --batchsz 50 --epochs 25 --patience 25 --train ./data/stsa.binary.phrases.train --valid ./data/stsa.binary.dev --test ./data/stsa.binary.test --embed /data/xdata/GoogleNews-vectors-negative300.bin --filtsz "3,4,5" --dropout 0.5
 ```
 
-All of the models should typically achieve the dynamic fine-tune results on SST from the Kim paper, though there is some slight variation between runs (I have seen accuracy greater than 88%, which is higher than reported the paper).  I have found that random uniform initialization of the convolutional layers with Glorot initialization on the fully-connected layers tends to work well, so that is what happens here in Tensorflow (and is default in Keras).
+All of the models should typically achieve the dynamic fine-tune results on SST from the Kim paper, though there is some slight variation between runs (I have seen accuracy as high as 88.36%, which is higher than even the stereo approach reported the paper).  I have found that random uniform initialization of the convolutional layers with Glorot initialization on the fully-connected layers tends to work well, so that is what happens here in Tensorflow (and is default in Keras).
 
 ## Restoring the Model
 
