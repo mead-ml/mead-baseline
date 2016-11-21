@@ -7,37 +7,42 @@ function createTaggerCrit(gpu)
    return gpu and crit:cuda() or crit
 end
 
-function testTagger(model, es, crit, confusion, options)
+function testTagger(phase, model, es, crit, confusion, options)
 
     model:evaluate()
     time = sys.clock()
-    local sz = es:size()
+    local batchsz = options.batchsz
+    local steps = math.floor(es:size()/batchsz)
 
     local epochErr = 0
-    for i=1,sz do
-        local xy = es:get(i)
- 	local x = options.gpu and xy.x:cuda() or xy.x
-        local y = options.gpu and xy.y:cuda() or xy.y
-	x = x:transpose(1, 2)
-	yt = tab1st(y:transpose(1, 2))
 
-	local pred = model:forward(x)
+    for i=1,steps do
+        local xy = batch(es, i, batchsz)
+ 	local xch = options.gpu and xy.xch:cuda() or xy.xch
+        local y = options.gpu and xy.y:cuda() or xy.y
+	local x_tbl = {}
+	table.insert(x_tbl, xch)
+	if options.embed ~= 'NONE' then
+	   local x = options.gpu and xy.x:cuda() or xy.x
+	   table.insert(x_tbl, x)
+	end
+
+	local pred = model:forward(x_tbl)
+	local yt = tab1st(y:transpose(1, 2))
 
 	local err = crit:forward(pred, yt)
 	epochErr = epochErr + err
-	
-	local thisBatchSz = x:size(2)
-	local seqlen = x:size(1)
 
+	local seqlen = xch:size(2)
 	-- Turn this from a table back into a tensor
 	pred = torch.cat(pred, 1)
+	
 	local outcomes = pred:size(2)
 
-	pred = pred:reshape(seqlen, thisBatchSz, outcomes)
+	pred = pred:reshape(seqlen, batchsz, outcomes)
 	pred = pred:transpose(1, 2)
-	x = x:transpose(1, 2)
-
-	for b=1,thisBatchSz do
+	
+	for b=1,batchsz do
 	   local seq = pred[b]
 	   local cy = y[b]:int()
 	   _, path = seq:max(2)
@@ -51,28 +56,30 @@ function testTagger(model, es, crit, confusion, options)
 	   end
 	end
 	
-	xlua.progress(i, sz)
+	xlua.progress(i, steps)
     end
     
     print(confusion)
     local err = (1-confusion.totalValid)
-    local avgEpochErr = epochErr / sz
+    local avgEpochErr = epochErr / steps
     time = sys.clock() - time
-    print('Test avg loss ' .. avgEpochErr)
-    print('Test accuracy (error) ' .. err)
-    print("Time to test " .. time .. 's')
+    print(phase .. ' avg loss ' .. avgEpochErr)
+    print(phase .. ' accuracy (error) ' .. err)
+    print("elapsed " .. time .. 's')
     return err
 end
 
 function trainTaggerEpoch(crit, model, ts, optmeth, options)
     model:training()
     local time = sys.clock()
+    local batchsz = options.batchsz
+    local steps = math.floor(ts:size()/batchsz)
 
-    local sz = ts:size()
-    local shuffle = torch.randperm(sz)
+    local shuffle = torch.randperm(steps)
     w,dEdw = model:getParameters()
     local epochErr = 0
-    for i=1,sz do
+
+    for i=1,steps do
        local si = shuffle[i]
 	    
        local evalf = function(wt)
@@ -82,20 +89,23 @@ function trainTaggerEpoch(crit, model, ts, optmeth, options)
 	  end
 	  
 	  dEdw:zero()
-	  local xy = ts:get(si)
-	  local x = options.gpu and xy.x:cuda() or xy.x
+	  local xy = batch(ts, si, batchsz)
+	  local xch = options.gpu and xy.xch:cuda() or xy.xch
 	  local y = options.gpu and xy.y:cuda() or xy.y
-
-	  x = x:transpose(1, 2)
+	  local x_tbl = {}
+	  table.insert(x_tbl, xch)
+	  if options.embed ~= 'NONE' then
+	     local x = options.gpu and xy.x:cuda() or xy.x
+	     table.insert(x_tbl, x)
+	  end
+	  local pred = model:forward(x_tbl)
 	  yt = tab1st(y:transpose(1, 2))
 
 	  
-	  local pred = model:forward(x)
 	  local err = crit:forward(pred, yt)
 	  epochErr = epochErr + err
-
 	  local grad = crit:backward(pred, yt)
-	  model:backward(x, grad)
+	  model:backward(x_tbl, grad)
 
 	  if options.clip and options.clip > 0 then
 	     dEdw:clamp(-options.clip, options.clip)
@@ -109,11 +119,12 @@ function trainTaggerEpoch(crit, model, ts, optmeth, options)
 	  options.afteroptim()
        end
 
-       xlua.progress(i, sz)
+       xlua.progress(i, steps)
 
     end
+
     time = sys.clock() - time
-    local avgEpochErr = epochErr / sz
+    local avgEpochErr = epochErr / steps
     print('Train avg loss ' .. avgEpochErr)
     print("Time to learn epoch " .. time .. 's')
 

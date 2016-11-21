@@ -112,23 +112,45 @@ In Torch and in Keras, restoring the model is trivial, but with TensorFlow there
 
 This code is useful for tagging tasks, e.g., POS tagging, chunking and NER tagging.  Recently, several researchers have proposed using RNNs for tagging, particularly LSTMs.  These models do back-propagation through time (BPTT)
 and then apply a shared fully connected layer per RNN output to produce a label.
-A common modification is to use Bidirectional LSTMs -- one in the forward direction, and one in the backward direction.  This usually improves the resolution of the tagger significantly.
+A common modification is to use Bidirectional LSTMs -- one in the forward direction, and one in the backward direction.  This usually improves the resolution of the tagger significantly.  That is the default approach taken here.
 
-This code is intended to be as simple as possible, and can utilize Justin Johnson's very straightforward, easy to understand [torch-rnn](https://github.com/jcjohnson/torch-rnn) library, or it can use [Element-Research's rnn library](https://github.com/Element-Research/rnn).  When using torch-rnn, we use a convolutional layer to weight share between RNN outputs.  The rnn library makes sequencing easy, so we can simply use a linear layer for that version.  This approach does not currently use a Sentence Level Likelihood as described in Collobert's various works using convolutional taggers.
+To execute these models it is necessary to form word vectors.  It has been shown that character level modeling supports morphosyntatic structure for tagging tasks.  It is common to combine words and characters to form vectors, although recently, direct character-based formation only has become more popular.
 
-## rnn-tag: Static implementation, input is a temporal feature vector of dense representations
+## tag_char_rnn: word/character-based RNN tagger
 
-Twitter is challenging data source for tagging problems.  The [TweetNLP project](http://www.cs.cmu.edu/~ark/TweetNLP) includes hand annotated POS data. The original taggers used for this task are described [here](http://www.cs.cmu.edu/~ark/TweetNLP/gimpel+etal.acl11.pdf).  The baseline that they compared their algorithm against got 83.38% accuracy.  The final model got 89.37% accuracy with many custom features.  Below, our simple BLSTM baseline with no custom features, no fine tuning of embeddings, and a very coarse approach to compositional character to word modeling still gets *89%* accuracy.  Without any character vectors, the model still gets 88.27% accuracy.
+The code is fairly flexible and supports word and/or character-level word embeddings.  For character-level processing, a character vector depth is selected, along with a word-vector depth.  There are two implementations of word vectors from character vectors: continous bag of letters or convolutional nets.  In the latter case, the user specifies 1 or more parallel filter sizes, and the convolutional layer outputs the requested number of feature maps over time.  The max value over time is selected for each, resulting in a fixed width word vector.  This is essentially Kim's 2015 language model approach.  The other, simpler way, is just a sum over the character vectors for each word.  This actually still works quite well, as long as this character word representation is used alongside actual word vectors.  In this case, the character vector size and word-char vector size are forced to be the same.
 
-This has been tested on oct27 train+dev and test splits (http://www.cs.cmu.edu/~ark/TweetNLP), using custom word2vec embedddings generated from ~32M tweets including s140 and the oct27 train+dev data.  Some of the data was sampled and preprocessed to have placeholder words for hashtags, mentions and URLs to be used as backoffs for words of those classes which are not found.  It also employs character vectors taken from splitting oct27 train+dev and s140 data and uses them to build averaged word vectors over characters.  This is a simple way of accounting for morphology and sparse terms while being simple enough to be a strong baseline.
+Word-based word vectors are supported by passing an -embed option to a word2vec file.  If this file is not passed, word-based word embeddings
+are not used at all.  If it is passed, word-char embeddings are concatenated to these representations.  This is essentially the dos Santos 2014 approach to tagging.
+
+
+Twitter is challenging data source for tagging problems.  The [TweetNLP project](http://www.cs.cmu.edu/~ark/TweetNLP) includes hand annotated POS data. The original taggers used for this task are described [here](http://www.cs.cmu.edu/~ark/TweetNLP/gimpel+etal.acl11.pdf).  The baseline that they compared their algorithm against got 83.38% accuracy.  The final model got 89.37% accuracy with many custom features.  Below, our simple BLSTM baseline with no custom features, and a very coarse approach to compositional character to word modeling still gets *89%-90%* accuracy.
+
+This has been tested on oct27 train, dev and test splits (http://www.cs.cmu.edu/~ark/TweetNLP), using custom word2vec embedddings generated from ~32M tweets including s140 and the oct27 train+dev data.  Some of the data was sampled and preprocessed to have placeholder words for hashtags, mentions and URLs to be used as backoffs for words of those classes which are not found.  The example below employs character vectors taken from splitting oct27 train+dev and s140 data and uses them to summed word vectors over characters.  Note that passing -cembed is not necessary, but provides a warm start for the character embeddings.
 
 ```
-th rnn-tag.lua -rnn blstm -eta .3 -optim adagrad -epochs 60 -embed /data/xdata/oct-s140clean-uber.cbow-bin -cembed /data/xdata/oct27-s140-char2vec-cbow-50.bin -hsz 100 -train /data/xdata/twpos-data-v0.3/oct27.splits/oct27.traindev -eval /data/xdata/twpos-data-v0.3/oct27.splits/oct27.test
+th tag_char_rnn.lua -rnn blstm -optim adam -eta 0.001 -epochs 60 -batchsz 50 -hsz 300 \
+-train /data/xdata/twpos-data-v0.3/oct27.splits/oct27.train \
+-valid /data/xdata/twpos-data-v0.3/oct27.splits/oct27.dev \
+-eval /data/xdata/twpos-data-v0.3/oct27.splits/oct27.test \
+-embed /data/xdata/oct-s140clean-uber.cbow-bin \
+-cembed /data/xdata/oct27-s140-char2vec-cbow-50.bin \
+-cbow
 ```
 
-## rnn-tag-fine: Dynamic (fine-tuning) implementation, input is a sparse vector
+Here is an example using convolutional filters for character embeddings, alongside word embeddings.  This is basically a combination of the dos Santos approach with the Kim parallel filter idea:
 
-Right now, the fine tuning version only supports word based tagging -- no character level backoff yet.  This will hopefully be fixed in the near future.
+```
+th tag_char_rnn.lua -rnn blstm -patience 60 -optim rmsprop -eta 0.001 -epochs 60 -batchsz 50 -hsz 300 \
+-train /data/xdata/twpos-data-v0.3/oct27.splits/oct27.train \
+-valid /data/xdata/twpos-data-v0.3/oct27.splits/oct27.dev \
+-eval /data/xdata/twpos-data-v0.3/oct27.splits/oct27.test \
+-embed /data/xdata/oct-s140clean-uber.cbow-bin \
+-cfiltsz "{1,2,3,4,5,7}" -wsz 30
+
+```
+
+If you want to use only the convolutional filter word vectors, just remove the -embed line above.
 
 # Seq2Seq
 
