@@ -25,7 +25,7 @@ function newLinear(inputSz, outputSz)
    return linear
 end
 
--- From the option list, pick one of [sgd, adagrad, adadelta, adam]
+-- From the option list, pick one of [sgd, adagrad, adadelta, adam, rmsprop]
 function optimMethod(opt)
 
    print('Trying to use optim method: ' .. opt.optim)
@@ -37,6 +37,8 @@ function optimMethod(opt)
    if opt.optim == 'sgd' then
       config.momentum = opt.mom
       optmeth = optim.sgd
+   elseif opt.optim == 'rmsprop' then
+      optmeth = optim.rmsprop
    elseif opt.optim == 'adagrad' then
       optmeth = optim.adagrad
    elseif opt.optim == 'adadelta' then

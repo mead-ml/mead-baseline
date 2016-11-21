@@ -98,7 +98,7 @@ cmd:text('Options:')
 cmd:option('-embed', DEF_EMBED, 'Word2Vec embeddings')
 cmd:option('-unif', DEF_UNIF, 'Word2Vec initialization for non-attested attributes')
 cmd:option('-eta', DEF_ETA, 'Initial learning rate')
-cmd:option('-optim', DEF_OPTIM, 'Optimization method (sgd|adagrad|adam|adadelta)')
+cmd:option('-optim', DEF_OPTIM, 'Optimization method (sgd|adagrad|adam|adadelta|rmsprop)')
 cmd:option('-decay', DEF_DECAY, 'Weight decay')
 cmd:option('-dropout', DEF_DROP, 'Dropout prob')
 cmd:option('-mom', DEF_MOM, 'Momentum for SGD')
@@ -181,7 +181,7 @@ else
    w2v = Word2VecLookupTable(opt.embed, vocab, opt.unif, false, finetune)
 end
 function afterhook() 
-      w2v.weight[w2v.vocab["<PADDING>"]]:zero()
+   w2v.weight[w2v.vocab["<PADDING>"]]:zero()
 end
 opt.afteroptim = afterhook
 
