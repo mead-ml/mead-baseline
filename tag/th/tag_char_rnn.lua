@@ -13,6 +13,7 @@ DEF_TSF = './data/twpos-data-v0.3/oct27.splits/oct27.train'
 DEF_VSF = 'NONE'
 DEF_ESF = './data/twpos-data-v0.3/oct27.splits/oct27.test'
 DEF_FILE_OUT = 'rnn-tagger.model'
+DEF_EVAL_OUT = 'rnn-tagger-test.txt'
 DEF_PATIENCE = 10
 DEF_RNN = 'blstm'
 DEF_OPTIM = 'adadelta'
@@ -156,6 +157,7 @@ cmd:option('-cembed', DEF_CEMBED, 'Character-level pre-trained embeddings')
 cmd:option('-embed', DEF_EMBED, 'Word-level pre-trained embeddings')
 cmd:option('-batchsz', DEF_BATCHSZ, 'Batch size')
 cmd:option('-save', DEF_FILE_OUT, 'Save model to')
+cmd:option('-output', DEF_EVAL_OUT, 'Write test eval to')
 cmd:option('-rnn', DEF_RNN)
 cmd:option('-train', DEF_TSF, 'Training file')
 cmd:option('-valid', DEF_VSF, 'Validation file (optional)')
@@ -220,8 +222,8 @@ local f2i = {}
 local finetune = true
 
 if opt.embed ~= 'NONE' then
+   print('Loading word embeddings ' .. opt.embed)
    word_vec = Word2VecLookupTable(opt.embed, vocab_word, opt.unif, false, finetune)
---   word_vec = Word2VecLookupTable(opt.embed, vocab_word, opt.unif, false, false)
 else
    word_vec = {}
    word_vec.dsz = 0
@@ -257,19 +259,20 @@ opt.afteroptim = afterhook
 
 -- Load Feature Vectors
 ---------------------------------------
-ts,f2i = conllSentsToIndices(opt.train, word_vec, wch_vec, maxw, f2i, opt)
+ts,f2i,_ = conllSentsToIndices(opt.train, word_vec, wch_vec, maxw, f2i, opt)
 print('Loaded training data')
 
 if opt.valid ~= 'NONE' then
    print('Using provided validation data')
-   vs,f2i = conllSentsToIndices(opt.valid, word_vec, wch_vec, maxw, f2i, opt)
+   vs,f2i,_ = conllSentsToIndices(opt.valid, word_vec, wch_vec, maxw, f2i, opt)
 else
    ts,vs = validSplit(ts, opt.valsplit, opt.ooc)
    print('Created validation split')
 end
 
-es,f2i = conllSentsToIndices(opt.eval, word_vec, wch_vec, maxw, f2i, opt)
-
+es,f2i,txts = conllSentsToIndices(opt.eval, word_vec, wch_vec, maxw, f2i, opt)
+-- print(txts)
+print(f2i)
 print('Using ' .. ts:size() .. ' examples for training')
 print('Using ' .. vs:size() .. ' examples for validation')
 print('Using ' .. es:size() .. ' examples for test')
@@ -290,9 +293,9 @@ local lastImproved = 0
 
 for i=1,opt.epochs do
     print('Training epoch ' .. i)
-    confusion = optim.ConfusionMatrix(i2f)
+    
     trainTaggerEpoch(crit, model, ts, optmeth, opt)
-    local erate = testTagger('Validation', model, vs, crit, confusion, opt)
+    local erate = testTagger('Validation', model, vs, crit, i2f, opt)
 
     if erate < errmin then
        lastImproved = i
@@ -309,8 +312,9 @@ end
 print('Highest validation acc: ' .. (100 * (1. - errmin)))
 model = loadModel(opt.save, opt.gpu)
 print('Reloaded best model')
-confusion = optim.ConfusionMatrix(i2f)
 
 -- For final evaluation, dont batch, want to get all examples once
+-- Also this will write out each example to the opt.output file, which can
+-- be used with conlleval.pl to test overall performance
 opt.batchsz = 1
-local erate = testTagger('Test', model, es, crit, confusion, opt)
+local erate = testTagger('Test', model, es, crit, i2f, opt, txts)

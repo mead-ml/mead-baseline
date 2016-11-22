@@ -7,9 +7,16 @@ function createTaggerCrit(gpu)
    return gpu and crit:cuda() or crit
 end
 
-function testTagger(phase, model, es, crit, confusion, options)
+function testTagger(phase, model, es, crit, i2f, options, txts)
 
     model:evaluate()
+    confusion = optim.ConfusionMatrix(i2f)
+
+    local file = nil
+    if txts then
+       file = io.open(options.output, 'w') or nil
+    end
+
     time = sys.clock()
     local batchsz = options.batchsz
     local steps = math.floor(es:size()/batchsz)
@@ -20,6 +27,7 @@ function testTagger(phase, model, es, crit, confusion, options)
         local xy = batch(es, i, batchsz)
  	local xch = options.gpu and xy.xch:cuda() or xy.xch
         local y = options.gpu and xy.y:cuda() or xy.y
+	local id = xy.id
 	local x_tbl = {}
 	table.insert(x_tbl, xch)
 	if options.embed ~= 'NONE' then
@@ -52,7 +60,14 @@ function testTagger(phase, model, es, crit, confusion, options)
 	      local truthj = cy[j]
 	      if truthj ~= 0 then
 		 confusion:add(guessj, truthj)
+		 if file ~= nil then
+		    file:write(txts[id[b]][j] .. ' ' .. i2f[truthj] .. ' ' .. i2f[guessj])
+		    file:write('\n')
+		 end
 	      end
+	   end
+	   if file ~= nil then
+	      file:write('\n')
 	   end
 	end
 	
@@ -63,6 +78,11 @@ function testTagger(phase, model, es, crit, confusion, options)
     local err = (1-confusion.totalValid)
     local avgEpochErr = epochErr / steps
     time = sys.clock() - time
+
+    if file ~= nil then
+       file:close()
+    end
+
     print(phase .. ' avg loss ' .. avgEpochErr)
     print(phase .. ' accuracy (error) ' .. err)
     print("elapsed " .. time .. 's')

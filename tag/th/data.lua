@@ -79,6 +79,7 @@ function batch(ts, start, batchsz)
    local xs_ch = torch.LongTensor(batchsz, siglen, maxw):fill(1)
    local xs = torch.LongTensor(batchsz, siglen):fill(1)
    local ys = torch.LongTensor(batchsz, siglen):fill(0)
+   local ids = torch.LongTensor(batchsz):fill(0)
    
    local sz = ts:size()
    local idx = (start-1)*batchsz + 1
@@ -93,9 +94,10 @@ function batch(ts, start, batchsz)
       xs_ch[i] = ex.xch
       xs[i] = ex.x
       ys[i] = ex.y
+      ids[i] = ex.id
       idx = idx + 1
    end
-   return {x=xs, xch=xs_ch,y=ys} 
+   return {x=xs, xch=xs_ch,y=ys,id=ids} 
 
 end
 
@@ -157,11 +159,11 @@ function conllSentsToIndices(file, words, chars, maxw, f2i, options)
 	  end
 
        end
-       ts:put({x=xs,xch=xs_ch,y=ys})
+       ts:put({x=xs,xch=xs_ch,y=ys,id=i})
 
     end
 
-    return ts, f2i
+    return ts, f2i, txts
 end
 
 function conllLines(tsfile)
