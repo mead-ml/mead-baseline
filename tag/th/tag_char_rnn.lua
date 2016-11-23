@@ -16,6 +16,7 @@ DEF_FILE_OUT = 'rnn-tagger.model'
 DEF_EVAL_OUT = 'rnn-tagger-test.txt'
 DEF_PATIENCE = 10
 DEF_RNN = 'blstm'
+DEF_NUM_RNN = 1
 DEF_OPTIM = 'adadelta'
 DEF_EPOCHS = 60
 DEF_ETA = 0.32
@@ -105,11 +106,7 @@ function createTaggerModel(word_vec, char_vec, opt, nc)
     local cfilts = opt.cfiltsz
     local gpu = opt.gpu
     local join_vec = word_vec.dsz + #cfilts * opt.wsz
---    local join_vec = word_vec.dsz
---   print(join_vec)
     local par = nn.ParallelTable(1, 3)
-
-
     local parseq = nn.Sequential()
   
     -- This makes it (T, B, D) on input, and it rejoins along D in output
@@ -133,7 +130,7 @@ function createTaggerModel(word_vec, char_vec, opt, nc)
     seq:add(nn.JoinTable(3))
     -- This puts us back into (B, T, Dall)
     
-    newLSTMCells(seq, join_vec, opt.hsz, 1, opt.rnn)
+    newLSTMCells(seq, join_vec, opt.hsz, opt.numrnn, opt.rnn)
     
     local subseq = nn.Sequential()
 --    subseq:add(nn.Dropout(opt.pdrop))
@@ -158,7 +155,8 @@ cmd:option('-embed', DEF_EMBED, 'Word-level pre-trained embeddings')
 cmd:option('-batchsz', DEF_BATCHSZ, 'Batch size')
 cmd:option('-save', DEF_FILE_OUT, 'Save model to')
 cmd:option('-output', DEF_EVAL_OUT, 'Write test eval to')
-cmd:option('-rnn', DEF_RNN)
+cmd:option('-rnn', DEF_RNN, 'RNN type (blstm|lstm) default is blstm')
+cmd:option('-numrnn', DEF_NUM_RNN, 'The depth of stacked RNNs')
 cmd:option('-train', DEF_TSF, 'Training file')
 cmd:option('-valid', DEF_VSF, 'Validation file (optional)')
 cmd:option('-eval', DEF_ESF, 'Testing file')

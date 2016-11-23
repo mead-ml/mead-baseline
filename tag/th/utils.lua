@@ -40,6 +40,7 @@ function newLSTMCells(seq, input, output, layers, rnntype)
 
    from = input
    to = output
+   print('Creating ' .. layers .. ' layer ' .. rnntype .. ' model')
    for i=1,layers do
 
       if rnntype == 'blstm' then
