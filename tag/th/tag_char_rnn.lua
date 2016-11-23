@@ -138,6 +138,7 @@ function createTaggerModel(word_vec, char_vec, opt, nc)
     subseq:add(nn.Dropout(opt.pdrop))
 
     subseq:add(newLinear(opt.hsz, nc))
+
     subseq:add(nn.LogSoftMax())
     seq:add(nn.Sequencer(nn.MaskZero(subseq, 1)))
 --    print(seq)

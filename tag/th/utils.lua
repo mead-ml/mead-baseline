@@ -76,23 +76,6 @@ function newLSTMCells(seq, input, output, layers, rnntype)
    return lstm
 end
 
---[[
-function newLSTMCells(seq, input, output, layers, rnntype)
-   seq:add(nn.SplitTable(2))
-   from = input
-   to = output
-   if rnntype == 'blstm' then
-      local rnnfwd = nn.FastLSTM(from, to):maskZero(1)
-      local rnnbwd = nn.FastLSTM(from, to):maskZero(1)
-      seq:add(nn.BiSequencer(rnnfwd, rnnbwd, nn.CAddTable()))
-    else
-       print('Using FastLSTM (no matter what you asked for)')
-       local rnnfwd = nn.FastLSTM(from, to):maskZero(1)
-       seq:add(nn.Sequencer(rnnfwd))
-   end
-end
---]]
-
 -- From the option list, pick one of [sgd, adagrad, adadelta, adam, rmsprop]
 function optimMethod(opt)
 
