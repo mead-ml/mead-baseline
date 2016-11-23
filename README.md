@@ -112,7 +112,7 @@ This code is useful for tagging tasks, e.g., POS tagging, chunking and NER taggi
 and then apply a shared fully connected layer per RNN output to produce a label.
 A common modification is to use Bidirectional LSTMs -- one in the forward direction, and one in the backward direction.  This usually improves the resolution of the tagger significantly.  That is the default approach taken here.
 
-To execute these models it is necessary to form word vectors.  It has been shown that character level modeling supports morphosyntatic structure for tagging tasks.  It is common to combine words and characters to form vectors, although recently, direct character-based formation only has become more popular.
+To execute these models it is necessary to form word vectors.  It has been shown that character level modeling is important in deep models to support morphosyntatic structure for tagging tasks.  It is common to combine words and characters to form vectors, although recently, direct character-based formation only has become more popular.
 
 ## tag_char_rnn: word/character-based RNN tagger
 
