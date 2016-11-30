@@ -17,7 +17,7 @@ REPLACE = { "'s": " 's ",
           
   
 def splits(text):
-    return filter(lambda s: len(s) != 0, re.split('\s+', text))
+    return list(filter(lambda s: len(s) != 0, re.split('\s+', text)))
 
 def doClean(l):
     l = re.sub(r"[^A-Za-z0-9(),!?\'\`]", " ", l)
