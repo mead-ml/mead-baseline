@@ -13,7 +13,7 @@ class ConvModel:
         basename = outdir + '/' + base
         tf.train.write_graph(sess.graph_def, outdir, base + '.graph', as_text=False)
         with open(basename + '.saver', 'w+b') as f:
-            f.write(str(self.saver.as_saver_def()))
+            f.write(bytes(self.saver.as_saver_def()))
         self.saver.save(sess, basename + '.model')
 
         with open(basename + '.labels', 'w') as f:
