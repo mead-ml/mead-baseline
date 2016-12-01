@@ -24,31 +24,30 @@ function conllBuildVocab(files)
     
 
    local vocab_word = {}
+   
+   local vocab_ch = {}
+   
+   local maxw = 0
+   for i=1,#files do
+      if files[i] ~= nil and files[i] ~= 'NONE' then
+	 local tsfile = io.open(files[i], 'r')
+	 for line in tsfile:lines() do
+	    local states = line:split('%s+')
+	    if #states ~= 0 then
 
-    local vocab_ch = {}
-
-    local maxw = 0
-    for i=1,#files do
-       if files[i] ~= nil and files[i] ~= 'NONE' then
-	  local tsfile = io.open(files[i], 'r')
-	  for line in tsfile:lines() do
-	     local states = line:split('%s+')
-	     if #states ~= 0 then
-
-		local w = states[1]
-		local cleaned = cleanup(w)
-		vocab_word[cleaned] = vocab_word[cleaned] or 1
-		maxw = math.max(maxw, #w)
-		for k=1,#w do
-		   local ch = w:sub(k, k)
-		   vocab_ch[ch] = vocab_ch[ch] or 1
-		end
-	     end
-	  end
-       end
-    end
-    
-    return maxw, vocab_ch, vocab_word
+	       local w = states[1]
+	       local cleaned = cleanup(w)
+	       vocab_word[cleaned] = vocab_word[cleaned] or 1
+	       maxw = math.max(maxw, #w)
+	       for k=1,#w do
+		  local ch = w:sub(k, k)
+		  vocab_ch[ch] = vocab_ch[ch] or 1
+	       end
+	    end
+	 end
+      end
+   end
+   return maxw, vocab_ch, vocab_word
 end
 
 -- Create a valid split of this data store, splitting on a fraction

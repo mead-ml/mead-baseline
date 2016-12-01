@@ -54,7 +54,7 @@ class Word2VecModel:
             # Anything left over, unattested in w2v model, just use a random
             # initialization
         if knownvocab is not None:
-            unknown = {v: cnt for v,cnt in knownvocab.iteritems() if cnt > 0}
+            unknown = {v: cnt for v,cnt in knownvocab.items() if cnt > 0}
             for v in unknown:
                 self.vocab[v] = k
                 k = k + 1
@@ -68,6 +68,37 @@ class Word2VecModel:
         if nullifabsent:
             return None
         return self.nullv
+
+class RandomInitVecModel:
+
+    def __init__(self, dsz, knownvocab, unifweight=None):
+
+        uw = 0.0 if unifweight == None else unifweight
+        self.vocab = {}
+        self.vocab["<PADDING>"] = 0
+        self.dsz = dsz
+        self.vsz = 0
+
+            
+        attested = {v: cnt for v,cnt in knownvocab.items() if cnt > 0}
+        for k,v in enumerate(attested):
+            self.vocab[v] = k
+            k = k + 1
+            self.vsz += 1
+
+        self.weights = np.random.uniform(-uw, uw, (self.vsz+1, self.dsz))
+
+
+        self.nullv = np.zeros(self.dsz, dtype=np.float32)
+        self.weights[0] = self.nullv
+
+    def lookup(self, word, nullifabsent=True):
+        if word in self.vocab:
+            return self.weights[self.vocab[word]]
+        if nullifabsent:
+            return None
+        return self.nullv
+
 
 if __name__ == '__main__':
     w2v = Word2VecModel('/data/xdata/GoogleNews-vectors-negative300.bin')

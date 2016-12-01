@@ -5,6 +5,26 @@ import re
 import math
 import codecs
 
+UNREP_EMOTICONS = (
+    ':)',
+    ':(((',
+    ':D',
+    '=)',
+    ':-)',
+    '=(',
+    '(=',
+    '=[[',
+)
+
+def cleanup(word):
+    if word.startswith('http'): return 'URL'
+    if word.startswith('@'): return '@@@@'
+    if word.startswith('#'): return '####'
+    if word == '"': return ','
+    if word in UNREP_EMOTICONS: return ';)'
+    if word == '<3': return '&lt;3'
+    return word.lower()
+
 def revlut(lut):
     return {v: k for k, v in lut.items()}
 
@@ -45,8 +65,10 @@ def numLines(filename):
     return lines
 
 def conllBuildVocab(files):
-    vocab = Counter()
-    
+    vocab_word = Counter()
+    vocab_ch = Counter()
+    maxw = 0
+
     for file in files:
         if file is None:
             continue
@@ -55,8 +77,11 @@ def conllBuildVocab(files):
                 states = re.split("\s", line)
                 if len(states) > 0:
                     w = states[0]
-                    vocab[w] += 1
-    return vocab
+                    vocab_word[w] += 1
+                    maxw = max(maxw, len(w))
+                    for k in w:
+                        vocab_ch[k] += 1
+    return maxw, vocab_ch, vocab_word
 
 def conllLines(tsfile):
 
@@ -64,7 +89,7 @@ def conllLines(tsfile):
     lbls = []
     txt = []
     lbl = []
-
+    
     with codecs.open(tsfile, encoding='utf-8', mode='r') as f:
         for line in f:
             states = re.split("\s", line.strip())
@@ -81,83 +106,48 @@ def conllLines(tsfile):
 
     return txts, lbls
 
+def conllSentsToIndices(filename, words, chars, maxw, f2i, options):
 
-def conllSentsToVectors(filename, w2v, f2i, options):
-    
-    batchsz = options.get("batchsz", 1)
+    chsz = chars.dsz
     mxlen = options.get("mxlen", 40)
-    zp = options.get("zp", 0)
+    mxcfiltsz = np.max(options["cfiltsz"])
+
+    halfcfiltsz = math.floor(mxcfiltsz / 2)
+    print(mxcfiltsz, halfcfiltsz)    
     b = 0
     ts = []
     idx = 0
     txts, lbls = conllLines(filename)
 
     for i in range(len(txts)):
+
+        xs_ch = np.zeros((mxlen, maxw), dtype=np.int)
+        xs = np.zeros((mxlen), dtype=np.int)
+        ys = np.zeros((mxlen), dtype=np.int)
+        
         lv = lbls[i]
         v = txts[i]
-        offset = i % batchsz        
-        siglen = mxlen + 2*zp
         
-        if offset == 0:
-            # Write batch
-            if b > 0:
-                ts.append({"x":xs,"y":ys})
-            b += 1
-            thisBatchSz = min(batchsz, len(txts) - i)
-            xs = np.zeros((thisBatchSz, siglen, wsz))
-            ys = np.zeros((thisBatchSz, siglen))
-
-        for j in range(min(siglen, len(v))):
-            tok = v[j]
+        for j in range(mxlen):
+            
+            if j == len(v):
+                break
+            
+            w = v[j]
+            nch = min(len(w), int(maxw - 2*halfcfiltsz))
             label = lv[j]
+
             if not label in f2i:
                 idx += 1
                 f2i[label] = idx
-            ys[offset][j+zp] = f2i[label]
-            xs[offset][j+zp] = w2v.lookup(tok)
-    if thisBatchSz > 0:
-        ts.append({"x":xs,"y":ys})
 
-    return ts, f2i
+            ys[j] = f2i[label]
+            xs[j] = words.vocab.get(cleanup(w), 0)
+            for k in range(nch):
+                xs_ch[j,k+halfcfiltsz] = chars.vocab.get(w[k], 0)
+        ts.append({"x":xs,"y":ys, "xch": xs_ch, "id": i })
 
-def conllSentsToIndices(filename, w2v, f2i, options):
-    
-    batchsz = options.get("batchsz", 1)
-    mxlen = options.get("mxlen", 40)
-    zp = options.get("zp", 0)
-    b = 0
-    ts = []
-    idx = 0
-    txts, lbls = conllLines(filename)
-
-    for i in range(len(txts)):
-        lv = lbls[i]
-        v = txts[i]
-        offset = i % batchsz
-        siglen = mxlen + 2*zp
-        
-        if offset == 0:
-            # Write batch
-            if b > 0:
-                ts.append({"x":xs,"y":ys})
-            b += 1
-            thisBatchSz = min(batchsz, len(txts) - i)
-            xs = np.zeros((thisBatchSz, siglen))
-            ys = np.zeros((thisBatchSz, siglen))
-
-        
-        for j in range(min(siglen, len(v))):
-            tok = v[j]
-            label = lv[j]
-            if not label in f2i:
-                idx += 1
-                f2i[label] = idx
-            ys[offset][j+zp] = f2i[label]
-            xs[offset][j+zp] = w2v.vocab.get(tok, 0)
-    if thisBatchSz > 0:
-        ts.append({"x":xs,"y":ys})
-
-    return ts, f2i
+    return ts, f2i, txts
 
 def validSplit(data, splitfrac):
     train = []
@@ -165,3 +155,29 @@ def validSplit(data, splitfrac):
     numinst = len(data)
     heldout = int(math.floor(numinst * (1-splitfrac)))
     return data[1:heldout], data[heldout:]
+
+def batch(ts, start, batchsz):
+    ex = ts[start]
+    siglen = ex["x"].shape[0]
+    maxw = ex["xch"].shape[1]
+    
+    xs_ch = np.zeros((batchsz, siglen, maxw), dtype=np.int)
+    xs = np.zeros((batchsz, siglen), dtype=np.int)
+    ys = np.zeros((batchsz, siglen), dtype=np.int)
+    ids = np.zeros((batchsz), dtype=np.int)
+
+    sz = len(ts)
+    idx = start * batchsz
+    for i in range(batchsz):
+        if idx >= sz: idx = 0
+        
+        ex = ts[idx]
+        xs_ch[i] = ex["xch"]
+        xs[i] = ex["x"]
+        ys[i] = ex["y"]
+        ids[i] = ex["id"]
+        idx += 1
+    return {"x": xs, "y": ys, "xch": xs_ch }
+        
+
+

@@ -83,10 +83,11 @@ function testTagger(phase, model, es, crit, i2f, options, txts)
        file:close()
     end
 
+    acc = 1 - err
     print(phase .. ' avg loss ' .. avgEpochErr)
-    print(phase .. ' accuracy (error) ' .. err)
+    print(phase .. ' accuracy ' .. acc)
     print("elapsed " .. time .. 's')
-    return err
+    return avgEpochErr, acc
 end
 
 function trainTaggerEpoch(crit, model, ts, optmeth, options)

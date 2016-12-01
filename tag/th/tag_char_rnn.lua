@@ -6,11 +6,12 @@ require 'torchure'
 require 'train'
 require 'data'
 require 'cudnn'
-require 'ReformTBD'
+require 'model'
 
-DEF_BATCHSZ = 8
+
+DEF_BATCHSZ = 50
 DEF_TSF = './data/twpos-data-v0.3/oct27.splits/oct27.train'
-DEF_VSF = 'NONE'
+DEF_VSF = './data/twpos-data-v0.3/oct27.splits/oct27.dev'
 DEF_ESF = './data/twpos-data-v0.3/oct27.splits/oct27.test'
 DEF_FILE_OUT = 'rnn-tagger.model'
 DEF_EVAL_OUT = 'rnn-tagger-test.txt'
@@ -36,116 +37,6 @@ DEF_OUT_OF_CORE = false
 DEF_EMBED = 'NONE'
 DEF_CEMBED = 'NONE'
 torch.setdefaulttensortype('torch.FloatTensor')
-
--- Take in (T,B,Ch), spit out (T,B,D)
--- MapTable will operate the sequence over each word, which causes them
--- to be returned in (T,B,D) order
--- when we get to the char vectors, we have (B, Tch, Dch) outputs
--- This is what we need to do convolution over the words letters
-function createConvCharWordEmbeddings(char_vec, opt)
-
-   -- Each of these operations is performed starting at (B, Ch) over T clones
-   local seq = nn.Sequential()
-   
-   local filts = opt.cfiltsz
-   -- First step transforms one-hot to (B, Tch) to (B, Tch, Dch)
-   seq:add(char_vec)
-   concat = nn.Concat(2)
-   for i=1,#filts do
-      local filtsz = filts[i]
-      print('Creating char filter of size ' .. filtsz)
-      local subseq = nn.Sequential()
-      subseq:add(newConv1D(char_vec.dsz, opt.wsz, filtsz, opt.gpu))
-      subseq:add(activationFor("relu", opt.gpu))
-      subseq:add(nn.Max(2))
-      subseq:add(nn.Dropout(opt.pdrop))
-      concat:add(subseq)
-   end
-   -- Concat leaves us with (B, D)
-   seq:add(concat)
-
-   newSkipConn(seq, #filts * opt.wsz)
-
-   -- Sequencing leaves us with (T, B, D)
-   local sequencer = nn.MapTable(seq)
-   return sequencer
-
-end
-
--- Take in (T, B, Ch) data, since we put it through a MapTable
--- we end up with each word being processed at a time, for each word
--- we are presented with (B, Ch) lookup table, which yields a char vector
--- at each T.  Then we sum along the Ch dimension which gives us a char word
--- vector
-function createCBOWCharWordEmbeddings(char_vec, opt)
-
-   local seq = nn.Sequential()
-   
-   seq:add(char_vec)
-
-   -- To go through conv1d, we know that we have (B,T,H) data
-   -- we want to sum over time
-   seq:add(nn.Sum(2))
-   local sequencer = nn.MapTable(seq)
-   return sequencer
-
-end
-
-function createCharWordEmbeddings(char_vec, opt)
-   if opt.cbow then
-      print('Using continuous bag of characters for char-level word embeddings')
-      return createCBOWCharWordEmbeddings(char_vec, opt)
-   end
-   print('Using CNN char-level word embeddings')
-   return createConvCharWordEmbeddings(char_vec, opt)
-end
-
-function createTaggerModel(word_vec, char_vec, opt, nc)
-    -- Create a processing chain
-    local seq = nn.Sequential()
-    local cfilts = opt.cfiltsz
-    local gpu = opt.gpu
-    local join_vec = word_vec.dsz + #cfilts * opt.wsz
-    local par = nn.ParallelTable(1, 3)
-    local parseq = nn.Sequential()
-  
-    -- This makes it (T, B, D) on input, and it rejoins along D in output
-    parseq:add(nn.SplitTable(2,3))
-    parseq:add(createCharWordEmbeddings(char_vec, opt))
-    parseq:add(nn.JoinTable(1))
-    -- (TxB, Dch)
-    parseq:add(ReformTBD(opt.mxlen, #cfilts * opt.wsz))
-    -- This puts us back into (B, T, Dch)
-    parseq:add(nn.Transpose({1,2}))
-    par:add(parseq)
-
-    if opt.embed ~= 'NONE' then
-       par:add(word_vec)
-    else
-       print('Direct word embeddings will not be used')
-    end
-
-    seq:add(par)
-    -- This is b/c parallel joins the table on the third dimension
-    seq:add(nn.JoinTable(3))
-    -- This puts us back into (B, T, Dall)
-    
-    newLSTMCells(seq, join_vec, opt.hsz, opt.numrnn, opt.rnn)
-    
-    local subseq = nn.Sequential()
---    subseq:add(nn.Dropout(opt.pdrop))
---    newSkipConn(subseq, opt.hsz)
-    subseq:add(nn.Dropout(opt.pdrop))
-
-    subseq:add(newLinear(opt.hsz, nc))
-
-    subseq:add(nn.LogSoftMax())
-    seq:add(nn.Sequencer(nn.MaskZero(subseq, 1)))
---    print(seq)
-
-    -- GPU if possible
-    return gpu and seq:cuda() or seq
-end
 
 --------------------------
 -- Command line handling
@@ -175,7 +66,7 @@ cmd:option('-charsz', DEF_CHARSZ, 'Character embedding depth')
 cmd:option('-wsz', DEF_WSZ, 'Word embedding depth')
 cmd:option('-proc', DEF_PROC)
 cmd:option('-patience', DEF_PATIENCE)
-cmd:option('-pdrop', DEF_PDROP, 'Dropout probability')
+cmd:option('-dropout', DEF_PDROP, 'Dropout probability')
 cmd:option('-ooc', DEF_OUT_OF_CORE, 'Should data batches be file-backed?')
 cmd:option('-mxlen', DEF_MXLEN, 'Max sentence length')
 cmd:option('-cbow', false, 'Do CBOW for characters')
@@ -190,7 +81,6 @@ opt.cfiltsz = loadstring("return " .. opt.cfiltsz)()
 ----------------------------------------
 
 state, optmeth = optimMethod(opt)
-
 
 --------------------------------------
 -- Processing on GPU or CPU
@@ -230,7 +120,7 @@ end
 
 -- Character embeddings
 if opt.cembed == 'NONE' then
-   if opt.charsz ~= opt.wsz then
+   if opt.charsz ~= opt.wsz and opt.cbow == true then
       print('Warning, you have opted for CBOW char embeddings, but have provided differing sizes for char embedding depth and word depth.  This is not possible, forcing char embedding depth to be word depth ' .. opt.wsz)
       opt.charsz = opt.wsz
    end
@@ -240,7 +130,7 @@ else
    print('Using pre-trained character embeddings ' .. opt.cembed)
    wch_vec = Word2VecLookupTable(opt.cembed, vocab_ch, opt.unif, false, finetune)
    opt.charsz = wch_vec.dsz
-   if opt.charsz ~= opt.wsz then
+   if opt.charsz ~= opt.wsz and opt.cbow == true then
       print('Warning, you have opted for CBOW char embeddings, and have provided pre-trained char vector embeddings.  To make this work, setting word vector size to character vector size ' .. opt.charsz)
       opt.wsz = opt.charsz
    end
@@ -287,19 +177,19 @@ local crit = createTaggerCrit(opt.gpu)
 
 local model = createTaggerModel(word_vec, wch_vec, opt, nc)
 
-local errmin = 1;
+local maxacc = 0
 local lastImproved = 0
 
 for i=1,opt.epochs do
     print('Training epoch ' .. i)
     
     trainTaggerEpoch(crit, model, ts, optmeth, opt)
-    local erate = testTagger('Validation', model, vs, crit, i2f, opt)
+    local loss, acc = testTagger('Validation', model, vs, crit, i2f, opt)
 
-    if erate < errmin then
+    if acc > maxacc then
        lastImproved = i
-       errmin = erate
-       print('Lowest error achieved yet -- writing model')
+       maxacc = acc
+       print('Highest dev acc achieved yet -- writing model')
        saveModel(model, opt.save, opt.gpu)
     end
     if (i - lastImproved) > opt.patience then
@@ -308,7 +198,11 @@ for i=1,opt.epochs do
     end
 end
 
-print('Highest validation acc: ' .. (100 * (1. - errmin)))
+print("-----------------------------------------------------")
+print('Highest dev acc: ' .. maxacc)
+print('=====================================================')
+print('Evaluating best model on test data')
+
 model = loadModel(opt.save, opt.gpu)
 print('Reloaded best model')
 
@@ -316,4 +210,9 @@ print('Reloaded best model')
 -- Also this will write out each example to the opt.output file, which can
 -- be used with conlleval.pl to test overall performance
 opt.batchsz = 1
-local erate = testTagger('Test', model, es, crit, i2f, opt, txts)
+local loss, acc = testTagger('Test', model, es, crit, i2f, opt, txts)
+
+print("-----------------------------------------------------")
+print('Test loss '.. loss)
+print('Test acc ' .. acc)
+print('=====================================================')
