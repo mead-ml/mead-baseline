@@ -53,7 +53,7 @@ class Trainer:
 
         print('Train (Loss %.4f) (Acc %d/%d = %.4f) (%.3f sec)' % (float(total_loss)/total, total_corr, total, float(total_corr)/total, duration))
 
-    def test(self, ts, sess):
+    def test(self, ts, sess, phase='Test'):
 
         total_loss = total_corr = total = 0
         start_time = time.time()
@@ -68,5 +68,5 @@ class Trainer:
         
         duration = time.time() - start_time
 
-        print('Test (Loss %.4f) (Acc %d/%d = %.4f) (%.3f sec)' % (float(total_loss)/total, total_corr, total, float(total_corr)/total, duration))
+        print('%s (Loss %.4f) (Acc %d/%d = %.4f) (%.3f sec)' % (phase, float(total_loss)/total, total_corr, total, float(total_corr)/total, duration))
         return float(total_corr)/total

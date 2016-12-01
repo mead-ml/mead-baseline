@@ -82,11 +82,12 @@ with tf.Graph().as_default():
         for i in range(FLAGS.epochs):
             print('Training epoch %d' % (i+1))
             trainer.train(ts, sess, train_writer, FLAGS.dropout)
-            this_acc = trainer.test(vs, sess)
+            this_acc = trainer.test(vs, sess, 'Validation')
             if this_acc > max_acc:
                 max_acc = this_acc
                 last_improved = i
                 trainer.checkpoint(sess, FLAGS.outdir, '%s' % FLAGS.save)
+                print('Highest acc achieved yet -- writing model')
 
             if (i - last_improved) > FLAGS.patience:
                 print('Stopping due to persistent failures to improve')
