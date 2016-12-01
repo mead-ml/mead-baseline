@@ -109,7 +109,10 @@ class ConvModel:
                 with tf.name_scope('cmot-%s' % fsz) as scope:
                     siglen = maxlen - fsz + 1
                     conv = convolution2d(expanded, cmotsz, [fsz, dsz], [1, 1], padding='VALID', scope=scope)
-                    mot = max_pool2d(conv, [siglen, 1], 1, padding='VALID', scope=scope)
+                    # First dim is batch, second dim is time, third dim is feature map
+                    # Max over time pooling, 2 calls below are equivalent
+                    mot = tf.reduce_max(conv, [1], keep_dims=True)
+                    #mot = max_pool2d(conv, [siglen, 1], 1, padding='VALID', scope=scope)
                 mots.append(mot)
             combine = flatten(tf.concat(3, mots))
 
@@ -125,7 +128,7 @@ class ConvModel:
                     # This makes it more like C/W 2011
                     if hsz > 0:
                         print('Adding a projection layer after MOT pooling')
-                        proj = fully_connected(hsz, scope='proj')
+                        proj = fully_connected(drop, hsz, scope='proj')
                         drop = tf.nn.dropout(proj, self.pkeep)
 
                     with tf.name_scope("output"):
