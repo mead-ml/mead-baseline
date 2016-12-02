@@ -83,15 +83,22 @@ class ConvModel:
         self.x = tf.placeholder(tf.int32, [None, maxlen], name="x")
         self.y = tf.placeholder(tf.int32, [None, nc], name="y")
 
+        filtsz = [int(filt) for filt in filtsz.split(',') ]
+        mxfiltsz = np.max(filtsz)
+        halffiltsz = int(math.floor(mxfiltsz / 2))
+
         # Use pre-trained embeddings from word2vec
         with tf.name_scope("LUT"):
             W = tf.Variable(tf.constant(w2v.weights, dtype=tf.float32), name = "W", trainable=finetune)
             e0 = tf.scatter_update(W, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, dsz]))
             with tf.control_dependencies([e0]):
-                lut = tf.nn.embedding_lookup(W, self.x)
+                # Zeropad out the word ids in the sentence to half the max
+                # filter size, to make a wide convolution.  This way we
+                # don't have to explicitly pad the x data upfront
+                zeropad = tf.pad(self.x, [[0,0], [halffiltsz, halffiltsz]], "CONSTANT") 
+                lut = tf.nn.embedding_lookup(W, zeropad)
                 expanded = tf.expand_dims(lut, -1)
 
-        filtsz = [int(filt) for filt in filtsz.split(',') ]
         mots = []
 
         seed = np.random.randint(10e8)

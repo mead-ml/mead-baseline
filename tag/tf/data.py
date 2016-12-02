@@ -110,10 +110,7 @@ def conllSentsToIndices(filename, words, chars, maxw, f2i, options):
 
     chsz = chars.dsz
     mxlen = options.get("mxlen", 40)
-    mxcfiltsz = np.max(options["cfiltsz"])
 
-    halfcfiltsz = math.floor(mxcfiltsz / 2)
-    print(mxcfiltsz, halfcfiltsz)    
     b = 0
     ts = []
     idx = 0
@@ -134,7 +131,7 @@ def conllSentsToIndices(filename, words, chars, maxw, f2i, options):
                 break
             
             w = v[j]
-            nch = min(len(w), int(maxw - 2*halfcfiltsz))
+            nch = min(len(w), maxw)
             label = lv[j]
 
             if not label in f2i:
@@ -144,7 +141,7 @@ def conllSentsToIndices(filename, words, chars, maxw, f2i, options):
             ys[j] = f2i[label]
             xs[j] = words.vocab.get(cleanup(w), 0)
             for k in range(nch):
-                xs_ch[j,k+halfcfiltsz] = chars.vocab.get(w[k], 0)
+                xs_ch[j,k] = chars.vocab.get(w[k], 0)
         ts.append({"x":xs,"y":ys, "xch": xs_ch, "id": i })
 
     return ts, f2i, txts

@@ -105,7 +105,6 @@ else:
 f2i = {"<PAD>":0}
 
 opts = { 'batchsz': FLAGS.batchsz,
-         'cfiltsz': [int(filt) for filt in FLAGS.cfiltsz.split(',')],
          'mxlen': FLAGS.mxlen }
 
 ts, f2i, _ = conllSentsToIndices(FLAGS.train, word_vec, char_vec, maxw, f2i, opts)

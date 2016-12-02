@@ -6,6 +6,7 @@ from tensorflow.python.platform import gfile
 from tensorflow.contrib.tensorboard.plugins import projector
 from utils import *
 import json
+import math
 
 def writeWordEmbeddings(word_vec, filename):
     idx2word = revlut(word_vec.vocab)
@@ -73,7 +74,14 @@ def charWordConvEmbeddings(char_vec, maxw, filtsz, char_dsz, wsz):
 def sharedCharWord(Wch, xch_i, maxw, filtsz, char_dsz, wsz, reuse):
 
     with tf.variable_scope("SharedCharWord", reuse=reuse):
-        cembed = tf.nn.embedding_lookup(Wch, xch_i)
+        # Zeropad the letters out to half the max filter size, to account for
+        # wide convolution.  This way we don't have to explicitly pad the
+        # data upfront, which means our Y sequences can be assumed not to
+        # start with zeros
+        mxfiltsz = np.max(filtsz)
+        halffiltsz = int(math.floor(mxfiltsz / 2))
+        zeropad = tf.pad(xch_i, [[0,0], [halffiltsz, halffiltsz]], "CONSTANT")
+        cembed = tf.nn.embedding_lookup(Wch, zeropad)
         if len(filtsz) == 0 or filtsz[0] == 0:
             return tf.reduce_sum(cembed, [1])
         return charWordConvEmbeddings(cembed, maxw, filtsz, char_dsz, wsz)

@@ -42,7 +42,6 @@ f2i = {}
 opts = { 'batchsz': FLAGS.batchsz,
          'clean': FLAGS.clean,
          'chars': FLAGS.chars,
-         'filtsz': [int(filt) for filt in FLAGS.filtsz.split(',')],
          'mxlen': FLAGS.mxlen }
 ts, f2i = loadTemporalIndices(FLAGS.train, w2vModel.vocab, f2i, opts)
 print('Loaded  training data')

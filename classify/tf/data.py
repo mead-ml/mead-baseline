@@ -70,12 +70,9 @@ def loadTemporalIndices(filename, index, f2i, options):
     clean = options.get("clean", True)
     chars = options.get("chars", False)
     PAD = index['<PADDING>']
-    mxfiltsz = np.max(options["filtsz"])
     mxlen = options.get("mxlen", 1000)
-    mxsiglen = mxlen - mxfiltsz
     labelIdx = len(f2i)
     
-    halffiltsz = int(math.floor(mxfiltsz / 2))
     labelIdx = len(f2i)
 
     n = numLines(filename)
@@ -103,12 +100,12 @@ def loadTemporalIndices(filename, index, f2i, options):
  
             y[offset] = f2i[label]
             toks = splits(text)
-            mx = min(len(toks), mxsiglen)
+            mx = min(len(toks), mxlen)
             toks = toks[:mx]
             for j in range(len(toks)):
                 w = toks[j]
                 key = index.get(w, PAD)
-                x[offset][j+halffiltsz] = key
+                x[offset][j] = key
             i = i + 1
     if thisBatchSz > 0:
         ts.append({"x":x,"y":y})
