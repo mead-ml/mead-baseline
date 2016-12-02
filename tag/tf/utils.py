@@ -1,4 +1,5 @@
 import tensorflow as tf
+import numpy as np
 import csv
 import codecs
 import cStringIO
@@ -8,6 +9,18 @@ def tensorToSeq(tensor):
 
 def seqToTensor(sequence):
     return tf.transpose(tf.pack(sequence), perm=[1, 0, 2])
+
+def fill_y(nc, yidx):
+    batchsz = yidx.shape[0]
+    siglen = yidx.shape[1]
+    dense = np.zeros((batchsz, siglen, nc), dtype=np.int)
+    for i in range(batchsz):
+        for j in range(siglen):
+            idx = int(yidx[i, j])
+            if idx > 0:
+                dense[i, j, idx] = 1
+
+    return dense
 
 
 # (B, T, L), gets a one out of L at each T if its populated

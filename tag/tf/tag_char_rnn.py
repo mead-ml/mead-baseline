@@ -7,10 +7,8 @@ from data import conllSentsToIndices
 from data import batch
 from data import revlut
 from data import validSplit
-from model import createModel
-from model import createLoss
-from model import vizWordEmbeddings
-from model import sentenceLengths
+from model import TaggerModel
+from train import Trainer
 import time
 
 DEF_BATCHSZ = 50
@@ -67,89 +65,9 @@ flags.DEFINE_integer('wsz', DEF_WSZ, 'Word embedding depth')
 flags.DEFINE_float('valsplit', DEF_VALSPLIT, 'Validation split if no valid set')
 #flags.DEFINE_string('cfiltsz', '0', 'Character filter sizes')
 flags.DEFINE_boolean('cbow', False, 'Do CBOW for characters')
+flags.DEFINE_string('save', DEF_FILE_OUT, 'Save basename')
 #flags.DEFINE_boolean('crf', False, 'Use CRF on top')
 
-def createTrainer(loss):
-    
-    global_step = tf.Variable(0, name='global_step', trainable=False)
-    if FLAGS.optim == 'adadelta':
-        optimizer = tf.train.AdadeltaOptimizer(FLAGS.eta, 0.95, 1e-6)
-    elif FLAGS.optim == 'adam':
-        optimizer = tf.train.AdamOptimizer(FLAGS.eta)
-    else:
-        optimizer = tf.train.GradientDescentOptimizer(FLAGS.eta)
-
-    train_op = optimizer.minimize(loss, global_step=global_step)
-    return train_op, global_step
-
-# Fill out the y matrix with 0s for other labels
-# can replace with one_hot!
-def fill_y(nc, yidx):
-    batchsz = yidx.shape[0]
-    siglen = yidx.shape[1]
-    dense = np.zeros((batchsz, siglen, nc), dtype=np.int)
-    for i in range(batchsz):
-        for j in range(siglen):
-            idx = int(yidx[i, j])
-            if idx > 0:
-                dense[i, j, idx] = 1
-
-    return dense
-
-
-def train(ts, sess, summary_writer, train_op, global_step, summary_op, loss, err, total, batchsz):
-
-
-    start_time = time.time()
-
-    steps = int(math.floor(len(ts)/float(batchsz)))
-    #print(len(ts), batchsz, steps)
-
-    shuffle = np.random.permutation(np.arange(steps))
-
-    total_loss = total_err = total_sum = 0
-
-    for i in range(steps):
-        si = shuffle[i]
-        ts_i = batch(ts, si, batchsz)
-        feed_dict = {x: ts_i["x"], xch: ts_i["xch"], y: fill_y(len(f2i), ts_i["y"]), pkeep: (1-FLAGS.dropout)}
-        
-        _, step, summary_str, lossv, errv, totalv = sess.run([train_op, global_step, summary_op, loss, err, total], feed_dict=feed_dict)
-        summary_writer.add_summary(summary_str, step)
-        total_err += errv
-        total_loss += lossv
-        total_sum += totalv
-
-    duration = time.time() - start_time
-    total_correct = float(total_sum - total_err)
-    print('Train (Loss %.4f) (Acc %d/%d = %.4f) (%.3f sec)' % (float(total_loss)/len(ts), total_correct, total_sum, total_correct/total_sum, duration))
-
-def test(phase, ts, sess, loss, err, total, batchsz):
-
-    total_loss = total_err = total_sum = 0
-    start_time = time.time()
-    
-    steps = int(math.floor(len(ts)/float(batchsz)))
-    #print(len(ts), batchsz, steps)
-
-    for j in range(steps):
-
-        ts_i = batch(ts, j, batchsz)
-            
-        feed_dict = {x: ts_i["x"], xch: ts_i["xch"], y: fill_y(len(f2i), ts_i["y"]), pkeep: 1}
-        
-        lossv, errv, totalv = sess.run([loss, err, total], feed_dict=feed_dict)
-
-        total_loss += lossv
-        total_err += errv
-        total_sum += totalv
-        
-    duration = time.time() - start_time
-    total_correct = float(total_sum - total_err)
-    acc = total_correct / total_sum
-    avg_loss = float(total_loss)/len(ts)
-    print('%s (Loss %.4f) (Acc %d/%d = %.4f) (%.3f sec)' % (phase, avg_loss, total_correct, total_sum, acc, duration))
-    return avg_loss, acc
 
 
 maxw, vocab_ch, vocab_word = conllBuildVocab([FLAGS.train, 
@@ -214,61 +132,60 @@ print('Using %d examples for test' % len(es))
 with tf.Graph().as_default():
     sess = tf.Session()
     with sess.as_default():
-        x, xch, y, pkeep, model, best = createModel(len(f2i),
-                                                    word_vec,
-                                                    char_vec,
-                                                    FLAGS.mxlen,
-                                                    maxw,
-                                                    FLAGS.rnn,
-                                                    FLAGS.wsz,
-                                                    FLAGS.hsz,
-                                                    FLAGS.cfiltsz)
+
+        model = TaggerModel()
+        model.params(f2i,
+                     word_vec,
+                     char_vec,
+                     FLAGS.mxlen,
+                     maxw,
+                     FLAGS.rnn,
+                     FLAGS.wsz,
+                     FLAGS.hsz,
+                     FLAGS.cfiltsz)
 
 
-        loss, err, total = createLoss(model, best, y)
-        loss_summary = tf.scalar_summary("loss", loss)
-        
-        train_op, global_step = createTrainer(loss)
-        
-        summary_op = tf.merge_all_summaries()
-        train_writer = tf.summary.FileWriter(FLAGS.outdir + "/train", sess.graph)
-        
+        trainer = Trainer(sess, model, FLAGS.outdir, FLAGS.optim, FLAGS.eta)
+
+        train_writer = trainer.writer()
+
         # This silently fails to load in Tensorboard, so leave out for now
         #if word_vec is not None:
         #    vizWordEmbeddings(word_vec, FLAGS.outdir, train_writer)
 
         init = tf.global_variables_initializer()
-        saver = tf.train.Saver()
         sess.run(init)
+        trainer.prepare(tf.train.Saver())
 
-        highest_acc = 0
+        max_acc = 0
         last_improved = 0
         for i in range(FLAGS.epochs):
-            print('Training epoch %d' % i)
-            train(ts, sess, train_writer, train_op, global_step, summary_op, loss, err, total, FLAGS.batchsz)
-            avg_loss, this_acc = test('Validation', vs, sess, loss, err, total, FLAGS.batchsz)
-            if this_acc > highest_acc:
-                highest_acc = this_acc
+            print('Training epoch %d' % (i+1))
+            trainer.train(ts, FLAGS.dropout, FLAGS.batchsz)
+            avg_loss, this_acc = trainer.test(vs, FLAGS.batchsz, 'Validation')
+            if this_acc > max_acc:
+                max_acc = this_acc
                 last_improved = i
                 print('Highest dev acc achieved yet -- writing model')
-                saver.save(sess, FLAGS.outdir + "/train/rnn-tag-fine.model", global_step=global_step)
+                trainer.checkpoint(FLAGS.save)
             if (i - last_improved) > FLAGS.patience:
                 print('Stopping due to persistent failures to improve')
                 break
 
 
         print("-----------------------------------------------------")
-        print('Highest dev acc %.2f' % (highest_acc * 100.))
+        print('Highest dev acc %.2f' % (max_acc * 100.))
         print('=====================================================')
         print('Evaluating best model on test data')
-        
-        best_model = tf.train.latest_checkpoint(FLAGS.outdir + "/train/")
-        print("Reloading " + best_model)
-        saver.restore(sess, best_model)
-        avg_loss, this_acc = test('Test', es, sess, loss, err, total, 1)
-              
+        print('=====================================================')
+        trainer.recover_last_checkpoint()
+        #best_model = tf.train.latest_checkpoint(FLAGS.outdir + "/train/")
+        #print("Reloading " + best_model)
+        #saver.restore(sess, best_model)
+        avg_loss, this_acc = trainer.test(es, 1, 'Test')
         print("-----------------------------------------------------")
         print('Test loss %.2f' % (avg_loss))
         print('Test acc %.2f' % (this_acc * 100.))
         print('=====================================================')
-
+        # Write out model, graph and saver for future inference
+        model.save(sess, FLAGS.outdir, FLAGS.save)

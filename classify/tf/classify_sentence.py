@@ -68,12 +68,11 @@ with tf.Graph().as_default():
     with sess.as_default():
         model.params(f2i, w2vModel, FLAGS.mxlen, FLAGS.filtsz, FLAGS.cmotsz, FLAGS.hsz, not FLAGS.static)
         
-        trainer = Trainer(model, FLAGS.optim, FLAGS.eta)
-        train_writer = tf.summary.FileWriter(FLAGS.outdir + "/train", sess.graph)
+        trainer = Trainer(sess, model, FLAGS.outdir, FLAGS.optim, FLAGS.eta)
         
         init = tf.global_variables_initializer()
-
         sess.run(init)
+
         trainer.prepare(tf.train.Saver())
 
         max_acc = 0
@@ -81,13 +80,13 @@ with tf.Graph().as_default():
 
         for i in range(FLAGS.epochs):
             print('Training epoch %d' % (i+1))
-            trainer.train(ts, sess, train_writer, FLAGS.dropout)
-            this_acc = trainer.test(vs, sess, 'Validation')
+            trainer.train(ts, FLAGS.dropout)
+            this_acc = trainer.test(vs, 'Validation')
             if this_acc > max_acc:
                 max_acc = this_acc
                 last_improved = i
-                trainer.checkpoint(sess, FLAGS.outdir, '%s' % FLAGS.save)
-                print('Highest acc achieved yet -- writing model')
+                trainer.checkpoint(FLAGS.save)
+                print('Highest dev acc achieved yet -- writing model')
 
             if (i - last_improved) > FLAGS.patience:
                 print('Stopping due to persistent failures to improve')
@@ -95,12 +94,14 @@ with tf.Graph().as_default():
 
 
         print("-----------------------------------------------------")
-        print('Highest validation acc %.4f' % max_acc)
+        print('Highest dev acc %.2f' % (max_acc * 100.))
         print('=====================================================')
         print('Evaluating best model on test data:')
         print('=====================================================')
-        trainer.recover_last_checkpoint(sess, FLAGS.outdir)
-        trainer.test(es, sess)
-
+        trainer.recover_last_checkpoint()
+        this_acc = trainer.test(es)
+        print("-----------------------------------------------------")
+        print('Test acc %.2f' % (this_acc * 100.))
+        print('=====================================================')
         # Write out model, graph and saver for future inference
         model.save(sess, FLAGS.outdir, FLAGS.save)
