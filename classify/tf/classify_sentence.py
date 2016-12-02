@@ -69,9 +69,9 @@ with tf.Graph().as_default():
         model.params(f2i, w2vModel, FLAGS.mxlen, FLAGS.filtsz, FLAGS.cmotsz, FLAGS.hsz, not FLAGS.static)
         
         trainer = Trainer(model, FLAGS.optim, FLAGS.eta)
-        train_writer = tf.train.SummaryWriter(FLAGS.outdir + "/train", sess.graph)
+        train_writer = tf.summary.FileWriter(FLAGS.outdir + "/train", sess.graph)
         
-        init = tf.initialize_all_variables()
+        init = tf.global_variables_initializer()
 
         sess.run(init)
         trainer.prepare(tf.train.Saver())

@@ -1,13 +1,27 @@
 import numpy as np
 import tensorflow as tf
-from tensorflow.contrib.layers import convolution2d, max_pool2d, fully_connected, flatten, xavier_initializer
-def tensorToSeq(tensor):
-    return tf.unpack(tf.transpose(tensor, perm=[1, 0, 2]))
+from data import revlut
+from tensorflow.contrib.tensorboard.plugins import projector
+from utils import *
 
-def seqToTensor(sequence):
-    return tf.transpose(tf.pack(sequence), perm=[1, 0, 2])
+def writeWordEmbeddings(word_vec, filename):
+    idx2word = revlut(word_vec.vocab)
+    with codecs.open(filename, 'w') as f:
+        wrtr = UnicodeWriter(f, delimiter='\t', quotechar='"')
 
+        wrtr.writerow(['Word'])
+        for i in range(len(idx2word)):
+            row = idx2word[i]
+            wrtr.writerow([row])
 
+def vizWordEmbeddings(word_vec, outdir, train_writer):
+    print('Setting up word embedding visualization')
+    proj_conf = projector.ProjectorConfig()
+    emb_conf = proj_conf.embeddings.add()
+    emb_conf.tensor_name = "WordLUT/embeddings"
+    emb_conf.metadata_path = outdir + "/train/metadata.tsv"
+    writeWordEmbeddings(word_vec, emb_conf.metadata_path)
+    projector.visualize_embeddings(train_writer, proj_conf)
 
 def charWordConvEmbeddings(char_vec, maxw, filtsz, char_dsz, wsz):
 
@@ -80,7 +94,7 @@ def createModel(nc, word_vec, char_vec, mxlen, maxw, rnntype, wsz, hsz, filtsz):
             we0 = tf.scatter_update(Ww, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, word_vec.dsz]))
         
             with tf.control_dependencies([we0]):
-                wembed = tf.nn.embedding_lookup(Ww, x)
+                wembed = tf.nn.embedding_lookup(Ww, x, name="embeddings")
 
     with tf.name_scope("CharLUT"):
         Wc = tf.Variable(tf.constant(char_vec.weights, dtype=tf.float32), name = "W")
@@ -124,14 +138,14 @@ def createModel(nc, word_vec, char_vec, mxlen, maxw, rnntype, wsz, hsz, filtsz):
 
         preds = [tf.nn.softmax(tf.matmul(rnnout, W) + b) for rnnout in rnnseq]
         pred = seqToTensor(preds)
+
         best = tf.argmax(pred, 2)
     
     return x, xch, y, pkeep, pred, best
 
 
 def createLoss(pred, best, y):
-    gold = tf.argmax(y, 2)
-    gold = tf.cast(gold, tf.float32)
+    gold = tf.cast(tf.argmax(y, 2), tf.float32)
     best = tf.cast(best, tf.float32)
     cross_entropy = y * tf.log(pred)
     cross_entropy = -tf.reduce_sum(cross_entropy, reduction_indices=2)

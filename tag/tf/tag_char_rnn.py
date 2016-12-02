@@ -9,6 +9,8 @@ from data import revlut
 from data import validSplit
 from model import createModel
 from model import createLoss
+from model import vizWordEmbeddings
+from model import sentenceLengths
 import time
 
 DEF_BATCHSZ = 50
@@ -38,7 +40,6 @@ DEF_VALSPLIT = 0.15
 DEF_EMBED = None
 DEF_CEMBED = None
 
-
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 flags.DEFINE_float('eta', DEF_ETA, 'Initial learning rate.')
@@ -58,7 +59,6 @@ flags.DEFINE_integer('epochs', DEF_EPOCHS, 'Number of epochs')
 flags.DEFINE_integer('batchsz', DEF_BATCHSZ, 'Batch size')
 flags.DEFINE_integer('mxlen', DEF_MXLEN, 'Max length')
 flags.DEFINE_string('cfiltsz', DEF_CFILTSZ, 'Character filter sizes')
-
 #flags.DEFINE_integer('charsz', 150, 'Char embedding depth')
 flags.DEFINE_integer('charsz', DEF_CHARSZ, 'Char embedding depth')
 flags.DEFINE_integer('patience', DEF_PATIENCE, 'Patience')
@@ -67,6 +67,7 @@ flags.DEFINE_integer('wsz', DEF_WSZ, 'Word embedding depth')
 flags.DEFINE_float('valsplit', DEF_VALSPLIT, 'Validation split if no valid set')
 #flags.DEFINE_string('cfiltsz', '0', 'Character filter sizes')
 flags.DEFINE_boolean('cbow', False, 'Do CBOW for characters')
+#flags.DEFINE_boolean('crf', False, 'Use CRF on top')
 
 def createTrainer(loss):
     
@@ -82,16 +83,17 @@ def createTrainer(loss):
     return train_op, global_step
 
 # Fill out the y matrix with 0s for other labels
+# can replace with one_hot!
 def fill_y(nc, yidx):
     batchsz = yidx.shape[0]
     siglen = yidx.shape[1]
-#    print(batchsz, siglen, nc)
     dense = np.zeros((batchsz, siglen, nc), dtype=np.int)
     for i in range(batchsz):
         for j in range(siglen):
             idx = int(yidx[i, j])
-            dense[i, j, idx] = 1
-    
+            if idx > 0:
+                dense[i, j, idx] = 1
+
     return dense
 
 
@@ -110,12 +112,10 @@ def train(ts, sess, summary_writer, train_op, global_step, summary_op, loss, err
     for i in range(steps):
         si = shuffle[i]
         ts_i = batch(ts, si, batchsz)
-
         feed_dict = {x: ts_i["x"], xch: ts_i["xch"], y: fill_y(len(f2i), ts_i["y"]), pkeep: (1-FLAGS.dropout)}
         
         _, step, summary_str, lossv, errv, totalv = sess.run([train_op, global_step, summary_op, loss, err, total], feed_dict=feed_dict)
         summary_writer.add_summary(summary_str, step)
-        
         total_err += errv
         total_loss += lossv
         total_sum += totalv
@@ -223,22 +223,28 @@ with tf.Graph().as_default():
                                                     FLAGS.wsz,
                                                     FLAGS.hsz,
                                                     FLAGS.cfiltsz)
+
+
         loss, err, total = createLoss(model, best, y)
         loss_summary = tf.scalar_summary("loss", loss)
         
         train_op, global_step = createTrainer(loss)
         
         summary_op = tf.merge_all_summaries()
-        train_writer = tf.train.SummaryWriter(FLAGS.outdir + "/train", sess.graph)
+        train_writer = tf.summary.FileWriter(FLAGS.outdir + "/train", sess.graph)
         
-        init = tf.initialize_all_variables()
+        # This silently fails to load in Tensorboard, so leave out for now
+        #if word_vec is not None:
+        #    vizWordEmbeddings(word_vec, FLAGS.outdir, train_writer)
+
+        init = tf.global_variables_initializer()
         saver = tf.train.Saver()
         sess.run(init)
 
         highest_acc = 0
         last_improved = 0
         for i in range(FLAGS.epochs):
-
+            print('Training epoch %d' % i)
             train(ts, sess, train_writer, train_op, global_step, summary_op, loss, err, total, FLAGS.batchsz)
             avg_loss, this_acc = test('Validation', vs, sess, loss, err, total, FLAGS.batchsz)
             if this_acc > highest_acc:

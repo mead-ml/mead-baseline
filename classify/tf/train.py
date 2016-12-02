@@ -18,8 +18,8 @@ class Trainer:
 
         self.train_op = self.optimizer.minimize(self.loss, global_step=self.global_step)
 
-        self.loss_summary = tf.scalar_summary("loss", self.loss)
-        self.acc_summary = tf.scalar_summary("accuracy", self.acc)
+        self.loss_summary = tf.summary.scalar("loss", self.loss)
+        self.acc_summary = tf.summary.scalar("accuracy", self.acc)
         self.summary_op = tf.merge_all_summaries()
 
     def checkpoint(self, sess, outdir, name):
