@@ -7,7 +7,7 @@ from data import conllSentsToIndices
 from data import batch
 from data import revlut
 from data import validSplit
-from model import TaggerModel
+from model import TaggerModel, vizEmbeddings
 from train import Trainer
 import time
 
@@ -148,9 +148,7 @@ with tf.Graph().as_default():
 
         train_writer = trainer.writer()
 
-        # This silently fails to load in Tensorboard, so leave out for now
-        #if word_vec is not None:
-        #    vizWordEmbeddings(word_vec, FLAGS.outdir, train_writer)
+        vizEmbeddings(char_vec, word_vec, FLAGS.outdir, train_writer)
 
         init = tf.global_variables_initializer()
         sess.run(init)

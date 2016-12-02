@@ -8,26 +8,32 @@ from utils import *
 import json
 import math
 
-def writeWordEmbeddings(word_vec, filename):
+def writeEmbeddingsTSV(word_vec, filename):
     idx2word = revlut(word_vec.vocab)
     with codecs.open(filename, 'w') as f:
         wrtr = UnicodeWriter(f, delimiter='\t', quotechar='"')
 
-        wrtr.writerow(['Word'])
+#        wrtr.writerow(['Word'])
         for i in range(len(idx2word)):
             row = idx2word[i]
             wrtr.writerow([row])
 
-def vizWordEmbeddings(word_vec, outdir, train_writer):
+def _vizEmbedding(proj_conf, emb, outdir, which):
+    emb_conf = proj_conf.embeddings.add()
+    emb_conf.tensor_name = '%s/W' % which
+    emb_conf.metadata_path = outdir + "/train/metadata-%s.tsv" % which
+    writeEmbeddingsTSV(emb, emb_conf.metadata_path)
+
+def vizEmbeddings(char_vec, word_vec, outdir, train_writer):
     print('Setting up word embedding visualization')
     proj_conf = projector.ProjectorConfig()
-    emb_conf = proj_conf.embeddings.add()
-    emb_conf.tensor_name = "WordLUT/embeddings"
-    emb_conf.metadata_path = outdir + "/train/metadata.tsv"
-    writeWordEmbeddings(word_vec, emb_conf.metadata_path)
+    _vizEmbedding(proj_conf, char_vec, outdir, 'CharLUT')
+    if word_vec is not None:
+        _vizEmbedding(proj_conf, word_vec, outdir, 'WordLUT')
     projector.visualize_embeddings(train_writer, proj_conf)
 
-def charWordConvEmbeddings(char_vec, maxw, filtsz, char_dsz, wsz):
+
+def charWordConvEmbeddings(char_vec, maxw, filtsz, char_dsz, wsz, padding):
 
     expanded = tf.expand_dims(char_vec, -1)
 
@@ -35,7 +41,7 @@ def charWordConvEmbeddings(char_vec, maxw, filtsz, char_dsz, wsz):
     for i, fsz in enumerate(filtsz):
         with tf.variable_scope('cmot-%s' % fsz):
 
-            siglen = maxw - fsz + 1
+            siglen = maxw + padding - fsz + 1
             kernel_shape =  [fsz, char_dsz, 1, wsz]
             
             # Weight tying
@@ -80,11 +86,13 @@ def sharedCharWord(Wch, xch_i, maxw, filtsz, char_dsz, wsz, reuse):
         # start with zeros
         mxfiltsz = np.max(filtsz)
         halffiltsz = int(math.floor(mxfiltsz / 2))
+        #zeropad = tf.Print(xch_i, [tf.shape(xch_i)])
         zeropad = tf.pad(xch_i, [[0,0], [halffiltsz, halffiltsz]], "CONSTANT")
         cembed = tf.nn.embedding_lookup(Wch, zeropad)
+        #cembed = tf.nn.embedding_lookup(Wch, xch_i)
         if len(filtsz) == 0 or filtsz[0] == 0:
             return tf.reduce_sum(cembed, [1])
-        return charWordConvEmbeddings(cembed, maxw, filtsz, char_dsz, wsz)
+        return charWordConvEmbeddings(cembed, maxw, filtsz, char_dsz, wsz, 2*halffiltsz)
 
 class TaggerModel:
 
@@ -206,11 +214,11 @@ class TaggerModel:
             ce0 = tf.scatter_update(Wc, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, char_dsz]))
 
             with tf.control_dependencies([ce0]):
-                    xch_seq = tensorToSeq(self.xch)
-                    cembed_seq = []
-                    for i, xch_i in enumerate(xch_seq):
-                        cembed_seq.append(sharedCharWord(Wc, xch_i, maxw, filtsz, char_dsz, wsz, None if i == 0 else True))
-                    word_char = seqToTensor(cembed_seq)
+                xch_seq = tensorToSeq(self.xch)
+                cembed_seq = []
+                for i, xch_i in enumerate(xch_seq):
+                    cembed_seq.append(sharedCharWord(Wc, xch_i, maxw, filtsz, char_dsz, wsz, None if i == 0 else True))
+                word_char = seqToTensor(cembed_seq)
 
             # List to tensor, reform as (T, B, W)
             # Join embeddings along the third dimension
