@@ -10,7 +10,7 @@ class Trainer:
         
         self.sess = sess
         self.outdir = outdir
-        self.loss, self.err, self.total = model.createLoss()
+        self.loss = model.createLoss()
         self.model = model
         self.global_step = tf.Variable(0, name='global_step', trainable=False)
         if optim == 'adadelta':
@@ -25,7 +25,6 @@ class Trainer:
         self.loss_summary = tf.summary.scalar("loss", self.loss)
         self.summary_op = tf.merge_all_summaries()
         self.train_writer = tf.summary.FileWriter(self.outdir + "/train", sess.graph)
-
 
     def writer(self):
         return self.train_writer
@@ -56,35 +55,47 @@ class Trainer:
             ts_i = batch(ts, si, batchsz)
             feed_dict = self.model.ex2dict(ts_i, 1.0-dropout)
         
-            _, step, summary_str, lossv, errv, totalv = self.sess.run([self.train_op, self.global_step, self.summary_op, self.loss, self.err, self.total], feed_dict=feed_dict)
+            _, step, summary_str, lossv = self.sess.run([self.train_op, self.global_step, self.summary_op, self.loss], feed_dict=feed_dict)
             self.train_writer.add_summary(summary_str, step)
         
-            total_err += errv
             total_loss += lossv
-            total_sum += totalv
 
         duration = time.time() - start_time
-        total_correct = float(total_sum - total_err)
-        print('Train (Loss %.4f) (Acc %d/%d = %.4f) (%.3f sec)' % (float(total_loss)/len(ts), total_correct, total_sum, total_correct/total_sum, duration))
+        print('Train (Loss %.4f) (%.3f sec)' % (float(total_loss)/len(ts), duration))
+
+    def _step(self, batch):
+
+        sentence_lengths = batch["length"]
+        truth = batch["y"]
+        feed_dict = self.model.ex2dict(batch, 1)
+        guess = self.model.predict(self.sess, batch)
+        correct_labels = 0
+        total_labels = 0
+        for b in range(len(guess)):
+            length = sentence_lengths[b]
+
+            assert(length == len(guess[b]))
+            sentence = guess[b]
+            # truth[b] is padded, cutting at :length gives us back true length
+            gold = truth[b][:length]
+            correct_labels += np.sum(np.equal(sentence, gold))
+            total_labels += length
+        return correct_labels, total_labels
 
     def test(self, ts, batchsz, phase='Test'):
 
-        total_loss = total_err = total_sum = 0
+        total_correct = total_sum = 0
         start_time = time.time()
     
         steps = int(math.floor(len(ts)/float(batchsz)))
 
         for i in range(steps):
             ts_i = batch(ts, i, batchsz)
-            feed_dict = self.model.ex2dict(ts_i, 1)
-            lossv, errv, totalv = self.sess.run([self.loss, self.err, self.total], feed_dict=feed_dict)
-            total_loss += lossv
-            total_err += errv
-            total_sum += totalv
+            batch_correct, batch_total = self._step(ts_i)
+            total_correct += batch_correct
+            total_sum += batch_total
              
         duration = time.time() - start_time
-        total_correct = float(total_sum - total_err)
-        acc = total_correct / total_sum
-        avg_loss = float(total_loss)/len(ts)
-        print('%s (Loss %.4f) (Acc %d/%d = %.4f) (%.3f sec)' % (phase, avg_loss, total_correct, total_sum, acc, duration))
-        return avg_loss, acc
+        total_acc = total_correct / float(total_sum)
+        print('%s (Acc %d/%d = %.4f) (%.3f sec)' % (phase, total_correct, total_sum, total_acc, duration))
+        return total_acc

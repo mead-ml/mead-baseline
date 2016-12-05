@@ -131,6 +131,16 @@ class TaggerModel:
             self.pkeep = tf.get_default_graph().get_tensor_by_name('pkeep:0')
             self.best = tf.get_default_graph().get_tensor_by_name('output/best:0')
             self.probs = tf.get_default_graph().get_tensor_by_name('output/probs:0')
+            try:
+                self.A = tf.get_default_graph().get_tensor_by_name('Loss/transitions')
+                print('Found transition matrix in graph, setting crf=True')
+                self.crf = True
+            except:
+                print('Failed to get transition matrix, setting crf=False')
+                self.A = None
+                self.crf = False
+
+
         with open(basename + '.labels', 'r') as f:
             self.labels = json.load(f)
 
@@ -148,45 +158,89 @@ class TaggerModel:
     def __init__(self):
         pass
 
-    def createLoss(self):
-        gold = tf.cast(tf.argmax(self.y, 2), tf.float32)
-        self.best = tf.cast(self.best, tf.float32)
-        cross_entropy = self.y * tf.log(self.probs)
+    def _computeWordLevelLoss(self, gold, mask):
+
+        nc = len(self.labels)
+        # Cross entropy loss
+        cross_entropy = tf.one_hot(self.y, nc, axis=-1) * tf.log(tf.nn.softmax(self.probs))
         cross_entropy = -tf.reduce_sum(cross_entropy, reduction_indices=2)
-        mask = tf.sign(gold)
-        all_total = tf.reduce_sum(mask, name="total")
         cross_entropy *= mask
         cross_entropy = tf.reduce_sum(cross_entropy, reduction_indices=1)
         all_loss = tf.reduce_mean(cross_entropy, name="loss")
-        err = tf.not_equal(self.best, gold)
-        err = tf.cast(err, tf.float32)
-        err *= mask
-        all_err = tf.reduce_sum(err)
-        return all_loss, all_err, all_total
+        return all_loss
 
-    def inference(self, sess, batch, probs=False):
+    def _computeSentenceLevelLoss(self, gold, mask, lengths):
 
+        ll, self.A = tf.contrib.crf.crf_log_likelihood(self.probs, self.y, lengths)
+        all_total = tf.reduce_sum(lengths, name="total")
+        return tf.reduce_mean(-ll)
+
+    def createLoss(self):
+        
+        with tf.variable_scope("Loss"):
+            gold = tf.cast(self.y, tf.float32)
+            mask = tf.sign(gold)
+
+            lengths = tf.reduce_sum(mask, name="lengths",
+                                    reduction_indices=1)
+
+            all_total = tf.reduce_sum(lengths, name="total")
+
+            if self.crf is True:
+                print('crf=True, creating SLL')
+                all_loss = self._computeSentenceLevelLoss(gold, mask, lengths)
+            else:
+                print('crf=False, creating WLL')
+                all_loss = self._computeWordLevelLoss(gold, mask)
+
+        #err = tf.not_equal(tf.cast(self.best, tf.float32), gold)
+        #err = tf.cast(err, tf.float32)
+        #err *= mask
+        #all_err = tf.reduce_sum(err)
+
+        return all_loss #, all_err, all_total
+
+
+    def predict(self, sess, batch):
+        
+        lengths = batch["length"]
         feed_dict = {self.x: batch["x"], self.xch: batch["xch"], self.pkeep: 1.0}
 
-        if probs is True:
-            return sess.run(self.probs, feed_dict=feed_dict)
-        return sess.run(self.best, feed_dict=feed_dict)
+        # We can probably conditionally add the loss here
+        preds = []
+        if self.crf is True:
+            probv, tranv = sess.run([self.probs, self.A], feed_dict=feed_dict)
+
+            for pij, sl in zip(probv, lengths):
+                unary = pij[:sl]
+                viterbi, _ = tf.contrib.crf.viterbi_decode(unary, tranv)
+                preds.append(viterbi)
+        else:
+            # Get batch (B, T)
+            bestv = sess.run(self.best, feed_dict=feed_dict)
+            # Each sentence, probv
+            for pij, sl in zip(bestv, lengths):
+                unary = pij[:sl]
+                preds.append(unary)
+
+        return preds
 
     def ex2dict(self, batch, pkeep):
         return {
             self.x: batch["x"],
             self.xch: batch["xch"],
-            self.y: fill_y(len(self.labels), batch["y"]),
+            self.y: batch["y"],
             self.pkeep: pkeep
         }
 
-    def params(self, labels, word_vec, char_vec, mxlen, maxw, rnntype, wsz, hsz, filtsz):
+    def params(self, labels, word_vec, char_vec, mxlen, maxw, rnntype, wsz, hsz, filtsz, crf=False):
 
+        self.crf = crf
         char_dsz = char_vec.dsz
         nc = len(labels)
         self.x = tf.placeholder(tf.int32, [None, mxlen], name="x")
         self.xch = tf.placeholder(tf.int32, [None, mxlen, maxw], name="xch")
-        self.y = tf.placeholder(tf.float32, [None, mxlen, nc], name="y")
+        self.y = tf.placeholder(tf.int32, [None, mxlen], name="y")
         self.pkeep = tf.placeholder(tf.float32, name="pkeep")
         self.labels = labels
 
@@ -248,7 +302,8 @@ class TaggerModel:
                                                 stddev = 0.1), name="W")
             b = tf.Variable(tf.constant(0.0, shape=[1,nc]), name="b")
 
-            preds = [tf.nn.softmax(tf.matmul(rnnout, W) + b) for rnnout in rnnseq]
+            preds = [tf.matmul(rnnout, W) + b for rnnout in rnnseq]
             self.probs = seqToTensor(preds)
             self.best = tf.argmax(self.probs, 2)
+            # going back to sparse representation
     

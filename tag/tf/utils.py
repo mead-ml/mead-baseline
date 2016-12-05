@@ -27,9 +27,11 @@ def fill_y(nc, yidx):
 # Then get a sum of the populated values
 def sentenceLengths(yfilled):
     used = tf.sign(tf.reduce_max(tf.abs(yfilled), reduction_indices=2))
-    length = tf.reduce_sum(used, reduction_indices=1)
-    length = tf.cast(length, tf.int32)
-    return length
+    lengths = tf.reduce_sum(used, reduction_indices=1)
+    lengths = tf.cast(lengths, tf.int32)
+    total = tf.reduce_sum(lengths)
+    #return length
+    return total
 
 class UnicodeWriter:
     """

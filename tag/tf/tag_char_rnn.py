@@ -66,8 +66,8 @@ flags.DEFINE_float('valsplit', DEF_VALSPLIT, 'Validation split if no valid set')
 #flags.DEFINE_string('cfiltsz', '0', 'Character filter sizes')
 flags.DEFINE_boolean('cbow', False, 'Do CBOW for characters')
 flags.DEFINE_string('save', DEF_FILE_OUT, 'Save basename')
-#flags.DEFINE_boolean('crf', False, 'Use CRF on top')
-
+flags.DEFINE_boolean('crf', False, 'Use CRF on top')
+flags.DEFINE_boolean('viz', False, 'Set up LUT vocabs for Tensorboard')
 
 
 maxw, vocab_ch, vocab_word = conllBuildVocab([FLAGS.train, 
@@ -141,14 +141,16 @@ with tf.Graph().as_default():
                      FLAGS.rnn,
                      FLAGS.wsz,
                      FLAGS.hsz,
-                     FLAGS.cfiltsz)
+                     FLAGS.cfiltsz,
+                     FLAGS.crf)
 
 
         trainer = Trainer(sess, model, FLAGS.outdir, FLAGS.optim, FLAGS.eta)
 
         train_writer = trainer.writer()
 
-        vizEmbeddings(char_vec, word_vec, FLAGS.outdir, train_writer)
+        if FLAGS.viz:
+            vizEmbeddings(char_vec, word_vec, FLAGS.outdir, train_writer)
 
         init = tf.global_variables_initializer()
         sess.run(init)
@@ -159,7 +161,7 @@ with tf.Graph().as_default():
         for i in range(FLAGS.epochs):
             print('Training epoch %d' % (i+1))
             trainer.train(ts, FLAGS.dropout, FLAGS.batchsz)
-            avg_loss, this_acc = trainer.test(vs, FLAGS.batchsz, 'Validation')
+            this_acc = trainer.test(vs, FLAGS.batchsz, 'Validation')
             if this_acc > max_acc:
                 max_acc = this_acc
                 last_improved = i
@@ -179,9 +181,9 @@ with tf.Graph().as_default():
         #best_model = tf.train.latest_checkpoint(FLAGS.outdir + "/train/")
         #print("Reloading " + best_model)
         #saver.restore(sess, best_model)
-        avg_loss, this_acc = trainer.test(es, 1, 'Test')
+        this_acc = trainer.test(es, 1, 'Test')
         print("-----------------------------------------------------")
-        print('Test loss %.2f' % (avg_loss))
+        #print('Test loss %.2f' % (avg_loss))
         print('Test acc %.2f' % (this_acc * 100.))
         print('=====================================================')
         # Write out model, graph and saver for future inference

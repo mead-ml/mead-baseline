@@ -125,9 +125,11 @@ def conllSentsToIndices(filename, words, chars, maxw, f2i, options):
         lv = lbls[i]
         v = txts[i]
         
+        length = mxlen
         for j in range(mxlen):
             
             if j == len(v):
+                length = j
                 break
             
             w = v[j]
@@ -142,7 +144,7 @@ def conllSentsToIndices(filename, words, chars, maxw, f2i, options):
             xs[j] = words.vocab.get(cleanup(w), 0)
             for k in range(nch):
                 xs_ch[j,k] = chars.vocab.get(w[k], 0)
-        ts.append({"x":xs,"y":ys, "xch": xs_ch, "id": i })
+        ts.append({"x":xs,"y":ys, "xch": xs_ch, "id": i, "length": length })
 
     return ts, f2i, txts
 
@@ -162,7 +164,7 @@ def batch(ts, start, batchsz):
     xs = np.zeros((batchsz, siglen), dtype=np.int)
     ys = np.zeros((batchsz, siglen), dtype=np.int)
     ids = np.zeros((batchsz), dtype=np.int)
-
+    length = np.zeros((batchsz), dtype=np.int)
     sz = len(ts)
     idx = start * batchsz
     for i in range(batchsz):
@@ -173,8 +175,9 @@ def batch(ts, start, batchsz):
         xs[i] = ex["x"]
         ys[i] = ex["y"]
         ids[i] = ex["id"]
+        length[i] = ex["length"]
         idx += 1
-    return {"x": xs, "y": ys, "xch": xs_ch }
+    return {"x": xs, "y": ys, "xch": xs_ch, "length": length }
         
 
 
