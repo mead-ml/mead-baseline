@@ -3,15 +3,17 @@ import numpy as np
 import time
 import math
 from data import batch
-
+from utils import toSpans, fScore
 class Trainer:
 
-    def __init__(self, sess, model, outdir, optim, eta):
+    def __init__(self, sess, model, outdir, optim, eta, idx2label, fscore=0):
         
         self.sess = sess
         self.outdir = outdir
         self.loss = model.createLoss()
         self.model = model
+        self.idx2label = idx2label
+        self.fscore = fscore
         self.global_step = tf.Variable(0, name='global_step', trainable=False)
         if optim == 'adadelta':
             self.optimizer = tf.train.AdadeltaOptimizer(eta, 0.95, 1e-6)
@@ -71,31 +73,73 @@ class Trainer:
         guess = self.model.predict(self.sess, batch)
         correct_labels = 0
         total_labels = 0
+
+        # For fscore
+        gold_count = 0
+        guess_count = 0
+        overlap_count = 0
+        
         for b in range(len(guess)):
             length = sentence_lengths[b]
-
             assert(length == len(guess[b]))
             sentence = guess[b]
             # truth[b] is padded, cutting at :length gives us back true length
             gold = truth[b][:length]
             correct_labels += np.sum(np.equal(sentence, gold))
             total_labels += length
-        return correct_labels, total_labels
+
+            if self.fscore > 0:
+                gold_chunks = toSpans(gold, self.idx2label)
+                gold_count += len(gold_chunks)
+
+                guess_chunks = toSpans(sentence, self.idx2label)
+                guess_count += len(guess_chunks)
+            
+                overlap_chunks = gold_chunks & guess_chunks
+                overlap_count += len(overlap_chunks)
+
+        return correct_labels, total_labels, overlap_count, gold_count, guess_count
 
     def test(self, ts, batchsz, phase='Test'):
 
-        total_correct = total_sum = 0
+        total_correct = total_sum = fscore = 0
+        total_gold_count = total_guess_count = total_overlap_count = 0
         start_time = time.time()
     
         steps = int(math.floor(len(ts)/float(batchsz)))
 
         for i in range(steps):
             ts_i = batch(ts, i, batchsz)
-            batch_correct, batch_total = self._step(ts_i)
-            total_correct += batch_correct
-            total_sum += batch_total
-             
+            correct, count, overlaps, golds, guesses = self._step(ts_i)
+            total_correct += correct
+            total_sum += count
+            total_gold_count += golds
+            total_guess_count += guesses
+            total_overlap_count += overlaps
+
         duration = time.time() - start_time
         total_acc = total_correct / float(total_sum)
-        print('%s (Acc %d/%d = %.4f) (%.3f sec)' % (phase, total_correct, total_sum, total_acc, duration))
-        return total_acc
+
+        # Only show the fscore if requested
+        if self.fscore > 0:
+            fscore = fScore(total_overlap_count,
+                            total_gold_count,
+                            total_guess_count,
+                            self.fscore)
+            print('%s (F%d = %.4f) (Acc %d/%d = %.4f) (%.3f sec)' % 
+                  (phase,
+                   self.fscore,
+                   fscore,
+                   total_correct,
+                   total_sum,
+                   total_acc,
+                   duration))
+                        
+        else:
+            print('%s (Acc %d/%d = %.4f) (%.3f sec)' %
+                  (phase,
+                   total_correct,
+                   total_sum, total_acc,
+                   duration))
+
+        return total_acc, fscore

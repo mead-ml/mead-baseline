@@ -4,7 +4,7 @@ from collections import Counter
 import re
 import math
 import codecs
-
+from utils import revlut
 UNREP_EMOTICONS = (
     ':)',
     ':(((',
@@ -25,9 +25,6 @@ def cleanup(word):
     if word == '<3': return '&lt;3'
     return word.lower()
 
-def revlut(lut):
-    return {v: k for k, v in lut.items()}
-
 REPLACE = { "'s": " 's ",
             "'ve": " 've ",
             "n't": " n't ",
@@ -37,25 +34,6 @@ REPLACE = { "'s": " 's ",
             ",": " , ",
             "!": " ! ",
         }
-          
-  
-def doClean(l):
-    l = re.sub(r"[^A-Za-z0-9(),!?\'\`]", " ", l)
-    for k,v in REPLACE.items():
-        l = l.replace(k, v)
-    return l.strip()
-
-def labelSent(line, clean, chars):
-    labelText = re.split('[\t\s]+', line)
-    label = labelText[0]
-    text = labelText[1:]
-    if chars is True:
-        text = ' '.join([ch for ch in ''.join(text)])
-    if clean is True:
-        text = ' '.join([doClean(w.lower()) for w in text]).replace('  ', ' ')
-    else:
-        text = ' '.join(text).replace('  ', ' ')
-    return label, text
 
 def numLines(filename):
     lines = 0

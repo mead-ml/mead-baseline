@@ -67,6 +67,7 @@ flags.DEFINE_float('valsplit', DEF_VALSPLIT, 'Validation split if no valid set')
 flags.DEFINE_boolean('cbow', False, 'Do CBOW for characters')
 flags.DEFINE_string('save', DEF_FILE_OUT, 'Save basename')
 flags.DEFINE_boolean('crf', False, 'Use CRF on top')
+flags.DEFINE_integer('fscore', 0, 'Use F-score in metrics and early stopping')
 flags.DEFINE_boolean('viz', False, 'Set up LUT vocabs for Tensorboard')
 
 
@@ -145,7 +146,7 @@ with tf.Graph().as_default():
                      FLAGS.crf)
 
 
-        trainer = Trainer(sess, model, FLAGS.outdir, FLAGS.optim, FLAGS.eta)
+        trainer = Trainer(sess, model, FLAGS.outdir, FLAGS.optim, FLAGS.eta, i2f, FLAGS.fscore)
 
         train_writer = trainer.writer()
 
@@ -156,16 +157,19 @@ with tf.Graph().as_default():
         sess.run(init)
         trainer.prepare(tf.train.Saver())
 
-        max_acc = 0
+        saving_metric = 0
+        metric_type = "F%d" % FLAGS.fscore if FLAGS.fscore > 0 else "acc"
         last_improved = 0
         for i in range(FLAGS.epochs):
             print('Training epoch %d' % (i+1))
             trainer.train(ts, FLAGS.dropout, FLAGS.batchsz)
-            this_acc = trainer.test(vs, FLAGS.batchsz, 'Validation')
-            if this_acc > max_acc:
-                max_acc = this_acc
+            this_acc, this_f = trainer.test(vs, FLAGS.batchsz, 'Validation')
+
+            this_metric = this_f if FLAGS.fscore > 0 else this_acc
+            if this_metric > saving_metric:
+                saving_metric = this_metric
                 last_improved = i
-                print('Highest dev acc achieved yet -- writing model')
+                print('Highest dev %s achieved yet -- writing model' % metric_type)
                 trainer.checkpoint(FLAGS.save)
             if (i - last_improved) > FLAGS.patience:
                 print('Stopping due to persistent failures to improve')
@@ -173,18 +177,16 @@ with tf.Graph().as_default():
 
 
         print("-----------------------------------------------------")
-        print('Highest dev acc %.2f' % (max_acc * 100.))
+        print('Highest dev %s %.2f' % (metric_type, saving_metric * 100.))
         print('=====================================================')
         print('Evaluating best model on test data')
         print('=====================================================')
         trainer.recover_last_checkpoint()
-        #best_model = tf.train.latest_checkpoint(FLAGS.outdir + "/train/")
-        #print("Reloading " + best_model)
-        #saver.restore(sess, best_model)
-        this_acc = trainer.test(es, 1, 'Test')
+        this_acc, this_f = trainer.test(es, 1, 'Test')
         print("-----------------------------------------------------")
-        #print('Test loss %.2f' % (avg_loss))
         print('Test acc %.2f' % (this_acc * 100.))
+        if FLAGS.fscore > 0:
+            print('Test F%d %.2f' % (FLAGS.fscore, this_f * 100.))
         print('=====================================================')
         # Write out model, graph and saver for future inference
         model.save(sess, FLAGS.outdir, FLAGS.save)

@@ -4,6 +4,54 @@ import csv
 import codecs
 import cStringIO
 
+def revlut(lut):
+    return {v: k for k, v in lut.items()}
+
+# Turn a sequence of IOB chunks into single tokens
+def toSpans(sequence, lut, strict_iob2=False):
+
+    iobtype = 2 if strict_iob2 else 1
+    chunks = []
+    current = None
+
+    for i, y in enumerate(sequence):
+        label = lut[y]
+
+        if label.startswith('B-'):
+            if current is not None:
+                chunks.append('@'.join(current))
+            current = [ label.replace('B-', ''), '%d' % i ]
+
+        elif label.startswith('I-'):
+            # If this doesnt happen, its not gold data, and its gonna be wrong
+            if current is not None:
+                current.append('%d' % i)
+            else:
+                if iobtype == 1:
+                    current = [ label.replace('I-', ''), '%d' % i]
+                else:
+                    print('Warning, unexpected format (I before B @ %d) %s' % (i, label))
+        else:
+            if current is not None:
+                chunks.append('@'.join(current))
+            current = None
+
+    if current is not None:
+        chunks.append('@'.join(current))
+
+    return set(chunks)
+
+def fScore(overlap_count, gold_count, guess_count, f=1):
+    beta_sq = f*f
+
+    precision = overlap_count / float(guess_count)
+    recall = overlap_count / float(gold_count)
+    if precision == 0.0 or recall == 0.0:
+        return 0.0
+    f = (1. + beta_sq) * (precision * recall) / (beta_sq * precision + recall)
+    return f
+    
+
 def tensorToSeq(tensor):
     return tf.unpack(tf.transpose(tensor, perm=[1, 0, 2]))
 

@@ -121,13 +121,12 @@ The code is fairly flexible and supports word and/or character-level word embedd
 Word-based word vectors are supported by passing an -embed option to a word2vec file.  If this file is not passed, word-based word embeddings
 are not used at all.  If it is passed, word-char embeddings are concatenated to these representations.  This is essentially the dos Santos 2014 approach to building vectors -- though the overall tagger is quite different, as it employs BLSTMs instead for the actual labeling.
 
-
 Twitter is a challenging data source for tagging problems.  The [TweetNLP project](http://www.cs.cmu.edu/~ark/TweetNLP) includes hand annotated POS data. The original taggers used for this task are described [here](http://www.cs.cmu.edu/~ark/TweetNLP/gimpel+etal.acl11.pdf).  The baseline that they compared their algorithm against got 83.38% accuracy.  The final model got 89.37% accuracy with many custom features.  Below, our simple BLSTM baseline with no custom features, and a very coarse approach to compositional character to word modeling still gets *89%-90%* accuracy.
 
 This has been tested on oct27 train, dev and test splits (http://www.cs.cmu.edu/~ark/TweetNLP), using custom word2vec embedddings generated from ~32M tweets including s140 and the oct27 train+dev data.  Some of the data was sampled and preprocessed to have placeholder words for hashtags, mentions and URLs to be used as backoffs for words of those classes which are not found.  The example below employs character vectors taken from splitting oct27 train+dev and s140 data and uses them to summed word vectors over characters.  Note that passing -cembed is not necessary, but provides a warm start for the character embeddings.
 
 ```
-th tag_char_rnn.lua -rnn blstm -optim adam -eta 0.001 -epochs 60 -batchsz 50 -hsz 300 \
+th tag_char_rnn.lua -rnn blstm -optim adam -eta 0.001 -epochs 40 -batchsz 50 -hsz 300 \
 -train /data/xdata/twpos-data-v0.3/oct27.splits/oct27.train \
 -valid /data/xdata/twpos-data-v0.3/oct27.splits/oct27.dev \
 -eval /data/xdata/twpos-data-v0.3/oct27.splits/oct27.test \
@@ -135,7 +134,17 @@ th tag_char_rnn.lua -rnn blstm -optim adam -eta 0.001 -epochs 60 -batchsz 50 -hs
 -cembed /data/xdata/oct27-s140-char2vec-cbow-50.bin \
 -cbow
 ```
+The tensorflow version is identical usage:
+```
+python2.7 tag_char_rnn.py --rnn blstm --numrnn 1 --optim adam --eta 0.001 --patience 20 --epochs 40 --batchsz 50 --hsz 300 \
+--train /data/xdata/twpos-data-v0.3/oct27.splits/oct27.train \
+--valid /data/xdata/twpos-data-v0.3/oct27.splits/oct27.dev \
+--test /data/xdata/twpos-data-v0.3/oct27.splits/oct27.test \
+--embed /data/xdata/oct-s140clean-uber.cbow-bin \
+--cembed /data/xdata/oct27-s140-char2vec-cbow-50.bin \
+--cbow
 
+```
 Here is an example using convolutional filters for character embeddings, alongside word embeddings.  This is basically a combination of the dos Santos approach with the Kim parallel filter idea:
 
 ```
@@ -149,6 +158,27 @@ th tag_char_rnn.lua -rnn blstm -patience 60 -optim rmsprop -eta 0.001 -epochs 60
 ```
 
 If you want to use only the convolutional filter word vectors, just remove the -embed line above.
+
+### NER (and other IOB-type) Tagging
+
+To do NER tagging, we typically do not want to use accuracy as a metric.  In those cases, most often, we use F1, the harmonic mean of precision and recall.  If you have IOB tagged data,
+you will typically want to pass '--fscore 1' to the code like so:
+
+```
+python2.7 tag_char_rnn.py --rnn blstm --numrnn 1 --optim adam --eta 0.001 --epochs 10 --batchsz 50 --hsz 300 \
+--train /home/dpressel/dev/work/glample/tagger/dataset/eng.train \
+--valid /home/dpressel/dev/work/glample/tagger/dataset/eng.testa \
+--test  /home/dpressel/dev/work/glample/tagger/dataset/eng.testb \
+--embed /data/xdata/oct-s140clean-uber.cbow-bin \
+--cembed /data/xdata/oct27-s140-char2vec-cbow-50.bin \
+--cbow --fscore 1
+```
+This will report an F1 score on at each validation pass, and will use F1 for early-stopping as well.
+```
+
+### Global coherency with a CRF (currently tensorflow only)
+
+For tasks that require global coherency like NER tagging, it has been shown that using a transition matrix between label states in conjunction with the output RNN tags improves performance.  This makes the tagger a linear chain CRF, and we can do this by simply adding another layer on top of our RNN output.  To do this, simply pass --crf as an argument.
 
 # Seq2Seq
 
