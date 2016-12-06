@@ -174,7 +174,6 @@ python2.7 tag_char_rnn.py --rnn blstm --numrnn 1 --optim adam --eta 0.001 --epoc
 --cbow --fscore 1
 ```
 This will report an F1 score on at each validation pass, and will use F1 for early-stopping as well.
-```
 
 ### Global coherency with a CRF (currently tensorflow only)
 
