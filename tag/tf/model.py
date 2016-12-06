@@ -277,6 +277,7 @@ class TaggerModel:
             # List to tensor, reform as (T, B, W)
             # Join embeddings along the third dimension
             joint = word_char if word_vec is None else tf.concat(2, [wembed, word_char])
+            joint = tf.nn.dropout(joint, self.pkeep)
 
         with tf.name_scope("Recurrence"):
             embedseq = tensorToSeq(joint)

@@ -55,7 +55,7 @@ def conllBuildVocab(files):
                 states = re.split("\s", line)
                 if len(states) > 0:
                     w = states[0]
-                    vocab_word[w] += 1
+                    vocab_word[cleanup(w)] += 1
                     maxw = max(maxw, len(w))
                     for k in w:
                         vocab_ch[k] += 1

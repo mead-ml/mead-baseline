@@ -20,7 +20,7 @@ class Trainer:
         elif optim == 'adam':
             self.optimizer = tf.train.AdamOptimizer(eta)
         else:
-            self.optimizer = tf.train.GradientDescentOptimizer(eta)
+            self.optimizer = tf.train.MomentumOptimizer(eta, 0.9)
 
         self.train_op = self.optimizer.minimize(self.loss, global_step=self.global_step)
 
