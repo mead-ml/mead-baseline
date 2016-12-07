@@ -23,9 +23,14 @@ def toSpans(sequence, lut, strict_iob2=False):
             current = [ label.replace('B-', ''), '%d' % i ]
 
         elif label.startswith('I-'):
-            # If this doesnt happen, its not gold data, and its gonna be wrong
+            
             if current is not None:
-                current.append('%d' % i)
+                base = label.replace('I-', '')
+                if base == current[0]:
+                    current.append('%d' % i)
+                else:
+                    chunks.append('@'.join(current))
+                    current = [ base, '%d' % i]
             else:
                 if iobtype == 1:
                     current = [ label.replace('I-', ''), '%d' % i]
@@ -44,8 +49,10 @@ def toSpans(sequence, lut, strict_iob2=False):
 def fScore(overlap_count, gold_count, guess_count, f=1):
     beta_sq = f*f
 
+    if guess_count == 0: return 0.0
     precision = overlap_count / float(guess_count)
     recall = overlap_count / float(gold_count)
+    #print('precision %.2f, recall %.2f' % (precision*100., recall*100.))
     if precision == 0.0 or recall == 0.0:
         return 0.0
     f = (1. + beta_sq) * (precision * recall) / (beta_sq * precision + recall)
