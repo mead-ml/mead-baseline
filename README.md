@@ -148,7 +148,8 @@ python2.7 tag_char_rnn.py --rnn blstm --numrnn 1 --optim adam --eta 0.001 --pati
 Here is an example using convolutional filters for character embeddings, alongside word embeddings.  This is basically a combination of the dos Santos approach with the Kim parallel filter idea:
 
 ```
-th tag_char_rnn.lua -rnn blstm -patience 60 -optim rmsprop -eta 0.001 -epochs 60 -batchsz 50 -hsz 300 \
+
+th tag_char_rnn.lua -rnn blstm -patience 60 -optim rmsprop -eta 0.001 -epochs 1000 -batchsz 50 -hsz 100 \
 -train /data/xdata/twpos-data-v0.3/oct27.splits/oct27.train \
 -valid /data/xdata/twpos-data-v0.3/oct27.splits/oct27.dev \
 -eval /data/xdata/twpos-data-v0.3/oct27.splits/oct27.test \
@@ -165,13 +166,13 @@ To do NER tagging, we typically do not want to use accuracy as a metric.  In tho
 you will typically want to pass '--fscore 1' to the code like so:
 
 ```
-python2.7 tag_char_rnn.py --rnn blstm --numrnn 1 --optim adam --eta 0.001 --epochs 10 --batchsz 50 --hsz 300 \
+python2.7 tag_char_rnn.py --rnn blstm --patience 70 --numrnn 1 --optim sgd --eta 0.001 --epochs 600 --batchsz 50 --hsz 100 \
 --train /home/dpressel/dev/work/glample/tagger/dataset/eng.train \
 --valid /home/dpressel/dev/work/glample/tagger/dataset/eng.testa \
 --test  /home/dpressel/dev/work/glample/tagger/dataset/eng.testb \
---embed /data/xdata/oct-s140clean-uber.cbow-bin \
---cembed /data/xdata/oct27-s140-char2vec-cbow-50.bin \
---cbow --fscore 1
+--embed /data/xdata/GoogleNews-vectors-negative300.bin \
+--cfiltsz "1,2,3,4,5,7" --wsz 30 --fscore 1
+
 ```
 This will report an F1 score on at each validation pass, and will use F1 for early-stopping as well.
 
@@ -179,6 +180,14 @@ This will report an F1 score on at each validation pass, and will use F1 for ear
 
 For tasks that require global coherency like NER tagging, it has been shown that using a transition matrix between label states in conjunction with the output RNN tags improves performance.  This makes the tagger a linear chain CRF, and we can do this by simply adding another layer on top of our RNN output.  To do this, simply pass --crf as an argument.
 
+```
+python2.7 tag_char_rnn.py --rnn blstm --patience 70 --numrnn 1 --optim sgd --eta 0.001 --epochs 600 --batchsz 50 --hsz 100 \
+--train /home/dpressel/dev/work/glample/tagger/dataset/eng.train \
+--valid /home/dpressel/dev/work/glample/tagger/dataset/eng.testa \
+--test  /home/dpressel/dev/work/glample/tagger/dataset/eng.testb \
+--embed /data/xdata/GoogleNews-vectors-negative300.bin \
+--cfiltsz "1,2,3,4,5,7" --wsz 30 --fscore 1 --crf
+```
 # Seq2Seq
 
 Encoder-decoder frameworks have been used for Statistical Machine Translation, Image Captioning, ASR, Conversation Modeling, Formula Generation and many other applications.  Seq2seq is a type of encoder-decoder implementation, where the encoder is some sort of RNN, and the memories (sometimes known as the "thought vector") are transferred over to the decoder, also an RNN, essentially making this a conditional language model.  The code as it is written here is with text in mind, and supports multiple types of RNNs, including GRUs and LSTMs, as well as stacked layers.  The TensorFlow version also supports attention.

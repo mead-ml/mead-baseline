@@ -23,7 +23,7 @@ def cleanup(word):
     if word == '"': return ','
     if word in UNREP_EMOTICONS: return ';)'
     if word == '<3': return '&lt;3'
-    return word.lower()
+    return word #word.lower()
 
 REPLACE = { "'s": " 's ",
             "'ve": " 've ",

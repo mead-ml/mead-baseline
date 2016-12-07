@@ -12,21 +12,21 @@ from train import Trainer
 import time
 
 DEF_BATCHSZ = 50
-DEF_TSF = './data/twpos-data-v0.3/oct27.splits/oct27.train'
-DEF_VSF = './data/twpos-data-v0.3/oct27.splits/oct27.dev'
-DEF_ESF = './data/twpos-data-v0.3/oct27.splits/oct27.test'
+DEF_TSF = ''
+DEF_VSF = ''
+DEF_ESF = ''
 DEF_FILE_OUT = 'rnn-tagger.model'
 DEF_EVAL_OUT = 'rnn-tagger-test.txt'
-DEF_PATIENCE = 20
+DEF_PATIENCE = 70
 DEF_RNN = 'blstm'
 DEF_NUM_RNN = 1
 DEF_OPTIM = 'sgd'
-DEF_EPOCHS = 60
-DEF_ETA = 0.32
+DEF_EPOCHS = 1000
+DEF_ETA = 0.001
 DEF_CFILTSZ = '1,2,3,4,5,7'
 DEF_HSZ = 100
 DEF_CHARSZ = 16
-DEF_WSZ = 50
+DEF_WSZ = 30
 DEF_PROC = 'gpu'
 DEF_CLIP = 5
 DEF_DECAY = 1e-7
@@ -93,8 +93,8 @@ if FLAGS.cembed:
     char_vec = w2v.Word2VecModel(FLAGS.cembed, vocab_ch, FLAGS.unif)
     FLAGS.charsz = char_vec.dsz
     if FLAGS.charsz != FLAGS.wsz and FLAGS.cbow is True:
-        print('Warning, you have opted for CBOW char embeddings, and have provided pre-trained char vector embeddings.  To make this work, setting word vector size to character vector size ' + FLAGS.charsz)
-        opt.wsz = opt.charsz
+        print('Warning, you have opted for CBOW char embeddings, and have provided pre-trained char vector embeddings.  To make this work, setting word vector size to character vector size %d' % FLAGS.charsz)
+        FLAGS.wsz = FLAGS.charsz
 else:
     if FLAGS.charsz != FLAGS.wsz and FLAGS.cbow is True:
         print('Warning, you have opted for CBOW char embeddings, but have provided differing sizes for char embedding depth and word depth.  This is not possible, forcing char embedding depth to be word depth ' + FLAGS.wsz)
