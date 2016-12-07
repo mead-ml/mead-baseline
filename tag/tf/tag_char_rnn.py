@@ -33,10 +33,13 @@ DEF_DECAY = 1e-7
 DEF_MOM = 0.9
 DEF_UNIF = 0.25
 DEF_PDROP = 0.5
-DEF_MXLEN = 40
+# By default, use max sentence length from data
+DEF_MXLEN = -1
+DEF_MXWLEN = 40
 DEF_VALSPLIT = 0.15
 DEF_EMBED = None
 DEF_CEMBED = None
+DEF_EVAL_OUT = 'rnn-tagger-test.txt'
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS
@@ -51,11 +54,13 @@ flags.DEFINE_string('test', DEF_ESF, 'Test file')
 flags.DEFINE_string('rnn', DEF_RNN, 'RNN type')
 flags.DEFINE_integer('numrnn', DEF_NUM_RNN, 'The depth of stacked RNNs')
 flags.DEFINE_string('outdir', 'out', 'Directory to put the output')
+flags.DEFINE_string('conll_output', DEF_EVAL_OUT, 'Place to put test CONLL file')
 flags.DEFINE_float('unif', DEF_UNIF, 'Initializer bounds for embeddings')
 flags.DEFINE_float('clip', DEF_CLIP, 'Gradient clipping cutoff')
 flags.DEFINE_integer('epochs', DEF_EPOCHS, 'Number of epochs')
 flags.DEFINE_integer('batchsz', DEF_BATCHSZ, 'Batch size')
-flags.DEFINE_integer('mxlen', DEF_MXLEN, 'Max length')
+flags.DEFINE_integer('mxlen', DEF_MXLEN, 'Max sentence length')
+flags.DEFINE_integer('mxwlen', DEF_MXWLEN, 'Max word length')
 flags.DEFINE_string('cfiltsz', DEF_CFILTSZ, 'Character filter sizes')
 #flags.DEFINE_integer('charsz', 150, 'Char embedding depth')
 flags.DEFINE_integer('charsz', DEF_CHARSZ, 'Char embedding depth')
@@ -71,11 +76,12 @@ flags.DEFINE_integer('fscore', 0, 'Use F-score in metrics and early stopping')
 flags.DEFINE_boolean('viz', False, 'Set up LUT vocabs for Tensorboard')
 
 
-maxw, vocab_ch, vocab_word = conllBuildVocab([FLAGS.train, 
-                                              FLAGS.test, 
-                                              FLAGS.valid])
-
-maxw = min(maxw, FLAGS.mxlen)
+maxs, maxw, vocab_ch, vocab_word = conllBuildVocab([FLAGS.train, 
+                                                    FLAGS.test, 
+                                                    FLAGS.valid])
+maxw = min(maxw, FLAGS.mxwlen)
+maxs = min(maxs, FLAGS.mxlen) if FLAGS.mxlen > 0 else maxs
+print('Max sentence length %d' % maxs)
 print('Max word length %d' % maxw)
 
 
@@ -105,21 +111,18 @@ else:
 
 f2i = {"<PAD>":0}
 
-opts = { 'batchsz': FLAGS.batchsz,
-         'mxlen': FLAGS.mxlen }
-
-ts, f2i, _ = conllSentsToIndices(FLAGS.train, word_vec, char_vec, maxw, f2i, opts)
+ts, f2i, _ = conllSentsToIndices(FLAGS.train, word_vec, char_vec, maxs, maxw, f2i)
 print('Loaded  training data')
 
 if FLAGS.valid is not None:
     print('Using provided validation data')
-    vs, f2i,_ = conllSentsToIndices(FLAGS.valid, word_vec, char_vec, maxw, f2i, opts)
+    vs, f2i,_ = conllSentsToIndices(FLAGS.valid, word_vec, char_vec, maxs, maxw, f2i)
 else:
     ts, vs = validSplit(ts, FLAGS.valsplit)
     print('Created validation split')
 
 
-es, f2i,txts = conllSentsToIndices(FLAGS.test, word_vec, char_vec, maxw, f2i, opts)
+es, f2i,txts = conllSentsToIndices(FLAGS.test, word_vec, char_vec, maxs, maxw, f2i)
 print('Loaded test data')
 
 i2f = revlut(f2i)
@@ -137,7 +140,7 @@ with tf.Graph().as_default():
         model.params(f2i,
                      word_vec,
                      char_vec,
-                     FLAGS.mxlen,
+                     maxs,
                      maxw,
                      FLAGS.rnn,
                      FLAGS.wsz,
@@ -182,7 +185,7 @@ with tf.Graph().as_default():
         print('Evaluating best model on test data')
         print('=====================================================')
         trainer.recover_last_checkpoint()
-        this_acc, this_f = trainer.test(es, 1, 'Test')
+        this_acc, this_f = trainer.test(es, 1, 'Test', FLAGS.conll_output, txts)
         print("-----------------------------------------------------")
         print('Test acc %.2f' % (this_acc * 100.))
         if FLAGS.fscore > 0:

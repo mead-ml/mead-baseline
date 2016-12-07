@@ -65,7 +65,21 @@ class Trainer:
         duration = time.time() - start_time
         print('Train (Loss %.4f) (%.3f sec)' % (float(total_loss)/len(ts), duration))
 
-    def _step(self, batch):
+    def _writeSentenceCONLL(self, handle, sentence, gold, txt):
+
+        if len(txt) != len(sentence):
+            txt = txt[:len(sentence)]
+
+        try:
+            for word, truth, guess in zip(txt, gold, sentence):
+                handle.write('%s %s %s\n' % (word, self.idx2label[truth], self.idx2label[guess]))
+            handle.write('\n')
+        except:
+            print('ERROR: Failed to write lines... closing file')
+            handle.close()
+            handle = None
+
+    def _step(self, batch, handle=None, txts=None):
 
         sentence_lengths = batch["length"]
         truth = batch["y"]
@@ -79,6 +93,7 @@ class Trainer:
         guess_count = 0
         overlap_count = 0
         
+        # For each sentence
         for b in range(len(guess)):
             length = sentence_lengths[b]
             assert(length == len(guess[b]))
@@ -98,9 +113,16 @@ class Trainer:
                 overlap_chunks = gold_chunks & guess_chunks
                 overlap_count += len(overlap_chunks)
 
+            # Should we write a file out?  If so, we have to have txts
+            if handle is not None:
+                idx = batch["id"][b]
+                txt = txts[idx]
+                self._writeSentenceCONLL(handle, sentence, gold, txt) 
+                
+
         return correct_labels, total_labels, overlap_count, gold_count, guess_count
 
-    def test(self, ts, batchsz, phase='Test'):
+    def test(self, ts, batchsz, phase='Test', conll_file=None, txts=None):
 
         total_correct = total_sum = fscore = 0
         total_gold_count = total_guess_count = total_overlap_count = 0
@@ -108,9 +130,14 @@ class Trainer:
     
         steps = int(math.floor(len(ts)/float(batchsz)))
 
+        # Only if they provide a file and the raw txts, we can write CONLL file
+        handle = None
+        if conll_file is not None and txts is not None:
+            handle = open(conll_file, "w")
+
         for i in range(steps):
             ts_i = batch(ts, i, batchsz)
-            correct, count, overlaps, golds, guesses = self._step(ts_i)
+            correct, count, overlaps, golds, guesses = self._step(ts_i, handle, txts)
             total_correct += correct
             total_sum += count
             total_gold_count += golds
@@ -141,5 +168,8 @@ class Trainer:
                    total_correct,
                    total_sum, total_acc,
                    duration))
+
+        if handle is not None:
+            handle.close()
 
         return total_acc, fscore

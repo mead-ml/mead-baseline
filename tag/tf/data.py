@@ -46,20 +46,30 @@ def conllBuildVocab(files):
     vocab_word = Counter()
     vocab_ch = Counter()
     maxw = 0
-
+    maxs = 0
     for file in files:
         if file is None:
             continue
+
+        sl = 0
         with codecs.open(file, encoding='utf-8', mode='r') as f:
             for line in f:
-                states = re.split("\s", line)
-                if len(states) > 0:
+
+                line = line.strip()
+                if line == '':
+                    maxs = max(maxs, sl)
+                    sl = 0
+
+                else:
+                    states = re.split("\s", line)
+                    sl += 1
                     w = states[0]
                     vocab_word[cleanup(w)] += 1
                     maxw = max(maxw, len(w))
                     for k in w:
                         vocab_ch[k] += 1
-    return maxw, vocab_ch, vocab_word
+
+    return maxs, maxw, vocab_ch, vocab_word
 
 def conllLines(tsfile):
 
@@ -84,10 +94,9 @@ def conllLines(tsfile):
 
     return txts, lbls
 
-def conllSentsToIndices(filename, words, chars, maxw, f2i, options):
+def conllSentsToIndices(filename, words, chars, mxlen, maxw, f2i):
 
     chsz = chars.dsz
-    mxlen = options.get("mxlen", 40)
 
     b = 0
     ts = []
@@ -155,7 +164,7 @@ def batch(ts, start, batchsz):
         ids[i] = ex["id"]
         length[i] = ex["length"]
         idx += 1
-    return {"x": xs, "y": ys, "xch": xs_ch, "length": length }
+    return {"x": xs, "y": ys, "xch": xs_ch, "length": length, "id": ids }
         
 
 
