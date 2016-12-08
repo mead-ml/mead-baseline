@@ -30,11 +30,14 @@ def toSpans(sequence, lut, strict_iob2=False):
                     current.append('%d' % i)
                 else:
                     chunks.append('@'.join(current))
+                    if iobtype == 2:
+                        print('Warning, type=IOB2, unexpected format ([%s] follows other tag type [%s] @ %d)' % (label, current[0], i))
+
                     current = [ base, '%d' % i]
+
             else:
-                if iobtype == 1:
-                    current = [ label.replace('I-', ''), '%d' % i]
-                else:
+                current = [ label.replace('I-', ''), '%d' % i]
+                if iobtype == 2:
                     print('Warning, unexpected format (I before B @ %d) %s' % (i, label))
         else:
             if current is not None:
