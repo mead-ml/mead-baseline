@@ -84,19 +84,27 @@ maxs = min(maxs, FLAGS.mxlen) if FLAGS.mxlen > 0 else maxs
 print('Max sentence length %d' % maxs)
 print('Max word length %d' % maxw)
 
+# Vocab LUTs
+word_vocab = None
+char_vocab = None
+
 
 if FLAGS.cbow is True:
     print('Using CBOW char embeddings')
     FLAGS.cfiltsz = '0'
 else:
     print('Using convolutional char embeddings')
+
 word_vec = None
 if FLAGS.embed:
     word_vec = w2v.Word2VecModel(FLAGS.embed, vocab_word, FLAGS.unif)
+    word_vocab = word_vec.vocab
 
 if FLAGS.cembed:
     print('Using pre-trained character embeddings ' + FLAGS.cembed)
     char_vec = w2v.Word2VecModel(FLAGS.cembed, vocab_ch, FLAGS.unif)
+    char_vocab = char_vec.vocab
+
     FLAGS.charsz = char_vec.dsz
     if FLAGS.charsz != FLAGS.wsz and FLAGS.cbow is True:
         print('Warning, you have opted for CBOW char embeddings, and have provided pre-trained char vector embeddings.  To make this work, setting word vector size to character vector size %d' % FLAGS.charsz)
@@ -107,22 +115,24 @@ else:
         FLAGS.charsz = FLAGS.wsz
 
     char_vec = w2v.RandomInitVecModel(FLAGS.charsz, vocab_ch, FLAGS.unif)
-
+    char_vocab = char_vec.vocab
 
 f2i = {"<PAD>":0}
 
-ts, f2i, _ = conllSentsToIndices(FLAGS.train, word_vec, char_vec, maxs, maxw, f2i)
+
+
+ts, f2i, _ = conllSentsToIndices(FLAGS.train, word_vocab, char_vocab, maxs, maxw, f2i)
 print('Loaded  training data')
 
 if FLAGS.valid is not None:
     print('Using provided validation data')
-    vs, f2i,_ = conllSentsToIndices(FLAGS.valid, word_vec, char_vec, maxs, maxw, f2i)
+    vs, f2i,_ = conllSentsToIndices(FLAGS.valid, word_vocab, char_vocab, maxs, maxw, f2i)
 else:
     ts, vs = validSplit(ts, FLAGS.valsplit)
     print('Created validation split')
 
 
-es, f2i,txts = conllSentsToIndices(FLAGS.test, word_vec, char_vec, maxs, maxw, f2i)
+es, f2i,txts = conllSentsToIndices(FLAGS.test, word_vocab, char_vocab, maxs, maxw, f2i)
 print('Loaded test data')
 
 i2f = revlut(f2i)
@@ -158,7 +168,7 @@ with tf.Graph().as_default():
 
         init = tf.global_variables_initializer()
         sess.run(init)
-        trainer.prepare(tf.train.Saver())
+        model.saveUsing(tf.train.Saver())
 
         saving_metric = 0
         metric_type = "F%d" % FLAGS.fscore if FLAGS.fscore > 0 else "acc"

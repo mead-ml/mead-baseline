@@ -4,66 +4,16 @@ import time
 import math
 from data import batch
 from utils import toSpans, fScore
-class Trainer:
 
-    def __init__(self, sess, model, outdir, optim, eta, idx2label, fscore=0):
-        
+
+
+class Evaluator:
+    
+    def __init__(self, sess, model, idx2label, fscore):
         self.sess = sess
-        self.outdir = outdir
-        self.loss = model.createLoss()
         self.model = model
         self.idx2label = idx2label
         self.fscore = fscore
-        self.global_step = tf.Variable(0, name='global_step', trainable=False)
-        if optim == 'adadelta':
-            self.optimizer = tf.train.AdadeltaOptimizer(eta, 0.95, 1e-6)
-        elif optim == 'adam':
-            self.optimizer = tf.train.AdamOptimizer(eta)
-        else:
-            self.optimizer = tf.train.MomentumOptimizer(eta, 0.9)
-
-        self.train_op = self.optimizer.minimize(self.loss, global_step=self.global_step)
-
-        self.loss_summary = tf.summary.scalar("loss", self.loss)
-        self.summary_op = tf.merge_all_summaries()
-        self.train_writer = tf.summary.FileWriter(self.outdir + "/train", sess.graph)
-
-    def writer(self):
-        return self.train_writer
-
-    def checkpoint(self, name):
-        self.model.saver.save(self.sess, self.outdir + "/train/" + name, global_step=self.global_step)
-
-    def recover_last_checkpoint(self):
-        latest = tf.train.latest_checkpoint(self.outdir + "/train/")
-        print("Reloading " + latest)
-        self.model.saver.restore(self.sess, latest)
-
-    def prepare(self, saver):
-        self.model.saver = saver
-
-    def train(self, ts, dropout, batchsz):
-
-        start_time = time.time()
-
-        steps = int(math.floor(len(ts)/float(batchsz)))
-
-        shuffle = np.random.permutation(np.arange(steps))
-
-        total_loss = total_err = total_sum = 0
-
-        for i in range(steps):
-            si = shuffle[i]
-            ts_i = batch(ts, si, batchsz)
-            feed_dict = self.model.ex2dict(ts_i, 1.0-dropout)
-        
-            _, step, summary_str, lossv = self.sess.run([self.train_op, self.global_step, self.summary_op, self.loss], feed_dict=feed_dict)
-            self.train_writer.add_summary(summary_str, step)
-        
-            total_loss += lossv
-
-        duration = time.time() - start_time
-        print('Train (Loss %.4f) (%.3f sec)' % (float(total_loss)/len(ts), duration))
 
     def _writeSentenceCONLL(self, handle, sentence, gold, txt):
 
@@ -79,7 +29,7 @@ class Trainer:
             handle.close()
             handle = None
 
-    def _step(self, batch, handle=None, txts=None):
+    def _batch(self, batch, handle=None, txts=None):
 
         sentence_lengths = batch["length"]
         truth = batch["y"]
@@ -122,7 +72,7 @@ class Trainer:
 
         return correct_labels, total_labels, overlap_count, gold_count, guess_count
 
-    def test(self, ts, batchsz, phase='Test', conll_file=None, txts=None):
+    def test(self, ts, batchsz=1, phase='Test', conll_file=None, txts=None):
 
         total_correct = total_sum = fscore = 0
         total_gold_count = total_guess_count = total_overlap_count = 0
@@ -137,7 +87,7 @@ class Trainer:
 
         for i in range(steps):
             ts_i = batch(ts, i, batchsz)
-            correct, count, overlaps, golds, guesses = self._step(ts_i, handle, txts)
+            correct, count, overlaps, golds, guesses = self._batch(ts_i, handle, txts)
             total_correct += correct
             total_sum += count
             total_gold_count += golds
@@ -173,3 +123,64 @@ class Trainer:
             handle.close()
 
         return total_acc, fscore
+
+class Trainer:
+
+    def __init__(self, sess, model, outdir, optim, eta, idx2label, fscore=0):
+        
+        self.sess = sess
+        self.outdir = outdir
+        self.loss = model.createLoss()
+        self.model = model
+        # Own this during training
+        self.evaluator = Evaluator(sess, model, idx2label, fscore)
+        self.global_step = tf.Variable(0, name='global_step', trainable=False)
+        if optim == 'adadelta':
+            self.optimizer = tf.train.AdadeltaOptimizer(eta, 0.95, 1e-6)
+        elif optim == 'adam':
+            self.optimizer = tf.train.AdamOptimizer(eta)
+        else:
+            self.optimizer = tf.train.MomentumOptimizer(eta, 0.9)
+
+        self.train_op = self.optimizer.minimize(self.loss, global_step=self.global_step)
+
+        self.loss_summary = tf.summary.scalar("loss", self.loss)
+        self.summary_op = tf.merge_all_summaries()
+        self.train_writer = tf.summary.FileWriter(self.outdir + "/train", sess.graph)
+
+    def writer(self):
+        return self.train_writer
+
+    def checkpoint(self, name):
+        self.model.saver.save(self.sess, self.outdir + "/train/" + name, global_step=self.global_step)
+
+    def recover_last_checkpoint(self):
+        latest = tf.train.latest_checkpoint(self.outdir + "/train/")
+        print("Reloading " + latest)
+        self.model.saver.restore(self.sess, latest)
+
+    def train(self, ts, dropout, batchsz):
+
+        start_time = time.time()
+
+        steps = int(math.floor(len(ts)/float(batchsz)))
+
+        shuffle = np.random.permutation(np.arange(steps))
+
+        total_loss = total_err = total_sum = 0
+
+        for i in range(steps):
+            si = shuffle[i]
+            ts_i = batch(ts, si, batchsz)
+            feed_dict = self.model.ex2dict(ts_i, 1.0-dropout)
+        
+            _, step, summary_str, lossv = self.sess.run([self.train_op, self.global_step, self.summary_op, self.loss], feed_dict=feed_dict)
+            self.train_writer.add_summary(summary_str, step)
+        
+            total_loss += lossv
+
+        duration = time.time() - start_time
+        print('Train (Loss %.4f) (%.3f sec)' % (float(total_loss)/len(ts), duration))
+
+    def test(self, ts, batchsz, phase='Test', conll_file=None, txts=None):
+        return self.evaluator.test(ts, batchsz, phase, conll_file, txts)

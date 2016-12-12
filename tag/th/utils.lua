@@ -1,5 +1,7 @@
+require 'pl'
 require 'optim'
 require 'xlua'
+require 'torchure'
 
 function newConv1D(ifm, ofm, filtsz, gpu)
    local tconv = gpu and cudnn.TemporalConvolution(ifm, ofm, filtsz) or nn.TemporalConvolution(ifm, ofm, filtsz)
@@ -118,3 +120,50 @@ function exists(name)
    if f~=nil then io.close(f) return true else return false end
 end
 
+function toSpans(sequence, lut, strict_iob2)
+   local iobtype = strict_iob2 and 2 or 1
+   local chunks = {}
+   local current = nil
+   
+   for i, y in pairs(sequence) do
+      local label = lut[y]
+      if startswith(label, 'B-') then
+	 
+	 if current ~= nil then
+	    table.insert(chunks, jointab(current, '@'))
+	 end
+	 current = { label:sub(3), string.format('%d', i) }
+
+      elseif startswith(label, 'I-') then
+	 
+	 if current ~= nil then
+	    local base = label:sub(3)
+	    if base == current[1] then
+	       table.insert(current, string.format('%d', i))
+	    else
+	       table.insert(chunks, jointab(current, '@'))
+	       if iobtype == 2 then
+		  print(string.format('Warning, type=IOB2, unexpected format ([%s] follows other tag type [%s] @ %d)', label, current[1], i))
+	       end
+	       current = { base, string.format('%d', i) }
+	    end
+	 else
+	    current = { base, string.format('%d', i) }
+	    if iobtype == 2 then
+	       print(string.format('Warning, unexpected format (I before B @ %d) %s', i, label))
+	    end
+	 end
+      else
+	 if current ~= nil then
+	    table.insert(chunks, jointab(current, '@'))
+	    current = nil
+	 end
+      end
+   end
+   if current ~= nil then
+      table.insert(chunks, jointab(current, '@'))
+   end
+   
+   -- Not sure how this comes into the path, I think its from penlight
+   return Set(chunks)
+end

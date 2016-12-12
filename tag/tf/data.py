@@ -94,9 +94,7 @@ def conllLines(tsfile):
 
     return txts, lbls
 
-def conllSentsToIndices(filename, words, chars, mxlen, maxw, f2i):
-
-    chsz = chars.dsz
+def conllSentsToIndices(filename, words_vocab, chars_vocab, mxlen, maxw, f2i):
 
     b = 0
     ts = []
@@ -128,9 +126,9 @@ def conllSentsToIndices(filename, words, chars, mxlen, maxw, f2i):
                 f2i[label] = idx
 
             ys[j] = f2i[label]
-            xs[j] = words.vocab.get(cleanup(w), 0)
+            xs[j] = words_vocab.get(cleanup(w), 0)
             for k in range(nch):
-                xs_ch[j,k] = chars.vocab.get(w[k], 0)
+                xs_ch[j,k] = chars_vocab.get(w[k], 0)
         ts.append({"x":xs,"y":ys, "xch": xs_ch, "id": i, "length": length })
 
     return ts, f2i, txts

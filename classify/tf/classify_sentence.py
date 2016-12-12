@@ -72,7 +72,7 @@ with tf.Graph().as_default():
         init = tf.global_variables_initializer()
         sess.run(init)
 
-        trainer.prepare(tf.train.Saver())
+        model.saveUsing(tf.train.Saver())
 
         max_acc = 0
         last_improved = 0

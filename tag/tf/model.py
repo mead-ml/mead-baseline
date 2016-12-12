@@ -7,6 +7,7 @@ from tensorflow.contrib.tensorboard.plugins import projector
 from utils import *
 import json
 import math
+import os
 
 def writeEmbeddingsTSV(word_vec, filename):
     idx2word = revlut(word_vec.vocab)
@@ -101,7 +102,7 @@ class TaggerModel:
         tf.train.write_graph(sess.graph_def, outdir, base + '.graph', as_text=False)
         with open(basename + '.saver', 'w') as f:
             f.write(str(self.saver.as_saver_def()))
-        self.saver.save(sess, basename + '.model')
+        self.saver.save(sess, basename)
 
         with open(basename + '.labels', 'w') as f:
             json.dump(self.labels, f)
@@ -118,21 +119,23 @@ class TaggerModel:
         with open(basename + '.saver') as fsv:
             saver_def = tf.train.SaverDef()
             text_format.Merge(fsv.read(), saver_def)
+            print('Loaded saver def')
 
         with gfile.FastGFile(basename + '.graph', 'r') as f:
             gd = tf.GraphDef()
             gd.ParseFromString(f.read())
             sess.graph.as_default()
             tf.import_graph_def(gd, name='')
-            sess.run(saver_def.restore_op_name, {saver_def.filename_tensor_name: basename + '.model'})
+            print('Imported graph def')
+            sess.run(saver_def.restore_op_name, {saver_def.filename_tensor_name: basename})
             self.x = tf.get_default_graph().get_tensor_by_name('x:0')
             self.xch = tf.get_default_graph().get_tensor_by_name('xch:0')
             self.y = tf.get_default_graph().get_tensor_by_name('y:0')
             self.pkeep = tf.get_default_graph().get_tensor_by_name('pkeep:0')
-            self.best = tf.get_default_graph().get_tensor_by_name('output/best:0')
-            self.probs = tf.get_default_graph().get_tensor_by_name('output/probs:0')
+            self.best = tf.get_default_graph().get_tensor_by_name('output/ArgMax:0') # X
+            self.probs = tf.get_default_graph().get_tensor_by_name('output/transpose:0') # X
             try:
-                self.A = tf.get_default_graph().get_tensor_by_name('Loss/transitions')
+                self.A = tf.get_default_graph().get_tensor_by_name('Loss/transitions:0')
                 print('Found transition matrix in graph, setting crf=True')
                 self.crf = True
             except:
@@ -157,6 +160,9 @@ class TaggerModel:
 
     def __init__(self):
         pass
+
+    def saveUsing(self, saver):
+        self.saver = saver
 
     def _computeWordLevelLoss(self, gold, mask):
 

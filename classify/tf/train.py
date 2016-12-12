@@ -36,9 +36,6 @@ class Trainer:
         print("Reloading " + latest)
         self.model.saver.restore(self.sess, latest)
 
-    def prepare(self, saver):
-        self.model.saver = saver
-
     def train(self, ts, dropout):
 
         total_loss = total_corr = total = 0

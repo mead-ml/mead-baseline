@@ -22,6 +22,8 @@ class ConvModel:
         with open(basename + '.vocab', 'w') as f:
             json.dump(self.vocab, f)
 
+    def saveUsing(self, saver):
+        self.saver = saver
 
     def restore(self, sess, indir, base):
         basename = indir + '/' + base
