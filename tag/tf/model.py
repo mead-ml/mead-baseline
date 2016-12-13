@@ -97,12 +97,16 @@ def sharedCharWord(Wch, xch_i, maxw, filtsz, char_dsz, wsz, reuse):
 
 class TaggerModel:
 
-    def save(self, sess, outdir, base):
+    def saveValues(self, sess, outdir, base):
+        basename = outdir + '/' + base
+        self.saver.save(sess, basename)
+
+    def saveMetadata(self, sess, outdir, base):
+        
         basename = outdir + '/' + base
         tf.train.write_graph(sess.graph_def, outdir, base + '.graph', as_text=False)
         with open(basename + '.saver', 'w') as f:
             f.write(str(self.saver.as_saver_def()))
-        self.saver.save(sess, basename)
 
         with open(basename + '.labels', 'w') as f:
             json.dump(self.labels, f)
@@ -113,9 +117,14 @@ class TaggerModel:
 
         with open(basename + '-char.vocab', 'w') as f:
             json.dump(self.char_vocab, f)
+        
+    def save(self, sess, outdir, base):
+        self.saveMetadata(sess, outdir, base)
+        self.saveValues(sess, outdir, base)
 
-    def restore(self, sess, indir, base):
+    def restore(self, sess, indir, base, checkpoint_name=None):
         basename = indir + '/' + base
+        checkpoint_name = checkpoint_name or basename
         with open(basename + '.saver') as fsv:
             saver_def = tf.train.SaverDef()
             text_format.Merge(fsv.read(), saver_def)
@@ -127,7 +136,9 @@ class TaggerModel:
             sess.graph.as_default()
             tf.import_graph_def(gd, name='')
             print('Imported graph def')
-            sess.run(saver_def.restore_op_name, {saver_def.filename_tensor_name: basename})
+
+            sess.run(saver_def.restore_op_name,
+                     {saver_def.filename_tensor_name: checkpoint_name})
             self.x = tf.get_default_graph().get_tensor_by_name('x:0')
             self.xch = tf.get_default_graph().get_tensor_by_name('xch:0')
             self.y = tf.get_default_graph().get_tensor_by_name('y:0')

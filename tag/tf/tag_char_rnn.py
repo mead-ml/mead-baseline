@@ -40,6 +40,7 @@ DEF_VALSPLIT = 0.15
 DEF_EMBED = None
 DEF_CEMBED = None
 DEF_EVAL_OUT = 'rnn-tagger-test.txt'
+DEF_TEST_THRESH = 10
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS
@@ -74,11 +75,11 @@ flags.DEFINE_string('save', DEF_FILE_OUT, 'Save basename')
 flags.DEFINE_boolean('crf', False, 'Use CRF on top')
 flags.DEFINE_integer('fscore', 0, 'Use F-score in metrics and early stopping')
 flags.DEFINE_boolean('viz', False, 'Set up LUT vocabs for Tensorboard')
-
-
+flags.DEFINE_integer('test_thresh', DEF_TEST_THRESH, 'How many epochs improvement required before testing')
 maxs, maxw, vocab_ch, vocab_word = conllBuildVocab([FLAGS.train, 
                                                     FLAGS.test, 
                                                     FLAGS.valid])
+
 maxw = min(maxw, FLAGS.mxwlen)
 maxs = min(maxs, FLAGS.mxlen) if FLAGS.mxlen > 0 else maxs
 print('Max sentence length %d' % maxs)
@@ -158,7 +159,6 @@ with tf.Graph().as_default():
                      FLAGS.cfiltsz,
                      FLAGS.crf)
 
-
         trainer = Trainer(sess, model, FLAGS.outdir, FLAGS.optim, FLAGS.eta, i2f, FLAGS.fscore)
 
         train_writer = trainer.writer()
@@ -169,21 +169,30 @@ with tf.Graph().as_default():
         init = tf.global_variables_initializer()
         sess.run(init)
         model.saveUsing(tf.train.Saver())
+        print('Writing metadata')
+        model.saveMetadata(sess, FLAGS.outdir, FLAGS.save)
 
         saving_metric = 0
         metric_type = "F%d" % FLAGS.fscore if FLAGS.fscore > 0 else "acc"
         last_improved = 0
         for i in range(FLAGS.epochs):
-            print('Training epoch %d' % (i+1))
+            print('Training epoch %d.' % (i+1))
+            if i > 0:
+                print('\t(last improvement @ %d)' % (last_improved+1))
             trainer.train(ts, FLAGS.dropout, FLAGS.batchsz)
             this_acc, this_f = trainer.test(vs, FLAGS.batchsz, 'Validation')
 
             this_metric = this_f if FLAGS.fscore > 0 else this_acc
             if this_metric > saving_metric:
                 saving_metric = this_metric
-                last_improved = i
                 print('Highest dev %s achieved yet -- writing model' % metric_type)
+
+                if (i - last_improved) > FLAGS.test_thresh:
+                    trainer.test(es, 1, 'Test')
                 trainer.checkpoint(FLAGS.save)
+                last_improved = i
+                    
+                
             if (i - last_improved) > FLAGS.patience:
                 print('Stopping due to persistent failures to improve')
                 break
@@ -202,4 +211,4 @@ with tf.Graph().as_default():
             print('Test F%d %.2f' % (FLAGS.fscore, this_f * 100.))
         print('=====================================================')
         # Write out model, graph and saver for future inference
-        model.save(sess, FLAGS.outdir, FLAGS.save)
+        model.saveValues(sess, FLAGS.outdir, FLAGS.save)
