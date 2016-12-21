@@ -130,17 +130,17 @@ class ConvModel:
                 drop = tf.nn.dropout(combine, self.pkeep)
 
                 # For fully connected layers, use xavier (glorot) transform
-                with tf.contrib.slim.arg_scope(
-                        [fully_connected],
-                        weights_initializer=xavier_init):
+            with tf.contrib.slim.arg_scope(
+                    [fully_connected],
+                    weights_initializer=xavier_init):
 
-                    # This makes it more like C/W 2011
-                    if hsz > 0:
-                        print('Adding a projection layer after MOT pooling')
-                        proj = fully_connected(drop, hsz, scope='proj')
-                        drop = tf.nn.dropout(proj, self.pkeep)
+                # This makes it more like C/W 2011
+                if hsz > 0:
+                    print('Adding a projection layer after MOT pooling')
+                    proj = fully_connected(drop, hsz, scope='proj')
+                    drop = tf.nn.dropout(proj, self.pkeep)
 
-                    with tf.name_scope("output"):
-                        self.lin = fully_connected(drop, nc)
-                        self.probs = tf.nn.softmax(self.lin, name="probs")
-                        self.best = tf.argmax(self.lin, 1, name="best")
+                with tf.name_scope("output"):
+                    self.lin = fully_connected(drop, nc)
+                    self.probs = tf.nn.softmax(self.lin, name="probs")
+                    self.best = tf.argmax(self.lin, 1, name="best")

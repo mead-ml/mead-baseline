@@ -173,7 +173,7 @@ if opt.static then
    finetune = false
    print('static weights requested (no fine-tuning)')
 end
-print(opt.unif)
+
 if opt.embed == 'NONE' then
    print('Warning: no pre-trained embeddings provided.  This will almost definitely cause degraded performance')
    w2v = VocabLookupTable(vocab, opt.dsz, opt.unif)
