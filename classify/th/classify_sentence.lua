@@ -206,13 +206,20 @@ if opt.valid ~= 'NONE' then
    print('Using provided validation data')
    vs,f2i = loadTemporalIndices(opt.valid, w2v, f2i, opt)
 else
-   ts,vs = validSplit(ts, opt.valsplit, opt.ooc)
-   print('Created validation split')
+   if opt.valsplit > 0.0 then
+      ts,vs = validSplit(ts, opt.valsplit, opt.ooc)
+      print('Created validation split')
+   else
+      print('No validation data used')
+      vs = nil
+   end
 end
 es,f2i = loadTemporalIndices(opt.eval, w2v, f2i, opt)
 
 print('Using ' .. ts:size() .. ' batches for training')
-print('Using ' .. vs:size() .. ' batches for validation')
+if vs ~= nil then
+   print('Using ' .. vs:size() .. ' batches for validation')
+end
 print('Using ' .. es:size() .. ' batches for test')
 
 local i2f = revlut(f2i)
@@ -231,23 +238,29 @@ for i=1,opt.epochs do
     print('Training epoch ' .. i)
     confusion = optim.ConfusionMatrix(i2f)
     trainEpoch(crit, model, ts, optmeth, confusion, opt)
-    confusion = optim.ConfusionMatrix(i2f)
-    local erate = test(crit, model, vs, confusion, opt)
-    if erate < errmin then
-       errmin = erate
-       lastImproved = i
-       print('Lowest error achieved yet -- writing model')
+
+    if vs ~= nil then
+       confusion = optim.ConfusionMatrix(i2f)
+       local erate = test(crit, model, vs, confusion, opt)
+       if erate < errmin then
+	  errmin = erate
+	  lastImproved = i
+	  print('Lowest error achieved yet -- writing model')
+	  saveModel(model, outname, opt.gpu)
+       end
+       if (i - lastImproved) > opt.patience then
+	  print('Stopping due to persistent failures to improve')
+	  break
+       end
+    else
+       print('Checkpointing model')
        saveModel(model, outname, opt.gpu)
-    end
-    if (i - lastImproved) > opt.patience then
-       print('Stopping due to persistent failures to improve')
-       break
     end
 end
 
-
-
-print('Highest validation acc: ' .. (100 * (1. - errmin)))
+if vs ~= nil then
+   print('Highest validation acc: ' .. (100 * (1. - errmin)))
+end
 print('=====================================================')
 print('Evaluating best model on test data')
 model = loadModel(outname, opt.gpu)
