@@ -22,7 +22,7 @@ class Trainer:
 
         self.loss_summary = tf.summary.scalar("loss", self.loss)
         self.acc_summary = tf.summary.scalar("accuracy", self.acc)
-        self.summary_op = tf.merge_all_summaries()
+        self.summary_op = tf.summary.merge_all()
         self.train_writer = tf.summary.FileWriter(self.outdir + "/train", sess.graph)
 
     def writer(self):

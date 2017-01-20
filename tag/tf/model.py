@@ -60,6 +60,7 @@ def charWordConvEmbeddings(char_vec, maxw, filtsz, char_dsz, wsz, padding):
                                  strides=[1,1,1,1],
                                  padding="VALID",
                                  name="pool")
+            # Add back in the dropout
             mots.append(mot)
             
     wsz_all = wsz * len(mots)

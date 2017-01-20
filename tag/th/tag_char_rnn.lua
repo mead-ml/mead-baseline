@@ -31,7 +31,8 @@ DEF_DECAY = 1e-7
 DEF_MOM = 0.0
 DEF_UNIF = 0.25
 DEF_PDROP = 0.5
-DEF_MXLEN = 40
+DEF_MXLEN = -1
+DEF_MXWLEN = 40
 DEF_VALSPLIT = 0.15
 DEF_OUT_OF_CORE = false
 DEF_EMBED = 'NONE'
@@ -69,6 +70,7 @@ cmd:option('-patience', DEF_PATIENCE)
 cmd:option('-dropout', DEF_PDROP, 'Dropout probability')
 cmd:option('-ooc', DEF_OUT_OF_CORE, 'Should data batches be file-backed?')
 cmd:option('-mxlen', DEF_MXLEN, 'Max sentence length')
+cmd:option('-mxwlen', DEF_MXWLEN, 'Max word length')
 cmd:option('-cbow', false, 'Do CBOW for characters')
 local opt = cmd:parse(arg)
 if opt.cbow then
@@ -100,9 +102,13 @@ require 'rnn'
 
 local vocab = nil
 
-maxw, vocab_ch, vocab_word = conllBuildVocab({opt.train, opt.eval, opt.valid})
+maxs, maxw, vocab_ch, vocab_word = 
+   conllBuildVocab({opt.train, opt.eval, opt.valid})
 
-maxw = math.min(maxw, opt.mxlen)
+print(vocab_ch)
+maxs = opt.mxlen > 0 and math.min(maxs, opt.mxlen) or maxs
+maxw = math.min(maxw, opt.mxwlen)
+print('Max sentence length ' .. maxs)
 print('Max word length ' .. maxw)
 ---------------------------------------
 -- Load Word2Vec Model(s)
@@ -148,18 +154,18 @@ opt.afteroptim = afterhook
 
 -- Load Feature Vectors
 ---------------------------------------
-ts,f2i,_ = conllSentsToIndices(opt.train, word_vec, wch_vec, maxw, f2i, opt)
+ts,f2i,_ = conllSentsToIndices(opt.train, word_vec, wch_vec, maxs, maxw, f2i, opt)
 print('Loaded training data')
 
 if opt.valid ~= 'NONE' then
    print('Using provided validation data')
-   vs,f2i,_ = conllSentsToIndices(opt.valid, word_vec, wch_vec, maxw, f2i, opt)
+   vs,f2i,_ = conllSentsToIndices(opt.valid, word_vec, wch_vec, maxs, maxw, f2i, opt)
 else
    ts,vs = validSplit(ts, opt.valsplit, opt.ooc)
    print('Created validation split')
 end
 
-es,f2i,txts = conllSentsToIndices(opt.eval, word_vec, wch_vec, maxw, f2i, opt)
+es,f2i,txts = conllSentsToIndices(opt.eval, word_vec, wch_vec, maxs, maxw, f2i, opt)
 -- print(txts)
 print(f2i)
 print('Using ' .. ts:size() .. ' examples for training')
@@ -175,7 +181,7 @@ print('Number of classes ' .. nc)
 local crit = createTaggerCrit(opt.gpu)
 
 
-local model = createTaggerModel(word_vec, wch_vec, opt, nc)
+local model = createTaggerModel(word_vec, wch_vec, maxs, opt, nc)
 
 local maxacc = 0
 local lastImproved = 0

@@ -56,7 +56,7 @@ class ConvModel:
     def createLoss(self):
 
         with tf.name_scope("loss"):
-            loss = tf.nn.softmax_cross_entropy_with_logits(self.lin, tf.cast(self.y, "float"))
+            loss = tf.nn.softmax_cross_entropy_with_logits(logits=self.lin, labels=tf.cast(self.y, "float"))
             all_loss = tf.reduce_sum(loss)
 
         with tf.name_scope("accuracy"):
@@ -116,14 +116,15 @@ class ConvModel:
 
             for i, fsz in enumerate(filtsz):
                 with tf.name_scope('cmot-%s' % fsz) as scope:
-                    siglen = maxlen - fsz + 1
                     conv = convolution2d(expanded, cmotsz, [fsz, dsz], [1, 1], padding='VALID', scope=scope)
                     # First dim is batch, second dim is time, third dim is feature map
                     # Max over time pooling, 2 calls below are equivalent
                     mot = tf.reduce_max(conv, [1], keep_dims=True)
-                    #mot = max_pool2d(conv, [siglen, 1], 1, padding='VALID', scope=scope)
+                    # --------------------------
+                    # siglen = maxlen - fsz + 1
+                    # mot = max_pool2d(conv, [siglen, 1], 1, padding='VALID', scope=scope)
                 mots.append(mot)
-            combine = flatten(tf.concat(3, mots))
+            combine = flatten(tf.stack(mots, axis=3)) #concat(3, mots))
 
             # Definitely drop out
             with tf.name_scope("dropout"):

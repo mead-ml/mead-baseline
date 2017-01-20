@@ -23,17 +23,7 @@ def cleanup(word):
     if word == '"': return ','
     if word in UNREP_EMOTICONS: return ';)'
     if word == '<3': return '&lt;3'
-    return word #word.lower()
-
-REPLACE = { "'s": " 's ",
-            "'ve": " 've ",
-            "n't": " n't ",
-            "'re": " 're ",
-            "'d": " 'd ",
-            "'ll": " 'll ",
-            ",": " , ",
-            "!": " ! ",
-        }
+    return word
 
 def numLines(filename):
     lines = 0

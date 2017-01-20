@@ -13,7 +13,7 @@ function testTagger(phase, model, es, crit, i2f, options, txts)
     confusion = optim.ConfusionMatrix(i2f)
 
     local file = nil
-    if txts then
+    if txts and options.output then
        file = io.open(options.output, 'w') or nil
     end
 
