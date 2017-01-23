@@ -4,7 +4,7 @@ import time
 
 class Trainer:
 
-    def __init__(self, model, optim, eta):
+    def __init__(self, model, optim, eta, clip):
         
         self.loss, self.errs, self.tot = model.createLoss()
         self.model = model
@@ -17,7 +17,7 @@ class Trainer:
             self.optimizer = tf.train.GradientDescentOptimizer(eta)
 
         gvs = self.optimizer.compute_gradients(self.loss)
-        capped_gvs = [(tf.clip_by_value(grad, -1., 1.), var) for grad, var in gvs]
+        capped_gvs = [(tf.clip_by_value(grad, -clip, clip), var) for grad, var in gvs]
         self.train_op = self.optimizer.apply_gradients(capped_gvs, global_step=self.global_step)
 
         self.loss_summary = tf.summary.scalar("loss", self.loss)

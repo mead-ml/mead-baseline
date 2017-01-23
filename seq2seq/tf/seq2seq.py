@@ -29,7 +29,7 @@ flags.DEFINE_integer('patience', 10, 'Patience')
 flags.DEFINE_integer('hsz', 100, 'Hidden layer size')
 flags.DEFINE_string('outdir', 'out', 'Directory to put the output')
 flags.DEFINE_boolean('clean', True, 'Do cleaning')
-flags.DEFINE_float('clip', 5, 'Gradient clipping')
+flags.DEFINE_float('clip', 1, 'Gradient clipping')
 flags.DEFINE_integer('layers', 1, 'Number of LSTM layers for encoder/decoder')
 flags.DEFINE_boolean('sharedv', False, 'Share vocab between source and destination')
 flags.DEFINE_boolean('showex', True, 'Show generated examples every few epochs')
@@ -124,7 +124,7 @@ with tf.Graph().as_default():
     with sess.as_default():
         seq2seq.params(embed1, embed2, FLAGS.mxlen, FLAGS.hsz, FLAGS.layers, FLAGS.attn, FLAGS.rnntype)
 
-        trainer = Trainer(seq2seq, FLAGS.optim, FLAGS.eta)
+        trainer = Trainer(seq2seq, FLAGS.optim, FLAGS.eta, FLAGS.clip)
         train_writer = tf.summary.FileWriter(FLAGS.outdir + "/train", sess.graph)
         init = tf.global_variables_initializer()
         sess.run(init)
