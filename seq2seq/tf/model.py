@@ -12,10 +12,10 @@ class Seq2SeqBase:
     def makeCell(self, hsz, nlayers, rnntype):
         st = False if nlayers > 1 else True
         
-        cell = tf.nn.rnn_cell.BasicLSTMCell(hsz, state_is_tuple=st) if rnntype == 'lstm' else tf.nn.rnn_cell.GRUCell(hsz)
+        cell = tf.contrib.rnn.BasicLSTMCell(hsz, state_is_tuple=st) if rnntype == 'lstm' else tf.contrib.rnn.GRUCell(hsz)
         
         if nlayers > 1:
-            cell = tf.nn.rnn_cell.MultiRNNCell([cell] * nlayers, state_is_tuple=st)
+            cell = tf.contrib.rnn.MultiRNNCell([cell] * nlayers, state_is_tuple=st)
         return cell
 
     def save(self, sess, outdir, base):
@@ -77,13 +77,13 @@ class Seq2SeqBase:
 
     def createLoss(self):
 
-        tsparse = tf.unpack(tf.transpose(self.tgt, perm=[1, 0]))
+        tsparse = tf.unstack(tf.transpose(self.tgt, perm=[1, 0]))
 
         with tf.name_scope("Loss"):
 
             log_perp_list = []
             error_list = []
-            totalSz = 0
+            total_list = []
             # For each t in T
             for preds_i, target_i in zip(self.preds, tsparse):
 
@@ -93,21 +93,24 @@ class Seq2SeqBase:
                 best_i = tf.cast(tf.argmax(preds_i, 1), tf.int32)
                 err = tf.cast(tf.not_equal(best_i, target_i), tf.float32)
                 # Gives back (B, V)
-                xe = tf.nn.sparse_softmax_cross_entropy_with_logits(preds_i, target_i)
+                xe = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=preds_i, labels=target_i)
 
                 log_perp_list.append(xe * mask)
                 error_list.append(err * mask)
-                totalSz += tf.reduce_sum(mask)
+                total_list.append(tf.reduce_sum(mask))
                 
             log_perps = tf.add_n(log_perp_list)
             error_all = tf.add_n(error_list)
-            log_perps /= totalSz
+            totalsz = tf.add_n(total_list)
+            log_perps /= totalsz
 
             cost = tf.reduce_sum(log_perps)
             all_error = tf.reduce_sum(error_all)
 
-            batchSz = tf.cast(tf.shape(tsparse[0])[0], tf.float32)
-            return cost/batchSz, all_error, totalSz
+            batchsz = tf.cast(tf.shape(tsparse[0])[0], tf.float32)
+            avg_cost = cost/batchsz
+            #checks = tf.add_check_numerics_ops()
+            return avg_cost, all_error, totalsz #, checks
 
     def step(self, sess, src, dst):
         """
@@ -155,16 +158,16 @@ class Seq2SeqModel(Seq2SeqBase):
             rnn_dec = self.makeCell(hsz, nlayers, rnntype)
 
             # Primitive will wrap RNN and unroll in time
-            rnn_enc_seq, final_encoder_state = tf.nn.rnn(rnn_enc, embed_in_seq, scope='rnn_enc', dtype=tf.float32)
+            rnn_enc_seq, final_encoder_state = tf.contrib.rnn.static_rnn(rnn_enc, embed_in_seq, scope='rnn_enc', dtype=tf.float32)
             # Provides the link between the encoder final state and the decoder
-            rnn_dec_seq, _ = tf.nn.rnn(rnn_dec, embed_out_seq, initial_state=final_encoder_state, scope='rnn_dec', dtype=tf.float32)
+            rnn_dec_seq, _ = tf.contrib.rnn.static_rnn(rnn_dec, embed_out_seq, initial_state=final_encoder_state, scope='rnn_dec', dtype=tf.float32)
 
         with tf.name_scope("output"):
             # Leave as a sequence of (T, B, W)
 
-            W = tf.Variable(tf.truncated_normal([hsz, embed2.vsz],
+            W = tf.Variable(tf.truncated_normal([hsz, embed2.vsz + 1],
                                                 stddev = 0.1), name="W")
-            b = tf.Variable(tf.constant(0.0, shape=[1, embed2.vsz]), name="b")
+            b = tf.Variable(tf.constant(0.0, shape=[1, embed2.vsz + 1]), name="b")
 
             self.preds = [(tf.matmul(rnn_dec_i, W) + b) for rnn_dec_i in rnn_dec_seq]
             self.probs = [tf.nn.softmax(pred, name="probs") for pred in self.preds]
@@ -209,7 +212,7 @@ class Seq2SeqLib(Seq2SeqBase):
                 print('With attention')
                 rnn_dec_seq, _ = attn_rnn_seq2seq(embed_in_seq, embed_out_seq, cell)
             else:
-                rnn_dec_seq, _ = tf.nn.seq2seq.basic_rnn_seq2seq(embed_in_seq, embed_out_seq, cell)
+                rnn_dec_seq, _ = tf.contrib.legacy_seq2seq.basic_rnn_seq2seq(embed_in_seq, embed_out_seq, cell)
             
         with tf.name_scope("output"):
             # Leave as a sequence of (T, B, W)

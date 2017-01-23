@@ -118,16 +118,16 @@ if FLAGS.attn:
 # Use library-backed seq2seq routine
 seq2seq = Seq2SeqLib() if FLAGS.seq2seqlib else Seq2SeqModel()
 
+#with tf.device('/cpu:0'):
 with tf.Graph().as_default():
     sess = tf.Session()
     with sess.as_default():
         seq2seq.params(embed1, embed2, FLAGS.mxlen, FLAGS.hsz, FLAGS.layers, FLAGS.attn, FLAGS.rnntype)
 
         trainer = Trainer(seq2seq, FLAGS.optim, FLAGS.eta)
-        train_writer = tf.train.SummaryWriter(FLAGS.outdir + "/train", sess.graph)
-        init = tf.initialize_all_variables()
+        train_writer = tf.summary.FileWriter(FLAGS.outdir + "/train", sess.graph)
+        init = tf.global_variables_initializer()
         sess.run(init)
-
         trainer.prepare(tf.train.Saver())
 
         err_min = 1

@@ -16,10 +16,12 @@ class Trainer:
         else:
             self.optimizer = tf.train.GradientDescentOptimizer(eta)
 
-        self.train_op = self.optimizer.minimize(self.loss, global_step=self.global_step)
+        gvs = self.optimizer.compute_gradients(self.loss)
+        capped_gvs = [(tf.clip_by_value(grad, -1., 1.), var) for grad, var in gvs]
+        self.train_op = self.optimizer.apply_gradients(capped_gvs, global_step=self.global_step)
 
-        self.loss_summary = tf.scalar_summary("loss", self.loss)
-        self.summary_op = tf.merge_all_summaries()
+        self.loss_summary = tf.summary.scalar("loss", self.loss)
+        self.summary_op = tf.summary.merge_all()
 
     def checkpoint(self, sess, outdir, name):
         self.model.saver.save(sess, outdir + "/train/" + name, global_step=self.global_step)
@@ -44,6 +46,7 @@ class Trainer:
         
             _, step, summary_str, lossv, errv, totv = sess.run([self.train_op, self.global_step, self.summary_op, self.loss, self.errs, self.tot], feed_dict=feed_dict)
             summary_writer.add_summary(summary_str, step)
+            #print(lossv, errv, totv)
             total_loss += lossv
             total_err += errv
             total += totv

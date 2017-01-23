@@ -50,6 +50,7 @@ def sentsToIndices(tsfile, vocab1, vocab2, options):
     PAD = vocab1['<PADDING>']
     GO = vocab2['<GO>']
     EOS = vocab2['<EOS>']
+
     ts = []
     b = 0
     i = 0

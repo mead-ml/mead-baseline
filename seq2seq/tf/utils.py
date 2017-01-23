@@ -9,22 +9,22 @@ def attn_rnn_seq2seq(encoder_inputs,
                      dtype=tf.float32,
                      scope=None):
     with tf.variable_scope(scope or "attention_rnn_seq2seq"):
-        encoder_outputs, enc_state = tf.nn.rnn(cell, encoder_inputs, dtype=dtype)
+        encoder_outputs, enc_state = tf.contrib.rnn.static_rnn(cell, encoder_inputs, dtype=dtype)
         top_states = [tf.reshape(e, [-1, 1, cell.output_size])
                       for e in encoder_outputs]
-        attention_states = tf.concat(1, top_states)
+        attention_states = tf.concat_v2(values=top_states, axis=1)
     
-    return tf.nn.seq2seq.attention_decoder(decoder_inputs,
-                                           enc_state,
-                                           attention_states,
-                                           cell,
-                                           num_heads=num_heads)
+    return tf.contrib.legacy_seq2seq.attention_decoder(decoder_inputs,
+                                                       enc_state,
+                                                       attention_states,
+                                                       cell,
+                                                       num_heads=num_heads)
 
 def tensorToSeq(tensor):
-    return tf.unpack(tf.transpose(tensor, perm=[1, 0, 2]))
+    return tf.unstack(tf.transpose(tensor, perm=[1, 0, 2]))
 
 def seqToTensor(sequence):
-    return tf.transpose(tf.pack(sequence), perm=[1, 0, 2])
+    return tf.transpose(tf.stack(sequence), perm=[1, 0, 2])
 
 def revlut(lut):
     return {v: k for k, v in lut.items()}
