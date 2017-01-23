@@ -64,7 +64,7 @@ def charWordConvEmbeddings(char_vec, maxw, filtsz, char_dsz, wsz, padding):
             mots.append(mot)
             
     wsz_all = wsz * len(mots)
-    combine = tf.reshape(tf.concat(3, mots), [-1, wsz_all])
+    combine = tf.reshape(tf.concat_v2(values=mots, axis=3), [-1, wsz_all])
 
     # Make a skip connection
 
@@ -294,22 +294,22 @@ class TaggerModel:
 
             # List to tensor, reform as (T, B, W)
             # Join embeddings along the third dimension
-            joint = word_char if word_vec is None else tf.concat(2, [wembed, word_char])
+            joint = word_char if word_vec is None else tf.concat_v2(values=[wembed, word_char], axis=2)
             joint = tf.nn.dropout(joint, self.pkeep)
 
         with tf.name_scope("Recurrence"):
             embedseq = tensorToSeq(joint)
 
             if rnntype == 'blstm':
-                rnnfwd = tf.nn.rnn_cell.BasicLSTMCell(hsz)
-                rnnbwd = tf.nn.rnn_cell.BasicLSTMCell(hsz)
+                rnnfwd = tf.contrib.rnn.BasicLSTMCell(hsz)
+                rnnbwd = tf.contrib.rnn.BasicLSTMCell(hsz)
 
                 # Primitive will wrap the fwd and bwd, reverse signal for bwd, unroll
-                rnnseq, _, __ = tf.nn.bidirectional_rnn(rnnfwd, rnnbwd, embedseq, dtype=tf.float32)
+                rnnseq, _, __ = tf.contrib.rnn.static_bidirectional_rnn(rnnfwd, rnnbwd, embedseq, dtype=tf.float32)
             else:
-                rnnfwd = tf.nn.rnn_cell.BasicLSTMCell(hsz)
+                rnnfwd = tf.contrib.rnn.BasicLSTMCell(hsz)
                 # Primitive will wrap RNN and unroll in time
-                rnnseq, _ = tf.nn.rnn(rnnfwd, embedseq, dtype=tf.float32)
+                rnnseq, _ = tf.contrib.rnn.static_rnn(rnnfwd, embedseq, dtype=tf.float32)
 
         with tf.name_scope("output"):
             # Converts seq to tensor, back to (B,T,W)

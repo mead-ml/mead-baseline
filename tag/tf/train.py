@@ -145,7 +145,7 @@ class Trainer:
         self.train_op = self.optimizer.minimize(self.loss, global_step=self.global_step)
 
         self.loss_summary = tf.summary.scalar("loss", self.loss)
-        self.summary_op = tf.merge_all_summaries()
+        self.summary_op = tf.summary.merge_all()
         self.train_writer = tf.summary.FileWriter(self.outdir + "/train", sess.graph)
 
     def writer(self):

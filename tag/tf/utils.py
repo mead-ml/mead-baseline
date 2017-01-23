@@ -63,10 +63,10 @@ def fScore(overlap_count, gold_count, guess_count, f=1):
     
 
 def tensorToSeq(tensor):
-    return tf.unpack(tf.transpose(tensor, perm=[1, 0, 2]))
+    return tf.unstack(tf.transpose(tensor, perm=[1, 0, 2]))
 
 def seqToTensor(sequence):
-    return tf.transpose(tf.pack(sequence), perm=[1, 0, 2])
+    return tf.transpose(tf.stack(sequence), perm=[1, 0, 2])
 
 def fill_y(nc, yidx):
     batchsz = yidx.shape[0]
