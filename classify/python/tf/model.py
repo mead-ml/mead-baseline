@@ -65,14 +65,14 @@ class ConvModel:
 
         return all_loss, all_right
 
-    def inference(self, sess, batch, probs=False):
-        feed_dict = {self.x: batch["x"], self.pkeep: 1.0}
+    def inference(self, sess, examples, probs=False):
+        feed_dict = {self.x: examples.x, self.pkeep: 1.0}
         if probs is True:
             return sess.run(self.probs, feed_dict=feed_dict)
         return sess.run(self.best, feed_dict=feed_dict)
 
-    def ex2dict(self, example, pkeep):
-        return {self.x: example["x"], self.y: fill_y(len(self.labels), example["y"]), self.pkeep: pkeep}
+    def ex2dict(self, examples, pkeep):
+        return {self.x: examples.x, self.y: fill_y(len(self.labels), examples.y), self.pkeep: pkeep}
 
     def params(self, labels, w2v, maxlen, filtsz, cmotsz, hsz, finetune = True):
         vsz = w2v.vsz

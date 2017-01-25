@@ -1,13 +1,13 @@
 import tensorflow as tf
 import numpy as np
-import w2v
+from os import sys, path
+sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+from w2v import *
+from data import *
 import time
 import json
+from model import *
 
-from model import ConvModel
-from data import buildVocab
-from data import loadTemporalIndices
-from data import validSplit
 from utils import revlut, fill_y
 from train import Trainer
 flags = tf.app.flags
@@ -33,27 +33,25 @@ flags.DEFINE_boolean('chars', False, 'Use characters instead of words')
 flags.DEFINE_boolean('static', False, 'Fix pre-trained embeddings weights')
 flags.DEFINE_float('valsplit', 0.15, 'Validation split if no valid set')
 flags.DEFINE_string('save', 'classify_sentence_tf', 'Save basename')
-vocab = buildVocab([FLAGS.train, FLAGS.test, FLAGS.valid], FLAGS.clean, FLAGS.chars)
+
+
+vocab = build_vocab([FLAGS.train, FLAGS.test, FLAGS.valid], FLAGS.clean, FLAGS.chars)
 
 unif = 0 if FLAGS.static else FLAGS.unif
-w2vModel = w2v.Word2VecModel(FLAGS.embed, vocab, unif)
+w2vModel = Word2VecModel(FLAGS.embed, vocab, unif)
 
 f2i = {}
-opts = { 'batchsz': FLAGS.batchsz,
-         'clean': FLAGS.clean,
-         'chars': FLAGS.chars,
-         'mxlen': FLAGS.mxlen }
-ts, f2i = loadTemporalIndices(FLAGS.train, w2vModel.vocab, f2i, opts)
-print('Loaded  training data')
+ts, f2i = load_sentences(FLAGS.train, w2vModel.vocab, f2i, FLAGS.clean, FLAGS.chars, FLAGS.mxlen)
+print('Loaded training data')
 
 if FLAGS.valid is not None:
     print('Using provided validation data')
-    vs, f2i = loadTemporalIndices(FLAGS.valid, w2vModel.vocab, f2i, opts)
+    vs, f2i = load_sentences(FLAGS.valid, w2vModel.vocab, f2i, FLAGS.clean, FLAGS.chars, FLAGS.mxlen)
 else:
-    ts, vs = validSplit(ts, FLAGS.valsplit)
+    ts, vs = valid_split(ts, FLAGS.valsplit)
     print('Created validation split')
 
-es, f2i = loadTemporalIndices(FLAGS.test, w2vModel.vocab, f2i, opts)
+es, f2i = load_sentences(FLAGS.test, w2vModel.vocab, f2i, FLAGS.clean, FLAGS.chars, FLAGS.mxlen)
 print('Loaded test data')
 
 """
@@ -79,8 +77,8 @@ with tf.Graph().as_default():
 
         for i in range(FLAGS.epochs):
             print('Training epoch %d' % (i+1))
-            trainer.train(ts, FLAGS.dropout)
-            this_acc = trainer.test(vs, 'Validation')
+            trainer.train(ts, FLAGS.dropout, FLAGS.batchsz)
+            this_acc = trainer.test(vs, FLAGS.batchsz, 'Validation')
             if this_acc > max_acc:
                 max_acc = this_acc
                 last_improved = i

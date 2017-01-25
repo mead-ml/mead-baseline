@@ -1,6 +1,9 @@
 import tensorflow as tf
 import numpy as np
 import time
+import math
+from os import sys, path
+import data
 
 class Trainer:
 
@@ -36,38 +39,48 @@ class Trainer:
         print("Reloading " + latest)
         self.model.saver.restore(self.sess, latest)
 
-    def train(self, ts, dropout):
+    def train(self, ts, dropout, batchsz=1):
 
         total_loss = total_corr = total = 0
-        seq = np.random.permutation(len(ts))
+        steps = int(math.floor(len(ts)/float(batchsz)))
+
         start_time = time.time()
-        for j in seq:
-    
-            feed_dict = self.model.ex2dict(ts[j], 1.0-dropout)
+
+        steps = int(math.floor(len(ts)/float(batchsz)))
+
+        shuffle = np.random.permutation(np.arange(steps))
+
+        for i in range(steps):
+            si = shuffle[i]
+            ts_i = data.batch(ts, si, batchsz)
+            feed_dict = self.model.ex2dict(ts_i, 1.0-dropout)
         
             _, step, summary_str, lossv, accv = self.sess.run([self.train_op, self.global_step, self.summary_op, self.loss, self.acc], feed_dict=feed_dict)
             self.train_writer.add_summary(summary_str, step)
         
             total_corr += accv
             total_loss += lossv
-            total += ts[j]["y"].shape[0]
+            total += len(ts_i)
 
         duration = time.time() - start_time
 
         print('Train (Loss %.4f) (Acc %d/%d = %.4f) (%.3f sec)' % (float(total_loss)/total, total_corr, total, float(total_corr)/total, duration))
 
-    def test(self, ts, phase='Test'):
+    def test(self, ts, batchsz=1, phase='Test'):
 
         total_loss = total_corr = total = 0
         start_time = time.time()
-        
-        for j in range(len(ts)):
+        steps = int(math.floor(len(ts)/float(batchsz)))
+
+        for i in range(steps):
             
-            feed_dict = self.model.ex2dict(ts[j], 1)
+            ts_i = data.batch(ts, i, batchsz)
+            
+            feed_dict = self.model.ex2dict(ts_i, 1)
             lossv, accv = self.sess.run([self.loss, self.acc], feed_dict=feed_dict)
             total_corr += accv
             total_loss += lossv
-            total += ts[j]["y"].shape[0]
+            total += len(ts_i)
         
         duration = time.time() - start_time
 
