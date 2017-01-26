@@ -13,7 +13,7 @@ class Evaluator:
         self.idx2label = idx2label
         self.fscore = fscore
 
-    def _writeSentenceCONLL(self, handle, sentence, gold, txt):
+    def _write_sentence_conll(self, handle, sentence, gold, txt):
 
         if len(txt) != len(sentence):
             txt = txt[:len(sentence)]
@@ -65,7 +65,7 @@ class Evaluator:
             if handle is not None:
                 idx = batch["id"][b]
                 txt = txts[idx]
-                self._writeSentenceCONLL(handle, sentence, gold, txt) 
+                self._write_sentence_conll(handle, sentence, gold, txt) 
                 
 
         return correct_labels, total_labels, overlap_count, gold_count, guess_count
@@ -128,7 +128,7 @@ class Trainer:
         
         self.sess = sess
         self.outdir = outdir
-        self.loss = model.createLoss()
+        self.loss = model.create_loss()
         self.model = model
         # Own this during training
         self.evaluator = Evaluator(sess, model, idx2label, fscore)

@@ -31,8 +31,7 @@ def viz_embeddings(char_vec, word_vec, outdir, train_writer):
         _viz_embedding(proj_conf, word_vec, outdir, 'WordLUT')
     projector.visualize_embeddings(train_writer, proj_conf)
 
-
-def char_word_conv_embeddings(char_vec, maxw, filtsz, char_dsz, wsz, padding):
+def char_word_conv_embeddings(char_vec, maxw, filtsz, char_dsz, wsz):
 
     expanded = tf.expand_dims(char_vec, -1)
 
@@ -40,7 +39,7 @@ def char_word_conv_embeddings(char_vec, maxw, filtsz, char_dsz, wsz, padding):
     for i, fsz in enumerate(filtsz):
         with tf.variable_scope('cmot-%s' % fsz):
 
-            siglen = maxw + padding - fsz + 1
+
             kernel_shape =  [fsz, char_dsz, 1, wsz]
             
             # Weight tying
@@ -53,11 +52,7 @@ def char_word_conv_embeddings(char_vec, maxw, filtsz, char_dsz, wsz, padding):
                 
             activation = tf.nn.relu(tf.nn.bias_add(conv, b), "activation")
 
-            mot = tf.nn.max_pool(activation,
-                                 ksize=[1, siglen, 1, 1],
-                                 strides=[1,1,1,1],
-                                 padding="VALID",
-                                 name="pool")
+            mot = tf.reduce_max(activation, [1], keep_dims=True)
             # Add back in the dropout
             mots.append(mot)
             
@@ -92,7 +87,7 @@ def shared_char_word(Wch, xch_i, maxw, filtsz, char_dsz, wsz, reuse):
         #cembed = tf.nn.embedding_lookup(Wch, xch_i)
         if len(filtsz) == 0 or filtsz[0] == 0:
             return tf.reduce_sum(cembed, [1])
-        return char_word_conv_embeddings(cembed, maxw, filtsz, char_dsz, wsz, 2*halffiltsz)
+        return char_word_conv_embeddings(cembed, maxw, filtsz, char_dsz, wsz)
 
 class TaggerModel:
 
@@ -191,7 +186,7 @@ class TaggerModel:
         all_total = tf.reduce_sum(lengths, name="total")
         return tf.reduce_mean(-ll)
 
-    def createLoss(self):
+    def create_loss(self):
         
         with tf.variable_scope("Loss"):
             gold = tf.cast(self.y, tf.float32)
