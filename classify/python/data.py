@@ -55,26 +55,42 @@ def build_vocab(files, clean=False, chars=False):
                     vocab[w] += 1
     return vocab
 
-def valid_split(data, splitfrac):
+class SentenceLabelExamples(object):
+
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+    def __getitem__(self, index):
+        return self.x[index], self.y[index]
+
+    def __len__(self):
+        return len(self.x)
+
+    def width(self):
+        return self.x[0].shape[0]
+
+def valid_split(data, splitfrac, ExType=SentenceLabelExamples):
     numinst = len(data)
     heldout = int(math.floor(numinst * (1-splitfrac)))
     x = data.x
     y = data.y
-    return SentenceLabelExamples(x[1:heldout], y[1:heldout]), SentenceLabelExamples(x[heldout:], y[heldout:])
+    return ExType(x[1:heldout], y[1:heldout]), ExType(x[heldout:], y[heldout:])
 
-def load_sentences(filename, index, f2i, clean=False, chars=False, mxlen=1000, mxfiltsz=0):
+
+def load_sentences(filename, index, f2i, clean=False, chars=False, mxlen=1000, mxfiltsz=0, vec_alloc=np.zeros, ExType=SentenceLabelExamples):
     ts = []
     PAD = index['<PADDING>']
-    nozplen = mxlen - mxfiltsz
+
     labelIdx = len(f2i)
     
     halffiltsz = int(math.floor(mxfiltsz / 2))
+    nozplen = mxlen - 2*halffiltsz
     labelIdx = len(f2i)
 
     n = num_lines(filename)
-    x = np.empty((n, mxlen), dtype=int)
-    x.fill(PAD)
-    y = np.zeros(n, dtype=int)
+    x = vec_alloc((n, mxlen), dtype=int)
+    y = vec_alloc((n), dtype=int)
  
     with codecs.open(filename, encoding='utf-8', mode='r') as f:
         for offset, line in enumerate(f):
@@ -91,34 +107,22 @@ def load_sentences(filename, index, f2i, clean=False, chars=False, mxlen=1000, m
                 w = toks[j]
                 key = index.get(w, PAD)
                 x[offset][j+halffiltsz] = key
-    return SentenceLabelExamples(x, y), f2i    
+    return ExType(x, y), f2i    
 
-class SentenceLabelExamples(object):
 
-    def __init__(self, x, y):
-        self.x = x
-        self.y = y
-
-    def __getitem__(self, index):
-        return self.x[index], self.y[index]
-
-    def __len__(self):
-        return len(self.x)
-
-    def width(self):
-        return self.x[0].shape[0]
-
-def batch(dataset, start, batchsz):
+def batch(dataset, start, batchsz, vec_alloc=np.empty, ExType=SentenceLabelExamples):
     siglen = dataset.width()
-    xb = np.zeros((batchsz, siglen), dtype=np.int)
-    yb = np.zeros((batchsz), dtype=np.int)
+    xb = vec_alloc((batchsz, siglen), dtype=np.int)
+
+    yb = vec_alloc((batchsz), dtype=np.int)
     sz = len(dataset)
     idx = start * batchsz
     for i in range(batchsz):
         if idx >= sz: idx = 0
         x, y = dataset[idx]
+
         xb[i] = x
         yb[i] = y
         idx += 1
 
-    return SentenceLabelExamples(xb, yb)
+    return ExType(xb, yb)
