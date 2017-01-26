@@ -10,29 +10,29 @@ import math
 import os
 
 
-def tensorToSeq(tensor):
+def tensor2seq(tensor):
     return tf.unstack(tf.transpose(tensor, perm=[1, 0, 2]))
 
-def seqToTensor(sequence):
+def seq2tensor(sequence):
     return tf.transpose(tf.stack(sequence), perm=[1, 0, 2])
 
 
-def _vizEmbedding(proj_conf, emb, outdir, which):
+def _viz_embedding(proj_conf, emb, outdir, which):
     emb_conf = proj_conf.embeddings.add()
     emb_conf.tensor_name = '%s/W' % which
     emb_conf.metadata_path = outdir + "/train/metadata-%s.tsv" % which
     write_embeddings_tsv(emb, emb_conf.metadata_path)
 
-def vizEmbeddings(char_vec, word_vec, outdir, train_writer):
+def viz_embeddings(char_vec, word_vec, outdir, train_writer):
     print('Setting up word embedding visualization')
     proj_conf = projector.ProjectorConfig()
-    _vizEmbedding(proj_conf, char_vec, outdir, 'CharLUT')
+    _viz_embedding(proj_conf, char_vec, outdir, 'CharLUT')
     if word_vec is not None:
-        _vizEmbedding(proj_conf, word_vec, outdir, 'WordLUT')
+        _viz_embedding(proj_conf, word_vec, outdir, 'WordLUT')
     projector.visualize_embeddings(train_writer, proj_conf)
 
 
-def charWordConvEmbeddings(char_vec, maxw, filtsz, char_dsz, wsz, padding):
+def char_word_conv_embeddings(char_vec, maxw, filtsz, char_dsz, wsz, padding):
 
     expanded = tf.expand_dims(char_vec, -1)
 
@@ -77,7 +77,7 @@ def charWordConvEmbeddings(char_vec, maxw, filtsz, char_dsz, wsz, padding):
     return joined
 
 
-def sharedCharWord(Wch, xch_i, maxw, filtsz, char_dsz, wsz, reuse):
+def shared_char_word(Wch, xch_i, maxw, filtsz, char_dsz, wsz, reuse):
 
     with tf.variable_scope("SharedCharWord", reuse=reuse):
         # Zeropad the letters out to half the max filter size, to account for
@@ -92,15 +92,15 @@ def sharedCharWord(Wch, xch_i, maxw, filtsz, char_dsz, wsz, reuse):
         #cembed = tf.nn.embedding_lookup(Wch, xch_i)
         if len(filtsz) == 0 or filtsz[0] == 0:
             return tf.reduce_sum(cembed, [1])
-        return charWordConvEmbeddings(cembed, maxw, filtsz, char_dsz, wsz, 2*halffiltsz)
+        return char_word_conv_embeddings(cembed, maxw, filtsz, char_dsz, wsz, 2*halffiltsz)
 
 class TaggerModel:
 
-    def saveValues(self, sess, outdir, base):
+    def save_values(self, sess, outdir, base):
         basename = outdir + '/' + base
         self.saver.save(sess, basename)
 
-    def saveMetadata(self, sess, outdir, base):
+    def save_md(self, sess, outdir, base):
         
         basename = outdir + '/' + base
         tf.train.write_graph(sess.graph_def, outdir, base + '.graph', as_text=False)
@@ -118,8 +118,8 @@ class TaggerModel:
             json.dump(self.char_vocab, f)
         
     def save(self, sess, outdir, base):
-        self.saveMetadata(sess, outdir, base)
-        self.saveValues(sess, outdir, base)
+        self.save_md(sess, outdir, base)
+        self.save_values(sess, outdir, base)
 
     def restore(self, sess, indir, base, checkpoint_name=None):
         basename = indir + '/' + base
@@ -171,10 +171,10 @@ class TaggerModel:
     def __init__(self):
         pass
 
-    def saveUsing(self, saver):
+    def save_using(self, saver):
         self.saver = saver
 
-    def _computeWordLevelLoss(self, gold, mask):
+    def _compute_word_level_loss(self, gold, mask):
 
         nc = len(self.labels)
         # Cross entropy loss
@@ -185,7 +185,7 @@ class TaggerModel:
         all_loss = tf.reduce_mean(cross_entropy, name="loss")
         return all_loss
 
-    def _computeSentenceLevelLoss(self, gold, mask, lengths):
+    def _compute_sentence_level_loss(self, gold, mask, lengths):
 
         ll, self.A = tf.contrib.crf.crf_log_likelihood(self.probs, self.y, lengths)
         all_total = tf.reduce_sum(lengths, name="total")
@@ -204,10 +204,10 @@ class TaggerModel:
 
             if self.crf is True:
                 print('crf=True, creating SLL')
-                all_loss = self._computeSentenceLevelLoss(gold, mask, lengths)
+                all_loss = self._compute_sentence_level_loss(gold, mask, lengths)
             else:
                 print('crf=False, creating WLL')
-                all_loss = self._computeWordLevelLoss(gold, mask)
+                all_loss = self._compute_word_level_loss(gold, mask)
 
         #err = tf.not_equal(tf.cast(self.best, tf.float32), gold)
         #err = tf.cast(err, tf.float32)
@@ -284,11 +284,11 @@ class TaggerModel:
             ce0 = tf.scatter_update(Wc, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, char_dsz]))
 
             with tf.control_dependencies([ce0]):
-                xch_seq = tensorToSeq(self.xch)
+                xch_seq = tensor2seq(self.xch)
                 cembed_seq = []
                 for i, xch_i in enumerate(xch_seq):
-                    cembed_seq.append(sharedCharWord(Wc, xch_i, maxw, filtsz, char_dsz, wsz, None if i == 0 else True))
-                word_char = seqToTensor(cembed_seq)
+                    cembed_seq.append(shared_char_word(Wc, xch_i, maxw, filtsz, char_dsz, wsz, None if i == 0 else True))
+                word_char = seq2tensor(cembed_seq)
 
             # List to tensor, reform as (T, B, W)
             # Join embeddings along the third dimension
@@ -296,7 +296,7 @@ class TaggerModel:
             joint = tf.nn.dropout(joint, self.pkeep)
 
         with tf.name_scope("Recurrence"):
-            embedseq = tensorToSeq(joint)
+            embedseq = tensor2seq(joint)
 
             if rnntype == 'blstm':
                 rnnfwd = tf.contrib.rnn.BasicLSTMCell(hsz)
@@ -320,7 +320,7 @@ class TaggerModel:
             b = tf.Variable(tf.constant(0.0, shape=[1,nc]), name="b")
 
             preds = [tf.matmul(rnnout, W) + b for rnnout in rnnseq]
-            self.probs = seqToTensor(preds)
+            self.probs = seq2tensor(preds)
             self.best = tf.argmax(self.probs, 2)
             # going back to sparse representation
     

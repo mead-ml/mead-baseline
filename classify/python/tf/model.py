@@ -22,7 +22,7 @@ class ConvModel:
         with open(basename + '.vocab', 'w') as f:
             json.dump(self.vocab, f)
 
-    def saveUsing(self, saver):
+    def save_using(self, saver):
         self.saver = saver
 
     def restore(self, sess, indir, base):
@@ -53,7 +53,7 @@ class ConvModel:
     def __init__(self):
         pass
 
-    def createLoss(self):
+    def create_loss(self):
 
         with tf.name_scope("loss"):
             loss = tf.nn.softmax_cross_entropy_with_logits(logits=self.lin, labels=tf.cast(self.y, "float"))

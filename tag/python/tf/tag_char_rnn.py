@@ -9,7 +9,7 @@ from data import conll_load_sentences
 from data import batch
 from data import revlut
 from data import valid_split
-from model import TaggerModel, vizEmbeddings
+from model import TaggerModel, viz_embeddings
 from train import Trainer
 import time
 
@@ -166,13 +166,13 @@ with tf.Graph().as_default():
         train_writer = trainer.writer()
 
         if FLAGS.viz:
-            vizEmbeddings(char_vec, word_vec, FLAGS.outdir, train_writer)
+            viz_embeddings(char_vec, word_vec, FLAGS.outdir, train_writer)
 
         init = tf.global_variables_initializer()
         sess.run(init)
-        model.saveUsing(tf.train.Saver())
+        model.save_using(tf.train.Saver())
         print('Writing metadata')
-        model.saveMetadata(sess, FLAGS.outdir, FLAGS.save)
+        model.save_md(sess, FLAGS.outdir, FLAGS.save)
 
         saving_metric = 0
         metric_type = "F%d" % FLAGS.fscore if FLAGS.fscore > 0 else "acc"
@@ -213,4 +213,4 @@ with tf.Graph().as_default():
             print('Test F%d %.2f' % (FLAGS.fscore, this_f * 100.))
         print('=====================================================')
         # Write out model, graph and saver for future inference
-        model.saveValues(sess, FLAGS.outdir, FLAGS.save)
+        model.save_values(sess, FLAGS.outdir, FLAGS.save)

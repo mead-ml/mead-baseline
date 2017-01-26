@@ -10,7 +10,7 @@ class Trainer:
     def __init__(self, sess, model, outdir, optim, eta):
         
         self.sess = sess
-        self.loss, self.acc = model.createLoss()
+        self.loss, self.acc = model.create_loss()
         self.model = model
         self.outdir = outdir
         self.global_step = tf.Variable(0, name='global_step', trainable=False)

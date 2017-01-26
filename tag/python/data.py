@@ -84,7 +84,7 @@ def conll_lines(tsfile):
 
     return txts, lbls
 
-def conll_load_sentences(filename, words_vocab, chars_vocab, mxlen, maxw, f2i):
+def conll_load_sentences(filename, words_vocab, chars_vocab, mxlen, maxw, f2i, vec_alloc=np.zeros):
 
     b = 0
     ts = []
@@ -93,9 +93,9 @@ def conll_load_sentences(filename, words_vocab, chars_vocab, mxlen, maxw, f2i):
 
     for i in range(len(txts)):
 
-        xs_ch = np.zeros((mxlen, maxw), dtype=np.int)
-        xs = np.zeros((mxlen), dtype=np.int)
-        ys = np.zeros((mxlen), dtype=np.int)
+        xs_ch = vec_alloc((mxlen, maxw), dtype=np.int)
+        xs = vec_alloc((mxlen), dtype=np.int)
+        ys = vec_alloc((mxlen), dtype=np.int)
         
         lv = lbls[i]
         v = txts[i]
@@ -130,16 +130,16 @@ def valid_split(data, splitfrac):
     heldout = int(math.floor(numinst * (1-splitfrac)))
     return data[1:heldout], data[heldout:]
 
-def batch(ts, start, batchsz):
+def batch(ts, start, batchsz, vec_alloc=np.zeros):
     ex = ts[start]
     siglen = ex["x"].shape[0]
     maxw = ex["xch"].shape[1]
     
-    xs_ch = np.zeros((batchsz, siglen, maxw), dtype=np.int)
-    xs = np.zeros((batchsz, siglen), dtype=np.int)
-    ys = np.zeros((batchsz, siglen), dtype=np.int)
-    ids = np.zeros((batchsz), dtype=np.int)
-    length = np.zeros((batchsz), dtype=np.int)
+    xs_ch = vec_alloc((batchsz, siglen, maxw), dtype=np.int)
+    xs = vec_alloc((batchsz, siglen), dtype=np.int)
+    ys = vec_alloc((batchsz, siglen), dtype=np.int)
+    ids = vec_alloc((batchsz), dtype=np.int)
+    length = vec_alloc((batchsz), dtype=np.int)
     sz = len(ts)
     idx = start * batchsz
     for i in range(batchsz):
@@ -153,6 +153,3 @@ def batch(ts, start, batchsz):
         length[i] = ex["length"]
         idx += 1
     return {"x": xs, "y": ys, "xch": xs_ch, "length": length, "id": ids }
-        
-
-
