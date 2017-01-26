@@ -17,7 +17,7 @@ Each algorithm is in a separate sub-directory, and is fully contained, even thou
 
 ## Convolution - Max Over Time Architecture (CMOT)
 
-This code provides a pure Lua/Torch7 and pure Python Tensorflow and Keras implementations -- no preprocessing of the dataset with python, nor HDF5 is required.  The Torch code depends on a tiny module that can load word2vec in Torch (https://github.com/dpressel/torchure) either as a model, or as an nn.LookupTable.  It is important to note that these models can easily be implemented with other deep learning frameworks, and without much work, can also be implemented from scratch!  Over time, this package will hopefully provide alternate implementations in other DL Frameworks and programming languages.
+This code provides a pure Lua/Torch7 and pure Python PyTorch, Tensorflow and Keras implementations -- no preprocessing of the dataset with python, nor HDF5 is required.  The Lua/Torch code depends on a tiny module that can load word2vec in Torch (https://github.com/dpressel/torchure) either as a model, or as an nn.LookupTable.  It is important to note that these models can easily be implemented with other deep learning frameworks, and without much work, can also be implemented from scratch!  Over time, this package will hopefully provide alternate implementations in other DL Frameworks and programming languages.
 
 When the GPU is used, the code *assumes that cudnn (>= R4) is available* and installed. This is because the performance gains over the 'cunn' implementation are significant (e.g., 3 minutes -> 30 seconds).
 
@@ -71,9 +71,9 @@ Early stopping with patience is supported.  There are many hyper-parameters that
 th classify_sentence.lua -static -eta 0.01 -batchsz 10 -decay 1e-9 -epochs 20 -train ../data/TREC.train.all -eval ../data/TREC.test.all -embed /data/xdata/GoogleNews-vectors-negative300.bin
 ```
 
-And with Tensorflow or Keras
+And with PyTorch, Tensorflow or Keras
 ```
-python classify_sentence.py  --static --eta 0.01 --batchsz 10 -epochs 20 --train ../data/TREC.train.all --test ../data/TREC.test.all --embed /data/xdata/GoogleNews-vectors-negative300.bin
+python classify_sentence.py --static --eta 0.01 --batchsz 10 -epochs 20 --train ../data/TREC.train.all --test ../data/TREC.test.all --embed /data/xdata/GoogleNews-vectors-negative300.bin
 ```
 
 Here is an example of parameterization of dynamic fine tuning (classify_sentence.lua) with SGD to train TREC QA set
@@ -94,10 +94,10 @@ Here is an example running Stanford Sentiment Treebank 2 data with adadelta
 
 th classify_sentence.lua -clean -optim adadelta -batchsz 50 -epochs 25 -patience 25 -train ./data/stsa.binary.phrases.train -valid ./data/stsa.binary.dev -eval ./data/stsa.binary.test -embed /data/xdata/GoogleNews-vectors-negative300.bin -filtsz "{3,4,5}"
 ```
-In Tensorflow or Keras:
+In PyTorch, Tensorflow or Keras:
 
 ```
-python2.7 classify_sentence.py --clean --optim adadelta --eta 0.004 --batchsz 50 --epochs 25 --patience 25 --train ./data/stsa.binary.phrases.train --valid ./data/stsa.binary.dev --test ./data/stsa.binary.test --embed /data/xdata/GoogleNews-vectors-negative300.bin --filtsz "3,4,5" --dropout 0.5
+python classify_sentence.py --clean --optim adadelta --eta 0.004 --batchsz 50 --epochs 25 --patience 25 --train ./data/stsa.binary.phrases.train --valid ./data/stsa.binary.dev --test ./data/stsa.binary.test --embed /data/xdata/GoogleNews-vectors-negative300.bin --filtsz "3,4,5" --dropout 0.5
 ```
 
 All of the models should typically achieve the dynamic fine-tune results on SST from the Kim paper, though there is some slight variation between runs (I have seen accuracy as high as 88.36%, which is higher than even the stereo approach reported in the paper).  I have found that random uniform initialization of the convolutional layers with Glorot initialization on the fully-connected layers tends to work well, so that is what happens here in Tensorflow (and is default in Keras).
