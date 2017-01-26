@@ -1,12 +1,14 @@
 import tensorflow as tf
 import numpy as np
 import math
+from os import sys, path
+sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 import w2v
-from data import conllBuildVocab
-from data import conllSentsToIndices
+from data import conll_build_vocab
+from data import conll_load_sentences
 from data import batch
 from data import revlut
-from data import validSplit
+from data import valid_split
 from model import TaggerModel, vizEmbeddings
 from train import Trainer
 import time
@@ -76,9 +78,9 @@ flags.DEFINE_boolean('crf', False, 'Use CRF on top')
 flags.DEFINE_integer('fscore', 0, 'Use F-score in metrics and early stopping')
 flags.DEFINE_boolean('viz', False, 'Set up LUT vocabs for Tensorboard')
 flags.DEFINE_integer('test_thresh', DEF_TEST_THRESH, 'How many epochs improvement required before testing')
-maxs, maxw, vocab_ch, vocab_word = conllBuildVocab([FLAGS.train, 
-                                                    FLAGS.test, 
-                                                    FLAGS.valid])
+maxs, maxw, vocab_ch, vocab_word = conll_build_vocab([FLAGS.train, 
+                                                      FLAGS.test, 
+                                                      FLAGS.valid])
 
 maxw = min(maxw, FLAGS.mxwlen)
 maxs = min(maxs, FLAGS.mxlen) if FLAGS.mxlen > 0 else maxs
@@ -122,18 +124,18 @@ f2i = {"<PAD>":0}
 
 
 
-ts, f2i, _ = conllSentsToIndices(FLAGS.train, word_vocab, char_vocab, maxs, maxw, f2i)
+ts, f2i, _ = conll_load_sentences(FLAGS.train, word_vocab, char_vocab, maxs, maxw, f2i)
 print('Loaded  training data')
 
 if FLAGS.valid is not None:
     print('Using provided validation data')
-    vs, f2i,_ = conllSentsToIndices(FLAGS.valid, word_vocab, char_vocab, maxs, maxw, f2i)
+    vs, f2i,_ = conll_load_sentences(FLAGS.valid, word_vocab, char_vocab, maxs, maxw, f2i)
 else:
-    ts, vs = validSplit(ts, FLAGS.valsplit)
+    ts, vs = valid_split(ts, FLAGS.valsplit)
     print('Created validation split')
 
 
-es, f2i,txts = conllSentsToIndices(FLAGS.test, word_vocab, char_vocab, maxs, maxw, f2i)
+es, f2i,txts = conll_load_sentences(FLAGS.test, word_vocab, char_vocab, maxs, maxw, f2i)
 print('Loaded test data')
 
 i2f = revlut(f2i)

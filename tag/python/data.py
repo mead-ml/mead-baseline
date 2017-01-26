@@ -25,14 +25,14 @@ def cleanup(word):
     if word == '<3': return '&lt;3'
     return word
 
-def numLines(filename):
+def num_lines(filename):
     lines = 0
     with codecs.open(filename, encoding='utf-8', mode='r') as f:
         for line in f:
             lines = lines + 1
     return lines
 
-def conllBuildVocab(files):
+def conll_build_vocab(files):
     vocab_word = Counter()
     vocab_ch = Counter()
     maxw = 0
@@ -61,7 +61,7 @@ def conllBuildVocab(files):
 
     return maxs, maxw, vocab_ch, vocab_word
 
-def conllLines(tsfile):
+def conll_lines(tsfile):
 
     txts = []
     lbls = []
@@ -84,12 +84,12 @@ def conllLines(tsfile):
 
     return txts, lbls
 
-def conllSentsToIndices(filename, words_vocab, chars_vocab, mxlen, maxw, f2i):
+def conll_load_sentences(filename, words_vocab, chars_vocab, mxlen, maxw, f2i):
 
     b = 0
     ts = []
     idx = 0
-    txts, lbls = conllLines(filename)
+    txts, lbls = conll_lines(filename)
 
     for i in range(len(txts)):
 
@@ -123,7 +123,7 @@ def conllSentsToIndices(filename, words_vocab, chars_vocab, mxlen, maxw, f2i):
 
     return ts, f2i, txts
 
-def validSplit(data, splitfrac):
+def valid_split(data, splitfrac):
     train = []
     valid = []
     numinst = len(data)

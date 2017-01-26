@@ -8,7 +8,7 @@ def revlut(lut):
     return {v: k for k, v in lut.items()}
 
 # Turn a sequence of IOB chunks into single tokens
-def toSpans(sequence, lut, strict_iob2=False):
+def to_spans(sequence, lut, strict_iob2=False):
 
     iobtype = 2 if strict_iob2 else 1
     chunks = []
@@ -49,7 +49,7 @@ def toSpans(sequence, lut, strict_iob2=False):
 
     return set(chunks)
 
-def fScore(overlap_count, gold_count, guess_count, f=1):
+def f_score(overlap_count, gold_count, guess_count, f=1):
     beta_sq = f*f
 
     if guess_count == 0: return 0.0
@@ -60,13 +60,6 @@ def fScore(overlap_count, gold_count, guess_count, f=1):
         return 0.0
     f = (1. + beta_sq) * (precision * recall) / (beta_sq * precision + recall)
     return f
-    
-
-def tensorToSeq(tensor):
-    return tf.unstack(tf.transpose(tensor, perm=[1, 0, 2]))
-
-def seqToTensor(sequence):
-    return tf.transpose(tf.stack(sequence), perm=[1, 0, 2])
 
 def fill_y(nc, yidx):
     batchsz = yidx.shape[0]
@@ -83,7 +76,7 @@ def fill_y(nc, yidx):
 
 # (B, T, L), gets a one out of L at each T if its populated
 # Then get a sum of the populated values
-def sentenceLengths(yfilled):
+def sentence_lengths(yfilled):
     used = tf.sign(tf.reduce_max(tf.abs(yfilled), reduction_indices=2))
     lengths = tf.reduce_sum(used, reduction_indices=1)
     lengths = tf.cast(lengths, tf.int32)
@@ -119,3 +112,12 @@ class UnicodeWriter:
     def writerows(self, rows):
         for row in rows:
             self.writerow(row)
+
+def write_embeddings_tsv(word_vec, filename):
+    idx2word = revlut(word_vec.vocab)
+    with codecs.open(filename, 'w') as f:
+        wrtr = UnicodeWriter(f, delimiter='\t', quotechar='"')
+#        wrtr.writerow(['Word'])
+        for i in range(len(idx2word)):
+            row = idx2word[i]
+            wrtr.writerow([row])

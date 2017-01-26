@@ -3,9 +3,7 @@ import numpy as np
 import time
 import math
 from data import batch
-from utils import toSpans, fScore
-
-
+from utils import to_spans, f_score
 
 class Evaluator:
     
@@ -54,10 +52,10 @@ class Evaluator:
             total_labels += length
 
             if self.fscore > 0:
-                gold_chunks = toSpans(gold, self.idx2label)
+                gold_chunks = to_spans(gold, self.idx2label)
                 gold_count += len(gold_chunks)
 
-                guess_chunks = toSpans(sentence, self.idx2label)
+                guess_chunks = to_spans(sentence, self.idx2label)
                 guess_count += len(guess_chunks)
             
                 overlap_chunks = gold_chunks & guess_chunks
@@ -99,10 +97,10 @@ class Evaluator:
 
         # Only show the fscore if requested
         if self.fscore > 0:
-            fscore = fScore(total_overlap_count,
-                            total_gold_count,
-                            total_guess_count,
-                            self.fscore)
+            fscore = f_score(total_overlap_count,
+                             total_gold_count,
+                             total_guess_count,
+                             self.fscore)
             print('%s (F%d = %.4f) (Acc %d/%d = %.4f) (%.3f sec)' % 
                   (phase,
                    self.fscore,

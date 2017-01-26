@@ -9,21 +9,19 @@ import json
 import math
 import os
 
-def writeEmbeddingsTSV(word_vec, filename):
-    idx2word = revlut(word_vec.vocab)
-    with codecs.open(filename, 'w') as f:
-        wrtr = UnicodeWriter(f, delimiter='\t', quotechar='"')
 
-#        wrtr.writerow(['Word'])
-        for i in range(len(idx2word)):
-            row = idx2word[i]
-            wrtr.writerow([row])
+def tensorToSeq(tensor):
+    return tf.unstack(tf.transpose(tensor, perm=[1, 0, 2]))
+
+def seqToTensor(sequence):
+    return tf.transpose(tf.stack(sequence), perm=[1, 0, 2])
+
 
 def _vizEmbedding(proj_conf, emb, outdir, which):
     emb_conf = proj_conf.embeddings.add()
     emb_conf.tensor_name = '%s/W' % which
     emb_conf.metadata_path = outdir + "/train/metadata-%s.tsv" % which
-    writeEmbeddingsTSV(emb, emb_conf.metadata_path)
+    write_embeddings_tsv(emb, emb_conf.metadata_path)
 
 def vizEmbeddings(char_vec, word_vec, outdir, train_writer):
     print('Setting up word embedding visualization')
