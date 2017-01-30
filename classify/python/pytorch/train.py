@@ -7,7 +7,7 @@ from os import sys, path
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 import data
 from torch.autograd import Variable
-from torchy import long_tensor_alloc2, TorchExamples
+from torchy import long_tensor_alloc, TorchExamples
 
 class Trainer:
 
@@ -27,7 +27,7 @@ class Trainer:
             self.crit.cuda()
     
     def _batch(self, ts, si, batchsz):
-        ds = data.batch(ts, si, batchsz, vec_alloc=long_tensor_alloc2, ExType=TorchExamples)
+        ds = data.batch(ts, si, batchsz, vec_alloc=long_tensor_alloc, ExType=TorchExamples)
         x = ds.x
         y = ds.y
         if self.gpu:

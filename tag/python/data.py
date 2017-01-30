@@ -116,7 +116,7 @@ def conll_load_sentences(filename, words_vocab, chars_vocab, mxlen, maxw, f2i, v
                 f2i[label] = idx
 
             ys[j] = f2i[label]
-            xs[j] = words_vocab.get(cleanup(w), 0)
+            xs[j] = words_vocab.get(cleanup(w))
             for k in range(nch):
                 xs_ch[j,k] = chars_vocab.get(w[k], 0)
         ts.append({"x":xs,"y":ys, "xch": xs_ch, "id": i, "length": length })
@@ -130,11 +130,9 @@ def valid_split(data, splitfrac):
     heldout = int(math.floor(numinst * (1-splitfrac)))
     return data[1:heldout], data[heldout:]
 
-def batch(ts, start, batchsz, vec_alloc=np.zeros):
+def batch(ts, start, batchsz, vec_alloc=np.zeros, vec_shape=np.shape):
     ex = ts[start]
-    siglen = ex["x"].shape[0]
-    maxw = ex["xch"].shape[1]
-    
+    siglen, maxw = vec_shape(ex["xch"])
     xs_ch = vec_alloc((batchsz, siglen, maxw), dtype=np.int)
     xs = vec_alloc((batchsz, siglen), dtype=np.int)
     ys = vec_alloc((batchsz, siglen), dtype=np.int)

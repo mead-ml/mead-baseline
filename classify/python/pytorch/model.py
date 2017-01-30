@@ -38,7 +38,7 @@ class ConvModel(nn.Module):
             self.add_module('conv-%d' % fsz, conv)
 
         # Width of concat of parallel convs
-        input_dim = cmotsz_all = cmotsz * len(filtsz)
+        input_dim = cmotsz * len(filtsz)
         self.fconns = nn.Sequential()
 
         # Using additional hidden layer?

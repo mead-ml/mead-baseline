@@ -12,7 +12,7 @@ sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 from w2v import *
 from data import *
 from utils import revlut, mdsave
-from torchy import long_0_tensor_alloc2, TorchExamples
+from torchy import long_0_tensor_alloc, TorchExamples
 parser = argparse.ArgumentParser(description='Process some integers.')
 parser.add_argument('--eta', help='Initial learning rate', default=0.001, type=float)
 parser.add_argument('--mom', help='SGD Momentum', default=0.9, type=float)
@@ -53,7 +53,7 @@ embeddings = Word2VecModel(args.embed, vocab, unif)
 
 mxfiltsz = np.max(args.filtsz)
 f2i = {}
-ts, f2i = load_sentences(args.train, embeddings.vocab, f2i, args.clean, args.chars, args.mxlen, mxfiltsz, vec_alloc=long_0_tensor_alloc2, ExType=TorchExamples)
+ts, f2i = load_sentences(args.train, embeddings.vocab, f2i, args.clean, args.chars, args.mxlen, mxfiltsz, vec_alloc=long_0_tensor_alloc, ExType=TorchExamples)
 print('Loaded training data')
 
 valsplit = args.valsplit
@@ -61,11 +61,11 @@ valdata = None
 if args.valid is not None:
     print('Using provided validation data')
     valsplit = 0
-    vs, f2i = load_sentences(args.valid, embeddings.vocab, f2i, args.clean, args.chars, args.mxlen, mxfiltsz, vec_alloc=long_0_tensor_alloc2, ExType=TorchExamples)
+    vs, f2i = load_sentences(args.valid, embeddings.vocab, f2i, args.clean, args.chars, args.mxlen, mxfiltsz, vec_alloc=long_0_tensor_alloc, ExType=TorchExamples)
 else:
     ts, vs = valid_split(ts, args.valsplit, ExType=TorchExamples)
 
-es, f2i = load_sentences(args.test, embeddings.vocab, f2i, args.clean, args.chars, args.mxlen, mxfiltsz, vec_alloc=long_0_tensor_alloc2, ExType=TorchExamples)
+es, f2i = load_sentences(args.test, embeddings.vocab, f2i, args.clean, args.chars, args.mxlen, mxfiltsz, vec_alloc=long_0_tensor_alloc, ExType=TorchExamples)
 print('Loaded test data')
 
 nc = len(f2i)

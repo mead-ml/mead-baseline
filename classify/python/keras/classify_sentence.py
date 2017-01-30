@@ -13,7 +13,7 @@ import json
 import argparse
 from utils import revlut, mdsave
 
-parser = argparse.ArgumentParser(description='Process some integers.')
+parser = argparse.ArgumentParser(description='CNN classification model for sentences')
 parser.add_argument('--embed', help='Word2Vec embeddings file', required=True)
 parser.add_argument('--train', help='Training file', required=True)
 parser.add_argument('--valid', help='Validation file')

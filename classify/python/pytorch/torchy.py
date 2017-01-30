@@ -16,13 +16,13 @@ class TorchExamples(object):
     def width(self):
         return self.x.size(1)
 
-def long_0_tensor_alloc2(dims, dtype):
-    lt = long_tensor_alloc2(dims, dtype)
+def long_0_tensor_alloc(dims, dtype):
+    lt = long_tensor_alloc(dims, dtype)
     lt.zero_()
     return lt
 
-def long_tensor_alloc2(dims, dtype):
+def long_tensor_alloc(dims, dtype):
     if type(dims) == int or len(dims) == 1:
         return torch.LongTensor(dims)
-    return torch.LongTensor(dims[0], dims[1])
+    return torch.LongTensor(*dims)
 
