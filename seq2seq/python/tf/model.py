@@ -1,10 +1,36 @@
 import tensorflow as tf
 import numpy as np
-from utils import *
 import json
 from google.protobuf import text_format
 from tensorflow.python.platform import gfile
 import math
+from utils import *
+
+
+# Method for seq2seq w/ attention using TF's library
+def attn_rnn_seq2seq(encoder_inputs,
+                     decoder_inputs,
+                     cell,
+                     num_heads=1,
+                     dtype=tf.float32,
+                     scope=None):
+    with tf.variable_scope(scope or "attention_rnn_seq2seq"):
+        encoder_outputs, enc_state = tf.contrib.rnn.static_rnn(cell, encoder_inputs, dtype=dtype)
+        top_states = [tf.reshape(e, [-1, 1, cell.output_size])
+                      for e in encoder_outputs]
+        attention_states = tf.concat_v2(values=top_states, axis=1)
+    
+    return tf.contrib.legacy_seq2seq.attention_decoder(decoder_inputs,
+                                                       enc_state,
+                                                       attention_states,
+                                                       cell,
+                                                       num_heads=num_heads)
+
+def tensor2seq(tensor):
+    return tf.unstack(tf.transpose(tensor, perm=[1, 0, 2]))
+
+def seq2tensor(sequence):
+    return tf.transpose(tf.stack(sequence), perm=[1, 0, 2])
 
     
 class Seq2SeqBase:
@@ -151,8 +177,8 @@ class Seq2SeqModel(Seq2SeqBase):
 
         with tf.name_scope("Recurrence"):
             # List to tensor, reform as (T, B, W)
-            embed_in_seq = tensorToSeq(embed_in)
-            embed_out_seq = tensorToSeq(embed_out)
+            embed_in_seq = tensor2seq(embed_in)
+            embed_out_seq = tensor2seq(embed_out)
 
             rnn_enc = self.makeCell(hsz, nlayers, rnntype)
             rnn_dec = self.makeCell(hsz, nlayers, rnntype)
@@ -204,8 +230,8 @@ class Seq2SeqLib(Seq2SeqBase):
                 embed_out = tf.nn.embedding_lookup(Wo, self.dst)
 
         with tf.name_scope("Recurrence"):
-            embed_in_seq = tensorToSeq(embed_in)
-            embed_out_seq = tensorToSeq(embed_out)
+            embed_in_seq = tensor2seq(embed_in)
+            embed_out_seq = tensor2seq(embed_out)
 
             cell = self.makeCell(hsz, nlayers, rnntype)
             if attn:

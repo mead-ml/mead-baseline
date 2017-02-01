@@ -1,8 +1,9 @@
 import tensorflow as tf
 import numpy as np
+from os import sys, path
+sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 from w2v import Word2VecModel
-from data import buildVocab
-from data import sentsToIndices
+from data import load_sentences, build_vocab
 from utils import *
 from model import *
 from train import Trainer
@@ -38,7 +39,7 @@ flags.DEFINE_boolean('seq2seqlib', False, 'Use seq2seq library underneath')
 flags.DEFINE_boolean('attn', False, 'Use attention')
 
 # TODO: Allow best path, not just sample path
-def showBatch(model, es, sess, rlut1, rlut2, embed2, sample):
+def show_batch(model, es, sess, rlut1, rlut2, embed2, sample):
     sz = len(es)
     rnum = int((sz - 1) * np.random.random_sample())
     GO = embed2.vocab['<GO>']
@@ -55,11 +56,10 @@ def showBatch(model, es, sess, rlut1, rlut2, embed2, sample):
         if i > MAX_EXAMPLES:
             break
         i += 1
-
         print('========================================================================')
-        sent = lookupSent(rlut1, src_i, True)
+        sent = lookup_sentence(rlut1, src_i, True)
         print('[OP] %s' % sent)
-        sent = lookupSent(rlut2, tgt_i)
+        sent = lookup_sentence(rlut2, tgt_i)
         print('[Actual] %s' % sent)
         dst_i = np.zeros((1,FLAGS.mxlen))
 
@@ -76,12 +76,12 @@ def showBatch(model, es, sess, rlut1, rlut2, embed2, sample):
                 # dynamically.  Ideally, we would also use a beam over several
                 # paths and pick the most likely path at the end, but this
                 # can be done in a separate program, not necessary to train
-                next_value = beamMultinomial(SAMPLE_PRUNE_INIT, output)
+                next_value = beam_multinomial(SAMPLE_PRUNE_INIT, output)
             
             if next_value == EOS:
                 break
 
-        sent = lookupSent(rlut2, dst_i.squeeze())
+        sent = lookup_sentence(rlut2, dst_i.squeeze())
         print('Guess: %s' % sent)
         print('------------------------------------------------------------------------')
 f2i = {}
@@ -93,8 +93,8 @@ if FLAGS.sharedv is True:
     v1.append(1)
     v2.append(0)
 
-vocab1 = buildVocab(v1, {FLAGS.train, FLAGS.test})
-vocab2 = buildVocab(v2, {FLAGS.train, FLAGS.test})
+vocab1 = build_vocab(v1, {FLAGS.train, FLAGS.test})
+vocab2 = build_vocab(v2, {FLAGS.train, FLAGS.test})
 
 embed1 = Word2VecModel(FLAGS.embed1, vocab1, FLAGS.unif)
 
@@ -105,8 +105,8 @@ print('Loaded word embeddings: ' + FLAGS.embed2)
 
 opts = { 'batchsz': FLAGS.batchsz,
          'mxlen': FLAGS.mxlen }
-ts = sentsToIndices(FLAGS.train, embed1.vocab, embed2.vocab, opts)
-es = sentsToIndices(FLAGS.test, embed1.vocab, embed2.vocab, opts)
+ts = load_sentences(FLAGS.train, embed1.vocab, embed2.vocab, FLAGS.mxlen, FLAGS.batchsz)
+es = load_sentences(FLAGS.test, embed1.vocab, embed2.vocab, FLAGS.mxlen, FLAGS.batchsz)
 rlut1 = revlut(embed1.vocab)
 rlut2 = revlut(embed2.vocab)
 
@@ -133,14 +133,13 @@ with tf.Graph().as_default():
         err_min = 1
         last_improved = 0
         reset = 0
-        #showBatch(seq2seq, es, sess, rlut1, rlut2, embed2, True)
+        #show_batch(seq2seq, es, sess, rlut1, rlut2, embed2, True)
 
         for i in range(FLAGS.epochs):
             print('Training epoch %d' % (i+1))
             trainer.train(ts, sess, train_writer, FLAGS.dropout)
             if FLAGS.showex:
-                showBatch(seq2seq, es, sess, rlut1, rlut2, embed2, FLAGS.sample)
-
+                show_batch(seq2seq, es, sess, rlut1, rlut2, embed2, FLAGS.sample)
             err_rate = trainer.test(es, sess)
 
             if err_rate < err_min:
@@ -150,15 +149,5 @@ with tf.Graph().as_default():
                 seq2seq.save(sess, FLAGS.outdir, 'seq2seq')
 
             if (i - last_improved) > FLAGS.patience:
-
-#                if reset < FLAGS.nreset:
-#                    reset += 1
-#                    FLAGS.eta *= 0.5
-#                    last_improved = i
-#                    print('Patience exhausted, trying again with eta=%f' % FLAGS.eta)
-#                    train_op, global_step = createTrainer(loss)
-#                else:
                 print('Stopping due to persistent failures to improve')
                 break
-
-#        seq2seq.save(sess, FLAGS.outdir, 'seq2seq')

@@ -54,7 +54,7 @@ class Word2VecModel:
             # Anything left over, unattested in w2v model, just use a random
             # initialization
         if knownvocab is not None:
-            unknown = {v: cnt for v,cnt in knownvocab.iteritems() if cnt > 0}
+            unknown = {v: cnt for v,cnt in knownvocab.items() if cnt > 0}
             for v in unknown:
                 self.vocab[v] = k
                 k = k + 1

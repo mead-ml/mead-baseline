@@ -5,22 +5,14 @@ import re
 import math
 import codecs
 
-def tryGetWordIdx(vocab, word):
-   return vocab[word] or vocab[word.lower()]
-
-def idxFor(vocab, tok):
-   OOV = vocab['<PADDING>']
-   return tryGetWordIdx(vocab, tok) or OOV
-
-def numLines(filename):
+def num_lines(filename):
     lines = 0
     with codecs.open(filename, encoding='utf-8', mode='r') as f:
         for line in f:
             lines = lines + 1
     return lines
 
-
-def buildVocab(colids, files, clean=False, chars=False):
+def build_vocab(colids, files, clean=False, chars=False):
     vocab = Counter()
     vocab['<PAD>'] = 1
     vocab['<GO>'] = 1
@@ -40,12 +32,7 @@ def buildVocab(colids, files, clean=False, chars=False):
     return vocab
 
 
-def sentsToIndices(tsfile, vocab1, vocab2, options):
-
-    linenum = 1
-    
-    batchsz = options.get("batchsz", 1)
-    mxlen = options.get("mxlen", 40)
+def load_sentences(tsfile, vocab1, vocab2, mxlen, batchsz):
 
     PAD = vocab1['<PADDING>']
     GO = vocab2['<GO>']
@@ -54,7 +41,7 @@ def sentsToIndices(tsfile, vocab1, vocab2, options):
     ts = []
     b = 0
     i = 0
-    n = numLines(tsfile)
+    n = num_lines(tsfile)
 
     with codecs.open(tsfile, encoding='utf-8', mode='r') as f:
         for line in f:
@@ -79,8 +66,8 @@ def sentsToIndices(tsfile, vocab1, vocab2, options):
 
        
             for j in range(mxsiglen):
-                idx1 = j < end1 and idxFor(vocab1, src[j]) or PAD
-                idx2 = j < end2 and idxFor(vocab2, dst[j]) or PAD
+                idx1 = j < end1 and vocab1[src[j]] or PAD
+                idx2 = j < end2 and vocab2[dst[j]] or PAD
                 # First signal is reversed and starting at end, left padding
                 srcl[offset, mxlen - (j+1)] = idx1
                 # Second signal is not reversed, follows <go> and ends on <eos>

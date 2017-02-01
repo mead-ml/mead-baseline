@@ -1,8 +1,9 @@
 import tensorflow as tf
 import numpy as np
+from os import sys, path
+sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 from w2v import Word2VecModel
-from data import buildVocab
-from data import sentsToIndices
+from data import load_sentences, build_vocab
 from utils import *
 from model import Seq2SeqModel
 from train import Trainer
@@ -19,7 +20,7 @@ flags.DEFINE_string('indir', 'in', 'Directory where model resides')
 flags.DEFINE_boolean('sample', False, 'If showing examples, sample?')
 
 # TODO: Allow best path, not just sample path
-def showBatch(model, es, sess, rlut1, rlut2, vocab, sample):
+def show_batch(model, es, sess, rlut1, rlut2, vocab, sample):
     sz = len(es)
     rnum = int((sz - 1) * np.random.random_sample())
     GO = vocab['<GO>']
@@ -38,9 +39,9 @@ def showBatch(model, es, sess, rlut1, rlut2, vocab, sample):
         i += 1
 
         print('========================================================================')
-        sent = lookupSent(rlut1, src_i, True)
+        sent = lookup_sentence(rlut1, src_i, True)
         print('[OP] %s' % sent)
-        sent = lookupSent(rlut2, tgt_i)
+        sent = lookup_sentence(rlut2, tgt_i)
         print('[Actual] %s' % sent)
         dst_i = np.zeros((1,FLAGS.mxlen))
 
@@ -57,19 +58,14 @@ def showBatch(model, es, sess, rlut1, rlut2, vocab, sample):
             if sample is False:
                 next_value = np.argmax(output)
             else:
-                next_value = beamMultinomial(SAMPLE_PRUNE_INIT, output)
+                next_value = beam_multinomial(SAMPLE_PRUNE_INIT, output)
             if next_value == EOS:
                 break
 
-        sent = lookupSent(rlut2, dst_i.squeeze())
+        sent = lookup_sentence(rlut2, dst_i.squeeze())
         print('Guess: %s' % sent)
         print('------------------------------------------------------------------------')
 f2i = {}
-
-
-
-opts = { 'batchsz': FLAGS.batchsz,
-         'mxlen': FLAGS.mxlen }
 
 seq2seq = Seq2SeqModel()
 BASE = 'seq2seq'
@@ -80,7 +76,8 @@ with tf.Graph().as_default():
         seq2seq.restore(sess, FLAGS.indir, BASE, FLAGS.mxlen)
         rlut1 = revlut(seq2seq.vocab1)
         rlut2 = revlut(seq2seq.vocab2)
-        es = sentsToIndices(FLAGS.test, seq2seq.vocab1, seq2seq.vocab2, opts)
-        init = tf.initialize_all_variables()
+        es = load_sentences(FLAGS.test, seq2seq.vocab1, seq2seq.vocab2, FLAGS.mxlen, FLAGS.batchsz)
+        init = tf.global_variables_initializer()
+
         sess.run(init)
-        showBatch(seq2seq, es, sess, rlut1, rlut2, seq2seq.vocab2, FLAGS.sample)
+        show_batch(seq2seq, es, sess, rlut1, rlut2, seq2seq.vocab2, FLAGS.sample)
