@@ -18,7 +18,7 @@ def attn_rnn_seq2seq(encoder_inputs,
         encoder_outputs, enc_state = tf.contrib.rnn.static_rnn(cell, encoder_inputs, dtype=dtype)
         top_states = [tf.reshape(e, [-1, 1, cell.output_size])
                       for e in encoder_outputs]
-        attention_states = tf.concat_v2(values=top_states, axis=1)
+        attention_states = tf.concat(values=top_states, axis=1)
     
     return tf.contrib.legacy_seq2seq.attention_decoder(decoder_inputs,
                                                        enc_state,

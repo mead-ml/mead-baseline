@@ -125,7 +125,7 @@ class ConvModel:
                     # mot = max_pool2d(conv, [siglen, 1], 1, padding='VALID', scope=scope)
                 mots.append(mot)
 
-            combine = flatten(tf.concat_v2(values=mots, axis=3))
+            combine = flatten(tf.concat(values=mots, axis=3))
 
             # Definitely drop out
             with tf.name_scope("dropout"):

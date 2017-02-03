@@ -57,7 +57,7 @@ def char_word_conv_embeddings(char_vec, maxw, filtsz, char_dsz, wsz):
             mots.append(mot)
             
     wsz_all = wsz * len(mots)
-    combine = tf.reshape(tf.concat_v2(values=mots, axis=3), [-1, wsz_all])
+    combine = tf.reshape(tf.concat(values=mots, axis=3), [-1, wsz_all])
 
     # Make a skip connection
 
@@ -287,7 +287,7 @@ class TaggerModel:
 
             # List to tensor, reform as (T, B, W)
             # Join embeddings along the third dimension
-            joint = word_char if word_vec is None else tf.concat_v2(values=[wembed, word_char], axis=2)
+            joint = word_char if word_vec is None else tf.concat(values=[wembed, word_char], axis=2)
             joint = tf.nn.dropout(joint, self.pkeep)
 
         with tf.name_scope("Recurrence"):
