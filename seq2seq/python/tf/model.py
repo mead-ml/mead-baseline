@@ -243,9 +243,9 @@ class Seq2SeqLib(Seq2SeqBase):
         with tf.name_scope("output"):
             # Leave as a sequence of (T, B, W)
 
-            W = tf.Variable(tf.truncated_normal([hsz, embed2.vsz],
+            W = tf.Variable(tf.truncated_normal([hsz, embed2.vsz + 1],
                                                 stddev = 0.1), name="W")
-            b = tf.Variable(tf.constant(0.0, shape=[1, embed2.vsz]), name="b")
+            b = tf.Variable(tf.constant(0.0, shape=[1, embed2.vsz + 1]), name="b")
 
             self.preds = [(tf.matmul(rnn_dec_i, W) + b) for rnn_dec_i in rnn_dec_seq]
             self.probs = [tf.nn.softmax(pred, name="probs") for pred in self.preds]
