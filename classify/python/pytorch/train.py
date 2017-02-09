@@ -13,13 +13,15 @@ class Trainer:
 
     def __init__(self, gpu, model, optim, eta, mom):
         self.gpu = gpu
+        #parameters = model.parameters()
+        parameters = filter(lambda p: p.requires_grad, model.parameters())
         if optim == 'adadelta':
             #self.optimizer = torch.optim.Adadelta(model.parameters(), lr=eta, rho=0.95, eps=1e-6)
-            self.optimizer = torch.optim.Adadelta(model.parameters())
+            self.optimizer = torch.optim.Adadelta(parameters)
         elif optim == 'adam':
-            self.optimizer = torch.optim.Adam(model.parameters(), lr=eta)
+            self.optimizer = torch.optim.Adam(parameters, lr=eta)
         else:
-            self.optimizer = torch.optim.SGD(model.parameters(), lr=eta, momentum=mom)
+            self.optimizer = torch.optim.SGD(parameters, lr=eta, momentum=mom)
         self.model = model
         self.crit = model.create_loss()
         if gpu:
