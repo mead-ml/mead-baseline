@@ -32,7 +32,7 @@ def build_vocab(colids, files, clean=False, chars=False):
     return vocab
 
 
-def load_sentences(tsfile, vocab1, vocab2, mxlen, batchsz):
+def load_sentences(tsfile, vocab1, vocab2, mxlen, batchsz, vec_alloc=np.zeros):
 
     PAD = vocab1['<PADDING>']
     GO = vocab2['<GO>']
@@ -54,18 +54,19 @@ def load_sentences(tsfile, vocab1, vocab2, mxlen, batchsz):
                     ts.append({"src":srcl,"dst":dstl,"tgt":tgtl})
                 b = b + 1
                 thisBatchSz = min(batchsz, n - i)
-                srcl = np.zeros((thisBatchSz, mxlen))
-                dstl = np.zeros((thisBatchSz, mxlen))
-                tgtl = np.zeros((thisBatchSz, mxlen))
+                srcl = vec_alloc((thisBatchSz, mxlen))
+                dstl = vec_alloc((thisBatchSz, mxlen))
+                tgtl = vec_alloc((thisBatchSz, mxlen))
 
 
-            end1 = min(len(src), mxlen)
-            end2 = min(len(dst), mxlen)
-            mxsiglen = max(end1, end2)
+            # if length 100, mxsiglen can be at most 99
+            end1 = min(len(src), mxlen - 1)
+            end2 = min(len(dst), mxlen - 1)
+            last = max(end1, end2)
             dstl[offset, 1] = GO
 
        
-            for j in range(mxsiglen):
+            for j in range(last):
                 idx1 = j < end1 and vocab1[src[j]] or PAD
                 idx2 = j < end2 and vocab2[dst[j]] or PAD
                 # First signal is reversed and starting at end, left padding

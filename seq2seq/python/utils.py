@@ -1,12 +1,11 @@
-import tensorflow as tf
 import numpy as np
 
 def revlut(lut):
     return {v: k for k, v in lut.items()}
 
-def lookup_sentence(rlut, seq, reverse=False):
+def lookup_sentence(rlut, seq, reverse=False, padchar=''):
     s = seq[::-1] if reverse else seq
-    return ' '.join([rlut[idx] if rlut[idx] != '<PADDING>' else '' for idx in s])
+    return ' '.join([rlut[idx] if rlut[idx] != '<PADDING>' else padchar for idx in s])
 
 # Get a sparse index (dictionary) of top values
 # Note: mutates input for efficiency

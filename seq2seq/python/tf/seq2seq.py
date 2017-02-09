@@ -100,11 +100,13 @@ embed1 = Word2VecModel(FLAGS.embed1, vocab1, FLAGS.unif)
 
 print('Loaded word embeddings: ' + FLAGS.embed1)
 
+if FLAGS.embed2 is None:
+    print('No embed2 found, using embed1 for both')
+    args.embed2 = args.embed1
+
 embed2 = Word2VecModel(FLAGS.embed2, vocab2, FLAGS.unif)
 print('Loaded word embeddings: ' + FLAGS.embed2)
 
-opts = { 'batchsz': FLAGS.batchsz,
-         'mxlen': FLAGS.mxlen }
 ts = load_sentences(FLAGS.train, embed1.vocab, embed2.vocab, FLAGS.mxlen, FLAGS.batchsz)
 es = load_sentences(FLAGS.test, embed1.vocab, embed2.vocab, FLAGS.mxlen, FLAGS.batchsz)
 rlut1 = revlut(embed1.vocab)
