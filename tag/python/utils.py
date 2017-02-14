@@ -1,7 +1,10 @@
 import numpy as np
 import csv
 import codecs
-import cStringIO
+try:
+    import cStringIO as cio
+except:
+    import io as cio
 
 def revlut(lut):
     return {v: k for k, v in lut.items()}
@@ -72,17 +75,6 @@ def fill_y(nc, yidx):
 
     return dense
 
-
-# (B, T, L), gets a one out of L at each T if its populated
-# Then get a sum of the populated values
-def sentence_lengths(yfilled):
-    used = tf.sign(tf.reduce_max(tf.abs(yfilled), reduction_indices=2))
-    lengths = tf.reduce_sum(used, reduction_indices=1)
-    lengths = tf.cast(lengths, tf.int32)
-    total = tf.reduce_sum(lengths)
-    #return length
-    return total
-
 class UnicodeWriter:
     """
     A CSV writer which will write rows to CSV file "f",
@@ -91,7 +83,7 @@ class UnicodeWriter:
 
     def __init__(self, f, dialect=csv.excel, encoding="utf-8", **kwds):
         # Redirect output to a queue
-        self.queue = cStringIO.StringIO()
+        self.queue = cio.StringIO()
         self.writer = csv.writer(self.queue, dialect=dialect, **kwds)
         self.stream = f
         self.encoder = codecs.getincrementalencoder(encoding)()

@@ -86,7 +86,6 @@ def conll_lines(tsfile):
 
 def conll_load_sentences(filename, words_vocab, chars_vocab, mxlen, maxw, f2i, vec_alloc=np.zeros):
 
-    b = 0
     ts = []
     idx = 0
     txts, lbls = conll_lines(filename)

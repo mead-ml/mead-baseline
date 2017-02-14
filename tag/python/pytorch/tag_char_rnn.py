@@ -11,63 +11,42 @@ from model import TaggerModel
 from train import Trainer
 from utils import revlut, fill_y
 from torchy import long_0_tensor_alloc
-DEF_BATCHSZ = 50
-DEF_FILE_OUT = 'rnn-tagger'
-DEF_EVAL_OUT = 'rnn-tagger-test.txt'
-DEF_PATIENCE = 70
-DEF_RNN = 'blstm'
-DEF_NUM_RNN = 1
-DEF_OPTIM = 'sgd'
-DEF_EPOCHS = 1000
-DEF_ETA = 0.001
-DEF_HSZ = 100
-DEF_CHARSZ = 16
-DEF_WSZ = 30
-DEF_CLIP = 5
-DEF_DECAY = 0
-DEF_MOM = 0.9
-DEF_UNIF = 0.25
-DEF_PDROP = 0.5
+
 # By default, use max sentence length from data
-DEF_MXLEN = -1
-DEF_MXWLEN = 40
-DEF_VALSPLIT = 0.15
-DEF_EVAL_OUT = 'rnn-tagger-test.txt'
-DEF_TEST_THRESH = 10
 
 parser = argparse.ArgumentParser(description='Sequence tagger for sentences')
 
-parser.add_argument('--eta', default=DEF_ETA , type=float)
+parser.add_argument('--eta', default=0.001, type=float)
 parser.add_argument('--embed', default=None, help='Word2Vec embeddings file')
 parser.add_argument('--cembed', default=None, help='Word2Vec char embeddings file')
-parser.add_argument('--optim', default=DEF_OPTIM, help='Optim method')
-parser.add_argument('--decay', default=DEF_DECAY, help='LR decay', type=float)
-parser.add_argument('--mom', default=DEF_MOM, help='SGD momentum', type=float)
-parser.add_argument('--dropout', default=DEF_PDROP, help='Dropout probability', type=float)
+parser.add_argument('--optim', default='sgd', help='Optim method')
+parser.add_argument('--decay', default=0, help='LR decay', type=float)
+parser.add_argument('--mom', default=0.9, help='SGD momentum', type=float)
+parser.add_argument('--dropout', default=0.5, help='Dropout probability', type=float)
 parser.add_argument('--train', help='Training file', required=True)
 parser.add_argument('--valid', help='Validation file')
 parser.add_argument('--test', help='Test file', required=True)
-parser.add_argument('--rnn', default=DEF_RNN, help='RNN type')
-parser.add_argument('--numrnn', default=DEF_NUM_RNN, help='The depth of stacked RNNs', type=int)
+parser.add_argument('--rnn', default='blstm', help='RNN type')
+parser.add_argument('--numrnn', default=1, help='The depth of stacked RNNs', type=int)
 parser.add_argument('--outdir', default='out', help='Directory to put the output')
-parser.add_argument('--conll_output', default=DEF_EVAL_OUT, help='Place to put test CONLL file')
-parser.add_argument('--unif', default=DEF_UNIF, help='Initializer bounds for embeddings', type=float)
-parser.add_argument('--clip', default=DEF_CLIP, help='Gradient clipping cutoff', type=float)
-parser.add_argument('--epochs', default=DEF_EPOCHS, help='Number of epochs', type=int)
-parser.add_argument('--batchsz', default=DEF_BATCHSZ, help='Batch size', type=int)
-parser.add_argument('--mxlen', default=DEF_MXLEN, help='Max sentence length', type=int)
-parser.add_argument('--mxwlen', default=DEF_MXWLEN, help='Max word length', type=int)
+parser.add_argument('--conll_output', default='rnn-tagger-test.txt', help='Place to put test CONLL file')
+parser.add_argument('--unif', default=0.25, help='Initializer bounds for embeddings', type=float)
+parser.add_argument('--clip', default=5, help='Gradient clipping cutoff', type=float)
+parser.add_argument('--epochs', default=100, help='Number of epochs', type=int)
+parser.add_argument('--batchsz', default=50, help='Batch size', type=int)
+parser.add_argument('--mxlen', default=-1, help='Max sentence length', type=int)
+parser.add_argument('--mxwlen', default=40, help='Max word length', type=int)
 parser.add_argument('--cfiltsz', help='Filter sizes', nargs='+', default=[1,2,3,4,5,7], type=int)
-parser.add_argument('--charsz', default=DEF_CHARSZ, help='Char embedding depth', type=int)
-parser.add_argument('--patience', default=DEF_PATIENCE, help='Patience', type=int)
-parser.add_argument('--hsz', default=DEF_HSZ, help='Hidden layer size', type=int)
-parser.add_argument('--wsz', default=DEF_WSZ, help='Word embedding depth', type=int)
-parser.add_argument('--valsplit', default=DEF_VALSPLIT, help='Validation split if no valid set', type=float)
+parser.add_argument('--charsz', default=16, help='Char embedding depth', type=int)
+parser.add_argument('--patience', default=70, help='Patience', type=int)
+parser.add_argument('--hsz', default=100, help='Hidden layer size', type=int)
+parser.add_argument('--wsz', default=30, help='Word embedding depth', type=int)
+parser.add_argument('--valsplit', default=0.15, help='Validation split if no valid set', type=float)
 parser.add_argument('--cbow', default=False, help='Do CBOW for characters', type=bool)
 parser.add_argument('--nogpu', default=False, help='Use CPU (Not recommended)', type=bool)
-parser.add_argument('--save', default=DEF_FILE_OUT, help='Save basename')
+parser.add_argument('--save', default='rnn-tagger', help='Save basename')
 parser.add_argument('--fscore', default=0, help='Use F-score in metrics and early stopping', type=int)
-parser.add_argument('--test_thresh', default=DEF_TEST_THRESH, help='How many epochs improvement required before testing', type=int)
+parser.add_argument('--test_thresh', default=10, help='How many epochs improvement required before testing', type=int)
 
 args = parser.parse_args()
 gpu = not args.nogpu
@@ -137,7 +116,8 @@ print('Using %d examples for training' % len(ts))
 print('Using %d examples for validation' % len(vs))
 print('Using %d examples for test' % len(es))
 
-model = TaggerModel(f2i, word_vec, char_vec, maxs, maxw, args.rnn, args.wsz, args.hsz,
+model = TaggerModel(f2i, word_vec, char_vec, maxs, maxw,
+                    args.rnn, args.wsz, args.hsz,
                     args.cfiltsz, args.dropout, args.numrnn)
 trainer = Trainer(gpu, model, args.optim, args.eta, args.mom)
 outname = '%s/%s.model' % (args.outdir, args.save)

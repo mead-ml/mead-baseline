@@ -10,6 +10,16 @@ import math
 import os
 
 
+# (B, T, L), gets a one out of L at each T if its populated
+# Then get a sum of the populated values
+def sentence_lengths(yfilled):
+    used = tf.sign(tf.reduce_max(tf.abs(yfilled), reduction_indices=2))
+    lengths = tf.reduce_sum(used, reduction_indices=1)
+    lengths = tf.cast(lengths, tf.int32)
+    total = tf.reduce_sum(lengths)
+    #return length
+    return total
+
 def tensor2seq(tensor):
     return tf.unstack(tf.transpose(tensor, perm=[1, 0, 2]))
 

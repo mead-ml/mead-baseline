@@ -13,8 +13,9 @@ from w2v import *
 from data import *
 from utils import revlut, mdsave
 from torchy import long_0_tensor_alloc, TorchExamples
+
 parser = argparse.ArgumentParser(description='Process some integers.')
-parser.add_argument('--eta', help='Initial learning rate', default=0.001, type=float)
+parser.add_argument('--eta', help='Initial learning rate', default=0.01, type=float)
 parser.add_argument('--mom', help='SGD Momentum', default=0.9, type=float)
 parser.add_argument('--embed', help='Word2Vec embeddings file', required=True)
 parser.add_argument('--train', help='Training file', required=True)

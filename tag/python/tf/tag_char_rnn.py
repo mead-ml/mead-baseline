@@ -13,71 +13,38 @@ from model import TaggerModel, viz_embeddings
 from train import Trainer
 import time
 
-DEF_BATCHSZ = 50
-DEF_TSF = ''
-DEF_VSF = ''
-DEF_ESF = ''
-DEF_FILE_OUT = 'rnn-tagger.model'
-DEF_EVAL_OUT = 'rnn-tagger-test.txt'
-DEF_PATIENCE = 70
-DEF_RNN = 'blstm'
-DEF_NUM_RNN = 1
-DEF_OPTIM = 'sgd'
-DEF_EPOCHS = 1000
-DEF_ETA = 0.001
-DEF_CFILTSZ = '1,2,3,4,5,7'
-DEF_HSZ = 100
-DEF_CHARSZ = 16
-DEF_WSZ = 30
-DEF_PROC = 'gpu'
-DEF_CLIP = 5
-DEF_DECAY = 1e-7
-DEF_MOM = 0.9
-DEF_UNIF = 0.25
-DEF_PDROP = 0.5
-# By default, use max sentence length from data
-DEF_MXLEN = -1
-DEF_MXWLEN = 40
-DEF_VALSPLIT = 0.15
-DEF_EMBED = None
-DEF_CEMBED = None
-DEF_EVAL_OUT = 'rnn-tagger-test.txt'
-DEF_TEST_THRESH = 10
-
 flags = tf.app.flags
 FLAGS = flags.FLAGS
-flags.DEFINE_float('eta', DEF_ETA, 'Initial learning rate.')
-flags.DEFINE_string('embed', DEF_EMBED, 'Word2Vec embeddings file')
-flags.DEFINE_string('cembed', DEF_CEMBED, 'Word2Vec char embeddings file')
-flags.DEFINE_string('optim', DEF_OPTIM, 'Optim method')
-flags.DEFINE_float('dropout', DEF_PDROP, 'Dropout probability')
-flags.DEFINE_string('train', DEF_TSF, 'Training file')
-flags.DEFINE_string('valid', DEF_VSF, 'Validation file')
-flags.DEFINE_string('test', DEF_ESF, 'Test file')
-flags.DEFINE_string('rnn', DEF_RNN, 'RNN type')
-flags.DEFINE_integer('numrnn', DEF_NUM_RNN, 'The depth of stacked RNNs')
+flags.DEFINE_float('eta', 0.001, 'Initial learning rate.')
+flags.DEFINE_string('embed', None, 'Word2Vec embeddings file')
+flags.DEFINE_string('cembed', None, 'Word2Vec char embeddings file')
+flags.DEFINE_string('optim', 'sgd', 'Optim method')
+flags.DEFINE_float('dropout', 0.5, 'Dropout probability')
+flags.DEFINE_string('train', '', 'Training file')
+flags.DEFINE_string('valid', '', 'Validation file')
+flags.DEFINE_string('test', '', 'Test file')
+flags.DEFINE_string('rnn', 'blstm', 'RNN type')
+flags.DEFINE_integer('numrnn', 1, 'The depth of stacked RNNs')
 flags.DEFINE_string('outdir', 'out', 'Directory to put the output')
-flags.DEFINE_string('conll_output', DEF_EVAL_OUT, 'Place to put test CONLL file')
-flags.DEFINE_float('unif', DEF_UNIF, 'Initializer bounds for embeddings')
-flags.DEFINE_float('clip', DEF_CLIP, 'Gradient clipping cutoff')
-flags.DEFINE_integer('epochs', DEF_EPOCHS, 'Number of epochs')
-flags.DEFINE_integer('batchsz', DEF_BATCHSZ, 'Batch size')
-flags.DEFINE_integer('mxlen', DEF_MXLEN, 'Max sentence length')
-flags.DEFINE_integer('mxwlen', DEF_MXWLEN, 'Max word length')
-flags.DEFINE_string('cfiltsz', DEF_CFILTSZ, 'Character filter sizes')
-#flags.DEFINE_integer('charsz', 150, 'Char embedding depth')
-flags.DEFINE_integer('charsz', DEF_CHARSZ, 'Char embedding depth')
-flags.DEFINE_integer('patience', DEF_PATIENCE, 'Patience')
-flags.DEFINE_integer('hsz', DEF_HSZ, 'Hidden layer size')
-flags.DEFINE_integer('wsz', DEF_WSZ, 'Word embedding depth')
-flags.DEFINE_float('valsplit', DEF_VALSPLIT, 'Validation split if no valid set')
-#flags.DEFINE_string('cfiltsz', '0', 'Character filter sizes')
+flags.DEFINE_string('conll_output', 'rnn-tagger-test.txt', 'Place to put test CONLL file')
+flags.DEFINE_float('unif', 0.25, 'Initializer bounds for embeddings')
+flags.DEFINE_float('clip', 5, 'Gradient clipping cutoff')
+flags.DEFINE_integer('epochs', 1000, 'Number of epochs')
+flags.DEFINE_integer('batchsz', 50, 'Batch size')
+flags.DEFINE_integer('mxlen', -1, 'Max sentence length')
+flags.DEFINE_integer('mxwlen', 40, 'Max word length')
+flags.DEFINE_string('cfiltsz', '1,2,3,4,5,7', 'Character filter sizes')
+flags.DEFINE_integer('charsz', 16, 'Char embedding depth')
+flags.DEFINE_integer('patience', 70, 'Patience')
+flags.DEFINE_integer('hsz', 100, 'Hidden layer size')
+flags.DEFINE_integer('wsz', 30, 'Word embedding depth (per parallel conv)')
+flags.DEFINE_float('valsplit', 0.15, 'Validation split if no valid set')
 flags.DEFINE_boolean('cbow', False, 'Do CBOW for characters')
-flags.DEFINE_string('save', DEF_FILE_OUT, 'Save basename')
+flags.DEFINE_string('save', 'rnn-tagger.model', 'Save basename')
 flags.DEFINE_boolean('crf', False, 'Use CRF on top')
 flags.DEFINE_integer('fscore', 0, 'Use F-score in metrics and early stopping')
 flags.DEFINE_boolean('viz', False, 'Set up LUT vocabs for Tensorboard')
-flags.DEFINE_integer('test_thresh', DEF_TEST_THRESH, 'How many epochs improvement required before testing')
+flags.DEFINE_integer('test_thresh', 10, 'How many epochs improvement required before testing')
 maxs, maxw, vocab_ch, vocab_word = conll_build_vocab([FLAGS.train, 
                                                       FLAGS.test, 
                                                       FLAGS.valid])

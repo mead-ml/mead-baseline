@@ -142,7 +142,7 @@ th tag_char_rnn.lua -rnn blstm -optim adam -eta 0.001 -epochs 40 -batchsz 50 -hs
 -cembed /data/xdata/oct27-s140-char2vec-cbow-50.bin \
 -cbow
 ```
-The tensorflow (and PyTorch) version is identical usage:
+The tensorflow version is identical usage:
 ```
 python2.7 tag_char_rnn.py --rnn blstm --numrnn 1 --optim adam --eta 0.001 --patience 20 --epochs 40 --batchsz 50 --hsz 300 \
 --train /data/xdata/twpos-data-v0.3/oct27.splits/oct27.train \
@@ -166,7 +166,9 @@ th tag_char_rnn.lua -rnn blstm -patience 60 -optim rmsprop -eta 0.001 -epochs 10
 
 ```
 
-If you want to use only the convolutional filter word vectors, just remove the -embed line above.
+Tensorflow and PyTorch usage would be almost the same, but for --cfiltsz in Tensorflow, it uses the FLAGS param and is comma-separated.  For  PyTorch, the arguments are space delimited
+
+If you want to use only the convolutional filter word vectors (and no word embeddings), just remove the -embed line above.
 
 ### NER (and other IOB-type) Tagging
 

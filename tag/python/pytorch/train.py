@@ -12,8 +12,10 @@ class Trainer:
 
     def __init__(self, gpu, model, optim, eta, mom):
         self.gpu = gpu
+
         if optim == 'adadelta':
-            self.optimizer = torch.optim.Adadelta(model.parameters(), lr=eta)
+            print('Using adadelta, ignoring learning rate')
+            self.optimizer = torch.optim.Adadelta(model.parameters())
         elif optim == 'adam':
             self.optimizer = torch.optim.Adam(model.parameters(), lr=eta)
         elif optim == 'rmsprop':

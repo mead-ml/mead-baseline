@@ -16,10 +16,10 @@ class Trainer:
         #parameters = model.parameters()
         parameters = filter(lambda p: p.requires_grad, model.parameters())
         if optim == 'adadelta':
-            #self.optimizer = torch.optim.Adadelta(model.parameters(), lr=eta, rho=0.95, eps=1e-6)
+            print('Using adadelta, ignoring learning rate')
             self.optimizer = torch.optim.Adadelta(parameters)
         elif optim == 'adam':
-            self.optimizer = torch.optim.Adam(parameters, lr=eta)
+            self.optimizer = torch.optim.Adam(parameters)
         else:
             self.optimizer = torch.optim.SGD(parameters, lr=eta, momentum=mom)
         self.model = model
