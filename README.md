@@ -101,7 +101,7 @@ Here are the last observed performance scores using _classify_sentence_ with fin
 It was run on the latest code as of 2/17/2017, with 25 epochs, a learning rate of 0.01 and adadelta as an optimizer:
 
 | Dataset | TensorFlow | Keras (TF) | PyTorch | Torch7 |
-|------------------------------------------------------|
+| ------- | ---------- | ---------- | ------- | ------ |
 | SST2    |      87.70 |      87.75 |  0.8637 | 87.095 |
 
 For Keras and TensorFlow, I am using the latest 1.0 branch.  For Keras and PyTorch I am using the master.
