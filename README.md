@@ -17,7 +17,7 @@ Each algorithm is in a separate sub-directory, and is fully contained, even thou
 
 ## Convolution - Max Over Time Architecture (CMOT)
 
-This code provides a pure Lua/Torch7 and pure Python PyTorch, Tensorflow and Keras implementations -- no preprocessing of the dataset with python, nor HDF5 is required.  The Lua/Torch code depends on a tiny module that can load word2vec in Torch (https://github.com/dpressel/torchure) either as a model, or as an nn.LookupTable.  It is important to note that these models can easily be implemented with other deep learning frameworks, and without much work, can also be implemented from scratch!  Over time, this package will hopefully provide alternate implementations in other DL Frameworks and programming languages.
+This code provides a pure Lua/Torch7 and pure Python PyTorch, TensorFlow and Keras implementations -- no preprocessing of the dataset with python, nor HDF5 is required.  The Lua/Torch code depends on a tiny module that can load word2vec in Torch (https://github.com/dpressel/torchure) either as a model, or as an nn.LookupTable.  It is important to note that these models can easily be implemented with other deep learning frameworks, and without much work, can also be implemented from scratch!  Over time, this package will hopefully provide alternate implementations in other DL Frameworks and programming languages.
 
 When the GPU is used, the code *assumes that cudnn (>= R4) is available* and installed. This is because the performance gains over the 'cunn' implementation are significant (e.g., 3 minutes -> 30 seconds).
 
@@ -75,7 +75,7 @@ Here is an example running Stanford Sentiment Treebank 2 data with adadelta
 
 th classify_sentence.lua -clean -optim adadelta -batchsz 50 -epochs 25 -patience 25 -train ./data/stsa.binary.phrases.train -valid ./data/stsa.binary.dev -eval ./data/stsa.binary.test -embed /data/xdata/GoogleNews-vectors-negative300.bin -filtsz "{3,4,5}"
 ```
-In Tensorflow:
+In TensorFlow:
 
 ```
 python classify_sentence.py --clean --optim adadelta --eta 0.01 --batchsz 50 --epochs 25 --patience 25 --train ./data/stsa.binary.phrases.train --valid ./data/stsa.binary.dev --test ./data/stsa.binary.test --embed /data/xdata/GoogleNews-vectors-negative300.bin --filtsz "3,4,5" --dropout 0.5
@@ -91,9 +91,9 @@ PyTorch and Keras have almost the same usage, but they use Python's builtin CL p
 
 ## Status
 
-This model is implemented in Tensorflow, Keras, Torch, and PyTorch.  Currently, the PyTorch model does not support 'static' embeddings.  The Keras model currently does not use an 'eta' parameter.  Weight initialization techniques vary slightly across implementations at the moment.
+This model is implemented in TensorFlow, Keras, Torch, and PyTorch.  Currently, the PyTorch model does not support 'static' embeddings.  The Keras model currently does not use an 'eta' parameter.  Weight initialization techniques vary slightly across implementations at the moment.
 
-All of the models should typically achieve the dynamic fine-tune results on SST from the Kim paper, though there is some slight variation between runs (I have seen accuracy as high as 88.36%, which is higher than even the stereo approach reported in the paper).  I have found that random uniform initialization of the convolutional layers with Glorot initialization on the fully-connected layers tends to work well, so that is what happens here in Tensorflow (and is default in Keras).
+All of the models should typically achieve the dynamic fine-tune results on SST from the Kim paper, though there is some slight variation between runs (I have seen accuracy as high as 88.36%, which is higher than even the stereo approach reported in the paper).  I have found that random uniform initialization of the convolutional layers with Glorot initialization on the fully-connected layers tends to work well, so that is what happens here in TensorFlow (and is default in Keras).
 
 ### Latest Runs
 
@@ -116,13 +116,11 @@ In Torch and in Keras, restoring the model is trivial, but with TensorFlow there
 
 # Structured Prediction using RNNs
 
-_TODO: Update this section, add Status section_
-
 This code is useful for tagging tasks, e.g., POS tagging, chunking and NER tagging.  Recently, several researchers have proposed using RNNs for tagging, particularly LSTMs.  These models do back-propagation through time (BPTT)
 and then apply a shared fully connected layer per RNN output to produce a label.
 A common modification is to use Bidirectional LSTMs -- one in the forward direction, and one in the backward direction.  This usually improves the resolution of the tagger significantly.  That is the default approach taken here.
 
-To execute these models it is necessary to form word vectors.  It has been shown that character level modeling is important in deep models to support morphosyntatic structure for tagging tasks.  It is common to combine words and characters to form vectors, although recently, direct character-based formation only has become more popular.
+To execute these models it is necessary to form word vectors.  It has been shown that character level modeling is important in deep models to support morpho-syntatic structure for tagging tasks.  It is common to combine words and characters to form vectors, although recently, direct character-based formation only has become more popular.
 
 ## tag_char_rnn: word/character-based RNN tagger
 
@@ -133,42 +131,18 @@ are not used at all.  If it is passed, word-char embeddings are concatenated to 
 
 Twitter is a challenging data source for tagging problems.  The [TweetNLP project](http://www.cs.cmu.edu/~ark/TweetNLP) includes hand annotated POS data. The original taggers used for this task are described [here](http://www.cs.cmu.edu/~ark/TweetNLP/gimpel+etal.acl11.pdf).  The baseline that they compared their algorithm against got 83.38% accuracy.  The final model got 89.37% accuracy with many custom features.  Below, our simple BLSTM baseline with no custom features, and a very coarse approach to compositional character to word modeling still gets *88%-90%* accuracy.
 
-This has been tested on oct27 train, dev and test splits (http://www.cs.cmu.edu/~ark/TweetNLP), using custom word2vec embedddings generated from ~32M tweets including s140 and the oct27 train+dev data (download here: https://drive.google.com/drive/folders/0B8N1oYmGLVGWWWZYS2E0MlRXajQ?usp=sharing).  Some of the data was sampled and preprocessed to have placeholder words for hashtags, mentions and URLs to be used as backoffs for words of those classes which are not found.  The example below employs character vectors taken from splitting oct27 train+dev and s140 data and uses them to summed word vectors over characters.  Note that passing -cembed is not necessary, but provides a warm start for the character embeddings.
+This has been tested on oct27 train, dev and test splits (http://www.cs.cmu.edu/~ark/TweetNLP), using custom word2vec embeddings generated from ~32M tweets including s140 and the oct27 train+dev data (download here: https://drive.google.com/drive/folders/0B8N1oYmGLVGWWWZYS2E0MlRXajQ?usp=sharing).  Some of the data was sampled and preprocessed to have placeholder words for hashtags, mentions and URLs to be used as backoffs for words of those classes which are not found.  The example below employs character vectors taken from splitting oct27 train+dev and s140 data and uses them to summed word vectors over characters.  Note that passing -cembed is not necessary, but provides a warm start for the character embeddings.
+
+## Running It
 
 ```
-th tag_char_rnn.lua -rnn blstm -optim adam -eta 0.001 -epochs 40 -batchsz 50 -hsz 300 \
--train /data/xdata/twpos-data-v0.3/oct27.splits/oct27.train \
--valid /data/xdata/twpos-data-v0.3/oct27.splits/oct27.dev \
--eval /data/xdata/twpos-data-v0.3/oct27.splits/oct27.test \
--embed /data/xdata/oct-s140clean-uber.cbow-bin \
--cembed /data/xdata/oct27-s140-char2vec-cbow-50.bin \
--cbow
-```
-The tensorflow version is identical usage:
-```
-python2.7 tag_char_rnn.py --rnn blstm --numrnn 1 --optim adam --eta 0.001 --patience 20 --epochs 40 --batchsz 50 --hsz 300 \
---train /data/xdata/twpos-data-v0.3/oct27.splits/oct27.train \
---valid /data/xdata/twpos-data-v0.3/oct27.splits/oct27.dev \
---test /data/xdata/twpos-data-v0.3/oct27.splits/oct27.test \
---embed /data/xdata/oct-s140clean-uber.cbow-bin \
---cembed /data/xdata/oct27-s140-char2vec-cbow-50.bin \
---cbow
-
-```
-Here is an example using convolutional filters for character embeddings, alongside word embeddings.  This is basically a combination of the dos Santos approach with the Kim parallel filter idea:
+Here is an example using convolutional filters for character embeddings, alongside word embeddings.  This is basically a combination of the dos Santos approach with the Kim parallel filter idea using TensorFlow:
 
 ```
 
-th tag_char_rnn.lua -rnn blstm -patience 60 -optim rmsprop -eta 0.001 -epochs 1000 -batchsz 50 -hsz 100 \
--train /data/xdata/twpos-data-v0.3/oct27.splits/oct27.train \
--valid /data/xdata/twpos-data-v0.3/oct27.splits/oct27.dev \
--eval /data/xdata/twpos-data-v0.3/oct27.splits/oct27.test \
--embed /data/xdata/oct-s140clean-uber.cbow-bin \
--cfiltsz "{1,2,3,4,5,7}" -wsz 30
+python tag_char_rnn.py --rnn blstm --patience 20 --optim adam --eta 0.01 --epochs 40 --batchsz 20 --hsz 200 --train $OCT_SPLITS/oct27.train --valid $OCT_SPLITS/oct27.dev --test $OCT_SPLITS/oct27.test --embed /data/xdata/oct-s140clean-uber.cbow-bin --cfiltsz "1,2,3,4,5,7" --wsz 30
 
-```
-
-Tensorflow and PyTorch usage would be almost the same, but for --cfiltsz in Tensorflow, it uses the FLAGS param and is comma-separated.  For  PyTorch, the arguments are space delimited
+For  PyTorch, the arguments are space delimited
 
 If you want to use only the convolutional filter word vectors (and no word embeddings), just remove the -embed line above.
 
@@ -178,31 +152,34 @@ To do NER tagging, we typically do not want to use accuracy as a metric.  In tho
 you will typically want to pass '--fscore 1' to the code like so:
 
 ```
-python2.7 tag_char_rnn.py --rnn blstm --patience 70 --numrnn 1 --optim sgd --eta 0.001 --epochs 600 --batchsz 50 --hsz 100 \
---train /home/dpressel/dev/work/glample/tagger/dataset/eng.train \
---valid /home/dpressel/dev/work/glample/tagger/dataset/eng.testa \
---test  /home/dpressel/dev/work/glample/tagger/dataset/eng.testb \
+python tag_char_rnn.py --rnn blstm --patience 70 --numrnn 1 --optim sgd --eta 0.001 --epochs 600 --batchsz 50 --hsz 100 \
+--train $CONLL/eng.train \
+--valid $CONLL/eng.testa \
+--test  $CONLL/eng.testb \
 --embed /data/xdata/GoogleNews-vectors-negative300.bin \
 --cfiltsz "1,2,3,4,5,7" --wsz 30 --fscore 1
 
 ```
 This will report an F1 score on at each validation pass, and will use F1 for early-stopping as well.
 
-### Global coherency with a CRF (currently tensorflow only)
+### Global coherency with a CRF (currently TensorFlow only)
 
 For tasks that require global coherency like NER tagging, it has been shown that using a transition matrix between label states in conjunction with the output RNN tags improves performance.  This makes the tagger a linear chain CRF, and we can do this by simply adding another layer on top of our RNN output.  To do this, simply pass --crf as an argument.
 
 ```
-python2.7 tag_char_rnn.py --rnn blstm --patience 70 --numrnn 1 --optim sgd --eta 0.001 --epochs 600 --batchsz 50 --hsz 100 \
---train /home/dpressel/dev/work/glample/tagger/dataset/eng.train \
---valid /home/dpressel/dev/work/glample/tagger/dataset/eng.testa \
---test  /home/dpressel/dev/work/glample/tagger/dataset/eng.testb \
+python tag_char_rnn.py --rnn blstm --patience 70 --numrnn 1 --optim sgd --eta 0.001 --epochs 600 --batchsz 50 --hsz 100 \
+--train $CONLL/eng.train \
+--valid $CONLL/eng.testa \
+--test  $CONLL/eng.testb \
 --embed /data/xdata/GoogleNews-vectors-negative300.bin \
 --cfiltsz "1,2,3,4,5,7" --wsz 30 --fscore 1 --crf
 ```
-# Seq2Seq
 
-_TODO: Update this section, add Status section_
+## Status
+
+This model is implemented in TensorFlow, Torch, and PyTorch.  The TensorFlow currently is the only implementation that supports using a CRF layer on the top.
+
+# Seq2Seq
 
 Encoder-decoder frameworks have been used for Statistical Machine Translation, Image Captioning, ASR, Conversation Modeling, Formula Generation and many other applications.  Seq2seq is a type of encoder-decoder implementation, where the encoder is some sort of RNN, and the memories (sometimes known as the "thought vector") are transferred over to the decoder, also an RNN, essentially making this a conditional language model.  The code as it is written here is with text in mind, and supports multiple types of RNNs, including GRUs and LSTMs, as well as stacked layers.  The TensorFlow version also supports attention.
 
@@ -211,6 +188,10 @@ Encoder-decoder frameworks have been used for Statistical Machine Translation, I
 This code implements seq2seq with mini-batching (as in other examples) using adagrad, adadelta, sgd or adam.  It supports two vocabularies, and takes word2vec pre-trained models as input, filling in words that are attested in the dataset but not found in the pre-trained models.  It uses dropout for regularization.
 
 For any reasonable size data, this really needs to run on the GPU for realistic training times.
+
+## Status
+
+This model is implemented in TensorFlow, Torch, and PyTorch.  The TensorFlow currently is the only implementation that supports using attention.
 
 # Distance metrics using Siamese Networks
 
