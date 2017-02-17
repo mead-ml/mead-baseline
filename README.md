@@ -27,8 +27,6 @@ When the GPU is used, the code *assumes that cudnn (>= R4) is available* and ins
 
 This is inspired by Yoon Kim's paper "Convolutional Neural Networks for Sentence Classification", and before that Collobert's "Sentence Level Approach."  The implementations provided here are basically the Kim static and non-static models.
 
-To explicitly specify filter widths at the same time, pass in -filtsz {3,4,5} at the command line for the Torch driver, or "3,4,5" for the Python drivers (these values are the default for the driver programs, so you do not have to pass them if these are the filter sizes you desire.
-
 This code doesn't implement multi-channel, as this probably does not make sense as a baseline. It does support adding a hidden projection layer (if you pass hsz), which is kind of like the "Sentence Level Approach" in the Collobert et al. paper, "Natural Language Processing (Almost) from Scratch"
 
 Temporal convolutional output total number of feature maps is configurable (this is also defines the size of the max over time layer, by definition).  This code offers several optimization options (adagrad, adadelta, adam and vanilla sgd).  The Kim paper uses adadelta, which works well, but vanilla SGD often works great for static embeddings.  Input signals are always padded to account for the filter width, so edges are still handled.
