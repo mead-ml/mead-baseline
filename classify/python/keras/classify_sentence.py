@@ -1,17 +1,17 @@
-from keras.models import Model, load_model
-from keras.layers import Dense, Activation, Convolution1D, Embedding, Input, merge, GlobalMaxPooling1D, Dropout
+from keras.models import load_model
 from keras.callbacks import EarlyStopping, ModelCheckpoint
-from model import create_model
-import numpy as np
+
 from keras.utils import np_utils
 from os import sys, path, makedirs
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+
 from w2v import *
 from data import *
 import time
-import json
 import argparse
-from utils import revlut, mdsave
+from utils import mdsave
+
+from model import create_model
 
 parser = argparse.ArgumentParser(description='CNN classification model for sentences')
 parser.add_argument('--embed', help='Word2Vec embeddings file', required=True)

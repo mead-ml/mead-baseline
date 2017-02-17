@@ -276,7 +276,7 @@ class TaggerModel:
 
         if word_vec is not None:
             with tf.name_scope("WordLUT"):
-                Ww = tf.Variable(tf.constant(word_vec.weights, dtype=tf.float32), name = "W")
+                Ww = tf.Variable(tf.constant(word_vec.weights, dtype=tf.float32), name="W")
 
                 we0 = tf.scatter_update(Ww, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, word_vec.dsz]))
 
@@ -284,7 +284,7 @@ class TaggerModel:
                     wembed = tf.nn.embedding_lookup(Ww, self.x, name="embeddings")
 
         with tf.name_scope("CharLUT"):
-            Wc = tf.Variable(tf.constant(char_vec.weights, dtype=tf.float32), name = "W")
+            Wc = tf.Variable(tf.constant(char_vec.weights, dtype=tf.float32), name="W")
 
             ce0 = tf.scatter_update(Wc, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, char_dsz]))
 

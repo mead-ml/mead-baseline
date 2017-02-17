@@ -1,14 +1,9 @@
 import tensorflow as tf
-import numpy as np
 from os import sys, path
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 from w2v import *
 from data import *
-import time
-import json
 from model import *
-
-from utils import revlut, fill_y
 from train import Trainer
 flags = tf.app.flags
 FLAGS = flags.FLAGS

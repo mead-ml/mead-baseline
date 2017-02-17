@@ -1,10 +1,5 @@
 import numpy as np
-import time
-import json
 import argparse
-import torch
-import torch.nn as nn
-from torch.autograd import Variable
 from model import ConvModel
 from train import Trainer
 from os import sys, path, makedirs

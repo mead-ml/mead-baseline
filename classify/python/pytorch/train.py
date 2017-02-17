@@ -13,7 +13,6 @@ class Trainer:
 
     def __init__(self, gpu, model, optim, eta, mom):
         self.gpu = gpu
-        #parameters = model.parameters()
         parameters = filter(lambda p: p.requires_grad, model.parameters())
         if optim == 'adadelta':
             print('Using adadelta, ignoring learning rate')

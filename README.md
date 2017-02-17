@@ -21,6 +21,8 @@ This code provides a pure Lua/Torch7 and pure Python PyTorch, Tensorflow and Ker
 
 When the GPU is used, the code *assumes that cudnn (>= R4) is available* and installed. This is because the performance gains over the 'cunn' implementation are significant (e.g., 3 minutes -> 30 seconds).
 
+
+
 *Details*
 
 This is inspired by Yoon Kim's paper "Convolutional Neural Networks for Sentence Classification", and before that Collobert's "Sentence Level Approach."  The implementations provided here are basically the Kim static and non-static models.
@@ -67,27 +69,6 @@ For handling data with high word sparsity, and for data where morphological feat
 
 Early stopping with patience is supported.  There are many hyper-parameters that you can tune, which may yield many different models.  Here is a Torch example of parameterization of static embeddings with SGD and the default three filter sizes (3, 4, and 5):
 
-```
-th classify_sentence.lua -static -eta 0.01 -batchsz 10 -decay 1e-9 -epochs 20 -train ../data/TREC.train.all -eval ../data/TREC.test.all -embed /data/xdata/GoogleNews-vectors-negative300.bin
-```
-
-And with PyTorch, Tensorflow or Keras
-```
-python classify_sentence.py --static --eta 0.01 --batchsz 10 -epochs 20 --train ../data/TREC.train.all --test ../data/TREC.test.all --embed /data/xdata/GoogleNews-vectors-negative300.bin
-```
-
-Here is an example of parameterization of dynamic fine tuning (classify_sentence.lua) with SGD to train TREC QA set
-
-```
-th classify_sentence.lua -optim adadelta -patience 20 -batchsz 50 -epochs 25 -train ../data/TREC.train.all -eval ../data/TREC.test.all -embed /data/xdata/GoogleNews-vectors-negative300.bin
-```
-
-And in Tensorflow and Keras versions, its basically the same
-
-```
-python classify_sentence.py --optim adadelta --batchsz 50 --epochs 25 --patience 25 --train ../data/TREC.train.all --test ../data/TREC.test.all -embed /data/xdata/GoogleNews-vectors-negative300.bin
-```
-
 Here is an example running Stanford Sentiment Treebank 2 data with adadelta
 
 ```
@@ -97,7 +78,7 @@ th classify_sentence.lua -clean -optim adadelta -batchsz 50 -epochs 25 -patience
 In Tensorflow:
 
 ```
-python classify_sentence.py --clean --optim adadelta --eta 0.004 --batchsz 50 --epochs 25 --patience 25 --train ./data/stsa.binary.phrases.train --valid ./data/stsa.binary.dev --test ./data/stsa.binary.test --embed /data/xdata/GoogleNews-vectors-negative300.bin --filtsz "3,4,5" --dropout 0.5
+python classify_sentence.py --clean --optim adadelta --eta 0.01 --batchsz 50 --epochs 25 --patience 25 --train ./data/stsa.binary.phrases.train --valid ./data/stsa.binary.dev --test ./data/stsa.binary.test --embed /data/xdata/GoogleNews-vectors-negative300.bin --filtsz "3,4,5" --dropout 0.5
 ```
 
 PyTorch and Keras have almost the same usage, but they use Python's builtin CL parser, so their filter sizes should be specified as
@@ -108,13 +89,34 @@ PyTorch and Keras have almost the same usage, but they use Python's builtin CL p
 
 (Note that these are already the default arguments!)
 
+## Status
+
+This model is implemented in Tensorflow, Keras, Torch, and PyTorch.  Currently, the PyTorch model does not support 'static' embeddings.  The Keras model currently does not use an 'eta' parameter.  Weight initialization techniques vary slightly across implementations at the moment.
+
 All of the models should typically achieve the dynamic fine-tune results on SST from the Kim paper, though there is some slight variation between runs (I have seen accuracy as high as 88.36%, which is higher than even the stereo approach reported in the paper).  I have found that random uniform initialization of the convolutional layers with Glorot initialization on the fully-connected layers tends to work well, so that is what happens here in Tensorflow (and is default in Keras).
+
+### Latest Runs
+
+Here are the last observed performance scores using _classify_sentence_ with fine-tuning on the Stanford Sentiment Treebank 2 (SST2)
+It was run on the latest code as of 2/17/2017, with 25 epochs, a learning rate of 0.01 and adadelta as an optimizer:
+
+| Dataset | TensorFlow | Keras (TF) | PyTorch | Torch7 |
+|------------------------------------------------------|
+| SST2    |      87.70 |      87.75 |  0.8637 | 87.095 |
+
+For Keras and TensorFlow, I am using the latest 1.0 branch.  For Keras and PyTorch I am using the master.
+Note that these are randomly initialized and these numbers will vary
+(IOW, don't assume that one implementation is guaranteed to outperform the others from a single run).
+
+On my laptop, each implementation takes between 29 - 40s per epoch.
 
 ## Restoring the Model
 
 In Torch and in Keras, restoring the model is trivial, but with TensorFlow there is a little more work.  The CNN classes are set up to handle this save and restore, which includes reloading the graph, and then reinitializing the model, along with labels and feature index.
 
 # Structured Prediction using RNNs
+
+_TODO: Update this section, add Status section_
 
 This code is useful for tagging tasks, e.g., POS tagging, chunking and NER tagging.  Recently, several researchers have proposed using RNNs for tagging, particularly LSTMs.  These models do back-propagation through time (BPTT)
 and then apply a shared fully connected layer per RNN output to produce a label.
@@ -199,6 +201,8 @@ python2.7 tag_char_rnn.py --rnn blstm --patience 70 --numrnn 1 --optim sgd --eta
 --cfiltsz "1,2,3,4,5,7" --wsz 30 --fscore 1 --crf
 ```
 # Seq2Seq
+
+_TODO: Update this section, add Status section_
 
 Encoder-decoder frameworks have been used for Statistical Machine Translation, Image Captioning, ASR, Conversation Modeling, Formula Generation and many other applications.  Seq2seq is a type of encoder-decoder implementation, where the encoder is some sort of RNN, and the memories (sometimes known as the "thought vector") are transferred over to the decoder, also an RNN, essentially making this a conditional language model.  The code as it is written here is with text in mind, and supports multiple types of RNNs, including GRUs and LSTMs, as well as stacked layers.  The TensorFlow version also supports attention.
 

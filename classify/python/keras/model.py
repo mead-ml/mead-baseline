@@ -1,5 +1,5 @@
-from keras.models import Model, load_model
-from keras.layers import Dense, Activation, Convolution1D, Embedding, Input, merge, GlobalMaxPooling1D, Dropout
+from keras.models import Model
+from keras.layers import Dense, Convolution1D, Embedding, Input, merge, GlobalMaxPooling1D, Dropout
 
 
 # Use the functional API since we support parallel convolutions

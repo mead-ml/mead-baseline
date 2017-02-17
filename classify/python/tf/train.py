@@ -42,12 +42,8 @@ class Trainer:
     def train(self, ts, dropout, batchsz=1):
 
         total_loss = total_corr = total = 0
-        steps = int(math.floor(len(ts)/float(batchsz)))
-
         start_time = time.time()
-
         steps = int(math.floor(len(ts)/float(batchsz)))
-
         shuffle = np.random.permutation(np.arange(steps))
 
         for i in range(steps):
