@@ -135,12 +135,11 @@ This has been tested on oct27 train, dev and test splits (http://www.cs.cmu.edu/
 
 ## Running It
 
-```
 Here is an example using convolutional filters for character embeddings, alongside word embeddings.  This is basically a combination of the dos Santos approach with the Kim parallel filter idea using TensorFlow:
 
 ```
-
 python tag_char_rnn.py --rnn blstm --patience 20 --optim adam --eta 0.01 --epochs 40 --batchsz 20 --hsz 200 --train $OCT_SPLITS/oct27.train --valid $OCT_SPLITS/oct27.dev --test $OCT_SPLITS/oct27.test --embed /data/xdata/oct-s140clean-uber.cbow-bin --cfiltsz "1,2,3,4,5,7" --wsz 30
+```
 
 For  PyTorch, the arguments are space delimited
 
@@ -158,8 +157,8 @@ python tag_char_rnn.py --rnn blstm --patience 70 --numrnn 1 --optim sgd --eta 0.
 --test  $CONLL/eng.testb \
 --embed /data/xdata/GoogleNews-vectors-negative300.bin \
 --cfiltsz "1,2,3,4,5,7" --wsz 30 --fscore 1
-
 ```
+
 This will report an F1 score on at each validation pass, and will use F1 for early-stopping as well.
 
 ### Global coherency with a CRF (currently TensorFlow only)
