@@ -1,0 +1,97 @@
+import numpy as np
+import time
+import tensorflow as tf
+from data import batch
+
+class Trainer(object):
+
+    # TODO: Get rid of this lame stuff in favor of tf.contrib.optimize_loss!  Its way better!
+    def __init__(self, sess, model, outdir, optim, eta, max_grad_norm):
+        self.sess = sess
+        self.model = model
+        self.loss = model.create_loss()
+        self.outdir = outdir
+        self.global_step = tf.Variable(0, name='global_step', trainable=False)
+        tvars = tf.trainable_variables()
+        grads, _ = tf.clip_by_global_norm(tf.gradients(self.loss, tvars), max_grad_norm)
+        if optim == 'adadelta':
+            optimizer = tf.train.AdadeltaOptimizer(eta, 0.95, 1e-6)
+        elif optim == 'adam':
+            optimizer = tf.train.AdamOptimizer(eta)
+        else:
+            optimizer = tf.train.GradientDescentOptimizer(eta)
+
+        self.train_op = optimizer.apply_gradients(
+            zip(grads, tvars),
+            global_step=self.global_step)
+
+        self.loss_summary = tf.summary.scalar("loss", self.loss)
+        self.summary_op = tf.summary.merge_all()
+        self.train_writer = tf.summary.FileWriter(self.outdir + "/train", sess.graph)
+
+    def checkpoint(self, name):
+        self.model.saver.save(self.sess, self.outdir + "/train/" + name, global_step=self.global_step)
+
+    def recover_last_checkpoint(self):
+        latest = tf.train.latest_checkpoint(self.outdir + "/train/")
+        print("Reloading " + latest)
+        self.model.saver.restore(self.sess, latest)
+
+    def train(self, ts, pkeep):
+        return self._run_epoch('Train', ts, pkeep, self.train_op)
+
+    def test(self, ts, phase='Test'):
+        return self._run_epoch(phase, ts, 1.0)
+
+    def _run_epoch(self, phase, ts, pkeep, is_training=False):
+        """Runs the model on the given data."""
+        start_time = time.time()
+        costs = 0.0
+        iters = 0
+        state = self.sess.run(self.model.initial_state)
+
+        fetches = {
+            "loss": self.loss,
+            "final_state": self.model.final_state,
+        }
+        if is_training:
+            fetches["train_op"] = self.train_op
+            fetches["global_step"] = self.global_step
+            fetches["summary_str"] = self.summary_op
+
+        step = 0
+
+        nbptt = self.model.batch_info['nbptt']
+        maxw = self.model.batch_info['maxw']
+        batchsz = self.model.batch_info['batchsz']
+        for next_batch in batch(ts, nbptt, batchsz, maxw):
+
+            feed_dict = {
+                self.model.x: next_batch[0],
+                self.model.xch: next_batch[1],
+                self.model.y: next_batch[2],
+                self.model.pkeep: pkeep
+            }
+            for i, (c, h) in enumerate(self.model.initial_state):
+                feed_dict[c] = state[i].c
+                feed_dict[h] = state[i].h
+
+            vals = self.sess.run(fetches, feed_dict)
+            cost = vals["loss"]
+            state = vals["final_state"]
+            if is_training:
+                summary_str = vals["summary_str"]
+                step = vals["global_step"]
+                self.train_writer.add_summary(summary_str, step)
+            costs += cost
+            iters += nbptt
+            step += 1
+            if step % 500 == 0:
+                print("step [%d] perplexity: %.3f" % (step, np.exp(costs / iters)))
+
+        duration = time.time() - start_time
+        avg_loss = costs / iters
+        perplexity = np.exp(costs / iters)
+        print('%s (Loss %.4f) (Perplexity = %.4f) (%.3f sec)' % (phase, avg_loss, perplexity, duration))
+        return perplexity
+

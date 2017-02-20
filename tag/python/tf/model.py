@@ -41,7 +41,7 @@ def viz_embeddings(char_vec, word_vec, outdir, train_writer):
         _viz_embedding(proj_conf, word_vec, outdir, 'WordLUT')
     projector.visualize_embeddings(train_writer, proj_conf)
 
-def char_word_conv_embeddings(char_vec, maxw, filtsz, char_dsz, wsz):
+def char_word_conv_embeddings(char_vec, filtsz, char_dsz, wsz):
 
     expanded = tf.expand_dims(char_vec, -1)
 
@@ -82,7 +82,7 @@ def char_word_conv_embeddings(char_vec, maxw, filtsz, char_dsz, wsz):
     return joined
 
 
-def shared_char_word(Wch, xch_i, maxw, filtsz, char_dsz, wsz, reuse):
+def shared_char_word(Wch, xch_i, filtsz, char_dsz, wsz, reuse):
 
     with tf.variable_scope("SharedCharWord", reuse=reuse):
         # Zeropad the letters out to half the max filter size, to account for
@@ -91,13 +91,11 @@ def shared_char_word(Wch, xch_i, maxw, filtsz, char_dsz, wsz, reuse):
         # start with zeros
         mxfiltsz = np.max(filtsz)
         halffiltsz = int(math.floor(mxfiltsz / 2))
-        #zeropad = tf.Print(xch_i, [tf.shape(xch_i)])
         zeropad = tf.pad(xch_i, [[0,0], [halffiltsz, halffiltsz]], "CONSTANT")
         cembed = tf.nn.embedding_lookup(Wch, zeropad)
-        #cembed = tf.nn.embedding_lookup(Wch, xch_i)
         if len(filtsz) == 0 or filtsz[0] == 0:
             return tf.reduce_sum(cembed, [1])
-        return char_word_conv_embeddings(cembed, maxw, filtsz, char_dsz, wsz)
+        return char_word_conv_embeddings(cembed, filtsz, char_dsz, wsz)
 
 class TaggerModel:
 
@@ -271,7 +269,7 @@ class TaggerModel:
             self.word_vocab = word_vec.vocab
         self.char_vocab = char_vec.vocab
 
-        filtsz = [int(filt) for filt in filtsz.split(',') ]
+        filtsz = [int(filt) for filt in filtsz.split(',')]
 
 
         if word_vec is not None:
@@ -292,7 +290,7 @@ class TaggerModel:
                 xch_seq = tensor2seq(self.xch)
                 cembed_seq = []
                 for i, xch_i in enumerate(xch_seq):
-                    cembed_seq.append(shared_char_word(Wc, xch_i, maxw, filtsz, char_dsz, wsz, None if i == 0 else True))
+                    cembed_seq.append(shared_char_word(Wc, xch_i, filtsz, char_dsz, wsz, None if i == 0 else True))
                 word_char = seq2tensor(cembed_seq)
 
             # List to tensor, reform as (T, B, W)
