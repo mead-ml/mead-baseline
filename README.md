@@ -190,20 +190,12 @@ For any reasonable size data, this really needs to run on the GPU for realistic 
 
 This model is implemented in TensorFlow, Torch, and PyTorch.  The TensorFlow currently is the only implementation that supports using attention.
 
-# Distance metrics using Siamese Networks
+# Language Modeling with Recurrent Neural Networks
 
-Siamese networks have been shown to be useful for tasks such as paraphrase detection, and are generally helpful for learning similarity/distance metrics.  The siamese network provided here is a convolutional neural net, based on the classify_sentence model above.  It uses an L2 (pairwise distance) metric function and a contrastive loss function to determine a distance between pairs.  For example, for a paraphrase corpus, the data will include 2 sentences and a label (0,1) stating whether or not the two documents are paraphases.  The Siamese network then learns a distance mapping from this data.
+This code is a WIP and currently implemented in TensorFlow only.  There are two implemented models based on these two papers:
 
-# siamese-fine: Parallel CNNs with shared weights, using Word2Vec input + fine-tuning with an L2 loss function
+  - Character-Aware Neural Language Models (Kim, Jernite, Sontag, Rush)
+    - https://arxiv.org/pdf/1508.06615.pdf
+  - Recurrent Neural Network Regularization (Zaremba, Vinyals, Sutskever) (2014)
+    - https://arxiv.org/pdf/1409.2329.pdf
 
-This example shows how to use a simple flat CNN with fine-tuning and ReLU activation (with dropout):
-
-```
-th siamese-fine.lua -optim adagrad -epochs 50 -patience 25 -cmotsz 100 -embed /data/xdata/oct-s140clean-uber.cbow-bin -train /data/xdata/para/tw/train.txt -valid /data/xdata/para/tw/dev.txt -eval /data/xdata/para/tw/test.txt
-```
-Same, but with an additional linear hidden layer
-
-```
-th siamese-fine.lua -optim adagrad -epochs 50 -patience 25 -cmotsz 100 -hsz 80 -embed /data/xdata/oct-s140clean-uber.cbow-bin -train /data/xdata/para/tw/train.txt -valid /data/xdata/para/tw/dev.txt -eval /data/xdata/para/tw/test.txt
-
-```
