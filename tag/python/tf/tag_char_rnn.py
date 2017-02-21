@@ -123,6 +123,7 @@ with tf.Graph().as_default():
                      maxs,
                      maxw,
                      FLAGS.rnn,
+                     FLAGS.numrnn,
                      FLAGS.wsz,
                      FLAGS.hsz,
                      FLAGS.cfiltsz,

@@ -14,8 +14,8 @@ def skip_conns(inputs, wsz_all, n):
             b_p = tf.get_variable("B_p", [1, wsz_all], initializer=tf.constant_initializer(0.0))
             proj = tf.nn.relu(tf.matmul(inputs, W_p) + b_p, "relu")
 
-        input = input + proj
-    return input
+        inputs = inputs + proj
+    return inputs
 
 def char_word_conv_embeddings(char_vec, filtsz, char_dsz, wsz):
 
@@ -25,8 +25,7 @@ def char_word_conv_embeddings(char_vec, filtsz, char_dsz, wsz):
     for i, fsz in enumerate(filtsz):
         with tf.variable_scope('cmot-%s' % fsz):
 
-
-            kernel_shape =  [fsz, char_dsz, 1, wsz]
+            kernel_shape = [fsz, char_dsz, 1, wsz]
 
             # Weight tying
             W = tf.get_variable("W", kernel_shape, initializer=tf.random_normal_initializer())

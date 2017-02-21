@@ -10,21 +10,20 @@ import math
 import os
 
 
-# (B, T, L), gets a one out of L at each T if its populated
-# Then get a sum of the populated values
-def sentence_lengths(yfilled):
-    used = tf.sign(tf.reduce_max(tf.abs(yfilled), reduction_indices=2))
-    lengths = tf.reduce_sum(used, reduction_indices=1)
-    lengths = tf.cast(lengths, tf.int32)
-    total = tf.reduce_sum(lengths)
-    #return length
-    return total
-
 def tensor2seq(tensor):
     return tf.unstack(tf.transpose(tensor, perm=[1, 0, 2]))
 
+
 def seq2tensor(sequence):
     return tf.transpose(tf.stack(sequence), perm=[1, 0, 2])
+
+
+def lstm_cell_w_dropout(hsz, pkeep):
+    return tf.contrib.rnn.DropoutWrapper(tf.contrib.rnn.BasicLSTMCell(hsz, forget_bias=0.0, state_is_tuple=True), output_keep_prob=pkeep)
+
+
+def stacked_lstm(hsz, pkeep, nlayers):
+    return tf.contrib.rnn.MultiRNNCell([lstm_cell_w_dropout(hsz, pkeep) for _ in range(nlayers)], state_is_tuple=True)
 
 
 def _viz_embedding(proj_conf, emb, outdir, which):
@@ -32,6 +31,7 @@ def _viz_embedding(proj_conf, emb, outdir, which):
     emb_conf.tensor_name = '%s/W' % which
     emb_conf.metadata_path = outdir + "/train/metadata-%s.tsv" % which
     write_embeddings_tsv(emb, emb_conf.metadata_path)
+
 
 def viz_embeddings(char_vec, word_vec, outdir, train_writer):
     print('Setting up word embedding visualization')
@@ -41,16 +41,26 @@ def viz_embeddings(char_vec, word_vec, outdir, train_writer):
         _viz_embedding(proj_conf, word_vec, outdir, 'WordLUT')
     projector.visualize_embeddings(train_writer, proj_conf)
 
+
+def skip_conns(inputs, wsz_all, n):
+    for i in range(n):
+        with tf.variable_scope("skip-%d" % i):
+            W_p = tf.get_variable("W_p", [wsz_all, wsz_all])
+            b_p = tf.get_variable("B_p", [1, wsz_all], initializer=tf.constant_initializer(0.0))
+            proj = tf.nn.relu(tf.matmul(inputs, W_p) + b_p, "relu")
+
+        inputs = inputs + proj
+    return inputs
+
+
 def char_word_conv_embeddings(char_vec, filtsz, char_dsz, wsz):
 
     expanded = tf.expand_dims(char_vec, -1)
-
     mots = []
     for i, fsz in enumerate(filtsz):
         with tf.variable_scope('cmot-%s' % fsz):
 
-
-            kernel_shape =  [fsz, char_dsz, 1, wsz]
+            kernel_shape = [fsz, char_dsz, 1, wsz]
             
             # Weight tying
             W = tf.get_variable("W", kernel_shape, initializer=tf.random_normal_initializer())
@@ -69,18 +79,8 @@ def char_word_conv_embeddings(char_vec, filtsz, char_dsz, wsz):
     wsz_all = wsz * len(mots)
     combine = tf.reshape(tf.concat(values=mots, axis=3), [-1, wsz_all])
 
-    # Make a skip connection
-
-#    with tf.name_scope("proj"):
-    with tf.variable_scope("proj"):
-
-        W_p = tf.get_variable("W_p", [wsz_all, wsz_all], initializer=tf.random_normal_initializer())
-        b_p = tf.get_variable("B_p", [1, wsz_all], initializer=tf.constant_initializer(0.0))
-        proj = tf.nn.relu(tf.matmul(combine, W_p) + b_p, "proj")
-
-    joined = combine + proj
+    joined = skip_conns(combine, wsz_all, 1)
     return joined
-
 
 def shared_char_word(Wch, xch_i, filtsz, char_dsz, wsz, reuse):
 
@@ -252,7 +252,7 @@ class TaggerModel:
             self.pkeep: pkeep
         }
 
-    def params(self, labels, word_vec, char_vec, mxlen, maxw, rnntype, wsz, hsz, filtsz, crf=False):
+    def params(self, labels, word_vec, char_vec, mxlen, maxw, rnntype, nlayers, wsz, hsz, filtsz, crf=False):
 
         self.crf = crf
         char_dsz = char_vec.dsz
@@ -302,13 +302,13 @@ class TaggerModel:
             embedseq = tensor2seq(joint)
 
             if rnntype == 'blstm':
-                rnnfwd = tf.contrib.rnn.BasicLSTMCell(hsz)
-                rnnbwd = tf.contrib.rnn.BasicLSTMCell(hsz)
+                rnnfwd = stacked_lstm(hsz, self.pkeep, nlayers)
+                rnnbwd = stacked_lstm(hsz, self.pkeep, nlayers)
 
                 # Primitive will wrap the fwd and bwd, reverse signal for bwd, unroll
                 rnnseq, _, __ = tf.contrib.rnn.static_bidirectional_rnn(rnnfwd, rnnbwd, embedseq, dtype=tf.float32)
             else:
-                rnnfwd = tf.contrib.rnn.BasicLSTMCell(hsz)
+                rnnfwd = stacked_lstm(hsz, self.pkeep, nlayers)
                 # Primitive will wrap RNN and unroll in time
                 rnnseq, _ = tf.contrib.rnn.static_rnn(rnnfwd, embedseq, dtype=tf.float32)
 

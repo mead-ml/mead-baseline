@@ -176,6 +176,16 @@ python tag_char_rnn.py --rnn blstm --patience 70 --numrnn 1 --optim sgd --eta 0.
 
 This model is implemented in TensorFlow, Torch, and PyTorch.  The TensorFlow currently is the only implementation that supports using a CRF layer on the top.
 
+### Latest Runs
+
+Here are the last observed performance scores using _tag_char_rnn_ with a 1-layer BLSTM on Twitter POS.  It was run with the Adam optimizer and a learning rate of 0.01 for up to 40 epochs.
+TODO: Add F-measure based NER CONLL data scores
+
+| Dataset   | TensorFlow | PyTorch |
+| --------- | ---------- | ------- |
+| twpos-v03 |      89.22 |   88.93 |
+
+
 # Seq2Seq
 
 Encoder-decoder frameworks have been used for Statistical Machine Translation, Image Captioning, ASR, Conversation Modeling, Formula Generation and many other applications.  Seq2seq is a type of encoder-decoder implementation, where the encoder is some sort of RNN, and the memories (sometimes known as the "thought vector") are transferred over to the decoder, also an RNN, essentially making this a conditional language model.  The code as it is written here is with text in mind, and supports multiple types of RNNs, including GRUs and LSTMs, as well as stacked layers.  The TensorFlow version also supports attention.
