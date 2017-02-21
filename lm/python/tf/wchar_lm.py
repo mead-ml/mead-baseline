@@ -114,6 +114,7 @@ with tf.Graph().as_default():
 
         last_improved = 0
         for i in range(FLAGS.epochs):
+            print('Epoch %d' % (i + 1))
             train_perplexity = trainer.train(ts, 1.0 - FLAGS.dropout)
             valid_perplexity = trainer.test(vs, phase='Validation')
 

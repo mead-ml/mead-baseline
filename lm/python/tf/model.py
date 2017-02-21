@@ -6,7 +6,7 @@ import math
 def lstm_cell(hsz):
     return tf.contrib.rnn.BasicLSTMCell(hsz, forget_bias=0.0, state_is_tuple=True)
 
-# TODO: Compare res vs highway
+
 def skip_conns(inputs, wsz_all, n):
     for i in range(n):
         with tf.variable_scope("skip-%d" % i):
@@ -17,19 +17,39 @@ def skip_conns(inputs, wsz_all, n):
         inputs = inputs + proj
     return inputs
 
-def char_word_conv_embeddings(char_vec, filtsz, char_dsz, wsz):
+
+def highway_conns(inputs, wsz_all, n):
+    for i in range(n):
+        with tf.variable_scope("highway-%d" % i):
+            W_p = tf.get_variable("W_p", [wsz_all, wsz_all])
+            b_p = tf.get_variable("B_p", [1, wsz_all], initializer=tf.constant_initializer(0.0))
+            proj = tf.nn.relu(tf.matmul(inputs, W_p) + b_p, "relu-proj")
+
+            W_t = tf.get_variable("W_t", [wsz_all, wsz_all])
+            b_t = tf.get_variable("B_t", [1, wsz_all], initializer=tf.constant_initializer(-2.0))
+            transform = tf.nn.sigmoid(tf.matmul(inputs, W_t) + b_t, "sigmoid-transform")
+
+        inputs = tf.multiply(transform, proj) + tf.multiply(inputs, 1 - transform)
+    return inputs
+
+
+def char_word_conv_embeddings(char_vec, filtsz, char_dsz, nfeat_factor, max_feat=200):
 
     expanded = tf.expand_dims(char_vec, -1)
-
     mots = []
+    wsz_all = 0
+    # wsz is feature factor
     for i, fsz in enumerate(filtsz):
+
+        nfeat = min(nfeat_factor * fsz, max_feat)
+        wsz_all += nfeat
         with tf.variable_scope('cmot-%s' % fsz):
 
-            kernel_shape = [fsz, char_dsz, 1, wsz]
+            kernel_shape = [fsz, char_dsz, 1, nfeat]
 
             # Weight tying
             W = tf.get_variable("W", kernel_shape, initializer=tf.random_normal_initializer())
-            b = tf.get_variable("b", [wsz], initializer=tf.constant_initializer(0.0))
+            b = tf.get_variable("b", [nfeat], initializer=tf.constant_initializer(0.0))
 
             conv = tf.nn.conv2d(expanded,
                                 W, strides=[1,1,1,1],
@@ -41,10 +61,10 @@ def char_word_conv_embeddings(char_vec, filtsz, char_dsz, wsz):
             # Add back in the dropout
             mots.append(mot)
 
-    wsz_all = wsz * len(mots)
     combine = tf.reshape(tf.concat(values=mots, axis=3), [-1, wsz_all])
-    joined = skip_conns(combine, wsz_all, 1)
+    joined = highway_conns(combine, wsz_all, 1)
     return joined
+
 
 def shared_char_word(Wch, xch_i, filtsz, char_dsz, wsz, reuse):
 
@@ -59,22 +79,26 @@ def shared_char_word(Wch, xch_i, filtsz, char_dsz, wsz, reuse):
 def tensor2seq(tensor):
     return tf.unstack(tf.transpose(tensor, perm=[1, 0, 2]))
 
+
 def seq2tensor(sequence):
     return tf.transpose(tf.stack(sequence), perm=[1, 0, 2])
+
 
 class AbstractLanguageModel(object):
 
     def __init__(self):
         pass
+
     def save_using(self, saver):
         self.saver = saver
 
     def _rnnlm(self, hsz, nlayers, batchsz, inputs, vsz):
-        def attn_cell(hsz):
+
+        def attn_cell():
             return tf.contrib.rnn.DropoutWrapper(lstm_cell(hsz), output_keep_prob=self.pkeep)
 
         cell = tf.contrib.rnn.MultiRNNCell(
-            [attn_cell(hsz) for _ in range(nlayers)], state_is_tuple=True)
+            [attn_cell() for _ in range(nlayers)], state_is_tuple=True)
 
         self.initial_state = cell.zero_state(batchsz, tf.float32)
         outputs, state = tf.contrib.rnn.static_rnn(cell, inputs, initial_state=self.initial_state, dtype=tf.float32)
@@ -88,7 +112,6 @@ class AbstractLanguageModel(object):
 
             self.logits = tf.nn.xw_plus_b(output, softmax_w, softmax_b, name="logits")
         self.final_state = state
-
 
     def save_values(self, sess, outdir, base):
         basename = outdir + '/' + base
@@ -107,6 +130,7 @@ class AbstractLanguageModel(object):
                 [tf.ones([tf.size(targets)], dtype=tf.float32)])
             loss = tf.reduce_sum(loss) / self.batch_info['batchsz']
             return loss
+
 
 class WordLanguageModel(AbstractLanguageModel):
 
@@ -145,7 +169,6 @@ class WordLanguageModel(AbstractLanguageModel):
                 json.dump(self.word_vocab, f)
         with open(basename + '-batch_dims.json', 'w') as f:
             json.dump(self.batch_info, f)
-
 
 
 class CharCompLanguageModel(AbstractLanguageModel):

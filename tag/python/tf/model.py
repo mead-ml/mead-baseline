@@ -1,6 +1,5 @@
 import numpy as np
 import tensorflow as tf
-from data import revlut
 from google.protobuf import text_format
 from tensorflow.python.platform import gfile
 from tensorflow.contrib.tensorboard.plugins import projector
@@ -53,6 +52,21 @@ def skip_conns(inputs, wsz_all, n):
     return inputs
 
 
+def highway_conns(inputs, wsz_all, n):
+    for i in range(n):
+        with tf.variable_scope("highway-%d" % i):
+            W_p = tf.get_variable("W_p", [wsz_all, wsz_all])
+            b_p = tf.get_variable("B_p", [1, wsz_all], initializer=tf.constant_initializer(0.0))
+            proj = tf.nn.relu(tf.matmul(inputs, W_p) + b_p, "relu-proj")
+
+            W_t = tf.get_variable("W_t", [wsz_all, wsz_all])
+            b_t = tf.get_variable("B_t", [1, wsz_all], initializer=tf.constant_initializer(-2.0))
+            transform = tf.nn.sigmoid(tf.matmul(inputs, W_t) + b_t, "sigmoid-transform")
+
+        inputs = tf.multiply(transform, proj) + tf.multiply(inputs, 1 - transform)
+    return inputs
+
+
 def char_word_conv_embeddings(char_vec, filtsz, char_dsz, wsz):
 
     expanded = tf.expand_dims(char_vec, -1)
@@ -79,6 +93,7 @@ def char_word_conv_embeddings(char_vec, filtsz, char_dsz, wsz):
     wsz_all = wsz * len(mots)
     combine = tf.reshape(tf.concat(values=mots, axis=3), [-1, wsz_all])
 
+    # joined = highway_conns(combine, wsz_all, 1)
     joined = skip_conns(combine, wsz_all, 1)
     return joined
 
@@ -156,7 +171,6 @@ class TaggerModel:
                 print('Failed to get transition matrix, setting crf=False')
                 self.A = None
                 self.crf = False
-
 
         with open(basename + '.labels', 'r') as f:
             self.labels = json.load(f)
@@ -253,8 +267,6 @@ class TaggerModel:
         self.y = tf.placeholder(tf.int32, [None, mxlen], name="y")
         self.pkeep = tf.placeholder(tf.float32, name="pkeep")
         self.labels = labels
-
-        
         self.word_vocab = {}
         if word_vec is not None:
             self.word_vocab = word_vec.vocab
@@ -316,4 +328,3 @@ class TaggerModel:
             self.probs = seq2tensor(preds)
             self.best = tf.argmax(self.probs, 2)
             # going back to sparse representation
-    

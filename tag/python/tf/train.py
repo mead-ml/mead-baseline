@@ -31,7 +31,6 @@ class Evaluator:
 
         sentence_lengths = batch["length"]
         truth = batch["y"]
-        feed_dict = self.model.ex2dict(batch, 1)
         guess = self.model.predict(self.sess, batch)
         correct_labels = 0
         total_labels = 0
@@ -66,7 +65,6 @@ class Evaluator:
                 idx = batch["id"][b]
                 txt = txts[idx]
                 self._write_sentence_conll(handle, sentence, gold, txt) 
-                
 
         return correct_labels, total_labels, overlap_count, gold_count, guess_count
 
