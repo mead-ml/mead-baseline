@@ -44,11 +44,9 @@ Here are some places where this code is known to perform well:
   - Language Detection (using word and char embeddings)
   - Question Categorization (QA trec)
 
-This architecture doesn't seem to perform especially well on long posts compared to NBSVM or even SVM.  However, this pattern is used to good effect as a compositional portion of larger models by various researchers.
-
 If you are looking specifically for Yoon Kim's multi-channel model, his code is open source (https://github.com/yoonkim/CNN_sentence) and there is another project on Github from Harvard NLP which recreates it in Torch (https://github.com/harvardnlp/sent-conv-torch).  By focusing on the static and non-static models, we are able to keep this code lean, easy to understand, and applicable as a baseline to a broad range of problems.
 
-There are some options in each implementation that might vary slightly, but each approach implementation has been tested separately.
+There are some options in each implementation that might vary slightly, but this approach should do at least as well as the original paper.
 
 ## Fine-tuning Embedding (LookupTable) layer
 The (default) fine-tuning approach loads the word2vec weight matrix into an Lookup Table.  As we can see from the Kim paper, dynamic/fine-tuning embedding models do not always out-perform static models, However, they tend to do better.
