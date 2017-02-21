@@ -82,6 +82,7 @@ def char_word_conv_embeddings(char_vec, filtsz, char_dsz, wsz):
     joined = skip_conns(combine, wsz_all, 1)
     return joined
 
+
 def shared_char_word(Wch, xch_i, filtsz, char_dsz, wsz, reuse):
 
     with tf.variable_scope("SharedCharWord", reuse=reuse):
@@ -177,7 +178,7 @@ class TaggerModel:
     def save_using(self, saver):
         self.saver = saver
 
-    def _compute_word_level_loss(self, gold, mask):
+    def _compute_word_level_loss(self, mask):
 
         nc = len(self.labels)
         # Cross entropy loss
@@ -188,10 +189,9 @@ class TaggerModel:
         all_loss = tf.reduce_mean(cross_entropy, name="loss")
         return all_loss
 
-    def _compute_sentence_level_loss(self, gold, mask, lengths):
+    def _compute_sentence_level_loss(self, lengths):
 
         ll, self.A = tf.contrib.crf.crf_log_likelihood(self.probs, self.y, lengths)
-        all_total = tf.reduce_sum(lengths, name="total")
         return tf.reduce_mean(-ll)
 
     def create_loss(self):
@@ -202,23 +202,14 @@ class TaggerModel:
 
             lengths = tf.reduce_sum(mask, name="lengths",
                                     reduction_indices=1)
-
-            all_total = tf.reduce_sum(lengths, name="total")
-
             if self.crf is True:
                 print('crf=True, creating SLL')
-                all_loss = self._compute_sentence_level_loss(gold, mask, lengths)
+                all_loss = self._compute_sentence_level_loss(lengths)
             else:
                 print('crf=False, creating WLL')
-                all_loss = self._compute_word_level_loss(gold, mask)
+                all_loss = self._compute_word_level_loss(mask)
 
-        #err = tf.not_equal(tf.cast(self.best, tf.float32), gold)
-        #err = tf.cast(err, tf.float32)
-        #err *= mask
-        #all_err = tf.reduce_sum(err)
-
-        return all_loss #, all_err, all_total
-
+        return all_loss
 
     def predict(self, sess, batch):
         
@@ -270,7 +261,6 @@ class TaggerModel:
         self.char_vocab = char_vec.vocab
 
         filtsz = [int(filt) for filt in filtsz.split(',')]
-
 
         if word_vec is not None:
             with tf.name_scope("WordLUT"):

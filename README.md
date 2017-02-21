@@ -2,7 +2,7 @@ baseline
 =========
 Simple, Strong Deep-Learning Baselines for NLP in several frameworks
 
-Stand-alone baselines implemented with multiple deep learning tools, including CNN sentence modeling, RNN/LSTM-based tagging, seq2seq, and siamese networks for similarity analysis.
+Stand-alone baselines implemented with multiple deep learning tools, including CNN sentence modeling, RNN/LSTM-based tagging, seq2seq, and language modeling.
 
 # Overview
 
@@ -91,7 +91,7 @@ PyTorch and Keras have almost the same usage, but they use Python's builtin CL p
 
 This model is implemented in TensorFlow, Keras, Torch, and PyTorch.  Currently, the PyTorch model does not support 'static' embeddings.  The Keras model currently does not use an 'eta' parameter.  Weight initialization techniques vary slightly across implementations at the moment.
 
-All of the models should typically achieve the dynamic fine-tune results on SST from the Kim paper, though there is some slight variation between runs (I have seen accuracy as high as 88.36%, which is higher than even the stereo approach reported in the paper).  I have found that random uniform initialization of the convolutional layers with Glorot initialization on the fully-connected layers tends to work well, so that is what happens here in TensorFlow (and is default in Keras).
+All of the models should typically achieve the dynamic fine-tune results on SST from the Kim paper, though there is some slight variation between runs (I have seen accuracy as high as *88.36%!*).  I have found that random uniform initialization of the convolutional layers with Glorot initialization on the fully-connected layers tends to work well, so that is what happens here in TensorFlow (and is default in Keras).
 
 ### Latest Runs
 
@@ -179,12 +179,10 @@ This model is implemented in TensorFlow, Torch, and PyTorch.  The TensorFlow cur
 ### Latest Runs
 
 Here are the last observed performance scores using _tag_char_rnn_ with a 1-layer BLSTM on Twitter POS.  It was run with the Adam optimizer and a learning rate of 0.01 for up to 40 epochs.
-TODO: Add F-measure based NER CONLL data scores
 
-| Dataset   | TensorFlow | PyTorch |
-| --------- | ---------- | ------- |
-| twpos-v03 |      89.22 |   88.93 |
-
+| Dataset   | Metric | TensorFlow | PyTorch |
+| --------- | ------ | ---------- | ------- |
+| twpos-v03 |    Acc |      89.22 |   88.93 |
 
 # Seq2Seq
 
