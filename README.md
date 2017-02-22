@@ -205,3 +205,20 @@ This code is a WIP and currently implemented in TensorFlow only.  There are two 
   - Character-Aware Neural Language Models (Kim, Jernite, Sontag, Rush)
     - https://arxiv.org/pdf/1508.06615.pdf
 
+To run the Zaremba model with their "medium regularized LSTM" configuration, early stopping, and pre-trained word vectors:
+
+
+```
+python wchar_lm.py --optim sgd --eta 1 --epochs 39 --decay_rate 1.2 \
+    --batchsz 20 --unif 0.05 --hsz 650 \
+    --train /data/ptb/train.txt \
+    --valid /data/ptb/valid.txt \
+    --test /data/ptb/test.txt \
+    --embed /data/GoogleNews-vectors-negative300.bin
+```
+
+| Dataset   |   Metric   | Framework  | Dev    |  Test   |
+| --------- | ---------- | ---------- | ------ | ------- |
+|       ptb | perplexity | TensorFlow | 80.168 | _77.2213_ |
+
+Dev perplexity observed was 
