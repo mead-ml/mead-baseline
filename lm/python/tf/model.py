@@ -48,21 +48,21 @@ def char_word_conv_embeddings(char_vec, filtsz, char_dsz, nfeat_factor, max_feat
             kernel_shape = [fsz, char_dsz, 1, nfeat]
 
             # Weight tying
-            W = tf.get_variable("W", kernel_shape, initializer=tf.random_normal_initializer())
+            W = tf.get_variable("W", kernel_shape)
             b = tf.get_variable("b", [nfeat], initializer=tf.constant_initializer(0.0))
 
             conv = tf.nn.conv2d(expanded,
                                 W, strides=[1,1,1,1],
                                 padding="VALID", name="conv")
 
-            activation = tf.nn.relu(tf.nn.bias_add(conv, b), "activation")
+            activation = tf.nn.tanh(tf.nn.bias_add(conv, b), "activation")
 
             mot = tf.reduce_max(activation, [1], keep_dims=True)
             # Add back in the dropout
             mots.append(mot)
 
     combine = tf.reshape(tf.concat(values=mots, axis=3), [-1, wsz_all])
-    joined = highway_conns(combine, wsz_all, 1)
+    joined = highway_conns(combine, wsz_all, 2)
     return joined
 
 
@@ -104,13 +104,11 @@ class AbstractLanguageModel(object):
         outputs, state = tf.contrib.rnn.static_rnn(cell, inputs, initial_state=self.initial_state, dtype=tf.float32)
         output = tf.reshape(tf.concat(outputs, 1), [-1, hsz])
 
-        with tf.name_scope("Output"):
-
-            softmax_w = tf.get_variable(
+        softmax_w = tf.get_variable(
                 "softmax_w", [hsz, vsz], dtype=tf.float32)
-            softmax_b = tf.get_variable("softmax_b", [vsz], dtype=tf.float32)
+        softmax_b = tf.get_variable("softmax_b", [vsz], dtype=tf.float32)
 
-            self.logits = tf.nn.xw_plus_b(output, softmax_w, softmax_b, name="logits")
+        self.logits = tf.nn.xw_plus_b(output, softmax_w, softmax_b, name="logits")
         self.final_state = state
 
     def save_values(self, sess, outdir, base):
@@ -138,6 +136,7 @@ class WordLanguageModel(AbstractLanguageModel):
         AbstractLanguageModel.__init__(self)
 
     def params(self, batchsz, nbptt, maxw, word_vec, hsz, nlayers):
+
 
         self.x = tf.placeholder(tf.int32, [None, nbptt], name="x")
         self.xch = tf.placeholder(tf.int32, [None, nbptt, maxw], name="xch")
@@ -189,21 +188,21 @@ class CharCompLanguageModel(AbstractLanguageModel):
 
         char_dsz = char_vec.dsz
 
-        with tf.name_scope("CharLUT"):
-            Wc = tf.Variable(tf.constant(char_vec.weights, dtype=tf.float32), name="W")
 
-            ce0 = tf.scatter_update(Wc, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, char_dsz]))
+        Wc = tf.Variable(tf.constant(char_vec.weights, dtype=tf.float32), name="Wch")
 
-            with tf.control_dependencies([ce0]):
-                xch_seq = tensor2seq(self.xch)
-                cembed_seq = []
-                for i, xch_i in enumerate(xch_seq):
-                    cembed_seq.append(shared_char_word(Wc, xch_i, filtsz, char_dsz, wsz, None if i == 0 else True))
-                word_char = seq2tensor(cembed_seq)
+        ce0 = tf.scatter_update(Wc, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, char_dsz]))
 
-            # List to tensor, reform as (T, B, W)
-            # Join embeddings along the third dimension
-            joint = word_char
+        with tf.control_dependencies([ce0]):
+            xch_seq = tensor2seq(self.xch)
+            cembed_seq = []
+            for i, xch_i in enumerate(xch_seq):
+                cembed_seq.append(shared_char_word(Wc, xch_i, filtsz, char_dsz, wsz, None if i == 0 else True))
+            word_char = seq2tensor(cembed_seq)
+
+        # List to tensor, reform as (T, B, W)
+        # Join embeddings along the third dimension
+        joint = word_char
 
         inputs = tf.nn.dropout(joint, self.pkeep)
         inputs = tf.unstack(inputs, num=nbptt, axis=1)

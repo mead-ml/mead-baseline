@@ -67,9 +67,16 @@ def batch(ts, nbptt, batchsz, wsz):
             xch[:, i*stride_ch:(i+1)*stride_ch].reshape((batchsz, nbptt, wsz)), \
             x[:, i*nbptt+1:(i+1)*nbptt+1].reshape((batchsz, nbptt))
 
+
+def num_steps_per_epoch(num_examples, nbptt, batchsz):
+    rest = num_examples // batchsz
+    return rest // nbptt
+
+
 def show_batch_words(batch, word_lut, limit=1000):
     for x in batch[0]:
         print(' '.join([word_lut[x[i]] for i in range(min(limit, x.shape[0]))]))
+
 
 def show_batch_letters(batch, char_lut, word_limit=1000, char_limit = 200):
     for xch in batch[1]:

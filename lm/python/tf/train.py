@@ -3,28 +3,50 @@ import time
 import tensorflow as tf
 from data import batch
 
+
+def zaremba_decay(eta, boundaries, decay_rate):
+
+    values = [eta/(decay_rate**i) for i in range(len(boundaries))]
+    print('Learning rate schedule:')
+    print(boundaries)
+    print(values)
+
+    def _decay(lr, global_step):
+        return tf.train.piecewise_constant(global_step, boundaries, values)
+    return _decay
+
+
+def exponential_staircase_decay(at_step=16000, decay_rate=0.5):
+
+    def _decay(lr, global_step):
+        return tf.train.exponential_decay(lr, global_step,
+                                          at_step, decay_rate, staircase=True)
+    return _decay
+
+
+def optimizer(optim, eta, loss_fn, max_grad_norm, boundaries, decay_rate):
+    global_step = tf.Variable(0, trainable=False)
+
+    if optim == 'adadelta':
+        optz = lambda lr: tf.train.AdadeltaOptimizer(lr, 0.95, 1e-6)
+
+    elif optim == 'adam':
+        optz = lambda lr: tf.train.AdamOptimizer(lr)
+    else:
+        optz = lambda lr: tf.train.GradientDescentOptimizer(lr)
+
+    lr_decay_fn = zaremba_decay(eta, boundaries, decay_rate)
+    return global_step, tf.contrib.layers.optimize_loss(loss_fn, global_step, eta, optz, clip_gradients=max_grad_norm, learning_rate_decay_fn=lr_decay_fn)
+
+
 class Trainer(object):
 
-    # TODO: Get rid of this lame stuff in favor of tf.contrib.optimize_loss!  Its way better!
-    def __init__(self, sess, model, outdir, optim, eta, max_grad_norm):
+    def __init__(self, sess, model, outdir, optim, eta, max_grad_norm, boundaries, decay_rate):
         self.sess = sess
         self.model = model
         self.loss = model.create_loss()
         self.outdir = outdir
-        self.global_step = tf.Variable(0, name='global_step', trainable=False)
-        tvars = tf.trainable_variables()
-        grads, _ = tf.clip_by_global_norm(tf.gradients(self.loss, tvars), max_grad_norm)
-        if optim == 'adadelta':
-            optimizer = tf.train.AdadeltaOptimizer(eta, 0.95, 1e-6)
-        elif optim == 'adam':
-            optimizer = tf.train.AdamOptimizer(eta)
-        else:
-            optimizer = tf.train.GradientDescentOptimizer(eta)
-
-        self.train_op = optimizer.apply_gradients(
-            zip(grads, tvars),
-            global_step=self.global_step)
-
+        self.global_step, self.train_op = optimizer(optim, eta, self.loss, float(max_grad_norm), boundaries, decay_rate)
         self.loss_summary = tf.summary.scalar("loss", self.loss)
         self.summary_op = tf.summary.merge_all()
         self.train_writer = tf.summary.FileWriter(self.outdir + "/train", sess.graph)
@@ -38,7 +60,7 @@ class Trainer(object):
         self.model.saver.restore(self.sess, latest)
 
     def train(self, ts, pkeep):
-        return self._run_epoch('Train', ts, pkeep, self.train_op)
+        return self._run_epoch('Train', ts, pkeep, True)
 
     def test(self, ts, phase='Test'):
         return self._run_epoch(phase, ts, 1.0)

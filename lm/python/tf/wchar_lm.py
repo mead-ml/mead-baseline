@@ -21,7 +21,7 @@ flags.DEFINE_integer('numrnn', 2, 'The depth of stacked RNNs')
 flags.DEFINE_string('outdir', 'out', 'Directory to put the output')
 flags.DEFINE_float('unif', 0.1, 'Initializer bounds for embeddings')
 flags.DEFINE_float('clip', 5, 'Gradient clipping cutoff')
-flags.DEFINE_integer('epochs', 1000, 'Number of epochs')
+flags.DEFINE_integer('epochs', 39, 'Number of epochs')
 flags.DEFINE_integer('batchsz', 20, 'Batch size')
 flags.DEFINE_integer('mxwlen', 40, 'Max word length')
 flags.DEFINE_integer('nbptt', 35, 'NBPTT steps')
@@ -36,8 +36,8 @@ flags.DEFINE_integer('fscore', 0, 'Use F-score in metrics and early stopping')
 flags.DEFINE_boolean('viz', False, 'Set up LUT vocabs for Tensorboard')
 flags.DEFINE_integer('test_thresh', 10, 'How many epochs improvement required before testing')
 flags.DEFINE_boolean('char', False, 'Use character-level modeling')
-
-flags.DEFINE_float('decay', 0.5, 'Learning rate decay')
+flags.DEFINE_integer('start_decay_epoch', 6, 'At what epoch should we start decaying')
+flags.DEFINE_float('decay_rate', 1.2, 'Learning rate decay')
 if path.exists(FLAGS.outdir) is False:
     print('Creating path: %s' % (FLAGS.outdir))
     makedirs(FLAGS.outdir)
@@ -86,25 +86,29 @@ print('Loaded test data')
 print('Using %d examples for training' % num_words[0])
 print('Using %d examples for validation' % num_words[1])
 print('Using %d examples for test' % num_words[2])
-
-
 best_valid_perplexity = 100000
+
 with tf.Graph().as_default():
-    initializer = tf.random_uniform_initializer(-FLAGS.unif, FLAGS.unif)
+
+    weight_initializer = tf.random_uniform_initializer(-FLAGS.unif, FLAGS.unif)
 
     lm = None
-    if FLAGS.char is True:
-        print('Using character-level modeling')
-        lm = CharCompLanguageModel()
-        lm.params(FLAGS.batchsz, FLAGS.nbptt, maxw, word_vec.vsz + 1, char_vec, FLAGS.cfiltsz, FLAGS.wsz, FLAGS.hsz, FLAGS.numrnn)
-    else:
-        print('Using word-level modeling')
-        lm = WordLanguageModel()
-        lm.params(FLAGS.batchsz, FLAGS.nbptt, maxw, word_vec, FLAGS.hsz, FLAGS.numrnn)
+    with tf.variable_scope('Model', initializer=weight_initializer):
+        if FLAGS.char is True:
+            print('Using character-level modeling')
+            lm = CharCompLanguageModel()
+            lm.params(FLAGS.batchsz, FLAGS.nbptt, maxw, word_vec.vsz + 1, char_vec, FLAGS.cfiltsz, FLAGS.wsz, FLAGS.hsz, FLAGS.numrnn)
+        else:
+            print('Using word-level modeling')
+            lm = WordLanguageModel()
+            lm.params(FLAGS.batchsz, FLAGS.nbptt, maxw, word_vec, FLAGS.hsz, FLAGS.numrnn)
 
     with tf.Session() as sess:
 
-        trainer = Trainer(sess, lm, FLAGS.outdir, FLAGS.optim, FLAGS.eta, FLAGS.clip)
+        steps_per_epoch = num_steps_per_epoch(num_words[0], FLAGS.nbptt, FLAGS.batchsz)
+        first_range = int(FLAGS.start_decay_epoch * steps_per_epoch)
+        boundaries = [first_range] + list(np.arange(FLAGS.start_decay_epoch + 1, FLAGS.epochs + 1, dtype=np.int32) * steps_per_epoch)
+        trainer = Trainer(sess, lm, FLAGS.outdir, FLAGS.optim, FLAGS.eta, FLAGS.clip, boundaries, FLAGS.decay_rate)
 
         init = tf.global_variables_initializer()
         sess.run(init)
