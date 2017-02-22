@@ -201,7 +201,7 @@ This model is implemented in TensorFlow, Torch, and PyTorch.  The TensorFlow cur
 
 # Language Modeling with Recurrent Neural Networks
 
-This code is a WIP and currently implemented in TensorFlow only.  There are two implemented models (WordLanguageModel, CharCompLanguageModel) based on these two papers:
+This code is currently implemented in TensorFlow only.  There are two implemented models (WordLanguageModel, CharCompLanguageModel) based on these two papers:
 
   - Recurrent Neural Network Regularization (Zaremba, Vinyals, Sutskever) (2014)
     - https://arxiv.org/pdf/1409.2329.pdf
