@@ -223,7 +223,7 @@ python wchar_lm.py --optim sgd --eta 1 --epochs 39 --decay_rate 1.2 \
 ## Status
 
 The "medium regularized LSTM" above (_Word Med_ below) has a lower perplexity than the original paper (even the large model).
-As noted above, this model uses pre-trained word vectors and early stopping.
+As noted above, the run above differs in that it uses pre-trained word vectors.
 
 |        Model       | Framework  | Dev    |  Test   |
 | ------------------ | ---------- | ------ | ------- |
