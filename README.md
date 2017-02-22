@@ -220,7 +220,13 @@ python wchar_lm.py --optim sgd --eta 1 --epochs 39 --decay_rate 1.2 \
     --embed /data/GoogleNews-vectors-negative300.bin
 ```
 
-| Dataset   |   Metric   | Framework  | Dev    |  Test   |
-| --------- | ---------- | ---------- | ------ | ------- |
-|       ptb | perplexity | TensorFlow | 80.168 | _77.2213_ |
+## Status
 
+The "medium regularized LSTM" above (_Word Med_ below) has a lower perplexity than the original paper (even the large model).
+As noted above, this model uses pre-trained word vectors and early stopping.
+
+|        Model       | Framework  | Dev    |  Test   |
+| ------------------ | ---------- | ------ | ------- |
+| Word Med (Zaremba) | TensorFlow | 80.168 | 77.2213 |
+
+_TODO: Add LSTM Char Small Configuration results_
