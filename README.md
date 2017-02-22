@@ -221,4 +221,3 @@ python wchar_lm.py --optim sgd --eta 1 --epochs 39 --decay_rate 1.2 \
 | --------- | ---------- | ---------- | ------ | ------- |
 |       ptb | perplexity | TensorFlow | 80.168 | _77.2213_ |
 
-Dev perplexity observed was 
