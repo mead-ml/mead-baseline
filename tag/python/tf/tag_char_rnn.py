@@ -1,21 +1,18 @@
 import tensorflow as tf
 import numpy as np
-import math
 from os import sys, path
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 import w2v
 from data import conll_build_vocab
 from data import conll_load_sentences
-from data import batch
 from data import revlut
 from data import valid_split
 from model import TaggerModel, viz_embeddings
 from train import Trainer
-import time
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS
-flags.DEFINE_float('eta', 0.001, 'Initial learning rate.')
+flags.DEFINE_float('eta', 0.01, 'Initial learning rate.')
 flags.DEFINE_string('embed', None, 'Word2Vec embeddings file')
 flags.DEFINE_string('cembed', None, 'Word2Vec char embeddings file')
 flags.DEFINE_string('optim', 'sgd', 'Optim method')
@@ -27,16 +24,16 @@ flags.DEFINE_string('rnn', 'blstm', 'RNN type')
 flags.DEFINE_integer('numrnn', 1, 'The depth of stacked RNNs')
 flags.DEFINE_string('outdir', 'out', 'Directory to put the output')
 flags.DEFINE_string('conll_output', 'rnn-tagger-test.txt', 'Place to put test CONLL file')
-flags.DEFINE_float('unif', 0.25, 'Initializer bounds for embeddings')
+flags.DEFINE_float('unif', 0.1, 'Initializer bounds for embeddings')
 flags.DEFINE_float('clip', 5, 'Gradient clipping cutoff')
-flags.DEFINE_integer('epochs', 1000, 'Number of epochs')
-flags.DEFINE_integer('batchsz', 50, 'Batch size')
+flags.DEFINE_integer('epochs', 400, 'Number of epochs')
+flags.DEFINE_integer('batchsz', 20, 'Batch size')
 flags.DEFINE_integer('mxlen', -1, 'Max sentence length')
 flags.DEFINE_integer('mxwlen', 40, 'Max word length')
 flags.DEFINE_string('cfiltsz', '1,2,3,4,5,7', 'Character filter sizes')
 flags.DEFINE_integer('charsz', 16, 'Char embedding depth')
-flags.DEFINE_integer('patience', 70, 'Patience')
-flags.DEFINE_integer('hsz', 100, 'Hidden layer size')
+flags.DEFINE_integer('patience', 20, 'Patience')
+flags.DEFINE_integer('hsz', 200, 'Hidden layer size')
 flags.DEFINE_integer('wsz', 30, 'Word embedding depth (per parallel conv)')
 flags.DEFINE_float('valsplit', 0.15, 'Validation split if no valid set')
 flags.DEFINE_boolean('cbow', False, 'Do CBOW for characters')
@@ -45,6 +42,8 @@ flags.DEFINE_boolean('crf', False, 'Use CRF on top')
 flags.DEFINE_integer('fscore', 0, 'Use F-score in metrics and early stopping')
 flags.DEFINE_boolean('viz', False, 'Set up LUT vocabs for Tensorboard')
 flags.DEFINE_integer('test_thresh', 10, 'How many epochs improvement required before testing')
+#flags.DEFINE_integer('start_decay_epoch', 6, 'At what epoch should we start decaying')
+#flags.DEFINE_float('decay_rate', 1.2, 'Learning rate decay')
 maxs, maxw, vocab_ch, vocab_word = conll_build_vocab([FLAGS.train, 
                                                       FLAGS.test, 
                                                       FLAGS.valid])
@@ -77,20 +76,19 @@ if FLAGS.cembed:
 
     FLAGS.charsz = char_vec.dsz
     if FLAGS.charsz != FLAGS.wsz and FLAGS.cbow is True:
-        print('Warning, you have opted for CBOW char embeddings, and have provided pre-trained char vector embeddings.  To make this work, setting word vector size to character vector size %d' % FLAGS.charsz)
+        print('Warning, you have opted for CBOW char embeddings, and have provided pre-trained char vector embeddings.'
+              '  To make this work, setting word vector size to character vector size %d' % FLAGS.charsz)
         FLAGS.wsz = FLAGS.charsz
 else:
     if FLAGS.charsz != FLAGS.wsz and FLAGS.cbow is True:
-        print('Warning, you have opted for CBOW char embeddings, but have provided differing sizes for char embedding depth and word depth.  This is not possible, forcing char embedding depth to be word depth ' + FLAGS.wsz)
+        print('Warning, you have opted for CBOW char embeddings, but have provided differing sizes for char embedding'
+              ' depth and word depth. This is not possible, forcing char embedding depth to be word depth ' + FLAGS.wsz)
         FLAGS.charsz = FLAGS.wsz
 
     char_vec = w2v.RandomInitVecModel(FLAGS.charsz, vocab_ch, FLAGS.unif)
     char_vocab = char_vec.vocab
 
 f2i = {"<PAD>":0}
-
-
-
 ts, f2i, _ = conll_load_sentences(FLAGS.train, word_vocab, char_vocab, maxs, maxw, f2i)
 print('Loaded  training data')
 
@@ -113,9 +111,10 @@ print('Using %d examples for test' % len(es))
 
 
 with tf.Graph().as_default():
-    sess = tf.Session()
-    with sess.as_default():
 
+    weight_initializer = tf.random_uniform_initializer(-FLAGS.unif, FLAGS.unif)
+
+    with tf.variable_scope("Model", initializer=weight_initializer):
         model = TaggerModel()
         model.params(f2i,
                      word_vec,
@@ -129,8 +128,9 @@ with tf.Graph().as_default():
                      FLAGS.cfiltsz,
                      FLAGS.crf)
 
-        trainer = Trainer(sess, model, FLAGS.outdir, FLAGS.optim, FLAGS.eta, i2f, FLAGS.fscore)
+    with tf.Session() as sess:
 
+        trainer = Trainer(sess, model, FLAGS.outdir, FLAGS.optim, FLAGS.eta, i2f, FLAGS.clip, FLAGS.fscore)
         train_writer = trainer.writer()
 
         if FLAGS.viz:
@@ -161,12 +161,10 @@ with tf.Graph().as_default():
                     trainer.test(es, 1, 'Test')
                 trainer.checkpoint(FLAGS.save)
                 last_improved = i
-                    
-                
+
             if (i - last_improved) > FLAGS.patience:
                 print('Stopping due to persistent failures to improve')
                 break
-
 
         print("-----------------------------------------------------")
         print('Highest dev %s %.2f' % (metric_type, saving_metric * 100.))

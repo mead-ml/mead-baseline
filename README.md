@@ -137,7 +137,10 @@ This has been tested on oct27 train, dev and test splits (http://www.cs.cmu.edu/
 Here is an example using convolutional filters for character embeddings, alongside word embeddings.  This is basically a combination of the dos Santos approach with the Kim parallel filter idea using TensorFlow:
 
 ```
-python tag_char_rnn.py --rnn blstm --patience 20 --optim adam --eta 0.01 --epochs 40 --batchsz 20 --hsz 200 --train $OCT_SPLITS/oct27.train --valid $OCT_SPLITS/oct27.dev --test $OCT_SPLITS/oct27.test --embed /data/xdata/oct-s140clean-uber.cbow-bin --cfiltsz "1,2,3,4,5,7" --wsz 30
+python tag_char_rnn.py --epochs 40 --train $OCT_SPLITS/oct27.train \
+    --valid $OCT_SPLITS/oct27.dev --test $OCT_SPLITS/oct27.test \
+    --embed /data/xdata/oct-s140clean-uber.cbow-bin \
+    --cfiltsz "1,2,3,4,5,7"
 ```
 
 For  PyTorch, the arguments are space delimited
@@ -150,12 +153,13 @@ To do NER tagging, we typically do not want to use accuracy as a metric.  In tho
 you will typically want to pass '--fscore 1' to the code like so:
 
 ```
-python tag_char_rnn.py --rnn blstm --patience 70 --numrnn 1 --optim sgd --eta 0.001 --epochs 600 --batchsz 50 --hsz 100 \
---train $CONLL/eng.train \
---valid $CONLL/eng.testa \
---test  $CONLL/eng.testb \
---embed /data/xdata/GoogleNews-vectors-negative300.bin \
---cfiltsz "1,2,3,4,5,7" --wsz 30 --fscore 1
+python tag_char_rnn.py --rnn blstm --patience 70 --numrnn 2 \
+   --eta 0.001 --epochs 600 --batchsz 50 --hsz 100 \
+   --train $CONLL/eng.train \
+   --valid $CONLL/eng.testa \
+   --test  $CONLL/eng.testb \
+   --embed /data/xdata/GoogleNews-vectors-negative300.bin \
+   --cfiltsz "1,2,3,4,5,7" --fscore 1
 ```
 
 This will report an F1 score on at each validation pass, and will use F1 for early-stopping as well.
@@ -165,12 +169,13 @@ This will report an F1 score on at each validation pass, and will use F1 for ear
 For tasks that require global coherency like NER tagging, it has been shown that using a transition matrix between label states in conjunction with the output RNN tags improves performance.  This makes the tagger a linear chain CRF, and we can do this by simply adding another layer on top of our RNN output.  To do this, simply pass --crf as an argument.
 
 ```
-python tag_char_rnn.py --rnn blstm --patience 70 --numrnn 1 --optim sgd --eta 0.001 --epochs 600 --batchsz 50 --hsz 100 \
---train $CONLL/eng.train \
---valid $CONLL/eng.testa \
---test  $CONLL/eng.testb \
---embed /data/xdata/GoogleNews-vectors-negative300.bin \
---cfiltsz "1,2,3,4,5,7" --wsz 30 --fscore 1 --crf
+python tag_char_rnn.py --rnn blstm --patience 70 --numrnn 2 \
+   --eta 0.001 --epochs 600 --batchsz 50 --hsz 100 \
+   --train $CONLL/eng.train \
+   --valid $CONLL/eng.testa \
+   --test  $CONLL/eng.testb \
+   --embed /data/xdata/GoogleNews-vectors-negative300.bin \
+   --cfiltsz "1,2,3,4,5,7" --fscore 1 --crf
 ```
 
 ## Status
@@ -179,11 +184,13 @@ This model is implemented in TensorFlow, Torch, and PyTorch.  The TensorFlow cur
 
 ### Latest Runs
 
-Here are the last observed performance scores using _tag_char_rnn_ with a 1-layer BLSTM on Twitter POS.  It was run with the Adam optimizer and a learning rate of 0.01 for up to 40 epochs.
+Here are the last observed performance scores using _tag_char_rnn_ with a 1-layer BLSTM on Twitter POS.  It was run for up to 40 epochs.
 
-| Dataset   | Metric | TensorFlow | PyTorch |
-| --------- | ------ | ---------- | ------- |
-| twpos-v03 |    Acc |      89.22 |   88.93 |
+| Dataset   | Metric | Method    | Eta (LR) | Framework  | Score |
+| --------- | ------ | --------- | -------  | ---------- | ----- |
+| twpos-v03 |    Acc | SGD mom.  |     0.01 | TensorFlow | 89.57 |
+| twpos-v03 |    Acc | Adadelta  |       -- | PyTorch    | 89.18 |
+
 
 # Seq2Seq
 

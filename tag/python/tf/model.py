@@ -77,7 +77,7 @@ def char_word_conv_embeddings(char_vec, filtsz, char_dsz, wsz):
             kernel_shape = [fsz, char_dsz, 1, wsz]
             
             # Weight tying
-            W = tf.get_variable("W", kernel_shape, initializer=tf.random_normal_initializer())
+            W = tf.get_variable("W", kernel_shape)
             b = tf.get_variable("b", [wsz], initializer=tf.constant_initializer(0.0))
 
             conv = tf.nn.conv2d(expanded, 
@@ -283,38 +283,34 @@ class TaggerModel:
                 with tf.control_dependencies([we0]):
                     wembed = tf.nn.embedding_lookup(Ww, self.x, name="embeddings")
 
-        with tf.name_scope("CharLUT"):
-            Wc = tf.Variable(tf.constant(char_vec.weights, dtype=tf.float32), name="W")
+        Wc = tf.Variable(tf.constant(char_vec.weights, dtype=tf.float32), name="Wch")
+        ce0 = tf.scatter_update(Wc, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, char_dsz]))
 
-            ce0 = tf.scatter_update(Wc, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, char_dsz]))
+        with tf.control_dependencies([ce0]):
+            xch_seq = tensor2seq(self.xch)
+            cembed_seq = []
+            for i, xch_i in enumerate(xch_seq):
+                cembed_seq.append(shared_char_word(Wc, xch_i, filtsz, char_dsz, wsz, None if i == 0 else True))
+            word_char = seq2tensor(cembed_seq)
 
-            with tf.control_dependencies([ce0]):
-                xch_seq = tensor2seq(self.xch)
-                cembed_seq = []
-                for i, xch_i in enumerate(xch_seq):
-                    cembed_seq.append(shared_char_word(Wc, xch_i, filtsz, char_dsz, wsz, None if i == 0 else True))
-                word_char = seq2tensor(cembed_seq)
+        # List to tensor, reform as (T, B, W)
+        # Join embeddings along the third dimension
+        joint = word_char if word_vec is None else tf.concat(values=[wembed, word_char], axis=2)
+        joint = tf.nn.dropout(joint, self.pkeep)
+        embedseq = tensor2seq(joint)
 
-            # List to tensor, reform as (T, B, W)
-            # Join embeddings along the third dimension
-            joint = word_char if word_vec is None else tf.concat(values=[wembed, word_char], axis=2)
-            joint = tf.nn.dropout(joint, self.pkeep)
+        if rnntype == 'blstm':
+            rnnfwd = stacked_lstm(hsz, self.pkeep, nlayers)
+            rnnbwd = stacked_lstm(hsz, self.pkeep, nlayers)
 
-        with tf.name_scope("Recurrence"):
-            embedseq = tensor2seq(joint)
+            # Primitive will wrap the fwd and bwd, reverse signal for bwd, unroll
+            rnnseq, _, __ = tf.contrib.rnn.static_bidirectional_rnn(rnnfwd, rnnbwd, embedseq, dtype=tf.float32)
+        else:
+            rnnfwd = stacked_lstm(hsz, self.pkeep, nlayers)
+            # Primitive will wrap RNN and unroll in time
+            rnnseq, _ = tf.contrib.rnn.static_rnn(rnnfwd, embedseq, dtype=tf.float32)
 
-            if rnntype == 'blstm':
-                rnnfwd = stacked_lstm(hsz, self.pkeep, nlayers)
-                rnnbwd = stacked_lstm(hsz, self.pkeep, nlayers)
-
-                # Primitive will wrap the fwd and bwd, reverse signal for bwd, unroll
-                rnnseq, _, __ = tf.contrib.rnn.static_bidirectional_rnn(rnnfwd, rnnbwd, embedseq, dtype=tf.float32)
-            else:
-                rnnfwd = stacked_lstm(hsz, self.pkeep, nlayers)
-                # Primitive will wrap RNN and unroll in time
-                rnnseq, _ = tf.contrib.rnn.static_rnn(rnnfwd, embedseq, dtype=tf.float32)
-
-        with tf.name_scope("output"):
+        with tf.variable_scope("output"):
             # Converts seq to tensor, back to (B,T,W)
 
             if rnntype == 'blstm':

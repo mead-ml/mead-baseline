@@ -122,7 +122,7 @@ class Evaluator:
 
 class Trainer:
 
-    def __init__(self, sess, model, outdir, optim, eta, idx2label, fscore=0):
+    def __init__(self, sess, model, outdir, optim, eta, idx2label, clip, fscore=0):
         
         self.sess = sess
         self.outdir = outdir
@@ -130,7 +130,9 @@ class Trainer:
         self.model = model
         # Own this during training
         self.evaluator = Evaluator(sess, model, idx2label, fscore)
-        self.global_step = tf.Variable(0, name='global_step', trainable=False)
+
+        tvars = tf.trainable_variables()
+        grads, _ = tf.clip_by_global_norm(tf.gradients(self.loss, tvars), clip)
         if optim == 'adadelta':
             self.optimizer = tf.train.AdadeltaOptimizer(eta, 0.95, 1e-6)
         elif optim == 'adam':
@@ -138,7 +140,9 @@ class Trainer:
         else:
             self.optimizer = tf.train.MomentumOptimizer(eta, 0.9)
 
-        self.train_op = self.optimizer.minimize(self.loss, global_step=self.global_step)
+        self.global_step = tf.Variable(0, name='global_step', trainable=False)
+        self.train_op = self.optimizer.apply_gradients(zip(grads, tvars),
+                                                       global_step=self.global_step)
 
         self.loss_summary = tf.summary.scalar("loss", self.loss)
         self.summary_op = tf.summary.merge_all()

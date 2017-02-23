@@ -16,10 +16,10 @@ from torchy import long_0_tensor_alloc
 
 parser = argparse.ArgumentParser(description='Sequence tagger for sentences')
 
-parser.add_argument('--eta', default=0.001, type=float)
+parser.add_argument('--eta', default=0.01, type=float)
 parser.add_argument('--embed', default=None, help='Word2Vec embeddings file')
 parser.add_argument('--cembed', default=None, help='Word2Vec char embeddings file')
-parser.add_argument('--optim', default='sgd', help='Optim method')
+parser.add_argument('--optim', default='adadelta', help='Optim method')
 parser.add_argument('--decay', default=0, help='LR decay', type=float)
 parser.add_argument('--mom', default=0.9, help='SGD momentum', type=float)
 parser.add_argument('--dropout', default=0.5, help='Dropout probability', type=float)
@@ -30,16 +30,16 @@ parser.add_argument('--rnn', default='blstm', help='RNN type')
 parser.add_argument('--numrnn', default=1, help='The depth of stacked RNNs', type=int)
 parser.add_argument('--outdir', default='out', help='Directory to put the output')
 parser.add_argument('--conll_output', default='rnn-tagger-test.txt', help='Place to put test CONLL file')
-parser.add_argument('--unif', default=0.25, help='Initializer bounds for embeddings', type=float)
-parser.add_argument('--clip', default=5, help='Gradient clipping cutoff', type=float)
-parser.add_argument('--epochs', default=100, help='Number of epochs', type=int)
-parser.add_argument('--batchsz', default=50, help='Batch size', type=int)
+parser.add_argument('--unif', default=0.1, help='Initializer bounds for embeddings', type=float)
+#parser.add_argument('--clip', default=5, help='Gradient clipping cutoff', type=float)
+parser.add_argument('--epochs', default=400, help='Number of epochs', type=int)
+parser.add_argument('--batchsz', default=20, help='Batch size', type=int)
 parser.add_argument('--mxlen', default=-1, help='Max sentence length', type=int)
 parser.add_argument('--mxwlen', default=40, help='Max word length', type=int)
 parser.add_argument('--cfiltsz', help='Filter sizes', nargs='+', default=[1,2,3,4,5,7], type=int)
 parser.add_argument('--charsz', default=16, help='Char embedding depth', type=int)
 parser.add_argument('--patience', default=70, help='Patience', type=int)
-parser.add_argument('--hsz', default=100, help='Hidden layer size', type=int)
+parser.add_argument('--hsz', default=200, help='Hidden layer size', type=int)
 parser.add_argument('--wsz', default=30, help='Word embedding depth', type=int)
 parser.add_argument('--valsplit', default=0.15, help='Validation split if no valid set', type=float)
 parser.add_argument('--cbow', default=False, help='Do CBOW for characters', type=bool)
@@ -86,11 +86,13 @@ if args.cembed:
 
     args.charsz = char_vec.dsz
     if args.charsz != args.wsz and args.cbow is True:
-        print('Warning, you have opted for CBOW char embeddings, and have provided pre-trained char vector embeddings.  To make this work, setting word vector size to character vector size %d' % args.charsz)
+        print('Warning, you have opted for CBOW char embeddings, and have provided pre-trained char vector embeddings.'
+              '  To make this work, setting word vector size to character vector size %d' % args.charsz)
         args.wsz = args.charsz
 else:
     if args.charsz != args.wsz and args.cbow is True:
-        print('Warning, you have opted for CBOW char embeddings, but have provided differing sizes for char embedding depth and word depth.  This is not possible, forcing char embedding depth to be word depth ' + args.wsz)
+        print('Warning, you have opted for CBOW char embeddings, but have provided differing sizes for char embedding'
+              ' depth and word depth.  This is not possible, forcing char embedding depth to be word depth ' + args.wsz)
         args.charsz = args.wsz
 
     char_vec = w2v.RandomInitVecModel(args.charsz, vocab_ch, args.unif)
@@ -118,7 +120,7 @@ print('Using %d examples for test' % len(es))
 
 model = TaggerModel(f2i, word_vec, char_vec, maxs, maxw,
                     args.rnn, args.wsz, args.hsz,
-                    args.cfiltsz, args.dropout, args.numrnn)
+                    args.cfiltsz, args.dropout, args.unif, args.numrnn)
 trainer = Trainer(gpu, model, args.optim, args.eta, args.mom)
 outname = '%s/%s.model' % (args.outdir, args.save)
 max_acc = 0

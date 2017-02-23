@@ -1,8 +1,6 @@
 import torch
 import torch.nn as nn
-from torch.autograd import Variable
-import numpy as np
-from utils import *
+
 
 class SequenceCriterion(nn.Module):
 
@@ -20,11 +18,26 @@ class SequenceCriterion(nn.Module):
         return loss
 
 
-def _rnn(insz, hsz, rnntype, nlayers):
+def _conv1d(in_channels, out_channels, fsz, unif):
+    c = nn.Conv1d(in_channels, out_channels, fsz)
+    c.weight.data.uniform_(-unif, unif)
+    return c
+
+
+def _linear(in_sz, out_sz, unif):
+    l = nn.Linear(in_sz, out_sz)
+    l.weight.data.uniform_(-unif, unif)
+    return l
+
+
+def _rnn(insz, hsz, rnntype, nlayers, unif):
     # For now, just handle LSTM, should be easy to update later
     ndir = 2 if rnntype.startswith('b') else 1
-    rnn = torch.nn.LSTM(insz, hsz, nlayers, bidirectional=True if ndir > 1 else False)
+    rnn = torch.nn.LSTM(insz, hsz, nlayers, bidirectional=True if ndir > 1 else False, bias=False)
+    for weight in rnn.parameters():
+        weight.data.uniform_(-unif, unif)
     return rnn, ndir*hsz
+
 
 def _embedding(x2vec, finetune=True):
     dsz = x2vec.dsz
@@ -34,9 +47,11 @@ def _embedding(x2vec, finetune=True):
                               requires_grad=finetune)
     return lut
 
+
 def _append2seq(seq, modules):
     for module in modules:
         seq.add_module(str(module), module)
+
 
 class TaggerModel(nn.Module):
 
@@ -52,11 +67,11 @@ class TaggerModel(nn.Module):
         name = '%s/%s.model' % (dirname, base)
         return torch.load(name)
 
-    def _char_word_conv_embeddings(self, maxw, filtsz, char_dsz, wchsz, pdrop):
+    def _char_word_conv_embeddings(self, maxw, filtsz, char_dsz, wchsz, pdrop, unif):
         self.char_convs = []
         for fsz in filtsz:
             conv = nn.Sequential(
-                nn.Conv1d(char_dsz, wchsz, fsz),
+                _conv1d(char_dsz, wchsz, fsz, unif),
                 nn.ReLU()
             )
             self.char_convs.append(conv)
@@ -68,17 +83,17 @@ class TaggerModel(nn.Module):
         self.word_ch_embed = nn.Sequential()
         _append2seq(self.word_ch_embed, (
             nn.Dropout(pdrop),
-            nn.Linear(self.wchsz, self.wchsz),
+            _linear(self.wchsz, self.wchsz, unif),
             nn.ReLU()
         ))
 
-    def __init__(self, labels, word_vec, char_vec, mxlen, maxw, rnntype, wchsz, hsz, filtsz, pdrop, nlayers=1):
+    def __init__(self, labels, word_vec, char_vec, mxlen, maxw, rnntype, wchsz, hsz, filtsz, pdrop, unif, nlayers=1):
         super(TaggerModel, self).__init__()
         char_dsz = char_vec.dsz
         word_dsz = 0
         self.nc = len(labels)
 
-        self._char_word_conv_embeddings(maxw, filtsz, char_dsz, wchsz, pdrop)
+        self._char_word_conv_embeddings(maxw, filtsz, char_dsz, wchsz, pdrop, unif)
 
         if word_vec is not None:
             self.wembed = _embedding(word_vec)
@@ -86,8 +101,8 @@ class TaggerModel(nn.Module):
 
         self.cembed = _embedding(char_vec)
         self.dropout = nn.Dropout(pdrop)
-        self.rnn, hsz = _rnn(self.wchsz + word_dsz, hsz, rnntype, nlayers)
-        self.decoder = nn.Linear(hsz, self.nc)
+        self.rnn, hsz = _rnn(self.wchsz + word_dsz, hsz, rnntype, nlayers, unif)
+        self.decoder = _linear(hsz, self.nc, unif)
         self.softmax = nn.LogSoftmax()
 
     def char2word(self, xch_i):
