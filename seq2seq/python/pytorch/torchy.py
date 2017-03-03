@@ -37,8 +37,7 @@ def show_batch(use_gpu, model, es, rlut1, rlut2, embed2, mxlen, sample, prob_cli
             break
         i += 1
         print('========================================================================')
-
-        sent = lookup_sentence(rlut1, src_i)
+        sent = lookup_sentence(rlut1, src_i.cpu().numpy(), reverse=True)
         print('[OP] %s' % sent)
         sent = lookup_sentence(rlut2, tgt_i)
         print('[Actual] %s' % sent)
