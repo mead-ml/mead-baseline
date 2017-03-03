@@ -9,19 +9,17 @@ Stand-alone baselines implemented with multiple deep learning tools, including C
 A few strong, deep baseline algorithms for several common NLP tasks,
 including sentence classification and tagging problems.  Considerations are conceptual simplicity, efficiency and accuracy.  This is intended as a simple to understand reference for building strong baselines with deep learning.
 
-After considering other strong, shallow baselines, we have found that even incredibly simple, moderately deep models often perform better.  These models are only slightly more complex to implement than strong baselines such as shingled SVMs and NBSVMs, and support multi-class output easily.  Additionally, they are (hopefully) the first "deep learning" thing you might think of for a certain type of problem.  Using these stronger baselines as a reference point hopefully yields more productive algorithms and experimentation.
+After considering other strong, shallow baselines, we have found that even incredibly simple, moderately deep models often perform better.  These models are only slightly more complex to implement than strong baselines such as shingled SVMs and NBSVMs, and support multi-class output easily.  Additionally, they are (hopefully) the first "deep learning thing" you might think of for a certain type of problem.  Using these stronger baselines as a reference point hopefully yields more productive algorithms and experimentation.
 
-Each algorithm and implementation for each DL framework is in a separate sub-directory, and is fully contained, even though this means that there is some overlap in the routines.  This is done for ease of use and experimentation.
+Each algorithm and implementation for each DL framework is in a separate sub-directory, and is fully contained, even though this means that there is some overlap in the routines.  This is done for ease of use and experimentation.  Below you can find descriptions of the algorithms, and the status of implementation for each framework.
+
+When the GPU is used, the code *assumes that cudnn (>= R4) is available* and installed. This is critical for good performance.
 
 # Sentence Classification using CMOT Model
 
 ## Convolution - Max Over Time Architecture (CMOT)
 
 This code provides a pure Lua/Torch7 and pure Python PyTorch, TensorFlow and Keras implementations -- no preprocessing of the dataset with python, nor HDF5 is required.  The Lua/Torch code depends on a tiny module that can load word2vec in Torch (https://github.com/dpressel/torchure) either as a model, or as an nn.LookupTable.  It is important to note that these models can easily be implemented with other deep learning frameworks, and without much work, can also be implemented from scratch!  Over time, this package will hopefully provide alternate implementations in other DL Frameworks and programming languages.
-
-When the GPU is used, the code *assumes that cudnn (>= R4) is available* and installed. This is because the performance gains over the 'cunn' implementation are significant (e.g., 3 minutes -> 30 seconds).
-
-
 
 *Details*
 
@@ -182,6 +180,8 @@ python tag_char_rnn.py --rnn blstm --patience 70 --numrnn 2 \
 
 This model is implemented in TensorFlow, Torch, and PyTorch.  The TensorFlow currently is the only implementation that supports using a CRF layer on the top.
 
+_TODO_: Benchmark for CONLL NER
+
 ### Latest Runs
 
 Here are the last observed performance scores using _tag_char_rnn_ with a 1-layer BLSTM on Twitter POS.  It was run for up to 40 epochs.
@@ -194,7 +194,7 @@ Here are the last observed performance scores using _tag_char_rnn_ with a 1-laye
 
 # Seq2Seq
 
-Encoder-decoder frameworks have been used for Statistical Machine Translation, Image Captioning, ASR, Conversation Modeling, Formula Generation and many other applications.  Seq2seq is a type of encoder-decoder implementation, where the encoder is some sort of RNN, and the memories (sometimes known as the "thought vector") are transferred over to the decoder, also an RNN, essentially making this a conditional language model.  The code as it is written here is with text in mind, and supports multiple types of RNNs, including GRUs and LSTMs, as well as stacked layers.  The TensorFlow version also supports attention.
+Encoder-decoder frameworks have been used for Statistical Machine Translation, Image Captioning, ASR, Conversation Modeling, Formula Generation and many other applications.  Seq2seq is a type of encoder-decoder implementation, where the encoder is some sort of RNN, and the memories (sometimes known as the "thought vector") are transferred over to the decoder, also an RNN, essentially making this a conditional language model.  The code as it is written here is with text in mind, and supports multiple types of RNNs, including GRUs and LSTMs, as well as stacked layer.  Global attention is optional.
 
 ## seq2seq: Phrase in, phrase-out, 2 lookup table implementation, input is a temporal vector, and so is output
 
@@ -204,7 +204,9 @@ For any reasonable size data, this really needs to run on the GPU for realistic 
 
 ## Status
 
-This model is implemented in TensorFlow, Torch, and PyTorch.  The TensorFlow currently is the only implementation that supports using attention.
+This model is implemented in TensorFlow, Torch, and PyTorch.  The TensorFlow has been tested extensively.  The PyTorch model now has experimental support for global attention.  Please use Python 3 to run the PyTorch.  The Lua Torch7 model is no longer being updated, and does not support attention.
+
+_TODO: Benchmark for NMT_
 
 # Language Modeling with Recurrent Neural Networks
 
