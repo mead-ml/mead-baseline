@@ -41,6 +41,7 @@ parser.add_argument('--sample', default=False, help='If showing examples, sample
 parser.add_argument('--topk', default=5, help='If sampling in examples, prunes to topk', type=int)
 parser.add_argument('--max_examples', default=5, help='How many examples to show', type=int)
 parser.add_argument('--nogpu', default=False, help='Dont use GPU (debug only!)', type=bool)
+parser.add_argument('--attn', default=False, help='Use attention')
 
 args = parser.parse_args()
 gpu = not args.nogpu
@@ -77,7 +78,9 @@ es = load_sentences(args.test, embed1.vocab, embed2.vocab, args.mxlen, args.batc
 rlut1 = revlut(embed1.vocab)
 rlut2 = revlut(embed2.vocab)
 
-seq2seq = Seq2SeqModel(embed1, embed2, args.mxlen, args.hsz, args.layers, args.rnntype)
+Seq2SeqModelType = Seq2SeqAttnModel if args.attn else Seq2SeqModel
+print(Seq2SeqModelType)
+seq2seq = Seq2SeqModelType(embed1, embed2, args.mxlen, args.hsz, args.layers, args.rnntype)
 
 trainer = Trainer(gpu, seq2seq, args.optim, args.eta, args.mom)
 

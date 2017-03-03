@@ -6,6 +6,7 @@ import time
 import math
 import numpy as np
 import data
+from utils import ProgressBar
 
 class Trainer:
 
@@ -68,8 +69,9 @@ class Trainer:
         duration = time.time() - start_time
         test_acc = float(total_corr)/total
 
-        print('%s (Loss %.4f) (Acc %d/%d = %.4f) (%.3f sec)' % 
-              (phase, float(total_loss)/total, total_corr, total, test_acc, duration))
+        avg_loss = float(total_loss)/total
+        print('%s (Loss %.4f) (Perplexity %.4f) (Acc %d/%d = %.4f) (%.3f sec)' % 
+              (phase, avg_loss, np.exp(avg_loss), total_corr, total, test_acc, duration))
         return test_acc
 
     def train(self, ts):
@@ -81,6 +83,7 @@ class Trainer:
         shuffle = np.random.permutation(np.arange(steps))
 
         total_loss = total_corr = total = 0
+        pg = ProgressBar(steps)
         for i in range(steps):
             self.optimizer.zero_grad()
             si = shuffle[i]
@@ -93,8 +96,11 @@ class Trainer:
             total_corr += self._right(pred, tgt)
             total += self._total(tgt)
             self.optimizer.step()
-
+            pg.update()
+        pg.done()
         duration = time.time() - start_time
 
-        print('Train (Loss %.4f) (Acc %d/%d = %.4f) (%.3f sec)' % 
-              (float(total_loss)/total, total_corr, total, float(total_corr)/total, duration))
+        avg_loss = float(total_loss)/total
+
+        print('Train (Loss %.4f) (Perplexity %.4f) (Acc %d/%d = %.4f) (%.3f sec)' % 
+              (avg_loss, np.exp(avg_loss), total_corr, total, float(total_corr)/total, duration))

@@ -50,7 +50,7 @@ def show_batch(use_gpu, model, es, rlut1, rlut2, embed2, mxlen, sample, prob_cli
         src_i = src_i.view(1, -1)
         for j in range(mxlen):
             dst_i[0,j] = next_value
-            probv = model.forward((Variable(src_i), Variable(dst_i)))
+            probv = model((Variable(src_i), Variable(dst_i)))
             output = probv.squeeze()[j]
             if sample is False:
                 _, next_value = torch.max(output, 0)
