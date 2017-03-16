@@ -1,6 +1,6 @@
 from keras.models import load_model
 from keras.callbacks import EarlyStopping, ModelCheckpoint
-
+from keras.metrics import fbeta_score
 from keras.utils import np_utils
 from os import sys, path, makedirs
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
@@ -68,7 +68,7 @@ mdsave(f2i, embeddings.vocab, args.outdir, args.save)
 
 model = create_model(embeddings, nc, args.filtsz, args.cmotsz, args.hsz, args.mxlen, args.dropout, not args.static)
 
-model.compile(args.optim, 'categorical_crossentropy' , metrics=['accuracy'])
+model.compile(args.optim, 'categorical_crossentropy' , metrics=['accuracy', fbeta_score])
 
 ts.y = np_utils.to_categorical(ts.y, nc)
 es.y = np_utils.to_categorical(es.y, nc)

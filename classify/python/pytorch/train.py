@@ -8,6 +8,7 @@ sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 import data
 from torch.autograd import Variable
 from torchy import long_tensor_alloc, TorchExamples
+from utils import ProgressBar
 
 class Trainer:
 
@@ -56,7 +57,7 @@ class Trainer:
 
             total_corr += self._right(pred, y)
             total += batchsz
-
+       
         duration = time.time() - start_time
 
         test_acc = float(total_corr)/total
@@ -72,6 +73,7 @@ class Trainer:
         steps = int(math.floor(len(ts)/float(batchsz)))
 
         shuffle = np.random.permutation(np.arange(steps))
+        pg = ProgressBar(steps)
 
         total_loss = total_corr = total = 0
         for i in range(steps):
@@ -86,7 +88,8 @@ class Trainer:
             total_corr += self._right(pred, y)
             total += batchsz
             self.optimizer.step()
-
+            pg.update()
+        pg.done()
         duration = time.time() - start_time
 
         print('Train (Loss %.4f) (Acc %d/%d = %.4f) (%.3f sec)' % 

@@ -4,6 +4,7 @@ import time
 import math
 from os import sys, path
 import data
+from utils import ProgressBar
 
 class Trainer:
 
@@ -45,6 +46,7 @@ class Trainer:
         start_time = time.time()
         steps = int(math.floor(len(ts)/float(batchsz)))
         shuffle = np.random.permutation(np.arange(steps))
+        pg = ProgressBar(steps)
 
         for i in range(steps):
             si = shuffle[i]
@@ -57,6 +59,8 @@ class Trainer:
             total_corr += accv
             total_loss += lossv
             total += len(ts_i)
+            pg.update()
+        pg.done()
 
         duration = time.time() - start_time
 

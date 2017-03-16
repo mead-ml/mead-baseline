@@ -1,6 +1,6 @@
 import numpy as np
 import re
-
+import six.moves
 
 # Modifed from here
 # http://stackoverflow.com/questions/3160699/python-progress-bar#3160819
@@ -33,7 +33,7 @@ class ProgressBar(object):
             'percent': percent * 100,
             'remaining': remaining
         }
-        print('\r' + self.fmt % args, end='')
+        six.print_('\r' + self.fmt % args, end='')
 
     def done(self):
         self.current = self.total
