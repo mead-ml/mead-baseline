@@ -99,7 +99,7 @@ It was run on the latest code as of 3/16/2017, with 25 epochs, a learning rate o
 
 | Dataset | TensorFlow | Keras (TF) | PyTorch | Torch7 |
 | ------- | ---------- | ---------- | ------- | ------ |
-| SST2    |      87.70 |      87.75 |  0.8747 | 87.095 |
+| SST2    |      87.70 |      87.75 |  87.47 | 87.095 |
 
 For Keras and TensorFlow, I am using the latest 1.0 branch.  For Keras and PyTorch I am using the master.
 Note that these are randomly initialized and these numbers will vary
