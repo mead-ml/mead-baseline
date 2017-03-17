@@ -58,12 +58,7 @@ class ConvModel:
         with tf.name_scope("loss"):
             loss = tf.nn.softmax_cross_entropy_with_logits(logits=self.lin, labels=tf.cast(self.y, "float"))
             all_loss = tf.reduce_sum(loss)
-
-        with tf.name_scope("accuracy"):
-            correct = tf.equal(self.best, tf.argmax(self.y, 1))
-            all_right = tf.reduce_sum(tf.cast(correct, "float"), name="accuracy")
-
-        return all_loss, all_right
+        return all_loss
 
     def inference(self, sess, examples, probs=False):
         feed_dict = {self.x: examples.x, self.pkeep: 1.0}

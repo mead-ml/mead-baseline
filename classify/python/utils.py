@@ -3,6 +3,54 @@ import numpy as np
 import re
 import six.moves
 
+# If you have scipy, use that instead
+class ConfusionMatrix:
+
+    def __init__(self, labels):
+        #np.set_printoptions(linewidth=300)
+        if type(labels) is dict:
+            self.labels = []
+            for i in range(len(labels)):
+                self.labels.append(labels[i])
+        else:
+            self.labels = labels
+        nc = len(self.labels)
+        self._cm = np.zeros((nc, nc), dtype=np.int)
+
+    def add(self, truth, guess):
+        self._cm[truth, guess] += 1
+
+    def __str__(self):
+        values = []
+        width = max(5, max(len(x) for x in self.labels) + 1)
+        for i, label in enumerate([''] + self.labels):
+            values += ["{:>{width}}".format(label, width=width+1)]
+        values += ['\n']
+        for i, label in enumerate(self.labels):
+            values += ["{:>{width}}".format(label, width=width+1)]
+            for j in range(len(self.labels)):
+                values += ["{:{width}d}".format(self._cm[i, j], width=width + 1)]
+            values += ['\n']
+        values += ['\n']
+        return ''.join(values)
+
+    def reset(self):
+        self._cm *= 0
+
+    def get_correct(self):
+        return self._cm.diagonal().sum()
+
+    def get_total(self):
+        return self._cm.sum()
+
+    def get_acc(self):
+        return self.get_correct()/self.get_total()
+
+    def add_batch(self, guess, truth):
+        for truth_i, guess_i in zip(truth, guess):
+            self.add(truth_i, guess_i)
+
+
 # Modifed from here
 # http://stackoverflow.com/questions/3160699/python-progress-bar#3160819
 class ProgressBar(object):

@@ -5,6 +5,7 @@ from w2v import *
 from data import *
 from model import *
 from train import Trainer
+from utils import revlut, ConfusionMatrix
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 flags.DEFINE_float('eta', 0.001, 'Initial learning rate.')
@@ -54,6 +55,8 @@ Train convolutional sentence model
 """
 
 model = ConvModel()
+labels = revlut(f2i)
+confusion = ConfusionMatrix(labels)
 
 with tf.Graph().as_default():
     sess = tf.Session()
@@ -72,8 +75,8 @@ with tf.Graph().as_default():
 
         for i in range(FLAGS.epochs):
             print('Training epoch %d' % (i+1))
-            trainer.train(ts, FLAGS.dropout, FLAGS.batchsz)
-            this_acc = trainer.test(vs, FLAGS.batchsz, 'Validation')
+            trainer.train(ts, confusion, FLAGS.dropout, FLAGS.batchsz)
+            this_acc = trainer.test(vs, confusion, FLAGS.batchsz, 'Validation')
             if this_acc > max_acc:
                 max_acc = this_acc
                 last_improved = i
@@ -91,7 +94,7 @@ with tf.Graph().as_default():
         print('Evaluating best model on test data:')
         print('=====================================================')
         trainer.recover_last_checkpoint()
-        this_acc = trainer.test(es)
+        this_acc = trainer.test(es, confusion)
         print("-----------------------------------------------------")
         print('Test acc %.2f' % (this_acc * 100.))
         print('=====================================================')

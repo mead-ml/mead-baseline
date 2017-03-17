@@ -6,7 +6,7 @@ from os import sys, path, makedirs
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 from w2v import *
 from data import *
-from utils import revlut, mdsave
+from utils import revlut, mdsave, ConfusionMatrix
 from torchy import long_0_tensor_alloc, TorchExamples
 
 parser = argparse.ArgumentParser(description='Process some integers.')
@@ -70,15 +70,17 @@ nc = len(f2i)
 mdsave(f2i, embeddings.vocab, args.outdir, args.save)
 
 model = ConvModel(embeddings, nc, args.filtsz, args.cmotsz, args.hsz, args.dropout, not args.static)
+labels = revlut(f2i)
 trainer = Trainer(gpu, model, args.optim, args.eta, args.mom)
 
 max_acc = 0
 last_improved = 0
+confusion = ConfusionMatrix(labels)
 
 for i in range(args.epochs):
     print('Training epoch %d' % (i+1))
-    trainer.train(ts, args.batchsz)
-    this_acc = trainer.test(vs, args.batchsz, 'Validation')
+    trainer.train(ts, confusion, args.batchsz)
+    this_acc = trainer.test(vs, confusion, args.batchsz, 'Validation')
     if this_acc > max_acc:
         max_acc = this_acc
         last_improved = i
@@ -99,4 +101,4 @@ print('Evaluating best model on test data:')
 print('=====================================================')
 model = ConvModel.load(args.outdir, args.save)
 
-score = trainer.test(es, 2)
+score = trainer.test(es, confusion, 2)
