@@ -138,6 +138,6 @@ class ConvModel:
                     drop = tf.nn.dropout(proj, self.pkeep)
 
                 with tf.name_scope("output"):
-                    self.lin = fully_connected(drop, nc)
+                    self.lin = fully_connected(drop, nc, activation_fn=None)
                     self.probs = tf.nn.softmax(self.lin, name="probs")
                     self.best = tf.argmax(self.lin, 1, name="best")
