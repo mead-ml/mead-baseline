@@ -46,7 +46,7 @@ class ConfusionMatrix:
     def get_acc(self):
         return self.get_correct()/self.get_total()
 
-    def add_batch(self, guess, truth):
+    def add_batch(self, truth, guess):
         for truth_i, guess_i in zip(truth, guess):
             self.add(truth_i, guess_i)
 
