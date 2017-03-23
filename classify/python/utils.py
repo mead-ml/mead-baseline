@@ -22,7 +22,7 @@ class ConfusionMatrix:
 
     def __str__(self):
         values = []
-        width = max(5, max(len(x) for x in self.labels) + 1)
+        width = max(8, max(len(x) for x in self.labels) + 1)
         for i, label in enumerate([''] + self.labels):
             values += ["{:>{width}}".format(label, width=width+1)]
         values += ['\n']
