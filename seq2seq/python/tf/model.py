@@ -3,6 +3,7 @@ import numpy as np
 import json
 from google.protobuf import text_format
 from tensorflow.python.platform import gfile
+#import tensorflow.contrib.seq2seq
 import math
 from utils import *
 
@@ -32,17 +33,18 @@ def tensor2seq(tensor):
 def seq2tensor(sequence):
     return tf.transpose(tf.stack(sequence), perm=[1, 0, 2])
 
+def _cell(hsz, rnntype, st):
+    return tf.contrib.rnn.BasicLSTMCell(hsz, state_is_tuple=st) if rnntype == 'lstm' else tf.contrib.rnn.GRUCell(hsz)
     
 class Seq2SeqBase:
 
+
     def makeCell(self, hsz, nlayers, rnntype):
-        st = False if nlayers > 1 else True
-        
-        cell = tf.contrib.rnn.BasicLSTMCell(hsz, state_is_tuple=st) if rnntype == 'lstm' else tf.contrib.rnn.GRUCell(hsz)
         
         if nlayers > 1:
-            cell = tf.contrib.rnn.MultiRNNCell([cell] * nlayers, state_is_tuple=st)
-        return cell
+            cell = tf.contrib.rnn.MultiRNNCell([_cell(hsz, rnntype, True) for _ in range(nlayers)], state_is_tuple=True)
+            return cell
+        return _cell(hsz, rnntype, False)
 
     def save(self, sess, outdir, base):
         basename = outdir + '/' + base
@@ -162,8 +164,8 @@ class Seq2SeqModel(Seq2SeqBase):
         self.pkeep = tf.placeholder(tf.float32, name="pkeep")
 
         with tf.name_scope("LUT"):
-            Wi = tf.Variable(tf.constant(embed1.weights, dtype=tf.float32), name = "W")
-            Wo = tf.Variable(tf.constant(embed2.weights, dtype=tf.float32), name = "W")
+            Wi = tf.Variable(tf.constant(embed1.weights, dtype=tf.float32), name = "Wi")
+            Wo = tf.Variable(tf.constant(embed2.weights, dtype=tf.float32), name = "Wo")
 
             ei0 = tf.scatter_update(Wi, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, embed1.dsz]))
             eo0 = tf.scatter_update(Wo, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, embed1.dsz]))
@@ -182,9 +184,8 @@ class Seq2SeqModel(Seq2SeqBase):
 
             rnn_enc = self.makeCell(hsz, nlayers, rnntype)
             rnn_dec = self.makeCell(hsz, nlayers, rnntype)
-
-            # Primitive will wrap RNN and unroll in time
             rnn_enc_seq, final_encoder_state = tf.contrib.rnn.static_rnn(rnn_enc, embed_in_seq, scope='rnn_enc', dtype=tf.float32)
+
             # Provides the link between the encoder final state and the decoder
             rnn_dec_seq, _ = tf.contrib.rnn.static_rnn(rnn_dec, embed_out_seq, initial_state=final_encoder_state, scope='rnn_dec', dtype=tf.float32)
 
@@ -200,7 +201,7 @@ class Seq2SeqModel(Seq2SeqBase):
 
 
 
-class Seq2SeqLib(Seq2SeqBase):
+class LegacySeq2SeqLib(Seq2SeqBase):
 
     def __init__(self):
         pass
@@ -216,8 +217,8 @@ class Seq2SeqLib(Seq2SeqBase):
         self.pkeep = tf.placeholder(tf.float32, name="pkeep")
 
         with tf.name_scope("LUT"):
-            Wi = tf.Variable(tf.constant(embed1.weights, dtype=tf.float32), name = "W")
-            Wo = tf.Variable(tf.constant(embed2.weights, dtype=tf.float32), name = "W")
+            Wi = tf.Variable(tf.constant(embed1.weights, dtype=tf.float32), name = "Wi")
+            Wo = tf.Variable(tf.constant(embed2.weights, dtype=tf.float32), name = "Wo")
 
             ei0 = tf.scatter_update(Wi, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, embed1.dsz]))
             eo0 = tf.scatter_update(Wo, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, embed1.dsz]))
@@ -249,3 +250,5 @@ class Seq2SeqLib(Seq2SeqBase):
 
             self.preds = [(tf.matmul(rnn_dec_i, W) + b) for rnn_dec_i in rnn_dec_seq]
             self.probs = [tf.nn.softmax(pred, name="probs") for pred in self.preds]
+
+

@@ -113,12 +113,12 @@ rlut1 = revlut(embed1.vocab)
 rlut2 = revlut(embed2.vocab)
 
 # For now, if attention is on, use library
-if FLAGS.attn:
+if FLAGS.attn is True:
     print('Forcing library option')
     FLAGS.seq2seqlib = True
 
 # Use library-backed seq2seq routine
-seq2seq = Seq2SeqLib() if FLAGS.seq2seqlib else Seq2SeqModel()
+seq2seq = LegacySeq2SeqLib() if FLAGS.seq2seqlib else Seq2SeqModel()
 
 #with tf.device('/cpu:0'):
 with tf.Graph().as_default():
