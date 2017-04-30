@@ -202,6 +202,8 @@ This code implements seq2seq with mini-batching (as in other examples) using ada
 
 For any reasonable size data, this really needs to run on the GPU for realistic training times.
 
+_TODO_: This code is only tested up to tensorflow 1.0.  It should be updated for 1.1 in the near future
+
 ## Status
 
 This model is implemented in TensorFlow, Torch, and PyTorch.  The TensorFlow has been tested extensively.  The PyTorch model now has experimental support for global attention.  Please use Python 3 to run the PyTorch.  The Lua Torch7 model is no longer being updated, and does not support attention.
