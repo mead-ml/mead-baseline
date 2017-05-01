@@ -202,7 +202,7 @@ This code implements seq2seq with mini-batching (as in other examples) using ada
 
 For any reasonable size data, this really needs to run on the GPU for realistic training times.
 
-_TODO_: This code is only tested up to tensorflow 1.0.  It should be updated for 1.1 in the near future
+_TODO_: The code on master works on tensorflow <= 1.0.  There is an experimental branch `tf_v1_1` that works on tensorflow 1.1 with the new decoder API. 
 
 ## Status
 
