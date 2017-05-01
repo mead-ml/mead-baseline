@@ -71,7 +71,7 @@ class Word2VecModel:
 
 class RandomInitVecModel:
 
-    def __init__(self, dsz, knownvocab, unifweight=None):
+    def __init__(self, dsz, knownvocab, counts=True, unifweight=None):
 
         uw = 0.0 if unifweight == None else unifweight
         self.vocab = {}
@@ -79,15 +79,17 @@ class RandomInitVecModel:
         self.dsz = dsz
         self.vsz = 0
 
-            
-        attested = {v: cnt for v,cnt in knownvocab.items() if cnt > 0}
-        for k,v in enumerate(attested):
-            self.vocab[v] = k
-            k = k + 1
-            self.vsz += 1
+        if counts is True:
+            attested = {v: cnt for v,cnt in knownvocab.items() if cnt > 0}
+            for k,v in enumerate(attested):
+                self.vocab[v] = k
+                k = k + 1
+                self.vsz += 1
+        else:
+            for k,v in enumerate(knownvocab):
+                self.vocab[k] = v
 
         self.weights = np.random.uniform(-uw, uw, (self.vsz+1, self.dsz))
-
 
         self.nullv = np.zeros(self.dsz, dtype=np.float32)
         self.weights[0] = self.nullv
