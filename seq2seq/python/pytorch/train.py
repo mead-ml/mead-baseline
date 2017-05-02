@@ -76,13 +76,14 @@ class Trainer:
         pg = ProgressBar(steps)
         for i in range(steps):
             self.optimizer.zero_grad()
+
             si = shuffle[i]
             ts_i = data.batch(ts, si, batchsz, long_tensor_alloc, tensor_shape, tensor_max)
             src, dst, tgt = self._wrap(ts_i)
             pred = self.model((src, dst))
             loss = self.crit(pred, tgt)
             total_loss += loss.data[0]
-            loss.backward(retain_variables=True)
+            loss.backward()
 
             total += self._total(tgt)
             self.optimizer.step()
