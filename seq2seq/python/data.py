@@ -80,7 +80,8 @@ def load_sentences(tsfile, vocab1, vocab2, mxlen, vec_alloc=np.zeros):
 
     return ts
 
-def batch(ts, start, batchsz, vec_alloc=np.zeros, vec_shape=np.shape):
+# Supporting torch Tensors and numpy SxS is getting messy.  Probably should wrap
+def batch(ts, start, batchsz, vec_alloc=np.zeros, vec_shape=np.shape, max_fn=np.max):
     ex = ts[start]
     sig_len = vec_shape(ex["src"])[0]
     srcs = vec_alloc((batchsz, sig_len), dtype=np.int)
@@ -99,6 +100,6 @@ def batch(ts, start, batchsz, vec_alloc=np.zeros, vec_shape=np.shape):
         tgt_lens[i] = ex["tgt_len"]
         idx += 1
 
-    sub_src = np.max(src_lens)
-    sub_tgt = np.max(tgt_lens)
+    sub_src = max_fn(src_lens)
+    sub_tgt = max_fn(tgt_lens)
     return {"src": srcs, "tgt": tgts, "src_len": src_lens, "tgt_len": tgt_lens }

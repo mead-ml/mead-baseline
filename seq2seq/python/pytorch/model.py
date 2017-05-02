@@ -122,7 +122,7 @@ class Seq2SeqModel(nn.Module):
     def __init__(self, embed1, embed2, mxlen, hsz, nlayers, rnntype, batchfirst=True):
         super(Seq2SeqModel, self).__init__()
         dsz = embed1.dsz
-
+        self.dropout = nn.Dropout(0.5)
         self.embed_in = _embedding(embed1)
         self.embed_out = _embedding(embed2)
         self.nc = embed2.vsz + 1            
@@ -252,3 +252,4 @@ class Seq2SeqAttnModel(nn.Module):
 
         embed_in_seq = self.embed_in(src)
         return self.encoder_rnn(embed_in_seq)
+

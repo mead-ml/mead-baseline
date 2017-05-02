@@ -75,8 +75,6 @@ with tf.Graph().as_default():
         else:
             seq2seq_creator_fn = Seq2Seq.create_lstm if FLAGS.rnntype.lower() == 'lstm' else Seq2Seq.create_gru
 
-        #seq2seq.params(embed1, embed2, FLAGS.mxlen, FLAGS.hsz, FLAGS.layers, FLAGS.attn, FLAGS.rnntype.lower())
-
         seq2seq = seq2seq_creator_fn(embed1, embed2, FLAGS.mxlen, FLAGS.hsz, FLAGS.layers)
 
         trainer = Trainer(seq2seq, FLAGS.optim, FLAGS.eta, FLAGS.clip)
