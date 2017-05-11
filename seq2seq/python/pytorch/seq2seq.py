@@ -30,7 +30,7 @@ parser.add_argument('--mxlen', default=100, help='Max length', type=int)
 parser.add_argument('--patience', default=10, help='Patience', type=int)
 parser.add_argument('--hsz', default=100, help='Hidden layer size', type=int)
 parser.add_argument('--outdir', default='out', help='Directory to put the output')
-parser.add_argument('--clip', default=1, help='Gradient clipping', type=float)
+parser.add_argument('--clip', default=5, help='Gradient clipping', type=float)
 parser.add_argument('--layers', default=1, help='Number of LSTM layers for encoder/decoder', type=int)
 parser.add_argument('--sharedv', default=False, help='Share vocab between source and destination', type=bool)
 parser.add_argument('--showex', default=True, help='Show generated examples every few epochs', type=bool)
@@ -79,9 +79,9 @@ Seq2SeqModelType = Seq2SeqAttnModel if args.attn else Seq2SeqModel
 print(Seq2SeqModelType)
 seq2seq = Seq2SeqModelType(embed1, embed2, args.mxlen, args.hsz, args.layers, args.rnntype)
 
-trainer = Trainer(gpu, seq2seq, args.optim, args.eta, args.mom)
+trainer = Trainer(gpu, seq2seq, args.optim, args.eta, args.mom, args.clip)
 
-err_min = 1
+err_min = 5
 last_improved = 0
 
 for i in range(args.epochs):

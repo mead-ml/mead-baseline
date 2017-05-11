@@ -11,8 +11,9 @@ from torchy import long_tensor_alloc, tensor_shape, tensor_max
 
 class Trainer:
 
-    def __init__(self, gpu, model, optim, eta, mom):
+    def __init__(self, gpu, model, optim, eta, mom, clip):
         self.gpu = gpu
+        self.clip = clip
         if optim == 'adadelta':
             self.optimizer = torch.optim.Adadelta(model.parameters(), lr=eta)
         elif optim == 'adam':
@@ -63,7 +64,7 @@ class Trainer:
         avg_loss = float(total_loss)/total
         print('%s (Loss %.4f) (Perplexity %.4f) (%.3f sec)' % 
               (phase, avg_loss, np.exp(avg_loss), duration))
-        return test_acc
+        return avg_loss
 
     def train(self, ts, batchsz):
         self.model.train()
@@ -84,6 +85,7 @@ class Trainer:
             loss = self.crit(pred, tgt)
             total_loss += loss.data[0]
             loss.backward()
+            torch.nn.utils.clip_grad_norm(self.model.parameters(), self.clip)
 
             total += self._total(tgt)
             self.optimizer.step()
