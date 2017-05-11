@@ -27,7 +27,7 @@ with tf.device('/cpu:0'):
     with tf.Graph().as_default():
         sess = tf.Session()
         with sess.as_default():
-            seq2seq = Seq2Seq.from_file(sess, FLAGS.indir, BASE)
+            seq2seq = Seq2Seq.from_file(sess, FLAGS.indir, BASE, predict=True)
             rlut1 = revlut(seq2seq.vocab1)
             rlut2 = revlut(seq2seq.vocab2)
             init = tf.global_variables_initializer()

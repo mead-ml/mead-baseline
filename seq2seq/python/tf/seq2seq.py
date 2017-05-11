@@ -44,8 +44,8 @@ if FLAGS.sharedv is True:
     v1.append(1)
     v2.append(0)
 
-vocab1 = build_vocab(v1, {FLAGS.train, FLAGS.test})
-vocab2 = build_vocab(v2, {FLAGS.train, FLAGS.test})
+vocab1 = build_vocab(v1, [FLAGS.train, FLAGS.test])
+vocab2 = build_vocab(v2, [FLAGS.train, FLAGS.test])
 
 embed1 = Word2VecModel(FLAGS.embed1, vocab1, FLAGS.unif)
 

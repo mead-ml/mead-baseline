@@ -56,8 +56,8 @@ if args.sharedv is True:
     v1.append(1)
     v2.append(0)
 
-vocab1 = build_vocab(v1, {args.train, args.test})
-vocab2 = build_vocab(v2, {args.train, args.test})
+vocab1 = build_vocab(v1, [args.train, args.test])
+vocab2 = build_vocab(v2, [args.train, args.test])
 
 embed1 = Word2VecModel(args.embed1, vocab1, args.unif)
 
