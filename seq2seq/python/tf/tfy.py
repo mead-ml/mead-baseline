@@ -58,4 +58,4 @@ def print_batch(best, rlut2):
                 break
             if v != '<PADDING>':
                 ll += [rlut2[best[i][b]]]
-        print(ll)
+        print(' '.join(ll))

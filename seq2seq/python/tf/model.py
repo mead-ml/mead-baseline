@@ -12,53 +12,7 @@ from w2v import *
 class Seq2SeqBase:
 
     def save(self, sess, outdir, base):
-        basename = outdir + '/' + base
-        tf.train.write_graph(sess.graph_def, outdir, base + '.graph', as_text=False)
-        with open(basename + '.saver', 'w+b') as f:
-            f.write(str(self.saver.as_saver_def()))
-        self.saver.save(sess, basename + '.model')
-
-        with open(basename + '-1.vocab', 'w') as f:
-            json.dump(self.vocab1, f)      
-
-        with open(basename + '-2.vocab', 'w') as f:
-            json.dump(self.vocab2, f)      
-
-    def _fmtfor(self, i):
-        if i == 0:
-            return 'output/probs:0'
-        else:
-            return 'output/probs_%d:0' % i
-
-    def restore(self, sess, indir, base, maxlen):
-        basename = indir + '/' + base
-        with open(basename + '.saver') as fsv:
-            saver_def = tf.train.SaverDef()
-            text_format.Merge(fsv.read(), saver_def)
-
-        with gfile.FastGFile(basename + '.graph', 'r') as f:
-            gd = tf.GraphDef()
-            gd.ParseFromString(f.read())
-            sess.graph.as_default()
-            tf.import_graph_def(gd, name='')
-            print('restore_op_name %s' % saver_def.restore_op_name)
-            print('filename_tensor_name %s' % saver_def.filename_tensor_name)
-            sess.run(saver_def.restore_op_name, {saver_def.filename_tensor_name: basename + '.model'})
-
-            self.src = tf.get_default_graph().get_tensor_by_name('src:0')
-            self.tgt = tf.get_default_graph().get_tensor_by_name('tgt:0')
-            self.pkeep = tf.get_default_graph().get_tensor_by_name('pkeep:0')
-            self.probs = [tf.get_default_graph().get_tensor_by_name(self._fmtfor(i)) for i in range(maxlen)]
-
-        with open(basename + '-1.vocab', 'r') as f:
-            self.vocab1 = json.load(f)
-
-        with open(basename + '-2.vocab', 'r') as f:
-            self.vocab2 = json.load(f)
-
-            
-        self.saver = tf.train.Saver(saver_def=saver_def)
-
+        pass
 
     def __init__(self):
         pass
@@ -117,8 +71,56 @@ class Seq2SeqBase:
             avg_cost = cost/batchsz
             return avg_cost
 
+class Seq2SeqBase_v1_0(Seq2SeqBase):
+    def save(self, sess, outdir, base):
+        basename = outdir + '/' + base
+        tf.train.write_graph(sess.graph_def, outdir, base + '.graph', as_text=False)
+        with open(basename + '.saver', 'w+b') as f:
+            f.write(str(self.saver.as_saver_def()))
+        self.saver.save(sess, basename + '.model')
 
-class Seq2SeqModel_v1_0(Seq2SeqBase):
+        with open(basename + '-1.vocab', 'w') as f:
+            json.dump(self.vocab1, f)      
+
+        with open(basename + '-2.vocab', 'w') as f:
+            json.dump(self.vocab2, f)      
+
+    def restore(self, sess, indir, base, mxlen):
+        basename = indir + '/' + base
+        with open(basename + '.saver') as fsv:
+            saver_def = tf.train.SaverDef()
+            text_format.Merge(fsv.read(), saver_def)
+
+        with gfile.FastGFile(basename + '.graph', 'rb') as f:
+            gd = tf.GraphDef()
+            gd.ParseFromString(f.read())
+            sess.graph.as_default()
+            tf.import_graph_def(gd, name='')
+            print('restore_op_name %s' % saver_def.restore_op_name)
+            print('filename_tensor_name %s' % saver_def.filename_tensor_name)
+            sess.run(saver_def.restore_op_name, {saver_def.filename_tensor_name: basename + '.model'})
+
+            self.src = tf.get_default_graph().get_tensor_by_name('src:0')
+            self.tgt = tf.get_default_graph().get_tensor_by_name('tgt:0')
+            self.pkeep = tf.get_default_graph().get_tensor_by_name('pkeep:0')
+            self.probs = [tf.get_default_graph().get_tensor_by_name(self._fmtfor(i)) for i in range(mxlen)]
+
+        with open(basename + '-1.vocab', 'r') as f:
+            self.vocab1 = json.load(f)
+
+        with open(basename + '-2.vocab', 'r') as f:
+            self.vocab2 = json.load(f)
+
+            
+        self.saver = tf.train.Saver(saver_def=saver_def)
+
+    def _fmtfor(self, i):
+        if i == 0:
+            return 'output/probs:0'
+        else:
+            return 'output/probs_%d:0' % i
+
+class Seq2SeqModel_v1_0(Seq2SeqBase_v1_0):
 
     def __init__(self):
         pass
@@ -173,7 +175,7 @@ class Seq2SeqModel_v1_0(Seq2SeqBase):
             self.preds = tf.stack(self.preds)
 
 
-class LegacySeq2SeqLib(Seq2SeqBase):
+class LegacySeq2SeqLib(Seq2SeqBase_v1_0):
 
     def __init__(self):
         pass
@@ -363,6 +365,13 @@ class Seq2SeqModel_v1_1(Seq2SeqBase):
             self.rnntype = state['rnntype']
             self.nlayers = state['nlayers']
             self.mxlen = state['mxlen']
+
+    def restore_graph(self, sess, indir, base):
+        with open(indir + '/' + base + '.graph', 'rb') as gf:
+            gd = tf.GraphDef()
+            gd.ParseFromString(gf.read())
+            sess.graph.as_default()
+            tf.import_graph_def(gd, name='')
 
     def ex2dict(self, example, pkeep):
         # This is a bit clunky, but to minimize impact on existing functions
