@@ -101,7 +101,6 @@ It was run on the latest code as of 3/16/2017, with 25 epochs, a learning rate o
 | ------- | ---------- | ---------- | ------- | ------ |
 | SST2    |      87.70 |      87.75 |  87.47 | 87.095 |
 
-For Keras and TensorFlow, I am using the latest 1.0 branch.  For Keras and PyTorch I am using the master.
 Note that these are randomly initialized and these numbers will vary
 (IOW, don't assume that one implementation is guaranteed to outperform the others from a single run).
 
@@ -202,7 +201,7 @@ This code implements seq2seq with mini-batching (as in other examples) using ada
 
 For any reasonable size data, this really needs to run on the GPU for realistic training times.
 
-_TODO_: The code on master works on tensorflow <= 1.0.  There is an experimental branch `tf_v1_1` that works on tensorflow 1.1 with the new decoder API. 
+The TensorFlow code has vanilla seq2seq using just the base graph modules, as well as legacy seq2seq lib (pre-1.1) and the new dynamic decoder seq2seq code in TF 1.1.
 
 ## Status
 
