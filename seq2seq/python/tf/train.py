@@ -2,11 +2,16 @@ import tensorflow as tf
 import numpy as np
 import time
 
+from data import batch
+import math
+
+from utils import ProgressBar
+
 class Trainer:
 
-    def __init__(self, model, optim, eta, clip):
+    def __init__(self, model, optim, eta, clip=5):
         
-        self.loss, self.errs, self.tot = model.createLoss()
+        self.loss = model.create_loss()
         self.model = model
         self.global_step = tf.Variable(0, name='global_step', trainable=False)
         if optim == 'adadelta':
@@ -17,8 +22,9 @@ class Trainer:
             self.optimizer = tf.train.GradientDescentOptimizer(eta)
 
         gvs = self.optimizer.compute_gradients(self.loss)
-        capped_gvs = [(tf.clip_by_value(grad, -clip, clip), var) for grad, var in gvs]
-        self.train_op = self.optimizer.apply_gradients(capped_gvs, global_step=self.global_step)
+        #capped_gvs = [(tf.clip_by_norm(grad, -clip, clip), var) for grad, var in gvs]
+        #self.train_op = self.optimizer.apply_gradients(capped_gvs, global_step=self.global_step)
+        self.train_op = self.optimizer.apply_gradients(gvs, global_step=self.global_step)
 
         self.loss_summary = tf.summary.scalar("loss", self.loss)
         self.summary_op = tf.summary.merge_all()
@@ -34,45 +40,60 @@ class Trainer:
     def prepare(self, saver):
         self.model.saver = saver
 
-    def train(self, ts, sess, summary_writer, dropout):
-        total = 0
+    def train(self, ts, sess, summary_writer, dropout, batchsz):
         total_loss = 0
-        total_err = 0
-        seq = np.random.permutation(len(ts))
+        steps = int(math.floor(len(ts)/float(batchsz)))
+        shuffle = np.random.permutation(np.arange(steps))
         start_time = time.time()
     
-        for j in seq:
-            feed_dict = self.model.ex2dict(ts[j], 1.0-dropout)
+        pg = ProgressBar(steps)
+
+        for i in range(steps):
+            si = shuffle[i]
+            ts_i = batch(ts, si, batchsz)
+            feed_dict = self.model.ex2dict(ts_i, 1.0-dropout)
         
-            _, step, summary_str, lossv, errv, totv = sess.run([self.train_op, self.global_step, self.summary_op, self.loss, self.errs, self.tot], feed_dict=feed_dict)
+            _, step, summary_str, lossv = sess.run([self.train_op, self.global_step, self.summary_op, self.loss], feed_dict=feed_dict)
             summary_writer.add_summary(summary_str, step)
             #print(lossv, errv, totv)
             total_loss += lossv
-            total_err += errv
-            total += totv
+            pg.update()
 
+        pg.done()
         duration = time.time() - start_time
-        
-        acc = 1.0 - (total_err/total)
             
-        print('Train (Loss %.4f, Acc %.4f) (%.3f sec)' % (float(total_loss)/len(seq), acc, duration))
+        print('Train (Loss %.4f) (%.3f sec)' % (total_loss/steps, duration))
 
 
-    def test(self, ts, sess):
+    def test(self, ts, sess, batchsz=1):
 
-        total_loss = total_err = total = 0
+        total_loss = 0
+        steps = int(math.floor(len(ts)/float(batchsz)))
         start_time = time.time()
-        for j in range(len(ts)):
-            feed_dict = self.model.ex2dict(ts[j], 1.0)
-            lossv, errv, totv = sess.run([self.loss, self.errs, self.tot], feed_dict=feed_dict)
+        for i in range(steps):
+            ts_i = batch(ts, i, batchsz)
+            feed_dict = self.model.ex2dict(ts_i, 1.0)
+            lossv = sess.run(self.loss, feed_dict=feed_dict)
             total_loss += lossv
-            total_err += errv
-            total += totv
         
         duration = time.time() - start_time
 
-        err = total_err/total
+        avg_loss = total_loss / steps
+        print('Test (Loss %.4f) (%.3f sec)' % (avg_loss, duration))
 
-        print('Test (Loss %.4f, Acc %.4f) (%.3f sec)' % (float(total_loss)/len(ts), 1.0 - err, duration))
+        return avg_loss
 
-        return err
+
+    def best_in_batch(self, ts, sess, batchsz):
+
+        steps = int(math.floor(len(ts)/float(batchsz)))
+        start_time = time.time()
+        shuffle = np.random.permutation(np.arange(steps))
+        ts_i = batch(ts, shuffle[0], batchsz)
+        feed_dict = self.model.ex2dict(ts_i, 1.0)
+        best = sess.run(self.model.best, feed_dict=feed_dict)
+        
+        
+        duration = time.time() - start_time
+        print('Show (%.3f sec)' % duration)
+        return best

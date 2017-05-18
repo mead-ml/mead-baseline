@@ -6,12 +6,14 @@ import time
 import math
 import numpy as np
 import data
-from utils import ProgressBar
+from utils import ProgressBar, lookup_sentence
+from torchy import long_tensor_alloc, tensor_shape, tensor_max
 
 class Trainer:
 
-    def __init__(self, gpu, model, optim, eta, mom):
+    def __init__(self, gpu, model, optim, eta, mom, clip):
         self.gpu = gpu
+        self.clip = clip
         if optim == 'adadelta':
             self.optimizer = torch.optim.Adadelta(model.parameters(), lr=eta)
         elif optim == 'adam':
@@ -29,8 +31,8 @@ class Trainer:
     
     def _wrap(self, ds):
         src = ds["src"]
-        dst = ds["dst"]
-        tgt = ds["tgt"]
+        dst = ds["tgt"][:,:-1]
+        tgt = ds["tgt"][:,1:]
 
         if self.gpu:
             src = src.cuda()
@@ -38,62 +40,53 @@ class Trainer:
             tgt = tgt.cuda()
         return Variable(src), Variable(dst), Variable(tgt)
     
-    # Ok, accuracy only for now, B x T x C
-    def _right(self, pred, tgt):
-        _, best = pred.max(2)
-        best = best.data.long().squeeze()
-        tgtt = tgt.data.long()
-        mask = tgtt.ne(0)
-        return torch.sum(mask * (tgtt == best))
-
     def _total(self, tgt):
         tgtt = tgt.data.long()
         return torch.sum(tgtt.ne(0))
 
-    def test(self, ts, phase='Test'):
+    def test(self, ts, batchsz, phase='Test'):
 
         self.model.eval()
 
-        total_loss = total_corr = total = 0
+        total_loss = total = 0
         start_time = time.time()
-        steps = len(ts)
+        steps = int(math.floor(len(ts)/float(batchsz)))
 
         for i in range(steps):
-            src, dst, tgt = self._wrap(ts[i])
+            ts_i = data.batch(ts, i, batchsz, long_tensor_alloc, tensor_shape, tensor_max)
+            src, dst, tgt = self._wrap(ts_i)
             pred = self.model((src, dst))
             loss = self.crit(pred, tgt)
             total_loss += loss.data[0]
-            total_corr += self._right(pred, tgt)
             total += self._total(tgt)
 
         duration = time.time() - start_time
-        test_acc = float(total_corr)/total
-
         avg_loss = float(total_loss)/total
-        print('%s (Loss %.4f) (Perplexity %.4f) (Acc %d/%d = %.4f) (%.3f sec)' % 
-              (phase, avg_loss, np.exp(avg_loss), total_corr, total, test_acc, duration))
-        return test_acc
+        print('%s (Loss %.4f) (Perplexity %.4f) (%.3f sec)' % 
+              (phase, avg_loss, np.exp(avg_loss), duration))
+        return avg_loss
 
-    def train(self, ts):
+    def train(self, ts, batchsz):
         self.model.train()
 
         start_time = time.time()
 
-        steps = int(len(ts))
+        steps = int(math.floor(len(ts)/float(batchsz)))
         shuffle = np.random.permutation(np.arange(steps))
-
-        total_loss = total_corr = total = 0
+        total_loss = total = 0
         pg = ProgressBar(steps)
         for i in range(steps):
             self.optimizer.zero_grad()
+
             si = shuffle[i]
-            src, dst, tgt = self._wrap(ts[si])
+            ts_i = data.batch(ts, si, batchsz, long_tensor_alloc, tensor_shape, tensor_max)
+            src, dst, tgt = self._wrap(ts_i)
             pred = self.model((src, dst))
             loss = self.crit(pred, tgt)
             total_loss += loss.data[0]
             loss.backward()
+            torch.nn.utils.clip_grad_norm(self.model.parameters(), self.clip)
 
-            total_corr += self._right(pred, tgt)
             total += self._total(tgt)
             self.optimizer.step()
             pg.update()
@@ -102,5 +95,55 @@ class Trainer:
 
         avg_loss = float(total_loss)/total
 
-        print('Train (Loss %.4f) (Perplexity %.4f) (Acc %d/%d = %.4f) (%.3f sec)' % 
-              (avg_loss, np.exp(avg_loss), total_corr, total, float(total_corr)/total, duration))
+        print('Train (Loss %.4f) (Perplexity %.4f) (%.3f sec)' % 
+              (avg_loss, np.exp(avg_loss), duration))
+
+# Mashed together from code using numpy only, hacked for th Tensors
+def show_examples(use_gpu, model, es, rlut1, rlut2, embed2, mxlen, sample, prob_clip, max_examples):
+
+    batch = data.batch(es, 0, max_examples, long_tensor_alloc, tensor_shape, tensor_max)
+    GO = embed2.vocab['<GO>']
+    EOS = embed2.vocab['<EOS>']
+
+    src_array = batch['src']
+    tgt_array = batch['tgt']
+    if use_gpu:
+        src_array = src_array.cuda()
+    
+    for src_i,tgt_i in zip(src_array, tgt_array):
+
+        print('========================================================================')
+        sent = lookup_sentence(rlut1, src_i.cpu().numpy(), reverse=True)
+        print('[OP] %s' % sent)
+        sent = lookup_sentence(rlut2, tgt_i)
+        print('[Actual] %s' % sent)
+        dst_i = torch.zeros(1, mxlen).long()
+        if use_gpu:
+            dst_i = dst_i.cuda()
+
+        next_value = GO
+        src_i = src_i.view(1, -1)
+        for j in range(mxlen):
+            dst_i[0,j] = next_value
+            probv = model((Variable(src_i), Variable(dst_i)))
+            output = probv.squeeze()[j]
+            if sample is False:
+                _, next_value = torch.max(output, 0)
+                next_value = int(next_value.data[0])
+            else:
+                probs = output.data.exp()
+                # This is going to zero out low prob. events so they are not
+                # sampled from
+                best, ids = probs.topk(prob_clip, 0, largest=True, sorted=True)
+                probs.zero_()
+                probs.index_copy_(0, ids, best)
+                probs.div_(torch.sum(probs))
+                fv = torch.multinomial(probs, 1)[0]
+                next_value = fv
+
+            if next_value == EOS:
+                break
+
+        sent = lookup_sentence(rlut2, dst_i.squeeze())
+        print('Guess: %s' % sent)
+        print('------------------------------------------------------------------------')
