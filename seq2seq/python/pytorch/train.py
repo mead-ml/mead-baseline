@@ -23,10 +23,9 @@ class Trainer:
         else:
             self.optimizer = torch.optim.SGD(model.parameters(), lr=eta, momentum=mom)
         self.model = model
-
         self.crit = model.create_loss()
         if gpu:
-            self.model.cuda()
+            self.model = torch.nn.DataParallel(model).cuda()
             self.crit.cuda()
     
     def _wrap(self, ds):
