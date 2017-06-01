@@ -2,7 +2,7 @@ import numpy as np
 import time
 import argparse
 
-from os import sys, path
+from os import sys, path, makedirs
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 from w2v import Word2VecModel
 from data import load_sentences, build_vocab
