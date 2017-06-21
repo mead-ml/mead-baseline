@@ -45,7 +45,7 @@ class StackedLSTMCell(nn.Module):
         for i, layer in enumerate(self.layers):
             h_i, c_i = layer(input, (h_0[i], c_0[i]))
             input = h_i
-            if i != self.num_layers:
+            if i != self.num_layers - 1:
                 input = self.dropout(input)
             hs += [h_i]
             cs += [c_i]
