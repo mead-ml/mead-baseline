@@ -19,12 +19,12 @@ class SequenceCriterion(nn.Module):
         loss = self.crit(inputs.view(total_sz, -1), targets.view(total_sz))
         return loss
 
-def _rnn(insz, hsz, rnntype, nlayers):
+def _rnn(insz, hsz, rnntype, nlayers, dropout):
 
     if rnntype == 'gru':
-        rnn = torch.nn.GRU(insz, hsz, nlayers)
+        rnn = torch.nn.GRU(insz, hsz, nlayers, dropout=dropout)
     else:
-        rnn = torch.nn.LSTM(insz, hsz, nlayers)
+        rnn = torch.nn.LSTM(insz, hsz, nlayers, dropout=dropout)
     return rnn
 
 
@@ -119,15 +119,16 @@ class Seq2SeqModel(nn.Module):
         return torch.load(name)
 
     # TODO: Add more dropout, BN
-    def __init__(self, embed1, embed2, mxlen, hsz, nlayers, rnntype, batchfirst=True):
+    def __init__(self, embed1, embed2, mxlen, hsz, nlayers, rnntype, batchfirst=True, pdrop=0.5):
         super(Seq2SeqModel, self).__init__()
         dsz = embed1.dsz
-        self.dropout = nn.Dropout(0.5)
+
+        self.dropout = nn.Dropout(pdrop)
         self.embed_in = _embedding(embed1)
         self.embed_out = _embedding(embed2)
         self.nc = embed2.vsz + 1            
-        self.encoder_rnn = _rnn(dsz, hsz, rnntype, nlayers)
-        self.decoder_rnn = _rnn(hsz, hsz, rnntype, nlayers)
+        self.encoder_rnn = _rnn(dsz, hsz, rnntype, nlayers, pdrop)
+        self.decoder_rnn = _rnn(hsz, hsz, rnntype, nlayers, pdrop)
         self.preds = nn.Linear(hsz, self.nc)
         self.batchfirst = batchfirst
         self.probs = nn.LogSoftmax()
@@ -172,15 +173,15 @@ class Seq2SeqAttnModel(nn.Module):
         return torch.load(name)
 
     # TODO: Add more dropout, BN
-    def __init__(self, embed1, embed2, mxlen, hsz, nlayers, rnntype, batchfirst=True):
+    def __init__(self, embed1, embed2, mxlen, hsz, nlayers, rnntype, batchfirst=True, pdrop=0.5):
         super(Seq2SeqAttnModel, self).__init__()
         dsz = embed1.dsz
         self.embed_in = _embedding(embed1)
         self.embed_out = _embedding(embed2)
         self.nc = embed2.vsz + 1            
-        self.encoder_rnn = _rnn(dsz, hsz, rnntype, nlayers)
-        self.dropout = nn.Dropout(0.5)
-        self.decoder_rnn = _rnn_cell(hsz + dsz, hsz, rnntype, nlayers, 0.5)
+        self.encoder_rnn = _rnn(dsz, hsz, rnntype, nlayers, pdrop)
+        self.dropout = nn.Dropout(pdrop)
+        self.decoder_rnn = _rnn_cell(hsz + dsz, hsz, rnntype, nlayers, pdrop)
         self.preds = nn.Linear(hsz, self.nc)
         self.batchfirst = batchfirst
         self.probs = nn.LogSoftmax()
