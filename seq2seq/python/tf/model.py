@@ -11,23 +11,17 @@ from w2v import *
 
 class Seq2SeqBase:
 
-    def save(self, sess, outdir, base):
+    def save(self, sess, model_base):
         pass
 
     def __init__(self):
         pass
 
-    def ex2dict(self, example, pkeep):
-
-        return {self.src: example["src"], 
-                self.tgt: example["tgt"],
-                self.pkeep: pkeep}
-
-    def step(self, sess, src, dst):
+    def step(self, sess, src, src_len, dst, dst_len):
         """
         Generate probability distribution over output V for next token
         """
-        feed_dict = {self.src: src, self.tgt: dst, self.pkeep: 1.0}
+        feed_dict = {self.src: src, self.tgt: dst, self.pkeep: pkeep}
         return sess.run(self.probs, feed_dict=feed_dict)
 
 
@@ -72,43 +66,46 @@ class Seq2SeqBase:
             return avg_cost
 
 class Seq2SeqBase_v1_0(Seq2SeqBase):
-    def save(self, sess, outdir, base):
-        basename = outdir + '/' + base
-        tf.train.write_graph(sess.graph_def, outdir, base + '.graph', as_text=False)
-        with open(basename + '.saver', 'w+b') as f:
-            f.write(str(self.saver.as_saver_def()))
-        self.saver.save(sess, basename + '.model')
+    def save(self, sess, model_base):
 
-        with open(basename + '-1.vocab', 'w') as f:
+        path_and_file = model_base.split('/')
+        outdir = '/'.join(path_and_file[:-1])
+        base = path_and_file[-1]
+        tf.train.write_graph(sess.graph_def, outdir, base + '.graph', as_text=False)
+
+        with open(model_base + '.saver', 'w+b') as f:
+            f.write(str(self.saver.as_saver_def()))
+        self.saver.save(sess, model_base + '.model')
+
+        with open(model_base + '-1.vocab', 'w') as f:
             json.dump(self.vocab1, f)      
 
-        with open(basename + '-2.vocab', 'w') as f:
+        with open(model_base + '-2.vocab', 'w') as f:
             json.dump(self.vocab2, f)      
 
-    def restore(self, sess, indir, base, mxlen):
-        basename = indir + '/' + base
-        with open(basename + '.saver') as fsv:
+    def restore(self, sess, model_base, mxlen):
+        with open(model_base + '.saver') as fsv:
             saver_def = tf.train.SaverDef()
             text_format.Merge(fsv.read(), saver_def)
 
-        with gfile.FastGFile(basename + '.graph', 'rb') as f:
+        with gfile.FastGFile(model_base + '.graph', 'rb') as f:
             gd = tf.GraphDef()
             gd.ParseFromString(f.read())
             sess.graph.as_default()
             tf.import_graph_def(gd, name='')
             print('restore_op_name %s' % saver_def.restore_op_name)
             print('filename_tensor_name %s' % saver_def.filename_tensor_name)
-            sess.run(saver_def.restore_op_name, {saver_def.filename_tensor_name: basename + '.model'})
+            sess.run(saver_def.restore_op_name, {saver_def.filename_tensor_name: model_base + '.model'})
 
             self.src = tf.get_default_graph().get_tensor_by_name('src:0')
             self.tgt = tf.get_default_graph().get_tensor_by_name('tgt:0')
             self.pkeep = tf.get_default_graph().get_tensor_by_name('pkeep:0')
             self.probs = [tf.get_default_graph().get_tensor_by_name(self._fmtfor(i)) for i in range(mxlen)]
 
-        with open(basename + '-1.vocab', 'r') as f:
+        with open(model_base + '-1.vocab', 'r') as f:
             self.vocab1 = json.load(f)
 
-        with open(basename + '-2.vocab', 'r') as f:
+        with open(model_base + '-2.vocab', 'r') as f:
             self.vocab2 = json.load(f)
 
             
@@ -300,7 +297,7 @@ class Seq2SeqModel_v1_1(Seq2SeqBase):
                 else:
                     helper = tf.contrib.seq2seq.TrainingHelper(inputs=tf.nn.embedding_lookup(Wo, self.tgt), sequence_length=self.tgt_len)
                 decoder = tf.contrib.seq2seq.BasicDecoder(cell=rnn_dec_cell, helper=helper, initial_state=initial_state, output_layer=proj)
-                final_outputs, final_decoder_state = tf.contrib.seq2seq.dynamic_decode(decoder, impute_finished=True, output_time_major=True, maximum_iterations=self.mxlen)
+                final_outputs, final_decoder_state, _ = tf.contrib.seq2seq.dynamic_decode(decoder, impute_finished=True, output_time_major=True, maximum_iterations=self.mxlen)
                 self.preds = final_outputs.rnn_output
                 best = final_outputs.sample_id
 
@@ -313,7 +310,7 @@ class Seq2SeqModel_v1_1(Seq2SeqBase):
         cell = new_multi_rnn_cell(self.hsz, self.rnntype, self.nlayers)
         if self.attn:
             attn_mech = tf.contrib.seq2seq.LuongAttention(self.hsz, rnn_enc_tensor, self.src_len) 
-            cell = tf.contrib.seq2seq.DynamicAttentionWrapper(cell, attn_mech, self.hsz, name='dyn_attn_cell')
+            cell = tf.contrib.seq2seq.AttentionWrapper(cell, attn_mech, self.hsz, name='dyn_attn_cell')
         return cell
 
     def encode(self, embed_in, src):
@@ -326,38 +323,39 @@ class Seq2SeqModel_v1_1(Seq2SeqBase):
             # This comes out as a sequence T of (B, D)
             return seq2tensor(rnn_enc_seq), final_encoder_state
 
-    def save_md(self, sess, outdir, base):
-        basename = outdir + '/' + base
-        tf.train.write_graph(sess.graph_def, outdir, base + '.graph-txt', as_text=True)
+    def save_md(self, sess, model_base):
+
+        path_and_file = model_base.split('/')
+        outdir = '/'.join(path_and_file[:-1])
+        base = path_and_file[-1]
         tf.train.write_graph(sess.graph_def, outdir, base + '.graph', as_text=False)
+
         state = {"attn": self.attn, "hsz": self.hsz, "dsz": self.dsz, "rnntype": self.rnntype, "nlayers": self.nlayers, "mxlen": self.mxlen }
-        with open(basename + '.state', 'w') as f:
+        with open(model_base + '.state', 'w') as f:
             json.dump(state, f)
 
-        with open(basename + '-1.vocab', 'w') as f:
+        with open(model_base + '-1.vocab', 'w') as f:
             json.dump(self.vocab1, f)      
 
-        with open(basename + '-2.vocab', 'w') as f:
+        with open(model_base + '-2.vocab', 'w') as f:
             json.dump(self.vocab2, f)     
         
 
-    def save(self, sess, outdir, base):
-        self.save_md(sess, outdir, base)
-        basename = outdir + '/' + base
-        #with open(basename + '.saver', 'w+b') as f:
+    def save(self, sess, model_base):
+        self.save_md(sess, model_base)
+        #with open(model_base + '.saver', 'w+b') as f:
         #    f.write(bytes(self.saver.as_saver_def(), 'utf8'))
-        self.saver.save(sess, basename + '.model')
+        self.saver.save(sess, model_base + '.model')
 
-    def restore_md(self, sess, indir, base):
-        basename = indir + '/' + base
+    def restore_md(self, sess, model_base):
 
-        with open(basename + '-1.vocab', 'r') as f:
+        with open(model_base + '-1.vocab', 'r') as f:
             self.vocab1 = json.load(f)
 
-        with open(basename + '-2.vocab', 'r') as f:
+        with open(model_base + '-2.vocab', 'r') as f:
             self.vocab2 = json.load(f)
 
-        with open(basename + '.state', 'r') as f:
+        with open(model_base + '.state', 'r') as f:
             state = json.load(f)
             self.attn = state['attn']
             self.hsz = state['hsz']
@@ -373,19 +371,19 @@ class Seq2SeqModel_v1_1(Seq2SeqBase):
             sess.graph.as_default()
             tf.import_graph_def(gd, name='')
 
-    def ex2dict(self, example, pkeep):
-        # This is a bit clunky, but to minimize impact on existing functions
-        # unreverse the sequence if attention is on.
-        src = example["src"] if self.attn is False else example['src'][:,::-1]
-
-        # This will be the actual tensor temporal length when we are done
-        mx_tgt_len = np.max(example["tgt_len"])
-        return {self.src: src, 
-                self.tgt: example["tgt"],
-                self.src_len: example["src_len"],
-                self.tgt_len: example["tgt_len"],
-                self.mx_tgt_len: mx_tgt_len,
-                self.pkeep: pkeep}
+#    def ex2dict(self, example, pkeep):
+#        # This is a bit clunky, but to minimize impact on existing functions
+##        # unreverse the sequence if attention is on.
+#        src = example["src"] if self.attn is False else example['src'][:,::-1]
+#
+#        # This will be the actual tensor temporal length when we are done
+#        mx_tgt_len = np.max(example["tgt_len"])
+#        return {self.src: src, 
+#                self.tgt: example["tgt"],
+#                self.src_len: example["src_len"],
+#                self.tgt_len: example["tgt_len"],
+#                self.mx_tgt_len: mx_tgt_len,
+#                self.pkeep: pkeep}
 
     # This method still available, but much less efficient than using the GreedyEmbeddingHelper
     def step(self, sess, src, src_len, dst, dst_len):

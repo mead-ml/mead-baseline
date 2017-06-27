@@ -13,55 +13,49 @@ def readtospc(f):
 
 class Word2VecModel:
 
-    def __init__(self, filename, knownvocab=None, unifweight=None):
+    def __init__(self, filename, knownvocab=None, unifweight=None, keep_unused=False):
 
         uw = 0.0 if unifweight == None else unifweight
         self.vocab = {}
-        self.vocab["<PADDING>"] = 0
+        idx = 0
+
         with open(filename, "rb") as f:
             header = f.readline()
             vsz, self.dsz = map(int, header.split())
 
-            if knownvocab is not None:
-                self.vsz = 0
-                for v in knownvocab:
-                    self.vsz += 1
-            else:
-                self.vsz = vsz
+            self.nullv = np.zeros(self.dsz, dtype=np.float32)
+            self.vocab["<PADDING>"] = idx
+            idx += 1
 
-            self.weights = np.random.uniform(-uw, uw, (self.vsz+1, self.dsz))
+            word_vectors = [self.nullv]
             width = 4 * self.dsz
-            k = 1
-            # All attested word vectors
+
             for i in range(vsz):
                 word = readtospc(f)
                 raw = f.read(width)
-                # If vocab list, not in: dont add, in:add, drop from list
-                if word in self.vocab:
+                if keep_unused is False and word not in knownvocab:
                     continue
 
-                if knownvocab is not None:
-                    if word not in knownvocab:
-                        continue
-
-                    # Otherwise drop freq to 0, for later
+                # Otherwise add it to the list and remove from knownvocab
+                if knownvocab and word in knownvocab:
                     knownvocab[word] = 0
-                vec = np.fromstring(raw, dtype=np.float32)
-                self.weights[k] = vec
-                self.vocab[word] = k
-                k = k + 1
 
-            # Anything left over, unattested in w2v model, just use a random
-            # initialization
+                vec = np.fromstring(raw, dtype=np.float32)
+                word_vectors.append(vec)
+
+                self.vocab[word] = idx
+                idx += 1
+
         if knownvocab is not None:
             unknown = {v: cnt for v,cnt in knownvocab.items() if cnt > 0}
             for v in unknown:
-                self.vocab[v] = k
-                k = k + 1
+                word_vectors.append(np.random.uniform(-uw, uw, self.dsz))
+                self.vocab[v] = idx
+                idx += 1
 
-        self.nullv = np.zeros(self.dsz, dtype=np.float32)
-        self.weights[0] = self.nullv
-
+        self.weights = np.array(word_vectors)
+        self.vsz = self.weights.shape[0] - 1
+        print(self.vsz, self.dsz)
     def lookup(self, word, nullifabsent=True):
         if word in self.vocab:
             return self.weights[self.vocab[word]]

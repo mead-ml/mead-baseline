@@ -28,11 +28,9 @@ class Trainer:
             self.model = torch.nn.DataParallel(model).cuda()
             self.crit.cuda()
     
-    def _wrap(self, ds):
-        src = ds["src"]
-        dst = ds["tgt"][:,:-1]
-        tgt = ds["tgt"][:,1:]
-
+    def _wrap(self, src, tgt):
+        dst = tgt[:,:-1]
+        tgt = tgt[:,1:]
         if self.gpu:
             src = src.cuda()
             dst = dst.cuda()
@@ -43,75 +41,76 @@ class Trainer:
         tgtt = tgt.data.long()
         return torch.sum(tgtt.ne(0))
 
-    def test(self, ts, batchsz, phase='Test'):
-
+    def test(self, ts):
         self.model.eval()
-
         total_loss = total = 0
-        start_time = time.time()
-        steps = int(math.floor(len(ts)/float(batchsz)))
-
-        for i in range(steps):
-            ts_i = data.batch(ts, i, batchsz, long_tensor_alloc, tensor_shape, tensor_max)
-            src, dst, tgt = self._wrap(ts_i)
+        #start_time = time.time()
+        steps = len(ts)
+        pg = ProgressBar(steps)
+        for src, tgt, src_len, tgt_len in ts:
+            src, dst, tgt = self._wrap(src, tgt)
             pred = self.model((src, dst))
             loss = self.crit(pred, tgt)
             total_loss += loss.data[0]
             total += self._total(tgt)
+            pg.update()
+        pg.done()
 
-        duration = time.time() - start_time
+        #duration = time.time() - start_time
         avg_loss = float(total_loss)/total
-        print('%s (Loss %.4f) (Perplexity %.4f) (%.3f sec)' % 
-              (phase, avg_loss, np.exp(avg_loss), duration))
+        #print('%s (Loss %.4f) (Perplexity %.4f) (%.3f sec)' % 
+        #      (phase, avg_loss, np.exp(avg_loss), duration))
         return avg_loss
 
-    def train(self, ts, batchsz):
+    def train(self, ts):
         self.model.train()
 
-        start_time = time.time()
-
-        steps = int(math.floor(len(ts)/float(batchsz)))
-        shuffle = np.random.permutation(np.arange(steps))
+        #start_time = time.time()
+        steps = len(ts)
         total_loss = total = 0
         pg = ProgressBar(steps)
-        for i in range(steps):
+        for src,tgt,src_len,tgt_len in ts:
             self.optimizer.zero_grad()
-
-            si = shuffle[i]
-            ts_i = data.batch(ts, si, batchsz, long_tensor_alloc, tensor_shape, tensor_max)
-            src, dst, tgt = self._wrap(ts_i)
+            src, dst, tgt = self._wrap(src, tgt)
             pred = self.model((src, dst))
             loss = self.crit(pred, tgt)
             total_loss += loss.data[0]
             loss.backward()
             torch.nn.utils.clip_grad_norm(self.model.parameters(), self.clip)
-
             total += self._total(tgt)
             self.optimizer.step()
             pg.update()
         pg.done()
-        duration = time.time() - start_time
+        #duration = time.time() - start_time
 
         avg_loss = float(total_loss)/total
+        return avg_loss
 
-        print('Train (Loss %.4f) (Perplexity %.4f) (%.3f sec)' % 
-              (avg_loss, np.exp(avg_loss), duration))
+        #print('Train (Loss %.4f) (Perplexity %.4f) (%.3f sec)' % 
+        #      (avg_loss, np.exp(avg_loss), duration))
 
 # Mashed together from code using numpy only, hacked for th Tensors
 def show_examples(use_gpu, model, es, rlut1, rlut2, embed2, mxlen, sample, prob_clip, max_examples):
+    si = np.random.randint(0, len(es))
 
-    batch = data.batch(es, 0, max_examples, long_tensor_alloc, tensor_shape, tensor_max)
+    src_array, tgt_array, src_len, _ = es[si]
+
+    if max_examples > 0:
+        max_examples = min(max_examples, src_array.size(0))
+        src_array = src_array[0:max_examples]
+        tgt_array = tgt_array[0:max_examples]
+        src_len = src_len[0:max_examples]
+
     GO = embed2.vocab['<GO>']
     EOS = embed2.vocab['<EOS>']
 
-    src_array = batch['src']
-    tgt_array = batch['tgt']
     if use_gpu:
         src_array = src_array.cuda()
     
-    for src_i,tgt_i in zip(src_array, tgt_array):
+    for src_len,src_i,tgt_i in zip(src_len, src_array, tgt_array):
 
         print('========================================================================')
+
         sent = lookup_sentence(rlut1, src_i.cpu().numpy(), reverse=True)
         print('[OP] %s' % sent)
         sent = lookup_sentence(rlut2, tgt_i)
@@ -146,3 +145,47 @@ def show_examples(use_gpu, model, es, rlut1, rlut2, embed2, mxlen, sample, prob_
         sent = lookup_sentence(rlut2, dst_i.squeeze())
         print('Guess: %s' % sent)
         print('------------------------------------------------------------------------')
+
+
+def fit(seq2seq, ts, es, **kwargs):
+    epochs = int(kwargs['epochs']) if 'epochs' in kwargs else 5
+    patience = int(kwargs['patience']) if 'patience' in kwargs else epochs
+    gpu = bool(kwargs['gpu']) if 'gpu' in kwargs else True
+    optim = kwargs['optim'] if 'optim' in kwargs else 'adam'
+    eta = float(kwargs['eta']) if 'eta' in kwargs else 0.01
+    mom = float(kwargs['mom']) if 'mom' in kwargs else 0.9
+    clip = float(kwargs['clip']) if 'clip' in kwargs else 5
+    model_file = kwargs['outfile'] if 'outfile' in kwargs and kwargs['outfile'] is not None else './model.pyth'
+    after_train_fn = kwargs['after_train_fn'] if 'after_train_fn' in kwargs else None
+    trainer = Trainer(gpu, seq2seq, optim, eta, mom, clip)
+    val_min = 1000
+    last_improved = 0
+
+    for i in range(epochs):
+        print('Training epoch %d' % (i+1))
+        start_time = time.time()
+        avg_train_loss = trainer.train(ts)
+        duration = time.time() - start_time
+        print('Training Loss %.4f (Perplexity %.4f) (%.3f sec)' % 
+              (avg_train_loss, np.exp(avg_train_loss), duration))
+
+
+        if after_train_fn is not None:
+            after_train_fn(seq2seq)
+
+        start_time = time.time()
+        avg_val_loss = trainer.test(es)
+        duration = time.time() - start_time
+        print('Validation Loss %.4f (Perplexity %.4f) (%.3f sec)' % 
+              (avg_val_loss, np.exp(avg_val_loss), duration))
+
+        if avg_val_loss < val_min:
+            last_improved = i
+            val_min = avg_val_loss
+            print('Lowest error achieved yet -- writing model')
+            seq2seq.save(model_file)
+
+        if (i - last_improved) > patience:
+            print('Stopping due to persistent failures to improve')
+            break
+

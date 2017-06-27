@@ -7,6 +7,10 @@ def tensor_max(tensor):
 def tensor_shape(tensor):
     return tensor.size()
 
+def tensor_reverse_2nd(tensor):
+    idx = torch.LongTensor([i for i in range(tensor.size(1)-1, -1, -1)])
+    return tensor.index_select(1, idx)
+
 def long_0_tensor_alloc(dims, dtype=None):
     lt = long_tensor_alloc(dims)
     lt.zero_()

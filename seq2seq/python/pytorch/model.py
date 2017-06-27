@@ -104,52 +104,22 @@ def _append2seq(seq, modules):
     for module in modules:
         seq.add_module(str(module), module)
 
-class Seq2SeqModel(nn.Module):
+class Seq2SeqBase(nn.Module):
 
-    def save(self, outdir, base):
-        outname = '%s/%s.model' % (outdir, base)
-        torch.save(self, outname)
+    def save(self, model_file):
+        torch.save(self, model_file)
 
     def create_loss(self):
         return SequenceCriterion(self.nc)
 
     @staticmethod
-    def load(dirname, base):
-        name = '%s/%s.model' % (dirname, base)
-        return torch.load(name)
-
-    # TODO: Add more dropout, BN
-    def __init__(self, embed1, embed2, mxlen, hsz, nlayers, rnntype, batchfirst=True, pdrop=0.5):
-        super(Seq2SeqModel, self).__init__()
-        dsz = embed1.dsz
-
-        self.dropout = nn.Dropout(pdrop)
-        self.embed_in = _embedding(embed1)
-        self.embed_out = _embedding(embed2)
-        self.nc = embed2.vsz + 1            
-        self.encoder_rnn = _rnn(dsz, hsz, rnntype, nlayers, pdrop)
-        self.decoder_rnn = _rnn(hsz, hsz, rnntype, nlayers, pdrop)
-        self.preds = nn.Linear(hsz, self.nc)
-        self.batchfirst = batchfirst
-        self.probs = nn.LogSoftmax()
+    def load(model_file):
+        return torch.load(model_file)
 
     # Input better be xch, x
     def forward(self, input):
         rnn_enc_seq, final_encoder_state = self.encode(input[0])
         return self.decode(rnn_enc_seq, final_encoder_state, input[1])
-
-    def decode(self, rnn_enc_seq, final_encoder_state, dst):
-        if self.batchfirst is True:
-            dst = dst.transpose(0, 1).contiguous()
-        embed_out_seq = self.embed_out(dst)
-        output, _ = self.decoder_rnn(embed_out_seq, final_encoder_state)
-
-        # Reform batch as (T x B, D)
-        pred = self.probs(self.preds(output.view(output.size(0)*output.size(1),
-                                                 -1)))
-        # back to T x B x H -> B x T x H
-        pred = pred.view(output.size(0), output.size(1), -1)
-        return pred.transpose(0, 1).contiguous() if self.batchfirst else pred
 
     def encode(self, src):
         if self.batchfirst is True:
@@ -158,22 +128,73 @@ class Seq2SeqModel(nn.Module):
         embed_in_seq = self.embed_in(src)
         return self.encoder_rnn(embed_in_seq)
 
-class Seq2SeqAttnModel(nn.Module):
+    def input_i(self, embed_i, output_i):
+        pass
 
-    def save(self, outdir, base):
-        outname = '%s/%s.model' % (outdir, base)
-        torch.save(self, outname)
+    def bridge(self, final_encoder_state, context):
+        pass
 
-    def create_loss(self):
-        return SequenceCriterion(self.nc)
+    def attn(self, output_t, context):
+        pass
 
-    @staticmethod
-    def load(dirname, base):
-        name = '%s/%s.model' % (dirname, base)
-        return torch.load(name)
+    def decode(self, context, final_encoder_state, dst):
+        if self.batchfirst is True:
+            dst = dst.transpose(0, 1).contiguous()
+
+        embed_out_seq = self.embed_out(dst)
+        h_i, output_i = self.bridge(final_encoder_state, context)
+        context_transpose = context.t()
+        outputs = []
+
+        for i, embed_i in enumerate(embed_out_seq.split(1)):
+            embed_i = self.input_i(embed_i, output_i)
+            output_i, h_i = self.decoder_rnn(embed_i, h_i)
+            output_i = self.attn(output_i, context_transpose)
+            output_i = self.dropout(output_i)
+            outputs += [output_i]
+
+        output = torch.stack(outputs)
+
+        # Reform batch as (T x B, D)
+        pred = self.probs(self.preds(output.view(output.size(0)*output.size(1),
+                                                 -1)))
+        # back to T x B x H -> B x T x H
+        pred = pred.view(output.size(0), output.size(1), -1)
+        return pred.transpose(0, 1).contiguous() if self.batchfirst else pred
+
+
+class Seq2SeqModel(Seq2SeqBase):
 
     # TODO: Add more dropout, BN
-    def __init__(self, embed1, embed2, mxlen, hsz, nlayers, rnntype, batchfirst=True, pdrop=0.5):
+    def __init__(self, embed1, embed2, hsz, nlayers, rnntype, batchfirst=True, pdrop=0.5):
+        super(Seq2SeqModel, self).__init__()
+        dsz = embed1.dsz
+
+        self.dropout = nn.Dropout(pdrop)
+        self.embed_in = _embedding(embed1)
+        self.embed_out = _embedding(embed2)
+        self.nc = embed2.vsz + 1            
+        self.encoder_rnn = _rnn(dsz, hsz, rnntype, nlayers, pdrop)
+        self.preds = nn.Linear(hsz, self.nc)
+        self.decoder_rnn = _rnn_cell(dsz, hsz, rnntype, nlayers, pdrop)
+        self.batchfirst = batchfirst
+        self.probs = nn.LogSoftmax()
+
+
+    def input_i(self, embed_i, output_i):
+        return embed_i.squeeze(0)
+
+    def bridge(self, final_encoder_state, context):
+        return final_encoder_state, None
+
+    def attn(self, output_t, context):
+        return output_t
+
+class Seq2SeqAttnModel(Seq2SeqBase):
+
+
+    # TODO: Add more dropout, BN
+    def __init__(self, embed1, embed2, hsz, nlayers, rnntype, batchfirst=True, pdrop=0.5):
         super(Seq2SeqAttnModel, self).__init__()
         dsz = embed1.dsz
         self.embed_in = _embedding(embed1)
@@ -207,50 +228,45 @@ class Seq2SeqAttnModel(nn.Module):
         combined = self.attn_tanh(self.attn_out(combined))
         return combined
 
-    # Input better be xch, x
-    def forward(self, input):
-        rnn_enc_seq, final_encoder_state = self.encode(input[0])
-        return self.decode(rnn_enc_seq, final_encoder_state, input[1])
-
-    def output_0(self, context):
+    def bridge(self, final_encoder_state, context):
         batch_size = context.size(1)
         h_size = (batch_size, self.hsz)
-        return Variable(context.data.new(*h_size).zero_(), requires_grad=False)
+        context_zeros = Variable(context.data.new(*h_size).zero_(), requires_grad=False)
+        if type(final_encoder_state) is tuple:
+            s1, s2 = final_encoder_state
+            return (s1*0, s2*0), context_zeros
+        else:
+            return final_encoder_state * 0, context_zeros
+        
+        #return Variable(final_encoder_state), requires_grad=False), 
+        
 
-    def decode(self, context, final_encoder_state, dst):
-        if self.batchfirst is True:
-            dst = dst.transpose(0, 1).contiguous()
-        embed_out_seq = self.embed_out(dst)
-        context_transpose = context.t()
-        h_i = final_encoder_state
-        init_output = self.output_0(context)
-        outputs = []
-        output_i = init_output
-        for i, embed_i in enumerate(embed_out_seq.split(1)):
-            # 1 x B x D -> B x D
-            embed_i = embed_i.squeeze(0)
-            # Luong paper says to do this "input feeding", Kim confirms always
-            # works better
-            # B x (D + H)
-            embed_i = torch.cat([embed_i, output_i], 1)
-            output_i, h_i = self.decoder_rnn(embed_i, h_i)
-            output_i = self.attn(output_i, context_transpose)
-            output_i = self.dropout(output_i)
-            outputs += [output_i]
+    def input_i(self, embed_i, output_i):
+        embed_i = embed_i.squeeze(0)
+        return torch.cat([embed_i, output_i], 1)
 
-        output = torch.stack(outputs)
 
-        # Reform batch as (T x B, D)
-        pred = self.probs(self.preds(output.view(output.size(0)*output.size(1),
-                                                 -1)))
-        # back to T x B x H -> B x T x H
-        pred = pred.view(output.size(0), output.size(1), -1)
-        return pred.transpose(0, 1).contiguous() if self.batchfirst else pred
-
-    def encode(self, src):
-        if self.batchfirst is True:
-            src = src.transpose(0, 1).contiguous()
-
-        embed_in_seq = self.embed_in(src)
-        return self.encoder_rnn(embed_in_seq)
-
+#    def decode(self, context, final_encoder_state, dst):
+#        if self.batchfirst is True:
+#            dst = dst.transpose(0, 1).contiguous()
+#
+#        embed_out_seq = self.embed_out(dst)
+#        h_i, output_i = self.bridge(final_encoder_state, context)
+#        context_transpose = context.t()
+#        outputs = []
+#
+#        for i, embed_i in enumerate(embed_out_seq.split(1)):
+#            embed_i = self.input_i(embed_i, output_i)
+#            output_i, h_i = self.decoder_rnn(embed_i, h_i)
+#            output_i = self.attn(output_i, context_transpose)
+#            output_i = self.dropout(output_i)
+#            outputs += [output_i]
+#
+#        output = torch.stack(outputs)
+#
+#        # Reform batch as (T x B, D)
+#        pred = self.probs(self.preds(output.view(output.size(0)*output.size(1),
+#                                                 -1)))
+#        # back to T x B x H -> B x T x H
+#        pred = pred.view(output.size(0), output.size(1), -1)
+#        return pred.transpose(0, 1).contiguous() if self.batchfirst else pred
