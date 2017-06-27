@@ -343,8 +343,6 @@ class Seq2SeqModel_v1_1(Seq2SeqBase):
 
     def save(self, sess, model_base):
         self.save_md(sess, model_base)
-        #with open(model_base + '.saver', 'w+b') as f:
-        #    f.write(bytes(self.saver.as_saver_def(), 'utf8'))
         self.saver.save(sess, model_base + '.model')
 
     def restore_md(self, sess, model_base):
@@ -371,21 +369,6 @@ class Seq2SeqModel_v1_1(Seq2SeqBase):
             sess.graph.as_default()
             tf.import_graph_def(gd, name='')
 
-#    def ex2dict(self, example, pkeep):
-#        # This is a bit clunky, but to minimize impact on existing functions
-##        # unreverse the sequence if attention is on.
-#        src = example["src"] if self.attn is False else example['src'][:,::-1]
-#
-#        # This will be the actual tensor temporal length when we are done
-#        mx_tgt_len = np.max(example["tgt_len"])
-#        return {self.src: src, 
-#                self.tgt: example["tgt"],
-#                self.src_len: example["src_len"],
-#                self.tgt_len: example["tgt_len"],
-#                self.mx_tgt_len: mx_tgt_len,
-#                self.pkeep: pkeep}
-
-    # This method still available, but much less efficient than using the GreedyEmbeddingHelper
     def step(self, sess, src, src_len, dst, dst_len):
         """
         Generate probability distribution over output V for next token

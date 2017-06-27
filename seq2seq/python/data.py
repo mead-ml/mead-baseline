@@ -1,73 +1,91 @@
-import w2v
+import random
 import numpy as np
-from collections import Counter
-import re
 import math
-import codecs
-import dataset
 
-def num_lines(filename):
-    lines = 0
-    with codecs.open(filename, encoding='utf-8', mode='r') as f:
-        for line in f:
-            lines = lines + 1
-    return lines
+class Examples:
 
-def build_vocab(colids, files, clean=False, chars=False):
-    vocab = Counter()
-    vocab['<PAD>'] = 1
-    vocab['<GO>'] = 1
-    vocab['<EOS>'] = 1
-    for file in files:
-        if file is None:
-            continue
-        with codecs.open(file, encoding='utf-8', mode='r') as f:
-            for line in f:
-                cols = re.split("\t", line)
-                for col in colids:
-                    text = re.split("\s", cols[col])
-                    
-                    for w in text:
-                        w = w.strip()
-                        vocab[w] += 1
-    return vocab
+    SRC = 0
+    TGT = 1
+    SRC_LEN = 2
+    TGT_LEN = 3
 
+    def __init__(self, example_list, do_shuffle=True, do_sort=True):
+        self.example_list = example_list
+        if do_shuffle:
+            random.shuffle(self.example_list)
+        if do_sort:
+            self.example_list = sorted(self.example_list, key=lambda x: x[Examples.SRC_LEN])
 
-def load_sentences(tsfile, vocab1, vocab2, mxlen, vec_alloc=np.zeros):
+    def __getitem__(self, i):
+        ex = self.example_list[i]
+        return ex[Examples.SRC], ex[Examples.TGT], ex[Examples.SRC_LEN], ex[Examples.TGT_LEN]
 
-    PAD = vocab1['<PADDING>']
-    GO = vocab2['<GO>']
-    EOS = vocab2['<EOS>']
+    def __len__(self):
+        return len(self.example_list)
 
-    ts = []
-    b = 0
-    i = 0
-    n = num_lines(tsfile)
+    def batch(self, start, batchsz, trim=False, vec_alloc=np.zeros, vec_shape=np.shape):
+        sig_src_len = len(self.example_list[0][Examples.SRC])
+        sig_tgt_len = len(self.example_list[0][Examples.TGT])
 
-    with codecs.open(tsfile, encoding='utf-8', mode='r') as f:
-        for line in f:
-            splits = re.split("\t", line.strip())
-            src = re.split("\s+", splits[0])
-            dst = re.split("\s+", splits[1])
+        srcs = vec_alloc((batchsz, sig_src_len), dtype=np.int)
+        tgts = vec_alloc((batchsz, sig_tgt_len), dtype=np.int)
+        src_lens = vec_alloc((batchsz), dtype=np.int)
+        tgt_lens = vec_alloc((batchsz), dtype=np.int)
+        sz = len(self.example_list)
+        idx = start * batchsz
+        
+        max_src_len = 0
+        max_tgt_len = 0
 
-            srcl = vec_alloc((mxlen), dtype=np.int)
-            tgtl = vec_alloc((mxlen), dtype=np.int)
-            src_len = len(src)
-            tgt_len = len(dst) + 2
-            end1 = min(src_len, mxlen)
-            end2 = min(tgt_len, mxlen)-2
-            last = max(end1, end2)
-            tgtl[0] = GO
-            src_len = end1
-            tgt_len = end2+2
-       
-            for j in range(last):
-                idx1 = vocab1[src[j]] if j < end1 else PAD
-                idx2 = vocab2[dst[j]] if j < end2 else PAD
-                srcl[j] = idx1
-                tgtl[j + 1] = idx2
+        idx = start * batchsz
+        for i in range(batchsz):
+            if idx >= sz: idx = 0
+        
+            example = self.example_list[idx]
+            srcs[i] = example[Examples.SRC]
+            tgts[i] = example[Examples.TGT]
+            src_lens[i] = example[Examples.SRC_LEN]
+            tgt_lens[i] = example[Examples.TGT_LEN]
+            max_src_len = max(max_src_len, src_lens[i])
+            max_tgt_len = max(max_tgt_len, tgt_lens[i])
+            idx += 1
 
-            tgtl[end2] = EOS
+        if trim:
+            srcs = srcs[:,0:max_src_len]
+            tgts = tgts[:,0:max_tgt_len]
 
-            ts.append( (srcl, tgtl, src_len, tgt_len) )
-    return dataset.Examples(ts)
+        return srcs, tgts, src_lens, tgt_lens
+
+def reverse_2nd(vec):
+    return vec[:,::-1]
+
+class DataFeed:
+
+    def __init__(self, examples, batchsz, **kwargs):
+        self.examples = examples
+        self.batchsz = batchsz
+        self.shuffle = kwargs['shuffle'] if 'shuffle' in kwargs else False
+        self.vec_alloc = kwargs['alloc_fn'] if 'alloc_fn' in kwargs else np.zeros
+        self.vec_shape = kwargs['shape_fn'] if 'shape_fn' in kwargs else np.shape
+        self.src_vec_trans = kwargs['src_trans_fn'] if 'src_trans_fn' in kwargs else None
+        self.steps = int(math.floor(len(self.examples)/float(batchsz)))
+        self.trim = bool(kwargs['trim']) if 'trim' in kwargs  else False
+
+    def _batch(self, i):
+        src, tgt, src_len, tgt_len = self.examples.batch(i, self.batchsz, self.trim, self.vec_alloc, self.vec_shape)
+        if self.src_vec_trans is not None:
+            src = self.src_vec_trans(src)
+        return src, tgt, src_len, tgt_len
+
+    def __getitem__(self, i):
+        return self._batch(i)
+
+    def __iter__(self):
+        shuffle = np.random.permutation(np.arange(self.steps)) if self.shuffle else np.arange(self.steps)
+
+        for i in range(self.steps):
+            si = shuffle[i]
+            yield self._batch(si)
+
+    def __len__(self):
+        return self.steps

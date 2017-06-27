@@ -4,8 +4,8 @@ import argparse
 from os import sys, path
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 from w2v import Word2VecModel
-from data import load_sentences, build_vocab
-from dataset import DataFeed, reverse_2nd
+from reader import load_sentences, build_vocab
+from data import DataFeed, reverse_2nd
 from utils import *
 from tfy import *
 from model import *
@@ -78,7 +78,7 @@ with tf.Graph().as_default():
     sess = tf.Session()
     with sess.as_default():
         if args.showex:
-            args.after_train_fn = lambda model: show_examples(sess, model, es, rlut1, rlut2, embed2, args.mxlen, args.sample, args.topk, args.max_examples)
+            args.after_train_fn = lambda model: show_examples(sess, model, es, rlut1, rlut2, embed2, args.mxlen, args.sample, args.topk, args.max_examples, reverse=not args.attn)
 
         if args.attn is True:
             seq2seq_creator_fn = Seq2Seq.create_lstm_attn if args.rnntype.lower() == 'lstm' else Seq2Seq.create_gru_attn

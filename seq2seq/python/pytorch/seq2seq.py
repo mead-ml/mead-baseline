@@ -5,8 +5,8 @@ import argparse
 from os import sys, path, makedirs
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 from w2v import Word2VecModel
-from data import load_sentences, build_vocab
-from dataset import DataFeed
+from reader import load_sentences, build_vocab
+from data import DataFeed
 from utils import revlut
 from model import *
 from torchy import *
@@ -82,6 +82,6 @@ print(Seq2SeqModelType)
 seq2seq = Seq2SeqModelType(embed1, embed2, args.hsz, args.layers, args.rnntype)
 
 if args.showex:
-    args.after_train_fn = lambda model: show_examples(gpu, model, es, rlut1, rlut2, embed2, args.mxlen, args.sample, args.topk, args.max_examples)
+    args.after_train_fn = lambda model: show_examples(gpu, model, es, rlut1, rlut2, embed2, args.mxlen, args.sample, args.topk, args.max_examples, rev=not args.attn)
 
 fit(seq2seq, ts, es, **vars(args))

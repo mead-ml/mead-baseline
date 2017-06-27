@@ -80,7 +80,7 @@ class Trainer:
         return avg_loss
 
 
-def show_examples(sess, model, es, rlut1, rlut2, embed2, mxlen, sample, prob_clip, max_examples):
+def show_examples(sess, model, es, rlut1, rlut2, embed2, mxlen, sample, prob_clip, max_examples, reverse):
     si = np.random.randint(0, len(es))
 
     src_array, tgt_array, src_len, _ = es[si]
@@ -98,7 +98,7 @@ def show_examples(sess, model, es, rlut1, rlut2, embed2, mxlen, sample, prob_cli
 
         print('========================================================================')
 
-        sent = lookup_sentence(rlut1, src_i, reverse=True)
+        sent = lookup_sentence(rlut1, src_i, reverse=reverse)
         print('[OP] %s' % sent)
         sent = lookup_sentence(rlut2, tgt_i)
         print('[Actual] %s' % sent)

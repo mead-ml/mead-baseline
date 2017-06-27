@@ -5,7 +5,6 @@ from torch.autograd import Variable
 import time
 import math
 import numpy as np
-import data
 from utils import ProgressBar, lookup_sentence
 from torchy import long_tensor_alloc, tensor_shape, tensor_max
 
@@ -90,7 +89,7 @@ class Trainer:
         #      (avg_loss, np.exp(avg_loss), duration))
 
 # Mashed together from code using numpy only, hacked for th Tensors
-def show_examples(use_gpu, model, es, rlut1, rlut2, embed2, mxlen, sample, prob_clip, max_examples):
+def show_examples(use_gpu, model, es, rlut1, rlut2, embed2, mxlen, sample, prob_clip, max_examples, reverse):
     si = np.random.randint(0, len(es))
 
     src_array, tgt_array, src_len, _ = es[si]
@@ -111,7 +110,7 @@ def show_examples(use_gpu, model, es, rlut1, rlut2, embed2, mxlen, sample, prob_
 
         print('========================================================================')
 
-        sent = lookup_sentence(rlut1, src_i.cpu().numpy(), reverse=True)
+        sent = lookup_sentence(rlut1, src_i.cpu().numpy(), reverse=reverse)
         print('[OP] %s' % sent)
         sent = lookup_sentence(rlut2, tgt_i)
         print('[Actual] %s' % sent)
