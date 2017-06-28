@@ -45,10 +45,15 @@ if args.backend == 'pytorch':
     import baseline.pytorch.classify as classify
     zeropadding = np.max(args.filtsz)
 else:
+    # Everything else uses numpy
     from numpy import zeros as vec_alloc
-    import baseline.tf.classify as classify
-    # For tensorflow, use tf.pad internally in the model
-    zeropadding = 0
+    if args.backend == 'keras':
+        zeropadding = np.max(args.filtsz)
+        import baseline.keras.classify as classify
+    else:
+        import baseline.tf.classify as classify
+        # For tensorflow, use tf.pad internally in the model
+        zeropadding = 0
 
 reporting = setup_reporting(args.visdom)
 
