@@ -77,10 +77,9 @@ class RandomInitVecModel:
         self.vsz = 0
 
         if counts is True:
-            attested = {v: cnt for v,cnt in known_vocab.items() if cnt > 0}
-            for k,v in enumerate(attested):
-                self.vocab[v] = k
-                k = k + 1
+            attested = [v for v, cnt in known_vocab.items() if cnt > 0]
+            for k, v in enumerate(attested):
+                self.vocab[v] = k + 1
                 self.vsz += 1
         else:
             print('Restoring existing vocab')

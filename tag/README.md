@@ -1,0 +1,1 @@
+The Python code in this subtree is deprecated and will be removed soon.  Please find the latest code in the `baseline/python` directory, including generic drivers with similar usage that can run all deep learning frameworks supported (using `--backend` argument)

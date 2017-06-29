@@ -91,6 +91,18 @@ def pytorch_embedding(x2vec, finetune=True):
     return lut
 
 
+def pytorch_conv1d(in_channels, out_channels, fsz, unif):
+    c = nn.Conv1d(in_channels, out_channels, fsz)
+    c.weight.data.uniform_(-unif, unif)
+    return c
+
+
+def pytorch_linear(in_sz, out_sz, unif):
+    l = nn.Linear(in_sz, out_sz)
+    l.weight.data.uniform_(-unif, unif)
+    return l
+
+
 def pytorch_rnn(insz, hsz, rnntype, nlayers, dropout):
 
     if rnntype == 'gru':
@@ -98,6 +110,15 @@ def pytorch_rnn(insz, hsz, rnntype, nlayers, dropout):
     else:
         rnn = torch.nn.LSTM(insz, hsz, nlayers, dropout=dropout)
     return rnn
+
+
+def pytorch_lstm(insz, hsz, rnntype, nlayers, dropout, unif):
+    ndir = 2 if rnntype.startswith('b') else 1
+    rnn = torch.nn.LSTM(insz, hsz, nlayers, dropout=dropout, bidirectional=True if ndir > 1 else False, bias=False)
+    for weight in rnn.parameters():
+        weight.data.uniform_(-unif, unif)
+    return rnn, ndir*hsz
+
 
 def append2seq(seq, modules):
 

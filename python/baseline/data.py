@@ -10,6 +10,7 @@ class DataFeed:
         self.batchsz = batchsz
         self.shuffle = kwargs['shuffle'] if 'shuffle' in kwargs else False
         self.vec_alloc = kwargs['alloc_fn'] if 'alloc_fn' in kwargs else np.zeros
+        self.vec_shape = kwargs['shape_fn'] if 'shape_fn' in kwargs else np.shape
         self.src_vec_trans = kwargs['src_trans_fn'] if 'src_trans_fn' in kwargs else None
         self.steps = int(math.floor(len(self.examples)/float(batchsz)))
         self.trim = bool(kwargs['trim']) if 'trim' in kwargs  else False
@@ -42,7 +43,6 @@ class SeqLabelExamples(object):
     def __getitem__(self, i):
         ex = self.example_list[i]
         return ex[SeqLabelExamples.SEQ], ex[SeqLabelExamples.LABEL]
-        return self.x[i], self.y[i]
 
     def __len__(self):
         return len(self.example_list)
@@ -82,6 +82,77 @@ class SeqLabelDataFeed(DataFeed):
         if self.src_vec_trans is not None:
             x = self.src_vec_trans(x)
         return x, y
+
+
+class SeqWordCharTagExamples(object):
+
+    SEQ_WORD = 0
+    SEQ_CHAR = 1
+    SEQ_TAG = 2
+    SEQ_LEN = 3
+    SEQ_ID = 4
+
+    def __init__(self, example_list, do_shuffle=True, do_sort=True):
+        self.example_list = example_list
+        if do_shuffle:
+            random.shuffle(self.example_list)
+        if do_sort:
+            self.example_list = sorted(self.example_list, key=lambda x: x[SeqWordCharTagExamples.SEQ_LEN])
+
+    def __getitem__(self, i):
+        ex = self.example_list[i]
+        return ex[SeqWordCharTagExamples.SEQ_WORD], ex[SeqWordCharTagExamples.SEQ_CHAR], \
+               ex[SeqWordCharTagExamples.SEQ_TAG], ex[SeqWordCharTagExamples.SEQ_LEN], \
+               ex[SeqWordCharTagExamples.SEQ_ID]
+
+    def __len__(self):
+        return len(self.example_list)
+
+    def batch(self, start, batchsz, trim=False, vec_alloc=np.empty, vec_shape=np.shape):
+        ex = self.example_list[start]
+        siglen, maxw = vec_shape(ex[SeqWordCharTagExamples.SEQ_CHAR])
+        xs_ch = vec_alloc((batchsz, siglen, maxw), dtype=np.int)
+        xs = vec_alloc((batchsz, siglen), dtype=np.int)
+        ys = vec_alloc((batchsz, siglen), dtype=np.int)
+        ids = vec_alloc((batchsz), dtype=np.int)
+        length = vec_alloc((batchsz), dtype=np.int)
+        sz = len(self.example_list)
+        idx = start * batchsz
+
+        max_src_len = 0
+
+        for i in range(batchsz):
+            if idx >= sz: idx = 0
+
+            ex = self.example_list[idx]
+            xs[i] = ex[SeqWordCharTagExamples.SEQ_WORD]
+            xs_ch[i] = ex[SeqWordCharTagExamples.SEQ_CHAR]
+            ys[i] = ex[SeqWordCharTagExamples.SEQ_TAG]
+            length[i] = ex[SeqWordCharTagExamples.SEQ_LEN]
+            max_src_len = max(max_src_len, length[i])
+            ids[i] = ex[SeqWordCharTagExamples.SEQ_ID]
+            idx += 1
+
+        if trim:
+            xs = xs[:,0:max_src_len]
+            xs_ch = xs_ch[:,0:max_src_len,:]
+            ys = ys[:,0:max_src_len]
+
+        return xs, xs_ch, ys, length, ids
+
+
+    @staticmethod
+    def valid_split(data, splitfrac=0.15):
+        numinst = len(data.examples)
+        heldout = int(math.floor(numinst * (1-splitfrac)))
+        heldout_ex = data.example_list[1:heldout]
+        rest_ex = data.example_list[heldout:]
+        return SeqLabelExamples(heldout_ex), SeqLabelExamples(rest_ex)
+
+class SeqWordCharDataFeed(DataFeed):
+
+    def _batch(self, i):
+        return self.examples.batch(i, self.batchsz, self.trim, self.vec_alloc, self.vec_shape)
 
 
 class Seq2SeqExamples:

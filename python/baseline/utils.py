@@ -1,6 +1,5 @@
 import numpy as np
-import re
-import six.moves
+
 
 def listify(x):
     if isinstance(x, (list, tuple, np.ndarray)):
@@ -9,12 +8,15 @@ def listify(x):
         return []
     return [x]
 
+
 def revlut(lut):
     return {v: k for k, v in lut.items()}
+
 
 def lookup_sentence(rlut, seq, reverse=False, padchar=''):
     s = seq[::-1] if reverse else seq
     return ' '.join([rlut[idx] if rlut[idx] != '<PADDING>' else padchar for idx in s])
+
 
 # Get a sparse index (dictionary) of top values
 # Note: mutates input for efficiency
@@ -49,11 +51,13 @@ def beam_multinomial(k, probs):
     sample_idx = np.argmax(np.random.multinomial(1, ary))
     return idx[sample_idx]
 
+
 def fill_y(nc, yidx):
     xidx = np.arange(0, yidx.shape[0], 1)
     dense = np.zeros((yidx.shape[0], nc), dtype=int)
     dense[xidx, yidx] = 1
     return dense
+
 
 def seq_fill_y(nc, yidx):
     batchsz = yidx.shape[0]
@@ -66,3 +70,58 @@ def seq_fill_y(nc, yidx):
                 dense[i, j, idx] = 1
 
     return dense
+
+
+# Turn a sequence of IOB chunks into single tokens
+def to_spans(sequence, lut, strict_iob2=False):
+
+    iobtype = 2 if strict_iob2 else 1
+    chunks = []
+    current = None
+
+    for i, y in enumerate(sequence):
+        label = lut[y]
+
+        #if label.startswith('B-'):
+        if not label.startswith('I-') and not label == 'O':
+            if current is not None:
+                chunks.append('@'.join(current))
+            current = [label.replace('B-', ''), '%d' % i ]
+
+        elif label.startswith('I-'):
+
+            if current is not None:
+                base = label.replace('I-', '')
+                if base == current[0]:
+                    current.append('%d' % i)
+                else:
+                    chunks.append('@'.join(current))
+                    if iobtype == 2:
+                        print('Warning, type=IOB2, unexpected format ([%s] follows other tag type [%s] @ %d)' % (label, current[0], i))
+
+                    current = [base, '%d' % i]
+
+            else:
+                current = [label.replace('I-', ''), '%d' % i]
+                if iobtype == 2:
+                    print('Warning, unexpected format (I before B @ %d) %s' % (i, label))
+        else:
+            if current is not None:
+                chunks.append('@'.join(current))
+            current = None
+
+    if current is not None:
+        chunks.append('@'.join(current))
+
+    return set(chunks)
+
+
+def f_score(overlap_count, gold_count, guess_count, f=1):
+    beta_sq = f*f
+    if guess_count == 0: return 0.0
+    precision = overlap_count / float(guess_count)
+    recall = overlap_count / float(gold_count)
+    if precision == 0.0 or recall == 0.0:
+        return 0.0
+    f = (1. + beta_sq) * (precision * recall) / (beta_sq * precision + recall)
+    return f

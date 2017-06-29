@@ -18,7 +18,7 @@ When the GPU is used, the code *assumes that cudnn (>= R5) is available* and ins
 
 ## Supported Tasks
 
-- [Sentence Classification](docs/cmot.md)
+- [Text Classification](docs/cmot.md)
 - [Tagging with RNNs](docs/tagging.md)
 - [Seq2Seq](docs/seq2seq.md)
 - [Language Modeling with RNNs](docs/lm.md)

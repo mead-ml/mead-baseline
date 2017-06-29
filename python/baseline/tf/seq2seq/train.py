@@ -9,28 +9,31 @@ from baseline.progress import ProgressBar
 
 class Seq2SeqTrainerTf:
 
-    def __init__(self, model, optim, eta, mom, clip, pdrop):
+    def __init__(self, model, **kwargs):
+
+        eta = kwargs.get('eta', kwargs.get('lr', 0.01))
+        print('using eta [%.3f]' % eta)
+        mom = kwargs.get('mom', 0.9)
+        optim = kwargs.get('optim', 'sgd')
+        print('using optim [%s]' % optim)
+        clip = float(kwargs['clip']) if 'clip' in kwargs else 5
+
+        self.sess = model.sess
         self.loss = model.create_loss()
         self.model = model
-        self.pdrop = pdrop
         self.global_step = tf.Variable(0, name='global_step', trainable=False)
         if optim == 'adadelta':
             self.optimizer = tf.train.AdadeltaOptimizer(eta, 0.95, 1e-6)
         elif optim == 'adam':
             self.optimizer = tf.train.AdamOptimizer(eta)
+        elif mom > 0:
+            self.optimizer = tf.train.MomentumOptimizer(eta, mom)
+            print('using mom [%.3f]' % mom)
         else:
-            if mom > 0:
-                self.optimizer = tf.train.MomentumOptimizer(eta, mom)
-            else:
-                self.optimizer = tf.train.GradientDescentOptimizer(eta)
+            self.optimizer = tf.train.GradientDescentOptimizer(eta)
 
         gvs = self.optimizer.compute_gradients(self.loss)
-        #capped_gvs = [(tf.clip_by_norm(grad, -clip, clip), var) for grad, var in gvs]
-        #self.train_op = self.optimizer.apply_gradients(capped_gvs, global_step=self.global_step)
         self.train_op = self.optimizer.apply_gradients(gvs, global_step=self.global_step)
-
-        self.loss_summary = tf.summary.scalar("loss", self.loss)
-        self.summary_op = tf.summary.merge_all()
 
     def checkpoint(self):
         self.model.saver.save(self.model.sess, "./tf-checkpoints/seq2seq", global_step=self.global_step)
@@ -50,8 +53,8 @@ class Seq2SeqTrainerTf:
         pg = ProgressBar(steps)
         for src, tgt, src_len, tgt_len in ts:
             # TODO: there is a bug that occurs if mx_tgt_len == mxlen
-            mx_tgt_len = np.max(tgt_len)
-            feed_dict = {self.model.src: src, self.model.tgt: tgt, self.model.src_len: src_len, self.model.tgt_len: tgt_len, self.model.mx_tgt_len: mx_tgt_len,self.model.pkeep: 1-self.pdrop}
+
+            feed_dict = self.model.make_feed_dict(src, src_len, tgt, tgt_len)
             _, step, lossv = self.model.sess.run([self.train_op, self.global_step, self.loss], feed_dict=feed_dict)
             total_loss += lossv
             pg.update()
@@ -68,9 +71,7 @@ class Seq2SeqTrainerTf:
         steps = len(ts)
         metrics = {}
         for src,tgt,src_len,tgt_len in ts:
-            mx_tgt_len = np.max(tgt_len)
-            feed_dict = {self.model.src: src, self.model.tgt: tgt, self.model.src_len: src_len, self.model.tgt_len: tgt_len, self.model.mx_tgt_len: mx_tgt_len, self.model.pkeep: 1}
-
+            feed_dict = self.model.make_feed_dict(src, src_len, tgt, tgt_len)
             lossv = self.model.sess.run(self.loss, feed_dict=feed_dict)
             total_loss += lossv
 
@@ -83,14 +84,10 @@ class Seq2SeqTrainerTf:
 def fit(seq2seq, ts, vs, **kwargs):
     epochs = int(kwargs['epochs']) if 'epochs' in kwargs else 5
     patience = int(kwargs['patience']) if 'patience' in kwargs else epochs
-    optim = kwargs['optim'] if 'optim' in kwargs else 'adam'
-    eta = float(kwargs['eta']) if 'eta' in kwargs else 0.01
-    mom = float(kwargs['mom']) if 'mom' in kwargs else 0.9
-    clip = float(kwargs['clip']) if 'clip' in kwargs else 5
+
     model_file = kwargs['outfile'] if 'outfile' in kwargs and kwargs['outfile'] is not None else './seq2seq-model-tf'
     after_train_fn = kwargs['after_train_fn'] if 'after_train_fn' in kwargs else None
-    pdrop = kwargs['pdrop'] if 'pdrop' in kwargs else 0.5
-    trainer = Seq2SeqTrainerTf(seq2seq, optim, eta, mom, clip, pdrop)
+    trainer = Seq2SeqTrainerTf(seq2seq, **kwargs)
     init = tf.global_variables_initializer()
     seq2seq.sess.run(init)
     saver = tf.train.Saver()

@@ -212,8 +212,13 @@ class Seq2SeqModelTf_v1_1(Seq2SeqBaseTf):
         """
         Generate probability distribution over output V for next token
         """
-        feed_dict = {self.src: src, self.src_len: src_len, self.tgt: dst, self.tgt_len: dst_len, self.pkeep: 1.0}
+        feed_dict = self.make_feed_dict(src, src_len, dst, dst_len)
         return self.sess.run(self.probs, feed_dict=feed_dict)
+
+    def make_feed_dict(self, src, src_len, dst, dst_len, do_dropout=False):
+        mx_tgt_len = np.max(dst_len)
+        feed_dict = {self.src: src, self.src_len: src_len, self.tgt: dst, self.tgt_len: dst_len, self.mx_tgt_len: mx_tgt_len, self.pkeep: 1.0}
+        return feed_dict
 
 
 def create_model(embedding1, embedding2, **kwargs):
