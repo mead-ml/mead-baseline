@@ -28,6 +28,8 @@ python tag_char_rnn.py --epochs 40 --train $OCT_SPLITS/oct27.train \
     --cfiltsz 1 2 3 4 5 7
 ```
 
+To run with PyTorch, just pass `--backend pytorch`
+
 If you want to use only the convolutional filter word vectors (and no word embeddings), just remove the -embed line above.
 
 ### NER (and other IOB-type) Tagging

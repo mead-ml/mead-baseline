@@ -48,13 +48,11 @@ The static (no fine-tuning) model usually has decent performance, and the code i
 
 Early stopping with patience is supported.  There are many hyper-parameters that you can tune, which may yield many different models.  Here is a PyTorch example of parameterization of dynamic embeddings with SGD and the default three filter sizes (3, 4, and 5):
 
-Here is an example running Stanford Sentiment Treebank 2 data with adadelta
+Here is an example running Stanford Sentiment Treebank 2 data with adadelta using pytorch
 
 ```
 python classify_sentence.py --backend pytorch --clean --optim adadelta --eta 0.01 --batchsz 50 --epochs 25 --patience 25 --train ./data/stsa.binary.phrases.train --valid ./data/stsa.binary.dev --test ./data/stsa.binary.test --embed /data/xdata/GoogleNews-vectors-negative300.bin --filtsz 3 4 5 --dropout 0.5
 ```
-
-(Note that these are already the default arguments!)
 
 ## Status
 
