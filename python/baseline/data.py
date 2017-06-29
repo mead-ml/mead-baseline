@@ -10,7 +10,6 @@ class DataFeed:
         self.batchsz = batchsz
         self.shuffle = kwargs['shuffle'] if 'shuffle' in kwargs else False
         self.vec_alloc = kwargs['alloc_fn'] if 'alloc_fn' in kwargs else np.zeros
-        self.vec_shape = kwargs['shape_fn'] if 'shape_fn' in kwargs else np.shape
         self.src_vec_trans = kwargs['src_trans_fn'] if 'src_trans_fn' in kwargs else None
         self.steps = int(math.floor(len(self.examples)/float(batchsz)))
         self.trim = bool(kwargs['trim']) if 'trim' in kwargs  else False
@@ -72,8 +71,8 @@ class SeqLabelExamples(object):
     def valid_split(data, splitfrac=0.15):
         numinst = len(data.examples)
         heldout = int(math.floor(numinst * (1-splitfrac)))
-        heldout_ex = self.example_list[1:heldout]
-        rest_ex = self.example_list[heldout:]
+        heldout_ex = data.example_list[1:heldout]
+        rest_ex = data.example_list[heldout:]
         return SeqLabelExamples(heldout_ex), SeqLabelExamples(rest_ex)
 
 class SeqLabelDataFeed(DataFeed):
@@ -106,7 +105,7 @@ class Seq2SeqExamples:
     def __len__(self):
         return len(self.example_list)
 
-    def batch(self, start, batchsz, trim=False, vec_alloc=np.zeros, vec_shape=np.shape):
+    def batch(self, start, batchsz, trim=False, vec_alloc=np.zeros):
         sig_src_len = len(self.example_list[0][Seq2SeqExamples.SRC])
         sig_tgt_len = len(self.example_list[0][Seq2SeqExamples.TGT])
 
@@ -115,8 +114,7 @@ class Seq2SeqExamples:
         src_lens = vec_alloc((batchsz), dtype=np.int)
         tgt_lens = vec_alloc((batchsz), dtype=np.int)
         sz = len(self.example_list)
-        idx = start * batchsz
-        
+
         max_src_len = 0
         max_tgt_len = 0
 
@@ -140,12 +138,12 @@ class Seq2SeqExamples:
         return srcs, tgts, src_lens, tgt_lens
 
 def reverse_2nd(vec):
-    return vec[:,::-1]
+    return vec[:, ::-1]
 
 class Seq2SeqDataFeed(DataFeed):
 
     def _batch(self, i):
-        src, tgt, src_len, tgt_len = self.examples.batch(i, self.batchsz, self.trim, self.vec_alloc, self.vec_shape)
+        src, tgt, src_len, tgt_len = self.examples.batch(i, self.batchsz, self.trim, self.vec_alloc)
         if self.src_vec_trans is not None:
             src = self.src_vec_trans(src)
         return src, tgt, src_len, tgt_len

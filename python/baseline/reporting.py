@@ -41,3 +41,10 @@ def visdom_reporting(metrics, epoch, phase):
                                          )
         else:
             g_vis.updateTrace(X=np.array([epoch]), Y=np.array([metrics[metric]]), win=g_vis_win[chart_id])
+
+
+def setup_reporting(use_visdom):
+    reporting = [basic_reporting]
+    if use_visdom is True:
+        reporting.append(visdom_reporting)
+    return reporting

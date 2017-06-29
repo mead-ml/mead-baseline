@@ -74,7 +74,7 @@ class StackedGRUCell(nn.Module):
 
         return input, hs
 
-def _rnn_cell(insz, hsz, rnntype, nlayers, dropout):
+def pytorch_rnn_cell(insz, hsz, rnntype, nlayers, dropout):
 
     if rnntype == 'gru':
         rnn = StackedGRUCell(nlayers, insz, hsz, dropout)
@@ -82,7 +82,7 @@ def _rnn_cell(insz, hsz, rnntype, nlayers, dropout):
         rnn = StackedLSTMCell(nlayers, insz, hsz, dropout)
     return rnn
 
-def _embedding(x2vec, finetune=True):
+def pytorch_embedding(x2vec, finetune=True):
     dsz = x2vec.dsz
     lut = nn.Embedding(x2vec.vsz + 1, dsz, padding_idx=0)
     del lut.weight
@@ -91,7 +91,7 @@ def _embedding(x2vec, finetune=True):
     return lut
 
 
-def _rnn(insz, hsz, rnntype, nlayers, dropout):
+def pytorch_rnn(insz, hsz, rnntype, nlayers, dropout):
 
     if rnntype == 'gru':
         rnn = torch.nn.GRU(insz, hsz, nlayers, dropout=dropout)
@@ -126,7 +126,7 @@ def long_tensor_alloc(dims, dtype=None):
     return torch.LongTensor(*dims)
 
 # Mashed together from code using numpy only, hacked for th Tensors
-def show_examples(use_gpu, model, es, rlut1, rlut2, embed2, mxlen, sample, prob_clip, max_examples, reverse):
+def show_examples_pytorch(model, es, rlut1, rlut2, embed2, mxlen, sample, prob_clip, max_examples, reverse):
     si = np.random.randint(0, len(es))
 
     src_array, tgt_array, src_len, _ = es[si]
@@ -140,8 +140,8 @@ def show_examples(use_gpu, model, es, rlut1, rlut2, embed2, mxlen, sample, prob_
     GO = embed2.vocab['<GO>']
     EOS = embed2.vocab['<EOS>']
 
-    if use_gpu:
-        src_array = src_array.cuda()
+    # TODO: fix this, check for GPU first
+    src_array = src_array.cuda()
     
     for src_len,src_i,tgt_i in zip(src_len, src_array, tgt_array):
 
@@ -152,8 +152,8 @@ def show_examples(use_gpu, model, es, rlut1, rlut2, embed2, mxlen, sample, prob_
         sent = lookup_sentence(rlut2, tgt_i)
         print('[Actual] %s' % sent)
         dst_i = torch.zeros(1, mxlen).long()
-        if use_gpu:
-            dst_i = dst_i.cuda()
+        #if use_gpu:
+        dst_i = dst_i.cuda()
 
         next_value = GO
         src_i = src_i.view(1, -1)

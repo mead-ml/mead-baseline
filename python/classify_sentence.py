@@ -3,12 +3,6 @@ import argparse
 from baseline import *
 from os import sys, path, makedirs
 
-def setup_reporting(use_visdom):
-    reporting = [basic_reporting]
-    if use_visdom is True:
-        reporting.append(visdom_reporting)
-
-
 parser = argparse.ArgumentParser(description='Train a text classifier')
 parser.add_argument('--visdom', help='Turn on visdom reporting', type=bool, default=False)
 parser.add_argument('--eta', help='Initial learning rate', default=0.01, type=float)
@@ -55,7 +49,7 @@ else:
         # For tensorflow, use tf.pad internally in the model
         zeropadding = 0
 
-reporting = setup_reporting(args.visdom)
+args.reporting = setup_reporting(args.visdom)
 
 vocab = TSVSeqLabelReader.build_vocab([args.train, args.test, args.valid], args.clean, False)
 

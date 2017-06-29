@@ -4,7 +4,7 @@ from distutils.version import LooseVersion
 from tensorflow.python.ops import rnn_cell_impl
 TF_GTE_11 = LooseVersion(tf.__version__) >= LooseVersion('0.1.1')
 from tensorflow.python.layers import core as layers_core
-
+from baseline.utils import lookup_sentence, beam_multinomial
 
 def tensor2seq(tensor):
     return tf.unstack(tf.transpose(tensor, perm=[1, 0, 2]))
@@ -47,3 +47,48 @@ def new_rnn_cell(hsz, rnntype, st=None):
 
 def new_multi_rnn_cell(hsz, name, num_layers):
     return tf.contrib.rnn.MultiRNNCell([new_rnn_cell(hsz, name) for _ in range(num_layers)], state_is_tuple=True)
+
+
+def show_examples_tf(model, es, rlut1, rlut2, embed2, mxlen, sample, prob_clip, max_examples, reverse):
+    si = np.random.randint(0, len(es))
+
+    src_array, tgt_array, src_len, _ = es[si]
+
+    if max_examples > 0:
+        max_examples = min(max_examples, src_array.shape[0])
+        src_array = src_array[0:max_examples]
+        tgt_array = tgt_array[0:max_examples]
+        src_len = src_len[0:max_examples]
+
+    GO = embed2.vocab['<GO>']
+    EOS = embed2.vocab['<EOS>']
+
+    for src_len_i,src_i,tgt_i in zip(src_len, src_array, tgt_array):
+
+        print('========================================================================')
+
+        sent = lookup_sentence(rlut1, src_i, reverse=reverse)
+        print('[OP] %s' % sent)
+        sent = lookup_sentence(rlut2, tgt_i)
+        print('[Actual] %s' % sent)
+        dst_i = np.zeros((1, mxlen))
+        src_i = src_i[np.newaxis,:]
+        src_len_i = np.array([src_len_i])
+        next_value = GO
+        for j in range(mxlen):
+            dst_i[0, j] = next_value
+            tgt_len_i = np.array([j+1])
+            output = model.step(src_i, src_len_i, dst_i, tgt_len_i)[j]
+            if sample is False:
+                next_value = np.argmax(output)
+            else:
+                # This is going to zero out low prob. events so they are not
+                # sampled from
+                next_value = beam_multinomial(prob_clip, output)
+
+            if next_value == EOS:
+                break
+
+        sent = lookup_sentence(rlut2, dst_i.squeeze())
+        print('Guess: %s' % sent)
+        print('------------------------------------------------------------------------')

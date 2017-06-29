@@ -68,7 +68,7 @@ class TSVSentencePairReader:
 
                 tgtl[end2] = EOS
 
-                ts.append( (srcl, tgtl, src_len, tgt_len) )
+                ts.append((srcl, tgtl, src_len, tgt_len))
         return baseline.data.Seq2SeqExamples(ts)
 
 

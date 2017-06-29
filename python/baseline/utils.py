@@ -2,7 +2,6 @@ import numpy as np
 import re
 import six.moves
 
-
 def listify(x):
     if isinstance(x, (list, tuple, np.ndarray)):
         return x

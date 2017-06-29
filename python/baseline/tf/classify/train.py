@@ -68,7 +68,6 @@ class ClassifyTrainerTf:
 
         return metrics
 
-
     def checkpoint(self):
         self.model.saver.save(self.sess, "./tf-checkpoints/classify", global_step=self.global_step)
 
