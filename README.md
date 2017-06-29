@@ -1,19 +1,20 @@
 baseline
 =========
+
 Simple, Strong Deep-Learning Baselines for NLP in several frameworks
 
-Stand-alone baselines implemented with multiple deep learning tools, including CNN sentence modeling, RNN/LSTM-based tagging, seq2seq, and language modeling.
+Baseline algorithms and data support implemented with multiple deep learning tools, including CNN sentence modeling, RNN/LSTM-based tagging, seq2seq, and language modeling.  Can be used as stand-alone command line tools or as a Python library.  The library attempts to provide a common interface for several common deep learning tasks, as well as easy-to-use file loaders to make it easy to publish standard results, compare against strong baselines without concern for mistakes and to support rapid experiments to try and beat these baselines.
 
 # Overview
 
 A few strong, deep baseline algorithms for several common NLP tasks,
-including sentence classification and tagging problems.  Considerations are conceptual simplicity, efficiency and accuracy.  This is intended as a simple to understand reference for building strong baselines with deep learning.
+including sentence classification, tagging, sequence-to-sequence and language modeling problems.  Considerations are conceptual simplicity, efficiency and accuracy.  This is intended as a simple to understand reference for building strong baselines with deep learning.
 
-After considering other strong, shallow baselines, we have found that even incredibly simple, moderately deep models often perform better.  These models are only slightly more complex to implement than strong baselines such as shingled SVMs and NBSVMs, and support multi-class output easily.  Additionally, they are (hopefully) the first "deep learning thing" you might think of for a certain type of problem.  Using these stronger baselines as a reference point hopefully yields more productive algorithms and experimentation.
+After considering other strong, shallow baselines, we have found that even incredibly simple, moderately deep models often perform better.  These models are only slightly more complex to implement than strong shallow baselines such as shingled SVMs and NBSVMs, and support multi-class output easily.  Additionally, they are (hopefully) the first "deep learning thing" you might think of for a certain type of problem.  Using these stronger baselines as a reference point hopefully yields more productive algorithms and experimentation.
 
-Each algorithm and implementation for each DL framework is in a separate sub-directory, and is fully contained, even though this means that there is some overlap in the routines.  This is done for ease of use and experimentation.  Below you can find descriptions of the algorithms, and the status of implementation for each framework.
+Each algorithm and implementation for each DL framework can be run as a separate command line program, or as a library.  Below you can find descriptions of the algorithms, and the status of implementation for each framework.
 
-When the GPU is used, the code *assumes that cudnn (>= R4) is available* and installed. This is critical for good performance.
+When the GPU is used, the code *assumes that cudnn (>= R5) is available* and installed. This is critical for good performance.
 
 # Sentence Classification using CMOT Model
 
@@ -25,9 +26,7 @@ This code provides a pure Lua/Torch7 and pure Python PyTorch, TensorFlow and Ker
 
 This is inspired by Yoon Kim's paper "Convolutional Neural Networks for Sentence Classification", and before that Collobert's "Sentence Level Approach."  The implementations provided here are basically the Kim static and non-static models.
 
-This code doesn't implement multi-channel, as this probably does not make sense as a baseline. It does support adding a hidden projection layer (if you pass hsz), which is kind of like the "Sentence Level Approach" in the Collobert et al. paper, "Natural Language Processing (Almost) from Scratch"
-
-Temporal convolutional output total number of feature maps is configurable (this is also defines the size of the max over time layer, by definition).  This code offers several optimization options (adagrad, adadelta, adam and vanilla sgd).  The Kim paper uses adadelta, which works well, but vanilla SGD often works great for static embeddings.  Input signals are always padded to account for the filter width, so edges are still handled.
+This code doesn't implement multi-channel, as this probably does not make sense as a baseline. Temporal convolutional output total number of feature maps is configurable (this is also defines the size of the max over time layer, by definition). This code offers several optimization options (adagrad, adadelta, adam and vanilla sgd).  The Kim paper uses adadelta, which works well, but vanilla SGD often works great for static embeddings.  Input signals are always padded to account for the filter width, so edges are still handled.
 
 Despite the simplicity of these approaches, we have found that on many datasets this performs better than other strong baselines such as NBSVM.
 
@@ -47,6 +46,7 @@ If you are looking specifically for Yoon Kim's multi-channel model, his code is 
 There are some options in each implementation that might vary slightly, but this approach should do at least as well as the original paper.
 
 ## Fine-tuning Embedding (LookupTable) layer
+
 The (default) fine-tuning approach loads the word2vec weight matrix into an Lookup Table.  As we can see from the Kim paper, dynamic/fine-tuning embedding models do not always out-perform static models, However, they tend to do better.
 
 We randomly initialize unattested words and add them to the weight matrix for the Lookup Table.  This can be controlled with the 'unif' parameter in the driver program.
@@ -64,24 +64,12 @@ The static (no fine-tuning) model usually has decent performance, and the code i
 
 ## Running It
 
-Early stopping with patience is supported.  There are many hyper-parameters that you can tune, which may yield many different models.  Here is a Torch example of parameterization of static embeddings with SGD and the default three filter sizes (3, 4, and 5):
+Early stopping with patience is supported.  There are many hyper-parameters that you can tune, which may yield many different models.  Here is a PyTorch example of parameterization of dynamic embeddings with SGD and the default three filter sizes (3, 4, and 5):
 
 Here is an example running Stanford Sentiment Treebank 2 data with adadelta
 
 ```
-
-th classify_sentence.lua -clean -optim adadelta -batchsz 50 -epochs 25 -patience 25 -train ./data/stsa.binary.phrases.train -valid ./data/stsa.binary.dev -eval ./data/stsa.binary.test -embed /data/xdata/GoogleNews-vectors-negative300.bin -filtsz "{3,4,5}"
-```
-In TensorFlow:
-
-```
-python classify_sentence.py --clean --optim adadelta --eta 0.01 --batchsz 50 --epochs 25 --patience 25 --train ./data/stsa.binary.phrases.train --valid ./data/stsa.binary.dev --test ./data/stsa.binary.test --embed /data/xdata/GoogleNews-vectors-negative300.bin --filtsz "3,4,5" --dropout 0.5
-```
-
-PyTorch and Keras have almost the same usage, but they use Python's builtin CL parser, so their filter sizes should be specified as
-
-```
---filtsz 3 4 5
+python classify_sentence.py --backend pytorch --clean --optim adadelta --eta 0.01 --batchsz 50 --epochs 25 --patience 25 --train ./data/stsa.binary.phrases.train --valid ./data/stsa.binary.dev --test ./data/stsa.binary.test --embed /data/xdata/GoogleNews-vectors-negative300.bin --filtsz 3 4 5 --dropout 0.5
 ```
 
 (Note that these are already the default arguments!)
@@ -99,16 +87,12 @@ It was run on the latest code as of 3/16/2017, with 25 epochs, a learning rate o
 
 | Dataset | TensorFlow | Keras (TF) | PyTorch | Torch7 |
 | ------- | ---------- | ---------- | ------- | ------ |
-| SST2    |      87.70 |      87.75 |  87.47 | 87.095 |
+| SST2    |      87.70 |      87.4  |  87.5   | 87.095 |
 
 Note that these are randomly initialized and these numbers will vary
 (IOW, don't assume that one implementation is guaranteed to outperform the others from a single run).
 
 On my laptop, each implementation takes between 29 - 40s per epoch.
-
-## Restoring the Model
-
-In Torch and in Keras, restoring the model is trivial, but with TensorFlow there is a little more work.  The CNN classes are set up to handle this save and restore, which includes reloading the graph, and then reinitializing the model, along with labels and feature index.
 
 # Structured Prediction using RNNs
 
@@ -137,10 +121,8 @@ Here is an example using convolutional filters for character embeddings, alongsi
 python tag_char_rnn.py --epochs 40 --train $OCT_SPLITS/oct27.train \
     --valid $OCT_SPLITS/oct27.dev --test $OCT_SPLITS/oct27.test \
     --embed /data/xdata/oct-s140clean-uber.cbow-bin \
-    --cfiltsz "1,2,3,4,5,7"
+    --cfiltsz 1 2 3 4 5 7
 ```
-
-For  PyTorch, the arguments are space delimited
 
 If you want to use only the convolutional filter word vectors (and no word embeddings), just remove the -embed line above.
 
@@ -156,7 +138,7 @@ python tag_char_rnn.py --rnn blstm --patience 70 --numrnn 2 \
    --valid $CONLL/eng.testa \
    --test  $CONLL/eng.testb \
    --embed /data/xdata/GoogleNews-vectors-negative300.bin \
-   --cfiltsz "1,2,3,4,5,7" --fscore 1
+   --cfiltsz 1 2 3 4 5 7 --fscore 1
 ```
 
 This will report an F1 score on at each validation pass, and will use F1 for early-stopping as well.
@@ -172,12 +154,12 @@ python tag_char_rnn.py --rnn blstm --patience 70 --numrnn 2 \
    --valid $CONLL/eng.testa \
    --test  $CONLL/eng.testb \
    --embed /data/xdata/GoogleNews-vectors-negative300.bin \
-   --cfiltsz "1,2,3,4,5,7" --fscore 1 --crf
+   --cfiltsz 1 2 3 4 5 7 --fscore 1 --crf
 ```
 
 ## Status
 
-This model is implemented in TensorFlow, Torch, and PyTorch.  The TensorFlow currently is the only implementation that supports using a CRF layer on the top.
+This model is implemented in TensorFlow and PyTorch (there is an old version in Torch7, which is no longer supported).  The TensorFlow currently is the only implementation that supports using a CRF layer on the top.
 
 _TODO_: Benchmark for CONLL NER
 
@@ -200,8 +182,6 @@ Encoder-decoder frameworks have been used for Statistical Machine Translation, I
 This code implements seq2seq with mini-batching (as in other examples) using adagrad, adadelta, sgd or adam.  It supports two vocabularies, and takes word2vec pre-trained models as input, filling in words that are attested in the dataset but not found in the pre-trained models.  It uses dropout for regularization.
 
 For any reasonable size data, this really needs to run on the GPU for realistic training times.
-
-The TensorFlow code has vanilla seq2seq using just the base graph modules, as well as legacy seq2seq lib (pre-1.1) and the new dynamic decoder seq2seq code in TF 1.1.
 
 ## Status
 
@@ -240,3 +220,14 @@ As noted above, the run above differs in that it uses pre-trained word vectors.
 | Word Med (Zaremba) | TensorFlow | 80.168 | 77.2213 |
 
 _TODO: Add LSTM Char Small Configuration results_
+
+## Reporting with Visdom
+
+To enable reporting with visdom, just pass `--visdom 1` in any command line program.  Baseline uses visdom with all framework implementations
+
+
+## Baseline as an API
+
+The latest code provides a high-level Python API to access common deep-learning NLP approaches.  This should facilitate faster research in any language, as these tasks are fairly standard for NLP.  The data loaders and data feeds are all reusable, as are the basic harnesses for the APIs.  To get an understanding for how to structure a program to use baseline, have a look at the command line programs for each task.
+
+You can also think of the library itself as an abstraction layer at the "solution" or algorithm level with sub-modules built with each framework. Adding a new framework is straightforward using the methods shown in the library.
