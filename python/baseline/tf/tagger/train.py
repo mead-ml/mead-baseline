@@ -169,7 +169,7 @@ def fit(model, ts, vs, es, **kwargs):
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
 
     if do_early_stopping:
-        early_stopping_metric = kwargs.get('early_stopping_metric', 'avg_loss')
+        early_stopping_metric = kwargs.get('early_stopping_metric', 'acc')
         patience = kwargs.get('patience', epochs)
         print('Doing early stopping on [%s] with patience [%d]' % (early_stopping_metric, patience))
 
@@ -177,7 +177,7 @@ def fit(model, ts, vs, es, **kwargs):
     print('reporting', reporting_fns)
 
     max_metric = 0
-
+    last_improved = 0
     for epoch in range(epochs):
 
         start_time = time.time()

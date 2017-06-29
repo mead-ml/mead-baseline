@@ -104,6 +104,7 @@ def fit(seq2seq, ts, vs, **kwargs):
     print('reporting', reporting_fns)
 
     min_metric = 10000
+    last_improved = 0
 
     for epoch in range(epochs):
 

@@ -93,6 +93,7 @@ def create_model(labels, word_embedding, char_embedding, **kwargs):
     hsz = int(kwargs['hsz'])
     layers = int(kwargs.get('layers', 1))
     rnntype = kwargs.get('rnntype', 'lstm')
+    print('RNN [%s]' % rnntype)
     maxs = kwargs.get('maxs', 100)
     maxw = kwargs.get('maxw', 100)
     unif = float(kwargs.get('unif', 0.25))

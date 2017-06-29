@@ -2,7 +2,7 @@ import argparse
 from baseline import *
 
 parser = argparse.ArgumentParser(description='Sequence tagger for sentences')
-
+parser.add_argument('--visdom', help='Turn on visdom reporting', type=bool, default=False)
 parser.add_argument('--eta', default=0.01, type=float)
 parser.add_argument('--embed', default=None, help='Word2Vec embeddings file')
 parser.add_argument('--cembed', default=None, help='Word2Vec char embeddings file')
@@ -31,7 +31,6 @@ parser.add_argument('--wsz', default=30, help='Word embedding depth', type=int)
 parser.add_argument('--valsplit', default=0.15, help='Validation split if no valid set', type=float)
 parser.add_argument('--nogpu', default=False, help='Use CPU (Not recommended)', type=bool)
 parser.add_argument('--save', default='rnn-tagger', help='Save basename')
-parser.add_argument('--fscore', default=0, help='Use F-score in metrics and early stopping', type=int)
 parser.add_argument('--test_thresh', default=10, help='How many epochs improvement required before testing', type=int)
 parser.add_argument('--crf', default=False, help='Use a CRF on top', type=bool)
 parser.add_argument('--early_stopping_metric', default='acc', help='Metric to use for early stopping')
@@ -39,6 +38,9 @@ parser.add_argument('--web_cleanup', default=False, help='Do cleanup of web toke
 parser.add_argument('--backend', default='tf', help='Default Deep Learning Framework')
 args = parser.parse_args()
 gpu = not args.nogpu
+
+
+args.reporting = setup_reporting(args.visdom)
 
 if args.backend == 'pytorch':
     from baseline.pytorch import long_0_tensor_alloc as vec_alloc

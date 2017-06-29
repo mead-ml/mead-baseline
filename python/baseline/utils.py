@@ -84,6 +84,7 @@ def to_spans(sequence, lut, strict_iob2=False):
 
         #if label.startswith('B-'):
         if not label.startswith('I-') and not label == 'O':
+            ##print(label)
             if current is not None:
                 chunks.append('@'.join(current))
             current = [label.replace('B-', ''), '%d' % i ]

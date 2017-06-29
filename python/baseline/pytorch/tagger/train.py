@@ -71,10 +71,8 @@ class TaggerTrainerPyTorch:
             sentence = sentence[:sentence_length]
             correct_labels += np.sum(np.equal(sentence, gold))
             total_labels += sentence_length
-
             gold_chunks = to_spans(gold, self.idx2label)
             gold_count += len(gold_chunks)
-
             guess_chunks = to_spans(sentence, self.idx2label)
             guess_count += len(guess_chunks)
 
@@ -135,6 +133,7 @@ class TaggerTrainerPyTorch:
             loss = self.crit(pred, y)
             total_loss += loss.data[0]
             loss.backward()
+            torch.nn.utils.clip_grad_norm(self.model.parameters(), self.clip)
             #total_corr += self._right(pred, y)
             total += self._total(y)
             self.optimizer.step()
@@ -153,7 +152,7 @@ def fit(model, ts, vs, es, **kwargs):
     model_file = kwargs.get('outfile', './seq2seq-model.pyth')
 
     if do_early_stopping:
-        early_stopping_metric = kwargs.get('early_stopping_metric', 'avg_loss')
+        early_stopping_metric = kwargs.get('early_stopping_metric', 'acc')
         patience = kwargs.get('patience', epochs)
         print('Doing early stopping on [%s] with patience [%d]' % (early_stopping_metric, patience))
 
@@ -163,6 +162,7 @@ def fit(model, ts, vs, es, **kwargs):
     after_train_fn = kwargs.get('after_train_fn', None)
     trainer = TaggerTrainerPyTorch(model, **kwargs)
 
+    last_improved = 0
     max_metric = 0
     for epoch in range(epochs):
 

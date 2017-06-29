@@ -25,7 +25,7 @@ Here is an example using convolutional filters for character embeddings, alongsi
 python tag_char_rnn.py --epochs 40 --train $OCT_SPLITS/oct27.train \
     --valid $OCT_SPLITS/oct27.dev --test $OCT_SPLITS/oct27.test \
     --embed /data/xdata/oct-s140clean-uber.cbow-bin \
-    --cfiltsz 1 2 3 4 5 7
+    --cfiltsz 1 2 3 4 5 7 --web_cleanup True
 ```
 
 To run with PyTorch, just pass `--backend pytorch`

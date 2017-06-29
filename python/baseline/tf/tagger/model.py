@@ -220,6 +220,7 @@ def create_model(labels, word_embeddings, char_embeddings, **kwargs):
     hsz = int(kwargs['hsz'])
     layers = int(kwargs.get('layers', 1))
     rnntype = kwargs.get('rnntype', 'lstm')
+    print('RNN [%s]' % rnntype)
     maxs = kwargs.get('maxs', 100)
     maxw = kwargs.get('maxw', 100)
     wsz = kwargs.get('wsz', 30)

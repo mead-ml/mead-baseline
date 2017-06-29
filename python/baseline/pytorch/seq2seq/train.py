@@ -110,6 +110,7 @@ def fit(model, ts, vs, **kwargs):
     trainer = Seq2SeqTrainerPyTorch(model, **kwargs)
 
     min_metric = 10000
+    last_improved = 0
     for epoch in range(epochs):
 
         start_time = time.time()
