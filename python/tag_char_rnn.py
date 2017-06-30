@@ -32,7 +32,7 @@ parser.add_argument('--nogpu', default=False, help='Use CPU (Not recommended)', 
 parser.add_argument('--save', default='rnn-tagger', help='Save basename')
 parser.add_argument('--test_thresh', default=10, help='How many epochs improvement required before testing', type=int)
 parser.add_argument('--crf', default=False, help='Use a CRF on top', type=bool)
-parser.add_argument('--early_stopping_metric', default='acc', help='Metric to use for early stopping')
+parser.add_argument('--early_stopping_metric', default='f1', help='Metric for early stopping. For IOB tagging use f1')
 parser.add_argument('--web_cleanup', default=False, help='Do cleanup of web tokens?', type=bool)
 parser.add_argument('--backend', default='tf', help='Default Deep Learning Framework')
 args = parser.parse_args()
