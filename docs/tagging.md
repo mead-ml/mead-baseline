@@ -15,7 +15,20 @@ The character-level embeddings are based on Character-Aware Neural Language Mode
 
 Twitter is a challenging data source for tagging problems.  The [TweetNLP project](http://www.cs.cmu.edu/~ark/TweetNLP) includes hand annotated POS data. The original taggers used for this task are described [here](http://www.cs.cmu.edu/~ark/TweetNLP/gimpel+etal.acl11.pdf).  The baseline that they compared their algorithm against got 83.38% accuracy.  The final model got 89.37% accuracy with many custom features.  Below, our simple BLSTM baseline with no custom features, and a very coarse approach to compositional character to word modeling still gets *88%-90%* accuracy.
 
-This has been tested on oct27 train, dev and test splits (http://www.cs.cmu.edu/~ark/TweetNLP), using custom word2vec embeddings generated from ~32M tweets including s140 and the oct27 train+dev data (download them here: https://drive.google.com/drive/folders/0B8N1oYmGLVGWWWZYS2E0MlRXajQ?usp=sharing).  Some of the data was sampled and preprocessed to have placeholder words for hashtags, mentions and URLs to be used as backoffs for words of those classes which are not found.  The example below employs character vectors taken from splitting oct27 train+dev and s140 data and uses them to summed word vectors over characters.  Note that passing -cembed is not necessary, but provides a warm start for the character embeddings.
+### Pre-trained word2vec embeddings
+
+#### Google News
+The Google news word vectors are useful for many different tasks and tagging is no exception.  Here is a link to get those (from Google)
+
+https://drive.google.com/file/d/0B7XkCwpI5KDYNlNUTTlSS21pQmM/edit
+
+#### Twitter
+
+Custom word2vec embeddings generated from ~32M tweets including s140 and the oct27 train+dev data.  Some of the data was sampled and preprocessed to have placeholder words for hashtags, mentions and URLs to be used as backoffs for words of those classes which are not found.
+
+https://drive.google.com/drive/folders/0B8N1oYmGLVGWWWZYS2E0MlRXajQ?usp=sharing
+
+If you use these, pass `--web_cleanup 1` to make sure that preprocessing is done to match preprocessing on the pre-trained embeddings
 
 ## Running It
 
