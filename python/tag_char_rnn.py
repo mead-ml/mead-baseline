@@ -17,7 +17,7 @@ parser.add_argument('--layers', default=1, help='The depth of stacked RNNs', typ
 parser.add_argument('--outdir', default='out', help='Directory to put the output')
 parser.add_argument('--conll_output', default='rnn-tagger-test.txt', help='Place to put test CONLL file')
 parser.add_argument('--unif', default=0.1, help='Initializer bounds for embeddings', type=float)
-parser.add_argument('--clip', default=5, help='Gradient clipping cutoff', type=float)
+parser.add_argument('--clip', default=5.0, help='Gradient clipping cutoff', type=float)
 parser.add_argument('--epochs', default=400, help='Number of epochs', type=int)
 parser.add_argument('--batchsz', default=20, help='Batch size', type=int)
 parser.add_argument('--mxlen', default=-1, help='Max sentence length', type=int)
