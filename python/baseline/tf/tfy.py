@@ -23,12 +23,12 @@ def optimizer(loss_fn, **kwargs):
 
     elif decay_type == 'staircase':
         at_step = int(kwargs.get('bounds', 16000))
-        decay_rate = kwargs.get('decay_rate', 0.5)
+        decay_rate = float(kwargs.get('decay_rate', 0.5))
         decay_fn = lambda lr, global_step: tf.train.exponential_decay(lr, global_step, at_step, decay_rate, staircase=True)
 
     elif decay_type == 'zaremba':
         boundaries = kwargs.get('bounds', None)
-        decay_rate = kwargs.get('decay_rate', None)
+        decay_rate = float(kwargs.get('decay_rate', None))
         values = [eta/(decay_rate**i) for i in range(len(boundaries))]
         print('Learning rate schedule:')
         print(boundaries)

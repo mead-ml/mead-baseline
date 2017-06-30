@@ -91,9 +91,9 @@ args.maxs = maxs
 args.maxw = maxw
 
 
-ts = SeqWordCharDataFeed(tsx, args.batchsz, shuffle=True, alloc_fn=vec_alloc, shape_fn=vec_shape, trim=trim)
-vs = SeqWordCharDataFeed(vsx, args.batchsz, alloc_fn=vec_alloc, shape_fn=vec_shape, trim=trim)
-es = SeqWordCharDataFeed(esx, args.batchsz, alloc_fn=vec_alloc, shape_fn=vec_shape, trim=trim)
+ts = SeqWordCharLabelDataFeed(tsx, args.batchsz, shuffle=True, alloc_fn=vec_alloc, shape_fn=vec_shape, trim=trim)
+vs = SeqWordCharLabelDataFeed(vsx, args.batchsz, alloc_fn=vec_alloc, shape_fn=vec_shape, trim=trim)
+es = SeqWordCharLabelDataFeed(esx, args.batchsz, alloc_fn=vec_alloc, shape_fn=vec_shape, trim=trim)
 
 model = tagger.create_model(f2i, word_vec, char_vec, **vars(args))
 

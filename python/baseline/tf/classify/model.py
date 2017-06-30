@@ -6,6 +6,7 @@ import json
 from tensorflow.contrib.layers import convolution2d, fully_connected, flatten, xavier_initializer
 from baseline.utils import fill_y
 
+
 class ConvModel:
 
     def save(self, outfile):

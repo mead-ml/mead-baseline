@@ -271,3 +271,48 @@ class TSVSeqLabelReader:
                 examples.append((x, y))
         return baseline.data.SeqLabelExamples(examples), f2i
 
+
+class PTBSeqReader:
+
+    @staticmethod
+    def build_vocab(files):
+        vocab_word = Counter()
+        vocab_ch = Counter()
+        maxw = 0
+        num_words_in_files = []
+        for file in files:
+            if file is None:
+                continue
+
+            with codecs.open(file, encoding='utf-8', mode='r') as f:
+                num_words = 0
+                for line in f:
+                    sentence = line.split() + ['<EOS>']
+                    num_words += len(sentence)
+                    for w in sentence:
+                        vocab_word[w] += 1
+                        maxw = max(maxw, len(w))
+                        for k in w:
+                            vocab_ch[k] += 1
+                num_words_in_files.append(num_words)
+
+        return maxw, vocab_ch, vocab_word, num_words_in_files
+
+    @staticmethod
+    def load(filename, words_vocab, chars_vocab, num_words, maxw, vec_alloc=np.zeros):
+
+        xch = vec_alloc((num_words, maxw), np.int)
+        x = vec_alloc((num_words), np.int)
+        i = 0
+        with codecs.open(filename, encoding='utf-8', mode='r') as f:
+            for line in f:
+                sentence = line.split() + ['<EOS>']
+                num_words += len(sentence)
+                for w in sentence:
+                    x[i] = words_vocab.get(w)
+                    nch = min(len(w), maxw)
+                    for k in range(nch):
+                        xch[i,k] = chars_vocab.get(w[k], 0)
+                    i += 1
+
+        return x, xch

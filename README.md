@@ -16,6 +16,9 @@ Each algorithm and implementation for each DL framework can be run as a separate
 
 When the GPU is used, the code *assumes that cudnn (>= R5) is available* and installed. This is critical for good performance.
 
+**Update 6/30/2017: The python code has been refactored to support reusing components and use as a python module.  If you used to run code from the `<task>/python/<framework>` areas, you can now run those tasks from `baseline/python`.  See usage in each task area**
+
+
 ## Supported Tasks
 
 - [Text Classification](docs/cmot.md)
@@ -33,3 +36,4 @@ To enable reporting with visdom, just pass `--visdom 1` in any command line prog
 The latest code provides a high-level Python API to access common deep-learning NLP approaches.  This should facilitate faster research in any language, as these tasks are fairly standard for NLP.  The data loaders and data feeds are all reusable, as are the basic harnesses for the APIs.  To get an understanding for how to structure a program to use baseline, have a look at the command line programs for each task.
 
 You can also think of the library itself as an abstraction layer at the "solution" or algorithm level with sub-modules built with each framework. Adding a new framework is straightforward using the methods shown in the library.
+

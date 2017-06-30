@@ -3,17 +3,11 @@ import numpy as np
 import math
 
 
-class DataFeed:
+class DataFeed(object):
 
-    def __init__(self, examples, batchsz, **kwargs):
-        self.examples = examples
-        self.batchsz = batchsz
-        self.shuffle = kwargs['shuffle'] if 'shuffle' in kwargs else False
-        self.vec_alloc = kwargs['alloc_fn'] if 'alloc_fn' in kwargs else np.zeros
-        self.vec_shape = kwargs['shape_fn'] if 'shape_fn' in kwargs else np.shape
-        self.src_vec_trans = kwargs['src_trans_fn'] if 'src_trans_fn' in kwargs else None
-        self.steps = int(math.floor(len(self.examples)/float(batchsz)))
-        self.trim = bool(kwargs['trim']) if 'trim' in kwargs  else False
+    def __init__(self):
+        self.steps = 0
+        self.shuffle = False
 
     def _batch(self, i):
         pass
@@ -31,10 +25,28 @@ class DataFeed:
     def __len__(self):
         return self.steps
 
+
+class ExampleDataFeed(DataFeed):
+
+    def __init__(self, examples, batchsz, **kwargs):
+        super(ExampleDataFeed, self).__init__()
+
+        self.examples = examples
+        self.batchsz = batchsz
+        self.shuffle = kwargs['shuffle'] if 'shuffle' in kwargs else False
+        self.vec_alloc = kwargs['alloc_fn'] if 'alloc_fn' in kwargs else np.zeros
+        self.vec_shape = kwargs['shape_fn'] if 'shape_fn' in kwargs else np.shape
+        self.src_vec_trans = kwargs['src_trans_fn'] if 'src_trans_fn' in kwargs else None
+        self.steps = int(math.floor(len(self.examples)/float(batchsz)))
+        self.trim = bool(kwargs['trim']) if 'trim' in kwargs  else False
+
+
+
 class SeqLabelExamples(object):
 
     SEQ = 0
     LABEL = 1
+
     def __init__(self, example_list, do_shuffle=True):
         self.example_list = example_list
         if do_shuffle:
@@ -50,7 +62,6 @@ class SeqLabelExamples(object):
     def width(self):
         x, y = self.example_list[0]
         return len(x)
-
 
     def batch(self, start, batchsz, vec_alloc=np.empty):
         siglen = self.width()
@@ -75,14 +86,16 @@ class SeqLabelExamples(object):
         rest_ex = data.example_list[heldout:]
         return SeqLabelExamples(heldout_ex), SeqLabelExamples(rest_ex)
 
-class SeqLabelDataFeed(DataFeed):
+class SeqLabelDataFeed(ExampleDataFeed):
+
+    def __init__(self, examples, batchsz, **kwargs):
+        super(SeqLabelDataFeed, self).__init__(examples, batchsz, **kwargs)
 
     def _batch(self, i):
         x, y = self.examples.batch(i, self.batchsz, self.vec_alloc)
         if self.src_vec_trans is not None:
             x = self.src_vec_trans(x)
         return x, y
-
 
 class SeqWordCharTagExamples(object):
 
@@ -149,13 +162,17 @@ class SeqWordCharTagExamples(object):
         rest_ex = data.example_list[heldout:]
         return SeqLabelExamples(heldout_ex), SeqLabelExamples(rest_ex)
 
-class SeqWordCharDataFeed(DataFeed):
+
+class SeqWordCharLabelDataFeed(ExampleDataFeed):
+
+    def __init__(self, examples, batchsz, **kwargs):
+        super(SeqWordCharLabelDataFeed, self).__init__(examples, batchsz, **kwargs)
 
     def _batch(self, i):
         return self.examples.batch(i, self.batchsz, self.trim, self.vec_alloc, self.vec_shape)
 
 
-class Seq2SeqExamples:
+class Seq2SeqExamples(object):
 
     SRC = 0
     TGT = 1
@@ -208,13 +225,47 @@ class Seq2SeqExamples:
 
         return srcs, tgts, src_lens, tgt_lens
 
+
 def reverse_2nd(vec):
     return vec[:, ::-1]
 
-class Seq2SeqDataFeed(DataFeed):
+
+class Seq2SeqDataFeed(ExampleDataFeed):
+
+    def __init__(self, examples, batchsz, **kwargs):
+        super(Seq2SeqDataFeed, self).__init__(examples, batchsz, **kwargs)
 
     def _batch(self, i):
         src, tgt, src_len, tgt_len = self.examples.batch(i, self.batchsz, self.trim, self.vec_alloc)
         if self.src_vec_trans is not None:
             src = self.src_vec_trans(src)
         return src, tgt, src_len, tgt_len
+
+
+# This one is a little different at the moment
+class SeqWordCharDataFeed(DataFeed):
+
+    def __init__(self, x, xch, nbptt, batchsz, maxw):
+        super(SeqWordCharDataFeed, self).__init__()
+        num_examples = x.shape[0]
+        rest = num_examples // batchsz
+        self.steps = rest // nbptt
+        self.stride_ch = nbptt * maxw
+        trunc = batchsz * rest
+
+        print('Truncating from %d to %d' % (num_examples, trunc))
+        self.x = x[:trunc].reshape((batchsz, rest))
+        xch = xch.flatten()
+        trunc = batchsz * rest * maxw
+
+        print('Truncated from %d to %d' % (xch.shape[0], trunc))
+        self.xch = xch[:trunc].reshape((batchsz, rest * maxw))
+        self.nbptt = nbptt
+        self.batchsz = batchsz
+        self.wsz = maxw
+    def _batch(self, i):
+        return self.x[:, i*self.nbptt:(i+1)*self.nbptt].reshape((self.batchsz, self.nbptt)), \
+              self.xch[:, i*self.stride_ch:(i+1)*self.stride_ch].reshape((self.batchsz, self.nbptt, self.wsz)), \
+              self.x[:, i*self.nbptt+1:(i+1)*self.nbptt+1].reshape((self.batchsz, self.nbptt))
+
+
