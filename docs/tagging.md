@@ -44,7 +44,7 @@ python tag_char_rnn.py --rnn blstm --patience 70 --numrnn 2 \
    --valid $CONLL/eng.testa \
    --test  $CONLL/eng.testb \
    --embed /data/xdata/GoogleNews-vectors-negative300.bin \
-   --cfiltsz 1 2 3 4 5 7 --fscore 1
+   --cfiltsz 1 2 3 4 5 7
 ```
 
 This will report an F1 score on at each validation pass, and will use F1 for early-stopping as well.
@@ -60,7 +60,7 @@ python tag_char_rnn.py --rnn blstm --patience 70 --numrnn 2 \
    --valid $CONLL/eng.testa \
    --test  $CONLL/eng.testb \
    --embed /data/xdata/GoogleNews-vectors-negative300.bin \
-   --cfiltsz 1 2 3 4 5 7 --fscore 1 --crf
+   --cfiltsz 1 2 3 4 5 7 --crf
 ```
 
 ## Status
