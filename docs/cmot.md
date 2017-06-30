@@ -2,13 +2,13 @@
 
 ## Convolution - Max Over Time Architecture (CMOT)
 
-This code provides a pure Lua/Torch7 and pure Python PyTorch, TensorFlow and Keras implementations -- no preprocessing of the dataset with python, nor HDF5 is required.  The Lua/Torch code depends on a tiny module that can load word2vec in Torch (https://github.com/dpressel/torchure) either as a model, or as an nn.LookupTable.  It is important to note that these models can easily be implemented with other deep learning frameworks, and without much work, can also be implemented from scratch!  Over time, this package will hopefully provide alternate implementations in other DL Frameworks and programming languages.
+This code provides a pure Python PyTorch, TensorFlow and Keras implementations (as well as a Lua/Torch7 implementation. 
 
 *Details*
 
 This is inspired by Yoon Kim's paper "Convolutional Neural Networks for Sentence Classification", and before that Collobert's "Sentence Level Approach."  The implementations provided here are basically the Kim static and non-static models.
 
-This code doesn't implement multi-channel, as this probably does not make sense as a baseline. Temporal convolutional output total number of feature maps is configurable (this is also defines the size of the max over time layer, by definition). This code offers several optimization options (adagrad, adadelta, adam and vanilla sgd).  The Kim paper uses adadelta, which works well, but vanilla SGD often works great for static embeddings.  Input signals are always padded to account for the filter width, so edges are still handled.
+Temporal convolutional output total number of feature maps is configurable (this also defines the size of the max over time layer, by definition). This code offers several optimization options (adagrad, adadelta, adam and vanilla sgd, with and without momentum).  The Kim paper uses adadelta, which works well, but vanilla SGD often works well too.
 
 Despite the simplicity of these approaches, we have found that on many datasets this performs better than other strong baselines such as NBSVM.
 
@@ -22,8 +22,7 @@ Here are some places where this code is known to perform well:
     - Consistent improvement over [extended algorithm](https://github.com/sudhof/politeness) from authors using a decimation split (descending rank heldout)
   - Language Detection (using word and char embeddings)
   - Question Categorization (QA trec)
-
-If you are looking specifically for Yoon Kim's multi-channel model, his code is open source (https://github.com/yoonkim/CNN_sentence) and there is another project on Github from Harvard NLP which recreates it in Torch (https://github.com/harvardnlp/sent-conv-torch).  By focusing on the static and non-static models, we are able to keep this code lean, easy to understand, and applicable as a baseline to a broad range of problems.
+  - Intent detection
 
 There are some options in each implementation that might vary slightly, but this approach should do at least as well as the original paper.
 
@@ -51,7 +50,12 @@ Early stopping with patience is supported.  There are many hyper-parameters that
 Here is an example running Stanford Sentiment Treebank 2 data with adadelta using pytorch
 
 ```
-python classify_sentence.py --backend pytorch --clean --optim adadelta --eta 0.01 --batchsz 50 --epochs 25 --patience 25 --train ./data/stsa.binary.phrases.train --valid ./data/stsa.binary.dev --test ./data/stsa.binary.test --embed /data/xdata/GoogleNews-vectors-negative300.bin --filtsz 3 4 5 --dropout 0.5
+python classify_sentence.py --backend pytorch --clean --optim adadelta --eta 1 --batchsz 50 --epochs 25 \
+ --train ../data/stsa.binary.phrases.train \
+ --valid ../data/stsa.binary.dev \
+ --test ../data/stsa.binary.test \
+ --embed /data/xdata/GoogleNews-vectors-negative300.bin \
+ --dropout 0.5
 ```
 
 ## Status
@@ -66,10 +70,11 @@ Here are the last observed performance scores using _classify_sentence_ with fin
 It was run on the latest code as of 3/16/2017, with 25 epochs with adadelta as an optimizer:
 
 ```
+
 python classify_sentence.py --backend tf --clean --optim adadelta --eta 1 --batchsz 50 --epochs 25 --patience 25 \
- --train /home/dpressel/dev/work/sent-conv-torch/data/stsa.binary.phrases.train \
- --valid /home/dpressel/dev/work/sent-conv-torch/data/stsa.binary.dev \
- --test /home/dpressel/dev/work/sent-conv-torch/data/stsa.binary.test \
+ --train ../data/stsa.binary.phrases.train \
+ --valid ../data/stsa.binary.dev \
+ --test ../data/stsa.binary.test \
  --embed /data/xdata/GoogleNews-vectors-negative300.bin --filtsz 3 4 5 \
  --dropout 0.5
 
@@ -82,4 +87,4 @@ python classify_sentence.py --backend tf --clean --optim adadelta --eta 1 --batc
 Note that these are randomly initialized and these numbers will vary
 (IOW, don't assume that one implementation is guaranteed to outperform the others from a single run).
 
-On my laptop, each implementation takes between 29 - 40s per epoch.
+On my laptop, each implementation takes between 29 - 40s per epoch depending on the deep learning framework (TensorFlow and PyTorch are fastest, and about the same speed)
