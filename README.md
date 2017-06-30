@@ -6,7 +6,7 @@ Simple, Strong Deep-Learning Baselines for NLP in several frameworks
 Baseline algorithms and data support implemented with multiple deep learning tools, including CNN sentence modeling, RNN/LSTM-based tagging, seq2seq, and language modeling.  Can be used as stand-alone command line tools or as a Python library.  The library attempts to provide a common interface for several common deep learning tasks, as well as easy-to-use file loaders to make it easy to publish standard results, compare against strong baselines without concern for mistakes and to support rapid experiments to try and beat these baselines.
 
 
-**Update 6/30/2017: The code has been refactored to support reusing components and use as a python module.  If you used to run code from the `<task>/python/<framework>` areas, you can now run those tasks from `baseline/python`.  See usage in each task area**
+**Update 6/30/2017: The code has been refactored to support reusing components and use as a python module.  If you used to run code from the `<task>/python/<framework>` areas, you can now run those tasks from `baseline/python`.  See usage in each task [document](docs)**
 
 # Overview
 
