@@ -4,6 +4,7 @@ import time
 from baseline.utils import to_spans, f_score, listify, revlut
 from baseline.progress import ProgressBar
 from baseline.reporting import basic_reporting
+from baseline.tf.tfy import optimizer
 
 class TaggerEvaluatorTf:
 
@@ -101,33 +102,10 @@ class TaggerTrainerTf:
 
     def __init__(self, model, **kwargs):
 
-        eta = kwargs.get('eta', kwargs.get('lr', 0.01))
-        print('using eta [%.3f]' % eta)
-        mom = kwargs.get('mom', 0.9)
-        optim = kwargs.get('optim', 'sgd')
-        print('using optim [%s]' % optim)
-        clip = float(kwargs['clip']) if 'clip' in kwargs else 5
-
         self.loss = model.create_loss()
         self.model = model
-        self.global_step = tf.Variable(0, name='global_step', trainable=False)
-        if optim == 'adadelta':
-            self.optimizer = tf.train.AdadeltaOptimizer(eta, 0.95, 1e-6)
-        elif optim == 'adam':
-            self.optimizer = tf.train.AdamOptimizer(eta)
-        elif mom > 0:
-            self.optimizer = tf.train.MomentumOptimizer(eta, mom)
-            print('using mom [%.3f]' % mom)
-        else:
-            self.optimizer = tf.train.GradientDescentOptimizer(eta)
-
         self.evaluator = TaggerEvaluatorTf(model)
-        tvars = tf.trainable_variables()
-        grads, _ = tf.clip_by_global_norm(tf.gradients(self.loss, tvars), clip)
-
-        self.global_step = tf.Variable(0, name='global_step', trainable=False)
-        self.train_op = self.optimizer.apply_gradients(zip(grads, tvars),
-                                                       global_step=self.global_step)
+        self.global_step, self.train_op = optimizer(self.loss, **kwargs)
 
     def checkpoint(self):
         self.model.saver.save(self.model.sess, "./tf-checkpoints/tagger", global_step=self.global_step)
@@ -218,4 +196,4 @@ def fit(model, ts, vs, es, **kwargs):
         evaluator = TaggerEvaluatorTf(model)
         test_metrics = evaluator.test(es, conll_file=conll_file, txts=txts)
         for reporting in reporting_fns:
-            reporting(test_metrics, epoch, 'Test')
+            reporting(test_metrics, 0, 'Test')

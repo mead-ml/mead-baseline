@@ -205,4 +205,4 @@ def fit(model, ts, vs, es, **kwargs):
         trainer = TaggerTrainerPyTorch(model, **kwargs)
         test_metrics = trainer.test(es)
         for reporting in reporting_fns:
-            reporting(test_metrics, epoch, 'Test')
+            reporting(test_metrics, 0, 'Test')

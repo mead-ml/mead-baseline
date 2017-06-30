@@ -3,32 +3,16 @@ from baseline.confusion import ConfusionMatrix
 from baseline.progress import ProgressBar
 from baseline.reporting import basic_reporting
 from baseline.utils import listify
+from baseline.tf.tfy import optimizer
 import time
 
 class ClassifyTrainerTf:
 
     def __init__(self, model, **kwargs):
-
-        eta = kwargs.get('eta', kwargs.get('lr', 0.01))
-        print('using eta [%.3f]' % eta)
-        mom = kwargs.get('mom', 0.9)
-        optim = kwargs.get('optim', 'sgd')
-        print('using optim [%s]' % optim)
         self.sess = model.sess
         self.loss = model.create_loss()
         self.model = model
-        self.global_step = tf.Variable(0, name='global_step', trainable=False)
-        if optim == 'adadelta':
-            self.optimizer = tf.train.AdadeltaOptimizer(eta, 0.95, 1e-6)
-        elif optim == 'adam':
-            self.optimizer = tf.train.AdamOptimizer(eta)
-        elif mom > 0:
-            self.optimizer = tf.train.MomentumOptimizer(eta, mom)
-            print('using mom [%.3f]' % mom)
-        else:
-            self.optimizer = tf.train.GradientDescentOptimizer(eta)
-
-        self.train_op = self.optimizer.minimize(self.loss, global_step=self.global_step)
+        self.global_step, self.train_op = optimizer(self.loss, **kwargs)
 
     def train(self, loader):
 
@@ -45,7 +29,6 @@ class ClassifyTrainerTf:
 
         pg.done()
         metrics = cm.get_all_metrics()
-        # This might be actually the average batch loss
         metrics['avg_loss'] = total_loss/float(steps)
         return metrics
 
@@ -141,4 +124,4 @@ def fit(model, ts, vs, es=None, **kwargs):
         test_metrics = trainer.test(es)
             
         for reporting in reporting_fns:
-            reporting(test_metrics, epoch, 'Test')
+            reporting(test_metrics, 0, 'Test')

@@ -1,10 +1,57 @@
 import tensorflow as tf
 import numpy as np
-from tensorflow.python.ops import rnn_cell_impl
 import math
 
 from tensorflow.python.layers import core as layers_core
 from baseline.utils import lookup_sentence, beam_multinomial
+
+
+def optimizer(loss_fn, **kwargs):
+
+    global_step = tf.Variable(0, trainable=False)
+    clip = kwargs.get('clip', None)
+    mom = kwargs.get('mom', 0.9)
+    optim = kwargs.get('optim', 'sgd')
+    eta = kwargs.get('eta', kwargs.get('lr', 0.01))
+    decay_type = kwargs.get('decay_type', None)
+    decay_fn = None
+
+    if decay_type == 'piecewise':
+        boundaries = kwargs.get('bounds', None)
+        decay_values = kwargs.get('decay_values', None)
+        decay_fn = lambda lr, global_step: tf.train.piecewise_constant(global_step, boundaries, decay_values)
+
+    elif decay_type == 'staircase':
+        at_step = int(kwargs.get('bounds', 16000))
+        decay_rate = kwargs.get('decay_rate', 0.5)
+        decay_fn = lambda lr, global_step: tf.train.exponential_decay(lr, global_step, at_step, decay_rate, staircase=True)
+
+    elif decay_type == 'zaremba':
+        boundaries = kwargs.get('bounds', None)
+        decay_rate = kwargs.get('decay_rate', None)
+        values = [eta/(decay_rate**i) for i in range(len(boundaries))]
+        print('Learning rate schedule:')
+        print(boundaries)
+        print(values)
+        decay_fn = lambda lr, global_step: tf.train.piecewise_constant(global_step, boundaries, values)
+
+    if optim == 'adadelta':
+        print('adadelta', eta)
+        optz = lambda lr: tf.train.AdadeltaOptimizer(lr, 0.95, 1e-6)
+    elif optim == 'adam':
+        print('adam', eta)
+        optz = lambda lr: tf.train.AdamOptimizer(lr)
+    elif mom > 0:
+        print('sgd-mom', eta, mom)
+        optz = lambda lr: tf.train.MomentumOptimizer(lr, mom)
+    else:
+        print('sgd')
+        optz = lambda lr: tf.train.GradientDescentOptimizer(lr)
+
+    print('clip', clip)
+    print('decay', decay_fn)
+    return global_step, tf.contrib.layers.optimize_loss(loss_fn, global_step, eta, optz, clip_gradients=clip, learning_rate_decay_fn=decay_fn)
+
 
 def tensor2seq(tensor):
     return tf.unstack(tf.transpose(tensor, perm=[1, 0, 2]))
@@ -38,6 +85,8 @@ def dense_layer(output_layer_depth):
     output_layer = layers_core.Dense(output_layer_depth, use_bias=False, dtype=tf.float32, name="dense")
     return output_layer
 
+def lstm_cell(hsz):
+    return tf.contrib.rnn.BasicLSTMCell(hsz, forget_bias=0.0, state_is_tuple=True)
 
 def lstm_cell_w_dropout(hsz, pkeep):
     return tf.contrib.rnn.DropoutWrapper(tf.contrib.rnn.BasicLSTMCell(hsz, forget_bias=0.0, state_is_tuple=True), output_keep_prob=pkeep)
@@ -158,6 +207,39 @@ def char_word_conv_embeddings(char_vec, filtsz, char_dsz, wsz):
     return joined
 
 
+
+def char_word_conv_embeddings_var_fm(char_vec, filtsz, char_dsz, nfeat_factor, max_feat=200):
+
+    expanded = tf.expand_dims(char_vec, -1)
+    mots = []
+    wsz_all = 0
+    # wsz is feature factor
+    for i, fsz in enumerate(filtsz):
+
+        nfeat = min(nfeat_factor * fsz, max_feat)
+        wsz_all += nfeat
+        with tf.variable_scope('cmot-%s' % fsz):
+
+            kernel_shape = [fsz, char_dsz, 1, nfeat]
+
+            # Weight tying
+            W = tf.get_variable("W", kernel_shape)
+            b = tf.get_variable("b", [nfeat], initializer=tf.constant_initializer(0.0))
+
+            conv = tf.nn.conv2d(expanded,
+                                W, strides=[1,1,1,1],
+                                padding="VALID", name="conv")
+
+            activation = tf.nn.tanh(tf.nn.bias_add(conv, b), "activation")
+
+            mot = tf.reduce_max(activation, [1], keep_dims=True)
+            # Add back in the dropout
+            mots.append(mot)
+
+    combine = tf.reshape(tf.concat(values=mots, axis=3), [-1, wsz_all])
+    joined = highway_conns(combine, wsz_all, 2)
+    return joined
+
 def shared_char_word(Wch, xch_i, filtsz, char_dsz, wsz, reuse):
 
     with tf.variable_scope("SharedCharWord", reuse=reuse):
@@ -166,9 +248,25 @@ def shared_char_word(Wch, xch_i, filtsz, char_dsz, wsz, reuse):
         # data upfront, which means our Y sequences can be assumed not to
         # start with zeros
         mxfiltsz = np.max(filtsz)
-        halffiltsz = int(math.floor(mxfiltsz / 2))
+        halffiltsz = mxfiltsz // 2
         zeropad = tf.pad(xch_i, [[0,0], [halffiltsz, halffiltsz]], "CONSTANT")
         cembed = tf.nn.embedding_lookup(Wch, zeropad)
         if len(filtsz) == 0 or filtsz[0] == 0:
             return tf.reduce_sum(cembed, [1])
         return char_word_conv_embeddings(cembed, filtsz, char_dsz, wsz)
+
+
+def shared_char_word_var_fm(Wch, xch_i, filtsz, char_dsz, wsz, reuse):
+
+    with tf.variable_scope("SharedCharWord", reuse=reuse):
+        # Zeropad the letters out to half the max filter size, to account for
+        # wide convolution.  This way we don't have to explicitly pad the
+        # data upfront, which means our Y sequences can be assumed not to
+        # start with zeros
+        mxfiltsz = np.max(filtsz)
+        halffiltsz = mxfiltsz // 2
+        zeropad = tf.pad(xch_i, [[0,0], [halffiltsz, halffiltsz]], "CONSTANT")
+        cembed = tf.nn.embedding_lookup(Wch, zeropad)
+        if len(filtsz) == 0 or filtsz[0] == 0:
+            return tf.reduce_sum(cembed, [1])
+        return char_word_conv_embeddings_var_fm(cembed, filtsz, char_dsz, wsz)

@@ -92,7 +92,7 @@ class Seq2SeqTrainerPyTorch:
         return metrics
 
 
-def fit(model, ts, vs, **kwargs):
+def fit(model, ts, vs, es=None, **kwargs):
 
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
     epochs = int(kwargs.get('epochs', 20))
@@ -145,3 +145,14 @@ def fit(model, ts, vs, **kwargs):
 
     if do_early_stopping is True:
         print('Best performance on min_metric %.3f at epoch %d' % (min_metric, last_improved))
+
+    if es is not None:
+        model.load(model_file)
+        trainer = Seq2SeqTrainerPyTorch(model, **kwargs)
+        start_time = time.time()
+        test_metrics = trainer.test(es)
+        test_duration = time.time() - start_time
+        print('Test time (%.3f sec)' % test_duration)
+
+        for reporting in reporting_fns:
+            reporting(test_metrics, 0, 'Test')

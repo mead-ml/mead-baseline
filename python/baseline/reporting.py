@@ -25,7 +25,7 @@ def visdom_reporting(metrics, epoch, phase):
         g_vis = visdom.Visdom()
 
     for metric in metrics.keys():
-        chart_id =  '(%s) %s' % (phase, metric)
+        chart_id = '(%s) %s' % (phase, metric)
         windows = {}
         if epoch == 0:
             print('Creating visualization for %s' % chart_id)

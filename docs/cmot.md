@@ -63,11 +63,21 @@ All of the models should typically achieve the dynamic fine-tune results on SST 
 ### Latest Runs
 
 Here are the last observed performance scores using _classify_sentence_ with fine-tuning on the Stanford Sentiment Treebank 2 (SST2)
-It was run on the latest code as of 3/16/2017, with 25 epochs, a learning rate of 0.01 and adadelta as an optimizer:
+It was run on the latest code as of 3/16/2017, with 25 epochs with adadelta as an optimizer:
+
+```
+python classify_sentence.py --backend tf --clean --optim adadelta --eta 1 --batchsz 50 --epochs 25 --patience 25 \
+ --train /home/dpressel/dev/work/sent-conv-torch/data/stsa.binary.phrases.train \
+ --valid /home/dpressel/dev/work/sent-conv-torch/data/stsa.binary.dev \
+ --test /home/dpressel/dev/work/sent-conv-torch/data/stsa.binary.test \
+ --embed /data/xdata/GoogleNews-vectors-negative300.bin --filtsz 3 4 5 \
+ --dropout 0.5
+
+```
 
 | Dataset | TensorFlow | Keras (TF) | PyTorch | Torch7 |
 | ------- | ---------- | ---------- | ------- | ------ |
-| SST2    |      87.70 |      87.4  |  87.5   | 87.095 |
+| SST2    |       87.9 |      87.4  |  87.9   | 87.095 |
 
 Note that these are randomly initialized and these numbers will vary
 (IOW, don't assume that one implementation is guaranteed to outperform the others from a single run).
