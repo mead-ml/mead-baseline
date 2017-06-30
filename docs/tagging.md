@@ -36,7 +36,7 @@ Here is an example using convolutional filters for character embeddings, alongsi
 
 ```
 python tag_char_rnn.py --rnntype blstm --optim sgd --wsz 30 --eta 0.01 \
-    --epochs 40 --web_cleanup True --batchsz 20 --hsz 200 \
+    --epochs 40 --web_cleanup 1 --batchsz 20 --hsz 200 \
     --train ../data/oct27.train \
     --valid ../data/oct27.dev \
     --test ../data/oct27.test \
