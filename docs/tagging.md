@@ -9,23 +9,25 @@ It seems that a good baseline should combine word vectors and character-level co
 
 ## tag_char_rnn: word/character-based RNN tagger
 
-The code is fairly flexible and supports word and/or character-level word embeddings.  For character-level processing, a character vector depth is selected, along with a word-vector depth. There are two implementations of word vectors from character vectors: continous bag of letters or convolutional nets. In the latter case, the user specifies 1 or more parallel filter sizes, and the convolutional layer outputs the requested number of feature maps over time. The max value over time is selected for each, resulting in a fixed width word vector. This is essentially Kim's 2015 language model approach to forming word vectors. The other, simpler way, is just a sum over the character vectors for each word. This actually still works quite well on some datasets, as long as this character word representation is used alongside actual word vectors. In this case, the character vector size and word-char vector size are forced to be the same.
+The code uses word and character-level word embeddings.  For character-level processing, a character vector depth is selected, along with a word-vector depth. 
 
-Word-based word vectors are supported by passing an --embed option to a word2vec file.  If this file is not passed, word-based word embeddings are not used at all.  If it is passed, word-char embeddings are concatenated to these representations. This is essentially the dos Santos 2014 approach to building vectors -- though the overall tagger is quite different, as it employs BLSTMs instead for the actual labeling.
+The character-level embeddings are based on Character-Aware Neural Language Models (Kim, Jernite, Sontag, Rush) and dos Santos 2014 (though the latter's tagging model is quite different).  Unlike dos Santos' approach, here parallel filters are applied during the convolution (which is like the Kim approach). Unlike the Kim approach residual connections of like size filters are used, and since they improve performance for tagging, word vectors are also used.
 
 Twitter is a challenging data source for tagging problems.  The [TweetNLP project](http://www.cs.cmu.edu/~ark/TweetNLP) includes hand annotated POS data. The original taggers used for this task are described [here](http://www.cs.cmu.edu/~ark/TweetNLP/gimpel+etal.acl11.pdf).  The baseline that they compared their algorithm against got 83.38% accuracy.  The final model got 89.37% accuracy with many custom features.  Below, our simple BLSTM baseline with no custom features, and a very coarse approach to compositional character to word modeling still gets *88%-90%* accuracy.
 
-This has been tested on oct27 train, dev and test splits (http://www.cs.cmu.edu/~ark/TweetNLP), using custom word2vec embeddings generated from ~32M tweets including s140 and the oct27 train+dev data (download here: https://drive.google.com/drive/folders/0B8N1oYmGLVGWWWZYS2E0MlRXajQ?usp=sharing).  Some of the data was sampled and preprocessed to have placeholder words for hashtags, mentions and URLs to be used as backoffs for words of those classes which are not found.  The example below employs character vectors taken from splitting oct27 train+dev and s140 data and uses them to summed word vectors over characters.  Note that passing -cembed is not necessary, but provides a warm start for the character embeddings.
+This has been tested on oct27 train, dev and test splits (http://www.cs.cmu.edu/~ark/TweetNLP), using custom word2vec embeddings generated from ~32M tweets including s140 and the oct27 train+dev data (download them here: https://drive.google.com/drive/folders/0B8N1oYmGLVGWWWZYS2E0MlRXajQ?usp=sharing).  Some of the data was sampled and preprocessed to have placeholder words for hashtags, mentions and URLs to be used as backoffs for words of those classes which are not found.  The example below employs character vectors taken from splitting oct27 train+dev and s140 data and uses them to summed word vectors over characters.  Note that passing -cembed is not necessary, but provides a warm start for the character embeddings.
 
 ## Running It
 
 Here is an example using convolutional filters for character embeddings, alongside word embeddings.  This is basically a combination of the dos Santos approach with the Kim parallel filter idea using TensorFlow:
 
 ```
-python tag_char_rnn.py --epochs 40 --train $OCT_SPLITS/oct27.train \
-    --valid $OCT_SPLITS/oct27.dev --test $OCT_SPLITS/oct27.test \
-    --embed /data/xdata/oct-s140clean-uber.cbow-bin \
-    --cfiltsz 1 2 3 4 5 7 --web_cleanup True
+python tag_char_rnn.py --rnntype blstm --optim sgd --wsz 30 --eta 0.01 \
+    --epochs 40 --web_cleanup True --batchsz 20 --hsz 200 \
+    --train ../data/oct27.train \
+    --valid ../data/oct27.dev \
+    --test ../data/oct27.test \
+    --embed /data/xdata/oct-s140clean-uber.cbow-bin --cfiltsz 1 2 3 4 5 7
 ```
 
 To run with PyTorch, just pass `--backend pytorch`
@@ -34,33 +36,32 @@ If you want to use only the convolutional filter word vectors (and no word embed
 
 ### NER (and other IOB-type) Tagging
 
-To do NER tagging, we typically do not want to use accuracy as a metric.  In those cases, most often, we use F1, the harmonic mean of precision and recall.  If you have IOB tagged data,
-you will typically want to pass '--fscore 1' to the code like so:
+NER tagging can be performed with a BLSTM with the usage below:
 
 ```
-python tag_char_rnn.py --rnn blstm --patience 70 --numrnn 2 \
-   --eta 0.001 --epochs 600 --batchsz 50 --hsz 100 \
-   --train $CONLL/eng.train \
-   --valid $CONLL/eng.testa \
-   --test  $CONLL/eng.testb \
-   --embed /data/xdata/GoogleNews-vectors-negative300.bin \
-   --cfiltsz 1 2 3 4 5 7
+python tag_char_rnn.py --rnntype blstm --patience 70 --layers 2 --optim sgd --eta 0.001 --epochs 1000 --batchsz 50 --hsz 100 \
+    --train ../data/eng.train \
+    --valid ../data/eng.testa \
+    --test  ../data/eng.testb \
+    --embed /data/xdata/GoogleNews-vectors-negative300.bin \
+    --cfiltsz 1 2 3 4 5 7  --wsz 30
 ```
 
 This will report an F1 score on at each validation pass, and will use F1 for early-stopping as well.
 
 ### Global coherency with a CRF (currently TensorFlow only)
 
-For tasks that require global coherency like NER tagging, it has been shown that using a transition matrix between label states in conjunction with the output RNN tags improves performance.  This makes the tagger a linear chain CRF, and we can do this by simply adding another layer on top of our RNN output.  To do this, simply pass --crf as an argument.
+For tasks that require global coherency like NER tagging, it has been shown that using a transition matrix between label states in conjunction with the output RNN tags improves performance.  This makes the tagger a linear chain CRF, and we can do this by simply adding another layer on top of our RNN output.  To do this, simply pass `--crf 1` as an argument.
 
 ```
-python tag_char_rnn.py --rnn blstm --patience 70 --numrnn 2 \
-   --eta 0.001 --epochs 600 --batchsz 50 --hsz 100 \
-   --train $CONLL/eng.train \
-   --valid $CONLL/eng.testa \
-   --test  $CONLL/eng.testb \
-   --embed /data/xdata/GoogleNews-vectors-negative300.bin \
-   --cfiltsz 1 2 3 4 5 7 --crf
+python tag_char_rnn.py \
+    --rnntype blstm --patience 70 \
+    --layers 2 --optim sgd --eta 0.001 --epochs 1000 --batchsz 50 --hsz 100 \
+    --train ../data/eng.train \
+    --valid ../data/eng.testa \
+    --test  ../data/eng.testb \
+    --embed /data/xdata/GoogleNews-vectors-negative300.bin \
+    --cfiltsz 1 2 3 4 5 7 --wsz 30 --crf 1
 ```
 
 ## Status
