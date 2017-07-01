@@ -13,35 +13,69 @@ def num_lines(filename):
     return lines
 
 
-class TSVSentencePairReader:
+def _build_vocab_for_col(col, files):
+    vocab = Counter()
+    vocab['<PAD>'] = 1
+    vocab['<GO>'] = 1
+    vocab['<EOS>'] = 1
 
-    @staticmethod
-    def build_vocab(colids, files, clean=False, chars=False):
-        vocab = Counter()
-        vocab['<PAD>'] = 1
-        vocab['<GO>'] = 1
-        vocab['<EOS>'] = 1
-        for file in files:
-            if file is None:
-                continue
-            with codecs.open(file, encoding='utf-8', mode='r') as f:
-                for line in f:
-                    cols = re.split("\t", line)
-                    for col in colids:
-                        text = re.split("\s", cols[col])
+    for file in files:
+        if file is None:
+            continue
+        with codecs.open(file, encoding='utf-8', mode='r') as f:
+            for line in f:
+                cols = re.split("\t", line)
+                text = re.split("\s", cols[col])
 
-                        for w in text:
-                            w = w.strip()
-                            vocab[w] += 1
-        return vocab
+                for w in text:
+                    w = w.strip()
+                    vocab[w] += 1
+    return vocab
 
-    @staticmethod
-    def load(tsfile, vocab1, vocab2, mxlen, vec_alloc=np.zeros):
+class ParallelCorpusReader:
 
+    def __init__(self,
+                 max_sentence_length=1000,
+                 vec_alloc=np.zeros,
+                 src_trans_fn=None,
+                 trim=False):
+        self.vec_alloc = vec_alloc
+        self.src_trans_fn = src_trans_fn
+        self.max_sentence_length = max_sentence_length
+        self.trim = trim
+
+    def build_vocabs(self, files):
+        pass
+
+    def load_examples(self, tsfile, vocab1, vocab2):
+        pass
+
+    def load(self, tsfile, vocab1, vocab2, batchsz, shuffle=False):
+        examples = self.load_examples(tsfile, vocab1, vocab2)
+        return baseline.data.Seq2SeqDataFeed(examples, batchsz,
+                                             shuffle=shuffle, src_trans_fn=self.src_trans_fn,
+                                             alloc_fn=self.vec_alloc, trim=self.trim)
+
+class TSVParallelCorpusReader(ParallelCorpusReader):
+
+    def __init__(self, max_sentence_length=1000,
+                 vec_alloc=np.zeros,
+                 src_trans_fn=None,
+                 trim=False, src_col_num=0, dst_col_num=1):
+        super(TSVParallelCorpusReader, self).__init__(max_sentence_length, vec_alloc, src_trans_fn, trim)
+        self.src_col_num = src_col_num
+        self.dst_col_num = dst_col_num
+
+    def build_vocabs(self, files):
+        src_vocab = _build_vocab_for_col(self.src_col_num, files)
+        dst_vocab = _build_vocab_for_col(self.dst_col_num, files)
+        return src_vocab, dst_vocab
+
+    def load_examples(self, tsfile, vocab1, vocab2):
         PAD = vocab1['<PADDING>']
         GO = vocab2['<GO>']
         EOS = vocab2['<EOS>']
-
+        mxlen = self.max_sentence_length
         ts = []
         with codecs.open(tsfile, encoding='utf-8', mode='r') as f:
             for line in f:
@@ -49,8 +83,8 @@ class TSVSentencePairReader:
                 src = re.split("\s+", splits[0])
                 dst = re.split("\s+", splits[1])
 
-                srcl = vec_alloc(mxlen, dtype=np.int)
-                tgtl = vec_alloc(mxlen, dtype=np.int)
+                srcl = self.vec_alloc(mxlen, dtype=np.int)
+                tgtl = self.vec_alloc(mxlen, dtype=np.int)
                 src_len = len(src)
                 tgt_len = len(dst) + 2
                 end1 = min(src_len, mxlen)
@@ -69,7 +103,66 @@ class TSVSentencePairReader:
                 tgtl[end2] = EOS
 
                 ts.append((srcl, tgtl, src_len, tgt_len))
+
         return baseline.data.Seq2SeqExamples(ts)
+
+class MultiFileParallelCorpusReader(ParallelCorpusReader):
+
+    def __init__(self, src_suffix, dst_suffix,
+                 max_sentence_length=1000,
+                 vec_alloc=np.zeros,
+                 src_trans_fn=None,
+                 trim=False):
+        super(MultiFileParallelCorpusReader, self).__init__(max_sentence_length, vec_alloc, src_trans_fn, trim)
+        self.src_suffix = src_suffix
+        self.dst_suffix = dst_suffix
+        if not src_suffix.startswith('.'):
+            self.src_suffix = '.' + self.src_suffix
+        if not dst_suffix.startswith('.'):
+            self.dst_suffix = '.' + self.dst_suffix
+
+    def build_vocabs(self, files):
+        src_vocab = _build_vocab_for_col(0, files)
+        dst_vocab = src_vocab
+        return src_vocab, dst_vocab
+
+    def load_examples(self, tsfile, vocab1, vocab2):
+        PAD = vocab1['<PADDING>']
+        GO = vocab2['<GO>']
+        EOS = vocab2['<EOS>']
+        mxlen = self.max_sentence_length
+        ts = []
+
+
+        with codecs.open(tsfile + self.src_suffix, encoding='utf-8', mode='r') as fsrc:
+            with codecs.open(tsfile + self.dst_suffix, encoding='utf-8', mode='r') as fdst:
+                for src, dst in zip(fsrc, fdst):
+
+                    src = re.split("\s+", src.strip())
+                    dst = re.split("\s+", dst.strip())
+                    srcl = self.vec_alloc(mxlen, dtype=np.int)
+                    tgtl = self.vec_alloc(mxlen, dtype=np.int)
+                    src_len = len(src)
+                    tgt_len = len(dst) + 2
+                    end1 = min(src_len, mxlen)
+                    end2 = min(tgt_len, mxlen)-2
+                    last = max(end1, end2)
+                    tgtl[0] = GO
+                    src_len = end1
+                    tgt_len = end2+2
+
+                    for j in range(last):
+                        idx1 = vocab1[src[j]] if j < end1 else PAD
+                        idx2 = vocab2[dst[j]] if j < end2 else PAD
+                        srcl[j] = idx1
+                        tgtl[j + 1] = idx2
+
+                    tgtl[end2] = EOS
+
+                    ts.append((srcl, tgtl, src_len, tgt_len))
+
+        return baseline.data.Seq2SeqExamples(ts)
+
 
 def identity_trans_fn(x):
     return x
@@ -87,7 +180,8 @@ class CONLLSeqReader:
         '=[[',
     )
 
-    def __init__(self, max_sentence_length=-1, max_word_length=-1, word_trans_fn=None, vec_alloc=np.zeros, vec_shape=np.shape, trim=False):
+    def __init__(self, max_sentence_length=-1, max_word_length=-1, word_trans_fn=None,
+                 vec_alloc=np.zeros, vec_shape=np.shape, trim=False):
         self.cleanup_fn = identity_trans_fn if word_trans_fn is None else word_trans_fn
         self.max_sentence_length = max_sentence_length
         self.max_word_length = max_word_length
