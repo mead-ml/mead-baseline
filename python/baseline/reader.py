@@ -87,6 +87,15 @@ class CONLLSeqReader:
         '=[[',
     )
 
+    def __init__(self, max_sentence_length=-1, max_word_length=-1, word_trans_fn=None, vec_alloc=np.zeros, vec_shape=np.shape, trim=False):
+        self.cleanup_fn = identity_trans_fn if word_trans_fn is None else word_trans_fn
+        self.max_sentence_length = max_sentence_length
+        self.max_word_length = max_word_length
+        self.vec_alloc = vec_alloc
+        self.vec_shape = vec_shape
+        self.trim = trim
+        self.label2index = {"<PAD>": 0}
+
     @staticmethod
     def web_cleanup(word):
         if word.startswith('http'): return 'URL'
@@ -97,10 +106,7 @@ class CONLLSeqReader:
         if word == '<3': return '&lt;3'
         return word
 
-    @staticmethod
-    def build_vocab(files, word_trans_fn=None):
-        cleanup_fn = identity_trans_fn if word_trans_fn is None else word_trans_fn
-
+    def build_vocab(self, files):
         vocab_word = Counter()
         vocab_ch = Counter()
         maxw = 0
@@ -122,12 +128,17 @@ class CONLLSeqReader:
                         states = re.split("\s", line)
                         sl += 1
                         w = states[0]
-                        vocab_word[cleanup_fn(w)] += 1
+                        vocab_word[self.cleanup_fn(w)] += 1
                         maxw = max(maxw, len(w))
                         for k in w:
                             vocab_ch[k] += 1
 
-        return maxs, maxw, vocab_ch, vocab_word
+        self.max_word_length = min(maxw, self.max_word_length) if self.max_word_length > 0 else maxw
+        self.max_sentence_length = min(maxs, self.max_sentence_length) if self.max_sentence_length > 0 else maxs
+        print('Max sentence length %d' % self.max_sentence_length)
+        print('Max word length %d' % self.max_word_length)
+
+        return vocab_ch, vocab_word
 
     @staticmethod
     def read_lines(tsfile):
@@ -153,18 +164,19 @@ class CONLLSeqReader:
 
         return txts, lbls
 
-    @staticmethod
-    def load(filename, words_vocab, chars_vocab, mxlen, maxw, f2i, word_trans_fn, vec_alloc=np.zeros):
-        cleanup_fn = identity_trans_fn if word_trans_fn is None else word_trans_fn
+    def load(self, filename, words_vocab, chars_vocab, batchsz, shuffle=False):
+
         ts = []
         idx = 0
+        mxlen = self.max_sentence_length
+        maxw = self.max_word_length
         txts, lbls = CONLLSeqReader.read_lines(filename)
 
         for i in range(len(txts)):
 
-            xs_ch = vec_alloc((mxlen, maxw), dtype=np.int)
-            xs = vec_alloc((mxlen), dtype=np.int)
-            ys = vec_alloc((mxlen), dtype=np.int)
+            xs_ch = self.vec_alloc((mxlen, maxw), dtype=np.int)
+            xs = self.vec_alloc((mxlen), dtype=np.int)
+            ys = self.vec_alloc((mxlen), dtype=np.int)
 
             lv = lbls[i]
             v = txts[i]
@@ -180,19 +192,18 @@ class CONLLSeqReader:
                 nch = min(len(w), maxw)
                 label = lv[j]
 
-                if not label in f2i:
+                if label not in self.label2index:
                     idx += 1
-                    f2i[label] = idx
+                    self.label2index[label] = idx
 
-                ys[j] = f2i[label]
-                xs[j] = words_vocab.get(cleanup_fn(w))
+                ys[j] = self.label2index[label]
+                xs[j] = words_vocab.get(self.cleanup_fn(w))
                 for k in range(nch):
                     xs_ch[j, k] = chars_vocab.get(w[k], 0)
 
             ts.append((xs, xs_ch, ys, length, i))
-
-
-        return baseline.data.SeqWordCharTagExamples(ts), f2i, txts
+        examples = baseline.data.SeqWordCharTagExamples(ts)
+        return baseline.data.SeqWordCharLabelDataFeed(examples, batchsz=batchsz, shuffle=shuffle, alloc_fn=self.vec_alloc, shape_fn=self.vec_shape), txts
 
 
 class TSVSeqLabelReader:
@@ -207,70 +218,74 @@ class TSVSeqLabelReader:
                 "!": " ! ",
                 }
 
+    def __init__(self, mxlen=1000, mxfiltsz=0, clean_fn=None, vec_alloc=np.zeros):
+        self.vocab = None
+        self.label2index = {}
+        self.clean_fn = clean_fn #TSVSeqLabelReader.do_clean
+        self.mxlen = mxlen
+        self.mxfiltsz = mxfiltsz
+        self.vec_alloc=vec_alloc
+        if self.clean_fn is None:
+            self.clean_fn = lambda x: x
+
     @staticmethod
     def splits(text):
         return list(filter(lambda s: len(s) != 0, re.split('\s+', text)))
 
     @staticmethod
     def do_clean(l):
+        l = l.lower()
         l = re.sub(r"[^A-Za-z0-9(),!?\'\`]", " ", l)
         for k, v in TSVSeqLabelReader.REPLACE.items():
             l = l.replace(k, v)
         return l.strip()
 
     @staticmethod
-    def label_and_sentence(line, clean, chars):
-        labelText = re.split('[\t\s]+', line)
-        label = labelText[0]
-        text = labelText[1:]
-        if chars is True:
-            text = ' '.join([ch for ch in ''.join(text)])
-        if clean is True:
-            text = ' '.join([TSVSeqLabelReader.do_clean(w.lower()) for w in text]).replace('  ', ' ')
-        else:
-            text = ' '.join(text).replace('  ', ' ')
+    def label_and_sentence(line, clean_fn):
+        label_text = re.split('[\t\s]+', line)
+        label = label_text[0]
+        text = label_text[1:]
+        text = ' '.join(list(filter(lambda s: len(s) != 0, [clean_fn(w) for w in text])))
         return label, text
 
-    @staticmethod
-    def build_vocab(files, clean=False, chars=False):
+    def build_vocab(self, files):
         vocab = Counter()
         for file in files:
             if file is None:
                 continue
             with codecs.open(file, encoding='utf-8', mode='r') as f:
                 for line in f:
-                    _, text = TSVSeqLabelReader.label_and_sentence(line, clean, chars)
+                    _, text = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn)
                     for w in TSVSeqLabelReader.splits(text):
                         vocab[w] += 1
         return vocab
 
-    @staticmethod
-    def load(filename, index, f2i, clean=False, chars=False, mxlen=1000, mxfiltsz=0, vec_alloc=np.zeros):
+    def load(self, filename, index, batchsz, shuffle=False):
 
         PAD = index['<PADDING>']
-        halffiltsz = mxfiltsz // 2
-        nozplen = mxlen - 2*halffiltsz
-        label_idx = len(f2i)
+        halffiltsz = self.mxfiltsz // 2
+        nozplen = self.mxlen - 2*halffiltsz
+        label_idx = len(self.label2index)
         examples = []
         with codecs.open(filename, encoding='utf-8', mode='r') as f:
             for offset, line in enumerate(f):
-                label, text = TSVSeqLabelReader.label_and_sentence(line, clean, chars)
-                if label not in f2i:
-                    f2i[label] = label_idx
+                label, text = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn)
+                if label not in self.label2index:
+                    self.label2index[label] = label_idx
                     label_idx += 1
 
-                y = f2i[label]
+                y = self.label2index[label]
                 toks = TSVSeqLabelReader.splits(text)
                 mx = min(len(toks), nozplen)
                 toks = toks[:mx]
-                x = vec_alloc(mxlen, dtype=int)
+                x = self.vec_alloc(self.mxlen, dtype=int)
                 for j in range(len(toks)):
                     w = toks[j]
                     key = index.get(w, PAD)
                     x[j+halffiltsz] = key
                 examples.append((x, y))
-        return baseline.data.SeqLabelExamples(examples), f2i
-
+        return baseline.data.SeqLabelDataFeed(baseline.data.SeqLabelExamples(examples),
+                                              batchsz=batchsz, shuffle=shuffle, alloc_fn=self.vec_alloc)
 
 class PTBSeqReader:
 

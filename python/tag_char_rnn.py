@@ -53,12 +53,9 @@ else:
         import baseline.tf.tagger as tagger
         trim = False
 word_trans_fn = None if not args.web_cleanup else CONLLSeqReader.web_cleanup
-maxs, maxw, vocab_ch, vocab_word = CONLLSeqReader.build_vocab([args.train, args.test, args.valid], word_trans_fn=word_trans_fn)
+reader = CONLLSeqReader(args.mxlen, args.mxwlen, word_trans_fn=word_trans_fn, vec_alloc=vec_alloc, vec_shape=vec_shape, trim=trim)
+vocab_ch, vocab_word = reader.build_vocab([args.train, args.test, args.valid])
 
-maxw = min(maxw, args.mxwlen)
-maxs = min(maxs, args.mxlen) if args.mxlen > 0 else maxs
-print('Max sentence length %d' % maxs)
-print('Max word length %d' % maxw)
 
 # Vocab LUTs
 word_vocab = None
@@ -72,30 +69,20 @@ if args.embed:
 char_vec = RandomInitVecModel(args.charsz, vocab_ch, unif_weight=args.unif)
 char_vocab = char_vec.vocab
 print(char_vocab)
-f2i = {"<PAD>":0}
-tsx, f2i, _ = CONLLSeqReader.load(args.train, word_vocab, char_vocab, maxs, maxw, f2i, word_trans_fn=word_trans_fn, vec_alloc=vec_alloc)
-print('Loaded  training data')
 
-if args.valid is not None:
-    print('Using provided validation data')
-    vsx, f2i,_ = CONLLSeqReader.load(args.valid, word_vocab, char_vocab, maxs, maxw, f2i, word_trans_fn=word_trans_fn, vec_alloc=vec_alloc)
-else:
-    tsx, vsx = SeqWordCharTagExamples.valid_split(tsx, args.valsplit)
-    print('Created validation split')
+ts, _ = reader.load(args.train, word_vocab, char_vocab, args.batchsz, shuffle=True)
+print('Loaded training data')
 
+vs, _ = reader.load(args.valid, word_vocab, char_vocab, args.batchsz)
+print('Loaded valid data')
 
-esx, f2i,txts = CONLLSeqReader.load(args.test, word_vocab, char_vocab, maxs, maxw, f2i, word_trans_fn=word_trans_fn, vec_alloc=vec_alloc)
+es, txts = reader.load(args.test, word_vocab, char_vocab, 2)
 print('Loaded test data')
 
-args.maxs = maxs
-args.maxw = maxw
+args.maxs = reader.max_sentence_length
+args.maxw = reader.max_word_length
 
-
-ts = SeqWordCharLabelDataFeed(tsx, args.batchsz, shuffle=True, alloc_fn=vec_alloc, shape_fn=vec_shape, trim=trim)
-vs = SeqWordCharLabelDataFeed(vsx, args.batchsz, alloc_fn=vec_alloc, shape_fn=vec_shape, trim=trim)
-es = SeqWordCharLabelDataFeed(esx, args.batchsz, alloc_fn=vec_alloc, shape_fn=vec_shape, trim=trim)
-
-model = tagger.create_model(f2i, word_vec, char_vec, **vars(args))
+model = tagger.create_model(reader.label2index, word_vec, char_vec, **vars(args))
 
 tagger.fit(model, ts, vs, es, **vars(args))
 

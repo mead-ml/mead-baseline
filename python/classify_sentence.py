@@ -51,36 +51,22 @@ else:
 
 args.reporting = setup_reporting(args.visdom)
 
-vocab = TSVSeqLabelReader.build_vocab([args.train, args.test, args.valid], args.clean, False)
-
+clean_fn = TSVSeqLabelReader.do_clean if args.clean else None, vec_alloc
+print(clean_fn)
+reader = TSVSeqLabelReader(args.mxlen, zeropadding, vec_alloc=vec_alloc)
+vocab = reader.build_vocab([args.train, args.test, args.valid])
 unif = 0 if args.static else args.unif
 embeddings = Word2VecModel(args.embed, vocab, unif, keep_unused=args.keep_unused)
 
-
-f2i = {}
-tsx, f2i = TSVSeqLabelReader.load(args.train, embeddings.vocab, f2i, args.clean, False, args.mxlen, zeropadding, vec_alloc=vec_alloc)
-
+ts = reader.load(args.train, embeddings.vocab, args.batchsz, shuffle=True)
 print('Loaded training data')
 
-valsplit = args.valsplit
-valdata = None
-if args.valid is not None:
-    print('Using provided validation data')
-    valsplit = 0
-    vsx, f2i = TSVSeqLabelReader.load(args.valid, embeddings.vocab, f2i, args.clean, False, args.mxlen, zeropadding, vec_alloc=vec_alloc)
-else:
-    tsx, vsx = SeqLabelExamples.valid_split(ts, args.valsplit)
+vs = reader.load(args.valid, embeddings.vocab, args.batchsz)
+print('Loaded valid data')
 
-esx, f2i = TSVSeqLabelReader.load(args.test, embeddings.vocab, f2i, args.clean, False, args.mxlen, zeropadding, vec_alloc=vec_alloc)
+es = reader.load(args.test, embeddings.vocab, 2)
 print('Loaded test data')
-labels = revlut(f2i)
+labels = revlut(reader.label2index)
 
 model = classify.create_model(embeddings, labels, filtsz=args.filtsz, cmotsz=args.cmotsz, dropout=args.dropout, finetune=not args.static)
-
-ts = SeqLabelDataFeed(tsx, args.batchsz, alloc_fn=vec_alloc, shuffle=True)
-vs = SeqLabelDataFeed(vsx, args.batchsz, alloc_fn=vec_alloc)
-es = SeqLabelDataFeed(esx, 2, alloc_fn=vec_alloc)
-
-
-
 classify.fit(model, ts, vs, es, **vars(args))

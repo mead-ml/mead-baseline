@@ -89,6 +89,6 @@ Here are the last observed performance scores using _tag_char_rnn_ with a 1-laye
 
 | Dataset   | Metric | Method    | Eta (LR) | Framework  | Score |
 | --------- | ------ | --------- | -------  | ---------- | ----- |
-| twpos-v03 |    Acc | SGD mom.  |     0.01 | TensorFlow | 89.57 |
+| twpos-v03 |    Acc | SGD mom.  |     0.01 | TensorFlow | 89.7  |
 | twpos-v03 |    Acc | Adadelta  |       -- | PyTorch    | 89.18 |
 
