@@ -2,13 +2,13 @@ from baseline.pytorch.torchy import *
 from baseline.utils import listify, to_spans, f_score, revlut
 from baseline.reporting import basic_reporting
 from baseline.progress import ProgressBar
-import time
+from baseline.train import EpochReportingTrainer
 
 
-class TaggerTrainerPyTorch:
+class TaggerTrainerPyTorch(EpochReportingTrainer):
 
     def __init__(self, model, **kwargs):
-
+        super(TaggerTrainerPyTorch, self).__init__()
         self.gpu = not bool(kwargs.get('nogpu', False))
         optim = kwargs.get('optim', 'adam')
         eta = float(kwargs.get('eta', 0.01))
@@ -87,7 +87,7 @@ class TaggerTrainerPyTorch:
 
         return correct_labels, total_labels, overlap_count, gold_count, guess_count
 
-    def test(self, ts):
+    def _test(self, ts):
 
         self.model.eval()
 
@@ -121,8 +121,8 @@ class TaggerTrainerPyTorch:
         metrics['avg_loss'] = float(total_loss)/total_sum
         return metrics
 
-    def train(self, ts):
-        total_loss = total_corr = total = 0
+    def _train(self, ts):
+        total_loss = total = 0
         metrics = {}
         steps = len(ts)
         pg = ProgressBar(steps)
@@ -134,14 +134,12 @@ class TaggerTrainerPyTorch:
             total_loss += loss.data[0]
             loss.backward()
             torch.nn.utils.clip_grad_norm(self.model.parameters(), self.clip)
-            #total_corr += self._right(pred, y)
             total += self._total(y)
             self.optimizer.step()
             pg.update()
 
         pg.done()
         metrics['avg_loss'] = float(total_loss)/total
-        #metrics['acc'] = float(total_corr)/total
         return metrics
 
 
@@ -166,22 +164,10 @@ def fit(model, ts, vs, es, **kwargs):
     max_metric = 0
     for epoch in range(epochs):
 
-        start_time = time.time()
-        train_metrics = trainer.train(ts)
-        train_duration = time.time() - start_time
-        print('Training time (%.3f sec)' % train_duration)
-
+        trainer.train(ts, reporting_fns)
         if after_train_fn is not None:
             after_train_fn(model)
-
-        start_time = time.time()
-        test_metrics = trainer.test(vs)
-        test_duration = time.time() - start_time
-        print('Validation time (%.3f sec)' % test_duration)
-
-        for reporting in reporting_fns:
-            reporting(train_metrics, epoch, 'Train')
-            reporting(test_metrics, epoch, 'Valid')
+        test_metrics = trainer.test(vs, reporting_fns, phase='Valid')
 
         if do_early_stopping is False:
             model.save(model_file)
@@ -203,6 +189,4 @@ def fit(model, ts, vs, es, **kwargs):
         print('Reloading best checkpoint')
         model = torch.load(model_file)
         trainer = TaggerTrainerPyTorch(model, **kwargs)
-        test_metrics = trainer.test(es)
-        for reporting in reporting_fns:
-            reporting(test_metrics, 0, 'Test')
+        trainer.test(es, reporting_fns, phase='Test')

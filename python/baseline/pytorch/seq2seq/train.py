@@ -2,17 +2,18 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.autograd import Variable
-import time
 import numpy as np
 from baseline.progress import ProgressBar
 from baseline.reporting import basic_reporting
 from baseline.utils import listify
+from baseline.train import Trainer
 
 
-class Seq2SeqTrainerPyTorch:
+class Seq2SeqTrainerPyTorch(Trainer):
 
     def __init__(self, model, **kwargs):
-
+        super(Seq2SeqTrainerPyTorch, self).__init__()
+        self.steps = 0
         self.gpu = bool(kwargs.get('gpu', True))
         optim = kwargs.get('optim', 'adam')
         eta = float(kwargs.get('eta', 0.01))
@@ -46,13 +47,18 @@ class Seq2SeqTrainerPyTorch:
         tgtt = tgt.data.long()
         return torch.sum(tgtt.ne(0))
 
-    def test(self, ts):
+    def test(self, vs, reporting_fns, phase):
         self.model.eval()
         metrics = {}
         total_loss = total = 0
-        steps = len(ts)
+        steps = len(vs)
+        epochs = 0
+        if phase == 'Valid':
+            self.valid_epochs += 1
+            epochs = self.valid_epochs
+
         pg = ProgressBar(steps)
-        for src, tgt, src_len, tgt_len in ts:
+        for src, tgt, src_len, tgt_len in vs:
             src, dst, tgt = self._wrap(src, tgt)
             pred = self.model((src, dst))
             loss = self.crit(pred, tgt)
@@ -64,16 +70,18 @@ class Seq2SeqTrainerPyTorch:
         avg_loss = float(total_loss)/total
         metrics['avg_loss'] = avg_loss
         metrics['perplexity'] = np.exp(avg_loss)
+        for reporting in reporting_fns:
+            reporting(metrics, epochs, phase)
         return metrics
 
-    def train(self, ts):
+    def train(self, ts, reporting_fns):
         self.model.train()
 
         metrics = {}
-        steps = len(ts)
+
         total_loss = total = 0
-        pg = ProgressBar(steps)
         for src, tgt, src_len, tgt_len in ts:
+            self.steps += 1
             self.optimizer.zero_grad()
             src, dst, tgt = self._wrap(src, tgt)
             pred = self.model((src, dst))
@@ -83,12 +91,21 @@ class Seq2SeqTrainerPyTorch:
             torch.nn.utils.clip_grad_norm(self.model.parameters(), self.clip)
             total += self._total(tgt)
             self.optimizer.step()
-            pg.update()
-        pg.done()
+            
+            if self.steps % 500 == 0:
+                avg_loss = float(total_loss)/total
+                metrics['avg_loss'] = avg_loss
+                metrics['perplexity'] = np.exp(avg_loss)
+                for reporting in reporting_fns:
+                    reporting(metrics, self.steps, 'Train')
 
+        self.train_epochs += 1
         avg_loss = float(total_loss)/total
         metrics['avg_loss'] = avg_loss
         metrics['perplexity'] = np.exp(avg_loss)
+        for reporting in reporting_fns:
+            reporting(metrics, self.steps, 'Train')
+
         return metrics
 
 
@@ -113,22 +130,12 @@ def fit(model, ts, vs, es=None, **kwargs):
     last_improved = 0
     for epoch in range(epochs):
 
-        start_time = time.time()
-        train_metrics = trainer.train(ts)
-        train_duration = time.time() - start_time
-        print('Training time (%.3f sec)' % train_duration)
+        trainer.train(ts, reporting_fns)
 
         if after_train_fn is not None:
             after_train_fn(model)
 
-        start_time = time.time()
-        test_metrics = trainer.test(vs)
-        test_duration = time.time() - start_time
-        print('Validation time (%.3f sec)' % test_duration)
-
-        for reporting in reporting_fns:
-            reporting(train_metrics, epoch, 'Train')
-            reporting(test_metrics, epoch, 'Valid')
+        test_metrics = trainer.test(vs, reporting_fns, phase='Valid')
 
         if do_early_stopping is False:
             model.save(model_file)
@@ -149,10 +156,4 @@ def fit(model, ts, vs, es=None, **kwargs):
     if es is not None:
         model.load(model_file)
         trainer = Seq2SeqTrainerPyTorch(model, **kwargs)
-        start_time = time.time()
-        test_metrics = trainer.test(es)
-        test_duration = time.time() - start_time
-        print('Test time (%.3f sec)' % test_duration)
-
-        for reporting in reporting_fns:
-            reporting(test_metrics, 0, 'Test')
+        trainer.test(es, reporting_fns, phase='Test')

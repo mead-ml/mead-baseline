@@ -2,9 +2,10 @@ from baseline.utils import listify
 from baseline.progress import ProgressBar
 from baseline.confusion import ConfusionMatrix
 from baseline.reporting import basic_reporting
+from baseline.train import EpochReportingTrainer
 import torch
 import torch.autograd
-import time
+
 def _add_to_cm(cm, y, pred):
     _, best = pred.max(1)
     yt = y.cpu().int()
@@ -12,9 +13,10 @@ def _add_to_cm(cm, y, pred):
     cm.add_batch(yt.data.numpy(), yp.data.numpy())
 
 
-class ClassifyTrainerPyTorch:
+class ClassifyTrainerPyTorch(EpochReportingTrainer):
 
     def __init__(self, model, **kwargs):
+        super(ClassifyTrainerPyTorch, self).__init__()
         eta = kwargs.get('eta', kwargs.get('lr', 0.01))
         print('using eta [%.3f]' % eta)
         optim = kwargs.get('optim', 'sgd')
@@ -37,7 +39,7 @@ class ClassifyTrainerPyTorch:
         self.model = torch.nn.DataParallel(model).cuda()
         self.crit = model.create_loss().cuda()
 
-    def test(self, loader):
+    def _test(self, loader):
         self.model.eval()
         total_loss = 0
         steps = len(loader)
@@ -62,7 +64,7 @@ class ClassifyTrainerPyTorch:
 
         return metrics
 
-    def train(self, loader):
+    def _train(self, loader):
         self.model.train()
         steps = len(loader)
         pg = ProgressBar(steps)
@@ -88,6 +90,7 @@ class ClassifyTrainerPyTorch:
         metrics['avg_loss'] = total_loss/float(steps)
         return metrics
 
+
 def fit(model, ts, vs, es, **kwargs):
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
     epochs = int(kwargs.get('epochs', 20))
@@ -106,19 +109,8 @@ def fit(model, ts, vs, es, **kwargs):
     last_improved = 0
 
     for epoch in range(epochs):
-        start_time = time.time()
-        train_metrics = trainer.train(ts)
-        train_duration = time.time() - start_time        
-        print('Training time (%.3f sec)' % train_duration)
-
-        start_time = time.time()
-        test_metrics = trainer.test(vs)
-        test_duration = time.time() - start_time
-        print('Validation time (%.3f sec)' % test_duration)
-
-        for reporting in reporting_fns:
-            reporting(train_metrics, epoch, 'Train')
-            reporting(test_metrics, epoch, 'Valid')
+        trainer.train(ts, reporting_fns)
+        test_metrics = trainer.test(vs, reporting_fns)
         
         if do_early_stopping is False:
             model.save(model_file)
@@ -140,7 +132,4 @@ def fit(model, ts, vs, es, **kwargs):
         print('Reloading best checkpoint')
         model = torch.load(model_file)
         trainer = ClassifyTrainerPyTorch(model, **kwargs)
-        test_metrics = trainer.test(es)
-        for reporting in reporting_fns:
-            reporting(test_metrics, 0, 'Test')
-
+        trainer.test(es, reporting_fns, phase='Test')

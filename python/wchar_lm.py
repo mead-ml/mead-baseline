@@ -25,7 +25,7 @@ parser.add_argument('--unif', default=0.1, help='Initializer bounds for embeddin
 parser.add_argument('--clip', default=5.0, help='Gradient clipping cutoff', type=float)
 parser.add_argument('--epochs', default=30, help='Number of epochs', type=int)
 parser.add_argument('--batchsz', default=20, help='Batch size', type=int)
-parser.add_argument('--nbptt', default=-35, help='Steps of backprop through time', type=int)
+parser.add_argument('--nbptt', default=35, help='Steps of backprop through time', type=int)
 parser.add_argument('--mxwlen', default=40, help='Max word length', type=int)
 parser.add_argument('--cfiltsz', help='Filter sizes', nargs='+', default=[1,2,3,4,5,7], type=int)
 parser.add_argument('--charsz', default=16, help='Char embedding depth', type=int)
@@ -43,6 +43,9 @@ parser.add_argument('--decay_rate', default=1.2, type=float, help='Learning rate
 parser.add_argument('--decay_type', default='zaremba', help='What learning rate decay schedule')
 parser.add_argument('--backend', default='tf', help='Default Deep Learning Framework')
 args = parser.parse_args()
+
+
+args.reporting = setup_reporting(args.visdom)
 
 if args.backend == 'tf':
     import baseline.tf.lm as lm

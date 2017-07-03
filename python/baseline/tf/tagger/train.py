@@ -1,10 +1,11 @@
 import tensorflow as tf
 import numpy as np
-import time
 from baseline.utils import to_spans, f_score, listify, revlut
 from baseline.progress import ProgressBar
 from baseline.reporting import basic_reporting
 from baseline.tf.tfy import optimizer
+from baseline.train import EpochReportingTrainer
+
 
 class TaggerEvaluatorTf:
 
@@ -98,10 +99,10 @@ class TaggerEvaluatorTf:
         return metrics
 
 
-class TaggerTrainerTf:
+class TaggerTrainerTf(EpochReportingTrainer):
 
     def __init__(self, model, **kwargs):
-
+        super(TaggerTrainerTf, self).__init__()
         self.loss = model.create_loss()
         self.model = model
         self.evaluator = TaggerEvaluatorTf(model)
@@ -115,7 +116,7 @@ class TaggerTrainerTf:
         print("Reloading " + latest)
         self.model.saver.restore(self.model.sess, latest)
 
-    def train(self, ts):
+    def _train(self, ts):
         total_loss = 0
         steps = len(ts)
         metrics = {}
@@ -129,7 +130,7 @@ class TaggerTrainerTf:
         metrics['avg_loss'] = float(total_loss)/steps
         return metrics
 
-    def test(self, ts, conll_file=None, txts=None):
+    def _test(self, ts, conll_file=None, txts=None):
         return self.evaluator.test(ts, conll_file, txts)
 
 def fit(model, ts, vs, es, **kwargs):
@@ -158,22 +159,11 @@ def fit(model, ts, vs, es, **kwargs):
     last_improved = 0
     for epoch in range(epochs):
 
-        start_time = time.time()
-        train_metrics = trainer.train(ts)
-        train_duration = time.time() - start_time
-        print('Training time (%.3f sec)' % train_duration)
-
+        trainer.train(ts, reporting_fns)
         if after_train_fn is not None:
             after_train_fn(model)
 
-        start_time = time.time()
-        test_metrics = trainer.test(vs)
-        test_duration = time.time() - start_time
-        print('Validation time (%.3f sec)' % test_duration)
-
-        for reporting in reporting_fns:
-            reporting(train_metrics, epoch, 'Train')
-            reporting(test_metrics, epoch, 'Valid')
+        test_metrics = trainer.test(vs, reporting_fns, phase='Valid')
 
         if do_early_stopping is False:
             model.save(model_file)

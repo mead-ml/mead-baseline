@@ -4,17 +4,19 @@ from baseline.progress import ProgressBar
 from baseline.reporting import basic_reporting
 from baseline.utils import listify
 from baseline.tf.tfy import optimizer
-import time
+from baseline.train import EpochReportingTrainer
 
-class ClassifyTrainerTf:
+
+class ClassifyTrainerTf(EpochReportingTrainer):
 
     def __init__(self, model, **kwargs):
+        super(ClassifyTrainerTf, self).__init__()
         self.sess = model.sess
         self.loss = model.create_loss()
         self.model = model
         self.global_step, self.train_op = optimizer(self.loss, **kwargs)
 
-    def train(self, loader):
+    def _train(self, loader):
 
         cm = ConfusionMatrix(self.model.labels)
         total_loss = 0
@@ -32,7 +34,7 @@ class ClassifyTrainerTf:
         metrics['avg_loss'] = total_loss/float(steps)
         return metrics
 
-    def test(self, loader):
+    def _test(self, loader):
 
         total_loss = 0
         cm = ConfusionMatrix(self.model.labels)
@@ -59,6 +61,7 @@ class ClassifyTrainerTf:
         print('Reloading ' + latest)
         self.model.saver.restore(self.model.sess, latest)
 
+
 def fit(model, ts, vs, es=None, **kwargs):
 
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
@@ -82,20 +85,9 @@ def fit(model, ts, vs, es=None, **kwargs):
 
     for epoch in range(epochs):
 
-        start_time = time.time()
-        train_metrics = trainer.train(ts)
-        train_duration = time.time() - start_time        
-        print('Training time (%.3f sec)' % train_duration)
+        trainer.train(ts, reporting_fns)
+        test_metrics = trainer.test(vs, reporting_fns, phase='Valid')
 
-        start_time = time.time()
-        test_metrics = trainer.test(vs)
-        test_duration = time.time() - start_time
-        print('Validation time (%.3f sec)' % test_duration)
-
-        for reporting in reporting_fns:
-            reporting(train_metrics, epoch, 'Train')
-            reporting(test_metrics, epoch, 'Valid')
-        
         if do_early_stopping is False:
             trainer.checkpoint()
             trainer.model.save(model_file)
@@ -111,17 +103,11 @@ def fit(model, ts, vs, es=None, **kwargs):
             print('Stopping due to persistent failures to improve')
             break
 
-
     if do_early_stopping is True:
         print('Best performance on max_metric %.3f at epoch %d' % (max_metric, last_improved))
-
 
     if es is not None:
         print('Reloading best checkpoint')
         trainer.recover_last_checkpoint()
-
         trainer = ClassifyTrainerTf(model, **kwargs)
-        test_metrics = trainer.test(es)
-            
-        for reporting in reporting_fns:
-            reporting(test_metrics, 0, 'Test')
+        trainer.test(es, reporting_fns, phase='Test')

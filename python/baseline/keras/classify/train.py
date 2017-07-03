@@ -1,20 +1,21 @@
 from keras.utils import np_utils
-from keras import optimizers
 from baseline.utils import listify
 from baseline.reporting import basic_reporting
 from baseline.progress import ProgressBar
-import time
+from baseline.train import *
 
-class ClassifyTrainerKeras:
+
+class ClassifyTrainerKeras(EpochReportingTrainer):
 
     METRIC_REMAP = {'fmeasure': 'f1'}
 
     def __init__(self, model, **kwargs):
+        super(ClassifyTrainerKeras, self).__init__()
         self.model = model
         optim = kwargs.get('optim', 'adam')
         self.model.impl.compile(optim, 'categorical_crossentropy', metrics=['accuracy', 'fmeasure'])
 
-    def train(self, loader):
+    def _train(self, loader):
 
         train_metrics = {}
         steps = len(loader)
@@ -34,7 +35,7 @@ class ClassifyTrainerKeras:
         pg.done()
         return train_metrics
 
-    def test(self, loader):
+    def _test(self, loader):
         test_metrics = {}
         steps = len(loader)
         pg = ProgressBar(steps)
@@ -73,20 +74,9 @@ def fit(model, ts, vs, es=None, **kwargs):
 
     for epoch in range(epochs):
 
-        start_time = time.time()
-        train_metrics = trainer.train(ts)
-        train_duration = time.time() - start_time        
-        print('Training time (%.3f sec)' % train_duration)
+        trainer.train(ts, reporting_fns)
+        test_metrics = trainer.test(vs, reporting_fns)
 
-        start_time = time.time()
-        test_metrics = trainer.test(vs)
-        test_duration = time.time() - start_time
-        print('Validation time (%.3f sec)' % test_duration)
-
-        for reporting in reporting_fns:
-            reporting(train_metrics, epoch, 'Train')
-            reporting(test_metrics, epoch, 'Valid')
-        
         if do_early_stopping is False:
             model.save(model_file)
 
@@ -107,7 +97,4 @@ def fit(model, ts, vs, es=None, **kwargs):
         print('Reloading best checkpoint')
         model.load(model_file)
         trainer = ClassifyTrainerKeras(model, **kwargs)
-        test_metrics = trainer.test(es)
-            
-        for reporting in reporting_fns:
-            reporting(test_metrics, epoch, 'Test')
+        trainer.test(es, reporting_fns, phase='Test')

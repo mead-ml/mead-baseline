@@ -1,16 +1,15 @@
 import tensorflow as tf
 import numpy as np
-import time
-
 from baseline.utils import listify
 from baseline.reporting import basic_reporting
-from baseline.progress import ProgressBar
 from baseline.tf.tfy import optimizer
+from baseline.train import Trainer
 
-class Seq2SeqTrainerTf:
+
+class Seq2SeqTrainerTf(Trainer):
 
     def __init__(self, model, **kwargs):
-
+        super(Seq2SeqTrainerTf, self).__init__()
         self.sess = model.sess
         self.loss = model.create_loss()
         self.model = model
@@ -27,31 +26,41 @@ class Seq2SeqTrainerTf:
     def prepare(self, saver):
         self.model.saver = saver
 
-    def train(self, ts):
+    def train(self, ts, reporting_fns):
         total_loss = 0
-        steps = len(ts)
+        steps = 0
         metrics = {}
-        pg = ProgressBar(steps)
+
         for src, tgt, src_len, tgt_len in ts:
             # TODO: there is a bug that occurs if mx_tgt_len == mxlen
-
+            steps += 1
             feed_dict = self.model.make_feed_dict(src, src_len, tgt, tgt_len)
-            _, step, lossv = self.model.sess.run([self.train_op, self.global_step, self.loss], feed_dict=feed_dict)
+            _, global_step, lossv = self.model.sess.run([self.train_op, self.global_step, self.loss], feed_dict=feed_dict)
             total_loss += lossv
-            pg.update()
+            if steps % 500 == 0:
+                metrics['avg_loss'] = total_loss / steps
+                metrics['perplexity'] = np.exp(total_loss / steps)
+                for reporting in reporting_fns:
+                    reporting(metrics, global_step, 'Train')
+            
+        assert(steps == len(ts))
 
-        pg.done()
-        avg_loss = total_loss/steps
-        metrics['avg_loss'] = avg_loss
-        metrics['perplexity'] = np.exp(avg_loss)
+        metrics['avg_loss'] = total_loss / steps
+        metrics['perplexity'] = np.exp(total_loss / steps)
+        for reporting in reporting_fns:
+            reporting(metrics, global_step, 'Train')
         return metrics
 
-    def test(self, ts):
+    def test(self, vs, reporting_fns, phase='Valid'):
+        epochs = 0
+        if phase == 'Valid':
+            self.valid_epochs += 1
+            epochs = self.valid_epochs
 
         total_loss = 0
-        steps = len(ts)
+        steps = len(vs)
         metrics = {}
-        for src,tgt,src_len,tgt_len in ts:
+        for src,tgt,src_len,tgt_len in vs:
             feed_dict = self.model.make_feed_dict(src, src_len, tgt, tgt_len)
             lossv = self.model.sess.run(self.loss, feed_dict=feed_dict)
             total_loss += lossv
@@ -59,6 +68,8 @@ class Seq2SeqTrainerTf:
         avg_loss = total_loss/steps
         metrics['avg_loss'] = avg_loss
         metrics['perplexity'] = np.exp(avg_loss)
+        for reporting in reporting_fns:
+            reporting(metrics, epochs, phase)
         return metrics
 
 
@@ -89,22 +100,10 @@ def fit(seq2seq, ts, vs, es=None, **kwargs):
 
     for epoch in range(epochs):
 
-        start_time = time.time()
-        train_metrics = trainer.train(ts)
-        train_duration = time.time() - start_time
-        print('Training time (%.3f sec)' % train_duration)
-
+        trainer.train(ts, reporting_fns)
         if after_train_fn is not None:
             after_train_fn(seq2seq)
-
-        start_time = time.time()
-        test_metrics = trainer.test(vs)
-        test_duration = time.time() - start_time
-        print('Validation time (%.3f sec)' % test_duration)
-
-        for reporting in reporting_fns:
-            reporting(train_metrics, epoch, 'Train')
-            reporting(test_metrics, epoch, 'Valid')
+        test_metrics = trainer.test(vs, reporting_fns, phase='Valid')
 
         if do_early_stopping is False:
             trainer.checkpoint()
@@ -125,10 +124,5 @@ def fit(seq2seq, ts, vs, es=None, **kwargs):
         print('Best performance on min_metric %.3f at epoch %d' % (min_metric, last_improved))
     if es is not None:
         trainer.recover_last_checkpoint()
-        start_time = time.time()
-        trainer.test(es)
-        test_duration = time.time() - start_time
-        print('Test time (%.3f sec)' % test_duration)
+        trainer.test(es, reporting_fns, phase='Test')
 
-        for reporting in reporting_fns:
-            reporting(test_metrics, 0, 'Test')

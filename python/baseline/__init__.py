@@ -5,3 +5,4 @@ from baseline.data import *
 from baseline.reader import *
 from baseline.progress import *
 from baseline.reporting import *
+from baseline.train import *

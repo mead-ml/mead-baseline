@@ -1,11 +1,13 @@
 from baseline.tf.tfy import *
 from baseline.utils import listify
 from baseline.reporting import basic_reporting
-import time
+from baseline.train import Trainer
 
-class LanguageModelTrainerTf:
+
+class LanguageModelTrainerTf(Trainer):
 
     def __init__(self, model, **kwargs):
+        super(LanguageModelTrainerTf, self).__init__()
         self.model = model
         self.loss = model.create_loss()
         self.global_step, self.train_op = optimizer(self.loss, **kwargs)
@@ -18,14 +20,7 @@ class LanguageModelTrainerTf:
         print("Reloading " + latest)
         self.model.saver.restore(self.model.sess, latest)
 
-    def train(self, ts):
-        return self._run_epoch(ts, True)
-
-    def test(self, ts):
-        return self._run_epoch(ts)
-
-    def _run_epoch(self, ts, is_training=False):
-
+    def train(self, ts, reporting_fns):
         total_loss = 0.0
         iters = 0
         state = self.model.sess.run(self.model.initial_state)
@@ -34,16 +29,61 @@ class LanguageModelTrainerTf:
             "loss": self.loss,
             "final_state": self.model.final_state,
         }
-        if is_training:
-            fetches["train_op"] = self.train_op
-            fetches["global_step"] = self.global_step
+
+        fetches["train_op"] = self.train_op
+        fetches["global_step"] = self.global_step
 
         step = 0
         metrics = {}
 
         for x, xch, y in ts:
 
-            feed_dict = self.model.make_feed_dict(x, xch, y, not is_training)
+            feed_dict = self.model.make_feed_dict(x, xch, y, True)
+            for i, (c, h) in enumerate(self.model.initial_state):
+                feed_dict[c] = state[i].c
+                feed_dict[h] = state[i].h
+
+            vals = self.model.sess.run(fetches, feed_dict)
+            loss = vals["loss"]
+            state = vals["final_state"]
+            global_step = vals["global_step"]
+            total_loss += loss
+            iters += self.model.nbptt
+            step += 1
+            if step % 500 == 0:
+                metrics['avg_loss'] = total_loss / iters
+                metrics['perplexity'] = np.exp(total_loss / iters)
+                for reporting in reporting_fns:
+                    reporting(metrics, global_step, 'Train')
+
+        metrics['avg_loss'] = total_loss / iters
+        metrics['perplexity'] = np.exp(total_loss / iters)
+
+        for reporting in reporting_fns:
+            reporting(metrics, global_step, 'Train')
+        return metrics
+
+    def test(self, ts, reporting_fns, phase):
+        total_loss = 0.0
+        iters = 0
+        epochs = 0
+        if phase == 'Valid':
+            self.valid_epochs += 1
+            epochs = self.valid_epochs
+
+        state = self.model.sess.run(self.model.initial_state)
+
+        fetches = {
+            "loss": self.loss,
+            "final_state": self.model.final_state,
+        }
+
+        step = 0
+        metrics = {}
+
+        for x, xch, y in ts:
+
+            feed_dict = self.model.make_feed_dict(x, xch, y, False)
             for i, (c, h) in enumerate(self.model.initial_state):
                 feed_dict[c] = state[i].c
                 feed_dict[h] = state[i].h
@@ -54,13 +94,12 @@ class LanguageModelTrainerTf:
             total_loss += loss
             iters += self.model.nbptt
             step += 1
-            if step % 500 == 0:
-                # TODO make this a callback
-                print("step [%d] perplexity: %.3f" % (step, np.exp(total_loss / iters)))
 
         metrics['avg_loss'] = total_loss / iters
         metrics['perplexity'] = np.exp(total_loss / iters)
 
+        for reporting in reporting_fns:
+            reporting(metrics, epochs, phase)
         return metrics
 
 
@@ -91,22 +130,11 @@ def fit(model, ts, vs, es=None, **kwargs):
 
     for epoch in range(epochs):
 
-        start_time = time.time()
-        train_metrics = trainer.train(ts)
-        train_duration = time.time() - start_time
-        print('Training time (%.3f sec)' % train_duration)
-
+        trainer.train(ts, reporting_fns)
         if after_train_fn is not None:
             after_train_fn(model)
 
-        start_time = time.time()
-        test_metrics = trainer.test(vs)
-        test_duration = time.time() - start_time
-        print('Validation time (%.3f sec)' % test_duration)
-
-        for reporting in reporting_fns:
-            reporting(train_metrics, epoch, 'Train')
-            reporting(test_metrics, epoch, 'Valid')
+        test_metrics = trainer.test(vs, reporting_fns, phase='Valid')
 
         if do_early_stopping is False:
             trainer.checkpoint()
@@ -127,10 +155,6 @@ def fit(model, ts, vs, es=None, **kwargs):
         print('Best performance on min_metric %.3f at epoch %d' % (min_metric, last_improved))
     if es is not None:
         trainer.recover_last_checkpoint()
-        start_time = time.time()
-        trainer.test(es)
-        test_duration = time.time() - start_time
-        print('Test time (%.3f sec)' % test_duration)
+        trainer.test(es, reporting_fns, phase='Test')
 
-        for reporting in reporting_fns:
-            reporting(test_metrics, 0, 'Test')
+
