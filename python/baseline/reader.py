@@ -89,16 +89,14 @@ class TSVParallelCorpusReader(ParallelCorpusReader):
                 tgt_len = len(dst) + 2
                 end1 = min(src_len, mxlen)
                 end2 = min(tgt_len, mxlen)-2
-                last = max(end1, end2)
                 tgtl[0] = GO
                 src_len = end1
                 tgt_len = end2+2
 
-                for j in range(last):
-                    idx1 = vocab1[src[j]] if j < end1 else PAD
-                    idx2 = vocab2[dst[j]] if j < end2 else PAD
-                    srcl[j] = idx1
-                    tgtl[j + 1] = idx2
+                for j in range(end1):
+                    srcl[j] = vocab1[src[j]]
+                for j in range(end2):
+                    tgtl[j + 1] = vocab2[dst[j]]
 
                 tgtl[end2] = EOS
 
@@ -151,14 +149,12 @@ class MultiFileParallelCorpusReader(ParallelCorpusReader):
                     src_len = end1
                     tgt_len = end2+2
 
-                    for j in range(last):
-                        idx1 = vocab1[src[j]] if j < end1 else PAD
-                        idx2 = vocab2[dst[j]] if j < end2 else PAD
-                        srcl[j] = idx1
-                        tgtl[j + 1] = idx2
+                    for j in range(end1):
+                        srcl[j] = vocab1[src[j]]
+                    for j in range(end2):
+                        tgtl[j + 1] = vocab2[dst[j]]
 
                     tgtl[end2] = EOS
-
                     ts.append((srcl, tgtl, src_len, tgt_len))
 
         return baseline.data.Seq2SeqExamples(ts)
