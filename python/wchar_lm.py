@@ -50,10 +50,9 @@ args.reporting = setup_reporting(args.visdom)
 if args.backend == 'tf':
     import baseline.tf.lm as lm
 
-args.maxw, vocab_ch, vocab_word, num_words = PTBSeqReader.build_vocab([args.train, args.valid, args.test])
+reader = PTBSeqReader(args.mxwlen, args.nbptt)
+vocab_ch, vocab_word, num_words = reader.build_vocab([args.train, args.valid, args.test])
 
-args.maxw = min(args.maxw, args.mxwlen)
-print('Max word length %d' % args.maxw)
 
 # Vocab LUTs
 word_vocab = None
@@ -73,23 +72,18 @@ else:
 char_vec = w2v.RandomInitVecModel(args.charsz, vocab_ch, args.unif)
 char_vocab = char_vec.vocab
 
-x, xch = PTBSeqReader.load(args.train, word_vocab, char_vocab, num_words[0], args.maxw)
-ts = SeqWordCharDataFeed(x, xch, args.nbptt, args.batchsz, args.maxw)
+ts = reader.load(args.train, word_vocab, char_vocab, num_words[0], batchsz=args.batchsz)
 print('Loaded training data')
 
-x, xch = PTBSeqReader.load(args.valid, word_vocab, char_vocab, num_words[1], args.maxw)
-vs = SeqWordCharDataFeed(x, xch, args.nbptt, args.batchsz, args.maxw)
-
+vs = reader.load(args.valid, word_vocab, char_vocab, num_words[1], batchsz=args.batchsz)
 print('Loaded validation data')
 
-x, xch = PTBSeqReader.load(args.test, word_vocab, char_vocab, num_words[2], args.maxw)
-es = SeqWordCharDataFeed(x, xch, args.nbptt, args.batchsz, args.maxw)
-print('Loaded test data')
+es = reader.load(args.test, word_vocab, char_vocab, num_words[2], batchsz=args.batchsz)
 
 print('Using %d examples for training' % num_words[0])
 print('Using %d examples for validation' % num_words[1])
 print('Using %d examples for test' % num_words[2])
-
+args.maxw = reader.max_word_length
 model = lm.create_model(word_vec, char_vec, **vars(args))
 steps_per_epoch = num_steps_per_epoch(num_words[0], args.nbptt, args.batchsz)
 first_range = int(args.start_decay_epoch * steps_per_epoch)

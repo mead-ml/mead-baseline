@@ -379,8 +379,11 @@ class TSVSeqLabelReader:
 
 class PTBSeqReader:
 
-    @staticmethod
-    def build_vocab(files):
+    def __init__(self, max_word_length, nbptt):
+        self.max_word_length = max_word_length
+        self.nbptt = nbptt
+
+    def build_vocab(self, files):
         vocab_word = Counter()
         vocab_ch = Counter()
         maxw = 0
@@ -401,12 +404,14 @@ class PTBSeqReader:
                             vocab_ch[k] += 1
                 num_words_in_files.append(num_words)
 
-        return maxw, vocab_ch, vocab_word, num_words_in_files
+        self.max_word_length = min(maxw, self.max_word_length)
+        print('Max word length %d' % self.max_word_length)
 
-    @staticmethod
-    def load(filename, words_vocab, chars_vocab, num_words, maxw, vec_alloc=np.zeros):
+        return vocab_ch, vocab_word, num_words_in_files
 
-        xch = vec_alloc((num_words, maxw), np.int)
+    def load(self, filename, words_vocab, chars_vocab, num_words, batchsz, vec_alloc=np.zeros):
+
+        xch = vec_alloc((num_words, self.max_word_length), np.int)
         x = vec_alloc((num_words), np.int)
         i = 0
         with codecs.open(filename, encoding='utf-8', mode='r') as f:
@@ -415,9 +420,9 @@ class PTBSeqReader:
                 num_words += len(sentence)
                 for w in sentence:
                     x[i] = words_vocab.get(w)
-                    nch = min(len(w), maxw)
+                    nch = min(len(w), self.max_word_length)
                     for k in range(nch):
-                        xch[i,k] = chars_vocab.get(w[k], 0)
+                        xch[i, k] = chars_vocab.get(w[k], 0)
                     i += 1
 
-        return x, xch
+        return baseline.data.SeqWordCharDataFeed(x, xch, self.nbptt, batchsz, self.max_word_length)
