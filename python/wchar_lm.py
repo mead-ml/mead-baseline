@@ -12,7 +12,7 @@ parser.add_argument('--eta', default=1, help='Initial learning rate', type=float
 parser.add_argument('--embed', default=None, help='Word2Vec embeddings file')
 parser.add_argument('--optim', default='sgd', help='Optim method')
 parser.add_argument('--decay', default=0, help='LR decay', type=float)
-parser.add_argument('--mom', default=0.9, help='SGD momentum', type=float)
+parser.add_argument('--mom', default=0, help='SGD momentum', type=float)
 parser.add_argument('--dropout', default=0.5, help='Dropout probability', type=float)
 parser.add_argument('--train', help='Training file', required=True)
 parser.add_argument('--valid', help='Validation file')
