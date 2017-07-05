@@ -5,9 +5,13 @@ from tensorflow.python.platform import gfile
 import json
 from tensorflow.contrib.layers import convolution2d, fully_connected, flatten, xavier_initializer
 from baseline.utils import fill_y
+from baseline.model import Classifier
 
 
-class ConvModel:
+class ConvModel(Classifier):
+
+    def __init__(self):
+        super(ConvModel, self).__init()
 
     def save(self, outfile):
         path_and_file = outfile.split('/')
@@ -25,8 +29,11 @@ class ConvModel:
         with open(basename + '.vocab', 'w') as f:
             json.dump(self.vocab, f)
 
-    def load(self, sess, basename):
+    @staticmethod
+    def load(basename, **kwargs):
 
+        sess = kwargs.get('session', tf.Session())
+        model = ConvModel()
         with open(basename + '.saver') as fsv:
             saver_def = tf.train.SaverDef()
             text_format.Merge(fsv.read(), saver_def)
@@ -37,19 +44,20 @@ class ConvModel:
             sess.graph.as_default()
             tf.import_graph_def(gd, name='')
             sess.run(saver_def.restore_op_name, {saver_def.filename_tensor_name: basename + '.model'})
-            self.x = tf.get_default_graph().get_tensor_by_name('x:0')
-            self.y = tf.get_default_graph().get_tensor_by_name('y:0')
-            self.pkeep = tf.get_default_graph().get_tensor_by_name('pkeep:0')
-            self.best = tf.get_default_graph().get_tensor_by_name('output/best:0')
-            self.logits = tf.get_default_graph().get_tensor_by_name('output/logits:0')
+            model.x = tf.get_default_graph().get_tensor_by_name('x:0')
+            model.y = tf.get_default_graph().get_tensor_by_name('y:0')
+            model.pkeep = tf.get_default_graph().get_tensor_by_name('pkeep:0')
+            model.best = tf.get_default_graph().get_tensor_by_name('output/best:0')
+            model.logits = tf.get_default_graph().get_tensor_by_name('output/logits:0')
         with open(basename + '.labels', 'r') as f:
-            self.labels = json.load(f)
+            model.labels = json.load(f)
 
         with open(basename + '.vocab', 'r') as f:
-            self.vocab = json.load(f)
+            model.vocab = json.load(f)
 
-        self.saver = tf.train.Saver(saver_def=saver_def)
-        self.sess = sess
+        model.saver = tf.train.Saver(saver_def=saver_def)
+        model.sess = sess
+        return model
 
     def __init__(self):
         pass
@@ -61,11 +69,15 @@ class ConvModel:
             all_loss = tf.reduce_mean(loss)
         return all_loss
 
-    def __call__(self, x, probs=False):
+    def classify(self, x):
         feed_dict = {self.x: x, self.pkeep: 1.0}
-        if probs is True:
-            return self.sess.run(tf.nn.softmax(self.logits), feed_dict=feed_dict)
-        return self.sess.run(self.best, feed_dict=feed_dict)
+        probs = self.sess.run(tf.nn.softmax(self.logits), feed_dict=feed_dict)
+        results = []
+        batchsz = probs.shape[0]
+        for b in range(batchsz):
+            outcomes = [(self.labels[id_i], prob_i) for id_i, prob_i in enumerate(probs[b])]
+            results.append(outcomes)
+        return results
 
     def ex2dict(self, x, y, do_dropout=False):
 
@@ -139,6 +151,12 @@ class ConvModel:
                     model.best = tf.argmax(model.logits, 1, name="best")
         model.sess = sess
         return model
+
+    def get_labels(self):
+        return self.labels
+
+    def get_vocab(self):
+        return self.vocab
 
 
 def create_model(w2v, labels, **kwargs):

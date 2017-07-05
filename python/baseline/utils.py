@@ -12,7 +12,6 @@ def listify(x):
 def revlut(lut):
     return {v: k for k, v in lut.items()}
 
-
 def lookup_sentence(rlut, seq, reverse=False, padchar=''):
     s = seq[::-1] if reverse else seq
     return (' '.join([rlut[idx] if rlut[idx] != '<PADDING>' else padchar for idx in s])).strip()

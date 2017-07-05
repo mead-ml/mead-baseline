@@ -5,6 +5,18 @@ import torch.autograd
 import torch.nn as nn
 
 
+def classify_bt(model, batch_time):
+    tensor = torch.from_numpy(batch_time) if type(batch_time) == np.ndarray else batch_time
+    probs = model(torch.autograd.Variable(tensor, requires_grad=False).cuda()).exp().data
+    probs.div_(torch.sum(probs))
+    results = []
+    batchsz = probs.size(0)
+    for b in range(batchsz):
+        outcomes = [(model.labels[id_i], prob_i) for id_i, prob_i in enumerate(probs[b])]
+        results.append(outcomes)
+    return results
+
+
 class SequenceCriterion(nn.Module):
 
     def __init__(self, nc):

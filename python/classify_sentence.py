@@ -66,7 +66,7 @@ print('Loaded valid data')
 
 es = reader.load(args.test, embeddings.vocab, 2)
 print('Loaded test data')
-labels = revlut(reader.label2index)
+labels = list(revlut(reader.label2index))
 
 model = classify.create_model(embeddings, labels, filtsz=args.filtsz, cmotsz=args.cmotsz, dropout=args.dropout, finetune=not args.static)
 classify.fit(model, ts, vs, es, **vars(args))

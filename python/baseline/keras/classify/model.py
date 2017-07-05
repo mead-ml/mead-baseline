@@ -1,8 +1,10 @@
 from keras.models import Model, load_model
 from keras.layers import Dense, Convolution1D, Embedding, Input, merge, GlobalMaxPooling1D, Dropout
+from baseline.model import Classifier
 import json
 
-class ConvModelKeras:
+
+class ConvModel(Classifier):
 
     def __init__(self):
         pass
@@ -16,18 +18,24 @@ class ConvModelKeras:
         with open(basename + '.vocab', 'w') as f:
             json.dump(self.vocab, f)
 
-    def load(self, basename):
-        self.impl = load_model(basename)
+    @staticmethod
+    def load(basename, **kwargs):
+        model = ConvModel()
+        model.impl = load_model(basename)
         with open(basename + '.labels', 'r') as f:
-            self.labels = json.load(f)
+            model.labels = json.load(f)
 
         with open(basename + '.vocab', 'r') as f:
-            self.vocab = json.load(f)
+            model.vocab = json.load(f)
+        return model
 
+    def classify(self, batch_time):
+        batchsz = batch_time.shape[0]
+        return self.impl.fit(batch_time, batch_size=batchsz)
 
     @staticmethod
     def create(w2v, labels, **kwargs):
-        model = ConvModelKeras()
+        model = ConvModel()
         model.labels = labels
         model.vocab = w2v.vocab
         filtsz = kwargs['filtsz']
@@ -61,7 +69,24 @@ class ConvModelKeras:
         model.impl = Model(input=[x], output=[dense])
         return model
 
+    def classify(self, batch_time):
+
+        batchsz = batch_time.shape[0]
+        probs = self.impl.predict(batch_time, batchsz)
+
+        results = []
+        for b in range(batchsz):
+            outcomes = [(self.labels[id_i], prob_i) for id_i, prob_i in enumerate(probs[b])]
+            results.append(outcomes)
+        return results
+
+    def get_labels(self):
+        return self.labels
+
+    def get_vocab(self):
+        return self.vocab
+
 
 # Use the functional API since we support parallel convolutions
 def create_model(w2v, labels, **kwargs):
-    return ConvModelKeras.create(w2v, labels, **kwargs)
+    return ConvModel.create(w2v, labels, **kwargs)
