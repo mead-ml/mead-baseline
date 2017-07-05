@@ -51,7 +51,7 @@ if args.backend == 'pytorch':
     show_ex_fn = show_examples_pytorch
     alloc_fn = long_0_tensor_alloc
     shape_fn = tensor_shape
-    src_trans_fn = None if args.attn else tensor_reverse_2nd
+    src_vec_trans = None if args.attn else tensor_reverse_2nd
     trim = True
 else:
     from baseline.tf import *
@@ -59,17 +59,18 @@ else:
     from numpy import zeros as alloc_fn
     from numpy import shape as shape_fn
     show_ex_fn = show_examples_tf
-    src_trans_fn = None if args.attn else reverse_2nd
+    src_vec_trans = None if args.attn else reverse_2nd
     trim = False
 
 if args.pair_suffix is not None and args.vocab is not None:
     print('Reading parallel file corpus')
     reader = MultiFileParallelCorpusReader(args.pair_suffix[0], args.pair_suffix[1],
-                                           args.mxlen, vec_alloc=alloc_fn, trim=trim)
+                                           args.mxlen, vec_alloc=alloc_fn, trim=trim,
+                                           src_vec_trans=src_vec_trans)
     vocab_list = [args.vocab]
 else:
     print('Reading tab-separated corpus')
-    reader = TSVParallelCorpusReader(args.mxlen, vec_alloc=alloc_fn, trim=trim)
+    reader = TSVParallelCorpusReader(args.mxlen, vec_alloc=alloc_fn, trim=trim, src_vec_trans=src_vec_trans)
     vocab_list = [args.train, args.test]
 
 vocab1, vocab2 = reader.build_vocabs(vocab_list)

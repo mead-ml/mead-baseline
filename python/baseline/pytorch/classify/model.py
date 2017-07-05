@@ -154,6 +154,7 @@ class LSTMModel(nn.Module, Classifier):
 
 def create_model(w2v, labels, **kwargs):
     model_type = kwargs.get('model_type', 'conv')
-    if model_type == 'conv':
-        return ConvModel.create(w2v, labels, **kwargs)
-    return LSTMModel.create(w2v, labels, **kwargs)
+    return ConvModel.create(w2v, labels, **kwargs)
+    #if model_type == 'conv':
+    #    return ConvModel.create(w2v, labels, **kwargs)
+    #return LSTMModel.create(w2v, labels, **kwargs)

@@ -33,12 +33,12 @@ class ExampleDataFeed(DataFeed):
 
         self.examples = examples
         self.batchsz = batchsz
-        self.shuffle = kwargs['shuffle'] if 'shuffle' in kwargs else False
-        self.vec_alloc = kwargs['alloc_fn'] if 'alloc_fn' in kwargs else np.zeros
-        self.vec_shape = kwargs['shape_fn'] if 'shape_fn' in kwargs else np.shape
-        self.src_vec_trans = kwargs['src_trans_fn'] if 'src_trans_fn' in kwargs else None
+        self.shuffle = bool(kwargs.get('shuffle', False))
+        self.vec_alloc = kwargs.get('vec_alloc', np.zeros)
+        self.vec_shape = kwargs.get('vec_shape', np.shape)
+        self.src_vec_trans = kwargs.get('src_vec_trans', None)
         self.steps = int(math.floor(len(self.examples)/float(batchsz)))
-        self.trim = bool(kwargs['trim']) if 'trim' in kwargs  else False
+        self.trim = bool(kwargs.get('trim', False))
 
 
 

@@ -37,10 +37,10 @@ class ParallelCorpusReader:
     def __init__(self,
                  max_sentence_length=1000,
                  vec_alloc=np.zeros,
-                 src_trans_fn=None,
+                 src_vec_trans=None,
                  trim=False):
         self.vec_alloc = vec_alloc
-        self.src_trans_fn = src_trans_fn
+        self.src_vec_trans = src_vec_trans
         self.max_sentence_length = max_sentence_length
         self.trim = trim
 
@@ -53,16 +53,16 @@ class ParallelCorpusReader:
     def load(self, tsfile, vocab1, vocab2, batchsz, shuffle=False):
         examples = self.load_examples(tsfile, vocab1, vocab2)
         return baseline.data.Seq2SeqDataFeed(examples, batchsz,
-                                             shuffle=shuffle, src_trans_fn=self.src_trans_fn,
-                                             alloc_fn=self.vec_alloc, trim=self.trim)
+                                             shuffle=shuffle, src_vec_trans=self.src_vec_trans,
+                                             vec_alloc=self.vec_alloc, trim=self.trim)
 
 class TSVParallelCorpusReader(ParallelCorpusReader):
 
     def __init__(self, max_sentence_length=1000,
                  vec_alloc=np.zeros,
-                 src_trans_fn=None,
+                 src_vec_trans=None,
                  trim=False, src_col_num=0, dst_col_num=1):
-        super(TSVParallelCorpusReader, self).__init__(max_sentence_length, vec_alloc, src_trans_fn, trim)
+        super(TSVParallelCorpusReader, self).__init__(max_sentence_length, vec_alloc, src_vec_trans, trim)
         self.src_col_num = src_col_num
         self.dst_col_num = dst_col_num
 
@@ -109,9 +109,9 @@ class MultiFileParallelCorpusReader(ParallelCorpusReader):
     def __init__(self, src_suffix, dst_suffix,
                  max_sentence_length=1000,
                  vec_alloc=np.zeros,
-                 src_trans_fn=None,
+                 src_vec_trans=None,
                  trim=False):
-        super(MultiFileParallelCorpusReader, self).__init__(max_sentence_length, vec_alloc, src_trans_fn, trim)
+        super(MultiFileParallelCorpusReader, self).__init__(max_sentence_length, vec_alloc, src_vec_trans, trim)
         self.src_suffix = src_suffix
         self.dst_suffix = dst_suffix
         if not src_suffix.startswith('.'):
@@ -293,7 +293,7 @@ class CONLLSeqReader:
 
             ts.append((xs, xs_ch, ys, length, i))
         examples = baseline.data.SeqWordCharTagExamples(ts)
-        return baseline.data.SeqWordCharLabelDataFeed(examples, batchsz=batchsz, shuffle=shuffle, alloc_fn=self.vec_alloc, shape_fn=self.vec_shape), txts
+        return baseline.data.SeqWordCharLabelDataFeed(examples, batchsz=batchsz, shuffle=shuffle, vec_alloc=self.vec_alloc, vec_shape=self.vec_shape), txts
 
 
 class TSVSeqLabelReader:
@@ -308,7 +308,7 @@ class TSVSeqLabelReader:
                 "!": " ! ",
                 }
 
-    def __init__(self, mxlen=1000, mxfiltsz=0, clean_fn=None, vec_alloc=np.zeros):
+    def __init__(self, mxlen=1000, mxfiltsz=0, clean_fn=None, vec_alloc=np.zeros, src_vec_trans=None):
         self.vocab = None
         self.label2index = {}
         self.clean_fn = clean_fn #TSVSeqLabelReader.do_clean
@@ -317,7 +317,7 @@ class TSVSeqLabelReader:
         self.vec_alloc=vec_alloc
         if self.clean_fn is None:
             self.clean_fn = lambda x: x
-
+        self.src_vec_trans = src_vec_trans
     @staticmethod
     def splits(text):
         return list(filter(lambda s: len(s) != 0, re.split('\s+', text)))
@@ -375,7 +375,7 @@ class TSVSeqLabelReader:
                     x[j+halffiltsz] = key
                 examples.append((x, y))
         return baseline.data.SeqLabelDataFeed(baseline.data.SeqLabelExamples(examples),
-                                              batchsz=batchsz, shuffle=shuffle, alloc_fn=self.vec_alloc)
+                                              batchsz=batchsz, shuffle=shuffle, vec_alloc=self.vec_alloc, src_vec_trans=self.src_vec_trans)
 
 class PTBSeqReader:
 
