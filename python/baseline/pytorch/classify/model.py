@@ -85,6 +85,7 @@ class ConvModel(nn.Module, Classifier):
     def get_vocab(self):
         return self.vocab
 
+
 class LSTMModel(nn.Module, Classifier):
 
     def __init__(self):
@@ -138,7 +139,7 @@ class LSTMModel(nn.Module, Classifier):
         embeddings = self.lut(input)
         output, hidden = self.lstm(embeddings)
         # This squeeze can cause problems when B=1
-        last_frame = output[:,-1,:].squeeze()
+        last_frame = output[:, -1, :].squeeze()
         output = self.fconns(last_frame)
         return output
 
