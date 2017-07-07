@@ -109,5 +109,4 @@ def fit(model, ts, vs, es=None, **kwargs):
     if es is not None:
         print('Reloading best checkpoint')
         trainer.recover_last_checkpoint()
-        trainer = ClassifyTrainerTf(model, **kwargs)
         trainer.test(es, reporting_fns, phase='Test')
