@@ -86,7 +86,7 @@ class TSVParallelCorpusReader(ParallelCorpusReader):
                 srcl = self.vec_alloc(mxlen, dtype=np.int)
                 tgtl = self.vec_alloc(mxlen, dtype=np.int)
                 src_len = len(src)
-                tgt_len = len(dst) + 2
+                tgt_len = len(dst) + 2  # <GO>,...,<EOS>
                 end1 = min(src_len, mxlen)
                 end2 = min(tgt_len, mxlen)-2
                 tgtl[0] = GO

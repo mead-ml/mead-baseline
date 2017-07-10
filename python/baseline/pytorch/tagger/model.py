@@ -1,6 +1,8 @@
 from baseline.pytorch.torchy import *
+from baseline.model import Tagger
 
-class TaggerModel(nn.Module):
+
+class TaggerModel(nn.Module, Tagger):
 
     def save(self, outname):
         torch.save(self, outname)
@@ -9,11 +11,11 @@ class TaggerModel(nn.Module):
         return SequenceCriterion(len(self.labels))
 
     @staticmethod
-    def load(dirname, base):
-        name = '%s/%s.model' % (dirname, base)
-        return torch.load(name)
+    def load(outname, **kwargs):
+        model = torch.load(outname)
+        return model
 
-    def _char_word_conv_embeddings(self, maxw, filtsz, char_dsz, wchsz, pdrop, unif):
+    def _char_word_conv_embeddings(self, filtsz, char_dsz, wchsz, pdrop, unif):
         self.char_convs = []
         for fsz in filtsz:
             conv = nn.Sequential(
@@ -33,22 +35,40 @@ class TaggerModel(nn.Module):
             nn.ReLU()
         ))
 
-    def __init__(self, labels, word_vec, char_vec, mxlen, maxw, rnntype, wchsz, hsz, filtsz, pdrop, unif, nlayers=1):
+    def __init__(self):
         super(TaggerModel, self).__init__()
+
+    @staticmethod
+    def create(labels, word_vec, char_vec, **kwargs):
+        model = TaggerModel()
         char_dsz = char_vec.dsz
         word_dsz = 0
-        self.labels = labels
-        self._char_word_conv_embeddings(maxw, filtsz, char_dsz, wchsz, pdrop, unif)
+        hsz = int(kwargs['hsz'])
+        nlayers = int(kwargs.get('layers', 1))
+        rnntype = kwargs.get('rnntype', 'lstm')
+        print('RNN [%s]' % rnntype)
+        unif = float(kwargs.get('unif', 0.25))
+        wsz = kwargs.get('wsz', 30)
+        filtsz = kwargs.get('cfiltsz')
+        crf = bool(kwargs.get('crf', False))
+        if crf:
+            print('Warning: CRF not supported yet in PyTorch model... ignoring')
+        pdrop = float(kwargs.get('dropout', 0.5))
+        model.labels = labels
+        model._char_word_conv_embeddings(filtsz, char_dsz, wsz, pdrop, unif)
 
         if word_vec is not None:
-            self.wembed = pytorch_embedding(word_vec)
+            model.word_vocab = word_vec.vocab
+            model.wembed = pytorch_embedding(word_vec)
             word_dsz = word_vec.dsz
 
-        self.cembed = pytorch_embedding(char_vec)
-        self.dropout = nn.Dropout(pdrop)
-        self.rnn, hsz = pytorch_lstm(self.wchsz + word_dsz, hsz, rnntype, nlayers, pdrop, unif)
-        self.decoder = pytorch_linear(hsz, len(self.labels), unif)
-        self.softmax = nn.LogSoftmax()
+        model.char_vocab = char_vec.vocab
+        model.cembed = pytorch_embedding(char_vec)
+        model.dropout = nn.Dropout(pdrop)
+        model.rnn, hsz = pytorch_lstm(model.wchsz + word_dsz, hsz, rnntype, nlayers, pdrop, unif)
+        model.decoder = pytorch_linear(hsz, len(model.labels), unif)
+        model.softmax = nn.LogSoftmax()
+        return model
 
     def char2word(self, xch_i):
         # For starters we need to perform embeddings for each character
@@ -88,21 +108,18 @@ class TaggerModel(nn.Module):
         decoded = decoded.view(output.size(0), output.size(1), -1)
         return decoded.transpose(0, 1).contiguous()
 
+    def get_vocab(self, vocab_type):
+        if vocab_type == 'word':
+            return self.word_vocab
+        return self.char_vocab
+
+    def get_labels(self):
+        return self.labels
+
+    def predict(self, x, xch, lengths):
+        return predict_seq_bt(self, x, xch, lengths)
+
 
 def create_model(labels, word_embedding, char_embedding, **kwargs):
-    hsz = int(kwargs['hsz'])
-    layers = int(kwargs.get('layers', 1))
-    rnntype = kwargs.get('rnntype', 'lstm')
-    print('RNN [%s]' % rnntype)
-    maxs = kwargs.get('maxs', 100)
-    maxw = kwargs.get('maxw', 100)
-    unif = float(kwargs.get('unif', 0.25))
-    wsz = kwargs.get('wsz', 30)
-    filtsz = kwargs.get('cfiltsz')
-    crf = bool(kwargs.get('crf', False))
-    if crf:
-        print('Warning: CRF not supported yet in PyTorch model... ignoring')
-    dropout = float(kwargs.get('dropout', 0.5))
-    model = TaggerModel(labels, word_embedding, char_embedding, maxs, maxw,
-                        rnntype, wsz, hsz, filtsz, dropout, unif, layers)
+    model = TaggerModel.create(labels, word_embedding, char_embedding, **kwargs)
     return model

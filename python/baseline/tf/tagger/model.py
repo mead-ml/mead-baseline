@@ -3,8 +3,10 @@ import json
 import os
 from google.protobuf import text_format
 from tensorflow.python.platform import gfile
+from baseline.model import Tagger
 
-class TaggerModel:
+
+class TaggerModel(Tagger):
 
     def save_values(self, basename):
         self.saver.save(self.sess, basename)
@@ -40,8 +42,12 @@ class TaggerModel:
         self.save_md(basename)
         self.save_values(basename)
 
-    def restore(self, sess, basename, checkpoint_name=None):
-        self.sess = sess
+    @staticmethod
+    def load(basename, **kwargs):
+
+        model = TaggerModel()
+        model.sess = kwargs.get('sess', tf.Session())
+        checkpoint_name = kwargs.get('checkpoint_name', basename)
         checkpoint_name = checkpoint_name or basename
         with open(basename + '.saver') as fsv:
             saver_def = tf.train.SaverDef()
@@ -51,39 +57,39 @@ class TaggerModel:
         with gfile.FastGFile(basename + '.graph', 'rb') as f:
             gd = tf.GraphDef()
             gd.ParseFromString(f.read())
-            self.sess.graph.as_default()
+            model.sess.graph.as_default()
             tf.import_graph_def(gd, name='')
             print('Imported graph def')
 
-            self.sess.run(saver_def.restore_op_name,
-                     {saver_def.filename_tensor_name: checkpoint_name})
-            self.x = tf.get_default_graph().get_tensor_by_name('x:0')
-            self.xch = tf.get_default_graph().get_tensor_by_name('xch:0')
-            self.y = tf.get_default_graph().get_tensor_by_name('y:0')
-            self.pkeep = tf.get_default_graph().get_tensor_by_name('pkeep:0')
-            self.best = tf.get_default_graph().get_tensor_by_name('output/ArgMax:0') # X
-            self.probs = tf.get_default_graph().get_tensor_by_name('output/transpose:0') # X
+            model.sess.run(saver_def.restore_op_name, {saver_def.filename_tensor_name: checkpoint_name})
+            model.x = tf.get_default_graph().get_tensor_by_name('x:0')
+            model.xch = tf.get_default_graph().get_tensor_by_name('xch:0')
+            model.y = tf.get_default_graph().get_tensor_by_name('y:0')
+            model.pkeep = tf.get_default_graph().get_tensor_by_name('pkeep:0')
+            model.best = tf.get_default_graph().get_tensor_by_name('output/ArgMax:0') # X
+            model.probs = tf.get_default_graph().get_tensor_by_name('output/transpose:0') # X
             try:
-                self.A = tf.get_default_graph().get_tensor_by_name('Loss/transitions:0')
+                model.A = tf.get_default_graph().get_tensor_by_name('Loss/transitions:0')
                 print('Found transition matrix in graph, setting crf=True')
-                self.crf = True
+                model.crf = True
             except:
                 print('Failed to get transition matrix, setting crf=False')
-                self.A = None
-                self.crf = False
+                model.A = None
+                model.crf = False
 
         with open(basename + '.labels', 'r') as f:
-            self.labels = json.load(f)
+            model.labels = json.load(f)
 
-        self.word_vocab = {}
+        model.word_vocab = {}
         if os.path.exists(basename + '-word.vocab'):
             with open(basename + '-word.vocab', 'r') as f:
-                self.word_vocab = json.load(f)
+                model.word_vocab = json.load(f)
 
         with open(basename + '-char.vocab', 'r') as f:
-            self.char_vocab = json.load(f)
+            model.char_vocab = json.load(f)
 
-        self.saver = tf.train.Saver(saver_def=saver_def)
+        model.saver = tf.train.Saver(saver_def=saver_def)
+        return model
 
     def __init__(self):
         pass
@@ -124,6 +130,19 @@ class TaggerModel:
 
         return all_loss
 
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def load(basename, **kwargs):
+        pass
+
+    def get_vocab(self, vocab_type='word'):
+        return self.word_vocab if vocab_type == 'word' else self.char_vocab
+
+    def get_labels(self):
+        return self.labels
+
     def predict(self, x, xch, lengths):
 
         feed_dict = self.make_feed_dict(x, xch)
@@ -146,24 +165,34 @@ class TaggerModel:
 
         return preds
 
-    def params(self, sess, labels, word_vec, char_vec, mxlen, maxw, rnntype, nlayers, wsz, hsz, filtsz, crf, pdrop):
+    @staticmethod
+    def create(labels, word_vec, char_vec, **kwargs):
 
-        self.sess = sess
-        self.crf = crf
+        model = TaggerModel()
+        model.sess = kwargs.get('sess', tf.Session())
+
+        mxlen = kwargs.get('maxs', 100)
+        maxw = kwargs.get('maxw', 100)
+        wsz = kwargs.get('wsz', 30)
+        filtsz = kwargs.get('cfiltsz')
+        hsz = int(kwargs['hsz'])
+        crf = bool(kwargs.get('crf', False))
+        pdrop = kwargs.get('dropout', 0.5)
+        rnntype = kwargs.get('rnntype', 'blstm')
+        nlayers = kwargs.get('layers', 1)
+        model.labels = labels
+        model.crf = crf
         char_dsz = char_vec.dsz
         nc = len(labels)
-        self.x = tf.placeholder(tf.int32, [None, mxlen], name="x")
-        self.xch = tf.placeholder(tf.int32, [None, mxlen, maxw], name="xch")
-        self.y = tf.placeholder(tf.int32, [None, mxlen], name="y")
-        self.pkeep = tf.placeholder(tf.float32, name="pkeep")
-        self.pdrop_value = pdrop
-        self.labels = labels
-        self.word_vocab = {}
+        model.x = tf.placeholder(tf.int32, [None, mxlen], name="x")
+        model.xch = tf.placeholder(tf.int32, [None, mxlen, maxw], name="xch")
+        model.y = tf.placeholder(tf.int32, [None, mxlen], name="y")
+        model.pkeep = tf.placeholder(tf.float32, name="pkeep")
+        model.pdrop_value = pdrop
+        model.word_vocab = {}
         if word_vec is not None:
-            self.word_vocab = word_vec.vocab
-        self.char_vocab = char_vec.vocab
-
-        #filtsz = [int(filt) for filt in filtsz.split(',')]
+            model.word_vocab = word_vec.vocab
+        model.char_vocab = char_vec.vocab
 
         if word_vec is not None:
             with tf.name_scope("WordLUT"):
@@ -172,13 +201,13 @@ class TaggerModel:
                 we0 = tf.scatter_update(Ww, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, word_vec.dsz]))
 
                 with tf.control_dependencies([we0]):
-                    wembed = tf.nn.embedding_lookup(Ww, self.x, name="embeddings")
+                    wembed = tf.nn.embedding_lookup(Ww, model.x, name="embeddings")
 
         Wc = tf.Variable(tf.constant(char_vec.weights, dtype=tf.float32), name="Wch")
         ce0 = tf.scatter_update(Wc, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, char_dsz]))
 
         with tf.control_dependencies([ce0]):
-            xch_seq = tensor2seq(self.xch)
+            xch_seq = tensor2seq(model.xch)
             cembed_seq = []
             for i, xch_i in enumerate(xch_seq):
                 cembed_seq.append(shared_char_word(Wc, xch_i, filtsz, char_dsz, wsz, None if i == 0 else True))
@@ -187,17 +216,17 @@ class TaggerModel:
         # List to tensor, reform as (T, B, W)
         # Join embeddings along the third dimension
         joint = word_char if word_vec is None else tf.concat(values=[wembed, word_char], axis=2)
-        joint = tf.nn.dropout(joint, self.pkeep)
+        joint = tf.nn.dropout(joint, model.pkeep)
         embedseq = tensor2seq(joint)
 
         if rnntype == 'blstm':
-            rnnfwd = stacked_lstm(hsz, self.pkeep, nlayers)
-            rnnbwd = stacked_lstm(hsz, self.pkeep, nlayers)
+            rnnfwd = stacked_lstm(hsz, model.pkeep, nlayers)
+            rnnbwd = stacked_lstm(hsz, model.pkeep, nlayers)
 
             # Primitive will wrap the fwd and bwd, reverse signal for bwd, unroll
             rnnseq, _, __ = tf.contrib.rnn.static_bidirectional_rnn(rnnfwd, rnnbwd, embedseq, dtype=tf.float32)
         else:
-            rnnfwd = stacked_lstm(hsz, self.pkeep, nlayers)
+            rnnfwd = stacked_lstm(hsz, model.pkeep, nlayers)
             # Primitive will wrap RNN and unroll in time
             rnnseq, _ = tf.contrib.rnn.static_rnn(rnnfwd, embedseq, dtype=tf.float32)
 
@@ -208,26 +237,15 @@ class TaggerModel:
                 hsz *= 2
 
             W = tf.Variable(tf.truncated_normal([hsz, nc],
-                                                stddev = 0.1), name="W")
-            b = tf.Variable(tf.constant(0.0, shape=[1,nc]), name="b")
+                                                stddev=0.1), name="W")
+            b = tf.Variable(tf.constant(0.0, shape=[1, nc]), name="b")
 
             preds = [tf.matmul(rnnout, W) + b for rnnout in rnnseq]
-            self.probs = seq2tensor(preds)
-            self.best = tf.argmax(self.probs, 2)
+            model.probs = seq2tensor(preds)
+            model.best = tf.argmax(model.probs, 2)
+        return model
 
 
 def create_model(labels, word_embeddings, char_embeddings, **kwargs):
-    hsz = int(kwargs['hsz'])
-    layers = int(kwargs.get('layers', 1))
-    rnntype = kwargs.get('rnntype', 'lstm')
-    print('RNN [%s]' % rnntype)
-    maxs = kwargs.get('maxs', 100)
-    maxw = kwargs.get('maxw', 100)
-    wsz = kwargs.get('wsz', 30)
-    filtsz = kwargs.get('cfiltsz')
-    crf = bool(kwargs.get('crf', False))
-    dropout = float(kwargs.get('dropout', 0.5))
-    sess = kwargs.get('sess', tf.Session())
-    tagger = TaggerModel()
-    tagger.params(sess, labels, word_embeddings, char_embeddings, maxs, maxw, rnntype, layers, wsz, hsz, filtsz, crf, dropout)
+    tagger = TaggerModel.create(labels, word_embeddings, char_embeddings, **kwargs)
     return tagger

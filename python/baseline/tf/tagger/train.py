@@ -166,12 +166,14 @@ def fit(model, ts, vs, es, **kwargs):
         test_metrics = trainer.test(vs, reporting_fns, phase='Valid')
 
         if do_early_stopping is False:
+            trainer.checkpoint()
             model.save(model_file)
 
         elif test_metrics[early_stopping_metric] > max_metric:
             last_improved = epoch
             max_metric = test_metrics[early_stopping_metric]
             print('New max %.3f' % max_metric)
+            trainer.checkpoint()
             model.save(model_file)
 
         elif (epoch - last_improved) > patience:
@@ -182,7 +184,7 @@ def fit(model, ts, vs, es, **kwargs):
         print('Best performance on max_metric %.3f at epoch %d' % (max_metric, last_improved))
     if es is not None:
 
-        model.restore(tf.Session(), model_file)
+        trainer.recover_last_checkpoint()
         evaluator = TaggerEvaluatorTf(model)
         test_metrics = evaluator.test(es, conll_file=conll_file, txts=txts)
         for reporting in reporting_fns:

@@ -17,6 +17,36 @@ def classify_bt(model, batch_time):
     return results
 
 
+def predict_seq_bt(model, x, xch, lengths):
+    x_t = torch.from_numpy(x) if type(x) == np.ndarray else x
+    xch_t = torch.from_numpy(xch) if type(xch) == np.ndarray else x
+    len_t = torch.from_numpy(lengths) if type(lengths) == np.ndarray else lengths
+    x_v = torch.autograd.Variable(x_t, requires_grad=False).cuda()
+    xch_v = torch.autograd.Variable(xch_t, requires_grad=False).cuda()
+    len_v = torch.autograd.Variable(len_t, requires_grad=False)
+    results = model((x_v, xch_v, len_v))
+    if type(x) == np.ndarray:
+        return results.cpu().to_numpy()
+    return results
+
+
+def to_scalar(var):
+    # returns a python float
+    return var.view(-1).data.tolist()[0]
+
+
+def argmax(vec):
+    # return the argmax as a python int
+    _, idx = torch.max(vec, 1)
+    return to_scalar(idx)
+
+
+def log_sum_exp(vec):
+    max_score = vec[0, argmax(vec)]
+    max_score_broadcast = max_score.view(1, -1).expand(1, vec.size()[1])
+    return max_score + torch.log(torch.sum(torch.exp(vec - max_score_broadcast)))
+
+
 class SequenceCriterion(nn.Module):
 
     def __init__(self, nc):
