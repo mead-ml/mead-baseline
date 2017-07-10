@@ -44,7 +44,6 @@ class TaggerModel(Tagger):
 
     @staticmethod
     def load(basename, **kwargs):
-
         model = TaggerModel()
         model.sess = kwargs.get('sess', tf.Session())
         checkpoint_name = kwargs.get('checkpoint_name', basename)
@@ -131,10 +130,6 @@ class TaggerModel(Tagger):
         return all_loss
 
     def __init__(self):
-        pass
-
-    @staticmethod
-    def load(basename, **kwargs):
         pass
 
     def get_vocab(self, vocab_type='word'):

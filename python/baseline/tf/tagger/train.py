@@ -138,7 +138,7 @@ def fit(model, ts, vs, es, **kwargs):
     patience = int(kwargs['patience']) if 'patience' in kwargs else epochs
     conll_file = kwargs.get('conll_file', None)
     txts = kwargs.get('txts', None)
-    model_file = kwargs['outfile'] if 'outfile' in kwargs and kwargs['outfile'] is not None else './seq2seq-model-tf'
+    model_file = kwargs['outfile'] if 'outfile' in kwargs and kwargs['outfile'] is not None else './tagger-model-tf'
     after_train_fn = kwargs['after_train_fn'] if 'after_train_fn' in kwargs else None
     trainer = TaggerTrainerTf(model, **kwargs)
     init = tf.global_variables_initializer()

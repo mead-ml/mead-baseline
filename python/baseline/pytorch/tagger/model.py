@@ -108,10 +108,8 @@ class TaggerModel(nn.Module, Tagger):
         decoded = decoded.view(output.size(0), output.size(1), -1)
         return decoded.transpose(0, 1).contiguous()
 
-    def get_vocab(self, vocab_type):
-        if vocab_type == 'word':
-            return self.word_vocab
-        return self.char_vocab
+    def get_vocab(self, vocab_type='word'):
+        return self.word_vocab if vocab_type == 'word' else self.char_vocab
 
     def get_labels(self):
         return self.labels

@@ -24,9 +24,11 @@ def predict_seq_bt(model, x, xch, lengths):
     x_v = torch.autograd.Variable(x_t, requires_grad=False).cuda()
     xch_v = torch.autograd.Variable(xch_t, requires_grad=False).cuda()
     len_v = torch.autograd.Variable(len_t, requires_grad=False)
-    results = model((x_v, xch_v, len_v))
+    results = model((x_v, xch_v, len_v)).data
     if type(x) == np.ndarray:
-        return results.cpu().to_numpy()
+        results = results.cpu().numpy()
+        # Fix this to not be greedy
+        results = np.argmax(results, -1)
     return results
 
 

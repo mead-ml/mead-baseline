@@ -1,5 +1,5 @@
 import numpy as np
-
+from baseline.utils import revlut
 
 class Classifier:
     """Text classifier
@@ -92,8 +92,42 @@ class Tagger:
     def predict(self, x, xch, lengths):
         pass
 
-    def predict_text(self, tokens, mxlen, zeropad=0, zero_alloc=np.zeros):
-        pass
+    def predict_text(self, tokens, mxlen, maxw, zero_alloc=np.zeros):
+        """
+        Utility function to convert lists of sentence tokens to integer value one-hots which
+        are then passed to the tagger.  The resultant output is then converted back to label and token
+        to be printed
+        :param tokens: 
+        :param mxlen: 
+        :param maxw: 
+        :param zero_alloc: 
+        :return: 
+        """
+        words_vocab = self.get_vocab(vocab_type='word')
+        chars_vocab = self.get_vocab(vocab_type='char')
+        # This might be inefficient if the label space is large
+        label_vocab = revlut(self.get_labels())
+        xs = zero_alloc((1, mxlen), dtype=int)
+        xs_ch = zero_alloc((1, mxlen, maxw), dtype=int)
+        lengths = zero_alloc(1, dtype=int)
+        lengths[0] = min(len(tokens), mxlen)
+        for j in range(mxlen):
+
+            if j == len(tokens):
+                break
+
+            w = tokens[j]
+            nch = min(len(w), maxw)
+
+            xs[0, j] = words_vocab.get(w, 0)
+            for k in range(nch):
+                xs_ch[0, j, k] = chars_vocab.get(w[k], 0)
+
+        indices = self.predict(xs, xs_ch, lengths)[0]
+        output = []
+        for j in range(lengths[0]):
+            output.append((tokens[j], label_vocab[indices[j]]))
+        return output
 
     def get_vocab(self, vocab_type='word'):
         pass
