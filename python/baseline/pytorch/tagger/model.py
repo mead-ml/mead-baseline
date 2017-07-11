@@ -2,7 +2,7 @@ from baseline.pytorch.torchy import *
 from baseline.model import Tagger
 
 
-class TaggerModel(nn.Module, Tagger):
+class RNNTaggerModel(nn.Module, Tagger):
 
     def save(self, outname):
         torch.save(self, outname)
@@ -36,11 +36,11 @@ class TaggerModel(nn.Module, Tagger):
         ))
 
     def __init__(self):
-        super(TaggerModel, self).__init__()
+        super(RNNTaggerModel, self).__init__()
 
     @staticmethod
     def create(labels, word_vec, char_vec, **kwargs):
-        model = TaggerModel()
+        model = RNNTaggerModel()
         char_dsz = char_vec.dsz
         word_dsz = 0
         hsz = int(kwargs['hsz'])
@@ -119,5 +119,5 @@ class TaggerModel(nn.Module, Tagger):
 
 
 def create_model(labels, word_embedding, char_embedding, **kwargs):
-    model = TaggerModel.create(labels, word_embedding, char_embedding, **kwargs)
+    model = RNNTaggerModel.create(labels, word_embedding, char_embedding, **kwargs)
     return model

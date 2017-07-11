@@ -6,7 +6,7 @@ from tensorflow.python.platform import gfile
 from baseline.model import Tagger
 
 
-class TaggerModel(Tagger):
+class RNNTaggerModel(Tagger):
 
     def save_values(self, basename):
         self.saver.save(self.sess, basename)
@@ -44,7 +44,7 @@ class TaggerModel(Tagger):
 
     @staticmethod
     def load(basename, **kwargs):
-        model = TaggerModel()
+        model = RNNTaggerModel()
         model.sess = kwargs.get('sess', tf.Session())
         checkpoint_name = kwargs.get('checkpoint_name', basename)
         checkpoint_name = checkpoint_name or basename
@@ -163,7 +163,7 @@ class TaggerModel(Tagger):
     @staticmethod
     def create(labels, word_vec, char_vec, **kwargs):
 
-        model = TaggerModel()
+        model = RNNTaggerModel()
         model.sess = kwargs.get('sess', tf.Session())
 
         mxlen = kwargs.get('maxs', 100)
@@ -242,5 +242,5 @@ class TaggerModel(Tagger):
 
 
 def create_model(labels, word_embeddings, char_embeddings, **kwargs):
-    tagger = TaggerModel.create(labels, word_embeddings, char_embeddings, **kwargs)
+    tagger = RNNTaggerModel.create(labels, word_embeddings, char_embeddings, **kwargs)
     return tagger
