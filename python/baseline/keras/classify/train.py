@@ -55,14 +55,37 @@ class ClassifyTrainerKeras(EpochReportingTrainer):
 
 
 def fit(model, ts, vs, es=None, **kwargs):
-
+    """
+    Train a classifier using Keras
+    
+    :param model: The model to train
+    :param ts: A training data set
+    :param vs: A validation data set
+    :param es: A test data set, can be None
+    :param kwargs: 
+        See below
+    
+    :Keyword Arguments:
+        * *do_early_stopping* (``bool``) --
+          Stop after evaluation data is no longer improving.  Defaults to True
+        
+        * *epochs* (``int``) -- how many epochs.  Default to 20
+        * *outfile* -- Model output file, defaults to classifier-model.pyth
+        * *patience* (``int``) -- 
+           How many epochs where evaluation is no longer improving before we give up
+        * *reporting* --
+           Callbacks which may be used on reporting updates
+        * *optim* --
+           What optimizer to use.  Defaults to `adam`
+    :return: 
+    """
     trainer = ClassifyTrainerKeras(model, **kwargs)
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
     epochs = int(kwargs.get('epochs', 20))
     model_file = kwargs.get('outfile', './classifier-model-keras')
 
     if do_early_stopping:
-        early_stopping_metric = kwargs.get('early_stopping_metric', 'f1')
+        early_stopping_metric = kwargs.get('early_stopping_metric', 'acc')
         patience = kwargs.get('patience', epochs)
         print('Doing early stopping on [%s] with patience [%d]' % (early_stopping_metric, patience))
 

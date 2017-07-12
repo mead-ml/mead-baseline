@@ -58,7 +58,8 @@ class ParallelCorpusReader:
 
 class TSVParallelCorpusReader(ParallelCorpusReader):
 
-    def __init__(self, max_sentence_length=1000,
+    def __init__(self,
+                 max_sentence_length=1000,
                  vec_alloc=np.zeros,
                  src_vec_trans=None,
                  trim=False, src_col_num=0, dst_col_num=1):
