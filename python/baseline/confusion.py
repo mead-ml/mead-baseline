@@ -2,8 +2,16 @@ import numpy as np
 
 
 class ConfusionMatrix:
-
+    """Confusion matrix with metrics
+    
+    This class accumulates classification output, and tracks it in a confusion matrix.
+    Metrics are available that use the confusion matrix
+    """
     def __init__(self, labels):
+        """Constructor with input labels
+        
+        :param labels: Either a dictionary (`k=int,v=str`) or an array of labels
+        """
         if type(labels) is dict:
             self.labels = []
             for i in range(len(labels)):
@@ -14,6 +22,12 @@ class ConfusionMatrix:
         self._cm = np.zeros((nc, nc), dtype=np.int)
 
     def add(self, truth, guess):
+        """Add a single value to the confusion matrix based off `truth` and `guess`
+        
+        :param truth: The real `y` value (or ground truth label)
+        :param guess: The guess for `y` value (or assertion)
+        """
+
         self._cm[truth, guess] += 1
 
     def __str__(self):
@@ -31,32 +45,67 @@ class ConfusionMatrix:
         return ''.join(values)
 
     def reset(self):
+        """Reset the matrix
+        """
         self._cm *= 0
 
     def get_correct(self):
+        """Get the diagonals of the confusion matrix
+        
+        :return: (``int``) Number of correct classifications
+        """
         return self._cm.diagonal().sum()
 
     def get_total(self):
+        """Get total classifications
+        
+        :return: (``int``) total classifications
+        """
         return self._cm.sum()
 
     def get_acc(self):
+        """Get the accuracy
+        
+        :return: (``float``) accuracy
+        """
         return self.get_correct()/self.get_total()
 
     def get_recall(self):
+        """Get the recall
+        
+        :return: (``float``) recall
+        """
         total = np.sum(self._cm, axis=1) + 0.0000001
         return np.diag(self._cm) / total
 
     def get_precision(self):
-        total =  np.sum(self._cm, axis=0) + 0.0000001
+        """Get the precision
+        :return: (``float``) precision
+        """
+
+        total = np.sum(self._cm, axis=0) + 0.0000001
         return np.diag(self._cm) / total
 
     def get_mean_precision(self):
+        """Get the mean precision across labels
+        
+        :return: (``float``) mean precision
+        """
         return np.mean(self.get_precision())
 
     def get_mean_recall(self):
+        """Get the mean recall across labels
+        
+        :return: (``float``) mean recall
+        """
         return np.mean(self.get_recall())
 
     def get_macro_f(self, beta=1):
+        """Get the macro F_b, with adjustable beta (defaulting to F1)
+        
+        :param beta: (``float``) defaults to 1 (F1)
+        :return: (``float``) macro F_b
+        """
         p = self.get_mean_precision()
         r = self.get_mean_recall()
         if beta < 0:
@@ -64,6 +113,11 @@ class ConfusionMatrix:
         return (beta*beta + 1) * p * r / (beta*beta * p + r)
 
     def get_f(self, beta=1):
+        """Get 2 class F_b, with adjustable beta (defaulting to F1)
+        
+        :param beta: (``float``) defaults to 1 (F1)
+        :return: (``float``) 2-class F_b
+        """
         p = self.get_precision()[1]
         r = self.get_recall()[1]
         if beta < 0:
@@ -71,6 +125,10 @@ class ConfusionMatrix:
         return (beta*beta + 1) * p * r / (beta*beta * p + r)
 
     def get_all_metrics(self):
+        """Make a map of metrics suitable for reporting, keyed by metric name
+        
+        :return: (``dict``) Map of metrics keyed by metric names
+        """
         metrics = {'acc': self.get_acc()}
         # If 2 class, assume second class is positive AKA 1
         if len(self.labels) == 2:
@@ -84,5 +142,11 @@ class ConfusionMatrix:
         return metrics
 
     def add_batch(self, truth, guess):
+        """Add a batch of data to the confusion matrix
+        
+        :param truth: The truth tensor
+        :param guess: The guess tensor
+        :return: 
+        """
         for truth_i, guess_i in zip(truth, guess):
             self.add(truth_i, guess_i)

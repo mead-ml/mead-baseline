@@ -70,7 +70,7 @@ def fit(model, ts, vs, es=None, **kwargs):
           Stop after evaluation data is no longer improving.  Defaults to True
         
         * *epochs* (``int``) -- how many epochs.  Default to 20
-        * *outfile* -- Model output file, defaults to classifier-model.pyth
+        * *outfile* -- Model output file, defaults to classifier-model-keras
         * *patience* (``int``) -- 
            How many epochs where evaluation is no longer improving before we give up
         * *reporting* --

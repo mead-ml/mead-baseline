@@ -2,6 +2,11 @@ import numpy as np
 import time
 
 def listify(x):
+    """Take a scalar or list and make it a list
+    
+    :param x: The input to convert
+    :return: A list
+    """
     if isinstance(x, (list, tuple, np.ndarray)):
         return x
     if x is None:
@@ -52,6 +57,12 @@ def beam_multinomial(k, probs):
 
 
 def fill_y(nc, yidx):
+    """Convert a `B` sparse array to a dense one, to expand labels 
+    
+    :param nc: (``int``) The number of labels
+    :param yidx: The sparse array of the labels
+    :return: A dense array
+    """
     xidx = np.arange(0, yidx.shape[0], 1)
     dense = np.zeros((yidx.shape[0], nc), dtype=int)
     dense[xidx, yidx] = 1
@@ -59,6 +70,12 @@ def fill_y(nc, yidx):
 
 
 def seq_fill_y(nc, yidx):
+    """Convert a `BxT` sparse array to a dense one, to expand labels 
+    
+    :param nc: (``int``) The number of labels
+    :param yidx: The sparse array of the labels
+    :return: A dense array
+    """
     batchsz = yidx.shape[0]
     siglen = yidx.shape[1]
     dense = np.zeros((batchsz, siglen, nc), dtype=np.int)
@@ -83,7 +100,6 @@ def to_spans(sequence, lut, strict_iob2=False):
 
         #if label.startswith('B-'):
         if not label.startswith('I-') and not label == 'O':
-            ##print(label)
             if current is not None:
                 chunks.append('@'.join(current))
             current = [label.replace('B-', ''), '%d' % i ]

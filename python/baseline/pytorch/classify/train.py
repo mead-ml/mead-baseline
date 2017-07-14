@@ -98,13 +98,10 @@ def fit(model, ts, vs, es, **kwargs):
     :param ts: A training data set
     :param vs: A validation data set
     :param es: A test data set, can be None
-    :param kwargs: 
-        See below
+    :param kwargs: See below
     
     :Keyword Arguments:
-        * *do_early_stopping* (``bool``) --
-          Stop after evaluation data is no longer improving.  Defaults to True
-        
+        * *do_early_stopping* (``bool``) -- Stop after eval data is not improving. Default to True
         * *epochs* (``int``) -- how many epochs.  Default to 20
         * *outfile* -- Model output file, defaults to classifier-model.pyth
         * *patience* -- 
