@@ -144,6 +144,7 @@ def pytorch_conv1d(in_channels, out_channels, fsz, unif):
 def pytorch_linear(in_sz, out_sz, unif):
     l = nn.Linear(in_sz, out_sz)
     l.weight.data.uniform_(-unif, unif)
+    l.bias.data.zero_()
     return l
 
 
