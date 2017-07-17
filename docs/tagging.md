@@ -62,7 +62,7 @@ python tag_char_rnn.py --rnntype blstm --patience 70 --layers 2 --optim sgd --et
 
 This will report an F1 score on at each validation pass, and will use F1 for early-stopping as well.
 
-### Global coherency with a CRF (currently TensorFlow only)
+### Global coherency with a CRF
 
 For tasks that require global coherency like NER tagging, it has been shown that using a transition matrix between label states in conjunction with the output RNN tags improves performance.  This makes the tagger a linear chain CRF, and we can do this by simply adding another layer on top of our RNN output.  To do this, simply pass `--crf 1` as an argument.
 
@@ -79,7 +79,7 @@ python tag_char_rnn.py \
 
 ## Status
 
-This model is implemented in TensorFlow and PyTorch (there is an old version in Torch7, which is no longer supported). The PyTorch CRF implementation is still experimental and in need of optimization.
+This model is implemented in TensorFlow and PyTorch (there is an old version in Torch7, which is no longer supported). The PyTorch CRF implementation is still experimental.
 
 _TODO_: Benchmark for CONLL NER
 
