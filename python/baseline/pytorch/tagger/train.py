@@ -43,7 +43,6 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
 
         correct_labels = 0
         total_labels = 0
-        #guess_n = guess.data.cpu().numpy()
         truth_n = truth.cpu().numpy()
         # For fscore
         gold_count = 0
@@ -57,7 +56,6 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
 
             sentence_length = sentence_lengths[b]
             gold = truth_n[b, :sentence_length]
-            #sentence = sentence[:sentence_length]
             correct_labels += np.sum(np.equal(sentence, gold))
             total_labels += sentence_length
             gold_chunks = to_spans(gold, self.idx2label)
