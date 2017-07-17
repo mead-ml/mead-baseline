@@ -31,23 +31,60 @@ def forward_algorithm(unary, transitions, start_idx, end_idx):
     init_alphas[0][start_idx] = 0.
 
     # Wrap in a variable so that we will get automatic backprop
-    forward_var = torch.autograd.Variable(init_alphas)
+    alphas = torch.autograd.Variable(init_alphas)
 
     # Iterate through the sentence
     for unary_t in unary:
+        # torch.Size([T, num_labels])
+        #print(unary_t.size())
         alphas_t = []  # The forward variables at this timestep
-        for next_tag in range(num_labels):
+        for tag in range(num_labels):
             # broadcast the emission score: it is the same regardless of the previous tag
-            emit_score = unary_t[next_tag].view(1, -1).expand(1, num_labels)
-            # the ith entry of trans_score is the score of transitioning to next_tag from i
-            trans_score = transitions[next_tag].view(1, -1)
-            # The ith entry of next_tag_var is the value for the edge (i -> next_tag)
+            #            [1x1]                           [1 x L] (replicated)
+            emit_score = unary_t[tag].view(1, -1).expand(1, num_labels)
+            # the ith entry of trans_score is the score of transitioning to tag from i
+            #             [1xL]
+            trans_score = transitions[tag].view(1, -1)
+            # The ith entry of next_tag_var is the value for the edge (i -> tag)
             # before we do log-sum-exp
-            next_tag_var = forward_var + trans_score + emit_score
+            #              [1xL]
+            next_tag_var = alphas + trans_score + emit_score
             # The forward variable for this tag is log-sum-exp of all the scores.
             alphas_t.append(log_sum_exp(next_tag_var))
-        forward_var = torch.cat(alphas_t).view(1, -1)
-    terminal_var = forward_var + transitions[end_idx]
+        alphas = torch.cat(alphas_t).view(1, -1)
+    terminal_var = alphas + transitions[end_idx]
+    alpha = log_sum_exp(terminal_var)
+    return alpha
+
+
+def vec_log_sum_exp(vec, dim=2):
+    max_scores, idx = torch.max(vec, dim)
+    max_scores_broadcast = max_scores.expand_as(vec)
+    return max_scores + torch.log(torch.sum(torch.exp(vec - max_scores_broadcast), dim))
+
+
+def forward_algorithm_vec(unary, transitions, start_idx, end_idx):
+    siglen, num_labels = unary.size()
+
+    # Do the forward algorithm to compute the partition function
+    init_alphas = torch.Tensor(1, num_labels).fill_(-10000.).cuda()
+    # START_TAG has all of the score.
+    init_alphas[0][start_idx] = 0.
+
+    # Wrap in a variable so that we will get automatic backprop
+    alphas = torch.autograd.Variable(init_alphas)
+
+    # Iterate through the sentence
+    for t, unary_t in enumerate(unary):
+        expanded_alpha_t = alphas.expand(num_labels, num_labels)
+        # torch.Size([T, num_labels])
+        emit_scores_transpose = torch.autograd.Variable(unary_t.data.view(1, -1).transpose(0, 1).expand(num_labels, num_labels), requires_grad=False)
+        next_tag_var = expanded_alpha_t + transitions
+        next_tag_var += emit_scores_transpose
+        scores = vec_log_sum_exp(next_tag_var, 1).transpose(0, 1)
+        alphas = scores
+
+    terminal_var = alphas + transitions[end_idx]
     alpha = log_sum_exp(terminal_var)
     return alpha
 
@@ -59,22 +96,22 @@ def viterbi_decode(unary, transitions, start_idx, end_idx):
     inits = torch.Tensor(1, num_labels).fill_(-10000.).cuda()
     inits[0][start_idx] = 0
 
-    # forward_var at step i holds the viterbi variables for step i-1
-    forward_var = torch.autograd.Variable(inits)
+    # alphas at step i holds the viterbi variables for step i-1
+    alphas = torch.autograd.Variable(inits)
     for unary_t in unary:
         backpointers_t = []  # holds the backpointers for this step
         viterbi_t = []  # holds the viterbi variables for this step
 
-        for next_tag in range(num_labels):
-            next_tag_var = forward_var + transitions[next_tag]
+        for tag in range(num_labels):
+            next_tag_var = alphas + transitions[tag]
             best_tag_id = argmax(next_tag_var)
             backpointers_t.append(best_tag_id)
             viterbi_t.append(next_tag_var[0][best_tag_id])
-        forward_var = (torch.cat(viterbi_t) + unary_t).view(1, -1)
+        alphas = (torch.cat(viterbi_t) + unary_t).view(1, -1)
         backpointers.append(backpointers_t)
 
     # Transition to STOP_TAG
-    terminal_var = forward_var + transitions[end_idx]
+    terminal_var = alphas + transitions[end_idx]
     best_tag_id = argmax(terminal_var)
     path_score = terminal_var[0][best_tag_id]
 
@@ -151,7 +188,8 @@ class RNNTaggerModel(nn.Module, Tagger):
         filtsz = kwargs.get('cfiltsz')
         crf = bool(kwargs.get('crf', False))
         if crf:
-            model.transitions = nn.Parameter(torch.randn(len(labels), len(labels)))
+            weights = torch.Tensor(len(labels), len(labels)).uniform_(-unif, unif)
+            model.transitions = nn.Parameter(weights)
         pdrop = float(kwargs.get('dropout', 0.5))
         model.labels = labels
         model._char_word_conv_embeddings(filtsz, char_dsz, wsz, pdrop, unif)
@@ -249,7 +287,7 @@ class RNNTaggerModel(nn.Module, Tagger):
                 gold_tags = gold[:sl]
                 unary = pij[:sl]
                 total_tags += len(gold_tags)
-                forward_score = forward_algorithm(unary, self.transitions, START_IDX, END_IDX)
+                forward_score = forward_algorithm_vec(unary, self.transitions, START_IDX, END_IDX)
                 gold_score = score_sentence(unary, gold_tags, self.transitions, START_IDX, END_IDX)
                 batch_loss += forward_score - gold_score
         else:
