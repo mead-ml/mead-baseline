@@ -37,9 +37,9 @@ The latest code provides a high-level Python API to access common deep-learning 
 
 You can also think of the library itself as an abstraction layer at the "solution" or algorithm level with sub-modules built with each framework. Adding a new framework is straightforward using the methods shown in the library.
 
-### Baseline API as scaffolding for an experiment
+### As scaffolding for an experiment
 
-If you have a problem where the input is the same (e.g, temporal word vectors) as a `baseline` task, you can easily use the API to set up your boilerplate work for you, and focus only on your model.
+If you have a problem where the input is the same as a `baseline` task (e.g. unstrutured prediction over a temporal vector), you can easily use the API to set up your boilerplate work for you, and focus on your model.
 
 Here is an example training a classifier (an simple LSTM, written in PyTorch), making use of the training, data loader, and reporting routines for a classification problem:
 
