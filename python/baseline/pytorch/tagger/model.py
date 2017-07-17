@@ -2,7 +2,9 @@ from baseline.pytorch.torchy import *
 from baseline.model import Tagger
 import torch.autograd
 
-
+# Some of this code is borrowed from here:
+# https://github.com/rguthrie3/DeepLearningForNLPInPytorch
+# I have vectorized the implementation for reasonable performance on real data
 # Helper functions to make the code more readable.
 def to_scalar(var):
     # returns a python float
@@ -22,6 +24,7 @@ def log_sum_exp(vec):
     return max_score + torch.log(torch.sum(torch.exp(vec - max_score_broadcast)))
 
 
+# This code is not used, its here only for reference!
 def forward_algorithm(unary, transitions, start_idx, end_idx):
     siglen, num_labels = unary.size()
 
@@ -58,12 +61,26 @@ def forward_algorithm(unary, transitions, start_idx, end_idx):
 
 
 def vec_log_sum_exp(vec, dim=2):
+    """Vectorized version of log-sum-exp
+    
+    :param vec: Vector
+    :param dim: What dimension to operate on
+    :return: 
+    """
     max_scores, idx = torch.max(vec, dim)
     max_scores_broadcast = max_scores.expand_as(vec)
     return max_scores + torch.log(torch.sum(torch.exp(vec - max_scores_broadcast), dim))
 
 
 def forward_algorithm_vec(unary, transitions, start_idx, end_idx):
+    """Vectorized forward algorithm for CRF layer
+    
+    :param unary: The observations
+    :param transitions: The transitions
+    :param start_idx: The index of the start position
+    :param end_idx: The index of the end position
+    :return: Alphas
+    """
     siglen, num_labels = unary.size()
 
     # Do the forward algorithm to compute the partition function
