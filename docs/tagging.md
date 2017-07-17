@@ -79,7 +79,7 @@ python tag_char_rnn.py \
 
 ## Status
 
-This model is implemented in TensorFlow and PyTorch (there is an old version in Torch7, which is no longer supported).  The TensorFlow currently is the only implementation that supports using a CRF layer on the top.
+This model is implemented in TensorFlow and PyTorch (there is an old version in Torch7, which is no longer supported). The PyTorch CRF implementation is still experimental and in need of optimization.
 
 _TODO_: Benchmark for CONLL NER
 
