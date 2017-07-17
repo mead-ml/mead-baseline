@@ -73,7 +73,6 @@ class TSVParallelCorpusReader(ParallelCorpusReader):
         return src_vocab, dst_vocab
 
     def load_examples(self, tsfile, vocab1, vocab2):
-        PAD = vocab1['<PADDING>']
         GO = vocab2['<GO>']
         EOS = vocab2['<EOS>']
         mxlen = self.max_sentence_length
@@ -105,6 +104,7 @@ class TSVParallelCorpusReader(ParallelCorpusReader):
 
         return baseline.data.Seq2SeqExamples(ts)
 
+
 class MultiFileParallelCorpusReader(ParallelCorpusReader):
 
     def __init__(self, src_suffix, dst_suffix,
@@ -126,7 +126,7 @@ class MultiFileParallelCorpusReader(ParallelCorpusReader):
         return src_vocab, dst_vocab
 
     def load_examples(self, tsfile, vocab1, vocab2):
-        PAD = vocab1['<PADDING>']
+        PAD = vocab1['<PAD>']
         GO = vocab2['<GO>']
         EOS = vocab2['<EOS>']
         mxlen = self.max_sentence_length
@@ -164,6 +164,7 @@ class MultiFileParallelCorpusReader(ParallelCorpusReader):
 def identity_trans_fn(x):
     return x
 
+
 class CONLLSeqReader:
 
     UNREP_EMOTICONS = (
@@ -185,7 +186,7 @@ class CONLLSeqReader:
         self.vec_alloc = vec_alloc
         self.vec_shape = vec_shape
         self.trim = trim
-        self.label2index = {"<PAD>": 0}
+        self.label2index = {"<PAD>": 0, "<GO>": 1, "<EOS>": 2}
 
     @staticmethod
     def web_cleanup(word):
@@ -258,7 +259,7 @@ class CONLLSeqReader:
     def load(self, filename, words_vocab, chars_vocab, batchsz, shuffle=False):
 
         ts = []
-        idx = 0
+        idx = 2 # GO=0, START=1, EOS=2
         mxlen = self.max_sentence_length
         maxw = self.max_word_length
         txts, lbls = CONLLSeqReader.read_lines(filename)
@@ -353,7 +354,7 @@ class TSVSeqLabelReader:
 
     def load(self, filename, index, batchsz, shuffle=False):
 
-        PAD = index['<PADDING>']
+        PAD = index['<PAD>']
         halffiltsz = self.mxfiltsz // 2
         nozplen = self.mxlen - 2*halffiltsz
         label_idx = len(self.label2index)

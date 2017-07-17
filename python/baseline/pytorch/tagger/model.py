@@ -1,5 +1,103 @@
 from baseline.pytorch.torchy import *
 from baseline.model import Tagger
+import torch.autograd
+
+
+# Helper functions to make the code more readable.
+def to_scalar(var):
+    # returns a python float
+    return var.view(-1).data.tolist()[0]
+
+
+def argmax(vec):
+    # return the argmax as a python int
+    _, idx = torch.max(vec, 1)
+    return to_scalar(idx)
+
+
+# Compute log sum exp in a numerically stable way for the forward algorithm
+def log_sum_exp(vec):
+    max_score = vec[0, argmax(vec)]
+    max_score_broadcast = max_score.view(1, -1).expand(1, vec.size()[1])
+    return max_score + torch.log(torch.sum(torch.exp(vec - max_score_broadcast)))
+
+
+def forward_algorithm(unary, transitions, start_idx, end_idx):
+    siglen, num_labels = unary.size()
+
+    # Do the forward algorithm to compute the partition function
+    init_alphas = torch.Tensor(1, num_labels).fill_(-10000.).cuda()
+    # START_TAG has all of the score.
+    init_alphas[0][start_idx] = 0.
+
+    # Wrap in a variable so that we will get automatic backprop
+    forward_var = torch.autograd.Variable(init_alphas)
+
+    # Iterate through the sentence
+    for unary_t in unary:
+        alphas_t = []  # The forward variables at this timestep
+        for next_tag in range(num_labels):
+            # broadcast the emission score: it is the same regardless of the previous tag
+            emit_score = unary_t[next_tag].view(1, -1).expand(1, num_labels)
+            # the ith entry of trans_score is the score of transitioning to next_tag from i
+            trans_score = transitions[next_tag].view(1, -1)
+            # The ith entry of next_tag_var is the value for the edge (i -> next_tag)
+            # before we do log-sum-exp
+            next_tag_var = forward_var + trans_score + emit_score
+            # The forward variable for this tag is log-sum-exp of all the scores.
+            alphas_t.append(log_sum_exp(next_tag_var))
+        forward_var = torch.cat(alphas_t).view(1, -1)
+    terminal_var = forward_var + transitions[end_idx]
+    alpha = log_sum_exp(terminal_var)
+    return alpha
+
+
+def viterbi_decode(unary, transitions, start_idx, end_idx):
+    backpointers = []
+
+    siglen, num_labels = unary.size()
+    inits = torch.Tensor(1, num_labels).fill_(-10000.).cuda()
+    inits[0][start_idx] = 0
+
+    # forward_var at step i holds the viterbi variables for step i-1
+    forward_var = torch.autograd.Variable(inits)
+    for unary_t in unary:
+        backpointers_t = []  # holds the backpointers for this step
+        viterbi_t = []  # holds the viterbi variables for this step
+
+        for next_tag in range(num_labels):
+            next_tag_var = forward_var + transitions[next_tag]
+            best_tag_id = argmax(next_tag_var)
+            backpointers_t.append(best_tag_id)
+            viterbi_t.append(next_tag_var[0][best_tag_id])
+        forward_var = (torch.cat(viterbi_t) + unary_t).view(1, -1)
+        backpointers.append(backpointers_t)
+
+    # Transition to STOP_TAG
+    terminal_var = forward_var + transitions[end_idx]
+    best_tag_id = argmax(terminal_var)
+    path_score = terminal_var[0][best_tag_id]
+
+    # Follow the back pointers to decode the best path.
+    best_path = [best_tag_id]
+    for backpointers_t in reversed(backpointers):
+        best_tag_id = backpointers_t[best_tag_id]
+        best_path.append(best_tag_id)
+    # Pop off the start tag (we dont want to return that to the caller)
+    start = best_path.pop()
+    assert start == start_idx
+    best_path.reverse()
+    return torch.LongTensor(best_path), path_score
+
+
+def score_sentence(unary, tags, transitions, start_idx, end_idx):
+    # Gives the score of a provided tag sequence
+    score = torch.autograd.Variable(torch.Tensor([0]).cuda())
+    tags = torch.cat([torch.LongTensor([start_idx]).cuda(), tags])
+    for i, unary_t in enumerate(unary):
+        score = score + transitions[tags[i + 1], tags[i]] + unary_t[tags[i + 1]]
+    score = score + transitions[end_idx, tags[-1]]
+    return score
 
 
 class RNNTaggerModel(nn.Module, Tagger):
@@ -7,8 +105,8 @@ class RNNTaggerModel(nn.Module, Tagger):
     def save(self, outname):
         torch.save(self, outname)
 
-    def create_loss(self):
-        return SequenceCriterion(len(self.labels))
+    def get_criterion(self):
+        return self.crit
 
     @staticmethod
     def load(outname, **kwargs):
@@ -44,6 +142,7 @@ class RNNTaggerModel(nn.Module, Tagger):
         char_dsz = char_vec.dsz
         word_dsz = 0
         hsz = int(kwargs['hsz'])
+        model.crf = bool(kwargs.get('crf', False))
         nlayers = int(kwargs.get('layers', 1))
         rnntype = kwargs.get('rnntype', 'lstm')
         print('RNN [%s]' % rnntype)
@@ -52,7 +151,7 @@ class RNNTaggerModel(nn.Module, Tagger):
         filtsz = kwargs.get('cfiltsz')
         crf = bool(kwargs.get('crf', False))
         if crf:
-            print('Warning: CRF not supported yet in PyTorch model... ignoring')
+            model.transitions = nn.Parameter(torch.randn(len(labels), len(labels)))
         pdrop = float(kwargs.get('dropout', 0.5))
         model.labels = labels
         model._char_word_conv_embeddings(filtsz, char_dsz, wsz, pdrop, unif)
@@ -68,6 +167,7 @@ class RNNTaggerModel(nn.Module, Tagger):
         model.rnn, hsz = pytorch_lstm(model.wchsz + word_dsz, hsz, rnntype, nlayers, pdrop, unif)
         model.decoder = pytorch_linear(hsz, len(model.labels), unif)
         model.softmax = nn.LogSoftmax()
+        model.crit = SequenceCriterion(len(labels))
         return model
 
     def char2word(self, xch_i):
@@ -84,13 +184,9 @@ class RNNTaggerModel(nn.Module, Tagger):
         output = self.word_ch_embed(mots)
         return output + mots
 
-    # Input better be xch, x
-    def forward(self, input):
-
-        xch = input[1].transpose(0, 1).contiguous()
+    def _compute_unary_tb(self, x, xch):
         batchsz = xch.size(1)
         seqlen = xch.size(0)
-        x = input[0].transpose(0, 1).contiguous()
         # Vectorized
         words_over_time = self.char2word(xch.view(seqlen * batchsz, -1)).view(seqlen, batchsz, -1)
 
@@ -107,6 +203,64 @@ class RNNTaggerModel(nn.Module, Tagger):
         # back to T x B x H -> B x T x H
         decoded = decoded.view(output.size(0), output.size(1), -1)
         return decoded.transpose(0, 1).contiguous()
+
+    # Input better be xch, x
+    def forward(self, input):
+        START_IDX = self.labels.get("<GO>")
+        END_IDX = self.labels.get("<EOS>")
+        x = input[0].transpose(0, 1).contiguous()
+        xch = input[1].transpose(0, 1).contiguous()
+        lengths = input[2]
+        batchsz = xch.size(1)
+        seqlen = xch.size(0)
+
+        probv = self._compute_unary_tb(x, xch)
+        preds = []
+        if self.crf is True:
+            for pij, sl in zip(probv, lengths):
+                unary = pij[:sl]
+                viterbi, _ = viterbi_decode(unary, self.transitions, START_IDX, END_IDX)
+                preds.append(viterbi)
+        else:
+            # Get batch (B, T)
+
+            for pij, sl in zip(probv, lengths):
+                _, unary = torch.max(pij[:sl], 1)
+                preds.append(unary.data)
+
+        return preds
+
+    def compute_loss(self, input):
+        START_IDX = self.labels.get("<GO>")
+        END_IDX = self.labels.get("<EOS>")
+        x = input[0].transpose(0, 1).contiguous()
+        xch = input[1].transpose(0, 1).contiguous()
+        lengths = input[2]
+        tags = input[3]
+        batchsz = xch.size(1)
+        seqlen = xch.size(0)
+
+        probv = self._compute_unary_tb(x, xch)
+        batch_loss = 0.
+        total_tags = 0.
+        if self.crf is True:
+            for pij, gold, sl in zip(probv, tags.data, lengths):
+
+                gold_tags = gold[:sl]
+                unary = pij[:sl]
+                total_tags += len(gold_tags)
+                forward_score = forward_algorithm(unary, self.transitions, START_IDX, END_IDX)
+                gold_score = score_sentence(unary, gold_tags, self.transitions, START_IDX, END_IDX)
+                batch_loss += forward_score - gold_score
+        else:
+            # Get batch (B, T)
+            for pij, gold, sl in zip(probv, tags, lengths):
+                unary = pij[:sl]
+                gold_tags = gold[:sl]
+                total_tags += len(gold_tags)
+                batch_loss += self.crit(unary, gold_tags)
+
+        return batch_loss / total_tags
 
     def get_vocab(self, vocab_type='word'):
         return self.word_vocab if vocab_type == 'word' else self.char_vocab

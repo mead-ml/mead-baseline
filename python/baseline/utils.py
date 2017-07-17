@@ -19,7 +19,7 @@ def revlut(lut):
 
 def lookup_sentence(rlut, seq, reverse=False, padchar=''):
     s = seq[::-1] if reverse else seq
-    return (' '.join([rlut[idx] if rlut[idx] != '<PADDING>' else padchar for idx in s])).strip()
+    return (' '.join([rlut[idx] if rlut[idx] != '<PAD>' else padchar for idx in s])).strip()
 
 
 # Get a sparse index (dictionary) of top values

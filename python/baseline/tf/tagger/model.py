@@ -171,12 +171,11 @@ class RNNTaggerModel(Tagger):
         wsz = kwargs.get('wsz', 30)
         filtsz = kwargs.get('cfiltsz')
         hsz = int(kwargs['hsz'])
-        crf = bool(kwargs.get('crf', False))
         pdrop = kwargs.get('dropout', 0.5)
         rnntype = kwargs.get('rnntype', 'blstm')
         nlayers = kwargs.get('layers', 1)
         model.labels = labels
-        model.crf = crf
+        model.crf = bool(kwargs.get('crf', False))
         char_dsz = char_vec.dsz
         nc = len(labels)
         model.x = tf.placeholder(tf.int32, [None, mxlen], name="x")

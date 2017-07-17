@@ -14,7 +14,7 @@ class Word2VecModel:
             vsz, self.dsz = map(int, header.split())
 
             self.nullv = np.zeros(self.dsz, dtype=np.float32)
-            self.vocab["<PADDING>"] = idx
+            self.vocab["<PAD>"] = idx
             idx += 1
 
             word_vectors = [self.nullv]
@@ -72,7 +72,7 @@ class RandomInitVecModel:
 
         uw = 0.0 if unif_weight is None else unif_weight
         self.vocab = {}
-        self.vocab["<PADDING>"] = 0
+        self.vocab["<PAD>"] = 0
         self.dsz = dsz
         self.vsz = 0
 

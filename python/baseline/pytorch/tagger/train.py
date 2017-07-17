@@ -25,9 +25,9 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
         else:
             self.optimizer = torch.optim.SGD(model.parameters(), lr=eta, momentum=mom)
 
-        self.crit = model.create_loss()
+        self.crit = model.get_criterion()
         if self.gpu:
-            self.model = torch.nn.DataParallel(model).cuda()
+            self.model = model.cuda()
             self.crit.cuda()
 
     def _wrap(self, x, xch, y):
@@ -37,38 +37,27 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
             xch = xch.cuda()
             y = y.cuda()
 
-        return torch.autograd.Variable(x), torch.autograd.Variable(xch),\
-               torch.autograd.Variable(y.contiguous())
-
-    # Ok, accuracy only for now, B x T x C
-    def _right(self, pred, y):
-        _, best = pred.max(2)
-        best = best.data.long().squeeze()
-        yt = y.data.long()
-        mask = yt.ne(0)
-        return torch.sum(mask * (yt == best))
-
-    def _total(self, y):
-        yt = y.data.long()
-        return torch.sum(yt.ne(0))
+        return torch.autograd.Variable(x), torch.autograd.Variable(xch), torch.autograd.Variable(y.contiguous())
 
     def process_output(self, guess, truth, sentence_lengths, ids, handle=None, txts=None):
 
         correct_labels = 0
         total_labels = 0
-        guess_n = guess.data.cpu().numpy()
-        truth_n = truth.data.cpu().numpy()
+        #guess_n = guess.data.cpu().numpy()
+        truth_n = truth.cpu().numpy()
         # For fscore
         gold_count = 0
         guess_count = 0
         overlap_count = 0
 
         # For each sentence
-        for b in range(len(guess_n)):
-            sentence = np.argmax(guess_n[b], -1)
+        for b in range(len(guess)):
+
+            sentence = guess[b].cpu().squeeze().numpy()
+
             sentence_length = sentence_lengths[b]
-            gold = truth_n[b,:sentence_length]
-            sentence = sentence[:sentence_length]
+            gold = truth_n[b, :sentence_length]
+            #sentence = sentence[:sentence_length]
             correct_labels += np.sum(np.equal(sentence, gold))
             total_labels += sentence_length
             gold_chunks = to_spans(gold, self.idx2label)
@@ -90,8 +79,6 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
     def _test(self, ts):
 
         self.model.eval()
-
-        total_loss = 0
         total_correct = 0
         total_sum = 0
         total_gold_count = 0
@@ -102,10 +89,8 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
         pg = ProgressBar(steps)
         for x, xch, y, lengths, ids in ts:
             x, xch, y = self._wrap(x, xch, y)
-            pred = self.model((x, xch))
-            loss = self.crit(pred, y)
-            total_loss += loss.data[0]
-            correct, count, overlaps, golds, guesses = self.process_output(pred, y, lengths, ids, None, None)
+            pred = self.model((x, xch, lengths))
+            correct, count, overlaps, golds, guesses = self.process_output(pred, y.data, lengths, ids, None, None)
             total_correct += correct
             total_sum += count
             total_gold_count += golds
@@ -118,28 +103,25 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
         # Only show the fscore if requested
         metrics['f1'] = f_score(total_overlap_count, total_gold_count, total_guess_count)
         metrics['acc'] = total_acc
-        metrics['avg_loss'] = float(total_loss)/total_sum
         return metrics
 
     def _train(self, ts):
-        total_loss = total = 0
+        total_loss = 0
         metrics = {}
         steps = len(ts)
         pg = ProgressBar(steps)
         for x, xch, y, lengths, ids in ts:
             x, xch, y = self._wrap(x, xch, y)
             self.optimizer.zero_grad()
-            pred = self.model((x, xch))
-            loss = self.crit(pred, y)
+            loss = self.model.compute_loss((x, xch, lengths, y))
             total_loss += loss.data[0]
             loss.backward()
             torch.nn.utils.clip_grad_norm(self.model.parameters(), self.clip)
-            total += self._total(y)
             self.optimizer.step()
             pg.update()
 
         pg.done()
-        metrics['avg_loss'] = float(total_loss)/total
+        metrics['avg_loss'] = float(total_loss)/steps
         return metrics
 
 
