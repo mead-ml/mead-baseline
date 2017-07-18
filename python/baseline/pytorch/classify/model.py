@@ -39,17 +39,16 @@ class ConvModel(nn.Module, Classifier):
         del model.lut.weight
         model.lut.weight = nn.Parameter(torch.FloatTensor(embeddings.weights),
                                        requires_grad=finetune)
-        model.convs = []
+        convs = []
         for i, fsz in enumerate(filtsz):
             pad = fsz//2                
             conv = nn.Sequential(
                 nn.Conv1d(dsz, cmotsz, fsz, padding=pad),
                 nn.ReLU()
             )
-            model.convs.append(conv)
+            convs.append(conv)
             # Add the module so its managed correctly
-            model.add_module('conv-%d' % i, conv)
-
+        model.convs = nn.ModuleList(convs)
         # Width of concat of parallel convs
         input_dim = cmotsz * len(filtsz)
         model.fconns = nn.Sequential()
