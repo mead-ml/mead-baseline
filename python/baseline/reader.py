@@ -15,7 +15,7 @@ def num_lines(filename):
 
 def _build_vocab_for_col(col, files):
     vocab = Counter()
-    vocab['<PAD>'] = 1
+    #vocab['<PAD>'] = 1
     vocab['<GO>'] = 1
     vocab['<EOS>'] = 1
 

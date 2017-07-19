@@ -86,7 +86,6 @@ es = reader.load(args.test, embed1.vocab, embed2.vocab, args.batchsz)
 print('Finished loading datasets')
 rlut1 = revlut(embed1.vocab)
 rlut2 = revlut(embed2.vocab)
-
 model = seq2seq.create_model(embed1, embed2, **vars(args))
 # This code is framework specific
 if args.showex:
