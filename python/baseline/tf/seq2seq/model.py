@@ -54,7 +54,7 @@ class Seq2SeqModel(EncoderDecoder):
         pass
 
     @staticmethod
-    def create(src_vocab, dst_vocab, **kwargs):
+    def create(src_vocab_embed, dst_vocab_embed, **kwargs):
 
         model = Seq2SeqModel()
         hsz = int(kwargs['hsz'])
@@ -74,8 +74,8 @@ class Seq2SeqModel(EncoderDecoder):
         model.tgt_len = tf.placeholder(tf.int32, [None], name="tgt_len")
         model.mx_tgt_len = tf.placeholder(tf.int32, name="mx_tgt_len")
 
-        model.vocab1 = src_vocab.vocab
-        model.vocab2 = dst_vocab.vocab
+        model.vocab1 = src_vocab_embed.vocab
+        model.vocab2 = dst_vocab_embed.vocab
 
         model.mxlen = mxlen
         model.hsz = hsz
@@ -85,14 +85,14 @@ class Seq2SeqModel(EncoderDecoder):
 
         GO = model.vocab2['<GO>']
         EOS = model.vocab2['<EOS>']
-        vsz = dst_vocab.vsz + 1
+        vsz = dst_vocab_embed.vsz + 1
 
-        assert src_vocab.dsz == dst_vocab.dsz
-        model.dsz = src_vocab.dsz
+        assert src_vocab_embed.dsz == dst_vocab_embed.dsz
+        model.dsz = src_vocab_embed.dsz
 
         with tf.name_scope("LUT"):
-            Wi = tf.Variable(tf.constant(src_vocab.weights, dtype=tf.float32), name="Wi")
-            Wo = tf.Variable(tf.constant(dst_vocab.weights, dtype=tf.float32), name="Wo")
+            Wi = tf.Variable(tf.constant(src_vocab_embed.weights, dtype=tf.float32), name="Wi")
+            Wo = tf.Variable(tf.constant(dst_vocab_embed.weights, dtype=tf.float32), name="Wo")
 
             embed_in = tf.nn.embedding_lookup(Wi, model.src)
             
@@ -198,7 +198,13 @@ class Seq2SeqModel(EncoderDecoder):
         feed_dict = {self.src: src, self.src_len: src_len, self.tgt: dst, self.tgt_len: dst_len, self.mx_tgt_len: mx_tgt_len, self.pkeep: 1.0}
         return feed_dict
 
+    def get_src_vocab(self):
+        return self.vocab1
 
-def create_model(embedding1, embedding2, **kwargs):
-    enc_dec = Seq2SeqModel.create(embedding1, embedding2, **kwargs)
+    def get_dst_vocab(self):
+        return self.vocab2
+
+
+def create_model(src_vocab_embed, dst_vocab_embed, **kwargs):
+    enc_dec = Seq2SeqModel.create(src_vocab_embed, dst_vocab_embed, **kwargs)
     return enc_dec

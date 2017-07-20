@@ -159,3 +159,9 @@ class EncoderDecoder:
 
     def create_loss(self):
         pass
+
+    def get_src_vocab(self):
+        pass
+
+    def get_dst_vocab(self):
+        pass

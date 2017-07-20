@@ -7,8 +7,20 @@ from baseline.model import EncoderDecoder
 
 class Seq2SeqBase(nn.Module, EncoderDecoder):
 
-    def __init__(self):
+    def __init__(self, embed1, embed2, batchfirst):
         super(Seq2SeqBase, self).__init__()
+        self.embed_in = pytorch_embedding(embed1)
+        self.embed_out = pytorch_embedding(embed2)
+        self.nc = embed2.vsz + 1
+        self.vocab1 = embed1.vocab
+        self.vocab2 = embed2.vocab
+        self.batchfirst = batchfirst
+
+    def get_src_vocab(self):
+        return self.vocab1
+
+    def get_dst_vocab(self):
+        return self.vocab2
 
     def save(self, model_file):
         torch.save(self, model_file)
@@ -71,19 +83,13 @@ class Seq2SeqModel(Seq2SeqBase):
 
     # TODO: Add more dropout, BN
     def __init__(self, embed1, embed2, hsz, nlayers, rnntype, batchfirst=True, pdrop=0.5):
-        super(Seq2SeqModel, self).__init__()
+        super(Seq2SeqModel, self).__init__(embed1, embed2, batchfirst)
         dsz = embed1.dsz
-
         self.dropout = nn.Dropout(pdrop)
-        self.embed_in = pytorch_embedding(embed1)
-        self.embed_out = pytorch_embedding(embed2)
-        self.nc = embed2.vsz + 1            
         self.encoder_rnn = pytorch_rnn(dsz, hsz, rnntype, nlayers, pdrop)
         self.preds = nn.Linear(hsz, self.nc)
         self.decoder_rnn = pytorch_rnn_cell(dsz, hsz, rnntype, nlayers, pdrop)
-        self.batchfirst = batchfirst
         self.probs = nn.LogSoftmax()
-
 
     def input_i(self, embed_i, output_i):
         return embed_i.squeeze(0)
@@ -98,16 +104,12 @@ class Seq2SeqModel(Seq2SeqBase):
 class Seq2SeqAttnModel(Seq2SeqBase):
 
     def __init__(self, embed1, embed2, hsz, nlayers, rnntype, batchfirst=True, pdrop=0.5):
-        super(Seq2SeqAttnModel, self).__init__()
+        super(Seq2SeqAttnModel, self).__init__(embed1, embed2, batchfirst)
         dsz = embed1.dsz
-        self.embed_in = pytorch_embedding(embed1)
-        self.embed_out = pytorch_embedding(embed2)
-        self.nc = embed2.vsz + 1            
         self.encoder_rnn = pytorch_rnn(dsz, hsz, rnntype, nlayers, pdrop)
         self.dropout = nn.Dropout(pdrop)
         self.decoder_rnn = pytorch_rnn_cell(hsz + dsz, hsz, rnntype, nlayers, pdrop)
         self.preds = nn.Linear(hsz, self.nc)
-        self.batchfirst = batchfirst
         self.probs = nn.LogSoftmax()
         self.output_to_attn = nn.Linear(hsz, hsz, bias=False)
         self.attn_softmax = nn.Softmax()
@@ -146,12 +148,12 @@ class Seq2SeqAttnModel(Seq2SeqBase):
         return torch.cat([embed_i, output_i], 1)
 
 
-def create_model(embedding1, embedding2, **kwargs):
+def create_model(src_vocab_embed, dst_vocab_embed, **kwargs):
     hsz = int(kwargs['hsz'])
     attn = bool(kwargs.get('attn', False))
     layers = int(kwargs.get('layers', 1))
     rnntype = kwargs.get('rnntype', 'lstm')
     Seq2SeqModelType = Seq2SeqAttnModel if attn else Seq2SeqModel
     print(Seq2SeqModelType)
-    model = Seq2SeqModelType(embedding1, embedding2, hsz, layers, rnntype)
+    model = Seq2SeqModelType(src_vocab_embed, dst_vocab_embed, hsz, layers, rnntype)
     return model
