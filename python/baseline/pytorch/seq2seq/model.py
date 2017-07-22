@@ -53,12 +53,8 @@ class Seq2SeqBase(nn.Module, EncoderDecoder):
     def attn(self, output_t, context):
         pass
 
-    def decode(self, context, final_encoder_state, dst):
-        if self.batchfirst is True:
-            dst = dst.transpose(0, 1).contiguous()
-
+    def decode_rnn(self, context, h_i, output_i, dst):
         embed_out_seq = self.embed_out(dst)
-        h_i, output_i = self.bridge(final_encoder_state, context)
         context_transpose = context.t()
         outputs = []
 
@@ -69,15 +65,42 @@ class Seq2SeqBase(nn.Module, EncoderDecoder):
             output_i = self.dropout(output_i)
             outputs += [output_i]
 
-        output = torch.stack(outputs)
+        outputs = torch.stack(outputs)
+        return outputs, h_i
 
+    def decode(self, context, final_encoder_state, dst):
+        if self.batchfirst is True:
+            dst = dst.transpose(0, 1).contiguous()
+
+        h_i, output_i = self.bridge(final_encoder_state, context)
+
+        #embed_out_seq = self.embed_out(dst)
+        #context_transpose = context.t()
+        #outputs = []
+
+        #for i, embed_i in enumerate(embed_out_seq.split(1)):
+        #    embed_i = self.input_i(embed_i, output_i)
+        #    output_i, h_i = self.decoder_rnn(embed_i, h_i)
+        #    output_i = self.attn(output_i, context_transpose)
+        #    output_i = self.dropout(output_i)
+        #    outputs += [output_i]
+        #output = torch.stack(outputs)
+        output, _ = self.decode_rnn(context, h_i, output_i, dst)
+        pred = self.prediction(output)
+        # Reform batch as (T x B, D)
+        #pred = self.probs(self.preds(output.view(output.size(0)*output.size(1),
+        #                                         -1)))
+        # back to T x B x H -> B x T x H
+        #pred = pred.view(output.size(0), output.size(1), -1)
+        return pred.transpose(0, 1).contiguous() if self.batchfirst else pred
+
+    def prediction(self, output):
         # Reform batch as (T x B, D)
         pred = self.probs(self.preds(output.view(output.size(0)*output.size(1),
                                                  -1)))
         # back to T x B x H -> B x T x H
         pred = pred.view(output.size(0), output.size(1), -1)
-        return pred.transpose(0, 1).contiguous() if self.batchfirst else pred
-
+        return pred
 
 class Seq2SeqModel(Seq2SeqBase):
 
