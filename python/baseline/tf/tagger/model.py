@@ -206,35 +206,32 @@ class RNNTaggerModel(Tagger):
                 cembed_seq.append(shared_char_word(Wc, xch_i, filtsz, char_dsz, wsz, None if i == 0 else True))
             word_char = seq2tensor(cembed_seq)
 
-        # List to tensor, reform as (T, B, W)
         # Join embeddings along the third dimension
         joint = word_char if word_vec is None else tf.concat(values=[wembed, word_char], axis=2)
-        joint = tf.nn.dropout(joint, model.pkeep)
-        embedseq = tensor2seq(joint)
+        embedseq = tf.nn.dropout(joint, model.pkeep)
 
         if rnntype == 'blstm':
             rnnfwd = stacked_lstm(hsz, model.pkeep, nlayers)
             rnnbwd = stacked_lstm(hsz, model.pkeep, nlayers)
-
-            # Primitive will wrap the fwd and bwd, reverse signal for bwd, unroll
-            rnnseq, _, __ = tf.contrib.rnn.static_bidirectional_rnn(rnnfwd, rnnbwd, embedseq, dtype=tf.float32)
+            rnnout, _ = tf.nn.bidirectional_dynamic_rnn(rnnfwd, rnnbwd, embedseq, sequence_length=model.lengths, dtype=tf.float32)
+            # The output of the BRNN function needs to be joined on the H axis
+            rnnout = tf.concat(axis=2, values=rnnout)
         else:
             rnnfwd = stacked_lstm(hsz, model.pkeep, nlayers)
-            # Primitive will wrap RNN and unroll in time
-            rnnseq, _ = tf.contrib.rnn.static_rnn(rnnfwd, embedseq, dtype=tf.float32)
-
+            rnnout, _ = tf.nn.dynamic_rnn(rnnfwd, embedseq, sequence_length=model.lengths, dtype=tf.float32)
         with tf.variable_scope("output"):
             # Converts seq to tensor, back to (B,T,W)
 
             if rnntype == 'blstm':
                 hsz *= 2
 
-            Wo = tf.Variable(tf.truncated_normal([hsz, nc],
-                                                stddev=0.1), name="Wo")
+            Wo = tf.Variable(tf.truncated_normal([hsz, nc], stddev=0.1), name="Wo")
             bo = tf.Variable(tf.constant(0.0, shape=[1, nc]), name="bo")
+            # Flatten from [B x T x H] - > [BT x H]
+            rnnout_bt_x_h = tf.reshape(rnnout, [-1, hsz])
 
-            preds = [tf.matmul(rnnout, Wo) + bo for rnnout in rnnseq]
-            model.probs = seq2tensor(preds)
+            preds = tf.matmul(rnnout_bt_x_h, Wo) + bo
+            model.probs = tf.reshape(preds, [-1, mxlen, nc])
             model.best = tf.argmax(model.probs, 2)
         return model
 
