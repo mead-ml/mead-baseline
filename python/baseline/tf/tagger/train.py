@@ -122,7 +122,7 @@ class TaggerTrainerTf(EpochReportingTrainer):
         metrics = {}
         pg = ProgressBar(steps)
         for x, xch, y, lengths, id in ts:
-            feed_dict = self.model.make_feed_dict(x, xch, y, do_dropout=True)
+            feed_dict = self.model.make_feed_dict(x, xch, lengths, y, do_dropout=True)
             _, step, lossv = self.model.sess.run([self.train_op, self.global_step, self.loss], feed_dict=feed_dict)
             total_loss += lossv
             pg.update()

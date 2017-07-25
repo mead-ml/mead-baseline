@@ -31,9 +31,9 @@ class RNNTaggerModel(Tagger):
         with open(basename + '-char.vocab', 'w') as f:
             json.dump(self.char_vocab, f)
 
-    def make_feed_dict(self, x, xch, y=None, do_dropout=False):
+    def make_feed_dict(self, x, xch, lengths, y=None, do_dropout=False):
         pkeep = 1.0-self.pdrop_value if do_dropout else 1.0
-        feed_dict = {self.x: x, self.xch: xch, self.pkeep: pkeep}
+        feed_dict = {self.x: x, self.xch: xch, self.lengths: lengths, self.pkeep: pkeep}
         if y is not None:
             feed_dict[self.y] = y
         return feed_dict
@@ -107,9 +107,9 @@ class RNNTaggerModel(Tagger):
         all_loss = tf.reduce_mean(cross_entropy, name="loss")
         return all_loss
 
-    def _compute_sentence_level_loss(self, lengths):
+    def _compute_sentence_level_loss(self):
 
-        ll, self.A = tf.contrib.crf.crf_log_likelihood(self.probs, self.y, lengths)
+        ll, self.A = tf.contrib.crf.crf_log_likelihood(self.probs, self.y, self.lengths)
         return tf.reduce_mean(-ll)
 
     def create_loss(self):
@@ -118,11 +118,9 @@ class RNNTaggerModel(Tagger):
             gold = tf.cast(self.y, tf.float32)
             mask = tf.sign(gold)
 
-            lengths = tf.reduce_sum(mask, name="lengths",
-                                    reduction_indices=1)
             if self.crf is True:
                 print('crf=True, creating SLL')
-                all_loss = self._compute_sentence_level_loss(lengths)
+                all_loss = self._compute_sentence_level_loss()
             else:
                 print('crf=False, creating WLL')
                 all_loss = self._compute_word_level_loss(mask)
@@ -140,7 +138,7 @@ class RNNTaggerModel(Tagger):
 
     def predict(self, x, xch, lengths):
 
-        feed_dict = self.make_feed_dict(x, xch)
+        feed_dict = self.make_feed_dict(x, xch, lengths)
         # We can probably conditionally add the loss here
         preds = []
         if self.crf is True:
@@ -181,6 +179,7 @@ class RNNTaggerModel(Tagger):
         model.x = tf.placeholder(tf.int32, [None, mxlen], name="x")
         model.xch = tf.placeholder(tf.int32, [None, mxlen, maxw], name="xch")
         model.y = tf.placeholder(tf.int32, [None, mxlen], name="y")
+        model.lengths = tf.placeholder(tf.int32, [None], name="lengths")
         model.pkeep = tf.placeholder(tf.float32, name="pkeep")
         model.pdrop_value = pdrop
         model.word_vocab = {}
@@ -230,11 +229,11 @@ class RNNTaggerModel(Tagger):
             if rnntype == 'blstm':
                 hsz *= 2
 
-            W = tf.Variable(tf.truncated_normal([hsz, nc],
-                                                stddev=0.1), name="W")
-            b = tf.Variable(tf.constant(0.0, shape=[1, nc]), name="b")
+            Wo = tf.Variable(tf.truncated_normal([hsz, nc],
+                                                stddev=0.1), name="Wo")
+            bo = tf.Variable(tf.constant(0.0, shape=[1, nc]), name="bo")
 
-            preds = [tf.matmul(rnnout, W) + b for rnnout in rnnseq]
+            preds = [tf.matmul(rnnout, Wo) + bo for rnnout in rnnseq]
             model.probs = seq2tensor(preds)
             model.best = tf.argmax(model.probs, 2)
         return model
