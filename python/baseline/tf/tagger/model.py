@@ -4,6 +4,7 @@ import os
 from google.protobuf import text_format
 from tensorflow.python.platform import gfile
 from baseline.model import Tagger
+from tensorflow.contrib.layers import fully_connected, xavier_initializer
 
 
 class RNNTaggerModel(Tagger):
@@ -186,7 +187,7 @@ class RNNTaggerModel(Tagger):
         if word_vec is not None:
             model.word_vocab = word_vec.vocab
         model.char_vocab = char_vec.vocab
-
+        seed = np.random.randint(10e8)
         if word_vec is not None:
             with tf.name_scope("WordLUT"):
                 Ww = tf.Variable(tf.constant(word_vec.weights, dtype=tf.float32), name="W")
@@ -222,15 +223,18 @@ class RNNTaggerModel(Tagger):
         with tf.variable_scope("output"):
             # Converts seq to tensor, back to (B,T,W)
 
+            hout = hsz
             if rnntype == 'blstm':
-                hsz *= 2
-
-            Wo = tf.Variable(tf.truncated_normal([hsz, nc], stddev=0.1), name="Wo")
-            bo = tf.Variable(tf.constant(0.0, shape=[1, nc]), name="bo")
+                hout *= 2
             # Flatten from [B x T x H] - > [BT x H]
-            rnnout_bt_x_h = tf.reshape(rnnout, [-1, hsz])
+            rnnout_bt_x_h = tf.reshape(rnnout, [-1, hout])
 
-            preds = tf.matmul(rnnout_bt_x_h, Wo) + bo
+            #init = tf.random_uniform_initializer(-0.05, 0.05, dtype=tf.float32, seed=seed)
+            init = xavier_initializer(True, seed)
+
+            with tf.contrib.slim.arg_scope([fully_connected], weights_initializer=init):
+                hidden = tf.nn.dropout(fully_connected(rnnout_bt_x_h, hsz, activation_fn=tf.nn.tanh), model.pkeep)
+                preds = fully_connected(hidden, nc, activation_fn=None, weights_initializer=init)
             model.probs = tf.reshape(preds, [-1, mxlen, nc])
             model.best = tf.argmax(model.probs, 2)
         return model

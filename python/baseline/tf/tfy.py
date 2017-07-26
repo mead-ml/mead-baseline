@@ -85,8 +85,10 @@ def dense_layer(output_layer_depth):
     output_layer = layers_core.Dense(output_layer_depth, use_bias=False, dtype=tf.float32, name="dense")
     return output_layer
 
+
 def lstm_cell(hsz):
     return tf.contrib.rnn.BasicLSTMCell(hsz, forget_bias=0.0, state_is_tuple=True)
+
 
 def lstm_cell_w_dropout(hsz, pkeep):
     return tf.contrib.rnn.DropoutWrapper(tf.contrib.rnn.BasicLSTMCell(hsz, forget_bias=0.0, state_is_tuple=True), output_keep_prob=pkeep)
@@ -94,6 +96,7 @@ def lstm_cell_w_dropout(hsz, pkeep):
 
 def stacked_lstm(hsz, pkeep, nlayers):
     return tf.contrib.rnn.MultiRNNCell([lstm_cell_w_dropout(hsz, pkeep) for _ in range(nlayers)], state_is_tuple=True)
+
 
 def new_rnn_cell(hsz, rnntype, st=None):
     if st is not None:
@@ -119,7 +122,7 @@ def show_examples_tf(model, es, rlut1, rlut2, embed2, mxlen, sample, prob_clip, 
     GO = embed2.vocab['<GO>']
     EOS = embed2.vocab['<EOS>']
 
-    for src_len_i,src_i,tgt_i in zip(src_len, src_array, tgt_array):
+    for src_len_i, src_i, tgt_i in zip(src_len, src_array, tgt_array):
 
         print('========================================================================')
 
@@ -206,8 +209,6 @@ def char_word_conv_embeddings(char_vec, filtsz, char_dsz, wsz):
     joined = skip_conns(combine, wsz_all, 1)
     return joined
 
-
-
 def char_word_conv_embeddings_var_fm(char_vec, filtsz, char_dsz, nfeat_factor, max_feat=200):
 
     expanded = tf.expand_dims(char_vec, -1)
@@ -227,7 +228,7 @@ def char_word_conv_embeddings_var_fm(char_vec, filtsz, char_dsz, nfeat_factor, m
             b = tf.get_variable("b", [nfeat], initializer=tf.constant_initializer(0.0))
 
             conv = tf.nn.conv2d(expanded,
-                                W, strides=[1,1,1,1],
+                                W, strides=[1, 1, 1, 1],
                                 padding="VALID", name="conv")
 
             activation = tf.nn.tanh(tf.nn.bias_add(conv, b), "activation")
@@ -249,7 +250,7 @@ def shared_char_word(Wch, xch_i, filtsz, char_dsz, wsz, reuse):
         # start with zeros
         mxfiltsz = np.max(filtsz)
         halffiltsz = mxfiltsz // 2
-        zeropad = tf.pad(xch_i, [[0,0], [halffiltsz, halffiltsz]], "CONSTANT")
+        zeropad = tf.pad(xch_i, [[0, 0], [halffiltsz, halffiltsz]], "CONSTANT")
         cembed = tf.nn.embedding_lookup(Wch, zeropad)
         if len(filtsz) == 0 or filtsz[0] == 0:
             return tf.reduce_sum(cembed, [1])
@@ -265,7 +266,7 @@ def shared_char_word_var_fm(Wch, xch_i, filtsz, char_dsz, wsz, reuse):
         # start with zeros
         mxfiltsz = np.max(filtsz)
         halffiltsz = mxfiltsz // 2
-        zeropad = tf.pad(xch_i, [[0,0], [halffiltsz, halffiltsz]], "CONSTANT")
+        zeropad = tf.pad(xch_i, [[0, 0], [halffiltsz, halffiltsz]], "CONSTANT")
         cembed = tf.nn.embedding_lookup(Wch, zeropad)
         if len(filtsz) == 0 or filtsz[0] == 0:
             return tf.reduce_sum(cembed, [1])
