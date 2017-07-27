@@ -34,6 +34,7 @@ parser.add_argument('--test_thresh', default=10, help='How many epochs improveme
 parser.add_argument('--crf', default=False, help='Use a CRF on top', type=bool)
 parser.add_argument('--early_stopping_metric', default='f1', help='Metric for early stopping. For IOB tagging use f1')
 parser.add_argument('--web_cleanup', default=False, help='Do cleanup of web tokens?', type=bool)
+parser.add_argument('--lower', default=False, help='Lower case word tokens?', type=bool)
 parser.add_argument('--backend', default='tf', help='Default Deep Learning Framework')
 args = parser.parse_args()
 gpu = not args.nogpu
@@ -52,7 +53,15 @@ else:
     if args.backend == 'tf':
         import baseline.tf.tagger as tagger
         trim = False
-word_trans_fn = None if not args.web_cleanup else CONLLSeqReader.web_cleanup
+
+word_trans_fn = None
+if args.web_cleanup is True:
+    print('Web-ish data cleanup')
+    word_trans_fn = CONLLSeqReader.web_cleanup
+elif args.lower is True:
+    print('Lower-case word tokens')
+    word_trans_fn = str.lower
+
 reader = CONLLSeqReader(args.mxlen, args.mxwlen, word_trans_fn=word_trans_fn, vec_alloc=vec_alloc, vec_shape=vec_shape, trim=trim)
 vocab_ch, vocab_word = reader.build_vocab([args.train, args.test, args.valid])
 

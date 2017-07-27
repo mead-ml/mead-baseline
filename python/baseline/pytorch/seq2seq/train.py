@@ -7,6 +7,7 @@ from baseline.progress import ProgressBar
 from baseline.reporting import basic_reporting
 from baseline.utils import listify
 from baseline.train import Trainer
+import time
 
 
 class Seq2SeqTrainerPyTorch(Trainer):
@@ -80,7 +81,10 @@ class Seq2SeqTrainerPyTorch(Trainer):
         metrics = {}
 
         total_loss = total = 0
+        duration = 0
         for src, tgt, src_len, tgt_len in ts:
+
+            start_time = time.time()
             self.steps += 1
             self.optimizer.zero_grad()
             src, dst, tgt = self._wrap(src, tgt)
@@ -91,8 +95,11 @@ class Seq2SeqTrainerPyTorch(Trainer):
             torch.nn.utils.clip_grad_norm(self.model.parameters(), self.clip)
             total += self._total(tgt)
             self.optimizer.step()
-            
+            duration += time.time() - start_time
+
             if self.steps % 500 == 0:
+                print('Step time (%.3f sec)' % (duration / 500.))
+                duration = 0
                 avg_loss = float(total_loss)/total
                 metrics['avg_loss'] = avg_loss
                 metrics['perplexity'] = np.exp(avg_loss)

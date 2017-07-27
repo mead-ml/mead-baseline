@@ -4,6 +4,7 @@ from baseline.utils import listify
 from baseline.reporting import basic_reporting
 from baseline.tf.tfy import optimizer
 from baseline.train import Trainer
+import time
 
 
 class Seq2SeqTrainerTf(Trainer):
@@ -30,14 +31,19 @@ class Seq2SeqTrainerTf(Trainer):
         total_loss = 0
         steps = 0
         metrics = {}
-
+        duration = 0
         for src, tgt, src_len, tgt_len in ts:
-            # TODO: there is a bug that occurs if mx_tgt_len == mxlen
+
+            start_time = time.time()
             steps += 1
             feed_dict = self.model.make_feed_dict(src, src_len, tgt, tgt_len)
             _, global_step, lossv = self.model.sess.run([self.train_op, self.global_step, self.loss], feed_dict=feed_dict)
             total_loss += lossv
+            duration += time.time() - start_time
+
             if steps % 500 == 0:
+                print('Step time (%.3f sec)' % (duration / 500.))
+                duration = 0
                 metrics['avg_loss'] = total_loss / steps
                 metrics['perplexity'] = np.exp(total_loss / steps)
                 for reporting in reporting_fns:

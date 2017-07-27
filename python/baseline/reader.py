@@ -253,7 +253,6 @@ class CONLLSeqReader:
                     txt = []
                     lbl = []
 
-
         return txts, lbls
 
     def load(self, filename, words_vocab, chars_vocab, batchsz, shuffle=False):
@@ -313,7 +312,7 @@ class TSVSeqLabelReader:
     def __init__(self, mxlen=1000, mxfiltsz=0, clean_fn=None, vec_alloc=np.zeros, src_vec_trans=None):
         self.vocab = None
         self.label2index = {}
-        self.clean_fn = clean_fn #TSVSeqLabelReader.do_clean
+        self.clean_fn = clean_fn
         self.mxlen = mxlen
         self.mxfiltsz = mxfiltsz
         self.vec_alloc=vec_alloc
@@ -378,6 +377,7 @@ class TSVSeqLabelReader:
                 examples.append((x, y))
         return baseline.data.SeqLabelDataFeed(baseline.data.SeqLabelExamples(examples),
                                               batchsz=batchsz, shuffle=shuffle, vec_alloc=self.vec_alloc, src_vec_trans=self.src_vec_trans)
+
 
 class PTBSeqReader:
 
