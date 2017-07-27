@@ -220,7 +220,14 @@ class RNNTaggerModel(nn.Module, Tagger):
         model.cembed = pytorch_embedding(char_vec)
         model.dropout = nn.Dropout(pdrop)
         model.rnn, out_hsz = pytorch_lstm(model.wchsz + word_dsz, hsz, rnntype, nlayers, pdrop, unif)
-        model.decoder = pytorch_linear(out_hsz, len(model.labels), unif)
+        model.decoder = nn.Sequential()
+        append2seq(model.decoder, (
+            nn.Dropout(pdrop),
+            pytorch_linear(out_hsz, hsz, unif),
+            nn.Tanh(),
+            pytorch_linear(hsz, len(model.labels), unif)
+        ))
+
         model.softmax = nn.LogSoftmax()
         model.crit = SequenceCriterion(len(labels))
         return model
