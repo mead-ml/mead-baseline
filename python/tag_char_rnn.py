@@ -14,7 +14,7 @@ parser.add_argument('--valid', help='Validation file')
 parser.add_argument('--test', help='Test file', required=True)
 parser.add_argument('--rnntype', default='blstm', help='RNN type')
 parser.add_argument('--layers', default=1, help='The depth of stacked RNNs', type=int)
-parser.add_argument('--outdir', default='out', help='Directory to put the output')
+parser.add_argument('--outfile', help='Output file base', default='./tagger-model')
 parser.add_argument('--conll_output', default='rnn-tagger-test.txt', help='Place to put test CONLL file')
 parser.add_argument('--unif', default=0.1, help='Initializer bounds for embeddings', type=float)
 parser.add_argument('--clip', default=5.0, help='Gradient clipping cutoff', type=float)
@@ -62,7 +62,8 @@ elif args.lower is True:
     print('Lower-case word tokens')
     word_trans_fn = str.lower
 
-reader = CONLLSeqReader(args.mxlen, args.mxwlen, word_trans_fn=word_trans_fn, vec_alloc=vec_alloc, vec_shape=vec_shape, trim=trim)
+reader = CONLLSeqReader(args.mxlen, args.mxwlen, word_trans_fn=word_trans_fn,
+                        vec_alloc=vec_alloc, vec_shape=vec_shape, trim=trim)
 vocab_ch, vocab_word = reader.build_vocab([args.train, args.test, args.valid])
 
 

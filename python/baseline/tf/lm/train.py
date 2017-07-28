@@ -1,5 +1,5 @@
 from baseline.tf.tfy import *
-from baseline.utils import listify
+from baseline.utils import listify, get_model_file
 from baseline.reporting import basic_reporting
 from baseline.train import Trainer
 
@@ -107,7 +107,7 @@ def fit(model, ts, vs, es=None, **kwargs):
     epochs = int(kwargs['epochs']) if 'epochs' in kwargs else 5
     patience = int(kwargs['patience']) if 'patience' in kwargs else epochs
 
-    model_file = kwargs['outfile'] if 'outfile' in kwargs and kwargs['outfile'] is not None else './seq2seq-model-tf'
+    model_file = get_model_file(kwargs, 'lm', 'tf')
     after_train_fn = kwargs['after_train_fn'] if 'after_train_fn' in kwargs else None
     trainer = LanguageModelTrainerTf(model, **kwargs)
     init = tf.global_variables_initializer()

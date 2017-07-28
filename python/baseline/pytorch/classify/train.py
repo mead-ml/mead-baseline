@@ -1,4 +1,4 @@
-from baseline.utils import listify
+from baseline.utils import listify, get_model_file
 from baseline.progress import ProgressBar
 from baseline.confusion import ConfusionMatrix
 from baseline.reporting import basic_reporting
@@ -118,7 +118,7 @@ def fit(model, ts, vs, es, **kwargs):
     """
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
     epochs = int(kwargs.get('epochs', 20))
-    model_file = kwargs.get('outfile', './classifier-model.pyth')
+    model_file = get_model_file(kwargs, 'classify', 'pytorch')
     if do_early_stopping:
         early_stopping_metric = kwargs.get('early_stopping_metric', 'acc')
         patience = kwargs.get('patience', epochs)

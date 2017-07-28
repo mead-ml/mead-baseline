@@ -1,5 +1,5 @@
 from baseline.pytorch.torchy import *
-from baseline.utils import listify, to_spans, f_score, revlut
+from baseline.utils import listify, to_spans, f_score, revlut, get_model_file
 from baseline.reporting import basic_reporting
 from baseline.progress import ProgressBar
 from baseline.train import EpochReportingTrainer
@@ -127,7 +127,7 @@ def fit(model, ts, vs, es, **kwargs):
 
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
     epochs = int(kwargs.get('epochs', 20))
-    model_file = kwargs.get('outfile', './tagger-model.pyth')
+    model_file = get_model_file(kwargs, 'tagger', 'pytorch')
 
     if do_early_stopping:
         early_stopping_metric = kwargs.get('early_stopping_metric', 'acc')

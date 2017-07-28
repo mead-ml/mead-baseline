@@ -5,7 +5,7 @@ from torch.autograd import Variable
 import numpy as np
 from baseline.progress import ProgressBar
 from baseline.reporting import basic_reporting
-from baseline.utils import listify
+from baseline.utils import listify, get_model_file
 from baseline.train import Trainer
 import time
 
@@ -120,7 +120,7 @@ def fit(model, ts, vs, es=None, **kwargs):
 
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
     epochs = int(kwargs.get('epochs', 20))
-    model_file = kwargs.get('outfile', './seq2seq-model.pyth')
+    model_file = get_model_file(kwargs, 'seq2seq', 'pytorch')
 
     if do_early_stopping:
         early_stopping_metric = kwargs.get('early_stopping_metric', 'avg_loss')

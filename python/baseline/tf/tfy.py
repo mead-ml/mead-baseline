@@ -1,7 +1,5 @@
 import tensorflow as tf
 import numpy as np
-import math
-
 from tensorflow.python.layers import core as layers_core
 from baseline.utils import lookup_sentence, beam_multinomial
 
@@ -50,7 +48,8 @@ def optimizer(loss_fn, **kwargs):
 
     print('clip', clip)
     print('decay', decay_fn)
-    return global_step, tf.contrib.layers.optimize_loss(loss_fn, global_step, eta, optz, clip_gradients=clip, learning_rate_decay_fn=decay_fn)
+    return global_step, tf.contrib.layers.optimize_loss(loss_fn, global_step, eta, optz,
+                                                        clip_gradients=clip, learning_rate_decay_fn=decay_fn)
 
 
 def tensor2seq(tensor):
@@ -209,6 +208,7 @@ def char_word_conv_embeddings(char_vec, filtsz, char_dsz, wsz):
     joined = skip_conns(combine, wsz_all, 1)
     return joined
 
+
 def char_word_conv_embeddings_var_fm(char_vec, filtsz, char_dsz, nfeat_factor, max_feat=200):
 
     expanded = tf.expand_dims(char_vec, -1)
@@ -240,6 +240,7 @@ def char_word_conv_embeddings_var_fm(char_vec, filtsz, char_dsz, nfeat_factor, m
     combine = tf.reshape(tf.concat(values=mots, axis=3), [-1, wsz_all])
     joined = highway_conns(combine, wsz_all, 2)
     return joined
+
 
 def shared_char_word(Wch, xch_i, filtsz, char_dsz, wsz, reuse):
 

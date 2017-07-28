@@ -25,7 +25,7 @@ parser.add_argument('--filtsz', help='Filter sizes', nargs='+', default=[3,4,5],
 parser.add_argument('--clean', help='Do cleaning', action='store_true', default=True)
 parser.add_argument('--static', help='Fix pre-trained embeddings weights', action='store_true')
 parser.add_argument('--valsplit', help='Validation split if no valid set', default=0.15, type=float)
-parser.add_argument('--outdir', help='Output directory', default='./train')
+parser.add_argument('--outfile', help='Output file base', default='./classify-model')
 parser.add_argument('--backend', help='Which deep learning framework to use', default='tf')
 parser.add_argument('--keep_unused', help='Keep unused vocabulary terms as word vectors', default=False)
 parser.add_argument('--do_early_stopping', help='Should we do early stopping?', default=True, type=bool)

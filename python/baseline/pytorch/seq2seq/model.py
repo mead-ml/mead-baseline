@@ -137,7 +137,7 @@ class Seq2SeqAttnModel(Seq2SeqBase):
         self.output_to_attn = nn.Linear(hsz, hsz, bias=False)
         self.attn_softmax = nn.Softmax()
         self.attn_out = nn.Linear(2*hsz, hsz, bias=False)
-        self.attn_tanh = nn.Tanh()
+        self.attn_tanh = pytorch_activation("tanh")
         self.nlayers = nlayers
         self.hsz = hsz
 

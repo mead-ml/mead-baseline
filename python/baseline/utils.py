@@ -1,5 +1,6 @@
 import numpy as np
 import time
+import os
 
 def listify(x):
     """Take a scalar or list and make it a list
@@ -16,6 +17,18 @@ def listify(x):
 
 def revlut(lut):
     return {v: k for k, v in lut.items()}
+
+
+def get_model_file(dictionary, task, platform):
+    base = dictionary.get('outfile', './%s-model' % task)
+    rid = os.getpid()
+    if platform.startswith('pyt'):
+        name = '%s-%d.pyt' % (base, rid)
+    else:
+        name = '%s-%s-%d' % (base, platform, rid)
+    print('model file [%s]' % name)
+    return name
+
 
 def lookup_sentence(rlut, seq, reverse=False, padchar=''):
     s = seq[::-1] if reverse else seq

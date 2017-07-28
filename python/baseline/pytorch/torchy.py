@@ -126,6 +126,7 @@ def pytorch_rnn_cell(insz, hsz, rnntype, nlayers, dropout):
         rnn = StackedLSTMCell(nlayers, insz, hsz, dropout)
     return rnn
 
+
 def pytorch_embedding(x2vec, finetune=True):
     dsz = x2vec.dsz
     lut = nn.Embedding(x2vec.vsz + 1, dsz, padding_idx=0)
@@ -134,6 +135,17 @@ def pytorch_embedding(x2vec, finetune=True):
                               requires_grad=finetune)
     return lut
 
+
+def pytorch_activation(name="relu"):
+    if name == "tanh":
+        return nn.Tanh()
+    if name == "prelu":
+        return nn.PReLU()
+    if name == "sigmoid":
+        return nn.Sigmoid()
+    if name == "log_sigmoid":
+        return nn.LogSigmoid()
+    return nn.ReLU()
 
 def pytorch_conv1d(in_channels, out_channels, fsz, unif):
     c = nn.Conv1d(in_channels, out_channels, fsz)

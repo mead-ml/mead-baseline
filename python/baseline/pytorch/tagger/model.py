@@ -172,7 +172,7 @@ class RNNTaggerModel(nn.Module, Tagger):
         for fsz in filtsz:
             conv = nn.Sequential(
                 pytorch_conv1d(char_dsz, wchsz, fsz, unif),
-                nn.ReLU()
+                pytorch_activation("relu")
             )
             self.char_convs.append(conv)
             # Add the module so its managed correctly
@@ -184,7 +184,7 @@ class RNNTaggerModel(nn.Module, Tagger):
         append2seq(self.word_ch_embed, (
             nn.Dropout(pdrop),
             pytorch_linear(self.wchsz, self.wchsz, unif),
-            nn.ReLU()
+            pytorch_activation("relu")
         ))
 
     def __init__(self):
@@ -224,7 +224,7 @@ class RNNTaggerModel(nn.Module, Tagger):
         append2seq(model.decoder, (
             nn.Dropout(pdrop),
             pytorch_linear(out_hsz, hsz, unif),
-            nn.Tanh(),
+            pytorch_activation("tanh"),
             pytorch_linear(hsz, len(model.labels), unif)
         ))
 

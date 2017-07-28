@@ -1,6 +1,6 @@
 import tensorflow as tf
 import numpy as np
-from baseline.utils import to_spans, f_score, listify, revlut
+from baseline.utils import to_spans, f_score, listify, revlut, get_model_file
 from baseline.progress import ProgressBar
 from baseline.reporting import basic_reporting
 from baseline.tf.tfy import optimizer
@@ -133,12 +133,13 @@ class TaggerTrainerTf(EpochReportingTrainer):
     def _test(self, ts, conll_file=None, txts=None):
         return self.evaluator.test(ts, conll_file, txts)
 
+
 def fit(model, ts, vs, es, **kwargs):
     epochs = int(kwargs['epochs']) if 'epochs' in kwargs else 5
     patience = int(kwargs['patience']) if 'patience' in kwargs else epochs
     conll_file = kwargs.get('conll_file', None)
     txts = kwargs.get('txts', None)
-    model_file = kwargs['outfile'] if 'outfile' in kwargs and kwargs['outfile'] is not None else './tagger-model-tf'
+    model_file = get_model_file(kwargs, 'tagger', 'tf')
     after_train_fn = kwargs['after_train_fn'] if 'after_train_fn' in kwargs else None
     trainer = TaggerTrainerTf(model, **kwargs)
     init = tf.global_variables_initializer()

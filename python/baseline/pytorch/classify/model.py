@@ -44,7 +44,7 @@ class ConvModel(nn.Module, Classifier):
             pad = fsz//2                
             conv = nn.Sequential(
                 nn.Conv1d(dsz, cmotsz, fsz, padding=pad),
-                nn.ReLU()
+                pytorch_activation("relu")
             )
             convs.append(conv)
             # Add the module so its managed correctly

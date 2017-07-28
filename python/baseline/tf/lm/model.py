@@ -1,6 +1,7 @@
 from baseline.tf.tfy import *
 import json
 
+
 class AbstractLanguageModel(object):
 
     def __init__(self):

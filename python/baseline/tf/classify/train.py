@@ -2,7 +2,7 @@ import tensorflow as tf
 from baseline.confusion import ConfusionMatrix
 from baseline.progress import ProgressBar
 from baseline.reporting import basic_reporting
-from baseline.utils import listify
+from baseline.utils import listify, get_model_file
 from baseline.tf.tfy import optimizer
 from baseline.train import EpochReportingTrainer
 
@@ -88,7 +88,7 @@ def fit(model, ts, vs, es=None, **kwargs):
     """
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
     epochs = int(kwargs.get('epochs', 20))
-    model_file = kwargs.get('outfile', './classifier-model-tf')
+    model_file = get_model_file(kwargs, 'classify', 'tf')
 
     if do_early_stopping:
         early_stopping_metric = kwargs.get('early_stopping_metric', 'acc')

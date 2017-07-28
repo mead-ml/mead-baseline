@@ -1,6 +1,6 @@
 import tensorflow as tf
 import numpy as np
-from baseline.utils import listify
+from baseline.utils import listify, get_model_file
 from baseline.reporting import basic_reporting
 from baseline.tf.tfy import optimizer
 from baseline.train import Trainer
@@ -83,7 +83,7 @@ def fit(seq2seq, ts, vs, es=None, **kwargs):
     epochs = int(kwargs['epochs']) if 'epochs' in kwargs else 5
     patience = int(kwargs['patience']) if 'patience' in kwargs else epochs
 
-    model_file = kwargs['outfile'] if 'outfile' in kwargs and kwargs['outfile'] is not None else './seq2seq-model-tf'
+    model_file = get_model_file(kwargs, 'seq2seq', 'tf')
     after_train_fn = kwargs['after_train_fn'] if 'after_train_fn' in kwargs else None
     trainer = Seq2SeqTrainerTf(seq2seq, **kwargs)
     init = tf.global_variables_initializer()
