@@ -66,6 +66,52 @@ class Word2VecModel:
         return self.nullv
 
 
+class GloVeModel:
+
+    def __init__(self, filename, known_vocab=None, unif_weight=None, keep_unused=False):
+
+        uw = 0.0 if unif_weight is None else unif_weight
+        self.vocab = {}
+        idx = 1
+
+        word_vectors = []
+        with open(filename, "r") as f:
+            for line in f:
+                values = line.split()
+                word = values[0]
+                if keep_unused is False and word not in known_vocab:
+                    continue
+
+                # Otherwise add it to the list and remove from knownvocab
+                if known_vocab and word in known_vocab:
+                    known_vocab[word] = 0
+                vec = np.asarray(values[1:], dtype=np.float32)
+                word_vectors.append(vec)
+                self.vocab[word] = idx
+                idx += 1
+            self.dsz = vec.shape[0]
+            self.nullv = np.zeros(self.dsz, dtype=np.float32)
+            word_vectors = [self.nullv] + word_vectors
+            self.vocab["<PAD>"] = 0
+
+        if known_vocab is not None:
+            unknown = {v: cnt for v, cnt in known_vocab.items() if cnt > 0}
+            for v in unknown:
+                word_vectors.append(np.random.uniform(-uw, uw, self.dsz))
+                self.vocab[v] = idx
+                idx += 1
+
+        self.weights = np.array(word_vectors)
+        self.vsz = self.weights.shape[0] - 1
+
+    def lookup(self, word, nullifabsent=True):
+        if word in self.vocab:
+            return self.weights[self.vocab[word]]
+        if nullifabsent:
+            return None
+        return self.nullv
+
+
 class RandomInitVecModel:
 
     def __init__(self, dsz, known_vocab, counts=True, unif_weight=None):

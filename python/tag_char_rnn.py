@@ -73,7 +73,7 @@ char_vocab = None
 
 word_vec = None
 if args.embed:
-    word_vec = Word2VecModel(args.embed, vocab_word, unif_weight=args.unif)
+    word_vec = GloVeModel(args.embed, vocab_word, unif_weight=args.unif) if args.embed.endswith(".txt") else Word2VecModel(args.embed, vocab_word, unif_weight=args.unif)
     word_vocab = word_vec.vocab
 
 char_vec = RandomInitVecModel(args.charsz, vocab_ch, unif_weight=args.unif)

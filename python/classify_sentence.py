@@ -56,7 +56,13 @@ print(clean_fn)
 reader = TSVSeqLabelReader(args.mxlen, zeropadding, vec_alloc=vec_alloc)
 vocab = reader.build_vocab([args.train, args.test, args.valid])
 unif = 0 if args.static else args.unif
-embeddings = Word2VecModel(args.embed, vocab, unif, keep_unused=args.keep_unused)
+embeddings = GloVeModel(args.embed,
+                        vocab,
+                        unif_weight=args.unif) if args.embed.endswith(".txt") else Word2VecModel(args.embed,
+                                                                                                 vocab,
+                                                                                                 unif,
+                                                                                                 keep_unused=args.keep_unused)
+
 
 ts = reader.load(args.train, embeddings.vocab, args.batchsz, shuffle=True)
 print('Loaded training data')

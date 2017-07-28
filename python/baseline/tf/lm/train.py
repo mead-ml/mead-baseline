@@ -29,10 +29,8 @@ class LanguageModelTrainerTf(Trainer):
         fetches = {
             "loss": self.loss,
             "final_state": self.model.final_state,
-        }
-
-        fetches["train_op"] = self.train_op
-        fetches["global_step"] = self.global_step
+            "train_op": self.train_op,
+            "global_step": self.global_step}
 
         step = 0
         metrics = {}
