@@ -5,6 +5,7 @@ from baseline.progress import ProgressBar
 from baseline.reporting import basic_reporting
 from baseline.tf.tfy import optimizer
 from baseline.train import EpochReportingTrainer
+import os
 
 
 class TaggerEvaluatorTf:
@@ -109,10 +110,10 @@ class TaggerTrainerTf(EpochReportingTrainer):
         self.global_step, self.train_op = optimizer(self.loss, **kwargs)
 
     def checkpoint(self):
-        self.model.saver.save(self.model.sess, "./tf-checkpoints/tagger", global_step=self.global_step)
+        self.model.saver.save(self.model.sess, "./tf-tagger-%d/tagger" % os.getpid(), global_step=self.global_step)
 
     def recover_last_checkpoint(self):
-        latest = tf.train.latest_checkpoint("./tf-checkpoints")
+        latest = tf.train.latest_checkpoint("./tf-tagger-%d" % os.getpid())
         print("Reloading " + latest)
         self.model.saver.restore(self.model.sess, latest)
 

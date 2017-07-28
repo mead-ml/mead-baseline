@@ -5,6 +5,7 @@ from baseline.reporting import basic_reporting
 from baseline.utils import listify, get_model_file
 from baseline.tf.tfy import optimizer
 from baseline.train import EpochReportingTrainer
+import os
 
 
 class ClassifyTrainerTf(EpochReportingTrainer):
@@ -54,10 +55,10 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         return metrics
 
     def checkpoint(self):
-        self.model.saver.save(self.sess, "./tf-checkpoints/classify", global_step=self.global_step)
+        self.model.saver.save(self.sess, "./tf-classify-%d/classify" % os.getpid(), global_step=self.global_step)
 
     def recover_last_checkpoint(self):
-        latest = tf.train.latest_checkpoint("./tf-checkpoints")
+        latest = tf.train.latest_checkpoint("./tf-classify-%d" % os.getpid())
         print('Reloading ' + latest)
         self.model.saver.restore(self.model.sess, latest)
 

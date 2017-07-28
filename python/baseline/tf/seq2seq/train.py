@@ -5,6 +5,7 @@ from baseline.reporting import basic_reporting
 from baseline.tf.tfy import optimizer
 from baseline.train import Trainer
 import time
+import os
 
 
 class Seq2SeqTrainerTf(Trainer):
@@ -17,10 +18,10 @@ class Seq2SeqTrainerTf(Trainer):
         self.global_step, self.train_op = optimizer(self.loss, **kwargs)
 
     def checkpoint(self):
-        self.model.saver.save(self.model.sess, "./tf-checkpoints/seq2seq", global_step=self.global_step)
+        self.model.saver.save(self.model.sess, "./tf-seq2seq-%d/seq2seq" % os.getpid(), global_step=self.global_step)
 
     def recover_last_checkpoint(self):
-        latest = tf.train.latest_checkpoint("./tf-checkpoints")
+        latest = tf.train.latest_checkpoint("./tf-seq2seq-%d" % os.getpid())
         print('Reloading ' + latest)
         self.model.saver.restore(self.model.sess, latest)
 

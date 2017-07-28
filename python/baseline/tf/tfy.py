@@ -209,6 +209,7 @@ def char_word_conv_embeddings(char_vec, filtsz, char_dsz, wsz):
     return joined
 
 
+
 def char_word_conv_embeddings_var_fm(char_vec, filtsz, char_dsz, nfeat_factor, max_feat=200):
 
     expanded = tf.expand_dims(char_vec, -1)

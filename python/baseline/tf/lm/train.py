@@ -2,6 +2,7 @@ from baseline.tf.tfy import *
 from baseline.utils import listify, get_model_file
 from baseline.reporting import basic_reporting
 from baseline.train import Trainer
+import os
 
 
 class LanguageModelTrainerTf(Trainer):
@@ -13,10 +14,10 @@ class LanguageModelTrainerTf(Trainer):
         self.global_step, self.train_op = optimizer(self.loss, **kwargs)
 
     def checkpoint(self):
-        self.model.saver.save(self.model.sess, "./tf-checkpoints/lm", global_step=self.global_step)
+        self.model.saver.save(self.model.sess, "./tf-lm-%d/lm" % os.getpid(), global_step=self.global_step)
 
     def recover_last_checkpoint(self):
-        latest = tf.train.latest_checkpoint("./tf-checkpoints")
+        latest = tf.train.latest_checkpoint("./tf-lm-%d" % os.getpid())
         print("Reloading " + latest)
         self.model.saver.restore(self.model.sess, latest)
 
