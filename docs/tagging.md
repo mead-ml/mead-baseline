@@ -81,9 +81,10 @@ python tag_char_rnn.py \
 
 This model is implemented in TensorFlow and PyTorch (there is an old version in Torch7, which is no longer supported). The PyTorch CRF implementation is still experimental.
 
-_TODO_: Benchmark for CONLL NER
 
 ### Latest Runs
+
+#### Twitter POS
 
 Here are the last observed performance scores using _tag_char_rnn_ with a 1-layer BLSTM on Twitter POS.  It was run for up to 40 epochs.
 
@@ -92,3 +93,23 @@ Here are the last observed performance scores using _tag_char_rnn_ with a 1-laye
 | twpos-v03 |    Acc | SGD mom.  |     0.01 | TensorFlow | 89.7  |
 | twpos-v03 |    Acc | Adam      |       -- | PyTorch    | 89.4  |
 
+#### CONLL
+
+| Dataset   | Metric | Method    | Eta (LR) | Framework  | Score |
+| --------- | ------ | --------- | -------  | ---------- | ----- |
+| CONLL     |     F1 | SGD mom.  |     0.01 | TensorFlow | 90.2  |
+
+
+```
+python tag_char_rnn.py \
+    --rnntype blstm --patience 40 \
+    --layers 1 --optim sgd --eta 0.01 --clip 5. --epochs 240 --batchsz 10 --hsz 100 \
+    --train ../data/eng.train \
+    --valid ../data/eng.testa \
+    --test  ../data/eng.testb \
+    --lower 1 \
+    --embed /data/embeddings/glove/glove.42B.300d.txt \
+    --cfiltsz 1 2 3 4 5 7 --wsz 10 --crf 1
+popd
+
+```
