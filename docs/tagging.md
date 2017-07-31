@@ -49,33 +49,24 @@ If you want to use only the convolutional filter word vectors (and no word embed
 
 ### NER (and other IOB-type) Tagging
 
-NER tagging can be performed with a BLSTM with the usage below:
-
-```
-python tag_char_rnn.py --rnntype blstm --patience 70 --layers 2 --optim sgd --eta 0.001 --epochs 1000 --batchsz 50 --hsz 100 \
-    --train ../data/eng.train \
-    --valid ../data/eng.testa \
-    --test  ../data/eng.testb \
-    --embed /data/xdata/GoogleNews-vectors-negative300.bin \
-    --cfiltsz 1 2 3 4 5 7  --wsz 30
-```
-
-This will report an F1 score on at each validation pass, and will use F1 for early-stopping as well.
-
-### Global coherency with a CRF
+NER tagging can be performed with a BLSTM, and optionally, a top level CRF. This will report an F1 score on at each validation pass, and will use F1 for early-stopping as well.
 
 For tasks that require global coherency like NER tagging, it has been shown that using a transition matrix between label states in conjunction with the output RNN tags improves performance.  This makes the tagger a linear chain CRF, and we can do this by simply adding another layer on top of our RNN output.  To do this, simply pass `--crf 1` as an argument.
 
 ```
 python tag_char_rnn.py \
-    --rnntype blstm --patience 70 \
-    --layers 2 --optim sgd --eta 0.001 --epochs 1000 --batchsz 50 --hsz 100 \
+    --rnntype blstm --patience 40 \
+    --layers 1 --optim sgd --eta 0.01 --clip 5. --epochs 240 --batchsz 10 --hsz 100 \
     --train ../data/eng.train \
     --valid ../data/eng.testa \
     --test  ../data/eng.testb \
-    --embed /data/xdata/GoogleNews-vectors-negative300.bin \
-    --cfiltsz 1 2 3 4 5 7 --wsz 30 --crf 1
+    --lower 1 \
+    --embed /data/embeddings/glove/glove.42B.300d.txt \
+    --cfiltsz 1 2 3 4 5 7 --wsz 10 --crf 1
+popd
+
 ```
+
 
 ## Status
 
@@ -99,17 +90,3 @@ Here are the last observed performance scores using _tag_char_rnn_ with a 1-laye
 | --------- | ------ | --------- | -------  | ---------- | ----- |
 | CONLL     |     F1 | SGD mom.  |     0.01 | TensorFlow | 90.2  |
 
-
-```
-python tag_char_rnn.py \
-    --rnntype blstm --patience 40 \
-    --layers 1 --optim sgd --eta 0.01 --clip 5. --epochs 240 --batchsz 10 --hsz 100 \
-    --train ../data/eng.train \
-    --valid ../data/eng.testa \
-    --test  ../data/eng.testb \
-    --lower 1 \
-    --embed /data/embeddings/glove/glove.42B.300d.txt \
-    --cfiltsz 1 2 3 4 5 7 --wsz 10 --crf 1
-popd
-
-```
