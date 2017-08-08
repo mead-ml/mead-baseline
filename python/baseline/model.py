@@ -165,3 +165,7 @@ class EncoderDecoder:
 
     def get_dst_vocab(self):
         pass
+
+    @staticmethod
+    def load(basename, **kwargs):
+        pass

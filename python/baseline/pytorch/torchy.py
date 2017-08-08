@@ -203,7 +203,10 @@ def long_tensor_alloc(dims, dtype=None):
         return torch.LongTensor(dims)
     return torch.LongTensor(*dims)
 
+
 # Mashed together from code using numpy only, hacked for th Tensors
+# This function should never be used for decoding.  It exists only so that the training model can greedily decode
+# It is super slow and doesnt use maintain a beam of hypotheses
 def show_examples_pytorch(model, es, rlut1, rlut2, embed2, mxlen, sample, prob_clip, max_examples, reverse):
     si = np.random.randint(0, len(es))
 

@@ -29,7 +29,7 @@ class Seq2SeqBase(nn.Module, EncoderDecoder):
         return SequenceCriterion(self.nc)
 
     @staticmethod
-    def load(model_file):
+    def load(model_file, **kwargs):
         return torch.load(model_file)
 
     # Input better be xch, x
@@ -176,7 +176,8 @@ def create_model(src_vocab_embed, dst_vocab_embed, **kwargs):
     attn = bool(kwargs.get('attn', False))
     layers = int(kwargs.get('layers', 1))
     rnntype = kwargs.get('rnntype', 'lstm')
+    dropout = kwargs.get('dropout', 0.5)
     Seq2SeqModelType = Seq2SeqAttnModel if attn else Seq2SeqModel
     print(Seq2SeqModelType)
-    model = Seq2SeqModelType(src_vocab_embed, dst_vocab_embed, hsz, layers, rnntype)
+    model = Seq2SeqModelType(src_vocab_embed, dst_vocab_embed, hsz, layers, rnntype, True, dropout)
     return model

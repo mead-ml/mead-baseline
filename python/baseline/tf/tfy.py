@@ -107,6 +107,8 @@ def new_multi_rnn_cell(hsz, name, num_layers):
     return tf.contrib.rnn.MultiRNNCell([new_rnn_cell(hsz, name) for _ in range(num_layers)], state_is_tuple=True)
 
 
+# This function should never be used for decoding.  It exists only so that the training model can greedily decode
+# It is super slow and doesnt use maintain a beam of hypotheses
 def show_examples_tf(model, es, rlut1, rlut2, embed2, mxlen, sample, prob_clip, max_examples, reverse):
     si = np.random.randint(0, len(es))
 
