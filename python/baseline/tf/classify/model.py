@@ -96,9 +96,11 @@ class ConvModel(Classifier):
         model.labels = labels
         nc = len(labels)
         model.vocab = w2v.vocab
-        model.pkeep = tf.placeholder(tf.float32, name="pkeep")
+        # This only exists to make exporting easier
+        model.pkeep = kwargs.get('pkeep', tf.placeholder(tf.float32, name="pkeep"))
         model.pdrop_value = kwargs.get('dropout', 0.5)
-        model.x = tf.placeholder(tf.int32, [None, mxlen], name="x")
+        # This only exists to make exporting easier
+        model.x = kwargs.get('x', tf.placeholder(tf.int32, [None, mxlen], name="x"))
         model.y = tf.placeholder(tf.int32, [None, nc], name="y")
         mxfiltsz = np.max(filtsz)
         halffiltsz = mxfiltsz // 2
@@ -162,3 +164,9 @@ class ConvModel(Classifier):
 def create_model(w2v, labels, **kwargs):
     #model_type = kwargs.get('model_type', 'conv')
     return ConvModel.create(w2v, labels, **kwargs)
+
+
+@staticmethod
+def load_model(outname, **kwargs):
+    model = ConvModel.load(outname, **kwargs)
+    return model

@@ -37,8 +37,7 @@ class ConvModel(nn.Module, Classifier):
         model.vocab = embeddings.vocab
         model.lut = nn.Embedding(embeddings.vsz + 1, dsz)
         del model.lut.weight
-        model.lut.weight = nn.Parameter(torch.FloatTensor(embeddings.weights),
-                                       requires_grad=finetune)
+        model.lut.weight = nn.Parameter(torch.FloatTensor(embeddings.weights), requires_grad=finetune)
         convs = []
         for i, fsz in enumerate(filtsz):
             pad = fsz//2                
@@ -158,3 +157,9 @@ def create_model(w2v, labels, **kwargs):
     #if model_type == 'conv':
     #    return ConvModel.create(w2v, labels, **kwargs)
     #return LSTMModel.create(w2v, labels, **kwargs)
+
+
+@staticmethod
+def load_model(outname, **kwargs):
+    model = ConvModel.load(outname, **kwargs)
+    return model
