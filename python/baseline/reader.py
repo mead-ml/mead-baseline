@@ -351,9 +351,10 @@ class TSVSeqLabelReader:
                         vocab[w] += 1
         return vocab
 
-    def load(self, filename, index, batchsz, shuffle=False):
+    def load(self, filename, index, batchsz, **kwargs):
 
         PAD = index['<PAD>']
+        shuffle = kwargs.get('shuffle', False)
         halffiltsz = self.mxfiltsz // 2
         nozplen = self.mxlen - 2*halffiltsz
         label_idx = len(self.label2index)
