@@ -15,7 +15,6 @@ def num_lines(filename):
 
 def _build_vocab_for_col(col, files):
     vocab = Counter()
-    #vocab['<PAD>'] = 1
     vocab['<GO>'] = 1
     vocab['<EOS>'] = 1
 
@@ -31,6 +30,7 @@ def _build_vocab_for_col(col, files):
                     w = w.strip()
                     vocab[w] += 1
     return vocab
+
 
 class ParallelCorpusReader:
 
@@ -55,6 +55,7 @@ class ParallelCorpusReader:
         return baseline.data.Seq2SeqDataFeed(examples, batchsz,
                                              shuffle=shuffle, src_vec_trans=self.src_vec_trans,
                                              vec_alloc=self.vec_alloc, trim=self.trim)
+
 
 class TSVParallelCorpusReader(ParallelCorpusReader):
 
@@ -131,7 +132,6 @@ class MultiFileParallelCorpusReader(ParallelCorpusReader):
         EOS = vocab2['<EOS>']
         mxlen = self.max_sentence_length
         ts = []
-
 
         with codecs.open(tsfile + self.src_suffix, encoding='utf-8', mode='r') as fsrc:
             with codecs.open(tsfile + self.dst_suffix, encoding='utf-8', mode='r') as fdst:
@@ -297,7 +297,19 @@ class CONLLSeqReader:
         return baseline.data.SeqWordCharLabelDataFeed(examples, batchsz=batchsz, shuffle=shuffle, vec_alloc=self.vec_alloc, vec_shape=self.vec_shape), txts
 
 
-class TSVSeqLabelReader:
+class SeqLabelReader:
+
+    def __init__(self):
+        pass
+
+    def build_vocab(self, files, **kwargs):
+        pass
+
+    def load(self, filename, index, batchsz, **kwargs):
+        pass
+
+
+class TSVSeqLabelReader(SeqLabelReader):
 
     REPLACE = { "'s": " 's ",
                 "'ve": " 've ",
@@ -310,6 +322,8 @@ class TSVSeqLabelReader:
                 }
 
     def __init__(self, mxlen=1000, mxfiltsz=0, clean_fn=None, vec_alloc=np.zeros, src_vec_trans=None):
+        super(TSVSeqLabelReader, self).__init__()
+
         self.vocab = None
         self.label2index = {}
         self.clean_fn = clean_fn
@@ -319,6 +333,7 @@ class TSVSeqLabelReader:
         if self.clean_fn is None:
             self.clean_fn = lambda x: x
         self.src_vec_trans = src_vec_trans
+
     @staticmethod
     def splits(text):
         return list(filter(lambda s: len(s) != 0, re.split('\s+', text)))
