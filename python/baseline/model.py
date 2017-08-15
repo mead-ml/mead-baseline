@@ -83,7 +83,7 @@ def create_classifier_model(default_create_model_fn, w2v, labels, **kwargs):
     if model_type == 'default':
         return default_create_model_fn(w2v, labels, **kwargs)
 
-    model = create_user_model(model_type, w2v, labels, **kwargs)
+    model = create_user_model(w2v, labels, **kwargs)
     return model
 
 
@@ -93,7 +93,7 @@ def load_classifier_model(default_load_fn, outname, **kwargs):
     if model_type == 'default':
         print('Calling default load fn', default_load_fn)
         return default_load_fn(outname, **kwargs)
-    return load_user_model(model_type, outname, **kwargs)
+    return load_user_model(outname, **kwargs)
 
 
 class Tagger:
