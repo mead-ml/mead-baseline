@@ -1,5 +1,5 @@
 import numpy as np
-from baseline.utils import revlut
+from baseline.utils import revlut, load_user_model, create_user_model
 
 
 class Classifier:
@@ -76,6 +76,24 @@ class Classifier:
             x[0, j + halffiltsz] = idx
         outcomes = self.classify(x)[0]
         return sorted(outcomes, key=lambda tup: tup[1], reverse=True)
+
+
+def create_classifier_model(default_create_model_fn, w2v, labels, **kwargs):
+    model_type = kwargs.get('model_type', 'default')
+    if model_type == 'default':
+        return default_create_model_fn(w2v, labels, **kwargs)
+
+    model = create_user_model(model_type, w2v, labels, **kwargs)
+    return model
+
+
+def load_classifier_model(default_load_fn, outname, **kwargs):
+
+    model_type = kwargs.get('model_type', 'default')
+    if model_type == 'default':
+        print('Calling default load fn', default_load_fn)
+        return default_load_fn(outname, **kwargs)
+    return load_user_model(model_type, outname, **kwargs)
 
 
 class Tagger:

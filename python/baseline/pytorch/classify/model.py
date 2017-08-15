@@ -2,11 +2,11 @@ import torch
 import torch.nn as nn
 import math
 import json
-from baseline.model import Classifier
+from baseline.model import Classifier, load_classifier_model, create_classifier_model
 from baseline.pytorch.torchy import *
-from baseline.utils import create_user_model, load_user_model
 import torch.backends.cudnn as cudnn
 cudnn.benchmark = True
+
 
 class ConvModel(nn.Module, Classifier):
 
@@ -86,16 +86,8 @@ class ConvModel(nn.Module, Classifier):
 
 
 def create_model(w2v, labels, **kwargs):
-    model_type = kwargs.get('model_type', 'default')
-    if model_type == 'default':
-        return ConvModel.create(w2v, labels, **kwargs)
-    model = create_user_model(w2v, labels, **kwargs)
-    return model
+    return create_classifier_model(ConvModel.create, w2v, labels, **kwargs)
 
 
-@staticmethod
 def load_model(outname, **kwargs):
-    model_type = kwargs.get('model_type', 'default')
-    if model_type == 'default':
-        return ConvModel.load(outname, **kwargs)
-    return load_user_model(outname, **kwargs)
+    return load_classifier_model(ConvModel.load, outname, **kwargs)

@@ -337,3 +337,7 @@ class RNNTaggerModel(nn.Module, Tagger):
 def create_model(labels, word_embedding, char_embedding, **kwargs):
     model = RNNTaggerModel.create(labels, word_embedding, char_embedding, **kwargs)
     return model
+
+
+def load_model(modelname, **kwargs):
+    return RNNTaggerModel.load(modelname, **kwargs)

@@ -1,6 +1,6 @@
-from keras.models import Model, load_model
+import keras.models
 from keras.layers import Dense, Convolution1D, Embedding, Input, merge, GlobalMaxPooling1D, Dropout
-from baseline.model import Classifier
+from baseline.model import Classifier, load_classifier_model, create_classifier_model
 import json
 
 
@@ -21,7 +21,7 @@ class ConvModel(Classifier):
     @staticmethod
     def load(basename, **kwargs):
         model = ConvModel()
-        model.impl = load_model(basename)
+        model.impl = keras.models.load_model(basename)
         with open(basename + '.labels', 'r') as f:
             model.labels = json.load(f)
 
@@ -66,7 +66,7 @@ class ConvModel(Classifier):
         input_dim = cmotsz_all
         last_layer = drop1
         dense = Dense(output_dim=nc, input_dim=input_dim, activation='softmax')(last_layer)
-        model.impl = Model(input=[x], output=[dense])
+        model.impl = keras.models.Model(input=[x], output=[dense])
         return model
 
     def classify(self, batch_time):
@@ -87,6 +87,9 @@ class ConvModel(Classifier):
         return self.vocab
 
 
-# Use the functional API since we support parallel convolutions
 def create_model(w2v, labels, **kwargs):
-    return ConvModel.create(w2v, labels, **kwargs)
+    return create_classifier_model(ConvModel.create, w2v, labels, **kwargs)
+
+
+def load_model(outname, **kwargs):
+    return load_classifier_model(ConvModel.load, outname, **kwargs)
