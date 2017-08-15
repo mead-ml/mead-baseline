@@ -1,6 +1,7 @@
 import numpy as np
 from baseline.utils import revlut
 
+
 class Classifier:
     """Text classifier
     

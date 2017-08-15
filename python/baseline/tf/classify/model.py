@@ -4,7 +4,7 @@ from google.protobuf import text_format
 from tensorflow.python.platform import gfile
 import json
 from tensorflow.contrib.layers import convolution2d, fully_connected, flatten, xavier_initializer
-from baseline.utils import fill_y
+from baseline.utils import fill_y, create_user_model, load_user_model
 from baseline.model import Classifier
 
 
@@ -162,11 +162,17 @@ class ConvModel(Classifier):
 
 
 def create_model(w2v, labels, **kwargs):
-    #model_type = kwargs.get('model_type', 'conv')
-    return ConvModel.create(w2v, labels, **kwargs)
+    model_type = kwargs.get('model_type', 'default')
+    if model_type == 'default':
+        return ConvModel.create(w2v, labels, **kwargs)
 
+    model = create_user_model(model_type, w2v, labels, **kwargs)
+    return model
 
 @staticmethod
 def load_model(outname, **kwargs):
-    model = ConvModel.load(outname, **kwargs)
-    return model
+
+    model_type = kwargs.get('model_type', 'default')
+    if model_type == 'default':
+        return ConvModel.load(outname, **kwargs)
+    return load_user_model(model_type, outname, **kwargs)

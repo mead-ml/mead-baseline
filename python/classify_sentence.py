@@ -30,19 +30,23 @@ parser.add_argument('--backend', help='Which deep learning framework to use', de
 parser.add_argument('--keep_unused', help='Keep unused vocabulary terms as word vectors', default=False)
 parser.add_argument('--do_early_stopping', help='Should we do early stopping?', default=True, type=bool)
 parser.add_argument('--early_stopping_metric', help='What metric should we use if stopping early', default='acc')
-
+parser.add_argument('--model_type', help='Name of model to load and train', default='default')
+parser.add_argument('--rev', help='Time reverse input text', default=False, type=bool)
 args = parser.parse_args()
 
 
 if args.backend == 'pytorch':
     from baseline.pytorch import long_0_tensor_alloc as vec_alloc
+    from baseline.pytorch import tensor_reverse_2nd as rev2nd
     import baseline.pytorch.classify as classify
     zeropadding = np.max(args.filtsz)
 else:
     # Everything else uses numpy
     from numpy import zeros as vec_alloc
+    from baseline.data import reverse_2nd as rev2nd
     if args.backend == 'keras':
         zeropadding = np.max(args.filtsz)
+
         import baseline.keras.classify as classify
     else:
         import baseline.tf.classify as classify
@@ -52,8 +56,10 @@ else:
 args.reporting = setup_reporting(args.visdom)
 
 clean_fn = TSVSeqLabelReader.do_clean if args.clean else None, vec_alloc
-print(clean_fn)
-reader = TSVSeqLabelReader(args.mxlen, zeropadding, vec_alloc=vec_alloc)
+src_vec_trans = rev2nd if args.rev else None
+
+print(clean_fn, src_vec_trans)
+reader = TSVSeqLabelReader(args.mxlen, zeropadding, vec_alloc=vec_alloc, src_vec_trans=src_vec_trans)
 vocab = reader.build_vocab([args.train, args.test, args.valid])
 unif = 0 if args.static else args.unif
 embeddings = GloVeModel(args.embed,
@@ -74,5 +80,12 @@ es = reader.load(args.test, embeddings.vocab, 2)
 print('Loaded test data')
 labels = list(revlut(reader.label2index))
 
-model = classify.create_model(embeddings, labels, filtsz=args.filtsz, cmotsz=args.cmotsz, dropout=args.dropout, finetune=not args.static)
+model = classify.create_model(embeddings, labels,
+                              model_type=args.model_type,
+                              unif=args.unif,
+                              filtsz=args.filtsz,
+                              cmotsz=args.cmotsz,
+                              dropout=args.dropout,
+                              finetune=not args.static)
+
 classify.fit(model, ts, vs, es, **vars(args))

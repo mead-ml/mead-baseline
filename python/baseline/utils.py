@@ -1,6 +1,8 @@
 import numpy as np
 import time
 import os
+import importlib
+
 
 def listify(x):
     """Take a scalar or list and make it a list
@@ -17,6 +19,25 @@ def listify(x):
 
 def revlut(lut):
     return {v: k for k, v in lut.items()}
+
+
+def import_user_module(module_type, model_type):
+    module_name = "%s_%s" % (module_type, model_type)
+    print('Loading user model %s' % module_name)
+    mod = importlib.import_module(module_name)
+    return mod
+
+
+def create_user_model(w2v, labels, **kwargs):
+    model_type = kwargs['model_type']
+    mod = import_user_module("classifier", model_type)
+    return mod.create_model(w2v, labels, **kwargs)
+
+
+def load_user_model(outname, **kwargs):
+    model_type = kwargs['model_type']
+    mod = import_user_module("classifier", model_type)
+    return mod.load_model(model_type, outname, **kwargs)
 
 
 def get_model_file(dictionary, task, platform):
