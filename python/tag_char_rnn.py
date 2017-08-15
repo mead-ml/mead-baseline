@@ -36,6 +36,8 @@ parser.add_argument('--early_stopping_metric', default='f1', help='Metric for ea
 parser.add_argument('--web_cleanup', default=False, help='Do cleanup of web tokens?', type=bool)
 parser.add_argument('--lower', default=False, help='Lower case word tokens?', type=bool)
 parser.add_argument('--backend', default='tf', help='Default Deep Learning Framework')
+parser.add_argument('--model_type', help='Name of model to load and train', default='default')
+
 args = parser.parse_args()
 gpu = not args.nogpu
 

@@ -5,6 +5,7 @@ from google.protobuf import text_format
 from tensorflow.python.platform import gfile
 from baseline.model import Tagger
 from tensorflow.contrib.layers import fully_connected, xavier_initializer
+from baseline.model import Tagger, create_tagger_model, load_tagger_model
 
 
 class RNNTaggerModel(Tagger):
@@ -91,9 +92,6 @@ class RNNTaggerModel(Tagger):
         model.saver = tf.train.Saver(saver_def=saver_def)
         return model
 
-    def __init__(self):
-        pass
-
     def save_using(self, saver):
         self.saver = saver
 
@@ -129,6 +127,7 @@ class RNNTaggerModel(Tagger):
         return all_loss
 
     def __init__(self):
+        super(RNNTaggerModel, self).__init__()
         pass
 
     def get_vocab(self, vocab_type='word'):
@@ -240,10 +239,10 @@ class RNNTaggerModel(Tagger):
         return model
 
 
-def create_model(labels, word_embeddings, char_embeddings, **kwargs):
-    tagger = RNNTaggerModel.create(labels, word_embeddings, char_embeddings, **kwargs)
-    return tagger
+def create_model(labels, word_embedding, char_embedding, **kwargs):
+    model = create_tagger_model(RNNTaggerModel.create, labels, word_embedding, char_embedding, **kwargs)
+    return model
 
 
 def load_model(modelname, **kwargs):
-    return RNNTaggerModel.load(modelname, **kwargs)
+    return load_tagger_model(RNNTaggerModel.load, modelname, **kwargs)

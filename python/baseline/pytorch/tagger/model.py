@@ -1,5 +1,5 @@
 from baseline.pytorch.torchy import *
-from baseline.model import Tagger
+from baseline.model import Tagger, create_tagger_model, load_tagger_model
 import torch.autograd
 
 # Some of this code is borrowed from here:
@@ -335,9 +335,9 @@ class RNNTaggerModel(nn.Module, Tagger):
 
 
 def create_model(labels, word_embedding, char_embedding, **kwargs):
-    model = RNNTaggerModel.create(labels, word_embedding, char_embedding, **kwargs)
+    model = create_tagger_model(RNNTaggerModel.create, labels, word_embedding, char_embedding, **kwargs)
     return model
 
 
 def load_model(modelname, **kwargs):
-    return RNNTaggerModel.load(modelname, **kwargs)
+    return load_tagger_model(RNNTaggerModel.load, modelname, **kwargs)

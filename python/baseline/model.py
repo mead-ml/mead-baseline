@@ -1,5 +1,5 @@
 import numpy as np
-from baseline.utils import revlut, load_user_model, create_user_model
+from baseline.utils import revlut, load_user_model, create_user_model, load_user_tagger_model, create_user_tagger_model
 
 
 class Classifier:
@@ -79,6 +79,14 @@ class Classifier:
 
 
 def create_classifier_model(default_create_model_fn, w2v, labels, **kwargs):
+    """If `model_type` is given, use it to load an addon model and construct that OW use default
+    
+    :param default_create_model_fn: Function to create the model, typically a static factory method
+    :param w2v: Word embeddings
+    :param labels: A list or map of labels
+    :param kwargs: Anything required to feed the model its parameters
+    :return: A newly created model
+    """
     model_type = kwargs.get('model_type', 'default')
     if model_type == 'default':
         return default_create_model_fn(w2v, labels, **kwargs)
@@ -88,7 +96,13 @@ def create_classifier_model(default_create_model_fn, w2v, labels, **kwargs):
 
 
 def load_classifier_model(default_load_fn, outname, **kwargs):
-
+    """If `model_type` is given, use it to load an addon model and construct that OW use default
+    
+    :param default_load_fn: Function to load the model, typically a static factory method
+    :param outname The model name to load
+    :param kwargs: Anything required to feed the model its parameters
+    :return: A restored model
+    """
     model_type = kwargs.get('model_type', 'default')
     if model_type == 'default':
         print('Calling default load fn', default_load_fn)
@@ -97,7 +111,12 @@ def load_classifier_model(default_load_fn, outname, **kwargs):
 
 
 class Tagger:
-
+    """Structured prediction classifier, AKA a tagger
+    
+    This class takes a temporal signal, represented as words over time, and characters of words
+    and generates an output label for each time.  This type of model is used for POS tagging or any
+    type of chunking (e.g. NER, POS chunks, slot-filling)
+    """
     def __init__(self):
         pass
 
@@ -153,6 +172,24 @@ class Tagger:
 
     def get_labels(self):
         pass
+
+
+def create_tagger_model(default_create_model_fn, labels, word_embedding, char_embedding, **kwargs):
+    model_type = kwargs.get('model_type', 'default')
+    if model_type == 'default':
+        return default_create_model_fn(labels, word_embedding, char_embedding, **kwargs)
+
+    model = create_user_tagger_model(labels, word_embedding, char_embedding, **kwargs)
+    return model
+
+
+def load_tagger_model(default_load_fn, outname, **kwargs):
+
+    model_type = kwargs.get('model_type', 'default')
+    if model_type == 'default':
+        print('Calling default load fn', default_load_fn)
+        return default_load_fn(outname, **kwargs)
+    return load_user_tagger_model(outname, **kwargs)
 
 
 class LanguageModel:
