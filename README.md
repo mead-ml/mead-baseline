@@ -45,4 +45,5 @@ https://gist.github.com/dpressel/3691af49fd5c118ea724775dd970f059
 https://gist.github.com/dpressel/014588c0b260ec582c9a4b951a8c5980
 https://gist.github.com/dpressel/d01474f646c73f4773dbbc3a77624d64
 
-Then pass `--model_type {task}_{model}.py` (e.g. `classify_nbow.py`) to the driver program for that task.
+Then pass `--model_type {task}_{model}` (e.g. `classify_nbow`) to the driver program for that task (which should be named the same with a `.py` suffix.
+
