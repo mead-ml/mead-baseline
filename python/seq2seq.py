@@ -3,6 +3,7 @@ from baseline import *
 
 parser = argparse.ArgumentParser(description='Sequence to sequence learning')
 parser.add_argument('--visdom', help='Turn on visdom reporting', type=bool, default=False)
+parser.add_argument('--tensorboard', help='Turn on tensorboard reporting', type=bool, default=False)
 parser.add_argument('--eta', default=0.001, help='Initial learning rate.', type=float)
 parser.add_argument('--mom', default=0.9, help='Momentum (if SGD)', type=float)
 parser.add_argument('--embed1', help='Word2Vec embeddings file (1)')
@@ -37,7 +38,7 @@ parser.add_argument('--vocab', default=None, help='vocab (basename) file to give
 args = parser.parse_args()
 gpu = not args.nogpu
 
-args.reporting = setup_reporting(args.visdom)
+args.reporting = setup_reporting(**vars(args))
 
 # reader = TSVSentencePairReader # src is column 0, dst is column 1
 # source_vocab, dst_vocab = reader.build_vocabs([args.train, args.test])

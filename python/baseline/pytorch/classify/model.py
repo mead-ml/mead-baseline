@@ -54,7 +54,7 @@ class ConvModel(nn.Module, Classifier):
         model.fconns = nn.Sequential()
 
         append2seq(model.fconns, (
-            #nn.BatchNorm1d(input_dim),
+            ##nn.BatchNorm1d(input_dim),
             nn.Dropout(pdrop),
             nn.Linear(input_dim, nc),
             nn.LogSoftmax()

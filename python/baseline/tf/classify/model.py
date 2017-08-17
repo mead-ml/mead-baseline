@@ -139,6 +139,8 @@ class ConvModel(Classifier):
 
             combine = flatten(tf.concat(values=mots, axis=3))
 
+            #with tf.name_scope("bn"):
+            #    combine = tf.contrib.layers.batch_norm(combine, is_training=tf.cast(1-tf.cast(model.pkeep, dtype=tf.int32), tf.bool))
             # Definitely drop out
             with tf.name_scope("dropout"):
                 drop = tf.nn.dropout(combine, model.pkeep)

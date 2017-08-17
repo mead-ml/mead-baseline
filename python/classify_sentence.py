@@ -5,6 +5,7 @@ from os import sys, path, makedirs
 
 parser = argparse.ArgumentParser(description='Train a text classifier')
 parser.add_argument('--visdom', help='Turn on visdom reporting', type=bool, default=False)
+parser.add_argument('--tensorboard', help='Turn on tensorboard reporting', type=bool, default=False)
 parser.add_argument('--eta', help='Initial learning rate', default=0.01, type=float)
 parser.add_argument('--mom', help='SGD Momentum', default=0.9, type=float)
 parser.add_argument('--embed', help='Word2Vec embeddings file', required=True)
@@ -53,7 +54,7 @@ else:
         # For tensorflow, use tf.pad internally in the model
         zeropadding = 0
 
-args.reporting = setup_reporting(args.visdom)
+args.reporting = setup_reporting(**vars(args))
 
 clean_fn = TSVSeqLabelReader.do_clean if args.clean else None, vec_alloc
 src_vec_trans = rev2nd if args.rev else None

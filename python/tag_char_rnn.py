@@ -3,6 +3,7 @@ from baseline import *
 
 parser = argparse.ArgumentParser(description='Sequence tagger for sentences')
 parser.add_argument('--visdom', help='Turn on visdom reporting', type=bool, default=False)
+parser.add_argument('--tensorboard', help='Turn on tensorboard reporting', type=bool, default=False)
 parser.add_argument('--eta', default=0.01, type=float)
 parser.add_argument('--embed', default=None, help='Word2Vec embeddings file')
 parser.add_argument('--optim', default='adadelta', help='Optim method')
@@ -42,7 +43,7 @@ args = parser.parse_args()
 gpu = not args.nogpu
 
 
-args.reporting = setup_reporting(args.visdom)
+args.reporting = setup_reporting(**vars(args))
 
 if args.backend == 'pytorch':
     from baseline.pytorch import long_0_tensor_alloc as vec_alloc

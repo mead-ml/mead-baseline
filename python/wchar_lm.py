@@ -8,6 +8,7 @@ def num_steps_per_epoch(num_examples, nbptt, batchsz):
 
 parser = argparse.ArgumentParser(description='Language Modeler')
 parser.add_argument('--visdom', help='Turn on visdom reporting', type=bool, default=False)
+parser.add_argument('--tensorboard', help='Turn on tensorboard reporting', type=bool, default=False)
 parser.add_argument('--eta', default=1, help='Initial learning rate', type=float)
 parser.add_argument('--embed', default=None, help='Word2Vec embeddings file')
 parser.add_argument('--optim', default='sgd', help='Optim method')
@@ -45,7 +46,7 @@ parser.add_argument('--backend', default='tf', help='Default Deep Learning Frame
 args = parser.parse_args()
 
 
-args.reporting = setup_reporting(args.visdom)
+args.reporting = setup_reporting(**vars(args))
 
 if args.backend == 'tf':
     import baseline.tf.lm as lm
