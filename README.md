@@ -39,8 +39,10 @@ You can also think of the library itself as an abstraction layer at the "solutio
 
 ### As scaffolding for an experiment
 
-If you have a problem where the input is the same as a `baseline` task (e.g. unstrutured prediction over a temporal vector), you can easily use the API to set up your boilerplate work for you, and focus on your model.
+If you have a problem where the input is the same as a `baseline` task (e.g. unstrutured prediction over a temporal vector), you can easily use the API to set up your boilerplate work for you, and focus on your model, by creating a user-defined `addon`.  This is just a normal python file with a creation and load hooks.  Here are some examples:
 
-Here is an example training a classifier (an simple LSTM, written in PyTorch), making use of the training, data loader, and reporting routines for a classification problem:
-
+https://gist.github.com/dpressel/3691af49fd5c118ea724775dd970f059
 https://gist.github.com/dpressel/014588c0b260ec582c9a4b951a8c5980
+https://gist.github.com/dpressel/d01474f646c73f4773dbbc3a77624d64
+
+Then pass `--model_type {task}_{model}.py` (e.g. `classify_nbow.py`) to the driver program for that task.
