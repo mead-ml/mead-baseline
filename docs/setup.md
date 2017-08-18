@@ -8,18 +8,27 @@ For maintaining a virtual environment in python, we use `conda`. Conda can be in
 
 ### Creating a Virtual Environment using Conda
 
-- `conda create --name dl python=3 <keras tensorflow pytorch>`
+- `conda create --name dl python=3 <tensorflow pytorch>`
 
-- While this will install the required libraries, you should install tensorflow from source. The instructions are [here](#installing-tensorflow-from-source). 
+- While this will install the required libraries, you should install tensorflow and pytorch from source. The instructions are [here](#installing-tensorflow-from-source). 
 
 - **TODO**: Document `pytorch` installation from source.
- 
+
 - `source activate dl` to activate the virtualenv.
+
+- `conda install prompt_toolkit`
+
+#### For reporting
+
+- `pip install tensorboard_logger`
+
+- `pip install visodm`
+
+(these are not available from conda yet.)
 
 ### Installing Tensorflow from Source
 
 - **Clone tensorflow**: `git clone https://github.com/tensorflow/tensorflow `
-
 - **Install Bazel**: [See the instructions](https://docs.bazel.build/versions/master/install.html)
 - **Configure**: `cd tensorflow && ./configure`. During the configuration, you would be asked many questions, just use carriage return, other than the cuda question. 
 ```
@@ -59,16 +68,16 @@ bazel-bin/tensorflow/tools/pip_package/build_pip_package /tmp/tensorflow_pkg
 - Once you can access the proper page, download the following files:
 
 ```buildoutcfg
-cuDNN v7.0 Runtime Library for Ubuntu<14/16>.04 (Deb)
+cuDNN v6.0 Runtime Library for Ubuntu<14/16>.04 (Deb)
 
-cuDNN v7.0 Developer Library for Ubuntu<14/16>.04 (Deb)
+cuDNN v6.0 Developer Library for Ubuntu<14/16>.04 (Deb)
 
-cuDNN v7.0 Code Samples and User Guide for Ubuntu<14/16>.04 (Deb)
+cuDNN v6.0 Code Samples and User Guide for Ubuntu<14/16>.04 (Deb)
 ```
 _download the ones for your ubuntu version_. Use `sudo dpkg -i` to install. to check the installation, follow these steps:
 
 ```buildoutcfg
-cp -r /usr/src/cudnn_samples_v7/ $HOME
+cp -r /usr/src/cudnn_samples_v6/ $HOME
 cd $HOME/cudnn_samples_v7/mnistCUDNN
 make clean && make
 ./mnistCUDNN
@@ -85,7 +94,12 @@ export PATH=/usr/local/cuda/bin:${PATH}
 export LD_LIBRARY_PATH=/usr/local/cuda/lib64:{LD_LIBRARY_PATH}
 
 ```
+Else, you can download the required file for cuDNN 6.0 [directly from here]( http://developer.download.nvidia.com/compute/redist/cudnn/v6.0/cudnn-8.0-linux-x64-v6.0.tgz), untar it (by default will untar to `cuda`), and copy the necessary files
+```buildoutcfg
+sudo cp cuda/include/cudnn.h /usr/local/cuda/include/
+sudo cp cuda/lib64/* /usr/local/cuda/lib64/
 
+```
 
 
 
