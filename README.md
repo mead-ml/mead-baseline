@@ -30,6 +30,7 @@ When the GPU is used, the code *assumes that cudnn (>= R5) is available* and ins
 
 To enable reporting with visdom, just pass `--visdom 1` in any command line program.  Baseline uses visdom with all framework implementations
 
+## [Set up](docs/setup.md)
 
 ## Baseline as an API
 
