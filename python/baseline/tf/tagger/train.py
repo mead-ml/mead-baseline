@@ -8,7 +8,7 @@ from baseline.train import EpochReportingTrainer
 import os
 
 
-class TaggerEvaluatorTf:
+class TaggerEvaluatorTf(object):
 
     def __init__(self, model):
         self.model = model

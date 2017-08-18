@@ -1,7 +1,7 @@
 import numpy as np
 
 
-class ConfusionMatrix:
+class ConfusionMatrix(object):
     """Confusion matrix with metrics
     
     This class accumulates classification output, and tracks it in a confusion matrix.

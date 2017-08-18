@@ -1,7 +1,7 @@
 import numpy as np
 
 
-class Word2VecModel:
+class Word2VecModel(object):
 
     def __init__(self, filename, known_vocab=None, unif_weight=None, keep_unused=False):
 
@@ -66,7 +66,7 @@ class Word2VecModel:
         return self.nullv
 
 
-class GloVeModel:
+class GloVeModel(object):
 
     def __init__(self, filename, known_vocab=None, unif_weight=None, keep_unused=False):
 
@@ -112,7 +112,7 @@ class GloVeModel:
         return self.nullv
 
 
-class RandomInitVecModel:
+class RandomInitVecModel(object):
 
     def __init__(self, dsz, known_vocab, counts=True, unif_weight=None):
 

@@ -32,7 +32,7 @@ def _build_vocab_for_col(col, files):
     return vocab
 
 
-class ParallelCorpusReader:
+class ParallelCorpusReader(object):
 
     def __init__(self,
                  max_sentence_length=1000,
@@ -165,7 +165,7 @@ def identity_trans_fn(x):
     return x
 
 
-class CONLLSeqReader:
+class CONLLSeqReader(object):
 
     UNREP_EMOTICONS = (
         ':)',
@@ -297,7 +297,7 @@ class CONLLSeqReader:
         return baseline.data.SeqWordCharLabelDataFeed(examples, batchsz=batchsz, shuffle=shuffle, vec_alloc=self.vec_alloc, vec_shape=self.vec_shape), txts
 
 
-class SeqLabelReader:
+class SeqLabelReader(object):
 
     def __init__(self):
         pass
@@ -395,7 +395,7 @@ class TSVSeqLabelReader(SeqLabelReader):
                                               batchsz=batchsz, shuffle=shuffle, vec_alloc=self.vec_alloc, src_vec_trans=self.src_vec_trans)
 
 
-class PTBSeqReader:
+class PTBSeqReader(object):
 
     def __init__(self, max_word_length, nbptt):
         self.max_word_length = max_word_length

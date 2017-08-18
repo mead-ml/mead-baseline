@@ -1,7 +1,7 @@
 import time
 
 
-class Trainer:
+class Trainer(object):
 
     def __init__(self):
         self.train_epochs = 0

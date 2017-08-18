@@ -2,7 +2,7 @@ import numpy as np
 from baseline.utils import revlut, load_user_model, create_user_model, load_user_tagger_model, create_user_tagger_model
 
 
-class Classifier:
+class Classifier(object):
     """Text classifier
     
     Provide an interface to DNN classifiers that use word lookup tables.
@@ -110,7 +110,7 @@ def load_classifier_model(default_load_fn, outname, **kwargs):
     return load_user_model(outname, **kwargs)
 
 
-class Tagger:
+class Tagger(object):
     """Structured prediction classifier, AKA a tagger
     
     This class takes a temporal signal, represented as words over time, and characters of words
@@ -192,7 +192,7 @@ def load_tagger_model(default_load_fn, outname, **kwargs):
     return load_user_tagger_model(outname, **kwargs)
 
 
-class LanguageModel:
+class LanguageModel(object):
 
     def __init__(self):
         pass
@@ -201,7 +201,7 @@ class LanguageModel:
         pass
 
 
-class EncoderDecoder:
+class EncoderDecoder(object):
 
     def save(self, model_base):
         pass
