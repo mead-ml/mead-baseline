@@ -1,6 +1,6 @@
 ## Setting up the system
 
-We assume cuda drivers and [cuDNN](https://developer.nvidia.com/cudnn) is installed. cuda installation instructions are [here](https://askubuntu.com/questions/799184/how-can-i-install-cuda-on-ubuntu-16-04). cuDNN installation instructions are [described below](#cudnn-instllation).  
+We assume cuda drivers and [cuDNN](https://developer.nvidia.com/cudnn) is installed. cuda installation instructions are [here](https://askubuntu.com/questions/799184/how-can-i-install-cuda-on-ubuntu-16-04). cuDNN installation instructions are [described below](#cudnn-installation).  
 
 ### Conda
 
