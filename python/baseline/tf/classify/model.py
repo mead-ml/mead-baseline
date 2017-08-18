@@ -6,7 +6,7 @@ import json
 from tensorflow.contrib.layers import convolution2d, fully_connected, flatten, xavier_initializer
 from baseline.utils import fill_y
 from baseline.model import Classifier, load_classifier_model, create_classifier_model
-
+from baseline.tf.tfy import skip_conns, highway_conns
 
 class ConvModel(Classifier):
 
@@ -123,36 +123,41 @@ class ConvModel(Classifier):
         init = tf.random_uniform_initializer(-0.05, 0.05, dtype=tf.float32, seed=seed)
         xavier_init = xavier_initializer(True, seed)
 
-        # Create parallel filter operations of different sizes
-        with tf.contrib.slim.arg_scope(
-                [convolution2d, fully_connected],
-                weights_initializer=init,
-                biases_initializer=tf.constant_initializer(0)):
+        for i, fsz in enumerate(filtsz):
+            with tf.variable_scope('cmot-%s' % fsz):
 
-            for i, fsz in enumerate(filtsz):
-                with tf.name_scope('cmot-%s' % fsz) as scope:
-                    conv = convolution2d(expanded, cmotsz, [fsz, dsz], [1, 1], padding='VALID', scope=scope)
-                    # First dim is batch, second dim is time, third dim is feature map
-                    # Max over time pooling, 2 calls below are equivalent
-                    mot = tf.reduce_max(conv, [1], keep_dims=True)
+                kernel_shape = [fsz, dsz, 1, cmotsz]
+
+                # Weight tying
+                W = tf.get_variable("W", kernel_shape, initializer=init)
+                b = tf.get_variable("b", [cmotsz], initializer=tf.constant_initializer(0.0))
+
+                conv = tf.nn.conv2d(expanded,
+                                    W, strides=[1,1,1,1],
+                                    padding="VALID", name="conv")
+
+                activation = tf.nn.relu(tf.nn.bias_add(conv, b), "activation")
+
+                mot = tf.reduce_max(activation, [1], keep_dims=True)
+                # Add back in the dropout
                 mots.append(mot)
 
-            combine = flatten(tf.concat(values=mots, axis=3))
+        wsz_all = cmotsz * len(mots)
+        combine = tf.reshape(tf.concat(values=mots, axis=3), [-1, wsz_all])
+        # combine = highway_conns(combine, wsz_all, 1)
 
-            #with tf.name_scope("bn"):
-            #    combine = tf.contrib.layers.batch_norm(combine, is_training=tf.cast(1-tf.cast(model.pkeep, dtype=tf.int32), tf.bool))
-            # Definitely drop out
-            with tf.name_scope("dropout"):
-                drop = tf.nn.dropout(combine, model.pkeep)
+        # Definitely drop out
+        with tf.name_scope("dropout"):
+            drop = tf.nn.dropout(combine, model.pkeep)
 
-                # For fully connected layers, use xavier (glorot) transform
-            with tf.contrib.slim.arg_scope(
-                    [fully_connected],
-                    weights_initializer=xavier_init):
+            # For fully connected layers, use xavier (glorot) transform
+        with tf.contrib.slim.arg_scope(
+                [fully_connected],
+                weights_initializer=xavier_init):
 
-                with tf.name_scope("output"):
-                    model.logits = tf.identity(fully_connected(drop, nc, activation_fn=None), name="logits")
-                    model.best = tf.argmax(model.logits, 1, name="best")
+            with tf.name_scope("output"):
+                model.logits = tf.identity(fully_connected(drop, nc, activation_fn=None), name="logits")
+                model.best = tf.argmax(model.logits, 1, name="best")
         model.sess = sess
         return model
 
