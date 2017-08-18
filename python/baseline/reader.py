@@ -3,6 +3,7 @@ import numpy as np
 from collections import Counter
 import re
 import codecs
+from baseline.utils import import_user_module
 
 
 def num_lines(filename):
@@ -161,6 +162,26 @@ class MultiFileParallelCorpusReader(ParallelCorpusReader):
         return baseline.data.Seq2SeqExamples(ts)
 
 
+def create_parallel_corpus_reader(mxlen, alloc_fn, trim, src_vec_trans, **kwargs):
+
+    reader_type = kwargs.get('reader_type', 'default')
+
+    if reader_type == 'default':
+        print('Reading parallel file corpus')
+        pair_suffix = kwargs.get('pair_suffix')
+        reader = MultiFileParallelCorpusReader(pair_suffix[0], pair_suffix[1],
+                                               mxlen, alloc_fn,
+                                               src_vec_trans, trim)
+    elif reader_type == 'tsv':
+        print('Reading tab-separated corpus')
+        reader = TSVParallelCorpusReader(mxlen, alloc_fn, src_vec_trans, trim)
+    else:
+        mod = import_user_module("reader", reader_type)
+        return mod.create_parallel_corpus_reader(mxlen, alloc_fn,
+                                                 src_vec_trans, trim, **kwargs)
+    return reader
+
+
 def identity_trans_fn(x):
     return x
 
@@ -297,6 +318,21 @@ class CONLLSeqReader(object):
         return baseline.data.SeqWordCharLabelDataFeed(examples, batchsz=batchsz, shuffle=shuffle, vec_alloc=self.vec_alloc, vec_shape=self.vec_shape), txts
 
 
+def create_seq_pred_reader(mxlen, mxwlen, word_trans_fn, vec_alloc, vec_shape, trim, **kwargs):
+
+    reader_type = kwargs.get('reader_type', 'default')
+
+    if reader_type == 'default':
+        print('Reading CONLL sequence file corpus')
+        reader = CONLLSeqReader(mxlen, mxwlen, word_trans_fn,
+                                vec_alloc, vec_shape, trim)
+    else:
+        mod = import_user_module("reader", reader_type)
+        reader = mod.create_seq_pred_reader(mxlen, mxwlen, word_trans_fn,
+                                            vec_alloc, vec_shape, trim, **kwargs)
+    return reader
+
+
 class SeqLabelReader(object):
 
     def __init__(self):
@@ -393,6 +429,17 @@ class TSVSeqLabelReader(SeqLabelReader):
                 examples.append((x, y))
         return baseline.data.SeqLabelDataFeed(baseline.data.SeqLabelExamples(examples),
                                               batchsz=batchsz, shuffle=shuffle, vec_alloc=self.vec_alloc, src_vec_trans=self.src_vec_trans)
+
+
+def create_pred_reader(mxlen, zeropadding, clean_fn, vec_alloc, src_vec_trans, **kwargs):
+    reader_type = kwargs.get('reader_type', 'default')
+
+    if reader_type == 'default':
+        reader = TSVSeqLabelReader(mxlen, zeropadding, clean_fn, vec_alloc, src_vec_trans)
+    else:
+        mod = import_user_module("reader", reader_type)
+        reader = mod.create_pred_reader(mxlen, zeropadding, vec_alloc, src_vec_trans, **kwargs)
+    return reader
 
 
 class PTBSeqReader(object):

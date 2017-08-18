@@ -56,11 +56,11 @@ else:
 
 args.reporting = setup_reporting(**vars(args))
 
-clean_fn = TSVSeqLabelReader.do_clean if args.clean else None, vec_alloc
+clean_fn = TSVSeqLabelReader.do_clean if args.clean else None
 src_vec_trans = rev2nd if args.rev else None
 
 print(clean_fn, src_vec_trans)
-reader = TSVSeqLabelReader(args.mxlen, zeropadding, vec_alloc=vec_alloc, src_vec_trans=src_vec_trans)
+reader = create_pred_reader(args.mxlen, zeropadding, clean_fn, vec_alloc, src_vec_trans)
 vocab = reader.build_vocab([args.train, args.test, args.valid])
 unif = 0 if args.static else args.unif
 embeddings = GloVeModel(args.embed,

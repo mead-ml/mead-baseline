@@ -65,8 +65,8 @@ elif args.lower is True:
     print('Lower-case word tokens')
     word_trans_fn = str.lower
 
-reader = CONLLSeqReader(args.mxlen, args.mxwlen, word_trans_fn=word_trans_fn,
-                        vec_alloc=vec_alloc, vec_shape=vec_shape, trim=trim)
+reader = create_seq_pred_reader(args.mxlen, args.mxwlen, word_trans_fn, vec_alloc, vec_shape, trim)
+
 vocab_ch, vocab_word = reader.build_vocab([args.train, args.test, args.valid])
 
 
