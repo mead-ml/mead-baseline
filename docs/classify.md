@@ -1,4 +1,6 @@
-# Sentence Classification using CMOT Model
+# Sentence Classification
+
+There are several models built in to the `baseline` codebase.  These are summarized individually in the sections below
 
 ## Convolution - Max Over Time Architecture (CMOT)
 
@@ -58,12 +60,6 @@ python classify_sentence.py --backend pytorch --clean --optim adadelta --eta 1 -
  --dropout 0.5
 ```
 
-## Status
-
-This model is implemented in TensorFlow, Keras, Torch, and PyTorch.  Currently, the PyTorch model does not support 'static' embeddings.  The Keras model currently does not use an 'eta' parameter.  Weight initialization techniques vary slightly across implementations at the moment.
-
-All of the models should typically achieve the dynamic fine-tune results on SST from the Kim paper, though there is some slight variation between runs (I have seen accuracy as high as *88.36%!*).
-
 ### Latest Runs
 
 Here are the last observed performance scores using _classify_sentence_ with fine-tuning on the Stanford Sentiment Treebank 2 (SST2)
@@ -83,6 +79,67 @@ python classify_sentence.py --backend tf --clean --optim adadelta --eta 1 --batc
 | Dataset | TensorFlow | Keras (TF) | PyTorch | Torch7 |
 | ------- | ---------- | ---------- | ------- | ------ |
 | SST2    |       87.9 |      87.4  |  87.9   | 87.095 |
+
+Note that these are randomly initialized and these numbers will vary
+(IOW, don't assume that one implementation is guaranteed to outperform the others from a single run).
+
+On my laptop, each implementation takes between 29 - 40s per epoch depending on the deep learning framework (TensorFlow and PyTorch are fastest, and about the same speed)
+
+## LSTM
+
+Provides a simple LSTM for text classification with PyTorch and TensorFlow
+
+*Details*
+
+The LSTM model provided here expects a time-reversed signal (so that padding will be on the left-side).  The driver program can be passed `--rev 1` to do this time-reversal (you currently must do this when using this model).  The LSTM's final hidden state is then passed to the final layer.  The use of an LSTM instead of parallel convolutional filters is the main differentiator between this model and the default model (CMOT) above.  To request the LSTM classifier instead of the default, pass `--model_type lstm` to the driver program (along with the request for time-reversal).
+
+
+## Running It
+
+This model is run similarly to the model above:
+
+Early stopping with patience is supported.  There are many hyper-parameters that you can tune, which may yield many different models.
+
+Here is an example running Stanford Sentiment Treebank 2 data with adam using TensorFlow:
+
+```
+python classify_sentence.py --backend tf --clean --optim adadelta --eta 1 --batchsz 50 --epochs 25 --patience 25 \
+ --train ../data/stsa.binary.phrases.train \
+ --valid ../data/stsa.binary.dev \
+ --test ../data/stsa.binary.test \
+ --embed /data/xdata/GoogleNews-vectors-negative300.bin \
+ --rev 1
+ --model_type lstm \
+ --dropout 0.5
+```
+
+## Status
+
+This model is implemented in TensorFlow, Keras, Torch, and PyTorch.  Currently, the PyTorch model does not support 'static' embeddings.  The Keras model currently does not use an 'eta' parameter.  Weight initialization techniques vary slightly across implementations at the moment.
+
+All of the models should typically achieve the dynamic fine-tune results on SST from the Kim paper, though there is some slight variation between runs (I have seen accuracy as high as *88.36%!*).
+
+### Latest Runs
+
+Here are the last observed performance scores using _classify_sentence_ with fine-tuning on the Stanford Sentiment Treebank 2 (SST2)
+It was run on the latest code as of 8/21/2017, with 25 epochs with adadelta as an optimizer:
+
+```
+```
+python classify_sentence.py --backend tf --clean --optim adadelta --eta 1 --batchsz 50 --epochs 25 --patience 25 \
+ --train ../data/stsa.binary.phrases.train \
+ --valid ../data/stsa.binary.dev \
+ --test ../data/stsa.binary.test \
+ --embed /data/xdata/GoogleNews-vectors-negative300.bin \
+ --rev 1 \
+ --model_type lstm \
+ --dropout 0.5
+```
+```
+
+| Dataset | TensorFlow | PyTorch | 
+| ------- | ---------- | ------- | 
+| SST2    |       87.1 |  87.1   |
 
 Note that these are randomly initialized and these numbers will vary
 (IOW, don't assume that one implementation is guaranteed to outperform the others from a single run).
