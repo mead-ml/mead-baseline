@@ -108,7 +108,7 @@ python classify_sentence.py --backend tf --clean --optim adadelta --eta 1 --batc
  --valid ../data/stsa.binary.dev \
  --test ../data/stsa.binary.test \
  --embed /data/xdata/GoogleNews-vectors-negative300.bin \
- --rev 1
+ --rev 1 \
  --model_type lstm \
  --dropout 0.5
 ```
