@@ -97,14 +97,16 @@ def stacked_lstm(hsz, pkeep, nlayers):
     return tf.contrib.rnn.MultiRNNCell([lstm_cell_w_dropout(hsz, pkeep) for _ in range(nlayers)], state_is_tuple=True)
 
 
-def new_rnn_cell(hsz, rnntype, st=None):
+def rnn_cell_w_dropout(hsz, pkeep, rnntype, st=None):
     if st is not None:
-        return tf.contrib.rnn.BasicLSTMCell(hsz, state_is_tuple=st) if rnntype == 'lstm' else tf.contrib.rnn.GRUCell(hsz)
-    return tf.contrib.rnn.LSTMCell(hsz) if rnntype == 'lstm' else tf.contrib.rnn.GRUCell(hsz)
+        cell = tf.contrib.rnn.BasicLSTMCell(hsz, state_is_tuple=st) if rnntype == 'lstm' else tf.contrib.rnn.GRUCell(hsz)
+    else:
+        cell = tf.contrib.rnn.LSTMCell(hsz) if rnntype == 'lstm' else tf.contrib.rnn.GRUCell(hsz)
+    return tf.contrib.rnn.DropoutWrapper(cell, output_keep_prob=pkeep)
 
 
-def new_multi_rnn_cell(hsz, name, num_layers):
-    return tf.contrib.rnn.MultiRNNCell([new_rnn_cell(hsz, name) for _ in range(num_layers)], state_is_tuple=True)
+def multi_rnn_cell_w_dropout(hsz, pkeep, rnntype, num_layers):
+    return tf.contrib.rnn.MultiRNNCell([rnn_cell_w_dropout(hsz, pkeep, rnntype) for _ in range(num_layers)], state_is_tuple=True)
 
 
 # This function should never be used for decoding.  It exists only so that the training model can greedily decode

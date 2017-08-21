@@ -37,7 +37,7 @@ class Seq2SeqTrainerTf(Trainer):
 
             start_time = time.time()
             steps += 1
-            feed_dict = self.model.make_feed_dict(src, src_len, tgt, tgt_len)
+            feed_dict = self.model.make_feed_dict(src, src_len, tgt, tgt_len, do_dropout=True)
             _, global_step, lossv = self.model.sess.run([self.train_op, self.global_step, self.loss], feed_dict=feed_dict)
             total_loss += lossv
             duration += time.time() - start_time

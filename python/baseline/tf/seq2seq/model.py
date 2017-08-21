@@ -104,7 +104,7 @@ class Seq2SeqModel(EncoderDecoder):
         model.src = tf.placeholder(tf.int32, [None, mxlen], name="src")
         model.tgt = tf.placeholder(tf.int32, [None, mxlen], name="tgt")
         model.pkeep = tf.placeholder(tf.float32, name="pkeep")
-
+        model.pdrop_value = kwargs.get('dropout', 0.5)
         model.src_len = tf.placeholder(tf.int32, [None], name="src_len")
         model.tgt_len = tf.placeholder(tf.int32, [None], name="tgt_len")
         model.mx_tgt_len = tf.placeholder(tf.int32, name="mx_tgt_len")
@@ -145,11 +145,10 @@ class Seq2SeqModel(EncoderDecoder):
         with tf.name_scope("Recurrence"):
             rnn_enc_tensor, final_encoder_state = model.encode(embed_in, model.src)
             batch_sz = tf.shape(rnn_enc_tensor)[0]
-            ##batch_sz = tf.Print(batch_sz, [batch_sz])
 
             with tf.variable_scope("dec"):
                 proj = dense_layer(dst_vsz)
-                rnn_dec_cell = model._attn_cell(rnn_enc_tensor, beam_width) #[:,:-1,:])
+                rnn_dec_cell = model._attn_cell_w_dropout(rnn_enc_tensor, beam_width) #[:,:-1,:])
 
                 if beam_width > 1:
                     final_encoder_state = tf.contrib.seq2seq.tile_batch(final_encoder_state, multiplier=beam_width)
@@ -204,8 +203,8 @@ class Seq2SeqModel(EncoderDecoder):
                 model.probs = tf.map_fn(lambda x: tf.nn.softmax(x, name='probs'), model.preds)
         return model
 
-    def _attn_cell(self, rnn_enc_tensor, beam):
-        cell = new_multi_rnn_cell(self.hsz, self.rnntype, self.nlayers)
+    def _attn_cell_w_dropout(self, rnn_enc_tensor, beam):
+        cell = multi_rnn_cell_w_dropout(self.hsz, self.pkeep, self.rnntype, self.nlayers)
         if self.attn:
             src_len = self.src_len
             if beam > 1:
@@ -221,7 +220,7 @@ class Seq2SeqModel(EncoderDecoder):
         with tf.name_scope('encode'):
             # List to tensor, reform as (T, B, W)
             embed_in_seq = tensor2seq(embed_in)
-            rnn_enc_cell = new_multi_rnn_cell(self.hsz, self.rnntype, self.nlayers)
+            rnn_enc_cell = multi_rnn_cell_w_dropout(self.hsz, self.pkeep, self.rnntype, self.nlayers)
             #TODO: Switch to tf.nn.rnn.dynamic_rnn()
             rnn_enc_seq, final_encoder_state = tf.contrib.rnn.static_rnn(rnn_enc_cell, embed_in_seq, scope='rnn_enc', dtype=tf.float32)
             # This comes out as a sequence T of (B, D)
@@ -273,7 +272,10 @@ class Seq2SeqModel(EncoderDecoder):
 
     def make_feed_dict(self, src, src_len, dst, dst_len, do_dropout=False):
         mx_tgt_len = np.max(dst_len)
-        feed_dict = {self.src: src, self.src_len: src_len, self.tgt: dst, self.tgt_len: dst_len, self.mx_tgt_len: mx_tgt_len, self.pkeep: 1.0}
+        feed_dict = {self.src: src, self.src_len: src_len,
+                     self.tgt: dst, self.tgt_len: dst_len,
+                     self.mx_tgt_len: mx_tgt_len,
+                     self.pkeep: self.pdrop_value if do_dropout else 1.0}
         return feed_dict
 
     def get_src_vocab(self):
