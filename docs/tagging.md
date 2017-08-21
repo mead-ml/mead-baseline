@@ -88,5 +88,5 @@ Here are the last observed performance scores using _tag_char_rnn_ with a 1-laye
 
 | Dataset   | Metric | Method    | Eta (LR) | Framework  | Score |
 | --------- | ------ | --------- | -------  | ---------- | ----- |
-| CONLL     |     F1 | SGD mom.  |     0.01 | TensorFlow | 90.2  |
+| CONLL     |     F1 | SGD mom.  |     0.01 | TensorFlow | 90.3  |
 

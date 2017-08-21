@@ -123,7 +123,6 @@ Here are the last observed performance scores using _classify_sentence_ with fin
 It was run on the latest code as of 8/21/2017, with 25 epochs with adadelta as an optimizer:
 
 ```
-```
 python classify_sentence.py --backend tf --clean --optim adadelta --eta 1 --batchsz 50 --epochs 25 --patience 25 \
  --train ../data/stsa.binary.phrases.train \
  --valid ../data/stsa.binary.dev \
@@ -132,7 +131,6 @@ python classify_sentence.py --backend tf --clean --optim adadelta --eta 1 --batc
  --rev 1 \
  --model_type lstm \
  --dropout 0.5
-```
 ```
 
 | Dataset | TensorFlow | PyTorch | 
