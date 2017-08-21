@@ -79,10 +79,13 @@ print('Loaded valid data')
 
 es = reader.load(args.test, embeddings.vocab, 2)
 print('Loaded test data')
+
 labels = list(revlut(reader.label2index))
+print('Number of labels found: [%d]' % len(labels))
 
 model = classify.create_model(embeddings, labels,
                               model_type=args.model_type,
+                              mxlen=args.mxlen,
                               unif=args.unif,
                               filtsz=args.filtsz,
                               cmotsz=args.cmotsz,
