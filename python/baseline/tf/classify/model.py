@@ -283,7 +283,6 @@ class LSTMModel(Classifier):
 
         output_state = final_state.h
         combine = tf.reshape(output_state, [-1, hsz])
-        # combine = highway_conns(combine, wsz_all, 1)
 
         # Definitely drop out
         with tf.name_scope("dropout"):
