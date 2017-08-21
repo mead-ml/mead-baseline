@@ -4,7 +4,7 @@ We assume cuda drivers and [cuDNN](https://developer.nvidia.com/cudnn) is instal
 
 ### Conda
 
-For maintaining a virtual environment in python, we use `conda`. You can use other package managers such as `pip`. Conda can be installed by [downloading this file](https://repo.continuum.io/archive/Anaconda3-4.4.0-Linux-x86_64.sh) and using `bash <installer.sh>`. Download the latest version from [this link](https://www.continuum.io/downloads).
+While the codes can be run from any python eco system, we use `conda` as a virtual environment. You can use other package managers such as `pip`. If you want to install conda, it can be installed by [downloading this file](https://repo.continuum.io/archive/Anaconda3-4.4.0-Linux-x86_64.sh) and using `bash <installer.sh>`. Download the latest version from [this link](https://www.continuum.io/downloads).
 
 ### Creating a Virtual Environment using Conda
 
