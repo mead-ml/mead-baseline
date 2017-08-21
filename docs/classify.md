@@ -115,9 +115,7 @@ python classify_sentence.py --backend tf --clean --optim adadelta --eta 1 --batc
 
 ## Status
 
-This model is implemented in TensorFlow, Keras, Torch, and PyTorch.  Currently, the PyTorch model does not support 'static' embeddings.  The Keras model currently does not use an 'eta' parameter.  Weight initialization techniques vary slightly across implementations at the moment.
-
-All of the models should typically achieve the dynamic fine-tune results on SST from the Kim paper, though there is some slight variation between runs (I have seen accuracy as high as *88.36%!*).
+This model is implemented in TensorFlow and PyTorch.  
 
 ### Latest Runs
 
