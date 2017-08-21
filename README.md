@@ -26,10 +26,12 @@ When the GPU is used, the code *assumes that cudnn (>= R5) is available* and ins
 - [Seq2Seq](docs/seq2seq.md)
 - [Language Modeling with RNNs](docs/lm.md)
 
+
 ## Reporting with Visdom
 
 To enable reporting with visdom, just pass `--visdom 1` in any command line program.  Baseline uses visdom with all framework implementations
 
+### [Set up](docs/setup.md)
 
 ## Baseline as an API
 
