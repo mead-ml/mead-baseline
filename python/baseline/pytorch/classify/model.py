@@ -85,9 +85,83 @@ class ConvModel(nn.Module, Classifier):
         return self.vocab
 
 
+
+class LSTMModel(nn.Module, Classifier):
+
+    def save(self, outname):
+        print('saving %s' % outname)
+        torch.save(self, outname)
+
+    def create_loss(self):
+        return nn.NLLLoss()
+
+    def __init__(self):
+        super(LSTMModel, self).__init__()
+
+    @staticmethod
+    def load(outname, **kwargs):
+        model = torch.load(outname)
+        return model
+
+    @staticmethod
+    def create(embeddings, labels, **kwargs):
+        pdrop = kwargs.get('dropout', 0.5)
+        nlayers = kwargs.get('layers', 1)
+        hsz = kwargs.get('hsz', kwargs.get('cmotsz', 100))
+        unif = kwargs['unif']
+        dsz = embeddings.dsz
+        model = LSTMModel()
+        model.labels = labels
+        nc = len(labels)
+
+        model.vocab = embeddings.vocab
+        model.lut = nn.Embedding(embeddings.vsz + 1, dsz)
+        del model.lut.weight
+
+        model.lut.weight = nn.Parameter(torch.FloatTensor(embeddings.weights),
+                                        requires_grad=True)
+
+        model.lstm = nn.LSTM(dsz, hsz, nlayers, bias=False, batch_first=True, dropout=pdrop)
+        for weight in model.lstm.parameters():
+            weight.data.uniform_(-unif, unif)
+        # Width of concat of parallel convs
+        input_dim = hsz
+        model.fconns = nn.Sequential()
+
+        append2seq(model.fconns, (
+            nn.BatchNorm1d(input_dim),
+            nn.Dropout(pdrop),
+            nn.Linear(input_dim, nc),
+            nn.LogSoftmax()
+        ))
+        return model
+
+    def forward(self, input):
+        # BxTxH
+        embeddings = self.lut(input)
+        output, hidden = self.lstm(embeddings)
+        # This squeeze can cause problems when B=1
+        last_frame = output[:, -1, :].squeeze()
+        output = self.fconns(last_frame)
+        return output
+
+    def classify(self, batch_time):
+        return classify_bt(self, batch_time)
+
+    def get_labels(self):
+        return self.labels
+
+    def get_vocab(self):
+        return self.vocab
+
+# These define the possible models for this backend
+BASELINE_CLASSIFICATION_MODELS = {'default': ConvModel.create, 'lstm': LSTMModel.create}
+BASELINE_CLASSIFICATION_LOADERS = {'default': ConvModel.load, 'lstm': LSTMModel.load}
+
+
 def create_model(w2v, labels, **kwargs):
-    return create_classifier_model(ConvModel.create, w2v, labels, **kwargs)
+    return create_classifier_model(BASELINE_CLASSIFICATION_MODELS, w2v, labels, **kwargs)
 
 
 def load_model(outname, **kwargs):
-    return load_classifier_model(ConvModel.load, outname, **kwargs)
+    return load_classifier_model(BASELINE_CLASSIFICATION_LOADERS, outname, **kwargs)

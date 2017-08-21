@@ -78,35 +78,39 @@ class Classifier(object):
         return sorted(outcomes, key=lambda tup: tup[1], reverse=True)
 
 
-def create_classifier_model(default_create_model_fn, w2v, labels, **kwargs):
+def create_classifier_model(known_creators, w2v, labels, **kwargs):
     """If `model_type` is given, use it to load an addon model and construct that OW use default
     
-    :param default_create_model_fn: Function to create the model, typically a static factory method
+    :param known_creators: Map of baseline creators, keyed by `model_type`, typically a static factory method
     :param w2v: Word embeddings
     :param labels: A list or map of labels
     :param kwargs: Anything required to feed the model its parameters
     :return: A newly created model
     """
     model_type = kwargs.get('model_type', 'default')
-    if model_type == 'default':
-        return default_create_model_fn(w2v, labels, **kwargs)
+    if model_type in known_creators:
+        creator_fn = known_creators[model_type]
+        print('Calling baseline model ', creator_fn)
+        return creator_fn(w2v, labels, **kwargs)
 
     model = create_user_model(w2v, labels, **kwargs)
     return model
 
 
-def load_classifier_model(default_load_fn, outname, **kwargs):
+def load_classifier_model(known_loaders, outname, **kwargs):
     """If `model_type` is given, use it to load an addon model and construct that OW use default
     
-    :param default_load_fn: Function to load the model, typically a static factory method
+    :param known_loaders: Map of baseline functions to load the model, typically a static factory method
     :param outname The model name to load
     :param kwargs: Anything required to feed the model its parameters
     :return: A restored model
     """
+
     model_type = kwargs.get('model_type', 'default')
-    if model_type == 'default':
-        print('Calling default load fn', default_load_fn)
-        return default_load_fn(outname, **kwargs)
+    if model_type in known_loaders:
+        loader_fn = known_loaders[model_type]
+        print('Calling baseline model loader ', loader_fn)
+        return loader_fn(outname, **kwargs)
     return load_user_model(outname, **kwargs)
 
 
