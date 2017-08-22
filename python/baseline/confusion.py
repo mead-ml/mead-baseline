@@ -68,7 +68,7 @@ class ConfusionMatrix(object):
         
         :return: (``float``) accuracy
         """
-        return self.get_correct()/self.get_total()
+        return float(self.get_correct())/self.get_total()
 
     def get_recall(self):
         """Get the recall
