@@ -1,5 +1,6 @@
 import numpy as np
 import os
+import logging
 
 
 def basic_reporting(metrics, tick, phase, tick_type=None):
@@ -13,6 +14,18 @@ def basic_reporting(metrics, tick, phase, tick_type=None):
     for k, v in metrics.items():
         print('\t%s=%.3f' % (k, v))
     print('-------------------------------------------------')
+
+
+def logging_reporting(metrics, tick, phase, tick_type=None):
+    if tick_type is None:
+        tick_type = 'STEP'
+        if phase in ['Valid', 'Test']:
+            tick_type = 'EPOCH'
+
+    msg = {'tick_type': tick_type, 'tick': tick, 'phase': phase }
+    for k, v in metrics.items():
+        msg[k] = v
+    logging.info(msg)
 
 g_vis = None
 g_vis_win = {}
