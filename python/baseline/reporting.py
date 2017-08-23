@@ -1,6 +1,7 @@
 import numpy as np
 import os
 
+
 def basic_reporting(metrics, tick, phase, tick_type=None):
     if tick_type is None:
         tick_type = 'STEP'

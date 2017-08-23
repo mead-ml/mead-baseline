@@ -391,7 +391,7 @@ class TSVSeqLabelReader(SeqLabelReader):
         text = ' '.join(list(filter(lambda s: len(s) != 0, [clean_fn(w) for w in text])))
         return label, text
 
-    def build_vocab(self, files):
+    def build_vocab(self, files, **kwargs):
         """Take a directory (as a string), or an array of files and build a vocabulary
         
         Take in a directory or an array of individual files (as a list).  If the argument is
@@ -404,7 +404,7 @@ class TSVSeqLabelReader(SeqLabelReader):
         if type(files) == str:
             if os.path.isdir(files):
                 base = files
-                files = filter(lambda x: os.path.isfile(os.path.join(base, x)), os.listdir(base))
+                files = filter(os.path.isfile, [os.path.join(base, x) for x in os.listdir(base)])
             else:
                 files = [files]
 
