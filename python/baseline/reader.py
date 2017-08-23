@@ -438,7 +438,7 @@ def create_pred_reader(mxlen, zeropadding, clean_fn, vec_alloc, src_vec_trans, *
         reader = TSVSeqLabelReader(mxlen, zeropadding, clean_fn, vec_alloc, src_vec_trans)
     else:
         mod = import_user_module("reader", reader_type)
-        reader = mod.create_pred_reader(mxlen, zeropadding, vec_alloc, src_vec_trans, **kwargs)
+        reader = mod.create_pred_reader(mxlen, zeropadding, clean_fn, vec_alloc, src_vec_trans, **kwargs)
     return reader
 
 
