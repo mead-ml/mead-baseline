@@ -4,6 +4,7 @@ from collections import Counter
 import re
 import codecs
 from baseline.utils import import_user_module
+import os
 
 
 def num_lines(filename):
@@ -391,6 +392,22 @@ class TSVSeqLabelReader(SeqLabelReader):
         return label, text
 
     def build_vocab(self, files):
+        """Take a directory (as a string), or an array of files and build a vocabulary
+        
+        Take in a directory or an array of individual files (as a list).  If the argument is
+        a string, it may be a directory, in which case, all files in the directory will be loaded
+        to form a vocabulary.
+        
+        :param files: Either a directory (str), or an array of individual files
+        :return: 
+        """
+        if type(files) == str:
+            if os.path.isdir(files):
+                base = files
+                files = filter(lambda x: os.path.isfile(os.path.join(base, x)), os.listdir(base))
+            else:
+                files = [files]
+
         vocab = Counter()
         for file in files:
             if file is None:
