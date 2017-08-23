@@ -1,6 +1,6 @@
 import tensorflow as tf
 from baseline.confusion import ConfusionMatrix
-from baseline.progress import ProgressBar
+from baseline.progress import create_progress_bar
 from baseline.reporting import basic_reporting
 from baseline.utils import listify, get_model_file
 from baseline.tf.tfy import optimizer
@@ -22,7 +22,7 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         cm = ConfusionMatrix(self.model.labels)
         total_loss = 0
         steps = len(loader)
-        pg = ProgressBar(steps)
+        pg = create_progress_bar(steps)
         for x, y in loader:
             feed_dict = self.model.ex2dict(x, y, do_dropout=True)
             _, step, lossv, guess = self.sess.run([self.train_op, self.global_step, self.loss, self.model.best], feed_dict=feed_dict)
@@ -40,7 +40,7 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         total_loss = 0
         cm = ConfusionMatrix(self.model.labels)
         steps = len(loader)
-        pg = ProgressBar(steps)
+        pg = create_progress_bar(steps)
         for x, y in loader:
             feed_dict = self.model.ex2dict(x, y)
             lossv, guess = self.sess.run([self.loss, self.model.best], feed_dict=feed_dict)

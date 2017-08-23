@@ -1,7 +1,7 @@
 from baseline.pytorch.torchy import *
 from baseline.utils import listify, to_spans, f_score, revlut, get_model_file
 from baseline.reporting import basic_reporting
-from baseline.progress import ProgressBar
+from baseline.progress import create_progress_bar
 from baseline.train import EpochReportingTrainer
 
 
@@ -84,7 +84,7 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
         total_overlap_count = 0
         metrics = {}
         steps = len(ts)
-        pg = ProgressBar(steps)
+        pg = create_progress_bar(steps)
         for x, xch, y, lengths, ids in ts:
             x, xch, y = self._wrap(x, xch, y)
             pred = self.model((x, xch, lengths))
@@ -107,7 +107,7 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
         total_loss = 0
         metrics = {}
         steps = len(ts)
-        pg = ProgressBar(steps)
+        pg = create_progress_bar(steps)
         for x, xch, y, lengths, ids in ts:
             x, xch, y = self._wrap(x, xch, y)
             self.optimizer.zero_grad()

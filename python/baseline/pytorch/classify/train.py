@@ -1,5 +1,5 @@
 from baseline.utils import listify, get_model_file
-from baseline.progress import ProgressBar
+from baseline.progress import create_progress_bar
 from baseline.confusion import ConfusionMatrix
 from baseline.reporting import basic_reporting
 from baseline.train import EpochReportingTrainer
@@ -43,7 +43,7 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
         self.model.eval()
         total_loss = 0
         steps = len(loader)
-        pg = ProgressBar(steps)
+        pg = create_progress_bar(steps)
         cm = ConfusionMatrix(self.labels)
 
         for x, y in loader:
@@ -67,7 +67,7 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
     def _train(self, loader):
         self.model.train()
         steps = len(loader)
-        pg = ProgressBar(steps)
+        pg = create_progress_bar(steps)
         cm = ConfusionMatrix(self.labels)
         total_loss = 0
         for x, y in loader:

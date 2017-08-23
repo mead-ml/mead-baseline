@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.autograd import Variable
 import numpy as np
-from baseline.progress import ProgressBar
+from baseline.progress import create_progress_bar
 from baseline.reporting import basic_reporting
 from baseline.utils import listify, get_model_file
 from baseline.train import Trainer
@@ -58,7 +58,7 @@ class Seq2SeqTrainerPyTorch(Trainer):
             self.valid_epochs += 1
             epochs = self.valid_epochs
 
-        pg = ProgressBar(steps)
+        pg = create_progress_bar(steps)
         for src, tgt, src_len, tgt_len in vs:
             src, dst, tgt = self._wrap(src, tgt)
             pred = self.model((src, dst))

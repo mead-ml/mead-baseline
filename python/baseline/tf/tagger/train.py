@@ -1,7 +1,7 @@
 import tensorflow as tf
 import numpy as np
 from baseline.utils import to_spans, f_score, listify, revlut, get_model_file
-from baseline.progress import ProgressBar
+from baseline.progress import create_progress_bar
 from baseline.reporting import basic_reporting
 from baseline.tf.tfy import optimizer
 from baseline.train import EpochReportingTrainer
@@ -72,7 +72,7 @@ class TaggerEvaluatorTf(object):
         total_gold_count = total_guess_count = total_overlap_count = 0
 
         steps = len(ts)
-        pg = ProgressBar(steps)
+        pg = create_progress_bar(steps)
         metrics = {}
         # Only if they provide a file and the raw txts, we can write CONLL file
         handle = None
@@ -121,7 +121,7 @@ class TaggerTrainerTf(EpochReportingTrainer):
         total_loss = 0
         steps = len(ts)
         metrics = {}
-        pg = ProgressBar(steps)
+        pg = create_progress_bar(steps)
         for x, xch, y, lengths, id in ts:
             feed_dict = self.model.make_feed_dict(x, xch, lengths, y, do_dropout=True)
             _, step, lossv = self.model.sess.run([self.train_op, self.global_step, self.loss], feed_dict=feed_dict)

@@ -26,9 +26,31 @@ class Progress(object):
         pass
 
 
+class ProgressBarJupyter(Progress):
+    """Simple Jupyter progress bar
+    
+    Writes a progress bar to an ipython widget
+    
+    """
+    def __init__(self, total):
+        super(ProgressBarJupyter, self).__init__()
+        from ipywidgets import FloatProgress
+        from IPython.display import display
+        self.progress = FloatProgress(min=0, max=total)
+        display(self.progress)
+
+    def update(self, step=1):
+        self.progress.value += step
+
+    def done(self):
+        """Close the widget
+        """
+        self.progress.close()
+
+
 # Modifed from here
 # http://stackoverflow.com/questions/3160699/python-progress-bar#3160819
-class ProgressBar(Progress):
+class ProgressBarTerminal(Progress):
     """Simple terminal-based progress bar
     
     Writes a progress bar to the terminal, using a designated `symbol` (which defaults to `=`)
@@ -38,7 +60,7 @@ class ProgressBar(Progress):
     FULL = '%(bar)s %(current)d/%(total)d (%(percent)3d%%) %(remaining)d to go'
 
     def __init__(self, total, width=40, fmt=DEFAULT, symbol='='):
-        super(ProgressBar, self).__init__()
+        super(ProgressBarTerminal, self).__init__()
         assert len(symbol) == 1
 
         self.total = total
@@ -79,3 +101,27 @@ class ProgressBar(Progress):
         self.update(step=0)
         print('')
 
+
+# This is retrofitted in, maybe there is a better way though
+g_Progress = ProgressBarTerminal
+
+
+def set_global_progress_bar(type):
+    """Sets the global factory for progress bars
+    
+    :param type: A string (`terminal` and `jupyter` will provide different implementations, otherwise its null)
+    :return: The global
+    """
+    global g_Progress
+    if type == 'terminal':
+        g_Progress = ProgressBarTerminal
+    elif type == 'jupyter':
+        g_Progress = ProgressBarJupyter
+    else:
+        g_Progress = Progress
+    return g_Progress
+
+
+def create_progress_bar(steps):
+    global g_Progress
+    return g_Progress(steps)

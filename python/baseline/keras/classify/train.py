@@ -1,7 +1,7 @@
 from keras.utils import np_utils
 from baseline.utils import listify, get_model_file
 from baseline.reporting import basic_reporting
-from baseline.progress import ProgressBar
+from baseline.progress import create_progress_bar
 from baseline.train import *
 
 
@@ -19,7 +19,7 @@ class ClassifyTrainerKeras(EpochReportingTrainer):
 
         train_metrics = {}
         steps = len(loader)
-        pg = ProgressBar(steps)
+        pg = create_progress_bar(steps)
         for x, y in loader:
             y = np_utils.to_categorical(y,  len(self.model.labels))
             metrics = self.model.impl.train_on_batch(x, y)
@@ -38,7 +38,7 @@ class ClassifyTrainerKeras(EpochReportingTrainer):
     def _test(self, loader):
         test_metrics = {}
         steps = len(loader)
-        pg = ProgressBar(steps)
+        pg = create_progress_bar(steps)
         for x, y in loader:
             y = np_utils.to_categorical(y, len(self.model.labels))
             metrics = self.model.impl.test_on_batch(x, y)
