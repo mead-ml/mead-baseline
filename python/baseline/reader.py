@@ -3,7 +3,7 @@ import numpy as np
 from collections import Counter
 import re
 import codecs
-from baseline.utils import import_user_module
+from baseline.utils import import_user_module, revlut
 import os
 
 
@@ -366,7 +366,7 @@ class TSVSeqLabelReader(SeqLabelReader):
         self.clean_fn = clean_fn
         self.mxlen = mxlen
         self.mxfiltsz = mxfiltsz
-        self.vec_alloc=vec_alloc
+        self.vec_alloc = vec_alloc
         if self.clean_fn is None:
             self.clean_fn = lambda x: x
         self.src_vec_trans = src_vec_trans
@@ -401,6 +401,7 @@ class TSVSeqLabelReader(SeqLabelReader):
         :param files: Either a directory (str), or an array of individual files
         :return: 
         """
+        label_idx = len(self.label2index)
         if type(files) == str:
             if os.path.isdir(files):
                 base = files
@@ -414,10 +415,17 @@ class TSVSeqLabelReader(SeqLabelReader):
                 continue
             with codecs.open(file, encoding='utf-8', mode='r') as f:
                 for line in f:
-                    _, text = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn)
+                    label, text = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn)
+                    if label not in self.label2index:
+                        self.label2index[label] = label_idx
+                        label_idx += 1
                     for w in TSVSeqLabelReader.splits(text):
                         vocab[w] += 1
-        return vocab
+
+        return vocab, self.get_labels()
+
+    def get_labels(self):
+        return list(revlut(self.label2index))
 
     def load(self, filename, index, batchsz, **kwargs):
 
@@ -425,15 +433,11 @@ class TSVSeqLabelReader(SeqLabelReader):
         shuffle = kwargs.get('shuffle', False)
         halffiltsz = self.mxfiltsz // 2
         nozplen = self.mxlen - 2*halffiltsz
-        label_idx = len(self.label2index)
+
         examples = []
         with codecs.open(filename, encoding='utf-8', mode='r') as f:
             for offset, line in enumerate(f):
                 label, text = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn)
-                if label not in self.label2index:
-                    self.label2index[label] = label_idx
-                    label_idx += 1
-
                 y = self.label2index[label]
                 toks = TSVSeqLabelReader.splits(text)
                 mx = min(len(toks), nozplen)

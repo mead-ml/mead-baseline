@@ -61,7 +61,7 @@ src_vec_trans = rev2nd if args.rev else None
 
 print(clean_fn, src_vec_trans)
 reader = create_pred_reader(args.mxlen, zeropadding, clean_fn, vec_alloc, src_vec_trans)
-vocab = reader.build_vocab([args.train, args.test, args.valid])
+vocab, labels = reader.build_vocab([args.train, args.test, args.valid])
 unif = 0 if args.static else args.unif
 embeddings = GloVeModel(args.embed,
                         vocab,
@@ -79,8 +79,6 @@ print('Loaded valid data')
 
 es = reader.load(args.test, embeddings.vocab, 2)
 print('Loaded test data')
-
-labels = list(revlut(reader.label2index))
 print('Number of labels found: [%d]' % len(labels))
 
 model = classify.create_model(embeddings, labels,
