@@ -86,6 +86,14 @@ class ConvModel(Classifier):
     def get_vocab(self):
         return self.vocab
 
+# TODO: Add the other models!
+BASELINE_CLASSIFICATION_MODELS = {
+    'default': ConvModel.create
+}
+BASELINE_CLASSIFICATION_LOADERS = {
+    'default': ConvModel.load
+}
+
 
 def create_model(w2v, labels, **kwargs):
     return create_classifier_model(ConvModel.create, w2v, labels, **kwargs)

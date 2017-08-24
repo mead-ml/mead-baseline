@@ -100,7 +100,7 @@ This model is run similarly to the model above:
 
 Early stopping with patience is supported.  There are many hyper-parameters that you can tune, which may yield many different models.
 
-Here is an example running Stanford Sentiment Treebank 2 data with adam using TensorFlow:
+Here is an example running Stanford Sentiment Treebank 2 data with adadelta using TensorFlow:
 
 ```
 python classify_sentence.py --backend tf --clean --optim adadelta --eta 1 --batchsz 50 --epochs 25 --patience 25 \
@@ -140,4 +140,38 @@ python classify_sentence.py --backend tf --clean --optim adadelta --eta 1 --batc
 Note that these are randomly initialized and these numbers will vary
 (IOW, don't assume that one implementation is guaranteed to outperform the others from a single run).
 
-On my laptop, each implementation takes between 29 - 40s per epoch depending on the deep learning framework (TensorFlow and PyTorch are fastest, and about the same speed)
+I have seen accuracy as high as 89.2 with this model.
+
+
+## NBoW (Max and Average Pooling)
+
+Two different models of Neural Bag-of-Words models are supported: max pooling (`--model_type nbowmax`) and average pooling (`--model_type nbow`).  Passing `--layers <N>` defines the number of hidden layers, and passing `--hsz <HU>` defines the number of hidden units for each layer.
+
+## Status
+
+This model is implemented in TensorFlow and PyTorch.  
+
+### Latest Runs
+
+Here are the last observed performance scores using _classify_sentence_ with fine-tuning on the Stanford Sentiment Treebank 2 (SST2) with a single hidden layer, and `hsz=100`
+
+It was run on the latest code as of 8/24/2017, with 25 epochs with adadelta as an optimizer:
+
+#### NBoW Results
+
+```
+python classify_sentence.py --backend pytorch --clean --optim adadelta --eta 1 --batchsz 50 --epochs 25 \
+ --train ../data/stsa.binary.phrases.train \
+ --valid ../data/stsa.binary.dev \
+ --test ../data/stsa.binary.test \
+ --embed /data/xdata/GoogleNews-vectors-negative300.bin \
+ --dropout 0.5 --model_type nbowmax
+```
+
+| model_type | Dataset | TensorFlow | PyTorch | 
+|------------| ------- | ---------- | ------- | 
+| nbowmax    | SST2    |       82.8 |  84.1   |
+| nbow       | SST2    |       84.2 |  82.9   |
+
+Note that these are randomly initialized and these numbers will vary
+(IOW, don't assume that one implementation is guaranteed to outperform the others from a single run).
