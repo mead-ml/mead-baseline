@@ -3,21 +3,13 @@ baseline
 
 Simple, Strong Deep-Learning Baselines for NLP in several frameworks
 
-Baseline algorithms and data support implemented with multiple deep learning tools, including CNN sentence modeling, RNN/LSTM-based tagging, seq2seq, and language modeling.  Can be used as stand-alone command line tools or as a Python library.  The library attempts to provide a common interface for several common deep learning tasks, as well as easy-to-use file loaders to make it easy to publish standard results, compare against strong baselines without concern for mistakes and to support rapid experiments to try and beat these baselines.
-
-
-**Update 6/30/2017: The code has been refactored to support reusing components and use as a python module.  If you used to run code from the `<task>/python/<framework>` areas, you can now run those tasks from `baseline/python`.  See usage in each task [document](docs)**
+Baseline algorithms and data support implemented with multiple deep learning tools, including sentence classification, tagging, seq2seq, and language modeling.  Can be used as stand-alone command line tools or as a Python library.  The library attempts to provide a common interface for several common deep learning tasks, as well as easy-to-use file loaders to make it easy to publish standard results, compare against strong baselines without concern for mistakes and to support rapid experiments to try and beat these baselines.
 
 # Overview
 
-A few strong, deep baseline algorithms for several common NLP tasks,
-including sentence classification, tagging, sequence-to-sequence and language modeling problems.  Considerations are conceptual simplicity, efficiency and accuracy.  This is intended as a simple to understand reference for building strong baselines with deep learning.
+A few strong, deep baseline algorithms for several common NLP tasks, including sentence classification, tagging, sequence-to-sequence and language modeling problems.  Considerations are conceptual simplicity, efficiency and accuracy.  The included approaches are (hopefully) the first "deep learning thing" you might think of for a certain type of problem, and are currently near SoTA for many datasets.  Below you can find descriptions of the algorithms, and the status of implementation for each framework.
 
-After considering other strong, shallow baselines, we have found that even incredibly simple, moderately deep models often perform better.  These models are only slightly more complex to implement than strong shallow baselines such as shingled SVMs and NBSVMs, and support multi-class output easily.  Additionally, they are (hopefully) the first "deep learning thing" you might think of for a certain type of problem.  Using these stronger baselines as a reference point hopefully yields more productive algorithms and experimentation.
-
-Each algorithm and implementation for each DL framework can be run as a separate command line program, or as a library.  Below you can find descriptions of the algorithms, and the status of implementation for each framework.
-
-When the GPU is used, the code *assumes that cudnn (>= R5) is available* and installed. This is critical for good performance.
+When the GPU is used, the code assumes that cudnn is available* and installed. This is critical for good performance.
 
 ## Supported Tasks
 
@@ -26,10 +18,24 @@ When the GPU is used, the code *assumes that cudnn (>= R5) is available* and ins
 - [Seq2Seq](docs/seq2seq.md)
 - [Language Modeling with RNNs](docs/lm.md)
 
-## Reporting with Visdom
+## Reporting with Visdom and tensorboard
 
-To enable reporting with visdom, just pass `--visdom 1` in any command line program.  Baseline uses visdom with all framework implementations
+### Visdom
 
+First install it:
+
+`pip install visdom`
+
+To enable reporting with visdom, just pass `--visdom 1` in any command line program.
+
+### Tensorboard
+
+First install tensorboard logger (which is independent of tensorflow):
+
+`pip install tensorboard_logger`
+
+To enable reporting with tensorboard, just pass `--tensorboard 1` in any command line program.
+You must have tensorboard installed to use this.
 
 ## Baseline as an API
 
@@ -39,11 +45,9 @@ You can also think of the library itself as an abstraction layer at the "solutio
 
 ### As scaffolding for an experiment
 
-If you have a problem where the input is the same as a `baseline` task (e.g. unstrutured prediction over a temporal vector), you can easily use the API to set up your boilerplate work for you, and focus on your model, by creating a user-defined `addon`.  This is just a normal python file with a creation and load hooks.  Here are some examples:
+If you have a problem where the input is the same as a `baseline` task, you can easily use the API to set up your boilerplate work for you, and focus on your model, by creating a user-defined `addon`.  This is just a normal python file with a creation and load hooks.  Here are some examples:
 
-https://gist.github.com/dpressel/3691af49fd5c118ea724775dd970f059
-https://gist.github.com/dpressel/014588c0b260ec582c9a4b951a8c5980
 https://gist.github.com/dpressel/d01474f646c73f4773dbbc3a77624d64
 
-Then pass `--model_type {task}_{model}` (e.g. `classify_nbow`, in the case of the first example gist) to the driver program for that task.
+Then pass `--model_type {model}` (e.g. `nochar`, in the case of the first example gist) to the driver program for that task.  The driver program will look to see if it has an implementation for `nochar` and will not find it in its registry of taggers.  So it will import `tagger_nochar.py`, and call its `create_model` function with the arguments and use the provided model.
 
