@@ -28,13 +28,13 @@ Here are some places where this code is known to perform well:
 
 There are some options in each implementation that might vary slightly, but this approach should do at least as well as the original paper.
 
-## Fine-tuning Embedding (LookupTable) layer
+### With Fine-tuning Embedding (LookupTable) layer
 
 The (default) fine-tuning approach loads the word2vec weight matrix into an Lookup Table.  As we can see from the Kim paper, dynamic/fine-tuning embedding models do not always out-perform static models, However, they tend to do better.
 
 We randomly initialize unattested words and add them to the weight matrix for the Lookup Table.  This can be controlled with the 'unif' parameter in the driver program.
 
-## Static, "frozen" Embedding (LookupTable) layer
+### Static, "frozen" Embedding (LookupTable) layer
 
 There are several ways to do static embeddings.  One way would be to load a temporal signal comprised of word2vec vectors at each tick.  This can be done by loading the model, and then looking up each word and building a temporal vector out of each lookup.  This will expand the vector in the training data, which will take up more space upfront, and will require transferring more memory to the GPU,
 but then bypasses the lookup table altogther.  If you are not fine-tuning, this means you could pre-compute your feature vectors all the way to post-embedding layer. 
@@ -45,7 +45,7 @@ When this is exercised currently, the 'unif' parameter is ignored, forcing unatt
 
 The static (no fine-tuning) model usually has decent performance, and the code is very simple to implement from scratch, as long as you have access to a fast convolution operator.  For most cases, fine-tuning is preferred.
 
-## Running It
+### Running It
 
 Early stopping with patience is supported.  There are many hyper-parameters that you can tune, which may yield many different models.  Here is a PyTorch example of parameterization of dynamic embeddings with SGD and the default three filter sizes (3, 4, and 5):
 
@@ -94,7 +94,7 @@ Provides a simple LSTM for text classification with PyTorch and TensorFlow
 The LSTM model provided here expects a time-reversed signal (so that padding will be on the left-side).  The driver program can be passed `--rev 1` to do this time-reversal (you currently must do this when using this model).  The LSTM's final hidden state is then passed to the final layer.  The use of an LSTM instead of parallel convolutional filters is the main differentiator between this model and the default model (CMOT) above.  To request the LSTM classifier instead of the default, pass `--model_type lstm` to the driver program (along with the request for time-reversal).
 
 
-## Running It
+### Running It
 
 This model is run similarly to the model above:
 
@@ -113,7 +113,7 @@ python classify_sentence.py --backend tf --clean --optim adadelta --eta 1 --batc
  --dropout 0.5
 ```
 
-## Status
+### Status
 
 This model is implemented in TensorFlow and PyTorch.  
 
@@ -147,7 +147,7 @@ I have seen accuracy as high as 89.2 with this model.
 
 Two different models of Neural Bag-of-Words models are supported: max pooling (`--model_type nbowmax`) and average pooling (`--model_type nbow`).  Passing `--layers <N>` defines the number of hidden layers, and passing `--hsz <HU>` defines the number of hidden units for each layer.
 
-## Status
+### Status
 
 This model is implemented in TensorFlow and PyTorch.  
 
