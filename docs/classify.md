@@ -2,7 +2,7 @@
 
 There are several models built in to the `baseline` codebase.  These are summarized individually in the sections below
 
-## Convolution - Max Over Time Architecture (CMOT)
+## Convolution Model
 
 This code provides a pure Python PyTorch, TensorFlow and Keras implementations (as well as a Lua/Torch7 implementation. 
 
@@ -85,7 +85,7 @@ Note that these are randomly initialized and these numbers will vary
 
 On my laptop, each implementation takes between 29 - 40s per epoch depending on the deep learning framework (TensorFlow and PyTorch are fastest, and about the same speed)
 
-## LSTM
+## LSTM Model
 
 Provides a simple LSTM for text classification with PyTorch and TensorFlow
 
@@ -143,7 +143,7 @@ Note that these are randomly initialized and these numbers will vary
 I have seen accuracy as high as 89.2 with this model.
 
 
-## NBoW (Max and Average Pooling)
+## Neural Bag of Words (NBoW) Model (Max and Average Pooling)
 
 Two different models of Neural Bag-of-Words models are supported: max pooling (`--model_type nbowmax`) and average pooling (`--model_type nbow`).  Passing `--layers <N>` defines the number of hidden layers, and passing `--hsz <HU>` defines the number of hidden units for each layer.
 
