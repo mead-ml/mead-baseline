@@ -15,9 +15,9 @@ def basic_reporting(metrics, tick, phase, tick_type=None):
         print('\t%s=%.3f' % (k, v))
     print('-------------------------------------------------')
 
-g_log = logging.getLogger('baseline')
 
 def logging_reporting(metrics, tick, phase, tick_type=None):
+    log = logging.getLogger('baseline.reporting')
     if tick_type is None:
         tick_type = 'STEP'
         if phase in ['Valid', 'Test']:
@@ -26,7 +26,7 @@ def logging_reporting(metrics, tick, phase, tick_type=None):
     msg = {'tick_type': tick_type, 'tick': tick, 'phase': phase }
     for k, v in metrics.items():
         msg[k] = v
-    g_log.info(msg)
+    log.info(msg)
 
 g_vis = None
 g_vis_win = {}
