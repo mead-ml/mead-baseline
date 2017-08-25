@@ -40,7 +40,7 @@ def classifier_repl(classifier, **kwargs):
             break
         try:
             tokens = text.split(' ')
-            outcomes = classifier.classify_text(mxlen, tokens, zeropad)
+            outcomes = classifier.classify_text(tokens, mxlen=mxlen, zeropad=zeropad)
             k = min(k, len(outcomes))
             probs = outcomes[:k]
             for prob_i in probs:
