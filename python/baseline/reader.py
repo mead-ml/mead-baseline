@@ -425,7 +425,10 @@ class TSVSeqLabelReader(SeqLabelReader):
         return vocab, self.get_labels()
 
     def get_labels(self):
-        return list(revlut(self.label2index))
+        labels = [''] * len(self.label2index)
+        for label, index in self.label2index.items():
+            labels[index] = label
+        return labels
 
     def load(self, filename, index, batchsz, **kwargs):
 
