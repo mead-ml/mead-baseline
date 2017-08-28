@@ -1,10 +1,24 @@
 import numpy as np
 
 
-class Word2VecModel(object):
+class EmbeddingsModel(object):
+    def __init__(self):
+        super(EmbeddingsModel, self).__init__()
+
+    def get_vsz(self):
+        pass
+
+    def get_dsz(self):
+        pass
+
+    def lookup(self, word, nullifabsent=True):
+        pass
+
+
+class Word2VecModel(EmbeddingsModel):
 
     def __init__(self, filename, known_vocab=None, unif_weight=None, keep_unused=False):
-
+        super(Word2VecModel, self).__init__()
         uw = 0.0 if unif_weight is None else unif_weight
         self.vocab = {}
         idx = 0
@@ -46,6 +60,12 @@ class Word2VecModel(object):
         self.weights = np.array(word_vectors)
         self.vsz = self.weights.shape[0] - 1
 
+    def get_dsz(self):
+        return self.dsz
+
+    def get_vsz(self):
+        return self.vsz
+
     @staticmethod
     def _readtospc(f):
 
@@ -66,10 +86,10 @@ class Word2VecModel(object):
         return self.nullv
 
 
-class GloVeModel(object):
+class GloVeModel(EmbeddingsModel):
 
     def __init__(self, filename, known_vocab=None, unif_weight=None, keep_unused=False):
-
+        super(GloVeModel, self).__init__()
         uw = 0.0 if unif_weight is None else unif_weight
         self.vocab = {}
         idx = 1
@@ -104,6 +124,12 @@ class GloVeModel(object):
         self.weights = np.array(word_vectors)
         self.vsz = self.weights.shape[0] - 1
 
+    def get_dsz(self):
+        return self.dsz
+
+    def get_vsz(self):
+        return self.vsz
+
     def lookup(self, word, nullifabsent=True):
         if word in self.vocab:
             return self.weights[self.vocab[word]]
@@ -112,10 +138,10 @@ class GloVeModel(object):
         return self.nullv
 
 
-class RandomInitVecModel(object):
+class RandomInitVecModel(EmbeddingsModel):
 
     def __init__(self, dsz, known_vocab, counts=True, unif_weight=None):
-
+        super(RandomInitVecModel, self).__init__()
         uw = 0.0 if unif_weight is None else unif_weight
         self.vocab = {}
         self.vocab["<PAD>"] = 0
@@ -136,6 +162,12 @@ class RandomInitVecModel(object):
 
         self.nullv = np.zeros(self.dsz, dtype=np.float32)
         self.weights[0] = self.nullv
+
+    def get_dsz(self):
+        return self.dsz
+
+    def get_vsz(self):
+        return self.vsz
 
     def lookup(self, word, nullifabsent=True):
         if word in self.vocab:
