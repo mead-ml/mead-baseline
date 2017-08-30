@@ -23,6 +23,7 @@ def tagger_repl(tagger, **kwargs):
         except Exception as e:
             logging.exception('Error')
 
+
 def classifier_repl(classifier, **kwargs):
 
     mxlen = int(kwargs.get('mxlen', 100))

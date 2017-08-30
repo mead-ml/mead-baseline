@@ -211,8 +211,6 @@ class WordClassifierBase(Classifier):
         pooled = model.pool(word_embeddings, dsz, init, **kwargs)
         # combine = highway_conns(combine, wsz_all, 1)
 
-
-
         stacked = model.stacked(pooled, init, **kwargs)
 
         # For fully connected layers, use xavier (glorot) transform

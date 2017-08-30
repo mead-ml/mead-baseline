@@ -40,12 +40,6 @@ gpu = not args.nogpu
 
 args.reporting = setup_reporting(**vars(args))
 
-# reader = TSVSentencePairReader # src is column 0, dst is column 1
-# source_vocab, dst_vocab = reader.build_vocabs([args.train, args.test])
-# reader.load(source_vocab, dst_vocab.
-# esx = TSVSentencePairReader.load(args.test, embed1.vocab, embed2.vocab, args.mxlen, alloc_fn
-# reader = ParallelCorpusReader(src_ext, dst_ext)
-
 if args.backend == 'pytorch':
     import baseline.pytorch.seq2seq as seq2seq
     from baseline.pytorch import *

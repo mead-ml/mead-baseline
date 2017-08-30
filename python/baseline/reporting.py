@@ -87,7 +87,8 @@ def setup_reporting(**kwargs):
 
     use_visdom = kwargs.get('visdom', False)
     use_tensorboard = kwargs.get('tensorboard', False)
-    reporting = [basic_reporting]
+    use_logging = kwargs.get('logging', False)
+    reporting = [logging_reporting if use_logging else basic_reporting]
     if use_visdom:
         reporting.append(visdom_reporting)
     if use_tensorboard:

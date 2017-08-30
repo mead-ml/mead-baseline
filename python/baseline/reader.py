@@ -147,7 +147,6 @@ class MultiFileParallelCorpusReader(ParallelCorpusReader):
                     tgt_len = len(dst) + 2
                     end1 = min(src_len, mxlen)
                     end2 = min(tgt_len, mxlen)-2
-                    last = max(end1, end2)
                     tgtl[0] = GO
                     src_len = end1
                     tgt_len = end2+2
