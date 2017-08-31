@@ -4,6 +4,14 @@ import logging
 
 
 def basic_reporting(metrics, tick, phase, tick_type=None):
+    """Write results to `stdout`
+
+    :param metrics: A map of metrics to scores
+    :param tick: The time (resolution defined by `tick_type`)
+    :param phase: The phase of training (`Train`, `Valid`, `Test`)
+    :param tick_type: The resolution of tick (`STEP`, `EPOCH`)
+    :return:
+    """
     if tick_type is None:
         tick_type = 'STEP'
         if phase in ['Valid', 'Test']:
@@ -17,6 +25,14 @@ def basic_reporting(metrics, tick, phase, tick_type=None):
 
 
 def logging_reporting(metrics, tick, phase, tick_type=None):
+    """Write results to Python's `logging` module under `baseline.reporting`
+
+    :param metrics: A map of metrics to scores
+    :param tick: The time (resolution defined by `tick_type`)
+    :param phase: The phase of training (`Train`, `Valid`, `Test`)
+    :param tick_type: The resolution of tick (`STEP`, `EPOCH`)
+    :return:
+    """
     log = logging.getLogger('baseline.reporting')
     if tick_type is None:
         tick_type = 'STEP'
@@ -33,6 +49,14 @@ g_vis_win = {}
 
 
 def visdom_reporting(metrics, tick, phase, tick_type=None):
+    """This method will write its results to visdom
+
+    :param metrics: A map of metrics to scores
+    :param tick: The time (resolution defined by `tick_type`)
+    :param phase: The phase of training (`Train`, `Valid`, `Test`)
+    :param tick_type: The resolution of tick (`STEP`, `EPOCH`)
+    :return:
+    """
     # To use this:
     # python -m visdom.server
     # http://localhost:8097/
@@ -66,6 +90,14 @@ g_tb_run = None
 
 
 def tensorboard_reporting(metrics, tick, phase, tick_type=None):
+    """This method will write its results to tensorboard
+
+    :param metrics: A map of metrics to scores
+    :param tick: The time (resolution defined by `tick_type`)
+    :param phase: The phase of training (`Train`, `Valid`, `Test`)
+    :param tick_type: The resolution of tick (`STEP`, `EPOCH`)
+    :return:
+    """
     # To use this:
     # tensorboard --logdir runs
     # http://localhost:6006
@@ -84,7 +116,19 @@ def tensorboard_reporting(metrics, tick, phase, tick_type=None):
 
 
 def setup_reporting(**kwargs):
+    """Negotiate the reporting hooks
 
+     :param kwargs:
+        See below
+
+    :Keyword Arguments:
+        * *visdom* (``bool``) --
+          Setup a hook to call `visdom` for logging.  Defaults to `False`
+        * *tensorboard* (``bool``) --
+          Setup a hook to call `tensorboard` for logging.  Defaults to `False`
+        * *logging* (``bool``) --
+          Use Python's `logging` module to log events to `baseline.reporting`.  Default to `False`
+    """
     use_visdom = kwargs.get('visdom', False)
     use_tensorboard = kwargs.get('tensorboard', False)
     use_logging = kwargs.get('logging', False)

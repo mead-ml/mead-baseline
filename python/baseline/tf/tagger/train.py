@@ -26,7 +26,6 @@ class TaggerEvaluatorTf(object):
         except:
             print('ERROR: Failed to write lines... closing file')
             handle.close()
-            handle = None
 
     def process_batch(self, x, xch, truth, sentence_lengths, ids, handle=None, txts=None):
 
@@ -66,7 +65,7 @@ class TaggerEvaluatorTf(object):
 
         return correct_labels, total_labels, overlap_count, gold_count, guess_count
 
-    def test(self, ts, conll_file=None, txts=None):
+    def test(self, ts, conll_output=None, txts=None):
 
         total_correct = total_sum = 0
         total_gold_count = total_guess_count = total_overlap_count = 0
@@ -76,8 +75,8 @@ class TaggerEvaluatorTf(object):
         metrics = {}
         # Only if they provide a file and the raw txts, we can write CONLL file
         handle = None
-        if conll_file is not None and txts is not None:
-            handle = open(conll_file, "w")
+        if conll_output is not None and txts is not None:
+            handle = open(conll_output, "w")
 
         for x, xch, y, lengths, id in ts:
             correct, count, overlaps, golds, guesses = self.process_batch(x, xch, y, lengths, id, handle, txts)
@@ -131,14 +130,15 @@ class TaggerTrainerTf(EpochReportingTrainer):
         metrics['avg_loss'] = float(total_loss)/steps
         return metrics
 
-    def _test(self, ts, conll_file=None, txts=None):
-        return self.evaluator.test(ts, conll_file, txts)
+    def _test(self, ts):
+        return self.evaluator.test(ts)
 
 
 def fit(model, ts, vs, es, **kwargs):
     epochs = int(kwargs['epochs']) if 'epochs' in kwargs else 5
     patience = int(kwargs['patience']) if 'patience' in kwargs else epochs
-    conll_file = kwargs.get('conll_file', None)
+    conll_output = kwargs.get('conll_output', None)
+    #TODO: ???? Really?
     txts = kwargs.get('txts', None)
     model_file = get_model_file(kwargs, 'tagger', 'tf')
     after_train_fn = kwargs['after_train_fn'] if 'after_train_fn' in kwargs else None
@@ -188,6 +188,6 @@ def fit(model, ts, vs, es, **kwargs):
 
         trainer.recover_last_checkpoint()
         evaluator = TaggerEvaluatorTf(model)
-        test_metrics = evaluator.test(es, conll_file=conll_file, txts=txts)
+        test_metrics = evaluator.test(es, conll_output=conll_output, txts=txts)
         for reporting in reporting_fns:
             reporting(test_metrics, 0, 'Test')

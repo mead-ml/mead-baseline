@@ -89,7 +89,7 @@ print('Loaded training data')
 vs, _ = reader.load(args.valid, word_vocab, char_vocab, args.batchsz)
 print('Loaded valid data')
 
-es, txts = reader.load(args.test, word_vocab, char_vocab, 2)
+es, txts = reader.load(args.test, word_vocab, char_vocab, 1)
 print('Loaded test data')
 
 args.maxs = reader.max_sentence_length
@@ -97,5 +97,5 @@ args.maxw = reader.max_word_length
 
 model = tagger.create_model(reader.label2index, word_vec, char_vec, **vars(args))
 
-tagger.fit(model, ts, vs, es, **vars(args))
+tagger.fit(model, ts, vs, es, txts=txts, **vars(args))
 
