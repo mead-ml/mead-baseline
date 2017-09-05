@@ -20,6 +20,8 @@ def basic_reporting(metrics, tick, phase, tick_type=None):
     print('%s [%d] [%s]' % (tick_type, tick, phase))
     print('=================================================')
     for k, v in metrics.items():
+        if k not in ['avg_loss', 'perplexity']:
+            v *= 100.
         print('\t%s=%.3f' % (k, v))
     print('-------------------------------------------------')
 
