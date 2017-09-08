@@ -240,7 +240,9 @@ class RNNTaggerModel(nn.Module, Tagger):
         for conv in self.char_convs:
             # In Conv1d, data BxCxT, max over time
             mot, _ = conv(char_vecs).max(2)
-            mots.append(mot.squeeze(2))
+            mots.append(mot)
+            #  Not required/working in latest pytorch
+            #mots.append(mot.squeeze(2))
 
         mots = torch.cat(mots, 1)
         output = self.word_ch_embed(mots)
@@ -249,6 +251,7 @@ class RNNTaggerModel(nn.Module, Tagger):
     def _compute_unary_tb(self, x, xch):
         batchsz = xch.size(1)
         seqlen = xch.size(0)
+        
         # Vectorized
         words_over_time = self.char2word(xch.view(seqlen * batchsz, -1)).view(seqlen, batchsz, -1)
 

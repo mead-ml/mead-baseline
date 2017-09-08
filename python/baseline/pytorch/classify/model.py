@@ -112,7 +112,9 @@ class ConvModel(WordClassifierBase):
             # In Conv1d, data BxCxT, max over time
             conv_out = conv(embeddings)
             mot, _ = conv_out.max(2)
-            mots.append(mot.squeeze(2))
+            mots.append(mot)
+            #  Not required/working in latest pytorch
+            #mots.append(mot.squeeze(2))
 
         mots = torch.cat(mots, 1)
         return self.conv_drop(mots)
