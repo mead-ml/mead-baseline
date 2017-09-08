@@ -251,7 +251,7 @@ class RNNTaggerModel(nn.Module, Tagger):
     def _compute_unary_tb(self, x, xch):
         batchsz = xch.size(1)
         seqlen = xch.size(0)
-        
+
         # Vectorized
         words_over_time = self.char2word(xch.view(seqlen * batchsz, -1)).view(seqlen, batchsz, -1)
 

@@ -28,7 +28,6 @@ parser.add_argument('--sharedv', default=False, help='Share vocab between source
 parser.add_argument('--showex', default=True, help='Show generated examples every few epochs', type=bool)
 parser.add_argument('--sample', default=False, help='If showing examples, sample?', type=bool)
 parser.add_argument('--topk', default=5, help='If sampling in examples, prunes to topk', type=int)
-parser.add_argument('--attn', default=False, help='Use attention', type=bool)
 parser.add_argument('--max_examples', default=5, help='How many examples to show', type=int)
 parser.add_argument('--nogpu', default=False, help='Dont use GPU (debug only!)', type=bool)
 parser.add_argument('--pdrop', default=0.5, help='Dropout', type=float)
@@ -43,19 +42,20 @@ gpu = not args.nogpu
 
 args.reporting = setup_reporting(**vars(args))
 
+do_reverse = args.model_type == 'default'
 if args.backend == 'pytorch':
     import baseline.pytorch.seq2seq as seq2seq
     from baseline.pytorch import *
     show_ex_fn = show_examples_pytorch
     alloc_fn = long_0_tensor_alloc
-    src_vec_trans = None if args.attn else tensor_reverse_2nd
+    src_vec_trans = tensor_reverse_2nd if do_reverse else None
     trim = True
 else:
     from baseline.tf import *
     import baseline.tf.seq2seq as seq2seq
     from numpy import zeros as alloc_fn
     show_ex_fn = show_examples_tf
-    src_vec_trans = None if args.attn else reverse_2nd
+    src_vec_trans = reverse_2nd if do_reverse else None
     trim = False
 
 reader = create_parallel_corpus_reader(args.mxlen, alloc_fn, trim, src_vec_trans,
@@ -81,6 +81,7 @@ rlut2 = revlut(embed2.vocab)
 model = seq2seq.create_model(embed1, embed2, **vars(args))
 # This code is framework specific
 if args.showex:
-    args.after_train_fn = lambda model: show_ex_fn(model, es, rlut1, rlut2, embed2, args.mxlen, args.sample, args.topk, args.max_examples, reverse=not args.attn)
+    args.after_train_fn = lambda model: show_ex_fn(model, es, rlut1, rlut2, embed2,
+                                                   args.mxlen, args.sample, args.topk, args.max_examples, reverse=do_reverse)
 
 seq2seq.fit(model, ts, es, **vars(args))
