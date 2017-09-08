@@ -2,9 +2,10 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 from baseline.pytorch.torchy import *
-from baseline.model import EncoderDecoder
+from baseline.model import EncoderDecoder, load_seq2seq_model, create_seq2seq_model
 
 
+# TODO: This could be generalized better with a little refactoring
 class Seq2SeqBase(nn.Module, EncoderDecoder):
 
     def __init__(self, embed1, embed2, batchfirst):
@@ -28,9 +29,21 @@ class Seq2SeqBase(nn.Module, EncoderDecoder):
     def create_loss(self):
         return SequenceCriterion(self.nc)
 
-    @staticmethod
-    def load(model_file, **kwargs):
-        return torch.load(model_file)
+    @classmethod
+    def load(cls, outname, **kwargs):
+        model = torch.load(outname)
+        return model
+
+    @classmethod
+    def create(cls, input_embeddings, output_embeddings, **kwargs):
+        hsz = kwargs['hsz']
+        layers = kwargs['layers']
+        rnntype = kwargs['rnntype']
+        pdrop = kwargs.get('dropout', 0.5)
+        batchfirst = kwargs.get('batchfirst', True)
+        model = cls(input_embeddings, output_embeddings, hsz, layers, rnntype, batchfirst, pdrop)
+        print(model)
+        return model
 
     # Input better be xch, x
     def forward(self, input):
@@ -55,7 +68,7 @@ class Seq2SeqBase(nn.Module, EncoderDecoder):
 
     def decode_rnn(self, context, h_i, output_i, dst):
         embed_out_seq = self.embed_out(dst)
-        context_transpose = context.t()
+        context_transpose = context.transpose(0, 1)
         outputs = []
 
         for i, embed_i in enumerate(embed_out_seq.split(1)):
@@ -89,6 +102,7 @@ class Seq2SeqBase(nn.Module, EncoderDecoder):
         # back to T x B x H -> B x T x H
         pred = pred.view(output.size(0), output.size(1), -1)
         return pred
+
 
 class Seq2SeqModel(Seq2SeqBase):
 
@@ -159,13 +173,20 @@ class Seq2SeqAttnModel(Seq2SeqBase):
         return torch.cat([embed_i, output_i], 1)
 
 
+BASELINE_SEQ2SEQ_MODELS = {
+    'default': Seq2SeqModel.create,
+    'attn': Seq2SeqAttnModel.create
+}
+BASELINE_SEQ2SEQ_LOADERS = {
+    'default': Seq2SeqModel.load,
+    'attn': Seq2SeqAttnModel.create
+}
+
+
 def create_model(src_vocab_embed, dst_vocab_embed, **kwargs):
-    hsz = int(kwargs['hsz'])
-    attn = bool(kwargs.get('attn', False))
-    layers = int(kwargs.get('layers', 1))
-    rnntype = kwargs.get('rnntype', 'lstm')
-    dropout = kwargs.get('dropout', 0.5)
-    Seq2SeqModelType = Seq2SeqAttnModel if attn else Seq2SeqModel
-    print(Seq2SeqModelType)
-    model = Seq2SeqModelType(src_vocab_embed, dst_vocab_embed, hsz, layers, rnntype, True, dropout)
+    model = create_seq2seq_model(BASELINE_SEQ2SEQ_MODELS, src_vocab_embed, dst_vocab_embed, **kwargs)
     return model
+
+
+def load_model(modelname, **kwargs):
+    return load_seq2seq_model(BASELINE_SEQ2SEQ_LOADERS, modelname, **kwargs)

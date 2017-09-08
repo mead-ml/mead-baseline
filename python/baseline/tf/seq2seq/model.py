@@ -3,9 +3,8 @@ import json
 from google.protobuf import text_format
 from tensorflow.python.platform import gfile
 from baseline.tf.tfy import *
-from baseline.w2v import RandomInitVecModel
 import tensorflow.contrib.seq2seq as tfcontrib_seq2seq
-from baseline.model import EncoderDecoder
+from baseline.model import EncoderDecoder, load_seq2seq_model, create_seq2seq_model
 
 
 def _temporal_cross_entropy_loss(logits, labels, label_lengths, mx_seq_length):
@@ -87,12 +86,13 @@ class Seq2SeqModel(EncoderDecoder):
         return model
 
     @staticmethod
-    def create(**kwargs):
+    def create(src_vocab_embed, dst_vocab_embed, **kwargs):
 
         model = Seq2SeqModel()
 
         hsz = int(kwargs['hsz'])
-        attn = bool(kwargs.get('attn', False))
+        attn = kwargs.get('model_type') == 'attn'
+        print('attn', attn)
         nlayers = int(kwargs.get('layers', 1))
         rnntype = kwargs.get('rnntype', 'lstm')
         mxlen = kwargs.get('mxlen', 100)
@@ -109,11 +109,8 @@ class Seq2SeqModel(EncoderDecoder):
         model.tgt_len = tf.placeholder(tf.int32, [None], name="tgt_len")
         model.mx_tgt_len = tf.placeholder(tf.int32, name="mx_tgt_len")
 
-        src_vocab_embed = kwargs.get('src_vocab_embed', None)
-        dst_vocab_embed = kwargs.get('dst_vocab_embed', None)
-
-        model.vocab1 = src_vocab_embed.vocab if src_vocab_embed is not None else kwargs['src_vocab']
-        model.vocab2 = dst_vocab_embed.vocab if dst_vocab_embed is not None else kwargs['dst_vocab']
+        model.vocab1 = src_vocab_embed if type(src_vocab_embed) is dict else src_vocab_embed.vocab
+        model.vocab2 = dst_vocab_embed if type(dst_vocab_embed) is dict else dst_vocab_embed.vocab
 
         model.mxlen = mxlen
         model.hsz = hsz
@@ -128,14 +125,14 @@ class Seq2SeqModel(EncoderDecoder):
         #if dst_vocab_embed is not None:
         #    assert dst_vsz == dst_vocab_embed.vsz + 1
         #assert src_vocab_embed.dsz == dst_vocab_embed.dsz
-        model.dsz = src_vocab_embed.dsz if src_vocab_embed is not None else kwargs["dsz"]
+        model.dsz = kwargs['dsz'] if type(src_vocab_embed) is dict else src_vocab_embed.dsz
 
         with tf.name_scope("LUT"):
-            if src_vocab_embed is not None:
+            if type(src_vocab_embed) is not dict:
                 Wi = tf.Variable(tf.constant(src_vocab_embed.weights, dtype=tf.float32), name="Wi")
             else:
                 Wi = tf.Variable(tf.random_uniform([len(model.vocab1), model.dsz], -unif, unif), name="Wi")
-            if dst_vocab_embed is not None:
+            if type(src_vocab_embed) is not dict:
                 Wo = tf.Variable(tf.constant(dst_vocab_embed.weights, dtype=tf.float32), name="Wo")
             else:
                 Wo = tf.Variable(tf.random_uniform([len(model.vocab2), model.dsz], -unif, unif), name="Wo")
@@ -285,8 +282,20 @@ class Seq2SeqModel(EncoderDecoder):
         return self.vocab2
 
 
+BASELINE_SEQ2SEQ_MODELS = {
+    'default': Seq2SeqModel.create,
+    'attn': Seq2SeqModel.create
+}
+BASELINE_SEQ2SEQ_LOADERS = {
+    'default': Seq2SeqModel.load,
+    'attn': Seq2SeqModel.load
+}
+
+
 def create_model(src_vocab_embed, dst_vocab_embed, **kwargs):
-    kwargs["src_vocab_embed"] = src_vocab_embed
-    kwargs["dst_vocab_embed"] = dst_vocab_embed
-    enc_dec = Seq2SeqModel.create(**kwargs)
-    return enc_dec
+    model = create_seq2seq_model(BASELINE_SEQ2SEQ_MODELS, src_vocab_embed, dst_vocab_embed, **kwargs)
+    return model
+
+
+def load_model(modelname, **kwargs):
+    return load_seq2seq_model(BASELINE_SEQ2SEQ_LOADERS, modelname, **kwargs)

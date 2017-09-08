@@ -35,6 +35,9 @@ parser.add_argument('--pdrop', default=0.5, help='Dropout', type=float)
 parser.add_argument('--backend', default='tf', help='Deep Learning Framework backend')
 parser.add_argument('--pair_suffix', default=None, nargs='+', help='list of suffixes to give if parallel corpora')
 parser.add_argument('--vocab', default=None, help='vocab (basename) file to give if it exists')
+parser.add_argument('--reader_type', default='default', help='reader type')
+parser.add_argument('--model_type', help='Name of model to load and train', default='default')
+
 args = parser.parse_args()
 gpu = not args.nogpu
 
@@ -45,27 +48,21 @@ if args.backend == 'pytorch':
     from baseline.pytorch import *
     show_ex_fn = show_examples_pytorch
     alloc_fn = long_0_tensor_alloc
-    shape_fn = tensor_shape
     src_vec_trans = None if args.attn else tensor_reverse_2nd
     trim = True
 else:
     from baseline.tf import *
     import baseline.tf.seq2seq as seq2seq
     from numpy import zeros as alloc_fn
-    from numpy import shape as shape_fn
     show_ex_fn = show_examples_tf
     src_vec_trans = None if args.attn else reverse_2nd
     trim = False
 
-if args.pair_suffix is not None and args.vocab is not None:
-    print('Reading parallel file corpus')
-    reader = MultiFileParallelCorpusReader(args.pair_suffix[0], args.pair_suffix[1],
-                                           args.mxlen, vec_alloc=alloc_fn, trim=trim,
-                                           src_vec_trans=src_vec_trans)
+reader = create_parallel_corpus_reader(args.mxlen, alloc_fn, trim, src_vec_trans,
+                                       pair_suffix=args.pair_suffix, reader_type=args.reader_type)
+if args.vocab is not None:
     vocab_list = [args.vocab]
 else:
-    print('Reading tab-separated corpus')
-    reader = TSVParallelCorpusReader(args.mxlen, vec_alloc=alloc_fn, trim=trim, src_vec_trans=src_vec_trans)
     vocab_list = [args.train, args.test]
 
 vocab1, vocab2 = reader.build_vocabs(vocab_list)

@@ -52,6 +52,17 @@ def load_user_tagger_model(outname, **kwargs):
     return mod.load_model(model_type, outname, **kwargs)
 
 
+def create_user_seq2seq_model(input_embedding, output_embedding, **kwargs):
+    model_type = kwargs['model_type']
+    mod = import_user_module("seq2seq", model_type)
+    return mod.create_model(input_embedding, output_embedding, **kwargs)
+
+
+def load_user_seq2seq_model(outname, **kwargs):
+    model_type = kwargs['model_type']
+    mod = import_user_module("seq2seq", model_type)
+    return mod.load_model(model_type, outname, **kwargs)
+
 def get_model_file(dictionary, task, platform):
     base = dictionary.get('outfile', './%s-model' % task)
     rid = os.getpid()

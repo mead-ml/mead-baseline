@@ -3,7 +3,6 @@ import json
 import os
 from google.protobuf import text_format
 from tensorflow.python.platform import gfile
-from baseline.model import Tagger
 from tensorflow.contrib.layers import fully_connected, xavier_initializer
 from baseline.model import Tagger, create_tagger_model, load_tagger_model
 
@@ -176,11 +175,11 @@ class RNNTaggerModel(Tagger):
         model.crf = bool(kwargs.get('crf', False))
         char_dsz = char_vec.dsz
         nc = len(labels)
-        model.x = tf.placeholder(tf.int32, [None, mxlen], name="x")
-        model.xch = tf.placeholder(tf.int32, [None, mxlen, maxw], name="xch")
-        model.y = tf.placeholder(tf.int32, [None, mxlen], name="y")
-        model.lengths = tf.placeholder(tf.int32, [None], name="lengths")
-        model.pkeep = tf.placeholder(tf.float32, name="pkeep")
+        model.x = kwargs.get('x', tf.placeholder(tf.int32, [None, mxlen], name="x"))
+        model.xch = kwargs.get('xch', tf.placeholder(tf.int32, [None, mxlen, maxw], name="xch"))
+        model.y = kwargs.get('y', tf.placeholder(tf.int32, [None, mxlen], name="y"))
+        model.lengths = kwargs.get('lengths', tf.placeholder(tf.int32, [None], name="lengths"))
+        model.pkeep = kwargs.get('pkeep', tf.placeholder(tf.float32, name="pkeep"))
         model.pdrop_value = pdrop
         model.word_vocab = {}
         if word_vec is not None:

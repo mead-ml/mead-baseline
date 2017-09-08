@@ -1,5 +1,6 @@
 import numpy as np
 from baseline.utils import revlut, load_user_model, create_user_model, load_user_tagger_model, create_user_tagger_model
+from baseline.utils import load_user_seq2seq_model, create_user_seq2seq_model
 
 
 class Classifier(object):
@@ -229,3 +230,23 @@ class EncoderDecoder(object):
     @staticmethod
     def load(basename, **kwargs):
         pass
+
+
+def create_seq2seq_model(known_creators, input_embedding, output_embedding, **kwargs):
+    model_type = kwargs.get('model_type', 'default')
+    if model_type in known_creators:
+        creator_fn = known_creators[model_type]
+        print('Calling baseline model ', creator_fn)
+        return creator_fn(input_embedding, output_embedding, **kwargs)
+
+    model = create_user_seq2seq_model(input_embedding, output_embedding, **kwargs)
+    return model
+
+
+def load_seq2seq_model(known_loaders, outname, **kwargs):
+    model_type = kwargs.get('model_type', 'default')
+    if model_type in known_loaders:
+        loader_fn = known_loaders[model_type]
+        print('Calling baseline model loader ', loader_fn)
+        return loader_fn(outname, **kwargs)
+    return load_user_seq2seq_model(outname, **kwargs)
