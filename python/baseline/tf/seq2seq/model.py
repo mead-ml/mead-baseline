@@ -101,14 +101,13 @@ class Seq2SeqModel(EncoderDecoder):
         model.sess = kwargs.get('sess', tf.Session())
         unif = kwargs.get('unif', 0.25)
         # These are going to be (B,T)
-        model.src = tf.placeholder(tf.int32, [None, mxlen], name="src")
-        model.tgt = tf.placeholder(tf.int32, [None, mxlen], name="tgt")
-        model.pkeep = tf.placeholder(tf.float32, name="pkeep")
+        model.src = kwargs.get('src', tf.placeholder(tf.int32, [None, mxlen], name="src"))
+        model.tgt = kwargs.get('tgt', tf.placeholder(tf.int32, [None, mxlen], name="tgt"))
+        model.pkeep = kwargs.get('pkeep', tf.placeholder(tf.float32, name="pkeep"))
         model.pdrop_value = kwargs.get('dropout', 0.5)
-        model.src_len = tf.placeholder(tf.int32, [None], name="src_len")
-        model.tgt_len = tf.placeholder(tf.int32, [None], name="tgt_len")
-        model.mx_tgt_len = tf.placeholder(tf.int32, name="mx_tgt_len")
-
+        model.src_len = kwargs.get(tf.placeholder(tf.int32, [None], name="src_len"))
+        model.tgt_len = kwargs.get(tf.placeholder(tf.int32, [None], name="tgt_len"))
+        model.mx_tgt_len = kwargs.get(tf.placeholder(tf.int32, name="mx_tgt_len"))
         model.vocab1 = src_vocab_embed if type(src_vocab_embed) is dict else src_vocab_embed.vocab
         model.vocab2 = dst_vocab_embed if type(dst_vocab_embed) is dict else dst_vocab_embed.vocab
 
