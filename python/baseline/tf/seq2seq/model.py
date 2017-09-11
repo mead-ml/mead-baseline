@@ -105,9 +105,9 @@ class Seq2SeqModel(EncoderDecoder):
         model.tgt = kwargs.get('tgt', tf.placeholder(tf.int32, [None, mxlen], name="tgt"))
         model.pkeep = kwargs.get('pkeep', tf.placeholder(tf.float32, name="pkeep"))
         model.pdrop_value = kwargs.get('dropout', 0.5)
-        model.src_len = kwargs.get(tf.placeholder(tf.int32, [None], name="src_len"))
-        model.tgt_len = kwargs.get(tf.placeholder(tf.int32, [None], name="tgt_len"))
-        model.mx_tgt_len = kwargs.get(tf.placeholder(tf.int32, name="mx_tgt_len"))
+        model.src_len = kwargs.get('src_len', tf.placeholder(tf.int32, [None], name="src_len"))
+        model.tgt_len = kwargs.get('tgt_len', tf.placeholder(tf.int32, [None], name="tgt_len"))
+        model.mx_tgt_len = kwargs.get('mx_tgt_len', tf.placeholder(tf.int32, name="mx_tgt_len"))
         model.vocab1 = src_vocab_embed if type(src_vocab_embed) is dict else src_vocab_embed.vocab
         model.vocab2 = dst_vocab_embed if type(dst_vocab_embed) is dict else dst_vocab_embed.vocab
 
@@ -141,7 +141,6 @@ class Seq2SeqModel(EncoderDecoder):
         with tf.name_scope("Recurrence"):
             rnn_enc_tensor, final_encoder_state = model.encode(embed_in, model.src)
             batch_sz = tf.shape(rnn_enc_tensor)[0]
-
             with tf.variable_scope("dec"):
                 proj = dense_layer(dst_vsz)
                 rnn_dec_cell = model._attn_cell_w_dropout(rnn_enc_tensor, beam_width) #[:,:-1,:])
@@ -162,6 +161,7 @@ class Seq2SeqModel(EncoderDecoder):
                         decoder = tf.contrib.seq2seq.BasicDecoder(cell=rnn_dec_cell, helper=helper,
                                                                   initial_state=initial_state, output_layer=proj)
                     else:
+
                         ##initial_state = tf.contrib.seq2seq.tile_batch(initial_state, multiplier=beam_width)
                         #tiled_initial_state =
                         # Define a beam-search decoder
