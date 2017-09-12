@@ -1,4 +1,5 @@
 import numpy as np
+import io
 
 
 class EmbeddingsModel(object):
@@ -23,7 +24,7 @@ class Word2VecModel(EmbeddingsModel):
         self.vocab = {}
         idx = 0
 
-        with open(filename, "rb") as f:
+        with io.open(filename, "rb") as f:
             header = f.readline()
             vsz, self.dsz = map(int, header.split())
 
@@ -95,7 +96,7 @@ class GloVeModel(EmbeddingsModel):
         idx = 1
 
         word_vectors = []
-        with open(filename, "r", encoding="utf-8") as f:
+        with io.open(filename, "r", encoding="utf-8") as f:
             for line in f:
                 values = line.split()
                 word = values[0]
