@@ -95,7 +95,7 @@ class GloVeModel(EmbeddingsModel):
         idx = 1
 
         word_vectors = []
-        with open(filename, "r") as f:
+        with open(filename, "r", encoding="utf-8") as f:
             for line in f:
                 values = line.split()
                 word = values[0]
