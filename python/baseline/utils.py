@@ -37,7 +37,7 @@ def create_user_model(w2v, labels, **kwargs):
 def load_user_model(outname, **kwargs):
     model_type = kwargs['model_type']
     mod = import_user_module("classifier", model_type)
-    return mod.load_model(model_type, outname, **kwargs)
+    return mod.load_model(outname, **kwargs)
 
 
 def create_user_tagger_model(labels, word_embedding, char_embedding, **kwargs):
@@ -49,7 +49,13 @@ def create_user_tagger_model(labels, word_embedding, char_embedding, **kwargs):
 def load_user_tagger_model(outname, **kwargs):
     model_type = kwargs['model_type']
     mod = import_user_module("tagger", model_type)
-    return mod.load_model(model_type, outname, **kwargs)
+    return mod.load_model(outname, **kwargs)
+
+
+def create_user_lang_model(word_vec, char_vec, **kwargs):
+    model_type = kwargs['model_type']
+    mod = import_user_module('lang', model_type)
+    return mod.create_model(word_vec, char_vec, **kwargs)
 
 
 def create_user_seq2seq_model(input_embedding, output_embedding, **kwargs):
@@ -61,7 +67,8 @@ def create_user_seq2seq_model(input_embedding, output_embedding, **kwargs):
 def load_user_seq2seq_model(outname, **kwargs):
     model_type = kwargs['model_type']
     mod = import_user_module("seq2seq", model_type)
-    return mod.load_model(model_type, outname, **kwargs)
+    return mod.load_model(outname, **kwargs)
+
 
 def get_model_file(dictionary, task, platform):
     base = dictionary.get('outfile', './%s-model' % task)
@@ -95,15 +102,14 @@ def topk(k, probs):
 
 #  Prune all elements in a large probability distribution below the top K
 #  Renormalize the distribution with only top K, and then sample n times out of that
-
 def beam_multinomial(k, probs):
-    
+
     tops = topk(k, probs)
     i = 0
     n = len(tops.keys())
     ary = np.zeros((n))
     idx = []
-    for abs_idx,v in tops.iteritems():
+    for abs_idx, v in tops.items():
         ary[i] = v
         idx.append(abs_idx)
         i += 1

@@ -21,7 +21,6 @@ parser.add_argument('--test', help='Test file', required=True)
 parser.add_argument('--rnntype', default='lstm', help='RNN type')
 parser.add_argument('--layers', default=2, help='The depth of stacked RNNs', type=int)
 parser.add_argument('--outfile', help='Output file base', default='./lang-model')
-parser.add_argument('--conll_output', default='rnn-tagger-test.txt', help='Place to put test CONLL file')
 parser.add_argument('--unif', default=0.1, help='Initializer bounds for embeddings', type=float)
 parser.add_argument('--clip', default=5.0, help='Gradient clipping cutoff', type=float)
 parser.add_argument('--epochs', default=30, help='Number of epochs', type=int)
@@ -37,7 +36,7 @@ parser.add_argument('--valsplit', default=0.15, help='Validation split if no val
 parser.add_argument('--nogpu', default=False, help='Use CPU (Not recommended)', type=bool)
 parser.add_argument('--model_file', default='wchar_lm.model', help='Save basename')
 parser.add_argument('--test_thresh', default=10, help='How many epochs improvement required before testing', type=int)
-parser.add_argument('--char', default=False, help='Use character-level modeling', type=bool)
+parser.add_argument('--model_type', default='default', help='What type of language model')
 parser.add_argument('--early_stopping_metric', default='avg_loss', help='Metric to use for early stopping')
 parser.add_argument('--start_decay_epoch', default=6, type=int, help='At what epoch should we start decaying')
 parser.add_argument('--decay_rate', default=1.2, type=float, help='Learning rate decay')
@@ -61,16 +60,16 @@ char_vocab = None
 
 # No matter what we will create a vocab for words, since that is what we are emitting
 word_vec = None
-if args.embed and args.char is False:
+if args.embed:
     word_vec = w2v.Word2VecModel(args.embed, vocab_word, args.unif)
     word_vocab = word_vec.vocab
 # TODO: Fix this to be a boolean for use word vectors
 else:
     print('Creating new embedding weights')
-    word_vec = w2v.RandomInitVecModel(args.hsz, vocab_word, args.unif)
+    word_vec = w2v.RandomInitVecModel(args.hsz, vocab_word, unif_weight=args.unif)
     word_vocab = word_vec.vocab
 
-char_vec = w2v.RandomInitVecModel(args.charsz, vocab_ch, args.unif)
+char_vec = w2v.RandomInitVecModel(args.charsz, vocab_ch, unif_weight=args.unif)
 char_vocab = char_vec.vocab
 
 ts = reader.load(args.train, word_vocab, char_vocab, num_words[0], batchsz=args.batchsz)
