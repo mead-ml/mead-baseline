@@ -174,7 +174,7 @@ class CharCompLanguageModel(AbstractLanguageModel):
             with open(basename + '-char.vocab', 'w') as f:
                 json.dump(self.char_vocab, f)
         with open(basename + '-batch_dims.json', 'w') as f:
-            json.dump(self.batch_info, f)
+            json.dump({'batchsz': self.batchsz, 'nbptt': self.nbptt, 'maxw': self.maxw}, f)
 
 
 BASELINE_LM_MODELS = {
