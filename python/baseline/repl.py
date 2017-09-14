@@ -7,7 +7,7 @@ import numpy as np
 def tagger_repl(tagger, **kwargs):
     mxlen = int(kwargs.get('mxlen', 100))
     maxw = int(kwargs.get('maxw', 100))
-    zeropad = int(kwargs.get('zeropad', 0))
+    #zeropad = int(kwargs.get('zeropad', 0))
     prompt_name = kwargs.get('prompt', 'class> ')
     history_file = kwargs.get('history_file', '.history')
     history = FileHistory(history_file)
@@ -19,7 +19,7 @@ def tagger_repl(tagger, **kwargs):
             break
         try:
             tokens = text.split(' ')
-            best = tagger.predict_text(tokens, mxlen=mxlen, maxw=maxw, zeropad=zeropad)
+            best = tagger.predict_text(tokens, mxlen=mxlen, maxw=maxw)
             print(best)
         except Exception as e:
             logging.exception('Error')
