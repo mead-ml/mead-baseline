@@ -65,9 +65,10 @@ class RNNTaggerModel(Tagger):
             model.x = tf.get_default_graph().get_tensor_by_name('x:0')
             model.xch = tf.get_default_graph().get_tensor_by_name('xch:0')
             model.y = tf.get_default_graph().get_tensor_by_name('y:0')
+            model.lengths = tf.get_default_graph().get_tensor_by_name('lengths:0')
             model.pkeep = tf.get_default_graph().get_tensor_by_name('pkeep:0')
             model.best = tf.get_default_graph().get_tensor_by_name('output/ArgMax:0')
-            model.probs = tf.get_default_graph().get_tensor_by_name('output/Reshape:0')
+            model.probs = tf.get_default_graph().get_tensor_by_name('output/Reshape_1:0')  # TODO: rename
             try:
                 model.A = tf.get_default_graph().get_tensor_by_name('Loss/transitions:0')
                 print('Found transition matrix in graph, setting crf=True')
