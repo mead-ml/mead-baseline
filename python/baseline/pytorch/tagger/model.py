@@ -14,7 +14,7 @@ def to_scalar(var):
 def argmax(vec):
     # return the argmax as a python int
     _, idx = torch.max(vec, 1)
-    return to_scalar(idx)
+    return idx.data[0]  #to_scalar(idx)
 
 
 # Compute log sum exp in a numerically stable way for the forward algorithm
@@ -69,7 +69,7 @@ def vec_log_sum_exp(vec, dim=2):
     """
     max_scores, idx = torch.max(vec, dim)
     max_scores_broadcast = max_scores.expand_as(vec)
-    return max_scores + torch.log(torch.sum(torch.exp(vec - max_scores_broadcast), dim))
+    return max_scores + torch.log(torch.sum(torch.exp(vec - max_scores_broadcast), dim, keepdim=True))
 
 
 def forward_algorithm_vec(unary, transitions, start_idx, end_idx):
@@ -183,7 +183,7 @@ class RNNTaggerModel(nn.Module, Tagger):
         self.word_ch_embed = nn.Sequential()
         append2seq(self.word_ch_embed, (
             nn.Dropout(pdrop),
-            pytorch_linear(self.wchsz, self.wchsz, unif),
+            pytorch_linear(self.wchsz, self.wchsz, unif * .1),
             pytorch_activation("relu")
         ))
 
@@ -206,6 +206,7 @@ class RNNTaggerModel(nn.Module, Tagger):
         crf = bool(kwargs.get('crf', False))
         if crf:
             weights = torch.Tensor(len(labels), len(labels)).uniform_(-unif, unif)
+            #weights = torch.Tensor(len(labels), len(labels)).zero_()
             model.transitions = nn.Parameter(weights)
         pdrop = float(kwargs.get('dropout', 0.5))
         model.labels = labels
@@ -225,11 +226,11 @@ class RNNTaggerModel(nn.Module, Tagger):
             nn.Dropout(pdrop),
             pytorch_linear(out_hsz, hsz, unif),
             pytorch_activation("tanh"),
-            pytorch_linear(hsz, len(model.labels), unif)
+            pytorch_linear(hsz, len(model.labels))
         ))
 
         model.softmax = nn.LogSoftmax()
-        model.crit = SequenceCriterion(len(labels))
+        model.crit = SequenceCriterion(len(labels), LossFn=nn.CrossEntropyLoss)
         return model
 
     def char2word(self, xch_i):
@@ -263,8 +264,10 @@ class RNNTaggerModel(nn.Module, Tagger):
         output, hidden = self.rnn(dropped)
 
         # Reform batch as (T x B, D)
-        decoded = self.softmax(self.decoder(output.view(output.size(0)*output.size(1),
-                                                        -1)))
+        #decoded = self.softmax(self.decoder(output.view(output.size(0)*output.size(1),
+        #                                                -1)))
+        decoded = self.decoder(output.view(output.size(0)*output.size(1), -1))
+
         # back to T x B x H -> B x T x H
         decoded = decoded.view(output.size(0), output.size(1), -1)
         return decoded.transpose(0, 1).contiguous()
@@ -314,7 +317,8 @@ class RNNTaggerModel(nn.Module, Tagger):
                 gold_tags = gold[:sl]
                 unary = pij[:sl]
                 total_tags += len(gold_tags)
-                forward_score = forward_algorithm_vec(unary, self.transitions, START_IDX, END_IDX)
+                #forward_score1 = forward_algorithm_vec(unary, self.transitions, START_IDX, END_IDX)
+                forward_score = forward_algorithm(unary, self.transitions, START_IDX, END_IDX)
                 gold_score = score_sentence(unary, gold_tags, self.transitions, START_IDX, END_IDX)
                 batch_loss += forward_score - gold_score
         else:

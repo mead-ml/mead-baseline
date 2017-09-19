@@ -51,12 +51,13 @@ def log_sum_exp(vec):
 
 class SequenceCriterion(nn.Module):
 
-    def __init__(self, nc):
+    def __init__(self, nc, LossFn=nn.NLLLoss):
         super(SequenceCriterion, self).__init__()
         # Assume pad is zero element for now
         weight = torch.ones(nc)
         weight[0] = 0
-        self.crit = nn.NLLLoss(weight, size_average=False)
+        self.crit = LossFn(size_average=False)
+        #self.crit = nn.NLLLoss(weight, size_average=False)
 
     def forward(self, inputs, targets):
         # This is BxT, which is what we want!
@@ -149,15 +150,17 @@ def pytorch_activation(name="relu"):
     return nn.ReLU()
 
 
-def pytorch_conv1d(in_channels, out_channels, fsz, unif):
+def pytorch_conv1d(in_channels, out_channels, fsz, unif=0):
     c = nn.Conv1d(in_channels, out_channels, fsz)
-    c.weight.data.uniform_(-unif, unif)
+    if unif > 0:
+        c.weight.data.uniform_(-unif, unif)
     return c
 
 
-def pytorch_linear(in_sz, out_sz, unif):
+def pytorch_linear(in_sz, out_sz, unif=0):
     l = nn.Linear(in_sz, out_sz)
-    l.weight.data.uniform_(-unif, unif)
+    if unif > 0:
+        l.weight.data.uniform_(-unif, unif)
     l.bias.data.zero_()
     return l
 
@@ -171,11 +174,12 @@ def pytorch_rnn(insz, hsz, rnntype, nlayers, dropout):
     return rnn
 
 
-def pytorch_lstm(insz, hsz, rnntype, nlayers, dropout, unif):
+def pytorch_lstm(insz, hsz, rnntype, nlayers, dropout, unif=0):
     ndir = 2 if rnntype.startswith('b') else 1
     rnn = torch.nn.LSTM(insz, hsz, nlayers, dropout=dropout, bidirectional=True if ndir > 1 else False, bias=False)
-    for weight in rnn.parameters():
-        weight.data.uniform_(-unif, unif)
+    if unif > 0:
+        for weight in rnn.parameters():
+            weight.data.uniform_(-unif, unif)
     return rnn, ndir*hsz
 
 
