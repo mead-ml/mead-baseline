@@ -52,7 +52,7 @@ class Classifier(object):
         """
         pass
 
-    def classify_text(self, tokens, mxlen, zeropad=0, zero_alloc=np.zeros):
+    def classify_text(self, tokens, mxlen, zeropad=0, zero_alloc=np.zeros, word_trans_fn=str.lower):
         """Utility method to convert a list of words comprising a text to indices, and create a single element
         batch which is then classified.  The returned decision is sorted in descending order of probability
         
@@ -73,7 +73,7 @@ class Classifier(object):
                     print(word)
                     idx = 0
             else:
-                idx = vocab[word]
+                idx = vocab[word_trans_fn(word)]
             x[0, j + halffiltsz] = idx
         outcomes = self.classify(x)[0]
         return sorted(outcomes, key=lambda tup: tup[1], reverse=True)
