@@ -1,6 +1,6 @@
 import numpy as np
 from baseline.utils import revlut, load_user_model, create_user_model, load_user_tagger_model, create_user_tagger_model
-from baseline.utils import load_user_seq2seq_model, create_user_seq2seq_model, create_user_lang_model
+from baseline.utils import load_user_seq2seq_model, create_user_seq2seq_model, create_user_lang_model, lowercase
 
 
 class Classifier(object):
@@ -52,7 +52,7 @@ class Classifier(object):
         """
         pass
 
-    def classify_text(self, tokens, mxlen, zeropad=0, zero_alloc=np.zeros, word_trans_fn=str.lower):
+    def classify_text(self, tokens, mxlen, zeropad=0, zero_alloc=np.zeros, word_trans_fn=lowercase):
         """Utility method to convert a list of words comprising a text to indices, and create a single element
         batch which is then classified.  The returned decision is sorted in descending order of probability
         
@@ -60,6 +60,7 @@ class Classifier(object):
         :param mxlen: The maximum length of the words.  List items beyond this edge are removed
         :param zeropad: How much zero-padding (total) to allocate the signal
         :param zero_alloc: A function defining an allocator.  Defaults to numpy zeros
+        :param word_trans_fn: A transform on the input word
         :return: A sorted list of outcomes for a single element batch
         """
         vocab = self.get_vocab()
@@ -135,7 +136,7 @@ class Tagger(object):
     def predict(self, x, xch, lengths):
         pass
 
-    def predict_text(self, tokens, mxlen, maxw, zero_alloc=np.zeros, word_trans_fn=str.lower):
+    def predict_text(self, tokens, mxlen, maxw, zero_alloc=np.zeros, word_trans_fn=lowercase):
         """
         Utility function to convert lists of sentence tokens to integer value one-hots which
         are then passed to the tagger.  The resultant output is then converted back to label and token

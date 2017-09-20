@@ -63,7 +63,7 @@ if args.web_cleanup is True:
     word_trans_fn = CONLLSeqReader.web_cleanup
 elif args.lower is True:
     print('Lower-case word tokens')
-    word_trans_fn = str.lower
+    word_trans_fn = lowercase
 
 reader = create_seq_pred_reader(args.mxlen, args.mxwlen, word_trans_fn, vec_alloc, vec_shape, trim)
 

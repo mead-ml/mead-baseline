@@ -21,6 +21,9 @@ def revlut(lut):
     return {v: k for k, v in lut.items()}
 
 
+def lowercase(x):
+    return x.lower()
+
 def import_user_module(module_type, model_type):
     module_name = "%s_%s" % (module_type, model_type)
     print('Loading user model %s' % module_name)
