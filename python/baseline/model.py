@@ -135,7 +135,7 @@ class Tagger(object):
     def predict(self, x, xch, lengths):
         pass
 
-    def predict_text(self, tokens, mxlen, maxw, zero_alloc=np.zeros):
+    def predict_text(self, tokens, mxlen, maxw, zero_alloc=np.zeros, word_trans_fn=str.lower):
         """
         Utility function to convert lists of sentence tokens to integer value one-hots which
         are then passed to the tagger.  The resultant output is then converted back to label and token
@@ -143,7 +143,8 @@ class Tagger(object):
         :param tokens: 
         :param mxlen: 
         :param maxw: 
-        :param zero_alloc: 
+        :param zero_alloc: Define
+        :param word_trans_fn:
         :return: 
         """
         words_vocab = self.get_vocab(vocab_type='word')
@@ -162,7 +163,7 @@ class Tagger(object):
             w = tokens[j]
             nch = min(len(w), maxw)
 
-            xs[0, j] = words_vocab.get(w, 0)
+            xs[0, j] = words_vocab.get(word_trans_fn(w), 0)
             for k in range(nch):
                 xs_ch[0, j, k] = chars_vocab.get(w[k], 0)
 
