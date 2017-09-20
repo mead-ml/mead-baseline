@@ -6,15 +6,10 @@ import torch.autograd
 # https://github.com/rguthrie3/DeepLearningForNLPInPytorch
 # I have vectorized the implementation for reasonable performance on real data
 # Helper functions to make the code more readable.
-def to_scalar(var):
-    # returns a python float
-    return var.view(-1).data.tolist()[0]
-
-
 def argmax(vec):
     # return the argmax as a python int
     _, idx = torch.max(vec, 1)
-    return idx.data[0]  #to_scalar(idx)
+    return idx.data[0]
 
 
 # Compute log sum exp in a numerically stable way for the forward algorithm
@@ -60,14 +55,14 @@ def forward_algorithm(unary, transitions, start_idx, end_idx):
     return alpha
 
 
-def vec_log_sum_exp(vec, dim=2):
+def vec_log_sum_exp(vec, dim):
     """Vectorized version of log-sum-exp
     
     :param vec: Vector
     :param dim: What dimension to operate on
     :return: 
     """
-    max_scores, idx = torch.max(vec, dim)
+    max_scores, idx = torch.max(vec, dim, keepdim=True)
     max_scores_broadcast = max_scores.expand_as(vec)
     return max_scores + torch.log(torch.sum(torch.exp(vec - max_scores_broadcast), dim, keepdim=True))
 
@@ -95,7 +90,7 @@ def forward_algorithm_vec(unary, transitions, start_idx, end_idx):
     for t, unary_t in enumerate(unary):
         expanded_alpha_t = alphas.expand(num_labels, num_labels)
         # torch.Size([T, num_labels])
-        emit_scores_transpose = torch.autograd.Variable(unary_t.data.view(1, -1).transpose(0, 1).expand(num_labels, num_labels), requires_grad=False)
+        emit_scores_transpose = unary_t.view(1, -1).transpose(0, 1).expand(num_labels, num_labels)
         next_tag_var = expanded_alpha_t + transitions
         next_tag_var += emit_scores_transpose
         scores = vec_log_sum_exp(next_tag_var, 1).transpose(0, 1)
@@ -205,8 +200,8 @@ class RNNTaggerModel(nn.Module, Tagger):
         filtsz = kwargs.get('cfiltsz')
         crf = bool(kwargs.get('crf', False))
         if crf:
-            weights = torch.Tensor(len(labels), len(labels)).uniform_(-unif, unif)
-            #weights = torch.Tensor(len(labels), len(labels)).zero_()
+            #weights = torch.Tensor(len(labels), len(labels)).uniform_(-unif, unif)
+            weights = torch.Tensor(len(labels), len(labels)).zero_()
             model.transitions = nn.Parameter(weights)
         pdrop = float(kwargs.get('dropout', 0.5))
         model.labels = labels
@@ -229,7 +224,7 @@ class RNNTaggerModel(nn.Module, Tagger):
             pytorch_linear(hsz, len(model.labels))
         ))
 
-        model.softmax = nn.LogSoftmax()
+        #model.softmax = nn.LogSoftmax()
         model.crit = SequenceCriterion(len(labels), LossFn=nn.CrossEntropyLoss)
         return model
 
@@ -317,8 +312,8 @@ class RNNTaggerModel(nn.Module, Tagger):
                 gold_tags = gold[:sl]
                 unary = pij[:sl]
                 total_tags += len(gold_tags)
-                #forward_score1 = forward_algorithm_vec(unary, self.transitions, START_IDX, END_IDX)
-                forward_score = forward_algorithm(unary, self.transitions, START_IDX, END_IDX)
+                forward_score = forward_algorithm_vec(unary, self.transitions, START_IDX, END_IDX)
+                #forward_score = forward_algorithm(unary, self.transitions, START_IDX, END_IDX)
                 gold_score = score_sentence(unary, gold_tags, self.transitions, START_IDX, END_IDX)
                 batch_loss += forward_score - gold_score
         else:
