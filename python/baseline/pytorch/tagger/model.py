@@ -157,6 +157,11 @@ class RNNTaggerModel(nn.Module, Tagger):
     def get_criterion(self):
         return self.crit
 
+    def to_gpu(self):
+        self.cuda()
+        self.crit.cuda()
+        return self
+
     @staticmethod
     def load(outname, **kwargs):
         model = torch.load(outname)
@@ -165,8 +170,9 @@ class RNNTaggerModel(nn.Module, Tagger):
     def _char_word_conv_embeddings(self, filtsz, char_dsz, wchsz, pdrop, unif):
         self.char_convs = []
         for fsz in filtsz:
+            pad = fsz//2
             conv = nn.Sequential(
-                pytorch_conv1d(char_dsz, wchsz, fsz, unif),
+                pytorch_conv1d(char_dsz, wchsz, fsz, unif, padding=pad),
                 pytorch_activation("relu")
             )
             self.char_convs.append(conv)
@@ -178,7 +184,7 @@ class RNNTaggerModel(nn.Module, Tagger):
         self.word_ch_embed = nn.Sequential()
         append2seq(self.word_ch_embed, (
             nn.Dropout(pdrop),
-            pytorch_linear(self.wchsz, self.wchsz, unif * .1),
+            pytorch_linear(self.wchsz, self.wchsz, unif),
             pytorch_activation("relu")
         ))
 

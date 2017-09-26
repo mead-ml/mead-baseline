@@ -51,9 +51,9 @@ def log_sum_exp(vec):
 
 class SequenceCriterion(nn.Module):
 
-    def __init__(self, nc, LossFn=nn.NLLLoss):
+    def __init__(self, nc, pad_masking=True, LossFn=nn.NLLLoss):
         super(SequenceCriterion, self).__init__()
-        # Assume pad is zero element for now
+        # Assume pad is zero element for now (No! Pad off the zeros)
         weight = torch.ones(nc)
         weight[0] = 0
         self.crit = LossFn(size_average=False)
@@ -150,8 +150,8 @@ def pytorch_activation(name="relu"):
     return nn.ReLU()
 
 
-def pytorch_conv1d(in_channels, out_channels, fsz, unif=0):
-    c = nn.Conv1d(in_channels, out_channels, fsz)
+def pytorch_conv1d(in_channels, out_channels, fsz, unif=0, padding=0):
+    c = nn.Conv1d(in_channels, out_channels, fsz, padding=padding)
     if unif > 0:
         c.weight.data.uniform_(-unif, unif)
     return c

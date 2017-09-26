@@ -25,10 +25,8 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
         else:
             self.optimizer = torch.optim.SGD(model.parameters(), lr=eta, momentum=mom)
 
-        self.crit = model.get_criterion()
         if self.gpu:
-            self.model = model.cuda()
-            self.crit.cuda()
+            self.model = model.to_gpu()
 
     def _wrap(self, x, xch, y):
 
