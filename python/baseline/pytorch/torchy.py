@@ -19,16 +19,18 @@ def classify_bt(model, batch_time):
 
 def predict_seq_bt(model, x, xch, lengths):
     x_t = torch.from_numpy(x) if type(x) == np.ndarray else x
-    xch_t = torch.from_numpy(xch) if type(xch) == np.ndarray else x
-    len_t = torch.from_numpy(lengths) if type(lengths) == np.ndarray else lengths
+    xch_t = torch.from_numpy(xch) if type(xch) == np.ndarray else xch
+    len_v = torch.from_numpy(lengths) if type(lengths) == np.ndarray else lengths
     x_v = torch.autograd.Variable(x_t, requires_grad=False).cuda()
     xch_v = torch.autograd.Variable(xch_t, requires_grad=False).cuda()
-    len_v = torch.autograd.Variable(len_t, requires_grad=False)
-    results = model((x_v, xch_v, len_v)).data
-    if type(x) == np.ndarray:
-        results = results.cpu().numpy()
-        # Fix this to not be greedy
-        results = np.argmax(results, -1)
+    #len_v = torch.autograd.Variable(len_t, requires_grad=False)
+    results = model((x_v, xch_v, len_v))
+    #print(results)
+    #if type(x) == np.ndarray:
+    #    # results = results.cpu().numpy()
+    #    # Fix this to not be greedy
+    #    results = np.argmax(results, -1)
+
     return results
 
 
@@ -51,13 +53,12 @@ def log_sum_exp(vec):
 
 class SequenceCriterion(nn.Module):
 
-    def __init__(self, nc, pad_masking=True, LossFn=nn.NLLLoss):
+    def __init__(self, nc, LossFn=nn.NLLLoss):
         super(SequenceCriterion, self).__init__()
         # Assume pad is zero element for now (No! Pad off the zeros)
         weight = torch.ones(nc)
         weight[0] = 0
         self.crit = LossFn(size_average=False)
-        #self.crit = nn.NLLLoss(weight, size_average=False)
 
     def forward(self, inputs, targets):
         # This is BxT, which is what we want!
