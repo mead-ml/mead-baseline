@@ -224,9 +224,9 @@ class RNNTaggerModel(nn.Module, Tagger):
         model.rnn, out_hsz = pytorch_lstm(model.wchsz + word_dsz, hsz, rnntype, nlayers, pdrop, unif)
         model.decoder = nn.Sequential()
         append2seq(model.decoder, (
-            nn.Dropout(pdrop),
             pytorch_linear(out_hsz, hsz, unif),
             pytorch_activation("tanh"),
+            nn.Dropout(pdrop),
             pytorch_linear(hsz, len(model.labels))
         ))
 
@@ -263,10 +263,6 @@ class RNNTaggerModel(nn.Module, Tagger):
 
         dropped = self.dropout(words_over_time)
         output, hidden = self.rnn(dropped)
-
-        # Reform batch as (T x B, D)
-        #decoded = self.softmax(self.decoder(output.view(output.size(0)*output.size(1),
-        #                                                -1)))
         decoded = self.decoder(output.view(output.size(0)*output.size(1), -1))
 
         # back to T x B x H -> B x T x H
