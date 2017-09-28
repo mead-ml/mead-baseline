@@ -53,12 +53,9 @@ def log_sum_exp(vec):
 
 class SequenceCriterion(nn.Module):
 
-    def __init__(self, nc, LossFn=nn.NLLLoss):
+    def __init__(self, LossFn=nn.NLLLoss):
         super(SequenceCriterion, self).__init__()
-        # Assume pad is zero element for now (No! Pad off the zeros)
-        weight = torch.ones(nc)
-        weight[0] = 0
-        self.crit = LossFn(size_average=False)
+        self.crit = LossFn(ignore_index=0, size_average=False)
 
     def forward(self, inputs, targets):
         # This is BxT, which is what we want!

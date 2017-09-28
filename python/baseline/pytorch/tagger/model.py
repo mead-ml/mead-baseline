@@ -154,9 +154,6 @@ class RNNTaggerModel(nn.Module, Tagger):
     def save(self, outname):
         torch.save(self, outname)
 
-    def get_criterion(self):
-        return self.crit
-
     def to_gpu(self):
         self.cuda()
         self.crit.cuda()
@@ -231,7 +228,7 @@ class RNNTaggerModel(nn.Module, Tagger):
         ))
 
         #model.softmax = nn.LogSoftmax()
-        model.crit = SequenceCriterion(len(labels), LossFn=nn.CrossEntropyLoss)
+        model.crit = SequenceCriterion(LossFn=nn.CrossEntropyLoss)
         return model
 
     def char2word(self, xch_i):
@@ -315,7 +312,6 @@ class RNNTaggerModel(nn.Module, Tagger):
                 unary = pij[:sl]
                 total_tags += len(gold_tags)
                 forward_score = forward_algorithm_vec(unary, self.transitions, START_IDX, END_IDX)
-                #forward_score = forward_algorithm(unary, self.transitions, START_IDX, END_IDX)
                 gold_score = score_sentence(unary, gold_tags, self.transitions, START_IDX, END_IDX)
                 batch_loss += forward_score - gold_score
         else:
