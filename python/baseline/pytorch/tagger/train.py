@@ -102,6 +102,7 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
         return metrics
 
     def _train(self, ts):
+        self.model.train()
         total_loss = 0
         metrics = {}
         steps = len(ts)
@@ -135,6 +136,8 @@ def fit(model, ts, vs, es, **kwargs):
     reporting_fns = listify(kwargs.get('reporting', basic_reporting))
     print('reporting', reporting_fns)
 
+    #validation_improvement_fn = kwargs.get('validation_improvement', None)
+
     after_train_fn = kwargs.get('after_train_fn', None)
     trainer = TaggerTrainerPyTorch(model, **kwargs)
 
@@ -151,10 +154,13 @@ def fit(model, ts, vs, es, **kwargs):
             model.save(model_file)
 
         elif test_metrics[early_stopping_metric] > max_metric:
+            #if validation_improvement_fn is not None:
+            #    validation_improvement_fn(early_stopping_metric, test_metrics, epoch, max_metric, last_improved)
             last_improved = epoch
             max_metric = test_metrics[early_stopping_metric]
             print('New max %.3f' % max_metric)
             model.save(model_file)
+
 
         elif (epoch - last_improved) > patience:
             print('Stopping due to persistent failures to improve')

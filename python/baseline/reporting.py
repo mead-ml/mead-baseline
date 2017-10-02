@@ -140,3 +140,9 @@ def setup_reporting(**kwargs):
     if use_tensorboard:
         reporting.append(tensorboard_reporting)
     return reporting
+
+
+#def print_validation_improvement(on_metric, metrics, tick, previous, previous_tick):
+#    max_metric = metrics[on_metric]
+#    direction = 'max' if on_metric not in ['avg_loss', 'perplexity'] else 'min'
+#    print('New %s %.3f' % (direction, max_metric))

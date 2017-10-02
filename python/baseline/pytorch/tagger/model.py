@@ -1,6 +1,7 @@
 from baseline.pytorch.torchy import *
 from baseline.model import Tagger, create_tagger_model, load_tagger_model
 import torch.autograd
+import math
 
 # Some of this code is borrowed from here:
 # https://github.com/rguthrie3/DeepLearningForNLPInPytorch
@@ -164,12 +165,12 @@ class RNNTaggerModel(nn.Module, Tagger):
         model = torch.load(outname)
         return model
 
-    def _char_word_conv_embeddings(self, filtsz, char_dsz, wchsz, pdrop, unif):
+    def _char_word_conv_embeddings(self, filtsz, char_dsz, wchsz, pdrop):
         self.char_convs = []
         for fsz in filtsz:
             pad = fsz//2
             conv = nn.Sequential(
-                pytorch_conv1d(char_dsz, wchsz, fsz, unif, padding=pad),
+                pytorch_conv1d(char_dsz, wchsz, fsz, math.sqrt(3./wchsz), padding=pad),
                 pytorch_activation("relu")
             )
             self.char_convs.append(conv)
@@ -180,8 +181,8 @@ class RNNTaggerModel(nn.Module, Tagger):
         self.wchsz = wchsz * len(filtsz)
         self.word_ch_embed = nn.Sequential()
         append2seq(self.word_ch_embed, (
-            nn.Dropout(pdrop),
-            pytorch_linear(self.wchsz, self.wchsz, unif),
+            #nn.Dropout(pdrop),
+            pytorch_linear(self.wchsz, self.wchsz, math.sqrt(6./(self.wchsz + self.wchsz))),
             pytorch_activation("relu")
         ))
 
@@ -208,7 +209,7 @@ class RNNTaggerModel(nn.Module, Tagger):
             model.transitions = nn.Parameter(weights)
         pdrop = float(kwargs.get('dropout', 0.5))
         model.labels = labels
-        model._char_word_conv_embeddings(filtsz, char_dsz, wsz, pdrop, unif)
+        model._char_word_conv_embeddings(filtsz, char_dsz, wsz, pdrop)
 
         if word_vec is not None:
             model.word_vocab = word_vec.vocab
@@ -218,13 +219,14 @@ class RNNTaggerModel(nn.Module, Tagger):
         model.char_vocab = char_vec.vocab
         model.cembed = pytorch_embedding(char_vec)
         model.dropout = nn.Dropout(pdrop)
-        model.rnn, out_hsz = pytorch_lstm(model.wchsz + word_dsz, hsz, rnntype, nlayers, pdrop, unif)
+        initv = math.sqrt(6./(model.wchsz + word_dsz + hsz))
+        model.rnn, out_hsz = pytorch_lstm(model.wchsz + word_dsz, hsz, rnntype, nlayers, pdrop, initv)
         model.decoder = nn.Sequential()
         append2seq(model.decoder, (
-            pytorch_linear(out_hsz, hsz, unif),
+            pytorch_linear(out_hsz, hsz, math.sqrt(6./(out_hsz + hsz))),
             pytorch_activation("tanh"),
             nn.Dropout(pdrop),
-            pytorch_linear(hsz, len(model.labels))
+            pytorch_linear(hsz, len(model.labels), math.sqrt(6./(hsz + len(model.labels))))
         ))
 
         #model.softmax = nn.LogSoftmax()
@@ -232,8 +234,11 @@ class RNNTaggerModel(nn.Module, Tagger):
         return model
 
     def char2word(self, xch_i):
+
         # For starters we need to perform embeddings for each character
+        # (TxB) x W -> (TxB) x W x D
         char_embeds = self.cembed(xch_i)
+        # (TxB) x D x W
         char_vecs = char_embeds.transpose(1, 2).contiguous()
         mots = []
         for conv in self.char_convs:
@@ -251,19 +256,24 @@ class RNNTaggerModel(nn.Module, Tagger):
         batchsz = xch.size(1)
         seqlen = xch.size(0)
 
-        # Vectorized
+        # TBH
         words_over_time = self.char2word(xch.view(seqlen * batchsz, -1)).view(seqlen, batchsz, -1)
 
         if x is not None:
+            #print(self.wembed.weight[0])
             word_vectors = self.wembed(x)
             words_over_time = torch.cat([words_over_time, word_vectors], 2)
 
         dropped = self.dropout(words_over_time)
+        # output = (T, B, H)
         output, hidden = self.rnn(dropped)
+        # stack (T x B, H)
         decoded = self.decoder(output.view(output.size(0)*output.size(1), -1))
 
-        # back to T x B x H -> B x T x H
+        # back to T x B x H
         decoded = decoded.view(output.size(0), output.size(1), -1)
+
+        # now to B x T x H
         return decoded.transpose(0, 1).contiguous()
 
     # Input better be xch, x

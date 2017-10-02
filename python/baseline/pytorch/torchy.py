@@ -174,10 +174,12 @@ def pytorch_rnn(insz, hsz, rnntype, nlayers, dropout):
 
 def pytorch_lstm(insz, hsz, rnntype, nlayers, dropout, unif=0):
     ndir = 2 if rnntype.startswith('b') else 1
-    rnn = torch.nn.LSTM(insz, hsz, nlayers, dropout=dropout, bidirectional=True if ndir > 1 else False, bias=False)
+    #print('ndir: %d, rnntype: %s, nlayers: %d, dropout: %.2f, unif: %.2f' % (ndir, rnntype, nlayers, dropout, unif))
+    rnn = torch.nn.LSTM(insz, hsz, nlayers, dropout=dropout, bidirectional=True if ndir > 1 else False)#, bias=False)
     if unif > 0:
         for weight in rnn.parameters():
             weight.data.uniform_(-unif, unif)
+    #rnn.bias.zero_()
     return rnn, ndir*hsz
 
 
