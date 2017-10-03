@@ -51,6 +51,9 @@ class AbstractLanguageModel(object):
     def create(cls, batchsz, nbptt, maxw, **kwargs):
         pass
 
+    def get_vocab(self, vocab_type='word'):
+        pass
+
 
 class WordLanguageModel(AbstractLanguageModel):
 
@@ -92,6 +95,11 @@ class WordLanguageModel(AbstractLanguageModel):
         nlayers = kwargs.get('layer', kwargs.get('nlayers', 1))
         lm._rnnlm(hsz, nlayers, inputs, vsz)
         return lm
+
+    def get_vocab(self, vocab_type='word'):
+        if vocab_type == 'word':
+            return self.word_vocab
+        return None
 
     def save_md(self, basename):
 
@@ -161,6 +169,11 @@ class CharCompLanguageModel(AbstractLanguageModel):
         hsz = kwargs['hsz']
         lm._rnnlm(hsz, nlayers, inputs, vsz)
         return lm
+
+    def get_vocab(self, vocab_type='word'):
+        if vocab_type == 'char':
+            return self.char_vocab
+        return None
 
     def save_md(self, basename):
         path = basename.split('/')

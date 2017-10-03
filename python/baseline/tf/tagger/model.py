@@ -196,15 +196,18 @@ class RNNTaggerModel(Tagger):
                 with tf.control_dependencies([we0]):
                     wembed = tf.nn.embedding_lookup(Ww, model.x, name="embeddings")
 
-        Wc = tf.Variable(tf.constant(char_vec.weights, dtype=tf.float32), name="Wch")
-        ce0 = tf.scatter_update(Wc, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, char_dsz]))
+        Wch = tf.Variable(tf.constant(char_vec.weights, dtype=tf.float32), name="Wch")
+        ce0 = tf.scatter_update(Wch, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, char_dsz]))
 
-        with tf.control_dependencies([ce0]):
-            xch_seq = tensor2seq(model.xch)
-            cembed_seq = []
-            for i, xch_i in enumerate(xch_seq):
-                cembed_seq.append(shared_char_word(Wc, xch_i, filtsz, char_dsz, wsz, None if i == 0 else True))
-            word_char = seq2tensor(cembed_seq)
+        with tf.variable_scope("Chars2Word"):
+            with tf.control_dependencies([ce0]):
+                rnnchar_bt_x_w = tf.reshape(model.xch, [-1, maxw])
+                mxfiltsz = np.max(filtsz)
+                halffiltsz = mxfiltsz // 2
+                zeropad = tf.pad(rnnchar_bt_x_w, [[0, 0], [halffiltsz, halffiltsz]], "CONSTANT")
+                cembed = tf.nn.embedding_lookup(Wch, zeropad, name="embeddings")
+                cmot = char_word_conv_embeddings(cembed, filtsz, char_dsz, wsz)
+                word_char = tf.reshape(cmot, [-1, mxlen, len(filtsz) * wsz])
 
         # Join embeddings along the third dimension
         joint = word_char if word_vec is None else tf.concat(values=[wembed, word_char], axis=2)
