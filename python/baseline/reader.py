@@ -514,3 +514,14 @@ class PTBSeqReader(object):
                     i += 1
 
         return baseline.data.SeqWordCharDataFeed(x, xch, self.nbptt, batchsz, self.max_word_length)
+
+
+def create_lm_reader(max_word_length, nbptt, **kwargs):
+    reader_type = kwargs.get('reader_type', 'default')
+
+    if reader_type == 'default':
+        reader = PTBSeqReader(max_word_length, nbptt)
+    else:
+        mod = import_user_module("reader", reader_type)
+        reader = mod.create_lm_reader(max_word_length, nbptt, **kwargs)
+    return reader

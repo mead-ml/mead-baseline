@@ -50,7 +50,7 @@ args.reporting = setup_reporting(**vars(args))
 if args.backend == 'tf':
     import baseline.tf.lm as lm
 
-reader = PTBSeqReader(args.mxwlen, args.nbptt)
+reader = create_lm_reader(args.mxwlen, args.nbptt)
 vocab_ch, vocab_word, num_words = reader.build_vocab([args.train, args.valid, args.test])
 
 
