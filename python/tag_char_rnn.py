@@ -2,8 +2,8 @@ import argparse
 from baseline import *
 
 parser = argparse.ArgumentParser(description='Sequence tagger for sentences')
-parser.add_argument('--visdom', help='Turn on visdom reporting', type=bool, default=False)
-parser.add_argument('--tensorboard', help='Turn on tensorboard reporting', type=bool, default=False)
+parser.add_argument('--visdom', help='Turn on visdom reporting', type=str2bool, default=False)
+parser.add_argument('--tensorboard', help='Turn on tensorboard reporting', type=str2bool, default=False)
 parser.add_argument('--eta', default=0.01, type=float)
 parser.add_argument('--embed', default=None, help='Word2Vec embeddings file')
 parser.add_argument('--optim', default='adadelta', help='Optim method')
@@ -23,25 +23,25 @@ parser.add_argument('--epochs', default=400, help='Number of epochs', type=int)
 parser.add_argument('--batchsz', default=20, help='Batch size', type=int)
 parser.add_argument('--mxlen', default=-1, help='Max sentence length', type=int)
 parser.add_argument('--mxwlen', default=40, help='Max word length', type=int)
-parser.add_argument('--cfiltsz', help='Filter sizes', nargs='+', default=[1,2,3,4,5,7], type=int)
+parser.add_argument('--cfiltsz', help='Filter sizes', nargs='+', default=[1, 2, 3, 4, 5, 7], type=int)
 parser.add_argument('--charsz', default=16, help='Char embedding depth', type=int)
 parser.add_argument('--patience', default=20, help='Patience', type=int)
 parser.add_argument('--hsz', default=200, help='Hidden layer size', type=int)
 parser.add_argument('--wsz', default=30, help='Word embedding depth', type=int)
 parser.add_argument('--valsplit', default=0.15, help='Validation split if no valid set', type=float)
-parser.add_argument('--nogpu', default=False, help='Use CPU (Not recommended)', type=bool)
+parser.add_argument('--nogpu', default=False, help='Use CPU (Not recommended)', type=str2bool)
 parser.add_argument('--save', default='rnn-tagger', help='Save basename')
 parser.add_argument('--test_thresh', default=10, help='How many epochs improvement required before testing', type=int)
-parser.add_argument('--crf', default=False, help='Use a CRF on top', type=bool)
+parser.add_argument('--crf', default=False, help='Use a CRF on top', type=str2bool)
+parser.add_argument('--do_early_stopping', help='Should we do early stopping?', default=True, type=str2bool)
 parser.add_argument('--early_stopping_metric', default='f1', help='Metric for early stopping. For IOB tagging use f1')
-parser.add_argument('--web_cleanup', default=False, help='Do cleanup of web tokens?', type=bool)
-parser.add_argument('--lower', default=False, help='Lower case word tokens?', type=bool)
+parser.add_argument('--web_cleanup', default=False, help='Do cleanup of web tokens?', type=str2bool)
+parser.add_argument('--lower', default=False, help='Lower case word tokens?', type=str2bool)
 parser.add_argument('--backend', default='tf', help='Default Deep Learning Framework')
 parser.add_argument('--model_type', help='Name of model to load and train', default='default')
 
 args = parser.parse_args()
 gpu = not args.nogpu
-
 
 args.reporting = setup_reporting(**vars(args))
 

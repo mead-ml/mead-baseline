@@ -4,8 +4,8 @@ from baseline import *
 from os import sys, path, makedirs
 
 parser = argparse.ArgumentParser(description='Train a text classifier')
-parser.add_argument('--visdom', help='Turn on visdom reporting', type=bool, default=False)
-parser.add_argument('--tensorboard', help='Turn on tensorboard reporting', type=bool, default=False)
+parser.add_argument('--visdom', help='Turn on visdom reporting', type=str2bool, default=False)
+parser.add_argument('--tensorboard', help='Turn on tensorboard reporting', type=str2bool, default=False)
 parser.add_argument('--eta', help='Initial learning rate', default=0.01, type=float)
 parser.add_argument('--mom', help='SGD Momentum', default=0.9, type=float)
 parser.add_argument('--embed', help='Word2Vec embeddings file', required=True)
@@ -28,11 +28,11 @@ parser.add_argument('--static', help='Fix pre-trained embeddings weights', actio
 parser.add_argument('--valsplit', help='Validation split if no valid set', default=0.15, type=float)
 parser.add_argument('--outfile', help='Output file base', default='./classify-model')
 parser.add_argument('--backend', help='Which deep learning framework to use', default='tf')
-parser.add_argument('--keep_unused', help='Keep unused vocabulary terms as word vectors', default=False)
-parser.add_argument('--do_early_stopping', help='Should we do early stopping?', default=True, type=bool)
+parser.add_argument('--keep_unused', help='Keep unused vocabulary terms as word vectors', default=False, type=str2bool)
+parser.add_argument('--do_early_stopping', help='Should we do early stopping?', default=True, type=str2bool)
 parser.add_argument('--early_stopping_metric', help='What metric should we use if stopping early', default='acc')
 parser.add_argument('--model_type', help='Name of model to load and train', default='default')
-parser.add_argument('--rev', help='Time reverse input text', default=False, type=bool)
+parser.add_argument('--rev', help='Time reverse input text', default=False, type=str2bool)
 args = parser.parse_args()
 
 
