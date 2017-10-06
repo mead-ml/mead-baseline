@@ -61,10 +61,10 @@ class Seq2SeqModel(EncoderDecoder):
         state["layers"] = state["nlayers"]
         print(state)
         with open(basename + '-1.vocab', 'r') as f:
-            state["src_vocab"] = json.load(f)
+            src_vocab_embed = json.load(f)
 
         with open(basename + '-2.vocab', 'r') as f:
-            state["dst_vocab"] = json.load(f)
+            dst_vocab_embed = json.load(f)
 
         if 'predict' in kwargs:
             state['predict'] = kwargs['predict']
@@ -74,7 +74,10 @@ class Seq2SeqModel(EncoderDecoder):
 
         state['sess'] = kwargs.get('sess', tf.Session())
 
-        model = Seq2SeqModel.create(**state)
+        if state['attn'] is True:
+            state['model_type'] = 'attn'
+
+        model = Seq2SeqModel.create(src_vocab_embed, dst_vocab_embed, **state)
 
         do_init = kwargs.get('init', True)
         if do_init:
@@ -251,7 +254,7 @@ class Seq2SeqModel(EncoderDecoder):
             tf.import_graph_def(gd, name='')
 
     def run(self, src, src_len):
-        feed_dict = {self.src: src, self.src_len: src_len}
+        feed_dict = {self.src: src, self.src_len: src_len, self.pkeep: 1.0}
         vec = self.sess.run(self.best, feed_dict=feed_dict)
         # (B x K x T)
         if len(vec.shape) == 3:
