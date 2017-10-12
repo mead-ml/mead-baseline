@@ -24,32 +24,40 @@ class LanguageModelTrainerTf(Trainer):
     def train(self, ts, reporting_fns):
         total_loss = 0.0
         iters = 0
-        state = self.model.sess.run(self.model.initial_state)
+
+        xfer_state = hasattr(self.model, 'initial_state')
+        if xfer_state:
+            state = self.model.sess.run(self.model.initial_state)
 
         fetches = {
             "loss": self.loss,
-            "final_state": self.model.final_state,
             "train_op": self.train_op,
             "global_step": self.global_step}
 
+        if xfer_state:
+            fetches["final_state"] = self.model.final_state
         step = 0
         metrics = {}
 
         for x, xch, y in ts:
 
             feed_dict = self.model.make_feed_dict(x, xch, y, True)
-            for i, (c, h) in enumerate(self.model.initial_state):
-                feed_dict[c] = state[i].c
-                feed_dict[h] = state[i].h
+            if xfer_state:
+                for i, (c, h) in enumerate(self.model.initial_state):
+                    feed_dict[c] = state[i].c
+                    feed_dict[h] = state[i].h
 
             vals = self.model.sess.run(fetches, feed_dict)
             loss = vals["loss"]
-            state = vals["final_state"]
+
+            if xfer_state:
+                state = vals["final_state"]
             global_step = vals["global_step"]
             total_loss += loss
             iters += self.model.nbptt
             step += 1
             if step % 500 == 0:
+                print(total_loss, iters)
                 metrics['avg_loss'] = total_loss / iters
                 metrics['perplexity'] = np.exp(total_loss / iters)
                 for reporting in reporting_fns:
@@ -69,13 +77,17 @@ class LanguageModelTrainerTf(Trainer):
         if phase == 'Valid':
             self.valid_epochs += 1
             epochs = self.valid_epochs
+        xfer_state = hasattr(self.model, 'initial_state')
 
-        state = self.model.sess.run(self.model.initial_state)
+        if xfer_state:
+            state = self.model.sess.run(self.model.initial_state)
 
         fetches = {
             "loss": self.loss,
-            "final_state": self.model.final_state,
         }
+
+        if xfer_state:
+            fetches["final_state"] = self.model.final_state
 
         step = 0
         metrics = {}
@@ -83,13 +95,15 @@ class LanguageModelTrainerTf(Trainer):
         for x, xch, y in ts:
 
             feed_dict = self.model.make_feed_dict(x, xch, y, False)
-            for i, (c, h) in enumerate(self.model.initial_state):
-                feed_dict[c] = state[i].c
-                feed_dict[h] = state[i].h
+            if xfer_state:
+                for i, (c, h) in enumerate(self.model.initial_state):
+                    feed_dict[c] = state[i].c
+                    feed_dict[h] = state[i].h
 
             vals = self.model.sess.run(fetches, feed_dict)
             loss = vals["loss"]
-            state = vals["final_state"]
+            if xfer_state:
+                state = vals["final_state"]
             total_loss += loss
             iters += self.model.nbptt
             step += 1

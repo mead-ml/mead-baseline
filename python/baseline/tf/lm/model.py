@@ -142,7 +142,7 @@ class CharCompLanguageModel(AbstractLanguageModel):
         lm.y = kwargs.get('y', tf.placeholder(tf.int32, [None, lm.nbptt], name="y"))
         lm.pkeep = kwargs.get('pkeep', tf.placeholder(tf.float32, name="pkeep"))
 
-        filtsz = kwargs['filtsz']
+        filtsz = kwargs['cfiltsz']
 
         vsz = word_vec.vsz + 1
         lm.char_vocab = char_vec.vocab
