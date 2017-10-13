@@ -309,7 +309,7 @@ class CONLLSeqReader(object):
                     self.label2index[label] = idx
 
                 ys[j] = self.label2index[label]
-                xs[j] = words_vocab.get(self.cleanup_fn(w))
+                xs[j] = words_vocab.get(self.cleanup_fn(w), 0)
                 for k in range(nch):
                     xs_ch[j, k] = chars_vocab.get(w[k], 0)
 
@@ -507,7 +507,7 @@ class PTBSeqReader(object):
                 sentence = line.split() + ['<EOS>']
                 num_words += len(sentence)
                 for w in sentence:
-                    x[i] = words_vocab.get(w)
+                    x[i] = words_vocab.get(w, 0)
                     nch = min(len(w), self.max_word_length)
                     for k in range(nch):
                         xch[i, k] = chars_vocab.get(w[k], 0)
