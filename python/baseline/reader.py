@@ -492,7 +492,9 @@ class PTBSeqReader(object):
                             vocab_ch[k] += 1
                 num_words_in_files.append(num_words)
 
-        self.max_word_length = min(maxw, self.max_word_length)
+        self.max_word_length = min(maxw, self.max_word_length) if self.max_word_length > 0 else maxw
+
+        #self.max_word_length = min(maxw, self.max_word_length)
         print('Max word length %d' % self.max_word_length)
 
         return vocab_ch, vocab_word, num_words_in_files
