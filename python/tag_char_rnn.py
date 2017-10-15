@@ -22,7 +22,7 @@ parser.add_argument('--clip', default=5.0, help='Gradient clipping cutoff', type
 parser.add_argument('--epochs', default=400, help='Number of epochs', type=int)
 parser.add_argument('--batchsz', default=20, help='Batch size', type=int)
 parser.add_argument('--mxlen', default=-1, help='Max sentence length', type=int)
-parser.add_argument('--mxwlen', default=40, help='Max word length', type=int)
+parser.add_argument('--mxwlen', default=-1, help='Max word length', type=int)
 parser.add_argument('--cfiltsz', help='Filter sizes', nargs='+', default=[1, 2, 3, 4, 5, 7], type=int)
 parser.add_argument('--charsz', default=16, help='Char embedding depth', type=int)
 parser.add_argument('--patience', default=20, help='Patience', type=int)
