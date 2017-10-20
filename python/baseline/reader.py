@@ -30,7 +30,8 @@ def _build_vocab_for_col(col, files):
 
                 for w in text:
                     w = w.strip()
-                    vocab[w] += 1
+                    if w:
+                        vocab[w] += 1
     return vocab
 
 

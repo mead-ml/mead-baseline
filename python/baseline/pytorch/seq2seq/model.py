@@ -27,7 +27,7 @@ class Seq2SeqBase(nn.Module, EncoderDecoder):
         torch.save(self, model_file)
 
     def create_loss(self):
-        return SequenceCriterion(self.nc)
+        return SequenceCriterion()
 
     @classmethod
     def load(cls, outname, **kwargs):
