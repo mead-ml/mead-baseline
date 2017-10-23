@@ -77,7 +77,7 @@ class Word2VecModel(EmbeddingsModel):
             s.extend(ch)
             ch = f.read(1)
         s = s.decode('utf-8')
-        return s
+        return s.strip()
 
     def lookup(self, word, nullifabsent=True):
         if word in self.vocab:
