@@ -99,9 +99,9 @@ def stacked_lstm(hsz, pkeep, nlayers):
 
 def rnn_cell_w_dropout(hsz, pkeep, rnntype, st=None):
     if st is not None:
-        cell = tf.contrib.rnn.BasicLSTMCell(hsz, state_is_tuple=st) if rnntype == 'lstm' else tf.contrib.rnn.GRUCell(hsz)
+        cell = tf.contrib.rnn.BasicLSTMCell(hsz, state_is_tuple=st) if rnntype.endswith('lstm') else tf.contrib.rnn.GRUCell(hsz)
     else:
-        cell = tf.contrib.rnn.LSTMCell(hsz) if rnntype == 'lstm' else tf.contrib.rnn.GRUCell(hsz)
+        cell = tf.contrib.rnn.LSTMCell(hsz) if rnntype.endswith('lstm') else tf.contrib.rnn.GRUCell(hsz)
     return tf.contrib.rnn.DropoutWrapper(cell, output_keep_prob=pkeep)
 
 

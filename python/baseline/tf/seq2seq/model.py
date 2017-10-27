@@ -218,12 +218,35 @@ class Seq2SeqModel(EncoderDecoder):
     def encode(self, embed_in, src):
         with tf.name_scope('encode'):
             # List to tensor, reform as (T, B, W)
-            embed_in_seq = tensor2seq(embed_in)
-            rnn_enc_cell = multi_rnn_cell_w_dropout(self.hsz, self.pkeep, self.rnntype, self.nlayers)
-            #TODO: Switch to tf.nn.rnn.dynamic_rnn()
-            rnn_enc_seq, final_encoder_state = tf.contrib.rnn.static_rnn(rnn_enc_cell, embed_in_seq, scope='rnn_enc', dtype=tf.float32)
+            if self.rnntype == 'blstm':
+                nlayers_bi = int(self.nlayers / 2)
+                rnn_fwd_cell = multi_rnn_cell_w_dropout(self.hsz, self.pkeep, self.rnntype, nlayers_bi)
+                rnn_bwd_cell = multi_rnn_cell_w_dropout(self.hsz, self.pkeep, self.rnntype, nlayers_bi)
+                rnn_enc_tensor, final_encoder_state = tf.nn.bidirectional_dynamic_rnn(rnn_fwd_cell, rnn_bwd_cell,
+                                                                                      embed_in,
+                                                                                      scope='brnn_enc',
+                                                                                      sequence_length=self.src_len,
+                                                                                      dtype=tf.float32)
+                rnn_enc_tensor = tf.concat(rnn_enc_tensor, -1)
+                if nlayers_bi == 1:
+                    encoder_state = final_encoder_state
+                else:
+                    # alternatively concat forward and backward states
+                    encoder_state = []
+                    for i in range(self.nlayers):
+                        encoder_state.append(final_encoder_state[0][i])  # forward
+                        encoder_state.append(final_encoder_state[1][i])  # backward
+                    encoder_state = tuple(encoder_state)
+            else:
+
+                rnn_enc_cell = multi_rnn_cell_w_dropout(self.hsz, self.pkeep, self.rnntype, self.nlayers)
+                rnn_enc_tensor, encoder_state = tf.nn.dynamic_rnn(rnn_enc_cell, embed_in,
+                                                                  scope='rnn_enc',
+                                                                  sequence_length=self.src_len,
+                                                                  dtype=tf.float32)
+
             # This comes out as a sequence T of (B, D)
-            return seq2tensor(rnn_enc_seq), final_encoder_state
+            return rnn_enc_tensor, encoder_state
 
     def save_md(self, model_base):
 
