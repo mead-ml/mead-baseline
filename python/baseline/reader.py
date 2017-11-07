@@ -187,7 +187,68 @@ def identity_trans_fn(x):
     return x
 
 
-class CONLLSeqReader(object):
+class SeqPredictReader(object):
+
+    def __init__(self, max_sentence_length=-1, max_word_length=-1, word_trans_fn=None,
+                 vec_alloc=np.zeros, vec_shape=np.shape, trim=False):
+        self.cleanup_fn = identity_trans_fn if word_trans_fn is None else word_trans_fn
+        self.max_sentence_length = max_sentence_length
+        self.max_word_length = max_word_length
+        self.vec_alloc = vec_alloc
+        self.vec_shape = vec_shape
+        self.trim = trim
+        self.label2index = {"<PAD>": 0, "<GO>": 1, "<EOS>": 2}
+
+    def build_vocab(self, files):
+        pass
+
+    def read_lines(self):
+        pass
+
+    def load(self, filename, words_vocab, chars_vocab, batchsz, shuffle=False):
+
+        ts = []
+        idx = 2 # GO=0, START=1, EOS=2
+        mxlen = self.max_sentence_length
+        maxw = self.max_word_length
+        txts, lbls = self.read_lines(filename)
+
+        for i in range(len(txts)):
+
+            xs_ch = self.vec_alloc((mxlen, maxw), dtype=np.int)
+            xs = self.vec_alloc((mxlen), dtype=np.int)
+            ys = self.vec_alloc((mxlen), dtype=np.int)
+
+            lv = lbls[i]
+            v = txts[i]
+
+            length = mxlen
+            for j in range(mxlen):
+
+                if j == len(v):
+                    length = j
+                    break
+
+                w = v[j]
+                nch = min(len(w), maxw)
+                label = lv[j]
+
+                if label not in self.label2index:
+                    idx += 1
+                    self.label2index[label] = idx
+
+                ys[j] = self.label2index[label]
+                xs[j] = words_vocab.get(self.cleanup_fn(w), 0)
+                for k in range(nch):
+                    xs_ch[j, k] = chars_vocab.get(w[k], 0)
+
+            ts.append((xs, xs_ch, ys, length, i))
+        examples = baseline.data.SeqWordCharTagExamples(ts)
+        return baseline.data.SeqWordCharLabelDataFeed(examples, batchsz=batchsz, shuffle=shuffle,
+                                                      vec_alloc=self.vec_alloc, vec_shape=self.vec_shape), txts
+
+
+class CONLLSeqReader(SeqPredictReader):
 
     UNREP_EMOTICONS = (
         ':)',
@@ -202,13 +263,7 @@ class CONLLSeqReader(object):
 
     def __init__(self, max_sentence_length=-1, max_word_length=-1, word_trans_fn=None,
                  vec_alloc=np.zeros, vec_shape=np.shape, trim=False):
-        self.cleanup_fn = identity_trans_fn if word_trans_fn is None else word_trans_fn
-        self.max_sentence_length = max_sentence_length
-        self.max_word_length = max_word_length
-        self.vec_alloc = vec_alloc
-        self.vec_shape = vec_shape
-        self.trim = trim
-        self.label2index = {"<PAD>": 0, "<GO>": 1, "<EOS>": 2}
+        super(CONLLSeqReader, self).__init__(max_sentence_length, max_word_length, word_trans_fn, vec_alloc, vec_shape, trim)
 
     @staticmethod
     def web_cleanup(word):
@@ -254,8 +309,7 @@ class CONLLSeqReader(object):
 
         return vocab_ch, vocab_word
 
-    @staticmethod
-    def read_lines(tsfile):
+    def read_lines(self, tsfile):
 
         txts = []
         lbls = []
@@ -276,47 +330,6 @@ class CONLLSeqReader(object):
                     lbl = []
 
         return txts, lbls
-
-    def load(self, filename, words_vocab, chars_vocab, batchsz, shuffle=False):
-
-        ts = []
-        idx = 2 # GO=0, START=1, EOS=2
-        mxlen = self.max_sentence_length
-        maxw = self.max_word_length
-        txts, lbls = CONLLSeqReader.read_lines(filename)
-
-        for i in range(len(txts)):
-
-            xs_ch = self.vec_alloc((mxlen, maxw), dtype=np.int)
-            xs = self.vec_alloc((mxlen), dtype=np.int)
-            ys = self.vec_alloc((mxlen), dtype=np.int)
-
-            lv = lbls[i]
-            v = txts[i]
-
-            length = mxlen
-            for j in range(mxlen):
-
-                if j == len(v):
-                    length = j
-                    break
-
-                w = v[j]
-                nch = min(len(w), maxw)
-                label = lv[j]
-
-                if label not in self.label2index:
-                    idx += 1
-                    self.label2index[label] = idx
-
-                ys[j] = self.label2index[label]
-                xs[j] = words_vocab.get(self.cleanup_fn(w), 0)
-                for k in range(nch):
-                    xs_ch[j, k] = chars_vocab.get(w[k], 0)
-
-            ts.append((xs, xs_ch, ys, length, i))
-        examples = baseline.data.SeqWordCharTagExamples(ts)
-        return baseline.data.SeqWordCharLabelDataFeed(examples, batchsz=batchsz, shuffle=shuffle, vec_alloc=self.vec_alloc, vec_shape=self.vec_shape), txts
 
 
 def create_seq_pred_reader(mxlen, mxwlen, word_trans_fn, vec_alloc, vec_shape, trim, **kwargs):
