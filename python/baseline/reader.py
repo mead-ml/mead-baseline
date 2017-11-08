@@ -84,9 +84,8 @@ class TSVParallelCorpusReader(ParallelCorpusReader):
         with codecs.open(tsfile, encoding='utf-8', mode='r') as f:
             for line in f:
                 splits = re.split("\t", line.strip())
-                src = re.split("\s+", splits[0])
-                dst = re.split("\s+", splits[1])
-
+                src = list(filter(lambda x: len(x) > 0, re.split("\s+", splits[0])))
+                dst = list(filter(lambda x: len(x) > 0, re.split("\s+", splits[1])))
                 srcl = self.vec_alloc(mxlen, dtype=np.int)
                 tgtl = self.vec_alloc(mxlen, dtype=np.int)
                 src_len = len(src)

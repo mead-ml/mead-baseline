@@ -59,7 +59,7 @@ class Seq2SeqModel(EncoderDecoder):
             state = json.load(f)
         # FIXME: Need a single name for this.  This is a total hack
         state["layers"] = state["nlayers"]
-        print(state)
+        #print(state)
         with open(basename + '-1.vocab', 'r') as f:
             src_vocab_embed = json.load(f)
 
@@ -95,7 +95,7 @@ class Seq2SeqModel(EncoderDecoder):
 
         hsz = int(kwargs['hsz'])
         attn = kwargs.get('model_type') == 'attn'
-        print('attn', attn)
+        #print('attn', attn)
         nlayers = int(kwargs.get('layers', 1))
         rnntype = kwargs.get('rnntype', 'lstm')
         mxlen = kwargs.get('mxlen', 100)

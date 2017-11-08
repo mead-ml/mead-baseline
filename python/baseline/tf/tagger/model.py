@@ -52,14 +52,14 @@ class RNNTaggerModel(Tagger):
         with open(basename + '.saver') as fsv:
             saver_def = tf.train.SaverDef()
             text_format.Merge(fsv.read(), saver_def)
-            print('Loaded saver def')
+            #print('Loaded saver def')
 
         with gfile.FastGFile(basename + '.graph', 'rb') as f:
             gd = tf.GraphDef()
             gd.ParseFromString(f.read())
             model.sess.graph.as_default()
             tf.import_graph_def(gd, name='')
-            print('Imported graph def')
+            #print('Imported graph def')
 
             model.sess.run(saver_def.restore_op_name, {saver_def.filename_tensor_name: checkpoint_name})
             model.x = tf.get_default_graph().get_tensor_by_name('x:0')
@@ -71,10 +71,10 @@ class RNNTaggerModel(Tagger):
             model.probs = tf.get_default_graph().get_tensor_by_name('output/Reshape_1:0')  # TODO: rename
             try:
                 model.A = tf.get_default_graph().get_tensor_by_name('Loss/transitions:0')
-                print('Found transition matrix in graph, setting crf=True')
+                #print('Found transition matrix in graph, setting crf=True')
                 model.crf = True
             except:
-                print('Failed to get transition matrix, setting crf=False')
+                #print('Failed to get transition matrix, setting crf=False')
                 model.A = None
                 model.crf = False
 

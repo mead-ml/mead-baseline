@@ -238,7 +238,6 @@ def create_seq2seq_model(known_creators, input_embedding, output_embedding, **kw
     model_type = kwargs.get('model_type', 'default')
     if model_type in known_creators:
         creator_fn = known_creators[model_type]
-        print('Calling baseline model ', creator_fn)
         return creator_fn(input_embedding, output_embedding, **kwargs)
 
     model = create_user_seq2seq_model(input_embedding, output_embedding, **kwargs)
@@ -249,7 +248,6 @@ def load_seq2seq_model(known_loaders, outname, **kwargs):
     model_type = kwargs.get('model_type', 'default')
     if model_type in known_loaders:
         loader_fn = known_loaders[model_type]
-        print('Calling baseline model loader ', loader_fn)
         return loader_fn(outname, **kwargs)
     return load_user_seq2seq_model(outname, **kwargs)
 
