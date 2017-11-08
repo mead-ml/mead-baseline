@@ -65,15 +65,22 @@ reader = create_parallel_corpus_reader(args.mxlen, alloc_fn, trim, src_vec_trans
 if args.vocab is not None:
     vocab_list = [args.vocab]
 else:
-    vocab_list = [args.train, args.test]
+    vocab_list = [args.train, args.valid, args.test]
 
 vocab1, vocab2 = reader.build_vocabs(vocab_list)
 
-embed1 = Word2VecModel(args.embed1, vocab1, unif_weight=args.unif) \
-    if args.embed1 else RandomInitVecModel(args.dsz, vocab1, unif_weight=args.unif)
+print(vocab2)
+if args.embed1:
+    EmbeddingsModelType = GloVeModel if args.embed1.endswith(".txt") else Word2VecModel
+    embed1 = EmbeddingsModelType(args.embed1, vocab1, unif_weight=args.unif)
+else:
+    embed1 = RandomInitVecModel(args.dsz, vocab1, unif_weight=args.unif)
 
-embed2 = Word2VecModel(args.embed2, vocab2, unif_weight=args.unif) \
-    if args.embed2 else RandomInitVecModel(args.dsz, vocab1, unif_weight=args.unif)
+if args.embed2:
+    EmbeddingsModelType = GloVeModel if args.embed2.endswith(".txt") else Word2VecModel
+    embed2 = EmbeddingsModelType(args.embed2, vocab2, unif_weight=args.unif)
+else:
+    embed2 = RandomInitVecModel(args.dsz, vocab2, unif_weight=args.unif)
 
 ts = reader.load(args.train, embed1.vocab, embed2.vocab, args.batchsz, shuffle=True)
 es = reader.load(args.test, embed1.vocab, embed2.vocab, args.batchsz)
