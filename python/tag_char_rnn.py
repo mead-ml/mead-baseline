@@ -39,6 +39,7 @@ parser.add_argument('--web_cleanup', default=False, help='Do cleanup of web toke
 parser.add_argument('--lower', default=False, help='Lower case word tokens?', type=str2bool)
 parser.add_argument('--backend', default='tf', help='Default Deep Learning Framework')
 parser.add_argument('--model_type', help='Name of model to load and train', default='default')
+parser.add_argument('--reader_type', default='default', help='reader type (defaults to CONLL)')
 
 args = parser.parse_args()
 gpu = not args.nogpu
@@ -65,7 +66,8 @@ elif args.lower is True:
     print('Lower-case word tokens')
     word_trans_fn = lowercase
 
-reader = create_seq_pred_reader(args.mxlen, args.mxwlen, word_trans_fn, vec_alloc, vec_shape, trim)
+reader = create_seq_pred_reader(args.mxlen, args.mxwlen, word_trans_fn,
+                                vec_alloc, vec_shape, trim, reader_type=args.reader_type)
 
 vocab_ch, vocab_word = reader.build_vocab([args.train, args.test, args.valid])
 
