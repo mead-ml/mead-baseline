@@ -40,7 +40,7 @@ parser.add_argument('--lower', default=False, help='Lower case word tokens?', ty
 parser.add_argument('--backend', default='tf', help='Default Deep Learning Framework')
 parser.add_argument('--model_type', help='Name of model to load and train', default='default')
 parser.add_argument('--reader_type', default='default', help='reader type (defaults to CONLL)')
-
+parser.add_argument('--pad_unk_test', default=False, help='Treat vocab only in test as UNK despite present embeddings')
 args = parser.parse_args()
 gpu = not args.nogpu
 
@@ -69,7 +69,12 @@ elif args.lower is True:
 reader = create_seq_pred_reader(args.mxlen, args.mxwlen, word_trans_fn,
                                 vec_alloc, vec_shape, trim, reader_type=args.reader_type)
 
-vocab_ch, vocab_word = reader.build_vocab([args.train, args.test, args.valid])
+vocab_sources = [args.train, args.valid]
+
+if not args.pad_unk_test:
+    vocab_sources += [args.test]
+
+vocab_ch, vocab_word = reader.build_vocab(vocab_sources)
 
 
 # Vocab LUTs
