@@ -84,21 +84,21 @@ class TSVParallelCorpusReader(ParallelCorpusReader):
         with codecs.open(tsfile, encoding='utf-8', mode='r') as f:
             for line in f:
                 splits = re.split("\t", line.strip())
-                src = list(filter(lambda x: len(x) > 0, re.split("\s+", splits[0])))
-                dst = list(filter(lambda x: len(x) > 0, re.split("\s+", splits[1])))
+                src = list(filter(lambda x: len(x) != 0, re.split("\s+", splits[0])))
+                dst = list(filter(lambda x: len(x) != 0, re.split("\s+", splits[1])))
                 srcl = self.vec_alloc(mxlen, dtype=np.int)
                 tgtl = self.vec_alloc(mxlen, dtype=np.int)
                 src_len = len(src)
                 tgt_len = len(dst) + 2  # <GO>,...,<EOS>
                 end1 = min(src_len, mxlen)
-                end2 = min(tgt_len, mxlen)-2
+                end2 = min(tgt_len, mxlen)-1
                 tgtl[0] = GO
                 src_len = end1
                 tgt_len = end2+2
 
                 for j in range(end1):
                     srcl[j] = vocab1[src[j]]
-                for j in range(end2):
+                for j in range(end2-1):
                     tgtl[j + 1] = vocab2[dst[j]]
 
                 tgtl[end2] = EOS
@@ -146,14 +146,14 @@ class MultiFileParallelCorpusReader(ParallelCorpusReader):
                     src_len = len(src)
                     tgt_len = len(dst) + 2
                     end1 = min(src_len, mxlen)
-                    end2 = min(tgt_len, mxlen)-2
+                    end2 = min(tgt_len, mxlen)-1
                     tgtl[0] = GO
                     src_len = end1
                     tgt_len = end2+2
 
                     for j in range(end1):
                         srcl[j] = vocab1[src[j]]
-                    for j in range(end2):
+                    for j in range(end2-1):
                         tgtl[j + 1] = vocab2[dst[j]]
 
                     tgtl[end2] = EOS
