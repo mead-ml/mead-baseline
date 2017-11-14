@@ -92,7 +92,7 @@ This model is run similarly to the model above.
 Here is an example running Stanford Sentiment Treebank 2 data with adadelta using TensorFlow:
 
 ```
-python classify_sentence.py --backend tf --clean --optim adadelta --eta 1 --batchsz 50 --epochs 25 --patience 25 \
+python classify_sentence.py --clean --optim adadelta --eta 1 --batchsz 50 --epochs 25 --patience 25 \
  --train ../data/stsa.binary.phrases.train \
  --valid ../data/stsa.binary.dev \
  --test ../data/stsa.binary.test \
@@ -102,21 +102,33 @@ python classify_sentence.py --backend tf --clean --optim adadelta --eta 1 --batc
  --dropout 0.5
 ```
 
+Here is an example running the TREC question categorization dataset
+
+```
+python classify_sentence.py --optim adadelta --eta 1 --batchsz 10 --epochs 30 --patience 25 \
+ --train ../data/trec.nodev.utf8 \
+ --valid ../data/trec.dev.utf8 \
+ --test ../data/trec.test.utf8 \
+ --embed /data/embeddings/GoogleNews-vectors-negative300.bin --filtsz 3 4 5 \
+ --dropout 0.5
+
+```
+
 ### Status
 
 This model is implemented in TensorFlow and PyTorch.  
 
 ### Latest Runs
 
-Here are the last observed performance scores using _classify_sentence_ with fine-tuning on the Stanford Sentiment Treebank 2 (SST2)
-It was run on the latest code as of 8/21/2017, just as shown in the command-line above
+Here are the last observed performance scores using _classify_sentence_ with fine-tuning on various datasets.
 
 | Dataset | TensorFlow | PyTorch | 
 | ------- | ---------- | ------- | 
-| SST2    |       87.1 |  87.1   |
+| sst2    |       87.1 |  87.1   |
+| dbpedia |     99.054 |   --    | 
+| trec-qa |       93.2 |  92.4   |
 
 Note that these are randomly initialized and these numbers will vary
-(IOW, don't assume that one implementation is guaranteed to outperform the others from a single run -- I have seen accuracy as high as 89.2 with this model).
 
 ## Neural Bag of Words (NBoW) Model (Max and Average Pooling)
 
@@ -128,7 +140,7 @@ This model is implemented in TensorFlow and PyTorch.
 
 ### Latest Runs
 
-Here are the last observed performance scores using _classify_sentence_ with fine-tuning on the Stanford Sentiment Treebank 2 (SST2) with a single hidden layer (the default), and `hsz=100` (the default)
+Here are the last observed performance scores using _classify_sentence_ with fine-tuning on the Stanford Sentiment Treebank 2 (sst2) with a single hidden layer (the default), and `hsz=100` (the default)
 
 It was run on the latest code as of 8/24/2017, with 25 epochs with adadelta as an optimizer:
 
@@ -145,8 +157,8 @@ python classify_sentence.py --backend pytorch --clean --optim adadelta --eta 1 -
 
 | model_type | Dataset | TensorFlow | PyTorch | 
 |------------| ------- | ---------- | ------- | 
-| nbowmax    | SST2    |       82.8 |  84.1   |
-| nbow       | SST2    |       84.2 |  82.9   |
+| nbowmax    | sst2    |       82.8 |  84.1   |
+| nbow       | sst2    |       84.2 |  82.9   |
 
 Note that these are randomly initialized and these numbers will vary
 (IOW, don't assume that one implementation is guaranteed to outperform the others from a single run).
