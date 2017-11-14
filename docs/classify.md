@@ -106,7 +106,7 @@ python classify_sentence.py --optim sgd --eta 0.01 --batchsz 50 --epochs 40 --pa
 Note that these are randomly initialized and these numbers will vary
 (IOW, don't assume that one implementation is guaranteed to outperform the others from a single run).
 
-On my laptop, each implementation takes between 29 - 40s per epoch depending on the deep learning framework (TensorFlow and PyTorch are fastest, and about the same speed)
+On my laptop, each implementation for SST2 takes between 29 - 40s per epoch depending on the deep learning framework (TensorFlow and PyTorch are fastest, and about the same speed)
 
 ## LSTM Model
 
