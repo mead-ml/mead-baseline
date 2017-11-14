@@ -13,22 +13,7 @@ The code uses word and character-level word embeddings.  For character-level pro
 
 The character-level embeddings are based on Character-Aware Neural Language Models (Kim, Jernite, Sontag, Rush) and dos Santos 2014 (though the latter's tagging model is quite different).  Unlike dos Santos' approach, here parallel filters are applied during the convolution (which is like the Kim approach). Unlike the Kim approach residual connections of like size filters are used, and since they improve performance for tagging, word vectors are also used.
 
-Twitter is a challenging data source for tagging problems.  The [TweetNLP project](http://www.cs.cmu.edu/~ark/TweetNLP) includes hand annotated POS data. The original taggers used for this task are described [here](http://www.cs.cmu.edu/~ark/TweetNLP/gimpel+etal.acl11.pdf).  The baseline that they compared their algorithm against got 83.38% accuracy.  The final model got 89.37% accuracy with many custom features.  Below, our simple BLSTM baseline with no custom features, and a very coarse approach to compositional character to word modeling still gets *88%-90%* accuracy.
-
-### Pre-trained word2vec embeddings
-
-#### Google News
-The Google news word vectors are useful for many different tasks and tagging is no exception.  Here is a link to get those (from Google)
-
-https://drive.google.com/file/d/0B7XkCwpI5KDYNlNUTTlSS21pQmM/edit
-
-#### Twitter
-
-Custom word2vec embeddings generated from ~32M tweets including s140 and the oct27 train+dev data.  Some of the data was sampled and preprocessed to have placeholder words for hashtags, mentions and URLs to be used as backoffs for words of those classes which are not found.
-
-https://drive.google.com/drive/folders/0B8N1oYmGLVGWWWZYS2E0MlRXajQ?usp=sharing
-
-If you use these, pass `--web_cleanup 1` to make sure that preprocessing is done to match preprocessing on the pre-trained embeddings
+Twitter is a challenging data source for tagging problems.  The [TweetNLP project](http://www.cs.cmu.edu/~ark/TweetNLP) includes hand annotated POS data. The original taggers used for this task are described [here](http://www.cs.cmu.edu/~ark/TweetNLP/gimpel+etal.acl11.pdf).  The baseline that they compared their algorithm against got 83.38% accuracy.  The final model got 89.37% accuracy with many custom features.  Below, our simple BLSTM baseline with no custom features, and a very coarse approach to compositional character to word modeling still gets equivalent results.
 
 ## Running It
 
@@ -36,11 +21,12 @@ Here is an example using convolutional filters for character embeddings, alongsi
 
 ```
 python tag_char_rnn.py --rnntype blstm --optim sgd --wsz 30 --eta 0.01 \
-    --epochs 40 --web_cleanup 1 --batchsz 20 --hsz 200 \
+    --lower 1 \
+    --epochs 50 --batchsz 10 --hsz 200 \
     --train ../data/oct27.train \
     --valid ../data/oct27.dev \
     --test ../data/oct27.test \
-    --embed /data/xdata/oct-s140clean-uber.cbow-bin --cfiltsz 1 2 3 4 5 7
+    --embed /data/embeddings/glove.twitter.27B.200d.txt --cfiltsz 1 2 3 4 5 7
 ```
 
 To run with PyTorch, just pass `--backend pytorch`
@@ -53,17 +39,19 @@ NER tagging can be performed with a BLSTM, and optionally, a top level CRF. This
 
 For tasks that require global coherency like NER tagging, it has been shown that using a transition matrix between label states in conjunction with the output RNN tags improves performance.  This makes the tagger a linear chain CRF, and we can do this by simply adding another layer on top of our RNN output.  To do this, simply pass `--crf 1` as an argument.
 
+The parameterization below yields a very similar model to this paper: https://arxiv.org/pdf/1603.01354.pdf and yields near-SoTA performance
+
 ```
 python tag_char_rnn.py \
     --rnntype blstm --patience 40 \
-    --layers 1 --optim sgd --eta 0.01 --clip 5. --epochs 240 --batchsz 10 --hsz 100 \
+    --layers 1 --optim sgd --eta 0.015 --clip 5. --epochs 240 --batchsz 10 --hsz 200 \
+    --decay_rate 0.05 --decay_type invtime \
     --train ../data/eng.train \
     --valid ../data/eng.testa \
     --test  ../data/eng.testb \
     --lower 1 \
-    --embed /data/embeddings/glove/glove.42B.300d.txt \
-    --cfiltsz 1 2 3 4 5 7 --wsz 10 --crf 1
-popd
+    --embed /data/embeddings/glove.6B.100d.txt \
+    --cfiltsz 3 --wsz 30 --crf 1
 
 ```
 
@@ -75,18 +63,12 @@ This model is implemented in TensorFlow and PyTorch (there is an old version in 
 
 ### Latest Runs
 
-#### Twitter POS
+Here are the last observed performance scores on various dataset
 
-Here are the last observed performance scores using _tag_char_rnn_ with a 1-layer BLSTM on Twitter POS.  It was run for up to 40 epochs.
-
-| Dataset   | Metric | Method    | Eta (LR) | Framework  | Score |
-| --------- | ------ | --------- | -------  | ---------- | ----- |
-| twpos-v03 |    Acc | SGD mom.  |     0.01 | TensorFlow | 89.7  |
-| twpos-v03 |    Acc | Adam      |       -- | PyTorch    | 89.4  |
-
-#### CONLL
-
-| Dataset   | Metric | Method    | Eta (LR) | Framework  | Score |
-| --------- | ------ | --------- | -------  | ---------- | ----- |
-| CONLL     |     F1 | SGD mom.  |     0.01 | TensorFlow | 90.3  |
+| dataset       | metric | method   | eta (LR) | backend  | score | proj | crf  | hsz |
+| ------------- | ------ | -------- | -------  | -------- | ----- | -----| -----|-----|
+| twpos-v03     |    acc | sgd mom. |     0.01 | tf       | 89.5  | Y    | N    | 100 |
+| twpos-v03     |    acc | adam     |       -- | pytorch  | 89.4  | N    | N    | 100 |
+| conll 2003    |     f1 | sgd mom. |     0.01 | tf       | 90.81 | N    | Y    | 100 |
+| atis (mesnil) |     f1 | sgd mom. |     0.01 | tf       | 96.74 | N    | N    | 100 |
 
