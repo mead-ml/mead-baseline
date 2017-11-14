@@ -71,7 +71,7 @@ python classify_sentence.py --backend tf --clean --optim adadelta --eta 1 --batc
 
 | Dataset | TensorFlow | Keras (TF) | PyTorch | Torch7 |
 | ------- | ---------- | ---------- | ------- | ------ |
-| SST2    |       87.9 |      87.4  |  87.9   | 87.095 |
+| sst2    |       87.9 |      87.4  |  87.9   | 87.095 |
 
 Note that these are randomly initialized and these numbers will vary
 (IOW, don't assume that one implementation is guaranteed to outperform the others from a single run).
