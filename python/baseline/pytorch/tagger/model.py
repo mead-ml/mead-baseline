@@ -195,16 +195,14 @@ class RNNTaggerModel(nn.Module, Tagger):
         char_dsz = char_vec.dsz
         word_dsz = 0
         hsz = int(kwargs['hsz'])
+        model.proj = bool(kwargs.get('proj', False))
         model.crf = bool(kwargs.get('crf', False))
         nlayers = int(kwargs.get('layers', 1))
         rnntype = kwargs.get('rnntype', 'lstm')
         print('RNN [%s]' % rnntype)
-        unif = float(kwargs.get('unif', 0.25))
         wsz = kwargs.get('wsz', 30)
         filtsz = kwargs.get('cfiltsz')
-        crf = bool(kwargs.get('crf', False))
-        if crf:
-            #weights = torch.Tensor(len(labels), len(labels)).uniform_(-unif, unif)
+        if model.crf:
             weights = torch.Tensor(len(labels), len(labels)).zero_()
             model.transitions = nn.Parameter(weights)
         pdrop = float(kwargs.get('dropout', 0.5))
@@ -222,14 +220,18 @@ class RNNTaggerModel(nn.Module, Tagger):
         initv = math.sqrt(6./(model.wchsz + word_dsz + hsz))
         model.rnn, out_hsz = pytorch_lstm(model.wchsz + word_dsz, hsz, rnntype, nlayers, pdrop, initv)
         model.decoder = nn.Sequential()
-        append2seq(model.decoder, (
-            pytorch_linear(out_hsz, hsz, math.sqrt(6./(out_hsz + hsz))),
-            pytorch_activation("tanh"),
-            nn.Dropout(pdrop),
-            pytorch_linear(hsz, len(model.labels), math.sqrt(6./(hsz + len(model.labels))))
-        ))
+        if model.proj is True:
+            append2seq(model.decoder, (
+                pytorch_linear(out_hsz, hsz, math.sqrt(6./(out_hsz + hsz))),
+                pytorch_activation("tanh"),
+                nn.Dropout(pdrop),
+                pytorch_linear(hsz, len(model.labels), math.sqrt(6./(hsz + len(model.labels))))
+            ))
+        else:
+            append2seq(model.decoder, (
+                pytorch_linear(out_hsz, len(model.labels), math.sqrt(6./(out_hsz + len(model.labels)))),
+            ))
 
-        #model.softmax = nn.LogSoftmax()
         model.crit = SequenceCriterion(LossFn=nn.CrossEntropyLoss)
         return model
 
