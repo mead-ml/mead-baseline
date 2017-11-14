@@ -114,6 +114,19 @@ python classify_sentence.py --optim adadelta --eta 1 --batchsz 10 --epochs 30 --
 
 ```
 
+Here is an example running on a preprocessed version of dbpedia with 10% heldout:
+
+```
+python classify_sentence.py --optim sgd --eta 0.01 --batchsz 50 --epochs 40 --patience 25 \
+ --train /data/xdata/classify/dbpedia_csv/train-tok-nodev.txt \
+ --valid /data/xdata/classify/dbpedia_csv/dev-tok.txt \
+ --test /data/xdata/classify/dbpedia_csv/test-tok.txt \
+ --mxlen 100 \
+ --cmotsz 300 \
+ --embed /data/embeddings/glove.42B.300d.txt --filtsz 1 2 3 4 5 7 \
+ --dropout 0.5
+```
+
 ### Status
 
 This model is implemented in TensorFlow and PyTorch.  
