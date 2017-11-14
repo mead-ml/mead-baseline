@@ -69,9 +69,39 @@ python classify_sentence.py --backend tf --clean --optim adadelta --eta 1 --batc
 
 ```
 
-| Dataset | TensorFlow | Keras (TF) | PyTorch | Torch7 |
-| ------- | ---------- | ---------- | ------- | ------ |
-| sst2    |       87.9 |      87.4  |  87.9   | 87.095 |
+
+Here is an example running the TREC question categorization dataset
+
+```
+python classify_sentence.py --optim adadelta --eta 1 --batchsz 10 --epochs 30 --patience 25 \
+ --train ../data/trec.nodev.utf8 \
+ --valid ../data/trec.dev.utf8 \
+ --test ../data/trec.test.utf8 \
+ --embed /data/embeddings/GoogleNews-vectors-negative300.bin --filtsz 3 4 5 \
+ --dropout 0.5
+
+```
+
+Here is an example running on a preprocessed version of dbpedia with 10% heldout:
+
+```
+python classify_sentence.py --optim sgd --eta 0.01 --batchsz 50 --epochs 40 --patience 25 \
+ --train /data/xdata/classify/dbpedia_csv/train-tok-nodev.txt \
+ --valid /data/xdata/classify/dbpedia_csv/dev-tok.txt \
+ --test /data/xdata/classify/dbpedia_csv/test-tok.txt \
+ --mxlen 100 \
+ --cmotsz 300 \
+ --embed /data/embeddings/glove.42B.300d.txt --filtsz 1 2 3 4 5 7 \
+ --dropout 0.5
+```
+
+
+| Dataset | TensorFlow | Keras (TF) | PyTorch |
+| ------- | ---------- | ---------- | ------- |
+| sst2    |       87.9 |      87.4  |  87.9   |
+| dbpedia |     99.054 |   --       |  --     | 
+| trec-qa |       93.2 |   --       |  92.4   |
+
 
 Note that these are randomly initialized and these numbers will vary
 (IOW, don't assume that one implementation is guaranteed to outperform the others from a single run).
@@ -102,31 +132,6 @@ python classify_sentence.py --clean --optim adadelta --eta 1 --batchsz 50 --epoc
  --dropout 0.5
 ```
 
-Here is an example running the TREC question categorization dataset
-
-```
-python classify_sentence.py --optim adadelta --eta 1 --batchsz 10 --epochs 30 --patience 25 \
- --train ../data/trec.nodev.utf8 \
- --valid ../data/trec.dev.utf8 \
- --test ../data/trec.test.utf8 \
- --embed /data/embeddings/GoogleNews-vectors-negative300.bin --filtsz 3 4 5 \
- --dropout 0.5
-
-```
-
-Here is an example running on a preprocessed version of dbpedia with 10% heldout:
-
-```
-python classify_sentence.py --optim sgd --eta 0.01 --batchsz 50 --epochs 40 --patience 25 \
- --train /data/xdata/classify/dbpedia_csv/train-tok-nodev.txt \
- --valid /data/xdata/classify/dbpedia_csv/dev-tok.txt \
- --test /data/xdata/classify/dbpedia_csv/test-tok.txt \
- --mxlen 100 \
- --cmotsz 300 \
- --embed /data/embeddings/glove.42B.300d.txt --filtsz 1 2 3 4 5 7 \
- --dropout 0.5
-```
-
 ### Status
 
 This model is implemented in TensorFlow and PyTorch.  
@@ -138,8 +143,6 @@ Here are the last observed performance scores using _classify_sentence_ with fin
 | Dataset | TensorFlow | PyTorch | 
 | ------- | ---------- | ------- | 
 | sst2    |       87.1 |  87.1   |
-| dbpedia |     99.054 |   --    | 
-| trec-qa |       93.2 |  92.4   |
 
 Note that these are randomly initialized and these numbers will vary
 
