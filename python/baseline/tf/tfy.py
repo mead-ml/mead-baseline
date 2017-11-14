@@ -24,6 +24,11 @@ def optimizer(loss_fn, **kwargs):
         decay_rate = float(kwargs.get('decay_rate', 0.5))
         decay_fn = lambda lr, global_step: tf.train.exponential_decay(lr, global_step, at_step, decay_rate, staircase=True)
 
+    elif decay_type == 'invtime':
+        decay_rate = float(kwargs.get('decay_rate', 0.05))
+        at_step = int(kwargs.get('bounds', 16000))
+        decay_fn = lambda lr, global_step: tf.train.inverse_time_decay(lr, global_step, at_step, decay_rate, staircase=False)
+
     elif decay_type == 'zaremba':
         boundaries = kwargs.get('bounds', None)
         decay_rate = float(kwargs.get('decay_rate', None))
@@ -90,7 +95,7 @@ def lstm_cell(hsz):
 
 
 def lstm_cell_w_dropout(hsz, pkeep):
-    return tf.contrib.rnn.DropoutWrapper(tf.contrib.rnn.BasicLSTMCell(hsz, forget_bias=0.0, state_is_tuple=True), output_keep_prob=pkeep)
+    return tf.contrib.rnn.DropoutWrapper(tf.contrib.rnn.BasicLSTMCell(hsz, forget_bias=1.0, state_is_tuple=True), output_keep_prob=pkeep)
 
 
 def stacked_lstm(hsz, pkeep, nlayers):
