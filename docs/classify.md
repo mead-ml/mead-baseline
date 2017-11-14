@@ -4,7 +4,7 @@ There are several models built in to the `baseline` codebase.  These are summari
 
 ## Convolution Model
 
-This code provides PyTorch, TensorFlow and Keras implementations (as well as an older Lua/Torch7 implementation). 
+This code provides PyTorch, TensorFlow and Keras implementations. 
 
 *Details*
 
