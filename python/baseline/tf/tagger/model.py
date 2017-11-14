@@ -18,6 +18,10 @@ class RNNTaggerModel(Tagger):
         base = path[-1]
         outdir = '/'.join(path[:-1])
 
+        state = {"mxlen": self.mxlen, "maxw": self.maxw, "crf": self.crf, "proj": self.proj }
+        with open(basename + '.state', 'w') as f:
+            json.dump(state, f)
+
         tf.train.write_graph(self.sess.graph_def, outdir, base + '.graph', as_text=False)
         with open(basename + '.saver', 'w') as f:
             f.write(str(self.saver.as_saver_def()))
@@ -49,17 +53,22 @@ class RNNTaggerModel(Tagger):
         model.sess = kwargs.get('sess', tf.Session())
         checkpoint_name = kwargs.get('checkpoint_name', basename)
         checkpoint_name = checkpoint_name or basename
+        with open(basename + '.state') as f:
+            state = json.load(f)
+            model.mxlen = state.get('mxlen', 100)
+            model.maxw = state.get('maxw', 100)
+            model.crf = bool(state.get('crf', False))
+            model.proj = bool(state.get('proj', False))
+
         with open(basename + '.saver') as fsv:
             saver_def = tf.train.SaverDef()
             text_format.Merge(fsv.read(), saver_def)
-            #print('Loaded saver def')
 
         with gfile.FastGFile(basename + '.graph', 'rb') as f:
             gd = tf.GraphDef()
             gd.ParseFromString(f.read())
             model.sess.graph.as_default()
             tf.import_graph_def(gd, name='')
-            #print('Imported graph def')
 
             model.sess.run(saver_def.restore_op_name, {saver_def.filename_tensor_name: checkpoint_name})
             model.x = tf.get_default_graph().get_tensor_by_name('x:0')
@@ -72,9 +81,12 @@ class RNNTaggerModel(Tagger):
             try:
                 model.A = tf.get_default_graph().get_tensor_by_name('Loss/transitions:0')
                 #print('Found transition matrix in graph, setting crf=True')
-                model.crf = True
+                if not model.crf:
+                    print('Warning: meta-data says no CRF but model contains transition matrix!')
+                    model.crf = True
             except:
-                #print('Failed to get transition matrix, setting crf=False')
+                if model.crf is True:
+                    print('Warning: meta-data says there is a CRF but not transition matrix found!')
                 model.A = None
                 model.crf = False
 
@@ -164,21 +176,21 @@ class RNNTaggerModel(Tagger):
         model = RNNTaggerModel()
         model.sess = kwargs.get('sess', tf.Session())
 
-        mxlen = kwargs.get('maxs', 100)
-        maxw = kwargs.get('maxw', 100)
-        wsz = kwargs.get('wsz', 30)
-        filtsz = kwargs.get('cfiltsz')
+        model.mxlen = kwargs.get('maxs', 100)
+        model.maxw = kwargs.get('maxw', 100)
+
         hsz = int(kwargs['hsz'])
         pdrop = kwargs.get('dropout', 0.5)
         rnntype = kwargs.get('rnntype', 'blstm')
         nlayers = kwargs.get('layers', 1)
         model.labels = labels
         model.crf = bool(kwargs.get('crf', False))
+        model.proj = bool(kwargs.get('proj', False))
         char_dsz = char_vec.dsz
         nc = len(labels)
-        model.x = kwargs.get('x', tf.placeholder(tf.int32, [None, mxlen], name="x"))
-        model.xch = kwargs.get('xch', tf.placeholder(tf.int32, [None, mxlen, maxw], name="xch"))
-        model.y = kwargs.get('y', tf.placeholder(tf.int32, [None, mxlen], name="y"))
+        model.x = kwargs.get('x', tf.placeholder(tf.int32, [None, model.mxlen], name="x"))
+        model.xch = kwargs.get('xch', tf.placeholder(tf.int32, [None, model.mxlen, model.maxw], name="xch"))
+        model.y = kwargs.get('y', tf.placeholder(tf.int32, [None, model.mxlen], name="y"))
         model.lengths = kwargs.get('lengths', tf.placeholder(tf.int32, [None], name="lengths"))
         model.pkeep = kwargs.get('pkeep', tf.placeholder(tf.float32, name="pkeep"))
         model.pdrop_value = pdrop
@@ -199,17 +211,7 @@ class RNNTaggerModel(Tagger):
         Wch = tf.Variable(tf.constant(char_vec.weights, dtype=tf.float32), name="Wch")
         ce0 = tf.scatter_update(Wch, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, char_dsz]))
 
-        with tf.variable_scope("Chars2Word"):
-            with tf.control_dependencies([ce0]):
-                rnnchar_bt_x_w = tf.reshape(model.xch, [-1, maxw])
-                mxfiltsz = np.max(filtsz)
-                halffiltsz = mxfiltsz // 2
-                zeropad = tf.pad(rnnchar_bt_x_w, [[0, 0], [halffiltsz, halffiltsz]], "CONSTANT")
-                cembed = tf.nn.embedding_lookup(Wch, zeropad, name="embeddings")
-                cmot = char_word_conv_embeddings(cembed, filtsz, char_dsz, wsz)
-                word_char = tf.reshape(cmot, [-1, mxlen, len(filtsz) * wsz])
-
-        # Join embeddings along the third dimension
+        word_char = RNNTaggerModel.pool_chars(Wch, ce0, char_dsz, kwargs, model)
         joint = word_char if word_vec is None else tf.concat(values=[wembed, word_char], axis=2)
         embedseq = tf.nn.dropout(joint, model.pkeep)
 
@@ -222,24 +224,41 @@ class RNNTaggerModel(Tagger):
         else:
             rnnfwd = stacked_lstm(hsz, model.pkeep, nlayers)
             rnnout, _ = tf.nn.dynamic_rnn(rnnfwd, embedseq, sequence_length=model.lengths, dtype=tf.float32)
+
         with tf.variable_scope("output"):
             # Converts seq to tensor, back to (B,T,W)
-
             hout = hsz
             if rnntype == 'blstm':
                 hout *= 2
             # Flatten from [B x T x H] - > [BT x H]
             rnnout_bt_x_h = tf.reshape(rnnout, [-1, hout])
-
-            #init = tf.random_uniform_initializer(-0.05, 0.05, dtype=tf.float32, seed=seed)
             init = xavier_initializer(True, seed)
 
             with tf.contrib.slim.arg_scope([fully_connected], weights_initializer=init):
-                hidden = tf.nn.dropout(fully_connected(rnnout_bt_x_h, hsz, activation_fn=tf.nn.tanh), model.pkeep)
-                preds = fully_connected(hidden, nc, activation_fn=None, weights_initializer=init)
-            model.probs = tf.reshape(preds, [-1, mxlen, nc])
+                if model.proj is True:
+                    hidden = tf.nn.dropout(fully_connected(rnnout_bt_x_h, hsz, activation_fn=tf.nn.tanh), model.pkeep)
+                    preds = fully_connected(hidden, nc, activation_fn=None, weights_initializer=init)
+                else:
+                    preds = fully_connected(rnnout_bt_x_h, nc, activation_fn=None, weights_initializer=init)
+            model.probs = tf.reshape(preds, [-1, model.mxlen, nc])
             model.best = tf.argmax(model.probs, 2)
         return model
+
+    @staticmethod
+    def pool_chars(Wch, ce0, char_dsz, kwargs, model):
+        wsz = kwargs.get('wsz', 30)
+        filtsz = kwargs.get('cfiltsz')
+        with tf.variable_scope("Chars2Word"):
+            with tf.control_dependencies([ce0]):
+                rnnchar_bt_x_w = tf.reshape(model.xch, [-1, model.maxw])
+                mxfiltsz = np.max(filtsz)
+                halffiltsz = mxfiltsz // 2
+                zeropad = tf.pad(rnnchar_bt_x_w, [[0, 0], [halffiltsz, halffiltsz]], "CONSTANT")
+                cembed = tf.nn.embedding_lookup(Wch, zeropad, name="embeddings")
+                cmot = char_word_conv_embeddings(cembed, filtsz, char_dsz, wsz)
+                word_char = tf.reshape(cmot, [-1, model.mxlen, len(filtsz) * wsz])
+
+        return word_char
 
 
 def create_model(labels, word_embedding, char_embedding, **kwargs):
