@@ -19,7 +19,8 @@ parser.add_argument('--rnntype', default='blstm', help='RNN type')
 parser.add_argument('--layers', default=1, help='The depth of stacked RNNs', type=int)
 parser.add_argument('--outfile', help='Output file base', default='./tagger-model')
 parser.add_argument('--conll_output', default='rnn-tagger-test.txt', help='Place to put test CONLL file')
-parser.add_argument('--unif', default=0.1, help='Initializer bounds for embeddings', type=float)
+parser.add_argument('--unif', default=0.1, help='Initializer bounds for word embeddings', type=float)
+parser.add_argument('--unifc', default=0.32, help='Initializer bounds for char embeddings', type=float)
 parser.add_argument('--clip', default=5.0, help='Gradient clipping cutoff', type=float)
 parser.add_argument('--epochs', default=40, help='Number of epochs', type=int)
 parser.add_argument('--batchsz', default=10, help='Batch size', type=int)
@@ -85,10 +86,11 @@ char_vocab = None
 
 word_vec = None
 if args.embed:
-    word_vec = GloVeModel(args.embed, vocab_word, unif_weight=args.unif) if args.embed.endswith(".txt") else Word2VecModel(args.embed, vocab_word, unif_weight=args.unif)
+    EmbeddingsModelType = GloVeModel if args.embed.endswith(".txt") else Word2VecModel
+    word_vec = EmbeddingsModelType(args.embed, vocab_word, unif_weight=args.unif)
     word_vocab = word_vec.vocab
 
-char_vec = RandomInitVecModel(args.charsz, vocab_ch, unif_weight=args.unif)
+char_vec = RandomInitVecModel(args.charsz, vocab_ch, unif_weight=args.unifc)
 char_vocab = char_vec.vocab
 print(char_vocab)
 

@@ -67,7 +67,7 @@ Here are the last observed performance scores on various dataset
 
 | dataset       | metric | method   | eta (LR) | backend  | score | proj | crf  | hsz |
 | ------------- | ------ | -------- | -------  | -------- | ----- | -----| -----|-----|
-| twpos-v03     |    acc | sgd mom. |     0.01 | tf       | 89.5  | Y    | N    | 100 |
+| twpos-v03     |    acc | sgd mom. |     0.01 | tf       | 89.6  | N    | N    | 100 |
 | twpos-v03     |    acc | adam     |       -- | pytorch  | 89.4  | N    | N    | 100 |
 | conll 2003    |     f1 | sgd mom. |     0.01 | tf       | 90.81 | N    | Y    | 100 |
 | atis (mesnil) |     f1 | sgd mom. |     0.01 | tf       | 96.74 | N    | N    | 100 |
