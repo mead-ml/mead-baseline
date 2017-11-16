@@ -480,9 +480,10 @@ def create_pred_reader(mxlen, zeropadding, clean_fn, vec_alloc, src_vec_trans, *
 
 class PTBSeqReader(object):
 
-    def __init__(self, max_word_length, nbptt):
+    def __init__(self, max_word_length, nbptt, word_trans_fn):
         self.max_word_length = max_word_length
         self.nbptt = nbptt
+        self.cleanup_fn = identity_trans_fn if word_trans_fn is None else word_trans_fn
 
     def build_vocab(self, files):
         vocab_word = Counter()
@@ -496,7 +497,8 @@ class PTBSeqReader(object):
             with codecs.open(file, encoding='utf-8', mode='r') as f:
                 num_words = 0
                 for line in f:
-                    sentence = line.split() + ['<EOS>']
+                    sentence = line.split()
+                    sentence = [self.cleanup_fn(w) for w in sentence] + ['<EOS>']
                     num_words += len(sentence)
                     for w in sentence:
                         vocab_word[w] += 1
@@ -531,12 +533,12 @@ class PTBSeqReader(object):
         return baseline.data.SeqWordCharDataFeed(x, xch, self.nbptt, batchsz, self.max_word_length)
 
 
-def create_lm_reader(max_word_length, nbptt, **kwargs):
+def create_lm_reader(max_word_length, nbptt, word_trans_fn, **kwargs):
     reader_type = kwargs.get('reader_type', 'default')
 
     if reader_type == 'default':
-        reader = PTBSeqReader(max_word_length, nbptt)
+        reader = PTBSeqReader(max_word_length, nbptt, word_trans_fn)
     else:
         mod = import_user_module("reader", reader_type)
-        reader = mod.create_lm_reader(max_word_length, nbptt, **kwargs)
+        reader = mod.create_lm_reader(max_word_length, nbptt, word_trans_fn, **kwargs)
     return reader

@@ -36,6 +36,7 @@ parser.add_argument('--nogpu', default=False, help='Use CPU (Not recommended)', 
 parser.add_argument('--model_file', default='wchar_lm.model', help='Save basename')
 parser.add_argument('--test_thresh', default=10, help='How many epochs improvement required before testing', type=int)
 parser.add_argument('--model_type', default='default', help='What type of language model')
+parser.add_argument('--lower', default=False, help='Lower case word tokens?', type=str2bool)
 parser.add_argument('--do_early_stopping', help='Should we do early stopping?', default=True, type=str2bool)
 parser.add_argument('--early_stopping_metric', default='avg_loss', help='Metric to use for early stopping')
 parser.add_argument('--start_decay_epoch', default=6, type=int, help='At what epoch should we start decaying')
@@ -50,7 +51,10 @@ args.reporting = setup_reporting(**vars(args))
 if args.backend == 'tf':
     import baseline.tf.lm as lm
 
-reader = create_lm_reader(args.mxwlen, args.nbptt)
+
+word_trans_fn = lowercase if args.lower is True else None
+
+reader = create_lm_reader(args.mxwlen, args.nbptt, word_trans_fn)
 vocab_ch, vocab_word, num_words = reader.build_vocab([args.train, args.valid, args.test])
 
 
