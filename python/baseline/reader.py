@@ -498,10 +498,10 @@ class PTBSeqReader(object):
                 num_words = 0
                 for line in f:
                     sentence = line.split()
-                    sentence = [self.cleanup_fn(w) for w in sentence] + ['<EOS>']
+                    sentence = [w for w in sentence] + ['<EOS>']
                     num_words += len(sentence)
                     for w in sentence:
-                        vocab_word[w] += 1
+                        vocab_word[self.cleanup_fn(w)] += 1
                         maxw = max(maxw, len(w))
                         for k in w:
                             vocab_ch[k] += 1
@@ -524,7 +524,7 @@ class PTBSeqReader(object):
                 sentence = line.split() + ['<EOS>']
                 num_words += len(sentence)
                 for w in sentence:
-                    x[i] = words_vocab.get(w, 0)
+                    x[i] = words_vocab.get(self.cleanup_fn(w), 0)
                     nch = min(len(w), self.max_word_length)
                     for k in range(nch):
                         xch[i, k] = chars_vocab.get(w[k], 0)
