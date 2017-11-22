@@ -1,7 +1,7 @@
 from baseline.tf.tfy import *
 from baseline.utils import listify, get_model_file
 from baseline.reporting import basic_reporting
-from baseline.train import Trainer
+from baseline.train import Trainer, create_trainer
 import os
 
 
@@ -41,7 +41,7 @@ class LanguageModelTrainerTf(Trainer):
 
         for x, xch, y in ts:
 
-            feed_dict = self.model.make_feed_dict(x, xch, y, True)
+            feed_dict = self.model.make_input(x, xch, y, True)
             if xfer_state:
                 for i, (c, h) in enumerate(self.model.initial_state):
                     feed_dict[c] = state[i].c
@@ -94,7 +94,7 @@ class LanguageModelTrainerTf(Trainer):
 
         for x, xch, y in ts:
 
-            feed_dict = self.model.make_feed_dict(x, xch, y, False)
+            feed_dict = self.model.make_input(x, xch, y, False)
             if xfer_state:
                 for i, (c, h) in enumerate(self.model.initial_state):
                     feed_dict[c] = state[i].c
@@ -122,7 +122,7 @@ def fit(model, ts, vs, es=None, **kwargs):
 
     model_file = get_model_file(kwargs, 'lm', 'tf')
     after_train_fn = kwargs['after_train_fn'] if 'after_train_fn' in kwargs else None
-    trainer = LanguageModelTrainerTf(model, **kwargs)
+    trainer = create_trainer(LanguageModelTrainerTf, model, **kwargs)
     init = tf.global_variables_initializer()
     model.sess.run(init)
     saver = tf.train.Saver()

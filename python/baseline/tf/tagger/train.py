@@ -4,7 +4,7 @@ from baseline.utils import to_spans, f_score, listify, revlut, get_model_file
 from baseline.progress import create_progress_bar
 from baseline.reporting import basic_reporting
 from baseline.tf.tfy import optimizer
-from baseline.train import EpochReportingTrainer
+from baseline.train import EpochReportingTrainer, create_trainer
 import os
 
 
@@ -27,9 +27,12 @@ class TaggerEvaluatorTf(object):
             print('ERROR: Failed to write lines... closing file')
             handle.close()
 
-    def process_batch(self, x, xch, truth, sentence_lengths, ids, handle=None, txts=None):
+    def process_batch(self, batch_dict, handle=None, txts=None):
 
-        guess = self.model.predict(x, xch, sentence_lengths)
+        guess = self.model.predict(batch_dict)
+        sentence_lengths = batch_dict['lengths']
+        ids = batch_dict['ids']
+        truth = batch_dict['y']
         correct_labels = 0
         total_labels = 0
 
@@ -78,8 +81,8 @@ class TaggerEvaluatorTf(object):
         if conll_output is not None and txts is not None:
             handle = open(conll_output, "w")
 
-        for x, xch, y, lengths, id in ts:
-            correct, count, overlaps, golds, guesses = self.process_batch(x, xch, y, lengths, id, handle, txts)
+        for batch_dict in ts:
+            correct, count, overlaps, golds, guesses = self.process_batch(batch_dict, handle, txts)
             total_correct += correct
             total_sum += count
             total_gold_count += golds
@@ -121,8 +124,8 @@ class TaggerTrainerTf(EpochReportingTrainer):
         steps = len(ts)
         metrics = {}
         pg = create_progress_bar(steps)
-        for x, xch, y, lengths, id in ts:
-            feed_dict = self.model.make_feed_dict(x, xch, lengths, y, do_dropout=True)
+        for batch_dict in ts:
+            feed_dict = self.model.make_input(batch_dict, do_dropout=True)
             _, step, lossv = self.model.sess.run([self.train_op, self.global_step, self.loss], feed_dict=feed_dict)
             total_loss += lossv
             pg.update()
@@ -142,7 +145,7 @@ def fit(model, ts, vs, es, **kwargs):
     txts = kwargs.get('txts', None)
     model_file = get_model_file(kwargs, 'tagger', 'tf')
     after_train_fn = kwargs['after_train_fn'] if 'after_train_fn' in kwargs else None
-    trainer = TaggerTrainerTf(model, **kwargs)
+    trainer = create_trainer(TaggerTrainerTf, model, **kwargs)
     init = tf.global_variables_initializer()
     model.sess.run(init)
     saver = tf.train.Saver()
@@ -187,6 +190,7 @@ def fit(model, ts, vs, es, **kwargs):
     if es is not None:
 
         trainer.recover_last_checkpoint()
+        # What to do about overloading this??
         evaluator = TaggerEvaluatorTf(model)
         test_metrics = evaluator.test(es, conll_output=conll_output, txts=txts)
         for reporting in reporting_fns:

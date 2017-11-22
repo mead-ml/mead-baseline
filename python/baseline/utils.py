@@ -33,32 +33,104 @@ def str2bool(v):
 def lowercase(x):
     return x.lower()
 
+
 def import_user_module(module_type, model_type):
+    """Load a module that is in the python path with a canonical name
+
+    This method loads a user-defined model, which must exist in the `PYTHONPATH` and must also
+    follow a fixed naming convention of `{module_type}_{model_type}.py`.  The module is dynamically
+    loaded, at which point its creator or loader function should be called to instantiate the model.
+    This is essentially a plugin, but its implementation is trivial.
+
+    :param module_type: one of `classifier`, `tagger`, `seq2seq`, `lang`
+    :param model_type: A name for the model, which is the suffix
+    :return:
+    """
     module_name = "%s_%s" % (module_type, model_type)
     print('Loading user model %s' % module_name)
     mod = importlib.import_module(module_name)
     return mod
 
 
-def create_user_model(w2v, labels, **kwargs):
+def create_user_classifier_model(w2v, labels, **kwargs):
+    """Create a user-defined classifier model
+
+    This creates an unstructured prediction classification model defined by the user.
+    It first imports a module that must exist in the `PYTHONPATH`, with a named defined as
+    `classifier_{model_type}.py`.  Once created, this user-defined model can be trained within
+    the existing training programs
+
+    :param w2v: Some type of word vectors
+    :param labels: The categorical label types
+    :param kwargs:
+    :return: A user-defined model
+    """
     model_type = kwargs['model_type']
     mod = import_user_module("classifier", model_type)
     return mod.create_model(w2v, labels, **kwargs)
 
 
-def load_user_model(outname, **kwargs):
+def load_user_classifier_model(outname, **kwargs):
+    """Loads a user-defined classifier model
+
+    This loads a previously serialized unstructured prediction classification model defined by the user.
+    It first imports a module that must exist in the `PYTHONPATH`, with a named defined as
+    `classifier_{model_type}.py`.  Once loaded, this user-defined model can be used within the driver programs
+
+    :param outname: The name of the file where the model is serialized
+    :param kwargs:
+    :return: A user-defined model
+    """
     model_type = kwargs['model_type']
     mod = import_user_module("classifier", model_type)
     return mod.load_model(outname, **kwargs)
 
 
+def create_user_trainer(model, **kwargs):
+    """Create a user-defined trainer
+
+    Given a model, create a custom trainer that will train the model.  This requires that the trainer
+    module lives in the `PYTHONPATH`, and is named `trainer_{trainer_type}`.  Once instantiated, this trainer
+    can be used by the `fit()` function within each task type
+
+    :param model: The model to train
+    :param kwargs:
+    :return: A user-defined trainer
+    """
+    model_type = kwargs['trainer_type']
+    mod = import_user_module("trainer", model_type)
+    return mod.create_trainer(model, **kwargs)
+
+
 def create_user_tagger_model(labels, word_embedding, char_embedding, **kwargs):
+    """Create a user-defined tagger model
+
+    This creates an structured prediction classification model defined by the user.
+    It first imports a module that must exist in the `PYTHONPATH`, with a named defined as
+    `tagger_{model_type}.py`.  Once created, this user-defined model can be trained within
+    the existing training programs
+
+    :param w2v: Some type of word vectors
+    :param labels: The categorical label types
+    :param kwargs:
+    :return: A user-defined model
+    """
     model_type = kwargs['model_type']
     mod = import_user_module("tagger", model_type)
     return mod.create_model(labels, word_embedding, char_embedding, **kwargs)
 
 
 def load_user_tagger_model(outname, **kwargs):
+    """Loads a user-defined tagger model
+
+    This loads a previously serialized structured prediction classification model defined by the user.
+    It first imports a module that must exist in the `PYTHONPATH`, with a named defined as
+    `tagger_{model_type}.py`.  Once loaded, this user-defined model can be used within the driver programs
+
+    :param outname: The name of the file where the model is serialized
+    :param kwargs:
+    :return: A user-defined model
+    """
     model_type = kwargs['model_type']
     mod = import_user_module("tagger", model_type)
     return mod.load_model(outname, **kwargs)
@@ -71,18 +143,47 @@ def create_user_lang_model(word_vec, char_vec, **kwargs):
 
 
 def create_user_seq2seq_model(input_embedding, output_embedding, **kwargs):
+    """Create a user-defined encoder-decoder model
+
+    This creates an encoder-decoder model defined by the user.
+    It first imports a module that must exist in the `PYTHONPATH`, with a named defined as
+    `tagger_{model_type}.py`.  Once created, this user-defined model can be trained within
+    the existing training programs
+
+    :param w2v: Some type of word vectors
+    :param labels: The categorical label types
+    :param kwargs:
+    :return: A user-defined model
+    """
     model_type = kwargs['model_type']
     mod = import_user_module("seq2seq", model_type)
     return mod.create_model(input_embedding, output_embedding, **kwargs)
 
 
 def load_user_seq2seq_model(outname, **kwargs):
+    """Loads a user-defined encoder-decoder model
+
+    This loads a previously serialized encoder-decoder model defined by the user.
+    It first imports a module that must exist in the `PYTHONPATH`, with a named defined as
+    `seq2seq_{model_type}.py`.  Once loaded, this user-defined model can be used within the driver programs
+
+    :param outname: The name of the file where the model is serialized
+    :param kwargs:
+    :return: A user-defined model
+    """
     model_type = kwargs['model_type']
     mod = import_user_module("seq2seq", model_type)
     return mod.load_model(outname, **kwargs)
 
 
 def get_model_file(dictionary, task, platform):
+    """Model name file helper to abstract different DL platforms (FWs)
+
+    :param dictionary:
+    :param task:
+    :param platform:
+    :return:
+    """
     base = dictionary.get('outfile', './%s-model' % task)
     rid = os.getpid()
     if platform.startswith('pyt'):
@@ -94,6 +195,14 @@ def get_model_file(dictionary, task, platform):
 
 
 def lookup_sentence(rlut, seq, reverse=False, padchar=''):
+    """Lookup a sentence by id and return words
+
+    :param rlut: an index -> word lookup table
+    :param seq: A temporal sequence
+    :param reverse: (``bool``) Should reverse?
+    :param padchar: What padding character to use when replacing with words
+    :return:
+    """
     s = seq[::-1] if reverse else seq
     return (' '.join([rlut[idx] if rlut[idx] != '<PAD>' else padchar for idx in s])).strip()
 

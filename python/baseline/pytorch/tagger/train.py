@@ -2,7 +2,7 @@ from baseline.pytorch.torchy import *
 from baseline.utils import listify, to_spans, f_score, revlut, get_model_file
 from baseline.reporting import basic_reporting
 from baseline.progress import create_progress_bar
-from baseline.train import EpochReportingTrainer
+from baseline.train import EpochReportingTrainer, create_trainer
 
 
 class TaggerTrainerPyTorch(EpochReportingTrainer):
@@ -27,15 +27,6 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
 
         if self.gpu:
             self.model = model.to_gpu()
-
-    def _wrap(self, x, xch, y):
-
-        if self.gpu:
-            x = x.cuda()
-            xch = xch.cuda()
-            y = y.cuda()
-
-        return torch.autograd.Variable(x), torch.autograd.Variable(xch), torch.autograd.Variable(y.contiguous())
 
     def process_output(self, guess, truth, sentence_lengths, ids, handle=None, txts=None):
 
@@ -83,9 +74,14 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
         metrics = {}
         steps = len(ts)
         pg = create_progress_bar(steps)
-        for x, xch, y, lengths, ids in ts:
-            x, xch, y = self._wrap(x, xch, y)
-            pred = self.model((x, xch, lengths))
+        for batch_dict in ts:
+
+            fx = self.model.make_input(batch_dict)
+            inputs = fx[:-1]
+            y = fx[-1]
+            lengths = batch_dict['lengths']
+            ids = batch_dict['ids']
+            pred = self.model(inputs)
             correct, count, overlaps, golds, guesses = self.process_output(pred, y.data, lengths, ids, None, None)
             total_correct += correct
             total_sum += count
@@ -107,10 +103,11 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
         metrics = {}
         steps = len(ts)
         pg = create_progress_bar(steps)
-        for x, xch, y, lengths, ids in ts:
-            x, xch, y = self._wrap(x, xch, y)
+        for batch_dict in ts:
+
+            inputs = self.model.make_input(batch_dict)
             self.optimizer.zero_grad()
-            loss = self.model.compute_loss((x, xch, lengths, y))
+            loss = self.model.compute_loss(inputs)
             total_loss += loss.data[0]
             loss.backward()
             torch.nn.utils.clip_grad_norm(self.model.parameters(), self.clip)
@@ -139,7 +136,7 @@ def fit(model, ts, vs, es, **kwargs):
     #validation_improvement_fn = kwargs.get('validation_improvement', None)
 
     after_train_fn = kwargs.get('after_train_fn', None)
-    trainer = TaggerTrainerPyTorch(model, **kwargs)
+    trainer = create_trainer(TaggerTrainerPyTorch, model, **kwargs)
 
     last_improved = 0
     max_metric = 0
@@ -172,5 +169,5 @@ def fit(model, ts, vs, es, **kwargs):
     if es is not None:
         print('Reloading best checkpoint')
         model = torch.load(model_file)
-        trainer = TaggerTrainerPyTorch(model, **kwargs)
+        trainer = create_trainer(TaggerTrainerPyTorch, model, **kwargs)
         trainer.test(es, reporting_fns, phase='Test')

@@ -220,7 +220,12 @@ def long_tensor_alloc(dims, dtype=None):
 def show_examples_pytorch(model, es, rlut1, rlut2, embed2, mxlen, sample, prob_clip, max_examples, reverse):
     si = np.random.randint(0, len(es))
 
-    src_array, tgt_array, src_len, _ = es[si]
+    batch_dict = es[si]
+
+    src_array = batch_dict['src']
+    tgt_array = batch_dict['dst']
+    src_len = batch_dict['src_len']
+    #src_array, tgt_array, src_len, _ = es[si]
 
     if max_examples > 0:
         max_examples = min(max_examples, src_array.size(0))

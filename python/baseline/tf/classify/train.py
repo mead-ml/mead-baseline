@@ -4,7 +4,7 @@ from baseline.progress import create_progress_bar
 from baseline.reporting import basic_reporting
 from baseline.utils import listify, get_model_file
 from baseline.tf.tfy import optimizer
-from baseline.train import EpochReportingTrainer
+from baseline.train import EpochReportingTrainer, create_trainer
 import os
 
 
@@ -23,8 +23,9 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         total_loss = 0
         steps = len(loader)
         pg = create_progress_bar(steps)
-        for x, y in loader:
-            feed_dict = self.model.ex2dict(x, y, do_dropout=True)
+        for batch_dict in loader:
+            y = batch_dict['y']
+            feed_dict = self.model.make_input(batch_dict, do_dropout=True)
             _, step, lossv, guess = self.sess.run([self.train_op, self.global_step, self.loss, self.model.best], feed_dict=feed_dict)
             cm.add_batch(y, guess)
             total_loss += lossv
@@ -41,8 +42,9 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         cm = ConfusionMatrix(self.model.labels)
         steps = len(loader)
         pg = create_progress_bar(steps)
-        for x, y in loader:
-            feed_dict = self.model.ex2dict(x, y)
+        for batch_dict in loader:
+            y = batch_dict['y']
+            feed_dict = self.model.make_input(batch_dict)
             lossv, guess = self.sess.run([self.loss, self.model.best], feed_dict=feed_dict)
             cm.add_batch(y, guess)
             total_loss += lossv
@@ -99,7 +101,7 @@ def fit(model, ts, vs, es=None, **kwargs):
     reporting_fns = listify(kwargs.get('reporting', basic_reporting))
     print('reporting', reporting_fns)
     
-    trainer = ClassifyTrainerTf(model, **kwargs)
+    trainer = create_trainer(ClassifyTrainerTf, model, **kwargs)
     model.sess.run(tf.global_variables_initializer())
     model.saver = tf.train.Saver()
 

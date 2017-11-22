@@ -46,6 +46,16 @@ class WordClassifierBase(nn.Module, Classifier):
     def __init__(self):
         super(WordClassifierBase, self).__init__()
 
+    def make_input(self, batch_dict):
+        x = batch_dict['x']
+        y = batch_dict['y']
+        if type(x) == list:
+            x = [torch.autograd.Variable(item.cuda()) for item in x]
+        else:
+            x = torch.autograd.Variable(x.cuda())
+        y = torch.autograd.Variable(y.cuda())
+        return x, y
+
     def forward(self, input):
         # BxTxC
         embeddings = self.lut(input)
@@ -53,8 +63,8 @@ class WordClassifierBase(nn.Module, Classifier):
         stacked = self._stacked(pooled)
         return self.output(stacked)
 
-    def classify(self, batch_time):
-        return classify_bt(self, batch_time)
+    def classify(self, batch_dict):
+        return classify_bt(self, batch_dict['x'])
 
     def get_labels(self):
         return self.labels

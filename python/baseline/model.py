@@ -1,5 +1,5 @@
 import numpy as np
-from baseline.utils import revlut, load_user_model, create_user_model, load_user_tagger_model, create_user_tagger_model
+from baseline.utils import revlut, load_user_classifier_model, create_user_classifier_model, load_user_tagger_model, create_user_tagger_model
 from baseline.utils import load_user_seq2seq_model, create_user_seq2seq_model, create_user_lang_model, lowercase
 
 
@@ -29,11 +29,13 @@ class Classifier(object):
         """
         pass
 
-    def classify(self, batch_time):
-        """Classify a batch of text as tensor of BxT indices to words.
+    def classify(self, batch_dict):
+        """Classify a batch of text with whatever features the model can use from the batch_dict.
         The indices correspond to get_vocab().get('word', 0)
         
-        :param batch_time: BxT tensor of indices
+        :param batch_dict: This normally contains `x`, a `BxT` tensor of indices.  Some classifiers and readers may
+        provide other features
+
         :return: A list of lists of tuples (label, value)
         """
         pass
@@ -54,7 +56,10 @@ class Classifier(object):
 
     def classify_text(self, tokens, mxlen, zeropad=0, zero_alloc=np.zeros, word_trans_fn=lowercase):
         """Utility method to convert a list of words comprising a text to indices, and create a single element
-        batch which is then classified.  The returned decision is sorted in descending order of probability
+        batch which is then classified.  The returned decision is sorted in descending order of probability.
+
+        At the moment, this method only prepares `x` features in the `batch_dict`.  This means that it cannot
+        be used for models that provide, for instance, character-level features.  In that case, use `classify` directly.
         
         :param tokens: A list of words
         :param mxlen: The maximum length of the words.  List items beyond this edge are removed
@@ -76,7 +81,7 @@ class Classifier(object):
             else:
                 idx = vocab[word_trans_fn(word)]
             x[0, j + halffiltsz] = idx
-        outcomes = self.classify(x)[0]
+        outcomes = self.classify({'x': x})[0]
         return sorted(outcomes, key=lambda tup: tup[1], reverse=True)
 
 
@@ -95,7 +100,7 @@ def create_classifier_model(known_creators, w2v, labels, **kwargs):
         print('Calling baseline model ', creator_fn)
         return creator_fn(w2v, labels, **kwargs)
 
-    model = create_user_model(w2v, labels, **kwargs)
+    model = create_user_classifier_model(w2v, labels, **kwargs)
     return model
 
 
@@ -113,7 +118,7 @@ def load_classifier_model(known_loaders, outname, **kwargs):
         loader_fn = known_loaders[model_type]
         print('Calling baseline model loader ', loader_fn)
         return loader_fn(outname, **kwargs)
-    return load_user_model(outname, **kwargs)
+    return load_user_classifier_model(outname, **kwargs)
 
 
 class Tagger(object):
@@ -133,14 +138,18 @@ class Tagger(object):
     def load(basename, **kwargs):
         pass
 
-    def predict(self, x, xch, lengths):
+    def predict(self, batch_dict):
         pass
 
     def predict_text(self, tokens, mxlen, maxw, zero_alloc=np.zeros, word_trans_fn=lowercase):
         """
         Utility function to convert lists of sentence tokens to integer value one-hots which
         are then passed to the tagger.  The resultant output is then converted back to label and token
-        to be printed
+        to be printed.
+
+        This method is not aware of any input features other than words and characters (and lengths).  If you
+        wish to use other features and have a custom model that is aware of those, use `predict` directly.
+
         :param tokens: 
         :param mxlen: 
         :param maxw: 
@@ -168,7 +177,7 @@ class Tagger(object):
             for k in range(nch):
                 xs_ch[0, j, k] = chars_vocab.get(w[k], 0)
 
-        indices = self.predict(xs, xs_ch, lengths)[0]
+        indices = self.predict({'x': xs, 'xch': xs_ch, 'lengths': lengths})[0]
         output = []
         for j in range(lengths[0]):
             output.append((tokens[j], label_vocab[indices[j]]))

@@ -276,7 +276,9 @@ class Seq2SeqModel(EncoderDecoder):
             self.sess.graph.as_default()
             tf.import_graph_def(gd, name='')
 
-    def run(self, src, src_len):
+    def run(self, source_dict):
+        src = source_dict['src']
+        src_len = source_dict['src_len']
         feed_dict = {self.src: src, self.src_len: src_len, self.pkeep: 1.0}
         vec = self.sess.run(self.best, feed_dict=feed_dict)
         # (B x K x T)
@@ -285,14 +287,19 @@ class Seq2SeqModel(EncoderDecoder):
         else:
             return vec.transpose(1, 0)
 
-    def step(self, src, src_len, dst, dst_len):
+    def step(self, batch_dict):
         """
         Generate probability distribution over output V for next token
         """
-        feed_dict = self.make_feed_dict(src, src_len, dst, dst_len)
+        feed_dict = self.make_input(batch_dict)
         return self.sess.run(self.probs, feed_dict=feed_dict)
 
-    def make_feed_dict(self, src, src_len, dst, dst_len, do_dropout=False):
+    def make_input(self, batch_dict, do_dropout=False):
+        src = batch_dict['src']
+        src_len = batch_dict['src_len']
+        dst = batch_dict['dst']
+        dst_len = batch_dict['dst_len']
+
         mx_tgt_len = np.max(dst_len)
         feed_dict = {self.src: src, self.src_len: src_len,
                      self.tgt: dst, self.tgt_len: dst_len,

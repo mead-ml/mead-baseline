@@ -3,7 +3,7 @@ import numpy as np
 from baseline.utils import listify, get_model_file
 from baseline.reporting import basic_reporting
 from baseline.tf.tfy import optimizer
-from baseline.train import Trainer
+from baseline.train import Trainer, create_trainer
 import time
 import os
 
@@ -33,12 +33,20 @@ class Seq2SeqTrainerTf(Trainer):
         steps = 0
         metrics = {}
         duration = 0
-        for src, tgt, src_len, tgt_len in ts:
 
+        fetches = {
+            "loss": self.loss,
+            "train_op": self.train_op,
+            "global_step": self.global_step}
+
+        for batch_dict in ts:
             start_time = time.time()
             steps += 1
-            feed_dict = self.model.make_feed_dict(src, src_len, tgt, tgt_len, do_dropout=True)
-            _, global_step, lossv = self.model.sess.run([self.train_op, self.global_step, self.loss], feed_dict=feed_dict)
+            feed_dict = self.model.make_input(batch_dict, do_dropout=True)
+            vals = self.model.sess.run(fetches, feed_dict=feed_dict)
+            global_step = vals["global_step"]
+            lossv = vals["loss"]
+
             total_loss += lossv
             duration += time.time() - start_time
 
@@ -64,12 +72,19 @@ class Seq2SeqTrainerTf(Trainer):
             self.valid_epochs += 1
             epochs = self.valid_epochs
 
+        fetches = {
+            "loss": self.loss,
+        }
+
         total_loss = 0
         steps = len(vs)
         metrics = {}
-        for src,tgt,src_len,tgt_len in vs:
-            feed_dict = self.model.make_feed_dict(src, src_len, tgt, tgt_len)
-            lossv = self.model.sess.run(self.loss, feed_dict=feed_dict)
+
+        for batch_dict in vs:
+
+            feed_dict = self.model.make_input(batch_dict)
+            vals = self.model.sess.run(fetches, feed_dict)
+            lossv = vals["loss"]
             total_loss += lossv
 
         avg_loss = total_loss/steps
@@ -79,16 +94,15 @@ class Seq2SeqTrainerTf(Trainer):
             reporting(metrics, epochs, phase)
         return metrics
 
-
-def fit(seq2seq, ts, vs, es=None, **kwargs):
+def fit(model, ts, vs, es=None, **kwargs):
     epochs = int(kwargs['epochs']) if 'epochs' in kwargs else 5
     patience = int(kwargs['patience']) if 'patience' in kwargs else epochs
 
     model_file = get_model_file(kwargs, 'seq2seq', 'tf')
     after_train_fn = kwargs['after_train_fn'] if 'after_train_fn' in kwargs else None
-    trainer = Seq2SeqTrainerTf(seq2seq, **kwargs)
+    trainer = create_trainer(Seq2SeqTrainerTf, model, **kwargs)
     init = tf.global_variables_initializer()
-    seq2seq.sess.run(init)
+    model.sess.run(init)
     saver = tf.train.Saver()
     trainer.prepare(saver)
 
@@ -109,7 +123,7 @@ def fit(seq2seq, ts, vs, es=None, **kwargs):
 
         trainer.train(ts, reporting_fns)
         if after_train_fn is not None:
-            after_train_fn(seq2seq)
+            after_train_fn(model)
         test_metrics = trainer.test(vs, reporting_fns, phase='Valid')
 
         if do_early_stopping is False:

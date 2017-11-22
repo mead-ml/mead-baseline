@@ -32,6 +32,7 @@ parser.add_argument('--keep_unused', help='Keep unused vocabulary terms as word 
 parser.add_argument('--do_early_stopping', help='Should we do early stopping?', default=True, type=str2bool)
 parser.add_argument('--early_stopping_metric', help='What metric should we use if stopping early', default='acc')
 parser.add_argument('--model_type', help='Name of model to load and train', default='default')
+parser.add_argument('--trainer_type', help='Name of trainer to load and train', default='default')
 parser.add_argument('--rev', help='Time reverse input text', default=False, type=str2bool)
 args = parser.parse_args()
 

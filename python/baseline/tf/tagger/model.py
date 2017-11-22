@@ -36,7 +36,12 @@ class RNNTaggerModel(Tagger):
         with open(basename + '-char.vocab', 'w') as f:
             json.dump(self.char_vocab, f)
 
-    def make_feed_dict(self, x, xch, lengths, y=None, do_dropout=False):
+    def make_input(self, batch_dict, do_dropout=False):
+        x = batch_dict['x']
+        y = batch_dict.get('y', None)
+        xch = batch_dict['xch']
+        lengths = batch_dict['lengths']
+
         pkeep = 1.0-self.pdrop_value if do_dropout else 1.0
         feed_dict = {self.x: x, self.xch: xch, self.lengths: lengths, self.pkeep: pkeep}
         if y is not None:
@@ -148,9 +153,10 @@ class RNNTaggerModel(Tagger):
     def get_labels(self):
         return self.labels
 
-    def predict(self, x, xch, lengths):
+    def predict(self, batch_dict):
 
-        feed_dict = self.make_feed_dict(x, xch, lengths)
+        feed_dict = self.make_input(batch_dict)
+        lengths = batch_dict['lengths']
         # We can probably conditionally add the loss here
         preds = []
         if self.crf is True:

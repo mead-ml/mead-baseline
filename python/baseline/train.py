@@ -1,4 +1,5 @@
 import time
+from baseline.utils import create_user_trainer
 
 
 class Trainer(object):
@@ -50,3 +51,18 @@ class EpochReportingTrainer(Trainer):
 
     def _test(self, vs):
         pass
+
+
+def create_trainer(default_create_model_fn, model, **kwargs):
+    """Create the default trainer, or a user-defined one if `trainer_type` is not `default`
+
+    :param default_create_model_fn: The constructor for the default trainer (defined in each platform/task)
+    :param model: The model to train
+    :param kwargs:
+    :return:
+    """
+    model_type = kwargs.get('trainer_type', 'default')
+    if model_type == 'default':
+        return default_create_model_fn(model, **kwargs)
+
+    return create_user_trainer(model, **kwargs)

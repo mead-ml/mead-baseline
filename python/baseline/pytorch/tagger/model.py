@@ -156,6 +156,7 @@ class RNNTaggerModel(nn.Module, Tagger):
         torch.save(self, outname)
 
     def to_gpu(self):
+        self.gpu = True
         self.cuda()
         self.crit.cuda()
         return self
@@ -199,6 +200,7 @@ class RNNTaggerModel(nn.Module, Tagger):
         model.crf = bool(kwargs.get('crf', False))
         nlayers = int(kwargs.get('layers', 1))
         rnntype = kwargs.get('rnntype', 'lstm')
+        model.gpu = False
         print('RNN [%s]' % rnntype)
         wsz = kwargs.get('wsz', 30)
         filtsz = kwargs.get('cfiltsz')
@@ -253,6 +255,25 @@ class RNNTaggerModel(nn.Module, Tagger):
         mots = torch.cat(mots, 1)
         output = self.word_ch_embed(mots)
         return output + mots
+
+    def make_input(self, batch_dict):
+
+        x = batch_dict['x']
+        xch = batch_dict['xch']
+        y = batch_dict.get('y', None)
+        lengths = batch_dict['lengths']
+
+        if self.gpu:
+            x = x.cuda()
+            xch = xch.cuda()
+            if y is not None:
+                y = y.cuda()
+
+        if y is not None:
+            y = torch.autograd.Variable(y.contiguous())
+
+        return torch.autograd.Variable(x), torch.autograd.Variable(xch), lengths, y
+
 
     def _compute_unary_tb(self, x, xch):
         batchsz = xch.size(1)
@@ -311,8 +332,6 @@ class RNNTaggerModel(nn.Module, Tagger):
         xch = input[1].transpose(0, 1).contiguous()
         lengths = input[2]
         tags = input[3]
-        batchsz = xch.size(1)
-        seqlen = xch.size(0)
 
         probv = self._compute_unary_tb(x, xch)
         batch_loss = 0.
@@ -342,7 +361,10 @@ class RNNTaggerModel(nn.Module, Tagger):
     def get_labels(self):
         return self.labels
 
-    def predict(self, x, xch, lengths):
+    def predict(self, batch_dict):
+        x = batch_dict['x']
+        xch = batch_dict['xch']
+        lengths = batch_dict['lengths']
         return predict_seq_bt(self, x, xch, lengths)
 
 

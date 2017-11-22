@@ -5,17 +5,15 @@ from baseline.pytorch.torchy import *
 from baseline.model import EncoderDecoder, load_seq2seq_model, create_seq2seq_model
 
 
-# TODO: This could be generalized better with a little refactoring
 class Seq2SeqBase(nn.Module, EncoderDecoder):
 
-    def __init__(self, embed1, embed2, batchfirst):
+    def __init__(self, embeddings_in, embeddings_out):
         super(Seq2SeqBase, self).__init__()
-        self.embed_in = pytorch_embedding(embed1)
-        self.embed_out = pytorch_embedding(embed2)
-        self.nc = embed2.vsz + 1
-        self.vocab1 = embed1.vocab
-        self.vocab2 = embed2.vocab
-        self.batchfirst = batchfirst
+        self.embed_in = pytorch_embedding(embeddings_in)
+        self.embed_out = pytorch_embedding(embeddings_out)
+        self.nc = embeddings_out.vsz + 1
+        self.vocab1 = embeddings_in.vocab
+        self.vocab2 = embeddings_out.vocab
 
     def get_src_vocab(self):
         return self.vocab1
@@ -36,14 +34,22 @@ class Seq2SeqBase(nn.Module, EncoderDecoder):
 
     @classmethod
     def create(cls, input_embeddings, output_embeddings, **kwargs):
-        hsz = kwargs['hsz']
-        layers = kwargs['layers']
-        rnntype = kwargs['rnntype']
-        pdrop = kwargs.get('dropout', 0.5)
-        batchfirst = kwargs.get('batchfirst', True)
-        model = cls(input_embeddings, output_embeddings, hsz, layers, rnntype, batchfirst, pdrop)
+
+        model = cls(input_embeddings, output_embeddings, **kwargs)
         print(model)
         return model
+
+    def make_input(self, batch_dict):
+        src = batch_dict['src']
+        tgt = batch_dict['dst']
+
+        dst = tgt[:, :-1]
+        tgt = tgt[:, 1:]
+        if self.gpu:
+            src = src.cuda()
+            dst = dst.cuda()
+            tgt = tgt.cuda()
+        return Variable(src), Variable(dst), Variable(tgt)
 
     # Input better be xch, x
     def forward(self, input):
@@ -51,9 +57,7 @@ class Seq2SeqBase(nn.Module, EncoderDecoder):
         return self.decode(rnn_enc_seq, final_encoder_state, input[1])
 
     def encode(self, src):
-        if self.batchfirst is True:
-            src = src.transpose(0, 1).contiguous()
-
+        src = src.transpose(0, 1).contiguous()
         embed_in_seq = self.embed_in(src)
         return self.encoder_rnn(embed_in_seq)
 
@@ -82,8 +86,7 @@ class Seq2SeqBase(nn.Module, EncoderDecoder):
         return outputs, h_i
 
     def decode(self, context, final_encoder_state, dst):
-        if self.batchfirst is True:
-            dst = dst.transpose(0, 1).contiguous()
+        dst = dst.transpose(0, 1).contiguous()
 
         h_i, output_i = self.bridge(final_encoder_state, context)
         output, _ = self.decode_rnn(context, h_i, output_i, dst)
@@ -93,7 +96,7 @@ class Seq2SeqBase(nn.Module, EncoderDecoder):
         #                                         -1)))
         # back to T x B x H -> B x T x H
         #pred = pred.view(output.size(0), output.size(1), -1)
-        return pred.transpose(0, 1).contiguous() if self.batchfirst else pred
+        return pred.transpose(0, 1).contiguous()
 
     def prediction(self, output):
         # Reform batch as (T x B, D)
@@ -106,14 +109,19 @@ class Seq2SeqBase(nn.Module, EncoderDecoder):
 
 class Seq2SeqModel(Seq2SeqBase):
 
-    # TODO: Add more dropout, BN
-    def __init__(self, embed1, embed2, hsz, nlayers, rnntype, batchfirst=True, pdrop=0.5):
-        super(Seq2SeqModel, self).__init__(embed1, embed2, batchfirst)
-        dsz = embed1.dsz
+    def __init__(self, embeddings_in, embeddings_out, **kwargs):
+        super(Seq2SeqModel, self).__init__(embeddings_in, embeddings_out)
+
+        self.hsz = kwargs['hsz']
+        nlayers = kwargs['layers']
+        rnntype = kwargs['rnntype']
+        pdrop = kwargs.get('dropout', 0.5)
+        dsz = embeddings_in.dsz
+        self.gpu = kwargs.get('gpu', True)
         self.dropout = nn.Dropout(pdrop)
-        self.encoder_rnn = pytorch_rnn(dsz, hsz, rnntype, nlayers, pdrop)
-        self.preds = nn.Linear(hsz, self.nc)
-        self.decoder_rnn = pytorch_rnn_cell(dsz, hsz, rnntype, nlayers, pdrop)
+        self.encoder_rnn = pytorch_rnn(dsz, self.hsz, rnntype, nlayers, pdrop)
+        self.preds = nn.Linear(self.hsz, self.nc)
+        self.decoder_rnn = pytorch_rnn_cell(dsz, self.hsz, rnntype, nlayers, pdrop)
         self.probs = nn.LogSoftmax()
 
     def input_i(self, embed_i, output_i):
@@ -128,20 +136,24 @@ class Seq2SeqModel(Seq2SeqBase):
 
 class Seq2SeqAttnModel(Seq2SeqBase):
 
-    def __init__(self, embed1, embed2, hsz, nlayers, rnntype, batchfirst=True, pdrop=0.5):
-        super(Seq2SeqAttnModel, self).__init__(embed1, embed2, batchfirst)
-        dsz = embed1.dsz
-        self.encoder_rnn = pytorch_rnn(dsz, hsz, rnntype, nlayers, pdrop)
+    def __init__(self, embeddings_in, embeddings_out, **kwargs):
+        super(Seq2SeqAttnModel, self).__init__(embeddings_in, embeddings_out)
+        self.hsz = kwargs['hsz']
+        nlayers = kwargs['layers']
+        rnntype = kwargs['rnntype']
+        pdrop = kwargs.get('dropout', 0.5)
+        dsz = embeddings_in.dsz
+        self.gpu = kwargs.get('gpu', True)
+        self.encoder_rnn = pytorch_rnn(dsz, self.hsz, rnntype, nlayers, pdrop)
         self.dropout = nn.Dropout(pdrop)
-        self.decoder_rnn = pytorch_rnn_cell(hsz + dsz, hsz, rnntype, nlayers, pdrop)
-        self.preds = nn.Linear(hsz, self.nc)
+        self.decoder_rnn = pytorch_rnn_cell(self.hsz + dsz, self.hsz, rnntype, nlayers, pdrop)
+        self.preds = nn.Linear(self.hsz, self.nc)
         self.probs = nn.LogSoftmax()
-        self.output_to_attn = nn.Linear(hsz, hsz, bias=False)
+        self.output_to_attn = nn.Linear(self.hsz, self.hsz, bias=False)
         self.attn_softmax = nn.Softmax()
-        self.attn_out = nn.Linear(2*hsz, hsz, bias=False)
+        self.attn_out = nn.Linear(2 * self.hsz, self.hsz, bias=False)
         self.attn_tanh = pytorch_activation("tanh")
         self.nlayers = nlayers
-        self.hsz = hsz
 
     def attn(self, output_t, context):
         # Output(t) = B x H x 1

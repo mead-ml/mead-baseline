@@ -6,7 +6,7 @@ import numpy as np
 from baseline.progress import create_progress_bar
 from baseline.reporting import basic_reporting
 from baseline.utils import listify, get_model_file
-from baseline.train import Trainer
+from baseline.train import Trainer, create_trainer
 import time
 
 
@@ -30,20 +30,12 @@ class Seq2SeqTrainerPyTorch(Trainer):
         else:
             self.optimizer = torch.optim.SGD(model.parameters(), lr=eta, momentum=mom)
         self.model = model
+        self._input = model.make_input
         self.crit = model.create_loss()
         if self.gpu:
             self.model = torch.nn.DataParallel(model).cuda()
             self.crit.cuda()
-    
-    def _wrap(self, src, tgt):
-        dst = tgt[:,:-1]
-        tgt = tgt[:,1:]
-        if self.gpu:
-            src = src.cuda()
-            dst = dst.cuda()
-            tgt = tgt.cuda()
-        return Variable(src), Variable(dst), Variable(tgt)
-    
+
     def _total(self, tgt):
         tgtt = tgt.data.long()
         return torch.sum(tgtt.ne(0))
@@ -59,9 +51,11 @@ class Seq2SeqTrainerPyTorch(Trainer):
             epochs = self.valid_epochs
 
         pg = create_progress_bar(steps)
-        for src, tgt, src_len, tgt_len in vs:
-            src, dst, tgt = self._wrap(src, tgt)
-            pred = self.model((src, dst))
+        for batch_dict in vs:
+            fx = self._input(batch_dict)
+            tgt = fx[-1]
+            fx = fx[:-1]
+            pred = self.model(fx)
             loss = self.crit(pred, tgt)
             total_loss += loss.data[0]
             total += self._total(tgt)
@@ -82,13 +76,15 @@ class Seq2SeqTrainerPyTorch(Trainer):
 
         total_loss = total = 0
         duration = 0
-        for src, tgt, src_len, tgt_len in ts:
+        for batch_dict in ts:
 
             start_time = time.time()
             self.steps += 1
             self.optimizer.zero_grad()
-            src, dst, tgt = self._wrap(src, tgt)
-            pred = self.model((src, dst))
+            fx = self._input(batch_dict)
+            tgt = fx[-1]
+            fx = fx[:-1]
+            pred = self.model(fx)
             loss = self.crit(pred, tgt)
             total_loss += loss.data[0]
             loss.backward()
@@ -131,7 +127,7 @@ def fit(model, ts, vs, es=None, **kwargs):
     print('reporting', reporting_fns)
 
     after_train_fn = kwargs.get('after_train_fn', None)
-    trainer = Seq2SeqTrainerPyTorch(model, **kwargs)
+    trainer = create_trainer(Seq2SeqTrainerPyTorch, model, **kwargs)
 
     min_metric = 10000
     last_improved = 0

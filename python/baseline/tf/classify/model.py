@@ -76,7 +76,7 @@ class WordClassifierBase(Classifier):
             results.append(outcomes)
         return results
 
-    def ex2dict(self, x, y, do_dropout=False):
+    def make_input(self, batch_dict, do_dropout=False):
         """Convert from an input of x and y tensors to a `feed_dict`
         
         :param x: Input tensor `x` (`BxT`)
@@ -84,6 +84,9 @@ class WordClassifierBase(Classifier):
         :param do_dropout: Defaults to off.  If its on, use the dropout value provided during model construction
         :return: A `feed_dict`
         """
+
+        x = batch_dict['x']
+        y = batch_dict['y']
         pkeep = 1.0 - self.pdrop_value if do_dropout else 1
         return {self.x: x, self.y: fill_y(len(self.labels), y), self.pkeep: pkeep}
 

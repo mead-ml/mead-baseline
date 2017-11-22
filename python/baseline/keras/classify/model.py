@@ -1,5 +1,7 @@
 import keras.models
-from keras.layers import Dense, Convolution1D, Embedding, Input, merge, GlobalMaxPooling1D, Dropout
+from keras.layers import Dense, Conv1D, Embedding, Input, merge, GlobalMaxPooling1D, Dropout
+from keras.utils import np_utils
+
 from baseline.model import Classifier, load_classifier_model, create_classifier_model
 import json
 
@@ -21,7 +23,8 @@ class ConvModel(Classifier):
     @staticmethod
     def load(basename, **kwargs):
         model = ConvModel()
-        model.impl = keras.models.load_model(basename)
+
+        model.impl = keras.models.load_model(basename, **kwargs)
         with open(basename + '.labels', 'r') as f:
             model.labels = json.load(f)
 
@@ -55,7 +58,7 @@ class ConvModel(Classifier):
 
         mots = []
         for i, fsz in enumerate(filtsz):
-            conv = Convolution1D(cmotsz, fsz, activation='relu', input_length=mxlen)(embed)
+            conv = Conv1D(cmotsz, fsz, activation='relu')(embed)
             gmp = GlobalMaxPooling1D()(conv)
             mots.append(gmp)
 
@@ -80,6 +83,12 @@ class ConvModel(Classifier):
             results.append(outcomes)
         return results
 
+
+    def make_input(self, batch_dict):
+        x = batch_dict['x']
+        y = np_utils.to_categorical(batch_dict['y'], len(self.labels))
+        return x, y
+
     def get_labels(self):
         return self.labels
 
@@ -96,8 +105,8 @@ BASELINE_CLASSIFICATION_LOADERS = {
 
 
 def create_model(w2v, labels, **kwargs):
-    return create_classifier_model(ConvModel.create, w2v, labels, **kwargs)
+    return create_classifier_model(BASELINE_CLASSIFICATION_MODELS, w2v, labels, **kwargs)
 
 
 def load_model(outname, **kwargs):
-    return load_classifier_model(ConvModel.load, outname, **kwargs)
+    return load_classifier_model(BASELINE_CLASSIFICATION_LOADERS, outname, **kwargs)

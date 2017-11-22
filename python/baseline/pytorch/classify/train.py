@@ -2,9 +2,10 @@ from baseline.utils import listify, get_model_file
 from baseline.progress import create_progress_bar
 from baseline.confusion import ConfusionMatrix
 from baseline.reporting import basic_reporting
-from baseline.train import EpochReportingTrainer
+from baseline.train import EpochReportingTrainer, create_trainer
 import torch
 import torch.autograd
+
 
 def _add_to_cm(cm, y, pred):
     _, best = pred.max(1)
@@ -36,7 +37,7 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
             print('using mom [%.3f]' % mom)
             self.optimizer = torch.optim.SGD(parameters, lr=eta, momentum=mom)
 
-        self.model = torch.nn.DataParallel(model).cuda()
+        self.model = model.cuda()
         self.crit = model.create_loss().cuda()
 
     def _test(self, loader):
@@ -46,12 +47,8 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
         pg = create_progress_bar(steps)
         cm = ConfusionMatrix(self.labels)
 
-        for x, y in loader:
-            if type(x) == list:
-                x = [torch.autograd.Variable(item.cuda()) for item in x]
-            else:
-                x = torch.autograd.Variable(x.cuda())
-            y = torch.autograd.Variable(y.cuda())
+        for batch_dict in loader:
+            x, y = self.model.make_input(batch_dict)
             pred = self.model(x)
             loss = self.crit(pred, y)
             total_loss += loss.data[0]
@@ -70,13 +67,9 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
         pg = create_progress_bar(steps)
         cm = ConfusionMatrix(self.labels)
         total_loss = 0
-        for x, y in loader:
+        for batch_dict in loader:
             self.optimizer.zero_grad()
-            if type(x) == list:
-                x = [torch.autograd.Variable(item.cuda()) for item in x]
-            else:
-                x = torch.autograd.Variable(x.cuda())
-            y = torch.autograd.Variable(y.cuda())
+            x, y = self.model.make_input(batch_dict)
             pred = self.model(x)
             loss = self.crit(pred, y)
             total_loss += loss.data[0]
@@ -127,8 +120,9 @@ def fit(model, ts, vs, es, **kwargs):
     reporting_fns = listify(kwargs.get('reporting', basic_reporting))
     print('reporting', reporting_fns)
 
-    trainer = ClassifyTrainerPyTorch(model, **kwargs)
-    
+
+    trainer = create_trainer(ClassifyTrainerPyTorch, model, **kwargs)
+
     max_metric = 0
     last_improved = 0
 
@@ -155,5 +149,5 @@ def fit(model, ts, vs, es, **kwargs):
     if es is not None:
         print('Reloading best checkpoint')
         model = torch.load(model_file)
-        trainer = ClassifyTrainerPyTorch(model, **kwargs)
+        trainer = create_trainer(ClassifyTrainerPyTorch, model, **kwargs)
         trainer.test(es, reporting_fns, phase='Test')

@@ -1,27 +1,50 @@
-from keras.utils import np_utils
 from baseline.utils import listify, get_model_file
 from baseline.reporting import basic_reporting
 from baseline.progress import create_progress_bar
 from baseline.train import *
+from keras import metrics
+import keras.backend as K
 
+# Borrowed verbatim from here:
+# https://stackoverflow.com/questions/45411902/how-to-use-f1-score-with-keras-model#45412451
+def f1_score(y_true, y_pred):
+
+    # Count positive samples.
+    c1 = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
+    c2 = K.sum(K.round(K.clip(y_pred, 0, 1)))
+    c3 = K.sum(K.round(K.clip(y_true, 0, 1)))
+
+    # If there are no true samples, fix the F1 score at 0.
+    if c3 == 0:
+        return 0
+
+    # How many selected items are relevant?
+    precision = c1 / c2
+
+    # How many relevant items are selected?
+    recall = c1 / c3
+
+    # Calculate f1_score
+    f1_score = 2 * (precision * recall) / (precision + recall)
+    return f1_score
 
 class ClassifyTrainerKeras(EpochReportingTrainer):
 
-    METRIC_REMAP = {'fmeasure': 'f1'}
+    METRIC_REMAP = {'f1_score': 'f1', 'categorical_accuracy': 'acc'}
 
     def __init__(self, model, **kwargs):
         super(ClassifyTrainerKeras, self).__init__()
         self.model = model
         optim = kwargs.get('optim', 'adam')
-        self.model.impl.compile(optim, 'categorical_crossentropy', metrics=['accuracy', 'fmeasure'])
+        self.model.impl.compile(optim, 'categorical_crossentropy', metrics=[metrics.categorical_accuracy, f1_score])
 
     def _train(self, loader):
 
         train_metrics = {}
         steps = len(loader)
         pg = create_progress_bar(steps)
-        for x, y in loader:
-            y = np_utils.to_categorical(y,  len(self.model.labels))
+        for batch_dict in loader:
+            x, y = self.model.make_input(batch_dict)
             metrics = self.model.impl.train_on_batch(x, y)
             for i in range(len(self.model.impl.metrics_names)):
                 name = self.model.impl.metrics_names[i]
@@ -39,8 +62,8 @@ class ClassifyTrainerKeras(EpochReportingTrainer):
         test_metrics = {}
         steps = len(loader)
         pg = create_progress_bar(steps)
-        for x, y in loader:
-            y = np_utils.to_categorical(y, len(self.model.labels))
+        for batch_dict in loader:
+            x, y = self.model.make_input(batch_dict)
             metrics = self.model.impl.test_on_batch(x, y)
             for i in range(len(self.model.impl.metrics_names)):
                 name = self.model.impl.metrics_names[i]
@@ -79,7 +102,7 @@ def fit(model, ts, vs, es=None, **kwargs):
            What optimizer to use.  Defaults to `adam`
     :return: 
     """
-    trainer = ClassifyTrainerKeras(model, **kwargs)
+    trainer = create_trainer(ClassifyTrainerKeras, model, **kwargs)
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
     epochs = int(kwargs.get('epochs', 20))
     model_file = get_model_file(kwargs, 'classify', 'keras')
@@ -118,6 +141,6 @@ def fit(model, ts, vs, es=None, **kwargs):
 
     if es is not None:
         print('Reloading best checkpoint')
-        model.load(model_file)
+        model.load(model_file, custom_objects= {'f1_score': f1_score})
         trainer = ClassifyTrainerKeras(model, **kwargs)
         trainer.test(es, reporting_fns, phase='Test')

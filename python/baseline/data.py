@@ -156,7 +156,7 @@ class SeqLabelDataFeed(ExampleDataFeed):
         x, y = self.examples.batch(i, self.batchsz, self.vec_alloc)
         if self.src_vec_trans is not None:
             x = self.src_vec_trans(x)
-        return x, y
+        return {'x': x, 'y': y}
 
 
 class SeqWordCharTagExamples(object):
@@ -238,7 +238,7 @@ class SeqWordCharTagExamples(object):
             xs_ch = xs_ch[:,0:max_src_len,:]
             ys = ys[:,0:max_src_len]
 
-        return xs, xs_ch, ys, length, ids
+        return {"x": xs, "xch": xs_ch, "y": ys, "lengths": length, "ids": ids}
 
 
     @staticmethod
@@ -360,7 +360,7 @@ class Seq2SeqDataFeed(ExampleDataFeed):
         src, tgt, src_len, tgt_len = self.examples.batch(i, self.batchsz, self.trim, self.vec_alloc)
         if self.src_vec_trans is not None:
             src = self.src_vec_trans(src)
-        return src, tgt, src_len, tgt_len
+        return {'src': src, 'dst': tgt, 'src_len': src_len, 'dst_len': tgt_len}
 
 
 # This one is a little different at the moment

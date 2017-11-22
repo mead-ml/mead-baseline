@@ -119,7 +119,10 @@ def multi_rnn_cell_w_dropout(hsz, pkeep, rnntype, num_layers):
 def show_examples_tf(model, es, rlut1, rlut2, embed2, mxlen, sample, prob_clip, max_examples, reverse):
     si = np.random.randint(0, len(es))
 
-    src_array, tgt_array, src_len, _ = es[si]
+    batch_dict = es[si]
+    src_array = batch_dict['src']
+    tgt_array = batch_dict['dst']
+    src_len = batch_dict['src_len']
 
     if max_examples > 0:
         max_examples = min(max_examples, src_array.shape[0])
@@ -145,7 +148,7 @@ def show_examples_tf(model, es, rlut1, rlut2, embed2, mxlen, sample, prob_clip, 
         for j in range(mxlen):
             dst_i[0, j] = next_value
             tgt_len_i = np.array([j+1])
-            output = model.step(src_i, src_len_i, dst_i, tgt_len_i)[j]
+            output = model.step({'src': src_i, 'src_len': src_len_i, 'dst': dst_i, 'dst_len': tgt_len_i})[j]
             if sample is False:
                 next_value = np.argmax(output)
             else:
