@@ -38,6 +38,7 @@ parser.add_argument('--early_stopping_metric', default='avg_loss', help='Metric 
 parser.add_argument('--vocab', default=None, help='vocab (basename) file to give if it exists')
 parser.add_argument('--reader_type', default='default', help='reader type')
 parser.add_argument('--model_type', help='Name of model to load and train', default='default')
+parser.add_argument('--trainer_type', help='Name of trainer to load and train', default='default')
 
 args = parser.parse_args()
 gpu = not args.nogpu

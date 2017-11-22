@@ -40,6 +40,7 @@ parser.add_argument('--web_cleanup', default=False, help='Do cleanup of web toke
 parser.add_argument('--lower', default=True, help='Lower case word tokens?', type=str2bool)
 parser.add_argument('--backend', default='tf', help='Default Deep Learning Framework')
 parser.add_argument('--model_type', help='Name of model to load and train', default='default')
+parser.add_argument('--trainer_type', help='Name of trainer to load and train', default='default')
 parser.add_argument('--reader_type', default='default', help='reader type (defaults to CONLL)')
 parser.add_argument('--proj', default=False, help='Add a hidden layer before final output', type=str2bool)
 parser.add_argument('--pad_unk_test', default=False, help='Treat vocab only in test as UNK despite present embeddings')

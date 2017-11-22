@@ -39,9 +39,9 @@ class LanguageModelTrainerTf(Trainer):
         step = 0
         metrics = {}
 
-        for x, xch, y in ts:
+        for batch_dict in ts:
 
-            feed_dict = self.model.make_input(x, xch, y, True)
+            feed_dict = self.model.make_input(batch_dict, True)
             if xfer_state:
                 for i, (c, h) in enumerate(self.model.initial_state):
                     feed_dict[c] = state[i].c
@@ -92,9 +92,9 @@ class LanguageModelTrainerTf(Trainer):
         step = 0
         metrics = {}
 
-        for x, xch, y in ts:
+        for batch_dict in ts:
 
-            feed_dict = self.model.make_input(x, xch, y, False)
+            feed_dict = self.model.make_input(batch_dict, False)
             if xfer_state:
                 for i, (c, h) in enumerate(self.model.initial_state):
                     feed_dict[c] = state[i].c

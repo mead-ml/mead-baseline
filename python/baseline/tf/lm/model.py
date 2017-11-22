@@ -60,7 +60,10 @@ class WordLanguageModel(AbstractLanguageModel):
     def __init__(self):
         AbstractLanguageModel.__init__(self)
 
-    def make_input(self, x, xch, y, do_dropout=False):
+    def make_input(self, batch_dict, do_dropout=False):
+        x = batch_dict['x']
+        y = batch_dict['y']
+
         pkeep = 1.0 - self.pdrop_value if do_dropout else 1.0
         feed_dict = {self.x: x, self.y: y, self.pkeep: pkeep}
         return feed_dict
@@ -123,7 +126,11 @@ class CharCompLanguageModel(AbstractLanguageModel):
     def __init__(self):
         AbstractLanguageModel.__init__(self)
 
-    def make_input(self, x, xch, y, do_dropout=False):
+    def make_input(self, batch_dict, do_dropout=False):
+        x = batch_dict['x']
+        xch = batch_dict['xch']
+        y = batch_dict['y']
+
         pkeep = 1.0 - self.pdrop_value if do_dropout else 1.0
         feed_dict = {self.x: x, self.xch: xch, self.y: y, self.pkeep: pkeep}
         return feed_dict
