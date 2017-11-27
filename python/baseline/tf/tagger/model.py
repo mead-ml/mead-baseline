@@ -18,7 +18,7 @@ class RNNTaggerModel(Tagger):
         base = path[-1]
         outdir = '/'.join(path[:-1])
 
-        state = {"mxlen": self.mxlen, "maxw": self.maxw, "crf": self.crf, "proj": self.proj }
+        state = {"mxlen": self.mxlen, "maxw": self.maxw, "crf": self.crf, "proj": self.proj}
         with open(basename + '.state', 'w') as f:
             json.dump(state, f)
 

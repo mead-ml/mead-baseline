@@ -74,8 +74,8 @@ class Seq2SeqModel(EncoderDecoder):
 
         state['sess'] = kwargs.get('sess', tf.Session())
 
-        if state['attn'] is True:
-            state['model_type'] = 'attn'
+        if 'model_type' in kwargs:
+            state['model_type'] = kwargs['model_type']
 
         model = Seq2SeqModel.create(src_vocab_embed, dst_vocab_embed, **state)
 
