@@ -76,6 +76,8 @@ class Seq2SeqModel(EncoderDecoder):
 
         if 'model_type' in kwargs:
             state['model_type'] = kwargs['model_type']
+        elif state['attn']:
+            state['model_type'] = 'attn' if state['attn'] is True else 'default'
 
         model = Seq2SeqModel.create(src_vocab_embed, dst_vocab_embed, **state)
 
