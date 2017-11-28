@@ -44,7 +44,7 @@ parser.add_argument('--trainer_type', help='Name of trainer to load and train', 
 parser.add_argument('--reader_type', default='default', help='reader type (defaults to CONLL)')
 parser.add_argument('--proj', default=False, help='Add a hidden layer before final output', type=str2bool)
 parser.add_argument('--pad_unk_test', default=False, help='Treat vocab only in test as UNK despite present embeddings')
-parser.add_argument('--bounds', type=int, help='Tell optim decay functionality how many steps before applying decay')
+parser.add_argument('--bounds', type=int, default=16000, help='Tell optim decay functionality how many steps before applying decay')
 args = parser.parse_args()
 gpu = not args.nogpu
 
