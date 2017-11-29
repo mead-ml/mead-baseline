@@ -115,7 +115,8 @@ class Seq2SeqModel(EncoderDecoder):
         model.mx_tgt_len = kwargs.get('mx_tgt_len', tf.placeholder(tf.int32, name="mx_tgt_len"))
         model.vocab1 = src_vocab_embed if type(src_vocab_embed) is dict else src_vocab_embed.vocab
         model.vocab2 = dst_vocab_embed if type(dst_vocab_embed) is dict else dst_vocab_embed.vocab
-
+        model.arc_state = kwargs.get('arc_state', False)
+        print('ARC state', model.arc_state)
         model.mxlen = mxlen
         model.hsz = hsz
         model.nlayers = nlayers
@@ -155,8 +156,8 @@ class Seq2SeqModel(EncoderDecoder):
 
                 if model.attn is True:
                     initial_state = rnn_dec_cell.zero_state(batch_sz*beam_width, tf.float32)
-                    ###Should we pass the hidden state??
-                    ###initial_state = initial_state.clone(cell_state=final_encoder_state)
+                    if model.arc_state is True:
+                        initial_state = initial_state.clone(cell_state=final_encoder_state)
                 else:
                     initial_state = final_encoder_state
 
@@ -167,8 +168,6 @@ class Seq2SeqModel(EncoderDecoder):
                                                                   initial_state=initial_state, output_layer=proj)
                     else:
 
-                        ##initial_state = tf.contrib.seq2seq.tile_batch(initial_state, multiplier=beam_width)
-                        #tiled_initial_state =
                         # Define a beam-search decoder
                         decoder = tf.contrib.seq2seq.BeamSearchDecoder(
                             cell=rnn_dec_cell,
@@ -230,15 +229,11 @@ class Seq2SeqModel(EncoderDecoder):
                                                                                       sequence_length=self.src_len,
                                                                                       dtype=tf.float32)
                 rnn_enc_tensor = tf.concat(rnn_enc_tensor, -1)
-                if nlayers_bi == 1:
-                    encoder_state = final_encoder_state
-                else:
-                    # alternatively concat forward and backward states
-                    encoder_state = []
-                    for i in range(self.nlayers):
-                        encoder_state.append(final_encoder_state[0][i])  # forward
-                        encoder_state.append(final_encoder_state[1][i])  # backward
-                    encoder_state = tuple(encoder_state)
+                encoder_state = []
+                for i in range(nlayers_bi):
+                    encoder_state.append(final_encoder_state[0][i])  # forward
+                    encoder_state.append(final_encoder_state[1][i])  # backward
+                encoder_state = tuple(encoder_state)
             else:
 
                 rnn_enc_cell = multi_rnn_cell_w_dropout(self.hsz, self.pkeep, self.rnntype, self.nlayers)
@@ -257,7 +252,10 @@ class Seq2SeqModel(EncoderDecoder):
         base = path_and_file[-1]
         tf.train.write_graph(self.sess.graph_def, outdir, base + '.graph', as_text=False)
 
-        state = {"attn": self.attn, "hsz": self.hsz, "dsz": self.dsz, "rnntype": self.rnntype, "nlayers": self.nlayers, "mxlen": self.mxlen }
+        state = {
+            "attn": self.attn, "hsz": self.hsz, "dsz": self.dsz,
+            "rnntype": self.rnntype, "nlayers": self.nlayers,
+            "mxlen": self.mxlen, "arc_state": self.arc_state }
         with open(model_base + '.state', 'w') as f:
             json.dump(state, f)
 

@@ -39,7 +39,7 @@ parser.add_argument('--vocab', default=None, help='vocab (basename) file to give
 parser.add_argument('--reader_type', default='default', help='reader type')
 parser.add_argument('--model_type', help='Name of model to load and train', default='default')
 parser.add_argument('--trainer_type', help='Name of trainer to load and train', default='default')
-
+parser.add_argument('--arc_state', help='Create arc between encoder final state and decoder init state', default=False, type=str2bool)
 args = parser.parse_args()
 gpu = not args.nogpu
 
@@ -70,7 +70,6 @@ else:
 
 vocab1, vocab2 = reader.build_vocabs(vocab_list)
 
-print(vocab2)
 if args.embed1:
     EmbeddingsModelType = GloVeModel if args.embed1.endswith(".txt") else Word2VecModel
     embed1 = EmbeddingsModelType(args.embed1, vocab1, unif_weight=args.unif)
