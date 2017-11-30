@@ -64,14 +64,9 @@ print(clean_fn, src_vec_trans)
 reader = create_pred_reader(args.mxlen, zeropadding, clean_fn, vec_alloc, src_vec_trans)
 vocab, labels = reader.build_vocab([args.train, args.test, args.valid])
 unif = 0 if args.static else args.unif
-embeddings = GloVeModel(args.embed,
-                        vocab,
-                        unif_weight=args.unif) if args.embed.endswith(".txt") else Word2VecModel(args.embed,
-                                                                                                 vocab,
-                                                                                                 unif,
-                                                                                                 keep_unused=args.keep_unused)
 
-
+EmbeddingsModelType = GloVeModel if args.embed.endswith(".txt") else Word2VecModel
+embeddings = EmbeddingsModelType(args.embed, vocab, unif_weight=args.unif, keep_unused=args.keep_unused)
 ts = reader.load(args.train, embeddings.vocab, args.batchsz, shuffle=True)
 print('Loaded training data')
 

@@ -18,7 +18,7 @@ class EmbeddingsModel(object):
 
 class Word2VecModel(EmbeddingsModel):
 
-    def __init__(self, filename, known_vocab=None, unif_weight=None, keep_unused=False):
+    def __init__(self, filename, known_vocab=None, unif_weight=None, keep_unused=False, normalize=False):
         super(Word2VecModel, self).__init__()
         uw = 0.0 if unif_weight is None else unif_weight
         self.vocab = {}
@@ -58,6 +58,11 @@ class Word2VecModel(EmbeddingsModel):
                 self.vocab[v] = idx
                 idx += 1
 
+        if normalize is True:
+            for i in range(len(word_vectors)):
+                norm = np.linalg.norm(word_vectors[i])
+                word_vectors[i] = word_vectors[i] if norm == 0.0 else word_vectors[i]/norm
+
         self.weights = np.array(word_vectors)
         self.vsz = self.weights.shape[0] - 1
 
@@ -89,7 +94,7 @@ class Word2VecModel(EmbeddingsModel):
 
 class GloVeModel(EmbeddingsModel):
 
-    def __init__(self, filename, known_vocab=None, unif_weight=None, keep_unused=False):
+    def __init__(self, filename, known_vocab=None, unif_weight=None, keep_unused=False, normalize=False):
         super(GloVeModel, self).__init__()
         uw = 0.0 if unif_weight is None else unif_weight
         self.vocab = {}
@@ -121,6 +126,11 @@ class GloVeModel(EmbeddingsModel):
                 word_vectors.append(np.random.uniform(-uw, uw, self.dsz))
                 self.vocab[v] = idx
                 idx += 1
+
+        if normalize is True:
+            for i in range(len(word_vectors)):
+                norm = np.linalg.norm(word_vectors[i])
+                word_vectors[i] = word_vectors[i] if norm == 0.0 else word_vectors[i]/norm
 
         self.weights = np.array(word_vectors)
         self.vsz = self.weights.shape[0] - 1
