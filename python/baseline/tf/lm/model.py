@@ -87,7 +87,7 @@ class WordLanguageModel(AbstractLanguageModel):
 
         hsz = kwargs['hsz']
         lm.word_vocab = word_vec.vocab
-        lm.char_vocab = char_vec.vocab
+        lm.char_vocab = char_vec.vocab if char_vec is not None else None
         vsz = word_vec.vsz + 1
 
         with tf.name_scope("WordLUT"):
