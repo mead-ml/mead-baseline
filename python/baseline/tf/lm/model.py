@@ -69,7 +69,6 @@ class WordLanguageModel(AbstractLanguageModel):
         feed_dict = {self.x: x, self.y: y, self.pkeep: pkeep}
         return feed_dict
 
-
     @classmethod
     def create(cls, word_vec, char_vec, **kwargs):
 
@@ -130,7 +129,7 @@ class WordLanguageModel(AbstractLanguageModel):
 
         model.saver = tf.train.Saver()
         model.saver.restore(model.sess, basename)
-        print([v.name for v in tf.trainable_variables()])
+
         return model
 
 

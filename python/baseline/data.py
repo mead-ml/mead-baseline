@@ -380,7 +380,8 @@ class SeqWordCharDataFeed(DataFeed):
         super(SeqWordCharDataFeed, self).__init__()
         num_examples = x.shape[0]
         rest = num_examples // batchsz
-        if rest % nbptt == 0:
+        #if num_examples is divisible by batchsz * nbptt (equivalent to rest is divisible by nbptt), we have a problem. reduce rest in that case.
+        if rest % nbptt == 0: 
             rest = rest-1
 
         self.steps = rest // nbptt
