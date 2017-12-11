@@ -1,6 +1,6 @@
 import numpy as np
 from baseline.utils import revlut, load_user_classifier_model, create_user_classifier_model, load_user_tagger_model, create_user_tagger_model
-from baseline.utils import load_user_seq2seq_model, create_user_seq2seq_model, create_user_lang_model, lowercase
+from baseline.utils import load_user_lang_model, load_user_seq2seq_model, create_user_seq2seq_model, create_user_lang_model, lowercase
 
 
 class Classifier(object):
@@ -216,6 +216,20 @@ class LanguageModel(object):
     def step(self, batch_time, context):
         pass
 
+def create_lang_model(known_creators, word_vec, char_vec, **kwargs):
+    model_type = kwargs.get('model_type', 'default')
+    if model_type in known_creators:
+        creator_fn = known_creators[model_type]
+        print('Calling baseline model loader ', creator_fn)
+        return creator_fn(word_vec, char_vec, **kwargs)
+    return create_user_lang_model(word_vec, char_vec, **kwargs)
+
+def load_lang_model(known_loaders, outname, **kwargs):
+    model_type = kwargs.get('model_type', 'default')
+    if model_type in known_loaders:
+        loader_fn = known_loaders[model_type]
+        return loader_fn(outname, **kwargs)
+    return load_user_lang_model(outname, **kwargs)
 
 class EncoderDecoder(object):
 
@@ -261,11 +275,5 @@ def load_seq2seq_model(known_loaders, outname, **kwargs):
     return load_user_seq2seq_model(outname, **kwargs)
 
 
-def create_lang_model(known_creators, word_vec, char_vec, **kwargs):
-    model_type = kwargs.get('model_type', 'default')
-    if model_type in known_creators:
-        creator_fn = known_creators[model_type]
-        print('Calling baseline model loader ', creator_fn)
-        return creator_fn(word_vec, char_vec, **kwargs)
-    return create_user_lang_model(word_vec, char_vec, **kwargs)
+
 

@@ -1,6 +1,7 @@
 from baseline.tf.tfy import *
-from baseline.model import create_lang_model
+from baseline.model import create_lang_model, load_lang_model
 import json
+import baseline as bl
 
 
 class AbstractLanguageModel(object):
@@ -68,6 +69,7 @@ class WordLanguageModel(AbstractLanguageModel):
         feed_dict = {self.x: x, self.y: y, self.pkeep: pkeep}
         return feed_dict
 
+
     @classmethod
     def create(cls, word_vec, char_vec, **kwargs):
 
@@ -79,12 +81,13 @@ class WordLanguageModel(AbstractLanguageModel):
         lm.x = kwargs.get('x', tf.placeholder(tf.int32, [None, lm.nbptt], name="x"))
         lm.y = kwargs.get('y', tf.placeholder(tf.int32, [None, lm.nbptt], name="y"))
         lm.pkeep = kwargs.get('pkeep', tf.placeholder(tf.float32, name="pkeep"))
-        pdrop = kwargs.get('pdrop', 0.5)
+        pdrop = kwargs.get('dropout', 0.5)
         lm.pdrop_value = pdrop
 
 
         hsz = kwargs['hsz']
         lm.word_vocab = word_vec.vocab
+        lm.char_vocab = char_vec.vocab
         vsz = word_vec.vsz + 1
 
         with tf.name_scope("WordLUT"):
@@ -104,6 +107,33 @@ class WordLanguageModel(AbstractLanguageModel):
             return self.word_vocab
         return None
 
+    @staticmethod
+    def load(basename, **kwargs):
+        dsz = kwargs["dsz"]
+        with open(basename + '-word.vocab', 'r') as f:
+            vocab_word = json.load(f)
+
+        init_word_vectors = bl.RandomInitVecModel(dsz, vocab_word, False)
+        init_char_vectors  = None #this is not used in WordLanguageModel.create, but keeping the fixture same.
+        unif = kwargs['unif']
+
+        weight_initializer = tf.random_uniform_initializer(-unif, unif)
+        with tf.variable_scope('Model', initializer=weight_initializer):
+            model = WordLanguageModel.create(init_word_vectors, init_char_vectors, **kwargs)
+
+        print("model graph created, starting variable population")
+
+        do_init = kwargs.get('init', True)
+        if do_init:
+            init = tf.global_variables_initializer()
+            model.sess.run(init)
+
+        model.saver = tf.train.Saver()
+        model.saver.restore(model.sess, basename)
+        print([v.name for v in tf.trainable_variables()])
+        return model
+
+
     def save_md(self, basename):
 
         path = basename.split('/')
@@ -117,6 +147,11 @@ class WordLanguageModel(AbstractLanguageModel):
         if len(self.word_vocab) > 0:
             with open(basename + '-word.vocab', 'w') as f:
                 json.dump(self.word_vocab, f)
+
+        if len(self.char_vocab) > 0:
+            with open(basename + '-char.vocab', 'w') as f:
+                json.dump(self.char_vocab, f)
+
         with open(basename + '-batch_dims.json', 'w') as f:
             json.dump({'batchsz': self.batchsz, 'nbptt': self.nbptt, 'maxw': self.maxw}, f)
 
@@ -203,10 +238,10 @@ BASELINE_LM_MODELS = {
 }
 
 # TODO:
-# BASELINE_LM_LOADERS = {
-#    'default': WordLanguageModel.load,
-#    'convchar': CharCompLanguageModel.load
-# }
+BASELINE_LM_LOADERS = {
+   'default': WordLanguageModel.load,
+   #'convchar': CharCompLanguageModel.load
+}
 
 
 # TODO: move the scoping and weight initialization into the model itself
@@ -220,3 +255,6 @@ def create_model(word_vec, char_vec, **kwargs):
     with tf.variable_scope('Model', initializer=weight_initializer):
         lm = create_lang_model(BASELINE_LM_MODELS, word_vec, char_vec, **kwargs)
     return lm
+
+def load_model(modelname, **kwargs):
+    return load_lang_model(BASELINE_LM_LOADERS, modelname, **kwargs)

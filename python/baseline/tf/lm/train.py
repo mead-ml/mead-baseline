@@ -40,6 +40,7 @@ class LanguageModelTrainerTf(Trainer):
         metrics = {}
 
         for batch_dict in ts:
+            print(batch_dict['x'].shape)
 
             feed_dict = self.model.make_input(batch_dict, True)
             if xfer_state:

@@ -380,10 +380,13 @@ class SeqWordCharDataFeed(DataFeed):
         super(SeqWordCharDataFeed, self).__init__()
         num_examples = x.shape[0]
         rest = num_examples // batchsz
+        if rest % nbptt == 0:
+            rest = rest-1
+
         self.steps = rest // nbptt
         self.stride_ch = nbptt * maxw
-        trunc = batchsz * rest
 
+        trunc = rest*batchsz
         print('Truncating from %d to %d' % (num_examples, trunc))
         self.x = x[:trunc].reshape((batchsz, rest))
         xch = xch.flatten()
@@ -401,5 +404,4 @@ class SeqWordCharDataFeed(DataFeed):
             'xch': self.xch[:, i*self.stride_ch:(i+1)*self.stride_ch].reshape((self.batchsz, self.nbptt, self.wsz)),
             'y': self.x[:, i*self.nbptt+1:(i+1)*self.nbptt+1].reshape((self.batchsz, self.nbptt))
         }
-
 
