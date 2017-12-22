@@ -381,6 +381,10 @@ class SeqWordCharDataFeed(DataFeed):
         num_examples = x.shape[0]
         rest = num_examples // batchsz
         self.steps = rest // nbptt
+        #if num_examples is divisible by batchsz * nbptt (equivalent to rest is divisible by nbptt), we #have a problem. reduce rest in that case.
+        if rest % nbptt == 0: 
+            rest = rest-1
+
         self.stride_ch = nbptt * maxw
         trunc = batchsz * rest
 
