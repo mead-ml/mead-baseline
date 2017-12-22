@@ -40,7 +40,6 @@ class LanguageModelTrainerTf(Trainer):
         metrics = {}
 
         for batch_dict in ts:
-
             feed_dict = self.model.make_input(batch_dict, True)
             if xfer_state:
                 for i, (c, h) in enumerate(self.model.initial_state):

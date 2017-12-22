@@ -175,6 +175,21 @@ def load_user_seq2seq_model(outname, **kwargs):
     mod = import_user_module("seq2seq", model_type)
     return mod.load_model(outname, **kwargs)
 
+def load_user_lang_model(outname, **kwargs):
+    """Loads a user-defined encoder-decoder model
+
+    This loads a previously serialized encoder-decoder model defined by the user.
+    It first imports a module that must exist in the `PYTHONPATH`, with a named defined as
+    `seq2seq_{model_type}.py`.  Once loaded, this user-defined model can be used within the driver programs
+
+    :param outname: The name of the file where the model is serialized
+    :param kwargs:
+    :return: A user-defined model
+    """
+    model_type = kwargs['model_type']
+    mod = import_user_module("lang", model_type)
+    return mod.load_model(outname, **kwargs)
+
 
 def get_model_file(dictionary, task, platform):
     """Model name file helper to abstract different DL platforms (FWs)
