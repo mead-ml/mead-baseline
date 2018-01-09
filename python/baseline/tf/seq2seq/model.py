@@ -69,6 +69,12 @@ class Seq2SeqModel(EncoderDecoder):
         if 'predict' in kwargs:
             state['predict'] = kwargs['predict']
 
+        if 'sampling' in kwargs:
+            state['sampling'] = kwargs['sampling']
+
+        if 'sampling_temp' in kwargs:
+            state['sampling_temp'] = kwargs['sampling_temp']
+
         if 'beam' in kwargs:
             state['beam'] = kwargs['beam']
 
@@ -103,6 +109,8 @@ class Seq2SeqModel(EncoderDecoder):
         mxlen = kwargs.get('mxlen', 100)
         predict = kwargs.get('predict', False)
         beam_width = kwargs.get('beam', 1)
+        sampling = kwargs.get('sampling', False)
+        sampling_temp = kwargs.get('sampling_temp', 1.0)
         model.sess = kwargs.get('sess', tf.Session())
         unif = kwargs.get('unif', 0.25)
         # These are going to be (B,T)
@@ -163,7 +171,11 @@ class Seq2SeqModel(EncoderDecoder):
 
                 if predict is True:
                     if beam_width == 1:
-                        helper = tf.contrib.seq2seq.GreedyEmbeddingHelper(Wo, tf.fill([batch_sz], GO), EOS)
+                        if sampling:
+                            helper = tf.contrib.seq2seq.SamplingEmbeddingHelper(Wo, tf.fill([batch_sz], GO), EOS,
+                                                                                softmax_temperature=sampling_temp)
+                        else:
+                            helper = tf.contrib.seq2seq.GreedyEmbeddingHelper(Wo, tf.fill([batch_sz], GO), EOS)
                         decoder = tf.contrib.seq2seq.BasicDecoder(cell=rnn_dec_cell, helper=helper,
                                                                   initial_state=initial_state, output_layer=proj)
                     else:
