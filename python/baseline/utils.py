@@ -102,7 +102,7 @@ def create_user_trainer(model, **kwargs):
     return mod.create_trainer(model, **kwargs)
 
 
-def create_user_tagger_model(labels, word_embedding, char_embedding, **kwargs):
+def create_user_tagger_model(labels, vocabs, **kwargs):
     """Create a user-defined tagger model
 
     This creates an structured prediction classification model defined by the user.
@@ -117,7 +117,7 @@ def create_user_tagger_model(labels, word_embedding, char_embedding, **kwargs):
     """
     model_type = kwargs['model_type']
     mod = import_user_module("tagger", model_type)
-    return mod.create_model(labels, word_embedding, char_embedding, **kwargs)
+    return mod.create_model(labels, vocabs, **kwargs)
 
 
 def load_user_tagger_model(outname, **kwargs):

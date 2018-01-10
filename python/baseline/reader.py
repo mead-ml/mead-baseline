@@ -189,13 +189,14 @@ def identity_trans_fn(x):
 class SeqPredictReader(object):
 
     def __init__(self, max_sentence_length=-1, max_word_length=-1, word_trans_fn=None,
-                 vec_alloc=np.zeros, vec_shape=np.shape, trim=False):
+                 vec_alloc=np.zeros, vec_shape=np.shape, trim=False, extended_features=dict()):
         self.cleanup_fn = identity_trans_fn if word_trans_fn is None else word_trans_fn
         self.max_sentence_length = max_sentence_length
         self.max_word_length = max_word_length
         self.vec_alloc = vec_alloc
         self.vec_shape = vec_shape
         self.trim = trim
+        self.extended_features = extended_features
         self.label2index = {"<PAD>": 0, "<GO>": 1, "<EOS>": 2}
 
     def build_vocab(self, files):
@@ -212,25 +213,32 @@ class SeqPredictReader(object):
         idx = 2 # GO=0, START=1, EOS=2
         mxlen = self.max_sentence_length
         maxw = self.max_word_length
-        txts, lbls = self.read_lines(filename)
-
-        for i in range(len(txts)):
+        extracted = self.read_lines(filename)
+        texts = extracted['texts']
+        labels = extracted['labels']
+        for i in range(len(texts)):
 
             xs_ch = self.vec_alloc((mxlen, maxw), dtype=np.int)
             xs = self.vec_alloc((mxlen), dtype=np.int)
             ys = self.vec_alloc((mxlen), dtype=np.int)
 
-            lv = lbls[i]
-            v = txts[i]
+            keys = self.extended_features.keys()
+
+            item = {}
+            for key in keys:
+                item[key] = self.vec_alloc((mxlen), dtype=np.int)
+
+            text = texts[i]
+            lv = labels[i]
 
             length = mxlen
             for j in range(mxlen):
 
-                if j == len(v):
+                if j == len(text):
                     length = j
                     break
 
-                w = v[j]
+                w = text[j]
                 nch = min(len(w), maxw)
                 label = lv[j]
 
@@ -240,13 +248,16 @@ class SeqPredictReader(object):
 
                 ys[j] = self.label2index[label]
                 xs[j] = words_vocab.get(self.cleanup_fn(w), 0)
+                # Extended features
+                for key in keys:
+                    item[key][j] = vocabs[key].get(extracted[key][i][j])
                 for k in range(nch):
                     xs_ch[j, k] = chars_vocab.get(w[k], 0)
-
-            ts.append({'x': xs, 'xch': xs_ch, 'y': ys, 'lengths': length, 'ids': i})
+            item.update({'x': xs, 'xch': xs_ch, 'y': ys, 'lengths': length, 'ids': i})
+            ts.append(item)
         examples = baseline.data.SeqWordCharTagExamples(ts)
         return baseline.data.SeqWordCharLabelDataFeed(examples, batchsz=batchsz, shuffle=shuffle,
-                                                      vec_alloc=self.vec_alloc, vec_shape=self.vec_shape), txts
+                                                      vec_alloc=self.vec_alloc, vec_shape=self.vec_shape), texts
 
 
 class CONLLSeqReader(SeqPredictReader):
@@ -263,8 +274,8 @@ class CONLLSeqReader(SeqPredictReader):
     )
 
     def __init__(self, max_sentence_length=-1, max_word_length=-1, word_trans_fn=None,
-                 vec_alloc=np.zeros, vec_shape=np.shape, trim=False):
-        super(CONLLSeqReader, self).__init__(max_sentence_length, max_word_length, word_trans_fn, vec_alloc, vec_shape, trim)
+                 vec_alloc=np.zeros, vec_shape=np.shape, trim=False, extended_features=dict()):
+        super(CONLLSeqReader, self).__init__(max_sentence_length, max_word_length, word_trans_fn, vec_alloc, vec_shape, trim, extended_features)
 
     @staticmethod
     def web_cleanup(word):
@@ -279,6 +290,11 @@ class CONLLSeqReader(SeqPredictReader):
     def build_vocab(self, files):
         vocab_word = Counter()
         vocab_ch = Counter()
+        vocabs = {}
+        keys = self.extended_features.keys()
+        for key in keys:
+            vocabs[key] = Counter()
+
         maxw = 0
         maxs = 0
         for file in files:
@@ -302,13 +318,16 @@ class CONLLSeqReader(SeqPredictReader):
                         maxw = max(maxw, len(w))
                         for k in w:
                             vocab_ch[k] += 1
+                        for key, index in self.extended_features.items():
+                            vocabs[key][states[index]] += 1
 
         self.max_word_length = min(maxw, self.max_word_length) if self.max_word_length > 0 else maxw
         self.max_sentence_length = min(maxs, self.max_sentence_length) if self.max_sentence_length > 0 else maxs
         print('Max sentence length %d' % self.max_sentence_length)
         print('Max word length %d' % self.max_word_length)
 
-        return {'char': vocab_ch, 'word': vocab_word }
+        vocabs.update({'char': vocab_ch, 'word': vocab_word})
+        return vocabs
 
     def read_lines(self, tsfile):
 
@@ -316,7 +335,13 @@ class CONLLSeqReader(SeqPredictReader):
         lbls = []
         txt = []
         lbl = []
+        features = {}
+        # Extended feature values
+        xfv = {}
 
+        for key in self.extended_features.keys():
+            features[key] = []
+            xfv[key] = []
         with codecs.open(tsfile, encoding='utf-8', mode='r') as f:
             for line in f:
                 states = re.split("\s", line.strip())
@@ -324,13 +349,19 @@ class CONLLSeqReader(SeqPredictReader):
                 if len(states) > 1:
                     txt.append(states[0])
                     lbl.append(states[-1])
+                    for key, value in self.extended_features.items():
+                        xfv[key].append(states[value])
                 else:
                     txts.append(txt)
                     lbls.append(lbl)
+                    for key in self.extended_features.keys():
+                        features[key].append(xfv[key])
+                        xfv[key] = []
                     txt = []
                     lbl = []
 
-        return txts, lbls
+        features.update({'texts': txts, 'labels': lbls})
+        return features
 
 
 def create_seq_pred_reader(mxlen, mxwlen, word_trans_fn, vec_alloc, vec_shape, trim, **kwargs):
@@ -340,7 +371,7 @@ def create_seq_pred_reader(mxlen, mxwlen, word_trans_fn, vec_alloc, vec_shape, t
     if reader_type == 'default':
         print('Reading CONLL sequence file corpus')
         reader = CONLLSeqReader(mxlen, mxwlen, word_trans_fn,
-                                vec_alloc, vec_shape, trim)
+                                vec_alloc, vec_shape, trim, extended_features=kwargs.get('extended_features', {}))
     else:
         mod = import_user_module("reader", reader_type)
         reader = mod.create_seq_pred_reader(mxlen, mxwlen, word_trans_fn,
