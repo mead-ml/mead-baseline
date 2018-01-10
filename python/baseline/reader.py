@@ -204,9 +204,11 @@ class SeqPredictReader(object):
     def read_lines(self):
         pass
 
-    def load(self, filename, words_vocab, chars_vocab, batchsz, shuffle=False):
+    def load(self, filename, vocabs, batchsz, shuffle=False):
 
         ts = []
+        words_vocab = vocabs['word']
+        chars_vocab = vocabs['char']
         idx = 2 # GO=0, START=1, EOS=2
         mxlen = self.max_sentence_length
         maxw = self.max_word_length
@@ -241,7 +243,7 @@ class SeqPredictReader(object):
                 for k in range(nch):
                     xs_ch[j, k] = chars_vocab.get(w[k], 0)
 
-            ts.append((xs, xs_ch, ys, length, i))
+            ts.append({'x': xs, 'xch': xs_ch, 'y': ys, 'lengths': length, 'ids': i})
         examples = baseline.data.SeqWordCharTagExamples(ts)
         return baseline.data.SeqWordCharLabelDataFeed(examples, batchsz=batchsz, shuffle=shuffle,
                                                       vec_alloc=self.vec_alloc, vec_shape=self.vec_shape), txts
@@ -306,7 +308,7 @@ class CONLLSeqReader(SeqPredictReader):
         print('Max sentence length %d' % self.max_sentence_length)
         print('Max word length %d' % self.max_word_length)
 
-        return vocab_ch, vocab_word
+        return {'char': vocab_ch, 'word': vocab_word }
 
     def read_lines(self, tsfile):
 

@@ -190,12 +190,12 @@ class Tagger(object):
         pass
 
 
-def create_tagger_model(default_create_model_fn, labels, word_embedding, char_embedding, **kwargs):
+def create_tagger_model(default_create_model_fn, labels, embeddings, **kwargs):
     model_type = kwargs.get('model_type', 'default')
     if model_type == 'default':
-        return default_create_model_fn(labels, word_embedding, char_embedding, **kwargs)
+        return default_create_model_fn(labels, embeddings, **kwargs)
 
-    model = create_user_tagger_model(labels, word_embedding, char_embedding, **kwargs)
+    model = create_user_tagger_model(labels, embeddings, **kwargs)
     return model
 
 
