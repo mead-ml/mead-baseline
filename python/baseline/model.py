@@ -81,7 +81,7 @@ class Classifier(object):
             else:
                 idx = vocab[word_trans_fn(word)]
             x[0, j + halffiltsz] = idx
-        outcomes = self.classify({'x': x})[0]
+        outcomes = self.classify(x)[0]
         return sorted(outcomes, key=lambda tup: tup[1], reverse=True)
 
 
