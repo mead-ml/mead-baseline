@@ -32,7 +32,8 @@ class ConvModel(Classifier):
             model.vocab = json.load(f)
         return model
 
-    def classify(self, batch_time):
+    def classify(self, batch_dict):
+        batch_time = batch_dict['x']
         batchsz = batch_time.shape[0]
         return self.impl.fit(batch_time, batch_size=batchsz)
 
