@@ -59,7 +59,7 @@ class WordClassifierBase(Classifier):
             all_loss = tf.reduce_mean(loss)
         return all_loss
 
-    def classify(self, x):
+    def classify(self, batch_dict):
         """This method provides a basic routine to run "inference" or predict outputs based on data.
         It runs the `x` tensor in (`BxT`), and turns dropout off, running the network all the way to a softmax
         output
@@ -67,6 +67,7 @@ class WordClassifierBase(Classifier):
         :param x: The `x` tensor of input (`BxT`)
         :return: Each outcome as a ``list`` of tuples `(label, probability)`
         """
+        x = batch_dict['x']
         feed_dict = {self.x: x, self.pkeep: 1.0}
         probs = self.sess.run(tf.nn.softmax(self.logits), feed_dict=feed_dict)
         results = []
