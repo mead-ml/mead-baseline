@@ -547,10 +547,10 @@ class PTBSeqReader(object):
 
         return vocab_ch, vocab_word, num_words_in_files
 
-    def load(self, filename, words_vocab, chars_vocab, num_words, batchsz, vec_alloc=np.zeros):
+    def load(self, filename, words_vocab, chars_vocab, num_words, batchsz):
 
-        xch = vec_alloc((num_words, self.max_word_length), np.int)
-        x = vec_alloc((num_words), np.int)
+        xch = np.zeros((num_words, self.max_word_length), np.int)
+        x = np.zeros(num_words, np.int)
         i = 0
         with codecs.open(filename, encoding='utf-8', mode='r') as f:
             for line in f:

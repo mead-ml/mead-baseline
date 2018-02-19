@@ -43,21 +43,21 @@ parser.add_argument('--early_stopping_metric', default='avg_loss', help='Metric 
 parser.add_argument('--start_decay_epoch', default=6, type=int, help='At what epoch should we start decaying')
 parser.add_argument('--decay_rate', default=1.2, type=float, help='Learning rate decay')
 parser.add_argument('--decay_type', default='zaremba', help='What learning rate decay schedule')
+parser.add_argument('--reader_type', default='default', help='reader type (defaults to PTB)')
 parser.add_argument('--backend', default='tf', help='Default Deep Learning Framework')
 args = parser.parse_args()
 
-
 args.reporting = setup_reporting(**vars(args))
 
-if args.backend == 'tf':
+if args.backend == 'pytorch':
+    import baseline.pytorch.lm as lm
+else:
     import baseline.tf.lm as lm
-
 
 word_trans_fn = lowercase if args.lower is True else None
 
-reader = create_lm_reader(args.mxwlen, args.nbptt, word_trans_fn)
+reader = create_lm_reader(args.mxwlen, args.nbptt, word_trans_fn, reader_type=args.reader_type)
 vocab_ch, vocab_word, num_words = reader.build_vocab([args.train, args.valid, args.test])
-
 
 # Vocab LUTs
 word_vocab = None
@@ -92,7 +92,7 @@ args.maxw = reader.max_word_length
 model = lm.create_model(word_vec, char_vec, **vars(args))
 steps_per_epoch = num_steps_per_epoch(num_words[0], args.nbptt, args.batchsz)
 first_range = int(args.start_decay_epoch * steps_per_epoch)
-args.bounds = [first_range] + list(np.arange(args.start_decay_epoch + 1, args.epochs + 1, dtype=np.int32) * steps_per_epoch)
-
+if args.decay_type == 'zaremba':
+    args.bounds = [first_range] + list(np.arange(args.start_decay_epoch + 1, args.epochs + 1, dtype=np.int32) * steps_per_epoch)
 lm.fit(model, ts, vs, es, **vars(args))
 
