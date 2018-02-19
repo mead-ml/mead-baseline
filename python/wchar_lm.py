@@ -57,39 +57,36 @@ else:
 word_trans_fn = lowercase if args.lower is True else None
 
 reader = create_lm_reader(args.mxwlen, args.nbptt, word_trans_fn, reader_type=args.reader_type)
-vocab_ch, vocab_word, num_words = reader.build_vocab([args.train, args.valid, args.test])
+vocabs, num_words = reader.build_vocab([args.train, args.valid, args.test])
 
-# Vocab LUTs
-word_vocab = None
-char_vocab = None
-
-# No matter what we will create a vocab for words, since that is what we are emitting
-word_vec = None
+embeddings = {'word': None, 'char': None}
+word2index = {'word': None, 'char': None}
 if args.embed:
-    word_vec = w2v.Word2VecModel(args.embed, vocab_word, args.unif)
-    word_vocab = word_vec.vocab
-# TODO: Fix this to be a boolean for use word vectors
+    EmbeddingsModelType = GloVeModel if args.embed.endswith(".txt") else Word2VecModel
+    embeddings['word'] = EmbeddingsModelType(args.embed, vocabs['word'], unif_weight=args.unif)
+    word2index['word'] = embeddings['word'].vocab
 else:
     print('Creating new embedding weights')
-    word_vec = w2v.RandomInitVecModel(args.hsz, vocab_word, unif_weight=args.unif)
-    word_vocab = word_vec.vocab
+    embeddings['word'] = w2v.RandomInitVecModel(args.hsz, vocabs['word'], unif_weight=args.unif)
+    word2index['word'] = embeddings['word'].vocab
 
-char_vec = w2v.RandomInitVecModel(args.charsz, vocab_ch, unif_weight=args.unif)
-char_vocab = char_vec.vocab
+embeddings['char'] = RandomInitVecModel(args.charsz, vocabs['char'], unif_weight=args.unif)
+word2index['char'] = embeddings['char'].vocab
 
-ts = reader.load(args.train, word_vocab, char_vocab, num_words[0], batchsz=args.batchsz)
+
+ts = reader.load(args.train, word2index, num_words[0], batchsz=args.batchsz)
 print('Loaded training data')
 
-vs = reader.load(args.valid, word_vocab, char_vocab, num_words[1], batchsz=args.batchsz)
+vs = reader.load(args.valid, word2index, num_words[1], batchsz=args.batchsz)
 print('Loaded validation data')
 
-es = reader.load(args.test, word_vocab, char_vocab, num_words[2], batchsz=args.batchsz)
+es = reader.load(args.test, word2index, num_words[2], batchsz=args.batchsz)
 
 print('Using %d examples for training' % num_words[0])
 print('Using %d examples for validation' % num_words[1])
 print('Using %d examples for test' % num_words[2])
 args.maxw = reader.max_word_length
-model = lm.create_model(word_vec, char_vec, **vars(args))
+model = lm.create_model(embeddings, **vars(args))
 steps_per_epoch = num_steps_per_epoch(num_words[0], args.nbptt, args.batchsz)
 first_range = int(args.start_decay_epoch * steps_per_epoch)
 if args.decay_type == 'zaremba':

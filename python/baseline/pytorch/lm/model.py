@@ -21,15 +21,18 @@ class WordLanguageModel(nn.Module):
         super(WordLanguageModel, self).__init__()
 
     @staticmethod
-    def create(word_embeddings, char_embeddings, **kwargs):
+    def create(embeddings, **kwargs):
+        word_vec = embeddings['word']
+
         model = WordLanguageModel()
         model.gpu = kwargs.get('gpu', True)
-        word_vec = word_embeddings
         word_dsz = 0
         model.hsz = int(kwargs['hsz'])
+        unif = float(kwargs.get('unif', 0.0))
+        print(unif)
         model.nlayers = int(kwargs.get('layers', 1))
         pdrop = float(kwargs.get('dropout', 0.5))
-        model.vocab_sz = word_embeddings.vsz + 1
+        model.vocab_sz = word_vec.vsz + 1
 
         if word_vec is not None:
             model.word_vocab = word_vec.vocab
@@ -40,7 +43,7 @@ class WordLanguageModel(nn.Module):
         model.rnn, out_hsz = pytorch_lstm(word_dsz, model.hsz, 'lstm', model.nlayers, pdrop, batch_first=True)
         model.decoder = nn.Sequential()
         append2seq(model.decoder, (
-                pytorch_linear(model.hsz, model.vocab_sz),
+                pytorch_linear(model.hsz, model.vocab_sz, unif),
             ))
 
         return model
@@ -80,9 +83,9 @@ BASELINE_LM_MODELS = {
     'default': WordLanguageModel.create
 }
 
-def create_model(word_embeddings, char_embeddings, **kwargs):
 
-    lm = create_lang_model(BASELINE_LM_MODELS, word_embeddings, char_embeddings, **kwargs)
+def create_model(embeddings, **kwargs):
+    lm = create_lang_model(BASELINE_LM_MODELS, embeddings, **kwargs)
     return lm
 
 

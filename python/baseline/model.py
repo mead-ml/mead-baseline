@@ -261,11 +261,11 @@ def load_seq2seq_model(known_loaders, outname, **kwargs):
     return load_user_seq2seq_model(outname, **kwargs)
 
 
-def create_lang_model(known_creators, word_vec, char_vec, **kwargs):
+def create_lang_model(known_creators, embeddings, **kwargs):
     model_type = kwargs.get('model_type', 'default')
     if model_type in known_creators:
         creator_fn = known_creators[model_type]
         print('Calling baseline model loader ', creator_fn)
-        return creator_fn(word_vec, char_vec, **kwargs)
-    return create_user_lang_model(word_vec, char_vec, **kwargs)
+        return creator_fn(embeddings, **kwargs)
+    return create_user_lang_model(embeddings, **kwargs)
 
