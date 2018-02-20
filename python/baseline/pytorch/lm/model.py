@@ -109,8 +109,16 @@ class CharCompLanguageModel(AbstractLanguageModel):
             convs.append(conv)
             # Add the module so its managed correctly
         self.convs = nn.ModuleList(convs)
+
+        wchsz = cmotsz * len(filtsz)
+        self.highway = nn.Sequential()
+        append2seq(self.highway, (
+            Highway(wchsz),
+            Highway(wchsz)
+        ))
+
         # Width of concat of parallel convs
-        return cmotsz * len(filtsz)
+        return wchsz
 
     def _char_encoder(self, batch_first_words):
         emb = self.dropout(self.cembed(batch_first_words))
@@ -123,7 +131,8 @@ class CharCompLanguageModel(AbstractLanguageModel):
             mots.append(mot)
 
         mots = torch.cat(mots, 1)
-        return self.dropout(mots)
+        output = self.highway(mots)
+        return self.dropout(output)
 
 
     @staticmethod

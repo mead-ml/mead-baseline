@@ -172,6 +172,22 @@ def pytorch_rnn(insz, hsz, rnntype, nlayers, dropout):
     return rnn
 
 
+class Highway(nn.Module):
+
+    def __init__(self,
+                 input_size):
+        super(Highway, self).__init__()
+        self.proj = nn.Linear(input_size, input_size)
+        self.transform = nn.Linear(input_size, input_size)
+        self.transform.bias.data.fill_(-2.0)
+
+    def forward(self, input):
+        proj_result = nn.functional.relu(self.proj(input))
+        proj_gate = nn.functional.sigmoid(self.transform(input))
+        gated = (proj_gate * proj_result) + ((1 - proj_gate) * input)
+        return gated
+
+
 def pytorch_lstm(insz, hsz, rnntype, nlayers, dropout, unif=0, batch_first=False):
     ndir = 2 if rnntype.startswith('b') else 1
     #print('ndir: %d, rnntype: %s, nlayers: %d, dropout: %.2f, unif: %.2f' % (ndir, rnntype, nlayers, dropout, unif))
