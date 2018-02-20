@@ -57,7 +57,7 @@ class LanguageModelTrainerPyTorch(Trainer):
 
         for batch_dict in vs:
             inputs = self.model.make_input(batch_dict)
-            output, hidden = self.model(inputs[0], hidden)
+            output, hidden = self.model(inputs[:-1], hidden)
             total_loss += self.crit(output, inputs[-1]).data
             hidden = self.repackage_hidden(hidden)
             iters += nbptt
@@ -87,7 +87,7 @@ class LanguageModelTrainerPyTorch(Trainer):
             hidden = self.repackage_hidden(hidden)
             inputs = self.model.make_input(batch_dict)
             self.optimizer.zero_grad()
-            output, hidden = self.model(inputs[0], hidden)
+            output, hidden = self.model(inputs[:-1], hidden)
             loss = self.crit(output, inputs[-1])
             loss.backward()
             total_loss += loss.data

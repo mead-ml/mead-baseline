@@ -45,6 +45,7 @@ parser.add_argument('--decay_rate', default=1.2, type=float, help='Learning rate
 parser.add_argument('--decay_type', default='zaremba', help='What learning rate decay schedule')
 parser.add_argument('--reader_type', default='default', help='reader type (defaults to PTB)')
 parser.add_argument('--backend', default='tf', help='Default Deep Learning Framework')
+parser.add_argument('--dsz', type=int, default=300, help='Word vector size if no embeddings given')
 args = parser.parse_args()
 
 args.reporting = setup_reporting(**vars(args))
@@ -67,7 +68,8 @@ if args.embed:
     word2index['word'] = embeddings['word'].vocab
 else:
     print('Creating new embedding weights')
-    embeddings['word'] = w2v.RandomInitVecModel(args.hsz, vocabs['word'], unif_weight=args.unif)
+    ##if args.dsz > 0:
+    embeddings['word'] = w2v.RandomInitVecModel(args.dsz, vocabs['word'], unif_weight=args.unif)
     word2index['word'] = embeddings['word'].vocab
 
 embeddings['char'] = RandomInitVecModel(args.charsz, vocabs['char'], unif_weight=args.unif)
