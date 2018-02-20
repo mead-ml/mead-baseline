@@ -32,6 +32,8 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
             self.optimizer = torch.optim.Adam(parameters)
         elif optim == 'rmsprop':
             self.optimizer = torch.optim.RMSprop(model.parameters(), lr=eta)
+        elif optim == 'asgd':
+            self.optimizer = torch.optim.ASGD(model.parameters(), lr=eta)
         else:
             mom = kwargs.get('mom', 0.9)
             print('using mom [%.3f]' % mom)

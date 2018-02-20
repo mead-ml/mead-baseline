@@ -162,11 +162,14 @@ class SeqLabelDataFeed(ExampleDataFeed):
 class SeqWordCharTagExamples(object):
     """Examples of sequences of words, characters and tags
     """
-    SEQ_WORD = 0
-    SEQ_CHAR = 1
-    SEQ_TAG = 2
-    SEQ_LEN = 3
-    SEQ_ID = 4
+
+    SEQ_WORD = 'x'
+    SEQ_CHAR = 'xch'
+    SEQ_TAG = 'y'
+    SEQ_LEN = 'lengths'
+    SEQ_CHAR = 'xch'
+    SEQ_ID = 'ids'
+    SCALARS = [SEQ_LEN, SEQ_ID]
 
     def __init__(self, example_list, do_shuffle=True, do_sort=True):
         """Constructor
@@ -187,10 +190,7 @@ class SeqWordCharTagExamples(object):
         :param i: (``int``) index of example
         :return: example in order `SEQ_WORD`, `SEQ_CHAR`, `SEQ_TAG`, `SEQ_LEN`, `SEQ_ID`
         """
-        ex = self.example_list[i]
-        return ex[SeqWordCharTagExamples.SEQ_WORD], ex[SeqWordCharTagExamples.SEQ_CHAR], \
-               ex[SeqWordCharTagExamples.SEQ_TAG], ex[SeqWordCharTagExamples.SEQ_LEN], \
-               ex[SeqWordCharTagExamples.SEQ_ID]
+        return self.example_list[i]
 
     def __len__(self):
         """Get the number of examples
@@ -210,35 +210,44 @@ class SeqWordCharTagExamples(object):
         :return: batched `x` word vector, `x` character vector, batched `y` vector, `length` vector, `ids`
         """
         ex = self.example_list[start]
+        keys = ex.keys()
         siglen, maxw = vec_shape(ex[SeqWordCharTagExamples.SEQ_CHAR])
-        xs_ch = vec_alloc((batchsz, siglen, maxw), dtype=np.int)
-        xs = vec_alloc((batchsz, siglen), dtype=np.int)
-        ys = vec_alloc((batchsz, siglen), dtype=np.int)
-        ids = vec_alloc((batchsz), dtype=np.int)
-        length = vec_alloc((batchsz), dtype=np.int)
+
+        batch = {}
+        for k in keys:
+            if k == SeqWordCharTagExamples.SEQ_CHAR:
+                batch[k] = vec_alloc((batchsz, siglen, maxw), dtype=np.int)
+            elif k in SeqWordCharTagExamples.SCALARS:
+                batch[k] = vec_alloc((batchsz), dtype=np.int)
+            else:
+                batch[k] = vec_alloc((batchsz, siglen), dtype=np.int)
+
         sz = len(self.example_list)
         idx = start * batchsz
 
         max_src_len = 0
 
         for i in range(batchsz):
-            if idx >= sz: idx = 0
+            if idx >= sz:
+                idx = 0
 
             ex = self.example_list[idx]
-            xs[i] = ex[SeqWordCharTagExamples.SEQ_WORD]
-            xs_ch[i] = ex[SeqWordCharTagExamples.SEQ_CHAR]
-            ys[i] = ex[SeqWordCharTagExamples.SEQ_TAG]
-            length[i] = ex[SeqWordCharTagExamples.SEQ_LEN]
-            max_src_len = max(max_src_len, length[i])
-            ids[i] = ex[SeqWordCharTagExamples.SEQ_ID]
+            for k in keys:
+                batch[k][i] = ex[k]
+
+            max_src_len = max(max_src_len, ex[SeqWordCharTagExamples.SEQ_LEN])
             idx += 1
 
         if trim:
-            xs = xs[:,0:max_src_len]
-            xs_ch = xs_ch[:,0:max_src_len,:]
-            ys = ys[:,0:max_src_len]
+            for k in keys:
+                if k == SeqWordCharTagExamples.SEQ_CHAR:
+                    batch[k] = batch[k][:, 0:max_src_len, :]
+                elif k in SeqWordCharTagExamples.SCALARS:
+                    pass
+                else:
+                    batch[k] = batch[k][:0, max_src_len]
 
-        return {"x": xs, "xch": xs_ch, "y": ys, "lengths": length, "ids": ids}
+        return batch
 
 
     @staticmethod

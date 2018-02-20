@@ -177,8 +177,10 @@ class RNNTaggerModel(Tagger):
         return preds
 
     @staticmethod
-    def create(labels, word_vec, char_vec, **kwargs):
+    def create(labels, embeddings, **kwargs):
 
+        word_vec = embeddings['word']
+        char_vec = embeddings['char']
         model = RNNTaggerModel()
         model.sess = kwargs.get('sess', tf.Session())
 
@@ -267,8 +269,8 @@ class RNNTaggerModel(Tagger):
         return word_char
 
 
-def create_model(labels, word_embedding, char_embedding, **kwargs):
-    model = create_tagger_model(RNNTaggerModel.create, labels, word_embedding, char_embedding, **kwargs)
+def create_model(labels, embeddings, **kwargs):
+    model = create_tagger_model(RNNTaggerModel.create, labels, embeddings, **kwargs)
     return model
 
 

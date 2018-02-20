@@ -191,8 +191,10 @@ class RNNTaggerModel(nn.Module, Tagger):
         super(RNNTaggerModel, self).__init__()
 
     @staticmethod
-    def create(labels, word_vec, char_vec, **kwargs):
+    def create(labels, embeddings, **kwargs):
         model = RNNTaggerModel()
+        word_vec = embeddings['word']
+        char_vec = embeddings['char']
         char_dsz = char_vec.dsz
         word_dsz = 0
         hsz = int(kwargs['hsz'])
@@ -368,8 +370,9 @@ class RNNTaggerModel(nn.Module, Tagger):
         return predict_seq_bt(self, x, xch, lengths)
 
 
-def create_model(labels, word_embedding, char_embedding, **kwargs):
-    model = create_tagger_model(RNNTaggerModel.create, labels, word_embedding, char_embedding, **kwargs)
+def create_model(labels, embeddings, **kwargs):
+
+    model = create_tagger_model(RNNTaggerModel.create, labels, embeddings, **kwargs)
     return model
 
 

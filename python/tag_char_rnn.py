@@ -78,36 +78,34 @@ vocab_sources = [args.train, args.valid]
 if not args.pad_unk_test:
     vocab_sources += [args.test]
 
-vocab_ch, vocab_word = reader.build_vocab(vocab_sources)
+vocabs = reader.build_vocab(vocab_sources)
 
 
 # Vocab LUTs
-word_vocab = None
-char_vocab = None
-
-word_vec = None
+embeddings = {'word': None, 'char': None}
+word2index = {'word': None, 'char': None}
 if args.embed:
     EmbeddingsModelType = GloVeModel if args.embed.endswith(".txt") else Word2VecModel
-    word_vec = EmbeddingsModelType(args.embed, vocab_word, unif_weight=args.unif)
-    word_vocab = word_vec.vocab
+    embeddings['word'] = EmbeddingsModelType(args.embed, vocabs['word'], unif_weight=args.unif)
+    word2index['word'] = embeddings['word'].vocab
 
-char_vec = RandomInitVecModel(args.charsz, vocab_ch, unif_weight=args.unifc)
-char_vocab = char_vec.vocab
-print(char_vocab)
+embeddings['char'] = RandomInitVecModel(args.charsz, vocabs['char'], unif_weight=args.unifc)
+word2index['char'] = embeddings['char'].vocab
 
-ts, _ = reader.load(args.train, word_vocab, char_vocab, args.batchsz, shuffle=True)
+
+ts, _ = reader.load(args.train, word2index, args.batchsz, shuffle=True)
 print('Loaded training data')
 
-vs, _ = reader.load(args.valid, word_vocab, char_vocab, args.batchsz)
+vs, _ = reader.load(args.valid, word2index, args.batchsz)
 print('Loaded valid data')
 
-es, txts = reader.load(args.test, word_vocab, char_vocab, 1)
+es, txts = reader.load(args.test, word2index, 1)
 print('Loaded test data')
 
 args.maxs = reader.max_sentence_length
 args.maxw = reader.max_word_length
 
-model = tagger.create_model(reader.label2index, word_vec, char_vec, **vars(args))
+model = tagger.create_model(reader.label2index, embeddings, **vars(args))
 
 tagger.fit(model, ts, vs, es, txts=txts, **vars(args))
 

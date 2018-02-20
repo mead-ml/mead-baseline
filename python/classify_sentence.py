@@ -8,13 +8,16 @@ parser.add_argument('--visdom', help='Turn on visdom reporting', type=str2bool, 
 parser.add_argument('--tensorboard', help='Turn on tensorboard reporting', type=str2bool, default=False)
 parser.add_argument('--eta', help='Initial learning rate', default=0.01, type=float)
 parser.add_argument('--mom', help='SGD Momentum', default=0.9, type=float)
+parser.add_argument('--start_decay_epoch', type=int, help='At what epoch should we start decaying')
+parser.add_argument('--decay_rate', default=0.0, type=float, help='Learning rate decay')
+parser.add_argument('--decay_type', help='What learning rate decay schedule')
 parser.add_argument('--embed', help='Word2Vec embeddings file', required=True)
 parser.add_argument('--train', help='Training file', required=True)
 parser.add_argument('--valid', help='Validation file')
 parser.add_argument('--test', help='Test file', required=True)
 parser.add_argument('--save', help='Save basename', default='classify_sentence_pytorch')
 parser.add_argument('--nogpu', help='Do not use GPU', default=False)
-parser.add_argument('--optim', help='Optim method', default='adam', choices=['adam', 'adagrad', 'adadelta', 'sgd'])
+parser.add_argument('--optim', help='Optim method', default='adam', choices=['adam', 'adagrad', 'adadelta', 'sgd', 'asgd'])
 parser.add_argument('--dropout', help='Dropout probability', default=0.5, type=float)
 parser.add_argument('--unif', help='Initializer bounds for embeddings', default=0.25)
 parser.add_argument('--epochs', help='Number of epochs', default=25, type=int)
@@ -34,6 +37,8 @@ parser.add_argument('--early_stopping_metric', help='What metric should we use i
 parser.add_argument('--model_type', help='Name of model to load and train', default='default')
 parser.add_argument('--trainer_type', help='Name of trainer to load and train', default='default')
 parser.add_argument('--rev', help='Time reverse input text', default=False, type=str2bool)
+parser.add_argument('--bounds', type=int, default=16000, help='Tell optim decay functionality how many steps before applying decay')
+
 args = parser.parse_args()
 
 

@@ -73,13 +73,13 @@ class Classifier(object):
         halffiltsz = zeropad // 2
         length = min(len(tokens), mxlen - zeropad + 1)
         for j in range(length):
-            word = tokens[j]
+            word = word_trans_fn(tokens[j])
             if word not in vocab:
                 if word != '':
                     print(word)
                     idx = 0
             else:
-                idx = vocab[word_trans_fn(word)]
+                idx = vocab[word]
             x[0, j + halffiltsz] = idx
         outcomes = self.classify({'x': x})[0]
         return sorted(outcomes, key=lambda tup: tup[1], reverse=True)
@@ -190,12 +190,12 @@ class Tagger(object):
         pass
 
 
-def create_tagger_model(default_create_model_fn, labels, word_embedding, char_embedding, **kwargs):
+def create_tagger_model(default_create_model_fn, labels, embeddings, **kwargs):
     model_type = kwargs.get('model_type', 'default')
     if model_type == 'default':
-        return default_create_model_fn(labels, word_embedding, char_embedding, **kwargs)
+        return default_create_model_fn(labels, embeddings, **kwargs)
 
-    model = create_user_tagger_model(labels, word_embedding, char_embedding, **kwargs)
+    model = create_user_tagger_model(labels, embeddings, **kwargs)
     return model
 
 
@@ -261,11 +261,11 @@ def load_seq2seq_model(known_loaders, outname, **kwargs):
     return load_user_seq2seq_model(outname, **kwargs)
 
 
-def create_lang_model(known_creators, word_vec, char_vec, **kwargs):
+def create_lang_model(known_creators, embeddings, **kwargs):
     model_type = kwargs.get('model_type', 'default')
     if model_type in known_creators:
         creator_fn = known_creators[model_type]
         print('Calling baseline model loader ', creator_fn)
-        return creator_fn(word_vec, char_vec, **kwargs)
-    return create_user_lang_model(word_vec, char_vec, **kwargs)
+        return creator_fn(embeddings, **kwargs)
+    return create_user_lang_model(embeddings, **kwargs)
 

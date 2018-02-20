@@ -69,9 +69,11 @@ class WordLanguageModel(AbstractLanguageModel):
         return feed_dict
 
     @classmethod
-    def create(cls, word_vec, char_vec, **kwargs):
+    def create(cls, embeddings, **kwargs):
 
         lm = cls()
+        word_vec = embeddings['word']
+
         lm.batchsz = kwargs['batchsz']
         lm.nbptt = kwargs['nbptt']
         lm.maxw = kwargs['maxw']
@@ -136,10 +138,11 @@ class CharCompLanguageModel(AbstractLanguageModel):
         return feed_dict
 
     @classmethod
-    def create(cls, word_vec, char_vec, **kwargs):
+    def create(cls, embeddings, **kwargs):
 
         lm = cls()
-
+        word_vec = embeddings['word']
+        char_vec = embeddings['char']
         lm.batchsz = kwargs['batchsz']
         lm.nbptt = kwargs['nbptt']
         lm.maxw = kwargs['maxw']
@@ -210,7 +213,7 @@ BASELINE_LM_MODELS = {
 
 
 # TODO: move the scoping and weight initialization into the model itself
-def create_model(word_vec, char_vec, **kwargs):
+def create_model(embeddings, **kwargs):
     unif = kwargs['unif']
 
     if 'sess' not in kwargs:
@@ -218,5 +221,5 @@ def create_model(word_vec, char_vec, **kwargs):
 
     weight_initializer = tf.random_uniform_initializer(-unif, unif)
     with tf.variable_scope('Model', initializer=weight_initializer):
-        lm = create_lang_model(BASELINE_LM_MODELS, word_vec, char_vec, **kwargs)
+        lm = create_lang_model(BASELINE_LM_MODELS, embeddings, **kwargs)
     return lm

@@ -27,6 +27,8 @@ class Seq2SeqTrainerPyTorch(Trainer):
             self.optimizer = torch.optim.Adam(model.parameters(), lr=eta)
         elif optim == 'rmsprop':
             self.optimizer = torch.optim.RMSprop(model.parameters(), lr=eta)
+        elif optim == 'asgd':
+            self.optimizer = torch.optim.ASGD(model.parameters(), lr=eta)
         else:
             self.optimizer = torch.optim.SGD(model.parameters(), lr=eta, momentum=mom)
         self.model = model

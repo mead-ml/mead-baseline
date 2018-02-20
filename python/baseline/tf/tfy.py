@@ -29,13 +29,26 @@ def optimizer(loss_fn, **kwargs):
         at_step = int(kwargs.get('bounds', 16000))
         decay_fn = lambda lr, global_step: tf.train.inverse_time_decay(lr, global_step, at_step, decay_rate, staircase=False)
 
+    # warm restarts in master, not in 1.5 yet
+    #elif decay_type == 'sgdr':
+    #    at_step = kwargs.get('bounds', 1000)
+    #    decay_fn = lambda lr, global_step: tf.train.cosine_decay_restarts(lr, global_step, first_decay_steps=at_step)
+
+    elif decay_type == 'cosine':
+        at_step = kwargs.get('bounds', 1000)
+        decay_fn = lambda lr, global_step: tf.train.cosine_decay(lr, global_step, at_step)
+
+    elif decay_type == 'lincos':
+        at_step = kwargs.get('bounds', 1000)
+        decay_fn = lambda lr, global_step: tf.train.linear_cosine_decay(lr, global_step, at_step)
+
     elif decay_type == 'zaremba':
         boundaries = kwargs.get('bounds', None)
         decay_rate = float(kwargs.get('decay_rate', None))
-        values = [eta/(decay_rate**i) for i in range(len(boundaries))]
+        values = [eta/(decay_rate**i) for i in range(len(boundaries)+1)]
         print('Learning rate schedule:')
-        print(boundaries)
-        print(values)
+        print('B', len(boundaries), boundaries)
+        print('V', len(values), values)
         decay_fn = lambda lr, global_step: tf.train.piecewise_constant(global_step, boundaries, values)
 
     if optim == 'adadelta':
