@@ -106,6 +106,7 @@ def viterbi_decode(unary, transitions, start_idx, end_idx):
     backpointers = []
 
     siglen, num_labels = unary.size()
+
     inits = torch.Tensor(1, num_labels).fill_(-10000.).cuda()
     inits[0][start_idx] = 0
 
@@ -120,7 +121,8 @@ def viterbi_decode(unary, transitions, start_idx, end_idx):
             best_tag_id = argmax(next_tag_var)
             backpointers_t.append(best_tag_id)
             viterbi_t.append(next_tag_var[0][best_tag_id])
-        alphas = (torch.cat(viterbi_t) + unary_t).view(1, -1)
+
+        alphas = (torch.stack(viterbi_t, 0) + unary_t).view(1, -1)
         backpointers.append(backpointers_t)
 
     # Transition to STOP_TAG
@@ -314,6 +316,7 @@ class RNNTaggerModel(nn.Module, Tagger):
         probv = self._compute_unary_tb(x, xch)
         preds = []
         if self.crf is True:
+
             for pij, sl in zip(probv, lengths):
                 unary = pij[:sl]
                 viterbi, _ = viterbi_decode(unary, self.transitions, START_IDX, END_IDX)
