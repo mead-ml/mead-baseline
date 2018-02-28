@@ -78,11 +78,8 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
         pg = create_progress_bar(steps)
         for batch_dict in ts:
 
-            fx = self.model.make_input(batch_dict)
-            inputs = fx[:-1]
-            y = fx[-1]
-            lengths = batch_dict['lengths']
-            ids = batch_dict['ids']
+            x, xch, lengths, y, ids = self.model.make_input(batch_dict)
+            inputs = (x, xch, lengths)
             pred = self.model(inputs)
             correct, count, overlaps, golds, guesses = self.process_output(pred, y.data, lengths, ids, None, None)
             total_correct += correct

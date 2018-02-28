@@ -266,6 +266,15 @@ class RNNTaggerModel(nn.Module, Tagger):
         xch = batch_dict['xch']
         y = batch_dict.get('y', None)
         lengths = batch_dict['lengths']
+        ids = batch_dict.get('ids', None)
+        lengths, perm_idx = lengths.sort(0, descending=True)
+        x = x[perm_idx]
+        xch = xch[perm_idx]
+        if y is not None:
+            y = y[perm_idx]
+
+        if ids is not None:
+            ids = ids[perm_idx]
 
         if self.gpu:
             x = x.cuda()
@@ -276,14 +285,13 @@ class RNNTaggerModel(nn.Module, Tagger):
         if y is not None:
             y = torch.autograd.Variable(y.contiguous())
 
-        return torch.autograd.Variable(x), torch.autograd.Variable(xch), lengths, y
+        return torch.autograd.Variable(x), torch.autograd.Variable(xch), lengths, y, ids
 
+    def _compute_unary_tb(self, x, xch, lengths):
 
-    def _compute_unary_tb(self, x, xch):
         batchsz = xch.size(1)
         seqlen = xch.size(0)
 
-        # TBH
         words_over_time = self.char2word(xch.view(seqlen * batchsz, -1)).view(seqlen, batchsz, -1)
 
         if x is not None:
@@ -293,7 +301,11 @@ class RNNTaggerModel(nn.Module, Tagger):
 
         dropped = self.dropout(words_over_time)
         # output = (T, B, H)
-        output, hidden = self.rnn(dropped)
+
+        packed = torch.nn.utils.rnn.pack_padded_sequence(dropped, lengths)
+        output, hidden = self.rnn(packed)
+        output, _ = torch.nn.utils.rnn.pad_packed_sequence(output)
+
         # stack (T x B, H)
         decoded = self.decoder(output.view(output.size(0)*output.size(1), -1))
 
@@ -313,7 +325,7 @@ class RNNTaggerModel(nn.Module, Tagger):
         batchsz = xch.size(1)
         seqlen = xch.size(0)
 
-        probv = self._compute_unary_tb(x, xch)
+        probv = self._compute_unary_tb(x, xch, lengths)
         preds = []
         if self.crf is True:
 
@@ -338,7 +350,7 @@ class RNNTaggerModel(nn.Module, Tagger):
         lengths = input[2]
         tags = input[3]
 
-        probv = self._compute_unary_tb(x, xch)
+        probv = self._compute_unary_tb(x, xch, lengths)
         batch_loss = 0.
         total_tags = 0.
         if self.crf is True:
