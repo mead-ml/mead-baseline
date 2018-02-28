@@ -185,7 +185,7 @@ class RNNTaggerModel(nn.Module, Tagger):
         self.word_ch_embed = nn.Sequential()
         append2seq(self.word_ch_embed, (
             #nn.Dropout(pdrop),
-            pytorch_linear(self.wchsz, self.wchsz, math.sqrt(6./(self.wchsz + self.wchsz))),
+            pytorch_linear(self.wchsz, self.wchsz),
             pytorch_activation("relu")
         ))
 
@@ -223,19 +223,18 @@ class RNNTaggerModel(nn.Module, Tagger):
         model.char_vocab = char_vec.vocab
         model.cembed = pytorch_embedding(char_vec)
         model.dropout = nn.Dropout(pdrop)
-        initv = math.sqrt(6./(model.wchsz + word_dsz + hsz))
-        model.rnn, out_hsz = pytorch_lstm(model.wchsz + word_dsz, hsz, rnntype, nlayers, pdrop, initv)
+        model.rnn, out_hsz = pytorch_lstm(model.wchsz + word_dsz, hsz, rnntype, nlayers, pdrop)
         model.decoder = nn.Sequential()
         if model.proj is True:
             append2seq(model.decoder, (
-                pytorch_linear(out_hsz, hsz, math.sqrt(6./(out_hsz + hsz))),
+                pytorch_linear(out_hsz, hsz),
                 pytorch_activation("tanh"),
                 nn.Dropout(pdrop),
-                pytorch_linear(hsz, len(model.labels), math.sqrt(6./(hsz + len(model.labels))))
+                pytorch_linear(hsz, len(model.labels))
             ))
         else:
             append2seq(model.decoder, (
-                pytorch_linear(out_hsz, len(model.labels), math.sqrt(6./(out_hsz + len(model.labels)))),
+                pytorch_linear(out_hsz, len(model.labels)),
             ))
 
         model.crit = SequenceCriterion(LossFn=nn.CrossEntropyLoss)
