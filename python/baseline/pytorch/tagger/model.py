@@ -301,7 +301,7 @@ class RNNTaggerModel(nn.Module, Tagger):
         dropped = self.dropout(words_over_time)
         # output = (T, B, H)
 
-        packed = torch.nn.utils.rnn.pack_padded_sequence(dropped, lengths)
+        packed = torch.nn.utils.rnn.pack_padded_sequence(dropped, lengths.tolist())
         output, hidden = self.rnn(packed)
         output, _ = torch.nn.utils.rnn.pad_packed_sequence(output)
 
