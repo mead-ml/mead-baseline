@@ -35,7 +35,6 @@ def forward_algorithm(unary, transitions, start_idx, end_idx):
     # Iterate through the sentence
     for unary_t in unary:
         # torch.Size([T, num_labels])
-        #print(unary_t.size())
         alphas_t = []  # The forward variables at this timestep
         for tag in range(num_labels):
             # broadcast the emission score: it is the same regardless of the previous tag
@@ -122,7 +121,11 @@ def viterbi_decode(unary, transitions, start_idx, end_idx):
             backpointers_t.append(best_tag_id)
             viterbi_t.append(next_tag_var[0][best_tag_id])
 
-        alphas = (torch.stack(viterbi_t, 0) + unary_t).view(1, -1)
+        if PYT_MAJOR_VERSION < 0.4:
+            alphas = (torch.cat(viterbi_t) + unary_t).view(1, -1)
+
+        else:
+            alphas = (torch.stack(viterbi_t, 0) + unary_t).view(1, -1)
         backpointers.append(backpointers_t)
 
     # Transition to STOP_TAG
@@ -306,6 +309,7 @@ class RNNTaggerModel(nn.Module, Tagger):
         output, _ = torch.nn.utils.rnn.pad_packed_sequence(output)
 
         # stack (T x B, H)
+        output = self.dropout(output)
         decoded = self.decoder(output.view(output.size(0)*output.size(1), -1))
 
         # back to T x B x H

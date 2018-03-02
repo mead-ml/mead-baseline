@@ -1,8 +1,11 @@
 import torch
 import numpy as np
-from baseline.utils import lookup_sentence
+from baseline.utils import lookup_sentence, get_version
 import torch.autograd
 import torch.nn as nn
+
+
+PYT_MAJOR_VERSION = get_version(torch)
 
 
 def classify_bt(model, batch_time):

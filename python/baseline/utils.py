@@ -17,6 +17,10 @@ def listify(x):
     return [x]
 
 
+def get_version(pkg):
+    s = '.'.join(pkg.__version__.split('.')[:2])
+    return float(s)
+
 def revlut(lut):
     return {v: k for k, v in lut.items()}
 
