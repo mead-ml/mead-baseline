@@ -206,7 +206,7 @@ class RNNTaggerModel(nn.Module, Tagger):
         model.proj = bool(kwargs.get('proj', False))
         model.crf = bool(kwargs.get('crf', False))
         nlayers = int(kwargs.get('layers', 1))
-        rnntype = kwargs.get('rnntype', 'lstm')
+        rnntype = kwargs.get('rnntype', 'blstm')
         model.gpu = False
         print('RNN [%s]' % rnntype)
         wsz = kwargs.get('wsz', 30)
