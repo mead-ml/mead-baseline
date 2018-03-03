@@ -309,7 +309,7 @@ class RNNTaggerModel(nn.Module, Tagger):
         output, _ = torch.nn.utils.rnn.pad_packed_sequence(output)
 
         # stack (T x B, H)
-        output = self.dropout(output)
+        #output = self.dropout(output)
         decoded = self.decoder(output.view(output.size(0)*output.size(1), -1))
 
         # back to T x B x H
