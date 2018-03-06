@@ -220,7 +220,7 @@ def char_word_conv_embeddings(char_vec, filtsz, char_dsz, wsz):
                                 W, strides=[1,1,1,1],
                                 padding="VALID", name="conv")
 
-            activation = tf.nn.relu(tf.nn.bias_add(conv, b), "activation")
+            activation = tf.nn.tanh(tf.nn.bias_add(conv, b), "activation")
 
             mot = tf.reduce_max(activation, [1], keep_dims=True)
             # Add back in the dropout

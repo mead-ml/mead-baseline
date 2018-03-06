@@ -177,7 +177,7 @@ class RNNTaggerModel(nn.Module, Tagger):
             pad = fsz//2
             conv = nn.Sequential(
                 pytorch_conv1d(char_dsz, wchsz, fsz, math.sqrt(3./wchsz), padding=pad),
-                pytorch_activation("relu")
+                pytorch_activation("tanh")
             )
             self.char_convs.append(conv)
             # Add the module so its managed correctly
