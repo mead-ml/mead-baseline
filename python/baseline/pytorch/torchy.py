@@ -155,6 +155,8 @@ def pytorch_conv1d(in_channels, out_channels, fsz, unif=0, padding=0):
     c = nn.Conv1d(in_channels, out_channels, fsz, padding=padding)
     if unif > 0:
         c.weight.data.uniform_(-unif, unif)
+    else:
+        torch.nn.init.xavier_uniform(c.weight)
     return c
 
 
@@ -162,6 +164,8 @@ def pytorch_linear(in_sz, out_sz, unif=0):
     l = nn.Linear(in_sz, out_sz)
     if unif > 0:
         l.weight.data.uniform_(-unif, unif)
+    else:
+        torch.nn.init.xavier_uniform(l.weight)
     l.bias.data.zero_()
     return l
 
@@ -172,6 +176,7 @@ def pytorch_rnn(insz, hsz, rnntype, nlayers, dropout):
         rnn = torch.nn.GRU(insz, hsz, nlayers, dropout=dropout)
     else:
         rnn = torch.nn.LSTM(insz, hsz, nlayers, dropout=dropout)
+
     return rnn
 
 
@@ -198,8 +203,38 @@ def pytorch_lstm(insz, hsz, rnntype, nlayers, dropout, unif=0, batch_first=False
     if unif > 0:
         for weight in rnn.parameters():
             weight.data.uniform_(-unif, unif)
-    #rnn.bias.zero_()
+    else:
+        nn.init.xavier_uniform(rnn.weight_hh_l0)
+        nn.init.xavier_uniform(rnn.weight_ih_l0)
+
     return rnn, ndir*hsz
+
+
+def pytorch_prepare_optimizer(model, **kwargs):
+
+    mom = kwargs.get('mom', 0.9)
+    optim = kwargs.get('optim', 'sgd')
+    eta = kwargs.get('eta', kwargs.get('lr', 0.01))
+    decay_rate = float(kwargs.get('decay_rate', 0.0))
+    decay_type = kwargs.get('decay_type', None)
+
+    if optim == 'adadelta':
+        optimizer = torch.optim.Adadelta(model.parameters(), lr=eta)
+    elif optim == 'adam':
+        optimizer = torch.optim.Adam(model.parameters(), lr=eta)
+    elif optim == 'rmsprop':
+        optimizer = torch.optim.RMSprop(model.parameters(), lr=eta)
+    elif optim == 'asgd':
+        optimizer = torch.optim.ASGD(model.parameters(), lr=eta)
+    else:
+        optimizer = torch.optim.SGD(model.parameters(), lr=eta, momentum=mom)
+
+    scheduler = None
+    if decay_rate > 0.0 and decay_type is not None:
+        if decay_type == 'invtime':
+            scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1, gamma=decay_rate)
+
+    return optimizer, scheduler
 
 
 def append2seq(seq, modules):

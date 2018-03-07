@@ -176,7 +176,7 @@ class RNNTaggerModel(nn.Module, Tagger):
         for fsz in filtsz:
             pad = fsz//2
             conv = nn.Sequential(
-                pytorch_conv1d(char_dsz, wchsz, fsz, math.sqrt(3./wchsz), padding=pad),
+                pytorch_conv1d(char_dsz, wchsz, fsz, padding=pad),
                 pytorch_activation("tanh")
             )
             self.char_convs.append(conv)
@@ -255,12 +255,10 @@ class RNNTaggerModel(nn.Module, Tagger):
             # In Conv1d, data BxCxT, max over time
             mot, _ = conv(char_vecs).max(2)
             mots.append(mot)
-            #  Not required/working in latest pytorch
-            #mots.append(mot.squeeze(2))
 
         mots = torch.cat(mots, 1)
         output = self.word_ch_embed(mots)
-        return output + mots
+        return mots + output
 
     def make_input(self, batch_dict):
 

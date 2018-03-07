@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.autograd import Variable
+from baseline.pytorch.torchy import pytorch_prepare_optimizer
 import numpy as np
 from baseline.progress import create_progress_bar
 from baseline.reporting import basic_reporting
@@ -16,21 +17,8 @@ class Seq2SeqTrainerPyTorch(Trainer):
         super(Seq2SeqTrainerPyTorch, self).__init__()
         self.steps = 0
         self.gpu = bool(kwargs.get('gpu', True))
-        optim = kwargs.get('optim', 'adam')
-        eta = float(kwargs.get('eta', 0.01))
-        mom = float(kwargs.get('mom', 0.9))
         self.clip = float(kwargs.get('clip', 5))
-
-        if optim == 'adadelta':
-            self.optimizer = torch.optim.Adadelta(model.parameters(), lr=eta)
-        elif optim == 'adam':
-            self.optimizer = torch.optim.Adam(model.parameters(), lr=eta)
-        elif optim == 'rmsprop':
-            self.optimizer = torch.optim.RMSprop(model.parameters(), lr=eta)
-        elif optim == 'asgd':
-            self.optimizer = torch.optim.ASGD(model.parameters(), lr=eta)
-        else:
-            self.optimizer = torch.optim.SGD(model.parameters(), lr=eta, momentum=mom)
+        self.optimizer, self.scheduler = pytorch_prepare_optimizer(self.model, **kwargs)
         self.model = model
         self._input = model.make_input
         self.crit = model.create_loss()
@@ -78,6 +66,9 @@ class Seq2SeqTrainerPyTorch(Trainer):
 
         total_loss = total = 0
         duration = 0
+        if self.scheduler is not None:
+            self.scheduler.step()
+
         for batch_dict in ts:
 
             start_time = time.time()

@@ -10,23 +10,10 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
     def __init__(self, model, **kwargs):
         super(TaggerTrainerPyTorch, self).__init__()
         self.gpu = not bool(kwargs.get('nogpu', False))
-        optim = kwargs.get('optim', 'adam')
-        eta = float(kwargs.get('eta', 0.01))
-        mom = float(kwargs.get('mom', 0.9))
-        self.clip = float(kwargs.get('clip', 5))
         self.model = model
         self.idx2label = revlut(self.model.labels)
-        if optim == 'adadelta':
-            self.optimizer = torch.optim.Adadelta(model.parameters(), lr=eta)
-        elif optim == 'adam':
-            self.optimizer = torch.optim.Adam(model.parameters(), lr=eta)
-        elif optim == 'rmsprop':
-            self.optimizer = torch.optim.RMSprop(model.parameters(), lr=eta)
-        elif optim == 'asgd':
-            self.optimizer = torch.optim.ASGD(model.parameters(), lr=eta)
-        else:
-            self.optimizer = torch.optim.SGD(model.parameters(), lr=eta, momentum=mom)
-
+        self.clip = float(kwargs.get('clip', 5))
+        self.optimizer, self.scheduler = pytorch_prepare_optimizer(self.model, **kwargs)
         if self.gpu:
             self.model = model.to_gpu()
 
@@ -101,6 +88,9 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
         total_loss = 0
         metrics = {}
         steps = len(ts)
+        if self.scheduler is not None:
+            self.scheduler.step()
+            #print(self.optimizer.param_groups[0]['lr'])
         pg = create_progress_bar(steps)
         for batch_dict in ts:
 
