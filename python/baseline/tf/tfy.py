@@ -177,12 +177,12 @@ def show_examples_tf(model, es, rlut1, rlut2, embed2, mxlen, sample, prob_clip, 
         print('------------------------------------------------------------------------')
 
 
-def skip_conns(inputs, wsz_all, n):
+def skip_conns(inputs, wsz_all, n, activation_fn=tf.nn.relu):
     for i in range(n):
         with tf.variable_scope("skip-%d" % i):
             W_p = tf.get_variable("W_p", [wsz_all, wsz_all])
             b_p = tf.get_variable("B_p", [1, wsz_all], initializer=tf.constant_initializer(0.0))
-            proj = tf.nn.relu(tf.matmul(inputs, W_p) + b_p, "relu")
+            proj = activation_fn(tf.matmul(inputs, W_p) + b_p, "skip_activation")
 
         inputs = inputs + proj
     return inputs
@@ -203,7 +203,7 @@ def highway_conns(inputs, wsz_all, n):
     return inputs
 
 
-def char_word_conv_embeddings(char_vec, filtsz, char_dsz, wsz):
+def char_word_conv_embeddings(char_vec, filtsz, char_dsz, wsz, activation_fn=tf.nn.tanh):
 
     expanded = tf.expand_dims(char_vec, -1)
     mots = []
@@ -217,10 +217,10 @@ def char_word_conv_embeddings(char_vec, filtsz, char_dsz, wsz):
             b = tf.get_variable("b", [wsz], initializer=tf.constant_initializer(0.0))
 
             conv = tf.nn.conv2d(expanded,
-                                W, strides=[1,1,1,1],
+                                W, strides=[1, 1, 1, 1],
                                 padding="VALID", name="conv")
 
-            activation = tf.nn.tanh(tf.nn.bias_add(conv, b), "activation")
+            activation = activation_fn(tf.nn.bias_add(conv, b), "activation")
 
             mot = tf.reduce_max(activation, [1], keep_dims=True)
             # Add back in the dropout
@@ -233,6 +233,13 @@ def char_word_conv_embeddings(char_vec, filtsz, char_dsz, wsz):
     joined = skip_conns(combine, wsz_all, 1)
     return joined
 
+
+def tf_activation(name):
+    if name == "tanh":
+            return tf.nn.tanh
+    if name == "sigmoid":
+        return tf.nn.sigmoid
+    return tf.nn.relu
 
 
 def char_word_conv_embeddings_var_fm(char_vec, filtsz, char_dsz, nfeat_factor, max_feat=200):

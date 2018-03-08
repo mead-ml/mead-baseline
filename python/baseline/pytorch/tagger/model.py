@@ -177,7 +177,7 @@ class RNNTaggerModel(nn.Module, Tagger):
             pad = fsz//2
             conv = nn.Sequential(
                 pytorch_conv1d(char_dsz, wchsz, fsz, padding=pad),
-                pytorch_activation("tanh")
+                pytorch_activation(self.activation_type)
             )
             self.char_convs.append(conv)
             # Add the module so its managed correctly
@@ -189,7 +189,7 @@ class RNNTaggerModel(nn.Module, Tagger):
         append2seq(self.word_ch_embed, (
             #nn.Dropout(pdrop),
             pytorch_linear(self.wchsz, self.wchsz),
-            pytorch_activation("relu")
+            pytorch_activation(self.activation_type)
         ))
 
     def __init__(self):
@@ -205,15 +205,14 @@ class RNNTaggerModel(nn.Module, Tagger):
         hsz = int(kwargs['hsz'])
         model.proj = bool(kwargs.get('proj', False))
         model.crf = bool(kwargs.get('crf', False))
+        model.activation_type = kwargs.get('activation', 'tanh')
         nlayers = int(kwargs.get('layers', 1))
         rnntype = kwargs.get('rnntype', 'blstm')
         model.gpu = False
         print('RNN [%s]' % rnntype)
         wsz = kwargs.get('wsz', 30)
         filtsz = kwargs.get('cfiltsz')
-        if model.crf:
-            weights = torch.Tensor(len(labels), len(labels)).zero_()
-            model.transitions = nn.Parameter(weights)
+
         pdrop = float(kwargs.get('dropout', 0.5))
         model.labels = labels
         model._char_word_conv_embeddings(filtsz, char_dsz, wsz, pdrop)
@@ -231,7 +230,7 @@ class RNNTaggerModel(nn.Module, Tagger):
         if model.proj is True:
             append2seq(model.decoder, (
                 pytorch_linear(out_hsz, hsz),
-                pytorch_activation("tanh"),
+                pytorch_activation(model.activation_type),
                 nn.Dropout(pdrop),
                 pytorch_linear(hsz, len(model.labels))
             ))
@@ -240,6 +239,9 @@ class RNNTaggerModel(nn.Module, Tagger):
                 pytorch_linear(out_hsz, len(model.labels)),
             ))
 
+        if model.crf:
+            weights = torch.Tensor(len(labels), len(labels)).zero_()
+            model.transitions = nn.Parameter(weights)
         model.crit = SequenceCriterion(LossFn=nn.CrossEntropyLoss)
         return model
 

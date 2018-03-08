@@ -194,6 +194,8 @@ class RNNTaggerModel(Tagger):
         model.labels = labels
         model.crf = bool(kwargs.get('crf', False))
         model.proj = bool(kwargs.get('proj', False))
+        model.activation_type = kwargs.get('activation', 'tanh')
+
         char_dsz = char_vec.dsz
         nc = len(labels)
         model.x = kwargs.get('x', tf.placeholder(tf.int32, [None, model.mxlen], name="x"))
@@ -244,7 +246,8 @@ class RNNTaggerModel(Tagger):
 
             with tf.contrib.slim.arg_scope([fully_connected], weights_initializer=init):
                 if model.proj is True:
-                    hidden = tf.nn.dropout(fully_connected(rnnout_bt_x_h, hsz, activation_fn=tf.nn.tanh), model.pkeep)
+                    hidden = tf.nn.dropout(fully_connected(rnnout_bt_x_h, hsz,
+                                                           activation_fn=tf_activation(model.activation_type)), model.pkeep)
                     preds = fully_connected(hidden, nc, activation_fn=None, weights_initializer=init)
                 else:
                     preds = fully_connected(rnnout_bt_x_h, nc, activation_fn=None, weights_initializer=init)
@@ -263,7 +266,8 @@ class RNNTaggerModel(Tagger):
                 halffiltsz = mxfiltsz // 2
                 zeropad = tf.pad(rnnchar_bt_x_w, [[0, 0], [halffiltsz, halffiltsz]], "CONSTANT")
                 cembed = tf.nn.embedding_lookup(Wch, zeropad, name="embeddings")
-                cmot = char_word_conv_embeddings(cembed, filtsz, char_dsz, wsz)
+                cmot = char_word_conv_embeddings(cembed, filtsz, char_dsz, wsz,
+                                                 activation_fn=tf_activation(model.activation_type))
                 word_char = tf.reshape(cmot, [-1, model.mxlen, len(filtsz) * wsz])
 
         return word_char
