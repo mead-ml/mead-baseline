@@ -194,6 +194,7 @@ class RNNTaggerModel(Tagger):
         model.labels = labels
         model.crf = bool(kwargs.get('crf', False))
         model.proj = bool(kwargs.get('proj', False))
+        model.feed_input = bool(kwargs.get('feed_input', False))
         model.activation_type = kwargs.get('activation', 'tanh')
 
         char_dsz = char_vec.dsz
@@ -231,15 +232,18 @@ class RNNTaggerModel(Tagger):
             rnnout, _ = tf.nn.bidirectional_dynamic_rnn(rnnfwd, rnnbwd, embedseq, sequence_length=model.lengths, dtype=tf.float32)
             # The output of the BRNN function needs to be joined on the H axis
             rnnout = tf.concat(axis=2, values=rnnout)
+        elif rnntype == 'cnn':
+            rnnout = stacked_cnn(embedseq, hsz, model.pkeep, nlayers)
         else:
             rnnfwd = stacked_lstm(hsz, model.pkeep, nlayers)
             rnnout, _ = tf.nn.dynamic_rnn(rnnfwd, embedseq, sequence_length=model.lengths, dtype=tf.float32)
 
         with tf.variable_scope("output"):
+            if model.feed_input is True:
+                rnnout = tf.concat(axis=2, values=[rnnout, embedseq])
+
             # Converts seq to tensor, back to (B,T,W)
-            hout = hsz
-            if rnntype == 'blstm':
-                hout *= 2
+            hout = rnnout.get_shape()[-1]
             # Flatten from [B x T x H] - > [BT x H]
             rnnout_bt_x_h = tf.reshape(rnnout, [-1, hout])
             init = xavier_initializer(True, seed)

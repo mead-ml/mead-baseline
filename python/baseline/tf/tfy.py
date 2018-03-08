@@ -115,6 +115,15 @@ def stacked_lstm(hsz, pkeep, nlayers):
     return tf.contrib.rnn.MultiRNNCell([lstm_cell_w_dropout(hsz, pkeep) for _ in range(nlayers)], state_is_tuple=True)
 
 
+def stacked_cnn(inputs, hsz, pkeep, nlayers, activation_fn=tf.nn.relu):
+    with tf.variable_scope("StackedCNN"):
+        layer = tf.nn.dropout(tf.layers.conv1d(inputs, hsz, 5, activation=activation_fn, padding="same", reuse=False), pkeep)
+
+        for i in range(1, nlayers):
+            layer = layer + tf.nn.dropout(tf.layers.conv1d(inputs, hsz, 5, activation=activation_fn, padding="same", reuse=False), pkeep)
+        return layer
+
+
 def rnn_cell_w_dropout(hsz, pkeep, rnntype, st=None):
     if st is not None:
         cell = tf.contrib.rnn.BasicLSTMCell(hsz, state_is_tuple=st) if rnntype.endswith('lstm') else tf.contrib.rnn.GRUCell(hsz)
