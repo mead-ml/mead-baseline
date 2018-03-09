@@ -58,8 +58,7 @@ python tag_char_rnn.py \
 
 ## Status
 
-This model is implemented in TensorFlow and PyTorch (there is an old version in Torch7, which is no longer supported). The PyTorch CRF implementation is still experimental.
-
+This model is implemented in TensorFlow and PyTorch (there is an old version in Torch7, which is no longer supported).
 
 ### Latest Runs
 
