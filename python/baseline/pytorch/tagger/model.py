@@ -270,6 +270,14 @@ class RNNTaggerModel(nn.Module, Tagger):
         y = batch_dict.get('y', None)
         lengths = batch_dict['lengths']
         ids = batch_dict.get('ids', None)
+
+        if self.training and self.pdropin_value > 0.0:
+            UNK = self.word_vocab['<UNK>']
+            PAD = self.word_vocab['<PAD>']
+            mask_pad = x != PAD
+            mask_drop = x.new(x.size(0), x.size(1)).bernoulli_(self.pdropin_value).byte()
+            x.masked_fill_(mask_pad & mask_drop, UNK)
+        
         lengths, perm_idx = lengths.sort(0, descending=True)
         x = x[perm_idx]
         xch = xch[perm_idx]
