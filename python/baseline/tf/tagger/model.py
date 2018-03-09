@@ -233,7 +233,10 @@ class RNNTaggerModel(Tagger):
             # The output of the BRNN function needs to be joined on the H axis
             rnnout = tf.concat(axis=2, values=rnnout)
         elif rnntype == 'cnn':
-            rnnout = stacked_cnn(embedseq, hsz, model.pkeep, nlayers)
+            filts = kwargs.get('wfiltsz', None)
+            if filts is None:
+                filts = [5]
+            rnnout = stacked_cnn(embedseq, hsz, model.pkeep, nlayers, filts=filts)
         else:
             rnnfwd = stacked_lstm(hsz, model.pkeep, nlayers)
             rnnout, _ = tf.nn.dynamic_rnn(rnnfwd, embedseq, sequence_length=model.lengths, dtype=tf.float32)

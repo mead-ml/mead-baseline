@@ -115,13 +115,17 @@ def stacked_lstm(hsz, pkeep, nlayers):
     return tf.contrib.rnn.MultiRNNCell([lstm_cell_w_dropout(hsz, pkeep) for _ in range(nlayers)], state_is_tuple=True)
 
 
-def stacked_cnn(inputs, hsz, pkeep, nlayers, activation_fn=tf.nn.relu):
+def stacked_cnn(inputs, hsz, pkeep, nlayers, activation_fn=tf.nn.relu, filts=[5]):
     with tf.variable_scope("StackedCNN"):
-        layer = tf.nn.dropout(tf.layers.conv1d(inputs, hsz, 5, activation=activation_fn, padding="same", reuse=False), pkeep)
+        layers = []
+        for filt in filts:
+            layer = tf.nn.dropout(tf.layers.conv1d(inputs, hsz, filt, activation=activation_fn, padding="same", reuse=False), pkeep)
 
-        for i in range(1, nlayers):
-            layer = layer + tf.nn.dropout(tf.layers.conv1d(inputs, hsz, 5, activation=activation_fn, padding="same", reuse=False), pkeep)
-        return layer
+            for i in range(1, nlayers):
+                layer = layer + tf.nn.dropout(tf.layers.conv1d(inputs, hsz, 5, activation=activation_fn, padding="same", reuse=False), pkeep)
+            layers += [layer]
+
+        return tf.concat(values=layers, axis=2)
 
 
 def rnn_cell_w_dropout(hsz, pkeep, rnntype, st=None):
