@@ -216,6 +216,7 @@ class SeqPredictReader(object):
         extracted = self.read_lines(filename)
         texts = extracted['texts']
         labels = extracted['labels']
+        words_vocab["<UNK>"] = 1
         for i in range(len(texts)):
 
             xs_ch = self.vec_alloc((mxlen, maxw), dtype=np.int)

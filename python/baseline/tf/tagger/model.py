@@ -43,6 +43,12 @@ class RNNTaggerModel(Tagger):
         lengths = batch_dict['lengths']
 
         pkeep = 1.0-self.pdrop_value if do_dropout else 1.0
+
+        if do_dropout and self.pdropin_value > 0.0:
+            UNK = self.word_vocab['<UNK>']
+            PAD = self.word_vocab['<PAD>']
+            drop_indices = np.where((np.random.random(x.shape) < self.pdropin_value) & (x != PAD))
+            x[drop_indices[0], drop_indices[1]] = UNK
         feed_dict = {self.x: x, self.xch: xch, self.lengths: lengths, self.pkeep: pkeep}
         if y is not None:
             feed_dict[self.y] = y
@@ -189,6 +195,8 @@ class RNNTaggerModel(Tagger):
 
         hsz = int(kwargs['hsz'])
         pdrop = kwargs.get('dropout', 0.5)
+        pdrop_in = kwargs.get('dropin', 0.0)
+        print('DROPIN', pdrop_in)
         rnntype = kwargs.get('rnntype', 'blstm')
         nlayers = kwargs.get('layers', 1)
         model.labels = labels
@@ -205,6 +213,7 @@ class RNNTaggerModel(Tagger):
         model.lengths = kwargs.get('lengths', tf.placeholder(tf.int32, [None], name="lengths"))
         model.pkeep = kwargs.get('pkeep', tf.placeholder(tf.float32, name="pkeep"))
         model.pdrop_value = pdrop
+        model.pdropin_value = pdrop_in
         model.word_vocab = {}
         if word_vec is not None:
             model.word_vocab = word_vec.vocab

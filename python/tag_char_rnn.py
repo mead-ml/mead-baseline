@@ -12,6 +12,7 @@ parser.add_argument('--start_decay_epoch', type=int, help='At what epoch should 
 parser.add_argument('--decay_rate', default=0.0, type=float, help='Learning rate decay')
 parser.add_argument('--decay_type', help='What learning rate decay schedule')
 parser.add_argument('--dropout', default=0.5, help='Dropout probability', type=float)
+parser.add_argument('--dropin', default=0.0, help='Probability of dropping input', type=float)
 parser.add_argument('--train', help='Training file', required=True)
 parser.add_argument('--valid', help='Validation file')
 parser.add_argument('--test', help='Test file', required=True)
