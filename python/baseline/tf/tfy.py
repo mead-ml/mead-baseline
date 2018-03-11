@@ -122,7 +122,7 @@ def stacked_cnn(inputs, hsz, pkeep, nlayers, activation_fn=tf.nn.relu, filts=[5]
             layer = tf.nn.dropout(tf.layers.conv1d(inputs, hsz, filt, activation=activation_fn, padding="same", reuse=False), pkeep)
 
             for i in range(1, nlayers):
-                layer = layer + tf.nn.dropout(tf.layers.conv1d(inputs, hsz, 5, activation=activation_fn, padding="same", reuse=False), pkeep)
+                layer = layer + tf.nn.dropout(tf.layers.conv1d(inputs, hsz, filt, activation=activation_fn, padding="same", reuse=False), pkeep)
             layers += [layer]
 
         return tf.concat(values=layers, axis=2)

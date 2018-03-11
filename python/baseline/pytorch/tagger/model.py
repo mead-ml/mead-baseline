@@ -277,7 +277,7 @@ class RNNTaggerModel(nn.Module, Tagger):
             mask_pad = x != PAD
             mask_drop = x.new(x.size(0), x.size(1)).bernoulli_(self.pdropin_value).byte()
             x.masked_fill_(mask_pad & mask_drop, UNK)
-        
+
         lengths, perm_idx = lengths.sort(0, descending=True)
         x = x[perm_idx]
         xch = xch[perm_idx]
