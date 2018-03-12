@@ -51,7 +51,8 @@ python tag_char_rnn.py \
     --test  ../data/eng.testb \
     --lower 1 \
     --embed /data/embeddings/glove.6B.100d.txt \
-    --cfiltsz 3 --wsz 30 --crf 1
+    --dropin 0.1 \
+    --cfiltsz 3 --wsz 30 --charsz 30 --crf 1
 
 ```
 
