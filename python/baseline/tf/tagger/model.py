@@ -196,7 +196,6 @@ class RNNTaggerModel(Tagger):
         hsz = int(kwargs['hsz'])
         pdrop = kwargs.get('dropout', 0.5)
         pdrop_in = kwargs.get('dropin', 0.0)
-        print('DROPIN', pdrop_in)
         rnntype = kwargs.get('rnntype', 'blstm')
         nlayers = kwargs.get('layers', 1)
         model.labels = labels
