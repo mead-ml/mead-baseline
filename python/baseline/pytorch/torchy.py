@@ -156,7 +156,7 @@ def pytorch_conv1d(in_channels, out_channels, fsz, unif=0, padding=0):
     if unif > 0:
         c.weight.data.uniform_(-unif, unif)
     else:
-        torch.nn.init.xavier_uniform(c.weight)
+        torch.nn.init.orthogonal(c.weight)
     return c
 
 
@@ -165,7 +165,7 @@ def pytorch_linear(in_sz, out_sz, unif=0):
     if unif > 0:
         l.weight.data.uniform_(-unif, unif)
     else:
-        torch.nn.init.xavier_uniform(l.weight)
+        torch.nn.init.orthogonal(l.weight)
     l.bias.data.zero_()
     return l
 
@@ -204,8 +204,8 @@ def pytorch_lstm(insz, hsz, rnntype, nlayers, dropout, unif=0, batch_first=False
         for weight in rnn.parameters():
             weight.data.uniform_(-unif, unif)
     else:
-        nn.init.xavier_uniform(rnn.weight_hh_l0)
-        nn.init.xavier_uniform(rnn.weight_ih_l0)
+        nn.init.orthogonal(rnn.weight_hh_l0)
+        nn.init.orthogonal(rnn.weight_ih_l0)
 
     return rnn, ndir*hsz
 
