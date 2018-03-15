@@ -142,6 +142,8 @@ def pytorch_embedding(x2vec, finetune=True):
 def pytorch_activation(name="relu"):
     if name == "tanh":
         return nn.Tanh()
+    if name == "hardtanh":
+        return nn.Hardtanh()
     if name == "prelu":
         return nn.PReLU()
     if name == "sigmoid":
@@ -151,21 +153,30 @@ def pytorch_activation(name="relu"):
     return nn.ReLU()
 
 
-def pytorch_conv1d(in_channels, out_channels, fsz, unif=0, padding=0):
+def pytorch_conv1d(in_channels, out_channels, fsz, unif=0, padding=0, initializer=None):
     c = nn.Conv1d(in_channels, out_channels, fsz, padding=padding)
     if unif > 0:
         c.weight.data.uniform_(-unif, unif)
+    elif initializer == "ortho":
+        nn.init.orthogonal(c.weight)
+    elif initializer == "he" or initializer == "kaiming":
+        nn.init.kaiming_uniform(c.weight)
     else:
-        torch.nn.init.orthogonal(c.weight)
+        nn.init.xavier_uniform(c.weight)
     return c
 
 
-def pytorch_linear(in_sz, out_sz, unif=0):
+def pytorch_linear(in_sz, out_sz, unif=0, initializer=None):
     l = nn.Linear(in_sz, out_sz)
     if unif > 0:
         l.weight.data.uniform_(-unif, unif)
+    elif initializer == "ortho":
+        nn.init.orthogonal(l.weight)
+    elif initializer == "he" or initializer == "kaiming":
+        nn.init.kaiming_uniform(l.weight)
     else:
-        torch.nn.init.orthogonal(l.weight)
+        nn.init.xavier_uniform(l.weight)
+
     l.bias.data.zero_()
     return l
 
@@ -196,16 +207,22 @@ class Highway(nn.Module):
         return gated
 
 
-def pytorch_lstm(insz, hsz, rnntype, nlayers, dropout, unif=0, batch_first=False):
+def pytorch_lstm(insz, hsz, rnntype, nlayers, dropout, unif=0, batch_first=False, initializer=None):
     ndir = 2 if rnntype.startswith('b') else 1
     #print('ndir: %d, rnntype: %s, nlayers: %d, dropout: %.2f, unif: %.2f' % (ndir, rnntype, nlayers, dropout, unif))
     rnn = torch.nn.LSTM(insz, hsz, nlayers, dropout=dropout, bidirectional=True if ndir > 1 else False, batch_first=batch_first)#, bias=False)
     if unif > 0:
         for weight in rnn.parameters():
             weight.data.uniform_(-unif, unif)
-    else:
+    elif initializer == "ortho":
         nn.init.orthogonal(rnn.weight_hh_l0)
         nn.init.orthogonal(rnn.weight_ih_l0)
+    elif initializer == "he" or initializer == "kaiming":
+        nn.init.kaiming_uniform(rnn.weight_hh_l0)
+        nn.init.kaiming_uniform(rnn.weight_ih_l0)
+    else:
+        nn.init.xavier_uniform(rnn.weight_hh_l0)
+        nn.init.xavier_uniform(rnn.weight_ih_l0)
 
     return rnn, ndir*hsz
 
