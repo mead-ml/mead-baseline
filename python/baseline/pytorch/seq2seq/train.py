@@ -18,8 +18,8 @@ class Seq2SeqTrainerPyTorch(Trainer):
         self.steps = 0
         self.gpu = bool(kwargs.get('gpu', True))
         self.clip = float(kwargs.get('clip', 5))
-        self.optimizer, self.scheduler = pytorch_prepare_optimizer(self.model, **kwargs)
         self.model = model
+        self.optimizer, self.scheduler = pytorch_prepare_optimizer(self.model, **kwargs)
         self._input = model.make_input
         self.crit = model.create_loss()
         if self.gpu:
