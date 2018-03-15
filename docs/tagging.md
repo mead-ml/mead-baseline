@@ -31,8 +31,6 @@ python tag_char_rnn.py --rnntype blstm --optim sgd --wsz 30 --eta 0.01 \
 
 To run with PyTorch, just pass `--backend pytorch`
 
-If you want to use only the convolutional filter word vectors (and no word embeddings), just remove the -embed line above.
-
 ### NER (and other IOB-type) Tagging
 
 NER tagging can be performed with a BLSTM, and optionally, a top level CRF. This will report an F1 score on at each validation pass, and will use F1 for early-stopping as well.
