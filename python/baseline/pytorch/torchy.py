@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from baseline.utils import lookup_sentence, get_version
+from baseline.utils import lookup_sentence, get_version, revlut
 import torch.autograd
 import torch.nn as nn
 
@@ -285,6 +285,96 @@ def long_tensor_alloc(dims, dtype=None):
     return torch.LongTensor(*dims)
 
 
+def prepare_src(model, tokens, mxlen=100):
+    src_vocab = model.get_src_vocab()
+    length = min(len(tokens), mxlen)
+    x = torch.LongTensor(length).zero_()
+
+    for j in range(length):
+        word = tokens[j]
+        if word not in src_vocab:
+            if word != '':
+                print(word)
+                idx = 0
+        else:
+            idx = src_vocab[word]
+        x[j] = idx
+    return torch.autograd.Variable(x.view(-1, 1))
+
+
+def beam_decode(model, src, K):
+    with torch.no_grad():
+        T = src.size(1)
+        # Transpose in here?
+        context, h_i = model.encode(src)
+        dst_vocab = model.get_dst_vocab()
+        GO = dst_vocab['<GO>']
+        EOS = dst_vocab['<EOS>']
+
+        paths = [[GO] for _ in range(K)]
+        # K
+        scores = torch.FloatTensor([0. for _ in range(K)])
+        if src.is_cuda:
+            scores = scores.cuda()
+        # TBH
+        context = torch.autograd.Variable(context.data.repeat(1, K, 1))
+        h_i = (torch.autograd.Variable(h_i[0].data.repeat(1, K, 1)), torch.autograd.Variable(h_i[1].data.repeat(1, K, 1)))
+        h_i, dec_out = model.bridge(h_i, context)
+
+        for i in range(T):
+            lst = [path[-1] for path in paths]
+            dst = torch.LongTensor(lst).type(src.type())
+            mask_eos = dst == EOS
+            mask_pad = dst == 0
+            dst = dst.view(1, K)
+            var = torch.autograd.Variable(dst)
+            dec_out, h_i = model.decode_rnn(context, h_i, dec_out, var)
+            # 1 x K x V
+            wll = model.prediction(dec_out).data
+            # Just mask wll against end data
+            V = wll.size(-1)
+            dec_out = dec_out.squeeze(0)  # get rid of T=t dimension
+            # K x V
+            wll = wll.squeeze(0)  # get rid of T=t dimension
+
+            if i > 0:
+                expanded_history = scores.unsqueeze(1).expand_as(wll)
+                wll.masked_fill_(mask_eos | mask_pad, 0)
+                sll = wll + expanded_history
+            else:
+                sll = wll[0]
+
+            flat_sll = sll.view(-1)
+            best, best_idx = flat_sll.squeeze().topk(K, 0)
+            best_beams = best_idx / V
+            best_idx = best_idx % V
+            new_paths = []
+            for j, beam_id in enumerate(best_beams):
+                new_paths.append(paths[beam_id] + [best_idx[j]])
+                scores[j] = best[j]
+
+            # Copy the beam state of the winners
+            for hc in h_i:  # iterate over h, c
+                old_beam_state = hc.clone()
+                for i, beam_id in enumerate(best_beams):
+                    H = hc.size(2)
+                    src_beam = old_beam_state.view(-1, K, H)[:, beam_id]
+                    dst_beam = hc.view(-1, K, H)[:, i]
+                    dst_beam.data.copy_(src_beam.data)
+            paths = new_paths
+
+        return paths, scores
+
+
+def beam_decode_tokens(model, src_tokens, K, idx2word, mxlen=50):
+    src = prepare_src(model, src_tokens, mxlen)
+    paths, scores = beam_decode(model, src, K)
+    path_str = []
+    for j, path in enumerate(paths):
+        path_str.append([idx2word[i] for i in path])
+    return path_str, scores
+    #return beam_decode(model, src, K)
+
 # Mashed together from code using numpy only, hacked for th Tensors
 # This function should never be used for decoding.  It exists only so that the training model can greedily decode
 # It is super slow and doesnt use maintain a beam of hypotheses
@@ -296,7 +386,6 @@ def show_examples_pytorch(model, es, rlut1, rlut2, embed2, mxlen, sample, prob_c
     src_array = batch_dict['src']
     tgt_array = batch_dict['dst']
     src_len = batch_dict['src_len']
-    #src_array, tgt_array, src_len, _ = es[si]
 
     if max_examples > 0:
         max_examples = min(max_examples, src_array.size(0))
@@ -304,13 +393,10 @@ def show_examples_pytorch(model, es, rlut1, rlut2, embed2, mxlen, sample, prob_c
         tgt_array = tgt_array[0:max_examples]
         src_len = src_len[0:max_examples]
 
-    GO = embed2.vocab['<GO>']
-    EOS = embed2.vocab['<EOS>']
-
     # TODO: fix this, check for GPU first
     src_array = src_array.cuda()
     
-    for src_len,src_i,tgt_i in zip(src_len, src_array, tgt_array):
+    for src_len, src_i, tgt_i in zip(src_len, src_array, tgt_array):
 
         print('========================================================================')
 
@@ -318,33 +404,8 @@ def show_examples_pytorch(model, es, rlut1, rlut2, embed2, mxlen, sample, prob_c
         print('[OP] %s' % sent)
         sent = lookup_sentence(rlut2, tgt_i)
         print('[Actual] %s' % sent)
-        dst_i = torch.zeros(1, mxlen).long()
-        #if use_gpu:
-        dst_i = dst_i.cuda()
 
-        next_value = GO
-        src_i = src_i.view(1, -1)
-        for j in range(mxlen):
-            dst_i[0,j] = next_value
-            probv = model((torch.autograd.Variable(src_i), torch.autograd.Variable(dst_i)))
-            output = probv.squeeze()[j]
-            if sample is False:
-                _, next_value = torch.max(output, 0)
-                next_value = int(next_value.data[0])
-            else:
-                probs = output.data.exp()
-                # This is going to zero out low prob. events so they are not
-                # sampled from
-                best, ids = probs.topk(prob_clip, 0, largest=True, sorted=True)
-                probs.zero_()
-                probs.index_copy_(0, ids, best)
-                probs.div_(torch.sum(probs))
-                fv = torch.multinomial(probs, 1)[0]
-                next_value = fv
-
-            if next_value == EOS:
-                break
-
-        sent = lookup_sentence(rlut2, dst_i.squeeze())
+        dst_i, scores = beam_decode(model, torch.autograd.Variable(src_i.view(1, -1), requires_grad=False), 1)
+        sent = lookup_sentence(rlut2, dst_i[0])
         print('Guess: %s' % sent)
         print('------------------------------------------------------------------------')
