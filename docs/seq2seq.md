@@ -10,6 +10,6 @@ For any reasonable size data, this really needs to run on the GPU for realistic 
 
 ## Status
 
-This model is implemented in TensorFlow, Torch, and PyTorch.  The TensorFlow has been tested extensively.  The PyTorch model now has experimental support for global attention.  Please use Python 3 to run the PyTorch.  The Lua Torch7 model is no longer being updated, and does not support attention.
+This model is implemented in TensorFlow and PyTorch.  The TensorFlow has been tested extensively.  The PyTorch model now has experimental support for global attention.
 
 _TODO: Benchmark for NMT_

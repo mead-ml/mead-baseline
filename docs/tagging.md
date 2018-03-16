@@ -57,7 +57,7 @@ python tag_char_rnn.py \
 
 ## Status
 
-This model is implemented in TensorFlow and PyTorch (there is an old version in Torch7, which is no longer supported).
+This model is implemented in TensorFlow and PyTorch.
 
 ### Latest Runs
 
