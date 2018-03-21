@@ -216,7 +216,7 @@ class SeqPredictReader(object):
         extracted = self.read_lines(filename)
         texts = extracted['texts']
         labels = extracted['labels']
-        words_vocab["<UNK>"] = 1
+
         for i in range(len(texts)):
 
             xs_ch = self.vec_alloc((mxlen, maxw), dtype=np.int)
@@ -291,6 +291,7 @@ class CONLLSeqReader(SeqPredictReader):
     def build_vocab(self, files):
         vocab_word = Counter()
         vocab_ch = Counter()
+        vocab_word['<UNK>'] = 1
         vocabs = {}
         keys = self.extended_features.keys()
         for key in keys:
