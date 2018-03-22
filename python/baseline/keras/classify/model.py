@@ -38,7 +38,8 @@ class ConvModel(Classifier):
         return self.impl.fit(batch_time, batch_size=batchsz)
 
     @staticmethod
-    def create(w2v, labels, **kwargs):
+    def create(embeddings, labels, **kwargs):
+        w2v = embeddings['word']
         model = ConvModel()
         model.labels = labels
         model.vocab = w2v.vocab
@@ -83,7 +84,6 @@ class ConvModel(Classifier):
             outcomes = [(self.labels[id_i], prob_i) for id_i, prob_i in enumerate(probs[b])]
             results.append(outcomes)
         return results
-
 
     def make_input(self, batch_dict):
         x = batch_dict['x']

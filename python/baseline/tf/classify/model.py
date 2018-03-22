@@ -149,7 +149,7 @@ class WordClassifierBase(Classifier):
         return model
 
     @classmethod
-    def create(cls, w2v, labels, **kwargs):
+    def create(cls, embeddings, labels, **kwargs):
         """The main method for creating all :class:`WordBasedModel` types.
         
         This method instantiates a model with pooling and optional stacking layers.
@@ -157,7 +157,7 @@ class WordClassifierBase(Classifier):
         information in order to properly initialize.  For this reason, the full list of keyword args are passed
         to the :method:`pool` and :method:`stacked` methods.
         
-        :param w2v: This is a dictionary of words, mapped to their numerical indices in the lookup table
+        :param embeddings: This is a dictionary of embeddings, mapped to their numerical indices in the lookup table
         :param labels: This is a list of the `str` labels
         :param kwargs: See below
         
@@ -180,6 +180,7 @@ class WordClassifierBase(Classifier):
         sess = kwargs.get('sess', tf.Session())
         finetune = bool(kwargs.get('finetune', True))
         mxlen = int(kwargs.get('mxlen', 100))
+        w2v = embeddings['word']
         model = cls()
         dsz = w2v.dsz
         model.labels = labels
@@ -419,8 +420,8 @@ BASELINE_CLASSIFICATION_LOADERS = {
 }
 
 
-def create_model(w2v, labels, **kwargs):
-    return create_classifier_model(BASELINE_CLASSIFICATION_MODELS, w2v, labels, **kwargs)
+def create_model(embeddings, labels, **kwargs):
+    return create_classifier_model(BASELINE_CLASSIFICATION_MODELS, embeddings, labels, **kwargs)
 
 
 def load_model(outname, **kwargs):

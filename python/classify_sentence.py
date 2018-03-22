@@ -71,14 +71,18 @@ vocab, labels = reader.build_vocab([args.train, args.test, args.valid])
 unif = 0 if args.static else args.unif
 
 EmbeddingsModelType = GloVeModel if args.embed.endswith(".txt") else Word2VecModel
-embeddings = EmbeddingsModelType(args.embed, vocab, unif_weight=args.unif, keep_unused=args.keep_unused)
-ts = reader.load(args.train, embeddings.vocab, args.batchsz, shuffle=True)
+embeddings = {}
+embeddings['word'] = EmbeddingsModelType(args.embed, vocab, unif_weight=args.unif, keep_unused=args.keep_unused)
+feature2index = {}
+feature2index['word'] = embeddings['word'].vocab
+
+ts = reader.load(args.train, feature2index, args.batchsz, shuffle=True)
 print('Loaded training data')
 
-vs = reader.load(args.valid, embeddings.vocab, args.batchsz)
+vs = reader.load(args.valid, feature2index, args.batchsz)
 print('Loaded valid data')
 
-es = reader.load(args.test, embeddings.vocab, 2)
+es = reader.load(args.test, feature2index, 2)
 print('Loaded test data')
 print('Number of labels found: [%d]' % len(labels))
 

@@ -477,8 +477,9 @@ class TSVSeqLabelReader(SeqLabelReader):
             labels[index] = label
         return labels
 
-    def load(self, filename, index, batchsz, **kwargs):
+    def load(self, filename, indices, batchsz, **kwargs):
 
+        index = indices['word']
         PAD = index['<PAD>']
         shuffle = kwargs.get('shuffle', False)
         halffiltsz = self.mxfiltsz // 2
