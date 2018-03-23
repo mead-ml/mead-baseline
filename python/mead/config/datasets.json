@@ -1,5 +1,11 @@
 [
     {
+	"train_file": "/data/datasets/ptb/train.txt",
+	"valid_file": "/data/datasets/ptb/valid.txt",
+	"test_file": "/data/datasets/ptb/test.txt",
+	"label": "ptb"
+    },
+    {
 	"train_file": "/data/datasets/sst2/stsa.binary.phrases.train",
 	"valid_file": "/data/datasets/sst2/stsa.binary.dev",
 	"test_file": "/data/datasets/sst2/stsa.binary.test",
