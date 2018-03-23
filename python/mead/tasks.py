@@ -1,0 +1,366 @@
+import baseline as bl
+import json
+import numpy as np
+import logging
+import logging.config
+
+
+class Task(object):
+    TASK_REGISTRY = {}
+
+    def __init__(self, logger_file):
+        super(Task, self).__init__()
+        self.config_params = None
+        self._configure_logger(logger_file)
+
+    def _configure_logger(self, logger_file):
+        with open(logger_file) as f:
+            config = json.load(f)
+            logging.config.dictConfig(config)
+
+    @staticmethod
+    def index_by_label(dataset_file):
+        with open(dataset_file) as f:
+            datasets_list = json.load(f)
+            datasets = dict((x["label"], x) for x in datasets_list)
+            return datasets
+
+    @staticmethod
+    def get_task_specific(task, logging_config):
+        config = Task.TASK_REGISTRY[task](logging_config)
+        return config
+
+    def read_config(self, config_file, datasets_index):
+        """
+        Read the config file and the datasets index
+
+        Between the config file and the dataset index, we have enough information
+        to configure the backend and the models.  We can also initialize the data readers
+
+        :param config_file: The config file
+        :param datasets_index: The index of datasets
+        :return:
+        """
+        datasets_set = Task.index_by_label(datasets_index)
+        self.config_params = self._read_config(config_file)
+        self._setup_task()
+        self._configure_reporting()
+        self.dataset = datasets_set[self.config_params['dataset']]
+        self.reader = self._create_task_specific_reader()
+
+    def initialize(self, embeddings_index):
+        """
+        Load the vocabulary using the readers and then load any embeddings required
+
+        :param embeddings_index: The index of embeddings
+        :return:
+        """
+        pass
+
+    def _create_task_specific_reader(self):
+        """
+        Create a task specific reader, based on the config
+        :return:
+        """
+        pass
+
+    def _setup_task(self):
+        """
+        This (pure) method provides the task-specific setup
+        :return:
+        """
+        pass
+
+    def _load_dataset(self):
+        pass
+
+    def _create_model(self):
+        pass
+
+    def train(self):
+        """
+        Do training
+        :return:
+        """
+        self._load_dataset()
+        model = self._create_model()
+        self.task.fit(model, self.train_data, self.valid_data, self.test_data, **self.config_params['train'])
+        return model
+
+    def _configure_reporting(self):
+        reporting = {
+            "logging": True,
+            "visdom": self.config_params.get('visdom', False),
+            "tensorboard": self.config_params.get('tensorboard', False)
+        }
+        reporting = bl.setup_reporting(**reporting)
+        self.config_params['train']['reporting'] = reporting
+        logging.basicConfig(level=logging.DEBUG)
+
+    @staticmethod
+    def _create_embeddings_from_file(embed, vocab, unif, keep_unused):
+        EmbeddingT = bl.GloVeModel if embed.endswith('.txt') else bl.Word2VecModel
+        return EmbeddingT(embed, vocab, unif_weight=unif, keep_unused=keep_unused)
+
+    def _create_embeddings(self, embeddings_set, vocabs):
+
+        unif = self.config_params['unif']
+        keep_unused = self.config_params.get('keep_unused', False)
+
+        if 'word' in vocabs:
+            embeddings_section = self.config_params['word_embeddings']
+            embed_label = embeddings_section.get('label', None)
+
+            if embed_label is not None:
+                embed_file = embeddings_set[embed_label]['file']
+                embeddings = dict()
+                embeddings['word'] = Task._create_embeddings_from_file(embed_file, vocabs['word'], unif=unif, keep_unused=keep_unused)
+            else:
+                dsz = embeddings_section['dsz']
+                embeddings = bl.RandomInitVecModel(dsz, vocabs['word'], unif_weight=unif)
+
+        if 'char' in vocabs:
+            if self.config_params.get('charsz', -1) > 0:
+                embeddings['char'] = bl.RandomInitVecModel(self.config_params['charsz'], vocabs['char'], unif_weight=unif)
+
+        extended_embed_info = self.config_params.get('extended_embed_info', {}),
+        for key, vocab in vocabs.items():
+            if key in extended_embed_info:
+                print('Adding extended feature embeddings {}'.format(key))
+                ext_embed = None if extended_embed_info[key].get("embedding", None) is None \
+                    else extended_embed_info[key]["embedding"]
+                ext_emb_dsz = extended_embed_info[key].get("dsz", None)
+                if ext_embed is not None:
+                    EmbeddingT = bl.GloVeModel if ext_embed.endswith('.txt') else bl.Word2VecModel
+                    print("using {} to read external embedding file {}".format(EmbeddingT, ext_embed))
+                    embeddings[key] = EmbeddingT(ext_embed, known_vocab=vocab, unif_weight=unif, keep_unused=False)
+                else:
+                    print("randomly initializing external feature with dimension {}".format(ext_emb_dsz))
+                    embeddings[key] = bl.RandomInitVecModel(ext_emb_dsz, vocab, unif_weight=unif)
+            elif key not in ['word', 'char']:
+                raise Exception("Error: must specify a field '{}' in 'extended_embed_sz' dictionary for embedding dim size".format(key))
+
+        out_vocabs = {}
+        for key, value in embeddings.items():
+            out_vocabs[key] = value.vocab
+        return embeddings, out_vocabs
+
+    @staticmethod
+    def _read_config(config):
+        with open(config) as f:
+            return json.load(f)
+
+    @staticmethod
+    def _log2json(log):
+        s=[]
+        with open(log) as f:
+            for line in f:
+                x = line.replace("'", '"')
+                s.append(json.loads(x))
+        return s
+
+
+class ClassifierTask(Task):
+
+    def __init__(self, logging_file, **kwargs):
+        super(ClassifierTask, self).__init__(logging_file, **kwargs)
+
+        self.task = None
+
+    def _create_task_specific_reader(self):
+        return bl.create_pred_reader(self.config_params['preproc']['mxlen'],
+                                     zeropadding=0,
+                                     clean_fn=self.config_params['preproc']['clean_fn'],
+                                     vec_alloc=self.config_params['preproc']['vec_alloc'],
+                                     src_vec_trans=self.config_params['preproc']['src_vec_trans'],
+                                     reader_type=self.config_params['loader']['reader_type'])
+
+    def _setup_task(self):
+        backend = self.config_params.get('backend', 'tensorflow')
+        if backend == 'pytorch':
+            print('PyTorch backend')
+            from baseline.pytorch import long_0_tensor_alloc
+            from baseline.pytorch import tensor_reverse_2nd as rev2nd
+            import baseline.pytorch.classify as classify
+
+            self.config_params['preproc']['vec_alloc'] = long_0_tensor_alloc
+
+        else:
+            self.config_params['preproc']['vec_alloc'] = np.zeros
+
+            if backend == 'keras':
+                print('Keras backend')
+                import baseline.keras.classify as classify
+            else:
+                print('TensorFlow backend')
+                import baseline.tf.classify as classify
+                from baseline.data import reverse_2nd as rev2nd
+
+        self.task = classify
+
+        if self.config_params['preproc'].get('clean', False) is True:
+            self.config_params['preproc']['clean_fn'] = bl.TSVSeqLabelReader.do_clean
+            print('Clean')
+        elif self.config_params['preproc'].get('lower', False) is True:
+            self.config_params['preproc']['clean_fn'] = bl.lowercase
+            print('Lower')
+        else:
+            self.config_params['preproc']['clean_fn'] = None
+
+        self.config_params['preproc']['src_vec_trans'] = rev2nd if self.config_params['preproc'].get('rev', False) else None
+        self.config_params['model']['mxlen'] = self.config_params['preproc']['mxlen']
+
+    def initialize(self, embeddings):
+        embeddings_set = Task.index_by_label(embeddings)
+        vocab, self.labels = self.reader.build_vocab([self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']])
+        self.embeddings, self.feat2index = self._create_embeddings(embeddings_set, {'word': vocab})
+
+    def _create_model(self):
+        return self.task.create_model(self.embeddings, self.labels, **self.config_params['model'])
+
+    def _load_dataset(self):
+        self.train_data = self.reader.load(self.dataset['train_file'], self.feat2index, self.config_params['batchsz'], shuffle=True)
+        self.valid_data = self.reader.load(self.dataset['valid_file'], self.feat2index, self.config_params['batchsz'])
+        self.test_data = self.reader.load(self.dataset['test_file'], self.feat2index, self.config_params.get('test_batchsz', 1))
+
+Task.TASK_REGISTRY['classify'] = ClassifierTask
+
+
+class TaggerTask(Task):
+
+    def __init__(self, logging_file, **kwargs):
+        super(TaggerTask, self).__init__(logging_file, **kwargs)
+        self.task = None
+
+    def _create_task_specific_reader(self):
+        preproc = self.config_params['preproc']
+        reader = bl.create_seq_pred_reader(preproc['mxlen'],
+                                           preproc['mxwlen'],
+                                           preproc['word_trans_fn'],
+                                           preproc['vec_alloc'],
+                                           preproc['vec_shape'],
+                                           preproc['trim'],
+                                           **self.config_params['loader'])
+        return reader
+
+    def _setup_task(self):
+        backend = self.config_params.get('backend', 'tensorflow')
+        if backend == 'pytorch':
+            print('PyTorch backend')
+            from baseline.pytorch import long_0_tensor_alloc as vec_alloc
+            from baseline.pytorch import tensor_shape as vec_shape
+            import baseline.pytorch.tagger as tagger
+            self.config_params['preproc']['vec_alloc'] = vec_alloc
+            self.config_params['preproc']['vec_shape'] = vec_shape
+            self.config_params['preproc']['trim'] = True
+        else:
+            self.config_params['preproc']['vec_alloc'] = np.zeros
+            self.config_params['preproc']['vec_shape'] = np.shape
+            print('TensorFlow backend')
+            self.config_params['preproc']['trim'] = False
+            import baseline.tf.tagger as tagger
+
+        self.task = tagger
+        if self.config_params['preproc'].get('web-cleanup', False) is True:
+            self.config_params['preproc']['word_trans_fn'] = bl.CONLLSeqReader.web_cleanup
+            print('Web-ish data cleanup')
+        elif self.config_params['preproc'].get('lower', False) is True:
+            self.config_params['preproc']['word_trans_fn'] = bl.lowercase
+            print('Lower')
+        else:
+            self.config_params['word_trans_fn'] = None
+
+    def initialize(self, embeddings):
+        embeddings_set = Task.index_by_label(embeddings)
+        vocabs = self.reader.build_vocab([self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']])
+        self.embeddings, self.feat2index = self._create_embeddings(embeddings_set, vocabs)
+
+    def _create_model(self):
+        labels = self.reader.label2index
+        self.config_params['model']["unif"] = self.config_params["unif"]
+        self.config_params['model']['maxs'] = self.reader.max_sentence_length
+        self.config_params['model']['maxw'] = self.reader.max_word_length
+        return self.task.create_model(labels, self.embeddings, **self.config_params['model'])
+
+    def _load_dataset(self):
+        self.train_data, _ = self.reader.load(self.dataset['train_file'], self.feat2index, self.config_params['batchsz'], shuffle=True)
+        self.valid_data, _ = self.reader.load(self.dataset['valid_file'], self.feat2index, self.config_params['batchsz'])
+        self.test_data, _ = self.reader.load(self.dataset['test_file'], self.feat2index, self.config_params.get('test_batchsz', 1), shuffle=False)
+
+Task.TASK_REGISTRY['tagger'] = TaggerTask
+
+
+class EncoderDecoderTask(Task):
+
+    def __init__(self, logging_file, **kwargs):
+        super(EncoderDecoderTask, self).__init__(logging_file, **kwargs)
+        self.task = None
+
+    def _create_task_specific_reader(self):
+        preproc = self.config_params['preproc']
+        reader = bl.create_parallel_corpus_reader(preproc['mxlen'],
+                                                  preproc['vec_alloc'],
+                                                  preproc['trim'],
+                                                  preproc['word_trans_fn'],
+                                                  reader_type=self.config_params['loader']['reader_type'])
+        return reader
+
+    def _setup_task(self):
+
+        # If its not vanilla seq2seq, dont bother reversing
+        do_reverse = self.config_params['model']['model_type'] == 'default'
+        backend = self.config_params.get('backend', 'tensorflow')
+        if backend == 'pytorch':
+            print('PyTorch backend')
+            import bl.pytorch.long_0_tensor_alloc as vec_alloc
+            import bl.pytorch.tensor_shape as vec_shape
+            import bl.pytorch.seq2seq as seq2seq
+            self.config_params['preproc']['vec_alloc'] = vec_alloc
+            self.config_params['preproc']['vec_shape'] = vec_shape
+            src_vec_trans = bl.tensor_reverse_2nd if do_reverse else None
+            self.config_params['preproc']['word_trans_fn'] = src_vec_trans
+            self.config_params['preproc']['show_ex'] = bl.pytorch.show_examples_pytorch
+            self.config_params['preproc']['trim'] = True
+        else:
+            import baseline.tf.seq2seq as seq2seq
+            self.config_params['preproc']['vec_alloc'] = np.zeros
+            self.config_params['preproc']['vec_shape'] = np.shape
+            self.config_params['preproc']['trim'] = False
+            src_vec_trans = bl.reverse_2nd if do_reverse else None
+            self.config_params['preproc']['word_trans_fn'] = src_vec_trans
+            self.config_params['preproc']['show_ex'] = bl.tf.show_examples_tf
+
+        self.task = seq2seq
+
+    def initialize(self, embeddings):
+        embeddings_set = Task.index_by_label(embeddings)
+        vocab1, vocab2 = self.reader.build_vocabs([self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']])
+        self.embeddings1, self.feat2index1 = self._create_embeddings(embeddings_set, {'word': vocab1})
+        self.embeddings2, self.feat2index2 = self._create_embeddings(embeddings_set, {'word': vocab2})
+
+    def _load_dataset(self):
+        self.train_data = self.reader.load(self.dataset['train_file'], self.feat2index1['word'], self.feat2index2['word'], self.config_params['batchsz'], shuffle=True)
+        self.valid_data = self.reader.load(self.dataset['valid_file'], self.feat2index1['word'], self.feat2index2['word'], self.config_params['batchsz'], shuffle=True)
+        self.test_data = self.reader.load(self.dataset['test_file'], self.feat2index1['word'], self.feat2index2['word'], self.config_params.get('test_batchsz', 1))
+
+    def _create_model(self):
+        return self.task.create_model(self.embeddings1['word'], self.embeddings2['word'], **self.config_params['model'])
+
+    def train(self):
+
+        num_ex = self.config_params['num_valid_to_show']
+
+        if num_ex > 0:
+            print('Showing examples')
+            preproc = self.config_params['preproc']
+            show_ex_fn = preproc['show_ex']
+            rlut1 = bl.revlut(self.feat2index1['word'])
+            rlut2 = bl.revlut(self.feat2index2['word'])
+            self.config_params['train']['after_train_fn'] = lambda model: show_ex_fn(model,
+                                                                                     self.valid_data, rlut1, rlut2,
+                                                                                     self.embeddings2,
+                                                                                     preproc['mxlen'], False, 0,
+                                                                                     num_ex, reverse=False)
+        super(EncoderDecoderTask, self).train()
+
+Task.TASK_REGISTRY['seq2seq'] = EncoderDecoderTask
