@@ -83,7 +83,7 @@ class WordLanguageModel(AbstractLanguageModel):
         return model
 
     def forward(self, input, hidden):
-        emb = self._encoder(input)
+        emb = self._encoder(input[0])
         return self._rnnlm(emb, hidden)
 
     def _encoder(self, input):
