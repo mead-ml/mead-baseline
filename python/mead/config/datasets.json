@@ -1,0 +1,44 @@
+[
+    {
+	"train_file": "/data/datasets/sst2/stsa.binary.phrases.train",
+	"valid_file": "/data/datasets/sst2/stsa.binary.dev",
+	"test_file": "/data/datasets/sst2/stsa.binary.test",
+	"label": "SST2"
+    },
+    {
+        "train_file": "/data/datasets/trec/trec.nodev.utf8",
+        "valid_file": "/data/datasets/trec/trec.dev.utf8",
+        "test_file": "/data/datasets/trec/trec.test.utf8",
+        "label": "trec"
+    },
+    {
+        "train_file": "/data/datasets/dbpedia/train-tok-nodev.txt",
+        "valid_file": "/data/datasets/dbpedia/dev-tok.txt",
+        "test_file": "/data/datasets/dbpedia/test-tok.txt",
+        "label": "dbpedia"
+    },
+    {
+	"train_file": "/data/datasets/pos/oct27.train",
+	"valid_file": "/data/datasets/pos/oct27.dev",
+	"test_file": "/data/datasets/pos/oct27.test",
+	"label": "twpos"
+    },
+    {
+	"train_file": "/data/datasets/ner/eng.train",
+	"valid_file": "/data/datasets/ner/eng.testa",
+	"test_file": "/data/datasets/ner/eng.testb",
+	"label": "conll"
+    },
+    {
+	"train_file": "/data/datasets/ner/wnut/wnut17train.conll",
+	"valid_file": "/data/datasets/ner/wnut/wnut17dev.conll",
+	"test_file": "/data/datasets/ner/wnut/wnut17test.conll",
+	"label": "wnut"
+    },
+    {
+	"train_file": "/data/datasets/atis-conll/atis-2.train.conll",
+	"valid_file": "/data/datasets/atis-conll/atis-2.dev.conll",
+	"test_file": "/data/datasets/atis-conll/atis.test.conll",
+	"label": "atis"
+    }
+]
