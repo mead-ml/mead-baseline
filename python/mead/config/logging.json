@@ -1,0 +1,43 @@
+{
+    "version": 1,
+    "disable_existing_loggers": false,
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "level": "DEBUG",
+            "stream": "ext://sys.stdout"
+        },
+        "reporting_file_handler": {
+            "class": "logging.FileHandler",
+            "level": "INFO",
+	    "mode": "w",
+            "filename": "reporting.log",
+            "encoding": "utf8"
+        },
+        "info_file_handler": {
+            "class": "logging.FileHandler",
+            "level": "INFO",
+            "filename": "info.log",
+            "encoding": "utf8"
+        },
+	"error_file_handler": {
+            "class": "logging.FileHandler",
+            "level": "ERROR",
+            "filename": "errors.log",
+            "encoding": "utf8"
+        }
+    },
+    "loggers": {
+        "baseline.reporting": {
+            "level": "INFO",
+            "handlers": ["reporting_file_handler"],
+            "propagate": "no"
+        }
+    },
+
+    "root": {
+        "level": "INFO",
+        "handlers": ["console", "info_file_handler", "error_file_handler"]
+    }
+
+}
