@@ -23,7 +23,8 @@ class WordClassifierBase(nn.Module, Classifier):
         torch.save(self, outname)
 
     @classmethod
-    def create(cls, embeddings, labels, **kwargs):
+    def create(cls, embeddings_set, labels, **kwargs):
+        embeddings = embeddings_set['word']
         finetune = kwargs.get('finetune', True)
         dsz = embeddings.dsz
         model = cls()
@@ -210,8 +211,8 @@ BASELINE_CLASSIFICATION_LOADERS = {
 }
 
 
-def create_model(w2v, labels, **kwargs):
-    return create_classifier_model(BASELINE_CLASSIFICATION_MODELS, w2v, labels, **kwargs)
+def create_model(embeddings, labels, **kwargs):
+    return create_classifier_model(BASELINE_CLASSIFICATION_MODELS, embeddings, labels, **kwargs)
 
 
 def load_model(outname, **kwargs):

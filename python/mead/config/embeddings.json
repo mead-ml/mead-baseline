@@ -1,0 +1,37 @@
+[
+    {
+	"label": "glove-twitter-27B",
+	"file": "/data/embeddings/glove.twitter.27B.200d.txt",
+	"dsz": 200
+    },
+    {
+	"label": "w2v-twitter-30M",
+	"file": "/data/embeddings/oct-s140clean-uber.cbow-bin",
+	"dsz": 150
+    },
+    {
+	"label": "glove-42B",
+	"file": "/data/embeddings/glove.42B.300d.txt",
+	"dsz": 300
+    },
+    {
+        "label": "glove-6B-100",
+        "file": "/data/embeddings/glove.6B.100d.txt",
+        "dsz": 100
+    },
+    {
+	"label": "glove-6B-300",
+	"file": "/data/embeddings/glove.6B.300d.txt",
+	"dsz": 300
+    },
+    {
+	"label": "w2v-gn",
+	"file": "/data/embeddings/GoogleNews-vectors-negative300.bin",
+	"dsz": 300
+    },
+    {
+        "label": "numberbatch",
+        "file": "/data/embeddings/numberbatch-en-17.06.txt",
+        "dsz": 300
+    }
+]

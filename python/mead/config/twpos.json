@@ -1,0 +1,43 @@
+{
+    "batchsz": 20,
+    "conll_output": "twposresults.conll",
+    "test_thresh": 10,
+    "charsz": 16,
+    "unif": 0.1,
+    "preproc": {
+        "mxlen": 38,
+        "mxwlen": 40,
+        "web-cleanup": true,
+        "lower": true,
+        "valsplit": 0.15
+    },
+    "backend": "tensorflow",
+    "dataset": "twpos",
+    "loader": {
+        "reader_type": "default"
+    },
+    "model": {
+        "model_type": "default",
+        "cfiltsz": [1,2,3,4,5,7],
+        "hsz": 200,
+        "wsz": 30,
+        "dropout": 0.5,
+        "rnntype": "blstm",
+        "layers": 1,
+        "crf": true	
+    },
+
+    "word_embeddings": {
+	"label": "w2v-twitter-30M"
+    },
+    "train": {
+        "epochs": 40,
+        "optim": "sgd",
+        "decay": 0,
+        "eta": 0.01,
+        "mom": 0.9,
+        "patience": 20,
+        "early_stopping_metric": "acc",
+        "clip": 5.0
+    }
+}

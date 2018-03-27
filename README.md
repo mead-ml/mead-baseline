@@ -51,3 +51,7 @@ https://gist.github.com/dpressel/d01474f646c73f4773dbbc3a77624d64
 
 Then pass `--model_type {model}` (e.g. `nochar`, in the case of the first example gist) to the driver program for that task.  The driver program will look to see if it has an implementation for `nochar` and will not find it in its registry of taggers.  So it will import `tagger_nochar.py`, and call its `create_model` function with the arguments and use the provided model.
 
+## Running from configuration files, using `mead`
+
+We provide a single driver to train all of the tasks from a simple JSON configuration file as part of [mead](docs/mead.md).  This makes it easy to explore model architetures, track your experiments and deploy models to production easily.  Sample configurations are provided for the tasks
+

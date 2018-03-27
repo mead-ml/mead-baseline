@@ -94,6 +94,7 @@ class Seq2SeqTrainerTf(Trainer):
             reporting(metrics, epochs, phase)
         return metrics
 
+
 def fit(model, ts, vs, es=None, **kwargs):
     epochs = int(kwargs['epochs']) if 'epochs' in kwargs else 5
     patience = int(kwargs['patience']) if 'patience' in kwargs else epochs
