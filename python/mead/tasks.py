@@ -3,6 +3,8 @@ import json
 import numpy as np
 import logging
 import logging.config
+#import mead.exporters
+import mead.utils
 
 
 class Task(object):
@@ -17,13 +19,6 @@ class Task(object):
         with open(logger_file) as f:
             config = json.load(f)
             logging.config.dictConfig(config)
-
-    @staticmethod
-    def index_by_label(dataset_file):
-        with open(dataset_file) as f:
-            datasets_list = json.load(f)
-            datasets = dict((x["label"], x) for x in datasets_list)
-            return datasets
 
     @staticmethod
     def get_task_specific(task, logging_config):
@@ -41,7 +36,7 @@ class Task(object):
         :param datasets_index: The index of datasets
         :return:
         """
-        datasets_set = Task.index_by_label(datasets_index)
+        datasets_set = mead.utils.index_by_label(datasets_index)
         self.config_params = self._read_config(config_file)
         self._setup_task()
         self._configure_reporting()
@@ -159,6 +154,9 @@ class Task(object):
                 s.append(json.loads(x))
         return s
 
+    #def exporter(self):
+    #    pass
+
 
 class ClassifierTask(Task):
 
@@ -211,7 +209,7 @@ class ClassifierTask(Task):
         self.config_params['model']['mxlen'] = self.config_params['preproc']['mxlen']
 
     def initialize(self, embeddings):
-        embeddings_set = Task.index_by_label(embeddings)
+        embeddings_set = mead.utils.index_by_label(embeddings)
         vocab, self.labels = self.reader.build_vocab([self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']])
         self.embeddings, self.feat2index = self._create_embeddings(embeddings_set, {'word': vocab})
 
@@ -222,6 +220,9 @@ class ClassifierTask(Task):
         self.train_data = self.reader.load(self.dataset['train_file'], self.feat2index, self.config_params['batchsz'], shuffle=True)
         self.valid_data = self.reader.load(self.dataset['valid_file'], self.feat2index, self.config_params['batchsz'])
         self.test_data = self.reader.load(self.dataset['test_file'], self.feat2index, self.config_params.get('test_batchsz', 1))
+
+    #def exporter(self):
+    #    return mead.ClassifyTensorFlowExporter(self)
 
 Task.TASK_REGISTRY['classify'] = ClassifierTask
 
@@ -271,7 +272,7 @@ class TaggerTask(Task):
             self.config_params['word_trans_fn'] = None
 
     def initialize(self, embeddings):
-        embeddings_set = Task.index_by_label(embeddings)
+        embeddings_set = mead.utils.index_by_label(embeddings)
         vocabs = self.reader.build_vocab([self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']])
         self.embeddings, self.feat2index = self._create_embeddings(embeddings_set, vocabs)
 
@@ -286,6 +287,9 @@ class TaggerTask(Task):
         self.train_data, _ = self.reader.load(self.dataset['train_file'], self.feat2index, self.config_params['batchsz'], shuffle=True)
         self.valid_data, _ = self.reader.load(self.dataset['valid_file'], self.feat2index, self.config_params['batchsz'])
         self.test_data, _ = self.reader.load(self.dataset['test_file'], self.feat2index, self.config_params.get('test_batchsz', 1), shuffle=False)
+
+    #def exporter(self):
+    #    return mead.TaggerTensorFlowExporter(self)
 
 Task.TASK_REGISTRY['tagger'] = TaggerTask
 
@@ -302,7 +306,7 @@ class EncoderDecoderTask(Task):
                                                   preproc['vec_alloc'],
                                                   preproc['trim'],
                                                   preproc['word_trans_fn'],
-                                                  reader_type=self.config_params['loader']['reader_type'])
+                                                  **self.config_params['loader'])
         return reader
 
     def _setup_task(self):
@@ -333,7 +337,7 @@ class EncoderDecoderTask(Task):
         self.task = seq2seq
 
     def initialize(self, embeddings):
-        embeddings_set = Task.index_by_label(embeddings)
+        embeddings_set = mead.utils.index_by_label(embeddings)
         vocab1, vocab2 = self.reader.build_vocabs([self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']])
         self.embeddings1, self.feat2index1 = self._create_embeddings(embeddings_set, {'word': vocab1})
         self.embeddings2, self.feat2index2 = self._create_embeddings(embeddings_set, {'word': vocab2})
@@ -358,13 +362,12 @@ class EncoderDecoderTask(Task):
             rlut2 = bl.revlut(self.feat2index2['word'])
             self.config_params['train']['after_train_fn'] = lambda model: show_ex_fn(model,
                                                                                      self.valid_data, rlut1, rlut2,
-                                                                                     self.embeddings2,
+                                                                                     self.embeddings2['word'],
                                                                                      preproc['mxlen'], False, 0,
                                                                                      num_ex, reverse=False)
         super(EncoderDecoderTask, self).train()
 
 Task.TASK_REGISTRY['seq2seq'] = EncoderDecoderTask
-
 
 
 class LanguageModelingTask(Task):
@@ -411,7 +414,7 @@ class LanguageModelingTask(Task):
             self.config_params['preproc']['word_trans_fn'] = None
 
     def initialize(self, embeddings):
-        embeddings_set = Task.index_by_label(embeddings)
+        embeddings_set = mead.utils.index_by_label(embeddings)
         vocab, self.num_words = self.reader.build_vocab([self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']])
         self.embeddings, self.feat2index = self._create_embeddings(embeddings_set, vocab)
 

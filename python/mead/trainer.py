@@ -1,5 +1,5 @@
 import argparse
-from mead.tasks import Task
+import mead
 
 parser = argparse.ArgumentParser(description='Train a text classifier')
 parser.add_argument('--config', help='JSON Configuration for an experiment', required=True)
@@ -9,7 +9,7 @@ parser.add_argument('--logging', help='json file for logging', default='./config
 parser.add_argument('--task', help='task to run', default='classify')
 args = parser.parse_args()
 
-task = Task.get_task_specific(args.task, args.logging)
+task = mead.Task.get_task_specific(args.task, args.logging)
 task.read_config(args.config, args.datasets)
 task.initialize(args.embeddings)
 task.train()

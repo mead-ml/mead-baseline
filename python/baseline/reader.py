@@ -123,9 +123,15 @@ class MultiFileParallelCorpusReader(ParallelCorpusReader):
         if not dst_suffix.startswith('.'):
             self.dst_suffix = '.' + self.dst_suffix
 
+    # 2 possibilities here, either we have a vocab file, e.g. vocab.bpe.32000, or we are going to generate
+    # from each column
     def build_vocabs(self, files):
-        src_vocab = _build_vocab_for_col(0, files)
-        dst_vocab = src_vocab
+        if len(files) == 1 and os.path.exists(files[0]):
+            src_vocab = _build_vocab_for_col(0, files)
+            dst_vocab = src_vocab
+        else:
+            src_vocab = _build_vocab_for_col(0, [f + self.src_suffix for f in files])
+            dst_vocab = _build_vocab_for_col(0, [f + self.dst_suffix for f in files])
         return src_vocab, dst_vocab
 
     def load_examples(self, tsfile, vocab1, vocab2):
