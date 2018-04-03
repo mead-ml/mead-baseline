@@ -3,21 +3,12 @@ import json
 import baseline
 import os
 import mead.utils
+import mead.exporters
 
 FIELD_NAME = 'text/tokens'
 
 
-class Exporter(object):
-
-    def __init__(self, task):
-        super(Exporter, self).__init__()
-        self.task = task
-
-    def run(self, model_file, embeddings, output_dir, model_version, **kwargs):
-        pass
-
-
-class TensorFlowExporter(Exporter):
+class TensorFlowExporter(mead.exporters.Exporter):
 
     def __init__(self, task):
         super(TensorFlowExporter, self).__init__(task)
