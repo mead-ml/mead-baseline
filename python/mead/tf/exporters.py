@@ -254,7 +254,7 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
     def restore_model(self, sess, basename):
         sess.run(tf.tables_initializer())
         sess.run(tf.global_variables_initializer())
-        saver = tf.train.Saver(tf.contrib.framework.get_variables_to_restore(exclude=["viterbi", "trellis", "backpointers"]))
+        saver = tf.train.Saver()
         saver.restore(sess, basename)
 
     def _run(self, sess, model_file, embeddings_set, output_dir, model_version):
