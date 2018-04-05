@@ -3,7 +3,6 @@ import json
 import numpy as np
 import logging
 import logging.config
-#import mead.exporters
 import mead.utils
 
 
@@ -13,6 +12,7 @@ class Task(object):
     def __init__(self, logger_file):
         super(Task, self).__init__()
         self.config_params = None
+        self.ExporterType = None
         self._configure_logger(logger_file)
 
     def _configure_logger(self, logger_file):
@@ -147,15 +147,15 @@ class Task(object):
 
     @staticmethod
     def _log2json(log):
-        s=[]
+        s = []
         with open(log) as f:
             for line in f:
                 x = line.replace("'", '"')
                 s.append(json.loads(x))
         return s
 
-    #def exporter(self):
-    #    pass
+    def create_exporter(self):
+        return self.ExporterType(self)
 
 
 class ClassifierTask(Task):
@@ -180,7 +180,6 @@ class ClassifierTask(Task):
             from baseline.pytorch import long_0_tensor_alloc
             from baseline.pytorch import tensor_reverse_2nd as rev2nd
             import baseline.pytorch.classify as classify
-
             self.config_params['preproc']['vec_alloc'] = long_0_tensor_alloc
 
         else:
@@ -193,6 +192,8 @@ class ClassifierTask(Task):
                 print('TensorFlow backend')
                 import baseline.tf.classify as classify
                 from baseline.data import reverse_2nd as rev2nd
+                import mead.tf
+                self.ExporterType = mead.tf.ClassifyTensorFlowExporter
 
         self.task = classify
 
@@ -220,9 +221,6 @@ class ClassifierTask(Task):
         self.train_data = self.reader.load(self.dataset['train_file'], self.feat2index, self.config_params['batchsz'], shuffle=True)
         self.valid_data = self.reader.load(self.dataset['valid_file'], self.feat2index, self.config_params['batchsz'])
         self.test_data = self.reader.load(self.dataset['test_file'], self.feat2index, self.config_params.get('test_batchsz', 1))
-
-    #def exporter(self):
-    #    return mead.ClassifyTensorFlowExporter(self)
 
 Task.TASK_REGISTRY['classify'] = ClassifierTask
 
@@ -260,6 +258,8 @@ class TaggerTask(Task):
             print('TensorFlow backend')
             self.config_params['preproc']['trim'] = False
             import baseline.tf.tagger as tagger
+            import mead.tf
+            self.ExporterType = mead.tf.TaggerTensorFlowExporter
 
         self.task = tagger
         if self.config_params['preproc'].get('web-cleanup', False) is True:
@@ -287,9 +287,6 @@ class TaggerTask(Task):
         self.train_data, _ = self.reader.load(self.dataset['train_file'], self.feat2index, self.config_params['batchsz'], shuffle=True)
         self.valid_data, _ = self.reader.load(self.dataset['valid_file'], self.feat2index, self.config_params['batchsz'])
         self.test_data, _ = self.reader.load(self.dataset['test_file'], self.feat2index, self.config_params.get('test_batchsz', 1), shuffle=False)
-
-    #def exporter(self):
-    #    return mead.TaggerTensorFlowExporter(self)
 
 Task.TASK_REGISTRY['tagger'] = TaggerTask
 
@@ -327,6 +324,8 @@ class EncoderDecoderTask(Task):
             self.config_params['preproc']['trim'] = True
         else:
             import baseline.tf.seq2seq as seq2seq
+            import mead.tf
+            self.ExporterType = mead.tf.Seq2SeqTensorFlowExporter
             self.config_params['preproc']['vec_alloc'] = np.zeros
             self.config_params['preproc']['vec_shape'] = np.shape
             self.config_params['preproc']['trim'] = False
