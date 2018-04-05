@@ -73,11 +73,8 @@ class ClassifyTensorFlowExporter(TensorFlowExporter):
             #raw_post = tf.Print(raw_post, [raw_post])
             mxlen = self.task.config_params['preproc']['mxlen']
             raw_tokens = tf.string_split(tf.reshape(raw_post, [-1])).values
-            npost = tf.cond(tf.size(raw_tokens) > mxlen,
-                            lambda: tf.reduce_join(raw_tokens[:mxlen], separator=" "),
-                            lambda: tf.reduce_join(raw_tokens, separator=" "))
+            npost = tf.reduce_join(raw_tokens[:mxlen], separator=" ")
             tokens = tf.string_split(tf.reshape(npost, [-1]))
-
             # Convert the string values to word indices (ints)
             indices = word2index.lookup(tokens)
 
@@ -222,10 +219,7 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
             #raw_post = tf.Print(raw_post, [raw_post])
             tokens = tf.string_split(tf.reshape(raw_post, [-1])).values
             # sentence length <= mxlen
-            nraw_post = tf.cond(tf.size(tokens) > mxlen,
-                                lambda: tf.reduce_join(tokens[:mxlen], separator=" "),
-                                lambda: tf.reduce_join(tokens, separator=" "))
-
+            nraw_post = tf.reduce_join(raw_tokens[:mxlen], separator=" ")
             # vocab has only lowercase words
             split_chars = tf.string_split(tf.reshape(nraw_post, [-1]), delimiter="").values
             upchar_inds = upchars_lut.lookup(split_chars)
@@ -260,7 +254,7 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
     def restore_model(self, sess, basename):
         sess.run(tf.tables_initializer())
         sess.run(tf.global_variables_initializer())
-        saver = tf.train.Saver(tf.contrib.framework.get_variables_to_restore(exclude=["viterbi", "trellis", "backpointers"]))
+        saver = tf.train.Saver()
         saver.restore(sess, basename)
 
     def _run(self, sess, model_file, embeddings_set, output_dir, model_version):
@@ -451,9 +445,7 @@ class Seq2SeqTensorFlowExporter(TensorFlowExporter):
             #raw_post = tf.Print(raw_post, [raw_post])
             mxlen = self.task.config_params['preproc']['mxlen']
             raw_tokens = tf.string_split(tf.reshape(raw_post, [-1])).values
-            npost = tf.cond(tf.size(raw_tokens) > mxlen,
-                            lambda: tf.reduce_join(raw_tokens[:mxlen], separator=" "),
-                            lambda: tf.reduce_join(raw_tokens, separator=" "))
+            npost = tf.reduce_join(raw_tokens[:mxlen], separator=" ")
             tokens = tf.string_split(tf.reshape(npost, [-1]))
             sentence_length = tf.size(tokens)
 
