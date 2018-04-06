@@ -201,14 +201,15 @@ class BiRNNWrapper(nn.Module):
         return (output, hidden)
 
 
-def pytorch_rnn(insz, hsz, rnntype, nlayers, dropout, bidir=False):
+def pytorch_rnn(insz, hsz, rnntype, nlayers, dropout):
 
     if rnntype == 'gru':
-        rnn = torch.nn.GRU(insz, hsz, nlayers, dropout=dropout, bidirectional=bidir)
-    else:
-        rnn = torch.nn.LSTM(insz, hsz, nlayers, dropout=dropout, bidirectional=bidir)
-    if bidir:
+        rnn = torch.nn.GRU(insz, hsz, nlayers, dropout=dropout)
+    elif rnntype == 'blstm':
+        rnn = torch.nn.LSTM(insz, hsz, nlayers, dropout=dropout, bidirectional=True)
         rnn = BiRNNWrapper(rnn, nlayers)
+    else:
+        rnn = torch.nn.LSTM(insz, hsz, nlayers, dropout=dropout)
     return rnn
 
 

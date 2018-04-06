@@ -117,12 +117,13 @@ class Seq2SeqModel(Seq2SeqBase):
         nlayers = kwargs['layers']
         rnntype = kwargs['rnntype']
         pdrop = kwargs.get('dropout', 0.5)
-        bidir = kwargs.get('bidir', False)
-        enc_hsz = self.hsz // 2 if bidir else self.hsz
+        enc_hsz = self.hsz
+        if rnntype == 'blstm' or rnntype == 'bgru':
+            enc_hsz = enc_hsz // 2
         dsz = embeddings_in.dsz
         self.gpu = kwargs.get('gpu', True)
         self.dropout = nn.Dropout(pdrop)
-        self.encoder_rnn = pytorch_rnn(dsz, enc_hsz, rnntype, nlayers, pdrop, bidir)
+        self.encoder_rnn = pytorch_rnn(dsz, enc_hsz, rnntype, nlayers, pdrop)
         self.preds = nn.Linear(self.hsz, self.nc)
         self.decoder_rnn = pytorch_rnn_cell(dsz, self.hsz, rnntype, nlayers, pdrop)
         self.probs = nn.LogSoftmax()
@@ -145,11 +146,12 @@ class Seq2SeqAttnModel(Seq2SeqBase):
         nlayers = kwargs['layers']
         rnntype = kwargs['rnntype']
         pdrop = kwargs.get('dropout', 0.5)
-        bidir = kwargs.get('bidir', False)
-        enc_hsz = self.hsz // 2 if bidir else self.hsz
+        enc_hsz = self.hsz
+        if rnntype == 'lstm' or rnntype == 'gru':
+            enc_hsz = enc_hsz // 2
         dsz = embeddings_in.dsz
         self.gpu = kwargs.get('gpu', True)
-        self.encoder_rnn = pytorch_rnn(dsz, enc_hsz, rnntype, nlayers, pdrop, bidir)
+        self.encoder_rnn = pytorch_rnn(dsz, enc_hsz, rnntype, nlayers, pdrop)
         self.dropout = nn.Dropout(pdrop)
         self.decoder_rnn = pytorch_rnn_cell(self.hsz + dsz, self.hsz, rnntype, nlayers, pdrop)
         self.preds = nn.Linear(self.hsz, self.nc)
