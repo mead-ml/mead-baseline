@@ -34,7 +34,7 @@ _dbhost_ is typically `localhost` and _dbport_ is `27017`. **DO NOT COMMIT THIS 
 **Starting**: use `--host`,`--port`,`--user` and `password` to specify the host, port, username and password for mongodb.
 
  ```aidl
-(dl) digitalroots:deep-roots$ xpctl --host localhost
+(dl) home:home$ xpctl --host localhost
 setting dbhost to localhost dbport to 27017
 db connection successful
 Starting xpctl...
@@ -98,7 +98,7 @@ xpctl > results classify test SST2 --metric f1 --user root
 ```
 
 ```aidl
-(dl) digitalroots:work$ xpctl --host xxx.yyy.com results tagger test idr --metric f1 --metric acc --sort acc
+(dl) home:home$ xpctl --host xxx.yyy.com results tagger test idr --metric f1 --metric acc --sort acc
 setting dbhost to xxx.yyy.com dbport to 27017
 db connection successful
                          id    username                                    label dataset                                      sha1                    date        f1       acc
@@ -107,7 +107,7 @@ db connection successful
 ```
 
 ```aidl
-(dl) digitalroots:work$ xpctl --host xxx.yyy.com results tagger test idr --metric f1 --metric acc --sort f1
+(dl) home:work$ xpctl --host xxx.yyy.com results tagger test idr --metric f1 --metric acc --sort f1
 setting dbhost to xxx.yyy.com dbport to 27017
 db connection successful
                          id    username                                    label dataset                                      sha1                    date       acc        f1
@@ -116,7 +116,7 @@ db connection successful
 ```
 
 ```aidl
-(dl) digitalroots:work$ xpctl --host xxx.yyy.com results tagger test idr --metric f1
+(dl) home:work$ xpctl --host xxx.yyy.com results tagger test idr --metric f1
 setting dbhost to xxx.yyy.com dbport to 27017
 db connection successful
                          id    username                                    label dataset                                      sha1                    date        f1
@@ -242,12 +242,12 @@ Options:
 ```
 
 ```
-(dl) schoudhury:deep-roots$ xpctl configdiff tagger 786c05921a7badd61914aa7f25f48145096b7a39 54be249f9d33ac399edc0d91678959d36b12fd29
+(dl) schoudhury:work$ xpctl configdiff tagger 786c05921a7badd61914aa7f25f48145096b7a39 54be249f9d33ac399edc0d91678959d36b12fd29
 setting dbhost to xxx.yyy.com dbport to 27017
 db connection successful
 diff of sha2 wrt sha1
 {'model': {'bottlesz': 1024}}
-(dl) schoudhury:deep-roots$ xpctl configdiff tagger 54be249f9d33ac399edc0d91678959d36b12fd29 786c05921a7badd61914aa7f25f48145096b7a39
+(dl) schoudhury:work$ xpctl configdiff tagger 54be249f9d33ac399edc0d91678959d36b12fd29 786c05921a7badd61914aa7f25f48145096b7a39
 setting dbhost to xxx.yyy.com dbport to 27017
 db connection successful
 diff of sha2 wrt sha1
