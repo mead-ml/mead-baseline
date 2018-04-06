@@ -9,11 +9,11 @@ RUN apt-get update && \
     pip install torchvision && \
     jupyter nbextension enable --py widgetsnbextension
 
-COPY ./python /baseline
+COPY ./python /baseline/python
 
 VOLUME ["/data/embeddings", "/data/model-store", "/data/datasets", "/data/model-checkpoints"]
 
-ENV PYTHONPATH='$PYTHONPATH:/baseline'
+ENV PYTHONPATH='$PYTHONPATH:/baseline/python'
 
 WORKDIR /baseline
 CMD ["bash"]
