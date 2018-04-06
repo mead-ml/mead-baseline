@@ -5,12 +5,14 @@ In [baseline/mead](../mead/README.md) we have separate **tasks** such as classif
 After an experiment is done, use `xpctl` to report the results to a mongodb server. Then use it to analyze, compare and export your experimental results. It can be used in `repl` mode (inside a shell) and `command` mode. Most examples shown here uses xpctl in the `command` mode: (`xpctl command arguments options` or `xpctl --host localhost --port 27107 command argument(s) option(s)` )
 
 ### Contents
-- [**Requirements**](requirement)
+- [**Dependencies**](dependencies)
 - [**Installation**](installation)
 - [**REPL mode and commands**](repl-mode-and-commands)
 - [**Workflow for running an experiment**](#workflow-for-running-an-experiment)
 
-### `xpctl` requires [mongodb](https://docs.mongodb.com/) to be installed locally or an accessible server.
+### Dependencies
+
+`xpctl` requires [mongodb](https://docs.mongodb.com/) to be installed locally or an accessible server.
 
 ### Installation
 
