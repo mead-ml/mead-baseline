@@ -5,7 +5,7 @@ MODEL_STORE?=/data/model-store
 EMBEDDINGS_DIR?=/data/embeddings
 CHECKPOINTS_DIR?=/data/model-checkpoints
 DATASETS_DIR?=/data/datasets
-BASELINE=../python
+BASELINE="$(dirname "$(pwd)")"/python
 HOST_NETWORK?=default
 GPU?=0
 DOCKER=NV_GPU=$(GPU) nvidia-docker
