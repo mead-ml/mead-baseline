@@ -11,7 +11,7 @@ RUN apt-get update && \
 
 COPY ./python ./baseline
 
-VOLUME ["/data/embeddings", "/data/model-store", "/data/tasks", "/data/model-checkpoints"]
+VOLUME ["/data/embeddings", "/data/model-store", "/data/datasets", "/data/model-checkpoints"]
 
 WORKDIR ./baseline
 CMD ["bash"]
