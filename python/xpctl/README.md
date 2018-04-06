@@ -58,8 +58,7 @@ result is empty
 xpctl > results test tagger
 xpctl > results test tagger
      username                                    label dataset                                      sha1                    date       acc        f1
-0  schoudhury  bidirectional lstm + CRF on IDR dataset     idr  bf17c21bb88ac24f8b1a6114dec8134b913c1122 2017-08-30 23:16:52.122  0.952626  0.850447
-1  schoudhury            bilstm CRF, standard settings    wnut  5809068e3c88d9d45d0dca1f00ef24241026c1b9 2017-08-31 18:45:34.649  0.933372  0.383981
+1  testuser            bilstm CRF, standard settings    wnut  5809068e3c88d9d45d0dca1f00ef24241026c1b9 2017-08-31 18:45:34.649  0.933372  0.383981
 xpctl > lastresult
 result contains test results for task: tagger
 ```
@@ -76,7 +75,7 @@ Usage: xpctl results [OPTIONS] TASK EVENT_TYPE DATASET
   metric(s), a sort metric. use --metric f1 --metric acc for multiple
   metrics. use one metric for the sort.
 Options:
-  --user TEXT    list of users (dpressel, root), [multiple]: --user a --user b
+  --user TEXT    list of users (test-user, root), [multiple]: --user a --user b
   --metric TEXT  list of metrics (prec, recall, f1, accuracy),[multiple]:
                  --metric f1 --metric acc
   --sort TEXT    specify one metric to sort the results
@@ -98,30 +97,29 @@ xpctl > results classify test SST2 --metric f1 --user root
 ```
 
 ```aidl
-(dl) home:home$ xpctl --host xxx.yyy.com results tagger test idr --metric f1 --metric acc --sort acc
-setting dbhost to xxx.yyy.com dbport to 27017
-db connection successful
-                         id    username                                    label dataset                                      sha1                    date        f1       acc
-0  59a747647412df6bbc269f6d  schoudhury  bidirectional lstm + CRF on IDR dataset     idr  bf17c21bb88ac24f8b1a6114dec8134b913c1122 2017-08-30 23:16:52.122  0.850447  0.952626
-1  59b9af747412df155562438d  schoudhury                                     test     idr  7fbbd90b57395b003ab8476b6a17e747f8dfcba3 2017-09-13 22:21:35.322  0.860052  0.952474
+(xpt2.7) testuser:~$ xpctl results tagger test wnut --metric f1 --metric acc --sort acc
+db connection successful with [host]: x.y.com, [port]: 27017
+                          id      username                                      label dataset                                      sha1                    date       acc        f1
+4   5a1611c038d2dd7832f7c47c    testuser                      bilstm-CRF-filt-1-2-3    wnut  39831513cb319984c9410a2c7da9429ec0bc745d 2017-11-23 00:09:33.455  0.939854  0.391667
+8   5a02665d6232a6030a275fc3          root     wnut-lowercased-gazetteer-5proj-unif-0    wnut  4073e6dff65340d954af3e66d36a6d144fca5825 2017-11-08 02:05:17.009  0.939287  0.386049
 ```
 
 ```aidl
-(dl) home:work$ xpctl --host xxx.yyy.com results tagger test idr --metric f1 --metric acc --sort f1
-setting dbhost to xxx.yyy.com dbport to 27017
-db connection successful
-                         id    username                                    label dataset                                      sha1                    date       acc        f1
-1  59b9af747412df155562438d  schoudhury                                     test     idr  7fbbd90b57395b003ab8476b6a17e747f8dfcba3 2017-09-13 22:21:35.322  0.952474  0.860052
-0  59a747647412df6bbc269f6d  schoudhury  bidirectional lstm + CRF on IDR dataset     idr  bf17c21bb88ac24f8b1a6114dec8134b913c1122 2017-08-30 23:16:52.122  0.952626  0.850447
+(xpt2.7) testuser:~$ xpctl results tagger test wnut --metric f1 --metric acc --sort f1
+db connection successful with [host]: x.y.com, [port]: 27017
+                          id      username                                      label dataset                                      sha1                    date       acc        f1
+10  5a05f17c6232a638b53903b0  testuser             wnut-gazetteer-noproj-unif-0.1    wnut  ab7b1fed1f0206ad9ebf3887657f18051d99f643 2017-11-10 18:35:40.741  0.936957  0.402537
+6   5a0140636232a60282e0cb8d          root  wnut-lowercased-gazetteer-noproj-unif-0.1    wnut  231c11c31fa8389a192da9e84a1c19d7ada46613 2017-11-07 05:10:59.629  0.938211  0.395871
+9   5a026c6a6232a605d4ea2688          root    wnut-lowercased-gazetteer-noproj-unif-0    wnut  ab7b1fed1f0206ad9ebf3887657f18051d99f643 2017-11-08 02:31:06.897  0.938391  0.391900
 ```
 
 ```aidl
-(dl) home:work$ xpctl --host xxx.yyy.com results tagger test idr --metric f1
-setting dbhost to xxx.yyy.com dbport to 27017
-db connection successful
-                         id    username                                    label dataset                                      sha1                    date        f1
-1  59b9af747412df155562438d  schoudhury                                     test     idr  7fbbd90b57395b003ab8476b6a17e747f8dfcba3 2017-09-13 22:21:35.322  0.860052
-0  59a747647412df6bbc269f6d  schoudhury  bidirectional lstm + CRF on IDR dataset     idr  bf17c21bb88ac24f8b1a6114dec8134b913c1122 2017-08-30 23:16:52.122  0.850447
+(xpt2.7) testuser:~$ xpctl results tagger test wnut --metric f1
+db connection successful with [host]: x.y.com, [port]: 27017
+                          id      username                                      label dataset                                      sha1                    date        f1
+10  5a05f17c6232a638b53903b0  testuser             wnut-gazetteer-noproj-unif-0.1    wnut  ab7b1fed1f0206ad9ebf3887657f18051d99f643 2017-11-10 18:35:40.741  0.402537
+6   5a0140636232a60282e0cb8d          root  wnut-lowercased-gazetteer-noproj-unif-0.1    wnut  231c11c31fa8389a192da9e84a1c19d7ada46613 2017-11-07 05:10:59.629  0.395871
+9   5a026c6a6232a605d4ea2688          root    wnut-lowercased-gazetteer-noproj-unif-0    wnut  ab7b1fed1f0206ad9ebf3887657f18051d99
 ```
 
 - **best**: shows the best (n) result for a task. 
@@ -135,7 +133,7 @@ Usage: best [OPTIONS] TASK EVENT_TYPE DATASET METRIC
   available for the task. Optionally supply number of results (n-best),
   user(s) and metric(only ONE)
 Options:
-  --user TEXT  list of users (dpressel, root), [multiple]: --user a --user b
+  --user TEXT  list of users (test-user, root), [multiple]: --user a --user b
   --n INTEGER  N best results
   --help       Show this message and exit.
 ```
@@ -242,12 +240,12 @@ Options:
 ```
 
 ```
-(dl) schoudhury:work$ xpctl configdiff tagger 786c05921a7badd61914aa7f25f48145096b7a39 54be249f9d33ac399edc0d91678959d36b12fd29
+(dl) testuser:work$ xpctl configdiff tagger 786c05921a7badd61914aa7f25f48145096b7a39 54be249f9d33ac399edc0d91678959d36b12fd29
 setting dbhost to xxx.yyy.com dbport to 27017
 db connection successful
 diff of sha2 wrt sha1
 {'model': {'bottlesz': 1024}}
-(dl) schoudhury:work$ xpctl configdiff tagger 54be249f9d33ac399edc0d91678959d36b12fd29 786c05921a7badd61914aa7f25f48145096b7a39
+(dl) testuser:work$ xpctl configdiff tagger 54be249f9d33ac399edc0d91678959d36b12fd29 786c05921a7badd61914aa7f25f48145096b7a39
 setting dbhost to xxx.yyy.com dbport to 27017
 db connection successful
 diff of sha2 wrt sha1
@@ -295,15 +293,12 @@ xpctl > lbsummary --task tagger
 Task: [tagger]
 ---------------------------------------------------------------------------------------------
          user dataset    event_type   metrics  num_experiments
-0    dpressel   twpos   test_events    acc,f1                1
-1    dpressel   twpos  train_events  avg_loss                1
-2    dpressel   twpos  valid_events    acc,f1                1
-3  schoudhury     idr   test_events    acc,f1                1
-4  schoudhury     idr  train_events  avg_loss                1
-5  schoudhury     idr  valid_events    acc,f1                1
-6  schoudhury    wnut   test_events    acc,f1                1
-7  schoudhury    wnut  train_events  avg_loss                1
-8  schoudhury    wnut  valid_events    acc,f1                1
+0    test-user   twpos   test_events    acc,f1                1
+1    test-user   twpos  train_events  avg_loss                1
+2    test-user   twpos  valid_events    acc,f1                1
+6  testuser    wnut   test_events    acc,f1                1
+7  testuser    wnut  train_events  avg_loss                1
+8  testuser    wnut  valid_events    acc,f1                1
 ```
 
 
@@ -313,7 +308,7 @@ Perform an experiment E, i.e., train the model and test.
 
 Using xpctl 
 1. Put the results ( `putresult`). This will show you the id of the result you just updated in the database. 
-2. Get the best result so far: `xpctl best tagger test idr f1`
+2. Get the best result so far: `xpctl best tagger test <test-dataset> f1`
 3. If E is the best so far, use `putmodel` to store the model in a persistent loc.
 
 _ sometime later _ : 
@@ -321,14 +316,14 @@ _ sometime later _ :
 4. To check if we have the model stored in a persistent loc: `getmodelloc`.
 
 ```
-(dl) schoudhury:xpctl$ xpctl best tagger test idr f1
+(dl) testuser:xpctl$ xpctl best tagger test <test-dataset> f1
 setting dbhost to localhost dbport to 27017
 db connection successful
 using metric: ['f1']
 total 2 results found, showing best 1 results
                          id    username label dataset                                      sha1                    date        f1
-1  59b9af747412df155562438d  schoudhury  test     idr  7fbbd90b57395b003ab8476b6a17e747f8dfcba3 2017-09-13 22:21:35.322  0.860052
-(dl) schoudhury:xpctl$ xpctl putmodel --help
+1  59b9af747412df155562438d  testuser  test     <test-dataset>  7fbbd90b57395b003ab8476b6a17e747f8dfcba3 2017-09-13 22:21:35.322  0.860052
+(dl) testuser:xpctl$ xpctl putmodel --help
 setting dbhost to localhost dbport to 27017
 db connection successful
 Usage: xpctl putmodel [OPTIONS] TASK ID CBASE
@@ -341,7 +336,7 @@ Usage: xpctl putmodel [OPTIONS] TASK ID CBASE
 Options:
   --cstore TEXT  location of the model checkpoint store
   --help         Show this message and exit.
-(dl) schoudhury:xpctl$ xpctl getmodelloc --help
+(dl) testuser:xpctl$ xpctl getmodelloc --help
 setting dbhost to localhost dbport to 27017
 db connection successful
 Usage: xpctl getmodelloc [OPTIONS] TASK ID
@@ -351,7 +346,7 @@ Usage: xpctl getmodelloc [OPTIONS] TASK ID
 Options:
   --help  Show this message and exit.
 
-(dl) schoudhury:xpctl$ xpctl getmodelloc tagger 59b9af747412df155562438d
+(dl) testuser:xpctl$ xpctl getmodelloc tagger 59b9af747412df155562438d
 setting dbhost to localhost dbport to 27017
 db connection successful
 ['model storage loc for record id 59b9af747412df155562438d is /data/model-checkpoints/7fbbd90b57395b003ab8476b6a17e747f8dfcba3/1.zip']

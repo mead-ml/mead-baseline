@@ -88,7 +88,7 @@ def getmodelloc(task, id):
 
 
 @cli.command()
-@click.option('--user', multiple=True, help="list of users (dpressel, root), [multiple]: --user a --user b")
+@click.option('--user', multiple=True, help="list of users (testuser, root), [multiple]: --user a --user b")
 @click.option('--metric', multiple=True, help="list of metrics (prec, recall, f1, accuracy),[multiple]: --metric f1 "
                                               "--metric acc")
 @click.option('--sort', help="specify one metric to sort the results")
@@ -109,7 +109,7 @@ def results(user, metric, sort, dataset, task, event_type):
 
 
 @cli.command()
-@click.option('--user', multiple=True, help="list of users (dpressel, root), [multiple]: --user a --user b")
+@click.option('--user', multiple=True, help="list of users (testuser, root), [multiple]: --user a --user b")
 @click.option('--n', default=1, help="N best results")
 @click.argument('task')
 @click.argument('event_type')
