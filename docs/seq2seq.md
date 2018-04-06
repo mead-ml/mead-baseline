@@ -4,7 +4,7 @@ Encoder-decoder frameworks have been used for Statistical Machine Translation, I
 
 ## seq2seq: Phrase in, phrase-out, 2 lookup table implementation, input is a temporal vector, and so is output
 
-This code implements seq2seq with mini-batching (as in other examples) using adagrad, adadelta, sgd or adam.  It supports two vocabularies, and takes word2vec pre-trained models as input, filling in words that are attested in the dataset but not found in the pre-trained models.  It uses dropout for regularization.
+This code implements seq2seq with mini-batching (as in other examples) using adagrad, adadelta, sgd or adam.  It supports two vocabularies, and supports word2vec pre-trained models as input, filling in words that are attested in the dataset but not found in the pre-trained models.  It uses dropout for regularization.
 
 For any reasonable size data, this really needs to run on the GPU for realistic training times.
 
