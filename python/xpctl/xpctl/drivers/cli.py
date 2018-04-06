@@ -1,3 +1,4 @@
+from click_shell import shell
 from xpctl.core import *
 import pandas as pd
 import datetime
