@@ -1,4 +1,4 @@
-import baseline as bl
+import baseline
 import json
 import numpy as np
 import logging
@@ -88,13 +88,13 @@ class Task(object):
             "visdom": self.config_params.get('visdom', False),
             "tensorboard": self.config_params.get('tensorboard', False)
         }
-        reporting = bl.setup_reporting(**reporting)
+        reporting = baseline.setup_reporting(**reporting)
         self.config_params['train']['reporting'] = reporting
         logging.basicConfig(level=logging.DEBUG)
 
     @staticmethod
     def _create_embeddings_from_file(embed, vocab, unif, keep_unused):
-        EmbeddingT = bl.GloVeModel if embed.endswith('.txt') else bl.Word2VecModel
+        EmbeddingT = baseline.GloVeModel if embed.endswith('.txt') else baseline.Word2VecModel
         return EmbeddingT(embed, vocab, unif_weight=unif, keep_unused=keep_unused)
 
     def _create_embeddings(self, embeddings_set, vocabs):
@@ -113,11 +113,11 @@ class Task(object):
                 embeddings['word'] = Task._create_embeddings_from_file(embed_file, vocabs['word'], unif=unif, keep_unused=keep_unused)
             else:
                 dsz = embeddings_section['dsz']
-                embeddings['word'] = bl.RandomInitVecModel(dsz, vocabs['word'], unif_weight=unif)
+                embeddings['word'] = baseline.RandomInitVecModel(dsz, vocabs['word'], unif_weight=unif)
 
         if 'char' in vocabs:
             if self.config_params.get('charsz', -1) > 0:
-                embeddings['char'] = bl.RandomInitVecModel(self.config_params['charsz'], vocabs['char'], unif_weight=unif)
+                embeddings['char'] = baseline.RandomInitVecModel(self.config_params['charsz'], vocabs['char'], unif_weight=unif)
 
         extended_embed_info = self.config_params.get('extended_embed_info', {}),
         for key, vocab in vocabs.items():
@@ -127,12 +127,12 @@ class Task(object):
                     else extended_embed_info[key]["embedding"]
                 ext_emb_dsz = extended_embed_info[key].get("dsz", None)
                 if ext_embed is not None:
-                    EmbeddingT = bl.GloVeModel if ext_embed.endswith('.txt') else bl.Word2VecModel
+                    EmbeddingT = baseline.GloVeModel if ext_embed.endswith('.txt') else baseline.Word2VecModel
                     print("using {} to read external embedding file {}".format(EmbeddingT, ext_embed))
                     embeddings[key] = EmbeddingT(ext_embed, known_vocab=vocab, unif_weight=unif, keep_unused=False)
                 else:
                     print("randomly initializing external feature with dimension {}".format(ext_emb_dsz))
-                    embeddings[key] = bl.RandomInitVecModel(ext_emb_dsz, vocab, unif_weight=unif)
+                    embeddings[key] = baseline.RandomInitVecModel(ext_emb_dsz, vocab, unif_weight=unif)
             elif key not in ['word', 'char']:
                 raise Exception("Error: must specify a field '{}' in 'extended_embed_sz' dictionary for embedding dim size".format(key))
 
@@ -167,12 +167,12 @@ class ClassifierTask(Task):
         self.task = None
 
     def _create_task_specific_reader(self):
-        return bl.create_pred_reader(self.config_params['preproc']['mxlen'],
-                                     zeropadding=0,
-                                     clean_fn=self.config_params['preproc']['clean_fn'],
-                                     vec_alloc=self.config_params['preproc']['vec_alloc'],
-                                     src_vec_trans=self.config_params['preproc']['src_vec_trans'],
-                                     reader_type=self.config_params['loader']['reader_type'])
+        return baseline.create_pred_reader(self.config_params['preproc']['mxlen'],
+                                           zeropadding=0,
+                                           clean_fn=self.config_params['preproc']['clean_fn'],
+                                           vec_alloc=self.config_params['preproc']['vec_alloc'],
+                                           src_vec_trans=self.config_params['preproc']['src_vec_trans'],
+                                           reader_type=self.config_params['loader']['reader_type'])
 
     def _setup_task(self):
         backend = self.config_params.get('backend', 'tensorflow')
@@ -199,10 +199,10 @@ class ClassifierTask(Task):
         self.task = classify
 
         if self.config_params['preproc'].get('clean', False) is True:
-            self.config_params['preproc']['clean_fn'] = bl.TSVSeqLabelReader.do_clean
+            self.config_params['preproc']['clean_fn'] = baseline.TSVSeqLabelReader.do_clean
             print('Clean')
         elif self.config_params['preproc'].get('lower', False) is True:
-            self.config_params['preproc']['clean_fn'] = bl.lowercase
+            self.config_params['preproc']['clean_fn'] = baseline.lowercase
             print('Lower')
         else:
             self.config_params['preproc']['clean_fn'] = None
@@ -234,13 +234,13 @@ class TaggerTask(Task):
 
     def _create_task_specific_reader(self):
         preproc = self.config_params['preproc']
-        reader = bl.create_seq_pred_reader(preproc['mxlen'],
-                                           preproc['mxwlen'],
-                                           preproc['word_trans_fn'],
-                                           preproc['vec_alloc'],
-                                           preproc['vec_shape'],
-                                           preproc['trim'],
-                                           **self.config_params['loader'])
+        reader = baseline.create_seq_pred_reader(preproc['mxlen'],
+                                                 preproc['mxwlen'],
+                                                 preproc['word_trans_fn'],
+                                                 preproc['vec_alloc'],
+                                                 preproc['vec_shape'],
+                                                 preproc['trim'],
+                                                 **self.config_params['loader'])
         return reader
 
     def _setup_task(self):
@@ -264,10 +264,10 @@ class TaggerTask(Task):
 
         self.task = tagger
         if self.config_params['preproc'].get('web-cleanup', False) is True:
-            self.config_params['preproc']['word_trans_fn'] = bl.CONLLSeqReader.web_cleanup
+            self.config_params['preproc']['word_trans_fn'] = baseline.CONLLSeqReader.web_cleanup
             print('Web-ish data cleanup')
         elif self.config_params['preproc'].get('lower', False) is True:
-            self.config_params['preproc']['word_trans_fn'] = bl.lowercase
+            self.config_params['preproc']['word_trans_fn'] = baseline.lowercase
             print('Lower')
         else:
             self.config_params['word_trans_fn'] = None
@@ -300,11 +300,11 @@ class EncoderDecoderTask(Task):
 
     def _create_task_specific_reader(self):
         preproc = self.config_params['preproc']
-        reader = bl.create_parallel_corpus_reader(preproc['mxlen'],
-                                                  preproc['vec_alloc'],
-                                                  preproc['trim'],
-                                                  preproc['word_trans_fn'],
-                                                  **self.config_params['loader'])
+        reader = baseline.create_parallel_corpus_reader(preproc['mxlen'],
+                                                        preproc['vec_alloc'],
+                                                        preproc['trim'],
+                                                        preproc['word_trans_fn'],
+                                                        **self.config_params['loader'])
         return reader
 
     def _setup_task(self):
@@ -314,14 +314,14 @@ class EncoderDecoderTask(Task):
         backend = self.config_params.get('backend', 'tensorflow')
         if backend == 'pytorch':
             print('PyTorch backend')
-            import bl.pytorch.long_0_tensor_alloc as vec_alloc
-            import bl.pytorch.tensor_shape as vec_shape
-            import bl.pytorch.seq2seq as seq2seq
+            from baseline.pytorch import long_0_tensor_alloc as vec_alloc
+            from baseline.pytorch import tensor_shape as vec_shape
+            import baseline.pytorch.seq2seq as seq2seq
             self.config_params['preproc']['vec_alloc'] = vec_alloc
             self.config_params['preproc']['vec_shape'] = vec_shape
-            src_vec_trans = bl.tensor_reverse_2nd if do_reverse else None
+            src_vec_trans = baseline.tensor_reverse_2nd if do_reverse else None
             self.config_params['preproc']['word_trans_fn'] = src_vec_trans
-            self.config_params['preproc']['show_ex'] = bl.pytorch.show_examples_pytorch
+            self.config_params['preproc']['show_ex'] = baseline.pytorch.show_examples_pytorch
             self.config_params['preproc']['trim'] = True
         else:
             import baseline.tf.seq2seq as seq2seq
@@ -330,9 +330,9 @@ class EncoderDecoderTask(Task):
             self.config_params['preproc']['vec_alloc'] = np.zeros
             self.config_params['preproc']['vec_shape'] = np.shape
             self.config_params['preproc']['trim'] = False
-            src_vec_trans = bl.reverse_2nd if do_reverse else None
+            src_vec_trans = baseline.reverse_2nd if do_reverse else None
             self.config_params['preproc']['word_trans_fn'] = src_vec_trans
-            self.config_params['preproc']['show_ex'] = bl.tf.show_examples_tf
+            self.config_params['preproc']['show_ex'] = baseline.tf.show_examples_tf
 
         self.task = seq2seq
 
@@ -363,8 +363,8 @@ class EncoderDecoderTask(Task):
             print('Showing examples')
             preproc = self.config_params['preproc']
             show_ex_fn = preproc['show_ex']
-            rlut1 = bl.revlut(self.feat2index1['word'])
-            rlut2 = bl.revlut(self.feat2index2['word'])
+            rlut1 = baseline.revlut(self.feat2index1['word'])
+            rlut2 = baseline.revlut(self.feat2index2['word'])
             self.config_params['train']['after_train_fn'] = lambda model: show_ex_fn(model,
                                                                                      self.valid_data, rlut1, rlut2,
                                                                                      self.embeddings2['word'],
@@ -384,10 +384,10 @@ class LanguageModelingTask(Task):
     def _create_task_specific_reader(self):
         mxwlen = self.config_params['preproc']['mxwlen']
         nbptt = self.config_params['nbptt']
-        reader = bl.create_lm_reader(mxwlen,
-                                     nbptt,
-                                     self.config_params['preproc']['word_trans_fn'],
-                                     reader_type=self.config_params['loader']['reader_type'])
+        reader = baseline.create_lm_reader(mxwlen,
+                                           nbptt,
+                                           self.config_params['preproc']['word_trans_fn'],
+                                           reader_type=self.config_params['loader']['reader_type'])
         return reader
 
     def _setup_task(self):
@@ -410,10 +410,10 @@ class LanguageModelingTask(Task):
         self.task = lm
 
         if self.config_params.get('web-cleanup', False) is True:
-            self.config_params['preproc']['word_trans_fn'] = bl.CONLLSeqReader.web_cleanup
+            self.config_params['preproc']['word_trans_fn'] = baseline.CONLLSeqReader.web_cleanup
             print('Web-ish data cleanup')
         elif self.config_params.get('lower', False) is True:
-            self.config_params['preproc']['word_trans_fn'] = bl.lowercase
+            self.config_params['preproc']['word_trans_fn'] = baseline.lowercase
             print('Lower')
         else:
             self.config_params['preproc']['word_trans_fn'] = None
