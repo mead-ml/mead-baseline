@@ -181,13 +181,35 @@ def pytorch_linear(in_sz, out_sz, unif=0, initializer=None):
     return l
 
 
+def _cat_dir(h):
+    return torch.cat([h[0:h.size(0):2], h[1:h.size(0):2]], dim=-1)
+
+
+class BiRNNWrapper(nn.Module):
+
+    def __init__(self, rnn, nlayers):
+        super(BiRNNWrapper, self).__init__()
+        self.rnn = rnn
+        self.nlayers = nlayers
+
+    def forward(self, seq):
+        output, hidden = self.rnn(seq)
+        if isinstance(hidden, tuple):
+            hidden = tuple(_cat_dir(h) for h in hidden)
+        else:
+            hidden = _cat_dir(hidden)
+        return (output, hidden)
+
+
 def pytorch_rnn(insz, hsz, rnntype, nlayers, dropout):
 
     if rnntype == 'gru':
         rnn = torch.nn.GRU(insz, hsz, nlayers, dropout=dropout)
+    elif rnntype == 'blstm':
+        rnn = torch.nn.LSTM(insz, hsz, nlayers, dropout=dropout, bidirectional=True)
+        rnn = BiRNNWrapper(rnn, nlayers)
     else:
         rnn = torch.nn.LSTM(insz, hsz, nlayers, dropout=dropout)
-
     return rnn
 
 
