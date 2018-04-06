@@ -6,7 +6,8 @@ EMBEDDINGS_DIR?=/data/embeddings
 CHECKPOINTS_DIR?=/data/model-checkpoints
 TASKS_DIR?=/data/tasks
 HOST_NETWORK?=default
-DOCKER?=nvidia-docker
+GPU?=0
+DOCKER=GPU=$(GPU) nvidia-docker
 
 build:
 	docker build --network $(HOST_NETWORK) -t baseline -f ./Dockerfile ../
