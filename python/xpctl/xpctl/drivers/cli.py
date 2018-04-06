@@ -1,16 +1,10 @@
-import click
-from click_shell import shell
 from xpctl.core import *
 import pandas as pd
 import datetime
 import socket
 import hashlib
 import os
-import subprocess
 import getpass
-import pymongo
-import time
-import shutil
 from bson.objectid import ObjectId
 import sys
 import json
@@ -32,15 +26,13 @@ events = {
 }
 
 
-################
 # set up env
-################
 def read_cred():
     j = None
     try:
         from .mongocred import creds
         j = creds
-    except:
+    except ImportError:
         return (None, None, None, None)
     return (j['dbhost'], j['dbport'], j['user'], j['passwd'])
 
@@ -74,6 +66,7 @@ def cli(host, port, user, password):
         click.echo("db connection unsuccessful, aborting")
         sys.exit(1)
 
+
 @cli.command()
 def vars():
     """Prints the value of system variables dbhost and dbport"""
@@ -93,9 +86,6 @@ def getmodelloc(task, id):
     return 
 
 
-##########################
-### calculate results
-###########################
 @cli.command()
 @click.option('--user', multiple=True, help="list of users (dpressel, root), [multiple]: --user a --user b")
 @click.option('--metric', multiple=True, help="list of metrics (prec, recall, f1, accuracy),[multiple]: --metric f1 "
@@ -140,10 +130,7 @@ def best(user, metric, dataset, n, task, event_type):
         click.echo("no result found for this query")
 
 
-####################
 # summarize results
-####################
-
 @cli.command()
 @click.option('--task')
 def lbsummary(task):
@@ -184,9 +171,7 @@ def tasksummary(task, dataset, metric):
     click.echo(tsummary)
 
 
-################
 # Edit database
-###############
 @cli.command()
 @click.argument('task')
 @click.argument('id')
@@ -236,10 +221,8 @@ def delete(id, task):
             click.echo("no record deleted")
         return   
 
-#########################
-# Put results in database
-#########################
 
+# Put results in database
 @cli.command()
 @click.option("--user", default=getpass.getuser(), help="username")
 @click.option("--cbase", help="path to the base structure for the model checkpoint files:"
@@ -305,6 +288,7 @@ def putresult(user, log, task, config, label, cbase, cstore):
     insertoneresult = coll.insert_one(post)
     click.echo("results updated, the new results are stored with the record id: {}".format(insertoneresult.inserted_id))
 
+
 @cli.command()
 @click.option("--cstore", default="/data/model-checkpoints", help="location of the model checkpoint store")
 @click.argument('task')
@@ -335,9 +319,8 @@ def putmodel(task, id, cbase, cstore):
         click.echo("model could not be stored, see previous errors")
 
 
-###########
+
 # writers
-###########
 @cli.command()
 @click.argument("task")
 @click.argument("sha")

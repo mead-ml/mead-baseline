@@ -260,7 +260,7 @@ def get_baseline_sha1():
     return get_git_revision_hash(get_baseline_loc()).strip().decode("utf-8")
 
 
-def storemodel(cbase, configsha1, cstore):
+def store_model(cbase, configsha1, cstore):
     mdir, mbase = os.path.split(cbase)
     mdir = mdir if mdir else "."
     if not os.path.exists(mdir):
