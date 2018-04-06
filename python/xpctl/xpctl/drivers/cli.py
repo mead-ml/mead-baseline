@@ -81,16 +81,6 @@ def vars():
 
 
 @cli.command()
-@click.option('--host', default="localhost", help="database host")
-@click.option('--port', default=27017, help="database port")
-def setupdb(host, port):
-    """sets up the database connection. helpful if you started spct without --host and --port"""
-    db = setupdb_int(host, port)
-    if db is not None:
-        click.echo("db connection successful")
-
-
-@cli.command()
 @click.argument('task')
 @click.argument('id')
 def getmodelloc(task, id):
