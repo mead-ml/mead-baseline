@@ -139,7 +139,7 @@ def lbsummary(task):
     all users, datasets and metrics for that task. This is helpful because we often forget what metrics or datasets were
     used for a task, which are the necessary parameters for the commands `results` and `best` and `tasksummary`. Shows
     the summary for all available tasks if no option is specified."""
-    db = setupdb_int(dbhost, dbport)
+    db = cli_int(dbhost, dbport, dbuser, dbpass)
     if db is None:
         click.echo("can not connect to database")
         return
