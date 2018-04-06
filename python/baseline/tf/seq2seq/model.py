@@ -124,7 +124,7 @@ class Seq2SeqModel(EncoderDecoder):
         model.vocab1 = src_vocab_embed if type(src_vocab_embed) is dict else src_vocab_embed.vocab
         model.vocab2 = dst_vocab_embed if type(dst_vocab_embed) is dict else dst_vocab_embed.vocab
         model.arc_state = kwargs.get('arc_state', False)
-        print('ARC state', model.arc_state)
+        #print('ARC state', model.arc_state)
         model.mxlen = mxlen
         model.hsz = hsz
         model.nlayers = nlayers

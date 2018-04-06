@@ -14,6 +14,7 @@ class Seq2SeqBase(nn.Module, EncoderDecoder):
         self.nc = embeddings_out.vsz + 1
         self.vocab1 = embeddings_in.vocab
         self.vocab2 = embeddings_out.vocab
+        self.beam_sz = 1
 
     def get_src_vocab(self):
         return self.vocab1

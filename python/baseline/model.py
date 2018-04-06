@@ -242,6 +242,9 @@ class EncoderDecoder(object):
     def load(basename, **kwargs):
         pass
 
+    def run(self, source_dict):
+        pass
+
 
 def create_seq2seq_model(known_creators, input_embedding, output_embedding, **kwargs):
     model_type = kwargs.get('model_type', 'default')

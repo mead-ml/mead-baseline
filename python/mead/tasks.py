@@ -106,13 +106,14 @@ class Task(object):
             embeddings_section = self.config_params['word_embeddings']
             embed_label = embeddings_section.get('label', None)
 
+            embeddings = dict()
             if embed_label is not None:
                 embed_file = embeddings_set[embed_label]['file']
-                embeddings = dict()
+
                 embeddings['word'] = Task._create_embeddings_from_file(embed_file, vocabs['word'], unif=unif, keep_unused=keep_unused)
             else:
                 dsz = embeddings_section['dsz']
-                embeddings = bl.RandomInitVecModel(dsz, vocabs['word'], unif_weight=unif)
+                embeddings['word'] = bl.RandomInitVecModel(dsz, vocabs['word'], unif_weight=unif)
 
         if 'char' in vocabs:
             if self.config_params.get('charsz', -1) > 0:
@@ -337,7 +338,12 @@ class EncoderDecoderTask(Task):
 
     def initialize(self, embeddings):
         embeddings_set = mead.utils.index_by_label(embeddings)
-        vocab1, vocab2 = self.reader.build_vocabs([self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']])
+
+        vocab_file = self.dataset.get('vocab_file', None)
+        if vocab_file is not None:
+            vocab1, vocab2 = self.reader.build_vocabs([vocab_file])
+        else:
+            vocab1, vocab2 = self.reader.build_vocabs([self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']])
         self.embeddings1, self.feat2index1 = self._create_embeddings(embeddings_set, {'word': vocab1})
         self.embeddings2, self.feat2index2 = self._create_embeddings(embeddings_set, {'word': vocab2})
 

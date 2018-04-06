@@ -19,7 +19,7 @@ def _build_vocab_for_col(col, files):
     vocab = Counter()
     vocab['<GO>'] = 1
     vocab['<EOS>'] = 1
-
+    vocab['<UNK>'] = 1
     for file in files:
         if file is None:
             continue
@@ -94,7 +94,7 @@ class TSVParallelCorpusReader(ParallelCorpusReader):
                 end2 = min(tgt_len, mxlen)-1
                 tgtl[0] = GO
                 src_len = end1
-                tgt_len = end2+2
+                tgt_len = end2+1
 
                 for j in range(end1):
                     srcl[j] = vocab1[src[j]]
@@ -138,6 +138,8 @@ class MultiFileParallelCorpusReader(ParallelCorpusReader):
         PAD = vocab1['<PAD>']
         GO = vocab2['<GO>']
         EOS = vocab2['<EOS>']
+        UNK1 = vocab1['<UNK>']
+        UNK2 = vocab2['<UNK>']
         mxlen = self.max_sentence_length
         ts = []
 
@@ -155,12 +157,12 @@ class MultiFileParallelCorpusReader(ParallelCorpusReader):
                     end2 = min(tgt_len, mxlen)-1
                     tgtl[0] = GO
                     src_len = end1
-                    tgt_len = end2+2
+                    tgt_len = end2+1
 
                     for j in range(end1):
-                        srcl[j] = vocab1[src[j]]
+                        srcl[j] = vocab1.get(src[j], UNK1)
                     for j in range(end2-1):
-                        tgtl[j + 1] = vocab2[dst[j]]
+                        tgtl[j + 1] = vocab2.get(dst[j], UNK2)
 
                     tgtl[end2] = EOS
                     ts.append((srcl, tgtl, src_len, tgt_len))
