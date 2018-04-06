@@ -10,7 +10,8 @@ For any reasonable size data, this really needs to run on the GPU for realistic 
 
 ## Status
 
-This model is implemented in TensorFlow and PyTorch.  The TensorFlow has been tested extensively.  The PyTorch model now has experimental support for global attention.  The English-Vietnamese dataset is from https://nlp.stanford.edu/projects/nmt/ and the site authors have published previously on the dataset here: https://nlp.stanford.edu/pubs/luong-manning-iwslt15.pdf
+This model is implemented in TensorFlow and PyTorch.  The TensorFlow has been tested extensively.  The PyTorch model now has experimental support for global attention.  The English-Vietnamese dataset is from https://nlp.stanford.edu/projects/nmt/ and the site authors have published previously on the dataset here: https://nlp.stanford.edu/pubs/luong-manning-iwslt15.pdf. Test results are for Single NMT on TED tst2013.
+
 
 *Our results for Single NMT*
 
