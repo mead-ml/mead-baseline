@@ -1,14 +1,12 @@
 import click
-from click_shell import shell
 from xpctl.helpers import *
 import pandas as pd
-import socket
 import os
 import subprocess
 import pymongo
-import time
 import shutil
 from bson.objectid import ObjectId
+
 
 def connect(host, port, user, passw):
     client = None
@@ -24,12 +22,13 @@ def connect(host, port, user, passw):
     try:
         dbnames = client.database_names()
     except pymongo.errors.ServerSelectionTimeoutError:
-        print("can not get database from mongo at host: {}, port {}, connection timed out".format(host,port))
+        print("can not get database from mongo at host: {}, port {}, connection timed out".format(host, port))
         return None
     if "reporting_db" not in dbnames:
         print("no database for results found")
         return None
     return client.reporting_db
+
 
 dbhost = None
 dbport = None
@@ -38,9 +37,10 @@ db = None
 events = {
     "train": "train_events",
     "test": "test_events",
-    "valid": "valid_events", 
+    "valid": "valid_events",
     "dev": "valid_events",
 }
+
 
 def dbsetup(tname):
     if db is None:
@@ -52,12 +52,14 @@ def dbsetup(tname):
     else:
         return True
 
+
 def cli_int(dbhost, dbport, dbuser, dbpass):
     global db
     db = connect(dbhost, dbport, dbuser, dbpass)
     return db
 
-def getmodelloc_int(task, id):
+
+def get_modelloc_int(task, id):
     if not dbsetup(task):
         return None
     coll = db[task]
@@ -68,6 +70,7 @@ def getmodelloc_int(task, id):
     if not results:
         return None
     return results[0]
+
 
 def get_metrics(list, event_type):
     keys = []
@@ -82,7 +85,7 @@ def get_metrics(list, event_type):
     return keys
 
 
-def generatedataframe(coll, metrics, query, projection, event_type):
+def generate_data_frame(coll, metrics, query, projection, event_type):
     results = list(coll.find(query, projection))
     if not results:
         return
@@ -90,17 +93,18 @@ def generatedataframe(coll, metrics, query, projection, event_type):
     ms = list(set(metrics)) if metrics else list(get_metrics(results, event_type))
     presults = []
     for result in results:  # different experiments
-        for index in range(len(result[event_type])):  # train_event epoch 0, train_event epoch 1 etc.
-            # for event_type = test_event, there is only one event
+        for index in range(len(result[event_type])):  # train_event epoch 0,
+            # train_event epoch 1 etc, for event_type = test_event, there is only one event
             data = []
             for metric in ms:
                 data.append(result[event_type][index][metric])
-            presults.append([result['_id'], result['username'], result['label'], result['config']['dataset'], result['sha1'],
-                             result['date']] + data)
+            presults.append(
+                [result['_id'], result['username'], result['label'], result['config']['dataset'], result['sha1'],
+                 result['date']] + data)
     return pd.DataFrame(presults, columns=['id', 'username', 'label', 'dataset', 'sha1', 'date'] + ms)
 
 
-def updatequery(q, uname, dataset):
+def update_query(q, uname, dataset):
     query = q
     if uname:
         query.update({"username": {"$in": list(uname)}})
@@ -109,11 +113,10 @@ def updatequery(q, uname, dataset):
     return query
 
 
-def updateprojection(event_type):
+def update_projection(event_type):
     projection = {"_id": 1, "sha1": 1, "label": 1, "username": 1, "config.dataset": 1, "date": 1}
     projection.update({event_type: 1})
     return projection
-
 
 
 def bestn_results(uname, metric, dataset, tname, numresults, event_type, ascending):
@@ -123,11 +126,12 @@ def bestn_results(uname, metric, dataset, tname, numresults, event_type, ascendi
         metrics = [metric]
         click.echo("using metric: {}".format(metrics))
         coll = db[tname]
-        query = updatequery({}, uname, dataset)
-        projection = updateprojection(event_type)
-        resultdframe = generatedataframe(coll, metrics, query, projection, event_type)
+        query = update_query({}, uname, dataset)
+        projection = update_projection(event_type)
+        resultdframe = generate_data_frame(coll, metrics, query, projection, event_type)
         if not resultdframe.empty:
-            resultdframe = resultdframe.sort_values(metrics, ascending=[ascending])[:min(int(numresults),                                                                                         resultdframe.shape[0])]
+            resultdframe = resultdframe.sort_values(metrics, ascending=[ascending])[
+                           :min(int(numresults), resultdframe.shape[0])]
             return resultdframe
         else:
             return None
@@ -143,9 +147,9 @@ def results_int(user, metric, sort, dataset, task, event_type):
     else:
         metrics = list(metric)
         coll = db[task]
-        query = updatequery({}, user, dataset)
-        projection = updateprojection(event_type=events[event_type])
-        resultdframe = generatedataframe(coll, metrics, query, projection, event_type=events[event_type])
+        query = update_query({}, user, dataset)
+        projection = update_projection(event_type=events[event_type])
+        resultdframe = generate_data_frame(coll, metrics, query, projection, event_type=events[event_type])
         if len(metric) == 1:
             metric = metric[0]
             if metric == "avg_loss" or metric == "perplexity":
@@ -164,6 +168,7 @@ def results_int(user, metric, sort, dataset, task, event_type):
         else:
             return None
 
+
 def config2json_int(task, sha):
     """Exports the config file for an experiment as a json file. Arguments: taskname,
     experiment sha1, output file path"""
@@ -173,16 +178,17 @@ def config2json_int(task, sha):
         coll = db[task]
         j = coll.find_one({"sha1": sha}, {"config": 1})["config"]
         if not j:
-            return None    
+            return None
         else:
             return j
+
 
 def best_int(user, metric, dataset, n, task, event_type):
     """Shows the best F1 score for event_type(tran/valid/test) on a particular task (classify/ tagger) on
     a particular dataset (SST2, wnut) using a particular metric. Default behavior: The best result for
     **All** users available for the task. Optionally supply number of results (n-best), user(s) and metric(only ONE)"""
     event_type = event_type.lower()
-    
+
     if event_type not in events:
         return None
     else:
@@ -198,9 +204,9 @@ def task_summary(task, dataset, metric):
     else:
         metrics = [metric]
         coll = db[task]
-        query = updatequery({}, [], dataset)
-        projection = updateprojection(event_type=events["test"])
-        resultdframe = generatedataframe(coll, metrics, query, projection, event_type=events["test"])
+        query = update_query({}, [], dataset)
+        projection = update_projection(event_type=events["test"])
+        resultdframe = generate_data_frame(coll, metrics, query, projection, event_type=events["test"])
         if not resultdframe.empty:
             datasets = resultdframe.dataset.unique()
             if dataset not in datasets:
@@ -223,15 +229,15 @@ def generate_info(coll):
     have participated in this."""
     event_types = [events["train"], events["test"], events["valid"]]
 
-    q = updatequery({}, None, None)
+    q = update_query({}, None, None)
     p = {'config.dataset': 1}
     datasets = list(set([x['config']['dataset'] for x in list(coll.find(q, p))]))
     store = []  #
 
     for dataset in datasets:
-        q = updatequery({}, None, dataset)
+        q = update_query({}, None, dataset)
         for event_type in event_types:
-            p = updateprojection(event_type)
+            p = update_projection(event_type)
             results = list(coll.find(q, p))
             metrics = get_metrics(results, event_type)
             for result in results:  # different experiments
@@ -279,12 +285,10 @@ def storemodel(cbase, configsha1, cstore):
         shutil.copy(mfile, modelloc)
         click.echo("writing model file: [{}] to store: [{}]".format(mfile, modelloc))
     click.echo("zipping model files")
-    shutil.make_archive( base_name =  modelloc,
-                         format    =  'zip',
-                         root_dir  =  modellocbase,
-                         base_dir  =  newdir )
-    #shutil.make_archive(modelloc, 'zip', modelloc, newdir)
+    shutil.make_archive(base_name=modelloc,
+                        format='zip',
+                        root_dir=modellocbase,
+                        base_dir=newdir)
     shutil.rmtree(modelloc)
     click.echo("zipped file written, model directory removed")
-    return modelloc+".zip"
-
+    return modelloc + ".zip"
