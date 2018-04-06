@@ -12,4 +12,7 @@ For any reasonable size data, this really needs to run on the GPU for realistic 
 
 This model is implemented in TensorFlow and PyTorch.  The TensorFlow has been tested extensively.  The PyTorch model now has experimental support for global attention.
 
-_TODO: Benchmark for NMT_
+| dataset        | metric | optim  | eta (LR) | backend    | score  | encoder | layers | dropout | hidden | embed | epochs |
+| -------------- | ------ | ------ | -------- | ---------- | ------ | ------- | ------ | ------- | ------ | ----- | ------ |
+| iwslt15-en-vi  |  BLEU  | adam   |  0.001   | TensorFlow | 25.21  | blstm   |      2 |     0.5 |   500  |  500  |    16  |
+
