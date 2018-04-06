@@ -16,7 +16,7 @@ After an experiment is done, use `xpctl` to report the results to a mongodb serv
 
 ### Installation
 
-In the `xpctl` dir, run `pip install -e`. You can create a file `mongocred.py` at `xpctl/drivers/` if you do not want to pass the parameters everytime you start the command. The file should look like this:
+In the `xpctl` dir, run `pip install -e`. Before installation, you can create a file `mongocred.py` at `xpctl/drivers/` if you do not want to pass the parameters everytime you start the command. The file should look like this:
 
 ```
 creds = {"user": <username>,
