@@ -15,4 +15,5 @@ VOLUME ["/data/embeddings", "/data/model-store", "/data/datasets", "/data/model-
 
 ENV PYTHONPATH='$PYTHONPATH:/baseline'
 
+WORKDIR /baseline
 CMD ["bash"]
