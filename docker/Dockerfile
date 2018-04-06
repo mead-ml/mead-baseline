@@ -1,7 +1,6 @@
 ARG TF_VERSION=1.5.0
 
 FROM tensorflow/tensorflow:${TF_VERSION}-gpu-py3
-LABEL authors="Dan Pressel, Sagnik Choudhury, Yanjie Zhao, Matt Barta"
 
 RUN apt-get update && \
     apt-get install -y g++ make git vim && \
