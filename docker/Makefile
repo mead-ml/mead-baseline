@@ -13,4 +13,4 @@ build:
 	docker build --network $(HOST_NETWORK) -t baseline -f ./Dockerfile ../
 
 bash: build
-	$(DOCKER) run --rm -it --network ${HOST_NETWORK} -v ${MODEL_STORE}:/data/model-store -v ${EMBEDDINGS}:/data/embeddings -v ${CHECKPOINTS_DIR}:/data/model-checkpoints -v ${DATASETS_DIR}:/data/datasets baseline
+	$(DOCKER) run --rm -it --network ${HOST_NETWORK} -v ${MODEL_STORE}:/data/model-store -v ${EMBEDDINGS}:/data/embeddings:ro -v ${CHECKPOINTS_DIR}:/data/model-checkpoints -v ${DATASETS_DIR}:/data/datasets:ro baseline
