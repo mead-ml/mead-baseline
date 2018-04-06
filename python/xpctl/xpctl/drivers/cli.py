@@ -38,7 +38,8 @@ events = {
 def read_cred():
     j = None
     try:
-        from mongocred import creds as j
+        from .mongocred import creds
+        j = creds
     except:
         return (None, None, None, None)
     return (j['dbhost'], j['dbport'], j['user'], j['passwd'])
@@ -59,8 +60,7 @@ def cli(host, port, user, password):
     dbhost = host if host else host_c
     dbport = port if port else port_c 
     dbuser = user if user else user_c
-    dbpass = password if password else passw_c
-      
+    dbpass = password if password else passw_c 
     creds = {'mongo host':dbhost, 'mongo port':dbport, 'username':dbuser, 'password': dbpass}
     for var in creds:
         if creds[var] is None:
