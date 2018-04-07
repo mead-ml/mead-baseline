@@ -86,3 +86,58 @@ Here is a simple example of configuring `mead` to run a BLSTM-CRF in `pytorch` a
 
 ```
 
+### Adding new models
+
+Adding new models in mead is easy: put a directory under `addons/` and add 1. model architecture, 2. trainer (if necessary) 3. data reader (if necessary). The model files should start with `task_`, eg, if you are adding a `tagger` model, it should be called `tagger_xxx.py`. Similarly, the reader files should start with `reader_`.  In the configuration file, change the `model_type` and/or `reader_type` to `xxx` from `default`. Add this directory to your `PYTHONPATH` and run the code as before i.e., `python trainer.py --task tagger --config config/xxx.json` and `baseline` will pick up the new model automatically.  
+
+### Support for features
+
+For `tagger`, baseline supports multuple features in the CoNLL IOB file. For eg., you can include the POS chunks as:
+
+```
+Barrack B-NP B-PER
+Obama B-NP I-PER
+```
+
+If this feature is called `pos`, your configuration file would change slightly:
+
+```
+"loader": {
+        "reader_type": "default",
+        "extended_features": {
+            "pos": 1
+        }
+    },
+```
+
+`"pos":1` indicates that `pos` is the first feature in the CoNLL file. You can include multiple features. The last column in the ConLL file is considered the `IOB label`. For each feature, you *CAN* create an embedding file (in `Word2Vec` or `Glove` format). The embedding file is the mapping from the string feature to real values, eg: 
+
+```
+B-NP 010001
+I-NP 012221
+```
+shows an embedding file `pos.txt` in `Word2Vec` format. Again, to use this, you would need to change the config a little:
+
+```
+    "word_embeddings": {"label": "glove-42B"},
+    "extended_embed_info": {
+        "pos": {"embedding":"/data/embeddings/pos.txt"}
+    },
+
+```
+
+Creating an embedding file is not necessary, if you do not provide one we will initialize these features with random values. However, you must provide a dimension size in that case. Your config file will change to:
+
+```
+    "word_embeddings": {"label": "glove-42B"},
+    "extended_embed_info": {
+        "pos": {"dsz":10}
+    },
+
+```
+
+An example of this is provided in gazetter model (one that includes gazetter infomration in NER tagging): [the code](../python/addons/schoudhury/tagger_gazetteer.py) and the [JSON file](../python/mead/configs/wnut_gazetteer.json). Including gazetteers does improve the result on wnut17 dataset. 
+
+ 
+   
+     

@@ -119,7 +119,7 @@ class Task(object):
             if self.config_params.get('charsz', -1) > 0:
                 embeddings['char'] = baseline.RandomInitVecModel(self.config_params['charsz'], vocabs['char'], unif_weight=unif)
 
-        extended_embed_info = self.config_params.get('extended_embed_info', {}),
+        extended_embed_info = self.config_params.get('extended_embed_info', {})
         for key, vocab in vocabs.items():
             if key in extended_embed_info:
                 print('Adding extended feature embeddings {}'.format(key))
