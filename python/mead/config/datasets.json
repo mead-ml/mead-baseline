@@ -53,5 +53,11 @@
 	"valid_file": "/data/datasets/iwslt15-en-vi/tst2012",
 	"test_file": "/data/datasets/iwslt15-en-vi/tst2013",
 	"label": "iwslt15-en-vi"
+    },
+    {
+        "train_file": "/data/datasets/ner/wnut-gaz/wnut17train.conll",
+        "valid_file": "/data/datasets/ner/wnut-gaz/wnut17dev.conll",
+        "test_file": "/data/datasets/ner/wnut-gaz/wnut17test.conll",
+        "label": "wnut-gaz"
     }
 ]
