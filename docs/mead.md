@@ -88,7 +88,7 @@ Here is a simple example of configuring `mead` to run a BLSTM-CRF in `pytorch` a
 
 ### Adding new models
 
-Adding new models in mead is easy: put a directory under `addons/` and add 1. model architecture, 2. trainer (if necessary) 3. data reader (if necessary). The model files should start with `task_`, eg, if you are adding a `tagger` model, it should be called `tagger_xxx.py`. Similarly, the reader files should start with `reader_`.  In the configuration file, change the `model_type` and/or `reader_type` to `xxx` from `default`. Add this directory to your `PYTHONPATH` and run the code as before i.e., `python trainer.py --task tagger --config config/xxx.json` and `baseline` will pick up the new model automatically.  
+Adding new models in mead is easy: under `addons/` add 1. model architecture, 2. trainer (if necessary) 3. data reader (if necessary). The model files should start with `task_`, eg, if you are adding a `tagger` model, it should be called `tagger_xxx.py`. Similarly, the reader files should start with `reader_`.  In the configuration file, change the `model_type` and/or `reader_type` to `xxx` from `default`. Add this directory to your `PYTHONPATH` and run the code as before i.e., `python trainer.py --task tagger --config config/xxx.json` and `baseline` will pick up the new model automatically.  
 
 ### Support for features
 
@@ -136,7 +136,7 @@ Creating an embedding file is not necessary, if you do not provide one we will i
 
 ```
 
-An example of this is provided in gazetter model (one that includes gazetter infomration in NER tagging): [the code](../python/addons/schoudhury/tagger_gazetteer.py) and the [JSON file](../python/mead/configs/wnut_gazetteer.json). Including gazetteers does improve the result on wnut17 dataset. 
+An example of this is provided in gazetter model (one that includes gazetter infomration in NER tagging): [the code](../python/addons/tagger_gazetteer.py) and the [JSON file](../python/mead/configs/wnut_gazetteer.json). Including gazetteers does improve the result on wnut17 dataset. 
 
  
    
