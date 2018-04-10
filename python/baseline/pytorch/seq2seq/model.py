@@ -118,7 +118,7 @@ class Seq2SeqModel(Seq2SeqBase):
         rnntype = kwargs['rnntype']
         pdrop = kwargs.get('dropout', 0.5)
         enc_hsz = self.hsz
-        if rnntype == 'blstm' or rnntype == 'bgru':
+        if rnntype == 'blstm':
             enc_hsz = enc_hsz // 2
         dsz = embeddings_in.dsz
         self.gpu = kwargs.get('gpu', True)
@@ -147,7 +147,7 @@ class Seq2SeqAttnModel(Seq2SeqBase):
         rnntype = kwargs['rnntype']
         pdrop = kwargs.get('dropout', 0.5)
         enc_hsz = self.hsz
-        if rnntype == 'lstm' or rnntype == 'gru':
+        if rnntype == 'blstm':
             enc_hsz = enc_hsz // 2
         dsz = embeddings_in.dsz
         self.gpu = kwargs.get('gpu', True)
