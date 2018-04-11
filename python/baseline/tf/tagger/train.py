@@ -146,6 +146,8 @@ def fit(model, ts, vs, es, **kwargs):
     model_file = get_model_file(kwargs, 'tagger', 'tf')
     after_train_fn = kwargs['after_train_fn'] if 'after_train_fn' in kwargs else None
     trainer = create_trainer(TaggerTrainerTf, model, **kwargs)
+    tables = tf.tables_initializer()
+    model.sess.run(tables)
     init = tf.global_variables_initializer()
     model.sess.run(init)
     saver = tf.train.Saver()

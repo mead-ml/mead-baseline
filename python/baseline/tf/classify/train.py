@@ -102,6 +102,8 @@ def fit(model, ts, vs, es=None, **kwargs):
     print('reporting', reporting_fns)
     
     trainer = create_trainer(ClassifyTrainerTf, model, **kwargs)
+    tables = tf.tables_initializer()
+    model.sess.run(tables)
     model.sess.run(tf.global_variables_initializer())
     model.saver = tf.train.Saver()
 

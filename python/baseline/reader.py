@@ -501,12 +501,13 @@ class TSVSeqLabelReader(SeqLabelReader):
                 toks = TSVSeqLabelReader.splits(text)
                 mx = min(len(toks), nozplen)
                 toks = toks[:mx]
+                length = mx
                 x = self.vec_alloc(self.mxlen, dtype=int)
                 for j in range(len(toks)):
                     w = toks[j]
                     key = index.get(w, PAD)
                     x[j+halffiltsz] = key
-                examples.append((x, y))
+                examples.append((x, y, length))
         return baseline.data.SeqLabelDataFeed(baseline.data.SeqLabelExamples(examples),
                                               batchsz=batchsz, shuffle=shuffle, vec_alloc=self.vec_alloc, src_vec_trans=self.src_vec_trans)
 

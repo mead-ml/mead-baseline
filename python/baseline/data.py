@@ -74,6 +74,7 @@ class SeqLabelExamples(object):
     """
     SEQ = 0
     LABEL = 1
+    LENGTH = 1
 
     def __init__(self, example_list, do_shuffle=True):
         self.example_list = example_list
@@ -87,7 +88,7 @@ class SeqLabelExamples(object):
         :return: an example
         """
         ex = self.example_list[i]
-        return ex[SeqLabelExamples.SEQ], ex[SeqLabelExamples.LABEL]
+        return ex[SeqLabelExamples.SEQ], ex[SeqLabelExamples.LABEL], ex[SeqLabelExamples.LENGTH]
 
     def __len__(self):
         """Number of examples
@@ -101,7 +102,7 @@ class SeqLabelExamples(object):
         
         :return: (``int``) length
         """
-        x, y = self.example_list[0]
+        x, y, _ = self.example_list[0]
         return len(x)
 
     def batch(self, start, batchsz, vec_alloc=np.empty):
@@ -115,16 +116,18 @@ class SeqLabelExamples(object):
         siglen = self.width()
         xb = vec_alloc((batchsz, siglen), dtype=np.int)
         yb = vec_alloc((batchsz), dtype=np.int)
+        lengths = vec_alloc((batchsz), dtype=np.int)
         sz = len(self.example_list)
         idx = start * batchsz
         for i in range(batchsz):
             if idx >= sz: idx = 0
-            x, y = self.example_list[idx]
+            x, y, length = self.example_list[idx]
             xb[i] = x
             yb[i] = y
+            lengths[i] = length
             idx += 1
 
-        return xb, yb
+        return xb, yb, lengths
         
     @staticmethod
     def valid_split(data, splitfrac=0.15):
@@ -153,10 +156,10 @@ class SeqLabelDataFeed(ExampleDataFeed):
         :param i: (``int``) step index
         :return: A batch tensor x, batch tensor y
         """
-        x, y = self.examples.batch(i, self.batchsz, self.vec_alloc)
+        x, y, lengths = self.examples.batch(i, self.batchsz, self.vec_alloc)
         if self.src_vec_trans is not None:
             x = self.src_vec_trans(x)
-        return {'x': x, 'y': y}
+        return {'x': x, 'y': y, 'lengths': lengths}
 
 
 class SeqWordCharTagExamples(object):
