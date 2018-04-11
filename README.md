@@ -45,9 +45,10 @@ You can also think of the library itself as an abstraction layer at the "solutio
 
 ### As scaffolding for an experiment
 
-If you have a problem where the input is the same as a `baseline` task, you can easily use the API to set up your boilerplate work for you, and focus on your model, by creating a user-defined `addon`.  This is just a normal python file with a creation and load hooks (see the `python/addons` directory for examples). 
+If you have a problem where the input is the same as a `baseline` task, you can easily use the API to set up your boilerplate work for you, and focus on your model, by creating a user-defined `addon`.  This is just a normal python file with a creation and load hooks (see the [addons area](python/addons) for examples). 
 
 Then pass `--model_type {model}` to the driver program for that task.  The driver program will look to see if it has an implementation within the library and will not find the one in its registry.  So it will import the module and call its `create_model` function with the arguments and use the provided model.
+
 
 ## Running from configuration files, using `mead`
 
