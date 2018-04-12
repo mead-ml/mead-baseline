@@ -270,7 +270,7 @@ class TaggerTask(Task):
             self.config_params['preproc']['word_trans_fn'] = baseline.lowercase
             print('Lower')
         else:
-            self.config_params['word_trans_fn'] = None
+            self.config_params['preproc']['word_trans_fn'] = None 
 
     def initialize(self, embeddings):
         embeddings_set = mead.utils.index_by_label(embeddings)
