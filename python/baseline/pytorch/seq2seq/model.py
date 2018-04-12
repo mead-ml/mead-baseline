@@ -42,14 +42,26 @@ class Seq2SeqBase(nn.Module, EncoderDecoder):
 
     def make_input(self, batch_dict):
         src = batch_dict['src']
+        src_lengths = batch_dict['src_len']
         tgt = batch_dict['dst']
 
         dst = tgt[:, :-1]
         tgt = tgt[:, 1:]
+
+        src_lengths, perm_idx = src_lengths.sort(0, descending=True)
+        src = src[perm_idx]
+        dst = dst[perm_idx]
+        tgt = tgt[perm_idx]
+
+        self.src_lengths = Variable(src_lengths, requires_grad=False)
+        self.src_mask = sequence_mask(self.src_lengths)
+
         if self.gpu:
             src = src.cuda()
             dst = dst.cuda()
             tgt = tgt.cuda()
+            self.src_lengths = self.src_lengths.cuda()
+            self.src_mask = self.src_mask.cuda()
         return Variable(src), Variable(dst), Variable(tgt)
 
     # Input better be xch, x
@@ -60,7 +72,10 @@ class Seq2SeqBase(nn.Module, EncoderDecoder):
     def encode(self, src):
         src = src.transpose(0, 1).contiguous()
         embed_in_seq = self.embed_in(src)
-        return self.encoder_rnn(embed_in_seq)
+        packed = torch.nn.utils.rnn.pack_padded_sequence(embed_in_seq, self.src_lengths.data.tolist())
+        output, hidden = self.encoder_rnn(packed)
+        output, _ = torch.nn.utils.rnn.pad_packed_sequence(output)
+        return output, hidden
 
     def input_i(self, embed_i, output_i):
         pass
@@ -167,7 +182,8 @@ class Seq2SeqAttnModel(Seq2SeqBase):
         # Context = B x T x H
         # a = B x T x 1
         a = torch.bmm(context, self.output_to_attn(output_t).unsqueeze(2))
-        a = self.attn_softmax(a.squeeze(2))
+        scores = attention_mask(a.squeeze(2), self.src_mask)
+        a = self.attn_softmax(scores)
         # a = B x T
         # Want to apply over context, scaled by a
         # (B x 1 x T) (B x T x H) = (B x 1 x H)

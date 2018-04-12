@@ -1,11 +1,29 @@
 import torch
 import numpy as np
 from baseline.utils import lookup_sentence, get_version, revlut
+from torch.autograd import Variable
 import torch.autograd
 import torch.nn as nn
 
 
 PYT_MAJOR_VERSION = get_version(torch)
+
+
+def sequence_mask(lengths):
+    max_len = torch.max(lengths)
+    # 1 x T
+    row = Variable(torch.arange(0, max_len.data[0]), requires_grad=False).view(1, -1)
+    # B x 1
+    col = lengths.view(-1, 1).float()
+    # Broadcast to B x T, compares increasing number to max
+    mask = row < col
+    return mask.float()
+
+
+def attention_mask(scores, mask, value=100000):
+    # Make padded scores really low so they become 0 in softmax
+    scores = scores * mask + (mask - 1) * value
+    return scores
 
 
 def classify_bt(model, batch_time):
@@ -198,7 +216,7 @@ class BiRNNWrapper(nn.Module):
             hidden = tuple(_cat_dir(h) for h in hidden)
         else:
             hidden = _cat_dir(hidden)
-        return (output, hidden)
+        return output, hidden
 
 
 def pytorch_rnn(insz, hsz, rnntype, nlayers, dropout):
