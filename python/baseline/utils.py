@@ -2,6 +2,7 @@ import numpy as np
 import time
 import os
 import importlib
+from functools import partial
 
 
 def listify(x):
@@ -55,39 +56,33 @@ def import_user_module(module_type, model_type):
     mod = importlib.import_module(module_name)
     return mod
 
+def create_user_model(input_, output_, **kwargs):
+    """Create a user-defined model
 
-def create_user_classifier_model(w2v, labels, **kwargs):
-    """Create a user-defined classifier model
-
-    This creates an unstructured prediction classification model defined by the user.
+    This creates a model defined by the user.
     It first imports a module that must exist in the `PYTHONPATH`, with a named defined as
-    `classifier_{model_type}.py`.  Once created, this user-defined model can be trained within
+    `{task_type}_{model_type}.py`.  Once created, this user-defined model can be trained within
     the existing training programs
 
-    :param w2v: Some type of word vectors
-    :param labels: The categorical label types
+    :param input_: Some type of word vectors for the input
+    :param output_: Things passed dealing with the output
     :param kwargs:
     :return: A user-defined model
     """
     model_type = kwargs['model_type']
-    mod = import_user_module("classifier", model_type)
-    return mod.create_model(w2v, labels, **kwargs)
+    mod = import_user_module(kwargs['task_type'], model_type)
+    return mod.create_model(input_, output_, **kwargs)
 
 
-def load_user_classifier_model(outname, **kwargs):
-    """Loads a user-defined classifier model
+create_user_classifier_model = partial(create_user_model, task_type='classify')
+create_user_tagger_model = partial(create_user_model, task_type='tagger')
+create_user_seq2seq_model = partial(create_user_model, task_type='seq2seq')
 
-    This loads a previously serialized unstructured prediction classification model defined by the user.
-    It first imports a module that must exist in the `PYTHONPATH`, with a named defined as
-    `classifier_{model_type}.py`.  Once loaded, this user-defined model can be used within the driver programs
 
-    :param outname: The name of the file where the model is serialized
-    :param kwargs:
-    :return: A user-defined model
-    """
+def create_user_lang_model(embeddings, **kwargs):
     model_type = kwargs['model_type']
-    mod = import_user_module("classifier", model_type)
-    return mod.load_model(outname, **kwargs)
+    mod = import_user_module('lang', model_type)
+    return mod.create_model(embeddings, **kwargs)
 
 
 def create_user_trainer(model, **kwargs):
@@ -106,78 +101,26 @@ def create_user_trainer(model, **kwargs):
     return mod.create_trainer(model, **kwargs)
 
 
-def create_user_tagger_model(labels, vocabs, **kwargs):
-    """Create a user-defined tagger model
+def load_user_model(outname, **kwargs):
+    """Loads a user-defined model
 
-    This creates an structured prediction classification model defined by the user.
+    This loads a previously serialized model defined by the user.
     It first imports a module that must exist in the `PYTHONPATH`, with a named defined as
-    `tagger_{model_type}.py`.  Once created, this user-defined model can be trained within
-    the existing training programs
-
-    :param w2v: Some type of word vectors
-    :param labels: The categorical label types
-    :param kwargs:
-    :return: A user-defined model
-    """
-    model_type = kwargs['model_type']
-    mod = import_user_module("tagger", model_type)
-    return mod.create_model(labels, vocabs, **kwargs)
-
-
-def load_user_tagger_model(outname, **kwargs):
-    """Loads a user-defined tagger model
-
-    This loads a previously serialized structured prediction classification model defined by the user.
-    It first imports a module that must exist in the `PYTHONPATH`, with a named defined as
-    `tagger_{model_type}.py`.  Once loaded, this user-defined model can be used within the driver programs
+    `{task_type}_{model_type}.py`.  Once loaded, this user-defined model can be used within the driver programs
 
     :param outname: The name of the file where the model is serialized
     :param kwargs:
     :return: A user-defined model
     """
     model_type = kwargs['model_type']
-    mod = import_user_module("tagger", model_type)
+    mod = import_user_module(kwargs['task_type'], model_type)
     return mod.load_model(outname, **kwargs)
 
 
-def create_user_lang_model(embeddings, **kwargs):
-    model_type = kwargs['model_type']
-    mod = import_user_module('lang', model_type)
-    return mod.create_model(embeddings, **kwargs)
-
-
-def create_user_seq2seq_model(input_embedding, output_embedding, **kwargs):
-    """Create a user-defined encoder-decoder model
-
-    This creates an encoder-decoder model defined by the user.
-    It first imports a module that must exist in the `PYTHONPATH`, with a named defined as
-    `tagger_{model_type}.py`.  Once created, this user-defined model can be trained within
-    the existing training programs
-
-    :param w2v: Some type of word vectors
-    :param labels: The categorical label types
-    :param kwargs:
-    :return: A user-defined model
-    """
-    model_type = kwargs['model_type']
-    mod = import_user_module("seq2seq", model_type)
-    return mod.create_model(input_embedding, output_embedding, **kwargs)
-
-
-def load_user_seq2seq_model(outname, **kwargs):
-    """Loads a user-defined encoder-decoder model
-
-    This loads a previously serialized encoder-decoder model defined by the user.
-    It first imports a module that must exist in the `PYTHONPATH`, with a named defined as
-    `seq2seq_{model_type}.py`.  Once loaded, this user-defined model can be used within the driver programs
-
-    :param outname: The name of the file where the model is serialized
-    :param kwargs:
-    :return: A user-defined model
-    """
-    model_type = kwargs['model_type']
-    mod = import_user_module("seq2seq", model_type)
-    return mod.load_model(outname, **kwargs)
+load_user_classifier_model = partial(load_user_model, task_type='classify')
+load_user_tagger_model = partial(load_user_model, task_type='tagger')
+load_user_seq2seq_model = partial(load_user_model, task_type='seq2seq')
+load_user_lm_model = partial(load_user_model, task_type='lm')
 
 
 def get_model_file(dictionary, task, platform):
