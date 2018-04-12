@@ -54,7 +54,7 @@ class Classifier(object):
         """
         pass
 
-    def classify_text(self, tokens, mxlen, zeropad=0, zero_alloc=np.zeros, word_trans_fn=lowercase):
+    def classify_text(self, tokens, mxlen, zero_alloc=np.zeros, word_trans_fn=lowercase):
         """Utility method to convert a list of words comprising a text to indices, and create a single element
         batch which is then classified.  The returned decision is sorted in descending order of probability.
 
@@ -63,15 +63,13 @@ class Classifier(object):
         
         :param tokens: A list of words
         :param mxlen: The maximum length of the words.  List items beyond this edge are removed
-        :param zeropad: How much zero-padding (total) to allocate the signal
         :param zero_alloc: A function defining an allocator.  Defaults to numpy zeros
         :param word_trans_fn: A transform on the input word
         :return: A sorted list of outcomes for a single element batch
         """
         vocab = self.get_vocab()
         x = zero_alloc((1, mxlen), dtype=int)
-        halffiltsz = zeropad // 2
-        length = min(len(tokens), mxlen - zeropad + 1)
+        length = min(len(tokens), mxlen)
         for j in range(length):
             word = word_trans_fn(tokens[j])
             if word not in vocab:
@@ -80,7 +78,7 @@ class Classifier(object):
                     idx = 0
             else:
                 idx = vocab[word]
-            x[0, j + halffiltsz] = idx
+            x[0, j] = idx
         outcomes = self.classify({'x': x})[0]
         return sorted(outcomes, key=lambda tup: tup[1], reverse=True)
 

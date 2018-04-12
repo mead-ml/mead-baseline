@@ -216,33 +216,46 @@ def highway_conns(inputs, wsz_all, n):
     return inputs
 
 
-def char_word_conv_embeddings(char_vec, filtsz, char_dsz, wsz, activation_fn=tf.nn.tanh):
+def parallel_conv(input_, filtsz, dsz, motsz, activation_fn=tf.nn.relu):
+    """Do parallel convolutions with multiple filter widths and max-over-time pooling.
 
-    expanded = tf.expand_dims(char_vec, -1)
+    :param input_: The inputs in the shape [B, T, H].
+    :param filtsz: The list of filter widths to use.
+    :param dsz: The depths of the input (H).
+    :param motsz: The number of conv filters to use (can be an int or a list to allow for various sized filters)
+
+    :Keyword Arguments:
+    * *activation_fn* -- (``callable``) The activation function to apply after the convolution and bias add
+    """
+    if not isinstance(motsz, list):
+        motsz = [motsz] * len(filtsz)
+    DUMMY_AXIS = 1
+    TIME_AXIS = 2
+    FEATURE_AXIS = 3
+    expanded = tf.expand_dims(input_, DUMMY_AXIS)
     mots = []
-    for i, fsz in enumerate(filtsz):
+    for fsz, cmotsz in zip(filtsz, motsz):
         with tf.variable_scope('cmot-%s' % fsz):
-
-            kernel_shape = [fsz, char_dsz, 1, wsz]
-
-            # Weight tying
-            W = tf.get_variable("W", kernel_shape)
-            b = tf.get_variable("b", [wsz], initializer=tf.constant_initializer(0.0))
-
-            conv = tf.nn.conv2d(expanded,
-                                W, strides=[1, 1, 1, 1],
-                                padding="VALID", name="conv")
-
-            activation = activation_fn(tf.nn.bias_add(conv, b), "activation")
-
-            mot = tf.reduce_max(activation, [1], keep_dims=True)
-            # Add back in the dropout
+            kernel_shape = [1, fsz, dsz, cmotsz]
+            W = tf.get_variable('W', kernel_shape)
+            b = tf.get_variable(
+                'b', [cmotsz],
+                initializer=tf.constant_initializer(0.0)
+            )
+            conv = tf.nn.conv2d(
+                expanded, W,
+                strides=[1, 1, 1, 1],
+                padding="SAME", name="CONV"
+            )
+            activation = activation_fn(tf.nn.bias_add(conv, b), 'activation')
+            mot = tf.reduce_max(activation, [TIME_AXIS], keep_dims=True)
             mots.append(mot)
+    combine = tf.squeeze(tf.concat(values=mots, axis=FEATURE_AXIS))
+    return combine
 
-    wsz_all = wsz * len(mots)
-    combine = tf.reshape(tf.concat(values=mots, axis=3), [-1, wsz_all])
-
-    # joined = highway_conns(combine, wsz_all, 1)
+def char_word_conv_embeddings(char_vec, filtsz, char_dsz, wsz, activation_fn=tf.nn.tanh):
+    combine = parallel_conv(char_vec, filtsz, char_dsz, wsz, activation_fn)
+    wsz_all = wsz * len(filtsz)
     joined = skip_conns(combine, wsz_all, 1)
     return joined
 
@@ -255,35 +268,10 @@ def tf_activation(name):
     return tf.nn.relu
 
 
-def char_word_conv_embeddings_var_fm(char_vec, filtsz, char_dsz, nfeat_factor, max_feat=200):
-
-    expanded = tf.expand_dims(char_vec, -1)
-    mots = []
-    wsz_all = 0
-    # wsz is feature factor
-    for i, fsz in enumerate(filtsz):
-
-        nfeat = min(nfeat_factor * fsz, max_feat)
-        wsz_all += nfeat
-        with tf.variable_scope('cmot-%s' % fsz):
-
-            kernel_shape = [fsz, char_dsz, 1, nfeat]
-
-            # Weight tying
-            W = tf.get_variable("W", kernel_shape)
-            b = tf.get_variable("b", [nfeat], initializer=tf.constant_initializer(0.0))
-
-            conv = tf.nn.conv2d(expanded,
-                                W, strides=[1, 1, 1, 1],
-                                padding="VALID", name="conv")
-
-            activation = tf.nn.tanh(tf.nn.bias_add(conv, b), "activation")
-
-            mot = tf.reduce_max(activation, [1], keep_dims=True)
-            # Add back in the dropout
-            mots.append(mot)
-
-    combine = tf.reshape(tf.concat(values=mots, axis=3), [-1, wsz_all])
+def char_word_conv_embeddings_var_fm(char_vec, filtsz, char_dsz, nfeat_factor, max_feat=200, activation_fn=tf.nn.tanh):
+    nfeats = [min(nfeat_factor * fsz, max_feat) for fsz in filtsz]
+    wsz_all = sum(nfeats)
+    combine = parallel_conv(char_vec, filtsz, char_dsz, nfeats, activation_fn)
     joined = highway_conns(combine, wsz_all, 2)
     return joined
 
@@ -291,14 +279,7 @@ def char_word_conv_embeddings_var_fm(char_vec, filtsz, char_dsz, nfeat_factor, m
 def shared_char_word(Wch, xch_i, filtsz, char_dsz, wsz, reuse):
 
     with tf.variable_scope("SharedCharWord", reuse=reuse):
-        # Zeropad the letters out to half the max filter size, to account for
-        # wide convolution.  This way we don't have to explicitly pad the
-        # data upfront, which means our Y sequences can be assumed not to
-        # start with zeros
-        mxfiltsz = np.max(filtsz)
-        halffiltsz = mxfiltsz // 2
-        zeropad = tf.pad(xch_i, [[0, 0], [halffiltsz, halffiltsz]], "CONSTANT")
-        cembed = tf.nn.embedding_lookup(Wch, zeropad)
+        cembed = tf.nn.embedding_lookup(Wch, xch_i)
         if len(filtsz) == 0 or filtsz[0] == 0:
             return tf.reduce_sum(cembed, [1])
         return char_word_conv_embeddings(cembed, filtsz, char_dsz, wsz)
@@ -307,14 +288,7 @@ def shared_char_word(Wch, xch_i, filtsz, char_dsz, wsz, reuse):
 def shared_char_word_var_fm(Wch, xch_i, filtsz, char_dsz, wsz, reuse):
 
     with tf.variable_scope("SharedCharWord", reuse=reuse):
-        # Zeropad the letters out to half the max filter size, to account for
-        # wide convolution.  This way we don't have to explicitly pad the
-        # data upfront, which means our Y sequences can be assumed not to
-        # start with zeros
-        mxfiltsz = np.max(filtsz)
-        halffiltsz = mxfiltsz // 2
-        zeropad = tf.pad(xch_i, [[0, 0], [halffiltsz, halffiltsz]], "CONSTANT")
-        cembed = tf.nn.embedding_lookup(Wch, zeropad)
+        cembed = tf.nn.embedding_lookup(Wch, xch_i)
         if len(filtsz) == 0 or filtsz[0] == 0:
             return tf.reduce_sum(cembed, [1])
         return char_word_conv_embeddings_var_fm(cembed, filtsz, char_dsz, wsz)

@@ -228,10 +228,7 @@ class RNNTaggerGazetteerModel(Tagger):
         with tf.variable_scope("Chars2Word"):
             with tf.control_dependencies([ce0]):
                 rnnchar_bt_x_w = tf.reshape(model.xch, [-1, maxw])
-                mxfiltsz = np.max(filtsz)
-                halffiltsz = mxfiltsz // 2
-                zeropad = tf.pad(rnnchar_bt_x_w, [[0, 0], [halffiltsz, halffiltsz]], "CONSTANT")
-                cembed = tf.nn.embedding_lookup(Wch, zeropad, name="charembeddings")
+                cembed = tf.nn.embedding_lookup(Wch, rnnchar_bt_x_w, name="charembeddings")
                 cmot = char_word_conv_embeddings(cembed, filtsz, char_dsz, wsz)
                 word_char = tf.reshape(cmot, [-1, mxlen, len(filtsz) * wsz])
 
