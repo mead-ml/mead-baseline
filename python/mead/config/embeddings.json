@@ -33,5 +33,10 @@
         "label": "numberbatch",
         "file": "/data/embeddings/numberbatch-en-17.06.txt",
         "dsz": 300
+    },
+    {
+	"label": "senna",
+	"file": "/data/embeddings/senna-50.txt",
+	"dsz": 50
     }
 ]

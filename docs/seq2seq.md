@@ -10,12 +10,13 @@ For any reasonable size data, this really needs to run on the GPU for realistic 
 
 ## Status
 
-This model is implemented in TensorFlow and PyTorch.  The TensorFlow has been tested extensively.  The PyTorch model now has experimental support for global attention.  The English-Vietnamese dataset is from https://nlp.stanford.edu/projects/nmt/ and the site authors have published previously on the dataset here: https://nlp.stanford.edu/pubs/luong-manning-iwslt15.pdf. Test results are for Single NMT on TED tst2013.
+This model is implemented in TensorFlow and PyTorch.  The English-Vietnamese dataset is from https://nlp.stanford.edu/projects/nmt/ and the site authors have published previously on the dataset here: https://nlp.stanford.edu/pubs/luong-manning-iwslt15.pdf. Test results are for Single NMT on TED tst2013.  The WMT dataset is available via https://github.com/tensorflow/nmt#wmt-german-english
 
 
 *Our results for Single NMT*
 
 | dataset        | metric | optim  | eta (LR) | backend    | score  | encoder | layers | dropout | hidden | embed | epochs |
 | -------------- | ------ | ------ | -------- | ---------- | ------ | ------- | ------ | ------- | ------ | ----- | ------ |
-| iwslt15-en-vi  |  BLEU  | adam   |  0.001   | TensorFlow | 25.21  | blstm   |      2 |     0.5 |   500  |  500  |    16  |
+| iwslt15-en-vi  |  BLEU  | adam   |  0.001   | TensorFlow | 25.21  | blstm   |      2 |     0.5 |   512  |  512  |    16  |
+| newstest2015.(de|en) | BLEU | adam | 0.001  | TensorFlow | 27.92  | blstm   |      4 |     0.5 |   512  |  512  |    12  |
 
