@@ -15,6 +15,11 @@
 	"dsz": 300
     },
     {
+        "label": "glove-6B-50",
+        "file": "/data/embeddings/glove.6B.50d.txt",
+        "dsz": 50
+    },
+    {
         "label": "glove-6B-100",
         "file": "/data/embeddings/glove.6B.100d.txt",
         "dsz": 100
