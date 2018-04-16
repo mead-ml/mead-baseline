@@ -1,0 +1,75 @@
+import random
+from unittest.mock import patch, MagicMock
+import numpy as np
+import tensorflow as tf
+from baseline.tf.tfy import parallel_conv, char_word_conv_embeddings, char_word_conv_embeddings_var_fm
+
+class ParallelConvTest(tf.test.TestCase):
+
+    def setUp(self):
+        tf.reset_default_graph()
+        self.batchsz = random.randint(5, 65)
+        self.seqsz = random.randint(5, 11)
+        self.embedsz = random.randint(100, 301)
+        self.num_filt = random.randint(2, 6)
+        self.filtsz = set()
+        while len(self.filtsz) != self.num_filt:
+            self.filtsz.add(random.randint(2, 7))
+        self.filtsz = list(self.filtsz)
+        self.motsz = random.randint(128, 257)
+        self.nfeat_factor = random.randint(1, 4)
+        self.max_feat = random.randint(100, 301)
+        self.input = np.random.uniform(size=(self.batchsz, self.seqsz, self.embedsz)).astype(np.float32)
+        self.input = tf.constant(self.input)
+
+    def test_batch_shape(self):
+        conv = parallel_conv(self.input, self.filtsz, self.embedsz, self.motsz)
+        with self.test_session() as sess:
+            sess.run(tf.global_variables_initializer())
+            self.assertEqual(conv.eval().shape[0], self.batchsz)
+
+
+    def test_feature_shape(self):
+        conv = parallel_conv(self.input, self.filtsz, self.embedsz, self.motsz)
+        with self.test_session() as sess:
+            sess.run(tf.global_variables_initializer())
+            self.assertEqual(conv.eval().shape[1], self.motsz * self.num_filt)
+
+
+    def test_conv_called(self):
+        with patch('baseline.tf.tfy.tf.nn.conv2d') as conv_mock:
+            conv_mock.return_value = tf.zeros((self.batchsz, 1, self.seqsz, self.motsz))
+            conv = parallel_conv(self.input, self.filtsz, self.embedsz, self.motsz)
+            self.assertEqual(conv_mock.call_count, self.num_filt)
+
+    def test_list_number_equal(self):
+        with tf.variable_scope("TEST"):
+            conv1 = parallel_conv(self.input, self.filtsz, self.embedsz, self.motsz)
+        with tf.variable_scope("TEST", reuse=True):
+            conv2 = parallel_conv(self.input, self.filtsz, self.embedsz, [self.motsz] * len(self.filtsz))
+        with self.test_session() as sess:
+            sess.run(tf.global_variables_initializer())
+            np.testing.assert_allclose(conv1.eval(), conv2.eval())
+
+    @patch('baseline.tf.tfy.parallel_conv')
+    @patch('baseline.tf.tfy.skip_conns')
+    def test_char_word_call_correct(self, skip_mock, conv_mock):
+        conv_ret = MagicMock()
+        conv_mock.return_value = conv_ret
+        _ = char_word_conv_embeddings(self.input, self.filtsz, self.embedsz, self.motsz)
+        conv_mock.assert_called_once_with(self.input, self.filtsz, self.embedsz, self.motsz, tf.nn.tanh)
+        skip_mock.assert_called_once_with(conv_ret, self.motsz * len(self.filtsz), 1)
+
+    @patch('baseline.tf.tfy.parallel_conv')
+    @patch('baseline.tf.tfy.highway_conns')
+    def test_char_word_call_correct(self, skip_mock, conv_mock):
+        conv_ret = MagicMock()
+        conv_mock.return_value = conv_ret
+        nfeats = [min(self.nfeat_factor * fsz, self.max_feat) for fsz in self.filtsz]
+        _ = char_word_conv_embeddings_var_fm(self.input, self.filtsz, self.embedsz, self.nfeat_factor, max_feat=self.max_feat)
+        conv_mock.assert_called_once_with(self.input, self.filtsz, self.embedsz, nfeats, tf.nn.tanh)
+        skip_mock.assert_called_once_with(conv_ret, sum(nfeats), 2)
+
+
+if __name__ == "__main__":
+    tf.test.main()

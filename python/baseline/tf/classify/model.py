@@ -6,7 +6,7 @@ import json
 from tensorflow.contrib.layers import fully_connected, xavier_initializer
 from baseline.utils import fill_y
 from baseline.model import Classifier, load_classifier_model, create_classifier_model
-from baseline.tf.tfy import lstm_cell_w_dropout
+from baseline.tf.tfy import lstm_cell_w_dropout, parallel_conv
 
 
 class WordClassifierBase(Classifier):
@@ -195,9 +195,6 @@ class WordClassifierBase(Classifier):
         # I wish there was an elegant way to avoid this
         filtsz = kwargs.get('filtsz', [3, 4, 5]) if kwargs.get('model_type', 'default') == 'default' else 0
 
-        mxfiltsz = np.max(filtsz)
-        halffiltsz = mxfiltsz // 2
-        print(filtsz, halffiltsz)
         seed = np.random.randint(10e8)
         init = tf.random_uniform_initializer(-0.05, 0.05, dtype=tf.float32, seed=seed)
         xavier_init = xavier_initializer(True, seed)
@@ -207,11 +204,7 @@ class WordClassifierBase(Classifier):
             W = tf.Variable(tf.constant(w2v.weights, dtype=tf.float32), name="W", trainable=finetune)
             e0 = tf.scatter_update(W, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, dsz]))
             with tf.control_dependencies([e0]):
-                # Zeropad out the word ids in the sentence to half the max
-                # filter size, to make a wide convolution.  This way we
-                # don't have to explicitly pad the x data upfront
-                zeropad = tf.pad(model.x, [[0,0], [halffiltsz, halffiltsz]], "CONSTANT")
-                word_embeddings = tf.nn.embedding_lookup(W, zeropad)
+                word_embeddings = tf.nn.embedding_lookup(W, model.x)
 
         pooled = model.pool(word_embeddings, dsz, init, **kwargs)
         # combine = highway_conns(combine, wsz_all, 1)
@@ -278,29 +271,8 @@ class ConvModel(WordClassifierBase):
         """
         cmotsz = kwargs['cmotsz']
         filtsz = kwargs['filtsz']
-        expanded = tf.expand_dims(word_embeddings, -1)
-        mots = []
 
-        for i, fsz in enumerate(filtsz):
-            with tf.variable_scope('cmot-%s' % fsz):
-
-                kernel_shape = [fsz, dsz, 1, cmotsz]
-
-                W = tf.get_variable("W", kernel_shape, initializer=init)
-                b = tf.get_variable("b", [cmotsz], initializer=tf.constant_initializer(0.0))
-
-                conv = tf.nn.conv2d(expanded,
-                                    W, strides=[1, 1, 1, 1],
-                                    padding="VALID", name="conv")
-
-                activation = tf.nn.relu(tf.nn.bias_add(conv, b), "activation")
-
-                mot = tf.reduce_max(activation, [1], keep_dims=True)
-                # Add back in the dropout
-                mots.append(mot)
-
-        wsz_all = cmotsz * len(mots)
-        combine = tf.reshape(tf.concat(values=mots, axis=3), [-1, wsz_all])
+        combine = parallel_conv(word_embeddings, filtsz, dsz, cmotsz)
         # Definitely drop out
         with tf.name_scope("dropout"):
             combine = tf.nn.dropout(combine, self.pkeep)

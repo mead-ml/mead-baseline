@@ -7,7 +7,6 @@ import numpy as np
 def tagger_repl(tagger, **kwargs):
     mxlen = int(kwargs.get('mxlen', 100))
     maxw = int(kwargs.get('maxw', 100))
-    #zeropad = int(kwargs.get('zeropad', 0))
     prompt_name = kwargs.get('prompt', 'class> ')
     history_file = kwargs.get('history_file', '.history')
     history = FileHistory(history_file)
@@ -30,7 +29,6 @@ def classifier_repl(classifier, **kwargs):
     mxlen = int(kwargs.get('mxlen', 100))
     k = int(kwargs.get('k', 1))
     thresh = float(kwargs.get('thresh', 0.0))
-    zeropad = int(kwargs.get('zeropad', 0))
     prompt_name = kwargs.get('prompt', 'class> ')
     history_file = kwargs.get('history_file', '.history')
     history = FileHistory(history_file)
@@ -42,7 +40,7 @@ def classifier_repl(classifier, **kwargs):
             break
         try:
             tokens = text.split(' ')
-            outcomes = classifier.classify_text(tokens, mxlen=mxlen, zeropad=zeropad)
+            outcomes = classifier.classify_text(tokens, mxlen=mxlen)
             k = min(k, len(outcomes))
             probs = outcomes[:k]
             for prob_i in probs:
