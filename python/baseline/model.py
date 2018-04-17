@@ -1,3 +1,4 @@
+from functools import partial
 import numpy as np
 from baseline.utils import revlut, load_user_classifier_model, create_user_classifier_model, load_user_tagger_model, create_user_tagger_model
 from baseline.utils import load_user_seq2seq_model, create_user_seq2seq_model, create_user_lang_model, lowercase
@@ -83,40 +84,51 @@ class Classifier(object):
         return sorted(outcomes, key=lambda tup: tup[1], reverse=True)
 
 
-def create_classifier_model(known_creators, w2v, labels, **kwargs):
+def create_model(known_creators, input_, output_, **kwargs):
     """If `model_type` is given, use it to load an addon model and construct that OW use default
-    
+
+    For classification and tagging tasks input_ is embeddings and output_ is labels
+    For seq2seq tasks input_ is the source embeddings and output_ is the target embeddings
+
     :param known_creators: Map of baseline creators, keyed by `model_type`, typically a static factory method
-    :param w2v: Word embeddings
-    :param labels: A list or map of labels
+    :param input_: parameter for the input, general word vectors
+    :param output_: parameter for the output, generally labels or output vectors
     :param kwargs: Anything required to feed the model its parameters
     :return: A newly created model
     """
     model_type = kwargs.get('model_type', 'default')
+    creator_fn = known_creators[model_type] if model_type in known_creators else kwargs['task_fn']
+    print('Calling model ', creator_fn)
+    return creator_fn(input_, output_, **kwargs)
+
+create_classifier_model = partial(create_model, task_fn=create_user_classifier_model)
+create_tagger_model = partial(create_model, task_fn=create_user_tagger_model)
+create_seq2seq_model = partial(create_model, task_fn=create_user_seq2seq_model)
+
+def create_lang_model(known_creators, embeddings, **kwargs):
+    model_type = kwargs.get('model_type', 'default')
     if model_type in known_creators:
         creator_fn = known_creators[model_type]
-        print('Calling baseline model ', creator_fn)
-        return creator_fn(w2v, labels, **kwargs)
-
-    model = create_user_classifier_model(w2v, labels, **kwargs)
-    return model
+        print('Calling baseline model loader ', creator_fn)
+        return creator_fn(embeddings, **kwargs)
+    return create_user_lang_model(embeddings, **kwargs)
 
 
-def load_classifier_model(known_loaders, outname, **kwargs):
+def load_model(known_loaders, outname, **kwargs):
     """If `model_type` is given, use it to load an addon model and construct that OW use default
-    
+
     :param known_loaders: Map of baseline functions to load the model, typically a static factory method
     :param outname The model name to load
     :param kwargs: Anything required to feed the model its parameters
     :return: A restored model
     """
-
     model_type = kwargs.get('model_type', 'default')
-    if model_type in known_loaders:
-        loader_fn = known_loaders[model_type]
-        print('Calling baseline model loader ', loader_fn)
-        return loader_fn(outname, **kwargs)
-    return load_user_classifier_model(outname, **kwargs)
+    loader_fn = known_loaders[model_type] if model_type in known_loaders else kwargs['task_fn']
+    return loader_fn(outname, **kwargs)
+
+load_classifier_model = partial(load_model, task_fn=load_user_classifier_model)
+load_tagger_model = partial(load_model, task_fn=load_user_tagger_model)
+load_seq2seq_model = partial(load_model, task_fn=load_user_seq2seq_model)
 
 
 class Tagger(object):
@@ -188,24 +200,6 @@ class Tagger(object):
         pass
 
 
-def create_tagger_model(default_create_model_fn, labels, embeddings, **kwargs):
-    model_type = kwargs.get('model_type', 'default')
-    if model_type == 'default':
-        return default_create_model_fn(labels, embeddings, **kwargs)
-
-    model = create_user_tagger_model(labels, embeddings, **kwargs)
-    return model
-
-
-def load_tagger_model(default_load_fn, outname, **kwargs):
-
-    model_type = kwargs.get('model_type', 'default')
-    if model_type == 'default':
-        print('Calling default load fn', default_load_fn)
-        return default_load_fn(outname, **kwargs)
-    return load_user_tagger_model(outname, **kwargs)
-
-
 class LanguageModel(object):
 
     def __init__(self):
@@ -242,31 +236,3 @@ class EncoderDecoder(object):
 
     def run(self, source_dict, **kwargs):
         pass
-
-
-def create_seq2seq_model(known_creators, input_embedding, output_embedding, **kwargs):
-    model_type = kwargs.get('model_type', 'default')
-    if model_type in known_creators:
-        creator_fn = known_creators[model_type]
-        return creator_fn(input_embedding, output_embedding, **kwargs)
-
-    model = create_user_seq2seq_model(input_embedding, output_embedding, **kwargs)
-    return model
-
-
-def load_seq2seq_model(known_loaders, outname, **kwargs):
-    model_type = kwargs.get('model_type', 'default')
-    if model_type in known_loaders:
-        loader_fn = known_loaders[model_type]
-        return loader_fn(outname, **kwargs)
-    return load_user_seq2seq_model(outname, **kwargs)
-
-
-def create_lang_model(known_creators, embeddings, **kwargs):
-    model_type = kwargs.get('model_type', 'default')
-    if model_type in known_creators:
-        creator_fn = known_creators[model_type]
-        print('Calling baseline model loader ', creator_fn)
-        return creator_fn(embeddings, **kwargs)
-    return create_user_lang_model(embeddings, **kwargs)
-

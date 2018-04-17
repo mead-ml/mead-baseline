@@ -396,12 +396,17 @@ class RNNTaggerModel(nn.Module, Tagger):
         lengths = batch_dict['lengths']
         return predict_seq_bt(self, x, xch, lengths)
 
+BASELINE_TAGGER_MODELS = {
+    'default': RNNTaggerModel.create
+}
+
+BASELINE_TAGGER_LOADERS = {
+    'default': RNNTaggerModel.load
+}
 
 def create_model(labels, embeddings, **kwargs):
-
-    model = create_tagger_model(RNNTaggerModel.create, labels, embeddings, **kwargs)
-    return model
+    return create_tagger_model(BASELINE_TAGGER_MODELS, labels, embeddings, **kwargs)
 
 
 def load_model(modelname, **kwargs):
-    return load_tagger_model(RNNTaggerModel.load, modelname, **kwargs)
+    return load_tagger_model(BASELINE_TAGGER_LOADERS, modelname, **kwargs)
