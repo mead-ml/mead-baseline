@@ -19,10 +19,11 @@ def predict_sequence(text, src_vocab, dst_index2word, mxlen):
         z = src_vocab.get(content[i], 0)
         xs[0, i] = z
     lenz = np.array([len(content)])
-    z = model.run({'src': xs, 'src_len': lenz}).squeeze()
+    z = model.run({'src': xs, 'src_len': lenz})[0]
     best = z[0]
     out = []
-    for i in range(best.shape[0]):
+    for i in range(len(best)):
+    ##for i in range(best.shape[0]):
         word = dst_index2word.get(best[i], '<PAD>')
         if word != '<PAD>' and word != '<EOS>':
             out.append(word)
@@ -55,4 +56,4 @@ with open(args.input, "r") as f:
         if line == '':
             print('\n')
         else:
-            print(predict_sequence(line, words_vocab, rlut, model.mxlen))
+            print(predict_sequence(line, words_vocab, rlut, 100))

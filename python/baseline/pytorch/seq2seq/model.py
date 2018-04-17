@@ -37,42 +37,41 @@ class Seq2SeqBase(nn.Module, EncoderDecoder):
     def create(cls, input_embeddings, output_embeddings, **kwargs):
 
         model = cls(input_embeddings, output_embeddings, **kwargs)
-        print(model)
         return model
 
     def make_input(self, batch_dict):
         src = batch_dict['src']
-        src_lengths = batch_dict['src_len']
+        src_len = batch_dict['src_len']
         tgt = batch_dict['dst']
 
         dst = tgt[:, :-1]
         tgt = tgt[:, 1:]
 
-        src_lengths, perm_idx = src_lengths.sort(0, descending=True)
+        src_len, perm_idx = src_len.sort(0, descending=True)
         src = src[perm_idx]
         dst = dst[perm_idx]
         tgt = tgt[perm_idx]
-
-        self.src_lengths = Variable(src_lengths, requires_grad=False)
-        self.src_mask = sequence_mask(self.src_lengths)
 
         if self.gpu:
             src = src.cuda()
             dst = dst.cuda()
             tgt = tgt.cuda()
-            self.src_lengths = self.src_lengths.cuda()
-            self.src_mask = self.src_mask.cuda()
-        return Variable(src), Variable(dst), Variable(tgt)
+            src_len = src_len.cuda()
+
+        return Variable(src), Variable(dst), Variable(src_len, requires_grad=False), Variable(tgt)
 
     # Input better be xch, x
     def forward(self, input):
-        rnn_enc_seq, final_encoder_state = self.encode(input[0])
-        return self.decode(rnn_enc_seq, final_encoder_state, input[1])
+        src = input[0]
+        dst = input[1]
+        src_len = input[2]
+        rnn_enc_seq, final_encoder_state = self.encode(src, src_len)
+        return self.decode(rnn_enc_seq, src_len, final_encoder_state, dst)
 
-    def encode(self, src):
+    def encode(self, src, src_len):
         src = src.transpose(0, 1).contiguous()
         embed_in_seq = self.embed_in(src)
-        packed = torch.nn.utils.rnn.pack_padded_sequence(embed_in_seq, self.src_lengths.data.tolist())
+        packed = torch.nn.utils.rnn.pack_padded_sequence(embed_in_seq, src_len.data.tolist())
         output, hidden = self.encoder_rnn(packed)
         output, _ = torch.nn.utils.rnn.pad_packed_sequence(output)
         return output, hidden
@@ -83,10 +82,10 @@ class Seq2SeqBase(nn.Module, EncoderDecoder):
     def bridge(self, final_encoder_state, context):
         pass
 
-    def attn(self, output_t, context):
+    def attn(self, output_t, context, src_mask=None):
         pass
 
-    def decode_rnn(self, context, h_i, output_i, dst):
+    def decode_rnn(self, context, h_i, output_i, dst, src_mask):
         embed_out_seq = self.embed_out(dst)
         context_transpose = context.transpose(0, 1)
         outputs = []
@@ -94,24 +93,23 @@ class Seq2SeqBase(nn.Module, EncoderDecoder):
         for i, embed_i in enumerate(embed_out_seq.split(1)):
             embed_i = self.input_i(embed_i, output_i)
             output_i, h_i = self.decoder_rnn(embed_i, h_i)
-            output_i = self.attn(output_i, context_transpose)
+            output_i = self.attn(output_i, context_transpose, src_mask)
             output_i = self.dropout(output_i)
             outputs += [output_i]
 
         outputs = torch.stack(outputs)
         return outputs, h_i
 
-    def decode(self, context, final_encoder_state, dst):
+    def decode(self, context, src_len, final_encoder_state, dst):
+
+        src_mask = sequence_mask(src_len)
+        if self.gpu:
+            src_mask = src_mask.cuda()
         dst = dst.transpose(0, 1).contiguous()
 
         h_i, output_i = self.bridge(final_encoder_state, context)
-        output, _ = self.decode_rnn(context, h_i, output_i, dst)
+        output, _ = self.decode_rnn(context, h_i, output_i, dst, src_mask)
         pred = self.prediction(output)
-        # Reform batch as (T x B, D)
-        #pred = self.probs(self.preds(output.view(output.size(0)*output.size(1),
-        #                                         -1)))
-        # back to T x B x H -> B x T x H
-        #pred = pred.view(output.size(0), output.size(1), -1)
         return pred.transpose(0, 1).contiguous()
 
     def prediction(self, output):
@@ -121,6 +119,92 @@ class Seq2SeqBase(nn.Module, EncoderDecoder):
         # back to T x B x H -> B x T x H
         pred = pred.view(output.size(0), output.size(1), -1)
         return pred
+
+    # B x K x T and here T is a list
+    def run(self, batch_dict, **kwargs):
+        src = batch_dict['src']
+        src_len = batch_dict['src_len']
+        src = torch.from_numpy(src) if type(src) == np.ndarray else src
+        if type(src_len) == int:
+            src_len = np.array([src_len])
+        src_len = torch.from_numpy(src_len) if type(src_len) == np.ndarray else src_len
+        if torch.is_tensor(src):
+            src = torch.autograd.Variable(src, requires_grad=False)
+        if torch.is_tensor(src_len):
+            src_len = torch.autograd.Variable(src_len, requires_grad=False)
+
+        if self.gpu:
+            src = src.cuda()
+            src_len = src_len.cuda()
+        batch = []
+        for src_i, src_len_i in zip(src, src_len):
+            batch += [self.beam_decode(src_i.view(1, -1), src_len_i, kwargs.get('beam', 1))[0]]
+
+        return batch
+
+    def beam_decode(self, src, src_len, K):
+        T = src.size(1)
+        context, h_i = self.encode(src, src_len)
+        src_mask = sequence_mask(src_len)
+        dst_vocab = self.get_dst_vocab()
+        GO = dst_vocab['<GO>']
+        EOS = dst_vocab['<EOS>']
+
+        paths = [[GO] for _ in range(K)]
+        # K
+        scores = torch.FloatTensor([0. for _ in range(K)])
+        if self.gpu:
+            scores = scores.cuda()
+            src_mask = src_mask.cuda()
+        # TBH
+        context = torch.autograd.Variable(context.data.repeat(1, K, 1), requires_grad=False)
+        h_i = (torch.autograd.Variable(h_i[0].data.repeat(1, K, 1), requires_grad=False),
+               torch.autograd.Variable(h_i[1].data.repeat(1, K, 1), requires_grad=False))
+        h_i, dec_out = self.bridge(h_i, context)
+
+        for i in range(T):
+            lst = [path[-1] for path in paths]
+            dst = torch.LongTensor(lst).type(src.type())
+            mask_eos = dst == EOS
+            mask_pad = dst == 0
+            dst = dst.view(1, K)
+            var = torch.autograd.Variable(dst, requires_grad=False)
+            dec_out, h_i = self.decode_rnn(context, h_i, dec_out, var, src_mask)
+            # 1 x K x V
+            wll = self.prediction(dec_out).data
+            # Just mask wll against end data
+            V = wll.size(-1)
+            dec_out = dec_out.squeeze(0)  # get rid of T=t dimension
+            # K x V
+            wll = wll.squeeze(0)  # get rid of T=t dimension
+
+            if i > 0:
+                expanded_history = scores.unsqueeze(1).expand_as(wll)
+                wll.masked_fill_(mask_eos | mask_pad, 0)
+                sll = wll + expanded_history
+            else:
+                sll = wll[0]
+
+            flat_sll = sll.view(-1)
+            best, best_idx = flat_sll.squeeze().topk(K, 0)
+            best_beams = best_idx / V
+            best_idx = best_idx % V
+            new_paths = []
+            for j, beam_id in enumerate(best_beams):
+                new_paths.append(paths[beam_id] + [best_idx[j]])
+                scores[j] = best[j]
+
+            # Copy the beam state of the winners
+            for hc in h_i:  # iterate over h, c
+                old_beam_state = hc.clone()
+                for i, beam_id in enumerate(best_beams):
+                    H = hc.size(2)
+                    src_beam = old_beam_state.view(-1, K, H)[:, beam_id]
+                    dst_beam = hc.view(-1, K, H)[:, i]
+                    dst_beam.data.copy_(src_beam.data)
+            paths = new_paths
+
+        return [p[1:] for p in paths], scores
 
 
 class Seq2SeqModel(Seq2SeqBase):
@@ -149,7 +233,7 @@ class Seq2SeqModel(Seq2SeqBase):
     def bridge(self, final_encoder_state, context):
         return final_encoder_state, None
 
-    def attn(self, output_t, context):
+    def attn(self, output_t, context, src_mask=None):
         return output_t
 
 
@@ -177,12 +261,12 @@ class Seq2SeqAttnModel(Seq2SeqBase):
         self.attn_tanh = pytorch_activation("tanh")
         self.nlayers = nlayers
 
-    def attn(self, output_t, context):
+    def attn(self, output_t, context, src_mask=None):
         # Output(t) = B x H x 1
         # Context = B x T x H
         # a = B x T x 1
         a = torch.bmm(context, self.output_to_attn(output_t).unsqueeze(2))
-        scores = attention_mask(a.squeeze(2), self.src_mask)
+        scores = attention_mask(a.squeeze(2), src_mask)
         a = self.attn_softmax(scores)
         # a = B x T
         # Want to apply over context, scaled by a
