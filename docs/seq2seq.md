@@ -18,5 +18,5 @@ This model is implemented in TensorFlow and PyTorch.  The English-Vietnamese dat
 | dataset        | metric | optim  | eta (LR) | backend    | score  | encoder | layers | dropout | hidden | embed | epochs |
 | -------------- | ------ | ------ | -------- | ---------- | ------ | ------- | ------ | ------- | ------ | ----- | ------ |
 | iwslt15-en-vi  |  BLEU  | adam   |  0.001   | TensorFlow | 25.21  | blstm   |      2 |     0.5 |   512  |  512  |    16  |
-| newstest2015.(de|en) | BLEU | adam | 0.001  | TensorFlow | 27.92  | blstm   |      4 |     0.5 |   512  |  512  |    12  |
+| newstest2015.(de\|en) | BLEU | adam | 0.001  | TensorFlow | 27.92  | blstm   |      4 |     0.5 |   512  |  512  |    12  |
 
