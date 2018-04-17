@@ -240,7 +240,7 @@ class EncoderDecoder(object):
     def load(basename, **kwargs):
         pass
 
-    def run(self, source_dict):
+    def run(self, source_dict, **kwargs):
         pass
 
 

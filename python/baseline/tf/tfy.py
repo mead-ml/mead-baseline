@@ -78,26 +78,6 @@ def seq2tensor(sequence):
     return tf.transpose(tf.stack(sequence), perm=[1, 0, 2])
 
 
-# Method for seq2seq w/ attention using TF's library
-def legacy_attn_rnn_seq2seq(encoder_inputs,
-                            decoder_inputs,
-                            cell,
-                            num_heads=1,
-                            dtype=tf.float32,
-                            scope=None):
-    with tf.variable_scope(scope or "attention_rnn_seq2seq"):
-        encoder_outputs, enc_state = tf.contrib.rnn.static_rnn(cell, encoder_inputs, dtype=dtype)
-        top_states = [tf.reshape(e, [-1, 1, cell.output_size])
-                      for e in encoder_outputs]
-        attention_states = tf.concat(values=top_states, axis=1)
-    
-    return tf.contrib.legacy_seq2seq.attention_decoder(decoder_inputs,
-                                                       enc_state,
-                                                       attention_states,
-                                                       cell,
-                                                       num_heads=num_heads)
-
-
 def dense_layer(output_layer_depth):
     output_layer = layers_core.Dense(output_layer_depth, use_bias=False, dtype=tf.float32, name="dense")
     return output_layer
@@ -252,6 +232,7 @@ def parallel_conv(input_, filtsz, dsz, motsz, activation_fn=tf.nn.relu):
             mots.append(mot)
     combine = tf.squeeze(tf.concat(values=mots, axis=FEATURE_AXIS))
     return combine
+
 
 def char_word_conv_embeddings(char_vec, filtsz, char_dsz, wsz, activation_fn=tf.nn.tanh):
     combine = parallel_conv(char_vec, filtsz, char_dsz, wsz, activation_fn)

@@ -1,20 +1,23 @@
 import torch
 import numpy as np
-from baseline.utils import lookup_sentence, get_version, revlut
+from baseline.utils import lookup_sentence, get_version
 from torch.autograd import Variable
 import torch.autograd
 import torch.nn as nn
-
+import torch.nn.functional
+import math
+import copy
 
 PYT_MAJOR_VERSION = get_version(torch)
 
 
 def sequence_mask(lengths):
-    max_len = torch.max(lengths)
+    len = lengths.cpu()
+    max_len = torch.max(len)
     # 1 x T
     row = Variable(torch.arange(0, max_len.data[0]), requires_grad=False).view(1, -1)
     # B x 1
-    col = lengths.view(-1, 1).float()
+    col = len.view(-1, 1).float()
     # Broadcast to B x T, compares increasing number to max
     mask = row < col
     return mask.float()
@@ -199,6 +202,10 @@ def pytorch_linear(in_sz, out_sz, unif=0, initializer=None):
     return l
 
 
+def pytorch_clone_module(module_, N):
+    return nn.ModuleList([copy.deepcopy(module_) for _ in range(N)])
+
+
 def _cat_dir(h):
     return torch.cat([h[0:h.size(0):2], h[1:h.size(0):2]], dim=-1)
 
@@ -245,6 +252,30 @@ class Highway(nn.Module):
         proj_gate = nn.functional.sigmoid(self.transform(input))
         gated = (proj_gate * proj_result) + ((1 - proj_gate) * input)
         return gated
+
+
+class LayerNorm(nn.Module):
+    """
+    Applies Layer Normalization over a mini-batch of inputs as described in
+    the paper `Layer Normalization`_ .
+
+    .. math::
+        y = \frac{x - \mathrm{E}[x]}{ \sqrt{\mathrm{Var}[x]} + \epsilon} * \gamma + \beta
+
+    This is provided in pytorch's master, and can be replaced in the near future.
+    For the time, being, this code is borrowed from here: http://nlp.seas.harvard.edu/2018/04/03/attention.html
+
+    """
+    def __init__(self, num_features, eps=1e-6):
+        super(LayerNorm, self).__init__()
+        self.a = nn.Parameter(torch.ones(num_features))
+        self.b = nn.Parameter(torch.zeros(num_features))
+        self.eps = eps
+
+    def forward(self, x):
+        mean = x.mean(-1, keepdim=True)
+        std = x.std(-1, keepdim=True)
+        return self.a * (x - mean) / (std + self.eps) + self.b
 
 
 def pytorch_lstm(insz, hsz, rnntype, nlayers, dropout, unif=0, batch_first=False, initializer=None):
@@ -342,82 +373,16 @@ def prepare_src(model, tokens, mxlen=100):
     return torch.autograd.Variable(x.view(-1, 1))
 
 
-def beam_decode(model, src, K):
-    with torch.no_grad():
-        T = src.size(1)
-        # Transpose in here?
-        context, h_i = model.encode(src)
-        dst_vocab = model.get_dst_vocab()
-        GO = dst_vocab['<GO>']
-        EOS = dst_vocab['<EOS>']
-
-        paths = [[GO] for _ in range(K)]
-        # K
-        scores = torch.FloatTensor([0. for _ in range(K)])
-        if src.is_cuda:
-            scores = scores.cuda()
-        # TBH
-        context = torch.autograd.Variable(context.data.repeat(1, K, 1))
-        h_i = (torch.autograd.Variable(h_i[0].data.repeat(1, K, 1)), torch.autograd.Variable(h_i[1].data.repeat(1, K, 1)))
-        h_i, dec_out = model.bridge(h_i, context)
-
-        for i in range(T):
-            lst = [path[-1] for path in paths]
-            dst = torch.LongTensor(lst).type(src.type())
-            mask_eos = dst == EOS
-            mask_pad = dst == 0
-            dst = dst.view(1, K)
-            var = torch.autograd.Variable(dst)
-            dec_out, h_i = model.decode_rnn(context, h_i, dec_out, var)
-            # 1 x K x V
-            wll = model.prediction(dec_out).data
-            # Just mask wll against end data
-            V = wll.size(-1)
-            dec_out = dec_out.squeeze(0)  # get rid of T=t dimension
-            # K x V
-            wll = wll.squeeze(0)  # get rid of T=t dimension
-
-            if i > 0:
-                expanded_history = scores.unsqueeze(1).expand_as(wll)
-                wll.masked_fill_(mask_eos | mask_pad, 0)
-                sll = wll + expanded_history
-            else:
-                sll = wll[0]
-
-            flat_sll = sll.view(-1)
-            best, best_idx = flat_sll.squeeze().topk(K, 0)
-            best_beams = best_idx / V
-            best_idx = best_idx % V
-            new_paths = []
-            for j, beam_id in enumerate(best_beams):
-                new_paths.append(paths[beam_id] + [best_idx[j]])
-                scores[j] = best[j]
-
-            # Copy the beam state of the winners
-            for hc in h_i:  # iterate over h, c
-                old_beam_state = hc.clone()
-                for i, beam_id in enumerate(best_beams):
-                    H = hc.size(2)
-                    src_beam = old_beam_state.view(-1, K, H)[:, beam_id]
-                    dst_beam = hc.view(-1, K, H)[:, i]
-                    dst_beam.data.copy_(src_beam.data)
-            paths = new_paths
-
-        return paths, scores
-
-
-def beam_decode_tokens(model, src_tokens, K, idx2word, mxlen=50):
-    src = prepare_src(model, src_tokens, mxlen)
-    paths, scores = beam_decode(model, src, K)
-    path_str = []
-    for j, path in enumerate(paths):
-        path_str.append([idx2word[i] for i in path])
-    return path_str, scores
+#def beam_decode_tokens(model, src_tokens, K, idx2word, mxlen=50):
+#    src = prepare_src(model, src_tokens, mxlen)
+#    paths, scores = beam_decode(model, src, K)
+#    path_str = []
+#    for j, path in enumerate(paths):
+#        path_str.append([idx2word[i] for i in path])
+#    return path_str, scores
     #return beam_decode(model, src, K)
 
-# Mashed together from code using numpy only, hacked for th Tensors
-# This function should never be used for decoding.  It exists only so that the training model can greedily decode
-# It is super slow and doesnt use maintain a beam of hypotheses
+
 def show_examples_pytorch(model, es, rlut1, rlut2, embed2, mxlen, sample, prob_clip, max_examples, reverse):
     si = np.random.randint(0, len(es))
 
@@ -426,6 +391,7 @@ def show_examples_pytorch(model, es, rlut1, rlut2, embed2, mxlen, sample, prob_c
     src_array = batch_dict['src']
     tgt_array = batch_dict['dst']
     src_len = batch_dict['src_len']
+
 
     if max_examples > 0:
         max_examples = min(max_examples, src_array.size(0))
@@ -436,16 +402,18 @@ def show_examples_pytorch(model, es, rlut1, rlut2, embed2, mxlen, sample, prob_c
     # TODO: fix this, check for GPU first
     src_array = src_array.cuda()
     
-    for src_len, src_i, tgt_i in zip(src_len, src_array, tgt_array):
+    for src_len_i, src_i, tgt_i in zip(src_len, src_array, tgt_array):
 
         print('========================================================================')
+        src_len_i = torch.ones(1).fill_(src_len_i).type_as(src_len)
 
         sent = lookup_sentence(rlut1, src_i.cpu().numpy(), reverse=reverse)
         print('[OP] %s' % sent)
         sent = lookup_sentence(rlut2, tgt_i)
         print('[Actual] %s' % sent)
-
-        dst_i, scores = beam_decode(model, torch.autograd.Variable(src_i.view(1, -1), requires_grad=False), 1)
-        sent = lookup_sentence(rlut2, dst_i[0])
+        src_dict = {'src': torch.autograd.Variable(src_i.view(1, -1), requires_grad=False),
+                    'src_len': torch.autograd.Variable(src_len_i, requires_grad=False)}
+        dst_i = model.run(src_dict)[0][0]
+        sent = lookup_sentence(rlut2, dst_i)
         print('Guess: %s' % sent)
         print('------------------------------------------------------------------------')
