@@ -54,3 +54,6 @@ Then pass `--model_type {model}` to the driver program for that task.  The drive
 
 We provide a single driver to train all of the tasks from a simple JSON configuration file as part of [mead](docs/mead.md).  This makes it easy to explore model architetures, track your experiments and deploy models to production easily.  Sample configurations are provided for the tasks
 
+##Running baseline in docker containers
+
+`Baseline` can be run within a Docker container to reduce the installation complexity and to isolate experiment configurations and variants. See [the docker section](docker/README.md) for details.  
