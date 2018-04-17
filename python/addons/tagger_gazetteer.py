@@ -271,9 +271,8 @@ class RNNTaggerGazetteerModel(Tagger):
 
 
 def create_model(labels, embeddings, **kwargs):
-    model = RNNTaggerGazetteerModel.create(labels, embeddings, **kwargs)
-    return model
+    return RNNTaggerGazetteerModel.create(labels, embeddings, **kwargs)
 
 
 def load_model(modelname, **kwargs):
-    return load_tagger_model(RNNTaggerGazetteerModel.load, modelname, **kwargs)
+    return RNNTaggerGazetteerModel.load(modelname, **kwargs)
