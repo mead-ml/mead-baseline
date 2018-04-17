@@ -79,7 +79,7 @@ def vars():
 @click.argument('id')
 def getmodelloc(task, id):
     """get the model location for a particluar task and record id"""
-    result = getmodelloc_int(task,id)  
+    result = get_modelloc_int(task,id)  
     if result is None:
         click.echo("no results found")
         return
