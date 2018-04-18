@@ -48,7 +48,7 @@
 	"label": "atis"
     },
     {
-	"vocab_file": "/data/datasets/iwslt15-en-vi/vocab.en_vi",
+	"vocab_file": "/data/datasets/iwslt15-en-vi/vocab",
 	"train_file": "/data/datasets/iwslt15-en-vi/train",
 	"valid_file": "/data/datasets/iwslt15-en-vi/tst2012",
 	"test_file": "/data/datasets/iwslt15-en-vi/tst2013",
