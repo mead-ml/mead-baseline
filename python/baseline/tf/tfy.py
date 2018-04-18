@@ -230,7 +230,8 @@ def parallel_conv(input_, filtsz, dsz, motsz, activation_fn=tf.nn.relu):
             activation = activation_fn(tf.nn.bias_add(conv, b), 'activation')
             mot = tf.reduce_max(activation, [TIME_AXIS], keep_dims=True)
             mots.append(mot)
-    combine = tf.squeeze(tf.concat(values=mots, axis=FEATURE_AXIS))
+    motsz_all = sum(motsz)
+    combine = tf.reshape(tf.concat(values=mots, axis=FEATURE_AXIS), [-1, motsz_all])
     return combine
 
 
