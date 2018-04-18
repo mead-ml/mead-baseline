@@ -23,7 +23,9 @@ class Seq2SeqTrainerPyTorch(Trainer):
         self._input = model.make_input
         self.crit = model.create_loss()
         if self.gpu:
+            # model.patch_parameters()
             self.model = torch.nn.DataParallel(model).cuda()
+            # model.restore_parameters()
             self.crit.cuda()
 
     def _total(self, tgt):
