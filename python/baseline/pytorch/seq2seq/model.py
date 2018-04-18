@@ -37,6 +37,7 @@ class Seq2SeqBase(nn.Module, EncoderDecoder):
     def create(cls, input_embeddings, output_embeddings, **kwargs):
 
         model = cls(input_embeddings, output_embeddings, **kwargs)
+        print(model)
         return model
 
     def make_input(self, batch_dict):
@@ -164,7 +165,7 @@ class Seq2SeqBase(nn.Module, EncoderDecoder):
 
         for i in range(T):
             lst = [path[-1] for path in paths]
-            dst = torch.LongTensor(lst).type(src.type())
+            dst = torch.LongTensor(lst).type(src.data.type())
             mask_eos = dst == EOS
             mask_pad = dst == 0
             dst = dst.view(1, K)
@@ -266,8 +267,10 @@ class Seq2SeqAttnModel(Seq2SeqBase):
         # Context = B x T x H
         # a = B x T x 1
         a = torch.bmm(context, self.output_to_attn(output_t).unsqueeze(2))
-        scores = attention_mask(a.squeeze(2), src_mask)
-        a = self.attn_softmax(scores)
+        a = a.squeeze(2).masked_fill(src_mask == 0, -1e9)
+        a = self.attn_softmax(a)
+        # a.squeeze_(2).masked_fill_(self.src_mask, -100000)
+        # a = self.attn_softmax(a)
         # a = B x T
         # Want to apply over context, scaled by a
         # (B x 1 x T) (B x T x H) = (B x 1 x H)
