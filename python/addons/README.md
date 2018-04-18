@@ -19,3 +19,7 @@ These models are coded in a backend that is supported by baseline (currently eit
 - [Tagger with Gazetteer](tagger_gazetteer.py)
   - This model allows gazetteer features to be used along with normal word and character embeddings
   - Achieves *40.2537* on WNUT, a significant improvement over the baseline
+
+- [Encoder Decoder with Transformer](seq2seq_transformer.py)
+  - This model implements https://arxiv.org/abs/1706.03762
+    - Based on this excellent reference: http://nlp.seas.harvard.edu/2018/04/03/attention.html
