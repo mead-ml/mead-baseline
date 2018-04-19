@@ -15,7 +15,7 @@ It has three components:
 
 The workflow for developing a deep learning model using baseline is simple: 
 
-1. Map the problem to one of the existing tasks using a `<$task, dataset$>` tuple, eg., NER on CoNLL 2003 dataset is a `<tagger task, conll>.
+1. Map the problem to one of the existing tasks using a `<$task, dataset$>` tuple, eg., NER on CoNLL 2003 dataset is a `<tagger task, conll>`.
 
 2. Use the existing implementations in `Baseline` or extend the base model class to create a new architecture. 
 
