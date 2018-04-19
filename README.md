@@ -1,59 +1,26 @@
-baseline
+Baseline
 =========
 
-Simple, Strong Deep-Learning Baselines for NLP in several frameworks
-
-Baseline algorithms and data support implemented with multiple deep learning tools, including sentence classification, tagging, seq2seq, and language modeling.  Can be used as stand-alone command line tools or as a Python library.  The library attempts to provide a common interface for several common deep learning tasks, as well as easy-to-use file loaders to make it easy to publish standard results, compare against strong baselines without concern for mistakes and to support rapid experiments to try and beat these baselines.
-
-# Overview
-
-A few strong, deep baseline algorithms for several common NLP tasks, including sentence classification, tagging, sequence-to-sequence and language modeling problems.  Considerations are conceptual simplicity, efficiency and accuracy.  The included approaches are (hopefully) the first "deep learning thing" you might think of for a certain type of problem, and are currently near SoTA for many datasets.  Below you can find descriptions of the algorithms, and the status of implementation for each framework.
-
-When the GPU is used, the code assumes that cudnn is available* and installed. This is critical for good performance.
-
-## Supported Tasks
-
-- [Text Classification](docs/classify.md)
-- [Tagging with RNNs](docs/tagging.md)
-- [Seq2Seq](docs/seq2seq.md)
-- [Language Modeling with RNNs](docs/lm.md)
-
-## Reporting with Visdom and tensorboard
-
-### Visdom
-
-First install it:
-
-`pip install visdom`
-
-To enable reporting with visdom, just pass `--visdom 1` in any command line program.
-
-### Tensorboard
-
-First install tensorboard logger (which is independent of tensorflow):
-
-`pip install tensorboard_logger`
-
-To enable reporting with tensorboard, just pass `--tensorboard 1` in any command line program.
-You must have tensorboard installed to use this.
-
-## Baseline as an API
-
-The latest code provides a high-level Python API to access common deep-learning NLP approaches.  This should facilitate faster research in any language, as these tasks are fairly standard for NLP.  The data loaders and data feeds are all reusable, as are the basic harnesses for the APIs.  To get an understanding for how to structure a program to use baseline, have a look at the command line programs for each task.
-
-You can also think of the library itself as an abstraction layer at the "solution" or algorithm level with sub-modules built with each framework. Adding a new framework is straightforward using the methods shown in the library.
-
-### As scaffolding for an experiment
-
-If you have a problem where the input is the same as a `baseline` task, you can easily use the API to set up your boilerplate work for you, and focus on your model, by creating a user-defined `addon`.  This is just a normal python file with a creation and load hooks (see the [addons area](python/addons) for examples). 
-
-Then pass `--model_type {model}` to the driver program for that task.  The driver program will look to see if it has an implementation within the library and will not find the one in its registry.  So it will import the module and call its `create_model` function with the arguments and use the provided model.
+Baseline is a library for reproducible deep learning research and fast model development for NLP. The library provides easily extensible abstractions and implementations for data loading, model development, training and export of deep learning architectures. It also provides implementations for simple, high-performance, deep learning models for various NLP tasks, against which newly developed models can be compared. Deep learning experiments are hard to reproduce, Baseline provides functionalities to track them. The goal is to allow a researcher to focus on model development, delegating the repetitive tasks to the library.
 
 
-## Running from configuration files, using `mead`
 
-We provide a single driver to train all of the tasks from a simple JSON configuration file as part of [mead](docs/mead.md).  This makes it easy to explore model architetures, track your experiments and deploy models to production easily.  Sample configurations are provided for the tasks
+It has three components: 
 
-##Running baseline in docker containers
+- [**baseline-core**](docs/baseline.md): An object-oriented Python library for rapid development of deep learning algorithms. The library provides extensible base classes for common components in a deep learning architecture (data loading, model development, training, evaluation, and export) in TensorFlow and PyTorch. In addition, it provides strong, deep learning baselines for four fundamental NLP tasks -- Classification, Sequence Tagging, Sequence-to-Sequence Encoder-Decoders and Language Modeling. Many NLP problems can be seen as variants of these tasks. For example, Part of Speech (POS) Tagging, Named Entity Recognition (NER) and Slot-filling are all Sequence Tagging tasks, Neural Machine Translation (NMT) is typically modeled as an Encoder-Decoder task. An end-user can easily implement a new model and delegate the rest to the library.
 
-`Baseline` can be run within a Docker container to reduce the installation complexity and to isolate experiment configurations and variants. See [the docker section](docker/README.md) for details.  
+- [**mead**](docs/mead.md): A library built on  for fast _M_odeling, _E_xperimentation _A_nd _D_evelopment. It contains driver programs to run experiments from JSON configuration files to completely control the reader, trainer, model, and hyper-parameters. 
+  
+- [**xpctl**](docs/xpctl.md): A command-line interface to track experimental results and provide access to a global leaderboard. After running an experiment through mead, the results and the logs are committed to a database. Several commands are provided to show the best experimental results under various constraints. 
+
+The workflow for developing a deep learning model using baseline is simple: 
+
+1. Map the problem to one of the existing tasks using a `<$task, dataset$>` tuple, eg., NER on CoNLL 2003 dataset is a `<tagger task, conll>.
+
+2. Use the existing implementations in `Baseline` or extend the base model class to create a new architecture. 
+
+3. Define a configuration file in `mead` and run an experiment. 
+
+4. Use `XPCTL` to compare the result with the previous experiments, commit the results to the leaderboard database and the model files to a persistent storage if desired.
+
+Additionally, the base models provided by the library can be exported from saved checkpoints directly into [TensorFlow Serving](https://www.tensorflow.org/serving/) for deployment in a production environment. [The framework can be run within a Docker container](docker/README.md) to reduce the installation complexity and to isolate experiment configurations and variants. It is actively maintained by a team of core developers and accepts public contributions.
