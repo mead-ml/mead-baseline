@@ -9,7 +9,6 @@ We assume all necessary files (datasests, embeddings etc.) are stored in `/data/
 
 For convenience, we also provide a [script](../docker/docker.sh), which can be run as `./docker.sh -g 0 -n <container_name>`, eg. `./docker.sh -g 0 -n test`. The script assumes that following directories exist in your machine:
 
-
 - `/data/embeddings`: location for embedding files (W2v, Glove), see [embeddings.json](../python/mead/config/embeddings.json) in `mead`.  
 
 - `/data/datasets`: dataset locations (PTB, CoNLL), see [datasets.json](../python/mead/config/datasets.json) in `mead`.

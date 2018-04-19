@@ -28,14 +28,12 @@ events = {
 
 
 # set up env
-def read_cred():
-    j = None
+def read_cred(configjson):
     try:
-        from .mongocred import creds
-        j = creds
-    except ImportError:
+        j = json.load(open(configjson))
+        return(j.get('dbhost', None), j.get('dbport',None), j.get('user',None), j.get('passwd',None))
+    except IOError:
         return (None, None, None, None)
-    return (j['dbhost'], j['dbport'], j['user'], j['passwd'])
 
 
 @shell(prompt="xpctl > ", intro="Starting xpctl...")
@@ -43,21 +41,24 @@ def read_cred():
 @click.option('--port', help="mongo port", default=27017)
 @click.option('--user', help="mongo username")
 @click.option('--password', help="mongo password")
-def cli(host, port, user, password):
+@click.option('--config', help="mongo creds", default="~/xpctlcred.json")
+def cli(host, port, user, password, config):
     global dbhost
     global dbport
     global dbuser
     global dbpass
     global db
-    host_c,port_c,user_c,passw_c = read_cred()
+    host_c,port_c,user_c,passw_c = (None, None, None, None)
+    if os.path.exists(os.path.expanduser(config)): 
+        host_c,port_c,user_c,passw_c = read_cred(os.path.expanduser(config))
     dbhost = host if host else host_c
     dbport = port if port else port_c 
     dbuser = user if user else user_c
     dbpass = password if password else passw_c 
-    creds = {'mongo host':dbhost, 'mongo port':dbport, 'username':dbuser, 'password': dbpass}
+    creds = {'mongo host':(dbhost, 'host'), 'mongo port':(dbport, 'port'), 'username':(dbuser, 'user'), 'password': (dbpass, 'password')}
     for var in creds:
-        if creds[var] is None:
-            click.echo("Value for [{}] is None, provide a proper value".format(var))   
+        if creds[var][0] is None:
+            click.echo("Value for [{}] is None, provide a proper value using --{} option".format(var,creds[var][1]))   
             sys.exit(1)
 
     db = cli_int(dbhost, dbport, dbuser, dbpass)
