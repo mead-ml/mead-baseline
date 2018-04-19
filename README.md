@@ -9,7 +9,7 @@ It has three components:
 
 - [**baseline-core**](docs/baseline.md): An object-oriented Python library for rapid development of deep learning algorithms. The library provides extensible base classes for common components in a deep learning architecture (data loading, model development, training, evaluation, and export) in TensorFlow and PyTorch. In addition, it provides strong, deep learning baselines for four fundamental NLP tasks -- Classification, Sequence Tagging, Sequence-to-Sequence Encoder-Decoders and Language Modeling. Many NLP problems can be seen as variants of these tasks. For example, Part of Speech (POS) Tagging, Named Entity Recognition (NER) and Slot-filling are all Sequence Tagging tasks, Neural Machine Translation (NMT) is typically modeled as an Encoder-Decoder task. An end-user can easily implement a new model and delegate the rest to the library.
 
-- [**mead**](docs/mead.md): A library built on  for fast _M_odeling, _E_xperimentation _A_nd _D_evelopment. It contains driver programs to run experiments from JSON configuration files to completely control the reader, trainer, model, and hyper-parameters. 
+- [**mead**](docs/mead.md): A library built on  for fast Modeling, Experimentation And Development. It contains driver programs to run experiments from JSON configuration files to completely control the reader, trainer, model, and hyper-parameters. 
   
 - [**xpctl**](docs/xpctl.md): A command-line interface to track experimental results and provide access to a global leaderboard. After running an experiment through mead, the results and the logs are committed to a database. Several commands are provided to show the best experimental results under various constraints. 
 
