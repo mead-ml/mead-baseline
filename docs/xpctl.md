@@ -1,6 +1,6 @@
 ## xpctl
 
-In [baseline/mead](../mead/README.md) we have separate **tasks** such as classify or tagger. Each task can have multiple **experiments**, each corresponding to a separate model or different hyperparameters of the same model. An experiment is uniquely identified by the id. The configuration for an experiment is uniquely identified by hash(_sha1_) of the config file. 
+In [mead](mead.md) we have separate **tasks** such as classify or tagger. Each task can have multiple **experiments**, each corresponding to a separate model or different hyperparameters of the same model. An experiment is uniquely identified by the id. The configuration for an experiment is uniquely identified by hash(_sha1_) of the config file. 
 
 After an experiment is done, use `xpctl` to report the results to a mongodb server. Then use it to analyze, compare and export your experimental results. It can be used in `repl` mode (inside a shell) and `command` mode. Most examples shown here uses xpctl in the `command` mode: (`xpctl command arguments options` or `xpctl --host localhost --port 27107 command argument(s) option(s)` )
 

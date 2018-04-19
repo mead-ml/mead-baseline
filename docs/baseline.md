@@ -1,4 +1,4 @@
-#Overview
+# Overview
 
 This is the core part of the library. The top-level module provides base classes for data loading and evaluation. The data loader reads common file formats for classification, CONLL-formatted IOB files for sequence tagging, TSV and standard parallel corpora files for Neural Machine Translation and text files for language modeling. The data is masked and padded as necessary. It is also shuffled, sorted and batched such that data vectors in each batch have similar lengths. For sequence tagging problems, the loader supports multiple user-defined features. Also, the reader supports common formats for pre-trained embeddings. The library also supports common data cleaning procedures.
 
@@ -11,11 +11,11 @@ Model architecture development is a common use-case for a researcher. The librar
 
 ## Supported Tasks
 
-Driver programs are provided to train/test a model from the command line. In the following docs, we document how to use them, the implemented algorithms and the results in details.  
+Driver programs are provided to train/test a model from the command line. In the following docs, we document how to use them, the implemented algorithms and the results in details. However, we recommend using [mead](mead.md) and [xpctl](xpctl.md) to run deep learning experiments.  
  
 - [Text Classification](classify.md)
 - [Tagging with RNNs](tagging.md)
-- [Seq2Seq](seq2seq.md)
+- [Seq2Seq for Encoder-Decoder](seq2seq.md)
 - [Language Modeling with RNNs](lm.md)
 
 ## Dependencies
@@ -33,7 +33,7 @@ You can also think of the library itself as an abstraction layer at the "solutio
 
 ### As scaffolding for an experiment
 
-If you have a problem where the input is the same as a `baseline` task, you can easily use the API to set up your boilerplate work for you, and focus on your model, by creating a user-defined `addon`.  This is just a normal python file with a creation and load hooks (see the [addons area](python/addons) for examples). 
+If you have a problem where the input is the same as a `baseline` task, you can easily use the API to set up your boilerplate work for you, and focus on your model, by creating a user-defined `addon`.  This is just a normal python file with a creation and load hooks (see the [addons area](../python/addons) for examples). 
 
 Then pass `--model_type {model}` to the driver program for that task.  The driver program will look to see if it has an implementation within the library and will not find the one in its registry.  So it will import the module and call its `create_model` function with the arguments and use the provided model.
 
