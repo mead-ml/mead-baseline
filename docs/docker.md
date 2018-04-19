@@ -7,7 +7,7 @@ nvidia-docker run --net=host -v /data:/data:ro -it baseline bash
 
 We assume all necessary files (datasests, embeddings etc.) are stored in `/data/` in your machine.
 
-For convenience, we also provide a [script](docker.sh), which can be run as `./docker.sh -g 0 -n <container_name>`, eg. `./docker.sh -g 0 -n test`. The script assumes that following directories exist in your machine:
+For convenience, we also provide a [script](../docker/docker.sh), which can be run as `./docker.sh -g 0 -n <container_name>`, eg. `./docker.sh -g 0 -n test`. The script assumes that following directories exist in your machine:
 
 
 - `/data/embeddings`: location for embedding files (W2v, Glove), see [embeddings.json](../python/mead/config/embeddings.json) in `mead`.  
