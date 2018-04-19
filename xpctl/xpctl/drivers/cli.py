@@ -40,7 +40,7 @@ def read_cred():
 
 @shell(prompt="xpctl > ", intro="Starting xpctl...")
 @click.option('--host', help="mongo host")
-@click.option('--port', help="mongo port")
+@click.option('--port', help="mongo port", default=27017)
 @click.option('--user', help="mongo username")
 @click.option('--password', help="mongo password")
 def cli(host, port, user, password):
