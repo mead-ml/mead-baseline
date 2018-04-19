@@ -9,7 +9,9 @@ RUN apt-get update && \
     pip install torchvision && \
     jupyter nbextension enable --py widgetsnbextension
 
-COPY ./python /baseline/python
+COPY python /baseline/python
+COPY xpctl xpctl
+RUN pip install -e xpctl
 
 VOLUME ["/data/embeddings", "/data/model-store", "/data/datasets", "/data/model-checkpoints"]
 
