@@ -16,10 +16,11 @@ After an experiment is done, use `xpctl` to report the results to a mongodb serv
 
 ### Installation
 
-In the `xpctl` dir, run `pip install -e`. Before installation, you can create a file `mongocred.py` at `xpctl/drivers/` if you do not want to pass the parameters everytime you start the command. The file should look like this:
+In the `xpctl` dir, run `pip install -e`. Before installation, you can create a file `xpctlcred.json` at your `HOME` directory if you do not want to pass the parameters everytime you start the command. The file should look like this:
 
 ```
-creds = {"user": <username>,
+{
+ "user": <username>,
  "passwd": <password>,
  "dbhost": <dbhost>,
  "dbport": <dbport>
@@ -27,13 +28,13 @@ creds = {"user": <username>,
 
 ```
 
-_dbhost_ is typically `localhost` and _dbport_ is `27017`. **DO NOT COMMIT THIS FILE**
+_dbhost_ is typically `localhost` and _dbport_ is `27017`. 
 
 If you use [docker](docker.md), `xpctl` will be automatically installed.
  
 ### REPL Mode and Commands
  
-**Starting**: use `--host`,`--port`,`--user` and `password` to specify the host, port, username and password for mongodb.
+**Starting**: use `--host`,`--port`,`--user` and `password` to specify the host, port, username and password for mongodb. Else, you can pass a config file with the option `--config`. `xpctl` assumes that the config file is located at `~/xpctlcred.json` (in which case you can just use the command `xpctl` w/o specifying any option) but it can be saved anywhere you want.
 
  ```aidl
 (dl) home:home$ xpctl --host localhost
