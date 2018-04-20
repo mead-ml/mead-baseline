@@ -88,7 +88,7 @@ def get_metrics(list, event_type):
 def generate_data_frame(coll, metrics, query, projection, event_type):
     results = list(coll.find(query, projection))
     if not results:
-        return
+        return pd.DataFrame()
 
     ms = list(set(metrics)) if metrics else list(get_metrics(results, event_type))
     presults = []
