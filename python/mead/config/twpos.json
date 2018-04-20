@@ -7,7 +7,6 @@
     "preproc": {
         "mxlen": 38,
         "mxwlen": 40,
-        "web-cleanup": true,
         "lower": true,
         "valsplit": 0.15
     },
@@ -28,7 +27,7 @@
     },
 
     "word_embeddings": {
-	"label": "w2v-twitter-30M"
+	"label": "glove-twitter-27B"
     },
     "train": {
         "epochs": 40,
