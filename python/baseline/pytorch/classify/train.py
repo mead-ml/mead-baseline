@@ -22,7 +22,7 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
         print('using eta [%.3f]' % eta)
         optim = kwargs.get('optim', 'sgd')
         print('using optim [%s]' % optim)
-
+        self.clip = float(kwargs.get('clip', 5))
         parameters = filter(lambda p: p.requires_grad, model.parameters())
         self.labels = model.labels
         if optim == 'adadelta':
@@ -74,8 +74,10 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
             x, y = self.model.make_input(batch_dict)
             pred = self.model(x)
             loss = self.crit(pred, y)
+
             total_loss += loss.data[0]
             loss.backward()
+            torch.nn.utils.clip_grad_norm(self.model.parameters(), self.clip)
             _add_to_cm(cm, y, pred)
             self.optimizer.step()
             pg.update()
