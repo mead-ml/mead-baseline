@@ -217,7 +217,7 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
             mxwlen = task.config_params['preproc']['mxwlen']
 
             #raw_post = tf.Print(raw_post, [raw_post])
-            tokens = tf.string_split(tf.reshape(raw_post, [-1])).values
+            raw_tokens = tf.string_split(tf.reshape(raw_post, [-1])).values
             # sentence length <= mxlen
             nraw_post = tf.reduce_join(raw_tokens[:mxlen], separator=" ")
             # vocab has only lowercase words
