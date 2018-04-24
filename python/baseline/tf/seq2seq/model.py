@@ -108,7 +108,7 @@ class Seq2SeqModel(EncoderDecoder):
         rnntype = kwargs.get('rnntype', 'lstm')
         mxlen = kwargs.get('mxlen', 100)
         predict = kwargs.get('predict', False)
-        beam_width = kwargs.get('beam', 1)
+        beam_width = kwargs.get('beam', 1) if predict is True else 1
         sampling = kwargs.get('sampling', False)
         sampling_temp = kwargs.get('sampling_temp', 1.0)
         model.sess = kwargs.get('sess', tf.Session())
