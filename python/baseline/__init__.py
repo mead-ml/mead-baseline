@@ -8,4 +8,5 @@ from baseline.reporting import *
 from baseline.model import *
 from baseline.train import *
 from baseline.repl import *
+from baseline.version import __version__
 
