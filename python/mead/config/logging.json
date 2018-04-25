@@ -10,7 +10,7 @@
         "reporting_file_handler": {
             "class": "logging.FileHandler",
             "level": "INFO",
-	    "mode": "w",
+	        "mode": "w",
             "filename": "reporting.log",
             "encoding": "utf8"
         },

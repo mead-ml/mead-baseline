@@ -4,7 +4,7 @@ import numpy as np
 import logging
 import logging.config
 import mead.utils
-
+import os
 
 class Task(object):
     TASK_REGISTRY = {}
@@ -16,12 +16,24 @@ class Task(object):
         self._configure_logger(logger_file)
 
     def _configure_logger(self, logger_file):
+        """Use the logger file (logging.json) to configure the log, but overwrite the filename to include the PID
+
+        :param logger_file: The logging configuration JSON file
+        :return: A dictionary config derived from the logger_file, with the reporting handler suffixed with PID
+        """
         with open(logger_file) as f:
             config = json.load(f)
+            config['handlers']['reporting_file_handler']['filename'] = 'reporting-{}.log'.format(os.getpid())
             logging.config.dictConfig(config)
 
     @staticmethod
     def get_task_specific(task, logging_config):
+        """Get the task from the task registry associated with the name
+
+        :param task: The task name
+        :param logging_config: The configuration to read from
+        :return:
+        """
         config = Task.TASK_REGISTRY[task](logging_config)
         return config
 
