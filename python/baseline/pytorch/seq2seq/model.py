@@ -164,7 +164,7 @@ class Seq2SeqBase(nn.Module, EncoderDecoder):
 
         for i in range(T):
             lst = [path[-1] for path in paths]
-            dst = torch.LongTensor(lst).type(src.type())
+            dst = torch.LongTensor(lst).type(src.data.type())
             mask_eos = dst == EOS
             mask_pad = dst == 0
             dst = dst.view(1, K)
