@@ -15,7 +15,7 @@ def sequence_mask(lengths):
     len = lengths.cpu()
     max_len = torch.max(len)
     # 1 x T
-    row = Variable(torch.arange(0, max_len.data[0]), requires_grad=False).view(1, -1)
+    row = Variable(torch.arange(0, max_len.item()), requires_grad=False).view(1, -1)
     # B x 1
     col = len.view(-1, 1).float()
     # Broadcast to B x T, compares increasing number to max
@@ -183,7 +183,7 @@ def pytorch_conv1d(in_channels, out_channels, fsz, unif=0, padding=0, initialize
     elif initializer == "he" or initializer == "kaiming":
         nn.init.kaiming_uniform(c.weight)
     else:
-        nn.init.xavier_uniform(c.weight)
+        nn.init.xavier_uniform_(c.weight)
     return c
 
 
@@ -196,7 +196,7 @@ def pytorch_linear(in_sz, out_sz, unif=0, initializer=None):
     elif initializer == "he" or initializer == "kaiming":
         nn.init.kaiming_uniform(l.weight)
     else:
-        nn.init.xavier_uniform(l.weight)
+        nn.init.xavier_uniform_(l.weight)
 
     l.bias.data.zero_()
     return l
@@ -294,8 +294,8 @@ def pytorch_lstm(insz, hsz, rnntype, nlayers, dropout, unif=0, batch_first=False
         nn.init.kaiming_uniform(rnn.weight_hh_l0)
         nn.init.kaiming_uniform(rnn.weight_ih_l0)
     else:
-        nn.init.xavier_uniform(rnn.weight_hh_l0)
-        nn.init.xavier_uniform(rnn.weight_ih_l0)
+        nn.init.xavier_uniform_(rnn.weight_hh_l0)
+        nn.init.xavier_uniform_(rnn.weight_ih_l0)
 
     return rnn, ndir*hsz
 
@@ -330,7 +330,7 @@ def pytorch_prepare_optimizer(model, **kwargs):
 def append2seq(seq, modules):
 
     for i, module in enumerate(modules):
-        seq.add_module('%s-%d' % (str(module), i), module)
+        seq.add_module('%s-%d' % (str(module).replace('.', 'dot'), i), module)
 
 
 def tensor_max(tensor):
@@ -411,11 +411,12 @@ def show_examples_pytorch(model, es, rlut1, rlut2, embed2, mxlen, sample, prob_c
 
         sent = lookup_sentence(rlut1, src_i.cpu().numpy(), reverse=reverse)
         print('[OP] %s' % sent)
-        sent = lookup_sentence(rlut2, tgt_i)
+        sent = lookup_sentence(rlut2, tgt_i.cpu().numpy())
         print('[Actual] %s' % sent)
         src_dict = {'src': torch.autograd.Variable(src_i.view(1, -1), requires_grad=False),
                     'src_len': torch.autograd.Variable(src_len_i, requires_grad=False)}
         dst_i = model.run(src_dict)[0][0]
+        dst_i = [idx.item() for idx in dst_i]
         sent = lookup_sentence(rlut2, dst_i)
         print('Guess: %s' % sent)
         print('------------------------------------------------------------------------')

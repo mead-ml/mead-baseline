@@ -10,7 +10,7 @@ import torch.autograd
 def _add_to_cm(cm, y, pred):
     _, best = pred.max(1)
     yt = y.cpu().int()
-    yp = best.cpu().int().squeeze()
+    yp = best.cpu().int()
     cm.add_batch(yt.data.numpy(), yp.data.numpy())
 
 
@@ -53,7 +53,7 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
             x, y = self.model.make_input(batch_dict)
             pred = self.model(x)
             loss = self.crit(pred, y)
-            total_loss += loss.data[0]
+            total_loss += loss.item()
             _add_to_cm(cm, y, pred)
             pg.update()
         pg.done()
@@ -75,9 +75,9 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
             pred = self.model(x)
             loss = self.crit(pred, y)
 
-            total_loss += loss.data[0]
+            total_loss += loss.item()
             loss.backward()
-            torch.nn.utils.clip_grad_norm(self.model.parameters(), self.clip)
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.clip)
             _add_to_cm(cm, y, pred)
             self.optimizer.step()
             pg.update()

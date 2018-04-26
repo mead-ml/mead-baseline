@@ -86,7 +86,7 @@ class WordClassifierBase(nn.Module, Classifier):
         self.output = nn.Sequential()
         append2seq(self.output, (
             nn.Linear(input_dim, nc),
-            nn.LogSoftmax()
+            nn.LogSoftmax(dim=1)
         ))
 
     def _init_pool(self, dsz, **kwargs):
@@ -146,8 +146,7 @@ class LSTMModel(WordClassifierBase):
 
     def _pool(self, embeddings):
         output, hidden = self.lstm(embeddings)
-        # This squeeze can cause problems when B=1
-        last_frame = output[:, -1, :].squeeze()
+        last_frame = output[:, -1, :].squeeze(1)
         return last_frame
 
 
