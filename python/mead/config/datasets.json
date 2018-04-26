@@ -1,5 +1,5 @@
 [
-    {
+  {
 	"train_file": "/data/datasets/ptb/train.txt",
 	"valid_file": "/data/datasets/ptb/valid.txt",
 	"test_file": "/data/datasets/ptb/test.txt",
@@ -30,9 +30,9 @@
 	"label": "twpos"
     },
     {
-	"train_file": "/data/datasets/ner/eng.train",
-	"valid_file": "/data/datasets/ner/eng.testa",
-	"test_file": "/data/datasets/ner/eng.testb",
+	"train_file": "https://raw.githubusercontent.com/dpressel/baseline/master/data/eng.train",
+	"valid_file": "https://raw.githubusercontent.com/dpressel/baseline/master/data/eng.testa",
+	"test_file": "https://raw.githubusercontent.com/dpressel/baseline/master/data/neng.testb",
 	"label": "conll"
     },
     {

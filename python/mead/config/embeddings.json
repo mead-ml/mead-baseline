@@ -16,17 +16,17 @@
     },
     {
         "label": "glove-6B-50",
-        "file": "/data/embeddings/glove.6B.50d.txt",
+        "file": "https://s3-us-west-2.amazonaws.com/allennlp/datasets/glove/glove.6B.50d.txt.gz",
         "dsz": 50
     },
     {
         "label": "glove-6B-100",
-        "file": "/data/embeddings/glove.6B.100d.txt",
+        "file": "https://s3-us-west-2.amazonaws.com/allennlp/datasets/glove/glove.6B.100d.txt.gz",
         "dsz": 100
     },
     {
 	"label": "glove-6B-300",
-	"file": "/data/embeddings/glove.6B.300d.txt",
+	"file": "https://s3-us-west-2.amazonaws.com/allennlp/datasets/glove/glove.6B.00d.txt.gz",
 	"dsz": 300
     },
     {
