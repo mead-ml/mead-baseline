@@ -275,7 +275,7 @@ def putresult(user, log, task, config, label, cbase, cstore):
     }
 
     if cbase:
-        modelloc = storemodel(cbase=cbase, configsha1=hashlib.sha1(open(configf, "rb").read()).hexdigest(),
+        modelloc = store_model(cbase=cbase, configsha1=hashlib.sha1(open(configf, "rb").read()).hexdigest(),
                               cstore=cstore)
         if modelloc is not None:
             post.update({"checkpoint": "{}:{}".format(hostname, os.path.abspath(modelloc))})
