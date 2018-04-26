@@ -11,15 +11,26 @@ import magic
 def extract_gzip(file_loc):
     import gzip
     import shutil
+    temp_file = "{}.1".format(file_loc)
     with gzip.open(file_loc, 'rb') as f_in:
-        with open("{}.1".format(file_loc), 'wb') as f_out:
+        with open(temp_file, 'wb') as f_out:
             shutil.copyfileobj(f_in, f_out)
-    shutil.move("{}.1".format(file_loc), file_loc)
+    shutil.move(temp_file, file_loc)
     return file_loc
 
 
 def extract_zip(file_loc):
-    raise NotImplementedError
+    import zipfile
+    temp_file = "{}.1".format(file_loc)
+    with zipfile.ZipFile(file_loc, "r") as zip_ref:
+        zip_ref.extractall(temp_file)
+    if os.path.isdir(temp_file):
+        if len(os.listdir(temp_file)) > 1:
+            raise RuntimeError("the directory extracted from the downloaded link contains more than one files, should contain only one")
+        temp_file_path = os.path.join(temp_file, os.listdir(temp_file)[0])
+    shutil.move(temp_file_path, file_loc)
+    return file_loc
+
 
 
 zipd = {'application/gzip': extract_gzip, 'application/zip': extract_zip}
@@ -27,7 +38,7 @@ zipd = {'application/gzip': extract_gzip, 'application/zip': extract_zip}
 
 def file_dloader(url, cachedir):
     r = requests.get(url, stream=True)
-    path_to_save = "/tmp/data.dload"
+    path_to_save = "/tmp/data.dload-{}".format(os.getpid())
     if not os.path.exists(cachedir):
         os.makedirs(cachedir)
     try:

@@ -1,47 +1,52 @@
 [
     {
 	"label": "glove-twitter-27B",
-	"file": "/data/embeddings/glove.twitter.27B.200d.txt",
+	"file": "http://nlp.stanford.edu/data/glove.twitter.27B.zip",
 	"dsz": 200
     },
     {
 	"label": "w2v-twitter-30M",
-	"file": "/data/embeddings/oct-s140clean-uber.cbow-bin",
+	"file": "https://www.dropbox.com/s/ihs4or6z5bq33tb/oct-s140clean-uber.cbow-bin?dl=0",
 	"dsz": 150
     },
     {
 	"label": "glove-42B",
-	"file": "/data/embeddings/glove.42B.300d.txt",
+	"file": "http://nlp.stanford.edu/data/glove.42B.300d.zip",
 	"dsz": 300
     },
     {
         "label": "glove-6B-50",
-        "file": "https://s3-us-west-2.amazonaws.com/allennlp/datasets/glove/glove.6B.50d.txt.gz",
+        "file": "https://www.dropbox.com/s/339mhx40t3q9bp5/glove.6B.50d.txt.gz?dl=0",
         "dsz": 50
     },
     {
         "label": "glove-6B-100",
-        "file": "https://s3-us-west-2.amazonaws.com/allennlp/datasets/glove/glove.6B.100d.txt.gz",
+        "file": "https://www.dropbox.com/s/cjg716n67rpp9s5/glove.6B.100d.txt.gz?dl=0",
         "dsz": 100
     },
     {
+        "label": "glove-6B-200",
+        "file": "https://www.dropbox.com/s/o80aqj1ky9ddm7c/glove.6B.200d.txt.gz?dl=0",
+        "dsz": 200
+    },
+     {
 	"label": "glove-6B-300",
-	"file": "https://s3-us-west-2.amazonaws.com/allennlp/datasets/glove/glove.6B.00d.txt.gz",
+	"file": "https://www.dropbox.com/s/x4uyw8ichye0gc3/glove.6B.300d.txt.gz?dl=0",
 	"dsz": 300
     },
     {
 	"label": "w2v-gn",
-	"file": "/data/embeddings/GoogleNews-vectors-negative300.bin",
+	"file": "https://s3.amazonaws.com/mordecai-geo/GoogleNews-vectors-negative300.bin.gz",
 	"dsz": 300
     },
     {
         "label": "numberbatch",
-        "file": "/data/embeddings/numberbatch-en-17.06.txt",
+        "file": "https://conceptnet.s3.amazonaws.com/downloads/2017/numberbatch/numberbatch-en-17.06.txt.gz",
         "dsz": 300
     },
     {
 	"label": "senna",
-	"file": "/data/embeddings/senna-50.txt",
+	"file": "https://www.dropbox.com/s/s8q2feew1fmwl3p/senna-50.txt.gz?dl=0",
 	"dsz": 50
     }
 ]
