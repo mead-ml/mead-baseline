@@ -361,7 +361,7 @@ class EncoderDecoderTask(Task):
     def initialize(self, embeddings):
         embeddings_set = mead.utils.index_by_label(embeddings)
 
-        vocab_file = self.dataset.get('vocab_file', None)
+        vocab_file = download(self.dataset.get('vocab_file', None))
         if vocab_file is not None:
             vocab1, vocab2 = self.reader.build_vocabs([vocab_file])
         else:

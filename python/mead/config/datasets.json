@@ -1,8 +1,8 @@
 [
   {
-	"train_file": "/data/datasets/ptb/train.txt",
-	"valid_file": "/data/datasets/ptb/valid.txt",
-	"test_file": "/data/datasets/ptb/test.txt",
+	"train_file": "https://www.dropbox.com/s/ymzojfrg89mq81o/train.txt?dl=0",
+	"valid_file": "https://www.dropbox.com/s/ozqu2q9sdylnlei/valid.txt?dl=0",
+	"test_file": "https://www.dropbox.com/s/p93qos44hx0qlxg/test.txt?dl=0",
 	"label": "ptb"
     },
     {
