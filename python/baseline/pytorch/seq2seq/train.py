@@ -28,7 +28,7 @@ class Seq2SeqTrainerPyTorch(Trainer):
 
     def _total(self, tgt):
         tgtt = tgt.data.long()
-        return torch.sum(tgtt.ne(0))
+        return torch.sum(tgtt.ne(0)).item()
 
     def test(self, vs, reporting_fns, phase):
         self.model.eval()
@@ -47,7 +47,7 @@ class Seq2SeqTrainerPyTorch(Trainer):
             fx = fx[:-1]
             pred = self.model(fx)
             loss = self.crit(pred, tgt)
-            total_loss += loss.data[0]
+            total_loss += loss.item()
             total += self._total(tgt)
             pg.update()
         pg.done()
@@ -79,9 +79,9 @@ class Seq2SeqTrainerPyTorch(Trainer):
             fx = fx[:-1]
             pred = self.model(fx)
             loss = self.crit(pred, tgt)
-            total_loss += loss.data[0]
+            total_loss += loss.item()
             loss.backward()
-            torch.nn.utils.clip_grad_norm(self.model.parameters(), self.clip)
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.clip)
             total += self._total(tgt)
             self.optimizer.step()
             duration += time.time() - start_time

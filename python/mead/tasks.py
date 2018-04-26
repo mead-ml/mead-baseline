@@ -335,10 +335,11 @@ class EncoderDecoderTask(Task):
             print('PyTorch backend')
             from baseline.pytorch import long_0_tensor_alloc as vec_alloc
             from baseline.pytorch import tensor_shape as vec_shape
+            from baseline.pytorch import tensor_reverse_2nd as rev2nd
             import baseline.pytorch.seq2seq as seq2seq
             self.config_params['preproc']['vec_alloc'] = vec_alloc
             self.config_params['preproc']['vec_shape'] = vec_shape
-            src_vec_trans = baseline.tensor_reverse_2nd if do_reverse else None
+            src_vec_trans = rev2nd if do_reverse else None
             self.config_params['preproc']['word_trans_fn'] = src_vec_trans
             self.config_params['preproc']['show_ex'] = baseline.pytorch.show_examples_pytorch
             self.config_params['preproc']['trim'] = True

@@ -36,8 +36,8 @@ class LanguageModelTrainerPyTorch(Trainer):
 
     def repackage_hidden(self, h):
         """Wraps hidden states in new Variables, to detach them from their history."""
-        if type(h) == torch.autograd.Variable:
-            return torch.autograd.Variable(h.data)
+        if isinstance(h, torch.Tensor):
+            return h.detach()
         else:
             return tuple(self.repackage_hidden(v) for v in h)
 
@@ -100,7 +100,7 @@ class LanguageModelTrainerPyTorch(Trainer):
                 for reporting in reporting_fns:
                     reporting(metrics, self.train_steps, 'Train')
 
-            torch.nn.utils.clip_grad_norm(self.model.parameters(), self.clip)
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.clip)
             self.optimizer.step()
 
         avg_loss = float(total_loss) / iters / batchsz

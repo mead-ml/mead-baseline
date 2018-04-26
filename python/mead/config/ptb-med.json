@@ -1,0 +1,34 @@
+{
+	"batchsz": 20,
+	"unif": 0.05,
+    "nbptt": 35,
+    "charsz": 16,
+    "preproc": {
+        "mxwlen": 40,
+        "lower": true
+    },
+    "backend": "pytorch",
+    "dataset": "ptb",
+    "loader": {
+        "reader_type": "default"
+    },
+    "model": {
+        "model_type": "default",
+        "hsz": 200
+    },
+    "word_embeddings": {
+        "label": "w2v-gn"
+    },
+    "train": {
+        "epochs": 39,
+        "decay_rate": 1.2,
+        "patience": 40000,
+        "optim": "sgd",
+        "start_decay_epoch": 6,
+        "decay_type": "zaremba",
+        "eta": 1.0,
+        "mom": 0.0,
+        "do_early_stopping": true,
+        "clip": 5.0
+    }
+}

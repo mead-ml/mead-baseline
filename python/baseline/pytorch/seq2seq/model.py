@@ -138,6 +138,7 @@ class Seq2SeqBase(nn.Module, EncoderDecoder):
             src_len = src_len.cuda()
         batch = []
         for src_i, src_len_i in zip(src, src_len):
+            src_len_i = src_len_i.unsqueeze(0)
             batch += [self.beam_decode(src_i.view(1, -1), src_len_i, kwargs.get('beam', 1))[0]]
 
         return batch
@@ -225,7 +226,7 @@ class Seq2SeqModel(Seq2SeqBase):
         self.encoder_rnn = pytorch_rnn(dsz, enc_hsz, rnntype, nlayers, pdrop)
         self.preds = nn.Linear(self.hsz, self.nc)
         self.decoder_rnn = pytorch_rnn_cell(dsz, self.hsz, rnntype, nlayers, pdrop)
-        self.probs = nn.LogSoftmax()
+        self.probs = nn.LogSoftmax(dim=1)
 
     def input_i(self, embed_i, output_i):
         return embed_i.squeeze(0)
@@ -254,9 +255,9 @@ class Seq2SeqAttnModel(Seq2SeqBase):
         self.dropout = nn.Dropout(pdrop)
         self.decoder_rnn = pytorch_rnn_cell(self.hsz + dsz, self.hsz, rnntype, nlayers, pdrop)
         self.preds = nn.Linear(self.hsz, self.nc)
-        self.probs = nn.LogSoftmax()
+        self.probs = nn.LogSoftmax(dim=1)
         self.output_to_attn = nn.Linear(self.hsz, self.hsz, bias=False)
-        self.attn_softmax = nn.Softmax()
+        self.attn_softmax = nn.Softmax(dim=1)
         self.attn_out = nn.Linear(2 * self.hsz, self.hsz, bias=False)
         self.attn_tanh = pytorch_activation("tanh")
         self.nlayers = nlayers

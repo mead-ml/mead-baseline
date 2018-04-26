@@ -30,7 +30,7 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
         # For each sentence
         for b in range(len(guess)):
 
-            sentence = guess[b].cpu().squeeze().numpy()
+            sentence = guess[b].cpu().numpy()
 
             sentence_length = sentence_lengths[b]
             gold = truth_n[b, :sentence_length]
@@ -97,9 +97,9 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
             inputs = self.model.make_input(batch_dict)
             self.optimizer.zero_grad()
             loss = self.model.compute_loss(inputs)
-            total_loss += loss.data[0]
+            total_loss += loss.item()
             loss.backward()
-            torch.nn.utils.clip_grad_norm(self.model.parameters(), self.clip)
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.clip)
             self.optimizer.step()
             pg.update()
 
