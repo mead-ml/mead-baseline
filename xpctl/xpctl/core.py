@@ -1,12 +1,12 @@
-import click
-from xpctl.helpers import *
-import pandas as pd
+#!/usr/bin/env python3
 import os
-import subprocess
-import pymongo
 import shutil
-from bson.objectid import ObjectId
+import subprocess
 
+import click
+import pandas as pd
+import pymongo
+from bson.objectid import ObjectId
 
 def connect(host, port, user, passw):
     client = None
@@ -16,13 +16,14 @@ def connect(host, port, user, passw):
     else:
         client = pymongo.MongoClient(host, port)
     if client is None:
-        print("can not connect to mongo at host: [{}], port [{}], username: [{}], password: [{}]".format(host, port,
-                                                                                                         user, passw))
+        print("can not connect to mongo at host: [{}], port [{}], " \
+        "username: [{}], password: [{}]".format(host, port, user, passw))
         return None
     try:
         dbnames = client.database_names()
     except pymongo.errors.ServerSelectionTimeoutError:
-        print("can not get database from mongo at host: {}, port {}, connection timed out".format(host, port))
+        print("can not get database from mongo at host: {}, port {}, " \
+        "connection timed out".format(host, port))
         return None
     if "reporting_db" not in dbnames:
         print("no database for results found")
