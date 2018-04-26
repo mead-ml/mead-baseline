@@ -180,7 +180,7 @@ def tasksummary(task, dataset, metric):
 @click.argument('label')
 def updatelabel(id, label, task):
     """Update the _label_ for an experiment (identified by its id) for a task"""
-    db = setupdb_int(dbhost, dbport)
+    db = cli_int(dbhost, dbport, dbuser, dbpass)
     if db is None:
         click.echo("can not connect to database")
         return
@@ -198,7 +198,7 @@ def updatelabel(id, label, task):
 @click.argument('id')
 def delete(id, task):
     """delete a record from database with the given object id. also delete the associated model file from the checkpoint."""
-    db = setupdb_int(dbhost, dbport)
+    db = cli_int(dbhost, dbport, dbuser, dbpass)
     if db is None:
         click.echo("can not connect to database")
         return
@@ -239,7 +239,7 @@ def putresult(user, log, task, config, label, cbase, cstore):
     the experiment, the log file storing the results for the experiment (typically <taskname>/reporting.log)
     and a short description of the experiment (label). Gets the username from system (can provide as an option). Also
     provide the model location produced by the config optionally"""
-    db = setupdb_int(dbhost, dbport)
+    db = cli_int(dbhost, dbport, dbuser, dbpass)
     if db is None:
         click.echo("can not connect to database")
         return
@@ -300,7 +300,7 @@ def putmodel(task, id, cbase, cstore):
     """Puts the model from an experiment in the model store and updates the database with the location.
     Arguments:  task name, id of the record, and the path to the base structure for
     the model checkpoint files such as ../tagger/tagger-model-tf-11967 or /home/ds/tagger/tagger-model-tf-11967"""
-    db = setupdb_int(dbhost, dbport)
+    db = cli_int(dbhost, dbport, dbuser, dbpass)
     if db is None:
         click.echo("can not connect to database")
         return
@@ -343,7 +343,7 @@ def config2json(task, sha, filename):
 @click.argument("sha2")
 def configdiff(task, sha1, sha2):
     """Shows the difference between two json files for a task, diff of sha2 wrt sha1"""
-    db = setupdb_int(dbhost, dbport)
+    db = cli_int(dbhost, dbport, dbuser, dbpass)
     if db is None:
         click.echo("can not connect to database")
         return
