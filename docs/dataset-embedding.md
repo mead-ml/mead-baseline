@@ -1,50 +1,107 @@
-### Datasets and Embedding files
+### Datasets and Embedding Files
 
-The datasets and embedding file locations are tracked in `mead/datasets.json`, and `mead/emeddings.json`. The datasets can exist in your local machine. We also provide methods for automated download of the embedding and the data files. There are a couple of ways to do this:
+The datasets and embedding file locations should be provided in `mead/datasets.json`, and `mead/emeddings.json`. These files can exist in your local machine. We also provide methods for automated download. There are a couple of ways to specify the dataset or embedding file locations:
  
 #### Datasets
  
- In `datasets.json`. 
+- Path to the data files on your computer:
 
-- Provide direct download links for train/test/valid keys:
-```aidl
-{
-    "train_file": "https://www.dropbox.com/s/a3mg6nuk1u9wbk1/train-tok-nodev.txt.gz?dl=1",
-    "valid_file": "https://www.dropbox.com/s/0f3zw5okduxtcjg/dev-tok.txt.gz?dl=1",
-    "test_file": "https://www.dropbox.com/s/n5rbul7ku2ek6zn/test-tok.txt.gz?dl=1",
-    "label": "dbpedia"
-  }
 ```
-- Provide download link to a zip file that will extract into a folder, and specify the filenames inside the folder. 
-
-```aidl
   {
+    "train_file": "/data/datasets/sst2/stsa.binary.phrases.train",
+    "valid_file": "/data/datasets/sst2/stsa.binary.dev",
+    "test_file": "/data/datasets/sst2/stsa.binary.test",
+    "label": "SST2"
+  },
+```
+- **checked**
+
+```
+    {
+	"vocab_file": "/data/datasets/iwslt15-en-vi/vocab.en_vi",
+	"train_file": "/data/datasets/iwslt15-en-vi/train",
+	"valid_file": "/data/datasets/iwslt15-en-vi/tst2012",
+	"test_file": "/data/datasets/iwslt15-en-vi/tst2013",
+	"label": "iwslt15-en-vi"
+    },
+
+```
+- Link to a directory zip, file names in the unzipped directory as keys
+
+- **checked**
+
+```
+{
     "train_file": "eng.train",
     "valid_file": "eng.testa",
     "test_file": "eng.testb",
-    "download": "https://www.dropbox.com/s/35pfeppg7n5yg6p/conll.tar.gz?dl=1",
+    "download": "https://www.dropbox.com/s/p6ogzhiex9yqsmn/conll.tar.gz?dl=1",
     "label": "conll"
+}
+```
+
+or
+
+```
+  {
+    "vocab_file": "vocab.en_vi",
+    "train_file": "train",
+    "valid_file": "tst2012",
+    "test_file": "tst2013",
+    "download": "https://www.dropbox.com/s/peqeifib013us5p/iwslt15-en-vi.tar.gz?dl=1",
+    "label": "iwslt15-en-vi"
   }
 ```
 
-#### Embedding files
+- Each key points to a separate download link:
 
-You need to provide direct links to the embedding files:
- 
-```aidl
+```
   {
+    "train_file": "https://www.dropbox.com/s/sj9xjeiihjs8cmk/oct27.train?dl=1",
+    "valid_file": "https://www.dropbox.com/s/whzkv7te2zklqn2/oct27.dev?dl=1",
+    "test_file": "https://www.dropbox.com/s/riyn2ne85pirfpd/oct27.test?dl=1",
+    "label": "twpos"
+  },
+```
+
+#### Embedding Files
+
+- Compressed zip/tar.gz file with multiple embedding files. the files are uniquely identified by the dsz. Eg, in the zip below, we will pick the file `200` in the file name. 
+ 
+```
+    {
+	"label": "glove-twitter-27B",
+	"file": "http://nlp.stanford.edu/data/glove.twitter.27B.zip",
+	"dsz": 200
+    },
+```
+
+- Direct download link
+
+```
+    {
+        "label": "glove-6B-50",
+        "file": "https://www.dropbox.com/s/339mhx40t3q9bp5/glove.6B.50d.txt.gz?dl=1",
+        "dsz": 50
+    },
+```
+
+- On file system
+
+```aidl
+{
         "label": "glove-6B-100",
-        "file": "https://www.dropbox.com/s/cjg716n67rpp9s5/glove.6B.100d.txt.gz?dl=1",
+        "file": "/data/embeddings/glove.6B.100d.txt",
         "dsz": 100
     },
 ```
 
 ### File format
-The links can have the usual data format supported by `baseline` or standard zip formats such as `gz, tar.gz, tgz, zip`. We automatically extract them as needed.
+The links can have the usual data format supported by `baseline` or standard zip formats such as `.gz, tar.gz, tgz, zip`. We automatically extract them as needed.
 
 #### Caching
 
-For faster download, all downloaded files are cached. A `<key,value>` store for the download links are maintained at an internal JSON file, which should not be committed. For eg:
+For faster download, all downloaded files are cached. A `<key,value>` store for the download links are maintained at an internal JSON file (datasets-embeddings-cache.json), which should not be committed. For eg:
 ```aidl
 x:config$ cat datasets-embeddings-cache.json 
 {
@@ -67,4 +124,3 @@ The location of the cache directory is `~/.bl-dataset-embeddings/` by default, u
 
 You can write your own downloaders by extending the base Downloader class. Helper methods are provided. 
 
- 

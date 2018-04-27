@@ -6,18 +6,21 @@ def get_file(file_name):
     return file_name
 
 
-def extract_gzip_one_file(file_loc):
+def extract_gzip(file_loc):
     import gzip
     import shutil
     temp_file = get_file("{}.1".format(file_loc))
     with gzip.open(file_loc, 'rb') as f_in:
         with open(temp_file, 'wb') as f_out:
             shutil.copyfileobj(f_in, f_out)
-    shutil.move(temp_file, file_loc)
-    return file_loc
+    if mime_type(temp_file) == "application/x-tar":
+        return extract_tar(temp_file)
+    else:
+        shutil.move(temp_file, file_loc)
+        return file_loc
 
 
-def extract_gzip_dir(file_loc):
+def extract_tar(file_loc):
     import tarfile
     import os
     temp_file = get_file("{}.1".format(file_loc))
@@ -28,7 +31,7 @@ def extract_gzip_dir(file_loc):
     return os.path.join(temp_file, os.listdir(temp_file)[0])
 
 
-def extract_zip_dir(file_loc):
+def extract_zip(file_loc):
     import zipfile
     temp_file = get_file("{}.1".format(file_loc))
     with zipfile.ZipFile(file_loc, "r") as zip_ref:
@@ -138,7 +141,7 @@ class SingleFileDownloader(Downloader):
                 return dcaches[url]
             else:  # download the file in the cache, update the json
                 cache_dir = get_cache_dir()
-                zipd = {'application/gzip': extract_gzip_one_file, 'application/zip': extract_zip_one_file}
+                zipd = {'application/gzip': extract_gzip, 'application/zip': extract_zip}
                 temp_file = web_downloader(url)
                 dload_file = extractor(filepath=temp_file, cache_dir=cache_dir, extractor_func=zipd.get(mime_type(temp_file), None))
                 dcaches.update({url: dload_file})
@@ -149,9 +152,10 @@ class SingleFileDownloader(Downloader):
 
 
 class DataDownloader(Downloader):
-    def __init__(self, dataset_desc, cache_ignore=False):
+    def __init__(self, dataset_desc, enc_dec=False, cache_ignore=False):
         super(DataDownloader, self).__init__(cache_ignore)
         self.dataset_desc = dataset_desc
+        self.enc_dec = enc_dec
 
     def download(self):
         import os
@@ -173,14 +177,17 @@ class DataDownloader(Downloader):
                 else:
                     cache_dir = get_cache_dir()
                     temp_file = web_downloader(url)
-                    zipd = {'application/gzip': extract_gzip_dir, 'application/zip': extract_zip_dir}
+                    zipd = {'application/gzip': extract_gzip, 'application/zip': extract_zip}
                     download_dir = extractor(filepath=temp_file, cache_dir=cache_dir, extractor_func=zipd.get(mime_type(temp_file), None))
                     download_caches.update({url: download_dir})
                     json.dump(download_caches, open("config/datasets-embeddings-cache.json", "w"), indent=True)
                     return {k: os.path.join(download_dir, self.dataset_desc[k]) for k in self.dataset_desc if k.endswith("_file")}
         else:  # we have download links to every file or they exist
-            return {k: self.dataset_desc[k] if os.path.exists(self.dataset_desc[k]) else SingleFileDownloader(self.dataset_desc[k]).download()
-                    for k in self.dataset_desc if k.endswith("_file")}
+            if not self.enc_dec:
+                return {k: SingleFileDownloader(self.dataset_desc[k]).download() for k in self.dataset_desc if k.endswith("_file")}
+            else:
+                return {k: self.dataset_desc[k] for k in self.dataset_desc if k.endswith("_file")} #this files can not be downloaded because there's a post processing on them.
+
 
 
 class EmbeddingDownloader(Downloader):
@@ -193,6 +200,7 @@ class EmbeddingDownloader(Downloader):
     def _get_embedding_file(loc, key):
         import os
         if os.path.isfile(loc):
+            print("embedding file location: {}".format(loc))
             return loc
         else:  # This is a directory, return the actual file
             files = [x for x in os.listdir(loc) if str(key) in x]
@@ -206,6 +214,10 @@ class EmbeddingDownloader(Downloader):
 
     def download(self):
         import json
+        import os
+        if os.path.exists(self.embedding_file):
+            print("embedding file location: {}".format(self.embedding_file))
+            return self.embedding_file
         try:
             download_caches = json.load(open("config/datasets-embeddings-cache.json"))
         except IOError:
@@ -221,7 +233,8 @@ class EmbeddingDownloader(Downloader):
             else:
                 cache_dir = get_cache_dir()
                 temp_file = web_downloader(url)
-                zipd = {'application/gzip': extract_gzip_dir, 'application/zip': extract_zip_dir}
+                zipd = {'application/gzip': extract_gzip, 'application/zip': extract_zip}
                 download_loc = extractor(filepath=temp_file, cache_dir=cache_dir, extractor_func=zipd.get(mime_type(temp_file), None))
                 download_caches.update({url: download_loc})
+                json.dump(download_caches, open("config/datasets-embeddings-cache.json", "w"), indent=True)
                 return self._get_embedding_file(download_loc, self.embedding_key)

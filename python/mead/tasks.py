@@ -227,7 +227,8 @@ class ClassifierTask(Task):
     def initialize(self, embeddings):
         embeddings_set = mead.utils.index_by_label(embeddings)
         self.dataset = DataDownloader(self.dataset).download()
-        vocab, self.labels = self.reader.build_vocab([self.dataset["train_file"], self.dataset["valid_file"], self.dataset["test_file"]])
+        print("[train file]: {}\n[valid file]: {}\n[test file]: {}".format(self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']))
+        vocab, self.labels = self.reader.build_vocab([self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']])
         self.embeddings, self.feat2index = self._create_embeddings(embeddings_set, {'word': vocab})
 
 
@@ -235,9 +236,9 @@ class ClassifierTask(Task):
         return self.task.create_model(self.embeddings, self.labels, **self.config_params['model'])
 
     def _load_dataset(self):
-        self.train_data = self.reader.load(self.dataset["train_file"], self.feat2index, self.config_params['batchsz'], shuffle=True)
-        self.valid_data = self.reader.load(self.dataset["valid_file"], self.feat2index, self.config_params['batchsz'])
-        self.test_data = self.reader.load(self.dataset["test_file"], self.feat2index, self.config_params.get('test_batchsz', 1))
+        self.train_data = self.reader.load(self.dataset['train_file'], self.feat2index, self.config_params['batchsz'], shuffle=True)
+        self.valid_data = self.reader.load(self.dataset['valid_file'], self.feat2index, self.config_params['batchsz'])
+        self.test_data = self.reader.load(self.dataset['test_file'], self.feat2index, self.config_params.get('test_batchsz', 1))
 
 Task.TASK_REGISTRY['classify'] = ClassifierTask
 
@@ -290,8 +291,9 @@ class TaggerTask(Task):
 
     def initialize(self, embeddings):
         self.dataset = DataDownloader(self.dataset).download()
+        print("[train file]: {}\n[valid file]: {}\n[test file]: {}".format(self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']))
         embeddings_set = mead.utils.index_by_label(embeddings)
-        vocabs = self.reader.build_vocab([self.dataset["train_file"], self.dataset["valid_file"], self.dataset["test_file"]])
+        vocabs = self.reader.build_vocab([self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']])
         self.embeddings, self.feat2index = self._create_embeddings(embeddings_set, vocabs)
 
     def _create_model(self):
@@ -302,9 +304,9 @@ class TaggerTask(Task):
         return self.task.create_model(labels, self.embeddings, **self.config_params['model'])
 
     def _load_dataset(self):
-        self.train_data, _ = self.reader.load(self.dataset["train_file"], self.feat2index, self.config_params['batchsz'], shuffle=True)
-        self.valid_data, _ = self.reader.load(self.dataset["valid_file"], self.feat2index, self.config_params['batchsz'])
-        self.test_data, self.txts = self.reader.load(self.dataset["test_file"], self.feat2index, self.config_params.get('test_batchsz', 1), shuffle=False)
+        self.train_data, _ = self.reader.load(self.dataset['train_file'], self.feat2index, self.config_params['batchsz'], shuffle=True)
+        self.valid_data, _ = self.reader.load(self.dataset['valid_file'], self.feat2index, self.config_params['batchsz'])
+        self.test_data, self.txts = self.reader.load(self.dataset['test_file'], self.feat2index, self.config_params.get('test_batchsz', 1), shuffle=False)
 
     def train(self):
         self._load_dataset()
@@ -363,8 +365,8 @@ class EncoderDecoderTask(Task):
 
     def initialize(self, embeddings):
         embeddings_set = mead.utils.index_by_label(embeddings)
-
-        self.dataset = DataDownloader(self.dataset).download()
+        self.dataset = DataDownloader(self.dataset, True).download()
+        print("[train file]: {}\n[valid file]: {}\n[test file]: {}\n[vocab file]: {}".format(self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file'], self.dataset['vocab_file']))
         vocab_file = self.dataset['vocab_file']
         if vocab_file is not None:
             vocab1, vocab2 = self.reader.build_vocabs([vocab_file])
