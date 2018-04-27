@@ -11,10 +11,9 @@ setup(
         'xlsxwriter',
         'jsondiff'
     ],
-    packages=['xpctl.core', 'xpctl.helpers', 'xpctl.drivers'],
     entry_points={
           'console_scripts': [
-              'xpctl = xpctl.drivers.cli:cli'
+              'xpctl = xpctl.cli:cli'
           ]
       },
 )
