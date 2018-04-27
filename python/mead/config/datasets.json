@@ -9,7 +9,7 @@
     "train_file": "https://www.dropbox.com/s/minooobg2g2rfq3/stsa.binary.phrases.train?dl=1",
     "valid_file": "https://www.dropbox.com/s/mo1w63df5wy4gua/stsa.binary.dev?dl=1",
     "test_file": "https://www.dropbox.com/s/5t4l43jf1ad0ot9/stsa.binary.test?dl=1",
-    "label": "SST21"
+    "label": "SST2"
   },
   {
     "train_file": "https://www.dropbox.com/s/01xnwkiaeqd7n8q/trec.nodev.utf8?dl=1",

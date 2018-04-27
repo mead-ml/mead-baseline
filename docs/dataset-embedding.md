@@ -1,9 +1,9 @@
 ### Datasets and Embedding Files
 
 The datasets and embedding file locations should be provided in `mead/datasets.json`, and `mead/emeddings.json`. These files can exist in your local machine. We also provide methods for automated download. There are a couple of ways to specify the dataset or embedding file locations:
- 
+
 #### Datasets
- 
+
 - Path to the data files on your computer:
 
 ```
@@ -66,8 +66,8 @@ or
 
 #### Embedding Files
 
-- Compressed zip/tar.gz file with multiple embedding files. the files are uniquely identified by the dsz. Eg, in the zip below, we will pick the file `200` in the file name. 
- 
+- Compressed zip/tar.gz file with multiple embedding files. the files are uniquely identified by the dsz. Eg, in the zip below, we will pick the file `200` in the file name.
+
 ```
     {
 	"label": "glove-twitter-27B",
@@ -103,7 +103,7 @@ The links can have the usual data format supported by `baseline` or standard zip
 
 For faster download, all downloaded files are cached. A `<key,value>` store for the download links are maintained at an internal JSON file (datasets-embeddings-cache.json), which should not be committed. For eg:
 ```aidl
-x:config$ cat datasets-embeddings-cache.json 
+x:config$ cat datasets-embeddings-cache.json
 {
  "https://www.dropbox.com/s/p6ogzhiex9yqsmn/conll.tar.gz?dl=1": "/data/bl-dataset-embeddings//521c44052a51699742cc63e39db514528e9c2640",
  "https://www.dropbox.com/s/cjg716n67rpp9s5/glove.6B.100d.txt.gz?dl=1": "/data/bl-dataset-embeddings//a483a44d4414a18c7b10b36dd6daa59195eb292b",
@@ -119,8 +119,7 @@ x:config$ cat datasets-embeddings-cache.json
 The location of the cache directory is `~/.bl-dataset-embeddings/` by default, unless you explicitly mention it at `mead/config.json`. 
 
 
- 
 #### Writing own downloaders
 
-You can write your own downloaders by extending the base Downloader class. Helper methods are provided. 
+You can write your own downloaders by extending the base Downloader class. Helper methods are provided.
 

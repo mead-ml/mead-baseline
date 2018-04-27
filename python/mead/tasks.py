@@ -366,8 +366,8 @@ class EncoderDecoderTask(Task):
     def initialize(self, embeddings):
         embeddings_set = mead.utils.index_by_label(embeddings)
         self.dataset = DataDownloader(self.dataset, True).download()
-        print("[train file]: {}\n[valid file]: {}\n[test file]: {}\n[vocab file]: {}".format(self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file'], self.dataset['vocab_file']))
-        vocab_file = self.dataset['vocab_file']
+        print("[train file]: {}\n[valid file]: {}\n[test file]: {}\n[vocab file]: {}".format(self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file'], self.dataset.get('vocab_file',"None")))
+        vocab_file = self.dataset.get('vocab_file',None)
         if vocab_file is not None:
             vocab1, vocab2 = self.reader.build_vocabs([vocab_file])
         else:
@@ -449,6 +449,7 @@ class LanguageModelingTask(Task):
     def initialize(self, embeddings):
         embeddings_set = mead.utils.index_by_label(embeddings)
         self.dataset = DataDownloader(self.dataset).download()
+        print("[train file]: {}\n[valid file]: {}\n[test file]: {}".format(self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']))
         vocab, self.num_words = self.reader.build_vocab([self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']])
         self.embeddings, self.feat2index = self._create_embeddings(embeddings_set, vocab)
 

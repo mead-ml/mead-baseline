@@ -5,7 +5,8 @@ This is a simple configuration-driven training/test system that facilitates expl
 We define a problem as a $<$task, dataset$>$ tuple. To use mead, we simply set up a JSON configuration file that tells the driver what models, readers and trainers to run, with what parameters and HPs. For any task, the configuration file should contain 1.~The dataset name, 2.~Embedding type, 3.~Reader type, 4.~Model type, 5.~Model hyper-parameters, 6.~Training parameters (number of epochs, optimizers, optimizer specific parameters, patience for early stopping), 7. ~Pre-processing information. Reasonable default values are provided where possible. Thus, the whole experiment including hyper-parameters is uniquely identified by the sha1 hash of the configuration file. An experiment produces comprehensive logs including step-wise loss on the training data and task-specific metrics on the development and test sets. The reporting hooks support popular visualization frameworks including Tensorboard logging and Visdom. The model is persisted after each epoch, or, when early-stopping is enabled, whenever the model improves on the target development metric. The persisted model can be used to restart the training process or perform inference.
 
 Here is a simple example for configuring the `default` model for SST2, with a TensorFlow backend for 2 epochs:
-  
+
+
 ```
 {
     "batchsz": 50,
