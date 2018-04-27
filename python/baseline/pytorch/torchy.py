@@ -221,6 +221,8 @@ class BiRNNWrapper(nn.Module):
 
 
 def pytorch_rnn(insz, hsz, rnntype, nlayers, dropout):
+    if nlayers == 1:
+        dropout = 0.0
 
     if rnntype == 'gru':
         rnn = torch.nn.GRU(insz, hsz, nlayers, dropout=dropout)
@@ -275,6 +277,8 @@ class LayerNorm(nn.Module):
 
 
 def pytorch_lstm(insz, hsz, rnntype, nlayers, dropout, unif=0, batch_first=False, initializer=None):
+    if nlayers == 1:
+        dropout = 0.0
     ndir = 2 if rnntype.startswith('b') else 1
     #print('ndir: %d, rnntype: %s, nlayers: %d, dropout: %.2f, unif: %.2f' % (ndir, rnntype, nlayers, dropout, unif))
     rnn = torch.nn.LSTM(insz, hsz, nlayers, dropout=dropout, bidirectional=True if ndir > 1 else False, batch_first=batch_first)#, bias=False)
