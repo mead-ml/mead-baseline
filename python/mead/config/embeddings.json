@@ -6,7 +6,7 @@
     },
     {
 	"label": "w2v-twitter-30M",
-	"file": "https://www.dropbox.com/s/ihs4or6z5bq33tb/oct-s140clean-uber.cbow-bin?dl=0",
+	"file": "https://www.dropbox.com/s/ihs4or6z5bq33tb/oct-s140clean-uber.cbow-bin?dl=1",
 	"dsz": 150
     },
     {
@@ -16,22 +16,22 @@
     },
     {
         "label": "glove-6B-50",
-        "file": "https://www.dropbox.com/s/339mhx40t3q9bp5/glove.6B.50d.txt.gz?dl=0",
+        "file": "https://www.dropbox.com/s/339mhx40t3q9bp5/glove.6B.50d.txt.gz?dl=1",
         "dsz": 50
     },
     {
         "label": "glove-6B-100",
-        "file": "https://www.dropbox.com/s/cjg716n67rpp9s5/glove.6B.100d.txt.gz?dl=0",
+        "file": "https://www.dropbox.com/s/cjg716n67rpp9s5/glove.6B.100d.txt.gz?dl=1",
         "dsz": 100
     },
     {
         "label": "glove-6B-200",
-        "file": "https://www.dropbox.com/s/o80aqj1ky9ddm7c/glove.6B.200d.txt.gz?dl=0",
+        "file": "https://www.dropbox.com/s/o80aqj1ky9ddm7c/glove.6B.200d.txt.gz?dl=1",
         "dsz": 200
     },
      {
 	"label": "glove-6B-300",
-	"file": "https://www.dropbox.com/s/x4uyw8ichye0gc3/glove.6B.300d.txt.gz?dl=0",
+	"file": "https://www.dropbox.com/s/x4uyw8ichye0gc3/glove.6B.300d.txt.gz?dl=1",
 	"dsz": 300
     },
     {
@@ -46,7 +46,7 @@
     },
     {
 	"label": "senna",
-	"file": "https://www.dropbox.com/s/s8q2feew1fmwl3p/senna-50.txt.gz?dl=0",
+	"file": "https://www.dropbox.com/s/s8q2feew1fmwl3p/senna-50.txt.gz?dl=1",
 	"dsz": 50
     }
 ]

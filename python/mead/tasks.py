@@ -5,7 +5,7 @@ import logging
 import logging.config
 import mead.utils
 import os
-from downloader import SingleFileDownloader, DirDownloader, mime_type
+from downloader import EmbeddingDownloader, DataDownloader, mime_type
 
 class Task(object):
     TASK_REGISTRY = {}
@@ -106,10 +106,10 @@ class Task(object):
         logging.basicConfig(level=logging.DEBUG)
 
     @staticmethod
-    def _create_embeddings_from_file(embed, vocab, unif, keep_unused):
-        embed = SingleFileDownloader(embed).download()
-        EmbeddingT = baseline.GloVeModel if mime_type(embed) == 'text/plain' else baseline.Word2VecModel
-        return EmbeddingT(embed, vocab, unif_weight=unif, keep_unused=keep_unused)
+    def _create_embeddings_from_file(embed_file, embed_dsz, vocab, unif, keep_unused):
+        embed_file = EmbeddingDownloader(embed_file, embed_dsz).download()
+        EmbeddingT = baseline.GloVeModel if mime_type(embed_file) == 'text/plain' else baseline.Word2VecModel
+        return EmbeddingT(embed_file, vocab, unif_weight=unif, keep_unused=keep_unused)
 
     def _create_embeddings(self, embeddings_set, vocabs):
 
@@ -123,7 +123,8 @@ class Task(object):
             embeddings = dict()
             if embed_label is not None:
                 embed_file = embeddings_set[embed_label]['file']
-                embeddings['word'] = Task._create_embeddings_from_file(embed_file, vocabs['word'], unif=unif, keep_unused=keep_unused)
+                embed_dsz = embeddings_set[embed_label]['dsz']
+                embeddings['word'] = Task._create_embeddings_from_file(embed_file, embed_dsz, vocabs['word'], unif=unif, keep_unused=keep_unused)
             else:
                 dsz = embeddings_section['dsz']
                 embeddings['word'] = baseline.RandomInitVecModel(dsz, vocabs['word'], unif_weight=unif)
@@ -225,7 +226,7 @@ class ClassifierTask(Task):
 
     def initialize(self, embeddings):
         embeddings_set = mead.utils.index_by_label(embeddings)
-        self.dataset = DirDownloader(self.dataset).download()
+        self.dataset = DataDownloader(self.dataset).download()
         vocab, self.labels = self.reader.build_vocab([self.dataset["train_file"], self.dataset["valid_file"], self.dataset["test_file"]])
         self.embeddings, self.feat2index = self._create_embeddings(embeddings_set, {'word': vocab})
 
@@ -288,8 +289,8 @@ class TaggerTask(Task):
             self.config_params['preproc']['word_trans_fn'] = None 
 
     def initialize(self, embeddings):
+        self.dataset = DataDownloader(self.dataset).download()
         embeddings_set = mead.utils.index_by_label(embeddings)
-        self.dataset = DirDownloader(self.dataset).download()
         vocabs = self.reader.build_vocab([self.dataset["train_file"], self.dataset["valid_file"], self.dataset["test_file"]])
         self.embeddings, self.feat2index = self._create_embeddings(embeddings_set, vocabs)
 
@@ -363,7 +364,7 @@ class EncoderDecoderTask(Task):
     def initialize(self, embeddings):
         embeddings_set = mead.utils.index_by_label(embeddings)
 
-        self.dataset = DirDownloader(self.dataset).download()
+        self.dataset = DataDownloader(self.dataset).download()
         vocab_file = self.dataset['vocab_file']
         if vocab_file is not None:
             vocab1, vocab2 = self.reader.build_vocabs([vocab_file])
@@ -445,7 +446,7 @@ class LanguageModelingTask(Task):
 
     def initialize(self, embeddings):
         embeddings_set = mead.utils.index_by_label(embeddings)
-        self.dataset = DirDownloader(self.dataset).download()
+        self.dataset = DataDownloader(self.dataset).download()
         vocab, self.num_words = self.reader.build_vocab([self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']])
         self.embeddings, self.feat2index = self._create_embeddings(embeddings_set, vocab)
 
