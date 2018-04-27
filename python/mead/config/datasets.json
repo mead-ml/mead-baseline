@@ -1,63 +1,64 @@
 [
   {
-	"train_file": "https://www.dropbox.com/s/ymzojfrg89mq81o/train.txt?dl=0",
-	"valid_file": "https://www.dropbox.com/s/ozqu2q9sdylnlei/valid.txt?dl=0",
-	"test_file": "https://www.dropbox.com/s/p93qos44hx0qlxg/test.txt?dl=0",
-	"label": "ptb"
-    },
-    {
-	"train_file": "/data/datasets/sst2/stsa.binary.phrases.train",
-	"valid_file": "/data/datasets/sst2/stsa.binary.dev",
-	"test_file": "/data/datasets/sst2/stsa.binary.test",
-	"label": "SST2"
-    },
-    {
-        "train_file": "/data/datasets/trec/trec.nodev.utf8",
-        "valid_file": "/data/datasets/trec/trec.dev.utf8",
-        "test_file": "/data/datasets/trec/trec.test.utf8",
-        "label": "trec"
-    },
-    {
-        "train_file": "/data/datasets/dbpedia/train-tok-nodev.txt",
-        "valid_file": "/data/datasets/dbpedia/dev-tok.txt",
-        "test_file": "/data/datasets/dbpedia/test-tok.txt",
-        "label": "dbpedia"
-    },
-    {
-	"train_file": "/data/datasets/pos/oct27.train",
-	"valid_file": "/data/datasets/pos/oct27.dev",
-	"test_file": "/data/datasets/pos/oct27.test",
-	"label": "twpos"
-    },
-    {
-	"train_file": "https://raw.githubusercontent.com/dpressel/baseline/master/data/eng.train",
-	"valid_file": "https://raw.githubusercontent.com/dpressel/baseline/master/data/eng.testa",
-	"test_file": "https://raw.githubusercontent.com/dpressel/baseline/master/data/neng.testb",
-	"label": "conll"
-    },
-    {
-	"train_file": "/data/datasets/ner/wnut/wnut17train.conll",
-	"valid_file": "/data/datasets/ner/wnut/wnut17dev.conll",
-	"test_file": "/data/datasets/ner/wnut/wnut17test.conll",
-	"label": "wnut"
-    },
-    {
-	"train_file": "/data/datasets/atis-conll/atis-2.train.conll",
-	"valid_file": "/data/datasets/atis-conll/atis-2.dev.conll",
-	"test_file": "/data/datasets/atis-conll/atis.test.conll",
-	"label": "atis"
-    },
-    {
-	"vocab_file": "/data/datasets/iwslt15-en-vi/vocab.en_vi",
-	"train_file": "/data/datasets/iwslt15-en-vi/train",
-	"valid_file": "/data/datasets/iwslt15-en-vi/tst2012",
-	"test_file": "/data/datasets/iwslt15-en-vi/tst2013",
-	"label": "iwslt15-en-vi"
-    },
-    {
-        "train_file": "/data/datasets/ner/wnut-gaz/wnut17train.conll",
-        "valid_file": "/data/datasets/ner/wnut-gaz/wnut17dev.conll",
-        "test_file": "/data/datasets/ner/wnut-gaz/wnut17test.conll",
-        "label": "wnut-gaz"
-    }
+    "train_file": "https://www.dropbox.com/s/ymzojfrg89mq81o/train.txt?dl=0",
+    "valid_file": "https://www.dropbox.com/s/ozqu2q9sdylnlei/valid.txt?dl=0",
+    "test_file": "https://www.dropbox.com/s/p93qos44hx0qlxg/test.txt?dl=0",
+    "label": "ptb"
+  },
+  {
+    "train_file": "https://www.dropbox.com/s/minooobg2g2rfq3/stsa.binary.phrases.train?dl=0",
+    "valid_file": "https://www.dropbox.com/s/mo1w63df5wy4gua/stsa.binary.dev?dl=0",
+    "test_file": "https://www.dropbox.com/s/5t4l43jf1ad0ot9/stsa.binary.test?dl=0",
+    "label": "SST2"
+  },
+  {
+    "train_file": "https://www.dropbox.com/s/01xnwkiaeqd7n8q/trec.nodev.utf8?dl=0",
+    "valid_file": "https://www.dropbox.com/s/3sb57tf9916gvv1/trec.dev.utf8?dl=0",
+    "test_file": "https://www.dropbox.com/s/4051qu030a6u0dq/trec.test.utf8?dl=0",
+    "label": "trec"
+  },
+  {
+    "train_file": "https://www.dropbox.com/s/a3mg6nuk1u9wbk1/train-tok-nodev.txt.gz?dl=0",
+    "valid_file": "https://www.dropbox.com/s/0f3zw5okduxtcjg/dev-tok.txt.gz?dl=0",
+    "test_file": "https://www.dropbox.com/s/n5rbul7ku2ek6zn/test-tok.txt.gz?dl=0",
+    "label": "dbpedia"
+  },
+  {
+    "train_file": "https://www.dropbox.com/s/sj9xjeiihjs8cmk/oct27.train?dl=0",
+    "valid_file": "https://www.dropbox.com/s/whzkv7te2zklqn2/oct27.dev?dl=0",
+    "test_file": "https://www.dropbox.com/s/riyn2ne85pirfpd/oct27.test?dl=0",
+    "label": "twpos"
+  },
+  {
+    "train_file": "eng.train",
+    "valid_file": "eng.testa",
+    "test_file": "eng.testb",
+    "download": "https://www.dropbox.com/s/35pfeppg7n5yg6p/conll.tar.gz?dl=0",
+    "label": "conll"
+  },
+  {
+    "train_file": "https://www.dropbox.com/s/l677px7hjjnp2xy/wnut17train.conll?dl=0",
+    "valid_file": "https://www.dropbox.com/s/20qji1zo8galjou/wnut17dev.conll?dl=0",
+    "test_file": "https://www.dropbox.com/s/yyhy2p9nl20ljcp/wnut17test.conll?dl=0",
+    "label": "wnut"
+  },
+  {
+    "train_file": "https://www.dropbox.com/s/u7584mofhj5ca2b/atis-2.train.conll?dl=0",
+    "valid_file": "https://www.dropbox.com/s/t2tprlf85jd4j5m/atis-2.dev.conll?dl=0",
+    "test_file": "https://www.dropbox.com/s/7rjksfi6ltok6li/atis.test.conll?dl=0",
+    "label": "atis"
+  },
+  {
+    "vocab_file": "/data/datasets/iwslt15-en-vi/vocab.en_vi",
+    "train_file": "/data/datasets/iwslt15-en-vi/train",
+    "valid_file": "/data/datasets/iwslt15-en-vi/tst2012",
+    "test_file": "/data/datasets/iwslt15-en-vi/tst2013",
+    "label": "iwslt15-en-vi"
+  },
+  {
+    "train_file": "/data/datasets/ner/wnut-gaz/wnut17train.conll",
+    "valid_file": "/data/datasets/ner/wnut-gaz/wnut17dev.conll",
+    "test_file": "/data/datasets/ner/wnut-gaz/wnut17test.conll",
+    "label": "wnut-gaz"
+  }
 ]

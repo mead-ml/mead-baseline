@@ -5,7 +5,7 @@ import logging
 import logging.config
 import mead.utils
 import os
-from mead.utils import download, mime_type
+from downloader import SingleFileDownloader, DirDownloader, mime_type
 
 class Task(object):
     TASK_REGISTRY = {}
@@ -107,7 +107,7 @@ class Task(object):
 
     @staticmethod
     def _create_embeddings_from_file(embed, vocab, unif, keep_unused):
-        embed = download(embed)
+        embed = SingleFileDownloader(embed).download()
         EmbeddingT = baseline.GloVeModel if mime_type(embed) == 'text/plain' else baseline.Word2VecModel
         return EmbeddingT(embed, vocab, unif_weight=unif, keep_unused=keep_unused)
 
@@ -123,7 +123,6 @@ class Task(object):
             embeddings = dict()
             if embed_label is not None:
                 embed_file = embeddings_set[embed_label]['file']
-
                 embeddings['word'] = Task._create_embeddings_from_file(embed_file, vocabs['word'], unif=unif, keep_unused=keep_unused)
             else:
                 dsz = embeddings_section['dsz']
@@ -226,16 +225,18 @@ class ClassifierTask(Task):
 
     def initialize(self, embeddings):
         embeddings_set = mead.utils.index_by_label(embeddings)
-        vocab, self.labels = self.reader.build_vocab([download(self.dataset['train_file']), download(self.dataset['valid_file']), download(self.dataset['test_file'])])
+        self.dataset = DirDownloader(self.dataset).download()
+        vocab, self.labels = self.reader.build_vocab([self.dataset["train_file"], self.dataset["valid_file"], self.dataset["test_file"]])
         self.embeddings, self.feat2index = self._create_embeddings(embeddings_set, {'word': vocab})
+
 
     def _create_model(self):
         return self.task.create_model(self.embeddings, self.labels, **self.config_params['model'])
 
     def _load_dataset(self):
-        self.train_data = self.reader.load(download(self.dataset['train_file']), self.feat2index, self.config_params['batchsz'], shuffle=True)
-        self.valid_data = self.reader.load(download(self.dataset['valid_file']), self.feat2index, self.config_params['batchsz'])
-        self.test_data = self.reader.load(download(self.dataset['test_file']), self.feat2index, self.config_params.get('test_batchsz', 1))
+        self.train_data = self.reader.load(self.dataset["train_file"], self.feat2index, self.config_params['batchsz'], shuffle=True)
+        self.valid_data = self.reader.load(self.dataset["valid_file"], self.feat2index, self.config_params['batchsz'])
+        self.test_data = self.reader.load(self.dataset["test_file"], self.feat2index, self.config_params.get('test_batchsz', 1))
 
 Task.TASK_REGISTRY['classify'] = ClassifierTask
 
@@ -288,7 +289,8 @@ class TaggerTask(Task):
 
     def initialize(self, embeddings):
         embeddings_set = mead.utils.index_by_label(embeddings)
-        vocabs = self.reader.build_vocab([download(self.dataset['train_file']), download(self.dataset['valid_file']), download(self.dataset['test_file'])])
+        self.dataset = DirDownloader(self.dataset).download()
+        vocabs = self.reader.build_vocab([self.dataset["train_file"], self.dataset["valid_file"], self.dataset["test_file"]])
         self.embeddings, self.feat2index = self._create_embeddings(embeddings_set, vocabs)
 
     def _create_model(self):
@@ -299,9 +301,9 @@ class TaggerTask(Task):
         return self.task.create_model(labels, self.embeddings, **self.config_params['model'])
 
     def _load_dataset(self):
-        self.train_data, _ = self.reader.load(download(self.dataset['train_file']), self.feat2index, self.config_params['batchsz'], shuffle=True)
-        self.valid_data, _ = self.reader.load(download(self.dataset['valid_file']), self.feat2index, self.config_params['batchsz'])
-        self.test_data, self.txts = self.reader.load(download(self.dataset['test_file']), self.feat2index, self.config_params.get('test_batchsz', 1), shuffle=False)
+        self.train_data, _ = self.reader.load(self.dataset["train_file"], self.feat2index, self.config_params['batchsz'], shuffle=True)
+        self.valid_data, _ = self.reader.load(self.dataset["valid_file"], self.feat2index, self.config_params['batchsz'])
+        self.test_data, self.txts = self.reader.load(self.dataset["test_file"], self.feat2index, self.config_params.get('test_batchsz', 1), shuffle=False)
 
     def train(self):
         self._load_dataset()
@@ -361,18 +363,19 @@ class EncoderDecoderTask(Task):
     def initialize(self, embeddings):
         embeddings_set = mead.utils.index_by_label(embeddings)
 
-        vocab_file = download(self.dataset.get('vocab_file', None))
+        self.dataset = DirDownloader(self.dataset).download()
+        vocab_file = self.dataset['vocab_file']
         if vocab_file is not None:
             vocab1, vocab2 = self.reader.build_vocabs([vocab_file])
         else:
-            vocab1, vocab2 = self.reader.build_vocabs([download(self.dataset['train_file']), download(self.dataset['valid_file']), download(self.dataset['test_file'])])
+            vocab1, vocab2 = self.reader.build_vocabs([self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']])
         self.embeddings1, self.feat2index1 = self._create_embeddings(embeddings_set, {'word': vocab1})
         self.embeddings2, self.feat2index2 = self._create_embeddings(embeddings_set, {'word': vocab2})
 
     def _load_dataset(self):
-        self.train_data = self.reader.load(download(self.dataset['train_file']), self.feat2index1['word'], self.feat2index2['word'], self.config_params['batchsz'], shuffle=True)
-        self.valid_data = self.reader.load(download(self.dataset['valid_file']), self.feat2index1['word'], self.feat2index2['word'], self.config_params['batchsz'], shuffle=True)
-        self.test_data = self.reader.load(download(self.dataset['test_file']), self.feat2index1['word'], self.feat2index2['word'], self.config_params.get('test_batchsz', 1))
+        self.train_data = self.reader.load(self.dataset['train_file'], self.feat2index1['word'], self.feat2index2['word'], self.config_params['batchsz'], shuffle=True)
+        self.valid_data = self.reader.load(self.dataset['valid_file'], self.feat2index1['word'], self.feat2index2['word'], self.config_params['batchsz'], shuffle=True)
+        self.test_data = self.reader.load(self.dataset['test_file'], self.feat2index1['word'], self.feat2index2['word'], self.config_params.get('test_batchsz', 1))
 
     def _create_model(self):
         return self.task.create_model(self.embeddings1['word'], self.embeddings2['word'], **self.config_params['model'])
@@ -442,16 +445,17 @@ class LanguageModelingTask(Task):
 
     def initialize(self, embeddings):
         embeddings_set = mead.utils.index_by_label(embeddings)
-        vocab, self.num_words = self.reader.build_vocab([download(self.dataset['train_file']), download(self.dataset['valid_file']), download(self.dataset['test_file'])])
+        self.dataset = DirDownloader(self.dataset).download()
+        vocab, self.num_words = self.reader.build_vocab([self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']])
         self.embeddings, self.feat2index = self._create_embeddings(embeddings_set, vocab)
 
     def _load_dataset(self):
         mxwlen = self.config_params['preproc']['mxwlen']
         if mxwlen > 0:
             self.reader.max_word_length = max(mxwlen, self.reader.max_word_length)
-        self.train_data = self.reader.load(download(self.dataset['train_file']), self.feat2index, self.num_words[0], self.config_params['batchsz'])
-        self.valid_data = self.reader.load(download(self.dataset['valid_file']), self.feat2index, self.num_words[1], self.config_params['batchsz'])
-        self.test_data = self.reader.load(download(self.dataset['test_file']), self.feat2index, self.num_words[2], self.config_params['batchsz'])
+        self.train_data = self.reader.load(self.dataset['train_file'], self.feat2index, self.num_words[0], self.config_params['batchsz'])
+        self.valid_data = self.reader.load(self.dataset['valid_file'], self.feat2index, self.num_words[1], self.config_params['batchsz'])
+        self.test_data = self.reader.load(self.dataset['test_file'], self.feat2index, self.num_words[2], self.config_params['batchsz'])
 
     def _create_model(self):
 
