@@ -12,21 +12,15 @@ PYT_MAJOR_VERSION = get_version(torch)
 
 
 def sequence_mask(lengths):
-    len = lengths.cpu()
-    max_len = torch.max(len)
+    lens = lengths.cpu()
+    max_len = torch.max(lens)
     # 1 x T
-    row = Variable(torch.arange(0, max_len.item()), requires_grad=False).view(1, -1)
+    row = torch.arange(0, max_len.item()).type_as(lens).view(1, -1)
     # B x 1
-    col = len.view(-1, 1).float()
+    col = lens.view(-1, 1)
     # Broadcast to B x T, compares increasing number to max
     mask = row < col
-    return mask.float()
-
-
-def attention_mask(scores, mask, value=100000):
-    # Make padded scores really low so they become 0 in softmax
-    scores = scores * mask + (mask - 1) * value
-    return scores
+    return mask
 
 
 def classify_bt(model, batch_time):
