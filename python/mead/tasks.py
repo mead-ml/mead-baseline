@@ -10,10 +10,16 @@ from downloader import EmbeddingDownloader, DataDownloader, mime_type
 class Task(object):
     TASK_REGISTRY = {}
 
-    def __init__(self, logger_file):
+    def __init__(self, logger_file, mead_config):
         super(Task, self).__init__()
         self.config_params = None
         self.ExporterType = None
+        self.mead_config = mead_config
+        if mead_config is not None:
+            self.data_download_cache = json.load(open(mead_config)).get("datacache", "~/.bl-data-embeddings/")
+        else:
+            self.data_download_cache = "~/.bl-data-embeddings/"
+        print("using {} as data/embeddings cache".format(self.data_download_cache))
         self._configure_logger(logger_file)
 
     def _configure_logger(self, logger_file):
@@ -28,14 +34,14 @@ class Task(object):
             logging.config.dictConfig(config)
 
     @staticmethod
-    def get_task_specific(task, logging_config):
+    def get_task_specific(task, logging_config, mead_config):
         """Get the task from the task registry associated with the name
 
         :param task: The task name
         :param logging_config: The configuration to read from
         :return:
         """
-        config = Task.TASK_REGISTRY[task](logging_config)
+        config = Task.TASK_REGISTRY[task](logging_config, mead_config)
         return config
 
     def read_config(self, config_file, datasets_index):
@@ -106,8 +112,8 @@ class Task(object):
         logging.basicConfig(level=logging.DEBUG)
 
     @staticmethod
-    def _create_embeddings_from_file(embed_file, embed_dsz, vocab, unif, keep_unused):
-        embed_file = EmbeddingDownloader(embed_file, embed_dsz).download()
+    def _create_embeddings_from_file(embed_file, embed_dsz, data_download_cache, vocab, unif, keep_unused):
+        embed_file = EmbeddingDownloader(embed_file, embed_dsz, data_download_cache).download()
         EmbeddingT = baseline.GloVeModel if mime_type(embed_file) == 'text/plain' else baseline.Word2VecModel
         return EmbeddingT(embed_file, vocab, unif_weight=unif, keep_unused=keep_unused)
 
@@ -124,7 +130,7 @@ class Task(object):
             if embed_label is not None:
                 embed_file = embeddings_set[embed_label]['file']
                 embed_dsz = embeddings_set[embed_label]['dsz']
-                embeddings['word'] = Task._create_embeddings_from_file(embed_file, embed_dsz, vocabs['word'], unif=unif, keep_unused=keep_unused)
+                embeddings['word'] = Task._create_embeddings_from_file(embed_file, embed_dsz, self.data_download_cache, vocabs['word'], unif=unif, keep_unused=keep_unused)
             else:
                 dsz = embeddings_section['dsz']
                 embeddings['word'] = baseline.RandomInitVecModel(dsz, vocabs['word'], unif_weight=unif)
@@ -175,9 +181,8 @@ class Task(object):
 
 class ClassifierTask(Task):
 
-    def __init__(self, logging_file, **kwargs):
-        super(ClassifierTask, self).__init__(logging_file, **kwargs)
-
+    def __init__(self, logging_file, mead_config, **kwargs):
+        super(ClassifierTask, self).__init__(logging_file, mead_config, **kwargs)
         self.task = None
 
     def _create_task_specific_reader(self):
@@ -226,7 +231,7 @@ class ClassifierTask(Task):
 
     def initialize(self, embeddings):
         embeddings_set = mead.utils.index_by_label(embeddings)
-        self.dataset = DataDownloader(self.dataset).download()
+        self.dataset = DataDownloader(self.dataset, self.data_download_cache).download()
         print("[train file]: {}\n[valid file]: {}\n[test file]: {}".format(self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']))
         vocab, self.labels = self.reader.build_vocab([self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']])
         self.embeddings, self.feat2index = self._create_embeddings(embeddings_set, {'word': vocab})
@@ -245,8 +250,8 @@ Task.TASK_REGISTRY['classify'] = ClassifierTask
 
 class TaggerTask(Task):
 
-    def __init__(self, logging_file, **kwargs):
-        super(TaggerTask, self).__init__(logging_file, **kwargs)
+    def __init__(self, logging_file, mead_config, **kwargs):
+        super(TaggerTask, self).__init__(logging_file, mead_config, **kwargs)
         self.task = None
 
     def _create_task_specific_reader(self):
@@ -290,7 +295,7 @@ class TaggerTask(Task):
             self.config_params['preproc']['word_trans_fn'] = None 
 
     def initialize(self, embeddings):
-        self.dataset = DataDownloader(self.dataset).download()
+        self.dataset = DataDownloader(self.dataset, self.data_download_cache).download()
         print("[train file]: {}\n[valid file]: {}\n[test file]: {}".format(self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']))
         embeddings_set = mead.utils.index_by_label(embeddings)
         vocabs = self.reader.build_vocab([self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']])
@@ -320,8 +325,8 @@ Task.TASK_REGISTRY['tagger'] = TaggerTask
 
 class EncoderDecoderTask(Task):
 
-    def __init__(self, logging_file, **kwargs):
-        super(EncoderDecoderTask, self).__init__(logging_file, **kwargs)
+    def __init__(self, logging_file, mead_config, **kwargs):
+        super(EncoderDecoderTask, self).__init__(logging_file, mead_config, **kwargs)
         self.task = None
 
     def _create_task_specific_reader(self):
@@ -365,7 +370,7 @@ class EncoderDecoderTask(Task):
 
     def initialize(self, embeddings):
         embeddings_set = mead.utils.index_by_label(embeddings)
-        self.dataset = DataDownloader(self.dataset, True).download()
+        self.dataset = DataDownloader(self.dataset, self.data_download_cache, True).download()
         print("[train file]: {}\n[valid file]: {}\n[test file]: {}\n[vocab file]: {}".format(self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file'], self.dataset.get('vocab_file',"None")))
         vocab_file = self.dataset.get('vocab_file',None)
         if vocab_file is not None:
@@ -405,8 +410,8 @@ Task.TASK_REGISTRY['seq2seq'] = EncoderDecoderTask
 
 class LanguageModelingTask(Task):
 
-    def __init__(self, logging_file, **kwargs):
-        super(LanguageModelingTask, self).__init__(logging_file, **kwargs)
+    def __init__(self, logging_file, mead_config, **kwargs):
+        super(LanguageModelingTask, self).__init__(logging_file, mead_config, **kwargs)
         self.task = None
 
     def _create_task_specific_reader(self):
@@ -448,7 +453,7 @@ class LanguageModelingTask(Task):
 
     def initialize(self, embeddings):
         embeddings_set = mead.utils.index_by_label(embeddings)
-        self.dataset = DataDownloader(self.dataset).download()
+        self.dataset = DataDownloader(self.dataset, self.data_download_cache).download()
         print("[train file]: {}\n[valid file]: {}\n[test file]: {}".format(self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']))
         vocab, self.num_words = self.reader.build_vocab([self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']])
         self.embeddings, self.feat2index = self._create_embeddings(embeddings_set, vocab)

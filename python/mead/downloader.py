@@ -50,7 +50,7 @@ def get_cache_dir():
         data_cache = json.load(open("config.json")).get("datacache", "~/.bl-dataset-embeddings/")
     except IOError:
         data_cache = "~/.bl-dataset-embeddings/"
-    print("using {} as data/embeddings cache".format(data_cache))
+
     return data_cache
 
 
@@ -110,9 +110,10 @@ def validate_url(url):
 
 
 class Downloader(object):
-    def __init__(self, cache_ignore):
+    def __init__(self, data_download_cache, cache_ignore):
         super(Downloader, self).__init__()
         self.cache_ignore = cache_ignore
+        self.data_download_cache = data_download_cache
         pass
 
     def download(self):
@@ -120,9 +121,10 @@ class Downloader(object):
 
 
 class SingleFileDownloader(Downloader):
-    def __init__(self, dataset_file, cache_ignore=False):
-        super(SingleFileDownloader, self).__init__(cache_ignore)
+    def __init__(self, dataset_file, data_download_cache, cache_ignore=False):
+        super(SingleFileDownloader, self).__init__(data_download_cache, cache_ignore)
         self.dataset_file = dataset_file
+        self.data_download_cache = data_download_cache
 
     def download(self):
         import json
@@ -140,21 +142,23 @@ class SingleFileDownloader(Downloader):
                 print("file for {} found in cache, not downloading".format(url))
                 return dcaches[url]
             else:  # download the file in the cache, update the json
-                cache_dir = get_cache_dir()
+                cache_dir = self.data_download_cache
+                print("using {} as data/embeddings cache".format(cache_dir))
                 zipd = {'application/gzip': extract_gzip, 'application/zip': extract_zip}
                 temp_file = web_downloader(url)
                 dload_file = extractor(filepath=temp_file, cache_dir=cache_dir, extractor_func=zipd.get(mime_type(temp_file), None))
                 dcaches.update({url: dload_file})
                 json.dump(dcaches, open("config/datasets-embeddings-cache.json", "w"), indent=True)
                 return dload_file
-        else: # try to see if we can validate it in some way
+        else:  # try to see if we can validate it in some way
             raise RuntimeError("the file {} is not in cache and can not be downloaded".format(file_loc))
 
 
 class DataDownloader(Downloader):
-    def __init__(self, dataset_desc, enc_dec=False, cache_ignore=False):
-        super(DataDownloader, self).__init__(cache_ignore)
+    def __init__(self, dataset_desc, data_download_cache, enc_dec=False, cache_ignore=False):
+        super(DataDownloader, self).__init__(data_download_cache, cache_ignore)
         self.dataset_desc = dataset_desc
+        self.data_download_cache = data_download_cache
         self.enc_dec = enc_dec
 
     def download(self):
@@ -175,7 +179,7 @@ class DataDownloader(Downloader):
                 if not validate_url(url):
                     raise RuntimeError("can not download from the given url")
                 else:
-                    cache_dir = get_cache_dir()
+                    cache_dir = self.data_download_cache
                     temp_file = web_downloader(url)
                     zipd = {'application/gzip': extract_gzip, 'application/zip': extract_zip}
                     download_dir = extractor(filepath=temp_file, cache_dir=cache_dir, extractor_func=zipd.get(mime_type(temp_file), None))
@@ -184,17 +188,17 @@ class DataDownloader(Downloader):
                     return {k: os.path.join(download_dir, self.dataset_desc[k]) for k in self.dataset_desc if k.endswith("_file")}
         else:  # we have download links to every file or they exist
             if not self.enc_dec:
-                return {k: SingleFileDownloader(self.dataset_desc[k]).download() for k in self.dataset_desc if k.endswith("_file")}
+                return {k: SingleFileDownloader(self.dataset_desc[k], self.data_download_cache).download() for k in self.dataset_desc if k.endswith("_file")}
             else:
-                return {k: self.dataset_desc[k] for k in self.dataset_desc if k.endswith("_file")} #this files can not be downloaded because there's a post processing on them.
-
+                return {k: self.dataset_desc[k] for k in self.dataset_desc if k.endswith("_file")} # these files can not be downloaded because there's a post processing on them.
 
 
 class EmbeddingDownloader(Downloader):
-    def __init__(self, embedding_file, embedding_dsz, cache_ignore=False):
-        super(EmbeddingDownloader, self).__init__(cache_ignore)
+    def __init__(self, embedding_file, embedding_dsz, data_download_cache, cache_ignore=False):
+        super(EmbeddingDownloader, self).__init__(data_download_cache, cache_ignore)
         self.embedding_file = embedding_file
         self.embedding_key = embedding_dsz
+        self.data_download_cache = data_download_cache
 
     @staticmethod
     def _get_embedding_file(loc, key):
@@ -231,7 +235,7 @@ class EmbeddingDownloader(Downloader):
             if not validate_url(url):
                 raise RuntimeError("can not download from the given url")
             else:
-                cache_dir = get_cache_dir()
+                cache_dir = self.data_download_cache
                 temp_file = web_downloader(url)
                 zipd = {'application/gzip': extract_gzip, 'application/zip': extract_zip}
                 download_loc = extractor(filepath=temp_file, cache_dir=cache_dir, extractor_func=zipd.get(mime_type(temp_file), None))

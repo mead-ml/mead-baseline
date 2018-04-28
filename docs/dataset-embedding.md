@@ -116,7 +116,7 @@ x:config$ cat datasets-embeddings-cache.json
 ```
 
 
-The location of the cache directory is `~/.bl-dataset-embeddings/` by default, unless you explicitly mention it at `mead/config.json`. 
+The location of the cache directory is `~/.bl-dataset-embeddings/` by default, unless you explicitly mention it at `mead/config/meadconfig.json` and pass it to the trainer with the option `--meadconfig`: `python trainer.py --config config/twpos.json --task tagger --meadconfig config.json`
 
 
 #### Writing own downloaders
