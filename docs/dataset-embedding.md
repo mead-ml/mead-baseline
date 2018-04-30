@@ -14,7 +14,7 @@ The datasets and embedding file locations should be provided in `mead/datasets.j
     "label": "SST2"
   },
 ```
-- **checked**
+or
 
 ```
     {
@@ -28,7 +28,6 @@ The datasets and embedding file locations should be provided in `mead/datasets.j
 ```
 - Link to a directory zip, file names in the unzipped directory as keys
 
-- **checked**
 
 ```
 {
