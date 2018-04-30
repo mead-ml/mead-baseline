@@ -72,7 +72,7 @@ def extractor(filepath, cache_dir, extractor_func):
 def web_downloader(url):
     import requests
     import shutil
-    from clint.textui import progress
+    from baseline.progress import create_progress_bar
     import os
     r = requests.get(url, stream=True)
     path_to_save = "/tmp/data.dload-{}".format(os.getpid())
@@ -85,10 +85,14 @@ def web_downloader(url):
             except TypeError:
                 print("download size can not be calculated")
             if total_length is not None:
-                for chunk in progress.bar(r.iter_content(chunk_size=1024), expected_size=(total_length/1024) + 1):
+                chunk_size=1024
+                pg = create_progress_bar(total_length/chunk_size)
+                for chunk in r.iter_content(chunk_size=chunk_size):
                     if chunk:
                         f.write(chunk)
+                        pg.update()
                         f.flush()
+                pg.done()
             else:
                 shutil.copyfileobj(r.raw, f)
 
