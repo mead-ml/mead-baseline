@@ -1,32 +1,32 @@
 [
   {
-    "train_file": "https://www.dropbox.com/s/ymzojfrg89mq81o/train.txt?dl=1",
-    "valid_file": "https://www.dropbox.com/s/ozqu2q9sdylnlei/valid.txt?dl=1",
-    "test_file": "https://www.dropbox.com/s/p93qos44hx0qlxg/test.txt?dl=1",
+    "train_file": "https://www.dropbox.com/s/sow0c3xwvpye4dq/train.txt?dl=1",
+    "valid_file": "https://www.dropbox.com/s/rbmc2u53lv49fwm/valid.txt?dl=1",
+    "test_file": "https://www.dropbox.com/s/gqb18jz27la13ts/test.txt?dl=1",
     "label": "ptb"
   },
   {
-    "train_file": "https://www.dropbox.com/s/minooobg2g2rfq3/stsa.binary.phrases.train?dl=1",
-    "valid_file": "https://www.dropbox.com/s/mo1w63df5wy4gua/stsa.binary.dev?dl=1",
-    "test_file": "https://www.dropbox.com/s/5t4l43jf1ad0ot9/stsa.binary.test?dl=1",
+    "train_file": "https://www.dropbox.com/s/1nu2wfuhbc8y8hd/stsa.binary.phrases.train?dl=1",
+    "valid_file": "https://www.dropbox.com/s/x5kyyr1h4cdw0lb/stsa.binary.dev?dl=1",
+    "test_file": "https://www.dropbox.com/s/2fkpwqz0alkae6h/stsa.binary.test?dl=1",
     "label": "SST2"
   },
   {
-    "train_file": "https://www.dropbox.com/s/01xnwkiaeqd7n8q/trec.nodev.utf8?dl=1",
-    "valid_file": "https://www.dropbox.com/s/3sb57tf9916gvv1/trec.dev.utf8?dl=1",
-    "test_file": "https://www.dropbox.com/s/4051qu030a6u0dq/trec.test.utf8?dl=1",
+    "train_file": "https://www.dropbox.com/s/pvcbx2oe7qea1i2/trec.nodev.utf8?dl=1",
+    "valid_file": "https://www.dropbox.com/s/ynk5b072foe17df/trec.dev.utf8?dl=1",
+    "test_file": "https://www.dropbox.com/s/y3pjw0pseu9tjfs/trec.test.utf8?dl=1",
     "label": "trec"
   },
   {
-    "train_file": "https://www.dropbox.com/s/a3mg6nuk1u9wbk1/train-tok-nodev.txt.gz?dl=1",
-    "valid_file": "https://www.dropbox.com/s/0f3zw5okduxtcjg/dev-tok.txt.gz?dl=1",
-    "test_file": "https://www.dropbox.com/s/n5rbul7ku2ek6zn/test-tok.txt.gz?dl=1",
+    "train_file": "https://www.dropbox.com/s/1jxd5tpc6lo12t7/train-tok-nodev.txt.gz?dl=1",
+    "valid_file": "https://www.dropbox.com/s/8wgf8m6f8qmubga/dev-tok.txt.gz?dl=1",
+    "test_file": "https://www.dropbox.com/s/3qf0sj60exi4r1r/test-tok.txt.gz?dl=0",
     "label": "dbpedia"
   },
   {
-    "train_file": "https://www.dropbox.com/s/sj9xjeiihjs8cmk/oct27.train?dl=1",
-    "valid_file": "https://www.dropbox.com/s/whzkv7te2zklqn2/oct27.dev?dl=1",
-    "test_file": "https://www.dropbox.com/s/riyn2ne85pirfpd/oct27.test?dl=1",
+    "train_file": "https://www.dropbox.com/s/3sai7784q98v70l/oct27.train?dl=1",
+    "valid_file": "https://www.dropbox.com/s/d8vxb0qrhevulac/oct27.dev?dl=1",
+    "test_file": "https://www.dropbox.com/s/v581dsmz49iuy3d/oct27.test?dl=1",
     "label": "twpos"
   },
   {
@@ -37,15 +37,15 @@
     "label": "conll"
   },
   {
-    "train_file": "https://www.dropbox.com/s/l677px7hjjnp2xy/wnut17train.conll?dl=1",
-    "valid_file": "https://www.dropbox.com/s/20qji1zo8galjou/wnut17dev.conll?dl=1",
-    "test_file": "https://www.dropbox.com/s/yyhy2p9nl20ljcp/wnut17test.conll?dl=1",
+    "train_file": "https://www.dropbox.com/s/onqpf57mcthuw07/wnut17train.conll?dl=1",
+    "valid_file": "https://www.dropbox.com/s/xquzdk75v9hd59p/wnut17dev.conll?dl=1",
+    "test_file": "https://www.dropbox.com/s/ftsyhgabjer8feh/wnut17test.conll?dl=1",
     "label": "wnut"
   },
   {
-    "train_file": "https://www.dropbox.com/s/u7584mofhj5ca2b/atis-2.train.conll?dl=1",
-    "valid_file": "https://www.dropbox.com/s/t2tprlf85jd4j5m/atis-2.dev.conll?dl=1",
-    "test_file": "https://www.dropbox.com/s/7rjksfi6ltok6li/atis.test.conll?dl=1",
+    "train_file": "https://www.dropbox.com/s/0s9fwrrv8ztwn2o/atis-2.train.conll?dl=1",
+    "valid_file": "https://www.dropbox.com/s/pqqni4zhkqhrgks/atis-2.dev.conll?dl=1",
+    "test_file": "https://www.dropbox.com/s/yxq77bapmhfcifo/atis.test.conll?dl=1",
     "label": "atis"
   },
   {
