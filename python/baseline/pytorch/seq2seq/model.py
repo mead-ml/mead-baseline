@@ -145,68 +145,70 @@ class Seq2SeqBase(nn.Module, EncoderDecoder):
         return batch
 
     def beam_decode(self, src, src_len, K):
-        T = src.size(1)
-        context, h_i = self.encode(src, src_len)
-        src_mask = sequence_mask(src_len)
-        dst_vocab = self.get_dst_vocab()
-        GO = dst_vocab['<GO>']
-        EOS = dst_vocab['<EOS>']
+        with torch.no_grad():
 
-        paths = [[GO] for _ in range(K)]
-        # K
-        scores = torch.FloatTensor([0. for _ in range(K)])
-        if self.gpu:
-            scores = scores.cuda()
-            src_mask = src_mask.cuda()
-        # TBH
-        context = torch.autograd.Variable(context.data.repeat(1, K, 1), requires_grad=False)
-        h_i = (torch.autograd.Variable(h_i[0].data.repeat(1, K, 1), requires_grad=False),
-               torch.autograd.Variable(h_i[1].data.repeat(1, K, 1), requires_grad=False))
-        h_i, dec_out = self.bridge(h_i, context)
+            T = src.size(1)
+            context, h_i = self.encode(src, src_len)
+            src_mask = sequence_mask(src_len)
+            dst_vocab = self.get_dst_vocab()
+            GO = dst_vocab['<GO>']
+            EOS = dst_vocab['<EOS>']
 
-        for i in range(T):
-            lst = [path[-1] for path in paths]
-            dst = torch.LongTensor(lst).type(src.data.type())
-            mask_eos = dst == EOS
-            mask_pad = dst == 0
-            dst = dst.view(1, K)
-            var = torch.autograd.Variable(dst, requires_grad=False)
-            dec_out, h_i = self.decode_rnn(context, h_i, dec_out, var, src_mask)
-            # 1 x K x V
-            wll = self.prediction(dec_out).data
-            # Just mask wll against end data
-            V = wll.size(-1)
-            dec_out = dec_out.squeeze(0)  # get rid of T=t dimension
-            # K x V
-            wll = wll.squeeze(0)  # get rid of T=t dimension
+            paths = [[GO] for _ in range(K)]
+            # K
+            scores = torch.FloatTensor([0. for _ in range(K)])
+            if self.gpu:
+                scores = scores.cuda()
+                src_mask = src_mask.cuda()
+            # TBH
+            context = torch.autograd.Variable(context.data.repeat(1, K, 1))
+            h_i = (torch.autograd.Variable(h_i[0].data.repeat(1, K, 1)),
+                   torch.autograd.Variable(h_i[1].data.repeat(1, K, 1)))
+            h_i, dec_out = self.bridge(h_i, context)
 
-            if i > 0:
-                expanded_history = scores.unsqueeze(1).expand_as(wll)
-                wll.masked_fill_(mask_eos | mask_pad, 0)
-                sll = wll + expanded_history
-            else:
-                sll = wll[0]
+            for i in range(T):
+                lst = [path[-1] for path in paths]
+                dst = torch.LongTensor(lst).type(src.data.type())
+                mask_eos = dst == EOS
+                mask_pad = dst == 0
+                dst = dst.view(1, K)
+                var = torch.autograd.Variable(dst)
+                dec_out, h_i = self.decode_rnn(context, h_i, dec_out, var, src_mask)
+                # 1 x K x V
+                wll = self.prediction(dec_out).data
+                # Just mask wll against end data
+                V = wll.size(-1)
+                dec_out = dec_out.squeeze(0)  # get rid of T=t dimension
+                # K x V
+                wll = wll.squeeze(0)  # get rid of T=t dimension
 
-            flat_sll = sll.view(-1)
-            best, best_idx = flat_sll.squeeze().topk(K, 0)
-            best_beams = best_idx / V
-            best_idx = best_idx % V
-            new_paths = []
-            for j, beam_id in enumerate(best_beams):
-                new_paths.append(paths[beam_id] + [best_idx[j]])
-                scores[j] = best[j]
+                if i > 0:
+                    expanded_history = scores.unsqueeze(1).expand_as(wll)
+                    wll.masked_fill_(mask_eos | mask_pad, 0)
+                    sll = wll + expanded_history
+                else:
+                    sll = wll[0]
 
-            # Copy the beam state of the winners
-            for hc in h_i:  # iterate over h, c
-                old_beam_state = hc.clone()
-                for i, beam_id in enumerate(best_beams):
-                    H = hc.size(2)
-                    src_beam = old_beam_state.view(-1, K, H)[:, beam_id]
-                    dst_beam = hc.view(-1, K, H)[:, i]
-                    dst_beam.data.copy_(src_beam.data)
-            paths = new_paths
+                flat_sll = sll.view(-1)
+                best, best_idx = flat_sll.squeeze().topk(K, 0)
+                best_beams = best_idx / V
+                best_idx = best_idx % V
+                new_paths = []
+                for j, beam_id in enumerate(best_beams):
+                    new_paths.append(paths[beam_id] + [best_idx[j]])
+                    scores[j] = best[j]
 
-        return [p[1:] for p in paths], scores
+                # Copy the beam state of the winners
+                for hc in h_i:  # iterate over h, c
+                    old_beam_state = hc.clone()
+                    for i, beam_id in enumerate(best_beams):
+                        H = hc.size(2)
+                        src_beam = old_beam_state.view(-1, K, H)[:, beam_id]
+                        dst_beam = hc.view(-1, K, H)[:, i]
+                        dst_beam.data.copy_(src_beam.data)
+                paths = new_paths
+
+            return [p[1:] for p in paths], scores
 
 
 class Seq2SeqModel(Seq2SeqBase):
