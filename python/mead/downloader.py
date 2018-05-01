@@ -65,7 +65,7 @@ def extractor(filepath, cache_dir, extractor_func):
     path_to_save = filepath if extractor_func is None else extractor_func(filepath)
     if not os.path.exists(cache_dir):
         os.makedirs(cache_dir)
-    path_to_save_sha1 = "{}/{}".format(cache_dir, sha1)
+    path_to_save_sha1 = os.path.join(cache_dir, sha1)
     shutil.move(path_to_save, path_to_save_sha1)
     print("downloaded data saved in {}".format(path_to_save_sha1))
     return path_to_save_sha1
@@ -119,11 +119,11 @@ def validate_url(url):
 def update_cache(key):
     import json
     try:
-        dcaches = json.load(open("config/datasets-embeddings-cache.json"))[key]
+        dcaches = json.load(open(os.path.join(self.data_download_cache, "datasets-embeddings-cache.json")))[key]
     except (IOError, KeyError):
         return
     del dcaches[key]
-    json.dump(dcaches, open("config/datasets-embeddings-cache.json", "w"), indent=True)
+    json.dump(dcaches, open(os.path.join(self.data_download_cache, "datasets-embeddings-cache.json"), "w"), indent=True)
 
 
 def delete_file(file_loc):
@@ -183,7 +183,7 @@ class SingleFileDownloader(Downloader):
         elif validate_url(file_loc):  # is it a web URL? check if exists in cache
             url = file_loc
             try:
-                dcaches = json.load(open("config/datasets-embeddings-cache.json"))
+                dcaches = json.load(open(os.path.join(self.data_download_cache, "datasets-embeddings-cache.json")))
             except IOError:
                 dcaches = {}
             if url in dcaches and check_sanity_file(dcaches[url], url) and not self.cache_ignore:
@@ -196,7 +196,7 @@ class SingleFileDownloader(Downloader):
                 temp_file = web_downloader(url)
                 dload_file = extractor(filepath=temp_file, cache_dir=cache_dir, extractor_func=zipd.get(mime_type(temp_file), None))
                 dcaches.update({url: dload_file})
-                json.dump(dcaches, open("config/datasets-embeddings-cache.json", "w"), indent=True)
+                json.dump(dcaches, open(os.path.join(self.data_download_cache, "datasets-embeddings-cache.json"), "w"), indent=True)
                 return dload_file
         else:
             raise RuntimeError("the file {} is not in cache and can not be downloaded".format(file_loc))
@@ -215,11 +215,11 @@ class DataDownloader(Downloader):
         dload_bundle = self.dataset_desc.get("download", None)
         if dload_bundle is not None:  # download a zip/tar/tar.gz directory, look for train, dev test files inside that.
             try:
-                daches = json.load(open("config/datasets-embeddings-cache.json"))
+                dcaches = json.load(open(os.path.join(self.data_download_cache, "datasets-embeddings-cache.json")))
             except IOError:
-                daches = {}
-            if dload_bundle in daches and check_sanity_dir(daches[dload_bundle], self.dataset_desc, self.enc_dec, dload_bundle) and not self.cache_ignore:
-                download_dir = daches[dload_bundle]
+                dcaches = {}
+            if dload_bundle in dcaches and check_sanity_dir(dcaches[dload_bundle], self.dataset_desc, self.enc_dec, dload_bundle) and not self.cache_ignore:
+                download_dir = dcaches[dload_bundle]
                 print("files for {} found in cache, not downloading".format(dload_bundle))
                 return {k: os.path.join(download_dir, self.dataset_desc[k]) for k in self.dataset_desc if k.endswith("_file")}
             else:  # try to download the bundle and unzip
@@ -231,8 +231,11 @@ class DataDownloader(Downloader):
                     temp_file = web_downloader(url)
                     zipd = {'application/gzip': extract_gzip, 'application/zip': extract_zip}
                     download_dir = extractor(filepath=temp_file, cache_dir=cache_dir, extractor_func=zipd.get(mime_type(temp_file), None))
-                    daches.update({url: download_dir})
-                    json.dump(daches, open("config/datasets-embeddings-cache.json", "w"), indent=True)
+                    if "sha1" in self.dataset_desc:
+                        if os.path.split(download_dir)[-1] != self.dataset_desc["sha1"]:
+                            raise RuntimeError("The sha1 of the downloaded file does not match with the provided one")
+                    dcaches.update({url: download_dir})
+                    json.dump(dcaches, open(os.path.join(self.data_download_cache, "datasets-embeddings-cache.json"), "w"), indent=True)
                     return {k: os.path.join(download_dir, self.dataset_desc[k]) for k in self.dataset_desc if k.endswith("_file")}
         else:  # we have download links to every file or they exist
             if not self.enc_dec:
@@ -276,7 +279,7 @@ class EmbeddingDownloader(Downloader):
             print("embedding file location: {}".format(self.embedding_file))
             return self.embedding_file
         try:
-            dacache = json.load(open("config/datasets-embeddings-cache.json"))
+            dacache = json.load(open(os.path.join(self.data_download_cache, "datasets-embeddings-cache.json")))
         except IOError:
             dacache = {}
         if self.embedding_file in dacache and not self.cache_ignore:
@@ -293,5 +296,5 @@ class EmbeddingDownloader(Downloader):
                 zipd = {'application/gzip': extract_gzip, 'application/zip': extract_zip}
                 download_loc = extractor(filepath=temp_file, cache_dir=cache_dir, extractor_func=zipd.get(mime_type(temp_file), None))
                 dacache.update({url: download_loc})
-                json.dump(dacache, open("config/datasets-embeddings-cache.json", "w"), indent=True)
+                json.dump(dacache, open(os.path.join(self.data_download_cache, "datasets-embeddings-cache.json"), "w"), indent=True)
                 return self._get_embedding_file(download_loc, self.embedding_key, dload_url=self.embedding_file)

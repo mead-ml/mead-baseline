@@ -1,32 +1,40 @@
 [
   {
-    "train_file": "https://www.dropbox.com/s/sow0c3xwvpye4dq/train.txt?dl=1",
-    "valid_file": "https://www.dropbox.com/s/rbmc2u53lv49fwm/valid.txt?dl=1",
-    "test_file": "https://www.dropbox.com/s/gqb18jz27la13ts/test.txt?dl=1",
+    "train_file": "train.txt",
+    "valid_file": "valid.txt",
+    "test_file": "test.txt",
+    "download": "https://www.dropbox.com/s/5g8en2jc9951omu/ptb.tar.gz?dl=1",
+    "sha1": "56aacd9bd3aeffb34a9536e8de2341a8d6770f7b",
     "label": "ptb"
   },
   {
-    "train_file": "https://www.dropbox.com/s/1nu2wfuhbc8y8hd/stsa.binary.phrases.train?dl=1",
-    "valid_file": "https://www.dropbox.com/s/x5kyyr1h4cdw0lb/stsa.binary.dev?dl=1",
-    "test_file": "https://www.dropbox.com/s/2fkpwqz0alkae6h/stsa.binary.test?dl=1",
+    "train_file": "stsa.binary.phrases.train",
+    "valid_file": "stsa.binary.dev",
+    "test_file": "stsa.binary.test",
+    "download": "https://www.dropbox.com/s/7jyi4pi894bh2qh/sst2.tar.gz?dl=1",
+    "sha1": "31eb669609c65af3aa68a381fc760c4eaf801917",
     "label": "SST2"
   },
   {
     "train_file": "https://www.dropbox.com/s/pvcbx2oe7qea1i2/trec.nodev.utf8?dl=1",
     "valid_file": "https://www.dropbox.com/s/ynk5b072foe17df/trec.dev.utf8?dl=1",
     "test_file": "https://www.dropbox.com/s/y3pjw0pseu9tjfs/trec.test.utf8?dl=1",
+    "sha1":"b52dd4b6cfe6ec51ea6cfa56baef8128b1785e3b",
+    "download": "https://www.dropbox.com/s/08km2ean8bkt7p3/trec.tar.gz?dl=1",
     "label": "trec"
   },
   {
     "train_file": "https://www.dropbox.com/s/1jxd5tpc6lo12t7/train-tok-nodev.txt.gz?dl=1",
     "valid_file": "https://www.dropbox.com/s/8wgf8m6f8qmubga/dev-tok.txt.gz?dl=1",
-    "test_file": "https://www.dropbox.com/s/3qf0sj60exi4r1r/test-tok.txt.gz?dl=0",
+    "test_file": "https://www.dropbox.com/s/3qf0sj60exi4r1r/test-tok.txt.gz?dl=1",
     "label": "dbpedia"
   },
   {
-    "train_file": "https://www.dropbox.com/s/3sai7784q98v70l/oct27.train?dl=1",
-    "valid_file": "https://www.dropbox.com/s/d8vxb0qrhevulac/oct27.dev?dl=1",
-    "test_file": "https://www.dropbox.com/s/v581dsmz49iuy3d/oct27.test?dl=1",
+    "train_file": "oct27.train",
+    "valid_file": "oct27.dev",
+    "test_file": "oct27.test",
+    "download":"https://www.dropbox.com/s/08km2ean8bkt7p3/trec.tar.gz?dl=1",
+    "sha1":"78f46aa658126cd0c82b08c081469cc2a8551c66",
     "label": "twpos"
   },
   {
@@ -34,18 +42,23 @@
     "valid_file": "eng.testa",
     "test_file": "eng.testb",
     "download": "https://www.dropbox.com/s/p6ogzhiex9yqsmn/conll.tar.gz?dl=1",
+    "sha1":"521c44052a51699742cc63e39db514528e9c2640",
     "label": "conll"
   },
   {
-    "train_file": "https://www.dropbox.com/s/onqpf57mcthuw07/wnut17train.conll?dl=1",
-    "valid_file": "https://www.dropbox.com/s/xquzdk75v9hd59p/wnut17dev.conll?dl=1",
-    "test_file": "https://www.dropbox.com/s/ftsyhgabjer8feh/wnut17test.conll?dl=1",
+    "train_file": "wnut17train.conll",
+    "valid_file": "wnut17dev.conll",
+    "test_file": "wnut17test.conll",
+    "download": "https://www.dropbox.com/s/fc7sqt9tpxh3c5d/wnut17.tar.gz?dl=1",
+    "sha1":"0163d877fac98a2063ca4bcb005c26b3786b8e81",
     "label": "wnut"
   },
   {
-    "train_file": "https://www.dropbox.com/s/0s9fwrrv8ztwn2o/atis-2.train.conll?dl=1",
-    "valid_file": "https://www.dropbox.com/s/pqqni4zhkqhrgks/atis-2.dev.conll?dl=1",
-    "test_file": "https://www.dropbox.com/s/yxq77bapmhfcifo/atis.test.conll?dl=1",
+    "train_file": "atis-2.train.conll",
+    "valid_file": "atis-2.dev.conll",
+    "test_file": "atis.test.conll",
+    "download": "https://www.dropbox.com/s/gf4pi7hcjlzfkup/atis.tar.gz?dl=1",
+    "sha1":"e4fac3770902b5c914f65ddf2fc2d2431a5a2bb0",
     "label": "atis"
   },
   {
@@ -54,6 +67,7 @@
     "valid_file": "tst2012",
     "test_file": "tst2013",
     "download": "https://www.dropbox.com/s/99petw2kdab69cr/iwslt15-en-vi.tar.gz?dl=1",
+    "sha1":"418a2ccfa7c46a1a1db900295e95ac03e2ec6993",
     "label": "iwslt15-en-vi"
   },
   {
