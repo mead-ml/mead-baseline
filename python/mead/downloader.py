@@ -117,7 +117,18 @@ def update_cache(key, data_download_cache):
     write_json(dcache, os.path.join(data_download_cache, DATA_CACHE_CONF))
 
 
-def check_sanity_file(file_loc, data_dcache=None, key=None):
+def is_file_correct(file_loc, data_dcache=None, key=None):
+    """check if the file location mentioned in the json file is correct, i.e.,
+    exists and not corrupted. This is needed when the direct download link/ path for a file
+    changes and the user is unaware. This is not tracked by sha1 either. If it returns False, delete the corrupted file.
+    Additionally, if the file location is a URL, i.e. exists in the cache, delete it so that it can be re-downloaded.
+
+    Keyword arguments:
+    file_loc -- location of the file
+    data_dcache -- data download cache location (default None, for local system file paths)
+    key -- URL for download (default None, for local system file paths)
+    """
+
     if os.path.exists(file_loc) and os.path.isfile(file_loc) and not mime_type(file_loc) == "text/html":
         # dropbox doesn't give 404 in case the file does not exist, produces an HTML. The actual files are never HTMLs.
         return True
@@ -128,7 +139,18 @@ def check_sanity_file(file_loc, data_dcache=None, key=None):
         return False
 
 
-def check_sanity_dir(dir_loc, dataset_desc, data_dcache=None, ignore_file_check=False, key=None):
+def is_dir_correct(dir_loc, dataset_desc, data_dcache, key, ignore_file_check=False):
+    """check if the directory extracted from the zip location mentioned in the datasets json file is correct, i.e.,
+    all files inside exist and are not corrupted. If not, we will update the cache try to re-download them.
+
+    Keyword arguments:
+    dir_loc -- location of the directory
+    dataset_desc -- to know the individual file locations inside the directory
+    data_dcache -- data download cache location
+    key -- URL for download
+    ignore_file_check --to handle enc_dec datasets, see later.
+    """
+
     if not os.path.exists(dir_loc) or not os.path.isdir(dir_loc):
         update_cache(key, data_dcache)
         return False
@@ -136,7 +158,7 @@ def check_sanity_dir(dir_loc, dataset_desc, data_dcache=None, ignore_file_check=
         return True
     files = [os.path.join(dir_loc, dataset_desc[k]) for k in dataset_desc if k.endswith("_file")]
     for f in files:
-        if not check_sanity_file(f, key, data_dcache):
+        if not is_file_correct(f, key, data_dcache):
             return False
     return True
 
@@ -172,13 +194,13 @@ class SingleFileDownloader(Downloader):
 
     def download(self):
         file_loc = self.dataset_file
-        if check_sanity_file(file_loc):
+        if is_file_correct(file_loc):
             return file_loc
         elif validate_url(file_loc):  # is it a web URL? check if exists in cache
             url = file_loc
             dcache_path = os.path.join(self.data_download_cache, DATA_CACHE_CONF)
             dcache = read_json(dcache_path)
-            if url in dcache and check_sanity_file(dcache[url], self.data_download_cache, url) and not self.cache_ignore:
+            if url in dcache and is_file_correct(dcache[url], self.data_download_cache, url) and not self.cache_ignore:
                 LOG("file for {} found in cache, not downloading".format(url))
                 return dcache[url]
             else:  # download the file in the cache, update the json
@@ -207,8 +229,8 @@ class DataDownloader(Downloader):
             dcache_path = os.path.join(self.data_download_cache, DATA_CACHE_CONF)
             dcache = read_json(dcache_path)
             if dload_bundle in dcache and \
-                    check_sanity_dir(dcache[dload_bundle], self.dataset_desc, self.data_download_cache, self.enc_dec, dload_bundle)\
-                    and not self.cache_ignore:
+                    is_dir_correct(dcache[dload_bundle], self.dataset_desc, self.data_download_cache, dload_bundle,
+                                   self.enc_dec) and not self.cache_ignore:
                 download_dir = dcache[dload_bundle]
                 LOG("files for {} found in cache, not downloading".format(dload_bundle))
                 return {k: os.path.join(download_dir, self.dataset_desc[k]) for k in self.dataset_desc
@@ -261,7 +283,7 @@ class EmbeddingDownloader(Downloader):
             return embed_file_loc
 
     def download(self):
-        if check_sanity_file(self.embedding_file):
+        if is_file_correct(self.embedding_file):
             LOG("embedding file location: {}".format(self.embedding_file))
             return self.embedding_file
         dcache_path = os.path.join(self.data_download_cache, DATA_CACHE_CONF)
