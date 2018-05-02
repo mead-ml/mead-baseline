@@ -246,13 +246,11 @@ class EmbeddingDownloader(Downloader):
         self.sha1 = embedding_sha1
         self.zipd = {'application/gzip': extract_gzip, 'application/zip': extract_zip}
 
-    def _get_embedding_file(self, loc, key, dload_url):
+    @staticmethod
+    def _get_embedding_file(loc, key):
         if os.path.isfile(loc):
-            if check_sanity_file(loc):
                 LOG("embedding file location: {}".format(loc))
                 return loc
-            else:
-                return EmbeddingDownloader(self.embedding_file, self.embedding_key, self.data_download_cache).download()
         else:  # This is a directory, return the actual file
             files = [x for x in os.listdir(loc) if str(key) in x]
             if len(files) == 0:
@@ -260,11 +258,7 @@ class EmbeddingDownloader(Downloader):
             elif len(files) > 1:
                 LOG("multiple embedding files found for the given key [{}], choosing {}".format(key, files[0]))
             embed_file_loc = os.path.join(loc, files[0])
-            if check_sanity_file(embed_file_loc, self.data_download_cache, dload_url):
-                LOG("embedding file location: {}".format(embed_file_loc))
-                return embed_file_loc
-            else:
-                return EmbeddingDownloader(self.embedding_file, self.embedding_key, self.data_download_cache).download()
+            return embed_file_loc
 
     def download(self):
         if check_sanity_file(self.embedding_file):
@@ -275,7 +269,7 @@ class EmbeddingDownloader(Downloader):
         if self.embedding_file in dcache and not self.cache_ignore:
             download_loc = dcache[self.embedding_file]
             LOG("files for {} found in cache".format(self.embedding_file))
-            return self._get_embedding_file(download_loc, self.embedding_key, self.embedding_file)
+            return self._get_embedding_file(download_loc, self.embedding_key)
         else:  # try to download the bundle and unzip
             url = self.embedding_file
             if not validate_url(url):
