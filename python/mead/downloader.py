@@ -59,7 +59,8 @@ zipd = {'application/gzip': extract_gzip, 'application/zip': extract_zip}
 
 
 def extractor(filepath, cache_dir, extractor_func):
-    sha1 = hashlib.sha1(open(filepath, 'rb').read()).hexdigest()
+    with open(filepath, 'rb') as f:
+        sha1 = hashlib.sha1(f.read()).hexdigest()
     LOG("extracting file..")
     path_to_save = filepath if extractor_func is None else extractor_func(filepath)
     if not os.path.exists(cache_dir):
