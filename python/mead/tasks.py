@@ -16,9 +16,11 @@ class Task(object):
         self.ExporterType = None
         self.mead_config = mead_config
         if mead_config is not None:
-            self.data_download_cache = read_json(mead_config).get("datacache", "~/.bl-data/")
+            data_download_cache = read_json(mead_config).get("datacache", "~/.bl-data/")
         else:
-            self.data_download_cache = "~/.bl-data/"
+            data_download_cache = "~/.bl-data/"
+        self.data_download_cache = os.path.expanduser(data_download_cache) if data_download_cache.startswith("~") else \
+            data_download_cache
         print("using {} as data/embeddings cache".format(self.data_download_cache))
         self._configure_logger(logger_file)
 
