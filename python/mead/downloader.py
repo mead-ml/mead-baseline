@@ -212,7 +212,7 @@ class SingleFileDownloader(Downloader):
                 dcache.update({url: dload_file})
                 write_json(dcache, os.path.join(self.data_download_cache, DATA_CACHE_CONF))
                 return dload_file
-        raise RuntimeError("the file {} is not in cache and can not be downloaded".format(file_loc))
+        raise RuntimeError("the file [{}] is not in cache and can not be downloaded".format(file_loc))
 
 
 class DataDownloader(Downloader):

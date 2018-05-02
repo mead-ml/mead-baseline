@@ -82,7 +82,7 @@ or
 
 - On file system
 
-```aidl
+```
 {
         "label": "glove-6B-100",
         "file": "/data/embeddings/glove.6B.100d.txt",
@@ -96,7 +96,7 @@ The links can have the usual data format supported by `baseline` or standard zip
 #### Caching
 
 For faster download, all downloaded files are cached. A `<key,value>` store for the download links are maintained at an internal JSON file (datasets-embeddings-cache.json), which should not be committed. For eg:
-```aidl
+```
 x:config$ cat data-cache.json
 {
  "https://www.dropbox.com/s/p6ogzhiex9yqsmn/conll.tar.gz?dl=1": "/data/bl-dataset-embeddings//521c44052a51699742cc63e39db514528e9c2640",
