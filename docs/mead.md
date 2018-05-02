@@ -6,7 +6,7 @@ We define a problem as a $<$task, dataset$>$ tuple. To use mead, we simply set u
 
 Here is a simple example for configuring the `default` model for SST2, with a TensorFlow backend for 2 epochs:
 
- 
+
 ```
 {
     "batchsz": 50,
@@ -88,6 +88,9 @@ Here is a simple example of configuring `mead` to run a BLSTM-CRF in `pytorch` a
 }
 
 ```
+
+### Dataset and Embeddings
+You can provide your own dataset and embedding files in `mead` by changing the `datasets.json` or `embeddings.json`. We provide some standard ones, see [this doc](dataset-embedding.md) for details.
 
 ### Adding new models
 

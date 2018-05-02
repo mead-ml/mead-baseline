@@ -1,63 +1,79 @@
 [
-    {
-	"train_file": "/data/datasets/ptb/train.txt",
-	"valid_file": "/data/datasets/ptb/valid.txt",
-	"test_file": "/data/datasets/ptb/test.txt",
-	"label": "ptb"
-    },
-    {
-	"train_file": "/data/datasets/sst2/stsa.binary.phrases.train",
-	"valid_file": "/data/datasets/sst2/stsa.binary.dev",
-	"test_file": "/data/datasets/sst2/stsa.binary.test",
-	"label": "SST2"
-    },
-    {
-        "train_file": "/data/datasets/trec/trec.nodev.utf8",
-        "valid_file": "/data/datasets/trec/trec.dev.utf8",
-        "test_file": "/data/datasets/trec/trec.test.utf8",
-        "label": "trec"
-    },
-    {
-        "train_file": "/data/datasets/dbpedia/train-tok-nodev.txt",
-        "valid_file": "/data/datasets/dbpedia/dev-tok.txt",
-        "test_file": "/data/datasets/dbpedia/test-tok.txt",
-        "label": "dbpedia"
-    },
-    {
-	"train_file": "/data/datasets/pos/oct27.train",
-	"valid_file": "/data/datasets/pos/oct27.dev",
-	"test_file": "/data/datasets/pos/oct27.test",
-	"label": "twpos"
-    },
-    {
-	"train_file": "/data/datasets/ner/eng.train",
-	"valid_file": "/data/datasets/ner/eng.testa",
-	"test_file": "/data/datasets/ner/eng.testb",
-	"label": "conll"
-    },
-    {
-	"train_file": "/data/datasets/ner/wnut/wnut17train.conll",
-	"valid_file": "/data/datasets/ner/wnut/wnut17dev.conll",
-	"test_file": "/data/datasets/ner/wnut/wnut17test.conll",
-	"label": "wnut"
-    },
-    {
-	"train_file": "/data/datasets/atis-conll/atis-2.train.conll",
-	"valid_file": "/data/datasets/atis-conll/atis-2.dev.conll",
-	"test_file": "/data/datasets/atis-conll/atis.test.conll",
-	"label": "atis"
-    },
-    {
-	"vocab_file": "/data/datasets/iwslt15-en-vi/vocab.en_vi",
-	"train_file": "/data/datasets/iwslt15-en-vi/train",
-	"valid_file": "/data/datasets/iwslt15-en-vi/tst2012",
-	"test_file": "/data/datasets/iwslt15-en-vi/tst2013",
-	"label": "iwslt15-en-vi"
-    },
-    {
-        "train_file": "/data/datasets/ner/wnut-gaz/wnut17train.conll",
-        "valid_file": "/data/datasets/ner/wnut-gaz/wnut17dev.conll",
-        "test_file": "/data/datasets/ner/wnut-gaz/wnut17test.conll",
-        "label": "wnut-gaz"
-    }
+  {
+    "train_file": "train.txt",
+    "valid_file": "valid.txt",
+    "test_file": "test.txt",
+    "download": "https://www.dropbox.com/s/5g8en2jc9951omu/ptb.tar.gz?dl=1",
+    "sha1": "56aacd9bd3aeffb34a9536e8de2341a8d6770f7b",
+    "label": "ptb"
+  },
+  {
+    "train_file": "stsa.binary.phrases.train",
+    "valid_file": "stsa.binary.dev",
+    "test_file": "stsa.binary.test",
+    "download": "https://www.dropbox.com/s/7jyi4pi894bh2qh/sst2.tar.gz?dl=1",
+    "sha1": "31eb669609c65af3aa68a381fc760c4eaf801917",
+    "label": "SST2"
+  },
+  {
+    "train_file": "trec.nodev.utf8",
+    "valid_file": "trec.dev.utf8",
+    "test_file": "trec.test.utf8",
+    "sha1":"b52dd4b6cfe6ec51ea6cfa56baef8128b1785e3b",
+    "download": "https://www.dropbox.com/s/08km2ean8bkt7p3/trec.tar.gz?dl=1",
+    "label": "trec"
+  },
+  {
+    "train_file": "https://www.dropbox.com/s/1jxd5tpc6lo12t7/train-tok-nodev.txt.gz?dl=1",
+    "valid_file": "https://www.dropbox.com/s/8wgf8m6f8qmubga/dev-tok.txt.gz?dl=1",
+    "test_file": "https://www.dropbox.com/s/3qf0sj60exi4r1r/test-tok.txt.gz?dl=1",
+    "label": "dbpedia"
+  },
+  {
+    "train_file": "oct27.train",
+    "valid_file": "oct27.dev",
+    "test_file": "oct27.test",
+    "download":"https://www.dropbox.com/s/6uyfatcgmbmyzkr/twpos.tar.gz?dl=1",
+    "sha1":"78f46aa658126cd0c82b08c081469cc2a8551c66",
+    "label": "twpos"
+  },
+  {
+    "train_file": "eng.train",
+    "valid_file": "eng.testa",
+    "test_file": "eng.testb",
+    "download": "https://www.dropbox.com/s/p6ogzhiex9yqsmn/conll.tar.gz?dl=1",
+    "sha1":"521c44052a51699742cc63e39db514528e9c2640",
+    "label": "conll"
+  },
+  {
+    "train_file": "wnut17train.conll",
+    "valid_file": "wnut17dev.conll",
+    "test_file": "wnut17test.conll",
+    "download": "https://www.dropbox.com/s/fc7sqt9tpxh3c5d/wnut17.tar.gz?dl=1",
+    "sha1":"0163d877fac98a2063ca4bcb005c26b3786b8e81",
+    "label": "wnut"
+  },
+  {
+    "train_file": "atis-2.train.conll",
+    "valid_file": "atis-2.dev.conll",
+    "test_file": "atis.test.conll",
+    "download": "https://www.dropbox.com/s/gf4pi7hcjlzfkup/atis.tar.gz?dl=1",
+    "sha1":"e4fac3770902b5c914f65ddf2fc2d2431a5a2bb0",
+    "label": "atis"
+  },
+  {
+    "vocab_file": "vocab.en_vi",
+    "train_file": "train",
+    "valid_file": "tst2012",
+    "test_file": "tst2013",
+    "download": "https://www.dropbox.com/s/99petw2kdab69cr/iwslt15-en-vi.tar.gz?dl=1",
+    "sha1":"e58049478c7814a339c3bd8ec31c79ddacc029fb",
+    "label": "iwslt15-en-vi"
+  },
+  {
+    "train_file": "/data/datasets/ner/wnut-gaz/wnut17train.conll",
+    "valid_file": "/data/datasets/ner/wnut-gaz/wnut17dev.conll",
+    "test_file": "/data/datasets/ner/wnut-gaz/wnut17test.conll",
+    "label": "wnut-gaz"
+  }
 ]
