@@ -102,7 +102,7 @@ The links can have the usual data format supported by `baseline` or standard zip
 
 For faster download, all downloaded files are cached. A `<key,value>` store for the download links are maintained at an internal JSON file (datasets-embeddings-cache.json), which should not be committed. For eg:
 ```aidl
-x:config$ cat datasets-embeddings-cache.json
+x:config$ cat data-cache.json
 {
  "https://www.dropbox.com/s/p6ogzhiex9yqsmn/conll.tar.gz?dl=1": "/data/bl-dataset-embeddings//521c44052a51699742cc63e39db514528e9c2640",
  "https://www.dropbox.com/s/cjg716n67rpp9s5/glove.6B.100d.txt.gz?dl=1": "/data/bl-dataset-embeddings//a483a44d4414a18c7b10b36dd6daa59195eb292b",
@@ -115,7 +115,7 @@ x:config$ cat datasets-embeddings-cache.json
 ```
 
 
-The location of the cache directory is `~/.bl-dataset-embeddings/` by default, unless you explicitly mention it at `mead/config/meadconfig.json` and pass it to the trainer with the option `--meadconfig`: `python trainer.py --config config/twpos.json --task tagger --meadconfig config.json`
+The location of the cache directory is `~/.bl-data/` by default, unless you explicitly mention it at `mead/config/meadconfig.json` and pass it to the trainer with the option `--meadconfig`: `python trainer.py --config config/twpos.json --task tagger --meadconfig config.json`
 
 
 #### Writing own downloaders
