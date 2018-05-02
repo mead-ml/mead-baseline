@@ -286,7 +286,7 @@ class EmbeddingDownloader(Downloader):
                 download_loc = extractor(filepath=temp_file, cache_dir=cache_dir,
                                          extractor_func=self.zipd.get(mime_type(temp_file), None))
                 if self.sha1 is not None:
-                    if os.path.split(download_loc) != self.sha1:
+                    if os.path.split(download_loc)[-1] != self.sha1:
                         raise RuntimeError("The sha1 of the downloaded file does not match with the provided one")
                 dcache.update({url: download_loc})
                 write_to_json(dcache, os.path.join(self.data_download_cache, DATA_CACHE_CONF))
