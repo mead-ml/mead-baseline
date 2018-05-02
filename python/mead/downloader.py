@@ -10,7 +10,6 @@ import re
 import json
 
 
-LOG = lambda x: print(x)
 DATA_CACHE_CONF = "data-cache.json"
 
 
@@ -55,19 +54,17 @@ def mime_type(loc):
     return magic.Magic(mime=True).from_file(loc)
 
 
-zipd = {'application/gzip': extract_gzip, 'application/zip': extract_zip}
-
-
 def extractor(filepath, cache_dir, extractor_func):
     with open(filepath, 'rb') as f:
         sha1 = hashlib.sha1(f.read()).hexdigest()
-    LOG("extracting file..")
+    print("extracting file..")
     path_to_save = filepath if extractor_func is None else extractor_func(filepath)
     if not os.path.exists(cache_dir):
         os.makedirs(cache_dir)
     path_to_save_sha1 = os.path.join(cache_dir, sha1)
+    delete_old_copy(path_to_save_sha1)
     shutil.move(path_to_save, path_to_save_sha1)
-    LOG("downloaded data saved in {}".format(path_to_save_sha1))
+    print("downloaded data saved in {}".format(path_to_save_sha1))
     return path_to_save_sha1
 
 
@@ -78,7 +75,7 @@ def web_downloader(url):
         raise RuntimeError("The file can not be downloaded")
     path_to_save = "/tmp/data.dload-{}".format(os.getpid())
     try:
-        LOG("downloading {}".format(url))
+        print("downloading {}".format(url))
         with open(path_to_save, 'wb') as f:
             total_length = r.headers.get('content-length', None)
             if total_length is not None:
@@ -178,6 +175,8 @@ def write_json(content, filepath):
 
 
 class Downloader(object):
+    ZIPD = {'application/gzip': extract_gzip, 'application/zip': extract_zip}
+
     def __init__(self, data_download_cache, cache_ignore):
         super(Downloader, self).__init__()
         self.cache_ignore = cache_ignore
@@ -202,19 +201,18 @@ class SingleFileDownloader(Downloader):
             dcache_path = os.path.join(self.data_download_cache, DATA_CACHE_CONF)
             dcache = read_json(dcache_path)
             if url in dcache and is_file_correct(dcache[url], self.data_download_cache, url) and not self.cache_ignore:
-                LOG("file for {} found in cache, not downloading".format(url))
+                print("file for {} found in cache, not downloading".format(url))
                 return dcache[url]
             else:  # download the file in the cache, update the json
                 cache_dir = self.data_download_cache
-                LOG("using {} as data/embeddings cache".format(cache_dir))
+                print("using {} as data/embeddings cache".format(cache_dir))
                 temp_file = web_downloader(url)
                 dload_file = extractor(filepath=temp_file, cache_dir=cache_dir,
-                                       extractor_func=zipd.get(mime_type(temp_file), None))
+                                       extractor_func=Downloader.ZIPD.get(mime_type(temp_file), None))
                 dcache.update({url: dload_file})
                 write_json(dcache, os.path.join(self.data_download_cache, DATA_CACHE_CONF))
                 return dload_file
-        else:
-            raise RuntimeError("the file {} is not in cache and can not be downloaded".format(file_loc))
+        raise RuntimeError("the file {} is not in cache and can not be downloaded".format(file_loc))
 
 
 class DataDownloader(Downloader):
@@ -233,7 +231,7 @@ class DataDownloader(Downloader):
                     is_dir_correct(dcache[dload_bundle], self.dataset_desc, self.data_download_cache, dload_bundle,
                                    self.enc_dec) and not self.cache_ignore:
                 download_dir = dcache[dload_bundle]
-                LOG("files for {} found in cache, not downloading".format(dload_bundle))
+                print("files for {} found in cache, not downloading".format(dload_bundle))
                 return {k: os.path.join(download_dir, self.dataset_desc[k]) for k in self.dataset_desc
                         if k.endswith("_file")}
             else:  # try to download the bundle and unzip
@@ -244,7 +242,7 @@ class DataDownloader(Downloader):
                     temp_file = web_downloader(dload_bundle)
 
                     download_dir = extractor(filepath=temp_file, cache_dir=cache_dir,
-                                             extractor_func=zipd.get(mime_type(temp_file), None))
+                                             extractor_func=Downloader.ZIPD.get(mime_type(temp_file), None))
                     if "sha1" in self.dataset_desc:
                         if os.path.split(download_dir)[-1] != self.dataset_desc["sha1"]:
                             raise RuntimeError("The sha1 of the downloaded file does not match with the provided one")
@@ -272,26 +270,26 @@ class EmbeddingDownloader(Downloader):
     @staticmethod
     def _get_embedding_file(loc, key):
         if os.path.isfile(loc):
-                LOG("embedding file location: {}".format(loc))
+                print("embedding file location: {}".format(loc))
                 return loc
         else:  # This is a directory, return the actual file
             files = [x for x in os.listdir(loc) if str(key) in x]
             if len(files) == 0:
                 raise RuntimeError("No embedding file found for the given key [{}]".format(key))
             elif len(files) > 1:
-                LOG("multiple embedding files found for the given key [{}], choosing {}".format(key, files[0]))
+                print("multiple embedding files found for the given key [{}], choosing {}".format(key, files[0]))
             embed_file_loc = os.path.join(loc, files[0])
             return embed_file_loc
 
     def download(self):
         if is_file_correct(self.embedding_file):
-            LOG("embedding file location: {}".format(self.embedding_file))
+            print("embedding file location: {}".format(self.embedding_file))
             return self.embedding_file
         dcache_path = os.path.join(self.data_download_cache, DATA_CACHE_CONF)
         dcache = read_json(dcache_path)
         if self.embedding_file in dcache and not self.cache_ignore:
             download_loc = dcache[self.embedding_file]
-            LOG("files for {} found in cache".format(self.embedding_file))
+            print("files for {} found in cache".format(self.embedding_file))
             return self._get_embedding_file(download_loc, self.embedding_key)
         else:  # try to download the bundle and unzip
             url = self.embedding_file
@@ -301,7 +299,7 @@ class EmbeddingDownloader(Downloader):
                 cache_dir = self.data_download_cache
                 temp_file = web_downloader(url)
                 download_loc = extractor(filepath=temp_file, cache_dir=cache_dir,
-                                         extractor_func=zipd.get(mime_type(temp_file), None))
+                                         extractor_func=Downloader.ZIPD.get(mime_type(temp_file), None))
                 if self.sha1 is not None:
                     if os.path.split(download_loc)[-1] != self.sha1:
                         raise RuntimeError("The sha1 of the downloaded file does not match with the provided one")
