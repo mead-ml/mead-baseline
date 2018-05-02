@@ -307,4 +307,4 @@ class EmbeddingDownloader(Downloader):
                         raise RuntimeError("The sha1 of the downloaded file does not match with the provided one")
                 dcache.update({url: download_loc})
                 write_json(dcache, os.path.join(self.data_download_cache, DATA_CACHE_CONF))
-                return self._get_embedding_file(download_loc, self.embedding_key, self.embedding_file)
+                return self._get_embedding_file(download_loc, self.embedding_key)

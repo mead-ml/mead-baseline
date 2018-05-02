@@ -5,7 +5,7 @@ import logging
 import logging.config
 import mead.utils
 import os
-from downloader import EmbeddingDownloader, DataDownloader, mime_type
+from downloader import EmbeddingDownloader, DataDownloader, mime_type, read_json
 
 class Task(object):
     TASK_REGISTRY = {}
@@ -16,7 +16,7 @@ class Task(object):
         self.ExporterType = None
         self.mead_config = mead_config
         if mead_config is not None:
-            self.data_download_cache = json.load(open(mead_config)).get("datacache", "~/.bl-data/")
+            self.data_download_cache = read_json(mead_config).get("datacache", "~/.bl-data/")
         else:
             self.data_download_cache = "~/.bl-data/"
         print("using {} as data/embeddings cache".format(self.data_download_cache))
