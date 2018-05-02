@@ -16,7 +16,10 @@ DATA_CACHE_CONF = "data-cache.json"
 
 def delete_old_copy(file_name):
     if os.path.exists(file_name):
-        shutil.rmtree(file_name, ignore_errors=True)
+        if os.path.isfile(file_name):
+            os.remove(file_name)
+        else:
+            shutil.rmtree(file_name)
     return file_name
 
 
