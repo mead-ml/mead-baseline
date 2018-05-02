@@ -112,8 +112,8 @@ class Task(object):
         logging.basicConfig(level=logging.DEBUG)
 
     @staticmethod
-    def _create_embeddings_from_file(embed_file, embed_dsz, data_download_cache, vocab, unif, keep_unused):
-        embed_file = EmbeddingDownloader(embed_file, embed_dsz, data_download_cache).download()
+    def _create_embeddings_from_file(embed_file, embed_dsz, embed_sha1, data_download_cache, vocab, unif, keep_unused):
+        embed_file = EmbeddingDownloader(embed_file, embed_dsz, embed_sha1, data_download_cache).download()
         EmbeddingT = baseline.GloVeModel if mime_type(embed_file) == 'text/plain' else baseline.Word2VecModel
         return EmbeddingT(embed_file, vocab, unif_weight=unif, keep_unused=keep_unused)
 
@@ -130,7 +130,10 @@ class Task(object):
             if embed_label is not None:
                 embed_file = embeddings_set[embed_label]['file']
                 embed_dsz = embeddings_set[embed_label]['dsz']
-                embeddings['word'] = Task._create_embeddings_from_file(embed_file, embed_dsz, self.data_download_cache, vocabs['word'], unif=unif, keep_unused=keep_unused)
+                embed_sha1 = embeddings_set[embed_label].get('sha1',None)
+                embeddings['word'] = Task._create_embeddings_from_file(embed_file, embed_dsz, embed_sha1,
+                                                                       self.data_download_cache, vocabs['word'],
+                                                                       unif=unif, keep_unused=keep_unused)
             else:
                 dsz = embeddings_section['dsz']
                 embeddings['word'] = baseline.RandomInitVecModel(dsz, vocabs['word'], unif_weight=unif)

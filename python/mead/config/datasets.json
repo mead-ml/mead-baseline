@@ -33,7 +33,7 @@
     "train_file": "oct27.train",
     "valid_file": "oct27.dev",
     "test_file": "oct27.test",
-    "download":"https://www.dropbox.com/s/08km2ean8bkt7p3/trec.tar.gz?dl=1",
+    "download":"https://www.dropbox.com/s/6uyfatcgmbmyzkr/twpos.tar.gz?dl=1",
     "sha1":"78f46aa658126cd0c82b08c081469cc2a8551c66",
     "label": "twpos"
   },
