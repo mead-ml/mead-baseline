@@ -16,9 +16,9 @@
     "label": "SST2"
   },
   {
-    "train_file": "https://www.dropbox.com/s/pvcbx2oe7qea1i2/trec.nodev.utf8?dl=1",
-    "valid_file": "https://www.dropbox.com/s/ynk5b072foe17df/trec.dev.utf8?dl=1",
-    "test_file": "https://www.dropbox.com/s/y3pjw0pseu9tjfs/trec.test.utf8?dl=1",
+    "train_file": "trec.nodev.utf8",
+    "valid_file": "trec.dev.utf8",
+    "test_file": "trec.test.utf8",
     "sha1":"b52dd4b6cfe6ec51ea6cfa56baef8128b1785e3b",
     "download": "https://www.dropbox.com/s/08km2ean8bkt7p3/trec.tar.gz?dl=1",
     "label": "trec"

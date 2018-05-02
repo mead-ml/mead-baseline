@@ -2,52 +2,47 @@
 
 The datasets and embedding file locations should be provided in `mead/datasets.json`, and `mead/emeddings.json`. These files can exist in your local machine. We also provide methods for automated download. There are a couple of ways to specify the dataset or embedding file locations:
 
+#### Requirements
+
+`python-magic` and `requests` are the dependencies for automatic download of the files. This can be done in most environments with the command `pip install python-magic` and `pip install requests`.
+ 
 #### Datasets
 
-- Path to the data files on your computer:
-
-```
-  {
-    "train_file": "/data/datasets/sst2/stsa.binary.phrases.train",
-    "valid_file": "/data/datasets/sst2/stsa.binary.dev",
-    "test_file": "/data/datasets/sst2/stsa.binary.test",
-    "label": "SST2"
-  },
-```
-or
+- Path to the data files on your computer (provide the paths separately):
 
 ```
     {
-	"vocab_file": "/data/datasets/iwslt15-en-vi/vocab.en_vi",
-	"train_file": "/data/datasets/iwslt15-en-vi/train",
-	"valid_file": "/data/datasets/iwslt15-en-vi/tst2012",
-	"test_file": "/data/datasets/iwslt15-en-vi/tst2013",
-	"label": "iwslt15-en-vi"
-    },
+      "train_file": "/data/datasets/ner/wnut-gaz/wnut17train.conll",
+      "valid_file": "/data/datasets/ner/wnut-gaz/wnut17dev.conll",
+      "test_file": "/data/datasets/ner/wnut-gaz/wnut17test.conll",
+      "label": "wnut-gaz"
+    }
+```
+
+- Link to a directory zip, file names in the unzipped directory as keys (we provide _sha1_ for the zip file in this case. If you send a PR for a new dataset, please add the _sha1_ as well)
+
 
 ```
-- Link to a directory zip, file names in the unzipped directory as keys
-
-
-```
-{
+ {
     "train_file": "eng.train",
     "valid_file": "eng.testa",
     "test_file": "eng.testb",
     "download": "https://www.dropbox.com/s/p6ogzhiex9yqsmn/conll.tar.gz?dl=1",
+    "sha1":"521c44052a51699742cc63e39db514528e9c2640",
     "label": "conll"
-}
+  }
 ```
 
 or
 
 ```
-  {
+{
     "vocab_file": "vocab.en_vi",
     "train_file": "train",
     "valid_file": "tst2012",
     "test_file": "tst2013",
-    "download": "https://www.dropbox.com/s/peqeifib013us5p/iwslt15-en-vi.tar.gz?dl=1",
+    "download": "https://www.dropbox.com/s/99petw2kdab69cr/iwslt15-en-vi.tar.gz?dl=1",
+    "sha1":"418a2ccfa7c46a1a1db900295e95ac03e2ec6993",
     "label": "iwslt15-en-vi"
   }
 ```
@@ -55,12 +50,12 @@ or
 - Each key points to a separate download link:
 
 ```
-  {
-    "train_file": "https://www.dropbox.com/s/sj9xjeiihjs8cmk/oct27.train?dl=1",
-    "valid_file": "https://www.dropbox.com/s/whzkv7te2zklqn2/oct27.dev?dl=1",
-    "test_file": "https://www.dropbox.com/s/riyn2ne85pirfpd/oct27.test?dl=1",
-    "label": "twpos"
-  },
+{
+    "train_file": "https://www.dropbox.com/s/1jxd5tpc6lo12t7/train-tok-nodev.txt.gz?dl=1",
+    "valid_file": "https://www.dropbox.com/s/8wgf8m6f8qmubga/dev-tok.txt.gz?dl=1",
+    "test_file": "https://www.dropbox.com/s/3qf0sj60exi4r1r/test-tok.txt.gz?dl=1",
+    "label": "dbpedia"
+}
 ```
 
 #### Embedding Files
