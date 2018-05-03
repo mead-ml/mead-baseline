@@ -52,7 +52,20 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
 
         return correct_labels, total_labels, overlap_count, gold_count, guess_count
 
-    def _test(self, ts):
+    def _write_sentence_conll(self, handle, sentence, gold, txt):
+
+        if len(txt) != len(sentence):
+            txt = txt[:len(sentence)]
+
+        try:
+            for word, truth, guess in zip(txt, gold, sentence):
+                handle.write('%s %s %s\n' % (word, self.idx2label[truth], self.idx2label[guess]))
+            handle.write('\n')
+        except:
+            print('ERROR: Failed to write lines... closing file')
+            handle.close()
+
+    def _test(self, ts, **kwargs):
 
         self.model.eval()
         total_correct = 0
@@ -62,13 +75,18 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
         total_overlap_count = 0
         metrics = {}
         steps = len(ts)
+        conll_output = kwargs.get('conll_output', None)
+        txts = kwargs.get('txts', None)
+        handle = None
+        if conll_output is not None and txts is not None:
+            handle = open(conll_output, "w")
         pg = create_progress_bar(steps)
         for batch_dict in ts:
 
             x, xch, lengths, y, ids = self.model.make_input(batch_dict)
             inputs = (x, xch, lengths)
             pred = self.model(inputs)
-            correct, count, overlaps, golds, guesses = self.process_output(pred, y.data, lengths, ids, None, None)
+            correct, count, overlaps, golds, guesses = self.process_output(pred, y.data, lengths, ids, handle, txts)
             total_correct += correct
             total_sum += count
             total_gold_count += golds
@@ -113,6 +131,8 @@ def fit(model, ts, vs, es, **kwargs):
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
     epochs = int(kwargs.get('epochs', 20))
     model_file = get_model_file(kwargs, 'tagger', 'pytorch')
+    conll_output = kwargs.get('conll_output', None)
+    txts = kwargs.get('txts', None)
 
     if do_early_stopping:
         early_stopping_metric = kwargs.get('early_stopping_metric', 'acc')
@@ -159,4 +179,4 @@ def fit(model, ts, vs, es, **kwargs):
         print('Reloading best checkpoint')
         model = torch.load(model_file)
         trainer = create_trainer(TaggerTrainerPyTorch, model, **kwargs)
-        trainer.test(es, reporting_fns, phase='Test')
+        trainer.test(es, reporting_fns, conll_output=conll_output, txts=txts, phase='Test')

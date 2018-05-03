@@ -32,9 +32,9 @@ class EpochReportingTrainer(Trainer):
             reporting(metrics, self.train_epochs * len(ts), 'Train')
         return metrics
 
-    def test(self, vs, reporting_fns, phase='Valid'):
+    def test(self, vs, reporting_fns, phase='Valid', **kwargs):
         start_time = time.time()
-        metrics = self._test(vs)
+        metrics = self._test(vs, **kwargs)
         duration = time.time() - start_time
         print('%s time (%.3f sec)' % (phase, duration))
         epochs = 0
@@ -49,7 +49,7 @@ class EpochReportingTrainer(Trainer):
     def _train(self, ts):
         pass
 
-    def _test(self, vs):
+    def _test(self, vs, **kwargs):
         pass
 
 
