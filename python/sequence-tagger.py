@@ -31,7 +31,7 @@ parser.add_argument('--inp', help='input conll', required=True)
 parser.add_argument('--outp', help='output conll', required=True)
 parser.add_argument('--model', help='model file: tagger-model-tf-*', required=True)
 parser.add_argument('--mxlen', help='max. length of the sentence (provided during training)', type=int, required=True)
-parser.add_argument('--mxwlen', help='max. length of a word', type=int, required=True)
+parser.add_argument('--mxwlen', help='max. length of a word (provided during training)', type=int, required=True)
 
 args = parser.parse_args()
 
