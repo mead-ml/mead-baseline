@@ -213,7 +213,7 @@ class SeqPredictReader(object):
     def read_lines(self):
         pass
 
-    def load(self, filename, vocabs, batchsz, shuffle=False):
+    def load(self, filename, vocabs, batchsz, shuffle=False, do_sort=True):
 
         ts = []
         words_vocab = vocabs['word']
@@ -264,7 +264,7 @@ class SeqPredictReader(object):
                     xs_ch[j, k] = chars_vocab.get(w[k], 0)
             item.update({'x': xs, 'xch': xs_ch, 'y': ys, 'lengths': length, 'ids': i})
             ts.append(item)
-        examples = baseline.data.SeqWordCharTagExamples(ts)
+        examples = baseline.data.SeqWordCharTagExamples(ts, do_shuffle=shuffle, do_sort=do_sort)
         return baseline.data.SeqWordCharLabelDataFeed(examples, batchsz=batchsz, shuffle=shuffle,
                                                       vec_alloc=self.vec_alloc, vec_shape=self.vec_shape), texts
 
