@@ -33,15 +33,16 @@ parser.add_argument('--model', help='model file: tagger-model-tf-*', required=Tr
 parser.add_argument('--mxlen', help='max. length of the sentence (provided during training)', type=int, required=True)
 parser.add_argument('--mxwlen', help='max. length of a word (provided during training)', type=int, required=True)
 parser.add_argument('--backend', choices=['tf', 'pytorch'], default='tf', help='Deep Learning Framework backend')
-
+parser.add_argument('--modeltype', default='default', help='tagger model type')
+# choices are ['default'] currently. default is RNNTaggerModel.
 args = parser.parse_args()
 
 if args.backend == 'tf':
-    from baseline.tf.tagger.model import RNNTaggerModel
-    tagger = RNNTaggerModel.load(args.model)
+    from baseline.tf.tagger.model import BASELINE_TAGGER_LOADERS
+    tagger = BASELINE_TAGGER_LOADERS[args.modeltype](args.model)
 else:
-    from baseline.pytorch.tagger.model import RNNTaggerModel
-    tagger = RNNTaggerModel.load(args.model)
+    from baseline.pytorch.tagger.model import BASELINE_TAGGER_LOADERS
+    tagger = BASELINE_TAGGER_LOADERS[args.modeltype](args.model)
 
 predlbls = []
 inp_txts, gold_lbls = read_lines(args.inp)

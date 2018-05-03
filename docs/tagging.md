@@ -81,5 +81,4 @@ Run the code like this:
 python tag.py --inp wnut17test.conll --outp test.conll --model mead/tagger-model-tf-2847 --mxlen 60 --mxwlen 40
 ```
 
-Currently we support loading an [`RNNTaggerModel`](../python/baseline/tf/tagger/model.py) trained with TensorFlow/ PyTorch.
-
+We support loading tagger models defined in [TensorFlow](../python/baseline/tf/tagger/model.py) and [PyTorch](../python/baseline/pytorch/tagger/model.py). 
