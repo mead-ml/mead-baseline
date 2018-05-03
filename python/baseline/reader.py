@@ -206,6 +206,7 @@ class SeqPredictReader(object):
         self.trim = trim
         self.extended_features = extended_features
         self.label2index = {"<PAD>": 0, "<GO>": 1, "<EOS>": 2}
+        self.idx = 2  # GO=0, START=1, EOS=2
 
     def build_vocab(self, files):
         pass
@@ -218,7 +219,7 @@ class SeqPredictReader(object):
         ts = []
         words_vocab = vocabs['word']
         chars_vocab = vocabs['char']
-        idx = 2 # GO=0, START=1, EOS=2
+
         mxlen = self.max_sentence_length
         maxw = self.max_word_length
         extracted = self.read_lines(filename)
@@ -252,8 +253,8 @@ class SeqPredictReader(object):
                 label = lv[j]
 
                 if label not in self.label2index:
-                    idx += 1
-                    self.label2index[label] = idx
+                    self.idx += 1
+                    self.label2index[label] = self.idx
 
                 ys[j] = self.label2index[label]
                 xs[j] = words_vocab.get(self.cleanup_fn(w), 0)
