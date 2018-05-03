@@ -209,7 +209,7 @@ class Tagger(object):
         This method is not aware of any input features other than words and characters (and lengths).  If you
         wish to use other features and have a custom model that is aware of those, use `predict` directly.
 
-        :param tokens: 
+        :param tokens:
         :param mxlen: 
         :param maxw: 
         :param zero_alloc: Define

@@ -74,12 +74,12 @@ Here are the last observed performance scores on various dataset
 
 ### Testing a trained model on your data
 
-You can use [`sequence-tagger.py`](../python/sequence-tagger.py) to load a sequence tagger checkpoint, predict the labels for an input conll file and produce the output in the same format. The second column is the predicted label.  
+You can use [`tag.py`](../python/tag.py) to load a sequence tagger checkpoint, predict the labels for an input conll file and produce the output in the same format. The second column is the predicted label.
 
 Run the code like this:
 ```
-python conllwriter.py --inp wnut17test.conll --outp test.conll --model mead/tagger-model-tf-2847 --mxlen 60 --mxwlen 40
+python tag.py --inp wnut17test.conll --outp test.conll --model mead/tagger-model-tf-2847 --mxlen 60 --mxwlen 40
 ```
 
-Currently we support loading an [`RNNTaggerModel`](../python/baseline/tf/tagger/model.py) trained with TensorFlow.  
+Currently we support loading an [`RNNTaggerModel`](../python/baseline/tf/tagger/model.py) trained with TensorFlow/ PyTorch.
 

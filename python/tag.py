@@ -1,7 +1,7 @@
-from baseline.tf.tagger import RNNTaggerModel
 import argparse
 import codecs
 import re
+from baseline.progress import create_progress_bar
 
 
 def read_lines(tsfile):
@@ -32,21 +32,28 @@ parser.add_argument('--outp', help='output conll', required=True)
 parser.add_argument('--model', help='model file: tagger-model-tf-*', required=True)
 parser.add_argument('--mxlen', help='max. length of the sentence (provided during training)', type=int, required=True)
 parser.add_argument('--mxwlen', help='max. length of a word (provided during training)', type=int, required=True)
+parser.add_argument('--backend', choices=['tf', 'pytorch'], default='tf', help='Deep Learning Framework backend')
 
 args = parser.parse_args()
 
-tagger = RNNTaggerModel.load(args.model)
-print("model loaded")
+if args.backend == 'tf':
+    from baseline.tf.tagger.model import RNNTaggerModel
+    tagger = RNNTaggerModel.load(args.model)
+else:
+    from baseline.pytorch.tagger.model import RNNTaggerModel
+    tagger = RNNTaggerModel.load(args.model)
 
 predlbls = []
-inptxts, goldlbls = read_lines(args.inp)
+inp_txts, gold_lbls = read_lines(args.inp)
 
+pg = create_progress_bar(len(inp_txts))
 with codecs.open(args.outp, encoding="utf-8", mode="w") as f:
-    for index, sen in enumerate(inptxts):
-        predlbl_sen = [x[1] for x in tagger.predict_text(sen, mxlen=args.mxlen, maxw=args.mxwlen)]
-        goldlbl_sen = goldlbls[index]
-        for word, predlbl, goldlbl in zip(sen, predlbl_sen, goldlbl_sen):
-            f.write("{} {} {}\n".format(word, predlbl, goldlbl))
+    for index, sen in enumerate(inp_txts):
+        pred_lbl_sen = [x[1] for x in tagger.predict_text(sen, mxlen=args.mxlen, maxw=args.mxwlen)]
+        gold_lbl_sen = gold_lbls[index]
+        for word, pred_lbl, gold_lbl in zip(sen, pred_lbl_sen, gold_lbl_sen):
+            f.write("{} {} {}\n".format(word, pred_lbl, gold_lbl))
         f.write("\n")
-        if not index % 100:
-            print("{} percent processed".format(int((index/len(inptxts))*100)))
+        pg.update()
+
+pg.done()
