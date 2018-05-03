@@ -2,6 +2,10 @@ import numpy as np
 import os
 import logging
 
+__all__ = [
+    "basic_reporting", "logging_reporting", "visdom_reporting",
+    "tensorboard_reporting", "setup_reporting"
+]
 
 def basic_reporting(metrics, tick, phase, tick_type=None):
     """Write results to `stdout`

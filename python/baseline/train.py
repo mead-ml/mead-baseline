@@ -1,6 +1,7 @@
 import time
 from baseline.utils import create_user_trainer
 
+__all__ = ["Trainer", "EpochReportingTrainer", "create_trainer"]
 
 class Trainer(object):
 

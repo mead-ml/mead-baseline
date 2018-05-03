@@ -2,6 +2,11 @@ import random
 import numpy as np
 import math
 
+__all__ = [
+    "DataFeed", "ExampleDataFeed", "SeqLabelExamples", "SeqLabelDataFeed",
+    "SeqWordCharTagExamples", "SeqWordCharLabelDataFeed", "Seq2SeqExamples",
+    "reverse_2nd", "Seq2SeqDataFeed", "SeqWordCharDataFeed"
+]
 
 class DataFeed(object):
     """Data collection that, when iterated, produces an epoch of data

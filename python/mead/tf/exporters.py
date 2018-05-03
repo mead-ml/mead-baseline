@@ -7,6 +7,12 @@ import mead.exporters
 
 FIELD_NAME = 'text/tokens'
 
+__all__ = [
+    "TensorFlowExporter",
+    "ClassifyTensorFlowExporter",
+    "TaggerTensorFlowExporter",
+    "Seq2SeqTensorFlowExporter",
+]
 
 class TensorFlowExporter(mead.exporters.Exporter):
 

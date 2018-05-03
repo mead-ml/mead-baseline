@@ -1,4 +1,4 @@
-DNNs can be deployed within a model serving framework such as \textbf{TensorFlow Serving}, a high-performance and highly scalable deployment architecture. All of the baseline implementations have exporters, though some customization may be required for user-defined models, for which we provide interfaces. The exporter transforms the model to include pre-processing and service-consumable output.
+DNNs can be deployed within a model serving framework such as __TensorFlow Serving__, a high-performance and highly scalable deployment architecture. All of the baseline implementations have exporters, though some customization may be required for user-defined models, for which we provide interfaces. The exporter transforms the model to include pre-processing and service-consumable output.
 
 Currently we provide code to export and serve TensorFlow models. The saved model is a typical TensorFlow checkpoint: model graph and data (values for the variables).
 
@@ -34,7 +34,7 @@ git clone --recursive https://github.com/tensorflow/serving
 2. Install bazel:
 
 ```
-sudo tee /etc/apt/sources.list.d/bazel.list
+echo "deb [arch=amd64] http://storage.googleapis.com/bazel-apt stable jdk1.8" | sudo tee /etc/apt/sources.list.d/bazel.list
 curl https://bazel.build/bazel-release.pub.gpg | sudo apt-key add -
 
 sudo apt-get update && sudo apt-get install bazel

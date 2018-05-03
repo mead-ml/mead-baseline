@@ -1,5 +1,6 @@
-#!/usr/bin/env python3
 import json
+
+__all__ = ["log2json", "read_config"]
 
 def log2json(log):
     s = []

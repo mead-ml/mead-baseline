@@ -1,6 +1,9 @@
 import numpy as np
 import io
 
+__all__ = [
+    "EmbeddingsModel", "Word2VecModel", "GloVeModel", "RandomInitVecModel"
+]
 
 class EmbeddingsModel(object):
     def __init__(self):

@@ -2,6 +2,8 @@ import re
 from binascii import hexlify
 from functools import partial
 
+__all__ = ["mime_type"]
+
 class MN(object):
     GZIP = b'1f8b'
     TAR = b'7573746172'

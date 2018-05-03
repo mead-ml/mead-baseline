@@ -1,9 +1,20 @@
-import numpy as np
-import time
 import os
+import sys
+import time
 import importlib
 from functools import partial
+import numpy as np
+import addons
 
+__all__ = [
+    "listify", "get_version", "revlut", "str2bool", "lowercase", "import_user_module",
+    "create_user_model", "create_user_classifier_model", "create_user_tagger_model",
+    "create_user_seq2seq_model", "create_user_lang_model", "create_user_trainer",
+    "load_user_model", "load_user_classifier_model", "load_user_tagger_model",
+    "load_user_seq2seq_model", "load_user_lang_model", "get_model_file",
+    "lookup_sentence", "topk", "beam_multinomial", "fill_y", "seq_fill_y",
+    "to_spans", "f_score"
+]
 
 def listify(x):
     """Take a scalar or list and make it a list
@@ -51,6 +62,7 @@ def import_user_module(module_type, model_type):
     :param model_type: A name for the model, which is the suffix
     :return:
     """
+    sys.path.append(os.path.dirname(os.path.realpath(addons.__file__)))
     module_name = "%s_%s" % (module_type, model_type)
     print('Loading user model %s' % module_name)
     mod = importlib.import_module(module_name)
@@ -120,7 +132,7 @@ def load_user_model(outname, **kwargs):
 load_user_classifier_model = partial(load_user_model, task_type='classify')
 load_user_tagger_model = partial(load_user_model, task_type='tagger')
 load_user_seq2seq_model = partial(load_user_model, task_type='seq2seq')
-load_user_lm_model = partial(load_user_model, task_type='lm')
+load_user_lang_model = partial(load_user_model, task_type='lm')
 
 
 def get_model_file(dictionary, task, platform):

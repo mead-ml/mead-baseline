@@ -6,6 +6,13 @@ import codecs
 from baseline.utils import import_user_module, revlut
 import os
 
+__all__ = [
+    "num_lines", "ParallelCorpusReader", "TSVParallelCorpusReader",
+    "MultiFileParallelCorpusReader", "create_parallel_corpus_reader",
+    "identity_trans_fn", "SeqPredictReader", "CONLLSeqReader",
+    "create_seq_pred_reader", "SeqLabelReader", "TSVSeqLabelReader",
+    "create_pred_reader", "PTBSeqReader", "create_lm_reader"
+]
 
 def num_lines(filename):
     lines = 0

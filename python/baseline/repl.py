@@ -3,6 +3,7 @@ from prompt_toolkit.history import FileHistory
 import logging
 import numpy as np
 
+__all__ = ["tagger_repl", "classifier_repl"]
 
 def tagger_repl(tagger, **kwargs):
     mxlen = int(kwargs.get('mxlen', 100))

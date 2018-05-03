@@ -1,5 +1,6 @@
 import numpy as np
 
+__all__ = ["ConfusionMatrix"]
 
 class ConfusionMatrix(object):
     """Confusion matrix with metrics

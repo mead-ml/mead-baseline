@@ -8,6 +8,10 @@ import os
 from mead.downloader import EmbeddingDownloader, DataDownloader, read_json
 from mead.mime_type import mime_type
 
+__all__ = [
+    "Task", "ClassifierTask", "TaggerTask", "EncoderDecoderTask", "LanguageModelingTask"
+]
+
 class Task(object):
     TASK_REGISTRY = {}
 
