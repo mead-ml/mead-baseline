@@ -1,7 +1,6 @@
 import gzip
 import tarfile
 import zipfile
-import magic
 import hashlib
 import shutil
 import requests
@@ -51,7 +50,29 @@ def extract_zip(file_loc):
 
 
 def mime_type(loc):
-    return magic.Magic(mime=True).from_file(loc)
+    """
+    find the mimetype associated with a file
+    in order to determine what encoder needs to be run.
+
+    we need to ensure that the text/html type is handled,
+    because dropbox doesn't send a 404.
+
+    :loc a file name or a url
+
+    :returns (string) mimetype.
+    """
+    loc_without_query = loc.split("?")[0]
+
+    mimetype = "text/html"
+
+    if loc_without_query.endswith(".gz"):
+        mimetype = "application/gzip"
+    if loc_without_query.endswith(".tar"):
+        mimetype = "application/x-tar"
+    if loc_without_query.endswith(".zip"):
+        mimetype = "application/zip"
+
+    return mimetype
 
 
 def extractor(filepath, cache_dir, extractor_func):
