@@ -1,13 +1,13 @@
 import gzip
 import tarfile
 import zipfile
-import magic
 import hashlib
 import shutil
 import requests
 import os
 import re
 import json
+from mead.mime_type import mime_type
 
 
 DATA_CACHE_CONF = "data-cache.json"
@@ -48,10 +48,6 @@ def extract_zip(file_loc):
     with zipfile.ZipFile(file_loc, "r") as zip_ref:
         zip_ref.extractall(temp_file)
     return temp_file
-
-
-def mime_type(loc):
-    return magic.Magic(mime=True).from_file(loc)
 
 
 def extractor(filepath, cache_dir, extractor_func):

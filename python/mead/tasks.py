@@ -5,7 +5,8 @@ import logging
 import logging.config
 import mead.utils
 import os
-from downloader import EmbeddingDownloader, DataDownloader, mime_type, read_json
+from downloader import EmbeddingDownloader, DataDownloader, read_json
+from mead.mime_type import mime_type
 
 class Task(object):
     TASK_REGISTRY = {}
