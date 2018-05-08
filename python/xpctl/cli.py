@@ -12,17 +12,25 @@ from bson.objectid import ObjectId
 from click_shell import shell
 import click
 
-from xpctl.core import (cli_int,
-                        get_modelloc_int,
-                        results_int,
-                        best_int,
-                        generate_info,
-                        task_summary,
-                        get_modelloc_int,
-                        get_baseline_sha1,
-                        store_model,
-                        config2json_int)
+from xpctl.core import (
+    cli_int,
+    get_modelloc_int,
+    results_int,
+    best_int,
+    generate_info,
+    task_summary,
+    get_modelloc_int,
+    get_baseline_sha1,
+    store_model,
+    config2json_int
+)
 from xpctl.helpers import read_config, log2json
+
+__all__ = [
+    "read_cred", "cli", "vars", "getmodelloc", "results", "best",
+    "lbsummary", "tasksummary", "updatelabel", "delete", "putresult",
+    "putmodel", "config2json", "configdiff"
+]
 
 pd.set_option('display.expand_frame_repr', False)
 

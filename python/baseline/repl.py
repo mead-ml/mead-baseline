@@ -2,8 +2,12 @@ from prompt_toolkit import prompt
 from prompt_toolkit.history import FileHistory
 import logging
 import numpy as np
+from baseline.utils import export
 
+__all__ = []
+exporter = export(__all__)
 
+@exporter
 def tagger_repl(tagger, **kwargs):
     mxlen = int(kwargs.get('mxlen', 100))
     maxw = int(kwargs.get('maxw', 100))
@@ -24,6 +28,7 @@ def tagger_repl(tagger, **kwargs):
             logging.exception('Error')
 
 
+@exporter
 def classifier_repl(classifier, **kwargs):
 
     mxlen = int(kwargs.get('mxlen', 100))

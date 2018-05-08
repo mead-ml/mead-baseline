@@ -1,7 +1,11 @@
-import numpy as np
 import io
+import numpy as np
+from baseline.utils import export
 
+__all__ = []
+exporter = export(__all__)
 
+@exporter
 class EmbeddingsModel(object):
     def __init__(self):
         super(EmbeddingsModel, self).__init__()
@@ -15,7 +19,7 @@ class EmbeddingsModel(object):
     def lookup(self, word, nullifabsent=True):
         pass
 
-
+@exporter
 class Word2VecModel(EmbeddingsModel):
 
     def __init__(self, filename, known_vocab=None, unif_weight=None, keep_unused=False, normalize=False):
@@ -92,6 +96,7 @@ class Word2VecModel(EmbeddingsModel):
         return self.nullv
 
 
+@exporter
 class GloVeModel(EmbeddingsModel):
 
     def __init__(self, filename, known_vocab=None, unif_weight=None, keep_unused=False, normalize=False):
@@ -149,6 +154,7 @@ class GloVeModel(EmbeddingsModel):
         return self.nullv
 
 
+@exporter
 class RandomInitVecModel(EmbeddingsModel):
 
     def __init__(self, dsz, known_vocab, counts=True, unif_weight=None):

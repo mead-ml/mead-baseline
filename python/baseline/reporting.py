@@ -1,8 +1,12 @@
-import numpy as np
 import os
 import logging
+import numpy as np
+from baseline.utils import export
 
+__all__ = []
+exporter = export(__all__)
 
+@exporter
 def basic_reporting(metrics, tick, phase, tick_type=None):
     """Write results to `stdout`
 
@@ -26,6 +30,7 @@ def basic_reporting(metrics, tick, phase, tick_type=None):
     print('-------------------------------------------------')
 
 
+@exporter
 def logging_reporting(metrics, tick, phase, tick_type=None):
     """Write results to Python's `logging` module under `baseline.reporting`
 
@@ -50,6 +55,7 @@ g_vis = None
 g_vis_win = {}
 
 
+@exporter
 def visdom_reporting(metrics, tick, phase, tick_type=None):
     """This method will write its results to visdom
 
@@ -91,6 +97,7 @@ def visdom_reporting(metrics, tick, phase, tick_type=None):
 g_tb_run = None
 
 
+@exporter
 def tensorboard_reporting(metrics, tick, phase, tick_type=None):
     """This method will write its results to tensorboard
 
@@ -117,6 +124,7 @@ def tensorboard_reporting(metrics, tick, phase, tick_type=None):
         tb_log_value(chart_id, metrics[metric], tick)
 
 
+@exporter
 def setup_reporting(**kwargs):
     """Negotiate the reporting hooks
 

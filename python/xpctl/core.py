@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import os
 import shutil
 import subprocess
@@ -7,6 +6,14 @@ import click
 import pandas as pd
 import pymongo
 from bson.objectid import ObjectId
+
+__all__ == [
+    "connect", "dbsetup", "cli_int", "get_modelloc_int", "get_metrics",
+    "generate_data_frame", "update_query", "update_projection", "bestn_results",
+    "results_int", "config2json_int", "best_int", "task_summary", "generate_info",
+    "get_git_revision_hash", "get_baseline_loc", "get_baseline_loc",
+    "get_baseline_sha1", "store_model"
+]
 
 def connect(host, port, user, passw):
     client = None

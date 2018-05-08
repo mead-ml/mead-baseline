@@ -1,9 +1,18 @@
 from functools import partial
 import numpy as np
-from baseline.utils import revlut, load_user_classifier_model, create_user_classifier_model, load_user_tagger_model, create_user_tagger_model
-from baseline.utils import load_user_seq2seq_model, create_user_seq2seq_model, create_user_lang_model, lowercase
+from baseline.utils import (
+    load_user_classifier_model, create_user_classifier_model,
+    load_user_tagger_model, create_user_tagger_model,
+    load_user_seq2seq_model, create_user_seq2seq_model,
+    create_user_lang_model,
+    lowercase, revlut,
+    export, wrapped_partial,
+)
 
+__all__ = []
+exporter = export(__all__)
 
+@exporter
 class Classifier(object):
     """Text classifier
     
@@ -84,6 +93,7 @@ class Classifier(object):
         return sorted(outcomes, key=lambda tup: tup[1], reverse=True)
 
 
+@exporter
 def create_model(known_creators, input_, output_, **kwargs):
     """If `model_type` is given, use it to load an addon model and construct that OW use default
 
@@ -101,10 +111,29 @@ def create_model(known_creators, input_, output_, **kwargs):
     print('Calling model ', creator_fn)
     return creator_fn(input_, output_, **kwargs)
 
-create_classifier_model = partial(create_model, task_fn=create_user_classifier_model)
-create_tagger_model = partial(create_model, task_fn=create_user_tagger_model)
-create_seq2seq_model = partial(create_model, task_fn=create_user_seq2seq_model)
+create_classifier_model = exporter(
+    wrapped_partial(
+        create_model,
+        task_fn=create_user_classifier_model,
+        name='create_classifier_model'
+    )
+)
+create_tagger_model = exporter(
+    wrapped_partial(
+        create_model,
+        task_fn=create_user_tagger_model,
+        name='create_tagger_model'
+    )
+)
+create_seq2seq_model = exporter(
+    wrapped_partial(
+        create_model,
+        task_fn=create_user_seq2seq_model,
+        name='create_seq2seq_model'
+    )
+)
 
+@exporter
 def create_lang_model(known_creators, embeddings, **kwargs):
     model_type = kwargs.get('model_type', 'default')
     if model_type in known_creators:
@@ -114,6 +143,7 @@ def create_lang_model(known_creators, embeddings, **kwargs):
     return create_user_lang_model(embeddings, **kwargs)
 
 
+@exporter
 def load_model(known_loaders, outname, **kwargs):
     """If `model_type` is given, use it to load an addon model and construct that OW use default
 
@@ -126,11 +156,30 @@ def load_model(known_loaders, outname, **kwargs):
     loader_fn = known_loaders[model_type] if model_type in known_loaders else kwargs['task_fn']
     return loader_fn(outname, **kwargs)
 
-load_classifier_model = partial(load_model, task_fn=load_user_classifier_model)
-load_tagger_model = partial(load_model, task_fn=load_user_tagger_model)
-load_seq2seq_model = partial(load_model, task_fn=load_user_seq2seq_model)
+load_classifier_model = exporter(
+    wrapped_partial(
+        load_model,
+        task_fn=load_user_classifier_model,
+        name='load_classifier_model'
+    )
+)
+load_tagger_model = exporter(
+    wrapped_partial(
+        load_model,
+        task_fn=load_user_tagger_model,
+        name='load_classifier_model'
+    )
+)
+load_seq2seq_model = exporter(
+    wrapped_partial(
+        load_model,
+        task_fn=load_user_seq2seq_model,
+        name='load_seq2seq_model'
+    )
+)
 
 
+@exporter
 class Tagger(object):
     """Structured prediction classifier, AKA a tagger
     
@@ -200,6 +249,7 @@ class Tagger(object):
         pass
 
 
+@exporter
 class LanguageModel(object):
 
     def __init__(self):
@@ -209,6 +259,7 @@ class LanguageModel(object):
         pass
 
 
+@exporter
 class EncoderDecoder(object):
 
     def save(self, model_base):

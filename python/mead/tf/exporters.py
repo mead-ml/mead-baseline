@@ -4,10 +4,13 @@ import baseline
 import os
 import mead.utils
 import mead.exporters
+from baseline.utils import export
 
 FIELD_NAME = 'text/tokens'
 
+__all__ = []
 
+@export(__all__)
 class TensorFlowExporter(mead.exporters.Exporter):
 
     def __init__(self, task):
@@ -37,6 +40,7 @@ class TensorFlowExporter(mead.exporters.Exporter):
         return labels
 
 
+@export(__all__)
 class ClassifyTensorFlowExporter(TensorFlowExporter):
 
     def __init__(self, task):
@@ -172,6 +176,7 @@ class ClassifyTensorFlowExporter(TensorFlowExporter):
         print('Successfully exported model to %s' % output_dir)
 
 
+@export(__all__)
 class TaggerTensorFlowExporter(TensorFlowExporter):
 
     def __init__(self, task):
@@ -380,6 +385,7 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
         print('Successfully exported model to %s' % output_dir)
 
 
+@export(__all__)
 class Seq2SeqTensorFlowExporter(TensorFlowExporter):
 
     def __init__(self, task):

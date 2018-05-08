@@ -1,7 +1,11 @@
 from mead.tasks import *
 from mead.utils import *
+from baseline.utils import export
 
+__all__ = []
+exporter = export(__all__)
 
+@exporter
 class Exporter(object):
 
     def __init__(self, task):
