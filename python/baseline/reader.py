@@ -3,17 +3,13 @@ import numpy as np
 from collections import Counter
 import re
 import codecs
-from baseline.utils import import_user_module, revlut
+from baseline.utils import import_user_module, revlut, export
 import os
 
-__all__ = [
-    "num_lines", "ParallelCorpusReader", "TSVParallelCorpusReader",
-    "MultiFileParallelCorpusReader", "create_parallel_corpus_reader",
-    "identity_trans_fn", "SeqPredictReader", "CONLLSeqReader",
-    "create_seq_pred_reader", "SeqLabelReader", "TSVSeqLabelReader",
-    "create_pred_reader", "PTBSeqReader", "create_lm_reader"
-]
+__all__ = []
+exporter = export(__all__)
 
+@exporter
 def num_lines(filename):
     lines = 0
     with codecs.open(filename, encoding='utf-8', mode='r') as f:
@@ -42,6 +38,7 @@ def _build_vocab_for_col(col, files):
     return vocab
 
 
+@exporter
 class ParallelCorpusReader(object):
 
     def __init__(self,
@@ -67,6 +64,7 @@ class ParallelCorpusReader(object):
                                              vec_alloc=self.vec_alloc, trim=self.trim)
 
 
+@exporter
 class TSVParallelCorpusReader(ParallelCorpusReader):
 
     def __init__(self,
@@ -115,6 +113,7 @@ class TSVParallelCorpusReader(ParallelCorpusReader):
         return baseline.data.Seq2SeqExamples(ts)
 
 
+@exporter
 class MultiFileParallelCorpusReader(ParallelCorpusReader):
 
     def __init__(self, src_suffix, dst_suffix,
@@ -177,6 +176,7 @@ class MultiFileParallelCorpusReader(ParallelCorpusReader):
         return baseline.data.Seq2SeqExamples(ts)
 
 
+@exporter
 def create_parallel_corpus_reader(mxlen, alloc_fn, trim, src_vec_trans, **kwargs):
 
     reader_type = kwargs.get('reader_type', 'default')
@@ -197,10 +197,12 @@ def create_parallel_corpus_reader(mxlen, alloc_fn, trim, src_vec_trans, **kwargs
     return reader
 
 
+@exporter
 def identity_trans_fn(x):
     return x
 
 
+@exporter
 class SeqPredictReader(object):
 
     def __init__(self, max_sentence_length=-1, max_word_length=-1, word_trans_fn=None,
@@ -277,6 +279,7 @@ class SeqPredictReader(object):
                                                       vec_alloc=self.vec_alloc, vec_shape=self.vec_shape), texts
 
 
+@exporter
 class CONLLSeqReader(SeqPredictReader):
 
     UNREP_EMOTICONS = (
@@ -382,6 +385,7 @@ class CONLLSeqReader(SeqPredictReader):
         return features
 
 
+@exporter
 def create_seq_pred_reader(mxlen, mxwlen, word_trans_fn, vec_alloc, vec_shape, trim, **kwargs):
 
     reader_type = kwargs.get('reader_type', 'default')
@@ -397,6 +401,7 @@ def create_seq_pred_reader(mxlen, mxwlen, word_trans_fn, vec_alloc, vec_shape, t
     return reader
 
 
+@exporter
 class SeqLabelReader(object):
 
     def __init__(self):
@@ -409,6 +414,7 @@ class SeqLabelReader(object):
         pass
 
 
+@exporter
 class TSVSeqLabelReader(SeqLabelReader):
 
     REPLACE = { "'s": " 's ",
@@ -520,6 +526,7 @@ class TSVSeqLabelReader(SeqLabelReader):
                                               batchsz=batchsz, shuffle=shuffle, vec_alloc=self.vec_alloc, src_vec_trans=self.src_vec_trans)
 
 
+@exporter
 def create_pred_reader(mxlen, zeropadding, clean_fn, vec_alloc, src_vec_trans, **kwargs):
     reader_type = kwargs.get('reader_type', 'default')
 
@@ -531,6 +538,7 @@ def create_pred_reader(mxlen, zeropadding, clean_fn, vec_alloc, src_vec_trans, *
     return reader
 
 
+@exporter
 class PTBSeqReader(object):
 
     def __init__(self, max_word_length, nbptt, word_trans_fn):
@@ -588,6 +596,7 @@ class PTBSeqReader(object):
         return baseline.data.SeqWordCharDataFeed(x, xch, self.nbptt, batchsz, self.max_word_length)
 
 
+@exporter
 def create_lm_reader(max_word_length, nbptt, word_trans_fn, **kwargs):
     reader_type = kwargs.get('reader_type', 'default')
 

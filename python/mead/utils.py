@@ -1,8 +1,11 @@
 import os
 import json
+from baseline.utils import export
 
-__all__ = ["index_by_label", "convert_path"]
+__all__ = []
+exporter = export(__all__)
 
+@exporter
 def index_by_label(dataset_file):
     with open(dataset_file) as f:
         datasets_list = json.load(f)
@@ -10,6 +13,7 @@ def index_by_label(dataset_file):
         return datasets
 
 
+@exporter
 def convert_path(path):
     """If the provided path doesn't exist search for it relative to mead."""
     if os.path.isfile(path):

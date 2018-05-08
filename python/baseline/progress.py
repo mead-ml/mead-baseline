@@ -1,11 +1,12 @@
 import re
 import six.moves
+from baseline.utils import export
 
-__all__ = [
-    "Progress", "ProgressBarJupyter", "ProgressBarTerminal",
-    "set_global_progress_bar", "create_progress_bar"
-]
+__all__ = []
 
+exporter = export(__all__)
+
+@exporter
 class Progress(object):
     """Progress hook
     
@@ -29,7 +30,7 @@ class Progress(object):
         """
         pass
 
-
+@exporter
 class ProgressBarJupyter(Progress):
     """Simple Jupyter progress bar
     
@@ -54,6 +55,7 @@ class ProgressBarJupyter(Progress):
 
 # Modifed from here
 # http://stackoverflow.com/questions/3160699/python-progress-bar#3160819
+@exporter
 class ProgressBarTerminal(Progress):
     """Simple terminal-based progress bar
     
@@ -110,6 +112,7 @@ class ProgressBarTerminal(Progress):
 g_Progress = ProgressBarTerminal
 
 
+@exporter
 def set_global_progress_bar(type):
     """Sets the global factory for progress bars
     
@@ -126,6 +129,7 @@ def set_global_progress_bar(type):
     return g_Progress
 
 
+@exporter
 def create_progress_bar(steps):
     global g_Progress
     return g_Progress(steps)

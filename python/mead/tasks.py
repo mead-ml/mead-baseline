@@ -7,11 +7,12 @@ import mead.utils
 import os
 from mead.downloader import EmbeddingDownloader, DataDownloader, read_json
 from mead.mime_type import mime_type
+from baseline.utils import export
 
-__all__ = [
-    "Task", "ClassifierTask", "TaggerTask", "EncoderDecoderTask", "LanguageModelingTask"
-]
+__all__ = []
+exporter = export(__all__)
 
+@exporter
 class Task(object):
     TASK_REGISTRY = {}
 
@@ -187,6 +188,7 @@ class Task(object):
         return self.ExporterType(self)
 
 
+@exporter
 class ClassifierTask(Task):
 
     def __init__(self, logging_file, mead_config, **kwargs):
@@ -256,6 +258,7 @@ class ClassifierTask(Task):
 Task.TASK_REGISTRY['classify'] = ClassifierTask
 
 
+@exporter
 class TaggerTask(Task):
 
     def __init__(self, logging_file, mead_config, **kwargs):
@@ -331,6 +334,7 @@ class TaggerTask(Task):
 Task.TASK_REGISTRY['tagger'] = TaggerTask
 
 
+@exporter
 class EncoderDecoderTask(Task):
 
     def __init__(self, logging_file, mead_config, **kwargs):
@@ -416,6 +420,7 @@ class EncoderDecoderTask(Task):
 Task.TASK_REGISTRY['seq2seq'] = EncoderDecoderTask
 
 
+@exporter
 class LanguageModelingTask(Task):
 
     def __init__(self, logging_file, mead_config, **kwargs):

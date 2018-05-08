@@ -1,7 +1,10 @@
 import numpy as np
+from baseline.utils import export as export
 
-__all__ = ["ConfusionMatrix"]
+__all__ = []
+exporter = export(__all__)
 
+@exporter
 class ConfusionMatrix(object):
     """Confusion matrix with metrics
     

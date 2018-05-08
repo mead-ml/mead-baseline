@@ -1,8 +1,10 @@
 import re
 from binascii import hexlify
 from functools import partial
+from baseline.utils import export
 
-__all__ = ["mime_type"]
+__all__ = []
+exporter = export(__all__)
 
 class MN(object):
     GZIP = b'1f8b'
@@ -29,6 +31,7 @@ def check_re(b, regex=None):
 check_html = partial(check_re, regex=RE.HTML)
 check_bin = partial(check_re, regex=RE.BIN)
 
+@exporter
 def mime_type(file_name):
     b = open(file_name, 'rb').read(1024)
     if check_gzip(b):

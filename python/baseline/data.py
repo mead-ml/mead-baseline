@@ -1,13 +1,12 @@
 import random
 import numpy as np
 import math
+from baseline.utils import export
 
-__all__ = [
-    "DataFeed", "ExampleDataFeed", "SeqLabelExamples", "SeqLabelDataFeed",
-    "SeqWordCharTagExamples", "SeqWordCharLabelDataFeed", "Seq2SeqExamples",
-    "reverse_2nd", "Seq2SeqDataFeed", "SeqWordCharDataFeed"
-]
+__all__ = []
+exporter = export(__all__)
 
+@exporter
 class DataFeed(object):
     """Data collection that, when iterated, produces an epoch of data
     
@@ -36,6 +35,7 @@ class DataFeed(object):
         return self.steps
 
 
+@exporter
 class ExampleDataFeed(DataFeed):
 
     """Abstract base class that works on a list of examples
@@ -72,6 +72,7 @@ class ExampleDataFeed(DataFeed):
         self.trim = bool(kwargs.get('trim', False))
 
 
+@exporter
 class SeqLabelExamples(object):
     """Unstructured prediction examples
     
@@ -149,6 +150,7 @@ class SeqLabelExamples(object):
         return SeqLabelExamples(heldout_ex), SeqLabelExamples(rest_ex)
 
 
+@exporter
 class SeqLabelDataFeed(ExampleDataFeed):
     """Data feed for :class:`SeqLabelExamples`
     """
@@ -167,6 +169,7 @@ class SeqLabelDataFeed(ExampleDataFeed):
         return {'x': x, 'y': y, 'lengths': lengths}
 
 
+@exporter
 class SeqWordCharTagExamples(object):
     """Examples of sequences of words, characters and tags
     """
@@ -273,6 +276,7 @@ class SeqWordCharTagExamples(object):
         return SeqLabelExamples(heldout_ex), SeqLabelExamples(rest_ex)
 
 
+@exporter
 class SeqWordCharLabelDataFeed(ExampleDataFeed):
     """Feed object for sequential prediction training data
     """
@@ -283,6 +287,7 @@ class SeqWordCharLabelDataFeed(ExampleDataFeed):
         return self.examples.batch(i, self.batchsz, self.trim, self.vec_alloc, self.vec_shape)
 
 
+@exporter
 class Seq2SeqExamples(object):
     """Paired training examples
     """
@@ -358,6 +363,7 @@ class Seq2SeqExamples(object):
         return srcs, tgts, src_lens, tgt_lens
 
 
+@exporter
 def reverse_2nd(vec):
     """Do time-reversal on numpy array of form `B x T`
     
@@ -367,6 +373,7 @@ def reverse_2nd(vec):
     return vec[:, ::-1]
 
 
+@exporter
 class Seq2SeqDataFeed(ExampleDataFeed):
     """Data feed of paired examples
     """
@@ -381,6 +388,7 @@ class Seq2SeqDataFeed(ExampleDataFeed):
 
 
 # This one is a little different at the moment
+@exporter
 class SeqWordCharDataFeed(DataFeed):
     """Data feed to return language modeling training data
     """

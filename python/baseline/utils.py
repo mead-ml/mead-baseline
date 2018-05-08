@@ -2,20 +2,31 @@ import os
 import sys
 import time
 import importlib
-from functools import partial
+from functools import partial, update_wrapper, wraps
 import numpy as np
 import addons
 
-__all__ = [
-    "listify", "get_version", "revlut", "str2bool", "lowercase", "import_user_module",
-    "create_user_model", "create_user_classifier_model", "create_user_tagger_model",
-    "create_user_seq2seq_model", "create_user_lang_model", "create_user_trainer",
-    "load_user_model", "load_user_classifier_model", "load_user_tagger_model",
-    "load_user_seq2seq_model", "load_user_lang_model", "get_model_file",
-    "lookup_sentence", "topk", "beam_multinomial", "fill_y", "seq_fill_y",
-    "to_spans", "f_score"
-]
+__all__ = []
 
+def parameterize(func):
+    @wraps(func)
+    def decorator(*args, **kwargs):
+        return lambda x: func(x, *args, **kwargs)
+    return decorator
+
+@parameterize
+def export(obj, all_list=None):
+    """Add a function or class to the __all__.
+
+    When exporting something with out using as a decorator do it like so:
+        `func = exporter(func)`
+    """
+    all_list.append(obj.__name__)
+    return obj
+
+exporter = export(__all__)
+
+@exporter
 def listify(x):
     """Take a scalar or list and make it a list
     
@@ -28,15 +39,17 @@ def listify(x):
         return []
     return [x]
 
-
+@exporter
 def get_version(pkg):
     s = '.'.join(pkg.__version__.split('.')[:2])
     return float(s)
 
+@exporter
 def revlut(lut):
     return {v: k for k, v in lut.items()}
 
 
+@exporter
 def str2bool(v):
     if v.lower() in ('yes', 'true', 't', 'y', '1'):
         return True
@@ -46,10 +59,12 @@ def str2bool(v):
         raise Exception('Boolean value expected.')
 
 
+@exporter
 def lowercase(x):
     return x.lower()
 
 
+@exporter
 def import_user_module(module_type, model_type):
     """Load a module that is in the python path with a canonical name
 
@@ -68,6 +83,7 @@ def import_user_module(module_type, model_type):
     mod = importlib.import_module(module_name)
     return mod
 
+@exporter
 def create_user_model(input_, output_, **kwargs):
     """Create a user-defined model
 
@@ -85,18 +101,51 @@ def create_user_model(input_, output_, **kwargs):
     mod = import_user_module(kwargs['task_type'], model_type)
     return mod.create_model(input_, output_, **kwargs)
 
+def wrapped_partial(func, name=None, *args, **kwargs):
+    """
+    When we use `functools.partial` the `__name__` is not defined which breaks
+    our export function so we use update wrapper to give it a `__name__`.
 
-create_user_classifier_model = partial(create_user_model, task_type='classify')
-create_user_tagger_model = partial(create_user_model, task_type='tagger')
-create_user_seq2seq_model = partial(create_user_model, task_type='seq2seq')
+    :param name: A new name that is assigned to `__name__` so that the name
+    of the partial can be different than the wrapped function.
+    """
+    partial_func = partial(func, *args, **kwargs)
+    update_wrapper(partial_func, func)
+    if name is not None:
+        partial_func.__name__ = name
+    return partial_func
+
+create_user_classifier_model = exporter(
+    wrapped_partial(
+        create_user_model,
+        task_type='classify',
+        name='create_user_classifier_model'
+    )
+)
+create_user_tagger_model = exporter(
+    wrapped_partial(
+        create_user_model,
+        task_type='tagger',
+        name='create_user_tagger_model'
+    )
+)
+create_user_seq2seq_model = exporter(
+    wrapped_partial(
+        create_user_model,
+        task_type='seq2seq',
+        name='create_user_seq2seq_model'
+    )
+)
 
 
+@exporter
 def create_user_lang_model(embeddings, **kwargs):
     model_type = kwargs['model_type']
     mod = import_user_module('lang', model_type)
     return mod.create_model(embeddings, **kwargs)
 
 
+@exporter
 def create_user_trainer(model, **kwargs):
     """Create a user-defined trainer
 
@@ -113,6 +162,7 @@ def create_user_trainer(model, **kwargs):
     return mod.create_trainer(model, **kwargs)
 
 
+@exporter
 def load_user_model(outname, **kwargs):
     """Loads a user-defined model
 
@@ -129,12 +179,37 @@ def load_user_model(outname, **kwargs):
     return mod.load_model(outname, **kwargs)
 
 
-load_user_classifier_model = partial(load_user_model, task_type='classify')
-load_user_tagger_model = partial(load_user_model, task_type='tagger')
-load_user_seq2seq_model = partial(load_user_model, task_type='seq2seq')
-load_user_lang_model = partial(load_user_model, task_type='lm')
+load_user_classifier_model = exporter(
+    wrapped_partial(
+        load_user_model,
+        task_type='classify',
+        name='load_user_classifier_model'
+    )
+)
+load_user_tagger_model = exporter(
+    wrapped_partial(
+        load_user_model,
+        task_type='tagger',
+        name='load_user_tagger_model'
+    )
+)
+load_user_seq2seq_model = exporter(
+    wrapped_partial(
+        load_user_model,
+        task_type='seq2seq',
+        name='load_user_seq2seq_model'
+    )
+)
+load_user_lang_model = exporter(
+    wrapped_partial(
+        load_user_model,
+        task_type='lm',
+        name='load_user_lang_model'
+    )
+)
 
 
+@exporter
 def get_model_file(dictionary, task, platform):
     """Model name file helper to abstract different DL platforms (FWs)
 
@@ -153,6 +228,7 @@ def get_model_file(dictionary, task, platform):
     return name
 
 
+@exporter
 def lookup_sentence(rlut, seq, reverse=False, padchar=''):
     """Lookup a sentence by id and return words
 
@@ -166,9 +242,13 @@ def lookup_sentence(rlut, seq, reverse=False, padchar=''):
     return (' '.join([rlut[idx] if rlut[idx] != '<PAD>' else padchar for idx in s])).strip()
 
 
-# Get a sparse index (dictionary) of top values
-# Note: mutates input for efficiency
+@exporter
 def topk(k, probs):
+    """Get a sparse index (dictionary of top values).
+
+    Note:
+        mutates input for efficiency
+    """
 
     lut = {}
     i = 0
@@ -180,9 +260,12 @@ def topk(k, probs):
         i += 1
     return lut
 
-#  Prune all elements in a large probability distribution below the top K
-#  Renormalize the distribution with only top K, and then sample n times out of that
+@exporter
 def beam_multinomial(k, probs):
+    """Prune all elements in a large probability distribution below the top K.
+    
+    Renormalize the distribution with only top K, and then sample n times out of that.
+    """
 
     tops = topk(k, probs)
     i = 0
@@ -199,6 +282,7 @@ def beam_multinomial(k, probs):
     return idx[sample_idx]
 
 
+@exporter
 def fill_y(nc, yidx):
     """Convert a `B` sparse array to a dense one, to expand labels 
     
@@ -212,6 +296,7 @@ def fill_y(nc, yidx):
     return dense
 
 
+@exporter
 def seq_fill_y(nc, yidx):
     """Convert a `BxT` sparse array to a dense one, to expand labels 
     
@@ -231,8 +316,9 @@ def seq_fill_y(nc, yidx):
     return dense
 
 
-# Turn a sequence of IOB chunks into single tokens
+@exporter
 def to_spans(sequence, lut, strict_iob2=False):
+    """Turn a sequence of IOB chunks into single tokens."""
 
     iobtype = 2 if strict_iob2 else 1
     chunks = []
@@ -275,6 +361,7 @@ def to_spans(sequence, lut, strict_iob2=False):
     return set(chunks)
 
 
+@exporter
 def f_score(overlap_count, gold_count, guess_count, f=1):
     beta_sq = f*f
     if guess_count == 0: return 0.0

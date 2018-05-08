@@ -1,8 +1,10 @@
 import time
-from baseline.utils import create_user_trainer
+from baseline.utils import create_user_trainer, export
 
-__all__ = ["Trainer", "EpochReportingTrainer", "create_trainer"]
+__all__ = []
+exporter = export(__all__)
 
+@exporter
 class Trainer(object):
 
     def __init__(self):
@@ -17,6 +19,7 @@ class Trainer(object):
         pass
 
 
+@exporter
 class EpochReportingTrainer(Trainer):
 
     def __init__(self):
@@ -54,6 +57,7 @@ class EpochReportingTrainer(Trainer):
         pass
 
 
+@exporter
 def create_trainer(default_create_model_fn, model, **kwargs):
     """Create the default trainer, or a user-defined one if `trainer_type` is not `default`
 
