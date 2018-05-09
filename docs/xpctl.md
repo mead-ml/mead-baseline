@@ -233,30 +233,6 @@ Options:
   --help  Show this message and exit.
 ```
 
-- **configdiff**
-```aidl
-Usage: xpctl configdiff [OPTIONS] TASK SHA1 SHA2
-  Shows the difference between two json files for a task, diff of sha2 wrt
-  sha1
-Options:
-  --help  Show this message and exit.
-```
-
-```
-(dl) testuser:work$ xpctl configdiff tagger 786c05921a7badd61914aa7f25f48145096b7a39 54be249f9d33ac399edc0d91678959d36b12fd29
-setting dbhost to xxx.yyy.com dbport to 27017
-db connection successful
-diff of sha2 wrt sha1
-{'model': {'bottlesz': 1024}}
-(dl) testuser:work$ xpctl configdiff tagger 54be249f9d33ac399edc0d91678959d36b12fd29 786c05921a7badd61914aa7f25f48145096b7a39
-setting dbhost to xxx.yyy.com dbport to 27017
-db connection successful
-diff of sha2 wrt sha1
-{'model': {delete: ['bottlesz']}}
-```
-
-The first example shows sha2 has a param `bottlesz` that is not in sha1, the second (sha vals are reversed) shows `bottlesz` should be deleted from sha1 to make it equal to sha2.
-
 ##### Summary
 
 - **tasksummary**: provides a natural language summary for a task. 
