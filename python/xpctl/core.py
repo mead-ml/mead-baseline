@@ -375,15 +375,3 @@ class MongoRepo(ExperimentRepo):
                 print_fn("-" * 93)
                 print_fn(self.get_info(task, event_types))
 
-
-def get_git_revision_hash(baselinepath):
-    return subprocess.check_output(['git', '--git-dir={}/.git'.format(baselinepath), 'rev-parse', 'HEAD']).strip()
-
-
-def get_baseline_loc():  # assumes baseline is in pythonpath
-    return [x for x in os.environ['PYTHONPATH'].split(":") if "baseline" in x][0][:-7]
-
-
-def get_baseline_sha1():
-    return get_git_revision_hash(get_baseline_loc()).strip().decode("utf-8")
-
