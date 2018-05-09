@@ -1,6 +1,6 @@
 import os
 import shutil
-import subprocess
+from __future__ import print_function
 import pandas as pd
 import pymongo
 import datetime
@@ -51,46 +51,149 @@ class ExperimentRepo(object):
         super(ExperimentRepo, self).__init__()
 
     def get_task_names(self):
+        """Get the names of all tasks in the repository
+
+        :return: A list of tasks
+        """
         pass
 
     def has_task(self, task):
+        """Does this task exist in the repository
+
+        :param task: (``str``) Task name
+        :return: (``bool``) `True` if it exist, `False` if it does not
+        """
         pass
 
-    def nbest_by_metric(self, uname, metric, dataset, tname, numresults, event_type, ascending):
+    def nbest_by_metric(self, username, metric, dataset, task, num_results, event_type, ascending):
+        """Get the n-best results according to the specific metrics
+
+        :param username: (``str``) Name of user or None
+        :param metric: (``str``) The name of the metric to use for N-best
+        :param dataset: (``str``) The name of the dataset
+        :param task: (``str``) The name of the task
+        :param num_results: (``int``) The number of results (max) to retrieve from the repo
+        :param event_type: (``str``) The event types to retrieve from repo
+        :param ascending: (``bool``) Should we sort ascending or descending (depends on metric)
+        :return: The N-best data frame
+        """
         pass
 
-    def config2json(self, task, sha):
+    def config2dict(self, task, sha1):
+        """Convert a configuration stored in the repository to a string
+
+        :param task: (``str``) The task name
+        :param sha1: (``str``) The sha1 of the configuration
+        :return: (``dict``) The configuration
+        """
         pass
 
     @staticmethod
     def create_mongo_repo(host, port, user, passw):
+        """Create a MongoDB-backed repository
+
+        :param host: (``str``)The host name
+        :param port: (``str``)The port
+        :param user: (``str``)The user
+        :param passw: (``str``)The password
+        :return: A MongoDB-backed repository
+        """
         return MongoRepo(host, port, user, passw)
 
     def get_model_location(self, id, task):
+        """Get the physical location of the model specified by this id
+
+        :param id: The identifier of the run
+        :param task: (``str``) The task name
+        :return: (``str``) The model location
+        """
         pass
 
-    def get_results(self, user, metric, sort, dataset, task, event_type):
+    def get_results(self, username, metric, sort, dataset, task, event_type):
+        """Get results from the database
+
+        :param username: (``str``) The username
+        :param metric: (``str``) The metric to use
+        :param sort: (``str``) The field to sort on
+        :param dataset: (``str``) The dataset
+        :param task: (``str``) The task
+        :param event_type: (``str``) event types to listen for
+        :return: A result DataFrame
+        """
         pass
 
     def get_info(self, task, event_types):
+        """Show datasets that are available for this task, what metrics and which username and hostnames
+
+        :param task: (``str``) Task name
+        :param event_types: (``list``) A list of ``str`` of event types
+        """
         pass
 
     def leaderboard_summary(self, task=None, event_types=None, print_fn=print):
         pass
 
     def get_label(self, id, task):
+        """Get the label for the record with this id
+
+        :param id: The identifier for this record
+        :param task: (``str``) The task name
+        :return: (``str``) Return the user-defined label for this task
+        """
         pass
 
     def rename_label(self, id, task, new_label):
+        """Rename the user-defined label for the task identified by this id
+
+        :param id: The identifier for this record
+        :param task: (``str``) The task name
+        :param new_label: (``str``) The new label
+        :return: (``tuple``) A tuple of the old name and then the new name
+        """
         raise NotImplemented("Base ExperimentRepo events are immutable")
 
-    def rm(self, id, task, print_fn):
+    def rm(self, id, task, print_fn=print):
+        """Remove a record specified by this id
+
+        :param id: The identifier for this record
+        :param task: (``str``) The task name for this record
+        :param print_fn: A print callback which takes a ``str`` argument
+        :return: (``bool``) True if something was removed
+        """
         raise NotImplemented("Base ExperimentRepo tasks are immutable")
 
     def put_model(self, id, task, checkpoint_base, checkpoint_store, print_fn=print):
+        """Put the model for the record identified by id to the the checkpoint store
+
+        :param id:  The identifier
+        :param task: (``str``) The task name
+        :param checkpoint_base: (``str``) The basename of the model
+        :param checkpoint_store: (``str``) A path to the checkpoint store
+        :param print_fn: A print callback which takes a ``str`` argument
+        :return: The model location
+        """
         pass
 
     def put_result(self, task, config_obj, events_obj, **kwargs):
+        """Put the result to the experiment repository
+
+        :param task: (``str``) The task name
+        :param config_obj: (``dict``) A dictionary containing the job configuration
+        :param events_obj: (``dict``) A dictionary containing the events that transpired during training
+        :param kwargs: See below
+
+        label = kwargs.get("label", id)
+
+        :Keyword Arguments:
+        * *checkpoint_base* (``str``) -- If we are putting the model simultaneously, required basename for model
+        * *checkpoint_store* (``str``) -- If we are putting the model simultaneously, required destination
+        * *print_fn* -- A print callback which takes a ``str`` argument
+        * *hostname* -- (``str``) A hostname, defaults to name of the local machine
+        * *username* -- (``str``) A username, defaults to the name of the user on this machine
+        * *label* -- (``str``) An optional, human-readable label name.  Defaults to sha1 of this configuration
+
+        :return: The identifier assigned by the database
+        """
         pass
 
 
@@ -121,7 +224,6 @@ class MongoRepo(ExperimentRepo):
         self.db = client.reporting_db
 
     def put_result(self, task, config_obj, events_obj, **kwargs):
-
         now = datetime.datetime.utcnow().isoformat()
         train_events = list(filter(lambda x: x['phase'] == 'Train', events_obj))
         valid_events = list(filter(lambda x: x['phase'] == 'Valid', events_obj))
@@ -133,7 +235,7 @@ class MongoRepo(ExperimentRepo):
         hostname = kwargs.get('hostname', socket.gethostname())
         username = kwargs.get('username', getpass.getuser())
         config_sha1 = hashlib.sha1(json.dumps(config_obj).encode('utf-8')).hexdigest()
-        label = kwargs.get("label", id)
+        label = kwargs.get("label", config_sha1)
 
         post = {
             "config": config_obj,
@@ -194,7 +296,7 @@ class MongoRepo(ExperimentRepo):
         changed_label = coll.find_one({'_id': ObjectId(id)}, {'label': 1})["label"]
         return prev_label, changed_label
 
-    def rm(self, id, task, print_fn):
+    def rm(self, id, task, print_fn=print):
         coll = self.db[task]
         prev = coll.find_one({'_id': ObjectId(id)}, {'label': 1})
         if prev is None:
@@ -257,10 +359,10 @@ class MongoRepo(ExperimentRepo):
         projection.update({event_type: 1})
         return projection
 
-    def nbest_by_metric(self, uname, metric, dataset, tname, num_results, event_type, ascending):
+    def nbest_by_metric(self, username, metric, dataset, task, num_results, event_type, ascending):
         metrics = [metric]
-        coll = self.db[tname]
-        query = self._update_query({}, uname, dataset)
+        coll = self.db[task]
+        query = self._update_query({}, username, dataset)
         projection = self._update_projection(event_type)
         result_frame = self._generate_data_frame(coll, metrics, query, projection, event_type)
         if not result_frame.empty:
@@ -268,11 +370,11 @@ class MongoRepo(ExperimentRepo):
                                             ascending=[ascending])[:min(int(num_results), result_frame.shape[0])]
         return None
 
-    def get_results(self, user, metric, sort, dataset, task, event_type):
+    def get_results(self, username, metric, sort, dataset, task, event_type):
         event_type = event_type.lower()
         metrics = list(metric)
         coll = self.db[task]
-        query = self._update_query({}, user, dataset)
+        query = self._update_query({}, username, dataset)
         projection = self._update_projection(event_type=event_type)
         result_frame = self._generate_data_frame(coll, metrics, query, projection, event_type=event_type)
         if len(metric) == 1:
@@ -315,9 +417,9 @@ class MongoRepo(ExperimentRepo):
 
         return None
 
-    def config2json(self, task, sha):
+    def config2dict(self, task, sha1):
         coll = self.db[task]
-        j = coll.find_one({"sha1": sha}, {"config": 1})["config"]
+        j = coll.find_one({"sha1": sha1}, {"config": 1})["config"]
         if not j:
             return None
         else:
@@ -337,8 +439,6 @@ class MongoRepo(ExperimentRepo):
         return results[0]
 
     def get_info(self, task, event_types):
-        """we will show what datasets are available for this task, what are the metrics and which username and hostnames
-        have participated in this."""
         coll = self.db[task]
         q = self._update_query({}, None, None)
         p = {'config.dataset': 1}

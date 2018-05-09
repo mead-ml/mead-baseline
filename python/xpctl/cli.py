@@ -308,7 +308,7 @@ def config2json(task, sha1, filename):
         click.echo("no results for the specified task {}, use another task".format(task))
         return
 
-    j = RepoManager.get().config2json(task, sha1)
+    j = RepoManager.get().config2dict(task, sha1)
     if j is None:
         click.echo("can not find config sha1: {}".format(sha1))
         return
