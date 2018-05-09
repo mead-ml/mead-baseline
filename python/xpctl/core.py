@@ -8,10 +8,15 @@ import socket
 import json
 import hashlib
 import getpass
-import baseline
+from baseline.utils import export
 from bson.objectid import ObjectId
+from baseline.version import __version__
+
+__all__ = []
+exporter = export(__all__)
 
 
+@exporter
 def store_model(checkpoint_base, config_sha1, checkpoint_store, print_fn=print):
     mdir, mbase = os.path.split(checkpoint_base)
     mdir = mdir if mdir else "."
@@ -45,6 +50,7 @@ def store_model(checkpoint_base, config_sha1, checkpoint_store, print_fn=print):
     return model_loc + ".zip"
 
 
+@exporter
 class ExperimentRepo(object):
 
     def __init__(self):
@@ -197,6 +203,7 @@ class ExperimentRepo(object):
         pass
 
 
+@exporter
 class MongoRepo(ExperimentRepo):
 
     def __init__(self, host, port, user, passw):
@@ -247,7 +254,7 @@ class MongoRepo(ExperimentRepo):
             "date": now,
             "label": label,
             "sha1": config_sha1,
-            "version": baseline.__version__
+            "version": __version__
         }
 
         if checkpoint_base:
