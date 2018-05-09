@@ -312,8 +312,8 @@ class MongoRepo(ExperimentRepo):
             summary = "For dataset {}, the best {} is {:0.3f} reported by {} on {}. " \
                       "The sha1 for the config file is {}.".format(dataset, metric, result, user, date, sha1)
             return summary
-        else:
-            return None
+
+        return None
 
     def config2json(self, task, sha):
         coll = self.db[task]
