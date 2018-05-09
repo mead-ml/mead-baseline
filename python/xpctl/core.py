@@ -191,7 +191,7 @@ class MongoRepo(ExperimentRepo):
         coll = self.db[task]
         prev_label = coll.find_one({'_id': ObjectId(id)}, {'label': 1})["label"]
         coll.update({'_id': ObjectId(id)}, {'$set': {'label': new_label}}, upsert=False)
-        changed_label = coll.find_one({'_id': pymongo.ObjectId(id)}, {'label': 1})["label"]
+        changed_label = coll.find_one({'_id': ObjectId(id)}, {'label': 1})["label"]
         return prev_label, changed_label
 
     def rm(self, id, task, print_fn):
