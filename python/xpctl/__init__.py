@@ -1,1 +1,4 @@
-__version__ = "0.2.0"
+from xpctl.core import *
+from baseline.version import __version__
+
+
