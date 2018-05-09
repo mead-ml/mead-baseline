@@ -8,7 +8,7 @@ import socket
 import json
 import hashlib
 import getpass
-from baseline.utils import export
+from baseline.utils import export, listify
 from bson.objectid import ObjectId
 from baseline.version import __version__
 
@@ -340,7 +340,7 @@ class MongoRepo(ExperimentRepo):
             return pd.DataFrame()
 
         results = []
-        ms = list(set(metrics)) if metrics else list(self._get_metrics(results, event_type))
+        ms = list(set(metrics)) if len(metrics) > 0 else list(self._get_metrics(all_results, event_type))
         for result in all_results:  # different experiments
             for index in range(len(result[event_type])):  # train_event epoch 0,
                 # train_event epoch 1 etc, for event_type = test_event, there is only one event
@@ -366,7 +366,7 @@ class MongoRepo(ExperimentRepo):
         return projection
 
     def nbest_by_metric(self, username, metric, dataset, task, num_results, event_type, ascending):
-        metrics = [metric]
+        metrics = listify(metric)
         coll = self.db[task]
         query = self._update_query({}, username, dataset)
         projection = self._update_projection(event_type)
@@ -400,7 +400,7 @@ class MongoRepo(ExperimentRepo):
         return None
 
     def task_summary(self, task, dataset, metric, event_type):
-        metrics = [metric]
+        metrics = listify(metric)
 
         coll = self.db[task]
         query = self._update_query({}, [], dataset)
@@ -411,8 +411,6 @@ class MongoRepo(ExperimentRepo):
             if dataset not in datasets:
                 return None
             dsr = result_frame[result_frame.dataset == dataset].sort_values(metric, ascending=False)
-            print("___")
-            print(dsr)
             result = dsr[metric].iloc[0]
             user = dsr.username.iloc[0]
             sha1 = dsr.sha1.iloc[0]

@@ -36,7 +36,7 @@ If you use [docker](docker.md), `xpctl` will be automatically installed.
  
 **Starting**: use `--host`,`--port`,`--user` and `password` to specify the host, port, username and password for mongodb. Else, you can pass a config file with the option `--config`. `xpctl` assumes that the config file is located at `~/xpctlcred.json` (in which case you can just use the command `xpctl` w/o specifying any option) but it can be saved anywhere you want.
 
- ```aidl
+ ```
 (dl) home:home$ xpctl --host localhost
 setting dbhost to localhost dbport to 27017
 db connection successful
@@ -48,29 +48,17 @@ xpctl >
 ##### Set up and general info
 
 - **vars**:   Prints the value of system variables dbhost and dbport. 
-```aidl
+```
 xpctl > vars
 dbhost: xxx.yyy.com, dbport: 27017
 xpctl >
-```
-
-- **lastresult**:  Shows the description of last operation that populated the result data frame.
- ```aidl
-xpctl > lastresult
-result is empty
-xpctl > results test tagger
-xpctl > results test tagger
-     username                                    label dataset                                      sha1                    date       acc        f1
-1  testuser            bilstm CRF, standard settings    wnut  5809068e3c88d9d45d0dca1f00ef24241026c1b9 2017-08-31 18:45:34.649  0.933372  0.383981
-xpctl > lastresult
-result contains test results for task: tagger
 ```
 
 ##### Analysis
 
 - **results**: shows results for a task, event type (train/test/valid) and a dataset. Optionally supply metric(s) and a metric to sort the results with. If you specify **only one** metric, the results will be sorted on that.
 
-```aidl
+```
 Usage: xpctl results [OPTIONS] TASK EVENT_TYPE DATASET
   Shows the results for event_type(tran/valid/test) on a particular task
   (classify/ tagger) with a particular dataset (SST2, wnut). Default
@@ -85,21 +73,23 @@ Options:
   --help         Show this message and exit.
 ```
 
-```aidl
-xpctl > results classify test SST2
-  username            label dataset                                      sha1                    date  precision       acc       f1    recall  avg_loss
-0     root  Kim2014-SST2-TF    SST2  bc64107767f51431828e492b4bce804ce41069a6 2017-08-31 14:15:56.611   0.831516  0.868132  0.87487  0.922992  0.519631
 ```
-```aidl
-xpctl > results classify test SST2 --metric f1
-  username            label dataset                                      sha1                    date       f1
-0     root  Kim2014-SST2-TF    SST2  bc64107767f51431828e492b4bce804ce41069a6 2017-08-31 14:15:56.611  0.87487
-xpctl > results classify test SST2 --metric f1 --user root
-  username            label dataset                                      sha1                    date       f1
-0     root  Kim2014-SST2-TF    SST2  bc64107767f51431828e492b4bce804ce41069a6 2017-08-31 14:15:56.611  0.87487
+xpctl > results classify test SST2
+                         id  username                    label dataset                                      sha1                        date  avg_loss        f1    recall       acc  precision
+0  5af36f9bb5536c60d1e2ccc1  dpressel  Kim2014-SST2-TF-2epochs    SST2  8ab6ab6ee8fdf14b111223e2edf48750c30c7e51  2018-05-09T22:00:49.195327  0.306686  0.873474  0.865787  0.874794   0.881299
+1  5af34c0bb5536c533c9b6ecc      None  Kim2014-SST2-TF-2epochs    SST2  8ab6ab6ee8fdf14b111223e2edf48750c30c7e51  2018-05-09T19:29:15.696297  0.293442  0.871570  0.873487  0.871499   0.869660
+2  5af34c9fb5536c53bb07bc46      None  Kim2014-SST2-TF-2epochs    SST2  8ab6ab6ee8fdf14b111223e2edf48750c30c7e51  2018-05-09T19:31:42.984408  0.321655  0.874655  0.871287  0.875343   0.878049
 ```
 
-```aidl
+```
+xpctl > results classify test SST2 --metric acc
+                         id  username                    label dataset                                      sha1                        date       acc
+2  5af34c9fb5536c53bb07bc46      None  Kim2014-SST2-TF-2epochs    SST2  8ab6ab6ee8fdf14b111223e2edf48750c30c7e51  2018-05-09T19:31:42.984408  0.875343
+0  5af36f9bb5536c60d1e2ccc1  dpressel  Kim2014-SST2-TF-2epochs    SST2  8ab6ab6ee8fdf14b111223e2edf48750c30c7e51  2018-05-09T22:00:49.195327  0.874794
+1  5af34c0bb5536c533c9b6ecc      None  Kim2014-SST2-TF-2epochs    SST2  8ab6ab6ee8fdf14b111223e2edf48750c30c7e51  2018-05-09T19:29:15.696297  0.871499
+```
+
+```
 (xpt2.7) testuser:~$ xpctl results tagger test wnut --metric f1 --metric acc --sort acc
 db connection successful with [host]: x.y.com, [port]: 27017
                           id      username                                      label dataset                                      sha1                    date       acc        f1
@@ -107,7 +97,7 @@ db connection successful with [host]: x.y.com, [port]: 27017
 8   5a02665d6232a6030a275fc3          root     wnut-lowercased-gazetteer-5proj-unif-0    wnut  4073e6dff65340d954af3e66d36a6d144fca5825 2017-11-08 02:05:17.009  0.939287  0.386049
 ```
 
-```aidl
+```
 (xpt2.7) testuser:~$ xpctl results tagger test wnut --metric f1 --metric acc --sort f1
 db connection successful with [host]: x.y.com, [port]: 27017
                           id      username                                      label dataset                                      sha1                    date       acc        f1
@@ -116,7 +106,7 @@ db connection successful with [host]: x.y.com, [port]: 27017
 9   5a026c6a6232a605d4ea2688          root    wnut-lowercased-gazetteer-noproj-unif-0    wnut  ab7b1fed1f0206ad9ebf3887657f18051d99f643 2017-11-08 02:31:06.897  0.938391  0.391900
 ```
 
-```aidl
+```
 (xpt2.7) testuser:~$ xpctl results tagger test wnut --metric f1
 db connection successful with [host]: x.y.com, [port]: 27017
                           id      username                                      label dataset                                      sha1                    date        f1
@@ -127,7 +117,7 @@ db connection successful with [host]: x.y.com, [port]: 27017
 
 - **best**: shows the best (n) result for a task. 
 
-```aidl
+```
 xpctl > help best
 Usage: best [OPTIONS] TASK EVENT_TYPE DATASET METRIC
   Shows the best F1 score for event_type(tran/valid/test) on a particular
@@ -141,24 +131,19 @@ Options:
   --help       Show this message and exit.
 ```
 
-```aidl
-xpctl > best classify test sa180k macro_f1
-using metric: ['macro_f1']
-total 6 results found
-  username            label dataset                                      sha1                    date  macro_f1
-3     root  sa180k_fsz12357  sa180k  707bec2361d27981cb3362b7b379de41b21e6110 2017-09-08 20:02:18.905  0.738329
-xpctl > best classify test sa180k macro_f1 --n 2
-using metric: ['macro_f1']
-total 6 results found
-  username            label dataset                                      sha1                    date  macro_f1
-3     root  sa180k_fsz12357  sa180k  707bec2361d27981cb3362b7b379de41b21e6110 2017-09-08 20:02:18.905  0.738329
-1     root    sa180k_fsz135  sa180k  8dc68171bfadbbdc19a7af060e6e1ca41d9ad41a 2017-09-08 18:52:02.443  0.73824
 ```
+xpctl > best --n 3 classify test SST2 acc
+
+total 3 results found, showing best 3 results
+                         id  username                    label dataset                                      sha1                        date       acc
+2  5af34c9fb5536c53bb07bc46      None  Kim2014-SST2-TF-2epochs    SST2  8ab6ab6ee8fdf14b111223e2edf48750c30c7e51  2018-05-09T19:31:42.984408  0.875343
+0  5af36f9bb5536c60d1e2ccc1  dpressel  Kim2014-SST2-TF-2epochs    SST2  8ab6ab6ee8fdf14b111223e2edf48750c30c7e51  2018-05-09T22:00:49.195327  0.874794
+1  5af34c0bb5536c533c9b6ecc      None  Kim2014-SST2-TF-2epochs    SST2  8ab6ab6e```
 
 #### Updating the database
 
 - **updatelabel**: update the label for an experiment.
-```aidl
+```
 xpctl > help updatelabel
 Usage: updatelabel [OPTIONS] TASK ID LABEL
   Update the label for an experiment (identified by its id) for a task
@@ -167,7 +152,7 @@ Options:
 ```
 
 - **delete**: deletes a record from the database and the associated model file from model-checkpoints if it exists.
-```aidl
+```
 setting dbhost to xxx.yyy.com dbport to 27017
 db connection successful
 Usage: xpctl delete [OPTIONS] TASK ID
@@ -179,7 +164,7 @@ Options:
 
 - **putresult**: puts the result of an experiment in the database. Can optionally store the model files in a persistent model store (will automatically zip them) This is tested for `tensorflow` models, not `pytorch` ones yet. 
  
-```aidl
+```
 xpctl > help putresult
 Usage: putresult [OPTIONS] TASK CONFIG LOG LABEL
   Puts the results of an experiment on the database. Arguments:  task name,
@@ -199,7 +184,7 @@ Options:
 
 - **putmodel**: save model files in a persistent location. The location can be provided by the option -cstore, by default it is `/data/model-checkpoints` directory in your machine. This is tested for `tensorflow` models, not `pytorch` ones yet. 
 
-```aidl
+```
 xpctl > putmodel --help
 Usage: putmodel [OPTIONS] TASK ID CBASE
   Puts the model from an experiment in the model store and updates the
@@ -215,7 +200,7 @@ Options:
 ##### Exporting
 
 - **getmodelloc** : shows the model location for an id (**id, not SHA1**. An experiment can be run multiple times using the same config). 
-```aidl
+```
 xpctl > help modelloc
 Usage: xpctl getmodelloc [OPTIONS] TASK ID
   get the model location for a particluar task and record id
@@ -224,7 +209,7 @@ Options:
 ```
 
 - **config2json**
-```aidl
+```
 xpctl > help config2json
 Usage: config2json [OPTIONS] TASK SHA FILENAME
   Exports the config file for an experiment as a json file. Arguments:
@@ -237,7 +222,7 @@ Options:
 
 - **tasksummary**: provides a natural language summary for a task. 
 
-```aidl
+```
 xpctl > help tasksummary
 Usage: tasksummary [OPTIONS] TASK DATASET METRIC
   Provides a natural language summary for a task. This is almost equivalent
@@ -246,14 +231,14 @@ Options:
   --help  Show this message and exit.
 ```
 
-```aidl
+```
 xpctl > tasksummary classify sa180k macro_f1
 For dataset sa180k, the best f1 is 0.718 reported by root on 2017-09-08 17:24:32.963000. The sha1 for the config file is 6dac0ea88618ab67d6f5d690279c13f1ec305167.
 ```
 
 - **lbsummary**: provides a description of all tasks in the leaderboard. 
 
-```aidl
+```
 xpctl > lbsummary --help
 Usage: lbsummary [OPTIONS]
   Provides a summary of the leaderboard. Options: taskname. If you provide a
@@ -267,7 +252,7 @@ Options:
   --help       Show this message and exit.
 
 ```
-```aidl
+```
 xpctl > lbsummary --task tagger
 Task: [tagger]
 ---------------------------------------------------------------------------------------------
