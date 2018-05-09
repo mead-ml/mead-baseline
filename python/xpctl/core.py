@@ -1,226 +1,310 @@
 import os
 import shutil
 import subprocess
-
-import click
 import pandas as pd
 import pymongo
+import datetime
+import socket
+import json
+import hashlib
+import getpass
+import baseline
 from bson.objectid import ObjectId
 
-__all__ == [
-    "connect", "dbsetup", "cli_int", "get_modelloc_int", "get_metrics",
-    "generate_data_frame", "update_query", "update_projection", "bestn_results",
-    "results_int", "config2json_int", "best_int", "task_summary", "generate_info",
-    "get_git_revision_hash", "get_baseline_loc", "get_baseline_loc",
-    "get_baseline_sha1", "store_model"
-]
 
-def connect(host, port, user, passw):
-    client = None
-    if user and passw:
-        uri = "mongodb://{}:{}@{}:{}/test".format(user, passw, host, port)
-        client = pymongo.MongoClient(uri)
-    else:
-        client = pymongo.MongoClient(host, port)
-    if client is None:
-        print("can not connect to mongo at host: [{}], port [{}], " \
-        "username: [{}], password: [{}]".format(host, port, user, passw))
+def store_model(checkpoint_base, config_sha1, checkpoint_store, print_fn=print):
+    mdir, mbase = os.path.split(checkpoint_base)
+    mdir = mdir if mdir else "."
+    if not os.path.exists(mdir):
+        print_fn("no directory found for the model location: [{}], aborting command".format(mdir))
         return None
-    try:
-        dbnames = client.database_names()
-    except pymongo.errors.ServerSelectionTimeoutError:
-        print("can not get database from mongo at host: {}, port {}, " \
-        "connection timed out".format(host, port))
+
+    mfiles = ["{}/{}".format(mdir, x) for x in os.listdir(mdir) if x.startswith(mbase + "-") or
+              x.startswith(mbase + ".")]
+    if not mfiles:
+        print_fn("no model files found with base [{}] at location [{}], aborting command".format(mbase, mdir))
         return None
-    if "reporting_db" not in dbnames:
-        print("no database for results found")
-        return None
-    return client.reporting_db
+    model_loc_base = "{}/{}".format(checkpoint_store, config_sha1)
+    if not os.path.exists(model_loc_base):
+        os.makedirs(model_loc_base)
+    dirs = [int(x[:-4]) for x in os.listdir(model_loc_base) if x.endswith(".zip") and x[:-4].isdigit()]
+    # we expect dirs in numbers.
+    new_dir = "1" if not dirs else str(max(dirs) + 1)
+    model_loc = "{}/{}".format(model_loc_base, new_dir)
+    os.makedirs(model_loc)
+    for mfile in mfiles:
+        shutil.copy(mfile, model_loc)
+        print_fn("writing model file: [{}] to store: [{}]".format(mfile, model_loc))
+    print_fn("zipping model files")
+    shutil.make_archive(base_name=model_loc,
+                        format='zip',
+                        root_dir=model_loc_base,
+                        base_dir=new_dir)
+    shutil.rmtree(model_loc)
+    print_fn("zipped file written, model directory removed")
+    return model_loc + ".zip"
 
 
-dbhost = None
-dbport = None
-db = None
+class ExperimentRepo(object):
 
-events = {
-    "train": "train_events",
-    "test": "test_events",
-    "valid": "valid_events",
-    "dev": "valid_events",
-}
+    def __init__(self):
+        super(ExperimentRepo, self).__init__()
 
+    def get_task_names(self):
+        pass
 
-def dbsetup(tname):
-    if db is None:
-        click.echo("set up db connection using setupdb command")
-        return False
-    elif tname not in db.collection_names():
-        click.echo("no results for the specified task {}, use another task".format(tname))
-        return False
-    else:
-        return True
+    def has_task(self, task):
+        pass
 
+    def nbest_by_metric(self, uname, metric, dataset, tname, numresults, event_type, ascending):
+        pass
 
-def cli_int(dbhost, dbport, dbuser, dbpass):
-    global db
-    db = connect(dbhost, dbport, dbuser, dbpass)
-    return db
+    def config2json(self, task, sha):
+        pass
 
+    @staticmethod
+    def create_mongo_repo(host, port, user, passw):
+        return MongoRepo(host, port, user, passw)
 
-def get_modelloc_int(task, id):
-    if not dbsetup(task):
-        return None
-    coll = db[task]
-    query = {'_id': ObjectId(id)}
-    projection = {'checkpoint': 1}
-    results = [x.get('checkpoint', None) for x in list(coll.find(query, projection))]
-    results = [x for x in results if x]
-    if not results:
-        return None
-    return results[0]
+    def get_model_location(self, id, task):
+        pass
 
+    def get_results(self, user, metric, sort, dataset, task, event_type):
+        pass
 
-def get_metrics(list, event_type):
-    keys = []
-    for x in list:
-        if x[event_type]:
-            for k in x[event_type][0].keys():
-                keys.append(k)
-    keys = set(keys)
-    if 'tick_type' in keys: keys.remove("tick_type")
-    if 'tick' in keys: keys.remove("tick")
-    if 'phase' in keys: keys.remove("phase")
-    return keys
+    def get_info(self, task, event_types):
+        pass
+
+    def leaderboard_summary(self, task=None, event_types=None, print_fn=print):
+        pass
+
+    def get_label(self, id, task):
+        pass
+
+    def rename_label(self, id, task, new_label):
+        raise NotImplemented("Base ExperimentRepo events are immutable")
+
+    def rm(self, id, task, print_fn):
+        raise NotImplemented("Base ExperimentRepo tasks are immutable")
+
+    def put_model(self, id, task, checkpoint_base, checkpoint_store, print_fn=print):
+        pass
+
+    def put_result(self, task, config_obj, events_obj, **kwargs):
+        pass
 
 
-def generate_data_frame(coll, metrics, query, projection, event_type):
-    results = list(coll.find(query, projection))
-    if not results:
-        return pd.DataFrame()
+class MongoRepo(ExperimentRepo):
 
-    ms = list(set(metrics)) if metrics else list(get_metrics(results, event_type))
-    presults = []
-    for result in results:  # different experiments
-        for index in range(len(result[event_type])):  # train_event epoch 0,
-            # train_event epoch 1 etc, for event_type = test_event, there is only one event
-            data = []
-            for metric in ms:
-                data.append(result[event_type][index][metric])
-            presults.append(
-                [result['_id'], result['username'], result['label'], result['config']['dataset'], result['sha1'],
-                 result['date']] + data)
-    return pd.DataFrame(presults, columns=['id', 'username', 'label', 'dataset', 'sha1', 'date'] + ms)
-
-
-def update_query(q, uname, dataset):
-    query = q
-    if uname:
-        query.update({"username": {"$in": list(uname)}})
-    if dataset:
-        query.update({"config.dataset": dataset})
-    return query
-
-
-def update_projection(event_type):
-    projection = {"_id": 1, "sha1": 1, "label": 1, "username": 1, "config.dataset": 1, "date": 1}
-    projection.update({event_type: 1})
-    return projection
-
-
-def bestn_results(uname, metric, dataset, tname, numresults, event_type, ascending):
-    if not dbsetup(tname):
-        return None
-    else:
-        metrics = [metric]
-        click.echo("using metric: {}".format(metrics))
-        coll = db[tname]
-        query = update_query({}, uname, dataset)
-        projection = update_projection(event_type)
-        resultdframe = generate_data_frame(coll, metrics, query, projection, event_type)
-        if not resultdframe.empty:
-            resultdframe = resultdframe.sort_values(metrics, ascending=[ascending])[
-                           :min(int(numresults), resultdframe.shape[0])]
-            return resultdframe
+    def __init__(self, host, port, user, passw):
+        super(MongoRepo, self).__init__()
+        self.dbhost = host
+        if user and passw:
+            uri = "mongodb://{}:{}@{}:{}/test".format(user, passw, host, port)
+            client = pymongo.MongoClient(uri)
         else:
-            return None
+            client = pymongo.MongoClient(host, port)
+        if client is None:
+            s = "can not connect to mongo at host: [{}], port [{}], username: [{}], password: [{}]".format(host,
+                                                                                                           port,
+                                                                                                           user,
+                                                                                                           passw)
+            raise Exception(s)
+        try:
+            dbnames = client.database_names()
+        except pymongo.errors.ServerSelectionTimeoutError:
+            raise Exception("can not get database from mongo at host: {}, port {}, connection timed out".format(host,
+                                                                                                                port))
 
+        if "reporting_db" not in dbnames:
+            raise Exception("no database for results found")
+        self.db = client.reporting_db
 
-def results_int(user, metric, sort, dataset, task, event_type):
-    event_type = event_type.lower()
+    def put_result(self, task, config_obj, events_obj, **kwargs):
 
-    if not dbsetup(task):
+        now = datetime.datetime.utcnow().isoformat()
+        train_events = list(filter(lambda x: x['phase'] == 'Train', events_obj))
+        valid_events = list(filter(lambda x: x['phase'] == 'Valid', events_obj))
+        test_events = list(filter(lambda x: x['phase'] == 'Test', events_obj))
+
+        checkpoint_base = kwargs.get('checkpoint_base', None)
+        checkpoint_store = kwargs.get('checkpoint_store', None)
+        print_fn = kwargs.get('print_fn', print)
+        hostname = kwargs.get('hostname', socket.gethostname())
+        username = kwargs.get('username', getpass.getuser())
+        config_sha1 = hashlib.sha1(json.dumps(config_obj).encode('utf-8')).hexdigest()
+        label = kwargs.get("label", id)
+
+        post = {
+            "config": config_obj,
+            "train_events": train_events,
+            "valid_events": valid_events,
+            "test_events": test_events,
+            "username": username,
+            "hostname": hostname,
+            "date": now,
+            "label": label,
+            "sha1": config_sha1,
+            "version": baseline.__version__
+        }
+
+        if checkpoint_base:
+            model_loc = store_model(checkpoint_base, config_sha1, checkpoint_store)
+            if model_loc is not None:
+                post.update({"checkpoint": "{}:{}".format(hostname, os.path.abspath(model_loc))})
+            else:
+                print_fn("model could not be stored, see previous errors")
+
+        if task in self.db.collection_names():
+            print_fn("updating results for existing task [{}] in host [{}]".format(task, self.dbhost))
+        else:
+            print_fn("creating new task [{}] in host [{}]".format(task, self.dbhost))
+        coll = self.db[task]
+        result = coll.insert_one(post)
+
+        print_fn("results updated, the new results are stored with the record id: {}".format(result.inserted_id))
+        return result.inserted_id
+
+    def has_task(self, task):
+        return task in self.get_task_names()
+
+    def put_model(self, id, task, checkpoint_base, checkpoint_store, print_fn=print):
+        coll = self.db[task]
+        query = {'_id': ObjectId(id)}
+        projection = {'sha1': 1}
+        results = list(coll.find(query, projection))
+        if not results:
+            print_fn("no sha1 for the given id found, returning.")
+            return False
+        sha1 = results[0]['sha1']
+        model_loc = store_model(checkpoint_base, sha1, checkpoint_store, print_fn)
+        if model_loc is not None:
+            coll.update_one({'_id': ObjectId(id)}, {'$set': {'checkpoint': model_loc}}, upsert=False)
+        return model_loc
+
+    def get_label(self, id, task):
+        coll = self.db[task]
+        label = coll.find_one({'_id': ObjectId(id)}, {'label': 1})["label"]
+        return label
+
+    def rename_label(self, id, task, new_label):
+        coll = self.db[task]
+        prev_label = coll.find_one({'_id': ObjectId(id)}, {'label': 1})["label"]
+        coll.update({'_id': ObjectId(id)}, {'$set': {'label': new_label}}, upsert=False)
+        changed_label = coll.find_one({'_id': pymongo.ObjectId(id)}, {'label': 1})["label"]
+        return prev_label, changed_label
+
+    def rm(self, id, task, print_fn):
+        coll = self.db[task]
+        prev = coll.find_one({'_id': ObjectId(id)}, {'label': 1})
+        if prev is None:
+            return
+
+        model_loc = self.get_model_location(id, task)
+        if model_loc is not None:
+            if os.path.exists(model_loc):
+                os.remove(model_loc)
+
+            coll.remove({'_id': ObjectId(id)})
+            assert coll.find_one({'_id': ObjectId(id)}) is None
+            return True
+            print_fn("record {} deleted successfully from database {}".format(id, task))
+        return False
+
+    def _get_metrics(self, xs, event_type):
+        keys = []
+        for x in xs:
+            if x[event_type]:
+                for k in x[event_type][0].keys():
+                    keys.append(k)
+        keys = set(keys)
+        if 'tick_type' in keys:
+            keys.remove("tick_type")
+        if 'tick' in keys:
+            keys.remove("tick")
+        if 'phase' in keys:
+            keys.remove("phase")
+        return keys
+
+    def _generate_data_frame(self, coll, metrics, query, projection, event_type):
+        all_results = list(coll.find(query, projection))
+        if not all_results:
+            return pd.DataFrame()
+
+        results = []
+        ms = list(set(metrics)) if metrics else list(self._get_metrics(results, event_type))
+        for result in all_results:  # different experiments
+            for index in range(len(result[event_type])):  # train_event epoch 0,
+                # train_event epoch 1 etc, for event_type = test_event, there is only one event
+                data = []
+                for metric in ms:
+                    data.append(result[event_type][index][metric])
+                results.append(
+                    [result['_id'], result['username'], result['label'], result['config']['dataset'], result['sha1'],
+                     result['date']] + data)
+        return pd.DataFrame(results, columns=['id', 'username', 'label', 'dataset', 'sha1', 'date'] + ms)
+
+    def _update_query(self, q, uname, dataset):
+        query = q
+        if uname:
+            query.update({"username": {"$in": list(uname)}})
+        if dataset:
+            query.update({"config.dataset": dataset})
+        return query
+
+    def _update_projection(self, event_type):
+        projection = {"_id": 1, "sha1": 1, "label": 1, "username": 1, "config.dataset": 1, "date": 1}
+        projection.update({event_type: 1})
+        return projection
+
+    def nbest_by_metric(self, uname, metric, dataset, tname, num_results, event_type, ascending):
+        metrics = [metric]
+        coll = self.db[tname]
+        query = self._update_query({}, uname, dataset)
+        projection = self._update_projection(event_type)
+        result_frame = self._generate_data_frame(coll, metrics, query, projection, event_type)
+        if not result_frame.empty:
+            return result_frame.sort_values(metrics,
+                                            ascending=[ascending])[:min(int(num_results), result_frame.shape[0])]
         return None
-    elif event_type not in events:
-        click.echo("we do not have results for the event type: {}".format(event_type))
-    else:
+
+    def get_results(self, user, metric, sort, dataset, task, event_type):
+        event_type = event_type.lower()
         metrics = list(metric)
-        coll = db[task]
-        query = update_query({}, user, dataset)
-        projection = update_projection(event_type=events[event_type])
-        resultdframe = generate_data_frame(coll, metrics, query, projection, event_type=events[event_type])
+        coll = self.db[task]
+        query = self._update_query({}, user, dataset)
+        projection = self._update_projection(event_type=event_type)
+        result_frame = self._generate_data_frame(coll, metrics, query, projection, event_type=event_type)
         if len(metric) == 1:
             metric = metric[0]
             if metric == "avg_loss" or metric == "perplexity":
-                resultdframe = resultdframe.sort_values(metric, ascending=True)
+                result_frame = result_frame.sort_values(metric, ascending=True)
             else:
-                resultdframe = resultdframe.sort_values(metric, ascending=False)
-        if sort:
-            if sort == "avg_loss" or sort == "perplexity":
-                resultdframe = resultdframe.sort_values(sort, ascending=True)
-            else:
-                resultdframe = resultdframe.sort_values(sort, ascending=False)
-        if resultdframe is None:
-            return None
-        elif not resultdframe.empty:
-            return resultdframe
-        else:
-            return None
+                result_frame = result_frame.sort_values(metric, ascending=False)
+            if sort:
+                if sort == "avg_loss" or sort == "perplexity":
+                    result_frame = result_frame.sort_values(sort, ascending=True)
+                else:
+                    result_frame = result_frame.sort_values(sort, ascending=False)
 
-
-def config2json_int(task, sha):
-    """Exports the config file for an experiment as a json file. Arguments: taskname,
-    experiment sha1, output file path"""
-    if not dbsetup(task):
+        if not result_frame.empty:
+            return result_frame
         return None
-    else:
-        coll = db[task]
-        j = coll.find_one({"sha1": sha}, {"config": 1})["config"]
-        if not j:
-            return None
-        else:
-            return j
 
-
-def best_int(user, metric, dataset, n, task, event_type):
-    """Shows the best F1 score for event_type(tran/valid/test) on a particular task (classify/ tagger) on
-    a particular dataset (SST2, wnut) using a particular metric. Default behavior: The best result for
-    **All** users available for the task. Optionally supply number of results (n-best), user(s) and metric(only ONE)"""
-    event_type = event_type.lower()
-
-    if event_type not in events:
-        return None
-    else:
-        if metric == "avg_loss" or metric == "perplexity":
-            return bestn_results(user, metric, dataset, task, n, events[event_type], ascending=True)
-        else:
-            return bestn_results(user, metric, dataset, task, n, events[event_type], ascending=False)
-
-
-def task_summary(task, dataset, metric):
-    if not dbsetup(task):
-        return None
-    else:
+    def task_summary(self, task, dataset, metric, event_type):
         metrics = [metric]
-        coll = db[task]
-        query = update_query({}, [], dataset)
-        projection = update_projection(event_type=events["test"])
-        resultdframe = generate_data_frame(coll, metrics, query, projection, event_type=events["test"])
-        if not resultdframe.empty:
-            datasets = resultdframe.dataset.unique()
+
+        coll = self.db[task]
+        query = self._update_query({}, [], dataset)
+        projection = self._update_projection(event_type=event_type)
+        result_frame = self._generate_data_frame(coll, metrics, query, projection, event_type=event_type)
+        if not result_frame.empty:
+            datasets = result_frame.dataset.unique()
             if dataset not in datasets:
-                click.echo("no result found for the requested dataset: {}".format(dataset))
-                return
-            dsr = resultdframe[resultdframe.dataset == dataset].sort_values(metric, ascending=False)
+                return None
+            dsr = result_frame[result_frame.dataset == dataset].sort_values(metric, ascending=False)
+            print("___")
+            print(dsr)
             result = dsr[metric].iloc[0]
             user = dsr.username.iloc[0]
             sha1 = dsr.sha1.iloc[0]
@@ -231,29 +315,65 @@ def task_summary(task, dataset, metric):
         else:
             return None
 
+    def config2json(self, task, sha):
+        coll = self.db[task]
+        j = coll.find_one({"sha1": sha}, {"config": 1})["config"]
+        if not j:
+            return None
+        else:
+            return j
 
-def generate_info(coll):
-    """we will show what datasets are available for this task, what are the metrics and which username and hostnames
-    have participated in this."""
-    event_types = [events["train"], events["test"], events["valid"]]
+    def get_task_names(self):
+        return self.db.collection_names()
 
-    q = update_query({}, None, None)
-    p = {'config.dataset': 1}
-    datasets = list(set([x['config']['dataset'] for x in list(coll.find(q, p))]))
-    store = []  #
+    def get_model_location(self, id, task):
+        coll = self.db[task]
+        query = {'_id': ObjectId(id)}
+        projection = {'checkpoint': 1}
+        results = [x.get('checkpoint', None) for x in list(coll.find(query, projection))]
+        results = [x for x in results if x]
+        if not results:
+            return None
+        return results[0]
 
-    for dataset in datasets:
-        q = update_query({}, None, dataset)
-        for event_type in event_types:
-            p = update_projection(event_type)
-            results = list(coll.find(q, p))
-            metrics = get_metrics(results, event_type)
-            for result in results:  # different experiments
-                store.append([result['username'], result['config']['dataset'], event_type, ",".join(metrics)])
+    def get_info(self, task, event_types):
+        """we will show what datasets are available for this task, what are the metrics and which username and hostnames
+        have participated in this."""
+        coll = self.db[task]
+        q = self._update_query({}, None, None)
+        p = {'config.dataset': 1}
+        datasets = list(set([x['config']['dataset'] for x in list(coll.find(q, p))]))
+        store = []  #
 
-    df = pd.DataFrame(store, columns=['user', 'dataset', 'event_type', 'metrics'])
-    return df.groupby(['user', 'dataset', 'event_type', 'metrics']).size().reset_index() \
-        .rename(columns={0: 'num_experiments'})
+        for dataset in datasets:
+            q = self._update_query({}, None, dataset)
+            for event_type in event_types:
+                p = self._update_projection(event_type)
+                results = list(coll.find(q, p))
+                metrics = self._get_metrics(results, event_type)
+                for result in results:  # different experiments
+                    store.append([result['username'], result['config']['dataset'], event_type, ",".join(metrics)])
+
+        df = pd.DataFrame(store, columns=['user', 'dataset', 'event_type', 'metrics'])
+        return df.groupby(['user', 'dataset', 'event_type', 'metrics']).size().reset_index() \
+            .rename(columns={0: 'num_experiments'})
+
+    def leaderboard_summary(self, task=None, event_types=None, print_fn=print):
+
+        if task:
+            print_fn("Task: [{}]".format(task))
+            print_fn("-" * 93)
+            print_fn(self.get_info(task, event_types))
+        else:
+            tasks = self.db.collection_names()
+            if "system.indexes" in tasks:
+                tasks.remove("system.indexes")
+            print_fn("There are {} tasks: {}".format(len(tasks), tasks))
+            for task in tasks:
+                print_fn("-" * 93)
+                print_fn("Task: [{}]".format(task))
+                print_fn("-" * 93)
+                print_fn(self.get_info(task, event_types))
 
 
 def get_git_revision_hash(baselinepath):
@@ -267,36 +387,3 @@ def get_baseline_loc():  # assumes baseline is in pythonpath
 def get_baseline_sha1():
     return get_git_revision_hash(get_baseline_loc()).strip().decode("utf-8")
 
-
-def store_model(cbase, configsha1, cstore):
-    mdir, mbase = os.path.split(cbase)
-    mdir = mdir if mdir else "."
-    if not os.path.exists(mdir):
-        click.echo("no directory found for the model location: [{}], aborting command".format(mdir))
-        return None
-
-    mfiles = ["{}/{}".format(mdir, x) for x in os.listdir(mdir) if x.startswith(mbase + "-") or
-              x.startswith(mbase + ".")]
-    if not mfiles:
-        click.echo("no model files found with the model base [{}] at the model location [{}], aborting command"
-                   .format(mbase, mdir))
-        return None
-    modellocbase = "{}/{}".format(cstore, configsha1)
-    if not os.path.exists(modellocbase):
-        os.makedirs(modellocbase)
-    dirs = [int(x[:-4]) for x in os.listdir(modellocbase) if x.endswith(".zip") and x[:-4].isdigit()]
-    # we expect dirs in numbers.
-    newdir = "1" if not dirs else str(max(dirs) + 1)
-    modelloc = "{}/{}".format(modellocbase, newdir)
-    os.makedirs(modelloc)
-    for mfile in mfiles:
-        shutil.copy(mfile, modelloc)
-        click.echo("writing model file: [{}] to store: [{}]".format(mfile, modelloc))
-    click.echo("zipping model files")
-    shutil.make_archive(base_name=modelloc,
-                        format='zip',
-                        root_dir=modellocbase,
-                        base_dir=newdir)
-    shutil.rmtree(modelloc)
-    click.echo("zipped file written, model directory removed")
-    return modelloc + ".zip"
