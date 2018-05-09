@@ -1,8 +1,8 @@
 import json
 import os
 import sys
-
 import pandas as pd
+import getpass
 from click_shell import shell
 import click
 from xpctl.core import ExperimentRepo
@@ -256,7 +256,7 @@ def delete(id, task):
 
 # Put results in database
 @cli.command()
-@click.option("--user", help="username")
+@click.option("--user", help="username", default=getpass.getuser())
 @click.option("--cbase", help="path to the base structure for the model checkpoint files:"
                               "such as ../tagger/tagger-model-tf-11967 or /home/ds/tagger/tagger-model-tf-11967")
 @click.option("--cstore", default="/data/model-checkpoints", help="location of the model checkpoint store")
@@ -290,7 +290,7 @@ def putresult(user, log, task, config, label, cbase, cstore):
 @click.argument('cbase')
 def putmodel(task, id, cbase, cstore):
 
-    model_loc = RepoManager.get().put_model(task, id, cbase, cstore, click.echo)
+    model_loc = RepoManager.get().put_model(id, task, cbase, cstore, click.echo)
     if model_loc is not None:
         click.echo("database updated with {}".format(model_loc))
         return
