@@ -1,6 +1,6 @@
+from __future__ import print_function
 import os
 import shutil
-from __future__ import print_function
 import pandas as pd
 import pymongo
 import datetime
@@ -300,18 +300,17 @@ class MongoRepo(ExperimentRepo):
         coll = self.db[task]
         prev = coll.find_one({'_id': ObjectId(id)}, {'label': 1})
         if prev is None:
-            return
+            return False
 
         model_loc = self.get_model_location(id, task)
-        if model_loc is not None:
-            if os.path.exists(model_loc):
+        if model_loc is not None and os.path.exists(model_loc):
                 os.remove(model_loc)
-
-            coll.remove({'_id': ObjectId(id)})
-            assert coll.find_one({'_id': ObjectId(id)}) is None
-            return True
-            print_fn("record {} deleted successfully from database {}".format(id, task))
-        return False
+        else:
+            print_fn("No model stored for this record. Only purging the database.")
+        coll.remove({'_id': ObjectId(id)})
+        assert coll.find_one({'_id': ObjectId(id)}) is None
+        print_fn("record {} deleted successfully from database {}".format(id, task))
+        return True
 
     def _get_metrics(self, xs, event_type):
         keys = []

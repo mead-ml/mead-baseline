@@ -248,7 +248,7 @@ def delete(id, task):
         "from {} database. We will also delete the model file if it exists.".format(prev, task))
 
     if click.confirm('Do you want to continue?'):
-        if RepoManager.rm(task, id) is True:
+        if RepoManager.get().rm(id, task, click.echo) is True:
             click.echo("record {} deleted successfully from database {}".format(id, task))
             return
     click.echo("no record deleted")
