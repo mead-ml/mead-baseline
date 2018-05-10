@@ -239,7 +239,7 @@ class Tagger(object):
         indices = self.predict({'x': xs, 'xch': xs_ch, 'lengths': lengths})[0]
         output = []
         for j in range(lengths[0]):
-            output.append((tokens[j], label_vocab[indices[j]]))
+            output.append((tokens[j], label_vocab[indices[j].item()]))
         return output
 
     def get_vocab(self, vocab_type='word'):
