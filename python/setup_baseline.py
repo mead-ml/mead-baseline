@@ -79,8 +79,6 @@ def main():
         install_requires=[
             'numpy',
             'six',
-            'prompt_toolkit',
-            'portalocker',
             'requests',
         ],
         entry_points={

@@ -8,7 +8,6 @@ try:
     from baseline.reporting import *
     from baseline.model import *
     from baseline.train import *
-    from baseline.repl import *
 except ImportError:
     pass
 from baseline.version import __version__
