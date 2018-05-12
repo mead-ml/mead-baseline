@@ -142,4 +142,4 @@ Creating an embedding file is not necessary, if you do not provide one we will i
 
 ```
 
-An example of this is provided in gazetter model (one that includes gazetter infomration in NER tagging): [the code](../python/addons/tagger_gazetteer.py) and the [JSON file](../python/mead/configs/wnut-gazetteer.json). Including gazetteers does improve the result on wnut17 dataset.
+An example of this is provided in gazetter model (one that includes gazetter information in NER tagging): [the code](../python/addons/tagger_gazetteer.py) and the [JSON file](../python/mead/config/wnut-gazetteer.json). Including gazetteers does improve the result on wnut17 dataset.
