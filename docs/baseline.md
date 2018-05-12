@@ -27,6 +27,7 @@ The Baseline module has dependencies on:
 - `six`
 - `requests`
 - for visualization: `tensorboard_logger` and/or `visdom` are optional. To enable reporting with `visdom`/`tensorboard_logger`, just pass `--visdom 1`/`--tensorboard 1` in any command line program. 
+- `PyYAML` is an optional dependency, which, if installed, allows [mead](mead.md) configurations to be provided with YAML instead of JSON
 - When the GPU is used, the code assumes that `cudnn` is available and installed. This is critical for good performance.
 
 ## Baseline as an API

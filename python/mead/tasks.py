@@ -7,7 +7,7 @@ import mead.utils
 import os
 from mead.downloader import EmbeddingDownloader, DataDownloader, read_json
 from mead.mime_type import mime_type
-from baseline.utils import export
+from baseline.utils import export, read_config_file
 
 __all__ = []
 exporter = export(__all__)
@@ -62,7 +62,7 @@ class Task(object):
         :return:
         """
         datasets_set = mead.utils.index_by_label(datasets_index)
-        self.config_params = self._read_config(config_file)
+        self.config_params = read_config_file(config_file)
         self._setup_task()
         self._configure_reporting()
         self.dataset = datasets_set[self.config_params['dataset']]
@@ -169,11 +169,6 @@ class Task(object):
         for key, value in embeddings.items():
             out_vocabs[key] = value.vocab
         return embeddings, out_vocabs
-
-    @staticmethod
-    def _read_config(config):
-        with open(config) as f:
-            return json.load(f)
 
     @staticmethod
     def _log2json(log):

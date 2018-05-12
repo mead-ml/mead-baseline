@@ -6,9 +6,8 @@ import shutil
 import requests
 import os
 import re
-import json
 from mead.mime_type import mime_type
-from baseline.utils import export
+from baseline.utils import export, read_json, write_json
 
 __all__ = []
 exporter = export(__all__)
@@ -167,21 +166,6 @@ def is_dir_correct(dir_loc, dataset_desc, data_dcache, key, ignore_file_check=Fa
         if not is_file_correct(f, key, data_dcache):
             return False
     return True
-
-
-@exporter
-def read_json(filepath):
-    if not os.path.exists(filepath):
-        return {}
-    with open(filepath) as f:
-        j_con = json.load(f)
-    return j_con
-
-
-@exporter
-def write_json(content, filepath):
-    with open(filepath, "w") as f:
-        json.dump(content, f, indent=True)
 
 
 @exporter

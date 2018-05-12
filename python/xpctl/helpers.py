@@ -12,8 +12,3 @@ def log2json(log_file):
             x = line.replace("'", '"')
             s.append(json.loads(x))
     return s
-
-
-def read_config(config):
-    with open(config) as f:
-        return json.load(f)

@@ -7,6 +7,7 @@ from click_shell import shell
 import click
 from xpctl.core import ExperimentRepo
 from xpctl.helpers import *
+from baseline.utils import read_json, read_config_file
 pd.set_option('display.expand_frame_repr', False)
 
 
@@ -41,10 +42,9 @@ EVENT_TYPES = {
 
 
 # set up env
-def read_cred(config_json):
-    with open(config_json) as f:
-        j = json.load(f)
+def read_cred(config_file):
     try:
+        j = read_json(config_file, None)
         return j.get('dbhost', None), j.get('dbport', None), j.get('user', None), j.get('passwd', None)
     except IOError:
         return None, None, None, None
@@ -275,7 +275,7 @@ def putresult(user, log, task, config, label, cbase, cstore):
         return
 
     config_file = config
-    config_mem = read_config(config_file)
+    config_mem = read_config_file(config_file)
     events_mem = log2json(logf)
 
     RepoManager.get().put_result(task, config_mem, events_mem,

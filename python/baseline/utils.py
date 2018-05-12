@@ -1,10 +1,10 @@
 import os
 import sys
-import time
 import importlib
 from functools import partial, update_wrapper, wraps
 import numpy as np
 import addons
+import json
 
 __all__ = []
 
@@ -63,6 +63,41 @@ def str2bool(v):
 def lowercase(x):
     return x.lower()
 
+
+@exporter
+def read_json(filepath, default_value={}):
+    """Read a JSON file in.  If no file is found and default value is set, return that instead.  Otherwise error
+
+    :param filepath: A file to load
+    :param default_value: If the file doesnt exist, an alternate object to return, or if None, throw FileNotFoundError
+    :return: A JSON object
+    """
+    if not os.path.exists(filepath):
+        if default_value is None:
+            raise FileNotFoundError('No file [] found'.format(filepath))
+        return default_value
+    with open(filepath) as f:
+        return json.load(f)
+
+
+@exporter
+def read_config_file(config_file):
+    """Read a config file. This method optionally supports YAML, if the dependency was already installed.  O.W. JSON plz
+
+    :param config_file: (``str``) A path to a config file which should be a JSON file, or YAML if pyyaml is installed
+    :return: (``dict``) An object
+    """
+    with open(config_file) as f:
+        if config_file.endswith('.yml'):
+            import yaml
+            return yaml.load(f)
+        return json.load(f)
+
+
+@exporter
+def write_json(content, filepath):
+    with open(filepath, "w") as f:
+        json.dump(content, f, indent=True)
 
 @exporter
 def import_user_module(module_type, model_type):
