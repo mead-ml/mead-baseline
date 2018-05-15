@@ -445,6 +445,10 @@ class TSVSeqLabelReader(SeqLabelReader):
         self.do_chars = do_chars
 
     @staticmethod
+    def splits(text):
+        return list(filter(lambda s: len(s) != 0, re.split('\s+', text)))
+
+    @staticmethod
     def do_clean(l):
         l = l.lower()
         l = re.sub(r"[^A-Za-z0-9(),!?\'\`]", " ", l)
@@ -591,7 +595,6 @@ class TSVSeqLabelReader(SeqLabelReader):
         return baseline.data.SeqLabelDataFeed(baseline.data.SeqLabelExamples(examples, do_shuffle=shuffle, do_sort=do_sort),
                                               batchsz=batchsz, shuffle=shuffle,
                                               vec_alloc=self.vec_alloc, src_vec_trans=self.src_vec_trans)
-
 
 @exporter
 def create_pred_reader(mxlen, zeropadding, clean_fn, vec_alloc, src_vec_trans, **kwargs):

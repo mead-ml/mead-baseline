@@ -222,7 +222,10 @@ class ClassifierTask(Task):
                 import baseline.keras.classify as classify
             if backend == 'dynet':
                 print('Dynet backend')
+                if 'autobatchsz' in self.config_params['train']:
+                    self.config_params['model']['batched'] = False
                 import baseline.dy.classify as classify
+                from baseline.data import reverse_2nd as rev2nd
             else:
                 print('TensorFlow backend')
                 import baseline.tf.classify as classify

@@ -14,12 +14,13 @@ class WordClassifierBase(Classifier):
             self,
             embeddings, labels,
             finetune=True, dense=False,
-            dropout=0.5,
+            dropout=0.5, batched=False,
             **kwargs
     ):
         super(WordClassifierBase, self).__init__()
         self._pc = dy.ParameterCollection()
 
+        self.batched = batched
         self.pdrop = dropout
         self.train = True
 
@@ -29,7 +30,7 @@ class WordClassifierBase(Classifier):
 
         self.embed = Embedding(
             vsz, dsz, self.pc,
-            embeddings.weights, finetune, dense
+            embeddings.weights, finetune, dense, self.batched
         )
 
         self.labels = labels
@@ -45,14 +46,19 @@ class WordClassifierBase(Classifier):
 
     def __str__(self):
         str_ = []
-        for x in chain(self.pc.lookup_parameters_list(), self.pc.parameters_list()):
-            str_.append(f"{x.name()}: {x.shape()}")
-        return '\n'.join(str_)
+        for p in chain(self.pc.lookup_parameters_list(), self.pc.parameters_list()):
+            str_.append("{}: {}".format(p.name(), p.shape()))
+        str_ = '\n'.join(str_)
+        if self.batched:
+            return "Batched Model: \n{}".format(str_)
+        return str_
 
     def make_input(self, batch_dict):
         x = batch_dict['x']
         y = batch_dict['y']
-        return x.T, y.T
+        if self.batched:
+            return x.T, y.T
+        return x[0], y[0]
 
     def forward(self, input_):
         embedded = self.embed(input_)
@@ -61,7 +67,9 @@ class WordClassifierBase(Classifier):
         return self.output(stacked)
 
     def loss(self, input_, y):
-        return dy.pickneglogsoftmax_batch(input_, y)
+        if self.batched:
+            return dy.pickneglogsoftmax_batch(input_, y)
+        return dy.pickneglogsoftmax(input_, y)
 
     def dropout(self, input_):
         if self.train:
@@ -109,7 +117,7 @@ class ConvModel(WordClassifierBase):
         kwargs['dense'] = True
         super(ConvModel, self).__init__(*args, **kwargs)
 
-    def _init_pool(self, dsz, filtsz=(2, 3), cmotsz=128, **kwargs):
+    def _init_pool(self, dsz, filtsz, cmotsz, **kwargs):
         convs = []
         for fsz in filtsz:
             convs.append(Convolution1d(fsz, cmotsz, dsz, self.pc))
@@ -125,7 +133,9 @@ class ConvModel(WordClassifierBase):
 
 class LSTMModel(WordClassifierBase):
 
-    def _init_pool(self, dsz, hsz=100, layers=1, **kwargs):
+    def _init_pool(self, dsz, hsz=None, layers=1, **kwargs):
+        if hsz is None:
+            hsz = kwargs.get('cmotsz', 100)
         return hsz, LSTM(hsz, dsz, self.pc, layers=layers)
 
 class NBowModel(WordClassifierBase):

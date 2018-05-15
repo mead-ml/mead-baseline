@@ -4,7 +4,7 @@ def Linear(osz, isz, pc, name="Linear"):
     weight = pc.add_parameters((osz, isz), name="{}Weight".format(name))
     bias = pc.add_parameters(osz, name="{}Bias".format(name))
 
-    def linear(input_: dy.Expression):
+    def linear(input_):
         output = weight * input_ + bias
         return output
 

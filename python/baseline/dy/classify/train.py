@@ -6,8 +6,8 @@ from baseline.train import EpochReportingTrainer, create_trainer
 import dynet as dy
 import numpy as np
 
-def _add_to_cm(cm, y, preds):
-    best = np.argmax(preds, axis=0)
+def _add_to_cm(cm, y, preds, axis=0):
+    best = np.argmax(preds, axis=axis)
     best = np.reshape(best, y.shape)
     cm.add_batch(y, best)
 
@@ -36,11 +36,15 @@ class ClassifyTrainerDynet(EpochReportingTrainer):
             self.optimizer = dy.MomentumSGDTrainer(model.pc, learning_rate=eta, mom=mom)
         self.optimizer.set_clip_threshold(clip)
 
-    def _test(self, loader):
-        total_loss = 0
+    def _update(self, loss):
+        loss.backward()
+        self.optimizer.update()
+
+    def _step(self, loader, update):
         steps = len(loader)
         pg = create_progress_bar(steps)
         cm = ConfusionMatrix(self.labels)
+        total_loss = 0
 
         for batch_dict in pg(loader):
             dy.renew_cg()
@@ -50,31 +54,57 @@ class ClassifyTrainerDynet(EpochReportingTrainer):
             loss = dy.sum_batches(losses)
             total_loss += loss.npvalue().item()
             _add_to_cm(cm, ys, preds.npvalue())
+            update(loss)
 
         metrics = cm.get_all_metrics()
         metrics['avg_loss'] = total_loss / float(steps)
         return metrics
 
+
+    def _test(self, loader):
+        return self._step(loader, lambda x: None)
 
     def _train(self, loader):
+        return self._step(loader, self._update)
+
+class ClassifyTrainerAutobatch(ClassifyTrainerDynet):
+    def __init__(self, model, autobatchsz=1, **kwargs):
+        self.autobatchsz = autobatchsz
+        print(f"Autobatch Size: {self.autobatchsz}")
+        super(ClassifyTrainerAutobatch, self).__init__(model, **kwargs)
+
+    def _step(self, loader, update):
         steps = len(loader)
         pg = create_progress_bar(steps)
         cm = ConfusionMatrix(self.labels)
         total_loss = 0
+        i = 1
+        preds, losses, ys = [], [], []
         for batch_dict in pg(loader):
-            dy.renew_cg()
-            xs, ys = self.model.make_input(batch_dict)
-            preds = self.model.forward(xs)
-            losses = self.model.loss(preds, ys)
-            loss = dy.sum_batches(losses)
-            total_loss += loss.npvalue().item()
-            _add_to_cm(cm, ys, preds.npvalue())
-            loss.backward()
-            self.optimizer.update()
+            x, y = self.model.make_input(batch_dict)
+            pred = self.model.forward(x)
+            preds.append(pred)
+            loss = self.model.loss(pred, y)
+            losses.append(loss)
+            ys.append(y)
+            if i % self.autobatchsz == 0:
+                loss = dy.esum(losses)
+                preds = dy.concatenate_cols(preds)
+                total_loss += loss.npvalue().item()
+                _add_to_cm(cm, np.array(ys), preds.npvalue())
+                update(loss)
+                preds, losses, ys = [], [], []
+            i += 1
+        loss = dy.esum(losses)
+        preds = dy.concatenate_cols(preds)
+        total_loss += loss.npvalue().item()
+        _add_to_cm(cm, np.array(ys), preds.npvalue())
+        update(loss)
 
         metrics = cm.get_all_metrics()
         metrics['avg_loss'] = total_loss / float(steps)
         return metrics
+
 
 def fit(
         model,
@@ -84,6 +114,7 @@ def fit(
         reporting=basic_reporting,
         **kwargs
 ):
+    autobatchsz = kwargs.get('autobatchsz', 1)
     model_file = get_model_file(kwargs, 'classify', 'dynet')
     if do_early_stopping:
         patience = kwargs.get('patience', epochs)
@@ -92,7 +123,10 @@ def fit(
     reporting_fns = listify(reporting)
     print('reporting', reporting_fns)
 
-    trainer = create_trainer(ClassifyTrainerDynet, model, **kwargs)
+    if autobatchsz != 1:
+        trainer = create_trainer(ClassifyTrainerAutobatch, model, **kwargs)
+    else:
+        trainer = create_trainer(ClassifyTrainerDynet, model, **kwargs)
 
     max_metric = 0
     last_improved = 0
@@ -120,5 +154,8 @@ def fit(
     if es is not None:
         print('Reloading best checkpoint')
         model = model.load(model_file)
-        trainer = create_trainer(ClassifyTrainerDynet, model, **kwargs)
+        if autobatchsz != 1:
+            trainer = create_trainer(ClassifyTrainerAutobatch, model, **kwargs)
+        else:
+            trainer = create_trainer(ClassifyTrainerDynet, model, **kwargs)
         trainer.test(es, reporting_fns, phase='Test')
