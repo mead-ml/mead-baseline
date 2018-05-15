@@ -220,6 +220,9 @@ class ClassifierTask(Task):
             if backend == 'keras':
                 print('Keras backend')
                 import baseline.keras.classify as classify
+            if backend == 'dynet':
+                print('Dynet backend')
+                import baseline.dy.classify as classify
             else:
                 print('TensorFlow backend')
                 import baseline.tf.classify as classify
