@@ -16,7 +16,7 @@ After an experiment is done, use `xpctl` to report the results to a mongodb serv
 
 ### Installation
 
-In the `xpctl` dir, run `pip install -e`. Before installation, you can create a file `xpctlcred.json` at your `HOME` directory if you do not want to pass the parameters everytime you start the command. The file should look like this:
+In the `python` dir, run `./install_dev.sh xpctl`. Before installation, you can create a file `xpctlcred.json` at your `HOME` directory if you do not want to pass the parameters everytime you start the command. The file should look like this:
 
 ```
 {
