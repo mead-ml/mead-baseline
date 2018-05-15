@@ -25,6 +25,10 @@ The workflow for developing a deep learning model using baseline is simple:
 
 Additionally, the base models provided by the library can be [exported from saved checkpoints](docs/export.md) directly into [TensorFlow Serving](https://www.tensorflow.org/serving/) for deployment in a production environment. [The framework can be run within a Docker container](docs/docker.md) to reduce the installation complexity and to isolate experiment configurations and variants. It is actively maintained by a team of core developers and accepts public contributions.
 
+#### Installation
+
+Baseline can be installed as a python package with the command `./install_dev.sh baseline`. 
+
 #### A Note About Versions
 
 Deep Learning Frameworks are evolving quickly, and changes are not always backwards compatible.  We recommend recent versions of each framework.  Baseline is known to work on most versions of TensorFlow, and is currently being run on versions between 1.5 and 1.7.  PyTorch 0.4 is a major departure from 0.3, and we felt that maintaining both versions would be counter-productive to the goals of this project.  We recently migrated Baseline to 0.4.  There is an `r0.1` branch of Baseline that does work with 0.3, but its development is not active.

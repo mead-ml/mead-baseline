@@ -10,8 +10,8 @@ RUN apt-get update && \
     jupyter nbextension enable --py widgetsnbextension
 
 COPY python /baseline/python
-COPY xpctl xpctl
-RUN pip install -e xpctl
+COPY docs /baseline/docs
+RUN  cd /baseline/python/ && ./install_dev.sh xpctl && ./install_dev.sh baseline
 
 VOLUME ["/data/embeddings", "/data/model-store", "/data/datasets", "/data/model-checkpoints"]
 
