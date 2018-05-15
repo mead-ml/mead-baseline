@@ -508,11 +508,9 @@ class TSVSeqLabelReader(SeqLabelReader):
         nozplen = self.mxlen - 2*halffiltsz
 
         examples = []
-        texts = []
         with codecs.open(filename, encoding='utf-8', mode='r') as f:
             for offset, line in enumerate(f):
                 label, text = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn)
-                texts.append(text)
                 y = self.label2index[label]
                 toks = TSVSeqLabelReader.splits(text)
                 mx = min(len(toks), nozplen)
