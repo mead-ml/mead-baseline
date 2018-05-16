@@ -11,28 +11,6 @@ from baseline.utils import read_json, read_config_file
 pd.set_option('display.expand_frame_repr', False)
 
 
-class RepoManager(object):
-
-    central_repo = None
-    dbhost = None
-    dbport = None
-    dbuser = None
-    dbpass = None
-
-    @staticmethod
-    def get():
-        if RepoManager.central_repo is None:
-            RepoManager.central_repo = ExperimentRepo.create_mongo_repo(RepoManager.dbhost, RepoManager.dbport,
-                                                                        RepoManager.dbuser, RepoManager.dbpass)
-
-        if RepoManager.central_repo is not None:
-            click.echo("db connection successful with [host]: {}, [port]: {}".format(RepoManager.dbhost,
-                                                                                     RepoManager.dbport))
-            return RepoManager.central_repo
-        click.echo("db connection unsuccessful, aborting")
-        sys.exit(1)
-
-
 EVENT_TYPES = {
     "train": "train_events", "Train": "train_events",
     "test": "test_events", "Test": "test_events",
@@ -41,26 +19,78 @@ EVENT_TYPES = {
 }
 
 
+class RepoManager(object):
+
+    central_repo = None
+    dbtype = None
+    dbhost = None
+    dbport = None
+    dbuser = None
+    dbpass = None
+
+    @staticmethod
+    def get():
+        if RepoManager.central_repo is None:
+            RepoManager.central_repo = ExperimentRepo.create_repo(RepoManager.dbtype,
+                                                                  RepoManager.dbhost,
+                                                                  RepoManager.dbport,
+                                                                  RepoManager.dbuser,
+                                                                  RepoManager.dbpass)
+
+        if RepoManager.central_repo is not None:
+            click.echo("db {} connection successful with [host]: {}, [port]: {}".format(RepoManager.dbtype,
+                                                                                        RepoManager.dbhost,
+                                                                                        RepoManager.dbport))
+            return RepoManager.central_repo
+        click.echo("db connection unsuccessful, aborting")
+        sys.exit(1)
+
 # set up env
 def read_cred(config_file):
+    dbtype = None
+    dbhost = None
+    dbport = None
+    user = None
+    passwd = None
+
     try:
         j = read_json(config_file, None)
-        return j.get('dbhost', None), j.get('dbport', None), j.get('user', None), j.get('passwd', None)
+        dbtype = j.get('dbtype')
+        dbhost = j.get('dbhost')
+        dbport = j.get('dbport')
+        user = j.get('user')
+        passwd = j.get('passwd')
+
     except IOError:
-        return None, None, None, None
+        pass
+
+    return dbtype, dbhost, dbport, user, passwd
 
 
 @shell(prompt="xpctl > ", intro="Starting xpctl...")
-@click.option('--host', help="mongo host")
-@click.option('--port', help="mongo port", default=27017)
-@click.option('--user', help="mongo username")
-@click.option('--password', help="mongo password")
-@click.option('--config', help="mongo creds", default="~/xpctlcred.json")
-def cli(host, port, user, password, config):
+@click.option('--dbtype', help="backend DB")
+@click.option('--host', help="backend host")
+@click.option('--port', help="backend port")
+@click.option('--user', help="backend username")
+@click.option('--password', help="backend password")
+@click.option('--config', help="backend creds", default="~/xpctlcred.json")
+def cli(dbtype, host, port, user, password, config):
 
-    host_c, port_c, user_c, passw_c = (None, None, None, None)
-    if os.path.exists(os.path.expanduser(config)):
-        host_c, port_c, user_c, passw_c = read_cred(os.path.expanduser(config))
+    dbtype_c = None
+    host_c = None
+    port_c = None
+    user_c = None
+    passw_c = None
+
+    config = os.path.expanduser(config)
+
+    if os.path.exists(config):
+        dbtype_c, host_c, port_c, user_c, passw_c = read_cred(config)
+
+    if dbtype is None and dbtype_c is None:
+        dbtype = "mongo"
+    elif dbtype is None:
+        dbtype = dbtype_c
 
     if host is None and host_c is None:
         host = "localhost"
@@ -68,10 +98,14 @@ def cli(host, port, user, password, config):
         host = host_c
 
     if port is None and port_c is None:
-        port = 27017
+        if dbtype == 'mongo':
+            port = 27017
+        else:
+            port = None
     elif port is None:
         port = port_c
 
+    RepoManager.dbtype = dbtype
     RepoManager.dbhost = host
     RepoManager.dbport = port
     RepoManager.dbuser = user if user else user_c
@@ -81,7 +115,10 @@ def cli(host, port, user, password, config):
 @cli.command()
 def vars():
     """Prints the value of system variables dbhost and dbport"""
-    click.echo("dbhost: {}, dbport: {}".format(RepoManager.dbhost, RepoManager.dbport))
+    click.echo("[DB] type: {}, host: {}, port: {}, user: {}".format(RepoManager.dbtype,
+                                                                    RepoManager.dbhost,
+                                                                    RepoManager.dbport,
+                                                                    RepoManager.dbuser))
 
 
 @cli.command()
