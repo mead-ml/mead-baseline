@@ -70,3 +70,15 @@ Here are the last observed performance scores on various dataset
 | conll 2003    |     f1 | sgd mom. |     0.015| tf       | 90.88 | N    | Y    | 200 |
 | conll 2003    |     f1 | sgd mom. |     0.015| pytorch  | 90.86 | N    | Y    | 200 |
 | atis (mesnil) |     f1 | sgd mom. |     0.01 | tf       | 96.74 | N    | N    | 100 |
+
+
+### Testing a trained model on your data
+
+You can use [`tag.py`](../python/tag.py) to load a sequence tagger checkpoint, predict the labels for an input conll file and produce the output in the same format. The second column is the predicted label.
+
+Run the code like this:
+```
+python tag.py --input wnut17test.conll --output test.conll --model mead/tagger-model-tf-2847 --mxlen 60 --mxwlen 40
+```
+
+We support loading tagger models defined in [TensorFlow](../python/baseline/tf/tagger/model.py) and [PyTorch](../python/baseline/pytorch/tagger/model.py). 
