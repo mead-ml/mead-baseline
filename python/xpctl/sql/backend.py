@@ -100,17 +100,6 @@ class SQLRepo(ExperimentRepo):
             uri = '{}://{}@{}/{}'.format(dbtype, user, host, dbname)
         self._connect(uri)
 
-    def _find_or_create(self, model, **kwargs):
-        session = self.Session()
-        instance = session.query(model).filter_by(**kwargs).first()
-        if instance:
-            return instance, False
-        else:
-            instance = model(**kwargs)
-            session.add(instance)
-            session.commit()
-            return instance, True
-
     def put_result(self, task, config_obj, events_obj, **kwargs):
         session = self.Session()
         print_fn = kwargs.get('print_fn', print)
