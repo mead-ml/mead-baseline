@@ -14,11 +14,17 @@ These models are coded in a backend that is supported by baseline (currently eit
     - `pip install tensorflow-hub`
     - https://www.tensorflow.org/hub/installation
   - Run using [this config](../mead/config/sst2-elmo.json)
-    - `~/dev/work/baseline/python/mead$ python trainer.py --config config/sst2-elmo.json`
+    - `mead-train --config config/sst2-elmo.json`
 
 - [Tagger with Gazetteer](tagger_gazetteer.py)
   - This model allows gazetteer features to be used along with normal word and character embeddings
-  - Achieves *40.2537* on WNUT, a significant improvement over the baseline
+  - Achieves *40.2537* on WNUT17, a significant improvement over the baseline
+
+- [Tagger with ELMo embeddings](tagger_elmo.py)
+  - Uses ELMo embeddings (see info above) concatenated with word embeddings using 1 or 2 bidirectional LSTM layers.  With a single BLSTM layer, it achieves ~*42.2* F1 on WNUT17, which appears to be SoTA
+  - This model requires `tensorflow_hub` (see info above)
+  - Run using [this config](../mead/config/wnut-elmo.json)
+    - `mead-train --config config/wnut-elmo.json`
 
 - [Encoder Decoder with Transformer](seq2seq_transformer.py)
   - This model implements https://arxiv.org/abs/1706.03762
