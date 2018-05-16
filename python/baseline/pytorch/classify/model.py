@@ -101,34 +101,12 @@ class ConvModel(WordClassifierBase):
     def _init_pool(self, dsz, **kwargs):
         filtsz = kwargs['filtsz']
         cmotsz = kwargs['cmotsz']
-        convs = []
-        for i, fsz in enumerate(filtsz):
-            pad = fsz//2
-            conv = nn.Sequential(
-                nn.Conv1d(dsz, cmotsz, fsz, padding=pad),
-                pytorch_activation("relu")
-            )
-            convs.append(conv)
-            # Add the module so its managed correctly
-        self.convs = nn.ModuleList(convs)
-        # Width of concat of parallel convs
-        self.conv_drop = nn.Dropout(self.pdrop)
-
-        return cmotsz * len(filtsz)
+        self.parallel_conv = ParallelConv(dsz, cmotsz, filtsz, "relu", self.pdrop)
+        return self.parallel_conv.outsz
 
     def _pool(self, btc):
         embeddings = btc.transpose(1, 2).contiguous()
-        mots = []
-        for conv in self.convs:
-            # In Conv1d, data BxCxT, max over time
-            conv_out = conv(embeddings)
-            mot, _ = conv_out.max(2)
-            mots.append(mot)
-            #  Not required/working in latest pytorch
-            #mots.append(mot.squeeze(2))
-
-        mots = torch.cat(mots, 1)
-        return self.conv_drop(mots)
+        return self.parallel_conv(embeddings)
 
 
 class LSTMModel(WordClassifierBase):

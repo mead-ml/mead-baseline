@@ -6,6 +6,7 @@ from baseline.utils import export
 __all__ = []
 exporter = export(__all__)
 
+
 @exporter
 class DataFeed(object):
     """Data collection that, when iterated, produces an epoch of data
@@ -78,14 +79,25 @@ class SeqLabelExamples(object):
     
     Datasets of paired `(x, y)` data, where `x` is a tensor of data over time and `y` is a single label
     """
-    SEQ = 0
-    LABEL = 1
-    LENGTH = 1
+    LABEL = 'y'
+    SEQ = 'x'
+    SEQ_CHAR = 'xch'
+    LABEL = 'y'
+    SEQ_LENGTH = 'lengths'
+    SCALARS = [SEQ_LENGTH, LABEL]
 
-    def __init__(self, example_list, do_shuffle=True):
+    def __init__(self, example_list, do_shuffle=True, do_sort=False):
+        """Constructor
+
+        :param example_list:  A list of examples
+        :param do_shuffle: (``bool``) Shuffle the data? Defaults to `True`
+        :param do_sort: (``bool``) Sort the data.  Defaults to `True`
+        """
         self.example_list = example_list
         if do_shuffle:
             random.shuffle(self.example_list)
+        if do_sort:
+            self.example_list = sorted(self.example_list, key=lambda x: x[SeqWordCharTagExamples.SEQ_LEN])
 
     def __getitem__(self, i):
         """Get a single example
@@ -93,8 +105,7 @@ class SeqLabelExamples(object):
         :param i: (``int``) simple index
         :return: an example
         """
-        ex = self.example_list[i]
-        return ex[SeqLabelExamples.SEQ], ex[SeqLabelExamples.LABEL], ex[SeqLabelExamples.LENGTH]
+        return self.example_list[i]
 
     def __len__(self):
         """Number of examples
@@ -108,46 +119,63 @@ class SeqLabelExamples(object):
         
         :return: (``int``) length
         """
-        x, y, _ = self.example_list[0]
+        x = self.example_list[0]['x']
         return len(x)
 
-    def batch(self, start, batchsz, vec_alloc=np.empty):
+    def batch(self, start, batchsz, trim=False, vec_alloc=np.empty, vec_shape=np.shape):
         """Get a batch of data
-        
-        :param start: The step index
-        :param batchsz: The batch size
+
+        :param start: (``int``) The step index
+        :param batchsz: (``int``) The batch size
+        :param trim: (``bool``) Trim to maximum length in a batch
         :param vec_alloc: A vector allocator, defaults to `numpy.empty`
-        :return: batched x vector, batched y vector
+        :param vec_shape: A vector shape function, defaults to `numpy.shape`
+        :return: batched `x` word vector, `x` character vector, batched `y` vector, `length` vector, `ids`
         """
-        siglen = self.width()
-        xb = vec_alloc((batchsz, siglen), dtype=np.int)
-        yb = vec_alloc((batchsz), dtype=np.int)
-        lengths = vec_alloc((batchsz), dtype=np.int)
+        ex = self.example_list[start]
+        keys = ex.keys()
+
+        if SeqLabelExamples.SEQ_CHAR in ex:
+            siglen, maxw = vec_shape(ex[SeqLabelExamples.SEQ_CHAR])
+        else:
+            siglen = vec_shape(ex[SeqLabelExamples.SEQ])[0]
+            maxw = 0
+
+        batch = {}
+        for k in keys:
+            if k == SeqLabelExamples.SEQ_CHAR:
+                batch[k] = vec_alloc((batchsz, siglen, maxw), dtype=np.int)
+            elif k in SeqLabelExamples.SCALARS:
+                batch[k] = vec_alloc((batchsz), dtype=np.int)
+            else:
+                batch[k] = vec_alloc((batchsz, siglen), dtype=np.int)
+
         sz = len(self.example_list)
         idx = start * batchsz
+
+        max_src_len = 0
+
         for i in range(batchsz):
-            if idx >= sz: idx = 0
-            x, y, length = self.example_list[idx]
-            xb[i] = x
-            yb[i] = y
-            lengths[i] = length
+            if idx >= sz:
+                idx = 0
+
+            ex = self.example_list[idx]
+            for k in keys:
+                batch[k][i] = ex[k]
+
+            max_src_len = max(max_src_len, ex[SeqWordCharTagExamples.SEQ_LEN])
             idx += 1
 
-        return xb, yb, lengths
-        
-    @staticmethod
-    def valid_split(data, splitfrac=0.15):
-        """Function to produce a split of data based on a fraction
-        
-        :param data: Data to split
-        :param splitfrac: (``float``) fraction of data to hold out
-        :return: Two sets of label examples
-        """
-        numinst = len(data.examples)
-        heldout = int(math.floor(numinst * (1-splitfrac)))
-        heldout_ex = data.example_list[1:heldout]
-        rest_ex = data.example_list[heldout:]
-        return SeqLabelExamples(heldout_ex), SeqLabelExamples(rest_ex)
+        if trim:
+            for k in keys:
+                if k == SeqWordCharTagExamples.SEQ_CHAR:
+                    batch[k] = batch[k][:, 0:max_src_len, :]
+                elif k in SeqWordCharTagExamples.SCALARS:
+                    pass
+                else:
+                    batch[k] = batch[k][:0, max_src_len]
+
+        return batch
 
 
 @exporter
@@ -163,10 +191,11 @@ class SeqLabelDataFeed(ExampleDataFeed):
         :param i: (``int``) step index
         :return: A batch tensor x, batch tensor y
         """
-        x, y, lengths = self.examples.batch(i, self.batchsz, self.vec_alloc)
+        batch = self.examples.batch(i, self.batchsz, trim=False, vec_alloc=self.vec_alloc, vec_shape=self.vec_shape)
+
         if self.src_vec_trans is not None:
-            x = self.src_vec_trans(x)
-        return {'x': x, 'y': y, 'lengths': lengths}
+            batch[SeqLabelExamples.SEQ] = self.src_vec_trans(batch[SeqLabelExamples.SEQ])
+        return batch
 
 
 @exporter
@@ -259,21 +288,6 @@ class SeqWordCharTagExamples(object):
                     batch[k] = batch[k][:0, max_src_len]
 
         return batch
-
-
-    @staticmethod
-    def valid_split(data, splitfrac=0.15):
-        """Function to produce a split of data based on a fraction
-        
-        :param data: Data to split
-        :param splitfrac: (``float``) fraction of data to hold out
-        :return: Two sets of label examples
-        """
-        numinst = len(data.examples)
-        heldout = int(math.floor(numinst * (1-splitfrac)))
-        heldout_ex = data.example_list[1:heldout]
-        rest_ex = data.example_list[heldout:]
-        return SeqLabelExamples(heldout_ex), SeqLabelExamples(rest_ex)
 
 
 @exporter

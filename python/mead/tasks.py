@@ -239,7 +239,7 @@ class ClassifierTask(Task):
         self.dataset = DataDownloader(self.dataset, self.data_download_cache).download()
         print("[train file]: {}\n[valid file]: {}\n[test file]: {}".format(self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']))
         vocab, self.labels = self.reader.build_vocab([self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']])
-        self.embeddings, self.feat2index = self._create_embeddings(embeddings_set, {'word': vocab})
+        self.embeddings, self.feat2index = self._create_embeddings(embeddings_set, vocab)
 
 
     def _create_model(self):

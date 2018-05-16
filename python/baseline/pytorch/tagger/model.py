@@ -172,17 +172,7 @@ class RNNTaggerModel(nn.Module, Tagger):
         return model
 
     def _char_word_conv_embeddings(self, filtsz, char_dsz, wchsz, pdrop):
-        self.char_convs = []
-        for fsz in filtsz:
-            pad = fsz//2
-            conv = nn.Sequential(
-                pytorch_conv1d(char_dsz, wchsz, fsz, padding=pad),
-                pytorch_activation(self.activation_type)
-            )
-            self.char_convs.append(conv)
-            # Add the module so its managed correctly
-            self.add_module('char-conv-%d' % fsz, conv)
-
+        self.char_comp = ParallelConv(char_dsz, wchsz, filtsz, self.activation_type, pdrop)
         # Width of concat of parallel convs
         self.wchsz = wchsz * len(filtsz)
         self.word_ch_embed = nn.Sequential()
@@ -253,13 +243,7 @@ class RNNTaggerModel(nn.Module, Tagger):
         char_embeds = self.cembed(xch_i)
         # (TxB) x D x W
         char_vecs = char_embeds.transpose(1, 2).contiguous()
-        mots = []
-        for conv in self.char_convs:
-            # In Conv1d, data BxCxT, max over time
-            mot, _ = conv(char_vecs).max(2)
-            mots.append(mot)
-
-        mots = torch.cat(mots, 1)
+        mots = self.char_comp(char_vecs)
         output = self.word_ch_embed(mots)
         return mots + output
 
