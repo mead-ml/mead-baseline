@@ -78,7 +78,7 @@ class Event(Base):
 class SQLRepo(ExperimentRepo):
 
     def _connect(self, uri):
-        self.engine = sql.create_engine(uri, echo=True, paramstyle='format')
+        self.engine = sql.create_engine(uri, echo=False, paramstyle='format')
         Base.metadata.create_all(self.engine)
         self.Session = orm.sessionmaker(bind=self.engine)
 
@@ -244,34 +244,6 @@ class SQLRepo(ExperimentRepo):
         metrics = listify(metric)
         metrics_to_add = [metrics[0]] if len(metrics) == 1 else []
         phase = self.event2phase(event_type)
-        if len(metric) == 1:
-            metric = metric[0]
-            if metric == "avg_loss" or metric == "perplexity":
-                ascending = True
-            else:
-                ascending = False
-
-            if sort:
-                if sort == "avg_loss" or sort == "perplexity":
-                    ascending = True
-                else:
-                    ascending = False
-            best = self._nbest_by_metric_rows(username, metric, dataset, task, -1, event_type, ascending)
-            for exp, metric, _ in best:
-                result = [exp.id, exp.username, exp.label, exp.dataset, exp.sha1, exp.date, metric.value]
-                for event in exp.events:
-                    if phase == event.phase:
-                        for m in event.metrics:
-                            if m.label != metric.label:
-                                result += [m.value]
-                                if m.label not in metrics_to_add:
-                                    metrics_to_add += [m.label]
-                results.append(result)
-            return pd.DataFrame(results,
-                                columns=['id', 'username', 'label', 'dataset', 'sha1', 'date'] + metrics_to_add)
-
-        phase = self.event2phase(event_type)
-
         hits = session.query(Experiment).filter(Experiment.dataset == dataset). \
             filter(Experiment.task == task)
 
@@ -286,7 +258,19 @@ class SQLRepo(ExperimentRepo):
                             metrics_to_add += [m.label]
                     results.append(result)
         cols = ['id', 'username', 'label', 'dataset', 'sha1', 'date'] + metrics_to_add
-        return pd.DataFrame(results, columns=cols)
+        frame = pd.DataFrame(results, columns=cols)
+        if len(metric) == 1:
+            metric = metric[0]
+            if metric == "avg_loss" or metric == "perplexity":
+                result_frame = frame.sort_values(metric, ascending=True)
+            else:
+                result_frame = frame.sort_values(metric, ascending=False)
+            if sort:
+                if sort == "avg_loss" or sort == "perplexity":
+                    frame = result_frame.sort_values(sort, ascending=True)
+                else:
+                    frame = result_frame.sort_values(sort, ascending=False)
+        return frame
 
     def task_summary(self, task, dataset, metric, event_type):
 
