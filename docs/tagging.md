@@ -78,7 +78,7 @@ You can use [`tag.py`](../python/tag.py) to load a sequence tagger checkpoint, p
 
 Run the code like this:
 ```
-python tag.py --inp wnut17test.conll --outp test.conll --model mead/tagger-model-tf-2847 --mxlen 60 --mxwlen 40
+python tag.py --input wnut17test.conll --output test.conll --model mead/tagger-model-tf-2847 --mxlen 60 --mxwlen 40
 ```
 
 We support loading tagger models defined in [TensorFlow](../python/baseline/tf/tagger/model.py) and [PyTorch](../python/baseline/pytorch/tagger/model.py). 
