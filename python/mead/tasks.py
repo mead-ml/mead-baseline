@@ -196,7 +196,9 @@ class ClassifierTask(Task):
                                            clean_fn=self.config_params['preproc']['clean_fn'],
                                            vec_alloc=self.config_params['preproc']['vec_alloc'],
                                            src_vec_trans=self.config_params['preproc']['src_vec_trans'],
-                                           reader_type=self.config_params['loader']['reader_type'])
+                                           reader_type=self.config_params['loader']['reader_type'],
+                                           mxwlen=self.config_params['preproc'].get('mxwlen', -1),
+                                           do_chars=self.config_params['loader'].get('do_chars', False))
 
     def _setup_task(self):
         backend = self.config_params.get('backend', 'tensorflow')
@@ -233,6 +235,7 @@ class ClassifierTask(Task):
 
         self.config_params['preproc']['src_vec_trans'] = rev2nd if self.config_params['preproc'].get('rev', False) else None
         self.config_params['model']['mxlen'] = self.config_params['preproc']['mxlen']
+        self.config_params['model']['mxwlen'] = self.config_params['preproc'].get('mxwlen', -1)
 
     def initialize(self, embeddings):
         embeddings_set = mead.utils.index_by_label(embeddings)

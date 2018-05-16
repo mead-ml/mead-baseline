@@ -512,7 +512,7 @@ class TSVSeqLabelReader(SeqLabelReader):
         print('Max sentence length {}, requested length {}'.format(maxs, self.max_sentence_length))
 
         if self.do_chars:
-            print('Max word length {}, requested length'.format(maxw, self.max_word_length))
+            print('Max word length {}, requested length {}'.format(maxw, self.max_word_length))
         return vocab, self.get_labels()
 
     def get_labels(self):

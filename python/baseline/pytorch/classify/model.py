@@ -32,9 +32,7 @@ class WordClassifierBase(nn.Module, Classifier):
         model.labels = labels
         nc = len(labels)
         model.vocab = embeddings.vocab
-        model.lut = nn.Embedding(embeddings.vsz + 1, dsz)
-        del model.lut.weight
-        model.lut.weight = nn.Parameter(torch.FloatTensor(embeddings.weights), requires_grad=finetune)
+        model.lut = pytorch_embedding(embeddings, finetune)
         pool_dim = model._init_pool(dsz, **kwargs)
         stacked_dim = model._init_stacked(pool_dim, **kwargs)
         model._init_output(stacked_dim, nc)
