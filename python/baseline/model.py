@@ -82,12 +82,7 @@ class Classifier(object):
         length = min(len(tokens), mxlen)
         for j in range(length):
             word = word_trans_fn(tokens[j])
-            if word not in vocab:
-                if word != '':
-                    print(word)
-                    idx = 0
-            else:
-                idx = vocab[word]
+            idx = vocab.get(word, 0)
             x[0, j] = idx
         outcomes = self.classify({'x': x})[0]
         return sorted(outcomes, key=lambda tup: tup[1], reverse=True)
