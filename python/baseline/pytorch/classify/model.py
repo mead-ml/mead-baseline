@@ -57,7 +57,8 @@ class WordClassifierBase(nn.Module, Classifier):
 
     def forward(self, input):
         # BxTxC
-        embeddings = self.lut(input)
+        x = input[0]
+        embeddings = self.lut(x)
         pooled = self._pool(embeddings)
         stacked = self._stacked(pooled)
         return self.output(stacked)
