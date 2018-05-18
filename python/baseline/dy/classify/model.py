@@ -1,4 +1,3 @@
-from itertools import chain
 import dynet as dy
 from baseline.model import (
     Classifier,
@@ -8,7 +7,7 @@ from baseline.model import (
 from baseline.dy.dynety import *
 
 
-class WordClassifierBase(Classifier):
+class WordClassifierBase(Classifier, DynetModel):
 
     def __init__(
             self,
@@ -45,10 +44,7 @@ class WordClassifierBase(Classifier):
         return self._pc
 
     def __str__(self):
-        str_ = []
-        for p in chain(self.pc.lookup_parameters_list(), self.pc.parameters_list()):
-            str_.append("{}: {}".format(p.name(), p.shape()))
-        str_ = '\n'.join(str_)
+        str_ = super(WordClassifierBase, self).__str__()
         if self.batched:
             return "Batched Model: \n{}".format(str_)
         return str_
@@ -56,13 +52,14 @@ class WordClassifierBase(Classifier):
     def make_input(self, batch_dict):
         x = batch_dict['x']
         y = batch_dict['y']
+        lengths = batch_dict['lengths']
         if self.batched:
-            return x.T, y.T
-        return x[0], y[0]
+            return x.T, y.T, lengths.T - 1
+        return x[0], y[0], lengths - 1
 
-    def forward(self, input_):
+    def forward(self, input_, lengths):
         embedded = self.embed(input_)
-        pooled = self.pool(embedded)
+        pooled = self.pool(embedded, lengths)
         stacked = self.stacked(pooled)
         return self.output(stacked)
 
@@ -122,7 +119,7 @@ class ConvModel(WordClassifierBase):
         for fsz in filtsz:
             convs.append(Convolution1d(fsz, cmotsz, dsz, self.pc))
 
-        def call_pool(input_):
+        def call_pool(input_, _):
             input_ = dy.reshape(input_, (1, *input_.dim()[0]))
             mots = []
             for conv in convs:
@@ -136,12 +133,13 @@ class LSTMModel(WordClassifierBase):
     def _init_pool(self, dsz, hsz=None, layers=1, **kwargs):
         if hsz is None:
             hsz = kwargs.get('cmotsz', 100)
-        return hsz, LSTM(hsz, dsz, self.pc, layers=layers)
+
+        return hsz, LSTMEncoder(hsz, dsz, self.pc, layers=layers)
 
 class NBowModel(WordClassifierBase):
 
     def _init_pool(self, *args, **kwargs):
-        def pool(input_):
+        def pool(input_, _):
             return dy.esum(input_) / len(input_)
 
         return args[0], pool
@@ -149,7 +147,7 @@ class NBowModel(WordClassifierBase):
 class NBowMax(WordClassifierBase):
 
     def _init_pool(self, *args, **kwargs):
-        def pool(input_):
+        def pool(input_, _):
             return dy.emax(input_)
 
         return args[0], pool
@@ -159,7 +157,7 @@ BASELINE_CLASSIFICATION_MODELS = {
     'default': ConvModel.create,
     'lstm': LSTMModel.create,
     'nbow': NBowModel.create,
-    'nbowmax': NBowModel.create,
+    'nbowmax': NBowMax.create,
 }
 
 BASELINE_CLASSIFICATION_LOADER = {

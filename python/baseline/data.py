@@ -86,7 +86,7 @@ class SeqLabelExamples(object):
     SEQ_CHAR = 'xch'
     LABEL = 'y'
     SEQ_LENGTH = 'lengths'
-    SCALARS = [SEQ_LENGTH, LABEL]
+    SCALARS = {SEQ_LENGTH, LABEL}
 
     def __init__(self, example_list, do_shuffle=True, do_sort=False):
         """Constructor
@@ -146,7 +146,7 @@ class SeqLabelExamples(object):
             elif k in SeqLabelExamples.SCALARS:
                 pass
             else:
-                batch[k] = batch[k][:0, max_src_len]
+                batch[k] = batch[k][:, :max_src_len]
         return batch
 
     def _batch_objs(self, start, batchsz, trim, vec_alloc, vec_shape):
@@ -229,7 +229,7 @@ class SeqLabelDataFeed(ExampleDataFeed):
         :param i: (``int``) step index
         :return: A batch tensor x, batch tensor y
         """
-        batch = self.examples.batch(i, self.batchsz, trim=False, vec_alloc=self.vec_alloc, vec_shape=self.vec_shape)
+        batch = self.examples.batch(i, self.batchsz, trim=self.trim, vec_alloc=self.vec_alloc, vec_shape=self.vec_shape)
 
         if self.src_vec_trans is not None:
             batch[SeqLabelExamples.SEQ] = self.src_vec_trans(batch[SeqLabelExamples.SEQ])

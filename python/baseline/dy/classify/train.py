@@ -1,10 +1,10 @@
+import dynet as dy
+import numpy as np
 from baseline.utils import listify, get_model_file
 from baseline.progress import create_progress_bar
 from baseline.confusion import ConfusionMatrix
 from baseline.reporting import basic_reporting
 from baseline.train import EpochReportingTrainer, create_trainer
-import dynet as dy
-import numpy as np
 
 def _add_to_cm(cm, y, preds, axis=0):
     best = np.argmax(preds, axis=axis)
@@ -48,8 +48,8 @@ class ClassifyTrainerDynet(EpochReportingTrainer):
 
         for batch_dict in pg(loader):
             dy.renew_cg()
-            xs, ys = self.model.make_input(batch_dict)
-            preds = self.model.forward(xs)
+            xs, ys, ls = self.model.make_input(batch_dict)
+            preds = self.model.forward(xs, ls)
             losses = self.model.loss(preds, ys)
             loss = dy.sum_batches(losses)
             total_loss += loss.npvalue().item()
@@ -80,9 +80,10 @@ class ClassifyTrainerAutobatch(ClassifyTrainerDynet):
         total_loss = 0
         i = 1
         preds, losses, ys = [], [], []
+        dy.renew_cg()
         for batch_dict in pg(loader):
-            x, y = self.model.make_input(batch_dict)
-            pred = self.model.forward(x)
+            x, y, l = self.model.make_input(batch_dict)
+            pred = self.model.forward(x, l)
             preds.append(pred)
             loss = self.model.loss(pred, y)
             losses.append(loss)
@@ -94,6 +95,7 @@ class ClassifyTrainerAutobatch(ClassifyTrainerDynet):
                 _add_to_cm(cm, np.array(ys), preds.npvalue())
                 update(loss)
                 preds, losses, ys = [], [], []
+                dy.renew_cg()
             i += 1
         loss = dy.esum(losses)
         preds = dy.concatenate_cols(preds)
@@ -154,8 +156,4 @@ def fit(
     if es is not None:
         print('Reloading best checkpoint')
         model = model.load(model_file)
-        if autobatchsz != 1:
-            trainer = create_trainer(ClassifyTrainerAutobatch, model, **kwargs)
-        else:
-            trainer = create_trainer(ClassifyTrainerDynet, model, **kwargs)
         trainer.test(es, reporting_fns, phase='Test')
