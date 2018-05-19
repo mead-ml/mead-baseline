@@ -5,55 +5,44 @@ from baseline.utils import export
 __all__ = []
 exporter = export(__all__)
 
+
+def norm_weights(word_vectors):
+    norms = np.linalg.norm(word_vectors, axis=1, keepdims=True)
+    norms = (norms == 0) + norms
+    return word_vectors / norms
+
 @exporter
 class EmbeddingsModel(object):
     def __init__(self):
         super(EmbeddingsModel, self).__init__()
 
-    def get_vsz(self):
-        pass
-
     def get_dsz(self):
-        pass
+        return self.dsz
+
+    def get_vsz(self):
+        return self.vsz
 
     def lookup(self, word, nullifabsent=True):
-        pass
+        if word in self.vocab:
+            return self.weights[self.vocab[word]]
+        if nullifabsent:
+            return None
+        return self.nullv
+
 
 @exporter
-class Word2VecModel(EmbeddingsModel):
+class PretrainedEmbeddingsModel(EmbeddingsModel):
 
-    def __init__(self, filename, known_vocab=None, unif_weight=None, keep_unused=False, normalize=False):
-        super(Word2VecModel, self).__init__()
+    def __init__(self, filename, known_vocab=None, unif_weight=None, keep_unused=False, normalize=False, **kwargs):
+        super(PretrainedEmbeddingsModel, self).__init__()
         uw = 0.0 if unif_weight is None else unif_weight
         self.vocab = {}
-        idx = 0
+        idx = 1
 
-        with io.open(filename, "rb") as f:
-            header = f.readline()
-            vsz, self.dsz = map(int, header.split())
-
-            self.nullv = np.zeros(self.dsz, dtype=np.float32)
-            self.vocab["<PAD>"] = idx
-            idx += 1
-
-            word_vectors = [self.nullv]
-            width = 4 * self.dsz
-
-            for i in range(vsz):
-                word = Word2VecModel._readtospc(f)
-                raw = f.read(width)
-                if keep_unused is False and word not in known_vocab:
-                    continue
-
-                # Otherwise add it to the list and remove from knownvocab
-                if known_vocab and word in known_vocab:
-                    known_vocab[word] = 0
-
-                vec = np.fromstring(raw, dtype=np.float32)
-                word_vectors.append(vec)
-
-                self.vocab[word] = idx
-                idx += 1
+        word_vectors, self.dsz, known_vocab, idx = self._read_vectors(filename, idx, known_vocab, keep_unused)
+        self.nullv = np.zeros(self.dsz, dtype=np.float32)
+        word_vectors = [self.nullv] + word_vectors
+        self.vocab["<PAD>"] = 0
 
         if known_vocab is not None:
             unknown = {v: cnt for v,cnt in known_vocab.items() if cnt > 0}
@@ -62,19 +51,41 @@ class Word2VecModel(EmbeddingsModel):
                 self.vocab[v] = idx
                 idx += 1
 
-        if normalize is True:
-            for i in range(len(word_vectors)):
-                norm = np.linalg.norm(word_vectors[i])
-                word_vectors[i] = word_vectors[i] if norm == 0.0 else word_vectors[i]/norm
-
         self.weights = np.array(word_vectors)
+        if normalize is True:
+            self.weights = norm_weights(self.weights)
+
         self.vsz = self.weights.shape[0] - 1
 
-    def get_dsz(self):
-        return self.dsz
+    def _read_vectors(self, filename, idx, known_vocab, keep_unused):
+        pass
 
-    def get_vsz(self):
-        return self.vsz
+
+@exporter
+class Word2VecModel(PretrainedEmbeddingsModel):
+
+    def __init__(self, filename, **kwargs):
+        super(Word2VecModel, self).__init__(filename, **kwargs)
+
+    def _read_vectors(self, filename, idx, known_vocab, keep_unused):
+        word_vectors = []
+        with io.open(filename, "rb") as f:
+            header = f.readline()
+            vsz, dsz = map(int, header.split())
+            width = 4 * dsz
+            for i in range(vsz):
+                word = Word2VecModel._readtospc(f)
+                raw = f.read(width)
+                if keep_unused is False and word not in known_vocab:
+                    continue
+                if known_vocab and word in known_vocab:
+                    known_vocab[word] = 0
+                vec = np.fromstring(raw, dtype=np.float32)
+                word_vectors.append(vec)
+                self.vocab[word] = idx
+                idx += 1
+        return word_vectors, dsz, known_vocab, idx
+
 
     @staticmethod
     def _readtospc(f):
@@ -88,23 +99,14 @@ class Word2VecModel(EmbeddingsModel):
         s = s.decode('utf-8')
         return s.strip()
 
-    def lookup(self, word, nullifabsent=True):
-        if word in self.vocab:
-            return self.weights[self.vocab[word]]
-        if nullifabsent:
-            return None
-        return self.nullv
-
 
 @exporter
-class GloVeModel(EmbeddingsModel):
+class GloVeModel(PretrainedEmbeddingsModel):
 
-    def __init__(self, filename, known_vocab=None, unif_weight=None, keep_unused=False, normalize=False):
-        super(GloVeModel, self).__init__()
-        uw = 0.0 if unif_weight is None else unif_weight
-        self.vocab = {}
-        idx = 1
+    def __init__(self, filename, **kwargs):
+        super(GloVeModel, self).__init__(filename, **kwargs)
 
+    def _read_vectors(self, filename, idx, known_vocab, keep_unused):
         word_vectors = []
         with io.open(filename, "r", encoding="utf-8") as f:
             for line in f:
@@ -112,46 +114,14 @@ class GloVeModel(EmbeddingsModel):
                 word = values[0]
                 if keep_unused is False and word not in known_vocab:
                     continue
-
-                # Otherwise add it to the list and remove from knownvocab
                 if known_vocab and word in known_vocab:
                     known_vocab[word] = 0
                 vec = np.asarray(values[1:], dtype=np.float32)
                 word_vectors.append(vec)
                 self.vocab[word] = idx
                 idx += 1
-            self.dsz = vec.shape[0]
-            self.nullv = np.zeros(self.dsz, dtype=np.float32)
-            word_vectors = [self.nullv] + word_vectors
-            self.vocab["<PAD>"] = 0
-
-        if known_vocab is not None:
-            unknown = {v: cnt for v, cnt in known_vocab.items() if cnt > 0}
-            for v in unknown:
-                word_vectors.append(np.random.uniform(-uw, uw, self.dsz))
-                self.vocab[v] = idx
-                idx += 1
-
-        if normalize is True:
-            for i in range(len(word_vectors)):
-                norm = np.linalg.norm(word_vectors[i])
-                word_vectors[i] = word_vectors[i] if norm == 0.0 else word_vectors[i]/norm
-
-        self.weights = np.array(word_vectors)
-        self.vsz = self.weights.shape[0] - 1
-
-    def get_dsz(self):
-        return self.dsz
-
-    def get_vsz(self):
-        return self.vsz
-
-    def lookup(self, word, nullifabsent=True):
-        if word in self.vocab:
-            return self.weights[self.vocab[word]]
-        if nullifabsent:
-            return None
-        return self.nullv
+        dsz = vec.shape[0]
+        return word_vectors, dsz, known_vocab, idx
 
 
 @exporter
@@ -179,16 +149,3 @@ class RandomInitVecModel(EmbeddingsModel):
 
         self.nullv = np.zeros(self.dsz, dtype=np.float32)
         self.weights[0] = self.nullv
-
-    def get_dsz(self):
-        return self.dsz
-
-    def get_vsz(self):
-        return self.vsz
-
-    def lookup(self, word, nullifabsent=True):
-        if word in self.vocab:
-            return self.weights[self.vocab[word]]
-        if nullifabsent:
-            return None
-        return self.nullv

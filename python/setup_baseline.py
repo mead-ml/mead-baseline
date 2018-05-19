@@ -81,6 +81,9 @@ def main():
             'six',
             'requests',
         ],
+        extras_require={
+            'test': ['pytest', 'mock']
+        },
         entry_points={
             'console_scripts': [
                 'mead-train = mead.trainer:main',
