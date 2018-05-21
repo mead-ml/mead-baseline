@@ -11,6 +11,7 @@ def norm_weights(word_vectors):
     norms = (norms == 0) + norms
     return word_vectors / norms
 
+
 @exporter
 class EmbeddingsModel(object):
     def __init__(self):
@@ -45,7 +46,7 @@ class PretrainedEmbeddingsModel(EmbeddingsModel):
         self.vocab["<PAD>"] = 0
 
         if known_vocab is not None:
-            unknown = {v: cnt for v,cnt in known_vocab.items() if cnt > 0}
+            unknown = {v: cnt for v, cnt in known_vocab.items() if cnt > 0}
             for v in unknown:
                 word_vectors.append(np.random.uniform(-uw, uw, self.dsz))
                 self.vocab[v] = idx
@@ -64,8 +65,8 @@ class PretrainedEmbeddingsModel(EmbeddingsModel):
 @exporter
 class Word2VecModel(PretrainedEmbeddingsModel):
 
-    def __init__(self, filename, **kwargs):
-        super(Word2VecModel, self).__init__(filename, **kwargs)
+    def __init__(self, filename, known_vocab=None, unif_weight=None, keep_unused=False, normalize=False, **kwargs):
+        super(Word2VecModel, self).__init__(filename, known_vocab, unif_weight, keep_unused, normalize, **kwargs)
 
     def _read_vectors(self, filename, idx, known_vocab, keep_unused):
         word_vectors = []
@@ -86,7 +87,6 @@ class Word2VecModel(PretrainedEmbeddingsModel):
                 idx += 1
         return word_vectors, dsz, known_vocab, idx
 
-
     @staticmethod
     def _readtospc(f):
 
@@ -103,8 +103,8 @@ class Word2VecModel(PretrainedEmbeddingsModel):
 @exporter
 class GloVeModel(PretrainedEmbeddingsModel):
 
-    def __init__(self, filename, **kwargs):
-        super(GloVeModel, self).__init__(filename, **kwargs)
+    def __init__(self, filename, known_vocab=None, unif_weight=None, keep_unused=False, normalize=False, **kwargs):
+        super(GloVeModel, self).__init__(filename, known_vocab, unif_weight, keep_unused, normalize, **kwargs)
 
     def _read_vectors(self, filename, idx, known_vocab, keep_unused):
         word_vectors = []

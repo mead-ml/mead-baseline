@@ -103,7 +103,7 @@ try:
             _ = char_word_conv_embeddings_var_fm(self.p, self.filtsz, self.embedsz, self.nfeat_factor, max_feat=self.max_feat)
             conv_mock.assert_called_once_with(self.p, self.filtsz, self.embedsz, nfeats, tf.nn.tanh)
             skip_mock.assert_called_once_with(conv_ret, sum(nfeats), 2)
-except ImportError:
+except ImportError as e:
     pass
 
 if __name__ == "__main__":
