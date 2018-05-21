@@ -452,11 +452,12 @@ class TSVSeqLabelReader(SeqLabelReader):
         return l.strip()
 
     @staticmethod
-    def label_and_sentence(line):
+    def label_and_sentence(line, clean_fn):
         label_text = re.split('[\t\s]+', line)
         label = label_text[0]
         text = label_text[1:]
-        text = list(filter(lambda s: len(s) != 0, text))
+        text = ' '.join(list(filter(lambda s: len(s) != 0, [clean_fn(w) for w in text])))
+        text = list(filter(lambda s: len(s) != 0, re.split('\s+', text)))
         return label, text
 
     def build_vocab(self, files, **kwargs):
@@ -486,7 +487,7 @@ class TSVSeqLabelReader(SeqLabelReader):
                 continue
             with codecs.open(file, encoding='utf-8', mode='r') as f:
                 for line in f:
-                    label, text = TSVSeqLabelReader.label_and_sentence(line)
+                    label, text = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn)
                     maxs = max(maxs, len(text))
                     for w in text:
                         maxw = max(maxw, len(w))
@@ -494,9 +495,7 @@ class TSVSeqLabelReader(SeqLabelReader):
                             for ch in w:
                                 vocab_chars[ch] += 1
 
-                        w = self.clean_fn(w)
-                        if len(w) > 0:
-                            vocab_words[w] += 1
+                        vocab_words[w] += 1
                     if label not in self.label2index:
                         self.label2index[label] = label_idx
                         label_idx += 1
@@ -535,7 +534,7 @@ class TSVSeqLabelReader(SeqLabelReader):
         examples = []
         with codecs.open(filename, encoding='utf-8', mode='r') as f:
             for offset, line in enumerate(f):
-                label, text = TSVSeqLabelReader.label_and_sentence(line)
+                label, text = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn)
                 y = self.label2index[label]
                 mx = min(len(text), nozplen)
                 text = text[:mx]
@@ -552,7 +551,7 @@ class TSVSeqLabelReader(SeqLabelReader):
                         for k in range(nch):
                             key = vocabs['char'].get(w[k], PAD)
                             xch[offset, k] = key
-                    key = words_vocab.get(self.clean_fn(w), PAD)
+                    key = words_vocab.get(w, PAD)
                     x[offset] = key
                 example = {'x': x, 'y': y, 'lengths': length}
                 if self.do_chars:
