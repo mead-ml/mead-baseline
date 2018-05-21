@@ -147,7 +147,11 @@ class SeqLabelExamples(object):
         batch = {}
 
         for k in keys:
-            batch[k] = vec_alloc([batchsz] + list(vec_shape(ex[k])), dtype=np.int)
+            field = ex[k]
+            if np.isscalar(field):
+                batch[k] = vec_alloc(batchsz, dtype=np.int)
+            else:
+                batch[k] = vec_alloc([batchsz] + list(vec_shape(ex[k])), dtype=np.int)
 
         sz = len(self.example_list)
         idx = start * batchsz
@@ -165,7 +169,6 @@ class SeqLabelExamples(object):
             max_src_len = max(max_src_len, ex[SeqWordCharTagExamples.SEQ_LEN])
             idx += 1
         return self._trim_batch(batch, keys, max_src_len) if trim else batch
-
 
 
 @exporter
