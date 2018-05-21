@@ -122,6 +122,16 @@ class SeqLabelExamples(object):
         x = self.example_list[0]['x']
         return len(x)
 
+    def _trim_batch(self, batch, keys, max_src_len):
+        for k in keys:
+            if k == SeqWordCharTagExamples.SEQ_CHAR:
+                batch[k] = batch[k][:, 0:max_src_len, :]
+            elif k in SeqWordCharTagExamples.SCALARS:
+                pass
+            else:
+                batch[k] = batch[k][:0, max_src_len]
+        return batch
+
     def batch(self, start, batchsz, trim=False, vec_alloc=np.empty, vec_shape=np.shape):
         """Get a batch of data
 
@@ -134,21 +144,10 @@ class SeqLabelExamples(object):
         """
         ex = self.example_list[start]
         keys = ex.keys()
-
-        if SeqLabelExamples.SEQ_CHAR in ex:
-            siglen, maxw = vec_shape(ex[SeqLabelExamples.SEQ_CHAR])
-        else:
-            siglen = vec_shape(ex[SeqLabelExamples.SEQ])[0]
-            maxw = 0
-
         batch = {}
+
         for k in keys:
-            if k == SeqLabelExamples.SEQ_CHAR:
-                batch[k] = vec_alloc((batchsz, siglen, maxw), dtype=np.int)
-            elif k in SeqLabelExamples.SCALARS:
-                batch[k] = vec_alloc((batchsz), dtype=np.int)
-            else:
-                batch[k] = vec_alloc((batchsz, siglen), dtype=np.int)
+            batch[k] = vec_alloc([batchsz] + list(vec_shape(ex[k])), dtype=np.int)
 
         sz = len(self.example_list)
         idx = start * batchsz
@@ -165,17 +164,8 @@ class SeqLabelExamples(object):
 
             max_src_len = max(max_src_len, ex[SeqWordCharTagExamples.SEQ_LEN])
             idx += 1
+        return self._trim_batch(batch, keys, max_src_len) if trim else batch
 
-        if trim:
-            for k in keys:
-                if k == SeqWordCharTagExamples.SEQ_CHAR:
-                    batch[k] = batch[k][:, 0:max_src_len, :]
-                elif k in SeqWordCharTagExamples.SCALARS:
-                    pass
-                else:
-                    batch[k] = batch[k][:0, max_src_len]
-
-        return batch
 
 
 @exporter
