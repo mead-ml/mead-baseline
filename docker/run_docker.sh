@@ -26,12 +26,12 @@ fi
 echo "using GPU: "${GPU_NUM}", container name: "${CON_NAME}
 
 CON_BUILD=baseline
-docker build --network=host -t ${CON_BUILD} -f Dockerfile ../
-if [ $? -ne 0 ]; then
-    echo "could not build container, exiting"
-    exit 1
+
+if [ -e $HOME/.bl-data ]; then
+    CACHE_MOUNT="-v $HOME/.bl-data:$HOME/.bl-data"
+else
+    CACHE_MOUNT=""
 fi
 
-
-NV_GPU=${GPU_NUM} nvidia-docker run -e LANG=C.UTF-8 --rm --name=${CON_NAME} --net=host -v /data/embeddings:/data/embeddings:ro -v /data/datasets:/data/datasets:ro -v /data/model-store:/data/model-store -v /data/model-checkpoints:/data/model-checkpoints -it ${CON_BUILD} bash
+NV_GPU=${GPU_NUM} nvidia-docker run -e LANG=C.UTF-8 --rm --name=${CON_NAME} --net=host -v /data/embeddings:/data/embeddings:ro -v /data/datasets:/data/datasets:ro -v /data/model-store:/data/model-store -v /data/model-checkpoints:/data/model-checkpoints ${CACHE_MOUNT} -it ${CON_BUILD} bash
 
