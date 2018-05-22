@@ -149,8 +149,10 @@ class SeqLabelExamples(object):
         for k in keys:
             field = ex[k]
             if np.isscalar(field):
+                # print('Expanding field {} to a list'.format(k))
                 batch[k] = vec_alloc(batchsz, dtype=np.int)
             else:
+                # print('Expanding field {} to a tensor'.format(k))
                 batch[k] = vec_alloc([batchsz] + list(vec_shape(ex[k])), dtype=np.int)
 
         sz = len(self.example_list)
@@ -165,8 +167,9 @@ class SeqLabelExamples(object):
             ex = self.example_list[idx]
             for k in keys:
                 batch[k][i] = ex[k]
-
-            max_src_len = max(max_src_len, ex[SeqWordCharTagExamples.SEQ_LEN])
+            # Hack + 0.5
+            if trim:
+                max_src_len = max(max_src_len, ex[SeqWordCharTagExamples.SEQ_LEN])
             idx += 1
         return self._trim_batch(batch, keys, max_src_len) if trim else batch
 
