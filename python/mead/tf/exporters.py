@@ -199,9 +199,9 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
         if not os.path.isdir(basepath):
             raise IOError("not a model directory")
 
-        for file in os.listdir(basepath):
-            if file.endswith(filetype_ending):
-                filename_without_ending = file[:-len(filetype_ending)]
+        for filename in os.listdir(basepath):
+            if filename.endswith(filetype_ending):
+                filename_without_ending = filename[:-len(filetype_ending)]
                 matching_files.append(filename_without_ending)
 
         return matching_files
@@ -221,9 +221,7 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
         model_file: the nonspecific path to the model. this could be 
                     /data/model/<model_name>. we need to remove the model name.
         """
-        print(model_file)
         model_name = model_file.split('/')[-1]
-        print('model_name: ', model_name)
         # the length of the name plus 1 for the hyphen separating the suffix.
         return [x[len(model_name)+1:] for x in filenames]
 
@@ -473,15 +471,12 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
             extra_info = self.task.config_params["extended_embed_info"]
 
             if embed_type not in extra_info:
-                raise ValueError("embedding dimension size could not be found for %s within the configuration's \
-'extended_embed_info' object. Please provide a %s object with 'dsz' key." % (embed_type, embed_type))
-            
-            return extra_info[embed_type]['dsz']
-
-        raise ValueError("could not find embedding type in configuration. If \
+                raise ValueError("could not find embedding type in configuration. If \
 the embedding is not of type 'word' or 'char', please fill in and put \
 { %s : {'dsz' : [ENTER_DIMENSION_SIZE_HERE] } } in the \
 'extended_embed_info config object." % (embed_type))
+            
+            return extra_info[embed_type]['dsz']
 
     def _initialize_embedding(self, dimensions_size, vocab):
         return baseline.RandomInitVecModel(dimensions_size, vocab, False)
