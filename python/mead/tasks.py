@@ -5,9 +5,9 @@ import logging
 import logging.config
 import mead.utils
 import os
-from mead.downloader import EmbeddingDownloader, DataDownloader, read_json
+from mead.downloader import EmbeddingDownloader, DataDownloader
 from mead.mime_type import mime_type
-from baseline.utils import export, read_config_file
+from baseline.utils import export, read_config_file, read_json, write_json
 
 __all__ = []
 exporter = export(__all__)
@@ -21,10 +21,16 @@ class Task(object):
         self.config_params = None
         self.ExporterType = None
         self.mead_config = mead_config
-        if mead_config is not None:
-            self.data_download_cache = os.path.expanduser(read_json(mead_config).get("datacache", "~/.bl-data/"))
+        if os.path.exists(mead_config):
+            mead_settings = read_json(mead_config)
         else:
-            self.data_download_cache = os.path.expanduser("~/.bl-data/")
+            mead_settings = {}
+        if 'datacache' not in mead_settings:
+            self.data_download_cache = os.path.expanduser("~/.bl-data")
+            mead_settings['datacache'] = self.data_download_cache
+            write_json(mead_settings, mead_config)
+        else:
+            self.data_download_cache = os.path.expanduser(mead_settings['datacache'])
         print("using {} as data/embeddings cache".format(self.data_download_cache))
         self._configure_logger(logger_file)
 

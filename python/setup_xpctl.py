@@ -61,6 +61,9 @@ def main():
                 'xpctl = xpctl.cli:cli'
             ],
         },
+        extras_require={
+            'test': []
+        },
         classifiers={
             'Development Status :: 2 - Pre-Alpha',
             'Environment :: Console',

@@ -1,7 +1,8 @@
+#!/bin/bash
+
 package=${1:-"baseline"}
 test=${2:-"test"}
 
-rm -rf *.egg*
 cp setup_$package.py setup.py
 pip install -e .[test]
 rm setup.py
