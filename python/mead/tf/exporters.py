@@ -39,7 +39,7 @@ class TensorFlowExporter(mead.exporters.Exporter):
             labels = json.load(f)
         return labels
 
-
+    
 @export(__all__)
 class ClassifyTensorFlowExporter(TensorFlowExporter):
 
@@ -183,6 +183,60 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
         super(TaggerTensorFlowExporter, self).__init__(task)
 
     @staticmethod
+    def _find_files_by_type(model_file, filetype):
+        """
+        I need to find all vocab files within a tensorflow model directory.
+        To do this, we will grab the directory and do a lookup by filetype.
+
+        we rely on the fact that vocab files end in .vocab.
+
+        :returns the file names without the filetype.
+        """
+        matching_files = []
+
+        filetype_ending = "." + filetype
+        basepath = TaggerTensorFlowExporter._get_dir_from_model_file(model_file)
+        if not os.path.isdir(basepath):
+            raise IOError("not a model directory")
+
+        for file in os.listdir(basepath):
+            if file.endswith(filetype_ending):
+                filename_without_ending = file[:-len(filetype_ending)]
+                matching_files.append(filename_without_ending)
+
+        return matching_files
+
+    @staticmethod
+    def _get_vocab_file_suffixes(model_file, filenames):
+        """
+        because our operations assume knowledge of the model name, we 
+        only need toreturn the suffix appended onto the end of the model 
+        name in the file.
+
+        we make the assumption that a suffix is denoted with a hyphen.
+
+        e.g.  a vocab file name = tagger-model-tf-30803-word.vocab
+              would return ['word']
+
+        model_file: the nonspecific path to the model. this could be 
+                    /data/model/<model_name>. we need to remove the model name.
+        """
+        print(model_file)
+        model_name = model_file.split('/')[-1]
+        print('model_name: ', model_name)
+        # the length of the name plus 1 for the hyphen separating the suffix.
+        return [x[len(model_name)+1:] for x in filenames]
+
+    @staticmethod
+    def _get_dir_from_model_file(model_file):
+        """
+        model file is a path, but to a nonspecific model name.
+
+        this method grabs the directory.
+        """
+        return os.path.dirname(model_file)
+
+    @staticmethod
     def read_vocab(basename, ty):
         vocab_file = '%s-%s.vocab' % (basename, ty)
         print('Reading {}', vocab_file)
@@ -204,6 +258,9 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
         return tok2index, vocab
 
     def _preproc_post_creator(self):
+        """
+        indices are created during vocab creation.
+        """
         word2index = self.word2index
         char2index = self.char2index
         lchars = self.lchars
@@ -263,11 +320,11 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
         saver.restore(sess, basename)
 
     def _run(self, sess, model_file, embeddings_set, output_dir, model_version):
-        self.word2index, vocab_word = TaggerTensorFlowExporter.read_vocab(model_file, 'word')
-        self.char2index, vocab_char = TaggerTensorFlowExporter.read_vocab(model_file, 'char')
-        upchars = tf.constant([chr(i) for i in range(65, 91)])
-        self.lchars = tf.constant([chr(i) for i in range(97, 123)])
-        self.upchars_lut = tf.contrib.lookup.index_table_from_tensor(mapping=upchars, num_oov_buckets=1, default_value=-1)
+        vocab_files = TaggerTensorFlowExporter._find_files_by_type(model_file, 'vocab')
+        vocab_suffixes = TaggerTensorFlowExporter._get_vocab_file_suffixes(model_file, vocab_files)
+        indices, vocabs = self._create_vocabs(model_file, vocab_suffixes)
+
+        self.assign_char_lookup()
 
         labels = self.load_labels(model_file)
         # Make the TF example, network input
@@ -278,22 +335,16 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
         tf_example = tf.parse_example(serialized_tf_example, feature_configs)
         raw_posts = tf_example[FIELD_NAME]
 
+        # self._preproc_post_creator requires these indices.
+        self.word2index = indices['word']
+        self.char2index = indices['char']
         # Run for each post
         x, xch, lengths = tf.map_fn(self._preproc_post_creator(), raw_posts,
                                     dtype=(tf.int64, tf.int64, tf.int32),
                                     back_prop=False)
 
-        word_embeddings = self.task.config_params["word_embeddings"]
-        dsz = embeddings_set[word_embeddings["label"]]["dsz"]
-        char_dsz = self.task.config_params["charsz"]
-        init_word_vectors = baseline.RandomInitVecModel(dsz, vocab_word, False)
-        init_char_vectors = baseline.RandomInitVecModel(char_dsz, vocab_char, False)
-        embeddings = {}
-        embeddings['word'] = init_word_vectors
-        embeddings['char'] = init_char_vectors
-        vocabs = {}
-        vocabs['word'] = vocab_word
-        vocabs['char'] = vocab_char
+        embeddings = self._initialize_embeddings_map(vocabs, embeddings_set)
+
         # WARNING: This can be a bug if the user defaults the values (-1)
         # for conll, the mxlen=124, for idr, the mxlen is forced to a max BPTT
         # for twpos, the mxlen=38
@@ -384,6 +435,56 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
         builder.save()
         print('Successfully exported model to %s' % output_dir)
 
+    def _create_vocabs(self, model_file, vocab_suffixes):
+        """
+        :model_file the path-like object to the model and model name.
+        :vocab_suffixes the list of vocab types. e.g. 'word', 'char', 'ner'.
+        """
+        vocabs = {}
+        indices = {}
+        for suffix in vocab_suffixes:
+            index, vocab = TaggerTensorFlowExporter.read_vocab(model_file, suffix)
+            vocabs[suffix] = vocab
+            indices[suffix] = index
+
+        return indices, vocabs
+
+    def assign_char_lookup(self):
+        upchars = tf.constant([chr(i) for i in range(65, 91)])
+        self.lchars = tf.constant([chr(i) for i in range(97, 123)])
+        self.upchars_lut = tf.contrib.lookup.index_table_from_tensor(mapping=upchars, num_oov_buckets=1, default_value=-1)
+        
+    def _initialize_embeddings_map(self, vocabs, embeddings_set):
+        embeddings = {}
+
+        for vocab_type in vocabs.keys():
+            dimension_size = self._get_embedding_dsz(embeddings_set, vocab_type)
+            embeddings[vocab_type] = self._initialize_embedding(dimension_size, vocabs[vocab_type])
+
+        return embeddings
+
+    def _get_embedding_dsz(self, embeddings_set, embed_type):
+        if embed_type == 'word':
+            word_embeddings = self.task.config_params["word_embeddings"]
+            return embeddings_set[word_embeddings["label"]]["dsz"]
+        elif embed_type == 'char':
+            return self.task.config_params["charsz"]
+        else:
+            extra_info = self.task.config_params["extended_embed_info"]
+
+            if embed_type not in extra_info:
+                raise ValueError("embedding dimension size could not be found for %s within the configuration's \
+'extended_embed_info' object. Please provide a %s object with 'dsz' key." % (embed_type, embed_type))
+            
+            return extra_info[embed_type]['dsz']
+
+        raise ValueError("could not find embedding type in configuration. If \
+the embedding is not of type 'word' or 'char', please fill in and put \
+{ %s : {'dsz' : [ENTER_DIMENSION_SIZE_HERE] } } in the \
+'extended_embed_info config object." % (embed_type))
+
+    def _initialize_embedding(self, dimensions_size, vocab):
+        return baseline.RandomInitVecModel(dimensions_size, vocab, False)
 
 @export(__all__)
 class Seq2SeqTensorFlowExporter(TensorFlowExporter):
