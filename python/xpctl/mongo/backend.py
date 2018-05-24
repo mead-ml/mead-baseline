@@ -162,7 +162,7 @@ class MongoRepo(ExperimentRepo):
                 for metric in ms:
                     data.append(result[event_type][index][metric])
                 results.append(
-                    [result['_id'], result['username'], result['label'], result['config']['dataset'], result['sha1'],
+                    [result['_id'], result['username'], result['label'], result['config']['dataset'], result.get('sha1'),
                      result['date']] + data)
         return pd.DataFrame(results, columns=['id', 'username', 'label', 'dataset', 'sha1', 'date'] + ms)
 
