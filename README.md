@@ -27,7 +27,9 @@ Additionally, the base models provided by the library can be [exported from save
 
 #### Installation
 
-Baseline can be installed as a python package with the command `./install_dev.sh baseline`. 
+Baseline can be installed as a python package with the command `./install_dev.sh baseline`.
+
+Currently xpctl depends on baseline but baseline is not on pypi so you need to install baseline before you install xpctl with `./install_dev.sh xpctl`
 
 #### A Note About Versions
 
