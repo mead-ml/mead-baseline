@@ -13,7 +13,7 @@ class About(object):
     URL = "https://www.github.com/{}/{}".format(AUTHOR, NAME)
     DOWNLOAD_URL = "{}/archive/{}.tar.gz".format(URL, VERSION)
     DOC_URL = "{}/tree/master/".format(URL)
-    DOC_NAME = 'README.md'
+    DOC_NAME = 'docs/{}.md'.format(NAME)
 
 def build_packages(backends, tasks):
     """Specify backends by hand so dev ones aren't included."""
@@ -48,7 +48,7 @@ def read_doc(f_name, new_name=None, fix_fn=fix_links):
     if new_name is None:
         new_name = f_name
     path = os.path.dirname(os.path.realpath(__file__))
-    doc_loc = os.path.join(path, '..', f_name)
+    doc_loc = os.path.normpath(os.path.join(path, '..', f_name))
     new_loc = os.path.join(path, new_name)
     if os.path.isfile(doc_loc):
         shutil.copyfile(doc_loc, new_loc)
@@ -60,7 +60,7 @@ def main():
         name='deep_{}'.format(About.NAME),
         version=About.VERSION,
         description='Strong Deep-Learning Baseline algorithms for NLP',
-        long_description=read_doc(About.DOC_NAME),
+        long_description=read_doc(About.DOC_NAME, new_name='README.md'),
         long_description_content_type="text/markdown",
         author=About.AUTHOR,
         author_email=About.EMAIL,

@@ -12,9 +12,8 @@ RUN apt-get update && \
 
 COPY python /baseline/python
 COPY docs /baseline/docs
-COPY test /baseline/test
 
-RUN  cd /baseline/python/ && bash ./install_dev.sh xpctl no_test && bash ./install_dev.sh baseline no_test
+RUN  cd /baseline/python/ && bash ./install_dev.sh baseline no_test && bash ./install_dev.sh xpctl no_test
 
 VOLUME ["/data/embeddings", "/data/model-store", "/data/datasets", "/data/model-checkpoints"]
 
