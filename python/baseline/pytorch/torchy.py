@@ -234,6 +234,39 @@ def pytorch_rnn(insz, hsz, rnntype, nlayers, dropout):
     return rnn
 
 
+class ParallelConv(nn.Module):
+
+    def __init__(self, insz, outsz, filtsz, activation_type, pdrop):
+        super(ParallelConv, self).__init__()
+        convs = []
+        outsz_filts = outsz
+
+        if type(outsz) == int:
+            outsz_filts = len(filtsz) * [outsz]
+
+        self.outsz = sum(outsz_filts)
+        for i, fsz in enumerate(filtsz):
+            pad = fsz//2
+            conv = nn.Sequential(
+                nn.Conv1d(insz, outsz_filts[i], fsz, padding=pad),
+                pytorch_activation(activation_type)
+            )
+            convs.append(conv)
+            # Add the module so its managed correctly
+        self.convs = nn.ModuleList(convs)
+        self.conv_drop = nn.Dropout(pdrop)
+
+    def forward(self, input_bct):
+        mots = []
+        for conv in self.convs:
+            # In Conv1d, data BxCxT, max over time
+            conv_out = conv(input_bct)
+            mot, _ = conv_out.max(2)
+            mots.append(mot)
+        mots = torch.cat(mots, 1)
+        return self.conv_drop(mots)
+
+
 class Highway(nn.Module):
 
     def __init__(self,

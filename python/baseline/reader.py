@@ -427,22 +427,21 @@ class TSVSeqLabelReader(SeqLabelReader):
                 "!": " ! ",
                 }
 
-    def __init__(self, mxlen=1000, mxfiltsz=0, clean_fn=None, vec_alloc=np.zeros, src_vec_trans=None):
+    def __init__(self, max_sentence_length=-1, max_word_length=-1, mxfiltsz=0, clean_fn=None, vec_alloc=np.zeros, src_vec_trans=None, do_chars=False):
         super(TSVSeqLabelReader, self).__init__()
 
         self.vocab = None
         self.label2index = {}
         self.clean_fn = clean_fn
-        self.mxlen = mxlen
+
+        self.max_sentence_length = max_sentence_length
+        self.max_word_length = max_word_length
         self.mxfiltsz = mxfiltsz
         self.vec_alloc = vec_alloc
         if self.clean_fn is None:
             self.clean_fn = lambda x: x
         self.src_vec_trans = src_vec_trans
-
-    @staticmethod
-    def splits(text):
-        return list(filter(lambda s: len(s) != 0, re.split('\s+', text)))
+        self.do_chars = do_chars
 
     @staticmethod
     def do_clean(l):
@@ -458,6 +457,7 @@ class TSVSeqLabelReader(SeqLabelReader):
         label = label_text[0]
         text = label_text[1:]
         text = ' '.join(list(filter(lambda s: len(s) != 0, [clean_fn(w) for w in text])))
+        text = list(filter(lambda s: len(s) != 0, re.split('\s+', text)))
         return label, text
 
     def build_vocab(self, files, **kwargs):
@@ -477,20 +477,41 @@ class TSVSeqLabelReader(SeqLabelReader):
                 files = filter(os.path.isfile, [os.path.join(base, x) for x in os.listdir(base)])
             else:
                 files = [files]
-
-        vocab = Counter()
+        maxs = 0
+        maxw = 0
+        vocab_words = Counter()
+        if self.do_chars:
+            vocab_chars = Counter()
         for file in files:
             if file is None:
                 continue
             with codecs.open(file, encoding='utf-8', mode='r') as f:
                 for line in f:
                     label, text = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn)
+                    maxs = max(maxs, len(text))
+                    for w in text:
+                        maxw = max(maxw, len(w))
+                        if self.do_chars:
+                            for ch in w:
+                                vocab_chars[ch] += 1
+
+                        vocab_words[w] += 1
                     if label not in self.label2index:
                         self.label2index[label] = label_idx
                         label_idx += 1
-                    for w in TSVSeqLabelReader.splits(text):
-                        vocab[w] += 1
 
+        vocab = {'word': vocab_words}
+        if self.do_chars:
+            vocab['char'] = vocab_chars
+
+        if self.max_sentence_length < 0:
+            self.max_sentence_length = maxs
+        if self.max_word_length < 0:
+            self.max_word_length = maxw
+        print('Max sentence length {}, requested length {}'.format(maxs, self.max_sentence_length))
+
+        if self.do_chars:
+            print('Max word length {}, requested length {}'.format(maxw, self.max_word_length))
         return vocab, self.get_labels()
 
     def get_labels(self):
@@ -499,31 +520,46 @@ class TSVSeqLabelReader(SeqLabelReader):
             labels[index] = label
         return labels
 
-    def load(self, filename, indices, batchsz, **kwargs):
+    def load(self, filename, vocabs, batchsz, **kwargs):
 
-        index = indices['word']
-        PAD = index['<PAD>']
+        words_vocab = vocabs['word']
+        mxlen = self.max_sentence_length
+        maxw = self.max_word_length
+        PAD = words_vocab['<PAD>']
         shuffle = kwargs.get('shuffle', False)
+        do_sort = kwargs.get('do_sort', False)
         halffiltsz = self.mxfiltsz // 2
-        nozplen = self.mxlen - 2*halffiltsz
+        nozplen = mxlen - 2*halffiltsz
 
         examples = []
         with codecs.open(filename, encoding='utf-8', mode='r') as f:
             for offset, line in enumerate(f):
                 label, text = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn)
                 y = self.label2index[label]
-                toks = TSVSeqLabelReader.splits(text)
-                mx = min(len(toks), nozplen)
-                toks = toks[:mx]
+                mx = min(len(text), nozplen)
+                text = text[:mx]
                 length = mx
-                x = self.vec_alloc(self.mxlen, dtype=int)
-                for j in range(len(toks)):
-                    w = toks[j]
-                    key = index.get(w, PAD)
-                    x[j+halffiltsz] = key
-                examples.append((x, y, length))
-        return baseline.data.SeqLabelDataFeed(baseline.data.SeqLabelExamples(examples),
-                                              batchsz=batchsz, shuffle=shuffle, vec_alloc=self.vec_alloc, src_vec_trans=self.src_vec_trans)
+                x = self.vec_alloc(mxlen, dtype=int)
+                xch = None
+                if self.do_chars:
+                    xch = self.vec_alloc((mxlen, maxw), dtype=int)
+                for j in range(len(text)):
+                    w = text[j]
+                    offset = j + halffiltsz
+                    if self.do_chars:
+                        nch = min(maxw, len(w))
+                        for k in range(nch):
+                            key = vocabs['char'].get(w[k], PAD)
+                            xch[offset, k] = key
+                    key = words_vocab.get(w, PAD)
+                    x[offset] = key
+                example = {'x': x, 'y': y, 'lengths': length}
+                if self.do_chars:
+                    example['xch'] = xch
+                examples.append(example)
+        return baseline.data.SeqLabelDataFeed(baseline.data.SeqLabelExamples(examples, do_shuffle=shuffle, do_sort=do_sort),
+                                              batchsz=batchsz, shuffle=shuffle,
+                                              vec_alloc=self.vec_alloc, src_vec_trans=self.src_vec_trans)
 
 
 @exporter
@@ -531,7 +567,8 @@ def create_pred_reader(mxlen, zeropadding, clean_fn, vec_alloc, src_vec_trans, *
     reader_type = kwargs.get('reader_type', 'default')
 
     if reader_type == 'default':
-        reader = TSVSeqLabelReader(mxlen, zeropadding, clean_fn, vec_alloc, src_vec_trans)
+        do_chars = kwargs.get('do_chars', False)
+        reader = TSVSeqLabelReader(mxlen, kwargs.get('mxwlen', -1), zeropadding, clean_fn, vec_alloc, src_vec_trans, do_chars)
     else:
         mod = import_user_module("reader", reader_type)
         reader = mod.create_pred_reader(mxlen, zeropadding, clean_fn, vec_alloc, src_vec_trans, **kwargs)

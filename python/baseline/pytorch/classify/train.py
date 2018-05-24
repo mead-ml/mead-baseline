@@ -39,8 +39,11 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
             print('using mom [%.3f]' % mom)
             self.optimizer = torch.optim.SGD(parameters, lr=eta, momentum=mom)
 
-        self.model = model.cuda()
         self.crit = model.create_loss().cuda()
+        self.model = torch.nn.DataParallel(model).cuda()
+
+    def _make_input(self, batch_dict):
+        return self.model.module.make_input(batch_dict)
 
     def _test(self, loader):
         self.model.eval()
@@ -50,8 +53,9 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
         cm = ConfusionMatrix(self.labels)
 
         for batch_dict in loader:
-            x, y = self.model.make_input(batch_dict)
-            pred = self.model(x)
+            vec = self._make_input(batch_dict)
+            y = vec[-1]
+            pred = self.model(vec[:-1])
             loss = self.crit(pred, y)
             total_loss += loss.item()
             _add_to_cm(cm, y, pred)
@@ -71,10 +75,10 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
         total_loss = 0
         for batch_dict in loader:
             self.optimizer.zero_grad()
-            x, y = self.model.make_input(batch_dict)
-            pred = self.model(x)
+            vec = self._make_input(batch_dict)
+            y = vec[-1]
+            pred = self.model(vec[:-1])
             loss = self.crit(pred, y)
-
             total_loss += loss.item()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.clip)

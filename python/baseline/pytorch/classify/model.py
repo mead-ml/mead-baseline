@@ -32,9 +32,7 @@ class WordClassifierBase(nn.Module, Classifier):
         model.labels = labels
         nc = len(labels)
         model.vocab = embeddings.vocab
-        model.lut = nn.Embedding(embeddings.vsz + 1, dsz)
-        del model.lut.weight
-        model.lut.weight = nn.Parameter(torch.FloatTensor(embeddings.weights), requires_grad=finetune)
+        model.lut = pytorch_embedding(embeddings, finetune)
         pool_dim = model._init_pool(dsz, **kwargs)
         stacked_dim = model._init_stacked(pool_dim, **kwargs)
         model._init_output(stacked_dim, nc)
@@ -59,7 +57,8 @@ class WordClassifierBase(nn.Module, Classifier):
 
     def forward(self, input):
         # BxTxC
-        embeddings = self.lut(input)
+        x = input[0]
+        embeddings = self.lut(x)
         pooled = self._pool(embeddings)
         stacked = self._stacked(pooled)
         return self.output(stacked)
@@ -101,34 +100,12 @@ class ConvModel(WordClassifierBase):
     def _init_pool(self, dsz, **kwargs):
         filtsz = kwargs['filtsz']
         cmotsz = kwargs['cmotsz']
-        convs = []
-        for i, fsz in enumerate(filtsz):
-            pad = fsz//2
-            conv = nn.Sequential(
-                nn.Conv1d(dsz, cmotsz, fsz, padding=pad),
-                pytorch_activation("relu")
-            )
-            convs.append(conv)
-            # Add the module so its managed correctly
-        self.convs = nn.ModuleList(convs)
-        # Width of concat of parallel convs
-        self.conv_drop = nn.Dropout(self.pdrop)
-
-        return cmotsz * len(filtsz)
+        self.parallel_conv = ParallelConv(dsz, cmotsz, filtsz, "relu", self.pdrop)
+        return self.parallel_conv.outsz
 
     def _pool(self, btc):
         embeddings = btc.transpose(1, 2).contiguous()
-        mots = []
-        for conv in self.convs:
-            # In Conv1d, data BxCxT, max over time
-            conv_out = conv(embeddings)
-            mot, _ = conv_out.max(2)
-            mots.append(mot)
-            #  Not required/working in latest pytorch
-            #mots.append(mot.squeeze(2))
-
-        mots = torch.cat(mots, 1)
-        return self.conv_drop(mots)
+        return self.parallel_conv(embeddings)
 
 
 class LSTMModel(WordClassifierBase):
