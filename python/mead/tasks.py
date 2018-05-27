@@ -202,9 +202,8 @@ class ClassifierTask(Task):
                                            clean_fn=self.config_params['preproc']['clean_fn'],
                                            vec_alloc=self.config_params['preproc']['vec_alloc'],
                                            src_vec_trans=self.config_params['preproc']['src_vec_trans'],
-                                           reader_type=self.config_params['loader']['reader_type'],
                                            mxwlen=self.config_params['preproc'].get('mxwlen', -1),
-                                           do_chars=self.config_params['loader'].get('do_chars', False))
+                                           **self.config_params['loader'])
 
     def _setup_task(self):
         backend = self.config_params.get('backend', 'tensorflow')

@@ -27,7 +27,6 @@ class DataFeed(object):
 
     def __iter__(self):
         shuffle = np.random.permutation(np.arange(self.steps)) if self.shuffle else np.arange(self.steps)
-
         for i in range(self.steps):
             si = shuffle[i]
             yield self._batch(si)
@@ -79,6 +78,9 @@ class SeqLabelExamples(object):
     
     Datasets of paired `(x, y)` data, where `x` is a tensor of data over time and `y` is a single label
     """
+    FORMAT_OBJS = 0
+    FORMAT_VECS = 1
+
     LABEL = 'y'
     SEQ = 'x'
     SEQ_CHAR = 'xch'
@@ -94,10 +96,16 @@ class SeqLabelExamples(object):
         :param do_sort: (``bool``) Sort the data.  Defaults to `True`
         """
         self.example_list = example_list
-        if do_shuffle:
+        self.data_format = SeqLabelExamples.FORMAT_VECS if type(self.example_list) is dict else SeqLabelExamples.FORMAT_OBJS
+
+        if do_shuffle and self.data_format == SeqLabelExamples.FORMAT_OBJS:
             random.shuffle(self.example_list)
+
         if do_sort:
-            self.example_list = sorted(self.example_list, key=lambda x: x[SeqWordCharTagExamples.SEQ_LEN])
+            if self.data_format == SeqLabelExamples.FORMAT_OBJS:
+                self.example_list = sorted(self.example_list, key=lambda x: x[SeqWordCharTagExamples.SEQ_LEN])
+            else:
+                print('Warning: pre-sorting by length not yet supported in vector format, use objs')
 
     def __getitem__(self, i):
         """Get a single example
@@ -105,41 +113,50 @@ class SeqLabelExamples(object):
         :param i: (``int``) simple index
         :return: an example
         """
-        return self.example_list[i]
+        if self.data_format == SeqLabelExamples.FORMAT_OBJS:
+            return self.example_list[i]
+        obj = dict((k, self.example_list[k][i]) for k in self.example_list.keys())
+        return obj
 
     def __len__(self):
         """Number of examples
         
         :return: (``int``) length of data
         """
-        return len(self.example_list)
+        if self.data_format == SeqLabelExamples.FORMAT_OBJS:
+            return len(self.example_list)
+
+        return len(self.example_list[SeqLabelExamples.SEQ])
 
     def width(self):
         """ Width of the temporal signal
         
         :return: (``int``) length
         """
-        x = self.example_list[0]['x']
-        return len(x)
+        if self.data_format == SeqLabelExamples.FORMAT_OBJS:
+            x_at_0 = self.example_list[0][SeqLabelExamples.SEQ]
+        else:
+            x_at_0 = self.example_list[SeqLabelExamples.SEQ][0]
+        return len(x_at_0)
 
     def _trim_batch(self, batch, keys, max_src_len):
         for k in keys:
-            if k == SeqWordCharTagExamples.SEQ_CHAR:
+            if k == SeqLabelExamples.SEQ_CHAR:
                 batch[k] = batch[k][:, 0:max_src_len, :]
-            elif k in SeqWordCharTagExamples.SCALARS:
+            elif k in SeqLabelExamples.SCALARS:
                 pass
             else:
                 batch[k] = batch[k][:0, max_src_len]
         return batch
 
-    def batch(self, start, batchsz, trim=False, vec_alloc=np.empty, vec_shape=np.shape):
+    def _batch_objs(self, start, batchsz, trim, vec_alloc, vec_shape):
         """Get a batch of data
 
         :param start: (``int``) The step index
         :param batchsz: (``int``) The batch size
         :param trim: (``bool``) Trim to maximum length in a batch
-        :param vec_alloc: A vector allocator, defaults to `numpy.empty`
-        :param vec_shape: A vector shape function, defaults to `numpy.shape`
+        :param vec_alloc: A vector allocator
+        :param vec_shape: A vector shape function
         :return: batched `x` word vector, `x` character vector, batched `y` vector, `length` vector, `ids`
         """
         ex = self.example_list[start]
@@ -171,6 +188,31 @@ class SeqLabelExamples(object):
             if trim:
                 max_src_len = max(max_src_len, ex[SeqWordCharTagExamples.SEQ_LEN])
             idx += 1
+        return batch, keys, max_src_len
+
+    def batch(self, start, batchsz, trim=False, vec_alloc=np.empty, vec_shape=np.shape):
+        """Get a batch of data
+
+        :param start: (``int``) The step index
+        :param batchsz: (``int``) The batch size
+        :param trim: (``bool``) Trim to maximum length in a batch
+        :param vec_alloc: A vector allocator, defaults to `numpy.empty`
+        :param vec_shape: A vector shape function, defaults to `numpy.shape`
+        :return: batched `x` word vector, `x` character vector, batched `y` vector, `length` vector, `ids`
+        """
+        if self.data_format == SeqLabelExamples.FORMAT_OBJS:
+            batch, keys, max_src_len = self._batch_objs(start, batchsz, trim, vec_alloc, vec_shape)
+        else:
+            keys = self.example_list.keys()
+            batch = {}
+            idx = start * batchsz
+            for k in keys:
+                vec = self.example_list[k]
+                if trim:
+                    batch[k] = vec[idx:idx+batchsz, ].copy()
+                else:
+                    batch[k] = vec[idx:idx+batchsz, ]
+                    # assert batch[k].base is vec
         return self._trim_batch(batch, keys, max_src_len) if trim else batch
 
 

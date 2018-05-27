@@ -9,6 +9,7 @@ import os
 __all__ = []
 exporter = export(__all__)
 
+
 @exporter
 def num_lines(filename):
     lines = 0
@@ -427,13 +428,13 @@ class TSVSeqLabelReader(SeqLabelReader):
                 "!": " ! ",
                 }
 
-    def __init__(self, max_sentence_length=-1, max_word_length=-1, mxfiltsz=0, clean_fn=None, vec_alloc=np.zeros, src_vec_trans=None, do_chars=False):
+    def __init__(self, max_sentence_length=-1, max_word_length=-1, mxfiltsz=0, clean_fn=None, vec_alloc=np.zeros, src_vec_trans=None, do_chars=False, data_format='objs'):
         super(TSVSeqLabelReader, self).__init__()
 
         self.vocab = None
         self.label2index = {}
         self.clean_fn = clean_fn
-
+        self.data_format = data_format
         self.max_sentence_length = max_sentence_length
         self.max_word_length = max_word_length
         self.mxfiltsz = mxfiltsz
@@ -531,32 +532,62 @@ class TSVSeqLabelReader(SeqLabelReader):
         halffiltsz = self.mxfiltsz // 2
         nozplen = mxlen - 2*halffiltsz
 
-        examples = []
-        with codecs.open(filename, encoding='utf-8', mode='r') as f:
-            for offset, line in enumerate(f):
-                label, text = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn)
-                y = self.label2index[label]
-                mx = min(len(text), nozplen)
-                text = text[:mx]
-                length = mx
-                x = self.vec_alloc(mxlen, dtype=int)
-                xch = None
-                if self.do_chars:
-                    xch = self.vec_alloc((mxlen, maxw), dtype=int)
-                for j in range(len(text)):
-                    w = text[j]
-                    offset = j + halffiltsz
+        if self.data_format == 'objs':
+            examples = []
+            with codecs.open(filename, encoding='utf-8', mode='r') as f:
+                for offset, line in enumerate(f):
+                    label, text = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn)
+                    y = self.label2index[label]
+                    mx = min(len(text), nozplen)
+                    text = text[:mx]
+                    length = mx
+                    x = self.vec_alloc(mxlen, dtype=int)
+                    xch = None
                     if self.do_chars:
-                        nch = min(maxw, len(w))
-                        for k in range(nch):
-                            key = vocabs['char'].get(w[k], PAD)
-                            xch[offset, k] = key
-                    key = words_vocab.get(w, PAD)
-                    x[offset] = key
-                example = {'x': x, 'y': y, 'lengths': length}
-                if self.do_chars:
-                    example['xch'] = xch
-                examples.append(example)
+                        xch = self.vec_alloc((mxlen, maxw), dtype=int)
+                    for j in range(len(text)):
+                        w = text[j]
+                        offset = j + halffiltsz
+                        if self.do_chars:
+                            nch = min(maxw, len(w))
+                            for k in range(nch):
+                                key = vocabs['char'].get(w[k], PAD)
+                                xch[offset, k] = key
+                        key = words_vocab.get(w, PAD)
+                        x[offset] = key
+                    example = {'x': x, 'y': y, 'lengths': length}
+                    if self.do_chars:
+                        example['xch'] = xch
+                    examples.append(example)
+        else:
+            num_samples = num_lines(filename)
+            x = self.vec_alloc((num_samples, mxlen), dtype=int)
+            y = self.vec_alloc(num_samples, dtype=int)
+            lengths = self.vec_alloc(num_samples, dtype=int)
+            if self.do_chars:
+                xch = self.vec_alloc((num_samples, mxlen, maxw), dtype=int)
+
+            with codecs.open(filename, encoding='utf-8', mode='r') as f:
+                for i, line in enumerate(f):
+                    label, text = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn)
+                    y[i] = self.label2index[label]
+                    mx = min(len(text), nozplen)
+                    text = text[:mx]
+                    lengths[i] = mx
+                    for j in range(len(text)):
+                        w = text[j]
+                        offset = j + halffiltsz
+                        if self.do_chars:
+                            nch = min(maxw, len(w))
+                            for k in range(nch):
+                                key = vocabs['char'].get(w[k], PAD)
+                                xch[i, offset, k] = key
+                        key = words_vocab.get(w, PAD)
+                        x[i, offset] = key
+
+            examples = {'x': x, 'y': y, 'lengths': lengths}
+            if self.do_chars:
+                examples['xch'] = xch
         return baseline.data.SeqLabelDataFeed(baseline.data.SeqLabelExamples(examples, do_shuffle=shuffle, do_sort=do_sort),
                                               batchsz=batchsz, shuffle=shuffle,
                                               vec_alloc=self.vec_alloc, src_vec_trans=self.src_vec_trans)
@@ -568,7 +599,9 @@ def create_pred_reader(mxlen, zeropadding, clean_fn, vec_alloc, src_vec_trans, *
 
     if reader_type == 'default':
         do_chars = kwargs.get('do_chars', False)
-        reader = TSVSeqLabelReader(mxlen, kwargs.get('mxwlen', -1), zeropadding, clean_fn, vec_alloc, src_vec_trans, do_chars)
+        data_format = kwargs.get('data_format', 'objs')
+        reader = TSVSeqLabelReader(mxlen, kwargs.get('mxwlen', -1), zeropadding, clean_fn, vec_alloc, src_vec_trans,
+                                   do_chars=do_chars, data_format=data_format)
     else:
         mod = import_user_module("reader", reader_type)
         reader = mod.create_pred_reader(mxlen, zeropadding, clean_fn, vec_alloc, src_vec_trans, **kwargs)

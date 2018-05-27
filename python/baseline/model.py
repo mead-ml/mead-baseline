@@ -12,6 +12,7 @@ from baseline.utils import (
 __all__ = []
 exporter = export(__all__)
 
+
 @exporter
 class Classifier(object):
     """Text classifier
