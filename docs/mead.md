@@ -93,7 +93,7 @@ Here is a simple example of configuring `mead` to run a BLSTM-CRF in `pytorch` a
 
 To train a model use the [trainer.py](../python/mead/trainer.py) utility in the directory:
 
-```python
+```
 python trainer.py --config config/conll.json --task tagger
 ```
 
