@@ -89,6 +89,17 @@ Here is a simple example of configuring `mead` to run a BLSTM-CRF in `pytorch` a
 
 ```
 
+### Training 
+
+To train a model use the [trainer.py](../python/mead/trainer.py) utility in the directory:
+
+```
+python trainer.py --config config/conll.json --task tagger
+```
+
+See more running options in [trainer.py](../python/mead/trainer.py).
+
+
 ### Dataset and Embeddings
 You can provide your own dataset and embedding files in `mead` by changing the `datasets.json` or `embeddings.json`. We provide some standard ones, see [this doc](dataset-embedding.md) for details.
 
