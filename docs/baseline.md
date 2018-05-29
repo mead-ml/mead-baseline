@@ -41,7 +41,7 @@ The driver programs available in baseline are:
   
 However, we recommend training the models through [mead](../python/mead/README.md). For running through mead, use the [trainer.py](../python/mead/trainer.py) utility in the directory:
 
-```python
+```
 python trainer.py --config config/conll.json --task tagger
 ```
 
