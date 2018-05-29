@@ -30,6 +30,29 @@ The Baseline module has dependencies on:
 - `PyYAML` is an optional dependency, which, if installed, allows [mead](mead.md) configurations to be provided with YAML instead of JSON
 - When the GPU is used, the code assumes that `cudnn` is available and installed. This is critical for good performance.
 
+## Running the codes
+
+The driver programs available in baseline are:
+
+- **Classification**: _train_: [classify_sentence.py](../python/classify_sentence.py) 
+- **Sequence Tagging**: _train_ : [tag_char_rnn.py](../python/tag_char_rnn.py), _test_: [tag.py](../python/tag.py)
+- **Language Modeling**: _train_: [wchar_lm.py](../python/wchar_lm.py) 
+- **Encoder Decoder**: _train_ [seq2seq.py](../python/seq2seq.py), _test_: [translate.py](../python/translate.py)  
+  
+However, we recommend training the models through [mead](../python/mead/README.md). For running through mead, use the [trainer.py](../python/mead/trainer.py) utility in the directory:
+
+```python
+python trainer.py --config config/conll.json --task tagger
+```
+
+See more running options in [trainer.py](../python/mead/trainer.py).
+
+To run these codes `baseline/python` should be available in your `PYTHONPATH` variable.  
+
+### Installing Baseline as a Python Package
+
+Baseline can be installed as a python package using the script [install_dev.sh](../python/install_dev.sh). To install, run the command: `./install.sh baseline`. Once installed, you can use the commands: `mead.train` and `mead.export` to  run the [trainer](../python/mead/trainer.py) or the [exporter](../python/mead/export.py) (with the same options as before) w/o putting baseline in PYTHONPATH. 
+
 ## Baseline as an API
 
 The latest code provides a high-level Python API to access common deep-learning NLP approaches.  This should facilitate faster research in any language, as these tasks are fairly standard for NLP.  The data loaders and data feeds are all reusable, as are the basic harnesses for the APIs.  To get an understanding for how to structure a program to use baseline, have a look at the command line programs for each task.
