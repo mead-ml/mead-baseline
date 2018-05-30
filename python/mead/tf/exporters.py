@@ -1,13 +1,14 @@
-import tensorflow as tf
-import json
-import baseline
 import os
+import json
+import tensorflow as tf
+from google.protobuf import text_format
 from tensorflow.python.framework.errors_impl import NotFoundError
+import baseline
 import mead.utils
 import mead.exporters
 from mead.tf.preprocessor import PreprocessorCreator
 from baseline.utils import export
-from baseline.tf.tfy import get_vocab_file_suffixes
+from baseline.tf.tfy import get_vocab_file_suffixes, _add_ema
 FIELD_NAME = 'text/tokens'
 
 __all__ = []
@@ -24,6 +25,12 @@ class TensorFlowExporter(mead.exporters.Exporter):
 
     def restore_model(self, sess, basename):
         saver = tf.train.Saver()
+        # If there is a eval saver defined load that.
+        if os.path.exists(basename + '.eval_saver'):
+            with open(basename + '.eval_saver') as fsv:
+                eval_saver_def = tf.train.SaverDef()
+                text_format.Merge(fsv.read(), eval_saver_def)
+                saver = tf.train.Saver(saver_def=eval_saver_def)
         sess.run(tf.tables_initializer())
         sess.run(tf.global_variables_initializer())
         try:
@@ -132,7 +139,9 @@ class TensorFlowExporter(mead.exporters.Exporter):
     def _get_embedding_dsz(self, embeddings_set, embed_type):
         if embed_type == 'word':
             word_embeddings = self.task.config_params["word_embeddings"]
-            return embeddings_set[word_embeddings["label"]]["dsz"]
+            if 'label' in word_embeddings:
+                return embeddings_set[word_embeddings["label"]]["dsz"]
+            return word_embeddings['dsz']
         elif embed_type == 'char':
             return self.task.config_params["charsz"]
         else:
@@ -191,6 +200,9 @@ class ClassifyTensorFlowExporter(TensorFlowExporter):
         model_params["maxw"] = mxwlen
         print(model_params)
         model = baseline.tf.classify.create_model(embeddings, labels, **model_params)
+        # If the model was trained with EMA add these to the graph
+        if 'ema_decay' in self.task.config_params['train']:
+            model.ema, model.ema_op, model.eval_saver = _add_ema(model, self.task.config_params['train']['ema_decay'])
         softmax_output = tf.nn.softmax(model.logits)
 
         values, indices = tf.nn.top_k(softmax_output, len(labels))

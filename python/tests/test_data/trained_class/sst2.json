@@ -1,5 +1,4 @@
 {
-    "task": "classify",
     "batchsz": 50,
     "preproc": {
         "mxlen": 100,
@@ -9,18 +8,18 @@
     "backend": "tensorflow",
     "dataset": "SST2",
     "loader": {
+        "eval": true,
         "reader_type": "default"
     },
     "unif": 0.25,
     "model": {
-        "model_type": "default",
-        "filtsz": [3, 4, 5],
-        "cmotsz": 100,
+        "model_type": "nbow",
+        "hsz": 2,
         "dropout": 0.5,
         "finetune": true
     },
     "word_embeddings": {
-        "label": "w2v-gn"
+        "dsz": 3
     },
     "train": {
         "epochs": 2,

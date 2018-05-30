@@ -1,8 +1,9 @@
-import tensorflow as tf
-import numpy as np
-from google.protobuf import text_format
-from tensorflow.python.platform import gfile
+import os
 import json
+import numpy as np
+import tensorflow as tf
+from tensorflow.python.platform import gfile
+from google.protobuf import text_format
 from tensorflow.contrib.layers import fully_connected, xavier_initializer
 from baseline.utils import fill_y, listify
 from baseline.model import Classifier, load_classifier_model, create_classifier_model
@@ -49,6 +50,11 @@ class WordClassifierBase(Classifier):
         tf.train.write_graph(self.sess.graph_def, outdir, base + '.graph', as_text=False)
         with open(basename + '.saver', 'w') as f:
             f.write(str(self.saver.as_saver_def()))
+        # If we have an eval_saver used for ema loading save that
+        if hasattr(self, 'eval_saver'):
+            with open(basename + '.eval_saver', 'w') as f:
+                f.write(str(self.eval_saver.as_saver_def()))
+        self.saver.save(self.sess, basename + '.model')
 
         with open(basename + '.labels', 'w') as f:
             json.dump(self.labels, f)
@@ -149,10 +155,17 @@ class WordClassifierBase(Classifier):
         :return: A restored model
         """
         sess = kwargs.get('session', tf.Session())
+        eval_ = kwargs.get('eval', False)
         model = cls()
         with open(basename + '.saver') as fsv:
             saver_def = tf.train.SaverDef()
             text_format.Merge(fsv.read(), saver_def)
+        # If there is an eval saver load it
+        if os.path.exists(basename + '.eval_saver'):
+            with open(basename + '.eval_saver') as fsv:
+                eval_saver_def = tf.train.SaverDef()
+                text_format.Merge(fsv.read(), eval_saver_def)
+                model.eval_saver = tf.train.Saver(saver_def=eval_saver_def)
 
         checkpoint_name = kwargs.get('checkpoint_name', basename)
         checkpoint_name = checkpoint_name or basename
@@ -163,10 +176,16 @@ class WordClassifierBase(Classifier):
             sess.graph.as_default()
             tf.import_graph_def(gd, name='')
             try:
-                sess.run(saver_def.restore_op_name, {saver_def.filename_tensor_name: checkpoint_name})
+                if eval_ and hasattr(model, 'eval_saver'):
+                    sess.run(eval_saver_def.restore_op_name, {eval_saver_def.filename_tensor_name: basename})
+                else:
+                    sess.run(saver_def.restore_op_name, {saver_def.filename_tensor_name: checkpoint_name})
             except:
                 # Backwards compat
-                sess.run(saver_def.restore_op_name, {saver_def.filename_tensor_name: checkpoint_name + ".model"})
+                if eval_ and hasattr(model, 'eval_saver'):
+                    sess.run(eval_saver_def.restore_op_name, {eval_saver_def.filename_tensor_name: basename + ".model"})
+                else:
+                    sess.run(saver_def.restore_op_name, {saver_def.filename_tensor_name: checkpoint_name + ".model"})
 
             model.x = tf.get_default_graph().get_tensor_by_name('x:0')
             model.y = tf.get_default_graph().get_tensor_by_name('y:0')
@@ -414,7 +433,7 @@ class NBowBase(WordClassifierBase):
         :return:
         """
         kwargs['hsz'] = kwargs.get('hsz', [100])
-        return super(NBowBase, self).stacked()
+        return super(NBowBase, self).stacked(pooled, init)
 
 
 class NBowModel(NBowBase):
