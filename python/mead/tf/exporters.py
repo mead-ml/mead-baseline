@@ -5,7 +5,7 @@ import os
 import mead.utils
 import mead.exporters
 from baseline.utils import export
-
+from baseline.tf.tfy import get_vocab_file_suffixes
 FIELD_NAME = 'text/tokens'
 
 __all__ = []
@@ -183,60 +183,8 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
         super(TaggerTensorFlowExporter, self).__init__(task)
 
     @staticmethod
-    def _find_files_by_type(model_file, filetype):
-        """
-        I need to find all vocab files within a tensorflow model directory.
-        To do this, we will grab the directory and do a lookup by filetype.
-
-        we rely on the fact that vocab files end in .vocab.
-
-        :returns the file names without the filetype.
-        """
-        matching_files = []
-
-        filetype_ending = "." + filetype
-        basepath = TaggerTensorFlowExporter._get_dir_from_model_file(model_file)
-        if not os.path.isdir(basepath):
-            raise IOError("not a model directory")
-
-        for filename in os.listdir(basepath):
-            if filename.endswith(filetype_ending):
-                filename_without_ending = filename[:-len(filetype_ending)]
-                matching_files.append(filename_without_ending)
-
-        return matching_files
-
-    @staticmethod
-    def _get_vocab_file_suffixes(model_file, filenames):
-        """
-        because our operations assume knowledge of the model name, we 
-        only need toreturn the suffix appended onto the end of the model 
-        name in the file.
-
-        we make the assumption that a suffix is denoted with a hyphen.
-
-        e.g.  a vocab file name = tagger-model-tf-30803-word.vocab
-              would return ['word']
-
-        model_file: the nonspecific path to the model. this could be 
-                    /data/model/<model_name>. we need to remove the model name.
-        """
-        model_name = model_file.split('/')[-1]
-        # the length of the name plus 1 for the hyphen separating the suffix.
-        return [x[len(model_name)+1:] for x in filenames]
-
-    @staticmethod
-    def _get_dir_from_model_file(model_file):
-        """
-        model file is a path, but to a nonspecific model name.
-
-        this method grabs the directory.
-        """
-        return os.path.dirname(model_file)
-
-    @staticmethod
     def read_vocab(basename, ty):
-        vocab_file = '%s-%s.vocab' % (basename, ty)
+        vocab_file = '{}-{}.vocab'.format(basename, ty)
         print('Reading {}', vocab_file)
         with open(vocab_file, 'r') as f:
             vocab = json.load(f)
@@ -318,8 +266,8 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
         saver.restore(sess, basename)
 
     def _run(self, sess, model_file, embeddings_set, output_dir, model_version):
-        vocab_files = TaggerTensorFlowExporter._find_files_by_type(model_file, 'vocab')
-        vocab_suffixes = TaggerTensorFlowExporter._get_vocab_file_suffixes(model_file, vocab_files)
+
+        vocab_suffixes = get_vocab_file_suffixes(model_file)
         indices, vocabs = self._create_vocabs(model_file, vocab_suffixes)
 
         self.assign_char_lookup()
