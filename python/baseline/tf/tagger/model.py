@@ -29,6 +29,15 @@ class RNNTaggerModel(Tagger):
         with open(basename + '.labels', 'w') as f:
             json.dump(self.labels, f)
 
+        # What it should do
+        # vocab_suffixes = get_vocab_file_suffixes(basename)
+        # for ty in vocab_suffixes:
+        #    vocab_file = '{}-{}.vocab'.format(basename, ty)
+        #    print('Reading {}', vocab_file)
+        #    with open(vocab_file, 'r') as f:
+        #        self.vocab[ty] = json.load(f)
+
+        # Until we have backwards compat, figured out, do same as before...
         if len(self.word_vocab) > 0:
             with open(basename + '-word.vocab', 'w') as f:
                 json.dump(self.word_vocab, f)
@@ -230,7 +239,7 @@ class RNNTaggerModel(Tagger):
         Wch = tf.Variable(tf.constant(char_vec.weights, dtype=tf.float32), name="Wch")
         ce0 = tf.scatter_update(Wch, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, char_dsz]))
 
-        word_char = RNNTaggerModel.pool_chars(Wch, ce0, char_dsz, kwargs, model)
+        word_char, _ = pool_chars(model.xch, Wch, ce0, char_dsz, **kwargs)
         joint = word_char if word_vec is None else tf.concat(values=[wembed, word_char], axis=2)
         embedseq = tf.nn.dropout(joint, model.pkeep)
 
@@ -270,23 +279,6 @@ class RNNTaggerModel(Tagger):
             model.best = tf.argmax(model.probs, 2)
         return model
 
-    @staticmethod
-    def pool_chars(Wch, ce0, char_dsz, kwargs, model):
-        wsz = kwargs.get('wsz', 30)
-        filtsz = kwargs.get('cfiltsz')
-        with tf.variable_scope("Chars2Word"):
-            with tf.control_dependencies([ce0]):
-                rnnchar_bt_x_w = tf.reshape(model.xch, [-1, model.maxw])
-                mxfiltsz = np.max(filtsz)
-                halffiltsz = mxfiltsz // 2
-                zeropad = tf.pad(rnnchar_bt_x_w, [[0, 0], [halffiltsz, halffiltsz]], "CONSTANT")
-                cembed = tf.nn.embedding_lookup(Wch, zeropad, name="embeddings")
-                cmot = char_word_conv_embeddings(cembed, filtsz, char_dsz, wsz,
-                                                 activation_fn=tf_activation(model.activation_type))
-                word_char = tf.reshape(cmot, [-1, model.mxlen, len(filtsz) * wsz])
-
-        return word_char
-
 BASELINE_TAGGER_MODELS = {
     'default': RNNTaggerModel.create,
 }
@@ -294,6 +286,7 @@ BASELINE_TAGGER_MODELS = {
 BASELINE_TAGGER_LOADERS = {
     'default': RNNTaggerModel.load
 }
+
 
 def create_model(labels, embeddings, **kwargs):
     return create_tagger_model(BASELINE_TAGGER_MODELS, labels, embeddings, **kwargs)

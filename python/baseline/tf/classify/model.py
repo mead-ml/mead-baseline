@@ -6,7 +6,9 @@ import json
 from tensorflow.contrib.layers import fully_connected, xavier_initializer
 from baseline.utils import fill_y, listify
 from baseline.model import Classifier, load_classifier_model, create_classifier_model
-from baseline.tf.tfy import lstm_cell_w_dropout, parallel_conv
+from baseline.tf.tfy import lstm_cell_w_dropout, parallel_conv, get_vocab_file_suffixes, pool_chars
+from baseline.version import __version__
+import os
 
 
 class WordClassifierBase(Classifier):
@@ -27,26 +29,47 @@ class WordClassifierBase(Classifier):
         """
         super(WordClassifierBase, self).__init__()
 
-    def save(self, outfile):
-        """Save a word-based model, along with the label and word indices
-        
-        :param outfile: 
-        :return: 
-        """
-        path_and_file = outfile.split('/')
-        outdir = '/'.join(path_and_file[:-1])
-        base = path_and_file[-1]
-        basename = outdir + '/' + base
+    def save_values(self, basename):
+        self.saver.save(self.sess, basename)
+
+    def save_md(self, basename):
+
+        path = basename.split('/')
+        base = path[-1]
+        outdir = '/'.join(path[:-1])
+
+        state = {"mxlen": self.mxlen, "version": __version__}
+        if self.mxwlen is not None:
+            state["mxwlen"] = self.mxwlen
+        with open(basename + '.state', 'w') as f:
+            json.dump(state, f)
+
         tf.train.write_graph(self.sess.graph_def, outdir, base + '.graph', as_text=False)
         with open(basename + '.saver', 'w') as f:
             f.write(str(self.saver.as_saver_def()))
-        self.saver.save(self.sess, basename + '.model')
 
         with open(basename + '.labels', 'w') as f:
             json.dump(self.labels, f)
 
-        with open(basename + '.vocab', 'w') as f:
-            json.dump(self.vocab, f)
+        for key in self.vocab.keys():
+            with open(basename + '-{}.vocab'.format(key), 'w') as f:
+                json.dump(self.vocab[key], f)
+
+    def load_md(self, basename):
+
+        state_file = basename + '.state'
+        # Backwards compat for now
+        if not os.path.exists(state_file):
+            return
+
+        with open(state_file, 'w') as f:
+            state = json.load(f)
+            self.mxlen = state.get('mxlen')
+            self.mxwlen = state.get('mxwlen')
+
+    def save(self, basename):
+        self.save_md(basename)
+        self.save_values(basename)
 
     def create_loss(self):
         """The loss function is currently provided here, although this is not a great place for it
@@ -67,8 +90,7 @@ class WordClassifierBase(Classifier):
         :param x: The `x` tensor of input (`BxT`)
         :return: Each outcome as a ``list`` of tuples `(label, probability)`
         """
-        x = batch_dict['x']
-        feed_dict = {self.x: x, self.pkeep: 1.0}
+        feed_dict = self.make_input(self, batch_dict)
         probs = self.sess.run(tf.nn.softmax(self.logits), feed_dict=feed_dict)
         results = []
         batchsz = probs.shape[0]
@@ -78,18 +100,19 @@ class WordClassifierBase(Classifier):
         return results
 
     def make_input(self, batch_dict, do_dropout=False):
-        """Convert from an input of x and y tensors to a `feed_dict`
-        
-        :param x: Input tensor `x` (`BxT`)
-        :param y: Input tensor `y` (`B`)
-        :param do_dropout: Defaults to off.  If its on, use the dropout value provided during model construction
-        :return: A `feed_dict`
-        """
-
         x = batch_dict['x']
-        y = batch_dict['y']
-        pkeep = 1.0 - self.pdrop_value if do_dropout else 1
-        return {self.x: x, self.y: fill_y(len(self.labels), y), self.pkeep: pkeep}
+        y = batch_dict.get('y', None)
+        xch = batch_dict.get('xch')
+        lengths = batch_dict.get('lengths')
+        pkeep = 1.0 - self.pdrop_value if do_dropout else 1.0
+        feed_dict = {self.x: x, self.pkeep: pkeep}
+        if xch is not None and self.xch is not None:
+            feed_dict[self.xch] = xch
+        #if lengths is not None and self.lengths is not None:
+        #    feed_dict[self.lengths] = lengths
+        if y is not None:
+            feed_dict[self.y] = fill_y(len(self.labels), y)
+        return feed_dict
 
     def get_labels(self):
         """Get the string labels back
@@ -98,12 +121,14 @@ class WordClassifierBase(Classifier):
         """
         return self.labels
 
-    def get_vocab(self):
+    def get_vocab(self, name=None):
         """Get the vocab back, as a ``dict`` of ``str`` keys mapped to ``int`` values
         
         :return: A ``dict`` of words mapped to indices
         """
-        return self.vocab
+        if name is None:
+            return self.vocab['word']
+        return self.vocab[name]
 
     @classmethod
     def load(cls, basename, **kwargs):
@@ -135,17 +160,38 @@ class WordClassifierBase(Classifier):
             sess.run(saver_def.restore_op_name, {saver_def.filename_tensor_name: basename + '.model'})
             model.x = tf.get_default_graph().get_tensor_by_name('x:0')
             model.y = tf.get_default_graph().get_tensor_by_name('y:0')
+            try:
+                model.xch = tf.get_default_graph().has_tensor_by_name('xch:0')
+            except:
+                model.xch = None
+            try:
+                model.lengths = tf.get_default_graph().has_tensor_by_name('lengths:0')
+            except:
+                model.lengths = None
             model.pkeep = tf.get_default_graph().get_tensor_by_name('pkeep:0')
             model.best = tf.get_default_graph().get_tensor_by_name('output/best:0')
             model.logits = tf.get_default_graph().get_tensor_by_name('output/logits:0')
         with open(basename + '.labels', 'r') as f:
             model.labels = json.load(f)
 
-        with open(basename + '.vocab', 'r') as f:
-            model.vocab = json.load(f)
+        model.vocab = {}
+
+        # Backwards compat
+        if os.path.exists(basename + '.vocab'):
+            with open(basename + '.vocab', 'r') as f:
+                model.vocab['word'] = json.load(f)
+        # Grep for all features
+        else:
+            vocab_suffixes = get_vocab_file_suffixes(basename)
+            for ty in vocab_suffixes:
+                vocab_file = '{}-{}.vocab'.format(basename, ty)
+            print('Reading {}', vocab_file)
+            with open(vocab_file, 'r') as f:
+                model.vocab[ty] = json.load(f)
 
         model.saver = tf.train.Saver(saver_def=saver_def)
         model.sess = sess
+        model.load_md(basename)
         return model
 
     @classmethod
@@ -179,20 +225,24 @@ class WordClassifierBase(Classifier):
         """
         sess = kwargs.get('sess', tf.Session())
         finetune = bool(kwargs.get('finetune', True))
-        mxlen = int(kwargs.get('mxlen', 100))
         w2v = embeddings['word']
+        c2v = embeddings.get('char')
+
         model = cls()
-        dsz = w2v.dsz
+        word_dsz = w2v.dsz
+        wchsz = 0
         model.labels = labels
         nc = len(labels)
         model.vocab = w2v.vocab
+        model.mxlen = int(kwargs.get('mxlen', 100))
+        model.mxwlen = None
         # This only exists to make exporting easier
         model.pkeep = kwargs.get('pkeep', tf.placeholder(tf.float32, name="pkeep"))
         model.pdrop_value = kwargs.get('dropout', 0.5)
         # This only exists to make exporting easier
-        model.x = kwargs.get('x', tf.placeholder(tf.int32, [None, mxlen], name="x"))
+        model.x = kwargs.get('x', tf.placeholder(tf.int32, [None, model.mxlen], name="x"))
         model.y = kwargs.get('y', tf.placeholder(tf.int32, [None, nc], name="y"))
-
+        model.xch = None
         seed = np.random.randint(10e8)
         init = tf.random_uniform_initializer(-0.05, 0.05, dtype=tf.float32, seed=seed)
         xavier_init = xavier_initializer(True, seed)
@@ -200,11 +250,22 @@ class WordClassifierBase(Classifier):
         # Use pre-trained embeddings from word2vec
         with tf.name_scope("LUT"):
             W = tf.Variable(tf.constant(w2v.weights, dtype=tf.float32), name="W", trainable=finetune)
-            e0 = tf.scatter_update(W, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, dsz]))
+            e0 = tf.scatter_update(W, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, word_dsz]))
             with tf.control_dependencies([e0]):
                 word_embeddings = tf.nn.embedding_lookup(W, model.x)
 
-        pooled = model.pool(word_embeddings, dsz, init, **kwargs)
+        if c2v is not None:
+            model.mxwlen = int(kwargs.get('mxwlen', 40))
+            model.xch = kwargs.get('xch', tf.placeholder(tf.int32, [None, model.mxlen, model.mxwlen]))
+            char_dsz = c2v.dsz
+            with tf.name_scope("CharLUT"):
+                Wch = tf.Variable(tf.constant(c2v.weights, dtype=tf.float32), name="Wch", trainable=True)
+                ech0 = tf.scatter_update(Wch, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, char_dsz]))
+                char_comp, wchsz = pool_chars(model.xch, Wch, ech0, char_dsz, **kwargs)
+                word_embeddings = tf.concat(values=[word_embeddings, char_comp], axis=2)
+
+        input_sz = word_dsz + wchsz
+        pooled = model.pool(word_embeddings, input_sz, init, **kwargs)
         stacked = model.stacked(pooled, init, **kwargs)
 
         # For fully connected layers, use xavier (glorot) transform
