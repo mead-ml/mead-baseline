@@ -192,8 +192,6 @@ class WordClassifierBase(Classifier):
         # This only exists to make exporting easier
         model.x = kwargs.get('x', tf.placeholder(tf.int32, [None, mxlen], name="x"))
         model.y = kwargs.get('y', tf.placeholder(tf.int32, [None, nc], name="y"))
-        # I wish there was an elegant way to avoid this
-        filtsz = kwargs.get('filtsz', [3, 4, 5]) if kwargs.get('model_type', 'default') == 'default' else 0
 
         seed = np.random.randint(10e8)
         init = tf.random_uniform_initializer(-0.05, 0.05, dtype=tf.float32, seed=seed)
@@ -207,15 +205,12 @@ class WordClassifierBase(Classifier):
                 word_embeddings = tf.nn.embedding_lookup(W, model.x)
 
         pooled = model.pool(word_embeddings, dsz, init, **kwargs)
-        # combine = highway_conns(combine, wsz_all, 1)
-
         stacked = model.stacked(pooled, init, **kwargs)
 
         # For fully connected layers, use xavier (glorot) transform
         with tf.contrib.slim.arg_scope(
                 [fully_connected],
                 weights_initializer=xavier_init):
-
             with tf.name_scope("output"):
                 model.logits = tf.identity(fully_connected(stacked, nc, activation_fn=None), name="logits")
                 model.best = tf.argmax(model.logits, 1, name="best")
