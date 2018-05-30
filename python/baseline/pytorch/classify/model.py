@@ -4,6 +4,7 @@ import math
 import json
 from baseline.model import Classifier, load_classifier_model, create_classifier_model
 from baseline.pytorch.torchy import *
+from baseline.utils import listify
 import torch.backends.cudnn as cudnn
 cudnn.benchmark = True
 
@@ -76,10 +77,26 @@ class WordClassifierBase(nn.Module, Classifier):
         pass
 
     def _stacked(self, pooled):
-        return pooled
+        if self.stacked is None:
+            return pooled
+        return self.stacked(pooled)
 
     def _init_stacked(self, input_dim, **kwargs):
-        return input_dim
+        hszs = listify(kwargs.get('hsz', []))
+        if len(hszs) == 0:
+            self.stacked = None
+            return input_dim
+        self.stacked = nn.Sequential()
+        #append2seq(self.stacked, [nn.Dropout(self.pdrop)])
+        layers = []
+        in_layer_sz = input_dim
+        for i, hsz in enumerate(hszs):
+            layers.append(nn.Linear(in_layer_sz, hsz))
+            layers.append(nn.ReLU())
+            layers.append(nn.Dropout(self.pdrop))
+            in_layer_sz = hsz
+        append2seq(self.stacked, layers)
+        return in_layer_sz
 
     def _init_output(self, input_dim, nc):
         self.output = nn.Sequential()
@@ -114,11 +131,14 @@ class LSTMModel(WordClassifierBase):
         super(LSTMModel, self).__init__()
 
     def _init_pool(self, dsz, **kwargs):
-        unif = kwargs['unif']
-        hsz = kwargs.get('hsz', kwargs.get('cmotsz', 100))
-        self.lstm = nn.LSTM(dsz, hsz, 1, bias=False, batch_first=True, dropout=self.pdrop)
-        for weight in self.lstm.parameters():
-            weight.data.uniform_(-unif, unif)
+        unif = kwargs.get('unif')
+        hsz = kwargs.get('rnnsz', kwargs.get('hsz', 100))
+        if type(hsz) is list:
+            hsz = hsz[0]
+        self.lstm = nn.LSTM(dsz, hsz, 1, bias=True, batch_first=True, dropout=self.pdrop)
+        if unif is not None:
+            for weight in self.lstm.parameters():
+                weight.data.uniform_(-unif, unif)
         return hsz
 
     def _pool(self, embeddings):
@@ -136,22 +156,8 @@ class NBowBase(WordClassifierBase):
         return dsz
 
     def _init_stacked(self, input_dim, **kwargs):
-        hsz = kwargs.get('hsz', kwargs.get('cmotsz', 100))
-        self.stacked = nn.Sequential()
-        append2seq(self.stacked, [nn.Dropout(self.pdrop)])
-        layers = []
-        nlayers = kwargs.get('layers', 1)
-        in_layer_sz = input_dim
-        for i in range(nlayers):
-            layers.append(nn.Linear(in_layer_sz, hsz))
-            layers.append(nn.ReLU())
-            layers.append(nn.Dropout(self.pdrop))
-            in_layer_sz = hsz
-        append2seq(self.stacked, layers)
-        return hsz
-
-    def _stacked(self, pooled):
-        return self.stacked(pooled)
+        kwargs['hsz'] = kwargs.get('hsz', [100])
+        return super(NBowBase, self)._init_stacked(input_dim, **kwargs)
 
 
 class NBowModel(NBowBase):

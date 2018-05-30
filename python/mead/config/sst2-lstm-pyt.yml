@@ -10,8 +10,7 @@ loader:
 unif: 0.25
 model: 
   model_type: lstm 
-  rnnsz: 200
-  #hsz: [20, 100]
+  rnnsz: 100
   dropout: 0.5
   finetune: true
 word_embeddings: 

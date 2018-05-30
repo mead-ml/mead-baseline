@@ -4,7 +4,7 @@ from google.protobuf import text_format
 from tensorflow.python.platform import gfile
 import json
 from tensorflow.contrib.layers import fully_connected, xavier_initializer
-from baseline.utils import fill_y
+from baseline.utils import fill_y, listify
 from baseline.model import Classifier, load_classifier_model, create_classifier_model
 from baseline.tf.tfy import lstm_cell_w_dropout, parallel_conv
 
@@ -234,14 +234,31 @@ class WordClassifierBase(Classifier):
         pass
 
     def stacked(self, pooled, init, **kwargs):
-        """This takes the pooled layer and puts it through a stack of (presumably) fully-connected layers.
-        Not all implementations utilize this
-        
-        :param pooled: The output of the pooling layer
-        :param init: The tensorflow initializer to use for these methods
-        :return: The final representation of the stacking.  By default, do none
+        """Stack 1 or more hidden layers, optionally (forming an MLP)
+
+        :param pooled: The fixed representation of the model
+        :param init: The tensorflow initializer
+        :param kwargs: See below
+
+        :Keyword Arguments:
+        * *hsz* -- (``int``) The number of hidden units (defaults to `100`)
+
+        :return: The final layer
         """
-        return pooled
+
+        hszs = listify(kwargs.get('hsz', []))
+        if len(hszs) == 0:
+            return pooled
+
+        in_layer = pooled
+        for i, hsz in enumerate(hszs):
+            with tf.variable_scope('fc-{}'.format(i)):
+                with tf.contrib.slim.arg_scope(
+                        [fully_connected],
+                        weights_initializer=init):
+                    fc = fully_connected(in_layer, hsz, activation_fn=tf.nn.relu)
+                    in_layer = tf.nn.dropout(fc, self.pkeep)
+        return in_layer
 
 
 class ConvModel(WordClassifierBase):
@@ -300,7 +317,9 @@ class LSTMModel(WordClassifierBase):
         
         :return: 
         """
-        hsz = kwargs.get('hsz', kwargs.get('cmotsz', 100))
+        hsz = kwargs.get('rnnsz', kwargs.get('hsz', 100))
+        if type(hsz) is list:
+            hsz = hsz[0]
         char_rnnfwd = lstm_cell_w_dropout(hsz, self.pkeep)
         rnnout, final_state = tf.nn.dynamic_rnn(char_rnnfwd, word_embeddings, dtype=tf.float32)
 
@@ -316,32 +335,15 @@ class NBowBase(WordClassifierBase):
         super(NBowBase, self).__init__()
 
     def stacked(self, pooled, init, **kwargs):
-        """To make a neural bag of words, stack 1 or more hidden layers (forming an MLP)
-        
-        :param pooled: The fixed representation of the model
-        :param init: The tensorflow initializer
-        :param kwargs: See below
-        
-        :Keyword Arguments:
-        * *layers* -- (``int``) The number of hidden layers (defaults to `1`)
-        * *hsz* -- (``int``) The number of hidden units (defaults to `100`)
-        * *cmotsz* -- (``int``) An alias for `hsz`
-        
-        :return: The final layer
+        """Force at least one hidden layer here
+
+        :param pooled:
+        :param init:
+        :param kwargs:
+        :return:
         """
-        nlayers = kwargs.get('layers', 1)
-        hsz = kwargs.get('hsz', kwargs.get('cmotsz', 100))
-
-        in_layer = pooled
-        for i in range(nlayers):
-            with tf.variable_scope('fc-%s' % i):
-                with tf.contrib.slim.arg_scope(
-                        [fully_connected],
-                        weights_initializer=init):
-
-                    fc = fully_connected(in_layer, hsz, activation_fn=tf.nn.relu)
-                    in_layer = tf.nn.dropout(fc, self.pkeep)
-        return in_layer
+        kwargs['hsz'] = kwargs.get('hsz', [100])
+        return super(NBowBase, self).stacked()
 
 
 class NBowModel(NBowBase):
