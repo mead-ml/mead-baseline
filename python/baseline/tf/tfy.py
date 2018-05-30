@@ -2,6 +2,50 @@ import tensorflow as tf
 import numpy as np
 from tensorflow.python.layers import core as layers_core
 from baseline.utils import lookup_sentence, beam_multinomial
+import os
+
+
+def _find_files_by_type(model_file, filetype):
+    """Find all files by type, removing suffix
+
+    we rely on the fact that vocab files end in .vocab.
+
+    :return: the file names without the filetype.
+    """
+    matching_files = []
+
+    filetype_ending = "." + filetype
+    basepath = os.path.dirname(model_file)
+    if not os.path.isdir(basepath):
+        raise IOError("not a model directory")
+
+    for filename in os.listdir(basepath):
+        if filename.endswith(filetype_ending):
+            filename_without_ending = filename[:-len(filetype_ending)]
+            matching_files.append(filename_without_ending)
+
+    return matching_files
+
+
+def get_vocab_file_suffixes(model_file):
+
+    """Because our operations assume knowledge of the model name, we
+    only need to return the suffix appended onto the end of the model
+    name in the file.
+
+    we make the assumption that a suffix is denoted with a hyphen.
+
+    e.g.  a vocab file name = tagger-model-tf-30803-word.vocab
+          would return ['word']
+
+    :param model_file: the nonspecific path to the model. this could be
+                /data/model/<model_name>. we need to remove the model name.
+    :return:
+    """
+    filenames = _find_files_by_type(model_file, 'vocab')
+    model_name = model_file.split('/')[-1]
+    # the length of the name plus 1 for the hyphen separating the suffix.
+    return [x[len(model_name)+1:] for x in filenames]
 
 
 def optimizer(loss_fn, **kwargs):
@@ -256,6 +300,32 @@ def char_word_conv_embeddings_var_fm(char_vec, filtsz, char_dsz, nfeat_factor, m
     combine = parallel_conv(char_vec, filtsz, char_dsz, nfeats, activation_fn)
     joined = highway_conns(combine, wsz_all, 2)
     return joined
+
+
+def pool_chars(xch, Wch, ce0, char_dsz, **kwargs):
+    """Take in a tensor of characters (B x maxs x maxw) and do character convolution
+
+    :param xch: TF tensor for input characters, (B x maxs x maxw)
+    :param Wch: A character embeddings matrix
+    :param ce0: A control dependency for the embeddings that keeps the <PAD> value 0
+    :param char_dsz: The character embedding dsz
+    :param kwargs:
+    :return: The character compositional embedding and the number of hidden units as a tuple
+    """
+    wsz = kwargs.get('wsz', 30)
+    filtsz = kwargs.get('cfiltsz', [3])
+    mxlen = int(kwargs.get('maxs', kwargs.get('mxlen', 100)))
+    mxwlen = kwargs.get('maxw', kwargs.get('mxwlen', 40))
+    activation_type = kwargs.get('activation', 'tanh')
+    with tf.variable_scope("Chars2Word"):
+        with tf.control_dependencies([ce0]):
+            char_bt_x_w = tf.reshape(xch, [-1, mxwlen])
+            cembed = tf.nn.embedding_lookup(Wch, char_bt_x_w, name="embeddings")
+            cmot = char_word_conv_embeddings(cembed, filtsz, char_dsz, wsz,
+                                             activation_fn=tf_activation(activation_type))
+            word_char = tf.reshape(cmot, [-1, mxlen, len(filtsz) * wsz])
+
+    return word_char, len(filtsz) * wsz
 
 
 def shared_char_word(Wch, xch_i, filtsz, char_dsz, wsz, reuse):
