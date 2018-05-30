@@ -51,7 +51,7 @@ class Classifier(object):
         """
         pass
 
-    def get_vocab(self):
+    def get_vocab(self, name='word'):
         """Return the vocabulary, which is a dictionary mapping a word to its word index
         
         :return: A dictionary mapping a word to its word index
@@ -78,7 +78,7 @@ class Classifier(object):
         :param word_trans_fn: A transform on the input word
         :return: A sorted list of outcomes for a single element batch
         """
-        vocab = self.get_vocab()
+        vocab = self.get_vocab('word')
         x = zero_alloc((1, mxlen), dtype=int)
         length = min(len(tokens), mxlen)
         for j in range(length):

@@ -121,13 +121,11 @@ class WordClassifierBase(Classifier):
         """
         return self.labels
 
-    def get_vocab(self, name=None):
+    def get_vocab(self, name='word'):
         """Get the vocab back, as a ``dict`` of ``str`` keys mapped to ``int`` values
         
         :return: A ``dict`` of words mapped to indices
         """
-        if name is None:
-            return self.vocab['word']
         return self.vocab[name]
 
     @classmethod
