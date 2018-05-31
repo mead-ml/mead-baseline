@@ -4,6 +4,7 @@ import baseline
 import os
 import mead.utils
 import mead.exporters
+from mead.tf.preprocessor import PreprocessorCreator
 from baseline.utils import export
 from baseline.tf.tfy import get_vocab_file_suffixes
 FIELD_NAME = 'text/tokens'
@@ -203,62 +204,6 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
         )
         return tok2index, vocab
 
-    def _preproc_post_creator(self):
-        """
-        indices are created during vocab creation.
-        """
-        word2index = self.word2index
-        char2index = self.char2index
-        lchars = self.lchars
-        upchars_lut = self.upchars_lut
-        task = self.task
-        def preproc_post(raw_post):
-            # Split the input string, assuming that whitespace is splitter
-            # The client should perform any required tokenization for us and join on ' '
-
-            # WARNING: This can be a bug if the user defaults the values (-1)
-            # for conll, the mxlen=124, for idr, the mxlen is forced to a max BPTT
-            # for twpos, the mxlen=38
-            # this should probably be fixed by serializing the mxlen of the model
-            # or rereading it from the tensor from file
-            mxlen = task.config_params['preproc']['mxlen']
-            mxwlen = task.config_params['preproc']['mxwlen']
-
-            #raw_post = tf.Print(raw_post, [raw_post])
-            raw_tokens = tf.string_split(tf.reshape(raw_post, [-1])).values
-            # sentence length <= mxlen
-            nraw_post = tf.reduce_join(raw_tokens[:mxlen], separator=" ")
-            # vocab has only lowercase words
-            split_chars = tf.string_split(tf.reshape(nraw_post, [-1]), delimiter="").values
-            upchar_inds = upchars_lut.lookup(split_chars)
-            lc_raw_post = tf.reduce_join(tf.map_fn(lambda x: tf.cond(x[0] > 25,
-                                                                     lambda: x[1],
-                                                                     lambda: lchars[x[0]]),
-                                                   (upchar_inds, split_chars), dtype=tf.string))
-            word_tokens = tf.string_split(tf.reshape(lc_raw_post, [-1]))
-
-            # numchars per word should be <= mxwlen
-            unchanged_word_tokens = tf.string_split(tf.reshape(nraw_post, [-1]))
-            culled_word_token_vals = tf.substr(unchanged_word_tokens.values, 0, mxwlen)
-            char_tokens = tf.string_split(culled_word_token_vals, delimiter='')
-            word_indices = word2index.lookup(word_tokens)
-            char_indices = char2index.lookup(char_tokens)
-
-            # Reshape them out to the proper length
-            reshaped_words = tf.sparse_reshape(word_indices, shape=[-1])
-            sentence_length = tf.size(reshaped_words)  # tf.shape if 2 dims needed
-
-            reshaped_words = tf.sparse_reset_shape(reshaped_words, new_shape=[mxlen])
-            reshaped_chars = tf.sparse_reset_shape(char_indices, new_shape=[mxlen, mxwlen])
-
-            # Now convert to a dense representation
-            x = tf.sparse_tensor_to_dense(reshaped_words)
-            x = tf.contrib.framework.with_shape([mxlen], x)
-            xch = tf.sparse_tensor_to_dense(reshaped_chars)
-            xch = tf.contrib.framework.with_shape([mxlen, mxwlen], xch)
-            return x, xch, sentence_length
-        return preproc_post
-
     def restore_model(self, sess, basename):
         sess.run(tf.tables_initializer())
         sess.run(tf.global_variables_initializer())
@@ -273,20 +218,23 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
         self.assign_char_lookup()
 
         labels = self.load_labels(model_file)
+        extra_features_required = [x for x in vocabs.keys() if x not in ['word', 'char']]
+
         # Make the TF example, network input
-        serialized_tf_example = tf.placeholder(tf.string, name='tf_example')
-        feature_configs = {
-            FIELD_NAME: tf.FixedLenFeature(shape=[], dtype=tf.string),
-        }
-        tf_example = tf.parse_example(serialized_tf_example, feature_configs)
+        serialized_tf_example, tf_example = self._create_example(extra_features_required)
         raw_posts = tf_example[FIELD_NAME]
 
-        # self._preproc_post_creator requires these indices.
-        self.word2index = indices['word']
-        self.char2index = indices['char']
+        preprocessor = PreprocessorCreator(indices, 
+                                           self.lchars,
+                                           self.upchars_lut, 
+                                           self.task,
+                                           FIELD_NAME,
+                                           extra_features_required)
+
+        types = {k: tf.int64 for k in indices.keys()}
         # Run for each post
-        x, xch, lengths = tf.map_fn(self._preproc_post_creator(), raw_posts,
-                                    dtype=(tf.int64, tf.int64, tf.int32),
+        preprocessed, lengths = tf.map_fn(preprocessor.preproc_post, tf_example,
+                                    dtype=(types, tf.int32),
                                     back_prop=False)
 
         embeddings = self._initialize_embeddings_map(vocabs, embeddings_set)
@@ -300,8 +248,12 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
         mxwlen = self.task.config_params['preproc']['mxwlen']
 
         model_params = self.task.config_params["model"]
-        model_params["x"] = x
-        model_params["xch"] = xch
+        model_params["x"] = preprocessed['word']
+        model_params["xch"] = preprocessed['char']
+
+        for other in extra_features_required:
+            model_params[other] = preprocessed[other]
+
         model_params["lengths"] = lengths
         model_params["pkeep"] = 1
         model_params["sess"] = sess
@@ -354,10 +306,10 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
                     CLASSIFY_METHOD_NAME)
         )
 
-        predict_inputs_tensor = tf.saved_model.utils.build_tensor_info(raw_posts)
+        prediction_inputs = self._create_prediction_input(tf_example, extra_features_required)
         prediction_signature = (
             tf.saved_model.signature_def_utils.build_signature_def(
-                inputs={'tokens': predict_inputs_tensor},
+                inputs=prediction_inputs,
                 outputs={
                     'classes': classes_output_tensor,
                     'scores': scores_output_tensor
@@ -380,6 +332,35 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
 
         builder.save()
         print('Successfully exported model to %s' % output_dir)
+
+    def _create_example(self, extra_features_required):
+        serialized_tf_example = tf.placeholder(tf.string, name='tf_example')
+
+        feature_configs = {
+            FIELD_NAME: tf.FixedLenFeature(shape=[], dtype=tf.string),
+        }
+        for other in extra_features_required:
+            feature_configs[other] = tf.FixedLenFeature(shape=[], dtype=tf.string)
+
+        tf_example = tf.parse_example(serialized_tf_example, feature_configs)
+        return serialized_tf_example, tf_example
+
+    def _create_prediction_input(self, post_mappings, extra_embed_names):
+        """
+        builds tensor information for inputs to the saved model.
+
+        This assumes that tokens will be provided, and any additional
+        embedding information will come at the token level.
+        """
+        inputs = {}
+        raw_post = post_mappings[FIELD_NAME]
+        inputs['tokens'] = tf.saved_model.utils.build_tensor_info(raw_post)
+
+        for extra in extra_embed_names:
+            raw = post_mappings[extra]
+            inputs[extra] = tf.saved_model.utils.build_tensor_info(raw)
+
+        return inputs
 
     def _create_vocabs(self, model_file, vocab_suffixes):
         """
