@@ -451,3 +451,137 @@ def show_examples_pytorch(model, es, rlut1, rlut2, embed2, mxlen, sample, prob_c
         sent = lookup_sentence(rlut2, dst_i)
         print('Guess: %s' % sent)
         print('------------------------------------------------------------------------')
+
+
+# Some of this code is borrowed from here:
+# https://github.com/rguthrie3/DeepLearningForNLPInPytorch
+def argmax(vec):
+    # return the argmax as a python int
+    _, idx = torch.max(vec, 1)
+    return idx.data[0]
+
+# Compute log sum exp in a numerically stable way for the forward algorithm
+def log_sum_exp(vec):
+    max_score = vec[0, argmax(vec)]
+    max_score_broadcast = max_score.view(1, -1).expand(1, vec.size()[1])
+    return max_score + torch.log(torch.sum(torch.exp(vec - max_score_broadcast)))
+
+def vec_log_sum_exp(vec, dim):
+    """Vectorized version of log-sum-exp
+
+    :param vec: Vector
+    :param dim: What dimension to operate on
+    :return:
+    """
+    max_scores, idx = torch.max(vec, dim, keepdim=True)
+    max_scores_broadcast = max_scores.expand_as(vec)
+    return max_scores + torch.log(torch.sum(torch.exp(vec - max_scores_broadcast), dim, keepdim=True))
+
+class CRF(nn.Module):
+
+    def __init__(self, n_tags, idxs=None):
+        super(CRF, self).__init__()
+
+        if idxs is None:
+            self.start_idx = n_tags
+            self.end_idx = n_tags + 1
+            self.n_tags = n_tags + 2
+            self.add_ends = True
+        else:
+            self.start_idx, self.end_idx = idxs
+            self.n_tags = n_tags
+            self.add_ends = False
+
+        self.transitions = nn.Parameter(torch.Tensor(self.n_tags, self.n_tags).zero_())
+
+    @staticmethod
+    def _prep_input(input_):
+        ends = torch.Tensor(input_.size()[0], 2).fill_(-1e4).to(input_.device)
+        return torch.cat([input_, ends], dim=1)
+
+    def neg_log_loss(self, unary, tags):
+        if self.add_ends:
+            unary = CRF._prep_input(unary)
+        viterbi_score = self.forward(unary)
+        gold_score = self.score_sentence(unary, tags)
+        return viterbi_score - gold_score
+
+    def score_sentence(self, unary, tags):
+        # Gives the score of a provided tag sequence
+        score = torch.autograd.Variable(torch.Tensor([0]).cuda())
+        tags = torch.cat([torch.LongTensor([self.start_idx]).cuda(), tags])
+        for i, unary_t in enumerate(unary):
+            score = score + self.transitions[tags[i + 1], tags[i]] + unary_t[tags[i + 1]]
+        score = score + self.transitions[self.end_idx, tags[-1]]
+        return score
+
+    def forward(self, unary):
+        """Vectorized forward algorithm for CRF layer
+
+        :param unary: The observations
+        :param transitions: The transitions
+        :param start_idx: The index of the start position
+        :param end_idx: The index of the end position
+        :return: Alphas
+        """
+        # Do the forward algorithm to compute the partition function
+        init_alphas = torch.Tensor(1, self.n_tags).fill_(-1000.).to(unary.device)
+        # START_TAG has all of the score.
+        init_alphas[0][self.start_idx] = 0.
+
+        # Wrap in a variable so that we will get automatic backprop
+        alphas = torch.autograd.Variable(init_alphas)
+
+        # Iterate through the sentence
+        for t, unary_t in enumerate(unary):
+            emit_scores_transpose = unary_t.view(-1, 1)
+            next_tag_var = alphas + emit_scores_transpose + self.transitions
+            scores = vec_log_sum_exp(next_tag_var, 1).transpose(0, 1)
+            alphas = scores
+
+        terminal_var = alphas + self.transitions[self.end_idx]
+        alpha = log_sum_exp(terminal_var)
+        return alpha
+
+    def decode(self, unary):
+        if self.add_ends:
+            unary = CRF._prep_input(unary)
+        backpointers = []
+
+        inits = torch.Tensor(1, self.n_tags).fill_(-10000.).cuda()
+        inits[0][self.start_idx] = 0
+
+        # alphas at step i holds the viterbi variables for step i-1
+        alphas = torch.autograd.Variable(inits)
+        for unary_t in unary:
+            backpointers_t = []  # holds the backpointers for this step
+            viterbi_t = []  # holds the viterbi variables for this step
+
+            for tag in range(self.n_tags):
+                next_tag_var = alphas + self.transitions[tag]
+                best_tag_id = argmax(next_tag_var)
+                backpointers_t.append(best_tag_id)
+                viterbi_t.append(next_tag_var[0][best_tag_id])
+
+            if PYT_MAJOR_VERSION < 0.4:
+                alphas = (torch.cat(viterbi_t) + unary_t).view(1, -1)
+
+            else:
+                alphas = (torch.stack(viterbi_t, 0) + unary_t).view(1, -1)
+            backpointers.append(backpointers_t)
+
+        # Transition to STOP_TAG
+        terminal_var = alphas + self.transitions[self.end_idx]
+        best_tag_id = argmax(terminal_var)
+        path_score = terminal_var[0][best_tag_id]
+
+        # Follow the back pointers to decode the best path.
+        best_path = [best_tag_id]
+        for backpointers_t in reversed(backpointers):
+            best_tag_id = backpointers_t[best_tag_id]
+            best_path.append(best_tag_id)
+        # Pop off the start tag (we dont want to return that to the caller)
+        start = best_path.pop()
+        assert start == self.start_idx
+        best_path.reverse()
+        return torch.LongTensor(best_path), path_score
