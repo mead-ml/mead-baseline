@@ -196,7 +196,7 @@ class Tagger(object):
     def predict(self, batch_dict):
         pass
 
-    def predict_text(self, tokens, mxlen, maxw, zero_alloc=np.zeros, word_trans_fn=lowercase):
+    def predict_text(self, tokens, mxlen, maxw, zero_alloc=np.zeros, word_trans_fn=lowercase, vocab_keys={'word':0, 'char':None}):
         """
         Utility function to convert lists of sentence tokens to integer value one-hots which
         are then passed to the tagger.  The resultant output is then converted back to label and token
@@ -212,27 +212,38 @@ class Tagger(object):
         :param word_trans_fn:
         :return: 
         """
-        words_vocab = self.get_vocab(vocab_type='word')
-        chars_vocab = self.get_vocab(vocab_type='char')
         # This might be inefficient if the label space is large
         label_vocab = revlut(self.get_labels())
         xs = zero_alloc((1, mxlen), dtype=int)
         xs_ch = zero_alloc((1, mxlen, maxw), dtype=int)
         lengths = zero_alloc(1, dtype=int)
         lengths[0] = min(len(tokens), mxlen)
+        data = {}
+        if not type(tokens[0]) is list:  # support the existing case
+            tokens = [[token] for token in tokens]
         for j in range(mxlen):
-
             if j == len(tokens):
                 break
-
-            w = tokens[j]
-            nch = min(len(w), maxw)
-
-            xs[0, j] = words_vocab.get(word_trans_fn(w), 0)
-            for k in range(nch):
-                xs_ch[0, j, k] = chars_vocab.get(w[k], 0)
-
-        indices = self.predict({'x': xs, 'xch': xs_ch, 'lengths': lengths})[0]
+            token_features = tokens[j]
+            if 'word' in vocab_keys:
+                word_index = vocab_keys['word']
+                words_vocab = self.get_vocab(vocab_type='word')
+                w = token_features[word_index]
+                xs[0, j] = words_vocab.get(word_trans_fn(w), 0)
+                if 'char' in vocab_keys:
+                    nch = min(len(w), maxw)
+                    for k in range(nch):
+                        chars_vocab = self.get_vocab(vocab_type='char')
+                        xs_ch[0, j, k] = chars_vocab.get(w[k], 0)
+            for key in vocab_keys:
+                if not key == 'word' and not key == 'char':
+                    feature_index = vocab_keys[key]
+                    feature = token_features[feature_index]
+                    feature_vocab = self.get_vocab(vocab_type=key)
+                    data[key] = zero_alloc((1, mxlen), dtype=np.int)
+                    data[key][0, j] = feature_vocab[feature]
+        data.update({'x': xs, 'xch': xs_ch, 'lengths': lengths})
+        indices = self.predict(data)[0]
         output = []
         for j in range(lengths[0]):
             output.append((tokens[j], label_vocab[indices[j].item()]))
