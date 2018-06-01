@@ -125,7 +125,8 @@ class ConvModel(WordClassifierBase):
             convs.append(Convolution1d(fsz, cmotsz, dsz, self.pc))
 
         def call_pool(input_, _):
-            input_ = dy.reshape(input_, (1, *input_.dim()[0]))
+            dims = tuple([1] + list(input_.dim()[0]))
+            input_ = dy.reshape(input_, dims)
             mots = []
             for conv in convs:
                 mots.append(conv(input_))
