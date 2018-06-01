@@ -11,7 +11,7 @@ loader:
 unif: 0.25
 model:
   model_type: lstm
-  hsz: 256
+  rnnsz: 256
   dropout: 0.5
   finetune: true
 word_embeddings:

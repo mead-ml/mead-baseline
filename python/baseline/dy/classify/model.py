@@ -4,6 +4,7 @@ from baseline.model import (
     load_classifier_model,
     create_classifier_model
 )
+from baseline.utils import listify
 from baseline.dy.dynety import *
 
 
@@ -60,7 +61,7 @@ class WordClassifierBase(Classifier, DynetModel):
     def forward(self, input_, lengths):
         embedded = self.embed(input_)
         pooled = self.pool(embedded, lengths)
-        stacked = self.stacked(pooled)
+        stacked = pooled if self.stacked is None else self.stacked(pooled)
         return self.output(stacked)
 
     def loss(self, input_, y):
@@ -73,12 +74,15 @@ class WordClassifierBase(Classifier, DynetModel):
             return dy.dropout(input_, self.pdrop)
         return input_
 
-    def _init_stacked(self, input_dim, hsz=None, layers=1, **kwargs):
-        if hsz is None:
-            hsz = kwargs.get("cmotsz", 100)
+    def _init_stacked(self, input_dim, **kwargs):
+
+        hszs = listify(kwargs.get('hsz', []))
+        if len(hszs) == 0:
+            return input_dim, None
+
         stacked_layers = []
         isz = input_dim
-        for x in range(layers):
+        for i, hsz in enumerate(hszs):
             stacked_layers.append(Linear(hsz, isz, self.pc))
             stacked_layers.append(dy.rectify)
             stacked_layers.append(self.dropout)
@@ -109,6 +113,7 @@ class WordClassifierBase(Classifier, DynetModel):
         self.pc.populate(file_name)
         return self
 
+
 class ConvModel(WordClassifierBase):
     def __init__(self, *args, **kwargs):
         kwargs['dense'] = True
@@ -128,13 +133,16 @@ class ConvModel(WordClassifierBase):
 
         return len(filtsz) * cmotsz, call_pool
 
+
 class LSTMModel(WordClassifierBase):
 
-    def _init_pool(self, dsz, hsz=None, layers=1, **kwargs):
-        if hsz is None:
-            hsz = kwargs.get('cmotsz', 100)
+    def _init_pool(self, dsz, layers=1, **kwargs):
+        hsz = kwargs.get('rnnsz', kwargs.get('hsz', 100))
+        if type(hsz) is list:
+            hsz = hsz[0]
 
         return hsz, LSTMEncoder(hsz, dsz, self.pc, layers=layers)
+
 
 class NBowModel(WordClassifierBase):
 
@@ -143,6 +151,7 @@ class NBowModel(WordClassifierBase):
             return dy.esum(input_) / len(input_)
 
         return args[0], pool
+
 
 class NBowMax(WordClassifierBase):
 
@@ -167,8 +176,9 @@ BASELINE_CLASSIFICATION_LOADER = {
     'nbowmax': NBowMax.load
 }
 
+
 def create_model(embeddings, labels, **kwargs):
     return create_classifier_model(BASELINE_CLASSIFICATION_MODELS, embeddings, labels, **kwargs)
 
 def load_model(outname, **kwargs):
-    return load_classifier_model(BASELINE_CLASSIFICATION_LOADERS, outname, **kwargs)
+    return load_classifier_model(BASELINE_CLASSIFICATION_LOADER, outname, **kwargs)
