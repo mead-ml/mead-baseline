@@ -1,6 +1,7 @@
 import random
+import pytest
 import numpy as np
-import dynet as dy
+dy = pytest.importorskip('dynet')
 from baseline.dy.dynety import *
 
 SIZES = [128, 256, 300, 512]
