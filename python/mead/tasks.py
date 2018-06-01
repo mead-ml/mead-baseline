@@ -203,6 +203,7 @@ class ClassifierTask(Task):
                                            vec_alloc=self.config_params['preproc']['vec_alloc'],
                                            src_vec_trans=self.config_params['preproc']['src_vec_trans'],
                                            mxwlen=self.config_params['preproc'].get('mxwlen', -1),
+                                           trim=self.config_params['preproc'].get('trim', False),
                                            **self.config_params['loader'])
 
     def _setup_task(self):
@@ -220,6 +221,18 @@ class ClassifierTask(Task):
             if backend == 'keras':
                 print('Keras backend')
                 import baseline.keras.classify as classify
+            if backend == 'dynet':
+                print('Dynet backend')
+                import _dynet
+                dy_params = _dynet.DynetParams()
+                dy_params.from_args()
+                dy_params.set_requested_gpus(1)
+                if 'autobatchsz' in self.config_params['train']:
+                    self.config_params['model']['batched'] = False
+                    dy_params.set_autobatch(True)
+                dy_params.init()
+                import baseline.dy.classify as classify
+                from baseline.data import reverse_2nd as rev2nd
             else:
                 print('TensorFlow backend')
                 import baseline.tf.classify as classify
@@ -306,7 +319,7 @@ class TaggerTask(Task):
             self.config_params['preproc']['word_trans_fn'] = baseline.lowercase
             print('Lower')
         else:
-            self.config_params['preproc']['word_trans_fn'] = None 
+            self.config_params['preproc']['word_trans_fn'] = None
 
     def initialize(self, embeddings):
         self.dataset = DataDownloader(self.dataset, self.data_download_cache).download()

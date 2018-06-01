@@ -11,7 +11,7 @@ def main():
     parser.add_argument('--embeddings', help='json library of embeddings', default='config/embeddings.json', type=convert_path)
     parser.add_argument('--logging', help='json file for logging', default='config/logging.json', type=convert_path)
     parser.add_argument('--task', help='task to run', default='classify', choices=['classify', 'tagger', 'seq2seq', 'lm'])
-    args = parser.parse_args()
+    args = parser.parse_known_args()[0]
 
     task = mead.Task.get_task_specific(args.task, args.logging, args.settings)
     task.read_config(args.config, args.datasets)
