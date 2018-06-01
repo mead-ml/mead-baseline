@@ -70,7 +70,6 @@ class ClassifyTrainerDynet(EpochReportingTrainer):
 class ClassifyTrainerAutobatch(ClassifyTrainerDynet):
     def __init__(self, model, autobatchsz=1, **kwargs):
         self.autobatchsz = autobatchsz
-        print(f"Autobatch Size: {self.autobatchsz}")
         super(ClassifyTrainerAutobatch, self).__init__(model, **kwargs)
 
     def _step(self, loader, update):
