@@ -480,6 +480,20 @@ def vec_log_sum_exp(vec, dim):
 class CRF(nn.Module):
 
     def __init__(self, n_tags, idxs=None):
+        """Initialize the object.
+
+        :param n_tags: int The number of tags in your output (emission size)
+        :param idxs: Tuple(int. int) The index of the start and stop symbol
+            in emissions.
+
+        Note:
+            if idxs is none then the CRF adds these symbols to the emission
+            vectors and n_tags is assumed to be the number of output tags.
+
+            if idxs is not none then the first element is assumed to be the
+            start index and the second idx is assumed to be the end index. In
+            this case n_tags is assumed to include the start and end symbols.
+        """
         super(CRF, self).__init__()
 
         if idxs is None:
@@ -496,7 +510,7 @@ class CRF(nn.Module):
 
     @staticmethod
     def _prep_input(input_):
-        ends = torch.Tensor(input_.size()[0], 2).fill_(-1e4).to(input_.device)
+        ends = torch.Tensor(input_.size()[0], 2).fill_(-1000.).to(input_.device)
         return torch.cat([input_, ends], dim=1)
 
     def neg_log_loss(self, unary, tags):
