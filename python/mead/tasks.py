@@ -252,8 +252,6 @@ class ClassifierTask(Task):
             self.config_params['preproc']['clean_fn'] = None
 
         self.config_params['preproc']['src_vec_trans'] = rev2nd if self.config_params['preproc'].get('rev', False) else None
-        self.config_params['model']['mxlen'] = self.config_params['preproc']['mxlen']
-        self.config_params['model']['mxwlen'] = self.config_params['preproc'].get('mxwlen', -1)
 
     def initialize(self, embeddings):
         embeddings_set = mead.utils.index_by_label(embeddings)
@@ -264,7 +262,10 @@ class ClassifierTask(Task):
 
 
     def _create_model(self):
-        return self.task.create_model(self.embeddings, self.labels, **self.config_params['model'])
+        model = self.config_params['model']
+        model['mxlen'] = self.reader.max_sentence_length
+        model['mxwlen'] = self.reader.max_word_length
+        return self.task.create_model(self.embeddings, self.labels, **model)
 
     def _load_dataset(self):
         self.train_data = self.reader.load(self.dataset['train_file'], self.feat2index, self.config_params['batchsz'], shuffle=True)
