@@ -1,3 +1,4 @@
+task: classify
 batchsz: 1
 preproc:
   mxlen: -1

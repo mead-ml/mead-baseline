@@ -56,7 +56,7 @@ class Task(object):
         config = Task.TASK_REGISTRY[task](logging_config, mead_config)
         return config
 
-    def read_config(self, config_file, datasets_index):
+    def read_config(self, config_params, datasets_index):
         """
         Read the config file and the datasets index
 
@@ -68,7 +68,7 @@ class Task(object):
         :return:
         """
         datasets_set = mead.utils.index_by_label(datasets_index)
-        self.config_params = read_config_file(config_file)
+        self.config_params = config_params
         self._setup_task()
         self._configure_reporting()
         self.dataset = datasets_set[self.config_params['dataset']]

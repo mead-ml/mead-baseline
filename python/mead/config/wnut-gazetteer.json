@@ -1,4 +1,5 @@
 {
+    "task": "tagger",
     "batchsz": 20,
     "conll_output": "wnutresults.conll",
     "test_thresh": 10,
