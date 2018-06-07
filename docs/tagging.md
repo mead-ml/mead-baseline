@@ -80,5 +80,9 @@ Run the code like this:
 ```
 python tag.py --input wnut17test.conll --output test.conll --model mead/tagger-model-tf-2847 --mxlen 60 --mxwlen 40
 ```
+`tag.py` also supports multiple features in the conll file. However, you need to create a JSON file (dictionary) with the index of the features in the format: `{feature-name:feature-index}` (eg. `{"gaz":1}`) where the `gaz` feature is the second column in the conll file. To run the code use: 
+```
+python tag.py --input gaz-tester.conll --output gaz-tester-out.conll --model mead/tagger-gaz/tagger-model-tf-12509 --mxlen 60 --mxwlen 40 --model_type gazetteer --features feature.json
+```
 
 We support loading tagger models defined in [TensorFlow](../python/baseline/tf/tagger/model.py) and [PyTorch](../python/baseline/pytorch/tagger/model.py). 
