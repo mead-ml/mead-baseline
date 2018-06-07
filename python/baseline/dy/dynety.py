@@ -2,6 +2,7 @@ from itertools import chain
 import numpy as np
 import dynet as dy
 
+
 class DynetModel(object):
     def __init__(self):
         super(DynetModel, self).__init__()
@@ -11,6 +12,7 @@ class DynetModel(object):
         for p in chain(self.pc.lookup_parameters_list(), self.pc.parameters_list()):
             str_.append("{}: {}".format(p.name(), p.shape()))
         return '\n'.join(str_)
+
 
 def Linear(osz, isz, pc, name="Linear"):
     """
@@ -35,6 +37,7 @@ def Linear(osz, isz, pc, name="Linear"):
 
     return linear
 
+
 def LSTM(osz, isz, pc, layers=1):
     """
     :param osz: int
@@ -56,6 +59,31 @@ def LSTM(osz, isz, pc, layers=1):
 
     return encode
 
+
+def BiLSTM(osz, isz, pc, layers=1):
+    """
+    :param osz: int
+    :param isz: int
+    :param pc: dy.ParameterCollection
+    :param layers: int
+    """
+    lstm_forward = dy.VanillaLSTMBuilder(layers, isz, osz//2, pc)
+    lstm_backward = dy.VanillaLSTMBuilder(layers, isz, osz//2, pc)
+
+    def encode(input_):
+        """
+        :param input_: List[dy.Expression] ((isz,), B)
+
+        Returns:
+            dy.Expression ((osz,), B)
+        """
+        state_forward = lstm_forward.initial_state()
+        state_backward = lstm_backward.initial_state()
+        return state_forward.transduce(input_), state_backward.transduce(reversed(input_))
+
+    return encode
+
+
 def LSTMEncoder(osz, isz, pc, layers=1):
     """
     :param osz: int
@@ -71,6 +99,27 @@ def LSTMEncoder(osz, isz, pc, layers=1):
         return final_states
 
     return encode
+
+
+def BiLSTMEncoder(osz, isz, pc, layers=1):
+    """
+    :param osz: int
+    :param isz: int
+    :param pc: dy.ParameterCollection
+    :param layers: int
+    """
+    lstm = BiLSTM(osz, isz, pc, layers=layers)
+
+    def encode(input_, lengths):
+        forward, backward = lstm(input_)
+        states = dy.concatenate_cols(forward)
+        final_states_forward = dy.pick_batch(states, lengths, dim=1)
+        states = dy.concatenate_cols(backward)
+        final_states_backward = dy.pick_batch(states, lengths, dim=1)
+        return dy.concatenate([final_states_forward, final_states_backward])
+
+    return encode
+
 
 def Convolution1d(fsz, cmotsz, dsz, pc, strides=(1, 1, 1, 1), name="Conv"):
     """1D Convolution.
@@ -99,6 +148,7 @@ def Convolution1d(fsz, cmotsz, dsz, pc, strides=(1, 1, 1, 1), name="Conv"):
         return mot
 
     return conv
+
 
 def Embedding(
     vsz, dsz, pc,
@@ -138,9 +188,8 @@ def Embedding(
 
     return embed
 
-def Attention(
-    lstmsz, pc, name="Attention"
-):
+
+def Attention(lstmsz, pc, name="Attention"):
     """Vectorized Bahdanau Attention.
 
     :param lstmsz: int
@@ -177,6 +226,7 @@ def Attention(
         return attend
 
     return attention
+
 
 class CRF(DynetModel):
     """Linear Chain CRF in Dynet."""

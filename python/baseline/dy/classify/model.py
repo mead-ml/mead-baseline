@@ -24,13 +24,15 @@ class WordClassifierBase(Classifier, DynetModel):
         self.pdrop = dropout
         self.train = True
 
-        vsz = len(embeddings.vocab)
-        dsz = embeddings.dsz
-        self.vocab = embeddings.vocab
+        vsz = len(embeddings['word'].vocab)
+        dsz = embeddings['word'].dsz
 
-        self.embed = Embedding(
+        self.vocab = {}
+        self.vocab['word'] = embeddings['word'].vocab
+
+        self.embed_word = Embedding(
             vsz, dsz, self.pc,
-            embeddings.weights, finetune, dense, self.batched
+            embeddings['word'].weights, finetune, dense, self.batched
         )
 
         self.labels = labels
@@ -59,7 +61,7 @@ class WordClassifierBase(Classifier, DynetModel):
         return x[0], y[0], lengths - 1
 
     def forward(self, input_, lengths):
-        embedded = self.embed(input_)
+        embedded = self.embed_word(input_)
         pooled = self.pool(embedded, lengths)
         stacked = pooled if self.stacked is None else self.stacked(pooled)
         return self.output(stacked)
@@ -100,8 +102,7 @@ class WordClassifierBase(Classifier, DynetModel):
 
     @classmethod
     def create(cls, embeddings_set, labels, **kwargs):
-        embeddings = embeddings_set['word']
-        model = cls(embeddings, labels, **kwargs)
+        model = cls(embeddings_set, labels, **kwargs)
         print(model)
         return model
 
@@ -145,6 +146,16 @@ class LSTMModel(WordClassifierBase):
         return hsz, LSTMEncoder(hsz, dsz, self.pc, layers=layers)
 
 
+class BLSTMModel(WordClassifierBase):
+
+    def _init_pool(self, dsz, layers=1, **kwargs):
+        hsz = kwargs.get('rnnsz', kwargs.get('hsz', 100))
+        if type(hsz) is list:
+            hsz = hsz[0]
+
+        return hsz, BiLSTMEncoder(hsz, dsz, self.pc, layers=layers)
+
+
 class NBowModel(WordClassifierBase):
 
     def _init_pool(self, *args, **kwargs):
@@ -166,6 +177,7 @@ class NBowMax(WordClassifierBase):
 BASELINE_CLASSIFICATION_MODELS = {
     'default': ConvModel.create,
     'lstm': LSTMModel.create,
+    'blstm': BLSTMModel.create,
     'nbow': NBowModel.create,
     'nbowmax': NBowMax.create,
 }
@@ -173,6 +185,7 @@ BASELINE_CLASSIFICATION_MODELS = {
 BASELINE_CLASSIFICATION_LOADER = {
     'default': ConvModel.load,
     'lstm': LSTMModel.load,
+    'blstm': BLSTMModel.load,
     'nbow': NBowModel.load,
     'nbowmax': NBowMax.load
 }
@@ -180,6 +193,7 @@ BASELINE_CLASSIFICATION_LOADER = {
 
 def create_model(embeddings, labels, **kwargs):
     return create_classifier_model(BASELINE_CLASSIFICATION_MODELS, embeddings, labels, **kwargs)
+
 
 def load_model(outname, **kwargs):
     return load_classifier_model(BASELINE_CLASSIFICATION_LOADER, outname, **kwargs)
