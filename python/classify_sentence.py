@@ -1,5 +1,7 @@
 import numpy as np
 import argparse
+from baseline import *
+from os import sys,path, makedirs 
 
 parser = argparse.ArgumentParser(description='Train a text classifier')
 parser.add_argument('--visdom', help='Turn on visdom reporting', type=str2bool, default=False)
