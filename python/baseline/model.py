@@ -197,7 +197,7 @@ class Tagger(object):
         pass
 
     def predict_text(self, tokens, mxlen, maxw, zero_alloc=np.zeros, word_trans_fn=lowercase, vocab_keys={'word':0, 'char':None},
-                     tagger_featurizer_fn=tagger_featurizer):
+                     featurizer_fn=tagger_featurizer):
         """
         Utility function to convert lists of sentence tokens to integer value one-hots which
         are then passed to the tagger.  The resultant output is then converted back to label and token
@@ -212,7 +212,7 @@ class Tagger(object):
         :param zero_alloc: Define
         :param word_trans_fn:
         :param vocab_keys:
-        :param tagger_featurizer_fn:
+        :param featurizer_fn:
         :return: 
         """
         # This might be inefficient if the label space is large
@@ -220,7 +220,7 @@ class Tagger(object):
         label_vocab = revlut(self.get_labels())
         lengths = zero_alloc(1, dtype=int)
         lengths[0] = min(len(tokens), mxlen)
-        data = tagger_featurizer_fn(self, tokens, mxlen, maxw, zero_alloc, word_trans_fn, vocab_keys)
+        data = featurizer_fn(self, tokens, mxlen, maxw, zero_alloc, word_trans_fn, vocab_keys)
         indices = self.predict(data)[0]
         output = []
         for j in range(lengths[0]):
