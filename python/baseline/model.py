@@ -6,8 +6,9 @@ from baseline.utils import (
     load_user_seq2seq_model, create_user_seq2seq_model,
     create_user_lang_model,
     lowercase, revlut,
-    export, wrapped_partial, tagger_featurizer
+    export, wrapped_partial
 )
+from baseline.featurizers import tagger_featurizer
 
 __all__ = []
 exporter = export(__all__)

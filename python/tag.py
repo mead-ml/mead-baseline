@@ -3,7 +3,7 @@ import codecs
 import re
 from baseline.progress import create_progress_bar
 from baseline.utils import load_user_model
-from baseline.utils import tagger_featurizer_elmo, tagger_featurizer
+import importlib
 import json
 
 
@@ -39,9 +39,15 @@ parser.add_argument('--features', default=None, help='JSON file with the feature
                                                      'and the feature index in the CONLL file example: {"gaz":1}, when '
                                                      'the conll file has gazetteer feature in column 2')
 parser.add_argument('--model_type', default='default', help='tagger model type')
-parser.add_argument('--featurizer_fn', default='default', help='featurizer fn')
+parser.add_argument('--featurizer_fn_loc', default='default_loc', help='featurizer location')
+parser.add_argument('--featurizer_fn', default='default_fn', help='featurizer fn')
 # choice(s) are ['default'] currently. default is RNNTaggerModel.
 args = parser.parse_args()
+
+featurizer_defaults = {'default_loc': 'baseline.featurizers', 'default_fn': 'tagger_featurizer'}
+featurizer_mod = importlib.import_module(featurizer_defaults.get(args.featurizer_fn_loc, args.featurizer_fn_loc))
+featurizer_fn = getattr(featurizer_mod, featurizer_defaults.get(args.featurizer_fn, args.featurizer_fn))
+
 
 if args.backend == 'tf':
     from baseline.tf.tagger.model import BASELINE_TAGGER_LOADERS
@@ -65,13 +71,11 @@ if args.features is not None:
     features = json.load(open(args.features))
     vocab_keys.update(features)
 
+
 pg = create_progress_bar(len(input_texts))
+
 with codecs.open(args.output, encoding="utf-8", mode="w") as f:
     for index, sen in enumerate(input_texts):
-        if args.featurizer_fn == 'elmo':
-            featurizer_fn = tagger_featurizer_elmo
-        else:
-            featurizer_fn = tagger_featurizer
         predicted_label_sen = [x[1] for x in tagger.predict_text(sen, mxlen=args.mxlen, maxw=args.mxwlen,
                                                                  vocab_keys=vocab_keys, featurizer_fn=featurizer_fn)]
         gold_label_sen = gold_labels[index]
