@@ -324,4 +324,4 @@ def create_model(labels, embeddings, **kwargs):
 
 
 def load_model(modelname, **kwargs):
-    return load_tagger_model(RNNTaggerELMoModel.load, modelname, **kwargs)
+    return RNNTaggerELMoModel.load(modelname, **kwargs)
