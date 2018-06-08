@@ -8,7 +8,6 @@ from baseline.utils import (
     lowercase, revlut,
     export, wrapped_partial
 )
-from baseline.featurizers import create_featurizer
 
 __all__ = []
 exporter = export(__all__)
@@ -197,8 +196,7 @@ class Tagger(object):
     def predict(self, batch_dict):
         pass
 
-    def predict_text(self, tokens, mxlen, maxw, zero_alloc=np.zeros, word_trans_fn=lowercase, vocab_keys={'word':0, 'char':None},
-                     featurizer_type='default'):
+    def predict_text(self, tokens, mxlen, maxw, featurizer, zero_alloc=np.zeros, word_trans_fn=lowercase):
         """
         Utility function to convert lists of sentence tokens to integer value one-hots which
         are then passed to the tagger.  The resultant output is then converted back to label and token
@@ -221,8 +219,7 @@ class Tagger(object):
         label_vocab = revlut(self.get_labels())
         lengths = zero_alloc(1, dtype=int)
         lengths[0] = min(len(tokens), mxlen)
-        featurizer = create_featurizer(self, mxlen, maxw, zero_alloc, word_trans_fn, vocab_keys=vocab_keys, featurizer_type=featurizer_type)
-        data = featurizer.featurize(tokens)
+        data = featurizer.featurize(tokens, word_trans_fn)
         indices = self.predict(data)[0]
         output = []
         for j in range(lengths[0]):

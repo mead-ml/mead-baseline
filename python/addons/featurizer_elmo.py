@@ -3,10 +3,10 @@ from baseline.utils import lowercase
 
 
 class TaggerElmoFeaturizer(Featurizer):
-    def __init__(self, tagger, mxlen, maxw, zero_alloc, word_trans_fn):
-        super(TaggerElmoFeaturizer, self).__init__(tagger, mxlen, maxw, zero_alloc, word_trans_fn)
+    def __init__(self, tagger, mxlen, maxw, zero_alloc):
+        super(TaggerElmoFeaturizer, self).__init__(tagger, mxlen, maxw, zero_alloc)
 
-    def featurize(self, tokens):
+    def featurize(self, tokens, word_trans_fn):
         tokens = [token[0] for token in tokens]
         xs = self.zero_alloc((1, self.mxlen), dtype=int)
         xs_lc = self.zero_alloc((1, self.mxlen), dtype=int)
@@ -24,8 +24,8 @@ class TaggerElmoFeaturizer(Featurizer):
             xs_lc[0, j] = words_vocab.get(lowercase(w), 0)
             for k in range(nch):
                 xs_ch[0, j, k] = chars_vocab.get(w[k], 0)
-        return {'x': xs, 'xs_lc': xs_lc, 'xch': xs_ch, 'lengths': lengths}
+        return {'x': xs, 'x_lc': xs_lc, 'xch': xs_ch, 'lengths': lengths}
 
 
-def create_featurizer(model, mxlen, maxw, zero_alloc, word_trans_fn, **kwargs):
-    return TaggerElmoFeaturizer(model, mxlen, maxw, zero_alloc, word_trans_fn)
+def create_featurizer(model, mxlen, maxw, zero_alloc, **kwargs):
+    return TaggerElmoFeaturizer(model, mxlen, maxw, zero_alloc)
