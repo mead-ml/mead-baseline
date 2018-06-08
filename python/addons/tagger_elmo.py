@@ -319,9 +319,8 @@ class RNNTaggerELMoModel(Tagger):
 
 
 def create_model(labels, embeddings, **kwargs):
-    model = RNNTaggerELMoModel.create(labels, embeddings, **kwargs)
-    return model
+    return RNNTaggerELMoModel.create(labels, embeddings, **kwargs)
 
 
 def load_model(modelname, **kwargs):
-    return load_tagger_model(RNNTaggerELMoModel.load, modelname, **kwargs)
+    return RNNTaggerELMoModel.load(modelname, **kwargs)
