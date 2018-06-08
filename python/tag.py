@@ -39,29 +39,15 @@ parser.add_argument('--features', default=None, help='JSON file with the feature
                                                      'and the feature index in the CONLL file example: {"gaz":1}, when '
                                                      'the conll file has gazetteer feature in column 2')
 parser.add_argument('--model_type', default='default', help='tagger model type')
-parser.add_argument('--featurizer_fn_loc', default='default_loc', help='featurizer location')
-parser.add_argument('--featurizer_fn', default='default_fn', help='featurizer fn')
-# choice(s) are ['default'] currently. default is RNNTaggerModel.
+parser.add_argument('--featurizer_type', default='default', help='featurizer type')
+
 args = parser.parse_args()
 
-featurizer_defaults = {'default_loc': 'baseline.featurizers', 'default_fn': 'tagger_featurizer'}
-featurizer_mod = importlib.import_module(featurizer_defaults.get(args.featurizer_fn_loc, args.featurizer_fn_loc))
-featurizer_fn = getattr(featurizer_mod, featurizer_defaults.get(args.featurizer_fn, args.featurizer_fn))
-
-
 if args.backend == 'tf':
-    from baseline.tf.tagger.model import BASELINE_TAGGER_LOADERS
-    if args.model_type == 'default':
-        tagger = BASELINE_TAGGER_LOADERS['default'](args.model)
-    else:
-        tagger = load_user_model(args.model, model_type=args.model_type, task_type='tagger')
-
+    import baseline.tf.tagger.model as tagger
 else:
-    from baseline.pytorch.tagger.model import BASELINE_TAGGER_LOADERS
-    if args.model_type == 'default':
-        tagger = BASELINE_TAGGER_LOADERS['default'](args.model)
-    else:
-        tagger = load_user_model(args.model, model_type=args.model_type, task_type='tagger')
+    import baseline.pytorch.tagger.model as tagger
+model = tagger.load_model(args.model, model_type=args.model_type)
 
 predicted_labels = []
 input_texts, gold_labels = read_lines(args.input)
@@ -76,11 +62,13 @@ pg = create_progress_bar(len(input_texts))
 
 with codecs.open(args.output, encoding="utf-8", mode="w") as f:
     for index, sen in enumerate(input_texts):
-        predicted_label_sen = [x[1] for x in tagger.predict_text(sen, mxlen=args.mxlen, maxw=args.mxwlen,
-                                                                 vocab_keys=vocab_keys, featurizer_fn=featurizer_fn)]
+        predicted_label_sen = [x[1] for x in model.predict_text(sen, mxlen=args.mxlen, maxw=args.mxwlen,
+                                                                vocab_keys=vocab_keys,
+                                                                featurizer_type=args.featurizer_type)]
         gold_label_sen = gold_labels[index]
         for word_feature, predicted_label, gold_label in zip(sen, predicted_label_sen, gold_label_sen):
             f.write("{} {} {}\n".format(" ".join(word_feature), gold_label, predicted_label))
         f.write("\n")
+        pg.update()
 
 pg.done()
