@@ -26,7 +26,7 @@
  },
  "word_embeddings": {"label": "glove-42B"},
  "train": {
-  "epochs": 2,
+  "epochs": 60,
   "optim": "sgd",
   "decay": 0,
   "eta": 0.01,
