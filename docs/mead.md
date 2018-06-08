@@ -105,7 +105,15 @@ You can provide your own dataset and embedding files in `mead` by changing the `
 
 ### Adding new models
 
-Adding new models in mead is easy: under `addons/` add 1. model architecture, 2. trainer (if necessary) 3. data reader (if necessary). The model files should start with `task_`, eg, if you are adding a `tagger` model, it should be called `tagger_xxx.py`. Similarly, the reader files should start with `reader_`.  In the configuration file, change the `model_type` and/or `reader_type` to `xxx` from `default`. Add this directory to your `PYTHONPATH` and run the code as before i.e., `python trainer.py --task tagger --config config/xxx.json` and Baseline will pick up the new model automatically.  
+Adding new models in mead is easy: 
+
+under `addons/` add 
+
+1. model architecture, 
+2. trainer (if necessary) 
+3. data reader (if necessary). 
+
+The model files should start with `task_`, eg, if you are adding a `tagger` model, it should be called `tagger_xxx.py`. Similarly, the reader files should start with `reader_`.  In the configuration file, change the `model_type` and/or `reader_type` to `xxx` from `default`. Add this directory to your `PYTHONPATH` and run the code as before i.e., `python trainer.py --task tagger --config config/xxx.json` and Baseline will pick up the new model automatically.  
 
 ### Support for features
 
