@@ -80,7 +80,6 @@ class RNNTaggerELMoModel(Tagger):
             gd.ParseFromString(f.read())
             model.sess.graph.as_default()
             tf.import_graph_def(gd, name='')
-
             model.sess.run(saver_def.restore_op_name, {saver_def.filename_tensor_name: checkpoint_name})
             model.x = tf.get_default_graph().get_tensor_by_name('x:0')
             model.x_lc = tf.get_default_graph().get_tensor_by_name('x_lc:0')
@@ -114,6 +113,7 @@ class RNNTaggerELMoModel(Tagger):
             model.char_vocab = json.load(f)
 
         model.saver = tf.train.Saver(saver_def=saver_def)
+
         return model
 
     def save_using(self, saver):

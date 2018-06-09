@@ -54,7 +54,6 @@ python tag_char_rnn.py \
 
 ```
 
-
 ## Status
 
 This model is implemented in TensorFlow and PyTorch.
