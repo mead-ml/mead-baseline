@@ -359,7 +359,7 @@ class ConvModel(WordClassifierBase):
 
 
 class LSTMModel(WordClassifierBase):
-    """A simple single-directional single-layer LSTM. No layer-stacking. Pad sequences left for this model
+    """A simple single-directional single-layer LSTM. No layer-stacking.
     
     """
     def __init__(self):
