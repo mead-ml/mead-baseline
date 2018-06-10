@@ -80,12 +80,13 @@ class Classifier(object):
         """
         vocab = self.get_vocab('word')
         x = zero_alloc((1, mxlen), dtype=int)
-        length = min(len(tokens), mxlen)
-        for j in range(length):
+        length = zero_alloc(1, dtype=int)
+        length[0] = min(len(tokens), mxlen)
+        for j in range(length[0]):
             word = word_trans_fn(tokens[j])
             idx = vocab.get(word, 0)
             x[0, j] = idx
-        outcomes = self.classify({'x': x})[0]
+        outcomes = self.classify({'x': x, 'lengths': length})[0]
         return sorted(outcomes, key=lambda tup: tup[1], reverse=True)
 
 

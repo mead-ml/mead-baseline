@@ -62,7 +62,7 @@ class WordClassifierBase(Classifier):
         if not os.path.exists(state_file):
             return
 
-        with open(state_file, 'w') as f:
+        with open(state_file, 'r') as f:
             state = json.load(f)
             self.mxlen = state.get('mxlen')
             self.mxwlen = state.get('mxwlen')
@@ -87,10 +87,10 @@ class WordClassifierBase(Classifier):
         It runs the `x` tensor in (`BxT`), and turns dropout off, running the network all the way to a softmax
         output
         
-        :param x: The `x` tensor of input (`BxT`)
+        :param batch_dict: (``dict``) contains `x` tensor of input (`BxT`)
         :return: Each outcome as a ``list`` of tuples `(label, probability)`
         """
-        feed_dict = self.make_input(self, batch_dict)
+        feed_dict = self.make_input(batch_dict)
         probs = self.sess.run(tf.nn.softmax(self.logits), feed_dict=feed_dict)
         results = []
         batchsz = probs.shape[0]
@@ -150,12 +150,15 @@ class WordClassifierBase(Classifier):
             saver_def = tf.train.SaverDef()
             text_format.Merge(fsv.read(), saver_def)
 
+        checkpoint_name = kwargs.get('checkpoint_name', basename)
+        checkpoint_name = checkpoint_name or basename
+
         with gfile.FastGFile(basename + '.graph', 'rb') as f:
             gd = tf.GraphDef()
             gd.ParseFromString(f.read())
             sess.graph.as_default()
             tf.import_graph_def(gd, name='')
-            sess.run(saver_def.restore_op_name, {saver_def.filename_tensor_name: basename + '.model'})
+            sess.run(saver_def.restore_op_name, {saver_def.filename_tensor_name: checkpoint_name})
             model.x = tf.get_default_graph().get_tensor_by_name('x:0')
             model.y = tf.get_default_graph().get_tensor_by_name('y:0')
             try:
@@ -183,7 +186,7 @@ class WordClassifierBase(Classifier):
             vocab_suffixes = get_vocab_file_suffixes(basename)
             for ty in vocab_suffixes:
                 vocab_file = '{}-{}.vocab'.format(basename, ty)
-            print('Reading {}', vocab_file)
+            print('Reading {}'.format(vocab_file))
             with open(vocab_file, 'r') as f:
                 model.vocab[ty] = json.load(f)
 

@@ -44,8 +44,9 @@ def get_vocab_file_suffixes(model_file):
     """
     filenames = _find_files_by_type(model_file, 'vocab')
     model_name = model_file.split('/')[-1]
+
     # the length of the name plus 1 for the hyphen separating the suffix.
-    return [x[len(model_name)+1:] for x in filenames]
+    return [x[len(model_name)+1:] for x in filenames if x.startswith(model_name)]
 
 
 def optimizer(loss_fn, **kwargs):
