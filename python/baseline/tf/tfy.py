@@ -60,7 +60,7 @@ def get_vocab_file_suffixes(model_file):
     model_name = model_file.split('/')[-1]
 
     # the length of the name plus 1 for the hyphen separating the suffix.
-    return [x[len(model_name)+1:] for x in filenames if x.find(model_name) >= 0]
+    return [x[len(model_name)+1:] for x in filenames if x.startswith(model_name)]
 
 
 
