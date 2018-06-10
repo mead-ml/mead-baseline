@@ -105,7 +105,7 @@ class WordClassifierBase(Classifier):
         xch = batch_dict.get('xch')
         lengths = batch_dict.get('lengths')
         pkeep = 1.0 - self.pdrop_value if do_dropout else 1.0
-        feed_dict = {self.x: x, self.pkeep: pkeep}
+        feed_dict = {self.x: x, self.pkeep: pkeep, self.lengths: lengths}
         if xch is not None and self.xch is not None:
             feed_dict[self.xch] = xch
         #if lengths is not None and self.lengths is not None:
@@ -159,11 +159,11 @@ class WordClassifierBase(Classifier):
             model.x = tf.get_default_graph().get_tensor_by_name('x:0')
             model.y = tf.get_default_graph().get_tensor_by_name('y:0')
             try:
-                model.xch = tf.get_default_graph().has_tensor_by_name('xch:0')
+                model.xch = tf.get_default_graph().get_tensor_by_name('xch:0')
             except:
                 model.xch = None
             try:
-                model.lengths = tf.get_default_graph().has_tensor_by_name('lengths:0')
+                model.lengths = tf.get_default_graph().get_tensor_by_name('lengths:0')
             except:
                 model.lengths = None
             model.pkeep = tf.get_default_graph().get_tensor_by_name('pkeep:0')
@@ -240,6 +240,7 @@ class WordClassifierBase(Classifier):
         # This only exists to make exporting easier
         model.x = kwargs.get('x', tf.placeholder(tf.int32, [None, model.mxlen], name="x"))
         model.y = kwargs.get('y', tf.placeholder(tf.int32, [None, nc], name="y"))
+        model.lengths = kwargs.get('lengths', tf.placeholder(tf.int32, [None], name="lengths"))
         model.xch = None
         seed = np.random.randint(10e8)
         init = tf.random_uniform_initializer(-0.05, 0.05, dtype=tf.float32, seed=seed)
@@ -375,7 +376,7 @@ class LSTMModel(WordClassifierBase):
         if type(hsz) is list:
             hsz = hsz[0]
         char_rnnfwd = lstm_cell_w_dropout(hsz, self.pkeep)
-        rnnout, final_state = tf.nn.dynamic_rnn(char_rnnfwd, word_embeddings, dtype=tf.float32)
+        rnnout, final_state = tf.nn.dynamic_rnn(char_rnnfwd, word_embeddings, dtype=tf.float32, sequence_length=self.lengths)
 
         output_state = final_state.h
         combine = tf.reshape(output_state, [-1, hsz])

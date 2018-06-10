@@ -85,8 +85,6 @@ class WordClassifierBase(nn.Module, Classifier):
     def forward(self, input):
         # BxTxC
         x = input[0]
-        embeddings = self.lut(x)
-        x = input[0]
         embeddings_word = self.lut(x)
         if self.char_dsz > 0:
             xch = input[1]
@@ -198,9 +196,9 @@ class LSTMModel(WordClassifierBase):
         return hsz
 
     def _pool(self, embeddings):
+
         output, hidden = self.lstm(embeddings)
-        last_frame = output[:, -1, :].squeeze(1)
-        return last_frame
+        return hidden[0].view(hidden[0].shape[1:])
 
 
 class NBowBase(WordClassifierBase):
