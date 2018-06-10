@@ -21,19 +21,28 @@ class WordCharLength(Featurizer):
     def run(self, tokens):
         tokens = [token[0] for token in tokens]
         xs = self.zero_alloc((1, self.mxlen), dtype=int)
-        xs_ch = self.zero_alloc((1, self.mxlen, self.maxw), dtype=int)
+
+        chars_vocab = self.model.get_vocab('char')
+        if chars_vocab is not None:
+            if self.maxw is None:
+                raise Exception('Expected max word length')
+            xs_ch = self.zero_alloc((1, self.mxlen, self.maxw), dtype=int)
+        else:
+            xs_ch = None
         lengths = self.zero_alloc(1, dtype=int)
         lengths[0] = min(len(tokens), self.mxlen)
         words_vocab = self.model.get_vocab('word')
-        chars_vocab = self.model.get_vocab('char')
+
         for j in range(self.mxlen):
             if j == len(tokens):
                 break
             w = tokens[j]
-            nch = min(len(w), self.maxw)
-            xs[0, j] = words_vocab.get(self.word_trans_fn(w), 0)
-            for k in range(nch):
-                xs_ch[0, j, k] = chars_vocab.get(w[k], 0)
+            if chars_vocab is not None:
+                nch = min(len(w), self.maxw)
+                xs[0, j] = words_vocab.get(self.word_trans_fn(w), 0)
+
+                for k in range(nch):
+                    xs_ch[0, j, k] = chars_vocab.get(w[k], 0)
         return {'x': xs, 'xch': xs_ch, 'lengths': lengths}
 
 

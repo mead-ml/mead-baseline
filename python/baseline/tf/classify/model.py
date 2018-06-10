@@ -129,7 +129,7 @@ class WordClassifierBase(Classifier):
         
         :return: A ``dict`` of words mapped to indices
         """
-        return self.vocab[name]
+        return self.vocab.get(name)
 
     @classmethod
     def load(cls, basename, **kwargs):
