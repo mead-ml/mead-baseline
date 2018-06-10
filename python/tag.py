@@ -7,6 +7,7 @@ from baseline.featurizers import create_featurizer
 import json
 import numpy as np
 
+
 def read_lines(tsfile):
     txts = []
     labels = []
@@ -59,7 +60,8 @@ if args.features is not None:
 
 
 pg = create_progress_bar(len(input_texts))
-featurizer = create_featurizer(model, args.mxlen, args.mxwlen, zero_alloc=np.zeros, vocab_keys=vocab_keys, featurizer_type=args.featurizer_type)
+featurizer = create_featurizer(model, args.mxlen, args.mxwlen, zero_alloc=np.zeros,
+                               vocab_keys=vocab_keys, featurizer_type=args.featurizer_type)
 with codecs.open(args.output, encoding="utf-8", mode="w") as f:
     for index, sen in enumerate(input_texts):
         predicted_label_sen = [x[1] for x in model.predict_text(sen, mxlen=args.mxlen, maxw=args.mxwlen,

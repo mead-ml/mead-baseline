@@ -1,5 +1,5 @@
 import numpy as np
-from baseline.utils import lowercase, import_user_module
+from baseline.utils import import_user_module
 
 
 class Featurizer(object):
