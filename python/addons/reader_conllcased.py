@@ -1,4 +1,4 @@
-from baseline.reader import *
+from baseline.reader import CONLLSeqReader
 import numpy as np
 from collections import Counter
 import codecs
@@ -7,15 +7,14 @@ import os
 import re
 import baseline.data
 
+
 class CONLLSeqMixedCaseReader(CONLLSeqReader):
 
     def __init__(self, max_sentence_length=-1, max_word_length=-1, word_trans_fn=None,
                  vec_alloc=np.zeros, vec_shape=np.shape, trim=False, extended_features=dict()):
         super(CONLLSeqMixedCaseReader, self).__init__(max_sentence_length, max_word_length, word_trans_fn, vec_alloc, vec_shape, trim, extended_features)
 
-
     def load(self, filename, vocabs, batchsz, shuffle=False, do_sort=True):
-
         ts = []
         words_vocab = vocabs['word']
         chars_vocab = vocabs['char']
@@ -113,6 +112,7 @@ class CONLLSeqMixedCaseReader(CONLLSeqReader):
 
         vocabs.update({'char': vocab_ch, 'word': vocab_word})
         return vocabs
+
 
 def create_seq_pred_reader(mxlen, mxwlen, word_trans_fn, vec_alloc, vec_shape, trim, **kwargs):
     return CONLLSeqMixedCaseReader(mxlen, mxwlen, word_trans_fn, vec_alloc, vec_shape, trim)

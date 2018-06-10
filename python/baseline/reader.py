@@ -428,7 +428,12 @@ class TSVSeqLabelReader(SeqLabelReader):
                 "!": " ! ",
                 }
 
-    def __init__(self, max_sentence_length=-1, max_word_length=-1, mxfiltsz=0, clean_fn=None, vec_alloc=np.zeros, src_vec_trans=None, do_chars=False, data_format='objs'):
+    def __init__(
+            self,
+            max_sentence_length=-1, max_word_length=-1, mxfiltsz=0,
+            clean_fn=None, vec_alloc=np.zeros, src_vec_trans=None,
+            do_chars=False, data_format='objs', trim=False
+    ):
         super(TSVSeqLabelReader, self).__init__()
 
         self.vocab = None
@@ -443,6 +448,11 @@ class TSVSeqLabelReader(SeqLabelReader):
             self.clean_fn = lambda x: x
         self.src_vec_trans = src_vec_trans
         self.do_chars = do_chars
+        self.trim = trim
+
+    @staticmethod
+    def splits(text):
+        return list(filter(lambda s: len(s) != 0, re.split('\s+', text)))
 
     @staticmethod
     def do_clean(l):
@@ -589,9 +599,8 @@ class TSVSeqLabelReader(SeqLabelReader):
             if self.do_chars:
                 examples['xch'] = xch
         return baseline.data.SeqLabelDataFeed(baseline.data.SeqLabelExamples(examples, do_shuffle=shuffle, do_sort=do_sort),
-                                              batchsz=batchsz, shuffle=shuffle,
+                                              batchsz=batchsz, shuffle=shuffle, trim=self.trim,
                                               vec_alloc=self.vec_alloc, src_vec_trans=self.src_vec_trans)
-
 
 @exporter
 def create_pred_reader(mxlen, zeropadding, clean_fn, vec_alloc, src_vec_trans, **kwargs):
@@ -600,8 +609,9 @@ def create_pred_reader(mxlen, zeropadding, clean_fn, vec_alloc, src_vec_trans, *
     if reader_type == 'default':
         do_chars = kwargs.get('do_chars', False)
         data_format = kwargs.get('data_format', 'objs')
+        trim = kwargs.get('trim', False)
         reader = TSVSeqLabelReader(mxlen, kwargs.get('mxwlen', -1), zeropadding, clean_fn, vec_alloc, src_vec_trans,
-                                   do_chars=do_chars, data_format=data_format)
+                                   do_chars=do_chars, data_format=data_format, trim=trim)
     else:
         mod = import_user_module("reader", reader_type)
         reader = mod.create_pred_reader(mxlen, zeropadding, clean_fn, vec_alloc, src_vec_trans, **kwargs)

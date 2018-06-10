@@ -107,6 +107,15 @@ class ProgressBarTerminal(Progress):
         self.update(step=0)
         print('')
 
+    def __call__(self, real_iter):
+        return self.__iter__(real_iter)
+
+    def __iter__(self, real_iter):
+        for x in real_iter:
+            yield x
+            self.update()
+        self.done()
+
 
 # This is retrofitted in, maybe there is a better way though
 g_Progress = ProgressBarTerminal

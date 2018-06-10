@@ -15,16 +15,30 @@ def _find_files_by_type(model_file, filetype):
     matching_files = []
 
     filetype_ending = "." + filetype
-    basepath = os.path.dirname(model_file)
-    if not os.path.isdir(basepath):
-        raise IOError("not a model directory")
+    basepath = get_basepath_or_cwd(model_file)
 
     for filename in os.listdir(basepath):
         if filename.endswith(filetype_ending):
             filename_without_ending = filename[:-len(filetype_ending)]
-            matching_files.append(filename_without_ending)
+            matching_files.append(os.path.join(basepath, filename_without_ending))
+
+    if not matching_files:
+        raise ValueError("no vocab files found in directory %s. \
+Please specify the model as path-like. e.g. /data/model/model-name-1234" % basepath)
 
     return matching_files
+
+def get_basepath_or_cwd(model_file):
+    """
+    inspects the model_file variable for a directory name.
+
+    if no directory is found, returns current working dir.
+    """
+    basepath = os.path.dirname(model_file)
+    if not os.path.isdir(basepath):
+        basepath = os.getcwd()
+
+    return basepath
 
 
 def get_vocab_file_suffixes(model_file):
@@ -46,7 +60,8 @@ def get_vocab_file_suffixes(model_file):
     model_name = model_file.split('/')[-1]
 
     # the length of the name plus 1 for the hyphen separating the suffix.
-    return [x[len(model_name)+1:] for x in filenames if x.startswith(model_name)]
+    return [x[len(model_name)+1:] for x in filenames if x.find(model_name) >= 0]
+
 
 
 def optimizer(loss_fn, **kwargs):

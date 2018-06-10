@@ -40,7 +40,7 @@ class PretrainedEmbeddingsModel(EmbeddingsModel):
         self.vocab = {}
         idx = 1
 
-        word_vectors, self.dsz, known_vocab, idx = self._read_vectors(filename, idx, known_vocab, keep_unused)
+        word_vectors, self.dsz, known_vocab, idx = self._read_vectors(filename, idx, known_vocab, keep_unused, **kwargs)
         self.nullv = np.zeros(self.dsz, dtype=np.float32)
         word_vectors = [self.nullv] + word_vectors
         self.vocab["<PAD>"] = 0
@@ -58,7 +58,7 @@ class PretrainedEmbeddingsModel(EmbeddingsModel):
 
         self.vsz = self.weights.shape[0] - 1
 
-    def _read_vectors(self, filename, idx, known_vocab, keep_unused):
+    def _read_vectors(self, filename, idx, known_vocab, keep_unused, **kwargs):
         pass
 
 
@@ -68,7 +68,13 @@ class Word2VecModel(PretrainedEmbeddingsModel):
     def __init__(self, filename, known_vocab=None, unif_weight=None, keep_unused=False, normalize=False, **kwargs):
         super(Word2VecModel, self).__init__(filename, known_vocab, unif_weight, keep_unused, normalize, **kwargs)
 
-    def _read_vectors(self, filename, idx, known_vocab, keep_unused):
+    def _read_vectors(self, filename, idx, known_vocab, keep_unused, **kwargs):
+        use_mmap = bool(kwargs.get('use_mmap', False))
+
+        read_fn = self._read_vectors_mmap if use_mmap else self._read_vectors_file
+        return read_fn(filename, idx, known_vocab, keep_unused)
+
+    def _read_vectors_file(self, filename, idx, known_vocab, keep_unused):
         word_vectors = []
         with io.open(filename, "rb") as f:
             header = f.readline()
@@ -86,6 +92,37 @@ class Word2VecModel(PretrainedEmbeddingsModel):
                 self.vocab[word] = idx
                 idx += 1
         return word_vectors, dsz, known_vocab, idx
+
+    @staticmethod
+    def _read_line_mmap(m, width, start):
+        current = start+1
+        while m[current:current+1] != b' ':
+            current += 1
+        vocab = m[start:current].decode('utf-8')
+        raw = m[current+1:current+width+1]
+        value = np.fromstring(raw, dtype=np.float32)
+        return vocab, value, current+width + 1
+
+    def _read_vectors_mmap(self, filename, idx, known_vocab, keep_unused):
+        import mmap
+        word_vectors = []
+        with open(filename, 'rb') as f:
+            with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as m:
+                header_end = m[:50].find(b'\n')
+                vsz, dsz = map(int, (m[:header_end]).split(b' '))
+                width = 4 * dsz
+                current = header_end + 1
+                for i in range(vsz):
+                    word, vec, current = Word2VecModel._read_line_mmap(m, width, current)
+                    if keep_unused is False and word not in known_vocab:
+                        continue
+                    if known_vocab and word in known_vocab:
+                        known_vocab[word] = 0
+
+                    word_vectors.append(vec)
+                    self.vocab[word] = idx
+                    idx += 1
+                return word_vectors, dsz, known_vocab, idx
 
     @staticmethod
     def _readtospc(f):
@@ -106,7 +143,13 @@ class GloVeModel(PretrainedEmbeddingsModel):
     def __init__(self, filename, known_vocab=None, unif_weight=None, keep_unused=False, normalize=False, **kwargs):
         super(GloVeModel, self).__init__(filename, known_vocab, unif_weight, keep_unused, normalize, **kwargs)
 
-    def _read_vectors(self, filename, idx, known_vocab, keep_unused):
+    def _read_vectors(self, filename, idx, known_vocab, keep_unused, **kwargs):
+        use_mmap = bool(kwargs.get('use_mmap', False))
+
+        read_fn = self._read_vectors_mmap if use_mmap else self._read_vectors_file
+        return read_fn(filename, idx, known_vocab, keep_unused)
+
+    def _read_vectors_file(self, filename, idx, known_vocab, keep_unused):
         word_vectors = []
         with io.open(filename, "r", encoding="utf-8") as f:
             for line in f:
@@ -122,6 +165,27 @@ class GloVeModel(PretrainedEmbeddingsModel):
                 idx += 1
         dsz = vec.shape[0]
         return word_vectors, dsz, known_vocab, idx
+
+    def _read_vectors_mmap(self, filename, idx, known_vocab, keep_unused):
+        import mmap
+        word_vectors = []
+        with open(filename, "r", encoding="utf-8") as f:
+            with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as m:
+                for line in iter(m.readline, ''):
+                    values = line.split()
+                    if len(values) == 0:
+                        break
+                    word = values[0]
+                    if keep_unused is False and word not in known_vocab:
+                        continue
+                    if known_vocab and word in known_vocab:
+                        known_vocab[word] = 0
+                    vec = np.asarray(values[1:], dtype=np.float32)
+                    word_vectors.append(vec)
+                    self.vocab[word] = idx
+                    idx += 1
+                dsz = vec.shape[0]
+                return word_vectors, dsz, known_vocab, idx
 
 
 @exporter

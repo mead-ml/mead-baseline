@@ -1,4 +1,5 @@
 {
+    "task": "classify",
     "batchsz": 50,
     "preproc": {
 	"mxlen": 100,

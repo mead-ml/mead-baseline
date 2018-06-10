@@ -1,6 +1,7 @@
 {
-	"batchsz": 20,
-	"unif": 0.05,
+    "task": "lm",
+    "batchsz": 20,
+    "unif": 0.05,
     "nbptt": 35,
     "charsz": 16,
     "preproc": {

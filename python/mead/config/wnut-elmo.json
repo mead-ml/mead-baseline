@@ -1,39 +1,39 @@
 {
- "batchsz": 20,
- "conll_output": "wnutresults.conll",
- "charsz": 16,
- "unif": 0.1,
- "preproc": {
-  "mxlen": 60,
-  "mxwlen": 40,
-  "lower": true
- },
- "backend": "tensorflow",
- "dataset": "wnut",
- "loader": {
-  "reader_type": "conllcased"
- },
- "model": {
-  "model_type": "elmo",
-  "cfiltsz": [
-   3
-  ],
-  "hsz": 512,
-  "wsz": 10,
-  "dropout": 0.5,
-  "rnntype": "blstm",
-  "crf": 1
- },
- "word_embeddings": {"label": "glove-42B"},
- "train": {
-  "epochs": 60,
-  "optim": "sgd",
-  "decay": 0,
-  "eta": 0.01,
-  "mom": 0.9,
-  "patience": 20,
-  "early_stopping_metric": "f1",
-  "clip": 5.0
- }
+    "task": "tagger",
+    "batchsz": 20,
+    "conll_output": "wnutresults.conll",
+    "charsz": 16,
+    "unif": 0.1,
+    "preproc": {
+	"mxlen": 60,
+	"mxwlen": 40,
+	"lower": true
+    },
+    "backend": "tensorflow",
+    "dataset": "wnut",
+    "loader": {
+	"reader_type": "conllcased"
+    },
+    "model": {
+	"model_type": "elmo",
+	"cfiltsz": [
+	    3
+	],
+	"hsz": 512,
+	"wsz": 10,
+	"dropout": 0.5,
+	"rnntype": "blstm",
+	"crf": 1
+    },
+    "word_embeddings": {"label": "glove-42B"},
+    "train": {
+	"epochs": 60,
+	"optim": "sgd",
+	"decay": 0,
+	"eta": 0.01,
+	"mom": 0.9,
+	"patience": 20,
+	"early_stopping_metric": "f1",
+	"clip": 5.0
+    }
 }
-

@@ -56,7 +56,7 @@ class Task(object):
         config = Task.TASK_REGISTRY[task](logging_config, mead_config)
         return config
 
-    def read_config(self, config_file, datasets_index):
+    def read_config(self, config_params, datasets_index):
         """
         Read the config file and the datasets index
 
@@ -68,7 +68,7 @@ class Task(object):
         :return:
         """
         datasets_set = mead.utils.index_by_label(datasets_index)
-        self.config_params = read_config_file(config_file)
+        self.config_params = config_params
         self._setup_task()
         self._configure_reporting()
         self.dataset = datasets_set[self.config_params['dataset']]
@@ -203,6 +203,7 @@ class ClassifierTask(Task):
                                            vec_alloc=self.config_params['preproc']['vec_alloc'],
                                            src_vec_trans=self.config_params['preproc']['src_vec_trans'],
                                            mxwlen=self.config_params['preproc'].get('mxwlen', -1),
+                                           trim=self.config_params['preproc'].get('trim', False),
                                            **self.config_params['loader'])
 
     def _setup_task(self):
@@ -220,6 +221,18 @@ class ClassifierTask(Task):
             if backend == 'keras':
                 print('Keras backend')
                 import baseline.keras.classify as classify
+            if backend == 'dynet':
+                print('Dynet backend')
+                import _dynet
+                dy_params = _dynet.DynetParams()
+                dy_params.from_args()
+                dy_params.set_requested_gpus(1)
+                if 'autobatchsz' in self.config_params['train']:
+                    self.config_params['model']['batched'] = False
+                    dy_params.set_autobatch(True)
+                dy_params.init()
+                import baseline.dy.classify as classify
+                from baseline.data import reverse_2nd as rev2nd
             else:
                 print('TensorFlow backend')
                 import baseline.tf.classify as classify
@@ -239,8 +252,6 @@ class ClassifierTask(Task):
             self.config_params['preproc']['clean_fn'] = None
 
         self.config_params['preproc']['src_vec_trans'] = rev2nd if self.config_params['preproc'].get('rev', False) else None
-        self.config_params['model']['mxlen'] = self.config_params['preproc']['mxlen']
-        self.config_params['model']['mxwlen'] = self.config_params['preproc'].get('mxwlen', -1)
 
     def initialize(self, embeddings):
         embeddings_set = mead.utils.index_by_label(embeddings)
@@ -251,7 +262,10 @@ class ClassifierTask(Task):
 
 
     def _create_model(self):
-        return self.task.create_model(self.embeddings, self.labels, **self.config_params['model'])
+        model = self.config_params['model']
+        model['mxlen'] = self.reader.max_sentence_length
+        model['mxwlen'] = self.reader.max_word_length
+        return self.task.create_model(self.embeddings, self.labels, **model)
 
     def _load_dataset(self):
         self.train_data = self.reader.load(self.dataset['train_file'], self.feat2index, self.config_params['batchsz'], shuffle=True)
@@ -306,7 +320,7 @@ class TaggerTask(Task):
             self.config_params['preproc']['word_trans_fn'] = baseline.lowercase
             print('Lower')
         else:
-            self.config_params['preproc']['word_trans_fn'] = None 
+            self.config_params['preproc']['word_trans_fn'] = None
 
     def initialize(self, embeddings):
         self.dataset = DataDownloader(self.dataset, self.data_download_cache).download()

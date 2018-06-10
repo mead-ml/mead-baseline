@@ -1,4 +1,5 @@
 {
+    "task": "tagger",
     "batchsz": 10,
     "conll_output": "conllresults.conll",
     "test_thresh": 10,

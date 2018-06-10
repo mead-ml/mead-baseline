@@ -9,34 +9,35 @@ Here is a simple example for configuring the `default` model for SST2, with a Te
 
 ```
 {
+    "task": "classify",
     "batchsz": 50,
     "preproc": {
-	"mxlen": 100,
-	"rev": false,
-	"clean": true
+	    "mxlen": 100,
+	    "rev": false,
+	    "clean": true
     },
     "backend": "tensorflow",
     "dataset": "SST2",
     "loader": {
-	"reader_type": "default"
+	    "reader_type": "default"
     },
     "unif": 0.25,
     "model": {
-	"model_type": "default",
-	"filtsz": [3,4,5],
-	"cmotsz": 100,
-	"dropout": 0.5,
-	"finetune": true
+	    "model_type": "default",
+	    "filtsz": [3,4,5],
+	    "cmotsz": 100,
+	    "dropout": 0.5,
+	    "finetune": true
     },
     "word_embeddings": {
-	"label": "w2v-gn"
+	    "label": "w2v-gn"
     },
     "train": {
-	"epochs": 2,
-	"optim": "adadelta",
-	"eta": 1.0,
-	"model_base": "./models/sst2",
-	"early_stopping_metric": "acc"
+	    "epochs": 2,
+	    "optim": "adadelta",
+	    "eta": 1.0,
+	    "model_base": "./models/sst2",
+	    "early_stopping_metric": "acc"
     }
 }
 
@@ -46,9 +47,9 @@ Here is a simple example of configuring `mead` to run a BLSTM-CRF in `pytorch` a
 
 ```
 {
+    "task": "tagger",
     "batchsz": 10,
     "conll_output": "conllresults.conll",
-    "test_thresh": 10,
     "charsz": 30,
     "unif": 0.1,
     "preproc": {
@@ -94,7 +95,7 @@ Here is a simple example of configuring `mead` to run a BLSTM-CRF in `pytorch` a
 To train a model use the [trainer.py](../python/mead/trainer.py) utility in the directory:
 
 ```
-python trainer.py --config config/conll.json --task tagger
+python trainer.py --config config/conll.json
 ```
 
 See more running options in [trainer.py](../python/mead/trainer.py).
@@ -105,7 +106,15 @@ You can provide your own dataset and embedding files in `mead` by changing the `
 
 ### Adding new models
 
-Adding new models in mead is easy: under `addons/` add 1. model architecture, 2. trainer (if necessary) 3. data reader (if necessary). The model files should start with `task_`, eg, if you are adding a `tagger` model, it should be called `tagger_xxx.py`. Similarly, the reader files should start with `reader_`.  In the configuration file, change the `model_type` and/or `reader_type` to `xxx` from `default`. Add this directory to your `PYTHONPATH` and run the code as before i.e., `python trainer.py --task tagger --config config/xxx.json` and Baseline will pick up the new model automatically.  
+Adding new models in mead is easy: 
+
+under `addons/` add 
+
+1. model architecture, 
+2. trainer (if necessary) 
+3. data reader (if necessary). 
+
+The model files should start with `task_`, eg, if you are adding a `tagger` model, it should be called `tagger_xxx.py`. Similarly, the reader files should start with `reader_`.  In the configuration file, change the `model_type` and/or `reader_type` to `xxx` from `default`. Add this directory to your `PYTHONPATH` and run the code as before i.e., `python trainer.py --task tagger --config config/xxx.json` and Baseline will pick up the new model automatically.  
 
 ### Support for features
 

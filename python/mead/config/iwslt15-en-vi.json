@@ -1,4 +1,5 @@
 {
+    "task": "seq2seq",
     "num_valid_to_show": 5,
     "batchsz": 100,
     "unif": 0.25,

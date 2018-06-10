@@ -8,6 +8,11 @@ After an experiment is done, use `xpctl` to report the results to a mongodb serv
 - [**Dependencies**](#dependencies)
 - [**Installation**](#installation)
 - [**REPL mode and commands**](#repl-mode-and-commands)
+    - [**Commands**](#commands)
+    - [**Updating the database**](#updating-the-database)
+          - [**Importing**](#importing)
+          - [**Exporting**](#exporting)
+          - [**Summary**](#summary)
 - [**Workflow for running an experiment**](#workflow-for-running-an-experiment)
 
 ### Dependencies
@@ -17,7 +22,6 @@ After an experiment is done, use `xpctl` to report the results to a mongodb serv
 ### Installation
 
 In the `python` dir, run `./install_dev.sh xpctl`. Before installation, you can create a file `xpctlcred.json` at your `HOME` directory if you do not want to pass the parameters everytime you start the command. The file should look like this:
-
 ```
 {
  "user": <username>,
@@ -28,21 +32,22 @@ In the `python` dir, run `./install_dev.sh xpctl`. Before installation, you can 
 
 ```
 
-_dbhost_ is typically `localhost` and _dbport_ is `27017`. 
+_dbhost_ is typically `localhost` and _dbport_ is `27017`. Here `<username>`, `<password>` and `<dbhost>` should be passed as string. 
 
 If you use [docker](docker.md), `xpctl` will be automatically installed.
  
 ### REPL Mode and Commands
  
 **Starting**: use `--host`,`--port`,`--user` and `password` to specify the host, port, username and password for mongodb. Else, you can pass a config file with the option `--config`. `xpctl` assumes that the config file is located at `~/xpctlcred.json` (in which case you can just use the command `xpctl` w/o specifying any option) but it can be saved anywhere you want.
-
- ```
+```
 (dl) home:home$ xpctl --host localhost
 setting dbhost to localhost dbport to 27017
 db connection successful
 Starting xpctl...
 xpctl > 
+
 ```
+
 #### Commands
 
 ##### Set up and general info
@@ -57,10 +62,9 @@ xpctl >
 ##### Analysis
 
 - **results**: shows results for a task, event type (train/test/valid) and a dataset. Optionally supply metric(s) and a metric to sort the results with. If you specify **only one** metric, the results will be sorted on that.
-
 ```
 Usage: xpctl results [OPTIONS] TASK EVENT_TYPE DATASET
-  Shows the results for event_type(tran/valid/test) on a particular task
+  Shows the results for event_type(train/valid/test) on a particular task
   (classify/ tagger) with a particular dataset (SST2, wnut). Default
   behavior: **All** users, and metrics. Optionally supply user(s),
   metric(s), a sort metric. use --metric f1 --metric acc for multiple
@@ -116,15 +120,15 @@ db connection successful with [host]: x.y.com, [port]: 27017
 ```
 
 - **best**: shows the best (n) result for a task. 
-
 ```
 xpctl > help best
 Usage: best [OPTIONS] TASK EVENT_TYPE DATASET METRIC
-  Shows the best F1 score for event_type(tran/valid/test) on a particular
-  task (classify/ tagger) on a particular dataset (SST2, wnut) using a
-  particular metric. Default behavior: The best result for **All** users
-  available for the task. Optionally supply number of results (n-best),
-  user(s) and metric(only ONE)
+  Shows the best score for event_type(tran/valid/test) on a particular
+  task (classify/ tagger), on a particular dataset (SST2, wnut) and a
+  particular metric. 
+Default behavior: 
+  The best result for **All** users available for the task. 
+Optionally supply number of results (n-best), user(s) and metric(only ONE)
 Options:
   --user TEXT  list of users (test-user, root), [multiple]: --user a --user b
   --n INTEGER  N best results
@@ -138,7 +142,9 @@ total 3 results found, showing best 3 results
                          id  username                    label dataset                                      sha1                        date       acc
 2  5af34c9fb5536c53bb07bc46      None  Kim2014-SST2-TF-2epochs    SST2  8ab6ab6ee8fdf14b111223e2edf48750c30c7e51  2018-05-09T19:31:42.984408  0.875343
 0  5af36f9bb5536c60d1e2ccc1  dpressel  Kim2014-SST2-TF-2epochs    SST2  8ab6ab6ee8fdf14b111223e2edf48750c30c7e51  2018-05-09T22:00:49.195327  0.874794
-1  5af34c0bb5536c533c9b6ecc      None  Kim2014-SST2-TF-2epochs    SST2  8ab6ab6e```
+1  5af34c0bb5536c533c9b6ecc      None  Kim2014-SST2-TF-2epochs    SST2  8ab6ab6e
+
+```
 
 #### Updating the database
 
@@ -162,13 +168,13 @@ Options:
   --help  Show this message and exit.
 ```
 
-- **putresult**: puts the result of an experiment in the database. Can optionally store the model files in a persistent model store (will automatically zip them) This is tested for `tensorflow` models, not `pytorch` ones yet. 
- 
+##### Importing
+
+- **putresult**: puts the result of an experiment in the database. Can optionally store the model files in a persistent model store (will automatically zip them). This is tested for `tensorflow` models, not `pytorch` ones yet. 
 ```
 xpctl > help putresult
 Usage: putresult [OPTIONS] TASK CONFIG LOG LABEL
-  Puts the results of an experiment on the database. Arguments:  task name,
-  location of the config file for the experiment, the log file storing the
+  Puts the results of an experiment on the database. Arguments:  task name (classify/ tagger), location of the config file for the experiment, the log file storing the
   results for the experiment (typically <taskname>/reporting.log) and a
   short description of the experiment (label). Gets the username from system
   (can provide as an option). Also provide the model location produced by
@@ -182,13 +188,22 @@ Options:
   --help         Show this message and exit.
 ```
 
-- **putmodel**: save model files in a persistent location. The location can be provided by the option -cstore, by default it is `/data/model-checkpoints` directory in your machine. This is tested for `tensorflow` models, not `pytorch` ones yet. 
+```
+xpctl > putresult --user ijindal classify /home/ijindal/dev/work/baseline/python/mead/config/sst2.json /home/ijindal/dev/work/baseline/python/mead/reporting-4923.log  testClassify
 
+db mongo connection successful with [host]: research.digitalroots.com, [port]: 27017
+updating results for existing task [classify] in host [research.digitalroots.com]
+results updated, the new results are stored with the record id: 5b1aacb933ed5901dc545af8
+
+```
+This record id is then used in *putmodel*
+
+- **putmodel**: save model files in a persistent location. The location can be provided by the option -cstore, by default it is `/data/model-checkpoints` directory in your machine. This is tested for `tensorflow` models, not `pytorch` ones yet. 
 ```
 xpctl > putmodel --help
 Usage: putmodel [OPTIONS] TASK ID CBASE
   Puts the model from an experiment in the model store and updates the
-  database with the location. Arguments:  task name, id of the record, and
+  database with the location. Arguments:  task name (classify/ tagger), record id, and
   the path to the base structure for the model checkpoint files such as
   ../tagger/tagger-model-tf-11967 or /home/ds/tagger/tagger-model-tf-11967
 Options:
@@ -197,15 +212,40 @@ Options:
 
 ```
 
+```
+ xpctl > putmodel classify 5b1aacb933ed5901dc545af8 /home/ijindal/dev/work/baseline/python/mead/classify-model-tf-4923/classify-model-tf-4923
+
+ db mongo connection successful with [host]: research.digitalroots.com, [port]: 27017
+writing model file: [/home/ijindal/dev/work/baseline/python/mead/classify-model-tf-4923/classify-model-tf-4923.saver] to store: [/data/model-checkpoints/67105e2108885c5ee08e211537fbda602f2ba254/1]
+writing model file: [/home/ijindal/dev/work/baseline/python/mead/classify-model-tf-4923/classify-model-tf-4923.model.index] to store: [/data/model-checkpoints/67105e2108885c5ee08e211537fbda602f2ba254/1]
+writing model file: [/home/ijindal/dev/work/baseline/python/mead/classify-model-tf-4923/classify-model-tf-4923.graph] to store: [/data/model-checkpoints/67105e2108885c5ee08e211537fbda602f2ba254/1]
+writing model file: [/home/ijindal/dev/work/baseline/python/mead/classify-model-tf-4923/classify-model-tf-4923.model.data-00000-of-00001] to store: [/data/model-checkpoints/67105e2108885c5ee08e211537fbda602f2ba254/1]
+writing model file: [/home/ijindal/dev/work/baseline/python/mead/classify-model-tf-4923/classify-model-tf-4923.model.meta] to store: [/data/model-checkpoints/67105e2108885c5ee08e211537fbda602f2ba254/1]
+writing model file: [/home/ijindal/dev/work/baseline/python/mead/classify-model-tf-4923/classify-model-tf-4923.labels] to store: [/data/model-checkpoints/67105e2108885c5ee08e211537fbda602f2ba254/1]
+writing model file: [/home/ijindal/dev/work/baseline/python/mead/classify-model-tf-4923/classify-model-tf-4923.vocab] to store: [/data/model-checkpoints/67105e2108885c5ee08e211537fbda602f2ba254/1]
+zipping model files
+zipped file written, model directory removed
+database updated with /data/model-checkpoints/67105e2108885c5ee08e211537fbda602f2ba254/1.zip
+
+```
 ##### Exporting
 
 - **getmodelloc** : shows the model location for an id (**id, not SHA1**. An experiment can be run multiple times using the same config). 
 ```
-xpctl > help modelloc
+xpctl > help getmodelloc
 Usage: xpctl getmodelloc [OPTIONS] TASK ID
-  get the model location for a particluar task and record id
+  get the model location for a particular task name (classify/ tagger) and record id
 Options:
   --help  Show this message and exit.
+```
+
+```
+xpctl > getmodelloc classify 5b1aacb933ed5901dc545af8
+
+db mongo connection successful with [host]: research.digitalroots.com, [port]: 27017
+db mongo connection successful with [host]: research.digitalroots.com, [port]: 27017
+model loc is /data/model-checkpoints/67105e2108885c5ee08e211537fbda602f2ba254/1.zip
+
 ```
 
 - **config2json**
@@ -213,15 +253,23 @@ Options:
 xpctl > help config2json
 Usage: config2json [OPTIONS] TASK SHA FILENAME
   Exports the config file for an experiment as a json file. Arguments:
-  taskname, sha1 for the experimental config, output file path
+  task name (classify/ tagger), sha1 for the experimental config, output file path
 Options:
   --help  Show this message and exit.
+```
+Here `sha1` is the model-checkpoint id.
+
+```
+xpctl > config2json classify 67105e2108885c5ee08e211537fbda602f2ba254 /home/ijindal/dev/work/baseline/python/mead/c_SST2.json
+
+db mongo connection successful with [host]: research.digitalroots.com, [port]: 27017
+db mongo connection successful with [host]: research.digitalroots.com, [port]: 27017
+
 ```
 
 ##### Summary
 
 - **tasksummary**: provides a natural language summary for a task. 
-
 ```
 xpctl > help tasksummary
 Usage: tasksummary [OPTIONS] TASK DATASET METRIC
@@ -237,7 +285,6 @@ For dataset sa180k, the best f1 is 0.718 reported by root on 2017-09-08 17:24:32
 ```
 
 - **lbsummary**: provides a description of all tasks in the leaderboard. 
-
 ```
 xpctl > lbsummary --help
 Usage: lbsummary [OPTIONS]
@@ -252,6 +299,7 @@ Options:
   --help       Show this message and exit.
 
 ```
+
 ```
 xpctl > lbsummary --task tagger
 Task: [tagger]
@@ -271,13 +319,15 @@ Task: [tagger]
 Perform an experiment E, i.e., train the model and test. 
 
 Using xpctl 
+
 1. Put the results ( `putresult`). This will show you the id of the result you just updated in the database. 
 2. Get the best result so far: `xpctl best tagger test <test-dataset> f1`
 3. If E is the best so far, use `putmodel` to store the model in a persistent loc.
 
 _ sometime later _ : 
+
 4. Check the best model so far: `best`
-4. To check if we have the model stored in a persistent loc: `getmodelloc`.
+5. To check if we have the model stored in a persistent loc: `getmodelloc`.
 
 ```
 (dl) testuser:xpctl$ xpctl best tagger test <test-dataset> f1

@@ -406,3 +406,4 @@ def f_score(overlap_count, gold_count, guess_count, f=1):
         return 0.0
     f = (1. + beta_sq) * (precision * recall) / (beta_sq * precision + recall)
     return f
+
