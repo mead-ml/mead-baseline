@@ -6,7 +6,7 @@ from baseline.utils import (
     load_user_seq2seq_model, create_user_seq2seq_model,
     create_user_lang_model,
     lowercase, revlut,
-    export, wrapped_partial,
+    export, wrapped_partial
 )
 
 __all__ = []
@@ -196,7 +196,7 @@ class Tagger(object):
     def predict(self, batch_dict):
         pass
 
-    def predict_text(self, tokens, mxlen, maxw, zero_alloc=np.zeros, word_trans_fn=lowercase):
+    def predict_text(self, tokens, mxlen, maxw, featurizer, zero_alloc=np.zeros, word_trans_fn=lowercase):
         """
         Utility function to convert lists of sentence tokens to integer value one-hots which
         are then passed to the tagger.  The resultant output is then converted back to label and token
@@ -210,29 +210,17 @@ class Tagger(object):
         :param maxw: 
         :param zero_alloc: Define
         :param word_trans_fn:
+        :param vocab_keys:
+        :param featurizer_type:
         :return: 
         """
-        words_vocab = self.get_vocab(vocab_type='word')
-        chars_vocab = self.get_vocab(vocab_type='char')
         # This might be inefficient if the label space is large
+
         label_vocab = revlut(self.get_labels())
-        xs = zero_alloc((1, mxlen), dtype=int)
-        xs_ch = zero_alloc((1, mxlen, maxw), dtype=int)
         lengths = zero_alloc(1, dtype=int)
         lengths[0] = min(len(tokens), mxlen)
-        for j in range(mxlen):
-
-            if j == len(tokens):
-                break
-
-            w = tokens[j]
-            nch = min(len(w), maxw)
-
-            xs[0, j] = words_vocab.get(word_trans_fn(w), 0)
-            for k in range(nch):
-                xs_ch[0, j, k] = chars_vocab.get(w[k], 0)
-
-        indices = self.predict({'x': xs, 'xch': xs_ch, 'lengths': lengths})[0]
+        data = featurizer.featurize(tokens, word_trans_fn)
+        indices = self.predict(data)[0]
         output = []
         for j in range(lengths[0]):
             output.append((tokens[j], label_vocab[indices[j].item()]))

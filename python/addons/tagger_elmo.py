@@ -88,7 +88,8 @@ class RNNTaggerELMoModel(Tagger):
             model.lengths = tf.get_default_graph().get_tensor_by_name('lengths:0')
             model.pkeep = tf.get_default_graph().get_tensor_by_name('pkeep:0')
             model.best = tf.get_default_graph().get_tensor_by_name('output/ArgMax:0')
-            model.probs = tf.get_default_graph().get_tensor_by_name('output/Reshape_1:0')  # TODO: rename
+            model.probs = tf.get_default_graph().get_tensor_by_name('output/Reshape_1:0')  # TODO: rename 
+            model.sess.run(tf.get_default_graph().get_operation_by_name('index2word/table_init'))
             try:
                 model.A = tf.get_default_graph().get_tensor_by_name('Loss/transitions:0')
                 #print('Found transition matrix in graph, setting crf=True')
@@ -191,7 +192,6 @@ class RNNTaggerELMoModel(Tagger):
 
         for v, i in vocab.items():
             vocab_list[i] = v
-
         vocab_list[0] = ''
 
         i2w = tf.contrib.lookup.index_to_string_table_from_tensor(
@@ -319,8 +319,7 @@ class RNNTaggerELMoModel(Tagger):
 
 
 def create_model(labels, embeddings, **kwargs):
-    model = RNNTaggerELMoModel.create(labels, embeddings, **kwargs)
-    return model
+    return RNNTaggerELMoModel.create(labels, embeddings, **kwargs)
 
 
 def load_model(modelname, **kwargs):

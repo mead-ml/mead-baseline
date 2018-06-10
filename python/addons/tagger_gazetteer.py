@@ -16,7 +16,6 @@ class RNNTaggerGazetteerModel(Tagger):
         self.saver.save(self.sess, basename)
 
     def save_md(self, basename):
-
         path = basename.split('/')
         base = path[-1]
         outdir = '/'.join(path[:-1])
@@ -34,6 +33,9 @@ class RNNTaggerGazetteerModel(Tagger):
 
         with open(basename + '-char.vocab', 'w') as f:
             json.dump(self.char_vocab, f)
+
+        with open(basename + '-gaz.vocab', 'w') as f:
+            json.dump(self.gazette_vocab, f)
 
     def make_input(self, batch_dict, do_dropout=False):
         x = batch_dict['x']
@@ -73,7 +75,7 @@ class RNNTaggerGazetteerModel(Tagger):
             model.sess.run(saver_def.restore_op_name, {saver_def.filename_tensor_name: checkpoint_name})
             model.x = tf.get_default_graph().get_tensor_by_name('x:0')
             model.xch = tf.get_default_graph().get_tensor_by_name('xch:0')
-            model.xg = tf.get_default_graph().get_tensor_by_name('xg:0')
+            model.gaz = tf.get_default_graph().get_tensor_by_name('gaz:0')
             model.y = tf.get_default_graph().get_tensor_by_name('y:0')
             model.lengths = tf.get_default_graph().get_tensor_by_name('lengths:0')
             model.pkeep = tf.get_default_graph().get_tensor_by_name('pkeep:0')
@@ -92,12 +94,14 @@ class RNNTaggerGazetteerModel(Tagger):
             model.labels = json.load(f)
 
         model.word_vocab = {}
-        if os.path.exists(basename + '-word.vocab'):
-            with open(basename + '-word.vocab', 'r') as f:
+        with open(basename + '-word.vocab', 'r') as f:
                 model.word_vocab = json.load(f)
 
         with open(basename + '-char.vocab', 'r') as f:
             model.char_vocab = json.load(f)
+
+        with open(basename + '-gaz.vocab', 'r') as f:
+            model.gazette_vocab = json.load(f)
 
         model.saver = tf.train.Saver(saver_def=saver_def)
         return model
@@ -141,7 +145,14 @@ class RNNTaggerGazetteerModel(Tagger):
         pass
 
     def get_vocab(self, vocab_type='word'):
-        return self.word_vocab if vocab_type == 'word' else self.char_vocab
+        if vocab_type == 'word':
+            return self.word_vocab
+        elif vocab_type == 'gaz':
+            return self.gazette_vocab
+        elif vocab_type == 'char':
+            return self.char_vocab
+        else:
+            raise RuntimeError("No vocab found for the provided key")
 
     def get_labels(self):
         return self.labels

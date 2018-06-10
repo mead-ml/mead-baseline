@@ -77,7 +77,18 @@ You can use [`tag.py`](../python/tag.py) to load a sequence tagger checkpoint, p
 
 Run the code like this:
 ```
-python tag.py --input wnut17test.conll --output test.conll --model mead/tagger-model-tf-2847 --mxlen 60 --mxwlen 40
+python tag.py --input conll-tester.conll --output out-conll-tester.conll --model mead/tagger/tagger-model-tf-7097 --mxlen 124 --mxwlen 61
+```
+`tag.py` also supports multiple features in the conll file. However, you need to create a JSON file (dictionary) with the index of the features in the format: `{feature-name:feature-index}` (eg. `{"gaz":1}`) where the `gaz` feature is the second column in the conll file. To run the code use: 
+
+```
+python tag.py --input gaz-tester.conll --output gaz-tester-out-1.conll --model mead/tagger-gaz/tagger-model-tf-12509 --mxlen 60 --mxwlen 40 --model_type gazetteer --features features.json --featurizer_type multifeature
+```
+
+You can write your own featurizer (`featurizer_<featurizer_type>.py`) and keep it in your PYTHONPATH. For an example, see [featurizer_elmo.py](../python/addons/featurizer_elmo.py). The `featurizer_type` should be passed as an argument as shown below:
+
+```
+python tag.py --input elmo-tester.conll --output elmo-tester-out.conll --model mead/elmo-2/tagger-model-tf-2658 --mxlen 60 --mxwlen 40 --model_type elmo --featurizer_type elmo
 ```
 
 We support loading tagger models defined in [TensorFlow](../python/baseline/tf/tagger/model.py) and [PyTorch](../python/baseline/pytorch/tagger/model.py). 
