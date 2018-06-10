@@ -73,6 +73,7 @@ class WordClassifierBase(nn.Module, Classifier):
         x = batch_dict['x']
         xch = batch_dict.get('xch')
         y = batch_dict.get('y')
+        lengths = batch_dict.get('lengths')
         if self.gpu:
             x = x.cuda()
             if xch is not None:
@@ -80,30 +81,32 @@ class WordClassifierBase(nn.Module, Classifier):
             if y is not None:
                 y = y.cuda()
 
-        return x, xch, y
+        return x, xch, lengths, y
 
     def forward(self, input):
         # BxTxC
         x = input[0]
-        embeddings_word = self.lut(x)
+        embeddings = self.lut(x)
         if self.char_dsz > 0:
             xch = input[1]
             B, T, W = xch.shape
             embeddings_char = self._char_encoding(xch.view(-1, W)).view(B, T, self.char_comp.outsz)
-            embeddings = torch.cat([embeddings_word, embeddings_char], 2)
-        pooled = self._pool(embeddings)
+            embeddings = torch.cat([embeddings, embeddings_char], 2)
+        lengths = input[2]
+        pooled = self._pool(embeddings, lengths)
         stacked = self._stacked(pooled)
         return self.output(stacked)
 
     def classify(self, batch_dict):
         x = batch_dict['x']
         xch = batch_dict.get('xch')
+        lengths = batch_dict.get('lengths')
         with torch.no_grad():
             if self.gpu:
                 x = x.cuda()
                 if xch is not None:
                     xch = xch.cuda()
-            probs = self(x, xch).cuda().exp()
+            probs = self(x, xch, lengths).exp()
             probs.div_(torch.sum(probs))
             results = []
             batchsz = probs.size(0)
@@ -118,7 +121,7 @@ class WordClassifierBase(nn.Module, Classifier):
     def get_vocab(self, name='word'):
         return self.vocab.get['word']
 
-    def _pool(self, embeddings):
+    def _pool(self, embeddings, lengths):
         pass
 
     def _stacked(self, pooled):
@@ -174,7 +177,7 @@ class ConvModel(WordClassifierBase):
         self.parallel_conv = ParallelConv(dsz, cmotsz, filtsz, "relu", self.pdrop)
         return self.parallel_conv.outsz
 
-    def _pool(self, btc):
+    def _pool(self, btc, lengths):
         embeddings = btc.transpose(1, 2).contiguous()
         return self.parallel_conv(embeddings)
 
@@ -189,16 +192,43 @@ class LSTMModel(WordClassifierBase):
         hsz = kwargs.get('rnnsz', kwargs.get('hsz', 100))
         if type(hsz) is list:
             hsz = hsz[0]
-        self.lstm = nn.LSTM(dsz, hsz, 1, bias=True, batch_first=True, dropout=self.pdrop)
+        self.lstm = nn.LSTM(dsz, hsz, 1, bias=True, dropout=self.pdrop)
         if unif is not None:
             for weight in self.lstm.parameters():
                 weight.data.uniform_(-unif, unif)
         return hsz
 
-    def _pool(self, embeddings):
+    def _pool(self, embeddings, lengths):
 
-        output, hidden = self.lstm(embeddings)
-        return hidden[0].view(hidden[0].shape[1:])
+        embeddings = embeddings.transpose(0, 1)
+        packed = torch.nn.utils.rnn.pack_padded_sequence(embeddings, lengths.tolist())
+        output, hidden = self.lstm(packed)
+        hidden = hidden[0].view(hidden[0].shape[1:])
+        return hidden
+
+    def make_input(self, batch_dict):
+
+        x = batch_dict['x']
+        xch = batch_dict.get('xch')
+        y = batch_dict.get('y')
+        lengths = batch_dict['lengths']
+        lengths, perm_idx = lengths.sort(0, descending=True)
+        x = x[perm_idx]
+        if xch is not None:
+            xch = xch[perm_idx]
+        if y is not None:
+            y = y[perm_idx]
+        if self.gpu:
+            x = x.cuda()
+            if xch is not None:
+                xch = xch.cuda()
+            if y is not None:
+                y = y.cuda()
+
+        if y is not None:
+            y = y.contiguous()
+
+        return x, xch, lengths, y
 
 
 class NBowBase(WordClassifierBase):
@@ -227,7 +257,7 @@ class NBowMaxModel(NBowBase):
     def __init__(self):
         super(NBowMaxModel, self).__init__()
 
-    def _pool(self, embeddings):
+    def _pool(self, embeddings, lengths):
         dmax, _ = torch.max(embeddings, 1, False)
         return dmax
 

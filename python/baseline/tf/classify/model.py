@@ -231,7 +231,11 @@ class WordClassifierBase(Classifier):
         wchsz = 0
         model.labels = labels
         nc = len(labels)
-        model.vocab = w2v.vocab
+
+        model.vocab = {}
+        for k in embeddings.keys():
+            model.vocab[k] = embeddings[k].vocab
+
         model.mxlen = int(kwargs.get('mxlen', 100))
         model.mxwlen = None
         # This only exists to make exporting easier
