@@ -101,12 +101,19 @@ class WordClassifierBase(nn.Module, Classifier):
         x = batch_dict['x']
         xch = batch_dict.get('xch')
         lengths = batch_dict.get('lengths')
+        if type(x) == np.ndarray:
+            x = torch.from_numpy(x)
+        if xch is not None and type(xch) == np.ndarray:
+            xch = torch.from_numpy(xch)
+        if lengths is not None and type(lengths) == np.ndarray:
+            lengths = torch.from_numpy(lengths)
+
         with torch.no_grad():
             if self.gpu:
                 x = x.cuda()
                 if xch is not None:
                     xch = xch.cuda()
-            probs = self(x, xch, lengths).exp()
+            probs = self((x, xch, lengths)).exp()
             probs.div_(torch.sum(probs))
             results = []
             batchsz = probs.size(0)
@@ -119,7 +126,7 @@ class WordClassifierBase(nn.Module, Classifier):
         return self.labels
 
     def get_vocab(self, name='word'):
-        return self.vocab.get['word']
+        return self.vocab.get(name)
 
     def _pool(self, embeddings, lengths):
         pass
