@@ -3,10 +3,10 @@ from baseline.utils import lowercase
 
 
 class TaggerElmoFeaturizer(Featurizer):
-    def __init__(self, tagger, mxlen, maxw, zero_alloc):
+    def __init__(self, tagger, mxlen, maxw, zero_alloc, **kwargs):
         super(TaggerElmoFeaturizer, self).__init__(tagger, mxlen, maxw, zero_alloc)
 
-    def featurize(self, tokens, word_trans_fn):
+    def run(self, tokens):
         tokens = [token[0] for token in tokens]
         xs = self.zero_alloc((1, self.mxlen), dtype=int)
         xs_lc = self.zero_alloc((1, self.mxlen), dtype=int)

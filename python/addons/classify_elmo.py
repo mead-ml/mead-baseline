@@ -99,12 +99,15 @@ class ELMoClassifier(Classifier):
             saver_def = tf.train.SaverDef()
             text_format.Merge(fsv.read(), saver_def)
 
+        checkpoint_name = kwargs.get('checkpoint_name', basename)
+        checkpoint_name = checkpoint_name or basename
+
         with gfile.FastGFile(basename + '.graph', 'rb') as f:
             gd = tf.GraphDef()
             gd.ParseFromString(f.read())
             sess.graph.as_default()
             tf.import_graph_def(gd, name='')
-            sess.run(saver_def.restore_op_name, {saver_def.filename_tensor_name: basename + '.model'})
+            sess.run(saver_def.restore_op_name, {saver_def.filename_tensor_name: checkpoint_name})
             model.x = tf.get_default_graph().get_tensor_by_name('x:0')
             model.y = tf.get_default_graph().get_tensor_by_name('y:0')
             model.pkeep = tf.get_default_graph().get_tensor_by_name('pkeep:0')
