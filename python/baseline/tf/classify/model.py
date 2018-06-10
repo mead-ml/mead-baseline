@@ -38,9 +38,11 @@ class WordClassifierBase(Classifier):
         base = path[-1]
         outdir = '/'.join(path[:-1])
 
-        state = {"mxlen": self.mxlen, "version": __version__}
+        state = {"mxlen": self.mxlen, "version": __version__, 'use_chars': False}
         if self.mxwlen is not None:
             state["mxwlen"] = self.mxwlen
+        if self.xch is not None:
+            state['use_chars'] = True
         with open(basename + '.state', 'w') as f:
             json.dump(state, f)
 
@@ -108,6 +110,7 @@ class WordClassifierBase(Classifier):
         feed_dict = {self.x: x, self.pkeep: pkeep, self.lengths: lengths}
         if xch is not None and self.xch is not None:
             feed_dict[self.xch] = xch
+
         #if lengths is not None and self.lengths is not None:
         #    feed_dict[self.lengths] = lengths
         if y is not None:
@@ -262,7 +265,7 @@ class WordClassifierBase(Classifier):
 
         if c2v is not None:
             model.mxwlen = int(kwargs.get('mxwlen', 40))
-            model.xch = kwargs.get('xch', tf.placeholder(tf.int32, [None, model.mxlen, model.mxwlen]))
+            model.xch = kwargs.get('xch', tf.placeholder(tf.int32, [None, model.mxlen, model.mxwlen], name='xch'))
             char_dsz = c2v.dsz
             with tf.name_scope("CharLUT"):
                 Wch = tf.Variable(tf.constant(c2v.weights, dtype=tf.float32), name="Wch", trainable=True)

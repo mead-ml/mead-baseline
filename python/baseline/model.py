@@ -1,4 +1,3 @@
-from functools import partial
 import numpy as np
 from baseline.utils import (
     load_user_classifier_model, create_user_classifier_model,
@@ -7,6 +6,9 @@ from baseline.utils import (
     create_user_lang_model,
     lowercase, revlut,
     export, wrapped_partial
+)
+from baseline.featurizers import (
+    WordCharLength
 )
 
 __all__ = []
@@ -65,7 +67,7 @@ class Classifier(object):
         """
         pass
 
-    def classify_text(self, tokens, mxlen, zero_alloc=np.zeros, word_trans_fn=lowercase):
+    def classify_text(self, tokens, **kwargs):
         """Utility method to convert a list of words comprising a text to indices, and create a single element
         batch which is then classified.  The returned decision is sorted in descending order of probability.
 
@@ -78,15 +80,17 @@ class Classifier(object):
         :param word_trans_fn: A transform on the input word
         :return: A sorted list of outcomes for a single element batch
         """
-        vocab = self.get_vocab('word')
-        x = zero_alloc((1, mxlen), dtype=int)
-        length = zero_alloc(1, dtype=int)
-        length[0] = min(len(tokens), mxlen)
-        for j in range(length[0]):
-            word = word_trans_fn(tokens[j])
-            idx = vocab.get(word, 0)
-            x[0, j] = idx
-        outcomes = self.classify({'x': x, 'lengths': length})[0]
+        featurizer = kwargs.get('featurizer')
+        if featurizer is None:
+            mxlen = kwargs.get('mxlen', self.mxlen if hasattr(self, 'mxlen') else len(tokens))
+            maxw = kwargs.get('mxwlen', self.mxwlen if hasattr(self, 'mxwlen') else max([len(token) for token in tokens]))
+            zero_alloc = kwargs.get('zero_alloc', np.zeros)
+            featurizer = WordCharLength(self, mxlen, maxw, zero_alloc, **kwargs)
+
+        lengths = zero_alloc(1, dtype=int)
+        lengths[0] = min(len(tokens), mxlen)
+        data = featurizer.run(tokens)
+        outcomes = self.classify(data)[0]
         return sorted(outcomes, key=lambda tup: tup[1], reverse=True)
 
 
@@ -197,7 +201,7 @@ class Tagger(object):
     def predict(self, batch_dict):
         pass
 
-    def predict_text(self, tokens, mxlen, maxw, featurizer, zero_alloc=np.zeros, word_trans_fn=lowercase):
+    def predict_text(self, tokens, **kwargs):
         """
         Utility function to convert lists of sentence tokens to integer value one-hots which
         are then passed to the tagger.  The resultant output is then converted back to label and token
@@ -206,21 +210,25 @@ class Tagger(object):
         This method is not aware of any input features other than words and characters (and lengths).  If you
         wish to use other features and have a custom model that is aware of those, use `predict` directly.
 
-        :param tokens: 
-        :param mxlen: 
-        :param maxw: 
-        :param zero_alloc: Define
-        :param word_trans_fn:
-        :param vocab_keys:
-        :param featurizer_type:
-        :return: 
+        :param tokens: (``list``) A list of tokens
+
         """
+
+        featurizer = kwargs.get('featurizer')
+        if featurizer is None:
+            mxlen = kwargs.get('mxlen', self.mxlen if hasattr(self, 'mxlen') else len(tokens))
+            maxw = kwargs.get('maxw', self.maxw if hasattr(self, 'maxw') else max([len(token) for token in tokens]))
+            zero_alloc = kwargs.get('zero_alloc', np.zeros)
+            featurizer = WordCharLength(self, mxlen, maxw, zero_alloc, **kwargs)
+
         # This might be inefficient if the label space is large
 
         label_vocab = revlut(self.get_labels())
-        lengths = zero_alloc(1, dtype=int)
-        lengths[0] = min(len(tokens), mxlen)
-        data = featurizer.featurize(tokens, word_trans_fn)
+        #lengths = zero_alloc(1, dtype=int)
+        #lengths[0] = min(len(tokens), mxlen)
+
+        data = featurizer.run(tokens)
+        lengths = data['lengths']
         indices = self.predict(data)[0]
         output = []
         for j in range(lengths[0]):

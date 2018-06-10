@@ -16,7 +16,6 @@ def _find_files_by_type(model_file, filetype):
 
     filetype_ending = "." + filetype
     basepath = get_basepath_or_cwd(model_file)
-
     for filename in os.listdir(basepath):
         if filename.endswith(filetype_ending):
             filename_without_ending = filename[:-len(filetype_ending)]
@@ -27,6 +26,7 @@ def _find_files_by_type(model_file, filetype):
 Please specify the model as path-like. e.g. /data/model/model-name-1234" % basepath)
 
     return matching_files
+
 
 def get_basepath_or_cwd(model_file):
     """
@@ -58,10 +58,10 @@ def get_vocab_file_suffixes(model_file):
     """
     filenames = _find_files_by_type(model_file, 'vocab')
     model_name = model_file.split('/')[-1]
-
+    basepath = get_basepath_or_cwd(model_file)
+    full_base = os.path.join(basepath, model_name)
     # the length of the name plus 1 for the hyphen separating the suffix.
-    return [x[len(model_name)+1:] for x in filenames if x.startswith(model_name)]
-
+    return [x[len(full_base)+1:] for x in filenames if x.startswith(full_base)]
 
 
 def optimizer(loss_fn, **kwargs):
