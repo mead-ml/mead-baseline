@@ -32,14 +32,14 @@ class WordCharLength(Featurizer):
         lengths = self.zero_alloc(1, dtype=int)
         lengths[0] = min(len(tokens), self.mxlen)
         words_vocab = self.model.get_vocab('word')
-
         for j in range(self.mxlen):
             if j == len(tokens):
                 break
             w = tokens[j]
+            xs[0, j] = words_vocab.get(self.word_trans_fn(w), 0)
+
             if chars_vocab is not None:
                 nch = min(len(w), self.maxw)
-                xs[0, j] = words_vocab.get(self.word_trans_fn(w), 0)
 
                 for k in range(nch):
                     xs_ch[0, j, k] = chars_vocab.get(w[k], 0)
