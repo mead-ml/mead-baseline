@@ -87,10 +87,7 @@ class Classifier(object):
             zero_alloc = kwargs.get('zero_alloc', np.zeros)
             featurizer = WordCharLength(self, mxlen, maxw, zero_alloc)
 
-        lengths = zero_alloc(1, dtype=int)
-        lengths[0] = min(len(tokens), mxlen)
         data = featurizer.run(tokens)
-        data['lengths'] = lengths
         outcomes = self.classify(data)[0]
         return sorted(outcomes, key=lambda tup: tup[1], reverse=True)
 
