@@ -81,8 +81,8 @@ class Classifier(object):
         :return: A sorted list of outcomes for a single element batch
         """
         featurizer = kwargs.get('featurizer')
+        mxlen = kwargs.get('mxlen', self.mxlen if hasattr(self, 'mxlen') else len(tokens))
         if featurizer is None:
-            mxlen = kwargs.get('mxlen', self.mxlen if hasattr(self, 'mxlen') else len(tokens))
             maxw = kwargs.get('mxwlen', self.mxwlen if hasattr(self, 'mxwlen') else max([len(token) for token in tokens]))
             zero_alloc = kwargs.get('zero_alloc', np.zeros)
             featurizer = WordCharLength(self, mxlen, maxw, zero_alloc)
@@ -90,6 +90,7 @@ class Classifier(object):
         lengths = zero_alloc(1, dtype=int)
         lengths[0] = min(len(tokens), mxlen)
         data = featurizer.run(tokens)
+        data['lengths'] = lengths
         outcomes = self.classify(data)[0]
         return sorted(outcomes, key=lambda tup: tup[1], reverse=True)
 

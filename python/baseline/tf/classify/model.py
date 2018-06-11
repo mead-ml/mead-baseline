@@ -107,12 +107,13 @@ class WordClassifierBase(Classifier):
         xch = batch_dict.get('xch')
         lengths = batch_dict.get('lengths')
         pkeep = 1.0 - self.pdrop_value if do_dropout else 1.0
-        feed_dict = {self.x: x, self.pkeep: pkeep, self.lengths: lengths}
-        if xch is not None and self.xch is not None:
+        feed_dict = {self.x: x, self.pkeep: pkeep}
+
+        if hasattr(self, 'lengths') and self.lengths is not None:
+            feed_dict[self.lengths] = lengths
+        if hasattr(self, 'xch') and xch is not None and self.xch is not None:
             feed_dict[self.xch] = xch
 
-        #if lengths is not None and self.lengths is not None:
-        #    feed_dict[self.lengths] = lengths
         if y is not None:
             feed_dict[self.y] = fill_y(len(self.labels), y)
         return feed_dict
@@ -161,7 +162,12 @@ class WordClassifierBase(Classifier):
             gd.ParseFromString(f.read())
             sess.graph.as_default()
             tf.import_graph_def(gd, name='')
-            sess.run(saver_def.restore_op_name, {saver_def.filename_tensor_name: checkpoint_name})
+            try:
+                sess.run(saver_def.restore_op_name, {saver_def.filename_tensor_name: checkpoint_name})
+            except:
+                # Backwards compat
+                sess.run(saver_def.restore_op_name, {saver_def.filename_tensor_name: checkpoint_name + ".model"})
+
             model.x = tf.get_default_graph().get_tensor_by_name('x:0')
             model.y = tf.get_default_graph().get_tensor_by_name('y:0')
             try:
