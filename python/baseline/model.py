@@ -85,7 +85,7 @@ class Classifier(object):
             mxlen = kwargs.get('mxlen', self.mxlen if hasattr(self, 'mxlen') else len(tokens))
             maxw = kwargs.get('mxwlen', self.mxwlen if hasattr(self, 'mxwlen') else max([len(token) for token in tokens]))
             zero_alloc = kwargs.get('zero_alloc', np.zeros)
-            featurizer = WordCharLength(self, mxlen, maxw, zero_alloc, **kwargs)
+            featurizer = WordCharLength(self, mxlen, maxw, zero_alloc)
 
         lengths = zero_alloc(1, dtype=int)
         lengths[0] = min(len(tokens), mxlen)
@@ -219,7 +219,7 @@ class Tagger(object):
             mxlen = kwargs.get('mxlen', self.mxlen if hasattr(self, 'mxlen') else len(tokens))
             maxw = kwargs.get('maxw', self.maxw if hasattr(self, 'maxw') else max([len(token) for token in tokens]))
             zero_alloc = kwargs.get('zero_alloc', np.zeros)
-            featurizer = WordCharLength(self, mxlen, maxw, zero_alloc, **kwargs)
+            featurizer = WordCharLength(self, mxlen, maxw, zero_alloc)
 
         # This might be inefficient if the label space is large
 
