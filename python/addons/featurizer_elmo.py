@@ -7,7 +7,8 @@ class TaggerElmoFeaturizer(Featurizer):
         super(TaggerElmoFeaturizer, self).__init__(tagger, mxlen, maxw, zero_alloc)
 
     def run(self, tokens):
-        tokens = [token[0] for token in tokens]
+        if type(tokens[0]) is not str:
+            tokens = [token[0] for token in tokens]
         xs = self.zero_alloc((1, self.mxlen), dtype=int)
         xs_lc = self.zero_alloc((1, self.mxlen), dtype=int)
         xs_ch = self.zero_alloc((1, self.mxlen, self.maxw), dtype=int)
