@@ -6,7 +6,7 @@ class PreprocessorCreator(object):
         indices are created during vocab creation.
         """
         self.word2index = indices['word']
-        self.char2index = indices['char']
+        self.char2index = indices.get('char')
         self.indices = indices
 
         self.lchars = lchars
@@ -28,16 +28,17 @@ class PreprocessorCreator(object):
         raw_post = post_mappings[self.token_key]
         # raw_post = post_mappings
         mxlen = self.task.config_params['preproc']['mxlen']
-        mxwlen = self.task.config_params['preproc']['mxwlen']
+        mxwlen = self.task.config_params['preproc'].get('mxwlen')
 
         nraw_post = self._reform_raw(raw_post, mxlen)
-        
+
         preprocs = {}
         words, sentence_length = self._create_word_vectors_from_post(nraw_post, mxlen)
-        chars, _ = self._create_char_vectors_from_post(nraw_post, mxlen, mxwlen)
-
         preprocs['word'] = words
-        preprocs['char'] = chars
+        if 'char' in self.indices:
+            chars, _ = self._create_char_vectors_from_post(nraw_post, mxlen, mxwlen)
+            preprocs['char'] = chars
+
 
         for extra in self.extra_feats:
             index = self.indices[extra]
