@@ -60,12 +60,10 @@ if args.features is not None:
 
 
 pg = create_progress_bar(len(input_texts))
-featurizer = create_featurizer(model, args.mxlen, args.mxwlen, zero_alloc=np.zeros,
-                               vocab_keys=vocab_keys, featurizer_type=args.featurizer_type)
+featurizer = create_featurizer(model, vocab_keys=vocab_keys, featurizer_type=args.featurizer_type)
 with codecs.open(args.output, encoding="utf-8", mode="w") as f:
     for index, sen in enumerate(input_texts):
-        predicted_label_sen = [x[1] for x in model.predict_text(sen, mxlen=args.mxlen, maxw=args.mxwlen,
-                                                                featurizer=featurizer, word_trans_fn=lowercase)]
+        predicted_label_sen = [x[1] for x in model.predict_text(sen, featurizer=featurizer, word_trans_fn=lowercase)]
         gold_label_sen = gold_labels[index]
         for word_feature, predicted_label, gold_label in zip(sen, predicted_label_sen, gold_label_sen):
             f.write("{} {} {}\n".format(" ".join(word_feature), gold_label, predicted_label))

@@ -84,7 +84,13 @@ class MultiFeatureFeaturizer(Featurizer):
         return data
 
 
-def create_featurizer(model, mxlen, maxw, zero_alloc=np.zeros, **kwargs):
+def create_featurizer(model, zero_alloc=np.zeros, **kwargs):
+
+    mxlen = kwargs.get('mxlen', model.mxlen if hasattr(model, 'mxlen') else -1)
+    maxw = kwargs.get('maxw', model.maxw if hasattr(model, 'maxw') else model.mxwlen if hasattr(model, 'mxwlen') else -1)
+    kwargs.pop('mxlen', None)
+    kwargs.pop('maxw', None)
+    kwargs.pop('zero_alloc', None)
     featurizer_type = kwargs.get('featurizer_type', 'default')
     if featurizer_type == 'default':
         return WordCharLength(model, mxlen, maxw, zero_alloc, **kwargs)
