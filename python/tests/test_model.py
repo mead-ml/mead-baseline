@@ -7,17 +7,11 @@ FULL_CONFIG = {
         "mxlen": 60,
         "mxwlen": 40,
         "maxw": 40,  # add this so this works for both classifiers and taggers
-        "web-cleanup": False,
-        "lower": True,
-        "valsplit": 0.15
     }
 
 NO_LENGTH_CONFIG = {
         # "mxlen": 60,
         # "mxwlen": 40,
-        "web-cleanup": False,
-        "lower": True,
-        "valsplit": 0.15
     }
 
 TOKENS = ['this', 'is', 'a', 'test']
@@ -98,7 +92,6 @@ def test_classify_token_settings(WordCharLength):
     ensure that the classifier will read from the tokens in
     classify_text.
     """
-
     # mxlen and mxwlen not set in class. it should be determined from tokens.
     classifier = create_dummy_classifier(mxlen=None, mxwlen=None)
 
