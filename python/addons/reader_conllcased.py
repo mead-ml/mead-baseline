@@ -13,12 +13,13 @@ class CONLLSeqMixedCaseReader(CONLLSeqReader):
     def __init__(self, max_sentence_length=-1, max_word_length=-1, word_trans_fn=None,
                  vec_alloc=np.zeros, vec_shape=np.shape, trim=False, extended_features=dict()):
         super(CONLLSeqMixedCaseReader, self).__init__(max_sentence_length, max_word_length, word_trans_fn, vec_alloc, vec_shape, trim, extended_features)
+        self.idx = 2 # GO=0, START=1, EOS=2
+
 
     def load(self, filename, vocabs, batchsz, shuffle=False, do_sort=True):
         ts = []
         words_vocab = vocabs['word']
         chars_vocab = vocabs['char']
-        idx = 2 # GO=0, START=1, EOS=2
         mxlen = self.max_sentence_length
         maxw = self.max_word_length
         extracted = self.read_lines(filename)
@@ -52,8 +53,8 @@ class CONLLSeqMixedCaseReader(CONLLSeqReader):
                 label = lv[j]
 
                 if label not in self.label2index:
-                    idx += 1
-                    self.label2index[label] = idx
+                    self.idx += 1
+                    self.label2index[label] = self.idx
 
                 ys[j] = self.label2index[label]
                 xs_lc[j] = words_vocab.get(w.lower(), 0)
