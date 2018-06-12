@@ -318,10 +318,10 @@ def char_word_conv_embeddings_var_fm(char_vec, filtsz, char_dsz, nfeat_factor, m
     return joined
 
 
-def pool_chars(xch, Wch, ce0, char_dsz, **kwargs):
+def pool_chars(x_char, Wch, ce0, char_dsz, **kwargs):
     """Take in a tensor of characters (B x maxs x maxw) and do character convolution
 
-    :param xch: TF tensor for input characters, (B x maxs x maxw)
+    :param x_char: TF tensor for input characters, (B x maxs x maxw)
     :param Wch: A character embeddings matrix
     :param ce0: A control dependency for the embeddings that keeps the <PAD> value 0
     :param char_dsz: The character embedding dsz
@@ -335,7 +335,7 @@ def pool_chars(xch, Wch, ce0, char_dsz, **kwargs):
     activation_type = kwargs.get('activation', 'tanh')
     with tf.variable_scope("Chars2Word"):
         with tf.control_dependencies([ce0]):
-            char_bt_x_w = tf.reshape(xch, [-1, mxwlen])
+            char_bt_x_w = tf.reshape(x_char, [-1, mxwlen])
             cembed = tf.nn.embedding_lookup(Wch, char_bt_x_w, name="embeddings")
             cmot = char_word_conv_embeddings(cembed, filtsz, char_dsz, wsz,
                                              activation_fn=tf_activation(activation_type))
