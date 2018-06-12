@@ -55,7 +55,8 @@ class ELMoClassifier(Classifier):
         :return: Each outcome as a ``list`` of tuples `(label, probability)`
         """
         x = batch_dict['x']
-        feed_dict = {self.x: x, self.pkeep: 1.0}
+        lengths = batch_dict['lengths']
+        feed_dict = {self.x: x, self.lengths: lengths, self.pkeep: 1.0}
         probs = self.sess.run(tf.nn.softmax(self.logits), feed_dict=feed_dict)
         results = []
         batchsz = probs.shape[0]
@@ -74,8 +75,8 @@ class ELMoClassifier(Classifier):
     def get_labels(self):
         return self.labels
 
-    def get_vocab(self):
-        return self.vocab
+    def get_vocab(self, name):
+        return self.vocab if name == 'word' else None
 
     @classmethod
     def load(cls, basename, **kwargs):
@@ -107,12 +108,15 @@ class ELMoClassifier(Classifier):
             gd.ParseFromString(f.read())
             sess.graph.as_default()
             tf.import_graph_def(gd, name='')
-            sess.run(saver_def.restore_op_name, {saver_def.filename_tensor_name: checkpoint_name})
+            sess.run(saver_def.restore_op_name, {saver_def.filename_tensor_name: checkpoint_name + ".model"})
             model.x = tf.get_default_graph().get_tensor_by_name('x:0')
             model.y = tf.get_default_graph().get_tensor_by_name('y:0')
+            model.lengths = tf.get_default_graph().get_tensor_by_name('lengths:0')
             model.pkeep = tf.get_default_graph().get_tensor_by_name('pkeep:0')
             model.best = tf.get_default_graph().get_tensor_by_name('output/best:0')
             model.logits = tf.get_default_graph().get_tensor_by_name('output/logits:0')
+            sess.run(tf.get_default_graph().get_operation_by_name('index2word/table_init'))
+
         with open(basename + '.labels', 'r') as f:
             model.labels = json.load(f)
 

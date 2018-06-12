@@ -1,5 +1,6 @@
 try:
     from baseline.utils import *
+    from baseline.featurizers import *
     from baseline.w2v import *
     from baseline.confusion import *
     from baseline.data import *
