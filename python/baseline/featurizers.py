@@ -19,6 +19,8 @@ class WordCharLength(Featurizer):
         self.word_trans_fn = kwargs.get('word_trans_fn', lowercase)
 
     def run(self, tokens):
+        if type(tokens[0]) is not str:
+            tokens = [token[0] for token in tokens]
         xs = self.zero_alloc((1, self.mxlen), dtype=int)
 
         chars_vocab = self.model.get_vocab('char')
