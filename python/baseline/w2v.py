@@ -1,4 +1,5 @@
 import io
+import contextlib
 import numpy as np
 from baseline.utils import export
 
@@ -106,8 +107,8 @@ class Word2VecModel(PretrainedEmbeddingsModel):
     def _read_vectors_mmap(self, filename, idx, known_vocab, keep_unused):
         import mmap
         word_vectors = []
-        with open(filename, 'rb') as f:
-            with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as m:
+        with io.open(filename, 'rb') as f:
+            with contextlib.closing(mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)) as m:
                 header_end = m[:50].find(b'\n')
                 vsz, dsz = map(int, (m[:header_end]).split(b' '))
                 width = 4 * dsz
@@ -169,8 +170,8 @@ class GloVeModel(PretrainedEmbeddingsModel):
     def _read_vectors_mmap(self, filename, idx, known_vocab, keep_unused):
         import mmap
         word_vectors = []
-        with open(filename, "r", encoding="utf-8") as f:
-            with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as m:
+        with io.open(filename, "r", encoding="utf-8") as f:
+            with contextlib.closing(mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)) as m:
                 for line in iter(m.readline, ''):
                     values = line.split()
                     if len(values) == 0:
