@@ -1,6 +1,6 @@
 import pytest
 from baseline import model
-from unittest.mock import patch, MagicMock
+from mock import patch, MagicMock
 import numpy as np
 
 FULL_CONFIG = {
