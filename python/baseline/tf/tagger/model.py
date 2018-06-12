@@ -239,8 +239,6 @@ class RNNTaggerModel(Tagger):
         Wch = tf.Variable(tf.constant(char_vec.weights, dtype=tf.float32), name="Wch")
         ce0 = tf.scatter_update(Wch, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, char_dsz]))
 
-        if 'xch' in kwargs:
-            del kwargs['xch']
         word_char, _ = pool_chars(model.xch, Wch, ce0, char_dsz, **kwargs)
         joint = word_char if word_vec is None else tf.concat(values=[wembed, word_char], axis=2)
         embedseq = tf.nn.dropout(joint, model.pkeep)

@@ -276,8 +276,6 @@ class WordClassifierBase(Classifier):
             with tf.name_scope("CharLUT"):
                 Wch = tf.Variable(tf.constant(c2v.weights, dtype=tf.float32), name="Wch", trainable=True)
                 ech0 = tf.scatter_update(Wch, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, char_dsz]))
-                if 'xch' in kwargs:
-                    del kwargs['xch']
                 char_comp, wchsz = pool_chars(model.xch, Wch, ech0, char_dsz, **kwargs)
                 word_embeddings = tf.concat(values=[word_embeddings, char_comp], axis=2)
 
