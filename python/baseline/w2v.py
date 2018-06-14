@@ -39,6 +39,9 @@ class EmbeddingsModel(object):
         except:
             return self.weights[0]
 
+    def __getitem__(self, word):
+        return self.lookup(word, nullifabsent=False)
+
 
 @exporter
 class PretrainedEmbeddingsModel(EmbeddingsModel):
@@ -143,11 +146,12 @@ class Word2VecModel(PretrainedEmbeddingsModel):
         s = bytearray()
         ch = f.read(1)
 
-        while ch != b'\x20':
+        while ch != b' ':
             s.extend(ch)
             ch = f.read(1)
         s = s.decode('utf-8')
-        return s.strip()
+        # Only strip out normal space and \n not other spaces which are words.
+        return s.strip(' \n')
 
 
 @exporter
@@ -166,9 +170,11 @@ class GloVeModel(PretrainedEmbeddingsModel):
         word_vectors = []
         with io.open(filename, "r", encoding="utf-8") as f:
             for line in f:
-                values = line.split()
+                line = line.rstrip("\n")
+                values = line.split(" ")
                 word = values[0]
-                if keep_unused is False and word not in known_vocab:
+                if word in self.vocab: continue
+                if keep_unused is False and word not in known_vocab or word in self.vocab:
                     continue
                 if known_vocab and word in known_vocab:
                     known_vocab[word] = 0
@@ -184,11 +190,13 @@ class GloVeModel(PretrainedEmbeddingsModel):
         word_vectors = []
         with io.open(filename, "r", encoding="utf-8") as f:
             with contextlib.closing(mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)) as m:
-                for line in iter(m.readline, ''):
-                    values = line.split()
+                for line in iter(m.readline, b''):
+                    line = line.rstrip(b"\n")
+                    values = line.split(b" ")
                     if len(values) == 0:
                         break
                     word = values[0]
+                    if word in self.vocab: continue
                     if keep_unused is False and word not in known_vocab:
                         continue
                     if known_vocab and word in known_vocab:

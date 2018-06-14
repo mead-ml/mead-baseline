@@ -115,7 +115,7 @@ def test_mmap_w2v():
 
 def test_normalize_e2e():
     wv = random_model()(normalize=True, keep_unused=True)
-    norms = np.linalg.norm(wv.weights, axis=1)
+    norms = np.sqrt(np.sum(np.square(wv.weights), 1))
     for norm in norms:
         assert norm == 0 or np.allclose(norm, 1, rtol=1e-4)
 
@@ -123,9 +123,11 @@ def test_normalize_e2e():
 def test_normalize():
     wv = random_model()(keep_unused=True)
     normed = norm_weights(wv.weights)
-    norms = np.linalg.norm(normed, axis=1)
-    for norm in norms:
-        assert norm == 0 or np.allclose(norm, 1, rtol=1e-4)
+    gold_norms = np.zeros_like(wv.weights)
+    for i in range(len(gold_norms)):
+        norm = np.sqrt(np.sum(np.square(wv.weights[i])))
+        gold_norms[i] = wv.weights[i] if norm == 0.0 else wv.weights[i] / norm
+    np.testing.assert_allclose(normed, gold_norms)
 
 
 def test_vocab_truncation():
