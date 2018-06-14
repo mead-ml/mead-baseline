@@ -37,6 +37,10 @@ class PretrainedEmbeddingsModel(EmbeddingsModel):
 
     def __init__(self, filename, known_vocab=None, unif_weight=None, keep_unused=False, normalize=False, **kwargs):
         super(PretrainedEmbeddingsModel, self).__init__()
+
+        if known_vocab is None and keep_unused is False:
+            print('Warning: known_vocab=None, keep_unused=False. Setting keep_unused=True, all vocab will be preserved')
+            keep_unused = True
         uw = 0.0 if unif_weight is None else unif_weight
         self.vocab = {}
         idx = 1
