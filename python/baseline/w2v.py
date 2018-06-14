@@ -31,6 +31,14 @@ class EmbeddingsModel(object):
             return None
         return self.nullv
 
+    def mean_vec(self, tokens):
+        if type(tokens) is str:
+            tokens = tokens.split()
+        try:
+            return np.mean([self.lookup(t, False) for t in tokens], 0)
+        except:
+            return self.weights[0]
+
 
 @exporter
 class PretrainedEmbeddingsModel(EmbeddingsModel):
