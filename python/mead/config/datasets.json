@@ -53,6 +53,14 @@
     "label": "conll-bio"
   },
   {
+    "train_file": "eng.train.iobes",
+    "valid_file": "eng.testa.iobes",
+    "test_file": "eng.testb.iobes",
+    "download": "https://www.dropbox.com/s/r40ygkdbq0oidvg/conll-iobes.tar.gz?dl=1",
+    "label": "conll-iobes"
+  },
+
+  {
     "train_file": "wnut17train.conll",
     "valid_file": "wnut17dev.conll",
     "test_file": "wnut17test.conll",

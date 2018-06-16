@@ -422,6 +422,56 @@ def convert_iob_to_bio(ifile, ofile):
 
 
 @exporter
+def convert_iob_to_iobes(ifile, ofile):
+
+    with open(ifile, 'r') as reader, open(ofile, 'w') as writer:
+        lines = [line.strip() for line in reader]
+        prev = 'O'
+        for i, line in enumerate(lines):
+
+            tokens = line.split()
+            if len(tokens) == 0:
+                prev = 'O'
+                writer.write('\n')
+                continue
+
+            label = tokens[-1]
+
+            if i + 1 != len(lines):
+                next_tokens = lines[i+1].split()
+                if len(next_tokens) > 1:
+                     next_tag = next_tokens[-1]
+                else:
+                    next_tag = None
+
+            if label != 'O' and label != prev:
+                # If the last was O, it has to be a B
+                if prev == 'O':
+                    label = 'B-' + label[2:]
+                # Otherwise if the tags are different, it also has to be a B
+                elif label[2:] != prev[2:]:
+                    label = 'B-' + label[2:]
+
+            # Nothing to do for label == 'O'
+            if label == 'O':
+                updated_label = label
+            elif label.split('-')[0] == 'B':
+                if next_tag and next_tag.split('-')[0] == 'I':
+                    updated_label = label
+                else:
+                    updated_label = label.replace('B-', 'S-')
+            elif label.split('-')[0] == 'I':
+                if next_tag and next_tag.split('-')[0] == 'I':
+                    updated_label = label
+                else:
+                    updated_label = label.replace('I-', 'E-')
+            else:
+                raise Exception('Invalid IOB format!')
+
+            writer.write(' '.join(tokens[:-1]) + ' ' + updated_label + '\n')
+            prev = tokens[-1]
+
+@exporter
 def to_spans(sequence, lut, span_type):
     """Turn a sequence of IOB chunks into single tokens."""
 
