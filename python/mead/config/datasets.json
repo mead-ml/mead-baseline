@@ -46,6 +46,13 @@
     "label": "conll"
   },
   {
+    "train_file": "eng.train.bio",
+    "valid_file": "eng.testa.bio",
+    "test_file": "eng.testb.bio",
+    "download": "https://www.dropbox.com/s/bl7tig3hkqf1ueq/conll-bio.tar.gz?dl=1",
+    "label": "conll-bio"
+  },
+  {
     "train_file": "wnut17train.conll",
     "valid_file": "wnut17dev.conll",
     "test_file": "wnut17test.conll",
