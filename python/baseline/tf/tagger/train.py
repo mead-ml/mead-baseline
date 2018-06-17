@@ -10,9 +10,10 @@ import os
 
 class TaggerEvaluatorTf(object):
 
-    def __init__(self, model):
+    def __init__(self, model, span_type):
         self.model = model
         self.idx2label = revlut(model.labels)
+        self.span_type = span_type
 
     def _write_sentence_conll(self, handle, sentence, gold, txt):
 
@@ -51,10 +52,10 @@ class TaggerEvaluatorTf(object):
             correct_labels += np.sum(np.equal(sentence, gold))
             total_labels += length
 
-            gold_chunks = to_spans(gold, self.idx2label)
+            gold_chunks = to_spans(gold, self.idx2label, self.span_type)
             gold_count += len(gold_chunks)
 
-            guess_chunks = to_spans(sentence, self.idx2label)
+            guess_chunks = to_spans(sentence, self.idx2label, self.span_type)
             guess_count += len(guess_chunks)
 
             overlap_chunks = gold_chunks & guess_chunks
@@ -108,7 +109,9 @@ class TaggerTrainerTf(EpochReportingTrainer):
         super(TaggerTrainerTf, self).__init__()
         self.loss = model.create_loss()
         self.model = model
-        self.evaluator = TaggerEvaluatorTf(model)
+        span_type = kwargs.get('spans', 'iob')
+
+        self.evaluator = TaggerEvaluatorTf(model, span_type)
         self.global_step, self.train_op = optimizer(self.loss, **kwargs)
 
     def checkpoint(self):
@@ -141,7 +144,7 @@ def fit(model, ts, vs, es, **kwargs):
     epochs = int(kwargs['epochs']) if 'epochs' in kwargs else 5
     patience = int(kwargs['patience']) if 'patience' in kwargs else epochs
     conll_output = kwargs.get('conll_output', None)
-    #TODO: ???? Really?
+    span_type = kwargs.get('spans', 'iob')
     txts = kwargs.get('txts', None)
     model_file = get_model_file(kwargs, 'tagger', 'tf')
     after_train_fn = kwargs['after_train_fn'] if 'after_train_fn' in kwargs else None
@@ -193,7 +196,7 @@ def fit(model, ts, vs, es, **kwargs):
 
         trainer.recover_last_checkpoint()
         # What to do about overloading this??
-        evaluator = TaggerEvaluatorTf(model)
+        evaluator = TaggerEvaluatorTf(model, span_type)
         test_metrics = evaluator.test(es, conll_output=conll_output, txts=txts)
         for reporting in reporting_fns:
             reporting(test_metrics, 0, 'Test')

@@ -42,17 +42,21 @@ The parameterization below yields a very similar model to this paper: https://ar
 ```
 python tag_char_rnn.py \
     --rnntype blstm --patience 40 \
-    --layers 1 --optim sgd --eta 0.015 --clip 5. --epochs 240 --batchsz 10 --hsz 200 \
+    --layers 1 --optim sgd --eta 0.015 --clip 5. --epochs 100 --batchsz 10 --hsz 200 \
     --decay_rate 0.05 --decay_type invtime \
-    --train ../data/eng.train \
-    --valid ../data/eng.testa \
-    --test  ../data/eng.testb \
+    --train ../data/eng.train.iobes \
+    --valid ../data/eng.testa.iobes \
+    --test  ../data/eng.testb.iobes \
     --lower 1 \
     --embed /data/embeddings/glove.6B.100d.txt \
     --dropin 0.1 \
     --cfiltsz 3 --wsz 30 --charsz 30 --crf 1
 
 ```
+
+Or using `mead`:
+
+`python trainer.py --config config/conll-iobes.json`
 
 ## Status
 
@@ -62,13 +66,14 @@ This model is implemented in TensorFlow and PyTorch.
 
 Here are the last observed performance scores on various dataset
 
-| dataset       | metric | method   | eta (LR) | backend  | score | proj | crf  | hsz |
-| ------------- | ------ | -------- | -------  | -------- | ----- | -----| -----|-----|
-| twpos-v03     |    acc | sgd mom. |     0.01 | tf       | 89.6  | N    | N    | 100 |
-| twpos-v03     |    acc | adam     |       -- | pytorch  | 89.4  | N    | N    | 100 |
-| conll 2003    |     f1 | sgd mom. |     0.015| tf       | 90.88 | N    | Y    | 200 |
-| conll 2003    |     f1 | sgd mom. |     0.015| pytorch  | 90.86 | N    | Y    | 200 |
-| atis (mesnil) |     f1 | sgd mom. |     0.01 | tf       | 96.74 | N    | N    | 100 |
+| dataset             | metric | method   | eta (LR) | backend  | score | proj | crf  | hsz |
+| ------------------- | ------ | -------- | -------  | -------- | ----- | -----| -----|-----|
+| twpos-v03           |    acc | sgd mom. |     0.01 | tf       | 89.6  | N    | N    | 100 |
+| twpos-v03           |    acc | adam     |       -- | pytorch  | 89.4  | N    | N    | 100 |
+| conll 2003 (IOB1)   |     f1 | sgd mom. |     0.015| tf       | 90.88 | N    | Y    | 200 |
+| conll 2003 (IOB1)   |     f1 | sgd mom. |     0.015| pytorch  | 90.86 | N    | Y    | 200 |
+| conll 2003 (IOBES)  |     f1 | std mom. |     0.015| pytorch  | 91.21 | N    | Y    | 200 |
+|       atis (mesnil) |     f1 | sgd mom. |     0.01 | tf       | 96.74 | N    | N    | 100 |
 
 
 ### Testing a trained model on your data
