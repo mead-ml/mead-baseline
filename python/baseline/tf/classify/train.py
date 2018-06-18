@@ -1,12 +1,11 @@
+import os
 import tensorflow as tf
 from baseline.confusion import ConfusionMatrix
 from baseline.progress import create_progress_bar
 from baseline.reporting import basic_reporting
 from baseline.utils import listify, get_model_file
-from baseline.tf.tfy import optimizer
+from baseline.tf.tfy import optimizer, _add_ema
 from baseline.train import EpochReportingTrainer, create_trainer
-import os
-
 
 class ClassifyTrainerTf(EpochReportingTrainer):
 
@@ -15,7 +14,14 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         self.sess = model.sess
         self.loss = model.create_loss()
         self.model = model
-        self.global_step, self.train_op = optimizer(self.loss, **kwargs)
+        self.global_step, train_op = optimizer(self.loss, **kwargs)
+        decay = kwargs.get('ema_decay', None)
+        if decay is not None:
+            model.ema, model.ema_op, model.eval_saver = _add_ema(model, decay)
+            with tf.control_dependencies([model.ema_op]):
+                self.train_op = tf.identity(train_op)
+        else:
+            self.train_op = train_op
 
     def _train(self, loader):
 
@@ -56,11 +62,38 @@ class ClassifyTrainerTf(EpochReportingTrainer):
 
         return metrics
 
-    def checkpoint(self):
-        self.model.saver.save(self.sess, "./tf-classify-%d/classify" % os.getpid(), global_step=self.global_step)
+    def checkpoint(self, train=False):
+        """When train is true it saves checkpoint to a subfolder for ema loading.
 
-    def recover_last_checkpoint(self):
-        latest = tf.train.latest_checkpoint("./tf-classify-%d" % os.getpid())
+        When train is False it saves normally. This is the checkpoint used for
+        early stopping.
+        """
+        file_name = './tf-classify-{}'.format(os.getpid())
+        if train:
+            file_name = os.path.join(file_name, "train")
+            try:
+                os.makedirs(file_name)
+            except OSError:
+                pass
+        file_name = os.path.join(file_name, 'classify')
+        self.model.saver.save(self.sess, file_name, global_step=self.global_step)
+
+    def eval_restore(self, train=False):
+        file_name = './tf-classify-{}'.format(os.getpid())
+        if train:
+            file_name = os.path.join(file_name, "train")
+        latest = tf.train.latest_checkpoint(file_name)
+        print('Eval Loading ' + latest)
+        try:
+            self.model.eval_saver.restore(self.model.sess, latest)
+        except AttributeError:
+            self.model.saver.restore(self.model.sess, latest)
+
+    def recover_last_checkpoint(self, train=False):
+        file_name = './tf-classify-{}'.format(os.getpid())
+        if train:
+            file_name = os.path.join(file_name, "train")
+        latest = tf.train.latest_checkpoint(file_name)
         print('Reloading ' + latest)
         self.model.saver.restore(self.model.sess, latest)
 
@@ -68,26 +101,26 @@ class ClassifyTrainerTf(EpochReportingTrainer):
 def fit(model, ts, vs, es=None, **kwargs):
     """
     Train a classifier using TensorFlow
-    
+
     :param model: The model to train
     :param ts: A training data set
     :param vs: A validation data set
     :param es: A test data set, can be None
-    :param kwargs: 
+    :param kwargs:
         See below
-    
+
     :Keyword Arguments:
         * *do_early_stopping* (``bool``) --
           Stop after evaluation data is no longer improving.  Defaults to True
-        
+
         * *epochs* (``int``) -- how many epochs.  Default to 20
         * *outfile* -- Model output file, defaults to classifier-model.pyth
-        * *patience* -- 
+        * *patience* --
            How many epochs where evaluation is no longer improving before we give up
         * *reporting* --
            Callbacks which may be used on reporting updates
         * Additional arguments are supported, see :func:`baseline.tf.optimize` for full list
-    :return: 
+    :return:
     """
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
     epochs = int(kwargs.get('epochs', 20))
@@ -100,7 +133,7 @@ def fit(model, ts, vs, es=None, **kwargs):
 
     reporting_fns = listify(kwargs.get('reporting', basic_reporting))
     print('reporting', reporting_fns)
-    
+
     trainer = create_trainer(ClassifyTrainerTf, model, **kwargs)
     tables = tf.tables_initializer()
     model.sess.run(tables)
@@ -113,7 +146,10 @@ def fit(model, ts, vs, es=None, **kwargs):
     for epoch in range(epochs):
 
         trainer.train(ts, reporting_fns)
+        trainer.checkpoint(train=True)
+        trainer.eval_restore(train=True)
         test_metrics = trainer.test(vs, reporting_fns, phase='Valid')
+        trainer.recover_last_checkpoint(train=True)
 
         if do_early_stopping is False:
             trainer.checkpoint()
@@ -135,5 +171,5 @@ def fit(model, ts, vs, es=None, **kwargs):
 
     if es is not None:
         print('Reloading best checkpoint')
-        trainer.recover_last_checkpoint()
+        trainer.eval_restore()
         trainer.test(es, reporting_fns, phase='Test')

@@ -1,4 +1,5 @@
 try:
+    import os
     import random
     import unittest
     from mock import patch, MagicMock
@@ -8,6 +9,7 @@ try:
 except ImportError:
     raise unittest.SkipTest('Failed to import tensorflow')
 
+os.environ['CUDA_VISIBLE_DEVICES'] = ''
 
 class ParallelConvTest(tf.test.TestCase):
 

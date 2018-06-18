@@ -4,6 +4,27 @@ from tensorflow.python.layers import core as layers_core
 from baseline.utils import lookup_sentence, beam_multinomial
 import os
 
+def _add_ema(model, decay):
+    """Create ops needed to track EMA when training.
+
+    :param model: The model with a `.sess` we want to track the ema of.
+    :param decay: Decay to use in the EMA
+
+    Common use case looks like this:
+        `model.ema, model.ema_op, model.eval_saver = _add_ema(mode, decay)`
+
+    :return:
+        ema - The ema object that use get averages with using `ema.average(tensor)`
+        ema_op - The update op. This applies the ema for each variable. Should be
+            set as a control dependency on the training op.
+        eval_saver - tf.train.Saver set up so that when it reads in data it reads
+            the ema values and loads them into the varaibles.
+    """
+    ema = tf.train.ExponentialMovingAverage(decay=decay)
+    model_vars = model.sess.graph.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
+    ema_op = ema.apply(model_vars)
+    eval_saver = tf.train.Saver({ema.average_name(var): var for var in model_vars})
+    return ema, ema_op, eval_saver
 
 def _find_files_by_type(model_file, filetype):
     """Find all files by type, removing suffix

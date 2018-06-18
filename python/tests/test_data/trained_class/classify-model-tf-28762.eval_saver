@@ -1,0 +1,6 @@
+filename_tensor_name: "save/Const:0"
+save_tensor_name: "save/control_dependency:0"
+restore_op_name: "save/restore_all"
+max_to_keep: 5
+keep_checkpoint_every_n_hours: 10000.0
+version: V2
