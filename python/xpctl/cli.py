@@ -9,7 +9,7 @@ from xpctl.core import ExperimentRepo
 from xpctl.helpers import *
 from baseline.utils import read_json, read_config_file
 pd.set_option('display.expand_frame_repr', False)
-
+pd.set_option("display.max_rows", -1)
 
 EVENT_TYPES = {
     "train": "train_events", "Train": "train_events",
