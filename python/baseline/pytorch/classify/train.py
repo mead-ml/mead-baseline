@@ -51,7 +51,7 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
         steps = len(loader)
         pg = create_progress_bar(steps)
         cm = ConfusionMatrix(self.labels)
-        print_cm = kwargs.get("print_cm", False)
+        verbose = kwargs.get("verbose", False)
 
         for batch_dict in loader:
             vec = self._make_input(batch_dict)
@@ -65,8 +65,8 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
 
         metrics = cm.get_all_metrics()
         metrics['avg_loss'] = total_loss/float(steps)
-        if print_cm:
-            print("confusion matrix\n{}\n".format("".join(["="]*40)))
+        if verbose:
+            print("\n{}\n".format("".join(["="]*40)))
             print(cm)
             print("\n{}\n".format("".join(["="]*40)))
 
@@ -123,7 +123,7 @@ def fit(model, ts, vs, es, **kwargs):
     :return: 
     """
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
-    print_cm = bool(kwargs.get('print_cm', False))
+    verbose = bool(kwargs.get('verbose', False))
     epochs = int(kwargs.get('epochs', 20))
     model_file = get_model_file(kwargs, 'classify', 'pytorch')
     if do_early_stopping:
@@ -164,4 +164,4 @@ def fit(model, ts, vs, es, **kwargs):
         print('Reloading best checkpoint')
         model = torch.load(model_file)
         trainer = create_trainer(ClassifyTrainerPyTorch, model, **kwargs)
-        trainer.test(es, reporting_fns, phase='Test', print_cm=print_cm)
+        trainer.test(es, reporting_fns, phase='Test', verbose=verbose)
