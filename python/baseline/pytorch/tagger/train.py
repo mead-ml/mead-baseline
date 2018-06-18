@@ -11,7 +11,8 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
         super(TaggerTrainerPyTorch, self).__init__()
         self.gpu = not bool(kwargs.get('nogpu', False))
         # By default support IOB1/IOB2
-        self.span_type = kwargs.get('spans', 'iob')
+        self.span_type = kwargs.get('span_type', 'iob')
+        print('Setting span type {}'.format(self.span_type))
         self.model = model
         self.idx2label = revlut(self.model.labels)
         self.clip = float(kwargs.get('clip', 5))

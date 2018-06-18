@@ -37,7 +37,8 @@
         "mom": 0.9,
         "patience": 40,
         "early_stopping_metric": "f1",
-        "clip": 5.0
+        "clip": 5.0,
+        "span_type": "bio"
     }
 }
 
