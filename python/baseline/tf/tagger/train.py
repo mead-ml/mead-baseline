@@ -111,7 +111,6 @@ class TaggerTrainerTf(EpochReportingTrainer):
         self.loss = model.create_loss()
         self.model = model
         span_type = kwargs.get('span_type', 'iob')
-
         self.evaluator = TaggerEvaluatorTf(model, span_type)
         self.global_step, self.train_op = optimizer(self.loss, **kwargs)
 
