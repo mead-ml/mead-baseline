@@ -14,6 +14,7 @@ class TaggerEvaluatorTf(object):
         self.model = model
         self.idx2label = revlut(model.labels)
         self.span_type = span_type
+        print('Setting span type {}'.format(self.span_type))
 
     def _write_sentence_conll(self, handle, sentence, gold, txt):
 
@@ -109,7 +110,7 @@ class TaggerTrainerTf(EpochReportingTrainer):
         super(TaggerTrainerTf, self).__init__()
         self.loss = model.create_loss()
         self.model = model
-        span_type = kwargs.get('spans', 'iob')
+        span_type = kwargs.get('span_type', 'iob')
 
         self.evaluator = TaggerEvaluatorTf(model, span_type)
         self.global_step, self.train_op = optimizer(self.loss, **kwargs)
@@ -144,7 +145,7 @@ def fit(model, ts, vs, es, **kwargs):
     epochs = int(kwargs['epochs']) if 'epochs' in kwargs else 5
     patience = int(kwargs['patience']) if 'patience' in kwargs else epochs
     conll_output = kwargs.get('conll_output', None)
-    span_type = kwargs.get('spans', 'iob')
+    span_type = kwargs.get('span_type', 'iob')
     txts = kwargs.get('txts', None)
     model_file = get_model_file(kwargs, 'tagger', 'tf')
     after_train_fn = kwargs['after_train_fn'] if 'after_train_fn' in kwargs else None

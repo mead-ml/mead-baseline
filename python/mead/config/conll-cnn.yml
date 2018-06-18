@@ -25,7 +25,7 @@ model:
 word_embeddings:
   label: glove-6B-100
 train:
-  epochs: 100
+  epochs: 600
   optim: sgd
   decay: 0
   eta: 0.015
@@ -33,3 +33,4 @@ train:
   patience: 40
   early_stopping_metric: f1
   clip: 5.0
+  span_type: iobes

@@ -72,7 +72,6 @@ Here are the last observed performance scores on various dataset
 | twpos-v03           |    acc | adam     |       -- | pytorch  | 89.4  | N    | N    | 100 |
 | conll 2003 (IOB1)   |     f1 | sgd mom. |     0.015| tf       | 90.88 | N    | Y    | 200 |
 | conll 2003 (IOB1)   |     f1 | sgd mom. |     0.015| pytorch  | 90.86 | N    | Y    | 200 |
-| conll 2003 (IOBES)  |     f1 | std mom. |     0.015| pytorch  | 91.21 | N    | Y    | 200 |
 |       atis (mesnil) |     f1 | sgd mom. |     0.01 | tf       | 96.74 | N    | N    | 100 |
 
 
