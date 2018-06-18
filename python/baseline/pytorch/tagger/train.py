@@ -10,6 +10,8 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
     def __init__(self, model, **kwargs):
         super(TaggerTrainerPyTorch, self).__init__()
         self.gpu = not bool(kwargs.get('nogpu', False))
+        # By default support IOB1/IOB2
+        self.span_type = kwargs.get('spans', 'iob')
         self.model = model
         self.idx2label = revlut(self.model.labels)
         self.clip = float(kwargs.get('clip', 5))
@@ -36,9 +38,9 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
             gold = truth_n[b, :sentence_length]
             correct_labels += np.sum(np.equal(sentence, gold))
             total_labels += sentence_length
-            gold_chunks = to_spans(gold, self.idx2label)
+            gold_chunks = to_spans(gold, self.idx2label, self.span_type)
             gold_count += len(gold_chunks)
-            guess_chunks = to_spans(sentence, self.idx2label)
+            guess_chunks = to_spans(sentence, self.idx2label, self.span_type)
             guess_count += len(guess_chunks)
 
             overlap_chunks = gold_chunks & guess_chunks

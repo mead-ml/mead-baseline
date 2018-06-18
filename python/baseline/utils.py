@@ -352,9 +352,133 @@ def seq_fill_y(nc, yidx):
 
 
 @exporter
-def to_spans(sequence, lut, strict_iob2=False):
+def convert_iob_to_iobes(ifile, ofile):
+    """Convert from IOB to BIO (IOB2)
+
+    This code is copied verbatim from Xuezhe Ma:
+    https://github.com/XuezheMax/NeuroNLP2/issues/9
+
+    :param ifile: Original IOB format CONLL file
+    :param ofile: BIO/IOB2 format
+    """
+    with open(ifile, 'r') as reader, open(ofile, 'w') as writer:
+        prev = 'O'
+        for line in reader:
+            line = line.strip()
+            if len(line) == 0:
+                prev = 'O'
+                writer.write('\n')
+                continue
+
+            tokens = line.split()
+            label = tokens[-1]
+            # If this label is B or I and not equal to the previous
+            if label != 'O' and label != prev:
+                # If the last was Outside, we have a B
+                if prev == 'O':
+                    label = 'B-' + label[2:]
+                elif label[2:] != prev[2:]:
+                    label = 'B-' + label[2:]
+                else:
+                    label = label
+            writer.write(" ".join(tokens[:-1]) + " " + label)
+            writer.write('\n')
+            prev = tokens[-1]
+
+
+@exporter
+def convert_iob_to_bio(ifile, ofile):
+    """Convert from IOB to BIO (IOB2)
+
+    This code is copied from Xuezhe Ma (though I added comments)
+    https://github.com/XuezheMax/NeuroNLP2/issues/9
+
+    :param ifile: Original IOB format CONLL file
+    :param ofile: BIO/IOB2 format
+    """
+    with open(ifile, 'r') as reader, open(ofile, 'w') as writer:
+        prev = 'O'
+        for line in reader:
+            line = line.strip()
+            if len(line) == 0:
+                prev = 'O'
+                writer.write('\n')
+                continue
+
+            tokens = line.split()
+            # print tokens
+            label = tokens[-1]
+            # If this label is B or I and not equal to the previous
+            if label != 'O' and label != prev:
+                # If the last was O, it has to be a B
+                if prev == 'O':
+                    label = 'B-' + label[2:]
+                # Otherwise if the tags are different, it also has to be a B
+                elif label[2:] != prev[2:]:
+                    label = 'B-' + label[2:]
+
+            writer.write(' '.join(tokens[:-1]) + ' ' + label + '\n')
+            prev = tokens[-1]
+
+
+@exporter
+def convert_iob_to_iobes(ifile, ofile):
+
+    with open(ifile, 'r') as reader, open(ofile, 'w') as writer:
+        lines = [line.strip() for line in reader]
+        prev = 'O'
+        for i, line in enumerate(lines):
+
+            tokens = line.split()
+            if len(tokens) == 0:
+                prev = 'O'
+                writer.write('\n')
+                continue
+
+            label = tokens[-1]
+
+            if i + 1 != len(lines):
+                next_tokens = lines[i+1].split()
+                if len(next_tokens) > 1:
+                     next_tag = next_tokens[-1]
+                else:
+                    next_tag = None
+
+            if label != 'O' and label != prev:
+                # If the last was O, it has to be a B
+                if prev == 'O':
+                    label = 'B-' + label[2:]
+                # Otherwise if the tags are different, it also has to be a B
+                elif label[2:] != prev[2:]:
+                    label = 'B-' + label[2:]
+
+            # Nothing to do for label == 'O'
+            if label == 'O':
+                updated_label = label
+            elif label.split('-')[0] == 'B':
+                if next_tag and next_tag.split('-')[0] == 'I':
+                    updated_label = label
+                else:
+                    updated_label = label.replace('B-', 'S-')
+            elif label.split('-')[0] == 'I':
+                if next_tag and next_tag.split('-')[0] == 'I':
+                    updated_label = label
+                else:
+                    updated_label = label.replace('I-', 'E-')
+            else:
+                raise Exception('Invalid IOB format!')
+
+            writer.write(' '.join(tokens[:-1]) + ' ' + updated_label + '\n')
+            prev = tokens[-1]
+
+@exporter
+def to_spans(sequence, lut, span_type):
     """Turn a sequence of IOB chunks into single tokens."""
 
+    if span_type == 'iobes':
+        return to_spans_iobes(sequence, lut)
+
+    strict_iob2 = (span_type == 'iob2') or (span_type == 'bio')
     iobtype = 2 if strict_iob2 else 1
     chunks = []
     current = None
@@ -390,6 +514,87 @@ def to_spans(sequence, lut, strict_iob2=False):
                 chunks.append('@'.join(current))
             current = None
 
+    if current is not None:
+        chunks.append('@'.join(current))
+
+    return set(chunks)
+
+
+def to_spans_iobes(sequence, lut):
+    chunks = []
+    current = None
+
+    for i, y in enumerate(sequence):
+        label = lut[y]
+
+        # This indicates a multi-word chunk start
+        if label.startswith('B-'):
+
+            # Flush existing chunk
+            if current is not None:
+                chunks.append('@'.join(current))
+            # Create a new chunk
+            current = [label.replace('B-', ''), '%d' % i]
+
+        # This indicates a single word chunk
+        elif label.startswith('S-'):
+
+            # Flush existing chunk, and since this is self-contained, we will clear current
+            if current is not None:
+                chunks.append('@'.join(current))
+                current = None
+
+            base = label.replace('S-', '')
+            # Write this right into the chunks since self-contained
+            chunks.append('@'.join([base, '%d' % i]))
+
+        # Indicates we are inside of a chunk already
+        elif label.startswith('I-'):
+
+            # This should always be the case!
+            if current is not None:
+                base = label.replace('I-', '')
+                if base == current[0]:
+                    current.append('%d' % i)
+                else:
+                    chunks.append('@'.join(current))
+                    print('Warning: I without matching previous B/I')
+                    current = [base, '%d' % i]
+
+            else:
+                print('Warning: I without a previous chunk')
+                current = [label.replace('I-', ''), '%d' % i]
+
+        # We are at the end of a chunk, so flush current
+        elif label.startswith('E-'):
+
+            # Flush current chunk
+            if current is not None:
+                base = label.replace('E-', '')
+                if base == current[0]:
+                    current.append('%d' % i)
+                    chunks.append('@'.join(current))
+                    current = None
+                else:
+                    chunks.append('@'.join(current))
+                    print('Warning: E doesnt agree with previous B/I type!')
+                    current = [base, '%d' % i]
+                    chunks.append('@'.join(current))
+                    current = None
+
+            # This should never happen
+            else:
+                current = [label.replace('E-', ''), '%d' % i]
+                print('Warning, E without previous chunk!')
+                chunks.append('@'.join(current))
+                current = None
+        # Outside
+        else:
+            if current is not None:
+                chunks.append('@'.join(current))
+            current = None
+
+    # If something is left, flush
     if current is not None:
         chunks.append('@'.join(current))
 

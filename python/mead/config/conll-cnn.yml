@@ -1,0 +1,35 @@
+task: tagger
+batchsz: 10
+conll_output: conllresults.conll
+charsz: 50
+unif: 0.1
+preproc:
+  mxlen: -1
+  mxwlen: -1
+  lower: true
+backend: tensorflow
+dataset: conll-iobes
+loader:
+  reader_type: default
+model:
+  model_type: default
+  wfiltsz: [5]
+  cfiltsz: [3]
+  hsz: 800
+  wsz: 50
+  dropout: 0.5
+  rnntype: cnn
+  layers: 2
+  crf: 1
+
+word_embeddings:
+  label: glove-6B-100
+train:
+  epochs: 100
+  optim: sgd
+  decay: 0
+  eta: 0.015
+  mom: 0.9
+  patience: 40
+  early_stopping_metric: f1
+  clip: 5.0
