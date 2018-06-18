@@ -233,7 +233,7 @@ def lbsummary(task):
     if task is not None:
         if not RepoManager.get().has_task(task):
             click.echo("no results for the specified task {}, use another task".format(task))
-        return
+            return
 
     return RepoManager.get().leaderboard_summary(task, event_types, click.echo)
 
