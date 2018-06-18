@@ -79,15 +79,20 @@ class ConfusionMatrix(object):
         
         :return: (``float``) recall
         """
-        total = np.sum(self._cm, axis=1) + 0.0000001
+        total = np.sum(self._cm, axis=1)
+        total = (total == 0) + total
         return np.diag(self._cm) / total
+
+    def get_support(self):
+        return np.sum(self._cm, axis=1)
 
     def get_precision(self):
         """Get the precision
         :return: (``float``) precision
         """
 
-        total = np.sum(self._cm, axis=0) + 0.0000001
+        total = np.sum(self._cm, axis=0)
+        total = (total == 0) + total
         return np.diag(self._cm) / total
 
     def get_mean_precision(self):
@@ -97,6 +102,9 @@ class ConfusionMatrix(object):
         """
         return np.mean(self.get_precision())
 
+    def get_weighted_precision(self):
+        return np.sum(self.get_precision() * self.get_support())/self.get_total()
+
     def get_mean_recall(self):
         """Get the mean recall across labels
         
@@ -104,17 +112,31 @@ class ConfusionMatrix(object):
         """
         return np.mean(self.get_recall())
 
+    def get_weighted_recall(self):
+        return np.sum(self.get_recall() * self.get_support())/self.get_total()
+
+    def get_weighted_f(self, beta=1):
+        return np.sum(self.get_class_f(beta) * self.get_support())/self.get_total()
+
     def get_macro_f(self, beta=1):
         """Get the macro F_b, with adjustable beta (defaulting to F1)
         
         :param beta: (``float``) defaults to 1 (F1)
         :return: (``float``) macro F_b
         """
-        p = self.get_mean_precision()
-        r = self.get_mean_recall()
         if beta < 0:
             raise Exception('Beta must be greater than 0')
-        return (beta*beta + 1) * p * r / (beta*beta * p + r)
+        return np.mean(self.get_class_f(beta))
+
+    def get_class_f(self, beta=1):
+        p = self.get_precision()
+        r = self.get_recall()
+
+        b = beta*beta
+        d = (b * p + r)
+        d = (d == 0) + d
+
+        return (b + 1) * p * r / d
 
     def get_f(self, beta=1):
         """Get 2 class F_b, with adjustable beta (defaulting to F1)
@@ -143,6 +165,9 @@ class ConfusionMatrix(object):
             metrics['mean_precision'] = self.get_mean_precision()
             metrics['mean_recall'] = self.get_mean_recall()
             metrics['macro_f1'] = self.get_macro_f(1)
+            metrics['weighted_precision'] = self.get_weighted_precision()
+            metrics['weighted_recall'] = self.get_weighted_recall()
+            metrics['weighted_f1'] = self.get_weighted_f(1)
         return metrics
 
     def add_batch(self, truth, guess):
