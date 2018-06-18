@@ -6,7 +6,7 @@
 	"rev": false,
 	"clean": true
     },
-    "backend": "pytorch",
+    "backend": "tensorflow",
     "dataset": "SST2",
     "loader": {
 	"reader_type": "default"
