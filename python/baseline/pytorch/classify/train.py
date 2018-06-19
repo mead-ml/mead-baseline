@@ -124,7 +124,7 @@ def fit(model, ts, vs, es, **kwargs):
     :return: 
     """
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
-    verbose = kwargs.get('verbose', {'print': kwargs.get('verbose_print', None), 'file': kwargs.get('verbose_file', None)})
+    verbose = kwargs.get('verbose', {'print': kwargs.get('verbose_print', False), 'file': kwargs.get('verbose_file', None)})
 
     epochs = int(kwargs.get('epochs', 20))
 
