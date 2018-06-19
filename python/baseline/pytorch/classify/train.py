@@ -5,6 +5,7 @@ from baseline.reporting import basic_reporting
 from baseline.train import EpochReportingTrainer, create_trainer
 import torch
 import torch.autograd
+from baseline.utils import verbose_output_classify
 
 
 def _add_to_cm(cm, y, pred):
@@ -54,7 +55,7 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
         steps = len(loader)
         pg = create_progress_bar(steps)
         cm = ConfusionMatrix(self.labels)
-        verbose = kwargs.get("verbose", False)
+        verbose = kwargs.get("verbose", None)
 
         for batch_dict in loader:
             vec = self._make_input(batch_dict)
@@ -68,8 +69,7 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
 
         metrics = cm.get_all_metrics()
         metrics['avg_loss'] = total_loss/float(steps)
-        if verbose:
-            print(cm)
+        verbose_output_classify(verbose, cm)
 
         return metrics
 
@@ -124,8 +124,10 @@ def fit(model, ts, vs, es, **kwargs):
     :return: 
     """
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
-    verbose = bool(kwargs.get('verbose', False))
+    verbose = kwargs.get('verbose', {'print': kwargs.get('verbose_print', None), 'file': kwargs.get('verbose_file', None)})
+
     epochs = int(kwargs.get('epochs', 20))
+
     model_file = get_model_file(kwargs, 'classify', 'pytorch')
     if do_early_stopping:
         early_stopping_metric = kwargs.get('early_stopping_metric', 'acc')

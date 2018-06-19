@@ -6,7 +6,7 @@ from baseline.confusion import ConfusionMatrix
 from baseline.reporting import basic_reporting
 from baseline.train import EpochReportingTrainer, create_trainer
 from baseline.dy.dynety import *
-
+from baseline.utils import verbose_output_classify
 
 def _add_to_cm(cm, y, preds, axis=0):
     best = np.argmax(preds, axis=axis)
@@ -19,10 +19,14 @@ class ClassifyTrainerDynet(EpochReportingTrainer):
     def __init__(
             self,
             model,
+            optim='sgd', clip=5, mom=0.9,
             **kwargs
     ):
         super(ClassifyTrainerDynet, self).__init__()
         self.model = model
+        eta = kwargs.get('eta', kwargs.get('lr', 0.01))
+        print("Using eta [{:.4f}]".format(eta))
+        print("Using optim [{}]".format(optim))
         self.labels = model.labels
         self.optimizer = optimizer(model, **kwargs)
 
@@ -30,7 +34,7 @@ class ClassifyTrainerDynet(EpochReportingTrainer):
         loss.backward()
         self.optimizer.update()
 
-    def _step(self, loader, update, verbose=False):
+    def _step(self, loader, update, verbose=None):
         steps = len(loader)
         pg = create_progress_bar(steps)
         cm = ConfusionMatrix(self.labels)
@@ -48,12 +52,12 @@ class ClassifyTrainerDynet(EpochReportingTrainer):
 
         metrics = cm.get_all_metrics()
         metrics['avg_loss'] = total_loss / float(steps)
-        if verbose:
-            print(cm)
+        verbose_output_classify(verbose, cm)
         return metrics
 
+
     def _test(self, loader, **kwargs):
-        return self._step(loader, lambda x: None, kwargs.get("verbose", False))
+        return self._step(loader, lambda x: None, kwargs.get("verbose", None))
 
     def _train(self, loader):
         return self._step(loader, self._update)
@@ -64,7 +68,7 @@ class ClassifyTrainerAutobatch(ClassifyTrainerDynet):
         self.autobatchsz = autobatchsz
         super(ClassifyTrainerAutobatch, self).__init__(model, **kwargs)
 
-    def _step(self, loader, update, verbose=False):
+    def _step(self, loader, update, verbose):
         steps = len(loader)
         pg = create_progress_bar(steps)
         cm = ConfusionMatrix(self.labels)
@@ -96,10 +100,7 @@ class ClassifyTrainerAutobatch(ClassifyTrainerDynet):
 
         metrics = cm.get_all_metrics()
         metrics['avg_loss'] = total_loss / float(steps)
-        if verbose:
-            print("\n{}\n".format("".join(["="]*40)))
-            print(cm)
-            print("\n{}\n".format("".join(["="]*40)))
+        verbose_output_classify(verbose, cm)
         return metrics
 
 
@@ -112,7 +113,7 @@ def fit(
         **kwargs
 ):
     autobatchsz = kwargs.get('autobatchsz', 1)
-    verbose = bool(kwargs.get('verbose', False))
+    verbose = kwargs.get('verbose', {'print': kwargs.get('verbose_print', None), 'file': kwargs.get('verbose_file', None)})
     model_file = get_model_file(kwargs, 'classify', 'dynet')
     if do_early_stopping:
         patience = kwargs.get('patience', epochs)

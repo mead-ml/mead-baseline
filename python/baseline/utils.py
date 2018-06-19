@@ -209,7 +209,7 @@ def iobes_mask(vocab, start, end, pad=None):
 @exporter
 def listify(x):
     """Take a scalar or list and make it a list
-
+    
     :param x: The input to convert
     :return: A list
     """
@@ -464,15 +464,14 @@ def topk(k, probs):
     Note:
         mutates input for efficiency
     """
-    # This would be better:
-    # idx = (-probs).argsort()[:k]
+
     lut = {}
     i = 0
 
     while i < k:
         idx = np.argmax(probs)
         lut[idx] = probs[idx]
-        probs[idx] = -1e9
+        probs[idx] = 0
         i += 1
     return lut
 
@@ -782,3 +781,11 @@ def zip_model(path):
         z.write(f)
         os.remove(f)
     z.close()
+
+def verbose_output_classify(verbose, confusion_matrix):
+    do_print = bool(verbose.get("print", False))
+    outfile = verbose.get("file", None)
+    if do_print:
+        print(confusion_matrix)
+    if outfile is not None:
+        confusion_matrix.write_to_file(outfile)
