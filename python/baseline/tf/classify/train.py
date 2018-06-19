@@ -36,11 +36,13 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         metrics['avg_loss'] = total_loss/float(steps)
         return metrics
 
-    def _test(self, loader):
+    def _test(self, loader, **kwargs):
 
         total_loss = 0
         cm = ConfusionMatrix(self.model.labels)
         steps = len(loader)
+        verbose = kwargs.get("verbose", False)
+
         pg = create_progress_bar(steps)
         for batch_dict in loader:
             y = batch_dict['y']
@@ -53,6 +55,8 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         pg.done()
         metrics = cm.get_all_metrics()
         metrics['avg_loss'] = total_loss/float(steps)
+        if verbose:
+            print(cm)
 
         return metrics
 
@@ -90,6 +94,7 @@ def fit(model, ts, vs, es=None, **kwargs):
     :return: 
     """
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
+    verbose = bool(kwargs.get('verbose', False))
     epochs = int(kwargs.get('epochs', 20))
     model_file = get_model_file(kwargs, 'classify', 'tf')
 
@@ -136,4 +141,4 @@ def fit(model, ts, vs, es=None, **kwargs):
     if es is not None:
         print('Reloading best checkpoint')
         trainer.recover_last_checkpoint()
-        trainer.test(es, reporting_fns, phase='Test')
+        trainer.test(es, reporting_fns, phase='Test', verbose=verbose)

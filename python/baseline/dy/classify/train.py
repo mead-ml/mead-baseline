@@ -40,7 +40,7 @@ class ClassifyTrainerDynet(EpochReportingTrainer):
         loss.backward()
         self.optimizer.update()
 
-    def _step(self, loader, update):
+    def _step(self, loader, update, verbose=False):
         steps = len(loader)
         pg = create_progress_bar(steps)
         cm = ConfusionMatrix(self.labels)
@@ -58,11 +58,13 @@ class ClassifyTrainerDynet(EpochReportingTrainer):
 
         metrics = cm.get_all_metrics()
         metrics['avg_loss'] = total_loss / float(steps)
+        if verbose:
+            print(cm)
         return metrics
 
 
-    def _test(self, loader):
-        return self._step(loader, lambda x: None)
+    def _test(self, loader, **kwargs):
+        return self._step(loader, lambda x: None, kwargs.get("verbose", False))
 
     def _train(self, loader):
         return self._step(loader, self._update)
@@ -72,7 +74,7 @@ class ClassifyTrainerAutobatch(ClassifyTrainerDynet):
         self.autobatchsz = autobatchsz
         super(ClassifyTrainerAutobatch, self).__init__(model, **kwargs)
 
-    def _step(self, loader, update):
+    def _step(self, loader, update, verbose):
         steps = len(loader)
         pg = create_progress_bar(steps)
         cm = ConfusionMatrix(self.labels)
@@ -104,6 +106,10 @@ class ClassifyTrainerAutobatch(ClassifyTrainerDynet):
 
         metrics = cm.get_all_metrics()
         metrics['avg_loss'] = total_loss / float(steps)
+        if verbose:
+            print("\n{}\n".format("".join(["="]*40)))
+            print(cm)
+            print("\n{}\n".format("".join(["="]*40)))
         return metrics
 
 
@@ -116,6 +122,7 @@ def fit(
         **kwargs
 ):
     autobatchsz = kwargs.get('autobatchsz', 1)
+    verbose = bool(kwargs.get('verbose', False))
     model_file = get_model_file(kwargs, 'classify', 'dynet')
     if do_early_stopping:
         patience = kwargs.get('patience', epochs)
@@ -155,4 +162,4 @@ def fit(
     if es is not None:
         print('Reloading best checkpoint')
         model = model.load(model_file)
-        trainer.test(es, reporting_fns, phase='Test')
+        trainer.test(es, reporting_fns, phase='Test', verbose=verbose)
