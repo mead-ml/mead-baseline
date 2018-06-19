@@ -56,9 +56,7 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         metrics = cm.get_all_metrics()
         metrics['avg_loss'] = total_loss/float(steps)
         if verbose:
-            print("\n{}\n".format("".join(["="]*40)))
             print(cm)
-            print("\n{}\n".format("".join(["="]*40)))
 
         return metrics
 

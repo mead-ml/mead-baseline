@@ -24,3 +24,4 @@ train:
   eta: 1.0
   model_base: ./models/sst2
   early_stopping_metric: acc
+  verbose: True

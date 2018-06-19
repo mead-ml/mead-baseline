@@ -40,7 +40,7 @@ class ClassifyTrainerDynet(EpochReportingTrainer):
         loss.backward()
         self.optimizer.update()
 
-    def _step(self, loader, update, verbose):
+    def _step(self, loader, update, verbose=False):
         steps = len(loader)
         pg = create_progress_bar(steps)
         cm = ConfusionMatrix(self.labels)
@@ -59,9 +59,7 @@ class ClassifyTrainerDynet(EpochReportingTrainer):
         metrics = cm.get_all_metrics()
         metrics['avg_loss'] = total_loss / float(steps)
         if verbose:
-            print("\n{}\n".format("".join(["="]*40)))
             print(cm)
-            print("\n{}\n".format("".join(["="]*40)))
         return metrics
 
 
