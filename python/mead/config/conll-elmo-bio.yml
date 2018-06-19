@@ -8,8 +8,9 @@ preproc:
     mxlen: -1
     mxwlen: -1
     lower: false 
-    backend: tensorflow
-    dataset: conll-bio
+
+backend: tensorflow
+dataset: conll-bio
 
 loader: 
     reader_type: conllcased
@@ -21,7 +22,7 @@ model:
     wsz: 30
     dropout: 0.5
     rnntype: blstm
-layers: 2
+    layers: 2
     crf: 1
 
 
