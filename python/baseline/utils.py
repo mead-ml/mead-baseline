@@ -783,6 +783,8 @@ def zip_model(path):
     z.close()
 
 def verbose_output_classify(verbose, confusion_matrix):
+    if verbose is None:
+        return
     do_print = bool(verbose.get("print", False))
     outfile = verbose.get("file", None)
     if do_print:
