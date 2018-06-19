@@ -3,7 +3,6 @@ from baseline.utils import export as export
 from collections import OrderedDict
 import csv
 
-
 __all__ = []
 exporter = export(__all__)
 
