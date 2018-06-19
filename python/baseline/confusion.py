@@ -60,7 +60,6 @@ class ConfusionMatrix(object):
                 row_dict.update({"labels": self.labels[index]})
                 dw.writerow(row_dict)
 
-
     def reset(self):
         """Reset the matrix
         """
