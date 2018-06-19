@@ -270,9 +270,8 @@ class ELMoClassifier(Classifier):
 
 
 def create_model(word_embeddings, labels, **kwargs):
-    tagger = ELMoClassifier.create(word_embeddings, labels, **kwargs)
-    return tagger
-
+    classifier = ELMoClassifier.create(word_embeddings, labels, **kwargs)
+    return classifier
 
 def load_model(modelname, **kwargs):
     return ELMoClassifier.load(modelname, **kwargs)

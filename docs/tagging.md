@@ -44,9 +44,9 @@ python tag_char_rnn.py \
     --rnntype blstm --patience 40 \
     --layers 1 --optim sgd --eta 0.015 --clip 5. --epochs 100 --batchsz 10 --hsz 200 \
     --decay_rate 0.05 --decay_type invtime \
-    --train ../data/eng.train.iobes \
-    --valid ../data/eng.testa.iobes \
-    --test  ../data/eng.testb.iobes \
+    --train ../data/eng.train.bio \
+    --valid ../data/eng.testa.bio \
+    --test  ../data/eng.testb.bio \
     --lower 1 \
     --embed /data/embeddings/glove.6B.100d.txt \
     --dropin 0.1 \
@@ -57,6 +57,7 @@ python tag_char_rnn.py \
 Or using `mead`:
 
 `python trainer.py --config config/conll-iobes.json`
+`python trainer.py --config config/conll-bio.json`
 
 ## Status
 
@@ -72,6 +73,7 @@ Here are the last observed performance scores on various dataset
 | twpos-v03           |    acc | adam     |       -- | pytorch  | 89.4  | N    | N    | 100 |
 | conll 2003 (IOB1)   |     f1 | sgd mom. |     0.015| tf       | 90.88 | N    | Y    | 200 |
 | conll 2003 (IOB1)   |     f1 | sgd mom. |     0.015| pytorch  | 90.86 | N    | Y    | 200 |
+| conll 2003 (BIO)    |     f1 | sgd mom. |     0.015| pytorch  |  91.2 | N    | Y    | 200 |
 |       atis (mesnil) |     f1 | sgd mom. |     0.01 | tf       | 96.74 | N    | N    | 100 |
 
 
