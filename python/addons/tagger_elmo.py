@@ -311,9 +311,9 @@ class RNNTaggerELMoModel(Tagger):
                 halffiltsz = mxfiltsz // 2
                 zeropad = tf.pad(rnnchar_bt_x_w, [[0, 0], [halffiltsz, halffiltsz]], "CONSTANT")
                 cembed = tf.nn.embedding_lookup(Wch, zeropad, name="embeddings")
-                cmot = char_word_conv_embeddings(cembed, filtsz, char_dsz, wsz,
+                cmot, num_filts = char_word_conv_embeddings(cembed, filtsz, char_dsz, wsz,
                                                  activation_fn=tf_activation(model.activation_type))
-                word_char = tf.reshape(cmot, [-1, model.mxlen, len(filtsz) * wsz])
+                word_char = tf.reshape(cmot, [-1, model.mxlen, num_filts])
 
         return word_char
 

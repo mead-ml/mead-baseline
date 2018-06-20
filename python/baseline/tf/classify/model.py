@@ -360,7 +360,7 @@ class ConvModel(WordClassifierBase):
         cmotsz = kwargs['cmotsz']
         filtsz = kwargs['filtsz']
 
-        combine = parallel_conv(word_embeddings, filtsz, dsz, cmotsz)
+        combine, _ = parallel_conv(word_embeddings, filtsz, dsz, cmotsz)
         # Definitely drop out
         with tf.name_scope("dropout"):
             combine = tf.nn.dropout(combine, self.pkeep)
