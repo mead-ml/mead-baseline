@@ -306,6 +306,7 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
         model_params["sess"] = sess
         model_params["maxs"] = mxlen
         model_params["maxw"] = mxwlen
+        model_params['span_type'] = self.task.config_params['train'].get('span_type')
         print(model_params)
         model = baseline.tf.tagger.create_model(labels, embeddings, **model_params)
         model.create_loss()

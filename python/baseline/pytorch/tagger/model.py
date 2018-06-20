@@ -44,6 +44,8 @@ class RNNTaggerModel(nn.Module, Tagger):
         hsz = int(kwargs['hsz'])
         model.proj = bool(kwargs.get('proj', False))
         model.use_crf = bool(kwargs.get('crf', False))
+        model.crf_mask = kwargs.get('crf_mask', False)
+        model.span_type = kwargs.get('span_type')
         model.activation_type = kwargs.get('activation', 'tanh')
         nlayers = int(kwargs.get('layers', 1))
         rnntype = kwargs.get('rnntype', 'blstm')
@@ -80,7 +82,15 @@ class RNNTaggerModel(nn.Module, Tagger):
             ))
 
         if model.use_crf:
-            model.crf = CRF(len(labels), (model.labels.get("<GO>"), model.labels.get("<EOS>")))
+            if model.crf_mask:
+                assert model.span_type is not None, "A Crf mask cannot be used without providing `span_type`"
+                model.crf = CRF(
+                    len(labels),
+                    (model.labels.get("<GO>"), model.labels.get("<EOS>")),
+                    model.labels, model.span_type, model.labels.get("<PAD>")
+                )
+            else:
+                model.crf = CRF(len(labels), (model.labels.get("<GO>"), model.labels.get("<EOS>")))
         model.crit = SequenceCriterion(LossFn=nn.CrossEntropyLoss)
         print(model)
         return model

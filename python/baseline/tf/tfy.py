@@ -1,9 +1,15 @@
 import tensorflow as tf
 import numpy as np
 from tensorflow.python.layers import core as layers_core
-from baseline.utils import lookup_sentence, beam_multinomial
+from baseline.utils import lookup_sentence, beam_multinomial, crf_mask as crf_m
 import os
 
+def crf_mask(vocab, span_type, s_idx, e_idx, pad_idx=None):
+    """Create a CRF Mask.
+
+    Returns a mask with invalid moves as 0 and valid moves as 1.
+    """
+    return tf.constant(crf_m(vocab, span_type, s_idx, e_idx, pad_idx).T)
 
 def _find_files_by_type(model_file, filetype):
     """Find all files by type, removing suffix

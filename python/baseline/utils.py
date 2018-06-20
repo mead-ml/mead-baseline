@@ -26,10 +26,176 @@ def export(obj, all_list=None):
 
 exporter = export(__all__)
 
+
+@exporter
+def crf_mask(vocab, span_type, s_idx, e_idx, pad_idx=None):
+    """Create a CRF mask.
+
+    Returns a mask with invalid moves as 0 and valid as 1.
+    """
+    rev_lut = {v: k for k, v in vocab.items()}
+    start = rev_lut[s_idx]
+    end = rev_lut[e_idx]
+    pad = None if pad_idx is None else rev_lut[pad_idx]
+    if span_type.upper() == "IOB":
+        mask = iob_mask(vocab, start, end, pad)
+    if span_type.upper() == "IOB2" or span_type.upper() == "BIO":
+        mask = iob2_mask(vocab, start, end, pad)
+    if span_type.upper() == "IOBES":
+        mask = iobes_mask(vocab, start, end, pad)
+    return mask
+
+def iob_mask(vocab, start, end, pad=None):
+    small = 0
+    mask = np.ones((len(vocab), len(vocab)), dtype=np.float32)
+    for from_ in vocab:
+        for to in vocab:
+            # Can't move to start
+            if to is start:
+                mask[vocab[to], vocab[from_]] = small
+            # Can't move from end
+            if from_ is end:
+                mask[vocab[to], vocab[from_]] = small
+            # Can only move from pad to pad or end
+            if from_ is pad:
+                if not(to is pad or to is end):
+                    mask[vocab[to], vocab[from_]] = small
+            elif from_ is start:
+                # Can't move from start to a B
+                if to.startswith("B-"):
+                    mask[vocab[to], vocab[from_]] = small
+            else:
+                if from_.startswith("B-"):
+                    # Can't move from a B to a B of another type
+                    if to.startswith("B-"):
+                        from_type = from_.split("-")[1]
+                        to_type = to.split("-")[1]
+                        if from_type != to_type:
+                            mask[vocab[to], vocab[from_]] = small
+                elif from_.startswith("I-"):
+                    # Can't move from an I to a B of another type
+                    if to.startswith("B-"):
+                        from_type = from_.split("-")[1]
+                        to_type = to.split("-")[1]
+                        if from_type != to_type:
+                            mask[vocab[to], vocab[from_]] = small
+                elif from_.startswith("O"):
+                    # Can't move from an O to a B
+                    if to.startswith("B-"):
+                        mask[vocab[to], vocab[from_]] = small
+    return mask
+
+def iob2_mask(vocab, start, end, pad=None):
+    small = 0
+    mask = np.ones((len(vocab), len(vocab)), dtype=np.float32)
+    for from_ in vocab:
+        for to in vocab:
+            # Can't move to start
+            if to is start:
+                mask[vocab[to], vocab[from_]] = small
+            # Can't move from end
+            if from_ is end:
+                mask[vocab[to], vocab[from_]] = small
+            # Can only move from pad to pad or end
+            if from_ is pad:
+                if not(to is pad or to is end):
+                    mask[vocab[to], vocab[from_]] = small
+            elif from_ is start:
+                # Can't move from start to a I
+                if to.startswith("I-"):
+                    mask[vocab[to], vocab[from_]] = small
+            else:
+                if from_.startswith("B-"):
+                    # Can't move from a B to an I of a different type
+                    if to.startswith("I-"):
+                        from_type = from_.split("-")[1]
+                        to_type = to.split("-")[1]
+                        if from_type != to_type:
+                            mask[vocab[to], vocab[from_]] = small
+                elif from_.startswith("I-"):
+                    # Can't move from an I to an I of another type
+                    if to.startswith("I-"):
+                        from_type = from_.split("-")[1]
+                        to_type = to.split("-")[1]
+                        if from_type != to_type:
+                            mask[vocab[to], vocab[from_]] = small
+                elif from_.startswith("O"):
+                    # Can't move from an O to an I
+                    if to.startswith("I-"):
+                        mask[vocab[to], vocab[from_]] = small
+    return(mask)
+
+
+def iobes_mask(vocab, start, end, pad=None):
+    small = 0
+    mask = np.ones((len(vocab), len(vocab)), dtype=np.float32)
+    for from_ in vocab:
+        for to in vocab:
+            # Can't move to start
+            if to is start:
+                mask[vocab[to], vocab[from_]] = small
+            # Can't move from end
+            if from_ is end:
+                mask[vocab[to], vocab[from_]] = small
+            # Can only move from pad to pad or to end
+            if from_ is pad:
+                if not(to is pad or to is end):
+                    mask[vocab[to], vocab[from_]] = small
+            elif from_ is start:
+                # Can't move from start to I or E
+                if to.startswith("I-") or to.startswith("E-"):
+                    mask[vocab[to], vocab[from_]] = small
+            else:
+                if from_.startswith("B-"):
+                    # Can't move from B to B, S, O, End, or Pad
+                    if (
+                        to.startswith("B-") or
+                        to.startswith("S-") or
+                        to.startswith("O") or
+                        to is end or
+                        to is pad
+                    ):
+                        mask[vocab[to], vocab[from_]] = small
+                    # Can only move to matching I or E
+                    elif to.startswith("I-") or to.startswith("E-"):
+                        from_type = from_.split("-")[1]
+                        to_type = to.split("-")[1]
+                        if from_type != to_type:
+                            mask[vocab[to], vocab[from_]] = small
+                elif from_.startswith("I-"):
+                    # Can't move from I to B, S, O, End or Pad
+                    if (
+                        to.startswith("B-") or
+                        to.startswith("S-") or
+                        to.startswith("O") or
+                        to is end or
+                        to is pad
+                    ):
+                        mask[vocab[to], vocab[from_]] = small
+                    # Can only move to matching I or E
+                    elif to.startswith("I-") or to.startswith("E-"):
+                        from_type = from_.split("-")[1]
+                        to_type = to.split("-")[1]
+                        if from_type != to_type:
+                            mask[vocab[to], vocab[from_]] = small
+                elif (
+                    from_.startswith("E-") or
+                    from_.startswith("I-") or
+                    from_.startswith("S-") or
+                    from_.startswith("O")
+                ):
+                    # Can't move from E to I or E
+                    # Can't move from I to I or E
+                    # Can't move from S to I or E
+                    # Can't move from O to I or E
+                    if to.startswith("I-") or to.startswith("E-"):
+                        mask[vocab[to], vocab[from_]] = small
+    return mask
+
 @exporter
 def listify(x):
     """Take a scalar or list and make it a list
-    
+
     :param x: The input to convert
     :return: A list
     """

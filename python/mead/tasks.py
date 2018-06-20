@@ -331,6 +331,7 @@ class TaggerTask(Task):
 
     def _create_model(self):
         labels = self.reader.label2index
+        self.config_params['model']['span_type'] = self.config_params['train'].get('span_type')
         self.config_params['model']["unif"] = self.config_params["unif"]
         self.config_params['model']['maxs'] = self.reader.max_sentence_length
         self.config_params['model']['maxw'] = self.reader.max_word_length
