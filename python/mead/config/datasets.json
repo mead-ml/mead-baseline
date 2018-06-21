@@ -56,7 +56,7 @@
     "train_file": "eng.train.iobes",
     "valid_file": "eng.testa.iobes",
     "test_file": "eng.testb.iobes",
-    "download": "https://www.dropbox.com/s/r40ygkdbq0oidvg/conll-iobes.tar.gz?dl=1",
+    "download": "https://www.dropbox.com/s/mpi905nphvz63tl/conll-iobes.tar.gz?dl=1",
     "label": "conll-iobes"
   },
 

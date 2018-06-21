@@ -352,41 +352,6 @@ def seq_fill_y(nc, yidx):
 
 
 @exporter
-def convert_iob_to_iobes(ifile, ofile):
-    """Convert from IOB to BIO (IOB2)
-
-    This code is copied verbatim from Xuezhe Ma:
-    https://github.com/XuezheMax/NeuroNLP2/issues/9
-
-    :param ifile: Original IOB format CONLL file
-    :param ofile: BIO/IOB2 format
-    """
-    with open(ifile, 'r') as reader, open(ofile, 'w') as writer:
-        prev = 'O'
-        for line in reader:
-            line = line.strip()
-            if len(line) == 0:
-                prev = 'O'
-                writer.write('\n')
-                continue
-
-            tokens = line.split()
-            label = tokens[-1]
-            # If this label is B or I and not equal to the previous
-            if label != 'O' and label != prev:
-                # If the last was Outside, we have a B
-                if prev == 'O':
-                    label = 'B-' + label[2:]
-                elif label[2:] != prev[2:]:
-                    label = 'B-' + label[2:]
-                else:
-                    label = label
-            writer.write(" ".join(tokens[:-1]) + " " + label)
-            writer.write('\n')
-            prev = tokens[-1]
-
-
-@exporter
 def convert_iob_to_bio(ifile, ofile):
     """Convert from IOB to BIO (IOB2)
 
@@ -422,16 +387,14 @@ def convert_iob_to_bio(ifile, ofile):
 
 
 @exporter
-def convert_iob_to_iobes(ifile, ofile):
+def convert_bio_to_iobes(ifile, ofile):
 
     with open(ifile, 'r') as reader, open(ofile, 'w') as writer:
         lines = [line.strip() for line in reader]
-        prev = 'O'
         for i, line in enumerate(lines):
 
             tokens = line.split()
             if len(tokens) == 0:
-                prev = 'O'
                 writer.write('\n')
                 continue
 
@@ -444,29 +407,24 @@ def convert_iob_to_iobes(ifile, ofile):
                 else:
                     next_tag = None
 
-            if label != 'O' and label != prev:
-                # If the last was O, it has to be a B
-                if prev == 'O':
-                    label = 'B-' + label[2:]
-                # Otherwise if the tags are different, it also has to be a B
-                elif label[2:] != prev[2:]:
-                    label = 'B-' + label[2:]
-
             # Nothing to do for label == 'O'
             if label == 'O':
                 updated_label = label
-            elif label.split('-')[0] == 'B':
-                if next_tag and next_tag.split('-')[0] == 'I':
+
+            # It could be S
+            elif label[0] == 'B':
+                if next_tag and next_tag[0] == 'I' and next_tag[2:] == label[2:]:
                     updated_label = label
                 else:
                     updated_label = label.replace('B-', 'S-')
-            elif label.split('-')[0] == 'I':
-                if next_tag and next_tag.split('-')[0] == 'I':
+
+            elif label[0] == 'I':
+                if next_tag and next_tag[0] == 'I':
                     updated_label = label
                 else:
                     updated_label = label.replace('I-', 'E-')
             else:
-                raise Exception('Invalid IOB format!')
+                raise Exception('Invalid IOBES format!')
 
             writer.write(' '.join(tokens[:-1]) + ' ' + updated_label + '\n')
             prev = tokens[-1]
