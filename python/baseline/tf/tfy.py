@@ -327,15 +327,19 @@ def pool_chars(x_char, Wch, ce0, char_dsz, **kwargs):
         nfeats = kwargs.get('wsz', 30)
     mxlen = int(kwargs.get('maxs', kwargs.get('mxlen', 100)))
     mxwlen = kwargs.get('maxw', kwargs.get('mxwlen', 40))
-    gating = kwargs.get('gating', skip_conns)
+    gating = kwargs.get('gating', "skip")
+    gating_fn = highway_conns if gating.startswith('highway') else skip_conns
+    num_gates = int(kwargs.get('num_gates', 1))
+    # print(gating_fn, num_gates)
     activation_type = kwargs.get('activation', 'tanh')
     with tf.variable_scope("Chars2Word"):
         with tf.control_dependencies([ce0]):
             char_bt_x_w = tf.reshape(x_char, [-1, mxwlen])
             cembed = tf.nn.embedding_lookup(Wch, char_bt_x_w, name="embeddings")
             cmot, num_filts = char_word_conv_embeddings(cembed, filtsz, char_dsz, nfeats,
-                                             activation_fn=tf_activation(activation_type),
-                                             gating=gating)
+                                                        activation_fn=tf_activation(activation_type),
+                                                        gating=gating_fn,
+                                                        num_gates=num_gates)
             word_char = tf.reshape(cmot, [-1, mxlen, num_filts])
 
     return word_char, num_filts
