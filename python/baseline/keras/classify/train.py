@@ -3,6 +3,7 @@ from baseline.reporting import basic_reporting
 from baseline.progress import create_progress_bar
 from baseline.train import *
 from keras import metrics
+from keras import optimizers
 import keras.backend as K
 
 # Borrowed verbatim from here:
@@ -32,11 +33,40 @@ class ClassifyTrainerKeras(EpochReportingTrainer):
 
     METRIC_REMAP = {'f1_score': 'f1', 'categorical_accuracy': 'acc'}
 
+    @staticmethod
+    def _optimizer(**kwargs):
+
+        clip = kwargs.get('clip', None)
+        mom = kwargs.get('mom', 0.9)
+        optim = kwargs.get('optim', 'sgd')
+        eta = kwargs.get('eta', kwargs.get('lr', 0.01))
+
+        if optim == 'adadelta':
+            print('adadelta', eta)
+            optz = optimizers.Adadelta(eta, 0.95, 1e-6)
+        elif optim == 'adam':
+            print('adam', eta)
+            optz = optimizers.Adam(eta)
+        elif optim == 'rmsprop':
+            print('rmsprop', eta)
+            optz = optimizers.RMSprop(eta)
+        elif optim == 'adagrad':
+            print('adagrad', eta)
+            optz = optimizers.Adagrad(eta)
+        elif mom > 0:
+            print('sgd-mom', eta, mom)
+            optz = optimizers.SGD(eta, mom)
+        else:
+            print('sgd')
+            optz = optimizers.SGD(eta)
+        return optz
+
     def __init__(self, model, **kwargs):
         super(ClassifyTrainerKeras, self).__init__()
         self.model = model
-        optim = kwargs.get('optim', 'adam')
-        self.model.impl.compile(optim, 'categorical_crossentropy', metrics=[metrics.categorical_accuracy, f1_score])
+        self.model.impl.compile('categorical_crossentropy',
+                                optimizer=ClassifyTrainerKeras._optimizer(**kwargs),
+                                metrics=[metrics.categorical_accuracy, f1_score])
 
     def _train(self, loader):
 
