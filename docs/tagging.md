@@ -1,4 +1,4 @@
-# Structured Prediction using RNNs
+# Structured Prediction using CNN-BLSTM-CRF
 
 This code is useful for tagging tasks, e.g., POS tagging, chunking and NER tagging.  Recently, several researchers have proposed using RNNs for tagging, particularly LSTMs.  These models do back-propagation through time (BPTT)
 and then apply a shared fully connected layer per RNN output to produce a label.
@@ -7,7 +7,7 @@ A common modification is to use Bidirectional LSTMs -- one in the forward direct
 To execute these models it is necessary to form word vectors.  It has been shown that character-level modeling is important in deep models to support morpho-syntatic structure for tagging tasks.
 It seems that a good baseline should combine word vectors and character-level compositions of words.
 
-## tag_char_rnn: word/character-based RNN tagger
+## CNN-BLSTM-CRF
 
 The code uses word and character-level word embeddings.  For character-level processing, a character vector depth is selected, along with a word-vector depth. 
 
@@ -17,47 +17,27 @@ Twitter is a challenging data source for tagging problems.  The [TweetNLP projec
 
 ## Running It
 
-Here is an example using convolutional filters for character embeddings, alongside word embeddings.  This is basically a combination of the dos Santos approach with the Kim parallel filter idea using TensorFlow:
+Here is an example using convolutional filters for character embeddings, alongside word embeddings.  This is basically a combination of the dos Santos approach with the Kim parallel filter idea:
 
 ```
-python tag_char_rnn.py --rnntype blstm --optim sgd --wsz 30 --eta 0.01 \
-    --lower 1 \
-    --epochs 50 --batchsz 10 --hsz 200 \
-    --train ../data/oct27.train \
-    --valid ../data/oct27.dev \
-    --test ../data/oct27.test \
-    --embed /data/embeddings/glove.twitter.27B.200d.txt --cfiltsz 1 2 3 4 5 7
+python --config config/conll-twpos.json
 ```
-
 To run with PyTorch, just pass `--backend pytorch`
 
 ### NER (and other IOB-type) Tagging
 
-NER tagging can be performed with a BLSTM, and optionally, a top level CRF. This will report an F1 score on at each validation pass, and will use F1 for early-stopping as well.
+NER tagging can be performed with a BLSTM, and optionally, a top-level CRF. This will report an F1 score on at each validation pass, and will use F1 for early-stopping as well.
 
-For tasks that require global coherency like NER tagging, it has been shown that using a transition matrix between label states in conjunction with the output RNN tags improves performance.  This makes the tagger a linear chain CRF, and we can do this by simply adding another layer on top of our RNN output.  To do this, simply pass `--crf 1` as an argument.
+For tasks that require global coherency like NER tagging, it has been shown that using a transition matrix between label states in conjunction with the output RNN tags improves performance.  This makes the tagger a linear chain CRF, and we can do this by simply adding another layer on top of our RNN output.
 
-The parameterization below yields a very similar model to this paper: https://arxiv.org/pdf/1603.01354.pdf and yields near-SoTA performance
-
-```
-python tag_char_rnn.py \
-    --rnntype blstm --patience 40 \
-    --layers 1 --optim sgd --eta 0.015 --clip 5. --epochs 100 --batchsz 10 --hsz 200 \
-    --decay_rate 0.05 --decay_type invtime \
-    --train ../data/eng.train.bio \
-    --valid ../data/eng.testa.bio \
-    --test  ../data/eng.testb.bio \
-    --lower 1 \
-    --embed /data/embeddings/glove.6B.100d.txt \
-    --dropin 0.1 \
-    --cfiltsz 3 --wsz 30 --charsz 30 --crf 1
+The [mead](mead.md)  configuration below yields a very similar model to this paper: https://arxiv.org/pdf/1603.01354.pdf and yields near-SoTA performance.
 
 ```
+python trainer.py --config config/conll-iobes.json
+python trainer.py --config config/conll-bio.json
+```
 
-Or using `mead`:
-
-`python trainer.py --config config/conll-iobes.json`
-`python trainer.py --config config/conll-bio.json`
+- We find (along with most other papers/implementors) that IOBES (BMES), on average, out-performs BIO (IOB2).  We also find that IOB2 out-performs IOB1 (the original format in which the data is provided).  Note these details do not change the actual model itself, it just trains the model in a way that seems to cause it to learn better, and when comparing implementations, its important to take note of which of the three formats are used.
 
 ## Status
 
@@ -65,17 +45,16 @@ This model is implemented in TensorFlow and PyTorch.
 
 ### Latest Runs
 
-Here are the last observed performance scores on various dataset
+Here are some observed performance scores on various dataset.  In general, our observed peformance is very similar to this recent paper: https://arxiv.org/pdf/1806.04470.pdf
 
-| dataset             | metric | method   | eta (LR) | backend  | score | proj | crf  | hsz |
-| ------------------- | ------ | -------- | -------  | -------- | ----- | -----| -----|-----|
-| twpos-v03           |    acc | sgd mom. |     0.01 | tf       | 89.6  | N    | N    | 100 |
-| twpos-v03           |    acc | adam     |       -- | pytorch  | 89.4  | N    | N    | 100 |
-| conll 2003 (IOB1)   |     f1 | sgd mom. |     0.015| tf       | 90.88 | N    | Y    | 200 |
-| conll 2003 (IOB1)   |     f1 | sgd mom. |     0.015| pytorch  | 90.86 | N    | Y    | 200 |
-| conll 2003 (BIO)    |     f1 | sgd mom. |     0.015| pytorch  |  91.2 | N    | Y    | 200 |
-|       atis (mesnil) |     f1 | sgd mom. |     0.01 | tf       | 96.74 | N    | N    | 100 |
 
+| dataset             | metric | method   | eta (LR) |    avg | proj | crf  | hsz |
+| ------------------- | ------ | -------- | -------  | ------ | -----| -----|-----|
+| twpos-v03           |    acc | adam     |       -- | 89.4   | N    | N    | 100 |
+| conll 2003 (IOB1)   |     f1 | sgd mom. |     0.015| 90.8   | N    | Y    | 200 |
+| conll 2003 (BIO)    |     f1 | sgd mom. |     0.015| 90.9   | N    | Y    | 200 |
+| conll 2003 (IOB2)   |     f1 | sgd mom. |     0.015| 91.1   | N    | Y    | 200 |
+|       atis (mesnil) |     f1 | sgd mom. |     0.01 | 96.74  | N    | N    | 100 |
 
 ### Testing a trained model on your data
 
