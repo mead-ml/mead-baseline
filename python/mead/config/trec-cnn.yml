@@ -10,7 +10,7 @@ loader:
 unif: 0.25
 model:
     model_type: default
-    filtsz: [3, 4, 5]
+    filtsz: [3]
     dropout: 0.5
     cmotsz: 100 
 
