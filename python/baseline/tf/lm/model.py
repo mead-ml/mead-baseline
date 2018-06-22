@@ -9,16 +9,18 @@ class AbstractLanguageModel(object):
         self.layers = None
         self.hsz = None
         self.rnntype = 'lstm'
+
     def save_using(self, saver):
         self.saver = saver
 
     def _rnnlm(self, inputs, vsz):
 
+        # If this is a BLSTM, its probably going to be used for transfer learning, and the propagation of the
+        # state is probably not required.
         if self.rnntype == 'blstm':
             rnnfwd = stacked_lstm(self.hsz, self.pkeep, self.layers)
             rnnbwd = stacked_lstm(self.hsz, self.pkeep, self.layers)
-            self.initial_state = rnnfwd.zero_state(self.batchsz, tf.float32)
-            rnnout, state_fwd, state_bwd = tf.nn.bidirectional_dynamic_rnn(rnnfwd, rnnbwd, inputs, initial_state_fw=self.initial_state, dtype=tf.float32)
+            rnnout, state_fwd, state_bwd = tf.nn.bidirectional_dynamic_rnn(rnnfwd, rnnbwd, inputs, dtype=tf.float32)
             rnnout = tf.concat(axis=2, values=rnnout)
         else:
             rnnfwd = stacked_lstm(self.hsz, self.pkeep, self.layers)
@@ -63,7 +65,6 @@ class WordLanguageModel(AbstractLanguageModel):
     def make_input(self, batch_dict, do_dropout=False):
         x = batch_dict['x']
         y = batch_dict['y']
-        lengths = np.tile(self.mxlen, x.shape[0])
         pkeep = 1.0 - self.pdrop_value if do_dropout else 1.0
         feed_dict = {self.x: x, self.y: y, self.pkeep: pkeep}
         return feed_dict
