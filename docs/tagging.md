@@ -53,7 +53,7 @@ Here are some observed performance scores on various dataset.  In general, our o
 | twpos-v03           |    acc | adam     |       -- | 89.4   | N    | N    | 100 |
 | conll 2003 (IOB1)   |     f1 | sgd mom. |     0.015| 90.8   | N    | Y    | 200 |
 | conll 2003 (BIO)    |     f1 | sgd mom. |     0.015| 90.9   | N    | Y    | 200 |
-| conll 2003 (IOB2)   |     f1 | sgd mom. |     0.015| 91.1   | N    | Y    | 200 |
+| conll 2003 (IOBES)  |     f1 | sgd mom. |     0.015| 91.1   | N    | Y    | 200 |
 |       atis (mesnil) |     f1 | sgd mom. |     0.01 | 96.74  | N    | N    | 100 |
 
 ### Testing a trained model on your data
