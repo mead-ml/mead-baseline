@@ -9,23 +9,18 @@ class AbstractLanguageModel(object):
         self.layers = None
         self.hsz = None
         self.rnntype = 'lstm'
+        self.pkeep = None
+        self.saver = None
 
     def save_using(self, saver):
         self.saver = saver
 
     def _rnnlm(self, inputs, vsz):
 
-        # If this is a BLSTM, its probably going to be used for transfer learning, and the propagation of the
-        # state is probably not required.
-        if self.rnntype == 'blstm':
-            rnnfwd = stacked_lstm(self.hsz, self.pkeep, self.layers)
-            rnnbwd = stacked_lstm(self.hsz, self.pkeep, self.layers)
-            rnnout, state_fwd, state_bwd = tf.nn.bidirectional_dynamic_rnn(rnnfwd, rnnbwd, inputs, dtype=tf.float32)
-            rnnout = tf.concat(axis=2, values=rnnout)
-        else:
-            rnnfwd = stacked_lstm(self.hsz, self.pkeep, self.layers)
-            self.initial_state = rnnfwd.zero_state(self.batchsz, tf.float32)
-            rnnout, state = tf.nn.dynamic_rnn(rnnfwd, inputs, initial_state=self.initial_state, dtype=tf.float32)
+        rnnfwd = stacked_lstm(self.hsz, self.pkeep, self.layers)
+        self.initial_state = rnnfwd.zero_state(self.batchsz, tf.float32)
+        rnnout, state = tf.nn.dynamic_rnn(rnnfwd, inputs, initial_state=self.initial_state, dtype=tf.float32)
+        self.final_state = state
 
         output = tf.reshape(tf.concat(rnnout, 1), [-1, self.hsz])
 
@@ -34,7 +29,6 @@ class AbstractLanguageModel(object):
         softmax_b = tf.get_variable("softmax_b", [vsz], dtype=tf.float32)
 
         self.logits = tf.nn.xw_plus_b(output, softmax_w, softmax_b, name="logits")
-        self.final_state = state
 
     def save_values(self, basename):
         self.saver.save(self.sess, basename)
@@ -81,6 +75,7 @@ class WordLanguageModel(AbstractLanguageModel):
         lm.sess = kwargs.get('sess', tf.Session())
         lm.x = kwargs.get('x', tf.placeholder(tf.int32, [None, lm.mxlen], name="x"))
         lm.y = kwargs.get('y', tf.placeholder(tf.int32, [None, lm.mxlen], name="y"))
+        lm.rnntype = kwargs.get('rnntype', 'lstm')
         lm.pkeep = kwargs.get('pkeep', tf.placeholder(tf.float32, name="pkeep"))
         pdrop = kwargs.get('pdrop', 0.5)
         lm.pdrop_value = pdrop
@@ -155,6 +150,7 @@ class CharCompLanguageModel(AbstractLanguageModel):
         lm.xch = kwargs.get('xch', tf.placeholder(tf.int32, [None, lm.mxlen, lm.maxw], name="xch"))
         lm.y = kwargs.get('y', tf.placeholder(tf.int32, [None, lm.mxlen], name="y"))
         lm.pkeep = kwargs.get('pkeep', tf.placeholder(tf.float32, name="pkeep"))
+        lm.rnntype = kwargs.get('rnntype', 'lstm')
         vsz = word_vec.vsz + 1
         lm.char_vocab = char_vec.vocab
         lm.word_vocab = word_vec.vocab
