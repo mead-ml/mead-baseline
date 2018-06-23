@@ -22,7 +22,7 @@
         "wsz": 30,
         "dropout": 0.5,
         "rnntype": "blstm",
-        "layers": 2,
+        "layers": 1,
 	"crf": 1
     },
 
@@ -32,7 +32,7 @@
     "train": {
         "epochs": 100,
         "optim": "sgd",
-        "decay": 0,
+        "decay": 0.05,
         "eta": 0.015,
         "mom": 0.9,
         "patience": 40,
