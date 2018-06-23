@@ -70,15 +70,10 @@ python classify_sentence.py --backend tf --clean --optim adadelta --eta 1 --batc
 ```
 
 
-Here is an example running the TREC question categorization dataset
+Here is an example running the TREC question categorization dataset.  This model uses a single filter of length 3.
 
 ```
-python classify_sentence.py --optim adadelta --eta 1 --batchsz 10 --epochs 30 --patience 25 \
- --train ../data/trec.nodev.utf8 \
- --valid ../data/trec.dev.utf8 \
- --test ../data/trec.test.utf8 \
- --embed /data/embeddings/GoogleNews-vectors-negative300.bin --filtsz 3 4 5 \
- --dropout 0.5
+python trainer.py --config config/trec-cnn.yml
 
 ```
 
@@ -96,17 +91,17 @@ python classify_sentence.py --optim sgd --eta 0.01 --batchsz 50 --epochs 40 --pa
 ```
 
 
-| Dataset | TensorFlow | Keras (TF) | PyTorch |
-| ------- | ---------- | ---------- | ------- |
-| sst2    |       87.9 |      87.4  |  87.9   |
-| dbpedia |     99.054 |   --       |  --     | 
-| trec-qa |       93.2 |   --       |  92.4   |
+| Dataset | Results    |
+| ------- | ---------- | 
+| sst2    |       87.9 |
+| dbpedia |     99.054 | 
+| trec-qa |       94.6 |
 
 
 Note that these are randomly initialized and these numbers will vary
 (IOW, don't assume that one implementation is guaranteed to outperform the others from a single run).
 
-On my laptop, each implementation for SST2 takes between 29 - 40s per epoch depending on the deep learning framework (TensorFlow and PyTorch are fastest, and about the same speed)
+On my laptop, each implementation for SST2 takes between 15 - 30s per epoch depending on the deep learning framework (TensorFlow and PyTorch are fastest, and about the same speed)
 
 ## LSTM Model
 
@@ -131,20 +126,6 @@ python classify_sentence.py --clean --optim adadelta --eta 1 --batchsz 50 --epoc
  --model_type lstm \
  --dropout 0.5
 ```
-
-### Status
-
-This model is implemented in TensorFlow and PyTorch.  
-
-### Latest Runs
-
-Here are the last observed performance scores using _classify_sentence_ with fine-tuning on various datasets.
-
-| Dataset | TensorFlow | PyTorch | 
-| ------- | ---------- | ------- | 
-| sst2    |       87.1 |  87.1   |
-
-Note that these are randomly initialized and these numbers will vary
 
 ## Neural Bag of Words (NBoW) Model (Max and Average Pooling)
 
@@ -178,3 +159,4 @@ python classify_sentence.py --backend pytorch --clean --optim adadelta --eta 1 -
 
 Note that these are randomly initialized and these numbers will vary
 (IOW, don't assume that one implementation is guaranteed to outperform the others from a single run).
+
