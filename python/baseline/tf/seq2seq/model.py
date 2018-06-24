@@ -103,7 +103,6 @@ class Seq2SeqModel(EncoderDecoder):
 
         hsz = int(kwargs['hsz'])
         attn = kwargs.get('model_type') == 'attn'
-        #print('attn', attn)
         nlayers = int(kwargs.get('layers', 1))
         rnntype = kwargs.get('rnntype', 'lstm')
         mxlen = kwargs.get('mxlen', 100)
@@ -113,7 +112,6 @@ class Seq2SeqModel(EncoderDecoder):
         sampling_temp = kwargs.get('sampling_temp', 1.0)
         model.sess = kwargs.get('sess', tf.Session())
         unif = kwargs.get('unif', 0.25)
-        # These are going to be (B,T)
         model.src = kwargs.get('src', tf.placeholder(tf.int32, [None, mxlen], name="src"))
         model.tgt = kwargs.get('tgt', tf.placeholder(tf.int32, [None, mxlen], name="tgt"))
         model.pkeep = kwargs.get('pkeep', tf.placeholder(tf.float32, name="pkeep"))
@@ -123,99 +121,95 @@ class Seq2SeqModel(EncoderDecoder):
         model.mx_tgt_len = kwargs.get('mx_tgt_len', tf.placeholder(tf.int32, name="mx_tgt_len"))
         model.vocab1 = src_vocab_embed if type(src_vocab_embed) is dict else src_vocab_embed.vocab
         model.vocab2 = dst_vocab_embed if type(dst_vocab_embed) is dict else dst_vocab_embed.vocab
+        attn_type = kwargs.get('attn_type', 'bahdanau').lower()
         model.arc_state = kwargs.get('arc_state', False)
-        #print('ARC state', model.arc_state)
         model.mxlen = mxlen
         model.hsz = hsz
         model.nlayers = nlayers
         model.rnntype = rnntype
         model.attn = attn
-
         GO = model.vocab2['<GO>']
         EOS = model.vocab2['<EOS>']
-        ##vsz = dst_vocab_embed.vsz + 1
         dst_vsz = len(model.vocab2)
-        #if dst_vocab_embed is not None:
-        #    assert dst_vsz == dst_vocab_embed.vsz + 1
-        #assert src_vocab_embed.dsz == dst_vocab_embed.dsz
         model.dsz = kwargs['dsz'] if type(src_vocab_embed) is dict else src_vocab_embed.dsz
 
-        with tf.name_scope("LUT"):
-            if type(src_vocab_embed) is not dict:
-                Wi = tf.Variable(tf.constant(src_vocab_embed.weights, dtype=tf.float32), name="Wi")
-            else:
-                Wi = tf.Variable(tf.random_uniform([len(model.vocab1), model.dsz], -unif, unif), name="Wi")
-            if type(src_vocab_embed) is not dict:
-                Wo = tf.Variable(tf.constant(dst_vocab_embed.weights, dtype=tf.float32), name="Wo")
-            else:
-                Wo = tf.Variable(tf.random_uniform([len(model.vocab2), model.dsz], -unif, unif), name="Wo")
+        with tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE):
 
-            embed_in = tf.nn.embedding_lookup(Wi, model.src)
-            
-        with tf.name_scope("Recurrence"):
-            rnn_enc_tensor, final_encoder_state = model.encode(embed_in, model.src)
-            batch_sz = tf.shape(rnn_enc_tensor)[0]
-            with tf.variable_scope("dec"):
-                proj = dense_layer(dst_vsz)
-                rnn_dec_cell = model._attn_cell_w_dropout(rnn_enc_tensor, beam_width) #[:,:-1,:])
-
-                if beam_width > 1:
-                    final_encoder_state = tf.contrib.seq2seq.tile_batch(final_encoder_state, multiplier=beam_width)
-
-                if model.attn is True:
-                    initial_state = rnn_dec_cell.zero_state(batch_sz*beam_width, tf.float32)
-                    if model.arc_state is True:
-                        initial_state = initial_state.clone(cell_state=final_encoder_state)
+            with tf.name_scope("LUT"):
+                if type(src_vocab_embed) is not dict:
+                    Wi = tf.get_variable("Wi", initializer=tf.constant_initializer(src_vocab_embed.weights, dtype=tf.float32, verify_shape=True), shape=[len(model.vocab1), model.dsz])
                 else:
-                    initial_state = final_encoder_state
+                    Wi = tf.get_variable("Wi", initializer=tf.random_uniform_initializer(-unif, unif), shape=[len(model.vocab1), model.dsz])
+                if type(src_vocab_embed) is not dict:
+                    Wo = tf.get_variable("Wo", initializer=tf.constant_initializer(dst_vocab_embed.weights, dtype=tf.float32, verify_shape=True), shape=[len(model.vocab2), model.dsz])
+                else:
+                    Wo = tf.get_variable("Wo",initializer=tf.random_uniform_initializer(-unif, unif), shape=[len(model.vocab2), model.dsz])
+                embed_in = tf.nn.embedding_lookup(Wi, model.src)
 
-                if predict is True:
-                    if beam_width == 1:
-                        if sampling:
-                            helper = tf.contrib.seq2seq.SamplingEmbeddingHelper(Wo, tf.fill([batch_sz], GO), EOS,
-                                                                                softmax_temperature=sampling_temp)
-                        else:
-                            helper = tf.contrib.seq2seq.GreedyEmbeddingHelper(Wo, tf.fill([batch_sz], GO), EOS)
-                        decoder = tf.contrib.seq2seq.BasicDecoder(cell=rnn_dec_cell, helper=helper,
-                                                                  initial_state=initial_state, output_layer=proj)
+            with tf.name_scope("Recurrence"):
+                rnn_enc_tensor, final_encoder_state = model.encode(embed_in, model.src)
+                batch_sz = tf.shape(rnn_enc_tensor)[0]
+                with tf.variable_scope("dec", reuse=tf.AUTO_REUSE):
+                    proj = dense_layer(dst_vsz)
+                    rnn_dec_cell = model._attn_cell_w_dropout(rnn_enc_tensor, beam_width, attn_type)
+
+                    if beam_width > 1:
+                        final_encoder_state = tf.contrib.seq2seq.tile_batch(final_encoder_state, multiplier=beam_width)
+
+                    if model.attn is True:
+                        initial_state = rnn_dec_cell.zero_state(batch_sz*beam_width, tf.float32)
+                        if model.arc_state is True:
+                            initial_state = initial_state.clone(cell_state=final_encoder_state)
                     else:
+                        initial_state = final_encoder_state
 
-                        # Define a beam-search decoder
-                        decoder = tf.contrib.seq2seq.BeamSearchDecoder(
-                            cell=rnn_dec_cell,
-                            embedding=Wo,
-                            start_tokens=tf.fill([batch_sz], GO),
-                            end_token=EOS,
-                            initial_state=initial_state,
-                            beam_width=beam_width,
-                            output_layer=proj,
-                            length_penalty_weight=0.0)
+                    if predict is True:
+                        if beam_width == 1:
+                            if sampling:
+                                helper = tf.contrib.seq2seq.SamplingEmbeddingHelper(Wo, tf.fill([batch_sz], GO), EOS,
+                                                                                    softmax_temperature=sampling_temp)
+                            else:
+                                helper = tf.contrib.seq2seq.GreedyEmbeddingHelper(Wo, tf.fill([batch_sz], GO), EOS)
+                            decoder = tf.contrib.seq2seq.BasicDecoder(cell=rnn_dec_cell, helper=helper,
+                                                                      initial_state=initial_state, output_layer=proj)
+                        else:
+
+                            # Define a beam-search decoder
+                            decoder = tf.contrib.seq2seq.BeamSearchDecoder(
+                                cell=rnn_dec_cell,
+                                embedding=Wo,
+                                start_tokens=tf.fill([batch_sz], GO),
+                                end_token=EOS,
+                                initial_state=initial_state,
+                                beam_width=beam_width,
+                                output_layer=proj,
+                                length_penalty_weight=0.0)
+                    else:
+                        helper = tf.contrib.seq2seq.TrainingHelper(inputs=tf.nn.embedding_lookup(Wo, model.tgt), sequence_length=model.tgt_len)
+                        decoder = tf.contrib.seq2seq.BasicDecoder(cell=rnn_dec_cell, helper=helper, initial_state=initial_state, output_layer=proj)
+
+                    final_outputs, final_decoder_state, _ = tf.contrib.seq2seq.dynamic_decode(decoder,
+                                                                                              impute_finished=predict is False or beam_width == 1,
+                                                                                              swap_memory=True,
+                                                                                              output_time_major=True,
+                                                                                              maximum_iterations=model.mxlen)
+
+                    if predict is True and beam_width > 1:
+                        model.preds = tf.no_op()
+                        best = final_outputs.predicted_ids
+                    else:
+                        model.preds = final_outputs.rnn_output
+                        best = final_outputs.sample_id
+
+            with tf.name_scope("Output"):
+                model.best = tf.identity(best, name='best')
+                if beam_width > 1:
+                    model.probs = tf.no_op(name='probs')
                 else:
-                    helper = tf.contrib.seq2seq.TrainingHelper(inputs=tf.nn.embedding_lookup(Wo, model.tgt), sequence_length=model.tgt_len)
-                    decoder = tf.contrib.seq2seq.BasicDecoder(cell=rnn_dec_cell, helper=helper, initial_state=initial_state, output_layer=proj)
+                    model.probs = tf.map_fn(lambda x: tf.nn.softmax(x, name='probs'), model.preds)
+            return model
 
-                final_outputs, final_decoder_state, _ = tf.contrib.seq2seq.dynamic_decode(decoder,
-                                                                                          impute_finished=predict is False or beam_width == 1,
-                                                                                          swap_memory=True,
-                                                                                          output_time_major=True,
-                                                                                          maximum_iterations=model.mxlen)
-
-                if predict is True and beam_width > 1:
-                    model.preds = tf.no_op()
-                    best = final_outputs.predicted_ids
-                else:
-                    model.preds = final_outputs.rnn_output
-                    best = final_outputs.sample_id
-
-        with tf.name_scope("Output"):
-            model.best = tf.identity(best, name='best')
-            if beam_width > 1:
-                model.probs = tf.no_op(name='probs')
-            else:
-                model.probs = tf.map_fn(lambda x: tf.nn.softmax(x, name='probs'), model.preds)
-        return model
-
-    def _attn_cell_w_dropout(self, rnn_enc_tensor, beam):
+    def _attn_cell_w_dropout(self, rnn_enc_tensor, beam, attn_type):
         cell = multi_rnn_cell_w_dropout(self.hsz, self.pkeep, self.rnntype, self.nlayers)
         if self.attn:
             src_len = self.src_len
@@ -223,8 +217,8 @@ class Seq2SeqModel(EncoderDecoder):
                 # Expand the encoded tensor for all beam entries
                 rnn_enc_tensor = tf.contrib.seq2seq.tile_batch(rnn_enc_tensor, multiplier=beam)
                 src_len = tf.contrib.seq2seq.tile_batch(src_len, multiplier=beam)
-            attn_mech = tfcontrib_seq2seq.BahdanauAttention(self.hsz, rnn_enc_tensor, src_len)
-            #attn_mech = tfcontrib_seq2seq.LuongAttention(self.hsz, rnn_enc_tensor, src_len)
+            GlobalAttention = tfcontrib_seq2seq.LuongAttention if attn_type == 'luong' else tfcontrib_seq2seq.BahdanauAttention
+            attn_mech = GlobalAttention(self.hsz, rnn_enc_tensor, src_len)
             cell = tf.contrib.seq2seq.AttentionWrapper(cell, attn_mech, self.hsz, name='dyn_attn_cell')
         return cell
 
