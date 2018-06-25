@@ -18,6 +18,7 @@ class Seq2SeqTrainerTf(Trainer):
         self.global_step = tf.get_variable(
             'global_step', [],
             initializer=tf.constant_initializer(0), trainable=False)
+
         self.global_step, self.train_op = optimizer(self.loss, colocate_gradients_with_ops=True, **kwargs)
         #self.train_op = tf.train.AdamOptimizer(kwargs.get('eta')).minimize(tf.reduce_mean(self.loss),
         #                                                                   global_step=self.global_step,

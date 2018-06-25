@@ -11,6 +11,76 @@ from baseline.version import __version__
 import os
 
 
+class ClassifyParallelModel(Classifier):
+
+    def __init__(self, create_fn, embed, **kwargs):
+        super(ClassifyParallelModel, self).__init__()
+        # We need to remove these because we may be calling back to our caller, and we need
+        # the condition of calling to be non-parallel
+        gpus = kwargs.pop('gpus', [-1])
+        # If the gpu ID is set to -1, use CUDA_VISIBLE_DEVICES to figure it out
+        if gpus[0] == -1:
+            gpus = [int(g) for g in os.getenv('CUDA_VISIBLE_DEVICES', os.getenv('NV_GPU', '0')).split(',')]
+        print(gpus)
+        ng = len(gpus)
+
+        self.labels = labels
+        nc = len(labels)
+
+        self.saver = None
+        self.replicas = []
+
+        self.mxlen = int(kwargs.get('mxlen', 100))
+        self.mxwlen = int(kwargs.get('mxwlen', 40))
+
+        # This only exists to make exporting easier
+        self.pkeep = kwargs.get('pkeep', tf.placeholder(tf.float32, name="pkeep"))
+        self.pdrop_value = kwargs.get('dropout', 0.5)
+        # This only exists to make exporting easier
+        self.x = kwargs.get('x', tf.placeholder(tf.int32, [None, self.mxlen], name="x_parallel"))
+        self.y = kwargs.get('y', tf.placeholder(tf.int32, [None, nc], name="y_parallel"))
+        self.lengths = kwargs.get('lengths', tf.placeholder(tf.int32, [None], name="lengths_parallel"))
+        self.pkeep = kwargs.get('pkeep', tf.placeholder(tf.float32, name="pkeep"))
+        self.pdrop_value = kwargs.get('dropout', 0.5)
+
+        x_splits = tf.split(self.x, ng)
+        y_splits = tf.split(self.y, ng)
+        lengths_splits = tf.split(self.lengths, ng)
+
+        losses = []
+        with tf.Session(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False)) as sess:
+            for i, g in enumerate(gpus):
+                with tf.device(tf.DeviceSpec(device_type='GPU', device_index=g)):
+                    replica = create_fn(embed, sess=sess, x=x_splits[i], y=y_splits[i], lengths=lengths_splits[i],
+                                        pkeep=self.pkeep, **kwargs)
+                    self.replicas.append(replica)
+                    loss_op = replica.create_loss()
+                    losses.append(loss_op)
+
+            self.loss = tf.reduce_mean(tf.stack(losses))
+            with tf.device(tf.DeviceSpec(device_type="CPU")):
+                self.inference = create_fn(embed, sess=sess, pkeep=self.pkeep, **kwargs)
+        self.sess = sess
+
+    def create_loss(self):
+        return self.loss
+
+    def save(self, model_base):
+        return self.inference.save(model_base)
+
+    def set_saver(self, saver):
+        self.inference.saver = saver
+        self.saver = saver
+
+    def make_input(self, batch_dict, do_dropout=False):
+        x = batch_dict['x']
+        y = batch_dict['y']
+        lengths = batch_dict['lengths']
+        feed_dict = {self.x: x, self.y: y, self.lengths: lengths,
+                     self.replicas[0].pkeep: self.pdrop_value if do_dropout else 1.0}
+        return feed_dict
+
+
 class WordClassifierBase(Classifier):
     """Base for all baseline implementations of word-based classifiers
     
@@ -233,6 +303,13 @@ class WordClassifierBase(Classifier):
         
         :return: A fully-initialized tensorflow classifier 
         """
+
+
+        gpus = kwargs.get('gpus', [])
+        # If we are parallelized, we will use the wrapper object Seq2SeqParallelModel and this creation function
+        if len(gpus) >= 1:
+            return ClassifyParallelModel(WordClassifierBase.create, embeddings, **kwargs)
+
         sess = kwargs.get('sess', tf.Session())
         finetune = bool(kwargs.get('finetune', True))
         w2v = embeddings['word']
@@ -258,38 +335,47 @@ class WordClassifierBase(Classifier):
         model.y = kwargs.get('y', tf.placeholder(tf.int32, [None, nc], name="y"))
         model.lengths = kwargs.get('lengths', tf.placeholder(tf.int32, [None], name="lengths"))
         model.xch = None
-        seed = np.random.randint(10e8)
-        init = tf.random_uniform_initializer(-0.05, 0.05, dtype=tf.float32, seed=seed)
-        xavier_init = xavier_initializer(True, seed)
 
-        # Use pre-trained embeddings from word2vec
-        with tf.name_scope("LUT"):
-            W = tf.Variable(tf.constant(w2v.weights, dtype=tf.float32), name="W", trainable=finetune)
-            e0 = tf.scatter_update(W, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, word_dsz]))
-            with tf.control_dependencies([e0]):
-                word_embeddings = tf.nn.embedding_lookup(W, model.x)
+        with tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE):
 
-        if c2v is not None:
-            model.mxwlen = int(kwargs.get('mxwlen', 40))
-            model.xch = kwargs.get('xch', tf.placeholder(tf.int32, [None, model.mxlen, model.mxwlen], name='xch'))
-            char_dsz = c2v.dsz
-            with tf.name_scope("CharLUT"):
-                Wch = tf.Variable(tf.constant(c2v.weights, dtype=tf.float32), name="Wch", trainable=True)
-                ech0 = tf.scatter_update(Wch, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, char_dsz]))
-                char_comp, wchsz = pool_chars(model.xch, Wch, ech0, char_dsz, **kwargs)
-                word_embeddings = tf.concat(values=[word_embeddings, char_comp], axis=2)
+            seed = np.random.randint(10e8)
+            init = tf.random_uniform_initializer(-0.05, 0.05, dtype=tf.float32, seed=seed)
+            xavier_init = xavier_initializer(True, seed)
 
-        input_sz = word_dsz + wchsz
-        pooled = model.pool(word_embeddings, input_sz, init, **kwargs)
-        stacked = model.stacked(pooled, init, **kwargs)
+            # Use pre-trained embeddings from word2vec
+            with tf.name_scope("LUT"):
+                W = tf.get_variable("W",
+                                    initializer=tf.constant_initializer(w2v.weights, dtype=tf.float32,
+                                                                        verify_shape=True),
+                                    shape=[len(w2v.vocab), w2v.dsz], trainable=finetune)
+                e0 = tf.scatter_update(W, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, word_dsz]))
+                with tf.control_dependencies([e0]):
+                    word_embeddings = tf.nn.embedding_lookup(W, model.x)
 
-        # For fully connected layers, use xavier (glorot) transform
-        with tf.contrib.slim.arg_scope(
-                [fully_connected],
-                weights_initializer=xavier_init):
-            with tf.name_scope("output"):
-                model.logits = tf.identity(fully_connected(stacked, nc, activation_fn=None), name="logits")
-                model.best = tf.argmax(model.logits, 1, name="best")
+            if c2v is not None:
+                model.mxwlen = int(kwargs.get('mxwlen', 40))
+                model.xch = kwargs.get('xch', tf.placeholder(tf.int32, [None, model.mxlen, model.mxwlen], name='xch'))
+                char_dsz = c2v.dsz
+                with tf.name_scope("CharLUT"):
+                    Wch = tf.get_variable("Wch",
+                                          initializer=tf.constant_initializer(c2v.weights, dtype=tf.float32,
+                                                                              verify_shape=True),
+                                          shape=[len(c2v.vocab), c2v.dsz], trainable=True)
+                    ech0 = tf.scatter_update(Wch, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, char_dsz]))
+                    char_comp, wchsz = pool_chars(model.xch, Wch, ech0, char_dsz, **kwargs)
+                    word_embeddings = tf.concat(values=[word_embeddings, char_comp], axis=2)
+
+            input_sz = word_dsz + wchsz
+            pooled = model.pool(word_embeddings, input_sz, init, **kwargs)
+            stacked = model.stacked(pooled, init, **kwargs)
+
+            # For fully connected layers, use xavier (glorot) transform
+            with tf.contrib.slim.arg_scope(
+                    [fully_connected],
+                    weights_initializer=xavier_init):
+                with tf.name_scope("output"):
+                    model.logits = tf.identity(fully_connected(stacked, nc, activation_fn=None), name="logits")
+                    model.best = tf.argmax(model.logits, 1, name="best")
         model.sess = sess
         return model
 

@@ -10,7 +10,7 @@ from baseline.model import EncoderDecoder, load_seq2seq_model, create_seq2seq_mo
 def _temporal_cross_entropy_loss(logits, labels, label_lengths, mx_seq_length):
     """Do cross-entropy loss accounting for sequence lengths
     
-    :param logits: a `Tensor` with shape `[batch, timesteps, vocab]`
+    :param logits: a `Tensor` with shape `[timesteps, batch, vocab]`
     :param labels: an integer `Tensor` with shape `[batch, timesteps]`
     :param label_lengths: The actual length of the target text.  Assume right-padded
     :param mx_seq_length: The maximum length of the sequence
@@ -47,6 +47,7 @@ def _temporal_cross_entropy_loss(logits, labels, label_lengths, mx_seq_length):
 class Seq2SeqParallelModel(EncoderDecoder):
 
     def __init__(self, create_fn, src_vocab_embed, dst_vocab_embed, **kwargs):
+        super(Seq2SeqParallelModel, self).__init__()
         # We need to remove these because we may be calling back to our caller, and we need
         # the condition of calling to be non-parallel
         gpus = kwargs.pop('gpus', [-1])
@@ -83,13 +84,12 @@ class Seq2SeqParallelModel(EncoderDecoder):
                                         **kwargs)
                     self.replicas.append(replica)
                     loss_op = replica.create_loss()
-
                     losses.append(loss_op)
             self.loss = tf.reduce_mean(tf.stack(losses))
 
             with tf.device(tf.DeviceSpec(device_type="CPU")):
-                self.inference = create_fn(src_vocab_embed, dst_vocab_embed, sess=sess, mx_tgt_len=self.mx_tgt_len, id=0,
-                                           pkeep=self.pkeep, **kwargs)
+                self.inference = create_fn(src_vocab_embed, dst_vocab_embed, sess=sess, mx_tgt_len=self.mx_tgt_len,
+                                           id=0, pkeep=self.pkeep, **kwargs)
         self.sess = sess
 
     def create_loss(self):

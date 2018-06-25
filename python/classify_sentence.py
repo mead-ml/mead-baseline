@@ -39,6 +39,8 @@ parser.add_argument('--trainer_type', help='Name of trainer to load and train', 
 parser.add_argument('--rev', help='Time reverse input text', default=False, type=str2bool)
 parser.add_argument('--bounds', type=int, default=16000, help='Tell optim decay functionality how many steps before applying decay')
 parser.add_argument('--verbose', type=str2bool, default=False, help='print confusion matrix for the test data')
+parser.add_argument('--gpus', help='GPUs', nargs='+', default=[], type=int)
+
 
 args = parser.parse_args()
 
@@ -73,7 +75,7 @@ unif = 0 if args.static else args.unif
 
 EmbeddingsModelType = GloVeModel if args.embed.endswith(".txt") else Word2VecModel
 embeddings = {}
-embeddings['word'] = EmbeddingsModelType(args.embed, vocab, unif_weight=args.unif, keep_unused=args.keep_unused)
+embeddings['word'] = EmbeddingsModelType(args.embed, vocab['word'], unif_weight=args.unif, keep_unused=args.keep_unused)
 feature2index = {}
 feature2index['word'] = embeddings['word'].vocab
 
