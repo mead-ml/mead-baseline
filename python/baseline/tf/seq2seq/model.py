@@ -23,10 +23,12 @@ def _temporal_cross_entropy_loss(logits, labels, label_lengths, mx_seq_length):
     # Logits == mxlen=10*batchsz=100
     # Labels == mxlen=9,batchsz=100
     labels = labels[0:mx_seq_length, :]
+    logit_length = tf.to_int32(tf.shape(logits)[0])
     timesteps = tf.to_int32(tf.shape(labels)[0])
     # The labels no longer include <GO> so go is not useful.  This means that if the length was 100 before, the length
     # of labels is now 99 (and that is the max allowed)
-
+    pad_size = timesteps - logit_length
+    logits = tf.pad(logits, [[0, pad_size], [0, 0], [0, 0]])
     #logits = logits[0:mx_seq_length, :, :]
     with tf.name_scope("Loss"):
         losses = tf.nn.sparse_softmax_cross_entropy_with_logits(
@@ -45,7 +47,6 @@ def _temporal_cross_entropy_loss(logits, labels, label_lengths, mx_seq_length):
 class Seq2SeqParallelModel(EncoderDecoder):
 
     def __init__(self, create_fn, src_vocab_embed, dst_vocab_embed, **kwargs):
-
         # We need to remove these because we may be calling back to our caller, and we need
         # the condition of calling to be non-parallel
         gpus = kwargs.pop('gpus', [-1])
@@ -77,16 +78,17 @@ class Seq2SeqParallelModel(EncoderDecoder):
                                         src=src_splits[i], tgt=tgt_splits[i],
                                         src_len=src_len_splits[i], tgt_len=tgt_len_splits[i],
                                         mx_tgt_len=self.mx_tgt_len,
+                                        id=i+1,
                                         pkeep=self.pkeep,
                                         **kwargs)
                     self.replicas.append(replica)
                     loss_op = replica.create_loss()
 
                     losses.append(loss_op)
-            self.loss = tf.reduce_mean(tf.concat(losses, axis=1))
+            self.loss = tf.reduce_mean(tf.stack(losses))
 
             with tf.device(tf.DeviceSpec(device_type="CPU")):
-                self.inference = create_fn(src_vocab_embed, dst_vocab_embed, sess=sess, mx_tgt_len=self.mx_tgt_len,
+                self.inference = create_fn(src_vocab_embed, dst_vocab_embed, sess=sess, mx_tgt_len=self.mx_tgt_len, id=0,
                                            pkeep=self.pkeep, **kwargs)
         self.sess = sess
 
@@ -123,8 +125,9 @@ class Seq2SeqParallelModel(EncoderDecoder):
 class Seq2SeqModel(EncoderDecoder):
 
     def create_loss(self):
+        with tf.variable_scope('Loss{}'.format(self.id), reuse=False):
         # We do not want to count <GO> in our assessment, we do want to count <EOS>
-        return _temporal_cross_entropy_loss(self.preds[:-1, :, :], self.tgt[:, 1:], self.tgt_len - 1, self.mx_tgt_len - 1)
+            return _temporal_cross_entropy_loss(self.preds[:-1, :, :], self.tgt[:, 1:], self.tgt_len - 1, self.mx_tgt_len - 1)
 
     def __init__(self):
         super(Seq2SeqModel, self).__init__()
@@ -205,6 +208,7 @@ class Seq2SeqModel(EncoderDecoder):
         model.vocab2 = dst_vocab_embed if type(dst_vocab_embed) is dict else dst_vocab_embed.vocab
         attn_type = kwargs.get('attn_type', 'bahdanau').lower()
         model.arc_state = kwargs.get('arc_state', False)
+        model.id = kwargs.get('id', 0)
         model.mxlen = mxlen
         model.hsz = hsz
         model.nlayers = nlayers
@@ -275,14 +279,12 @@ class Seq2SeqModel(EncoderDecoder):
                                                                                               swap_memory=True,
                                                                                               output_time_major=True,
                                                                                               maximum_iterations=model.mxlen)
-
                     if predict is True and beam_width > 1:
                         model.preds = tf.no_op()
                         best = final_outputs.predicted_ids
                     else:
                         model.preds = final_outputs.rnn_output
                         best = final_outputs.sample_id
-
             with tf.name_scope("Output"):
                 model.best = tf.identity(best, name='best')
                 if beam_width > 1:
