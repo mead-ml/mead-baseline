@@ -13,7 +13,7 @@ import os
 
 class ClassifyParallelModel(Classifier):
 
-    def __init__(self, create_fn, embed, **kwargs):
+    def __init__(self, create_fn, embed, labels, **kwargs):
         super(ClassifyParallelModel, self).__init__()
         # We need to remove these because we may be calling back to our caller, and we need
         # the condition of calling to be non-parallel
@@ -21,7 +21,7 @@ class ClassifyParallelModel(Classifier):
         # If the gpu ID is set to -1, use CUDA_VISIBLE_DEVICES to figure it out
         if gpus[0] == -1:
             gpus = [int(g) for g in os.getenv('CUDA_VISIBLE_DEVICES', os.getenv('NV_GPU', '0')).split(',')]
-        print(gpus)
+        print('GPUs', gpus)
         ng = len(gpus)
 
         self.labels = labels
@@ -48,10 +48,11 @@ class ClassifyParallelModel(Classifier):
         lengths_splits = tf.split(self.lengths, ng)
 
         losses = []
+        self.labels = labels
         with tf.Session(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False)) as sess:
             for i, g in enumerate(gpus):
                 with tf.device(tf.DeviceSpec(device_type='GPU', device_index=g)):
-                    replica = create_fn(embed, sess=sess, x=x_splits[i], y=y_splits[i], lengths=lengths_splits[i],
+                    replica = create_fn(embed, labels, sess=sess, x=x_splits[i], y=y_splits[i], lengths=lengths_splits[i],
                                         pkeep=self.pkeep, **kwargs)
                     self.replicas.append(replica)
                     loss_op = replica.create_loss()
@@ -59,8 +60,9 @@ class ClassifyParallelModel(Classifier):
 
             self.loss = tf.reduce_mean(tf.stack(losses))
             with tf.device(tf.DeviceSpec(device_type="CPU")):
-                self.inference = create_fn(embed, sess=sess, pkeep=self.pkeep, **kwargs)
+                self.inference = create_fn(embed, labels, sess=sess, pkeep=self.pkeep, **kwargs)
         self.sess = sess
+        self.best = self.inference.best
 
     def create_loss(self):
         return self.loss
@@ -73,8 +75,24 @@ class ClassifyParallelModel(Classifier):
         self.saver = saver
 
     def make_input(self, batch_dict, do_dropout=False):
+        if do_dropout is False:
+            return self.inference.make_input(batch_dict)
         x = batch_dict['x']
-        y = batch_dict['y']
+        y = batch_dict.get('y', None)
+        #xch = batch_dict.get('xch')
+        lengths = batch_dict.get('lengths')
+        pkeep = 1.0 - self.pdrop_value if do_dropout else 1.0
+        feed_dict = {self.x: x, self.replicas[0].pkeep: pkeep}
+
+        if hasattr(self, 'lengths') and self.lengths is not None:
+            feed_dict[self.lengths] = lengths
+        #if hasattr(self, 'xch') and xch is not None and self.xch is not None:
+        #    feed_dict[self.xch] = xch
+
+        if y is not None:
+            feed_dict[self.y] = fill_y(len(self.labels), y)
+        return feed_dict
+
         lengths = batch_dict['lengths']
         feed_dict = {self.x: x, self.y: y, self.lengths: lengths,
                      self.replicas[0].pkeep: self.pdrop_value if do_dropout else 1.0}
@@ -98,6 +116,10 @@ class WordClassifierBase(Classifier):
         """Base
         """
         super(WordClassifierBase, self).__init__()
+
+
+    def set_saver(self, saver):
+        self.saver = saver
 
     def save_values(self, basename):
         self.saver.save(self.sess, basename)
@@ -308,8 +330,8 @@ class WordClassifierBase(Classifier):
         gpus = kwargs.get('gpus', [])
         # If we are parallelized, we will use the wrapper object Seq2SeqParallelModel and this creation function
         if len(gpus) >= 1:
-            return ClassifyParallelModel(WordClassifierBase.create, embeddings, **kwargs)
-
+            return ClassifyParallelModel(cls.create, embeddings, labels, **kwargs)
+        print('REGULAR')
         sess = kwargs.get('sess', tf.Session())
         finetune = bool(kwargs.get('finetune', True))
         w2v = embeddings['word']

@@ -19,20 +19,20 @@ class ClassifyTrainerTf(EpochReportingTrainer):
 
     def _train(self, loader):
 
-        cm = ConfusionMatrix(self.model.labels)
+        #cm = ConfusionMatrix(self.model.labels)
         total_loss = 0
         steps = len(loader)
         pg = create_progress_bar(steps)
         for batch_dict in loader:
             y = batch_dict['y']
             feed_dict = self.model.make_input(batch_dict, do_dropout=True)
-            _, step, lossv, guess = self.sess.run([self.train_op, self.global_step, self.loss, self.model.best], feed_dict=feed_dict)
-            cm.add_batch(y, guess)
+            _, step, lossv = self.sess.run([self.train_op, self.global_step, self.loss], feed_dict=feed_dict)
             total_loss += lossv
             pg.update()
 
         pg.done()
-        metrics = cm.get_all_metrics()
+        metrics = {}
+        #metrics = cm.get_all_metrics()
         metrics['avg_loss'] = total_loss/float(steps)
         return metrics
 
@@ -47,14 +47,13 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         for batch_dict in loader:
             y = batch_dict['y']
             feed_dict = self.model.make_input(batch_dict)
-            lossv, guess = self.sess.run([self.loss, self.model.best], feed_dict=feed_dict)
+            guess = self.sess.run(self.model.best, feed_dict=feed_dict)
             cm.add_batch(y, guess)
-            total_loss += lossv
             pg.update()
 
         pg.done()
         metrics = cm.get_all_metrics()
-        metrics['avg_loss'] = total_loss/float(steps)
+        #metrics['avg_loss'] = total_loss/float(steps)
         if verbose:
             print(cm)
 
@@ -110,7 +109,7 @@ def fit(model, ts, vs, es=None, **kwargs):
     tables = tf.tables_initializer()
     model.sess.run(tables)
     model.sess.run(tf.global_variables_initializer())
-    model.saver = tf.train.Saver()
+    model.set_saver(tf.train.Saver())
 
     max_metric = 0
     last_improved = 0

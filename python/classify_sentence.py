@@ -96,6 +96,7 @@ model = classify.create_model(embeddings, labels,
                               filtsz=args.filtsz,
                               cmotsz=args.cmotsz,
                               dropout=args.dropout,
-                              finetune=not args.static)
+                              finetune=not args.static,
+                              gpus=args.gpus)
 
 classify.fit(model, ts, vs, es, **vars(args))
