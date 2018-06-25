@@ -57,7 +57,6 @@ class Seq2SeqParallelModel(EncoderDecoder):
         ng = len(gpus)
         self.saver = None
         self.replicas = []
-        self.losses = []
         self.src = kwargs.get('src', tf.placeholder(tf.int32, [None, mxlen], name="src_parallel"))
         self.tgt = kwargs.get('tgt', tf.placeholder(tf.int32, [None, mxlen], name="tgt_parallel"))
         self.src_len = kwargs.get('src_len', tf.placeholder(tf.int32, [None], name="src_len_parallel"))
@@ -70,8 +69,8 @@ class Seq2SeqParallelModel(EncoderDecoder):
         tgt_splits = tf.split(self.tgt, ng)
         src_len_splits = tf.split(self.src_len, ng)
         tgt_len_splits = tf.split(self.tgt_len, ng)
-
-        with tf.Session(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=True)) as sess:
+        losses = []
+        with tf.Session(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False)) as sess:
             for i, g in enumerate(gpus):
                 with tf.device(tf.DeviceSpec(device_type='GPU', device_index=g)):
                     replica = create_fn(src_vocab_embed, dst_vocab_embed, sess=sess,
@@ -82,9 +81,9 @@ class Seq2SeqParallelModel(EncoderDecoder):
                                         **kwargs)
                     self.replicas.append(replica)
                     loss_op = replica.create_loss()
-                    self.losses.append(loss_op)
 
-            self.avg_loss = tf.reduce_mean(self.losses)
+                    losses.append(loss_op)
+            self.loss = tf.reduce_mean(tf.concat(losses, axis=1))
 
             with tf.device(tf.DeviceSpec(device_type="CPU")):
                 self.inference = create_fn(src_vocab_embed, dst_vocab_embed, sess=sess, mx_tgt_len=self.mx_tgt_len,
@@ -92,7 +91,7 @@ class Seq2SeqParallelModel(EncoderDecoder):
         self.sess = sess
 
     def create_loss(self):
-        return self.avg_loss
+        return self.loss
 
     def save(self, model_base):
         return self.inference.save(model_base)
