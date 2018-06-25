@@ -40,9 +40,9 @@ The static (no fine-tuning) model usually has decent performance, and the code i
 
 ### Running It
 
-Early stopping with patience is supported.  There are many hyper-parameters that you can tune, which may yield many different models.  Here is a PyTorch example of parameterization of dynamic embeddings with SGD and the default three filter sizes (3, 4, and 5):
+Early stopping with patience is supported.  There are many hyper-parameters that you can tune, which may yield many different models.
 
-[Here](../python/mead/config/sst2.json) is an example running Stanford Sentiment Treebank 2 data with adadelta:
+[Here](../python/mead/config/sst2.json) is a tensorflow example running Stanford Sentiment Treebank 2 data with adadelta:
 
 ```
 python trainer.py --config config/sst2.json
