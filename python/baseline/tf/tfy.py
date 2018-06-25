@@ -117,6 +117,9 @@ def optimizer(loss_fn, **kwargs):
     elif optim == 'adam':
         print('adam', eta)
         optz = lambda lr: tf.train.AdamOptimizer(lr)
+    elif optim == 'rmsprop':
+        print('rmsprop', eta)
+        optz = lambda lr: tf.train.RMSPropOptimizer(lr, momentum=mom)
     elif mom > 0:
         print('sgd-mom', eta, mom)
         optz = lambda lr: tf.train.MomentumOptimizer(lr, mom)

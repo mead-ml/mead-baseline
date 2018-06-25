@@ -15,7 +15,13 @@ class Seq2SeqTrainerTf(Trainer):
         self.sess = model.sess
         self.loss = model.create_loss()
         self.model = model
-        self.global_step, self.train_op = optimizer(self.loss, **kwargs)
+        self.global_step = tf.get_variable(
+            'global_step', [],
+            initializer=tf.constant_initializer(0), trainable=False)
+        self.global_step, self.train_op = optimizer(self.loss, colocate_gradients_with_ops=True, **kwargs)
+        #self.train_op = tf.train.AdamOptimizer(kwargs.get('eta')).minimize(tf.reduce_mean(self.loss),
+        #                                                                   global_step=self.global_step,
+        #                                                                   colocate_gradients_with_ops=True)
 
     def checkpoint(self):
         self.model.saver.save(self.model.sess, "./tf-seq2seq-%d/seq2seq" % os.getpid(), global_step=self.global_step)
@@ -26,7 +32,7 @@ class Seq2SeqTrainerTf(Trainer):
         self.model.saver.restore(self.model.sess, latest)
 
     def prepare(self, saver):
-        self.model.saver = saver
+        self.model.set_saver(saver)
 
     def train(self, ts, reporting_fns):
         total_loss = 0

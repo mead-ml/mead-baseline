@@ -42,6 +42,79 @@ def _temporal_cross_entropy_loss(logits, labels, label_lengths, mx_seq_length):
         return losses
 
 
+class Seq2SeqParallelModel(EncoderDecoder):
+
+    def __init__(self, create_fn, src_vocab_embed, dst_vocab_embed, **kwargs):
+
+        # We need to remove these because we may be calling back to our caller, and we need
+        # the condition of calling to be non-parallel
+        gpus = kwargs.pop('gpus', [-1])
+        # If the gpu ID is set to -1, use CUDA_VISIBLE_DEVICES to figure it out
+        if gpus[0] == -1:
+            gpus = [int(g) for g in os.getenv('CUDA_VISIBLE_DEVICES', os.getenv('NV_GPU', '0')).split(',')]
+        print(gpus)
+        mxlen = kwargs.get('mxlen', 100)
+        ng = len(gpus)
+        self.saver = None
+        self.replicas = []
+        self.losses = []
+        self.src = kwargs.get('src', tf.placeholder(tf.int32, [None, mxlen], name="src_parallel"))
+        self.tgt = kwargs.get('tgt', tf.placeholder(tf.int32, [None, mxlen], name="tgt_parallel"))
+        self.src_len = kwargs.get('src_len', tf.placeholder(tf.int32, [None], name="src_len_parallel"))
+        self.tgt_len = kwargs.get('tgt_len', tf.placeholder(tf.int32, [None], name="tgt_len_parallel"))
+        self.pdrop_value = kwargs.get('dropout', 0.5)
+
+        src_splits = tf.split(self.src, ng)
+        tgt_splits = tf.split(self.tgt, ng)
+        src_len_splits = tf.split(self.src_len, ng)
+        tgt_len_splits = tf.split(self.tgt_len, ng)
+
+        with tf.Session(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=True)) as sess:
+            for g in gpus:
+                with tf.device(tf.DeviceSpec(device_type='GPU', device_index=g)):
+                    replica = create_fn(src_vocab_embed, dst_vocab_embed, sess=sess,
+                                        src=src_splits[g], tgt=tgt_splits[g],
+                                        src_len=src_len_splits[g], tgt_len=tgt_len_splits[g], **kwargs)
+                    self.replicas.append(replica)
+                    loss_op = replica.create_loss()
+                    self.losses.append(loss_op)
+
+            self.avg_loss = tf.reduce_mean(self.losses)
+
+            with tf.device(tf.DeviceSpec(device_type="CPU")):
+                self.inference = create_fn(src_vocab_embed, dst_vocab_embed, sess=sess, **kwargs)
+        self.sess = sess
+
+    def create_loss(self):
+        return self.avg_loss
+
+    def save(self, model_base):
+        return self.inference.save(model_base)
+
+    def set_saver(self, saver):
+        self.inference.saver = saver
+        self.saver = saver
+
+    def step(self, batch_dict):
+        """
+        Generate probability distribution over output V for next token
+        """
+        return self.inference.step(batch_dict)
+
+    def make_input(self, batch_dict, do_dropout=False):
+        src = batch_dict['src']
+        src_len = batch_dict['src_len']
+        dst = batch_dict['dst']
+        dst_len = batch_dict['dst_len']
+
+        mx_tgt_len = np.max(dst_len)
+        feed_dict = {self.src: src, self.src_len: src_len,
+                     self.tgt: dst, self.tgt_len: dst_len,
+                     self.replicas[0].mx_tgt_len: mx_tgt_len,
+                     self.replicas[0].pkeep: self.pdrop_value if do_dropout else 1.0}
+        return feed_dict
+
+
 class Seq2SeqModel(EncoderDecoder):
 
     def create_loss(self):
@@ -50,7 +123,7 @@ class Seq2SeqModel(EncoderDecoder):
 
     def __init__(self):
         super(Seq2SeqModel, self).__init__()
-        pass
+        self.saver = None
 
     @staticmethod
     def load(basename, **kwargs):
@@ -99,8 +172,12 @@ class Seq2SeqModel(EncoderDecoder):
     @staticmethod
     def create(src_vocab_embed, dst_vocab_embed, **kwargs):
 
-        model = Seq2SeqModel()
+        gpus = kwargs.get('gpus', [])
+        # If we are parallelized, we will use the wrapper object Seq2SeqParallelModel and this creation function
+        if len(gpus) >= 1:
+            return Seq2SeqParallelModel(Seq2SeqModel.create, src_vocab_embed, dst_vocab_embed, **kwargs)
 
+        model = Seq2SeqModel()
         hsz = int(kwargs['hsz'])
         attn = kwargs.get('model_type') == 'attn'
         nlayers = int(kwargs.get('layers', 1))
@@ -208,6 +285,9 @@ class Seq2SeqModel(EncoderDecoder):
                 else:
                     model.probs = tf.map_fn(lambda x: tf.nn.softmax(x, name='probs'), model.preds)
             return model
+
+    def set_saver(self, saver):
+        self.saver = saver
 
     def _attn_cell_w_dropout(self, rnn_enc_tensor, beam, attn_type):
         cell = multi_rnn_cell_w_dropout(self.hsz, self.pkeep, self.rnntype, self.nlayers)
