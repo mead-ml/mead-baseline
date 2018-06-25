@@ -62,6 +62,8 @@ class Seq2SeqParallelModel(EncoderDecoder):
         self.tgt = kwargs.get('tgt', tf.placeholder(tf.int32, [None, mxlen], name="tgt_parallel"))
         self.src_len = kwargs.get('src_len', tf.placeholder(tf.int32, [None], name="src_len_parallel"))
         self.tgt_len = kwargs.get('tgt_len', tf.placeholder(tf.int32, [None], name="tgt_len_parallel"))
+        self.mx_tgt_len = kwargs.get('mx_tgt_len', tf.placeholder(tf.int32, name="mx_tgt_len"))
+        self.pkeep = kwargs.get('pkeep', tf.placeholder(tf.float32, name="pkeep"))
         self.pdrop_value = kwargs.get('dropout', 0.5)
 
         src_splits = tf.split(self.src, ng)
@@ -74,7 +76,10 @@ class Seq2SeqParallelModel(EncoderDecoder):
                 with tf.device(tf.DeviceSpec(device_type='GPU', device_index=g)):
                     replica = create_fn(src_vocab_embed, dst_vocab_embed, sess=sess,
                                         src=src_splits[i], tgt=tgt_splits[i],
-                                        src_len=src_len_splits[i], tgt_len=tgt_len_splits[i], **kwargs)
+                                        src_len=src_len_splits[i], tgt_len=tgt_len_splits[i],
+                                        mx_tgt_len=self.mx_tgt_len,
+                                        pkeep=self.pkeep,
+                                        **kwargs)
                     self.replicas.append(replica)
                     loss_op = replica.create_loss()
                     self.losses.append(loss_op)
@@ -82,7 +87,8 @@ class Seq2SeqParallelModel(EncoderDecoder):
             self.avg_loss = tf.reduce_mean(self.losses)
 
             with tf.device(tf.DeviceSpec(device_type="CPU")):
-                self.inference = create_fn(src_vocab_embed, dst_vocab_embed, sess=sess, **kwargs)
+                self.inference = create_fn(src_vocab_embed, dst_vocab_embed, sess=sess, mx_tgt_len=self.mx_tgt_len,
+                                           pkeep=self.pkeep, **kwargs)
         self.sess = sess
 
     def create_loss(self):
@@ -191,11 +197,11 @@ class Seq2SeqModel(EncoderDecoder):
         unif = kwargs.get('unif', 0.25)
         model.src = kwargs.get('src', tf.placeholder(tf.int32, [None, mxlen], name="src"))
         model.tgt = kwargs.get('tgt', tf.placeholder(tf.int32, [None, mxlen], name="tgt"))
-        model.pkeep = kwargs.get('pkeep', tf.placeholder(tf.float32, name="pkeep"))
         model.pdrop_value = kwargs.get('dropout', 0.5)
         model.src_len = kwargs.get('src_len', tf.placeholder(tf.int32, [None], name="src_len"))
         model.tgt_len = kwargs.get('tgt_len', tf.placeholder(tf.int32, [None], name="tgt_len"))
         model.mx_tgt_len = kwargs.get('mx_tgt_len', tf.placeholder(tf.int32, name="mx_tgt_len"))
+        model.pkeep = kwargs.get('pkeep', tf.placeholder(tf.float32, name="pkeep"))
         model.vocab1 = src_vocab_embed if type(src_vocab_embed) is dict else src_vocab_embed.vocab
         model.vocab2 = dst_vocab_embed if type(dst_vocab_embed) is dict else dst_vocab_embed.vocab
         attn_type = kwargs.get('attn_type', 'bahdanau').lower()
