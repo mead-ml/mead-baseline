@@ -15,7 +15,7 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         self.sess = model.sess
         self.loss = model.create_loss()
         self.model = model
-        self.global_step, self.train_op = optimizer(self.loss, **kwargs)
+        self.global_step, self.train_op = optimizer(self.loss, colocate_gradients_with_ops=True, **kwargs)
 
     def _train(self, loader):
 
@@ -24,7 +24,6 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         steps = len(loader)
         pg = create_progress_bar(steps)
         for batch_dict in loader:
-            y = batch_dict['y']
             feed_dict = self.model.make_input(batch_dict, do_dropout=True)
             _, step, lossv = self.sess.run([self.train_op, self.global_step, self.loss], feed_dict=feed_dict)
             total_loss += lossv
@@ -32,13 +31,11 @@ class ClassifyTrainerTf(EpochReportingTrainer):
 
         pg.done()
         metrics = {}
-        #metrics = cm.get_all_metrics()
         metrics['avg_loss'] = total_loss/float(steps)
         return metrics
 
     def _test(self, loader, **kwargs):
 
-        total_loss = 0
         cm = ConfusionMatrix(self.model.labels)
         steps = len(loader)
         verbose = kwargs.get("verbose", False)
@@ -53,7 +50,6 @@ class ClassifyTrainerTf(EpochReportingTrainer):
 
         pg.done()
         metrics = cm.get_all_metrics()
-        #metrics['avg_loss'] = total_loss/float(steps)
         if verbose:
             print(cm)
 
