@@ -74,7 +74,7 @@ class Seq2SeqParallelModel(EncoderDecoder):
         losses = []
         with tf.Session(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False)) as sess:
             for i, g in enumerate(gpus):
-                with tf.device(tf.DeviceSpec(device_type='GPU', device_index=g)):
+                with tf.device(tf.DeviceSpec(device_type='GPU', device_index=i)):
                     replica = create_fn(src_vocab_embed, dst_vocab_embed, sess=sess,
                                         src=src_splits[i], tgt=tgt_splits[i],
                                         src_len=src_len_splits[i], tgt_len=tgt_len_splits[i],

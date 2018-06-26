@@ -51,7 +51,7 @@ class ClassifyParallelModel(Classifier):
         self.labels = labels
         with tf.Session(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False)) as sess:
             for i, g in enumerate(gpus):
-                with tf.device(tf.DeviceSpec(device_type='GPU', device_index=g)):
+                with tf.device(tf.DeviceSpec(device_type='GPU', device_index=i)):
                     replica = create_fn(embed, labels, sess=sess, x=x_splits[i], y=y_splits[i], lengths=lengths_splits[i],
                                         pkeep=self.pkeep, **kwargs)
                     self.replicas.append(replica)
