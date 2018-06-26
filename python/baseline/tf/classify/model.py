@@ -67,6 +67,9 @@ class ClassifyParallelModel(Classifier):
     def create_loss(self):
         return self.loss
 
+    def create_test_loss(self):
+        return self.inference.create_test_loss()
+
     def save(self, model_base):
         return self.inference.save(model_base)
 
@@ -164,6 +167,12 @@ class WordClassifierBase(Classifier):
     def save(self, basename):
         self.save_md(basename)
         self.save_values(basename)
+
+    def create_test_loss(self):
+        with tf.name_scope("test_loss"):
+            loss = tf.nn.softmax_cross_entropy_with_logits(logits=self.logits, labels=tf.cast(self.y, "float"))
+            all_loss = tf.reduce_mean(loss)
+        return all_loss
 
     def create_loss(self):
         """The loss function is currently provided here, although this is not a great place for it
@@ -331,7 +340,6 @@ class WordClassifierBase(Classifier):
         # If we are parallelized, we will use the wrapper object Seq2SeqParallelModel and this creation function
         if len(gpus) >= 1:
             return ClassifyParallelModel(cls.create, embeddings, labels, **kwargs)
-        print('REGULAR')
         sess = kwargs.get('sess', tf.Session())
         finetune = bool(kwargs.get('finetune', True))
         w2v = embeddings['word']
