@@ -50,13 +50,12 @@ class Seq2SeqParallelModel(EncoderDecoder):
         super(Seq2SeqParallelModel, self).__init__()
         # We need to remove these because we may be calling back to our caller, and we need
         # the condition of calling to be non-parallel
-        gpus = kwargs.pop('gpus', [-1])
+        gpus = kwargs.pop('gpus', -1)
         # If the gpu ID is set to -1, use CUDA_VISIBLE_DEVICES to figure it out
-        if gpus[0] == -1:
-            gpus = [int(g) for g in os.getenv('CUDA_VISIBLE_DEVICES', os.getenv('NV_GPU', '0')).split(',')]
-        print(gpus)
+        if gpus == -1:
+            gpus = len(os.getenv('CUDA_VISIBLE_DEVICES', os.getenv('NV_GPU', '0')).split(','))
+        print('Num GPUs', gpus)
         mxlen = kwargs.get('mxlen', 100)
-        ng = len(gpus)
         self.saver = None
         self.replicas = []
         self.src = kwargs.get('src', tf.placeholder(tf.int32, [None, mxlen], name="src_parallel"))
@@ -73,7 +72,7 @@ class Seq2SeqParallelModel(EncoderDecoder):
         tgt_len_splits = tf.split(self.tgt_len, ng)
         losses = []
         with tf.Session(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False)) as sess:
-            for i, g in enumerate(gpus):
+            for i in range(gpus):
                 with tf.device(tf.DeviceSpec(device_type='GPU', device_index=i)):
                     replica = create_fn(src_vocab_embed, dst_vocab_embed, sess=sess,
                                         src=src_splits[i], tgt=tgt_splits[i],
@@ -180,9 +179,8 @@ class Seq2SeqModel(EncoderDecoder):
     @staticmethod
     def create(src_vocab_embed, dst_vocab_embed, **kwargs):
 
-        gpus = kwargs.get('gpus', [])
-        # If we are parallelized, we will use the wrapper object Seq2SeqParallelModel and this creation function
-        if len(gpus) >= 1:
+        gpus = kwargs.get('gpus')
+        if gpus is not None:
             return Seq2SeqParallelModel(Seq2SeqModel.create, src_vocab_embed, dst_vocab_embed, **kwargs)
 
         model = Seq2SeqModel()

@@ -17,12 +17,11 @@ class ClassifyParallelModel(Classifier):
         super(ClassifyParallelModel, self).__init__()
         # We need to remove these because we may be calling back to our caller, and we need
         # the condition of calling to be non-parallel
-        gpus = kwargs.pop('gpus', [-1])
+        gpus = kwargs.pop('gpus', -1)
         # If the gpu ID is set to -1, use CUDA_VISIBLE_DEVICES to figure it out
-        if gpus[0] == -1:
-            gpus = [int(g) for g in os.getenv('CUDA_VISIBLE_DEVICES', os.getenv('NV_GPU', '0')).split(',')]
-        print('GPUs', gpus)
-        ng = len(gpus)
+        if gpus == -1:
+            gpus = len(os.getenv('CUDA_VISIBLE_DEVICES', os.getenv('NV_GPU', '0')).split(','))
+        print('Num GPUs', gpus)
 
         self.labels = labels
         nc = len(labels)
@@ -43,14 +42,14 @@ class ClassifyParallelModel(Classifier):
         self.pkeep = kwargs.get('pkeep', tf.placeholder(tf.float32, name="pkeep"))
         self.pdrop_value = kwargs.get('dropout', 0.5)
 
-        x_splits = tf.split(self.x, ng)
-        y_splits = tf.split(self.y, ng)
-        lengths_splits = tf.split(self.lengths, ng)
+        x_splits = tf.split(self.x, gpus)
+        y_splits = tf.split(self.y, gpus)
+        lengths_splits = tf.split(self.lengths, gpus)
 
         losses = []
         self.labels = labels
         with tf.Session(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False)) as sess:
-            for i, g in enumerate(gpus):
+            for i in range(gpus):
                 with tf.device(tf.DeviceSpec(device_type='GPU', device_index=i)):
                     replica = create_fn(embed, labels, sess=sess, x=x_splits[i], y=y_splits[i], lengths=lengths_splits[i],
                                         pkeep=self.pkeep, **kwargs)
@@ -336,9 +335,9 @@ class WordClassifierBase(Classifier):
         """
 
 
-        gpus = kwargs.get('gpus', [])
+        gpus = kwargs.get('gpus')
         # If we are parallelized, we will use the wrapper object Seq2SeqParallelModel and this creation function
-        if len(gpus) >= 1:
+        if gpus is not None:
             return ClassifyParallelModel(cls.create, embeddings, labels, **kwargs)
         sess = kwargs.get('sess', tf.Session())
         finetune = bool(kwargs.get('finetune', True))
