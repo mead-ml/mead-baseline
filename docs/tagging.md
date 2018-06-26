@@ -46,15 +46,16 @@ This model is implemented in TensorFlow and PyTorch.
 ### Latest Runs
 
 Here are some observed performance scores on various dataset.  In general, our observed peformance is very similar to this recent paper: https://arxiv.org/pdf/1806.04470.pdf
-Average scores are listed below.  Our max run so far is 91.37 using IOBES on CONLL2003.  This [same model with ELMo](../python/addons) achieves an F1 of 92.
+Average scores are listed below.  Our best run so far is 91.37 using IOBES on CONLL2003.  This [same model with ELMo](../python/addons) achieves an F1 of 92.
 
-| dataset             | metric | method   | eta (LR) |    avg | proj | crf  | hsz |
-| ------------------- | ------ | -------- | -------  | ------ | -----| -----|-----|
-| twpos-v03           |    acc | adam     |       -- | 89.4   | N    | N    | 100 |
-| conll 2003 (IOB1)   |     f1 | sgd mom. |     0.015| 90.8   | N    | Y    | 200 |
-| conll 2003 (BIO)    |     f1 | sgd mom. |     0.015| 90.9   | N    | Y    | 200 |
-| conll 2003 (IOBES)  |     f1 | sgd mom. |     0.015| 91.1   | N    | Y    | 200 |
-|       atis (mesnil) |     f1 | sgd mom. |     0.01 | 96.74  | N    | N    | 100 |
+| dataset             | model type    | metric | method   | eta (LR) |    avg |   max |  hsz |
+| ------------------- | ------------- |------- | -------- | -------- | ------ | ----- |----- |
+| twpos-v03           | CNN-BLSTM     |    acc | adam     |       -- | 89.4   |    -  |  100 |
+| conll 2003 (IOB1)   | CNN-BLSTM-CRF |     f1 | sgd mom. |     0.015| 90.8   | 90.98 |  200 |
+| conll 2003 (BIO)    | CNN-BLSTM-CRF |     f1 | sgd mom. |     0.015| 90.9   | 91.2  |  200 |
+| conll 2003 (IOBES)  | CNN-BLSTM-CRF |     f1 | sgd mom. |     0.015| 91.1   | 91.37 |  200 |
+| conll 2003 (IOBES)  | CNN-CNN-CRF   |     f1 | sgd mom. |     0.001| 90.54  | 90.67 |  800 |
+|       atis (mesnil) | CNN-BLSTM     |     f1 | sgd mom. |     0.01 |     -  | 96.74 |  100 |
 
 ### Testing a trained model on your data
 
