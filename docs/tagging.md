@@ -46,7 +46,7 @@ This model is implemented in TensorFlow and PyTorch.
 ### Latest Runs
 
 Here are some observed performance scores on various dataset.  In general, our observed peformance is very similar to this recent paper: https://arxiv.org/pdf/1806.04470.pdf
-Average scores are listed below.  Our max run so far is 91.32 using IOBES on CONLL2003.  This [same model with ELMo](../python/addons) achieves an F1 of 92.
+Average scores are listed below.  Our max run so far is 91.37 using IOBES on CONLL2003.  This [same model with ELMo](../python/addons) achieves an F1 of 92.
 
 | dataset             | metric | method   | eta (LR) |    avg | proj | crf  | hsz |
 | ------------------- | ------ | -------- | -------  | ------ | -----| -----|-----|
