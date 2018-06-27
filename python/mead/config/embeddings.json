@@ -44,7 +44,6 @@
   {
     "label": "w2v-gn",
     "file": "https://www.dropbox.com/s/699kgut7hdb5tg9/GoogleNews-vectors-negative300.bin.gz?dl=1",
-    "sha1": "be9bfda5fdc3b3cc7376e652fc489350fe9ff863",
     "dsz": 300
   },
   {
