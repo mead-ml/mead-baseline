@@ -13,7 +13,7 @@ import os
 
 class ClassifyParallelModel(Classifier):
 
-    def __init__(self, create_fn, embed, labels, **kwargs):
+    def __init__(self, create_fn, embeddings, labels, **kwargs):
         super(ClassifyParallelModel, self).__init__()
         # We need to remove these because we may be calling back to our caller, and we need
         # the condition of calling to be non-parallel
@@ -45,13 +45,20 @@ class ClassifyParallelModel(Classifier):
         x_splits = tf.split(self.x, gpus)
         y_splits = tf.split(self.y, gpus)
         lengths_splits = tf.split(self.lengths, gpus)
+        xch_splits = None
+        c2v = embeddings.get('char')
+        if c2v is not None:
+            self.xch = kwargs.get('xch', tf.placeholder(tf.int32, [None, self.mxlen, self.mxwlen], name='xch_parallel'))
+            xch_splits = tf.split(self.xch, gpus)
 
         losses = []
         self.labels = labels
         with tf.Session(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False)) as sess:
             for i in range(gpus):
                 with tf.device(tf.DeviceSpec(device_type='GPU', device_index=i)):
-                    replica = create_fn(embed, labels, sess=sess, x=x_splits[i], y=y_splits[i], lengths=lengths_splits[i],
+                    replica = create_fn(embeddings, labels, sess=sess, x=x_splits[i], y=y_splits[i],
+                                        xch=xch_splits[i] if xch_splits is not None else None,
+                                        lengths=lengths_splits[i],
                                         pkeep=self.pkeep, **kwargs)
                     self.replicas.append(replica)
                     loss_op = replica.create_loss()
@@ -59,7 +66,7 @@ class ClassifyParallelModel(Classifier):
 
             self.loss = tf.reduce_mean(tf.stack(losses))
             with tf.device(tf.DeviceSpec(device_type="CPU")):
-                self.inference = create_fn(embed, labels, sess=sess, pkeep=self.pkeep, **kwargs)
+                self.inference = create_fn(embeddings, labels, sess=sess, pkeep=self.pkeep, **kwargs)
         self.sess = sess
         self.best = self.inference.best
 
@@ -81,23 +88,18 @@ class ClassifyParallelModel(Classifier):
             return self.inference.make_input(batch_dict)
         x = batch_dict['x']
         y = batch_dict.get('y', None)
-        #xch = batch_dict.get('xch')
+        xch = batch_dict.get('xch')
         lengths = batch_dict.get('lengths')
         pkeep = 1.0 - self.pdrop_value if do_dropout else 1.0
         feed_dict = {self.x: x, self.replicas[0].pkeep: pkeep}
 
         if hasattr(self, 'lengths') and self.lengths is not None:
             feed_dict[self.lengths] = lengths
-        #if hasattr(self, 'xch') and xch is not None and self.xch is not None:
-        #    feed_dict[self.xch] = xch
+        if hasattr(self, 'xch') and xch is not None and self.xch is not None:
+            feed_dict[self.xch] = xch
 
         if y is not None:
             feed_dict[self.y] = fill_y(len(self.labels), y)
-        return feed_dict
-
-        lengths = batch_dict['lengths']
-        feed_dict = {self.x: x, self.y: y, self.lengths: lengths,
-                     self.replicas[0].pkeep: self.pdrop_value if do_dropout else 1.0}
         return feed_dict
 
 
@@ -334,9 +336,8 @@ class WordClassifierBase(Classifier):
         :return: A fully-initialized tensorflow classifier 
         """
 
-
         gpus = kwargs.get('gpus')
-        # If we are parallelized, we will use the wrapper object Seq2SeqParallelModel and this creation function
+        # If we are parallelized, we will use the wrapper object ClassifyParallelModel and this creation function
         if gpus is not None:
             return ClassifyParallelModel(cls.create, embeddings, labels, **kwargs)
         sess = kwargs.get('sess', tf.Session())
