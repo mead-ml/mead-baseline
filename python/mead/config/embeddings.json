@@ -43,8 +43,7 @@
   },
   {
     "label": "w2v-gn",
-    "file": "https://s3.amazonaws.com/mordecai-geo/GoogleNews-vectors-negative300.bin.gz",
-    "sha1": "be9bfda5fdc3b3cc7376e652fc489350fe9ff863",
+    "file": "https://www.dropbox.com/s/699kgut7hdb5tg9/GoogleNews-vectors-negative300.bin.gz?dl=1",
     "dsz": 300
   },
   {
