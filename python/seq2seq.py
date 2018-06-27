@@ -40,7 +40,7 @@ parser.add_argument('--reader_type', default='default', help='reader type')
 parser.add_argument('--model_type', help='Name of model to load and train', default='default')
 parser.add_argument('--trainer_type', help='Name of trainer to load and train', default='default')
 parser.add_argument('--arc_state', help='Create arc between encoder final state and decoder init state', default=False, type=str2bool)
-parser.add_argument('--gpus', help='GPUs', nargs='+', default=[], type=int)
+parser.add_argument('--gpus', help='GPUs', type=int)
 args = parser.parse_args()
 gpu = not args.nogpu
 
