@@ -13,7 +13,7 @@
     "unif": 0.25,
     "model": {
 	"model_type": "default",
-	"filtsz": [2,3,4,5],
+	"filtsz": [1,2,3,4,5,7],
 	"cmotsz": 400,
 	"dropout": 0.5,
         "gpus": 4,
@@ -23,7 +23,7 @@
 	"label": "glove-42B"
     },
     "train": {
-	"epochs": 60,
+	"epochs": 80,
 	"optim": "sgd",
 	"eta": 0.02,
 	"model_base": "./models/dbpedia",
