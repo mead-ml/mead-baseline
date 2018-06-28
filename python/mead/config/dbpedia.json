@@ -13,7 +13,7 @@
     "unif": 0.25,
     "model": {
 	"model_type": "default",
-	"filtsz": [2,3,4,5]
+	"filtsz": [2,3,4,5],
 	"cmotsz": 400,
 	"dropout": 0.5,
 	"finetune": true
@@ -22,7 +22,7 @@
 	"label": "glove-42B"
     },
     "train": {
-	"epochs": 25,
+	"epochs": 60,
 	"optim": "sgd",
 	"eta": 0.02,
 	"decay": 0.02,
