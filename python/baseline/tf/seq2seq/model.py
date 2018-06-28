@@ -94,6 +94,9 @@ class Seq2SeqParallelModel(EncoderDecoder):
     def create_loss(self):
         return self.loss
 
+    def create_test_loss(self):
+        return self.inference.create_test_loss()
+
     def save(self, model_base):
         return self.inference.save(model_base)
 
@@ -108,6 +111,8 @@ class Seq2SeqParallelModel(EncoderDecoder):
         return self.inference.step(batch_dict)
 
     def make_input(self, batch_dict, do_dropout=False):
+        if do_dropout is False:
+            return self.inference.make_input(batch_dict)
         src = batch_dict['src']
         src_len = batch_dict['src_len']
         dst = batch_dict['dst']
@@ -120,12 +125,20 @@ class Seq2SeqParallelModel(EncoderDecoder):
                      self.replicas[0].pkeep: self.pdrop_value if do_dropout else 1.0}
         return feed_dict
 
+    def load(self, basename, **kwargs):
+        self.inference.load(basename, **kwargs)
+
 
 class Seq2SeqModel(EncoderDecoder):
 
     def create_loss(self):
         with tf.variable_scope('Loss{}'.format(self.id), reuse=False):
-        # We do not want to count <GO> in our assessment, we do want to count <EOS>
+            # We do not want to count <GO> in our assessment, we do want to count <EOS>
+            return _temporal_cross_entropy_loss(self.preds[:-1, :, :], self.tgt[:, 1:], self.tgt_len - 1, self.mx_tgt_len - 1)
+
+    def create_test_loss(self):
+        with tf.variable_scope('Loss', reuse=False):
+            # We do not want to count <GO> in our assessment, we do want to count <EOS>
             return _temporal_cross_entropy_loss(self.preds[:-1, :, :], self.tgt[:, 1:], self.tgt_len - 1, self.mx_tgt_len - 1)
 
     def __init__(self):

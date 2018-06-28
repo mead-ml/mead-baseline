@@ -14,15 +14,9 @@ class Seq2SeqTrainerTf(Trainer):
         super(Seq2SeqTrainerTf, self).__init__()
         self.sess = model.sess
         self.loss = model.create_loss()
+        self.test_loss = model.create_test_loss()
         self.model = model
-        self.global_step = tf.get_variable(
-            'global_step', [],
-            initializer=tf.constant_initializer(0), trainable=False)
-
-        self.global_step, self.train_op = optimizer(self.loss, colocate_gradients_with_ops=True, **kwargs)
-        #self.train_op = tf.train.AdamOptimizer(kwargs.get('eta')).minimize(tf.reduce_mean(self.loss),
-        #                                                                   global_step=self.global_step,
-        #                                                                   colocate_gradients_with_ops=True)
+        self.global_step, self.train_op = optimizer(self.loss, **kwargs)
 
     def checkpoint(self):
         self.model.saver.save(self.model.sess, "./tf-seq2seq-%d/seq2seq" % os.getpid(), global_step=self.global_step)
@@ -80,7 +74,7 @@ class Seq2SeqTrainerTf(Trainer):
             epochs = self.valid_epochs
 
         fetches = {
-            "loss": self.loss,
+            "loss": self.test_loss,
         }
 
         total_loss = 0
@@ -152,6 +146,7 @@ def fit(model, ts, vs, es=None, **kwargs):
     if do_early_stopping is True:
         print('Best performance on min_metric %.3f at epoch %d' % (min_metric, last_improved))
     if es is not None:
+
         trainer.recover_last_checkpoint()
         trainer.test(es, reporting_fns, phase='Test')
 
