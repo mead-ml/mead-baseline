@@ -16,7 +16,6 @@
 	"filtsz": [1,2,3,4,5,7],
 	"cmotsz": 400,
 	"dropout": 0.5,
-        "gpus": 4,
 	"finetune": true
     },
     "word_embeddings": {
