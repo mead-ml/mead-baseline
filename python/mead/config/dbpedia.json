@@ -26,7 +26,6 @@
 	"epochs": 60,
 	"optim": "sgd",
 	"eta": 0.02,
-	"decay": 0.02,
 	"model_base": "./models/dbpedia",
 	"early_stopping_metric": "acc",
         "verbose": true

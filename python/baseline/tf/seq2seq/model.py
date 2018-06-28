@@ -66,10 +66,10 @@ class Seq2SeqParallelModel(EncoderDecoder):
         self.pkeep = kwargs.get('pkeep', tf.placeholder(tf.float32, name="pkeep"))
         self.pdrop_value = kwargs.get('dropout', 0.5)
 
-        src_splits = tf.split(self.src, ng)
-        tgt_splits = tf.split(self.tgt, ng)
-        src_len_splits = tf.split(self.src_len, ng)
-        tgt_len_splits = tf.split(self.tgt_len, ng)
+        src_splits = tf.split(self.src, gpus)
+        tgt_splits = tf.split(self.tgt, gpus)
+        src_len_splits = tf.split(self.src_len, gpus)
+        tgt_len_splits = tf.split(self.tgt_len, gpus)
         losses = []
         with tf.Session(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False)) as sess:
             for i in range(gpus):
