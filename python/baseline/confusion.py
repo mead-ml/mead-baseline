@@ -81,7 +81,7 @@ class ConfusionMatrix(object):
         """
         total = np.sum(self._cm, axis=1)
         total = (total == 0) + total
-        return np.diag(self._cm) / total
+        return np.diag(self._cm) / total.astype(float)
 
     def get_support(self):
         return np.sum(self._cm, axis=1)
@@ -93,7 +93,7 @@ class ConfusionMatrix(object):
 
         total = np.sum(self._cm, axis=0)
         total = (total == 0) + total
-        return np.diag(self._cm) / total
+        return np.diag(self._cm) / total.astype(float)
 
     def get_mean_precision(self):
         """Get the mean precision across labels
@@ -103,7 +103,7 @@ class ConfusionMatrix(object):
         return np.mean(self.get_precision())
 
     def get_weighted_precision(self):
-        return np.sum(self.get_precision() * self.get_support())/self.get_total()
+        return np.sum(self.get_precision() * self.get_support())/float(self.get_total())
 
     def get_mean_recall(self):
         """Get the mean recall across labels
@@ -113,10 +113,10 @@ class ConfusionMatrix(object):
         return np.mean(self.get_recall())
 
     def get_weighted_recall(self):
-        return np.sum(self.get_recall() * self.get_support())/self.get_total()
+        return np.sum(self.get_recall() * self.get_support())/float(self.get_total())
 
     def get_weighted_f(self, beta=1):
-        return np.sum(self.get_class_f(beta) * self.get_support())/self.get_total()
+        return np.sum(self.get_class_f(beta) * self.get_support())/float(self.get_total())
 
     def get_macro_f(self, beta=1):
         """Get the macro F_b, with adjustable beta (defaulting to F1)
