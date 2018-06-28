@@ -1,0 +1,34 @@
+{
+    "task": "classify",
+    "batchsz": 1024,
+    "preproc": {
+	"mxlen": 100,
+	"clean": true
+    },
+    "backend": "tensorflow",
+    "dataset": "dbpedia",
+    "loader": {
+	"reader_type": "default"
+    },
+    "unif": 0.25,
+    "model": {
+	"model_type": "default",
+	"filtsz": [2,3,4,5]
+	"cmotsz": 400,
+	"dropout": 0.5,
+	"finetune": true
+    },
+    "word_embeddings": {
+	"label": "glove-42B"
+    },
+    "train": {
+	"epochs": 25,
+	"optim": "sgd",
+	"eta": 0.02,
+	"decay": 0.02,
+        "gpus": 4,
+	"model_base": "./models/dbpedia",
+	"early_stopping_metric": "acc",
+        "verbose": true
+    }
+}
