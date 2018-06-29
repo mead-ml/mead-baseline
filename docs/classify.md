@@ -96,7 +96,7 @@ python classify_sentence.py --optim sgd --eta 0.01 --batchsz 50 --epochs 40 --pa
 | sst2    |       87.9 |
 | dbpedia |     99.054 | 
 | trec-qa |       94.6 |
-
+| AG      |       92.5 |
 
 Note that these are randomly initialized and these numbers will vary
 (IOW, don't assume that one implementation is guaranteed to outperform the others from a single run).
