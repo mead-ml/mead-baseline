@@ -121,7 +121,6 @@ class WordClassifierBase(Classifier):
         """
         super(WordClassifierBase, self).__init__()
 
-
     def set_saver(self, saver):
         self.saver = saver
 
@@ -250,7 +249,7 @@ class WordClassifierBase(Classifier):
         
         :return: A restored model
         """
-        sess = kwargs.get('session', tf.Session())
+        sess = kwargs.get('session', kwargs.get('sess', tf.Session()))
         model = cls()
         with open(basename + '.saver') as fsv:
             saver_def = tf.train.SaverDef()
