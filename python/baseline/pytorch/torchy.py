@@ -569,22 +569,12 @@ class CRF(nn.Module):
 
         # alphas at step i holds the viterbi variables for step i-1
         alphas = torch.autograd.Variable(inits)
+
         for unary_t in unary:
-            backpointers_t = []  # holds the backpointers for this step
-            viterbi_t = []  # holds the viterbi variables for this step
-
-            for tag in range(self.n_tags):
-                next_tag_var = alphas + self.transitions[tag]
-                best_tag_id = argmax(next_tag_var)
-                backpointers_t.append(best_tag_id)
-                viterbi_t.append(next_tag_var[0][best_tag_id])
-
-            if PYT_MAJOR_VERSION < 0.4:
-                alphas = (torch.cat(viterbi_t) + unary_t).view(1, -1)
-
-            else:
-                alphas = (torch.stack(viterbi_t, 0) + unary_t).view(1, -1)
-            backpointers.append(backpointers_t)
+            next_tag_var = alphas + self.transitions
+            viterbi, best_tag_ids = torch.max(next_tag_var, 1)
+            backpointers.append(best_tag_ids.data)
+            alphas = (viterbi + unary_t).view(1, -1)
 
         # Transition to STOP_TAG
         terminal_var = alphas + self.transitions[self.end_idx]
