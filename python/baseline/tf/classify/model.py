@@ -33,13 +33,12 @@ class ClassifyParallelModel(Classifier):
         self.mxwlen = int(kwargs.get('mxwlen', 40))
 
         # This only exists to make exporting easier
-        self.pkeep = kwargs.get('pkeep', tf.placeholder(tf.float32, name="pkeep"))
         self.pdrop_value = kwargs.get('dropout', 0.5)
         # This only exists to make exporting easier
         self.x = kwargs.get('x', tf.placeholder(tf.int32, [None, self.mxlen], name="x_parallel"))
         self.y = kwargs.get('y', tf.placeholder(tf.int32, [None, nc], name="y_parallel"))
         self.lengths = kwargs.get('lengths', tf.placeholder(tf.int32, [None], name="lengths_parallel"))
-        self.pkeep = kwargs.get('pkeep', tf.placeholder(tf.float32, name="pkeep"))
+        self.pkeep = kwargs.get('pkeep', tf.placeholder_with_default(1.0, shape=(), name="pkeep"))
         self.pdrop_value = kwargs.get('dropout', 0.5)
 
         x_splits = tf.split(self.x, gpus)
@@ -53,7 +52,10 @@ class ClassifyParallelModel(Classifier):
 
         losses = []
         self.labels = labels
+
         with tf.Session(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False)) as sess:
+            with tf.device(tf.DeviceSpec(device_type="CPU")):
+                self.inference = create_fn(embeddings, labels, sess=sess, **kwargs)
             for i in range(gpus):
                 with tf.device(tf.DeviceSpec(device_type='GPU', device_index=i)):
                     replica = create_fn(embeddings, labels, sess=sess, x=x_splits[i], y=y_splits[i],
@@ -65,8 +67,7 @@ class ClassifyParallelModel(Classifier):
                     losses.append(loss_op)
 
             self.loss = tf.reduce_mean(tf.stack(losses))
-            with tf.device(tf.DeviceSpec(device_type="CPU")):
-                self.inference = create_fn(embeddings, labels, sess=sess, pkeep=self.pkeep, **kwargs)
+
         self.sess = sess
         self.best = self.inference.best
 
@@ -90,8 +91,8 @@ class ClassifyParallelModel(Classifier):
         y = batch_dict.get('y', None)
         xch = batch_dict.get('xch')
         lengths = batch_dict.get('lengths')
-        pkeep = 1.0 - self.pdrop_value if do_dropout else 1.0
-        feed_dict = {self.x: x, self.replicas[0].pkeep: pkeep}
+        pkeep = 1.0 - self.pdrop_value
+        feed_dict = {self.x: x, self.pkeep: pkeep}
 
         if hasattr(self, 'lengths') and self.lengths is not None:
             feed_dict[self.lengths] = lengths
@@ -141,7 +142,11 @@ class WordClassifierBase(Classifier):
         with open(basename + '.state', 'w') as f:
             json.dump(state, f)
 
+        #tf.train.export_meta_graph(filename=os.path.join(outdir, base + '.meta'),
+        #                           as_text=True)
+        #sub_graph = remove_parallel_nodes(self.sess.graph_def)
         tf.train.write_graph(self.sess.graph_def, outdir, base + '.graph', as_text=False)
+        #tf.train.write_graph(sub_graph, outdir, base + '.graph', as_text=False)
         with open(basename + '.saver', 'w') as f:
             f.write(str(self.saver.as_saver_def()))
 
@@ -207,8 +212,11 @@ class WordClassifierBase(Classifier):
         y = batch_dict.get('y', None)
         xch = batch_dict.get('xch')
         lengths = batch_dict.get('lengths')
-        pkeep = 1.0 - self.pdrop_value if do_dropout else 1.0
-        feed_dict = {self.x: x, self.pkeep: pkeep}
+        #feed_dict = {self.x: x, self.pkeep: pkeep}
+        feed_dict = {self.x: x}
+        if do_dropout:
+            feed_dict[self.pkeep] = 1.0 - self.pdrop_value
+        #pkeep = 1.0 - self.pdrop_value if do_dropout else 1.0
 
         if hasattr(self, 'lengths') and self.lengths is not None:
             feed_dict[self.lengths] = lengths
@@ -300,7 +308,6 @@ class WordClassifierBase(Classifier):
                 with open(vocab_file, 'r') as f:
                     model.vocab[ty] = json.load(f)
 
-        model.saver = tf.train.Saver(saver_def=saver_def)
         model.sess = sess
         model.load_md(basename)
         return model
@@ -357,7 +364,7 @@ class WordClassifierBase(Classifier):
         model.mxlen = int(kwargs.get('mxlen', 100))
         model.mxwlen = None
         # This only exists to make exporting easier
-        model.pkeep = kwargs.get('pkeep', tf.placeholder(tf.float32, name="pkeep"))
+        model.pkeep = kwargs.get('pkeep', tf.placeholder_with_default(1.0, shape=(), name="pkeep"))
         model.pdrop_value = kwargs.get('dropout', 0.5)
         # This only exists to make exporting easier
         model.x = kwargs.get('x', tf.placeholder(tf.int32, [None, model.mxlen], name="x"))
@@ -406,6 +413,7 @@ class WordClassifierBase(Classifier):
                     model.logits = tf.identity(fully_connected(stacked, nc, activation_fn=None), name="logits")
                     model.best = tf.argmax(model.logits, 1, name="best")
         model.sess = sess
+        # writer = tf.summary.FileWriter('blah', sess.graph)
         return model
 
     def pool(self, word_embeddings, dsz, init, **kwargs):
