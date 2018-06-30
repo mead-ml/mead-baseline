@@ -354,8 +354,8 @@ class CRF(DynetModel):
         for emission in emissions:
             next_vars = dy.colwise_add(dy.transpose(self.transitions), alphas)
             best_tags = np.argmax(next_vars.npvalue(), 0)
-            v_t = [dy.pick(dy.pick(next_vars, b), i) for i, b in enumerate(best_tags)]
-            alphas = dy.concatenate(v_t) + emission
+            v_t = dy.max_dim(next_vars, 0)
+            alphas = v_t + emission
             backpointers.append(best_tags)
 
         terminal_expr = alphas + dy.pick(self.transitions, self.end_idx)

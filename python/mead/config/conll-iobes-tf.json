@@ -10,8 +10,8 @@
         "mxwlen": -1,
         "lower": true
     },
-    "backend": "pytorch",
-    "dataset": "conll",
+    "backend": "tensorflow",
+    "dataset": "conll-iobes",
     "loader": {
         "reader_type": "default"
     },
@@ -22,7 +22,7 @@
         "wsz": 30,
         "dropout": 0.5,
         "rnntype": "blstm",
-        "layers": 2,
+        "layers": 1,
 	"crf": 1
     },
 
@@ -32,12 +32,13 @@
     "train": {
         "epochs": 100,
         "optim": "sgd",
-        "decay": 0,
+        "decay": 0.05,
         "eta": 0.015,
         "mom": 0.9,
         "patience": 40,
         "early_stopping_metric": "f1",
-        "clip": 5.0
+        "clip": 5.0,
+        "span_type": "iobes"
     }
 }
 

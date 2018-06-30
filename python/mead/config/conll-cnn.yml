@@ -1,5 +1,5 @@
 task: tagger
-batchsz: 10
+batchsz: 128
 conll_output: conllresults.conll
 charsz: 50
 unif: 0.1
@@ -21,6 +21,7 @@ model:
   rnntype: cnn
   layers: 2
   crf: 1
+  activation: relu
 
 word_embeddings:
   label: glove-6B-100
@@ -28,7 +29,7 @@ train:
   epochs: 600
   optim: sgd
   decay: 0
-  eta: 0.015
+  eta: 0.001
   mom: 0.9
   patience: 40
   early_stopping_metric: f1

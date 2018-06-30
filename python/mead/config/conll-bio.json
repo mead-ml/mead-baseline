@@ -1,8 +1,7 @@
 {
     "task": "tagger",
     "batchsz": 10,
-    "conll_output": "conllresults.conll",
-    "test_thresh": 10,
+    "conll_output": "conll-bio-results.conll",
     "charsz": 30,
     "unif": 0.1,
     "preproc": {
@@ -22,7 +21,7 @@
         "wsz": 30,
         "dropout": 0.5,
         "rnntype": "blstm",
-        "layers": 2,
+        "layers": 1,
 	"crf": 1
     },
 
@@ -32,7 +31,7 @@
     "train": {
         "epochs": 100,
         "optim": "sgd",
-        "decay": 0,
+        "decay": 0.05,
         "eta": 0.015,
         "mom": 0.9,
         "patience": 40,

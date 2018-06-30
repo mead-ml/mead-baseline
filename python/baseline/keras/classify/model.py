@@ -64,7 +64,7 @@ class ConvModel(Classifier):
             gmp = GlobalMaxPooling1D()(conv)
             mots.append(gmp)
 
-        joined = merge(mots, mode='concat')
+        joined = keras.layers.concatenate(mots, axis=1)
         cmotsz_all = cmotsz * len(filtsz)
         drop1 = Dropout(pdrop)(joined)
 

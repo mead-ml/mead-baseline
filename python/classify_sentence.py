@@ -73,7 +73,7 @@ unif = 0 if args.static else args.unif
 
 EmbeddingsModelType = GloVeModel if args.embed.endswith(".txt") else Word2VecModel
 embeddings = {}
-embeddings['word'] = EmbeddingsModelType(args.embed, vocab, unif_weight=args.unif, keep_unused=args.keep_unused)
+embeddings['word'] = EmbeddingsModelType(args.embed, vocab['word'], unif_weight=args.unif, keep_unused=args.keep_unused)
 feature2index = {}
 feature2index['word'] = embeddings['word'].vocab
 

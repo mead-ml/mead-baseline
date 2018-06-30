@@ -1,0 +1,26 @@
+batchsz: 10
+preproc:
+    mxlen: -1
+
+backend: tensorflow
+dataset: trec
+loader:
+    reader_type: default
+
+unif: 0.25
+model:
+    model_type: default
+    filtsz: [3]
+    dropout: 0.5
+    cmotsz: 100 
+
+word_embeddings:
+    label: w2v-gn
+
+train:
+    epochs: 30
+    optim: adadelta
+    eta: 1.0
+    model_base: ./models/trec
+    early_stopping_metric: macro_f1
+    patience: 25

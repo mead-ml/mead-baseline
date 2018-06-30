@@ -425,7 +425,6 @@ def show_examples_pytorch(model, es, rlut1, rlut2, embed2, mxlen, sample, prob_c
     tgt_array = batch_dict['dst']
     src_len = batch_dict['src_len']
 
-
     if max_examples > 0:
         max_examples = min(max_examples, src_array.size(0))
         src_array = src_array[0:max_examples]
@@ -460,11 +459,13 @@ def argmax(vec):
     _, idx = torch.max(vec, 1)
     return idx.data[0]
 
+
 # Compute log sum exp in a numerically stable way for the forward algorithm
 def log_sum_exp(vec):
     max_score = vec[0, argmax(vec)]
     max_score_broadcast = max_score.view(1, -1).expand(1, vec.size()[1])
     return max_score + torch.log(torch.sum(torch.exp(vec - max_score_broadcast)))
+
 
 def vec_log_sum_exp(vec, dim):
     """Vectorized version of log-sum-exp
@@ -476,6 +477,7 @@ def vec_log_sum_exp(vec, dim):
     max_scores, idx = torch.max(vec, dim, keepdim=True)
     max_scores_broadcast = max_scores.expand_as(vec)
     return max_scores + torch.log(torch.sum(torch.exp(vec - max_scores_broadcast), dim, keepdim=True))
+
 
 class CRF(nn.Module):
 
@@ -567,22 +569,12 @@ class CRF(nn.Module):
 
         # alphas at step i holds the viterbi variables for step i-1
         alphas = torch.autograd.Variable(inits)
+
         for unary_t in unary:
-            backpointers_t = []  # holds the backpointers for this step
-            viterbi_t = []  # holds the viterbi variables for this step
-
-            for tag in range(self.n_tags):
-                next_tag_var = alphas + self.transitions[tag]
-                best_tag_id = argmax(next_tag_var)
-                backpointers_t.append(best_tag_id)
-                viterbi_t.append(next_tag_var[0][best_tag_id])
-
-            if PYT_MAJOR_VERSION < 0.4:
-                alphas = (torch.cat(viterbi_t) + unary_t).view(1, -1)
-
-            else:
-                alphas = (torch.stack(viterbi_t, 0) + unary_t).view(1, -1)
-            backpointers.append(backpointers_t)
+            next_tag_var = alphas + self.transitions
+            viterbi, best_tag_ids = torch.max(next_tag_var, 1)
+            backpointers.append(best_tag_ids.data)
+            alphas = (viterbi + unary_t).view(1, -1)
 
         # Transition to STOP_TAG
         terminal_var = alphas + self.transitions[self.end_idx]
