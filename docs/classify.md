@@ -87,7 +87,8 @@ Two different pooling methods for NBoW are supported: max (`"model_type": "nbowm
 
 ### Status
 
-This model is implemented in TensorFlow and PyTorch.  Multi-GPU support can be enabled with `"gpus": <N>`.  `"gpus": -1` is a special case that tells the driver to run with all available GPUs.  The `CUDA_VISIBLE_DEVICES` environment variable should be set to create a mask of GPUs that are visible to the program.
+
+This model is implemented in TensorFlow and PyTorch. Multi-GPU support can be enabled by passing `--gpus <N>` to the `mead-train`.  `--gpus -1` is a special case that tells the driver to run with all available GPUs.  The `CUDA_VISIBLE_DEVICES` environment variable should be set to create a mask of GPUs that are visible to the program.
 
 ### Latest Runs
 

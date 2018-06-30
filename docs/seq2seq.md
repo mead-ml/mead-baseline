@@ -10,7 +10,7 @@ For any reasonable size data, this really needs to run on the GPU.
 
 ## Status
 
-This model is implemented in TensorFlow and PyTorch. Multi-GPU support can be enabled with `"gpus": <N>`.  `"gpus": -1` is a special case that tells the driver to run with all available GPUs.  The `CUDA_VISIBLE_DEVICES` environment variable should be set to create a mask of GPUs that are visible to the program.
+This model is implemented in TensorFlow and PyTorch. Multi-GPU support can be enabled by passing `--gpus <N>` to the `mead-train`.  `--gpus -1` is a special case that tells the driver to run with all available GPUs.  The `CUDA_VISIBLE_DEVICES` environment variable should be set to create a mask of GPUs that are visible to the program.
 
 The English-Vietnamese dataset is from https://nlp.stanford.edu/projects/nmt/ and the site authors have published previously on the dataset here: https://nlp.stanford.edu/pubs/luong-manning-iwslt15.pdf. Test results are for Single NMT on TED tst2013.  The WMT dataset is available via https://github.com/tensorflow/nmt#wmt-german-english
 
