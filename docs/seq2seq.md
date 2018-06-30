@@ -6,11 +6,13 @@ Encoder-decoder frameworks have been used for Statistical Machine Translation, I
 
 This code implements seq2seq with mini-batching (as in other examples) using adagrad, adadelta, sgd or adam.  It supports two vocabularies, and supports word2vec pre-trained models as input, filling in words that are attested in the dataset but not found in the pre-trained models.  It uses dropout for regularization.
 
-For any reasonable size data, this really needs to run on the GPU for realistic training times.
+For any reasonable size data, this really needs to run on the GPU.
 
 ## Status
 
-This model is implemented in TensorFlow and PyTorch.  The English-Vietnamese dataset is from https://nlp.stanford.edu/projects/nmt/ and the site authors have published previously on the dataset here: https://nlp.stanford.edu/pubs/luong-manning-iwslt15.pdf. Test results are for Single NMT on TED tst2013.  The WMT dataset is available via https://github.com/tensorflow/nmt#wmt-german-english
+This model is implemented in TensorFlow and PyTorch. Multi-GPU support can be enabled with `"gpus": <N>`.  `"gpus": -1` is a special case that tells the driver to run with all available GPUs.  The `CUDA_VISIBLE_DEVICES` environment variable should be set to create a mask of GPUs that are visible to the program.
+
+The English-Vietnamese dataset is from https://nlp.stanford.edu/projects/nmt/ and the site authors have published previously on the dataset here: https://nlp.stanford.edu/pubs/luong-manning-iwslt15.pdf. Test results are for Single NMT on TED tst2013.  The WMT dataset is available via https://github.com/tensorflow/nmt#wmt-german-english
 
 
 *Our results for Single NMT*

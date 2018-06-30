@@ -73,7 +73,7 @@ def optimizer(loss_fn, **kwargs):
     eta = kwargs.get('eta', kwargs.get('lr', 0.01))
     decay_type = kwargs.get('decay_type', None)
     decay_fn = None
-
+    colocate_gradients_with_ops = bool(kwargs.get('colocate_gradients_with_ops', False))
     if decay_type == 'piecewise':
         boundaries = kwargs.get('bounds', None)
         decay_values = kwargs.get('decay_values', None)
@@ -117,6 +117,9 @@ def optimizer(loss_fn, **kwargs):
     elif optim == 'adam':
         print('adam', eta)
         optz = lambda lr: tf.train.AdamOptimizer(lr)
+    elif optim == 'rmsprop':
+        print('rmsprop', eta)
+        optz = lambda lr: tf.train.RMSPropOptimizer(lr, momentum=mom)
     elif mom > 0:
         print('sgd-mom', eta, mom)
         optz = lambda lr: tf.train.MomentumOptimizer(lr, mom)
@@ -127,6 +130,7 @@ def optimizer(loss_fn, **kwargs):
     print('clip', clip)
     print('decay', decay_fn)
     return global_step, tf.contrib.layers.optimize_loss(loss_fn, global_step, eta, optz,
+                                                        colocate_gradients_with_ops=colocate_gradients_with_ops,
                                                         clip_gradients=clip, learning_rate_decay_fn=decay_fn)
 
 

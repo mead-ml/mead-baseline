@@ -14,42 +14,40 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         super(ClassifyTrainerTf, self).__init__()
         self.sess = model.sess
         self.loss = model.create_loss()
+        self.test_loss = model.create_test_loss()
         self.model = model
-        self.global_step, self.train_op = optimizer(self.loss, **kwargs)
+        self.global_step, self.train_op = optimizer(self.loss, colocate_gradients_with_ops=True, **kwargs)
 
     def _train(self, loader):
 
-        cm = ConfusionMatrix(self.model.labels)
         total_loss = 0
         steps = len(loader)
         pg = create_progress_bar(steps)
         for batch_dict in loader:
-            y = batch_dict['y']
             feed_dict = self.model.make_input(batch_dict, do_dropout=True)
-            _, step, lossv, guess = self.sess.run([self.train_op, self.global_step, self.loss, self.model.best], feed_dict=feed_dict)
-            cm.add_batch(y, guess)
+            _, step, lossv = self.sess.run([self.train_op, self.global_step, self.loss], feed_dict=feed_dict)
             total_loss += lossv
             pg.update()
 
         pg.done()
-        metrics = cm.get_all_metrics()
+        metrics = {}
         metrics['avg_loss'] = total_loss/float(steps)
         return metrics
 
     def _test(self, loader, **kwargs):
 
-        total_loss = 0
         cm = ConfusionMatrix(self.model.labels)
         steps = len(loader)
+        total_loss = 0
         verbose = kwargs.get("verbose", False)
 
         pg = create_progress_bar(steps)
         for batch_dict in loader:
             y = batch_dict['y']
             feed_dict = self.model.make_input(batch_dict)
-            lossv, guess = self.sess.run([self.loss, self.model.best], feed_dict=feed_dict)
-            cm.add_batch(y, guess)
+            guess, lossv = self.sess.run([self.model.best, self.test_loss], feed_dict=feed_dict)
             total_loss += lossv
+            cm.add_batch(y, guess)
             pg.update()
 
         pg.done()
@@ -110,7 +108,7 @@ def fit(model, ts, vs, es=None, **kwargs):
     tables = tf.tables_initializer()
     model.sess.run(tables)
     model.sess.run(tf.global_variables_initializer())
-    model.saver = tf.train.Saver()
+    model.set_saver(tf.train.Saver())
 
     max_metric = 0
     last_improved = 0

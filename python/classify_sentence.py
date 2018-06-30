@@ -39,6 +39,8 @@ parser.add_argument('--trainer_type', help='Name of trainer to load and train', 
 parser.add_argument('--rev', help='Time reverse input text', default=False, type=str2bool)
 parser.add_argument('--bounds', type=int, default=16000, help='Tell optim decay functionality how many steps before applying decay')
 parser.add_argument('--verbose', type=str2bool, default=False, help='print confusion matrix for the test data')
+parser.add_argument('--gpus', help='GPUs', type=int)
+
 
 args = parser.parse_args()
 
@@ -94,6 +96,7 @@ model = classify.create_model(embeddings, labels,
                               filtsz=args.filtsz,
                               cmotsz=args.cmotsz,
                               dropout=args.dropout,
-                              finetune=not args.static)
+                              finetune=not args.static,
+                              gpus=args.gpus)
 
 classify.fit(model, ts, vs, es, **vars(args))

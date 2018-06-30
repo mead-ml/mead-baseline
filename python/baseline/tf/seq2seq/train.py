@@ -14,6 +14,7 @@ class Seq2SeqTrainerTf(Trainer):
         super(Seq2SeqTrainerTf, self).__init__()
         self.sess = model.sess
         self.loss = model.create_loss()
+        self.test_loss = model.create_test_loss()
         self.model = model
         self.global_step, self.train_op = optimizer(self.loss, **kwargs)
 
@@ -26,7 +27,7 @@ class Seq2SeqTrainerTf(Trainer):
         self.model.saver.restore(self.model.sess, latest)
 
     def prepare(self, saver):
-        self.model.saver = saver
+        self.model.set_saver(saver)
 
     def train(self, ts, reporting_fns):
         total_loss = 0
@@ -73,7 +74,7 @@ class Seq2SeqTrainerTf(Trainer):
             epochs = self.valid_epochs
 
         fetches = {
-            "loss": self.loss,
+            "loss": self.test_loss,
         }
 
         total_loss = 0
@@ -145,6 +146,7 @@ def fit(model, ts, vs, es=None, **kwargs):
     if do_early_stopping is True:
         print('Best performance on min_metric %.3f at epoch %d' % (min_metric, last_improved))
     if es is not None:
+
         trainer.recover_last_checkpoint()
         trainer.test(es, reporting_fns, phase='Test')
 
