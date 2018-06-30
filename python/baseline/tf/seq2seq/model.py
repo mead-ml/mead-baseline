@@ -63,7 +63,7 @@ class Seq2SeqParallelModel(EncoderDecoder):
         self.src_len = kwargs.get('src_len', tf.placeholder(tf.int32, [None], name="src_len_parallel"))
         self.tgt_len = kwargs.get('tgt_len', tf.placeholder(tf.int32, [None], name="tgt_len_parallel"))
         self.mx_tgt_len = kwargs.get('mx_tgt_len', tf.placeholder(tf.int32, name="mx_tgt_len"))
-        self.pkeep = kwargs.get('pkeep', tf.placeholder(tf.float32, name="pkeep"))
+        self.pkeep = kwargs.get('pkeep', tf.placeholder_with_default(1.0, (), name="pkeep"))
         self.pdrop_value = kwargs.get('dropout', 0.5)
 
         src_splits = tf.split(self.src, gpus)
@@ -72,6 +72,9 @@ class Seq2SeqParallelModel(EncoderDecoder):
         tgt_len_splits = tf.split(self.tgt_len, gpus)
         losses = []
         with tf.Session(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False)) as sess:
+            with tf.device(tf.DeviceSpec(device_type="CPU")):
+                self.inference = create_fn(src_vocab_embed, dst_vocab_embed, sess=sess, mx_tgt_len=self.mx_tgt_len,
+                                           id=0, pkeep=self.pkeep, **kwargs)
             for i in range(gpus):
                 with tf.device(tf.DeviceSpec(device_type='GPU', device_index=i)):
                     replica = create_fn(src_vocab_embed, dst_vocab_embed, sess=sess,
@@ -86,9 +89,7 @@ class Seq2SeqParallelModel(EncoderDecoder):
                     losses.append(loss_op)
             self.loss = tf.reduce_mean(tf.stack(losses))
 
-            with tf.device(tf.DeviceSpec(device_type="CPU")):
-                self.inference = create_fn(src_vocab_embed, dst_vocab_embed, sess=sess, mx_tgt_len=self.mx_tgt_len,
-                                           id=0, pkeep=self.pkeep, **kwargs)
+
         self.sess = sess
 
     def create_loss(self):
@@ -121,8 +122,9 @@ class Seq2SeqParallelModel(EncoderDecoder):
         mx_tgt_len = np.max(dst_len)
         feed_dict = {self.src: src, self.src_len: src_len,
                      self.tgt: dst, self.tgt_len: dst_len,
-                     self.replicas[0].mx_tgt_len: mx_tgt_len,
-                     self.replicas[0].pkeep: self.pdrop_value if do_dropout else 1.0}
+                     self.mx_tgt_len: mx_tgt_len,
+                     self.pkeep: 1.0 - self.pdrop_value}
+
         return feed_dict
 
     def load(self, basename, **kwargs):
@@ -214,7 +216,7 @@ class Seq2SeqModel(EncoderDecoder):
         model.src_len = kwargs.get('src_len', tf.placeholder(tf.int32, [None], name="src_len"))
         model.tgt_len = kwargs.get('tgt_len', tf.placeholder(tf.int32, [None], name="tgt_len"))
         model.mx_tgt_len = kwargs.get('mx_tgt_len', tf.placeholder(tf.int32, name="mx_tgt_len"))
-        model.pkeep = kwargs.get('pkeep', tf.placeholder(tf.float32, name="pkeep"))
+        model.pkeep = kwargs.get('pkeep', tf.placeholder_with_default(1.0, shape=(), name="pkeep"))
         model.vocab1 = src_vocab_embed if type(src_vocab_embed) is dict else src_vocab_embed.vocab
         model.vocab2 = dst_vocab_embed if type(dst_vocab_embed) is dict else dst_vocab_embed.vocab
         attn_type = kwargs.get('attn_type', 'bahdanau').lower()
@@ -302,6 +304,8 @@ class Seq2SeqModel(EncoderDecoder):
                     model.probs = tf.no_op(name='probs')
                 else:
                     model.probs = tf.map_fn(lambda x: tf.nn.softmax(x, name='probs'), model.preds)
+
+            writer = tf.summary.FileWriter('blah', model.sess.graph)
             return model
 
     def set_saver(self, saver):
@@ -383,7 +387,7 @@ class Seq2SeqModel(EncoderDecoder):
     def run(self, source_dict):
         src = source_dict['src']
         src_len = source_dict['src_len']
-        feed_dict = {self.src: src, self.src_len: src_len, self.pkeep: 1.0}
+        feed_dict = {self.src: src, self.src_len: src_len}
         vec = self.sess.run(self.best, feed_dict=feed_dict)
         # (B x K x T)
         if len(vec.shape) == 3:
@@ -401,14 +405,17 @@ class Seq2SeqModel(EncoderDecoder):
     def make_input(self, batch_dict, do_dropout=False):
         src = batch_dict['src']
         src_len = batch_dict['src_len']
-        dst = batch_dict['dst']
-        dst_len = batch_dict['dst_len']
+        dst = batch_dict.get('dst')
 
-        mx_tgt_len = np.max(dst_len)
-        feed_dict = {self.src: src, self.src_len: src_len,
-                     self.tgt: dst, self.tgt_len: dst_len,
-                     self.mx_tgt_len: mx_tgt_len,
-                     self.pkeep: self.pdrop_value if do_dropout else 1.0}
+        feed_dict = {self.src: src, self.src_len: src_len}
+
+        if dst is not None:
+            feed_dict[self.tgt] = dst
+            feed_dict[self.tgt_len] = batch_dict['dst_len']
+            feed_dict[self.mx_tgt_len] = np.max(batch_dict['dst_len'])
+
+        if do_dropout:
+            feed_dict[self.pkeep] = 1.0 - self.pdrop_value
         return feed_dict
 
     def get_src_vocab(self):
