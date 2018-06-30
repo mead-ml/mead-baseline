@@ -432,7 +432,7 @@ class TSVSeqLabelReader(SeqLabelReader):
             self,
             max_sentence_length=-1, max_word_length=-1, mxfiltsz=0,
             clean_fn=None, vec_alloc=np.zeros, src_vec_trans=None,
-            do_chars=False, data_format='objs', trim=False, splitter='[\t\s]+'
+            do_chars=False, data_format='objs', trim=False
     ):
         super(TSVSeqLabelReader, self).__init__()
 
@@ -449,7 +449,8 @@ class TSVSeqLabelReader(SeqLabelReader):
         self.src_vec_trans = src_vec_trans
         self.do_chars = do_chars
         self.trim = trim
-        self.splitter = splitter
+
+    SPLIT_ON = '[\t\s]+'
 
     @staticmethod
     def splits(text):
@@ -464,8 +465,8 @@ class TSVSeqLabelReader(SeqLabelReader):
         return l.strip()
 
     @staticmethod
-    def label_and_sentence(line, clean_fn, splitter):
-        label_text = re.split(splitter, line)
+    def label_and_sentence(line, clean_fn):
+        label_text = re.split(TSVSeqLabelReader.SPLIT_ON, line)
         label = label_text[0]
         text = label_text[1:]
         text = ' '.join(list(filter(lambda s: len(s) != 0, [clean_fn(w) for w in text])))
@@ -482,8 +483,6 @@ class TSVSeqLabelReader(SeqLabelReader):
         :param files: Either a directory (str), or an array of individual files
         :return: 
         """
-
-        print('SPLITTER', self.splitter)
         label_idx = len(self.label2index)
         if type(files) == str:
             if os.path.isdir(files):
@@ -501,7 +500,7 @@ class TSVSeqLabelReader(SeqLabelReader):
                 continue
             with codecs.open(file, encoding='utf-8', mode='r') as f:
                 for il, line in enumerate(f):
-                    label, text = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn, self.splitter)
+                    label, text = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn)
                     if len(text) == 0:
                         continue
                     maxs = max(maxs, len(text))
@@ -551,7 +550,7 @@ class TSVSeqLabelReader(SeqLabelReader):
             examples = []
             with codecs.open(filename, encoding='utf-8', mode='r') as f:
                 for il, line in enumerate(f):
-                    label, text = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn, self.splitter)
+                    label, text = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn)
                     if len(text) == 0:
                         continue
                     y = self.label2index[label]
@@ -586,7 +585,7 @@ class TSVSeqLabelReader(SeqLabelReader):
 
             with codecs.open(filename, encoding='utf-8', mode='r') as f:
                 for i, line in enumerate(f):
-                    label, text = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn, self.splitter)
+                    label, text = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn)
                     y[i] = self.label2index[label]
                     mx = min(len(text), nozplen)
                     text = text[:mx]
@@ -617,9 +616,9 @@ def create_pred_reader(mxlen, zeropadding, clean_fn, vec_alloc, src_vec_trans, *
         do_chars = kwargs.get('do_chars', False)
         data_format = kwargs.get('data_format', 'objs')
         trim = kwargs.get('trim', False)
-        splitter = kwargs.get('splitter', '[\t\s]+')
+        #splitter = kwargs.get('splitter', '[\t\s]+')
         reader = TSVSeqLabelReader(mxlen, kwargs.get('mxwlen', -1), zeropadding, clean_fn, vec_alloc, src_vec_trans,
-                                   do_chars=do_chars, data_format=data_format, trim=trim, splitter=splitter)
+                                   do_chars=do_chars, data_format=data_format, trim=trim)
     else:
         mod = import_user_module("reader", reader_type)
         reader = mod.create_pred_reader(mxlen, zeropadding, clean_fn, vec_alloc, src_vec_trans, **kwargs)
