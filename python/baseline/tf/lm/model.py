@@ -172,7 +172,7 @@ class CharCompLanguageModel(AbstractLanguageModel):
                     word_char = tf.concat(values=[wembed, word_char], axis=2)
 
         inputs = tf.nn.dropout(word_char, lm.pkeep)
-        inputs = tf.unstack(inputs, num=lm.mxlen, axis=1)
+        #inputs = tf.unstack(inputs, num=lm.mxlen, axis=1)
         lm.hsz = kwargs['hsz']
         lm._rnnlm(inputs, vsz)
         return lm
