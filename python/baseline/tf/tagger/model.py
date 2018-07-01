@@ -192,11 +192,16 @@ class RNNTaggerModel(Tagger):
         # We can probably conditionally add the loss here
         preds = []
         if self.crf is True:
+            start = np.full((1, len(self.labels)), -1e4)
+            start[0, self.labels['<GO>']] = 0
+
             probv, tranv = self.sess.run([self.probs, self.A], feed_dict=feed_dict)
 
             for pij, sl in zip(probv, lengths):
                 unary = pij[:sl]
+                unary = np.vstack([start, unary])
                 viterbi, _ = tf.contrib.crf.viterbi_decode(unary, tranv)
+                viterbi = viterbi[1:]
                 preds.append(viterbi)
         else:
             # Get batch (B, T)

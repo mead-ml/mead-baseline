@@ -682,11 +682,11 @@ def to_spans_iobes(sequence, lut):
                     current.append('%d' % i)
                 else:
                     chunks.append('@'.join(current))
-                    print('Warning: I without matching previous B/I')
+                    print('Warning: I without matching previous B/I @ %d' % i)
                     current = [base, '%d' % i]
 
             else:
-                print('Warning: I without a previous chunk')
+                print('Warning: I without a previous chunk @ %d' % i)
                 current = [label.replace('I-', ''), '%d' % i]
 
         # We are at the end of a chunk, so flush current
@@ -709,7 +709,7 @@ def to_spans_iobes(sequence, lut):
             # This should never happen
             else:
                 current = [label.replace('E-', ''), '%d' % i]
-                print('Warning, E without previous chunk!')
+                print('Warning, E without previous chunk! @ %d' % i)
                 chunks.append('@'.join(current))
                 current = None
         # Outside

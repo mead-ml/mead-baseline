@@ -1,3 +1,4 @@
+import numpy as np
 import tensorflow as tf
 import json
 import baseline
@@ -314,8 +315,14 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
         softmax_output = tf.nn.softmax(model.probs)
         values, indices = tf.nn.top_k(softmax_output, 1)
 
+        start_np = np.full((1, 1, len(labels)), -1e4, dtype=np.float32)
+        start_np[:, 0, labels['<GO>']] = 0
+        start = tf.constant(start_np)
+        model.probs = tf.concat([start, model.probs], 1)
+
         if model.crf is True:
             indices, _ = tf.contrib.crf.crf_decode(model.probs, model.A, tf.constant([mxlen ]))## We are assuming the batchsz is 1 here
+            indices = indices[:, 1:]
 
         list_of_labels = [''] * len(labels)
         for label, idval in labels.items():
