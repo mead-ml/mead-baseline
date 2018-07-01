@@ -8,14 +8,15 @@
         "mxwlen": 40,
         "lower": true
     },
-    "backend": "pytorch",
+    "backend": "tensorflow",
     "dataset": "ptb",
     "loader": {
         "reader_type": "default"
     },
     "model": {
         "model_type": "default",
-        "hsz": 200
+        "hsz": 650,
+        "layers": 2 
     },
     "word_embeddings": {
         "label": "w2v-gn"
