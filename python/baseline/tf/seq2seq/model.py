@@ -10,7 +10,7 @@ from baseline.model import EncoderDecoder, load_seq2seq_model, create_seq2seq_mo
 def _temporal_cross_entropy_loss(logits, labels, label_lengths, mx_seq_length):
     """Do cross-entropy loss accounting for sequence lengths
     
-    :param logits: a `Tensor` with shape `[batch, timesteps, vocab]`
+    :param logits: a `Tensor` with shape `[timesteps, batch, vocab]`
     :param labels: an integer `Tensor` with shape `[batch, timesteps]`
     :param label_lengths: The actual length of the target text.  Assume right-padded
     :param mx_seq_length: The maximum length of the sequence
@@ -23,10 +23,12 @@ def _temporal_cross_entropy_loss(logits, labels, label_lengths, mx_seq_length):
     # Logits == mxlen=10*batchsz=100
     # Labels == mxlen=9,batchsz=100
     labels = labels[0:mx_seq_length, :]
+    logit_length = tf.to_int32(tf.shape(logits)[0])
     timesteps = tf.to_int32(tf.shape(labels)[0])
     # The labels no longer include <GO> so go is not useful.  This means that if the length was 100 before, the length
     # of labels is now 99 (and that is the max allowed)
-
+    pad_size = timesteps - logit_length
+    logits = tf.pad(logits, [[0, pad_size], [0, 0], [0, 0]])
     #logits = logits[0:mx_seq_length, :, :]
     with tf.name_scope("Loss"):
         losses = tf.nn.sparse_softmax_cross_entropy_with_logits(
@@ -42,15 +44,108 @@ def _temporal_cross_entropy_loss(logits, labels, label_lengths, mx_seq_length):
         return losses
 
 
+class Seq2SeqParallelModel(EncoderDecoder):
+
+    def __init__(self, create_fn, src_vocab_embed, dst_vocab_embed, **kwargs):
+        super(Seq2SeqParallelModel, self).__init__()
+        # We need to remove these because we may be calling back to our caller, and we need
+        # the condition of calling to be non-parallel
+        gpus = kwargs.pop('gpus', -1)
+        # If the gpu ID is set to -1, use CUDA_VISIBLE_DEVICES to figure it out
+        if gpus == -1:
+            gpus = len(os.getenv('CUDA_VISIBLE_DEVICES', os.getenv('NV_GPU', '0')).split(','))
+        print('Num GPUs', gpus)
+        mxlen = kwargs.get('mxlen', 100)
+        self.saver = None
+        self.replicas = []
+        self.src = kwargs.get('src', tf.placeholder(tf.int32, [None, mxlen], name="src_parallel"))
+        self.tgt = kwargs.get('tgt', tf.placeholder(tf.int32, [None, mxlen], name="tgt_parallel"))
+        self.src_len = kwargs.get('src_len', tf.placeholder(tf.int32, [None], name="src_len_parallel"))
+        self.tgt_len = kwargs.get('tgt_len', tf.placeholder(tf.int32, [None], name="tgt_len_parallel"))
+        self.mx_tgt_len = kwargs.get('mx_tgt_len', tf.placeholder(tf.int32, name="mx_tgt_len"))
+        self.pkeep = kwargs.get('pkeep', tf.placeholder_with_default(1.0, (), name="pkeep"))
+        self.pdrop_value = kwargs.get('dropout', 0.5)
+
+        src_splits = tf.split(self.src, gpus)
+        tgt_splits = tf.split(self.tgt, gpus)
+        src_len_splits = tf.split(self.src_len, gpus)
+        tgt_len_splits = tf.split(self.tgt_len, gpus)
+        losses = []
+        with tf.Session(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False)) as sess:
+            with tf.device(tf.DeviceSpec(device_type="CPU")):
+                self.inference = create_fn(src_vocab_embed, dst_vocab_embed, sess=sess, mx_tgt_len=self.mx_tgt_len,
+                                           id=0, pkeep=self.pkeep, **kwargs)
+            for i in range(gpus):
+                with tf.device(tf.DeviceSpec(device_type='GPU', device_index=i)):
+                    replica = create_fn(src_vocab_embed, dst_vocab_embed, sess=sess,
+                                        src=src_splits[i], tgt=tgt_splits[i],
+                                        src_len=src_len_splits[i], tgt_len=tgt_len_splits[i],
+                                        mx_tgt_len=self.mx_tgt_len,
+                                        id=i+1,
+                                        pkeep=self.pkeep,
+                                        **kwargs)
+                    self.replicas.append(replica)
+                    loss_op = replica.create_loss()
+                    losses.append(loss_op)
+            self.loss = tf.reduce_mean(tf.stack(losses))
+
+
+        self.sess = sess
+
+    def create_loss(self):
+        return self.loss
+
+    def create_test_loss(self):
+        return self.inference.create_test_loss()
+
+    def save(self, model_base):
+        return self.inference.save(model_base)
+
+    def set_saver(self, saver):
+        self.inference.saver = saver
+        self.saver = saver
+
+    def step(self, batch_dict):
+        """
+        Generate probability distribution over output V for next token
+        """
+        return self.inference.step(batch_dict)
+
+    def make_input(self, batch_dict, do_dropout=False):
+        if do_dropout is False:
+            return self.inference.make_input(batch_dict)
+        src = batch_dict['src']
+        src_len = batch_dict['src_len']
+        dst = batch_dict['dst']
+        dst_len = batch_dict['dst_len']
+
+        mx_tgt_len = np.max(dst_len)
+        feed_dict = {self.src: src, self.src_len: src_len,
+                     self.tgt: dst, self.tgt_len: dst_len,
+                     self.mx_tgt_len: mx_tgt_len,
+                     self.pkeep: 1.0 - self.pdrop_value}
+
+        return feed_dict
+
+    def load(self, basename, **kwargs):
+        self.inference.load(basename, **kwargs)
+
+
 class Seq2SeqModel(EncoderDecoder):
 
     def create_loss(self):
-        # We do not want to count <GO> in our assessment, we do want to count <EOS>
-        return _temporal_cross_entropy_loss(self.preds[:-1, :, :], self.tgt[:, 1:], self.tgt_len - 1, self.mx_tgt_len - 1)
+        with tf.variable_scope('Loss{}'.format(self.id), reuse=False):
+            # We do not want to count <GO> in our assessment, we do want to count <EOS>
+            return _temporal_cross_entropy_loss(self.preds[:-1, :, :], self.tgt[:, 1:], self.tgt_len - 1, self.mx_tgt_len - 1)
+
+    def create_test_loss(self):
+        with tf.variable_scope('Loss', reuse=False):
+            # We do not want to count <GO> in our assessment, we do want to count <EOS>
+            return _temporal_cross_entropy_loss(self.preds[:-1, :, :], self.tgt[:, 1:], self.tgt_len - 1, self.mx_tgt_len - 1)
 
     def __init__(self):
         super(Seq2SeqModel, self).__init__()
-        pass
+        self.saver = None
 
     @staticmethod
     def load(basename, **kwargs):
@@ -98,8 +193,11 @@ class Seq2SeqModel(EncoderDecoder):
     @staticmethod
     def create(src_vocab_embed, dst_vocab_embed, **kwargs):
 
-        model = Seq2SeqModel()
+        gpus = kwargs.get('gpus')
+        if gpus is not None:
+            return Seq2SeqParallelModel(Seq2SeqModel.create, src_vocab_embed, dst_vocab_embed, **kwargs)
 
+        model = Seq2SeqModel()
         hsz = int(kwargs['hsz'])
         attn = kwargs.get('model_type') == 'attn'
         nlayers = int(kwargs.get('layers', 1))
@@ -113,15 +211,16 @@ class Seq2SeqModel(EncoderDecoder):
         unif = kwargs.get('unif', 0.25)
         model.src = kwargs.get('src', tf.placeholder(tf.int32, [None, mxlen], name="src"))
         model.tgt = kwargs.get('tgt', tf.placeholder(tf.int32, [None, mxlen], name="tgt"))
-        model.pkeep = kwargs.get('pkeep', tf.placeholder(tf.float32, name="pkeep"))
         model.pdrop_value = kwargs.get('dropout', 0.5)
         model.src_len = kwargs.get('src_len', tf.placeholder(tf.int32, [None], name="src_len"))
         model.tgt_len = kwargs.get('tgt_len', tf.placeholder(tf.int32, [None], name="tgt_len"))
         model.mx_tgt_len = kwargs.get('mx_tgt_len', tf.placeholder(tf.int32, name="mx_tgt_len"))
+        model.pkeep = kwargs.get('pkeep', tf.placeholder_with_default(1.0, shape=(), name="pkeep"))
         model.vocab1 = src_vocab_embed if type(src_vocab_embed) is dict else src_vocab_embed.vocab
         model.vocab2 = dst_vocab_embed if type(dst_vocab_embed) is dict else dst_vocab_embed.vocab
         attn_type = kwargs.get('attn_type', 'bahdanau').lower()
         model.arc_state = kwargs.get('arc_state', False)
+        model.id = kwargs.get('id', 0)
         model.mxlen = mxlen
         model.hsz = hsz
         model.nlayers = nlayers
@@ -192,21 +291,24 @@ class Seq2SeqModel(EncoderDecoder):
                                                                                               swap_memory=True,
                                                                                               output_time_major=True,
                                                                                               maximum_iterations=model.mxlen)
-
                     if predict is True and beam_width > 1:
                         model.preds = tf.no_op()
                         best = final_outputs.predicted_ids
                     else:
                         model.preds = final_outputs.rnn_output
                         best = final_outputs.sample_id
-
             with tf.name_scope("Output"):
                 model.best = tf.identity(best, name='best')
                 if beam_width > 1:
                     model.probs = tf.no_op(name='probs')
                 else:
                     model.probs = tf.map_fn(lambda x: tf.nn.softmax(x, name='probs'), model.preds)
+
+            writer = tf.summary.FileWriter('blah', model.sess.graph)
             return model
+
+    def set_saver(self, saver):
+        self.saver = saver
 
     def _attn_cell_w_dropout(self, rnn_enc_tensor, beam, attn_type):
         cell = multi_rnn_cell_w_dropout(self.hsz, self.pkeep, self.rnntype, self.nlayers)
@@ -284,7 +386,7 @@ class Seq2SeqModel(EncoderDecoder):
     def run(self, source_dict):
         src = source_dict['src']
         src_len = source_dict['src_len']
-        feed_dict = {self.src: src, self.src_len: src_len, self.pkeep: 1.0}
+        feed_dict = {self.src: src, self.src_len: src_len}
         vec = self.sess.run(self.best, feed_dict=feed_dict)
         # (B x K x T)
         if len(vec.shape) == 3:
@@ -302,14 +404,17 @@ class Seq2SeqModel(EncoderDecoder):
     def make_input(self, batch_dict, do_dropout=False):
         src = batch_dict['src']
         src_len = batch_dict['src_len']
-        dst = batch_dict['dst']
-        dst_len = batch_dict['dst_len']
+        dst = batch_dict.get('dst')
 
-        mx_tgt_len = np.max(dst_len)
-        feed_dict = {self.src: src, self.src_len: src_len,
-                     self.tgt: dst, self.tgt_len: dst_len,
-                     self.mx_tgt_len: mx_tgt_len,
-                     self.pkeep: self.pdrop_value if do_dropout else 1.0}
+        feed_dict = {self.src: src, self.src_len: src_len}
+
+        if dst is not None:
+            feed_dict[self.tgt] = dst
+            feed_dict[self.tgt_len] = batch_dict['dst_len']
+            feed_dict[self.mx_tgt_len] = np.max(batch_dict['dst_len'])
+
+        if do_dropout:
+            feed_dict[self.pkeep] = 1.0 - self.pdrop_value
         return feed_dict
 
     def get_src_vocab(self):

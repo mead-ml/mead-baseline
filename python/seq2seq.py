@@ -40,6 +40,7 @@ parser.add_argument('--reader_type', default='default', help='reader type')
 parser.add_argument('--model_type', help='Name of model to load and train', default='default')
 parser.add_argument('--trainer_type', help='Name of trainer to load and train', default='default')
 parser.add_argument('--arc_state', help='Create arc between encoder final state and decoder init state', default=False, type=str2bool)
+parser.add_argument('--gpus', help='GPUs', type=int)
 args = parser.parse_args()
 gpu = not args.nogpu
 
@@ -87,7 +88,9 @@ es = reader.load(args.test, embed1.vocab, embed2.vocab, args.batchsz)
 print('Finished loading datasets')
 rlut1 = revlut(embed1.vocab)
 rlut2 = revlut(embed2.vocab)
+
 model = seq2seq.create_model(embed1, embed2, **vars(args))
+
 # This code is framework specific
 if args.showex:
     args.after_train_fn = lambda model: show_ex_fn(model, es, rlut1, rlut2, embed2,
