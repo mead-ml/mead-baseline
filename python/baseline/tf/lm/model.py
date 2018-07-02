@@ -17,11 +17,13 @@ class AbstractLanguageModel(object):
 
     def _rnnlm(self, inputs, vsz):
 
-        rnnfwd = stacked_lstm(self.hsz, self.pkeep, self.layers)
+        #rnnfwd = stacked_lstm(self.hsz, self.pkeep, self.layers)
+        def cell():
+            return lstm_cell_w_dropout(self.hsz, self.pkeep)
+        rnnfwd = tf.contrib.rnn.MultiRNNCell([cell() for _ in range(self.layers)], state_is_tuple=True)
+
         self.initial_state = rnnfwd.zero_state(self.batchsz, tf.float32)
         rnnout, state = tf.nn.dynamic_rnn(rnnfwd, inputs, initial_state=self.initial_state, dtype=tf.float32)
-        self.final_state = state
-
         output = tf.reshape(tf.concat(rnnout, 1), [-1, self.hsz])
 
         softmax_w = tf.get_variable(
@@ -29,6 +31,8 @@ class AbstractLanguageModel(object):
         softmax_b = tf.get_variable("softmax_b", [vsz], dtype=tf.float32)
 
         self.logits = tf.nn.xw_plus_b(output, softmax_w, softmax_b, name="logits")
+        self.final_state = state
+
 
     def save_values(self, basename):
         self.saver.save(self.sess, basename)
