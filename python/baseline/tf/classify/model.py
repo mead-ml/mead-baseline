@@ -212,11 +212,8 @@ class WordClassifierBase(Classifier):
         y = batch_dict.get('y', None)
         xch = batch_dict.get('xch')
         lengths = batch_dict.get('lengths')
-        #feed_dict = {self.x: x, self.pkeep: pkeep}
-        feed_dict = {self.x: x}
-        if do_dropout:
-            feed_dict[self.pkeep] = 1.0 - self.pdrop_value
-        #pkeep = 1.0 - self.pdrop_value if do_dropout else 1.0
+        pkeep = 1.0 - self.pdrop_value if do_dropout else 1.0
+        feed_dict = {self.x: x, self.pkeep: pkeep}
 
         if hasattr(self, 'lengths') and self.lengths is not None:
             feed_dict[self.lengths] = lengths
