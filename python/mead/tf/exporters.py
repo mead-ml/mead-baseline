@@ -321,7 +321,7 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
         model.probs = tf.concat([start, model.probs], 1)
 
         if model.crf is True:
-            indices, _ = tf.contrib.crf.crf_decode(model.probs, model.A, tf.constant([mxlen ]))## We are assuming the batchsz is 1 here
+            indices, _ = tf.contrib.crf.crf_decode(model.probs, model.A, tf.constant([mxlen + 1]))## We are assuming the batchsz is 1 here
             indices = indices[:, 1:]
 
         list_of_labels = [''] * len(labels)

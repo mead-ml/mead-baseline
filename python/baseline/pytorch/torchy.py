@@ -523,7 +523,7 @@ class CRF(nn.Module):
             self.add_ends = False
         self.span_type = None
         if vocab is not None:
-            assert span_type is not None, "To mask transitions you need to provide a tagging span_type, choices are `IOB`, `IOB2`, and `IOBES`"
+            assert span_type is not None, "To mask transitions you need to provide a tagging span_type, choices are `IOB`, `BIO` (or `IOB2`), and `IOBES`"
             # If there weren't start and end idx provided we need to add them.
             if idxs is None:
                 vocab = vocab.copy()

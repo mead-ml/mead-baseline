@@ -78,7 +78,7 @@ class RNNTaggerModel(Tagger):
             model.mxlen = state.get('mxlen', 100)
             model.maxw = state.get('maxw', 100)
             model.crf = bool(state.get('crf', False))
-            model.crf_mask = state.get('crf_mask')
+            model.crf_mask = bool(state.get('crf_mask', False))
             model.span_type = state.get('span_type')
             model.proj = bool(state.get('proj', False))
 
@@ -143,7 +143,7 @@ class RNNTaggerModel(Tagger):
     def _compute_sentence_level_loss(self):
 
         if self.crf_mask:
-            assert self.span_type is not None, "A Crf mask cannot be used without providing `span_type`"
+            assert self.span_type is not None, "To mask transitions you need to provide a tagging span_type, choices are `IOB`, `BIO` (or `IOB2`), and `IOBES`"
             A = tf.get_variable(
                 "transitions_raw",
                 shape=(len(self.labels), len(self.labels)),
@@ -192,14 +192,15 @@ class RNNTaggerModel(Tagger):
         # We can probably conditionally add the loss here
         preds = []
         if self.crf is True:
-            start = np.full((1, len(self.labels)), -1e4)
-            start[0, self.labels['<GO>']] = 0
 
             probv, tranv = self.sess.run([self.probs, self.A], feed_dict=feed_dict)
+            batch_sz, _, label_sz = probv.shape
+            start = np.full((batch_sz, 1, label_sz), -1e4)
+            start[:, 0, self.labels['<GO>']] = 0
+            probv = np.concatenate([start, probv], 1)
 
             for pij, sl in zip(probv, lengths):
-                unary = pij[:sl]
-                unary = np.vstack([start, unary])
+                unary = pij[:sl + 1]
                 viterbi, _ = tf.contrib.crf.viterbi_decode(unary, tranv)
                 viterbi = viterbi[1:]
                 preds.append(viterbi)
@@ -231,7 +232,7 @@ class RNNTaggerModel(Tagger):
         nlayers = kwargs.get('layers', 1)
         model.labels = labels
         model.crf = bool(kwargs.get('crf', False))
-        model.crf_mask = kwargs.get('crf_mask')
+        model.crf_mask = bool(kwargs.get('crf_mask', False))
         model.span_type = kwargs.get('span_type')
         model.proj = bool(kwargs.get('proj', False))
         model.feed_input = bool(kwargs.get('feed_input', False))
