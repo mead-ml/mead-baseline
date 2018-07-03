@@ -23,6 +23,7 @@
 	"wsz": 10,
 	"dropout": 0.5,
 	"rnntype": "blstm",
+        "crf_mask": "true",
 	"crf": 1
     },
     "word_embeddings": {"label": "glove-42B"},
@@ -34,6 +35,7 @@
 	"mom": 0.9,
 	"patience": 20,
 	"early_stopping_metric": "f1",
+        "span_type": "bio",
 	"clip": 5.0
     }
 }
