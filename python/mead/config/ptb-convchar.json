@@ -19,17 +19,18 @@
         "nfeat_factor": 50,
         "hsz": 650,
         "layers": 2,
-        "gating": "highway"
+        "gating": "highway",
+        "num_gates": 2
     },
     "word_embeddings": {
         "dsz": 0
     },
     "train": {
-        "epochs": 39,
-        "decay_rate": 1.4,
+        "epochs": 25,
+        "decay_rate": 1.6,
         "patience": 40000,
         "optim": "sgd",
-        "start_decay_epoch": 6,
+        "start_decay_epoch": 10,
         "decay_type": "zaremba",
         "eta": 1.0,
         "mom": 0.0,
