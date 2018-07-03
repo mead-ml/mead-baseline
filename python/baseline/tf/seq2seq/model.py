@@ -154,7 +154,6 @@ class Seq2SeqModel(EncoderDecoder):
             state = json.load(f)
         # FIXME: Need a single name for this.  This is a total hack
         state["layers"] = state["nlayers"]
-        #print(state)
         with open(basename + '-1.vocab', 'r') as f:
             src_vocab_embed = json.load(f)
 

@@ -6,29 +6,33 @@ import json
 class AbstractLanguageModel(object):
 
     def __init__(self):
-        pass
+        self.layers = None
+        self.hsz = None
+        self.rnntype = 'lstm'
+        self.pkeep = None
+        self.saver = None
 
     def save_using(self, saver):
         self.saver = saver
 
-    def _rnnlm(self, hsz, nlayers, inputs, vsz):
+    def _rnnlm(self, inputs, vsz):
 
+        #rnnfwd = stacked_lstm(self.hsz, self.pkeep, self.layers)
         def cell():
-            return tf.contrib.rnn.DropoutWrapper(lstm_cell(hsz), output_keep_prob=self.pkeep)
+            return lstm_cell_w_dropout(self.hsz, self.pkeep)
+        rnnfwd = tf.contrib.rnn.MultiRNNCell([cell() for _ in range(self.layers)], state_is_tuple=True)
 
-        cell = tf.contrib.rnn.MultiRNNCell(
-            [cell() for _ in range(nlayers)], state_is_tuple=True)
-
-        self.initial_state = cell.zero_state(self.batchsz, tf.float32)
-        outputs, state = tf.contrib.rnn.static_rnn(cell, inputs, initial_state=self.initial_state, dtype=tf.float32)
-        output = tf.reshape(tf.concat(outputs, 1), [-1, hsz])
+        self.initial_state = rnnfwd.zero_state(self.batchsz, tf.float32)
+        rnnout, state = tf.nn.dynamic_rnn(rnnfwd, inputs, initial_state=self.initial_state, dtype=tf.float32)
+        output = tf.reshape(tf.concat(rnnout, 1), [-1, self.hsz])
 
         softmax_w = tf.get_variable(
-            "softmax_w", [hsz, vsz], dtype=tf.float32)
+            "softmax_w", [self.hsz, vsz], dtype=tf.float32)
         softmax_b = tf.get_variable("softmax_b", [vsz], dtype=tf.float32)
 
         self.logits = tf.nn.xw_plus_b(output, softmax_w, softmax_b, name="logits")
         self.final_state = state
+
 
     def save_values(self, basename):
         self.saver.save(self.sess, basename)
@@ -47,10 +51,6 @@ class AbstractLanguageModel(object):
             loss = tf.reduce_sum(loss) / self.batchsz
             return loss
 
-    @classmethod
-    def create(cls, batchsz, nbptt, maxw, **kwargs):
-        pass
-
     def get_vocab(self, vocab_type='word'):
         pass
 
@@ -63,7 +63,6 @@ class WordLanguageModel(AbstractLanguageModel):
     def make_input(self, batch_dict, do_dropout=False):
         x = batch_dict['x']
         y = batch_dict['y']
-
         pkeep = 1.0 - self.pdrop_value if do_dropout else 1.0
         feed_dict = {self.x: x, self.y: y, self.pkeep: pkeep}
         return feed_dict
@@ -75,17 +74,16 @@ class WordLanguageModel(AbstractLanguageModel):
         word_vec = embeddings['word']
 
         lm.batchsz = kwargs['batchsz']
-        lm.nbptt = kwargs['nbptt']
+        lm.mxlen = kwargs.get('mxlen', kwargs['nbptt'])
         lm.maxw = kwargs['maxw']
         lm.sess = kwargs.get('sess', tf.Session())
-        lm.x = kwargs.get('x', tf.placeholder(tf.int32, [None, lm.nbptt], name="x"))
-        lm.y = kwargs.get('y', tf.placeholder(tf.int32, [None, lm.nbptt], name="y"))
+        lm.x = kwargs.get('x', tf.placeholder(tf.int32, [None, lm.mxlen], name="x"))
+        lm.y = kwargs.get('y', tf.placeholder(tf.int32, [None, lm.mxlen], name="y"))
+        lm.rnntype = kwargs.get('rnntype', 'lstm')
         lm.pkeep = kwargs.get('pkeep', tf.placeholder(tf.float32, name="pkeep"))
         pdrop = kwargs.get('pdrop', 0.5)
         lm.pdrop_value = pdrop
-
-
-        hsz = kwargs['hsz']
+        lm.hsz = kwargs['hsz']
         lm.word_vocab = word_vec.vocab
         vsz = word_vec.vsz + 1
 
@@ -96,9 +94,9 @@ class WordLanguageModel(AbstractLanguageModel):
                 wembed = tf.nn.embedding_lookup(Ww, lm.x, name="embeddings")
 
         inputs = tf.nn.dropout(wembed, lm.pkeep)
-        inputs = tf.unstack(inputs, num=lm.nbptt, axis=1)
-        nlayers = kwargs.get('layer', kwargs.get('nlayers', 1))
-        lm._rnnlm(hsz, nlayers, inputs, vsz)
+        ##inputs = tf.unstack(inputs, num=lm.mxlen, axis=1)
+        lm.layers = kwargs.get('layers', kwargs.get('nlayers', 1))
+        lm._rnnlm(inputs, vsz)
         return lm
 
     def get_vocab(self, vocab_type='word'):
@@ -112,6 +110,12 @@ class WordLanguageModel(AbstractLanguageModel):
         base = path[-1]
         outdir = '/'.join(path[:-1])
 
+        state = {"mxlen": self.mxlen, "maxw": self.maxw,
+                 'hsz': self.hsz, 'batchsz': self.batchsz,
+                 'layers': self.layers}
+        with open(basename + '.state', 'w') as f:
+            json.dump(state, f)
+
         tf.train.write_graph(self.sess.graph_def, outdir, base + '.graph', as_text=False)
         with open(basename + '.saver', 'w') as f:
             f.write(str(self.saver.as_saver_def()))
@@ -119,8 +123,6 @@ class WordLanguageModel(AbstractLanguageModel):
         if len(self.word_vocab) > 0:
             with open(basename + '-word.vocab', 'w') as f:
                 json.dump(self.word_vocab, f)
-        with open(basename + '-batch_dims.json', 'w') as f:
-            json.dump({'batchsz': self.batchsz, 'nbptt': self.nbptt, 'maxw': self.maxw}, f)
 
 
 class CharCompLanguageModel(AbstractLanguageModel):
@@ -144,40 +146,39 @@ class CharCompLanguageModel(AbstractLanguageModel):
         word_vec = embeddings['word']
         char_vec = embeddings['char']
         lm.batchsz = kwargs['batchsz']
-        lm.nbptt = kwargs['nbptt']
+        kwargs['mxlen'] = kwargs.get('mxlen', kwargs['nbptt'])
+        lm.mxlen = kwargs['mxlen']
         lm.maxw = kwargs['maxw']
         lm.sess = kwargs.get('sess', tf.Session())
-        lm.x = kwargs.get('x', tf.placeholder(tf.int32, [None, lm.nbptt], name="x"))
-        lm.xch = kwargs.get('xch', tf.placeholder(tf.int32, [None, lm.nbptt, lm.maxw], name="xch"))
-        lm.y = kwargs.get('y', tf.placeholder(tf.int32, [None, lm.nbptt], name="y"))
+        lm.x = kwargs.get('x', tf.placeholder(tf.int32, [None, lm.mxlen], name="x"))
+        lm.xch = kwargs.get('xch', tf.placeholder(tf.int32, [None, lm.mxlen, lm.maxw], name="xch"))
+        lm.y = kwargs.get('y', tf.placeholder(tf.int32, [None, lm.mxlen], name="y"))
         lm.pkeep = kwargs.get('pkeep', tf.placeholder(tf.float32, name="pkeep"))
-
-        filtsz = kwargs['cfiltsz']
-
+        lm.rnntype = kwargs.get('rnntype', 'lstm')
         vsz = word_vec.vsz + 1
         lm.char_vocab = char_vec.vocab
+        lm.word_vocab = word_vec.vocab
         lm.pdrop_value = kwargs.get('pdrop', 0.5)
+        lm.layers = kwargs.get('layers', kwargs.get('nlayers', 1))
         char_dsz = char_vec.dsz
-        Wc = tf.Variable(tf.constant(char_vec.weights, dtype=tf.float32), name="Wch")
-        ce0 = tf.scatter_update(Wc, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, char_dsz]))
+        with tf.name_scope("CharLUT"):
+            Wch = tf.Variable(tf.constant(char_vec.weights, dtype=tf.float32), name="Wch", trainable=True)
+            ech0 = tf.scatter_update(Wch, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, char_dsz]))
+            word_char, wchsz = pool_chars(lm.xch, Wch, ech0, char_dsz, **kwargs)
 
-        wsz = kwargs['wsz']
-        nlayers = kwargs.get('layer', kwargs.get('nlayers', 1))
-        with tf.control_dependencies([ce0]):
-            xch_seq = tensor2seq(lm.xch)
-            cembed_seq = []
-            for i, xch_i in enumerate(xch_seq):
-                cembed_seq.append(shared_char_word_var_fm(Wc, xch_i, filtsz, char_dsz, wsz, None if i == 0 else True))
-            word_char = seq2tensor(cembed_seq)
+        lm.use_words = kwargs.get('use_words', False)
+        if lm.use_words:
+            with tf.name_scope("WordLUT"):
+                Ww = tf.Variable(tf.constant(word_vec.weights, dtype=tf.float32), name="W")
+                we0 = tf.scatter_update(Ww, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, word_vec.dsz]))
+                with tf.control_dependencies([we0]):
+                    wembed = tf.nn.embedding_lookup(Ww, lm.x, name="embeddings")
+                    word_char = tf.concat(values=[wembed, word_char], axis=2)
 
-        # List to tensor, reform as (T, B, W)
-        # Join embeddings along the third dimension
-        joint = word_char
-
-        inputs = tf.nn.dropout(joint, lm.pkeep)
-        inputs = tf.unstack(inputs, num=lm.nbptt, axis=1)
-        hsz = kwargs['hsz']
-        lm._rnnlm(hsz, nlayers, inputs, vsz)
+        inputs = tf.nn.dropout(word_char, lm.pkeep)
+        #inputs = tf.unstack(inputs, num=lm.mxlen, axis=1)
+        lm.hsz = kwargs['hsz']
+        lm._rnnlm(inputs, vsz)
         return lm
 
     def get_vocab(self, vocab_type='word'):
@@ -185,19 +186,30 @@ class CharCompLanguageModel(AbstractLanguageModel):
             return self.char_vocab
         return None
 
+    def save_values(self, basename):
+        self.saver.save(self.sess, basename)
+
     def save_md(self, basename):
+
         path = basename.split('/')
         base = path[-1]
         outdir = '/'.join(path[:-1])
+
+        state = {"mxlen": self.mxlen, "maxw": self.maxw, 'use_words': self.use_words,
+                 'layers': self.layers}
+        with open(basename + '.state', 'w') as f:
+            json.dump(state, f)
+
         tf.train.write_graph(self.sess.graph_def, outdir, base + '.graph', as_text=False)
         with open(basename + '.saver', 'w') as f:
             f.write(str(self.saver.as_saver_def()))
 
-        if len(self.char_vocab) > 0:
-            with open(basename + '-char.vocab', 'w') as f:
-                json.dump(self.char_vocab, f)
-        with open(basename + '-batch_dims.json', 'w') as f:
-            json.dump({'batchsz': self.batchsz, 'nbptt': self.nbptt, 'maxw': self.maxw}, f)
+        if len(self.word_vocab) > 0:
+            with open(basename + '-word.vocab', 'w') as f:
+                json.dump(self.word_vocab, f)
+
+        with open(basename + '-char.vocab', 'w') as f:
+            json.dump(self.char_vocab, f)
 
 
 BASELINE_LM_MODELS = {

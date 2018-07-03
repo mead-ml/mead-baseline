@@ -267,7 +267,7 @@ def parallel_conv(input_, filtsz, dsz, motsz, activation_fn=tf.nn.relu):
     :param filtsz: The list of filter widths to use.
     :param dsz: The depths of the input (H).
     :param motsz: The number of conv filters to use (can be an int or a list to allow for various sized filters)
-
+    :param activation_fn: The activation function to use (`default=tf.nn.relu`)
     :Keyword Arguments:
     * *activation_fn* -- (``callable``) The activation function to apply after the convolution and bias add
     """
@@ -296,14 +296,7 @@ def parallel_conv(input_, filtsz, dsz, motsz, activation_fn=tf.nn.relu):
             mots.append(mot)
     motsz_all = sum(motsz)
     combine = tf.reshape(tf.concat(values=mots, axis=FEATURE_AXIS), [-1, motsz_all])
-    return combine
-
-
-def char_word_conv_embeddings(char_vec, filtsz, char_dsz, wsz, activation_fn=tf.nn.tanh):
-    combine = parallel_conv(char_vec, filtsz, char_dsz, wsz, activation_fn)
-    wsz_all = wsz * len(filtsz)
-    joined = skip_conns(combine, wsz_all, 1)
-    return joined
+    return combine, motsz_all
 
 
 def tf_activation(name):
@@ -314,12 +307,10 @@ def tf_activation(name):
     return tf.nn.relu
 
 
-def char_word_conv_embeddings_var_fm(char_vec, filtsz, char_dsz, nfeat_factor, max_feat=200, activation_fn=tf.nn.tanh):
-    nfeats = [min(nfeat_factor * fsz, max_feat) for fsz in filtsz]
-    wsz_all = sum(nfeats)
-    combine = parallel_conv(char_vec, filtsz, char_dsz, nfeats, activation_fn)
-    joined = highway_conns(combine, wsz_all, 2)
-    return joined
+def char_word_conv_embeddings(char_vec, filtsz, char_dsz, nfeats, activation_fn=tf.nn.tanh, gating=skip_conns, num_gates=1):
+    combine, wsz_all = parallel_conv(char_vec, filtsz, char_dsz, nfeats, activation_fn)
+    joined = gating(combine, wsz_all, num_gates)
+    return joined, wsz_all
 
 
 def pool_chars(x_char, Wch, ce0, char_dsz, **kwargs):
@@ -332,35 +323,28 @@ def pool_chars(x_char, Wch, ce0, char_dsz, **kwargs):
     :param kwargs:
     :return: The character compositional embedding and the number of hidden units as a tuple
     """
-    wsz = kwargs.get('wsz', 30)
     filtsz = kwargs.get('cfiltsz', [3])
+    if 'nfeat_factor' in kwargs:
+        max_feat = kwargs.get('max_feat', 200)
+        nfeats = [min(kwargs['nfeat_factor'] * fsz, max_feat) for fsz in filtsz]
+    else:
+        nfeats = kwargs.get('wsz', 30)
     mxlen = int(kwargs.get('maxs', kwargs.get('mxlen', 100)))
     mxwlen = kwargs.get('maxw', kwargs.get('mxwlen', 40))
+    gating = kwargs.get('gating', "skip")
+    gating_fn = highway_conns if gating.startswith('highway') else skip_conns
+    num_gates = int(kwargs.get('num_gates', 1))
+    # print(gating_fn, num_gates)
     activation_type = kwargs.get('activation', 'tanh')
     with tf.variable_scope("Chars2Word"):
         with tf.control_dependencies([ce0]):
             char_bt_x_w = tf.reshape(x_char, [-1, mxwlen])
             cembed = tf.nn.embedding_lookup(Wch, char_bt_x_w, name="embeddings")
-            cmot = char_word_conv_embeddings(cembed, filtsz, char_dsz, wsz,
-                                             activation_fn=tf_activation(activation_type))
-            word_char = tf.reshape(cmot, [-1, mxlen, len(filtsz) * wsz])
+            cmot, num_filts = char_word_conv_embeddings(cembed, filtsz, char_dsz, nfeats,
+                                                        activation_fn=tf_activation(activation_type),
+                                                        gating=gating_fn,
+                                                        num_gates=num_gates)
+            word_char = tf.reshape(cmot, [-1, mxlen, num_filts])
 
-    return word_char, len(filtsz) * wsz
+    return word_char, num_filts
 
-
-def shared_char_word(Wch, xch_i, filtsz, char_dsz, wsz, reuse):
-
-    with tf.variable_scope("SharedCharWord", reuse=reuse):
-        cembed = tf.nn.embedding_lookup(Wch, xch_i)
-        if len(filtsz) == 0 or filtsz[0] == 0:
-            return tf.reduce_sum(cembed, [1])
-        return char_word_conv_embeddings(cembed, filtsz, char_dsz, wsz)
-
-
-def shared_char_word_var_fm(Wch, xch_i, filtsz, char_dsz, wsz, reuse):
-
-    with tf.variable_scope("SharedCharWord", reuse=reuse):
-        cembed = tf.nn.embedding_lookup(Wch, xch_i)
-        if len(filtsz) == 0 or filtsz[0] == 0:
-            return tf.reduce_sum(cembed, [1])
-        return char_word_conv_embeddings_var_fm(cembed, filtsz, char_dsz, wsz)

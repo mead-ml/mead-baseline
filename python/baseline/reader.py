@@ -450,6 +450,8 @@ class TSVSeqLabelReader(SeqLabelReader):
         self.do_chars = do_chars
         self.trim = trim
 
+    SPLIT_ON = '[\t\s]+'
+
     @staticmethod
     def splits(text):
         return list(filter(lambda s: len(s) != 0, re.split('\s+', text)))
@@ -464,7 +466,7 @@ class TSVSeqLabelReader(SeqLabelReader):
 
     @staticmethod
     def label_and_sentence(line, clean_fn):
-        label_text = re.split('[\t\s]+', line)
+        label_text = re.split(TSVSeqLabelReader.SPLIT_ON, line)
         label = label_text[0]
         text = label_text[1:]
         text = ' '.join(list(filter(lambda s: len(s) != 0, [clean_fn(w) for w in text])))
@@ -497,8 +499,10 @@ class TSVSeqLabelReader(SeqLabelReader):
             if file is None:
                 continue
             with codecs.open(file, encoding='utf-8', mode='r') as f:
-                for line in f:
+                for il, line in enumerate(f):
                     label, text = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn)
+                    if len(text) == 0:
+                        continue
                     maxs = max(maxs, len(text))
                     for w in text:
                         maxw = max(maxw, len(w))
@@ -545,8 +549,10 @@ class TSVSeqLabelReader(SeqLabelReader):
         if self.data_format == 'objs':
             examples = []
             with codecs.open(filename, encoding='utf-8', mode='r') as f:
-                for offset, line in enumerate(f):
+                for il, line in enumerate(f):
                     label, text = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn)
+                    if len(text) == 0:
+                        continue
                     y = self.label2index[label]
                     mx = min(len(text), nozplen)
                     text = text[:mx]
@@ -610,6 +616,7 @@ def create_pred_reader(mxlen, zeropadding, clean_fn, vec_alloc, src_vec_trans, *
         do_chars = kwargs.get('do_chars', False)
         data_format = kwargs.get('data_format', 'objs')
         trim = kwargs.get('trim', False)
+        #splitter = kwargs.get('splitter', '[\t\s]+')
         reader = TSVSeqLabelReader(mxlen, kwargs.get('mxwlen', -1), zeropadding, clean_fn, vec_alloc, src_vec_trans,
                                    do_chars=do_chars, data_format=data_format, trim=trim)
     else:

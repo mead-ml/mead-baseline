@@ -240,8 +240,8 @@ class RNNTaggerGazetteerModel(Tagger):
             with tf.control_dependencies([ce0]):
                 rnnchar_bt_x_w = tf.reshape(model.xch, [-1, maxw])
                 cembed = tf.nn.embedding_lookup(Wch, rnnchar_bt_x_w, name="charembeddings")
-                cmot = char_word_conv_embeddings(cembed, filtsz, char_dsz, wsz)
-                word_char = tf.reshape(cmot, [-1, mxlen, len(filtsz) * wsz])
+                cmot, num_filts = char_word_conv_embeddings(cembed, filtsz, char_dsz, wsz)
+                word_char = tf.reshape(cmot, [-1, mxlen, num_filts])
 
         # Join embeddings along the third dimension
         joint = word_char if word_vec is None else tf.concat(values=[wembed, word_char], axis=2)

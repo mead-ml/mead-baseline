@@ -57,6 +57,7 @@ Average scores are listed below.  Our best run so far is 91.37 using IOBES on CO
 | conll 2003 (IOBES)  | CNN-CNN-CRF   |     f1 | sgd mom. |     0.001| 90.54  | 90.67 |  800 |
 |       atis (mesnil) | CNN-BLSTM     |     f1 | sgd mom. |     0.01 |     -  | 96.74 |  100 |
 
+
 ### Testing a trained model on your data
 
 You can use [`tag.py`](../python/tag.py) to load a sequence tagger checkpoint, predict the labels for an input conll file and produce the output in the same format. The second column is the predicted label.

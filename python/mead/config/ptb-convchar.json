@@ -14,16 +14,19 @@
         "reader_type": "default"
     },
     "model": {
-        "model_type": "default",
+        "model_type": "convchar",
+        "cfiltsz": [1,2,3,4,5,6,7],
+        "nfeat_factor": 50,
         "hsz": 650,
-        "layers": 2 
+        "layers": 2,
+        "gating": "highway"
     },
     "word_embeddings": {
-        "label": "w2v-gn"
+        "dsz": 0
     },
     "train": {
         "epochs": 39,
-        "decay_rate": 1.2,
+        "decay_rate": 1.4,
         "patience": 40000,
         "optim": "sgd",
         "start_decay_epoch": 6,
