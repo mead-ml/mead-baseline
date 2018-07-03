@@ -18,7 +18,7 @@ These models are coded in a backend that is supported by baseline (currently eit
 
 - [Tagger with Gazetteer](tagger_gazetteer.py)
   - This model allows gazetteer features to be used along with normal word and character embeddings
-  - Achieves *40.2537* on WNUT17, a significant improvement over the baseline
+  - Achieves *40.2537* on WNUT17, an improvement over the baseline
 
 - [Tagger with ELMo embeddings](tagger_elmo.py)
   - Uses ELMo embeddings (see info above) concatenated with word embeddings using 1 or 2 bidirectional LSTM layers.  With a single BLSTM layer, it achieves ~*42.2* F1 on WNUT17, and up to *92* F1 on CONLL2003
