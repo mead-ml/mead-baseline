@@ -1,10 +1,10 @@
-from baseline.tf.tfy import *
-import json
 import os
+import json
 from google.protobuf import text_format
 from tensorflow.python.platform import gfile
 from tensorflow.contrib.layers import fully_connected, xavier_initializer
 from baseline.model import Tagger, create_tagger_model, load_tagger_model
+from baseline.tf.tfy import *
 
 
 class RNNTaggerModel(Tagger):
@@ -18,7 +18,7 @@ class RNNTaggerModel(Tagger):
         base = path[-1]
         outdir = '/'.join(path[:-1])
 
-        state = {"mxlen": self.mxlen, "maxw": self.maxw, "crf": self.crf, "proj": self.proj}
+        state = {"mxlen": self.mxlen, "maxw": self.maxw, "crf": self.crf, "proj": self.proj, "crf_mask": self.crf_mask, 'span_type': self.span_type}
         with open(basename + '.state', 'w') as f:
             json.dump(state, f)
 
@@ -78,6 +78,8 @@ class RNNTaggerModel(Tagger):
             model.mxlen = state.get('mxlen', 100)
             model.maxw = state.get('maxw', 100)
             model.crf = bool(state.get('crf', False))
+            model.crf_mask = bool(state.get('crf_mask', False))
+            model.span_type = state.get('span_type')
             model.proj = bool(state.get('proj', False))
 
         with open(basename + '.saver') as fsv:
@@ -140,7 +142,22 @@ class RNNTaggerModel(Tagger):
 
     def _compute_sentence_level_loss(self):
 
-        ll, self.A = tf.contrib.crf.crf_log_likelihood(self.probs, self.y, self.lengths)
+        if self.crf_mask:
+            assert self.span_type is not None, "To mask transitions you need to provide a tagging span_type, choices are `IOB`, `BIO` (or `IOB2`), and `IOBES`"
+            A = tf.get_variable(
+                "transitions_raw",
+                shape=(len(self.labels), len(self.labels)),
+                dtype=tf.float32,
+                trainable=True
+            )
+
+            self.mask = crf_mask(self.labels, self.span_type, self.labels['<GO>'], self.labels['<EOS>'], self.labels.get('<PAD>'))
+            self.inv_mask = tf.cast(tf.equal(self.mask, 0), tf.float32) * tf.constant(-1e4)
+
+            self.A = tf.add(tf.multiply(A, self.mask), self.inv_mask, name="transitions")
+            ll, self.A = tf.contrib.crf.crf_log_likelihood(self.probs, self.y, self.lengths, self.A)
+        else:
+            ll, self.A = tf.contrib.crf.crf_log_likelihood(self.probs, self.y, self.lengths)
         return tf.reduce_mean(-ll)
 
     def create_loss(self):
@@ -175,11 +192,17 @@ class RNNTaggerModel(Tagger):
         # We can probably conditionally add the loss here
         preds = []
         if self.crf is True:
+
             probv, tranv = self.sess.run([self.probs, self.A], feed_dict=feed_dict)
+            batch_sz, _, label_sz = probv.shape
+            start = np.full((batch_sz, 1, label_sz), -1e4)
+            start[:, 0, self.labels['<GO>']] = 0
+            probv = np.concatenate([start, probv], 1)
 
             for pij, sl in zip(probv, lengths):
-                unary = pij[:sl]
+                unary = pij[:sl + 1]
                 viterbi, _ = tf.contrib.crf.viterbi_decode(unary, tranv)
+                viterbi = viterbi[1:]
                 preds.append(viterbi)
         else:
             # Get batch (B, T)
@@ -209,6 +232,8 @@ class RNNTaggerModel(Tagger):
         nlayers = kwargs.get('layers', 1)
         model.labels = labels
         model.crf = bool(kwargs.get('crf', False))
+        model.crf_mask = bool(kwargs.get('crf_mask', False))
+        model.span_type = kwargs.get('span_type')
         model.proj = bool(kwargs.get('proj', False))
         model.feed_input = bool(kwargs.get('feed_input', False))
         model.activation_type = kwargs.get('activation', 'tanh')

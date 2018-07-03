@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 from baseline.utils import lookup_sentence, get_version
+from baseline.utils import crf_mask as crf_m
 from torch.autograd import Variable
 import torch.autograd
 import torch.nn as nn
@@ -478,15 +479,25 @@ def vec_log_sum_exp(vec, dim):
     max_scores_broadcast = max_scores.expand_as(vec)
     return max_scores + torch.log(torch.sum(torch.exp(vec - max_scores_broadcast), dim, keepdim=True))
 
+def crf_mask(vocab, span_type, s_idx, e_idx, pad_idx=None):
+    """Create a CRF mask.
+
+    Returns a Tensor with valid transitions as a 0 and invalid as a 1 for easy use with `masked_fill`
+    """
+    np_mask = crf_m(vocab, span_type, s_idx, e_idx, pad_idx=pad_idx)
+    return (torch.from_numpy(np_mask) == 0)
 
 class CRF(nn.Module):
 
-    def __init__(self, n_tags, idxs=None):
+    def __init__(self, n_tags, idxs=None, vocab=None, span_type=None, pad_idx=None):
         """Initialize the object.
 
         :param n_tags: int The number of tags in your output (emission size)
         :param idxs: Tuple(int. int) The index of the start and stop symbol
             in emissions.
+        :param vocab: The label vocab of the form vocab[string]: int
+        :param span_type: The tagging span_type used. `IOB`, `IOB2`, or `IOBES`
+        :param pds_idx: The index of the pad symbol in the vocab
 
         Note:
             if idxs is none then the CRF adds these symbols to the emission
@@ -495,6 +506,9 @@ class CRF(nn.Module):
             if idxs is not none then the first element is assumed to be the
             start index and the second idx is assumed to be the end index. In
             this case n_tags is assumed to include the start and end symbols.
+
+            if vocab is not None then a transition mask will be created that
+            limits illegal transitions.
         """
         super(CRF, self).__init__()
 
@@ -507,8 +521,32 @@ class CRF(nn.Module):
             self.start_idx, self.end_idx = idxs
             self.n_tags = n_tags
             self.add_ends = False
+        self.span_type = None
+        if vocab is not None:
+            assert span_type is not None, "To mask transitions you need to provide a tagging span_type, choices are `IOB`, `BIO` (or `IOB2`), and `IOBES`"
+            # If there weren't start and end idx provided we need to add them.
+            if idxs is None:
+                vocab = vocab.copy()
+                vocab['<GO>'] = self.start_idx
+                vocab['<EOS>'] = self.end_idx
+            self.span_type = span_type
+            self.register_buffer('mask', crf_mask(vocab, span_type, self.start_idx, self.end_idx, pad_idx))
+        else:
+            self.mask = None
 
-        self.transitions = nn.Parameter(torch.Tensor(self.n_tags, self.n_tags).zero_())
+        self.transitions_p = nn.Parameter(torch.Tensor(self.n_tags, self.n_tags).zero_())
+
+    @property
+    def transitions(self):
+        if self.mask is not None:
+            return self.transitions_p.masked_fill(self.mask, -1e4)
+        return self.transitions_p
+
+    def extra_repr(self):
+        str_ = "n_tags=%d" % self.n_tags
+        if self.mask is not None:
+            str_ += ", masked=True, span_type=%s" % self.span_type
+        return str_
 
     @staticmethod
     def _prep_input(input_):
@@ -523,12 +561,14 @@ class CRF(nn.Module):
         return viterbi_score - gold_score
 
     def score_sentence(self, unary, tags):
-        # Gives the score of a provided tag sequence
+        """"Get the score of a provided tag sequence."""
+        # Don't apply the mask each time use use self.transitions, save compute
+        transitions = self.transitions
         score = torch.autograd.Variable(torch.Tensor([0]).cuda())
         tags = torch.cat([torch.LongTensor([self.start_idx]).cuda(), tags])
         for i, unary_t in enumerate(unary):
-            score = score + self.transitions[tags[i + 1], tags[i]] + unary_t[tags[i + 1]]
-        score = score + self.transitions[self.end_idx, tags[-1]]
+            score = score + transitions[tags[i + 1], tags[i]] + unary_t[tags[i + 1]]
+        score = score + transitions[self.end_idx, tags[-1]]
         return score
 
     def forward(self, unary):
@@ -548,14 +588,17 @@ class CRF(nn.Module):
         # Wrap in a variable so that we will get automatic backprop
         alphas = torch.autograd.Variable(init_alphas)
 
+        # Don't apply the mask each time use use self.transitions, save compute
+        transitions = self.transitions
+
         # Iterate through the sentence
         for t, unary_t in enumerate(unary):
             emit_scores_transpose = unary_t.view(-1, 1)
-            next_tag_var = alphas + emit_scores_transpose + self.transitions
+            next_tag_var = alphas + emit_scores_transpose + transitions
             scores = vec_log_sum_exp(next_tag_var, 1).transpose(0, 1)
             alphas = scores
 
-        terminal_var = alphas + self.transitions[self.end_idx]
+        terminal_var = alphas + transitions[self.end_idx]
         alpha = log_sum_exp(terminal_var)
         return alpha
 
@@ -563,6 +606,8 @@ class CRF(nn.Module):
         if self.add_ends:
             unary = CRF._prep_input(unary)
         backpointers = []
+        # Don't apply the mask each time use use self.transitions, save compute
+        transitions = self.transitions
 
         inits = torch.Tensor(1, self.n_tags).fill_(-10000.).cuda()
         inits[0][self.start_idx] = 0
@@ -571,13 +616,13 @@ class CRF(nn.Module):
         alphas = torch.autograd.Variable(inits)
 
         for unary_t in unary:
-            next_tag_var = alphas + self.transitions
+            next_tag_var = alphas + transitions
             viterbi, best_tag_ids = torch.max(next_tag_var, 1)
             backpointers.append(best_tag_ids.data)
             alphas = (viterbi + unary_t).view(1, -1)
 
         # Transition to STOP_TAG
-        terminal_var = alphas + self.transitions[self.end_idx]
+        terminal_var = alphas + transitions[self.end_idx]
         best_tag_id = argmax(terminal_var)
         path_score = terminal_var[0][best_tag_id]
 

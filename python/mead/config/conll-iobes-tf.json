@@ -23,6 +23,7 @@
         "dropout": 0.5,
         "rnntype": "blstm",
         "layers": 1,
+        "crf_mask": true,
 	"crf": 1
     },
 

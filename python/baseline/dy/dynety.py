@@ -1,6 +1,7 @@
 from itertools import chain
 import numpy as np
 import dynet as dy
+from baseline.utils import crf_mask
 
 
 class DynetModel(object):
@@ -231,7 +232,7 @@ def Attention(lstmsz, pc, name="Attention"):
 class CRF(DynetModel):
     """Linear Chain CRF in Dynet."""
 
-    def __init__(self, n_tags, pc=None, idxs=None):
+    def __init__(self, n_tags, pc=None, idxs=None, vocab=None, span_type=None, pad_idx=None):
         """Initialize the object.
 
         :param n_tags: int The number of tags in your output (emission size)
@@ -245,6 +246,9 @@ class CRF(DynetModel):
             if idxs is not none then the first element is assumed to be the start index
             and the second idx is assumed to be the end index. In this case n_tags is
             assumed to include the start and end symbols.
+
+            if vocab is not None then we create a mask to reduce the probability of
+            illegal transitions.
         """
         super(CRF, self).__init__()
         if pc is None:
@@ -260,8 +264,23 @@ class CRF(DynetModel):
             self.start_idx, self.end_idx = idxs
             self.n_tags = n_tags
             self.add_ends = False
+        self.mask = None
+        if vocab is not None:
+            assert span_type is not None, "To mask transitions you need to provide a tagging span_type, choices are `IOB`, `BIO` (or `IOB2`), and `IOBES`"
+            if idxs is None:
+                vocab = vocab.copy()
+                vocab['<GO>'] = self.start_idx
+                vocab['<EOS>'] = self.end_idx
+            self.mask = crf_mask(vocab, span_type, self.start_idx, self.end_idx, pad_idx)
+            self.inv_mask = (self.mask == 0) * -1e4
 
-        self.transitions = self.pc.add_parameters((self.n_tags, self.n_tags), name="transition")
+        self.transitions_p = self.pc.add_parameters((self.n_tags, self.n_tags), name="transition")
+
+    @property
+    def transitions(self):
+        if self.mask is not None:
+            return dy.cmult(self.transitions_p, dy.inputTensor(self.mask)) + dy.inputTensor(self.inv_mask)
+        return self.transitions_p
 
     @staticmethod
     def _prep_input(emissions):
@@ -285,11 +304,12 @@ class CRF(DynetModel):
         """
         tags = [self.start_idx] + tags
         score = dy.scalarInput(0)
+        transitions = self.transitions
         for i, e in enumerate(emissions):
             # Due to Dynet being column based it is best to use the transmission
             # matrix so that x -> y is T[y, x].
-            score += dy.pick(dy.pick(self.transitions, tags[i + 1]), tags[i]) + dy.pick(e, tags[i + 1])
-        score += dy.pick(dy.pick(self.transitions, self.end_idx), tags[-1])
+            score += dy.pick(dy.pick(transitions, tags[i + 1]), tags[i]) + dy.pick(e, tags[i + 1])
+        score += dy.pick(dy.pick(transitions, self.end_idx), tags[-1])
         return score
 
     def neg_log_loss(self, emissions, tags):
@@ -323,15 +343,16 @@ class CRF(DynetModel):
         init_alphas = [-1e4] * (self.n_tags)
         init_alphas[self.start_idx] = 0
         alphas = dy.inputVector(init_alphas)
+        transitions = self.transitions
         for emission in emissions:
-            add_emission = dy.colwise_add(self.transitions, emission)
+            add_emission = dy.colwise_add(transitions, emission)
             scores = dy.colwise_add(dy.transpose(add_emission), alphas)
             # dy.logsumexp takes a list of dy.Expression and computes logsumexp
             # elementwise across the lists so for example the logsumexp is calculated
             # for [0] in each list. This means we want the scores for a given
             # transition scores for a tag to be in the columns
             alphas = dy.logsumexp([x for x in scores])
-        last_alpha = alphas + dy.pick(self.transitions, self.end_idx)
+        last_alpha = alphas + dy.pick(transitions, self.end_idx)
         alpha = dy.logsumexp([x for x in last_alpha])
         return alpha
 
@@ -346,19 +367,20 @@ class CRF(DynetModel):
         if self.add_ends:
             emissions = CRF._prep_input(emissions)
         backpointers = []
+        transitions = self.transitions
 
         inits = [-1e4] * (self.n_tags)
         inits[self.start_idx] = 0
         alphas = dy.inputVector(inits)
 
         for emission in emissions:
-            next_vars = dy.colwise_add(dy.transpose(self.transitions), alphas)
+            next_vars = dy.colwise_add(dy.transpose(transitions), alphas)
             best_tags = np.argmax(next_vars.npvalue(), 0)
             v_t = dy.max_dim(next_vars, 0)
             alphas = v_t + emission
             backpointers.append(best_tags)
 
-        terminal_expr = alphas + dy.pick(self.transitions, self.end_idx)
+        terminal_expr = alphas + dy.pick(transitions, self.end_idx)
         best_tag = np.argmax(terminal_expr.npvalue())
         path_score = dy.pick(terminal_expr, best_tag)
 
