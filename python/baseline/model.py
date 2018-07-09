@@ -137,7 +137,7 @@ def create_lang_model(known_creators, embeddings, **kwargs):
     model_type = kwargs.get('model_type', 'default')
     if model_type in known_creators:
         creator_fn = known_creators[model_type]
-        print('Calling baseline model loader ', creator_fn)
+        print('Calling baseline model creator ', creator_fn)
         return creator_fn(embeddings, **kwargs)
     return create_user_lang_model(embeddings, **kwargs)
 

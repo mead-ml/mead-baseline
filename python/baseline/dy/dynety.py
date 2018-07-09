@@ -7,6 +7,15 @@ from baseline.utils import crf_mask
 class DynetModel(object):
     def __init__(self):
         super(DynetModel, self).__init__()
+        self._pc = dy.ParameterCollection()
+
+    @property
+    def pc(self):
+        return self._pc
+
+    @pc.setter
+    def pc(self, value):
+        self._pc = value
 
     def __str__(self):
         str_ = []
@@ -14,8 +23,29 @@ class DynetModel(object):
             str_.append("{}: {}".format(p.name(), p.shape()))
         return '\n'.join(str_)
 
+def optimizer(model, optim='sgd', eta=0.01, clip=None, mom=0.9, **kwargs):
+    if 'lr' in kwargs:
+        eta = kwargs['lr']
+    print('Using eta [{:.4f}]'.format(eta))
+    print('Using optim [{}]'.format(optim))
+    if optim == 'adadelta':
+        opt = dy.AdadeltaTrainer(model.pc)
+    elif optim == 'adam':
+        opt = dy.AdamTrainer(model.pc)
+    elif optim == 'rmsprop':
+        opt = dy.RMSPropTrainer(model.pc, learning_rate=eta)
+    else:
+        if mom == 0 or mom is None:
+            opt = dy.SimpleSGDTrainer(model.pc, learning_rate=eta)
+        else:
+            print('Using mom {:.3f}'.format(mom))
+            opt = dy.MomentumSGDTrainer(model.pc, learning_rate=eta, mom=mom)
+    if clip is not None:
+        opt.set_clip_threshold(clip)
+    opt.set_sparse_updates(False)
+    return opt
 
-def Linear(osz, isz, pc, name="Linear"):
+def Linear(osz, isz, pc, name="linear"):
     """
     :param osz: int
     :param isz: int
@@ -23,8 +53,8 @@ def Linear(osz, isz, pc, name="Linear"):
     :param name: str
     """
     linear_pc = pc.add_subcollection(name=name)
-    weight = linear_pc.add_parameters((osz, isz), name="Weight".format(name))
-    bias = linear_pc.add_parameters(osz, name="Bias".format(name))
+    weight = linear_pc.add_parameters((osz, isz), name="weight")
+    bias = linear_pc.add_parameters(osz, name="bias")
 
     def linear(input_):
         """
@@ -33,11 +63,46 @@ def Linear(osz, isz, pc, name="Linear"):
         Returns:
             dy.Expression ((osz,), B)
         """
-        output = weight * input_ + bias
+        output = dy.affine_transform([bias, weight, input_])
         return output
 
     return linear
 
+
+def HighwayConnection(funcs, sz, pc, name="highway"):
+    """Highway Connection around arbitrary functions.
+
+    This highway block creates highway connections that short circuit each function in funcs.
+
+    :param funcs: A list of functions you can pass input_ to
+    :param sz: int The size of the input
+    :param pc: dy.ParameterCollection
+    :name str: The name of the layer
+    """
+    highway_pc = pc.add_subcollection(name=name)
+    weights = []
+    biases = []
+    for i in range(len(funcs)):
+        weights.append(highway_pc.add_parameters((sz, sz), name="weight-{}".format(i)))
+        biases.append(highway_pc.add_parameters((sz), init=dy.ConstInitializer(-2), name="bias-{}".format(i)))
+
+    def highway(input_):
+        for func, weight, bias in zip(funcs, weights, biases):
+            proj = dy.rectify(func(input_))
+            transform = dy.logistic(dy.affine_transform([bias, weight, input_]))
+            input_ = dy.cmult(transform, proj) + dy.cmult(input_, 1 - transform)
+        return input_
+
+    return highway
+
+
+def SkipConnection(funcs, *args, **kwargs):
+    def skip(input_):
+        for func in funcs:
+            proj = func(input_)
+            input_ = input_ + proj
+        return input_
+    return skip
 
 def LSTM(osz, isz, pc, layers=1):
     """
@@ -57,6 +122,34 @@ def LSTM(osz, isz, pc, layers=1):
         """
         state = lstm.initial_state()
         return state.transduce(input_)
+
+    return encode
+
+
+def TruncatedLSTM(
+        osz, isz, pc, layers=1,
+        dropout=None, batched=True
+):
+    """An LSTM that return the final state.
+    :param osz: int
+    :param isz: int
+    :param pc: dy.ParameterCollection
+    :param layers: int
+    """
+    lstm = dy.VanillaLSTMBuilder(layers, isz, osz, pc)
+
+    def encode(input_, state=None, train=True):
+        if state is not None:
+            state = [dy.inputTensor(s, batched) for s in state]
+        if train and dropout is not None:
+            lstm.set_dropout(dropout)
+        else:
+            lstm.disable_dropout()
+        lstm_state = lstm.initial_state(state)
+        outputs = lstm_state.add_inputs(input_)
+        last_state = outputs[-1].s()
+        outputs = [out.h()[-1] for out in outputs]
+        return outputs, last_state
 
     return encode
 
@@ -122,7 +215,7 @@ def BiLSTMEncoder(osz, isz, pc, layers=1):
     return encode
 
 
-def Convolution1d(fsz, cmotsz, dsz, pc, strides=(1, 1, 1, 1), name="Conv"):
+def Convolution1d(fsz, cmotsz, dsz, pc, strides=(1, 1, 1, 1), name="conv"):
     """1D Convolution.
 
     :param fsz: int, Size of conv filter.
@@ -132,8 +225,8 @@ def Convolution1d(fsz, cmotsz, dsz, pc, strides=(1, 1, 1, 1), name="Conv"):
     :param strides: Tuple[int, int, int, int]
     """
     conv_pc = pc.add_subcollection(name=name)
-    weight = conv_pc.add_parameters((1, fsz, dsz, cmotsz), name='Weight')
-    bias = conv_pc.add_parameters((cmotsz), name="Bias")
+    weight = conv_pc.add_parameters((1, fsz, dsz, cmotsz), name='weight')
+    bias = conv_pc.add_parameters((cmotsz), name="bias")
 
     def conv(input_):
         """Perform the 1D conv.
@@ -150,10 +243,27 @@ def Convolution1d(fsz, cmotsz, dsz, pc, strides=(1, 1, 1, 1), name="Conv"):
 
     return conv
 
+def ParallelConv(filtsz, cmotsz, dsz, pc, strides=(1, 1, 1, 1), name="parallel-conv"):
+    if isinstance(cmotsz, int):
+        cmotsz = [cmotsz] * len(filtsz)
+    conv_pc = pc.add_subcollection(name=name)
+    convs = [Convolution1d(fsz, cmot, dsz, conv_pc, strides, name="conv-{}".format(fsz)) for fsz, cmot in zip(filtsz, cmotsz)]
+
+    def conv(input_):
+        dims = tuple([1] + list(input_.dim()[0]))
+        input_ = dy.reshape(input_, dims)
+        mots = []
+        for conv in convs:
+            mots.append(conv(input_))
+        return dy.concatenate(mots)
+
+    return conv
 
 def Embedding(
     vsz, dsz, pc,
-    embedding_weight=None, finetune=False, dense=False, batched=False
+    embedding_weight=None,
+    finetune=False, dense=False, batched=False,
+    name="embeddings"
 ):
     """Create Embedding layer.
 
@@ -166,9 +276,15 @@ def Embedding(
     :param batched: bool Is the input a batched operation
     """
     if embedding_weight is not None:
-        embeddings = pc.lookup_parameters_from_numpy(embedding_weight, name="Embeddings")
+        if dense:
+            vsz, dsz = embedding_weight.shape
+            embedding_weight = np.reshape(embedding_weight, (vsz, 1, dsz))
+        embeddings = pc.lookup_parameters_from_numpy(embedding_weight, name=name)
     else:
-        embeddings = pc.add_lookup_parameters((vsz, dsz), name="Embeddings")
+        shape = (vsz, dsz)
+        if dense:
+            shape = (vsz, 1, dsz)
+        embeddings = pc.add_lookup_parameters(shape, name=name)
 
     def embed(input_):
         """Embed a sequence.
@@ -184,22 +300,22 @@ def Embedding(
         lookup = dy.lookup_batch if batched else dy.lookup
         embedded = [lookup(embeddings, x, finetune) for x in input_]
         if dense:
-            return dy.transpose(dy.concatenate(embedded, d=1))
+            return dy.concatenate(embedded, d=0)
         return embedded
 
     return embed
 
 
-def Attention(lstmsz, pc, name="Attention"):
+def Attention(lstmsz, pc, name="attention"):
     """Vectorized Bahdanau Attention.
 
     :param lstmsz: int
     :param pc: dy.ParameterCollection
     """
     attn_pc = pc.add_subcollection(name=name)
-    attention_w1 = attn_pc.add_parameters((lstmsz, lstmsz))
-    attention_w2 = attn_pc.add_parameters((lstmsz, lstmsz))
-    attention_v = attn_pc.add_parameters((1, lstmsz))
+    attention_w1 = attn_pc.add_parameters((lstmsz, lstmsz), name='encoder-projection')
+    attention_w2 = attn_pc.add_parameters((lstmsz, lstmsz), name='decoder-projection')
+    attention_v = attn_pc.add_parameters((1, lstmsz), name='attention-vector')
 
     def attention(encoder_vectors):
         """Compute the projected encoder vectors once per decoder.
@@ -251,10 +367,8 @@ class CRF(DynetModel):
             illegal transitions.
         """
         super(CRF, self).__init__()
-        if pc is None:
-            self.pc = dy.ParameterCollection()
-        else:
-            self.pc = pc.add_subcollection(name="CRF")
+        if pc is not None:
+            self.pc = pc.add_subcollection(name="crf")
         if idxs is None:
             self.start_idx = n_tags
             self.end_idx = n_tags + 1

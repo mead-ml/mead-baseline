@@ -8,7 +8,7 @@ from baseline.utils import listify
 from baseline.dy.dynety import *
 
 
-class WordClassifierBase(Classifier, DynetModel):
+class WordClassifierBase(DynetModel, Classifier):
 
     def __init__(
             self,
@@ -18,7 +18,6 @@ class WordClassifierBase(Classifier, DynetModel):
             **kwargs
     ):
         super(WordClassifierBase, self).__init__()
-        self._pc = dy.ParameterCollection()
 
         self.batched = batched
         self.pdrop = dropout
@@ -41,10 +40,6 @@ class WordClassifierBase(Classifier, DynetModel):
         pool_size, self.pool = self._init_pool(dsz, **kwargs)
         stack_size, self.stacked = self._init_stacked(pool_size, **kwargs)
         self.output = self._init_output(stack_size, n_classes)
-
-    @property
-    def pc(self):
-        return self._pc
 
     def __str__(self):
         str_ = super(WordClassifierBase, self).__str__()
@@ -121,17 +116,9 @@ class ConvModel(WordClassifierBase):
         super(ConvModel, self).__init__(*args, **kwargs)
 
     def _init_pool(self, dsz, filtsz, cmotsz, **kwargs):
-        convs = []
-        for fsz in filtsz:
-            convs.append(Convolution1d(fsz, cmotsz, dsz, self.pc))
-
+        parallel_conv = ParallelConv(filtsz, cmotsz, dsz, self.pc)
         def call_pool(input_, _):
-            dims = tuple([1] + list(input_.dim()[0]))
-            input_ = dy.reshape(input_, dims)
-            mots = []
-            for conv in convs:
-                mots.append(conv(input_))
-            return dy.concatenate(mots)
+            return parallel_conv(input_)
 
         return len(filtsz) * cmotsz, call_pool
 

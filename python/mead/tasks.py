@@ -468,9 +468,20 @@ class LanguageModelingTask(Task):
         else:
             self.config_params['preproc']['vec_alloc'] = np.zeros
             self.config_params['preproc']['vec_shape'] = np.shape
-            print('TensorFlow backend')
-            self.config_params['preproc']['trim'] = False
-            import baseline.tf.lm as lm
+            if backend == 'tensorflow':
+                print('TensorFlow backend')
+                self.config_params['preproc']['trim'] = False
+                import baseline.tf.lm as lm
+            else:
+                print('Dynet backend')
+                import _dynet
+                dy_params = _dynet.DynetParams()
+                dy_params.from_args()
+                dy_params.set_requested_gpus(1)
+                dy_params.init()
+                self.config_params['preproc']['trim'] = False
+                import baseline.dy.lm as lm
+
         self.task = lm
 
         if self.config_params.get('web-cleanup', False) is True:
