@@ -564,7 +564,7 @@ class CRF(nn.Module):
             unary = unary.transpose(0, 1)
             tags = tags.transpose(0, 1)
         if self.add_ends:
-            unary = BatchedCRF._prep_input(unary)
+            unary = CRF._prep_input(unary)
         _, batch_size, _ = unary.size()
         min_lengths = torch.min(lengths)
         viterbi_score = self.forward(unary, lengths, batch_size, min_lengths)
@@ -654,7 +654,7 @@ class CRF(nn.Module):
         if self.batch_first:
             unary = unary.transpose(0, 1)
         if self.add_ends:
-            unary = BatchedCRF._prep_input(unary)
+            unary = CRF._prep_input(unary)
         seq_len, batch_size, _ = unary.size()
         min_length = torch.min(lengths)
         batch_range = torch.arange(batch_size, dtype=torch.int64)
