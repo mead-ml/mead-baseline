@@ -37,7 +37,7 @@ class RNNTaggerModel(Tagger, DynetModel):
         if self.do_crf:
             vocab = labels if self.crf_mask else None
             self.crf = CRF(nc, idxs=(labels['<GO>'], labels['<EOS>']),
-                           vocab=vocab, span_type=self.span_type, batched=self.batched)
+                           vocab=vocab, span_type=self.span_type)
 
         self.activation_type = kwargs.get('activation', 'tanh')
 

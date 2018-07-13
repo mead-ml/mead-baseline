@@ -232,7 +232,7 @@ def Attention(lstmsz, pc, name="Attention"):
 class CRF(DynetModel):
     """Linear Chain CRF in Dynet."""
 
-    def __init__(self, n_tags, pc=None, idxs=None, vocab=None, span_type=None, pad_idx=None, batched=False):
+    def __init__(self, n_tags, pc=None, idxs=None, vocab=None, span_type=None, pad_idx=None):
         """Initialize the object.
 
         :param n_tags: int The number of tags in your output (emission size)
@@ -255,7 +255,6 @@ class CRF(DynetModel):
             self.pc = dy.ParameterCollection()
         else:
             self.pc = pc.add_subcollection(name="CRF")
-        self.batched = batched
         if idxs is None:
             self.start_idx = n_tags
             self.end_idx = n_tags + 1
@@ -309,17 +308,9 @@ class CRF(DynetModel):
         for i, e in enumerate(emissions):
             # Due to Dynet being column based it is best to use the transition
             # matrix so that x -> y is T[y, x].
-            nexts = self.item_at(transitions, tags[i + 1])
-            trans = self.item_at(nexts, tags[i])
-            emits = self.item_at(e, tags[i + 1])
-            score += trans + emits
-            #score += dy.pick(dy.pick(transitions, tags[i + 1]), tags[i]) + dy.pick(e, tags[i + 1])
+            score += dy.pick(dy.pick(transitions, tags[i + 1]), tags[i]) + dy.pick(e, tags[i + 1])
 
-        nexts = self.item_at(transitions, self.end_idx)
-        trans = self.item_at(nexts, tags[-1])
-
-        score += trans
-        ##score += dy.pick(dy.pick(transitions, self.end_idx), tags[-1])
+        score += dy.pick(dy.pick(transitions, self.end_idx), tags[-1])
         return score
 
     def neg_log_loss(self, emissions, tags):
@@ -365,15 +356,9 @@ class CRF(DynetModel):
             # for [0] in each list. This means we want the scores for a given
             # transition scores for a tag to be in the columns
             alphas = dy.logsumexp([x for x in scores])
-        last_alpha = alphas + self.item_at(transitions, self.end_idx)
+        last_alpha = alphas + dy.pick(transitions, self.end_idx)
         alpha = dy.logsumexp([x for x in last_alpha])
         return alpha
-
-    def item_at(self, mx, idx):
-        if self.batched:
-            return dy.pick_batch(mx, idx)
-
-        return dy.pick(mx, idx)
 
     def decode(self, emissions):
         """Viterbi decode to find the best sequence.
@@ -399,9 +384,9 @@ class CRF(DynetModel):
             alphas = v_t + emission
             backpointers.append(best_tags)
 
-        terminal_expr = alphas + self.item_at(transitions, self.end_idx)
+        terminal_expr = alphas + dy.pick(transitions, self.end_idx)
         best_tag = np.argmax(terminal_expr.npvalue())
-        path_score = self.item_at(terminal_expr, best_tag)
+        path_score = dy.pick(terminal_expr, best_tag)
 
         best_path = [best_tag]
         for bp_t in reversed(backpointers):
