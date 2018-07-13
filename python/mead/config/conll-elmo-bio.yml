@@ -23,6 +23,7 @@ model:
     dropout: 0.5
     rnntype: blstm
     layers: 2
+    crf_mask: true
     crf: 1
 
 
@@ -32,7 +33,6 @@ word_embeddings:
 train: 
     epochs: 50
     optim: sgd
-    decay: 0
     eta: 0.015
     mom: 0.9
     patience: 15
