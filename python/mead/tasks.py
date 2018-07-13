@@ -303,6 +303,26 @@ class TaggerTask(Task):
             self.config_params['preproc']['vec_alloc'] = vec_alloc
             self.config_params['preproc']['vec_shape'] = vec_shape
             self.config_params['preproc']['trim'] = True
+        elif backend == 'dynet':
+            print('Dynet backend')
+            import _dynet
+            dy_params = _dynet.DynetParams()
+            dy_params.from_args()
+            dy_params.set_requested_gpus(1)
+            dy_params.set_requested_gpus(1)
+            if 'autobatchsz' in self.config_params['train']:
+                self.config_params['model']['batched'] = False
+                dy_params.set_autobatch(True)
+            else:
+                self.config_params['model']['batched'] = True
+                dy_params.set_autobatch(False)
+            dy_params.init()
+
+            dy_params.init()
+            import baseline.dy.tagger as tagger
+            self.config_params['preproc']['vec_alloc'] = np.zeros
+            self.config_params['preproc']['vec_shape'] = np.shape
+            self.config_params['preproc']['trim'] = True
         else:
             self.config_params['preproc']['vec_alloc'] = np.zeros
             self.config_params['preproc']['vec_shape'] = np.shape

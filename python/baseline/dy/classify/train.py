@@ -6,10 +6,12 @@ from baseline.confusion import ConfusionMatrix
 from baseline.reporting import basic_reporting
 from baseline.train import EpochReportingTrainer, create_trainer
 
+
 def _add_to_cm(cm, y, preds, axis=0):
     best = np.argmax(preds, axis=axis)
     best = np.reshape(best, y.shape)
     cm.add_batch(y, best)
+
 
 class ClassifyTrainerDynet(EpochReportingTrainer):
 
@@ -62,12 +64,12 @@ class ClassifyTrainerDynet(EpochReportingTrainer):
             print(cm)
         return metrics
 
-
     def _test(self, loader, **kwargs):
         return self._step(loader, lambda x: None, kwargs.get("verbose", False))
 
     def _train(self, loader):
         return self._step(loader, self._update)
+
 
 class ClassifyTrainerAutobatch(ClassifyTrainerDynet):
     def __init__(self, model, autobatchsz=1, **kwargs):
