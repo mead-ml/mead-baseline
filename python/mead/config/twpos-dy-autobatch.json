@@ -1,0 +1,44 @@
+{
+    "task": "tagger",
+    "batchsz": 1,
+    "conll_output": "twposresults.conll",
+    "test_thresh": 10,
+    "charsz": 16,
+    "unif": 0.1,
+    "preproc": {
+        "mxlen": 38,
+        "mxwlen": 40,
+        "lower": true
+    },
+    "backend": "dynet",
+    "dataset": "twpos",
+    "loader": {
+        "reader_type": "default"
+    },
+    "model": {
+        "model_type": "default",
+        "cfiltsz": [3],
+        "hsz": 200,
+        "wsz": 30,
+        "dropout": 0.5,
+        "rnntype": "blstm",
+        "layers": 1,
+        "crf": false 
+    },
+
+    "word_embeddings": {
+	"label": "glove-twitter-27B"
+    },
+    "train": {
+	"autobatchsz": 20,
+        "epochs": 40,
+        "optim": "sgd",
+        "decay": 0,
+        "eta": 0.01,
+        "mom": 0.9,
+        "patience": 20,
+        "early_stopping_metric": "acc",
+        "clip": 5.0,
+        "span_type": "bio"
+    }
+}
