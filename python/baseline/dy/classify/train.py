@@ -5,6 +5,7 @@ from baseline.progress import create_progress_bar
 from baseline.confusion import ConfusionMatrix
 from baseline.reporting import basic_reporting
 from baseline.train import EpochReportingTrainer, create_trainer
+from baseline.dy.dynety import *
 
 def _add_to_cm(cm, y, preds, axis=0):
     best = np.argmax(preds, axis=axis)
@@ -16,25 +17,12 @@ class ClassifyTrainerDynet(EpochReportingTrainer):
     def __init__(
             self,
             model,
-            optim='sgd', clip=5, mom=0.9,
             **kwargs
     ):
         super(ClassifyTrainerDynet, self).__init__()
         self.model = model
-        eta = kwargs.get('eta', kwargs.get('lr', 0.01))
-        print("Using eta [{:.4f}]".format(eta))
-        print("Using optim [{}]".format(optim))
         self.labels = model.labels
-        if optim == 'adadelta':
-            self.optimizer = dy.AdadeltaTrainer(model.pc)
-        elif optim == 'adam':
-            self.optimizer = dy.AdamTrainer(model.pc)
-        elif optim == 'rmsprop':
-            self.optimizer = dy.RMSPropTrainer(model.pc, learning_rate=eta)
-        else:
-            print("using mom {:.3f}".format(mom))
-            self.optimizer = dy.MomentumSGDTrainer(model.pc, learning_rate=eta, mom=mom)
-        self.optimizer.set_clip_threshold(clip)
+        self.optimizer = optimizer(model, **kwargs)
 
     def _update(self, loss):
         loss.backward()
@@ -74,7 +62,7 @@ class ClassifyTrainerAutobatch(ClassifyTrainerDynet):
         self.autobatchsz = autobatchsz
         super(ClassifyTrainerAutobatch, self).__init__(model, **kwargs)
 
-    def _step(self, loader, update, verbose):
+    def _step(self, loader, update, verbose=False):
         steps = len(loader)
         pg = create_progress_bar(steps)
         cm = ConfusionMatrix(self.labels)

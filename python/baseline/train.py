@@ -1,4 +1,5 @@
 import time
+import numpy as np
 from baseline.utils import create_user_trainer, export
 
 __all__ = []
@@ -71,3 +72,61 @@ def create_trainer(default_create_model_fn, model, **kwargs):
         return default_create_model_fn(model, **kwargs)
 
     return create_user_trainer(model, **kwargs)
+
+@exporter
+def lr_decay(decay_type, **kwargs):
+    if decay_type == 'piecewise':
+        return piecewise_decay(**kwargs)
+    elif decay_type == 'staircase':
+        return staircase_decay(**kwargs)
+    elif decay_type == 'cosine':
+        return cosine_decay(**kwargs)
+    elif decay_type == 'zaremba':
+        return zaremba_decay(**kwargs)
+    elif decay_type == 'cyclic':
+        return cyclic_lr(**kwargs)
+
+def cyclic_lr(eta, max_eta=1e-2, bounds=1000, **kwargs):
+    def decay(steps):
+        cycle = np.floor(1 + steps / (2 * bounds))
+        x = np.abs(steps / bounds - 2 * cycle + 1)
+        learning_rate = eta + (max_eta - eta) * np.maximum(0., (1 - x))
+        return learning_rate
+    return decay
+
+def zaremba_decay(eta=1.0, bounds=None, decay_rate=None, **kwargs):
+    if bounds is None or decay_rate is None:
+        bounds = []
+        values = [eta]
+    else:
+        values = [eta / (decay_rate ** i) for i in range(len(bounds) + 1)]
+    print('Learning rate schedule')
+    print('B', len(bounds), bounds)
+    print('V', len(values), values)
+    return piecewise_decay(bounds, values)
+
+def cosine_decay(eta, bounds=1000, alpha=0.0, **kwargs):
+    def decay(steps):
+        step = min(steps, bounds)
+        cosine_decay = 0.5 * (1 + np.cos(np.pi * step / bounds))
+        decayed = (1 - alpha) * cosine_decay + alpha
+        return eta * decayed
+    return decay
+
+def exponential_decay(eta, bounds=16000, decay_rate=0.5, staircase=False, **kwargs):
+    if staircase:
+        return staircase_decay(eta, bounds, decay_rate, **kwargs)
+    def decay(step):
+        return eta * decay_rate ** (step / float(bounds))
+    return decay
+
+def staircase_decay(eta, bounds=16000, decay_rate=0.5, **kwargs):
+    def decay(step):
+        return eta * decay_rate ** (step // bounds)
+    return decay
+
+def piecewise_decay(bounds, values, **kwargs):
+    def decay(step):
+        pos = np.searchsorted(bounds, step)
+        return values[pos]
+    return decay
