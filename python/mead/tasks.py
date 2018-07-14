@@ -465,14 +465,11 @@ class LanguageModelingTask(Task):
             self.config_params['preproc']['vec_alloc'] = vec_alloc
             self.config_params['preproc']['vec_shape'] = vec_shape
             self.config_params['preproc']['trim'] = True
+
         else:
             self.config_params['preproc']['vec_alloc'] = np.zeros
             self.config_params['preproc']['vec_shape'] = np.shape
-            if backend == 'tensorflow':
-                print('TensorFlow backend')
-                self.config_params['preproc']['trim'] = False
-                import baseline.tf.lm as lm
-            else:
+            if backend == 'dynet':
                 print('Dynet backend')
                 import _dynet
                 dy_params = _dynet.DynetParams()
@@ -481,6 +478,10 @@ class LanguageModelingTask(Task):
                 dy_params.init()
                 self.config_params['preproc']['trim'] = False
                 import baseline.dy.lm as lm
+            else:
+                print('TensorFlow backend')
+                self.config_params['preproc']['trim'] = False
+                import baseline.tf.lm as lm
 
         self.task = lm
 

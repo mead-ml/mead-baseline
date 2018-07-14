@@ -23,6 +23,7 @@ class DynetModel(object):
             str_.append("{}: {}".format(p.name(), p.shape()))
         return '\n'.join(str_)
 
+
 def optimizer(model, optim='sgd', eta=0.01, clip=None, mom=0.9, **kwargs):
     if 'lr' in kwargs:
         eta = kwargs['lr']
@@ -44,6 +45,7 @@ def optimizer(model, optim='sgd', eta=0.01, clip=None, mom=0.9, **kwargs):
         opt.set_clip_threshold(clip)
     opt.set_sparse_updates(False)
     return opt
+
 
 def Linear(osz, isz, pc, name="linear"):
     """
@@ -103,6 +105,7 @@ def SkipConnection(funcs, *args, **kwargs):
             input_ = input_ + proj
         return input_
     return skip
+
 
 def LSTM(osz, isz, pc, layers=1):
     """
@@ -259,12 +262,11 @@ def ParallelConv(filtsz, cmotsz, dsz, pc, strides=(1, 1, 1, 1), name="parallel-c
 
     return conv
 
-def Embedding(
-    vsz, dsz, pc,
-    embedding_weight=None,
-    finetune=False, dense=False, batched=False,
-    name="embeddings"
-):
+
+def Embedding(vsz, dsz, pc,
+              embedding_weight=None,
+              finetune=False, dense=False, batched=False,
+              name="embeddings"):
     """Create Embedding layer.
 
     :param vsz: int, The Vocab Size

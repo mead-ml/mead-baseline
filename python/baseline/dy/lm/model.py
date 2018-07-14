@@ -1,6 +1,7 @@
 from baseline.model import create_lang_model, LanguageModel
 from baseline.dy.dynety import *
 
+
 class BaseLanguageModel(DynetModel, LanguageModel):
     def __init__(self):
         super(BaseLanguageModel, self).__init__()
@@ -13,8 +14,8 @@ class BaseLanguageModel(DynetModel, LanguageModel):
 
     def forward(self, input_, state=None, train=True):
         input_ = self.embed(input_)
-        transducted, last_state = self._rnn(input_, state, train)
-        output = self.output(transducted)
+        transduced, last_state = self._rnn(input_, state, train)
+        output = self.output(transduced)
         return output, last_state
 
     def save(self, file_name):
@@ -24,6 +25,7 @@ class BaseLanguageModel(DynetModel, LanguageModel):
     def load(self, file_name):
         self.pc.populate(file_name)
         return self
+
 
 class WordLanguageModel(BaseLanguageModel):
     def __init__(
@@ -55,6 +57,7 @@ class WordLanguageModel(BaseLanguageModel):
         model = cls(embeddings, **kwargs)
         print(model)
         return model
+
 
 class CharCompLanguageModel(BaseLanguageModel):
     def __init__(

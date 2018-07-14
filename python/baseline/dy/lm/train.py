@@ -6,6 +6,7 @@ from baseline.reporting import basic_reporting
 from baseline.train import EpochReportingTrainer, create_trainer, lr_decay
 from baseline.dy.dynety import *
 
+
 class LanguageModelTrainerDynet(EpochReportingTrainer):
     def __init__(
             self,
@@ -37,7 +38,7 @@ class LanguageModelTrainerDynet(EpochReportingTrainer):
             input_, labels = self.model.make_input(batch_dict)
             output, initial_state = self.model.forward(input_, initial_state)
             loss = self._loss(output, labels)
-            loss_val  = loss.npvalue().item()
+            loss_val = loss.npvalue().item()
             total_loss += loss_val
             initial_state = [x.npvalue() for x in initial_state]
             loss.backward()
@@ -70,7 +71,7 @@ class LanguageModelTrainerDynet(EpochReportingTrainer):
             input_, labels = self.model.make_input(batch_dict)
             output, initial_state = self.model.forward(input_, initial_state, train=False)
             loss = self._loss(output, labels)
-            loss_val  = loss.npvalue().item()
+            loss_val = loss.npvalue().item()
             total_loss += loss_val
             initial_state = [x.npvalue() for x in initial_state]
 
@@ -88,14 +89,14 @@ class LanguageModelTrainerDynet(EpochReportingTrainer):
             reporting(metrics, output, phase)
         return metrics
 
-def fit(
-        model,
+
+def fit(model,
         ts, vs, es=None,
         epochs=5,
         do_early_stopping=True, early_stopping_metric='avg_loss',
         reporting=basic_reporting,
-        **kwargs
-):
+        **kwargs):
+
     patience = int(kwargs.get('patience', epochs))
     after_train_fn = kwargs.get('after_train_fn', None)
 

@@ -12,6 +12,7 @@ def _add_to_cm(cm, y, preds, axis=0):
     best = np.reshape(best, y.shape)
     cm.add_batch(y, best)
 
+
 class ClassifyTrainerDynet(EpochReportingTrainer):
 
     def __init__(
@@ -56,6 +57,7 @@ class ClassifyTrainerDynet(EpochReportingTrainer):
 
     def _train(self, loader):
         return self._step(loader, self._update)
+
 
 class ClassifyTrainerAutobatch(ClassifyTrainerDynet):
     def __init__(self, model, autobatchsz=1, **kwargs):
