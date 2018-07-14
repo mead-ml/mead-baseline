@@ -30,7 +30,7 @@
         "label": "glove-6B-100"
     },
     "train": {
-        "epochs": 6,
+        "epochs": 80,
         "autobatchsz": 10,
         "optim": "sgd",
         "decay": 0.05,
