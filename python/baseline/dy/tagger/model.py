@@ -100,6 +100,8 @@ class RNNTaggerModel(Tagger, DynetModel):
         return exps
 
     def predict(self, input_, lengths):
+        dy.renew_cg()
+
         unaries = self.forward(input_, lengths)
         if self.do_crf is True:
             best_path, path_score = self.crf.decode(unaries)
