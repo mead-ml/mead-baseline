@@ -4,7 +4,7 @@ There are several models built in to the `baseline` codebase.  These are summari
 
 ## Convolution Model
 
-This code provides PyTorch, TensorFlow and Keras implementations. 
+This code provides PyTorch, TensorFlow, DyNet and Keras implementations. 
 
 *Details*
 
@@ -66,7 +66,7 @@ On my laptop, each implementation for SST2 takes between 15 - 30s per epoch depe
 
 ## LSTM Model
 
-Provides a simple LSTM for text classification with PyTorch and TensorFlow
+Provides a simple LSTM and BLSTM for text classification with PyTorch, TensorFlow and DyNet
 
 *Details*
 
@@ -88,7 +88,7 @@ Two different pooling methods for NBoW are supported: max (`"model_type": "nbowm
 ### Status
 
 
-This model is implemented in TensorFlow and PyTorch. Multi-GPU support can be enabled by passing `--gpus <N>` to the `mead-train`.  `--gpus -1` is a special case that tells the driver to run with all available GPUs.  The `CUDA_VISIBLE_DEVICES` environment variable should be set to create a mask of GPUs that are visible to the program.
+This model is implemented in TensorFlow, PyTorch and DyNet. Multi-GPU support can be enabled by passing `--gpus <N>` to the `mead-train`.  `--gpus -1` is a special case that tells the driver to run with all available GPUs.  The `CUDA_VISIBLE_DEVICES` environment variable should be set to create a mask of GPUs that are visible to the program.
 
 ### Latest Runs
 

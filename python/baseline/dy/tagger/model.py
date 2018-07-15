@@ -21,8 +21,7 @@ class RNNTaggerModel(Tagger, DynetModel):
         self.vocab = {}
         self.vocab['word'] = embeddings_set['word'].vocab
         self.vocab['char'] = embeddings_set['char'].vocab
-        self.batched = kwargs.get('batched', False)
-        self.word_embed = Embedding(word_vsz, word_dsz, self.pc, embeddings_set['word'].weights, finetune, dense, batched=self.batched)
+        self.word_embed = Embedding(word_vsz, word_dsz, self.pc, embeddings_set['word'].weights, finetune, dense, batched=False)
         self.char_embed = Embedding(char_vsz, self.char_dsz, self.pc, embeddings_set['char'].weights, True, dense, batched=True)
         self.labels = labels
 
@@ -58,7 +57,7 @@ class RNNTaggerModel(Tagger, DynetModel):
 
     def __str__(self):
         str_ = super(RNNTaggerModel, self).__str__()
-        return "Batched Model: \n{}".format(str_)
+        return "Auto-batching: \n{}".format(str_)
 
     def make_input(self, batch_dict):
         x = batch_dict['x']
@@ -124,7 +123,7 @@ class RNNTaggerModel(Tagger, DynetModel):
             return self.crf.neg_log_loss(preds, y.squeeze())
         else:
 
-            element_loss = dy.pickneglogsoftmax_batch if self.batched else dy.pickneglogsoftmax
+            element_loss = dy.pickneglogsoftmax
             errs = []
 
             for pred, y_i in zip(preds, y.T):

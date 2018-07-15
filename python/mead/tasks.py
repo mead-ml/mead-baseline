@@ -314,8 +314,10 @@ class TaggerTask(Task):
                 self.config_params['model']['batched'] = False
                 dy_params.set_autobatch(True)
             else:
-                self.config_params['model']['batched'] = True
-                dy_params.set_autobatch(False)
+                raise Exception('Tagger currently only supports autobatching.'
+                                'Change "batchsz" to 1 and under "train", set "autobatchsz" to your desired batchsz')
+                #self.config_params['model']['batched'] = True
+                #dy_params.set_autobatch(False)
             dy_params.init()
 
             dy_params.init()
