@@ -9,7 +9,7 @@ The top-level module also provides model base classes for four tasks:
 - [Seq2Seq for Encoder-Decoder](seq2seq.md)
 - [Language Modeling with RNNs](lm.md)
 
-These are the most common NLP tasks and many common problems can be mapped to them ( NER, slot filling -> Sequence Tagging, translation -> encoder decoder). The lower-level modules provide at least one implementation for each task in both TensorFlow and PyTorch. These are well-known algorithms with strong results so that new algorithms can be compared against them. 
+These are the most common NLP tasks and many common problems can be mapped to them ( NER, slot filling -> Sequence Tagging, translation -> encoder decoder). The lower-level modules provide at least one implementation for each task in TensorFlow, PyTorch and DyNet. These are well-known algorithms with strong results so that new algorithms can be compared against them. 
 
 The library provides methods to calculate standard evaluation metrics including precision, recall, F1, average loss, and perplexity. It also provides high-level utility support for common architecture layers and paradigms such as attention, highway and skip connections. The default trainer supports multiple optimizers, early stopping, and various learning rate schedules.
 
@@ -22,7 +22,7 @@ Driver programs are provided to train/test a model from the command line. In the
 
 The Baseline module has dependencies on:
 
-- `tensorflow` or `pytorch`
+- `tensorflow`, `pytorch` or `dynet`
 - `numpy`
 - `six`
 - `requests`

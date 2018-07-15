@@ -4,7 +4,7 @@ The datasets and embedding file locations should be provided in `mead/datasets.j
 
 #### Requirements
 
-`python-magic` and `requests` are the dependencies for automatic download of the files. This can be done in most environments with the command `pip install python-magic` and `pip install requests`.
+`requests` is the dependency for automatic download of the files. This can be done in most environments with the command `pip install requests`.
  
 #### Datasets
 

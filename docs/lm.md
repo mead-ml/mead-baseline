@@ -1,6 +1,6 @@
 # Language Modeling with Recurrent Neural Networks
 
-This code is currently implemented in TensorFlow and experimentally in PyTorch.  There are two implemented models (WordLanguageModel, CharCompLanguageModel) based on these two papers:
+There are two implemented models (WordLanguageModel, CharCompLanguageModel) based on these two papers:
 
   - Recurrent Neural Network Regularization (Zaremba, Vinyals, Sutskever) (2014)
     - https://arxiv.org/pdf/1409.2329.pdf
@@ -11,12 +11,7 @@ To run the Zaremba model with their "medium regularized LSTM" configuration, ear
 
 
 ```
-python wchar_lm.py --optim sgd --eta 1 --epochs 39 --decay_rate 1.2 \
-    --batchsz 20 --unif 0.05 --hsz 650 \
-    --train /data/ptb/train.txt \
-    --valid /data/ptb/valid.txt \
-    --test /data/ptb/test.txt \
-    --embed /data/GoogleNews-vectors-negative300.bin
+python trainer.py --config config/ptb-med.json
 ```
 
 ## Status

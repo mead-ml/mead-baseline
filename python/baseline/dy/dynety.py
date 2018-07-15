@@ -418,18 +418,19 @@ class CRF(DynetModel):
         Returns:
             dy.Expression ((1,), B)
         """
-        tags = [self.start_idx] + tags
+        tags = np.concatenate((np.array([self.start_idx], dtype=int), tags))
         score = dy.scalarInput(0)
         transitions = self.transitions
         for i, e in enumerate(emissions):
-            # Due to Dynet being column based it is best to use the transmission
+            # Due to Dynet being column based it is best to use the transition
             # matrix so that x -> y is T[y, x].
             score += dy.pick(dy.pick(transitions, tags[i + 1]), tags[i]) + dy.pick(e, tags[i + 1])
+
         score += dy.pick(dy.pick(transitions, self.end_idx), tags[-1])
         return score
 
     def neg_log_loss(self, emissions, tags):
-        """Get the Negative Log Loss.
+        """Get the Negative Log Loss. T x L
 
         :param emissions: List[dy.Expression ((H,), B)]
         :param tags: List[int]
@@ -449,6 +450,7 @@ class CRF(DynetModel):
         return viterbi_score - gold_score
 
     def _forward(self, emissions):
+
         """Viterbi forward to calculate all path scores.
 
         :param emissions: List[dy.Expression]
@@ -456,10 +458,12 @@ class CRF(DynetModel):
         Returns:
             dy.Expression ((1,), B)
         """
-        init_alphas = [-1e4] * (self.n_tags)
+        init_alphas = [-1e4] * self.n_tags
         init_alphas[self.start_idx] = 0
+
         alphas = dy.inputVector(init_alphas)
         transitions = self.transitions
+        # len(emissions) == T
         for emission in emissions:
             add_emission = dy.colwise_add(transitions, emission)
             scores = dy.colwise_add(dy.transpose(add_emission), alphas)
@@ -485,7 +489,7 @@ class CRF(DynetModel):
         backpointers = []
         transitions = self.transitions
 
-        inits = [-1e4] * (self.n_tags)
+        inits = [-1e4] * self.n_tags
         inits[self.start_idx] = 0
         alphas = dy.inputVector(inits)
 
@@ -507,3 +511,4 @@ class CRF(DynetModel):
         _ = best_path.pop()
         best_path.reverse()
         return best_path, path_score
+

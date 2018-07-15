@@ -7,6 +7,7 @@ from baseline.reporting import basic_reporting
 from baseline.train import EpochReportingTrainer, create_trainer
 from baseline.dy.dynety import *
 
+
 def _add_to_cm(cm, y, preds, axis=0):
     best = np.argmax(preds, axis=axis)
     best = np.reshape(best, y.shape)
@@ -50,7 +51,6 @@ class ClassifyTrainerDynet(EpochReportingTrainer):
         if verbose:
             print(cm)
         return metrics
-
 
     def _test(self, loader, **kwargs):
         return self._step(loader, lambda x: None, kwargs.get("verbose", False))

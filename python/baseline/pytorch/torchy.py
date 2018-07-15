@@ -479,13 +479,15 @@ def vec_log_sum_exp(vec, dim):
     max_scores_broadcast = max_scores.expand_as(vec)
     return max_scores + torch.log(torch.sum(torch.exp(vec - max_scores_broadcast), dim, keepdim=True))
 
+
 def crf_mask(vocab, span_type, s_idx, e_idx, pad_idx=None):
     """Create a CRF mask.
 
     Returns a Tensor with valid transitions as a 0 and invalid as a 1 for easy use with `masked_fill`
     """
     np_mask = crf_m(vocab, span_type, s_idx, e_idx, pad_idx=pad_idx)
-    return (torch.from_numpy(np_mask) == 0)
+    return torch.from_numpy(np_mask) == 0
+
 
 class CRF(nn.Module):
 

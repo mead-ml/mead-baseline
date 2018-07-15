@@ -22,7 +22,8 @@ Here is an example using convolutional filters for character embeddings, alongsi
 ```
 python --config config/conll-twpos.json
 ```
-To run with PyTorch, just pass `--backend pytorch`
+
+To change the backend between TensorFlow and PyTorch, just change the `backend` parameter (to `tensorflow` or `pytorch`).  For DyNet, we employ autobatching, which also affects the reader, so in addition to setting the `backend` to `dynet`, set the `batchsz` to `1`, and then set the `autobatchsz` under the `train` parameters to the desired batch size. See the example configs under [mead](../python/mead/config) for details.
 
 ### NER (and other IOB-type) Tagging
 

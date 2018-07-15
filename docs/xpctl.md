@@ -170,7 +170,7 @@ Options:
 
 ##### Importing
 
-- **putresult**: puts the result of an experiment in the database. Can optionally store the model files in a persistent model store (will automatically zip them). This is tested for `tensorflow` models, not `pytorch` ones yet. 
+- **putresult**: puts the result of an experiment in the database. Can optionally store the model files in a persistent model store (will automatically zip them). 
 ```
 xpctl > help putresult
 Usage: putresult [OPTIONS] TASK CONFIG LOG LABEL
