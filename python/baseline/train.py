@@ -73,6 +73,7 @@ def create_trainer(default_create_model_fn, model, **kwargs):
 
     return create_user_trainer(model, **kwargs)
 
+
 @exporter
 def lr_decay(decay_type, **kwargs):
     if decay_type == 'piecewise':
@@ -86,6 +87,7 @@ def lr_decay(decay_type, **kwargs):
     elif decay_type == 'cyclic':
         return cyclic_lr(**kwargs)
 
+
 def cyclic_lr(eta, max_eta=1e-2, bounds=1000, **kwargs):
     def decay(steps):
         cycle = np.floor(1 + steps / (2 * bounds))
@@ -93,6 +95,7 @@ def cyclic_lr(eta, max_eta=1e-2, bounds=1000, **kwargs):
         learning_rate = eta + (max_eta - eta) * np.maximum(0., (1 - x))
         return learning_rate
     return decay
+
 
 def zaremba_decay(eta=1.0, bounds=None, decay_rate=None, **kwargs):
     if bounds is None or decay_rate is None:
@@ -105,6 +108,7 @@ def zaremba_decay(eta=1.0, bounds=None, decay_rate=None, **kwargs):
     print('V', len(values), values)
     return piecewise_decay(bounds, values)
 
+
 def cosine_decay(eta, bounds=1000, alpha=0.0, **kwargs):
     def decay(steps):
         step = min(steps, bounds)
@@ -113,6 +117,7 @@ def cosine_decay(eta, bounds=1000, alpha=0.0, **kwargs):
         return eta * decayed
     return decay
 
+
 def exponential_decay(eta, bounds=16000, decay_rate=0.5, staircase=False, **kwargs):
     if staircase:
         return staircase_decay(eta, bounds, decay_rate, **kwargs)
@@ -120,10 +125,12 @@ def exponential_decay(eta, bounds=16000, decay_rate=0.5, staircase=False, **kwar
         return eta * decay_rate ** (step / float(bounds))
     return decay
 
+
 def staircase_decay(eta, bounds=16000, decay_rate=0.5, **kwargs):
     def decay(step):
         return eta * decay_rate ** (step // bounds)
     return decay
+
 
 def piecewise_decay(bounds, values, **kwargs):
     def decay(step):

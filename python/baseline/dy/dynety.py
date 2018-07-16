@@ -1,7 +1,7 @@
 from itertools import chain
 import numpy as np
 import dynet as dy
-from baseline.utils import crf_mask
+from baseline.utils import crf_mask, lookup_sentence
 
 
 class DynetModel(object):
@@ -511,4 +511,33 @@ class CRF(DynetModel):
         _ = best_path.pop()
         best_path.reverse()
         return best_path, path_score
+
+
+def show_examples_dynet(model, es, rlut1, rlut2, embed2, mxlen, sample, prob_clip, max_examples, reverse):
+    si = np.random.randint(0, len(es))
+
+    batch_dict = es[si]
+
+    src_array = batch_dict['src']
+    tgt_array = batch_dict['dst']
+    src_len = batch_dict['src_len']
+    if max_examples > 0:
+        max_examples = min(max_examples, src_array.shape[0])
+        src_array = src_array[0:max_examples]
+        tgt_array = tgt_array[0:max_examples]
+        src_len = src_len[0:max_examples]
+
+    for src_len_i, src_i, tgt_i in zip(src_len, src_array, tgt_array):
+
+        print('========================================================================')
+        src_len_i = np.array(src_len_i, ndmin=1)
+        sent = lookup_sentence(rlut1, src_i, reverse=reverse)
+        print('[OP] %s' % sent)
+        sent = lookup_sentence(rlut2, tgt_i)
+        print('[Actual] %s' % sent)
+        src_dict = {'src': src_i.reshape(1, -1), 'src_len': src_len_i.reshape(1, -1)}
+        dst_i = model.run(src_dict)[0]
+        sent = lookup_sentence(rlut2, dst_i)
+        print('Guess: %s' % sent)
+        print('------------------------------------------------------------------------')
 

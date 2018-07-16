@@ -287,9 +287,9 @@ class Seq2SeqAttnModel(Seq2SeqBase):
         context_zeros = Variable(context.data.new(*h_size).zero_(), requires_grad=False)
         if type(final_encoder_state) is tuple:
             s1, s2 = final_encoder_state
-            return (s1*0, s2*0), context_zeros
+            return (s1, s2), context_zeros
         else:
-            return final_encoder_state * 0, context_zeros
+            return final_encoder_state, context_zeros
 
     def input_i(self, embed_i, output_i):
         embed_i = embed_i.squeeze(0)

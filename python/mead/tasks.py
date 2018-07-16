@@ -408,15 +408,26 @@ class EncoderDecoderTask(Task):
             self.config_params['preproc']['show_ex'] = baseline.pytorch.show_examples_pytorch
             self.config_params['preproc']['trim'] = True
         else:
-            import baseline.tf.seq2seq as seq2seq
-            import mead.tf
-            self.ExporterType = mead.tf.Seq2SeqTensorFlowExporter
+
             self.config_params['preproc']['vec_alloc'] = np.zeros
             self.config_params['preproc']['vec_shape'] = np.shape
             self.config_params['preproc']['trim'] = False
             src_vec_trans = baseline.reverse_2nd if do_reverse else None
             self.config_params['preproc']['word_trans_fn'] = src_vec_trans
-            self.config_params['preproc']['show_ex'] = baseline.tf.show_examples_tf
+            if backend == 'dynet':
+                print('Dynet backend')
+                import _dynet
+                dy_params = _dynet.DynetParams()
+                dy_params.from_args()
+                dy_params.set_requested_gpus(1)
+                dy_params.init()
+                import baseline.dy.seq2seq as seq2seq
+                self.config_params['preproc']['show_ex'] = baseline.dy.show_examples_dynet
+            else:
+                import baseline.tf.seq2seq as seq2seq
+                import mead.tf
+                self.ExporterType = mead.tf.Seq2SeqTensorFlowExporter
+                self.config_params['preproc']['show_ex'] = baseline.tf.show_examples_tf
 
         self.task = seq2seq
 
