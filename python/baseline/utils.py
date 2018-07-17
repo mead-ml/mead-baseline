@@ -457,7 +457,7 @@ def topk(k, probs):
     while i < k:
         idx = np.argmax(probs)
         lut[idx] = probs[idx]
-        probs[idx] = 0
+        probs[idx] = -1e9
         i += 1
     return lut
 

@@ -246,6 +246,7 @@ def Convolution1d(fsz, cmotsz, dsz, pc, strides=(1, 1, 1, 1), name="conv"):
 
     return conv
 
+
 def ParallelConv(filtsz, cmotsz, dsz, pc, strides=(1, 1, 1, 1), name="parallel-conv"):
     if isinstance(cmotsz, int):
         cmotsz = [cmotsz] * len(filtsz)
