@@ -107,8 +107,8 @@ def fit(model, ts, vs, es=None, epochs=5, do_early_stopping=True,
     min_metric = 10000
     last_improved = 0
 
-    if after_train_fn is not None:
-        after_train_fn(model)
+    #if after_train_fn is not None:
+    #    after_train_fn(model)
     for epoch in range(epochs):
         trainer.train(ts, reporting_fns)
         if after_train_fn is not None:
