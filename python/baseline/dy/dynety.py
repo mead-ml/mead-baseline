@@ -129,6 +129,23 @@ def LSTM(osz, isz, pc, layers=1):
     return encode
 
 
+def LSTMEncoder(osz, isz, pc, layers=1):
+    """
+    :param osz: int
+    :param isz: int
+    :param pc: dy.ParameterCollection
+    :param layers: int
+    """
+    lstm = LSTM(osz, isz, pc, layers=layers)
+
+    def encode(input_, lengths):
+        states = lstm(input_)
+        final_states = [dy.pick_batch_elem(states[l], i) for i, l in enumerate(lengths)]
+        return dy.concatenate_to_batch(final_states)
+
+    return encode
+
+
 def TruncatedLSTM(
         osz, isz, pc, layers=1,
         dropout=None, batched=True
@@ -181,22 +198,6 @@ def BiLSTM(osz, isz, pc, layers=1):
     return encode
 
 
-def LSTMEncoder(osz, isz, pc, layers=1):
-    """
-    :param osz: int
-    :param isz: int
-    :param pc: dy.ParameterCollection
-    :param layers: int
-    """
-    lstm = LSTM(osz, isz, pc, layers=layers)
-
-    def encode(input_, lengths):
-        states = dy.concatenate_cols(lstm(input_))
-        final_states = dy.pick_batch(states, lengths, dim=1)
-        return final_states
-
-    return encode
-
 
 def BiLSTMEncoder(osz, isz, pc, layers=1):
     """
@@ -209,10 +210,10 @@ def BiLSTMEncoder(osz, isz, pc, layers=1):
 
     def encode(input_, lengths):
         forward, backward = lstm(input_)
-        states = dy.concatenate_cols(forward)
-        final_states_forward = dy.pick_batch(states, lengths, dim=1)
-        states = dy.concatenate_cols(backward)
-        final_states_backward = dy.pick_batch(states, lengths, dim=1)
+        final_states_forward = [dy.pick_batch_elem(forward[l], i) for i, l in enumerate(lengths)]
+        final_states_forward = dy.concatenate_to_batch(final_states_forward)
+        final_states_backward = [dy.pick_batch_elem(backward[l], i) for i, l in enumerate(lengths)]
+        final_states_backward = dy.concatenate_to_batch(final_states_backward)
         return dy.concatenate([final_states_forward, final_states_backward])
 
     return encode
