@@ -43,9 +43,7 @@ class Seq2SeqModel(DynetModel, EncoderDecoder):
             backward_state = outputs[-1].s()
             backward = [out.h()[-1] for out in outputs]
             output = [dy.concatenate([f, b]) for f, b in zip(forward, backward)]
-            c = dy.concatenate([forward_state[0], backward_state[0]])
-            h = dy.concatenate([forward_state[1], backward_state[1]])
-            hidden = (c, h)
+            hidden = [dy.concatenate([f, b]) for f, b in zip(forward_state, backward_state)]
         else:
             output = forward
             hidden = forward_state
@@ -152,7 +150,7 @@ class Seq2SeqModel(DynetModel, EncoderDecoder):
         batch = []
         for src_i, src_len_i in zip(src, src_len):
             #batch += [self.greedy_decode(src_i.reshape(-1, 1), src_len_i.reshape(-1, 1))]
-            best = self.beam_decode(src_i.reshape(-1, 1), src_len_i.reshape(-1, 1), K=kwargs.get('beam', 1))[0][0]
+            best = self.beam_decode(src_i.reshape(-1, 1), src_len_i.reshape(-1, 1), K=kwargs.get('beam', 2))[0][0]
             batch += [best]
 
         return batch
@@ -187,17 +185,18 @@ class Seq2SeqModel(DynetModel, EncoderDecoder):
 
         GO = self.vocab2['<GO>']
         EOS = self.vocab2['<EOS>']
+        dy.renew_cg()
 
         paths = [[GO] for _ in range(K)]
         # Which beams are done?
         done = np.array([False] * K)
         scores = np.array([0.0]*K)
         dy.renew_cg()
-        rnn_enc_seq, (c, h) = self.encode(src, src_len)
+        rnn_enc_seq, hidden = self.encode(src, src_len)
         context_mx = dy.concatenate_cols(rnn_enc_seq)
-
         # To vectorize, we need to expand along the batch dimension, K times
-        final_encoder_state_k = dy.concatenate_to_batch([c]*K), dy.concatenate_to_batch([h]*K)
+        final_encoder_state_k = (dy.concatenate_to_batch([h]*K) for h in hidden)
+        num_states = len(hidden)
         rnn_state = self.decoder_rnn.initial_state(final_encoder_state_k)
         attn_fn = self._attn(context_mx)
 
@@ -227,10 +226,10 @@ class Seq2SeqModel(DynetModel, EncoderDecoder):
 
             new_paths = []
             new_done = []
-            new_c = []
-            new_h = []
-            c, h = rnn_state.s()
 
+            hidden = rnn_state.s()
+            # For each hidden state
+            new_hidden = [[] for _ in range(num_states)]
             for j, best_flat in enumerate(best_idx_flat):
                 beam_id = best_beams[j]
                 best_word = best_idx[j]
@@ -239,16 +238,17 @@ class Seq2SeqModel(DynetModel, EncoderDecoder):
                 new_done.append(done[beam_id])
                 new_paths.append(paths[beam_id] + [best_word])
                 scores[j] = bests[best_flat]
-                new_c.append(dy.pick_batch_elem(c, beam_id))
-                new_h.append(dy.pick_batch_elem(h, beam_id))
+                # For each path, we need to pick that out and add it to the hiddens
+                # This will be (c1, c2, ..., h1, h2, ...)
+                for h_i, h in enumerate(hidden):
+                    new_hidden[h_i] += [dy.pick_batch_elem(h, beam_id)]
 
             done = np.array(new_done)
-            new_c = dy.concatenate_to_batch(new_c)
-            new_h = dy.concatenate_to_batch(new_h)
+            new_hidden = [dy.concatenate_to_batch(new_h) for new_h in new_hidden]
             paths = new_paths
             # Now comes the hard part, fix the hidden units
             # Copy the beam states of the winners
-            rnn_state = self.decoder_rnn.initial_state((new_c, new_h))
+            rnn_state = self.decoder_rnn.initial_state(new_hidden)
 
         return [p[1:] for p in paths], scores
 

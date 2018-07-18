@@ -450,7 +450,8 @@ def topk(k, probs):
     Note:
         mutates input for efficiency
     """
-
+    # This would be better:
+    # idx = (-probs).argsort()[:k]
     lut = {}
     i = 0
 
