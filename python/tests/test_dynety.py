@@ -247,6 +247,20 @@ def test_conv_output_shape_batched():
     output_ = conv(input_)
     assert output_.dim() == ((cmotsz,), batch_size)
 
+def test_conv_parameter_init_glorot():
+    dy.renew_cg()
+    pc = dy.ParameterCollection()
+    fsz = random.choice(FILTER_SIZES)
+    dsz = random.choice(SIZES)
+    cmotsz = random.choice(SIZES)
+    conv = Convolution1d(fsz, cmotsz, dsz, pc)
+    conv_weight = pc.parameters_list()[0]
+    gold = 0.5 * np.sqrt(6 / (fsz * dsz + fsz * cmotsz))
+    min_ = np.min(conv_weight.as_array())
+    max_ = np.max(conv_weight.as_array())
+    np.testing.assert_allclose(min_, -gold, atol=1e-5)
+    np.testing.assert_allclose(max_, gold, atol=1e-5)
+
 def test_embedded_dense_shape():
     dy.renew_cg()
     pc = dy.ParameterCollection()

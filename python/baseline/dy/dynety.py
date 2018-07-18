@@ -228,7 +228,16 @@ def Convolution1d(fsz, cmotsz, dsz, pc, strides=(1, 1, 1, 1), name="conv"):
     :param strides: Tuple[int, int, int, int]
     """
     conv_pc = pc.add_subcollection(name=name)
-    weight = conv_pc.add_parameters((1, fsz, dsz, cmotsz), name='weight')
+    fan_in = dsz * fsz
+    fan_out = cmotsz * fsz
+    # Pytorch and Dynet have a gain param that has suggested values based on
+    # the nonlinearity type, this defaults to the one for relu atm.
+    glorot_bounds = 0.5 * np.sqrt(6 / (fan_in + fan_out))
+    weight = conv_pc.add_parameters(
+        (1, fsz, dsz, cmotsz),
+        init=dy.UniformInitializer(glorot_bounds),
+        name='weight'
+    )
     bias = conv_pc.add_parameters((cmotsz), name="bias")
 
     def conv(input_):
