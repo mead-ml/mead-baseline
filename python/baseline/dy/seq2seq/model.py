@@ -1,3 +1,4 @@
+import numpy as np
 from baseline.model import create_seq2seq_model, load_seq2seq_model, EncoderDecoder
 from baseline.dy.dynety import *
 from baseline.utils import topk
@@ -14,8 +15,8 @@ class Seq2SeqModel(DynetModel, EncoderDecoder):
         print(self.rnntype)
         self.pdrop = kwargs.get('dropout', 0.5)
         self.nc = embeddings_out.vsz + 1
-        self.embed_in = Embedding(embeddings_in.vsz + 1, embeddings_in.dsz, self.pc, embedding_weight=embeddings_in.weights, finetune=True, batched=True)
-        self.embed_out = Embedding(self.nc, embeddings_out.dsz, self.pc, embedding_weight=embeddings_out.weights, finetune=True, batched=True)
+        self.embed_in = Embedding(embeddings_in.vsz + 1, embeddings_in.dsz, self.pc, embedding_weight=embeddings_in.weights, finetune=True, batched=True, name="source-embedding")
+        self.embed_out = Embedding(self.nc, embeddings_out.dsz, self.pc, embedding_weight=embeddings_out.weights, finetune=True, batched=True, name="target-embedding")
 
         if self.rnntype == 'blstm':
             self.lstm_forward = dy.VanillaLSTMBuilder(nlayers, embeddings_in.dsz, self.hsz//2, self.pc)
@@ -31,17 +32,11 @@ class Seq2SeqModel(DynetModel, EncoderDecoder):
         self.vocab2 = embeddings_out.vocab
         self.beam_sz = 1
 
-    def encode_rnn(self, embed_in_seq):
-
-        state_forward = self.lstm_forward.initial_state()
-        outputs = state_forward.add_inputs(embed_in_seq)
-        forward_state = outputs[-1].s()
-        forward = [out.h()[-1] for out in outputs]
+    def encode_rnn(self, embed_in_seq, src_len):
+        forward, forward_state = rnn_forward_with_state(self.lstm_forward, embed_in_seq, src_len)
         if self.lstm_backward is not None:
-            state_backward = self.lstm_backward.initial_state()
-            outputs = state_backward.add_inputs(reversed(embed_in_seq))
-            backward_state = outputs[-1].s()
-            backward = [out.h()[-1] for out in outputs]
+            backward, backward_state = rnn_forward_with_state(self.lstm_backward, embed_in_seq, src_len, backward=True)
+
             output = [dy.concatenate([f, b]) for f, b in zip(forward, backward)]
             hidden = [dy.concatenate([f, b]) for f, b in zip(forward_state, backward_state)]
         else:
@@ -93,7 +88,7 @@ class Seq2SeqModel(DynetModel, EncoderDecoder):
 
     def encode(self, src, src_len):
         embed_in_seq = self.embed_in(src)
-        output, hidden = self.encode_rnn(embed_in_seq)
+        output, hidden = self.encode_rnn(embed_in_seq, src_len)
         return output, hidden
 
     def input_i(self, embed_i, output_i):
@@ -150,7 +145,7 @@ class Seq2SeqModel(DynetModel, EncoderDecoder):
         batch = []
         for src_i, src_len_i in zip(src, src_len):
             #batch += [self.greedy_decode(src_i.reshape(-1, 1), src_len_i.reshape(-1, 1))]
-            best = self.beam_decode(src_i.reshape(-1, 1), src_len_i.reshape(-1, 1), K=kwargs.get('beam', 2))[0][0]
+            best = self.beam_decode(src_i.reshape(-1, 1), np.array([src_len_i]), K=kwargs.get('beam', 2))[0][0]
             batch += [best]
 
         return batch

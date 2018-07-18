@@ -106,117 +106,77 @@ def SkipConnection(funcs, *args, **kwargs):
         return input_
     return skip
 
+# RNN functions
+def rnn_forward(rnn, input_):
+    """Return only the output of the final layer.
 
-def LSTM(osz, isz, pc, layers=1):
+    :param rnn: dy.RNNBuild or dy.BiRNNBuilder
+    :param input_: List[dy.Expression]
+
+    Returns:
+        List[dy.Expression]: The outputs
     """
-    :param osz: int
-    :param isz: int
-    :param pc: dy.ParameterCollection
-    :param layers: int
+    if isinstance(rnn, dy.BiRNNBuilder):
+        return rnn.transduce(input_)
+    state = rnn.initial_state()
+    return state.transduce(input_)
+
+def rnn_forward_with_state(rnn, input_, lengths=None, state=None, batched=True, backward=False):
+    """Return the output of the final layers and the final state of the RNN.
+
+    :param rnn: dy.RNNBuilder
+    :param input_: List[dy.Expression]
+    :param lengths: List[int]
+    :param state: List[np.ndarray] The previous state (used in TBPTT)
+    :param batched: bool Is the state batched?
+    :param backward: bool Is this a backward rnn in a bRNN?
+
+    Returns:
+        List[dy.Expression] (Seq_len): The outputs
+        List[dy.Expression] (2 * layers if lstm): The state
     """
-    lstm = dy.VanillaLSTMBuilder(layers, isz, osz, pc)
+    if state is not None:
+        state = [dy.inputTensor(s, batched) for s in state]
+    lstm_state = rnn.initial_state(state)
+    if backward:
+        states = lstm_state.add_inputs(reversed(input_))
+        outputs = list(reversed([s.h()[-1] for s in states]))
+        # When going backwards (we pad right) the final state of the rnn
+        # is always the last one.
+        final_state = states[-1].s()
+        return outputs, final_state
+    states = lstm_state.add_inputs(input_)
+    outputs = [s.h()[-1] for s in states]
+    if lengths is None:
+        if backward:
+            outputs = list(reversed(outputs))
+        return outputs, states[-1].s()
+    final_states = [states[l - 1].s() for l in lengths]
+    final_state_by_batch = []
+    for i, state in enumerate(final_states):
+        batch_state = [dy.pick_batch_elem(s, i) for s in state]
+        final_state_by_batch.append(batch_state)
+    final_state = []
+    for i in range(len(final_state_by_batch[0])):
+        col = dy.concatenate_to_batch([final_state_by_batch[j][i] for j in range(len(final_state_by_batch))])
+        final_state.append(col)
+    if backward:
+        outputs = list(reversed(outputs))
+    return outputs, final_state
 
-    def encode(input_):
-        """
-        :param input_: List[dy.Expression] ((isz,), B)
+def rnn_encode(rnn, input_, lengths):
+    """Return the final output for each batch based on lengths.
 
-        Returns:
-            dy.Expression ((osz,), B)
-        """
-        state = lstm.initial_state()
-        return state.transduce(input_)
+    :param rnn: dy.RNNBuilder or dy.BiRNNBuilder
+    :param input_: List[dy.Expression]
+    :param lengths: List[int]
 
-    return encode
-
-
-def LSTMEncoder(osz, isz, pc, layers=1):
+    Returns:
+        dy.Expression
     """
-    :param osz: int
-    :param isz: int
-    :param pc: dy.ParameterCollection
-    :param layers: int
-    """
-    lstm = LSTM(osz, isz, pc, layers=layers)
-
-    def encode(input_, lengths):
-        states = lstm(input_)
-        final_states = [dy.pick_batch_elem(states[l], i) for i, l in enumerate(lengths)]
-        return dy.concatenate_to_batch(final_states)
-
-    return encode
-
-
-def TruncatedLSTM(
-        osz, isz, pc, layers=1,
-        dropout=None, batched=True
-):
-    """An LSTM that return the final state.
-    :param osz: int
-    :param isz: int
-    :param pc: dy.ParameterCollection
-    :param layers: int
-    """
-    lstm = dy.VanillaLSTMBuilder(layers, isz, osz, pc)
-
-    def encode(input_, state=None, train=True):
-        if state is not None:
-            state = [dy.inputTensor(s, batched) for s in state]
-        if train and dropout is not None:
-            lstm.set_dropout(dropout)
-        else:
-            lstm.disable_dropout()
-        lstm_state = lstm.initial_state(state)
-        outputs = lstm_state.add_inputs(input_)
-        last_state = outputs[-1].s()
-        outputs = [out.h()[-1] for out in outputs]
-        return outputs, last_state
-
-    return encode
-
-
-def BiLSTM(osz, isz, pc, layers=1):
-    """
-    :param osz: int
-    :param isz: int
-    :param pc: dy.ParameterCollection
-    :param layers: int
-    """
-    lstm_forward = dy.VanillaLSTMBuilder(layers, isz, osz//2, pc)
-    lstm_backward = dy.VanillaLSTMBuilder(layers, isz, osz//2, pc)
-
-    def encode(input_):
-        """
-        :param input_: List[dy.Expression] ((isz,), B)
-
-        Returns:
-            dy.Expression ((osz,), B)
-        """
-        state_forward = lstm_forward.initial_state()
-        state_backward = lstm_backward.initial_state()
-        return state_forward.transduce(input_), state_backward.transduce(reversed(input_))
-
-    return encode
-
-
-
-def BiLSTMEncoder(osz, isz, pc, layers=1):
-    """
-    :param osz: int
-    :param isz: int
-    :param pc: dy.ParameterCollection
-    :param layers: int
-    """
-    lstm = BiLSTM(osz, isz, pc, layers=layers)
-
-    def encode(input_, lengths):
-        forward, backward = lstm(input_)
-        final_states_forward = [dy.pick_batch_elem(forward[l], i) for i, l in enumerate(lengths)]
-        final_states_forward = dy.concatenate_to_batch(final_states_forward)
-        final_states_backward = [dy.pick_batch_elem(backward[l], i) for i, l in enumerate(lengths)]
-        final_states_backward = dy.concatenate_to_batch(final_states_backward)
-        return dy.concatenate([final_states_forward, final_states_backward])
-
-    return encode
+    states = rnn_forward(rnn, input_)
+    final_states = [dy.pick_batch_elem(states[l - 1], i) for i, l in enumerate(lengths)]
+    return dy.concatenate_to_batch(final_states)
 
 
 def Convolution1d(fsz, cmotsz, dsz, pc, strides=(1, 1, 1, 1), name="conv"):
@@ -546,7 +506,7 @@ def show_examples_dynet(model, es, rlut1, rlut2, embed2, mxlen, sample, prob_cli
         print('[OP] %s' % sent)
         sent = lookup_sentence(rlut2, tgt_i)
         print('[Actual] %s' % sent)
-        src_dict = {'src': src_i.reshape(1, -1), 'src_len': src_len_i.reshape(1, -1)}
+        src_dict = {'src': src_i.reshape(1, -1), 'src_len': src_len_i}
         dst_i = model.run(src_dict)[0]
         sent = lookup_sentence(rlut2, dst_i)
         print('Guess: %s' % sent)

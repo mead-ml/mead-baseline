@@ -75,41 +75,6 @@ def test_optimizer_clip_not_called():
         opt = optimizer(m, 'adam', clip=5.0)
         assert opt.set_clip_threshold.call_count == 1
 
-def test_truncated_lstm_output_shapes():
-    seq_len = np.random.randint(5, 10)
-    dy.renew_cg()
-    pc = dy.ParameterCollection()
-    lstm = TruncatedLSTM(100, 100, pc)
-    o, _ = lstm([dy.inputVector(np.random.rand(100)) for _ in range(seq_len)])
-    assert len(o) == seq_len
-    assert o[0].dim() == ((100,), 1)
-
-def test_truncated_lstm_state_shapes():
-    seq_len = np.random.randint(5, 10)
-    layers = np.random.randint(1, 3)
-    dy.renew_cg()
-    pc = dy.ParameterCollection()
-    lstm = TruncatedLSTM(100, 100, pc, layers)
-    _, l = lstm([dy.inputVector(np.random.rand(100)) for _ in range(seq_len)])
-    assert len(l) == 2 * layers
-    assert l[0].dim() == ((100,), 1)
-
-def test_truncated_lstm_input_state_changes_things():
-    seq_len = np.random.randint(5, 10)
-    inputs = np.random.rand(seq_len, 100)
-    dy.renew_cg()
-    pc = dy.ParameterCollection()
-    lstm = TruncatedLSTM(100, 100, pc, 1, batched=False)
-    o, l = lstm([dy.inputVector(in_) for in_ in inputs])
-    np_o = [x.npvalue() for x in o]
-    np_l = [x.npvalue() for x in l]
-    dy.renew_cg()
-    o, l = lstm([dy.inputVector(in_) for in_ in inputs], np_l)
-    np_o2 = [x.npvalue() for x in o]
-    for o, o2 in zip(np_o, np_o2):
-        with pytest.raises(AssertionError):
-            np.testing.assert_allclose(o, o2)
-
 def test_linear_params_present():
     dy.renew_cg()
     pc = dy.ParameterCollection()
@@ -159,57 +124,85 @@ def test_linear_forward_shape_batched():
     out_ = linear(input_)
     assert out_.dim() == ((out,), batch_size)
 
-def test_LSTM_shape():
+def test_rnn_forward_shape():
     dy.renew_cg()
     pc = dy.ParameterCollection()
     out = random.choice(SIZES)
     in_ = random.choice(SIZES)
+    batch_size = random.randint(1, 6)
     seq_len = random.randint(5, 11)
-    input_ = [dy.inputVector(np.random.randn(in_)) for _ in range(seq_len)]
-    lstm = LSTM(out, in_, pc)
-    output_ = lstm(input_)
-    assert len(output_) == seq_len
-    for out_ in output_:
-        assert out_.dim() == ((out,), 1)
-
-def test_LSTM_shape_batch():
-    dy.renew_cg()
-    pc = dy.ParameterCollection()
-    out = random.choice(SIZES)
-    in_ = random.choice(SIZES)
-    seq_len = random.randint(5, 11)
-    batch_size = random.randint(5, 11)
-    input_ = [dy.concatenate_to_batch([dy.inputVector(np.random.randn(in_)) for _ in range(batch_size)]) for _ in range(seq_len)]
-    lstm = LSTM(out, in_, pc)
-    output_ = lstm(input_)
+    input_ = [dy.inputTensor(np.random.randn(in_, batch_size), True) for _ in range(seq_len)]
+    layers = random.randint(1, 4)
+    rnn = dy.LSTMBuilder(layers, in_, out, pc)
+    output_ = rnn_forward(rnn, input_)
     assert len(output_) == seq_len
     for out_ in output_:
         assert out_.dim() == ((out,), batch_size)
 
-def test_LSTM_Encoder_shape():
+def test_rnn_forward_birnn():
     dy.renew_cg()
     pc = dy.ParameterCollection()
     out = random.choice(SIZES)
     in_ = random.choice(SIZES)
+    batch_size = random.randint(1, 6)
     seq_len = random.randint(5, 11)
-    lens = [seq_len - 1]
-    input_ = [dy.inputVector(np.random.randn(in_)) for _ in range(seq_len)]
-    lstm = LSTMEncoder(out, in_, pc)
-    output_ = lstm(input_, lens)
-    assert output_.dim() == ((out,), 1)
+    input_ = [dy.inputTensor(np.random.randn(in_, batch_size), True) for _ in range(seq_len)]
+    layers = random.randint(1, 4)
+    rnn = dy.BiRNNBuilder(layers, in_, out, pc, dy.VanillaLSTMBuilder)
+    output_ = rnn_forward(rnn, input_)
+    assert len(output_) == seq_len
+    for out_ in output_:
+        assert out_.dim() == ((out,), batch_size)
 
-def test_LSTM_Encoder_shape_batch():
+def test_rnn_with_state():
     dy.renew_cg()
     pc = dy.ParameterCollection()
     out = random.choice(SIZES)
     in_ = random.choice(SIZES)
+    batch_size = random.randint(1, 6)
     seq_len = random.randint(5, 11)
-    batch_size = random.randint(5, 11)
-    lens = [random.randint(1, seq_len) for _ in range(batch_size)]
-    input_ = [dy.concatenate_to_batch([dy.inputVector(np.random.randn(in_)) for _ in range(batch_size)]) for _ in range(seq_len)]
-    lstm = LSTMEncoder(out, in_, pc)
-    output_ = lstm(input_, lens)
-    assert output_.dim() == ((out,), batch_size)
+    input_ = [dy.inputTensor(np.random.randn(in_, batch_size), True) for _ in range(seq_len)]
+    layers = random.randint(1, 4)
+    rnn = dy.LSTMBuilder(layers, in_, out, pc)
+    output_, state = rnn_forward_with_state(rnn, input_)
+    assert len(output_) == seq_len
+    for out_ in output_:
+        assert out_.dim() == ((out,), batch_size)
+    assert len(state) == layers * 2
+    for s in state:
+        assert s.dim() == ((out,), batch_size)
+
+def test_rnn_with_state_with_prev():
+    seq_len = np.random.randint(5, 10)
+    batch_size = np.random.randint(2, 5)
+    inputs = np.random.rand(seq_len, 100, batch_size)
+    dy.renew_cg()
+    pc = dy.ParameterCollection()
+    lstm = dy.VanillaLSTMBuilder(1, 100, 100, pc)
+    o, l = rnn_forward_with_state(lstm, [dy.inputTensor(in_, True) for in_ in inputs])
+    np_o = [x.npvalue() for x in o]
+    np_l = [x.npvalue() for x in l]
+    dy.renew_cg()
+    o, l = rnn_forward_with_state(lstm, [dy.inputTensor(in_, True) for in_ in inputs], state=np_l)
+    np_o2 = [x.npvalue() for x in o]
+    for o, o2 in zip(np_o, np_o2):
+        with pytest.raises(AssertionError):
+            np.testing.assert_allclose(o, o2)
+
+def test_rnn_with_state_full_len_matches_ends():
+    dy.renew_cg()
+    pc = dy.ParameterCollection()
+    out = random.choice(SIZES)
+    in_ = random.choice(SIZES)
+    batch_size = random.randint(1, 6)
+    seq_len = random.randint(5, 11)
+    input_ = [dy.inputTensor(np.random.randn(in_, batch_size), True) for _ in range(seq_len)]
+    layers = random.randint(1, 4)
+    rnn = dy.LSTMBuilder(layers, in_, out, pc)
+    output_, state = rnn_forward_with_state(rnn, input_)
+    output_2, state_2 = rnn_forward_with_state(rnn, input_, lengths=[seq_len] * batch_size)
+    for s1, s2 in zip(state, state_2):
+        np.testing.assert_allclose(s1.npvalue(), s2.npvalue())
 
 def test_conv_params_shape():
     dy.renew_cg()

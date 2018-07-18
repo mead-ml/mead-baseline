@@ -14,7 +14,11 @@ class BaseLanguageModel(DynetModel, LanguageModel):
 
     def forward(self, input_, state=None, train=True):
         input_ = self.embed(input_)
-        transduced, last_state = self._rnn(input_, state, train)
+        if train:
+            self._rnn.set_dropout(self.dropout)
+        else:
+            self._rnn.disable_dropout()
+        transduced, last_state = rnn_forward_with_state(self._rnn, input_, None, state)
         output = self.output(transduced)
         return output, last_state
 
@@ -40,8 +44,9 @@ class WordLanguageModel(BaseLanguageModel):
         vsz = embedding.vsz + 1
         dsz = embedding.dsz
         self._embed = Embedding(vsz, dsz, self.pc, embedding_weight=embedding.weights, finetune=finetune, batched=True)
-        self._rnn = TruncatedLSTM(hsz, dsz, self.pc, layers, dropout)
+        self._rnn = dy.VanillaLSTMBuilder(layers, dsz, hsz, self.pc)
         self._output = Linear(vsz, hsz, self.pc, name="output")
+        self.dropout = dropout
 
     def embed(self, input_):
         words, _ = input_
@@ -96,8 +101,9 @@ class CharCompLanguageModel(BaseLanguageModel):
             rnninsz = cmotsz_total + dsz
         else:
             rnninsz = cmotsz_total
-        self._rnn = TruncatedLSTM(hsz, rnninsz, self.pc, layers, dropout)
+        self._rnn = dy.VanillaLSTMBuilder(layers, rnninsz, hsz, self.pc)
         self._output = Linear(vsz, hsz, self.pc, name="output")
+        self.dropout = dropout
 
     def make_input(self, batch_dict, **kwargs):
         x = batch_dict['x'].T

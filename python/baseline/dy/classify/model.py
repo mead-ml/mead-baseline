@@ -52,8 +52,8 @@ class WordClassifierBase(DynetModel, Classifier):
         y = batch_dict['y']
         lengths = batch_dict['lengths']
         if self.batched:
-            return x.T, y.T, lengths.T - 1
-        return x[0], y[0], lengths - 1
+            return x.T, y.T, lengths.T
+        return x[0], y[0], lengths
 
     def forward(self, input_, lengths):
         embedded = self.embed_word(input_)
@@ -129,8 +129,12 @@ class LSTMModel(WordClassifierBase):
         hsz = kwargs.get('rnnsz', kwargs.get('hsz', 100))
         if type(hsz) is list:
             hsz = hsz[0]
+        self.rnn = dy.VanillaLSTMBuilder(layers, dsz, hsz, self.pc)
 
-        return hsz, LSTMEncoder(hsz, dsz, self.pc, layers=layers)
+        def pool(input_, lengths):
+            return rnn_encode(self.rnn, input_, lengths)
+
+        return hsz, pool
 
 
 class BLSTMModel(WordClassifierBase):
@@ -139,8 +143,12 @@ class BLSTMModel(WordClassifierBase):
         hsz = kwargs.get('rnnsz', kwargs.get('hsz', 100))
         if type(hsz) is list:
             hsz = hsz[0]
+        self.rnn = dy.BiRNNBuilder(layers, dsz, hsz, self.pc, dy.VanillaLSTMBuilder)
 
-        return hsz, BiLSTMEncoder(hsz, dsz, self.pc, layers=layers)
+        def pool(input_, lengths):
+            return rnn_encode(self.rnn, input_, lengths)
+
+        return hsz, pool
 
 
 class NBowModel(WordClassifierBase):
