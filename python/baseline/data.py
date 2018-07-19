@@ -323,7 +323,7 @@ class SeqWordCharTagExamples(object):
                 elif k in SeqWordCharTagExamples.SCALARS:
                     pass
                 else:
-                    batch[k] = batch[k][:0, max_src_len]
+                    batch[k] = batch[k][:, 0:max_src_len]
 
         return batch
 

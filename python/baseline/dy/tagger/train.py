@@ -4,11 +4,12 @@ from baseline.utils import listify, get_model_file, revlut, to_spans, f_score
 from baseline.progress import create_progress_bar
 from baseline.reporting import basic_reporting
 from baseline.train import EpochReportingTrainer, create_trainer
+from baseline.dy.dynety import optimizer
 
 
 class TaggerTrainerDyNet(EpochReportingTrainer):
 
-    def __init__(self, model, optim='sgd', clip=5, mom=0.9, **kwargs):
+    def __init__(self, model, **kwargs):
 
         super(TaggerTrainerDyNet, self).__init__()
 
@@ -17,20 +18,8 @@ class TaggerTrainerDyNet(EpochReportingTrainer):
         self.model = model
         self.idx2label = revlut(self.model.labels)
         self.autobatchsz = kwargs.get('autobatchsz')
-        eta = kwargs.get('eta', kwargs.get('lr', 0.01))
-        print("Using eta [{:.4f}]".format(eta))
-        print("Using optim [{}]".format(optim))
         self.labels = model.labels
-        if optim == 'adadelta':
-            self.optimizer = dy.AdadeltaTrainer(model.pc)
-        elif optim == 'adam':
-            self.optimizer = dy.AdamTrainer(model.pc)
-        elif optim == 'rmsprop':
-            self.optimizer = dy.RMSPropTrainer(model.pc, learning_rate=eta)
-        else:
-            print("using mom {:.3f}".format(mom))
-            self.optimizer = dy.MomentumSGDTrainer(model.pc, learning_rate=eta, mom=mom)
-        self.optimizer.set_clip_threshold(clip)
+        self.optimizer = optimizer(model, **kwargs)
 
     def _update(self, loss):
         loss.backward()
