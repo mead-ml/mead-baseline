@@ -5,7 +5,7 @@ from baseline.model import (
     create_tagger_model
 )
 import numpy as np
-from baseline.dy.dynety import CRF, BiLSTM, Linear, Embedding, DynetModel, Convolution1d
+from baseline.dy.dynety import CRF, BiLSTM, Linear, Embedding, DynetModel, Convolution1d, ParallelConv
 
 
 class RNNTaggerModel(Tagger, DynetModel):
@@ -137,21 +137,12 @@ class RNNTaggerModel(Tagger, DynetModel):
         return input_
 
     def _init_output(self, input_dim, n_classes):
-        return Linear(n_classes, input_dim, self.pc, name="Output")
+        return Linear(n_classes, input_dim, self.pc, name="output")
 
     def _init_pool_chars(self, dsz, filtsz, cmotsz, **kwargs):
-        convs = []
-        for fsz in filtsz:
-            convs.append(Convolution1d(fsz, cmotsz, dsz, self.pc))
-
+        parallel_conv = ParallelConv(filtsz, cmotsz, dsz, self.pc)
         def call_pool(input_, _):
-            dims = tuple([1] + list(input_.dim()[0]))
-            input_ = dy.reshape(input_, dims)
-            mots = []
-            for conv in convs:
-                mots.append(conv(input_))
-            return dy.concatenate(mots)
-
+            return parallel_conv(input_)
         return len(filtsz) * cmotsz, call_pool
 
     @classmethod
