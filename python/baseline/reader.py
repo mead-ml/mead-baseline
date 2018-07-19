@@ -277,7 +277,7 @@ class SeqPredictReader(object):
             ts.append(item)
         examples = baseline.data.SeqWordCharTagExamples(ts, do_shuffle=shuffle, do_sort=do_sort)
         return baseline.data.SeqWordCharLabelDataFeed(examples, batchsz=batchsz, shuffle=shuffle,
-                                                      vec_alloc=self.vec_alloc, vec_shape=self.vec_shape), texts
+                                                      vec_alloc=self.vec_alloc, vec_shape=self.vec_shape, trim=self.trim), texts
 
 
 @exporter

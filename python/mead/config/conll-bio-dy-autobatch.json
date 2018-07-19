@@ -23,7 +23,7 @@
         "rnntype": "blstm",
         "layers": 1,
         "crf_mask": true,
-	"crf": true 
+        "crf": true
     },
 
     "word_embeddings": {

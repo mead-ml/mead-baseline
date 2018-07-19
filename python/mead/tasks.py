@@ -319,8 +319,6 @@ class TaggerTask(Task):
                 #self.config_params['model']['batched'] = True
                 #dy_params.set_autobatch(False)
             dy_params.init()
-
-            dy_params.init()
             import baseline.dy.tagger as tagger
             self.config_params['preproc']['vec_alloc'] = np.zeros
             self.config_params['preproc']['vec_shape'] = np.shape

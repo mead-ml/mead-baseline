@@ -35,7 +35,7 @@ class RNNTaggerModel(Tagger, DynetModel):
 
         if self.do_crf:
             vocab = labels if self.crf_mask else None
-            self.crf = CRF(nc, idxs=(labels['<GO>'], labels['<EOS>']),
+            self.crf = CRF(nc, pc=self.pc, idxs=(labels['<GO>'], labels['<EOS>']),
                            vocab=vocab, span_type=self.span_type)
 
         self.activation_type = kwargs.get('activation', 'tanh')
@@ -95,7 +95,6 @@ class RNNTaggerModel(Tagger, DynetModel):
             exps = []
             for bi_exp in bi_exps:
                 exps += [self.output(bi_exp)]
-
         return exps
 
     def predict(self, input_, lengths):
@@ -119,8 +118,7 @@ class RNNTaggerModel(Tagger, DynetModel):
 
     def loss(self, preds, y):
         if self.do_crf is True:
-            #
-            return self.crf.neg_log_loss(preds, y.squeeze())
+            return self.crf.neg_log_loss(preds, y.squeeze(0))
         else:
 
             element_loss = dy.pickneglogsoftmax
