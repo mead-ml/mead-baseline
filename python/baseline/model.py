@@ -22,7 +22,7 @@ class Classifier(object):
     Provide an interface to DNN classifiers that use word lookup tables.
     """
     def __init__(self):
-        pass
+        super(Classifier, self).__init__()
 
     def save(self, basename):
         """Save this model out
@@ -187,7 +187,7 @@ class Tagger(object):
     type of chunking (e.g. NER, POS chunks, slot-filling)
     """
     def __init__(self):
-        pass
+        super(Tagger, self).__init__()
 
     def save(self, basename):
         pass
@@ -244,7 +244,7 @@ class Tagger(object):
 class LanguageModel(object):
 
     def __init__(self):
-        pass
+        super(LanguageModel, self).__init__()
 
     def step(self, batch_time, context):
         pass
@@ -257,7 +257,7 @@ class EncoderDecoder(object):
         pass
 
     def __init__(self):
-        pass
+        super(EncoderDecoder, self).__init__()
 
     @staticmethod
     def create(src_vocab, dst_vocab, **kwargs):
