@@ -8,7 +8,7 @@ from baseline.utils import listify
 from baseline.dy.dynety import *
 
 
-class WordClassifierBase(DynetModel, Classifier):
+class WordClassifierBase(Classifier, DynetModel):
 
     def __init__(
             self,

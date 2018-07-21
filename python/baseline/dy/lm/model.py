@@ -2,7 +2,7 @@ from baseline.model import create_lang_model, LanguageModel
 from baseline.dy.dynety import *
 
 
-class BaseLanguageModel(DynetModel, LanguageModel):
+class BaseLanguageModel(LanguageModel, DynetModel):
     def __init__(self):
         super(BaseLanguageModel, self).__init__()
 
