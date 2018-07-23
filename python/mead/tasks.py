@@ -309,7 +309,6 @@ class TaggerTask(Task):
             dy_params = _dynet.DynetParams()
             dy_params.from_args()
             dy_params.set_requested_gpus(1)
-            dy_params.set_requested_gpus(1)
             if 'autobatchsz' in self.config_params['train']:
                 self.config_params['model']['batched'] = False
                 dy_params.set_autobatch(True)

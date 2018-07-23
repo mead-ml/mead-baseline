@@ -5,7 +5,7 @@ from baseline.model import (
     create_tagger_model
 )
 import numpy as np
-from baseline.dy.dynety import CRF, BiLSTM, Linear, Embedding, DynetModel, Convolution1d, ParallelConv
+from baseline.dy.dynety import CRF, Linear, Embedding, DynetModel, ParallelConv, rnn_forward
 
 
 class RNNTaggerModel(Tagger, DynetModel):
@@ -21,8 +21,8 @@ class RNNTaggerModel(Tagger, DynetModel):
         self.vocab = {}
         self.vocab['word'] = embeddings_set['word'].vocab
         self.vocab['char'] = embeddings_set['char'].vocab
-        self.word_embed = Embedding(word_vsz, word_dsz, self.pc, embeddings_set['word'].weights, finetune, dense, batched=False)
-        self.char_embed = Embedding(char_vsz, self.char_dsz, self.pc, embeddings_set['char'].weights, True, dense, batched=True)
+        self.word_embed = Embedding(word_vsz, word_dsz, self.pc, embeddings_set['word'].weights, finetune, dense, batched=False, name='word-embedding')
+        self.char_embed = Embedding(char_vsz, self.char_dsz, self.pc, embeddings_set['char'].weights, True, dense, batched=True, name='char-embedding')
         self.labels = labels
 
         self.hsz = int(kwargs['hsz'])
@@ -43,7 +43,7 @@ class RNNTaggerModel(Tagger, DynetModel):
         # Now make a BLSTM
         # Now make a CRF
         self.char_word_sz, self.pool_chars = self._init_pool_chars(self.char_dsz, kwargs.get('cfiltsz', [3]), kwargs.get('wsz', 30))
-        self.rnn = BiLSTM(self.hsz, self.char_word_sz + word_dsz, self.pc, layers=layers)
+        self.rnn = dy.BiRNNBuilder(layers, self.char_word_sz + word_dsz, self.hsz, self.pc, dy.VanillaLSTMBuilder)
         self.output = self._init_output(self.hsz, nc)
 
     def dropout(self, input_):
@@ -84,17 +84,8 @@ class RNNTaggerModel(Tagger, DynetModel):
         pooled_chars = dy.reshape(pooled_chars, (self.char_word_sz, T), B)
         pooled_chars = dy.transpose(pooled_chars)
         embed = [self.dropout(dy.concatenate([embed_word, pooled_char])) for embed_word, pooled_char in zip(embed_words_list, pooled_chars)]
-        if self.rnntype == 'lstm':
-            u_exps = self.rnn(embed)
-            exps = []
-            for u_exp in u_exps:
-                exps += [self.output(u_exp)]
-        else:
-            fw_exps, bw_exps = self.rnn(embed)
-            bi_exps = [dy.concatenate([f, b]) for f, b in zip(fw_exps, reversed(bw_exps))]
-            exps = []
-            for bi_exp in bi_exps:
-                exps += [self.output(bi_exp)]
+        exps = [self.output(out) for out in rnn_forward(self.rnn, embed)]
+
         return exps
 
     def predict(self, input_, lengths):
