@@ -9,19 +9,30 @@ else
     EGG=deep_baseline.egg-info
 fi
 
-mv $EGG "$EGG.old"
+clean_up() {
+    rm -rf setup.py &> /dev/null
+    mv "$EGG.old" $EGG &> /dev/null
+    rm -rf README.md &> /dev/null
+    rm -rf MANIFEST.in &> /dev/null
+}
+trap clean_up EXIT ERR INT TERM
+
+mv $EGG "$EGG.old" &> /dev/null
 
 cp setup_$package.py setup.py
-pip install -e .[test]
-rm setup.py
+if [ $? != 0 ]; then
+    echo "No setup file for $package was found, file should be named setup_$package.py"
+    exit 1
+fi
 
-mv "$EGG.old" $EGG
+pip install -e .[test]
+if [ $? != 0 ]; then
+    echo "$package failed to install."
+    exit 1
+fi
 
 if [ $package = "baseline" ]; then
     if [ $test = "test" ]; then
         pytest
     fi
 fi
-
-rm -rf README.md
-rm -rf MANIFEST.in
