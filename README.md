@@ -34,3 +34,24 @@ Currently xpctl depends on baseline but baseline is not on pypi so you need to i
 #### A Note About Versions
 
 Deep Learning Frameworks are evolving quickly, and changes are not always backwards compatible.  We recommend recent versions of each framework.  Baseline is known to work on most versions of TensorFlow, and is currently being run on versions between 1.5 and 1.7.  PyTorch 0.4 is a major departure from 0.3, and we felt that maintaining both versions would be counter-productive to the goals of this project.  We recently migrated Baseline to 0.4.  There is an `r0.1` branch of Baseline that does work with 0.3, but its development is not active.
+
+#### Citing
+
+If you use the library, please cite the following paper:
+
+```
+@InProceedings{W18-2506,
+  author =     "Pressel, Daniel
+        and Ray Choudhury, Sagnik
+        and Lester, Brian
+        and Zhao, Yanjie
+        and Barta, Matt",
+  title =     "Baseline: A Library for Rapid Modeling, Experimentation and Development of Deep Learning Algorithms targeting NLP",
+  booktitle =     "Proceedings of Workshop for NLP Open Source Software (NLP-OSS)",
+  year =     "2018",
+  publisher =     "Association for Computational Linguistics",
+  pages =     "34--40",
+  location =     "Melbourne, Australia",
+  url =     "http://aclweb.org/anthology/W18-2506"
+}
+```
