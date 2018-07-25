@@ -86,11 +86,11 @@ class RNNTaggerModel(nn.Module, Tagger):
                 assert model.span_type is not None, "A crf mask cannot be used without providing `span_type`"
                 model.crf = CRF(
                     len(labels),
-                    (model.labels.get("<GO>"), model.labels.get("<EOS>")),
-                    model.labels, model.span_type, model.labels.get("<PAD>")
+                    (model.labels.get("<GO>"), model.labels.get("<EOS>")), batch_first=False,
+                    vocab=model.labels, span_type=model.span_type, pad_idx=model.labels.get("<PAD>")
                 )
             else:
-                model.crf = CRF(len(labels), (model.labels.get("<GO>"), model.labels.get("<EOS>")))
+                model.crf = CRF(len(labels), (model.labels.get("<GO>"), model.labels.get("<EOS>")), batch_first=False)
         model.crit = SequenceCriterion(LossFn=nn.CrossEntropyLoss)
         print(model)
         return model
@@ -167,8 +167,7 @@ class RNNTaggerModel(nn.Module, Tagger):
         # back to T x B x H
         decoded = decoded.view(output.size(0), output.size(1), -1)
 
-        # now to B x T x H
-        return decoded.transpose(0, 1).contiguous()
+        return decoded
 
     # Input better be xch, x
     def forward(self, input):
@@ -179,16 +178,13 @@ class RNNTaggerModel(nn.Module, Tagger):
         seqlen = xch.size(0)
 
         probv = self._compute_unary_tb(x, xch, lengths)
-        preds = []
         if self.use_crf is True:
-
-            for pij, sl in zip(probv, lengths):
-                unary = pij[:sl]
-                viterbi, _ = self.crf.decode(unary)
-                preds.append(viterbi)
+            lengths = lengths.cuda()
+            preds, _ = self.crf.decode(probv, lengths)
         else:
             # Get batch (B, T)
-
+            probv = probv.transpose(0, 1)
+            preds = []
             for pij, sl in zip(probv, lengths):
                 _, unary = torch.max(pij[:sl], 1)
                 preds.append(unary.data)
@@ -205,21 +201,20 @@ class RNNTaggerModel(nn.Module, Tagger):
         batch_loss = 0.
         total_tags = 0.
         if self.use_crf is True:
-            for pij, gold, sl in zip(probv, tags.data, lengths):
-
-                gold_tags = gold[:sl]
-                unary = pij[:sl]
-                total_tags += len(gold_tags)
-                batch_loss += self.crf.neg_log_loss(unary, gold_tags)
+            # Get tags as [T, B]
+            tags = tags.transpose(0, 1)
+            lengths = lengths.cuda()
+            batch_loss = torch.mean(self.crf.neg_log_loss(probv, tags.data, lengths))
         else:
             # Get batch (B, T)
+            probv = probv.transpose(0, 1)
             for pij, gold, sl in zip(probv, tags, lengths):
                 unary = pij[:sl]
                 gold_tags = gold[:sl]
                 total_tags += len(gold_tags)
                 batch_loss += self.crit(unary, gold_tags)
 
-        return batch_loss / len(probv)
+        return batch_loss
 
     def get_vocab(self, vocab_type='word'):
         return self.word_vocab if vocab_type == 'word' else self.char_vocab

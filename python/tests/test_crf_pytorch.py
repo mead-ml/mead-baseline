@@ -27,7 +27,7 @@ def label_vocab():
 def crf(label_vocab):
     return CRF(
         len(label_vocab),
-        (label_vocab[S], label_vocab[E]),
+        (label_vocab[S], label_vocab[E]), True,
         label_vocab, SPAN_TYPE, label_vocab[P]
     )
 
@@ -49,7 +49,7 @@ def model(label_vocab, embeds):
 
 def test_mask_is_applied(label_vocab, crf):
     t = crf.transitions.detach().numpy()
-    assert t[label_vocab['<GO>'], label_vocab['O']] == -1e4
+    assert t[0, label_vocab['<GO>'], label_vocab['O']] == -1e4
 
 def test_mask_skipped(label_vocab):
     crf = CRF(
@@ -57,13 +57,13 @@ def test_mask_skipped(label_vocab):
         (label_vocab[S], label_vocab[E]),
     )
     t = crf.transitions.detach().numpy()
-    assert t[label_vocab['<GO>'], label_vocab['O']] != -1e4
+    assert t[0, label_vocab['<GO>'], label_vocab['O']] != -1e4
 
 def test_error_without_type(label_vocab):
     with pytest.raises(AssertionError):
         _ = CRF(
             len(label_vocab),
-            (label_vocab[S], label_vocab[E]),
+            (label_vocab[S], label_vocab[E]), True,
             label_vocab
         )
 
@@ -93,7 +93,7 @@ def test_error_without_type(label_vocab):
 
 def test_mask_used_in_model(label_vocab, model):
     t = model.crf.transitions.detach().numpy()
-    assert t[label_vocab['<GO>'], label_vocab['O']] == -1e4
+    assert t[0, label_vocab['<GO>'], label_vocab['O']] == -1e4
 
 def test_mask_not_used_in_model(label_vocab, embeds):
     model = create_model(
@@ -103,7 +103,7 @@ def test_mask_not_used_in_model(label_vocab, embeds):
         layers=2, rnntype="blstm"
     )
     t = model.crf.transitions.detach().numpy()
-    assert t[label_vocab['<GO>'], label_vocab['O']] != -1e4
+    assert t[0, label_vocab['<GO>'], label_vocab['O']] != -1e4
 
 def test_error_when_mask_and_no_span(label_vocab, embeds):
     with pytest.raises(AssertionError):
