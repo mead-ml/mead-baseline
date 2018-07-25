@@ -180,7 +180,7 @@ class SequentialWordClassifierBase(WordClassifierBase):
         mxlen = int(kwargs.get('mxlen', 100))
         vocab_size = w2v.weights.shape[0]
         embedding_dim = w2v.dsz
-        self.impl.add(Embedding(input_dim=vocab_size, mask_zero=True, output_dim=embedding_dim,
+        self.impl.add(Embedding(input_dim=vocab_size, output_dim=embedding_dim,
                                 weights=[w2v.weights], input_length=mxlen, trainable=finetune))
 
     @classmethod
@@ -204,6 +204,14 @@ class LSTMModel(SequentialWordClassifierBase):
     def __init__(self):
         super(LSTMModel, self).__init__()
 
+    def _embed(self, w2v, **kwargs):
+        finetune = bool(kwargs.get('finetune', True))
+        mxlen = int(kwargs.get('mxlen', 100))
+        vocab_size = w2v.weights.shape[0]
+        embedding_dim = w2v.dsz
+        self.impl.add(Embedding(input_dim=vocab_size, mask_zero=True, output_dim=embedding_dim,
+                                weights=[w2v.weights], input_length=mxlen, trainable=finetune))
+    
     def _pool(self, dsz, **kwargs):
         pdrop = kwargs.get('dropout', 0.5)
         mxlen = int(kwargs.get('mxlen', 100))
@@ -235,14 +243,6 @@ class LSTMModel(SequentialWordClassifierBase):
 class NBowModel(SequentialWordClassifierBase):
     def __init__(self):
         super(NBowModel, self).__init__()
-
-    def _embed(self, w2v, **kwargs):
-        finetune = bool(kwargs.get('finetune', True))
-        mxlen = int(kwargs.get('mxlen', 100))
-        vocab_size = w2v.weights.shape[0]
-        embedding_dim = w2v.dsz
-        self.impl.add(Embedding(input_dim=vocab_size, output_dim=embedding_dim,
-                                weights=[w2v.weights], input_length=mxlen, trainable=finetune))
 
     def _pool(self, dsz, **kwargs):
         pdrop = kwargs.get('dropout', 0.5)
