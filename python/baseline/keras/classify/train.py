@@ -64,7 +64,7 @@ class ClassifyTrainerKeras(EpochReportingTrainer):
     def __init__(self, model, **kwargs):
         super(ClassifyTrainerKeras, self).__init__()
         self.model = model
-        self.model.impl.compile('categorical_crossentropy',
+        self.model.impl.compile(loss='categorical_crossentropy',
                                 optimizer=ClassifyTrainerKeras._optimizer(**kwargs),
                                 metrics=[metrics.categorical_accuracy, f1_score])
 

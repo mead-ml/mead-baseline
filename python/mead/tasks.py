@@ -221,7 +221,8 @@ class ClassifierTask(Task):
             if backend == 'keras':
                 print('Keras backend')
                 import baseline.keras.classify as classify
-            if backend == 'dynet':
+                from baseline.data import reverse_2nd as rev2nd
+            elif backend == 'dynet':
                 print('Dynet backend')
                 import _dynet
                 dy_params = _dynet.DynetParams()

@@ -19,7 +19,7 @@ word_embeddings:
 train: 
   epochs: 20
   optim: adadelta
-  eta: 1.0
+  eta: 1
   model_base: ./models/sst2
   early_stopping_metric: acc
   verbose: true
