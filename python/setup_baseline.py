@@ -2,7 +2,7 @@ import os
 import re
 import shutil
 from itertools import product
-from setuptools import setup
+from setuptools import setup, find_packages
 from baseline import __version__
 
 class About(object):
@@ -14,13 +14,6 @@ class About(object):
     DOWNLOAD_URL = "{}/archive/{}.tar.gz".format(URL, VERSION)
     DOC_URL = "{}/tree/master/".format(URL)
     DOC_NAME = 'docs/{}.md'.format(NAME)
-
-def build_packages(backends, tasks):
-    """Specify backends by hand so dev ones aren't included."""
-    packages = product(backends, tasks)
-    packages = list(map(lambda x: 'baseline.{}'.format( '.'.join(x)), packages))
-    packages += list(map(lambda x: 'baseline.{}'.format(x), backends))
-    return packages
 
 def get_configs(config_loc):
     """include everything in config_loc as package data."""
@@ -67,11 +60,7 @@ def main():
         license='Apache 2.0',
         url=About.URL,
         download_url=About.DOWNLOAD_URL,
-        packages=(
-            ['baseline', 'mead', 'mead.tf', 'addons'] +
-            build_packages(['pytorch', 'tf'], ['classify', 'seq2seq', 'lm', 'tagger']) +
-            build_packages(['keras'], ['classify'])
-        ),
+        packages=find_packages(exclude=['tests', 'xpctl*']),
         package_data={
             'mead': get_configs('mead/config'),
         },
