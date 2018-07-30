@@ -489,7 +489,6 @@ def crf_mask(vocab, span_type, s_idx, e_idx, pad_idx=None):
     return torch.from_numpy(np_mask) == 0
 
 
-
 class CRF(nn.Module):
     def __init__(self, n_tags, idxs=None, batch_first=True, vocab=None, span_type=None, pad_idx=None):
         """Initialize the object.
@@ -595,7 +594,7 @@ class CRF(nn.Module):
                 unary_t[batch_range, tags[i + 1]]
             )
             if i >= min_length:
-                # If we are father along `T` than your length don't add to your score
+                # If we are farther along `T` than your length don't add to your score
                 mask = (i >= lengths)
                 scores = scores + new_scores.masked_fill(mask, 0)
             else:
