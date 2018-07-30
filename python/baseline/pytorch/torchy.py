@@ -569,9 +569,9 @@ class CRF(nn.Module):
             unary = CRF._prep_input(unary)
         _, batch_size, _ = unary.size()
         min_lengths = torch.min(lengths)
-        viterbi_score = self.forward(unary, lengths, batch_size, min_lengths)
+        fwd_score = self.forward(unary, lengths, batch_size, min_lengths)
         gold_score = self.score_sentence(unary, tags, lengths, batch_size, min_lengths)
-        return viterbi_score - gold_score
+        return fwd_score - gold_score
 
     def score_sentence(self, unary, tags, lengths, batch_size, min_length):
         """Score a batch of sentences.
@@ -619,11 +619,11 @@ class CRF(nn.Module):
         alphas[:, 0, self.start_idx] = 0.
         alphas.requires_grad = True
 
-        trans = self.transitions # [1, N, N]
+        trans = self.transitions  # [1, N, N]
 
         for i, unary_t in enumerate(unary):
             # unary_t: [B, N]
-            unary_t = unary_t.unsqueeze(2) # [B, N, 1]
+            unary_t = unary_t.unsqueeze(2)  # [B, N, 1]
             # Broadcast alphas along the rows of trans
             # Broadcast trans along the batch of alphas
             # [B, 1, N] + [1, N, N] -> [B, N, N]
@@ -667,15 +667,15 @@ class CRF(nn.Module):
         alphas[:, 0, self.start_idx] = 0
         alphas.requires_grad = True
 
-        trans = self.transitions # [1, N, N]
+        trans = self.transitions  # [1, N, N]
 
         for i, unary_t in enumerate(unary):
             # Broadcast alphas along the rows of trans and trans along the batch of alphas
-            next_tag_var = alphas + trans # [B, 1, N] + [1, N, N] -> [B, N, N]
+            next_tag_var = alphas + trans  # [B, 1, N] + [1, N, N] -> [B, N, N]
             viterbi, best_tag_ids = torch.max(next_tag_var, 2) # [B, N]
             backpointers.append(best_tag_ids.data)
-            new_alphas = viterbi + unary_t # [B, N] + [B, N]
-            new_alphas.unsqueeze_(1) # Prep for next round
+            new_alphas = viterbi + unary_t  # [B, N] + [B, N]
+            new_alphas.unsqueeze_(1)  # Prep for next round
             # If we haven't reached your length zero out old alpha and take new one.
             # If we are past your length, zero out new_alpha and keep old one.
             if i >= min_length:
@@ -687,7 +687,7 @@ class CRF(nn.Module):
         # Add end tag
         terminal_var = alphas.squeeze(1) + trans[:, self.end_idx]
         _, best_tag_id = torch.max(terminal_var, 1)
-        path_score = terminal_var[batch_range, best_tag_id] # Select best_tag from each batch
+        path_score = terminal_var[batch_range, best_tag_id]  # Select best_tag from each batch
 
         best_path = [best_tag_id]
         # Flip lengths
@@ -699,7 +699,7 @@ class CRF(nn.Module):
             mask = (i > rev_len)
             best_tag_id = best_tag_id.masked_fill(mask, 0) + new_best_tag_id.masked_fill(mask == 0, 0)
             best_path.append(best_tag_id)
-        start = best_path.pop()
+        _ = best_path.pop()
         best_path.reverse()
         best_path = torch.stack(best_path)
         # Return list of paths
