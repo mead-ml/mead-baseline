@@ -1,8 +1,8 @@
 usage() {
-    echo "Usage: $0 [-g <GPU number>] [-n <container name>]" 1>&2; exit 1;
+    echo "Usage: $0 [-g <GPU number>] [-n <container name>] [-t <container type: tf/pytorch>]" 1>&2; exit 1;
 }
 
-while getopts ":g:n:" x; do
+while getopts ":g:n:t:" x; do
     case "${x}" in
         g)
             GPU_NUM=${OPTARG}
@@ -10,6 +10,9 @@ while getopts ":g:n:" x; do
         n)
             CON_NAME=${OPTARG}
             ;;
+        t)  
+            CON_TYPE=${OPTARG}
+            ;; 
         *)
             usage
             ;;
@@ -18,14 +21,13 @@ while getopts ":g:n:" x; do
 done
 shift $((OPTIND-1))
 
-
-if [[ -z "${GPU_NUM// }" || -z "${CON_NAME//}" ]]; then
+if [[ -z "${GPU_NUM// }" || -z "${CON_NAME//}" || -z "${CON_TYPE//}" ]]; then
     usage
     exit 1
 fi
-echo "using GPU: "${GPU_NUM}", container name: "${CON_NAME}
+echo "using GPU: "${GPU_NUM}", container name: "${CON_NAME}, container type: "${CON_TYPE}"
 
-CON_BUILD=baseline
+CON_BUILD=baseline-${CON_TYPE}
 
 if [ -e $HOME/.bl-data ]; then
     CACHE_MOUNT="-v $HOME/.bl-data:$HOME/.bl-data"
