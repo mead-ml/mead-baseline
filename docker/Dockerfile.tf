@@ -1,13 +1,12 @@
-ARG TF_VERSION=1.5.0
+ARG TF_VERSION=1.7.0
 
-FROM python:3.5
+FROM python:3.6
 FROM tensorflow/tensorflow:${TF_VERSION}-gpu-py3
 
 RUN apt-get update && \
     apt-get install -y g++ make git vim && \
+    pip install --upgrade pip && \ 
     pip install visdom pymongo pyyaml && \
-    pip install http://download.pytorch.org/whl/cu90/torch-0.4.0-cp35-cp35m-linux_x86_64.whl && \
-    pip install torchvision && \
     jupyter nbextension enable --py widgetsnbextension
 
 COPY python /baseline/python
