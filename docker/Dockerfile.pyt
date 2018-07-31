@@ -3,6 +3,8 @@ FROM python:3.6
 RUN apt-get update && \
     apt-get install -y apt-utils g++ make git vim cython && \
     pip install --upgrade pip && \
+    pip install http://download.pytorch.org/whl/cu90/torch-0.4.0-cp36-cp36m-linux_x86_64.whl && \
+    pip install torchvision && \
     pip install visdom pymongo pyyaml jupyter && \
     jupyter nbextension enable --py widgetsnbextension
 
