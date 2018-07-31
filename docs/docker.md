@@ -10,4 +10,8 @@ nvidia-docker run --net=host -v /data:/data:ro -it baseline bash
 
 We assume all necessary files (datasests, embeddings etc.) are stored in `/data/` in your machine.
 
-For convenience, we also provide a [build script](../docker/build_docker.sh), and a [run script](../docker/run_docker.sh) which can be run as `./run_docker.sh -g 0 -n <container_name>`, eg. `./run_docker.sh -g 0 -n test`.
+For convenience, we also provide a [build script](../docker/build_docker.sh), and a [run script](../docker/run_docker.sh). The usual pipeline is this:
+
+- build a docker image: `./build_docker.sh tf` or `./build_docker.sh pyt` 
+
+- run the container: `./run_docker.sh -g <gpu_number> -n <container_name> -t <image_type>`, eg. `./run_docker.sh -g 0 -n test -t tf`.
