@@ -332,6 +332,21 @@ def pytorch_lstm(insz, hsz, rnntype, nlayers, dropout, unif=0, batch_first=False
     return rnn, ndir*hsz
 
 
+class LSTMEncoder(nn.Module):
+
+    def __init__(self, insz, hsz, rnntype, nlayers, dropout, residual=False, unif=0, initializer=None):
+        super(LSTMEncoder, self).__init__()
+        self.residual = residual
+        self.rnn, self.outsz = pytorch_lstm(insz, hsz, rnntype, nlayers, dropout, unif, False, initializer)
+
+    def forward(self, tbc, lengths):
+
+        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths.tolist())
+        output, hidden = self.rnn(packed)
+        output, _ = torch.nn.utils.rnn.pad_packed_sequence(output)
+        return output + tbc if self.residual else output
+
+
 def pytorch_prepare_optimizer(model, **kwargs):
 
     mom = kwargs.get('mom', 0.9)
