@@ -214,25 +214,20 @@ class MongoRepo(ExperimentRepo):
             return result_frame
         return None
 
-    def task_summary(self, task, dataset, metric, event_type):
-        metrics = listify(metric)
-
+    def task_summary(self, task, metric, dataset, sha1, event_type):
+        metrics = list(metric)
         coll = self.db[task]
         query = self._update_query({}, [], dataset)
         projection = self._update_projection(event_type=event_type)
-        result_frame = self._generate_data_frame(coll, metrics, query, projection, event_type=event_type)
+        result_frame = self._generate_data_frame(coll, metrics=metrics, query=query, projection=projection, event_type=event_type)
         if not result_frame.empty:
             datasets = result_frame.dataset.unique()
             if dataset not in datasets:
                 return None
-            dsr = result_frame[result_frame.dataset == dataset].sort_values(metric, ascending=False)
-            result = dsr[metric].iloc[0]
-            user = dsr.username.iloc[0]
-            sha1 = dsr.sha1.iloc[0]
-            date = dsr.date.iloc[0]
-            summary = "For dataset {}, the best {} is {:0.3f} reported by {} on {}. " \
-                      "The sha1 for the config file is {}.".format(dataset, metric, result, user, date, sha1)
-            return summary
+            dsr = result_frame[(result_frame.dataset == dataset) & (result_frame.sha1 == sha1)]
+            if dsr.empty:
+                return None
+            return df_summary(dsr)
 
         return None
 

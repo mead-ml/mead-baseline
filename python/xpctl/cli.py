@@ -239,20 +239,22 @@ def lbsummary(task):
 
 
 @cli.command()
+@click.option('--metric', multiple=True, help="list of metrics (prec, recall, f1, accuracy),[multiple]: --metric f1 "
+                                              "--metric acc")
+@click.option('--event_type', default='test', help="train/ dev/ test")
 @click.argument('task')
 @click.argument('dataset')
-@click.argument('metric')
-def tasksummary(task, dataset, metric):
+@click.argument('sha1')
+def tasksummary(metric, event_type, task, dataset, sha1):
     """
     Provides a natural language summary for a task. This is almost equivalent
     to the `best` command.
     """
-    event_type = EVENT_TYPES["test"]
     if not RepoManager.get().has_task(task):
         click.echo("no results for the specified task {}, use another task".format(task))
         return
-
-    task_summary = RepoManager.get().task_summary(task, dataset, metric, event_type)
+    event_type = EVENT_TYPES[event_type]
+    task_summary = RepoManager.get().task_summary(task, metric, dataset, sha1, event_type)
     if task_summary is None:
         click.echo("can't produce summary for the requested task {}".format(task))
         return
