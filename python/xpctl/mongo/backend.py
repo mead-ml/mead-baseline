@@ -12,6 +12,7 @@ from baseline.utils import export, listify
 from xpctl.core import ExperimentRepo, store_model
 from bson.objectid import ObjectId
 from baseline.version import __version__
+from xpctl.helpers import order_json
 
 __all__ = []
 exporter = export(__all__)
@@ -55,7 +56,7 @@ class MongoRepo(ExperimentRepo):
         print_fn = kwargs.get('print_fn', print)
         hostname = kwargs.get('hostname', socket.gethostname())
         username = kwargs.get('username', getpass.getuser())
-        config_sha1 = hashlib.sha1(json.dumps(config_obj).encode('utf-8')).hexdigest()
+        config_sha1 = hashlib.sha1(json.dumps(order_json(config_obj)).encode('utf-8')).hexdigest()
         label = kwargs.get("label", config_sha1)
 
         post = {
@@ -203,11 +204,11 @@ class MongoRepo(ExperimentRepo):
                 result_frame = result_frame.sort_values(metric, ascending=True)
             else:
                 result_frame = result_frame.sort_values(metric, ascending=False)
-            if sort:
-                if sort == "avg_loss" or sort == "perplexity":
-                    result_frame = result_frame.sort_values(sort, ascending=True)
-                else:
-                    result_frame = result_frame.sort_values(sort, ascending=False)
+        if sort:
+            if sort == "avg_loss" or sort == "perplexity":
+                result_frame = result_frame.sort_values(sort, ascending=True)
+            else:
+                result_frame = result_frame.sort_values(sort, ascending=False)
 
         if not result_frame.empty:
             return result_frame
