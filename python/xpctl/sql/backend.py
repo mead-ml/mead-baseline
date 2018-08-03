@@ -20,7 +20,7 @@ Base = declarative_base()
 import sqlalchemy as sql
 import sqlalchemy.orm as orm
 from xpctl.core import ExperimentRepo, store_model
-from xpctl.helpers import order_json
+from xpctl.helpers import order_json, summary
 
 EVENT_TYPES = {
     "train": "train_events", "Train": "train_events",
@@ -261,17 +261,15 @@ class SQLRepo(ExperimentRepo):
                 frame = result_frame.sort_values(sort, ascending=False)
         return frame
 
-    def task_summary(self, task, dataset, metric, event_type):
+    def task_summary(self, task, metric, dataset, sha1, event_type):
+        session = self.Session()
+        results = []
+        metrics = listify(metric)
+        metrics_to_add = [metrics[0]] if len(metrics) == 1 else []
+        phase = self.event2phase(event_type)
+        hits = session.query(Experiment).filter(Experiment.dataset == dataset). \
+            filter(Experiment.task == task)
 
-        ascending = True if metric == "avg_loss" or metric == "perplexity" else False
-        exp, metric, _ = self._nbest_by_metric_rows(None, metric, dataset, task, 1, event_type, ascending)[0]
-        summary = "For dataset {}, the best {} is {:0.3f} reported by {} on {}. " \
-                      "The sha1 for the config file is {}.".format(exp.dataset,
-                                                                   metric.label,
-                                                                   metric.value,
-                                                                   exp.username,
-                                                                   exp.date,
-                                                                   exp.sha1)
         return summary
 
     def phase2event(self, phase):

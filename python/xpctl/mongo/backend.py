@@ -12,7 +12,7 @@ from baseline.utils import export, listify
 from xpctl.core import ExperimentRepo, store_model
 from bson.objectid import ObjectId
 from baseline.version import __version__
-from xpctl.helpers import order_json
+from xpctl.helpers import order_json, expsummary, tasksummary
 
 __all__ = []
 exporter = export(__all__)
@@ -214,7 +214,7 @@ class MongoRepo(ExperimentRepo):
             return result_frame
         return None
 
-    def task_summary(self, task, metric, dataset, sha1, event_type):
+    def experiment_summary(self, task, metric, dataset, sha1, event_type):
         metrics = list(metric)
         coll = self.db[task]
         query = self._update_query({}, [], dataset)
@@ -227,8 +227,23 @@ class MongoRepo(ExperimentRepo):
             dsr = result_frame[(result_frame.dataset == dataset) & (result_frame.sha1 == sha1)]
             if dsr.empty:
                 return None
-            return df_summary(dsr)
+            return expsummary(dsr)
+        return None
 
+    def task_summary(self, task, metric, dataset, event_type):
+        metrics = list(metric)
+        coll = self.db[task]
+        query = self._update_query({}, [], dataset)
+        projection = self._update_projection(event_type=event_type)
+        result_frame = self._generate_data_frame(coll, metrics=metrics, query=query, projection=projection, event_type=event_type)
+        if not result_frame.empty:
+            datasets = result_frame.dataset.unique()
+            if dataset not in datasets:
+                return None
+            dsr = result_frame[result_frame.dataset == dataset]
+            if dsr.empty:
+                return None
+            return tasksummary(dsr)
         return None
 
     def config2dict(self, task, sha1):
@@ -252,32 +267,30 @@ class MongoRepo(ExperimentRepo):
             return None
         return results[0]
 
-    def get_info(self, task, event_types):
+    def get_info(self, task, event_type):
         coll = self.db[task]
         q = self._update_query({}, None, None)
         p = {'config.dataset': 1}
         datasets = list(set([x['config']['dataset'] for x in list(coll.find(q, p))]))
-        store = []  #
-
+        store = []
         for dataset in datasets:
             q = self._update_query({}, None, dataset)
-            for event_type in event_types:
-                p = self._update_projection(event_type)
-                results = list(coll.find(q, p))
-                metrics = self._get_metrics(results, event_type)
-                for result in results:  # different experiments
-                    store.append([result['username'], result['config']['dataset'], event_type, ",".join(metrics)])
+            p = self._update_projection(event_type)
+            results = list(coll.find(q, p))
+            metrics = self._get_metrics(results, event_type)
+            for result in results:  # different experiments
+                store.append([result['username'], result['config']['dataset'], task])
 
-        df = pd.DataFrame(store, columns=['user', 'dataset', 'event_type', 'metrics'])
-        return df.groupby(['user', 'dataset', 'event_type', 'metrics']).size().reset_index() \
-            .rename(columns={0: 'num_experiments'})
+        df = pd.DataFrame(store, columns=['user', 'dataset', 'task'])
+        #return df
+        return df.groupby(['user', 'dataset']).agg([len]) \
+            .rename(columns={"len": 'num_exps'})
 
-    def leaderboard_summary(self, task=None, event_types=None, print_fn=print):
-
+    def leaderboard_summary(self, event_type, task=None, print_fn=print):
         if task:
             print_fn("Task: [{}]".format(task))
             print_fn("-" * 93)
-            print_fn(self.get_info(task, event_types))
+            print_fn(self.get_info(task, event_type))
         else:
             tasks = self.db.collection_names()
             if "system.indexes" in tasks:
@@ -287,5 +300,5 @@ class MongoRepo(ExperimentRepo):
                 print_fn("-" * 93)
                 print_fn("Task: [{}]".format(task))
                 print_fn("-" * 93)
-                print_fn(self.get_info(task, event_types))
+                print_fn(self.get_info(task, event_type))
 

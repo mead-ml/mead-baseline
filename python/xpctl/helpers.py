@@ -3,6 +3,7 @@ import pymongo
 import pandas as pd
 import os
 from collections import OrderedDict
+import numpy as np
 
 __all__ = ["log2json", "order_json"]
 
@@ -27,3 +28,13 @@ def order_json(j):
             value = j[key]
         new[key] = value
     return new
+
+
+def expsummary(df):
+    return df.groupby("sha1").agg([len, np.mean, np.std, np.min, np.max]) \
+        .rename(columns={'len': 'num_exps', 'amean': 'mean', 'amin': 'min', 'amax': 'max'})
+
+
+def tasksummary(df):
+    return df.groupby("sha1").agg([len, np.mean, np.std, np.min, np.max])\
+        .rename(columns={'len': 'num_exps', 'amean': 'mean', 'amin': 'min', 'amax': 'max'})

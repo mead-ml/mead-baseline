@@ -134,7 +134,7 @@ class ExperimentRepo(object):
         """
         pass
 
-    def leaderboard_summary(self, task=None, event_types=None, print_fn=print):
+    def leaderboard_summary(self, task=None, event_type=None, print_fn=print):
         pass
 
     def get_label(self, id, task):

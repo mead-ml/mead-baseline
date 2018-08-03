@@ -222,20 +222,19 @@ def best(user, metric, dataset, n, task, event_type):
 def lbsummary(task):
     """
     Provides a summary of the leaderboard. Options: taskname. If you provide
-    a taskname, it will show all users, datasets and metrics for that task.
-    This is helpful because we often forget what metrics or datasets were
+    a taskname, it will show all users and datasets for that task.
+    This is helpful because we often forget what datasets were
     used for a task, which are the necessary parameters for the commands
     `results` and `best` and `tasksummary`. Shows
     the summary for all available tasks if no option is specified.
     """
-    event_types = [EVENT_TYPES['train'], EVENT_TYPES['valid'], EVENT_TYPES['test']]
 
     if task is not None:
         if not RepoManager.get().has_task(task):
             click.echo("no results for the specified task {}, use another task".format(task))
             return
 
-    return RepoManager.get().leaderboard_summary(task, event_types, click.echo)
+    return RepoManager.get().leaderboard_summary(event_type=EVENT_TYPES["test"], task=task, print_fn=click.echo)
 
 
 @cli.command()
@@ -245,22 +244,42 @@ def lbsummary(task):
 @click.argument('task')
 @click.argument('dataset')
 @click.argument('sha1')
-def tasksummary(metric, event_type, task, dataset, sha1):
+def xpsummary(metric, event_type, task, dataset, sha1):
     """
-    Provides a natural language summary for a task. This is almost equivalent
-    to the `best` command.
+    Provides a statistical summary for an experiment. An experiment is defined by a (task, dataset, config) triple.
+    Shows the average, min, max and std dev for an experiment performed multiple times using the same config.
     """
     if not RepoManager.get().has_task(task):
         click.echo("no results for the specified task {}, use another task".format(task))
         return
     event_type = EVENT_TYPES[event_type]
-    task_summary = RepoManager.get().task_summary(task, metric, dataset, sha1, event_type)
+    experiment_summary = RepoManager.get().experiment_summary(task, metric, dataset, sha1, event_type)
+    if experiment_summary is None:
+        click.echo("can't produce summary for the requested task {}".format(task))
+        return
+    click.echo(experiment_summary)
+
+@cli.command()
+@click.option('--metric', multiple=True, help="list of metrics (prec, recall, f1, accuracy),[multiple]: --metric f1 "
+                                              "--metric acc")
+@click.option('--event_type', default='test', help="train/ dev/ test")
+@click.argument('task')
+@click.argument('dataset')
+def tasksummary(metric, event_type, task, dataset):
+    """
+    Provides a statistical summary for a problem . An problem is defined by a (task, dataset) tuple.
+    For each config used in the task, shows the average, min, max and std dev and number of experiments done using the
+    config.
+    """
+    if not RepoManager.get().has_task(task):
+        click.echo("no results for the specified task {}, use another task".format(task))
+        return
+    event_type = EVENT_TYPES[event_type]
+    task_summary = RepoManager.get().task_summary(task, metric, dataset, event_type)
     if task_summary is None:
         click.echo("can't produce summary for the requested task {}".format(task))
         return
-
     click.echo(task_summary)
-
 
 # Edit database
 @cli.command()
