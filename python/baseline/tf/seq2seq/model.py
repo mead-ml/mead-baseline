@@ -71,25 +71,23 @@ class Seq2SeqParallelModel(EncoderDecoder):
         src_len_splits = tf.split(self.src_len, gpus)
         tgt_len_splits = tf.split(self.tgt_len, gpus)
         losses = []
-        with tf.Session(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False)) as sess:
-            with tf.device(tf.DeviceSpec(device_type="CPU")):
-                self.inference = create_fn(src_vocab_embed, dst_vocab_embed, sess=sess, mx_tgt_len=self.mx_tgt_len,
-                                           id=0, pkeep=self.pkeep, **kwargs)
-            for i in range(gpus):
-                with tf.device(tf.DeviceSpec(device_type='GPU', device_index=i)):
-                    replica = create_fn(src_vocab_embed, dst_vocab_embed, sess=sess,
-                                        src=src_splits[i], tgt=tgt_splits[i],
-                                        src_len=src_len_splits[i], tgt_len=tgt_len_splits[i],
-                                        mx_tgt_len=self.mx_tgt_len,
-                                        id=i+1,
-                                        pkeep=self.pkeep,
-                                        **kwargs)
-                    self.replicas.append(replica)
-                    loss_op = replica.create_loss()
-                    losses.append(loss_op)
-            self.loss = tf.reduce_mean(tf.stack(losses))
-
-
+        sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False))
+        with tf.device(tf.DeviceSpec(device_type="CPU")):
+            self.inference = create_fn(src_vocab_embed, dst_vocab_embed, sess=sess, mx_tgt_len=self.mx_tgt_len,
+                                       id=0, pkeep=self.pkeep, **kwargs)
+        for i in range(gpus):
+            with tf.device(tf.DeviceSpec(device_type='GPU', device_index=i)):
+                replica = create_fn(src_vocab_embed, dst_vocab_embed, sess=sess,
+                                    src=src_splits[i], tgt=tgt_splits[i],
+                                    src_len=src_len_splits[i], tgt_len=tgt_len_splits[i],
+                                    mx_tgt_len=self.mx_tgt_len,
+                                    id=i+1,
+                                    pkeep=self.pkeep,
+                                    **kwargs)
+                self.replicas.append(replica)
+                loss_op = replica.create_loss()
+                losses.append(loss_op)
+        self.loss = tf.reduce_mean(tf.stack(losses))
         self.sess = sess
 
     def create_loss(self):
