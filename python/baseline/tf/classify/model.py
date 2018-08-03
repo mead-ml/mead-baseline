@@ -53,20 +53,20 @@ class ClassifyParallelModel(Classifier):
         losses = []
         self.labels = labels
 
-        with tf.Session(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False)) as sess:
-            with tf.device(tf.DeviceSpec(device_type="CPU")):
-                self.inference = create_fn(embeddings, labels, sess=sess, **kwargs)
-            for i in range(gpus):
-                with tf.device(tf.DeviceSpec(device_type='GPU', device_index=i)):
-                    replica = create_fn(embeddings, labels, sess=sess, x=x_splits[i], y=y_splits[i],
-                                        xch=xch_splits[i] if xch_splits is not None else None,
-                                        lengths=lengths_splits[i],
-                                        pkeep=self.pkeep, **kwargs)
-                    self.replicas.append(replica)
-                    loss_op = replica.create_loss()
-                    losses.append(loss_op)
+        sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False)) 
+        with tf.device(tf.DeviceSpec(device_type="CPU")):
+            self.inference = create_fn(embeddings, labels, sess=sess, **kwargs)
+        for i in range(gpus):
+            with tf.device(tf.DeviceSpec(device_type='GPU', device_index=i)):
+                replica = create_fn(embeddings, labels, sess=sess, x=x_splits[i], y=y_splits[i],
+                                    xch=xch_splits[i] if xch_splits is not None else None,
+                                    lengths=lengths_splits[i],
+                                    pkeep=self.pkeep, **kwargs)
+                self.replicas.append(replica)
+                loss_op = replica.create_loss()
+                losses.append(loss_op)
 
-            self.loss = tf.reduce_mean(tf.stack(losses))
+        self.loss = tf.reduce_mean(tf.stack(losses))
 
         self.sess = sess
         self.best = self.inference.best
