@@ -30,11 +30,21 @@ def order_json(j):
     return new
 
 
-def expsummary(df):
+def sort_ascending(metric):
+    return metric == "avg_loss" or metric == "perplexity"
+
+
+def df_summary_exp(df):
     return df.groupby("sha1").agg([len, np.mean, np.std, np.min, np.max]) \
         .rename(columns={'len': 'num_exps', 'amean': 'mean', 'amin': 'min', 'amax': 'max'})
 
 
-def tasksummary(df):
-    return df.groupby("sha1").agg([len, np.mean, np.std, np.min, np.max])\
+def df_summary_task(df, metric=None, sort=None):
+    result_frame = df.groupby("sha1").agg([len, np.mean, np.std, np.min, np.max])\
         .rename(columns={'len': 'num_exps', 'amean': 'mean', 'amin': 'min', 'amax': 'max'})
+    metrics = list(metric)
+    if len(metric) == 1:
+        return result_frame.sort_values([(metrics[0], 'mean')], ascending=sort_ascending(metric))
+    if sort:
+        return result_frame.sort_values([(sort, 'mean')], ascending=sort_ascending(metric))
+    return result_frame

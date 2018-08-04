@@ -263,19 +263,21 @@ def xpsummary(metric, event_type, task, dataset, sha1):
 @click.option('--metric', multiple=True, help="list of metrics (prec, recall, f1, accuracy),[multiple]: --metric f1 "
                                               "--metric acc")
 @click.option('--event_type', default='test', help="train/ dev/ test")
+@click.option('--sort', help="specify one metric to sort the results")
 @click.argument('task')
 @click.argument('dataset')
-def tasksummary(metric, event_type, task, dataset):
+def tasksummary(metric, event_type, sort, task, dataset):
     """
     Provides a statistical summary for a problem . An problem is defined by a (task, dataset) tuple.
     For each config used in the task, shows the average, min, max and std dev and number of experiments done using the
-    config.
+    config. Optionally: a. --metrics: choose metric(s) to show. results ll be sorted on the first metric.
+    b. --sort output all metrics but sort on one.
     """
     if not RepoManager.get().has_task(task):
         click.echo("no results for the specified task {}, use another task".format(task))
         return
     event_type = EVENT_TYPES[event_type]
-    task_summary = RepoManager.get().task_summary(task, metric, dataset, event_type)
+    task_summary = RepoManager.get().task_summary(task, dataset, event_type, metric, sort)
     if task_summary is None:
         click.echo("can't produce summary for the requested task {}".format(task))
         return

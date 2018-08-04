@@ -32,7 +32,7 @@ In the `python` dir, run `./install_dev.sh xpctl`. Before installation, you can 
 
 ```
 
-_dbhost_ is typically `localhost` and _dbport_ is `27017`. Here `<username>`, `<password>` and `<dbhost>` should be passed as string. 
+_dbhost_ is typically `localhost` and _dbport_ is `y`. Here `<username>`, `<password>` and `<dbhost>` should be passed as string. 
 
 If you use [docker](docker.md), `xpctl` will be automatically installed.
  
@@ -41,7 +41,7 @@ If you use [docker](docker.md), `xpctl` will be automatically installed.
 **Starting**: use `--host`,`--port`,`--user` and `password` to specify the host, port, username and password for mongodb. Else, you can pass a config file with the option `--config`. `xpctl` assumes that the config file is located at `~/xpctlcred.json` (in which case you can just use the command `xpctl` w/o specifying any option) but it can be saved anywhere you want.
 ```
 (dl) home:home$ xpctl --host localhost
-setting dbhost to localhost dbport to 27017
+setting dbhost to localhost dbport to y
 db connection successful
 Starting xpctl...
 xpctl > 
@@ -55,7 +55,7 @@ xpctl >
 - **vars**:   Prints the value of system variables dbhost and dbport. 
 ```
 xpctl > vars
-dbhost: xxx.yyy.com, dbport: 27017
+dbhost: xxx.yyy.com, dbport: y
 xpctl >
 ```
 
@@ -95,7 +95,7 @@ xpctl > results classify test SST2 --metric acc
 
 ```
 (xpt2.7) testuser:~$ xpctl results tagger test wnut --metric f1 --metric acc --sort acc
-db connection successful with [host]: x.y.com, [port]: 27017
+db connection successful with [host]: x.y.com, [port]: y
                           id      username                                      label dataset                                      sha1                    date       acc        f1
 4   5a1611c038d2dd7832f7c47c    testuser                      bilstm-CRF-filt-1-2-3    wnut  39831513cb319984c9410a2c7da9429ec0bc745d 2017-11-23 00:09:33.455  0.939854  0.391667
 8   5a02665d6232a6030a275fc3          root     wnut-lowercased-gazetteer-5proj-unif-0    wnut  4073e6dff65340d954af3e66d36a6d144fca5825 2017-11-08 02:05:17.009  0.939287  0.386049
@@ -103,7 +103,7 @@ db connection successful with [host]: x.y.com, [port]: 27017
 
 ```
 (xpt2.7) testuser:~$ xpctl results tagger test wnut --metric f1 --metric acc --sort f1
-db connection successful with [host]: x.y.com, [port]: 27017
+db connection successful with [host]: x.y.com, [port]: y
                           id      username                                      label dataset                                      sha1                    date       acc        f1
 10  5a05f17c6232a638b53903b0  testuser             wnut-gazetteer-noproj-unif-0.1    wnut  ab7b1fed1f0206ad9ebf3887657f18051d99f643 2017-11-10 18:35:40.741  0.936957  0.402537
 6   5a0140636232a60282e0cb8d          root  wnut-lowercased-gazetteer-noproj-unif-0.1    wnut  231c11c31fa8389a192da9e84a1c19d7ada46613 2017-11-07 05:10:59.629  0.938211  0.395871
@@ -112,7 +112,7 @@ db connection successful with [host]: x.y.com, [port]: 27017
 
 ```
 (xpt2.7) testuser:~$ xpctl results tagger test wnut --metric f1
-db connection successful with [host]: x.y.com, [port]: 27017
+db connection successful with [host]: x.y.com, [port]: y
                           id      username                                      label dataset                                      sha1                    date        f1
 10  5a05f17c6232a638b53903b0  testuser             wnut-gazetteer-noproj-unif-0.1    wnut  ab7b1fed1f0206ad9ebf3887657f18051d99f643 2017-11-10 18:35:40.741  0.402537
 6   5a0140636232a60282e0cb8d          root  wnut-lowercased-gazetteer-noproj-unif-0.1    wnut  231c11c31fa8389a192da9e84a1c19d7ada46613 2017-11-07 05:10:59.629  0.395871
@@ -159,7 +159,7 @@ Options:
 
 - **delete**: deletes a record from the database and the associated model file from model-checkpoints if it exists.
 ```
-setting dbhost to xxx.yyy.com dbport to 27017
+setting dbhost to xxx.yyy.com dbport to y
 db connection successful
 Usage: xpctl delete [OPTIONS] TASK ID
   delete a record from database with the given object id. also delete the
@@ -191,8 +191,8 @@ Options:
 ```
 xpctl > putresult --user ijindal classify /home/ijindal/dev/work/baseline/python/mead/config/sst2.json /home/ijindal/dev/work/baseline/python/mead/reporting-4923.log  testClassify
 
-db mongo connection successful with [host]: research.digitalroots.com, [port]: 27017
-updating results for existing task [classify] in host [research.digitalroots.com]
+db mongo connection successful with [host]: x.x.x, [port]: y
+updating results for existing task [classify] in host [x.x.x]
 results updated, the new results are stored with the record id: 5b1aacb933ed5901dc545af8
 
 ```
@@ -215,7 +215,7 @@ Options:
 ```
  xpctl > putmodel classify 5b1aacb933ed5901dc545af8 /home/ijindal/dev/work/baseline/python/mead/classify-model-tf-4923/classify-model-tf-4923
 
- db mongo connection successful with [host]: research.digitalroots.com, [port]: 27017
+ db mongo connection successful with [host]: x.x.x, [port]: y
 writing model file: [/home/ijindal/dev/work/baseline/python/mead/classify-model-tf-4923/classify-model-tf-4923.saver] to store: [/data/model-checkpoints/67105e2108885c5ee08e211537fbda602f2ba254/1]
 writing model file: [/home/ijindal/dev/work/baseline/python/mead/classify-model-tf-4923/classify-model-tf-4923.model.index] to store: [/data/model-checkpoints/67105e2108885c5ee08e211537fbda602f2ba254/1]
 writing model file: [/home/ijindal/dev/work/baseline/python/mead/classify-model-tf-4923/classify-model-tf-4923.graph] to store: [/data/model-checkpoints/67105e2108885c5ee08e211537fbda602f2ba254/1]
@@ -242,8 +242,8 @@ Options:
 ```
 xpctl > getmodelloc classify 5b1aacb933ed5901dc545af8
 
-db mongo connection successful with [host]: research.digitalroots.com, [port]: 27017
-db mongo connection successful with [host]: research.digitalroots.com, [port]: 27017
+db mongo connection successful with [host]: x.x.x, [port]: y
+db mongo connection successful with [host]: x.x.x, [port]: y
 model loc is /data/model-checkpoints/67105e2108885c5ee08e211537fbda602f2ba254/1.zip
 
 ```
@@ -262,26 +262,107 @@ Here `sha1` is the model-checkpoint id.
 ```
 xpctl > config2json classify 67105e2108885c5ee08e211537fbda602f2ba254 /home/ijindal/dev/work/baseline/python/mead/c_SST2.json
 
-db mongo connection successful with [host]: research.digitalroots.com, [port]: 27017
-db mongo connection successful with [host]: research.digitalroots.com, [port]: 27017
+db mongo connection successful with [host]: x.x.x, [port]: y
+db mongo connection successful with [host]: x.x.x, [port]: y
 
 ```
 
 ##### Summary
 
-- **tasksummary**: provides a natural language summary for a task. 
+- **xpsummary**: Provides a statistical summary for an experiment. An experiment is defined by a (task, dataset, config) triple.
+
+```
+xpctl > help xpsummary
+Usage: xpsummary [OPTIONS] TASK DATASET SHA1
+
+  Provides a statistical summary for an experiment. An experiment is defined
+  by a (task, dataset, config) triple. Shows the average, min, max and std
+  dev for an experiment performed multiple times using the same config. Optionally provide event_type, i.e., train/ dev/ test. 
+
+Options:
+  --metric TEXT      list of metrics (prec, recall, f1, accuracy),[multiple]:
+                     --metric f1 --metric acc
+  --event_type TEXT  train/ dev/ test
+  --help             Show this message and exit.
+xpctl > 
+```
+```
+xpctl > xpsummary tagger conll 0d5627bfed6cd0435d362332935db8fad98dda39
+db mongo connection successful with [host]: x.x.x, [port]: y
+db mongo connection successful with [host]: x.x.x, [port]: y
+                                               f1                                              acc                                        
+                                         num_exps      mean       std       min       max num_exps      mean       std       min       max
+sha1                                                                                                                                      
+0d5627bfed6cd0435d362332935db8fad98dda39      2.0  0.905886  0.003213  0.903613  0.908158      2.0  0.980906  0.000636  0.980456  0.981356
+xpctl > xpsummary tagger conll 0d5627bfed6cd0435d362332935db8fad98dda39 --metric f1
+db mongo connection successful with [host]: x.x.x, [port]: y
+db mongo connection successful with [host]: x.x.x, [port]: y
+                                               f1                                        
+                                         num_exps      mean       std       min       max
+sha1                                                                                     
+0d5627bfed6cd0435d362332935db8fad98dda39      2.0  0.905886  0.003213  0.903613  0.908158
+xpctl > xpsummary tagger conll 0d5627bfed6cd0435d362332935db8fad98dda39 --event_type train
+db mongo connection successful with [host]: x.x.x, [port]: y
+db mongo connection successful with [host]: x.x.x, [port]: y
+                                         avg_loss                                        
+                                         num_exps      mean       std       min       max
+sha1                                                                                     
+0d5627bfed6cd0435d362332935db8fad98dda39    200.0  0.182984  0.311575  0.029169  2.681302
+xpctl > 
+```
+- **tasksummary**: Provides a statistical summary for a problem . A problem is defined by a (task, dataset) tuple.
 ```
 xpctl > help tasksummary
-Usage: tasksummary [OPTIONS] TASK DATASET METRIC
-  Provides a natural language summary for a task. This is almost equivalent
-  to the `best` command.
+Usage: tasksummary [OPTIONS] TASK DATASET
+
+  Provides a statistical summary for a problem . An problem is defined by a
+  (task, dataset) tuple. For each config used in the task, shows the
+  average, min, max and std dev and number of experiments done using the
+  config. Optionally: a. --metrics: choose metric(s) to show. results ll be
+  sorted on the first metric. b. --sort output all metrics but sort on one.
+
 Options:
-  --help  Show this message and exit.
+  --metric TEXT      list of metrics (prec, recall, f1, accuracy),[multiple]:
+                     --metric f1 --metric acc
+  --event_type TEXT  train/ dev/ test
+  --sort TEXT        specify one metric to sort the results
+  --help             Show this message and exit.
+xpctl > 
+
 ```
 
 ```
-xpctl > tasksummary classify sa180k macro_f1
-For dataset sa180k, the best f1 is 0.718 reported by root on 2017-09-08 17:24:32.963000. The sha1 for the config file is 6dac0ea88618ab67d6f5d690279c13f1ec305167.
+xpctl > tasksummary tagger conll 
+db mongo connection successful with [host]: x.x.x, [port]: y
+db mongo connection successful with [host]: x.x.x, [port]: y
+                                               f1                                              acc                                        
+                                         num_exps      mean       std       min       max num_exps      mean       std       min       max
+sha1                                                                                                                                      
+0a1dbc8cfa7eef3763c4246b57de75aada1e5d81      1.0  0.908834       NaN  0.908834  0.908834      1.0  0.980864       NaN  0.980864  0.980864
+0d5627bfed6cd0435d362332935db8fad98dda39      2.0  0.905886  0.003213  0.903613  0.908158      2.0  0.980906  0.000636  0.980456  0.981356
+56834f7ec17423f600f99ce446b0b2e5f1a186ab      1.0  0.900045       NaN  0.900045  0.900045      1.0  0.980104       NaN  0.980104  0.980104
+b42634a6a40cb08a257294ee1dfd47b3ac6d7f2f      1.0  0.825529       NaN  0.825529  0.825529      1.0  0.972304       NaN  0.972304  0.972304
+xpctl > tasksummary tagger conll --sort f1
+db mongo connection successful with [host]: x.x.x, [port]: y
+db mongo connection successful with [host]: x.x.x, [port]: y
+                                               f1                                              acc                                        
+                                         num_exps      mean       std       min       max num_exps      mean       std       min       max
+sha1                                                                                                                                      
+0a1dbc8cfa7eef3763c4246b57de75aada1e5d81      1.0  0.908834       NaN  0.908834  0.908834      1.0  0.980864       NaN  0.980864  0.980864
+0d5627bfed6cd0435d362332935db8fad98dda39      2.0  0.905886  0.003213  0.903613  0.908158      2.0  0.980906  0.000636  0.980456  0.981356
+56834f7ec17423f600f99ce446b0b2e5f1a186ab      1.0  0.900045       NaN  0.900045  0.900045      1.0  0.980104       NaN  0.980104  0.980104
+b42634a6a40cb08a257294ee1dfd47b3ac6d7f2f      1.0  0.825529       NaN  0.825529  0.825529      1.0  0.972304       NaN  0.972304  0.972304
+xpctl > tasksummary tagger conll --metric f1
+db mongo connection successful with [host]: x.x.x, [port]: y
+db mongo connection successful with [host]: x.x.x, [port]: y
+                                               f1                                        
+                                         num_exps      mean       std       min       max
+sha1                                                                                     
+0a1dbc8cfa7eef3763c4246b57de75aada1e5d81      1.0  0.908834       NaN  0.908834  0.908834
+0d5627bfed6cd0435d362332935db8fad98dda39      2.0  0.905886  0.003213  0.903613  0.908158
+56834f7ec17423f600f99ce446b0b2e5f1a186ab      1.0  0.900045       NaN  0.900045  0.900045
+b42634a6a40cb08a257294ee1dfd47b3ac6d7f2f      1.0  0.825529       NaN  0.825529  0.825529
+xpctl > 
 ```
 
 - **lbsummary**: provides a description of all tasks in the leaderboard. 
@@ -331,14 +412,14 @@ _ sometime later _ :
 
 ```
 (dl) testuser:xpctl$ xpctl best tagger test <test-dataset> f1
-setting dbhost to localhost dbport to 27017
+setting dbhost to localhost dbport to y
 db connection successful
 using metric: ['f1']
 total 2 results found, showing best 1 results
                          id    username label dataset                                      sha1                    date        f1
 1  59b9af747412df155562438d  testuser  test     <test-dataset>  7fbbd90b57395b003ab8476b6a17e747f8dfcba3 2017-09-13 22:21:35.322  0.860052
 (dl) testuser:xpctl$ xpctl putmodel --help
-setting dbhost to localhost dbport to 27017
+setting dbhost to localhost dbport to y
 db connection successful
 Usage: xpctl putmodel [OPTIONS] TASK ID CBASE
 
@@ -351,7 +432,7 @@ Options:
   --cstore TEXT  location of the model checkpoint store
   --help         Show this message and exit.
 (dl) testuser:xpctl$ xpctl getmodelloc --help
-setting dbhost to localhost dbport to 27017
+setting dbhost to localhost dbport to y
 db connection successful
 Usage: xpctl getmodelloc [OPTIONS] TASK ID
 
@@ -361,7 +442,7 @@ Options:
   --help  Show this message and exit.
 
 (dl) testuser:xpctl$ xpctl getmodelloc tagger 59b9af747412df155562438d
-setting dbhost to localhost dbport to 27017
+setting dbhost to localhost dbport to y
 db connection successful
 ['model storage loc for record id 59b9af747412df155562438d is /data/model-checkpoints/7fbbd90b57395b003ab8476b6a17e747f8dfcba3/1.zip']
 

@@ -12,7 +12,7 @@ from baseline.utils import export, listify
 from xpctl.core import ExperimentRepo, store_model
 from bson.objectid import ObjectId
 from baseline.version import __version__
-from xpctl.helpers import order_json, expsummary, tasksummary
+from xpctl.helpers import order_json, df_summary_exp, df_summary_task, sort_ascending
 
 __all__ = []
 exporter = export(__all__)
@@ -198,21 +198,13 @@ class MongoRepo(ExperimentRepo):
         query = self._update_query({}, username, dataset)
         projection = self._update_projection(event_type=event_type)
         result_frame = self._generate_data_frame(coll, metrics, query, projection, event_type=event_type)
+        if result_frame.empty:
+            return None
         if len(metric) == 1:
-            metric = metric[0]
-            if metric == "avg_loss" or metric == "perplexity":
-                result_frame = result_frame.sort_values(metric, ascending=True)
-            else:
-                result_frame = result_frame.sort_values(metric, ascending=False)
+            return result_frame.sort_values(metrics[0], ascending=sort_ascending(metric))
         if sort:
-            if sort == "avg_loss" or sort == "perplexity":
-                result_frame = result_frame.sort_values(sort, ascending=True)
-            else:
-                result_frame = result_frame.sort_values(sort, ascending=False)
-
-        if not result_frame.empty:
-            return result_frame
-        return None
+            return result_frame.sort_values(sort, ascending=sort_ascending(metric))
+        return result_frame
 
     def experiment_summary(self, task, metric, dataset, sha1, event_type):
         metrics = list(metric)
@@ -227,10 +219,10 @@ class MongoRepo(ExperimentRepo):
             dsr = result_frame[(result_frame.dataset == dataset) & (result_frame.sha1 == sha1)]
             if dsr.empty:
                 return None
-            return expsummary(dsr)
+            return df_summary_exp(dsr)
         return None
 
-    def task_summary(self, task, metric, dataset, event_type):
+    def task_summary(self, task, dataset, event_type, metric=None, sort=None):
         metrics = list(metric)
         coll = self.db[task]
         query = self._update_query({}, [], dataset)
@@ -243,7 +235,7 @@ class MongoRepo(ExperimentRepo):
             dsr = result_frame[result_frame.dataset == dataset]
             if dsr.empty:
                 return None
-            return tasksummary(dsr)
+            return df_summary_task(dsr, metric, sort)
         return None
 
     def config2dict(self, task, sha1):
