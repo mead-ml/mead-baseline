@@ -6,7 +6,7 @@ import json
 from tensorflow.contrib.layers import fully_connected, xavier_initializer
 from baseline.utils import fill_y, listify
 from baseline.model import Classifier, load_classifier_model, create_classifier_model
-from baseline.tf.tfy import lstm_cell_w_dropout, parallel_conv, get_vocab_file_suffixes, pool_chars
+from baseline.tf.tfy import stacked_lstm, parallel_conv, get_vocab_file_suffixes, pool_chars
 from baseline.version import __version__
 import os
 
@@ -511,11 +511,29 @@ class LSTMModel(WordClassifierBase):
         hsz = kwargs.get('rnnsz', kwargs.get('hsz', 100))
         if type(hsz) is list:
             hsz = hsz[0]
-        char_rnnfwd = lstm_cell_w_dropout(hsz, self.pkeep)
-        rnnout, final_state = tf.nn.dynamic_rnn(char_rnnfwd, word_embeddings, dtype=tf.float32, sequence_length=self.lengths)
 
-        output_state = final_state.h
-        combine = tf.reshape(output_state, [-1, hsz])
+        rnntype = kwargs.get('rnntype', 'lstm')
+        nlayers = int(kwargs.get('layers', 1))
+
+        if rnntype == 'blstm':
+            rnnfwd = stacked_lstm(hsz, self.pkeep, nlayers)
+            rnnbwd = stacked_lstm(hsz, self.pkeep, nlayers)
+            ((_, _), (fw_final_state, bw_final_state)) = tf.nn.bidirectional_dynamic_rnn(rnnfwd,
+                                                                                         rnnbwd,
+                                                                                         word_embeddings,
+                                                                                         sequence_length=self.lengths,
+                                                                                         dtype=tf.float32)
+            # The output of the BRNN function needs to be joined on the H axis
+            output_state = fw_final_state[-1].h + bw_final_state[-1].h
+            out_hsz = hsz
+
+        else:
+            rnnfwd = stacked_lstm(hsz, self.pkeep, nlayers)
+            (_, (output_state)) = tf.nn.dynamic_rnn(rnnfwd, word_embeddings, sequence_length=self.lengths, dtype=tf.float32)
+            output_state = output_state[-1].h
+            out_hsz = hsz
+
+        combine = tf.reshape(output_state, [-1, out_hsz])
         return combine
 
 

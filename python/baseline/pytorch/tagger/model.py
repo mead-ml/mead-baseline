@@ -213,6 +213,7 @@ class RNNTaggerModel(nn.Module, Tagger):
                 gold_tags = gold[:sl]
                 total_tags += len(gold_tags)
                 batch_loss += self.crit(unary, gold_tags)
+            batch_loss /= probv.shape[0]
 
         return batch_loss
 
