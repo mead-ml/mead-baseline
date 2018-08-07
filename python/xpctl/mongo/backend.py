@@ -206,7 +206,7 @@ class MongoRepo(ExperimentRepo):
             return result_frame.sort_values(sort, ascending=sort_ascending(metric))
         return result_frame
 
-    def experiment_summary(self, task, metric, dataset, sha1, event_type):
+    def experiment_summary(self, task, metric, dataset, sha1, event_type, num_exps):
         metrics = list(metric)
         coll = self.db[task]
         query = self._update_query({}, [], dataset)
@@ -219,6 +219,10 @@ class MongoRepo(ExperimentRepo):
             dsr = result_frame[(result_frame.dataset == dataset) & (result_frame.sha1 == sha1)]
             if dsr.empty:
                 return None
+            if num_exps is not None:
+                dsr = dsr.copy()
+                dsr['date'] = pd.to_datetime(dsr.date)
+                dsr = dsr.sort_values(by=['date']).head(int(num_exps))
             return df_summary_exp(dsr)
         return None
 

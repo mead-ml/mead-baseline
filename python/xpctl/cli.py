@@ -241,10 +241,12 @@ def lbsummary(task):
 @click.option('--metric', multiple=True, help="list of metrics (prec, recall, f1, accuracy),[multiple]: --metric f1 "
                                               "--metric acc")
 @click.option('--event_type', default='test', help="train/ dev/ test")
+@click.option('--num_exps', help="number of experiments")
+@click.option('--output', help='output file')
 @click.argument('task')
 @click.argument('dataset')
 @click.argument('sha1')
-def xpsummary(metric, event_type, task, dataset, sha1):
+def xpsummary(metric, event_type, num_exps, output, task, dataset, sha1):
     """
     Provides a statistical summary for an experiment. An experiment is defined by a (task, dataset, config) triple.
     Shows the average, min, max and std dev for an experiment performed multiple times using the same config.
@@ -253,20 +255,23 @@ def xpsummary(metric, event_type, task, dataset, sha1):
         click.echo("no results for the specified task {}, use another task".format(task))
         return
     event_type = EVENT_TYPES[event_type]
-    experiment_summary = RepoManager.get().experiment_summary(task, metric, dataset, sha1, event_type)
+    experiment_summary = RepoManager.get().experiment_summary(task, metric, dataset, sha1, event_type, num_exps)
     if experiment_summary is None:
         click.echo("can't produce summary for the requested task {}".format(task))
         return
     click.echo(experiment_summary)
+    if output is not None:
+        experiment_summary.to_csv(output, index=True, index_label="result-id")
 
 @cli.command()
 @click.option('--metric', multiple=True, help="list of metrics (prec, recall, f1, accuracy),[multiple]: --metric f1 "
                                               "--metric acc")
 @click.option('--event_type', default='test', help="train/ dev/ test")
 @click.option('--sort', help="specify one metric to sort the results")
+@click.option('--output', help='output file')
 @click.argument('task')
 @click.argument('dataset')
-def tasksummary(metric, event_type, sort, task, dataset):
+def tasksummary(metric, event_type, sort, output, task, dataset):
     """
     Provides a statistical summary for a problem . An problem is defined by a (task, dataset) tuple.
     For each config used in the task, shows the average, min, max and std dev and number of experiments done using the
@@ -282,6 +287,8 @@ def tasksummary(metric, event_type, sort, task, dataset):
         click.echo("can't produce summary for the requested task {}".format(task))
         return
     click.echo(task_summary)
+    if output is not None:
+        task_summary.to_csv(output, index=True, index_label="experiment-id")
 
 # Edit database
 @cli.command()
