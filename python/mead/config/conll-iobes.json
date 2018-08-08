@@ -30,7 +30,7 @@
         "label": "glove-6B-100"
     },
     "train": {
-        "epochs": 2,
+        "epochs": 100,
         "optim": "sgd",
         "decay": 0.05,
         "eta": 0.015,
