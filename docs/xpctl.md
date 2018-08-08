@@ -50,6 +50,8 @@ xpctl >
 
 #### Commands
 
+Details about any command can be found by `xpctl <command name> --help` on the terminal or `help <command-name>` inside the `xpctl` repl.
+ 
 ##### Set up and general info
 
 - **vars**:   Prints the value of system variables. 
@@ -61,7 +63,11 @@ xpctl >
 
 ##### Analysis
 
-- **results**: Provides a statistical summary of the results for a problem. A problem is defined by a (task, dataset) tuple. For each config used in the task, shows the average, min, max and std dev and number of experiments done using config. Optionally: 
+- **results**: Provides a statistical summary of the results for a problem. A problem is defined by a (task, dataset) tuple. For each config used in the task, shows the average, min, max and std dev and number of experiments done using config.
+ 
+  Usage: `results [OPTIONS] TASK DATASET`
+
+  Optionally: 
   - `--metrics`: choose metric(s) to show. results ll be sorted on the first metric. 
   - `--sort`: output all metrics but sort on one. 
   - `--n`: shows the last _n_ experimental results (per config). 
@@ -143,11 +149,52 @@ xpctl > results classify SST2 --metric f1 --metric acc --sort f1 --n 1
 ```
 
 - **details**: Shows the results for all experiments for a particular config (sha1). Optionally filter out by user(s), metric(s), or sort by one metric. Shows the results on the test data by default, provide event_type (train/valid/test) to see for other datasets. Optimally limit the number of results shown. 
+
+  Usage: `details [OPTIONS] TASK SHA1`
+  
+  Optionally: 
   - `--metrics`: choose metric(s) to filter the results on. results ll be sorted on the first metric. 
   - `--sort`: output all metrics but sort on one. 
   - `--n`: shows the last (by time) _n_ experimental results. 
   - `--event_type`: show results for train/dev/test datasets. defaults to _test_. 
 
+```
+xpctl > results tagger conll-iobes
+db mongo connection successful with [host]: research.digitalroots.com, [port]: 27017
+db mongo connection successful with [host]: research.digitalroots.com, [port]: 27017
+                                              acc                                               f1                                        
+                                         num_exps      mean       std       min       max num_exps      mean       std       min       max
+sha1                                                                                                                                      
+33aee90cc68beb1649bafc14015aa3827f159776      4.0  0.979112  0.000581  0.978292  0.979556      4.0  0.910722  0.001481  0.909091  0.912517
+5d482cd9cd5d3b03d115d6da848131f38bc6e529      1.0  0.979471       NaN  0.979471  0.979471      1.0  0.912186       NaN  0.912186  0.912186
+6edbdaa261620facab48c639385b513ae2feb868      1.0  0.979771       NaN  0.979771  0.979771      1.0  0.911538       NaN  0.911538  0.911538
+7f85e5c982491bf401b5fa83614ba4b0f94fe373      3.0  0.978571  0.000119  0.978464  0.978699      3.0  0.905433  0.001328  0.904122  0.906777
+89c8238a4154bb1cd652dfde7e687919a9317b68      3.0  0.979606  0.000527  0.978999  0.979942      3.0  0.910762  0.002732  0.907820  0.913220
+d96a35d18d6d68242a5bda05ff14938ce5c81269      1.0  0.981378       NaN  0.981378  0.981378      1.0  0.919784       NaN  0.919784  0.919784
+xpctl > details tagger 33aee90cc68beb1649bafc14015aa3827f159776
+db mongo connection successful with [host]: research.digitalroots.com, [port]: 27017
+db mongo connection successful with [host]: research.digitalroots.com, [port]: 27017
+                          id  username           label      dataset                                      sha1                       date       acc        f1
+44  5b2cdc2af5ed250de2b5dc45  dpressel  conll-iobes-tf  conll-iobes  33aee90cc68beb1649bafc14015aa3827f159776 2018-06-22 11:23:22.497571  0.978292  0.910056
+45  5b2cdc35f5ed250e6bd54c13  dpressel  conll-iobes-tf  conll-iobes  33aee90cc68beb1649bafc14015aa3827f159776 2018-06-22 11:23:33.690791  0.979492  0.912517
+46  5b2d0159f5ed2557e3db8859  dpressel  conll-iobes-tf  conll-iobes  33aee90cc68beb1649bafc14015aa3827f159776 2018-06-22 14:02:01.587844  0.979106  0.909091
+47  5b2d0169f5ed255b01e6da8c  dpressel  conll-iobes-tf  conll-iobes  33aee90cc68beb1649bafc14015aa3827f159776 2018-06-22 14:02:17.444505  0.979556  0.911225
+xpctl > details tagger 33aee90cc68beb1649bafc14015aa3827f159776 --sort f1
+db mongo connection successful with [host]: research.digitalroots.com, [port]: 27017
+db mongo connection successful with [host]: research.digitalroots.com, [port]: 27017
+                          id  username           label      dataset                                      sha1                       date       acc        f1
+45  5b2cdc35f5ed250e6bd54c13  dpressel  conll-iobes-tf  conll-iobes  33aee90cc68beb1649bafc14015aa3827f159776 2018-06-22 11:23:33.690791  0.979492  0.912517
+47  5b2d0169f5ed255b01e6da8c  dpressel  conll-iobes-tf  conll-iobes  33aee90cc68beb1649bafc14015aa3827f159776 2018-06-22 14:02:17.444505  0.979556  0.911225
+44  5b2cdc2af5ed250de2b5dc45  dpressel  conll-iobes-tf  conll-iobes  33aee90cc68beb1649bafc14015aa3827f159776 2018-06-22 11:23:22.497571  0.978292  0.910056
+46  5b2d0159f5ed2557e3db8859  dpressel  conll-iobes-tf  conll-iobes  33aee90cc68beb1649bafc14015aa3827f159776 2018-06-22 14:02:01.587844  0.979106  0.909091
+xpctl > details tagger 33aee90cc68beb1649bafc14015aa3827f159776 --sort f1 --n 2
+db mongo connection successful with [host]: research.digitalroots.com, [port]: 27017
+db mongo connection successful with [host]: research.digitalroots.com, [port]: 27017
+                          id  username           label      dataset                                      sha1                       date       acc        f1
+47  5b2d0169f5ed255b01e6da8c  dpressel  conll-iobes-tf  conll-iobes  33aee90cc68beb1649bafc14015aa3827f159776 2018-06-22 14:02:17.444505  0.979556  0.911225
+46  5b2d0159f5ed2557e3db8859  dpressel  conll-iobes-tf  conll-iobes  33aee90cc68beb1649bafc14015aa3827f159776 2018-06-22 14:02:01.587844  0.979106  0.909091
+xpctl > 
+```
 #### Updating the database
 
 - **updatelabel**: update the label for an experiment.
