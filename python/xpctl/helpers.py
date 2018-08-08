@@ -50,7 +50,7 @@ def df_get_results(result_frame, dataset, num_exps, metric, sort):
         for gname, rframe in result_frame.groupby("sha1"):
             rframe = rframe.copy()
             rframe['date'] =pd.to_datetime(rframe.date)
-            rframe = rframe.sort_values(by='date').head(int(num_exps))
+            rframe = rframe.sort_values(by='date', ascending=False).head(int(num_exps))
             df = df.append(rframe)
         result_frame = df
     result_frame = result_frame.drop(columns=["id"])
@@ -66,10 +66,14 @@ def df_get_results(result_frame, dataset, num_exps, metric, sort):
     return result_frame
 
 
-def df_experimental_details(result_frame, sha1, users, sort, metric):
+def df_experimental_details(result_frame, sha1, users, sort, metric, num_exps):
+    result_frame = result_frame[result_frame.sha1 == sha1]
     if result_frame.empty:
         return None
-    result_frame = result_frame[result_frame.sha1 == sha1]
+    if num_exps is not None:
+        result_frame = result_frame.copy()
+        result_frame['date'] =pd.to_datetime(result_frame.date)
+        result_frame = result_frame.sort_values(by='date', ascending=False).head(int(num_exps))
     if users is not None:
         df = pd.DataFrame()
         for user in users:

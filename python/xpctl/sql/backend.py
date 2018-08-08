@@ -200,6 +200,13 @@ class SQLRepo(ExperimentRepo):
             return 'Test'
         raise Exception('Unknown event type {}'.event_type)
 
+    @staticmethod
+    def _get_filtered_metrics(allmetrics, metrics):
+        if not metrics:
+            return allmetrics
+        else:
+            return [x for x in allmetrics if x.label in metrics]
+
     def get_results(self, task, dataset, event_type, num_exps = None, metric=None, sort=None):
         session = self.Session()
         results = []
@@ -212,7 +219,7 @@ class SQLRepo(ExperimentRepo):
             for event in exp.events:
                 if event.phase == phase:
                     result = [exp.id, exp.username, exp.label, exp.dataset, exp.sha1, exp.date]
-                    for m in event.metrics:
+                    for m in self._get_filtered_metrics(event.metrics, metrics):
                         result += [m.value]
                         if m.label not in metrics_to_add:
                             metrics_to_add += [m.label]
@@ -223,14 +230,27 @@ class SQLRepo(ExperimentRepo):
             return df_get_results(result_frame, dataset, num_exps, metric, sort)
         return None
 
-    def experiment_details(self, user, metric, sort, task, event_type, sha1):
+    def experiment_details(self, user, metric, sort, task, event_type, sha1, n):
+        session = self.Session()
+        results = []
         metrics = listify(metric)
-        coll = self.db[task]
         users = listify(user)
-        query = self._update_query({}, users, [])
-        projection = self._update_projection(event_type=event_type)
-        result_frame = self._generate_data_frame(coll, metrics=metrics, query=query, projection=projection, event_type=event_type)
-        return df_experimental_details(result_frame, sha1, user, sort, metric)
+        metrics_to_add = [metrics[0]] if len(metrics) == 1 else []
+        phase = self.event2phase(event_type)
+        hits = session.query(Experiment).filter(Experiment.sha1 == sha1). \
+            filter(Experiment.task == task)
+        for exp in hits:
+            for event in exp.events:
+                if event.phase == phase:
+                    result = [exp.id, exp.username, exp.label, exp.dataset, exp.sha1, exp.date]
+                    for m in self._get_filtered_metrics(event.metrics, metrics):
+                        result += [m.value]
+                        if m.label not in metrics_to_add:
+                            metrics_to_add += [m.label]
+                    results.append(result)
+        cols = ['id', 'username', 'label', 'dataset', 'sha1', 'date'] + metrics_to_add
+        result_frame = pd.DataFrame(results, columns=cols)
+        return df_experimental_details(result_frame, sha1, users, sort, metric, n)
 
     def phase2event(self, phase):
         return EVENT_TYPES[phase]
@@ -242,7 +262,6 @@ class SQLRepo(ExperimentRepo):
 
     def get_info(self, task, event_type):
         session = self.Session()
-        store = []
         results = []
         rs = session.query(Experiment).filter(Experiment.task == task)
         for exp in rs:

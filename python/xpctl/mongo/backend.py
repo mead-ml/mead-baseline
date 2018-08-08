@@ -179,14 +179,14 @@ class MongoRepo(ExperimentRepo):
         projection.update({event_type: 1})
         return projection
 
-    def experiment_details(self, user, metric, sort, task, event_type, sha1):
+    def experiment_details(self, user, metric, sort, task, event_type, sha1, n):
         metrics = listify(metric)
         coll = self.db[task]
         users = listify(user)
         query = self._update_query({}, users, [])
         projection = self._update_projection(event_type=event_type)
         result_frame = self._generate_data_frame(coll, metrics=metrics, query=query, projection=projection, event_type=event_type)
-        return df_experimental_details(result_frame, sha1, users, sort, metric)
+        return df_experimental_details(result_frame, sha1, users, sort, metric, n)
 
     def get_results(self, task, dataset, event_type, num_exps = None, metric=None, sort=None):
         metrics = listify(metric)

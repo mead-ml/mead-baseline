@@ -186,7 +186,7 @@ class ExperimentRepo(object):
         """
         pass
 
-    def experiment_details(self, user, metric, sort, task, event_type, sha1):
+    def experiment_details(self, user, metric, sort, task, event_type, sha1, n):
         """Get results from the database
 
         :param user: (``str``) The username
@@ -195,6 +195,7 @@ class ExperimentRepo(object):
         :param task: (``str``) The task
         :param event_type: (``str``) event types to listen for
         :param sha1: (``str``) sha1 of the config for the experiment
+        :param n: (``int``) number of results to show.
         :return: A result DataFrame
         """
         pass

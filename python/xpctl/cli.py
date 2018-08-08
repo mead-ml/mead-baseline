@@ -125,7 +125,7 @@ def vars():
 @click.argument('task')
 @click.argument('id')
 def getmodelloc(task, id):
-    """get the model location for a particular task and record id"""
+    """Get the model location for a particular task and record id"""
     if not RepoManager.get().has_task(task):
         click.echo("no results for the specified task {}, use another task".format(task))
         return
@@ -145,15 +145,12 @@ def getmodelloc(task, id):
 @click.option('--event_type', default='test', help="train/ dev/ test")
 @click.option('--sort', help="specify one metric to sort the results")
 @click.option('--output', help='output file')
-@click.option('--n', help='number of experiments to aggregate')
+@click.option('--n', help='number of experiments to aggregate', type=int)
 @click.argument('task')
 @click.argument('dataset')
 def results(metric, event_type, sort, output, n, task, dataset):
     """
-    Provides a statistical summary for a problem . An problem is defined by a (task, dataset) tuple.
-    For each config used in the task, shows the average, min, max and std dev and number of experiments done using the
-    config. Optionally: a. --metrics: choose metric(s) to show. results ll be sorted on the first metric.
-    b. --sort output all metrics but sort on one.
+    Provides a statistical summary of the results for a problem . A problem is defined by a (task, dataset) tuple. For each config used in the task, shows the average, min, max and std dev and number of experiments done using config. Optionally: a. --metrics: choose metric(s) to show. results ll be sorted on the first metric. b. --sort output all metrics but sort on one. c. --n: limit number of experiments. d. event_type: show results for train/dev/valid datasets. e. output: put the results in an output file.
     """
     if not RepoManager.get().has_task(task):
         click.echo("no results for the specified task {}, use another task".format(task))
@@ -166,7 +163,7 @@ def results(metric, event_type, sort, output, n, task, dataset):
         return
     click.echo(results)
     if output is not None:
-        results.to_csv(output, index=True, index_label="experiment-id")
+        results.to_csv(os.path.expanduser(output), index=True, index_label="config-sha1")
 
 
 
@@ -179,8 +176,7 @@ def lbsummary(task):
     a taskname, it will show all users and datasets for that task.
     This is helpful because we often forget what datasets were
     used for a task, which are the necessary parameters for the commands
-    `results` and `best` and `tasksummary`. Shows
-    the summary for all available tasks if no option is specified.
+    `results` and `best` and `tasksummary`. Shows the summary for all available tasks if no option is specified.
     """
 
     if task is not None:
@@ -197,16 +193,12 @@ def lbsummary(task):
                                               "--metric acc")
 @click.option('--sort', help="specify one metric to sort the results")
 @click.option('--event_type', default='test', help="specify one metric to sort the results")
+@click.option('--n', help='number of experiments', type=int)
 @click.argument('task')
 @click.argument('sha1')
-def xpdetails(user, metric, sort, event_type, task, sha1):
+def details(user, metric, sort, event_type, task, sha1, n):
     """
-    Shows the results for event_type(tran/valid/test) on a particular task
-    (classify/ tagger) with a particular dataset (SST2, wnut).
-
-    Default behavior: **All** users, and metrics. Optionally supply user(s),
-    metric(s), a sort metric. use --metric f1 --metric acc for multiple metrics.
-    use one metric for the sort.
+    Shows the results for all experiments for a particular config (sha1). Optionally filter out by user(s), metric(s), or sort by one metric. Shows the results on the test data by default, provide event_type (train/valid/test) to see for other datasets.
     """
     if not RepoManager.get().has_task(task):
         click.echo("no results for the specified task {}, use another task".format(task))
@@ -217,7 +209,7 @@ def xpdetails(user, metric, sort, event_type, task, sha1):
         click.echo("we do not have results for the event type: {}".format(event_type))
         return
 
-    result_frame = RepoManager.get().experiment_details(user, metric, sort, task, event_type, sha1)
+    result_frame = RepoManager.get().experiment_details(user, metric, sort, task, event_type, sha1, n)
     if result_frame is not None:
         click.echo(result_frame)
     else:
@@ -240,7 +232,9 @@ def updatelabel(id, label, task):
 @click.argument('task')
 @click.argument('id')
 def delete(id, task):
-
+    '''
+    Deletes a record from the database and the associated model file from model-checkpoints if it exists.
+    '''
     prev = RepoManager.get().get_label(id, task)
     if prev is None:
         click.echo("The record {} doesn't exist in the database".format(id))
@@ -266,7 +260,9 @@ def delete(id, task):
 @click.argument('log')
 @click.argument('label')
 def putresult(user, log, task, config, label, cbase, cstore):
-
+    '''
+    Puts the results in a database. provide task name, config file, the reporting log gile and the label. optionally can put the model files in a persistent storage.
+    '''
     logf = log.format(task)
     if not os.path.exists(logf):
         click.echo("the log file at {} doesn't exist, provide a valid location".format(logf))
@@ -290,7 +286,9 @@ def putresult(user, log, task, config, label, cbase, cstore):
 @click.argument('id')
 @click.argument('cbase')
 def putmodel(task, id, cbase, cstore):
-
+    '''
+    Puts the baseline model files in persistent storage. provide task, id and model base (""tagger-model-tf-"). optionally provide the storage location (/data/model-checkpoints by default)
+    '''
     model_loc = RepoManager.get().put_model(id, task, cbase, cstore, click.echo)
     if model_loc is not None:
         click.echo("database updated with {}".format(model_loc))
@@ -304,7 +302,9 @@ def putmodel(task, id, cbase, cstore):
 @click.argument("sha1")
 @click.argument("filename")
 def config2json(task, sha1, filename):
-
+    '''
+    Exports the config file for an experiment as a json file.
+    '''
     if not RepoManager.get().has_task(task):
         click.echo("no results for the specified task {}, use another task".format(task))
         return

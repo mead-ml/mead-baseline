@@ -17,11 +17,11 @@ After an experiment is done, use `xpctl` to report the results to a mongodb serv
 
 ### Dependencies
 
-`xpctl` requires [mongodb](https://docs.mongodb.com/) to be installed locally or an accessible server.
+`xpctl` requires a database to be installed locally or an accessible server. We currently support:  [mongodb](https://docs.mongodb.com/) and [postgresql](https://www.postgresql.org/)), but the base classes can be extended to support other databases. 
 
 ### Installation
 
-In the `python` dir, run `./install_dev.sh xpctl`. Before installation, you can create a file `xpctlcred.json` at your `HOME` directory if you do not want to pass the parameters everytime you start the command. The file should look like this:
+In the `python` dir, run `./install_dev.sh xpctl`. Before installation, you can create a file `xpctlcred.json` at your `HOME` directory if you do not want to pass the parameters every time you start the command. The file should look like this:
 ```
 {
  "user": <username>,
@@ -32,9 +32,9 @@ In the `python` dir, run `./install_dev.sh xpctl`. Before installation, you can 
 
 ```
 
-_dbhost_ is typically `localhost` and _dbport_ is `y`. Here `<username>`, `<password>` and `<dbhost>` should be passed as string. 
+_dbhost_ is typically `localhost` and _dbport_ is `y`. Here `<username>`, `<password>` and `<dbhost>` should be passed as string. If you are using a database other than _mongo_, put the line `"dbtype":"<databasetype>"`, eg. `"dbtype":"postgresql"`.
 
-If you use [docker](docker.md), `xpctl` will be automatically installed.
+If you use [docker for baseline](docker.md), `xpctl` will be automatically installed.
  
 ### REPL Mode and Commands
  
@@ -52,99 +52,101 @@ xpctl >
 
 ##### Set up and general info
 
-- **vars**:   Prints the value of system variables dbhost and dbport. 
+- **vars**:   Prints the value of system variables. 
 ```
 xpctl > vars
-dbhost: xxx.yyy.com, dbport: y
-xpctl >
+[DB] type: postgresql, host: localhost, port: 5432, user: x
+xpctl > 
 ```
 
 ##### Analysis
 
-- **results**: shows results for a task, event type (train/test/valid) and a dataset. Optionally supply metric(s) and a metric to sort the results with. If you specify **only one** metric, the results will be sorted on that.
+- **results**: Provides a statistical summary of the results for a problem. A problem is defined by a (task, dataset) tuple. For each config used in the task, shows the average, min, max and std dev and number of experiments done using config. Optionally: 
+  - `--metrics`: choose metric(s) to show. results ll be sorted on the first metric. 
+  - `--sort`: output all metrics but sort on one. 
+  - `--n`: shows the last _n_ experimental results (per config). 
+  - `--event_type`: show results for train/dev/test datasets. defaults to _test_. 
+  - `--output`: put the results in an output file.
+
 ```
-Usage: xpctl results [OPTIONS] TASK EVENT_TYPE DATASET
-  Shows the results for event_type(train/valid/test) on a particular task
-  (classify/ tagger) with a particular dataset (SST2, wnut). Default
-  behavior: **All** users, and metrics. Optionally supply user(s),
-  metric(s), a sort metric. use --metric f1 --metric acc for multiple
-  metrics. use one metric for the sort.
-Options:
-  --user TEXT    list of users (test-user, root), [multiple]: --user a --user b
-  --metric TEXT  list of metrics (prec, recall, f1, accuracy),[multiple]:
-                 --metric f1 --metric acc
-  --sort TEXT    specify one metric to sort the results
-  --help         Show this message and exit.
+xpctl > results tagger conll-iobes
+db mongo connection successful with [host]: x.x.x, [port]: port_num
+db mongo connection successful with [host]: x.x.x, [port]: port_num
+                                               f1                                              acc                                        
+                                         num_exps      mean       std       min       max num_exps      mean       std       min       max
+sha1                                                                                                                                      
+33aee90cc68beb1649bafc14015aa3827f159776      4.0  0.910722  0.001481  0.909091  0.912517      4.0  0.979112  0.000581  0.978292  0.979556
+5d482cd9cd5d3b03d115d6da848131f38bc6e529      1.0  0.912186       NaN  0.912186  0.912186      1.0  0.979471       NaN  0.979471  0.979471
+6edbdaa261620facab48c639385b513ae2feb868      1.0  0.911538       NaN  0.911538  0.911538      1.0  0.979771       NaN  0.979771  0.979771
+7f85e5c982491bf401b5fa83614ba4b0f94fe373      3.0  0.905433  0.001328  0.904122  0.906777      3.0  0.978571  0.000119  0.978464  0.978699
+89c8238a4154bb1cd652dfde7e687919a9317b68      3.0  0.910762  0.002732  0.907820  0.913220      3.0  0.979606  0.000527  0.978999  0.979942
+d96a35d18d6d68242a5bda05ff14938ce5c81269      1.0  0.919784       NaN  0.919784  0.919784      1.0  0.981378       NaN  0.981378  0.981378
+xpctl > 
 ```
 
 ```
-xpctl > results classify test SST2
-                         id  username                    label dataset                                      sha1                        date  avg_loss        f1    recall       acc  precision
-0  5af36f9bb5536c60d1e2ccc1  dpressel  Kim2014-SST2-TF-2epochs    SST2  8ab6ab6ee8fdf14b111223e2edf48750c30c7e51  2018-05-09T22:00:49.195327  0.306686  0.873474  0.865787  0.874794   0.881299
-1  5af34c0bb5536c533c9b6ecc      None  Kim2014-SST2-TF-2epochs    SST2  8ab6ab6ee8fdf14b111223e2edf48750c30c7e51  2018-05-09T19:29:15.696297  0.293442  0.871570  0.873487  0.871499   0.869660
-2  5af34c9fb5536c53bb07bc46      None  Kim2014-SST2-TF-2epochs    SST2  8ab6ab6ee8fdf14b111223e2edf48750c30c7e51  2018-05-09T19:31:42.984408  0.321655  0.874655  0.871287  0.875343   0.878049
+xpctl > results classify SST2 --metric f1 --metric acc
+db mongo connection successful with [host]: x.x.x, [port]: port_num
+db mongo connection successful with [host]: x.x.x, [port]: port_num
+                                              acc                                               f1                                        
+                                         num_exps      mean       std       min       max num_exps      mean       std       min       max
+sha1                                                                                                                                      
+09facce8e04d7e65da2d6761dc5f397f39983a80      1.0  0.875343       NaN  0.875343  0.875343      1.0  0.876429       NaN  0.876429  0.876429
+1a870728e04470a07643c5d9cff33329c004751f      1.0  0.881384       NaN  0.881384  0.881384      1.0  0.877133       NaN  0.877133  0.877133
+67105e2108885c5ee08e211537fbda602f2ba254      1.0  0.866008       NaN  0.866008  0.866008      1.0  0.871849       NaN  0.871849  0.871849
+72f2cce2ee4bcc755e527e03e05788442b658355      1.0  0.851099       NaN  0.851099  0.851099      1.0  0.853117       NaN  0.853117  0.853117
+8ab6ab6ee8fdf14b111223e2edf48750c30c7e51      5.0  0.875892  0.004545  0.871499  0.883580      5.0  0.876028  0.006098  0.871570  0.886752
+9ceabcb89c8bcb5500371c1898238d2973b12cdc      1.0  0.881933       NaN  0.881933  0.881933      1.0  0.883342       NaN  0.883342  0.883342
+bdd99c99536c33fd3e7c312e0cc16c23e9e225f8      1.0  0.876991       NaN  0.876991  0.876991      1.0  0.871854       NaN  0.871854  0.871854
+e1ddffe85b9e26906ba50da8d4a617acc8b4d162      1.0  0.877540       NaN  0.877540  0.877540      1.0  0.880301       NaN  0.880301  0.880301
+ff37ce73365a152a9a652b60ef8036ce23bd608c      2.0  0.876167  0.005048  0.872597  0.879736      2.0  0.879907  0.004127  0.876988  0.882825
+xpctl > 
 ```
 
 ```
-xpctl > results classify test SST2 --metric acc
-                         id  username                    label dataset                                      sha1                        date       acc
-2  5af34c9fb5536c53bb07bc46      None  Kim2014-SST2-TF-2epochs    SST2  8ab6ab6ee8fdf14b111223e2edf48750c30c7e51  2018-05-09T19:31:42.984408  0.875343
-0  5af36f9bb5536c60d1e2ccc1  dpressel  Kim2014-SST2-TF-2epochs    SST2  8ab6ab6ee8fdf14b111223e2edf48750c30c7e51  2018-05-09T22:00:49.195327  0.874794
-1  5af34c0bb5536c533c9b6ecc      None  Kim2014-SST2-TF-2epochs    SST2  8ab6ab6ee8fdf14b111223e2edf48750c30c7e51  2018-05-09T19:29:15.696297  0.871499
+xpctl > results classify SST2 --metric f1 --metric acc --sort f1
+db mongo connection successful with [host]: x.x.x, [port]: port_num
+db mongo connection successful with [host]: x.x.x, [port]: port_num
+                                              acc                                               f1                                        
+                                         num_exps      mean       std       min       max num_exps      mean       std       min       max
+sha1                                                                                                                                      
+9ceabcb89c8bcb5500371c1898238d2973b12cdc      1.0  0.881933       NaN  0.881933  0.881933      1.0  0.883342       NaN  0.883342  0.883342
+e1ddffe85b9e26906ba50da8d4a617acc8b4d162      1.0  0.877540       NaN  0.877540  0.877540      1.0  0.880301       NaN  0.880301  0.880301
+ff37ce73365a152a9a652b60ef8036ce23bd608c      2.0  0.876167  0.005048  0.872597  0.879736      2.0  0.879907  0.004127  0.876988  0.882825
+1a870728e04470a07643c5d9cff33329c004751f      1.0  0.881384       NaN  0.881384  0.881384      1.0  0.877133       NaN  0.877133  0.877133
+09facce8e04d7e65da2d6761dc5f397f39983a80      1.0  0.875343       NaN  0.875343  0.875343      1.0  0.876429       NaN  0.876429  0.876429
+8ab6ab6ee8fdf14b111223e2edf48750c30c7e51      5.0  0.875892  0.004545  0.871499  0.883580      5.0  0.876028  0.006098  0.871570  0.886752
+bdd99c99536c33fd3e7c312e0cc16c23e9e225f8      1.0  0.876991       NaN  0.876991  0.876991      1.0  0.871854       NaN  0.871854  0.871854
+67105e2108885c5ee08e211537fbda602f2ba254      1.0  0.866008       NaN  0.866008  0.866008      1.0  0.871849       NaN  0.871849  0.871849
+72f2cce2ee4bcc755e527e03e05788442b658355      1.0  0.851099       NaN  0.851099  0.851099      1.0  0.853117       NaN  0.853117  0.853117
+xpctl > 
 ```
 
 ```
-(xpt2.7) testuser:~$ xpctl results tagger test wnut --metric f1 --metric acc --sort acc
-db connection successful with [host]: x.y.com, [port]: y
-                          id      username                                      label dataset                                      sha1                    date       acc        f1
-4   5a1611c038d2dd7832f7c47c    testuser                      bilstm-CRF-filt-1-2-3    wnut  39831513cb319984c9410a2c7da9429ec0bc745d 2017-11-23 00:09:33.455  0.939854  0.391667
-8   5a02665d6232a6030a275fc3          root     wnut-lowercased-gazetteer-5proj-unif-0    wnut  4073e6dff65340d954af3e66d36a6d144fca5825 2017-11-08 02:05:17.009  0.939287  0.386049
-```
+xpctl > results classify SST2 --metric f1 --metric acc --sort f1 --n 1
+ db mongo connection successful with [host]: x.x.x, [port]: port_num
+ db mongo connection successful with [host]: x.x.x, [port]: port_num
+                                               acc                                         f1                                  
+                                          num_exps      mean std       min       max num_exps      mean std       min       max
+ sha1                                                                                                                          
+ 9ceabcb89c8bcb5500371c1898238d2973b12cdc      1.0  0.881933 NaN  0.881933  0.881933      1.0  0.883342 NaN  0.883342  0.883342
+ ff37ce73365a152a9a652b60ef8036ce23bd608c      1.0  0.879736 NaN  0.879736  0.879736      1.0  0.882825 NaN  0.882825  0.882825
+ e1ddffe85b9e26906ba50da8d4a617acc8b4d162      1.0  0.877540 NaN  0.877540  0.877540      1.0  0.880301 NaN  0.880301  0.880301
+ 1a870728e04470a07643c5d9cff33329c004751f      1.0  0.881384 NaN  0.881384  0.881384      1.0  0.877133 NaN  0.877133  0.877133
+ 09facce8e04d7e65da2d6761dc5f397f39983a80      1.0  0.875343 NaN  0.875343  0.875343      1.0  0.876429 NaN  0.876429  0.876429
+ bdd99c99536c33fd3e7c312e0cc16c23e9e225f8      1.0  0.876991 NaN  0.876991  0.876991      1.0  0.871854 NaN  0.871854  0.871854
+ 67105e2108885c5ee08e211537fbda602f2ba254      1.0  0.866008 NaN  0.866008  0.866008      1.0  0.871849 NaN  0.871849  0.871849
+ 8ab6ab6ee8fdf14b111223e2edf48750c30c7e51      1.0  0.871499 NaN  0.871499  0.871499      1.0  0.871570 NaN  0.871570  0.871570
+ 72f2cce2ee4bcc755e527e03e05788442b658355      1.0  0.851099 NaN  0.851099  0.851099      1.0  0.853117 NaN  0.853117  0.853117
+ xpctl > 
 
 ```
-(xpt2.7) testuser:~$ xpctl results tagger test wnut --metric f1 --metric acc --sort f1
-db connection successful with [host]: x.y.com, [port]: y
-                          id      username                                      label dataset                                      sha1                    date       acc        f1
-10  5a05f17c6232a638b53903b0  testuser             wnut-gazetteer-noproj-unif-0.1    wnut  ab7b1fed1f0206ad9ebf3887657f18051d99f643 2017-11-10 18:35:40.741  0.936957  0.402537
-6   5a0140636232a60282e0cb8d          root  wnut-lowercased-gazetteer-noproj-unif-0.1    wnut  231c11c31fa8389a192da9e84a1c19d7ada46613 2017-11-07 05:10:59.629  0.938211  0.395871
-9   5a026c6a6232a605d4ea2688          root    wnut-lowercased-gazetteer-noproj-unif-0    wnut  ab7b1fed1f0206ad9ebf3887657f18051d99f643 2017-11-08 02:31:06.897  0.938391  0.391900
-```
 
-```
-(xpt2.7) testuser:~$ xpctl results tagger test wnut --metric f1
-db connection successful with [host]: x.y.com, [port]: y
-                          id      username                                      label dataset                                      sha1                    date        f1
-10  5a05f17c6232a638b53903b0  testuser             wnut-gazetteer-noproj-unif-0.1    wnut  ab7b1fed1f0206ad9ebf3887657f18051d99f643 2017-11-10 18:35:40.741  0.402537
-6   5a0140636232a60282e0cb8d          root  wnut-lowercased-gazetteer-noproj-unif-0.1    wnut  231c11c31fa8389a192da9e84a1c19d7ada46613 2017-11-07 05:10:59.629  0.395871
-9   5a026c6a6232a605d4ea2688          root    wnut-lowercased-gazetteer-noproj-unif-0    wnut  ab7b1fed1f0206ad9ebf3887657f18051d99
-```
-
-- **best**: shows the best (n) result for a task. 
-```
-xpctl > help best
-Usage: best [OPTIONS] TASK EVENT_TYPE DATASET METRIC
-  Shows the best score for event_type(tran/valid/test) on a particular
-  task (classify/ tagger), on a particular dataset (SST2, wnut) and a
-  particular metric. 
-Default behavior: 
-  The best result for **All** users available for the task. 
-Optionally supply number of results (n-best), user(s) and metric(only ONE)
-Options:
-  --user TEXT  list of users (test-user, root), [multiple]: --user a --user b
-  --n INTEGER  N best results
-  --help       Show this message and exit.
-```
-
-```
-xpctl > best --n 3 classify test SST2 acc
-
-total 3 results found, showing best 3 results
-                         id  username                    label dataset                                      sha1                        date       acc
-2  5af34c9fb5536c53bb07bc46      None  Kim2014-SST2-TF-2epochs    SST2  8ab6ab6ee8fdf14b111223e2edf48750c30c7e51  2018-05-09T19:31:42.984408  0.875343
-0  5af36f9bb5536c60d1e2ccc1  dpressel  Kim2014-SST2-TF-2epochs    SST2  8ab6ab6ee8fdf14b111223e2edf48750c30c7e51  2018-05-09T22:00:49.195327  0.874794
-1  5af34c0bb5536c533c9b6ecc      None  Kim2014-SST2-TF-2epochs    SST2  8ab6ab6e
-
-```
+- **details**: Shows the results for all experiments for a particular config (sha1). Optionally filter out by user(s), metric(s), or sort by one metric. Shows the results on the test data by default, provide event_type (train/valid/test) to see for other datasets. Optimally limit the number of results shown. 
+  - `--metrics`: choose metric(s) to filter the results on. results ll be sorted on the first metric. 
+  - `--sort`: output all metrics but sort on one. 
+  - `--n`: shows the last (by time) _n_ experimental results. 
+  - `--event_type`: show results for train/dev/test datasets. defaults to _test_. 
 
 #### Updating the database
 
