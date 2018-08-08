@@ -160,8 +160,8 @@ xpctl > results classify SST2 --metric f1 --metric acc --sort f1 --n 1
 
 ```
 xpctl > results tagger conll-iobes
-db mongo connection successful with [host]: research.digitalroots.com, [port]: 27017
-db mongo connection successful with [host]: research.digitalroots.com, [port]: 27017
+db mongo connection successful with [host]: x.x.x, [port]: num_port
+db mongo connection successful with [host]: x.x.x, [port]: num_port
                                               acc                                               f1                                        
                                          num_exps      mean       std       min       max num_exps      mean       std       min       max
 sha1                                                                                                                                      
@@ -172,24 +172,24 @@ sha1
 89c8238a4154bb1cd652dfde7e687919a9317b68      3.0  0.979606  0.000527  0.978999  0.979942      3.0  0.910762  0.002732  0.907820  0.913220
 d96a35d18d6d68242a5bda05ff14938ce5c81269      1.0  0.981378       NaN  0.981378  0.981378      1.0  0.919784       NaN  0.919784  0.919784
 xpctl > details tagger 33aee90cc68beb1649bafc14015aa3827f159776
-db mongo connection successful with [host]: research.digitalroots.com, [port]: 27017
-db mongo connection successful with [host]: research.digitalroots.com, [port]: 27017
+db mongo connection successful with [host]: x.x.x, [port]: num_port
+db mongo connection successful with [host]: x.x.x, [port]: num_port
                           id  username           label      dataset                                      sha1                       date       acc        f1
 44  5b2cdc2af5ed250de2b5dc45  dpressel  conll-iobes-tf  conll-iobes  33aee90cc68beb1649bafc14015aa3827f159776 2018-06-22 11:23:22.497571  0.978292  0.910056
 45  5b2cdc35f5ed250e6bd54c13  dpressel  conll-iobes-tf  conll-iobes  33aee90cc68beb1649bafc14015aa3827f159776 2018-06-22 11:23:33.690791  0.979492  0.912517
 46  5b2d0159f5ed2557e3db8859  dpressel  conll-iobes-tf  conll-iobes  33aee90cc68beb1649bafc14015aa3827f159776 2018-06-22 14:02:01.587844  0.979106  0.909091
 47  5b2d0169f5ed255b01e6da8c  dpressel  conll-iobes-tf  conll-iobes  33aee90cc68beb1649bafc14015aa3827f159776 2018-06-22 14:02:17.444505  0.979556  0.911225
 xpctl > details tagger 33aee90cc68beb1649bafc14015aa3827f159776 --sort f1
-db mongo connection successful with [host]: research.digitalroots.com, [port]: 27017
-db mongo connection successful with [host]: research.digitalroots.com, [port]: 27017
+db mongo connection successful with [host]: x.x.x, [port]: num_port
+db mongo connection successful with [host]: x.x.x, [port]: num_port
                           id  username           label      dataset                                      sha1                       date       acc        f1
 45  5b2cdc35f5ed250e6bd54c13  dpressel  conll-iobes-tf  conll-iobes  33aee90cc68beb1649bafc14015aa3827f159776 2018-06-22 11:23:33.690791  0.979492  0.912517
 47  5b2d0169f5ed255b01e6da8c  dpressel  conll-iobes-tf  conll-iobes  33aee90cc68beb1649bafc14015aa3827f159776 2018-06-22 14:02:17.444505  0.979556  0.911225
 44  5b2cdc2af5ed250de2b5dc45  dpressel  conll-iobes-tf  conll-iobes  33aee90cc68beb1649bafc14015aa3827f159776 2018-06-22 11:23:22.497571  0.978292  0.910056
 46  5b2d0159f5ed2557e3db8859  dpressel  conll-iobes-tf  conll-iobes  33aee90cc68beb1649bafc14015aa3827f159776 2018-06-22 14:02:01.587844  0.979106  0.909091
 xpctl > details tagger 33aee90cc68beb1649bafc14015aa3827f159776 --sort f1 --n 2
-db mongo connection successful with [host]: research.digitalroots.com, [port]: 27017
-db mongo connection successful with [host]: research.digitalroots.com, [port]: 27017
+db mongo connection successful with [host]: x.x.x, [port]: num_port
+db mongo connection successful with [host]: x.x.x, [port]: num_port
                           id  username           label      dataset                                      sha1                       date       acc        f1
 47  5b2d0169f5ed255b01e6da8c  dpressel  conll-iobes-tf  conll-iobes  33aee90cc68beb1649bafc14015aa3827f159776 2018-06-22 14:02:17.444505  0.979556  0.911225
 46  5b2d0159f5ed2557e3db8859  dpressel  conll-iobes-tf  conll-iobes  33aee90cc68beb1649bafc14015aa3827f159776 2018-06-22 14:02:01.587844  0.979106  0.909091
