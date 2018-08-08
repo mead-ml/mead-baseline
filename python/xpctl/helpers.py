@@ -1,9 +1,8 @@
 import json
-import pymongo
 import pandas as pd
-import os
 from collections import OrderedDict
 import numpy as np
+from baseline.utils import listify
 
 __all__ = ["log2json", "order_json"]
 
@@ -39,12 +38,48 @@ def df_summary_exp(df):
         .rename(columns={'len': 'num_exps', 'amean': 'mean', 'amin': 'min', 'amax': 'max'})
 
 
-def df_summary_task(df, metric=None, sort=None):
-    result_frame = df.groupby("sha1").agg([len, np.mean, np.std, np.min, np.max])\
+def df_get_results(result_frame, dataset, num_exps, metric, sort):
+    datasets = result_frame.dataset.unique()
+    if dataset not in datasets:
+        return None
+    dsr = result_frame[result_frame.dataset == dataset]
+    if dsr.empty:
+        return None
+    df = pd.DataFrame()
+    if num_exps is not None:
+        for gname, rframe in result_frame.groupby("sha1"):
+            rframe = rframe.copy()
+            rframe['date'] =pd.to_datetime(rframe.date)
+            rframe = rframe.sort_values(by='date').head(int(num_exps))
+            df = df.append(rframe)
+        result_frame = df
+    result_frame = result_frame.drop(columns=["id"])
+    result_frame = result_frame.groupby("sha1").agg([len, np.mean, np.std, np.min, np.max])\
         .rename(columns={'len': 'num_exps', 'amean': 'mean', 'amin': 'min', 'amax': 'max'})
-    metrics = list(metric)
-    if len(metric) == 1:
-        return result_frame.sort_values([(metrics[0], 'mean')], ascending=sort_ascending(metric))
+    metrics = listify(metric)
+    if len(metrics) == 1:
+        result_frame = result_frame.sort_values([(metrics[0], 'mean')], ascending=sort_ascending(metric))
     if sort:
-        return result_frame.sort_values([(sort, 'mean')], ascending=sort_ascending(metric))
+        result_frame = result_frame.sort_values([(sort, 'mean')], ascending=sort_ascending(metric))
+    if result_frame.empty:
+        return None
+    return result_frame
+
+
+def df_experimental_details(result_frame, sha1, users, sort, metric):
+    if result_frame.empty:
+        return None
+    result_frame = result_frame[result_frame.sha1 == sha1]
+    if users is not None:
+        df = pd.DataFrame()
+        for user in users:
+            df = df.append(result_frame[result_frame.username == user])
+        result_frame = result_frame
+    metrics = list(metric)
+    if len(metrics) == 1:
+        result_frame = result_frame.sort_values([metrics[0]], ascending=sort_ascending(metric))
+    if sort:
+        result_frame = result_frame.sort_values([sort], ascending=sort_ascending(metric))
+    if result_frame.empty:
+        return None
     return result_frame

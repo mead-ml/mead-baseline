@@ -1,6 +1,5 @@
 from __future__ import print_function
 import os
-import shutil
 import pandas as pd
 import pymongo
 import datetime
@@ -12,7 +11,7 @@ from baseline.utils import export, listify
 from xpctl.core import ExperimentRepo, store_model
 from bson.objectid import ObjectId
 from baseline.version import __version__
-from xpctl.helpers import order_json, df_summary_exp, df_summary_task, sort_ascending
+from xpctl.helpers import order_json, df_get_results, df_experimental_details
 
 __all__ = []
 exporter = export(__all__)
@@ -180,66 +179,23 @@ class MongoRepo(ExperimentRepo):
         projection.update({event_type: 1})
         return projection
 
-    def nbest_by_metric(self, username, metric, dataset, task, num_results, event_type, ascending):
+    def experiment_details(self, user, metric, sort, task, event_type, sha1):
         metrics = listify(metric)
         coll = self.db[task]
-        query = self._update_query({}, username, dataset)
-        projection = self._update_projection(event_type)
-        result_frame = self._generate_data_frame(coll, metrics, query, projection, event_type)
-        if not result_frame.empty:
-            return result_frame.sort_values(metrics,
-                                            ascending=[ascending])[:min(int(num_results), result_frame.shape[0])]
-        return None
-
-    def get_results(self, username, metric, sort, dataset, task, event_type):
-        event_type = event_type.lower()
-        metrics = list(metric)
-        coll = self.db[task]
-        query = self._update_query({}, username, dataset)
+        users = listify(user)
+        query = self._update_query({}, users, [])
         projection = self._update_projection(event_type=event_type)
-        result_frame = self._generate_data_frame(coll, metrics, query, projection, event_type=event_type)
-        if result_frame.empty:
-            return None
-        if len(metric) == 1:
-            return result_frame.sort_values(metrics[0], ascending=sort_ascending(metric))
-        if sort:
-            return result_frame.sort_values(sort, ascending=sort_ascending(metric))
-        return result_frame
+        result_frame = self._generate_data_frame(coll, metrics=metrics, query=query, projection=projection, event_type=event_type)
+        return df_experimental_details(result_frame, sha1, users, sort, metric)
 
-    def experiment_summary(self, task, metric, dataset, sha1, event_type, num_exps):
-        metrics = list(metric)
+    def get_results(self, task, dataset, event_type, num_exps = None, metric=None, sort=None):
+        metrics = listify(metric)
         coll = self.db[task]
         query = self._update_query({}, [], dataset)
         projection = self._update_projection(event_type=event_type)
         result_frame = self._generate_data_frame(coll, metrics=metrics, query=query, projection=projection, event_type=event_type)
         if not result_frame.empty:
-            datasets = result_frame.dataset.unique()
-            if dataset not in datasets:
-                return None
-            dsr = result_frame[(result_frame.dataset == dataset) & (result_frame.sha1 == sha1)]
-            if dsr.empty:
-                return None
-            if num_exps is not None:
-                dsr = dsr.copy()
-                dsr['date'] = pd.to_datetime(dsr.date)
-                dsr = dsr.sort_values(by=['date']).head(int(num_exps))
-            return df_summary_exp(dsr)
-        return None
-
-    def task_summary(self, task, dataset, event_type, metric=None, sort=None):
-        metrics = list(metric)
-        coll = self.db[task]
-        query = self._update_query({}, [], dataset)
-        projection = self._update_projection(event_type=event_type)
-        result_frame = self._generate_data_frame(coll, metrics=metrics, query=query, projection=projection, event_type=event_type)
-        if not result_frame.empty:
-            datasets = result_frame.dataset.unique()
-            if dataset not in datasets:
-                return None
-            dsr = result_frame[result_frame.dataset == dataset]
-            if dsr.empty:
-                return None
-            return df_summary_task(dsr, metric, sort)
+            return df_get_results(result_frame, dataset, num_exps, metric, sort)
         return None
 
     def config2dict(self, task, sha1):
@@ -273,12 +229,10 @@ class MongoRepo(ExperimentRepo):
             q = self._update_query({}, None, dataset)
             p = self._update_projection(event_type)
             results = list(coll.find(q, p))
-            metrics = self._get_metrics(results, event_type)
             for result in results:  # different experiments
                 store.append([result['username'], result['config']['dataset'], task])
 
         df = pd.DataFrame(store, columns=['user', 'dataset', 'task'])
-        #return df
         return df.groupby(['user', 'dataset']).agg([len]) \
             .rename(columns={"len": 'num_exps'})
 
