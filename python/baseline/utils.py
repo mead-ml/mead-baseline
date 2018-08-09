@@ -597,11 +597,11 @@ def convert_bio_to_iobes(ifile, ofile):
             prev = tokens[-1]
 
 @exporter
-def to_spans(sequence, lut, span_type):
+def to_spans(sequence, lut, span_type, verbose=False):
     """Turn a sequence of IOB chunks into single tokens."""
 
     if span_type == 'iobes':
-        return to_spans_iobes(sequence, lut)
+        return to_spans_iobes(sequence, lut, verbose)
 
     strict_iob2 = (span_type == 'iob2') or (span_type == 'bio')
     iobtype = 2 if strict_iob2 else 1
@@ -625,14 +625,14 @@ def to_spans(sequence, lut, span_type):
                     current.append('%d' % i)
                 else:
                     chunks.append('@'.join(current))
-                    if iobtype == 2:
+                    if iobtype == 2 and verbose:
                         print('Warning, type=IOB2, unexpected format ([%s] follows other tag type [%s] @ %d)' % (label, current[0], i))
 
                     current = [base, '%d' % i]
 
             else:
                 current = [label.replace('I-', ''), '%d' % i]
-                if iobtype == 2:
+                if iobtype == 2 and verbose:
                     print('Warning, unexpected format (I before B @ %d) %s' % (i, label))
         else:
             if current is not None:
@@ -645,7 +645,7 @@ def to_spans(sequence, lut, span_type):
     return set(chunks)
 
 
-def to_spans_iobes(sequence, lut):
+def to_spans_iobes(sequence, lut, verbose=False):
     chunks = []
     current = None
 
@@ -683,11 +683,13 @@ def to_spans_iobes(sequence, lut):
                     current.append('%d' % i)
                 else:
                     chunks.append('@'.join(current))
-                    print('Warning: I without matching previous B/I @ %d' % i)
+                    if verbose:
+                        print('Warning: I without matching previous B/I @ %d' % i)
                     current = [base, '%d' % i]
 
             else:
-                print('Warning: I without a previous chunk @ %d' % i)
+                if verbose:
+                    print('Warning: I without a previous chunk @ %d' % i)
                 current = [label.replace('I-', ''), '%d' % i]
 
         # We are at the end of a chunk, so flush current
@@ -702,7 +704,8 @@ def to_spans_iobes(sequence, lut):
                     current = None
                 else:
                     chunks.append('@'.join(current))
-                    print('Warning: E doesnt agree with previous B/I type!')
+                    if verbose:
+                        print('Warning: E doesnt agree with previous B/I type!')
                     current = [base, '%d' % i]
                     chunks.append('@'.join(current))
                     current = None
@@ -710,7 +713,8 @@ def to_spans_iobes(sequence, lut):
             # This should never happen
             else:
                 current = [label.replace('E-', ''), '%d' % i]
-                print('Warning, E without previous chunk! @ %d' % i)
+                if verbose:
+                    print('Warning, E without previous chunk! @ %d' % i)
                 chunks.append('@'.join(current))
                 current = None
         # Outside
