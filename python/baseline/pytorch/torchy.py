@@ -369,7 +369,8 @@ def pytorch_prepare_optimizer(model, **kwargs):
     scheduler = None
     if decay_rate > 0.0 and decay_type is not None:
         if decay_type == 'invtime':
-            scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1, gamma=decay_rate)
+            gamma = 1.0 / (1.0 + 1.0 * decay_rate)
+            scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1, gamma=gamma)
 
     return optimizer, scheduler
 
