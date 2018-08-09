@@ -13,6 +13,7 @@ unif: 0.25
 model: 
   model_type: default 
   filtsz: [3,4,5]
+  cfiltsz: [2,3,4,5,7]
   cmotsz: 100
   char_hsz: 20
   dropout: 0.5
