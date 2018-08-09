@@ -1,6 +1,5 @@
 from __future__ import print_function
 import os
-import shutil
 import pandas as pd
 import pymongo
 import datetime
@@ -12,7 +11,7 @@ from baseline.utils import export, listify
 from xpctl.core import ExperimentRepo, store_model
 from bson.objectid import ObjectId
 from baseline.version import __version__
-from xpctl.helpers import order_json
+from xpctl.helpers import order_json, df_get_results, df_experimental_details
 
 __all__ = []
 exporter = export(__all__)
@@ -180,60 +179,23 @@ class MongoRepo(ExperimentRepo):
         projection.update({event_type: 1})
         return projection
 
-    def nbest_by_metric(self, username, metric, dataset, task, num_results, event_type, ascending):
+    def experiment_details(self, user, metric, sort, task, event_type, sha1, n):
         metrics = listify(metric)
         coll = self.db[task]
-        query = self._update_query({}, username, dataset)
-        projection = self._update_projection(event_type)
-        result_frame = self._generate_data_frame(coll, metrics, query, projection, event_type)
-        if not result_frame.empty:
-            return result_frame.sort_values(metrics,
-                                            ascending=[ascending])[:min(int(num_results), result_frame.shape[0])]
-        return None
-
-    def get_results(self, username, metric, sort, dataset, task, event_type):
-        event_type = event_type.lower()
-        metrics = list(metric)
-        coll = self.db[task]
-        query = self._update_query({}, username, dataset)
+        users = listify(user)
+        query = self._update_query({}, users, [])
         projection = self._update_projection(event_type=event_type)
-        result_frame = self._generate_data_frame(coll, metrics, query, projection, event_type=event_type)
-        if len(metric) == 1:
-            metric = metric[0]
-            if metric == "avg_loss" or metric == "perplexity":
-                result_frame = result_frame.sort_values(metric, ascending=True)
-            else:
-                result_frame = result_frame.sort_values(metric, ascending=False)
-        if sort:
-            if sort == "avg_loss" or sort == "perplexity":
-                result_frame = result_frame.sort_values(sort, ascending=True)
-            else:
-                result_frame = result_frame.sort_values(sort, ascending=False)
+        result_frame = self._generate_data_frame(coll, metrics=metrics, query=query, projection=projection, event_type=event_type)
+        return df_experimental_details(result_frame, sha1, users, sort, metric, n)
 
-        if not result_frame.empty:
-            return result_frame
-        return None
-
-    def task_summary(self, task, dataset, metric, event_type):
+    def get_results(self, task, dataset, event_type, num_exps = None, metric=None, sort=None):
         metrics = listify(metric)
-
         coll = self.db[task]
         query = self._update_query({}, [], dataset)
         projection = self._update_projection(event_type=event_type)
-        result_frame = self._generate_data_frame(coll, metrics, query, projection, event_type=event_type)
+        result_frame = self._generate_data_frame(coll, metrics=metrics, query=query, projection=projection, event_type=event_type)
         if not result_frame.empty:
-            datasets = result_frame.dataset.unique()
-            if dataset not in datasets:
-                return None
-            dsr = result_frame[result_frame.dataset == dataset].sort_values(metric, ascending=False)
-            result = dsr[metric].iloc[0]
-            user = dsr.username.iloc[0]
-            sha1 = dsr.sha1.iloc[0]
-            date = dsr.date.iloc[0]
-            summary = "For dataset {}, the best {} is {:0.3f} reported by {} on {}. " \
-                      "The sha1 for the config file is {}.".format(dataset, metric, result, user, date, sha1)
-            return summary
-
+            return df_get_results(result_frame, dataset, num_exps, metric, sort)
         return None
 
     def config2dict(self, task, sha1):
@@ -257,32 +219,28 @@ class MongoRepo(ExperimentRepo):
             return None
         return results[0]
 
-    def get_info(self, task, event_types):
+    def get_info(self, task, event_type):
         coll = self.db[task]
         q = self._update_query({}, None, None)
         p = {'config.dataset': 1}
         datasets = list(set([x['config']['dataset'] for x in list(coll.find(q, p))]))
-        store = []  #
-
+        store = []
         for dataset in datasets:
             q = self._update_query({}, None, dataset)
-            for event_type in event_types:
-                p = self._update_projection(event_type)
-                results = list(coll.find(q, p))
-                metrics = self._get_metrics(results, event_type)
-                for result in results:  # different experiments
-                    store.append([result['username'], result['config']['dataset'], event_type, ",".join(metrics)])
+            p = self._update_projection(event_type)
+            results = list(coll.find(q, p))
+            for result in results:  # different experiments
+                store.append([result['username'], result['config']['dataset'], task])
 
-        df = pd.DataFrame(store, columns=['user', 'dataset', 'event_type', 'metrics'])
-        return df.groupby(['user', 'dataset', 'event_type', 'metrics']).size().reset_index() \
-            .rename(columns={0: 'num_experiments'})
+        df = pd.DataFrame(store, columns=['user', 'dataset', 'task'])
+        return df.groupby(['user', 'dataset']).agg([len]) \
+            .rename(columns={"len": 'num_exps'})
 
-    def leaderboard_summary(self, task=None, event_types=None, print_fn=print):
-
+    def leaderboard_summary(self, event_type, task=None, print_fn=print):
         if task:
             print_fn("Task: [{}]".format(task))
             print_fn("-" * 93)
-            print_fn(self.get_info(task, event_types))
+            print_fn(self.get_info(task, event_type))
         else:
             tasks = self.db.collection_names()
             if "system.indexes" in tasks:
@@ -292,5 +250,5 @@ class MongoRepo(ExperimentRepo):
                 print_fn("-" * 93)
                 print_fn("Task: [{}]".format(task))
                 print_fn("-" * 93)
-                print_fn(self.get_info(task, event_types))
+                print_fn(self.get_info(task, event_type))
 

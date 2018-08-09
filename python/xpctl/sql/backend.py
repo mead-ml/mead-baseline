@@ -11,6 +11,7 @@ import getpass
 from baseline.utils import export, listify
 from bson.objectid import ObjectId
 from baseline.version import __version__
+from xpctl.helpers import order_json, df_get_results, df_experimental_details
 
 __all__ = []
 exporter = export(__all__)
@@ -20,7 +21,7 @@ Base = declarative_base()
 import sqlalchemy as sql
 import sqlalchemy.orm as orm
 from xpctl.core import ExperimentRepo, store_model
-from xpctl.helpers import order_json
+from xpctl.helpers import order_json, df_summary_exp
 
 EVENT_TYPES = {
     "train": "train_events", "Train": "train_events",
@@ -199,80 +200,57 @@ class SQLRepo(ExperimentRepo):
             return 'Test'
         raise Exception('Unknown event type {}'.event_type)
 
-    def _nbest_by_metric_rows(self, username, metric, dataset, task, num_results, event_type, ascending):
+    @staticmethod
+    def _get_filtered_metrics(allmetrics, metrics):
+        if not metrics:
+            return allmetrics
+        else:
+            return [x for x in allmetrics if x.label in metrics]
+
+    def get_results(self, task, dataset, event_type, num_exps = None, metric=None, sort=None):
         session = self.Session()
-        phase = self.event2phase(event_type)
-
-        best = session.query(Experiment, Metric, Event).\
-            filter(Experiment.dataset == dataset). \
-            filter(Event.phase == phase).\
-            filter(Experiment.task == task).\
-            filter(Event.experiment_id == Experiment.id).\
-            filter(Event.id == Metric.event_id).\
-            filter(Metric.label == metric)
-
-        if username is not None and len(username) > 0:
-            best = best.filter(Experiment.username.in_(username))
-
-        best = best.order_by(Metric.value.asc() if ascending is True else Metric.value.desc())
-        if num_results > 0:
-            return best[0:num_results]
-        return best
-
-    def nbest_by_metric(self, username, metric, dataset, task, num_results, event_type, ascending):
-        best = self._nbest_by_metric_rows(username, metric, dataset, task, num_results, event_type, ascending)
-        results = []
-        for exp, metric, event in best:
-            results.append([exp.id, exp.username, exp.label, exp.dataset, exp.sha1, exp.date, metric.value])
-        return pd.DataFrame(results, columns=['id', 'username', 'label', 'dataset', 'sha1', 'date', metric.label])
-
-    def get_results(self, username, metric, sort, dataset, task, event_type):
-        session = self.Session()
-
         results = []
         metrics = listify(metric)
         metrics_to_add = [metrics[0]] if len(metrics) == 1 else []
         phase = self.event2phase(event_type)
         hits = session.query(Experiment).filter(Experiment.dataset == dataset). \
             filter(Experiment.task == task)
-
         for exp in hits:
             for event in exp.events:
-
                 if event.phase == phase:
                     result = [exp.id, exp.username, exp.label, exp.dataset, exp.sha1, exp.date]
-                    for m in event.metrics:
+                    for m in self._get_filtered_metrics(event.metrics, metrics):
                         result += [m.value]
                         if m.label not in metrics_to_add:
                             metrics_to_add += [m.label]
                     results.append(result)
         cols = ['id', 'username', 'label', 'dataset', 'sha1', 'date'] + metrics_to_add
-        frame = pd.DataFrame(results, columns=cols)
-        if len(metric) == 1:
-            metric = metric[0]
-            if metric == "avg_loss" or metric == "perplexity":
-                result_frame = frame.sort_values(metric, ascending=True)
-            else:
-                result_frame = frame.sort_values(metric, ascending=False)
-        if sort:
-            if sort == "avg_loss" or sort == "perplexity":
-                frame = result_frame.sort_values(sort, ascending=True)
-            else:
-                frame = result_frame.sort_values(sort, ascending=False)
-        return frame
+        result_frame = pd.DataFrame(results, columns=cols)
+        if not result_frame.empty:
+            return df_get_results(result_frame, dataset, num_exps, metric, sort)
+        return None
 
-    def task_summary(self, task, dataset, metric, event_type):
-
-        ascending = True if metric == "avg_loss" or metric == "perplexity" else False
-        exp, metric, _ = self._nbest_by_metric_rows(None, metric, dataset, task, 1, event_type, ascending)[0]
-        summary = "For dataset {}, the best {} is {:0.3f} reported by {} on {}. " \
-                      "The sha1 for the config file is {}.".format(exp.dataset,
-                                                                   metric.label,
-                                                                   metric.value,
-                                                                   exp.username,
-                                                                   exp.date,
-                                                                   exp.sha1)
-        return summary
+    def experiment_details(self, user, metric, sort, task, event_type, sha1, n):
+        session = self.Session()
+        results = []
+        metrics = listify(metric)
+        users = listify(user)
+        metrics_to_add = [metrics[0]] if len(metrics) == 1 else []
+        phase = self.event2phase(event_type)
+        hits = session.query(Experiment).filter(Experiment.sha1 == sha1). \
+            filter(Experiment.task == task)
+        for exp in hits:
+            for event in exp.events:
+                if event.phase == phase:
+                    result = [exp.id, exp.username, exp.label, exp.dataset, exp.sha1, exp.date]
+                    for m in self._get_filtered_metrics(event.metrics, metrics):
+                        result += [m.value]
+                        if m.label not in metrics_to_add:
+                            metrics_to_add += [m.label]
+                    results.append(result)
+        cols = ['id', 'username', 'label', 'dataset', 'sha1', 'date'] + metrics_to_add
+        result_frame = pd.DataFrame(results, columns=cols)
+        return df_experimental_details(result_frame, sha1, users, sort, metric, n)
 
     def phase2event(self, phase):
         return EVENT_TYPES[phase]
@@ -282,35 +260,33 @@ class SQLRepo(ExperimentRepo):
         config = session.query(Experiment).filter(Experiment.sha1 == sha1).one().config
         return json.loads(config)
 
-    def get_info(self, task, event_types):
+    def get_info(self, task, event_type):
         session = self.Session()
-        if task is not None:
-            results = []
-            rs = session.query(Experiment).filter(Experiment.task == task)
-            for exp in rs:
-                for event in exp.events:
-                    event_type = self.phase2event(event.phase)
-                    if event_types is None or event_type in event_types:
-                        result = [exp.username, exp.dataset, event_type] + [','.join([m.label for m in event.metrics])]
+        results = []
+        rs = session.query(Experiment).filter(Experiment.task == task)
+        for exp in rs:
+            for event in exp.events:
+                current_event_type = self.phase2event(event.phase)
+                if event_type is None or current_event_type == event_type:
+                    result = [exp.username, exp.dataset, task]
                     results.append(result)
+        df = pd.DataFrame(results, columns=['user', 'dataset', 'task'])
+        return df.groupby(['user', 'dataset']).agg([len]) \
+            .rename(columns={"len": 'num_exps'})
 
-        df = pd.DataFrame(results, columns=['user', 'dataset', 'event_type', 'metrics'])
-        return df.groupby(['user', 'dataset', 'event_type', 'metrics']).size().reset_index() \
-            .rename(columns={0: 'num_experiments'})
-        return results
-
-    def leaderboard_summary(self, task=None, event_types=None, print_fn=print):
-
+    def leaderboard_summary(self, task=None, event_type=None, print_fn=print):
         if task:
             print_fn("Task: [{}]".format(task))
             print_fn("-" * 93)
-            print_fn(self.get_info(task, event_types))
+            print_fn(self.get_info(task, event_type))
         else:
             tasks = self.get_task_names()
+            if "system.indexes" in tasks:
+                tasks.remove("system.indexes")
             print_fn("There are {} tasks: {}".format(len(tasks), tasks))
             for task in tasks:
                 print_fn("-" * 93)
                 print_fn("Task: [{}]".format(task))
                 print_fn("-" * 93)
-                print_fn(self.get_info(task, event_types))
+                print_fn(self.get_info(task, event_type))
 

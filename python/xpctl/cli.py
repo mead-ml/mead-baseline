@@ -125,7 +125,7 @@ def vars():
 @click.argument('task')
 @click.argument('id')
 def getmodelloc(task, id):
-    """get the model location for a particular task and record id"""
+    """Get the model location for a particular task and record id"""
     if not RepoManager.get().has_task(task):
         click.echo("no results for the specified task {}, use another task".format(task))
         return
@@ -140,80 +140,31 @@ def getmodelloc(task, id):
 
 
 @cli.command()
-@click.option('--user', multiple=True, help="list of users (testuser, root), [multiple]: --user a --user b")
 @click.option('--metric', multiple=True, help="list of metrics (prec, recall, f1, accuracy),[multiple]: --metric f1 "
                                               "--metric acc")
+@click.option('--event_type', default='test', help="train/ dev/ test")
 @click.option('--sort', help="specify one metric to sort the results")
+@click.option('--output', help='output file')
+@click.option('--n', help='number of experiments to aggregate', type=int)
 @click.argument('task')
-@click.argument('event_type')
 @click.argument('dataset')
-def results(user, metric, sort, dataset, task, event_type):
+def results(metric, event_type, sort, output, n, task, dataset):
     """
-    Shows the results for event_type(tran/valid/test) on a particular task
-    (classify/ tagger) with a particular dataset (SST2, wnut).
-
-    Default behavior: **All** users, and metrics. Optionally supply user(s),
-    metric(s), a sort metric. use --metric f1 --metric acc for multiple metrics.
-    use one metric for the sort.
+    Provides a statistical summary of the results for a problem . A problem is defined by a (task, dataset) tuple. For each config used in the task, shows the average, min, max and std dev and number of experiments done using config. Optionally: a. --metrics: choose metric(s) to show. results ll be sorted on the first metric. b. --sort output all metrics but sort on one. c. --n: limit number of experiments. d. event_type: show results for train/dev/valid datasets. e. output: put the results in an output file.
     """
-    event_type = event_type.lower()
-
     if not RepoManager.get().has_task(task):
         click.echo("no results for the specified task {}, use another task".format(task))
         return
-
-    event_type = EVENT_TYPES.get(event_type, None)
-    if event_type is None:
-        click.echo("we do not have results for the event type: {}".format(event_type))
+    event_type = EVENT_TYPES[event_type]
+    num_exps = n
+    results = RepoManager.get().get_results(task, dataset, event_type, num_exps, metric, sort)
+    if results is None:
+        click.echo("can't produce summary for the requested task {}".format(task))
         return
+    click.echo(results)
+    if output is not None:
+        results.to_csv(os.path.expanduser(output), index=True, index_label="config-sha1")
 
-    result_frame = RepoManager.get().get_results(user, metric, sort, dataset, task, event_type)
-
-    if result_frame is not None:
-        click.echo(result_frame)
-        result_frame.desc = "{} results for task: {}".format(event_type, task)
-    else:
-        click.echo("no result found for this query")
-
-
-@cli.command()
-@click.option('--user', multiple=True, help="list of users (testuser, root), [multiple]: --user a --user b")
-@click.option('--n', default=1, help="N best results")
-@click.argument('task')
-@click.argument('event_type')
-@click.argument('dataset')
-@click.argument('metric')
-def best(user, metric, dataset, n, task, event_type):
-    """
-    Shows the best F1 score for event_type(tran/valid/test) on a
-    particular task (classify/ tagger) on a particular dataset (SST2, wnut)
-    using a particular metric. Default behavior: The best result for
-    **All** users available for the task. Optionally supply number of results
-    (n-best), user(s) and metric(only ONE)
-    """
-
-    event_type = event_type.lower()
-
-    if not RepoManager.get().has_task(task):
-        click.echo("no results for the specified task {}, use another task".format(task))
-        return
-
-    event_type = EVENT_TYPES.get(event_type, None)
-    if event_type is None:
-        click.echo("we do not have results for the event type: {}".format(event_type))
-        return
-
-    if metric == "avg_loss" or metric == "perplexity":
-        result_frame = RepoManager.get().nbest_by_metric(user, metric,
-                                                         dataset, task, n, event_type, ascending=True)
-    else:
-        result_frame = RepoManager.get().nbest_by_metric(user, metric, dataset, task, n, event_type, ascending=False)
-
-    if result_frame is not None:
-        click.echo("total {} results found, showing best {} results".format(result_frame.shape[0], n))
-        click.echo(result_frame)
-    else:
-        click.echo("no result found for this query")
 
 
 # summarize results
@@ -222,42 +173,47 @@ def best(user, metric, dataset, n, task, event_type):
 def lbsummary(task):
     """
     Provides a summary of the leaderboard. Options: taskname. If you provide
-    a taskname, it will show all users, datasets and metrics for that task.
-    This is helpful because we often forget what metrics or datasets were
+    a taskname, it will show all users and datasets for that task.
+    This is helpful because we often forget what datasets were
     used for a task, which are the necessary parameters for the commands
-    `results` and `best` and `tasksummary`. Shows
-    the summary for all available tasks if no option is specified.
+    `results` and `best` and `tasksummary`. Shows the summary for all available tasks if no option is specified.
     """
-    event_types = [EVENT_TYPES['train'], EVENT_TYPES['valid'], EVENT_TYPES['test']]
 
     if task is not None:
         if not RepoManager.get().has_task(task):
             click.echo("no results for the specified task {}, use another task".format(task))
             return
 
-    return RepoManager.get().leaderboard_summary(task, event_types, click.echo)
+    return RepoManager.get().leaderboard_summary(event_type=EVENT_TYPES["test"], task=task, print_fn=click.echo)
 
 
 @cli.command()
+@click.option('--user', multiple=True, help="list of users (testuser, root), [multiple]: --user a --user b")
+@click.option('--metric', multiple=True, help="list of metrics (prec, recall, f1, accuracy),[multiple]: --metric f1 "
+                                              "--metric acc")
+@click.option('--sort', help="specify one metric to sort the results")
+@click.option('--event_type', default='test', help="specify one metric to sort the results")
+@click.option('--n', help='number of experiments', type=int)
 @click.argument('task')
-@click.argument('dataset')
-@click.argument('metric')
-def tasksummary(task, dataset, metric):
+@click.argument('sha1')
+def details(user, metric, sort, event_type, task, sha1, n):
     """
-    Provides a natural language summary for a task. This is almost equivalent
-    to the `best` command.
+    Shows the results for all experiments for a particular config (sha1). Optionally filter out by user(s), metric(s), or sort by one metric. Shows the results on the test data by default, provide event_type (train/valid/test) to see for other datasets.
     """
-    event_type = EVENT_TYPES["test"]
     if not RepoManager.get().has_task(task):
         click.echo("no results for the specified task {}, use another task".format(task))
         return
 
-    task_summary = RepoManager.get().task_summary(task, dataset, metric, event_type)
-    if task_summary is None:
-        click.echo("can't produce summary for the requested task {}".format(task))
+    event_type = EVENT_TYPES.get(event_type, None)
+    if event_type is None:
+        click.echo("we do not have results for the event type: {}".format(event_type))
         return
 
-    click.echo(task_summary)
+    result_frame = RepoManager.get().experiment_details(user, metric, sort, task, event_type, sha1, n)
+    if result_frame is not None:
+        click.echo(result_frame)
+    else:
+        click.echo("no result found for this query")
 
 
 # Edit database
@@ -276,7 +232,9 @@ def updatelabel(id, label, task):
 @click.argument('task')
 @click.argument('id')
 def delete(id, task):
-
+    '''
+    Deletes a record from the database and the associated model file from model-checkpoints if it exists.
+    '''
     prev = RepoManager.get().get_label(id, task)
     if prev is None:
         click.echo("The record {} doesn't exist in the database".format(id))
@@ -302,7 +260,9 @@ def delete(id, task):
 @click.argument('log')
 @click.argument('label')
 def putresult(user, log, task, config, label, cbase, cstore):
-
+    '''
+    Puts the results in a database. provide task name, config file, the reporting log gile and the label. optionally can put the model files in a persistent storage.
+    '''
     logf = log.format(task)
     if not os.path.exists(logf):
         click.echo("the log file at {} doesn't exist, provide a valid location".format(logf))
@@ -326,7 +286,9 @@ def putresult(user, log, task, config, label, cbase, cstore):
 @click.argument('id')
 @click.argument('cbase')
 def putmodel(task, id, cbase, cstore):
-
+    '''
+    Puts the baseline model files in persistent storage. provide task, id and model base (""tagger-model-tf-"). optionally provide the storage location (/data/model-checkpoints by default)
+    '''
     model_loc = RepoManager.get().put_model(id, task, cbase, cstore, click.echo)
     if model_loc is not None:
         click.echo("database updated with {}".format(model_loc))
@@ -340,7 +302,9 @@ def putmodel(task, id, cbase, cstore):
 @click.argument("sha1")
 @click.argument("filename")
 def config2json(task, sha1, filename):
-
+    '''
+    Exports the config file for an experiment as a json file.
+    '''
     if not RepoManager.get().has_task(task):
         click.echo("no results for the specified task {}, use another task".format(task))
         return

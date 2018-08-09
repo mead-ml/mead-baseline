@@ -63,20 +63,6 @@ class ExperimentRepo(object):
         """
         pass
 
-    def nbest_by_metric(self, username, metric, dataset, task, num_results, event_type, ascending):
-        """Get the n-best results according to the specific metrics
-
-        :param username: (``str``) Name of user or None
-        :param metric: (``str``) The name of the metric to use for N-best
-        :param dataset: (``str``) The name of the dataset
-        :param task: (``str``) The name of the task
-        :param num_results: (``int``) The number of results (max) to retrieve from the repo
-        :param event_type: (``str``) The event types to retrieve from repo
-        :param ascending: (``bool``) Should we sort ascending or descending (depends on metric)
-        :return: The N-best data frame
-        """
-        pass
-
     def config2dict(self, task, sha1):
         """Convert a configuration stored in the repository to a string
 
@@ -134,7 +120,7 @@ class ExperimentRepo(object):
         """
         pass
 
-    def leaderboard_summary(self, task=None, event_types=None, print_fn=print):
+    def leaderboard_summary(self, task=None, event_type=None, print_fn=print):
         pass
 
     def get_label(self, id, task):
@@ -197,5 +183,19 @@ class ExperimentRepo(object):
         * *label* -- (``str``) An optional, human-readable label name.  Defaults to sha1 of this configuration
 
         :return: The identifier assigned by the database
+        """
+        pass
+
+    def experiment_details(self, user, metric, sort, task, event_type, sha1, n):
+        """Get results from the database
+
+        :param user: (``str``) The username
+        :param metric: (``str``) The metric to use
+        :param sort: (``str``) The field to sort on
+        :param task: (``str``) The task
+        :param event_type: (``str``) event types to listen for
+        :param sha1: (``str``) sha1 of the config for the experiment
+        :param n: (``int``) number of results to show.
+        :return: A result DataFrame
         """
         pass
