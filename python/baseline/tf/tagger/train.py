@@ -10,11 +10,13 @@ import os
 
 class TaggerEvaluatorTf(object):
 
-    def __init__(self, model, span_type):
+    def __init__(self, model, span_type, verbose):
         self.model = model
         self.idx2label = revlut(model.labels)
         self.span_type = span_type
-        print('Setting span type {}'.format(self.span_type))
+        if verbose:
+            print('Setting span type {}'.format(self.span_type))
+        self.verbose = verbose
 
     def _write_sentence_conll(self, handle, sentence, gold, txt):
 
@@ -53,10 +55,10 @@ class TaggerEvaluatorTf(object):
             correct_labels += np.sum(np.equal(sentence, gold))
             total_labels += length
 
-            gold_chunks = to_spans(gold, self.idx2label, self.span_type)
+            gold_chunks = to_spans(gold, self.idx2label, self.span_type, self.verbose)
             gold_count += len(gold_chunks)
 
-            guess_chunks = to_spans(sentence, self.idx2label, self.span_type)
+            guess_chunks = to_spans(sentence, self.idx2label, self.span_type, self.verbose)
             guess_count += len(guess_chunks)
 
             overlap_chunks = gold_chunks & guess_chunks
@@ -111,7 +113,8 @@ class TaggerTrainerTf(EpochReportingTrainer):
         self.loss = model.create_loss()
         self.model = model
         span_type = kwargs.get('span_type', 'iob')
-        self.evaluator = TaggerEvaluatorTf(model, span_type)
+        verbose = kwargs.get('verbose', False)
+        self.evaluator = TaggerEvaluatorTf(model, span_type, verbose)
         self.global_step, self.train_op = optimizer(self.loss, **kwargs)
 
     def checkpoint(self):
@@ -156,7 +159,7 @@ def fit(model, ts, vs, es, **kwargs):
     saver = tf.train.Saver()
     model.save_using(saver)
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
-
+    verbose = bool(kwargs.get('verbose', False))
     if do_early_stopping:
         early_stopping_metric = kwargs.get('early_stopping_metric', 'acc')
         patience = kwargs.get('patience', epochs)
@@ -196,7 +199,7 @@ def fit(model, ts, vs, es, **kwargs):
 
         trainer.recover_last_checkpoint()
         # What to do about overloading this??
-        evaluator = TaggerEvaluatorTf(model, span_type)
+        evaluator = TaggerEvaluatorTf(model, span_type, verbose)
         test_metrics = evaluator.test(es, conll_output=conll_output, txts=txts)
         for reporting in reporting_fns:
             reporting(test_metrics, 0, 'Test')
