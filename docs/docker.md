@@ -12,6 +12,6 @@ We assume all necessary files (datasests, embeddings etc.) are stored in `/data/
 
 For convenience, we also provide a [build script](../docker/build_docker.sh), and a [run script](../docker/run_docker.sh). The usual pipeline is this:
 
-- build a docker image: `./build_docker.sh tf` or `./build_docker.sh pytorch` 
+- build a docker image: `./build_docker.sh tf` or `./build_docker.sh pyt` 
 
-- run the container: `./run_docker.sh -g <gpu_number> -n <container_name> -t <image_type> -e <external directories to mount>`, eg. `./run_docker.sh -g 0 -n test -t tf -e ~/test` or `./run_docker.sh -g 0 -n test -t pytorch -e ~/test ~/test1/`. An external directory `/a/b/c` is mounted as `/c` in the docker.
+- run the container: `./run_docker.sh -g <gpu_number> -n <container_name> -t <image_type> -e <external directories to mount>`, eg. `./run_docker.sh -g 0 -n test -t tf -e ~/test` or `./run_docker.sh -g 0 -n test -t pyt -e ~/test ~/test1/`. An external directory `/a/b/c` is mounted as `/c` in the docker.
