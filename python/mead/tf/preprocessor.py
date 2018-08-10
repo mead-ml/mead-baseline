@@ -1,7 +1,7 @@
 import tensorflow as tf
 
 class PreprocessorCreator(object):
-    def __init__(self, indices, lchars, upchars_lut, task, token_key, extra_feats):
+    def __init__(self, indices, lchars, upchars_lut, task, token_key, extra_feats, mxlen=None, mxwlen=None):
         """
         indices are created during vocab creation.
         """
@@ -15,20 +15,22 @@ class PreprocessorCreator(object):
         self.task = task
         self.token_key = token_key
         self.extra_feats = extra_feats
+        if mxlen is None:
+            mxlen = self.task.config_params['preproc']['mxlen']
+        self.mxlen = mxlen
+        if mxwlen is None:
+            mxwlen = self.task.config_params['preproc'].get('mxwlen')
+        self.mxwlen = mxwlen
+
 
     def preproc_post(self, post_mappings):
         # Split the input string, assuming that whitespace is splitter
         # The client should perform any required tokenization for us and join on ' '
 
-        # WARNING: This can be a bug if the user defaults the values (-1)
-        # for conll, the mxlen=124, for idr, the mxlen is forced to a max BPTT
-        # for twpos, the mxlen=38
-        # this should probably be fixed by serializing the mxlen of the model
-        # or rereading it from the tensor from file
         raw_post = post_mappings[self.token_key]
         # raw_post = post_mappings
-        mxlen = self.task.config_params['preproc']['mxlen']
-        mxwlen = self.task.config_params['preproc'].get('mxwlen')
+        mxlen = self.mxlen
+        mxwlen = self.mxwlen
 
         nraw_post = self._reform_raw(raw_post, mxlen)
 
