@@ -1,5 +1,6 @@
 import argparse
 from baseline import *
+from mead.utils import unzip_model
 
 parser = argparse.ArgumentParser(description='Translate input sequence to output sequence')
 parser.add_argument('--input', help='Input sequence')
@@ -8,7 +9,7 @@ parser.add_argument('--max_examples', default=-1, help='How many examples to sho
 parser.add_argument('--nogpu', default=False, help='Dont use GPU (debug only!)', type=str2bool)
 parser.add_argument('--backend', default='tf', help='Deep Learning Framework backend')
 parser.add_argument('--model_type', help='Name of model to load and train', default='default')
-parser.add_argument('--model', help='Name of model checkpoint to load', required=True)
+parser.add_argument('--model', help='Name of model checkpoint to load', required=True, type=unzip_model)
 
 
 def predict_sequence(text, src_vocab, dst_index2word, mxlen):
