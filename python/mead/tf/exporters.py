@@ -150,6 +150,19 @@ the embedding is not of type 'word' or 'char', please fill in and put \
     def _initialize_embedding(self, dimensions_size, vocab):
         return baseline.RandomInitVecModel(dimensions_size, vocab, False)
 
+    def _get_max_lens(self, base_name):
+        mxlen = self.task.config_params['preproc']['mxlen']
+        mxwlen = self.task.config_params['preproc'].get('mxwlen')
+        state = baseline.utils.read_json("{}.state".format(base_name))
+        if 'mxlen' in state:
+            mxlen = state['mxlen']
+        # What should be called mxwlen is called maxw in the state object of this is for backwards compatibility.
+        if 'maxw' in state:
+            mxwlen = state['maxw']
+        if 'mxwlen' in state:
+            mxwlen = state['mxwlen']
+        return mxlen, mxwlen
+
 
 @export(__all__)
 class ClassifyTensorFlowExporter(TensorFlowExporter):
@@ -166,9 +179,11 @@ class ClassifyTensorFlowExporter(TensorFlowExporter):
         serialized_tf_example, tf_example = self._create_example(extra_features_required)
         raw_posts = tf_example[FIELD_NAME]
 
+        mxlen, mxwlen = self._get_max_lens(model_file)
+
         preprocessor = PreprocessorCreator(
             indices, self.lchars, self.upchars_lut,
-            self.task, FIELD_NAME, extra_features_required
+            self.task, FIELD_NAME, extra_features_required, mxlen, mxwlen
         )
         types = {k: tf.int64 for k in indices}
         preprocessed, lengths = tf.map_fn(
@@ -178,8 +193,6 @@ class ClassifyTensorFlowExporter(TensorFlowExporter):
 
         embeddings = self._initialize_embeddings_map(vocabs, embeddings_set)
 
-        mxlen = self.task.config_params['preproc']['mxlen']
-        mxwlen = self.task.config_params['preproc'].get('mxwlen')
         model_params = self.task.config_params["model"]
         model_params["x"] = preprocessed['word']
         if 'char' in vocabs:
@@ -274,9 +287,11 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
         serialized_tf_example, tf_example = self._create_example(extra_features_required)
         raw_posts = tf_example[FIELD_NAME]
 
+        mxlen, mxwlen = self._get_max_lens(model_file)
+
         preprocessor = PreprocessorCreator(
             indices, self.lchars, self.upchars_lut,
-            self.task, FIELD_NAME, extra_features_required
+            self.task, FIELD_NAME, extra_features_required, mxlen, mxwlen
         )
 
         types = {k: tf.int64 for k in indices.keys()}
@@ -286,14 +301,6 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
                                     back_prop=False)
 
         embeddings = self._initialize_embeddings_map(vocabs, embeddings_set)
-
-        # WARNING: This can be a bug if the user defaults the values (-1)
-        # for conll, the mxlen=124, for idr, the mxlen is forced to a max BPTT
-        # for twpos, the mxlen=38
-        # this should probably be fixed by serializing the mxlen of the model
-        # or rereading it from the tensor from file
-        mxlen = self.task.config_params['preproc']['mxlen']
-        mxwlen = self.task.config_params['preproc']['mxwlen']
 
         model_params = self.task.config_params["model"]
         model_params["x"] = preprocessed['word']
