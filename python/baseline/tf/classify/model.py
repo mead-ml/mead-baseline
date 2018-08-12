@@ -6,7 +6,7 @@ import json
 from tensorflow.contrib.layers import fully_connected, xavier_initializer
 from baseline.utils import fill_y, listify
 from baseline.model import Classifier, load_classifier_model, create_classifier_model
-from baseline.tf.tfy import stacked_lstm, parallel_conv, get_vocab_file_suffixes, pool_chars
+from baseline.tf.tfy import stacked_lstm, parallel_conv, get_vocab_file_suffixes, pool_chars, embed
 from baseline.version import __version__
 import os
 
@@ -374,16 +374,8 @@ class WordClassifierBase(Classifier):
             seed = np.random.randint(10e8)
             init = tf.random_uniform_initializer(-0.05, 0.05, dtype=tf.float32, seed=seed)
             xavier_init = xavier_initializer(True, seed)
-
-            # Use pre-trained embeddings from word2vec
-            with tf.name_scope("LUT"):
-                W = tf.get_variable("W",
-                                    initializer=tf.constant_initializer(w2v.weights, dtype=tf.float32,
-                                                                        verify_shape=True),
-                                    shape=[len(w2v.vocab), w2v.dsz], trainable=finetune)
-                e0 = tf.scatter_update(W, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, word_dsz]))
-                with tf.control_dependencies([e0]):
-                    word_embeddings = tf.nn.embedding_lookup(W, model.x)
+            word_embeddings = embed(model.x, len(w2v.vocab), word_dsz,
+                                    initializer=tf.constant_initializer(w2v.weights, dtype=tf.float32, verify_shape=True))
 
             if c2v is not None:
                 model.mxwlen = int(kwargs.get('mxwlen', 40))

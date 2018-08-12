@@ -266,6 +266,18 @@ def highway_conns(inputs, wsz_all, n):
     return inputs
 
 
+def embed(x, vsz, dsz, initializer, finetune=True, scope="LUT"):
+    with tf.name_scope(scope):
+        W = tf.get_variable("W",
+                            initializer=initializer,
+                            shape=[vsz, dsz], trainable=finetune)
+        e0 = tf.scatter_update(W, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, dsz]))
+        with tf.control_dependencies([e0]):
+            word_embeddings = tf.nn.embedding_lookup(W, x)
+
+    return word_embeddings
+
+
 def parallel_conv(input_, filtsz, dsz, motsz, activation_fn=tf.nn.relu):
     """Do parallel convolutions with multiple filter widths and max-over-time pooling.
 
