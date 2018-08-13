@@ -305,6 +305,7 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
         model_params = self.task.config_params["model"]
         model_params["x"] = preprocessed['word']
         model_params["xch"] = preprocessed['char']
+        model_params["x_lc"] = preprocessed['word']
 
         for other in extra_features_required:
             model_params[other] = preprocessed[other]
