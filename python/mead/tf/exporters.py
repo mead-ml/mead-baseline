@@ -261,15 +261,13 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
     def __init__(self, task):
         super(TaggerTensorFlowExporter, self).__init__(task)
 
-    def _run(self, sess, model_file, embeddings_set, output_dir, model_version):
+    def _run(self, sess, model_file, embeddings_set, output_dir, model_version, **kwargs):
 
         indices, vocabs = self._create_vocabs(model_file)
-
         self.assign_char_lookup()
 
         labels = self.load_labels(model_file)
         extra_features_required = [x for x in vocabs.keys() if x not in TensorFlowExporter.DEFAULT_VOCABS]
-
         # Make the TF example, network input
         serialized_tf_example, tf_example = self._create_example(extra_features_required)
         raw_posts = tf_example[FIELD_NAME]

@@ -33,7 +33,7 @@ class PreprocessorCreator(object):
         nraw_post = self._reform_raw(raw_post, mxlen)
 
         preprocs = {}
-        words, sentence_length = self._create_word_vectors_from_post(nraw_post, mxlen)
+        words, sentence_length = self._create_word_vectors_from_post_lower(nraw_post, mxlen)
         preprocs['word'] = words
         if 'char' in self.indices:
             chars, _ = self._create_char_vectors_from_post(nraw_post, mxlen, mxwlen)
@@ -60,7 +60,7 @@ class PreprocessorCreator(object):
 
         return nraw_post
 
-    def _create_word_vectors_from_post(self, nraw_post, mxlen):
+    def _create_word_vectors_from_post_lower(self, nraw_post, mxlen):
         # vocab has only lowercase words
         split_chars = tf.string_split(tf.reshape(nraw_post, [-1]), delimiter="").values
         upchar_inds = self.upchars_lut.lookup(split_chars)
