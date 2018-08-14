@@ -5,7 +5,7 @@ from baseline.utils import crf_mask as crf_m
 from torch.autograd import Variable
 import torch.autograd
 import torch.nn as nn
-import torch.nn.functional
+import torch.nn.functional as F
 import math
 import copy
 
@@ -158,6 +158,8 @@ def pytorch_embedding(x2vec, finetune=True):
 def pytorch_activation(name="relu"):
     if name == "tanh":
         return nn.Tanh()
+    if name == "identity":
+        return nn.Identity()
     if name == "hardtanh":
         return nn.Hardtanh()
     if name == "prelu":
@@ -345,6 +347,105 @@ class LSTMEncoder(nn.Module):
         output, hidden = self.rnn(packed)
         output, _ = torch.nn.utils.rnn.pad_packed_sequence(output)
         return output + tbc if self.residual else output
+
+
+class BaseAttention(nn.Module):
+
+    def __init__(self, hsz):
+        super(BaseAttention, self).__init__()
+        self.hsz = hsz
+        self.W_c = nn.Linear(2 * self.hsz, hsz, bias=False)
+
+    def forward(self, query_t, keys_bth, values_bth, keys_mask=None):
+        # Output(t) = B x H x 1
+        # Keys = B x T x H
+        # a = B x T x 1
+        a = self._attention(query_t, keys_bth, keys_mask)
+        attended = self._update(a, query_t, values_bth)
+
+        return attended
+
+    def _attention(self, query_t, keys_bth, keys_mask):
+        pass
+
+    def _update(self, a, query_t, values_bth):
+        # a = B x T
+        # Want to apply over context, scaled by a
+        # (B x 1 x T) (B x T x H) = (B x 1 x H)
+        a = a.view(a.size(0), 1, a.size(1))
+        c_t = torch.bmm(a, values_bth).squeeze(1)
+
+        attended = torch.cat([c_t, query_t], -1)
+        attended = F.tanh(self.W_c(attended))
+        return attended
+
+
+class LuongDotProductAttention(BaseAttention):
+
+    def __init__(self, hsz):
+        super(LuongDotProductAttention, self).__init__(hsz)
+
+    def _attention(self, query_t, keys_bth, keys_mask):
+        a = torch.bmm(keys_bth, query_t.unsqueeze(2))
+        a = a.squeeze(2).masked_fill(keys_mask == 0, -1e9)
+        a = F.softmax(a, dim=-1)
+        return a
+
+
+class ScaledDotProductAttention(BaseAttention):
+
+    def __init__(self, hsz):
+        super(ScaledDotProductAttention, self).__init__(hsz)
+
+    def _attention(self, query_t, keys_bth, keys_mask):
+        a = torch.bmm(keys_bth, query_t.unsqueeze(2)) / math.sqrt(self.hsz)
+        a = a.squeeze(2).masked_fill(keys_mask == 0, -1e9)
+        a = F.softmax(a, dim=-1)
+        return a
+
+
+class LuongGeneralAttention(BaseAttention):
+
+    def __init__(self, hsz):
+        super(LuongGeneralAttention, self).__init__(hsz)
+        self.W_a = nn.Linear(self.hsz, self.hsz, bias=False)
+
+    def _attention(self, query_t, keys_bth, keys_mask):
+        a = torch.bmm(keys_bth, self.W_a(query_t).unsqueeze(2))
+        a = a.squeeze(2).masked_fill(keys_mask == 0, -1e9)
+        a = F.softmax(a, dim=-1)
+        return a
+
+
+class BahdanauAttention(BaseAttention):
+
+    def __init__(self, hsz):
+        super(BahdanauAttention, self).__init__(hsz)
+        self.hsz = hsz
+        self.W_a = nn.Linear(self.hsz, self.hsz, bias=False)
+        self.E_a = nn.Linear(self.hsz, self.hsz, bias=False)
+        self.v = nn.Linear(self.hsz, 1, bias=False)
+
+    def _attention(self, query_t, keys_bth, keys_mask):
+        B, T, H = keys_bth.shape
+        q = self.W_a(query_t.view(-1, self.hsz)).view(B, 1, H)
+        u = self.E_a(keys_bth.contiguous().view(-1, self.hsz)).view(B, T, H)
+        z = F.tanh(q + u)
+        a = self.v(z.view(-1, self.hsz)).view(B, T)
+        a.masked_fill(keys_mask == 0, -1e9)
+        a = F.softmax(a, dim=-1)
+        return a
+
+    def _update(self, a, query_t, values_bth):
+        # a = B x T
+        # Want to apply over context, scaled by a
+        # (B x 1 x T) (B x T x H) = (B x 1 x H) -> (B x H)
+        a = a.view(a.size(0), 1, a.size(1))
+        c_t = torch.bmm(a, values_bth).squeeze(1)
+        # (B x 2H)
+        attended = torch.cat([c_t, query_t], -1)
+        attended = self.W_c(attended)
+        return attended
 
 
 def pytorch_prepare_optimizer(model, **kwargs):
