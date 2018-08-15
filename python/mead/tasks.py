@@ -8,6 +8,7 @@ import os
 from mead.downloader import EmbeddingDownloader, DataDownloader
 from mead.mime_type import mime_type
 from baseline.utils import export, read_config_file, read_json, write_json
+from mead.tf.exporters import ClassifyTensorFlowExporter, TaggerTensorFlowExporter, Seq2SeqTensorFlowExporter
 
 __all__ = []
 exporter = export(__all__)
@@ -185,9 +186,6 @@ class Task(object):
                 s.append(json.loads(x))
         return s
 
-    def create_exporter(self):
-        return self.ExporterType(self)
-
 
 @exporter
 class ClassifierTask(Task):
@@ -238,8 +236,7 @@ class ClassifierTask(Task):
                 print('TensorFlow backend')
                 import baseline.tf.classify as classify
                 from baseline.data import reverse_2nd as rev2nd
-                import mead.tf
-                self.ExporterType = mead.tf.ClassifyTensorFlowExporter
+                self.ExporterType = ClassifyTensorFlowExporter
 
         self.task = classify
 
@@ -329,8 +326,7 @@ class TaggerTask(Task):
             print('TensorFlow backend')
             self.config_params['preproc']['trim'] = False
             import baseline.tf.tagger as tagger
-            import mead.tf
-            self.ExporterType = mead.tf.TaggerTensorFlowExporter
+            self.ExporterType = TaggerTensorFlowExporter
 
         self.task = tagger
         if self.config_params['preproc'].get('web-cleanup', False) is True:
@@ -423,9 +419,8 @@ class EncoderDecoderTask(Task):
                 self.config_params['preproc']['show_ex'] = baseline.dy.show_examples_dynet
             else:
                 import baseline.tf.seq2seq as seq2seq
-                import mead.tf
-                self.ExporterType = mead.tf.Seq2SeqTensorFlowExporter
                 self.config_params['preproc']['show_ex'] = baseline.tf.show_examples_tf
+                self.ExporterType = Seq2SeqTensorFlowExporter
 
         self.task = seq2seq
 
