@@ -1,3 +1,4 @@
+# TODO: This file is deprecated.  Please use the MEAD trainer instead (mead/trainer.py)
 import argparse
 from baseline import *
 
