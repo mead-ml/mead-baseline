@@ -5,6 +5,7 @@ from baseline.progress import create_progress_bar
 from baseline.utils import load_user_model, lowercase
 from baseline.featurizers import create_featurizer 
 import json
+from mead.utils import unzip_model
 import numpy as np
 
 
@@ -32,7 +33,7 @@ parser = argparse.ArgumentParser(description='Loads an RNNTaggerModel, predicts 
                                              'predicted label')
 parser.add_argument('--input', help='input conll', required=True)
 parser.add_argument('--output', help='output conll', required=True)
-parser.add_argument('--model', help='model file: tagger-model-tf-*', required=True)
+parser.add_argument('--model', help='model file', required=True, type=unzip_model)
 parser.add_argument('--mxlen', help='max. length of the sentence (provided during training)', type=int, required=True)
 parser.add_argument('--mxwlen', help='max. length of a word (provided during training)', type=int, required=True)
 parser.add_argument('--backend', choices=['tf', 'pytorch'], default='tf', help='Deep Learning Framework backend')
