@@ -18,7 +18,7 @@ class Exporter(object):
 
 def create_exporter(task, exporter_type):
     if exporter_type == 'default':
-        return task.ExporterType
+        return task.ExporterType(task)
     else:
         mod = import_user_module("exporter", exporter_type)
         return mod.create_exporter(task, exporter_type)
