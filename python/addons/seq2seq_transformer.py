@@ -39,7 +39,7 @@ def scaled_dot_product_attention(query, key, value, mask=None, dropout=None):
     scores = torch.matmul(query, key.transpose(-2, -1)) / math.sqrt(d_k)
     if mask is not None:
         scores = scores.masked_fill(mask == 0, -1e9)
-    p_attn = torch.nn.functional.softmax(scores, dim=-1)
+    p_attn = F.softmax(scores, dim=-1)
     if dropout is not None:
         p_attn = dropout(p_attn)
     return torch.matmul(p_attn, value), p_attn
@@ -155,7 +155,7 @@ class PosEmbeddings(nn.Module):
     version that lives in T2T.  I have modified it to include the "normalization" step on the input embeddings
     internally as well.
     """
-    def __init__(self, embed, d_model, dropout, mxlen, max_timescale=1.0e4):
+    def __init__(self, embed, d_model, dropout, mxlen, max_timescale=1.0e4, gpu=False):
         """
 
         :param embed: The input is a normal embedding object
@@ -178,6 +178,25 @@ class PosEmbeddings(nn.Module):
         pe[:, 1::2] = torch.cos(position * inv_timescales)
         pe = pe.unsqueeze(0)
         self.register_buffer('pe', pe)
+        self.gpu = gpu
+
+    def cuda(self, device=None):
+        r"""Moves all model parameters and buffers to the GPU.
+
+        This also makes associated parameters and buffers different objects. So
+        it should be called before constructing optimizer if the module will
+        live on GPU while being optimized.
+
+        Arguments:
+            device (int, optional): if specified, all parameters will be
+                copied to that device
+
+        Returns:
+            Module: self
+        """
+        if self.gpu:
+            return self._apply(lambda t: t.cuda(device))
+        return self
 
     def forward(self, x):
         """Add a positional encoding to the embedding, followed by dropout
@@ -273,13 +292,13 @@ class Transformer(nn.Module, EncoderDecoder):
         self.d_ff = kwargs.get('d_ff', 2048)
         self.nlayers = kwargs.get('layers', kwargs.get('nlayers', 6))
         self.dropout = kwargs.get('dropout', 0.5)
+        emb_on_gpu = kwargs.get('embeddings_gpu', False)
         mxlen = kwargs.get('mxlen', 100)
-        self.pos_in = PosEmbeddings(embeddings_in, self.d_model, self.dropout, mxlen)
-        self.pos_out = PosEmbeddings(embeddings_out, self.d_model, self.dropout, mxlen)
+        self.pos_in = PosEmbeddings(embeddings_in, self.d_model, self.dropout, mxlen, gpu=emb_on_gpu)
+        self.pos_out = PosEmbeddings(embeddings_out, self.d_model, self.dropout, mxlen, gpu=emb_on_gpu)
         self.encoder = Encoder(EncoderLayer(self.num_heads, self.d_model, self.d_ff, self.dropout), self.nlayers)
         self.decoder = Decoder(DecoderLayer(self.num_heads, self.d_model, self.d_ff, self.dropout), self.nlayers)
         self.preds = nn.Linear(self.d_model, self.nc)
-        self.probs = nn.LogSoftmax()
 
     def get_src_vocab(self):
         return self.vocab1
@@ -342,7 +361,7 @@ class Transformer(nn.Module, EncoderDecoder):
 
     def prediction(self, output):
         # Reform batch as (T x B, D)
-        pred = self.probs(self.preds(output.view(output.size(0)*output.size(1),
+        pred = F.log_softmax(self.preds(output.view(output.size(0)*output.size(1),
                                                  -1)))
         pred = pred.view(output.size(0), output.size(1), -1)
         return pred
