@@ -87,7 +87,7 @@ class WordLanguageModel(AbstractLanguageModel):
         lm.word_vocab = word_vec.vocab
         vsz = word_vec.vsz + 1
 
-        with tf.name_scope("WordLUT"):
+        with tf.variable_scope("WordLUT"):
             Ww = tf.Variable(tf.constant(word_vec.weights, dtype=tf.float32), name="W")
             we0 = tf.scatter_update(Ww, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, word_vec.dsz]))
             with tf.control_dependencies([we0]):
@@ -161,14 +161,14 @@ class CharCompLanguageModel(AbstractLanguageModel):
         lm.pdrop_value = kwargs.get('pdrop', 0.5)
         lm.layers = kwargs.get('layers', kwargs.get('nlayers', 1))
         char_dsz = char_vec.dsz
-        with tf.name_scope("CharLUT"):
+        with tf.variable_scope("CharLUT"):
             Wch = tf.Variable(tf.constant(char_vec.weights, dtype=tf.float32), name="Wch", trainable=True)
             ech0 = tf.scatter_update(Wch, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, char_dsz]))
             word_char, wchsz = pool_chars(lm.xch, Wch, ech0, char_dsz, **kwargs)
 
         lm.use_words = kwargs.get('use_words', False)
         if lm.use_words:
-            with tf.name_scope("WordLUT"):
+            with tf.variable_scope("WordLUT"):
                 Ww = tf.Variable(tf.constant(word_vec.weights, dtype=tf.float32), name="W")
                 we0 = tf.scatter_update(Ww, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, word_vec.dsz]))
                 with tf.control_dependencies([we0]):

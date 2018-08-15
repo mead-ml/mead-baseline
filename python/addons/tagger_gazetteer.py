@@ -217,7 +217,7 @@ class RNNTaggerGazetteerModel(Tagger):
         model.gazette_vocab = gaz_vec.vocab
         seed = np.random.randint(10e8)
         if word_vec is not None:
-            with tf.name_scope("WordLUT"):
+            with tf.variable_scope("WordLUT"):
                 Ww = tf.Variable(tf.constant(word_vec.weights, dtype=tf.float32), name="W")
 
                 we0 = tf.scatter_update(Ww, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, word_vec.dsz]))
@@ -226,7 +226,7 @@ class RNNTaggerGazetteerModel(Tagger):
                     wembed = tf.nn.embedding_lookup(Ww, model.x, name="embeddings")
 
 
-        with tf.name_scope("GazLUT"):
+        with tf.variable_scope("GazLUT"):
             Wn = tf.Variable(tf.constant(gaz_vec.weights, dtype=tf.float32), name="W")
             ne0 = tf.scatter_update(Wn, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, gaz_vec.dsz]))
             with tf.control_dependencies([ne0]):

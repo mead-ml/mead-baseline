@@ -231,7 +231,7 @@ class Seq2SeqModel(EncoderDecoder):
 
         with tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE):
 
-            with tf.name_scope("LUT"):
+            with tf.variable_scope("LUT"):
                 if type(src_vocab_embed) is not dict:
                     Wi = tf.get_variable("Wi", initializer=tf.constant_initializer(src_vocab_embed.weights, dtype=tf.float32, verify_shape=True), shape=[len(model.vocab1), model.dsz])
                 else:
@@ -242,7 +242,7 @@ class Seq2SeqModel(EncoderDecoder):
                     Wo = tf.get_variable("Wo",initializer=tf.random_uniform_initializer(-unif, unif), shape=[len(model.vocab2), model.dsz])
                 embed_in = tf.nn.embedding_lookup(Wi, model.src)
 
-            with tf.name_scope("Recurrence"):
+            with tf.variable_scope("Recurrence"):
                 rnn_enc_tensor, final_encoder_state = model.encode(embed_in, model.src)
                 batch_sz = tf.shape(rnn_enc_tensor)[0]
                 with tf.variable_scope("dec", reuse=tf.AUTO_REUSE):
@@ -295,7 +295,7 @@ class Seq2SeqModel(EncoderDecoder):
                     else:
                         model.preds = final_outputs.rnn_output
                         best = final_outputs.sample_id
-            with tf.name_scope("Output"):
+            with tf.variable_scope("Output"):
                 model.best = tf.identity(best, name='best')
                 if beam_width > 1:
                     model.probs = tf.no_op(name='probs')
@@ -322,7 +322,7 @@ class Seq2SeqModel(EncoderDecoder):
         return cell
 
     def encode(self, embed_in, src):
-        with tf.name_scope('encode'):
+        with tf.variable_scope('encode'):
             # List to tensor, reform as (T, B, W)
             if self.rnntype == 'blstm':
                 nlayers_bi = int(self.nlayers / 2)

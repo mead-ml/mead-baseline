@@ -267,7 +267,7 @@ def highway_conns(inputs, wsz_all, n):
 
 
 def embed(x, vsz, dsz, initializer, finetune=True, scope="LUT"):
-    with tf.name_scope(scope):
+    with tf.variable_scope(scope):
         W = tf.get_variable("W",
                             initializer=initializer,
                             shape=[vsz, dsz], trainable=finetune)
