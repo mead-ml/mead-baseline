@@ -19,6 +19,7 @@ class SignatureInput(object):
 
     CLASSIFY_INPUT_KEY = tf.saved_model.signature_constants.CLASSIFY_INPUTS
     PREDICT_INPUT_KEY = 'tokens'
+    PREDICT_LENGTHS_TENSOR = 'lengths'
 
     def __init__(self, classify=None, predict=None, extra_features=[], model=None):
         """
@@ -36,7 +37,7 @@ class SignatureInput(object):
         if classify is not None:
             self.classify_sig = self._create_classify_sig(classify)
 
-        if not predict is not None and model:
+        if predict is None and model is not None:
             self.predict_sig = self._build_predict_signature_from_model(model)
         elif predict is not None:
             self.predict_sig = self._create_predict_sig(predict)
@@ -66,10 +67,7 @@ class SignatureInput(object):
     def _build_predict_signature_from_model(self, model):
         predict_tensors = {}
 
-        if self.predict:
-            predict_tensors[SignatureInput.PREDICT_INPUT_KEY] = tf.saved_model.utils.build_tensor_info(self.predict)
-
-        for v in self.input_list:
+        for v in self.input_list + [SignatureInput.PREDICT_LENGTHS_TENSOR]:
             try:
                 val = getattr(model, v)
                 predict_tensors[v] = tf.saved_model.utils.build_tensor_info(val)
@@ -100,19 +98,18 @@ class TensorFlowExporter(mead.exporters.Exporter):
         except NotFoundError:
             saver.restore(sess, basename + ".model")
 
-    def run(self, model_file, embeddings, output_dir, model_version, **kwargs):
+    def run(self, model_file, embeddings, output_dir, model_version, use_preproc):
         embeddings_set = mead.utils.index_by_label(embeddings)
         with tf.Graph().as_default():
             config_proto = tf.ConfigProto(allow_soft_placement=True)
             with tf.Session(config=config_proto) as sess:
-                use_preproc = kwargs.get('use_preproc', True)
-                sig_input, sig_output = self._run(sess, model_file, embeddings_set, use_preproc=use_preproc)
+                sig_input, sig_output, sig_name = self._run(sess, model_file, embeddings_set, use_preproc=use_preproc)
                 
                 output_path = os.path.join(tf.compat.as_bytes(output_dir),
                                    tf.compat.as_bytes(str(model_version)))
                 
                 print('Exporting trained model to %s' % output_path)
-                builder = self._create_builder(sess, output_path, sig_input, sig_output, 'predict_text')
+                builder = self._create_builder(sess, output_path, sig_input, sig_output, sig_name)
                 builder.save()
                 print('Successfully exported model to %s' % output_dir)
 
@@ -227,6 +224,23 @@ the embedding is not of type 'word' or 'char', please fill in and put \
     def _initialize_embedding(self, dimensions_size, vocab):
         return baseline.RandomInitVecModel(dimensions_size, vocab, False)
 
+    def _run_preproc(self, model_params, vocabs, model_file, indices, extra_features_required):
+        serialized_tf_example, tf_example = self._create_example(extra_features_required)
+        raw_posts = tf_example[FIELD_NAME]
+        
+        preprocessed, lengths = self._create_preprocessed_input(tf_example, 
+                                                            model_file, 
+                                                            indices,
+                                                            extra_features_required)
+    
+        model_params["x"] = preprocessed['word']
+        if 'char' in vocabs:
+            model_params['xch'] = preprocessed['char']
+        for other in extra_features_required:
+            model_params[other] = preprocessed[other]
+
+        return serialized_tf_example, tf_example, raw_posts, lengths
+
     def _create_preprocessed_input(self, tf_example, 
                                    model_file, 
                                    indices, 
@@ -307,23 +321,6 @@ class ClassifyTensorFlowExporter(TensorFlowExporter):
     def __init__(self, task):
         super(ClassifyTensorFlowExporter, self).__init__(task)
 
-    def _run_preproc(self, model_params, vocabs, model_file, indices, extra_features_required):
-        serialized_tf_example, tf_example = self._create_example(extra_features_required)
-        raw_posts = tf_example[FIELD_NAME]
-        
-        preprocessed, lengths = self._create_preprocessed_input(tf_example, 
-                                                            model_file, 
-                                                            indices,
-                                                            extra_features_required)
-    
-        model_params["x"] = preprocessed['word']
-        if 'char' in vocabs:
-            model_params['xch'] = preprocessed['char']
-        for other in extra_features_required:
-            model_params[other] = preprocessed[other]
-
-        return serialized_tf_example, tf_example, raw_posts
-
     def _run(self, sess, model_file, embeddings_set, use_preproc=True):
         indices, vocabs = self._create_vocabs(model_file)
         extra_features_required = [x for x in vocabs.keys() if x not in TensorFlowExporter.DEFAULT_VOCABS]
@@ -336,7 +333,7 @@ class ClassifyTensorFlowExporter(TensorFlowExporter):
         model_params = self.task.config_params["model"]
 
         if use_preproc:
-            serialized_tf_example, tf_example, raw_posts = self._run_preproc(model_params, 
+            serialized_tf_example, tf_example, raw_posts, lengths = self._run_preproc(model_params, 
                                                                             vocabs, 
                                                                             model_file, 
                                                                             indices, 
@@ -365,7 +362,7 @@ class ClassifyTensorFlowExporter(TensorFlowExporter):
 
         sig_output = SignatureOutput(classes, values)
 
-        return sig_input, sig_output
+        return sig_input, sig_output, 'predict_text'
 
 
 @export(__all__)
@@ -375,41 +372,34 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
         super(TaggerTensorFlowExporter, self).__init__(task)
 
     def _run(self, sess, model_file, embeddings_set, use_preproc=True):
-
+        mxlen, mxwlen = self._get_max_lens(model_file)
         indices, vocabs = self._create_vocabs(model_file)
-
         self.assign_char_lookup()
 
         labels = self.load_labels(model_file)
 
         extra_features_required = [x for x in vocabs.keys() if x not in TensorFlowExporter.DEFAULT_VOCABS]
-        serialized_tf_example, tf_example = self._create_example(extra_features_required)
-        raw_posts = tf_example[FIELD_NAME]
+        model_params = self.task.config_params["model"]
+
+        lengths = []
 
         if use_preproc:
-            serialized_tf_example, tf_example, raw_posts = self._run_preproc(model_params, 
+            serialized_tf_example, tf_example, raw_posts, lengths = self._run_preproc(model_params, 
                                                                             vocabs, 
                                                                             model_file, 
                                                                             indices, 
                                                                             extra_features_required)
-        
+            model_params["lengths"] = lengths
 
-        embeddings = self._initialize_embeddings_map(vocabs, embeddings_set)
 
-        model_params = self.task.config_params["model"]
-        model_params["x"] = preprocessed['word']
-        model_params["xch"] = preprocessed['char']
-
-        for other in extra_features_required:
-            model_params[other] = preprocessed[other]
-
-        model_params["lengths"] = lengths
         model_params["pkeep"] = 1
         model_params["sess"] = sess
         model_params["maxs"] = mxlen
         model_params["maxw"] = mxwlen
         model_params['span_type'] = self.task.config_params['train'].get('span_type')
         print(model_params)
+
+        embeddings = self._initialize_embeddings_map(vocabs, embeddings_set)
         model = baseline.tf.tagger.create_model(labels, embeddings, **model_params)
         model.create_loss()
 
@@ -441,7 +431,7 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
 
         sig_output = SignatureOutput(classes, values)
 
-        return sig_input, sig_output
+        return sig_input, sig_output, 'tag_text'
 
 
 @export(__all__)
@@ -563,4 +553,4 @@ class Seq2SeqTensorFlowExporter(TensorFlowExporter):
         sig_input = SignatureInput(serialized_tf_example, raw_posts)
         sig_output = SignatureOutput(classes, None)
 
-        return sig_input, sig_output
+        return sig_input, sig_outputl, 'suggest_text'
