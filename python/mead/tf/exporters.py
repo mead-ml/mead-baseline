@@ -3,80 +3,16 @@ import tensorflow as tf
 import json
 import baseline
 import os
-from collections import namedtuple
 from tensorflow.python.framework.errors_impl import NotFoundError
 import mead.utils
 import mead.exporters
+from mead.tf.signatures import SignatureInput, SignatureOutput
 from mead.tf.preprocessor import PreprocessorCreator
 from baseline.utils import export
 from baseline.tf.tfy import get_vocab_file_suffixes
 FIELD_NAME = 'text/tokens'
 
 __all__ = []
-
-class SignatureInput(object):
-    BASE_TENSOR_INPUT_NAMES = ['x', 'xch']
-
-    CLASSIFY_INPUT_KEY = tf.saved_model.signature_constants.CLASSIFY_INPUTS
-    PREDICT_INPUT_KEY = 'tokens'
-
-    def __init__(self, classify=None, predict=None, extra_features=[], model=None):
-        """
-        accepts the preprocessed tensors for classify and predict along with
-        a list of extra features that a model may define.
-
-        Because we allow random extra features, we inspect the model for
-        the related tensor. this is only currently supported for the predict
-        endpoint.
-        """
-        self.input_list = SignatureInput.BASE_TENSOR_INPUT_NAMES + extra_features
-
-        self.extra_features = extra_features
-
-        if classify is not None:
-            self.classify_sig = self._create_classify_sig(classify)
-
-        if predict is None and model is not None:
-            self.predict_sig = self._build_predict_signature_from_model(model)
-        elif predict is not None:
-            self.predict_sig = self._create_predict_sig(predict)
-
-    @property
-    def classify(self):
-        return self.classify_sig or {}
-
-    def _create_classify_sig(self, tensor):
-        res = {
-            SignatureInput.CLASSIFY_INPUT_KEY: 
-                tf.saved_model.utils.build_tensor_info(tensor)
-        }
-        return res
-
-    @property
-    def predict(self):
-        return self.predict_sig
-
-    def _create_predict_sig(self, tensor):
-        res = {
-            SignatureInput.PREDICT_INPUT_KEY: 
-                tf.saved_model.utils.build_tensor_info(tensor)
-        }
-        return res
-
-    def _build_predict_signature_from_model(self, model):
-        predict_tensors = {}
-
-        for v in self.input_list:
-            try:
-                val = getattr(model, v)
-                predict_tensors[v] = tf.saved_model.utils.build_tensor_info(val)
-            except:
-                pass # ugh
-
-        return predict_tensors
-
-SignatureOutput = namedtuple("SignatureOutput", ("classes", "scores"))
-
 
 @export(__all__)
 class TensorFlowExporter(mead.exporters.Exporter):
@@ -87,6 +23,9 @@ class TensorFlowExporter(mead.exporters.Exporter):
 
     def _run(self, sess, model_file, embeddings_set):
         pass
+
+    def get_raw_post(self, tf_example):
+        return tf_example[FIELD_NAME]
 
     def restore_model(self, sess, basename):
         saver = tf.train.Saver()
@@ -155,23 +94,6 @@ class TensorFlowExporter(mead.exporters.Exporter):
 
         tf_example = tf.parse_example(serialized_tf_example, feature_configs)
         return serialized_tf_example, tf_example
-
-    def _create_prediction_input(self, post_mappings, extra_embed_names):
-        """
-        builds tensor information for inputs to the saved model.
-
-        This assumes that tokens will be provided, and any additional
-        embedding information will come at the token level.
-        """
-        inputs = {}
-        raw_post = post_mappings[FIELD_NAME]
-        inputs['tokens'] = tf.saved_model.utils.build_tensor_info(raw_post)
-
-        for extra in extra_embed_names:
-            raw = post_mappings[extra]
-            inputs[extra] = tf.saved_model.utils.build_tensor_info(raw)
-
-        return inputs
 
     def _create_vocabs(self, model_file):
         """
@@ -274,7 +196,7 @@ the embedding is not of type 'word' or 'char', please fill in and put \
             mxwlen = state['mxwlen']
         return mxlen, mxwlen
 
-    def _create_builder(self, sess, output_path, sig_input, sig_output, sig_name, export_scores=True):
+    def _create_builder(self, sess, output_path, sig_input, sig_output, sig_name):
         """
         create the SavedModelBuilder with standard endpoints.
 
@@ -290,7 +212,7 @@ the embedding is not of type 'word' or 'char', please fill in and put \
             tf.saved_model.signature_constants.CLASSIFY_OUTPUT_CLASSES:
                         classes_output_tensor
         }
-        if export_scores:
+        if sig_output.scores is not None:
             scores_output_tensor = tf.saved_model.utils.build_tensor_info(sig_output.scores)
             output_def_map[tf.saved_model.signature_constants.CLASSIFY_OUTPUT_SCORES] = scores_output_tensor
 
