@@ -19,7 +19,6 @@ class SignatureInput(object):
 
     CLASSIFY_INPUT_KEY = tf.saved_model.signature_constants.CLASSIFY_INPUTS
     PREDICT_INPUT_KEY = 'tokens'
-    PREDICT_LENGTHS_TENSOR = 'lengths'
 
     def __init__(self, classify=None, predict=None, extra_features=[], model=None):
         """
@@ -67,7 +66,7 @@ class SignatureInput(object):
     def _build_predict_signature_from_model(self, model):
         predict_tensors = {}
 
-        for v in self.input_list + [SignatureInput.PREDICT_LENGTHS_TENSOR]:
+        for v in self.input_list:
             try:
                 val = getattr(model, v)
                 predict_tensors[v] = tf.saved_model.utils.build_tensor_info(val)
@@ -427,7 +426,7 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
         if use_preproc:
             sig_input = SignatureInput(serialized_tf_example, raw_posts, extra_features_required)
         else:
-            sig_input = SignatureInput(None, None, extra_features_required, model=model)
+            sig_input = SignatureInput(None, None, extra_features_required + ['lengths'], model=model)
 
         sig_output = SignatureOutput(classes, values)
 
