@@ -1,10 +1,11 @@
 import os
 import sys
 import json
-import logging
 import hashlib
+import logging
 import zipfile
 import importlib
+from contextlib import contextmanager
 from functools import partial, update_wrapper, wraps
 import numpy as np
 import addons
@@ -32,6 +33,25 @@ def export(obj, all_list=None):
 
 
 exporter = export(__all__)
+
+
+@contextmanager
+def redirect(from_stream, to_stream):
+    original_from = from_stream.fileno()
+    saved_from = os.dup(original_from)
+    os.dup2(to_stream.fileno(), original_from)
+    try:
+        yield
+        os.dup2(saved_from, original_from)
+    except Exception as e:
+        os.dup2(saved_from, original_from)
+        raise(e)
+
+
+@contextmanager
+def suppress_output():
+    with open(os.devnull, 'w') as devnull, redirect(sys.stdout, devnull), redirect(sys.stderr, devnull):
+        yield
 
 
 class JSONFormatter(logging.Formatter):
@@ -794,6 +814,7 @@ def f_score(overlap_count, gold_count, guess_count, f=1):
         return 0.0
     f = (1. + beta_sq) * (precision * recall) / (beta_sq * precision + recall)
     return f
+
 
 @exporter
 def unzip_model(path):

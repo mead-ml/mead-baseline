@@ -1,11 +1,11 @@
+import os
+import time
 import tensorflow as tf
 import numpy as np
-from baseline.utils import to_spans, f_score, listify, revlut, get_model_file
-from baseline.progress import create_progress_bar
 from baseline.tf.tfy import optimizer
+from baseline.progress import create_progress_bar
 from baseline.train import EpochReportingTrainer, create_trainer
-import os
-from baseline.utils import zip_model
+from baseline.utils import to_spans, f_score, listify, revlut, get_model_file
 
 
 class TaggerEvaluatorTf(object):
@@ -200,8 +200,11 @@ def fit(model, ts, vs, es, **kwargs):
         trainer.recover_last_checkpoint()
         # What to do about overloading this??
         evaluator = TaggerEvaluatorTf(model, span_type, verbose)
+        start = time.time()
         test_metrics = evaluator.test(es, conll_output=conll_output, txts=txts)
+        duration = time.time() - start
         for reporting in reporting_fns:
             reporting(test_metrics, 0, 'Test')
+        trainer.log.debug({'phase': 'Test', 'time': duration})
     if kwargs.get("model_zip", False):
         zip_model(model_file)

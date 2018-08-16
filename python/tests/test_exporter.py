@@ -1,14 +1,14 @@
+import os
 import pytest
 import numpy as np
 from mock import patch, Mock
+tf = pytest.importorskip('tensorflow')
 import baseline
+import baseline.tf.tagger
+from baseline.w2v import Word2VecModel
+from mead.tasks import TaggerTask
 from mead.tf.exporters import TaggerTensorFlowExporter
 from mead.tf.exporters import FIELD_NAME
-from mead.tasks import TaggerTask
-import tensorflow as tf
-import baseline.tf.tagger
-import os
-from baseline.w2v import Word2VecModel
 from tf_session import session_context, session_tf
 
 TAGGER_MODEL = os.path.join('test_data','tagger_model', 'tagger-model-tf-21855')

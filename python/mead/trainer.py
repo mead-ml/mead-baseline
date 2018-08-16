@@ -14,6 +14,7 @@ def main():
     parser.add_argument('--task', help='task to run', choices=['classify', 'tagger', 'seq2seq', 'lm'])
     parser.add_argument('--gpus', help='Number of GPUs (defaults to 1)', type=int)
     parser.add_argument('--reporting', help='reporting hooks', nargs='+')
+    parser.add_argument('--time', help='Log the time it takes to run epochs.', action='store_true')
     args, reporting_args = parser.parse_known_args()
 
     config_params = read_config_stream(args.config)
@@ -24,7 +25,7 @@ def main():
 
     task_name = config_params.get('task', 'classify') if args.task is None else args.task
     print('Task: [{}]'.format(task_name))
-    task = mead.Task.get_task_specific(task_name, args.logging, args.settings)
+    task = mead.Task.get_task_specific(task_name, args.logging, args.settings, args.time)
     task.read_config(config_params, args.datasets, reporting_args=reporting_args, config_file=args.config)
     task.initialize(args.embeddings)
     task.train()

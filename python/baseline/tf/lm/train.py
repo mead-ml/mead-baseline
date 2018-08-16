@@ -2,6 +2,8 @@ from baseline.tf.tfy import *
 from baseline.utils import listify, get_model_file
 from baseline.train import Trainer, create_trainer
 import os
+import time
+import logging
 
 
 class LanguageModelTrainerTf(Trainer):
@@ -11,6 +13,7 @@ class LanguageModelTrainerTf(Trainer):
         self.model = model
         self.loss = model.create_loss()
         self.global_step, self.train_op = optimizer(self.loss, **kwargs)
+        self.log = logging.getLogger('baseline.reporting')
 
     def checkpoint(self):
         self.model.saver.save(self.model.sess, "./tf-lm-%d/lm" % os.getpid(), global_step=self.global_step)
@@ -38,6 +41,7 @@ class LanguageModelTrainerTf(Trainer):
         step = 0
         metrics = {}
 
+        start = time.time()
         for batch_dict in ts:
 
             feed_dict = self.model.make_input(batch_dict, True)
@@ -60,13 +64,14 @@ class LanguageModelTrainerTf(Trainer):
                 metrics['avg_loss'] = total_loss / iters
                 metrics['perplexity'] = np.exp(total_loss / iters)
                 for reporting in reporting_fns:
-                    reporting(metrics, global_step, 'Train')
+                    reporting(metrics, global_step.item(), 'Train')
 
+        self.log.debug({'phase': 'Train', "time": time.time() - start})
         metrics['avg_loss'] = total_loss / iters
         metrics['perplexity'] = np.exp(total_loss / iters)
 
         for reporting in reporting_fns:
-            reporting(metrics, global_step, 'Train')
+            reporting(metrics, global_step.item(), 'Train')
         return metrics
 
     def test(self, ts, reporting_fns, phase):
@@ -90,6 +95,7 @@ class LanguageModelTrainerTf(Trainer):
 
         step = 0
         metrics = {}
+        start = time.time()
 
         for batch_dict in ts:
 
@@ -107,6 +113,7 @@ class LanguageModelTrainerTf(Trainer):
             iters += self.model.mxlen
             step += 1
 
+        self.log.debug({'phase': phase, "time": time.time() - start})
         metrics['avg_loss'] = total_loss / iters
         metrics['perplexity'] = np.exp(total_loss / iters)
 

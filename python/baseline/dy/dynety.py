@@ -211,7 +211,11 @@ def Convolution1d(fsz, cmotsz, dsz, pc, strides=(1, 1, 1, 1), name="conv"):
         """
         c = dy.conv2d_bias(input_, weight, bias, strides, is_valid=False)
         activation = dy.rectify(c)
-        mot = dy.reshape(dy.max_dim(activation, 1), (cmotsz,))
+        # dy.max_dim(x, d=0) is currently slow (see https://github.com/clab/dynet/issues/1011)
+        # So we do the max using max pooling instead.
+        ((_, seq_len, _), _) = activation.dim()
+        pooled = dy.maxpooling2d(activation, [1, seq_len, 1], strides)
+        mot = dy.reshape(pooled, (cmotsz,))
         return mot
 
     return conv

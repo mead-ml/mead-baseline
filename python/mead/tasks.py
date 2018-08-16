@@ -19,7 +19,7 @@ exporter = export(__all__)
 class Task(object):
     TASK_REGISTRY = {}
 
-    def __init__(self, logger_config, mead_settings_config=None):
+    def __init__(self, logger_config, mead_settings_config=None, time=False):
         super(Task, self).__init__()
         self.config_params = None
         self.ExporterType = None
@@ -38,10 +38,10 @@ class Task(object):
         else:
             self.data_download_cache = os.path.expanduser(self.mead_settings_config['datacache'])
         print("using {} as data/embeddings cache".format(self.data_download_cache))
-        self._configure_logger(logger_config)
-        self.task_name = None
+        self._configure_logger(logger_config, time)
+        self.name = None
 
-    def _configure_logger(self, logger_config):
+    def _configure_logger(self, logger_config, time=False):
         """Use the logger file (logging.json) to configure the log, but overwrite the filename to include the PID
 
         :param logger_config: The logging configuration JSON or file containing JSON
@@ -54,18 +54,21 @@ class Task(object):
         else:
             raise Exception("Expected logger config file or a JSON object")
 
+        if time:
+            config['handlers']['reporting_file_handler']['level'] = 'DEBUG'
+            config['loggers']['baseline.reporting']['level'] = 'DEBUG'
         config['handlers']['reporting_file_handler']['filename'] = 'reporting-{}.log'.format(os.getpid())
         logging.config.dictConfig(config)
 
     @staticmethod
-    def get_task_specific(task, logging_config, mead_config):
+    def get_task_specific(task, logging_config, mead_config, time=False):
         """Get the task from the task registry associated with the name
 
         :param task: The task name
         :param logging_config: The configuration to read from
         :return:
         """
-        config = Task.TASK_REGISTRY[task](logging_config, mead_config)
+        config = Task.TASK_REGISTRY[task](logging_config, mead_config, time=time)
         return config
 
     def read_config(self, config_params, datasets_index, **kwargs):
@@ -253,6 +256,7 @@ class ClassifierTask(Task):
                 dy_params.init()
                 import baseline.dy.classify as classify
                 from baseline.data import reverse_2nd as rev2nd
+                self.config_params['preproc']['trim'] = True
             else:
                 print('TensorFlow backend')
                 import baseline.tf.classify as classify
@@ -436,12 +440,14 @@ class EncoderDecoderTask(Task):
             if backend == 'dynet':
                 print('Dynet backend')
                 import _dynet
+                self.config_params['preproc']['trim'] = True
                 dy_params = _dynet.DynetParams()
                 dy_params.from_args()
                 dy_params.set_requested_gpus(1)
                 dy_params.init()
                 import baseline.dy.seq2seq as seq2seq
                 self.config_params['preproc']['show_ex'] = baseline.dy.show_examples_dynet
+                self.config_params['preproc']['trim'] = True
             else:
                 import baseline.tf.seq2seq as seq2seq
                 self.config_params['preproc']['show_ex'] = baseline.tf.show_examples_tf
@@ -529,7 +535,7 @@ class LanguageModelingTask(Task):
                 dy_params.from_args()
                 dy_params.set_requested_gpus(1)
                 dy_params.init()
-                self.config_params['preproc']['trim'] = False
+                self.config_params['preproc']['trim'] = True
                 import baseline.dy.lm as lm
             else:
                 print('TensorFlow backend')
