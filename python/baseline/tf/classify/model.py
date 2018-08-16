@@ -9,7 +9,7 @@ from baseline.model import Classifier, load_classifier_model, create_classifier_
 from baseline.tf.tfy import stacked_lstm, parallel_conv, get_vocab_file_suffixes, pool_chars, embed
 from baseline.version import __version__
 import os
-
+from baseline.utils import zip_model, unzip_model
 
 class ClassifyParallelModel(Classifier):
 
@@ -172,6 +172,9 @@ class WordClassifierBase(Classifier):
     def save(self, basename):
         self.save_md(basename)
         self.save_values(basename)
+        zip_model(basename)
+
+
 
     def create_test_loss(self):
         with tf.name_scope("test_loss"):
@@ -254,6 +257,7 @@ class WordClassifierBase(Classifier):
         
         :return: A restored model
         """
+        basename = unzip_model(basename)
         sess = kwargs.get('session', kwargs.get('sess', tf.Session()))
         model = cls()
         with open(basename + '.saver') as fsv:
@@ -590,8 +594,8 @@ BASELINE_CLASSIFICATION_MODELS = {
 BASELINE_CLASSIFICATION_LOADERS = {
     'default': ConvModel.load,
     'lstm': LSTMModel.load,
-    'nbow': NBowModel.create,
-    'nbowmax': NBowMaxModel.create
+    'nbow': NBowModel.load,
+    'nbowmax': NBowMaxModel.load
 }
 
 

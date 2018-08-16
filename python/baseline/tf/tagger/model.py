@@ -5,7 +5,7 @@ from tensorflow.python.platform import gfile
 from tensorflow.contrib.layers import fully_connected, xavier_initializer
 from baseline.model import Tagger, create_tagger_model, load_tagger_model
 from baseline.tf.tfy import *
-
+from baseline.utils import zip_model, unzip_model
 
 class RNNTaggerModel(Tagger):
 
@@ -66,9 +66,11 @@ class RNNTaggerModel(Tagger):
     def save(self, basename):
         self.save_md(basename)
         self.save_values(basename)
+        zip_model(basename)
 
     @staticmethod
     def load(basename, **kwargs):
+        basename = unzip_model(basename)
         model = RNNTaggerModel()
         model.sess = kwargs.get('sess', tf.Session())
         checkpoint_name = kwargs.get('checkpoint_name', basename)

@@ -23,7 +23,7 @@
 	"label": "w2v-gn"
     },
     "train": {
-	"epochs": 2,
+	"epochs": 1,
 	"optim": "adadelta",
 	"eta": 1.0,
 	"model_base": "./models/sst2",
