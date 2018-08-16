@@ -66,16 +66,16 @@ class Seq2SeqBase(nn.Module, EncoderDecoder):
         src = input[0]
         dst = input[1]
         src_len = input[2]
-        rnn_enc_seq, final_encoder_state = self.encode(src, src_len)
-        return self.decode(rnn_enc_seq, src_len, final_encoder_state, dst)
+        rnn_enc_tbh, final_encoder_state = self.encode(src, src_len)
+        return self.decode(rnn_enc_tbh, src_len, final_encoder_state, dst)
 
-    def encode(self, src, src_len):
-        src = src.transpose(0, 1).contiguous()
+    def encode(self, src_bth, src_len):
+        src = src_bth.transpose(0, 1).contiguous()
         embed_in_seq = self.embed_in(src)
         packed = torch.nn.utils.rnn.pack_padded_sequence(embed_in_seq, src_len.data.tolist())
-        output, hidden = self.encoder_rnn(packed)
-        output, _ = torch.nn.utils.rnn.pad_packed_sequence(output)
-        return output, hidden
+        output_tbh, hidden = self.encoder_rnn(packed)
+        output_tbh, _ = torch.nn.utils.rnn.pad_packed_sequence(output_tbh)
+        return output_tbh, hidden
 
     def input_i(self, embed_i, output_i):
         pass
@@ -86,30 +86,30 @@ class Seq2SeqBase(nn.Module, EncoderDecoder):
     def attn(self, output_t, context, src_mask=None):
         pass
 
-    def decode_rnn(self, context, h_i, output_i, dst, src_mask):
-        embed_out_seq = self.embed_out(dst)
-        context_transpose = context.transpose(0, 1)
+    def decode_rnn(self, context_tbh, h_i, output_i, dst, src_mask):
+        embed_out_tbh = self.embed_out(dst)
+        context_bth = context_tbh.transpose(0, 1)
         outputs = []
 
-        for i, embed_i in enumerate(embed_out_seq.split(1)):
+        for i, embed_i in enumerate(embed_out_tbh.split(1)):
             embed_i = self.input_i(embed_i, output_i)
             output_i, h_i = self.decoder_rnn(embed_i, h_i)
-            output_i = self.attn(output_i, context_transpose, src_mask)
+            output_i = self.attn(output_i, context_bth, src_mask)
             output_i = self.dropout(output_i)
             outputs += [output_i]
 
         outputs = torch.stack(outputs)
         return outputs, h_i
 
-    def decode(self, context, src_len, final_encoder_state, dst):
+    def decode(self, context_tbh, src_len, final_encoder_state, dst):
 
         src_mask = sequence_mask(src_len)
         if self.gpu:
             src_mask = src_mask.cuda()
         dst = dst.transpose(0, 1).contiguous()
 
-        h_i, output_i = self.bridge(final_encoder_state, context)
-        output, _ = self.decode_rnn(context, h_i, output_i, dst, src_mask)
+        h_i, output_i = self.bridge(final_encoder_state, context_tbh)
+        output, _ = self.decode_rnn(context_tbh, h_i, output_i, dst, src_mask)
         pred = self.prediction(output)
         return pred.transpose(0, 1).contiguous()
 

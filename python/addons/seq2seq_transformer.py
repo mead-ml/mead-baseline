@@ -292,10 +292,10 @@ class Transformer(nn.Module, EncoderDecoder):
         self.d_ff = kwargs.get('d_ff', 2048)
         self.nlayers = kwargs.get('layers', kwargs.get('nlayers', 6))
         self.dropout = kwargs.get('dropout', 0.5)
-        emb_on_gpu = kwargs.get('embeddings_gpu', False)
+        self.emb_on_gpu = kwargs.get('embeddings_gpu', False)
         mxlen = kwargs.get('mxlen', 100)
-        self.pos_in = PosEmbeddings(embeddings_in, self.d_model, self.dropout, mxlen, gpu=emb_on_gpu)
-        self.pos_out = PosEmbeddings(embeddings_out, self.d_model, self.dropout, mxlen, gpu=emb_on_gpu)
+        self.pos_in = PosEmbeddings(embeddings_in, self.d_model, self.dropout, mxlen=mxlen, gpu=self.emb_on_gpu)
+        self.pos_out = PosEmbeddings(embeddings_out, self.d_model, self.dropout, mxlen=mxlen, gpu=self.emb_on_gpu)
         self.encoder = Encoder(EncoderLayer(self.num_heads, self.d_model, self.d_ff, self.dropout), self.nlayers)
         self.decoder = Decoder(DecoderLayer(self.num_heads, self.d_model, self.d_ff, self.dropout), self.nlayers)
         self.preds = nn.Linear(self.d_model, self.nc)
@@ -332,8 +332,9 @@ class Transformer(nn.Module, EncoderDecoder):
             tgt = tgt[:, 1:]
 
         if self.gpu:
-            src = src.cuda()
-            dst = dst.cuda()
+            if self.emb_on_gpu:
+                src = src.cuda()
+                dst = dst.cuda()
             tgt = tgt.cuda()
 
         return Variable(src), Variable(dst), Variable(tgt)
