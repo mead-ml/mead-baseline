@@ -253,7 +253,7 @@ class RNNTaggerModel(Tagger):
         model.char_vocab = char_vec.vocab
         seed = np.random.randint(10e8)
         if word_vec is not None:
-            with tf.name_scope("WordLUT"):
+            with tf.variable_scope("WordLUT"):
                 Ww = tf.Variable(tf.constant(word_vec.weights, dtype=tf.float32), name="W")
 
                 we0 = tf.scatter_update(Ww, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, word_vec.dsz]))

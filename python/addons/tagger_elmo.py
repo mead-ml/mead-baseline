@@ -272,7 +272,7 @@ class RNNTaggerELMoModel(Tagger):
                 "sequence_len": model.lengths
             }, signature="tokens", as_dict=True)["elmo"]
 
-        with tf.name_scope("WordLUT"):
+        with tf.variable_scope("WordLUT"):
             Ww = tf.Variable(tf.constant(word_vec.weights, dtype=tf.float32), name="W")
             we0 = tf.scatter_update(Ww, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, word_vec.dsz]))
             with tf.control_dependencies([we0]):

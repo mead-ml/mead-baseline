@@ -381,7 +381,7 @@ class WordClassifierBase(Classifier):
                 model.mxwlen = int(kwargs.get('mxwlen', 40))
                 model.xch = kwargs.get('xch', tf.placeholder(tf.int32, [None, model.mxlen, model.mxwlen], name='xch'))
                 char_dsz = c2v.dsz
-                with tf.name_scope("CharLUT"):
+                with tf.variable_scope("CharLUT"):
                     Wch = tf.get_variable("Wch",
                                           initializer=tf.constant_initializer(c2v.weights, dtype=tf.float32,
                                                                               verify_shape=True),
@@ -398,7 +398,7 @@ class WordClassifierBase(Classifier):
             with tf.contrib.slim.arg_scope(
                     [fully_connected],
                     weights_initializer=xavier_init):
-                with tf.name_scope("output"):
+                with tf.variable_scope("output"):
                     model.logits = tf.identity(fully_connected(stacked, nc, activation_fn=None), name="logits")
                     model.best = tf.argmax(model.logits, 1, name="best")
         model.sess = sess
