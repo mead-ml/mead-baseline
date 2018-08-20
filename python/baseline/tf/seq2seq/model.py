@@ -302,7 +302,7 @@ class Seq2SeqModel(EncoderDecoder):
                 else:
                     model.probs = tf.map_fn(lambda x: tf.nn.softmax(x, name='probs'), model.preds)
 
-            writer = tf.summary.FileWriter('blah', model.sess.graph)
+            # writer = tf.summary.FileWriter('blah', model.sess.graph)
             return model
 
     def set_saver(self, saver):
