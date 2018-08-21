@@ -38,7 +38,7 @@ def df_summary_exp(df):
         .rename(columns={'len': 'num_exps', 'amean': 'mean', 'amin': 'min', 'amax': 'max'})
 
 
-def df_get_results(result_frame, dataset, num_exps, metric, sort):
+def df_get_results(result_frame, dataset, num_exps, num_exps_per_config, metric, sort):
     datasets = result_frame.dataset.unique()
     if dataset not in datasets:
         return None
@@ -46,11 +46,11 @@ def df_get_results(result_frame, dataset, num_exps, metric, sort):
     if dsr.empty:
         return None
     df = pd.DataFrame()
-    if num_exps is not None:
+    if num_exps_per_config is not None:
         for gname, rframe in result_frame.groupby("sha1"):
             rframe = rframe.copy()
             rframe['date'] =pd.to_datetime(rframe.date)
-            rframe = rframe.sort_values(by='date', ascending=False).head(int(num_exps))
+            rframe = rframe.sort_values(by='date', ascending=False).head(int(num_exps_per_config))
             df = df.append(rframe)
         result_frame = df
     result_frame = result_frame.drop(columns=["id"])
@@ -63,6 +63,8 @@ def df_get_results(result_frame, dataset, num_exps, metric, sort):
         result_frame = result_frame.sort_values([(sort, 'mean')], ascending=sort_ascending(metric))
     if result_frame.empty:
         return None
+    if num_exps is not None:
+        result_frame = result_frame.head(num_exps)
     return result_frame
 
 
@@ -70,10 +72,6 @@ def df_experimental_details(result_frame, sha1, users, sort, metric, num_exps):
     result_frame = result_frame[result_frame.sha1 == sha1]
     if result_frame.empty:
         return None
-    if num_exps is not None:
-        result_frame = result_frame.copy()
-        result_frame['date'] =pd.to_datetime(result_frame.date)
-        result_frame = result_frame.sort_values(by='date', ascending=False).head(int(num_exps))
     if users is not None:
         df = pd.DataFrame()
         for user in users:
@@ -86,4 +84,6 @@ def df_experimental_details(result_frame, sha1, users, sort, metric, num_exps):
         result_frame = result_frame.sort_values([sort], ascending=sort_ascending(metric))
     if result_frame.empty:
         return None
+    if num_exps is not None:
+        result_frame = result_frame.head(num_exps)
     return result_frame

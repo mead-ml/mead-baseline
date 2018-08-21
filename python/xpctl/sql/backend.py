@@ -207,7 +207,7 @@ class SQLRepo(ExperimentRepo):
         else:
             return [x for x in allmetrics if x.label in metrics]
 
-    def get_results(self, task, dataset, event_type, num_exps = None, metric=None, sort=None):
+    def get_results(self, task, dataset, event_type, num_exps=None, num_exps_per_config=None, metric=None, sort=None):
         session = self.Session()
         results = []
         metrics = listify(metric)
@@ -227,7 +227,7 @@ class SQLRepo(ExperimentRepo):
         cols = ['id', 'username', 'label', 'dataset', 'sha1', 'date'] + metrics_to_add
         result_frame = pd.DataFrame(results, columns=cols)
         if not result_frame.empty:
-            return df_get_results(result_frame, dataset, num_exps, metric, sort)
+            return df_get_results(result_frame, dataset, num_exps, num_exps_per_config, metric, sort)
         return None
 
     def experiment_details(self, user, metric, sort, task, event_type, sha1, n):
