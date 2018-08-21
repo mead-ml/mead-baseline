@@ -188,14 +188,14 @@ class MongoRepo(ExperimentRepo):
         result_frame = self._generate_data_frame(coll, metrics=metrics, query=query, projection=projection, event_type=event_type)
         return df_experimental_details(result_frame, sha1, users, sort, metric, n)
 
-    def get_results(self, task, dataset, event_type, num_exps = None, metric=None, sort=None):
+    def get_results(self, task, dataset, event_type,  num_exps=None, num_exps_per_config=None, metric=None, sort=None):
         metrics = listify(metric)
         coll = self.db[task]
         query = self._update_query({}, [], dataset)
         projection = self._update_projection(event_type=event_type)
         result_frame = self._generate_data_frame(coll, metrics=metrics, query=query, projection=projection, event_type=event_type)
         if not result_frame.empty:
-            return df_get_results(result_frame, dataset, num_exps, metric, sort)
+            return df_get_results(result_frame, dataset, num_exps, num_exps_per_config, metric, sort)
         return None
 
     def config2dict(self, task, sha1):

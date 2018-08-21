@@ -99,15 +99,17 @@ class ExperimentRepo(object):
         """
         pass
 
-    def get_results(self, username, metric, sort, dataset, task, event_type):
+    def get_results(self, task, dataset, event_type, num_exps, num_exps_per_config, metric, sort):
         """Get results from the database
 
-        :param username: (``str``) The username
+        :param task: (``str``) The taskname
+        :param dataset: (``str``) The dataset
+        :param event_type: (``str``) event types to listen for
+        :param num_exps: (``str``) number of results to show
+        :param num_exps_per_config: (``str``) number of results to show per config
+        :param event_type: (``str``) event types to listen for
         :param metric: (``str``) The metric to use
         :param sort: (``str``) The field to sort on
-        :param dataset: (``str``) The dataset
-        :param task: (``str``) The task
-        :param event_type: (``str``) event types to listen for
         :return: A result DataFrame
         """
         pass
