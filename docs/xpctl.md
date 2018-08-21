@@ -70,7 +70,7 @@ xpctl >
   Optionally: 
   - `--metrics`: choose metric(s) to show. results ll be sorted on the first metric. 
   - `--sort`: output all metrics but sort on one. 
-  - `--nconfig`: shows the last _n_ experimental results, sorted by time decreasing (per config).
+  - `--nconfig`: shows the statistical summaries for the last (sorted by time decreasing) _n_ experimental results per config. .
   - `--n`: shows _n_ results. 
   - `--event_type`: show results for train/dev/test datasets. defaults to _test_. 
   - `--output`: put the results in an output file.
