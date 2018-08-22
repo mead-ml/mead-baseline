@@ -1,0 +1,8 @@
+[
+    {
+     "train_file": "/data/datasets/test/toy.conll",
+     "valid_file": "/data/datasets/test/toy.conll",
+     "test_file": "/data/datasets/test/toy.conll",
+     "label": "test"
+    }
+]

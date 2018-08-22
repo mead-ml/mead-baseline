@@ -1,0 +1,7 @@
+[
+    {
+        "label": "glove-6B-100",
+        "file": "/data/embeddings/glove.6B.100d.txt",
+        "dsz": 100
+    }
+]

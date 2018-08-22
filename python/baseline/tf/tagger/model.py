@@ -253,19 +253,14 @@ class RNNTaggerModel(Tagger):
         model.char_vocab = char_vec.vocab
         seed = np.random.randint(10e8)
         if word_vec is not None:
-            with tf.name_scope("WordLUT"):
-                Ww = tf.Variable(tf.constant(word_vec.weights, dtype=tf.float32), name="W")
-
-                we0 = tf.scatter_update(Ww, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, word_vec.dsz]))
-
-                with tf.control_dependencies([we0]):
-                    wembed = tf.nn.embedding_lookup(Ww, model.x, name="embeddings")
+            word_embeddings = embed(model.x, len(word_vec.vocab), word_vec.dsz,
+                                    initializer=tf.constant_initializer(word_vec.weights, dtype=tf.float32, verify_shape=True))
 
         Wch = tf.Variable(tf.constant(char_vec.weights, dtype=tf.float32), name="Wch")
         ce0 = tf.scatter_update(Wch, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, char_dsz]))
 
         word_char, _ = pool_chars(model.xch, Wch, ce0, char_dsz, **kwargs)
-        joint = word_char if word_vec is None else tf.concat(values=[wembed, word_char], axis=2)
+        joint = word_char if word_vec is None else tf.concat(values=[word_embeddings, word_char], axis=2)
         embedseq = tf.nn.dropout(joint, model.pkeep)
 
         if rnntype == 'blstm':

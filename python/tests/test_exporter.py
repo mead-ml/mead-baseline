@@ -11,7 +11,7 @@ import os
 from baseline.w2v import Word2VecModel
 from tf_session import session_context, session_tf
 
-TAGGER_MODEL = os.path.join('test_data','tagger_model', 'tagger-model-tf-21275')
+TAGGER_MODEL = os.path.join('test_data','tagger_model', 'tagger-model-tf-21855')
 TAGGER_MODEL_FILES = os.path.join(os.path.dirname(__file__), TAGGER_MODEL)
 FAKE_FILE = './test_data/not_here'
 TEST_EMBEDDINGS = './test_data/glove_test.txt'
@@ -57,41 +57,9 @@ def tagger_task():
 
 @pytest.fixture
 def tagger_exporter():
-    return TaggerTensorFlowExporter(tagger_task())
-
-@pytest.fixture
-def words():
-    m = Mock()
-    dsz = 100
-    m.dsz = dsz
-    m.weights = np.zeros(np.array([26872, dsz]), dtype=np.float32)
-    m.vocab = {
-        '<PAD>': 0,
-        'test': 1
-    }
+    m = TaggerTensorFlowExporter(tagger_task())
     return m
 
-@pytest.fixture
-def chars():
-    m = Mock()
-    m.dsz = 30
-    m.weights = np.zeros(np.array([86, 30]), dtype=np.float32)
-    m.vocab = {
-        'a': 0,
-        'b': 1
-    }
-    return m
-
-@pytest.fixture
-def embeds():
-    return {
-        'word': words(),
-        'char': chars()
-    }
-
-@pytest.fixture
-def graph():
-    return tf.Graph()
 
 class ExporterTest(tf.test.TestCase):
 
@@ -127,75 +95,42 @@ class ExporterTest(tf.test.TestCase):
 
             assert 'test' in example
 
-    # def test_predict_has_tokens(self):
-    #     """
-    #     using a regular session as called from inside the model,
-    #     run _run(), returning the signature for the exported model
+    def test_predict_has_tokens(self):
+        """
+        using a regular session as called from inside the model,
+        run _run(), returning the signature for the exported model
         
-    #     """
-    #     with self.test_session(graph=tf.Graph()) as sess:
-    #         exporter = tagger_exporter()
-    #         embed = embeds()
-    #         exporter._initialize_embeddings_map=Mock(
-    #             return_value=embed
-    #         )
+        we check if the preprocessing fields returned in our mocked
+        _run_preproc() method are used to call the signature.
+        """
+        with self.test_session() as sess:
+            exporter = tagger_exporter()
+            mocked_model = Mock()
+            exporter._create_model = Mock(return_value=(None, None, mocked_model))
+            exporter.restore_model = Mock()
+            exporter._run_preproc = Mock(return_value=('srl', 'ex', 'raw', 'lengths'))
+
             
-    #         sig_in, sig_out, sig_name = exporter._run(sess, TAGGER_MODEL_FILES, None, use_preproc=True)
+            with patch('mead.tf.exporters.SignatureInput') as sigin:
+                sig_in, sig_out, sig_name = exporter._run(sess, TAGGER_MODEL_FILES, None, use_preproc=True)
 
-    #     assert 'tokens' in sig_in.predict
-    #     tf.reset_default_graph()
-
-
-    # def test_predict_tensor_info(self):
-    #     sess = tf.Session()
-    #     try:
-    #         exporter = tagger_exporter()
-    #         embed = embeds()
-    #         exporter._initialize_embeddings_map=Mock(
-    #             return_value=embed
-    #         )
-
-    #         serialized_example, example = exporter._create_example([])
-    #         predict_truth = tf.saved_model.utils.build_tensor_info(example[FIELD_NAME])
-            
-    #         sig_in, sig_out, sig_name = exporter._run(sess, TAGGER_MODEL_FILES, embeds(), use_preproc=True)
-
-    #         assert isinstance(sig_in.predict['tokens'], tf.TensorInfo)
-    #         assert sig_in.predict['tokens'].name.split('/')[1] == predict_truth.name.split("/")[1]
-
-    #     finally:
-    #         sess.close()
-
-    # def test_predict_without_preproc(self):
-    #     with self.test_session(graph=tf.Graph()) as sess:
-    #         exporter = tagger_exporter()
-    #         embed = embeds()
-    #         exporter._initialize_embeddings_map=Mock(
-    #             return_value=embed
-    #         )
-
-    #         sig_in, sig_out, sig_name = exporter._run(sess, TAGGER_MODEL_FILES, None, use_preproc=False)
-    #         assert isinstance(sig_in.predict['x'], tf.TensorInfo)
-    #     tf.reset_default_graph()
+                sigin.assert_called_once_with('srl', 'raw', [])
 
     def test_predict_info_without_preproc(self):
         """
-        the model that is being loaded specifies a mxlen
-        of -1, so we use a max len as defined by the data.
-
-        I know this is 124, so we inspect the tensorInfo here
-        to check if we have a tensor of the right shape.
-
-        This is a proxy to assume that the model.x tensor
-        shape matches this shape. I can't check equality here
-        directly.
+        test that we don't use preprocessing, and that our
+        signature input object is called assuming as much.
         """
-        with self.test_session(graph=tf.Graph()) as sess:
+        with self.test_session() as sess:
             exporter = tagger_exporter()
-            embed = embeds()
-            exporter._initialize_embeddings_map=Mock(
-                return_value=embed
-            )
+            mocked_model = Mock()
+            exporter._create_model = Mock(return_value=(None, None, mocked_model))
+            exporter.restore_model = Mock()
+            exporter._run_preproc = Mock(return_value=('srl', 'ex', 'raw', 'lengths'))
 
-            sig_in, sig_out, sig_name = exporter._run(sess, TAGGER_MODEL_FILES, None, use_preproc=False)
-            assert sig_in.predict['x'].tensor_shape.dim[1].size == 124
+
+            with patch('mead.tf.exporters.SignatureInput') as sigin:
+                sig_in, sig_out, sig_name = exporter._run(sess, TAGGER_MODEL_FILES, None, use_preproc=False)
+
+                assert not exporter._run_preproc.called
+                sigin.assert_called_once_with(None, None, ['lengths'], model=mocked_model)

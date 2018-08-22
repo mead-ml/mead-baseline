@@ -117,6 +117,9 @@ class TensorFlowExporter(mead.exporters.Exporter):
         self.upchars_lut = tf.contrib.lookup.index_table_from_tensor(mapping=upchars, num_oov_buckets=1, default_value=-1)
 
     def _initialize_embeddings_map(self, vocabs, embeddings_set):
+        """
+        generate a mapping of vocab_typ (word, char) to the embedding object.
+        """
         embeddings = {}
 
         for vocab_type in vocabs.keys():
@@ -292,6 +295,34 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
     def __init__(self, task):
         super(TaggerTensorFlowExporter, self).__init__(task)
 
+
+    def _create_model(self, vocabs, labels, embeddings_set, mxlen, model_params):
+        embeddings = self._initialize_embeddings_map(vocabs, embeddings_set)
+        model = baseline.tf.tagger.create_model(labels, embeddings, **model_params)
+        model.create_loss()
+
+        softmax_output = tf.nn.softmax(model.probs)
+        values, indices = tf.nn.top_k(softmax_output, 1)
+
+        start_np = np.full((1, 1, len(labels)), -1e4, dtype=np.float32)
+        start_np[:, 0, labels['<GO>']] = 0
+        start = tf.constant(start_np)
+        model.probs = tf.concat([start, model.probs], 1)
+
+        if model.crf is True:
+            indices, _ = tf.contrib.crf.crf_decode(model.probs, model.A, tf.constant([mxlen + 1]))## We are assuming the batchsz is 1 here
+            indices = indices[:, 1:]
+
+        list_of_labels = [''] * len(labels)
+        for label, idval in labels.items():
+            list_of_labels[idval] = label
+
+        class_tensor = tf.constant(list_of_labels)
+        table = tf.contrib.lookup.index_to_string_table_from_tensor(class_tensor)
+        classes = table.lookup(tf.to_int64(indices))
+
+        return classes, values, model
+
     def _run(self, sess, model_file, embeddings_set, use_preproc=True):
         mxlen, mxwlen = self._get_max_lens(model_file)
         indices, vocabs = self._create_vocabs(model_file)
@@ -320,29 +351,11 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
         model_params['span_type'] = self.task.config_params['train'].get('span_type')
         print(model_params)
 
-        embeddings = self._initialize_embeddings_map(vocabs, embeddings_set)
-        model = baseline.tf.tagger.create_model(labels, embeddings, **model_params)
-        model.create_loss()
-
-        softmax_output = tf.nn.softmax(model.probs)
-        values, indices = tf.nn.top_k(softmax_output, 1)
-
-        start_np = np.full((1, 1, len(labels)), -1e4, dtype=np.float32)
-        start_np[:, 0, labels['<GO>']] = 0
-        start = tf.constant(start_np)
-        model.probs = tf.concat([start, model.probs], 1)
-
-        if model.crf is True:
-            indices, _ = tf.contrib.crf.crf_decode(model.probs, model.A, tf.constant([mxlen + 1]))## We are assuming the batchsz is 1 here
-            indices = indices[:, 1:]
-
-        list_of_labels = [''] * len(labels)
-        for label, idval in labels.items():
-            list_of_labels[idval] = label
-
-        class_tensor = tf.constant(list_of_labels)
-        table = tf.contrib.lookup.index_to_string_table_from_tensor(class_tensor)
-        classes = table.lookup(tf.to_int64(indices))
+        classes, values, model = self._create_model(vocabs, 
+                                                    labels, 
+                                                    embeddings_set, 
+                                                    mxlen, 
+                                                    model_params)
         self.restore_model(sess, model_file)
         
         if use_preproc:
