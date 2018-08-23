@@ -766,6 +766,6 @@ def zip_model(path):
     model_files = [x for x in os.listdir(".") if path[2:] in x]
     z = zipfile.ZipFile("{}.zip".format(path), "w")
     for f in model_files:
-        z.write(file)
-        os.remove(file)
+        z.write(f)
+        os.remove(f)
     z.close()
