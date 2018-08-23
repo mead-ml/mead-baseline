@@ -1,10 +1,15 @@
 import os
 import sys
+import json
+import logging
 import importlib
 from functools import partial, update_wrapper, wraps
 import numpy as np
 import addons
 import json
+import hashlib
+import zipfile
+
 
 __all__ = []
 
@@ -26,6 +31,14 @@ def export(obj, all_list=None):
 
 exporter = export(__all__)
 
+
+class JSONFormatter(logging.Formatter):
+    def format(self, record):
+        try:
+            if isinstance(record.msg, (list, dict)):
+                record.msg = json.dumps(record.msg)
+        finally:
+            return super(JSONFormatter, self).format(record)
 
 @exporter
 def crf_mask(vocab, span_type, s_idx, e_idx, pad_idx=None):
@@ -741,3 +754,30 @@ def f_score(overlap_count, gold_count, guess_count, f=1):
     f = (1. + beta_sq) * (precision * recall) / (beta_sq * precision + recall)
     return f
 
+@exporter
+def unzip_model(path):
+    """If the path for a model file is a zip file, unzip it in /tmp and return the unzipped path"""
+    if path.endswith("zip"):
+        with open(path, 'rb') as f:
+            sha1 = hashlib.sha1(f.read()).hexdigest()
+        temp_dir = os.path.join("/tmp/", sha1)
+        if not os.path.exists(temp_dir):
+            print("unzipping model")
+            with zipfile.ZipFile(path, "r") as zip_ref:
+                zip_ref.extractall(temp_dir)
+        if len(os.listdir(temp_dir)) == 1:  # a directory was zipped v files
+            temp_dir = os.path.join(temp_dir, os.listdir(temp_dir)[0])
+        path = os.path.join(temp_dir, [x[:-6] for x in os.listdir(temp_dir) if 'index' in x][0])
+    return path
+
+
+@exporter
+def zip_model(path):
+    """zips the model files"""
+    print("zipping model files")
+    model_files = [x for x in os.listdir(".") if path[2:] in x]
+    z = zipfile.ZipFile("{}.zip".format(path), "w")
+    for f in model_files:
+        z.write(f)
+        os.remove(f)
+    z.close()

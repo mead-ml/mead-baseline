@@ -67,7 +67,8 @@ class RNNTaggerModel(nn.Module, Tagger):
         model.char_vocab = char_vec.vocab
         model.cembed = pytorch_embedding(char_vec)
         model.dropout = nn.Dropout(pdrop)
-        model.rnn, out_hsz = pytorch_lstm(model.wchsz + word_dsz, hsz, rnntype, nlayers, pdrop)
+        model.rnn = LSTMEncoder(model.wchsz + word_dsz, hsz, rnntype, nlayers, pdrop)
+        out_hsz = model.rnn.outsz
         model.decoder = nn.Sequential()
         if model.proj is True:
             append2seq(model.decoder, (
@@ -155,11 +156,7 @@ class RNNTaggerModel(nn.Module, Tagger):
 
         dropped = self.dropout(words_over_time)
         # output = (T, B, H)
-
-        packed = torch.nn.utils.rnn.pack_padded_sequence(dropped, lengths.tolist())
-        output, hidden = self.rnn(packed)
-        output, _ = torch.nn.utils.rnn.pad_packed_sequence(output)
-
+        output = self.rnn(dropped, lengths)
         # stack (T x B, H)
         #output = self.dropout(output)
         decoded = self.decoder(output.view(output.size(0)*output.size(1), -1))
@@ -174,9 +171,6 @@ class RNNTaggerModel(nn.Module, Tagger):
         x = input[0].transpose(0, 1).contiguous()
         xch = input[1].transpose(0, 1).contiguous()
         lengths = input[2]
-        batchsz = xch.size(1)
-        seqlen = xch.size(0)
-
         probv = self._compute_unary_tb(x, xch, lengths)
         if self.use_crf is True:
             lengths = lengths.cuda()

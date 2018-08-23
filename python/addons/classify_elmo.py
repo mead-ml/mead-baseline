@@ -177,7 +177,7 @@ class ELMoClassifier(Classifier):
         xavier_init = xavier_initializer(True, seed)
 
         # Use pre-trained embeddings from word2vec
-        with tf.name_scope("LUT"):
+        with tf.variable_scope("LUT"):
             W = tf.Variable(tf.constant(w2v.weights, dtype=tf.float32), name="W", trainable=finetune)
             e0 = tf.scatter_update(W, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, dsz]))
             with tf.control_dependencies([e0]):
@@ -206,7 +206,7 @@ class ELMoClassifier(Classifier):
                 [fully_connected],
                 weights_initializer=xavier_init):
 
-            with tf.name_scope("output"):
+            with tf.variable_scope("output"):
                 model.logits = tf.identity(fully_connected(stacked, nc, activation_fn=None), name="logits")
                 model.best = tf.argmax(model.logits, 1, name="best")
         model.sess = sess

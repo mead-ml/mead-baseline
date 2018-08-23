@@ -166,7 +166,7 @@ load_tagger_model = exporter(
     wrapped_partial(
         load_model,
         task_fn=load_user_tagger_model,
-        name='load_classifier_model'
+        name='load_tagger_model'
     )
 )
 load_seq2seq_model = exporter(

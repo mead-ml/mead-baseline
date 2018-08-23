@@ -6,7 +6,7 @@ from baseline.tf.tfy import optimizer
 from baseline.train import Trainer, create_trainer
 import time
 import os
-
+from baseline.utils import zip_model
 
 class Seq2SeqTrainerTf(Trainer):
 
@@ -149,4 +149,5 @@ def fit(model, ts, vs, es=None, **kwargs):
 
         trainer.recover_last_checkpoint()
         trainer.test(es, reporting_fns, phase='Test')
-
+    if kwargs.get("model_zip", False):
+        zip_model(model_file)

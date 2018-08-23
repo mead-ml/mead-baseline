@@ -448,6 +448,37 @@ class BahdanauAttention(BaseAttention):
         return attended
 
 
+class NoamOpt(object):
+
+    """Introduced in the Transformer paper, increase learning rate linearly during warmup, then decrease
+
+    The optimizer wraps Adam, and increases the learning rate linearly during the warmup period,
+    and then decreases it proportional to the sqrt of the step
+
+    """
+    def __init__(self, d_model, params, warmup_steps=4000):
+        self.optimizer = torch.optim.Adam(params, lr=0, betas=(0.9, 0.98), eps=1e-9)
+        self.step_num = 0
+        self.warmup_steps = warmup_steps
+        self.d_model = d_model
+        self.current_lr = 0
+
+    def step(self):
+        """Runs at every step and updates the learning rate
+
+        :return:
+        """
+        self.step_num += 1
+        lr = self.d_model**(-0.5) * min(self.step_num**(-0.5), self.step_num*self.warmup_steps**(-.5))
+        for p in self.optimizer.param_groups:
+            p['lr'] = lr
+        self.current_lr = lr
+        self.optimizer.step()
+
+    def zero_grad(self):
+        self.optimizer.zero_grad()
+
+
 def pytorch_prepare_optimizer(model, **kwargs):
 
     mom = kwargs.get('mom', 0.9)
@@ -464,6 +495,11 @@ def pytorch_prepare_optimizer(model, **kwargs):
         optimizer = torch.optim.RMSprop(model.parameters(), lr=eta)
     elif optim == 'asgd':
         optimizer = torch.optim.ASGD(model.parameters(), lr=eta)
+    elif optim == 'noam':
+        print('Using NoamOpt, lr will be ignored')
+        d_model = kwargs['d_model']
+        warmup_steps = kwargs.get('warmup_steps', 4000)
+        optimizer = NoamOpt(d_model, model.parameters(), warmup_steps)
     else:
         optimizer = torch.optim.SGD(model.parameters(), lr=eta, momentum=mom)
 

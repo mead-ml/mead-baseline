@@ -2,7 +2,7 @@
 
 In [mead](mead.md) we have separate **tasks** such as classify or tagger. Each task can have multiple **experiments**, each corresponding to a separate model or different hyperparameters of the same model. An experiment is uniquely identified by the id. The configuration for an experiment is uniquely identified by hash(_sha1_) of the config file. 
 
-After an experiment is done, use `xpctl` to report the results to a mongodb server. Then use it to analyze, compare and export your experimental results. It can be used in `repl` mode (inside a shell) and `command` mode. Most examples shown here uses xpctl in the `command` mode: (`xpctl command arguments options` or `xpctl --host localhost --port 27107 command argument(s) option(s)` )
+After an experiment is done, use `xpctl` to report the results to a database server. Then use it to analyze, compare and export your experimental results. It can be used in `repl` mode (inside a shell) and `command` mode. Most examples shown here uses xpctl in the `command` mode: (`xpctl command argument(s) option(s)` or `xpctl --host <your-host> --port <your-port> --dbtype <your-db> command argument(s) option(s)` )
 
 ### Contents
 - [**Dependencies**](#dependencies)
@@ -38,7 +38,7 @@ If you use [docker for baseline](docker.md), `xpctl` will be automatically insta
  
 ### REPL Mode and Commands
  
-**Starting**: use `--host`,`--port`,`--user` and `password` to specify the host, port, username and password for mongodb. Else, you can pass a config file with the option `--config`. `xpctl` assumes that the config file is located at `~/xpctlcred.json` (in which case you can just use the command `xpctl` w/o specifying any option) but it can be saved anywhere you want.
+**Starting**: use `--host`,`--port`,`--user`, `password` and `dbtype` to specify the host, port, username, password and dbtype for the database server. Else, you can pass a config file with the option `--config`. `xpctl` assumes that the config file is located at `~/xpctlcred.json` (in which case you can just use the command `xpctl` w/o specifying any option) but it can be saved anywhere you want.
 ```
 (dl) home:home$ xpctl --host localhost
 setting dbhost to localhost dbport to y
@@ -70,7 +70,8 @@ xpctl >
   Optionally: 
   - `--metrics`: choose metric(s) to show. results ll be sorted on the first metric. 
   - `--sort`: output all metrics but sort on one. 
-  - `--n`: shows the last _n_ experimental results (per config). 
+  - `--nconfig`: shows the statistical summaries for the last (sorted by time decreasing) _n_ experimental results per config. .
+  - `--n`: shows _n_ results. 
   - `--event_type`: show results for train/dev/test datasets. defaults to _test_. 
   - `--output`: put the results in an output file.
 
@@ -145,6 +146,18 @@ xpctl > results classify SST2 --metric f1 --metric acc --sort f1 --n 1
  8ab6ab6ee8fdf14b111223e2edf48750c30c7e51      1.0  0.871499 NaN  0.871499  0.871499      1.0  0.871570 NaN  0.871570  0.871570
  72f2cce2ee4bcc755e527e03e05788442b658355      1.0  0.851099 NaN  0.851099  0.851099      1.0  0.853117 NaN  0.853117  0.853117
  xpctl > 
+
+```
+
+```
+xpctl > results classify SST2 --metric f1 --metric acc --sort f1 --n 1
+db mongo connection successful with [host]: x.x.x, [port]: port_num
+db mongo connection successful with [host]: x.x.x, [port]: port_num
+                                               f1                                        acc                                  
+                                         num_exps      mean std       min       max num_exps      mean std       min       max
+sha1                                                                                                                          
+9ceabcb89c8bcb5500371c1898238d2973b12cdc      1.0  0.883342 NaN  0.883342  0.883342      1.0  0.881933 NaN  0.881933  0.881933
+xpctl > 
 
 ```
 
@@ -233,12 +246,12 @@ Options:
   --cbase TEXT   path to the base structure for the model checkpoint
                  files:such as ../tagger/tagger-model-tf-11967 or
                  /home/ds/tagger/tagger-model-tf-11967 
-  --cstore TEXT  location of the model checkpoint store (default /data/model-checkpoints in your machine)
+  --cstore TEXT  location of the model checkpoint store (default <store-path> in your machine)
   --help         Show this message and exit.
 ```
 
 ```
-xpctl > putresult --user ijindal classify /home/ijindal/dev/work/baseline/python/mead/config/sst2.json /home/ijindal/dev/work/baseline/python/mead/reporting-4923.log  testClassify
+xpctl > putresult --user ijindal classify <path>/config/sst2.json <path>/reporting-4923.log  testClassify
 
 db mongo connection successful with [host]: x.x.x, [port]: y
 updating results for existing task [classify] in host [x.x.x]
@@ -247,7 +260,7 @@ results updated, the new results are stored with the record id: 5b1aacb933ed5901
 ```
 This record id is then used in *putmodel*
 
-- **putmodel**: save model files in a persistent location. The location can be provided by the option -cstore, by default it is `/data/model-checkpoints` directory in your machine. This is tested for `tensorflow` models, not `pytorch` ones yet. 
+- **putmodel**: save model files in a persistent location. The location can be provided by the option -cstore, by default it is `<store-path>` directory in your machine. This is tested for `tensorflow` models, not `pytorch` ones yet. 
 ```
 xpctl > putmodel --help
 Usage: putmodel [OPTIONS] TASK ID CBASE
@@ -262,19 +275,19 @@ Options:
 ```
 
 ```
- xpctl > putmodel classify 5b1aacb933ed5901dc545af8 /home/ijindal/dev/work/baseline/python/mead/classify-model-tf-4923/classify-model-tf-4923
+ xpctl > putmodel classify 5b1aacb933ed5901dc545af8 <path>/classify-model-tf-4923/classify-model-tf-4923
 
  db mongo connection successful with [host]: x.x.x, [port]: y
-writing model file: [/home/ijindal/dev/work/baseline/python/mead/classify-model-tf-4923/classify-model-tf-4923.saver] to store: [/data/model-checkpoints/67105e2108885c5ee08e211537fbda602f2ba254/1]
-writing model file: [/home/ijindal/dev/work/baseline/python/mead/classify-model-tf-4923/classify-model-tf-4923.model.index] to store: [/data/model-checkpoints/67105e2108885c5ee08e211537fbda602f2ba254/1]
-writing model file: [/home/ijindal/dev/work/baseline/python/mead/classify-model-tf-4923/classify-model-tf-4923.graph] to store: [/data/model-checkpoints/67105e2108885c5ee08e211537fbda602f2ba254/1]
-writing model file: [/home/ijindal/dev/work/baseline/python/mead/classify-model-tf-4923/classify-model-tf-4923.model.data-00000-of-00001] to store: [/data/model-checkpoints/67105e2108885c5ee08e211537fbda602f2ba254/1]
-writing model file: [/home/ijindal/dev/work/baseline/python/mead/classify-model-tf-4923/classify-model-tf-4923.model.meta] to store: [/data/model-checkpoints/67105e2108885c5ee08e211537fbda602f2ba254/1]
-writing model file: [/home/ijindal/dev/work/baseline/python/mead/classify-model-tf-4923/classify-model-tf-4923.labels] to store: [/data/model-checkpoints/67105e2108885c5ee08e211537fbda602f2ba254/1]
-writing model file: [/home/ijindal/dev/work/baseline/python/mead/classify-model-tf-4923/classify-model-tf-4923.vocab] to store: [/data/model-checkpoints/67105e2108885c5ee08e211537fbda602f2ba254/1]
+writing model file: [<path>/classify-model-tf-4923/classify-model-tf-4923.saver] to store: [<store-path>/67105e2108885c5ee08e211537fbda602f2ba254/1]
+writing model file: [<path>/classify-model-tf-4923/classify-model-tf-4923.model.index] to store: [<store-path>/67105e2108885c5ee08e211537fbda602f2ba254/1]
+writing model file: [<path>/classify-model-tf-4923/classify-model-tf-4923.graph] to store: [<store-path>/67105e2108885c5ee08e211537fbda602f2ba254/1]
+writing model file: [<path>/classify-model-tf-4923/classify-model-tf-4923.model.data-00000-of-00001] to store: [<store-path>/67105e2108885c5ee08e211537fbda602f2ba254/1]
+writing model file: [<path>/classify-model-tf-4923/classify-model-tf-4923.model.meta] to store: [<store-path>/67105e2108885c5ee08e211537fbda602f2ba254/1]
+writing model file: [<path>/classify-model-tf-4923/classify-model-tf-4923.labels] to store: [<store-path>/67105e2108885c5ee08e211537fbda602f2ba254/1]
+writing model file: [<path>/classify-model-tf-4923/classify-model-tf-4923.vocab] to store: [<store-path>/67105e2108885c5ee08e211537fbda602f2ba254/1]
 zipping model files
 zipped file written, model directory removed
-database updated with /data/model-checkpoints/67105e2108885c5ee08e211537fbda602f2ba254/1.zip
+database updated with <store-path>/67105e2108885c5ee08e211537fbda602f2ba254/1.zip
 
 ```
 ##### Exporting
@@ -293,7 +306,7 @@ xpctl > getmodelloc classify 5b1aacb933ed5901dc545af8
 
 db mongo connection successful with [host]: x.x.x, [port]: y
 db mongo connection successful with [host]: x.x.x, [port]: y
-model loc is /data/model-checkpoints/67105e2108885c5ee08e211537fbda602f2ba254/1.zip
+model loc is <store-path>/67105e2108885c5ee08e211537fbda602f2ba254/1.zip
 
 ```
 
@@ -309,7 +322,7 @@ Options:
 Here `sha1` is the model-checkpoint id.
 
 ```
-xpctl > config2json classify 67105e2108885c5ee08e211537fbda602f2ba254 /home/ijindal/dev/work/baseline/python/mead/c_SST2.json
+xpctl > config2json classify 67105e2108885c5ee08e211537fbda602f2ba254 <path>/c_SST2.json
 
 db mongo connection successful with [host]: x.x.x, [port]: y
 db mongo connection successful with [host]: x.x.x, [port]: y
@@ -318,112 +331,13 @@ db mongo connection successful with [host]: x.x.x, [port]: y
 
 ##### Summary
 
-- **xpsummary**: Provides a statistical summary for an experiment. An experiment is defined by a (task, dataset, config) triple.
-
-```
-xpctl > help xpsummary
-Usage: xpsummary [OPTIONS] TASK DATASET SHA1
-
-  Provides a statistical summary for an experiment. An experiment is defined
-  by a (task, dataset, config) triple. Shows the average, min, max and std
-  dev for an experiment performed multiple times using the same config. Optionally provide event_type, i.e., train/ dev/ test. 
-
-Options:
-  --metric TEXT      list of metrics (prec, recall, f1, accuracy),[multiple]:
-                     --metric f1 --metric acc
-  --event_type TEXT  train/ dev/ test
-  --help             Show this message and exit.
-xpctl > 
-```
-```
-xpctl > xpsummary tagger conll 0d5627bfed6cd0435d362332935db8fad98dda39
-db mongo connection successful with [host]: x.x.x, [port]: y
-db mongo connection successful with [host]: x.x.x, [port]: y
-                                               f1                                              acc                                        
-                                         num_exps      mean       std       min       max num_exps      mean       std       min       max
-sha1                                                                                                                                      
-0d5627bfed6cd0435d362332935db8fad98dda39      2.0  0.905886  0.003213  0.903613  0.908158      2.0  0.980906  0.000636  0.980456  0.981356
-xpctl > xpsummary tagger conll 0d5627bfed6cd0435d362332935db8fad98dda39 --metric f1
-db mongo connection successful with [host]: x.x.x, [port]: y
-db mongo connection successful with [host]: x.x.x, [port]: y
-                                               f1                                        
-                                         num_exps      mean       std       min       max
-sha1                                                                                     
-0d5627bfed6cd0435d362332935db8fad98dda39      2.0  0.905886  0.003213  0.903613  0.908158
-xpctl > xpsummary tagger conll 0d5627bfed6cd0435d362332935db8fad98dda39 --event_type train
-db mongo connection successful with [host]: x.x.x, [port]: y
-db mongo connection successful with [host]: x.x.x, [port]: y
-                                         avg_loss                                        
-                                         num_exps      mean       std       min       max
-sha1                                                                                     
-0d5627bfed6cd0435d362332935db8fad98dda39    200.0  0.182984  0.311575  0.029169  2.681302
-xpctl > 
-```
-- **tasksummary**: Provides a statistical summary for a problem . A problem is defined by a (task, dataset) tuple.
-```
-xpctl > help tasksummary
-Usage: tasksummary [OPTIONS] TASK DATASET
-
-  Provides a statistical summary for a problem . An problem is defined by a
-  (task, dataset) tuple. For each config used in the task, shows the
-  average, min, max and std dev and number of experiments done using the
-  config. Optionally: a. --metrics: choose metric(s) to show. results ll be
-  sorted on the first metric. b. --sort output all metrics but sort on one.
-
-Options:
-  --metric TEXT      list of metrics (prec, recall, f1, accuracy),[multiple]:
-                     --metric f1 --metric acc
-  --event_type TEXT  train/ dev/ test
-  --sort TEXT        specify one metric to sort the results
-  --help             Show this message and exit.
-xpctl > 
-
-```
-
-```
-xpctl > tasksummary tagger conll 
-db mongo connection successful with [host]: x.x.x, [port]: y
-db mongo connection successful with [host]: x.x.x, [port]: y
-                                               f1                                              acc                                        
-                                         num_exps      mean       std       min       max num_exps      mean       std       min       max
-sha1                                                                                                                                      
-0a1dbc8cfa7eef3763c4246b57de75aada1e5d81      1.0  0.908834       NaN  0.908834  0.908834      1.0  0.980864       NaN  0.980864  0.980864
-0d5627bfed6cd0435d362332935db8fad98dda39      2.0  0.905886  0.003213  0.903613  0.908158      2.0  0.980906  0.000636  0.980456  0.981356
-56834f7ec17423f600f99ce446b0b2e5f1a186ab      1.0  0.900045       NaN  0.900045  0.900045      1.0  0.980104       NaN  0.980104  0.980104
-b42634a6a40cb08a257294ee1dfd47b3ac6d7f2f      1.0  0.825529       NaN  0.825529  0.825529      1.0  0.972304       NaN  0.972304  0.972304
-xpctl > tasksummary tagger conll --sort f1
-db mongo connection successful with [host]: x.x.x, [port]: y
-db mongo connection successful with [host]: x.x.x, [port]: y
-                                               f1                                              acc                                        
-                                         num_exps      mean       std       min       max num_exps      mean       std       min       max
-sha1                                                                                                                                      
-0a1dbc8cfa7eef3763c4246b57de75aada1e5d81      1.0  0.908834       NaN  0.908834  0.908834      1.0  0.980864       NaN  0.980864  0.980864
-0d5627bfed6cd0435d362332935db8fad98dda39      2.0  0.905886  0.003213  0.903613  0.908158      2.0  0.980906  0.000636  0.980456  0.981356
-56834f7ec17423f600f99ce446b0b2e5f1a186ab      1.0  0.900045       NaN  0.900045  0.900045      1.0  0.980104       NaN  0.980104  0.980104
-b42634a6a40cb08a257294ee1dfd47b3ac6d7f2f      1.0  0.825529       NaN  0.825529  0.825529      1.0  0.972304       NaN  0.972304  0.972304
-xpctl > tasksummary tagger conll --metric f1
-db mongo connection successful with [host]: x.x.x, [port]: y
-db mongo connection successful with [host]: x.x.x, [port]: y
-                                               f1                                        
-                                         num_exps      mean       std       min       max
-sha1                                                                                     
-0a1dbc8cfa7eef3763c4246b57de75aada1e5d81      1.0  0.908834       NaN  0.908834  0.908834
-0d5627bfed6cd0435d362332935db8fad98dda39      2.0  0.905886  0.003213  0.903613  0.908158
-56834f7ec17423f600f99ce446b0b2e5f1a186ab      1.0  0.900045       NaN  0.900045  0.900045
-b42634a6a40cb08a257294ee1dfd47b3ac6d7f2f      1.0  0.825529       NaN  0.825529  0.825529
-xpctl > 
-```
 
 - **lbsummary**: provides a description of all tasks in the leaderboard. 
 ```
 xpctl > lbsummary --help
 Usage: lbsummary [OPTIONS]
   Provides a summary of the leaderboard. Options: taskname. If you provide a
-  taskname, it will show all users, datasets, event_types and metrics for that task. This
-  is helpful because we often forget what metrics or datasets were used for
-  a task, which are the necessary parameters for the commands `results` and
-  `best` and `tasksummary`. Shows the summary for all available tasks if no
-  option is specified.
+  taskname, it will show all users, and datasets for that task. 
 Options:
   --task TEXT
   --help       Show this message and exit.
@@ -434,13 +348,33 @@ Options:
 xpctl > lbsummary --task tagger
 Task: [tagger]
 ---------------------------------------------------------------------------------------------
-         user dataset    event_type   metrics  num_experiments
-0    test-user   twpos   test_events    acc,f1                1
-1    test-user   twpos  train_events  avg_loss                1
-2    test-user   twpos  valid_events    acc,f1                1
-6  testuser    wnut   test_events    acc,f1                1
-7  testuser    wnut  train_events  avg_loss                1
-8  testuser    wnut  valid_events    acc,f1                1
+                                 task
+                             num_exps
+user         dataset                 
+blester      conll                  1
+digitalroots wnut                   2
+dpressel     conll                  3
+             conll-bio              5
+             conll-iobes           13
+             sf-ivt                 1
+             twpos                  1
+             wnut                   5
+mbarta       sf-ivt-20180607        3
+root         conll                  1
+             idr-05-14              1
+             idr-18-07-11          10
+             pj-intents-v2.0        1
+             sf-idr-pj-08-16        6
+             slftemplate            1
+             wnut                  12
+schoudhury   idr                    7
+             idr-05-14              1
+             idr-18-07-11           1
+             idr-fca                2
+             sf-idr-pj-08-09        1
+             sf-pj                  1
+             wnut                   5
+xpctl > 
 ```
 
 
@@ -451,48 +385,13 @@ Perform an experiment E, i.e., train the model and test.
 Using xpctl 
 
 1. Put the results ( `putresult`). This will show you the id of the result you just updated in the database. 
-2. Get the best result so far: `xpctl best tagger test <test-dataset> f1`
-3. If E is the best so far, use `putmodel` to store the model in a persistent loc.
+2. Get the best average result by a config so far: `xpctl results <task> <test-dataset> --sort <metric> --n 1`. This will give you the required sha1 for the best config.
+3. Get details for that config: `xpctl details <task> <sha1> --sort f1`. This will give you the id for the best performing experiment. Let's call it E'.
+4. If E' == E, your current experiment is the best so far, use `putmodel` to store the model in a persistent loc.
 
 _ sometime later _ : 
 
-4. Check the best model so far: `best`
-5. To check if we have the model stored in a persistent loc: `getmodelloc`.
-
-```
-(dl) testuser:xpctl$ xpctl best tagger test <test-dataset> f1
-setting dbhost to localhost dbport to y
-db connection successful
-using metric: ['f1']
-total 2 results found, showing best 1 results
-                         id    username label dataset                                      sha1                    date        f1
-1  59b9af747412df155562438d  testuser  test     <test-dataset>  7fbbd90b57395b003ab8476b6a17e747f8dfcba3 2017-09-13 22:21:35.322  0.860052
-(dl) testuser:xpctl$ xpctl putmodel --help
-setting dbhost to localhost dbport to y
-db connection successful
-Usage: xpctl putmodel [OPTIONS] TASK ID CBASE
-
-  Puts the model from an experiment in the model store and updates the
-  database with the location. Arguments:  task name, id of the record, and
-  the path to the base structure for the model checkpoint files such as
-  ../tagger/tagger-model-tf-11967 or /home/ds/tagger/tagger-model-tf-11967
-
-Options:
-  --cstore TEXT  location of the model checkpoint store
-  --help         Show this message and exit.
-(dl) testuser:xpctl$ xpctl getmodelloc --help
-setting dbhost to localhost dbport to y
-db connection successful
-Usage: xpctl getmodelloc [OPTIONS] TASK ID
-
-  get the model location for a particluar task and record id
-
-Options:
-  --help  Show this message and exit.
-
-(dl) testuser:xpctl$ xpctl getmodelloc tagger 59b9af747412df155562438d
-setting dbhost to localhost dbport to y
-db connection successful
-['model storage loc for record id 59b9af747412df155562438d is /data/model-checkpoints/7fbbd90b57395b003ab8476b6a17e747f8dfcba3/1.zip']
-
-```
+5. Check the best average result by a config so far: `xpctl results tagger <test-dataset> --sort f1 --n 1`
+6. Get details for that config: `xpctl details tagger <sha1> --sort f1`. This will give you the id for the best performing model.  
+7. To check if we have the model stored in a persistent loc: `getmodelloc <id>`.
+9. Use the model files in your system. 

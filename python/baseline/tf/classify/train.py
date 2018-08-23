@@ -1,12 +1,12 @@
+import os
 import tensorflow as tf
 from baseline.confusion import ConfusionMatrix
 from baseline.progress import create_progress_bar
 from baseline.reporting import basic_reporting
 from baseline.utils import listify, get_model_file
-from baseline.tf.tfy import optimizer
+from baseline.tf.tfy import optimizer, _add_ema
 from baseline.train import EpochReportingTrainer, create_trainer
-import os
-
+from baseline.utils import zip_model
 
 class ClassifyTrainerTf(EpochReportingTrainer):
 
@@ -16,9 +16,21 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         self.loss = model.create_loss()
         self.test_loss = model.create_test_loss()
         self.model = model
-        self.global_step, self.train_op = optimizer(self.loss, colocate_gradients_with_ops=True, **kwargs)
+        self.global_step, train_op = optimizer(self.loss, colocate_gradients_with_ops=True, **kwargs)
+        decay = kwargs.get('ema_decay', None)
+        if decay is not None:
+            self.ema = True
+            ema_op, self.ema_load, self.ema_restore = _add_ema(model, float(decay))
+            with tf.control_dependencies([ema_op]):
+                self.train_op = tf.identity(train_op)
+        else:
+            self.ema = False
+            self.train_op = train_op
 
     def _train(self, loader):
+
+        if self.ema:
+            self.sess.run(self.ema_restore)
 
         total_loss = 0
         steps = len(loader)
@@ -35,6 +47,9 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         return metrics
 
     def _test(self, loader, **kwargs):
+
+        if self.ema:
+            self.sess.run(self.ema_load)
 
         cm = ConfusionMatrix(self.model.labels)
         steps = len(loader)
@@ -70,31 +85,32 @@ class ClassifyTrainerTf(EpochReportingTrainer):
 def fit(model, ts, vs, es=None, **kwargs):
     """
     Train a classifier using TensorFlow
-    
+
     :param model: The model to train
     :param ts: A training data set
     :param vs: A validation data set
     :param es: A test data set, can be None
-    :param kwargs: 
+    :param kwargs:
         See below
-    
+
     :Keyword Arguments:
         * *do_early_stopping* (``bool``) --
           Stop after evaluation data is no longer improving.  Defaults to True
-        
+
         * *epochs* (``int``) -- how many epochs.  Default to 20
         * *outfile* -- Model output file, defaults to classifier-model.pyth
-        * *patience* -- 
+        * *patience* --
            How many epochs where evaluation is no longer improving before we give up
         * *reporting* --
            Callbacks which may be used on reporting updates
         * Additional arguments are supported, see :func:`baseline.tf.optimize` for full list
-    :return: 
+    :return:
     """
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
     verbose = bool(kwargs.get('verbose', False))
     epochs = int(kwargs.get('epochs', 20))
     model_file = get_model_file(kwargs, 'classify', 'tf')
+    ema = True if kwargs.get('ema_decay') is not None else False
 
     if do_early_stopping:
         early_stopping_metric = kwargs.get('early_stopping_metric', 'acc')
@@ -103,7 +119,7 @@ def fit(model, ts, vs, es=None, **kwargs):
 
     reporting_fns = listify(kwargs.get('reporting', basic_reporting))
     print('reporting', reporting_fns)
-    
+
     trainer = create_trainer(ClassifyTrainerTf, model, **kwargs)
     tables = tf.tables_initializer()
     model.sess.run(tables)
@@ -140,3 +156,5 @@ def fit(model, ts, vs, es=None, **kwargs):
         print('Reloading best checkpoint')
         trainer.recover_last_checkpoint()
         trainer.test(es, reporting_fns, phase='Test', verbose=verbose)
+    if kwargs.get("model_zip", False):
+        zip_model(model_file)

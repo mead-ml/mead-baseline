@@ -9,7 +9,7 @@ from baseline.model import Classifier, load_classifier_model, create_classifier_
 from baseline.tf.tfy import stacked_lstm, parallel_conv, get_vocab_file_suffixes, pool_chars, embed
 from baseline.version import __version__
 import os
-
+from baseline.utils import zip_model, unzip_model
 
 class ClassifyParallelModel(Classifier):
 
@@ -169,9 +169,10 @@ class WordClassifierBase(Classifier):
             self.mxlen = state.get('mxlen')
             self.mxwlen = state.get('mxwlen')
 
-    def save(self, basename):
+    def save(self, basename, **kwargs):
         self.save_md(basename)
         self.save_values(basename)
+
 
     def create_test_loss(self):
         with tf.name_scope("test_loss"):
@@ -254,6 +255,7 @@ class WordClassifierBase(Classifier):
         
         :return: A restored model
         """
+        basename = unzip_model(basename)
         sess = kwargs.get('session', kwargs.get('sess', tf.Session()))
         model = cls()
         with open(basename + '.saver') as fsv:
@@ -381,7 +383,7 @@ class WordClassifierBase(Classifier):
                 model.mxwlen = int(kwargs.get('mxwlen', 40))
                 model.xch = kwargs.get('xch', tf.placeholder(tf.int32, [None, model.mxlen, model.mxwlen], name='xch'))
                 char_dsz = c2v.dsz
-                with tf.name_scope("CharLUT"):
+                with tf.variable_scope("CharLUT"):
                     Wch = tf.get_variable("Wch",
                                           initializer=tf.constant_initializer(c2v.weights, dtype=tf.float32,
                                                                               verify_shape=True),
@@ -398,7 +400,7 @@ class WordClassifierBase(Classifier):
             with tf.contrib.slim.arg_scope(
                     [fully_connected],
                     weights_initializer=xavier_init):
-                with tf.name_scope("output"):
+                with tf.variable_scope("output"):
                     model.logits = tf.identity(fully_connected(stacked, nc, activation_fn=None), name="logits")
                     model.best = tf.argmax(model.logits, 1, name="best")
         model.sess = sess
@@ -590,8 +592,8 @@ BASELINE_CLASSIFICATION_MODELS = {
 BASELINE_CLASSIFICATION_LOADERS = {
     'default': ConvModel.load,
     'lstm': LSTMModel.load,
-    'nbow': NBowModel.create,
-    'nbowmax': NBowMaxModel.create
+    'nbow': NBowModel.load,
+    'nbowmax': NBowMaxModel.load
 }
 
 
