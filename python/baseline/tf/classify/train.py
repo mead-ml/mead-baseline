@@ -6,7 +6,7 @@ from baseline.reporting import basic_reporting
 from baseline.utils import listify, get_model_file
 from baseline.tf.tfy import optimizer, _add_ema
 from baseline.train import EpochReportingTrainer, create_trainer
-
+from baseline.utils import zip_model
 
 class ClassifyTrainerTf(EpochReportingTrainer):
 
@@ -156,3 +156,5 @@ def fit(model, ts, vs, es=None, **kwargs):
         print('Reloading best checkpoint')
         trainer.recover_last_checkpoint()
         trainer.test(es, reporting_fns, phase='Test', verbose=verbose)
+    if kwargs.get("model_zip", False):
+        zip_model(model_file)

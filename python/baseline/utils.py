@@ -764,6 +764,7 @@ def unzip_model(path):
 @exporter
 def zip_model(path):
     """zips the model files"""
+    print("zipping model files")
     model_files = [x for x in os.listdir(".") if path[2:] in x]
     z = zipfile.ZipFile("{}.zip".format(path), "w")
     for file in model_files:

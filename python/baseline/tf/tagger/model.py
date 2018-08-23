@@ -66,7 +66,6 @@ class RNNTaggerModel(Tagger):
     def save(self, basename):
         self.save_md(basename)
         self.save_values(basename)
-        zip_model(basename)
 
     @staticmethod
     def load(basename, **kwargs):

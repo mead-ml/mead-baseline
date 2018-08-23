@@ -169,11 +169,9 @@ class WordClassifierBase(Classifier):
             self.mxlen = state.get('mxlen')
             self.mxwlen = state.get('mxwlen')
 
-    def save(self, basename):
+    def save(self, basename, **kwargs):
         self.save_md(basename)
         self.save_values(basename)
-        zip_model(basename)
-
 
 
     def create_test_loss(self):

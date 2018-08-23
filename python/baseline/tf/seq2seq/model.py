@@ -373,7 +373,6 @@ class Seq2SeqModel(EncoderDecoder):
     def save(self, model_base):
         self.save_md(model_base)
         self.saver.save(self.sess, model_base + '.model')
-        zip_model(model_base)
 
     def restore_graph(self, base):
         with open(base + '.graph', 'rb') as gf:

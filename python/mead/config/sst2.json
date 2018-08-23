@@ -26,8 +26,8 @@
 	"epochs": 2,
 	"optim": "adadelta",
 	"eta": 1.0,
-	"model_base": "./models/sst2",
+	"model_zip": true,
 	"early_stopping_metric": "acc",
-        "verbose": true
+    "verbose": true
     }
 }
