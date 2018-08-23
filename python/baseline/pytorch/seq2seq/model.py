@@ -262,13 +262,13 @@ class Seq2SeqAttnModel(Seq2SeqBase):
         self.nlayers = nlayers
         attn_type = kwargs.get('attn_type', 'bahdanau').lower()
         if attn_type == 'dot':
-            self.attn_module = LuongDotProductAttention(enc_hsz)
+            self.attn_module = LuongDotProductAttention(self.hsz)
         elif attn_type == 'concat' or attn_type == 'bahdanau':
-            self.attn_module = BahdanauAttention(enc_hsz)
+            self.attn_module = BahdanauAttention(self.hsz)
         elif attn_type == 'sdp':
-            self.attn_module = ScaledDotProductAttention(enc_hsz)
+            self.attn_module = ScaledDotProductAttention(self.hsz)
         else:
-            self.attn_module = LuongGeneralAttention(enc_hsz)
+            self.attn_module = LuongGeneralAttention(self.hsz)
 
     def attn(self, output_t, context, src_mask=None):
         return self.attn_module(output_t, context, context, src_mask)
