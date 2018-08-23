@@ -1,10 +1,10 @@
 from mead.tf.exporters import TensorFlowExporter, PreprocessorCreator
+from mead.tf.signatures import SignatureInput, SignatureOutput
 import tensorflow as tf
 import baseline
 import numpy as np
 import os
 FIELD_NAME = 'text/tokens'
-
 
 class ElmoPreprocessorCreator(PreprocessorCreator):
     def __init__(self, indices, lchars, upchars_lut, task, token_key, extra_feats, mxlen=None, mxwlen=None):
@@ -49,7 +49,7 @@ class ElmoTaggerTensorFlowExporter(TensorFlowExporter):
     def __init__(self, task):
         super(ElmoTaggerTensorFlowExporter, self).__init__(task)
 
-    def _run(self, sess, model_file, embeddings_set, output_dir, model_version):
+    def _run(self, sess, model_file, embeddings_set, output_dir, model_version, use_preproc=True):
 
         indices, vocabs = self._create_vocabs(model_file)
 
@@ -113,61 +113,11 @@ class ElmoTaggerTensorFlowExporter(TensorFlowExporter):
         table = tf.contrib.lookup.index_to_string_table_from_tensor(class_tensor)
         classes = table.lookup(tf.to_int64(indices))
         self.restore_model(sess, model_file)
-        output_path = os.path.join(tf.compat.as_bytes(output_dir),
-                                   tf.compat.as_bytes(str(model_version)))
 
-        print('Exporting trained model to %s' % output_path)
-        builder = tf.saved_model.builder.SavedModelBuilder(output_path)
+        sig_input = SignatureInput(None, raw_posts)
+        sig_output = SignatureOutput(classes, values)
 
-        # Build the signature_def_map.
-        classify_inputs_tensor = tf.saved_model.utils.build_tensor_info(
-            serialized_tf_example)
-        classes_output_tensor = tf.saved_model.utils.build_tensor_info(
-            classes)
-        scores_output_tensor = tf.saved_model.utils.build_tensor_info(values)
-
-        classification_signature = (
-            tf.saved_model.signature_def_utils.build_signature_def(
-                inputs={
-                    tf.saved_model.signature_constants.CLASSIFY_INPUTS:
-                        classify_inputs_tensor
-                },
-                outputs={
-                    tf.saved_model.signature_constants.CLASSIFY_OUTPUT_CLASSES:
-                        classes_output_tensor,
-                    tf.saved_model.signature_constants.CLASSIFY_OUTPUT_SCORES:
-                        scores_output_tensor
-                },
-                method_name=tf.saved_model.signature_constants.
-                    CLASSIFY_METHOD_NAME)
-        )
-
-        prediction_inputs = self._create_prediction_input(tf_example, extra_features_required)
-        prediction_signature = (
-            tf.saved_model.signature_def_utils.build_signature_def(
-                inputs=prediction_inputs,
-                outputs={
-                    'classes': classes_output_tensor,
-                    'scores': scores_output_tensor
-                },
-                method_name=tf.saved_model.signature_constants.PREDICT_METHOD_NAME
-            )
-        )
-
-        legacy_init_op = tf.group(tf.tables_initializer(), name='legacy_init_op')
-        builder.add_meta_graph_and_variables(
-            sess, [tf.saved_model.tag_constants.SERVING],
-            signature_def_map={
-                'tag_text':
-                    prediction_signature,
-                tf.saved_model.signature_constants.
-                    DEFAULT_SERVING_SIGNATURE_DEF_KEY:
-                    classification_signature,
-            },
-            legacy_init_op=legacy_init_op)
-
-        builder.save()
-        print('Successfully exported model to %s' % output_dir)
+        return sig_input, sig_output, "tag_text"
 
 
 def create_exporter(task, exporter_type):

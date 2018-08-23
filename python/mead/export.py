@@ -17,6 +17,7 @@ def main():
     parser.add_argument('--model', help='model name', required=True, type=unzip_model)
     parser.add_argument('--model_version', help='model_version', default=1)
     parser.add_argument('--output_dir', help='output dir', default='./models')
+    parser.add_argument('--no_preproc', help="skip preprocessing", dest='use_preproc', action='store_false')
     args = parser.parse_args()
 
     config_params = read_config_file(args.config)
@@ -24,7 +25,8 @@ def main():
     task = mead.Task.get_task_specific(task_name, args.logging, args.settings)
     task.read_config(config_params, args.datasets)
     exporter = create_exporter(task, args.exporter_type)
-    exporter.run(args.model, args.embeddings, args.output_dir, args.model_version)
+
+    exporter.run(args.model, args.embeddings, args.output_dir, args.model_version, args.use_preproc)
 
 
 if __name__ == "__main__":

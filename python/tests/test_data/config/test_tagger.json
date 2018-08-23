@@ -1,0 +1,43 @@
+{
+    "task": "tagger",
+    "batchsz": 1,
+    "conll_output": "conllresults.conll",
+    "test_thresh": 10,
+    "charsz": 5,
+    "unif": 0.1,
+    "preproc": {
+        "mxlen": -1,
+        "mxwlen": -1,
+        "lower": true
+    },
+    "backend": "tensorflow",
+    "dataset": "test",
+    "loader": {
+        "reader_type": "default"
+    },
+    "model": {
+        "model_type": "default",
+        "cfiltsz": [3],
+        "hsz": 5,
+        "wsz": 5,
+        "dropout": 0.5,
+        "rnntype": "blstm",
+        "layers": 1,
+        "crf_mask": true,
+	"crf": 1
+    },
+
+    "word_embeddings": {
+        "label": "glove-6B-100"
+    },
+    "train": {
+        "epochs": 10,
+        "optim": "sgd",
+        "eta": 0.015,
+        "mom": 0.9,
+        "patience": 5,
+        "early_stopping_metric": "f1",
+        "clip": 5.0,
+        "span_type": "iobes"
+    }
+}
