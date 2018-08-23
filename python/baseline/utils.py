@@ -765,7 +765,8 @@ def unzip_model(path):
             print("unzipping model")
             with zipfile.ZipFile(path, "r") as zip_ref:
                 zip_ref.extractall(temp_dir)
-        temp_dir = os.path.join(temp_dir, os.listdir(temp_dir)[0])
+        if len(os.listdir(temp_dir)) == 1:  # a directory was zipped v files
+            temp_dir = os.path.join(temp_dir, os.listdir(temp_dir)[0])
         path = os.path.join(temp_dir, [x[:-6] for x in os.listdir(temp_dir) if 'index' in x][0])
     return path
 
