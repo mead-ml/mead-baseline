@@ -152,7 +152,6 @@ class MongoRepo(ExperimentRepo):
         all_results = list(coll.find(query, projection))
         if not all_results:
             return pd.DataFrame()
-
         results = []
         ms = list(set(metrics)) if len(metrics) > 0 else list(self._get_metrics(all_results, event_type))
         for result in all_results:  # different experiments
@@ -166,13 +165,18 @@ class MongoRepo(ExperimentRepo):
                      result['date']] + data)
         return pd.DataFrame(results, columns=['id', 'username', 'label', 'dataset', 'sha1', 'date'] + ms)
 
-    def _update_query(self, q, uname, dataset):
+    def _update_query(self, q, **kwargs):
         query = q
-        if uname:
-            query.update({"username": {"$in": list(uname)}})
-        if dataset:
-            query.update({"config.dataset": dataset})
-        return query
+        if not kwargs:
+            return query
+        else:
+            if "username" in kwargs and kwargs["username"]:
+                query.update({"username": {"$in": list(kwargs["username"])}})
+            if "dataset" in kwargs:
+                query.update({"config.dataset": kwargs["dataset"]})
+            if "sha1" in kwargs:
+                query.update({"sha1": kwargs["sha1"]})
+            return query
 
     def _update_projection(self, event_type):
         projection = {"_id": 1, "sha1": 1, "label": 1, "username": 1, "config.dataset": 1, "date": 1}
@@ -183,7 +187,7 @@ class MongoRepo(ExperimentRepo):
         metrics = listify(metric)
         coll = self.db[task]
         users = listify(user)
-        query = self._update_query({}, users, [])
+        query = self._update_query({}, username=users, sha1=sha1)
         projection = self._update_projection(event_type=event_type)
         result_frame = self._generate_data_frame(coll, metrics=metrics, query=query, projection=projection, event_type=event_type)
         return df_experimental_details(result_frame, sha1, users, sort, metric, n)
@@ -191,7 +195,7 @@ class MongoRepo(ExperimentRepo):
     def get_results(self, task, dataset, event_type,  num_exps=None, num_exps_per_config=None, metric=None, sort=None):
         metrics = listify(metric)
         coll = self.db[task]
-        query = self._update_query({}, [], dataset)
+        query = self._update_query({}, dataset=dataset)
         projection = self._update_projection(event_type=event_type)
         result_frame = self._generate_data_frame(coll, metrics=metrics, query=query, projection=projection, event_type=event_type)
         if not result_frame.empty:
@@ -221,12 +225,12 @@ class MongoRepo(ExperimentRepo):
 
     def get_info(self, task, event_type):
         coll = self.db[task]
-        q = self._update_query({}, None, None)
+        q = {}
         p = {'config.dataset': 1}
         datasets = list(set([x['config']['dataset'] for x in list(coll.find(q, p))]))
         store = []
         for dataset in datasets:
-            q = self._update_query({}, None, dataset)
+            q = self._update_query({}, dataset=dataset)
             p = self._update_projection(event_type)
             results = list(coll.find(q, p))
             for result in results:  # different experiments
