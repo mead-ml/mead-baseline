@@ -745,19 +745,17 @@ def f_score(overlap_count, gold_count, guess_count, f=1):
 
 @exporter
 def unzip_model(path):
-    from mead.mime_type import mime_type
     """If the path for a model file is a zip file, unzip it in /tmp and return the unzipped path"""
-    if not os.path.exists(path) or not mime_type(path) == "application/zip":
-        return path
-    with open(path, 'rb') as f:
-        sha1 = hashlib.sha1(f.read()).hexdigest()
-    temp_dir = os.path.join("/tmp/", sha1)
-    if not os.path.exists(temp_dir):
-        print("unzipping model before exporting")
-        with zipfile.ZipFile(path, "r") as zip_ref:
-            zip_ref.extractall(temp_dir)
-    temp_dir = os.path.join(temp_dir, os.listdir(temp_dir)[0])
-    path = os.path.join(temp_dir, [x[:-6] for x in os.listdir(temp_dir) if 'index' in x][0])
+    if path.endswith("zip"):
+        with open(path, 'rb') as f:
+            sha1 = hashlib.sha1(f.read()).hexdigest()
+        temp_dir = os.path.join("/tmp/", sha1)
+        if not os.path.exists(temp_dir):
+            print("unzipping model")
+            with zipfile.ZipFile(path, "r") as zip_ref:
+                zip_ref.extractall(temp_dir)
+        temp_dir = os.path.join(temp_dir, os.listdir(temp_dir)[0])
+        path = os.path.join(temp_dir, [x[:-6] for x in os.listdir(temp_dir) if 'index' in x][0])
     return path
 
 
@@ -767,7 +765,7 @@ def zip_model(path):
     print("zipping model files")
     model_files = [x for x in os.listdir(".") if path[2:] in x]
     z = zipfile.ZipFile("{}.zip".format(path), "w")
-    for file in model_files:
+    for f in model_files:
         z.write(file)
         os.remove(file)
     z.close()
