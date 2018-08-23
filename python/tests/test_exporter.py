@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-from unittest.mock import patch, Mock
+from mock import patch, Mock
 import baseline
 from mead.tf.exporters import TaggerTensorFlowExporter
 from mead.tf.exporters import FIELD_NAME
