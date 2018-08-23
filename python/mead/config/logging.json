@@ -1,17 +1,24 @@
 {
     "version": 1,
     "disable_existing_loggers": false,
+    "formatters": {
+        "json": {
+           "()": "baseline.utils.JSONFormatter"
+        }
+    },
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
             "level": "DEBUG",
-            "stream": "ext://sys.stdout"
+            "stream": "ext://sys.stdout",
+            "formatter": "json"
         },
         "reporting_file_handler": {
             "class": "logging.FileHandler",
             "level": "INFO",
 	        "mode": "w",
             "filename": "reporting.log",
+            "formatter": "json",
             "encoding": "utf8"
         },
         "info_file_handler": {

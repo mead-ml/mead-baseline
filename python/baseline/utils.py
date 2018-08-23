@@ -1,5 +1,7 @@
 import os
 import sys
+import json
+import logging
 import importlib
 from functools import partial, update_wrapper, wraps
 import numpy as np
@@ -7,6 +9,7 @@ import addons
 import json
 import hashlib
 import zipfile
+
 
 __all__ = []
 
@@ -28,6 +31,14 @@ def export(obj, all_list=None):
 
 exporter = export(__all__)
 
+
+class JSONFormatter(logging.Formatter):
+    def format(self, record):
+        try:
+            if isinstance(record.msg, (list, dict)):
+                record.msg = json.dumps(record.msg)
+        finally:
+            return super(JSONFormatter, self).format(record)
 
 @exporter
 def crf_mask(vocab, span_type, s_idx, e_idx, pad_idx=None):
