@@ -5,7 +5,7 @@ from tensorflow.python.platform import gfile
 from baseline.tf.tfy import *
 import tensorflow.contrib.seq2seq as tfcontrib_seq2seq
 from baseline.model import EncoderDecoder, load_seq2seq_model, create_seq2seq_model
-
+from baseline.utils import zip_model, unzip_model
 
 def _temporal_cross_entropy_loss(logits, labels, label_lengths, mx_seq_length):
     """Do cross-entropy loss accounting for sequence lengths
@@ -147,7 +147,7 @@ class Seq2SeqModel(EncoderDecoder):
 
     @staticmethod
     def load(basename, **kwargs):
-
+        basename = unzip_model(basename)
         with open(basename + '.state', 'r') as f:
             state = json.load(f)
         # FIXME: Need a single name for this.  This is a total hack

@@ -1,6 +1,7 @@
 import argparse
 import mead
-from mead.utils import convert_path, unzip_model
+from mead.utils import convert_path
+from baseline.utils import unzip_model
 from baseline.utils import read_config_file
 from mead.exporters import create_exporter
 

@@ -25,19 +25,3 @@ def convert_path(path, loc=None):
         loc = os.path.dirname(os.path.realpath(__file__))
     return os.path.join(loc, path)
 
-
-@exporter
-def unzip_model(path):
-    """If the path for a model file is a zip file, unzip it in /tmp and return the unzipped path"""
-    if not os.path.exists(path) or not mime_type(path) == "application/zip":
-        return path
-    with open(path, 'rb') as f:
-        sha1 = hashlib.sha1(f.read()).hexdigest()
-    temp_dir = os.path.join("/tmp/", sha1)
-    if not os.path.exists(temp_dir):
-        print("unzipping model before exporting")
-        with zipfile.ZipFile(path, "r") as zip_ref:
-            zip_ref.extractall(temp_dir)
-    temp_dir = os.path.join(temp_dir, os.listdir(temp_dir)[0])
-    path = os.path.join(temp_dir, [x[:-6] for x in os.listdir(temp_dir) if 'index' in x][0])
-    return path
