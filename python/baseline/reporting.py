@@ -51,48 +51,52 @@ def logging_reporting(metrics, tick, phase, tick_type=None):
         msg[k] = v
     log.info(msg)
 
-g_vis = None
-g_vis_win = {}
-
 
 @exporter
-def visdom_reporting(metrics, tick, phase, tick_type=None):
-    """This method will write its results to visdom
-
-    :param metrics: A map of metrics to scores
-    :param tick: The time (resolution defined by `tick_type`)
-    :param phase: The phase of training (`Train`, `Valid`, `Test`)
-    :param tick_type: The resolution of tick (`STEP`, `EPOCH`)
-    :return:
-    """
+def visdom_reporting(name="main"):
     # To use this:
     # python -m visdom.server
     # http://localhost:8097/
-    global g_vis
-    global g_vis_win
+    import visdom
+    print('Creating g_vis instance with env {}'.format(name))
+    g_vis = visdom.Visdom(env=name, use_incoming_socket=False)
+    g_vis_win = {}
 
-    if g_vis is None:
-        import visdom
-        print('Creating g_vis instance')
-        g_vis = visdom.Visdom()
+    def report(metrics, tick, phase, tick_type=None):
+        """This method will write its results to visdom
 
-    for metric in metrics.keys():
-        chart_id = '(%s) %s' % (phase, metric)
+        :param metrics: A map of metrics to scores
+        :param tick: The time (resolution defined by `tick_type`)
+        :param phase: The phase of training (`Train`, `Valid`, `Test`)
+        :param tick_type: The resolution of tick (`STEP`, `EPOCH`)
+        :return:
+        """
 
-        if chart_id not in g_vis_win:
-            print('Creating visualization for %s' % chart_id)
-            g_vis_win[chart_id] = g_vis.line(X=np.array([0]),
-                                             Y=np.array([metrics[metric]]),
-                                             opts=dict(
-                                                 fillarea=True,
-                                                 legend=False,
-                                                 xlabel='Time',
-                                                 ylabel='Metric',
-                                                 title=chart_id,
-                                             ),
-                                         )
-        else:
-            g_vis.updateTrace(X=np.array([tick]), Y=np.array([metrics[metric]]), win=g_vis_win[chart_id])
+        for metric in metrics.keys():
+            chart_id = '(%s) %s' % (phase, metric)
+
+            if chart_id not in g_vis_win:
+                print('Creating visualization for %s' % chart_id)
+                g_vis_win[chart_id] = g_vis.line(
+                    X=np.array([0]),
+                    Y=np.array([metrics[metric]]),
+                    opts=dict(
+                        fillarea=True,
+                        xlabel='Time',
+                        ylabel='Metric',
+                        title=chart_id,
+                    ),
+                )
+            else:
+                g_vis.line(
+                    X=np.array([tick]),
+                    Y=np.array([metrics[metric]]),
+                    win=g_vis_win[chart_id],
+                    update='append'
+                )
+
+    return report
+
 
 g_tb_run = None
 
@@ -140,11 +144,12 @@ def setup_reporting(**kwargs):
           Use Python's `logging` module to log events to `baseline.reporting`.  Default to `False`
     """
     use_visdom = kwargs.get('visdom', False)
+    visdom_name = kwargs.get('visdom_name', 'main')
     use_tensorboard = kwargs.get('tensorboard', False)
     use_logging = kwargs.get('logging', False)
     reporting = [logging_reporting if use_logging else basic_reporting]
     if use_visdom:
-        reporting.append(visdom_reporting)
+        reporting.append(visdom_reporting(visdom_name))
     if use_tensorboard:
         reporting.append(tensorboard_reporting)
     return reporting

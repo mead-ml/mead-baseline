@@ -6,6 +6,7 @@ from os import sys, path, makedirs
 
 parser = argparse.ArgumentParser(description='Train a text classifier')
 parser.add_argument('--visdom', help='Turn on visdom reporting', type=str2bool, default=False)
+parser.add_argument('--visdom_name', help='The name of the visdom env', default='main')
 parser.add_argument('--tensorboard', help='Turn on tensorboard reporting', type=str2bool, default=False)
 parser.add_argument('--eta', help='Initial learning rate', default=0.01, type=float)
 parser.add_argument('--mom', help='SGD Momentum', default=0.9, type=float)
