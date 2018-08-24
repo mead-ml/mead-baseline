@@ -25,7 +25,7 @@ if [ $? != 0 ]; then
     exit 1
 fi
 
-pip install -e .[test]
+pip install -e .[test,sql,mongo]
 if [ $? != 0 ]; then
     echo "$package failed to install."
     exit 1
