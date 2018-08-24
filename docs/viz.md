@@ -4,12 +4,12 @@
 
 Here are step-by-step instructions for seeing training progress with visdom:
 
-### Install visdom
+#### Install visdom
 ```
 pip install visdom
 ```
 
-### Launch visdom
+#### Launch visdom
 
 ```
 dpressel@dpressel:~/dev/work/baseline/python/mead$ python -m visdom.server
@@ -17,20 +17,19 @@ dpressel@dpressel:~/dev/work/baseline/python/mead$ python -m visdom.server
 Now, navigate your browser to: http://localhost:8097/
 
 
-### Set up visdom logging
+#### Run mead job with visdom argument
+
 ```
-dpressel@dpressel:~/dev/work$ head -n 8 mead/config/mdconfig.json
-{
-    "batchsz": 50,
-    "visdom": true,
-    "preproc": {
-	"mxlen": 100,
-	"rev": false
-    },
-    "backend": "tensorflow",
+mead-train --config config/sst2.json --visdom 1
 ```
 
-Run mead job.  Losses will plot as the training progresses.  Make sure to clear your visdom display in between `mead-train` runs
+Losses will plot as the training progresses.  You can compare runs by giving a `visdom_name` argument to the trainer
+
+```
+mead-train --config config/sst2.json --visdom 1 --visdom_name <name>
+```
+
+
 
 ### Using tensorboard
 
