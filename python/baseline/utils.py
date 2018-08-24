@@ -36,9 +36,10 @@ class JSONFormatter(logging.Formatter):
     def format(self, record):
         try:
             if isinstance(record.msg, (list, dict)):
-                record.msg = json.dumps(record.msg)
-        finally:
-            return super(JSONFormatter, self).format(record)
+                return json.dumps(record.msg)
+        except TypeError:
+            pass
+        return super(JSONFormatter, self).format(record)
 
 @exporter
 def crf_mask(vocab, span_type, s_idx, e_idx, pad_idx=None):

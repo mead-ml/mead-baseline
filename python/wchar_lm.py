@@ -9,6 +9,7 @@ def num_steps_per_epoch(num_examples, nbptt, batchsz):
 
 parser = argparse.ArgumentParser(description='Language Modeler')
 parser.add_argument('--visdom', help='Turn on visdom reporting', type=str2bool, default=False)
+parser.add_argument('--visdom_name', help='The name of the visdom env', default='main')
 parser.add_argument('--tensorboard', help='Turn on tensorboard reporting', type=str2bool, default=False)
 parser.add_argument('--eta', default=1, help='Initial learning rate', type=float)
 parser.add_argument('--embed', default=None, help='Word2Vec embeddings file')

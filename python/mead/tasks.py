@@ -117,7 +117,8 @@ class Task(object):
         reporting = {
             "logging": True,
             "visdom": self.config_params.get('visdom', False),
-            "tensorboard": self.config_params.get('tensorboard', False)
+            "tensorboard": self.config_params.get('tensorboard', False),
+            "visdom_name": self.config_params.get('visdom_name', 'main'),
         }
         reporting = baseline.setup_reporting(**reporting)
         self.config_params['train']['reporting'] = reporting

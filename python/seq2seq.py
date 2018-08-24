@@ -4,6 +4,7 @@ from baseline import *
 
 parser = argparse.ArgumentParser(description='Sequence to sequence learning')
 parser.add_argument('--visdom', help='Turn on visdom reporting', type=str2bool, default=False)
+parser.add_argument('--visdom_name', help='The name of the visdom env', default='main')
 parser.add_argument('--tensorboard', help='Turn on tensorboard reporting', type=str2bool, default=False)
 parser.add_argument('--eta', default=0.001, help='Initial learning rate.', type=float)
 parser.add_argument('--mom', default=0.9, help='Momentum (if SGD)', type=float)
