@@ -583,11 +583,26 @@ class NBowMaxModel(NBowBase):
         """
         return tf.reduce_max(word_embeddings, 1, keep_dims=False)
 
+
+class CompositePoolingModel(WordClassifierBase):
+
+    def __init__(self):
+        super(CompositePoolingModel, self).__init__()
+
+    def pool(self, word_embeddings, dsz, init, **kwargs):
+        SubModels = [eval(model) for model in kwargs.get('sub')]
+        pooling = []
+        for SubClass in SubModels:
+            pooling += [SubClass.pool(self, word_embeddings, dsz, init, **kwargs)]
+        return tf.concat(pooling, -1)
+
+
 BASELINE_CLASSIFICATION_MODELS = {
     'default': ConvModel.create,
     'lstm': LSTMModel.create,
     'nbow': NBowModel.create,
-    'nbowmax': NBowMaxModel.create
+    'nbowmax': NBowMaxModel.create,
+    'composite': CompositePoolingModel.create
 }
 BASELINE_CLASSIFICATION_LOADERS = {
     'default': ConvModel.load,
