@@ -546,7 +546,7 @@ class NBowBase(WordClassifierBase):
         :return:
         """
         kwargs['hsz'] = kwargs.get('hsz', [100])
-        return super(NBowBase, self).stacked()
+        return super(NBowBase, self).stacked(pooled, init, **kwargs)
 
 
 class NBowModel(NBowBase):
