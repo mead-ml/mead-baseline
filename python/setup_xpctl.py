@@ -62,7 +62,14 @@ def main():
             ],
         },
         extras_require={
-            'test': []
+            'test': [],
+            'mongo': [
+                'pymongo',
+            ],
+            'sql': [
+                'SQLAlchemy',
+                'psycopg2-binary',
+            ]
         },
         classifiers={
             'Development Status :: 2 - Pre-Alpha',
