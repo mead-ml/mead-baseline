@@ -6,7 +6,7 @@ Here are step-by-step instructions for seeing training progress with visdom:
 
 ### Install visdom
 ```
-pip install visdom
+pip install visdom==0.1.5
 ```
 
 ### Launch visdom
