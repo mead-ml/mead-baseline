@@ -24,8 +24,8 @@ dpressel@dpressel:~/dev/work$ head -n 8 mead/config/mdconfig.json
     "batchsz": 50,
     "visdom": true,
     "preproc": {
-	    "mxlen": 100,
-	    "rev": false
+        "mxlen": 100,
+        "rev": false
     },
     "backend": "tensorflow",
 ```
