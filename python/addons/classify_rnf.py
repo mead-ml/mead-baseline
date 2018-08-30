@@ -24,25 +24,14 @@ def make_ngram_fn(filtsz, mxlen):
     return make_ngram_dim
 
 
+# TODO: add docs, comments
 class RNFWordClassifier(SequentialWordClassifierBase):
-    """
-    Model defined in https://developers.google.com/machine-learning/guides/text-classification/step-4
-    """
+
     def __init__(self):
-        """
-        This model does separable convolution in blocks with max pooling, followed by an average pooling over time
-        """
+
         super(RNFWordClassifier, self).__init__()
 
     def _pool(self, dsz, **kwargs):
-        """Override the base method from parent to provide text pooling facility.
-        Here that is a stack of depthwise separable convolutions with interleaved max pooling followed by a global
-        avg-over-time pooling
-
-        :param dsz: Word embeddings dim size
-        :param kwargs:
-        :return: nothing
-        """
         filtsz = kwargs['filtsz']
         pdrop = kwargs.get('dropout', 0.5)
         rnnsz = kwargs['rnnsz']
