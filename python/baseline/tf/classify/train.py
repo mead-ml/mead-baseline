@@ -31,12 +31,14 @@ class ClassifyTrainerTf(EpochReportingTrainer):
 
         if self.ema:
             self.sess.run(self.ema_restore)
+
         total_loss = 0
         steps = len(loader)
         pg = create_progress_bar(steps)
         for batch_dict in loader:
             feed_dict = self.model.make_input(batch_dict, do_dropout=True)
             _, step, lossv = self.sess.run([self.train_op, self.global_step, self.loss], feed_dict=feed_dict)
+            total_loss += lossv
             pg.update()
 
         pg.done()
@@ -61,13 +63,14 @@ class ClassifyTrainerTf(EpochReportingTrainer):
             guess, lossv = self.sess.run([self.model.best, self.test_loss], feed_dict=feed_dict)
             total_loss += lossv
             cm.add_batch(y, guess)
-            total_loss += lossv
             pg.update()
 
         pg.done()
         metrics = cm.get_all_metrics()
         metrics['avg_loss'] = total_loss/float(steps)
-        verbose_output_classify(verbose, cm)
+        if verbose:
+            verbose_output_classify(verbose, cm)
+
         return metrics
 
     def checkpoint(self):
@@ -93,6 +96,7 @@ def fit(model, ts, vs, es=None, **kwargs):
     :Keyword Arguments:
         * *do_early_stopping* (``bool``) --
           Stop after evaluation data is no longer improving.  Defaults to True
+
         * *epochs* (``int``) -- how many epochs.  Default to 20
         * *outfile* -- Model output file, defaults to classifier-model.pyth
         * *patience* --

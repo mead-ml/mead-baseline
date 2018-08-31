@@ -36,10 +36,9 @@ class JSONFormatter(logging.Formatter):
     def format(self, record):
         try:
             if isinstance(record.msg, (list, dict)):
-                return json.dumps(record.msg)
-        except TypeError:
-            pass
-        return super(JSONFormatter, self).format(record)
+                record.msg = json.dumps(record.msg)
+        finally:
+            return super(JSONFormatter, self).format(record)
 
 @exporter
 def crf_mask(vocab, span_type, s_idx, e_idx, pad_idx=None):
@@ -464,6 +463,8 @@ def topk(k, probs):
     Note:
         mutates input for efficiency
     """
+    # This would be better:
+    # idx = (-probs).argsort()[:k]
     lut = {}
     i = 0
 
@@ -764,8 +765,7 @@ def unzip_model(path):
             print("unzipping model")
             with zipfile.ZipFile(path, "r") as zip_ref:
                 zip_ref.extractall(temp_dir)
-        if len(os.listdir(temp_dir)) == 1:  # a directory was zipped v files
-            temp_dir = os.path.join(temp_dir, os.listdir(temp_dir)[0])
+        temp_dir = os.path.join(temp_dir, os.listdir(temp_dir)[0])
         path = os.path.join(temp_dir, [x[:-6] for x in os.listdir(temp_dir) if 'index' in x][0])
     return path
 
