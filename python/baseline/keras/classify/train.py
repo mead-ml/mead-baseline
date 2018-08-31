@@ -4,62 +4,41 @@ from baseline.progress import create_progress_bar
 from baseline.train import EpochReportingTrainer, create_trainer
 from keras import metrics
 from keras import optimizers
-import keras.backend as K
-
-# Borrowed verbatim from here:
-# https://stackoverflow.com/questions/45411902/how-to-use-f1-score-with-keras-model#45412451
-def f1_score(y_true, y_pred):
-
-    # Count positive samples.
-    c1 = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
-    c2 = K.sum(K.round(K.clip(y_pred, 0, 1)))
-    c3 = K.sum(K.round(K.clip(y_true, 0, 1)))
-
-    # If there are no true samples, fix the F1 score at 0.
-    if c3 == 0:
-        return 0
-
-    # How many selected items are relevant?
-    precision = c1 / c2
-
-    # How many relevant items are selected?
-    recall = c1 / c3
-
-    # Calculate f1_score
-    f1_score = 2 * (precision * recall) / (precision + recall)
-    return f1_score
+import numpy as np
+from baseline.confusion import ConfusionMatrix
 
 
 class ClassifyTrainerKeras(EpochReportingTrainer):
 
-    METRIC_REMAP = {'f1_score': 'f1', 'categorical_accuracy': 'acc'}
+    METRIC_REMAP = {'categorical_accuracy': 'acc'}
+
 
     @staticmethod
     def _optimizer(**kwargs):
 
-        clip = kwargs.get('clip', None)
+        clip = kwargs.get('clip', 5)
         mom = kwargs.get('mom', 0.9)
         optim = kwargs.get('optim', 'sgd')
         eta = kwargs.get('eta', kwargs.get('lr', 0.01))
 
         if optim == 'adadelta':
             print('adadelta', eta)
-            optz = optimizers.Adadelta(eta, 0.95, 1e-6)
+            optz = optimizers.Adadelta(eta, 0.95, 1e-6, clipnorm=clip)
         elif optim == 'adam':
             print('adam', eta)
-            optz = optimizers.Adam(eta)
+            optz = optimizers.Adam(eta, clipnorm=clip)
         elif optim == 'rmsprop':
             print('rmsprop', eta)
-            optz = optimizers.RMSprop(eta)
+            optz = optimizers.RMSprop(eta, clipnorm=clip)
         elif optim == 'adagrad':
             print('adagrad', eta)
-            optz = optimizers.Adagrad(eta)
+            optz = optimizers.Adagrad(eta, clipnorm=clip)
         elif mom > 0:
             print('sgd-mom', eta, mom)
-            optz = optimizers.SGD(eta, mom)
+            optz = optimizers.SGD(eta, mom, clipnorm=clip)
         else:
             print('sgd')
-            optz = optimizers.SGD(eta)
+            optz = optimizers.SGD(eta, clipnorm=clip)
         return optz
 
     def __init__(self, model, **kwargs):
@@ -67,7 +46,7 @@ class ClassifyTrainerKeras(EpochReportingTrainer):
         self.model = model
         self.model.impl.compile(loss='categorical_crossentropy',
                                 optimizer=ClassifyTrainerKeras._optimizer(**kwargs),
-                                metrics=[metrics.categorical_accuracy, f1_score])
+                                metrics=[metrics.categorical_accuracy])
 
     def _train(self, loader):
 
@@ -90,21 +69,22 @@ class ClassifyTrainerKeras(EpochReportingTrainer):
         return train_metrics
 
     def _test(self, loader):
-        test_metrics = {}
         steps = len(loader)
         pg = create_progress_bar(steps)
+        cm = ConfusionMatrix(self.model.labels)
+
         for batch_dict in loader:
+            truth = batch_dict['y']
             x, y = self.model.make_input(batch_dict)
-            metrics = self.model.impl.test_on_batch(x, y)
-            for i in range(len(self.model.impl.metrics_names)):
-                name = self.model.impl.metrics_names[i]
-                name = ClassifyTrainerKeras.METRIC_REMAP.get(name, name)
-                test_metrics[name] = test_metrics.get(name, 0) + metrics[i]
+            pred = self.model.impl.predict_on_batch(x)
+            guess = np.argmax(pred, axis=-1)
+            cm.add_batch(truth, guess)
             pg.update()
         pg.done()
 
-        for k, v in test_metrics.items():
-            test_metrics[k] /= steps
+        test_metrics = cm.get_all_metrics()
+        #for k, v in test_metrics.items():
+        #    test_metrics[k] /= steps
         return test_metrics
 
 
@@ -172,6 +152,6 @@ def fit(model, ts, vs, es=None, **kwargs):
 
     if es is not None:
         print('Reloading best checkpoint')
-        model = model.load(model_file, custom_objects={'f1_score': f1_score})
+        model = model.load(model_file)
         trainer = ClassifyTrainerKeras(model, **kwargs)
         trainer.test(es, reporting_fns, phase='Test')
