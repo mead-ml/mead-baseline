@@ -106,7 +106,7 @@ def fit(model, ts, vs, es=None, **kwargs):
     :return:
     """
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
-    verbose = kwargs.get('verbose', {'print': kwargs.get('verbose_print', False), 'file': kwargs.get('verbose_file', None)})
+    verbose = kwargs.get('verbose', {'console': kwargs.get('verbose_console', False), 'file': kwargs.get('verbose_file', None)})
     epochs = int(kwargs.get('epochs', 20))
     model_file = get_model_file(kwargs, 'classify', 'tf')
     ema = True if kwargs.get('ema_decay') is not None else False

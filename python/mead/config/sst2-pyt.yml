@@ -23,7 +23,7 @@ train:
   model_base: ./models/sst2
   early_stopping_metric: acc
   verbose:
-    print: True
+    console: True
     file: sst2-cm.csv 
 
 

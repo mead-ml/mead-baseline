@@ -40,7 +40,8 @@ parser.add_argument('--model_type', help='Name of model to load and train', defa
 parser.add_argument('--trainer_type', help='Name of trainer to load and train', default='default')
 parser.add_argument('--rev', help='Time reverse input text', default=False, type=str2bool)
 parser.add_argument('--bounds', type=int, default=16000, help='Tell optim decay functionality how many steps before applying decay')
-parser.add_argument('--verbose', type=str2bool, default=False, help='print confusion matrix for the test data')
+parser.add_argument('--verbose_console', type=str2bool, default=False, help='print confusion matrix for the test data')
+parser.add_argument('--verbose_file', type=str, default=None, help='save confusion matrix for the test data in a file')
 parser.add_argument('--gpus', help='GPUs', type=int)
 
 

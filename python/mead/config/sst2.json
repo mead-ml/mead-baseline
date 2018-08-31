@@ -28,6 +28,6 @@
 	"eta": 1.0,
 	"model_zip": true,
 	"early_stopping_metric": "acc",
-      "verbose": {"print": true, "file": "sst2-cm.csv"}
+      "verbose": {"console": true, "file": "sst2-cm.csv"}
     }
 }
