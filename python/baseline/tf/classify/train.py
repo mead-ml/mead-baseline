@@ -68,8 +68,7 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         pg.done()
         metrics = cm.get_all_metrics()
         metrics['avg_loss'] = total_loss/float(steps)
-        if verbose:
-            verbose_output_classify(verbose, cm)
+        verbose_output_classify(verbose, cm)
 
         return metrics
 

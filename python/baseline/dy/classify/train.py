@@ -51,7 +51,6 @@ class ClassifyTrainerDynet(EpochReportingTrainer):
         verbose_output_classify(verbose, cm)
         return metrics
 
-
     def _test(self, loader, **kwargs):
         return self._step(loader, lambda x: None, kwargs.get("verbose", None))
 

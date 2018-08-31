@@ -36,9 +36,10 @@ class JSONFormatter(logging.Formatter):
     def format(self, record):
         try:
             if isinstance(record.msg, (list, dict)):
-                record.msg = json.dumps(record.msg)
-        finally:
-            return super(JSONFormatter, self).format(record)
+                return json.dumps(record.msg)
+        except TypeError:
+            pass
+        return super(JSONFormatter, self).format(record)
 
 @exporter
 def crf_mask(vocab, span_type, s_idx, e_idx, pad_idx=None):
@@ -765,7 +766,8 @@ def unzip_model(path):
             print("unzipping model")
             with zipfile.ZipFile(path, "r") as zip_ref:
                 zip_ref.extractall(temp_dir)
-        temp_dir = os.path.join(temp_dir, os.listdir(temp_dir)[0])
+        if len(os.listdir(temp_dir)) == 1:  # a directory was zipped v files
+            temp_dir = os.path.join(temp_dir, os.listdir(temp_dir)[0])
         path = os.path.join(temp_dir, [x[:-6] for x in os.listdir(temp_dir) if 'index' in x][0])
     return path
 
@@ -780,6 +782,7 @@ def zip_model(path):
         z.write(f)
         os.remove(f)
     z.close()
+
 
 @exporter
 def verbose_output_classify(verbose, confusion_matrix):
