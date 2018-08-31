@@ -19,14 +19,10 @@ class ClassifyTrainerDynet(EpochReportingTrainer):
     def __init__(
             self,
             model,
-            optim='sgd', clip=5, mom=0.9,
             **kwargs
     ):
         super(ClassifyTrainerDynet, self).__init__()
         self.model = model
-        eta = kwargs.get('eta', kwargs.get('lr', 0.01))
-        print("Using eta [{:.4f}]".format(eta))
-        print("Using optim [{}]".format(optim))
         self.labels = model.labels
         self.optimizer = optimizer(model, **kwargs)
 
@@ -68,7 +64,7 @@ class ClassifyTrainerAutobatch(ClassifyTrainerDynet):
         self.autobatchsz = autobatchsz
         super(ClassifyTrainerAutobatch, self).__init__(model, **kwargs)
 
-    def _step(self, loader, update, verbose):
+    def _step(self, loader, update, verbose=None):
         steps = len(loader)
         pg = create_progress_bar(steps)
         cm = ConfusionMatrix(self.labels)

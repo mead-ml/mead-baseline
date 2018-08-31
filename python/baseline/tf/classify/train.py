@@ -16,7 +16,7 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         self.loss = model.create_loss()
         self.test_loss = model.create_test_loss()
         self.model = model
-        self.global_step, self.train_op = optimizer(self.loss, **kwargs)
+        self.global_step, train_op = optimizer(self.loss, colocate_gradients_with_ops=True, **kwargs)
         decay = kwargs.get('ema_decay', None)
         if decay is not None:
             self.ema = True
@@ -31,16 +31,12 @@ class ClassifyTrainerTf(EpochReportingTrainer):
 
         if self.ema:
             self.sess.run(self.ema_restore)
-        
-        cm = ConfusionMatrix(self.model.labels)
         total_loss = 0
         steps = len(loader)
         pg = create_progress_bar(steps)
         for batch_dict in loader:
-            y = batch_dict['y']
             feed_dict = self.model.make_input(batch_dict, do_dropout=True)
             _, step, lossv = self.sess.run([self.train_op, self.global_step, self.loss], feed_dict=feed_dict)
-            total_loss += lossv
             pg.update()
 
         pg.done()
@@ -86,26 +82,25 @@ class ClassifyTrainerTf(EpochReportingTrainer):
 def fit(model, ts, vs, es=None, **kwargs):
     """
     Train a classifier using TensorFlow
-    
+
     :param model: The model to train
     :param ts: A training data set
     :param vs: A validation data set
     :param es: A test data set, can be None
-    :param kwargs: 
+    :param kwargs:
         See below
-    
+
     :Keyword Arguments:
         * *do_early_stopping* (``bool``) --
           Stop after evaluation data is no longer improving.  Defaults to True
-        
         * *epochs* (``int``) -- how many epochs.  Default to 20
         * *outfile* -- Model output file, defaults to classifier-model.pyth
-        * *patience* -- 
+        * *patience* --
            How many epochs where evaluation is no longer improving before we give up
         * *reporting* --
            Callbacks which may be used on reporting updates
         * Additional arguments are supported, see :func:`baseline.tf.optimize` for full list
-    :return: 
+    :return:
     """
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
     verbose = kwargs.get('verbose', {'print': kwargs.get('verbose_print', False), 'file': kwargs.get('verbose_file', None)})
@@ -120,12 +115,12 @@ def fit(model, ts, vs, es=None, **kwargs):
 
     reporting_fns = listify(kwargs.get('reporting', basic_reporting))
     print('reporting', reporting_fns)
-    
+
     trainer = create_trainer(ClassifyTrainerTf, model, **kwargs)
     tables = tf.tables_initializer()
     model.sess.run(tables)
     model.sess.run(tf.global_variables_initializer())
-    model.saver = tf.train.Saver()
+    model.set_saver(tf.train.Saver())
 
     max_metric = 0
     last_improved = 0
