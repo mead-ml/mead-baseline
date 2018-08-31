@@ -54,7 +54,7 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         cm = ConfusionMatrix(self.model.labels)
         steps = len(loader)
         total_loss = 0
-        verbose = kwargs.get("verbose", False)
+        verbose = kwargs.get("verbose", None)
 
         pg = create_progress_bar(steps)
         for batch_dict in loader:
