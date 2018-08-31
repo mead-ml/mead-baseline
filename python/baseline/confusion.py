@@ -148,7 +148,10 @@ class ConfusionMatrix(object):
         r = self.get_recall()[1]
         if beta < 0:
             raise Exception('Beta must be greater than 0')
-        return (beta*beta + 1) * p * r / (beta*beta * p + r)
+        d = (beta*beta * p + r)
+        if d == 0:
+            return 0
+        return (beta*beta + 1) * p * r / d
 
     def get_all_metrics(self):
         """Make a map of metrics suitable for reporting, keyed by metric name

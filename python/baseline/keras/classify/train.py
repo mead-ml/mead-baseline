@@ -1,7 +1,7 @@
 from baseline.utils import listify, get_model_file
 from baseline.reporting import basic_reporting
 from baseline.progress import create_progress_bar
-from baseline.train import *
+from baseline.train import EpochReportingTrainer, create_trainer
 from keras import metrics
 from keras import optimizers
 import keras.backend as K
@@ -28,6 +28,7 @@ def f1_score(y_true, y_pred):
     # Calculate f1_score
     f1_score = 2 * (precision * recall) / (precision + recall)
     return f1_score
+
 
 class ClassifyTrainerKeras(EpochReportingTrainer):
 
@@ -171,6 +172,6 @@ def fit(model, ts, vs, es=None, **kwargs):
 
     if es is not None:
         print('Reloading best checkpoint')
-        model.load(model_file, custom_objects= {'f1_score': f1_score})
+        model = model.load(model_file, custom_objects={'f1_score': f1_score})
         trainer = ClassifyTrainerKeras(model, **kwargs)
         trainer.test(es, reporting_fns, phase='Test')

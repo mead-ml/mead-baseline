@@ -17,7 +17,7 @@ model:
 word_embeddings: 
   label: w2v-gn
 train: 
-  epochs: 20
+  epochs: 2
   optim: adadelta
   eta: 1
   model_base: ./models/sst2
