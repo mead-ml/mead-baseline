@@ -21,7 +21,7 @@ Base = declarative_base()
 import sqlalchemy as sql
 import sqlalchemy.orm as orm
 from xpctl.core import ExperimentRepo, store_model
-from xpctl.helpers import order_json, df_summary_exp
+from xpctl.helpers import order_json, df_summary_exp, get_experiment_label
 
 EVENT_TYPES = {
     "train": "train_events", "Train": "train_events",
@@ -108,7 +108,7 @@ class SQLRepo(ExperimentRepo):
         hostname = kwargs.get('hostname', socket.gethostname())
         username = kwargs.get('username', getpass.getuser())
         config_sha1 = hashlib.sha1(json.dumps(order_json(config_obj)).encode('utf-8')).hexdigest()
-        label = kwargs.get("label", config_sha1)
+        label = get_experiment_label(config_obj, task, **kwargs)
         checkpoint_base = kwargs.get('checkpoint_base', None)
         checkpoint_store = kwargs.get('checkpoint_store', None)
 

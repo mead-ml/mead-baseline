@@ -1,8 +1,7 @@
 from __future__ import print_function
 import os
 import shutil
-from baseline.utils import export
-
+from baseline.utils import export, unzip_model
 
 __all__ = []
 exporter = export(__all__)
@@ -10,6 +9,7 @@ exporter = export(__all__)
 
 @exporter
 def store_model(checkpoint_base, config_sha1, checkpoint_store, print_fn=print):
+    checkpoint_base = unzip_model(checkpoint_base)
     mdir, mbase = os.path.split(checkpoint_base)
     mdir = mdir if mdir else "."
     if not os.path.exists(mdir):
@@ -38,7 +38,7 @@ def store_model(checkpoint_base, config_sha1, checkpoint_store, print_fn=print):
                         root_dir=model_loc_base,
                         base_dir=new_dir)
     shutil.rmtree(model_loc)
-    print_fn("zipped file written, model directory removed")
+    print_fn("model files zipped and written")
     return model_loc + ".zip"
 
 
