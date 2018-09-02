@@ -87,3 +87,14 @@ def df_experimental_details(result_frame, sha1, users, sort, metric, num_exps):
     if num_exps is not None:
         result_frame = result_frame.head(num_exps)
     return result_frame
+
+
+def get_experiment_label(config_obj, task, **kwargs):
+    if kwargs.get('label', None) is not None:
+        return kwargs['label']
+    if 'description' in config_obj:
+        return config_obj['description']
+    else:
+        model_type = config_obj.get('model_type', 'default')
+        backend = config_obj.get('backend', 'tensorflow')
+        return "{}-{}-{}".format(task, backend, model_type)

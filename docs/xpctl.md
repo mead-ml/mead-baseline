@@ -17,7 +17,7 @@ After an experiment is done, use `xpctl` to report the results to a database ser
 
 ### Dependencies
 
-`xpctl` requires a database to be installed locally or an accessible server. We currently support:  [mongodb](https://docs.mongodb.com/) and [postgresql](https://www.postgresql.org/)), but the base classes can be extended to support other databases. 
+`xpctl` requires a database to be installed locally or an accessible server. We currently support:  [mongodb](https://docs.mongodb.com/) and [postgresql](https://www.postgresql.org/)), but the base classes can be extended to support other databases. Create a database called `reporting_db` in your db instance.
 
 ### Installation
 
@@ -232,33 +232,49 @@ Options:
 
 ##### Importing
 
-- **putresult**: puts the result of an experiment in the database. Can optionally store the model files in a persistent model store (will automatically zip them). 
+- **putresult**: puts the result of an experiment in the database. Arguments:  task name (classify/ tagger/ etc.), location of the config file for the experiment, the log file storing the results for the experiment (typically <taskname>/reporting.log).
+Optionally:
+  - `--user`: Provide the username, by default reads from the system.
+  - `--cbase`: Path to the base structure for the model checkpoint files:such as ../tagger/tagger-model-tf-11967 or /home/ds/tagger/tagger-model-tf-11967 or tagger-model-tf-123.zip. Stores the model files in a persistent model checkpoint store (will automatically zip them).
+  - `--cstore`: Location of the persistent model checkpoint store, defaults to `/data/model-checkpoints`.
+  - `--label`: Optionally provide a label, reads from the config if you have a description field there, else creates a default label.
+
 ```
-xpctl > help putresult
-Usage: putresult [OPTIONS] TASK CONFIG LOG LABEL
-  Puts the results of an experiment on the database. Arguments:  task name (classify/ tagger), location of the config file for the experiment, the log file storing the
-  results for the experiment (typically <taskname>/reporting.log) and a
-  short description of the experiment (label). Gets the username from system
-  (can provide as an option). Also provide the model location produced by
-  the config optionally. 
+xpctl > putresult --help
+Usage: putresult [OPTIONS] TASK CONFIG LOG
+
+  Puts the results in a database. provide task name, config file, the
+  reporting log file. optionally can put the model files in a persistent
+  storage.
+
 Options:
   --user TEXT    username
   --cbase TEXT   path to the base structure for the model checkpoint
                  files:such as ../tagger/tagger-model-tf-11967 or
-                 /home/ds/tagger/tagger-model-tf-11967 
-  --cstore TEXT  location of the model checkpoint store (default <store-path> in your machine)
+                 /home/ds/tagger/tagger-model-tf-11967
+  --cstore TEXT  location of the model checkpoint store
+  --label TEXT   label for the experiment
   --help         Show this message and exit.
+xpctl >
 ```
 
 ```
-xpctl > putresult --user ijindal classify <path>/config/sst2.json <path>/reporting-4923.log  testClassify
-
-db mongo connection successful with [host]: x.x.x, [port]: y
-updating results for existing task [classify] in host [x.x.x]
-results updated, the new results are stored with the record id: 5b1aacb933ed5901dc545af8
-
+(dl) schoudhury:config$ xpctl --config ~/xpctlcred-mongo-local.json putresult classify sst2.json reporting-4444.log --user me --cbase classify-model-tf-4444.zip --cstore <my-home>/model-checkpoints
+db mongo connection successful with [host]: localhost, [port]: 27017
+unzipping model
+writing model file: [/tmp/3c461b6e24a48198c3f4308b15d97e1e1802d923/classify-model-tf-4444.saver] to store: [<my-home>/model-checkpoints/fa930387dce6a4345792adea5a926f1da00c063e/1]
+writing model file: [/tmp/3c461b6e24a48198c3f4308b15d97e1e1802d923/classify-model-tf-4444.index] to store: [<my-home>/model-checkpoints/fa930387dce6a4345792adea5a926f1da00c063e/1]
+writing model file: [/tmp/3c461b6e24a48198c3f4308b15d97e1e1802d923/classify-model-tf-4444.graph] to store: [<my-home>/model-checkpoints/fa930387dce6a4345792adea5a926f1da00c063e/1]
+writing model file: [/tmp/3c461b6e24a48198c3f4308b15d97e1e1802d923/classify-model-tf-4444.state] to store: [<my-home>/model-checkpoints/fa930387dce6a4345792adea5a926f1da00c063e/1]
+writing model file: [/tmp/3c461b6e24a48198c3f4308b15d97e1e1802d923/classify-model-tf-4444.labels] to store: [<my-home>/model-checkpoints/fa930387dce6a4345792adea5a926f1da00c063e/1]
+writing model file: [/tmp/3c461b6e24a48198c3f4308b15d97e1e1802d923/classify-model-tf-4444.data-00000-of-00001] to store: [<my-home>/model-checkpoints/fa930387dce6a4345792adea5a926f1da00c063e/1]
+writing model file: [/tmp/3c461b6e24a48198c3f4308b15d97e1e1802d923/classify-model-tf-4444.meta] to store: [<my-home>/model-checkpoints/fa930387dce6a4345792adea5a926f1da00c063e/1]
+writing model file: [/tmp/3c461b6e24a48198c3f4308b15d97e1e1802d923/classify-model-tf-4444-word.vocab] to store: [<my-home>/model-checkpoints/fa930387dce6a4345792adea5a926f1da00c063e/1]
+zipping model files
+creating new task [classify] in host [localhost]
+results updated, the new results are stored with the record id: 5b8a9764662ea6239a7d6d19
 ```
-This record id is then used in *putmodel*
+The record id returned by this command can be used in *putmodel*
 
 - **putmodel**: save model files in a persistent location. The location can be provided by the option -cstore, by default it is `<store-path>` directory in your machine. This is tested for `tensorflow` models, not `pytorch` ones yet. 
 ```

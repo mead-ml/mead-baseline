@@ -257,13 +257,13 @@ def delete(id, task):
 @click.option("--cbase", help="path to the base structure for the model checkpoint files:"
                               "such as ../tagger/tagger-model-tf-11967 or /home/ds/tagger/tagger-model-tf-11967")
 @click.option("--cstore", default="/data/model-checkpoints", help="location of the model checkpoint store")
+@click.option("--label", default=None, help="label for the experiment")
 @click.argument('task')
 @click.argument('config')
 @click.argument('log')
-@click.argument('label')
-def putresult(user, log, task, config, label, cbase, cstore):
+def putresult(user, cbase, cstore, label, task, config, log):
     '''
-    Puts the results in a database. provide task name, config file, the reporting log gile and the label. optionally can put the model files in a persistent storage.
+    Puts the results in a database. provide task name, config file, the reporting log file. optionally can put the model files in a persistent storage.
     '''
     logf = log.format(task)
     if not os.path.exists(logf):
