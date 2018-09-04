@@ -5,7 +5,7 @@ from baseline.reporting import basic_reporting
 from baseline.train import EpochReportingTrainer, create_trainer
 import torch
 import torch.autograd
-from baseline.utils import verbose_output_classify
+from baseline.utils import verbose_output
 
 
 def _add_to_cm(cm, y, pred):
@@ -69,7 +69,7 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
 
         metrics = cm.get_all_metrics()
         metrics['avg_loss'] = total_loss/float(steps)
-        verbose_output_classify(verbose, cm)
+        verbose_output(verbose, cm)
 
         return metrics
 

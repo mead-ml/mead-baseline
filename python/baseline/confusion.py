@@ -50,7 +50,7 @@ class ConfusionMatrix(object):
         values += ['\n']
         return ''.join(values)
 
-    def write_to_file(self, outfile):
+    def save(self, outfile):
         ordered_fieldnames = OrderedDict([("labels", None)] + [(l, None) for l in self.labels])
         with open(outfile, 'w') as f:
             dw = csv.DictWriter(f, delimiter=',', fieldnames=ordered_fieldnames)

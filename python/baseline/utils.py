@@ -785,7 +785,7 @@ def zip_model(path):
 
 
 @exporter
-def verbose_output_classify(verbose, confusion_matrix):
+def verbose_output(verbose, confusion_matrix):
     if verbose is None:
         return
     do_print = bool(verbose.get("console", False))
@@ -793,4 +793,4 @@ def verbose_output_classify(verbose, confusion_matrix):
     if do_print:
         print(confusion_matrix)
     if outfile is not None:
-        confusion_matrix.write_to_file(outfile)
+        confusion_matrix.save(outfile)

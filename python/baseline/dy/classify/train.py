@@ -6,7 +6,7 @@ from baseline.confusion import ConfusionMatrix
 from baseline.reporting import basic_reporting
 from baseline.train import EpochReportingTrainer, create_trainer
 from baseline.dy.dynety import *
-from baseline.utils import verbose_output_classify
+from baseline.utils import verbose_output
 
 def _add_to_cm(cm, y, preds, axis=0):
     best = np.argmax(preds, axis=axis)
@@ -48,7 +48,7 @@ class ClassifyTrainerDynet(EpochReportingTrainer):
 
         metrics = cm.get_all_metrics()
         metrics['avg_loss'] = total_loss / float(steps)
-        verbose_output_classify(verbose, cm)
+        verbose_output(verbose, cm)
         return metrics
 
     def _test(self, loader, **kwargs):
@@ -95,7 +95,7 @@ class ClassifyTrainerAutobatch(ClassifyTrainerDynet):
 
         metrics = cm.get_all_metrics()
         metrics['avg_loss'] = total_loss / float(steps)
-        verbose_output_classify(verbose, cm)
+        verbose_output(verbose, cm)
         return metrics
 
 

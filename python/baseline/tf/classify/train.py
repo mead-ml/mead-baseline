@@ -6,7 +6,7 @@ from baseline.reporting import basic_reporting
 from baseline.utils import listify, get_model_file
 from baseline.tf.tfy import optimizer, _add_ema
 from baseline.train import EpochReportingTrainer, create_trainer
-from baseline.utils import zip_model, verbose_output_classify
+from baseline.utils import zip_model, verbose_output
 
 class ClassifyTrainerTf(EpochReportingTrainer):
 
@@ -68,7 +68,7 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         pg.done()
         metrics = cm.get_all_metrics()
         metrics['avg_loss'] = total_loss/float(steps)
-        verbose_output_classify(verbose, cm)
+        verbose_output(verbose, cm)
 
         return metrics
 
