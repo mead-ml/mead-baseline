@@ -782,3 +782,15 @@ def zip_model(path):
         z.write(f)
         os.remove(f)
     z.close()
+
+
+@exporter
+def verbose_output(verbose, confusion_matrix):
+    if verbose is None:
+        return
+    do_print = bool(verbose.get("console", False))
+    outfile = verbose.get("file", None)
+    if do_print:
+        print(confusion_matrix)
+    if outfile is not None:
+        confusion_matrix.save(outfile)

@@ -6,7 +6,7 @@ from baseline.reporting import basic_reporting
 from baseline.utils import listify, get_model_file
 from baseline.tf.tfy import optimizer, _add_ema
 from baseline.train import EpochReportingTrainer, create_trainer
-from baseline.utils import zip_model
+from baseline.utils import zip_model, verbose_output
 
 class ClassifyTrainerTf(EpochReportingTrainer):
 
@@ -54,7 +54,7 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         cm = ConfusionMatrix(self.model.labels)
         steps = len(loader)
         total_loss = 0
-        verbose = kwargs.get("verbose", False)
+        verbose = kwargs.get("verbose", None)
 
         pg = create_progress_bar(steps)
         for batch_dict in loader:
@@ -68,8 +68,7 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         pg.done()
         metrics = cm.get_all_metrics()
         metrics['avg_loss'] = total_loss/float(steps)
-        if verbose:
-            print(cm)
+        verbose_output(verbose, cm)
 
         return metrics
 
@@ -107,7 +106,7 @@ def fit(model, ts, vs, es=None, **kwargs):
     :return:
     """
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
-    verbose = bool(kwargs.get('verbose', False))
+    verbose = kwargs.get('verbose', {'console': kwargs.get('verbose_console', False), 'file': kwargs.get('verbose_file', None)})
     epochs = int(kwargs.get('epochs', 20))
     model_file = get_model_file(kwargs, 'classify', 'tf')
     ema = True if kwargs.get('ema_decay') is not None else False

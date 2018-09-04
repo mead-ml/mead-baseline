@@ -1,5 +1,7 @@
 import numpy as np
 from baseline.utils import export as export
+from collections import OrderedDict
+import csv
 
 __all__ = []
 exporter = export(__all__)
@@ -47,6 +49,16 @@ class ConfusionMatrix(object):
             values += ['\n']
         values += ['\n']
         return ''.join(values)
+
+    def save(self, outfile):
+        ordered_fieldnames = OrderedDict([("labels", None)] + [(l, None) for l in self.labels])
+        with open(outfile, 'w') as f:
+            dw = csv.DictWriter(f, delimiter=',', fieldnames=ordered_fieldnames)
+            dw.writeheader()
+            for index, row in enumerate(self._cm):
+                row_dict = {l: row[i] for i, l in enumerate(self.labels)}
+                row_dict.update({"labels": self.labels[index]})
+                dw.writerow(row_dict)
 
     def reset(self):
         """Reset the matrix
