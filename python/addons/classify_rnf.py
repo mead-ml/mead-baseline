@@ -33,15 +33,16 @@ class RNFWordClassifier(SequentialWordClassifierBase):
 
     def _pool(self, dsz, **kwargs):
         filtsz = kwargs['filtsz']
-        pdrop = kwargs.get('dropout', 0.5)
+        pdrop = kwargs.get('dropout', 0.4)
+        pdrop_pool = kwargs.get('pool_dropout', 0.0)
         rnnsz = kwargs['rnnsz']
         mxlen = kwargs.get('mxlen', 100)
         self.impl.add(Dropout(rate=pdrop))
         self.impl.add(Lambda(make_ngram_fn(filtsz, mxlen)))
-        #self.impl.add(TimeDistributed(LSTM(rnnsz)))
-        self.impl.add(TimeDistributed(CuDNNLSTM(rnnsz)))
+        self.impl.add(TimeDistributed(LSTM(rnnsz, recurrent_dropout=pdrop)))
+        #self.impl.add(TimeDistributed(CuDNNLSTM(rnnsz)))
         self.impl.add(GlobalMaxPooling1D())
-        self.impl.add(Dropout(rate=pdrop))
+        self.impl.add(Dropout(rate=pdrop_pool))
 
 
 def create_model(embeddings, labels, **kwargs):

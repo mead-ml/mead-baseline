@@ -18,6 +18,11 @@
     "dsz": 300
   },
   {
+    "label": "glove-840B",
+    "file": "https://www.dropbox.com/s/hurm3px97mhknbi/glove.840B.300d.zip?dl=1",
+    "dsz": 300
+  },
+  {
     "label": "glove-6B-50",
     "file": "https://www.dropbox.com/s/339mhx40t3q9bp5/glove.6B.50d.txt.gz?dl=1",
     "sha1": "7395ee1f8f42f34869eb5feff690bf9ae79ffaa9",

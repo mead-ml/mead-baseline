@@ -15,11 +15,11 @@ model:
   dropout: 0.5
   finetune: true
 word_embeddings: 
-  label: w2v-gn
+  label: glove-840B
 train: 
   epochs: 2
-  optim: adadelta
-  eta: 1.0
+  optim: adam
+  eta: 0.001
   model_base: ./models/sst2
   early_stopping_metric: acc
 
