@@ -54,7 +54,7 @@ def read_cred(config_file):
     passwd = None
 
     try:
-        j = read_json(config_file, None)
+        j = read_json(config_file, strict=True)
         dbtype = j.get('dbtype')
         dbhost = j.get('dbhost')
         dbport = j.get('dbport')

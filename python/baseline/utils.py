@@ -245,19 +245,40 @@ def lowercase(x):
 
 
 @exporter
-def read_json(filepath, default_value={}):
+def read_json(filepath, default_value=None, strict=False):
     """Read a JSON file in.  If no file is found and default value is set, return that instead.  Otherwise error
 
-    :param filepath: A file to load
-    :param default_value: If the file doesnt exist, an alternate object to return, or if None, throw FileNotFoundError
-    :return: A JSON object
+    :param filepath: str, A file to load
+    :param default_value: If the file doesn't exist, return return this. Defaults to an empty dict.
+    :param strict: bool, If true raise an error on file not found.
+
+    :return: dict, The read JSON object
     """
     if not os.path.exists(filepath):
-        if default_value is None:
+        if strict:
             raise FileNotFoundError('No file [] found'.format(filepath))
-        return default_value
+        return default_value if default_value is not None else {}
     with open(filepath) as f:
         return json.load(f)
+
+
+@exporter
+def read_yaml(filepath, default_value=None, strict=False):
+    """Read a JSON file in.  If no file is found and default value is set, return that instead.  Otherwise error
+
+    :param filepath: str, A file to load
+    :param default_value: If the file doesn't exist, return return this. Defaults to an empty dict.
+    :param strict: bool, If true raise an error on file not found.
+
+    :return: dict, The read yaml object
+    """
+    if not os.path.exists(filepath):
+        if strict:
+            raise FileNotFoundError('No file [] found'.format(filepath))
+        return default_value if default_value is not None else {}
+    with open(filepath) as f:
+        import yaml
+        return yaml.load(f)
 
 
 @exporter
@@ -267,11 +288,9 @@ def read_config_file(config_file):
     :param config_file: (``str``) A path to a config file which should be a JSON file, or YAML if pyyaml is installed
     :return: (``dict``) An object
     """
-    with open(config_file) as f:
-        if config_file.endswith('.yml'):
-            import yaml
-            return yaml.load(f)
-        return json.load(f)
+    if config_file.endswith('.yml'):
+        return read_yaml(config_file, strict=True)
+    return read_json(config_file, strict=True)
 
 
 @exporter
