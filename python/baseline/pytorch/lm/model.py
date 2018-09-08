@@ -50,35 +50,34 @@ class AbstractLanguageModel(nn.Module):
         return torch.autograd.Variable(x), torch.autograd.Variable(y) if y is not None else None
 
 
-class WordLanguageModel(AbstractLanguageModel):
-
+class BasicLanguageModel(AbstractLanguageModel):
     def __init__(self):
-        super(WordLanguageModel, self).__init__()
+        super(BasicLanguageModel, self).__init__()
 
-    @staticmethod
-    def create(embeddings, **kwargs):
-        word_vec = embeddings['word']
+    def get_embeddings_section(self):
+        pass
 
-        model = WordLanguageModel()
+    @classmethod
+    def create(cls, embeddings, **kwargs):
+
+        model = cls()
+        vectors = embeddings[model.get_embeddings_section()]
         model.gpu = kwargs.get('gpu', True)
-        word_dsz = 0
         model.hsz = int(kwargs['hsz'])
         unif = float(kwargs.get('unif', 0.0))
         model.nlayers = int(kwargs.get('layers', 1))
         pdrop = float(kwargs.get('dropout', 0.5))
-        model.vocab_sz = word_vec.vsz + 1
+        model.vocab_sz = vectors.vsz + 1
 
-        if word_vec is not None:
-            model.word_vocab = word_vec.vocab
-            model.wembed = pytorch_embedding(word_vec)
-            word_dsz = word_vec.dsz
-
+        model.vocab = vectors.vocab
+        model.embed = pytorch_embedding(vectors)
+        model.dsz = vectors.dsz
         model.dropout = nn.Dropout(pdrop)
-        model.rnn, out_hsz = pytorch_lstm(word_dsz, model.hsz, 'lstm', model.nlayers, pdrop, batch_first=True)
+        model.rnn, out_hsz = pytorch_lstm(model.dsz, model.hsz, 'lstm', model.nlayers, pdrop, batch_first=True)
         model.decoder = nn.Sequential()
         append2seq(model.decoder, (
-                pytorch_linear(model.hsz, model.vocab_sz, unif),
-            ))
+            pytorch_linear(model.hsz, model.vocab_sz, unif),
+        ))
 
         return model
 
@@ -87,7 +86,25 @@ class WordLanguageModel(AbstractLanguageModel):
         return self._rnnlm(emb, hidden)
 
     def _encoder(self, input):
-        return self.dropout(self.wembed(input))
+        return self.dropout(self.embed(input))
+
+
+class WordLanguageModel(BasicLanguageModel):
+
+    def __init__(self):
+        super(WordLanguageModel, self).__init__()
+
+    def get_embeddings_section(self):
+        return 'word'
+
+
+class CharLanguageModel(BasicLanguageModel):
+
+    def __init__(self):
+        super(CharLanguageModel, self).__init__()
+
+    def get_embeddings_section(self):
+        return 'char'
 
 
 class CharCompLanguageModel(AbstractLanguageModel):
@@ -203,6 +220,7 @@ class CharCompLanguageModel(AbstractLanguageModel):
 
 BASELINE_LM_MODELS = {
     'default': WordLanguageModel.create,
+    'char': CharLanguageModel.create,
     'convchar': CharCompLanguageModel.create
 }
 

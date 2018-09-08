@@ -684,11 +684,51 @@ class PTBSeqReader(object):
 
 
 @exporter
+class PTBSeqCharReader(object):
+
+    def __init__(self, nbptt, char_trans_fn):
+        self.nbptt = nbptt
+        self.cleanup_fn = identity_trans_fn if char_trans_fn is None else char_trans_fn
+
+    def build_vocab(self, files):
+        vocab_ch = Counter()
+        num_chars_in_files = []
+        for file in files:
+            if file is None:
+                continue
+
+            with codecs.open(file, encoding='utf-8', mode='r') as f:
+                num_chars = 0
+                for line in f:
+                    for c in line:
+                        c = self.cleanup_fn(c)
+                        vocab_ch[c] += 1
+                        num_chars += 1
+                num_chars_in_files.append(num_chars)
+
+        vocab = {'char': vocab_ch}
+        return vocab, num_chars_in_files
+
+    def load(self, filename, word2index, num_chars, batchsz):
+        chars_vocab = word2index['char']
+        x = np.zeros(num_chars, np.int)
+        i = 0
+        with codecs.open(filename, encoding='utf-8', mode='r') as f:
+            for line in f:
+                for c in line:
+                    c = self.cleanup_fn(c)
+                    x[i] = chars_vocab[c]
+                    i += 1
+        return baseline.data.SeqCharDataFeed(x, self.nbptt, batchsz)
+
+@exporter
 def create_lm_reader(max_word_length, nbptt, word_trans_fn, **kwargs):
     reader_type = kwargs.get('reader_type', 'default')
 
     if reader_type == 'default':
         reader = PTBSeqReader(max_word_length, nbptt, word_trans_fn)
+    elif reader_type == 'char_ptb':
+        reader = PTBSeqCharReader(nbptt, None)
     else:
         mod = import_user_module("reader", reader_type)
         reader = mod.create_lm_reader(max_word_length, nbptt, word_trans_fn, **kwargs)

@@ -484,3 +484,36 @@ class SeqWordCharDataFeed(DataFeed):
         }
 
 
+@exporter
+class SeqCharDataFeed(DataFeed):
+    """Data feed to return language modeling training data
+    """
+
+    def __init__(self, x, nbptt, batchsz):
+        """Constructor
+
+        :param x: word tensor
+        :param xch: character tensor
+        :param nbptt: Number of steps of BPTT
+        :param batchsz: Batch size
+        :param maxw: The maximum word length
+        """
+        super(SeqCharDataFeed, self).__init__()
+        num_examples = x.shape[0]
+        rest = num_examples // batchsz
+        self.steps = rest // nbptt
+        if rest % nbptt == 0:
+            rest = rest-1
+
+        trunc = batchsz * rest
+
+        print('Truncating from %d to %d' % (num_examples, trunc))
+        self.x = x[:trunc].reshape((batchsz, rest))
+        self.nbptt = nbptt
+        self.batchsz = batchsz
+
+    def _batch(self, i):
+        return {
+            'x': self.x[:, i*self.nbptt:(i+1)*self.nbptt].reshape((self.batchsz, self.nbptt)),
+            'y': self.x[:, i*self.nbptt+1:(i+1)*self.nbptt+1].reshape((self.batchsz, self.nbptt))
+        }
