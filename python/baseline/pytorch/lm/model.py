@@ -1,5 +1,5 @@
 from baseline.pytorch.torchy import *
-from baseline.model import create_lang_model  #, load_lang_model
+from baseline.model import create_lang_model, load_lang_model
 import torch.autograd
 import math
 
@@ -217,18 +217,21 @@ class CharCompLanguageModel(AbstractLanguageModel):
         return self.word_vocab if vocab_type == 'word' else self.char_vocab
 
 
-
 BASELINE_LM_MODELS = {
     'default': WordLanguageModel.create,
     'char': CharLanguageModel.create,
     'convchar': CharCompLanguageModel.create
 }
 
+BASELINE_LM_LOADERS = {
+    'default': WordLanguageModel.load,
+    'char': CharLanguageModel.load,
+    'convchar': CharCompLanguageModel.load
+}
 
 def create_model(embeddings, **kwargs):
     lm = create_lang_model(BASELINE_LM_MODELS, embeddings, **kwargs)
     return lm
 
-
-#def load_model(modelname, **kwargs):
-#    return load_lang_model(WordLanguageModel.load, modelname, **kwargs)
+def load_model(modelname, **kwargs):
+    return load_lang_model(BASELINE_LM_LOADERS, modelname, **kwargs)

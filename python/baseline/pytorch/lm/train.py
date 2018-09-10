@@ -11,28 +11,16 @@ class LanguageModelTrainerPyTorch(Trainer):
         super(LanguageModelTrainerPyTorch, self).__init__()
         self.train_steps = 0
         self.valid_epochs = 0
-        self.gpu = not bool(kwargs.get('nogpu', False))
-        optim = kwargs.get('optim', 'adam')
-        eta = float(kwargs.get('eta', 0.01))
-        mom = float(kwargs.get('mom', 0.9))
-        self.clip = float(kwargs.get('clip', 5))
         self.model = model
-        if optim == 'adadelta':
-            self.optimizer = torch.optim.Adadelta(model.parameters(), lr=eta)
-        elif optim == 'adam':
-            self.optimizer = torch.optim.Adam(model.parameters(), lr=eta)
-        elif optim == 'rmsprop':
-            self.optimizer = torch.optim.RMSprop(model.parameters(), lr=eta)
-        elif optim == 'asgd':
-            self.optimizer = torch.optim.ASGD(model.parameters(), lr=eta)
-        else:
-            self.optimizer = torch.optim.SGD(model.parameters(), lr=eta, momentum=mom)
-
+        self.clip = float(kwargs.get('clip', 5))
+        self.gpu = not bool(kwargs.get('nogpu', False))
         self.crit = model.create_loss()
-        if self.gpu:
 
+        if self.gpu:
             self.model = self.model.cuda()
             self.crit.cuda()
+
+        self.optimizer, self.scheduler = pytorch_prepare_optimizer(self.model, **kwargs)
 
     def repackage_hidden(self, h):
         """Wraps hidden states in new Variables, to detach them from their history."""
@@ -77,6 +65,8 @@ class LanguageModelTrainerPyTorch(Trainer):
     def train(self, ts, reporting_fns):
         start_time = time.time()
         self.model.train()
+        if self.scheduler is not None:
+            self.scheduler.step()
         total_loss = 0
         metrics = {}
         batchsz, nbptt = self._get_dims(ts)

@@ -3,7 +3,7 @@ from baseline.utils import (
     load_user_classifier_model, create_user_classifier_model,
     load_user_tagger_model, create_user_tagger_model,
     load_user_seq2seq_model, create_user_seq2seq_model,
-    create_user_lang_model,
+    load_user_lang_model, create_user_lang_model,
     lowercase, revlut,
     export, wrapped_partial
 )
@@ -173,6 +173,13 @@ load_seq2seq_model = exporter(
     wrapped_partial(
         load_model,
         task_fn=load_user_seq2seq_model,
+        name='load_seq2seq_model'
+    )
+)
+load_lang_model = exporter(
+    wrapped_partial(
+        load_model,
+        task_fn=load_user_lang_model,
         name='load_seq2seq_model'
     )
 )
