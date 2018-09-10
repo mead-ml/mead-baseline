@@ -8,6 +8,13 @@
     "label": "ptb"
   },
   {
+    "train_file": "train.txt",
+    "valid_file": "valid.txt",
+    "test_file": "test.txt",
+    "download": "https://www.dropbox.com/s/q4i2vxw1nkhsk8g/wikitext-2.tar.gz?dl=1",
+    "label": "wikitext-2"
+  },
+  {
     "train_file": "stsa.binary.phrases.train",
     "valid_file": "stsa.binary.dev",
     "test_file": "stsa.binary.test",

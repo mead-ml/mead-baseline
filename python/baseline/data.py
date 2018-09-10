@@ -502,18 +502,19 @@ class SeqCharDataFeed(DataFeed):
         num_examples = x.shape[0]
         rest = num_examples // batchsz
         self.steps = rest // nbptt
-        if rest % nbptt == 0:
-            rest = rest-1
-
+        rest += 1
         trunc = batchsz * rest
 
         print('Truncating from %d to %d' % (num_examples, trunc))
-        self.x = x[:trunc].reshape((batchsz, rest))
+
+        self.x = np.append(x, x[:batchsz])[:trunc].reshape((batchsz, rest))
         self.nbptt = nbptt
         self.batchsz = batchsz
 
     def _batch(self, i):
+
         return {
+
             'x': self.x[:, i*self.nbptt:(i+1)*self.nbptt].reshape((self.batchsz, self.nbptt)),
             'y': self.x[:, i*self.nbptt+1:(i+1)*self.nbptt+1].reshape((self.batchsz, self.nbptt))
         }

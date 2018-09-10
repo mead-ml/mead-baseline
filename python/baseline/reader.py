@@ -626,7 +626,7 @@ def create_pred_reader(mxlen, zeropadding, clean_fn, vec_alloc, src_vec_trans, *
 
 
 @exporter
-class PTBSeqReader(object):
+class LineSeqReader(object):
 
     def __init__(self, max_word_length, nbptt, word_trans_fn):
         self.max_word_length = max_word_length
@@ -684,7 +684,7 @@ class PTBSeqReader(object):
 
 
 @exporter
-class PTBSeqCharReader(object):
+class LineSeqCharReader(object):
 
     def __init__(self, nbptt, char_trans_fn):
         self.nbptt = nbptt
@@ -726,9 +726,9 @@ def create_lm_reader(max_word_length, nbptt, word_trans_fn, **kwargs):
     reader_type = kwargs.get('reader_type', 'default')
 
     if reader_type == 'default':
-        reader = PTBSeqReader(max_word_length, nbptt, word_trans_fn)
-    elif reader_type == 'char_ptb':
-        reader = PTBSeqCharReader(nbptt, None)
+        reader = LineSeqReader(max_word_length, nbptt, word_trans_fn)
+    elif reader_type == 'char_line':
+        reader = LineSeqCharReader(nbptt, None)
     else:
         mod = import_user_module("reader", reader_type)
         reader = mod.create_lm_reader(max_word_length, nbptt, word_trans_fn, **kwargs)
