@@ -34,6 +34,7 @@ class Task(object):
             self.data_download_cache = os.path.expanduser(self.mead_settings['datacache'])
         print("using {} as data/embeddings cache".format(self.data_download_cache))
         self._configure_logger(logger_file)
+        self.name = None
 
     def _configure_logger(self, logger_file):
         """Use the logger file (logging.json) to configure the log, but overwrite the filename to include the PID
@@ -57,7 +58,7 @@ class Task(object):
         config = Task.TASK_REGISTRY[task](logging_config, mead_config)
         return config
 
-    def read_config(self, config_params, datasets_index):
+    def read_config(self, config_params, config_file, datasets_index, task_name):
         """
         Read the config file and the datasets index
 
@@ -70,8 +71,9 @@ class Task(object):
         """
         datasets_set = mead.utils.index_by_label(datasets_index)
         self.config_params = config_params
+        self.config_file = config_file
         self._setup_task()
-        self._configure_reporting(config_params.get('reporting', []))
+        self._configure_reporting(config_params.get('reporting', []), task_name)
         self.dataset = datasets_set[self.config_params['dataset']]
         self.reader = self._create_task_specific_reader()
 
@@ -115,8 +117,9 @@ class Task(object):
         self._close_reporting_hooks()
         return model
 
-    def _configure_reporting(self, reporting_hooks):
-        self.reporting = create_reporting_hook(reporting_hooks, self.mead_settings['reporting_hooks'])
+    def _configure_reporting(self, reporting_hooks, task_name):
+        self.reporting = create_reporting_hook(reporting_hooks, self.mead_settings['reporting_hooks'],
+                                               config_file=self.config_file, task=task_name)
         self.config_params['train']['reporting'] = [x.step for x in self.reporting]
         logging.basicConfig(level=logging.DEBUG)
 

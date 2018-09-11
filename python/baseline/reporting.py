@@ -12,9 +12,6 @@ class ReportingHook(object):
     def __init__(self, **kwargs):
         pass
 
-    def start(self, **kwargs):
-        pass
-
     def step(self, metrics, tick, phase, tick_type, **kwargs):
         pass
 
@@ -114,7 +111,7 @@ class VisdomReporting(ReportingHook):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         import visdom
-        name = kwargs.get('name', 'main')
+        name = kwargs.get('visdom_settings').get('name', 'main')
         print('Creating g_vis instance with env {}'.format(name))
         self.g_vis = visdom.Visdom(env=name, use_incoming_socket=False)
         self.g_vis_win = {}
@@ -186,14 +183,14 @@ def create_reporting_hook(reporting_hooks, hook_settings, **kwargs):
         reporting_hooks.remove('console')
     if 'visdom' in reporting_hooks:
         visdom_settings = hook_settings.get('visdom', {})
-        reporting.append(VisdomReporting(**visdom_settings))
+        reporting.append(VisdomReporting(visdom_settings=visdom_settings))
         reporting_hooks.remove('visdom')
     if 'tensorboard' in reporting_hooks:
         tensorboard_settings = hook_settings.get('tensorboard', {})
-        reporting.append(TensorBoardReporting(**tensorboard_settings))
+        reporting.append(TensorBoardReporting(tensorboard_settings=tensorboard_settings))
         reporting_hooks.remove('tensorboard')
     for reporting_hook in reporting_hooks:
         mod = import_user_module("reporting", reporting_hook)
-        hook_settings = hook_settings.get(reporting_hook, {})
-        reporting.append(mod.create_reporting_hook(**hook_settings))
+        hook_setting = hook_settings.get(reporting_hook, {})
+        reporting.append(mod.create_reporting_hook(hook_setting=hook_setting, **kwargs))
     return reporting
