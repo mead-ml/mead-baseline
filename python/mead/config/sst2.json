@@ -29,5 +29,6 @@
 	"model_zip": true,
 	"early_stopping_metric": "acc",
       "verbose": {"console": true, "file": "sst2-cm.csv"}
-    }
+    },
+    "reporting": ["visdom"]
 }
