@@ -1,7 +1,7 @@
 import io
 import contextlib
 import numpy as np
-from baseline.utils import export
+from baseline.utils import export, load_user_embeddings
 
 __all__ = []
 exporter = export(__all__)
@@ -17,6 +17,19 @@ def norm_weights(word_vectors):
 class EmbeddingsModel(object):
     def __init__(self):
         super(EmbeddingsModel, self).__init__()
+
+    def get_dsz(self):
+        pass
+
+    def get_vsz(self):
+        pass
+
+
+
+@exporter
+class WordEmbeddingsModel(object):
+    def __init__(self):
+        super(WordEmbeddingsModel, self).__init__()
 
     def get_dsz(self):
         return self.dsz
@@ -44,7 +57,7 @@ class EmbeddingsModel(object):
 
 
 @exporter
-class PretrainedEmbeddingsModel(EmbeddingsModel):
+class PretrainedEmbeddingsModel(WordEmbeddingsModel):
 
     def __init__(self, filename, known_vocab=None, unif_weight=None, keep_unused=False, normalize=False, **kwargs):
         super(PretrainedEmbeddingsModel, self).__init__()
@@ -215,7 +228,7 @@ class RandomInitVecModel(EmbeddingsModel):
     def __init__(self, dsz, known_vocab, counts=True, unif_weight=None):
         super(RandomInitVecModel, self).__init__()
         uw = 0.0 if unif_weight is None else unif_weight
-        self.vocab = {}
+        self.vocab = dict()
         self.vocab["<PAD>"] = 0
         self.dsz = dsz
         self.vsz = 0
@@ -234,3 +247,23 @@ class RandomInitVecModel(EmbeddingsModel):
 
         self.nullv = np.zeros(self.dsz, dtype=np.float32)
         self.weights[0] = self.nullv
+
+    def get_dsz(self):
+        return self.dsz
+
+    def get_vsz(self):
+        return self.vsz
+
+
+@exporter
+def load_embeddings(filename, known_vocab=None, **kwargs):
+    embed_type = kwargs.get('embed_type', 'default')
+    if embed_type == 'default':
+        EmbedT = GloVeModel if filename.endswith('txt') else Word2VecModel
+        return EmbedT(filename,
+                      known_vocab=known_vocab,
+                      unif_weight=kwargs.pop('unif', 0),
+                      keep_unused=kwargs.pop('keep_unused', False),
+                      normalize=kwargs.pop('normalized', False), **kwargs)
+    print('loading user module')
+    return load_user_embeddings(filename, known_vocab, **kwargs)

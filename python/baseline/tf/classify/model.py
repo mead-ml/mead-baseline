@@ -6,7 +6,11 @@ import json
 from tensorflow.contrib.layers import fully_connected, xavier_initializer
 from baseline.utils import fill_y, listify
 from baseline.model import Classifier, load_classifier_model, create_classifier_model
-from baseline.tf.tfy import stacked_lstm, parallel_conv, get_vocab_file_suffixes, pool_chars, embed
+from baseline.tf.tfy import (stacked_lstm,
+                             parallel_conv,
+                             get_vocab_file_suffixes,
+                             TensorFlowCharConvEmbeddings,
+                             TensorFlowWordEmbeddings)
 from baseline.version import __version__
 import os
 from baseline.utils import zip_model, unzip_model
@@ -172,7 +176,6 @@ class WordClassifierBase(Classifier):
     def save(self, basename, **kwargs):
         self.save_md(basename)
         self.save_values(basename)
-
 
     def create_test_loss(self):
         with tf.name_scope("test_loss"):
@@ -346,19 +349,17 @@ class WordClassifierBase(Classifier):
         if gpus is not None:
             return ClassifyParallelModel(cls.create, embeddings, labels, **kwargs)
         sess = kwargs.get('sess', tf.Session())
-        finetune = bool(kwargs.get('finetune', True))
-        w2v = embeddings['word']
-        c2v = embeddings.get('char')
 
         model = cls()
-        word_dsz = w2v.dsz
-        wchsz = 0
+        model.embeddings = dict()
+        model.embeddings['word'] = TensorFlowWordEmbeddings(embeddings['word'])
+        if 'char' in embeddings:
+            model.embeddings['char'] = TensorFlowCharConvEmbeddings(embeddings['char'])
+
         model.labels = labels
         nc = len(labels)
 
         model.vocab = {}
-        for k in embeddings.keys():
-            model.vocab[k] = embeddings[k].vocab
 
         model.mxlen = int(kwargs.get('mxlen', 100))
         model.mxwlen = None
@@ -376,23 +377,14 @@ class WordClassifierBase(Classifier):
             seed = np.random.randint(10e8)
             init = tf.random_uniform_initializer(-0.05, 0.05, dtype=tf.float32, seed=seed)
             xavier_init = xavier_initializer(True, seed)
-            word_embeddings = embed(model.x, len(w2v.vocab), word_dsz,
-                                    initializer=tf.constant_initializer(w2v.weights, dtype=tf.float32, verify_shape=True))
 
-            if c2v is not None:
-                model.mxwlen = int(kwargs.get('mxwlen', 40))
-                model.xch = kwargs.get('xch', tf.placeholder(tf.int32, [None, model.mxlen, model.mxwlen], name='xch'))
-                char_dsz = c2v.dsz
-                with tf.variable_scope("CharLUT"):
-                    Wch = tf.get_variable("Wch",
-                                          initializer=tf.constant_initializer(c2v.weights, dtype=tf.float32,
-                                                                              verify_shape=True),
-                                          shape=[len(c2v.vocab), c2v.dsz], trainable=True)
-                    ech0 = tf.scatter_update(Wch, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, char_dsz]))
-                    char_comp, wchsz = pool_chars(model.xch, Wch, ech0, char_dsz, **kwargs)
-                    word_embeddings = tf.concat(values=[word_embeddings, char_comp], axis=2)
+            word_embeddings = model.embeddings['word'].encode(model.x)
+            input_sz = model.embeddings['word'].get_dsz()
+            if 'char' in model.embeddings:
+                char_comp = model.embeddings['char'].encode(model.xch)
+                word_embeddings = tf.concat(values=[word_embeddings, char_comp], axis=2)
+                input_sz += model.embeddings['char'].get_dsz()
 
-            input_sz = word_dsz + wchsz
             pooled = model.pool(word_embeddings, input_sz, init, **kwargs)
             stacked = model.stacked(pooled, init, **kwargs)
 

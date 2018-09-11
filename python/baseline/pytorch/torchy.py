@@ -2,7 +2,6 @@ import torch
 import numpy as np
 from baseline.utils import lookup_sentence, get_version
 from baseline.utils import crf_mask as crf_m
-from torch.autograd import Variable
 import torch.autograd
 import torch.nn as nn
 import torch.nn.functional as F
@@ -153,6 +152,77 @@ def pytorch_embedding(x2vec, finetune=True):
     lut.weight = nn.Parameter(torch.FloatTensor(x2vec.weights),
                               requires_grad=finetune)
     return lut
+
+
+class PyTorchEmbeddings(object):
+
+    def __init__(self):
+        super(PyTorchEmbeddings).__init__()
+
+    def get_vsz(self):
+        pass
+
+    def get_dsz(self):
+        pass
+
+    def encode(self, x):
+        return self(x)
+
+
+class PyTorchWordEmbeddings(nn.Module, PyTorchEmbeddings):
+
+    def __init__(self, model, **kwargs):
+        super(PyTorchWordEmbeddings, self).__init__()
+        self.model = model
+        self.scope = kwargs.get('scope', 'LUT')
+        self.finetune = kwargs.get('finetune', True)
+        self.embeddings = pytorch_embedding(self.model, self.finetune)
+
+    def get_dsz(self):
+        return self.model.get_dsz()
+
+    def get_vsz(self):
+        return self.model.get_vsz()
+
+    def forward(self, x):
+        return self.embeddings(x)
+
+
+def pytorch_embeddings(in_embeddings_obj, DefaultType=PyTorchWordEmbeddings, **kwargs):
+    if isinstance(in_embeddings_obj, PyTorchEmbeddings):
+        return in_embeddings_obj
+    else:
+        return DefaultType(in_embeddings_obj, **kwargs)
+
+
+class PyTorchCharConvEmbeddings(nn.Module, PyTorchEmbeddings):
+
+    def __init__(self, model, **kwargs):
+        super(PyTorchCharConvEmbeddings, self).__init__()
+        self.model = model
+        self.embeddings = pytorch_embedding(model)
+        char_filtsz = kwargs.get('cfiltsz', [3])
+        char_hsz = kwargs.get('wsz', 30)
+        activation_type = kwargs.get('activation')
+        pdrop = kwargs.get('pdrop', 0.5)
+        self.char_comp = ParallelConv(self.model.get_dsz(), char_hsz, char_filtsz, activation_type, pdrop)
+
+    def get_dsz(self):
+        return self.char_comp.outsz
+
+    def get_vsz(self):
+        return self.model.get_vsz()
+
+    def forward(self, xch):
+
+        # For starters we need to perform embeddings for each character
+        # (TxB) x W -> (TxB) x W x D
+        B, T, W = xch.shape
+        char_embeds = self.embeddings(xch.view(-1, W))
+        # (TxB) x D x W
+        char_vecs = char_embeds.transpose(1, 2).contiguous()
+        mots = self.char_comp(char_vecs).view(B, T, self.char_comp.outsz)
+        return mots
 
 
 def pytorch_activation(name="relu"):

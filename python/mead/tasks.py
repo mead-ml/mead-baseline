@@ -8,7 +8,7 @@ import os
 from mead.downloader import EmbeddingDownloader, DataDownloader
 from mead.mime_type import mime_type
 from baseline.utils import export, read_config_file, read_json, write_json
-
+from baseline.w2v import load_embeddings
 __all__ = []
 exporter = export(__all__)
 
@@ -125,10 +125,9 @@ class Task(object):
         logging.basicConfig(level=logging.DEBUG)
 
     @staticmethod
-    def _create_embeddings_from_file(embed_file, embed_dsz, embed_sha1, data_download_cache, vocab, unif, keep_unused):
+    def _create_embeddings_from_file(embed_type, embed_file, embed_dsz, embed_sha1, data_download_cache, vocab, unif, keep_unused):
         embed_file = EmbeddingDownloader(embed_file, embed_dsz, embed_sha1, data_download_cache).download()
-        EmbeddingT = baseline.GloVeModel if mime_type(embed_file) == 'text/plain' else baseline.Word2VecModel
-        return EmbeddingT(embed_file, vocab, unif_weight=unif, keep_unused=keep_unused)
+        return load_embeddings(embed_file, vocab, unif=unif, keep_unused=keep_unused, embed_type=embed_type)
 
     def _create_embeddings(self, embeddings_set, vocabs):
 
@@ -144,8 +143,10 @@ class Task(object):
             if embed_label is not None:
                 embed_file = embeddings_set[embed_label]['file']
                 embed_dsz = embeddings_set[embed_label]['dsz']
-                embed_sha1 = embeddings_set[embed_label].get('sha1',None)
-                embeddings['word'] = Task._create_embeddings_from_file(embed_file, embed_dsz, embed_sha1,
+                embed_sha1 = embeddings_set[embed_label].get('sha1', None)
+                embed_type = embeddings_set[embed_label].get('embed_type', 'default')
+                embeddings['word'] = Task._create_embeddings_from_file(embed_type,
+                                                                       embed_file, embed_dsz, embed_sha1,
                                                                        self.data_download_cache, vocabs['word'],
                                                                        unif=unif, keep_unused=keep_unused)
             else:
@@ -153,7 +154,19 @@ class Task(object):
                 embeddings['word'] = baseline.RandomInitVecModel(dsz, vocabs['word'], unif_weight=unif)
 
         if 'char' in vocabs:
-            if self.config_params.get('charsz', -1) > 0:
+            if 'char_embeddings' in self.config_params:
+                embeddings_section = self.config_params['char_embeddings']
+                embed_label = embeddings_section.get('label', None)
+                if embed_label is not None:
+                    embed_file = embeddings_set[embed_label]['file']
+                    embed_dsz = embeddings_set[embed_label]['dsz']
+                    embed_sha1 = embeddings_set[embed_label].get('sha1', None)
+                    embed_type = embeddings_set[embed_label].get('embed_type', 'default')
+                    embeddings['char'] = Task._create_embeddings_from_file(embed_type,
+                                                                           embed_file, embed_dsz, embed_sha1,
+                                                                           self.data_download_cache, vocabs['char'],
+                                                                           unif=unif, keep_unused=keep_unused)
+            elif self.config_params.get('charsz', -1) > 0:
                 embeddings['char'] = baseline.RandomInitVecModel(self.config_params['charsz'], vocabs['char'], unif_weight=unif)
 
         extended_embed_info = self.config_params.get('extended_embed_info', {})
@@ -162,14 +175,19 @@ class Task(object):
                 print('Adding extended feature embeddings {}'.format(key))
                 ext_embed = None if extended_embed_info[key].get("embedding", None) is None \
                     else extended_embed_info[key]["embedding"]
-                ext_emb_dsz = extended_embed_info[key].get("dsz", None)
-                if ext_embed is not None:
-                    EmbeddingT = baseline.GloVeModel if ext_embed.endswith('.txt') else baseline.Word2VecModel
-                    print("using {} to read external embedding file {}".format(EmbeddingT, ext_embed))
-                    embeddings[key] = EmbeddingT(ext_embed, known_vocab=vocab, unif_weight=unif, keep_unused=False)
+                ext_embed_dsz = extended_embed_info[key].get("dsz")
+                ext_embed_sha1 = extended_embed_info[key].get("sha1")
+                ext_embed_file = extended_embed_info[key].get('file')
+                ext_embed_type = extended_embed_info[key].get('embed_type', 'default')
+                if ext_embed_file is not None:
+
+                    print("using {} to read external embedding file {}".format(ext_embed))
+                    embeddings[key] = Task._create_embeddings_from_file(ext_embed_type, ext_embed_file, ext_embed_dsz,
+                                                                        ext_embed_sha1, self.data_download_cache, vocab, unif, keep_unused)
+
                 else:
-                    print("randomly initializing external feature with dimension {}".format(ext_emb_dsz))
-                    embeddings[key] = baseline.RandomInitVecModel(ext_emb_dsz, vocab, unif_weight=unif)
+                    print("randomly initializing external feature with dimension {}".format(ext_embed_dsz))
+                    embeddings[key] = baseline.RandomInitVecModel(ext_embed_dsz, vocab, unif_weight=unif)
             elif key not in ['word', 'char']:
                 raise Exception("Error: must specify a field '{}' in 'extended_embed_sz' dictionary for embedding dim size".format(key))
 
@@ -259,7 +277,6 @@ class ClassifierTask(Task):
         print("[train file]: {}\n[valid file]: {}\n[test file]: {}".format(self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']))
         vocab, self.labels = self.reader.build_vocab([self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']])
         self.embeddings, self.feat2index = self._create_embeddings(embeddings_set, vocab)
-
 
     def _create_model(self):
         model = self.config_params['model']

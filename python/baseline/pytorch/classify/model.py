@@ -25,32 +25,19 @@ class WordClassifierBase(nn.Module, Classifier):
 
     @classmethod
     def create(cls, embeddings_set, labels, **kwargs):
-        word_embeddings = embeddings_set['word']
-        char_embeddings = embeddings_set.get('char')
-        finetune = kwargs.get('finetune', True)
-        activation_type = kwargs.get('activation', 'relu')
 
         model = cls()
+        model.pdrop = kwargs.get('pdrop', 0.5)
+        model.embeddings = dict()
+        model.embeddings['word'] = pytorch_embeddings(embeddings_set['word'], **kwargs)
+        input_sz = model.embeddings['word'].get_dsz()
+        if 'char' in embeddings_set:
+            model.embeddings['char'] = pytorch_embeddings(embeddings_set['char'],
+                                                          DefaultType=PyTorchCharConvEmbeddings,
+                                                          **kwargs)
+            input_sz += model.embeddings['char'].get_dsz()
         model.gpu = not bool(kwargs.get('nogpu', False))
-
-        model.word_dsz = word_embeddings.dsz
-        model.char_dsz = char_embeddings.dsz if char_embeddings is not None else 0
-        model.pdrop = kwargs.get('dropout', 0.5)
         model.labels = labels
-        model.lut = pytorch_embedding(word_embeddings, finetune)
-        model.vocab = {}
-        model.vocab['word'] = word_embeddings.vocab
-
-        if model.char_dsz > 0:
-            model.char_lut = pytorch_embedding(char_embeddings)
-            model.vocab['char'] = char_embeddings.vocab
-            char_filtsz = kwargs.get('cfiltsz', [3])
-            char_hsz = kwargs.get('char_hsz', 30)
-            model._init_pool_chars(char_hsz, char_filtsz, activation_type)
-            input_sz = model.word_dsz + model.char_comp.outsz
-        else:
-            input_sz = model.word_dsz
-
         model.log_softmax = nn.LogSoftmax(dim=1)
         nc = len(labels)
 
@@ -60,14 +47,16 @@ class WordClassifierBase(nn.Module, Classifier):
         print(model)
         return model
 
+    def cuda(self, device=None):
+        super(WordClassifierBase, self).cuda(device=device)
+        for emb in self.embeddings.values():
+            emb.cuda(device)
+
     def create_loss(self):
         return nn.NLLLoss()
 
     def __init__(self):
         super(WordClassifierBase, self).__init__()
-
-    def _init_pool_chars(self, char_hsz, char_filtsz, activation_type):
-        self.char_comp = ParallelConv(self.char_dsz, char_hsz, char_filtsz, activation_type, self.pdrop)
 
     def make_input(self, batch_dict):
         x = batch_dict['x']
@@ -86,11 +75,10 @@ class WordClassifierBase(nn.Module, Classifier):
     def forward(self, input):
         # BxTxC
         x = input[0]
-        embeddings = self.lut(x)
-        if self.char_dsz > 0:
+        embeddings = self.embeddings['word'](x)
+        if 'char' in self.embeddings:
             xch = input[1]
-            B, T, W = xch.shape
-            embeddings_char = self._char_encoding(xch.view(-1, W)).view(B, T, self.char_comp.outsz)
+            embeddings_char = self.embeddings['char'](xch)
             embeddings = torch.cat([embeddings, embeddings_char], 2)
         lengths = input[2]
         pooled = self._pool(embeddings, lengths)
@@ -161,16 +149,6 @@ class WordClassifierBase(nn.Module, Classifier):
 
     def _init_pool(self, dsz, **kwargs):
         pass
-
-    def _char_encoding(self, xch):
-
-        # For starters we need to perform embeddings for each character
-        # (TxB) x W -> (TxB) x W x D
-        char_embeds = self.char_lut(xch)
-        # (TxB) x D x W
-        char_vecs = char_embeds.transpose(1, 2).contiguous()
-        mots = self.char_comp(char_vecs)
-        return mots
 
 
 class ConvModel(WordClassifierBase):

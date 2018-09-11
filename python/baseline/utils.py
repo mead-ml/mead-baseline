@@ -317,6 +317,7 @@ def import_user_module(module_type, model_type):
     mod = importlib.import_module(module_name)
     return mod
 
+
 @exporter
 def create_user_model(input_, output_, **kwargs):
     """Create a user-defined model
@@ -334,6 +335,7 @@ def create_user_model(input_, output_, **kwargs):
     model_type = kwargs['model_type']
     mod = import_user_module(kwargs['task_type'], model_type)
     return mod.create_model(input_, output_, **kwargs)
+
 
 def wrapped_partial(func, name=None, *args, **kwargs):
     """
@@ -377,6 +379,13 @@ def create_user_lang_model(embeddings, **kwargs):
     model_type = kwargs['model_type']
     mod = import_user_module('lang', model_type)
     return mod.create_model(embeddings, **kwargs)
+
+
+@exporter
+def load_user_embeddings(embeddings_source, known_vocab, **kwargs):
+    embed_type = kwargs['embed_type']
+    mod = import_user_module('embed', embed_type)
+    return mod.load_embed(embeddings_source, known_vocab, **kwargs)
 
 
 @exporter

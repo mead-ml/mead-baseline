@@ -4,6 +4,7 @@ from baseline.utils import (
     load_user_tagger_model, create_user_tagger_model,
     load_user_seq2seq_model, create_user_seq2seq_model,
     load_user_lang_model, create_user_lang_model,
+    load_user_embeddings,
     lowercase, revlut,
     export, wrapped_partial
 )
@@ -285,3 +286,4 @@ class EncoderDecoder(object):
 
     def run(self, source_dict, **kwargs):
         pass
+

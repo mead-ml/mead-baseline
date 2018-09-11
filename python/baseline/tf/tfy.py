@@ -336,6 +336,40 @@ def embed(x, vsz, dsz, initializer, finetune=True, scope="LUT"):
     return word_embeddings
 
 
+class TensorFlowEmbeddings(object):
+
+    def __init__(self, model):
+        self.model = model
+
+    def get_dsz(self):
+        pass
+
+    def get_vsz(self):
+        return self.model.get_vsz()
+
+    def encode(self, _):
+        pass
+
+
+class TensorFlowWordEmbeddings(TensorFlowEmbeddings):
+
+    def __init__(self, model, **kwargs):
+        self.model = model
+        self.finetune = kwargs.get('finetune', True)
+        self.scope = kwargs.get('scope', 'LUT')
+
+    def get_dsz(self):
+        return self.model.get_dsz()
+
+    def encode(self, x):
+        return embed(x,
+                     len(self.model.vocab),
+                     self.get_dsz(),
+                     tf.constant_initializer(self.model.weights, dtype=tf.float32, verify_shape=True),
+                     self.finetune,
+                     self.scope)
+
+
 def parallel_conv(input_, filtsz, dsz, motsz, activation_fn=tf.nn.relu):
     """Do parallel convolutions with multiple filter widths and max-over-time pooling.
 
@@ -424,3 +458,34 @@ def pool_chars(x_char, Wch, ce0, char_dsz, **kwargs):
 
     return word_char, num_filts
 
+
+class TensorFlowCharConvEmbeddings(TensorFlowEmbeddings):
+
+    def __init__(self, model, **kwargs):
+        super(TensorFlowCharConvEmbeddings, model)
+        self.params = kwargs
+        self.scope = kwargs.get('scope', 'CharLUT')
+        self.wsz = None
+
+    def encode(self, xch):
+        with tf.variable_scope("CharLUT"):
+            Wch = tf.get_variable("Wch",
+                                  initializer=tf.constant_initializer(self.model.weights, dtype=tf.float32, verify_shape=True),
+                                  shape=[len(self.model.vocab), self.model.dsz], trainable=True)
+            ech0 = tf.scatter_update(Wch, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, self.model.dsz]))
+            char_comp, self.wsz = pool_chars(xch, Wch, ech0, self.model.dsz, **self.params)
+            return char_comp
+
+    def get_vsz(self):
+        return self.model.get_vsz()
+
+    # Warning this function is only initialized AFTER encode
+    def get_dsz(self):
+        return self.wsz
+
+
+def tf_embeddings(in_embeddings_obj, DefaultType=TensorFlowWordEmbeddings, **kwargs):
+    if isinstance(in_embeddings_obj, TensorFlowEmbeddings):
+        return in_embeddings_obj
+    else:
+        return DefaultType(in_embeddings_obj, **kwargs)
