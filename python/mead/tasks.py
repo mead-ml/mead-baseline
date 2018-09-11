@@ -117,7 +117,9 @@ class Task(object):
         self._close_reporting_hooks()
         return model
 
-    def _configure_reporting(self, reporting_hooks, task_name):
+    def _configure_reporting(self, reporting_hooks, task_name, reporting_args):
+        print(extra_args)
+        sys.exit(1)
         self.reporting = create_reporting_hook(reporting_hooks, self.mead_settings['reporting_hooks'],
                                                config_file=self.config_file, task=task_name)
         self.config_params['train']['reporting'] = [x.step for x in self.reporting]
