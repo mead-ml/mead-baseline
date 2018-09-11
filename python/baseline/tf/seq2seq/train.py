@@ -1,7 +1,6 @@
 import tensorflow as tf
 import numpy as np
 from baseline.utils import listify, get_model_file
-from baseline.reporting import basic_reporting
 from baseline.tf.tfy import optimizer
 from baseline.train import Trainer, create_trainer
 import time
@@ -115,7 +114,7 @@ def fit(model, ts, vs, es=None, **kwargs):
         patience = kwargs.get('patience', epochs)
         print('Doing early stopping on [%s] with patience [%d]' % (early_stopping_metric, patience))
 
-    reporting_fns = listify(kwargs.get('reporting', basic_reporting))
+    reporting_fns = listify(kwargs.get('reporting', []))
     print('reporting', reporting_fns)
 
     min_metric = 10000

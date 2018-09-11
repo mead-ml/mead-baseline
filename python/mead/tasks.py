@@ -9,6 +9,7 @@ from mead.downloader import EmbeddingDownloader, DataDownloader
 from mead.mime_type import mime_type
 from baseline.utils import export, read_config_file, read_json, write_json
 from baseline.reporting import create_reporting_hook
+from mead.utils import modify_reporting_hook_settings
 
 __all__ = []
 exporter = export(__all__)
@@ -58,7 +59,7 @@ class Task(object):
         config = Task.TASK_REGISTRY[task](logging_config, mead_config)
         return config
 
-    def read_config(self, config_params, config_file, datasets_index, task_name):
+    def read_config(self, config_params, config_file, datasets_index, task_name, **kwargs):
         """
         Read the config file and the datasets index
 
@@ -73,7 +74,7 @@ class Task(object):
         self.config_params = config_params
         self.config_file = config_file
         self._setup_task()
-        self._configure_reporting(config_params.get('reporting', []), task_name)
+        self._configure_reporting(config_params.get('reporting', []), task_name, **kwargs)
         self.dataset = datasets_set[self.config_params['dataset']]
         self.reader = self._create_task_specific_reader()
 
@@ -117,10 +118,11 @@ class Task(object):
         self._close_reporting_hooks()
         return model
 
-    def _configure_reporting(self, reporting_hooks, task_name, reporting_args):
-        print(extra_args)
-        sys.exit(1)
-        self.reporting = create_reporting_hook(reporting_hooks, self.mead_settings['reporting_hooks'],
+    def _configure_reporting(self, reporting_hooks, task_name, **kwargs):
+        reporting_settings = self.mead_settings['reporting_hooks']
+        reporting_args_mead = kwargs['reporting_args']
+        modify_reporting_hook_settings(reporting_settings, reporting_args_mead, reporting_hooks)
+        self.reporting = create_reporting_hook(reporting_hooks, reporting_settings,
                                                config_file=self.config_file, task=task_name)
         self.config_params['train']['reporting'] = [x.step for x in self.reporting]
         logging.basicConfig(level=logging.DEBUG)

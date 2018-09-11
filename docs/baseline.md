@@ -30,6 +30,10 @@ The Baseline module has dependencies on:
 - `PyYAML` is an optional dependency, which, if installed, allows [mead](mead.md) configurations to be provided with YAML instead of JSON
 - When the GPU is used, the code assumes that `cudnn` is available and installed. This is critical for good performance.
 
+## Saving the results
+
+We provide different [reporting hooks](reporting.md) for displaying the results on console/ saving to a log file or database or visualizations. All reporting hooks can be run simultaneously.
+
 ## Running the codes
 
 The driver programs available in baseline are:

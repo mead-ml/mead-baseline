@@ -115,7 +115,7 @@ def fit(model, ts, vs, es=None, **kwargs):
         patience = kwargs.get('patience', epochs)
         print('Doing early stopping on [%s] with patience [%d]' % (early_stopping_metric, patience))
 
-    reporting_fns = listify(kwargs.get('reporting'))
+    reporting_fns = listify(kwargs.get('reporting', []))
     print('reporting', reporting_fns)
 
     trainer = create_trainer(ClassifyTrainerTf, model, **kwargs)

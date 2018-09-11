@@ -3,7 +3,6 @@ import numpy as np
 from baseline.utils import listify, get_model_file
 from baseline.progress import create_progress_bar
 from baseline.confusion import ConfusionMatrix
-from baseline.reporting import basic_reporting
 from baseline.train import EpochReportingTrainer, create_trainer
 from baseline.dy.dynety import *
 from baseline.utils import verbose_output
@@ -104,7 +103,6 @@ def fit(
         ts, vs, es,
         epochs=20,
         do_early_stopping=True, early_stopping_metric='acc',
-        reporting=basic_reporting,
         **kwargs
 ):
     autobatchsz = kwargs.get('autobatchsz', 1)
@@ -114,7 +112,7 @@ def fit(
         patience = kwargs.get('patience', epochs)
         print('Doing early stopping on [{}] with patience [{}]'.format(early_stopping_metric, patience))
 
-    reporting_fns = listify(reporting)
+    reporting_fns = listify(kwargs.get('reporting', []))
     print('reporting', reporting_fns)
 
     if autobatchsz != 1:
