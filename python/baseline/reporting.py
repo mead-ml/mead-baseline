@@ -120,97 +120,6 @@ class VisdomReporting(ReportingHook):
         self.g_vis_win = {}
 
     def step(self, metrics, tick, phase, tick_type=None, **kwargs):
-        def report(metrics, tick, phase, tick_type=None):
-            """This method will write its results to visdom
-
-            :param metrics: A map of metrics to scores
-            :param tick: The time (resolution defined by `tick_type`)
-            :param phase: The phase of training (`Train`, `Valid`, `Test`)
-            :param tick_type: The resolution of tick (`STEP`, `EPOCH`)
-            :return:
-            """
-
-            for metric in metrics.keys():
-                chart_id = '(%s) %s' % (phase, metric)
-                if chart_id not in self.g_vis_win:
-                    print('Creating visualization for %s' % chart_id)
-                    self.g_vis_win[chart_id] = self.g_vis.line(
-                        X=np.array([0]),
-                        Y=np.array([metrics[metric]]),
-                        opts=dict(
-                            fillarea=True,
-                            xlabel='Time',
-                            ylabel='Metric',
-                            title=chart_id,
-                        ),
-                    )
-                else:
-                    self.g_vis.line(
-                        X=np.array([tick]),
-                        Y=np.array([metrics[metric]]),
-                        win=self.g_vis_win[chart_id],
-                        update='append'
-                    )
-
-        return report
-
-@exporter
-def basic_reporting(metrics, tick, phase, tick_type=None):
-    """Write results to `stdout`
-
-    :param metrics: A map of metrics to scores
-    :param tick: The time (resolution defined by `tick_type`)
-    :param phase: The phase of training (`Train`, `Valid`, `Test`)
-    :param tick_type: The resolution of tick (`STEP`, `EPOCH`)
-    :return:
-    """
-    if tick_type is None:
-        tick_type = 'STEP'
-        if phase in ['Valid', 'Test']:
-            tick_type = 'EPOCH'
-
-    print('%s [%d] [%s]' % (tick_type, tick, phase))
-    print('=================================================')
-    for k, v in metrics.items():
-        if k not in ['avg_loss', 'perplexity']:
-            v *= 100.
-        print('\t%s=%.3f' % (k, v))
-    print('-------------------------------------------------')
-
-
-@exporter
-def logging_reporting(metrics, tick, phase, tick_type=None):
-    """Write results to Python's `logging` module under `baseline.reporting`
-
-    :param metrics: A map of metrics to scores
-    :param tick: The time (resolution defined by `tick_type`)
-    :param phase: The phase of training (`Train`, `Valid`, `Test`)
-    :param tick_type: The resolution of tick (`STEP`, `EPOCH`)
-    :return:
-    """
-    log = logging.getLogger('baseline.reporting')
-    if tick_type is None:
-        tick_type = 'STEP'
-        if phase in ['Valid', 'Test']:
-            tick_type = 'EPOCH'
-
-    msg = {'tick_type': tick_type, 'tick': tick, 'phase': phase }
-    for k, v in metrics.items():
-        msg[k] = v
-    log.info(msg)
-
-
-@exporter
-def visdom_reporting(name="main"):
-    # To use this:
-    # python -m visdom.server
-    # http://localhost:8097/
-    import visdom
-    print('Creating g_vis instance with env {}'.format(name))
-    g_vis = visdom.Visdom(env=name, use_incoming_socket=False)
-    g_vis_win = {}
-
-    def report(metrics, tick, phase, tick_type=None):
         """This method will write its results to visdom
 
         :param metrics: A map of metrics to scores
@@ -219,13 +128,11 @@ def visdom_reporting(name="main"):
         :param tick_type: The resolution of tick (`STEP`, `EPOCH`)
         :return:
         """
-
         for metric in metrics.keys():
             chart_id = '(%s) %s' % (phase, metric)
-
-            if chart_id not in g_vis_win:
+            if chart_id not in self.g_vis_win:
                 print('Creating visualization for %s' % chart_id)
-                g_vis_win[chart_id] = g_vis.line(
+                self.g_vis_win[chart_id] = self.g_vis.line(
                     X=np.array([0]),
                     Y=np.array([metrics[metric]]),
                     opts=dict(
@@ -236,17 +143,12 @@ def visdom_reporting(name="main"):
                     ),
                 )
             else:
-                g_vis.line(
+                self.g_vis.line(
                     X=np.array([tick]),
                     Y=np.array([metrics[metric]]),
-                    win=g_vis_win[chart_id],
+                    win=self.g_vis_win[chart_id],
                     update='append'
                 )
-
-    return report
-
-
-g_tb_run = None
 
 
 @exporter
@@ -274,33 +176,6 @@ def tensorboard_reporting(metrics, tick, phase, tick_type=None):
     for metric in metrics.keys():
         chart_id = '%s:%s' % (phase, metric)
         tb_log_value(chart_id, metrics[metric], tick)
-
-
-@exporter
-def setup_reporting(**kwargs):
-    """Negotiate the reporting hooks
-
-     :param kwargs:
-        See below
-
-    :Keyword Arguments:
-        * *visdom* (``bool``) --
-          Setup a hook to call `visdom` for logging.  Defaults to `False`
-        * *tensorboard* (``bool``) --
-          Setup a hook to call `tensorboard` for logging.  Defaults to `False`
-        * *logging* (``bool``) --
-          Use Python's `logging` module to log events to `baseline.reporting`.  Default to `False`
-    """
-    use_visdom = kwargs.get('visdom', False)
-    visdom_name = kwargs.get('visdom_name', 'main')
-    use_tensorboard = kwargs.get('tensorboard', False)
-    use_logging = kwargs.get('logging', False)
-    reporting = [logging_reporting if use_logging else basic_reporting]
-    if use_visdom:
-        reporting.append(visdom_reporting(visdom_name))
-    if use_tensorboard:
-        reporting.append(tensorboard_reporting)
-    return reporting
 
 
 @exporter
