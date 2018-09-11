@@ -113,8 +113,8 @@ class VisdomReporting(ReportingHook):
         import visdom
         name = kwargs.get('visdom_settings').get('name', 'main')
         print('Creating g_vis instance with env {}'.format(name))
-        self.g_vis = visdom.Visdom(env=name, use_incoming_socket=False)
-        self.g_vis_win = {}
+        self._vis = visdom.Visdom(env=name, use_incoming_socket=False)
+        self._vis_win = {}
 
     def step(self, metrics, tick, phase, tick_type=None, **kwargs):
         """This method will write its results to visdom
@@ -127,9 +127,9 @@ class VisdomReporting(ReportingHook):
         """
         for metric in metrics.keys():
             chart_id = '(%s) %s' % (phase, metric)
-            if chart_id not in self.g_vis_win:
+            if chart_id not in self._vis_win:
                 print('Creating visualization for %s' % chart_id)
-                self.g_vis_win[chart_id] = self.g_vis.line(
+                self._vis_win[chart_id] = self._vis.line(
                     X=np.array([0]),
                     Y=np.array([metrics[metric]]),
                     opts=dict(
@@ -140,10 +140,10 @@ class VisdomReporting(ReportingHook):
                     ),
                 )
             else:
-                self.g_vis.line(
+                self._vis.line(
                     X=np.array([tick]),
                     Y=np.array([metrics[metric]]),
-                    win=self.g_vis_win[chart_id],
+                    win=self._vis_win[chart_id],
                     update='append'
                 )
 

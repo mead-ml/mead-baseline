@@ -28,7 +28,6 @@ def convert_path(path, loc=None):
     return os.path.join(loc, path)
 
 
-@exporter
 def _infer_type_or_str(x):
     try:
         return str2bool(x)
@@ -37,6 +36,7 @@ def _infer_type_or_str(x):
             return float(x)
         except ValueError:
             return x
+
 
 @exporter
 def modify_reporting_hook_settings(reporting_settings, reporting_args_mead, reporting_hooks):
