@@ -215,12 +215,26 @@ def lstm_cell(hsz, forget_bias=1.0):
     return tf.contrib.rnn.BasicLSTMCell(hsz, forget_bias=forget_bias, state_is_tuple=True)
 
 
-def lstm_cell_w_dropout(hsz, pkeep, forget_bias=1.0):
-    return tf.contrib.rnn.DropoutWrapper(tf.contrib.rnn.BasicLSTMCell(hsz, forget_bias=forget_bias, state_is_tuple=True), output_keep_prob=pkeep)
+def lstm_cell_w_dropout(hsz, pkeep, forget_bias=1.0, variational=True):
+    return tf.contrib.rnn.DropoutWrapper(
+        tf.contrib.rnn.BasicLSTMCell(hsz, forget_bias=forget_bias, state_is_tuple=True),
+        output_keep_prob=pkeep,
+        state_keep_prob=pkeep if variational else 1.0,
+        variational_recurrent=variational,
+        dtype=tf.float32
+    )
 
 
-def stacked_lstm(hsz, pkeep, nlayers):
-    return tf.contrib.rnn.MultiRNNCell([lstm_cell_w_dropout(hsz, pkeep) if i < nlayers - 1 else lstm_cell(hsz) for i in range(nlayers)], state_is_tuple=True)
+def stacked_lstm(hsz, pkeep, nlayers, variational=False):
+    if variational:
+        return tf.contrib.rnn.MultiRNNCell(
+            [lstm_cell_w_dropout(hsz, pkeep, variational=variational) for _ in range(nlayers)],
+            state_is_tuple=True
+        )
+    return tf.contrib.rnn.MultiRNNCell(
+        [lstm_cell_w_dropout(hsz, pkeep) if i < nlayers - 1 else lstm_cell(hsz) for i in range(nlayers)],
+        state_is_tuple=True
+    )
 
 
 def stacked_cnn(inputs, hsz, pkeep, nlayers, activation_fn=tf.nn.relu, filts=[5]):
@@ -236,16 +250,29 @@ def stacked_cnn(inputs, hsz, pkeep, nlayers, activation_fn=tf.nn.relu, filts=[5]
         return tf.concat(values=layers, axis=2)
 
 
-def rnn_cell_w_dropout(hsz, pkeep, rnntype, st=None):
+def rnn_cell_w_dropout(hsz, pkeep, rnntype, st=None, variational=False):
     if st is not None:
         cell = tf.contrib.rnn.BasicLSTMCell(hsz, state_is_tuple=st) if rnntype.endswith('lstm') else tf.contrib.rnn.GRUCell(hsz)
     else:
         cell = tf.contrib.rnn.LSTMCell(hsz) if rnntype.endswith('lstm') else tf.contrib.rnn.GRUCell(hsz)
-    return tf.contrib.rnn.DropoutWrapper(cell, output_keep_prob=pkeep)
+    return tf.contrib.rnn.DropoutWrapper(
+        cell,
+        output_keep_prob=pkeep,
+        state_keep_prob=pkeep if variational else 1.0,
+        variational_recurrent=variational
+    )
 
 
-def multi_rnn_cell_w_dropout(hsz, pkeep, rnntype, num_layers):
-    return tf.contrib.rnn.MultiRNNCell([rnn_cell_w_dropout(hsz, pkeep, rnntype) for _ in range(num_layers)], state_is_tuple=True)
+def multi_rnn_cell_w_dropout(hsz, pkeep, rnntype, num_layers, variational=False):
+    if variational:
+        return tf.contrib.rnn.MultiRNNCell(
+            [rnn_cell_w_dropout(hsz, pkeep, rnntype, variational) for _ in range(num_layers)],
+            state_is_tuple=True
+        )
+    return tf.contrib.rnn.MultiRNNCell(
+        [rnn_cell_w_dropout(hsz, pkeep, rnntype) if i < num_layers - 1 else rnn_cell_w_dropout(hsz, 1.0, rnntype) for i in range(num_layers)],
+        state_is_tuple=True
+    )
 
 
 # This function should never be used for decoding.  It exists only so that the training model can greedily decode

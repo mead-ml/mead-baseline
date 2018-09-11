@@ -503,6 +503,7 @@ class LSTMModel(WordClassifierBase):
         :return: 
         """
         hsz = kwargs.get('rnnsz', kwargs.get('hsz', 100))
+        vdrop = bool(kwargs.get('variational_dropout', False))
         if type(hsz) is list:
             hsz = hsz[0]
 
@@ -510,8 +511,8 @@ class LSTMModel(WordClassifierBase):
         nlayers = int(kwargs.get('layers', 1))
 
         if rnntype == 'blstm':
-            rnnfwd = stacked_lstm(hsz, self.pkeep, nlayers)
-            rnnbwd = stacked_lstm(hsz, self.pkeep, nlayers)
+            rnnfwd = stacked_lstm(hsz, self.pkeep, nlayers, variational=vdrop)
+            rnnbwd = stacked_lstm(hsz, self.pkeep, nlayers, variational=vdrop)
             ((_, _), (fw_final_state, bw_final_state)) = tf.nn.bidirectional_dynamic_rnn(rnnfwd,
                                                                                          rnnbwd,
                                                                                          word_embeddings,
@@ -522,7 +523,7 @@ class LSTMModel(WordClassifierBase):
             out_hsz = hsz
 
         else:
-            rnnfwd = stacked_lstm(hsz, self.pkeep, nlayers)
+            rnnfwd = stacked_lstm(hsz, self.pkeep, nlayers, variational=vdrop)
             (_, (output_state)) = tf.nn.dynamic_rnn(rnnfwd, word_embeddings, sequence_length=self.lengths, dtype=tf.float32)
             output_state = output_state[-1].h
             out_hsz = hsz

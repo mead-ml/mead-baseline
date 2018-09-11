@@ -46,6 +46,7 @@ class RNNTaggerModel(nn.Module, Tagger):
         model.use_crf = bool(kwargs.get('crf', False))
         model.crf_mask = bool(kwargs.get('crf_mask', False))
         model.span_type = kwargs.get('span_type')
+        model.vdrop = bool(kwargs.get('variational_dropout', False))
         model.activation_type = kwargs.get('activation', 'tanh')
         nlayers = int(kwargs.get('layers', 1))
         rnntype = kwargs.get('rnntype', 'blstm')
@@ -66,7 +67,10 @@ class RNNTaggerModel(nn.Module, Tagger):
 
         model.char_vocab = char_vec.vocab
         model.cembed = pytorch_embedding(char_vec)
-        model.dropout = nn.Dropout(pdrop)
+        if model.vdrop:
+            model.dropout = VariationalDropout(pdrop)
+        else:
+            model.dropout = nn.Dropout(pdrop)
         model.rnn = LSTMEncoder(model.wchsz + word_dsz, hsz, rnntype, nlayers, pdrop)
         out_hsz = model.rnn.outsz
         model.decoder = nn.Sequential()

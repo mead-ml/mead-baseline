@@ -206,6 +206,7 @@ class Seq2SeqModel(EncoderDecoder):
         sampling = kwargs.get('sampling', False)
         sampling_temp = kwargs.get('sampling_temp', 1.0)
         model.sess = kwargs.get('sess', tf.Session())
+        model.vdrop = bool(kwargs.get('variational_dropout', False))
         unif = kwargs.get('unif', 0.25)
         model.src = kwargs.get('src', tf.placeholder(tf.int32, [None, mxlen], name="src"))
         model.tgt = kwargs.get('tgt', tf.placeholder(tf.int32, [None, mxlen], name="tgt"))
@@ -309,7 +310,7 @@ class Seq2SeqModel(EncoderDecoder):
         self.saver = saver
 
     def _attn_cell_w_dropout(self, rnn_enc_tensor, beam, attn_type):
-        cell = multi_rnn_cell_w_dropout(self.hsz, self.pkeep, self.rnntype, self.nlayers)
+        cell = multi_rnn_cell_w_dropout(self.hsz, self.pkeep, self.rnntype, self.nlayers, variational=self.vdrop)
         if self.attn:
             src_len = self.src_len
             if beam > 1:
@@ -326,8 +327,8 @@ class Seq2SeqModel(EncoderDecoder):
             # List to tensor, reform as (T, B, W)
             if self.rnntype == 'blstm':
                 nlayers_bi = int(self.nlayers / 2)
-                rnn_fwd_cell = multi_rnn_cell_w_dropout(self.hsz, self.pkeep, self.rnntype, nlayers_bi)
-                rnn_bwd_cell = multi_rnn_cell_w_dropout(self.hsz, self.pkeep, self.rnntype, nlayers_bi)
+                rnn_fwd_cell = multi_rnn_cell_w_dropout(self.hsz, self.pkeep, self.rnntype, nlayers_bi, variational=self.vdrop)
+                rnn_bwd_cell = multi_rnn_cell_w_dropout(self.hsz, self.pkeep, self.rnntype, nlayers_bi, variational=self.vdrop)
                 rnn_enc_tensor, final_encoder_state = tf.nn.bidirectional_dynamic_rnn(rnn_fwd_cell, rnn_bwd_cell,
                                                                                       embed_in,
                                                                                       scope='brnn_enc',
@@ -341,7 +342,7 @@ class Seq2SeqModel(EncoderDecoder):
                 encoder_state = tuple(encoder_state)
             else:
 
-                rnn_enc_cell = multi_rnn_cell_w_dropout(self.hsz, self.pkeep, self.rnntype, self.nlayers)
+                rnn_enc_cell = multi_rnn_cell_w_dropout(self.hsz, self.pkeep, self.rnntype, self.nlayers, variational=self.vdrop)
                 rnn_enc_tensor, encoder_state = tf.nn.dynamic_rnn(rnn_enc_cell, embed_in,
                                                                   scope='rnn_enc',
                                                                   sequence_length=self.src_len,

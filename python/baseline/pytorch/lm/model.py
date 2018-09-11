@@ -30,7 +30,7 @@ class AbstractLanguageModel(nn.Module):
 
     def _rnnlm(self, emb, hidden):
         output, hidden = self.rnn(emb, hidden)
-        output = self.dropout(output).contiguous()
+        output = self.rnn_dropout(output).contiguous()
         decoded = self.decoder(output.view(output.size(0)*output.size(1), output.size(2)))
         return decoded.view(output.size(0), output.size(1), decoded.size(1)), hidden
 
@@ -72,6 +72,14 @@ class BasicLanguageModel(AbstractLanguageModel):
         model.vocab = vectors.vocab
         model.embed = pytorch_embedding(vectors)
         model.dsz = vectors.dsz
+
+        model.vdrop = bool(kwargs.get('variational_dropout', False))
+
+        if model.vdrop:
+            model.rnn_dropout = VariationalDropout(pdrop)
+        else:
+            model.rnn_dropout = nn.Dropout(pdrop)
+
         model.dropout = nn.Dropout(pdrop)
         model.rnn, out_hsz = pytorch_lstm(model.dsz, model.hsz, 'lstm', model.nlayers, pdrop, batch_first=True)
         model.decoder = nn.Sequential()
@@ -167,12 +175,17 @@ class CharCompLanguageModel(AbstractLanguageModel):
         model.nlayers = int(kwargs.get('layers', 1))
         pdrop = float(kwargs.get('dropout', 0.5))
         model.vocab_sz = word_vec.vsz + 1
+        model.vdrop = bool(kwargs.get('variational_dropout', False))
 
         #if word_vec is not None:
         #    model.word_vocab = word_vec.vocab
         #    model.wembed = pytorch_embedding(word_vec)
         #    word_dsz = word_vec.dsz
 
+        if model.vdrop:
+            model.rnn_dropout = VariationalDropout(pdrop)
+        else:
+            model.rnn_dropout = nn.Dropout(pdrop)
         model.dropout = nn.Dropout(pdrop)
         model.rnn, out_hsz = pytorch_lstm(cmotsz_all, model.hsz, 'lstm', model.nlayers, pdrop, batch_first=True)
         model.decoder = nn.Sequential()
@@ -204,7 +217,7 @@ class CharCompLanguageModel(AbstractLanguageModel):
         #else:
         emb = b_t_wch
         output, hidden = self.rnn(emb, hidden)
-        output = self.dropout(output).contiguous()
+        output = self.rnn_dropout(output).contiguous()
         decoded = self.decoder(output.view(output.size(0)*output.size(1), output.size(2)))
         return decoded.view(output.size(0), output.size(1), decoded.size(1)), hidden
 

@@ -256,7 +256,7 @@ def read_json(filepath, default_value=None, strict=False):
     """
     if not os.path.exists(filepath):
         if strict:
-            raise FileNotFoundError('No file [] found'.format(filepath))
+            raise FileNotFoundError('No file {} found'.format(filepath))
         return default_value if default_value is not None else {}
     with open(filepath) as f:
         return json.load(f)
@@ -274,7 +274,7 @@ def read_yaml(filepath, default_value=None, strict=False):
     """
     if not os.path.exists(filepath):
         if strict:
-            raise FileNotFoundError('No file [] found'.format(filepath))
+            raise FileNotFoundError('No file {} found'.format(filepath))
         return default_value if default_value is not None else {}
     with open(filepath) as f:
         import yaml
