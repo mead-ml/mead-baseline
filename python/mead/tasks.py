@@ -120,8 +120,8 @@ class Task(object):
 
     def _configure_reporting(self, reporting_hooks, task_name, **kwargs):
         reporting_settings = self.mead_settings.get('reporting_hooks', {})
-        if not reporting_settings:
-            for reporting_hook in reporting_hooks:
+        for reporting_hook in reporting_hooks:
+            if reporting_hook not in reporting_settings:
                 reporting_settings[reporting_hook] = {}
         reporting_args_mead = kwargs.get('reporting_args', [])
         modify_reporting_hook_settings(reporting_settings, reporting_args_mead, reporting_hooks)
