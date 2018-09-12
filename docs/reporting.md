@@ -13,7 +13,7 @@ You can use the reporting hooks in two ways:
 
 ```  
 
-- pass in the reporting hooks as arguments of `mead-train` or `python/mead/trainer.py`: `mead-train --config sst2.json --reporting visdom, console` 
+- pass in the reporting hooks as arguments of `mead-train` or `python/mead/trainer.py`: `mead-train --config sst2.json --reporting visdom console`
 
 Following reporting hooks are implemented:
 
