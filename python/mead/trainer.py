@@ -22,6 +22,7 @@ def main():
         config_params['model']['gpus'] = args.gpus
     if args.reporting is not None:
         config_params['reporting'] = args.reporting
+
     task_name = config_params.get('task', 'classify') if args.task is None else args.task
     print('Task: [{}]'.format(task_name))
     task = mead.Task.get_task_specific(task_name, args.logging, args.settings)
