@@ -128,7 +128,6 @@ class Task(object):
         logging.basicConfig(level=logging.DEBUG)
 
     def _close_reporting_hooks(self):
-        print("closing reporting hooks")
         for x in self.reporting:
             x.done()
 
