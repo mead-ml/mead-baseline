@@ -59,7 +59,7 @@ class Task(object):
         config = Task.TASK_REGISTRY[task](logging_config, mead_config)
         return config
 
-    def read_config(self, config_params, config_file, datasets_index, task_name, **kwargs):
+    def read_config(self, config_params, datasets_index, task_name, **kwargs):
         """
         Read the config file and the datasets index
 
@@ -72,7 +72,7 @@ class Task(object):
         """
         datasets_set = mead.utils.index_by_label(datasets_index)
         self.config_params = config_params
-        self.config_file = config_file
+        self.config_file = kwargs.get('config_file')
         self._setup_task()
         self._configure_reporting(config_params.get('reporting', []), task_name, **kwargs)
         self.dataset = datasets_set[self.config_params['dataset']]
@@ -119,8 +119,11 @@ class Task(object):
         return model
 
     def _configure_reporting(self, reporting_hooks, task_name, **kwargs):
-        reporting_settings = self.mead_settings.get('reporting_hooks')
-        reporting_args_mead = kwargs.get('reporting_args')
+        reporting_settings = self.mead_settings.get('reporting_hooks', {})
+        for reporting_hook in reporting_hooks:
+            if reporting_hook not in reporting_settings:
+                reporting_settings[reporting_hook] = {}
+        reporting_args_mead = kwargs.get('reporting_args', [])
         modify_reporting_hook_settings(reporting_settings, reporting_args_mead, reporting_hooks)
         self.reporting = create_reporting_hook(reporting_hooks, reporting_settings,
                                                config_file=self.config_file, task=task_name)
