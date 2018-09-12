@@ -8,6 +8,8 @@ import os
 from mead.downloader import EmbeddingDownloader, DataDownloader
 from mead.mime_type import mime_type
 from baseline.utils import export, read_config_file, read_json, write_json
+from baseline.reporting import create_reporting_hook
+from mead.utils import modify_reporting_hook_settings
 
 __all__ = []
 exporter = export(__all__)
@@ -22,17 +24,18 @@ class Task(object):
         self.ExporterType = None
         self.mead_config = mead_config
         if os.path.exists(mead_config):
-            mead_settings = read_json(mead_config)
+            self.mead_settings = read_json(mead_config)
         else:
-            mead_settings = {}
-        if 'datacache' not in mead_settings:
+            self.mead_settings = {}
+        if 'datacache' not in self.mead_settings:
             self.data_download_cache = os.path.expanduser("~/.bl-data")
-            mead_settings['datacache'] = self.data_download_cache
-            write_json(mead_settings, mead_config)
+            self.mead_settings['datacache'] = self.data_download_cache
+            write_json(self.mead_settings, mead_config)
         else:
-            self.data_download_cache = os.path.expanduser(mead_settings['datacache'])
+            self.data_download_cache = os.path.expanduser(self.mead_settings['datacache'])
         print("using {} as data/embeddings cache".format(self.data_download_cache))
         self._configure_logger(logger_file)
+        self.name = None
 
     def _configure_logger(self, logger_file):
         """Use the logger file (logging.json) to configure the log, but overwrite the filename to include the PID
@@ -56,7 +59,7 @@ class Task(object):
         config = Task.TASK_REGISTRY[task](logging_config, mead_config)
         return config
 
-    def read_config(self, config_params, datasets_index):
+    def read_config(self, config_params, config_file, datasets_index, task_name, **kwargs):
         """
         Read the config file and the datasets index
 
@@ -69,8 +72,9 @@ class Task(object):
         """
         datasets_set = mead.utils.index_by_label(datasets_index)
         self.config_params = config_params
+        self.config_file = config_file
         self._setup_task()
-        self._configure_reporting()
+        self._configure_reporting(config_params.get('reporting', []), task_name, **kwargs)
         self.dataset = datasets_set[self.config_params['dataset']]
         self.reader = self._create_task_specific_reader()
 
@@ -111,18 +115,21 @@ class Task(object):
         self._load_dataset()
         model = self._create_model()
         self.task.fit(model, self.train_data, self.valid_data, self.test_data, **self.config_params['train'])
+        self._close_reporting_hooks()
         return model
 
-    def _configure_reporting(self):
-        reporting = {
-            "logging": True,
-            "visdom": self.config_params.get('visdom', False),
-            "tensorboard": self.config_params.get('tensorboard', False),
-            "visdom_name": self.config_params.get('visdom_name', 'main'),
-        }
-        reporting = baseline.setup_reporting(**reporting)
-        self.config_params['train']['reporting'] = reporting
+    def _configure_reporting(self, reporting_hooks, task_name, **kwargs):
+        reporting_settings = self.mead_settings['reporting_hooks']
+        reporting_args_mead = kwargs['reporting_args']
+        modify_reporting_hook_settings(reporting_settings, reporting_args_mead, reporting_hooks)
+        self.reporting = create_reporting_hook(reporting_hooks, reporting_settings,
+                                               config_file=self.config_file, task=task_name)
+        self.config_params['train']['reporting'] = [x.step for x in self.reporting]
         logging.basicConfig(level=logging.DEBUG)
+
+    def _close_reporting_hooks(self):
+        for x in self.reporting:
+            x.done()
 
     @staticmethod
     def _create_embeddings_from_file(embed_file, embed_dsz, embed_sha1, data_download_cache, vocab, unif, keep_unused):

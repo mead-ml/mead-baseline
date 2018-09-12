@@ -31,11 +31,11 @@ class RepoManager(object):
     @staticmethod
     def get():
         if RepoManager.central_repo is None:
-            RepoManager.central_repo = ExperimentRepo.create_repo(RepoManager.dbtype,
-                                                                  RepoManager.dbhost,
+            RepoManager.central_repo = ExperimentRepo.create_repo(RepoManager.dbhost,
                                                                   RepoManager.dbport,
                                                                   RepoManager.dbuser,
-                                                                  RepoManager.dbpass)
+                                                                  RepoManager.dbpass,
+                                                                  RepoManager.dbtype)
 
         if RepoManager.central_repo is not None:
             click.echo("db {} connection successful with [host]: {}, [port]: {}".format(RepoManager.dbtype,

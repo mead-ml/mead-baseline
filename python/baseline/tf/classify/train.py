@@ -2,7 +2,6 @@ import os
 import tensorflow as tf
 from baseline.confusion import ConfusionMatrix
 from baseline.progress import create_progress_bar
-from baseline.reporting import basic_reporting
 from baseline.utils import listify, get_model_file
 from baseline.tf.tfy import optimizer, _add_ema
 from baseline.train import EpochReportingTrainer, create_trainer
@@ -116,7 +115,7 @@ def fit(model, ts, vs, es=None, **kwargs):
         patience = kwargs.get('patience', epochs)
         print('Doing early stopping on [%s] with patience [%d]' % (early_stopping_metric, patience))
 
-    reporting_fns = listify(kwargs.get('reporting', basic_reporting))
+    reporting_fns = listify(kwargs.get('reporting', []))
     print('reporting', reporting_fns)
 
     trainer = create_trainer(ClassifyTrainerTf, model, **kwargs)

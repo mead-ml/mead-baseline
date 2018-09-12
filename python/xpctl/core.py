@@ -73,7 +73,7 @@ class ExperimentRepo(object):
         pass
 
     @staticmethod
-    def create_repo(dbtype, host, port, user, passwd):
+    def create_repo(dbhost, dbport, user, passwd, dbtype='mongo'):
         """Create a MongoDB-backed repository
 
         :param type: (``str``) The database type
@@ -85,10 +85,10 @@ class ExperimentRepo(object):
         """
         if dbtype == 'mongo':
             from xpctl.mongo import MongoRepo
-            return MongoRepo(host, port, user, passwd)
+            return MongoRepo(dbhost, dbport, user, passwd)
         else:
             from xpctl.sql import SQLRepo
-            return SQLRepo(type=dbtype, host=host, port=port, user=user, passwd=passwd)
+            return SQLRepo(type=dbtype, host=dbhost, port=dbport, user=user, passwd=passwd)
 
     def get_model_location(self, id, task):
         """Get the physical location of the model specified by this id

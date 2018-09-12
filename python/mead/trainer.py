@@ -13,15 +13,20 @@ def main():
     parser.add_argument('--logging', help='json file for logging', default='config/logging.json', type=convert_path)
     parser.add_argument('--task', help='task to run', choices=['classify', 'tagger', 'seq2seq', 'lm'])
     parser.add_argument('--gpus', help='Number of GPUs (defaults to 1)', type=int)
-    args = parser.parse_known_args()[0]
+    parser.add_argument('--reporting', help='reporting hooks', nargs='+')
+    args, reporting_args = parser.parse_known_args()
 
     config_params = read_config_file(args.config)
+
     if args.gpus is not None:
         config_params['model']['gpus'] = args.gpus
+    if args.reporting is not None:
+        config_params['reporting'] = args.reporting
+
     task_name = config_params.get('task', 'classify') if args.task is None else args.task
     print('Task: [{}]'.format(task_name))
     task = mead.Task.get_task_specific(task_name, args.logging, args.settings)
-    task.read_config(config_params, args.datasets)
+    task.read_config(config_params, args.config, args.datasets, task_name, reporting_args=reporting_args)
     task.initialize(args.embeddings)
     task.train()
 

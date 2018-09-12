@@ -1,6 +1,5 @@
 from baseline.utils import listify, get_model_file
 from baseline.progress import create_progress_bar
-from baseline.reporting import basic_reporting
 from baseline.train import EpochReportingTrainer, create_trainer, lr_decay
 from baseline.dy.dynety import *
 
@@ -89,7 +88,7 @@ class Seq2SeqTrainerDynet(EpochReportingTrainer):
 
 
 def fit(model, ts, vs, es=None, epochs=5, do_early_stopping=True,
-        early_stopping_metric='avg_loss', reporting=basic_reporting, **kwargs):
+        early_stopping_metric='avg_loss', **kwargs):
 
     patience = int(kwargs.get('patience', epochs))
     after_train_fn = kwargs.get('after_train_fn', None)
@@ -101,7 +100,7 @@ def fit(model, ts, vs, es=None, epochs=5, do_early_stopping=True,
     if do_early_stopping:
         print("Doing early stopping on [{}] with patience [{}]".format(early_stopping_metric, patience))
 
-    reporting_fns = listify(reporting)
+    reporting_fns = listify(kwargs.get('reporting', []))
     print('reporting', reporting_fns)
 
     min_metric = 10000
