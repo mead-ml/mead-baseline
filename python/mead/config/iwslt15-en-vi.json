@@ -14,7 +14,7 @@
     },
     "model": {
         "model_type": "attn",
-	"rnntype": "blstm",
+        "rnntype": "blstm",
         "hsz": 500,
         "dropout": 0.5,
         "layers": 2

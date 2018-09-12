@@ -19,7 +19,8 @@ class AbstractLanguageModel(object):
 
         #rnnfwd = stacked_lstm(self.hsz, self.pkeep, self.layers)
         def cell():
-            return lstm_cell_w_dropout(self.hsz, self.pkeep)
+            return lstm_cell_w_dropout(self.hsz, self.pkeep, variational=self.vdrop)
+
         rnnfwd = tf.contrib.rnn.MultiRNNCell([cell() for _ in range(self.layers)], state_is_tuple=True)
 
         self.initial_state = rnnfwd.zero_state(self.batchsz, tf.float32)
@@ -80,6 +81,7 @@ class WordLanguageModel(AbstractLanguageModel):
         lm.x = kwargs.get('x', tf.placeholder(tf.int32, [None, lm.mxlen], name="x"))
         lm.y = kwargs.get('y', tf.placeholder(tf.int32, [None, lm.mxlen], name="y"))
         lm.rnntype = kwargs.get('rnntype', 'lstm')
+        lm.vdrop = kwargs.get('variational_dropout', False)
         lm.pkeep = kwargs.get('pkeep', tf.placeholder(tf.float32, name="pkeep"))
         pdrop = kwargs.get('pdrop', 0.5)
         lm.pdrop_value = pdrop
@@ -153,6 +155,7 @@ class CharCompLanguageModel(AbstractLanguageModel):
         lm.x = kwargs.get('x', tf.placeholder(tf.int32, [None, lm.mxlen], name="x"))
         lm.xch = kwargs.get('xch', tf.placeholder(tf.int32, [None, lm.mxlen, lm.maxw], name="xch"))
         lm.y = kwargs.get('y', tf.placeholder(tf.int32, [None, lm.mxlen], name="y"))
+        lm.vdrop = kwargs.get('variational_dropout', False)
         lm.pkeep = kwargs.get('pkeep', tf.placeholder(tf.float32, name="pkeep"))
         lm.rnntype = kwargs.get('rnntype', 'lstm')
         vsz = word_vec.vsz + 1

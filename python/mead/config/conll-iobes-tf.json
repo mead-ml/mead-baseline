@@ -24,7 +24,7 @@
         "rnntype": "blstm",
         "layers": 1,
         "crf_mask": true,
-	"crf": 1
+        "crf": 1
     },
 
     "word_embeddings": {

@@ -36,6 +36,30 @@ def classify_bt(model, batch_time):
     return results
 
 
+class VariationalDropout(nn.Module):
+    """Inverted dropout that applies the same mask at each time step."""
+
+    def __init__(self, p=0.5):
+        """Variational Dropout
+
+        :param p: float, the percentage to drop
+        """
+        super(VariationalDropout, self).__init__()
+        self.p = p
+
+    def extra_repr(self):
+        return 'p=%.1f' % self.p
+
+    def forward(self, input):
+        if not self.training:
+            return input
+        # Create a mask that covers a single time step
+        mask = torch.zeros(1, input.size(1), input.size(2)).bernoulli_(1 - self.p).to(input.device)
+        mask = mask / self.p
+        # Broadcast the mask over the sequence
+        return mask * input
+
+
 def predict_seq_bt(model, x, xch, lengths):
     x_t = torch.from_numpy(x) if type(x) == np.ndarray else x
     xch_t = torch.from_numpy(xch) if type(xch) == np.ndarray else xch
