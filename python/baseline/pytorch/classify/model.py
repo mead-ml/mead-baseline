@@ -40,7 +40,6 @@ class WordClassifierBase(nn.Module, Classifier):
         model.lut = pytorch_embedding(word_embeddings, finetune)
         model.vocab = {}
         model.vocab['word'] = word_embeddings.vocab
-        model.vdrop = bool(kwargs.get('variational_dropout', False))
 
         if model.char_dsz > 0:
             model.char_lut = pytorch_embedding(char_embeddings)
