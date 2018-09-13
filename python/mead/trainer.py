@@ -7,7 +7,7 @@ from mead.utils import convert_path, parse_extra_args
 def main():
     parser = argparse.ArgumentParser(description='Train a text classifier')
     parser.add_argument('--config', help='JSON Configuration for an experiment', type=convert_path, default="$MEAD_CONFIG")
-    parser.add_argument('--settings', help='JSON Configuration for mead', default='config/mead-settings.json', type=convert_path)
+    parser.add_argument('--settings', help='JSON Configuration for mead', default=None, type=convert_path)
     parser.add_argument('--datasets', help='json library of dataset labels', default='config/datasets.json', type=convert_path)
     parser.add_argument('--embeddings', help='json library of embeddings', default='config/embeddings.json', type=convert_path)
     parser.add_argument('--logging', help='json file for logging', default='config/logging.json', type=convert_path)

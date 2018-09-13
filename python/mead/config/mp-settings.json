@@ -1,0 +1,20 @@
+{
+    "datacache": "/home/blester/.bl-data",
+    "reporting_hooks": [],
+    "hpctl": {
+        "backend": {
+            "type": "mp",
+            "real_gpus": [0]
+        },
+        "logging": {
+            "host": "localhost",
+            "port": 6006
+        },
+        "frontend": {
+            "type": "console",
+            "train": "avg_loss",
+            "dev": "f1",
+            "test": "f1"
+        }
+    }
+}

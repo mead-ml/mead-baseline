@@ -1,0 +1,7 @@
+{
+    "()": "hpctl.logging_server.JSONSocketHandler",
+    "level": "INFO",
+    "host": "localhost",
+    "port": 6006,
+    "label": "hpctl"
+}

@@ -1,0 +1,319 @@
+from __future__ import absolute_import, division, print_function, unicode_literals
+import six
+from six.moves import cPickle as pickle
+
+import os
+import math
+import time
+import platform
+import functools
+from enum import Enum
+from collections import defaultdict
+from multiprocessing.managers import BaseManager
+import numpy as np
+from baseline.utils import export as exporter
+
+
+__all__ = []
+export = exporter(__all__)
+
+dd_list = functools.partial(defaultdict, list)
+ddd_list = functools.partial(defaultdict, dd_list)
+
+
+@six.python_2_unicode_compatible
+class States(Enum):
+    DONE = '\u2714'
+    KILLED = '\u2717'
+    RUNNING = '\u21bb'
+    UNKNOWN = '?'
+
+    def __str__(self):
+        return self.value
+
+
+@export
+class Results(object):
+    """An object that aggregates results from jobs.
+
+    DataStructure:
+        Dict[
+            hpctl.utils.Label: Dict [
+                str, phase : Dict [
+                    str, log field: List[float]
+                ]
+            ],
+            'state': hpctl.results.States, The state of that job.
+            'timestamp': int, When that job started.
+        ]
+
+    Data is resultsd in a columnish results where most entries are a list that
+    represent a timeseries. This lets use to easy `OLAP`-ish queries rather
+    than tracking the best performance in the frontend.
+    """
+    def __init__(self):
+        super(Results, self).__init__()
+        self.results = defaultdict(ddd_list)
+        self.label_to_config = {}
+        self.label_to_human = defaultdict(list)
+        self.human_to_label = defaultdict(list)
+
+    @classmethod
+    def create(cls, exp_hash=None):
+        """Load a results if found, create otherwise.
+
+        :param exp: str, The name of the experiment.
+        :param mead_hash: str, The name of the results.
+
+        :returns:
+            hpctl.results.Results
+        """
+        manager = ResultsManager()
+        manager.start()
+        if exp_hash is None:
+            return manager.Results()
+        loc = os.path.join(exp_hash, exp_hash)
+        loc = loc + '.p'
+        if not os.path.exists(loc):
+            return manager.Results()
+        s = pickle.load(open(loc, 'rb'))
+        for v in s.results.values():
+            # If you are loading a results and a job was running is dead now.
+            if v['state'] is States.RUNNING:
+                v['state'] = States.KILLED
+        results = manager.Results()
+        results.restore(s)
+        return results
+
+    def restore(self, results):
+        """Copy data from one results to another, used to populate the manager fro pickle reload."""
+        self.results = results.results
+        self.label_to_config = results.label_to_config
+        self.label_to_human = results.label_to_human
+        self.human_to_label = results.human_to_label
+
+    def save(self, exp_hash):
+        """Persist the results.
+
+        :param exp: str, The name of the experiment.
+        :param mead_hash: str, The name of the results.
+        """
+        loc = os.path.join(exp_hash, exp_hash)
+        loc = loc + ".p"
+        pickle.dump(self, open(loc, 'wb'))
+
+    def insert(self, label, config):
+        """Add a new entry to the results.
+
+        :param label: str, The sha1 of the config.
+        :param human: str, The human name of the config.
+        :param config: dict, The config.
+        """
+        self.label_to_config[label] = config
+        self.results[label]['state'] = States.RUNNING
+        self.results[label]['time_stamp'] = time.time()
+        self.label_to_human[label.sha1].append(label.human)
+        self.human_to_label[label.human].append(label.sha1)
+
+    def update(self, label, message):
+        """Update entry with a new log info.
+
+        :param label: str, The label for the log (a sha1 of a config).
+        :param message: dict, The log info.
+        """
+        phase = message.pop('phase')
+        if phase == 'Test':
+            self.results[label]['state'] = States.DONE
+        for k, v in message.items():
+            self.results[label][phase][k].append(v)
+
+    def get_config(self, label):
+        """Get the config from the sha1.
+
+        :param label: str, The sha1
+
+        :returns:
+            dict, The config.
+        """
+        return search(label, self.label_to_config, prefix=False)
+
+    def get_recent(self, label, phase, metric):
+        """Get the most recent entry for the somethings
+
+        :param label: str, The config label to look up.
+        :param phase: str, The phase of training to look at.
+        :param metric: str, The metric to look for.
+
+        :returns:
+            The last value in the column or 0.0
+        """
+        res = self.results[label][phase][metric]
+        res = res[-1] if res else 0.0
+        return res if not math.isnan(res) else 0.0
+
+    def get_best(self, label, phase, metric):
+        """Get the best performance of a given label for a given metric.
+
+        :param label: str, The label of the model.
+        :param phase: str, The name of the phase.
+        :param metric: str, The metric to look up.
+
+        :returns: tuple (float, int)
+            [0]: The value the best model achieved.
+            [1]: The tick value the best results was got at.
+        """
+        data = self.results[label][phase][metric]
+        if not data:
+            return 0.0, 0.0
+        val = np.max(data)
+        idx = self.results[label][phase]['tick'][np.argmax(data)]
+        return val, idx
+
+    def find_best(self, phase, metric):
+        """Get the best performance for a given metric.
+
+        :param phase: str, The name of the phase.
+        :param metric: str, The metric to look up.
+
+        :returns: tuple (str, float, int)
+            [0]: The sha1 label of the best performing model.
+            [1]: The value the best model achieved.
+            [2]: The tick value the best results was got at.
+        """
+        best_label = None
+        best_val = 0
+        best_idx = None
+        for label in self.results:
+            data = self.results[label][phase][metric]
+            if not data:
+                continue
+            val = np.max(data)
+            idx = self.results[label][phase]['tick'][np.argmax(data)]
+            if val > best_val:
+                best_val = val
+                best_label = label
+                best_idx = idx
+        return best_label, best_val, best_idx
+
+    def get_best_per_label(self, phase, metric):
+        """Get the best performance for a given metric across all labels.
+
+        :param phase: str, The name of the phase.
+        :param metric: str, The metric to look up.
+
+        :returns: tuple (List[str], List[float], List[int])
+            [0]: The sha1 label of the best performing model.
+            [1]: The value the best model achieved.
+            [2]: The tick value the best results was got at.
+        """
+        labels = self.get_labels()
+        vals = []
+        idxs = []
+        for label in labels:
+            val, idx = self.get_best(label, phase, metric)
+            vals.append(val)
+            idxs.append(idx)
+        return labels, vals, idxs
+
+    def get_labels(self):
+        """Get all the labels in the data results.
+
+        :returns:
+            List[str]: The list of labels sorted by the time they started.
+        """
+        labels = [(x, self.results[x]['time_stamp']) for x in self.results]
+        labels = sorted(labels, key=lambda x: x[1])
+        return [l[0] for l in labels]
+
+    def get_human(self, label):
+        """Get the human label from the sha1.
+
+        :param label: str, The sha1
+
+        :returns:
+            str, The human label.
+        """
+        return search(label, self.label_to_human, prefix=False)
+
+
+    def get_human_prefix(self, label):
+        """Get the human label from the sha1 with a prefix search, 'ab' matches 'abc'
+
+        :param label: str, The sha1
+
+        :returns:
+            str, The human label.
+        """
+        return search(label, self.label_to_human, prefix=True)
+
+    def get_label(self, label):
+        """Get the sha1 from the human label.
+
+        :param label: str, The human label
+
+        :returns:
+            str, The sha1.
+        """
+        return search(label, self.human_to_label, prefix=False)
+
+    def get_label_prefix(self, label):
+        """Get the sha1 from the human label with a prefix search, 'ab' matches 'abc'
+
+        :param label: str, The sha1
+
+        :returns:
+            str, The human label.
+        """
+        return search(label, self.human_to_label, prefix=True)
+
+    def get_state(self, label):
+        """Get the job state based on the label.
+
+        :param label: str, The sha1 of the config.
+
+        :returns:
+            str, The unicode of the status.
+        """
+        state = self.results[label]['state']
+        if state not in States:
+            return States.UNKNOWN
+        return state
+
+    def set_state(self, label, state):
+        """Set the state of a job.
+
+        :param label: str, The label to set the state on.
+        :param state: hpctl.results.States, The sate to set for the job.
+        """
+        self.results[label]['state'] = state
+
+
+# Create the results as a multiprocessing manager so that we can share the
+# results across processes.
+class ResultsManager(BaseManager):
+    pass
+ResultsManager.register(str('Results'), Results)
+
+
+def search(key, table, prefix=True):
+    """Search for `key` in `table`.
+
+    :param key: str, The string to look for.
+    :param table: dic, The table to look in.
+    :param prefix: bool, So a prefix search.
+
+    :returns:
+        Value in table or None
+        if it is a prefix search it returns the full key and the value or (None, None)
+    """
+    if key in table:
+        if prefix:
+            return key, table[key]
+        return table[key]
+    if prefix:
+        for k, v in table.items():
+            if k.startswith(key):
+                return k, v
+    if prefix:
+        return None, None
+    return None
