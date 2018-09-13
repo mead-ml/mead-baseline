@@ -77,6 +77,7 @@ def main():
             'console_scripts': [
                 'mead-train = mead.trainer:main',
                 'mead-export = mead.export:main',
+                'mead-clean = mead.clean:main',
             ]
         },
         classifiers={
