@@ -7,16 +7,13 @@ You can use the reporting hooks in two ways:
 - **mead config file**: The config file should have a field called "reporting" at the end of the json config. Eg: 
 
 ```
-    "train": {
-	"epochs": 60,
-	"patience": 20,
-	"decay_type": "invtime",
-	"decay_lr": 0.05,
-	"optim": "adam",
-	"eta": 0.001,
-	"model_base": "./models/pj-intents",
+ "train": {
+	"epochs": 2,
+	"optim": "adadelta",
+	"eta": 1.0,
+	"model_zip": true,
 	"early_stopping_metric": "acc",
-        "verbose": {"console": true, "file": "pj-planahead-intents-1.csv"}
+      "verbose": {"console": true, "file": "sst2-cm.csv"}
     },
     "reporting":["visdom","xpctl"]
 }
