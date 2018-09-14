@@ -34,7 +34,7 @@ def test_dropout_probs(input_, pdrop):
     dropped = vd(input_)
     initial_non_zero = np.count_nonzero(input_.numpy())
     dropped_non_zero = np.count_nonzero(dropped.detach().numpy())
-    np.testing.assert_allclose((dropped_non_zero / initial_non_zero), (1 - pdrop), atol=1e-1)
+    np.testing.assert_allclose((dropped_non_zero / float(initial_non_zero)), (1 - pdrop), atol=1e-1)
 
 
 def test_dropout_scaling(input_, pdrop):

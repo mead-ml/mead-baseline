@@ -193,7 +193,7 @@ def Convolution1d(fsz, cmotsz, dsz, pc, strides=(1, 1, 1, 1), name="conv"):
     fan_out = cmotsz * fsz
     # Pytorch and Dynet have a gain param that has suggested values based on
     # the nonlinearity type, this defaults to the one for relu atm.
-    glorot_bounds = 0.5 * np.sqrt(6 / (fan_in + fan_out))
+    glorot_bounds = 0.5 * np.sqrt(6.0 / (fan_in + fan_out))
     weight = conv_pc.add_parameters(
         (1, fsz, dsz, cmotsz),
         init=dy.UniformInitializer(glorot_bounds),

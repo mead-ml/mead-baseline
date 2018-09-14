@@ -31,7 +31,7 @@ def test_read_json_given_default():
     assert data == gold_default
 
 def test_read_json_strict():
-    with pytest.raises(FileNotFoundError):
+    with pytest.raises(IOError):
         read_json(os.path.join('not_there.json'), strict=True)
 
 def test_read_yaml(gold_data):
@@ -53,7 +53,7 @@ def test_read_yaml_given_default():
 
 def test_read_yaml_strict():
     pytest.importorskip('yaml')
-    with pytest.raises(FileNotFoundError):
+    with pytest.raises(IOError):
         read_yaml(os.path.join('not_there.yml'), strict=True)
 
 def test_read_config_json_dispatch():

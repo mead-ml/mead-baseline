@@ -54,5 +54,3 @@ def modify_reporting_hook_settings(reporting_settings, reporting_args_mead, repo
     for key in vars(args):
         this_hook, var = key.split(":")
         reporting_settings[this_hook].update({var: vars(args)[key]})
-
-
