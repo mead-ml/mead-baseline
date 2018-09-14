@@ -9,9 +9,10 @@ import os
 class XPCtlReporting(ReportingHook):
     def __init__(self, **kwargs):
         super(XPCtlReporting, self).__init__(**kwargs)
+        # throw exception if the next three can't be read from kwargs
         self.cred = read_config_file(os.path.expanduser(kwargs['hook_setting']['cred']))
         self.exp_config = read_config_file(os.path.expanduser(kwargs['config_file']))
-        self.task = self.exp_config['task']
+        self.task = kwargs['task']
         self.print_fn = print
         self.username = kwargs['hook_setting'].get('user', getpass.getuser())
         self.hostname = kwargs['hook_setting'].get('host', socket.gethostname())
