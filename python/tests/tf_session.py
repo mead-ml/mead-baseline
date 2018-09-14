@@ -1,6 +1,6 @@
 # borrowed from GPFlow
 import functools
-import contextlib
+from contextdecorator import ContextDecorator
 import tensorflow as tf
 import pytest
 import os
@@ -22,7 +22,7 @@ def session_tf():
     with session_context() as session:
         yield session
 
-class session_context(contextlib.ContextDecorator):
+class session_context(ContextDecorator):
     def __init__(self, graph=None, close_on_exit=True, **kwargs):
         self.graph = graph
         self.close_on_exit = close_on_exit

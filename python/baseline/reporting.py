@@ -21,7 +21,7 @@ class ReportingHook(object):
 
 class ConsoleReporting(ReportingHook):
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+        super(CosoleReporting, self).__init__(**kwargs)
 
     def step(self, metrics, tick, phase, tick_type=None, **kwargs):
         """Write results to `stdout`
@@ -48,7 +48,7 @@ class ConsoleReporting(ReportingHook):
 
 class LoggingReporting(ReportingHook):
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+        super(LoggingReporting, self).__init__(**kwargs)
         self.log = logging.getLogger('baseline.reporting')
 
     def step(self, metrics, tick, phase, tick_type=None, **kwargs):
@@ -79,7 +79,7 @@ class TensorBoardReporting(ReportingHook):
      - http://localhost:6006
     """
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+        super(TensorBoardReporting, self).__init__(**kwargs)
         from tensorboard_logger import configure as tb_configure, log_value as tb_log_value
         self.tb_configure = tb_configure
         self.tb_log_value = tb_log_value
@@ -109,7 +109,7 @@ class VisdomReporting(ReportingHook):
     - http://localhost:8097/
     """
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+        super(VisdomReporting, self).__init__(**kwargs)
         import visdom
         name = kwargs.get('visdom_settings').get('name', 'main')
         print('Creating g_vis instance with env {}'.format(name))

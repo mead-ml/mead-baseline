@@ -248,7 +248,7 @@ def test_conv_parameter_init_glorot():
     cmotsz = random.choice(SIZES)
     conv = Convolution1d(fsz, cmotsz, dsz, pc)
     conv_weight = pc.parameters_list()[0]
-    gold = 0.5 * np.sqrt(6 / (fsz * dsz + fsz * cmotsz))
+    gold = 0.5 * np.sqrt(6.0 / (fsz * dsz + fsz * cmotsz))
     min_ = np.min(conv_weight.as_array())
     max_ = np.max(conv_weight.as_array())
     np.testing.assert_allclose(min_, -gold, atol=1e-5)
