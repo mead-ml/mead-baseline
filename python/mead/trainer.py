@@ -1,12 +1,12 @@
 import argparse
 import mead
 from mead.utils import convert_path
-from baseline.utils import read_config_file
+from baseline.utils import read_config_stream
 
 
 def main():
     parser = argparse.ArgumentParser(description='Train a text classifier')
-    parser.add_argument('--config', help='JSON Configuration for an experiment', required=True, type=convert_path)
+    parser.add_argument('--config', help='JSON Configuration for an experiment', type=convert_path, default="$MEAD_CONFIG")
     parser.add_argument('--settings', help='JSON Configuration for mead', default='config/mead-settings.json', type=convert_path)
     parser.add_argument('--datasets', help='json library of dataset labels', default='config/datasets.json', type=convert_path)
     parser.add_argument('--embeddings', help='json library of embeddings', default='config/embeddings.json', type=convert_path)
@@ -16,8 +16,7 @@ def main():
     parser.add_argument('--reporting', help='reporting hooks', nargs='+')
     args, reporting_args = parser.parse_known_args()
 
-    config_params = read_config_file(args.config)
-
+    config_params = read_config_stream(args.config)
     if args.gpus is not None:
         config_params['model']['gpus'] = args.gpus
     if args.reporting is not None:

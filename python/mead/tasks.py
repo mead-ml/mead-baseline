@@ -7,46 +7,55 @@ import mead.utils
 import os
 from mead.downloader import EmbeddingDownloader, DataDownloader
 from mead.mime_type import mime_type
-from baseline.utils import export, read_config_file, read_json, write_json
+from baseline.utils import export, read_json
 from baseline.reporting import create_reporting_hook
 from mead.utils import modify_reporting_hook_settings
 
 __all__ = []
 exporter = export(__all__)
 
+
 @exporter
 class Task(object):
     TASK_REGISTRY = {}
 
-    def __init__(self, logger_file, mead_config):
+    def __init__(self, logger_config, mead_settings_config=None):
         super(Task, self).__init__()
         self.config_params = None
         self.ExporterType = None
-        self.mead_config = mead_config
-        if os.path.exists(mead_config):
-            self.mead_settings = read_json(mead_config)
+
+        if mead_settings_config is None:
+            self.mead_settings_config = {}
+        elif isinstance(mead_settings_config, dict):
+            self.mead_settings_config = mead_settings_config
+        elif os.path.exists(mead_settings_config):
+            self.mead_settings_config = read_json(mead_settings_config)
         else:
-            self.mead_settings = {}
-        if 'datacache' not in self.mead_settings:
+            raise Exception("Expected either a mead settings file or a JSON object")
+        if 'datacache' not in self.mead_settings_config:
             self.data_download_cache = os.path.expanduser("~/.bl-data")
-            self.mead_settings['datacache'] = self.data_download_cache
-            write_json(self.mead_settings, mead_config)
+            self.mead_settings_config['datacache'] = self.data_download_cache
         else:
-            self.data_download_cache = os.path.expanduser(self.mead_settings['datacache'])
+            self.data_download_cache = os.path.expanduser(self.mead_settings_config['datacache'])
         print("using {} as data/embeddings cache".format(self.data_download_cache))
-        self._configure_logger(logger_file)
+        self._configure_logger(logger_config)
         self.name = None
 
-    def _configure_logger(self, logger_file):
+    def _configure_logger(self, logger_config):
         """Use the logger file (logging.json) to configure the log, but overwrite the filename to include the PID
 
-        :param logger_file: The logging configuration JSON file
+        :param logger_config: The logging configuration JSON or file containing JSON
         :return: A dictionary config derived from the logger_file, with the reporting handler suffixed with PID
         """
-        with open(logger_file) as f:
-            config = json.load(f)
-            config['handlers']['reporting_file_handler']['filename'] = 'reporting-{}.log'.format(os.getpid())
-            logging.config.dictConfig(config)
+        if isinstance(logger_config, dict):
+            config = logger_config
+        elif os.path.exists(logger_config):
+            config = read_json(logger_config)
+        else:
+            raise Exception("Expected logger config file or a JSON object")
+
+        config['handlers']['reporting_file_handler']['filename'] = 'reporting-{}.log'.format(os.getpid())
+        logging.config.dictConfig(config)
 
     @staticmethod
     def get_task_specific(task, logging_config, mead_config):
@@ -119,7 +128,7 @@ class Task(object):
         return model
 
     def _configure_reporting(self, reporting_hooks, task_name, **kwargs):
-        reporting_settings = self.mead_settings.get('reporting_hooks', {})
+        reporting_settings = self.mead_settings_config.get('reporting_hooks', {})
         for reporting_hook in reporting_hooks:
             if reporting_hook not in reporting_settings:
                 reporting_settings[reporting_hook] = {}
@@ -201,8 +210,8 @@ class Task(object):
 @exporter
 class ClassifierTask(Task):
 
-    def __init__(self, logging_file, mead_config, **kwargs):
-        super(ClassifierTask, self).__init__(logging_file, mead_config, **kwargs)
+    def __init__(self, logging_config, mead_settings_config, **kwargs):
+        super(ClassifierTask, self).__init__(logging_config, mead_settings_config, **kwargs)
         self.task = None
 
     def _create_task_specific_reader(self):
@@ -288,8 +297,8 @@ Task.TASK_REGISTRY['classify'] = ClassifierTask
 @exporter
 class TaggerTask(Task):
 
-    def __init__(self, logging_file, mead_config, **kwargs):
-        super(TaggerTask, self).__init__(logging_file, mead_config, **kwargs)
+    def __init__(self, logging_config, mead_settings_config, **kwargs):
+        super(TaggerTask, self).__init__(logging_config, mead_settings_config, **kwargs)
         self.task = None
 
     def _create_task_specific_reader(self):
@@ -384,8 +393,8 @@ Task.TASK_REGISTRY['tagger'] = TaggerTask
 @exporter
 class EncoderDecoderTask(Task):
 
-    def __init__(self, logging_file, mead_config, **kwargs):
-        super(EncoderDecoderTask, self).__init__(logging_file, mead_config, **kwargs)
+    def __init__(self, logging_config, mead_settings_config, **kwargs):
+        super(EncoderDecoderTask, self).__init__(logging_config, mead_settings_config, **kwargs)
         self.task = None
 
     def _create_task_specific_reader(self):
@@ -481,8 +490,8 @@ Task.TASK_REGISTRY['seq2seq'] = EncoderDecoderTask
 @exporter
 class LanguageModelingTask(Task):
 
-    def __init__(self, logging_file, mead_config, **kwargs):
-        super(LanguageModelingTask, self).__init__(logging_file, mead_config, **kwargs)
+    def __init__(self, logging_config, mead_settings_config, **kwargs):
+        super(LanguageModelingTask, self).__init__(logging_config, mead_settings_config, **kwargs)
         self.task = None
 
     def _create_task_specific_reader(self):

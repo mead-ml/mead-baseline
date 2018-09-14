@@ -294,6 +294,22 @@ def read_config_file(config_file):
 
 
 @exporter
+def read_config_stream(config_stream):
+    """Read a config stream.  This may be a path to a YAML or JSON file, or it may be a str containing JSON or the name
+    of an env variable, or even a JSON object directly
+
+    :param config_stream:
+    :return:
+    """
+    if os.path.exists(config_stream) and os.path.isfile(config_stream):
+        return read_config_file(config_stream)
+    config = config_stream
+    if config_stream.startswith("$"):
+        print('Reading config from {}'.format(config_stream))
+        config = os.getenv(config_stream[1:])
+    return json.loads(config)
+
+@exporter
 def write_json(content, filepath):
     with open(filepath, "w") as f:
         json.dump(content, f, indent=True)

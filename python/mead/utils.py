@@ -23,6 +23,8 @@ def convert_path(path, loc=None):
     """If the provided path doesn't exist search for it relative to loc (or this file)."""
     if os.path.isfile(path):
         return path
+    if path.startswith("$"):
+        return path
     if loc is None:
         loc = os.path.dirname(os.path.realpath(__file__))
     return os.path.join(loc, path)
