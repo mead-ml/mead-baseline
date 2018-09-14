@@ -4,7 +4,7 @@ A `reporting hook` for baseline is a class that has three methods: `init`, `step
 
 You can use the reporting hooks in two ways: 
 
-- **mead config file**: The config file should have a field called "reporting" at the end of the json config. Eg: 
+- **mead config file**: The config file should have a field called "reporting". Eg: 
 
 ```
  "train": {
