@@ -7,9 +7,17 @@ You can use the reporting hooks in two ways:
 - **mead config file**: The config file should have a field called "reporting". Eg: 
 
 ```
-(dl) x:baseline$ tail -n 2 python/mead/config/sst2.json
-    "reporting": ["visdom", "xpctl"]
+ "train": {
+	"epochs": 2,
+	"optim": "adadelta",
+	"eta": 1.0,
+	"model_zip": true,
+	"early_stopping_metric": "acc",
+      "verbose": {"console": true, "file": "sst2-cm.csv"}
+    },
+    "reporting":["visdom","xpctl"]
 }
+
 
 ```  
 
