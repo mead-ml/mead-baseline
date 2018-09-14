@@ -8,16 +8,18 @@ from baseline.utils import fill_y, listify
 from baseline.model import Classifier, load_classifier_model, create_classifier_model
 from baseline.tf.tfy import (stacked_lstm,
                              parallel_conv,
-                             get_vocab_file_suffixes,
-                             TensorFlowCharConvEmbeddings,
-                             TensorFlowTokenEmbeddings,
-                             tf_embeddings)
+                             get_vocab_file_suffixes)
 
+from baseline.tf.embeddings import (TensorFlowEmbeddings,
+                                    TensorFlowCharConvEmbeddings,
+                                    TensorFlowTokenEmbeddings,
+                                    tf_embeddings)
 from baseline.version import __version__
 import os
 from baseline.utils import zip_model, unzip_model
+import copy
 
-# Broken RN
+
 class ClassifyParallelModel(Classifier):
 
     def __init__(self, create_fn, embeddings, labels, **kwargs):
@@ -35,25 +37,37 @@ class ClassifyParallelModel(Classifier):
 
         self.saver = None
         self.replicas = []
+        self.parallel_params = dict()
+        split_operations = dict()
+        for key in embeddings.keys():
+            Type = TensorFlowCharConvEmbeddings if key == 'char' else TensorFlowTokenEmbeddings
+            if isinstance(embeddings[key], TensorFlowEmbeddings):
+                Type = embeddings[key].__class__
+
+            self.parallel_params[key] = kwargs.get(key, Type.create_placeholder('{}_parallel'.format(key)))
+            split_operations[key] = tf.split(self.parallel_params[key], gpus)
+
+        self.lengths_key = kwargs.get('lengths_key')
+
+        if self.lengths_key is not None:
+            # This allows user to short-hand the field to use
+            if not self.lengths_key.endswith('_lengths'):
+                self.lengths_key += '_lengths'
+            self.lengths = kwargs.get('lengths', tf.placeholder(tf.int32, [None], name="lengths_parallel"))
+            lengths_splits = tf.split(self.lengths, gpus)
+            split_operations['lengths'] = lengths_splits
+
+        else:
+            self.lengths = None
 
         # This only exists to make exporting easier
-        self.pdrop_value = kwargs.get('dropout', 0.5)
-        # This only exists to make exporting easier
-        self.x = kwargs.get('x', tf.placeholder(tf.int32, [None, None], name="x_parallel"))
         self.y = kwargs.get('y', tf.placeholder(tf.int32, [None, nc], name="y_parallel"))
         self.lengths = kwargs.get('lengths', tf.placeholder(tf.int32, [None], name="lengths_parallel"))
         self.pkeep = kwargs.get('pkeep', tf.placeholder_with_default(1.0, shape=(), name="pkeep"))
         self.pdrop_value = kwargs.get('dropout', 0.5)
 
-        x_splits = tf.split(self.x, gpus)
         y_splits = tf.split(self.y, gpus)
-        lengths_splits = tf.split(self.lengths, gpus)
-        xch_splits = None
-        c2v = embeddings.get('char')
-        if c2v is not None:
-            self.xch = kwargs.get('xch', tf.placeholder(tf.int32, [None, None, None], name='xch_parallel'))
-            xch_splits = tf.split(self.xch, gpus)
-
+        split_operations['y'] = y_splits
         losses = []
         self.labels = labels
 
@@ -62,10 +76,14 @@ class ClassifyParallelModel(Classifier):
             self.inference = create_fn(embeddings, labels, sess=sess, **kwargs)
         for i in range(gpus):
             with tf.device(tf.DeviceSpec(device_type='GPU', device_index=i)):
-                replica = create_fn(embeddings, labels, sess=sess, x=x_splits[i], y=y_splits[i],
-                                    xch=xch_splits[i] if xch_splits is not None else None,
-                                    lengths=lengths_splits[i],
-                                    pkeep=self.pkeep, **kwargs)
+
+                kwargs_single = copy.deepcopy(kwargs)
+                kwargs_single['sess'] = sess
+                kwargs_single['pkeep'] = self.pkeep
+
+                for k, split_operation in split_operations.items():
+                    kwargs_single[k] = split_operation[i]
+                replica = create_fn(embeddings, labels, **kwargs_single)
                 self.replicas.append(replica)
                 loss_op = replica.create_loss()
                 losses.append(loss_op)
@@ -92,17 +110,16 @@ class ClassifyParallelModel(Classifier):
         if do_dropout is False:
             return self.inference.make_input(batch_dict)
 
-        x = batch_dict['x']
         y = batch_dict.get('y', None)
-        xch = batch_dict.get('xch')
-        lengths = batch_dict.get('lengths')
-        pkeep = 1.0 - self.pdrop_value
-        feed_dict = {self.x: x, self.pkeep: pkeep}
+        pkeep = 1.0 - self.pdrop_value if do_dropout else 1.0
+        feed_dict = {self.pkeep: pkeep}
 
-        if hasattr(self, 'lengths') and self.lengths is not None:
-            feed_dict[self.lengths] = lengths
-        if hasattr(self, 'xch') and xch is not None and self.xch is not None:
-            feed_dict[self.xch] = xch
+        for key in self.parallel_params.keys():
+            feed_dict["{}_parallel:0".format(key)] = batch_dict[key]
+
+        # Allow us to track a length, which is needed for BLSTMs
+        if self.lengths_key is not None:
+            feed_dict[self.lengths] = batch_dict[self.lengths_key]
 
         if y is not None:
             feed_dict[self.y] = fill_y(len(self.labels), y)
@@ -329,7 +346,7 @@ class ClassifierBase(Classifier):
         model.embeddings = dict()
         for key in embeddings.keys():
             DefaultType = TensorFlowCharConvEmbeddings if key == 'char' else TensorFlowTokenEmbeddings
-            model.embeddings[key] = tf_embeddings(embeddings[key], key, DefaultType=DefaultType)
+            model.embeddings[key] = tf_embeddings(embeddings[key], key, DefaultType=DefaultType, **kwargs)
 
         model.lengths_key = kwargs.get('lengths_key')
 
@@ -532,7 +549,7 @@ class NBowModel(NBowBase):
         :param kwargs: None
         :return: The average pooling representation
         """
-        return tf.reduce_mean(word_embeddings, 1, keep_dims=False)
+        return tf.reduce_mean(word_embeddings, 1, keepdims=False)
 
 
 class NBowMaxModel(NBowBase):
@@ -550,7 +567,7 @@ class NBowMaxModel(NBowBase):
         :param kwargs: None
         :return: The max pooling representation
         """
-        return tf.reduce_max(word_embeddings, 1, keep_dims=False)
+        return tf.reduce_max(word_embeddings, 1, keepdims=False)
 
 
 class CompositePoolingModel(ClassifierBase):

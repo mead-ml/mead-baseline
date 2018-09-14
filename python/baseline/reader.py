@@ -539,16 +539,16 @@ class TSVSeqLabelReader(SeqLabelReader):
 
 
 @exporter
-def create_pred_reader(featurizer, clean_fn, **kwargs):
+def create_pred_reader(vectorizers, clean_fn, **kwargs):
     reader_type = kwargs.get('reader_type', 'default')
 
     if reader_type == 'default':
         trim = kwargs.get('trim', False)
         #splitter = kwargs.get('splitter', '[\t\s]+')
-        reader = TSVSeqLabelReader(featurizer, clean_fn=clean_fn, trim=trim)
+        reader = TSVSeqLabelReader(vectorizers, clean_fn=clean_fn, trim=trim)
     else:
         mod = import_user_module("reader", reader_type)
-        reader = mod.create_pred_reader(clean_fn=clean_fn, **kwargs)
+        reader = mod.create_pred_reader(vectorizers, clean_fn=clean_fn, **kwargs)
     return reader
 
 

@@ -8,9 +8,7 @@ from baseline.utils import (
     lowercase, revlut,
     export, wrapped_partial
 )
-##from baseline.featurizers import (
-##    WordCharLength
-##)
+
 
 __all__ = []
 exporter = export(__all__)

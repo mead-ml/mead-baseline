@@ -9,7 +9,7 @@ from mead.downloader import EmbeddingDownloader, DataDownloader
 from mead.mime_type import mime_type
 from baseline.utils import export, read_config_file, read_json, write_json
 from baseline.w2v import load_embeddings
-from baseline.featurizers import create_vectorizer
+from baseline.vectorizers import create_vectorizer
 __all__ = []
 exporter = export(__all__)
 
