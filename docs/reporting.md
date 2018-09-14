@@ -4,12 +4,23 @@ A `reporting hook` for baseline is a class that has three methods: `init`, `step
 
 You can use the reporting hooks in two ways: 
 
-- **mead config file**: The config file should have a field called "reporting". Eg: 
+- **mead config file**: The config file should have a field called "reporting" at the end of the json config. Eg: 
 
 ```
-(dl) x:baseline$ tail -n 2 python/mead/config/sst2.json
-    "reporting": ["visdom", "xpctl"]
+    "train": {
+	"epochs": 60,
+	"patience": 20,
+	"decay_type": "invtime",
+	"decay_lr": 0.05,
+	"optim": "adam",
+	"eta": 0.001,
+	"model_base": "./models/pj-intents",
+	"early_stopping_metric": "acc",
+        "verbose": {"console": true, "file": "pj-planahead-intents-1.csv"}
+    },
+    "reporting":["visdom","xpctl"]
 }
+
 
 ```  
 
