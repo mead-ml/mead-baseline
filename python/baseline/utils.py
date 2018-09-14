@@ -389,6 +389,13 @@ def load_user_embeddings(embeddings_source, known_vocab, **kwargs):
 
 
 @exporter
+def create_user_vectorizer(**kwargs):
+    embed_type = kwargs['vectorizer_type']
+    mod = import_user_module('vec', embed_type)
+    return mod.load_vectorizer(**kwargs)
+
+
+@exporter
 def create_user_trainer(model, **kwargs):
     """Create a user-defined trainer
 

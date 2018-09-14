@@ -9,41 +9,50 @@ from mead.downloader import EmbeddingDownloader, DataDownloader
 from mead.mime_type import mime_type
 from baseline.utils import export, read_config_file, read_json, write_json
 from baseline.w2v import load_embeddings
+from baseline.featurizers import create_vectorizer
 __all__ = []
 exporter = export(__all__)
+
 
 @exporter
 class Task(object):
     TASK_REGISTRY = {}
 
-    def __init__(self, logger_file, mead_config):
+    def __init__(self, logger_file, mead_settings_config=None):
         super(Task, self).__init__()
         self.config_params = None
         self.ExporterType = None
-        self.mead_config = mead_config
-        if os.path.exists(mead_config):
-            mead_settings = read_json(mead_config)
+        if mead_settings_config is None:
+            self.mead_settings_config = {}
+        elif isinstance(mead_settings_config, dict):
+            self.mead_settings_config = mead_settings_config
+        elif os.path.exists(mead_settings_config):
+            self.mead_settings_config = read_json(mead_settings_config)
         else:
-            mead_settings = {}
-        if 'datacache' not in mead_settings:
+            raise Exception("Expected either a mead settings file or a JSON object")
+        if 'datacache' not in self.mead_settings_config:
             self.data_download_cache = os.path.expanduser("~/.bl-data")
-            mead_settings['datacache'] = self.data_download_cache
-            write_json(mead_settings, mead_config)
+            self.mead_settings_config['datacache'] = self.data_download_cache
         else:
-            self.data_download_cache = os.path.expanduser(mead_settings['datacache'])
+            self.data_download_cache = os.path.expanduser(self.mead_settings_config['datacache'])
         print("using {} as data/embeddings cache".format(self.data_download_cache))
         self._configure_logger(logger_file)
 
-    def _configure_logger(self, logger_file):
+    def _configure_logger(self, logger_config):
         """Use the logger file (logging.json) to configure the log, but overwrite the filename to include the PID
 
         :param logger_file: The logging configuration JSON file
         :return: A dictionary config derived from the logger_file, with the reporting handler suffixed with PID
         """
-        with open(logger_file) as f:
-            config = json.load(f)
-            config['handlers']['reporting_file_handler']['filename'] = 'reporting-{}.log'.format(os.getpid())
-            logging.config.dictConfig(config)
+        if isinstance(logger_config, dict):
+            config = logger_config
+        elif os.path.exists(logger_config):
+            config = read_json(logger_config)
+        else:
+            raise Exception("Expected logger config file or a JSON object")
+
+        config['handlers']['reporting_file_handler']['filename'] = 'reporting-{}.log'.format(os.getpid())
+        logging.config.dictConfig(config)
 
     @staticmethod
     def get_task_specific(task, logging_config, mead_config):
@@ -124,11 +133,6 @@ class Task(object):
         self.config_params['train']['reporting'] = reporting
         logging.basicConfig(level=logging.DEBUG)
 
-    @staticmethod
-    def _create_embeddings_from_file(embed_type, embed_file, embed_dsz, embed_sha1, data_download_cache, vocab, unif, keep_unused):
-        embed_file = EmbeddingDownloader(embed_file, embed_dsz, embed_sha1, data_download_cache).download()
-        return load_embeddings(embed_file, vocab, unif=unif, keep_unused=keep_unused, embed_type=embed_type)
-
     def _create_embeddings(self, embeddings_set, vocabs):
 
         unif = self.config_params['unif']
@@ -136,60 +140,27 @@ class Task(object):
 
         embeddings = dict()
 
-        if 'word' in vocabs:
-            embeddings_section = self.config_params['word_embeddings']
+        for feature in self.config_params['features']:
+            embeddings_section = feature['embeddings']
+            name = feature['name']
             embed_label = embeddings_section.get('label', None)
 
             if embed_label is not None:
                 embed_file = embeddings_set[embed_label]['file']
                 embed_dsz = embeddings_set[embed_label]['dsz']
                 embed_sha1 = embeddings_set[embed_label].get('sha1', None)
-                embed_type = embeddings_set[embed_label].get('embed_type', 'default')
-                embeddings['word'] = Task._create_embeddings_from_file(embed_type,
-                                                                       embed_file, embed_dsz, embed_sha1,
-                                                                       self.data_download_cache, vocabs['word'],
-                                                                       unif=unif, keep_unused=keep_unused)
+                embed_file = EmbeddingDownloader(embed_file, embed_dsz, embed_sha1, self.data_download_cache).download()
+                embeddings[name] = load_embeddings(embed_file,
+                                                   known_vocab=vocabs[name],
+                                                   embed_type=embeddings_section.get('type', 'default'),
+                                                   unif=unif,
+                                                   use_mmap=True,
+                                                   keep_unused=keep_unused)
+
+            # TODO: can we still find a way to call load_embeddings even if no file is given?
             else:
                 dsz = embeddings_section['dsz']
-                embeddings['word'] = baseline.RandomInitVecModel(dsz, vocabs['word'], unif_weight=unif)
-
-        if 'char' in vocabs:
-            if 'char_embeddings' in self.config_params:
-                embeddings_section = self.config_params['char_embeddings']
-                embed_label = embeddings_section.get('label', None)
-                if embed_label is not None:
-                    embed_file = embeddings_set[embed_label]['file']
-                    embed_dsz = embeddings_set[embed_label]['dsz']
-                    embed_sha1 = embeddings_set[embed_label].get('sha1', None)
-                    embed_type = embeddings_set[embed_label].get('embed_type', 'default')
-                    embeddings['char'] = Task._create_embeddings_from_file(embed_type,
-                                                                           embed_file, embed_dsz, embed_sha1,
-                                                                           self.data_download_cache, vocabs['char'],
-                                                                           unif=unif, keep_unused=keep_unused)
-            elif self.config_params.get('charsz', -1) > 0:
-                embeddings['char'] = baseline.RandomInitVecModel(self.config_params['charsz'], vocabs['char'], unif_weight=unif)
-
-        extended_embed_info = self.config_params.get('extended_embed_info', {})
-        for key, vocab in vocabs.items():
-            if key in extended_embed_info:
-                print('Adding extended feature embeddings {}'.format(key))
-                ext_embed = None if extended_embed_info[key].get("embedding", None) is None \
-                    else extended_embed_info[key]["embedding"]
-                ext_embed_dsz = extended_embed_info[key].get("dsz")
-                ext_embed_sha1 = extended_embed_info[key].get("sha1")
-                ext_embed_file = extended_embed_info[key].get('file')
-                ext_embed_type = extended_embed_info[key].get('embed_type', 'default')
-                if ext_embed_file is not None:
-
-                    print("using {} to read external embedding file {}".format(ext_embed))
-                    embeddings[key] = Task._create_embeddings_from_file(ext_embed_type, ext_embed_file, ext_embed_dsz,
-                                                                        ext_embed_sha1, self.data_download_cache, vocab, unif, keep_unused)
-
-                else:
-                    print("randomly initializing external feature with dimension {}".format(ext_embed_dsz))
-                    embeddings[key] = baseline.RandomInitVecModel(ext_embed_dsz, vocab, unif_weight=unif)
-            elif key not in ['word', 'char']:
-                raise Exception("Error: must specify a field '{}' in 'extended_embed_sz' dictionary for embedding dim size".format(key))
+                embeddings['name'] = baseline.RandomInitVecModel(dsz, vocabs['word'], unif_weight=unif)
 
         out_vocabs = {}
         for key, value in embeddings.items():
@@ -209,17 +180,18 @@ class Task(object):
 @exporter
 class ClassifierTask(Task):
 
-    def __init__(self, logging_file, mead_config, **kwargs):
-        super(ClassifierTask, self).__init__(logging_file, mead_config, **kwargs)
+    def __init__(self, logging_file, mead_settings_config, **kwargs):
+        super(ClassifierTask, self).__init__(logging_file, mead_settings_config, **kwargs)
         self.task = None
 
     def _create_task_specific_reader(self):
-        return baseline.create_pred_reader(self.config_params['preproc']['mxlen'],
-                                           zeropadding=0,
-                                           clean_fn=self.config_params['preproc']['clean_fn'],
-                                           vec_alloc=self.config_params['preproc']['vec_alloc'],
-                                           src_vec_trans=self.config_params['preproc']['src_vec_trans'],
-                                           mxwlen=self.config_params['preproc'].get('mxwlen', -1),
+        vectorizers = {}
+        for feature in self.config_params['features']:
+            key = feature['name']
+            vectorizer_section = feature.get('vectorizer', {'type': 'token1d'})
+            vectorizer = create_vectorizer(vectorizer_section)
+            vectorizers[key] = vectorizer
+        return baseline.create_pred_reader(vectorizers, clean_fn=self.config_params['preproc']['clean_fn'],
                                            trim=self.config_params['preproc'].get('trim', False),
                                            **self.config_params['loader'])
 
@@ -227,18 +199,12 @@ class ClassifierTask(Task):
         backend = self.config_params.get('backend', 'tensorflow')
         if backend == 'pytorch':
             print('PyTorch backend')
-            from baseline.pytorch import long_0_tensor_alloc
-            from baseline.pytorch import tensor_reverse_2nd as rev2nd
             import baseline.pytorch.classify as classify
-            self.config_params['preproc']['vec_alloc'] = long_0_tensor_alloc
 
         else:
-            self.config_params['preproc']['vec_alloc'] = np.zeros
-
             if backend == 'keras':
                 print('Keras backend')
                 import baseline.keras.classify as classify
-                from baseline.data import reverse_2nd as rev2nd
             elif backend == 'dynet':
                 print('Dynet backend')
                 import _dynet
@@ -250,11 +216,9 @@ class ClassifierTask(Task):
                     dy_params.set_autobatch(True)
                 dy_params.init()
                 import baseline.dy.classify as classify
-                from baseline.data import reverse_2nd as rev2nd
             else:
                 print('TensorFlow backend')
                 import baseline.tf.classify as classify
-                from baseline.data import reverse_2nd as rev2nd
                 from mead.tf.exporters import ClassifyTensorFlowExporter
                 self.ExporterType = ClassifyTensorFlowExporter
 
@@ -269,8 +233,6 @@ class ClassifierTask(Task):
         else:
             self.config_params['preproc']['clean_fn'] = None
 
-        self.config_params['preproc']['src_vec_trans'] = rev2nd if self.config_params['preproc'].get('rev', False) else None
-
     def initialize(self, embeddings):
         embeddings_set = mead.utils.index_by_label(embeddings)
         self.dataset = DataDownloader(self.dataset, self.data_download_cache).download()
@@ -280,8 +242,8 @@ class ClassifierTask(Task):
 
     def _create_model(self):
         model = self.config_params['model']
-        model['mxlen'] = self.reader.max_sentence_length
-        model['mxwlen'] = self.reader.max_word_length
+        model['mxlen'] = self.config_params['preproc']['mxlen'] #, self.config_params['preproc']['maxs'])
+        model['mxwlen'] = self.config_params['preproc'].get('mxwlen', 40) #, self.config_params['preproc']['maxw'])
         return self.task.create_model(self.embeddings, self.labels, **model)
 
     def _load_dataset(self):
@@ -409,24 +371,19 @@ class EncoderDecoderTask(Task):
         # If its not vanilla seq2seq, dont bother reversing
         do_reverse = self.config_params['model']['model_type'] == 'default'
         backend = self.config_params.get('backend', 'tensorflow')
+        src_vec_trans = baseline.reverse_2nd if do_reverse else None
+        self.config_params['preproc']['word_trans_fn'] = src_vec_trans
+
         if backend == 'pytorch':
             print('PyTorch backend')
             from baseline.pytorch import long_0_tensor_alloc as vec_alloc
             from baseline.pytorch import tensor_shape as vec_shape
             from baseline.pytorch import tensor_reverse_2nd as rev2nd
             import baseline.pytorch.seq2seq as seq2seq
-            self.config_params['preproc']['vec_alloc'] = vec_alloc
-            self.config_params['preproc']['vec_shape'] = vec_shape
-            src_vec_trans = rev2nd if do_reverse else None
-            self.config_params['preproc']['word_trans_fn'] = src_vec_trans
             self.config_params['preproc']['show_ex'] = baseline.pytorch.show_examples_pytorch
             self.config_params['preproc']['trim'] = True
         else:
-
-            self.config_params['preproc']['vec_alloc'] = np.zeros
-            self.config_params['preproc']['vec_shape'] = np.shape
             self.config_params['preproc']['trim'] = False
-            src_vec_trans = baseline.reverse_2nd if do_reverse else None
             self.config_params['preproc']['word_trans_fn'] = src_vec_trans
             if backend == 'dynet':
                 print('Dynet backend')

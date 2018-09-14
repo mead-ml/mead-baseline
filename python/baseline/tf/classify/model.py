@@ -10,7 +10,9 @@ from baseline.tf.tfy import (stacked_lstm,
                              parallel_conv,
                              get_vocab_file_suffixes,
                              TensorFlowCharConvEmbeddings,
-                             TensorFlowWordEmbeddings)
+                             TensorFlowWordEmbeddings,
+                             tf_embeddings)
+
 from baseline.version import __version__
 import os
 from baseline.utils import zip_model, unzip_model
@@ -138,40 +140,23 @@ class WordClassifierBase(Classifier):
         base = path[-1]
         outdir = '/'.join(path[:-1])
 
-        state = {"mxlen": self.mxlen, "version": __version__, 'use_chars': False}
-        if self.mxwlen is not None:
-            state["mxwlen"] = self.mxwlen
-        if self.xch is not None:
-            state['use_chars'] = True
+        state = {"version": __version__, "embeddings": list(self.embeddings.keys())}
         with open(basename + '.state', 'w') as f:
             json.dump(state, f)
 
-        #tf.train.export_meta_graph(filename=os.path.join(outdir, base + '.meta'),
-        #                           as_text=True)
-        #sub_graph = remove_parallel_nodes(self.sess.graph_def)
         tf.train.write_graph(self.sess.graph_def, outdir, base + '.graph', as_text=False)
-        #tf.train.write_graph(sub_graph, outdir, base + '.graph', as_text=False)
         with open(basename + '.saver', 'w') as f:
             f.write(str(self.saver.as_saver_def()))
 
         with open(basename + '.labels', 'w') as f:
             json.dump(self.labels, f)
 
-        for key in self.vocab.keys():
-            with open(basename + '-{}.vocab'.format(key), 'w') as f:
-                json.dump(self.vocab[key], f)
-
-    def load_md(self, basename):
-
+        for key, embedding in self.embeddings.items():
+            embedding.save_md(basename + '-{}.vocab'.format(key))
         state_file = basename + '.state'
         # Backwards compat for now
         if not os.path.exists(state_file):
             return
-
-        with open(state_file, 'r') as f:
-            state = json.load(f)
-            self.mxlen = state.get('mxlen')
-            self.mxwlen = state.get('mxwlen')
 
     def save(self, basename, **kwargs):
         self.save_md(basename)
@@ -212,17 +197,12 @@ class WordClassifierBase(Classifier):
         return results
 
     def make_input(self, batch_dict, do_dropout=False):
-        x = batch_dict['x']
         y = batch_dict.get('y', None)
-        xch = batch_dict.get('xch')
-        lengths = batch_dict.get('lengths')
         pkeep = 1.0 - self.pdrop_value if do_dropout else 1.0
-        feed_dict = {self.x: x, self.pkeep: pkeep}
+        feed_dict = {self.pkeep: pkeep}
 
-        if hasattr(self, 'lengths') and self.lengths is not None:
-            feed_dict[self.lengths] = lengths
-        if hasattr(self, 'xch') and xch is not None and self.xch is not None:
-            feed_dict[self.xch] = xch
+        for key in self.embeddings.keys():
+            feed_dict["{}:0".format(key)] = batch_dict[key]
 
         if y is not None:
             feed_dict[self.y] = fill_y(len(self.labels), y)
@@ -268,6 +248,12 @@ class WordClassifierBase(Classifier):
         checkpoint_name = kwargs.get('checkpoint_name', basename)
         checkpoint_name = checkpoint_name or basename
 
+        vocab_suffixes = get_vocab_file_suffixes(basename)
+        for ty in vocab_suffixes:
+            vocab_file = '{}-{}.vocab'.format(basename, ty)
+            print('Reading {}'.format(vocab_file))
+            model.embeddings[ty] = TensorFlowWordEmbeddings.load(vocab_file)
+
         with gfile.FastGFile(basename + '.graph', 'rb') as f:
             gd = tf.GraphDef()
             gd.ParseFromString(f.read())
@@ -294,21 +280,6 @@ class WordClassifierBase(Classifier):
             model.logits = tf.get_default_graph().get_tensor_by_name('output/logits:0')
         with open(basename + '.labels', 'r') as f:
             model.labels = json.load(f)
-
-        model.vocab = {}
-
-        # Backwards compat
-        if os.path.exists(basename + '.vocab'):
-            with open(basename + '.vocab', 'r') as f:
-                model.vocab['word'] = json.load(f)
-        # Grep for all features
-        else:
-            vocab_suffixes = get_vocab_file_suffixes(basename)
-            for ty in vocab_suffixes:
-                vocab_file = '{}-{}.vocab'.format(basename, ty)
-                print('Reading {}'.format(vocab_file))
-                with open(vocab_file, 'r') as f:
-                    model.vocab[ty] = json.load(f)
 
         model.sess = sess
         model.load_md(basename)
@@ -352,25 +323,17 @@ class WordClassifierBase(Classifier):
 
         model = cls()
         model.embeddings = dict()
-        model.embeddings['word'] = TensorFlowWordEmbeddings(embeddings['word'])
-        if 'char' in embeddings:
-            model.embeddings['char'] = TensorFlowCharConvEmbeddings(embeddings['char'])
+        for key in embeddings.keys():
+            DefaultType = TensorFlowCharConvEmbeddings if key == 'char' else TensorFlowWordEmbeddings
+            model.embeddings[key] = tf_embeddings(embeddings[key], key, DefaultType=DefaultType)
 
         model.labels = labels
         nc = len(labels)
-
-        model.vocab = {}
-
-        model.mxlen = int(kwargs.get('mxlen', 100))
-        model.mxwlen = None
+        model.y = kwargs.get('y', tf.placeholder(tf.int32, [None, nc], name="y"))
         # This only exists to make exporting easier
         model.pkeep = kwargs.get('pkeep', tf.placeholder_with_default(1.0, shape=(), name="pkeep"))
         model.pdrop_value = kwargs.get('dropout', 0.5)
         # This only exists to make exporting easier
-        model.x = kwargs.get('x', tf.placeholder(tf.int32, [None, model.mxlen], name="x"))
-        model.y = kwargs.get('y', tf.placeholder(tf.int32, [None, nc], name="y"))
-        model.lengths = kwargs.get('lengths', tf.placeholder(tf.int32, [None], name="lengths"))
-        model.xch = None
 
         with tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE):
 
@@ -378,13 +341,13 @@ class WordClassifierBase(Classifier):
             init = tf.random_uniform_initializer(-0.05, 0.05, dtype=tf.float32, seed=seed)
             xavier_init = xavier_initializer(True, seed)
 
-            word_embeddings = model.embeddings['word'].encode(model.x)
-            input_sz = model.embeddings['word'].get_dsz()
-            if 'char' in model.embeddings:
-                char_comp = model.embeddings['char'].encode(model.xch)
-                word_embeddings = tf.concat(values=[word_embeddings, char_comp], axis=2)
-                input_sz += model.embeddings['char'].get_dsz()
+            all_embeddings_out = []
+            for embedding in model.embeddings.values():
+                embeddings_out = embedding.encode()
+                all_embeddings_out += [embeddings_out]
 
+            word_embeddings = tf.concat(values=all_embeddings_out, axis=2)
+            input_sz = word_embeddings.shape[-1]
             pooled = model.pool(word_embeddings, input_sz, init, **kwargs)
             stacked = model.stacked(pooled, init, **kwargs)
 

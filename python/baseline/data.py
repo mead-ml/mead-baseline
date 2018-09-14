@@ -65,9 +65,6 @@ class ExampleDataFeed(DataFeed):
         self.examples = examples
         self.batchsz = batchsz
         self.shuffle = bool(kwargs.get('shuffle', False))
-        self.vec_alloc = kwargs.get('vec_alloc', np.zeros)
-        self.vec_shape = kwargs.get('vec_shape', np.shape)
-        self.src_vec_trans = kwargs.get('src_vec_trans', None)
         self.steps = int(math.floor(len(self.examples)/float(batchsz)))
         self.trim = bool(kwargs.get('trim', False))
 
@@ -78,12 +75,7 @@ class SeqLabelExamples(object):
     
     Datasets of paired `(x, y)` data, where `x` is a tensor of data over time and `y` is a single label
     """
-    FORMAT_OBJS = 0
-    FORMAT_VECS = 1
 
-    LABEL = 'y'
-    SEQ = 'x'
-    SEQ_CHAR = 'xch'
     LABEL = 'y'
     SEQ_LENGTH = 'lengths'
     SCALARS = {SEQ_LENGTH, LABEL}
@@ -96,16 +88,12 @@ class SeqLabelExamples(object):
         :param do_sort: (``bool``) Sort the data.  Defaults to `True`
         """
         self.example_list = example_list
-        self.data_format = SeqLabelExamples.FORMAT_VECS if type(self.example_list) is dict else SeqLabelExamples.FORMAT_OBJS
 
-        if do_shuffle and self.data_format == SeqLabelExamples.FORMAT_OBJS:
+        if do_shuffle:
             random.shuffle(self.example_list)
 
         if do_sort:
-            if self.data_format == SeqLabelExamples.FORMAT_OBJS:
-                self.example_list = sorted(self.example_list, key=lambda x: x[SeqWordCharTagExamples.SEQ_LEN])
-            else:
-                print('Warning: pre-sorting by length not yet supported in vector format, use objs')
+            self.example_list = sorted(self.example_list, key=lambda x: x[SeqWordCharTagExamples.SEQ_LEN])
 
     def __getitem__(self, i):
         """Get a single example
@@ -113,43 +101,33 @@ class SeqLabelExamples(object):
         :param i: (``int``) simple index
         :return: an example
         """
-        if self.data_format == SeqLabelExamples.FORMAT_OBJS:
-            return self.example_list[i]
-        obj = dict((k, self.example_list[k][i]) for k in self.example_list.keys())
-        return obj
+        return self.example_list[i]
 
     def __len__(self):
         """Number of examples
         
         :return: (``int``) length of data
         """
-        if self.data_format == SeqLabelExamples.FORMAT_OBJS:
-            return len(self.example_list)
-
-        return len(self.example_list[SeqLabelExamples.SEQ])
+        return len(self.example_list)
 
     def width(self):
         """ Width of the temporal signal
         
         :return: (``int``) length
         """
-        if self.data_format == SeqLabelExamples.FORMAT_OBJS:
-            x_at_0 = self.example_list[0][SeqLabelExamples.SEQ]
-        else:
-            x_at_0 = self.example_list[SeqLabelExamples.SEQ][0]
+        x_at_0 = self.example_list[0][SeqLabelExamples.SEQ]
         return len(x_at_0)
 
     def _trim_batch(self, batch, keys, max_src_len):
         for k in keys:
-            if k == SeqLabelExamples.SEQ_CHAR:
+            if len(batch[k].shape) == 3:
                 batch[k] = batch[k][:, 0:max_src_len, :]
-            elif k in SeqLabelExamples.SCALARS:
-                pass
-            else:
+            elif len(batch[k].shape) == 2:
                 batch[k] = batch[k][:, :max_src_len]
         return batch
 
-    def _batch_objs(self, start, batchsz, trim, vec_alloc, vec_shape):
+    def batch(self, start, batchsz, trim=False):
+
         """Get a batch of data
 
         :param start: (``int``) The step index
@@ -164,17 +142,9 @@ class SeqLabelExamples(object):
         batch = {}
 
         for k in keys:
-            field = ex[k]
-            if np.isscalar(field):
-                # print('Expanding field {} to a list'.format(k))
-                batch[k] = vec_alloc(batchsz, dtype=np.int)
-            else:
-                # print('Expanding field {} to a tensor'.format(k))
-                batch[k] = vec_alloc([batchsz] + list(vec_shape(ex[k])), dtype=np.int)
-
+            batch[k] = []
         sz = len(self.example_list)
         idx = start * batchsz
-
         max_src_len = 0
 
         for i in range(batchsz):
@@ -183,36 +153,14 @@ class SeqLabelExamples(object):
 
             ex = self.example_list[idx]
             for k in keys:
-                batch[k][i] = ex[k]
+                batch[k] += [ex[k]]
             # Hack + 0.5
             if trim:
                 max_src_len = max(max_src_len, ex[SeqWordCharTagExamples.SEQ_LEN])
             idx += 1
-        return batch, keys, max_src_len
 
-    def batch(self, start, batchsz, trim=False, vec_alloc=np.empty, vec_shape=np.shape):
-        """Get a batch of data
-
-        :param start: (``int``) The step index
-        :param batchsz: (``int``) The batch size
-        :param trim: (``bool``) Trim to maximum length in a batch
-        :param vec_alloc: A vector allocator, defaults to `numpy.empty`
-        :param vec_shape: A vector shape function, defaults to `numpy.shape`
-        :return: batched `x` word vector, `x` character vector, batched `y` vector, `length` vector, `ids`
-        """
-        if self.data_format == SeqLabelExamples.FORMAT_OBJS:
-            batch, keys, max_src_len = self._batch_objs(start, batchsz, trim, vec_alloc, vec_shape)
-        else:
-            keys = self.example_list.keys()
-            batch = {}
-            idx = start * batchsz
-            for k in keys:
-                vec = self.example_list[k]
-                if trim:
-                    batch[k] = vec[idx:idx+batchsz, ].copy()
-                else:
-                    batch[k] = vec[idx:idx+batchsz, ]
-                    # assert batch[k].base is vec
+        for k in keys:
+            batch[k] = np.stack(batch[k])
         return self._trim_batch(batch, keys, max_src_len) if trim else batch
 
 
@@ -229,10 +177,7 @@ class SeqLabelDataFeed(ExampleDataFeed):
         :param i: (``int``) step index
         :return: A batch tensor x, batch tensor y
         """
-        batch = self.examples.batch(i, self.batchsz, trim=self.trim, vec_alloc=self.vec_alloc, vec_shape=self.vec_shape)
-
-        if self.src_vec_trans is not None:
-            batch[SeqLabelExamples.SEQ] = self.src_vec_trans(batch[SeqLabelExamples.SEQ])
+        batch = self.examples.batch(i, self.batchsz, trim=self.trim)
         return batch
 
 
@@ -241,8 +186,8 @@ class SeqWordCharTagExamples(object):
     """Examples of sequences of words, characters and tags
     """
 
-    SEQ_WORD = 'x'
-    SEQ_CHAR = 'xch'
+    SEQ_WORD = 'word'
+    SEQ_CHAR = 'char'
     SEQ_TAG = 'y'
     SEQ_LEN = 'lengths'
     SEQ_CHAR = 'xch'

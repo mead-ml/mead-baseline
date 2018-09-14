@@ -1,99 +1,130 @@
 import numpy as np
-from baseline.utils import import_user_module, lowercase
+from baseline.utils import export, create_user_vectorizer
+from baseline.data import reverse_2nd
+import collections
 
 
-class Featurizer(object):
-    def __init__(self, model, mxlen, maxw, zero_alloc):
-        self.mxlen = mxlen
-        self.maxw = maxw
-        self.zero_alloc = zero_alloc
-        self.model = model
+__all__ = []
+exporter = export(__all__)
 
-    def run(self, tokens):
+
+class Vectorizer(object):
+
+    def __init__(self):
+        pass
+
+    def _iterable(self, tokens):
+        for tok in tokens:
+            yield tok
+
+    def _next_element(self, tokens, vocab):
+        OOV = vocab['<UNK>']
+        for atom in self._iterable(tokens):
+            yield vocab.get(atom, OOV)
+
+    def count(self, tokens):
+        counter = collections.Counter()
+        for tok in self._iterable(tokens):
+            counter[tok] += 1
+        return counter
+
+    def run(self, tokens, vocab):
         pass
 
 
-class WordCharLength(Featurizer):
-    def __init__(self, tagger, mxlen, maxw, zero_alloc, **kwargs):
-        super(WordCharLength, self).__init__(tagger, mxlen, maxw, zero_alloc)
-        self.word_trans_fn = kwargs.get('word_trans_fn', lowercase)
+class Token1DVectorizer(Vectorizer):
 
-    def run(self, tokens):
-        if type(tokens[0]) is not str:
-            tokens = [token[0] for token in tokens]
-        xs = self.zero_alloc((1, self.mxlen), dtype=int)
+    def __init__(self, **kwargs):
+        super(Vectorizer, self).__init__()
+        self.mxlen = kwargs.get('mxlen', kwargs.get('maxs', 100))
+        self.time_reverse = kwargs.get('rev', False)
 
-        chars_vocab = self.model.get_vocab('char')
-        if chars_vocab is not None:
-            if self.maxw is None:
-                raise Exception('Expected max word length')
-            xs_ch = self.zero_alloc((1, self.mxlen, self.maxw), dtype=int)
-        else:
-            xs_ch = None
-        lengths = self.zero_alloc(1, dtype=int)
-        lengths[0] = min(len(tokens), self.mxlen)
-        words_vocab = self.model.get_vocab('word')
-        for j in range(self.mxlen):
-            if j == len(tokens):
+    def run(self, tokens, vocab):
+        vec1d = np.zeros(self.mxlen, dtype=int)
+        for i, atom in enumerate(self._next_element(tokens, vocab)):
+            if i == self.mxlen:
+                i -= 1
                 break
-            w = tokens[j]
-            xs[0, j] = words_vocab.get(self.word_trans_fn(w), 0)
+            vec1d[i] = atom
+        valid_length = i
 
-            if chars_vocab is not None:
-                nch = min(len(w), self.maxw)
-
-                for k in range(nch):
-                    xs_ch[0, j, k] = chars_vocab.get(w[k], 0)
-        return {'x': xs, 'xch': xs_ch, 'lengths': lengths}
+        if self.time_reverse:
+            vec1d = reverse_2nd(vec1d)
+        return vec1d, valid_length
 
 
-class MultiFeatureFeaturizer(Featurizer):
-    def __init__(self, tagger, mxlen, maxw, zero_alloc, **kwargs):
-        super(MultiFeatureFeaturizer, self).__init__(tagger, mxlen, maxw, zero_alloc)
-        self.vocab_keys = kwargs['vocab_keys']
-        self.word_trans_fn = kwargs.get('word_trans_fn', lowercase)
+class AbstractCharVectorizer(Vectorizer):
 
-    def run(self, tokens):
-        xs = self.zero_alloc((1, self.mxlen), dtype=int)
-        xs_ch = self.zero_alloc((1, self.mxlen, self.maxw), dtype=int)
-        lengths = self.zero_alloc(1, dtype=int)
-        lengths[0] = min(len(tokens), self.mxlen)
-        data = {}
-        for j in range(self.mxlen):
-            if j == len(tokens):
+    def __init__(self):
+        super(AbstractCharVectorizer, self).__init__()
+
+    def _next_element(self, tokens, vocab):
+        OOV = vocab['<UNK>']
+        EOW = vocab.get('<EOW>', vocab.get(' '))
+
+        for token in self._iterable(tokens):
+            for ch in token:
+                yield self.vocab.get(ch, OOV)
+            yield EOW
+
+
+class Char2DLookupVectorizer(AbstractCharVectorizer):
+
+    def __init__(self, **kwargs):
+        super(Char2DLookupVectorizer, self).__init__()
+        self.mxlen = kwargs.get('mxlen', kwargs.get('maxs', 100))
+        self.mxwlen = kwargs.get('mxwlen', kwargs.get('maxw', 40))
+
+    def run(self, tokens, vocab):
+        vec2d = np.zeros((self.mxlen, self.mxwlen), dtype=int)
+        i = 0
+        j = 0
+        for atom in self._next_element(tokens):
+            if i == self.mxlen:
+                i -= 1
                 break
-            token_features = tokens[j]
-            if 'word' in self.vocab_keys:
-                word_index = self.vocab_keys['word']
-                words_vocab = self.model.get_vocab('word')
-                w = token_features[word_index]
-                xs[0, j] = words_vocab.get(self.word_trans_fn(w), 0)
-                if 'char' in self.vocab_keys:
-                    nch = min(len(w), self.maxw)
-                    for k in range(nch):
-                        chars_vocab = self.model.get_vocab('char')
-                        xs_ch[0, j, k] = chars_vocab.get(w[k], 0)
-            for key in self.vocab_keys:
-                if not key == 'word' and not key == 'char':
-                    feature_index = self.vocab_keys[key]
-                    feature = token_features[feature_index]
-                    feature_vocab = self.model.get_vocab(key)
-                    data[key] = self.zero_alloc((1, self.mxlen), dtype=np.int)
-                    data[key][0, j] = feature_vocab[feature]
-        data.update({'x': xs, 'xch': xs_ch, 'lengths': lengths})
-        return data
+            if atom == self.EOW or j == self.mxwlen:
+                i += 1
+                j = 0
+            else:
+                vec2d[i, j] = atom
+        valid_length = i
+        return vec2d, valid_length
 
 
-def create_featurizer(model, zero_alloc=np.zeros, **kwargs):
+class Char1DLookupVectorizer(AbstractCharVectorizer):
 
-    mxlen = kwargs.pop('mxlen', model.mxlen if hasattr(model, 'mxlen') else -1)
-    maxw = kwargs.pop('maxw', model.maxw if hasattr(model, 'maxw') else model.mxwlen if hasattr(model, 'mxwlen') else -1)
-    kwargs.pop('zero_alloc', None)
-    featurizer_type = kwargs.get('featurizer_type', 'default')
-    if featurizer_type == 'default':
-        return WordCharLength(model, mxlen, maxw, zero_alloc, **kwargs)
-    elif featurizer_type == 'multifeature':
-        return MultiFeatureFeaturizer(model, mxlen, maxw, zero_alloc, **kwargs)
+    def __init__(self, **kwargs):
+        super(Char1DLookupVectorizer, self).__init__()
+        self.mxlen = kwargs.get('mxlen', kwargs.get('maxs', 100))
+        self.time_reverse = kwargs.get('rev', False)
+
+    def run(self, tokens, vocab):
+
+        vec1d = np.zeros(self.mxlen, dtype=int)
+        for i, atom in enumerate(self._next_element(tokens, vocab)):
+            if i == self.mxlen:
+                i -= 1
+            vec1d[i] = atom
+        valid_length = i
+        if self.time_reverse:
+            vec1d = reverse_2nd(vec1d)
+        return vec1d, valid_length
+
+
+BASELINE_KNOWN_VECTORIZERS = {
+    'token1d': Token1DVectorizer,
+    'char2d': Char2DLookupVectorizer,
+    'char1d': Char1DLookupVectorizer
+}
+
+
+@exporter
+def create_vectorizer(filename, known_vocab=None, **kwargs):
+    vec_type = kwargs.get('vectorizer_type', kwargs.get('type', 'token1d'))
+    Constructor = BASELINE_KNOWN_VECTORIZERS.get(vec_type)
+    if Constructor is not None:
+        return Constructor(**kwargs)
     else:
-        mod = import_user_module("featurizer", featurizer_type)
-        return mod.create_featurizer(model, mxlen, maxw, zero_alloc, **kwargs)
+        print('loading user module')
+    return create_user_vectorizer(filename, known_vocab, **kwargs)
