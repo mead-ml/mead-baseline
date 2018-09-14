@@ -70,17 +70,10 @@ class ExampleDataFeed(DataFeed):
 
 
 @exporter
-class SeqLabelExamples(object):
-    """Unstructured prediction examples
-    
-    Datasets of paired `(x, y)` data, where `x` is a tensor of data over time and `y` is a single label
+class DictExamples(object):
+    """This object holds a list of dictionaries, and knows how to shuffle, sort and batch them
     """
-
-    LABEL = 'y'
-    SEQ_LENGTH = 'lengths'
-    SCALARS = {SEQ_LENGTH, LABEL}
-
-    def __init__(self, example_list, do_shuffle=True, do_sort=False):
+    def __init__(self, example_list, do_shuffle=True, sort_key=None):
         """Constructor
 
         :param example_list:  A list of examples
@@ -92,8 +85,10 @@ class SeqLabelExamples(object):
         if do_shuffle:
             random.shuffle(self.example_list)
 
-        if do_sort:
-            self.example_list = sorted(self.example_list, key=lambda x: x[SeqWordCharTagExamples.SEQ_LEN])
+        if sort_key is not None:
+            self.example_list = sorted(self.example_list, key=lambda x: x[sort_key])
+
+        self.sort_key = sort_key
 
     def __getitem__(self, i):
         """Get a single example
@@ -109,14 +104,6 @@ class SeqLabelExamples(object):
         :return: (``int``) length of data
         """
         return len(self.example_list)
-
-    def width(self):
-        """ Width of the temporal signal
-        
-        :return: (``int``) length
-        """
-        x_at_0 = self.example_list[0][SeqLabelExamples.SEQ]
-        return len(x_at_0)
 
     def _trim_batch(self, batch, keys, max_src_len):
         for k in keys:
@@ -154,9 +141,10 @@ class SeqLabelExamples(object):
             ex = self.example_list[idx]
             for k in keys:
                 batch[k] += [ex[k]]
-            # Hack + 0.5
-            if trim:
-                max_src_len = max(max_src_len, ex[SeqWordCharTagExamples.SEQ_LEN])
+
+            # Trim all batches along the sort_key if it exists
+            if trim and self.sort_key is not None:
+                max_src_len = max(max_src_len, ex[self.sort_key])
             idx += 1
 
         for k in keys:
@@ -182,98 +170,6 @@ class SeqLabelDataFeed(ExampleDataFeed):
 
 
 @exporter
-class SeqWordCharTagExamples(object):
-    """Examples of sequences of words, characters and tags
-    """
-
-    SEQ_WORD = 'word'
-    SEQ_CHAR = 'char'
-    SEQ_TAG = 'y'
-    SEQ_LEN = 'lengths'
-    SEQ_CHAR = 'xch'
-    SEQ_ID = 'ids'
-    SCALARS = [SEQ_LEN, SEQ_ID]
-
-    def __init__(self, example_list, do_shuffle=True, do_sort=True):
-        """Constructor
-        
-        :param example_list:  A list of examples
-        :param do_shuffle: (``bool``) Shuffle the data? Defaults to `True`
-        :param do_sort: (``bool``) Sort the data.  Defaults to `True`
-        """
-        self.example_list = example_list
-        if do_shuffle:
-            random.shuffle(self.example_list)
-        if do_sort:
-            self.example_list = sorted(self.example_list, key=lambda x: x[SeqWordCharTagExamples.SEQ_LEN])
-
-    def __getitem__(self, i):
-        """Get `ith` example in order `SEQ_WORD`, `SEQ_CHAR`, `SEQ_TAG`, `SEQ_LEN`, `SEQ_ID`
-        
-        :param i: (``int``) index of example
-        :return: example in order `SEQ_WORD`, `SEQ_CHAR`, `SEQ_TAG`, `SEQ_LEN`, `SEQ_ID`
-        """
-        return self.example_list[i]
-
-    def __len__(self):
-        """Get the number of examples
-        
-        :return: (``int``) number of examples
-        """
-        return len(self.example_list)
-
-    def batch(self, start, batchsz, trim=False, vec_alloc=np.empty, vec_shape=np.shape):
-        """Get a batch of data
-        
-        :param start: (``int``) The step index
-        :param batchsz: (``int``) The batch size
-        :param trim: (``bool``) Trim to maximum length in a batch
-        :param vec_alloc: A vector allocator, defaults to `numpy.empty`
-        :param vec_shape: A vector shape function, defaults to `numpy.shape`
-        :return: batched `x` word vector, `x` character vector, batched `y` vector, `length` vector, `ids`
-        """
-        ex = self.example_list[start]
-        keys = ex.keys()
-        siglen, maxw = vec_shape(ex[SeqWordCharTagExamples.SEQ_CHAR])
-
-        batch = {}
-        for k in keys:
-            if k == SeqWordCharTagExamples.SEQ_CHAR:
-                batch[k] = vec_alloc((batchsz, siglen, maxw), dtype=np.int)
-            elif k in SeqWordCharTagExamples.SCALARS:
-                batch[k] = vec_alloc((batchsz), dtype=np.int)
-            else:
-                batch[k] = vec_alloc((batchsz, siglen), dtype=np.int)
-
-        sz = len(self.example_list)
-        idx = start * batchsz
-
-        max_src_len = 0
-
-        for i in range(batchsz):
-            if idx >= sz:
-                idx = 0
-
-            ex = self.example_list[idx]
-            for k in keys:
-                batch[k][i] = ex[k]
-
-            max_src_len = max(max_src_len, ex[SeqWordCharTagExamples.SEQ_LEN])
-            idx += 1
-
-        if trim:
-            for k in keys:
-                if k == SeqWordCharTagExamples.SEQ_CHAR:
-                    batch[k] = batch[k][:, 0:max_src_len, :]
-                elif k in SeqWordCharTagExamples.SCALARS:
-                    pass
-                else:
-                    batch[k] = batch[k][:, 0:max_src_len]
-
-        return batch
-
-
-@exporter
 class SeqWordCharLabelDataFeed(ExampleDataFeed):
     """Feed object for sequential prediction training data
     """
@@ -288,12 +184,7 @@ class SeqWordCharLabelDataFeed(ExampleDataFeed):
 class Seq2SeqExamples(object):
     """Paired training examples
     """
-    SRC = 0
-    TGT = 1
-    SRC_LEN = 2
-    TGT_LEN = 3
-
-    def __init__(self, example_list, do_shuffle=True, do_sort=True):
+    def __init__(self, example_list, do_shuffle=True, sort_key=None):
         """Constructor
         
         :param example_list: Training pair examples 
@@ -303,17 +194,16 @@ class Seq2SeqExamples(object):
         self.example_list = example_list
         if do_shuffle:
             random.shuffle(self.example_list)
-        if do_sort:
-            self.example_list = sorted(self.example_list, key=lambda x: x[Seq2SeqExamples.SRC_LEN])
+        if sort_key is not None:
+            self.example_list = sorted(self.example_list, key=lambda x: x[sort_key])
 
     def __getitem__(self, i):
-        """Get the `ith` example from the training data
-        
-        :param i: (``int``) integer offset
-        :return: Example of `SRC`, `TGT`, `SRC_LEN`, `TGT_LEN`
+        """Get `ith` example
+
+        :param i: (``int``) index of example
+        :return: example dict
         """
-        ex = self.example_list[i]
-        return ex[Seq2SeqExamples.SRC], ex[Seq2SeqExamples.TGT], ex[Seq2SeqExamples.SRC_LEN], ex[Seq2SeqExamples.TGT_LEN]
+        return self.example_list[i]
 
     def __len__(self):
         return len(self.example_list)

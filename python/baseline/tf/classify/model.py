@@ -10,13 +10,14 @@ from baseline.tf.tfy import (stacked_lstm,
                              parallel_conv,
                              get_vocab_file_suffixes,
                              TensorFlowCharConvEmbeddings,
-                             TensorFlowWordEmbeddings,
+                             TensorFlowTokenEmbeddings,
                              tf_embeddings)
 
 from baseline.version import __version__
 import os
 from baseline.utils import zip_model, unzip_model
 
+# Broken RN
 class ClassifyParallelModel(Classifier):
 
     def __init__(self, create_fn, embeddings, labels, **kwargs):
@@ -35,13 +36,10 @@ class ClassifyParallelModel(Classifier):
         self.saver = None
         self.replicas = []
 
-        self.mxlen = int(kwargs.get('mxlen', 100))
-        self.mxwlen = int(kwargs.get('mxwlen', 40))
-
         # This only exists to make exporting easier
         self.pdrop_value = kwargs.get('dropout', 0.5)
         # This only exists to make exporting easier
-        self.x = kwargs.get('x', tf.placeholder(tf.int32, [None, self.mxlen], name="x_parallel"))
+        self.x = kwargs.get('x', tf.placeholder(tf.int32, [None, None], name="x_parallel"))
         self.y = kwargs.get('y', tf.placeholder(tf.int32, [None, nc], name="y_parallel"))
         self.lengths = kwargs.get('lengths', tf.placeholder(tf.int32, [None], name="lengths_parallel"))
         self.pkeep = kwargs.get('pkeep', tf.placeholder_with_default(1.0, shape=(), name="pkeep"))
@@ -53,7 +51,7 @@ class ClassifyParallelModel(Classifier):
         xch_splits = None
         c2v = embeddings.get('char')
         if c2v is not None:
-            self.xch = kwargs.get('xch', tf.placeholder(tf.int32, [None, self.mxlen, self.mxwlen], name='xch_parallel'))
+            self.xch = kwargs.get('xch', tf.placeholder(tf.int32, [None, None, None], name='xch_parallel'))
             xch_splits = tf.split(self.xch, gpus)
 
         losses = []
@@ -93,6 +91,7 @@ class ClassifyParallelModel(Classifier):
     def make_input(self, batch_dict, do_dropout=False):
         if do_dropout is False:
             return self.inference.make_input(batch_dict)
+
         x = batch_dict['x']
         y = batch_dict.get('y', None)
         xch = batch_dict.get('xch')
@@ -110,7 +109,7 @@ class ClassifyParallelModel(Classifier):
         return feed_dict
 
 
-class WordClassifierBase(Classifier):
+class ClassifierBase(Classifier):
     """Base for all baseline implementations of word-based classifiers
     
     This class provides a loose skeleton around which the baseline models (currently all word-based)
@@ -126,7 +125,7 @@ class WordClassifierBase(Classifier):
     def __init__(self):
         """Base
         """
-        super(WordClassifierBase, self).__init__()
+        super(ClassifierBase, self).__init__()
 
     def set_saver(self, saver):
         self.saver = saver
@@ -198,11 +197,16 @@ class WordClassifierBase(Classifier):
 
     def make_input(self, batch_dict, do_dropout=False):
         y = batch_dict.get('y', None)
+
         pkeep = 1.0 - self.pdrop_value if do_dropout else 1.0
         feed_dict = {self.pkeep: pkeep}
 
         for key in self.embeddings.keys():
             feed_dict["{}:0".format(key)] = batch_dict[key]
+
+        # Allow us to track a length, which is needed for BLSTMs
+        if self.lengths_key is not None:
+            feed_dict[self.lengths] = batch_dict[self.lengths_key]
 
         if y is not None:
             feed_dict[self.y] = fill_y(len(self.labels), y)
@@ -252,7 +256,7 @@ class WordClassifierBase(Classifier):
         for ty in vocab_suffixes:
             vocab_file = '{}-{}.vocab'.format(basename, ty)
             print('Reading {}'.format(vocab_file))
-            model.embeddings[ty] = TensorFlowWordEmbeddings.load(vocab_file)
+            model.embeddings[ty] = TensorFlowTokenEmbeddings.load(vocab_file)
 
         with gfile.FastGFile(basename + '.graph', 'rb') as f:
             gd = tf.GraphDef()
@@ -324,8 +328,18 @@ class WordClassifierBase(Classifier):
         model = cls()
         model.embeddings = dict()
         for key in embeddings.keys():
-            DefaultType = TensorFlowCharConvEmbeddings if key == 'char' else TensorFlowWordEmbeddings
+            DefaultType = TensorFlowCharConvEmbeddings if key == 'char' else TensorFlowTokenEmbeddings
             model.embeddings[key] = tf_embeddings(embeddings[key], key, DefaultType=DefaultType)
+
+        model.lengths_key = kwargs.get('lengths_key')
+
+        if model.lengths_key is not None:
+            # This allows user to short-hand the field to use
+            if not model.lengths_key.endswith('_lengths'):
+                model.lengths_key += '_lengths'
+            model.lengths = kwargs.get('lengths', tf.placeholder(tf.int32, [None], name="lengths"))
+        else:
+            model.lengths = None
 
         model.labels = labels
         nc = len(labels)
@@ -401,7 +415,7 @@ class WordClassifierBase(Classifier):
         return in_layer
 
 
-class ConvModel(WordClassifierBase):
+class ConvModel(ClassifierBase):
     """Current default model for `baseline` classification.  Parallel convolutions of varying receptive field width
     
     """
@@ -436,7 +450,7 @@ class ConvModel(WordClassifierBase):
         return combine
 
 
-class LSTMModel(WordClassifierBase):
+class LSTMModel(ClassifierBase):
     """A simple single-directional single-layer LSTM. No layer-stacking.
     
     """
@@ -461,7 +475,7 @@ class LSTMModel(WordClassifierBase):
         if type(hsz) is list:
             hsz = hsz[0]
 
-        rnntype = kwargs.get('rnntype', 'lstm')
+        rnntype = kwargs.get('rnn_type', kwargs.get('rnntype', 'lstm'))
         nlayers = int(kwargs.get('layers', 1))
 
         if rnntype == 'blstm':
@@ -486,7 +500,7 @@ class LSTMModel(WordClassifierBase):
         return combine
 
 
-class NBowBase(WordClassifierBase):
+class NBowBase(ClassifierBase):
     """Neural Bag-of-Words Model base class.  Defines stacking of fully-connected layers, but leaves pooling to derived
     """
     def __init__(self):
@@ -539,7 +553,7 @@ class NBowMaxModel(NBowBase):
         return tf.reduce_max(word_embeddings, 1, keep_dims=False)
 
 
-class CompositePoolingModel(WordClassifierBase):
+class CompositePoolingModel(ClassifierBase):
 
     def __init__(self):
         super(CompositePoolingModel, self).__init__()

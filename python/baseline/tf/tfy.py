@@ -443,10 +443,10 @@ def pool_chars(x_char, Wch, ce0, char_dsz, **kwargs):
     return word_char, num_filts
 
 
-class TensorFlowWordEmbeddings(TensorFlowEmbeddings):
+class TensorFlowTokenEmbeddings(TensorFlowEmbeddings):
 
     def __init__(self, model, name, **kwargs):
-        super(TensorFlowWordEmbeddings, self).__init__()
+        super(TensorFlowTokenEmbeddings, self).__init__()
         self.model = model
         self.finetune = kwargs.get('finetune', True)
         self.scope = kwargs.get('scope', 'LUT')
@@ -504,7 +504,7 @@ class TensorFlowCharConvEmbeddings(TensorFlowEmbeddings):
         return self.wsz
 
 
-def tf_embeddings(in_embeddings_obj, name, DefaultType=TensorFlowWordEmbeddings, **kwargs):
+def tf_embeddings(in_embeddings_obj, name, DefaultType=TensorFlowTokenEmbeddings, **kwargs):
     if isinstance(in_embeddings_obj, TensorFlowEmbeddings):
         return in_embeddings_obj
     else:

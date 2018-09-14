@@ -149,18 +149,19 @@ class Task(object):
                 embed_file = embeddings_set[embed_label]['file']
                 embed_dsz = embeddings_set[embed_label]['dsz']
                 embed_sha1 = embeddings_set[embed_label].get('sha1', None)
+                embed_use_mmap = embeddings_section.get('use_mmap', False)
                 embed_file = EmbeddingDownloader(embed_file, embed_dsz, embed_sha1, self.data_download_cache).download()
                 embeddings[name] = load_embeddings(embed_file,
                                                    known_vocab=vocabs[name],
                                                    embed_type=embeddings_section.get('type', 'default'),
                                                    unif=unif,
-                                                   use_mmap=True,
+                                                   use_mmap=embed_use_mmap,
                                                    keep_unused=keep_unused)
 
             # TODO: can we still find a way to call load_embeddings even if no file is given?
             else:
                 dsz = embeddings_section['dsz']
-                embeddings['name'] = baseline.RandomInitVecModel(dsz, vocabs['word'], unif_weight=unif)
+                embeddings[name] = baseline.RandomInitVecModel(dsz, vocabs[name], unif_weight=unif)
 
         out_vocabs = {}
         for key, value in embeddings.items():
@@ -189,7 +190,9 @@ class ClassifierTask(Task):
         for feature in self.config_params['features']:
             key = feature['name']
             vectorizer_section = feature.get('vectorizer', {'type': 'token1d'})
-            vectorizer = create_vectorizer(vectorizer_section)
+            vectorizer_section['mxlen'] = vectorizer_section.get('mxlen', self.config_params['preproc'].get('mxlen', 100))
+            vectorizer_section['mxwlen'] = vectorizer_section.get('mxlen', self.config_params['preproc'].get('mxwlen', 40))
+            vectorizer = create_vectorizer(**vectorizer_section)
             vectorizers[key] = vectorizer
         return baseline.create_pred_reader(vectorizers, clean_fn=self.config_params['preproc']['clean_fn'],
                                            trim=self.config_params['preproc'].get('trim', False),

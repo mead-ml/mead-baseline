@@ -465,18 +465,6 @@ class TSVSeqLabelReader(SeqLabelReader):
         text = list(filter(lambda s: len(s) != 0, re.split('\s+', text)))
         return label, text
 
-    def count(self, tokens):
-        vocab_dict = {}
-        for key, vectorizer in self.vectorizers.items():
-            vocab_dict[key] = vectorizer.counter(tokens)
-        return vocab_dict
-
-    def run(self, tokens):
-        batch_dict = {}
-        for key, vectorizer in self.vectorizers.items():
-            batch_dict[key] = vectorizer.run(tokens)
-        return batch_dict
-
     def build_vocab(self, files, **kwargs):
         """Take a directory (as a string), or an array of files and build a vocabulary
         
@@ -497,7 +485,8 @@ class TSVSeqLabelReader(SeqLabelReader):
         vocab = dict()
         for k in self.vectorizers.keys():
             vocab[k] = Counter()
-            vocab[k]['<UNK>'] = 1
+            vocab[k]['<UNK>'] = 100000  # In case freq cutoffs
+            vocab[k]['<EOW>'] = 100000  # In case freq cutoffs
 
         for file in files:
             if file is None:
@@ -527,8 +516,7 @@ class TSVSeqLabelReader(SeqLabelReader):
     def load(self, filename, vocabs, batchsz, **kwargs):
 
         shuffle = kwargs.get('shuffle', False)
-        do_sort = kwargs.get('do_sort', False)
-
+        sort_key = kwargs.get('sort_key', None)
         examples = []
         with codecs.open(filename, encoding='utf-8', mode='r') as f:
             for il, line in enumerate(f):
@@ -539,11 +527,16 @@ class TSVSeqLabelReader(SeqLabelReader):
                 example_dict = dict()
                 for k, vectorizer in self.vectorizers.items():
                     example_dict[k], lengths = vectorizer.run(text, vocabs[k])
+                    if lengths is not None:
+                        example_dict['{}_lengths'.format(k)] = lengths
 
                 example_dict['y'] = y
                 examples.append(example_dict)
-        return baseline.data.SeqLabelDataFeed(baseline.data.SeqLabelExamples(examples, do_shuffle=shuffle, do_sort=do_sort),
+        return baseline.data.SeqLabelDataFeed(baseline.data.DictExamples(examples,
+                                                                         do_shuffle=shuffle,
+                                                                         sort_key=sort_key),
                                               batchsz=batchsz, shuffle=shuffle, trim=self.trim)
+
 
 @exporter
 def create_pred_reader(featurizer, clean_fn, **kwargs):

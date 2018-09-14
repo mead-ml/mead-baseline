@@ -36,7 +36,7 @@ class Token1DVectorizer(Vectorizer):
 
     def __init__(self, **kwargs):
         super(Vectorizer, self).__init__()
-        self.mxlen = kwargs.get('mxlen', kwargs.get('maxs', 100))
+        self.mxlen = kwargs.get('mxlen', 100)
         self.time_reverse = kwargs.get('rev', False)
 
     def run(self, tokens, vocab):
@@ -49,7 +49,8 @@ class Token1DVectorizer(Vectorizer):
         valid_length = i
 
         if self.time_reverse:
-            vec1d = reverse_2nd(vec1d)
+            vec1d = vec1d[::-1]
+            return vec1d, None
         return vec1d, valid_length
 
 
@@ -64,7 +65,7 @@ class AbstractCharVectorizer(Vectorizer):
 
         for token in self._iterable(tokens):
             for ch in token:
-                yield self.vocab.get(ch, OOV)
+                yield vocab.get(ch, OOV)
             yield EOW
 
 
@@ -72,8 +73,8 @@ class Char2DLookupVectorizer(AbstractCharVectorizer):
 
     def __init__(self, **kwargs):
         super(Char2DLookupVectorizer, self).__init__()
-        self.mxlen = kwargs.get('mxlen', kwargs.get('maxs', 100))
-        self.mxwlen = kwargs.get('mxwlen', kwargs.get('maxw', 40))
+        self.mxlen = kwargs.get('mxlen', 100)
+        self.mxwlen = kwargs.get('mxwlen', 40)
 
     def run(self, tokens, vocab):
         vec2d = np.zeros((self.mxlen, self.mxwlen), dtype=int)
@@ -96,7 +97,9 @@ class Char1DLookupVectorizer(AbstractCharVectorizer):
 
     def __init__(self, **kwargs):
         super(Char1DLookupVectorizer, self).__init__()
-        self.mxlen = kwargs.get('mxlen', kwargs.get('maxs', 100))
+        print(kwargs)
+        self.mxlen = kwargs.get('mxlen', 100)
+        print('mxlen', self.mxlen)
         self.time_reverse = kwargs.get('rev', False)
 
     def run(self, tokens, vocab):
@@ -106,10 +109,10 @@ class Char1DLookupVectorizer(AbstractCharVectorizer):
             if i == self.mxlen:
                 i -= 1
             vec1d[i] = atom
-        valid_length = i
         if self.time_reverse:
-            vec1d = reverse_2nd(vec1d)
-        return vec1d, valid_length
+            vec1d = vec1d[::-1]
+            return vec1d, None
+        return vec1d, i
 
 
 BASELINE_KNOWN_VECTORIZERS = {
@@ -120,11 +123,12 @@ BASELINE_KNOWN_VECTORIZERS = {
 
 
 @exporter
-def create_vectorizer(filename, known_vocab=None, **kwargs):
+def create_vectorizer(**kwargs):
     vec_type = kwargs.get('vectorizer_type', kwargs.get('type', 'token1d'))
+    print(vec_type)
     Constructor = BASELINE_KNOWN_VECTORIZERS.get(vec_type)
     if Constructor is not None:
         return Constructor(**kwargs)
     else:
         print('loading user module')
-    return create_user_vectorizer(filename, known_vocab, **kwargs)
+    return create_user_vectorizer(**kwargs)
