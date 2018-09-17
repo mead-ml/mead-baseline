@@ -4,6 +4,7 @@ from collections import Counter
 import re
 import codecs
 from baseline.utils import import_user_module, revlut, export
+from baseline.vectorizers import Dict1DVectorizer
 import os
 
 __all__ = []
@@ -24,6 +25,7 @@ def _build_vocab_for_col(col, files):
     vocab['<GO>'] = 1
     vocab['<EOS>'] = 1
     vocab['<UNK>'] = 1
+    vocab['<EOW'] = 1
     for file in files:
         if file is None:
             continue
@@ -206,78 +208,61 @@ def identity_trans_fn(x):
 @exporter
 class SeqPredictReader(object):
 
-    def __init__(self, max_sentence_length=-1, max_word_length=-1, word_trans_fn=None,
-                 vec_alloc=np.zeros, vec_shape=np.shape, trim=False, extended_features=dict()):
-        self.cleanup_fn = identity_trans_fn if word_trans_fn is None else word_trans_fn
-        self.max_sentence_length = max_sentence_length
-        self.max_word_length = max_word_length
-        self.vec_alloc = vec_alloc
-        self.vec_shape = vec_shape
+    def __init__(self,
+                 vectorizers,
+                 trim=False):
+        self.vectorizers = vectorizers
         self.trim = trim
-        self.extended_features = extended_features
         self.label2index = {"<PAD>": 0, "<GO>": 1, "<EOS>": 2}
-        self.idx = 2  # GO=0, START=1, EOS=2
+        self.label_vectorizer = Dict1DVectorizer(fields='y', mxlen=-1)
 
     def build_vocab(self, files):
+
+        vocabs = {}
+        for key in self.vectorizers.keys():
+            vocabs[key] = Counter()
+            vocabs[key]['<UNK>'] = 100000  # In case freq cutoffs
+
+        labels = Counter()
+        for file in files:
+            if file is None:
+                continue
+
+            examples = self.read_examples(file)
+            for example in examples:
+                labels.update(self.label_vectorizer.count(example))
+                for k, vectorizer in self.vectorizers.items():
+                    vocab_example = vectorizer.count(example)
+                    vocabs[k].update(vocab_example)
+
+        base_offset = len(self.label2index)
+        for i, k in enumerate(labels.keys()):
+            self.label2index[k] = i + base_offset
+        return vocabs
+
+    def read_examples(self):
         pass
 
-    def read_lines(self):
-        pass
-
-    def load(self, filename, vocabs, batchsz, shuffle=False, do_sort=True):
+    def load(self, filename, vocabs, batchsz, shuffle=False, sort_key=None):
 
         ts = []
-        words_vocab = vocabs['word']
-        chars_vocab = vocabs['char']
+        texts = self.read_examples(filename)
 
-        mxlen = self.max_sentence_length
-        maxw = self.max_word_length
-        extracted = self.read_lines(filename)
-        texts = extracted['texts']
-        labels = extracted['labels']
+        if sort_key is not None and not sort_key.endswith('_lengths'):
+            sort_key += '_lengths'
 
-        for i in range(len(texts)):
-
-            xs_ch = self.vec_alloc((mxlen, maxw), dtype=np.int)
-            xs = self.vec_alloc((mxlen), dtype=np.int)
-            ys = self.vec_alloc((mxlen), dtype=np.int)
-
-            keys = self.extended_features.keys()
-
-            item = {}
-            for key in keys:
-                item[key] = self.vec_alloc((mxlen), dtype=np.int)
-
-            text = texts[i]
-            lv = labels[i]
-
-            length = mxlen
-            for j in range(mxlen):
-
-                if j == len(text):
-                    length = j
-                    break
-
-                w = text[j]
-                nch = min(len(w), maxw)
-                label = lv[j]
-
-                if label not in self.label2index:
-                    self.idx += 1
-                    self.label2index[label] = self.idx
-
-                ys[j] = self.label2index[label]
-                xs[j] = words_vocab.get(self.cleanup_fn(w), 0)
-                # Extended features
-                for key in keys:
-                    item[key][j] = vocabs[key].get(extracted[key][i][j])
-                for k in range(nch):
-                    xs_ch[j, k] = chars_vocab.get(w[k], 0)
-            item.update({'word': xs, 'char': xs_ch, 'y': ys, 'lengths': length, 'ids': i})
-            ts.append(item)
-        examples = baseline.data.SeqWordCharTagExamples(ts, do_shuffle=shuffle, do_sort=do_sort)
-        return baseline.data.SeqWordCharLabelDataFeed(examples, batchsz=batchsz, shuffle=shuffle,
-                                                      vec_alloc=self.vec_alloc, vec_shape=self.vec_shape, trim=self.trim), texts
+        for i, example_tokens in enumerate(texts):
+            example = {}
+            for k, vectorizer in self.vectorizers.items():
+                example[k], lengths = vectorizer.run(example_tokens, vocabs[k])
+                if lengths is not None:
+                    example['{}_lengths'.format(k)] = lengths
+            example['y'], lengths = self.label_vectorizer.run(example_tokens, self.label2index)
+            example['y_lengths'] = lengths
+            example['ids'] = i
+            ts.append(example)
+        examples = baseline.data.DictExamples(ts, do_shuffle=shuffle, sort_key=sort_key)
+        return baseline.data.ExampleDataFeed(examples, batchsz=batchsz, shuffle=shuffle, trim=self.trim), texts
 
 
 @exporter
@@ -294,9 +279,10 @@ class CONLLSeqReader(SeqPredictReader):
         '=[[',
     )
 
-    def __init__(self, max_sentence_length=-1, max_word_length=-1, word_trans_fn=None,
-                 vec_alloc=np.zeros, vec_shape=np.shape, trim=False, extended_features=dict()):
-        super(CONLLSeqReader, self).__init__(max_sentence_length, max_word_length, word_trans_fn, vec_alloc, vec_shape, trim, extended_features)
+    def __init__(self, vectorizers, trim=False, **kwargs):
+        super(CONLLSeqReader, self).__init__(vectorizers, trim)
+        self.named_fields = kwargs.get('named_fields', {})
+
 
     @staticmethod
     def web_cleanup(word):
@@ -308,97 +294,44 @@ class CONLLSeqReader(SeqPredictReader):
         if word == '<3': return '&lt;3'
         return word
 
-    def build_vocab(self, files):
-        vocab_word = Counter()
-        vocab_ch = Counter()
-        vocab_word['<UNK>'] = 1
-        vocabs = {}
-        keys = self.extended_features.keys()
-        for key in keys:
-            vocabs[key] = Counter()
+    def read_examples(self, tsfile):
 
-        maxw = 0
-        maxs = 0
-        for file in files:
-            if file is None:
-                continue
+        tokens = []
+        examples = []
 
-            sl = 0
-            with codecs.open(file, encoding='utf-8', mode='r') as f:
-                for line in f:
-
-                    line = line.strip()
-                    if line == '':
-                        maxs = max(maxs, sl)
-                        sl = 0
-
-                    else:
-                        states = re.split("\s", line)
-                        sl += 1
-                        w = states[0]
-                        vocab_word[self.cleanup_fn(w)] += 1
-                        maxw = max(maxw, len(w))
-                        for k in w:
-                            vocab_ch[k] += 1
-                        for key, index in self.extended_features.items():
-                            vocabs[key][states[index]] += 1
-
-        self.max_word_length = min(maxw, self.max_word_length) if self.max_word_length > 0 else maxw
-        self.max_sentence_length = min(maxs, self.max_sentence_length) if self.max_sentence_length > 0 else maxs
-        print('Max sentence length %d' % self.max_sentence_length)
-        print('Max word length %d' % self.max_word_length)
-
-        vocabs.update({'char': vocab_ch, 'word': vocab_word})
-        return vocabs
-
-    def read_lines(self, tsfile):
-
-        txts = []
-        lbls = []
-        txt = []
-        lbl = []
-        features = {}
-        # Extended feature values
-        xfv = {}
-
-        for key in self.extended_features.keys():
-            features[key] = []
-            xfv[key] = []
         with codecs.open(tsfile, encoding='utf-8', mode='r') as f:
             for line in f:
                 states = re.split("\s", line.strip())
 
+                token = dict()
                 if len(states) > 1:
-                    txt.append(states[0])
-                    lbl.append(states[-1])
-                    for key, value in self.extended_features.items():
-                        xfv[key].append(states[value])
-                else:
-                    txts.append(txt)
-                    lbls.append(lbl)
-                    for key in self.extended_features.keys():
-                        features[key].append(xfv[key])
-                        xfv[key] = []
-                    txt = []
-                    lbl = []
+                    for j in range(len(states)):
+                        noff = j - len(states)
+                        if noff >= 0:
+                            noff = j
+                        field_name = self.named_fields.get(str(j),
+                                                           self.named_fields.get(str(noff), str(j)))
+                        token[field_name] = states[j]
+                    tokens += [token]
 
-        features.update({'texts': txts, 'labels': lbls})
-        return features
+                else:
+                    examples += [tokens]
+                    tokens = []
+
+        return examples
 
 
 @exporter
-def create_seq_pred_reader(mxlen, mxwlen, word_trans_fn, vec_alloc, vec_shape, trim, **kwargs):
+def create_seq_pred_reader(vectorizers, trim, **kwargs):
 
     reader_type = kwargs.get('reader_type', 'default')
 
     if reader_type == 'default':
         print('Reading CONLL sequence file corpus')
-        reader = CONLLSeqReader(mxlen, mxwlen, word_trans_fn,
-                                vec_alloc, vec_shape, trim, extended_features=kwargs.get('extended_features', {}))
+        reader = CONLLSeqReader(vectorizers, trim, **kwargs)
     else:
         mod = import_user_module("reader", reader_type)
-        reader = mod.create_seq_pred_reader(mxlen, mxwlen, word_trans_fn,
-                                            vec_alloc, vec_shape, trim, **kwargs)
+        reader = mod.create_seq_pred_reader(vectorizers, trim, **kwargs)
     return reader
 
 
@@ -486,7 +419,6 @@ class TSVSeqLabelReader(SeqLabelReader):
         for k in self.vectorizers.keys():
             vocab[k] = Counter()
             vocab[k]['<UNK>'] = 100000  # In case freq cutoffs
-            vocab[k]['<EOW>'] = 100000  # In case freq cutoffs
 
         for file in files:
             if file is None:
@@ -517,7 +449,11 @@ class TSVSeqLabelReader(SeqLabelReader):
 
         shuffle = kwargs.get('shuffle', False)
         sort_key = kwargs.get('sort_key', None)
+        if sort_key is not None and not sort_key.endswith('_lengths'):
+            sort_key += '_lengths'
+
         examples = []
+
         with codecs.open(filename, encoding='utf-8', mode='r') as f:
             for il, line in enumerate(f):
                 label, text = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn)
@@ -532,10 +468,10 @@ class TSVSeqLabelReader(SeqLabelReader):
 
                 example_dict['y'] = y
                 examples.append(example_dict)
-        return baseline.data.SeqLabelDataFeed(baseline.data.DictExamples(examples,
-                                                                         do_shuffle=shuffle,
-                                                                         sort_key=sort_key),
-                                              batchsz=batchsz, shuffle=shuffle, trim=self.trim)
+        return baseline.data.ExampleDataFeed(baseline.data.DictExamples(examples,
+                                                                        do_shuffle=shuffle,
+                                                                        sort_key=sort_key),
+                                             batchsz=batchsz, shuffle=shuffle, trim=self.trim)
 
 
 @exporter

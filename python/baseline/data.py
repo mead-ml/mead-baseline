@@ -68,6 +68,15 @@ class ExampleDataFeed(DataFeed):
         self.steps = int(math.floor(len(self.examples)/float(batchsz)))
         self.trim = bool(kwargs.get('trim', False))
 
+    def _batch(self, i):
+        """
+        Get a batch of data at step `i`
+        :param i: (``int``) step index
+        :return: A batch tensor x, batch tensor y
+        """
+        batch = self.examples.batch(i, self.batchsz, trim=self.trim)
+        return batch
+
 
 @exporter
 class DictExamples(object):
@@ -150,34 +159,6 @@ class DictExamples(object):
         for k in keys:
             batch[k] = np.stack(batch[k])
         return self._trim_batch(batch, keys, max_src_len) if trim else batch
-
-
-@exporter
-class SeqLabelDataFeed(ExampleDataFeed):
-    """Data feed for :class:`SeqLabelExamples`
-    """
-    def __init__(self, examples, batchsz, **kwargs):
-        super(SeqLabelDataFeed, self).__init__(examples, batchsz, **kwargs)
-
-    def _batch(self, i):
-        """
-        Get a batch of data at step `i`
-        :param i: (``int``) step index
-        :return: A batch tensor x, batch tensor y
-        """
-        batch = self.examples.batch(i, self.batchsz, trim=self.trim)
-        return batch
-
-
-@exporter
-class SeqWordCharLabelDataFeed(ExampleDataFeed):
-    """Feed object for sequential prediction training data
-    """
-    def __init__(self, examples, batchsz, **kwargs):
-        super(SeqWordCharLabelDataFeed, self).__init__(examples, batchsz, **kwargs)
-
-    def _batch(self, i):
-        return self.examples.batch(i, self.batchsz, self.trim, self.vec_alloc, self.vec_shape)
 
 
 @exporter

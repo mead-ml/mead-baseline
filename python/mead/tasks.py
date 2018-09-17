@@ -190,8 +190,8 @@ class ClassifierTask(Task):
         for feature in self.config_params['features']:
             key = feature['name']
             vectorizer_section = feature.get('vectorizer', {'type': 'token1d'})
-            vectorizer_section['mxlen'] = vectorizer_section.get('mxlen', self.config_params['preproc'].get('mxlen', 100))
-            vectorizer_section['mxwlen'] = vectorizer_section.get('mxlen', self.config_params['preproc'].get('mxwlen', 40))
+            vectorizer_section['mxlen'] = vectorizer_section.get('mxlen', self.config_params['preproc'].get('mxlen', -1))
+            vectorizer_section['mxwlen'] = vectorizer_section.get('mxlen', self.config_params['preproc'].get('mxwlen', -1))
             vectorizer = create_vectorizer(**vectorizer_section)
             vectorizers[key] = vectorizer
         return baseline.create_pred_reader(vectorizers, clean_fn=self.config_params['preproc']['clean_fn'],
@@ -250,7 +250,7 @@ class ClassifierTask(Task):
         return self.task.create_model(self.embeddings, self.labels, **model)
 
     def _load_dataset(self):
-        self.train_data = self.reader.load(self.dataset['train_file'], self.feat2index, self.config_params['batchsz'], shuffle=True)
+        self.train_data = self.reader.load(self.dataset['train_file'], self.feat2index, self.config_params['batchsz'], shuffle=True, sort_key=self.config_params['loader'].get('sort_key'))
         self.valid_data = self.reader.load(self.dataset['valid_file'], self.feat2index, self.config_params['batchsz'])
         self.test_data = self.reader.load(self.dataset['test_file'], self.feat2index, self.config_params.get('test_batchsz', 1))
 
@@ -265,25 +265,22 @@ class TaggerTask(Task):
         self.task = None
 
     def _create_task_specific_reader(self):
-        preproc = self.config_params['preproc']
-        reader = baseline.create_seq_pred_reader(preproc['mxlen'],
-                                                 preproc['mxwlen'],
-                                                 preproc['word_trans_fn'],
-                                                 preproc['vec_alloc'],
-                                                 preproc['vec_shape'],
-                                                 preproc['trim'],
-                                                 **self.config_params['loader'])
-        return reader
+        vectorizers = {}
+        for feature in self.config_params['features']:
+            key = feature['name']
+            vectorizer_section = feature.get('vectorizer', {'type': 'token1d'})
+            vectorizer_section['mxlen'] = vectorizer_section.get('mxlen', self.config_params['preproc'].get('mxlen', -1))
+            vectorizer_section['mxwlen'] = vectorizer_section.get('mxlen', self.config_params['preproc'].get('mxwlen', -1))
+            vectorizer = create_vectorizer(**vectorizer_section)
+            vectorizers[key] = vectorizer
+        return baseline.create_seq_pred_reader(vectorizers, trim=self.config_params['preproc'].get('trim', False),
+                                               **self.config_params['loader'])
 
     def _setup_task(self):
         backend = self.config_params.get('backend', 'tensorflow')
         if backend == 'pytorch':
             print('PyTorch backend')
-            from baseline.pytorch import long_0_tensor_alloc as vec_alloc
-            from baseline.pytorch import tensor_shape as vec_shape
             import baseline.pytorch.tagger as tagger
-            self.config_params['preproc']['vec_alloc'] = vec_alloc
-            self.config_params['preproc']['vec_shape'] = vec_shape
             self.config_params['preproc']['trim'] = True
         elif backend == 'dynet':
             print('Dynet backend')
@@ -301,12 +298,8 @@ class TaggerTask(Task):
                 #dy_params.set_autobatch(False)
             dy_params.init()
             import baseline.dy.tagger as tagger
-            self.config_params['preproc']['vec_alloc'] = np.zeros
-            self.config_params['preproc']['vec_shape'] = np.shape
             self.config_params['preproc']['trim'] = True
         else:
-            self.config_params['preproc']['vec_alloc'] = np.zeros
-            self.config_params['preproc']['vec_shape'] = np.shape
             print('TensorFlow backend')
             self.config_params['preproc']['trim'] = False
             import baseline.tf.tagger as tagger
@@ -314,14 +307,14 @@ class TaggerTask(Task):
             self.ExporterType = TaggerTensorFlowExporter
 
         self.task = tagger
-        if self.config_params['preproc'].get('web-cleanup', False) is True:
-            self.config_params['preproc']['word_trans_fn'] = baseline.CONLLSeqReader.web_cleanup
-            print('Web-ish data cleanup')
-        elif self.config_params['preproc'].get('lower', False) is True:
-            self.config_params['preproc']['word_trans_fn'] = baseline.lowercase
-            print('Lower')
-        else:
-            self.config_params['preproc']['word_trans_fn'] = None
+        #if self.config_params['preproc'].get('web-cleanup', False) is True:
+        #    self.config_params['preproc']['word_trans_fn'] = baseline.CONLLSeqReader.web_cleanup
+        #    print('Web-ish data cleanup')
+        #elif self.config_params['preproc'].get('lower', False) is True:
+        #    self.config_params['preproc']['word_trans_fn'] = baseline.lowercase
+        #    print('Lower')
+        #else:
+        #    self.config_params['preproc']['word_trans_fn'] = None
 
     def initialize(self, embeddings):
         self.dataset = DataDownloader(self.dataset, self.data_download_cache).download()
@@ -334,14 +327,12 @@ class TaggerTask(Task):
         labels = self.reader.label2index
         self.config_params['model']['span_type'] = self.config_params['train'].get('span_type')
         self.config_params['model']["unif"] = self.config_params["unif"]
-        self.config_params['model']['maxs'] = self.reader.max_sentence_length
-        self.config_params['model']['maxw'] = self.reader.max_word_length
         return self.task.create_model(labels, self.embeddings, **self.config_params['model'])
 
     def _load_dataset(self):
-        self.train_data, _ = self.reader.load(self.dataset['train_file'], self.feat2index, self.config_params['batchsz'], shuffle=True)
-        self.valid_data, _ = self.reader.load(self.dataset['valid_file'], self.feat2index, self.config_params['batchsz'])
-        self.test_data, self.txts = self.reader.load(self.dataset['test_file'], self.feat2index, self.config_params.get('test_batchsz', 1), shuffle=False, do_sort=False)
+        self.train_data, _ = self.reader.load(self.dataset['train_file'], self.feat2index, self.config_params['batchsz'], shuffle=True, sort_key=self.config_params['loader'].get('sort_key', 'y'))
+        self.valid_data, _ = self.reader.load(self.dataset['valid_file'], self.feat2index, self.config_params['batchsz'], sort_key=None)
+        self.test_data, self.txts = self.reader.load(self.dataset['test_file'], self.feat2index, self.config_params.get('test_batchsz', 1), shuffle=False, sort_key=None)
 
     def train(self):
         self._load_dataset()

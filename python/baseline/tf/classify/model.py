@@ -349,6 +349,11 @@ class ClassifierBase(Classifier):
             model.embeddings[key] = tf_embeddings(embeddings[key], key, DefaultType=DefaultType, **kwargs)
 
         model.lengths_key = kwargs.get('lengths_key')
+        if model.lengths_key is None:
+            if 'word' in model.embeddings:
+                model.lengths_key = 'word'
+            elif 'x' in model.embeddings:
+                model.lengths_key = 'x'
 
         if model.lengths_key is not None:
             # This allows user to short-hand the field to use

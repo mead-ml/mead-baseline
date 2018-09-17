@@ -6,6 +6,8 @@ from tensorflow.contrib.layers import fully_connected, xavier_initializer
 from baseline.model import Tagger, create_tagger_model, load_tagger_model
 from baseline.tf.tfy import *
 from baseline.utils import zip_model, unzip_model
+from baseline.tf.embeddings import *
+
 
 class RNNTaggerModel(Tagger):
 
@@ -18,7 +20,7 @@ class RNNTaggerModel(Tagger):
         base = path[-1]
         outdir = '/'.join(path[:-1])
 
-        state = {"mxlen": self.mxlen, "maxw": self.maxw, "crf": self.crf, "proj": self.proj, "crf_mask": self.crf_mask, 'span_type': self.span_type}
+        state = {"crf": self.crf, "proj": self.proj, "crf_mask": self.crf_mask, 'span_type': self.span_type}
         with open(basename + '.state', 'w') as f:
             json.dump(state, f)
 
@@ -46,19 +48,18 @@ class RNNTaggerModel(Tagger):
             json.dump(self.char_vocab, f)
 
     def make_input(self, batch_dict, do_dropout=False):
-        x = batch_dict['x']
         y = batch_dict.get('y', None)
-        xch = batch_dict['xch']
-        lengths = batch_dict['lengths']
 
-        pkeep = 1.0-self.pdrop_value if do_dropout else 1.0
+        pkeep = 1.0 - self.pdrop_value if do_dropout else 1.0
+        feed_dict = {self.pkeep: pkeep}
 
-        if do_dropout and self.pdropin_value > 0.0:
-            UNK = self.word_vocab['<UNK>']
-            PAD = self.word_vocab['<PAD>']
-            drop_indices = np.where((np.random.random(x.shape) < self.pdropin_value) & (x != PAD))
-            x[drop_indices[0], drop_indices[1]] = UNK
-        feed_dict = {self.x: x, self.xch: xch, self.lengths: lengths, self.pkeep: pkeep}
+        for key in self.embeddings.keys():
+            feed_dict["{}:0".format(key)] = batch_dict[key]
+
+        # Allow us to track a length, which is needed for BLSTMs
+        if self.lengths_key is not None:
+            feed_dict[self.lengths] = batch_dict[self.lengths_key]
+
         if y is not None:
             feed_dict[self.y] = y
         return feed_dict
@@ -76,8 +77,6 @@ class RNNTaggerModel(Tagger):
         checkpoint_name = checkpoint_name or basename
         with open(basename + '.state') as f:
             state = json.load(f)
-            model.mxlen = state.get('mxlen', 100)
-            model.maxw = state.get('maxw', 100)
             model.crf = bool(state.get('crf', False))
             model.crf_mask = bool(state.get('crf_mask', False))
             model.span_type = state.get('span_type')
@@ -103,7 +102,6 @@ class RNNTaggerModel(Tagger):
             model.probs = tf.get_default_graph().get_tensor_by_name('output/Reshape_1:0')  # TODO: rename
             try:
                 model.A = tf.get_default_graph().get_tensor_by_name('Loss/transitions:0')
-                #print('Found transition matrix in graph, setting crf=True')
                 if not model.crf:
                     print('Warning: meta-data says no CRF but model contains transition matrix!')
                     model.crf = True
@@ -181,7 +179,7 @@ class RNNTaggerModel(Tagger):
         pass
 
     def get_vocab(self, vocab_type='word'):
-        return self.word_vocab if vocab_type == 'word' else self.char_vocab
+        return self.embeddings[vocab_type].vocab
 
     def get_labels(self):
         return self.labels
@@ -189,7 +187,7 @@ class RNNTaggerModel(Tagger):
     def predict(self, batch_dict):
 
         feed_dict = self.make_input(batch_dict)
-        lengths = batch_dict['lengths']
+        lengths = batch_dict[self.lengths_key]
         # We can probably conditionally add the loss here
         preds = []
         if self.crf is True:
@@ -215,20 +213,40 @@ class RNNTaggerModel(Tagger):
 
         return preds
 
-    @staticmethod
-    def create(labels, embeddings, **kwargs):
+    @classmethod
+    def create(cls, labels, embeddings, **kwargs):
 
-        word_vec = embeddings['word']
-        char_vec = embeddings['char']
-        model = RNNTaggerModel()
+        model = cls()
+        model.embeddings = dict()
+        for key in embeddings.keys():
+            DefaultType = TensorFlowCharConvEmbeddings if key == 'char' else TensorFlowTokenEmbeddings
+            model.embeddings[key] = tf_embeddings(embeddings[key], key, DefaultType=DefaultType, **kwargs)
+
+        model.lengths_key = kwargs.get('lengths_key')
+        if model.lengths_key is None:
+            if 'word' in model.embeddings:
+                model.lengths_key = 'word'
+            elif 'x' in model.embeddings:
+                model.lengths_key = 'x'
+
+        if model.lengths_key is None:
+            raise Exception("Require a `lengths_key`")
+            # This allows user to short-hand the field to use
+        if not model.lengths_key.endswith('_lengths'):
+            model.lengths_key += '_lengths'
+        model.lengths = kwargs.get('lengths', tf.placeholder(tf.int32, [None], name="lengths"))
+
+        model.labels = labels
+        nc = len(labels)
+        model.y = kwargs.get('y', tf.placeholder(tf.int32, [None, None], name="y"))
+        # This only exists to make exporting easier
+        model.pkeep = kwargs.get('pkeep', tf.placeholder_with_default(1.0, shape=(), name="pkeep"))
+        model.pdrop_value = kwargs.get('dropout', 0.5)
+
         model.sess = kwargs.get('sess', tf.Session())
 
-        model.mxlen = kwargs.get('maxs', 100)
-        model.maxw = kwargs.get('maxw', 100)
-
         hsz = int(kwargs['hsz'])
-        pdrop = kwargs.get('dropout', 0.5)
-        pdrop_in = kwargs.get('dropin', 0.0)
+        model.pdrop_in = kwargs.get('dropin', 0.0)
         rnntype = kwargs.get('rnntype', 'blstm')
         nlayers = kwargs.get('layers', 1)
         model.labels = labels
@@ -239,30 +257,14 @@ class RNNTaggerModel(Tagger):
         model.feed_input = bool(kwargs.get('feed_input', False))
         model.activation_type = kwargs.get('activation', 'tanh')
 
-        char_dsz = char_vec.dsz
-        nc = len(labels)
-        model.x = kwargs.get('x', tf.placeholder(tf.int32, [None, model.mxlen], name="x"))
-        model.xch = kwargs.get('xch', tf.placeholder(tf.int32, [None, model.mxlen, model.maxw], name="xch"))
-        model.y = kwargs.get('y', tf.placeholder(tf.int32, [None, model.mxlen], name="y"))
-        model.lengths = kwargs.get('lengths', tf.placeholder(tf.int32, [None], name="lengths"))
-        model.pkeep = kwargs.get('pkeep', tf.placeholder(tf.float32, name="pkeep"))
-        model.pdrop_value = pdrop
-        model.pdropin_value = pdrop_in
-        model.word_vocab = {}
-        if word_vec is not None:
-            model.word_vocab = word_vec.vocab
-        model.char_vocab = char_vec.vocab
-        seed = np.random.randint(10e8)
-        if word_vec is not None:
-            word_embeddings = embed(model.x, len(word_vec.vocab), word_vec.dsz,
-                                    initializer=tf.constant_initializer(word_vec.weights, dtype=tf.float32, verify_shape=True))
+        all_embeddings_out = []
+        for embedding in model.embeddings.values():
+            embeddings_out = embedding.encode()
+            all_embeddings_out += [embeddings_out]
 
-        Wch = tf.Variable(tf.constant(char_vec.weights, dtype=tf.float32), name="Wch")
-        ce0 = tf.scatter_update(Wch, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, char_dsz]))
-
-        word_char, _ = pool_chars(model.xch, Wch, ce0, char_dsz, **kwargs)
-        joint = word_char if word_vec is None else tf.concat(values=[word_embeddings, word_char], axis=2)
+        joint = tf.concat(values=all_embeddings_out, axis=2)
         embedseq = tf.nn.dropout(joint, model.pkeep)
+        seed = np.random.randint(10e8)
 
         if rnntype == 'blstm':
             rnnfwd = stacked_lstm(hsz, model.pkeep, nlayers)
@@ -284,9 +286,10 @@ class RNNTaggerModel(Tagger):
                 rnnout = tf.concat(axis=2, values=[rnnout, embedseq])
 
             # Converts seq to tensor, back to (B,T,W)
-            hout = rnnout.get_shape()[-1]
+            T = tf.shape(rnnout)[1]
+            H = rnnout.get_shape()[2]
             # Flatten from [B x T x H] - > [BT x H]
-            rnnout_bt_x_h = tf.reshape(rnnout, [-1, hout])
+            rnnout_bt_x_h = tf.reshape(rnnout, [-1, H])
             init = xavier_initializer(True, seed)
 
             with tf.contrib.slim.arg_scope([fully_connected], weights_initializer=init):
@@ -296,7 +299,7 @@ class RNNTaggerModel(Tagger):
                     preds = fully_connected(hidden, nc, activation_fn=None, weights_initializer=init)
                 else:
                     preds = fully_connected(rnnout_bt_x_h, nc, activation_fn=None, weights_initializer=init)
-            model.probs = tf.reshape(preds, [-1, model.mxlen, nc])
+            model.probs = tf.reshape(preds, [-1, T, nc])
             model.best = tf.argmax(model.probs, 2)
         return model
 

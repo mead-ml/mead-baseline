@@ -8,7 +8,7 @@ from baseline.utils import (
     lowercase, revlut,
     export, wrapped_partial
 )
-
+from baseline.vectorizers import Token1DVectorizer, Char2DVectorizer, Dict1DVectorizer, Dict2DVectorizer
 
 __all__ = []
 exporter = export(__all__)
@@ -79,15 +79,16 @@ class Classifier(object):
         :param word_trans_fn: A transform on the input word
         :return: A sorted list of outcomes for a single element batch
         """
-        ##featurizer = kwargs.get('featurizer')
-        ##mxlen = kwargs.get('mxlen', self.mxlen if hasattr(self, 'mxlen') else len(tokens))
-        ##if featurizer is None:
-        ##    maxw = kwargs.get('mxwlen', self.mxwlen if hasattr(self, 'mxwlen') else max([len(token) for token in tokens]))
-        ##    zero_alloc = kwargs.get('zero_alloc', np.zeros)
-        ##    featurizer = WordCharLength(self, mxlen, maxw, zero_alloc)
-        ##data = featurizer.run(tokens)
-        ##outcomes = self.classify(data)[0]
-        ##return sorted(outcomes, key=lambda tup: tup[1], reverse=True)
+        vectorizers = kwargs.get('vectorizers')
+        if vectorizers is None:
+            vectorizers = {'word': Token1DVectorizer()}
+
+        batch_dict = dict()
+        for k, vectorizer in vectorizers.items():
+            batch_dict[k], length = vectorizer.run(tokens, self.embeddings[k].vocab)
+
+        outcomes = self.classify(batch_dict)[0]
+        return sorted(outcomes, key=lambda tup: tup[1], reverse=True)
         return None
 
 @exporter
@@ -217,24 +218,28 @@ class Tagger(object):
 
         """
 
-        featurizer = kwargs.get('featurizer')
-        if featurizer is None:
+        vectorizers = kwargs.get('vectorizer')
+        if vectorizers is None:
+
             mxlen = kwargs.get('mxlen', self.mxlen if hasattr(self, 'mxlen') else len(tokens))
             maxw = kwargs.get('maxw', self.maxw if hasattr(self, 'maxw') else max([len(token) for token in tokens]))
-            zero_alloc = kwargs.get('zero_alloc', np.zeros)
-            featurizer = WordCharLength(self, mxlen, maxw, zero_alloc)
+            word_tokenizer = Dict1DVectorizer(mxlen=mxlen, fields='text')
+            char_tokenizer = Dict2DVectorizer(mxlen=mxlen, mxwlen=maxw, fields='text')
+            vectorizers = {'word': word_tokenizer, 'char': char_tokenizer}
 
         # This might be inefficient if the label space is large
 
         label_vocab = revlut(self.get_labels())
-        #lengths = zero_alloc(1, dtype=int)
-        #lengths[0] = min(len(tokens), mxlen)
+        batch_dict = dict()
+        for k, vectorizer in vectorizers.items():
+            value, length = vectorizer.run(tokens, self.embeddings[k].vocab)
+            batch_dict[k] = value
+            if length is not None:
+                batch_dict['{}_lengths'.format(k)] = length
 
-        data = featurizer.run(tokens)
-        lengths = data['lengths']
-        indices = self.predict(data)[0]
+        indices = self.predict(batch_dict)[0]
         output = []
-        for j in range(lengths[0]):
+        for j in len(tokens):
             output.append((tokens[j], label_vocab[indices[j].item()]))
         return output
 
