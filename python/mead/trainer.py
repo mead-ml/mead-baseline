@@ -25,7 +25,7 @@ def main():
     task_name = config_params.get('task', 'classify') if args.task is None else args.task
     print('Task: [{}]'.format(task_name))
     task = mead.Task.get_task_specific(task_name, args.logging, args.settings)
-    task.read_config(config_params, args.datasets, task_name, reporting_args=reporting_args, config_file=args.config)
+    task.read_config(config_params, args.datasets, reporting_args=reporting_args, config_file=args.config)
     task.initialize(args.embeddings)
     task.train()
 
