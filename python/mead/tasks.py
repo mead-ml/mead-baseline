@@ -39,7 +39,7 @@ class Task(object):
             self.data_download_cache = os.path.expanduser(self.mead_settings_config['datacache'])
         print("using {} as data/embeddings cache".format(self.data_download_cache))
         self._configure_logger(logger_config)
-        self.name = None
+        self.task_name = None
 
     def _configure_logger(self, logger_config):
         """Use the logger file (logging.json) to configure the log, but overwrite the filename to include the PID
@@ -68,7 +68,7 @@ class Task(object):
         config = Task.TASK_REGISTRY[task](logging_config, mead_config)
         return config
 
-    def read_config(self, config_params, datasets_index, task_name, **kwargs):
+    def read_config(self, config_params, datasets_index, **kwargs):
         """
         Read the config file and the datasets index
 
@@ -83,7 +83,7 @@ class Task(object):
         self.config_params = config_params
         self.config_file = kwargs.get('config_file')
         self._setup_task()
-        self._configure_reporting(config_params.get('reporting', []), task_name, **kwargs)
+        self._configure_reporting(config_params.get('reporting', []), self.task_name, **kwargs)
         self.dataset = datasets_set[self.config_params['dataset']]
         self.reader = self._create_task_specific_reader()
 
@@ -213,6 +213,7 @@ class ClassifierTask(Task):
     def __init__(self, logging_config, mead_settings_config, **kwargs):
         super(ClassifierTask, self).__init__(logging_config, mead_settings_config, **kwargs)
         self.task = None
+        self.task_name = 'classify'
 
     def _create_task_specific_reader(self):
         return baseline.create_pred_reader(self.config_params['preproc']['mxlen'],
@@ -300,6 +301,7 @@ class TaggerTask(Task):
     def __init__(self, logging_config, mead_settings_config, **kwargs):
         super(TaggerTask, self).__init__(logging_config, mead_settings_config, **kwargs)
         self.task = None
+        self.task_name = 'tagger'
 
     def _create_task_specific_reader(self):
         preproc = self.config_params['preproc']
@@ -396,6 +398,7 @@ class EncoderDecoderTask(Task):
     def __init__(self, logging_config, mead_settings_config, **kwargs):
         super(EncoderDecoderTask, self).__init__(logging_config, mead_settings_config, **kwargs)
         self.task = None
+        self.task_name = 'seq2seq'
 
     def _create_task_specific_reader(self):
         preproc = self.config_params['preproc']
@@ -493,6 +496,7 @@ class LanguageModelingTask(Task):
     def __init__(self, logging_config, mead_settings_config, **kwargs):
         super(LanguageModelingTask, self).__init__(logging_config, mead_settings_config, **kwargs)
         self.task = None
+        self.task_name = 'lm'
 
     def _create_task_specific_reader(self):
         mxwlen = self.config_params['preproc'].get('mxwlen', -1)
