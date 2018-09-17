@@ -165,6 +165,4 @@ def create_logs(label, mead_logs, hpctl_logs):
     hpctl_logs['label'] = str(label)
     mead_logs['handlers']['hpctl_handler'] = hpctl_logs
     mead_logs['loggers']['baseline.reporting']['handlers'].append('hpctl_handler')
-    log_file = 'tmp-{}-logging.json'.format(str(label))
-    write_json(mead_logs, log_file)
-    return log_file
+    return mead_logs

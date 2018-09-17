@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 from six.moves import zip, range
 
 import os
+import json
 import docker
 from baseline.utils import write_json, read_config_file
 from hpctl.backend import LocalGPUBackend, handle_gpus, Runner
@@ -54,19 +55,16 @@ def run_docker(
 
     # Write config files into working dir
     write_json(config_params, 'config.json')
-    write_json(settings, 'settings.json')
-    write_json(read_config_file(datasets), 'datasets.json')
-    write_json(read_config_file(embeddings), 'embeddings.json')
     logs = create_logs(label, mead_logs, hpctl_logs)
 
     container = get_container(config_params['backend'])
     command = [
         'mead-train',
-        '--config', os.path.realpath('./config.json'),
-        '--settings', os.path.realpath('./settings.json'),
-        '--datasets', os.path.realpath('./datasets.json'),
-        '--embeddings', os.path.realpath('./embeddings.json'),
-        '--logging', os.path.realpath(logs),
+        '--config', '$CONFIG',
+        '--settings', '$SETTINGS',
+        '--datasets', '$DATASETS',
+        '--embeddings', '$EMBEDDINGS',
+        '--logging', '$LOGGING',
         '--task', task_name,
         '--gpus', str(len(gpus)),
     ]
@@ -75,7 +73,14 @@ def run_docker(
         container,
         command,
         runtime='nvidia',
-        environment={'NV_GPU': ','.join(gpus)},
+        environment={
+            'NV_GPU': ','.join(gpus),
+            'CONFIG': json.dumps(config_params),
+            'SETTINGS': json.dumps(settings),
+            'DATASETS': json.dumps(read_config_file(datasets)),
+            'EMBEDDINGS': json.dumps(read_config_file(embeddings)),
+            'LOGGING': json.dumps(logs),
+        },
         network_mode='host',
         working_dir=loc,
         volumes=create_mounts(default_mounts, user_mounts, loc, cache),

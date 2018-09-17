@@ -1,4 +1,4 @@
-# HyperParameter Optimization Control (hpoctl)
+# HyperParameter Optimization Control (hpctl)
 
 Automatic Hyper Parameter Optimization to use with baseline.
 

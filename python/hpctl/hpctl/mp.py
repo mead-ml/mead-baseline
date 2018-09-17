@@ -58,7 +58,6 @@ def run_job(
     task.read_config(config_params, datasets, task_name)
     task.initialize(embeddings)
     task.train()
-    os.remove(logs)
 
 
 @export
