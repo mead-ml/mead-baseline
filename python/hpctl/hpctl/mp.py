@@ -54,6 +54,7 @@ def run_job(
     write_json(config_params, 'config.json')
     logs = create_logs(label, mead_logs, hpctl_logs)
     task = mead.Task.get_task_specific(task_name, logs, settings)
+    # Change this when PR#131 is merged: remove task_name
     task.read_config(config_params, datasets, task_name)
     task.initialize(embeddings)
     task.train()

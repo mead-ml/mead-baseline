@@ -325,7 +325,7 @@ def read_config_stream(config_stream):
     :param config_stream:
     :return:
     """
-    if isinstance(config_stream, dict) or config_stream is None:
+    if isinstance(config_stream, (dict, list)) or config_stream is None:
         return config_stream
     if os.path.exists(config_stream) and os.path.isfile(config_stream):
         return read_config_file(config_stream)
