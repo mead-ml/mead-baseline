@@ -90,7 +90,19 @@ def order_json(data):
     return new
 
 
-KEYS = {('conll_output',), ('visdom',), ('visdom_name',), ('model', 'gpus'), ('test_thresh',), ('reporting',), ('num_valid_to_show',), ('train', 'verbose'), ('train', 'model_base'), ('train', 'model_zip')}
+KEYS = {
+    ('conll_output',),
+    ('visdom',),
+    ('visdom_name',),
+    ('model', 'gpus'),
+    ('test_thresh',),
+    ('reporting',),
+    ('num_valid_to_show',),
+    ('train', 'verbose'),
+    ('train', 'model_base'),
+    ('train', 'model_zip'),
+    ('test_batchsz')
+}
 
 
 @export
