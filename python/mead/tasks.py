@@ -192,6 +192,8 @@ class ClassifierTask(Task):
             vectorizer_section = feature.get('vectorizer', {'type': 'token1d'})
             vectorizer_section['mxlen'] = vectorizer_section.get('mxlen', self.config_params['preproc'].get('mxlen', -1))
             vectorizer_section['mxwlen'] = vectorizer_section.get('mxlen', self.config_params['preproc'].get('mxwlen', -1))
+            if 'transform' in vectorizer_section:
+                vectorizer_section['transform_fn'] = eval(vectorizer_section['transform'])
             vectorizer = create_vectorizer(**vectorizer_section)
             vectorizers[key] = vectorizer
         return baseline.create_pred_reader(vectorizers, clean_fn=self.config_params['preproc']['clean_fn'],
@@ -230,9 +232,6 @@ class ClassifierTask(Task):
         if self.config_params['preproc'].get('clean', False) is True:
             self.config_params['preproc']['clean_fn'] = baseline.TSVSeqLabelReader.do_clean
             print('Clean')
-        elif self.config_params['preproc'].get('lower', False) is True:
-            self.config_params['preproc']['clean_fn'] = baseline.lowercase
-            print('Lower')
         else:
             self.config_params['preproc']['clean_fn'] = None
 
@@ -271,6 +270,8 @@ class TaggerTask(Task):
             vectorizer_section = feature.get('vectorizer', {'type': 'token1d'})
             vectorizer_section['mxlen'] = vectorizer_section.get('mxlen', self.config_params['preproc'].get('mxlen', -1))
             vectorizer_section['mxwlen'] = vectorizer_section.get('mxlen', self.config_params['preproc'].get('mxwlen', -1))
+            if 'transform' in vectorizer_section:
+                vectorizer_section['transform_fn'] = eval(vectorizer_section['transform'])
             vectorizer = create_vectorizer(**vectorizer_section)
             vectorizers[key] = vectorizer
         return baseline.create_seq_pred_reader(vectorizers, trim=self.config_params['preproc'].get('trim', False),
@@ -305,16 +306,7 @@ class TaggerTask(Task):
             import baseline.tf.tagger as tagger
             from mead.tf.exporters import TaggerTensorFlowExporter
             self.ExporterType = TaggerTensorFlowExporter
-
         self.task = tagger
-        #if self.config_params['preproc'].get('web-cleanup', False) is True:
-        #    self.config_params['preproc']['word_trans_fn'] = baseline.CONLLSeqReader.web_cleanup
-        #    print('Web-ish data cleanup')
-        #elif self.config_params['preproc'].get('lower', False) is True:
-        #    self.config_params['preproc']['word_trans_fn'] = baseline.lowercase
-        #    print('Lower')
-        #else:
-        #    self.config_params['preproc']['word_trans_fn'] = None
 
     def initialize(self, embeddings):
         self.dataset = DataDownloader(self.dataset, self.data_download_cache).download()
@@ -354,9 +346,7 @@ class EncoderDecoderTask(Task):
     def _create_task_specific_reader(self):
         preproc = self.config_params['preproc']
         reader = baseline.create_parallel_corpus_reader(preproc['mxlen'],
-                                                        preproc['vec_alloc'],
                                                         preproc['trim'],
-                                                        preproc['word_trans_fn'],
                                                         **self.config_params['loader'])
         return reader
 
@@ -366,13 +356,10 @@ class EncoderDecoderTask(Task):
         do_reverse = self.config_params['model']['model_type'] == 'default'
         backend = self.config_params.get('backend', 'tensorflow')
         src_vec_trans = baseline.reverse_2nd if do_reverse else None
-        self.config_params['preproc']['word_trans_fn'] = src_vec_trans
 
         if backend == 'pytorch':
             print('PyTorch backend')
             from baseline.pytorch import long_0_tensor_alloc as vec_alloc
-            from baseline.pytorch import tensor_shape as vec_shape
-            from baseline.pytorch import tensor_reverse_2nd as rev2nd
             import baseline.pytorch.seq2seq as seq2seq
             self.config_params['preproc']['show_ex'] = baseline.pytorch.show_examples_pytorch
             self.config_params['preproc']['trim'] = True
@@ -460,13 +447,9 @@ class LanguageModelingTask(Task):
             from baseline.pytorch import long_0_tensor_alloc as vec_alloc
             from baseline.pytorch import tensor_shape as vec_shape
             import baseline.pytorch.lm as lm
-            self.config_params['preproc']['vec_alloc'] = vec_alloc
-            self.config_params['preproc']['vec_shape'] = vec_shape
             self.config_params['preproc']['trim'] = True
 
         else:
-            self.config_params['preproc']['vec_alloc'] = np.zeros
-            self.config_params['preproc']['vec_shape'] = np.shape
             if backend == 'dynet':
                 print('Dynet backend')
                 import _dynet
@@ -480,17 +463,7 @@ class LanguageModelingTask(Task):
                 print('TensorFlow backend')
                 self.config_params['preproc']['trim'] = False
                 import baseline.tf.lm as lm
-
         self.task = lm
-
-        if self.config_params.get('web-cleanup', False) is True:
-            self.config_params['preproc']['word_trans_fn'] = baseline.CONLLSeqReader.web_cleanup
-            print('Web-ish data cleanup')
-        elif self.config_params.get('lower', False) is True:
-            self.config_params['preproc']['word_trans_fn'] = baseline.lowercase
-            print('Lower')
-        else:
-            self.config_params['preproc']['word_trans_fn'] = None
 
     def initialize(self, embeddings):
         embeddings_set = mead.utils.index_by_label(embeddings)

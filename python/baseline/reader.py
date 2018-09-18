@@ -201,11 +201,6 @@ def create_parallel_corpus_reader(mxlen, alloc_fn, trim, src_vec_trans, **kwargs
 
 
 @exporter
-def identity_trans_fn(x):
-    return x
-
-
-@exporter
 class SeqPredictReader(object):
 
     def __init__(self,

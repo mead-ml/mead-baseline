@@ -8,7 +8,11 @@
     "features": [
 	{
 	    "name": "word",
-	    "vectorizer": { "type": "dict1d", "fields": "text", "lower": true },
+	    "vectorizer": {
+		"type": "dict1d",
+		"fields": "text",
+		"transform": "baseline.lowercase"
+	    },
 	    "embeddings": { "label": "w2v-gn" }
 	},
 	{

@@ -14,7 +14,32 @@ class Vectorizer(object):
         pass
 
     def _iterable(self, tokens):
-        for tok in tokens:
+        pass
+
+    def _next_element(self, tokens, vocab):
+        pass
+
+    def run(self, tokens, vocab):
+        pass
+
+    def count(self, tokens):
+        pass
+
+
+@exporter
+def identity_trans_fn(x):
+    return x
+
+
+class AbstractVectorizer(Vectorizer):
+
+    def __init__(self, transform_fn=None):
+        super(AbstractVectorizer, self).__init__()
+        self.transform_fn = identity_trans_fn if transform_fn is None else transform_fn
+        #print(self.transform_fn)
+
+    def _iterable(self, tokens):
+        for tok in self.transform_fn(tokens):
             yield tok
 
     def _next_element(self, tokens, vocab):
@@ -24,17 +49,11 @@ class Vectorizer(object):
                 value = vocab['<UNK>']
             yield value
 
-    def run(self, tokens, vocab):
-        pass
 
-    def count(self, tokens):
-        pass
-
-
-class Token1DVectorizer(Vectorizer):
+class Token1DVectorizer(AbstractVectorizer):
 
     def __init__(self, **kwargs):
-        super(Vectorizer, self).__init__()
+        super(Token1DVectorizer, self).__init__(kwargs.get('transform_fn'))
         self.time_reverse = kwargs.get('rev', False)
         self.mxlen = kwargs.get('mxlen', -1)
         self.max_seen = 0
@@ -72,7 +91,7 @@ def _token_iterator(vectorizer, tokens):
     for tok in tokens:
         token = []
         for field in vectorizer.fields:
-            token += [tok[field]]
+            token += [vectorizer.transform_fn(tok[field])]
         yield vectorizer.delim.join(token)
 
 
@@ -87,10 +106,10 @@ class Dict1DVectorizer(Token1DVectorizer):
         return _token_iterator(self, tokens)
 
 
-class AbstractCharVectorizer(Vectorizer):
+class AbstractCharVectorizer(AbstractVectorizer):
 
-    def __init__(self):
-        super(AbstractCharVectorizer, self).__init__()
+    def __init__(self, transform_fn=None):
+        super(AbstractCharVectorizer, self).__init__(transform_fn)
 
     def _next_element(self, tokens, vocab):
         OOV = vocab['<UNK>']
@@ -104,7 +123,7 @@ class AbstractCharVectorizer(Vectorizer):
 class Char2DVectorizer(AbstractCharVectorizer):
 
     def __init__(self, **kwargs):
-        super(Char2DVectorizer, self).__init__()
+        super(Char2DVectorizer, self).__init__(kwargs.get('transform_fn'))
         self.mxlen = kwargs.get('mxlen', -1)
         self.mxwlen = kwargs.get('mxwlen', -1)
         self.max_seen_tok = 0
@@ -162,7 +181,7 @@ class Dict2DVectorizer(Char2DVectorizer):
 class Char1DVectorizer(AbstractCharVectorizer):
 
     def __init__(self, **kwargs):
-        super(Char1DVectorizer, self).__init__()
+        super(Char1DVectorizer, self).__init__(kwargs.get('transform_fn'))
         print(kwargs)
         self.mxlen = kwargs.get('mxlen', -1)
         self.time_reverse = kwargs.get('rev', False)
