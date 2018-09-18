@@ -57,8 +57,7 @@ class RNNTaggerModel(Tagger):
             feed_dict["{}:0".format(key)] = batch_dict[key]
 
         # Allow us to track a length, which is needed for BLSTMs
-        if self.lengths_key is not None:
-            feed_dict[self.lengths] = batch_dict[self.lengths_key]
+        feed_dict[self.lengths] = batch_dict[self.lengths_key]
 
         if y is not None:
             feed_dict[self.y] = y
@@ -294,7 +293,7 @@ class RNNTaggerModel(Tagger):
 
             with tf.contrib.slim.arg_scope([fully_connected], weights_initializer=init):
                 if model.proj is True:
-                    hidden = tf.nn.dropout(fully_connected(rnnout_bt_x_h, hsz,
+                    hidden = tf.nn.dropout(fully_connected(rnnout_bt_x_h, H,
                                                            activation_fn=tf_activation(model.activation_type)), model.pkeep)
                     preds = fully_connected(hidden, nc, activation_fn=None, weights_initializer=init)
                 else:
