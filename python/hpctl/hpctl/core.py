@@ -17,6 +17,7 @@ export = exporter(__all__)
 
 
 def serve(**kwargs):
+    """Spin up a flask server. This might become a thing that is used in the server version of hpctl."""
     exp = Experiment(**kwargs)
     config = read_config_file(kwargs['config'])
     config_hash = hash_config(config['mead'])
@@ -87,7 +88,7 @@ def search(**kwargs):
 
     frontend = get_frontend(exp, results)
 
-    num_iters = int(exp.hpctl_config.get('num_iters', 2))
+    num_iters = int(kwargs.get('num_iters', exp.hpctl_config.get('num_iters', 3)))
 
     run(num_iters, exp, results, backend, frontend, config_sampler, logs)
     logs.stop()

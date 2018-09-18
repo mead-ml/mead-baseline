@@ -47,17 +47,26 @@ def add_common_args(p):
     )
 
 
+def print_help(p):
+    def ph(*args, **kwargs):
+        p.print_help()
+    return ph
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="hpctl",
         description="Hyper Parameter Optimization tools.",
     )
+    ph = print_help(parser)
+    parser.set_defaults(func=ph)
 
     subparsers = parser.add_subparsers()
 
     search_parser = subparsers.add_parser('search', description="Explore Hyper Parameters.")
     search_parser.set_defaults(func=search)
     add_common_args(search_parser)
+    search_parser.add_argument('--num_iters', type=int, default=2, help="The number of sample to run.")
 
     find_parser = subparsers.add_parser('find', description="Find a file from the human name.")
     find_parser.set_defaults(func=find)

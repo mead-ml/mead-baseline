@@ -200,6 +200,7 @@ class ConfigSampler(object):
     def __init__(self, config, results, samplers=DEFAULT_SAMPLERS):
         super(ConfigSampler, self).__init__()
         self.config = config
+        self.exp = hash_config(config)
         self.results = results
         self.samplers = samplers
         for sampler in samplers.values():
@@ -250,7 +251,7 @@ class ConfigSampler(object):
                     tmp = tmp[x]
                 tmp[k[-1]] = v
         hashed = hash_config(s)
-        label = Label(hashed, random_name())
+        label = Label(self.exp, hashed, random_name())
         return label, s
 
 

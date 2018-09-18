@@ -54,8 +54,7 @@ def run_job(
     write_json(config_params, 'config.json')
     logs = create_logs(label, mead_logs, hpctl_logs)
     task = mead.Task.get_task_specific(task_name, logs, settings)
-    # Change this when PR#131 is merged: remove task_name
-    task.read_config(config_params, datasets, task_name)
+    task.read_config(config_params, datasets)
     task.initialize(embeddings)
     task.train()
 
@@ -69,12 +68,12 @@ class FileProcess(Process):
     :param exp: str, The name of the experiment.
     :param label: Label, The Label (sha1 and human name) of the model.
     """
-    def __init__(self, exp, label, *args, **kwargs):
+    def __init__(self, label, *args, **kwargs):
         super(FileProcess, self).__init__(*args, **kwargs)
-        self.exp = exp
+        self.exp = label.exp
         self.label = label.sha1
         self.human = label.human
-        self.loc = os.path.join(exp, str(label))
+        self.loc = os.path.join(self.exp, label.local)
         try:
             os.makedirs(self.loc)
         except OSError:
@@ -156,10 +155,10 @@ class MPRunner(Runner):
         self.func = func
         self.gpus = gpus
 
-    def start(self, exp, label, *args, **kwargs):
+    def start(self, label, *args, **kwargs):
         kwargs['gpus'] = self.gpus
         args = tuple([label] + list(args))
-        self.p = TmuxProcess(exp, label, target=self.func, args=args, kwargs=kwargs)
+        self.p = TmuxProcess(label, target=self.func, args=args, kwargs=kwargs)
         self.p.start()
         while self.is_done:
             pass
@@ -190,7 +189,8 @@ class MPBackend(LocalGPUBackend):
     """
     def __init__(
             self,
-            exp, results,
+            exp,
+            results,
             **kwargs
     ):
         super(MPBackend, self).__init__(exp, results, **kwargs)
@@ -202,7 +202,6 @@ class MPBackend(LocalGPUBackend):
         :param label: hpctl.utils.Label, The label for the job.
         :param config: dict, the config for the model.
         """
-        exp = self.exp.experiment_hash
         for job in self.jobs:
             # update label -> job mapping.
             if job.is_done:
@@ -214,7 +213,7 @@ class MPBackend(LocalGPUBackend):
                     del self.label_to_job[l]
                 job.join()
                 job.start(
-                    exp, label, config,
+                    label, config,
                     mead_logs=self.exp.mead_logs,
                     hpctl_logs=self.exp.hpctl_logs,
                     settings=self.exp.mead_settings,

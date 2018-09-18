@@ -2,6 +2,8 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 
 import os
 from baseline.utils import export as exporter
+from hpctl.utils import Label
+from hpctl.results import States
 
 
 __all__ = []
@@ -12,8 +14,13 @@ export = exporter(__all__)
 def handle_gpus(real_gpus, gpus, parallel_limit):
     """Function to handle gpu usage.
 
-    :param gpus: List[str], The gpus.
-    :param num_jobs: int, The number of concurrent jobs to run.
+    :param real_gpus: List[str], The gpus.
+    :param gpus: int, The number of gpus to use per job.
+    :param parallel_limit: The max number of jobs you are allowed to launch at once.
+
+    :returns:
+        tuple(list[list[str]], int)
+        The list of the real gpus to use per job, the number of gpus to use per job.
     """
     # If none given check in ENV varibales
     if real_gpus is None:
@@ -44,6 +51,7 @@ def get_backend(exp, results):
     backend_type = backend['type']
     print("Using backend [{}]".format(backend_type))
 
+    # GPUs are searched for in the mead config, hpctl config, and finally the default settings.
     gpus = exp.mead_config['model'].get('gpus', exp.hpctl_config.get('gpus', exp.hpctl_settings.get('gpus')))
 
     if backend_type == "mp":
@@ -59,6 +67,7 @@ def get_backend(exp, results):
 
 @export
 class Runner(object):
+    """Abstract base class that handles running and stopping a single job."""
     def __init__(self, *args, **kwargs):
         super(Runner, self).__init__()
         self.p = None
@@ -98,6 +107,14 @@ class Backend(object):
 
 @export
 class LocalGPUBackend(Backend):
+    """A class that runs jobs where it has to manage GPUs itself.
+
+    :param exp: hpctl.experiment.Experiment, the experiment settings.
+    :param results: hpctl.results.Results, The results storage object.
+    :param gpus: int, The number of jobs to run per job.
+    :param real_gpus: List[str,], The indices of the real gpus.
+    :param parallel_limit: int, The max number of jobs you can launch.
+    """
     def __init__(self, exp, results, gpus=None, real_gpus=None, parallel_limit=None, **kwargs):
         super(LocalGPUBackend, self).__init__()
         self.exp = exp
@@ -130,12 +147,7 @@ class LocalGPUBackend(Backend):
 
     def kill(self, label):
         """Kill job with name `label`."""
-        if not isinstance(label, Label):
-            human, sha1 = self.results.get_label_prefix(label)
-            if sha1:
-                label = Label(sha1[0], human)
-            else:
-                return
+        assert label in self.results.get_labels()
         self.results.set_state(label, States.KILLED)
         job = self.label_to_job.get(label)
         if job is None:

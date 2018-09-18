@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 import six
+from six.moves import intern
 
 import os
 import json
@@ -27,24 +28,39 @@ hpctl_path = export(
 
 @six.python_2_unicode_compatible
 class Label(object):
-    def __init__(self, sha1, human):
+    def __init__(self, exp, sha1, human):
         super(Label, self).__init__()
+        self.exp = exp
         self.sha1 = sha1
         self.human = human
+        intern(self.exp)
+        intern(self.sha1)
+        intern(self.human)
 
-    def __str__(self):
+    @property
+    def local(self):
         return "{}@{}".format(self.sha1, self.human)
 
+    def __str__(self):
+        return "{}@{}@{}".format(self.exp, self.sha1, self.human)
+
+    def __repr__(self):
+        return str(self)
+
     def __eq__(self, other):
-        return self.sha1 == other.sha1 and self.human == other.human
+        return (
+            self.exp == other.exp and
+            self.sha1 == other.sha1 and
+            self.human == other.human
+        )
 
     def __hash__(self):
         return hash(str(self))
 
     @classmethod
     def parse(cls, label_str):
-        sha1, human = label_str.split("@")
-        return cls(sha1, human)
+        exp, sha1, human = label_str.split("@")
+        return cls(exp, sha1, human)
 
 
 @export

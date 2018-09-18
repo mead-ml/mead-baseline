@@ -7,6 +7,7 @@ import select
 import platform
 from multiprocessing import Process, Queue
 from baseline.utils import export as exporter
+from hpctl.utils import Label
 from hpctl.results import States
 
 
@@ -120,7 +121,7 @@ class Console(Frontend):
         self.results = results
         self.print_count = 0
         self.first = True
-        default = self.exp.mead_config['train'].get('early_stopping_metric', 'f1')
+        default = self.exp.mead_config['train'].get('early_stopping_metric', 'avg_loss')
         self.train_metric = default if train is None else train
         self.dev_metric = default if dev is None else dev
         self.test_metric = default if test is None else test
@@ -165,10 +166,16 @@ class Console(Frontend):
                 self.print_count += 1
                 # Simple for now
                 data = data.split()
+                human, sha1 = self.results.get_label_prefix(data[1])
                 if len(data) >= 2:
+                    label = Label(
+                        self.exp.experiment_hash,
+                        sha1[0],
+                        human,
+                    )
                     data = {
                         "command": data[0],
-                        "label": data[1]
+                        "label": label
                     }
                 return data
         return None
