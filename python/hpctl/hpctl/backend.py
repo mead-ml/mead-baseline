@@ -41,7 +41,7 @@ def handle_gpus(real_gpus, gpus, parallel_limit):
 
 
 @export
-def get_backend(exp, results):
+def get_backend(exp):
     """Get the backend object.
 
     :param exp: hpctl.experiment.Experiment, The experiment data object.
@@ -62,7 +62,7 @@ def get_backend(exp, results):
         from hpctl.dock import DockerBackend
         Be = DockerBackend
 
-    return Be(exp, results, gpus=gpus, **backend)
+    return Be(gpus=gpus, **backend)
 
 
 @export
@@ -109,16 +109,12 @@ class Backend(object):
 class LocalGPUBackend(Backend):
     """A class that runs jobs where it has to manage GPUs itself.
 
-    :param exp: hpctl.experiment.Experiment, the experiment settings.
-    :param results: hpctl.results.Results, The results storage object.
     :param gpus: int, The number of jobs to run per job.
     :param real_gpus: List[str,], The indices of the real gpus.
     :param parallel_limit: int, The max number of jobs you can launch.
     """
-    def __init__(self, exp, results, gpus=None, real_gpus=None, parallel_limit=None, **kwargs):
+    def __init__(self, gpus=None, real_gpus=None, parallel_limit=None, **kwargs):
         super(LocalGPUBackend, self).__init__()
-        self.exp = exp
-        self.results = results
         self.jobs = []
         self.label_to_job = {}
         self.real_gpus, self.gpus = handle_gpus(real_gpus, gpus, parallel_limit)
@@ -145,10 +141,13 @@ class LocalGPUBackend(Backend):
     def all_done(self):
         return all(map(lambda x: x.is_done, self.jobs))
 
-    def kill(self, label):
-        """Kill job with name `label`."""
-        assert label in self.results.get_labels()
-        self.results.set_state(label, States.KILLED)
+    def kill(self, label, results):
+        """Kill job with name `label`.
+
+        :param label: hpctl.utils.Label, The label of the job to kill.
+        :param results: hpctl.results.Results, The data results object.
+        """
+        results.set_killed(label)
         job = self.label_to_job.get(label)
         if job is None:
             return

@@ -182,25 +182,23 @@ class MPRunner(Runner):
 class MPBackend(LocalGPUBackend):
     """Back end that runs multiprocessing jobs.
 
-    :param exp: hpctl.experiment.Experiment: The experiment config.
-    :param results: hpctl.results.Results: The data storage object.
     :param num_jobs: int, The number of concurrent jobs to run.
     :param gpus: List[str], The gpus.
     """
     def __init__(
             self,
-            exp,
             results,
             **kwargs
     ):
-        super(MPBackend, self).__init__(exp, results, **kwargs)
+        super(MPBackend, self).__init__(**kwargs)
         self.jobs = [MPRunner(run_job, gpu) for gpu in self.real_gpus]
 
-    def launch(self, label, config):
+    def launch(self, label, config, exp):
         """Start a job.
 
         :param label: hpctl.utils.Label, The label for the job.
         :param config: dict, the config for the model.
+        :param exp: hpctl.experiment.Experiment, The experiment data object.
         """
         for job in self.jobs:
             # update label -> job mapping.
@@ -214,12 +212,12 @@ class MPBackend(LocalGPUBackend):
                 job.join()
                 job.start(
                     label, config,
-                    mead_logs=self.exp.mead_logs,
-                    hpctl_logs=self.exp.hpctl_logs,
-                    settings=self.exp.mead_settings,
-                    datasets=self.exp.datasets,
-                    embeddings=self.exp.embeddings,
-                    task_name=self.exp.task_name
+                    mead_logs=exp.mead_logs,
+                    hpctl_logs=exp.hpctl_logs,
+                    settings=exp.mead_settings,
+                    datasets=exp.datasets,
+                    embeddings=exp.embeddings,
+                    task_name=exp.task_name
                 )
                 self.label_to_job[label] = job
                 return

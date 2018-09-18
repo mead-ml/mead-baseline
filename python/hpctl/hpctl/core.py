@@ -75,7 +75,7 @@ def search(**kwargs):
     exp = Experiment(**kwargs)
     results = Results.create(exp.experiment_hash)
 
-    backend = get_backend(exp, results)
+    backend = get_backend(exp)
 
     # Setup the sampler
     config_sampler = get_config_sampler(
@@ -88,7 +88,7 @@ def search(**kwargs):
 
     frontend = get_frontend(exp, results)
 
-    num_iters = int(kwargs.get('num_iters', exp.hpctl_config.get('num_iters', 3)))
+    num_iters = int(kwargs.get('num_iters') if kwargs.get('num_iters') is not None else exp.hpctl_config.get('num_iters', 3))
 
     run(num_iters, exp, results, backend, frontend, config_sampler, logs)
     logs.stop()
@@ -117,7 +117,7 @@ def run(num_iters, exp, results, backend, frontend, config_sampler, logs):
             label, config = config_sampler.sample()
             results.insert(label, config)
             results.save(exp.experiment_hash)
-            backend.launch(label, config)
+            backend.launch(label, config, exp)
             frontend.update()
             launched += 1
         # Monitor jobs
@@ -128,13 +128,13 @@ def run(num_iters, exp, results, backend, frontend, config_sampler, logs):
             frontend.update()
         # Get user inputs
         cmd = frontend.command()
-        process_command(cmd, backend, frontend)
+        process_command(cmd, backend, frontend, results)
         # Check for quit
         all_done = backend.all_done() if launched >= num_iters else False
 
 
-def process_command(cmd, backend, frontend):
+def process_command(cmd, backend, frontend, results):
     if cmd is not None and isinstance(cmd, dict):
         if cmd['command'] == 'kill':
-            backend.kill(cmd['label'])
+            backend.kill(cmd['label'], results)
             frontend.update()

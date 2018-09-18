@@ -167,22 +167,22 @@ class DockerRunner(Runner):
 class DockerBackend(LocalGPUBackend):
     """Backend that launches docker jobs.
 
-    :param results: hpctl.results.Results, The results storage location.
     :param default_mounts: List[str], The dirs to mount.
     :param user_mounts: List[str], The user dirs to mount.
     """
-    def __init__(self, exp, results, default_mounts=None, user_mounts=None, **kwargs):
-        super(DockerBackend, self).__init__(exp, results, **kwargs)
+    def __init__(self, default_mounts=None, user_mounts=None, **kwargs):
+        super(DockerBackend, self).__init__(**kwargs)
         self.client = docker.from_env()
         self.jobs = [DockerRunner(self.client, run_docker, gpu) for gpu in self.real_gpus]
         self.default_mounts = kwargs.get('default_mounts', [])
         self.user_mounts = kwargs.get('user_mounts', [])
 
-    def launch(self, label, config):
+    def launch(self, label, config, exp):
         """Start a job.
 
         :param label: hpctl.utils.Label, The label for the job.
         :param config: dict, the config for the model.
+        :param exp: hpctl.experiment.Experiment, The experiment data object.
         """
         for job in self.jobs:
             # update label -> job mapping.
@@ -197,12 +197,12 @@ class DockerBackend(LocalGPUBackend):
                 job.start(
                     label, config,
                     self.default_mounts, self.user_mounts,
-                    mead_logs=self.exp.mead_logs,
-                    hpctl_logs=self.exp.hpctl_logs,
-                    settings=self.exp.mead_settings,
-                    datasets=self.exp.datasets,
-                    embeddings=self.exp.embeddings,
-                    task_name=self.exp.task_name
+                    mead_logs=exp.mead_logs,
+                    hpctl_logs=exp.hpctl_logs,
+                    settings=exp.mead_settings,
+                    datasets=exp.datasets,
+                    embeddings=exp.embeddings,
+                    task_name=exp.task_name
                 )
                 self.label_to_job[label] = job
                 return

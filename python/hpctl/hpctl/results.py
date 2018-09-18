@@ -269,7 +269,7 @@ class Results(object):
     def get_state(self, label):
         """Get the job state based on the label.
 
-        :param label: str, The sha1 of the config.
+        :param label: hpctl.utils.Label, The sha1 of the config.
 
         :returns:
             str, The unicode of the status.
@@ -282,10 +282,19 @@ class Results(object):
     def set_state(self, label, state):
         """Set the state of a job.
 
-        :param label: str, The label to set the state on.
+        :param label: hpctl.utils.Label, The label to set the state on.
         :param state: hpctl.results.States, The sate to set for the job.
         """
+        if label not in self.results:
+            return
         self.results[label]['state'] = state
+
+    def set_killed(self, label):
+        """Set a job to killed.
+
+        :param label: hpctl.utils.Label, The label to set as killed.
+        """
+        self.set_state(label, States.KILLED)
 
 
 # Create the results as a multiprocessing manager so that we can share the
