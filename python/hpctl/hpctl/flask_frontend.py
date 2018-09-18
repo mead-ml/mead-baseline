@@ -16,13 +16,16 @@ class FlaskFrontend(Frontend):
     def index(self):
         return render_template('index.html')
 
-    def experiment(self):
+    def experiment(self, hash_):
+        return jsonify({'hash': hash_, 'name': self.exp.experiment_name})
+
+    def experiments(self):
         return jsonify({'hash': self.exp.experiment_hash, 'name': self.exp.experiment_name})
 
-    def hpctl_config(self):
+    def hpctl_config(self, exp):
         return jsonify(self.exp.mead_config)
 
-    def get_config(self, sha1):
+    def get_config(self, exp, sha1):
         label = Label.parse(sha1)
         res = {
             "sha1": sha1,
@@ -30,7 +33,7 @@ class FlaskFrontend(Frontend):
         }
         return jsonify(res)
 
-    def best_result(self, label, phase, metric):
+    def best_result(self, exp, label, phase, metric):
         val, idx = self.results.get_best(label, phase, metric)
         res = {
             'label': label,
@@ -41,7 +44,7 @@ class FlaskFrontend(Frontend):
         }
         return jsonify(res)
 
-    def recent_result(self, label, phase, metric):
+    def recent_result(self, exp, label, phase, metric):
         val = self.results.get_rescent(label, phase, metric)
         res = {
             'label': label,
@@ -51,23 +54,24 @@ class FlaskFrontend(Frontend):
         }
         return jsonify(res)
 
-    def labels(self):
+    def labels(self, exp):
         res = []
         labels = self.results.get_labels()
         for label in labels:
             res.append({"sha1": label.sha1, "human": label.human})
         return jsonify(res)
 
-    def get_label(self, name):
+    def get_label(self, exp, name):
         human = None; sha1 = None
         human, sha1 = self.results.get_label_prefix(name)
         if human is None:
             sha1, human = self.results.get_human_prefix(name)
         return jsonify({"sha1": sha1, "human": human[0]})
 
-    def get_state(self, label):
+    def get_state(self, exp, label):
         label, human = self.results.get_label_prefix(name)
         label = Label(label, human[0])
+        # Use color to help handle strings.
         state = color(self.results.get_state(label), off=True)
         res = {
             "sha1": label.sha1,
@@ -95,6 +99,7 @@ class FlaskFrontend(Frontend):
             'status': status,
             'sha1': sha1s,
             'names': humans,
+            'exp': [self.exp.experiment_hash] * len(humans),
             'train': train_stats,
             'train_ticks': train_ticks,
             'valid': dev_stats,
@@ -107,15 +112,16 @@ class FlaskFrontend(Frontend):
 def init_app(app, fe, base_url='/hpctl/v1'):
     """Bind routes to the functions at runtime so that we can have OOP stuff in the responses."""
     app.route('{}/'.format(base_url), methods={'GET'})(fe.index)
-    app.route('{}/config'.format(base_url), methods={'GET'})(fe.hpctl_config)
-    app.route('{}/config/<sha1>'.format(base_url), methods={'GET'})(fe.get_config)
-    app.route('{}/result/best/<sha1>/<phase>/<metric>'.format(base_url), methods={'GET'})(fe.best_result)
-    app.route('{}/result/recent/<sha1>/<phase>/<metric>'.format(base_url), methods={'GET'})(fe.recent_result)
-    app.route('{}/label/'.format(base_url), methods={'GET'})(fe.labels)
-    app.route('{}/label/<name>'.format(base_url), methods={'GET'})(fe.get_label)
+    app.route('{}/config/<exp>'.format(base_url), methods={'GET'})(fe.hpctl_config)
+    app.route('{}/config/<exp>/<sha1>'.format(base_url), methods={'GET'})(fe.get_config)
+    app.route('{}/result/best/<exp>/<sha1>/<phase>/<metric>'.format(base_url), methods={'GET'})(fe.best_result)
+    app.route('{}/result/recent/<exp>/<sha1>/<phase>/<metric>'.format(base_url), methods={'GET'})(fe.recent_result)
+    app.route('{}/label/<exp>'.format(base_url), methods={'GET'})(fe.labels)
+    app.route('{}/label/<exp>/<name>'.format(base_url), methods={'GET'})(fe.get_label)
     app.route('{}/command'.format(base_url), methods={'POST'})(fe.command)
-    app.route('{}/state/<label>'.format(base_url), methods={'GET'})(fe.get_state)
-    app.route('{}/experiment'.format(base_url), methods={'GET'})(fe.experiment)
+    app.route('{}/state/<exp>/<label>'.format(base_url), methods={'GET'})(fe.get_state)
+    app.route('{}/experiment'.format(base_url), methods={'GET'})(fe.experiments)
+    app.route('{}/experiment/<exp>'.format(base_url), methods={'GET'})(fe.experiment)
     app.route('{}/demo'.format(base_url), methods={'GET'})(fe.demo_status)
 
 

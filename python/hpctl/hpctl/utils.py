@@ -166,7 +166,7 @@ def hash_config(config):
 
 @export
 def create_logs(label, mead_logs, hpctl_logs):
-    """Inject the hpo looging config into the mead logging.
+    """Inject the hpctl looging config into the mead logging.
 
     Note:
         This currently writes it a file that mead need for now.

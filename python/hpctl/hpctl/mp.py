@@ -187,7 +187,6 @@ class MPBackend(LocalGPUBackend):
     """
     def __init__(
             self,
-            results,
             **kwargs
     ):
         super(MPBackend, self).__init__(**kwargs)
