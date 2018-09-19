@@ -96,28 +96,28 @@ def test_remove_one_missing_one_good(data):
 
 
 def test_label_equal(data):
-    l1 = Label('123', 'abc')
-    l2 = Label('123', 'abc')
+    l1 = Label('123', '456', 'abc')
+    l2 = Label('123', '456', 'abc')
     assert not l1 is l2
     assert l1 == l2
 
 
 def test_label_not_equal(data):
-    l1 = Label('123', 'abc')
-    l2 = Label('123', 'def')
+    l1 = Label('123', '456', 'abc')
+    l2 = Label('123', '456', 'def')
     assert not l1 is l2
     assert l1 != l2
 
 
 def test_label_same_hash(data):
-    l1 = Label('123', 'abc')
-    l2 = Label('123', 'abc')
+    l1 = Label('123', '456', 'abc')
+    l2 = Label('123', '456', 'abc')
     assert not l1 is l2
     assert hash(l1) == hash(l2)
 
 
 def test_label_share_dict_keys(data):
-    l1 = Label('123', 'abc')
-    l2 = Label('123', 'abc')
+    l1 = Label('123', '456', 'abc')
+    l2 = Label('123', '456', 'abc')
     d = {l1: None}
     assert l2 in d

@@ -5,7 +5,7 @@ from setuptools import setup, find_packages
 
 def get_version(project_name):
     regex = re.compile(r"^__version__ = '(\d+\.\d+\.\d+(?:a|b|rc|dev)?(?:\d)*?)'$")
-    with open("{}/__init__.py".format(project_name)) as f:
+    with open("{}/version.py".format(project_name)) as f:
         for line in f:
             m = regex.match(line)
             if m is not None:
