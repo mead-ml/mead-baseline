@@ -98,7 +98,7 @@ class MongoRepo(ExperimentRepo):
         results = list(coll.find(query, projection))
         if not results:
             print_fn("no sha1 for the given id found, returning.")
-            return False
+            return None
         sha1 = results[0]['sha1']
         model_loc = store_model(checkpoint_base, sha1, checkpoint_store, print_fn)
         if model_loc is not None:
