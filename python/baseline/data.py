@@ -152,7 +152,7 @@ class DictExamples(object):
                 batch[k] += [ex[k]]
 
             # Trim all batches along the sort_key if it exists
-            if trim and self.sort_key is not None:
+            if trim and self.src is not None:
                 max_src_len = max(max_src_len, ex[self.sort_key])
             idx += 1
 
@@ -163,9 +163,10 @@ class DictExamples(object):
 
 @exporter
 class Seq2SeqExamples(object):
+
     """Paired training examples
     """
-    def __init__(self, example_list, do_shuffle=True, sort_key=None):
+    def __init__(self, example_list, do_shuffle=True, src_sort_key=None):
         """Constructor
         
         :param example_list: Training pair examples 
@@ -175,8 +176,9 @@ class Seq2SeqExamples(object):
         self.example_list = example_list
         if do_shuffle:
             random.shuffle(self.example_list)
-        if sort_key is not None:
-            self.example_list = sorted(self.example_list, key=lambda x: x[sort_key])
+        if src_sort_key is not None:
+            self.example_list = sorted(self.example_list, key=lambda x: x[src_sort_key])
+        self.src_sort_key = src_sort_key
 
     def __getitem__(self, i):
         """Get `ith` example
@@ -189,70 +191,60 @@ class Seq2SeqExamples(object):
     def __len__(self):
         return len(self.example_list)
 
-    def batch(self, start, batchsz, trim=False, vec_alloc=np.zeros):
+    def _trim_batch(self, batch, max_src_len, max_dst_len):
+        for k in batch.keys():
+            max_len = max_src_len
+            if k == 'dst':
+                max_len = max_dst_len
+
+            if len(batch[k].shape) == 3:
+                batch[k] = batch[k][:, 0:max_len, :]
+            elif len(batch[k].shape) == 2:
+                batch[k] = batch[k][:, :max_len]
+
+        return batch
+
+    def batch(self, start, batchsz, trim=False):
+
         """Get a batch of data
-        
+
         :param start: (``int``) The step index
         :param batchsz: (``int``) The batch size
         :param trim: (``bool``) Trim to maximum length in a batch
-        :param vec_alloc: A vector allocator, defaults to `numpy.empty`
-        :param vec_shape: A vector shape function, defaults to `numpy.shape`
-        :return: batched source vector, target vector, source lengths, target lengths
+        :param vec_alloc: A vector allocator
+        :param vec_shape: A vector shape function
+        :return: batched `x` word vector, `x` character vector, batched `y` vector, `length` vector, `ids`
         """
-        sig_src_len = len(self.example_list[0][Seq2SeqExamples.SRC])
-        sig_tgt_len = len(self.example_list[0][Seq2SeqExamples.TGT])
+        ex = self.example_list[start]
+        keys = ex.keys()
+        batch = {}
 
-        srcs = vec_alloc((batchsz, sig_src_len), dtype=np.int)
-        tgts = vec_alloc((batchsz, sig_tgt_len), dtype=np.int)
-        src_lens = vec_alloc((batchsz), dtype=np.int)
-        tgt_lens = vec_alloc((batchsz), dtype=np.int)
+        for k in keys:
+            batch[k] = []
         sz = len(self.example_list)
-
-        max_src_len = 0
-        max_tgt_len = 0
-
         idx = start * batchsz
+        max_src_len = 0
+        max_dst_len = 0
         for i in range(batchsz):
-            if idx >= sz: idx = 0
-        
-            example = self.example_list[idx]
-            srcs[i] = example[Seq2SeqExamples.SRC]
-            tgts[i] = example[Seq2SeqExamples.TGT]
-            src_lens[i] = example[Seq2SeqExamples.SRC_LEN]
-            tgt_lens[i] = example[Seq2SeqExamples.TGT_LEN]
-            max_src_len = max(max_src_len, src_lens[i])
-            max_tgt_len = max(max_tgt_len, tgt_lens[i])
+            if idx >= sz:
+                idx = 0
+
+            ex = self.example_list[idx]
+            for k in keys:
+                batch[k] += [ex[k]]
+
+            # Trim all batches along the sort_key if it exists
+            if trim and self.src_sort_key is not None:
+                max_src_len = max(max_src_len, ex[self.src_sort_key])
+
+            if trim:
+                max_dst_len = max(max_dst_len, ex['dst_lengths'])
+
             idx += 1
 
-        if trim:
-            srcs = srcs[:, 0:max_src_len]
-            tgts = tgts[:, 0:max_tgt_len]
-
-        return srcs, tgts, src_lens, tgt_lens
-
-
-@exporter
-def reverse_2nd(vec):
-    """Do time-reversal on numpy array of form `B x T`
-    
-    :param vec: vector to time-reverse
-    :return: Time-reversed vector
-    """
-    return vec[:, ::-1]
-
-
-@exporter
-class Seq2SeqDataFeed(ExampleDataFeed):
-    """Data feed of paired examples
-    """
-    def __init__(self, examples, batchsz, **kwargs):
-        super(Seq2SeqDataFeed, self).__init__(examples, batchsz, **kwargs)
-
-    def _batch(self, i):
-        src, tgt, src_len, tgt_len = self.examples.batch(i, self.batchsz, self.trim, self.vec_alloc)
-        if self.src_vec_trans is not None:
-            src = self.src_vec_trans(src)
-        return {'src': src, 'dst': tgt, 'src_len': src_len, 'dst_len': tgt_len}
+        for k in keys:
+            batch[k] = np.stack(batch[k])
+        return self._trim_batch(batch, keys, max_src_len, max_dst_len) if trim else batch
 
 
 # This one is a little different at the moment
@@ -261,76 +253,66 @@ class SeqWordCharDataFeed(DataFeed):
     """Data feed to return language modeling training data
     """
 
-    def __init__(self, x, xch, nbptt, batchsz, maxw):
+    def __init__(self, examples, nbptt, batchsz, tgt_key):
         """Constructor
         
-        :param x: word tensor
+        :param examples: word tensor
         :param xch: character tensor
         :param nbptt: Number of steps of BPTT
         :param batchsz: Batch size
         :param maxw: The maximum word length
         """
         super(SeqWordCharDataFeed, self).__init__()
-        num_examples = x.shape[0]
+        num_examples = examples.shape[0]
         rest = num_examples // batchsz
         self.steps = rest // nbptt
-        #if num_examples is divisible by batchsz * nbptt (equivalent to rest is divisible by nbptt), we #have a problem. reduce rest in that case.
-        if rest % nbptt == 0: 
+        # This identifies which vector to use for targets
+        self.tgt_key = tgt_key
+        # if num_examples is divisible by batchsz * nbptt (equivalent to rest is divisible by nbptt), we
+        # have a problem. reduce rest in that case.
+
+        if rest % nbptt == 0:
             rest = rest-1
 
-        self.stride_ch = nbptt * maxw
-        trunc = batchsz * rest
+        for k in examples.keys():
+            dim_key = '{}_dims'.format(k)
+            shp = examples[dim_key]
+            if len(shp) == 2:
+                width = nbptt * shp[1]
+            else:
+                width = 1
+            trunc = batchsz * rest * width
+            self.examples[k] = examples[:trunc].reshape((batchsz, rest * width))
 
-        print('Truncating from %d to %d' % (num_examples, trunc))
-        self.x = x[:trunc].reshape((batchsz, rest))
-        xch = xch.flatten()
-        trunc = batchsz * rest * maxw
-
-        print('Truncated from %d to %d' % (xch.shape[0], trunc))
-        self.xch = xch[:trunc].reshape((batchsz, rest * maxw))
-        self.nbptt = nbptt
-        self.batchsz = batchsz
-        self.wsz = maxw
-
-    def _batch(self, i):
-        return {
-            'x': self.x[:, i*self.nbptt:(i+1)*self.nbptt].reshape((self.batchsz, self.nbptt)),
-            'xch': self.xch[:, i*self.stride_ch:(i+1)*self.stride_ch].reshape((self.batchsz, self.nbptt, self.wsz)),
-            'y': self.x[:, i*self.nbptt+1:(i+1)*self.nbptt+1].reshape((self.batchsz, self.nbptt))
-        }
-
-
-@exporter
-class SeqCharDataFeed(DataFeed):
-    """Data feed to return language modeling training data
-    """
-
-    def __init__(self, x, nbptt, batchsz):
-        """Constructor
-
-        :param x: word tensor
-        :param xch: character tensor
-        :param nbptt: Number of steps of BPTT
-        :param batchsz: Batch size
-        :param maxw: The maximum word length
-        """
-        super(SeqCharDataFeed, self).__init__()
-        num_examples = x.shape[0]
-        rest = num_examples // batchsz
-        self.steps = rest // nbptt
-        rest += 1
-        trunc = batchsz * rest
-
-        print('Truncating from %d to %d' % (num_examples, trunc))
-
-        self.x = np.append(x, x[:batchsz])[:trunc].reshape((batchsz, rest))
+            print('Truncating {} from {} to {}'.format(k, num_examples, trunc))
+            self.examples[k].flatten()
+            self.x[dim_key] = shp
         self.nbptt = nbptt
         self.batchsz = batchsz
 
     def _batch(self, i):
 
-        return {
+        example = {}
+        for k in self.x.keys():
+            x = self.x[k]
+            dims = self.x['{}_dims'.format(k)]
+            if len(dims) == 1:
+                width = 1
+            else:
+                width = dims[1]
 
-            'x': self.x[:, i*self.nbptt:(i+1)*self.nbptt].reshape((self.batchsz, self.nbptt)),
-            'y': self.x[:, i*self.nbptt+1:(i+1)*self.nbptt+1].reshape((self.batchsz, self.nbptt))
-        }
+            example[k] = x[:, i*self.nbptt*width:(i+1)*self.nbptt*width]
+            if len(dims) == 1:
+                example[k].reshape((self.batchsz, self.nbptt))
+            else:
+                example[k].reshape((self.batchsz, self.nbptt, width))
+
+        x = self.x[self.tgt_key]
+        example['y'] = x[:, i*self.nbptt+1:(i+1)*self.nbptt+1].reshape((self.batchsz, self.nbptt))
+        return example
+        #return {
+        #    'x': self.x[:, i*self.nbptt:(i+1)*self.nbptt].reshape((self.batchsz, self.nbptt)),
+        #    'xch': self.xch[:, i*self.stride_ch:(i+1)*self.stride_ch].reshape((self.batchsz, self.nbptt, self.wsz)),
+        #    'y': self.x[:, i*self.nbptt+1:(i+1)*self.nbptt+1].reshape((self.batchsz, self.nbptt))
+        #}
+

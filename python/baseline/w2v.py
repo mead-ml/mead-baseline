@@ -2,7 +2,7 @@ import io
 import contextlib
 import numpy as np
 from baseline.utils import export, load_user_embeddings
-
+from baseline.mime_type import mime_type
 __all__ = []
 exporter = export(__all__)
 
@@ -23,7 +23,6 @@ class EmbeddingsModel(object):
 
     def get_vsz(self):
         pass
-
 
 
 @exporter
@@ -259,11 +258,11 @@ class RandomInitVecModel(EmbeddingsModel):
 def load_embeddings(filename, known_vocab=None, **kwargs):
     embed_type = kwargs.get('embed_type', 'default')
     if embed_type == 'default':
-        EmbedT = GloVeModel if filename.endswith('txt') else Word2VecModel
-        return EmbedT(filename,
-                      known_vocab=known_vocab,
-                      unif_weight=kwargs.pop('unif', 0),
-                      keep_unused=kwargs.pop('keep_unused', False),
-                      normalize=kwargs.pop('normalized', False), **kwargs)
+        EmbeddingT = GloVeModel if mime_type(filename) == 'text/plain' else Word2VecModel
+        return EmbeddingT(filename,
+                          known_vocab=known_vocab,
+                          unif_weight=kwargs.pop('unif', 0),
+                          keep_unused=kwargs.pop('keep_unused', False),
+                          normalize=kwargs.pop('normalized', False), **kwargs)
     print('loading user module')
     return load_user_embeddings(filename, known_vocab, **kwargs)

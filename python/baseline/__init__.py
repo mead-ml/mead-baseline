@@ -1,4 +1,5 @@
 try:
+    from baseline.mime_type import *
     from baseline.utils import *
     from baseline.vectorizers import *
     from baseline.w2v import *

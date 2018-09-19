@@ -249,14 +249,13 @@ def multi_rnn_cell_w_dropout(hsz, pkeep, rnntype, num_layers):
 
 
 # This function should never be used for decoding.  It exists only so that the training model can greedily decode
-# It is super slow and doesnt use maintain a beam of hypotheses
 def show_examples_tf(model, es, rlut1, rlut2, embed2, mxlen, sample, prob_clip, max_examples, reverse):
     si = np.random.randint(0, len(es))
 
     batch_dict = es[si]
     src_array = batch_dict['src']
     tgt_array = batch_dict['dst']
-    src_len = batch_dict['src_len']
+    src_len = batch_dict['src_lengths']
 
     if max_examples > 0:
         max_examples = min(max_examples, src_array.shape[0])
@@ -266,23 +265,36 @@ def show_examples_tf(model, es, rlut1, rlut2, embed2, mxlen, sample, prob_clip, 
 
     GO = embed2.vocab['<GO>']
     EOS = embed2.vocab['<EOS>']
+    i = 0
 
-    for src_len_i, src_i, tgt_i in zip(src_len, src_array, tgt_array):
+    while True:
 
+        example = {}
+        for k in batch_dict.keys():
+            if i >= len(batch_dict[k]):
+                return
+            example[k] = batch_dict[k][i]
         print('========================================================================')
+
+        src_i = example['src']
+        src_len_i = example['src_lengths']
+        dst_i = example['dst']
 
         sent = lookup_sentence(rlut1, src_i, reverse=reverse)
         print('[OP] %s' % sent)
-        sent = lookup_sentence(rlut2, tgt_i)
+        sent = lookup_sentence(rlut2, dst_i)
         print('[Actual] %s' % sent)
         dst_i = np.zeros((1, mxlen))
-        src_i = src_i[np.newaxis,:]
-        src_len_i = np.array([src_len_i])
+        example['dst'] = dst_i
+        src_i = src_i[np.newaxis, :]
+        example['src'] = src_i
+        example['src_lengths'] = np.array([src_len_i])
         next_value = GO
         for j in range(mxlen):
             dst_i[0, j] = next_value
             tgt_len_i = np.array([j+1])
-            output = model.step({'src': src_i, 'src_len': src_len_i, 'dst': dst_i, 'dst_len': tgt_len_i})[j]
+            example['dst_lengths'] = tgt_len_i
+            output = model.step(example)[j]
             if sample is False:
                 next_value = np.argmax(output)
             else:
@@ -296,6 +308,9 @@ def show_examples_tf(model, es, rlut1, rlut2, embed2, mxlen, sample, prob_clip, 
         sent = lookup_sentence(rlut2, dst_i.squeeze())
         print('Guess: %s' % sent)
         print('------------------------------------------------------------------------')
+        i += 1
+        if i == max_examples:
+            return
 
 
 def skip_conns(inputs, wsz_all, n, activation_fn=tf.nn.relu):

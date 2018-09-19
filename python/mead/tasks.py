@@ -6,7 +6,6 @@ import logging.config
 import mead.utils
 import os
 from mead.downloader import EmbeddingDownloader, DataDownloader
-from mead.mime_type import mime_type
 from baseline.utils import export, read_config_file, read_json, write_json
 from baseline.w2v import load_embeddings
 from baseline.vectorizers import create_vectorizer
@@ -37,6 +36,19 @@ class Task(object):
             self.data_download_cache = os.path.expanduser(self.mead_settings_config['datacache'])
         print("using {} as data/embeddings cache".format(self.data_download_cache))
         self._configure_logger(logger_file)
+
+    def _create_vectorizers(self):
+        vectorizers = {}
+        for feature in self.config_params['features']:
+            key = feature['name']
+            vectorizer_section = feature.get('vectorizer', {'type': 'token1d'})
+            vectorizer_section['mxlen'] = vectorizer_section.get('mxlen', self.config_params['preproc'].get('mxlen', -1))
+            vectorizer_section['mxwlen'] = vectorizer_section.get('mxlen', self.config_params['preproc'].get('mxwlen', -1))
+            if 'transform' in vectorizer_section:
+                vectorizer_section['transform_fn'] = eval(vectorizer_section['transform'])
+            vectorizer = create_vectorizer(**vectorizer_section)
+            vectorizers[key] = vectorizer
+        return vectorizers
 
     def _configure_logger(self, logger_config):
         """Use the logger file (logging.json) to configure the log, but overwrite the filename to include the PID
@@ -133,14 +145,14 @@ class Task(object):
         self.config_params['train']['reporting'] = reporting
         logging.basicConfig(level=logging.DEBUG)
 
-    def _create_embeddings(self, embeddings_set, vocabs):
+    def _create_embeddings(self, embeddings_set, vocabs, features):
 
         unif = self.config_params['unif']
         keep_unused = self.config_params.get('keep_unused', False)
 
         embeddings = dict()
 
-        for feature in self.config_params['features']:
+        for feature in features:
             embeddings_section = feature['embeddings']
             name = feature['name']
             embed_label = embeddings_section.get('label', None)
@@ -186,16 +198,7 @@ class ClassifierTask(Task):
         self.task = None
 
     def _create_task_specific_reader(self):
-        vectorizers = {}
-        for feature in self.config_params['features']:
-            key = feature['name']
-            vectorizer_section = feature.get('vectorizer', {'type': 'token1d'})
-            vectorizer_section['mxlen'] = vectorizer_section.get('mxlen', self.config_params['preproc'].get('mxlen', -1))
-            vectorizer_section['mxwlen'] = vectorizer_section.get('mxlen', self.config_params['preproc'].get('mxwlen', -1))
-            if 'transform' in vectorizer_section:
-                vectorizer_section['transform_fn'] = eval(vectorizer_section['transform'])
-            vectorizer = create_vectorizer(**vectorizer_section)
-            vectorizers[key] = vectorizer
+        vectorizers = self._create_vectorizers()
         return baseline.create_pred_reader(vectorizers, clean_fn=self.config_params['preproc']['clean_fn'],
                                            trim=self.config_params['preproc'].get('trim', False),
                                            **self.config_params['loader'])
@@ -240,12 +243,10 @@ class ClassifierTask(Task):
         self.dataset = DataDownloader(self.dataset, self.data_download_cache).download()
         print("[train file]: {}\n[valid file]: {}\n[test file]: {}".format(self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']))
         vocab, self.labels = self.reader.build_vocab([self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']])
-        self.embeddings, self.feat2index = self._create_embeddings(embeddings_set, vocab)
+        self.embeddings, self.feat2index = self._create_embeddings(embeddings_set, vocab, self.config_params['features'])
 
     def _create_model(self):
         model = self.config_params['model']
-        model['mxlen'] = self.config_params['preproc']['mxlen'] #, self.config_params['preproc']['maxs'])
-        model['mxwlen'] = self.config_params['preproc'].get('mxwlen', 40) #, self.config_params['preproc']['maxw'])
         return self.task.create_model(self.embeddings, self.labels, **model)
 
     def _load_dataset(self):
@@ -264,16 +265,7 @@ class TaggerTask(Task):
         self.task = None
 
     def _create_task_specific_reader(self):
-        vectorizers = {}
-        for feature in self.config_params['features']:
-            key = feature['name']
-            vectorizer_section = feature.get('vectorizer', {'type': 'token1d'})
-            vectorizer_section['mxlen'] = vectorizer_section.get('mxlen', self.config_params['preproc'].get('mxlen', -1))
-            vectorizer_section['mxwlen'] = vectorizer_section.get('mxlen', self.config_params['preproc'].get('mxwlen', -1))
-            if 'transform' in vectorizer_section:
-                vectorizer_section['transform_fn'] = eval(vectorizer_section['transform'])
-            vectorizer = create_vectorizer(**vectorizer_section)
-            vectorizers[key] = vectorizer
+        vectorizers = self._create_vectorizers()
         return baseline.create_seq_pred_reader(vectorizers, trim=self.config_params['preproc'].get('trim', False),
                                                **self.config_params['loader'])
 
@@ -313,7 +305,7 @@ class TaggerTask(Task):
         print("[train file]: {}\n[valid file]: {}\n[test file]: {}".format(self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']))
         embeddings_set = mead.utils.index_by_label(embeddings)
         vocabs = self.reader.build_vocab([self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']])
-        self.embeddings, self.feat2index = self._create_embeddings(embeddings_set, vocabs)
+        self.embeddings, self.feat2index = self._create_embeddings(embeddings_set, vocabs, self.config_params['features'])
 
     def _create_model(self):
         labels = self.reader.label2index
@@ -344,28 +336,25 @@ class EncoderDecoderTask(Task):
         self.task = None
 
     def _create_task_specific_reader(self):
+        vectorizers = self._create_vectorizers()
+        dst_vectorizer = vectorizers.pop('dst')
         preproc = self.config_params['preproc']
-        reader = baseline.create_parallel_corpus_reader(preproc['mxlen'],
+        reader = baseline.create_parallel_corpus_reader(vectorizers,
+                                                        dst_vectorizer,
                                                         preproc['trim'],
                                                         **self.config_params['loader'])
         return reader
 
     def _setup_task(self):
 
-        # If its not vanilla seq2seq, dont bother reversing
-        do_reverse = self.config_params['model']['model_type'] == 'default'
         backend = self.config_params.get('backend', 'tensorflow')
-        src_vec_trans = baseline.reverse_2nd if do_reverse else None
-
         if backend == 'pytorch':
             print('PyTorch backend')
-            from baseline.pytorch import long_0_tensor_alloc as vec_alloc
             import baseline.pytorch.seq2seq as seq2seq
             self.config_params['preproc']['show_ex'] = baseline.pytorch.show_examples_pytorch
             self.config_params['preproc']['trim'] = True
         else:
             self.config_params['preproc']['trim'] = False
-            self.config_params['preproc']['word_trans_fn'] = src_vec_trans
             if backend == 'dynet':
                 print('Dynet backend')
                 import _dynet
@@ -387,21 +376,45 @@ class EncoderDecoderTask(Task):
         embeddings_set = mead.utils.index_by_label(embeddings)
         self.dataset = DataDownloader(self.dataset, self.data_download_cache, True).download()
         print("[train file]: {}\n[valid file]: {}\n[test file]: {}\n[vocab file]: {}".format(self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file'], self.dataset.get('vocab_file',"None")))
-        vocab_file = self.dataset.get('vocab_file',None)
+        vocab_file = self.dataset.get('vocab_file')
         if vocab_file is not None:
             vocab1, vocab2 = self.reader.build_vocabs([vocab_file])
         else:
             vocab1, vocab2 = self.reader.build_vocabs([self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']])
-        self.embeddings1, self.feat2index1 = self._create_embeddings(embeddings_set, {'word': vocab1})
-        self.embeddings2, self.feat2index2 = self._create_embeddings(embeddings_set, {'word': vocab2})
+
+        # To keep the config file simple, share a list between source and destination (dst)
+        features_src = []
+        features_dst = None
+        for feature in self.config_params['features']:
+            if feature['name'] == 'dst':
+                features_dst = feature
+            else:
+                features_src += [feature]
+
+        self.src_embeddings, self.feat2src = self._create_embeddings(embeddings_set, vocab1, features_src)
+        # For now, dont allow multiple vocabs of output
+        self.dst_embeddings, self.feat2dst = self._create_embeddings(embeddings_set, {'dst': vocab2}, [features_dst])
+        self.dst_embeddings = self.dst_embeddings['dst']
+        self.feat2dst = self.feat2dst['dst']
 
     def _load_dataset(self):
-        self.train_data = self.reader.load(self.dataset['train_file'], self.feat2index1['word'], self.feat2index2['word'], self.config_params['batchsz'], shuffle=True)
-        self.valid_data = self.reader.load(self.dataset['valid_file'], self.feat2index1['word'], self.feat2index2['word'], self.config_params['batchsz'], shuffle=True)
-        self.test_data = self.reader.load(self.dataset['test_file'], self.feat2index1['word'], self.feat2index2['word'], self.config_params.get('test_batchsz', 1))
+        sort_key = self.config_params['loader'].get('src_sort_key', 'src')
+        self.train_data = self.reader.load(self.dataset['train_file'],
+                                           self.feat2src, self.feat2dst,
+                                           self.config_params['batchsz'],
+                                           shuffle=True, sort_key=sort_key)
+        self.valid_data = self.reader.load(self.dataset['valid_file'],
+                                           self.feat2src,
+                                           self.feat2dst,
+                                           self.config_params['batchsz'],
+                                           shuffle=True)
+        self.test_data = self.reader.load(self.dataset['test_file'],
+                                          self.feat2src,
+                                          self.feat2dst,
+                                          self.config_params.get('test_batchsz', 1))
 
     def _create_model(self):
-        return self.task.create_model(self.embeddings1['word'], self.embeddings2['word'], **self.config_params['model'])
+        return self.task.create_model(self.src_embeddings, self.dst_embeddings, **self.config_params['model'])
 
     def train(self):
 
@@ -411,11 +424,12 @@ class EncoderDecoderTask(Task):
             print('Showing examples')
             preproc = self.config_params['preproc']
             show_ex_fn = preproc['show_ex']
-            rlut1 = baseline.revlut(self.feat2index1['word'])
-            rlut2 = baseline.revlut(self.feat2index2['word'])
+            vocab_name = self.config_params['loader'].get('src_sort_key', 'src')
+            rlut1 = baseline.revlut(self.feat2src[vocab_name])
+            rlut2 = baseline.revlut(self.feat2dst)
             self.config_params['train']['after_train_fn'] = lambda model: show_ex_fn(model,
                                                                                      self.valid_data, rlut1, rlut2,
-                                                                                     self.embeddings2['word'],
+                                                                                     self.dst_embeddings,
                                                                                      preproc['mxlen'], False, 0,
                                                                                      num_ex, reverse=False)
         super(EncoderDecoderTask, self).train()
@@ -435,7 +449,6 @@ class LanguageModelingTask(Task):
         nbptt = self.config_params['nbptt']
         reader = baseline.create_lm_reader(mxwlen,
                                            nbptt,
-                                           self.config_params['preproc']['word_trans_fn'],
                                            reader_type=self.config_params['loader']['reader_type'])
         return reader
 
@@ -444,8 +457,6 @@ class LanguageModelingTask(Task):
         backend = self.config_params.get('backend', 'tensorflow')
         if backend == 'pytorch':
             print('PyTorch backend')
-            from baseline.pytorch import long_0_tensor_alloc as vec_alloc
-            from baseline.pytorch import tensor_shape as vec_shape
             import baseline.pytorch.lm as lm
             self.config_params['preproc']['trim'] = True
 

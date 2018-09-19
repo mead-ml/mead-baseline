@@ -1,9 +1,6 @@
 import os
 import json
 from baseline.utils import export
-from mead.mime_type import mime_type
-import hashlib
-import zipfile
 
 __all__ = []
 exporter = export(__all__)

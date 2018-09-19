@@ -4,7 +4,7 @@ from collections import Counter
 import re
 import codecs
 from baseline.utils import import_user_module, revlut, export
-from baseline.vectorizers import Dict1DVectorizer
+from baseline.vectorizers import Dict1DVectorizer, GOVectorizer
 import os
 
 __all__ = []
@@ -20,12 +20,13 @@ def num_lines(filename):
     return lines
 
 
-def _build_vocab_for_col(col, files):
-    vocab = Counter()
-    vocab['<GO>'] = 1
-    vocab['<EOS>'] = 1
-    vocab['<UNK>'] = 1
-    vocab['<EOW'] = 1
+def _build_vocab_for_col(col, files, vectorizers):
+    vocabs = dict()
+
+    for key in vectorizers.keys():
+        vocabs[key] = Counter()
+        vocabs[key]['<UNK>'] = 100000  # In case freq cutoffs
+        vocabs[key]['<EOS>'] = 100000  # In case freq cutoffs
     for file in files:
         if file is None:
             continue
@@ -33,25 +34,21 @@ def _build_vocab_for_col(col, files):
             for line in f:
                 cols = re.split("\t", line)
                 text = re.split("\s", cols[col])
-
-                for w in text:
-                    w = w.strip()
-                    if w:
-                        vocab[w] += 1
-    return vocab
+                for key, vectorizer in vectorizers.items():
+                    vocabs[key].update(vectorizer.count(text))
+    return vocabs
 
 
 @exporter
 class ParallelCorpusReader(object):
 
     def __init__(self,
-                 max_sentence_length=1000,
-                 vec_alloc=np.zeros,
-                 src_vec_trans=None,
+                 src_vectorizers,
+                 dst_vectorizer,
                  trim=False):
-        self.vec_alloc = vec_alloc
-        self.src_vec_trans = src_vec_trans
-        self.max_sentence_length = max_sentence_length
+
+        self.src_vectorizers = src_vectorizers
+        self.dst_vectorizer = GOVectorizer(dst_vectorizer)
         self.trim = trim
 
     def build_vocabs(self, files):
@@ -60,71 +57,51 @@ class ParallelCorpusReader(object):
     def load_examples(self, tsfile, vocab1, vocab2):
         pass
 
-    def load(self, tsfile, vocab1, vocab2, batchsz, shuffle=False):
+    def load(self, tsfile, vocab1, vocab2, batchsz, shuffle=False, sort_key=None):
         examples = self.load_examples(tsfile, vocab1, vocab2)
-        return baseline.data.Seq2SeqDataFeed(examples, batchsz,
-                                             shuffle=shuffle, src_vec_trans=self.src_vec_trans,
-                                             vec_alloc=self.vec_alloc, trim=self.trim)
+        return baseline.data.ExampleDataFeed(examples, batchsz,
+                                             shuffle=shuffle, trim=self.trim, sort_key=sort_key)
 
 
 @exporter
 class TSVParallelCorpusReader(ParallelCorpusReader):
 
     def __init__(self,
-                 max_sentence_length=1000,
-                 vec_alloc=np.zeros,
-                 src_vec_trans=None,
+                 src_vectorizers, dst_vectorizer,
                  trim=False, src_col_num=0, dst_col_num=1):
-        super(TSVParallelCorpusReader, self).__init__(max_sentence_length, vec_alloc, src_vec_trans, trim)
+        super(TSVParallelCorpusReader, self).__init__(src_vectorizers, dst_vectorizer, trim)
         self.src_col_num = src_col_num
         self.dst_col_num = dst_col_num
 
     def build_vocabs(self, files):
-        src_vocab = _build_vocab_for_col(self.src_col_num, files)
-        dst_vocab = _build_vocab_for_col(self.dst_col_num, files)
-        return src_vocab, dst_vocab
+        src_vocab = _build_vocab_for_col(self.src_col_num, files, self.src_vectorizers)
+        dst_vocab = _build_vocab_for_col(self.dst_col_num, files, {'dst': self.dst_vectorizer})
+        return src_vocab, dst_vocab['dst']
 
-    def load_examples(self, tsfile, vocab1, vocab2):
-        GO = vocab2['<GO>']
-        EOS = vocab2['<EOS>']
-        mxlen = self.max_sentence_length
+    def load_examples(self, tsfile, src_vocabs, dst_vocab):
         ts = []
         with codecs.open(tsfile, encoding='utf-8', mode='r') as f:
             for line in f:
                 splits = re.split("\t", line.strip())
                 src = list(filter(lambda x: len(x) != 0, re.split("\s+", splits[0])))
+
+                example = {}
+                for k, vectorizer in self.src_vectorizers.items():
+                    example[k], length = vectorizer.run(src, src_vocabs[k])
+                    if length is not None:
+                        example['{}_lengths'.format(k)] = length
+
                 dst = list(filter(lambda x: len(x) != 0, re.split("\s+", splits[1])))
-                srcl = self.vec_alloc(mxlen, dtype=np.int)
-                tgtl = self.vec_alloc(mxlen, dtype=np.int)
-                src_len = len(src)
-                tgt_len = len(dst) + 2  # <GO>,...,<EOS>
-                end1 = min(src_len, mxlen)
-                end2 = min(tgt_len, mxlen)-1
-                tgtl[0] = GO
-                src_len = end1
-                tgt_len = end2+1
-
-                for j in range(end1):
-                    srcl[j] = vocab1[src[j]]
-                for j in range(end2-1):
-                    tgtl[j + 1] = vocab2[dst[j]]
-
-                tgtl[end2] = EOS
-
-                ts.append((srcl, tgtl, src_len, tgt_len))
-
+                example['dst'], example['dst_lengths'] = self.dst_vectorizer.run(dst, dst_vocab)
+                ts += [example]
         return baseline.data.Seq2SeqExamples(ts)
 
 
 @exporter
 class MultiFileParallelCorpusReader(ParallelCorpusReader):
 
-    def __init__(self, src_suffix, dst_suffix,
-                 max_sentence_length=1000,
-                 vec_alloc=np.zeros,
-                 src_vec_trans=None,
-                 trim=False):
-        super(MultiFileParallelCorpusReader, self).__init__(max_sentence_length, vec_alloc, src_vec_trans, trim)
+    def __init__(self, src_suffix, dst_suffix, src_vectorizers, dst_vectorizer, trim=False):
+        super(MultiFileParallelCorpusReader, self).__init__(src_vectorizers, dst_vectorizer, trim)
         self.src_suffix = src_suffix
         self.dst_suffix = dst_suffix
         if not src_suffix.startswith('.'):
@@ -136,67 +113,46 @@ class MultiFileParallelCorpusReader(ParallelCorpusReader):
     # from each column
     def build_vocabs(self, files):
         if len(files) == 1 and os.path.exists(files[0]):
-            src_vocab = _build_vocab_for_col(0, files)
-            dst_vocab = src_vocab
+            src_vocab = _build_vocab_for_col(0, files, self.src_vectorizers)
+            dst_vocab = _build_vocab_for_col(0, files, {'dst': self.dst_vectorizer})
         else:
-            src_vocab = _build_vocab_for_col(0, [f + self.src_suffix for f in files])
-            dst_vocab = _build_vocab_for_col(0, [f + self.dst_suffix for f in files])
-        return src_vocab, dst_vocab
+            src_vocab = _build_vocab_for_col(0, [f + self.src_suffix for f in files], self.src_vectorizers)
+            dst_vocab = _build_vocab_for_col(0, [f + self.dst_suffix for f in files], {'dst': self.dst_vectorizer})
+        return src_vocab, dst_vocab['dst']
 
-    def load_examples(self, tsfile, vocab1, vocab2):
-        PAD = vocab1['<PAD>']
-        GO = vocab2['<GO>']
-        EOS = vocab2['<EOS>']
-        UNK1 = vocab1['<UNK>']
-        UNK2 = vocab2['<UNK>']
-        mxlen = self.max_sentence_length
+    def load_examples(self, tsfile, src_vocabs, dst_vocab):
         ts = []
 
         with codecs.open(tsfile + self.src_suffix, encoding='utf-8', mode='r') as fsrc:
             with codecs.open(tsfile + self.dst_suffix, encoding='utf-8', mode='r') as fdst:
                 for src, dst in zip(fsrc, fdst):
-
+                    example = {}
                     src = re.split("\s+", src.strip())
+                    for k, vectorizer in self.src_vectorizers.items():
+                        example[k], length = vectorizer.run(src, src_vocabs[k])
+                        if length is not None:
+                            example['{}_lengths'.format(k)] = length
                     dst = re.split("\s+", dst.strip())
-                    srcl = self.vec_alloc(mxlen, dtype=np.int)
-                    tgtl = self.vec_alloc(mxlen, dtype=np.int)
-                    src_len = len(src)
-                    tgt_len = len(dst) + 2
-                    end1 = min(src_len, mxlen)
-                    end2 = min(tgt_len, mxlen)-1
-                    tgtl[0] = GO
-                    src_len = end1
-                    tgt_len = end2+1
-
-                    for j in range(end1):
-                        srcl[j] = vocab1.get(src[j], UNK1)
-                    for j in range(end2-1):
-                        tgtl[j + 1] = vocab2.get(dst[j], UNK2)
-
-                    tgtl[end2] = EOS
-                    ts.append((srcl, tgtl, src_len, tgt_len))
-
+                    example['dst'], example['dst_lengths'] = self.dst_vectorizer.run(dst, dst_vocab)
+                    ts += [example]
         return baseline.data.Seq2SeqExamples(ts)
 
 
 @exporter
-def create_parallel_corpus_reader(mxlen, alloc_fn, trim, src_vec_trans, **kwargs):
+def create_parallel_corpus_reader(src_vectorizers, dst_vectorizer, trim, **kwargs):
 
     reader_type = kwargs.get('reader_type', 'default')
 
     if reader_type == 'default':
         print('Reading parallel file corpus')
         pair_suffix = kwargs.get('pair_suffix')
-        reader = MultiFileParallelCorpusReader(pair_suffix[0], pair_suffix[1],
-                                               mxlen, alloc_fn,
-                                               src_vec_trans, trim)
+        reader = MultiFileParallelCorpusReader(pair_suffix[0], pair_suffix[1], src_vectorizers, dst_vectorizer, trim)
     elif reader_type == 'tsv':
         print('Reading tab-separated corpus')
-        reader = TSVParallelCorpusReader(mxlen, alloc_fn, src_vec_trans, trim)
+        reader = TSVParallelCorpusReader(src_vectorizers, dst_vectorizer, trim)
     else:
         mod = import_user_module("reader", reader_type)
-        return mod.create_parallel_corpus_reader(mxlen, alloc_fn,
-                                                 src_vec_trans, trim, **kwargs)
+        return mod.create_parallel_corpus_reader(src_vectorizers, dst_vectorizer, trim, **kwargs)
     return reader
 
 
@@ -486,67 +442,63 @@ def create_pred_reader(vectorizers, clean_fn, **kwargs):
 @exporter
 class LineSeqReader(object):
 
-    def __init__(self, max_word_length, nbptt, word_trans_fn):
+    def __init__(self, max_word_length, nbptt):
         self.max_word_length = max_word_length
         self.nbptt = nbptt
-        self.cleanup_fn = identity_trans_fn if word_trans_fn is None else word_trans_fn
 
     def build_vocab(self, files):
-        vocab_word = Counter()
-        vocab_ch = Counter()
-        maxw = 0
-        num_words_in_files = []
+
+        vocabs = {}
+        for key in self.vectorizers.keys():
+            vocabs[key] = Counter()
         for file in files:
             if file is None:
                 continue
 
             with codecs.open(file, encoding='utf-8', mode='r') as f:
-                num_words = 0
+
                 for line in f:
                     sentence = line.split()
-                    sentence = [w for w in sentence] + ['<EOS>']
-                    num_words += len(sentence)
-                    for w in sentence:
-                        vocab_word[self.cleanup_fn(w)] += 1
-                        maxw = max(maxw, len(w))
-                        for k in w:
-                            vocab_ch[k] += 1
-                num_words_in_files.append(num_words)
+                    for k, vectorizer in self.vectorizers.items():
+                        vectorizer.run(sentence)
+                    #sentence = [w for w in sentence] + ['<EOS>']
+                    #num_words += len(sentence)
+                    #for w in sentence:
+                    #    vocab_word[self.cleanup_fn(w)] += 1
+                    #    maxw = max(maxw, len(w))
+                    #    for k in w:
+                    #        vocab_ch[k] += 1
+                #num_words_in_files.append(num_words)
 
-        self.max_word_length = min(maxw, self.max_word_length) if self.max_word_length > 0 else maxw
+        #self.max_word_length = min(maxw, self.max_word_length) if self.max_word_length > 0 else maxw
 
-        print('Max word length %d' % self.max_word_length)
+        #print('Max word length %d' % self.max_word_length)
 
-        vocab = {'char': vocab_ch, 'word': vocab_word }
-        return vocab, num_words_in_files
+        return vocabs
 
-    def load(self, filename, word2index, num_words, batchsz):
+    def load(self, filename, vocabs, batchsz):
 
-        words_vocab = word2index['word']
-        chars_vocab = word2index['char']
-        xch = np.zeros((num_words, self.max_word_length), np.int)
-        x = np.zeros(num_words, np.int)
-        i = 0
+        x = dict()
+
+        # This isnt particularly efficient, but it allows the reader to remain agnostic of
+        # its content.  We just need to know if the vectorizer has more than 1 dim
         with codecs.open(filename, encoding='utf-8', mode='r') as f:
             for line in f:
-                sentence = line.split() + ['<EOS>']
-                num_words += len(sentence)
-                for w in sentence:
-                    x[i] = words_vocab.get(self.cleanup_fn(w), 0)
-                    nch = min(len(w), self.max_word_length)
-                    for k in range(nch):
-                        xch[i, k] = chars_vocab.get(w[k], 0)
-                    i += 1
+                sentence = line.split() # + ['<EOS>']
+                for k, vectorizer in self.vectorizers.items():
+                    vec, valid_lengths = vectorizer.run(sentence, vocabs[k])
+                    x[k] = np.concatenate([x[k], vec[:valid_lengths]])
 
-        return baseline.data.SeqWordCharDataFeed(x, xch, self.nbptt, batchsz, self.max_word_length)
+        for k, vectorizer in self.vectorizers.items():
+            x['{}_dims'.format(k)] = vectorizer.get_dims()
+        return baseline.data.SeqWordCharDataFeed(x, self.nbptt, batchsz)
 
 
 @exporter
 class LineSeqCharReader(object):
 
-    def __init__(self, nbptt, char_trans_fn):
+    def __init__(self, nbptt):
         self.nbptt = nbptt
-        self.cleanup_fn = identity_trans_fn if char_trans_fn is None else char_trans_fn
 
     def build_vocab(self, files):
         vocab_ch = Counter()

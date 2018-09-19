@@ -1,6 +1,5 @@
 import numpy as np
 from baseline.utils import export, create_user_vectorizer, listify
-from baseline.data import reverse_2nd
 import collections
 
 
@@ -13,16 +12,13 @@ class Vectorizer(object):
     def __init__(self):
         pass
 
-    def _iterable(self, tokens):
-        pass
-
-    def _next_element(self, tokens, vocab):
-        pass
-
     def run(self, tokens, vocab):
         pass
 
     def count(self, tokens):
+        pass
+
+    def get_dims(self):
         pass
 
 
@@ -79,12 +75,39 @@ class Token1DVectorizer(AbstractVectorizer):
                 i -= 1
                 break
             vec1d[i] = atom
-        valid_length = i
+        valid_length = i + 1
 
         if self.time_reverse:
             vec1d = vec1d[::-1]
             return vec1d, None
         return vec1d, valid_length
+
+    def get_dims(self):
+        return self.mxlen,
+
+
+class GOVectorizer(Vectorizer):
+
+    def __init__(self, vectorizer):
+        self.vectorizer = vectorizer
+        if self.vectorizer.mxlen != -1:
+            self.vectorizer.mxlen -= 1
+
+    def count(self, tokens):
+        counter = self.vectorizer.count(tokens)
+        counter['<GO>'] += 1
+        return counter
+
+    def run(self, tokens, vocab):
+        GO = vocab['<GO>']
+        EOS = vocab['<EOS>']
+        vec1d, valid_length = self.vectorizer.run(tokens, vocab)
+        vec1d = np.concatenate([[GO], vec1d])
+        vec1d[valid_length] = EOS
+        return vec1d, valid_length + 1
+
+    def get_dims(self):
+        return self.vectorizer.get_dims()[0] + 1,
 
 
 def _token_iterator(vectorizer, tokens):
@@ -163,8 +186,11 @@ class Char2DVectorizer(AbstractCharVectorizer):
             else:
                 vec2d[i, j] = atom
                 j += 1
-        valid_length = i
+        valid_length = i + 1
         return vec2d, valid_length
+
+    def get_dims(self):
+        return self.mxlen, self.mxwlen
 
 
 class Dict2DVectorizer(Char2DVectorizer):
@@ -214,7 +240,10 @@ class Char1DVectorizer(AbstractCharVectorizer):
         if self.time_reverse:
             vec1d = vec1d[::-1]
             return vec1d, None
-        return vec1d, i
+        return vec1d, i + 1
+
+    def get_dims(self):
+        return self.mxlen,
 
 
 BASELINE_KNOWN_VECTORIZERS = {

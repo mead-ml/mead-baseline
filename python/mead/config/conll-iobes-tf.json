@@ -13,7 +13,7 @@
 		"fields": "text",
 		"transform": "baseline.lowercase"
 	    },
-	    "embeddings": { "label": "w2v-gn" }
+	    "embeddings": { "label": "glove-6B-100" }
 	},
 	{
 	    "name": "char",
