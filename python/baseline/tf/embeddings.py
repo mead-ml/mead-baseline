@@ -19,6 +19,9 @@ class TensorFlowEmbeddings(object):
     def save_md(self):
         pass
 
+    def save(self):
+        pass
+
     @classmethod
     def create_placeholder(cls, name):
         pass
@@ -34,8 +37,8 @@ class TensorFlowTokenEmbeddings(TensorFlowEmbeddings):
         super(TensorFlowTokenEmbeddings, self).__init__()
         self.model = model
         self.finetune = kwargs.get('finetune', True)
-        self.scope = kwargs.get('scope', 'LUT')
         self.name = name
+        self.scope = kwargs.get('scope', '{}/LUT'.format(self.name))
         self.x = kwargs.get(self.name, self.create_placeholder(name))
 
     def get_vsz(self):
