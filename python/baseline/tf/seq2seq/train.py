@@ -123,6 +123,8 @@ def fit(model, ts, vs, es=None, **kwargs):
 
     for epoch in range(epochs):
 
+        #if after_train_fn is not None:
+        #    after_train_fn(model)
         trainer.train(ts, reporting_fns)
         if after_train_fn is not None:
             after_train_fn(model)
@@ -130,14 +132,14 @@ def fit(model, ts, vs, es=None, **kwargs):
 
         if do_early_stopping is False:
             trainer.checkpoint()
-            trainer.model.save(model_file)
+            ##trainer.model.save(model_file)
 
         elif test_metrics[early_stopping_metric] < min_metric:
             last_improved = epoch
             min_metric = test_metrics[early_stopping_metric]
             print('New min %.3f' % min_metric)
             trainer.checkpoint()
-            trainer.model.save(model_file)
+            ##trainer.model.save(model_file)
 
         elif (epoch - last_improved) > patience:
             print('Stopping due to persistent failures to improve')
@@ -149,5 +151,5 @@ def fit(model, ts, vs, es=None, **kwargs):
 
         trainer.recover_last_checkpoint()
         trainer.test(es, reporting_fns, phase='Test')
-    if kwargs.get("model_zip", False):
-        zip_model(model_file)
+    ##if kwargs.get("model_zip", False):
+    ##    zip_model(model_file)

@@ -366,7 +366,8 @@ class EncoderDecoderTask(Task):
                 self.config_params['preproc']['show_ex'] = baseline.dy.show_examples_dynet
             else:
                 import baseline.tf.seq2seq as seq2seq
-                self.config_params['preproc']['show_ex'] = baseline.tf.show_examples_tf
+                sort_key = self.config_params['loader'].get('src_sort_key', 'src')
+                self.config_params['preproc']['show_ex'] = baseline.tf.create_show_examples_tf(sort_key)
                 from mead.tf.exporters import Seq2SeqTensorFlowExporter
                 self.ExporterType = Seq2SeqTensorFlowExporter
 

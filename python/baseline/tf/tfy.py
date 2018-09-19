@@ -248,70 +248,62 @@ def multi_rnn_cell_w_dropout(hsz, pkeep, rnntype, num_layers):
     return tf.contrib.rnn.MultiRNNCell([rnn_cell_w_dropout(hsz, pkeep, rnntype) for _ in range(num_layers)], state_is_tuple=True)
 
 
-# This function should never be used for decoding.  It exists only so that the training model can greedily decode
-def show_examples_tf(model, es, rlut1, rlut2, embed2, mxlen, sample, prob_clip, max_examples, reverse):
-    si = np.random.randint(0, len(es))
+def create_show_examples_tf(src_key):
+    # This function should never be used for decoding.  It exists only so that the training model can greedily decode
+    def show_examples_tf(model, es, rlut1, rlut2, embed2, mxlen, sample, prob_clip, max_examples, reverse):
+        si = np.random.randint(0, len(es))
 
-    batch_dict = es[si]
-    src_array = batch_dict['src']
-    tgt_array = batch_dict['dst']
-    src_len = batch_dict['src_lengths']
+        batch_dict = es[si]
+        GO = embed2.vocab['<GO>']
+        EOS = embed2.vocab['<EOS>']
+        i = 0
+        src_lengths_key = '{}_lengths'.format(src_key)
 
-    if max_examples > 0:
-        max_examples = min(max_examples, src_array.shape[0])
-        src_array = src_array[0:max_examples]
-        tgt_array = tgt_array[0:max_examples]
-        src_len = src_len[0:max_examples]
+        while True:
 
-    GO = embed2.vocab['<GO>']
-    EOS = embed2.vocab['<EOS>']
-    i = 0
+            example = {}
+            for k in batch_dict.keys():
+                if i >= len(batch_dict[k]):
+                    return
+                example[k] = batch_dict[k][i]
+            print('========================================================================')
 
-    while True:
+            src_i = example[src_key]
+            src_len_i = example[src_lengths_key]
+            dst_i = example['dst']
 
-        example = {}
-        for k in batch_dict.keys():
-            if i >= len(batch_dict[k]):
+            sent = lookup_sentence(rlut1, src_i, reverse=reverse)
+            print('[OP] %s' % sent)
+            sent = lookup_sentence(rlut2, dst_i)
+            print('[Actual] %s' % sent)
+            dst_i = np.zeros((1, mxlen))
+            example['dst'] = dst_i
+            src_i = src_i[np.newaxis, :]
+            example[src_key] = src_i
+            example[src_lengths_key] = np.array([src_len_i])
+            next_value = GO
+            for j in range(mxlen):
+                dst_i[0, j] = next_value
+                tgt_len_i = np.array([j+1])
+                example['dst_lengths'] = tgt_len_i
+                output = model.step(example)[j]
+                if sample is False:
+                    next_value = np.argmax(output)
+                else:
+                    # This is going to zero out low prob. events so they are not
+                    # sampled from
+                    next_value = beam_multinomial(prob_clip, output)
+
+                if next_value == EOS:
+                    break
+
+            sent = lookup_sentence(rlut2, dst_i.squeeze())
+            print('Guess: %s' % sent)
+            print('------------------------------------------------------------------------')
+            i += 1
+            if i == max_examples:
                 return
-            example[k] = batch_dict[k][i]
-        print('========================================================================')
-
-        src_i = example['src']
-        src_len_i = example['src_lengths']
-        dst_i = example['dst']
-
-        sent = lookup_sentence(rlut1, src_i, reverse=reverse)
-        print('[OP] %s' % sent)
-        sent = lookup_sentence(rlut2, dst_i)
-        print('[Actual] %s' % sent)
-        dst_i = np.zeros((1, mxlen))
-        example['dst'] = dst_i
-        src_i = src_i[np.newaxis, :]
-        example['src'] = src_i
-        example['src_lengths'] = np.array([src_len_i])
-        next_value = GO
-        for j in range(mxlen):
-            dst_i[0, j] = next_value
-            tgt_len_i = np.array([j+1])
-            example['dst_lengths'] = tgt_len_i
-            output = model.step(example)[j]
-            if sample is False:
-                next_value = np.argmax(output)
-            else:
-                # This is going to zero out low prob. events so they are not
-                # sampled from
-                next_value = beam_multinomial(prob_clip, output)
-
-            if next_value == EOS:
-                break
-
-        sent = lookup_sentence(rlut2, dst_i.squeeze())
-        print('Guess: %s' % sent)
-        print('------------------------------------------------------------------------')
-        i += 1
-        if i == max_examples:
-            return
-
+    return show_examples_tf
 
 def skip_conns(inputs, wsz_all, n, activation_fn=tf.nn.relu):
     for i in range(n):
