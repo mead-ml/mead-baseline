@@ -159,18 +159,22 @@ class SQLRepo(ExperimentRepo):
         return set([t[0] for t in session.query(Experiment.task).distinct()])
 
     def put_model(self, id, task, checkpoint_base, checkpoint_store, print_fn=print):
-        coll = self.db[task]
-        query = {'_id': ObjectId(id)}
-        projection = {'sha1': 1}
-        results = list(coll.find(query, projection))
-        if not results:
+        session = self.Session()
+        exp = session.query(Experiment).get(id)
+        if exp is None:
             print_fn("no sha1 for the given id found, returning.")
-            return False
-        sha1 = results[0]['sha1']
+            return None
+        sha1 = exp.sha1
         model_loc = store_model(checkpoint_base, sha1, checkpoint_store, print_fn)
         if model_loc is not None:
-            coll.update_one({'_id': ObjectId(id)}, {'$set': {'checkpoint': model_loc}}, upsert=False)
+            exp.checkpoint = model_loc
+            session.commit()
         return model_loc
+
+    def get_model_location(self, id, task):
+        session = self.Session()
+        exp = session.query(Experiment).get(id)
+        return exp.checkpoint
 
     def get_label(self, id, task):
         session = self.Session()
