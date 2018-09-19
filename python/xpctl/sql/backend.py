@@ -174,11 +174,15 @@ class SQLRepo(ExperimentRepo):
     def get_model_location(self, id, task):
         session = self.Session()
         exp = session.query(Experiment).get(id)
+        if exp is None:
+            return None
         return exp.checkpoint
 
     def get_label(self, id, task):
         session = self.Session()
         exp = session.query(Experiment).get(id)
+        if exp is None:
+            return None
         return exp.label
 
     def rename_label(self, id, task, new_label):
