@@ -4,7 +4,7 @@ import os
 import platform
 from baseline.utils import read_config_file
 from baseline.utils import export as exporter
-from mead.utils import get_mead_settings
+from mead.utils import get_mead_settings, modify_reporting_hook_settings
 from hpctl.utils import hash_config
 
 
@@ -61,5 +61,17 @@ class Experiment(object):
             except:
                 pass
             print("Running experiment under name [{}]".format(self.experiment_name))
-        self.frontend_config = self.hpctl_config.get('frontend', self.hpctl_settings.get('frontend', {'type': 'console'}))
-        self.backend_config = self.hpctl_config.get('backend', self.hpctl_settings.get('backend', {'type': 'mp'}))
+        ends = {}
+        if kwargs.get('frontend') is None:
+            ends['frontend'] = self.hpctl_config.get('frontend', self.hpctl_settings.get('frontend', {'type': 'console'}))
+        else:
+            ends['frontend'] = {'type': kwargs['frontend']}
+        if kwargs.get('backend') is None:
+            ends['backend'] = self.hpctl_config.get('backend', self.hpctl_settings.get('backend', {'type': 'mp'}))
+        else:
+            ends['backend'] = {'type': kwargs['backend']}
+        modify_reporting_hook_settings(ends, kwargs['unknown'], {'backend', 'frontend'})
+        self.frontend_config = ends['frontend']
+        self.backend_config = ends['backend']
+        if isinstance(self.backend_config.get('real_gpus'), str):
+            self.backend_config['real_gpus'] = list(map(int, self.backend_config['real_gpus'].split(",")))

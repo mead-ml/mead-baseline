@@ -45,6 +45,12 @@ def add_common_args(p):
         choices=['classify', 'tagger', 'seq2seq', 'lm'],
         help="Task to run."
     )
+    p.add_argument(
+        '--frontend', help="The frontend to use."
+    )
+    p.add_argument(
+        '--backend', help="The backend to use."
+    )
 
 
 def print_help(p):
@@ -82,8 +88,10 @@ def main():
     add_common_args(serve_parser)
     serve_parser.add_argument("--debug", action="store_true")
 
-    args = parser.parse_args()
-    args.func(**vars(args))
+    args, extra = parser.parse_known_args()
+    args = vars(args)
+    args['unknown'] = extra
+    args['func'](**args)
 
 
 if __name__ == "__main__":
