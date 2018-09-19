@@ -3,4 +3,4 @@ try:
 except ImportError:
     pass
 
-from baseline.version import __version__
+from xpctl.version import __version__
