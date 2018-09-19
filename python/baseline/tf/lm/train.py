@@ -54,7 +54,8 @@ class LanguageModelTrainerTf(Trainer):
                 state = vals["final_state"]
             global_step = vals["global_step"]
             total_loss += loss
-            iters += self.model.mxlen
+            # NBPTT
+            iters += ts.nbptt
             step += 1
             if step % 500 == 0:
                 print(total_loss, iters)
@@ -105,7 +106,8 @@ class LanguageModelTrainerTf(Trainer):
             if xfer_state:
                 state = vals["final_state"]
             total_loss += loss
-            iters += self.model.mxlen
+            # NBPTT
+            iters += ts.nbptt
             step += 1
 
         metrics['avg_loss'] = total_loss / iters

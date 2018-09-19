@@ -446,9 +446,9 @@ class LanguageModelingTask(Task):
         self.task = None
 
     def _create_task_specific_reader(self):
-        mxwlen = self.config_params['preproc'].get('mxwlen', -1)
+        vectorizers = self._create_vectorizers()
         nbptt = self.config_params['nbptt']
-        reader = baseline.create_lm_reader(mxwlen,
+        reader = baseline.create_lm_reader(vectorizers,
                                            nbptt,
                                            reader_type=self.config_params['loader']['reader_type'])
         return reader
@@ -481,25 +481,22 @@ class LanguageModelingTask(Task):
         embeddings_set = mead.utils.index_by_label(embeddings)
         self.dataset = DataDownloader(self.dataset, self.data_download_cache).download()
         print("[train file]: {}\n[valid file]: {}\n[test file]: {}".format(self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']))
-        vocab, self.num_elems = self.reader.build_vocab([self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']])
-        self.embeddings, self.feat2index = self._create_embeddings(embeddings_set, vocab)
+        vocabs = self.reader.build_vocab([self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']])
+        self.embeddings, self.feat2index = self._create_embeddings(embeddings_set, vocabs, self.config_params['features'])
 
     def _load_dataset(self):
-        mxwlen = self.config_params['preproc'].get('mxwlen', -1)
-        if mxwlen > 0:
-            self.reader.max_word_length = max(mxwlen, self.reader.max_word_length)
-        self.train_data = self.reader.load(self.dataset['train_file'], self.feat2index, self.num_elems[0], self.config_params['batchsz'])
-        self.valid_data = self.reader.load(self.dataset['valid_file'], self.feat2index, self.num_elems[1], self.config_params['batchsz'])
-        self.test_data = self.reader.load(self.dataset['test_file'], self.feat2index, self.num_elems[2], self.config_params['batchsz'])
+        tgt_key = self.config_params['loader'].get('tgt_key', 'x')
+
+        self.train_data = self.reader.load(self.dataset['train_file'], self.feat2index, self.config_params['batchsz'], tgt_key=tgt_key)
+        self.valid_data = self.reader.load(self.dataset['valid_file'], self.feat2index, self.config_params['batchsz'], tgt_key=tgt_key)
+        self.test_data = self.reader.load(self.dataset['test_file'], self.feat2index, self.config_params['batchsz'], tgt_key=tgt_key)
 
     def _create_model(self):
 
         model = self.config_params['model']
         model['unif'] = self.config_params['unif']
         model['batchsz'] = self.config_params['batchsz']
-        model['nbptt'] = self.config_params['nbptt']
-        if hasattr(self.reader, 'max_word_length'):
-            model['maxw'] = self.reader.max_word_length
+        model['tgt_key'] = self.config_params['loader'].get('tgt_key', 'x')
         return self.task.create_model(self.embeddings, **model)
 
     @staticmethod
@@ -509,15 +506,15 @@ class LanguageModelingTask(Task):
 
     def train(self):
         # TODO: This should probably get generalized and pulled up
-        if self.config_params['train'].get('decay_type', None) == 'zaremba':
-            batchsz = self.config_params['batchsz']
-            nbptt = self.config_params['nbptt']
-            steps_per_epoch = LanguageModelingTask._num_steps_per_epoch(self.num_elems[0], nbptt, batchsz)
-            first_range = int(self.config_params['train']['start_decay_epoch'] * steps_per_epoch)
+        #if self.config_params['train'].get('decay_type', None) == 'zaremba':
+        #    batchsz = self.config_params['batchsz']
+        #    nbptt = self.config_params['nbptt']
+        #    steps_per_epoch = LanguageModelingTask._num_steps_per_epoch(self.num_elems[0], nbptt, batchsz)
+        #    first_range = int(self.config_params['train']['start_decay_epoch'] * steps_per_epoch)
 
-            self.config_params['train']['bounds'] = [first_range] + list(np.arange(self.config_params['train']['start_decay_epoch'] + 1,
-                                                                                   self.config_params['train']['epochs'] + 1,
-                                                                                   dtype=np.int32) * steps_per_epoch)
+        #    self.config_params['train']['bounds'] = [first_range] + list(np.arange(self.config_params['train']['start_decay_epoch'] + 1,
+        #                                                                           self.config_params['train']['epochs'] + 1,
+        #                                                                           dtype=np.int32) * steps_per_epoch)
 
         super(LanguageModelingTask, self).train()
 

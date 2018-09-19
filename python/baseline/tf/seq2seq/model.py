@@ -427,8 +427,6 @@ class Seq2SeqModel(EncoderDecoder):
             feed_dict[self.tgt_len] = batch_dict['dst_lengths']
             feed_dict[self.mx_tgt_len] = np.max(batch_dict['dst_lengths'])
 
-        if do_dropout:
-            feed_dict[self.pkeep] = 1.0 - self.pdrop_value
         return feed_dict
 
 
