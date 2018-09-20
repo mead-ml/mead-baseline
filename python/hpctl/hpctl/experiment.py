@@ -2,10 +2,9 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 
 import os
 import platform
-from baseline.utils import read_config_file
 from baseline.utils import export as exporter
+from baseline.utils import read_config_file, hash_config
 from mead.utils import get_mead_settings, parse_extra_args
-from hpctl.utils import hash_config
 
 
 __all__ = []

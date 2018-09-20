@@ -2,14 +2,14 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 
 import os
 from baseline.utils import export as exporter
-from baseline.utils import read_config_file, write_json
+from baseline.utils import read_config_file, write_json, hash_config
 from hpctl.results import Results
 from hpctl.backend import get_backend
 from hpctl.logging_server import Logs
 from hpctl.experiment import Experiment
 from hpctl.sample import get_config_sampler
 from hpctl.frontend import get_frontend, color
-from hpctl.utils import create_logs, hash_config
+from hpctl.utils import create_logs
 
 
 __all__ = []

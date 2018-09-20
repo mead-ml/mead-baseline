@@ -61,9 +61,10 @@ def test_grid_sampler_all_keys_in_sample():
 def test_log_sample_range():
     min_ = random.randint(1, 5)
     max_ = random.randint(5, 10)
+    buf = 0.2
 
     def real_test(min_, max_):
-        assert min_ <= log_sample(min_, max_).item() <= max_
+        assert min_ - buf <= log_sample(min_, max_).item() <= max_ + buf
 
     for _ in range(100):
         real_test(min_, max_)

@@ -1,6 +1,7 @@
 from copy import deepcopy
 import pytest
-from hpctl.utils import remove_monitoring, Label
+from baseline.utils import remove_extra_keys
+from hpctl.utils import Label
 
 
 @pytest.fixture
@@ -20,14 +21,14 @@ def test_remove_first_layer(data):
     del gold['a']
 
     keys = {('a',)}
-    res = remove_monitoring(data, keys)
+    res = remove_extra_keys(data, keys)
     assert res == gold
 
 def test_remove_multiple_first(data):
     gold = {'a': 1}
 
     keys = {('b',), ('e',)}
-    res = remove_monitoring(data, keys)
+    res = remove_extra_keys(data, keys)
     assert res == gold
 
 def test_remove_nested_key(data):
@@ -35,7 +36,7 @@ def test_remove_nested_key(data):
     del gold['b']['c']
 
     keys = {('b', 'c')}
-    res = remove_monitoring(data, keys)
+    res = remove_extra_keys(data, keys)
     assert res == gold
 
 def test_remove_multiple_nested(data):
@@ -43,7 +44,7 @@ def test_remove_multiple_nested(data):
     gold['b'] = {}
 
     keys = {('b', 'c'), ('b', 'd')}
-    res = remove_monitoring(data, keys)
+    res = remove_extra_keys(data, keys)
     assert res == gold
 
 def test_remove_mixed_keys(data):
@@ -52,21 +53,21 @@ def test_remove_mixed_keys(data):
     del gold['a']
 
     keys = {('b', 'c'), ('a',)}
-    res = remove_monitoring(data, keys)
+    res = remove_extra_keys(data, keys)
     assert res == gold
 
 def test_remove_single_missing(data):
     gold = deepcopy(data)
 
     keys = {('x',)}
-    res = remove_monitoring(data, keys)
+    res = remove_extra_keys(data, keys)
     assert res == gold
 
 def test_remove_nested_missing_first(data):
     gold = deepcopy(data)
 
     keys = {('x', 'c')}
-    res = remove_monitoring(data, keys)
+    res = remove_extra_keys(data, keys)
     assert res == gold
 
 
@@ -74,7 +75,7 @@ def test_remove_nested_missing_last(data):
     gold = deepcopy(data)
 
     keys = {('b', 'x')}
-    res = remove_monitoring(data, keys)
+    res = remove_extra_keys(data, keys)
     assert res == gold
 
 
@@ -82,7 +83,7 @@ def test_remove_nested_missing_both(data):
     gold = deepcopy(data)
 
     keys = {('y', 'x')}
-    res = remove_monitoring(data, keys)
+    res = remove_extra_keys(data, keys)
     assert res == gold
 
 
@@ -91,7 +92,7 @@ def test_remove_one_missing_one_good(data):
     del gold['a']
 
     keys = {('x', 'y'), ('a',)}
-    res = remove_monitoring(data, keys)
+    res = remove_extra_keys(data, keys)
     assert res == gold
 
 

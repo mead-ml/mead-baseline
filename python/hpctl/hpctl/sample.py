@@ -11,8 +11,8 @@ from random import choice
 from itertools import cycle, product
 import numpy as np
 from baseline.utils import export as exporter
-from baseline.utils import import_user_module
-from hpctl.utils import hash_config, Label
+from baseline.utils import import_user_module, hash_config
+from hpctl.utils import Label
 
 
 __all__ = []
