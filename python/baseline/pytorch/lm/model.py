@@ -67,7 +67,7 @@ class BasicLanguageModel(AbstractLanguageModel):
         unif = float(kwargs.get('unif', 0.0))
         model.nlayers = int(kwargs.get('layers', 1))
         pdrop = float(kwargs.get('dropout', 0.5))
-        model.vocab_sz = vectors.vsz + 1
+        model.vocab_sz = vectors.vsz
 
         model.vocab = vectors.vocab
         model.embed = pytorch_embedding(vectors)
@@ -166,7 +166,7 @@ class CharCompLanguageModel(AbstractLanguageModel):
         unif = float(kwargs.get('unif', 0.0))
         model.nlayers = int(kwargs.get('layers', 1))
         pdrop = float(kwargs.get('dropout', 0.5))
-        model.vocab_sz = word_vec.vsz + 1
+        model.vocab_sz = word_vec.vsz
 
         #if word_vec is not None:
         #    model.word_vocab = word_vec.vocab

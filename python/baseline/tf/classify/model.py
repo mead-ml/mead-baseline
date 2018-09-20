@@ -4,7 +4,7 @@ from google.protobuf import text_format
 from tensorflow.python.platform import gfile
 import json
 from tensorflow.contrib.layers import fully_connected, xavier_initializer
-from baseline.utils import fill_y, listify
+from baseline.utils import fill_y, listify, write_json, ls_props, read_json
 from baseline.model import Classifier, load_classifier_model, create_classifier_model
 from baseline.tf.tfy import (stacked_lstm,
                              parallel_conv,
@@ -127,9 +127,9 @@ class ClassifyParallelModel(Classifier):
 
 
 class ClassifierBase(Classifier):
-    """Base for all baseline implementations of word-based classifiers
+    """Base for all baseline implementations of token-based classifiers
     
-    This class provides a loose skeleton around which the baseline models (currently all word-based)
+    This class provides a loose skeleton around which the baseline models
     are built.  This essentially consists of dividing up the network into a logical separation between "pooling",
     or the conversion of temporal data to a fixed representation, and "stacking" layers, which are (optional)
     fully-connected layers below, finally followed with a penultimate layer that is projected to the output space.
@@ -156,23 +156,26 @@ class ClassifierBase(Classifier):
         base = path[-1]
         outdir = '/'.join(path[:-1])
 
-        state = {"version": __version__, "embeddings": list(self.embeddings.keys())}
-        with open(basename + '.state', 'w') as f:
-            json.dump(state, f)
+        # For each embedding, save a record of the keys
 
+        embeddings_info = {}
+        for k, v in self.embeddings.items():
+            embeddings_info[k] = v.__class__.__name__
+        state = {
+            "version": __version__,
+            "embeddings": embeddings_info,
+            "lengths_key": self.lengths_key
+        }
+        for prop in ls_props(self):
+            state[prop] = getattr(self, prop)
+
+        write_json(state, basename + '.state')
+        write_json(self.labels, basename + ".labels")
+        for key, embedding in self.embeddings.items():
+            embedding.save_md(basename + '-{}-md.json'.format(key))
         tf.train.write_graph(self.sess.graph_def, outdir, base + '.graph', as_text=False)
         with open(basename + '.saver', 'w') as f:
             f.write(str(self.saver.as_saver_def()))
-
-        with open(basename + '.labels', 'w') as f:
-            json.dump(self.labels, f)
-
-        for key, embedding in self.embeddings.items():
-            embedding.save_md(basename + '-{}.vocab'.format(key))
-        state_file = basename + '.state'
-        # Backwards compat for now
-        if not os.path.exists(state_file):
-            return
 
     def save(self, basename, **kwargs):
         self.save_md(basename)
@@ -236,13 +239,6 @@ class ClassifierBase(Classifier):
         """
         return self.labels
 
-    def get_vocab(self, name='word'):
-        """Get the vocab back, as a ``dict`` of ``str`` keys mapped to ``int`` values
-        
-        :return: A ``dict`` of words mapped to indices
-        """
-        return self.vocab.get(name)
-
     @classmethod
     def load(cls, basename, **kwargs):
         """Reload the model from a graph file and a checkpoint
@@ -269,11 +265,7 @@ class ClassifierBase(Classifier):
         checkpoint_name = kwargs.get('checkpoint_name', basename)
         checkpoint_name = checkpoint_name or basename
 
-        vocab_suffixes = get_vocab_file_suffixes(basename)
-        for ty in vocab_suffixes:
-            vocab_file = '{}-{}.vocab'.format(basename, ty)
-            print('Reading {}'.format(vocab_file))
-            model.embeddings[ty] = TensorFlowTokenEmbeddings.load(vocab_file)
+        state = read_json(basename + '.state')
 
         with gfile.FastGFile(basename + '.graph', 'rb') as f:
             gd = tf.GraphDef()
@@ -286,24 +278,25 @@ class ClassifierBase(Classifier):
                 # Backwards compat
                 sess.run(saver_def.restore_op_name, {saver_def.filename_tensor_name: checkpoint_name + ".model"})
 
-            model.x = tf.get_default_graph().get_tensor_by_name('x:0')
-            model.y = tf.get_default_graph().get_tensor_by_name('y:0')
-            try:
-                model.xch = tf.get_default_graph().get_tensor_by_name('xch:0')
-            except:
-                model.xch = None
-            try:
-                model.lengths = tf.get_default_graph().get_tensor_by_name('lengths:0')
-            except:
-                model.lengths = None
-            model.pkeep = tf.get_default_graph().get_tensor_by_name('pkeep:0')
-            model.best = tf.get_default_graph().get_tensor_by_name('output/best:0')
-            model.logits = tf.get_default_graph().get_tensor_by_name('output/logits:0')
-        with open(basename + '.labels', 'r') as f:
-            model.labels = json.load(f)
+        model.embeddings = dict()
+        for key, class_name in state['embeddings'].items():
+            md = read_json('{}-{}-md.json'.format(basename, key))
+            embed_args = dict({'vocab': md['vocab'], 'vsz': md['vsz'], 'dsz': md['dsz']})
+            embed_args[key] = tf.get_default_graph().get_tensor_by_name('{}:0'.format(key))
+            Constructor = eval(class_name)
+            model.embeddings[key] = Constructor(key, **embed_args)
 
+        model.lengths_key = state.get('lengths_key')
+        if model.lengths_key is not None:
+            model.lengths = tf.get_default_graph().get_tensor_by_name('lengths:0')
+        else:
+            model.lengths = None
+        model.pkeep = tf.get_default_graph().get_tensor_by_name('pkeep:0')
+        model.best = tf.get_default_graph().get_tensor_by_name('output/best:0')
+        model.logits = tf.get_default_graph().get_tensor_by_name('output/logits:0')
+
+        model.labels = read_json(basename + '.labels')
         model.sess = sess
-        model.load_md(basename)
         return model
 
     @classmethod

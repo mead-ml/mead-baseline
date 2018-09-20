@@ -52,7 +52,7 @@ def test_rand_vsz():
     vocab = ref_wv.vocab
     gold_dsz = ref_wv.get_dsz()
     wv = RandomInitVecModel(gold_dsz, vocab)
-    assert wv.get_vsz() == len(vocab) - 1
+    assert wv.get_vsz() == len(vocab)
 
 
 def test_rand_dsz():
@@ -198,7 +198,7 @@ def test_rand_no_counts():
         "D": 55
     }
     wv = RandomInitVecModel(random.randint(1, 301), vocab, counts=False)
-    assert wv.get_vsz() == len(vocab) - 1
+    assert wv.get_vsz() == len(vocab)
 
 
 def test_rand_counts():

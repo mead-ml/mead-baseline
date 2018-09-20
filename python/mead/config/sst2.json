@@ -9,8 +9,7 @@
         "type": "token1d"
       },
       "embeddings": {
-        "label": "w2v-gn",
-        "type": "charlm"
+        "label": "w2v-gn"
       }
     }
   ],

@@ -14,8 +14,8 @@ class Seq2SeqModel(DynetModel, EncoderDecoder):
         self.rnntype = kwargs['rnntype']
         print(self.rnntype)
         self.pdrop = kwargs.get('dropout', 0.5)
-        self.nc = embeddings_out.vsz + 1
-        self.embed_in = Embedding(embeddings_in.vsz + 1, embeddings_in.dsz, self.pc, embedding_weight=embeddings_in.weights, finetune=True, batched=True, name="source-embedding")
+        self.nc = embeddings_out.vsz
+        self.embed_in = Embedding(embeddings_in.vsz, embeddings_in.dsz, self.pc, embedding_weight=embeddings_in.weights, finetune=True, batched=True, name="source-embedding")
         self.embed_out = Embedding(self.nc, embeddings_out.dsz, self.pc, embedding_weight=embeddings_out.weights, finetune=True, batched=True, name="target-embedding")
 
         if self.rnntype == 'blstm':

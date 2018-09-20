@@ -11,7 +11,7 @@ class Seq2SeqBase(nn.Module, EncoderDecoder):
         super(Seq2SeqBase, self).__init__()
         self.embed_in = pytorch_embedding(embeddings_in)
         self.embed_out = pytorch_embedding(embeddings_out)
-        self.nc = embeddings_out.vsz + 1
+        self.nc = embeddings_out.vsz
         self.vocab1 = embeddings_in.vocab
         self.vocab2 = embeddings_out.vocab
         self.beam_sz = 1

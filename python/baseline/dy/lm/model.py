@@ -41,7 +41,7 @@ class WordLanguageModel(BaseLanguageModel):
     ):
         super(WordLanguageModel, self).__init__()
         embedding = embeddings['word']
-        vsz = embedding.vsz + 1
+        vsz = embedding.vsz
         dsz = embedding.dsz
         self._embed = Embedding(vsz, dsz, self.pc, embedding_weight=embedding.weights, finetune=finetune, batched=True)
         self._rnn = dy.VanillaLSTMBuilder(layers, dsz, hsz, self.pc)
@@ -77,9 +77,9 @@ class CharCompLanguageModel(BaseLanguageModel):
     ):
         super(CharCompLanguageModel, self).__init__()
         self.use_words = use_words
-        vsz = embedding['word'].vsz + 1
+        vsz = embedding['word'].vsz
         dsz = embedding['word'].dsz
-        cvsz = embedding['char'].vsz + 1
+        cvsz = embedding['char'].vsz
         cdsz = embedding['char'].dsz
         self.c_embed = Embedding(
             cvsz, cdsz,

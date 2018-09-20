@@ -283,7 +283,7 @@ class Transformer(nn.Module, EncoderDecoder):
     def __init__(self, embeddings_in, embeddings_out, **kwargs):
         super(Transformer, self).__init__()
         self.gpu = kwargs.get('gpu', True)
-        self.nc = embeddings_out.vsz + 1
+        self.nc = embeddings_out.vsz
         self.vocab1 = embeddings_in.vocab
         self.vocab2 = embeddings_out.vocab
         self.beam_sz = 1

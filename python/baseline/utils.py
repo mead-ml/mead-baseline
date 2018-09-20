@@ -298,6 +298,14 @@ def write_json(content, filepath):
     with open(filepath, "w") as f:
         json.dump(content, f, indent=True)
 
+
+@exporter
+def ls_props(thing):
+    #isinstance(getattr(type(thing), property):
+    return [x for x in dir(thing) if isinstance(getattr(type(thing), x, None), property)]
+    #return [k for k, v in dir(thing.__class__.__dict__.items() if type(v) is property]
+
+
 @exporter
 def import_user_module(module_type, model_type):
     """Load a module that is in the python path with a canonical name

@@ -79,17 +79,40 @@ class Classifier(object):
         :param word_trans_fn: A transform on the input word
         :return: A sorted list of outcomes for a single element batch
         """
+        if type(tokens[0]) == str:
+            tokens_seq = (tokens,)
+            max_length = len(tokens)
+        else:
+            tokens_seq = tokens
+            max_length = 0
+            for t in tokens_seq:
+                max_length = max(max_length, len(t))
+
         vectorizers = kwargs.get('vectorizers')
         if vectorizers is None:
-            vectorizers = {'word': Token1DVectorizer()}
+            vectorizers = {'word': Token1DVectorizer(mxlen=kwargs.get('mxlen', max_length))}
 
-        batch_dict = dict()
-        for k, vectorizer in vectorizers.items():
-            batch_dict[k], length = vectorizer.run(tokens, self.embeddings[k].vocab)
+        examples = dict()
+        for k in vectorizers.keys():
+            examples[k] = []
 
-        outcomes = self.classify(batch_dict)[0]
-        return sorted(outcomes, key=lambda tup: tup[1], reverse=True)
-        return None
+        for i, tokens in enumerate(tokens_seq):
+            for k, vectorizer in vectorizers.items():
+                vec, length = vectorizer.run(tokens, self.embeddings[k].vocab)
+                examples[k] += [vec]
+                if length is not None:
+                    lengths_key = '{}_lengths'.format(k)
+                    if lengths_key not in examples:
+                        examples[lengths_key] = []
+                    examples[lengths_key] += [length]
+
+        for k in vectorizers.keys():
+            examples[k] = np.stack(examples[k])
+        outcomes_list = self.classify(examples)
+        results = []
+        for outcomes in outcomes_list:
+            results += [sorted(outcomes, key=lambda tup: tup[1], reverse=True)]
+        return results
 
 @exporter
 def create_model(known_creators, input_, output_, **kwargs):
