@@ -1,6 +1,5 @@
 {
     "datacache": "/home/blester/.bl-data",
-    "reporting_hooks": [],
     "hpctl": {
         "backend": {
             "type": "mp",

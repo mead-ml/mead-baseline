@@ -39,6 +39,8 @@ class Experiment(object):
         self.mead_config = self.hpctl_config['mead']
         if isinstance(self.mead_config, str):
             self.mead_config = read_config_file(self.mead_config)
+        if kwargs.get('reporting') is not None:
+            self.mead_config['reporting'] = kwargs.get('reporting')
         self.mead_logs = read_config_file(logging)
         self.hpctl_logs = read_config_file(hpctl_logging)
         self.mead_settings = get_mead_settings(settings)

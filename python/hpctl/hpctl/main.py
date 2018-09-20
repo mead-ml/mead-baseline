@@ -45,6 +45,7 @@ def add_common_args(p):
         choices=['classify', 'tagger', 'seq2seq', 'lm'],
         help="Task to run."
     )
+    p.add_argument('--reporting', help='reporting hooks', nargs='+')
     p.add_argument(
         '--frontend', help="The frontend to use."
     )
