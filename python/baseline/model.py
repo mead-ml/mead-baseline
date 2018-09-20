@@ -91,7 +91,6 @@ class Classifier(object):
             for token in tokens:
                 mxwlen = max(mxwlen, len(token))
 
-
         vectorizers = kwargs.get('vectorizers')
         if vectorizers is None:
             vectorizers = {'word': Token1DVectorizer(mxlen=kwargs.get('mxlen', mxlen))}

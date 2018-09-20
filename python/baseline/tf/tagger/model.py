@@ -273,6 +273,7 @@ class RNNTaggerModel(Tagger):
         model.feed_input = bool(kwargs.get('feed_input', False))
         model.activation_type = kwargs.get('activation', 'tanh')
 
+        # Move compositional sections into class methods
         all_embeddings_out = []
         for embedding in model.embeddings.values():
             embeddings_out = embedding.encode()

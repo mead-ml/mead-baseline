@@ -2,7 +2,6 @@ import tensorflow as tf
 import numpy as np
 from google.protobuf import text_format
 from tensorflow.python.platform import gfile
-import json
 from tensorflow.contrib.layers import fully_connected, xavier_initializer
 from baseline.utils import fill_y, listify, write_json, ls_props, read_json
 from baseline.model import Classifier, load_classifier_model, create_classifier_model
@@ -62,7 +61,6 @@ class ClassifyParallelModel(Classifier):
 
         # This only exists to make exporting easier
         self.y = kwargs.get('y', tf.placeholder(tf.int32, [None, nc], name="y_parallel"))
-        self.lengths = kwargs.get('lengths', tf.placeholder(tf.int32, [None], name="lengths_parallel"))
         self.pkeep = kwargs.get('pkeep', tf.placeholder_with_default(1.0, shape=(), name="pkeep"))
         self.pdrop_value = kwargs.get('dropout', 0.5)
 

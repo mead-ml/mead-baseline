@@ -296,7 +296,6 @@ class TSVSeqLabelReader(SeqLabelReader):
     ):
         super(TSVSeqLabelReader, self).__init__()
 
-        self.vocab = None
         self.label2index = {}
         self.vectorizers = vectorizers
         self.clean_fn = clean_fn
