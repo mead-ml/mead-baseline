@@ -200,7 +200,7 @@ class WordClassifierBase(Classifier):
         :return: Each outcome as a ``list`` of tuples `(label, probability)`
         """
         feed_dict = self.make_input(batch_dict)
-        probs = self.sess.run(tf.nn.softmax(self.logits), feed_dict=feed_dict)
+        probs = self.sess.run(self.probs, feed_dict=feed_dict)
         results = []
         batchsz = probs.shape[0]
         for b in range(batchsz):
@@ -289,6 +289,7 @@ class WordClassifierBase(Classifier):
             model.pkeep = tf.get_default_graph().get_tensor_by_name('pkeep:0')
             model.best = tf.get_default_graph().get_tensor_by_name('output/best:0')
             model.logits = tf.get_default_graph().get_tensor_by_name('output/logits:0')
+            model.probs = tf.get_default_graph().get_tensor_by_name('output/probs:0')
         with open(basename + '.labels', 'r') as f:
             model.labels = json.load(f)
 
@@ -403,6 +404,7 @@ class WordClassifierBase(Classifier):
                 with tf.variable_scope("output"):
                     model.logits = tf.identity(fully_connected(stacked, nc, activation_fn=None), name="logits")
                     model.best = tf.argmax(model.logits, 1, name="best")
+                    model.probs = tf.nn.softmax(model.logits, name="probs")
         model.sess = sess
         # writer = tf.summary.FileWriter('blah', sess.graph)
         return model
