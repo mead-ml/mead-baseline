@@ -318,8 +318,6 @@ class Tagger(object):
         for k in vectorizers.keys():
             examples[k] = np.stack(examples[k])
 
-        print(examples)
-
         outcomes = self.predict(examples)
         outputs = []
         for i, outcome in enumerate(outcomes):
