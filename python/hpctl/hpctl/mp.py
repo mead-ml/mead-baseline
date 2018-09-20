@@ -48,13 +48,14 @@ def run_job(
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
     if gpus is not None:
         os.environ['CUDA_VISIBLE_DEVICES'] = ','.join(gpus)
-    reporting = ['--visdom:name', label.human]
+    if 'visdom' in config_params.get('reporting', {}):
+        config_params.get('reporting', {})['visdom']['name'] = label.human
     config_params['model']['gpus'] = len(gpus)
 
     write_json(config_params, 'config.json')
     logs = create_logs(label, mead_logs, hpctl_logs)
     task = mead.Task.get_task_specific(task_name, logs, settings)
-    task.read_config(config_params, datasets, reporting_args=reporting)
+    task.read_config(config_params, datasets)
     task.initialize(embeddings)
     task.train()
 

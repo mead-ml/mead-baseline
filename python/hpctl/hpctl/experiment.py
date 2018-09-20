@@ -4,7 +4,7 @@ import os
 import platform
 from baseline.utils import read_config_file
 from baseline.utils import export as exporter
-from mead.utils import get_mead_settings, modify_reporting_hook_settings
+from mead.utils import get_mead_settings, parse_extra_args
 from hpctl.utils import hash_config
 
 
@@ -40,7 +40,7 @@ class Experiment(object):
         if isinstance(self.mead_config, str):
             self.mead_config = read_config_file(self.mead_config)
         if kwargs.get('reporting') is not None:
-            self.mead_config['reporting'] = kwargs.get('reporting')
+            self.mead_config['reporting'] = parse_extra_args(kwargs.get('reporting'), kwargs['unknown'])
         self.mead_logs = read_config_file(logging)
         self.hpctl_logs = read_config_file(hpctl_logging)
         self.mead_settings = get_mead_settings(settings)
@@ -63,16 +63,26 @@ class Experiment(object):
             except:
                 pass
             print("Running experiment under name [{}]".format(self.experiment_name))
-        ends = {}
+
+        # Override front and backend stuff from cmd
+        ends = parse_extra_args(['frontend', 'backend'], kwargs['unknown'])
         if kwargs.get('frontend') is None:
-            ends['frontend'] = self.hpctl_config.get('frontend', self.hpctl_settings.get('frontend', {'type': 'console'}))
+            frontend = self.hpctl_config.get('frontend', self.hpctl_settings.get('frontend', {'type': 'console'}))
         else:
-            ends['frontend'] = {'type': kwargs['frontend']}
+            frontend = {'type': kwargs['frontend']}
+        # Merge dicts
+        for key, val in frontend.items():
+            if key not in ends['frontend']:
+                ends['frontend'][key] = val
+
         if kwargs.get('backend') is None:
-            ends['backend'] = self.hpctl_config.get('backend', self.hpctl_settings.get('backend', {'type': 'mp'}))
+            backend = self.hpctl_config.get('backend', self.hpctl_settings.get('backend', {'type': 'mp'}))
         else:
-            ends['backend'] = {'type': kwargs['backend']}
-        modify_reporting_hook_settings(ends, kwargs['unknown'], {'backend', 'frontend'})
+            backend = {'type': kwargs['backend']}
+        # Merge dicts
+        for key, val in backend.items():
+            if key not in ends['backend']:
+                ends['backend'][key] = val
         self.frontend_config = ends['frontend']
         self.backend_config = ends['backend']
         if isinstance(self.backend_config.get('real_gpus'), str):
