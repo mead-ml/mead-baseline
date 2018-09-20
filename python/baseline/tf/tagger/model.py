@@ -5,8 +5,9 @@ from tensorflow.python.platform import gfile
 from tensorflow.contrib.layers import fully_connected, xavier_initializer
 from baseline.model import Tagger, create_tagger_model, load_tagger_model
 from baseline.tf.tfy import *
-from baseline.utils import zip_model, unzip_model
+from baseline.utils import zip_model, unzip_model, ls_props, read_json, write_json
 from baseline.tf.embeddings import *
+from baseline.version import __version__
 
 
 class RNNTaggerModel(Tagger):
@@ -20,32 +21,30 @@ class RNNTaggerModel(Tagger):
         base = path[-1]
         outdir = '/'.join(path[:-1])
 
-        state = {"crf": self.crf, "proj": self.proj, "crf_mask": self.crf_mask, 'span_type': self.span_type}
-        with open(basename + '.state', 'w') as f:
-            json.dump(state, f)
+        # For each embedding, save a record of the keys
 
+        embeddings_info = {}
+        for k, v in self.embeddings.items():
+            embeddings_info[k] = v.__class__.__name__
+        state = {
+            'version': __version__,
+            'embeddings': embeddings_info,
+            'lengths_key': self.lengths_key,
+            'crf': self.crf,
+            'proj': self.proj,
+            'crf_mask': self.crf_mask,
+            'span_type': self.span_type
+        }
+        for prop in ls_props(self):
+            state[prop] = getattr(self, prop)
+
+        write_json(state, basename + '.state')
+        write_json(self.labels, basename + ".labels")
+        for key, embedding in self.embeddings.items():
+            embedding.save_md(basename + '-{}-md.json'.format(key))
         tf.train.write_graph(self.sess.graph_def, outdir, base + '.graph', as_text=False)
         with open(basename + '.saver', 'w') as f:
             f.write(str(self.saver.as_saver_def()))
-
-        with open(basename + '.labels', 'w') as f:
-            json.dump(self.labels, f)
-
-        # What it should do
-        # vocab_suffixes = get_vocab_file_suffixes(basename)
-        # for ty in vocab_suffixes:
-        #    vocab_file = '{}-{}.vocab'.format(basename, ty)
-        #    print('Reading {}', vocab_file)
-        #    with open(vocab_file, 'r') as f:
-        #        self.vocab[ty] = json.load(f)
-
-        # Until we have backwards compat, figured out, do same as before...
-        if len(self.word_vocab) > 0:
-            with open(basename + '-word.vocab', 'w') as f:
-                json.dump(self.word_vocab, f)
-
-        with open(basename + '-char.vocab', 'w') as f:
-            json.dump(self.char_vocab, f)
 
     def make_input(self, batch_dict, do_dropout=False):
         y = batch_dict.get('y', None)
@@ -67,60 +66,78 @@ class RNNTaggerModel(Tagger):
         self.save_md(basename)
         self.save_values(basename)
 
-    @staticmethod
-    def load(basename, **kwargs):
-        basename = unzip_model(basename)
-        model = RNNTaggerModel()
-        model.sess = kwargs.get('sess', tf.Session())
-        checkpoint_name = kwargs.get('checkpoint_name', basename)
-        checkpoint_name = checkpoint_name or basename
-        with open(basename + '.state') as f:
-            state = json.load(f)
-            model.crf = bool(state.get('crf', False))
-            model.crf_mask = bool(state.get('crf_mask', False))
-            model.span_type = state.get('span_type')
-            model.proj = bool(state.get('proj', False))
+    @classmethod
+    def load(cls, basename, **kwargs):
+        """Reload the model from a graph file and a checkpoint
 
+        The model that is loaded is independent of the pooling and stacking layers, making this class reusable
+        by sub-classes.
+
+        :param basename: The base directory to load from
+        :param kwargs: See below
+
+        :Keyword Arguments:
+        * *session* -- An optional tensorflow session.  If not passed, a new session is
+            created
+
+        :return: A restored model
+        """
+        basename = unzip_model(basename)
+        sess = kwargs.get('session', kwargs.get('sess', tf.Session()))
+        model = cls()
         with open(basename + '.saver') as fsv:
             saver_def = tf.train.SaverDef()
             text_format.Merge(fsv.read(), saver_def)
 
+        checkpoint_name = kwargs.get('checkpoint_name', basename)
+        checkpoint_name = checkpoint_name or basename
+
+        state = read_json(basename + '.state')
+
         with gfile.FastGFile(basename + '.graph', 'rb') as f:
             gd = tf.GraphDef()
             gd.ParseFromString(f.read())
-            model.sess.graph.as_default()
+            sess.graph.as_default()
             tf.import_graph_def(gd, name='')
-
-            model.sess.run(saver_def.restore_op_name, {saver_def.filename_tensor_name: checkpoint_name})
-            model.x = tf.get_default_graph().get_tensor_by_name('x:0')
-            model.xch = tf.get_default_graph().get_tensor_by_name('xch:0')
-            model.y = tf.get_default_graph().get_tensor_by_name('y:0')
-            model.lengths = tf.get_default_graph().get_tensor_by_name('lengths:0')
-            model.pkeep = tf.get_default_graph().get_tensor_by_name('pkeep:0')
-            model.best = tf.get_default_graph().get_tensor_by_name('output/ArgMax:0')
-            model.probs = tf.get_default_graph().get_tensor_by_name('output/Reshape_1:0')  # TODO: rename
             try:
-                model.A = tf.get_default_graph().get_tensor_by_name('Loss/transitions:0')
-                if not model.crf:
-                    print('Warning: meta-data says no CRF but model contains transition matrix!')
-                    model.crf = True
+                sess.run(saver_def.restore_op_name, {saver_def.filename_tensor_name: checkpoint_name})
             except:
-                if model.crf is True:
-                    print('Warning: meta-data says there is a CRF but not transition matrix found!')
-                model.A = None
-                model.crf = False
+                # Backwards compat
+                sess.run(saver_def.restore_op_name, {saver_def.filename_tensor_name: checkpoint_name + ".model"})
 
-        with open(basename + '.labels', 'r') as f:
-            model.labels = json.load(f)
+        model.embeddings = dict()
+        for key, class_name in state['embeddings'].items():
+            md = read_json('{}-{}-md.json'.format(basename, key))
+            embed_args = dict({'vocab': md['vocab'], 'vsz': md['vsz'], 'dsz': md['dsz']})
+            embed_args[key] = tf.get_default_graph().get_tensor_by_name('{}:0'.format(key))
+            Constructor = eval(class_name)
+            model.embeddings[key] = Constructor(key, **embed_args)
 
-        model.word_vocab = {}
-        if os.path.exists(basename + '-word.vocab'):
-            with open(basename + '-word.vocab', 'r') as f:
-                model.word_vocab = json.load(f)
+        model.crf = bool(state.get('crf', False))
+        model.crf_mask = bool(state.get('crf_mask', False))
+        model.span_type = state.get('span_type')
+        model.proj = bool(state.get('proj', False))
+        model.lengths_key = state.get('lengths_key', 'word')
+        model.lengths = tf.get_default_graph().get_tensor_by_name('lengths:0')
 
-        with open(basename + '-char.vocab', 'r') as f:
-            model.char_vocab = json.load(f)
+        model.y = tf.get_default_graph().get_tensor_by_name('y:0')
+        model.pkeep = tf.get_default_graph().get_tensor_by_name('pkeep:0')
+        model.best = tf.get_default_graph().get_tensor_by_name('output/ArgMax:0')
+        model.probs = tf.get_default_graph().get_tensor_by_name('output/Reshape_1:0')  # TODO: rename
 
+        try:
+            model.A = tf.get_default_graph().get_tensor_by_name('Loss/transitions:0')
+            if not model.crf:
+                print('Warning: meta-data says no CRF but model contains transition matrix!')
+                model.crf = True
+        except:
+            if model.crf is True:
+                print('Warning: meta-data says there is a CRF but not transition matrix found!')
+            model.A = None
+            model.crf = False
+
+        model.labels = read_json(basename + '.labels')
+        model.sess = sess
         model.saver = tf.train.Saver(saver_def=saver_def)
         return model
 

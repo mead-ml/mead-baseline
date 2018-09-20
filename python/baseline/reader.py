@@ -219,31 +219,9 @@ class SeqPredictReader(object):
 @exporter
 class CONLLSeqReader(SeqPredictReader):
 
-    UNREP_EMOTICONS = (
-        ':)',
-        ':(((',
-        ':D',
-        '=)',
-        ':-)',
-        '=(',
-        '(=',
-        '=[[',
-    )
-
     def __init__(self, vectorizers, trim=False, **kwargs):
         super(CONLLSeqReader, self).__init__(vectorizers, trim)
         self.named_fields = kwargs.get('named_fields', {})
-
-
-    @staticmethod
-    def web_cleanup(word):
-        if word.startswith('http'): return 'URL'
-        if word.startswith('@'): return '@@@@'
-        if word.startswith('#'): return '####'
-        if word == '"': return ','
-        if word in CONLLSeqReader.UNREP_EMOTICONS: return ';)'
-        if word == '<3': return '&lt;3'
-        return word
 
     def read_examples(self, tsfile):
 

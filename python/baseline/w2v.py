@@ -253,7 +253,7 @@ class RandomInitVecModel(EmbeddingsModel):
         self.vocab = dict()
         self.vocab["<PAD>"] = 0
         self.dsz = dsz
-        self.vsz = 0
+        self.vsz = 1
 
         if counts is True:
             attested = [v for v, cnt in known_vocab.items() if cnt > 0]

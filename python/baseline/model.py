@@ -6,7 +6,7 @@ from baseline.utils import (
     load_user_lang_model, create_user_lang_model,
     load_user_embeddings,
     lowercase, revlut,
-    export, wrapped_partial
+    export, wrapped_partial, is_sequence
 )
 from baseline.vectorizers import Token1DVectorizer, Char2DVectorizer, Dict1DVectorizer, Dict2DVectorizer
 
@@ -31,8 +31,8 @@ class Classifier(object):
         """
         pass
 
-    @staticmethod
-    def load(basename, **kwargs):
+    @classmethod
+    def load(cls, basename, **kwargs):
         """Load the model from a basename, including directory
         
         :param basename: Name of the model, not including suffixes
@@ -114,6 +114,7 @@ class Classifier(object):
             results += [sorted(outcomes, key=lambda tup: tup[1], reverse=True)]
         return results
 
+
 @exporter
 def create_model(known_creators, input_, output_, **kwargs):
     """If `model_type` is given, use it to load an addon model and construct that OW use default
@@ -153,6 +154,7 @@ create_seq2seq_model = exporter(
         name='create_seq2seq_model'
     )
 )
+
 
 @exporter
 def create_lang_model(known_creators, embeddings, **kwargs):
@@ -240,31 +242,95 @@ class Tagger(object):
         :param tokens: (``list``) A list of tokens
 
         """
+        label_field = kwargs.get('label', 'label')
 
-        vectorizers = kwargs.get('vectorizer')
+        mxlen = 0
+        mxwlen = 0
+        if type(tokens[0]) == str:
+            mxlen = len(tokens)
+            tokens_seq = []
+            for t in tokens:
+                mxwlen = max(mxwlen, len(t))
+                tokens_seq += [dict({'text': t})]
+            tokens_seq = [tokens_seq]
+        else:
+            # Better be a sequence, but it could be pre-batched, [[],[]]
+            # But what kind of object is at the first one then?
+            if is_sequence(tokens[0]):
+                tokens_seq = []
+                # Then what we have is [['The', 'dog',...], ['I', 'cannot']]
+                # For each of the utterances, we need to make a dictionary
+                if type(tokens[0][0]) == str:
+
+                    for utt in tokens:
+                        utt_dict_seq = []
+                        mxlen = max(mxlen, len(utt))
+                        for t in utt:
+                            mxwlen = max(mxwlen, len(t))
+                            utt_dict_seq += [dict({'text': t})]
+                        tokens_seq += [utt_dict_seq]
+                # Its already in dict form so we dont need to do anything
+                elif type(tokens[0][0]) == dict:
+                    for utt in tokens:
+                        mxlen = max(mxlen, len(utt))
+                        for t in utt['text']:
+                            mxwlen = max(mxwlen, len(t))
+            # If its a dict, we just wrap it up
+            elif type(tokens[0]) == dict:
+                mxlen = max(len(tokens))
+                for t in tokens:
+                    mxwlen = max(mxwlen, len(t))
+                tokens_seq = [tokens]
+            else:
+                raise Exception('Unknown input format')
+
+        if len(tokens_seq) == 0:
+            return []
+
+        vectorizers = kwargs.get('vectorizers')
         if vectorizers is None:
-
-            mxlen = kwargs.get('mxlen', self.mxlen if hasattr(self, 'mxlen') else len(tokens))
-            maxw = kwargs.get('maxw', self.maxw if hasattr(self, 'maxw') else max([len(token) for token in tokens]))
-            word_tokenizer = Dict1DVectorizer(mxlen=mxlen, fields='text')
-            char_tokenizer = Dict2DVectorizer(mxlen=mxlen, mxwlen=maxw, fields='text')
+            word_tokenizer = Dict1DVectorizer(mxlen=mxlen)
+            char_tokenizer = Dict2DVectorizer(mxlen=mxlen, mxwlen=mxwlen)
             vectorizers = {'word': word_tokenizer, 'char': char_tokenizer}
 
         # This might be inefficient if the label space is large
 
         label_vocab = revlut(self.get_labels())
-        batch_dict = dict()
-        for k, vectorizer in vectorizers.items():
-            value, length = vectorizer.run(tokens, self.embeddings[k].vocab)
-            batch_dict[k] = value
-            if length is not None:
-                batch_dict['{}_lengths'.format(k)] = length
 
-        indices = self.predict(batch_dict)[0]
-        output = []
-        for j in len(tokens):
-            output.append((tokens[j], label_vocab[indices[j].item()]))
-        return output
+        examples = dict()
+        for k, vectorizer in vectorizers.items():
+            if hasattr(vectorizer, 'mxlen') and vectorizer.mxlen == -1:
+                vectorizer.mxlen = mxlen
+            if hasattr(vectorizer, 'mxwlen') and vectorizer.mxwlen == -1:
+                vectorizer.mxwlen = mxwlen
+            examples[k] = []
+
+        for i, tokens in enumerate(tokens_seq):
+            for k, vectorizer in vectorizers.items():
+                vec, length = vectorizer.run(tokens, self.embeddings[k].vocab)
+                examples[k] += [vec]
+                if length is not None:
+                    lengths_key = '{}_lengths'.format(k)
+                    if lengths_key not in examples:
+                        examples[lengths_key] = []
+                    examples[lengths_key] += [length]
+
+        for k in vectorizers.keys():
+            examples[k] = np.stack(examples[k])
+
+        print(examples)
+
+        outcomes = self.predict(examples)
+        outputs = []
+        for i, outcome in enumerate(outcomes):
+            output = []
+            for j, token in enumerate(tokens_seq[i]):
+                new_token = dict()
+                new_token.update(token)
+                new_token[label_field] = label_vocab[outcome[j].item()]
+                output += [new_token]
+            outputs += [output]
+        return outputs
 
     def get_vocab(self, vocab_type='word'):
         pass

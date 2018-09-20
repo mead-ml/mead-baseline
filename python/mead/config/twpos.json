@@ -6,16 +6,47 @@
     "charsz": 16,
     "unif": 0.1,
     "preproc": {
-        "mxlen": 38,
-        "mxwlen": 40,
-        "lower": true,
-        "valsplit": 0.15
     },
     "backend": "tensorflow",
     "dataset": "twpos",
     "loader": {
-        "reader_type": "default"
+        "reader_type": "default",
+	"named_fields": {
+	    "0": "text",
+	    "-1": "y"
+	}
     },
+    "features": [
+	{
+	    "name": "word",
+	    "vectorizer": {
+		"type": "dict1d",
+		"fields": "text",
+		"transform": "baseline.lowercase",
+		"mxlen": 38
+	    },
+	    "embeddings": { "label": "glove-twitter-27B" }
+	},
+	{
+	    "name": "sidecar",
+	    "vectorizer": {
+		"type": "dict1d",
+		"fields": "text",
+		"transform": "baseline.web_cleanup",
+		"mxlen": 38
+	    },
+	    "embeddings": { "label": "w2v-twitter-30M" }
+	},
+	{
+	    "name": "char",
+	    "vectorizer": {
+		"type": "dict2d",
+		"mxlen": 38,
+		"mxwlen": 40
+	    },
+	    "embeddings": { "dsz": 30 }
+	}
+    ],
     "model": {
         "model_type": "default",
         "cfiltsz": [1,2,3,4,5,7],
@@ -25,10 +56,6 @@
         "rnntype": "blstm",
         "layers": 1,
         "crf": true	
-    },
-
-    "word_embeddings": {
-	"label": "glove-twitter-27B"
     },
     "train": {
         "epochs": 40,

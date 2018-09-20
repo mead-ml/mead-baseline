@@ -181,14 +181,14 @@ def fit(model, ts, vs, es, **kwargs):
 
         if do_early_stopping is False:
             trainer.checkpoint()
-            #model.save(model_file)
+            model.save(model_file)
 
         elif test_metrics[early_stopping_metric] > max_metric:
             last_improved = epoch
             max_metric = test_metrics[early_stopping_metric]
             print('New max %.3f' % max_metric)
             trainer.checkpoint()
-            #model.save(model_file)
+            model.save(model_file)
 
         elif (epoch - last_improved) > patience:
             print('Stopping due to persistent failures to improve')

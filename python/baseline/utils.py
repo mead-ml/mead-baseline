@@ -243,6 +243,34 @@ def str2bool(v):
 def lowercase(x):
     return x.lower()
 
+UNREP_EMOTICONS = (
+    ':)',
+    ':(((',
+    ':D',
+    '=)',
+    ':-)',
+    '=(',
+    '(=',
+    '=[[',
+)
+
+@exporter
+def web_cleanup(word):
+    if word.startswith('http'): return 'URL'
+    if word.startswith('@'): return '@@@@'
+    if word.startswith('#'): return '####'
+    if word == '"': return ','
+    if word in UNREP_EMOTICONS: return ';)'
+    if word == '<3': return '&lt;3'
+    return word
+
+
+@exporter
+def is_sequence(x):
+    import collections
+    if isinstance(x, str):
+        return False
+    return isinstance(x, collections.Sequence)
 
 @exporter
 def read_json(filepath, default_value=None, strict=False):
