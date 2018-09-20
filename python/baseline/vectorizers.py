@@ -7,6 +7,7 @@ __all__ = []
 exporter = export(__all__)
 
 
+@exporter
 class Vectorizer(object):
 
     def __init__(self):
@@ -27,6 +28,7 @@ def identity_trans_fn(x):
     return x
 
 
+@exporter
 class AbstractVectorizer(Vectorizer):
 
     def __init__(self, transform_fn=None):
@@ -46,6 +48,7 @@ class AbstractVectorizer(Vectorizer):
             yield value
 
 
+@exporter
 class Token1DVectorizer(AbstractVectorizer):
 
     def __init__(self, **kwargs):
@@ -86,6 +89,7 @@ class Token1DVectorizer(AbstractVectorizer):
         return self.mxlen,
 
 
+@exporter
 class GOVectorizer(Vectorizer):
 
     def __init__(self, vectorizer):
@@ -118,6 +122,7 @@ def _token_iterator(vectorizer, tokens):
         yield vectorizer.delim.join(token)
 
 
+@exporter
 class Dict1DVectorizer(Token1DVectorizer):
 
     def __init__(self, **kwargs):
@@ -129,6 +134,7 @@ class Dict1DVectorizer(Token1DVectorizer):
         return _token_iterator(self, tokens)
 
 
+@exporter
 class AbstractCharVectorizer(AbstractVectorizer):
 
     def __init__(self, transform_fn=None):
@@ -143,6 +149,7 @@ class AbstractCharVectorizer(AbstractVectorizer):
             yield EOW
 
 
+@exporter
 class Char2DVectorizer(AbstractCharVectorizer):
 
     def __init__(self, **kwargs):
@@ -193,6 +200,7 @@ class Char2DVectorizer(AbstractCharVectorizer):
         return self.mxlen, self.mxwlen
 
 
+@exporter
 class Dict2DVectorizer(Char2DVectorizer):
 
     def __init__(self, **kwargs):
@@ -204,6 +212,7 @@ class Dict2DVectorizer(Char2DVectorizer):
         return _token_iterator(self, tokens)
 
 
+@exporter
 class Char1DVectorizer(AbstractCharVectorizer):
 
     def __init__(self, **kwargs):

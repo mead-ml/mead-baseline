@@ -79,21 +79,29 @@ class Classifier(object):
         :param word_trans_fn: A transform on the input word
         :return: A sorted list of outcomes for a single element batch
         """
+        mxlen = 0
+        mxwlen = 0
         if type(tokens[0]) == str:
             tokens_seq = (tokens,)
-            max_length = len(tokens)
         else:
             tokens_seq = tokens
-            max_length = 0
-            for t in tokens_seq:
-                max_length = max(max_length, len(t))
+
+        for tokens in tokens_seq:
+            mxlen = max(mxlen, len(tokens))
+            for token in tokens:
+                mxwlen = max(mxwlen, len(token))
+
 
         vectorizers = kwargs.get('vectorizers')
         if vectorizers is None:
-            vectorizers = {'word': Token1DVectorizer(mxlen=kwargs.get('mxlen', max_length))}
+            vectorizers = {'word': Token1DVectorizer(mxlen=kwargs.get('mxlen', mxlen))}
 
         examples = dict()
-        for k in vectorizers.keys():
+        for k, vectorizer in vectorizers.items():
+            if hasattr(vectorizer, 'mxlen') and vectorizer.mxlen == -1:
+                vectorizer.mxlen = mxlen
+            if hasattr(vectorizer, 'mxwlen') and vectorizer.mxwlen == -1:
+                vectorizer.mxwlen = mxwlen
             examples[k] = []
 
         for i, tokens in enumerate(tokens_seq):
