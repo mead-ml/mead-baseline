@@ -3,8 +3,8 @@ import baseline.tf.classify as classify
 import argparse
 import os
 
-parser = argparse.ArgumentParser(description='Classify text with a TF model')
-parser.add_argument('--model', help='A TF classifier model', required=True, type=str)
+parser = argparse.ArgumentParser(description='Classify text with a model')
+parser.add_argument('--model', help='A classifier model', required=True, type=str)
 parser.add_argument('--text', help='raw value', type=str)
 
 
