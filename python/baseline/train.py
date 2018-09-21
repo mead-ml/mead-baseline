@@ -26,13 +26,12 @@ class EpochReportingTrainer(Trainer):
 
     def __init__(self):
         super(EpochReportingTrainer, self).__init__()
-        self.log = logging.getLogger('baseline.reporting')
+        self.log = logging.getLogger('baseline.timing')
 
     def train(self, ts, reporting_fns):
         start_time = time.time()
         metrics = self._train(ts)
         duration = time.time() - start_time
-        print('Training time (%.3f sec)' % duration)
         self.log.debug({'phase': 'Train', 'time': duration})
         self.train_epochs += 1
 
@@ -44,7 +43,6 @@ class EpochReportingTrainer(Trainer):
         start_time = time.time()
         metrics = self._test(vs, **kwargs)
         duration = time.time() - start_time
-        print('%s time (%.3f sec)' % (phase, duration))
         self.log.debug({'phase': phase, 'time': duration})
         epochs = 0
         if phase == 'Valid':

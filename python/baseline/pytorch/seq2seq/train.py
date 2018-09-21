@@ -1,14 +1,14 @@
+import time
+import logging
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.autograd import Variable
-from baseline.pytorch.torchy import pytorch_prepare_optimizer
 import numpy as np
 from baseline.progress import create_progress_bar
 from baseline.utils import listify, get_model_file
 from baseline.train import Trainer, create_trainer
-import time
-import logging
+from baseline.pytorch.torchy import pytorch_prepare_optimizer
 
 
 class Seq2SeqTrainerPyTorch(Trainer):
@@ -25,7 +25,7 @@ class Seq2SeqTrainerPyTorch(Trainer):
         if self.gpu:
             self.model = torch.nn.DataParallel(model).cuda()
             self.crit.cuda()
-        self.log = logging.getLogger('baseline.reporting')
+        self.log = logging.getLogger('baseline.timing')
 
     def _total(self, tgt):
         tgtt = tgt.data.long()

@@ -1,8 +1,8 @@
+import time
+import logging
 from baseline.pytorch.torchy import *
 from baseline.utils import listify, revlut, get_model_file
 from baseline.train import Trainer, create_trainer
-import time
-import logging
 
 
 class LanguageModelTrainerPyTorch(Trainer):
@@ -19,7 +19,7 @@ class LanguageModelTrainerPyTorch(Trainer):
         if self.gpu:
             self.model = self.model.cuda()
             self.crit.cuda()
-        self.log = logging.getLogger('baseline.reporting')
+        self.log = logging.getLogger('baseline.timing')
 
         self.optimizer, self.scheduler = pytorch_prepare_optimizer(self.model, **kwargs)
 

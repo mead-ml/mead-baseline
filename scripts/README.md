@@ -48,6 +48,7 @@ Generate a speed test report from the database, It groups runs by things like co
  * `--db` The database.
  * `--out` The name of the output file.
 
+_Note: Report uses `pdflatex` and imagemagik `convert` to generate png files for the markdown report so this might fail if you don't have them installed._
 
 #### `python speed_tests.py query`
 

@@ -19,7 +19,7 @@ exporter = export(__all__)
 class Task(object):
     TASK_REGISTRY = {}
 
-    def __init__(self, logger_config, mead_settings_config=None, time=False):
+    def __init__(self, logger_config, mead_settings_config=None):
         super(Task, self).__init__()
         self.config_params = None
         self.ExporterType = None
@@ -38,10 +38,10 @@ class Task(object):
         else:
             self.data_download_cache = os.path.expanduser(self.mead_settings_config['datacache'])
         print("using {} as data/embeddings cache".format(self.data_download_cache))
-        self._configure_logger(logger_config, time)
-        self.name = None
+        self._configure_logger(logger_config)
+        self.task_name = None
 
-    def _configure_logger(self, logger_config, time=False):
+    def _configure_logger(self, logger_config):
         """Use the logger file (logging.json) to configure the log, but overwrite the filename to include the PID
 
         :param logger_config: The logging configuration JSON or file containing JSON
@@ -54,21 +54,19 @@ class Task(object):
         else:
             raise Exception("Expected logger config file or a JSON object")
 
-        if time:
-            config['handlers']['reporting_file_handler']['level'] = 'DEBUG'
-            config['loggers']['baseline.reporting']['level'] = 'DEBUG'
         config['handlers']['reporting_file_handler']['filename'] = 'reporting-{}.log'.format(os.getpid())
+        config['handlers']['timing_file_handler']['filename'] = 'timing-{}.log'.format(os.getpid())
         logging.config.dictConfig(config)
 
     @staticmethod
-    def get_task_specific(task, logging_config, mead_config, time=False):
+    def get_task_specific(task, logging_config, mead_config):
         """Get the task from the task registry associated with the name
 
         :param task: The task name
         :param logging_config: The configuration to read from
         :return:
         """
-        config = Task.TASK_REGISTRY[task](logging_config, mead_config, time=time)
+        config = Task.TASK_REGISTRY[task](logging_config, mead_config)
         return config
 
     def read_config(self, config_params, datasets_index, **kwargs):

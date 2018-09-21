@@ -1,12 +1,13 @@
-import logging
-import tensorflow as tf
-import numpy as np
-from baseline.utils import listify, get_model_file
-from baseline.tf.tfy import optimizer
-from baseline.train import Trainer, create_trainer
-import time
 import os
+import time
+import logging
+import numpy as np
+import tensorflow as tf
 from baseline.utils import zip_model
+from baseline.tf.tfy import optimizer
+from baseline.utils import listify, get_model_file
+from baseline.train import Trainer, create_trainer
+
 
 class Seq2SeqTrainerTf(Trainer):
 
@@ -17,7 +18,7 @@ class Seq2SeqTrainerTf(Trainer):
         self.test_loss = model.create_test_loss()
         self.model = model
         self.global_step, self.train_op = optimizer(self.loss, **kwargs)
-        self.log = logging.getLogger('baseline.reporting')
+        self.log = logging.getLogger('baseline.timing')
 
     def checkpoint(self):
         self.model.saver.save(self.model.sess, "./tf-seq2seq-%d/seq2seq" % os.getpid(), global_step=self.global_step)

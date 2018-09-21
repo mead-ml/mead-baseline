@@ -20,7 +20,7 @@ class LanguageModelTrainerDynet(Trainer):
         self.decay = lr_decay(**kwargs)
         self.global_step = 0
         self.valid_epochs = 0
-        self.log = logging.getLogger('baseline.reporting')
+        self.log = logging.getLogger('baseline.timing')
 
     @staticmethod
     def _loss(outputs, labels):

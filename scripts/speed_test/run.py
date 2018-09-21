@@ -33,18 +33,13 @@ def run_model(si, config_params, logs, settings, datasets, embeddings, task_name
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
     config_params['reporting'] = {}
     with suppress_output():
-        task = mead.Task.get_task_specific(task_name, logs, settings, time=True)
+        task = mead.Task.get_task_specific(task_name, logs, settings)
         task.read_config(config_params, datasets)
         task.initialize(embeddings)
         task.train()
 
         si['framework_version'] = get_framework_version(config_params['backend'])
-        si['cuda'], si['cudnn'] = get_cuda_version()
-        # Anaconda pytorch comes with its own cudnn so I have to get it this way
-        if config_params['backend'] == 'pytorch':
-            import torch
-            # si['cudnn'] = torch.backends.cudnn.version()
-            si['cudnn'] = Version(7, 1, 2)
+        si['cuda'], si['cudnn'] = get_cuda_version(config_params['backend'])
         si['gpu_name'], si['gpu_mem'] = get_gpu_info(gpu)
         si['cpu_name'], si['cpu_mem'], si['cpu_cores'] = get_cpu_info()
         si['python'] = get_python_version()
@@ -57,6 +52,8 @@ def parse_logs(file_name):
     with open(file_name) as f:
         for line in f:
             entry = json.loads(line)
+            if 'phase' in entry and entry['phase'] == 'Test':
+                continue
             if 'time' in entry:
                 data.append(entry)
     return data
@@ -204,10 +201,26 @@ def version_str_to_tuple(version):
         return Version(0, 0, 0)
     return Version(int(m.group(1)), int(m.group(2)), int(m.group(3)))
 
-def get_cuda_version():
+
+def get_cuda_version(framework):
+    if framework == 'pytorch':
+        import torch
+        cuda = version_str_to_tuple(torch.version.cuda)
+        cudnn = torch.backends.cudnn.version()
+        cudnn_major = cudnn // 1000
+        cudnn = cudnn % 1000
+        cudnn_minor = cudnn // 100
+        cudnn_patch = cudnn % 100
+        cudnn = Version(cudnn_major, cudnn_minor, cudnn_patch)
+        return cuda, cudnn
+    return file_based_cuda_version()
+
+
+def file_based_cuda_version():
     """Find the version of CUDA and CUDNN."""
-    cuda_version = open('/usr/local/cuda/version.txt').read().split()[-1]
-    cudnn = open('/usr/local/cuda/include/cudnn.h').read()
+    loc = os.getenv('CUDA_HOME', os.path.join(os.sep, 'usr', 'local', 'cuda'))
+    cuda_version = open(os.path.join(loc, 'version.txt')).read().split()[-1]
+    cudnn = open(os.path.join(loc, 'include', 'cudnn.h')).read()
     cudnn_major = re.search(r'CUDNN_MAJOR (\d)', cudnn).groups()[0]
     cudnn_minor = re.search(r'CUDNN_MINOR (\d)', cudnn).groups()[0]
     cudnn_patch = re.search(r'CUDNN_PATCHLEVEL (\d)', cudnn).groups()[0]
@@ -368,39 +381,36 @@ def run(args):
                 pprint(config)
                 print()
             print()
-        steps = len(configs) * args.trials
+        steps = len(configs)
         pg = create_progress_bar(steps)
         for config in configs:
-            for _ in range(args.trials):
-                write_config = deepcopy(config)
-                task_name = config['task']
+            write_config = deepcopy(config)
+            config['train']['epochs'] = args.trials
+            task_name = config['task']
 
-                system_info = m.dict()
-                p = Process(
-                    target=run_model,
-                    args=(
-                        system_info,
-                        config,
-                        logs,
-                        settings,
-                        datasets,
-                        embeddings,
-                        task_name,
-                        dir_,
-                        int(args.gpu)
-                    )
+            system_info = m.dict()
+            p = Process(
+                target=run_model,
+                args=(
+                    system_info,
+                    config,
+                    logs,
+                    settings,
+                    datasets,
+                    embeddings,
+                    task_name,
+                    dir_,
+                    int(args.gpu)
                 )
-                p.start()
-                pid = p.pid
-                p.join()
-                # run_model(system_info, config, logs, settings, datasets, embeddings, task_name, dir_, int(args.gpu))
-                # pid = os.getpid()
-                log_file = os.path.join(dir_, 'reporting-{}.log'.format(pid))
-                speeds = parse_logs(log_file)
+            )
+            p.start()
+            pid = p.pid
+            p.join()
+            log_file = os.path.join(dir_, 'timing-{}.log'.format(pid))
+            speeds = parse_logs(log_file)
 
-                # Add dataset and model type to db?
-                save_data(conn, speeds, write_config, system_info)
-                pg.update()
+            save_data(conn, speeds, write_config, system_info)
+            pg.update()
         pg.done()
     finally:
         shutil.rmtree(dir_)
@@ -414,7 +424,7 @@ def add(args):
         return
     si = {}
     si['framework_version'] = get_framework_version(config['backend'])
-    si['cuda'], si['cudnn'] = get_cuda_version()
+    si['cuda'], si['cudnn'] = get_cuda_version(config['backend'])
     si['gpu_name'], si['gpu_mem'] = get_gpu_info(args.gpu)
     si['cpu_name'], si['cpu_mem'], si['cpu_cores'] = get_cpu_info()
     si['python'] = get_python_version()

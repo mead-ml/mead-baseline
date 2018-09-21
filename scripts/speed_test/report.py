@@ -269,7 +269,7 @@ def get_phases(conn, task, dataset):
         ''', (task, dataset)
     ).fetchall()
     phases = {p[0] for p in phases}
-    return ['Train', 'Valid', 'Test']
+    return phases
 
 
 def get_results(conn, task, dataset, framework, model, phase):

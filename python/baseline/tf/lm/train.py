@@ -1,9 +1,9 @@
-from baseline.tf.tfy import *
-from baseline.utils import listify, get_model_file
-from baseline.train import Trainer, create_trainer
 import os
 import time
 import logging
+from baseline.tf.tfy import *
+from baseline.utils import listify, get_model_file
+from baseline.train import Trainer, create_trainer
 
 
 class LanguageModelTrainerTf(Trainer):
@@ -13,7 +13,7 @@ class LanguageModelTrainerTf(Trainer):
         self.model = model
         self.loss = model.create_loss()
         self.global_step, self.train_op = optimizer(self.loss, **kwargs)
-        self.log = logging.getLogger('baseline.reporting')
+        self.log = logging.getLogger('baseline.timing')
 
     def checkpoint(self):
         self.model.saver.save(self.model.sess, "./tf-lm-%d/lm" % os.getpid(), global_step=self.global_step)
