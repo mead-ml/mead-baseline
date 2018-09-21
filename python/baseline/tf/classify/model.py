@@ -289,7 +289,10 @@ class WordClassifierBase(Classifier):
             model.pkeep = tf.get_default_graph().get_tensor_by_name('pkeep:0')
             model.best = tf.get_default_graph().get_tensor_by_name('output/best:0')
             model.logits = tf.get_default_graph().get_tensor_by_name('output/logits:0')
-            model.probs = tf.get_default_graph().get_tensor_by_name('output/probs:0')
+            try:
+                model.probs = tf.get_default_graph().get_tensor_by_name('output/probs:0')
+            except:
+                model.probs = tf.nn.softmax(model.logits)
         with open(basename + '.labels', 'r') as f:
             model.labels = json.load(f)
 
