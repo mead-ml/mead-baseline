@@ -5,18 +5,18 @@ from tensorflow.python.platform import gfile
 import json
 from tensorflow.contrib.layers import fully_connected, xavier_initializer
 from baseline.utils import fill_y
-from baseline.model import Classifier, load_classifier_model, create_classifier_model
+from baseline.model import ClassifierModel, load_classifier_model, create_classifier_model
 import tensorflow_hub as hub
 
 
-class ELMoClassifier(Classifier):
+class ELMoClassifierModel(ClassifierModel):
     """
     Convolutional model following baseline, but here use ELMo embeddings
     """
     def __init__(self):
         """Base
         """
-        super(ELMoClassifier, self).__init__()
+        super(ELMoClassifierModel, self).__init__()
 
     def save(self, outfile):
         """Save a word-based model, along with the label and word indices
@@ -158,7 +158,7 @@ class ELMoClassifier(Classifier):
         model.labels = labels
         nc = len(labels)
         model.vocab = w2v.vocab
-        model.i2w = ELMoClassifier.index2word(model.vocab)
+        model.i2w = ELMoClassifierModel.index2word(model.vocab)
         # This only exists to make exporting easier
         model.pkeep = kwargs.get('pkeep', tf.placeholder(tf.float32, name="pkeep"))
         model.pdrop_value = kwargs.get('dropout', 0.5)
@@ -270,8 +270,8 @@ class ELMoClassifier(Classifier):
 
 
 def create_model(word_embeddings, labels, **kwargs):
-    classifier = ELMoClassifier.create(word_embeddings, labels, **kwargs)
+    classifier = ELMoClassifierModel.create(word_embeddings, labels, **kwargs)
     return classifier
 
 def load_model(modelname, **kwargs):
-    return ELMoClassifier.load(modelname, **kwargs)
+    return ELMoClassifierModel.load(modelname, **kwargs)

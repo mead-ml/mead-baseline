@@ -43,12 +43,16 @@ def _build_vocab_for_col(col, files, vectorizers):
 class ParallelCorpusReader(object):
 
     def __init__(self,
-                 src_vectorizers,
-                 dst_vectorizer,
+                 vectorizers,
                  trim=False):
 
-        self.src_vectorizers = src_vectorizers
-        self.dst_vectorizer = GOVectorizer(dst_vectorizer)
+        self.src_vectorizers = {}
+        self.dst_vectorizer = None
+        for k, vectorizer in vectorizers.items():
+            if k == 'dst':
+                self.dst_vectorizer = GOVectorizer(vectorizer)
+            else:
+                self.src_vectorizers[k] = vectorizer
         self.trim = trim
 
     def build_vocabs(self, files):
@@ -66,10 +70,9 @@ class ParallelCorpusReader(object):
 @exporter
 class TSVParallelCorpusReader(ParallelCorpusReader):
 
-    def __init__(self,
-                 src_vectorizers, dst_vectorizer,
+    def __init__(self, vectorizers,
                  trim=False, src_col_num=0, dst_col_num=1):
-        super(TSVParallelCorpusReader, self).__init__(src_vectorizers, dst_vectorizer, trim)
+        super(TSVParallelCorpusReader, self).__init__(vectorizers, trim)
         self.src_col_num = src_col_num
         self.dst_col_num = dst_col_num
 
@@ -100,8 +103,8 @@ class TSVParallelCorpusReader(ParallelCorpusReader):
 @exporter
 class MultiFileParallelCorpusReader(ParallelCorpusReader):
 
-    def __init__(self, src_suffix, dst_suffix, src_vectorizers, dst_vectorizer, trim=False):
-        super(MultiFileParallelCorpusReader, self).__init__(src_vectorizers, dst_vectorizer, trim)
+    def __init__(self, src_suffix, dst_suffix, vectorizers, trim=False):
+        super(MultiFileParallelCorpusReader, self).__init__(vectorizers, trim)
         self.src_suffix = src_suffix
         self.dst_suffix = dst_suffix
         if not src_suffix.startswith('.'):
@@ -139,20 +142,20 @@ class MultiFileParallelCorpusReader(ParallelCorpusReader):
 
 
 @exporter
-def create_parallel_corpus_reader(src_vectorizers, dst_vectorizer, trim, **kwargs):
+def create_parallel_corpus_reader(vectorizers, trim, **kwargs):
 
     reader_type = kwargs.get('reader_type', 'default')
 
     if reader_type == 'default':
         print('Reading parallel file corpus')
         pair_suffix = kwargs.get('pair_suffix')
-        reader = MultiFileParallelCorpusReader(pair_suffix[0], pair_suffix[1], src_vectorizers, dst_vectorizer, trim)
+        reader = MultiFileParallelCorpusReader(pair_suffix[0], pair_suffix[1], vectorizers, trim)
     elif reader_type == 'tsv':
         print('Reading tab-separated corpus')
-        reader = TSVParallelCorpusReader(src_vectorizers, dst_vectorizer, trim)
+        reader = TSVParallelCorpusReader(vectorizers, trim)
     else:
         mod = import_user_module("reader", reader_type)
-        return mod.create_parallel_corpus_reader(src_vectorizers, dst_vectorizer, trim, **kwargs)
+        return mod.create_parallel_corpus_reader(vectorizers, trim, **kwargs)
     return reader
 
 

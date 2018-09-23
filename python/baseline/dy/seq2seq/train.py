@@ -94,7 +94,7 @@ def fit(model, ts, vs, es=None, epochs=5, do_early_stopping=True,
     patience = int(kwargs.get('patience', epochs))
     after_train_fn = kwargs.get('after_train_fn', None)
 
-    model_file = get_model_file(kwargs, 'seq2seq', 'dy')
+    model_file = get_model_file('seq2seq', 'dy', kwargs.get('basedir'))
 
     trainer = create_trainer(Seq2SeqTrainerDynet, model, **kwargs)
 

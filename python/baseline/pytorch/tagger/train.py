@@ -136,7 +136,7 @@ def fit(model, ts, vs, es, **kwargs):
 
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
     epochs = int(kwargs.get('epochs', 20))
-    model_file = get_model_file(kwargs, 'tagger', 'pytorch')
+    model_file = get_model_file('tagger', 'pytorch', kwargs.get('basedir'))
     conll_output = kwargs.get('conll_output', None)
     txts = kwargs.get('txts', None)
 

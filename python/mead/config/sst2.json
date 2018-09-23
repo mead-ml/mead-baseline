@@ -1,12 +1,14 @@
 {
   "version": 2,
   "task": "classify",
+  "basedir": "./sst2",
   "batchsz": 50,
   "features": [
     {
       "name": "word",
       "vectorizer": {
-        "type": "token1d"
+        "type": "token1d",
+	"transform": "baseline.lowercase"
       },
       "embeddings": {
         "label": "w2v-gn"

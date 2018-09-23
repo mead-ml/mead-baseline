@@ -1,12 +1,11 @@
 import baseline
 import json
-import numpy as np
 import logging
 import logging.config
 import mead.utils
 import os
 from mead.downloader import EmbeddingDownloader, DataDownloader
-from baseline.utils import export, read_config_file, read_json, write_json
+from baseline.utils import (export, read_json, zip_files, save_vectorizers, save_vocabs)
 from baseline.w2v import load_embeddings
 from baseline.vectorizers import create_vectorizer
 __all__ = []
@@ -38,7 +37,7 @@ class Task(object):
         self._configure_logger(logger_file)
 
     def _create_vectorizers(self):
-        vectorizers = {}
+        self.vectorizers = {}
         for feature in self.config_params['features']:
             key = feature['name']
             vectorizer_section = feature.get('vectorizer', {'type': 'token1d'})
@@ -47,8 +46,7 @@ class Task(object):
             if 'transform' in vectorizer_section:
                 vectorizer_section['transform_fn'] = eval(vectorizer_section['transform'])
             vectorizer = create_vectorizer(**vectorizer_section)
-            vectorizers[key] = vectorizer
-        return vectorizers
+            self.vectorizers[key] = vectorizer
 
     def _configure_logger(self, logger_config):
         """Use the logger file (logging.json) to configure the log, but overwrite the filename to include the PID
@@ -90,6 +88,11 @@ class Task(object):
         """
         datasets_set = mead.utils.index_by_label(datasets_index)
         self.config_params = config_params
+        basedir = self.config_params.get('basedir')
+        if basedir is not None and not os.path.exists(basedir):
+            print('Creating: {}'.format(basedir))
+            os.mkdir(basedir)
+        self.config_params['train']['basedir'] = basedir
         self._setup_task()
         self._configure_reporting()
         self.dataset = datasets_set[self.config_params['dataset']]
@@ -130,8 +133,10 @@ class Task(object):
         :return:
         """
         self._load_dataset()
+        save_vectorizers(self.get_basedir(), self.vectorizers)
         model = self._create_model()
         self.task.fit(model, self.train_data, self.valid_data, self.test_data, **self.config_params['train'])
+        zip_files(self.get_basedir())
         return model
 
     def _configure_reporting(self):
@@ -189,6 +194,8 @@ class Task(object):
                 s.append(json.loads(x))
         return s
 
+    def get_basedir(self):
+        return self.config_params.get('basedir', './')
 
 @exporter
 class ClassifierTask(Task):
@@ -198,8 +205,8 @@ class ClassifierTask(Task):
         self.task = None
 
     def _create_task_specific_reader(self):
-        vectorizers = self._create_vectorizers()
-        return baseline.create_pred_reader(vectorizers, clean_fn=self.config_params['preproc']['clean_fn'],
+        self._create_vectorizers()
+        return baseline.create_pred_reader(self.vectorizers, clean_fn=self.config_params['preproc']['clean_fn'],
                                            trim=self.config_params['preproc'].get('trim', False),
                                            **self.config_params['loader'])
 
@@ -208,7 +215,6 @@ class ClassifierTask(Task):
         if backend == 'pytorch':
             print('PyTorch backend')
             import baseline.pytorch.classify as classify
-
         else:
             if backend == 'keras':
                 print('Keras backend')
@@ -244,6 +250,7 @@ class ClassifierTask(Task):
         print("[train file]: {}\n[valid file]: {}\n[test file]: {}".format(self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']))
         vocab, self.labels = self.reader.build_vocab([self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']])
         self.embeddings, self.feat2index = self._create_embeddings(embeddings_set, vocab, self.config_params['features'])
+        save_vocabs(self.get_basedir(), self.feat2index)
 
     def _create_model(self):
         model = self.config_params['model']
@@ -265,8 +272,8 @@ class TaggerTask(Task):
         self.task = None
 
     def _create_task_specific_reader(self):
-        vectorizers = self._create_vectorizers()
-        return baseline.create_seq_pred_reader(vectorizers, trim=self.config_params['preproc'].get('trim', False),
+        self._create_vectorizers()
+        return baseline.create_seq_pred_reader(self.vectorizers, trim=self.config_params['preproc'].get('trim', False),
                                                **self.config_params['loader'])
 
     def _setup_task(self):
@@ -300,12 +307,14 @@ class TaggerTask(Task):
             self.ExporterType = TaggerTensorFlowExporter
         self.task = tagger
 
+
     def initialize(self, embeddings):
         self.dataset = DataDownloader(self.dataset, self.data_download_cache).download()
         print("[train file]: {}\n[valid file]: {}\n[test file]: {}".format(self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']))
         embeddings_set = mead.utils.index_by_label(embeddings)
         vocabs = self.reader.build_vocab([self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']])
         self.embeddings, self.feat2index = self._create_embeddings(embeddings_set, vocabs, self.config_params['features'])
+        save_vocabs(self.get_basedir(), self.feat2index)
 
     def _create_model(self):
         labels = self.reader.label2index
@@ -320,9 +329,11 @@ class TaggerTask(Task):
 
     def train(self):
         self._load_dataset()
+        save_vectorizers(self.get_basedir(), self.vectorizers)
         model = self._create_model()
         conll_output = self.config_params.get("conll_output", None)
         self.task.fit(model, self.train_data, self.valid_data, self.test_data, conll_output=conll_output, txts=self.txts, **self.config_params['train'])
+        zip_files(self.get_basedir())
         return model
 
 Task.TASK_REGISTRY['tagger'] = TaggerTask
@@ -336,11 +347,9 @@ class EncoderDecoderTask(Task):
         self.task = None
 
     def _create_task_specific_reader(self):
-        vectorizers = self._create_vectorizers()
-        dst_vectorizer = vectorizers.pop('dst')
+        self._create_vectorizers()
         preproc = self.config_params['preproc']
-        reader = baseline.create_parallel_corpus_reader(vectorizers,
-                                                        dst_vectorizer,
+        reader = baseline.create_parallel_corpus_reader(self.vectorizers,
                                                         preproc['trim'],
                                                         **self.config_params['loader'])
         return reader
@@ -394,7 +403,9 @@ class EncoderDecoderTask(Task):
 
         self.src_embeddings, self.feat2src = self._create_embeddings(embeddings_set, vocab1, features_src)
         # For now, dont allow multiple vocabs of output
+        save_vocabs(self.get_basedir(), self.feat2src)
         self.dst_embeddings, self.feat2dst = self._create_embeddings(embeddings_set, {'dst': vocab2}, [features_dst])
+        save_vocabs(self.get_basedir(), self.feat2dst)
         self.dst_embeddings = self.dst_embeddings['dst']
         self.feat2dst = self.feat2dst['dst']
 
@@ -446,9 +457,9 @@ class LanguageModelingTask(Task):
         self.task = None
 
     def _create_task_specific_reader(self):
-        vectorizers = self._create_vectorizers()
+        self._create_vectorizers()
         nbptt = self.config_params['nbptt']
-        reader = baseline.create_lm_reader(vectorizers,
+        reader = baseline.create_lm_reader(self.vectorizers,
                                            nbptt,
                                            reader_type=self.config_params['loader']['reader_type'])
         return reader
@@ -483,6 +494,7 @@ class LanguageModelingTask(Task):
         print("[train file]: {}\n[valid file]: {}\n[test file]: {}".format(self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']))
         vocabs = self.reader.build_vocab([self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']])
         self.embeddings, self.feat2index = self._create_embeddings(embeddings_set, vocabs, self.config_params['features'])
+        save_vocabs(self.get_basedir(), self.feat2index)
 
     def _load_dataset(self):
         tgt_key = self.config_params['loader'].get('tgt_key', 'x')

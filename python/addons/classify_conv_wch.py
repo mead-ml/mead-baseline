@@ -4,7 +4,7 @@ from baseline.pytorch.classify import *
 cudnn.benchmark = True
 
 
-class ConvConvModel(nn.Module, Classifier):
+class ConvConvModel(nn.Module, ClassifierModel):
 
     def __init__(self):
         super(ConvConvModel, self).__init__()

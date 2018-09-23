@@ -116,7 +116,7 @@ def fit(model, ts, vs, es=None, **kwargs):
     trainer = create_trainer(ClassifyTrainerKeras, model, **kwargs)
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
     epochs = int(kwargs.get('epochs', 20))
-    model_file = get_model_file(kwargs, 'classify', 'keras')
+    model_file = get_model_file('classify', 'keras', kwargs.get('basedir'))
 
     if do_early_stopping:
         early_stopping_metric = kwargs.get('early_stopping_metric', 'acc')

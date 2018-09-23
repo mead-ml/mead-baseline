@@ -1,6 +1,7 @@
 {
     "task": "tagger",
     "batchsz": 20,
+    "basedir": "./twpos",
     "conll_output": "twposresults.conll",
     "test_thresh": 10,
     "charsz": 16,

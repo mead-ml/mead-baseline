@@ -223,14 +223,28 @@ def stacked_lstm(hsz, pkeep, nlayers):
     return tf.contrib.rnn.MultiRNNCell([lstm_cell_w_dropout(hsz, pkeep) if i < nlayers - 1 else lstm_cell(hsz) for i in range(nlayers)], state_is_tuple=True)
 
 
-def stacked_cnn(inputs, hsz, pkeep, nlayers, activation_fn=tf.nn.relu, filts=[5]):
-    with tf.variable_scope("StackedCNN"):
+def stacked_cnn(inputs, hsz, pkeep, nlayers, filts=[5], activation_fn=tf.nn.relu, scope='StackedCNN'):
+    with tf.variable_scope(scope):
         layers = []
         for filt in filts:
-            layer = tf.nn.dropout(tf.layers.conv1d(inputs, hsz, filt, activation=activation_fn, padding="same", reuse=False), pkeep)
+            layer = tf.nn.dropout(tf.layers.conv1d(inputs,
+                                                   hsz,
+                                                   filt,
+                                                   activation=activation_fn,
+                                                   padding="same",
+                                                   name='conv{}-0'.format(filt)),
+                                  pkeep,
+                                  name='dropout{}-0'.format(filt))
 
             for i in range(1, nlayers):
-                layer = layer + tf.nn.dropout(tf.layers.conv1d(inputs, hsz, filt, activation=activation_fn, padding="same", reuse=False), pkeep)
+                layer = layer + tf.nn.dropout(tf.layers.conv1d(inputs,
+                                                               hsz,
+                                                               filt,
+                                                               activation=activation_fn,
+                                                               padding="same",
+                                                               name='conv{}-{}'.format(filt, i)),
+                                              pkeep,
+                                              name='dropout{}-{}'.format(filt, i))
             layers += [layer]
 
         return tf.concat(values=layers, axis=2)

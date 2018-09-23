@@ -37,8 +37,8 @@ class AbstractVectorizer(Vectorizer):
         #print(self.transform_fn)
 
     def _iterable(self, tokens):
-        for tok in self.transform_fn(tokens):
-            yield tok
+        for tok in tokens:
+            yield self.transform_fn(tok)
 
     def _next_element(self, tokens, vocab):
         for atom in self._iterable(tokens):
@@ -267,7 +267,6 @@ BASELINE_KNOWN_VECTORIZERS = {
 @exporter
 def create_vectorizer(**kwargs):
     vec_type = kwargs.get('vectorizer_type', kwargs.get('type', 'token1d'))
-    print(vec_type)
     Constructor = BASELINE_KNOWN_VECTORIZERS.get(vec_type)
     if Constructor is not None:
         return Constructor(**kwargs)

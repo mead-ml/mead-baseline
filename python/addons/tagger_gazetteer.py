@@ -10,7 +10,7 @@ import tensorflow as tf
 import numpy as np
 
 
-class RNNTaggerGazetteerModel(Tagger):
+class RNNTaggerModelGazetteerModel(Tagger):
 
     def save_values(self, basename):
         self.saver.save(self.sess, basename)

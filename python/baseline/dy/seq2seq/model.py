@@ -1,10 +1,10 @@
 import numpy as np
-from baseline.model import create_seq2seq_model, load_seq2seq_model, EncoderDecoder
+from baseline.model import create_seq2seq_model, load_seq2seq_model, EncoderDecoderModel
 from baseline.dy.dynety import *
 from baseline.utils import topk
 
 
-class Seq2SeqModel(DynetModel, EncoderDecoder):
+class Seq2SeqModel(DynetModel, EncoderDecoderModel):
 
     def __init__(self, embeddings_in, embeddings_out, **kwargs):
         super(Seq2SeqModel, self).__init__()

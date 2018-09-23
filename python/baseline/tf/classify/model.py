@@ -4,10 +4,9 @@ from google.protobuf import text_format
 from tensorflow.python.platform import gfile
 from tensorflow.contrib.layers import fully_connected, xavier_initializer
 from baseline.utils import fill_y, listify, write_json, ls_props, read_json
-from baseline.model import Classifier, load_classifier_model, create_classifier_model
+from baseline.model import ClassifierModel, load_classifier_model, create_classifier_model
 from baseline.tf.tfy import (stacked_lstm,
-                             parallel_conv,
-                             get_vocab_file_suffixes)
+                             parallel_conv)
 
 from baseline.tf.embeddings import (TensorFlowEmbeddings,
                                     TensorFlowCharConvEmbeddings,
@@ -15,11 +14,10 @@ from baseline.tf.embeddings import (TensorFlowEmbeddings,
                                     tf_embeddings)
 from baseline.version import __version__
 import os
-from baseline.utils import zip_model, unzip_model
 import copy
 
 
-class ClassifyParallelModel(Classifier):
+class ClassifyParallelModel(ClassifierModel):
 
     def __init__(self, create_fn, embeddings, labels, **kwargs):
         super(ClassifyParallelModel, self).__init__()
@@ -124,7 +122,7 @@ class ClassifyParallelModel(Classifier):
         return feed_dict
 
 
-class ClassifierBase(Classifier):
+class ClassifierModelBase(ClassifierModel):
     """Base for all baseline implementations of token-based classifiers
     
     This class provides a loose skeleton around which the baseline models
@@ -140,7 +138,7 @@ class ClassifierBase(Classifier):
     def __init__(self):
         """Base
         """
-        super(ClassifierBase, self).__init__()
+        super(ClassifierModelBase, self).__init__()
 
     def set_saver(self, saver):
         self.saver = saver
@@ -253,7 +251,6 @@ class ClassifierBase(Classifier):
         
         :return: A restored model
         """
-        basename = unzip_model(basename)
         sess = kwargs.get('session', kwargs.get('sess', tf.Session()))
         model = cls()
         with open(basename + '.saver') as fsv:
@@ -279,7 +276,7 @@ class ClassifierBase(Classifier):
         model.embeddings = dict()
         for key, class_name in state['embeddings'].items():
             md = read_json('{}-{}-md.json'.format(basename, key))
-            embed_args = dict({'vocab': md['vocab'], 'vsz': md['vsz'], 'dsz': md['dsz']})
+            embed_args = dict({'vsz': md['vsz'], 'dsz': md['dsz']})
             embed_args[key] = tf.get_default_graph().get_tensor_by_name('{}:0'.format(key))
             Constructor = eval(class_name)
             model.embeddings[key] = Constructor(key, **embed_args)
@@ -367,13 +364,7 @@ class ClassifierBase(Classifier):
             seed = np.random.randint(10e8)
             init = tf.random_uniform_initializer(-0.05, 0.05, dtype=tf.float32, seed=seed)
             xavier_init = xavier_initializer(True, seed)
-
-            all_embeddings_out = []
-            for embedding in model.embeddings.values():
-                embeddings_out = embedding.encode()
-                all_embeddings_out += [embeddings_out]
-
-            word_embeddings = tf.concat(values=all_embeddings_out, axis=2)
+            word_embeddings = model.embed()
             input_sz = word_embeddings.shape[-1]
             pooled = model.pool(word_embeddings, input_sz, init, **kwargs)
             stacked = model.stacked(pooled, init, **kwargs)
@@ -388,6 +379,14 @@ class ClassifierBase(Classifier):
         model.sess = sess
         # writer = tf.summary.FileWriter('blah', sess.graph)
         return model
+
+    def embed(self):
+        all_embeddings_out = []
+        for embedding in self.embeddings.values():
+            embeddings_out = embedding.encode()
+            all_embeddings_out += [embeddings_out]
+        word_embeddings = tf.concat(values=all_embeddings_out, axis=2)
+        return word_embeddings
 
     def pool(self, word_embeddings, dsz, init, **kwargs):
         """This method performs a transformation between a temporal signal and a fixed representation
@@ -428,7 +427,7 @@ class ClassifierBase(Classifier):
         return in_layer
 
 
-class ConvModel(ClassifierBase):
+class ConvModel(ClassifierModelBase):
     """Current default model for `baseline` classification.  Parallel convolutions of varying receptive field width
     
     """
@@ -463,7 +462,7 @@ class ConvModel(ClassifierBase):
         return combine
 
 
-class LSTMModel(ClassifierBase):
+class LSTMModel(ClassifierModelBase):
     """A simple single-directional single-layer LSTM. No layer-stacking.
     
     """
@@ -513,7 +512,7 @@ class LSTMModel(ClassifierBase):
         return combine
 
 
-class NBowBase(ClassifierBase):
+class NBowBase(ClassifierModelBase):
     """Neural Bag-of-Words Model base class.  Defines stacking of fully-connected layers, but leaves pooling to derived
     """
     def __init__(self):
@@ -566,7 +565,7 @@ class NBowMaxModel(NBowBase):
         return tf.reduce_max(word_embeddings, 1, keepdims=False)
 
 
-class CompositePoolingModel(ClassifierBase):
+class CompositePoolingModel(ClassifierModelBase):
 
     def __init__(self):
         super(CompositePoolingModel, self).__init__()

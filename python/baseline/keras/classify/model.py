@@ -10,11 +10,11 @@ from keras.layers import (Dense,
 
 from keras.utils import np_utils
 from baseline.utils import listify
-from baseline.model import Classifier, load_classifier_model, create_classifier_model
+from baseline.model import ClassifierModel, load_classifier_model, create_classifier_model
 import json
 
 
-class WordClassifierBase(Classifier):
+class WordClassifierModelBase(ClassifierModel):
 
     def __init__(self):
         pass

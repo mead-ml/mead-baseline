@@ -122,7 +122,7 @@ def fit(model, ts, vs, es=None, **kwargs):
     epochs = int(kwargs['epochs']) if 'epochs' in kwargs else 5
     patience = int(kwargs['patience']) if 'patience' in kwargs else epochs
 
-    model_file = get_model_file(kwargs, 'lm', 'tf')
+    model_file = get_model_file('lm', 'tf', kwargs.get('basedir'))
     after_train_fn = kwargs['after_train_fn'] if 'after_train_fn' in kwargs else None
     trainer = create_trainer(LanguageModelTrainerTf, model, **kwargs)
     init = tf.global_variables_initializer()

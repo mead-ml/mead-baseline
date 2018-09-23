@@ -15,13 +15,13 @@ exporter = export(__all__)
 
 
 @exporter
-class Classifier(object):
+class ClassifierModel(object):
     """Text classifier
     
     Provide an interface to DNN classifiers that use word lookup tables.
     """
     def __init__(self):
-        super(Classifier, self).__init__()
+        super(ClassifierModel, self).__init__()
 
     def save(self, basename):
         """Save this model out
@@ -52,13 +52,6 @@ class Classifier(object):
         """
         pass
 
-    def get_vocab(self, name='word'):
-        """Return the vocabulary, which is a dictionary mapping a word to its word index
-        
-        :return: A dictionary mapping a word to its word index
-        """
-        pass
-
     def get_labels(self):
         """Return a list of labels, where the offset within the list is the location in a confusion matrix, etc.
         
@@ -66,60 +59,6 @@ class Classifier(object):
         """
         pass
 
-    def classify_text(self, tokens, **kwargs):
-        """Utility method to convert a list of words comprising a text to indices, and create a single element
-        batch which is then classified.  The returned decision is sorted in descending order of probability.
-
-        At the moment, this method only prepares `x` features in the `batch_dict`.  This means that it cannot
-        be used for models that provide, for instance, character-level features.  In that case, use `classify` directly.
-        
-        :param tokens: A list of words
-        :param mxlen: The maximum length of the words.  List items beyond this edge are removed
-        :param zero_alloc: A function defining an allocator.  Defaults to numpy zeros
-        :param word_trans_fn: A transform on the input word
-        :return: A sorted list of outcomes for a single element batch
-        """
-        mxlen = 0
-        mxwlen = 0
-        if type(tokens[0]) == str:
-            tokens_seq = (tokens,)
-        else:
-            tokens_seq = tokens
-
-        for tokens in tokens_seq:
-            mxlen = max(mxlen, len(tokens))
-            for token in tokens:
-                mxwlen = max(mxwlen, len(token))
-
-        vectorizers = kwargs.get('vectorizers')
-        if vectorizers is None:
-            vectorizers = {'word': Token1DVectorizer(mxlen=kwargs.get('mxlen', mxlen))}
-
-        examples = dict()
-        for k, vectorizer in vectorizers.items():
-            if hasattr(vectorizer, 'mxlen') and vectorizer.mxlen == -1:
-                vectorizer.mxlen = mxlen
-            if hasattr(vectorizer, 'mxwlen') and vectorizer.mxwlen == -1:
-                vectorizer.mxwlen = mxwlen
-            examples[k] = []
-
-        for i, tokens in enumerate(tokens_seq):
-            for k, vectorizer in vectorizers.items():
-                vec, length = vectorizer.run(tokens, self.embeddings[k].vocab)
-                examples[k] += [vec]
-                if length is not None:
-                    lengths_key = '{}_lengths'.format(k)
-                    if lengths_key not in examples:
-                        examples[lengths_key] = []
-                    examples[lengths_key] += [length]
-
-        for k in vectorizers.keys():
-            examples[k] = np.stack(examples[k])
-        outcomes_list = self.classify(examples)
-        results = []
-        for outcomes in outcomes_list:
-            results += [sorted(outcomes, key=lambda tup: tup[1], reverse=True)]
-        return results
 
 
 @exporter
@@ -217,7 +156,7 @@ load_lang_model = exporter(
 
 
 @exporter
-class Tagger(object):
+class TaggerModel(object):
     """Structured prediction classifier, AKA a tagger
     
     This class takes a temporal signal, represented as words over time, and characters of words
@@ -225,7 +164,7 @@ class Tagger(object):
     type of chunking (e.g. NER, POS chunks, slot-filling)
     """
     def __init__(self):
-        super(Tagger, self).__init__()
+        super(TaggerModel, self).__init__()
 
     def save(self, basename):
         pass
@@ -237,112 +176,8 @@ class Tagger(object):
     def predict(self, batch_dict):
         pass
 
-    def predict_text(self, tokens, **kwargs):
-        """
-        Utility function to convert lists of sentence tokens to integer value one-hots which
-        are then passed to the tagger.  The resultant output is then converted back to label and token
-        to be printed.
-
-        This method is not aware of any input features other than words and characters (and lengths).  If you
-        wish to use other features and have a custom model that is aware of those, use `predict` directly.
-
-        :param tokens: (``list``) A list of tokens
-
-        """
-        label_field = kwargs.get('label', 'label')
-
-        mxlen = 0
-        mxwlen = 0
-        if type(tokens[0]) == str:
-            mxlen = len(tokens)
-            tokens_seq = []
-            for t in tokens:
-                mxwlen = max(mxwlen, len(t))
-                tokens_seq += [dict({'text': t})]
-            tokens_seq = [tokens_seq]
-        else:
-            # Better be a sequence, but it could be pre-batched, [[],[]]
-            # But what kind of object is at the first one then?
-            if is_sequence(tokens[0]):
-                tokens_seq = []
-                # Then what we have is [['The', 'dog',...], ['I', 'cannot']]
-                # For each of the utterances, we need to make a dictionary
-                if type(tokens[0][0]) == str:
-
-                    for utt in tokens:
-                        utt_dict_seq = []
-                        mxlen = max(mxlen, len(utt))
-                        for t in utt:
-                            mxwlen = max(mxwlen, len(t))
-                            utt_dict_seq += [dict({'text': t})]
-                        tokens_seq += [utt_dict_seq]
-                # Its already in dict form so we dont need to do anything
-                elif type(tokens[0][0]) == dict:
-                    for utt in tokens:
-                        mxlen = max(mxlen, len(utt))
-                        for t in utt['text']:
-                            mxwlen = max(mxwlen, len(t))
-            # If its a dict, we just wrap it up
-            elif type(tokens[0]) == dict:
-                mxlen = max(len(tokens))
-                for t in tokens:
-                    mxwlen = max(mxwlen, len(t))
-                tokens_seq = [tokens]
-            else:
-                raise Exception('Unknown input format')
-
-        if len(tokens_seq) == 0:
-            return []
-
-        vectorizers = kwargs.get('vectorizers')
-        if vectorizers is None:
-            word_tokenizer = Dict1DVectorizer(mxlen=mxlen)
-            char_tokenizer = Dict2DVectorizer(mxlen=mxlen, mxwlen=mxwlen)
-            vectorizers = {'word': word_tokenizer, 'char': char_tokenizer}
-
-        # This might be inefficient if the label space is large
-
-        label_vocab = revlut(self.get_labels())
-
-        examples = dict()
-        for k, vectorizer in vectorizers.items():
-            if hasattr(vectorizer, 'mxlen') and vectorizer.mxlen == -1:
-                vectorizer.mxlen = mxlen
-            if hasattr(vectorizer, 'mxwlen') and vectorizer.mxwlen == -1:
-                vectorizer.mxwlen = mxwlen
-            examples[k] = []
-
-        for i, tokens in enumerate(tokens_seq):
-            for k, vectorizer in vectorizers.items():
-                vec, length = vectorizer.run(tokens, self.embeddings[k].vocab)
-                examples[k] += [vec]
-                if length is not None:
-                    lengths_key = '{}_lengths'.format(k)
-                    if lengths_key not in examples:
-                        examples[lengths_key] = []
-                    examples[lengths_key] += [length]
-
-        for k in vectorizers.keys():
-            examples[k] = np.stack(examples[k])
-
-        outcomes = self.predict(examples)
-        outputs = []
-        for i, outcome in enumerate(outcomes):
-            output = []
-            for j, token in enumerate(tokens_seq[i]):
-                new_token = dict()
-                new_token.update(token)
-                new_token[label_field] = label_vocab[outcome[j].item()]
-                output += [new_token]
-            outputs += [output]
-        return outputs
-
-    def get_vocab(self, vocab_type='word'):
-        pass
-
     def get_labels(self):
         pass
-
 
 @exporter
 class LanguageModel(object):
@@ -355,13 +190,13 @@ class LanguageModel(object):
 
 
 @exporter
-class EncoderDecoder(object):
+class EncoderDecoderModel(object):
 
     def save(self, model_base):
         pass
 
     def __init__(self):
-        super(EncoderDecoder, self).__init__()
+        super(EncoderDecoderModel, self).__init__()
 
     @staticmethod
     def create(src_vocab, dst_vocab, **kwargs):

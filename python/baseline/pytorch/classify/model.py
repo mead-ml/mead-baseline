@@ -9,7 +9,7 @@ import torch.backends.cudnn as cudnn
 cudnn.benchmark = True
 
 
-class WordClassifierBase(nn.Module, Classifier):
+class WordClassifierModelBase(nn.Module, Classifier):
 
     def __init__(self):
         super(WordClassifierBase, self).__init__()

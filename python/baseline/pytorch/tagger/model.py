@@ -4,7 +4,7 @@ import torch.autograd
 import math
 
 
-class RNNTaggerModel(nn.Module, Tagger):
+class RNNTaggerModelModel(nn.Module, Tagger):
 
     def save(self, outname):
         torch.save(self, outname)

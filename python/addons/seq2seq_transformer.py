@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 from baseline.pytorch.torchy import *
-from baseline.model import EncoderDecoder
+from baseline.model import EncoderDecoderModel
 
 
 def subsequent_mask(size):
@@ -278,7 +278,7 @@ class Decoder(nn.Module):
         return self.norm(x)
 
 
-class Transformer(nn.Module, EncoderDecoder):
+class Transformer(nn.Module, EncoderDecoderModel):
 
     def __init__(self, embeddings_in, embeddings_out, **kwargs):
         super(Transformer, self).__init__()

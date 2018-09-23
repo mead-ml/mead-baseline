@@ -1,8 +1,6 @@
 import baseline as bl
-import baseline.tf.classify as classify
 import argparse
 import os
-
 parser = argparse.ArgumentParser(description='Classify text with a model')
 parser.add_argument('--model', help='A classifier model', required=True, type=str)
 parser.add_argument('--text', help='raw value', type=str)
@@ -21,5 +19,6 @@ else:
     texts = [args.text.split()]
 
 print(texts)
-m = classify.load_model(args.model)
-print(m.classify_text(texts))
+
+m = bl.ClassifierService.load(args.model)
+print(m.transform(texts))

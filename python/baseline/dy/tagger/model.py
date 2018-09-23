@@ -1,6 +1,6 @@
 import dynet as dy
 from baseline.model import (
-    Tagger,
+    TaggerModel,
     load_tagger_model,
     create_tagger_model
 )
@@ -8,9 +8,9 @@ import numpy as np
 from baseline.dy.dynety import CRF, Linear, Embedding, DynetModel, ParallelConv, rnn_forward
 
 
-class RNNTaggerModel(Tagger, DynetModel):
+class RNNTaggerModelModel(TaggerModel, DynetModel):
     def __init__(self, embeddings_set, labels, finetune=True, dense=False, dropout=0.5, layers=1, **kwargs):
-        super(RNNTaggerModel, self).__init__()
+        super(RNNTaggerModelModel, self).__init__()
         self._pc = dy.ParameterCollection()
         self.pdrop = dropout
         self.train = True
@@ -56,7 +56,7 @@ class RNNTaggerModel(Tagger, DynetModel):
         return self._pc
 
     def __str__(self):
-        str_ = super(RNNTaggerModel, self).__str__()
+        str_ = super(RNNTaggerModelModel, self).__str__()
         return "Auto-batching: \n{}".format(str_)
 
     def make_input(self, batch_dict):
@@ -150,11 +150,11 @@ class RNNTaggerModel(Tagger, DynetModel):
 
 
 BASELINE_TAGGER_MODELS = {
-    'default': RNNTaggerModel.create,
+    'default': RNNTaggerModelModel.create,
 }
 
 BASELINE_TAGGER_LOADERS = {
-    'default': RNNTaggerModel.load,
+    'default': RNNTaggerModelModel.load,
 }
 
 

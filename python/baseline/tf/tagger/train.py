@@ -6,7 +6,6 @@ from baseline.reporting import basic_reporting
 from baseline.tf.tfy import optimizer
 from baseline.train import EpochReportingTrainer, create_trainer
 import os
-from baseline.utils import zip_model
 
 
 class TaggerEvaluatorTf(object):
@@ -150,7 +149,7 @@ def fit(model, ts, vs, es, **kwargs):
     conll_output = kwargs.get('conll_output', None)
     span_type = kwargs.get('span_type', 'iob')
     txts = kwargs.get('txts', None)
-    model_file = get_model_file(kwargs, 'tagger', 'tf')
+    model_file = get_model_file('tagger', 'tf', kwargs.get('basedir'))
     after_train_fn = kwargs['after_train_fn'] if 'after_train_fn' in kwargs else None
     trainer = create_trainer(TaggerTrainerTf, model, **kwargs)
     tables = tf.tables_initializer()
@@ -204,5 +203,4 @@ def fit(model, ts, vs, es, **kwargs):
         test_metrics = evaluator.test(es, conll_output=conll_output, txts=txts)
         for reporting in reporting_fns:
             reporting(test_metrics, 0, 'Test')
-    if kwargs.get("model_zip", False):
-        zip_model(model_file)
+

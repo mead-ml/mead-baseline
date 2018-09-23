@@ -3,14 +3,14 @@ import json
 from google.protobuf import text_format
 from tensorflow.python.platform import gfile
 from tensorflow.contrib.layers import fully_connected, xavier_initializer
-from baseline.model import Tagger, create_tagger_model, load_tagger_model
+from baseline.model import TaggerModel, create_tagger_model, load_tagger_model
 from baseline.tf.tfy import *
-from baseline.utils import zip_model, unzip_model, ls_props, read_json, write_json
+from baseline.utils import ls_props, read_json, write_json
 from baseline.tf.embeddings import *
 from baseline.version import __version__
 
 
-class RNNTaggerModel(Tagger):
+class RNNTaggerModelModel(TaggerModel):
 
     def save_values(self, basename):
         self.saver.save(self.sess, basename)
@@ -82,7 +82,6 @@ class RNNTaggerModel(Tagger):
 
         :return: A restored model
         """
-        basename = unzip_model(basename)
         sess = kwargs.get('session', kwargs.get('sess', tf.Session()))
         model = cls()
         with open(basename + '.saver') as fsv:
@@ -108,7 +107,7 @@ class RNNTaggerModel(Tagger):
         model.embeddings = dict()
         for key, class_name in state['embeddings'].items():
             md = read_json('{}-{}-md.json'.format(basename, key))
-            embed_args = dict({'vocab': md['vocab'], 'vsz': md['vsz'], 'dsz': md['dsz']})
+            embed_args = dict({'vsz': md['vsz'], 'dsz': md['dsz']})
             embed_args[key] = tf.get_default_graph().get_tensor_by_name('{}:0'.format(key))
             Constructor = eval(class_name)
             model.embeddings[key] = Constructor(key, **embed_args)
@@ -191,11 +190,8 @@ class RNNTaggerModel(Tagger):
         return all_loss
 
     def __init__(self):
-        super(RNNTaggerModel, self).__init__()
+        super(RNNTaggerModelModel, self).__init__()
         pass
-
-    def get_vocab(self, vocab_type='word'):
-        return self.embeddings[vocab_type].vocab
 
     def get_labels(self):
         return self.labels
@@ -321,11 +317,11 @@ class RNNTaggerModel(Tagger):
         return model
 
 BASELINE_TAGGER_MODELS = {
-    'default': RNNTaggerModel.create,
+    'default': RNNTaggerModelModel.create,
 }
 
 BASELINE_TAGGER_LOADERS = {
-    'default': RNNTaggerModel.load
+    'default': RNNTaggerModelModel.load
 }
 
 

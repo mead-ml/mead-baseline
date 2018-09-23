@@ -20,16 +20,13 @@ class TensorFlowEmbeddings(object):
     def save_md(self):
         pass
 
-    def get_vocab(self):
-        pass
-
     @classmethod
     def create_placeholder(cls, name):
         pass
 
     @classmethod
     def create_from_embeddings(cls, name, model, **kwargs):
-        return cls(name, vsz=model.vsz, dsz=model.dsz, vocab=model.vocab, weights=model.weights, **kwargs)
+        return cls(name, vsz=model.vsz, dsz=model.dsz, weights=model.weights, **kwargs)
 
 
 class TensorFlowTokenEmbeddings(TensorFlowEmbeddings):
@@ -40,7 +37,6 @@ class TensorFlowTokenEmbeddings(TensorFlowEmbeddings):
 
     def __init__(self, name, **kwargs):
         super(TensorFlowTokenEmbeddings, self).__init__()
-        self.vocab = kwargs.get('vocab')
         self.vsz = kwargs.get('vsz')
         self.dsz = kwargs.get('dsz')
         self.finetune = kwargs.get('finetune', True)
@@ -48,9 +44,6 @@ class TensorFlowTokenEmbeddings(TensorFlowEmbeddings):
         self.scope = kwargs.get('scope', '{}/LUT'.format(self.name))
         self.x = kwargs.get(self.name, self.create_placeholder(name))
         self.weights = kwargs.get('weights')
-
-    def get_vocab(self):
-        return self.vocab
 
     def get_vsz(self):
         return self.vsz
@@ -60,14 +53,14 @@ class TensorFlowTokenEmbeddings(TensorFlowEmbeddings):
 
     def encode(self):
         return embed(self.x,
-                     len(self.vocab),
+                     self.get_vsz(),
                      self.get_dsz(),
                      tf.constant_initializer(self.weights, dtype=tf.float32, verify_shape=True),
                      self.finetune,
                      self.scope)
 
     def save_md(self, target):
-        write_json({'vsz': self.get_vsz(), 'dsz': self.get_dsz(), 'vocab': self.get_vocab()}, target)
+        write_json({'vsz': self.get_vsz(), 'dsz': self.get_dsz()}, target)
 
     def _get_weights(self, sess):
         weights = sess.run('{}/W:0'.format(self.scope))
@@ -82,7 +75,6 @@ class TensorFlowCharConvEmbeddings(TensorFlowEmbeddings):
 
     def __init__(self, name, **kwargs):
         super(TensorFlowCharConvEmbeddings, self).__init__()
-        self.vocab = kwargs.get('vocab')
         self.vsz = kwargs.get('vsz')
         self.dsz = kwargs.get('dsz')
         self.finetune = kwargs.get('finetune', True)
@@ -94,13 +86,13 @@ class TensorFlowCharConvEmbeddings(TensorFlowEmbeddings):
         self.xch = kwargs.get(self.name, tf.placeholder(tf.int32, [None, None, None], name=self.name))
 
     def save_md(self, target):
-        write_json({'vsz': self.get_vsz(), 'dsz': self.get_dsz(), 'vocab': self.get_vocab()}, target)
+        write_json({'vsz': self.get_vsz(), 'dsz': self.get_dsz()}, target)
 
     def encode(self):
         with tf.variable_scope(self.scope):
             Wch = tf.get_variable("Wch",
                                   initializer=tf.constant_initializer(self.weights, dtype=tf.float32, verify_shape=True),
-                                  shape=[len(self.vocab), self.dsz], trainable=True)
+                                  shape=[self.vsz, self.dsz], trainable=True)
             ech0 = tf.scatter_update(Wch, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, self.dsz]))
             char_comp, self.wsz = pool_chars(self.xch, Wch, ech0, self.dsz, **self.params)
             return char_comp
@@ -111,10 +103,6 @@ class TensorFlowCharConvEmbeddings(TensorFlowEmbeddings):
     # Warning this function is only initialized AFTER encode
     def get_dsz(self):
         return self.wsz
-
-    def get_vocab(self):
-        return self.vocab
-
 
 
 def tf_embeddings(in_embeddings_obj, name, DefaultType=TensorFlowTokenEmbeddings, **kwargs):

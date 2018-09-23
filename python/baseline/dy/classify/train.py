@@ -109,7 +109,7 @@ def fit(
 ):
     autobatchsz = kwargs.get('autobatchsz', 1)
     verbose = kwargs.get('verbose', {'print': kwargs.get('verbose_print', False), 'file': kwargs.get('verbose_file', None)})
-    model_file = get_model_file(kwargs, 'classify', 'dynet')
+    model_file = get_model_file('classify', 'dynet', kwargs.get('basedir'))
     if do_early_stopping:
         patience = kwargs.get('patience', epochs)
         print('Doing early stopping on [{}] with patience [{}]'.format(early_stopping_metric, patience))

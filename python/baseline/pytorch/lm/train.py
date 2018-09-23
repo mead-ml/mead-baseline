@@ -109,7 +109,7 @@ def fit(model, ts, vs, es, **kwargs):
     epochs = int(kwargs['epochs']) if 'epochs' in kwargs else 5
     patience = int(kwargs['patience']) if 'patience' in kwargs else epochs
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
-    model_file = get_model_file(kwargs, 'lm', 'pytorch')
+    model_file = get_model_file('lm', 'pytorch', kwargs.get('basedir'))
 
     if do_early_stopping:
         early_stopping_metric = kwargs.get('early_stopping_metric', 'avg_loss')

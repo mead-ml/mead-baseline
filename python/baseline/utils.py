@@ -13,11 +13,13 @@ import zipfile
 
 __all__ = []
 
+
 def parameterize(func):
     @wraps(func)
     def decorator(*args, **kwargs):
         return lambda x: func(x, *args, **kwargs)
     return decorator
+
 
 @parameterize
 def export(obj, all_list=None):
@@ -207,19 +209,6 @@ def iobes_mask(vocab, start, end, pad=None):
     return mask
 
 @exporter
-def listify(x):
-    """Take a scalar or list and make it a list
-
-    :param x: The input to convert
-    :return: A list
-    """
-    if isinstance(x, (list, tuple, np.ndarray)):
-        return x
-    if x is None:
-        return []
-    return [x]
-
-@exporter
 def get_version(pkg):
     s = '.'.join(pkg.__version__.split('.')[:2])
     return float(s)
@@ -271,6 +260,18 @@ def is_sequence(x):
     if isinstance(x, str):
         return False
     return isinstance(x, collections.Sequence)
+
+
+@exporter
+def listify(x):
+    """Take a scalar or list and make it a list iff not already a sequence or numpy array
+
+    :param x: The input to convert
+    :return: A list
+    """
+    if is_sequence(x) or isinstance(x, np.ndarray):
+        return x
+    return [x] if x is not None else []
 
 @exporter
 def read_json(filepath, default_value=None, strict=False):
@@ -329,9 +330,7 @@ def write_json(content, filepath):
 
 @exporter
 def ls_props(thing):
-    #isinstance(getattr(type(thing), property):
     return [x for x in dir(thing) if isinstance(getattr(type(thing), x, None), property)]
-    #return [k for k, v in dir(thing.__class__.__dict__.items() if type(v) is property]
 
 
 @exporter
@@ -496,7 +495,7 @@ load_user_lang_model = exporter(
 
 
 @exporter
-def get_model_file(dictionary, task, platform):
+def get_model_file(task, platform, basedir=None):
     """Model name file helper to abstract different DL platforms (FWs)
 
     :param dictionary:
@@ -504,7 +503,8 @@ def get_model_file(dictionary, task, platform):
     :param platform:
     :return:
     """
-    base = dictionary.get('outfile', './%s-model' % task)
+    basedir = './' if basedir is None else basedir
+    base = '{}/{}-model'.format(basedir, task)
     rid = os.getpid()
     if platform.startswith('pyt'):
         name = '%s-%d.pyt' % (base, rid)
@@ -580,26 +580,6 @@ def fill_y(nc, yidx):
     xidx = np.arange(0, yidx.shape[0], 1)
     dense = np.zeros((yidx.shape[0], nc), dtype=int)
     dense[xidx, yidx] = 1
-    return dense
-
-
-@exporter
-def seq_fill_y(nc, yidx):
-    """Convert a `BxT` sparse array to a dense one, to expand labels 
-    
-    :param nc: (``int``) The number of labels
-    :param yidx: The sparse array of the labels
-    :return: A dense array
-    """
-    batchsz = yidx.shape[0]
-    siglen = yidx.shape[1]
-    dense = np.zeros((batchsz, siglen, nc), dtype=np.int)
-    for i in range(batchsz):
-        for j in range(siglen):
-            idx = int(yidx[i, j])
-            if idx > 0:
-                dense[i, j, idx] = 1
-
     return dense
 
 
@@ -842,6 +822,83 @@ def unzip_model(path):
         path = os.path.join(temp_dir, [x[:-6] for x in os.listdir(temp_dir) if 'index' in x][0])
     return path
 
+
+@exporter
+def save_vectorizers(basedir, vectorizers, name='vectorizers'):
+    import pickle
+    save_md_file = '{}/{}-{}.pkl'.format(basedir, name, os.getpid())
+    with open(save_md_file, 'wb') as f:
+        pickle.dump(vectorizers, f)
+
+
+@exporter
+def save_vocabs(basedir, embeds_or_vocabs, name='vocabs'):
+    for k, embeds_or_vocabs in embeds_or_vocabs.items():
+        save_md = '{}/{}-{}-{}.json'.format(basedir, name, k, os.getpid())
+        # Its a vocab
+        if type(embeds_or_vocabs) == dict:
+            write_json(embeds_or_vocabs, save_md)
+        # Type is embeds
+        else:
+            write_json(embeds_or_vocabs.vocab, save_md)
+
+
+@exporter
+def load_vocabs(directory):
+    vocab_fnames = find_files_with_prefix(directory, 'vocabs')
+    vocabs = {}
+    for f in vocab_fnames:
+        print(f)
+        k = f.split('-')[-2]
+        vocab = read_json(f)
+        vocabs[k] = vocab
+    return vocabs
+
+
+@exporter
+def load_vectorizers(directory):
+    import pickle
+    vectorizers_fname = find_files_with_prefix(directory, 'vectorizers')[0]
+    with open(vectorizers_fname, "rb") as f:
+        vectorizers = pickle.load(f)
+    return vectorizers
+
+
+@exporter
+def unzip_files(zip_path):
+    with open(zip_path, 'rb') as f:
+        sha1 = hashlib.sha1(f.read()).hexdigest()
+        temp_dir = os.path.join("/tmp/", sha1)
+        if not os.path.exists(temp_dir):
+            print("unzipping model")
+            with zipfile.ZipFile(zip_path, "r") as zip_ref:
+                zip_ref.extractall(temp_dir)
+        if len(os.listdir(temp_dir)) == 1:  # a directory was zipped v files
+            temp_dir = os.path.join(temp_dir, os.listdir(temp_dir)[0])
+    return temp_dir
+
+@exporter
+def find_model_basename(directory):
+    path = os.path.join(directory, [x for x in os.listdir(directory) if 'model' in x and '-md' not in x][0])
+    print(path)
+    path = path.split('.')[:-1]
+    return '.'.join(path)
+
+@exporter
+def find_files_with_prefix(directory, prefix):
+    return [os.path.join(directory, x) for x in os.listdir(directory) if x.startswith(prefix)]
+
+@exporter
+def zip_files(basedir):
+    pid = str(os.getpid())
+    tgt_zip_base = os.path.abspath(basedir)
+    model_files = [x for x in os.listdir(basedir) if x.find(pid) >= 0 and os.path.isfile(os.path.join(basedir, x))]
+    z = zipfile.ZipFile("{}-{}.zip".format(tgt_zip_base, pid), "w")
+    for f in model_files:
+        f = os.path.join(basedir, f)
+        z.write(f)
+        os.remove(f)
+    z.close()
 
 @exporter
 def zip_model(path):

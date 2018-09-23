@@ -2,10 +2,10 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 from baseline.pytorch.torchy import *
-from baseline.model import EncoderDecoder, load_seq2seq_model, create_seq2seq_model
+from baseline.model import EncoderDecoderModel, load_seq2seq_model, create_seq2seq_model
 
 
-class Seq2SeqBase(nn.Module, EncoderDecoder):
+class Seq2SeqBase(nn.Module, EncoderDecoderModel):
 
     def __init__(self, embeddings_in, embeddings_out):
         super(Seq2SeqBase, self).__init__()
