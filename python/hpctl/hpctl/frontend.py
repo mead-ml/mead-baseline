@@ -131,7 +131,7 @@ class Console(Frontend):
         """Display the train and dev metrics as they come in."""
         reset_screen(self.print_count)
         self.print_count = 0
-        labels = self.results.get_labels()
+        labels = self.results.get_labels(self.exp.experiment_hash)
         max_len = max(map(len, map(lambda x: x.human, labels)))
         for label in labels:
             print('{state} {name:{width}} - train ({train_metric}): {train_stat:.3f} at {train_step} dev ({metric}): {dev_stat:.3f} at {dev_step}'.format(
@@ -150,7 +150,7 @@ class Console(Frontend):
     def finalize(self):
         """Find and print the best results on the test set."""
         self.update()
-        best, _, _ = self.results.find_best('Valid', self.dev_metric)
+        best, _, _ = self.results.find_best(self.exp.experiment_hash, 'Valid', self.dev_metric)
         test = self.results.get_recent(best, 'Test', self.test_metric)
         print("\n{} had a test performance of {} on {}".format(best.human, test, self.test_metric))
 
@@ -194,7 +194,7 @@ class ConsoleDev(Console):
         """Display the best Dev metrics."""
         reset_screen(self.print_count)
         self.print_count = 0
-        labels, vals, idxs = self.results.get_best_per_label('Valid', self.dev_metric)
+        labels, vals, idxs = self.results.get_best_per_label(self.exp_hash, 'Valid', self.dev_metric)
         max_len = max(map(len, map(lambda x: x.human, human_labels)))
         for label, val, idx in zip(labels, vals, idxs):
             print('{state} {name:{width}} - best dev ({metric}): {stat:.3f} at {step}'.format(

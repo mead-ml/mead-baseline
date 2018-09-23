@@ -8,6 +8,7 @@ import time
 import platform
 import functools
 from enum import Enum
+from pprint import pformat
 from collections import defaultdict
 from multiprocessing.managers import BaseManager
 import numpy as np
@@ -19,6 +20,7 @@ export = exporter(__all__)
 
 dd_list = functools.partial(defaultdict, list)
 ddd_list = functools.partial(defaultdict, dd_list)
+dddd_list = functools.partial(defaultdict, ddd_list)
 
 
 @six.python_2_unicode_compatible
@@ -37,15 +39,17 @@ class Results(object):
     """An object that aggregates results from jobs.
 
     DataStructure:
-        Dict[
-            hpctl.utils.Label: Dict [
-                str, phase : Dict [
-                    str, log field: List[float]
-                ]
-            ],
-            'state': hpctl.results.States, The state of that job.
-            'timestamp': int, When that job started.
-        ]
+        Dict: {
+            str, exp_hash : Dict[
+                hpctl.utils.Label: Dict [
+                    str, phase : Dict [
+                        str, log field: List[float]
+                    ]
+                ],
+                'state': hpctl.results.States, The state of that job.
+                'timestamp': int, When that job started.
+            ]
+        }
 
     Data is resultsd in a columnish results where most entries are a list that
     represent a timeseries. This lets use to easy `OLAP`-ish queries rather
@@ -53,7 +57,7 @@ class Results(object):
     """
     def __init__(self):
         super(Results, self).__init__()
-        self.results = defaultdict(ddd_list)
+        self.results = defaultdict(dddd_list)
         self.label_to_config = {}
         self.label_to_human = defaultdict(list)
         self.human_to_label = defaultdict(list)
@@ -110,8 +114,8 @@ class Results(object):
         :param config: dict, The config.
         """
         self.label_to_config[label] = config
-        self.results[label]['state'] = States.RUNNING
-        self.results[label]['time_stamp'] = time.time()
+        self.results[label.exp][label]['state'] = States.RUNNING
+        self.results[label.exp][label]['time_stamp'] = time.time()
         self.label_to_human[label.sha1].append(label.human)
         self.human_to_label[label.human].append(label.sha1)
 
@@ -123,9 +127,9 @@ class Results(object):
         """
         phase = message.pop('phase')
         if phase == 'Test':
-            self.results[label]['state'] = States.DONE
+            self.results[label.exp][label]['state'] = States.DONE
         for k, v in message.items():
-            self.results[label][phase][k].append(v)
+            self.results[label.exp][label][phase][k].append(v)
 
     def get_config(self, label):
         """Get the config from the sha1.
@@ -147,9 +151,9 @@ class Results(object):
         :returns:
             The last value in the column or 0.0
         """
-        res = self.results[label][phase][metric]
+        res = self.results[label.exp][label][phase][metric]
         res = res[-1] if res else 0.0
-        return res if not math.isnan(res) else 0.0
+        return res
 
     def get_best(self, label, phase, metric):
         """Get the best performance of a given label for a given metric.
@@ -162,14 +166,14 @@ class Results(object):
             [0]: The value the best model achieved.
             [1]: The tick value the best results was got at.
         """
-        data = self.results[label][phase][metric]
+        data = self.results[label.exp][label][phase][metric]
         if not data:
             return 0.0, 0.0
         val = np.max(data)
-        idx = self.results[label][phase]['tick'][np.argmax(data)]
+        idx = self.results[label.exp][label][phase]['tick'][np.argmax(data)]
         return val, idx
 
-    def find_best(self, phase, metric):
+    def find_best(self, exp_hash, phase, metric):
         """Get the best performance for a given metric.
 
         :param phase: str, The name of the phase.
@@ -183,19 +187,19 @@ class Results(object):
         best_label = None
         best_val = 0
         best_idx = None
-        for label in self.results:
-            data = self.results[label][phase][metric]
+        for label in self.results[exp_hash]:
+            data = self.results[exp_hash][label][phase][metric]
             if not data:
                 continue
             val = np.max(data)
-            idx = self.results[label][phase]['tick'][np.argmax(data)]
+            idx = self.results[exp_hash][label][phase]['tick'][np.argmax(data)]
             if val > best_val:
                 best_val = val
                 best_label = label
                 best_idx = idx
         return best_label, best_val, best_idx
 
-    def get_best_per_label(self, phase, metric):
+    def get_best_per_label(self, exp_hash, phase, metric):
         """Get the best performance for a given metric across all labels.
 
         :param phase: str, The name of the phase.
@@ -206,7 +210,7 @@ class Results(object):
             [1]: The value the best model achieved.
             [2]: The tick value the best results was got at.
         """
-        labels = self.get_labels()
+        labels = self.get_labels(exp_hash)
         vals = []
         idxs = []
         for label in labels:
@@ -215,13 +219,13 @@ class Results(object):
             idxs.append(idx)
         return labels, vals, idxs
 
-    def get_labels(self):
+    def get_labels(self, exp_hash):
         """Get all the labels in the data results.
 
         :returns:
             List[str]: The list of labels sorted by the time they started.
         """
-        labels = [(x, self.results[x]['time_stamp']) for x in self.results]
+        labels = [(x, self.results[exp_hash][x]['time_stamp']) for x in self.results[exp_hash]]
         labels = sorted(labels, key=lambda x: x[1])
         return [l[0] for l in labels]
 
@@ -274,7 +278,7 @@ class Results(object):
         :returns:
             str, The unicode of the status.
         """
-        state = self.results[label]['state']
+        state = self.results[label.exp][label]['state']
         if state not in States:
             return States.UNKNOWN
         return state
@@ -287,7 +291,7 @@ class Results(object):
         """
         if label not in self.results:
             return
-        self.results[label]['state'] = state
+        self.results[label.exp][label]['state'] = state
 
     def set_killed(self, label):
         """Set a job to killed.
@@ -295,6 +299,9 @@ class Results(object):
         :param label: hpctl.utils.Label, The label to set as killed.
         """
         self.set_state(label, States.KILLED)
+
+    def __str__(self):
+        return pformat(self.results)
 
 
 # Create the results as a multiprocessing manager so that we can share the
