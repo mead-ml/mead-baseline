@@ -1,18 +1,15 @@
-import torch
-import torch.nn as nn
-import math
-import json
-from baseline.model import Classifier, load_classifier_model, create_classifier_model
+from baseline.model import ClassifierModel, load_classifier_model, create_classifier_model
 from baseline.pytorch.torchy import *
+from baseline.pytorch.embeddings import pytorch_embeddings, PyTorchCharConvEmbeddings, PyTorchWordEmbeddings
 from baseline.utils import listify
 import torch.backends.cudnn as cudnn
 cudnn.benchmark = True
 
 
-class WordClassifierModelBase(nn.Module, Classifier):
+class ClassifierModelBase(nn.Module, ClassifierModel):
 
     def __init__(self):
-        super(WordClassifierBase, self).__init__()
+        super(ClassifierModelBase, self).__init__()
 
     @classmethod
     def load(cls, outname, **kwargs):
@@ -24,84 +21,86 @@ class WordClassifierModelBase(nn.Module, Classifier):
         torch.save(self, outname)
 
     @classmethod
-    def create(cls, embeddings_set, labels, **kwargs):
+    def create(cls, embeddings, labels, **kwargs):
 
         model = cls()
         model.pdrop = kwargs.get('pdrop', 0.5)
-        model.embeddings = dict()
-        model.embeddings['word'] = pytorch_embeddings(embeddings_set['word'], **kwargs)
-        input_sz = model.embeddings['word'].get_dsz()
-        if 'char' in embeddings_set:
-            model.embeddings['char'] = pytorch_embeddings(embeddings_set['char'],
-                                                          DefaultType=PyTorchCharConvEmbeddings,
-                                                          **kwargs)
-            input_sz += model.embeddings['char'].get_dsz()
+
+        model.lengths_key = kwargs.get('lengths_key')
+        if model.lengths_key is None:
+            if 'word' in embeddings:
+                model.lengths_key = 'word'
+            elif 'x' in embeddings:
+                model.lengths_key = 'x'
+
+        if model.lengths_key is not None:
+            # This allows user to short-hand the field to use
+            if not model.lengths_key.endswith('_lengths'):
+                model.lengths_key += '_lengths'
+        input_sz = model._init_embed(embeddings)
         model.gpu = not bool(kwargs.get('nogpu', False))
         model.labels = labels
         model.log_softmax = nn.LogSoftmax(dim=1)
-        nc = len(labels)
-
         pool_dim = model._init_pool(input_sz, **kwargs)
         stacked_dim = model._init_stacked(pool_dim, **kwargs)
-        model._init_output(stacked_dim, nc)
+        model._init_output(stacked_dim, len(labels))
         print(model)
         return model
 
     def cuda(self, device=None):
-        super(WordClassifierBase, self).cuda(device=device)
+        super(ClassifierModelBase, self).cuda(device=device)
         for emb in self.embeddings.values():
             emb.cuda(device)
 
     def create_loss(self):
         return nn.NLLLoss()
 
-    def __init__(self):
-        super(WordClassifierBase, self).__init__()
-
     def make_input(self, batch_dict):
-        x = batch_dict['x']
-        xch = batch_dict.get('xch')
-        y = batch_dict.get('y')
-        lengths = batch_dict.get('lengths')
-        if self.gpu:
-            x = x.cuda()
-            if xch is not None:
-                xch = xch.cuda()
-            if y is not None:
-                y = y.cuda()
+        """Transform a `batch_dict` into something usable in this model
 
-        return x, xch, lengths, y
+        :param batch_dict: (``dict``) A dictionary containing all inputs to the embeddings for this model
+        :param do_dropout: (``bool``) Should we do dropout.  Defaults to False
+        :return:
+        """
+        example_dict = dict({})
+        for key in self.embeddings.keys():
+            example_dict[key] = torch.from_numpy(batch_dict[key])
+            if self.gpu:
+                example_dict[key] = example_dict[key].cuda()
+
+        # Allow us to track a length, which is needed for BLSTMs
+        if self.lengths_key is not None:
+            example_dict['lengths'] = torch.from_numpy(batch_dict[self.lengths_key])
+            if self.gpu:
+                example_dict['lengths'] = example_dict['lengths'].cuda()
+
+        y = batch_dict.get('y')
+        if y is not None:
+            y = torch.from_numpy(y)
+            if self.gpu is not None:
+                y = y.cuda()
+            example_dict['y'] = y
+
+        return example_dict
 
     def forward(self, input):
         # BxTxC
-        x = input[0]
-        embeddings = self.embeddings['word'](x)
-        if 'char' in self.embeddings:
-            xch = input[1]
-            embeddings_char = self.embeddings['char'](xch)
-            embeddings = torch.cat([embeddings, embeddings_char], 2)
-        lengths = input[2]
-        pooled = self._pool(embeddings, lengths)
+        embeddings = self._embed(input)
+        pooled = self._pool(embeddings, input['lengths'])
         stacked = self._stacked(pooled)
         return self.output(stacked)
 
+    def _embed(self, input):
+        all_embeddings = []
+        for k, embedding in self.embeddings.items():
+            all_embeddings += [embedding.encode(input[k])]
+        return torch.cat(all_embeddings, 2)
+
     def classify(self, batch_dict):
-        x = batch_dict['x']
-        xch = batch_dict.get('xch')
-        lengths = batch_dict.get('lengths')
-        if type(x) == np.ndarray:
-            x = torch.from_numpy(x)
-        if xch is not None and type(xch) == np.ndarray:
-            xch = torch.from_numpy(xch)
-        if lengths is not None and type(lengths) == np.ndarray:
-            lengths = torch.from_numpy(lengths)
+        examples = self.make_input(batch_dict)
 
         with torch.no_grad():
-            if self.gpu:
-                x = x.cuda()
-                if xch is not None:
-                    xch = xch.cuda()
-            probs = self((x, xch, lengths)).exp()
+            probs = self(examples).exp()
             probs.div_(torch.sum(probs))
             results = []
             batchsz = probs.size(0)
@@ -123,6 +122,15 @@ class WordClassifierModelBase(nn.Module, Classifier):
         if self.stacked is None:
             return pooled
         return self.stacked(pooled)
+
+    def _init_embed(self, embeddings, **kwargs):
+        self.embeddings = dict()
+        input_sz = 0
+        for k, embedding in embeddings.items():
+            DefaultType = PyTorchCharConvEmbeddings if k == 'char' else PyTorchWordEmbeddings
+            self.embeddings[k] = pytorch_embeddings(embeddings[k], DefaultType)
+            input_sz += self.embeddings[k].get_dsz()
+        return input_sz
 
     def _init_stacked(self, input_dim, **kwargs):
         hszs = listify(kwargs.get('hsz', []))
@@ -151,7 +159,7 @@ class WordClassifierModelBase(nn.Module, Classifier):
         pass
 
 
-class ConvModel(WordClassifierBase):
+class ConvModel(ClassifierModelBase):
 
     def __init__(self):
         super(ConvModel, self).__init__()
@@ -167,7 +175,7 @@ class ConvModel(WordClassifierBase):
         return self.parallel_conv(embeddings)
 
 
-class LSTMModel(WordClassifierBase):
+class LSTMModel(ClassifierModelBase):
 
     def __init__(self):
         super(LSTMModel, self).__init__()
@@ -216,7 +224,7 @@ class LSTMModel(WordClassifierBase):
         return x, xch, lengths, y
 
 
-class NBowBase(WordClassifierBase):
+class NBowBase(ClassifierModelBase):
 
     def _init__(self):
         super(NBowBase, self)._init__()

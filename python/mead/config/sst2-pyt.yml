@@ -1,4 +1,5 @@
 batchsz: 50
+basedir: sst2
 preproc: 
   mxlen: 100
   rev: false
@@ -14,8 +15,13 @@ model:
   cmotsz: 100
   dropout: 0.5
   finetune: true
-word_embeddings: 
-  label: w2v-gn
+features:
+  - name: word
+    vectorizer:
+      type: token1d
+      transform: baseline.lowercase
+    embeddings:
+      label: w2v-gn
 train: 
   epochs: 2
   optim: adadelta
@@ -25,5 +31,4 @@ train:
   verbose:
     console: True
     file: sst2-cm.csv 
-
 
