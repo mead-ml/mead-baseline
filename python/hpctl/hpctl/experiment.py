@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 
 import os
 import platform
+from collections.abc import Mapping
 from baseline.utils import export as exporter
 from baseline.utils import read_config_file, hash_config
 from mead.utils import get_mead_settings, parse_extra_args
@@ -26,48 +27,44 @@ class Experiment(object):
     """
     def __init__(
             self,
-            experiment, config,
+            config,
             logging, hpctl_logging,
             settings,
             datasets, embeddings, task,
             **kwargs
     ):
         super(Experiment, self).__init__()
-        self.experiment_name = experiment
+
         self.hpctl_config = read_config_file(config)
         self.mead_config = self.hpctl_config['mead']
         if isinstance(self.mead_config, str):
             self.mead_config = read_config_file(self.mead_config)
+
         if kwargs.get('reporting') is not None:
             self.mead_config['reporting'] = parse_extra_args(kwargs.get('reporting'), kwargs['unknown'])
-        self.mead_logs = read_config_file(logging)
-        self.hpctl_logs = read_config_file(hpctl_logging)
+
         self.mead_settings = get_mead_settings(settings)
         self.hpctl_settings = self.mead_settings.get('hpctl', {})
+
+        self.mead_logs = read_config_file(logging)
+        self.hpctl_logs = read_config_file(hpctl_logging)
+        self.hpctl_logs['host'] = self.hpctl_settings.get('logging', {}).get('host', 'localhost')
+        self.hpctl_logs['port'] = self.hpctl_settings.get('logging', {}).get('port', 6006)
+
         self.root = self.hpctl_settings.get('root', 'delete_me')
         try:
             os.mkdir(self.root)
         except OSError:
             pass
         os.chdir(self.root)
-        self.hpctl_logs['host'] = self.hpctl_settings.get('logging', {}).get('host', 'localhost')
-        self.hpctl_logs['port'] = self.hpctl_settings.get('logging', {}).get('port', 6006)
-        self.datasets = datasets
-        self.embeddings = embeddings
+
+        self.datasets = read_config_file(datasets)
+        self.embeddings = read_config_file(embeddings)
         self.task_name = task
+
         # The hash of the mead config (including sampling info) used to name
         # the results persistence.
         self.experiment_hash = hash_config(self.mead_config)
-        try:
-            os.mkdir(self.experiment_hash)
-        except OSError:
-            pass
-        if self.experiment_name is not None:
-            try:
-                os.symlink(self.experiment_hash, self.experiment_name)
-            except:
-                pass
-            print("Running experiment under name [{}]".format(self.experiment_name))
 
         # Override front and backend stuff from cmd
         ends = parse_extra_args(['frontend', 'backend'], kwargs['unknown'])
@@ -91,4 +88,4 @@ class Experiment(object):
         self.frontend_config = ends['frontend']
         self.backend_config = ends['backend']
         if isinstance(self.backend_config.get('real_gpus'), str):
-            self.backend_config['real_gpus'] = list(map(int, self.backend_config['real_gpus'].split(",")))
+            self.backend_config['real_gpus'] = self.backend_config['real_gpus'].split(",")

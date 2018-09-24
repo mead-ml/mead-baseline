@@ -12,7 +12,7 @@ from baseline.utils import write_json
 from baseline.utils import export as exporter
 from hpctl.results import States
 from hpctl.utils import create_logs, Label
-from hpctl.backend import LocalGPUBackend, handle_gpus, Runner
+from hpctl.backend import LocalGPUBackend, Runner
 
 
 try:
@@ -142,32 +142,21 @@ class TmuxProcess(FileProcess):
 
 
 class MPRunner(Runner):
-    """Wrapper around run job to make interfacing easier.
-
-    Each job holds it own gpus so I don't have to track which are used when
-    launching a new job.
-
-    :param func: Callable, The function you run.
-    :param gpus: List[str], The gpus you can use.
-    """
-    def __init__(self, func, gpus=None, *args, **kwargs):
-        super(Runner, self).__init__()
+    def __init__(self):
+        super(MPRunner).__init__()
         self.p = None
-        self.func = func
-        self.gpus = gpus
-
-    def start(self, label, *args, **kwargs):
-        kwargs['gpus'] = self.gpus
-        args = tuple([label] + list(args))
-        self.p = TmuxProcess(label, target=self.func, args=args, kwargs=kwargs)
-        self.p.start()
-        while self.is_done:
-            pass
 
     def join(self):
         if self.p is None:
             return
         self.p.join()
+
+    def start(self, func, label, *args, **kwargs):
+        args = tuple([label] + list(args))
+        self.p = TmuxProcess(label, target=func, args=args, kwargs=kwargs)
+        self.p.start()
+        while self.is_done:
+            pass
 
     @property
     def is_done(self):
@@ -176,6 +165,8 @@ class MPRunner(Runner):
         return not self.p.is_alive()
 
     def stop(self):
+        if self.p is None:
+            return
         self.p.terminate()
 
 
@@ -191,9 +182,15 @@ class MPBackend(LocalGPUBackend):
             **kwargs
     ):
         super(MPBackend, self).__init__(**kwargs)
-        self.jobs = [MPRunner(run_job, gpu) for gpu in self.real_gpus]
 
-    def launch(self, label, config, exp, **kwargs):
+    def launch(
+            self,
+            label, config,
+            mead_logs, hpctl_logs,
+            settings, datasets,
+            embeddings, task_name,
+            **kwargs
+    ):
         """Start a job.
 
         :param label: hpctl.utils.Label, The label for the job.
@@ -209,15 +206,30 @@ class MPBackend(LocalGPUBackend):
                         to_del = l
                 if to_del is not None:
                     del self.label_to_job[l]
+
+                # Free my gpus
+                for gpu, cand_job in self.gpus_to_job.items():
+                    if job == cand_job:
+                        self.gpus_to_job[gpu] = None
                 job.join()
-                job.start(
-                    label, config,
-                    mead_logs=exp.mead_logs,
-                    hpctl_logs=exp.hpctl_logs,
-                    settings=exp.mead_settings,
-                    datasets=exp.datasets,
-                    embeddings=exp.embeddings,
-                    task_name=exp.task_name
-                )
-                self.label_to_job[label] = job
-                return
+                self.jobs.remove(job)
+
+        for gpu, job in self.gpus_to_job.items():
+            if job is None:
+                break
+
+        job = MPRunner()
+        job.start(
+            run_job,
+            label, config,
+            mead_logs=mead_logs,
+            hpctl_logs=hpctl_logs,
+            settings=settings,
+            datasets=datasets,
+            embeddings=embeddings,
+            task_name=task_name,
+            gpus=[str(gpu)]
+        )
+        self.label_to_job[label] = job
+        self.gpus_to_job[gpu] = job
+        self.jobs.append(job)

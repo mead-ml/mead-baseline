@@ -3,15 +3,12 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 import argparse
 from mead.utils import convert_path
 from hpctl.utils import hpctl_path
-from hpctl.core import search, find, list_names, serve
+from hpctl.core import search, find, list_names, serve, launch
 
 
 def add_common_args(p):
     p.add_argument(
-        '--experiment', help='The name for an experiment.', default=None
-    )
-    p.add_argument(
-        '--config', required=True, type=hpctl_path,
+        '--config', type=hpctl_path,
         help="Configuration for an experiment."
     )
     p.add_argument(
@@ -71,10 +68,13 @@ def main():
     subparsers = parser.add_subparsers()
 
     search_parser = subparsers.add_parser('search', description="Explore Hyper Parameters.")
-    # search_parser.set_defaults(func=search)
-    search_parser.set_defaults(func=serve)
+    search_parser.set_defaults(func=search)
     add_common_args(search_parser)
     search_parser.add_argument('--num_iters', type=int, help="The number of sample to run.")
+
+    launch_parser = subparsers.add_parser('launch')
+    launch_parser.set_defaults(func=launch)
+    add_common_args(launch_parser)
 
     find_parser = subparsers.add_parser('find', description="Find a file from the human name.")
     find_parser.set_defaults(func=find)
@@ -88,6 +88,7 @@ def main():
     serve_parser = subparsers.add_parser('serve', description="Start a flask server.")
     serve_parser.set_defaults(func=serve)
     add_common_args(serve_parser)
+    serve_parser.add_argument('--num_iters', type=int, help="The number of sample to run.")
     serve_parser.add_argument("--debug", action="store_true")
 
     args, extra = parser.parse_known_args()

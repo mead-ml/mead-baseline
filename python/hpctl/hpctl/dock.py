@@ -131,10 +131,38 @@ def run_docker(
     os.chdir(curr)
     return c, loc
 
-
 class DockerRunner(Runner):
-    def __init__(self, client, func, gpus=None, *args, **kwargs):
+    def __init__(self):
         super(DockerRunner, self).__init__()
+        self.p = None
+
+    def start(self, stuff?):
+        pass
+
+    def join(self):
+        if self.p is None:
+            return
+        self.p.wait()
+        # Dump everything the docker container outputs to a file.
+        with open(os.path.join(self.loc, 'stdout'), 'wb') as f:
+            f.write(self.p.logs())
+
+    @property
+    def is_done(self):
+        if self.p is None:
+            return True
+        self.p.reload()
+        return not self.p.status == 'running'
+
+    def stop(self):
+        if self.p is None:
+            return
+        self.p.kill()
+
+
+class HoldGPUDockerRunner(Runner):
+    def __init__(self, client, func, gpus=None, *args, **kwargs):
+        super(HoldDockerRunner, self).__init__()
         self.func = func
         self.client = client
         self.gpus = gpus
@@ -208,4 +236,4 @@ class DockerBackend(LocalGPUBackend):
                     task_name=exp.task_name
                 )
                 self.label_to_job[label] = job
-                return
+                "#dissecting-contextual-word-embeddings-architecture-and-representation-peters-et-al-2018"return

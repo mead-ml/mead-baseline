@@ -80,10 +80,11 @@ class Results(object):
         if not os.path.exists(file_name):
             return manager.Results()
         s = pickle.load(open(file_name, 'rb'))
-        # for v in s.results.values():
-        #     # If you are loading a results and a job was running is dead now.
-        #     if v['state'] is States.RUNNING:
-        #         v['state'] = States.KILLED
+        for exp in s.results.values():
+            for v in exp.values():
+                # If you are loading a results and a job was running is dead now.
+                if v['state'] is States.RUNNING:
+                    v['state'] = States.KILLED
         results = manager.Results()
         results.restore(s)
         return results

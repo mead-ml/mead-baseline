@@ -17,22 +17,6 @@ __all__ = []
 export = exporter(__all__)
 
 
-# def serve(**kwargs):
-#     """Spin up a flask server. This might become a thing that is used in the server version of hpctl."""
-#     exp = Experiment(**kwargs)
-#     config = read_config_file(kwargs['config'])
-#     config_hash = hash_config(config['mead'])
-#     results = Results.create(config_hash)
-#     from flask import Flask
-#     from hpctl.flask_frontend import init_app, FlaskFrontend
-#     from multiprocessing import Queue
-#     app = Flask(__name__)
-#     fe = FlaskFrontend(Queue, exp, results)
-#     init_app(app, fe)
-#     app.run(debug=kwargs['debug'])
-
-
-
 @export
 def list_names(**kwargs):
     """List all the human names from an experiment. For easy navigating afterwards."""
@@ -71,36 +55,24 @@ def find(**kwargs):
     print("Can't find {} in {}".format(name, config_hash))
 
 
-from hpctl.frontend import Console
-class DummyFrontend(Console):
-    def __init__(self, exp, results, count):
-        super(DummyFrontend, self).__init__(exp, results)
-        self.count = count
-        self.config_sampler = get_config_sampler(
-            exp.mead_config, None, exp.hpctl_config.get('samplers', [])
-        )
-        self.cs = [self.config_sampler.sample() for _ in range(self.count)]
-        self.cs[0][0].exp = "EXAMPLE"
-        for x in self.cs:
-            print(x[0])
-        print()
+def launch(**kwargs):
+    import requests
+    exp = Experiment(**kwargs)
+    send = {}
+    config_sampler = get_config_sampler(exp.mead_config, None, exp.hpctl_config.get('samplers', []))
+    label, config = config_sampler.sample()
+    print(label)
+    send['command'] = 'launch'
+    send['label'] = str(label)
+    send['config'] = config
+    send['datasets'] = exp.datasets
+    send['embeddings'] = exp.embeddings
+    send['mead_logs'] = exp.mead_logs
+    send['hpctl_logs'] = exp.hpctl_logs
+    send['task_name'] = exp.task_name
+    send['settings'] = exp.mead_settings
+    requests.post("http://localhost:5000/hpctl/v1/command", json=send)
 
-    def command(self):
-        if self.count >= 0:
-            self.count -= 1
-            if self.count == 0:
-                from copy import deepcopy
-                exp = deepcopy(self.exp)
-                exp.experiment_hash = "EXAMPLE"
-            else:
-                exp = self.exp
-            return {
-                "command": "start",
-                "label": self.cs[self.count][0],
-                "config": self.cs[self.count][1],
-                "exp": exp
-            }
-        return None, None
 
 def serve(**kwargs):
     # temp
@@ -108,7 +80,8 @@ def serve(**kwargs):
     results = Results.create()
     backend = get_backend(exp)
     logs = Logs.create(exp)
-    frontend = DummyFrontend(exp, results, 4)
+    exp.frontend_config['type'] = 'flask'
+    frontend = get_frontend(exp, results)
     scheduler = RoundRobinScheduler()
     try:
         run_forever(results, backend, scheduler, frontend, logs)
@@ -166,7 +139,12 @@ def run(num_iters, exp, results, backend, frontend, config_sampler, logs):
             label, config = config_sampler.sample()
             results.insert(label, config)
             results.save()
-            backend.launch(label, config, exp)
+            backend.launch(
+                label, config,
+                exp.mead_logs, exp.hpctl_logs,
+                exp.mead_settings, exp.datasets,
+                exp.embeddings, exp.task_name
+            )
             frontend.update()
             launched += 1
         # Monitor jobs
@@ -206,5 +184,5 @@ def process_command(cmd, backend, frontend, scheduler, results):
         if cmd['command'] == 'kill':
             backend.kill(cmd['label'], results)
             frontend.update()
-        if cmd['command'] == 'start':
+        if cmd['command'] == 'launch':
             scheduler.add(cmd['label'].exp, cmd)
