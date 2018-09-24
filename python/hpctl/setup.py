@@ -74,6 +74,7 @@ setup(
         'six',
         'enum34',
         'visdom',
+        'requests',
     ],
     setup_requires=[
     ],

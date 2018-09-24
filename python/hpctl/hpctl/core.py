@@ -62,7 +62,6 @@ def launch(**kwargs):
     config_sampler = get_config_sampler(exp.mead_config, None, exp.hpctl_config.get('samplers', []))
     label, config = config_sampler.sample()
     print(label)
-    send['command'] = 'launch'
     send['label'] = str(label)
     send['config'] = config
     send['datasets'] = exp.datasets
@@ -71,7 +70,9 @@ def launch(**kwargs):
     send['hpctl_logs'] = exp.hpctl_logs
     send['task_name'] = exp.task_name
     send['settings'] = exp.mead_settings
-    requests.post("http://localhost:5000/hpctl/v1/command", json=send)
+    from backend import RemoteBackend
+    be = RemoteBackend('localhost', '5000')
+    be.launch(**send)
 
 
 def serve(**kwargs):

@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 import os
+import requests
 from baseline.utils import export as exporter
 from hpctl.utils import Label
 from hpctl.results import States
@@ -77,8 +78,9 @@ class RemoteBackend(Backend):
         self.host = host
         self.port = port
 
-    def launch(**kwargs):
-        r = requests.post("{}:{}".format(self.host, self.port), json=kwargs)
+    def launch(self, **kwargs):
+        kwargs['command'] = 'launch'
+        r = requests.post("http://{}:{}/hpctl/v1/command".format(self.host, self.port), json=kwargs)
         if r.status_code != 200:
             raise Exception
 
