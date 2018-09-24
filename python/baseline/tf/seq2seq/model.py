@@ -5,7 +5,7 @@ from baseline.w2v import WordEmbeddingsModel
 from baseline.tf.tfy import *
 import tensorflow.contrib.seq2seq as tfcontrib_seq2seq
 from baseline.model import EncoderDecoderModel, load_seq2seq_model, create_seq2seq_model
-from baseline.utils import ls_props, read_json
+from baseline.utils import zip_model, unzip_model, ls_props, read_json
 from baseline.tf.embeddings import *
 from baseline.version import __version__
 import copy
@@ -174,8 +174,8 @@ class Seq2SeqModel(EncoderDecoderModel):
 
     @staticmethod
     def load(basename, **kwargs):
+        basename = unzip_model(basename)
         state = read_json(basename + '.state')
-        state["layers"] = state["nlayers"]
         if 'predict' in kwargs:
             state['predict'] = kwargs['predict']
 
@@ -193,17 +193,18 @@ class Seq2SeqModel(EncoderDecoderModel):
         if 'model_type' in kwargs:
             state['model_type'] = kwargs['model_type']
         elif state['attn']:
+            print('setting to attn')
             state['model_type'] = 'attn' if state['attn'] is True else 'default'
 
         with open(basename + '.saver') as fsv:
             saver_def = tf.train.SaverDef()
             text_format.Merge(fsv.read(), saver_def)
 
-        state = read_json(basename + '.state')
         src_embeddings = dict()
-        for key, class_name in state['embeddings'].items():
+        src_embeddings_dict = state.pop('src_embeddings')
+        for key, class_name in src_embeddings_dict.items():
             md = read_json('{}-{}-md.json'.format(basename, key))
-            embed_args = dict({'vocab': md['vocab'], 'vsz': md['vsz'], 'dsz': md['dsz']})
+            embed_args = dict({'vsz': md['vsz'], 'dsz': md['dsz']})
             Constructor = eval(class_name)
             src_embeddings[key] = Constructor(key, **embed_args)
 
@@ -216,7 +217,7 @@ class Seq2SeqModel(EncoderDecoderModel):
             model.sess.run(init)
 
         model.saver = tf.train.Saver()
-        model.saver.restore(model.sess, basename + '.model')
+        model.saver.restore(model.sess, basename)
         return model
 
     @classmethod
@@ -232,6 +233,8 @@ class Seq2SeqModel(EncoderDecoderModel):
             model.src_embeddings[key] = tf_embeddings(src_embeddings[key], key, DefaultType=DefaultType, **kwargs)
 
         model.dst_embedding = dst_embedding
+        GO = dst_embedding.vocab.get('<GO>')
+        EOS = dst_embedding.vocab.get('<EOS>')
         model.id = kwargs.get('id', 0)
         model.src_lengths_key = kwargs.get('src_lengths_key')
         if model.src_lengths_key is None:
@@ -251,7 +254,7 @@ class Seq2SeqModel(EncoderDecoderModel):
 
         hsz = int(kwargs['hsz'])
         attn = kwargs.get('model_type') == 'attn'
-        nlayers = int(kwargs.get('layers', 1))
+        layers = int(kwargs.get('layers', 1))
         rnntype = kwargs.get('rnntype', 'lstm')
         predict = kwargs.get('predict', False)
         beam_width = kwargs.get('beam', 1) if predict is True else 1
@@ -265,11 +268,10 @@ class Seq2SeqModel(EncoderDecoderModel):
         attn_type = kwargs.get('attn_type', 'bahdanau').lower()
         model.arc_state = kwargs.get('arc_state', False)
         model.hsz = hsz
-        model.nlayers = nlayers
+        model.layers = layers
         model.rnntype = rnntype
         model.attn = attn
-        GO = dst_embedding.vocab['<GO>']
-        EOS = dst_embedding.vocab['<EOS>']
+
 
         with tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE):
 
@@ -279,17 +281,17 @@ class Seq2SeqModel(EncoderDecoderModel):
                 all_embeddings_src += [embeddings_out]
 
             embed_in = tf.concat(values=all_embeddings_src, axis=-1)
-
+            print(dst_embedding.weights.shape)
             Wo = tf.get_variable("Wo", initializer=tf.constant_initializer(dst_embedding.weights,
                                                                            dtype=tf.float32,
                                                                            verify_shape=True),
-                                 shape=[len(dst_embedding.vocab), dst_embedding.dsz])
+                                 shape=[dst_embedding.vsz, dst_embedding.dsz])
 
             with tf.variable_scope("Recurrence"):
                 rnn_enc_tensor, final_encoder_state = model.encode(embed_in)
                 batch_sz = tf.shape(rnn_enc_tensor)[0]
                 with tf.variable_scope("dec", reuse=tf.AUTO_REUSE):
-                    proj = dense_layer(len(dst_embedding.vocab))
+                    proj = dense_layer(dst_embedding.vsz)
                     rnn_dec_cell = model._attn_cell_w_dropout(rnn_enc_tensor, beam_width, attn_type)
 
                     if beam_width > 1:
@@ -345,13 +347,15 @@ class Seq2SeqModel(EncoderDecoderModel):
                     model.probs = tf.map_fn(lambda x: tf.nn.softmax(x, name='probs'), model.preds)
 
             # writer = tf.summary.FileWriter('blah', model.sess.graph)
+            ##model.GO = GO
+            ##model.EOS = EOS
             return model
 
     def set_saver(self, saver):
         self.saver = saver
 
     def _attn_cell_w_dropout(self, rnn_enc_tensor, beam, attn_type):
-        cell = multi_rnn_cell_w_dropout(self.hsz, self.pkeep, self.rnntype, self.nlayers)
+        cell = multi_rnn_cell_w_dropout(self.hsz, self.pkeep, self.rnntype, self.layers)
         if self.attn:
             src_len = self.src_len
             if beam > 1:
@@ -367,7 +371,7 @@ class Seq2SeqModel(EncoderDecoderModel):
         with tf.variable_scope('encode'):
             # List to tensor, reform as (T, B, W)
             if self.rnntype == 'blstm':
-                nlayers_bi = int(self.nlayers / 2)
+                nlayers_bi = int(self.layers / 2)
                 rnn_fwd_cell = multi_rnn_cell_w_dropout(self.hsz, self.pkeep, self.rnntype, nlayers_bi)
                 rnn_bwd_cell = multi_rnn_cell_w_dropout(self.hsz, self.pkeep, self.rnntype, nlayers_bi)
                 rnn_enc_tensor, final_encoder_state = tf.nn.bidirectional_dynamic_rnn(rnn_fwd_cell, rnn_bwd_cell,
@@ -383,7 +387,7 @@ class Seq2SeqModel(EncoderDecoderModel):
                 encoder_state = tuple(encoder_state)
             else:
 
-                rnn_enc_cell = multi_rnn_cell_w_dropout(self.hsz, self.pkeep, self.rnntype, self.nlayers)
+                rnn_enc_cell = multi_rnn_cell_w_dropout(self.hsz, self.pkeep, self.rnntype, self.layers)
                 rnn_enc_tensor, encoder_state = tf.nn.dynamic_rnn(rnn_enc_cell, embed_in,
                                                                   scope='rnn_enc',
                                                                   sequence_length=self.src_len,
@@ -403,9 +407,12 @@ class Seq2SeqModel(EncoderDecoderModel):
         state = {
             "version": __version__,
             "src_embeddings": src_embeddings_info,
-            "attn": self.attn, "hsz": self.hsz,
-            "rnntype": self.rnntype, "nlayers": self.nlayers,
-            "arc_state": self.arc_state
+            "attn": self.attn,
+            "hsz": self.hsz,
+            "rnntype": self.rnntype, "layers": self.layers,
+            "arc_state": self.arc_state ##,
+            ##"GO": self.GO,
+            ##"EOS": self.EOS
         }
         for prop in ls_props(self):
             state[prop] = getattr(self, prop)
@@ -422,7 +429,7 @@ class Seq2SeqModel(EncoderDecoderModel):
 
     def save(self, model_base):
         self.save_md(model_base)
-        self.saver.save(self.sess, model_base + '.model')
+        self.saver.save(self.sess, model_base)
 
     def restore_graph(self, base):
         with open(base + '.graph', 'rb') as gf:

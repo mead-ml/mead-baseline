@@ -48,9 +48,11 @@ class WordEmbeddingsModel(object):
         self.vsz = kwargs.get('vsz')
         self.dsz = kwargs.get('dsz')
         self.weights = kwargs.get('weights')
-        if 'known_vocab_file' in kwargs:
+        if 'md_file' in kwargs:
             md = read_config_file(kwargs['md_file'])
             self.vocab = md['vocab']
+            self.vsz = md['vsz']
+            self.dsz = md['dsz']
         if 'weights_file' in kwargs:
             self.weights = np.load(kwargs['weights_file']).get('arr_0')
 
@@ -63,6 +65,9 @@ class WordEmbeddingsModel(object):
                 self.dsz = self.weights.shape[1]
             else:
                 assert self.dsz == self.weights.shape[1]
+
+        else:
+            self.weights = np.zeros((self.vsz, self.dsz))
 
     def get_dsz(self):
         return self.dsz

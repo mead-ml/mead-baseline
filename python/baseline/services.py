@@ -245,7 +245,6 @@ class EncoderDecoderService(object):
         pass
 
     def __init__(self, vocabs=None, vectorizers=None, model=None):
-        self.vectorizers = vectorizers
         self.model = model
         self.src_vocabs = {}
         self.dst_vocab = None
@@ -258,7 +257,7 @@ class EncoderDecoderService(object):
         self.dst_idx_to_token = revlut(self.dst_vocab)
         self.src_vectorizers = {}
         self.dst_vectorizer = None
-        for k, vectorizer, in vocabs.items():
+        for k, vectorizer, in vectorizers.items():
             if k == 'dst':
                 self.dst_vectorizer = vectorizer
             else:
@@ -279,6 +278,8 @@ class EncoderDecoderService(object):
         else:
             directory = unzip_files(bundle)
 
+        kwargs['predict'] = kwargs.get('predict', True)
+        kwargs['beam'] = kwargs.get('beam', 5)
         vocabs = load_vocabs(directory)
         vectorizers = load_vectorizers(directory)
         model_basename = find_model_basename(directory)
@@ -293,18 +294,49 @@ class EncoderDecoderService(object):
         return cls(vocabs, vectorizers, model)
 
     def transform(self, tokens, **kwargs):
-        source_dict = {}
-        for k, vectorizer in self.vectorizers:
-            source_dict[k], lengths = vectorizer.run(tokens, self.src_vocabs[k], kwargs.get('beam', 1))
-            if lengths is not None:
-                source_dict['{}_lengths'.format(k)]
 
-        z = self.model.run(source_dict)[0]
-        best = z[0]
-        out = []
-        for i in range(len(best)):
-            word = self.dst_idx_to_token.get(best[i], '<PAD>')
-            if word != '<PAD>' and word != '<EOS>':
-                out.append(word)
-        return out
+        mxlen = 0
+        mxwlen = 0
+        if type(tokens[0]) == str:
+            tokens_seq = (tokens,)
+        else:
+            tokens_seq = tokens
 
+        for tokens in tokens_seq:
+            mxlen = max(mxlen, len(tokens))
+            for token in tokens:
+                mxwlen = max(mxwlen, len(token))
+
+        examples = dict()
+        for k, vectorizer in self.src_vectorizers.items():
+            if hasattr(vectorizer, 'mxlen') and vectorizer.mxlen == -1:
+                vectorizer.mxlen = mxlen
+            if hasattr(vectorizer, 'mxwlen') and vectorizer.mxwlen == -1:
+                vectorizer.mxwlen = mxwlen
+            examples[k] = []
+
+        for i, tokens in enumerate(tokens_seq):
+            for k, vectorizer in self.src_vectorizers.items():
+                vec, length = vectorizer.run(tokens, self.src_vocabs[k])
+                examples[k] += [vec]
+                if length is not None:
+                    lengths_key = '{}_lengths'.format(k)
+                    if lengths_key not in examples:
+                        examples[lengths_key] = []
+                    examples[lengths_key] += [length]
+
+        for k in self.src_vectorizers.keys():
+            examples[k] = np.stack(examples[k])
+
+        outcomes = self.model.run(examples)
+        results = []
+        for i in range(len(outcomes)):
+            best = outcomes[i][0]
+
+            out = []
+            for j in range(len(best)):
+                word = self.dst_idx_to_token.get(best[j], '<PAD>')
+                if word != '<PAD>' and word != '<EOS>':
+                    out += [word]
+        results += [out]
+        return results

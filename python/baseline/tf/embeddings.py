@@ -1,7 +1,7 @@
 import tensorflow as tf
 from baseline.tf.tfy import embed, pool_chars
 from baseline.utils import write_json
-
+import numpy as np
 
 class TensorFlowEmbeddings(object):
 
@@ -44,6 +44,9 @@ class TensorFlowTokenEmbeddings(TensorFlowEmbeddings):
         self.scope = kwargs.get('scope', '{}/LUT'.format(self.name))
         self.x = kwargs.get(self.name, self.create_placeholder(name))
         self.weights = kwargs.get('weights')
+        if self.weights is None:
+            self.weights = np.zeros((self.vsz, self.dsz))
+
 
     def get_vsz(self):
         return self.vsz
