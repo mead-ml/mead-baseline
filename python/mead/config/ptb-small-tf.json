@@ -1,4 +1,5 @@
 {
+    "basedir": "ptb-small",
     "task": "lm",
     "batchsz": 20,
     "unif": 0.1,

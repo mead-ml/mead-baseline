@@ -179,13 +179,22 @@ class TaggerModel(object):
     def get_labels(self):
         pass
 
+
 @exporter
 class LanguageModel(object):
 
     def __init__(self):
         super(LanguageModel, self).__init__()
 
-    def step(self, batch_time, context):
+    @staticmethod
+    def load(basename, **kwargs):
+        pass
+
+    @classmethod
+    def create(cls, embeddings, **kwargs):
+        pass
+
+    def predict_next(self, batch_dict, **kwargs):
         pass
 
 
@@ -199,20 +208,14 @@ class EncoderDecoderModel(object):
         super(EncoderDecoderModel, self).__init__()
 
     @staticmethod
-    def create(src_vocab, dst_vocab, **kwargs):
+    def load(basename, **kwargs):
+        pass
+
+    @classmethod
+    def create(cls, src_embeddings, dst_embedding, **kwargs):
         pass
 
     def create_loss(self):
-        pass
-
-    def get_src_vocab(self):
-        pass
-
-    def get_dst_vocab(self):
-        pass
-
-    @staticmethod
-    def load(basename, **kwargs):
         pass
 
     def run(self, source_dict, **kwargs):

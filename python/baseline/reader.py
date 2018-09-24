@@ -431,6 +431,8 @@ class LineSeqReader(object):
         vocabs = {}
         for key in self.vectorizers.keys():
             vocabs[key] = Counter()
+            vocabs[key] = Counter()
+            vocabs[key]['<UNK>'] = 100000  # In case freq cutoffs
         for file in files:
             if file is None:
                 continue

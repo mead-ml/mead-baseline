@@ -231,11 +231,80 @@ class TaggerService(object):
 @exporter
 class LanguageModelService(object):
 
-    def __init__(self):
-        super(LanguageModelService, self).__init__()
+    def __init__(self, vocabs=None, vectorizers=None, model=None):
+        self.vectorizers = vectorizers
+        self.model = model
+        self.vocabs = vocabs
+        self.idx_to_token = revlut(self.vocabs[self.model.tgt_key])
 
-    def step(self, batch_time, context):
-        pass
+    @classmethod
+    def load(cls, bundle, **kwargs):
+
+        # can delegate
+        if os.path.isdir(bundle):
+            directory = bundle
+        else:
+            directory = unzip_files(bundle)
+
+        kwargs['batchsz'] = 1
+        vocabs = load_vocabs(directory)
+
+        vectorizers = load_vectorizers(directory)
+        model_basename = find_model_basename(directory)
+        if model_basename.find('-tf-') >= 0:
+            import baseline.tf.lm as lm
+        elif model_basename.endswith(".pyt"):
+            import baseline.pytorch.lm as lm
+        else:
+            import baseline.dy.lm as lm
+
+        model = lm.load_model(model_basename, **kwargs)
+        return cls(vocabs, vectorizers, model)
+
+    # Do a greedy decode for now, everything else will be super slow
+    def run(self, tokens, **kwargs):
+        mxlen = kwargs.get('mxlen', 10)
+        mxwlen = kwargs.get('mxwlen', 40)
+
+        for k, vectorizer in self.vectorizers.items():
+            if hasattr(vectorizer, 'mxlen') and vectorizer.mxlen == -1:
+                vectorizer.mxlen = mxlen
+            if hasattr(vectorizer, 'mxwlen') and vectorizer.mxwlen == -1:
+                vectorizer.mxwlen = mxwlen
+
+        token_buffer = tokens
+        tokens_seq = tokens
+        examples = dict()
+        for i in range(mxlen):
+
+            for k, vectorizer in self.vectorizers.items():
+                vectorizer.mxlen = len(token_buffer)
+                vec, length = vectorizer.run(token_buffer, self.vocabs[k])
+                if k in examples:
+                    examples[k] = np.append(examples[k], vec)
+                else:
+                    examples[k] = vec
+
+                if length is not None:
+                    lengths_key = '{}_lengths'.format(k)
+                    if lengths_key in examples:
+                        examples[lengths_key] += length
+                    else:
+                        examples[lengths_key] = np.array(length)
+            batch_dict = {k: v.reshape((1,) + v.shape) for k, v in examples.items()}
+            softmax_tokens = self.model.predict_next(batch_dict)
+            next_token = np.argmax(softmax_tokens, axis=-1)[-1]
+
+            token_str = self.idx_to_token.get(next_token, '<PAD>')
+            if token_str == '<EOS>':
+                break
+            if token_str != '<PAD>':
+                tokens_seq += [token_str]
+            token_buffer = [token_str]
+        return tokens_seq
+
+
+
 
 
 @exporter

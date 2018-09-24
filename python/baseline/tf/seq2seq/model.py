@@ -5,7 +5,7 @@ from baseline.w2v import WordEmbeddingsModel
 from baseline.tf.tfy import *
 import tensorflow.contrib.seq2seq as tfcontrib_seq2seq
 from baseline.model import EncoderDecoderModel, load_seq2seq_model, create_seq2seq_model
-from baseline.utils import zip_model, unzip_model, ls_props, read_json
+from baseline.utils import ls_props, read_json
 from baseline.tf.embeddings import *
 from baseline.version import __version__
 import copy
@@ -174,7 +174,6 @@ class Seq2SeqModel(EncoderDecoderModel):
 
     @staticmethod
     def load(basename, **kwargs):
-        basename = unzip_model(basename)
         state = read_json(basename + '.state')
         if 'predict' in kwargs:
             state['predict'] = kwargs['predict']
@@ -409,10 +408,9 @@ class Seq2SeqModel(EncoderDecoderModel):
             "src_embeddings": src_embeddings_info,
             "attn": self.attn,
             "hsz": self.hsz,
-            "rnntype": self.rnntype, "layers": self.layers,
-            "arc_state": self.arc_state ##,
-            ##"GO": self.GO,
-            ##"EOS": self.EOS
+            "rnntype": self.rnntype,
+            "layers": self.layers,
+            "arc_state": self.arc_state
         }
         for prop in ls_props(self):
             state[prop] = getattr(self, prop)

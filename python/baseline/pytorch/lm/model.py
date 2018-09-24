@@ -217,6 +217,7 @@ class CharCompLanguageModel(AbstractLanguageModel):
         return self.word_vocab if vocab_type == 'word' else self.char_vocab
 
 
+
 BASELINE_LM_MODELS = {
     'default': WordLanguageModel.create,
     'char': CharLanguageModel.create,
