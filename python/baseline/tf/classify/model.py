@@ -126,9 +126,10 @@ class ClassifierModelBase(ClassifierModel):
     """Base for all baseline implementations of token-based classifiers
     
     This class provides a loose skeleton around which the baseline models
-    are built.  This essentially consists of dividing up the network into a logical separation between "pooling",
+    are built.  This essentially consists of dividing up the network into a logical separation between "embedding",
+    or composition of lookup tables to build a vector representation of a temporal input, "pooling",
     or the conversion of temporal data to a fixed representation, and "stacking" layers, which are (optional)
-    fully-connected layers below, finally followed with a penultimate layer that is projected to the output space.
+    fully-connected layers below, followed by a projection to output space and a softmax
     
     For instance, the baseline convolutional and LSTM models implement pooling as CMOT, and LSTM last time
     respectively, whereas, neural bag-of-words (NBoW) do simple max or mean pooling followed by multiple fully-
@@ -144,10 +145,20 @@ class ClassifierModelBase(ClassifierModel):
         self.saver = saver
 
     def save_values(self, basename):
+        """Save tensor files out
+
+        :param basename: Base name of model
+        :return:
+        """
         self.saver.save(self.sess, basename)
 
     def save_md(self, basename):
+        """This method saves out a `.state` file containing meta-data from these classes and any info
+        registered by a user-defined derived class as a `property`. Also write the `graph` and `saver` and `labels`
 
+        :param basename:
+        :return:
+        """
         path = basename.split('/')
         base = path[-1]
         outdir = '/'.join(path[:-1])
@@ -174,6 +185,12 @@ class ClassifierModelBase(ClassifierModel):
             f.write(str(self.saver.as_saver_def()))
 
     def save(self, basename, **kwargs):
+        """Save meta-data and actual data for a model
+
+        :param basename: (``str``) The model basename
+        :param kwargs:
+        :return: None
+        """
         self.save_md(basename)
         self.save_values(basename)
 
@@ -197,9 +214,10 @@ class ClassifierModelBase(ClassifierModel):
     def classify(self, batch_dict):
         """This method provides a basic routine to run "inference" or predict outputs based on data.
         It runs the `x` tensor in (`BxT`), and turns dropout off, running the network all the way to a softmax
-        output
+        output. You can use this method directly if you have vector input, or you can use the `ClassifierService`
+        which can convert directly from text durign its `transform`.  That method calls this one underneath.
         
-        :param batch_dict: (``dict``) contains `x` tensor of input (`BxT`)
+        :param batch_dict: (``dict``) Contains any inputs to embeddings for this model
         :return: Each outcome as a ``list`` of tuples `(label, probability)`
         """
         feed_dict = self.make_input(batch_dict)
@@ -212,6 +230,12 @@ class ClassifierModelBase(ClassifierModel):
         return results
 
     def make_input(self, batch_dict, do_dropout=False):
+        """Transform a `batch_dict` into a TensorFlow `feed_dict`
+
+        :param batch_dict: (``dict``) A dictionary containing all inputs to the embeddings for this model
+        :param do_dropout: (``bool``) Should we do dropout.  Defaults to False
+        :return:
+        """
         y = batch_dict.get('y', None)
 
         pkeep = 1.0 - self.pdrop_value if do_dropout else 1.0
@@ -246,7 +270,7 @@ class ClassifierModelBase(ClassifierModel):
         :param kwargs: See below
         
         :Keyword Arguments:
-        * *session* -- An optional tensorflow session.  If not passed, a new session is
+        * *sess* -- An optional tensorflow session.  If not passed, a new session is
             created
         
         :return: A restored model
@@ -305,19 +329,22 @@ class ClassifierModelBase(ClassifierModel):
         
         :param embeddings: This is a dictionary of embeddings, mapped to their numerical indices in the lookup table
         :param labels: This is a list of the `str` labels
-        :param kwargs: See below
+        :param kwargs: There are sub-graph specific Keyword Args allowed for e.g. embeddings. See below for known args:
         
         :Keyword Arguments:
+        * *gpus* -- (``int``) How many GPUs to split training across.  If called this function delegates to
+            another class `ClassifyParallelModel` which creates a parent graph and splits its inputs across each
+            sub-model, by calling back into this exact method (w/o this argument), once per GPU
         * *model_type* -- The string name for the model (defaults to `default`)
-        * *session* -- An optional tensorflow session.  If not passed, a new session is
+        * *sess* -- An optional tensorflow session.  If not passed, a new session is
             created
+        * *lengths_key* -- (``str``) Specifies which `batch_dict` property should be used to determine the temporal length
+            if this is not set, it defaults to either `word`, or `x` if `word` is also not a feature
         * *finetune* -- Are we doing fine-tuning of word embeddings (defaults to `True`)
         * *mxlen* -- The maximum signal (`x` tensor temporal) length (defaults to `100`)
         * *dropout* -- This indicates how much dropout should be applied to the model when training.
         * *pkeep* -- By default, this is a `tf.placeholder`, but it can be passed in as part of a sub-graph.
             This is useful for exporting tensorflow models or potentially for using input tf queues
-        * *x* -- By default, this is a `tf.placeholder`, but it can be optionally passed as part of a sub-graph.
-        * *y* -- By default, this is a `tf.placeholder`, but it can be optionally passed as part of a sub-graph.
         * *filtsz* -- This is actually a top-level param due to an unfortunate coupling between the pooling layer
             and the input, which, for convolution, requires input padding.
         
@@ -381,6 +408,11 @@ class ClassifierModelBase(ClassifierModel):
         return model
 
     def embed(self):
+        """Thie method performs "embedding" of the inputs.  The base method here then concatenates along depth
+        dimension to form word embeddings
+
+        :return: A 3-d vector where the last dimension is the concatenated dimensions of all embeddings
+        """
         all_embeddings_out = []
         for embedding in self.embeddings.values():
             embeddings_out = embedding.encode()
@@ -478,8 +510,9 @@ class LSTMModel(ClassifierModelBase):
         :param kwargs: See below
         
         :Keyword Arguments:
-        * *hsz* -- (``int``) The number of hidden units (defaults to `100`)
-        * *cmotsz* -- (``int``) An alias for `hsz`
+        * *rnnsz* -- (``int``) The number of hidden units (defaults to `hsz`)
+        * *hsz* -- (``int``) backoff for `rnnsz`, typically a result of stacking params.  This keeps things simple so
+          its easy to do things like residual connections between LSTM and post-LSTM stacking layers
         
         :return: 
         """
@@ -566,11 +599,23 @@ class NBowMaxModel(NBowBase):
 
 
 class CompositePoolingModel(ClassifierModelBase):
-
+    """Fulfills pooling contract by aggregating pooling from a set of sub-models and concatenates each
+    """
     def __init__(self):
+        """
+        Construct a composite pooling model
+        """
         super(CompositePoolingModel, self).__init__()
 
     def pool(self, word_embeddings, dsz, init, **kwargs):
+        """Cycle each sub-model and call its pool method, then concatenate along final dimension
+
+        :param word_embeddings: The input graph
+        :param dsz: The number of input units
+        :param init: The initializer operation
+        :param kwargs:
+        :return: A pooled composite output
+        """
         SubModels = [eval(model) for model in kwargs.get('sub')]
         pooling = []
         for SubClass in SubModels:
@@ -594,8 +639,38 @@ BASELINE_CLASSIFICATION_LOADERS = {
 
 
 def create_model(embeddings, labels, **kwargs):
+    """This function creates a classifier with known embeddings and labels using the `model_type`.
+    If the model is found in a list of known models (keyed off `model_type`), it is constructed using a `create`
+    method known a priori (e.g. `LSTMModel.create`).  If the `mode_type` is a name not found in the dict of known
+    models, try to find a `classify_{model_type}` in the `PYTHONPATH` and load that instead.  This is a plugin facility
+    that allows baseline to be extended with custom models (a common use-case)
+
+    :param embeddings: (``dict``) A dictionary of embeddings sub-graphs or models
+    :param labels: A set of labels
+    :param kwargs: Addon models may have arbitary keyword args.  The known arguments are listed below
+
+    :Keyword Arguments:
+    * *model_type* - (``str``) The key name of this model.  If its not found, we go looking for an addon in the
+      PYTHONPATH and load that module
+    :return: A model
+    """
     return create_classifier_model(BASELINE_CLASSIFICATION_MODELS, embeddings, labels, **kwargs)
 
 
 def load_model(outname, **kwargs):
+    """This function loads a classifier with known embeddings and labels using the `model_type`.
+    If the model is found in a list of known models (keyed off `model_type`), it is constructed using a `load`
+    method known a priori (e.g. `LSTMModel.create`).  If the `mode_type` is a name not found in the dict of known
+    models, try to find a `classify_{model_type}` in the `PYTHONPATH` and load that instead.  This is a plugin facility
+    that allows baseline to be extended with custom models (a common use-case)
+
+    :param embeddings: (``dict``) A dictionary of embeddings sub-graphs or models
+    :param labels: A set of labels
+    :param kwargs: Addon models may have arbitary keyword args.  The known arguments are listed below
+
+    :Keyword Arguments:
+    * *model_type* - (``str``) The key name of this model.  If its not found, we go looking for an addon in the
+      PYTHONPATH and load that module
+    :return: A model
+    """
     return load_classifier_model(BASELINE_CLASSIFICATION_LOADERS, outname, **kwargs)

@@ -69,6 +69,8 @@ def crf_mask(vocab, span_type, s_idx, e_idx, pad_idx=None):
     """
     return tf.constant(crf_m(vocab, span_type, s_idx, e_idx, pad_idx).T)
 
+
+# TODO deprecated, remove
 def _find_files_by_type(model_file, filetype):
     """Find all files by type, removing suffix
 
@@ -105,6 +107,7 @@ def get_basepath_or_cwd(model_file):
     return basepath
 
 
+# TODO: deprecated, remove this!
 def get_vocab_file_suffixes(model_file):
 
     """Because our operations assume knowledge of the model name, we
@@ -198,32 +201,55 @@ def optimizer(loss_fn, **kwargs):
                                                         clip_gradients=clip, learning_rate_decay_fn=decay_fn)
 
 
-def tensor2seq(tensor):
-    return tf.unstack(tf.transpose(tensor, perm=[1, 0, 2]))
-
-
-def seq2tensor(sequence):
-    return tf.transpose(tf.stack(sequence), perm=[1, 0, 2])
-
-
 def dense_layer(output_layer_depth):
     output_layer = layers_core.Dense(output_layer_depth, use_bias=False, dtype=tf.float32, name="dense")
     return output_layer
 
 
 def lstm_cell(hsz, forget_bias=1.0):
+    """Produce a single cell with no dropout
+
+    :param hsz: (``int``) The number of hidden units per LSTM
+    :param forget_bias: (``int``) Defaults to 1
+    :return: a cell
+    """
     return tf.contrib.rnn.BasicLSTMCell(hsz, forget_bias=forget_bias, state_is_tuple=True)
 
 
 def lstm_cell_w_dropout(hsz, pkeep, forget_bias=1.0):
+    """Produce a single cell with dropout
+
+    :param hsz: (``int``) The number of hidden units per LSTM
+    :param pkeep: (``int``) The probability of keeping a unit value during dropout
+    :param forget_bias: (``int``) Defaults to 1
+    :return: a cell
+    """
     return tf.contrib.rnn.DropoutWrapper(tf.contrib.rnn.BasicLSTMCell(hsz, forget_bias=forget_bias, state_is_tuple=True), output_keep_prob=pkeep)
 
 
 def stacked_lstm(hsz, pkeep, nlayers):
+    """Produce a stack of LSTMs with dropout performed on all but the last layer.
+
+    :param hsz: (``int``) The number of hidden units per LSTM
+    :param pkeep: (``int``) The probability of keeping a unit value during dropout
+    :param nlayers: (``int``) The number of layers of LSTMs to stack
+    :return: a stacked cell
+    """
     return tf.contrib.rnn.MultiRNNCell([lstm_cell_w_dropout(hsz, pkeep) if i < nlayers - 1 else lstm_cell(hsz) for i in range(nlayers)], state_is_tuple=True)
 
 
 def stacked_cnn(inputs, hsz, pkeep, nlayers, filts=[5], activation_fn=tf.nn.relu, scope='StackedCNN'):
+    """Produce a stack of parallel or single convolution layers with residual connections and dropout between each
+
+    :param inputs: The input
+    :param hsz: (``int``) The number of hidden units per filter
+    :param pkeep: (``float``) The probability of keeping a unit value during dropout
+    :param nlayers: (``int``) The number of layers of parallel convolutions to stack
+    :param filts: (``list``) A list of parallel filter widths to apply
+    :param activation_fn: (``func``) A function for activation
+    :param scope: A string name to scope this operation
+    :return: a stacked CNN
+    """
     with tf.variable_scope(scope):
         layers = []
         for filt in filts:
@@ -250,16 +276,43 @@ def stacked_cnn(inputs, hsz, pkeep, nlayers, filts=[5], activation_fn=tf.nn.relu
         return tf.concat(values=layers, axis=2)
 
 
-def rnn_cell_w_dropout(hsz, pkeep, rnntype, st=None):
+def rnn_cell(hsz, rnntype, st=None):
+    """Produce a single RNN cell
+
+    :param hsz: (``int``) The number of hidden units per LSTM
+    :param rnntype: (``str``): `lstm` or `gru`
+    :param st: (``bool``) state is tuple? defaults to `None`
+    :return: a cell
+    """
     if st is not None:
         cell = tf.contrib.rnn.BasicLSTMCell(hsz, state_is_tuple=st) if rnntype.endswith('lstm') else tf.contrib.rnn.GRUCell(hsz)
     else:
         cell = tf.contrib.rnn.LSTMCell(hsz) if rnntype.endswith('lstm') else tf.contrib.rnn.GRUCell(hsz)
+    return cell
+
+
+def rnn_cell_w_dropout(hsz, pkeep, rnntype, st=None):
+    """Produce a single RNN cell with dropout
+
+    :param hsz: (``int``) The number of hidden units per LSTM
+    :param rnntype: (``str``): `lstm` or `gru`
+    :param pkeep: (``int``) The probability of keeping a unit value during dropout
+    :param st: (``bool``) state is tuple? defaults to `None`
+    :return: a cell
+    """
+    cell = rnn_cell(hsz, rnntype, st)
     return tf.contrib.rnn.DropoutWrapper(cell, output_keep_prob=pkeep)
 
 
-def multi_rnn_cell_w_dropout(hsz, pkeep, rnntype, num_layers):
-    return tf.contrib.rnn.MultiRNNCell([rnn_cell_w_dropout(hsz, pkeep, rnntype) for _ in range(num_layers)], state_is_tuple=True)
+def multi_rnn_cell_w_dropout(hsz, pkeep, rnntype, nlayers):
+    """Produce a stack of RNNs with dropout performed on all but the last layer.
+
+    :param hsz: (``int``) The number of hidden units per RNN
+    :param pkeep: (``int``) The probability of keeping a unit value during dropout
+    :param nlayers: (``int``) The number of layers of RNNs to stack
+    :return: a stacked cell
+    """
+    return tf.contrib.rnn.MultiRNNCell([rnn_cell_w_dropout(hsz, pkeep, rnntype) if i < nlayers - 1 else rnn_cell(hsz, rnntype) for i in range(nlayers)], state_is_tuple=True)
 
 
 def create_show_examples_tf(src_key):
@@ -319,7 +372,15 @@ def create_show_examples_tf(src_key):
                 return
     return show_examples_tf
 
+
 def skip_conns(inputs, wsz_all, n, activation_fn=tf.nn.relu):
+    """Produce one or more skip connection layers
+
+    :param inputs: The sub-graph input
+    :param wsz_all: The number of units
+    :param n: How many layers of gating
+    :return: graph output
+    """
     for i in range(n):
         with tf.variable_scope("skip-%d" % i):
             W_p = tf.get_variable("W_p", [wsz_all, wsz_all])
@@ -331,6 +392,13 @@ def skip_conns(inputs, wsz_all, n, activation_fn=tf.nn.relu):
 
 
 def highway_conns(inputs, wsz_all, n):
+    """Produce one or more highway connection layers
+
+    :param inputs: The sub-graph input
+    :param wsz_all: The number of units
+    :param n: How many layers of gating
+    :return: graph output
+    """
     for i in range(n):
         with tf.variable_scope("highway-%d" % i):
             W_p = tf.get_variable("W_p", [wsz_all, wsz_all])
@@ -385,6 +453,11 @@ def parallel_conv(input_, filtsz, dsz, motsz, activation_fn=tf.nn.relu):
 
 
 def tf_activation(name):
+    """Lookup an activation by string name
+
+    :param name: The string name
+    :return: The operation
+    """
     if name == "tanh":
             return tf.nn.tanh
     if name == "sigmoid":
@@ -393,6 +466,18 @@ def tf_activation(name):
 
 
 def char_word_conv_embeddings(char_vec, filtsz, char_dsz, nfeats, activation_fn=tf.nn.tanh, gating=skip_conns, num_gates=1):
+    """This wrapper takes in a character vector as input and performs parallel convolutions on it, followed by a
+    pooling operation and optional residual or highway connections
+
+    :param char_vec: The vector input
+    :param filtsz: A list or scalar containing filter sizes for each parallel filter
+    :param char_dsz: The character dimension size
+    :param nfeats: A list or scalar of the number of pooling units for each filter operation
+    :param activation_fn: A function for activation (`tf.nn.tanh` etc)
+    :param gating: A gating function to apply to the output
+    :param num_gates: The number of gates to apply
+    :return: The embedding output, the full number of units
+    """
     combine, wsz_all = parallel_conv(char_vec, filtsz, char_dsz, nfeats, activation_fn)
     joined = gating(combine, wsz_all, num_gates)
     return joined, wsz_all
@@ -406,7 +491,16 @@ def pool_chars(x_char, Wch, ce0, char_dsz, **kwargs):
     :param ce0: A control dependency for the embeddings that keeps the <PAD> value 0
     :param char_dsz: The character embedding dsz
     :param kwargs:
+
+    :Keyword Arguments:
+    * *cfiltsz* -- (``list``) A list of filters
+    * *nfeat_factor* -- (``int``) A factor to be multiplied to filter size to decide number of hidden units
+    * *max_feat* -- (``int``) The maximum number of hidden units per filter
+    * *gating* -- (``str``) `skip` or `highway` supported, yielding residual conn or highway, respectively
+    * *num_gates* -- (``int``) How many gating functions to apply
+    * *activation* -- (``str``) A string name of an activation, (e.g. `tanh`)
     :return: The character compositional embedding and the number of hidden units as a tuple
+
     """
     filtsz = kwargs.get('cfiltsz', [3])
     if 'nfeat_factor' in kwargs:
@@ -435,6 +529,16 @@ def pool_chars(x_char, Wch, ce0, char_dsz, **kwargs):
 
 
 def embed(x, vsz, dsz, initializer, finetune=True, scope="LUT"):
+    """Perform a lookup table operation while freezing the PAD vector.  Use the initializer to set the weights
+
+    :param x: The input to this operation
+    :param vsz: The size of the input vocabulary
+    :param dsz: The output size or embedding dimension
+    :param initializer: An operation to initialize the weights
+    :param finetune: Should the weights be fine-tuned during training or held constant?
+    :param scope: A string scoping this operation
+    :return: The sub-graph end
+    """
     with tf.variable_scope(scope):
         W = tf.get_variable("W",
                             initializer=initializer,

@@ -3,29 +3,62 @@ from baseline.tf.tfy import embed, pool_chars
 from baseline.utils import write_json
 import numpy as np
 
-class TensorFlowEmbeddings(object):
 
+class TensorFlowEmbeddings(object):
+    """This provides a base for TensorFlow embeddings sub-graphs
+
+    """
     def __init__(self):
+        """Constructor
+        """
         pass
 
     def get_dsz(self):
+        """Get the number of output dimension of this operation
+
+        :return:
+        """
         pass
 
     def get_vsz(self):
+        """Get the number of words (including <PAD>) in the vocabulary
+
+        :return:
+        """
         pass
 
     def encode(self):
+        """This instantiates the sub-graph for this object and returns the output node
+
+        :return:
+        """
         pass
 
     def save_md(self):
+        """Save the meta-data associated with this object, namely the `vsz` and `dsz`
+
+        :return:
+        """
         pass
 
     @classmethod
     def create_placeholder(cls, name):
+        """Create a placeholder with name `name`
+
+        :param name: (``str``) The name of the placeholder
+        :return: The placeholder
+        """
         pass
 
     @classmethod
     def create_from_embeddings(cls, name, model, **kwargs):
+        """Instantiate this sub-graph from the generalized representation from `baseline.w2v`
+
+        :param name: The name of the embeddings
+        :param model: The `baseline.w2v` model
+        :param kwargs:
+        :return:
+        """
         return cls(name, vsz=model.vsz, dsz=model.dsz, weights=model.weights, **kwargs)
 
 
@@ -47,27 +80,46 @@ class TensorFlowTokenEmbeddings(TensorFlowEmbeddings):
         if self.weights is None:
             self.weights = np.zeros((self.vsz, self.dsz))
 
-
-    def get_vsz(self):
-        return self.vsz
-
-    def get_dsz(self):
-        return self.dsz
-
     def encode(self):
         return embed(self.x,
-                     self.get_vsz(),
-                     self.get_dsz(),
+                     self.vsz,
+                     self.dsz,
                      tf.constant_initializer(self.weights, dtype=tf.float32, verify_shape=True),
                      self.finetune,
                      self.scope)
 
     def save_md(self, target):
+        write_json({'vsz': self.vsz, 'dsz': self.dsz}, target)
+
+
+class TensorFlowCharBoWEmbeddings(TensorFlowEmbeddings):
+
+    @classmethod
+    def create_placeholder(cls, name):
+        return tf.placeholder(tf.int32, [None, None, None], name=name)
+
+    def __init__(self, name, **kwargs):
+        super(TensorFlowCharBoWEmbeddings, self).__init__()
+        self.vsz = kwargs.get('vsz')
+        self.dsz = kwargs.get('dsz')
+        self.finetune = kwargs.get('finetune', True)
+        self.name = name
+        self.scope = kwargs.get('scope', '{}/CharBoWLUT'.format(self.name))
+        self.weights = kwargs.get('weights')
+        self.params = kwargs
+        self.wsz = None
+        self.xch = kwargs.get(self.name, tf.placeholder(tf.int32, [None, None, None], name=self.name))
+
+    def save_md(self, target):
         write_json({'vsz': self.get_vsz(), 'dsz': self.get_dsz()}, target)
 
-    def _get_weights(self, sess):
-        weights = sess.run('{}/W:0'.format(self.scope))
-        return weights
+    def encode(self):
+        return tf.reduce_sum(embed(self.x,
+                                   self.get_vsz(),
+                                   self.get_dsz(),
+                                   tf.constant_initializer(self.weights, dtype=tf.float32, verify_shape=True),
+                                   self.finetune,
+                                   self.scope), axis=-1, keep_dims=False)
 
 
 class TensorFlowCharConvEmbeddings(TensorFlowEmbeddings):
