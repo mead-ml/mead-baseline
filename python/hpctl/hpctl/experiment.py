@@ -44,7 +44,12 @@ class Experiment(object):
         self.hpctl_logs = read_config_file(hpctl_logging)
         self.mead_settings = get_mead_settings(settings)
         self.hpctl_settings = self.mead_settings.get('hpctl', {})
-        self.root = self.hpctl_settings.get('root', '.hpctl')
+        self.root = self.hpctl_settings.get('root', 'delete_me')
+        try:
+            os.mkdir(self.root)
+        except OSError:
+            pass
+        os.chdir(self.root)
         self.hpctl_logs['host'] = self.hpctl_settings.get('logging', {}).get('host', 'localhost')
         self.hpctl_logs['port'] = self.hpctl_settings.get('logging', {}).get('port', 6006)
         self.datasets = datasets

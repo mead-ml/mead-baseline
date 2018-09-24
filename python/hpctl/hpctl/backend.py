@@ -92,7 +92,7 @@ class Backend(object):
     def __init__(self):
         super(Backend, self).__init__()
 
-    def launch(self, label, config):
+    def launch(self, label, config, **kwargs):
         pass
 
     def any_done(self):

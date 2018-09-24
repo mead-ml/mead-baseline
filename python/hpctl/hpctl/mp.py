@@ -193,7 +193,7 @@ class MPBackend(LocalGPUBackend):
         super(MPBackend, self).__init__(**kwargs)
         self.jobs = [MPRunner(run_job, gpu) for gpu in self.real_gpus]
 
-    def launch(self, label, config, exp):
+    def launch(self, label, config, exp, **kwargs):
         """Start a job.
 
         :param label: hpctl.utils.Label, The label for the job.

@@ -63,7 +63,7 @@ class Results(object):
         self.human_to_label = defaultdict(list)
 
     @classmethod
-    def create(cls, exp_hash=None):
+    def create(cls, file_name="results"):
         """Load a results if found, create otherwise.
 
         :param exp: str, The name of the experiment.
@@ -74,17 +74,16 @@ class Results(object):
         """
         manager = ResultsManager()
         manager.start()
-        if exp_hash is None:
+        if file_name is None:
             return manager.Results()
-        loc = os.path.join(exp_hash, exp_hash)
-        loc = loc + '.p'
-        if not os.path.exists(loc):
+        file_name = file_name + '.p'
+        if not os.path.exists(file_name):
             return manager.Results()
-        s = pickle.load(open(loc, 'rb'))
-        for v in s.results.values():
-            # If you are loading a results and a job was running is dead now.
-            if v['state'] is States.RUNNING:
-                v['state'] = States.KILLED
+        s = pickle.load(open(file_name, 'rb'))
+        # for v in s.results.values():
+        #     # If you are loading a results and a job was running is dead now.
+        #     if v['state'] is States.RUNNING:
+        #         v['state'] = States.KILLED
         results = manager.Results()
         results.restore(s)
         return results
@@ -96,15 +95,14 @@ class Results(object):
         self.label_to_human = results.label_to_human
         self.human_to_label = results.human_to_label
 
-    def save(self, exp_hash):
+    def save(self, file_name="results"):
         """Persist the results.
 
         :param exp: str, The name of the experiment.
         :param mead_hash: str, The name of the results.
         """
-        loc = os.path.join(exp_hash, exp_hash)
-        loc = loc + ".p"
-        pickle.dump(self, open(loc, 'wb'))
+        file_name = file_name + ".p"
+        pickle.dump(self, open(file_name, 'wb'))
 
     def insert(self, label, config):
         """Add a new entry to the results.

@@ -87,7 +87,7 @@ class LoggingServer(socketserver.ThreadingTCPServer):
 
     def __init__(
         self, queue,
-        host='', port=6006,
+        host='0.0.0.0', port=6006,
         handler=JSONStreamHandler,
         timeout=1
     ):

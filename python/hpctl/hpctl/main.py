@@ -71,7 +71,8 @@ def main():
     subparsers = parser.add_subparsers()
 
     search_parser = subparsers.add_parser('search', description="Explore Hyper Parameters.")
-    search_parser.set_defaults(func=search)
+    # search_parser.set_defaults(func=search)
+    search_parser.set_defaults(func=serve)
     add_common_args(search_parser)
     search_parser.add_argument('--num_iters', type=int, help="The number of sample to run.")
 

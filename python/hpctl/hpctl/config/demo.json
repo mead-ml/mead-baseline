@@ -1,6 +1,5 @@
 {
     "num_iters": 4,
-    "num_jobs": 2,
     "mead": {
         "task": "classify",
         "batchsz": {
@@ -59,8 +58,7 @@
                 "max": 0.999
             },
             "model_base": "./models/sst2",
-            "early_stopping_metric": "acc",
-            "verbose": true
+            "early_stopping_metric": "acc"
         }
     }
 }
