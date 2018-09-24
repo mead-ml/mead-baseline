@@ -66,7 +66,7 @@ class WordEmbeddingsModel(object):
             else:
                 assert self.dsz == self.weights.shape[1]
 
-        else:
+        elif self.vsz is not None and self.dsz is not None:
             self.weights = np.zeros((self.vsz, self.dsz))
 
     def get_dsz(self):
