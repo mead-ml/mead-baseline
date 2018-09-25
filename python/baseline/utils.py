@@ -2,22 +2,25 @@ import os
 import sys
 import json
 import logging
+import hashlib
+import zipfile
 import importlib
+from copy import deepcopy
+from collections import OrderedDict
 from functools import partial, update_wrapper, wraps
 import numpy as np
 import addons
-import json
-import hashlib
-import zipfile
 
 
 __all__ = []
+
 
 def parameterize(func):
     @wraps(func)
     def decorator(*args, **kwargs):
         return lambda x: func(x, *args, **kwargs)
     return decorator
+
 
 @parameterize
 def export(obj, all_list=None):
@@ -28,6 +31,7 @@ def export(obj, all_list=None):
     """
     all_list.append(obj.__name__)
     return obj
+
 
 exporter = export(__all__)
 
@@ -40,6 +44,7 @@ class JSONFormatter(logging.Formatter):
         except TypeError:
             pass
         return super(JSONFormatter, self).format(record)
+
 
 @exporter
 def crf_mask(vocab, span_type, s_idx, e_idx, pad_idx=None):
@@ -58,6 +63,7 @@ def crf_mask(vocab, span_type, s_idx, e_idx, pad_idx=None):
     if span_type.upper() == "IOBES":
         mask = iobes_mask(vocab, start, end, pad)
     return mask
+
 
 def iob_mask(vocab, start, end, pad=None):
     small = 0
@@ -98,6 +104,7 @@ def iob_mask(vocab, start, end, pad=None):
                     if to.startswith("B-"):
                         mask[vocab[to], vocab[from_]] = small
     return mask
+
 
 def iob2_mask(vocab, start, end, pad=None):
     small = 0
@@ -829,3 +836,84 @@ def verbose_output(verbose, confusion_matrix):
         print(confusion_matrix)
     if outfile is not None:
         confusion_matrix.save(outfile)
+
+
+@exporter
+def order_json(data):
+    """Sort json to a consistent order.
+    When you hash json that has the some content but is different orders you get
+    different fingerprints.
+    In:  hashlib.sha1(json.dumps({'a': 12, 'b':14}).encode('utf-8')).hexdigest()
+    Out: '647aa7508f72ece3f8b9df986a206d95fd9a2caf'
+    In:  hashlib.sha1(json.dumps({'b': 14, 'a':12}).encode('utf-8')).hexdigest()
+    Out: 'a22215982dc0e53617be08de7ba9f1a80d232b23'
+    This function sorts json by key so that hashes are consistent.
+    Note:
+        In our configs we only have lists where the order doesn't matter so we
+        can sort them for consistency. This would have to change if we add a
+        config field that needs order we will need to refactor this.
+    :param data: dict, The json data.
+    :returns:
+        collections.OrderedDict: The data in a consistent order (keys sorted alphabetically).
+    """
+    new = OrderedDict()
+    for (key, value) in sorted(data.items(), key=lambda x: x[0]):
+        if isinstance(value, dict):
+            value = order_json(value)
+        elif isinstance(value, list):
+            value = sorted(value)
+        new[key] = value
+    return new
+
+
+KEYS = {
+    ('conll_output',),
+    ('visdom',),
+    ('visdom_name',),
+    ('model', 'gpus'),
+    ('test_thresh',),
+    ('reporting',),
+    ('num_valid_to_show',),
+    ('train', 'verbose'),
+    ('train', 'model_base'),
+    ('train', 'model_zip'),
+    ('test_batchsz')
+}
+
+
+@exporter
+def remove_extra_keys(config, keys=KEYS):
+    """Remove config items that don't effect the model.
+    When base most things off of the sha1 hash of the model configs but there
+    is a problem. Some things in the config file don't effect the model such
+    as the name of the `conll_output` file or if you are using `visdom`
+    reporting. This strips out these kind of things so that as long as the model
+    parameters match the sha1 will too.
+    :param config: dict, The json data.
+    :param keys: Set[Tuple[str]], The keys to remove.
+    :returns:
+        dict, The data with certain keys removed.
+    """
+    c = deepcopy(config)
+    for key in keys:
+        x = c
+        for k in key[:-1]:
+            x = x.get(k)
+            if x is None:
+                break
+        else:
+            _ = x.pop(key[-1], None)
+    return c
+
+
+@exporter
+def hash_config(config):
+    """Hash a json config with sha1.
+    :param config: dict, The config to hash.
+    :returns:
+        str, The sha1 hash.
+    """
+    stripped_config = remove_extra_keys(config)
+    sorted_config = order_json(stripped_config)
+    json_bytes = json.dumps(sorted_config).encode('utf-8')
+    return hashlib.sha1(json_bytes).hexdigest()
