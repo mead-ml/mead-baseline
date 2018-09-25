@@ -12,6 +12,13 @@ from hpctl.sample import get_config_sampler
 from hpctl.frontend import get_frontend, color
 from hpctl.utils import create_logs
 from hpctl.scheduler import RoundRobinScheduler
+from hpctl.settings import (
+    get_configs,
+    get_settings,
+    get_logs,
+    get_ends,
+    set_root,
+)
 
 
 __all__ = []
@@ -57,32 +64,38 @@ def find(**kwargs):
 
 
 def launch(**kwargs):
-    import requests
-    exp = Experiment(**kwargs)
-    send = {}
-    config_sampler = get_config_sampler(exp.mead_config, None, exp.hpctl_config.get('samplers', []))
+    hp_config, mead_config = get_configs(**kwargs)
+    exp_hash = hash_config(mead_config)
+    hp_settings, mead_settings = get_settings(**kwargs)
+    hp_logs, mead_logs = get_logs(hp_settings, **kwargs)
+    datasets = read_config_file_or_json(kwargs['datasets'])
+    embeddings = read_config_file_or_json(kwargs['embeddings'])
+    task_name = kwargs.get('task', mead_config.get('task', 'None'))
+    _, backend_config = get_ends(hp_config, hp_settings, **kwargs)
+    backend_config['type'] = 'remote'
+    if 'host' not in backend_config:
+        backend_config['host'] = 'localhost'
+    if 'port' not in backend_config:
+        backend_config['port'] = 5000
+
+    config_sampler = get_config_sampler(mead_config, None, hp_config.get('samplers', []))
     label, config = config_sampler.sample()
     print(label)
-    send['label'] = str(label)
-    send['config'] = config
-    send['datasets'] = exp.datasets
-    send['embeddings'] = exp.embeddings
-    send['mead_logs'] = exp.mead_logs
-    send['hpctl_logs'] = exp.hpctl_logs
-    send['task_name'] = exp.task_name
-    send['settings'] = exp.mead_settings
-    from backend import RemoteBackend
-    be = RemoteBackend('localhost', '5000')
+    send = {
+        'label': str(label),
+        'config': config,
+        'datasets': datasets,
+        'embeddings': embeddings,
+        'mead_logs': mead_logs,
+        'hpctl_logs': hp_logs,
+        'task_name': task_name,
+        'settings': mead_settings,
+    }
+
+    be = get_backend(backend_config)
     be.launch(**send)
 
 
-from hpctl.settings import (
-    get_configs,
-    get_settings,
-    get_logs,
-    get_ends,
-    set_root,
-)
 
 
 def serve(**kwargs):
