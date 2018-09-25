@@ -55,7 +55,7 @@ To run these codes `baseline/python` should be available in your `PYTHONPATH` va
 
 ### Installing Baseline as a Python Package
 
-Baseline can be installed as a python package using the script [install_dev.sh](../python/install_dev.sh). To install, run the command: `./install.sh baseline`. Once installed, you can use the commands: `mead.train` and `mead.export` to  run the [trainer](../python/mead/trainer.py) or the [exporter](../python/mead/export.py) (with the same options as before) w/o putting baseline in PYTHONPATH. 
+Baseline can be installed as a python package using the script [install_dev.sh](../python/install_dev.sh). To install, run the command: `./install.sh baseline`. Once installed, you can use the commands: `mead-train` and `mead-export` to  run the [trainer](../python/mead/trainer.py) or the [exporter](../python/mead/export.py) (with the same options as before) w/o putting baseline in PYTHONPATH. 
 
 ## Baseline as an API
 
