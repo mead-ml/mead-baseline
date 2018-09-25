@@ -5,7 +5,7 @@ import os
 import json
 import docker
 from baseline.utils import write_json, read_config_file
-from hpctl.backend import LocalGPUBackend, handle_gpus, Runner
+from hpctl.backend import LocalGPUBackend, Runner
 from hpctl.utils import create_logs
 
 
@@ -73,8 +73,8 @@ def run_docker(
     :param hpctl_logs: dict, The hpctl logging config.
     :param settings: dict, The mead and hpctl settings.
     :param task_name: str, The name of the mead task.
-    :param datasets: str, The dataset file.
-    :param embeddings: str, The embeddings file.
+    :param datasets: dict, The dataset mappings.
+    :param embeddings: dict, The embeddings mappings.
     :param gpus: List[str], The gpus the job is allowed to use.
 
     :returns:
@@ -119,8 +119,8 @@ def run_docker(
             'NV_GPU': ','.join(gpus),
             'CONFIG': json.dumps(config_params),
             'SETTINGS': json.dumps(settings),
-            'DATASETS': json.dumps(read_config_file(datasets)),
-            'EMBEDDINGS': json.dumps(read_config_file(embeddings)),
+            'DATASETS': json.dumps(datasets),
+            'EMBEDDINGS': json.dumps(embeddings),
             'LOGGING': json.dumps(logs),
         },
         network_mode='host',
@@ -136,41 +136,8 @@ class DockerRunner(Runner):
         super(DockerRunner, self).__init__()
         self.p = None
 
-    def start(self, stuff?):
-        pass
-
-    def join(self):
-        if self.p is None:
-            return
-        self.p.wait()
-        # Dump everything the docker container outputs to a file.
-        with open(os.path.join(self.loc, 'stdout'), 'wb') as f:
-            f.write(self.p.logs())
-
-    @property
-    def is_done(self):
-        if self.p is None:
-            return True
-        self.p.reload()
-        return not self.p.status == 'running'
-
-    def stop(self):
-        if self.p is None:
-            return
-        self.p.kill()
-
-
-class HoldGPUDockerRunner(Runner):
-    def __init__(self, client, func, gpus=None, *args, **kwargs):
-        super(HoldDockerRunner, self).__init__()
-        self.func = func
-        self.client = client
-        self.gpus = gpus
-
-    def start(self, exp, label, *args, **kwargs):
-        kwargs['gpus'] = self.gpus
-        # args = tuple([exp, label] + list(args))
-        self.p, self.loc = self.func(self.client, exp, label, *args, **kwargs)
+    def start(self, client, func, *args, **kwargs):
+        self.p, self.loc = func(client, *args, **kwargs)
         while self.is_done:
             pass
 
@@ -204,11 +171,17 @@ class DockerBackend(LocalGPUBackend):
     def __init__(self, default_mounts=None, user_mounts=None, **kwargs):
         super(DockerBackend, self).__init__(**kwargs)
         self.client = docker.from_env()
-        self.jobs = [DockerRunner(self.client, run_docker, gpu) for gpu in self.real_gpus]
         self.default_mounts = kwargs.get('default_mounts', [])
         self.user_mounts = kwargs.get('user_mounts', [])
 
-    def launch(self, label, config, exp):
+    def launch(
+            self,
+            label, config,
+            mead_logs, hpctl_logs,
+            settings, datasets,
+            embeddings, task_name,
+            **kwargs
+    ):
         """Start a job.
 
         :param label: hpctl.utils.Label, The label for the job.
@@ -224,16 +197,31 @@ class DockerBackend(LocalGPUBackend):
                         to_del = l
                 if to_del is not None:
                     del self.label_to_job[l]
+
+                # Free my gpus
+                for gpu, cand_job in self.gpus_to_job.items():
+                    if job == cand_job:
+                        self.gpus_to_job[gpu] = None
                 job.join()
-                job.start(
-                    label, config,
-                    self.default_mounts, self.user_mounts,
-                    mead_logs=exp.mead_logs,
-                    hpctl_logs=exp.hpctl_logs,
-                    settings=exp.mead_settings,
-                    datasets=exp.datasets,
-                    embeddings=exp.embeddings,
-                    task_name=exp.task_name
-                )
-                self.label_to_job[label] = job
-                "#dissecting-contextual-word-embeddings-architecture-and-representation-peters-et-al-2018"return
+                self.jobs.remove(job)
+
+        for gpu, job in self.gpus_to_job.items():
+            if job is None:
+                break
+
+        job = DockerRunner()
+        job.start(
+            self.client, run_docker,
+            label, config,
+            self.default_mounts, self.user_mounts,
+            mead_logs=mead_logs,
+            hpctl_logs=hpctl_logs,
+            settings=settings,
+            datasets=datasets,
+            embeddings=embeddings,
+            task_name=task_name,
+            gpus=[str(gpu)]
+        )
+        self.label_to_job[label] = job
+        self.gpus_to_job[gpu] = job
+        self.jobs.append(job)
