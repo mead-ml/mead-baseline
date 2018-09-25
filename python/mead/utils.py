@@ -1,23 +1,37 @@
 import os
 import json
-from copy import deepcopy
-from collections import OrderedDict
-from baseline.utils import export, str2bool
-from mead.mime_type import mime_type
 import hashlib
 import zipfile
 import argparse
+from copy import deepcopy
+from collections import OrderedDict
+from baseline.utils import export, str2bool, read_config_file
+from mead.mime_type import mime_type
 
 __all__ = []
 exporter = export(__all__)
 
 
 @exporter
-def index_by_label(dataset_file):
-    with open(dataset_file) as f:
-        datasets_list = json.load(f)
-        datasets = dict((x["label"], x) for x in datasets_list)
-        return datasets
+def read_config_file_or_json(config, name=''):
+    if isinstance(config, (dict, list)):
+        return config
+    elif os.path.exists(config):
+        return read_config_file(config)
+    raise Exception('Expected {} config file or a JSON object.'.format(name))
+
+
+@exporter
+def get_mead_settings(mead_settings_config):
+    if mead_settings_config is None:
+        return {}
+    return read_config_file_or_json(mead_settings_config, 'mead settings')
+
+
+@exporter
+def index_by_label(object_list):
+    objects = {x['label']: x for x in object_list}
+    return objects
 
 
 @exporter
