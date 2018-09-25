@@ -228,6 +228,9 @@ class Results(object):
         labels = sorted(labels, key=lambda x: x[1])
         return [l[0] for l in labels]
 
+    def get_experiments(self):
+        return [x for x in self.results]
+
     def get_human(self, label):
         """Get the human label from the sha1.
 

@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 import os
 from baseline.utils import export as exporter
 from baseline.utils import read_config_file, write_json, hash_config
+from mead.utils import read_config_file_or_json
 from hpctl.results import Results
 from hpctl.backend import get_backend
 from hpctl.logging_server import Logs
@@ -75,14 +76,26 @@ def launch(**kwargs):
     be.launch(**send)
 
 
+from hpctl.settings import (
+    get_configs,
+    get_settings,
+    get_logs,
+    get_ends,
+    set_root,
+)
+
+
 def serve(**kwargs):
-    # temp
-    exp = Experiment(**kwargs)
+    hp_settings, mead_settings = get_settings(**kwargs)
+    frontend_config, backend_config = get_ends({}, hp_settings, **kwargs)
+    hp_logs, _ = get_logs(hp_settings, **kwargs)
+    set_root(hp_settings)
+
     results = Results.create()
-    backend = get_backend(exp)
-    logs = Logs.create(exp)
-    exp.frontend_config['type'] = 'flask'
-    frontend = get_frontend(exp, results)
+    backend = get_backend(backend_config)
+    logs = Logs.create(hp_logs)
+    frontend_config['type'] = 'flask'
+    frontend = get_frontend(frontend_config, results)
     scheduler = RoundRobinScheduler()
     try:
         run_forever(results, backend, scheduler, frontend, logs)
@@ -90,37 +103,59 @@ def serve(**kwargs):
         pass
 
 
-
 @export
 def search(**kwargs):
     """Search for optimal hyperparameters."""
-    exp = Experiment(**kwargs)
+    hp_config, mead_config = get_configs(**kwargs)
+    exp_hash = hash_config(mead_config)
+    hp_settings, mead_settings = get_settings(**kwargs)
+    hp_logs, mead_logs = get_logs(hp_settings, **kwargs)
+    datasets = read_config_file_or_json(kwargs['datasets'])
+    embeddings = read_config_file_or_json(kwargs['embeddings'])
+    task_name = kwargs.get('task', mead_config.get('task', 'None'))
+    frontend_config, backend_config = get_ends(hp_config, hp_settings, **kwargs)
+
+    frontend_config['experiment_hash'] = exp_hash
+    default = mead_config['train'].get('early_stopping_metric', 'avg_loss')
+    if 'train' not in frontend_config:
+        frontend_config['train'] = default
+    if 'dev' not in frontend_config:
+        frontend_config['dev'] = default
+    if 'test' not in frontend_config:
+        frontend_config['test'] = default
+
+    set_root(hp_settings)
 
     results = Results.create()
 
-    backend = get_backend(exp)
+    backend = get_backend(backend_config)
 
     # Setup the sampler
     config_sampler = get_config_sampler(
-        exp.mead_config,
+        mead_config,
         results,
-        exp.hpctl_config.get('samplers', [])
+        hp_config.get('samplers', [])
     )
 
-    logs = Logs.create(exp)
+    if backend_config['type'] == 'remote':
+        from mock import MagicMock
+        logs = MagicMock()
+        logs.get.return_value = [None, None]
+    else:
+        logs = Logs.create(hp_logs)
 
-    frontend = get_frontend(exp, results)
+    frontend = get_frontend(frontend_config, results)
 
-    num_iters = int(kwargs.get('num_iters') if kwargs.get('num_iters') is not None else exp.hpctl_config.get('num_iters', 3))
+    num_iters = int(kwargs.get('num_iters') if kwargs.get('num_iters') is not None else hp_config.get('num_iters', 3))
 
-    run(num_iters, exp, results, backend, frontend, config_sampler, logs)
+    run(num_iters, results, backend, frontend, config_sampler, logs, mead_logs, hp_logs, mead_settings, datasets, embeddings, task_name)
     logs.stop()
     frontend.finalize()
     results.save()
 
 
 @export
-def run(num_iters, exp, results, backend, frontend, config_sampler, logs):
+def run(num_iters, results, backend, frontend, config_sampler, logs, mead_logs, hpctl_logs, mead_settings, datasets, embeddings, task_name):
     """The main driver of hpctl.
 
     :param num_iters: int, The number of jobs to run.
@@ -141,10 +176,10 @@ def run(num_iters, exp, results, backend, frontend, config_sampler, logs):
             results.insert(label, config)
             results.save()
             backend.launch(
-                label, config,
-                exp.mead_logs, exp.hpctl_logs,
-                exp.mead_settings, exp.datasets,
-                exp.embeddings, exp.task_name
+                label=label, config=config,
+                mead_logs=mead_logs, hpctl_logs=hpctl_logs,
+                settings=mead_settings, datasets=datasets,
+                embeddings=embeddings, task_name=task_name
             )
             frontend.update()
             launched += 1
@@ -164,12 +199,10 @@ def run(num_iters, exp, results, backend, frontend, config_sampler, logs):
 def run_forever(results, backend, scheduler, frontend, logs):
     while True:
         cmd = frontend.command()
-        process_command(cmd, backend, frontend, scheduler, logs)
+        process_command(cmd, backend, frontend, scheduler, results)
         if backend.any_done():
             exp_hash, job_blob = scheduler.get()
             if exp_hash is not None:
-                results.insert(job_blob['label'], job_blob['config'])
-                results.save()
                 backend.launch(**job_blob)
                 frontend.update()
         # Monitor jobs
@@ -187,3 +220,5 @@ def process_command(cmd, backend, frontend, scheduler, results):
             frontend.update()
         if cmd['command'] == 'launch':
             scheduler.add(cmd['label'].exp, cmd)
+            results.insert(cmd['label'], cmd['config'])
+            results.save()

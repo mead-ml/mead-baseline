@@ -12,14 +12,13 @@ export = exporter(__all__)
 
 
 @export
-def get_backend(exp):
+def get_backend(backend_config):
     """Get the backend object.
 
     :param exp: hpctl.experiment.Experiment, The experiment data object.
     :param results: hpctl.results.Results, The data results object.
     """
-    backend = exp.backend_config
-    backend_type = backend['type']
+    backend_type = backend_config['type']
     print("Using backend [{}]".format(backend_type))
 
     if backend_type == "mp":
@@ -30,7 +29,10 @@ def get_backend(exp):
         from hpctl.dock import DockerBackend
         Be = DockerBackend
 
-    return Be(**backend)
+    if backend_type == "remote":
+        Be = RemoteBackend
+
+    return Be(**backend_config)
 
 
 @export
@@ -74,13 +76,21 @@ class Backend(object):
 
 
 class RemoteBackend(Backend):
-    def __init__(self, host, port):
+    def __init__(self, host, port, **kwargs):
+        super(RemoteBackend, self).__init__()
         self.host = host
         self.port = port
 
+    def any_done(self):
+        return True
+
+    def all_done(self):
+        return True
+
     def launch(self, **kwargs):
         kwargs['command'] = 'launch'
-        r = requests.post("http://{}:{}/hpctl/v1/command".format(self.host, self.port), json=kwargs)
+        kwargs['label'] = str(kwargs['label'])
+        r = requests.post("http://{}:{}/hpctl/v1/launch".format(self.host, self.port), json=kwargs)
         if r.status_code != 200:
             raise Exception
 

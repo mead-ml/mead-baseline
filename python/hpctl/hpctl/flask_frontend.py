@@ -8,8 +8,7 @@ from hpctl.frontend import Frontend, color
 
 
 class FlaskFrontend(Frontend):
-    def __init__(self, q, exp, results):
-        self.exp = exp
+    def __init__(self, q, results):
         self.results = results
         self.queue = q
 
@@ -17,13 +16,14 @@ class FlaskFrontend(Frontend):
         return render_template('index.html')
 
     def experiment(self, hash_):
-        return jsonify({'hash': hash_, 'name': self.exp.experiment_name})
+        return jsonify({})
 
     def experiments(self):
-        return jsonify({'hash': self.exp.experiment_hash, 'name': self.exp.experiment_name})
+        exps = self.results.get_experiments()
+        return jsonify({'experiments': exps})
 
     def hpctl_config(self, exp):
-        return jsonify(self.exp.mead_config)
+        return jsonify({})
 
     def get_config(self, exp, sha1):
         label = Label.parse(sha1)
@@ -56,7 +56,7 @@ class FlaskFrontend(Frontend):
 
     def labels(self, exp):
         res = []
-        labels = self.results.get_labels()
+        labels = self.results.get_labels(exp)
         for label in labels:
             res.append({"sha1": label.sha1, "human": label.human})
         return jsonify(res)
@@ -68,20 +68,37 @@ class FlaskFrontend(Frontend):
             sha1, human = self.results.get_human_prefix(name)
         return jsonify({"sha1": sha1, "human": human[0]})
 
-    def get_state(self, exp, label):
-        label, human = self.results.get_label_prefix(name)
-        label = Label(label, human[0])
+    def get_state(self, exp, sha1, name):
+        label = Label(exp, sha1, name)
         # Use color to help handle strings.
         state = color(self.results.get_state(label), off=True)
         res = {
-            "sha1": label.sha1,
-            "state": state
+            "exp": exp,
+            "sha1": sha1,
+            "name": name,
+            "state": state,
         }
         return jsonify(res)
 
     def command(self):
         json = request.get_json()
         json['label'] = Label.parse(json['label'])
+        self.queue.put(json)
+        return jsonify({"success": "success"})
+
+    def kill(self, exp, sha1, name):
+        label = Label(exp, sha1, name)
+        msg = {
+            'command': 'kill',
+            'label': label
+        }
+        self.queue.put(msg)
+        return jsonify({"success": "success"})
+
+    def launch(self):
+        json = request.get_json()
+        json['label'] = Label.parse(json['label'])
+        json['command'] = 'launch'
         self.queue.put(json)
         return jsonify({"success": "success"})
 
@@ -119,15 +136,17 @@ def init_app(app, fe, base_url='/hpctl/v1'):
     app.route('{}/label/<exp>'.format(base_url), methods={'GET'})(fe.labels)
     app.route('{}/label/<exp>/<name>'.format(base_url), methods={'GET'})(fe.get_label)
     app.route('{}/command'.format(base_url), methods={'POST'})(fe.command)
-    app.route('{}/state/<exp>/<label>'.format(base_url), methods={'GET'})(fe.get_state)
+    app.route('{}/state/<exp>/<sha1>/<name>'.format(base_url), methods={'GET'})(fe.get_state)
     app.route('{}/experiment'.format(base_url), methods={'GET'})(fe.experiments)
     app.route('{}/experiment/<exp>'.format(base_url), methods={'GET'})(fe.experiment)
     app.route('{}/demo'.format(base_url), methods={'GET'})(fe.demo_status)
+    app.route('{}/kill/<exp>/<sha1>/<name>'.format(base_url), methods={'GET'})(fe.kill)
+    app.route('{}/launch'.format(base_url), methods={'POST'})(fe.launch)
 
 
-def create_flask(q, exp, results):
+def create_flask(q, results):
     app = Flask(__name__)
-    fe = FlaskFrontend(q, exp, results)
+    fe = FlaskFrontend(q, results)
     init_app(app, fe)
     p = Process(target=app.run)
     return p

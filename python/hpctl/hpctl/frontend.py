@@ -104,6 +104,7 @@ class FlaskShim(Frontend):
             data = None
         return None
 
+
 @export
 class Console(Frontend):
     header = "{0} hpctl search {0}".format("=" * 42)
@@ -115,33 +116,32 @@ class Console(Frontend):
     :param dev: str, The dev metric to track.
     :param test: str, The test metric to track.
     """
-    def __init__(self, exp, results, train=None, dev=None, test=None, **kwargs):
+    def __init__(self, results, experiment_hash, train, dev, test, **kwargs):
         super(Console, self).__init__()
-        self.exp = exp
+        self.experiment_hash = experiment_hash
         self.results = results
         self.print_count = 0
         self.first = True
-        default = self.exp.mead_config['train'].get('early_stopping_metric', 'avg_loss')
-        self.train_metric = default if train is None else train
-        self.dev_metric = default if dev is None else dev
-        self.test_metric = default if test is None else test
+        self.train = train
+        self.dev = dev
+        self.test = test
         print(self.header)
 
     def update(self):
         """Display the train and dev metrics as they come in."""
         reset_screen(self.print_count)
         self.print_count = 0
-        labels = self.results.get_labels(self.exp.experiment_hash)
+        labels = self.results.get_labels(self.experiment_hash)
         max_len = max(map(len, map(lambda x: x.human, labels)))
         for label in labels:
             print('{state} {name:{width}} - train ({train_metric}): {train_stat:.3f} at {train_step} dev ({metric}): {dev_stat:.3f} at {dev_step}'.format(
                 state=color(self.results.get_state(label)),
                 name=label.human,
-                train_metric=self.train_metric,
-                train_stat=self.results.get_recent(label, 'Train', self.train_metric),
+                train_metric=self.train,
+                train_stat=self.results.get_recent(label, 'Train', self.train),
                 train_step=self.results.get_recent(label, 'Train', 'tick'),
-                metric=self.dev_metric,
-                dev_stat=self.results.get_recent(label, 'Valid', self.dev_metric),
+                metric=self.dev,
+                dev_stat=self.results.get_recent(label, 'Valid', self.dev),
                 dev_step=self.results.get_recent(label, 'Valid', 'tick'),
                 width=max_len)
             )
@@ -150,15 +150,16 @@ class Console(Frontend):
     def finalize(self):
         """Find and print the best results on the test set."""
         self.update()
-        best, _, _ = self.results.find_best(self.exp.experiment_hash, 'Valid', self.dev_metric)
-        test = self.results.get_recent(best, 'Test', self.test_metric)
-        print("\n{} had a test performance of {} on {}".format(best.human, test, self.test_metric))
+        best, _, _ = self.results.find_best(self.experiment_hash, 'Valid', self.dev)
+        test = self.results.get_recent(best, 'Test', self.test)
+        print("\n{} had a test performance of {} on {}".format(best.human, test, self.test))
 
     def command(self):
         """Function that gets any user inputs.
 
         Linux only.
         """
+        return
         if platform.system() == "Linux":
             r, _, _ = select.select([sys.stdin,], [], [], 0.0)
             if r:
@@ -169,7 +170,7 @@ class Console(Frontend):
                 human, sha1 = self.results.get_label_prefix(data[1])
                 if len(data) >= 2:
                     label = Label(
-                        self.exp.experiment_hash,
+                        self.experiment_hash,
                         sha1[0],
                         human,
                     )
@@ -194,12 +195,12 @@ class ConsoleDev(Console):
         """Display the best Dev metrics."""
         reset_screen(self.print_count)
         self.print_count = 0
-        labels, vals, idxs = self.results.get_best_per_label(self.exp_hash, 'Valid', self.dev_metric)
+        labels, vals, idxs = self.results.get_best_per_label(self.experiment_hash, 'Valid', self.dev)
         max_len = max(map(len, map(lambda x: x.human, human_labels)))
         for label, val, idx in zip(labels, vals, idxs):
             print('{state} {name:{width}} - best dev ({metric}): {stat:.3f} at {step}'.format(
                 state=color(self.results.get_state(label)),
-                name=label.human, metric=self.dev_metric, stat=val, step=idx,
+                name=label.human, metric=self.dev, stat=val, step=idx,
                 width=max_len)
             )
             self.print_count += 1
@@ -214,7 +215,7 @@ FRONTENDS = {
 
 
 @export
-def get_frontend(exp, results):
+def get_frontend(frontend_config, results):
     """Create a frontend object.
 
     :param exp: hpctl.experiment.Experiment: The experiment config.
@@ -223,12 +224,11 @@ def get_frontend(exp, results):
     :returns:
         hpctl.frontend.Frontend: The frontend object.
     """
-    config = exp.frontend_config
-    frontend = config.pop('type', 'default')
+    frontend = frontend_config.pop('type', 'default')
     if frontend == 'flask':
         from hpctl.flask_frontend import create_flask
         q = Queue()
-        fe = create_flask(q, exp, results)
-        return FlaskShim(q, fe, **config)
+        fe = create_flask(q, results)
+        return FlaskShim(q, fe, **frontend_config)
 
-    return FRONTENDS[frontend](exp, results, **config)
+    return FRONTENDS[frontend](results, **frontend_config)

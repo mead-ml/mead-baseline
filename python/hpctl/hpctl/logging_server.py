@@ -157,7 +157,7 @@ class Logs(object):
         self.server_process.join()
 
     @classmethod
-    def create(cls, exp):
-        port = exp.hpctl_logs['port']
+    def create(cls, hpctl_logs):
+        port = hpctl_logs['port']
         return cls(port=port)
 
