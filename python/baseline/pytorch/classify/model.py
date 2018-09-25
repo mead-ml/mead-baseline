@@ -124,7 +124,7 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
         return self.stacked(pooled)
 
     def _init_embed(self, embeddings, **kwargs):
-        self.embeddings = dict()
+        self.embeddings = EmbeddingsContainer()
         input_sz = 0
         for k, embedding in embeddings.items():
             DefaultType = PyTorchCharConvEmbeddings if k == 'char' else PyTorchWordEmbeddings

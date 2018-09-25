@@ -621,4 +621,44 @@ def vec_log_sum_exp(vec, dim):
     return max_scores + torch.log(torch.sum(torch.exp(vec - max_scores_broadcast), dim, keepdim=True))
 
 
+class EmbeddingsContainer(nn.Module):
+    def __init__(self):
+        super(EmbeddingsContainer, self).__init__()
 
+    def __getitem__(self, key):
+        return self._modules[key]
+
+    def __setitem__(self, key, module):
+        self.add_module(key, module)
+
+    def __delitem__(self, key):
+        del self._modules[key]
+
+    def __len__(self):
+        return len(self._modules)
+
+    def __iter__(self):
+        return iter(self._modules)
+
+    def __contains__(self, key):
+        return key in self._modules
+
+    def clear(self):
+        self._modules.clear()
+
+    def pop(self, key):
+        v = self[key]
+        del self[key]
+        return v
+
+    def keys(self):
+        return self._modules.keys()
+
+    def items(self):
+        return self._modules.items()
+
+    def values(self):
+        return self._modules.values()
+
+    def update(self, modules):
+        raise Exception('Not implemented')
