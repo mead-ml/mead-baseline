@@ -147,7 +147,6 @@ class RNNTaggerModel(nn.Module, TaggerModel):
 
         return decoded
 
-    # Input better be xch, x
     def forward(self, input):
         lengths = input['lengths']
         probv = self.compute_unaries(input, lengths)
