@@ -1,10 +1,11 @@
 from baseline.pytorch.torchy import *
-from baseline.model import Tagger, create_tagger_model, load_tagger_model
+from baseline.pytorch.crf import *
+from baseline.model import TaggerModel, create_tagger_model, load_tagger_model
 import torch.autograd
 import math
 
 
-class RNNTaggerModelModel(nn.Module, Tagger):
+class RNNTaggerModel(nn.Module, TaggerModel):
 
     def save(self, outname):
         torch.save(self, outname)
@@ -108,11 +109,11 @@ class RNNTaggerModelModel(nn.Module, Tagger):
         return mots + output
 
     def make_input(self, batch_dict):
-
-        x = batch_dict['x']
-        xch = batch_dict['xch']
+        #print(batch_dict.keys())
+        x = torch.from_numpy(batch_dict['word'])
+        xch = torch.from_numpy(batch_dict['char'])
         y = batch_dict.get('y', None)
-        lengths = batch_dict['lengths']
+        lengths = torch.from_numpy(batch_dict['word_lengths'])
         ids = batch_dict.get('ids', None)
 
         if self.training and self.pdropin_value > 0.0:
@@ -135,7 +136,7 @@ class RNNTaggerModelModel(nn.Module, Tagger):
             x = x.cuda()
             xch = xch.cuda()
             if y is not None:
-                y = y.cuda()
+                y = torch.from_numpy(y).cuda()
 
         if y is not None:
             y = torch.autograd.Variable(y.contiguous())

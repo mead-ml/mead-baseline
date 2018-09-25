@@ -115,6 +115,8 @@ class DictExamples(object):
         return len(self.example_list)
 
     def _trim_batch(self, batch, keys, max_src_len):
+        if max_src_len == 0:
+            return batch
         for k in keys:
             if len(batch[k].shape) == 3:
                 batch[k] = batch[k][:, 0:max_src_len, :]
@@ -152,7 +154,7 @@ class DictExamples(object):
                 batch[k] += [ex[k]]
 
             # Trim all batches along the sort_key if it exists
-            if trim and self.src is not None:
+            if trim and self.sort_key is not None:
                 max_src_len = max(max_src_len, ex[self.sort_key])
             idx += 1
 
