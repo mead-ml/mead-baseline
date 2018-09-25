@@ -4,7 +4,7 @@ from collections import OrderedDict
 import numpy as np
 from baseline.utils import listify
 
-__all__ = ["log2json", "order_json"]
+__all__ = ["log2json"]
 
 
 def log2json(log_file):
@@ -14,19 +14,6 @@ def log2json(log_file):
             x = line.replace("'", '"')
             s.append(json.loads(x))
     return s
-
-
-def order_json(j):
-    new = OrderedDict()
-    for key in sorted(j.keys()):
-        if isinstance(j[key], dict):
-            value = order_json(j[key])
-        elif isinstance(j[key], list):
-            value = sorted(j[key])
-        else:
-            value = j[key]
-        new[key] = value
-    return new
 
 
 def sort_ascending(metric):
