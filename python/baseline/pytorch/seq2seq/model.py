@@ -221,6 +221,8 @@ class Seq2SeqModel(nn.Module, EncoderDecoderModel):
     def beam_decode(self, inputs, K, mxlen=100):
         with torch.no_grad():
             src_len = inputs['src_len']
+            src_field = self.src_lengths_key.split('_')[0]
+
             context, h_i = self.encode(inputs, src_len)
             src_mask = sequence_mask(src_len)
             GO = self.GO
@@ -240,7 +242,7 @@ class Seq2SeqModel(nn.Module, EncoderDecoderModel):
 
             for i in range(mxlen):
                 lst = [path[-1] for path in paths]
-                dst = torch.LongTensor(lst).type(src.data.type())
+                dst = torch.LongTensor(lst).type(inputs[src_field].data.type())
                 mask_eos = dst == EOS
                 mask_pad = dst == 0
                 dst = dst.view(1, K)
