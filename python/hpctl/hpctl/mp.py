@@ -49,7 +49,7 @@ def run_job(
     if gpus is not None:
         os.environ['CUDA_VISIBLE_DEVICES'] = ','.join(gpus)
     if 'visdom' in config_params.get('reporting', {}):
-        config_params.get('reporting', {})['visdom']['name'] = label.human
+        config_params.get('reporting', {})['visdom']['name'] = label.name
     config_params['model']['gpus'] = len(gpus)
 
     write_json(config_params, 'config.json')
@@ -73,7 +73,7 @@ class FileProcess(Process):
         super(FileProcess, self).__init__(*args, **kwargs)
         self.exp = label.exp
         self.label = label.sha1
-        self.human = label.human
+        self.name = label.name
         self.loc = os.path.join(self.exp, label.local)
         try:
             os.makedirs(self.loc)
@@ -87,7 +87,7 @@ class FileProcess(Process):
         sys.stdout = self.output
         sys.stderr = self.output
         os.chdir(self.loc)
-        setproctitle(self.human)
+        setproctitle(self.name)
         try:
             super(FileProcess, self).run()
         except Exception as e:
@@ -129,14 +129,14 @@ class TmuxProcess(FileProcess):
                 # the session and then call new-window. Probably need a lock
                 # so these can't step on each other.
                 call('tmux new-sess -s {} -n {} -d {}'.format(
-                    self.human, self.human, cmd
+                    self.name, self.name, cmd
                 ), shell=True, stdout=devnull, stderr=devnull)
 
     def join(self):
         super(TmuxProcess, self).join()
         if self.tmux:
             with open(os.devnull, 'w') as devnull:
-                call('tmux kill-session -t {}'.format(self.human),
+                call('tmux kill-session -t {}'.format(self.name),
                      shell=True, stdout=devnull, stderr=devnull
                 )
 

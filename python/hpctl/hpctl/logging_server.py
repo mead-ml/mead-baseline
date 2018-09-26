@@ -161,3 +161,24 @@ class Logs(object):
         port = hpctl_logs['port']
         return cls(port=port)
 
+
+class DummyLogs(object):
+    def __init__(self, *args, **kwargs):
+        super(DummyLogs, self).__init__()
+
+    def get(self):
+        return None, None
+
+    def stop(self):
+        pass
+
+    @classmethod
+    def create(cls, hpctl_logs):
+        return cls()
+
+
+def get_log_server(log_config):
+    kind = log_config.pop('type', 'real')
+    if kind == 'remote':
+        return DummyLogs.create(log_config)
+    return Logs.create(log_config)

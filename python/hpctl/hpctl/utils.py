@@ -5,9 +5,8 @@ from six.moves import intern
 import os
 import json
 import hashlib
-from copy import deepcopy
 from functools import partial
-from collections import OrderedDict, namedtuple
+from collections import Mapping
 from baseline.utils import export as exporter
 from baseline.utils import write_json, wrapped_partial
 from mead.utils import convert_path
@@ -27,22 +26,22 @@ hpctl_path = export(
 
 
 @six.python_2_unicode_compatible
-class Label(object):
-    def __init__(self, exp, sha1, human):
+class Label(Mapping):
+    def __init__(self, exp, sha1, name):
         super(Label, self).__init__()
         self.exp = exp
         self.sha1 = sha1
-        self.human = human
+        self.name = name
         intern(self.exp)
         intern(self.sha1)
-        intern(self.human)
+        intern(self.name)
 
     @property
     def local(self):
-        return "{}/{}".format(self.sha1, self.human)
+        return "{}/{}".format(self.sha1, self.name)
 
     def __str__(self):
-        return "{}/{}/{}".format(self.exp, self.sha1, self.human)
+        return "{}/{}/{}".format(self.exp, self.sha1, self.name)
 
     def __repr__(self):
         return str(self)
@@ -51,16 +50,26 @@ class Label(object):
         return (
             self.exp == other.exp and
             self.sha1 == other.sha1 and
-            self.human == other.human
+            self.name == other.name
         )
 
     def __hash__(self):
         return hash(str(self))
 
+    def __iter__(self):
+        for x in ('exp', 'sha1', 'name'):
+            yield x
+
+    def __getitem__(self, item):
+        return getattr(self, item)
+
+    def __len__(self):
+        return 3
+
     @classmethod
     def parse(cls, label_str):
-        exp, sha1, human = label_str.split("/")
-        return cls(exp, sha1, human)
+        exp, sha1, name = label_str.split("/")
+        return cls(exp, sha1, name)
 
 
 @export

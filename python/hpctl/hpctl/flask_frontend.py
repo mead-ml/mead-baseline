@@ -54,6 +54,15 @@ class FlaskFrontend(Frontend):
         }
         return jsonify(res)
 
+    def find_best_per(self, exp, phase, metric):
+        labels, vals, idxs = self.results.get_best_per_label(exp, phase, metric)
+        res = {
+            'labels': [str(x) for x in labels],
+            'values': vals,
+            'steps': idxs,
+        }
+        return jsonify(res)
+
     def recent_result(self, exp, sha1, name, phase, metric):
         label = Label(exp, sha1, name)
         val = self.results.get_recent(label, phase, metric)
@@ -69,7 +78,7 @@ class FlaskFrontend(Frontend):
         res = []
         labels = self.results.get_labels(exp)
         for label in labels:
-            res.append({"sha1": label.sha1, "human": label.human})
+            res.append({"exp": exp, "sha1": label.sha1, "name": label.name})
         return jsonify(res)
 
     def get_label(self, exp, name):
@@ -117,7 +126,7 @@ class FlaskFrontend(Frontend):
         # THIS FUNCTION IS JUST BECAUSE I DIDN'T WANT A FULL BLOWN JAVASCRIPT APP, TO REMOVE
         labels = self.results.get_labels()
         sha1s = [l.sha1 for l in labels]
-        humans = [l.human for l in labels]
+        names = [l.name for l in labels]
         status = [color(self.results.get_state(l), off=True) for l in labels]
         train_stats = [self.results.get_recent(l, 'Train', 'avg_loss') for l in labels]
         train_ticks = [self.results.get_recent(l, 'Train', 'tick') for l in labels]
@@ -126,7 +135,7 @@ class FlaskFrontend(Frontend):
         res = {
             'status': status,
             'sha1': sha1s,
-            'names': humans,
+            'names': names,
             'exp': [self.exp.experiment_hash] * len(humans),
             'train': train_stats,
             'train_ticks': train_ticks,
@@ -146,6 +155,7 @@ def init_app(app, fe, base_url='/hpctl/v1'):
     # Get the best results for this run
     app.route('{}/result/best/<exp>/<sha1>/<name>/<phase>/<metric>'.format(base_url), methods={'GET'})(fe.best_result)
     app.route('{}/result/find/best/<exp>/<phase>/<metric>'.format(base_url), methods={'GET'})(fe.find_best)
+    app.route('{}/result/find/best_per/<exp>/<phase>/<metric>'.format(base_url), methods={'GET'})(fe.find_best_per)
     # Get the recent results for this run
     app.route('{}/result/recent/<exp>/<sha1>/<name>/<phase>/<metric>'.format(base_url), methods={'GET'})(fe.recent_result)
     # Get all the labels run for this experiment

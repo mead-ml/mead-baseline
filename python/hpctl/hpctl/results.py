@@ -12,6 +12,7 @@ from pprint import pformat
 from collections import defaultdict
 from multiprocessing.managers import BaseManager
 import requests
+import cachetools
 import numpy as np
 from baseline.utils import export as exporter
 from hpctl.utils import Label
@@ -62,8 +63,8 @@ class Results(object):
         super(Results, self).__init__()
         self.results = defaultdict(dddd_list)
         self.label_to_config = {}
-        self.label_to_human = defaultdict(list)
-        self.human_to_label = defaultdict(list)
+        self.label_to_name = defaultdict(list)
+        self.name_to_label = defaultdict(list)
 
     @classmethod
     def create(cls, file_name="results", **kwargs):
@@ -96,8 +97,8 @@ class Results(object):
         """Copy data from one results to another, used to populate the manager fro pickle reload."""
         self.results = results.results
         self.label_to_config = results.label_to_config
-        self.label_to_human = results.label_to_human
-        self.human_to_label = results.human_to_label
+        self.label_to_name = results.label_to_name
+        self.name_to_label = results.name_to_label
 
     def save(self, file_name="results"):
         """Persist the results.
@@ -118,8 +119,8 @@ class Results(object):
         self.label_to_config[label] = config
         self.results[label.exp][label]['time_stamp'] = time.time()
         self.set_waiting(label)
-        self.label_to_human[label.sha1].append(label.human)
-        self.human_to_label[label.human].append(label.sha1)
+        self.label_to_name[label.sha1].append(label.name)
+        self.name_to_label[label.name].append(label.sha1)
 
     def update(self, label, message):
         """Update entry with a new log info.
@@ -242,7 +243,7 @@ class Results(object):
         :returns:
             str, The human label.
         """
-        return search(label, self.label_to_human, prefix=False)
+        return search(label, self.label_to_name, prefix=False)
 
 
     def get_human_prefix(self, label):
@@ -253,7 +254,7 @@ class Results(object):
         :returns:
             str, The human label.
         """
-        return search(label, self.label_to_human, prefix=True)
+        return search(label, self.label_to_name, prefix=True)
 
     def get_label(self, label):
         """Get the sha1 from the human label.
@@ -263,7 +264,7 @@ class Results(object):
         :returns:
             str, The sha1.
         """
-        return search(label, self.human_to_label, prefix=False)
+        return search(label, self.name_to_label, prefix=False)
 
     def get_label_prefix(self, label):
         """Get the sha1 from the human label with a prefix search, 'ab' matches 'abc'
@@ -273,7 +274,7 @@ class Results(object):
         :returns:
             str, The human label.
         """
-        return search(label, self.human_to_label, prefix=True)
+        return search(label, self.name_to_label, prefix=True)
 
     def get_state(self, label):
         """Get the job state based on the label.
@@ -311,6 +312,13 @@ class Results(object):
 
     def __str__(self):
         return pformat(self.results)
+
+    def __del__(self):
+        for exp in self.results:
+            for label in self.results[exp]:
+                state = self.get_state(label)
+                if state == States.RUNNING or state == States.WAITING:
+                    self.set_killed(label)
 
 
 class BaseResults(object):
@@ -376,60 +384,58 @@ class ResultsManager(BaseManager):
 ResultsManager.register(str('Results'), Results)
 
 
+def _get(url):
+    r = requests.get(url)
+    if r.status_code != 200:
+        raise Exception("Failed GET on {}".format(url))
+    return r.json()
+
+
 class RemoteResults(BaseResults):
-    def __init__(self, host='localhost', port=5000):
+    def __init__(self, host='localhost', port=5000, cache_time=15, **kwargs):
         super(RemoteResults, self).__init__()
-        self.host = host
-        self.port = port
-        self.url = 'http://{host}:{port}/hpctl/v1'.format(host=self.host, port=self.port)
+        self.url = 'http://{host}:{port}/hpctl/v1'.format(host=host, port=port)
+        cache = cachetools.TTLCache(maxsize=1000, ttl=cache_time)
+        self.get = cachetools.cached(cache)(_get)
 
     def get_labels(self, exp_hash):
-        r = requests.get("{url}/label/{exp}".format(url=self.url, exp=exp_hash))
-        if r.status_code != 200:
-            return []
+        resp = self.get("{url}/label/{exp}".format(url=self.url, exp=exp_hash))
         labels = []
-        resp = r.json()
         for res in resp:
-            labels.append(Label(exp_hash, res['sha1'], res['human']))
+            labels.append(Label(exp_hash, res['sha1'], res['name']))
         return labels
 
     def get_experiments(self):
-        r = requests.get("{url}/experiment".format(url=self.url))
-        if r.status_code != 200:
-            return []
-        return r.json()['experiments']
+        resp = self.get("{url}/experiment".format(url=self.url))
+        return resp['experiments']
 
     def get_state(self, label):
-        r = requests.get(
-            "{url}/state/{exp}/{sha1}/{name}".format(
-                url=self.url, exp=label.exp, sha1=label.sha1, name=label.human
-            )
-        )
-        if r.status_code != 200:
-            return '?'
-        return r.json()['state']
+        resp = self.get("{url}/state/{exp}/{sha1}/{name}".format(url=self.url, **label))
+        return resp['state']
 
     def get_recent(self, label, phase, metric):
-        r = requests.get(
+        resp = self.get(
             "{url}/result/recent/{exp}/{sha1}/{name}/{phase}/{metric}".format(
-                url=self.url,
-                exp=label.exp, sha1=label.sha1, name=label.human,
-                phase=phase, metric=metric
+                url = self.url, phase=phase, metric=metric, **label
             )
         )
-        if r.status_code != 200:
-            return 0.0
-        return r.json()['value']
+        return resp['value']
 
     def find_best(self, exp, phase, metric):
-        r = requests.get(
+        resp = self.get(
             "{url}/result/find/best/{exp}/{phase}/{metric}".format(
-                url=self.url,
-                exp=exp, phase=phase, metric=metric
+                url = self.url, exp=exp, phase=phase, metric=metric
             )
         )
-        resp = r.json()
         return Label.parse(resp['label']), resp['value'], resp['step']
+
+    def get_best_per_label(self, exp, phase, metric):
+        resp = self.get(
+            "{url}/result/find/best_per/{exp}/{phase}/{metric}".format(
+                url=self.url, exp=exp, phase=phase, metric=metric
+            )
+        )
+        return [Label.parse(x) for x in resp['labels']], resp['values'], resp['steps']
 
 
 def search(key, table, prefix=True):
@@ -454,3 +460,10 @@ def search(key, table, prefix=True):
     if prefix:
         return None, None
     return None
+
+
+def get_results(results_config):
+    kind = results_config.pop('type', 'local')
+    if kind == 'remote':
+        return RemoteResults(**results_config)
+    return Results.create(**results_config)

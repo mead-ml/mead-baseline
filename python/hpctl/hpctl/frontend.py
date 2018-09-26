@@ -137,11 +137,11 @@ class Console(Frontend):
         labels = self.results.get_labels(self.experiment_hash)
         if not labels:
             return
-        max_len = max(map(len, map(lambda x: x.human, labels)))
+        max_len = max(map(len, map(lambda x: x.name, labels)))
         for label in labels:
             print('{state} {name:{width}} - train ({train_metric}): {train_stat:.3f} at {train_step} dev ({metric}): {dev_stat:.3f} at {dev_step}'.format(
                 state=color(self.results.get_state(label)),
-                name=label.human,
+                name=label.name,
                 train_metric=self.train,
                 train_stat=self.results.get_recent(label, 'Train', self.train),
                 train_step=self.results.get_recent(label, 'Train', 'tick'),
@@ -157,7 +157,7 @@ class Console(Frontend):
         self.update()
         best, _, _ = self.results.find_best(self.experiment_hash, 'Valid', self.dev)
         test = self.results.get_recent(best, 'Test', self.test)
-        print("\n{} had a test performance of {} on {}".format(best.human, test, self.test))
+        print("\n{} had a test performance of {} on {}".format(best.name, test, self.test))
 
     def command(self):
         """Function that gets any user inputs.
@@ -201,11 +201,13 @@ class ConsoleDev(Console):
         reset_screen(self.print_count)
         self.print_count = 0
         labels, vals, idxs = self.results.get_best_per_label(self.experiment_hash, 'Valid', self.dev)
-        max_len = max(map(len, map(lambda x: x.human, human_labels)))
+        if not labels:
+            return
+        max_len = max(map(len, map(lambda x: x.name, labels)))
         for label, val, idx in zip(labels, vals, idxs):
             print('{state} {name:{width}} - best dev ({metric}): {stat:.3f} at {step}'.format(
                 state=color(self.results.get_state(label)),
-                name=label.human, metric=self.dev, stat=val, step=idx,
+                name=label.name, metric=self.dev, stat=val, step=idx,
                 width=max_len)
             )
             self.print_count += 1

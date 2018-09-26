@@ -73,15 +73,13 @@ setup(
     install_requires=[
         'six',
         'enum34',
-        'visdom',
-        'requests',
     ],
     setup_requires=[
     ],
     extras_require={
         'test': ['pytest', 'mock'],
-        'flask': ['flask'],
         'docker': ['docker'],
+        'remote': ['flask', 'requests', 'cachetools']
     },
     keywords=['deep-learning', 'nlp', 'pytorch', 'tensorflow'],
     ext_modules=ext_modules,

@@ -97,7 +97,7 @@ def run_docker(
     logs = create_logs(label, mead_logs, hpctl_logs)
 
     if 'visdom' in config_params.get('reporting', {}):
-        config_params.get('reporting', {})['visdom']['name'] = label.human
+        config_params.get('reporting', {})['visdom']['name'] = label.name
 
     container = get_container(config_params['backend'])
     command = [

@@ -5,12 +5,12 @@ import time
 from baseline.utils import export as exporter
 from baseline.utils import read_config_file, write_json, hash_config
 from mead.utils import read_config_file_or_json
-from hpctl.results import Results, RemoteResults
+from hpctl.utils import create_logs
+from hpctl.results import get_results
 from hpctl.backend import get_backend
-from hpctl.logging_server import Logs
 from hpctl.sample import get_config_sampler
 from hpctl.frontend import get_frontend, color
-from hpctl.utils import create_logs
+from hpctl.logging_server import get_log_server
 from hpctl.scheduler import RoundRobinScheduler
 from hpctl.settings import (
     get_configs,
@@ -34,7 +34,7 @@ def list_names(**kwargs):
     for label in results.get_labels():
         print("{} {}".format(
             color(results.get_state(label)),
-            label.human
+            label.name
         ))
 
 
@@ -63,6 +63,7 @@ def find(**kwargs):
     print("Can't find {} in {}".format(name, config_hash))
 
 
+@export
 def launch(**kwargs):
     hp_config, mead_config = get_configs(**kwargs)
     exp_hash = hash_config(mead_config)
@@ -96,17 +97,16 @@ def launch(**kwargs):
     be.launch(**send)
 
 
-
-
+@export
 def serve(**kwargs):
     hp_settings, mead_settings = get_settings(**kwargs)
     frontend_config, backend_config = get_ends({}, hp_settings, **kwargs)
     hp_logs, _ = get_logs(hp_settings, **kwargs)
     set_root(hp_settings)
 
-    results = Results.create()
+    results = get_results({})
     backend = get_backend(backend_config)
-    logs = Logs.create(hp_logs)
+    logs = get_log_server(hp_logs)
     frontend_config['type'] = 'flask'
     frontend = get_frontend(frontend_config, results)
     scheduler = RoundRobinScheduler()
@@ -114,6 +114,15 @@ def serve(**kwargs):
         run_forever(results, backend, scheduler, frontend, logs)
     except KeyboardInterrupt:
         pass
+
+
+def _remote_monkey_patch(backend_config, hp_logs, results_config):
+    if backend_config['type'] == 'remote':
+        hp_logs['type'] = 'remote'
+        results_config['type'] = 'remote'
+        results_config['host'] = backend_config['host']
+        results_config['port'] = backend_config['port']
+    return backend_config, hp_logs, results_config
 
 
 @export
@@ -138,9 +147,9 @@ def search(**kwargs):
         frontend_config['test'] = default
 
     set_root(hp_settings)
+    backend_config, hp_logs, results_config = _remote_monkey_patch(backend_config, hp_logs, {})
 
-    # results = Results.create()
-    results = RemoteResults()
+    results = get_results(results_config)
 
     backend = get_backend(backend_config)
 
@@ -151,10 +160,7 @@ def search(**kwargs):
         hp_config.get('samplers', [])
     )
 
-    from mock import MagicMock
-    logs = MagicMock()
-    logs.get.return_value = [None, None]
-    # logs = Logs.create(hp_logs)
+    logs = get_log_server(hp_logs)
 
     frontend = get_frontend(frontend_config, results)
 

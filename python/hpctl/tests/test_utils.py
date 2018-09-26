@@ -1,3 +1,4 @@
+import random
 from copy import deepcopy
 import pytest
 from baseline.utils import remove_extra_keys
@@ -122,3 +123,18 @@ def test_label_share_dict_keys(data):
     l2 = Label('123', '456', 'abc')
     d = {l1: None}
     assert l2 in d
+
+
+def test_label_unpacking():
+    exp = str(random.randint(1000, 9000))
+    sha1 = str(random.randint(1000, 9000))
+    name = str(random.randint(1000, 9000))
+    gold = {
+        'exp': exp,
+        'sha1': sha1,
+        'name': name
+    }
+    label = Label(exp, sha1, name)
+    res = dict(**label)
+    assert res == gold
+

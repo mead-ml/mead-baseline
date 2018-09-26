@@ -237,9 +237,8 @@ class ConfigSampler(object):
     def sample(self):
         """Replace values with the sampled ones.
 
-        :returns: tuple, (str, str, dict):
-            [0]: The hash of the config
-            [2]: A human friendly name
+        :returns: tuple, (hpctl.utils.Label dict):
+            [0]: The label
             [3]: The config.
         """
         s = deepcopy(self.config)
