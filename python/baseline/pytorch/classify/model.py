@@ -26,12 +26,6 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
         model.pdrop = kwargs.get('pdrop', 0.5)
 
         model.lengths_key = kwargs.get('lengths_key')
-        if model.lengths_key is None:
-            if 'word' in embeddings:
-                model.lengths_key = 'word'
-            elif 'x' in embeddings:
-                model.lengths_key = 'x'
-
         if model.lengths_key is not None:
             # This allows user to short-hand the field to use
             if not model.lengths_key.endswith('_lengths'):
