@@ -5,13 +5,13 @@ import pymongo
 import datetime
 import socket
 import json
-import hashlib
 import getpass
 from baseline.utils import export, listify
+from mead.utils import hash_config
 from xpctl.core import ExperimentRepo, store_model
 from bson.objectid import ObjectId
 from baseline.version import __version__
-from xpctl.helpers import order_json, df_get_results, df_experimental_details, get_experiment_label
+from xpctl.helpers import df_get_results, df_experimental_details, get_experiment_label
 
 __all__ = []
 exporter = export(__all__)
@@ -55,7 +55,7 @@ class MongoRepo(ExperimentRepo):
         print_fn = kwargs.get('print_fn', print)
         hostname = kwargs.get('hostname', socket.gethostname())
         username = kwargs.get('username', getpass.getuser())
-        config_sha1 = hashlib.sha1(json.dumps(order_json(config_obj)).encode('utf-8')).hexdigest()
+        config_sha1 = hash_config(config_obj)
         label = get_experiment_label(config_obj, task, **kwargs)
 
         post = {

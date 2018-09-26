@@ -2,22 +2,23 @@ import os
 import sys
 import json
 import logging
+import hashlib
+import zipfile
 import importlib
 from functools import partial, update_wrapper, wraps
 import numpy as np
 import addons
-import json
-import hashlib
-import zipfile
 
 
 __all__ = []
+
 
 def parameterize(func):
     @wraps(func)
     def decorator(*args, **kwargs):
         return lambda x: func(x, *args, **kwargs)
     return decorator
+
 
 @parameterize
 def export(obj, all_list=None):
@@ -28,6 +29,7 @@ def export(obj, all_list=None):
     """
     all_list.append(obj.__name__)
     return obj
+
 
 exporter = export(__all__)
 
@@ -40,6 +42,7 @@ class JSONFormatter(logging.Formatter):
         except TypeError:
             pass
         return super(JSONFormatter, self).format(record)
+
 
 @exporter
 def crf_mask(vocab, span_type, s_idx, e_idx, pad_idx=None):
@@ -58,6 +61,7 @@ def crf_mask(vocab, span_type, s_idx, e_idx, pad_idx=None):
     if span_type.upper() == "IOBES":
         mask = iobes_mask(vocab, start, end, pad)
     return mask
+
 
 def iob_mask(vocab, start, end, pad=None):
     small = 0
@@ -98,6 +102,7 @@ def iob_mask(vocab, start, end, pad=None):
                     if to.startswith("B-"):
                         mask[vocab[to], vocab[from_]] = small
     return mask
+
 
 def iob2_mask(vocab, start, end, pad=None):
     small = 0
