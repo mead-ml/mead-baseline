@@ -206,7 +206,9 @@ class Seq2SeqModel(nn.Module, EncoderDecoderModel):
     def run(self, batch_dict, beam=1, **kwargs):
         self.eval()
         batch = []
-        B = batch_dict['src'].shape[0]
+        # Bit of a hack
+        src_field = self.src_lengths_key.split('_')[0]
+        B = batch_dict[src_field].shape[0]
         for b in range(B):
             example = dict({})
             for k, value in batch_dict.items():
@@ -218,7 +220,6 @@ class Seq2SeqModel(nn.Module, EncoderDecoderModel):
 
     def beam_decode(self, inputs, K, mxlen=100):
         with torch.no_grad():
-            src = inputs['src']
             src_len = inputs['src_len']
             context, h_i = self.encode(inputs, src_len)
             src_mask = sequence_mask(src_len)

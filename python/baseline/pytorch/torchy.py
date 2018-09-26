@@ -563,12 +563,11 @@ def show_examples_pytorch(model, es, rlut1, rlut2, vocab, mxlen, sample, prob_cl
 
     batch_dict = es[si]
 
-    src_array = batch_dict['src']
-    tgt_array = batch_dict['tgt']
-    src_len = batch_dict['src_lengths']
+    src_len_key = model.src_length_key
+    src_len_field = src_len_key.split('_')[0]
 
     if max_examples > 0:
-        max_examples = min(max_examples, src_array.shape[0])
+        max_examples = min(max_examples, batch_dict[src_len_field].shape[0])
 
 
     # TODO: fix this, check for GPU first
@@ -582,7 +581,7 @@ def show_examples_pytorch(model, es, rlut1, rlut2, vocab, mxlen, sample, prob_cl
             example[k] = v.reshape((1,) + v.shape)
 
         print('========================================================================')
-        sent = lookup_sentence(rlut1, example['src'].squeeze(), reverse=reverse)
+        sent = lookup_sentence(rlut1, example[src_len_field].squeeze(), reverse=reverse)
         print('[OP] %s' % sent)
         sent = lookup_sentence(rlut2, example['tgt'].squeeze())
         print('[Actual] %s' % sent)
