@@ -154,16 +154,15 @@ class Task(object):
 
         if backend == 'pytorch':
             import baseline.pytorch.embeddings as embeddings
+        elif backend == 'keras':
+            print('Keras backend')
+            import baseline.keras.embeddings as embeddings
+        elif backend == 'dynet':
+            print('Dynet backend')
+            import baseline.dy.embeddings as embeddings
         else:
-            if backend == 'keras':
-                print('Keras backend')
-                import baseline.keras.embeddings as embeddings
-            elif backend == 'dynet':
-                print('Dynet backend')
-                import baseline.dy.embeddings as embeddings
-            else:
-                print('TensorFlow backend')
-                import baseline.tf.embeddings as embeddings
+            print('TensorFlow backend')
+            import baseline.tf.embeddings as embeddings
 
         unif = self.config_params['unif']
         keep_unused = self.config_params.get('keep_unused', False)
@@ -230,26 +229,25 @@ class ClassifierTask(Task):
         if backend == 'pytorch':
             print('PyTorch backend')
             import baseline.pytorch.classify as classify
+        elif backend == 'keras':
+            print('Keras backend')
+            import baseline.keras.classify as classify
+        elif backend == 'dynet':
+            print('Dynet backend')
+            import _dynet
+            dy_params = _dynet.DynetParams()
+            dy_params.from_args()
+            dy_params.set_requested_gpus(1)
+            if 'autobatchsz' in self.config_params['train']:
+                self.config_params['model']['batched'] = False
+                dy_params.set_autobatch(True)
+            dy_params.init()
+            import baseline.dy.classify as classify
         else:
-            if backend == 'keras':
-                print('Keras backend')
-                import baseline.keras.classify as classify
-            elif backend == 'dynet':
-                print('Dynet backend')
-                import _dynet
-                dy_params = _dynet.DynetParams()
-                dy_params.from_args()
-                dy_params.set_requested_gpus(1)
-                if 'autobatchsz' in self.config_params['train']:
-                    self.config_params['model']['batched'] = False
-                    dy_params.set_autobatch(True)
-                dy_params.init()
-                import baseline.dy.classify as classify
-            else:
-                print('TensorFlow backend')
-                import baseline.tf.classify as classify
-                from mead.tf.exporters import ClassifyTensorFlowExporter
-                self.ExporterType = ClassifyTensorFlowExporter
+            print('TensorFlow backend')
+            import baseline.tf.classify as classify
+            from mead.tf.exporters import ClassifyTensorFlowExporter
+            self.ExporterType = ClassifyTensorFlowExporter
 
         self.task = classify
 
@@ -375,6 +373,7 @@ class EncoderDecoderTask(Task):
             self.config_params['preproc']['show_ex'] = baseline.pytorch.show_examples_pytorch
             self.config_params['preproc']['trim'] = True
         else:
+            # TODO: why not support DyNet trimming?
             self.config_params['preproc']['trim'] = False
             if backend == 'dynet':
                 print('Dynet backend')
@@ -487,20 +486,19 @@ class LanguageModelingTask(Task):
             import baseline.pytorch.lm as lm
             self.config_params['preproc']['trim'] = True
 
+        elif backend == 'dynet':
+            print('Dynet backend')
+            import _dynet
+            dy_params = _dynet.DynetParams()
+            dy_params.from_args()
+            dy_params.set_requested_gpus(1)
+            dy_params.init()
+            self.config_params['preproc']['trim'] = False
+            import baseline.dy.lm as lm
         else:
-            if backend == 'dynet':
-                print('Dynet backend')
-                import _dynet
-                dy_params = _dynet.DynetParams()
-                dy_params.from_args()
-                dy_params.set_requested_gpus(1)
-                dy_params.init()
-                self.config_params['preproc']['trim'] = False
-                import baseline.dy.lm as lm
-            else:
-                print('TensorFlow backend')
-                self.config_params['preproc']['trim'] = False
-                import baseline.tf.lm as lm
+            print('TensorFlow backend')
+            self.config_params['preproc']['trim'] = False
+            import baseline.tf.lm as lm
         self.task = lm
 
     def initialize(self, embeddings):
