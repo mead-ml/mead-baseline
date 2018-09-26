@@ -71,17 +71,6 @@ class Seq2SeqParallelModel(EncoderDecoderModel):
         split_operations['tgt'] = tf.split(self.parallel_params[key], gpus)
 
         self.src_lengths_key = kwargs.get('src_lengths_key')
-        if self.src_lengths_key is None:
-            if 'src' in self.src_embeddings:
-                self.src_lengths_key = 'src'
-            elif 'x' in self.src_embeddings:
-                self.src_lengths_key = 'x'
-            else:
-                raise Exception("Require a `src_lengths_key`")
-
-        if not self.src_lengths_key.endswith('_lengths'):
-            self.src_lengths_key += '_lengths'
-
         self.src_len = kwargs.get('src_len', tf.placeholder(tf.int32, [None], name="src_len_parallel"))
         src_len_splits = tf.split(self.src_len, gpus)
         split_operations['src_len'] = src_len_splits
@@ -239,16 +228,6 @@ class Seq2SeqModel(EncoderDecoderModel):
         model.EOS = EOS
         model.id = kwargs.get('id', 0)
         model.src_lengths_key = kwargs.get('src_lengths_key')
-        if model.src_lengths_key is None:
-            if 'src' in model.src_embeddings:
-                model.src_lengths_key = 'src'
-            elif 'x' in model.src_embeddings:
-                model.src_lengths_key = 'x'
-            else:
-                raise Exception("Require a `src_lengths_key`")
-        if not model.src_lengths_key.endswith('_lengths'):
-            model.src_lengths_key += '_lengths'
-
         model.src_len = kwargs.get('src_len', tf.placeholder(tf.int32, [None], name="src_len"))
         model.tgt_len = kwargs.get('tgt_len', tf.placeholder(tf.int32, [None], name="tgt_len"))
         #model.tgt = kwargs.get('tgt', tf.placeholder(tf.int32, [None, None], name="tgt"))

@@ -466,6 +466,13 @@ class EncoderDecoderTask(Task):
     def _create_model(self):
         self.config_params['model']['GO'] = self.feat2tgt['<GO>']
         self.config_params['model']['EOS'] = self.feat2tgt['<EOS>']
+        self.config_params['model']["unif"] = self.config_params["unif"]
+        model = self.config_params['model']
+        lengths_key = model.get('src_lengths_key', self.config_params.get('sort_key', 'src'))
+        if lengths_key is not None:
+            if not lengths_key.endswith('_lengths'):
+                lengths_key = '{}_lengths'.format(lengths_key)
+            model['src_lengths_key'] = lengths_key
 
         return self.task.create_model(self.src_embeddings, self.tgt_embeddings, **self.config_params['model'])
 

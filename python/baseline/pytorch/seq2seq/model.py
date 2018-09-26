@@ -21,6 +21,7 @@ class Seq2SeqModel(nn.Module, EncoderDecoderModel):
         self.EOS = kwargs.get('EOS')
         self.gpu = kwargs.get('gpu', True)
         src_dsz, tgt_dsz = self._init_embed(src_embeddings, tgt_embedding)
+        self.src_lengths_key = kwargs.get('src_lengths_key')
         self._init_encoder(src_dsz, **kwargs)
         self._init_attn(**kwargs)
         self._init_decoder(tgt_dsz, **kwargs)
@@ -117,17 +118,22 @@ class Seq2SeqModel(nn.Module, EncoderDecoderModel):
         print(model)
         return model
 
-    # TODO FIXME Generalize
     def make_input(self, batch_dict):
         example = dict({})
-        example['src'] = torch.from_numpy(batch_dict['src'])
-        src_len = torch.from_numpy(batch_dict['src_lengths'])
-        src_len, perm_idx = src_len.sort(0, descending=True)
-        example['src_len'] = src_len
-        example['src'] = example['src'][perm_idx].transpose(0, 1).contiguous()
+
+        lengths = torch.from_numpy(batch_dict[self.src_lengths_key])
+        lengths, perm_idx = lengths.sort(0, descending=True)
+
         if self.gpu:
-            example['src'] = example['src'].cuda()
-            example['src_len'] = example['src_len'].cuda()
+            lengths = lengths.cuda()
+        example['src_len'] = lengths
+        for key in self.src_embeddings.keys():
+            tensor = torch.from_numpy(batch_dict[key])
+            tensor = tensor[perm_idx]
+            example[key] = tensor.transpose(0, 1).contiguous()
+            if self.gpu:
+                example[key] = example[key].cuda()
+
         if 'tgt' in batch_dict:
             tgt = torch.from_numpy(batch_dict['tgt'])
             example['dst'] = tgt[:, :-1]
@@ -137,7 +143,6 @@ class Seq2SeqModel(nn.Module, EncoderDecoderModel):
             if self.gpu:
                 example['dst'] = example['dst'].cuda()
                 example['tgt'] = example['tgt'].cuda()
-
         return example
 
     def _embed(self, input):
@@ -207,14 +212,13 @@ class Seq2SeqModel(nn.Module, EncoderDecoderModel):
             for k, value in batch_dict.items():
                 example[k] = value[b].reshape((1,) + value[b].shape)
             inputs = self.make_input(example)
-            batch += [self.beam_decode(inputs, beam)[0]]
+            batch += [self.beam_decode(inputs, beam, kwargs.get('mxlen', 100))[0]]
 
         return batch
 
-    def beam_decode(self, inputs, K):
+    def beam_decode(self, inputs, K, mxlen=100):
         with torch.no_grad():
             src = inputs['src']
-            T = src.size(1)
             src_len = inputs['src_len']
             context, h_i = self.encode(inputs, src_len)
             src_mask = sequence_mask(src_len)
@@ -233,7 +237,7 @@ class Seq2SeqModel(nn.Module, EncoderDecoderModel):
                    torch.autograd.Variable(h_i[1].data.repeat(1, K, 1)))
             h_i, dec_out = self.bridge(h_i, context)
 
-            for i in range(T):
+            for i in range(mxlen):
                 lst = [path[-1] for path in paths]
                 dst = torch.LongTensor(lst).type(src.data.type())
                 mask_eos = dst == EOS
