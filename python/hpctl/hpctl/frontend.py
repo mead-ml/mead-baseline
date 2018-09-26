@@ -28,6 +28,7 @@ def color(state, off=False):
     RED = '\033[31;1m'
     YELLOW = '\033[33;1m'
     BLACK = '\033[30;1m'
+    CYAN = '\033[36;1m'
     RESTORE = '\033[0m'
     if platform.system() == 'Windows' or off:
         try:
@@ -40,6 +41,8 @@ def color(state, off=False):
         color = RED
     elif state is States.RUNNING:
         color = YELLOW
+    elif state is States.WAITING:
+        color = CYAN
     else:
         color = BLACK
     # Because we use unicode strings for formatting we want the results

@@ -129,18 +129,30 @@ class FlaskFrontend(Frontend):
 def init_app(app, fe, base_url='/hpctl/v1'):
     """Bind routes to the functions at runtime so that we can have OOP stuff in the responses."""
     app.route('{}/'.format(base_url), methods={'GET'})(fe.index)
+    # Get the config for this experiment
     app.route('{}/config/<exp>'.format(base_url), methods={'GET'})(fe.hpctl_config)
+    # Get the config based on this sha1
     app.route('{}/config/<exp>/<sha1>'.format(base_url), methods={'GET'})(fe.get_config)
-    app.route('{}/result/best/<exp>/<sha1>/<phase>/<metric>'.format(base_url), methods={'GET'})(fe.best_result)
-    app.route('{}/result/recent/<exp>/<sha1>/<phase>/<metric>'.format(base_url), methods={'GET'})(fe.recent_result)
+    # Get the best results for this run
+    app.route('{}/result/best/<exp>/<sha1>/<name>/<phase>/<metric>'.format(base_url), methods={'GET'})(fe.best_result)
+    # Get the recent results for this run
+    app.route('{}/result/recent/<exp>/<sha1>/<name>/<phase>/<metric>'.format(base_url), methods={'GET'})(fe.recent_result)
+    # Get all the labels run for this experiment
     app.route('{}/label/<exp>'.format(base_url), methods={'GET'})(fe.labels)
+    # Sha1 look up from name?
     app.route('{}/label/<exp>/<name>'.format(base_url), methods={'GET'})(fe.get_label)
+    # General commands
     app.route('{}/command'.format(base_url), methods={'POST'})(fe.command)
+    # Get the state of this runn
     app.route('{}/state/<exp>/<sha1>/<name>'.format(base_url), methods={'GET'})(fe.get_state)
+    # Get a list of all experiments
     app.route('{}/experiment'.format(base_url), methods={'GET'})(fe.experiments)
+    # Get a list of all labels in this experiment?
     app.route('{}/experiment/<exp>'.format(base_url), methods={'GET'})(fe.experiment)
     app.route('{}/demo'.format(base_url), methods={'GET'})(fe.demo_status)
+    # Kill this run
     app.route('{}/kill/<exp>/<sha1>/<name>'.format(base_url), methods={'GET'})(fe.kill)
+    # Launch this job
     app.route('{}/launch'.format(base_url), methods={'POST'})(fe.launch)
 
 

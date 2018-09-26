@@ -28,6 +28,7 @@ class States(Enum):
     DONE = '\u2714'
     KILLED = '\u2717'
     RUNNING = '\u21bb'
+    WAITING = '\u231b'
     UNKNOWN = '?'
 
     def __str__(self):

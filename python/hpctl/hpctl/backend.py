@@ -80,16 +80,27 @@ class RemoteBackend(Backend):
         super(RemoteBackend, self).__init__()
         self.host = host
         self.port = port
+        self.labels = []
 
     def any_done(self):
         return True
 
     def all_done(self):
-        return True
+        # Track all label you personally launched and check if they are done.
+        undone = []
+        for label in self.labels():
+            r = requests.post("http://{}:{}/hpctl/v1/state/{}/{}/{}".format(self.host, self.port, label.exp, label.sha1, label.human))
+            if r.status_code != 200:
+                return False
+            if r.json()['state'] != str(States.DONE):
+                undone.append(label)
+        self.labels = undone
+        return not self.labels
 
     def launch(self, **kwargs):
         kwargs['command'] = 'launch'
         kwargs['label'] = str(kwargs['label'])
+        self.labels.append(kwargs['label'])
         r = requests.post("http://{}:{}/hpctl/v1/launch".format(self.host, self.port), json=kwargs)
         if r.status_code != 200:
             raise Exception
