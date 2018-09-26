@@ -35,13 +35,13 @@ def color(state, off=False):
             return str(state).decode('utf-8')
         except:
             return str(state)
-    if state is States.DONE:
+    if state is States.DONE or state == str(States.DONE):
         color = GREEN
-    elif state is States.KILLED:
+    elif state is States.KILLED or state == str(States.KILLED):
         color = RED
-    elif state is States.RUNNING:
+    elif state is States.RUNNING or state == str(States.RUNNING):
         color = YELLOW
-    elif state is States.WAITING:
+    elif state is States.WAITING or state == str(States.WAITING):
         color = CYAN
     else:
         color = BLACK
@@ -135,6 +135,8 @@ class Console(Frontend):
         reset_screen(self.print_count)
         self.print_count = 0
         labels = self.results.get_labels(self.experiment_hash)
+        if not labels:
+            return
         max_len = max(map(len, map(lambda x: x.human, labels)))
         for label in labels:
             print('{state} {name:{width}} - train ({train_metric}): {train_stat:.3f} at {train_step} dev ({metric}): {dev_stat:.3f} at {dev_step}'.format(

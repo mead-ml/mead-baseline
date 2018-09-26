@@ -33,7 +33,8 @@ class FlaskFrontend(Frontend):
         }
         return jsonify(res)
 
-    def best_result(self, exp, label, phase, metric):
+    def best_result(self, exp, sha1, name, phase, metric):
+        label = Label(exp, sha1, name)
         val, idx = self.results.get_best(label, phase, metric)
         res = {
             'label': label,
@@ -44,10 +45,20 @@ class FlaskFrontend(Frontend):
         }
         return jsonify(res)
 
-    def recent_result(self, exp, label, phase, metric):
-        val = self.results.get_rescent(label, phase, metric)
+    def find_best(self, exp, phase, metric):
+        label, val, idx = self.results.find_best(exp, phase, metric)
         res = {
-            'label': label,
+            'label': str(label),
+            'value': val,
+            'step': idx
+        }
+        return jsonify(res)
+
+    def recent_result(self, exp, sha1, name, phase, metric):
+        label = Label(exp, sha1, name)
+        val = self.results.get_recent(label, phase, metric)
+        res = {
+            'label': str(label),
             'phase': phase,
             'metric': metric,
             'value': val
@@ -125,7 +136,6 @@ class FlaskFrontend(Frontend):
         return jsonify(res)
 
 
-
 def init_app(app, fe, base_url='/hpctl/v1'):
     """Bind routes to the functions at runtime so that we can have OOP stuff in the responses."""
     app.route('{}/'.format(base_url), methods={'GET'})(fe.index)
@@ -135,6 +145,7 @@ def init_app(app, fe, base_url='/hpctl/v1'):
     app.route('{}/config/<exp>/<sha1>'.format(base_url), methods={'GET'})(fe.get_config)
     # Get the best results for this run
     app.route('{}/result/best/<exp>/<sha1>/<name>/<phase>/<metric>'.format(base_url), methods={'GET'})(fe.best_result)
+    app.route('{}/result/find/best/<exp>/<phase>/<metric>'.format(base_url), methods={'GET'})(fe.find_best)
     # Get the recent results for this run
     app.route('{}/result/recent/<exp>/<sha1>/<name>/<phase>/<metric>'.format(base_url), methods={'GET'})(fe.recent_result)
     # Get all the labels run for this experiment

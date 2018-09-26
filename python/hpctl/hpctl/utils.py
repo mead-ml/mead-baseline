@@ -39,10 +39,10 @@ class Label(object):
 
     @property
     def local(self):
-        return "{}@{}".format(self.sha1, self.human)
+        return "{}/{}".format(self.sha1, self.human)
 
     def __str__(self):
-        return "{}@{}@{}".format(self.exp, self.sha1, self.human)
+        return "{}/{}/{}".format(self.exp, self.sha1, self.human)
 
     def __repr__(self):
         return str(self)
@@ -59,7 +59,7 @@ class Label(object):
 
     @classmethod
     def parse(cls, label_str):
-        exp, sha1, human = label_str.split("@")
+        exp, sha1, human = label_str.split("/")
         return cls(exp, sha1, human)
 
 

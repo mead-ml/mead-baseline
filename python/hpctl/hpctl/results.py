@@ -11,8 +11,10 @@ from enum import Enum
 from pprint import pformat
 from collections import defaultdict
 from multiprocessing.managers import BaseManager
+import requests
 import numpy as np
 from baseline.utils import export as exporter
+from hpctl.utils import Label
 
 
 __all__ = []
@@ -52,7 +54,7 @@ class Results(object):
             ]
         }
 
-    Data is resultsd in a columnish results where most entries are a list that
+    Data is results in a columnish results where most entries are a list that
     represent a timeseries. This lets use to easy `OLAP`-ish queries rather
     than tracking the best performance in the frontend.
     """
@@ -64,7 +66,7 @@ class Results(object):
         self.human_to_label = defaultdict(list)
 
     @classmethod
-    def create(cls, file_name="results"):
+    def create(cls, file_name="results", **kwargs):
         """Load a results if found, create otherwise.
 
         :param exp: str, The name of the experiment.
@@ -114,8 +116,8 @@ class Results(object):
         :param config: dict, The config.
         """
         self.label_to_config[label] = config
-        self.results[label.exp][label]['state'] = States.RUNNING
         self.results[label.exp][label]['time_stamp'] = time.time()
+        self.set_waiting(label)
         self.label_to_human[label.sha1].append(label.human)
         self.human_to_label[label.human].append(label.sha1)
 
@@ -292,8 +294,6 @@ class Results(object):
         :param label: hpctl.utils.Label, The label to set the state on.
         :param state: hpctl.results.States, The sate to set for the job.
         """
-        if label not in self.results:
-            return
         self.results[label.exp][label]['state'] = state
 
     def set_killed(self, label):
@@ -303,15 +303,133 @@ class Results(object):
         """
         self.set_state(label, States.KILLED)
 
+    def set_waiting(self, label):
+        self.set_state(label, States.WAITING)
+
+    def set_running(self, label):
+        self.set_state(label, States.RUNNING)
+
     def __str__(self):
         return pformat(self.results)
 
+
+class BaseResults(object):
+    def __init__(self):
+        super(BaseResults, self).__init__()
+
+    @classmethod
+    def create(cls, **kwargs):
+        pass
+
+    def save(self, file_name=None):
+        pass
+
+    def insert(self, label, config):
+        pass
+
+    def update(self, label, message):
+        pass
+
+    def get_config(self, label):
+        pass
+
+    def get_recent(self, label, phase, metric):
+        pass
+
+    def get_best(self, label, phase, metric):
+        pass
+
+    def find_best(self, exp_hash, phase, metric):
+        pass
+
+    def get_best_per_label(self, exp_hash, phase, metric):
+        pass
+
+    def get_labels(self, exp_hash):
+        pass
+
+    def get_experiments(self):
+        pass
+
+    def get_state(self, label):
+        pass
+
+    def set_state(self, label, state):
+        pass
+
+    def set_killed(self, label):
+        pass
+
+    def set_waiting(self, label):
+        pass
+
+    def set_running(self, label):
+        pass
+
+    def command(self):
+        pass
 
 # Create the results as a multiprocessing manager so that we can share the
 # results across processes.
 class ResultsManager(BaseManager):
     pass
 ResultsManager.register(str('Results'), Results)
+
+
+class RemoteResults(BaseResults):
+    def __init__(self, host='localhost', port=5000):
+        super(RemoteResults, self).__init__()
+        self.host = host
+        self.port = port
+        self.url = 'http://{host}:{port}/hpctl/v1'.format(host=self.host, port=self.port)
+
+    def get_labels(self, exp_hash):
+        r = requests.get("{url}/label/{exp}".format(url=self.url, exp=exp_hash))
+        if r.status_code != 200:
+            return []
+        labels = []
+        resp = r.json()
+        for res in resp:
+            labels.append(Label(exp_hash, res['sha1'], res['human']))
+        return labels
+
+    def get_experiments(self):
+        r = requests.get("{url}/experiment".format(url=self.url))
+        if r.status_code != 200:
+            return []
+        return r.json()['experiments']
+
+    def get_state(self, label):
+        r = requests.get(
+            "{url}/state/{exp}/{sha1}/{name}".format(
+                url=self.url, exp=label.exp, sha1=label.sha1, name=label.human
+            )
+        )
+        if r.status_code != 200:
+            return '?'
+        return r.json()['state']
+
+    def get_recent(self, label, phase, metric):
+        r = requests.get(
+            "{url}/result/recent/{exp}/{sha1}/{name}/{phase}/{metric}".format(
+                url=self.url,
+                exp=label.exp, sha1=label.sha1, name=label.human,
+                phase=phase, metric=metric
+            )
+        )
+        if r.status_code != 200:
+            return 0.0
+        return r.json()['value']
+
+    def find_best(self, exp, phase, metric):
+        r = requests.get(
+            "{url}/results/find/best/{exp}/{phase}/{metric}".format(
+                url=self.url,
+                exp=exp, phase=phase, metric=metric
+            )
+        )
+        resp = r.json()
+        return Label.parse(resp['label']), resp['value'], res['step']
 
 
 def search(key, table, prefix=True):
