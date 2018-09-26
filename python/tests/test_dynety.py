@@ -317,7 +317,7 @@ def test_embedding_lookup():
     pc = dy.ParameterCollection()
     gold = np.random.randn(200, 100)
     embed = Embedding(12, 12, pc, embedding_weight=gold)
-    idx = random.randint(0, len(gold))
+    idx = random.randint(0, len(gold) - 1)
     vector = embed([idx])
     gold_v = gold[idx, :]
     np.testing.assert_allclose(gold_v, vector[0].npvalue())
