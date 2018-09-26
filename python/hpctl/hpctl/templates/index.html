@@ -1,0 +1,25 @@
+<html>
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+    <script type=text/javascript>
+      $SCRIPT_ROOT = {{ request.script_root|tojson|safe }};
+      $BASE = "/hpctl/v1"
+    </script>
+
+    <script>
+    $(document).ready(function() {
+        $.getJSON($SCRIPT_ROOT + $BASE + "/experiments", function(data, status) {
+            for (var i = 0; i < data.experiments.length; i++) {
+                var line = '<p><a href="' + $SCRIPT_ROOT + $BASE + '/demo_page/' + data.experiments[i] + '">' + data.experiments[i] + '</a></p>';
+                console.log(line)
+                $("#experiments").append(line);
+            }
+        });
+    });
+    </script>
+
+    <body>
+        <h1 id="title">HPCTL</h1>
+
+        <div id="experiments"></div>
+    </body>
+</html>

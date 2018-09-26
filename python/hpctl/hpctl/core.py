@@ -91,6 +91,7 @@ def launch(**kwargs):
         'hpctl_logs': hp_logs,
         'task_name': task_name,
         'settings': mead_settings,
+        'experiment_config': mead_config,
     }
 
     be = get_backend(backend_config)
@@ -240,6 +241,9 @@ def process_command(cmd, backend, frontend, scheduler, results):
             backend.kill(cmd['label'], results)
             frontend.update()
         if cmd['command'] == 'launch':
+            exp_config = cmd.pop('experiment_config', None)
+            if exp_config is not None:
+                results.add_experiment(exp_config)
             scheduler.add(cmd['label'].exp, cmd)
             results.insert(cmd['label'], cmd['config'])
             results.save()

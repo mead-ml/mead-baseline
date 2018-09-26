@@ -15,6 +15,7 @@ import requests
 import cachetools
 import numpy as np
 from baseline.utils import export as exporter
+from baseline.utils import hash_config
 from hpctl.utils import Label
 
 
@@ -65,6 +66,14 @@ class Results(object):
         self.label_to_config = {}
         self.label_to_name = defaultdict(list)
         self.name_to_label = defaultdict(list)
+        self.exp_to_config = {}
+
+    def add_experiment(self, exp_config):
+        exp_hash = hash_config(exp_config)
+        self.exp_to_config[exp_hash] = exp_config
+
+    def get_experiment_config(self, exp_hash):
+        return self.exp_to_config.get(exp_hash, {})
 
     @classmethod
     def create(cls, file_name="results", **kwargs):
@@ -99,6 +108,7 @@ class Results(object):
         self.label_to_config = results.label_to_config
         self.label_to_name = results.label_to_name
         self.name_to_label = results.name_to_label
+        self.exp_to_config = results.exp_to_config
 
     def save(self, file_name="results"):
         """Persist the results.
@@ -398,16 +408,16 @@ class RemoteResults(BaseResults):
         cache = cachetools.TTLCache(maxsize=1000, ttl=cache_time)
         self.get = cachetools.cached(cache)(_get)
 
+    def get_experiments(self):
+        resp = self.get("{url}/experiments".format(url=self.url))
+        return resp['experiments']
+
     def get_labels(self, exp_hash):
-        resp = self.get("{url}/label/{exp}".format(url=self.url, exp=exp_hash))
+        resp = self.get("{url}/labels/{exp}".format(url=self.url, exp=exp_hash))
         labels = []
         for res in resp:
             labels.append(Label(exp_hash, res['sha1'], res['name']))
         return labels
-
-    def get_experiments(self):
-        resp = self.get("{url}/experiment".format(url=self.url))
-        return resp['experiments']
 
     def get_state(self, label):
         resp = self.get("{url}/state/{exp}/{sha1}/{name}".format(url=self.url, **label))
@@ -423,7 +433,7 @@ class RemoteResults(BaseResults):
 
     def find_best(self, exp, phase, metric):
         resp = self.get(
-            "{url}/result/find/best/{exp}/{phase}/{metric}".format(
+            "{url}/result/best/{exp}/{phase}/{metric}".format(
                 url = self.url, exp=exp, phase=phase, metric=metric
             )
         )
@@ -431,7 +441,7 @@ class RemoteResults(BaseResults):
 
     def get_best_per_label(self, exp, phase, metric):
         resp = self.get(
-            "{url}/result/find/best_per/{exp}/{phase}/{metric}".format(
+            "{url}/results/best/{exp}/{phase}/{metric}".format(
                 url=self.url, exp=exp, phase=phase, metric=metric
             )
         )
