@@ -8,10 +8,6 @@ from baseline.model import ClassifierModel, load_classifier_model, create_classi
 from baseline.tf.tfy import (stacked_lstm,
                              parallel_conv)
 
-from baseline.tf.embeddings import (TensorFlowEmbeddings,
-                                    TensorFlowCharConvEmbeddings,
-                                    TensorFlowTokenEmbeddings,
-                                    tf_embeddings)
 from baseline.version import __version__
 import os
 import copy
@@ -37,11 +33,8 @@ class ClassifyParallelModel(ClassifierModel):
         self.parallel_params = dict()
         split_operations = dict()
         for key in embeddings.keys():
-            Type = TensorFlowCharConvEmbeddings if key == 'char' else TensorFlowTokenEmbeddings
-            if isinstance(embeddings[key], TensorFlowEmbeddings):
-                Type = embeddings[key].__class__
-
-            self.parallel_params[key] = kwargs.get(key, Type.create_placeholder('{}_parallel'.format(key)))
+            EmbeddingsType = embeddings[key].__class__
+            self.parallel_params[key] = kwargs.get(key, EmbeddingsType.create_placeholder('{}_parallel'.format(key)))
             split_operations[key] = tf.split(self.parallel_params[key], gpus)
 
         self.lengths_key = kwargs.get('lengths_key')
@@ -358,11 +351,7 @@ class ClassifierModelBase(ClassifierModel):
         sess = kwargs.get('sess', tf.Session())
 
         model = cls()
-        model.embeddings = dict()
-        for key in embeddings.keys():
-            DefaultType = TensorFlowCharConvEmbeddings if key == 'char' else TensorFlowTokenEmbeddings
-            model.embeddings[key] = tf_embeddings(embeddings[key], key, DefaultType=DefaultType, **kwargs)
-
+        model.embeddings = embeddings
         model.lengths_key = kwargs.get('lengths_key')
         if model.lengths_key is None:
             if 'word' in model.embeddings:

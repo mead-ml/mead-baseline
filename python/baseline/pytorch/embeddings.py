@@ -1,12 +1,7 @@
-import torch
-import numpy as np
-from baseline.utils import lookup_sentence, get_version
-from baseline.utils import crf_mask as crf_m
-import torch.autograd
+from baseline.w2v import PretrainedEmbeddingsModel, RandomInitVecModel
+from baseline.utils import load_user_embeddings, create_user_embeddings
 import torch.nn as nn
-import torch.nn.functional as F
-import math
-import copy
+
 from baseline.pytorch.torchy import pytorch_embedding, ParallelConv, pytorch_linear, pytorch_activation
 
 
@@ -24,11 +19,15 @@ class PyTorchEmbeddings(object):
     def encode(self, x):
         return self(x)
 
+    @classmethod
+    def create(cls, model, **kwargs):
+        return cls(model, **kwargs)
 
-class PyTorchWordEmbeddings(nn.Module, PyTorchEmbeddings):
+
+class LookupTableEmbeddings(nn.Module, PyTorchEmbeddings):
 
     def __init__(self, model, **kwargs):
-        super(PyTorchWordEmbeddings, self).__init__()
+        super(LookupTableEmbeddings, self).__init__()
         self.finetune = kwargs.get('finetune', True)
         self.vsz = model.get_vsz()
         self.dsz = model.get_dsz()
@@ -45,17 +44,46 @@ class PyTorchWordEmbeddings(nn.Module, PyTorchEmbeddings):
         return self.embeddings(x)
 
 
-def pytorch_embeddings(in_embeddings_obj, DefaultType=PyTorchWordEmbeddings, **kwargs):
-    if isinstance(in_embeddings_obj, PyTorchEmbeddings):
-        return in_embeddings_obj
-    else:
-        return DefaultType(in_embeddings_obj, **kwargs)
+#def pytorch_embeddings(in_embeddings_obj, DefaultType=PyTorchWordEmbeddings, **kwargs):
+#    if isinstance(in_embeddings_obj, PyTorchEmbeddings):
+#        return in_embeddings_obj
+#    else:
+#        return DefaultType(in_embeddings_obj, **kwargs)
 
+"""
+def _init_char_encoder(self, char_dsz, char_vec, **kwargs):
+        self.cembed = pytorch_embedding(char_vec)
+        filtsz = kwargs['cfiltsz']
+        cmotsz = kwargs['hsz']
 
-class PyTorchCharConvEmbeddings(nn.Module, PyTorchEmbeddings):
+        wchsz = cmotsz * len(filtsz)
+        self.highway = nn.Sequential()
+        append2seq(self.highway, (
+            Highway(wchsz),
+            Highway(wchsz)
+        ))
+
+        # Width of concat of parallel convs
+        return wchsz
+
+    def _char_encoder(self, batch_first_words):
+        emb = self.dropout(self.cembed(batch_first_words))
+        embeddings = emb.transpose(1, 2).contiguous()
+        mots = []
+        for conv in self.convs:
+            # In Conv1d, data BxCxT, max over time
+            conv_out = conv(embeddings)
+            mot, _ = conv_out.max(2)
+            mots.append(mot)
+
+        mots = torch.cat(mots, 1)
+        output = self.highway(mots)
+        return self.dropout(output)
+"""
+class CharConvEmbeddings(nn.Module, PyTorchEmbeddings):
 
     def __init__(self, model, **kwargs):
-        super(PyTorchCharConvEmbeddings, self).__init__()
+        super(CharConvEmbeddings, self).__init__()
         self.embeddings = pytorch_embedding(model)
         self.vsz = model.get_vsz()
         char_filtsz = kwargs.get('cfiltsz', [3])
@@ -88,3 +116,38 @@ class PyTorchCharConvEmbeddings(nn.Module, PyTorchEmbeddings):
         skipped = self.activation(self.linear(mots)) + mots
         return skipped.view(_0, _1, self.char_comp.outsz)
 
+
+# If the embeddings are listed here, than we need to use PretrainedEmbeddingsModel
+BASELINE_EMBEDDING_MODELS = {
+    'default': LookupTableEmbeddings.create,
+    'char-conv': CharConvEmbeddings.create
+}
+
+
+def load_embeddings(filename, name, known_vocab=None, **kwargs):
+
+    embed_type = kwargs.pop('embed_type', 'default')
+    create_fn = BASELINE_EMBEDDING_MODELS.get(embed_type)
+
+    if create_fn is not None:
+        model = PretrainedEmbeddingsModel(filename,
+                                          known_vocab=known_vocab,
+                                          unif_weight=kwargs.pop('unif', 0),
+                                          keep_unused=kwargs.pop('keep_unused', False),
+                                          normalize=kwargs.pop('normalized', False), **kwargs)
+        return {'embeddings': create_fn(model, **kwargs), 'vocab': model.get_vocab()}
+    print('loading user module')
+    return load_user_embeddings(filename, name, known_vocab, **kwargs)
+
+
+def create_embeddings(dsz, name, known_vocab=None, **kwargs):
+
+    embed_type = kwargs.pop('embed_type', 'default')
+    create_fn = BASELINE_EMBEDDING_MODELS.get(embed_type)
+
+    if create_fn is not None:
+        model = RandomInitVecModel(dsz, known_vocab=known_vocab, unif_weight=kwargs.pop('unif', 0), **kwargs)
+        return {'embeddings': create_fn(model, **kwargs), 'vocab': model.get_vocab()}
+
+    print('loading user module')
+    return create_user_embeddings(dsz, name, known_vocab, **kwargs)

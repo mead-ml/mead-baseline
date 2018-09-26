@@ -47,7 +47,7 @@ def _temporal_cross_entropy_loss(logits, labels, label_lengths, mx_seq_length):
 
 class Seq2SeqParallelModel(EncoderDecoderModel):
 
-    def __init__(self, create_fn, src_embeddings, dst_embedding, **kwargs):
+    def __init__(self, create_fn, src_embeddings, tgt_embedding, **kwargs):
         super(Seq2SeqParallelModel, self).__init__()
         # We need to remove these because we may be calling back to our caller, and we need
         # the condition of calling to be non-parallel
@@ -62,12 +62,13 @@ class Seq2SeqParallelModel(EncoderDecoderModel):
         self.parallel_params = dict()
         split_operations = dict()
         for key in src_embeddings.keys():
-            Type = TensorFlowCharConvEmbeddings if key == 'char' else TensorFlowTokenEmbeddings
-            if isinstance(src_embeddings[key], TensorFlowEmbeddings):
-                Type = src_embeddings[key].__class__
-
-            self.parallel_params[key] = kwargs.get(key, Type.create_placeholder('{}_parallel'.format(key)))
+            EmbeddingType = src_embeddings[key].__class__
+            self.parallel_params[key] = kwargs.get(key, EmbeddingType.create_placeholder('{}_parallel'.format(key)))
             split_operations[key] = tf.split(self.parallel_params[key], gpus)
+
+        EmbeddingType = tgt_embedding.__class__
+        self.parallel_params['tgt'] = kwargs.get(key, EmbeddingType.create_placeholder('tgt_parallel'.format(key)))
+        split_operations['tgt'] = tf.split(self.parallel_params[key], gpus)
 
         self.src_lengths_key = kwargs.get('src_lengths_key')
         if self.src_lengths_key is None:
@@ -96,7 +97,7 @@ class Seq2SeqParallelModel(EncoderDecoderModel):
         losses = []
         sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False))
         with tf.device(tf.DeviceSpec(device_type="CPU")):
-            self.inference = create_fn(src_embeddings, dst_embedding, sess=sess, mx_tgt_len=self.mx_tgt_len, pkeep=self.pkeep, id=1, **kwargs)
+            self.inference = create_fn(src_embeddings, tgt_embedding, sess=sess, mx_tgt_len=self.mx_tgt_len, pkeep=self.pkeep, id=1, **kwargs)
         for i in range(gpus):
             with tf.device(tf.DeviceSpec(device_type='GPU', device_index=i)):
 
@@ -106,7 +107,7 @@ class Seq2SeqParallelModel(EncoderDecoderModel):
                 kwargs_single['id'] = i + 1
                 for k, split_operation in split_operations.items():
                     kwargs_single[k] = split_operation[i]
-                replica = create_fn(src_embeddings, dst_embedding, **kwargs_single)
+                replica = create_fn(src_embeddings, tgt_embedding, **kwargs_single)
                 self.replicas.append(replica)
                 loss_op = replica.create_loss()
                 losses.append(loss_op)
@@ -139,11 +140,11 @@ class Seq2SeqParallelModel(EncoderDecoderModel):
         if do_dropout is False:
             return self.inference.make_input(batch_dict)
 
-        dst = batch_dict.get['dst']
-        dst_len = batch_dict['dst_len']
-        mx_tgt_len = np.max(dst_len)
+        tgt = batch_dict.get['tgt']
+        tgt_len = batch_dict['tgt_len']
+        mx_tgt_len = np.max(tgt_len)
         pkeep = 1.0 - self.pdrop_value if do_dropout else 1.0
-        feed_dict = {self.pkeep: pkeep, self.tgt: dst, self.tgt_len: dst_len, self.mx_tgt_len: mx_tgt_len}
+        feed_dict = {self.pkeep: pkeep, "tgt:0": tgt, self.tgt_len: tgt_len, self.mx_tgt_len: mx_tgt_len}
 
         for key in self.parallel_params.keys():
             feed_dict["{}_parallel:0".format(key)] = batch_dict[key]
@@ -161,12 +162,12 @@ class Seq2SeqModel(EncoderDecoderModel):
     def create_loss(self):
         with tf.variable_scope('Loss{}'.format(self.id), reuse=False):
             # We do not want to count <GO> in our assessment, we do want to count <EOS>
-            return _temporal_cross_entropy_loss(self.preds[:-1, :, :], self.tgt[:, 1:], self.tgt_len - 1, self.mx_tgt_len - 1)
+            return _temporal_cross_entropy_loss(self.preds[:-1, :, :], self.tgt_embedding.x[:, 1:], self.tgt_len - 1, self.mx_tgt_len - 1)
 
     def create_test_loss(self):
         with tf.variable_scope('Loss', reuse=False):
             # We do not want to count <GO> in our assessment, we do want to count <EOS>
-            return _temporal_cross_entropy_loss(self.preds[:-1, :, :], self.tgt[:, 1:], self.tgt_len - 1, self.mx_tgt_len - 1)
+            return _temporal_cross_entropy_loss(self.preds[:-1, :, :], self.tgt_embedding.x[:, 1:], self.tgt_len - 1, self.mx_tgt_len - 1)
 
     def __init__(self):
         super(Seq2SeqModel, self).__init__()
@@ -207,8 +208,12 @@ class Seq2SeqModel(EncoderDecoderModel):
             Constructor = eval(class_name)
             src_embeddings[key] = Constructor(key, **embed_args)
 
-        dst_embeddings = WordEmbeddingsModel(md_file='{}-dst-md.json'.format(basename))
-        model = Seq2SeqModel.create(src_embeddings, dst_embeddings, **state)
+        tgt_class_name = state.pop('tgt_embedding')
+        md = read_json('{}-tgt-md.json'.format(basename))
+        embed_args = dict({'vsz': md['vsz'], 'dsz': md['dsz']})
+        Constructor = eval(tgt_class_name)
+        tgt_embedding = Constructor('tgt', **embed_args)
+        model = Seq2SeqModel.create(src_embeddings, tgt_embedding, **state)
 
         do_init = kwargs.get('init', True)
         if do_init:
@@ -220,20 +225,18 @@ class Seq2SeqModel(EncoderDecoderModel):
         return model
 
     @classmethod
-    def create(cls, src_embeddings, dst_embedding, **kwargs):
+    def create(cls, src_embeddings, tgt_embedding, **kwargs):
 
         gpus = kwargs.get('gpus')
         if gpus is not None:
-            return Seq2SeqParallelModel(Seq2SeqModel.create, src_embeddings, dst_embedding, **kwargs)
+            return Seq2SeqParallelModel(Seq2SeqModel.create, src_embeddings, tgt_embedding, **kwargs)
         model = cls()
-        model.src_embeddings = dict()
-        for key in src_embeddings.keys():
-            DefaultType = TensorFlowCharConvEmbeddings if key == 'char' else TensorFlowTokenEmbeddings
-            model.src_embeddings[key] = tf_embeddings(src_embeddings[key], key, DefaultType=DefaultType, **kwargs)
-
-        model.dst_embedding = dst_embedding
-        GO = dst_embedding.vocab.get('<GO>')
-        EOS = dst_embedding.vocab.get('<EOS>')
+        model.src_embeddings = src_embeddings
+        model.tgt_embedding = tgt_embedding
+        GO = kwargs.get('GO')
+        EOS = kwargs.get('EOS')
+        model.GO = GO
+        model.EOS = EOS
         model.id = kwargs.get('id', 0)
         model.src_lengths_key = kwargs.get('src_lengths_key')
         if model.src_lengths_key is None:
@@ -248,7 +251,7 @@ class Seq2SeqModel(EncoderDecoderModel):
 
         model.src_len = kwargs.get('src_len', tf.placeholder(tf.int32, [None], name="src_len"))
         model.tgt_len = kwargs.get('tgt_len', tf.placeholder(tf.int32, [None], name="tgt_len"))
-        model.tgt = kwargs.get('tgt', tf.placeholder(tf.int32, [None, None], name="tgt"))
+        #model.tgt = kwargs.get('tgt', tf.placeholder(tf.int32, [None, None], name="tgt"))
         model.mx_tgt_len = kwargs.get('mx_tgt_len', tf.placeholder(tf.int32, name="mx_tgt_len"))
 
         hsz = int(kwargs['hsz'])
@@ -271,7 +274,6 @@ class Seq2SeqModel(EncoderDecoderModel):
         model.rnntype = rnntype
         model.attn = attn
 
-
         with tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE):
 
             all_embeddings_src = []
@@ -280,17 +282,22 @@ class Seq2SeqModel(EncoderDecoderModel):
                 all_embeddings_src += [embeddings_out]
 
             embed_in = tf.concat(values=all_embeddings_src, axis=-1)
-            print(dst_embedding.weights.shape)
-            Wo = tf.get_variable("Wo", initializer=tf.constant_initializer(dst_embedding.weights,
+
+            # dynamic_decode creates a scope "decoder" and it pushes operations underneath.
+            # which makes it really hard to get the same objects between train and test
+            # In an ideal world, TF would just let us using tgt_embedding.encode as a function pointer
+            # This works fine for training, but then at decode time its not quite in the right place scope-wise
+            # So instead, for now, we never call .encode() and instead we create our own operator
+            Wo = tf.get_variable("Wo", initializer=tf.constant_initializer(tgt_embedding.weights,
                                                                            dtype=tf.float32,
                                                                            verify_shape=True),
-                                 shape=[dst_embedding.vsz, dst_embedding.dsz])
+                                 shape=[tgt_embedding.vsz, tgt_embedding.dsz])
 
             with tf.variable_scope("Recurrence"):
                 rnn_enc_tensor, final_encoder_state = model.encode(embed_in)
                 batch_sz = tf.shape(rnn_enc_tensor)[0]
                 with tf.variable_scope("dec", reuse=tf.AUTO_REUSE):
-                    proj = dense_layer(dst_embedding.vsz)
+                    proj = dense_layer(tgt_embedding.vsz)
                     rnn_dec_cell = model._attn_cell_w_dropout(rnn_enc_tensor, beam_width, attn_type)
 
                     if beam_width > 1:
@@ -325,9 +332,10 @@ class Seq2SeqModel(EncoderDecoderModel):
                                 output_layer=proj,
                                 length_penalty_weight=0.0)
                     else:
-                        helper = tf.contrib.seq2seq.TrainingHelper(inputs=tf.nn.embedding_lookup(Wo, model.tgt), sequence_length=model.tgt_len)
+                        helper = tf.contrib.seq2seq.TrainingHelper(inputs=tf.nn.embedding_lookup(Wo, tgt_embedding.x), sequence_length=model.tgt_len)
                         decoder = tf.contrib.seq2seq.BasicDecoder(cell=rnn_dec_cell, helper=helper, initial_state=initial_state, output_layer=proj)
 
+                    # This creates a "decoder" scope
                     final_outputs, final_decoder_state, _ = tf.contrib.seq2seq.dynamic_decode(decoder,
                                                                                               impute_finished=predict is False or beam_width == 1,
                                                                                               swap_memory=True,
@@ -406,11 +414,14 @@ class Seq2SeqModel(EncoderDecoderModel):
         state = {
             "version": __version__,
             "src_embeddings": src_embeddings_info,
+            "tgt_embedding": self.tgt_embedding.__class__.__name__,
             "attn": self.attn,
             "hsz": self.hsz,
             "rnntype": self.rnntype,
             "layers": self.layers,
-            "arc_state": self.arc_state
+            "arc_state": self.arc_state,
+            "EOS": self.EOS,
+            "GO": self.GO
         }
         for prop in ls_props(self):
             state[prop] = getattr(self, prop)
@@ -419,7 +430,7 @@ class Seq2SeqModel(EncoderDecoderModel):
         for key, embedding in self.src_embeddings.items():
             embedding.save_md('{}-{}-md.json'.format(basename, key))
 
-        self.dst_embedding.save_md('{}-dst-md.json'.format(basename))
+        self.tgt_embedding.save_md('{}-tgt-md.json'.format(basename))
 
         tf.train.write_graph(self.sess.graph_def, outdir, base + '.graph', as_text=False)
         with open(basename + '.saver', 'w') as f:
@@ -463,11 +474,11 @@ class Seq2SeqModel(EncoderDecoderModel):
         if self.src_lengths_key is not None:
             feed_dict[self.src_len] = batch_dict[self.src_lengths_key]
 
-        dst = batch_dict.get('dst')
-        if dst is not None:
-            feed_dict[self.tgt] = batch_dict['dst']
-            feed_dict[self.tgt_len] = batch_dict['dst_lengths']
-            feed_dict[self.mx_tgt_len] = np.max(batch_dict['dst_lengths'])
+        tgt = batch_dict.get('tgt')
+        if tgt is not None:
+            feed_dict["tgt:0"] = batch_dict['tgt']
+            feed_dict[self.tgt_len] = batch_dict['tgt_lengths']
+            feed_dict[self.mx_tgt_len] = np.max(batch_dict['tgt_lengths'])
 
         return feed_dict
 
@@ -482,8 +493,8 @@ BASELINE_SEQ2SEQ_LOADERS = {
 }
 
 
-def create_model(src_vocab_embed, dst_vocab_embed, **kwargs):
-    model = create_seq2seq_model(BASELINE_SEQ2SEQ_MODELS, src_vocab_embed, dst_vocab_embed, **kwargs)
+def create_model(src_embed, tgt_embed, **kwargs):
+    model = create_seq2seq_model(BASELINE_SEQ2SEQ_MODELS, src_embed, tgt_embed, **kwargs)
     return model
 
 

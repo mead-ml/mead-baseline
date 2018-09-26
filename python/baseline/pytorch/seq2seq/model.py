@@ -7,20 +7,24 @@ from baseline.model import EncoderDecoderModel, load_seq2seq_model, create_seq2s
 
 class Seq2SeqBase(nn.Module, EncoderDecoderModel):
 
-    def __init__(self, embeddings_in, embeddings_out):
+    def __init__(self, embeddings_in, embeddings_out, GO, EOS):
         super(Seq2SeqBase, self).__init__()
-        self.embed_in = pytorch_embedding(embeddings_in)
-        self.embed_out = pytorch_embedding(embeddings_out)
+        self.GO = GO
+        self.EOS = EOS
+        self._init_embed(embeddings_in, embeddings_out)
         self.nc = embeddings_out.vsz
-        self.vocab1 = embeddings_in.vocab
-        self.vocab2 = embeddings_out.vocab
         self.beam_sz = 1
 
-    def get_src_vocab(self):
-        return self.vocab1
+    # There is absolutely no reason why tgt_embedding cannot be a LookupTableEmbeddings
+    def _init_embed(self, src_embeddings, tgt_embedding, **kwargs):
+        self.src_embeddings = EmbeddingsContainer()
+        input_sz = 0
+        for k, embedding in src_embeddings.items():
+            self.embeddings_src[k] = embedding
+            input_sz += embedding.get_dsz()
 
-    def get_dst_vocab(self):
-        return self.vocab2
+        self.tgt_embedding = tgt_embedding
+        return input_sz
 
     def save(self, model_file):
         torch.save(self, model_file)
@@ -29,49 +33,54 @@ class Seq2SeqBase(nn.Module, EncoderDecoderModel):
         return SequenceCriterion()
 
     @classmethod
-    def load(cls, outname, **kwargs):
-        model = torch.load(outname)
+    def load(cls, filename, **kwargs):
+        model = torch.load(filename)
         return model
 
     @classmethod
     def create(cls, input_embeddings, output_embeddings, **kwargs):
-
         model = cls(input_embeddings, output_embeddings, **kwargs)
         print(model)
         return model
 
+    # TODO FIXME Generalize
     def make_input(self, batch_dict):
-        src = batch_dict['src']
-        src_len = batch_dict['src_len']
-        tgt = batch_dict['dst']
-
-        dst = tgt[:, :-1]
-        tgt = tgt[:, 1:]
-
+        example = dict({})
+        example['src'] = torch.from_numpy(batch_dict['src'])
+        src_len = torch.from_numpy(batch_dict['src_len'])
         src_len, perm_idx = src_len.sort(0, descending=True)
-        src = src[perm_idx]
-        dst = dst[perm_idx]
-        tgt = tgt[perm_idx]
-
+        example['src_len'] = src_len
+        example['src'] = example['src'][perm_idx].transpose(0, 1).contiguous()
         if self.gpu:
-            src = src.cuda()
-            dst = dst.cuda()
-            tgt = tgt.cuda()
-            src_len = src_len.cuda()
+            example['src'] = example['src'].cuda()
+            example['src_len'] = example['src_len'].cuda()
+        dst = batch_dict.get('dst')
+        if dst is not None:
+            tgt = torch.from_numpy(batch_dict['dst'])
+            example['dst'] = tgt[:, :-1]
+            example['tgt'] = tgt[:, 1:]
+            example['dst'] = example['dst'][perm_idx].transpose(0, 1).contiguous()
+            example['tgt'] = example['tgt'][perm_idx]
+            if self.gpu:
+                example['dst'] = example['dst'].cuda()
+                example['tgt'] = example['tgt'].cuda()
 
-        return Variable(src), Variable(dst), Variable(src_len, requires_grad=False), Variable(tgt)
 
-    # Input better be xch, x
+        return example
+
+    def _embed(self, input):
+        all_embeddings = []
+        for k, embedding in self.src_embeddings.items():
+            all_embeddings += [embedding.encode(input[k])]
+        return torch.cat(all_embeddings, 2)
+
     def forward(self, input):
-        src = input[0]
-        dst = input[1]
-        src_len = input[2]
-        rnn_enc_tbh, final_encoder_state = self.encode(src, src_len)
-        return self.decode(rnn_enc_tbh, src_len, final_encoder_state, dst)
+        src_len = input['src_len']
+        rnn_enc_tbh, final_encoder_state = self.encode(input, src_len)
+        return self.decode(rnn_enc_tbh, input['src_len'], final_encoder_state, input['dst'])
 
-    def encode(self, src_bth, src_len):
-        src = src_bth.transpose(0, 1).contiguous()
-        embed_in_seq = self.embed_in(src)
+    def encode(self, input, src_len):
+        embed_in_seq = self._embed(input)
         packed = torch.nn.utils.rnn.pack_padded_sequence(embed_in_seq, src_len.data.tolist())
         output_tbh, hidden = self.encoder_rnn(packed)
         output_tbh, _ = torch.nn.utils.rnn.pad_packed_sequence(output_tbh)
@@ -87,7 +96,7 @@ class Seq2SeqBase(nn.Module, EncoderDecoderModel):
         pass
 
     def decode_rnn(self, context_tbh, h_i, output_i, dst, src_mask):
-        embed_out_tbh = self.embed_out(dst)
+        embed_out_tbh = self.dst_embedding(dst)
         context_bth = context_tbh.transpose(0, 1)
         outputs = []
 
@@ -106,53 +115,49 @@ class Seq2SeqBase(nn.Module, EncoderDecoderModel):
         src_mask = sequence_mask(src_len)
         if self.gpu:
             src_mask = src_mask.cuda()
-        dst = dst.transpose(0, 1).contiguous()
-
         h_i, output_i = self.bridge(final_encoder_state, context_tbh)
         output, _ = self.decode_rnn(context_tbh, h_i, output_i, dst, src_mask)
         pred = self.prediction(output)
+        # Return as B x T x H
         return pred.transpose(0, 1).contiguous()
 
     def prediction(self, output):
         # Reform batch as (T x B, D)
         pred = self.probs(self.preds(output.view(output.size(0)*output.size(1),
                                                  -1)))
-        # back to T x B x H -> B x T x H
+        # back to T x B x H
         pred = pred.view(output.size(0), output.size(1), -1)
         return pred
 
     # B x K x T and here T is a list
     def run(self, batch_dict, **kwargs):
-        src = batch_dict['src']
-        src_len = batch_dict['src_len']
-        src = torch.from_numpy(src) if type(src) == np.ndarray else src
-        if type(src_len) == int:
-            src_len = np.array([src_len])
-        src_len = torch.from_numpy(src_len) if type(src_len) == np.ndarray else src_len
-        if torch.is_tensor(src):
-            src = torch.autograd.Variable(src, requires_grad=False)
-        if torch.is_tensor(src_len):
-            src_len = torch.autograd.Variable(src_len, requires_grad=False)
-
-        if self.gpu:
-            src = src.cuda()
-            src_len = src_len.cuda()
+        inputs = self.make_input(batch_dict)
+        #src_len = batch_dict['src_len']
+        #src = torch.from_numpy(src) if type(src) == np.ndarray else src
+        #if type(src_len) == int:
+        #    src_len = np.array([src_len])
+        #src_len = torch.from_numpy(src_len) if type(src_len) == np.ndarray else src_len
+        #if torch.is_tensor(src):
+        #    src = torch.autograd.Variable(src, requires_grad=False)
+        #if torch.is_tensor(src_len):
+        #    src_len = torch.autograd.Variable(src_len, requires_grad=False)
         batch = []
-        for src_i, src_len_i in zip(src, src_len):
+        B = inputs['src'].shape[0]
+        for b in range(B):
             src_len_i = src_len_i.unsqueeze(0)
             batch += [self.beam_decode(src_i.view(1, -1), src_len_i, kwargs.get('beam', 1))[0]]
 
         return batch
 
-    def beam_decode(self, src, src_len, K):
+    def beam_decode(self, inputs, K):
         with torch.no_grad():
-
+            src = inputs['src']
             T = src.size(1)
-            context, h_i = self.encode(src, src_len)
+            src_len = inputs['src_len']
+            context, h_i = self.encode(inputs)
             src_mask = sequence_mask(src_len)
-            dst_vocab = self.get_dst_vocab()
-            GO = dst_vocab['<GO>']
-            EOS = dst_vocab['<EOS>']
+            GO = self.GO
+            EOS = self.EOS
 
             paths = [[GO] for _ in range(K)]
             # K
@@ -219,6 +224,8 @@ class Seq2SeqModel(Seq2SeqBase):
         self.hsz = kwargs['hsz']
         nlayers = kwargs['layers']
         rnntype = kwargs['rnntype']
+        self.GO = kwargs.get('GO')
+        self.EOS = kwargs.get('EOS')
         pdrop = kwargs.get('dropout', 0.5)
         enc_hsz = self.hsz
         if rnntype == 'blstm':

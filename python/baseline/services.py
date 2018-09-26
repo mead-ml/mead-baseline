@@ -316,27 +316,27 @@ class EncoderDecoderService(object):
     def __init__(self, vocabs=None, vectorizers=None, model=None):
         self.model = model
         self.src_vocabs = {}
-        self.dst_vocab = None
+        self.tgt_vocab = None
         for k, vocab in vocabs.items():
-            if k == 'dst':
-                self.dst_vocab = vocab
+            if k == 'tgt':
+                self.tgt_vocab = vocab
             else:
                 self.src_vocabs[k] = vocab
 
-        self.dst_idx_to_token = revlut(self.dst_vocab)
+        self.tgt_idx_to_token = revlut(self.tgt_vocab)
         self.src_vectorizers = {}
-        self.dst_vectorizer = None
+        self.tgt_vectorizer = None
         for k, vectorizer, in vectorizers.items():
-            if k == 'dst':
-                self.dst_vectorizer = vectorizer
+            if k == 'tgt':
+                self.tgt_vectorizer = vectorizer
             else:
                 self.src_vectorizers[k] = vectorizer
 
     def get_src_vocab(self, vocab_type):
         return self.src_vocabs[vocab_type]
 
-    def get_dst_vocab(self):
-        return self.dst_vocab
+    def get_tgt_vocab(self):
+        return self.tgt_vocab
 
     @classmethod
     def load(cls, bundle, **kwargs):
@@ -404,7 +404,7 @@ class EncoderDecoderService(object):
 
             out = []
             for j in range(len(best)):
-                word = self.dst_idx_to_token.get(best[j], '<PAD>')
+                word = self.tgt_idx_to_token.get(best[j], '<PAD>')
                 if word != '<PAD>' and word != '<EOS>':
                     out += [word]
         results += [out]

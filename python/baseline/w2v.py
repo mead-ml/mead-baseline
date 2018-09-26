@@ -275,6 +275,9 @@ class RandomInitVecModel(EmbeddingsModel):
         self.nullv = np.zeros(self.dsz, dtype=np.float32)
         self.weights[0] = self.nullv
 
+    def get_vocab(self):
+        return self.vocab
+
     def get_dsz(self):
         return self.dsz
 
@@ -284,15 +287,3 @@ class RandomInitVecModel(EmbeddingsModel):
     def save_md(self, target):
         write_json({'vsz': self.get_vsz(), 'dsz': self.get_dsz(), 'vocab': self.get_vocab()}, target)
 
-
-@exporter
-def load_embeddings(filename, known_vocab=None, **kwargs):
-    embed_type = kwargs.get('embed_type', 'default')
-    if embed_type == 'default':
-        return PretrainedEmbeddingsModel(filename,
-                                         known_vocab=known_vocab,
-                                         unif_weight=kwargs.pop('unif', 0),
-                                         keep_unused=kwargs.pop('keep_unused', False),
-                                         normalize=kwargs.pop('normalized', False), **kwargs)
-    print('loading user module')
-    return load_user_embeddings(filename, known_vocab, **kwargs)

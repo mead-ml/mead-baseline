@@ -6,11 +6,6 @@ from baseline.utils import read_json, write_json, ls_props
 from google.protobuf import text_format
 
 
-
-def run(self, **kwargs):
-    pass
-
-
 class BasicLanguageModel(LanguageModel):
 
     def __init__(self):
@@ -110,10 +105,7 @@ class BasicLanguageModel(LanguageModel):
 
         lm = cls()
 
-        lm.embeddings = dict()
-        for key in embeddings.keys():
-            DefaultType = TensorFlowCharConvEmbeddings if key == 'char' else TensorFlowTokenEmbeddings
-            lm.embeddings[key] = tf_embeddings(embeddings[key], key, DefaultType=DefaultType, **kwargs)
+        lm.embeddings = embeddings
         lm.y = kwargs.get('y', tf.placeholder(tf.int32, [None, None], name="y"))
         lm.batchsz = kwargs['batchsz']
         lm.sess = kwargs.get('sess', tf.Session())

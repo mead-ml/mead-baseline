@@ -18,7 +18,7 @@
 	{
 	    "name": "char",
 	    "vectorizer": { "type": "dict2d" },
-	    "embeddings": { "dsz": 30 }
+	    "embeddings": { "dsz": 30, "type": "char-conv" }
 	}
     ],
     "preproc": {

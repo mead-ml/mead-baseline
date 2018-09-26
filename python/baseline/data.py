@@ -193,11 +193,11 @@ class Seq2SeqExamples(object):
     def __len__(self):
         return len(self.example_list)
 
-    def _trim_batch(self, batch, max_src_len, max_dst_len):
+    def _trim_batch(self, batch, max_src_len, max_tgt_len):
         for k in batch.keys():
             max_len = max_src_len
-            if k == 'dst':
-                max_len = max_dst_len
+            if k == 'tgt':
+                max_len = max_tgt_len
 
             if len(batch[k].shape) == 3:
                 batch[k] = batch[k][:, 0:max_len, :]
@@ -226,7 +226,7 @@ class Seq2SeqExamples(object):
         sz = len(self.example_list)
         idx = start * batchsz
         max_src_len = 0
-        max_dst_len = 0
+        max_tgt_len = 0
         for i in range(batchsz):
             if idx >= sz:
                 idx = 0
@@ -240,13 +240,13 @@ class Seq2SeqExamples(object):
                 max_src_len = max(max_src_len, ex[self.src_sort_key])
 
             if trim:
-                max_dst_len = max(max_dst_len, ex['dst_lengths'])
+                max_tgt_len = max(max_tgt_len, ex['tgt_lengths'])
 
             idx += 1
 
         for k in keys:
             batch[k] = np.stack(batch[k])
-        return self._trim_batch(batch, keys, max_src_len, max_dst_len) if trim else batch
+        return self._trim_batch(batch, keys, max_src_len, max_tgt_len) if trim else batch
 
 
 # This one is a little different at the moment

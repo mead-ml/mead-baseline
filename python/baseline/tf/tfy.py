@@ -317,12 +317,12 @@ def multi_rnn_cell_w_dropout(hsz, pkeep, rnntype, nlayers):
 
 def create_show_examples_tf(src_key):
     # This function should never be used for decoding.  It exists only so that the training model can greedily decode
-    def show_examples_tf(model, es, rlut1, rlut2, embed2, mxlen, sample, prob_clip, max_examples, reverse):
+    def show_examples_tf(model, es, rlut1, rlut2, vocab, mxlen, sample, prob_clip, max_examples, reverse):
         si = np.random.randint(0, len(es))
 
         batch_dict = es[si]
-        GO = embed2.vocab['<GO>']
-        EOS = embed2.vocab['<EOS>']
+        GO = vocab['<GO>']
+        EOS = vocab['<EOS>']
         i = 0
         src_lengths_key = '{}_lengths'.format(src_key)
 
@@ -337,22 +337,22 @@ def create_show_examples_tf(src_key):
 
             src_i = example[src_key]
             src_len_i = example[src_lengths_key]
-            dst_i = example['dst']
+            tgt_i = example['tgt']
 
             sent = lookup_sentence(rlut1, src_i, reverse=reverse)
             print('[OP] %s' % sent)
-            sent = lookup_sentence(rlut2, dst_i)
+            sent = lookup_sentence(rlut2, tgt_i)
             print('[Actual] %s' % sent)
-            dst_i = np.zeros((1, mxlen))
-            example['dst'] = dst_i
+            tgt_i = np.zeros((1, mxlen))
+            example['tgt'] = tgt_i
             src_i = src_i[np.newaxis, :]
             example[src_key] = src_i
             example[src_lengths_key] = np.array([src_len_i])
             next_value = GO
             for j in range(mxlen):
-                dst_i[0, j] = next_value
+                tgt_i[0, j] = next_value
                 tgt_len_i = np.array([j+1])
-                example['dst_lengths'] = tgt_len_i
+                example['tgt_lengths'] = tgt_len_i
                 output = model.step(example)[j]
                 if sample is False:
                     next_value = np.argmax(output)
@@ -364,7 +364,7 @@ def create_show_examples_tf(src_key):
                 if next_value == EOS:
                     break
 
-            sent = lookup_sentence(rlut2, dst_i.squeeze())
+            sent = lookup_sentence(rlut2, tgt_i.squeeze())
             print('Guess: %s' % sent)
             print('------------------------------------------------------------------------')
             i += 1

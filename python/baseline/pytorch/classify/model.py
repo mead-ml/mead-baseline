@@ -1,6 +1,5 @@
 from baseline.model import ClassifierModel, load_classifier_model, create_classifier_model
 from baseline.pytorch.torchy import *
-from baseline.pytorch.embeddings import pytorch_embeddings, PyTorchCharConvEmbeddings, PyTorchWordEmbeddings
 from baseline.utils import listify
 import torch.backends.cudnn as cudnn
 cudnn.benchmark = True
@@ -127,9 +126,8 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
         self.embeddings = EmbeddingsContainer()
         input_sz = 0
         for k, embedding in embeddings.items():
-            DefaultType = PyTorchCharConvEmbeddings if k == 'char' else PyTorchWordEmbeddings
-            self.embeddings[k] = pytorch_embeddings(embeddings[k], DefaultType)
-            input_sz += self.embeddings[k].get_dsz()
+            self.embeddings[k] = embedding
+            input_sz += embedding.get_dsz()
         return input_sz
 
     def _init_stacked(self, input_dim, **kwargs):
@@ -200,28 +198,12 @@ class LSTMModel(ClassifierModelBase):
         return hidden
 
     def make_input(self, batch_dict):
-
-        x = batch_dict['x']
-        xch = batch_dict.get('xch')
-        y = batch_dict.get('y')
-        lengths = batch_dict['lengths']
+        inputs = super(LSTMModel).make_input(batch_dict)
+        lengths = inputs['lengths']
         lengths, perm_idx = lengths.sort(0, descending=True)
-        x = x[perm_idx]
-        if xch is not None:
-            xch = xch[perm_idx]
-        if y is not None:
-            y = y[perm_idx]
-        if self.gpu:
-            x = x.cuda()
-            if xch is not None:
-                xch = xch.cuda()
-            if y is not None:
-                y = y.cuda()
-
-        if y is not None:
-            y = y.contiguous()
-
-        return x, xch, lengths, y
+        for k, value in inputs.items():
+            inputs[k] = value[perm_idx]
+        return inputs
 
 
 class NBowBase(ClassifierModelBase):

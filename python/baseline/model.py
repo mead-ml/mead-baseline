@@ -60,7 +60,6 @@ class ClassifierModel(object):
         pass
 
 
-
 @exporter
 def create_model(known_creators, input_, output_, **kwargs):
     """If `model_type` is given, use it to load an addon model and construct that OW use default

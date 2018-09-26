@@ -1,9 +1,7 @@
 from baseline.pytorch.torchy import *
-from baseline.pytorch.embeddings import *
 from baseline.pytorch.crf import *
 from baseline.model import TaggerModel, create_tagger_model, load_tagger_model
 import torch.autograd
-import math
 
 
 class RNNTaggerModel(nn.Module, TaggerModel):
@@ -15,10 +13,6 @@ class RNNTaggerModel(nn.Module, TaggerModel):
         self.gpu = True
         self.cuda()
         self.crit.cuda()
-        #self.embeddings['word'].cuda()
-        #self.embeddings['char'].cuda()
-        #for k, embedding in self.embeddings.items():
-        #    self.embeddings[k] = embedding.cuda()
         return self
 
     @staticmethod
@@ -33,9 +27,8 @@ class RNNTaggerModel(nn.Module, TaggerModel):
         self.embeddings = EmbeddingsContainer()
         input_sz = 0
         for k, embedding in embeddings.items():
-            DefaultType = PyTorchCharConvEmbeddings if k == 'char' else PyTorchWordEmbeddings
-            self.embeddings[k] = pytorch_embeddings(embeddings[k], DefaultType)
-            input_sz += self.embeddings[k].get_dsz()
+            self.embeddings[k] = embedding
+            input_sz += embedding.get_dsz()
         return input_sz
 
     def _embed(self, input):

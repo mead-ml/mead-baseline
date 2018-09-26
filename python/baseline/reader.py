@@ -47,10 +47,10 @@ class ParallelCorpusReader(object):
                  trim=False):
 
         self.src_vectorizers = {}
-        self.dst_vectorizer = None
+        self.tgt_vectorizer = None
         for k, vectorizer in vectorizers.items():
-            if k == 'dst':
-                self.dst_vectorizer = GOVectorizer(vectorizer)
+            if k == 'tgt':
+                self.tgt_vectorizer = GOVectorizer(vectorizer)
             else:
                 self.src_vectorizers[k] = vectorizer
         self.trim = trim
@@ -71,17 +71,17 @@ class ParallelCorpusReader(object):
 class TSVParallelCorpusReader(ParallelCorpusReader):
 
     def __init__(self, vectorizers,
-                 trim=False, src_col_num=0, dst_col_num=1):
+                 trim=False, src_col_num=0, tgt_col_num=1):
         super(TSVParallelCorpusReader, self).__init__(vectorizers, trim)
         self.src_col_num = src_col_num
-        self.dst_col_num = dst_col_num
+        self.tgt_col_num = tgt_col_num
 
     def build_vocabs(self, files):
         src_vocab = _build_vocab_for_col(self.src_col_num, files, self.src_vectorizers)
-        dst_vocab = _build_vocab_for_col(self.dst_col_num, files, {'dst': self.dst_vectorizer})
-        return src_vocab, dst_vocab['dst']
+        tgt_vocab = _build_vocab_for_col(self.tgt_col_num, files, {'tgt': self.tgt_vectorizer})
+        return src_vocab, tgt_vocab['tgt']
 
-    def load_examples(self, tsfile, src_vocabs, dst_vocab):
+    def load_examples(self, tsfile, src_vocabs, tgt_vocab):
         ts = []
         with codecs.open(tsfile, encoding='utf-8', mode='r') as f:
             for line in f:
@@ -94,8 +94,8 @@ class TSVParallelCorpusReader(ParallelCorpusReader):
                     if length is not None:
                         example['{}_lengths'.format(k)] = length
 
-                dst = list(filter(lambda x: len(x) != 0, re.split("\s+", splits[1])))
-                example['dst'], example['dst_lengths'] = self.dst_vectorizer.run(dst, dst_vocab)
+                tgt = list(filter(lambda x: len(x) != 0, re.split("\s+", splits[1])))
+                example['tgt'], example['tgt_lengths'] = self.tgt_vectorizer.run(tgt, tgt_vocab)
                 ts += [example]
         return baseline.data.Seq2SeqExamples(ts)
 
@@ -103,40 +103,40 @@ class TSVParallelCorpusReader(ParallelCorpusReader):
 @exporter
 class MultiFileParallelCorpusReader(ParallelCorpusReader):
 
-    def __init__(self, src_suffix, dst_suffix, vectorizers, trim=False):
+    def __init__(self, src_suffix, tgt_suffix, vectorizers, trim=False):
         super(MultiFileParallelCorpusReader, self).__init__(vectorizers, trim)
         self.src_suffix = src_suffix
-        self.dst_suffix = dst_suffix
+        self.tgt_suffix = tgt_suffix
         if not src_suffix.startswith('.'):
             self.src_suffix = '.' + self.src_suffix
-        if not dst_suffix.startswith('.'):
-            self.dst_suffix = '.' + self.dst_suffix
+        if not tgt_suffix.startswith('.'):
+            self.tgt_suffix = '.' + self.tgt_suffix
 
     # 2 possibilities here, either we have a vocab file, e.g. vocab.bpe.32000, or we are going to generate
     # from each column
     def build_vocabs(self, files):
         if len(files) == 1 and os.path.exists(files[0]):
             src_vocab = _build_vocab_for_col(0, files, self.src_vectorizers)
-            dst_vocab = _build_vocab_for_col(0, files, {'dst': self.dst_vectorizer})
+            tgt_vocab = _build_vocab_for_col(0, files, {'tgt': self.tgt_vectorizer})
         else:
             src_vocab = _build_vocab_for_col(0, [f + self.src_suffix for f in files], self.src_vectorizers)
-            dst_vocab = _build_vocab_for_col(0, [f + self.dst_suffix for f in files], {'dst': self.dst_vectorizer})
-        return src_vocab, dst_vocab['dst']
+            tgt_vocab = _build_vocab_for_col(0, [f + self.tgt_suffix for f in files], {'tgt': self.tgt_vectorizer})
+        return src_vocab, tgt_vocab['tgt']
 
-    def load_examples(self, tsfile, src_vocabs, dst_vocab):
+    def load_examples(self, tsfile, src_vocabs, tgt_vocab):
         ts = []
 
         with codecs.open(tsfile + self.src_suffix, encoding='utf-8', mode='r') as fsrc:
-            with codecs.open(tsfile + self.dst_suffix, encoding='utf-8', mode='r') as fdst:
-                for src, dst in zip(fsrc, fdst):
+            with codecs.open(tsfile + self.tgt_suffix, encoding='utf-8', mode='r') as ftgt:
+                for src, tgt in zip(fsrc, ftgt):
                     example = {}
                     src = re.split("\s+", src.strip())
                     for k, vectorizer in self.src_vectorizers.items():
                         example[k], length = vectorizer.run(src, src_vocabs[k])
                         if length is not None:
                             example['{}_lengths'.format(k)] = length
-                    dst = re.split("\s+", dst.strip())
-                    example['dst'], example['dst_lengths'] = self.dst_vectorizer.run(dst, dst_vocab)
+                    tgt = re.split("\s+", tgt.strip())
+                    example['tgt'], example['tgt_lengths'] = self.tgt_vectorizer.run(tgt, tgt_vocab)
                     ts += [example]
         return baseline.data.Seq2SeqExamples(ts)
 

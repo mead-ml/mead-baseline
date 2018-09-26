@@ -229,10 +229,7 @@ class RNNTaggerModelModel(TaggerModel):
     def create(cls, labels, embeddings, **kwargs):
 
         model = cls()
-        model.embeddings = dict()
-        for key in embeddings.keys():
-            DefaultType = TensorFlowCharConvEmbeddings if key == 'char' else TensorFlowTokenEmbeddings
-            model.embeddings[key] = tf_embeddings(embeddings[key], key, DefaultType=DefaultType, **kwargs)
+        model.embeddings = embeddings
 
         model.lengths_key = kwargs.get('lengths_key')
         if model.lengths_key is None:

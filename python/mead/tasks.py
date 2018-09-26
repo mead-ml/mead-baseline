@@ -6,7 +6,6 @@ import mead.utils
 import os
 from mead.downloader import EmbeddingDownloader, DataDownloader
 from baseline.utils import (export, read_json, zip_files, save_vectorizers, save_vocabs)
-from baseline.w2v import load_embeddings
 from baseline.vectorizers import create_vectorizer
 __all__ = []
 exporter = export(__all__)
@@ -151,39 +150,54 @@ class Task(object):
         logging.basicConfig(level=logging.DEBUG)
 
     def _create_embeddings(self, embeddings_set, vocabs, features):
+        backend = self.config_params.get('backend', 'tensorflow')
+
+        if backend == 'pytorch':
+            import baseline.pytorch.embeddings as embeddings
+        else:
+            if backend == 'keras':
+                print('Keras backend')
+                import baseline.keras.embeddings as embeddings
+            elif backend == 'dynet':
+                print('Dynet backend')
+                import baseline.dy.embeddings as embeddings
+            else:
+                print('TensorFlow backend')
+                import baseline.tf.embeddings as embeddings
 
         unif = self.config_params['unif']
         keep_unused = self.config_params.get('keep_unused', False)
 
-        embeddings = dict()
-
+        embeddings_map = dict()
+        out_vocabs = {}
         for feature in features:
             embeddings_section = feature['embeddings']
             name = feature['name']
             embed_label = embeddings_section.get('label', None)
-
+            embed_type = embeddings_section.get('type', 'default')
             if embed_label is not None:
                 embed_file = embeddings_set[embed_label]['file']
                 embed_dsz = embeddings_set[embed_label]['dsz']
                 embed_sha1 = embeddings_set[embed_label].get('sha1', None)
                 embed_use_mmap = embeddings_section.get('use_mmap', False)
                 embed_file = EmbeddingDownloader(embed_file, embed_dsz, embed_sha1, self.data_download_cache).download()
-                embeddings[name] = load_embeddings(embed_file,
-                                                   known_vocab=vocabs[name],
-                                                   embed_type=embeddings_section.get('type', 'default'),
-                                                   unif=unif,
-                                                   use_mmap=embed_use_mmap,
-                                                   keep_unused=keep_unused)
+                embedding_bundle = embeddings.load_embeddings(embed_file,
+                                                              name,
+                                                              known_vocab=vocabs[name],
+                                                              embed_type=embed_type,
+                                                              unif=unif,
+                                                              use_mmap=embed_use_mmap,
+                                                              keep_unused=keep_unused)
 
-            # TODO: can we still find a way to call load_embeddings even if no file is given?
+                embeddings_map[name] = embedding_bundle['embeddings']
+                out_vocabs[name] = embedding_bundle['vocab']
             else:
                 dsz = embeddings_section['dsz']
-                embeddings[name] = baseline.RandomInitVecModel(dsz, vocabs[name], unif_weight=unif)
+                embedding_bundle = embeddings.create_embeddings(dsz, name, vocabs[name], unif=unif, embed_type=embed_type)
+                embeddings_map[name] = embedding_bundle['embeddings']
+                out_vocabs[name] = embedding_bundle['vocab']
 
-        out_vocabs = {}
-        for key, value in embeddings.items():
-            out_vocabs[key] = value.vocab
-        return embeddings, out_vocabs
+        return embeddings_map, out_vocabs
 
     @staticmethod
     def _log2json(log):
@@ -196,6 +210,7 @@ class Task(object):
 
     def get_basedir(self):
         return self.config_params.get('basedir', './')
+
 
 @exporter
 class ClassifierTask(Task):
@@ -294,8 +309,6 @@ class TaggerTask(Task):
             else:
                 raise Exception('Tagger currently only supports autobatching.'
                                 'Change "batchsz" to 1 and under "train", set "autobatchsz" to your desired batchsz')
-                #self.config_params['model']['batched'] = True
-                #dy_params.set_autobatch(False)
             dy_params.init()
             import baseline.dy.tagger as tagger
             self.config_params['preproc']['trim'] = True
@@ -306,7 +319,6 @@ class TaggerTask(Task):
             from mead.tf.exporters import TaggerTensorFlowExporter
             self.ExporterType = TaggerTensorFlowExporter
         self.task = tagger
-
 
     def initialize(self, embeddings):
         self.dataset = DataDownloader(self.dataset, self.data_download_cache).download()
@@ -392,41 +404,44 @@ class EncoderDecoderTask(Task):
         else:
             vocab1, vocab2 = self.reader.build_vocabs([self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']])
 
-        # To keep the config file simple, share a list between source and destination (dst)
+        # To keep the config file simple, share a list between source and destination (tgt)
         features_src = []
-        features_dst = None
+        features_tgt = None
         for feature in self.config_params['features']:
-            if feature['name'] == 'dst':
-                features_dst = feature
+            if feature['name'] == 'tgt':
+                features_tgt = feature
             else:
                 features_src += [feature]
 
         self.src_embeddings, self.feat2src = self._create_embeddings(embeddings_set, vocab1, features_src)
         # For now, dont allow multiple vocabs of output
         save_vocabs(self.get_basedir(), self.feat2src)
-        self.dst_embeddings, self.feat2dst = self._create_embeddings(embeddings_set, {'dst': vocab2}, [features_dst])
-        save_vocabs(self.get_basedir(), self.feat2dst)
-        self.dst_embeddings = self.dst_embeddings['dst']
-        self.feat2dst = self.feat2dst['dst']
+        self.tgt_embeddings, self.feat2tgt = self._create_embeddings(embeddings_set, {'tgt': vocab2}, [features_tgt])
+        save_vocabs(self.get_basedir(), self.feat2tgt)
+        self.tgt_embeddings = self.tgt_embeddings['tgt']
+        self.feat2tgt = self.feat2tgt['tgt']
 
     def _load_dataset(self):
         sort_key = self.config_params['loader'].get('src_sort_key', 'src')
         self.train_data = self.reader.load(self.dataset['train_file'],
-                                           self.feat2src, self.feat2dst,
+                                           self.feat2src, self.feat2tgt,
                                            self.config_params['batchsz'],
                                            shuffle=True, sort_key=sort_key)
         self.valid_data = self.reader.load(self.dataset['valid_file'],
                                            self.feat2src,
-                                           self.feat2dst,
+                                           self.feat2tgt,
                                            self.config_params['batchsz'],
                                            shuffle=True)
         self.test_data = self.reader.load(self.dataset['test_file'],
                                           self.feat2src,
-                                          self.feat2dst,
+                                          self.feat2tgt,
                                           self.config_params.get('test_batchsz', 1))
 
     def _create_model(self):
-        return self.task.create_model(self.src_embeddings, self.dst_embeddings, **self.config_params['model'])
+        self.config_params['model']['GO'] = self.feat2tgt['<GO>']
+        self.config_params['model']['EOS'] = self.feat2tgt['<EOS>']
+
+        return self.task.create_model(self.src_embeddings, self.tgt_embeddings, **self.config_params['model'])
 
     def train(self):
 
@@ -438,10 +453,10 @@ class EncoderDecoderTask(Task):
             show_ex_fn = preproc['show_ex']
             vocab_name = self.config_params['loader'].get('src_sort_key', 'src')
             rlut1 = baseline.revlut(self.feat2src[vocab_name])
-            rlut2 = baseline.revlut(self.feat2dst)
+            rlut2 = baseline.revlut(self.feat2tgt)
             self.config_params['train']['after_train_fn'] = lambda model: show_ex_fn(model,
                                                                                      self.valid_data, rlut1, rlut2,
-                                                                                     self.dst_embeddings,
+                                                                                     self.feat2tgt,
                                                                                      preproc['mxlen'], False, 0,
                                                                                      num_ex, reverse=False)
         super(EncoderDecoderTask, self).train()

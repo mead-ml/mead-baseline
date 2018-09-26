@@ -29,7 +29,7 @@
 	    "embeddings": { "label": "glove-twitter-27B" }
 	},
 	{
-	    "name": "sidecar",
+	    "name": "word2",
 	    "vectorizer": {
 		"type": "dict1d",
 		"fields": "text",
@@ -45,7 +45,7 @@
 		"mxlen": 38,
 		"mxwlen": 40
 	    },
-	    "embeddings": { "dsz": 30 }
+	    "embeddings": { "dsz": 30, "type": "char-conv" }
 	}
     ],
     "model": {

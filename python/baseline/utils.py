@@ -417,10 +417,17 @@ def create_user_lang_model(embeddings, **kwargs):
 
 
 @exporter
-def load_user_embeddings(embeddings_source, known_vocab, **kwargs):
+def load_user_embeddings(embeddings_source, name, known_vocab, **kwargs):
     embed_type = kwargs['embed_type']
     mod = import_user_module('embed', embed_type)
-    return mod.load_embed(embeddings_source, known_vocab, **kwargs)
+    return mod.load_embeddings(embeddings_source, name, known_vocab, **kwargs)
+
+
+@exporter
+def create_user_embeddings(dsz, name, known_vocab, **kwargs):
+    embed_type = kwargs['embed_type']
+    mod = import_user_module('embed', embed_type)
+    return mod.create_embeddings(dsz, name, known_vocab, **kwargs)
 
 
 @exporter
