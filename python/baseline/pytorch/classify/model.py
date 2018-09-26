@@ -105,9 +105,6 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
     def get_labels(self):
         return self.labels
 
-    def get_vocab(self, name='word'):
-        return self.vocab.get(name)
-
     def _pool(self, embeddings, lengths):
         pass
 

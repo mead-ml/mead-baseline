@@ -27,11 +27,7 @@
     "model_type": "lstm",
     "hsz": 200,
     "dropout": 0.5,
-    "finetune": true,
-    "lengths_key": "word"
-  },
-  "word_embeddings": {
-    "label": "w2v-gn"
+    "finetune": true
   },
   "train": {
     "epochs": 2,
