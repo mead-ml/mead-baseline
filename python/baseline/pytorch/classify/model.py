@@ -24,12 +24,7 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
 
         model = cls()
         model.pdrop = kwargs.get('pdrop', 0.5)
-
         model.lengths_key = kwargs.get('lengths_key')
-        if model.lengths_key is not None:
-            # This allows user to short-hand the field to use
-            if not model.lengths_key.endswith('_lengths'):
-                model.lengths_key += '_lengths'
         input_sz = model._init_embed(embeddings)
         model.gpu = not bool(kwargs.get('nogpu', False))
         model.labels = labels

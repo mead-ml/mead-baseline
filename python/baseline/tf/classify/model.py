@@ -38,15 +38,10 @@ class ClassifyParallelModel(ClassifierModel):
             split_operations[key] = tf.split(self.parallel_params[key], gpus)
 
         self.lengths_key = kwargs.get('lengths_key')
-
         if self.lengths_key is not None:
-            # This allows user to short-hand the field to use
-            if not self.lengths_key.endswith('_lengths'):
-                self.lengths_key += '_lengths'
             self.lengths = kwargs.get('lengths', tf.placeholder(tf.int32, [None], name="lengths_parallel"))
             lengths_splits = tf.split(self.lengths, gpus)
             split_operations['lengths'] = lengths_splits
-
         else:
             self.lengths = None
 
@@ -354,9 +349,6 @@ class ClassifierModelBase(ClassifierModel):
         model.embeddings = embeddings
         model.lengths_key = kwargs.get('lengths_key')
         if model.lengths_key is not None:
-            # This allows user to short-hand the field to use
-            if not model.lengths_key.endswith('_lengths'):
-                model.lengths_key += '_lengths'
             model.lengths = kwargs.get('lengths', tf.placeholder(tf.int32, [None], name="lengths"))
         else:
             model.lengths = None

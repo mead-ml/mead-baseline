@@ -267,8 +267,11 @@ class ClassifierTask(Task):
 
     def _create_model(self):
         model = self.config_params['model']
-        model['lengths_key'] = model.get('lengths_key', self.config_params.get('sort_key'))
-        self.config_params['loader'].get('sort_key')
+        lengths_key = model.get('lengths_key', self.config_params.get('sort_key'))
+        if lengths_key is not None:
+            if not lengths_key.endswith('_lengths'):
+                lengths_key = '{}_lengths'.format(lengths_key)
+            model['lengths_key'] = lengths_key
         return self.task.create_model(self.embeddings, self.labels, **model)
 
     def _load_dataset(self):
