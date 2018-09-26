@@ -423,13 +423,13 @@ class RemoteResults(BaseResults):
 
     def find_best(self, exp, phase, metric):
         r = requests.get(
-            "{url}/results/find/best/{exp}/{phase}/{metric}".format(
+            "{url}/result/find/best/{exp}/{phase}/{metric}".format(
                 url=self.url,
                 exp=exp, phase=phase, metric=metric
             )
         )
         resp = r.json()
-        return Label.parse(resp['label']), resp['value'], res['step']
+        return Label.parse(resp['label']), resp['value'], resp['step']
 
 
 def search(key, table, prefix=True):
