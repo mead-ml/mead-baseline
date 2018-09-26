@@ -41,17 +41,6 @@ class RNNTaggerModel(nn.Module, TaggerModel):
     def create(cls, labels, embeddings, **kwargs):
         model = cls()
         model.lengths_key = kwargs.get('lengths_key')
-        if model.lengths_key is None:
-            if 'word' in embeddings:
-                model.lengths_key = 'word'
-            elif 'x' in embeddings:
-                model.lengths_key = 'x'
-
-        if model.lengths_key is not None:
-            # This allows user to short-hand the field to use
-            if not model.lengths_key.endswith('_lengths'):
-                model.lengths_key += '_lengths'
-
         hsz = int(kwargs['hsz'])
         model.proj = bool(kwargs.get('proj', False))
         model.use_crf = bool(kwargs.get('crf', False))

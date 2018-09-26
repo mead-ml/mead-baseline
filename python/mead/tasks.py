@@ -332,9 +332,31 @@ class TaggerTask(Task):
         save_vocabs(self.get_basedir(), self.feat2index)
 
     def _create_model(self):
+        """
+        if model.lengths_key is None:
+            if 'word' in model.embeddings:
+                model.lengths_key = 'word'
+            elif 'x' in model.embeddings:
+                model.lengths_key = 'x'
+
+        if model.lengths_key is None:
+            raise Exception("Require a `lengths_key`")
+            # This allows user to short-hand the field to use
+        if not model.lengths_key.endswith('_lengths'):
+            model.lengths_key += '_lengths'
+        :return:
+        """
         labels = self.reader.label2index
         self.config_params['model']['span_type'] = self.config_params['train'].get('span_type')
         self.config_params['model']["unif"] = self.config_params["unif"]
+        model = self.config_params['model']
+        lengths_key = model.get('lengths_key', self.config_params.get('sort_key', 'word'))
+        if lengths_key is not None:
+            if not lengths_key.endswith('_lengths'):
+                lengths_key = '{}_lengths'.format(lengths_key)
+            model['lengths_key'] = lengths_key
+
+
         return self.task.create_model(labels, self.embeddings, **self.config_params['model'])
 
     def _load_dataset(self):

@@ -225,35 +225,33 @@ class RNNTaggerModelModel(TaggerModel):
 
         return preds
 
+    def embed(self):
+        """This method performs "embedding" of the inputs.  The base method here then concatenates along depth
+        dimension to form word embeddings
+
+        :return: A 3-d vector where the last dimension is the concatenated dimensions of all embeddings
+        """
+        all_embeddings_out = []
+        for embedding in self.embeddings.values():
+            embeddings_out = embedding.encode()
+            all_embeddings_out += [embeddings_out]
+        word_embeddings = tf.concat(values=all_embeddings_out, axis=2)
+        return word_embeddings
+
     @classmethod
     def create(cls, labels, embeddings, **kwargs):
 
         model = cls()
         model.embeddings = embeddings
-
         model.lengths_key = kwargs.get('lengths_key')
-        if model.lengths_key is None:
-            if 'word' in model.embeddings:
-                model.lengths_key = 'word'
-            elif 'x' in model.embeddings:
-                model.lengths_key = 'x'
-
-        if model.lengths_key is None:
-            raise Exception("Require a `lengths_key`")
-            # This allows user to short-hand the field to use
-        if not model.lengths_key.endswith('_lengths'):
-            model.lengths_key += '_lengths'
         model.lengths = kwargs.get('lengths', tf.placeholder(tf.int32, [None], name="lengths"))
-
         model.labels = labels
         nc = len(labels)
         model.y = kwargs.get('y', tf.placeholder(tf.int32, [None, None], name="y"))
         # This only exists to make exporting easier
         model.pkeep = kwargs.get('pkeep', tf.placeholder_with_default(1.0, shape=(), name="pkeep"))
         model.pdrop_value = kwargs.get('dropout', 0.5)
-
         model.sess = kwargs.get('sess', tf.Session())
-
         hsz = int(kwargs['hsz'])
         model.pdrop_in = kwargs.get('dropin', 0.0)
         rnntype = kwargs.get('rnntype', 'blstm')
@@ -266,13 +264,7 @@ class RNNTaggerModelModel(TaggerModel):
         model.feed_input = bool(kwargs.get('feed_input', False))
         model.activation_type = kwargs.get('activation', 'tanh')
 
-        # Move compositional sections into class methods
-        all_embeddings_out = []
-        for embedding in model.embeddings.values():
-            embeddings_out = embedding.encode()
-            all_embeddings_out += [embeddings_out]
-
-        joint = tf.concat(values=all_embeddings_out, axis=2)
+        joint = model.embed()
         embedseq = tf.nn.dropout(joint, model.pkeep)
         seed = np.random.randint(10e8)
 
