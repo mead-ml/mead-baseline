@@ -1,7 +1,7 @@
 import argparse
-import mead
-from mead.utils import convert_path
 from baseline.utils import read_config_stream
+import mead
+from mead.utils import convert_path, parse_extra_args
 
 
 def main():
@@ -20,7 +20,8 @@ def main():
     if args.gpus is not None:
         config_params['model']['gpus'] = args.gpus
     if args.reporting is not None:
-        config_params['reporting'] = args.reporting
+        reporting = parse_extra_args(args.reporting, reporting_args)
+        config_params['reporting'] = reporting
 
     task_name = config_params.get('task', 'classify') if args.task is None else args.task
     print('Task: [{}]'.format(task_name))

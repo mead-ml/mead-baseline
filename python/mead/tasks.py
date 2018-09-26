@@ -9,7 +9,7 @@ from mead.downloader import EmbeddingDownloader, DataDownloader
 from mead.mime_type import mime_type
 from baseline.utils import export, read_json
 from baseline.reporting import create_reporting_hook
-from mead.utils import modify_reporting_hook_settings
+
 
 __all__ = []
 exporter = export(__all__)
@@ -83,7 +83,7 @@ class Task(object):
         self.config_params = config_params
         self.config_file = kwargs.get('config_file')
         self._setup_task()
-        self._configure_reporting(config_params.get('reporting', []), self.task_name, **kwargs)
+        self._configure_reporting(config_params.get('reporting', {}), self.task_name, **kwargs)
         self.dataset = datasets_set[self.config_params['dataset']]
         self.reader = self._create_task_specific_reader()
 
@@ -127,15 +127,20 @@ class Task(object):
         self._close_reporting_hooks()
         return model
 
-    def _configure_reporting(self, reporting_hooks, task_name, **kwargs):
-        reporting_settings = self.mead_settings_config.get('reporting_hooks', {})
-        for reporting_hook in reporting_hooks:
-            if reporting_hook not in reporting_settings:
-                reporting_settings[reporting_hook] = {}
-        reporting_args_mead = kwargs.get('reporting_args', [])
-        modify_reporting_hook_settings(reporting_settings, reporting_args_mead, reporting_hooks)
-        self.reporting = create_reporting_hook(reporting_hooks, reporting_settings,
-                                               config_file=self.config_file, task=task_name)
+    def _configure_reporting(self, reporting, task_name, **kwargs):
+        default_reporting = self.mead_settings_config.get('reporting_hooks', {})
+        # Add default reporting information to the reporting settings.
+        for report_type in default_reporting:
+            if report_type in reporting:
+                for report_arg, report_val in default_reporting[report_type].items():
+                    if report_arg not in reporting[report_type]:
+                        reporting[report_type][report_arg] = report_val
+        reporting_hooks = list(reporting.keys())
+
+        self.reporting = create_reporting_hook(
+            reporting_hooks, reporting,
+            config_file=self.config_file, task=task_name
+        )
         self.config_params['train']['reporting'] = [x.step for x in self.reporting]
         logging.basicConfig(level=logging.DEBUG)
 

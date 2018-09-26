@@ -43,19 +43,38 @@ def _infer_type_or_str(x):
 
 
 @exporter
-def modify_reporting_hook_settings(reporting_settings, reporting_args_mead, reporting_hooks):
-    reporting_arg_keys = []
-    for x in reporting_hooks:
-        for var in reporting_args_mead:
-            if "{}:".format(x) in var:
-                reporting_arg_keys.append(var)
+def parse_extra_args(base_args, extra_args):
+    """Parse extra command line arguments based on based names.
+    Note:
+        special args should be in the form --{base_name}:{special_name}
+    :param base_args: List[str], A list of base argument names.
+    :param extra_args: List[str], A list of special arguments and values.
+    :returns:
+        dict, The parsed special settings in the form
+        {
+            "base": {
+                "special": val,
+                ...
+            },
+            ...
+        }
+    """
+    found_args = []
+    for arg in base_args:
+        key = "{}:".format(arg)
+        for extra_arg in extra_args:
+            if key in extra_arg:
+                found_args.append(extra_arg)
     parser = argparse.ArgumentParser()
-    for key in reporting_arg_keys:
+    for key in found_args:
         parser.add_argument(key, type=_infer_type_or_str)
-    args = parser.parse_known_args()[0]
-    for key in vars(args):
-        this_hook, var = key.split(":")
-        reporting_settings[this_hook].update({var: vars(args)[key]})
+    args = parser.parse_known_args(extra_args)[0]
+    settings = {arg: {} for arg in base_args}
+    args = vars(args)
+    for key in args:
+        base, extra = key.split(":")
+        settings[base][extra] = args[key]
+    return settings
 
 
 @exporter
