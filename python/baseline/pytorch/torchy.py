@@ -558,36 +558,36 @@ def prepare_src(model, tokens, mxlen=100):
     return torch.autograd.Variable(x.view(-1, 1))
 
 
-def show_examples_pytorch(model, es, rlut1, rlut2, embed2, mxlen, sample, prob_clip, max_examples, reverse):
+def show_examples_pytorch(model, es, rlut1, rlut2, vocab, mxlen, sample, prob_clip, max_examples, reverse):
     si = np.random.randint(0, len(es))
 
     batch_dict = es[si]
 
     src_array = batch_dict['src']
-    tgt_array = batch_dict['dst']
-    src_len = batch_dict['src_len']
+    tgt_array = batch_dict['tgt']
+    src_len = batch_dict['src_lengths']
 
     if max_examples > 0:
-        max_examples = min(max_examples, src_array.size(0))
-        src_array = src_array[0:max_examples]
-        tgt_array = tgt_array[0:max_examples]
-        src_len = src_len[0:max_examples]
+        max_examples = min(max_examples, src_array.shape[0])
+
 
     # TODO: fix this, check for GPU first
-    src_array = src_array.cuda()
-    
-    for src_len_i, src_i, tgt_i in zip(src_len, src_array, tgt_array):
+
+    for i in range(max_examples):
+
+        example = {}
+        # Batch first, so this gets a single example at once
+        for k, value in batch_dict.items():
+            v = value[i]
+            example[k] = v.reshape((1,) + v.shape)
 
         print('========================================================================')
-        src_len_i = torch.ones(1).fill_(src_len_i).type_as(src_len)
-
-        sent = lookup_sentence(rlut1, src_i.cpu().numpy(), reverse=reverse)
+        sent = lookup_sentence(rlut1, example['src'].squeeze(), reverse=reverse)
         print('[OP] %s' % sent)
-        sent = lookup_sentence(rlut2, tgt_i.cpu().numpy())
+        sent = lookup_sentence(rlut2, example['tgt'].squeeze())
         print('[Actual] %s' % sent)
-        src_dict = {'src': torch.autograd.Variable(src_i.view(1, -1), requires_grad=False),
-                    'src_len': torch.autograd.Variable(src_len_i, requires_grad=False)}
-        dst_i = model.run(src_dict)[0][0]
+
+        dst_i = model.run(example)[0][0]
         dst_i = [idx.item() for idx in dst_i]
         sent = lookup_sentence(rlut2, dst_i)
         print('Guess: %s' % sent)

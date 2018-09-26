@@ -5,41 +5,115 @@ from baseline.pytorch.torchy import *
 from baseline.model import EncoderDecoderModel, load_seq2seq_model, create_seq2seq_model
 
 
-class Seq2SeqBase(nn.Module, EncoderDecoderModel):
+class Seq2SeqModel(nn.Module, EncoderDecoderModel):
 
-    def __init__(self, embeddings_in, embeddings_out, GO, EOS):
-        super(Seq2SeqBase, self).__init__()
-        self.GO = GO
-        self.EOS = EOS
-        self._init_embed(embeddings_in, embeddings_out)
-        self.nc = embeddings_out.vsz
-        self.beam_sz = 1
+    def __init__(self, src_embeddings, tgt_embedding, **kwargs):
+        """This base model is extensible for attention and other uses.  It declares minimal fields allowing the
+        subclass to take over most of the duties for drastically different implementations
 
-    # There is absolutely no reason why tgt_embedding cannot be a LookupTableEmbeddings
+        :param src_embeddings: (``dict``) A dictionary of PyTorchEmbeddings
+        :param tgt_embedding: (``PyTorchEmbeddings``) A single PyTorchEmbeddings object
+        :param kwargs:
+        """
+        super(Seq2SeqModel, self).__init__()
+        self.beam_sz = kwargs.get('beam', 1)
+        self.GO = kwargs.get('GO')
+        self.EOS = kwargs.get('EOS')
+        self.gpu = kwargs.get('gpu', True)
+        src_dsz, tgt_dsz = self._init_embed(src_embeddings, tgt_embedding)
+        self._init_encoder(src_dsz, **kwargs)
+        self._init_attn(**kwargs)
+        self._init_decoder(tgt_dsz, **kwargs)
+
+    def _init_decoder(self, input_dim, **kwargs):
+        """This is the hook for providing the decoder.  It provides the input size, the rest is up to the impl.
+
+        The default implementation provides an RNN cell, followed by a linear projection, out to a softmax
+
+        :param input_dim: The input size
+        :param kwargs:
+        :return: void
+        """
+        dec_hsz = kwargs['hsz']
+        rnntype = kwargs['rnntype']
+        layers = kwargs['layers']
+        feed_input = kwargs.get('feed_input', True)
+        if feed_input:
+            self.input_i = self._feed_input
+            input_dim += dec_hsz
+        else:
+            self.input_i = self._basic_input
+        pdrop = kwargs.get('dropout', 0.5)
+        self.decoder_rnn = pytorch_rnn_cell(input_dim, dec_hsz, rnntype, layers, pdrop)
+        tgt_vsz = self.tgt_embedding.get_vsz()
+        pdrop = kwargs.get('dropout', 0.5)
+        self.dropout = nn.Dropout(pdrop)
+        self.preds = nn.Linear(dec_hsz, tgt_vsz)
+        self.probs = nn.LogSoftmax(dim=1)
+
+    def _init_encoder(self, input_dim, **kwargs):
+        """This is the hook for providing the encoder.  It provides the input size, the rest is up to the impl.
+
+        The default implementation provides a cuDNN-accelerated RNN encoder which is optionally bidirectional
+
+        :param input_dim: The input size
+        :param kwargs:
+        :return: void
+        """
+        enc_hsz = kwargs['hsz']
+        rnntype = kwargs['rnntype']
+        if rnntype == 'blstm':
+            enc_hsz = enc_hsz // 2
+        layers = kwargs['layers']
+        self.encoder_rnn = pytorch_rnn(input_dim, enc_hsz, rnntype, layers, kwargs.get('dropout', 0.5))
+
     def _init_embed(self, src_embeddings, tgt_embedding, **kwargs):
+        """This is the hook for providing embeddings.  It takes in a dictionary of `src_embeddings` and a single
+        tgt_embedding` of type `PyTorchEmbedding`
+
+        :param src_embeddings: (``dict``) A dictionary of PyTorchEmbeddings, one per embedding
+        :param tgt_embedding: (``PyTorchEmbeddings``) A single PyTorchEmbeddings object
+        :param kwargs:
+        :return: Return the aggregate embedding input size
+        """
         self.src_embeddings = EmbeddingsContainer()
         input_sz = 0
         for k, embedding in src_embeddings.items():
-            self.embeddings_src[k] = embedding
+            self.src_embeddings[k] = embedding
             input_sz += embedding.get_dsz()
 
         self.tgt_embedding = tgt_embedding
-        return input_sz
+        return input_sz, self.tgt_embedding.get_dsz()
 
     def save(self, model_file):
+        """Save the model out
+
+        :param model_file: (``str``) The filename
+        :return:
+        """
         torch.save(self, model_file)
 
     def create_loss(self):
+        """Create a loss function.
+
+        :return:
+        """
         return SequenceCriterion()
 
     @classmethod
     def load(cls, filename, **kwargs):
+        """Load a model from file
+
+        :param filename: (``str``) The filename
+        :param kwargs:
+        :return:
+        """
         model = torch.load(filename)
         return model
 
     @classmethod
-    def create(cls, input_embeddings, output_embeddings, **kwargs):
-        model = cls(input_embeddings, output_embeddings, **kwargs)
+    def create(cls, src_embeddings, tgt_embedding, **kwargs):
+        model = cls(src_embeddings, tgt_embedding, **kwargs)
         print(model)
         return model
 
@@ -47,16 +121,15 @@ class Seq2SeqBase(nn.Module, EncoderDecoderModel):
     def make_input(self, batch_dict):
         example = dict({})
         example['src'] = torch.from_numpy(batch_dict['src'])
-        src_len = torch.from_numpy(batch_dict['src_len'])
+        src_len = torch.from_numpy(batch_dict['src_lengths'])
         src_len, perm_idx = src_len.sort(0, descending=True)
         example['src_len'] = src_len
         example['src'] = example['src'][perm_idx].transpose(0, 1).contiguous()
         if self.gpu:
             example['src'] = example['src'].cuda()
             example['src_len'] = example['src_len'].cuda()
-        dst = batch_dict.get('dst')
-        if dst is not None:
-            tgt = torch.from_numpy(batch_dict['dst'])
+        if 'tgt' in batch_dict:
+            tgt = torch.from_numpy(batch_dict['tgt'])
             example['dst'] = tgt[:, :-1]
             example['tgt'] = tgt[:, 1:]
             example['dst'] = example['dst'][perm_idx].transpose(0, 1).contiguous()
@@ -64,7 +137,6 @@ class Seq2SeqBase(nn.Module, EncoderDecoderModel):
             if self.gpu:
                 example['dst'] = example['dst'].cuda()
                 example['tgt'] = example['tgt'].cuda()
-
 
         return example
 
@@ -81,30 +153,26 @@ class Seq2SeqBase(nn.Module, EncoderDecoderModel):
 
     def encode(self, input, src_len):
         embed_in_seq = self._embed(input)
+        #if self.training:
         packed = torch.nn.utils.rnn.pack_padded_sequence(embed_in_seq, src_len.data.tolist())
         output_tbh, hidden = self.encoder_rnn(packed)
         output_tbh, _ = torch.nn.utils.rnn.pad_packed_sequence(output_tbh)
+        #else:
+        #    output_tbh, hidden = self.encoder_rnn(embed_in_seq)
         return output_tbh, hidden
 
-    def input_i(self, embed_i, output_i):
-        pass
-
-    def bridge(self, final_encoder_state, context):
-        pass
-
-    def attn(self, output_t, context, src_mask=None):
-        pass
-
     def decode_rnn(self, context_tbh, h_i, output_i, dst, src_mask):
-        embed_out_tbh = self.dst_embedding(dst)
+        embed_out_tbh = self.tgt_embedding(dst)
         context_bth = context_tbh.transpose(0, 1)
         outputs = []
 
         for i, embed_i in enumerate(embed_out_tbh.split(1)):
+            # Input feeding would use previous attentional output in addition to destination embeddings
             embed_i = self.input_i(embed_i, output_i)
             output_i, h_i = self.decoder_rnn(embed_i, h_i)
             output_i = self.attn(output_i, context_bth, src_mask)
             output_i = self.dropout(output_i)
+            # Attentional outputs
             outputs += [output_i]
 
         outputs = torch.stack(outputs)
@@ -130,22 +198,16 @@ class Seq2SeqBase(nn.Module, EncoderDecoderModel):
         return pred
 
     # B x K x T and here T is a list
-    def run(self, batch_dict, **kwargs):
-        inputs = self.make_input(batch_dict)
-        #src_len = batch_dict['src_len']
-        #src = torch.from_numpy(src) if type(src) == np.ndarray else src
-        #if type(src_len) == int:
-        #    src_len = np.array([src_len])
-        #src_len = torch.from_numpy(src_len) if type(src_len) == np.ndarray else src_len
-        #if torch.is_tensor(src):
-        #    src = torch.autograd.Variable(src, requires_grad=False)
-        #if torch.is_tensor(src_len):
-        #    src_len = torch.autograd.Variable(src_len, requires_grad=False)
+    def run(self, batch_dict, beam=1, **kwargs):
+        self.eval()
         batch = []
-        B = inputs['src'].shape[0]
+        B = batch_dict['src'].shape[0]
         for b in range(B):
-            src_len_i = src_len_i.unsqueeze(0)
-            batch += [self.beam_decode(src_i.view(1, -1), src_len_i, kwargs.get('beam', 1))[0]]
+            example = dict({})
+            for k, value in batch_dict.items():
+                example[k] = value[b].reshape((1,) + value[b].shape)
+            inputs = self.make_input(example)
+            batch += [self.beam_decode(inputs, beam)[0]]
 
         return batch
 
@@ -154,7 +216,7 @@ class Seq2SeqBase(nn.Module, EncoderDecoderModel):
             src = inputs['src']
             T = src.size(1)
             src_len = inputs['src_len']
-            context, h_i = self.encode(inputs)
+            context, h_i = self.encode(inputs, src_len)
             src_mask = sequence_mask(src_len)
             GO = self.GO
             EOS = self.EOS
@@ -216,57 +278,50 @@ class Seq2SeqBase(nn.Module, EncoderDecoderModel):
             return [p[1:] for p in paths], scores
 
 
-class Seq2SeqModel(Seq2SeqBase):
-
-    def __init__(self, embeddings_in, embeddings_out, **kwargs):
-        super(Seq2SeqModel, self).__init__(embeddings_in, embeddings_out)
-
-        self.hsz = kwargs['hsz']
-        nlayers = kwargs['layers']
-        rnntype = kwargs['rnntype']
-        self.GO = kwargs.get('GO')
-        self.EOS = kwargs.get('EOS')
-        pdrop = kwargs.get('dropout', 0.5)
-        enc_hsz = self.hsz
-        if rnntype == 'blstm':
-            enc_hsz = enc_hsz // 2
-        dsz = embeddings_in.dsz
-        self.gpu = kwargs.get('gpu', True)
-        self.dropout = nn.Dropout(pdrop)
-        self.encoder_rnn = pytorch_rnn(dsz, enc_hsz, rnntype, nlayers, pdrop)
-        self.preds = nn.Linear(self.hsz, self.nc)
-        self.decoder_rnn = pytorch_rnn_cell(dsz, self.hsz, rnntype, nlayers, pdrop)
-        self.probs = nn.LogSoftmax(dim=1)
-
-    def input_i(self, embed_i, output_i):
-        return embed_i.squeeze(0)
-
     def bridge(self, final_encoder_state, context):
         return final_encoder_state, None
 
     def attn(self, output_t, context, src_mask=None):
         return output_t
 
+    def _init_attn(self, **kwargs):
+        pass
 
-class Seq2SeqAttnModel(Seq2SeqBase):
+    @staticmethod
+    def _basic_input(dst_embed_i, _):
+        """
+        In this function the destination embedding is passed directly to into the decoder.  The output of previous H
+        is ignored.  This is implemented using a bound method to a field in the class for speed so that this decision
+        is handled at initialization, not as a conditional in the training or inference
 
-    def __init__(self, embeddings_in, embeddings_out, **kwargs):
-        super(Seq2SeqAttnModel, self).__init__(embeddings_in, embeddings_out)
+        :param embed_i: The embedding at i
+        :param _: Ignored
+        :return: basic input
+        """
+        return dst_embed_i.squeeze(0)
+
+    @staticmethod
+    def _feed_input(embed_i, attn_output_i):
+        """
+        In this function the destination embedding is concatenated with the previous attentional output and
+        passed to the decoder. This is implemented using a bound method to a field in the class for speed
+        so that this decision is handled at initialization, not as a conditional in the training or inference
+
+        :param embed_i: The embedding at i
+        :param output_i: This is the last H state
+        :return: an input that is a concatenation of previous state and destination embedding
+        """
+        embed_i = embed_i.squeeze(0)
+        return torch.cat([embed_i, attn_output_i], 1)
+
+
+class Seq2SeqAttnModel(Seq2SeqModel):
+
+    def __init__(self, src_embeddings, tgt_embedding, **kwargs):
         self.hsz = kwargs['hsz']
-        nlayers = kwargs['layers']
-        rnntype = kwargs['rnntype']
-        pdrop = kwargs.get('dropout', 0.5)
-        enc_hsz = self.hsz
-        if rnntype == 'blstm':
-            enc_hsz = enc_hsz // 2
-        dsz = embeddings_in.dsz
-        self.gpu = kwargs.get('gpu', True)
-        self.encoder_rnn = pytorch_rnn(dsz, enc_hsz, rnntype, nlayers, pdrop)
-        self.dropout = nn.Dropout(pdrop)
-        self.decoder_rnn = pytorch_rnn_cell(self.hsz + dsz, self.hsz, rnntype, nlayers, pdrop)
-        self.preds = nn.Linear(self.hsz, self.nc)
-        self.probs = nn.LogSoftmax(dim=1)
-        self.nlayers = nlayers
+        super(Seq2SeqAttnModel, self).__init__(src_embeddings, tgt_embedding, **kwargs)
+
+    def _init_attn(self, **kwargs):
         attn_type = kwargs.get('attn_type', 'bahdanau').lower()
         if attn_type == 'dot':
             self.attn_module = LuongDotProductAttention(self.hsz)
@@ -290,9 +345,7 @@ class Seq2SeqAttnModel(Seq2SeqBase):
         else:
             return final_encoder_state, context_zeros
 
-    def input_i(self, embed_i, output_i):
-        embed_i = embed_i.squeeze(0)
-        return torch.cat([embed_i, output_i], 1)
+
 
 
 BASELINE_SEQ2SEQ_MODELS = {

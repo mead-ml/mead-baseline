@@ -199,6 +199,8 @@ class Seq2SeqExamples(object):
             if k == 'tgt':
                 max_len = max_tgt_len
 
+            if max_len == 0:
+                continue
             if len(batch[k].shape) == 3:
                 batch[k] = batch[k][:, 0:max_len, :]
             elif len(batch[k].shape) == 2:
@@ -246,7 +248,7 @@ class Seq2SeqExamples(object):
 
         for k in keys:
             batch[k] = np.stack(batch[k])
-        return self._trim_batch(batch, keys, max_src_len, max_tgt_len) if trim else batch
+        return self._trim_batch(batch, max_src_len, max_tgt_len) if trim else batch
 
 
 # This one is a little different at the moment
