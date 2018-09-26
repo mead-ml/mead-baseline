@@ -2,7 +2,7 @@ import random
 from copy import deepcopy
 import mock
 import pytest
-from baseline.utils import remove_extra_keys, order_json, hash_config
+from mead.utils import remove_extra_keys, order_json, hash_config
 
 
 @pytest.fixture
@@ -30,9 +30,9 @@ def mixed():
 
 
 def test_hash_config_fixes_json(data):
-    with mock.patch('baseline.utils.remove_extra_keys') as strip_mock:
+    with mock.patch('mead.utils.remove_extra_keys') as strip_mock:
         strip_mock.return_value = data
-        with mock.patch('baseline.utils.order_json') as order_mock:
+        with mock.patch('mead.utils.order_json') as order_mock:
            order_mock.return_value = data
            hash_config(data)
     strip_mock.assert_called_once_with(data)

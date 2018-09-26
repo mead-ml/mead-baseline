@@ -7,7 +7,8 @@ import datetime
 import socket
 import json
 import getpass
-from baseline.utils import export, listify, hash_config
+from baseline.utils import export, listify
+from mead.utils import hash_config
 from bson.objectid import ObjectId
 from baseline.version import __version__
 from xpctl.helpers import df_get_results, df_experimental_details
