@@ -47,6 +47,8 @@ class Label(Mapping):
         return str(self)
 
     def __eq__(self, other):
+        if not isinstance(other, Label):
+            return False
         return (
             self.exp == other.exp and
             self.sha1 == other.sha1 and

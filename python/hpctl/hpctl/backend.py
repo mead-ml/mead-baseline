@@ -80,6 +80,7 @@ class LocalGPUBackend(Backend):
         if real_gpus is None:
             self.real_gpus = os.getenv("CUDA_VISIBLE_DEVICES", os.getenv("NV_GPU", "0")).split(',')
             print('read: {} from envs'.format(self.real_gpus))
+        self.real_gpus = map(str, self.real_gpus)
         self.jobs = []
         self.label_to_job = {}
         self.gpus_to_job = {gpu: None for gpu in self.real_gpus}
@@ -98,13 +99,13 @@ class LocalGPUBackend(Backend):
                 if to_del is not None:
                     del self.label_to_job[to_del]
 
-            # Free gpus
-            for gpu, cand_job in self.gpus_to_job.items():
-                if job == cand_job:
-                    self.gpus_to_job[gpu] = None
+                # Free gpus
+                for gpu, cand_job in self.gpus_to_job.items():
+                    if job == cand_job:
+                        self.gpus_to_job[gpu] = None
 
-            job.join()
-            self.jobs.remove(job)
+                job.join()
+                self.jobs.remove(job)
 
     def _request_gpus(self, count):
         gpus = []

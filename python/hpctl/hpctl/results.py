@@ -207,6 +207,22 @@ class Results(object):
         pass
 
 
+class SpecialDefaults(defaultdict):
+    def __missing__(self, key):
+        if key == 'time_stamp':
+            val = self[key] = six.MAXSIZE
+        elif key == 'state':
+            val = self[key] = States.UNKNOWN
+        elif isinstance(key, Label):
+            val = self[key] = SpecialDefaults()
+        elif key in {'Train', 'Valid', 'Test'}:
+            val = self[key] = defaultdict(list)
+        elif isinstance(key, str):
+            val = self[key] = []
+        else:
+            val = self[key] = None
+        return val
+
 @export
 class LocalResults(Results):
     """An object that aggregates results from jobs.
@@ -230,7 +246,7 @@ class LocalResults(Results):
     """
     def __init__(self):
         super(LocalResults, self).__init__()
-        self.results = defaultdict(dddd_list)
+        self.results = defaultdict(SpecialDefaults)
         self.label_to_config = {}
         self.label_to_name = defaultdict(list)
         self.name_to_label = defaultdict(list)
@@ -338,9 +354,6 @@ class LocalResults(Results):
         return labels, vals, idxs
 
     def get_labels(self, exp_hash):
-        for x in self.results[exp_hash]:
-            if 'time_stamp' not in self.results[exp_hash][x]:
-                self.results[exp_hash][x]['time_stamp'] = six.MAXSIZE
         labels = [(x, self.results[exp_hash][x]['time_stamp']) for x in self.results[exp_hash]]
         labels = sorted(labels, key=lambda x: x[1])
         return [l[0] for l in labels]
