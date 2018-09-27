@@ -5,6 +5,8 @@
     "test_thresh": 10,
     "charsz": 30,
     "unif": 0.1,
+    "preproc": {
+    },
     "features": [
 	{
 	    "name": "word",
@@ -18,11 +20,9 @@
 	{
 	    "name": "char",
 	    "vectorizer": { "type": "dict2d" },
-	    "embeddings": { "dsz": 30, "type": "char-conv" }
+	    "embeddings": { "dsz": 30, "wsz": 30, "type": "char-conv" }
 	}
     ],
-    "preproc": {
-    },
     "backend": "tensorflow",
     "dataset": "conll-iobes",
     "loader": {
@@ -42,10 +42,6 @@
         "layers": 1,
         "crf_mask": true,
 	"crf": 1
-    },
-
-    "word_embeddings": {
-        "label": "glove-6B-100"
     },
     "train": {
         "epochs": 100,

@@ -28,7 +28,6 @@
 	"model_type": "lstm",
 	"hsz": 200,
 	"dropout": 0.5,
-	"lengths_key": "word",
 	"finetune": true
     },
     "train": {

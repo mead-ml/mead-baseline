@@ -37,8 +37,13 @@ class Task(object):
 
     def _create_vectorizers(self):
         self.vectorizers = {}
+
+        features = self.config_params['features']
+        self.primary_key = features[0]['name']
         for feature in self.config_params['features']:
             key = feature['name']
+            if feature.get('primary', False) is True:
+                self.primary_key = key
             vectorizer_section = feature.get('vectorizer', {'type': 'token1d'})
             vectorizer_section['mxlen'] = vectorizer_section.get('mxlen', self.config_params['preproc'].get('mxlen', -1))
             vectorizer_section['mxwlen'] = vectorizer_section.get('mxlen', self.config_params['preproc'].get('mxwlen', -1))
@@ -268,7 +273,7 @@ class ClassifierTask(Task):
 
     def _create_model(self):
         model = self.config_params['model']
-        lengths_key = model.get('lengths_key', self.config_params.get('sort_key'))
+        lengths_key = model.get('lengths_key', self.primary_key)
         if lengths_key is not None:
             if not lengths_key.endswith('_lengths'):
                 lengths_key = '{}_lengths'.format(lengths_key)
@@ -276,7 +281,7 @@ class ClassifierTask(Task):
         return self.task.create_model(self.embeddings, self.labels, **model)
 
     def _load_dataset(self):
-        self.train_data = self.reader.load(self.dataset['train_file'], self.feat2index, self.config_params['batchsz'], shuffle=True, sort_key=self.config_params['loader'].get('sort_key'))
+        self.train_data = self.reader.load(self.dataset['train_file'], self.feat2index, self.config_params['batchsz'], shuffle=True, sort_key=self.primary_key)
         self.valid_data = self.reader.load(self.dataset['valid_file'], self.feat2index, self.config_params['batchsz'])
         self.test_data = self.reader.load(self.dataset['test_file'], self.feat2index, self.config_params.get('test_batchsz', 1))
 
@@ -333,25 +338,11 @@ class TaggerTask(Task):
         save_vocabs(self.get_basedir(), self.feat2index)
 
     def _create_model(self):
-        """
-        if model.lengths_key is None:
-            if 'word' in model.embeddings:
-                model.lengths_key = 'word'
-            elif 'x' in model.embeddings:
-                model.lengths_key = 'x'
-
-        if model.lengths_key is None:
-            raise Exception("Require a `lengths_key`")
-            # This allows user to short-hand the field to use
-        if not model.lengths_key.endswith('_lengths'):
-            model.lengths_key += '_lengths'
-        :return:
-        """
         labels = self.reader.label2index
         self.config_params['model']['span_type'] = self.config_params['train'].get('span_type')
         self.config_params['model']["unif"] = self.config_params["unif"]
         model = self.config_params['model']
-        lengths_key = model.get('lengths_key', self.config_params.get('sort_key', 'word'))
+        lengths_key = model.get('lengths_key', self.primary_key)
         if lengths_key is not None:
             if not lengths_key.endswith('_lengths'):
                 lengths_key = '{}_lengths'.format(lengths_key)
@@ -361,7 +352,7 @@ class TaggerTask(Task):
         return self.task.create_model(labels, self.embeddings, **self.config_params['model'])
 
     def _load_dataset(self):
-        self.train_data, _ = self.reader.load(self.dataset['train_file'], self.feat2index, self.config_params['batchsz'], shuffle=True, sort_key=self.config_params['loader'].get('sort_key', 'y'))
+        self.train_data, _ = self.reader.load(self.dataset['train_file'], self.feat2index, self.config_params['batchsz'], shuffle=True, sort_key=self.primary_key)
         self.valid_data, _ = self.reader.load(self.dataset['valid_file'], self.feat2index, self.config_params['batchsz'], sort_key=None)
         self.test_data, self.txts = self.reader.load(self.dataset['test_file'], self.feat2index, self.config_params.get('test_batchsz', 1), shuffle=False, sort_key=None)
 
@@ -414,8 +405,7 @@ class EncoderDecoderTask(Task):
                 self.config_params['preproc']['show_ex'] = baseline.dy.show_examples_dynet
             else:
                 import baseline.tf.seq2seq as seq2seq
-                sort_key = self.config_params['loader'].get('src_sort_key', 'src')
-                self.config_params['preproc']['show_ex'] = baseline.tf.create_show_examples_tf(sort_key)
+                self.config_params['preproc']['show_ex'] = baseline.tf.create_show_examples_tf(self.primary_key)
                 from mead.tf.exporters import Seq2SeqTensorFlowExporter
                 self.ExporterType = Seq2SeqTensorFlowExporter
 
@@ -449,11 +439,10 @@ class EncoderDecoderTask(Task):
         self.feat2tgt = self.feat2tgt['tgt']
 
     def _load_dataset(self):
-        sort_key = self.config_params['loader'].get('src_sort_key', 'src')
         self.train_data = self.reader.load(self.dataset['train_file'],
                                            self.feat2src, self.feat2tgt,
                                            self.config_params['batchsz'],
-                                           shuffle=True, sort_key=sort_key)
+                                           shuffle=True, sort_key=self.primary_key)
         self.valid_data = self.reader.load(self.dataset['valid_file'],
                                            self.feat2src,
                                            self.feat2tgt,
@@ -469,7 +458,7 @@ class EncoderDecoderTask(Task):
         self.config_params['model']['EOS'] = self.feat2tgt['<EOS>']
         self.config_params['model']["unif"] = self.config_params["unif"]
         model = self.config_params['model']
-        lengths_key = model.get('src_lengths_key', self.config_params.get('sort_key', 'src'))
+        lengths_key = model.get('src_lengths_key', self.primary_key)
         if lengths_key is not None:
             if not lengths_key.endswith('_lengths'):
                 lengths_key = '{}_lengths'.format(lengths_key)
@@ -485,8 +474,7 @@ class EncoderDecoderTask(Task):
             print('Showing examples')
             preproc = self.config_params['preproc']
             show_ex_fn = preproc['show_ex']
-            vocab_name = self.config_params['loader'].get('src_sort_key', 'src')
-            rlut1 = baseline.revlut(self.feat2src[vocab_name])
+            rlut1 = baseline.revlut(self.feat2src[self.primary_key])
             rlut2 = baseline.revlut(self.feat2tgt)
             self.config_params['train']['after_train_fn'] = lambda model: show_ex_fn(model,
                                                                                      self.valid_data, rlut1, rlut2,
@@ -545,7 +533,7 @@ class LanguageModelingTask(Task):
         save_vocabs(self.get_basedir(), self.feat2index)
 
     def _load_dataset(self):
-        tgt_key = self.config_params['loader'].get('tgt_key', 'x')
+        tgt_key = self.config_params['loader'].get('tgt_key', self.primary_key)
 
         self.train_data = self.reader.load(self.dataset['train_file'], self.feat2index, self.config_params['batchsz'], tgt_key=tgt_key)
         self.valid_data = self.reader.load(self.dataset['valid_file'], self.feat2index, self.config_params['batchsz'], tgt_key=tgt_key)
@@ -556,7 +544,7 @@ class LanguageModelingTask(Task):
         model = self.config_params['model']
         model['unif'] = self.config_params['unif']
         model['batchsz'] = self.config_params['batchsz']
-        model['tgt_key'] = self.config_params['loader'].get('tgt_key', 'x')
+        model['tgt_key'] = self.config_params['loader'].get('tgt_key', self.primary_key)
         return self.task.create_model(self.embeddings, **model)
 
     @staticmethod
