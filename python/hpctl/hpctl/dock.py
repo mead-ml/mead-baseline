@@ -148,6 +148,8 @@ class DockerRunner(Runner):
         # Dump everything the docker container outputs to a file.
         with open(os.path.join(self.loc, 'stdout'), 'wb') as f:
             f.write(self.p.logs())
+        self.p.remove()
+        self.p = None
 
     @property
     def is_done(self):
@@ -188,26 +190,8 @@ class DockerBackend(LocalGPUBackend):
         :param config: dict, the config for the model.
         :param exp: hpctl.experiment.Experiment, The experiment data object.
         """
-        for job in self.jobs:
-            # update label -> job mapping.
-            if job.is_done:
-                to_del = None
-                for l, cand_job in self.label_to_job.items():
-                    if job == cand_job:
-                        to_del = l
-                if to_del is not None:
-                    del self.label_to_job[l]
-
-                # Free my gpus
-                for gpu, cand_job in self.gpus_to_job.items():
-                    if job == cand_job:
-                        self.gpus_to_job[gpu] = None
-                job.join()
-                self.jobs.remove(job)
-
-        for gpu, job in self.gpus_to_job.items():
-            if job is None:
-                break
+        self._free_resources()
+        gpu = self._request_gpus(1)
 
         job = DockerRunner()
         job.start(
@@ -220,8 +204,8 @@ class DockerBackend(LocalGPUBackend):
             datasets=datasets,
             embeddings=embeddings,
             task_name=task_name,
-            gpus=[str(gpu)]
+            gpus=gpu
         )
         self.label_to_job[label] = job
-        self.gpus_to_job[gpu] = job
+        self._reserve_gpus(gpu, job)
         self.jobs.append(job)

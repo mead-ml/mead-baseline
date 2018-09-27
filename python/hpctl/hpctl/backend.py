@@ -87,6 +87,38 @@ class LocalGPUBackend(Backend):
     def launch(self, *args, **kwargs):
         pass
 
+    def _free_resources(self):
+        for job in self.jobs:
+            # Update label -> job mapping
+            if job.is_done:
+                to_del = None
+                for l, cand_job in self.label_to_job.items():
+                    if job == cand_job:
+                        to_del = l
+                if to_del is not None:
+                    del self.label_to_job[to_del]
+
+            # Free gpus
+            for gpu, cand_job in self.gpus_to_job.items():
+                if job == cand_job:
+                    self.gpus_to_job[gpu] = None
+
+            job.join()
+            self.jobs.remove(job)
+
+    def _request_gpus(self, count):
+        gpus = []
+        for gpu, job in self.gpus_to_job.items():
+            if job is None:
+                gpus.append(str(gpu))
+                if len(gpus) == count:
+                    return gpus
+        return
+
+    def _reserve_gpus(self, gpus, job):
+        for gpu in gpus:
+            self.gpus_to_job[gpu] = job
+
     def any_done(self):
         return (
             any(map(lambda x: x.is_done, self.jobs)) or

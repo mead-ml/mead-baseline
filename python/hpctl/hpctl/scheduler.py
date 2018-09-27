@@ -1,5 +1,7 @@
+from __future__ import absolute_import, division, print_function, unicode_literals
+from six.moves import reduce
+
 import operator
-from functools import reduce
 from collections import defaultdict, deque
 
 
@@ -8,16 +10,33 @@ class Scheduler(object):
         super(Scheduler, self).__init__()
 
     def add(self, label, job):
+        """Add a job to be scheduled.
+
+        :param label: Label, The label of the job.
+        :param job: Any, This is the data used to run a job.
+        """
         pass
 
     def get(self):
+        """Get a job to run.
+
+        :returns: tuple(Label, Any)
+            The Label for the job and the data needed to run the job.
+        """
         pass
 
     def __len__(self):
+        """The number of jobs waiting."""
         pass
 
 
 class RoundRobinScheduler(Scheduler):
+    """A round robin scheduler.
+
+    The round robin is keyed on the experiment hash so that a single experiment
+    cannot hog all the resources. It doesn't prempt or anything like a scheduler
+    from an OS course.
+    """
     def __init__(self):
         super(RoundRobinScheduler, self).__init__()
         self.job_queue = defaultdict(deque)

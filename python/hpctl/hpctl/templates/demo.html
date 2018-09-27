@@ -2,8 +2,8 @@
 
     <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
     <script type=text/javascript>
-      $SCRIPT_ROOT = {{ request.script_root|tojson|safe }};
-      $BASE = "/hpctl/v1"
+        $SCRIPT_ROOT = {{ request.script_root|tojson|safe }};
+        $BASE = "/hpctl/v1"
     </script>
 
 
@@ -29,6 +29,8 @@
                     var button = '<button class="kill" id="kill-' + i + '"data-exp="' + data.exp[i] + '" data-sha1="' + data.sha1[i] + '" data-name="' + data.names[i] + '" onClick="killJob(this.id)">Kill</button>';
 					$("#labels").append(button);
                     var button = '<button class="config" id="config-' + i + '"data-exp="' + data.exp[i] + '" data-sha1="' + data.sha1[i] + '" data-name="' + data.names[i] + '" onClick="getConfig(this.id)">Config</button>';
+					$("#labels").append(button);
+                    var button = '<button class="xpctl" id="xpctl-' + i + '"data-exp="' + data.exp[i] + '" data-sha1="' + data.sha1[i] + '" data-name="' + data.names[i] + '" onClick="postXpctl(this.id)">xpctl</button>'
 					$("#labels").append(button);
                 }
             });
@@ -62,6 +64,19 @@
 				contentType: "application/json"
 			});
 		}
+
+        function postXpctl(id) {
+            var button = document.getElementById(id);
+            var exp = button.dataset.exp;
+            var sha1 = button.dataset.sha1;
+            var name = button.dataset.name;
+            $.ajax({
+                type: "POST",
+                url: $SCRIPT_ROOT + $BASE + "/xpctl/putresult/" + exp + "/" + sha1 + "/" + name,
+                dataType: "json",
+                contentType: "application/json"
+            });
+        }
 
 
 

@@ -65,6 +65,10 @@ class FlaskFrontend(Frontend):
         self.results.add_experiment(json)
         return jsonify({"command": "add"})
 
+    def put_result(self, exp, sha1, name):
+        # Look in the dir ROOT/exp/sha1/name and call the xpctl putresult
+        return jsonify({"command": "putresults", "status": "success"})
+
     def get_state(self, exp, sha1, name):
         label = Label(exp, sha1, name)
         # Using color to help handle strings.
@@ -173,7 +177,10 @@ def init_app(app, fe, base_url='/hpctl/v1'):
     app.route('{}/launch'.format(base_url), methods={'POST'})(fe.launch)
     # General commands (Currently unused)
     app.route('{}/command'.format(base_url), methods={'POST'})(fe.command)
+    # Add an experiment config to look at later
     app.route('{}/experiment/add'.format(base_url), methods={'POST'})(fe.add_experiment)
+    # Store the results of a job with xpctl
+    app.route('{}/xpctl/putresult/<exp>/<sha1>/<name>'.format(base_url), methods={'POST'})(fe.put_result)
 
     ## Information
     # Get the state of this run

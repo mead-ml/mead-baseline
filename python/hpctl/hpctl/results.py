@@ -338,6 +338,9 @@ class LocalResults(Results):
         return labels, vals, idxs
 
     def get_labels(self, exp_hash):
+        for x in self.results[exp_hash]:
+            if 'time_stamp' not in self.results[exp_hash][x]:
+                self.results[exp_hash][x]['time_stamp'] = six.MAXSIZE
         labels = [(x, self.results[exp_hash][x]['time_stamp']) for x in self.results[exp_hash]]
         labels = sorted(labels, key=lambda x: x[1])
         return [l[0] for l in labels]
