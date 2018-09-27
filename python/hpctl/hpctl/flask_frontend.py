@@ -60,6 +60,10 @@ class FlaskFrontend(Frontend):
         self.queue.put(json)
         return jsonify({"command": "success"})
 
+    def add_experiment(self):
+        json = request.get_json()
+        self.results.add_experiment(json)
+
     def get_state(self, exp, sha1, name):
         label = Label(exp, sha1, name)
         # Using color to help handle strings.
@@ -168,6 +172,7 @@ def init_app(app, fe, base_url='/hpctl/v1'):
     app.route('{}/launch'.format(base_url), methods={'POST'})(fe.launch)
     # General commands (Currently unused)
     app.route('{}/command'.format(base_url), methods={'POST'})(fe.command)
+    app.route('{}/experiment/add'.format(base_url), methods={'POST'})(fe.add_experiment)
 
     ## Information
     # Get the state of this run

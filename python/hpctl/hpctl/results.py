@@ -11,8 +11,6 @@ from enum import Enum
 from pprint import pformat
 from collections import defaultdict
 from multiprocessing.managers import BaseManager
-import requests
-import cachetools
 import numpy as np
 from baseline.utils import export as exporter
 from baseline.utils import hash_config
@@ -394,60 +392,6 @@ class ResultsManager(BaseManager):
 ResultsManager.register(str('Results'), Results)
 
 
-def _get(url):
-    r = requests.get(url)
-    if r.status_code != 200:
-        raise Exception("Failed GET on {}".format(url))
-    return r.json()
-
-
-class RemoteResults(BaseResults):
-    def __init__(self, host='localhost', port=5000, cache_time=15, **kwargs):
-        super(RemoteResults, self).__init__()
-        self.url = 'http://{host}:{port}/hpctl/v1'.format(host=host, port=port)
-        cache = cachetools.TTLCache(maxsize=1000, ttl=cache_time)
-        self.get = cachetools.cached(cache)(_get)
-
-    def get_experiments(self):
-        resp = self.get("{url}/experiments".format(url=self.url))
-        return resp['experiments']
-
-    def get_labels(self, exp_hash):
-        resp = self.get("{url}/labels/{exp}".format(url=self.url, exp=exp_hash))
-        labels = []
-        for res in resp:
-            labels.append(Label(exp_hash, res['sha1'], res['name']))
-        return labels
-
-    def get_state(self, label):
-        resp = self.get("{url}/state/{exp}/{sha1}/{name}".format(url=self.url, **label))
-        return resp['state']
-
-    def get_recent(self, label, phase, metric):
-        resp = self.get(
-            "{url}/result/recent/{exp}/{sha1}/{name}/{phase}/{metric}".format(
-                url = self.url, phase=phase, metric=metric, **label
-            )
-        )
-        return resp['value']
-
-    def find_best(self, exp, phase, metric):
-        resp = self.get(
-            "{url}/result/best/{exp}/{phase}/{metric}".format(
-                url = self.url, exp=exp, phase=phase, metric=metric
-            )
-        )
-        return Label.parse(resp['label']), resp['value'], resp['step']
-
-    def get_best_per_label(self, exp, phase, metric):
-        resp = self.get(
-            "{url}/results/best/{exp}/{phase}/{metric}".format(
-                url=self.url, exp=exp, phase=phase, metric=metric
-            )
-        )
-        return [Label.parse(x) for x in resp['labels']], resp['values'], resp['steps']
-
-
 def search(key, table, prefix=True):
     """Search for `key` in `table`.
 
@@ -475,5 +419,6 @@ def search(key, table, prefix=True):
 def get_results(results_config):
     kind = results_config.pop('type', 'local')
     if kind == 'remote':
+        from hpctl.remote import RemoteResults
         return RemoteResults(**results_config)
     return Results.create(**results_config)

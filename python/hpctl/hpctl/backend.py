@@ -1,10 +1,7 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 import os
-import requests
 from baseline.utils import export as exporter
-from hpctl.utils import Label
-from hpctl.results import States
 
 
 __all__ = []
@@ -30,6 +27,7 @@ def get_backend(backend_config):
         Be = DockerBackend
 
     if backend_type == "remote":
+        from hpctl.remote import RemoteBackend
         Be = RemoteBackend
 
     return Be(**backend_config)
@@ -75,41 +73,6 @@ class Backend(object):
         pass
 
 
-class RemoteBackend(Backend):
-    def __init__(self, host, port, **kwargs):
-        super(RemoteBackend, self).__init__()
-        self.host = host
-        self.port = int(port)
-        self.labels = []
-
-    def any_done(self):
-        return True
-
-    def all_done(self):
-        # Track all label you personally launched and check if they are done.
-        undone = []
-        for label in self.labels:
-            r = requests.get(
-                "http://{host}:{port}/hpctl/v1/state/{exp}/{sha1}/{name}".format(
-                    host=self.host, port=self.port, **label
-                )
-            )
-            if r.status_code != 200:
-                return False
-            if r.json()['state'] != str(States.DONE):
-                undone.append(label)
-        self.labels = undone
-        return not self.labels
-
-    def launch(self, **kwargs):
-        kwargs['command'] = 'launch'
-        self.labels.append(kwargs['label'])
-        kwargs['label'] = str(kwargs['label'])
-        r = requests.post("http://{}:{}/hpctl/v1/launch".format(self.host, self.port), json=kwargs)
-        if r.status_code != 200:
-            raise Exception
-
-
 class LocalGPUBackend(Backend):
     def __init__(self, real_gpus=None, **kwargs):
         super(LocalGPUBackend, self).__init__()
@@ -134,7 +97,10 @@ class LocalGPUBackend(Backend):
         return all(map(lambda x: x.is_done, self.jobs))
 
     def kill(self, label, results):
-        pass
+        if label not in self.label_to_job:
+            return
+        to_kill = self.label_to_job[label]
+        to_kill.stop()
 
     def __del__(self):
         for job in self.jobs:

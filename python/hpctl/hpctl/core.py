@@ -151,6 +151,7 @@ def search(**kwargs):
     backend_config, hp_logs, results_config = _remote_monkey_patch(backend_config, hp_logs, {})
 
     results = get_results(results_config)
+    results.add_experiment(mead_config)
 
     backend = get_backend(backend_config)
 
@@ -238,7 +239,9 @@ def run_forever(results, backend, scheduler, frontend, logs):
 def process_command(cmd, backend, frontend, scheduler, results):
     if cmd is not None and isinstance(cmd, dict):
         if cmd['command'] == 'kill':
+            print(cmd)
             backend.kill(cmd['label'], results)
+            results.set_killed(cmd['label'])
             frontend.update()
         if cmd['command'] == 'launch':
             exp_config = cmd.pop('experiment_config', None)
