@@ -203,7 +203,7 @@ def create_embeddings(dsz, name, known_vocab=None, **kwargs):
     create_fn = BASELINE_EMBEDDING_MODELS.get(embed_type)
 
     if create_fn is not None:
-        model = RandomInitVecModel(dsz, known_vocab=known_vocab, unif_weight=kwargs.pop('unif', 0), **kwargs)
+        model = RandomInitVecModel(dsz, known_vocab=known_vocab, unif_weight=kwargs.pop('unif', 0))
         return {'embeddings': create_fn(model, name, **kwargs), 'vocab': model.get_vocab()}
 
     print('loading user module')

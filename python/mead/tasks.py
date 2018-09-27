@@ -174,25 +174,26 @@ class Task(object):
             name = feature['name']
             embed_label = embeddings_section.get('label', None)
             embed_type = embeddings_section.get('type', 'default')
+            embeddings_section['unif'] = embeddings_section.get('unif', unif)
+            embeddings_section['keep_unused'] = embeddings_section.get('keep_unused', keep_unused)
             if embed_label is not None:
+                # Allow local overrides to uniform initializer
+
                 embed_file = embeddings_set[embed_label]['file']
                 embed_dsz = embeddings_set[embed_label]['dsz']
                 embed_sha1 = embeddings_set[embed_label].get('sha1', None)
-                embed_use_mmap = embeddings_section.get('use_mmap', False)
                 embed_file = EmbeddingDownloader(embed_file, embed_dsz, embed_sha1, self.data_download_cache).download()
                 embedding_bundle = embeddings.load_embeddings(embed_file,
                                                               name,
                                                               known_vocab=vocabs[name],
                                                               embed_type=embed_type,
-                                                              unif=unif,
-                                                              use_mmap=embed_use_mmap,
-                                                              keep_unused=keep_unused)
+                                                              **embeddings_section)
 
                 embeddings_map[name] = embedding_bundle['embeddings']
                 out_vocabs[name] = embedding_bundle['vocab']
             else:
-                dsz = embeddings_section['dsz']
-                embedding_bundle = embeddings.create_embeddings(dsz, name, vocabs[name], unif=unif, embed_type=embed_type)
+                dsz = embeddings_section.pop('dsz')
+                embedding_bundle = embeddings.create_embeddings(dsz, name, vocabs[name], embed_type=embed_type, **embeddings_section)
                 embeddings_map[name] = embedding_bundle['embeddings']
                 out_vocabs[name] = embedding_bundle['vocab']
 

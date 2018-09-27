@@ -45,14 +45,17 @@
 		"mxlen": 38,
 		"mxwlen": 40
 	    },
-	    "embeddings": { "dsz": 30, "type": "char-conv" }
+	    "embeddings": {
+		"dsz": 30,
+		"wsz": 30,
+		"type": "char-conv",
+		"cfiltsz": [1,2,3,4,5,7]
+	    }
 	}
     ],
     "model": {
         "model_type": "default",
-        "cfiltsz": [1,2,3,4,5,7],
         "hsz": 200,
-        "wsz": 30,
         "dropout": 0.5,
         "rnntype": "blstm",
         "layers": 1,
