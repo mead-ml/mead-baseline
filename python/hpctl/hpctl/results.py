@@ -39,6 +39,176 @@ class States(Enum):
 
 @export
 class Results(object):
+    """An object to track the results of various runs."""
+    def __init__(self):
+        super(Results, self).__init__()
+
+    def add_experiment(self, exp_config):
+        """Add an experiment config to look up later.
+
+        :param exp_config: dict, The experiment config (mead config plus
+            sampling directives.
+)
+        """
+        pass
+
+    def get_experiment_config(self, exp_hash):
+        """Look up the experiment config from the hash.
+
+        :param exp_hash: str, The hash of the config.
+
+        :returns: dict, The experiment config.
+        """
+        pass
+
+    @classmethod
+    def create(cls, **kwargs):
+        """Create the results object."""
+        pass
+
+    def save(self, file_name=None):
+        """Persist the results."""
+        pass
+
+    def insert(self, label, config):
+        """Add a new entry to the results
+
+        :param label: hpctl.utils.Label, The label of the config.
+        :param config: dict, The config.
+        """
+        pass
+
+    def update(self, label, message):
+        """Update entry with a new log info.
+
+        :param label: hpctl.utils.Label, The label for the log record.
+        :param message: dict, The log info.
+        """
+        pass
+
+    def get_config(self, label):
+        """Get the config from the sha1.
+
+        :param label: hpctl.utils.Label, The label to look up.
+
+        :returns:
+            dict, The config.
+        """
+        pass
+
+    def get_recent(self, label, phase, metric):
+        """Get the most recent entry for the somethings
+
+        :param label: hpctl.utils.Label, The config label to look up.
+        :param phase: str, The phase of training to look at.
+        :param metric: str, The metric to look for.
+
+        :returns:
+            The last value in the column or 0.0
+        """
+        pass
+
+    def get_best(self, label, phase, metric):
+        """Get the best performance of a given label for a given metric.
+
+        :param label: hpctl.utils.Label, The label of the model.
+        :param phase: str, The name of the phase.
+        :param metric: str, The metric to look up.
+
+        :returns: tuple (float, int)
+            [0]: The value the best model achieved.
+            [1]: The tick value the best results was got at.
+        """
+        pass
+
+    def find_best(self, exp_hash, phase, metric):
+        """Get the best performance for a given metric.
+
+        Note: The point of this is to compare a metric across jobs
+
+        :param exp_hash: str, The hash of the experiment this is from.
+        :param phase: str, The name of the phase.
+        :param metric: str, The metric to look up.
+
+        :returns: tuple (str, float, int)
+            [0]: The sha1 label of the best performing model.
+            [1]: The value the best model achieved.
+            [2]: The tick value the best results was got at.
+        """
+        pass
+
+    def get_best_per_label(self, exp_hash, phase, metric):
+        """Get the best performance for a given metric across all labels.
+
+        Note: The point of this is to compare a metric across steps for each job.
+
+        :param exp_hash: str, The hash of the experiment this is from.
+        :param phase: str, The name of the phase.
+        :param metric: str, The metric to look up.
+
+        :returns: tuple (List[str], List[float], List[int])
+            [0]: The sha1 label of the best performing model.
+            [1]: The value the best model achieved.
+            [2]: The tick value the best results was got at.
+        """
+        pass
+
+    def get_labels(self, exp_hash):
+        """Get all the labels in the data results.
+
+        :param exp_hash: str, The hash of the experiment this is from.
+
+        :returns:
+            List[str]: The list of labels sorted by the time they started.
+        """
+        pass
+
+    def get_experiments(self):
+        """Get a list of all hashes for the tracked experiments."""
+        pass
+
+    def get_state(self, label):
+        """Get the job state based on the label.
+
+        :param label: hpctl.utils.Label, The sha1 of the config.
+
+        :returns:
+            hpctl.results.States, The state of the job
+        """
+        pass
+
+    def set_state(self, label, state):
+        """Set the state of a job.
+
+        :param label: hpctl.utils.Label, The label to set the state on.
+        :param state: hpctl.results.States, The sate to set for the job.
+        """
+        pass
+
+    def set_killed(self, label):
+        """Set a job to killed.
+
+        :param label: hpctl.utils.Label, The label to set as killed.
+        """
+        pass
+
+    def set_waiting(self, label):
+        """Set a job to waiting.
+
+        :param label: hpctl.utils.Label, The label to set as killed.
+        """
+        pass
+
+    def set_running(self, label):
+        """Set a job to running.
+
+        :param label: hpctl.utils.Label, The label to set as killed.
+        """
+        pass
+
+
+@export
+class LocalResults(Results):
     """An object that aggregates results from jobs.
 
     DataStructure:
@@ -59,7 +229,7 @@ class Results(object):
     than tracking the best performance in the frontend.
     """
     def __init__(self):
-        super(Results, self).__init__()
+        super(LocalResults, self).__init__()
         self.results = defaultdict(dddd_list)
         self.label_to_config = {}
         self.label_to_name = defaultdict(list)
@@ -111,19 +281,12 @@ class Results(object):
     def save(self, file_name="results"):
         """Persist the results.
 
-        :param exp: str, The name of the experiment.
-        :param mead_hash: str, The name of the results.
+        :param file_name: str, The name for the save file.
         """
         file_name = file_name + ".p"
         pickle.dump(self, open(file_name, 'wb'))
 
     def insert(self, label, config):
-        """Add a new entry to the results.
-
-        :param label: str, The sha1 of the config.
-        :param human: str, The human name of the config.
-        :param config: dict, The config.
-        """
         self.label_to_config[label] = config
         self.results[label.exp][label]['time_stamp'] = time.time()
         self.set_waiting(label)
@@ -131,11 +294,6 @@ class Results(object):
         self.name_to_label[label.name].append(label.sha1)
 
     def update(self, label, message):
-        """Update entry with a new log info.
-
-        :param label: str, The label for the log (a sha1 of a config).
-        :param message: dict, The log info.
-        """
         phase = message.pop('phase')
         if phase == 'Test':
             self.results[label.exp][label]['state'] = States.DONE
@@ -143,40 +301,14 @@ class Results(object):
             self.results[label.exp][label][phase][k].append(v)
 
     def get_config(self, label):
-        """Get the config from the sha1.
-
-        :param label: str, The sha1
-
-        :returns:
-            dict, The config.
-        """
         return search(label, self.label_to_config, prefix=False)
 
     def get_recent(self, label, phase, metric):
-        """Get the most recent entry for the somethings
-
-        :param label: str, The config label to look up.
-        :param phase: str, The phase of training to look at.
-        :param metric: str, The metric to look for.
-
-        :returns:
-            The last value in the column or 0.0
-        """
         res = self.results[label.exp][label][phase][metric]
         res = res[-1] if res else 0.0
         return res
 
     def get_best(self, label, phase, metric):
-        """Get the best performance of a given label for a given metric.
-
-        :param label: str, The label of the model.
-        :param phase: str, The name of the phase.
-        :param metric: str, The metric to look up.
-
-        :returns: tuple (float, int)
-            [0]: The value the best model achieved.
-            [1]: The tick value the best results was got at.
-        """
         data = self.results[label.exp][label][phase][metric]
         if not data:
             return 0.0, 0.0
@@ -185,16 +317,6 @@ class Results(object):
         return val, idx
 
     def find_best(self, exp_hash, phase, metric):
-        """Get the best performance for a given metric.
-
-        :param phase: str, The name of the phase.
-        :param metric: str, The metric to look up.
-
-        :returns: tuple (str, float, int)
-            [0]: The sha1 label of the best performing model.
-            [1]: The value the best model achieved.
-            [2]: The tick value the best results was got at.
-        """
         best_label = None
         best_val = 0
         best_idx = None
@@ -211,16 +333,6 @@ class Results(object):
         return best_label, best_val, best_idx
 
     def get_best_per_label(self, exp_hash, phase, metric):
-        """Get the best performance for a given metric across all labels.
-
-        :param phase: str, The name of the phase.
-        :param metric: str, The metric to look up.
-
-        :returns: tuple (List[str], List[float], List[int])
-            [0]: The sha1 label of the best performing model.
-            [1]: The value the best model achieved.
-            [2]: The tick value the best results was got at.
-        """
         labels = self.get_labels(exp_hash)
         vals = []
         idxs = []
@@ -231,11 +343,6 @@ class Results(object):
         return labels, vals, idxs
 
     def get_labels(self, exp_hash):
-        """Get all the labels in the data results.
-
-        :returns:
-            List[str]: The list of labels sorted by the time they started.
-        """
         labels = [(x, self.results[exp_hash][x]['time_stamp']) for x in self.results[exp_hash]]
         labels = sorted(labels, key=lambda x: x[1])
         return [l[0] for l in labels]
@@ -285,31 +392,15 @@ class Results(object):
         return search(label, self.name_to_label, prefix=True)
 
     def get_state(self, label):
-        """Get the job state based on the label.
-
-        :param label: hpctl.utils.Label, The sha1 of the config.
-
-        :returns:
-            str, The unicode of the status.
-        """
         state = self.results[label.exp][label]['state']
         if state not in States:
             return States.UNKNOWN
         return state
 
     def set_state(self, label, state):
-        """Set the state of a job.
-
-        :param label: hpctl.utils.Label, The label to set the state on.
-        :param state: hpctl.results.States, The sate to set for the job.
-        """
         self.results[label.exp][label]['state'] = state
 
     def set_killed(self, label):
-        """Set a job to killed.
-
-        :param label: hpctl.utils.Label, The label to set as killed.
-        """
         self.set_state(label, States.KILLED)
 
     def set_waiting(self, label):
@@ -322,68 +413,13 @@ class Results(object):
         return pformat(self.results)
 
     def __del__(self):
+        """When a results object is closed set all running and waiting to killed."""
         for exp in self.results:
             for label in self.results[exp]:
                 state = self.get_state(label)
                 if state == States.RUNNING or state == States.WAITING:
                     self.set_killed(label)
 
-
-class BaseResults(object):
-    def __init__(self):
-        super(BaseResults, self).__init__()
-
-    @classmethod
-    def create(cls, **kwargs):
-        pass
-
-    def save(self, file_name=None):
-        pass
-
-    def insert(self, label, config):
-        pass
-
-    def update(self, label, message):
-        pass
-
-    def get_config(self, label):
-        pass
-
-    def get_recent(self, label, phase, metric):
-        pass
-
-    def get_best(self, label, phase, metric):
-        pass
-
-    def find_best(self, exp_hash, phase, metric):
-        pass
-
-    def get_best_per_label(self, exp_hash, phase, metric):
-        pass
-
-    def get_labels(self, exp_hash):
-        pass
-
-    def get_experiments(self):
-        pass
-
-    def get_state(self, label):
-        pass
-
-    def set_state(self, label, state):
-        pass
-
-    def set_killed(self, label):
-        pass
-
-    def set_waiting(self, label):
-        pass
-
-    def set_running(self, label):
-        pass
-
-    def command(self):
-        pass
 
 # Create the results as a multiprocessing manager so that we can share the
 # results across processes.
@@ -421,4 +457,4 @@ def get_results(results_config):
     if kind == 'remote':
         from hpctl.remote import RemoteResults
         return RemoteResults(**results_config)
-    return Results.create(**results_config)
+    return LocalResults.create(**results_config)

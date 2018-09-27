@@ -4,9 +4,8 @@ import requests
 import cachetools
 from baseline.utils import export as exporter
 from hpctl.utils import Label
-from hpctl.frontend import States
 from hpctl.backend import Backend
-from hpctl.results import BaseResults
+from hpctl.results import Results, States
 
 
 __all__ = []
@@ -52,7 +51,8 @@ class RemoteBackend(Backend):
 
 
 @export
-class RemoteResults(BaseResults):
+class RemoteResults(Results):
+    """Interact with the results object via the flask frontend."""
     def __init__(self, host='localhost', port=5000, cache_time=15, **kwargs):
         super(RemoteResults, self).__init__()
         self.url = 'http://{host}:{port}/hpctl/v1'.format(host=host, port=port)
