@@ -63,6 +63,7 @@ class FlaskFrontend(Frontend):
     def add_experiment(self):
         json = request.get_json()
         self.results.add_experiment(json)
+        return jsonify({"command": "add"})
 
     def get_state(self, exp, sha1, name):
         label = Label(exp, sha1, name)
@@ -91,7 +92,7 @@ class FlaskFrontend(Frontend):
         label = Label(exp, sha1, name)
         val, idx = self.results.get_best(label, phase, metric)
         res = {
-            'label': label,
+            'label': str(abel),
             'phase': phase,
             'metric': metric,
             'value': val,

@@ -256,17 +256,12 @@ class LocalResults(Results):
         manager = ResultsManager()
         manager.start()
         if file_name is None:
-            return manager.Results()
+            return manager.LocalResults()
         file_name = file_name + '.p'
         if not os.path.exists(file_name):
-            return manager.Results()
+            return manager.LocalResults()
         s = pickle.load(open(file_name, 'rb'))
-        for exp in s.results.values():
-            for v in exp.values():
-                # If you are loading a results and a job was running is dead now.
-                if v['state'] is States.RUNNING:
-                    v['state'] = States.KILLED
-        results = manager.Results()
+        results = manager.LocalResults()
         results.restore(s)
         return results
 
@@ -425,7 +420,7 @@ class LocalResults(Results):
 # results across processes.
 class ResultsManager(BaseManager):
     pass
-ResultsManager.register(str('Results'), Results)
+ResultsManager.register(str('LocalResults'), LocalResults)
 
 
 def search(key, table, prefix=True):

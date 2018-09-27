@@ -239,7 +239,6 @@ def run_forever(results, backend, scheduler, frontend, logs):
 def process_command(cmd, backend, frontend, scheduler, results):
     if cmd is not None and isinstance(cmd, dict):
         if cmd['command'] == 'kill':
-            print(cmd)
             backend.kill(cmd['label'], results)
             results.set_killed(cmd['label'])
             frontend.update()
