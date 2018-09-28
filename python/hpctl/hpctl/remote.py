@@ -1,4 +1,5 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
+import six
 
 import requests
 import cachetools
@@ -37,6 +38,7 @@ class RemoteBackend(Backend):
             state = _get(
                 "{url}/state/{exp}/{sha1}/{name}".format(url=self.url, **label)
             )['state']
+            state = state.encode('utf-8') if six.PY2 else state
             if state != str(States.DONE) and state != str(States.KILLED):
                 undone.append(label)
         self.labels = undone
@@ -79,7 +81,8 @@ class RemoteResults(Results):
 
     def get_state(self, label):
         resp = self.get("{url}/state/{exp}/{sha1}/{name}".format(url=self.url, **label))
-        return resp['state']
+        state = resp['state']
+        return state.encode('utf-8') if six.PY2 else state
 
     def get_recent(self, label, phase, metric):
         resp = self.get(
