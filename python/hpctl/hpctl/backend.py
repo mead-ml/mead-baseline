@@ -134,6 +134,8 @@ class LocalGPUBackend(Backend):
             return
         to_kill = self.label_to_job[label]
         to_kill.stop()
+        to_kill.join()
+        self._free_resources()
 
     def __del__(self):
         for job in self.jobs:

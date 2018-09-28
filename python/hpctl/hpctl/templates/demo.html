@@ -30,8 +30,13 @@
 					$("#labels").append(button);
                     var button = '<button class="config" id="config-' + i + '"data-exp="' + data.exp[i] + '" data-sha1="' + data.sha1[i] + '" data-name="' + data.names[i] + '" onClick="getConfig(this.id)">Config</button>';
 					$("#labels").append(button);
-                    var button = '<button class="xpctl" id="xpctl-' + i + '"data-exp="' + data.exp[i] + '" data-sha1="' + data.sha1[i] + '" data-name="' + data.names[i] + '" onClick="postXpctl(this.id)">xpctl</button>'
-					$("#labels").append(button);
+                    if (data.status[i] === "\u2714") {
+                        var button = '<button class="xpctl" id="xpctl-' + i + '"data-exp="' + data.exp[i] + '" data-sha1="' + data.sha1[i] + '" data-name="' + data.names[i] + '" onClick="postXpctl(this.id)">xpctl</button>'
+					    $("#labels").append(button);
+                    } else {
+                        var button = '<button class="xpctl" id="xpctl-' + i + '" disabled>xpctl</button>'
+					    $("#labels").append(button);
+                    }
                 }
             });
         }
