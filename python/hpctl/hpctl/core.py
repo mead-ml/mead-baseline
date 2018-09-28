@@ -150,6 +150,10 @@ def search(**kwargs):
     set_root(hp_settings)
     backend_config, hp_logs, results_config = _remote_monkey_patch(backend_config, hp_logs, {})
 
+    from hpctl.report import XPCTL
+    a = {'dbhost': 'localhost', 'dbport': 27017, 'user': '', 'passwd': ''}
+    xpctl = XPCTL(**a)
+
     results = get_results(results_config)
     results.add_experiment(mead_config)
 
@@ -165,6 +169,7 @@ def search(**kwargs):
     logs = get_log_server(hp_logs)
 
     frontend = get_frontend(frontend_config, results)
+    frontend.xpctl = xpctl
 
     num_iters = int(kwargs.get('num_iters') if kwargs.get('num_iters') is not None else hp_config.get('num_iters', 3))
 

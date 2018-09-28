@@ -158,6 +158,9 @@ class Console(Frontend):
         best, _, _ = self.results.find_best(self.experiment_hash, 'Valid', self.dev)
         test = self.results.get_recent(best, 'Test', self.test)
         print("\n{} had a test performance of {} on {}".format(best.name, test, self.test))
+        resp = input("Do you want to save this model with xpctl? (y/N) ")
+        if resp in {'y', 'Y'}:
+            self.xpctl.put_result(best)
 
     def command(self):
         """Function that gets any user inputs.
