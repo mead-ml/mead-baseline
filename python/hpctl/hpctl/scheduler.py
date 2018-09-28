@@ -29,6 +29,10 @@ class Scheduler(object):
         """The number of jobs waiting."""
         pass
 
+    def remove(self, label):
+        """Remove the job with this label."""
+        pass
+
 
 class RoundRobinScheduler(Scheduler):
     """A round robin scheduler.
@@ -44,11 +48,11 @@ class RoundRobinScheduler(Scheduler):
         self.rr = deque()
 
     def add(self, label, job):
-        self.job_queue[label].append(job)
-        if label in self.labels:
+        self.job_queue[label.exp].append((label, job))
+        if label.exp in self.labels:
             return
-        self.rr.append(label)
-        self.labels.add(label)
+        self.rr.append(label.exp)
+        self.labels.add(label.exp)
 
     def get(self):
         if not self.rr:
@@ -61,6 +65,21 @@ class RoundRobinScheduler(Scheduler):
             return label, job
         self.rr.append(label)
         return label, job
+
+    def remove(self, label):
+        if label.exp not in self.labels:
+            return
+        job_queue = self.job_queue[label.exp]
+        job = None
+        for (l, j) in job_queue:
+            if l == label:
+                job = j
+        if job is None:
+            return
+        job_queue.remove((label, job))
+        if not job_queue:
+            self.labels.remove(label.exp)
+            self.rr.remove(label.exp)
 
     def __len__(self):
         return reduce(operator.add, map(len, self.job_queue.values()))

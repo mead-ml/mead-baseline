@@ -74,7 +74,7 @@ class FileProcess(Process):
         self.exp = label.exp
         self.label = label.sha1
         self.name = label.name
-        self.loc = os.path.join(self.exp, label.local)
+        self.loc = os.path.join(self.exp, self.label, self.name)
         try:
             os.makedirs(self.loc)
         except OSError:
@@ -143,7 +143,7 @@ class TmuxProcess(FileProcess):
 
 class MPRunner(Runner):
     def __init__(self):
-        super(MPRunner).__init__()
+        super(MPRunner, self).__init__()
         self.p = None
 
     def join(self):

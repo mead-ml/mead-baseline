@@ -6,14 +6,21 @@
     </script>
 
     <script>
-    $(document).ready(function() {
+    function display() {
         $.getJSON($SCRIPT_ROOT + $BASE + "/experiments", function(data, status) {
+            console.log(data);
+            $("#experiments").empty()
             for (var i = 0; i < data.experiments.length; i++) {
                 var line = '<p><a href="' + $SCRIPT_ROOT + $BASE + '/demo_page/' + data.experiments[i] + '">' + data.experiments[i] + '</a></p>';
                 console.log(line)
                 $("#experiments").append(line);
             }
         });
+    }
+
+    $(document).ready(function(){
+        display()
+        setInterval(display, 5000);
     });
     </script>
 

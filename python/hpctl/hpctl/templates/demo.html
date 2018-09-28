@@ -19,12 +19,12 @@
 			});
 		});
 
-        function display() {
+        function display(a, b, c) {
             $.getJSON($SCRIPT_ROOT + $BASE + "/demo_data/{{exp_hash}}", function(data, status){
 				console.log(data);
                 $("#labels").empty()
                 for (var i = 0; i < data.names.length; i++) {
-                    var line = "<p>" + data.status[i] + " " + data.names[i] + " train (avg_loss): " + data.train[i] + " at Step:  " + data.train_ticks[i] + " dev (f1): " + data.valid[i] + " at Epoch: " + data.valid_ticks[i];
+                    var line = "<p>" + data.status[i] + " " + data.names[i] + " - train (avg_loss): " + data.train[i] + " at Step:  " + data.train_ticks[i] + " dev (f1): " + data.valid[i] + " at Epoch: " + data.valid_ticks[i];
                     $("#labels").append(line);
                     var button = '<button class="kill" id="kill-' + i + '"data-exp="' + data.exp[i] + '" data-sha1="' + data.sha1[i] + '" data-name="' + data.names[i] + '" onClick="killJob(this.id)">Kill</button>';
 					$("#labels").append(button);
@@ -42,7 +42,7 @@
         }
 
         $(document).ready(function(){
-            display()
+            display(1, 2, 3)
             setInterval(display, 5000);
         });
 
@@ -66,7 +66,8 @@
 				type: "POST",
 				url: $SCRIPT_ROOT + $BASE + "/kill/" + exp + "/" + sha1 + "/" + name,
 				dataType: "json",
-				contentType: "application/json"
+				contentType: "application/json",
+                success: display
 			});
 		}
 
@@ -79,7 +80,8 @@
                 type: "POST",
                 url: $SCRIPT_ROOT + $BASE + "/xpctl/putresult/" + exp + "/" + sha1 + "/" + name,
                 dataType: "json",
-                contentType: "application/json"
+                contentType: "application/json",
+                success: display
             });
         }
 

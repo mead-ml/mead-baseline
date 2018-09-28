@@ -238,8 +238,9 @@ def run_forever(results, backend, scheduler, frontend, logs):
         if backend.any_done():
             exp_hash, job_blob = scheduler.get()
             if exp_hash is not None:
-                backend.launch(**job_blob)
-                results.set_running(job_blob['label'])
+                label, job = job_blob
+                backend.launch(**job)
+                results.set_running(label)
                 frontend.update()
         # Monitor jobs
         label, message = logs.get()
@@ -254,11 +255,13 @@ def process_command(cmd, backend, frontend, scheduler, results):
         if cmd['command'] == 'kill':
             backend.kill(cmd['label'], results)
             results.set_killed(cmd['label'])
+            if scheduler is not None:
+                scheduler.remove(cmd['label'])
             frontend.update()
         if cmd['command'] == 'launch':
             exp_config = cmd.pop('experiment_config', None)
             if exp_config is not None:
                 results.add_experiment(exp_config)
-            scheduler.add(cmd['label'].exp, cmd)
+            scheduler.add(cmd['label'], cmd)
             results.insert(cmd['label'], cmd['config'])
             results.save()

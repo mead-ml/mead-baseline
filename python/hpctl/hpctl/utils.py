@@ -5,6 +5,7 @@ from six.moves import intern
 import os
 import json
 import hashlib
+import platform
 from functools import partial
 from collections import Mapping
 from baseline.utils import export as exporter
@@ -25,6 +26,20 @@ hpctl_path = export(
 )
 
 
+class Colors(object):
+    GREEN = '\033[32;1m'
+    RED = '\033[31;1m'
+    YELLOW = '\033[33;1m'
+    BLACK = '\033[30;1m'
+    CYAN = '\033[36;1m'
+    RESTORE = '\033[0m'
+
+def color(msg, color):
+    if platform.system() == 'Windows':
+        return msg
+    return "{}{}{}".format(color, msg, Colors.RESTORE)
+
+
 @six.python_2_unicode_compatible
 class Label(Mapping):
     def __init__(self, exp, sha1, name):
@@ -32,9 +47,9 @@ class Label(Mapping):
         self.exp = exp
         self.sha1 = sha1
         self.name = name
-        intern(self.exp)
-        intern(self.sha1)
-        intern(self.name)
+        # intern(self.exp)
+        # intern(self.sha1)
+        # intern(self.name)
 
     @property
     def local(self):

@@ -208,6 +208,16 @@ class Results(object):
 
 
 class SpecialDefaults(defaultdict):
+    """This is a defaultdict where the key can effect the default value.
+
+    Using the default dict instead of having to check and add elements all the
+    help develop the results object quickly but sometimes if you sent bad
+    requests (or the ordering of element access was weird) it could break when
+    the timestamp had a default dict as a value.
+
+    This class fixes that while keeping the results implementation clean. I'm
+    not in love with it and it is a bit odd so we might want to get rid of it.
+    """
     def __missing__(self, key):
         if key == 'time_stamp':
             val = self[key] = six.MAXSIZE
@@ -248,8 +258,7 @@ class LocalResults(Results):
         super(LocalResults, self).__init__()
         self.results = defaultdict(SpecialDefaults)
         self.label_to_config = {}
-        self.label_to_name = defaultdict(list)
-        self.name_to_label = defaultdict(list)
+        self.name_to_label = {}
         self.exp_to_config = {}
 
     def add_experiment(self, exp_config):
@@ -285,7 +294,6 @@ class LocalResults(Results):
         """Copy data from one results to another, used to populate the manager fro pickle reload."""
         self.results = results.results
         self.label_to_config = results.label_to_config
-        self.label_to_name = results.label_to_name
         self.name_to_label = results.name_to_label
         self.exp_to_config = results.exp_to_config
 
@@ -295,14 +303,13 @@ class LocalResults(Results):
         :param file_name: str, The name for the save file.
         """
         file_name = file_name + ".p"
-        pickle.dump(self, open(file_name, 'wb'))
+        pickle.dump(self, open(file_name, 'wb'), protocol=2)
 
     def insert(self, label, config):
         self.label_to_config[label] = config
         self.results[label.exp][label]['time_stamp'] = time.time()
         self.set_waiting(label)
-        self.label_to_name[label.sha1].append(label.name)
-        self.name_to_label[label.name].append(label.sha1)
+        self.name_to_label[label.name] = label
 
     def update(self, label, message):
         phase = message.pop('phase')

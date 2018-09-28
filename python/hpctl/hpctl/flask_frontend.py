@@ -1,11 +1,12 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
+import six
 from six.moves import zip
 
 import math
 from multiprocessing import Process
 from flask import Flask, request, jsonify, render_template
 from hpctl.utils import Label
-from hpctl.frontend import Frontend, color
+from hpctl.frontend import Frontend
 
 
 class FlaskFrontend(Frontend):
@@ -74,8 +75,8 @@ class FlaskFrontend(Frontend):
 
     def get_state(self, exp, sha1, name):
         label = Label(exp, sha1, name)
-        # Using color to help handle strings.
-        state = color(self.results.get_state(label), off=True)
+        state = self.results.get_state(label)
+        state = str(state).decode('utf-8') if six.PY2 else str(state)
         res = {
             "exp": exp,
             "sha1": sha1,
@@ -131,7 +132,8 @@ class FlaskFrontend(Frontend):
         labels = self.results.get_labels(exp)
         sha1s = [l.sha1 for l in labels]
         names = [l.name for l in labels]
-        status = [color(self.results.get_state(l), off=True) for l in labels]
+        status = [self.results.get_state(l) for l in labels]
+        status = [str(s).decode('utf-8') if six.PY2 else str(s) for s in status]
         train_stats = [self.results.get_recent(l, 'Train', 'avg_loss') for l in labels]
         train_stats = [x if not math.isnan(x) else 0.0 for x in train_stats]
         train_ticks = [self.results.get_recent(l, 'Train', 'tick') for l in labels]

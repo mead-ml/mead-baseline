@@ -82,7 +82,7 @@ def run_docker(
             The docker container to check on the status of the job,
             The working dir for the container.
     """
-    loc = os.path.realpath(os.path.join(str(label.exp), label.local))
+    loc = os.path.realpath(os.path.join(label.exp, label.sha1, label.name))
     curr = os.getcwd()
     try:
         os.makedirs(loc)

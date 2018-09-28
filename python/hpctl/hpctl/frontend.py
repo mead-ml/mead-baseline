@@ -1,13 +1,14 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
+import six
 from six.moves.queue import Empty
-from six.moves import zip, map, range
+from six.moves import zip, map, range, input
 
 import sys
 import select
 import platform
 from multiprocessing import Process, Queue
 from baseline.utils import export as exporter
-from hpctl.utils import Label
+from hpctl.utils import Label, color, Colors
 from hpctl.results import States
 
 
@@ -15,7 +16,7 @@ __all__ = []
 export = exporter(__all__)
 
 
-def color(state, off=False):
+def color_state(state):
     """Turn the state into a colored string.
 
     :param state: hpctl.results.States, The state to print.
@@ -24,34 +25,18 @@ def color(state, off=False):
     :returns:
         str, The string ready for printing.
     """
-    GREEN = '\033[32;1m'
-    RED = '\033[31;1m'
-    YELLOW = '\033[33;1m'
-    BLACK = '\033[30;1m'
-    CYAN = '\033[36;1m'
-    RESTORE = '\033[0m'
-    if platform.system() == 'Windows' or off:
-        try:
-            return str(state).decode('utf-8')
-        except:
-            return str(state)
     if state is States.DONE or state == str(States.DONE):
-        color = GREEN
+        c = Colors.GREEN
     elif state is States.KILLED or state == str(States.KILLED):
-        color = RED
+        c = Colors.RED
     elif state is States.RUNNING or state == str(States.RUNNING):
-        color = YELLOW
+        c = Colors.YELLOW
     elif state is States.WAITING or state == str(States.WAITING):
-        color = CYAN
+        c = Colors.CYAN
     else:
-        color = BLACK
-    # Because we use unicode strings for formatting we want the results
-    # to be as a unicode string rather than a bytes str, Python 2 returns
-    # bytes and 3 returns a str so we need to try to decode it for 2.
-    try:
-        return "{}{}{}".format(color, str(state).decode('utf-8'), RESTORE)
-    except:
-        return "{}{}{}".format(color, str(state), RESTORE)
+        c = Colors.BLACK
+    state = str(state).decode('utf-8') if six.PY2 else str(state)
+    return color(state, c)
 
 
 def reset_screen(lines):
@@ -141,7 +126,7 @@ class Console(Frontend):
         max_len = max(map(len, map(lambda x: x.name, labels)))
         for label in labels:
             print('{state} {name:{width}} - train ({train_metric}): {train_stat:.3f} at {train_step} dev ({metric}): {dev_stat:.3f} at {dev_step}'.format(
-                state=color(self.results.get_state(label)),
+                state=color_state(self.results.get_state(label)),
                 name=label.name,
                 train_metric=self.train,
                 train_stat=self.results.get_recent(label, 'Train', self.train),
@@ -210,7 +195,7 @@ class ConsoleDev(Console):
         max_len = max(map(len, map(lambda x: x.name, labels)))
         for label, val, idx in zip(labels, vals, idxs):
             print('{state} {name:{width}} - best dev ({metric}): {stat:.3f} at {step}'.format(
-                state=color(self.results.get_state(label)),
+                state=color_state(self.results.get_state(label)),
                 name=label.name, metric=self.dev, stat=val, step=idx,
                 width=max_len)
             )
@@ -222,6 +207,7 @@ FRONTENDS = {
     "console_dev": ConsoleDev,
     "dummy": Frontend,
     "default": Console,
+    "flask": FlaskShim,
 }
 
 
