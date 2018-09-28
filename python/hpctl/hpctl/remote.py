@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 import requests
 import cachetools
 from baseline.utils import export as exporter
+from xpctl.core import ExperimentRepo
 from hpctl.utils import Label
 from hpctl.backend import Backend
 from hpctl.results import Results, States
@@ -103,3 +104,15 @@ class RemoteResults(Results):
             )
         )
         return [Label.parse(x) for x in resp['labels']], resp['values'], resp['steps']
+
+
+@export
+class RemoteXPCTL(object):
+    def __init__(self, host, port, **kwargs):
+        self.url = "http://{host}:{port}/hpctl/v1".format(host=host, port=port)
+
+    def put_result(self, label):
+        r = requests.post(
+            '{url}/xpctl/putresult/{exp}/{sha1}/{name}'.format(
+                url=self.url, **label)
+        )

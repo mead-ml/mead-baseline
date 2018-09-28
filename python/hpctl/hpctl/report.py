@@ -3,9 +3,13 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 import os
 import glob
 import json
-import requests
 from baseline.utils import read_config_file
+from baseline.utils import export as exporter
 from xpctl.core import ExperimentRepo
+
+
+__all__ = []
+export = exporter(__all__)
 
 
 def read_logs(file_name):
@@ -16,12 +20,17 @@ def read_logs(file_name):
     return logs
 
 
+@export
 class XPCTL(object):
     def __init__(self, **kwargs):
         super(XPCTL, self).__init__()
-        self.repo = ExperimentRepo.create_repo(**kwargs)
+        self.xpctl_config = kwargs
+        self.repo = None
 
     def put_result(self, label):
+        # Wait to create the experiment repo until after the fork
+        if self.repo is None:
+            self.repo = ExperimentRepo.create_repo(**self.xpctl_config)
         loc = os.path.join(label.exp, label.sha1, label.name)
         config_loc = os.path.join(loc, 'config.json')
         config = read_config_file(config_loc)
@@ -31,12 +40,9 @@ class XPCTL(object):
         self.repo.put_result(task, config, logs)
 
 
-class RemoteXPCTL(object):
-    def __init__(self, url, port, **kwargs):
-        self.url = "http://{url}:{port}/hpctl/v1".format(url=url, port=port)
-
-    def put_result(self, label):
-        r = requests.post(
-            '{url}/xpctl/putresult/{exp}/{sha1}/{name}'.format(
-                url=self.url, **label)
-        )
+@export
+def get_xpctl(xpctl_config):
+    if xpctl_config.pop('type', 'local') == 'remote':
+        from hpctl.remote import RemoteXPCTL
+        return RemoteXPCTL(**xpctl_config)
+    return XPCTL(**xpctl_config)

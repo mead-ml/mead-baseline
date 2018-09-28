@@ -119,10 +119,11 @@ class Console(Frontend):
     :param dev: str, The dev metric to track.
     :param test: str, The test metric to track.
     """
-    def __init__(self, results, experiment_hash, train, dev, test, **kwargs):
+    def __init__(self, results, xpctl, experiment_hash, train, dev, test, **kwargs):
         super(Console, self).__init__()
         self.experiment_hash = experiment_hash
         self.results = results
+        self.xpctl = xpctl
         self.print_count = 0
         self.first = True
         self.train = train
@@ -225,7 +226,7 @@ FRONTENDS = {
 
 
 @export
-def get_frontend(frontend_config, results):
+def get_frontend(frontend_config, results, xpctl):
     """Create a frontend object.
 
     :param exp: hpctl.experiment.Experiment: The experiment config.
@@ -238,7 +239,7 @@ def get_frontend(frontend_config, results):
     if frontend == 'flask':
         from hpctl.flask_frontend import create_flask
         q = Queue()
-        fe = create_flask(q, results)
+        fe = create_flask(q, results, xpctl)
         return FlaskShim(q, fe, **frontend_config)
 
-    return FRONTENDS[frontend](results, **frontend_config)
+    return FRONTENDS[frontend](results, xpctl, **frontend_config)

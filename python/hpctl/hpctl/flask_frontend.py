@@ -9,9 +9,10 @@ from hpctl.frontend import Frontend, color
 
 
 class FlaskFrontend(Frontend):
-    def __init__(self, q, results):
+    def __init__(self, q, results, xpctl):
         self.results = results
         self.queue = q
+        self.xpctl = xpctl
 
     def index(self):
         return render_template('index.html')
@@ -67,7 +68,8 @@ class FlaskFrontend(Frontend):
         return jsonify({"command": "add"})
 
     def put_result(self, exp, sha1, name):
-        # Look in the dir ROOT/exp/sha1/name and call the xpctl putresult
+        label = Label(exp, sha1, name)
+        self.xpctl.put_result(label)
         return jsonify({"command": "putresults", "status": "success"})
 
     def get_state(self, exp, sha1, name):
@@ -97,7 +99,7 @@ class FlaskFrontend(Frontend):
         label = Label(exp, sha1, name)
         val, idx = self.results.get_best(label, phase, metric)
         res = {
-            'label': str(abel),
+            'label': str(label),
             'phase': phase,
             'metric': metric,
             'value': val,
@@ -210,9 +212,9 @@ def init_app(app, fe, base_url='/hpctl/v1'):
     app.route('{}/demo_page/<exp>'.format(base_url), methods={'GET'})(fe.demo_page)
 
 
-def create_flask(q, results):
+def create_flask(q, results, xpctl):
     app = Flask(__name__)
-    fe = FlaskFrontend(q, results)
+    fe = FlaskFrontend(q, results, xpctl)
     init_app(app, fe)
     p = Process(target=app.run)
     return p

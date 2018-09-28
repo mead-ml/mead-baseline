@@ -108,8 +108,13 @@ def serve(**kwargs):
     results = get_results({})
     backend = get_backend(backend_config)
     logs = get_log_server(hp_logs)
+
+    from hpctl.report import get_xpctl
+    xpctl_config = {'dbhost': 'localhost', 'dbport': 27017, 'user': '', 'passwd': ''}
+    xpctl = get_xpctl(xpctl_config)
+
     frontend_config['type'] = 'flask'
-    frontend = get_frontend(frontend_config, results)
+    frontend = get_frontend(frontend_config, results, xpctl)
     scheduler = RoundRobinScheduler()
     try:
         run_forever(results, backend, scheduler, frontend, logs)
@@ -147,12 +152,16 @@ def search(**kwargs):
     if 'test' not in frontend_config:
         frontend_config['test'] = default
 
-    set_root(hp_settings)
+    if backend_config['type'] != 'remote':
+        set_root(hp_settings)
     backend_config, hp_logs, results_config = _remote_monkey_patch(backend_config, hp_logs, {})
 
-    from hpctl.report import XPCTL
-    a = {'dbhost': 'localhost', 'dbport': 27017, 'user': '', 'passwd': ''}
-    xpctl = XPCTL(**a)
+    from hpctl.report import get_xpctl
+    xpctl_config = {'dbhost': 'localhost', 'dbport': 27017, 'user': '', 'passwd': ''}
+    if backend_config['type'] == 'remote':
+        xpctl_config = {'host': 'localhost', 'port': 5000, 'type': 'remote'}
+    print(xpctl_config)
+    xpctl = get_xpctl(xpctl_config)
 
     results = get_results(results_config)
     results.add_experiment(mead_config)
@@ -168,8 +177,7 @@ def search(**kwargs):
 
     logs = get_log_server(hp_logs)
 
-    frontend = get_frontend(frontend_config, results)
-    frontend.xpctl = xpctl
+    frontend = get_frontend(frontend_config, results, xpctl)
 
     num_iters = int(kwargs.get('num_iters') if kwargs.get('num_iters') is not None else hp_config.get('num_iters', 3))
 
