@@ -50,9 +50,11 @@ class ClassifyTrainerDynet(EpochReportingTrainer):
         return metrics
 
     def _test(self, loader, **kwargs):
+        self.model.train = False
         return self._step(loader, lambda x: None, kwargs.get("verbose", None))
 
     def _train(self, loader):
+        self.model.train = True
         return self._step(loader, self._update)
 
 

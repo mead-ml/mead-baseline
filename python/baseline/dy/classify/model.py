@@ -43,7 +43,8 @@ class ClassifierModelBase(DynetModel, ClassifierModel):
             all_embeddings_lists += [embedding.encode(batch_dict[k])]
 
         embed = dy.concatenate(all_embeddings_lists, d=1)
-        return self.dropout(embed)
+        return embed
+        #return self.dropout(embed)
         #embed = [self.dropout(dy.concatenate(z)) for z in lists]
         #embed = [self.dropout(dy.concatenate([embed_word])) for embed_word in embed_words_list]
 
@@ -133,7 +134,9 @@ class ConvModel(ClassifierModelBase):
         parallel_conv = ParallelConv(filtsz, cmotsz, dsz, self.pc)
         def call_pool(embedded, _):
             # This is a list (len(T) of lists (BxW)
-            return parallel_conv(embedded)
+            conv = parallel_conv(embedded)
+            return conv
+            #return self.dropout(conv)
 
         return len(filtsz) * cmotsz, call_pool
 

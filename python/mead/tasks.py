@@ -371,7 +371,7 @@ class TaggerTask(Task):
             model['lengths_key'] = lengths_key
 
         if self.backend.params is not None:
-            for k, v in self.backend.params:
+            for k, v in self.backend.params.items():
                 model[k] = v
         return self.backend.task.create_model(labels, self.embeddings, **self.config_params['model'])
 
@@ -486,7 +486,7 @@ class EncoderDecoderTask(Task):
                 lengths_key = '{}_lengths'.format(lengths_key)
             model['src_lengths_key'] = lengths_key
         if self.backend.params is not None:
-            for k, v in self.backend.params:
+            for k, v in self.backend.params.items():
                 model[k] = v
         return self.backend.task.create_model(self.src_embeddings, self.tgt_embeddings, **self.config_params['model'])
 
@@ -566,7 +566,8 @@ class LanguageModelingTask(Task):
         model['batchsz'] = self.config_params['batchsz']
         model['tgt_key'] = self.config_params['loader'].get('tgt_key', self.primary_key)
         if self.backend.params is not None:
-            model['_params'] = self.backend.params
+            for k, v in self.backend.params.items():
+                model[k] = v
         return self.backend.task.create_model(self.embeddings, **model)
 
     @staticmethod
