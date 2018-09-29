@@ -10,7 +10,7 @@ from baseline.tf.embeddings import *
 from baseline.version import __version__
 
 
-class RNNTaggerModelModel(TaggerModel):
+class RNNTaggerModel(TaggerModel):
 
     def save_values(self, basename):
         self.saver.save(self.sess, basename)
@@ -190,7 +190,7 @@ class RNNTaggerModelModel(TaggerModel):
         return all_loss
 
     def __init__(self):
-        super(RNNTaggerModelModel, self).__init__()
+        super(RNNTaggerModel, self).__init__()
         pass
 
     def get_labels(self):
@@ -269,8 +269,8 @@ class RNNTaggerModelModel(TaggerModel):
         seed = np.random.randint(10e8)
 
         if rnntype == 'blstm':
-            rnnfwd = stacked_lstm(hsz, model.pkeep, nlayers)
-            rnnbwd = stacked_lstm(hsz, model.pkeep, nlayers)
+            rnnfwd = stacked_lstm(hsz//2, model.pkeep, nlayers)
+            rnnbwd = stacked_lstm(hsz//2, model.pkeep, nlayers)
             rnnout, _ = tf.nn.bidirectional_dynamic_rnn(rnnfwd, rnnbwd, embedseq, sequence_length=model.lengths, dtype=tf.float32)
             # The output of the BRNN function needs to be joined on the H axis
             rnnout = tf.concat(axis=2, values=rnnout)
@@ -306,11 +306,11 @@ class RNNTaggerModelModel(TaggerModel):
         return model
 
 BASELINE_TAGGER_MODELS = {
-    'default': RNNTaggerModelModel.create,
+    'default': RNNTaggerModel.create,
 }
 
 BASELINE_TAGGER_LOADERS = {
-    'default': RNNTaggerModelModel.load
+    'default': RNNTaggerModel.load
 }
 
 

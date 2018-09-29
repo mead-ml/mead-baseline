@@ -24,6 +24,7 @@ class PyTorchEmbeddings(object):
         return cls(model, **kwargs)
 
 
+# TODO: Make these constructors more like TF, DyNet
 class LookupTableEmbeddings(nn.Module, PyTorchEmbeddings):
 
     def __init__(self, model, **kwargs):

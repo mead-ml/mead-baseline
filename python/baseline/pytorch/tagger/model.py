@@ -176,10 +176,8 @@ class RNNTaggerModel(nn.Module, TaggerModel):
         return self.labels
 
     def predict(self, batch_dict):
-        x = batch_dict['word']
-        xch = batch_dict['char']
-        lengths = batch_dict['lengths']
-        return predict_seq_bt(self, x, xch, lengths)
+        inputs = self.make_input(batch_dict)
+        return self(inputs)
 
 BASELINE_TAGGER_MODELS = {
     'default': RNNTaggerModel.create,

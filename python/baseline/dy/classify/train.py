@@ -8,6 +8,7 @@ from baseline.train import EpochReportingTrainer, create_trainer
 from baseline.dy.dynety import *
 from baseline.utils import verbose_output
 
+
 def _add_to_cm(cm, y, preds, axis=0):
     best = np.argmax(preds, axis=axis)
     best = np.reshape(best, y.shape)
@@ -16,11 +17,7 @@ def _add_to_cm(cm, y, preds, axis=0):
 
 class ClassifyTrainerDynet(EpochReportingTrainer):
 
-    def __init__(
-            self,
-            model,
-            **kwargs
-    ):
+    def __init__(self, model, **kwargs):
         super(ClassifyTrainerDynet, self).__init__()
         self.model = model
         self.labels = model.labels
@@ -38,8 +35,9 @@ class ClassifyTrainerDynet(EpochReportingTrainer):
 
         for batch_dict in pg(loader):
             dy.renew_cg()
-            xs, ys, ls = self.model.make_input(batch_dict)
-            preds = self.model.forward(xs, ls)
+            inputs = self.model.make_input(batch_dict)
+            ys = inputs.pop('y')
+            preds = self.model.forward(inputs)
             losses = self.model.loss(preds, ys)
             loss = dy.sum_batches(losses)
             total_loss += loss.npvalue().item()
@@ -72,8 +70,9 @@ class ClassifyTrainerAutobatch(ClassifyTrainerDynet):
         preds, losses, ys = [], [], []
         dy.renew_cg()
         for batch_dict in pg(loader):
-            x, y, l = self.model.make_input(batch_dict)
-            pred = self.model.forward(x, l)
+            inputs = self.model.make_input(batch_dict)
+            y = inputs.pop('y')
+            pred = self.model.forward(inputs)
             preds.append(pred)
             loss = self.model.loss(pred, y)
             losses.append(loss)
@@ -99,14 +98,8 @@ class ClassifyTrainerAutobatch(ClassifyTrainerDynet):
         return metrics
 
 
-def fit(
-        model,
-        ts, vs, es,
-        epochs=20,
-        do_early_stopping=True, early_stopping_metric='acc',
-        reporting=basic_reporting,
-        **kwargs
-):
+def fit(model, ts, vs, es, epochs=20, do_early_stopping=True,
+        early_stopping_metric='acc', reporting=basic_reporting, **kwargs):
     autobatchsz = kwargs.get('autobatchsz', 1)
     verbose = kwargs.get('verbose', {'print': kwargs.get('verbose_print', False), 'file': kwargs.get('verbose_file', None)})
     model_file = get_model_file('classify', 'dynet', kwargs.get('basedir'))

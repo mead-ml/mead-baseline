@@ -5,9 +5,10 @@ from baseline.utils import crf_mask, lookup_sentence
 
 
 class DynetModel(object):
-    def __init__(self):
+    def __init__(self, pc=None):
         super(DynetModel, self).__init__()
-        self._pc = dy.ParameterCollection()
+        self._pc = pc  #dy.ParameterCollection()
+        self.train = True
 
     @property
     def pc(self):
@@ -211,7 +212,9 @@ def Convolution1d(fsz, cmotsz, dsz, pc, strides=(1, 1, 1, 1), name="conv"):
         """
         c = dy.conv2d_bias(input_, weight, bias, strides, is_valid=False)
         activation = dy.rectify(c)
-        mot = dy.reshape(dy.max_dim(activation, 1), (cmotsz,))
+        ((_, seq_len, _), _) = activation.dim()
+        pooled = dy.maxpooling2d(activation, [1, seq_len, 1], strides)
+        mot = dy.reshape(pooled, (cmotsz,))
         return mot
 
     return conv
@@ -232,51 +235,6 @@ def ParallelConv(filtsz, cmotsz, dsz, pc, strides=(1, 1, 1, 1), name="parallel-c
         return dy.concatenate(mots)
 
     return conv
-
-
-def Embedding(vsz, dsz, pc,
-              embedding_weight=None,
-              finetune=False, dense=False, batched=False,
-              name="embeddings"):
-    """Create Embedding layer.
-
-    :param vsz: int, The Vocab Size
-    :param dsz: int, The Embeddings Size
-    :param pc: dy.ParameterCollection
-    :param embedding_weight: np.ndarray, Pretrained weights
-    :param finetune: bool Should the vectors be updated
-    :param dense: bool Should the result be a single matrix or a list of vectors
-    :param batched: bool Is the input a batched operation
-    """
-    if embedding_weight is not None:
-        if dense:
-            vsz, dsz = embedding_weight.shape
-            embedding_weight = np.reshape(embedding_weight, (vsz, 1, dsz))
-        embeddings = pc.lookup_parameters_from_numpy(embedding_weight, name=name)
-    else:
-        shape = (vsz, dsz)
-        if dense:
-            shape = (vsz, 1, dsz)
-        embeddings = pc.add_lookup_parameters(shape, name=name)
-
-    def embed(input_):
-        """Embed a sequence.
-
-        :param input_: List[List[int]] (batched) or List[int] (normal)
-            When batched the input should be a list over timesteps of lists of
-            words (over a batch) (T, B). Otherwise it is a list of words over time (T)
-
-        Returns:
-            dy.Expression ((T, H), B) if dense (useful for conv encoders)
-            List[dy.Expression] otherwise (used for RNNs)
-        """
-        lookup = dy.lookup_batch if batched else dy.lookup
-        embedded = [lookup(embeddings, x, finetune) for x in input_]
-        if dense:
-            return dy.concatenate(embedded, d=0)
-        return embedded
-
-    return embed
 
 
 def Attention(lstmsz, pc, name="attention"):
@@ -484,30 +442,30 @@ class CRF(DynetModel):
         return best_path, path_score
 
 
-def show_examples_dynet(model, es, rlut1, rlut2, embed2, mxlen, sample, prob_clip, max_examples, reverse):
+def show_examples_dynet(model, es, rlut1, rlut2, vocab, mxlen, sample, prob_clip, max_examples, reverse):
     si = np.random.randint(0, len(es))
 
     batch_dict = es[si]
 
-    src_array = batch_dict['src']
-    tgt_array = batch_dict['dst']
-    src_len = batch_dict['src_len']
+    lengths_key = model.src_lengths_key
+    src_field = lengths_key.split('_')[0]
+    src_array = batch_dict[src_field]
     if max_examples > 0:
         max_examples = min(max_examples, src_array.shape[0])
-        src_array = src_array[0:max_examples]
-        tgt_array = tgt_array[0:max_examples]
-        src_len = src_len[0:max_examples]
 
-    for src_len_i, src_i, tgt_i in zip(src_len, src_array, tgt_array):
+    for i in range(max_examples):
+        example = {}
+        # Batch first, so this gets a single example at once
+        for k, value in batch_dict.items():
+            v = value[i]
+            example[k] = v.reshape((1,) + v.shape)
 
         print('========================================================================')
-        src_len_i = np.array(src_len_i, ndmin=1)
-        sent = lookup_sentence(rlut1, src_i, reverse=reverse)
+        sent = lookup_sentence(rlut1, example[src_field].squeeze(), reverse=reverse)
         print('[OP] %s' % sent)
-        sent = lookup_sentence(rlut2, tgt_i)
+        sent = lookup_sentence(rlut2, example['tgt'].squeeze())
         print('[Actual] %s' % sent)
-        src_dict = {'src': src_i.reshape(1, -1), 'src_len': src_len_i}
-        dst_i = model.run(src_dict)[0]
+        dst_i = model.run(example)[0]
         sent = lookup_sentence(rlut2, dst_i)
         print('Guess: %s' % sent)
         print('------------------------------------------------------------------------')

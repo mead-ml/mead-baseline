@@ -4,7 +4,7 @@ import pytest
 import numpy as np
 tf = pytest.importorskip('tensorflow')
 from baseline.w2v import RandomInitVecModel
-from baseline.tf.tagger.model import create_model, RNNTaggerModelModel
+from baseline.tf.tagger.model import create_model, RNNTaggerModel
 from baseline.utils import crf_mask as np_crf
 
 
@@ -69,7 +69,7 @@ def test_persists_save(model, save_file):
     model.save_using(tf.train.Saver())
     t1 = model.sess.run(model.A)
     model.save(save_file)
-    m2 = RNNTaggerModelModel.load(save_file)
+    m2 = RNNTaggerModel.load(save_file)
     t2 = model.sess.run(m2.A)
     np.testing.assert_allclose(t1, t2)
 

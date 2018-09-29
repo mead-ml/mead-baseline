@@ -337,7 +337,7 @@ class LSTMEncoder(nn.Module):
     def __init__(self, insz, hsz, rnntype, nlayers, dropout, residual=False, unif=0, initializer=None):
         super(LSTMEncoder, self).__init__()
         self.residual = residual
-        self.rnn, self.outsz = pytorch_lstm(insz, hsz, rnntype, nlayers, dropout, unif, False, initializer)
+        self.rnn, self.outsz = pytorch_lstm(insz, hsz//2, rnntype, nlayers, dropout, unif, False, initializer)
 
     def forward(self, tbc, lengths):
 

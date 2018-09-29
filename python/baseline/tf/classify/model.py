@@ -383,7 +383,7 @@ class ClassifierModelBase(ClassifierModel):
         return model
 
     def embed(self):
-        """Thie method performs "embedding" of the inputs.  The base method here then concatenates along depth
+        """This method performs "embedding" of the inputs.  The base method here then concatenates along depth
         dimension to form word embeddings
 
         :return: A 3-d vector where the last dimension is the concatenated dimensions of all embeddings
