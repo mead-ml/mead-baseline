@@ -1,14 +1,18 @@
-import baseline
+import os
 import json
-import numpy as np
 import logging
 import logging.config
-import mead.utils
-import os
-from mead.downloader import EmbeddingDownloader, DataDownloader
-from mead.mime_type import mime_type
+import numpy as np
+import baseline
 from baseline.utils import export, read_json
 from baseline.reporting import create_reporting_hook
+from mead.mime_type import mime_type
+from mead.downloader import EmbeddingDownloader, DataDownloader
+from mead.utils import (
+    get_mead_settings,
+    read_config_file_or_json,
+    index_by_label,
+)
 
 
 __all__ = []
@@ -24,14 +28,7 @@ class Task(object):
         self.config_params = None
         self.ExporterType = None
 
-        if mead_settings_config is None:
-            self.mead_settings_config = {}
-        elif isinstance(mead_settings_config, dict):
-            self.mead_settings_config = mead_settings_config
-        elif os.path.exists(mead_settings_config):
-            self.mead_settings_config = read_json(mead_settings_config)
-        else:
-            raise Exception("Expected either a mead settings file or a JSON object")
+        self.mead_settings_config = get_mead_settings(mead_settings_config)
         if 'datacache' not in self.mead_settings_config:
             self.data_download_cache = os.path.expanduser("~/.bl-data")
             self.mead_settings_config['datacache'] = self.data_download_cache
@@ -47,12 +44,7 @@ class Task(object):
         :param logger_config: The logging configuration JSON or file containing JSON
         :return: A dictionary config derived from the logger_file, with the reporting handler suffixed with PID
         """
-        if isinstance(logger_config, dict):
-            config = logger_config
-        elif os.path.exists(logger_config):
-            config = read_json(logger_config)
-        else:
-            raise Exception("Expected logger config file or a JSON object")
+        config = read_config_file_or_json(logger_config, 'logger')
 
         config['handlers']['reporting_file_handler']['filename'] = 'reporting-{}.log'.format(os.getpid())
         logging.config.dictConfig(config)
@@ -79,7 +71,8 @@ class Task(object):
         :param datasets_index: The index of datasets
         :return:
         """
-        datasets_set = mead.utils.index_by_label(datasets_index)
+        datasets_index = read_config_file_or_json(datasets_index, 'datasets')
+        datasets_set = index_by_label(datasets_index)
         self.config_params = config_params
         self.config_file = kwargs.get('config_file')
         self._setup_task()
@@ -279,7 +272,8 @@ class ClassifierTask(Task):
         self.config_params['preproc']['src_vec_trans'] = rev2nd if self.config_params['preproc'].get('rev', False) else None
 
     def initialize(self, embeddings):
-        embeddings_set = mead.utils.index_by_label(embeddings)
+        embeddings = read_config_file_or_json(embeddings, 'embeddings')
+        embeddings_set = index_by_label(embeddings)
         self.dataset = DataDownloader(self.dataset, self.data_download_cache).download()
         print("[train file]: {}\n[valid file]: {}\n[test file]: {}".format(self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']))
         vocab, self.labels = self.reader.build_vocab([self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']])
@@ -370,7 +364,8 @@ class TaggerTask(Task):
     def initialize(self, embeddings):
         self.dataset = DataDownloader(self.dataset, self.data_download_cache).download()
         print("[train file]: {}\n[valid file]: {}\n[test file]: {}".format(self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']))
-        embeddings_set = mead.utils.index_by_label(embeddings)
+        embeddings = read_config_file_or_json(embeddings, 'embeddings')
+        embeddings_set = index_by_label(embeddings)
         vocabs = self.reader.build_vocab([self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']])
         self.embeddings, self.feat2index = self._create_embeddings(embeddings_set, vocabs)
 
@@ -456,7 +451,8 @@ class EncoderDecoderTask(Task):
         self.task = seq2seq
 
     def initialize(self, embeddings):
-        embeddings_set = mead.utils.index_by_label(embeddings)
+        embeddings = read_config_file_or_json(embeddings, 'embeddings')
+        embeddings_set = index_by_label(embeddings)
         self.dataset = DataDownloader(self.dataset, self.data_download_cache, True).download()
         print("[train file]: {}\n[valid file]: {}\n[test file]: {}\n[vocab file]: {}".format(self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file'], self.dataset.get('vocab_file',"None")))
         vocab_file = self.dataset.get('vocab_file',None)
@@ -553,7 +549,8 @@ class LanguageModelingTask(Task):
             self.config_params['preproc']['word_trans_fn'] = None
 
     def initialize(self, embeddings):
-        embeddings_set = mead.utils.index_by_label(embeddings)
+        embeddings = read_config_file_or_json(embeddings, 'embeddings')
+        embeddings_set = index_by_label(embeddings)
         self.dataset = DataDownloader(self.dataset, self.data_download_cache).download()
         print("[train file]: {}\n[valid file]: {}\n[test file]: {}".format(self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']))
         vocab, self.num_elems = self.reader.build_vocab([self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']])
