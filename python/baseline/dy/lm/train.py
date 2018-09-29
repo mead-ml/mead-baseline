@@ -1,12 +1,14 @@
+import time
+import logging
 import dynet as dy
 import numpy as np
 from baseline.utils import listify, get_model_file
 from baseline.progress import create_progress_bar
-from baseline.train import EpochReportingTrainer, create_trainer, lr_decay
+from baseline.train import Trainer, create_trainer, lr_decay
 from baseline.dy.dynety import *
 
 
-class LanguageModelTrainerDynet(EpochReportingTrainer):
+class LanguageModelTrainerDynet(Trainer):
     def __init__(
             self,
             model,
@@ -18,6 +20,7 @@ class LanguageModelTrainerDynet(EpochReportingTrainer):
         self.decay = lr_decay(**kwargs)
         self.global_step = 0
         self.valid_epochs = 0
+        self.log = logging.getLogger('baseline.timing')
 
     @staticmethod
     def _loss(outputs, labels):
@@ -31,6 +34,7 @@ class LanguageModelTrainerDynet(EpochReportingTrainer):
         iters = 0
         step = 0
         initial_state = None
+        start = time.time()
         for batch_dict in loader:
             dy.renew_cg()
             self.optimizer.learning_rate = self.decay(self.global_step)
@@ -54,6 +58,7 @@ class LanguageModelTrainerDynet(EpochReportingTrainer):
                 for reporting in reporting_fns:
                     reporting(metrics, self.global_step, 'Train')
 
+        self.log.debug({'phase': 'Train', 'time': time.time() - start})
         metrics['avg_loss'] = total_loss / iters
         metrics['perplexity'] = np.exp(total_loss / iters)
         for reporting in reporting_fns:
@@ -65,6 +70,7 @@ class LanguageModelTrainerDynet(EpochReportingTrainer):
         total_loss = 0.0
         iters = 0
         initial_state = None
+        start = time.time()
         for batch_dict in loader:
             dy.renew_cg()
             input_, labels = self.model.make_input(batch_dict)
@@ -82,6 +88,7 @@ class LanguageModelTrainerDynet(EpochReportingTrainer):
         else:
             output = 0
 
+        self.log.debug({'phase': phase, 'time': time.time() - start})
         metrics['avg_loss'] = total_loss / iters
         metrics['perplexity'] = np.exp(total_loss / iters)
         for reporting in reporting_fns:

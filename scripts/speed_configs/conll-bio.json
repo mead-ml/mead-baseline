@@ -1,0 +1,44 @@
+{
+    "task": "tagger",
+    "batchsz": 10,
+    "conll_output": "conll-bio-results.conll",
+    "charsz": 30,
+    "unif": 0.1,
+    "preproc": {
+        "mxlen": -1,
+        "mxwlen": -1,
+        "lower": true
+    },
+    "backend": "tensorflow",
+    "dataset": "conll-bio",
+    "loader": {
+        "reader_type": "default"
+    },
+    "model": {
+        "model_type": "default",
+        "cfiltsz": [3],
+        "hsz": 200,
+        "wsz": 30,
+        "dropout": 0.5,
+        "rnntype": "blstm",
+        "layers": 1,
+        "crf_mask": true,
+        "crf": 1
+    },
+
+    "word_embeddings": {
+        "label": "glove-6B-100"
+    },
+    "train": {
+        "epochs": 1,
+        "optim": "sgd",
+        "decay": 0.05,
+        "eta": 0.015,
+        "mom": 0.9,
+        "patience": 40,
+        "early_stopping_metric": "f1",
+        "clip": 5.0,
+        "span_type": "bio"
+    }
+}
+

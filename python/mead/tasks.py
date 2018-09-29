@@ -47,6 +47,7 @@ class Task(object):
         config = read_config_file_or_json(logger_config, 'logger')
 
         config['handlers']['reporting_file_handler']['filename'] = 'reporting-{}.log'.format(os.getpid())
+        config['handlers']['timing_file_handler']['filename'] = 'timing-{}.log'.format(os.getpid())
         logging.config.dictConfig(config)
 
     @staticmethod
@@ -251,6 +252,7 @@ class ClassifierTask(Task):
                 dy_params.init()
                 import baseline.dy.classify as classify
                 from baseline.data import reverse_2nd as rev2nd
+                self.config_params['preproc']['trim'] = True
             else:
                 print('TensorFlow backend')
                 import baseline.tf.classify as classify
@@ -436,12 +438,14 @@ class EncoderDecoderTask(Task):
             if backend == 'dynet':
                 print('Dynet backend')
                 import _dynet
+                self.config_params['preproc']['trim'] = True
                 dy_params = _dynet.DynetParams()
                 dy_params.from_args()
                 dy_params.set_requested_gpus(1)
                 dy_params.init()
                 import baseline.dy.seq2seq as seq2seq
                 self.config_params['preproc']['show_ex'] = baseline.dy.show_examples_dynet
+                self.config_params['preproc']['trim'] = True
             else:
                 import baseline.tf.seq2seq as seq2seq
                 self.config_params['preproc']['show_ex'] = baseline.tf.show_examples_tf
@@ -530,7 +534,7 @@ class LanguageModelingTask(Task):
                 dy_params.from_args()
                 dy_params.set_requested_gpus(1)
                 dy_params.init()
-                self.config_params['preproc']['trim'] = False
+                self.config_params['preproc']['trim'] = True
                 import baseline.dy.lm as lm
             else:
                 print('TensorFlow backend')

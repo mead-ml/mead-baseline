@@ -167,7 +167,7 @@ class CharCompLanguageModel(AbstractLanguageModel):
         model = CharCompLanguageModel()
 
         model.gpu = kwargs.get('gpu', True)
-        char_dsz = kwargs.get('charsz', 0)
+        char_dsz = embeddings['char'].dsz
         cmotsz_all = model._init_char_encoder(char_dsz, embeddings['char'], **kwargs)
         word_dsz = 0
         model.hsz = int(kwargs['hsz'])
@@ -192,6 +192,7 @@ class CharCompLanguageModel(AbstractLanguageModel):
         append2seq(model.decoder, (
             pytorch_linear(out_hsz, model.vocab_sz, unif),
         ))
+        print(model)
 
         return model
 

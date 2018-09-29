@@ -76,6 +76,8 @@ class ProgressBarTerminal(Progress):
             r'\g<name>%dd' % len(str(total)), fmt)
 
         self.current = 0
+        # Force initial print of pg for when steps are long.
+        self.update(step=0)
 
     def update(self, step=1):
         """Update progress bar by number of `steps`
