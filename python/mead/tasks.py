@@ -304,7 +304,9 @@ class ClassifierTask(Task):
         return self.backend.task.create_model(self.embeddings, self.labels, **model)
 
     def _load_dataset(self):
-        self.train_data = self.reader.load(self.dataset['train_file'], self.feat2index, self.config_params['batchsz'], shuffle=True, sort_key=self.primary_key)
+        self.train_data = self.reader.load(self.dataset['train_file'], self.feat2index, self.config_params['batchsz'],
+                                           shuffle=True,
+                                           sort_key=self.config_params['loader'].get('sort_key'))
         self.valid_data = self.reader.load(self.dataset['valid_file'], self.feat2index, self.config_params['batchsz'])
         self.test_data = self.reader.load(self.dataset['test_file'], self.feat2index, self.config_params.get('test_batchsz', 1))
 
@@ -376,7 +378,10 @@ class TaggerTask(Task):
         return self.backend.task.create_model(labels, self.embeddings, **self.config_params['model'])
 
     def _load_dataset(self):
-        self.train_data, _ = self.reader.load(self.dataset['train_file'], self.feat2index, self.config_params['batchsz'], shuffle=True, sort_key=self.primary_key)
+        # TODO: get rid of sort_key=self.primary_key in favor of something explicit?
+        self.train_data, _ = self.reader.load(self.dataset['train_file'], self.feat2index, self.config_params['batchsz'],
+                                              shuffle=True,
+                                              sort_key=self.primary_key)
         self.valid_data, _ = self.reader.load(self.dataset['valid_file'], self.feat2index, self.config_params['batchsz'], sort_key=None)
         self.test_data, self.txts = self.reader.load(self.dataset['test_file'], self.feat2index, self.config_params.get('test_batchsz', 1), shuffle=False, sort_key=None)
 

@@ -53,12 +53,6 @@ class Seq2SeqModel(DynetModel, EncoderDecoderModel):
         self.pc.populate(file_name)
         return self
 
-    def get_src_vocab(self):
-        return self.vocab1
-
-    def get_dst_vocab(self):
-        return self.vocab2
-
     def dropout(self, input_):
         if self.train:
             return dy.dropout(input_, self.pdrop)
@@ -66,33 +60,38 @@ class Seq2SeqModel(DynetModel, EncoderDecoderModel):
 
     @classmethod
     def create(cls, input_embeddings, output_embeddings, **kwargs):
-
         model = cls(input_embeddings, output_embeddings, **kwargs)
         print(model)
         return model
 
-    def make_input(self, batch_dict, **kwargs):
-        src = batch_dict['src'].T
-        src_len = batch_dict['src_len'].T
-        dst = batch_dict['dst'].T
-        tgt = dst[1:]
-        return src, dst[:-1], src_len, tgt
+    def make_input(self, batch_dict):
+        example_dict = dict({})
+        for k in self.embeddings.keys():
+            example_dict[k] = batch_dict[k].T
+
+        if self.src_lengths_key is not None:
+            lengths = batch_dict[self.src_lengths_key]
+            example_dict['src_len'] = lengths.T
+
+        if 'tgt' in batch_dict:
+            tgt = batch_dict['tgt'].T
+            example_dict['dst'] = tgt[:-1]
+            example_dict['tgt'] = tgt[1:]
+        return example_dict
 
     # Input better be xch, x
-    def forward(self, input):
-        src = input[0]
-        dst = input[1]
-        src_len = input[2]
-        rnn_enc_seq, final_encoder_state = self.encode(src, src_len)
+    def forward(self, batch_dict):
+        dst = batch_dict['dst']
+        src_len = batch_dict['src_len']
+        rnn_enc_seq, final_encoder_state = self.encode(batch_dict, src_len)
         return self.decode(rnn_enc_seq, src_len, final_encoder_state, dst)
 
-    def encode(self, src, src_len):
-        embed_in_seq = self.embed_in(src)
+    def encode(self, example_dict, src_len):
+        embed_in_seq = self.embed(example_dict)
         output, hidden = self.encode_rnn(embed_in_seq, src_len)
         return output, hidden
 
     def input_i(self, embed_i, output_i):
-        #return embed_i
         return embed_i
 
     def bridge(self, final_encoder_state, context):
@@ -144,7 +143,6 @@ class Seq2SeqModel(DynetModel, EncoderDecoderModel):
             src_len = np.array([src_len])
         batch = []
         for src_i, src_len_i in zip(src, src_len):
-            #batch += [self.greedy_decode(src_i.reshape(-1, 1), src_len_i.reshape(-1, 1))]
             best = self.beam_decode(src_i.reshape(-1, 1), np.array([src_len_i]), K=kwargs.get('beam', 2))[0][0]
             batch += [best]
 
@@ -207,7 +205,6 @@ class Seq2SeqModel(DynetModel, EncoderDecoderModel):
             V = wll.shape[0]
             if i > 0:
                 expanded_history = scores.reshape(scores.shape + (1,))  # scores = K
-                # TODO: dont add anything when the beam is done
                 sll = wll.T + expanded_history
             else:
                 sll = wll.T

@@ -8,9 +8,9 @@ import numpy as np
 from baseline.dy.dynety import CRF, Linear, DynetModel, rnn_forward
 
 
-class RNNTaggerModel(TaggerModel, DynetModel):
-    def __init__(self, embeddings_set, pc, labels, dropout=0.5, layers=1, **kwargs):
-        super(RNNTaggerModel, self).__init__(pc)
+class RNNTaggerModel(DynetModel, TaggerModel):
+    def __init__(self, embeddings_set, labels, dropout=0.5, layers=1, **kwargs):
+        super(RNNTaggerModel, self).__init__(kwargs['pc'])
         self.pdrop = dropout
         self.labels = labels
         self.hsz = int(kwargs['hsz'])
@@ -37,10 +37,6 @@ class RNNTaggerModel(TaggerModel, DynetModel):
             return dy.dropout(input_, self.pdrop)
         return input_
 
-    @property
-    def pc(self):
-        return self._pc
-
     def __str__(self):
         str_ = super(RNNTaggerModel, self).__str__()
         return "Auto-batching: \n{}".format(str_)
@@ -52,16 +48,21 @@ class RNNTaggerModel(TaggerModel, DynetModel):
             dsz += embedding.get_dsz()
         return dsz
 
+    def _embed(self, batch_dict):
+        all_embeddings_lists = []
+        for k, embedding in self.embeddings.items():
+            all_embeddings_lists += [embedding.encode(batch_dict[k])]
+
+        embed = dy.concatenate(all_embeddings_lists, d=1)
+        return embed
+
     def make_input(self, batch_dict):
         example_dict = dict({})
 
-        # This forces everything to (T, B, W) or (T, B)
-        # The former we dont actually want, but its ok, we fix it in the embedding input
-        # using a transpose(2, 0, 1)
         for k, embedding in self.embeddings.items():
             example_dict[k] = batch_dict[k].T
 
-        lengths = batch_dict[self.src_lengths_key]
+        lengths = batch_dict[self.lengths_key]
         example_dict['lengths'] = lengths
 
         y = batch_dict.get('y')
@@ -74,31 +75,26 @@ class RNNTaggerModel(TaggerModel, DynetModel):
 
         return example_dict
 
-    def _embed(self, input_):
-
-        all_embeddings_lists = []
-        for k, embedding in self.embeddings.items():
-            all_embeddings_lists += [embedding.encode(input_)]
-
-        pooled_vecs = [pooled for pooled in zip(all_embeddings_lists)]
-        return self.dropout(dy.concatenate(pooled_vecs))
-
     def compute_unaries(self, batch_dict):
         embed = self._embed(batch_dict)
-        exps = [self.output(out) for out in rnn_forward(self.rnn, embed)]
+        embed_list = [e for e in embed]
+        exps = [self.output(out) for out in rnn_forward(self.rnn, embed_list)]
         return exps
 
     def predict(self, batch_dict):
         dy.renew_cg()
         inputs = self.make_input(batch_dict)
         lengths = inputs['lengths']
-        unaries = self.compute_unaries(batch_dict)
+        unaries = self.compute_unaries(inputs)
         if self.do_crf is True:
             best_path, path_score = self.crf.decode(unaries)
         else:
             best_path = [np.argmax(x.npvalue(), axis=0) for x in unaries]
-        B, T = batch_dict[self.lengths_key].shape
-        best_path = np.stack(best_path).reshape((T, B))
+        # TODO: RN using autobatching, so none of this is really useful
+        # If we want to support batching in this function we have to either loop over the batch
+        # or we can just simplify all this code here
+        best_path = np.stack(best_path).reshape(-1, 1)  # (T, B)
+
         best_path = best_path.transpose(1, 0)
         results = []
 

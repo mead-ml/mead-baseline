@@ -1,11 +1,13 @@
 from itertools import chain
 import numpy as np
 from baseline.w2v import PretrainedEmbeddingsModel, RandomInitVecModel
-from baseline.dy.dynety import ParallelConv
-from baseline.utils import create_user_embeddings, load_user_embeddings
+from baseline.dy.dynety import ParallelConv, HighwayConnection, SkipConnection, Linear
+from baseline.utils import create_user_embeddings, load_user_embeddings, export
 import dynet as dy
+__all__ = []
+exporter = export(__all__)
 
-
+@exporter
 class DyNetEmbeddings(object):
 
     def __init__(self, pc):
@@ -42,7 +44,6 @@ class LookupTableEmbeddings(DyNetEmbeddings):
         self.dsz = kwargs.get('dsz')
         self.batched = kwargs.get('batched', False)
         self.finetune = kwargs.get('finetune', False)
-        #embedding_weight = kwargs['weights']
         embedding_weight = np.reshape(kwargs['weights'], (self.vsz, 1, self.dsz))
         self.lookup = dy.lookup_batch if self.batched else dy.lookup
         self.embeddings = self.pc.lookup_parameters_from_numpy(embedding_weight, name=name)
@@ -74,19 +75,38 @@ class CharConvEmbeddings(DyNetEmbeddings):
         super(CharConvEmbeddings, self).__init__(kwargs['pc'])
         self.vsz = kwargs.get('vsz')
         self.dsz = kwargs.get('dsz')
+        self.batched = kwargs.get('batched', False)
         self.finetune = kwargs.get('finetune', True)
         self.name = name
         self.weights = kwargs.get('weights')
         weights = kwargs.get('weights')
         embedding_weight = np.reshape(weights, (self.vsz, 1, self.dsz))
-        vsz, dsz = embedding_weight.shape
-        embedding_weight = np.reshape(embedding_weight, (vsz, 1, dsz))
         self.embeddings = self.pc.lookup_parameters_from_numpy(embedding_weight, name=name)
         filtsz = kwargs.get('cfiltsz', [3])
+        gate = kwargs.get('gating', 'skip')
+        num_gates = kwargs.get('num_gates', 1)
+        max_feat = kwargs.get('max_feat', 200)
+        nfeat_factor = kwargs.get('nfeat_factor')
         cmotsz = kwargs.get('wsz', 30)
-        self.wsz = len(filtsz) * cmotsz
-        self.pool = ParallelConv(filtsz, cmotsz, self.dsz, self.pc, name=self.name)
-        self.lookup = dy.lookup_batch if self.batched else dy.lookup
+        self.pool, self.wsz = self._create_char_comp(filtsz, cmotsz, self.dsz, gate, num_gates, max_feat, nfeat_factor)
+        self.lookup = dy.lookup_batch #if self.batched else dy.lookup
+
+    def _create_char_comp(self, filtsz, cmotsz, cdsz, gate, num_gates, max_feat, nfeat_factor):
+        if nfeat_factor is not None:
+            cmotsz = [min(nfeat_factor * fsz, max_feat) for fsz in filtsz]
+            cmotsz_total = sum(cmotsz)
+        else:
+            cmotsz_total = cmotsz * len(filtsz)
+        parallel_conv = ParallelConv(filtsz, cmotsz, cdsz, self.pc)
+        gate = HighwayConnection if gate.startswith('highway') else SkipConnection
+        funcs = [Linear(cmotsz_total, cmotsz_total, self.pc, name="linear-{}".format(i)) for i in range(num_gates)]
+        gating = gate(funcs, cmotsz_total, self.pc)
+
+        def call(input_):
+            x = parallel_conv(input_)
+            return gating(x)
+
+        return call, cmotsz_total
 
     def get_dsz(self):
         return self.wsz
@@ -95,18 +115,18 @@ class CharConvEmbeddings(DyNetEmbeddings):
         return self.vsz
 
     def encode(self, x):
-        xch = x.transpose(2, 0, 1)
-        W, T, B = xch.shape
-        xch = xch.reshape(W, -1)
+        xch = x.transpose(0, 2, 1)
+        W, T, B = x.shape
+        xch = x.reshape(W, -1)
         # W x (T x B)
         embedded = [self.lookup(self.embeddings, v, self.finetune) for v in xch]
         embed_chars_vec = dy.concatenate(embedded)
-        embed_chars_vec = dy.reshape(embed_chars_vec, (W, self.char_dsz), T*B)
-        pooled_chars = self.pool_chars(embed_chars_vec, 1)
-        pooled_chars = dy.reshape(pooled_chars, (self.char_word_sz, T), B)
+        embed_chars_vec = dy.reshape(embed_chars_vec, (W, self.dsz), T*B)
+        pooled_chars = self.pool(embed_chars_vec)
+        pooled_chars = dy.reshape(pooled_chars, (self.wsz, T), B)
         # Back to T x W x B
         pooled_chars = dy.transpose(pooled_chars)
-        return self.pool(pooled_chars)
+        return pooled_chars
 
 
 BASELINE_EMBEDDING_MODELS = {

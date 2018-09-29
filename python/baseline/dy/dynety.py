@@ -7,7 +7,7 @@ from baseline.utils import crf_mask, lookup_sentence
 class DynetModel(object):
     def __init__(self, pc=None):
         super(DynetModel, self).__init__()
-        self._pc = pc  #dy.ParameterCollection()
+        self._pc = pc
         self.train = True
 
     @property

@@ -91,7 +91,7 @@ class TaggerTrainerDyNet(EpochReportingTrainer):
         pg = create_progress_bar(steps)
         for batch_dict in ts:
 
-            lengths = batch_dict['lengths']
+            lengths = batch_dict[self.model.lengths_key]
             ids = batch_dict['ids']
             y = batch_dict['y']
             pred = self.model.predict(batch_dict)

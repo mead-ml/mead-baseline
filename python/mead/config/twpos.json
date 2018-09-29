@@ -3,7 +3,6 @@
     "batchsz": 20,
     "basedir": "./twpos",
     "conll_output": "twposresults.conll",
-    "test_thresh": 10,
     "charsz": 16,
     "unif": 0.1,
     "preproc": {
@@ -64,7 +63,6 @@
     "train": {
         "epochs": 40,
         "optim": "sgd",
-        "decay": 0,
         "eta": 0.01,
         "mom": 0.9,
         "patience": 20,

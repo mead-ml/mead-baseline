@@ -62,7 +62,10 @@ class ClassifierModelBase(DynetModel, ClassifierModel):
                 example_dict['lengths'] = lengths
 
         if 'y' in batch_dict:
-            example_dict['y'] = batch_dict['y']
+            if self.batched:
+                example_dict['y'] = batch_dict['y'].T
+            else:
+                example_dict['y'] = batch_dict['y'][0]
         return example_dict
 
     def forward(self, batch_dict):
