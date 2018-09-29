@@ -210,6 +210,7 @@ def Convolution1d(fsz, cmotsz, dsz, pc, strides=(1, 1, 1, 1), name="conv"):
         Returns:
             dy.Expression ((cmotsz,), B)
         """
+        # TODO: should be True, right?
         c = dy.conv2d_bias(input_, weight, bias, strides, is_valid=False)
         activation = dy.rectify(c)
         ((_, seq_len, _), _) = activation.dim()

@@ -44,11 +44,7 @@ class ClassifierModelBase(DynetModel, ClassifierModel):
 
         embed = dy.concatenate(all_embeddings_lists, d=1)
         return embed
-        #return self.dropout(embed)
-        #embed = [self.dropout(dy.concatenate(z)) for z in lists]
-        #embed = [self.dropout(dy.concatenate([embed_word])) for embed_word in embed_words_list]
 
-        #return embed
 
     def make_input(self, batch_dict):
         example_dict = dict({})
@@ -84,6 +80,7 @@ class ClassifierModelBase(DynetModel, ClassifierModel):
     def dropout(self, input_):
         if self.train:
             return dy.dropout(input_, self.pdrop)
+
         return input_
 
     def _init_stacked(self, input_dim, **kwargs):
@@ -127,16 +124,13 @@ class ClassifierModelBase(DynetModel, ClassifierModel):
 
 class ConvModel(ClassifierModelBase):
     def __init__(self, *args, **kwargs):
-        kwargs['dense'] = True
         super(ConvModel, self).__init__(*args, **kwargs)
 
     def _init_pool(self, dsz, filtsz, cmotsz, **kwargs):
         parallel_conv = ParallelConv(filtsz, cmotsz, dsz, self.pc)
         def call_pool(embedded, _):
-            # This is a list (len(T) of lists (BxW)
-            conv = parallel_conv(embedded)
+            conv = self.dropout(parallel_conv(embedded))
             return conv
-            #return self.dropout(conv)
 
         return len(filtsz) * cmotsz, call_pool
 

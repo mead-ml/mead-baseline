@@ -1,8 +1,8 @@
 task: classify
-basedir: ./models/sst2-dy
+basedir: sst2-dy
 batchsz: 50
 preproc:
-  mxlen: -1
+  mxlen: 100
   clean: true
 backend: dynet
 dataset: SST2
@@ -14,8 +14,6 @@ model:
   filtsz: [3,4,5]
   cmotsz: 100
   dropout: 0.5
-  finetune: true
-  batched: true
 features:
   - name: word
     vectorizer:
