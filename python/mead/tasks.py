@@ -422,11 +422,17 @@ class EncoderDecoderTask(Task):
             self.config_params['preproc']['trim'] = False
             if backend.name == 'dynet':
                 import _dynet
+                import _dynet
                 dy_params = _dynet.DynetParams()
                 dy_params.from_args()
                 dy_params.set_requested_gpus(1)
+                if 'autobatchsz' in self.config_params['train']:
+                    dy_params.set_autobatch(True)
+                    batched = False
+                else:
+                    batched = True
                 dy_params.init()
-                backend.params = {'pc': _dynet.ParameterCollection()}
+                backend.params = {'pc': _dynet.ParameterCollection(), 'batched': batched}
                 import baseline.dy.seq2seq as seq2seq
                 self.config_params['preproc']['show_ex'] = baseline.dy.show_examples_dynet
             else:

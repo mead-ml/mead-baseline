@@ -7,30 +7,36 @@ from baseline.utils import topk
 class Seq2SeqModel(DynetModel, EncoderDecoderModel):
 
     def __init__(self, embeddings_in, embeddings_out, **kwargs):
-        super(Seq2SeqModel, self).__init__()
+        super(Seq2SeqModel, self).__init__(kwargs['pc'])
         self.train = True
         self.hsz = kwargs['hsz']
-        nlayers = kwargs['layers']
+        layers = kwargs['layers']
         self.rnntype = kwargs['rnntype']
-        print(self.rnntype)
         self.pdrop = kwargs.get('dropout', 0.5)
         self.nc = embeddings_out.vsz
-        self.embed_in = Embedding(embeddings_in.vsz, embeddings_in.dsz, self.pc, embedding_weight=embeddings_in.weights, finetune=True, batched=True, name="source-embedding")
-        self.embed_out = Embedding(self.nc, embeddings_out.dsz, self.pc, embedding_weight=embeddings_out.weights, finetune=True, batched=True, name="target-embedding")
+        src_dsz = self._init_embed(embeddings_in)
+        self.tgt_embedding = embeddings_out
+        self.src_lengths_key = kwargs.get('src_lengths_key')
 
         if self.rnntype == 'blstm':
-            self.lstm_forward = dy.VanillaLSTMBuilder(nlayers, embeddings_in.dsz, self.hsz//2, self.pc)
-            self.lstm_backward = dy.VanillaLSTMBuilder(nlayers, embeddings_in.dsz, self.hsz//2, self.pc)
+            self.lstm_forward = dy.VanillaLSTMBuilder(layers, src_dsz, self.hsz//2, self.pc)
+            self.lstm_backward = dy.VanillaLSTMBuilder(layers,src_dsz, self.hsz//2, self.pc)
         else:
-            self.lstm_forward = dy.VanillaLSTMBuilder(nlayers, embeddings_in.dsz, self.hsz, self.pc)
+            self.lstm_forward = dy.VanillaLSTMBuilder(layers, src_dsz, self.hsz, self.pc)
             self.lstm_backward = None
 
         # TODO: hsz + dsz x for input feeding!
-        self.decoder_rnn = dy.VanillaLSTMBuilder(nlayers, self.hsz, embeddings_out.dsz, self.pc)
-        self.preds = Linear(self.nc, embeddings_out.dsz, self.pc)
-        self.vocab1 = embeddings_in.vocab
-        self.vocab2 = embeddings_out.vocab
+        out_dsz = self.tgt_embedding.dsz
+        self.decoder_rnn = dy.VanillaLSTMBuilder(layers, self.hsz, out_dsz, self.pc)
+        self.preds = Linear(self.nc, out_dsz, self.pc)
         self.beam_sz = 1
+
+    def _init_embed(self, embeddings):
+        dsz = 0
+        self.embeddings = embeddings
+        for embedding in self.embeddings.values():
+            dsz += embedding.get_dsz()
+        return dsz
 
     def encode_rnn(self, embed_in_seq, src_len):
         forward, forward_state = rnn_forward_with_state(self.lstm_forward, embed_in_seq, src_len)
@@ -64,14 +70,21 @@ class Seq2SeqModel(DynetModel, EncoderDecoderModel):
         print(model)
         return model
 
+    def _embed(self, batch_dict):
+        all_embeddings_lists = []
+        for k, embedding in self.embeddings.items():
+            all_embeddings_lists += [embedding.encode(batch_dict[k])]
+
+        embed = dy.concatenate(all_embeddings_lists, d=1)
+        return embed
+
     def make_input(self, batch_dict):
         example_dict = dict({})
         for k in self.embeddings.keys():
             example_dict[k] = batch_dict[k].T
 
-        if self.src_lengths_key is not None:
-            lengths = batch_dict[self.src_lengths_key]
-            example_dict['src_len'] = lengths.T
+        lengths = batch_dict[self.src_lengths_key]
+        example_dict['src_len'] = lengths.T
 
         if 'tgt' in batch_dict:
             tgt = batch_dict['tgt'].T
@@ -79,15 +92,14 @@ class Seq2SeqModel(DynetModel, EncoderDecoderModel):
             example_dict['tgt'] = tgt[1:]
         return example_dict
 
-    # Input better be xch, x
     def forward(self, batch_dict):
+        rnn_enc_seq, final_encoder_state = self.encode(batch_dict)
         dst = batch_dict['dst']
-        src_len = batch_dict['src_len']
-        rnn_enc_seq, final_encoder_state = self.encode(batch_dict, src_len)
-        return self.decode(rnn_enc_seq, src_len, final_encoder_state, dst)
+        return self.decode(rnn_enc_seq, final_encoder_state, dst)
 
-    def encode(self, example_dict, src_len):
-        embed_in_seq = self.embed(example_dict)
+    def encode(self, example_dict):
+        embed_in_seq = self._embed(example_dict)
+        src_len = example_dict['src_len']
         output, hidden = self.encode_rnn(embed_in_seq, src_len)
         return output, hidden
 
@@ -113,12 +125,12 @@ class Seq2SeqModel(DynetModel, EncoderDecoderModel):
             output += [output_i]
         return output
 
-    def decode(self, context, src_len, final_encoder_state, dst):
+    def decode(self, context, final_encoder_state, dst):
         h_i, output_i = self.bridge(final_encoder_state, context)
         context_mx = dy.concatenate_cols(context)
         rnn_state = self.decoder_rnn.initial_state(h_i)
         attn_fn = self._attn(context_mx)
-        embed_out_seq = self.embed_out(dst)
+        embed_out_seq = self.tgt_embedding.encode(dst)
         output = []
         for i, embed_i in enumerate(embed_out_seq):
             embed_i = self.input_i(embed_i, output_i)
@@ -136,23 +148,26 @@ class Seq2SeqModel(DynetModel, EncoderDecoderModel):
         return lsm
 
     # B x K x T and here T is a list
-    def run(self, batch_dict, **kwargs):
-        src = batch_dict['src']
-        src_len = batch_dict['src_len']
-        if type(src_len) == int or type(src_len) == np.int64:
-            src_len = np.array([src_len])
+    def run(self, batch_dict, beam=1, **kwargs):
+        self.train = False
+        # Bit of a hack
+        src_field = self.src_lengths_key.split('_')[0]
+        B = batch_dict[src_field].shape[1]
         batch = []
-        for src_i, src_len_i in zip(src, src_len):
-            best = self.beam_decode(src_i.reshape(-1, 1), np.array([src_len_i]), K=kwargs.get('beam', 2))[0][0]
-            batch += [best]
+        for b in range(B):
+            example = dict({})
+            for k, value in batch_dict.items():
+                example[k] = value[b].reshape((1,) + value[b].shape)
+            inputs = self.make_input(example)
+            batch += [self.beam_decode(inputs, beam, kwargs.get('mxlen', 100))[0]]
 
         return batch
 
-    def greedy_decode(self, src, src_len):
+    def greedy_decode(self, inputs, mxlen=100):
         GO = self.vocab2['<GO>']
         EOS = self.vocab2['<EOS>']
         dy.renew_cg()
-        rnn_enc_seq, final_encoder_state = self.encode(src, src_len)
+        rnn_enc_seq, final_encoder_state = self.encode(inputs)
         context_mx = dy.concatenate_cols(rnn_enc_seq)
         # rnn_state = self.decoder_rnn.initial_state(final_encoder_state)
         rnn_state = self.decoder_rnn.initial_state(final_encoder_state)
@@ -160,9 +175,9 @@ class Seq2SeqModel(DynetModel, EncoderDecoderModel):
 
         output_i = rnn_enc_seq[-1]  # zeros?!
         output = [GO]
-        for i in range(100):
+        for i in range(mxlen):
             dst_last = np.array(output[-1]).reshape(1, 1)
-            embed_i = self.embed_out([dst_last])[-1]
+            embed_i = self.tgt_embedding([dst_last])[-1]
             embed_i = self.input_i(embed_i, output_i)
             rnn_state = rnn_state.add_input(embed_i)
             rnn_output_i = rnn_state.output()
@@ -174,8 +189,7 @@ class Seq2SeqModel(DynetModel, EncoderDecoderModel):
 
         return output
 
-    def beam_decode(self, src, src_len, K=2):
-
+    def beam_decode(self, inputs, K, mxlen=100):
         GO = self.vocab2['<GO>']
         EOS = self.vocab2['<EOS>']
         dy.renew_cg()
@@ -185,7 +199,7 @@ class Seq2SeqModel(DynetModel, EncoderDecoderModel):
         done = np.array([False] * K)
         scores = np.array([0.0]*K)
         dy.renew_cg()
-        rnn_enc_seq, hidden = self.encode(src, src_len)
+        rnn_enc_seq, hidden = self.encode(inputs)
         context_mx = dy.concatenate_cols(rnn_enc_seq)
         # To vectorize, we need to expand along the batch dimension, K times
         final_encoder_state_k = (dy.concatenate_to_batch([h]*K) for h in hidden)
@@ -194,9 +208,9 @@ class Seq2SeqModel(DynetModel, EncoderDecoderModel):
         attn_fn = self._attn(context_mx)
 
         output_i = dy.concatenate_to_batch([rnn_enc_seq[-1]]*K)
-        for i in range(100):
+        for i in range(mxlen):
             dst_last = np.array([path[-1] for path in paths]).reshape(1, K)
-            embed_i = self.embed_out(dst_last)[-1]
+            embed_i = self.tgt_embedding(dst_last)[-1]
             embed_i = self.input_i(embed_i, output_i)
             rnn_state = rnn_state.add_input(embed_i)
             rnn_output_i = rnn_state.output()
