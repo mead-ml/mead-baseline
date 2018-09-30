@@ -499,8 +499,8 @@ class LSTMModel(ClassifierModelBase):
         nlayers = int(kwargs.get('layers', 1))
 
         if rnntype == 'blstm':
-            rnnfwd = stacked_lstm(hsz, self.pkeep, nlayers)
-            rnnbwd = stacked_lstm(hsz, self.pkeep, nlayers)
+            rnnfwd = stacked_lstm(hsz//2, self.pkeep, nlayers)
+            rnnbwd = stacked_lstm(hsz//2, self.pkeep, nlayers)
             ((_, _), (fw_final_state, bw_final_state)) = tf.nn.bidirectional_dynamic_rnn(rnnfwd,
                                                                                          rnnbwd,
                                                                                          word_embeddings,

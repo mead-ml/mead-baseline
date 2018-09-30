@@ -169,7 +169,9 @@ class LSTMModel(ClassifierModelBase):
         hsz = kwargs.get('rnnsz', kwargs.get('hsz', 100))
         if type(hsz) is list:
             hsz = hsz[0]
-        self.lstm = nn.LSTM(dsz, hsz, 1, bias=True, dropout=self.pdrop)
+
+        rnntype = kwargs.get('rnn_type', kwargs.get('rnntype', 'lstm'))
+        self.lstm = nn.LSTM(dsz, hsz, 1, bias=True, dropout=self.pdrop, bidirectional=rnntype.startswith('b'))
         if unif is not None:
             for weight in self.lstm.parameters():
                 weight.data.uniform_(-unif, unif)

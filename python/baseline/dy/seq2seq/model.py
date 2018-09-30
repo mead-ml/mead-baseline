@@ -9,6 +9,8 @@ class Seq2SeqModel(DynetModel, EncoderDecoderModel):
     def __init__(self, embeddings_in, embeddings_out, **kwargs):
         super(Seq2SeqModel, self).__init__(kwargs['pc'])
         self.train = True
+        self.GO = kwargs.get('GO')
+        self.EOS = kwargs.get('EOS')
         self.hsz = kwargs['hsz']
         layers = kwargs['layers']
         self.rnntype = kwargs['rnntype']
@@ -152,7 +154,7 @@ class Seq2SeqModel(DynetModel, EncoderDecoderModel):
         self.train = False
         # Bit of a hack
         src_field = self.src_lengths_key.split('_')[0]
-        B = batch_dict[src_field].shape[1]
+        B = batch_dict[src_field].shape[0]
         batch = []
         for b in range(B):
             example = dict({})
@@ -190,8 +192,8 @@ class Seq2SeqModel(DynetModel, EncoderDecoderModel):
         return output
 
     def beam_decode(self, inputs, K, mxlen=100):
-        GO = self.vocab2['<GO>']
-        EOS = self.vocab2['<EOS>']
+        GO = self.GO
+        EOS = self.EOS
         dy.renew_cg()
 
         paths = [[GO] for _ in range(K)]
@@ -210,7 +212,7 @@ class Seq2SeqModel(DynetModel, EncoderDecoderModel):
         output_i = dy.concatenate_to_batch([rnn_enc_seq[-1]]*K)
         for i in range(mxlen):
             dst_last = np.array([path[-1] for path in paths]).reshape(1, K)
-            embed_i = self.tgt_embedding(dst_last)[-1]
+            embed_i = self.tgt_embedding.encode(dst_last)[-1]
             embed_i = self.input_i(embed_i, output_i)
             rnn_state = rnn_state.add_input(embed_i)
             rnn_output_i = rnn_state.output()
