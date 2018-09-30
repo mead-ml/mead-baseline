@@ -77,7 +77,7 @@ class RNNTaggerModel(DynetModel, TaggerModel):
 
     def compute_unaries(self, batch_dict):
         embed = self._embed(batch_dict)
-        embed_list = [e for e in embed]
+        embed_list = [self.dropout(e) for e in embed]
         exps = [self.output(out) for out in rnn_forward(self.rnn, embed_list)]
         return exps
 

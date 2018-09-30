@@ -54,13 +54,11 @@
     ],
     "model": {
         "model_type": "default",
-        "cfiltsz": [3],
         "hsz": 200,
-        "wsz": 30,
         "dropout": 0.5,
         "rnntype": "blstm",
         "layers": 1,
-        "crf": false 
+        "crf": true
     },
     "train": {
 	"autobatchsz": 20,
