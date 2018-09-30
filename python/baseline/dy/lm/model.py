@@ -1,19 +1,51 @@
-from baseline.model import create_lang_model, LanguageModel
+from baseline.model import create_lang_model, load_lang_model, LanguageModel
 from baseline.dy.dynety import *
 
 
-class BaseLanguageModel(LanguageModel, DynetModel):
-    def __init__(self):
-        super(BaseLanguageModel, self).__init__()
+class BasicLanguageModel(DynetModel, LanguageModel):
 
-    def embed(self, input_):
-        pass
+    @classmethod
+    def create(cls, embeddings, **kwargs):
+        return cls(embeddings, **kwargs)
+
+    def __init__(self, embeddings, layers=1, hsz=650, dropout=None, **kwargs):
+        super(BasicLanguageModel, self).__init__(kwargs['pc'])
+        self.tgt_key = kwargs.get('tgt_key')
+        vsz = embeddings[self.tgt_key].vsz
+        dsz = self._init_embed(embeddings)
+        self._rnn = dy.VanillaLSTMBuilder(layers, dsz, hsz, self.pc)
+        self._output = Linear(vsz, hsz, self.pc, name="output")
+        self.dropout = dropout
+
+    def _init_embed(self, embeddings):
+        dsz = 0
+        self.embeddings = embeddings
+        for embedding in self.embeddings.values():
+            dsz += embedding.get_dsz()
+        return dsz
+
+    def _embed(self, batch_dict):
+        all_embeddings_lists = []
+        for k, embedding in self.embeddings.items():
+            all_embeddings_lists += [embedding.encode(batch_dict[k])]
+
+        embed = dy.concatenate(all_embeddings_lists, d=1)
+        return embed
+
+    def make_input(self, batch_dict):
+        example_dict = dict({})
+        for key in self.embeddings.keys():
+            example_dict[key] = batch_dict[key].T
+        y = batch_dict.get('y')
+        if y is not None:
+            example_dict['y'] = y.T
+        return example_dict
 
     def output(self, input_):
         return [self._output(x) for x in input_]
 
     def forward(self, input_, state=None, train=True):
-        input_ = self.embed(input_)
+        input_ = self._embed(input_)
         if train:
             self._rnn.set_dropout(self.dropout)
         else:
@@ -31,124 +63,8 @@ class BaseLanguageModel(LanguageModel, DynetModel):
         return self
 
 
-class WordLanguageModel(BaseLanguageModel):
-    def __init__(
-            self,
-            embeddings, finetune=True,
-            layers=1, hsz=650,
-            dropout=None,
-            **kwargs
-    ):
-        super(WordLanguageModel, self).__init__()
-        embedding = embeddings['word']
-        vsz = embedding.vsz
-        dsz = embedding.dsz
-        self._embed = Embedding(vsz, dsz, self.pc, embedding_weight=embedding.weights, finetune=finetune, batched=True)
-        self._rnn = dy.VanillaLSTMBuilder(layers, dsz, hsz, self.pc)
-        self._output = Linear(vsz, hsz, self.pc, name="output")
-        self.dropout = dropout
-
-    def embed(self, input_):
-        words, _ = input_
-        return self._embed(words)
-
-    def make_input(self, batch_dict, **kwargs):
-        x = batch_dict['x'].T
-        y = batch_dict['y'].T
-        return (x, None), y
-
-    @classmethod
-    def create(cls, embeddings, **kwargs):
-        model = cls(embeddings, **kwargs)
-        print(model)
-        return model
-
-
-class CharCompLanguageModel(BaseLanguageModel):
-    def __init__(
-            self, embedding,
-            finetune=True, use_words=False,
-            layers=1, hsz=650,
-            cmotsz=30, cfiltsz=[1, 2, 3, 4, 5, 6, 7],
-            max_feat=200, nfeat_factor=50,
-            gating='highway', num_gates=2,
-            dropout=None,
-            **kwargs
-    ):
-        super(CharCompLanguageModel, self).__init__()
-        self.use_words = use_words
-        vsz = embedding['word'].vsz
-        dsz = embedding['word'].dsz
-        cvsz = embedding['char'].vsz
-        cdsz = embedding['char'].dsz
-        self.c_embed = Embedding(
-            cvsz, cdsz,
-            self.pc,
-            embedding_weight=embedding['char'].weights,
-            finetune=finetune, dense=True, batched=True
-        )
-        if self.use_words:
-            self.w_embed = Embedding(
-                vsz, dsz,
-                self.pc,
-                embedding_weight=embedding['word'].weights,
-                finetune=finetune, dense=False, batched=True, name="word-embeddings"
-            )
-        self._char_comp, cmotsz_total = self._create_char_comp(
-            cfiltsz, cmotsz, cdsz, gating, num_gates, max_feat, nfeat_factor
-        )
-        if use_words:
-            rnninsz = cmotsz_total + dsz
-        else:
-            rnninsz = cmotsz_total
-        self._rnn = dy.VanillaLSTMBuilder(layers, rnninsz, hsz, self.pc)
-        self._output = Linear(vsz, hsz, self.pc, name="output")
-        self.dropout = dropout
-
-    def make_input(self, batch_dict, **kwargs):
-        x = batch_dict['x'].T
-        xch = batch_dict['xch']
-        # Change characters from [B, Ts, Tw] to [Ts, Tw, B] for easy lookup
-        xch = np.transpose(xch, (1, 2, 0))
-        y = batch_dict['y'].T
-        return (x, xch), y
-
-    def _create_char_comp(self, filtsz, cmotsz, cdsz, gate, num_gate, max_feat=200, nfeat_factor=None):
-        if nfeat_factor is not None:
-            cmotsz = [min(nfeat_factor * fsz, max_feat) for fsz in filtsz]
-            cmotsz_total = sum(cmotsz)
-        else:
-            cmotsz_total = cmotsz * len(filtsz)
-        self.parallel_conv = ParallelConv(filtsz, cmotsz, cdsz, self.pc)
-        gate = HighwayConnection if gate.startswith('highway') else SkipConnection
-        funcs = [Linear(cmotsz_total, cmotsz_total, self.pc, name="linear-{}".format(i)) for i in range(num_gate)]
-        gating = gate(funcs, cmotsz_total, self.pc)
-
-        def call(input_):
-            x = self.parallel_conv(input_)
-            return gating(x)
-
-        return call, cmotsz_total
-
-    def embed(self, input_):
-        words, chars = input_
-        c_embed = [self.c_embed(c) for c in chars]
-        result = [self._char_comp(c) for c in c_embed]
-        if self.use_words:
-            words = self.w_embed(words)
-            result = [dy.concatenate([r, w], d=0) for r, w in zip(result, words)]
-        return result
-
-
-    @classmethod
-    def create(cls, embeddings, **kwargs):
-        model = cls(embeddings, **kwargs)
-        print(model)
-        return model
-
 BASELINE_LM_MODELS = {
-    'default': WordLanguageModel.create,
-    'convchar': CharCompLanguageModel.create
+    'default': BasicLanguageModel.create,
 }
 
 
@@ -157,5 +73,5 @@ def create_model(embeddings, **kwargs):
     return lm
 
 
-#def load_model(modelname, **kwargs):
-#    return load_lang_model(WordLanguageModel.load, modelname, **kwargs)
+def load_model(modelname, **kwargs):
+    return load_lang_model(BasicLanguageModel.load, modelname, **kwargs)

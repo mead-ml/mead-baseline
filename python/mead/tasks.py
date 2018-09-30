@@ -542,13 +542,18 @@ class LanguageModelingTask(Task):
             self.config_params['preproc']['trim'] = True
 
         elif backend.name == 'dynet':
+            self.config_params['preproc']['trim'] = False
             import _dynet
             dy_params = _dynet.DynetParams()
             dy_params.from_args()
             dy_params.set_requested_gpus(1)
+            if 'autobatchsz' in self.config_params['train']:
+                dy_params.set_autobatch(True)
+                batched = False
+            else:
+                batched = True
             dy_params.init()
-            backend.params = {'pc': _dynet.ParameterCollection()}
-            self.config_params['preproc']['trim'] = False
+            backend.params = {'pc': _dynet.ParameterCollection(), 'batched': batched}
             import baseline.dy.lm as lm
         else:
             self.config_params['preproc']['trim'] = False
