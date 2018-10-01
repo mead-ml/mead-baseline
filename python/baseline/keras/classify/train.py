@@ -54,8 +54,9 @@ class ClassifyTrainerKeras(EpochReportingTrainer):
         steps = len(loader)
         pg = create_progress_bar(steps)
         for batch_dict in loader:
-            x, y = self.model.make_input(batch_dict)
-            metrics = self.model.impl.train_on_batch(x, y)
+            inputs = self.model.make_input(batch_dict)
+            y = inputs.pop('y')
+            metrics = self.model.impl.train_on_batch(inputs, y)
             for i in range(len(self.model.impl.metrics_names)):
                 name = self.model.impl.metrics_names[i]
                 name = ClassifyTrainerKeras.METRIC_REMAP.get(name, name)
@@ -74,9 +75,9 @@ class ClassifyTrainerKeras(EpochReportingTrainer):
         cm = ConfusionMatrix(self.model.labels)
 
         for batch_dict in loader:
-            truth = batch_dict['y']
-            x, y = self.model.make_input(batch_dict)
-            pred = self.model.impl.predict_on_batch(x)
+            truth = batch_dict.pop('y')
+            inputs = self.model.make_input(batch_dict)
+            pred = self.model.impl.predict_on_batch(inputs)
             guess = np.argmax(pred, axis=-1)
             cm.add_batch(truth, guess)
             pg.update()

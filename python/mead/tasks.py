@@ -26,23 +26,7 @@ class Task(object):
     TASK_REGISTRY = {}
 
     def _create_backend(self):
-        backend = Backend()
-        backend.name = self.config_params.get('backend', 'tensorflow')
-
-        if backend.name == 'pytorch':
-            import baseline.pytorch.embeddings as embeddings
-        elif backend.name == 'keras':
-            print('Keras backend')
-            import baseline.keras.embeddings as embeddings
-        elif backend.name == 'dynet':
-            print('Dynet backend')
-            import baseline.dy.embeddings as embeddings
-        else:
-            print('TensorFlow backend')
-            import baseline.tf.embeddings as embeddings
-
-        backend.embeddings = embeddings
-        return backend
+        pass
 
     def __init__(self, logger_file, mead_settings_config=None):
         super(Task, self).__init__()
@@ -243,10 +227,14 @@ class ClassifierTask(Task):
         super(ClassifierTask, self).__init__(logging_file, mead_settings_config, **kwargs)
 
     def _create_backend(self):
-        backend = super(ClassifierTask, self)._create_backend()
+        backend = Backend()
+        backend.name = self.config_params.get('backend', 'tensorflow')
+
         if backend.name == 'pytorch':
+            import baseline.pytorch.embeddings as embeddings
             import baseline.pytorch.classify as classify
         elif backend.name == 'keras':
+            import baseline.keras.embeddings as embeddings
             import baseline.keras.classify as classify
         elif backend.name == 'dynet':
             import _dynet
@@ -260,12 +248,15 @@ class ClassifierTask(Task):
                 batched = True
             dy_params.init()
             backend.params = {'pc': _dynet.ParameterCollection(), 'batched': batched}
+            import baseline.dy.embeddings as embeddings
             import baseline.dy.classify as classify
         else:
+            import baseline.tf.embeddings as embeddings
             import baseline.tf.classify as classify
             from mead.tf.exporters import ClassifyTensorFlowExporter
             backend.exporter = ClassifyTensorFlowExporter
 
+        backend.embeddings = embeddings
         backend.task = classify
         return backend
 
@@ -325,9 +316,12 @@ class TaggerTask(Task):
                                                **self.config_params['loader'])
 
     def _create_backend(self):
-        backend = super(TaggerTask, self)._create_backend()
+        backend = Backend()
+        backend.name = self.config_params.get('backend', 'tensorflow')
+
         if backend.name == 'pytorch':
             print('PyTorch backend')
+            import baseline.pytorch.embeddings as embeddings
             import baseline.pytorch.tagger as tagger
             self.config_params['preproc']['trim'] = True
         elif backend.name == 'dynet':
@@ -342,14 +336,17 @@ class TaggerTask(Task):
                                 'Change "batchsz" to 1 and under "train", set "autobatchsz" to your desired batchsz')
             dy_params.init()
             backend.params = {'pc': _dynet.ParameterCollection(), 'batched': False}
+            import baseline.dy.embeddings as embeddings
             import baseline.dy.tagger as tagger
             self.config_params['preproc']['trim'] = True
         else:
             print('TensorFlow backend')
             self.config_params['preproc']['trim'] = False
+            import baseline.tf.embeddings as embeddings
             import baseline.tf.tagger as tagger
             from mead.tf.exporters import TaggerTensorFlowExporter
             backend.exporter = TaggerTensorFlowExporter
+        backend.embeddings = embeddings
         backend.task = tagger
         return backend
 
@@ -412,8 +409,10 @@ class EncoderDecoderTask(Task):
         return reader
 
     def _create_backend(self):
-        backend = super(EncoderDecoderTask, self)._create_backend()
+        backend = Backend()
+        backend.name = self.config_params.get('backend', 'tensorflow')
         if backend.name == 'pytorch':
+            import baseline.pytorch.embeddings as embeddings
             import baseline.pytorch.seq2seq as seq2seq
             self.config_params['preproc']['show_ex'] = baseline.pytorch.show_examples_pytorch
             self.config_params['preproc']['trim'] = True
@@ -433,14 +432,17 @@ class EncoderDecoderTask(Task):
                     batched = True
                 dy_params.init()
                 backend.params = {'pc': _dynet.ParameterCollection(), 'batched': batched}
+                import baseline.dy.embeddings as embeddings
                 import baseline.dy.seq2seq as seq2seq
                 self.config_params['preproc']['show_ex'] = baseline.dy.show_examples_dynet
             else:
+                import baseline.tf.embeddings as embeddings
                 import baseline.tf.seq2seq as seq2seq
                 self.config_params['preproc']['show_ex'] = baseline.tf.create_show_examples_tf(self.primary_key)
                 from mead.tf.exporters import Seq2SeqTensorFlowExporter
                 backend.exporter = Seq2SeqTensorFlowExporter
 
+        backend.embeddings = embeddings
         backend.task = seq2seq
         return backend
 
@@ -536,8 +538,11 @@ class LanguageModelingTask(Task):
         return reader
 
     def _create_backend(self):
-        backend = super(LanguageModelingTask, self)._create_backend()
+        backend = Backend()
+        backend.name = self.config_params.get('backend', 'tensorflow')
+
         if backend.name == 'pytorch':
+            import baseline.pytorch.embeddings as embeddings
             import baseline.pytorch.lm as lm
             self.config_params['preproc']['trim'] = True
 
@@ -554,10 +559,13 @@ class LanguageModelingTask(Task):
                 batched = True
             dy_params.init()
             backend.params = {'pc': _dynet.ParameterCollection(), 'batched': batched}
+            import baseline.dy.embeddings as embeddings
             import baseline.dy.lm as lm
         else:
             self.config_params['preproc']['trim'] = False
+            import baseline.tf.embeddings as embeddings
             import baseline.tf.lm as lm
+        backend.embeddings = embeddings
         backend.task = lm
         return backend
 
