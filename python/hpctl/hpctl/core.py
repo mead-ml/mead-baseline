@@ -3,8 +3,8 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 import os
 import time
 from baseline.utils import export as exporter
-from baseline.utils import read_config_file, write_json, hash_config
-from mead.utils import read_config_file_or_json
+from baseline.utils import read_config_file, write_json
+from mead.utils import read_config_file_or_json, hash_config
 from hpctl.utils import create_logs
 from hpctl.results import get_results
 from hpctl.backend import get_backend

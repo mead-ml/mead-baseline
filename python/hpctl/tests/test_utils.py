@@ -1,7 +1,6 @@
 import random
 from copy import deepcopy
 import pytest
-from baseline.utils import remove_extra_keys
 from hpctl.utils import Label
 
 
@@ -15,86 +14,6 @@ def data():
         },
         'e': 4
     }
-
-
-def test_remove_first_layer(data):
-    gold = deepcopy(data)
-    del gold['a']
-
-    keys = {('a',)}
-    res = remove_extra_keys(data, keys)
-    assert res == gold
-
-def test_remove_multiple_first(data):
-    gold = {'a': 1}
-
-    keys = {('b',), ('e',)}
-    res = remove_extra_keys(data, keys)
-    assert res == gold
-
-def test_remove_nested_key(data):
-    gold = deepcopy(data)
-    del gold['b']['c']
-
-    keys = {('b', 'c')}
-    res = remove_extra_keys(data, keys)
-    assert res == gold
-
-def test_remove_multiple_nested(data):
-    gold = deepcopy(data)
-    gold['b'] = {}
-
-    keys = {('b', 'c'), ('b', 'd')}
-    res = remove_extra_keys(data, keys)
-    assert res == gold
-
-def test_remove_mixed_keys(data):
-    gold = deepcopy(data)
-    del gold['b']['c']
-    del gold['a']
-
-    keys = {('b', 'c'), ('a',)}
-    res = remove_extra_keys(data, keys)
-    assert res == gold
-
-def test_remove_single_missing(data):
-    gold = deepcopy(data)
-
-    keys = {('x',)}
-    res = remove_extra_keys(data, keys)
-    assert res == gold
-
-def test_remove_nested_missing_first(data):
-    gold = deepcopy(data)
-
-    keys = {('x', 'c')}
-    res = remove_extra_keys(data, keys)
-    assert res == gold
-
-
-def test_remove_nested_missing_last(data):
-    gold = deepcopy(data)
-
-    keys = {('b', 'x')}
-    res = remove_extra_keys(data, keys)
-    assert res == gold
-
-
-def test_remove_nested_missing_both(data):
-    gold = deepcopy(data)
-
-    keys = {('y', 'x')}
-    res = remove_extra_keys(data, keys)
-    assert res == gold
-
-
-def test_remove_one_missing_one_good(data):
-    gold = deepcopy(data)
-    del gold['a']
-
-    keys = {('x', 'y'), ('a',)}
-    res = remove_extra_keys(data, keys)
-    assert res == gold
 
 
 def test_label_equal(data):
@@ -137,4 +56,3 @@ def test_label_unpacking():
     label = Label(exp, sha1, name)
     res = dict(**label)
     assert res == gold
-

@@ -1,9 +1,9 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 import os
+from baseline.utils import read_config_file
 from baseline.utils import export as exporter
-from baseline.utils import read_config_file, hash_config
-from mead.utils import get_mead_settings, parse_extra_args
+from mead.utils import get_mead_settings, parse_extra_args, hash_config
 
 
 def get_configs(**kwargs):

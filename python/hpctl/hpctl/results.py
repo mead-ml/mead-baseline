@@ -13,7 +13,7 @@ from collections import defaultdict
 from multiprocessing.managers import BaseManager
 import numpy as np
 from baseline.utils import export as exporter
-from baseline.utils import hash_config
+from mead.utils import hash_config
 from hpctl.utils import Label
 
 
