@@ -15,14 +15,23 @@ class BasicLanguageModel(LanguageModel):
         self.pkeep = None
         self.saver = None
 
+    @property
+    def vdrop(self):
+        return self._vdrop
+
+    @vdrop.setter
+    def vdrop(self, value):
+        self._vdrop = value
+
     def save_using(self, saver):
         self.saver = saver
 
     def _rnnlm(self, inputs, vsz):
 
-        rnnfwd = tf.contrib.rnn.MultiRNNCell([lstm_cell_w_dropout(self.hsz, self.pkeep) for _ in range(self.layers)],
-                                             state_is_tuple=True)
+        def cell():
+            return lstm_cell_w_dropout(self.hsz, self.pkeep, variational=self.vdrop)
 
+        rnnfwd = tf.contrib.rnn.MultiRNNCell([cell() for _ in range(self.layers)], state_is_tuple=True)
         self.initial_state = rnnfwd.zero_state(self.batchsz, tf.float32)
         rnnout, state = tf.nn.dynamic_rnn(rnnfwd, inputs, initial_state=self.initial_state, dtype=tf.float32)
         output = tf.reshape(tf.concat(rnnout, 1), [-1, self.hsz])
@@ -104,23 +113,17 @@ class BasicLanguageModel(LanguageModel):
     def create(cls, embeddings, **kwargs):
 
         lm = cls()
-
         lm.embeddings = embeddings
         lm.y = kwargs.get('y', tf.placeholder(tf.int32, [None, None], name="y"))
         lm.batchsz = kwargs['batchsz']
         lm.sess = kwargs.get('sess', tf.Session())
         lm.rnntype = kwargs.get('rnntype', 'lstm')
+        lm.vdrop = kwargs.get('variational_dropout', False)
         lm.pkeep = kwargs.get('pkeep', tf.placeholder(tf.float32, name="pkeep"))
         pdrop = kwargs.get('pdrop', 0.5)
         lm.pdrop_value = pdrop
         lm.hsz = kwargs['hsz']
-
         lm.tgt_key = kwargs.get('tgt_key')
-        if lm.tgt_key is None:
-            if 'x' in lm.tgt_key:
-                lm.tgt_key = 'x'
-            elif 'word' in lm.tgt_key:
-                lm.tgt_key = 'word'
         if lm.tgt_key is None:
             raise Exception('Need a `tgt_key` to know which source vocabulary should be used for destination ')
         unif = kwargs.get('unif', 0.05)

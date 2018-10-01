@@ -12,6 +12,23 @@ from baseline.version import __version__
 
 class RNNTaggerModel(TaggerModel):
 
+
+    @property
+    def lengths_key(self):
+        return self._lengths_key
+
+    @lengths_key.setter
+    def lengths_key(self, value):
+        self._lengths_key = value
+
+    @property
+    def vdrop(self):
+        return self._vdrop
+
+    @vdrop.setter
+    def vdrop(self, value):
+        self._vdrop = value
+
     def save_values(self, basename):
         self.saver.save(self.sess, basename)
 
@@ -29,7 +46,6 @@ class RNNTaggerModel(TaggerModel):
         state = {
             'version': __version__,
             'embeddings': embeddings_info,
-            'lengths_key': self.lengths_key,
             'crf': self.crf,
             'proj': self.proj,
             'crf_mask': self.crf_mask,
@@ -119,7 +135,6 @@ class RNNTaggerModel(TaggerModel):
         model.crf_mask = bool(state.get('crf_mask', False))
         model.span_type = state.get('span_type')
         model.proj = bool(state.get('proj', False))
-        model.lengths_key = state.get('lengths_key', 'word')
         model.lengths = tf.get_default_graph().get_tensor_by_name('lengths:0')
 
         model.y = tf.get_default_graph().get_tensor_by_name('y:0')
@@ -259,6 +274,7 @@ class RNNTaggerModel(TaggerModel):
         model.pdrop_in = kwargs.get('dropin', 0.0)
         rnntype = kwargs.get('rnntype', 'blstm')
         nlayers = kwargs.get('layers', 1)
+        model.vdrop = kwargs.get('variational_dropout', False)
         model.labels = labels
         model.crf = bool(kwargs.get('crf', False))
         model.crf_mask = bool(kwargs.get('crf_mask', False))
@@ -272,8 +288,8 @@ class RNNTaggerModel(TaggerModel):
         seed = np.random.randint(10e8)
 
         if rnntype == 'blstm':
-            rnnfwd = stacked_lstm(hsz//2, model.pkeep, nlayers)
-            rnnbwd = stacked_lstm(hsz//2, model.pkeep, nlayers)
+            rnnfwd = stacked_lstm(hsz//2, model.pkeep, nlayers, model.vdrop)
+            rnnbwd = stacked_lstm(hsz//2, model.pkeep, nlayers, model.vdrop)
             rnnout, _ = tf.nn.bidirectional_dynamic_rnn(rnnfwd, rnnbwd, embedseq, sequence_length=model.lengths, dtype=tf.float32)
             # The output of the BRNN function needs to be joined on the H axis
             rnnout = tf.concat(axis=2, values=rnnout)
@@ -283,7 +299,7 @@ class RNNTaggerModel(TaggerModel):
                 filts = [5]
             rnnout = stacked_cnn(embedseq, hsz, model.pkeep, nlayers, filts=filts)
         else:
-            rnnfwd = stacked_lstm(hsz, model.pkeep, nlayers)
+            rnnfwd = stacked_lstm(hsz, model.pkeep, nlayers, model.vdrop)
             rnnout, _ = tf.nn.dynamic_rnn(rnnfwd, embedseq, sequence_length=model.lengths, dtype=tf.float32)
 
         with tf.variable_scope("output"):

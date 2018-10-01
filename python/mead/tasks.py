@@ -1,15 +1,22 @@
-import baseline
+import os
 import json
 import logging
 import logging.config
-import mead.utils
-import collections
+
 import os
-from mead.downloader import EmbeddingDownloader, DataDownloader
-from baseline.utils import (export, read_json, zip_files, save_vectorizers, save_vocabs)
+import baseline
 from baseline.vectorizers import create_vectorizer
+from baseline.reporting import create_reporting_hook
+from mead.downloader import EmbeddingDownloader, DataDownloader
+from mead.utils import (
+    get_mead_settings,
+    read_config_file_or_json,
+    index_by_label,
+)
+
+
 __all__ = []
-exporter = export(__all__)
+exporter = baseline.export(__all__)
 
 
 class Backend(object):
@@ -25,27 +32,29 @@ class Backend(object):
 class Task(object):
     TASK_REGISTRY = {}
 
+
+    @staticmethod
+    def register_task(Task):
+        Task.TASK_REGISTRY[Task.task_name()] = Task
+
     def _create_backend(self):
         pass
 
-    def __init__(self, logger_file, mead_settings_config=None):
+    def __init__(self, logger_config, mead_settings_config=None):
         super(Task, self).__init__()
         self.config_params = None
-        if mead_settings_config is None:
-            self.mead_settings_config = {}
-        elif isinstance(mead_settings_config, dict):
-            self.mead_settings_config = mead_settings_config
-        elif os.path.exists(mead_settings_config):
-            self.mead_settings_config = read_json(mead_settings_config)
-        else:
-            raise Exception("Expected either a mead settings file or a JSON object")
+        self.mead_settings_config = get_mead_settings(mead_settings_config)
         if 'datacache' not in self.mead_settings_config:
             self.data_download_cache = os.path.expanduser("~/.bl-data")
             self.mead_settings_config['datacache'] = self.data_download_cache
         else:
             self.data_download_cache = os.path.expanduser(self.mead_settings_config['datacache'])
         print("using {} as data/embeddings cache".format(self.data_download_cache))
-        self._configure_logger(logger_file)
+        self._configure_logger(logger_config)
+
+    @classmethod
+    def task_name(cls):
+        pass
 
     def _create_vectorizers(self):
         self.vectorizers = {}
@@ -67,17 +76,13 @@ class Task(object):
     def _configure_logger(self, logger_config):
         """Use the logger file (logging.json) to configure the log, but overwrite the filename to include the PID
 
-        :param logger_file: The logging configuration JSON file
+        :param logger_config: The logging configuration JSON or file containing JSON
         :return: A dictionary config derived from the logger_file, with the reporting handler suffixed with PID
         """
-        if isinstance(logger_config, dict):
-            config = logger_config
-        elif os.path.exists(logger_config):
-            config = read_json(logger_config)
-        else:
-            raise Exception("Expected logger config file or a JSON object")
 
+        config = read_config_file_or_json(logger_config, 'logger')
         config['handlers']['reporting_file_handler']['filename'] = 'reporting-{}.log'.format(os.getpid())
+        config['handlers']['timing_file_handler']['filename'] = 'timing-{}.log'.format(os.getpid())
         logging.config.dictConfig(config)
 
     @staticmethod
@@ -91,7 +96,7 @@ class Task(object):
         config = Task.TASK_REGISTRY[task](logging_config, mead_config)
         return config
 
-    def read_config(self, config_params, datasets_index):
+    def read_config(self, config_params, datasets_index, **kwargs):
         """
         Read the config file and the datasets index
 
@@ -102,15 +107,17 @@ class Task(object):
         :param datasets_index: The index of datasets
         :return:
         """
-        datasets_set = mead.utils.index_by_label(datasets_index)
+        datasets_index = read_config_file_or_json(datasets_index, 'datasets')
+        datasets_set = index_by_label(datasets_index)
         self.config_params = config_params
         basedir = self.config_params.get('basedir')
         if basedir is not None and not os.path.exists(basedir):
             print('Creating: {}'.format(basedir))
             os.mkdir(basedir)
         self.config_params['train']['basedir'] = basedir
+        self.config_file = kwargs.get('config_file')
         self._setup_task()
-        self._configure_reporting()
+        self._configure_reporting(config_params.get('reporting', {}), self.task_name, **kwargs)
         self.dataset = datasets_set[self.config_params['dataset']]
         self.reader = self._create_task_specific_reader()
 
@@ -149,22 +156,34 @@ class Task(object):
         :return:
         """
         self._load_dataset()
-        save_vectorizers(self.get_basedir(), self.vectorizers)
+        baseline.save_vectorizers(self.get_basedir(), self.vectorizers)
         model = self._create_model()
         self.backend.task.fit(model, self.train_data, self.valid_data, self.test_data, **self.config_params['train'])
-        zip_files(self.get_basedir())
+        baseline.zip_files(self.get_basedir())
+        self.task.fit(model, self.train_data, self.valid_data, self.test_data, **self.config_params['train'])
+        self._close_reporting_hooks()
         return model
 
-    def _configure_reporting(self):
-        reporting = {
-            "logging": True,
-            "visdom": self.config_params.get('visdom', False),
-            "tensorboard": self.config_params.get('tensorboard', False),
-            "visdom_name": self.config_params.get('visdom_name', 'main'),
-        }
-        reporting = baseline.setup_reporting(**reporting)
-        self.config_params['train']['reporting'] = reporting
+    def _configure_reporting(self, reporting, task_name, **kwargs):
+        default_reporting = self.mead_settings_config.get('reporting_hooks', {})
+        # Add default reporting information to the reporting settings.
+        for report_type in default_reporting:
+            if report_type in reporting:
+                for report_arg, report_val in default_reporting[report_type].items():
+                    if report_arg not in reporting[report_type]:
+                        reporting[report_type][report_arg] = report_val
+        reporting_hooks = list(reporting.keys())
+
+        self.reporting = create_reporting_hook(
+            reporting_hooks, reporting,
+            config_file=self.config_file, task=task_name
+        )
+        self.config_params['train']['reporting'] = [x.step for x in self.reporting]
         logging.basicConfig(level=logging.DEBUG)
+
+    def _close_reporting_hooks(self):
+        for x in self.reporting:
+            x.done()
 
     def _create_embeddings(self, embeddings_set, vocabs, features):
         unif = self.config_params['unif']
@@ -223,8 +242,12 @@ class Task(object):
 @exporter
 class ClassifierTask(Task):
 
-    def __init__(self, logging_file, mead_settings_config, **kwargs):
-        super(ClassifierTask, self).__init__(logging_file, mead_settings_config, **kwargs)
+    def __init__(self, logging_config, mead_settings_config, **kwargs):
+        super(ClassifierTask, self).__init__(logging_config, mead_settings_config, **kwargs)
+
+    @classmethod
+    def task_name(cls):
+        return 'classify'
 
     def _create_backend(self):
         backend = Backend()
@@ -275,12 +298,13 @@ class ClassifierTask(Task):
             self.config_params['preproc']['clean_fn'] = None
 
     def initialize(self, embeddings):
-        embeddings_set = mead.utils.index_by_label(embeddings)
+        embeddings = read_config_file_or_json(embeddings, 'embeddings')
+        embeddings_set = index_by_label(embeddings)
         self.dataset = DataDownloader(self.dataset, self.data_download_cache).download()
         print("[train file]: {}\n[valid file]: {}\n[test file]: {}".format(self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']))
         vocab, self.labels = self.reader.build_vocab([self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']])
         self.embeddings, self.feat2index = self._create_embeddings(embeddings_set, vocab, self.config_params['features'])
-        save_vocabs(self.get_basedir(), self.feat2index)
+        baseline.save_vocabs(self.get_basedir(), self.feat2index)
 
     def _create_model(self):
         model = self.config_params['model']
@@ -301,14 +325,19 @@ class ClassifierTask(Task):
         self.valid_data = self.reader.load(self.dataset['valid_file'], self.feat2index, self.config_params['batchsz'])
         self.test_data = self.reader.load(self.dataset['test_file'], self.feat2index, self.config_params.get('test_batchsz', 1))
 
-Task.TASK_REGISTRY['classify'] = ClassifierTask
+Task.register_task(ClassifierTask)
 
 
 @exporter
 class TaggerTask(Task):
 
-    def __init__(self, logging_file, mead_config, **kwargs):
-        super(TaggerTask, self).__init__(logging_file, mead_config, **kwargs)
+
+    def __init__(self, logging_config, mead_settings_config, **kwargs):
+        super(TaggerTask, self).__init__(logging_config, mead_settings_config, **kwargs)
+
+    @classmethod
+    def task_name(cls):
+        return 'tagger'
 
     def _create_task_specific_reader(self):
         self._create_vectorizers()
@@ -353,10 +382,11 @@ class TaggerTask(Task):
     def initialize(self, embeddings):
         self.dataset = DataDownloader(self.dataset, self.data_download_cache).download()
         print("[train file]: {}\n[valid file]: {}\n[test file]: {}".format(self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']))
-        embeddings_set = mead.utils.index_by_label(embeddings)
+        embeddings = read_config_file_or_json(embeddings, 'embeddings')
+        embeddings_set = index_by_label(embeddings)
         vocabs = self.reader.build_vocab([self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']])
         self.embeddings, self.feat2index = self._create_embeddings(embeddings_set, vocabs, self.config_params['features'])
-        save_vocabs(self.get_basedir(), self.feat2index)
+        baseline.save_vocabs(self.get_basedir(), self.feat2index)
 
     def _create_model(self):
         labels = self.reader.label2index
@@ -384,21 +414,26 @@ class TaggerTask(Task):
 
     def train(self):
         self._load_dataset()
-        save_vectorizers(self.get_basedir(), self.vectorizers)
+        baseline.save_vectorizers(self.get_basedir(), self.vectorizers)
         model = self._create_model()
         conll_output = self.config_params.get("conll_output", None)
         self.backend.task.fit(model, self.train_data, self.valid_data, self.test_data, conll_output=conll_output, txts=self.txts, **self.config_params['train'])
-        zip_files(self.get_basedir())
+        baseline.zip_files(self.get_basedir())
         return model
 
-Task.TASK_REGISTRY['tagger'] = TaggerTask
+Task.register_task(TaggerTask)
 
 
 @exporter
 class EncoderDecoderTask(Task):
 
-    def __init__(self, logging_file, mead_config, **kwargs):
-        super(EncoderDecoderTask, self).__init__(logging_file, mead_config, **kwargs)
+
+    def __init__(self, logging_config, mead_settings_config, **kwargs):
+        super(EncoderDecoderTask, self).__init__(logging_config, mead_settings_config, **kwargs)
+
+    @classmethod
+    def task_name(cls):
+        return 'seq2seq'
 
     def _create_task_specific_reader(self):
         self._create_vectorizers()
@@ -422,6 +457,7 @@ class EncoderDecoderTask(Task):
             if backend.name == 'dynet':
                 import _dynet
                 import _dynet
+                self.config_params['preproc']['trim'] = True
                 dy_params = _dynet.DynetParams()
                 dy_params.from_args()
                 dy_params.set_requested_gpus(1)
@@ -435,6 +471,7 @@ class EncoderDecoderTask(Task):
                 import baseline.dy.embeddings as embeddings
                 import baseline.dy.seq2seq as seq2seq
                 self.config_params['preproc']['show_ex'] = baseline.dy.show_examples_dynet
+                self.config_params['preproc']['trim'] = True
             else:
                 import baseline.tf.embeddings as embeddings
                 import baseline.tf.seq2seq as seq2seq
@@ -447,7 +484,8 @@ class EncoderDecoderTask(Task):
         return backend
 
     def initialize(self, embeddings):
-        embeddings_set = mead.utils.index_by_label(embeddings)
+        embeddings = read_config_file_or_json(embeddings, 'embeddings')
+        embeddings_set = index_by_label(embeddings)
         self.dataset = DataDownloader(self.dataset, self.data_download_cache, True).download()
         print("[train file]: {}\n[valid file]: {}\n[test file]: {}\n[vocab file]: {}".format(self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file'], self.dataset.get('vocab_file',"None")))
         vocab_file = self.dataset.get('vocab_file')
@@ -467,9 +505,9 @@ class EncoderDecoderTask(Task):
 
         self.src_embeddings, self.feat2src = self._create_embeddings(embeddings_set, vocab1, features_src)
         # For now, dont allow multiple vocabs of output
-        save_vocabs(self.get_basedir(), self.feat2src)
+        baseline.save_vocabs(self.get_basedir(), self.feat2src)
         self.tgt_embeddings, self.feat2tgt = self._create_embeddings(embeddings_set, {'tgt': vocab2}, [features_tgt])
-        save_vocabs(self.get_basedir(), self.feat2tgt)
+        baseline.save_vocabs(self.get_basedir(), self.feat2tgt)
         self.tgt_embeddings = self.tgt_embeddings['tgt']
         self.feat2tgt = self.feat2tgt['tgt']
 
@@ -520,14 +558,17 @@ class EncoderDecoderTask(Task):
                                                                                      num_ex, reverse=False)
         super(EncoderDecoderTask, self).train()
 
-Task.TASK_REGISTRY['seq2seq'] = EncoderDecoderTask
+Task.register_task(EncoderDecoderTask)
 
 
 @exporter
 class LanguageModelingTask(Task):
 
-    def __init__(self, logging_file, mead_config, **kwargs):
-        super(LanguageModelingTask, self).__init__(logging_file, mead_config, **kwargs)
+    def __init__(self, logging_config, mead_settings_config, **kwargs):
+        super(LanguageModelingTask, self).__init__(logging_config, mead_settings_config, **kwargs)
+
+    def task_name(cls):
+        return 'lm'
 
     def _create_task_specific_reader(self):
         self._create_vectorizers()
@@ -547,7 +588,7 @@ class LanguageModelingTask(Task):
             self.config_params['preproc']['trim'] = True
 
         elif backend.name == 'dynet':
-            self.config_params['preproc']['trim'] = False
+            self.config_params['preproc']['trim'] = True
             import _dynet
             dy_params = _dynet.DynetParams()
             dy_params.from_args()
@@ -570,12 +611,13 @@ class LanguageModelingTask(Task):
         return backend
 
     def initialize(self, embeddings):
-        embeddings_set = mead.utils.index_by_label(embeddings)
+        embeddings = read_config_file_or_json(embeddings, 'embeddings')
+        embeddings_set = index_by_label(embeddings)
         self.dataset = DataDownloader(self.dataset, self.data_download_cache).download()
         print("[train file]: {}\n[valid file]: {}\n[test file]: {}".format(self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']))
         vocabs = self.reader.build_vocab([self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']])
         self.embeddings, self.feat2index = self._create_embeddings(embeddings_set, vocabs, self.config_params['features'])
-        save_vocabs(self.get_basedir(), self.feat2index)
+        baseline.save_vocabs(self.get_basedir(), self.feat2index)
 
     def _load_dataset(self):
         tgt_key = self.config_params['loader'].get('tgt_key', self.primary_key)
@@ -599,18 +641,5 @@ class LanguageModelingTask(Task):
         rest = num_examples // batchsz
         return rest // nbptt
 
-    def train(self):
-        # TODO: This should probably get generalized and pulled up
-        #if self.config_params['train'].get('decay_type', None) == 'zaremba':
-        #    batchsz = self.config_params['batchsz']
-        #    nbptt = self.config_params['nbptt']
-        #    steps_per_epoch = LanguageModelingTask._num_steps_per_epoch(self.num_elems[0], nbptt, batchsz)
-        #    first_range = int(self.config_params['train']['start_decay_epoch'] * steps_per_epoch)
 
-        #    self.config_params['train']['bounds'] = [first_range] + list(np.arange(self.config_params['train']['start_decay_epoch'] + 1,
-        #                                                                           self.config_params['train']['epochs'] + 1,
-        #                                                                           dtype=np.int32) * steps_per_epoch)
-
-        super(LanguageModelingTask, self).train()
-
-Task.TASK_REGISTRY['lm'] = LanguageModelingTask
+Task.register_task(LanguageModelingTask)

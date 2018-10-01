@@ -30,6 +30,10 @@ The Baseline module has dependencies on:
 - `PyYAML` is an optional dependency, which, if installed, allows [mead](mead.md) configurations to be provided with YAML instead of JSON
 - When the GPU is used, the code assumes that `cudnn` is available and installed. This is critical for good performance.
 
+## Saving the results
+
+We provide different [reporting hooks](reporting.md) for displaying the results on console/ saving to a log file or database or visualizations. All reporting hooks can be run simultaneously.
+
 ## Running the codes
 
 The driver programs available in baseline are:
@@ -51,7 +55,7 @@ To run these codes `baseline/python` should be available in your `PYTHONPATH` va
 
 ### Installing Baseline as a Python Package
 
-Baseline can be installed as a python package using the script [install_dev.sh](../python/install_dev.sh). To install, run the command: `./install.sh baseline`. Once installed, you can use the commands: `mead.train` and `mead.export` to  run the [trainer](../python/mead/trainer.py) or the [exporter](../python/mead/export.py) (with the same options as before) w/o putting baseline in PYTHONPATH. 
+Baseline can be installed as a python package using the script [install_dev.sh](../python/install_dev.sh). To install, run the command: `./install.sh baseline`. Once installed, you can use the commands: `mead-train` and `mead-export` to  run the [trainer](../python/mead/trainer.py) or the [exporter](../python/mead/export.py) (with the same options as before) w/o putting baseline in PYTHONPATH. 
 
 ## Baseline as an API
 

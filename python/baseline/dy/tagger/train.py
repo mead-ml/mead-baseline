@@ -2,7 +2,6 @@ import dynet as dy
 import numpy as np
 from baseline.utils import listify, get_model_file, revlut, to_spans, f_score
 from baseline.progress import create_progress_bar
-from baseline.reporting import basic_reporting
 from baseline.train import EpochReportingTrainer, create_trainer
 from baseline.dy.dynety import optimizer
 
@@ -162,7 +161,7 @@ def fit(model, ts, vs, es, **kwargs):
         patience = kwargs.get('patience', epochs)
         print('Doing early stopping on [%s] with patience [%d]' % (early_stopping_metric, patience))
 
-    reporting_fns = listify(kwargs.get('reporting', basic_reporting))
+    reporting_fns = listify(kwargs.get('reporting', []))
     print('reporting', reporting_fns)
 
     #validation_improvement_fn = kwargs.get('validation_improvement', None)

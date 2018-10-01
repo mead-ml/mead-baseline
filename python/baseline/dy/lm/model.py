@@ -47,7 +47,8 @@ class BasicLanguageModel(DynetModel, LanguageModel):
     def forward(self, input_, state=None, train=True):
         input_ = self._embed(input_)
         if train:
-            self._rnn.set_dropout(self.dropout)
+            if self.dropout is not None:
+                self._rnn.set_dropout(self.dropout)
         else:
             self._rnn.disable_dropout()
         transduced, last_state = rnn_forward_with_state(self._rnn, input_, None, state)

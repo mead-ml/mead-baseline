@@ -1,8 +1,11 @@
-import tensorflow as tf
+import os
+import time
+import logging
 import numpy as np
-from baseline.utils import listify, get_model_file
-from baseline.reporting import basic_reporting
+import tensorflow as tf
+from baseline.utils import zip_model
 from baseline.tf.tfy import optimizer
+from baseline.utils import listify, get_model_file
 from baseline.train import Trainer, create_trainer
 import time
 import os
@@ -17,6 +20,7 @@ class Seq2SeqTrainerTf(Trainer):
         self.test_loss = model.create_test_loss()
         self.model = model
         self.global_step, self.train_op = optimizer(self.loss, **kwargs)
+        self.log = logging.getLogger('baseline.timing')
 
     def checkpoint(self):
         self.model.saver.save(self.model.sess, "./tf-seq2seq-%d/seq2seq" % os.getpid(), global_step=self.global_step)
@@ -40,6 +44,7 @@ class Seq2SeqTrainerTf(Trainer):
             "train_op": self.train_op,
             "global_step": self.global_step}
 
+        start = time.time()
         for batch_dict in ts:
             start_time = time.time()
             steps += 1
@@ -57,14 +62,15 @@ class Seq2SeqTrainerTf(Trainer):
                 metrics['avg_loss'] = total_loss / steps
                 metrics['perplexity'] = np.exp(total_loss / steps)
                 for reporting in reporting_fns:
-                    reporting(metrics, global_step, 'Train')
-            
+                    reporting(metrics, global_step.item(), 'Train')
+
         assert(steps == len(ts))
 
+        self.log.debug({'phase': 'Train', 'time': time.time() - start})
         metrics['avg_loss'] = total_loss / steps
         metrics['perplexity'] = np.exp(total_loss / steps)
         for reporting in reporting_fns:
-            reporting(metrics, global_step, 'Train')
+            reporting(metrics, global_step.item(), 'Train')
         return metrics
 
     def test(self, vs, reporting_fns, phase='Valid'):
@@ -81,6 +87,7 @@ class Seq2SeqTrainerTf(Trainer):
         steps = len(vs)
         metrics = {}
 
+        start = time.time()
         for batch_dict in vs:
 
             feed_dict = self.model.make_input(batch_dict)
@@ -88,6 +95,7 @@ class Seq2SeqTrainerTf(Trainer):
             lossv = vals["loss"]
             total_loss += lossv
 
+        self.log.debug({'phase': phase, 'time': time.time() - start})
         avg_loss = total_loss/steps
         metrics['avg_loss'] = avg_loss
         metrics['perplexity'] = np.exp(avg_loss)
@@ -115,7 +123,7 @@ def fit(model, ts, vs, es=None, **kwargs):
         patience = kwargs.get('patience', epochs)
         print('Doing early stopping on [%s] with patience [%d]' % (early_stopping_metric, patience))
 
-    reporting_fns = listify(kwargs.get('reporting', basic_reporting))
+    reporting_fns = listify(kwargs.get('reporting', []))
     print('reporting', reporting_fns)
 
     min_metric = 10000

@@ -36,7 +36,7 @@ class MaskTest(unittest.TestCase):
         score_mask = self.scores.masked_fill(mask, -1e9)
         attention_weights = F.softmax(score_mask, dim=1)
         for row in attention_weights:
-            np.testing.assert_allclose(torch.sum(row).item(), 1)
+            np.testing.assert_allclose(torch.sum(row).numpy(), 1.0, rtol=1e-5)
 
     def test_attention_masked_ignores_pad(self):
         mask = sequence_mask(self.lengths)

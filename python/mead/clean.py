@@ -23,6 +23,7 @@ twpos = re.compile("^twposresults.conll$")
 pyc = re.compile(r".*\.pyc$")
 pycache = re.compile(r"^.*/__pycache__/.*$")
 test_file = re.compile(r"^.*/test_data/.*$")
+cm_file = re.compile(r"^.*-cm.csv$")
 
 res = [
     log,
@@ -32,6 +33,7 @@ res = [
     checkpoint,
     conll,
     twpos,
+    cm_file,
 ]
 
 def delete(file_):

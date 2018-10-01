@@ -6,12 +6,12 @@ import pymongo
 import datetime
 import socket
 import json
-import hashlib
 import getpass
 from baseline.utils import export, listify
+from mead.utils import hash_config
 from bson.objectid import ObjectId
 from baseline.version import __version__
-from xpctl.helpers import order_json, df_get_results, df_experimental_details
+from xpctl.helpers import df_get_results, df_experimental_details
 
 __all__ = []
 exporter = export(__all__)
@@ -107,7 +107,7 @@ class SQLRepo(ExperimentRepo):
         now = datetime.datetime.utcnow().isoformat()
         hostname = kwargs.get('hostname', socket.gethostname())
         username = kwargs.get('username', getpass.getuser())
-        config_sha1 = hashlib.sha1(json.dumps(order_json(config_obj)).encode('utf-8')).hexdigest()
+        config_sha1 = hash_config(config_obj)
         label = get_experiment_label(config_obj, task, **kwargs)
         checkpoint_base = kwargs.get('checkpoint_base', None)
         checkpoint_store = kwargs.get('checkpoint_store', None)
@@ -159,22 +159,30 @@ class SQLRepo(ExperimentRepo):
         return set([t[0] for t in session.query(Experiment.task).distinct()])
 
     def put_model(self, id, task, checkpoint_base, checkpoint_store, print_fn=print):
-        coll = self.db[task]
-        query = {'_id': ObjectId(id)}
-        projection = {'sha1': 1}
-        results = list(coll.find(query, projection))
-        if not results:
+        session = self.Session()
+        exp = session.query(Experiment).get(id)
+        if exp is None:
             print_fn("no sha1 for the given id found, returning.")
-            return False
-        sha1 = results[0]['sha1']
+            return None
+        sha1 = exp.sha1
         model_loc = store_model(checkpoint_base, sha1, checkpoint_store, print_fn)
         if model_loc is not None:
-            coll.update_one({'_id': ObjectId(id)}, {'$set': {'checkpoint': model_loc}}, upsert=False)
+            exp.checkpoint = model_loc
+            session.commit()
         return model_loc
+
+    def get_model_location(self, id, task):
+        session = self.Session()
+        exp = session.query(Experiment).get(id)
+        if exp is None:
+            return None
+        return exp.checkpoint
 
     def get_label(self, id, task):
         session = self.Session()
         exp = session.query(Experiment).get(id)
+        if exp is None:
+            return None
         return exp.label
 
     def rename_label(self, id, task, new_label):

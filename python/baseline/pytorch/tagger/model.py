@@ -35,7 +35,7 @@ class RNNTaggerModel(nn.Module, TaggerModel):
         all_embeddings = []
         for k, embedding in self.embeddings.items():
             all_embeddings += [embedding.encode(input[k])]
-        return torch.cat(all_embeddings, 2)
+        return self.dropout(torch.cat(all_embeddings, 2))
 
     @classmethod
     def create(cls, labels, embeddings, **kwargs):
@@ -46,6 +46,7 @@ class RNNTaggerModel(nn.Module, TaggerModel):
         model.use_crf = bool(kwargs.get('crf', False))
         model.crf_mask = bool(kwargs.get('crf_mask', False))
         model.span_type = kwargs.get('span_type')
+        model.vdrop = bool(kwargs.get('variational_dropout', False))
         model.activation_type = kwargs.get('activation', 'tanh')
         nlayers = int(kwargs.get('layers', 1))
         rnntype = kwargs.get('rnntype', 'blstm')
@@ -55,7 +56,10 @@ class RNNTaggerModel(nn.Module, TaggerModel):
         pdrop = float(kwargs.get('dropout', 0.5))
         model.labels = labels
         input_sz = model._init_embed(embeddings, **kwargs)
-        model.dropout = nn.Dropout(pdrop)
+        if model.vdrop:
+            model.dropout = VariationalDropout(pdrop)
+        else:
+            model.dropout = nn.Dropout(pdrop)
         model.rnn = LSTMEncoder(input_sz, hsz, rnntype, nlayers, pdrop)
         out_hsz = model.rnn.outsz
         model.decoder = nn.Sequential()

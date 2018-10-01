@@ -1,11 +1,12 @@
+import time
+import logging
 from baseline.utils import listify, get_model_file
 from baseline.progress import create_progress_bar
-from baseline.reporting import basic_reporting
-from baseline.train import EpochReportingTrainer, create_trainer, lr_decay
+from baseline.train import Trainer, create_trainer, lr_decay
 from baseline.dy.dynety import *
 
 
-class Seq2SeqTrainerDynet(EpochReportingTrainer):
+class Seq2SeqTrainerDynet(Trainer):
     def __init__(self, model, **kwargs):
         super(Seq2SeqTrainerDynet, self).__init__()
         self.model = model
@@ -13,6 +14,7 @@ class Seq2SeqTrainerDynet(EpochReportingTrainer):
         ##self.decay = lr_decay(**kwargs)
         self.global_step = 0
         self.valid_epochs = 0
+        self.log = logging.getLogger('baseline.timing')
 
     @staticmethod
     def _loss(outputs, labels):
@@ -29,6 +31,7 @@ class Seq2SeqTrainerDynet(EpochReportingTrainer):
         total_loss = 0.0
         step = 0
         total = 0
+        start = time.time()
         for batch_dict in loader:
             dy.renew_cg()
             ##self.optimizer.learning_rate = self.decay(self.global_step)
@@ -52,6 +55,7 @@ class Seq2SeqTrainerDynet(EpochReportingTrainer):
                 for reporting in reporting_fns:
                     reporting(metrics, self.global_step, 'Train')
 
+        self.log.debug({'phase': 'Train', 'time': time.time() - start})
         avg_loss = total_loss / total
         metrics['avg_loss'] = avg_loss
         metrics['perplexity'] = np.exp(avg_loss)
@@ -69,6 +73,7 @@ class Seq2SeqTrainerDynet(EpochReportingTrainer):
             self.valid_epochs += 1
             epochs = self.valid_epochs
 
+        start = time.time()
         pg = create_progress_bar(steps)
         for batch_dict in vs:
             dy.renew_cg()
@@ -82,6 +87,7 @@ class Seq2SeqTrainerDynet(EpochReportingTrainer):
             pg.update()
         pg.done()
 
+        self.log.debug({'phase': phase, 'time': time.time() - start})
         avg_loss = float(total_loss)/total
         metrics['avg_loss'] = avg_loss
         metrics['perplexity'] = np.exp(avg_loss)
@@ -91,7 +97,7 @@ class Seq2SeqTrainerDynet(EpochReportingTrainer):
 
 
 def fit(model, ts, vs, es=None, epochs=5, do_early_stopping=True,
-        early_stopping_metric='avg_loss', reporting=basic_reporting, **kwargs):
+        early_stopping_metric='avg_loss', **kwargs):
 
     patience = int(kwargs.get('patience', epochs))
     after_train_fn = kwargs.get('after_train_fn', None)
@@ -103,7 +109,7 @@ def fit(model, ts, vs, es=None, epochs=5, do_early_stopping=True,
     if do_early_stopping:
         print("Doing early stopping on [{}] with patience [{}]".format(early_stopping_metric, patience))
 
-    reporting_fns = listify(reporting)
+    reporting_fns = listify(kwargs.get('reporting', []))
     print('reporting', reporting_fns)
 
     min_metric = 10000

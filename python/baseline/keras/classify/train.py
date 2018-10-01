@@ -1,5 +1,4 @@
 from baseline.utils import listify, get_model_file
-from baseline.reporting import basic_reporting
 from baseline.progress import create_progress_bar
 from baseline.train import EpochReportingTrainer, create_trainer
 from keras import metrics
@@ -124,7 +123,7 @@ def fit(model, ts, vs, es=None, **kwargs):
         patience = kwargs.get('patience', epochs)
         print('Doing early stopping on [%s] with patience [%d]' % (early_stopping_metric, patience))
 
-    reporting_fns = listify(kwargs.get('reporting', basic_reporting))
+    reporting_fns = listify(kwargs.get('reporting', []))
     print('reporting', reporting_fns)
 
     max_metric = 0

@@ -1,8 +1,8 @@
+import time
+import logging
 from baseline.pytorch.torchy import *
 from baseline.utils import listify, revlut, get_model_file
-from baseline.reporting import basic_reporting
 from baseline.train import Trainer, create_trainer
-import time
 
 
 class LanguageModelTrainerPyTorch(Trainer):
@@ -19,6 +19,7 @@ class LanguageModelTrainerPyTorch(Trainer):
         if self.gpu:
             self.model = self.model.cuda()
             self.crit.cuda()
+        self.log = logging.getLogger('baseline.timing')
 
         self.optimizer, self.scheduler = pytorch_prepare_optimizer(self.model, **kwargs)
 
@@ -58,6 +59,7 @@ class LanguageModelTrainerPyTorch(Trainer):
 
         duration = time.time() - start_time
         print('%s time (%.3f sec)' % (phase, duration))
+        self.log.debug({'phase': phase, 'time': duration})
 
         for reporting in reporting_fns:
             reporting(metrics, self.valid_epochs, phase)
@@ -101,6 +103,7 @@ class LanguageModelTrainerPyTorch(Trainer):
 
         duration = time.time() - start_time
         print('Training time (%.3f sec)' % duration)
+        self.log.debug({'phase': 'Train', 'time': duration})
 
         for reporting in reporting_fns:
             reporting(metrics, self.train_epochs * len(ts), 'Train')
@@ -118,7 +121,7 @@ def fit(model, ts, vs, es, **kwargs):
         patience = kwargs.get('patience', epochs)
         print('Doing early stopping on [%s] with patience [%d]' % (early_stopping_metric, patience))
 
-    reporting_fns = listify(kwargs.get('reporting', basic_reporting))
+    reporting_fns = listify(kwargs.get('reporting', []))
     print('reporting', reporting_fns)
 
     after_train_fn = kwargs.get('after_train_fn', None)

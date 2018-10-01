@@ -216,26 +216,42 @@ def lstm_cell(hsz, forget_bias=1.0):
     return tf.contrib.rnn.BasicLSTMCell(hsz, forget_bias=forget_bias, state_is_tuple=True)
 
 
-def lstm_cell_w_dropout(hsz, pkeep, forget_bias=1.0):
+def lstm_cell_w_dropout(hsz, pkeep, forget_bias=1.0, variational=True):
     """Produce a single cell with dropout
 
     :param hsz: (``int``) The number of hidden units per LSTM
     :param pkeep: (``int``) The probability of keeping a unit value during dropout
     :param forget_bias: (``int``) Defaults to 1
+    :param variational (``bool``) variational recurrence is on
     :return: a cell
-    """
-    return tf.contrib.rnn.DropoutWrapper(tf.contrib.rnn.BasicLSTMCell(hsz, forget_bias=forget_bias, state_is_tuple=True), output_keep_prob=pkeep)
+   """
+    return tf.contrib.rnn.DropoutWrapper(
+        tf.contrib.rnn.BasicLSTMCell(hsz, forget_bias=forget_bias, state_is_tuple=True),
+        output_keep_prob=pkeep,
+        state_keep_prob=pkeep if variational else 1.0,
+        variational_recurrent=variational,
+        dtype=tf.float32
+    )
 
 
-def stacked_lstm(hsz, pkeep, nlayers):
+def stacked_lstm(hsz, pkeep, nlayers, variational=False):
     """Produce a stack of LSTMs with dropout performed on all but the last layer.
 
     :param hsz: (``int``) The number of hidden units per LSTM
     :param pkeep: (``int``) The probability of keeping a unit value during dropout
     :param nlayers: (``int``) The number of layers of LSTMs to stack
+    :param variational (``bool``) variational recurrence is on
     :return: a stacked cell
     """
-    return tf.contrib.rnn.MultiRNNCell([lstm_cell_w_dropout(hsz, pkeep) if i < nlayers - 1 else lstm_cell(hsz) for i in range(nlayers)], state_is_tuple=True)
+    if variational:
+        return tf.contrib.rnn.MultiRNNCell(
+            [lstm_cell_w_dropout(hsz, pkeep, variational=variational) for _ in range(nlayers)],
+            state_is_tuple=True
+        )
+    return tf.contrib.rnn.MultiRNNCell(
+        [lstm_cell_w_dropout(hsz, pkeep) if i < nlayers - 1 else lstm_cell(hsz) for i in range(nlayers)],
+        state_is_tuple=True
+    )
 
 
 def stacked_cnn(inputs, hsz, pkeep, nlayers, filts=[5], activation_fn=tf.nn.relu, scope='StackedCNN'):
@@ -291,29 +307,44 @@ def rnn_cell(hsz, rnntype, st=None):
     return cell
 
 
-def rnn_cell_w_dropout(hsz, pkeep, rnntype, st=None):
+def rnn_cell_w_dropout(hsz, pkeep, rnntype, st=None, variational=False):
+
     """Produce a single RNN cell with dropout
 
     :param hsz: (``int``) The number of hidden units per LSTM
     :param rnntype: (``str``): `lstm` or `gru`
     :param pkeep: (``int``) The probability of keeping a unit value during dropout
     :param st: (``bool``) state is tuple? defaults to `None`
+    :param variational: (``bool``) Variational recurrence is on
     :return: a cell
     """
     cell = rnn_cell(hsz, rnntype, st)
-    return tf.contrib.rnn.DropoutWrapper(cell, output_keep_prob=pkeep)
+    return tf.contrib.rnn.DropoutWrapper(
+        cell,
+        output_keep_prob=pkeep,
+        state_keep_prob=pkeep if variational else 1.0,
+        variational_recurrent=variational
+    )
 
 
-def multi_rnn_cell_w_dropout(hsz, pkeep, rnntype, nlayers):
+def multi_rnn_cell_w_dropout(hsz, pkeep, rnntype, num_layers, variational=False):
     """Produce a stack of RNNs with dropout performed on all but the last layer.
 
     :param hsz: (``int``) The number of hidden units per RNN
     :param pkeep: (``int``) The probability of keeping a unit value during dropout
-    :param nlayers: (``int``) The number of layers of RNNs to stack
+    :param rnntype: (``str``) The type of RNN to use - `lstm` or `gru`
+    :param num_layers: (``int``) The number of layers of RNNs to stack
     :return: a stacked cell
     """
-    return tf.contrib.rnn.MultiRNNCell([rnn_cell_w_dropout(hsz, pkeep, rnntype) if i < nlayers - 1 else rnn_cell(hsz, rnntype) for i in range(nlayers)], state_is_tuple=True)
-
+    if variational:
+        return tf.contrib.rnn.MultiRNNCell(
+            [rnn_cell_w_dropout(hsz, pkeep, rnntype, variational) for _ in range(num_layers)],
+            state_is_tuple=True
+        )
+    return tf.contrib.rnn.MultiRNNCell(
+        [rnn_cell_w_dropout(hsz, pkeep, rnntype) if i < num_layers - 1 else rnn_cell_w_dropout(hsz, 1.0, rnntype) for i in range(num_layers)],
+        state_is_tuple=True
+    )
 
 def create_show_examples_tf(src_key):
     # This function should never be used for decoding.  It exists only so that the training model can greedily decode

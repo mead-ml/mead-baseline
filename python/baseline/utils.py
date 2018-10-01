@@ -1,14 +1,14 @@
 import os
 import sys
 import json
+import hashlib
 import logging
+import zipfile
 import importlib
+from contextlib import contextmanager
 from functools import partial, update_wrapper, wraps
 import numpy as np
 import addons
-import json
-import hashlib
-import zipfile
 
 
 __all__ = []
@@ -31,7 +31,27 @@ def export(obj, all_list=None):
     all_list.append(obj.__name__)
     return obj
 
+
 exporter = export(__all__)
+
+
+@contextmanager
+def redirect(from_stream, to_stream):
+    original_from = from_stream.fileno()
+    saved_from = os.dup(original_from)
+    os.dup2(to_stream.fileno(), original_from)
+    try:
+        yield
+        os.dup2(saved_from, original_from)
+    except Exception as e:
+        os.dup2(saved_from, original_from)
+        raise(e)
+
+
+@contextmanager
+def suppress_output():
+    with open(os.devnull, 'w') as devnull, redirect(sys.stdout, devnull), redirect(sys.stderr, devnull):
+        yield
 
 
 class JSONFormatter(logging.Formatter):
@@ -42,6 +62,7 @@ class JSONFormatter(logging.Formatter):
         except TypeError:
             pass
         return super(JSONFormatter, self).format(record)
+
 
 @exporter
 def crf_mask(vocab, span_type, s_idx, e_idx, pad_idx=None):
@@ -60,6 +81,7 @@ def crf_mask(vocab, span_type, s_idx, e_idx, pad_idx=None):
     if span_type.upper() == "IOBES":
         mask = iobes_mask(vocab, start, end, pad)
     return mask
+
 
 def iob_mask(vocab, start, end, pad=None):
     small = 0
@@ -100,6 +122,7 @@ def iob_mask(vocab, start, end, pad=None):
                     if to.startswith("B-"):
                         mask[vocab[to], vocab[from_]] = small
     return mask
+
 
 def iob2_mask(vocab, start, end, pad=None):
     small = 0
@@ -285,7 +308,7 @@ def read_json(filepath, default_value=None, strict=False):
     """
     if not os.path.exists(filepath):
         if strict:
-            raise FileNotFoundError('No file [] found'.format(filepath))
+            raise IOError('No file {} found'.format(filepath))
         return default_value if default_value is not None else {}
     with open(filepath) as f:
         return json.load(f)
@@ -303,7 +326,7 @@ def read_yaml(filepath, default_value=None, strict=False):
     """
     if not os.path.exists(filepath):
         if strict:
-            raise FileNotFoundError('No file [] found'.format(filepath))
+            raise IOError('No file {} found'.format(filepath))
         return default_value if default_value is not None else {}
     with open(filepath) as f:
         import yaml
@@ -321,6 +344,22 @@ def read_config_file(config_file):
         return read_yaml(config_file, strict=True)
     return read_json(config_file, strict=True)
 
+
+@exporter
+def read_config_stream(config_stream):
+    """Read a config stream.  This may be a path to a YAML or JSON file, or it may be a str containing JSON or the name
+    of an env variable, or even a JSON object directly
+
+    :param config_stream:
+    :return:
+    """
+    if os.path.exists(config_stream) and os.path.isfile(config_stream):
+        return read_config_file(config_stream)
+    config = config_stream
+    if config_stream.startswith("$"):
+        print('Reading config from {}'.format(config_stream))
+        config = os.getenv(config_stream[1:])
+    return json.loads(config)
 
 @exporter
 def write_json(content, filepath):
@@ -812,6 +851,7 @@ def f_score(overlap_count, gold_count, guess_count, f=1):
         return 0.0
     f = (1. + beta_sq) * (precision * recall) / (beta_sq * precision + recall)
     return f
+
 
 @exporter
 def unzip_model(path):

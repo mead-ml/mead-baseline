@@ -27,17 +27,30 @@
             "filename": "info.log",
             "encoding": "utf8"
         },
-	"error_file_handler": {
+	    "error_file_handler": {
             "class": "logging.FileHandler",
             "level": "ERROR",
             "filename": "errors.log",
             "encoding": "utf8"
+        },
+        "timing_file_handler": {
+            "class": "logging.FileHandler",
+            "level": "DEBUG",
+            "mode": "w",
+            "filename": "timing.log",
+            "formatter": "json",
+            "encoding": "utf-8"
         }
     },
     "loggers": {
         "baseline.reporting": {
             "level": "INFO",
             "handlers": ["reporting_file_handler"],
+            "propagate": "no"
+        },
+        "baseline.timing": {
+            "level": "DEBUG",
+            "handlers": ["timing_file_handler"],
             "propagate": "no"
         }
     },

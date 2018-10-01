@@ -1,14 +1,14 @@
+import time
+import logging
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.autograd import Variable
-from baseline.pytorch.torchy import pytorch_prepare_optimizer
 import numpy as np
 from baseline.progress import create_progress_bar
-from baseline.reporting import basic_reporting
 from baseline.utils import listify, get_model_file
 from baseline.train import Trainer, create_trainer
-import time
+from baseline.pytorch.torchy import pytorch_prepare_optimizer
 
 
 class Seq2SeqTrainerPyTorch(Trainer):
@@ -25,6 +25,7 @@ class Seq2SeqTrainerPyTorch(Trainer):
         if self.gpu:
             self.model = torch.nn.DataParallel(model).cuda()
             self.crit.cuda()
+        self.log = logging.getLogger('baseline.timing')
 
     def _total(self, tgt):
         tgtt = tgt.data.long()
@@ -40,6 +41,7 @@ class Seq2SeqTrainerPyTorch(Trainer):
             self.valid_epochs += 1
             epochs = self.valid_epochs
 
+        start = time.time()
         pg = create_progress_bar(steps)
         for batch_dict in vs:
             input = self._input(batch_dict)
@@ -51,6 +53,7 @@ class Seq2SeqTrainerPyTorch(Trainer):
             pg.update()
         pg.done()
 
+        self.log.debug({'phase': phase, 'time': time.time() - start})
         avg_loss = float(total_loss)/total
         metrics['avg_loss'] = avg_loss
         metrics['perplexity'] = np.exp(avg_loss)
@@ -68,6 +71,7 @@ class Seq2SeqTrainerPyTorch(Trainer):
         if self.scheduler is not None:
             self.scheduler.step()
 
+        start = time.time()
         for batch_dict in ts:
 
             start_time = time.time()
@@ -93,6 +97,7 @@ class Seq2SeqTrainerPyTorch(Trainer):
                 for reporting in reporting_fns:
                     reporting(metrics, self.steps, 'Train')
 
+        self.log.debug({'phase': 'Train', 'time': time.time() - start})
         self.train_epochs += 1
         avg_loss = float(total_loss)/total
         metrics['avg_loss'] = avg_loss
@@ -114,7 +119,7 @@ def fit(model, ts, vs, es=None, **kwargs):
         patience = kwargs.get('patience', epochs)
         print('Doing early stopping on [%s] with patience [%d]' % (early_stopping_metric, patience))
 
-    reporting_fns = listify(kwargs.get('reporting', basic_reporting))
+    reporting_fns = listify(kwargs.get('reporting', []))
     print('reporting', reporting_fns)
 
     after_train_fn = kwargs.get('after_train_fn', None)

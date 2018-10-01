@@ -208,7 +208,7 @@ class ClassifierModelBase(ClassifierModel):
         :return: Each outcome as a ``list`` of tuples `(label, probability)`
         """
         feed_dict = self.make_input(batch_dict)
-        probs = self.sess.run(tf.nn.softmax(self.logits), feed_dict=feed_dict)
+        probs = self.sess.run(self.probs, feed_dict=feed_dict)
         results = []
         batchsz = probs.shape[0]
         for b in range(batchsz):
@@ -298,6 +298,7 @@ class ClassifierModelBase(ClassifierModel):
 
         if model.lengths_key is not None:
             model.lengths = tf.get_default_graph().get_tensor_by_name('lengths:0')
+
         else:
             model.lengths = None
         model.pkeep = tf.get_default_graph().get_tensor_by_name('pkeep:0')
@@ -315,6 +316,14 @@ class ClassifierModelBase(ClassifierModel):
     @lengths_key.setter
     def lengths_key(self, value):
         self._lengths_key = value
+
+    @property
+    def vdrop(self):
+        return self._vdrop
+
+    @vdrop.setter
+    def vdrop(self, value):
+        self._vdrop = value
 
     @classmethod
     def create(cls, embeddings, labels, **kwargs):
@@ -388,6 +397,7 @@ class ClassifierModelBase(ClassifierModel):
                 with tf.variable_scope("output"):
                     model.logits = tf.identity(fully_connected(stacked, nc, activation_fn=None), name="logits")
                     model.best = tf.argmax(model.logits, 1, name="best")
+                    model.probs = tf.nn.softmax(model.logits, name="probs")
         model.sess = sess
         # writer = tf.summary.FileWriter('blah', sess.graph)
         return model
@@ -502,6 +512,7 @@ class LSTMModel(ClassifierModelBase):
         :return: 
         """
         hsz = kwargs.get('rnnsz', kwargs.get('hsz', 100))
+        vdrop = bool(kwargs.get('variational_dropout', False))
         if type(hsz) is list:
             hsz = hsz[0]
 
@@ -509,8 +520,8 @@ class LSTMModel(ClassifierModelBase):
         nlayers = int(kwargs.get('layers', 1))
 
         if rnntype == 'blstm':
-            rnnfwd = stacked_lstm(hsz//2, self.pkeep, nlayers)
-            rnnbwd = stacked_lstm(hsz//2, self.pkeep, nlayers)
+            rnnfwd = stacked_lstm(hsz//2, self.pkeep, nlayers, variational=vdrop)
+            rnnbwd = stacked_lstm(hsz//2, self.pkeep, nlayers, variational=vdrop)
             ((_, _), (fw_final_state, bw_final_state)) = tf.nn.bidirectional_dynamic_rnn(rnnfwd,
                                                                                          rnnbwd,
                                                                                          word_embeddings,
@@ -521,7 +532,7 @@ class LSTMModel(ClassifierModelBase):
             out_hsz = hsz
 
         else:
-            rnnfwd = stacked_lstm(hsz, self.pkeep, nlayers)
+            rnnfwd = stacked_lstm(hsz, self.pkeep, nlayers, variational=vdrop)
             (_, (output_state)) = tf.nn.dynamic_rnn(rnnfwd, word_embeddings, sequence_length=self.lengths, dtype=tf.float32)
             output_state = output_state[-1].h
             out_hsz = hsz

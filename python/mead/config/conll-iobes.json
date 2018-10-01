@@ -40,7 +40,7 @@
         "rnntype": "blstm",
         "layers": 1,
         "crf_mask": true,
-	"crf": 1
+        "crf": 1
     },
     "train": {
         "epochs": 100,

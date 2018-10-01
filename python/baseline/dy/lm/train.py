@@ -1,13 +1,14 @@
+import time
+import logging
 import dynet as dy
 import numpy as np
 from baseline.utils import listify, get_model_file
 from baseline.progress import create_progress_bar
-from baseline.reporting import basic_reporting
-from baseline.train import EpochReportingTrainer, create_trainer, lr_decay
+from baseline.train import Trainer, create_trainer, lr_decay
 from baseline.dy.dynety import *
 
 
-class LanguageModelTrainerDynet(EpochReportingTrainer):
+class LanguageModelTrainerDynet(Trainer):
     def __init__(self, model, **kwargs):
         super(LanguageModelTrainerDynet, self).__init__()
         self.model = model
@@ -15,6 +16,7 @@ class LanguageModelTrainerDynet(EpochReportingTrainer):
         self.decay = lr_decay(**kwargs) if kwargs.get('decay_type') is not None else None
         self.global_step = 0
         self.valid_epochs = 0
+        self.log = logging.getLogger('baseline.timing')
 
     @staticmethod
     def _loss(outputs, labels):
@@ -28,6 +30,7 @@ class LanguageModelTrainerDynet(EpochReportingTrainer):
         iters = 0
         step = 0
         initial_state = None
+        start = time.time()
         for batch_dict in loader:
             dy.renew_cg()
             if self.decay is not None:
@@ -53,6 +56,7 @@ class LanguageModelTrainerDynet(EpochReportingTrainer):
                 for reporting in reporting_fns:
                     reporting(metrics, self.global_step, 'Train')
 
+        self.log.debug({'phase': 'Train', 'time': time.time() - start})
         metrics['avg_loss'] = total_loss / iters
         metrics['perplexity'] = np.exp(total_loss / iters)
         for reporting in reporting_fns:
@@ -64,6 +68,7 @@ class LanguageModelTrainerDynet(EpochReportingTrainer):
         total_loss = 0.0
         iters = 0
         initial_state = None
+        start = time.time()
         for batch_dict in loader:
             dy.renew_cg()
             inputs = self.model.make_input(batch_dict)
@@ -81,6 +86,7 @@ class LanguageModelTrainerDynet(EpochReportingTrainer):
         else:
             output = 0
 
+        self.log.debug({'phase': phase, 'time': time.time() - start})
         metrics['avg_loss'] = total_loss / iters
         metrics['perplexity'] = np.exp(total_loss / iters)
         for reporting in reporting_fns:
@@ -88,7 +94,7 @@ class LanguageModelTrainerDynet(EpochReportingTrainer):
         return metrics
 
 
-def fit(model, ts, vs, es=None, epochs=5, do_early_stopping=True, early_stopping_metric='avg_loss', reporting=basic_reporting, **kwargs):
+def fit(model, ts, vs, es=None, epochs=5, do_early_stopping=True, early_stopping_metric='avg_loss', **kwargs):
 
     patience = int(kwargs.get('patience', epochs))
     after_train_fn = kwargs.get('after_train_fn', None)
@@ -100,7 +106,7 @@ def fit(model, ts, vs, es=None, epochs=5, do_early_stopping=True, early_stopping
     if do_early_stopping:
         print("Doing early stopping on [{}] with patience [{}]".format(early_stopping_metric, patience))
 
-    reporting_fns = listify(reporting)
+    reporting_fns = listify(kwargs.get('reporting', []))
     print('reporting', reporting_fns)
 
     min_metric = 10000
