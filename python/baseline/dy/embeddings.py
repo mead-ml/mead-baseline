@@ -43,7 +43,6 @@ class LookupTableEmbeddings(DyNetEmbeddings):
         self.vsz = kwargs.get('vsz')
         self.dsz = kwargs.get('dsz')
         self.batched = kwargs.get('batched', False)
-        self.finetune = kwargs.get('finetune', False)
         embedding_weight = np.reshape(kwargs['weights'], (self.vsz, 1, self.dsz))
         self.lookup = dy.lookup_batch if self.batched else dy.lookup
         self.embeddings = self.pc.lookup_parameters_from_numpy(embedding_weight, name=name)
