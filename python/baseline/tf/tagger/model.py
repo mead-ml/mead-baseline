@@ -92,6 +92,9 @@ class RNNTaggerModel(TaggerModel):
         checkpoint_name = checkpoint_name or basename
 
         state = read_json(basename + '.state')
+        for prop in ls_props(model):
+            if prop in state:
+                setattr(model, prop, state[prop])
 
         with gfile.FastGFile(basename + '.graph', 'rb') as f:
             gd = tf.GraphDef()

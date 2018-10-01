@@ -158,8 +158,7 @@ class ClassifierModelBase(ClassifierModel):
             embeddings_info[k] = v.__class__.__name__
         state = {
             "version": __version__,
-            "embeddings": embeddings_info ##,
-            ##"lengths_key": self.lengths_key
+            "embeddings": embeddings_info
         }
         for prop in ls_props(self):
             state[prop] = getattr(self, prop)

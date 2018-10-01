@@ -114,7 +114,9 @@ class GraphWordClassifierBase(ClassifierModelBase):
         model = cls()
         model.impl = keras.models.load_model(basename, **kwargs)
         state = read_json(basename + '.state')
-
+        for prop in ls_props(model):
+            if prop in state:
+                setattr(model, prop, state[prop])
         inputs = dict({(v.name, v) for v in model.impl.inputs})
 
         model.embeddings = dict()

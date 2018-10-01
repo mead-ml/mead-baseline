@@ -172,6 +172,9 @@ class BasicLanguageModel(LanguageModel):
             embeddings[key] = Constructor(key, **embed_args)
 
         model = BasicLanguageModel.create(embeddings, **state)
+        for prop in ls_props(model):
+            if prop in state:
+                setattr(model, prop, state[prop])
 
         do_init = kwargs.get('init', True)
         if do_init:

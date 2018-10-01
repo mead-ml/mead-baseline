@@ -203,7 +203,9 @@ class Seq2SeqModel(EncoderDecoderModel):
         Constructor = eval(tgt_class_name)
         tgt_embedding = Constructor('tgt', **embed_args)
         model = Seq2SeqModel.create(src_embeddings, tgt_embedding, **state)
-
+        for prop in ls_props(model):
+            if prop in state:
+                setattr(model, prop, state[prop])
         do_init = kwargs.get('init', True)
         if do_init:
             init = tf.global_variables_initializer()
