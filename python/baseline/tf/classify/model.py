@@ -7,7 +7,7 @@ from baseline.utils import fill_y, listify, write_json, ls_props, read_json
 from baseline.model import ClassifierModel, load_classifier_model, create_classifier_model
 from baseline.tf.tfy import (stacked_lstm,
                              parallel_conv)
-
+from baseline.tf.embeddings import *
 from baseline.version import __version__
 import os
 import copy
@@ -158,8 +158,8 @@ class ClassifierModelBase(ClassifierModel):
             embeddings_info[k] = v.__class__.__name__
         state = {
             "version": __version__,
-            "embeddings": embeddings_info,
-            "lengths_key": self.lengths_key
+            "embeddings": embeddings_info ##,
+            ##"lengths_key": self.lengths_key
         }
         for prop in ls_props(self):
             state[prop] = getattr(self, prop)
@@ -274,6 +274,10 @@ class ClassifierModelBase(ClassifierModel):
 
         state = read_json(basename + '.state')
 
+        for prop in ls_props(model):
+            if prop in state:
+                setattr(model, prop, state[prop])
+
         with gfile.FastGFile(basename + '.graph', 'rb') as f:
             gd = tf.GraphDef()
             gd.ParseFromString(f.read())
@@ -305,6 +309,14 @@ class ClassifierModelBase(ClassifierModel):
         model.labels = read_json(basename + '.labels')
         model.sess = sess
         return model
+
+    @property
+    def lengths_key(self):
+        return self._lengths_key
+
+    @lengths_key.setter
+    def lengths_key(self, value):
+        self._lengths_key = value
 
     @classmethod
     def create(cls, embeddings, labels, **kwargs):
