@@ -297,7 +297,6 @@ class ClassifierModelBase(ClassifierModel):
             Constructor = eval(class_name)
             model.embeddings[key] = Constructor(key, **embed_args)
 
-        model.lengths_key = state.get('lengths_key')
         if model.lengths_key is not None:
             model.lengths = tf.get_default_graph().get_tensor_by_name('lengths:0')
         else:
