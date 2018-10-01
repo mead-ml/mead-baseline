@@ -223,6 +223,8 @@ class SpecialDefaults(defaultdict):
             val = self[key] = six.MAXSIZE
         elif key == 'state':
             val = self[key] = States.UNKNOWN
+        elif key == 'xpctl':
+            val = self[key] = False
         elif isinstance(key, Label):
             val = self[key] = SpecialDefaults()
         elif key in {'Train', 'Valid', 'Test'}:
@@ -367,6 +369,12 @@ class LocalResults(Results):
 
     def get_experiments(self):
         return [x for x in self.results]
+
+    def set_xpctl(self, label, id_):
+        self.results[label.exp][label]['xpctl'] = id_
+
+    def get_xpctl(self, label):
+        return self.results[label.exp][label]['xpctl']
 
     def get_human(self, label):
         """Get the human label from the sha1.

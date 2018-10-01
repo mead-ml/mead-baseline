@@ -20,6 +20,10 @@ def read_logs(file_name):
     return logs
 
 
+def dummy_print(s):
+    pass
+
+
 @export
 class XPCTL(object):
     def __init__(self, **kwargs):
@@ -37,7 +41,7 @@ class XPCTL(object):
         task = config.get('task')
         log_loc = glob.glob(os.path.join(loc, 'reporting-*.log'))[0]
         logs = read_logs(log_loc)
-        self.repo.put_result(task, config, logs)
+        return self.repo.put_result(task, config, logs, print_fn=dummy_print)
 
 
 @export

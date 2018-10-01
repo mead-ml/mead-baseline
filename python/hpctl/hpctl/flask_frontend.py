@@ -70,8 +70,17 @@ class FlaskFrontend(Frontend):
 
     def put_result(self, exp, sha1, name):
         label = Label(exp, sha1, name)
-        self.xpctl.put_result(label)
-        return jsonify({"command": "putresults", "status": "success"})
+        if not self.results.get_xpctl(label):
+            id_ = self.xpctl.put_result(label)
+            self.results.set_xpctl(label, id_)
+        else:
+            id_ = self.results.get_xpctl(label)
+        return jsonify({"command": "putresults", "status": "success", "id": str(id_)})
+
+    def get_xpctl(self, exp, sha1, name):
+        label = Label(exp, sha1, name)
+        id_ = self.results.get_xpctl(label)
+        return jsonify(dict(id=id_, **label))
 
     def get_state(self, exp, sha1, name):
         label = Label(exp, sha1, name)
@@ -140,6 +149,7 @@ class FlaskFrontend(Frontend):
         dev_stats = [self.results.get_recent(l, 'Valid', 'f1') for l in labels]
         dev_stats = [x if not math.isnan(x) else 0.0 for x in dev_stats]
         dev_ticks = [self.results.get_recent(l, 'Valid', 'tick') for l in labels]
+        xpctls = [str(self.results.get_xpctl(l)) for l in labels]
         res = {
             'status': status,
             'sha1': sha1s,
@@ -148,7 +158,8 @@ class FlaskFrontend(Frontend):
             'train': train_stats,
             'train_ticks': train_ticks,
             'valid': dev_stats,
-            'valid_ticks': dev_ticks
+            'valid_ticks': dev_ticks,
+            'xpctls': xpctls
         }
         return jsonify(res)
 
@@ -201,6 +212,8 @@ def init_app(app, fe, base_url='/hpctl/v1'):
     app.route('{}/result/best/<exp>/<phase>/<metric>'.format(base_url), methods={'GET'})(fe.find_best_across)
     # Get the best results for each run (compares withing runs)
     app.route('{}/results/best/<exp>/<phase>/<metric>'.format(base_url), methods={'GET'})(fe.find_best_within)
+    # Check if this has be logged to xpctl
+    app.route('{}/xpctl/<exp>/<sha1>/<name>'.format(base_url), methods={'GET'})(fe.get_xpctl)
 
 
 

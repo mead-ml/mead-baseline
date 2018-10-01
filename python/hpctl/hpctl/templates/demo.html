@@ -30,7 +30,7 @@
 					$("#labels").append(button);
                     var button = '<button class="config" id="config-' + i + '"data-exp="' + data.exp[i] + '" data-sha1="' + data.sha1[i] + '" data-name="' + data.names[i] + '" onClick="getConfig(this.id)">Config</button>';
 					$("#labels").append(button);
-                    if (data.status[i] === "\u2714") {
+                    if (data.status[i] === "\u2714" && data.xpctls[i] === "False") {
                         var button = '<button class="xpctl" id="xpctl-' + i + '"data-exp="' + data.exp[i] + '" data-sha1="' + data.sha1[i] + '" data-name="' + data.names[i] + '" onClick="postXpctl(this.id)">xpctl</button>'
 					    $("#labels").append(button);
                     } else {
@@ -81,7 +81,9 @@
                 url: $SCRIPT_ROOT + $BASE + "/xpctl/putresult/" + exp + "/" + sha1 + "/" + name,
                 dataType: "json",
                 contentType: "application/json",
-                success: display
+            }).success(function(data, _, _) {
+                var line = "<p>" + name + " was commited to xpctl with id: " + data['id'] + "</p>";
+                $("#xpctl").append(line);
             });
         }
 
@@ -90,12 +92,12 @@
         </script>
 
         <div id="labels"></div>
+        <div id="xpctl"></div>
 
         <pre id="model_config"></pre>
 
         <button type="button" id="hpctl_config">Sample Config</button>
         <pre id="hpctl_config_result"></pre>
-        <p id='demo'> </demo>
 
 
     </body>
