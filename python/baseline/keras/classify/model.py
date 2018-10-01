@@ -4,10 +4,12 @@ from keras.layers import (Dense,
                           GlobalMaxPooling1D,
                           Dropout,
                           LSTM,
-                          GlobalAveragePooling1D, Concatenate)
+                          GlobalAveragePooling1D)
 
 from keras.utils import np_utils
-from baseline.utils import listify
+from baseline.keras.embeddings import LookupTableEmbeddings
+from baseline.version import __version__
+from baseline.utils import listify, ls_props, write_json, read_json
 from baseline.model import ClassifierModel, load_classifier_model, create_classifier_model
 import json
 
@@ -19,9 +21,27 @@ class ClassifierModelBase(ClassifierModel):
 
     def save(self, basename):
         self.impl.save(basename, overwrite=True)
+        path = basename.split('/')
+        base = path[-1]
+        outdir = '/'.join(path[:-1])
 
-        with open(basename + '.labels', 'w') as f:
-            json.dump(self.labels, f)
+        # For each embedding, save a record of the keys
+
+        embeddings_info = {}
+        for k, v in self.embeddings.items():
+            embeddings_info[k] = v.__class__.__name__
+        state = {
+            "version": __version__,
+            "embeddings": embeddings_info
+            ## "lengths_key": self.lengths_key
+        }
+        for prop in ls_props(self):
+            state[prop] = getattr(self, prop)
+
+        write_json(state, basename + '.state')
+        write_json(self.labels, basename + ".labels")
+        for key, embedding in self.embeddings.items():
+            embedding.save_md(basename + '-{}-md.json'.format(key))
 
     def classify(self, batch_dict):
         batch_time = batch_dict['x']
@@ -90,9 +110,23 @@ class GraphWordClassifierBase(ClassifierModelBase):
 
     @classmethod
     def load(cls, basename, **kwargs):
-        model = cls()
 
+        model = cls()
         model.impl = keras.models.load_model(basename, **kwargs)
+        state = read_json(basename + '.state')
+
+        inputs = dict({(v.name, v) for v in model.impl.inputs})
+
+        model.embeddings = dict()
+        for key, class_name in state['embeddings'].items():
+            md = read_json('{}-{}-md.json'.format(basename, key))
+            embed_args = dict({'vsz': md['vsz'], 'dsz': md['dsz']})
+            embed_args[key] = inputs[key]
+            Constructor = eval(class_name)
+            model.embeddings[key] = Constructor(key, **embed_args)
+
+        ##model.lengths_key = state.get('lengths_key')
+
         with open(basename + '.labels', 'r') as f:
             model.labels = json.load(f)
 
