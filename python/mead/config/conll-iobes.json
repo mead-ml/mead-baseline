@@ -34,8 +34,8 @@
     "model": {
         "model_type": "default",
         "cfiltsz": [3],
-        "hsz": 200,
-        "wsz": 30,
+        "hsz": 400,
+        "wsz": 50,
         "dropout": 0.5,
         "rnntype": "blstm",
         "layers": 1,
@@ -43,8 +43,9 @@
         "crf": 1
     },
     "train": {
-        "epochs": 100,
+        "epochs": 80,
         "optim": "sgd",
+	"decay_rate": 0.05,
         "eta": 0.015,
         "mom": 0.9,
         "patience": 40,

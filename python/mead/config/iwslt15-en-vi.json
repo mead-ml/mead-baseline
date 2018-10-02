@@ -35,7 +35,6 @@
     "train": {
         "epochs": 16,
         "optim": "adam",
-        "decay": 0,
         "eta": 0.001,
         "mom": 0.9,
         "patience": 20,

@@ -5,8 +5,7 @@ import logging.config
 
 import os
 import baseline
-from baseline.vectorizers import create_vectorizer
-from baseline.reporting import create_reporting_hook
+from baseline.utils import export
 from mead.downloader import EmbeddingDownloader, DataDownloader
 from mead.utils import (
     get_mead_settings,
@@ -16,7 +15,7 @@ from mead.utils import (
 
 
 __all__ = []
-exporter = baseline.export(__all__)
+exporter = export(__all__)
 
 
 class Backend(object):
@@ -34,8 +33,8 @@ class Task(object):
 
 
     @staticmethod
-    def register_task(Task):
-        Task.TASK_REGISTRY[Task.task_name()] = Task
+    def register_task(TaskClass):
+        Task.TASK_REGISTRY[TaskClass.task_name()] = TaskClass
 
     def _create_backend(self):
         pass
@@ -70,7 +69,7 @@ class Task(object):
             vectorizer_section['mxwlen'] = vectorizer_section.get('mxlen', self.config_params['preproc'].get('mxwlen', -1))
             if 'transform' in vectorizer_section:
                 vectorizer_section['transform_fn'] = eval(vectorizer_section['transform'])
-            vectorizer = create_vectorizer(**vectorizer_section)
+            vectorizer = baseline.create_vectorizer(**vectorizer_section)
             self.vectorizers[key] = vectorizer
 
     def _configure_logger(self, logger_config):
@@ -160,7 +159,6 @@ class Task(object):
         model = self._create_model()
         self.backend.task.fit(model, self.train_data, self.valid_data, self.test_data, **self.config_params['train'])
         baseline.zip_files(self.get_basedir())
-        self.task.fit(model, self.train_data, self.valid_data, self.test_data, **self.config_params['train'])
         self._close_reporting_hooks()
         return model
 
@@ -174,9 +172,9 @@ class Task(object):
                         reporting[report_type][report_arg] = report_val
         reporting_hooks = list(reporting.keys())
 
-        self.reporting = create_reporting_hook(
+        self.reporting = baseline.create_reporting_hook(
             reporting_hooks, reporting,
-            config_file=self.config_file, task=task_name
+            config_file=self.config_file, task=self.__class__.task_name()
         )
         self.config_params['train']['reporting'] = [x.step for x in self.reporting]
         logging.basicConfig(level=logging.DEBUG)
@@ -567,6 +565,7 @@ class LanguageModelingTask(Task):
     def __init__(self, logging_config, mead_settings_config, **kwargs):
         super(LanguageModelingTask, self).__init__(logging_config, mead_settings_config, **kwargs)
 
+    @classmethod
     def task_name(cls):
         return 'lm'
 

@@ -317,14 +317,6 @@ class ClassifierModelBase(ClassifierModel):
     def lengths_key(self, value):
         self._lengths_key = value
 
-    @property
-    def vdrop(self):
-        return self._vdrop
-
-    @vdrop.setter
-    def vdrop(self, value):
-        self._vdrop = value
-
     @classmethod
     def create(cls, embeddings, labels, **kwargs):
         """The main method for creating all :class:`WordBasedModel` types.
@@ -495,6 +487,15 @@ class LSTMModel(ClassifierModelBase):
     """
     def __init__(self):
         super(LSTMModel, self).__init__()
+        self._vdrop = None
+
+    @property
+    def vdrop(self):
+        return self._vdrop
+
+    @vdrop.setter
+    def vdrop(self, value):
+        self._vdrop = value
 
     def pool(self, word_embeddings, dsz, init, **kwargs):
         """LSTM with dropout yielding a final-state as output
