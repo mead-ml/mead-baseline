@@ -64,12 +64,28 @@ class TensorFlowEmbeddings(object):
 
 
 class LookupTableEmbeddings(TensorFlowEmbeddings):
+    """Provide "classic" Lookup-Table based word embeddings
+
+    """
 
     @classmethod
     def create_placeholder(cls, name):
         return tf.placeholder(tf.int32, [None, None], name=name)
 
     def __init__(self, name, **kwargs):
+        """Create a lookup-table based embedding.
+
+        :param name: The name of the feature/placeholder, and a key for the scope
+        :param kwargs:
+
+        :Keyword Arguments: See below
+        * *vsz* -- (``int``) this is the vocabulary (input) size of the lookup table
+        * *dsz* -- (``int``) the output dimension size of this embedding
+        * *finetune* -- (``bool``) (default is `True`) should we allow the sub-graph to learn updated weights
+        * *weights* -- (``numpy.ndarray``) Optional `vsz x dsz` weight matrix for initialization
+        * *scope* -- (``str``) An optional variable scope, by default it will be `{name}/LUT`
+        * *unif* -- (``float``) (defaults to `0.1`) If the weights should be created, what is the random initialization range
+        """
         super(LookupTableEmbeddings, self).__init__()
         self.vsz = kwargs.get('vsz')
         self.dsz = kwargs.get('dsz')
@@ -79,9 +95,15 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
         self.x = kwargs.get(self.name, self.create_placeholder(name))
         self.weights = kwargs.get('weights')
         if self.weights is None:
-            self.weights = np.zeros((self.vsz, self.dsz))
+            unif = kwargs.get('unif', 0.1)
+            self.weights = np.random.uniform(-unif, unif, (self.vsz, self.dsz))
 
     def encode(self, x=None):
+        """Build a simple Lookup Table and set as input `x` if it exists, or `self.x` otherwise.
+
+        :param x: An optional input sub-graph to bind to this operation or use `self.x` if `None`
+        :return: The sub-graph output
+        """
         if x is None:
             x = self.x
         return embed(x,
@@ -92,11 +114,18 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
                      self.scope)
 
     def save_md(self, target):
+        """Save the metadata associated with this embedding as a JSON file
+
+        :param target: The name of the output file
+        :return:
+        """
         write_json({'vsz': self.vsz, 'dsz': self.dsz}, target)
 
 
 class CharBoWEmbeddings(TensorFlowEmbeddings):
+    """Bag of character embeddings, sum char embeds, so in this case `wsz == dsz`
 
+    """
     @classmethod
     def create_placeholder(cls, name):
         return tf.placeholder(tf.int32, [None, None, None], name=name)
@@ -128,7 +157,9 @@ class CharBoWEmbeddings(TensorFlowEmbeddings):
 
 
 class CharConvEmbeddings(TensorFlowEmbeddings):
+    """dos Santos embeddings extended to parallel filters (AKA Kim character-aware neural language model inputs)
 
+    """
     @classmethod
     def create_placeholder(cls, name):
         return tf.placeholder(tf.int32, [None, None, None], name=name)
@@ -167,14 +198,8 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
         return self.wsz
 
 
-#def tf_embeddings(in_embeddings_obj, name, DefaultType=TensorFlowTokenEmbeddings, **kwargs):
-#    if isinstance(in_embeddings_obj, TensorFlowEmbeddings):
-#        return in_embeddings_obj
-#    else:
-#        return DefaultType.create(name, in_embeddings_obj, **kwargs)
-
-
 # If the embeddings are listed here, than we need to use PretrainedEmbeddingsModel
+# TODO: add/test CBoW to this registry
 BASELINE_EMBEDDING_MODELS = {
     'default': LookupTableEmbeddings.create,
     'char-conv': CharConvEmbeddings.create

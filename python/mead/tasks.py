@@ -19,7 +19,17 @@ exporter = export(__all__)
 
 
 class Backend(object):
+    """Simple object to represent a deep-learning framework backend
+    """
     def __init__(self, name=None, task=None, embeddings=None, params=None, exporter=None):
+        """Initialize the backend, optional with constructor args
+
+        :param name: (``str``) Name of the framework: currently one of (`tensorflow`, `pytorch`, `dynet`, `keras`)
+        :param task: Sub-module resolved to handle this task, e.g. (`baseline.tf.classify`)
+        :param embeddings: This is the framework-specific embeddings sub-module, e.g. (`baseline.tf.embeddings`)
+        :param params: (``dict``) A dictionary of framework-specific user-data to pass through keyword args to each sub-module
+        :param exporter: A framework-specific exporter to facilitate exporting to runtime deployment
+        """
         self.name = name
         self.task = task
         self.embeddings = embeddings
@@ -29,14 +39,25 @@ class Backend(object):
 
 @exporter
 class Task(object):
+    """Basic building block for a task of NLP problems, e.g. `tagger`, `classify`, etc.
+    """
     TASK_REGISTRY = {}
-
 
     @staticmethod
     def register_task(TaskClass):
+        """This method registers a class by its task name in the `TASK_REGISTRY`.  When `mead` goes to lookup its
+        `Task` by name, it will return the registered class
+
+        :param TaskClass: A class name
+        :return:
+        """
         Task.TASK_REGISTRY[TaskClass.task_name()] = TaskClass
 
     def _create_backend(self):
+        """This method creates and returns a `Backend` object
+
+        :return:
+        """
         pass
 
     def __init__(self, logger_config, mead_settings_config=None):
@@ -53,9 +74,19 @@ class Task(object):
 
     @classmethod
     def task_name(cls):
+        """This classmethod returns the official name of this task, e.g., `classify` for classification
+
+        :return: (``str``) - String name of this task
+        """
         pass
 
     def _create_vectorizers(self):
+        """Read the `features` section of the mead config.  This sections contains both embedding info and vectorizers
+        Then use the vectorizer sub-section to instantiate the vectorizers and return them in a ``dict`` with name
+        keyed off of the `features->name` and value of `vectorizer`
+
+        :return: (``dict``) - A dictionary of the vectorizers keyed by feature name
+        """
         self.vectorizers = {}
 
         features = self.config_params['features']
@@ -74,6 +105,8 @@ class Task(object):
 
     def _configure_logger(self, logger_config):
         """Use the logger file (logging.json) to configure the log, but overwrite the filename to include the PID
+
+        There are reporting and timing loggers that are configured, the latter being used for speed testing.
 
         :param logger_config: The logging configuration JSON or file containing JSON
         :return: A dictionary config derived from the logger_file, with the reporting handler suffixed with PID
@@ -116,7 +149,7 @@ class Task(object):
         self.config_params['train']['basedir'] = basedir
         self.config_file = kwargs.get('config_file')
         self._setup_task()
-        self._configure_reporting(config_params.get('reporting', {}), self.task_name, **kwargs)
+        self._configure_reporting(config_params.get('reporting', {}), **kwargs)
         self.dataset = datasets_set[self.config_params['dataset']]
         self.reader = self._create_task_specific_reader()
 
@@ -144,15 +177,31 @@ class Task(object):
         self.backend = self._create_backend()
 
     def _load_dataset(self):
+        """This hook is responsible for creating and initializing the ``DataFeed`` objects to be used for train, dev
+        and test phases.  This method should yield a `self.train_data`, `self.valid_data` and `self.test_data` on this
+        class
+
+        :return: Nothing
+        """
         pass
 
     def _create_model(self):
+        """This hook create the model used for training, using the `model` section of the mead config.  The model is
+        returned, not stored as a field of the class
+
+        :return: A representation
+        """
         pass
 
     def train(self):
-        """
-        Do training
-        :return:
+        """This method delegates to several sub-hooks in order to complete training.
+
+        1. call `_load_dataset()` which initializes the `DataFeed` fields of this class
+        2. call `baseline.save_vectorizers()` which write out the bound `vectorizers` fields to a file in the `basedir`
+        3. call `backend.task.fit()` which executes the training procedure and  yields a saved model
+        4. call `baseline.zip_files()` which zips all files in the `basedir` with the same `PID` as this process
+        5. call `_close_reporting_hooks()` which lets the reporting hooks know that the job is finished
+        :return: Nothing
         """
         self._load_dataset()
         baseline.save_vectorizers(self.get_basedir(), self.vectorizers)
@@ -160,9 +209,14 @@ class Task(object):
         self.backend.task.fit(model, self.train_data, self.valid_data, self.test_data, **self.config_params['train'])
         baseline.zip_files(self.get_basedir())
         self._close_reporting_hooks()
-        return model
 
-    def _configure_reporting(self, reporting, task_name, **kwargs):
+    def _configure_reporting(self, reporting, **kwargs):
+        """Configure all `reporting_hooks` specified in the mead settings or overridden at the command line
+
+        :param reporting:
+        :param kwargs:
+        :return:
+        """
         default_reporting = self.mead_settings_config.get('reporting_hooks', {})
         # Add default reporting information to the reporting settings.
         for report_type in default_reporting:
@@ -180,10 +234,30 @@ class Task(object):
         logging.basicConfig(level=logging.DEBUG)
 
     def _close_reporting_hooks(self):
+        """Tell all reporting objects they are done
+
+        :return: Nothing
+        """
         for x in self.reporting:
             x.done()
 
     def _create_embeddings(self, embeddings_set, vocabs, features):
+        """Creates a set of arbitrary sub-graph, DL-framework-specific embeddings by delegating to wired sub-module.
+
+        As part of this process, we take in an index of embeddings by name, a ``dict`` of ``Counter`` objects (keyed by
+        feature name), containing the number of times each token has been seen, and a `features` list which is a
+        sub-section of the mead config containing the `embeddings` section for each feature.
+        This method's job is to either create a sub-graph from a pretrained model, or to create a new random
+        initialized sub-graph, taking into account the input vocabulary counters.  The embeddings model has control
+        to determine the actual word indices and sub-graph for the embeddings, both of which are returned from this
+        method.  If some sort of feature selection is
+        performed, such as low count removal that would be required via the delegated methods
+
+        :param embeddings_set: The embeddings index passed to mead driver
+        :param vocabs: A set of known ``Counter``s for each vocabulary consisting of a token key and count for each
+        :param features: The `features` sub-section of the mead config
+        :return: Returns a ``tuple`` comprised of a ``dict`` of (`feature name`, `Embedding`) and an updated vocab
+        """
         unif = self.config_params['unif']
         keep_unused = self.config_params.get('keep_unused', False)
 
@@ -224,6 +298,7 @@ class Task(object):
 
         return embeddings_map, out_vocabs
 
+    # FIXME Remove
     @staticmethod
     def _log2json(log):
         s = []
@@ -234,6 +309,8 @@ class Task(object):
         return s
 
     def get_basedir(self):
+        """Return the base directory if provided, or CWD
+        """
         return self.config_params.get('basedir', './')
 
 
