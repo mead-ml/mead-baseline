@@ -239,7 +239,7 @@ class Char1DVectorizer(AbstractCharVectorizer):
     def run(self, tokens, vocab):
 
         if self.mxlen < 0:
-            self.mxlen = self.max_seen_char
+            self.mxlen = self.max_seen_tok
 
         vec1d = np.zeros(self.mxlen, dtype=int)
         for i, atom in enumerate(self._next_element(tokens, vocab)):
