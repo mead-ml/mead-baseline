@@ -73,9 +73,10 @@ class FlaskFrontend(Frontend):
         if not self.results.get_xpctl(label):
             id_ = self.xpctl.put_result(label)
             self.results.set_xpctl(label, id_)
+            id_ = str(id_)
         else:
             id_ = self.results.get_xpctl(label)
-        return jsonify({"command": "putresults", "status": "success", "id": str(id_)})
+        return jsonify({"command": "putresults", "status": "success", "id": id_})
 
     def get_xpctl(self, exp, sha1, name):
         label = Label(exp, sha1, name)
@@ -149,7 +150,7 @@ class FlaskFrontend(Frontend):
         dev_stats = [self.results.get_recent(l, 'Valid', 'f1') for l in labels]
         dev_stats = [x if not math.isnan(x) else 0.0 for x in dev_stats]
         dev_ticks = [self.results.get_recent(l, 'Valid', 'tick') for l in labels]
-        xpctls = [str(self.results.get_xpctl(l)) for l in labels]
+        xpctls = [self.results.get_xpctl(l) for l in labels]
         res = {
             'status': status,
             'sha1': sha1s,

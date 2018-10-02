@@ -63,3 +63,8 @@ def get_ends(hpctl_config, hpctl_settings, **kwargs):
     if isinstance(backend_config.get('real_gpus'), str):
         backend_config['real_gpus'] = backend_config['real_gpus'].split(",")
     return frontend_config, backend_config
+
+
+def get_xpctl_settings(mead_settings):
+    xpctl = mead_settings.get('reporting_hooks', {}).get('xpctl', {})
+    return read_config_file(xpctl['cred'])

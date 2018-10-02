@@ -206,6 +206,24 @@ class Results(object):
         """
         pass
 
+    def set_xpctl(self, label, id_):
+        """Mark that a job has be uploaded to xpctl.
+
+        :param label: hpctl.utils.Label, The label that was uploaded.
+        :param id_: The xpctl id returned.
+        """
+        pass
+
+    def get_xpctl(self, label):
+        """Get the id of the label in the xpctl db.
+
+        :param label: hpctl.utils.Label, The label to check.
+
+        :returns:
+            The id or False if has not be uploaded.
+        """
+        pass
+
 
 class SpecialDefaults(defaultdict):
     """This is a defaultdict where the key can effect the default value.
@@ -371,7 +389,7 @@ class LocalResults(Results):
         return [x for x in self.results]
 
     def set_xpctl(self, label, id_):
-        self.results[label.exp][label]['xpctl'] = id_
+        self.results[label.exp][label]['xpctl'] = str(id_)
 
     def get_xpctl(self, label):
         return self.results[label.exp][label]['xpctl']

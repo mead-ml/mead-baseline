@@ -109,7 +109,7 @@ class RemoteResults(Results):
         return [Label.parse(x) for x in resp['labels']], resp['values'], resp['steps']
 
     def get_xpctl(self, label):
-        resp = _get("{url}/xpctl/{exp}/{sha1}/{name}".format(url=url, **label))
+        resp = _get("{url}/xpctl/{exp}/{sha1}/{name}".format(url=self.url, **label))
         return resp['id']
 
 
@@ -123,3 +123,4 @@ class RemoteXPCTL(object):
             '{url}/xpctl/putresult/{exp}/{sha1}/{name}'.format(
                 url=self.url, **label)
         )
+        return r.json()['id']

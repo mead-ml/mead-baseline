@@ -3,6 +3,9 @@
     "reporting_hooks":{
         "visdom": {
             "name": "ZZZZZZZZZZZZ"
+        },
+        "xpctl": {
+            "cred": "/home/blester/xpctlcred.json.local"
         }
     },
     "hpctl": {

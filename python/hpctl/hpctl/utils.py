@@ -25,7 +25,7 @@ hpctl_path = export(
     )
 )
 
-
+@export
 class Colors(object):
     GREEN = '\033[32;1m'
     RED = '\033[31;1m'
@@ -34,12 +34,14 @@ class Colors(object):
     CYAN = '\033[36;1m'
     RESTORE = '\033[0m'
 
+@export
 def color(msg, color):
     if platform.system() == 'Windows':
         return msg
     return "{}{}{}".format(color, msg, Colors.RESTORE)
 
 
+@export
 @six.python_2_unicode_compatible
 class Label(Mapping):
     def __init__(self, exp, sha1, name):

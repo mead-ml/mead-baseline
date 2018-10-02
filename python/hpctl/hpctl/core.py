@@ -5,6 +5,7 @@ import time
 from baseline.utils import export as exporter
 from baseline.utils import read_config_file, write_json
 from mead.utils import read_config_file_or_json, hash_config
+from hpctl.report import get_xpctl
 from hpctl.utils import create_logs
 from hpctl.results import get_results
 from hpctl.backend import get_backend
@@ -18,6 +19,7 @@ from hpctl.settings import (
     get_logs,
     get_ends,
     set_root,
+    get_xpctl_settings,
 )
 
 
@@ -103,14 +105,14 @@ def serve(**kwargs):
     hp_settings, mead_settings = get_settings(**kwargs)
     frontend_config, backend_config = get_ends({}, hp_settings, **kwargs)
     hp_logs, _ = get_logs(hp_settings, **kwargs)
+    # Update to handle no xpctl
+    xpctl_config = get_xpctl_settings(mead_settings)
     set_root(hp_settings)
 
     results = get_results({})
     backend = get_backend(backend_config)
     logs = get_log_server(hp_logs)
 
-    from hpctl.report import get_xpctl
-    xpctl_config = {'dbhost': 'localhost', 'dbport': 27017, 'user': '', 'passwd': ''}
     xpctl = get_xpctl(xpctl_config)
 
     frontend_config['type'] = 'flask'
@@ -122,13 +124,15 @@ def serve(**kwargs):
         pass
 
 
-def _remote_monkey_patch(backend_config, hp_logs, results_config):
+def _remote_monkey_patch(backend_config, hp_logs, results_config, xpctl_config):
     if backend_config['type'] == 'remote':
         hp_logs['type'] = 'remote'
         results_config['type'] = 'remote'
         results_config['host'] = backend_config['host']
         results_config['port'] = backend_config['port']
-    return backend_config, hp_logs, results_config
+        xpctl_config['type'] = 'remote'
+        xpctl_config['host'] = backend_config['host']
+        xpctl_config['port'] = backend_config['port']
 
 
 @export
@@ -142,6 +146,8 @@ def search(**kwargs):
     embeddings = read_config_file_or_json(kwargs['embeddings'])
     task_name = kwargs.get('task', mead_config.get('task', 'None'))
     frontend_config, backend_config = get_ends(hp_config, hp_settings, **kwargs)
+    xpctl_config = get_xpctl_settings(mead_settings)
+    results_config = {}
 
     frontend_config['experiment_hash'] = exp_hash
     default = mead_config['train'].get('early_stopping_metric', 'avg_loss')
@@ -154,13 +160,8 @@ def search(**kwargs):
 
     if backend_config['type'] != 'remote':
         set_root(hp_settings)
-    backend_config, hp_logs, results_config = _remote_monkey_patch(backend_config, hp_logs, {})
+    _remote_monkey_patch(backend_config, hp_logs, results_config, xpctl_config)
 
-    from hpctl.report import get_xpctl
-    xpctl_config = {'dbhost': 'localhost', 'dbport': 27017, 'user': '', 'passwd': ''}
-    if backend_config['type'] == 'remote':
-        xpctl_config = {'host': 'localhost', 'port': 5000, 'type': 'remote'}
-    print(xpctl_config)
     xpctl = get_xpctl(xpctl_config)
 
     results = get_results(results_config)
