@@ -2,7 +2,6 @@
     "task": "tagger",
     "batchsz": 10,
     "conll_output": "conll-iobes-results.conll",
-    "charsz": 30,
     "unif": 0.1,
     "preproc": {
     },
@@ -19,7 +18,7 @@
 	{
 	    "name": "char",
 	    "vectorizer": { "type": "dict2d" },
-	    "embeddings": { "dsz": 30, "wsz": 30, "type": "char-conv" }
+	    "embeddings": { "dsz": 30, "wsz": 50, "type": "char-conv", "unif": 0.3 }
 	}
     ],
     "backend": "pytorch",
@@ -35,17 +34,15 @@
         "model_type": "default",
         "cfiltsz": [3],
         "hsz": 400,
-        "wsz": 50,
-        "dropout": 0.5,
+        "dropout": 0.2,
         "rnntype": "blstm",
         "layers": 1,
         "crf_mask": true,
         "crf": 1
     },
     "train": {
-        "epochs": 80,
+        "epochs": 100,
         "optim": "sgd",
-	"decay_rate": 0.05,
         "eta": 0.015,
         "mom": 0.9,
         "patience": 40,
