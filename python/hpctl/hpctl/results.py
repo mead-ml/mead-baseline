@@ -389,7 +389,7 @@ class LocalResults(Results):
         return [x for x in self.results]
 
     def set_xpctl(self, label, id_):
-        self.results[label.exp][label]['xpctl'] = str(id_)
+        self.results[label.exp][label]['xpctl'] = id_
 
     def get_xpctl(self, label):
         return self.results[label.exp][label]['xpctl']

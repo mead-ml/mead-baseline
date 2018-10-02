@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 import argparse
 from mead.utils import convert_path
 from hpctl.utils import hpctl_path
-from hpctl.core import search, find, list_names, serve, launch
+from hpctl.core import search, find, list_names, serve, launch, verify
 
 
 def add_common_args(p):
@@ -71,6 +71,12 @@ def main():
     search_parser.set_defaults(func=search)
     add_common_args(search_parser)
     search_parser.add_argument('--num_iters', type=int, help="The number of sample to run.")
+
+    verify_parser = subparsers.add_parser('verify', description="Run a config a lot.")
+    verify_parser.set_defaults(func=verify)
+    add_common_args(verify_parser)
+    verify_parser.add_argument('--num_iters', type=int, help="The number of times to run the job.")
+    verify_parser.add_argument('--label', help="The name for the job in xpctl.")
 
     launch_parser = subparsers.add_parser('launch')
     launch_parser.set_defaults(func=launch)

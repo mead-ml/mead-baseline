@@ -3,11 +3,11 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 import os
 from baseline.utils import read_config_file
 from baseline.utils import export as exporter
-from mead.utils import get_mead_settings, parse_extra_args, hash_config
+from mead.utils import get_mead_settings, parse_extra_args, hash_config, read_config_file_or_json
 
 
 def get_configs(**kwargs):
-    hpctl_config = read_config_file(kwargs['config'])
+    hpctl_config = read_config_file_or_json(kwargs['config'])
     mead_config = hpctl_config['mead']
     if isinstance(mead_config, str):
         mead_config = read_config_file(mead_config)

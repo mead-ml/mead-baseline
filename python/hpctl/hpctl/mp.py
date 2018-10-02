@@ -5,11 +5,12 @@ import os
 import sys
 import json
 import traceback
+from copy import deepcopy
 from multiprocessing import Process
 from subprocess import check_call, call, CalledProcessError
 import mead
-from baseline.utils import write_json
 from baseline.utils import export as exporter
+from baseline.utils import write_json, redirect
 from hpctl.results import States
 from hpctl.utils import create_logs, Label
 from hpctl.backend import LocalGPUBackend, Runner
@@ -51,11 +52,12 @@ def run_job(
     if 'visdom' in config_params.get('reporting', {}):
         config_params.get('reporting', {})['visdom']['name'] = label.name
     config_params['model']['gpus'] = len(gpus)
+    print(config_params)
 
     write_json(config_params, 'config.json')
     logs = create_logs(label, mead_logs, hpctl_logs)
     task = mead.Task.get_task_specific(task_name, logs, settings)
-    task.read_config(config_params, datasets)
+    task.read_config(config_params, datasets, config_file=deepcopy(config_params))
     task.initialize(embeddings)
     task.train()
 
@@ -83,17 +85,10 @@ class FileProcess(Process):
         self.output = open(self.out_file, 'w', buffering=1)
 
     def run(self):
-        out, err = sys.stdout, sys.stderr
-        sys.stdout = self.output
-        sys.stderr = self.output
-        os.chdir(self.loc)
-        setproctitle(self.name)
-        try:
+        with redirect(sys.stdout, self.output):
+            os.chdir(self.loc)
+            setproctitle(self.name)
             super(FileProcess, self).run()
-        except Exception as e:
-            sys.stderr = err
-            sys.stdout = out
-            raise(e)
 
     def join(self):
         super(FileProcess, self).join()

@@ -110,7 +110,6 @@ class Console(Frontend):
         self.results = results
         self.xpctl = xpctl
         self.print_count = 0
-        self.first = True
         self.train = train
         self.dev = dev
         self.test = test
@@ -144,7 +143,7 @@ class Console(Frontend):
         best, _, _ = self.results.find_best(self.experiment_hash, 'Valid', self.dev)
         test = self.results.get_recent(best, 'Test', self.test)
         print("\n{} had a test performance of {} on {}".format(best.name, test, self.test))
-        if not self.results.get_xpctl(best):
+        if not self.results.get_xpctl(best) and self.xpctl is not None:
             resp = input("Do you want to save this model with xpctl? (y/N) ")
             if resp in {'y', 'Y'}:
                 id_ = self.xpctl.put_result(best)

@@ -188,6 +188,68 @@ def search(**kwargs):
     results.save()
 
 
+# Requires xpctl
+@export
+def verify(**kwargs):
+    """Search for optimal hyperparameters."""
+    hp_config, mead_config = get_configs(**kwargs)
+    # Force xpctl
+    report = mead_config.get('reporting', {})
+    xpctl = report.get('xpctl', {})
+    if kwargs['label'] is not None:
+        xpctl['label'] = kwargs['label']
+    report['xpctl'] = xpctl
+    mead_config['reporting'] = report
+
+    exp_hash = hash_config(mead_config)
+    hp_settings, mead_settings = get_settings(**kwargs)
+    hp_logs, mead_logs = get_logs(hp_settings, **kwargs)
+    datasets = read_config_file_or_json(kwargs['datasets'])
+    embeddings = read_config_file_or_json(kwargs['embeddings'])
+    task_name = kwargs.get('task', mead_config.get('task', 'None'))
+    frontend_config, backend_config = get_ends(hp_config, hp_settings, **kwargs)
+    xpctl_config = {}
+    results_config = {}
+
+    frontend_config['experiment_hash'] = exp_hash
+    default = mead_config['train'].get('early_stopping_metric', 'avg_loss')
+    if 'train' not in frontend_config:
+        frontend_config['train'] = default
+    if 'dev' not in frontend_config:
+        frontend_config['dev'] = default
+    if 'test' not in frontend_config:
+        frontend_config['test'] = default
+
+    if backend_config['type'] != 'remote':
+        set_root(hp_settings)
+    _remote_monkey_patch(backend_config, hp_logs, results_config, xpctl_config)
+
+    results = get_results(results_config)
+    results.add_experiment(mead_config)
+
+    backend = get_backend(backend_config)
+
+    # Setup the sampler
+    config_sampler = get_config_sampler(
+        mead_config,
+        results,
+        hp_config.get('samplers', [])
+    )
+
+    logs = get_log_server(hp_logs)
+
+    frontend = get_frontend(frontend_config, results, None)
+
+    num_iters = int(kwargs.get('num_iters') if kwargs.get('num_iters') is not None else hp_config.get('num_iters', 3))
+
+    jobs = run(num_iters, results, backend, frontend, config_sampler, logs, mead_logs, hp_logs, mead_settings, datasets, embeddings, task_name)
+    logs.stop()
+    frontend.finalize()
+    results.save()
+    for job in jobs:
+        results.set_xpctl(job, True)
+
+
 @export
 def run(num_iters, results, backend, frontend, config_sampler, logs, mead_logs, hpctl_logs, mead_settings, datasets, embeddings, task_name):
     """The main driver of hpctl.
@@ -202,6 +264,7 @@ def run(num_iters, results, backend, frontend, config_sampler, logs, mead_logs, 
     :param logs: hpctl.logging_server.Logs, The log collector.
     """
     launched = 0
+    launched_labels = []
     all_done = False
     while not all_done:
         # Launch jobs
@@ -209,6 +272,7 @@ def run(num_iters, results, backend, frontend, config_sampler, logs, mead_logs, 
             label, config = config_sampler.sample()
             results.insert(label, config)
             results.save()
+            launched_labels.append(label)
             backend.launch(
                 label=label, config=config,
                 mead_logs=mead_logs, hpctl_logs=hpctl_logs,
@@ -230,6 +294,7 @@ def run(num_iters, results, backend, frontend, config_sampler, logs, mead_logs, 
         # Check for quit
         all_done = backend.all_done() if launched >= num_iters else False
         time.sleep(1)
+    return launched_labels
 
 
 def run_forever(results, backend, scheduler, frontend, logs):
