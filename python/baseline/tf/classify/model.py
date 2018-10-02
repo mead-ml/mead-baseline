@@ -307,7 +307,6 @@ class WordClassifierBase(Classifier):
             vocab_suffixes = get_vocab_file_suffixes(basename)
             for ty in vocab_suffixes:
                 vocab_file = '{}-{}.vocab'.format(basename, ty)
-                print('Reading {}'.format(vocab_file))
                 with open(vocab_file, 'r') as f:
                     model.vocab[ty] = json.load(f)
 
