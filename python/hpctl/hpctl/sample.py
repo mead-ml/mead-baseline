@@ -25,23 +25,6 @@ nouns = GzipFile(os.path.join(loc, "nouns.gz"), "r").read().decode('utf-8').rstr
 
 
 @export
-def build_samplers(names):
-    """Create user defined samplers.
-
-    :param names: List[str], The list of user defined sampling classes.
-
-    :returns:
-        dict[name] -> hpctl.sampler.Sampler, A mapping of names to user defined
-            samplers.
-    """
-    samplers = {}
-    for name in names:
-        mod = import_user_module("sampler", name)
-        samplers[name] = mod.create_sampler()
-    return samplers
-
-
-@export
 def random_name():
     """Generate a human readable random name.
 
@@ -229,6 +212,19 @@ class ConfigSampler(object):
                         examples[tuple([key] + list(k))] = v
         return examples
 
+    @staticmethod
+    def _collect(config):
+        examples = set()
+        for key, value in config.items():
+            if isinstance(value, dict):
+                if 'type' in value:
+                    examples.add(value['type'])
+                else:
+                    nested_example = ConfigSampler._collect(value)
+                    for type_ in nested_example:
+                        examples.add(type_)
+        return examples
+
     def __len__(self):
         """Grid searches are the only ones that have a length."""
         if 'grid' in self.samplers:
@@ -256,16 +252,35 @@ class ConfigSampler(object):
 
 
 @export
-def get_config_sampler(config, results, user_samplers=None):
+def build_samplers(names, default_samplers=DEFAULT_SAMPLERS):
+    """Create user defined samplers.
+
+    :param names: List[str], The list of user defined sampling classes.
+
+    :returns:
+        dict[name] -> hpctl.sampler.Sampler, A mapping of names to user defined
+            samplers.
+    """
+    samplers = {}
+    for name in names:
+        if name in default_samplers:
+            samplers[name] = default_samplers[name]
+        else:
+            mod = import_user_module("sampler", name)
+            samplers[name] = mod.create_sampler()
+    return samplers
+
+
+@export
+def get_config_sampler(config, results):
     """Create a ConfigSampler that includes user defined ones.
 
     ;param config: dict, The mead config with sampling information.
     :param results: hpctl.results.Results, The data results object.
     :param user_samplers: List[str], The names of user defined samplers.
     """
-    if user_samplers is None:
-        user_samplers = []
-    user_samplers = build_samplers(user_samplers)
-    DEFAULT_SAMPLERS.update(user_samplers)
-    config_sampler = ConfigSampler(config, results, samplers=DEFAULT_SAMPLERS)
+    needed_samplers = ConfigSampler._collect(config)
+    samplers = build_samplers(needed_samplers)
+    print(samplers)
+    config_sampler = ConfigSampler(config, results, samplers=samplers)
     return config_sampler

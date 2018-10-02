@@ -46,7 +46,8 @@ def reset_screen(lines):
 
     :param lines: int, The number of lines that are to be erased.
     """
-    if platform.system() == 'Linux':
+    import os
+    if not os.getenv('DEBUG', False) and platform.system() == 'Linux':
         for _ in range(lines):
             print("\033[F \033[2K", end='\r')
     else:
