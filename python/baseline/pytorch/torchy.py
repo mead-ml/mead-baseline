@@ -513,6 +513,7 @@ class NoamOpt(object):
 
 def pytorch_prepare_optimizer(model, **kwargs):
 
+    weight_decay = kwargs.get('weight_decay', 0)
     mom = kwargs.get('mom', 0.9)
     optim = kwargs.get('optim', 'sgd')
     eta = kwargs.get('eta', kwargs.get('lr', 0.01))
@@ -520,20 +521,20 @@ def pytorch_prepare_optimizer(model, **kwargs):
     decay_type = kwargs.get('decay_type', None)
 
     if optim == 'adadelta':
-        optimizer = torch.optim.Adadelta(model.parameters(), lr=eta)
+        optimizer = torch.optim.Adadelta(model.parameters(), lr=eta, weight_decay=weight_decay)
     elif optim == 'adam':
-        optimizer = torch.optim.Adam(model.parameters(), lr=eta)
+        optimizer = torch.optim.Adam(model.parameters(), lr=eta, weight_decay=weight_decay)
     elif optim == 'rmsprop':
-        optimizer = torch.optim.RMSprop(model.parameters(), lr=eta)
+        optimizer = torch.optim.RMSprop(model.parameters(), lr=eta, weight_decay=weight_decay)
     elif optim == 'asgd':
-        optimizer = torch.optim.ASGD(model.parameters(), lr=eta)
+        optimizer = torch.optim.ASGD(model.parameters(), lr=eta, weight_decay=weight_decay)
     elif optim == 'noam':
         print('Using NoamOpt, lr will be ignored')
         d_model = kwargs['d_model']
         warmup_steps = kwargs.get('warmup_steps', 4000)
         optimizer = NoamOpt(d_model, model.parameters(), warmup_steps)
     else:
-        optimizer = torch.optim.SGD(model.parameters(), lr=eta, momentum=mom)
+        optimizer = torch.optim.SGD(model.parameters(), lr=eta, momentum=mom, weight_decay=weight_decay)
 
     scheduler = None
     if decay_rate > 0.0 and decay_type is not None:
