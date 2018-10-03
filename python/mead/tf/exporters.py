@@ -37,7 +37,8 @@ class TensorFlowExporter(mead.exporters.Exporter):
             saver.restore(sess, basename + ".model")
 
     def run(self, model_file, embeddings, output_dir, model_version, use_preproc):
-        embeddings_set = mead.utils.index_by_label(embeddings)
+        embeddings_set = mead.utils.read_config_file(embeddings)
+        embeddings_set = mead.utils.index_by_label(embeddings_set)
         with tf.Graph().as_default():
             config_proto = tf.ConfigProto(allow_soft_placement=True)
             with tf.Session(config=config_proto) as sess:
