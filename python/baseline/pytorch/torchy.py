@@ -294,8 +294,7 @@ class ParallelConv(nn.Module):
 
 class Highway(nn.Module):
 
-    def __init__(self,
-                 input_size):
+    def __init__(self, input_size):
         super(Highway, self).__init__()
         self.proj = nn.Linear(input_size, input_size)
         self.transform = nn.Linear(input_size, input_size)
@@ -306,6 +305,17 @@ class Highway(nn.Module):
         proj_gate = nn.functional.sigmoid(self.transform(input))
         gated = (proj_gate * proj_result) + ((1 - proj_gate) * input)
         return gated
+
+
+class SkipConnection(nn.Module):
+
+    def __init__(self, input_size, activation='relu'):
+        super(SkipConnection, self).__init__()
+        self.proj = nn.Linear(input_size, input_size)
+        self.activation_fn = pytorch_activation(activation)
+
+    def forward(self, input):
+        return self.activation_fn(self.proj(input)) + input
 
 
 class LayerNorm(nn.Module):
