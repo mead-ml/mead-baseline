@@ -21,7 +21,7 @@ Base = declarative_base()
 import sqlalchemy as sql
 import sqlalchemy.orm as orm
 from xpctl.core import ExperimentRepo, store_model
-from xpctl.helpers import order_json, df_summary_exp, get_experiment_label
+from xpctl.helpers import df_summary_exp, get_experiment_label
 
 EVENT_TYPES = {
     "train": "train_events", "Train": "train_events",
