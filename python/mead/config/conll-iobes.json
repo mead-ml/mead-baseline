@@ -33,7 +33,7 @@
     "model": {
         "model_type": "default",
         "cfiltsz": [3],
-        "hsz": 400,
+        "hsz": 200,
         "dropout": 0.2,
         "rnntype": "blstm",
         "layers": 1,
