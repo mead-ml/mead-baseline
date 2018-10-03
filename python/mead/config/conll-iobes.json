@@ -31,7 +31,6 @@
 	}
     },
     "model": {
-        "weight_init": "ortho",
         "model_type": "default",
         "hsz": 200,
         "dropout": 0.2,
