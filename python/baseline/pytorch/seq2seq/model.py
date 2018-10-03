@@ -63,8 +63,6 @@ class Seq2SeqModel(nn.Module, EncoderDecoderModel):
         """
         enc_hsz = kwargs['hsz']
         rnntype = kwargs['rnntype']
-        if rnntype == 'blstm':
-            enc_hsz = enc_hsz // 2
         layers = kwargs['layers']
         self.encoder_rnn = pytorch_rnn(input_dim, enc_hsz, rnntype, layers, kwargs.get('dropout', 0.5))
 

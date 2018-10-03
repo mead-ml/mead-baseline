@@ -61,18 +61,17 @@ class RNNTaggerModel(nn.Module, TaggerModel):
         else:
             model.dropout = nn.Dropout(pdrop)
         model.rnn = LSTMEncoder(input_sz, hsz, rnntype, nlayers, pdrop)
-        out_hsz = model.rnn.outsz
         model.decoder = nn.Sequential()
         if model.proj is True:
             append2seq(model.decoder, (
-                pytorch_linear(out_hsz, hsz),
+                pytorch_linear(hsz, hsz),
                 pytorch_activation(model.activation_type),
                 nn.Dropout(pdrop),
                 pytorch_linear(hsz, len(model.labels))
             ))
         else:
             append2seq(model.decoder, (
-                pytorch_linear(out_hsz, len(model.labels)),
+                pytorch_linear(hsz, len(model.labels)),
             ))
 
         if model.use_crf:

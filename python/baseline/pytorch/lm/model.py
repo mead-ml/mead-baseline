@@ -74,7 +74,7 @@ class BasicLanguageModel(nn.Module, LanguageModel):
 
         lm.dsz = lm._init_embed(embeddings, **kwargs)
         lm.dropout = nn.Dropout(pdrop)
-        lm.rnn, out_hsz = pytorch_lstm(lm.dsz, lm.hsz, 'lstm', lm.layers, pdrop, batch_first=True)
+        lm.rnn = pytorch_lstm(lm.dsz, lm.hsz, 'lstm', lm.layers, pdrop, batch_first=True)
         lm.decoder = nn.Sequential()
         append2seq(lm.decoder, (
             pytorch_linear(lm.hsz, embeddings[lm.tgt_key].get_vsz(), unif),

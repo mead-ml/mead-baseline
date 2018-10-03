@@ -252,7 +252,7 @@ def pytorch_rnn(insz, hsz, rnntype, nlayers, dropout):
     if rnntype == 'gru':
         rnn = torch.nn.GRU(insz, hsz, nlayers, dropout=dropout)
     elif rnntype == 'blstm':
-        rnn = torch.nn.LSTM(insz, hsz, nlayers, dropout=dropout, bidirectional=True)
+        rnn = torch.nn.LSTM(insz, hsz//2, nlayers, dropout=dropout, bidirectional=True)
         rnn = BiRNNWrapper(rnn, nlayers)
     else:
         rnn = torch.nn.LSTM(insz, hsz, nlayers, dropout=dropout)
@@ -348,8 +348,8 @@ def pytorch_lstm(insz, hsz, rnntype, nlayers, dropout, unif=0, batch_first=False
     if nlayers == 1:
         dropout = 0.0
     ndir = 2 if rnntype.startswith('b') else 1
-    #print('ndir: %d, rnntype: %s, nlayers: %d, dropout: %.2f, unif: %.2f' % (ndir, rnntype, nlayers, dropout, unif))
-    rnn = torch.nn.LSTM(insz, hsz, nlayers, dropout=dropout, bidirectional=True if ndir > 1 else False, batch_first=batch_first)#, bias=False)
+    layer_hsz = hsz // ndir
+    rnn = torch.nn.LSTM(insz, layer_hsz, nlayers, dropout=dropout, bidirectional=True if ndir > 1 else False, batch_first=batch_first)#, bias=False)
     if unif > 0:
         for weight in rnn.parameters():
             weight.data.uniform_(-unif, unif)
@@ -363,7 +363,7 @@ def pytorch_lstm(insz, hsz, rnntype, nlayers, dropout, unif=0, batch_first=False
         nn.init.xavier_uniform_(rnn.weight_hh_l0)
         nn.init.xavier_uniform_(rnn.weight_ih_l0)
 
-    return rnn, ndir*hsz
+    return rnn
 
 
 class LSTMEncoder(nn.Module):
@@ -371,7 +371,7 @@ class LSTMEncoder(nn.Module):
     def __init__(self, insz, hsz, rnntype, nlayers, dropout, residual=False, unif=0, initializer=None):
         super(LSTMEncoder, self).__init__()
         self.residual = residual
-        self.rnn, self.outsz = pytorch_lstm(insz, hsz//2, rnntype, nlayers, dropout, unif, False, initializer)
+        self.rnn = pytorch_lstm(insz, hsz, rnntype, nlayers, dropout, unif, False, initializer)
 
     def forward(self, tbc, lengths):
 

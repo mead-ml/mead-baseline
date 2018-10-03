@@ -169,12 +169,9 @@ class LSTMModel(ClassifierModelBase):
         hsz = kwargs.get('rnnsz', kwargs.get('hsz', 100))
         if type(hsz) is list:
             hsz = hsz[0]
-
+        weight_init = kwargs.get('weight_init', 'uniform')
         rnntype = kwargs.get('rnn_type', kwargs.get('rnntype', 'lstm'))
-        self.lstm = nn.LSTM(dsz, hsz, 1, bias=True, dropout=self.pdrop, bidirectional=rnntype.startswith('b'))
-        if unif is not None:
-            for weight in self.lstm.parameters():
-                weight.data.uniform_(-unif, unif)
+        self.lstm = pytorch_lstm(dsz, hsz, rnntype, 1, self.pdrop, unif, batch_first=False, initializer=weight_init)
         return hsz
 
     def _pool(self, embeddings, lengths):
