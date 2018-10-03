@@ -350,15 +350,15 @@ def pytorch_lstm(insz, hsz, rnntype, nlayers, dropout, unif=0, batch_first=False
     ndir = 2 if rnntype.startswith('b') else 1
     layer_hsz = hsz // ndir
     rnn = torch.nn.LSTM(insz, layer_hsz, nlayers, dropout=dropout, bidirectional=True if ndir > 1 else False, batch_first=batch_first)#, bias=False)
-    if unif > 0:
-        for weight in rnn.parameters():
-            weight.data.uniform_(-unif, unif)
-    elif initializer == "ortho":
+    if initializer == "ortho":
         nn.init.orthogonal(rnn.weight_hh_l0)
         nn.init.orthogonal(rnn.weight_ih_l0)
     elif initializer == "he" or initializer == "kaiming":
         nn.init.kaiming_uniform(rnn.weight_hh_l0)
         nn.init.kaiming_uniform(rnn.weight_ih_l0)
+    elif unif > 0:
+        for weight in rnn.parameters():
+            weight.data.uniform_(-unif, unif)
     else:
         nn.init.xavier_uniform_(rnn.weight_hh_l0)
         nn.init.xavier_uniform_(rnn.weight_ih_l0)

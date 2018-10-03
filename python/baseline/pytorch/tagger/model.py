@@ -50,6 +50,7 @@ class RNNTaggerModel(nn.Module, TaggerModel):
         model.activation_type = kwargs.get('activation', 'tanh')
         nlayers = int(kwargs.get('layers', 1))
         rnntype = kwargs.get('rnntype', 'blstm')
+        unif = kwargs.get('unif', 0)
         model.gpu = False
         print('RNN [%s]' % rnntype)
 
@@ -60,7 +61,9 @@ class RNNTaggerModel(nn.Module, TaggerModel):
             model.dropout = VariationalDropout(pdrop)
         else:
             model.dropout = nn.Dropout(pdrop)
-        model.rnn = LSTMEncoder(input_sz, hsz, rnntype, nlayers, pdrop)
+
+        weight_init = kwargs.get('weight_init', 'uniform')
+        model.rnn = LSTMEncoder(input_sz, hsz, rnntype, nlayers, pdrop, unif=unif, initializer=weight_init)
         model.decoder = nn.Sequential()
         if model.proj is True:
             append2seq(model.decoder, (
