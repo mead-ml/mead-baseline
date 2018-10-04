@@ -184,6 +184,10 @@ class Results(object):
         """
         pass
 
+    def get_metrics(self, label, phase):
+        """Get all available metrics for a given phase."""
+        pass
+
     def set_state(self, label, state):
         """Set the state of a job.
 
@@ -432,6 +436,9 @@ class LocalResults(Results):
         if state not in States:
             return States.UNKNOWN
         return state
+
+    def get_metrics(self, label, phase):
+        return [m for m in self.results[label.exp][label][phase]]
 
     def set_state(self, label, state):
         self.results[label.exp][label]['state'] = state

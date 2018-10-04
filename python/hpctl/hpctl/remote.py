@@ -33,7 +33,8 @@ class RemoteBackend(Backend):
     def launch(self, **kwargs):
         kwargs['command'] = 'launch'
         self.labels.append(kwargs['label'])
-        kwargs['label'] = str(kwargs['label'])
+        label = kwargs.pop('label')
+        kwargs.update(**label)
         r = requests.post("{}/launch".format(self.url), json=kwargs)
         if r.status_code != 200:
             raise Exception
@@ -90,7 +91,7 @@ class RemoteResults(Results):
                 url = self.url, exp=exp, phase=phase, metric=metric
             )
         )
-        return Label.parse(resp['label']), resp['value'], resp['step']
+        return Label(resp['exp'], resp['sha1'], resp['name']), resp['value'], resp['tick']
 
     def get_best_per_label(self, exp, phase, metric):
         resp = self.get(
@@ -98,7 +99,8 @@ class RemoteResults(Results):
                 url=self.url, exp=exp, phase=phase, metric=metric
             )
         )
-        return [Label.parse(x) for x in resp['labels']], resp['values'], resp['steps']
+        labels = [Label(e, s, n) for e, s, n in zip(resp['exps'], resp['sha1s'], resp['names'])]
+        return labels, resp['values'], resp['steps']
 
     def get_xpctl(self, label):
         resp = _get("{url}/xpctl/{exp}/{sha1}/{name}".format(url=self.url, **label))

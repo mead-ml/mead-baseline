@@ -4,7 +4,7 @@ import os
 import time
 from baseline.utils import export as exporter
 from baseline.utils import read_config_file, write_json
-from mead.utils import read_config_file_or_json, hash_config
+from mead.utils import read_config_file_or_json, hash_config, parse_extra_args
 from hpctl.report import get_xpctl
 from hpctl.utils import create_logs
 from hpctl.results import get_results
@@ -69,7 +69,7 @@ def launch(
     _, backend_config = get_ends(hp_settings, unknown)
 
     # Force remote backend.
-    backend_config.get['type'] = 'remote'
+    backend_config['type'] = 'remote'
     if 'host' not in backend_config:
         backend_config['host'] = 'localhost'
     if 'port' not in backend_config:
@@ -79,7 +79,7 @@ def launch(
     label, config = config_sampler.sample()
     print(label)
     send = {
-        'label': str(label),
+        'label': label,
         'config': config,
         'datasets': datasets,
         'embeddings': embeddings,
@@ -136,24 +136,35 @@ def search(
         logging, hpctl_logging,
         datasets, embeddings,
         reporting, unknown,
-        task, num_iters, label,
+        task, num_iters,
         **kwargs
 ):
     """Search for optimal hyperparameters."""
     mead_config = get_config(config, reporting, unknown)
     exp_hash = hash_config(mead_config)
+
     hp_settings, mead_settings = get_settings(settings)
+
     hp_logs, mead_logs = get_logs(hp_settings, logging, hpctl_logging)
+
     datasets = read_config_file_or_json(datasets)
     embeddings = read_config_file_or_json(embeddings)
+
     if task is None:
         task = mead_config.get('task', 'classify')
+
     frontend_config, backend_config = get_ends(hp_settings, unknown)
-    xpctl_config = get_xpctl_settings(mead_settings)
-    if xpctl_config is not None and label is not None:
-        xpctl_config['label'] = label
+
+    # Figure out xpctl
+    xpctl_config = None
+    auto_xpctl = 'xpctl' in mead_config.get('reporting', [])
+    if not auto_xpctl:
+        xpctl_config = get_xpctl_settings(mead_settings)
+        xpctl_extra = parse_extra_args(['xpctl'], unknown)
+        xpctl_config['label'] = xpctl_extra.get('xpctl', {}).get('label')
     results_config = {}
 
+    # Set frontend defaults
     frontend_config['experiment_hash'] = exp_hash
     default = mead_config['train'].get('early_stopping_metric', 'avg_loss')
     if 'train' not in frontend_config:
@@ -163,6 +174,7 @@ def search(
     if 'test' not in frontend_config:
         frontend_config['test'] = default
 
+    # Negotiate remote status
     if backend_config['type'] != 'remote':
         set_root(hp_settings)
     _remote_monkey_patch(backend_config, hp_logs, results_config, xpctl_config)
@@ -184,6 +196,9 @@ def search(
     logs.stop()
     frontend.finalize()
     results.save()
+    if auto_xpctl:
+        for label in labels:
+            results.set_xpctl(label, True)
     return labels, results
 
 
@@ -207,47 +222,7 @@ def verify(
     report['xpctl'] = xpctl
     mead_config['reporting'] = report
 
-    exp_hash = hash_config(mead_config)
-    hp_settings, mead_settings = get_settings(settings)
-    hp_logs, mead_logs = get_logs(hp_settings, logging, hpctl_logging)
-    datasets = read_config_file_or_json(datasets)
-    embeddings = read_config_file_or_json(embeddings)
-    if task is None:
-        task = mead_config.get('task', 'classify')
-    frontend_config, backend_config = get_ends(hp_settings, unknown)
-    results_config = {}
-
-    frontend_config['experiment_hash'] = exp_hash
-    default = mead_config['train'].get('early_stopping_metric', 'avg_loss')
-    if 'train' not in frontend_config:
-        frontend_config['train'] = default
-    if 'dev' not in frontend_config:
-        frontend_config['dev'] = default
-    if 'test' not in frontend_config:
-        frontend_config['test'] = default
-
-    if backend_config['type'] != 'remote':
-        set_root(hp_settings)
-    _remote_monkey_patch(backend_config, hp_logs, results_config, {})
-
-    results = get_results(results_config)
-    results.add_experiment(mead_config)
-
-    backend = get_backend(backend_config)
-
-    config_sampler = get_config_sampler(mead_config, results)
-
-    logs = get_log_server(hp_logs)
-
-    frontend = get_frontend(frontend_config, results, None)
-
-    labels = run(num_iters, results, backend, frontend, config_sampler, logs, mead_logs, hp_logs, mead_settings, datasets, embeddings, task)
-    logs.stop()
-    frontend.finalize()
-    results.save()
-
-    for label in labels:
-        results.set_xpctl(label, True)
+    return search(config, settings, logging, hpctl_loggins, datasets, embeddings, reporting, unknown, task, num_iters)
 
 
 @export

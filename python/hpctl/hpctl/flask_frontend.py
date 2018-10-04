@@ -52,14 +52,14 @@ class FlaskFrontend(Frontend):
     def launch(self):
         # TODO: Comment on what should be in json to launch
         json = request.get_json()
-        json['label'] = Label.parse(json['label'])
+        json['label'] = Label(json['exp'], json['sha1'], json['name'])
         json['command'] = 'launch'
         self.queue.put(json)
         return jsonify({"command": "launch"})
 
     def command(self):
         json = request.get_json()
-        json['label'] = Label.parse(json['label'])
+        json['label'] = Label(json['exp'], json['sha1'], json['name'])
         self.queue.put(json)
         return jsonify({"command": "success"})
 
@@ -89,50 +89,32 @@ class FlaskFrontend(Frontend):
         label = Label(exp, sha1, name)
         state = self.results.get_state(label)
         state = str(state).decode('utf-8') if six.PY2 else str(state)
-        res = {
-            "exp": exp,
-            "sha1": sha1,
-            "name": name,
-            "state": state,
-        }
+        res = dict(state=state, **label)
         return jsonify(res)
 
     def recent_result(self, exp, sha1, name, phase, metric):
         label = Label(exp, sha1, name)
         val = self.results.get_recent(label, phase, metric)
-        res = {
-            'label': str(label),
-            'phase': phase,
-            'metric': metric,
-            'value': val
-        }
+        res = dict(phase=phase, metric=metric, value=val, **label)
         return jsonify(res)
 
     def best_result(self, exp, sha1, name, phase, metric):
         label = Label(exp, sha1, name)
         val, idx = self.results.get_best(label, phase, metric)
-        res = {
-            'label': str(label),
-            'phase': phase,
-            'metric': metric,
-            'value': val,
-            'tick': idx
-        }
+        res = dict(phase=phase, metric=metric, value=val, tick=idx, **label)
         return jsonify(res)
 
     def find_best_across(self, exp, phase, metric):
         label, val, idx = self.results.find_best(exp, phase, metric)
-        res = {
-            'label': str(label),
-            'value': val,
-            'step': idx
-        }
+        res = dict(phase=phase, metric=metric, value=val, tick=idx, **label)
         return jsonify(res)
 
     def find_best_within(self, exp, phase, metric):
         labels, vals, idxs = self.results.get_best_per_label(exp, phase, metric)
         res = {
-            'labels': [str(x) for x in labels],
+            'exps': [l.exp for l in labels],
+            'sha1s': [l.sha1 for l in labels],
+            'names': [l.name for l in labels],
             'values': vals,
             'steps': idxs,
         }
@@ -174,6 +156,11 @@ class FlaskFrontend(Frontend):
         if human is None:
             return jsonify({"exp": None, "sha1": None, "name": None})
         return jsonify(dict(**label))
+
+    def get_metrics(self, exp, sha1, name, phase):
+        label = Label(exp, sha1, name)
+        metrics = self.results.get_metrics(label, phase)
+        return jsonify(dict(phase=phase, metrics=metrics, **label))
 
 
 def init_app(app, fe, base_url='/hpctl/v1'):
@@ -218,6 +205,8 @@ def init_app(app, fe, base_url='/hpctl/v1'):
     app.route('{}/xpctl/<exp>/<sha1>/<name>'.format(base_url), methods={'GET'})(fe.get_xpctl)
     # Get the label based on the name
     app.route('{}/label/<name>'.format(base_url), methods={'GET'})(fe.get_label)
+    # Get all available metrics
+    app.route('{}/metrics/<exp>/<sha1>/<name>/<phase>'.format(base_url), methods={'GET'})(fe.get_metrics)
 
     # Simple display
     app.route('{}/demo_data/<exp>'.format(base_url), methods={'GET'})(fe.demo_data)
