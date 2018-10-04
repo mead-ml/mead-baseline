@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 
 import os
 from baseline.utils import export as exporter
+from hpctl.results import States
 
 
 __all__ = []
@@ -59,6 +60,7 @@ class Backend(object):
     """Abstract class that handles running models."""
     def __init__(self):
         super(Backend, self).__init__()
+        self.labels = []
 
     def launch(self, label, config, **kwargs):
         pass
@@ -66,8 +68,15 @@ class Backend(object):
     def any_done(self):
         pass
 
-    def all_done(self):
-        pass
+    def all_done(self, results):
+        # Track all label you personally launched and check if they are done.
+        undone = []
+        for label in self.labels:
+            state = results.get_state(label)
+            if state is not States.DONE and state is not States.KILLED:
+                undone.append(label)
+        self.labels = undone
+        return not self.labels
 
     def kill(self, label):
         pass
@@ -126,10 +135,8 @@ class LocalGPUBackend(Backend):
             any(map(lambda x: x is None, self.gpus_to_job.values()))
         )
 
-    def all_done(self):
-        return all(map(lambda x: x.is_done, self.jobs))
 
-    def kill(self, label, results):
+    def kill(self, label):
         if label not in self.label_to_job:
             return
         to_kill = self.label_to_job[label]

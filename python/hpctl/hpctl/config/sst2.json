@@ -1,5 +1,4 @@
 {
-"mead": {
     "task": "classify",
     "batchsz": 50,
     "preproc": {
@@ -31,5 +30,4 @@
 	"early_stopping_metric": "acc",
       "verbose": {"console": true, "file": "sst2-cm.csv"}
     }
-}
 }

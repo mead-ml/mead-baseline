@@ -3,28 +3,30 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 import os
 from baseline.utils import read_config_file
 from baseline.utils import export as exporter
-from mead.utils import get_mead_settings, parse_extra_args, hash_config, read_config_file_or_json
+from mead.utils import (
+    hash_config,
+    parse_extra_args,
+    get_mead_settings,
+    read_config_file_or_json,
+)
 
 
-def get_configs(**kwargs):
-    hpctl_config = read_config_file_or_json(kwargs['config'])
-    mead_config = hpctl_config['mead']
-    if isinstance(mead_config, str):
-        mead_config = read_config_file(mead_config)
-    if kwargs.get('reporting') is not None:
-        mead_config['reporting'] = parse_extra_args(kwargs.get('reporting'), kwargs['unknown'])
-    return hpctl_config, mead_config
+def get_config(config, reporting, extra_args):
+    mead_config = read_config_file_or_json(config)
+    if reporting is not None:
+        mead_config['reporting'] = parse_extra_args(reporting, extra_args)
+    return mead_config
 
 
-def get_settings(**kwargs):
-    mead_settings = get_mead_settings(kwargs['settings'])
+def get_settings(settings):
+    mead_settings = get_mead_settings(settings)
     hpctl_settings = mead_settings.get('hpctl', {})
     return hpctl_settings, mead_settings
 
 
-def get_logs(hpctl_settings, **kwargs):
-    mead_logs = read_config_file(kwargs['logging'])
-    hpctl_logs = read_config_file(kwargs['hpctl_logging'])
+def get_logs(hpctl_settings, logging, hpctl_logging):
+    mead_logs = read_config_file_or_json(logging)
+    hpctl_logs = read_config_file_or_json(hpctl_logging)
     hpctl_logs['host'] = hpctl_settings.get('logging', {}).get('host', 'localhost')
     hpctl_logs['port'] = int(hpctl_settings.get('logging', {}).get('post', 6006))
     return hpctl_logs, mead_logs
@@ -39,32 +41,26 @@ def set_root(hpctl_settings, default='delete_me'):
     os.chdir(root)
 
 
-def get_ends(hpctl_config, hpctl_settings, **kwargs):
-    ends = parse_extra_args(['frontend', 'backend'], kwargs['unknown'])
-    if kwargs.get('frontend') is None:
-        frontend = hpctl_config.get('frontend', hpctl_settings.get('frontend', {'type': 'console'}))
-    else:
-        frontend = {'type': kwargs['frontend']}
+def get_ends(hpctl_settings, extra_args):
+    ends = parse_extra_args(['frontend', 'backend'], extra_args)
+    fe = ends['frontend']
     # Merge dicts
-    for key, val in frontend.items():
-        if key not in ends['frontend']:
-            ends['frontend'][key] = val
+    for key, val in hpctl_settings.get('frontend', {'type': 'console'}).items():
+        if key not in fe:
+            fe[key] = val
 
-    if kwargs.get('backend') is None:
-        backend = hpctl_config.get('backend', hpctl_settings.get('backend', {'type': 'mp'}))
-    else:
-        backend = {'type': kwargs['backend']}
+    be = ends['backend']
     # Merge dicts
-    for key, val in backend.items():
-        if key not in ends['backend']:
-            ends['backend'][key] = val
-    frontend_config = ends['frontend']
-    backend_config = ends['backend']
-    if isinstance(backend_config.get('real_gpus'), str):
-        backend_config['real_gpus'] = backend_config['real_gpus'].split(",")
-    return frontend_config, backend_config
+    for key, val in hpctl_settings.get('backend', {'type': 'mp'}).items():
+        if key not in be:
+            be[key] = val
+    if isinstance(be.get('real_gpus'), str):
+        be['real_gpus'] = be['real_gpus'].split(",")
+    return fe, be
 
 
 def get_xpctl_settings(mead_settings):
     xpctl = mead_settings.get('reporting_hooks', {}).get('xpctl', {})
-    return read_config_file(xpctl['cred'])
+    if 'cred' not in xpctl:
+        return None
+    return read_config_file(os.path.expanduser(xpctl['cred']))

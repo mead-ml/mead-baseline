@@ -26,8 +26,9 @@ def dummy_print(s):
 
 @export
 class XPCTL(object):
-    def __init__(self, **kwargs):
+    def __init__(self, label=None, **kwargs):
         super(XPCTL, self).__init__()
+        self.name = label
         self.xpctl_config = kwargs
         self.repo = None
 
@@ -41,11 +42,13 @@ class XPCTL(object):
         task = config.get('task')
         log_loc = glob.glob(os.path.join(loc, 'reporting-*.log'))[0]
         logs = read_logs(log_loc)
-        return str(self.repo.put_result(task, config, logs, print_fn=dummy_print, label=label.name))
+        return str(self.repo.put_result(task, config, logs, print_fn=dummy_print, label=self.name))
 
 
 @export
 def get_xpctl(xpctl_config):
+    if xpctl_config is None:
+        return None
     if xpctl_config.pop('type', 'local') == 'remote':
         from hpctl.remote import RemoteXPCTL
         return RemoteXPCTL(**xpctl_config)

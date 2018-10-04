@@ -25,24 +25,10 @@ def _get(url):
 class RemoteBackend(Backend):
     def __init__(self, host, port, **kwargs):
         super(RemoteBackend, self).__init__()
-        self.labels = []
         self.url = 'http://{host}:{port}/hpctl/v1'.format(host=host, port=int(port))
 
     def any_done(self):
         return True
-
-    def all_done(self):
-        # Track all label you personally launched and check if they are done.
-        undone = []
-        for label in self.labels:
-            state = _get(
-                "{url}/state/{exp}/{sha1}/{name}".format(url=self.url, **label)
-            )['state']
-            state = state.encode('utf-8') if six.PY2 else state
-            if state != str(States.DONE) and state != str(States.KILLED):
-                undone.append(label)
-        self.labels = undone
-        return not self.labels
 
     def launch(self, **kwargs):
         kwargs['command'] = 'launch'
@@ -52,11 +38,16 @@ class RemoteBackend(Backend):
         if r.status_code != 200:
             raise Exception
 
+    def kill(self, label):
+        r = requests.post("{url}/kill/{exp}/{sha1}/{name}".format(url=self.url, **label))
+        if r.status_code != 200:
+            raise Exception
+
 
 @export
 class RemoteResults(Results):
     """Interact with the results object via the flask frontend."""
-    def __init__(self, host='localhost', port=5000, cache_time=15, **kwargs):
+    def __init__(self, host='localhost', port=5000, cache_time=5, **kwargs):
         super(RemoteResults, self).__init__()
         self.url = 'http://{host}:{port}/hpctl/v1'.format(host=host, port=port)
         cache = cachetools.TTLCache(maxsize=1000, ttl=cache_time)
@@ -82,7 +73,8 @@ class RemoteResults(Results):
     def get_state(self, label):
         resp = self.get("{url}/state/{exp}/{sha1}/{name}".format(url=self.url, **label))
         state = resp['state']
-        return state.encode('utf-8') if six.PY2 else state
+        state = state.encode('utf-8') if six.PY2 else state
+        return States.create(state)
 
     def get_recent(self, label, phase, metric):
         resp = self.get(
@@ -111,6 +103,10 @@ class RemoteResults(Results):
     def get_xpctl(self, label):
         resp = _get("{url}/xpctl/{exp}/{sha1}/{name}".format(url=self.url, **label))
         return resp['id']
+
+    def get_label_prefix(self, label):
+        resp = self.get("{url}/label/{name}".format(url=self.url, name=label))
+        return resp['name'], Label(**resp)
 
 
 @export

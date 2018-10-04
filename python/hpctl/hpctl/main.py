@@ -38,17 +38,11 @@ def add_common_args(p):
     )
     p.add_argument(
         '--task',
-        default='classify',
         choices=['classify', 'tagger', 'seq2seq', 'lm'],
         help="Task to run."
     )
     p.add_argument('--reporting', help='reporting hooks', nargs='+')
-    p.add_argument(
-        '--frontend', help="The frontend to use."
-    )
-    p.add_argument(
-        '--backend', help="The backend to use."
-    )
+    p.add_argument('--label', help="The name for the job in xpctl.")
 
 
 def print_help(p):
@@ -70,13 +64,12 @@ def main():
     search_parser = subparsers.add_parser('search', description="Explore Hyper Parameters.")
     search_parser.set_defaults(func=search)
     add_common_args(search_parser)
-    search_parser.add_argument('--num_iters', type=int, help="The number of sample to run.")
+    search_parser.add_argument('--num_iters', type=int, help="The number of sample to run.", default=2)
 
     verify_parser = subparsers.add_parser('verify', description="Run a config a lot.")
     verify_parser.set_defaults(func=verify)
     add_common_args(verify_parser)
-    verify_parser.add_argument('--num_iters', type=int, help="The number of times to run the job.")
-    verify_parser.add_argument('--label', help="The name for the job in xpctl.")
+    verify_parser.add_argument('--num_iters', type=int, help="The number of times to run the job.", default=2)
 
     launch_parser = subparsers.add_parser('launch')
     launch_parser.set_defaults(func=launch)
@@ -84,12 +77,12 @@ def main():
 
     find_parser = subparsers.add_parser('find', description="Find a file from the human name.")
     find_parser.set_defaults(func=find)
-    find_parser.add_argument("config", type=hpctl_path)
     find_parser.add_argument("name")
+    find_parser.add_argument("--root", default="delete_me")
 
     list_parser = subparsers.add_parser('list', description="List all names of experiment results.")
+    list_parser.add_argument("--root", default="delete_me")
     list_parser.set_defaults(func=list_names)
-    list_parser.add_argument("config", type=hpctl_path)
 
     serve_parser = subparsers.add_parser('serve', description="Start a flask server.")
     serve_parser.set_defaults(func=serve)
@@ -100,7 +93,7 @@ def main():
     args, extra = parser.parse_known_args()
     args = vars(args)
     args['unknown'] = extra
-    args['func'](**args)
+    args.pop('func')(**args)
 
 
 if __name__ == "__main__":

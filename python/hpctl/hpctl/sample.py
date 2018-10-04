@@ -39,8 +39,7 @@ def log_sample(min_, max_, size=1, base='e'):
 
     :param min_: float, The minimum for the sample range.
     :param max_: float, The maximum for the sample range.
-    :param size: int, The number of samples to draw.
-    :param base: str or int, The base of the log function.
+    :param size: int, The number of samples to draw.  :param base: str or int, The base of the log function.
     """
     if base == 'e':
         a = math.log(min_)
@@ -214,6 +213,14 @@ class ConfigSampler(object):
 
     @staticmethod
     def _collect(config):
+        """Find all sampling types used in the config.
+
+        Is there a way to leverage the _find function to do this?
+
+        :param config: dict, The mead config with the sampling directives.
+
+        :returns: set(str), The names of all used sampling operations.
+        """
         examples = set()
         for key, value in config.items():
             if isinstance(value, dict):
@@ -281,6 +288,5 @@ def get_config_sampler(config, results):
     """
     needed_samplers = ConfigSampler._collect(config)
     samplers = build_samplers(needed_samplers)
-    print(samplers)
     config_sampler = ConfigSampler(config, results, samplers=samplers)
     return config_sampler

@@ -10,11 +10,11 @@ from hpctl.utils import create_logs
 from hpctl.results import get_results
 from hpctl.backend import get_backend
 from hpctl.sample import get_config_sampler
-from hpctl.frontend import get_frontend, color
 from hpctl.logging_server import get_log_server
 from hpctl.scheduler import RoundRobinScheduler
+from hpctl.frontend import get_frontend, color_state
 from hpctl.settings import (
-    get_configs,
+    get_config,
     get_settings,
     get_logs,
     get_ends,
@@ -28,60 +28,54 @@ export = exporter(__all__)
 
 
 @export
-def list_names(**kwargs):
+def list_names(root, **kwargs):
     """List all the human names from an experiment. For easy navigating afterwards."""
-    config = read_config_file(kwargs['config'])
-    config_hash = hash_config(config['mead'])
-    results = Results.create(config_hash)
-    for label in results.get_labels():
-        print("{} {}".format(
-            color(results.get_state(label)),
-            label.name
-        ))
+    results = get_results({"file_name": os.path.join(root, 'results')})
+    experiments = results.get_experiments()
+    for experiment in experiments:
+        print(experiment)
+        for label in results.get_labels(experiment):
+            state = results.get_state(label)
+            print("\t{state} {sha1} -> {name}".format(state=color_state(state), **label))
 
 
 @export
-def find(**kwargs):
+def find(name, root, **kwargs):
     """Find the location of job information based on human name."""
-    name = kwargs['name']
-    config = read_config_file(kwargs['config'])
-    config_hash = hash_config(config['mead'])
-    results = Results.create(config_hash)
-    s = results._getvalue()
-    # Look in human to label
-    human, sha1 = results.get_label_prefix(name)
-    if human is not None:
-        print("{} ->".format(human))
-        for sha in sha1:
-            print("\t{}".format(os.path.join(config_hash, sha)))
-        return
-    # Look in label to human
-    sha1, human = results.get_human_prefix(name)
-    if sha1 is not None:
-        print("{} ->".format(sha1))
-        for h in human:
-              print("\t{}".format(h))
-        return
-    print("Can't find {} in {}".format(name, config_hash))
+    results = get_results({"file_name": os.path.join(root, 'results')})
+    _, label = results.get_label_prefix(name)
+    if label is not None:
+        print(label)
+    else:
+        print("Can't find {}".format(name))
 
 
 @export
-def launch(**kwargs):
-    hp_config, mead_config = get_configs(**kwargs)
+def launch(
+        config, settings,
+        logging, hpctl_logging,
+        datasets, embeddings,
+        reporting, unknown,
+        task, **kwargs
+):
+    mead_config = get_config(config, reporting, unknown)
     exp_hash = hash_config(mead_config)
-    hp_settings, mead_settings = get_settings(**kwargs)
-    hp_logs, mead_logs = get_logs(hp_settings, **kwargs)
-    datasets = read_config_file_or_json(kwargs['datasets'])
-    embeddings = read_config_file_or_json(kwargs['embeddings'])
-    task_name = kwargs.get('task', mead_config.get('task', 'None'))
-    _, backend_config = get_ends(hp_config, hp_settings, **kwargs)
-    backend_config['type'] = 'remote'
+    hp_settings, mead_settings = get_settings(settings)
+    hp_logs, mead_logs = get_logs(hp_settings, logging, hpctl_logging)
+    datasets = read_config_file_or_json(datasets)
+    embeddings = read_config_file_or_json(embeddings)
+    if task is None:
+        task = mead_config.get('task', 'classify')
+    _, backend_config = get_ends(hp_settings, unknown)
+
+    # Force remote backend.
+    backend_config.get['type'] = 'remote'
     if 'host' not in backend_config:
         backend_config['host'] = 'localhost'
     if 'port' not in backend_config:
         backend_config['port'] = 5000
 
-    config_sampler = get_config_sampler(mead_config, None, hp_config.get('samplers', []))
+    config_sampler = get_config_sampler(mead_config, None)
     label, config = config_sampler.sample()
     print(label)
     send = {
@@ -91,7 +85,7 @@ def launch(**kwargs):
         'embeddings': embeddings,
         'mead_logs': mead_logs,
         'hpctl_logs': hp_logs,
-        'task_name': task_name,
+        'task_name': task,
         'settings': mead_settings,
         'experiment_config': mead_config,
     }
@@ -101,10 +95,10 @@ def launch(**kwargs):
 
 
 @export
-def serve(**kwargs):
-    hp_settings, mead_settings = get_settings(**kwargs)
-    frontend_config, backend_config = get_ends({}, hp_settings, **kwargs)
-    hp_logs, _ = get_logs(hp_settings, **kwargs)
+def serve(settings, hpctl_logging, unknown, **kwargs):
+    hp_settings, mead_settings = get_settings(settings)
+    frontend_config, backend_config = get_ends(hp_settings, unknown)
+    hp_logs, _ = get_logs(hp_settings, {}, hpctl_logging)
     # Update to handle no xpctl
     xpctl_config = get_xpctl_settings(mead_settings)
     set_root(hp_settings)
@@ -125,28 +119,39 @@ def serve(**kwargs):
 
 
 def _remote_monkey_patch(backend_config, hp_logs, results_config, xpctl_config):
-    if backend_config['type'] == 'remote':
+    if backend_config.get('type', 'local') == 'remote':
         hp_logs['type'] = 'remote'
         results_config['type'] = 'remote'
         results_config['host'] = backend_config['host']
         results_config['port'] = backend_config['port']
-        xpctl_config['type'] = 'remote'
-        xpctl_config['host'] = backend_config['host']
-        xpctl_config['port'] = backend_config['port']
+        if xpctl_config is not None:
+            xpctl_config['type'] = 'remote'
+            xpctl_config['host'] = backend_config['host']
+            xpctl_config['port'] = backend_config['port']
 
 
 @export
-def search(**kwargs):
+def search(
+        config, settings,
+        logging, hpctl_logging,
+        datasets, embeddings,
+        reporting, unknown,
+        task, num_iters, label,
+        **kwargs
+):
     """Search for optimal hyperparameters."""
-    hp_config, mead_config = get_configs(**kwargs)
+    mead_config = get_config(config, reporting, unknown)
     exp_hash = hash_config(mead_config)
-    hp_settings, mead_settings = get_settings(**kwargs)
-    hp_logs, mead_logs = get_logs(hp_settings, **kwargs)
-    datasets = read_config_file_or_json(kwargs['datasets'])
-    embeddings = read_config_file_or_json(kwargs['embeddings'])
-    task_name = kwargs.get('task', mead_config.get('task', 'None'))
-    frontend_config, backend_config = get_ends(hp_config, hp_settings, **kwargs)
+    hp_settings, mead_settings = get_settings(settings)
+    hp_logs, mead_logs = get_logs(hp_settings, logging, hpctl_logging)
+    datasets = read_config_file_or_json(datasets)
+    embeddings = read_config_file_or_json(embeddings)
+    if task is None:
+        task = mead_config.get('task', 'classify')
+    frontend_config, backend_config = get_ends(hp_settings, unknown)
     xpctl_config = get_xpctl_settings(mead_settings)
+    if xpctl_config is not None and label is not None:
+        xpctl_config['label'] = label
     results_config = {}
 
     frontend_config['experiment_hash'] = exp_hash
@@ -169,46 +174,47 @@ def search(**kwargs):
 
     backend = get_backend(backend_config)
 
-    # Setup the sampler
-    config_sampler = get_config_sampler(
-        mead_config,
-        results,
-        hp_config.get('samplers', [])
-    )
+    config_sampler = get_config_sampler(mead_config, results)
 
     logs = get_log_server(hp_logs)
 
     frontend = get_frontend(frontend_config, results, xpctl)
 
-    num_iters = int(kwargs.get('num_iters') if kwargs.get('num_iters') is not None else hp_config.get('num_iters', 3))
-
-    run(num_iters, results, backend, frontend, config_sampler, logs, mead_logs, hp_logs, mead_settings, datasets, embeddings, task_name)
+    labels = run(num_iters, results, backend, frontend, config_sampler, logs, mead_logs, hp_logs, mead_settings, datasets, embeddings, task)
     logs.stop()
     frontend.finalize()
     results.save()
+    return labels, results
 
 
-# Requires xpctl
 @export
-def verify(**kwargs):
+def verify(
+        config, settings,
+        logging, hpctl_logging,
+        datasets, embeddings,
+        reporting, unknown,
+        task, num_iters, label,
+        **kwargs
+):
     """Search for optimal hyperparameters."""
-    hp_config, mead_config = get_configs(**kwargs)
+    mead_config = get_config(config, reporting, unknown)
+
     # Force xpctl
     report = mead_config.get('reporting', {})
     xpctl = report.get('xpctl', {})
-    if kwargs['label'] is not None:
-        xpctl['label'] = kwargs['label']
+    if label is not None:
+        xpctl['label'] = label
     report['xpctl'] = xpctl
     mead_config['reporting'] = report
 
     exp_hash = hash_config(mead_config)
-    hp_settings, mead_settings = get_settings(**kwargs)
-    hp_logs, mead_logs = get_logs(hp_settings, **kwargs)
-    datasets = read_config_file_or_json(kwargs['datasets'])
-    embeddings = read_config_file_or_json(kwargs['embeddings'])
-    task_name = kwargs.get('task', mead_config.get('task', 'None'))
-    frontend_config, backend_config = get_ends(hp_config, hp_settings, **kwargs)
-    xpctl_config = {}
+    hp_settings, mead_settings = get_settings(settings)
+    hp_logs, mead_logs = get_logs(hp_settings, logging, hpctl_logging)
+    datasets = read_config_file_or_json(datasets)
+    embeddings = read_config_file_or_json(embeddings)
+    if task is None:
+        task = mead_config.get('task', 'classify')
+    frontend_config, backend_config = get_ends(hp_settings, unknown)
     results_config = {}
 
     frontend_config['experiment_hash'] = exp_hash
@@ -222,32 +228,26 @@ def verify(**kwargs):
 
     if backend_config['type'] != 'remote':
         set_root(hp_settings)
-    _remote_monkey_patch(backend_config, hp_logs, results_config, xpctl_config)
+    _remote_monkey_patch(backend_config, hp_logs, results_config, {})
 
     results = get_results(results_config)
     results.add_experiment(mead_config)
 
     backend = get_backend(backend_config)
 
-    # Setup the sampler
-    config_sampler = get_config_sampler(
-        mead_config,
-        results,
-        hp_config.get('samplers', [])
-    )
+    config_sampler = get_config_sampler(mead_config, results)
 
     logs = get_log_server(hp_logs)
 
     frontend = get_frontend(frontend_config, results, None)
 
-    num_iters = int(kwargs.get('num_iters') if kwargs.get('num_iters') is not None else hp_config.get('num_iters', 3))
-
-    jobs = run(num_iters, results, backend, frontend, config_sampler, logs, mead_logs, hp_logs, mead_settings, datasets, embeddings, task_name)
+    labels = run(num_iters, results, backend, frontend, config_sampler, logs, mead_logs, hp_logs, mead_settings, datasets, embeddings, task)
     logs.stop()
     frontend.finalize()
     results.save()
-    for job in jobs:
-        results.set_xpctl(job, True)
+
+    for label in labels:
+        results.set_xpctl(label, True)
 
 
 @export
@@ -290,9 +290,9 @@ def run(num_iters, results, backend, frontend, config_sampler, logs, mead_logs, 
         frontend.update()
         # Get user inputs
         cmd = frontend.command()
-        process_command(cmd, backend, frontend, None, results)
+        process_command(cmd, backend, frontend, None, results, frontend.xpctl)
         # Check for quit
-        all_done = backend.all_done() if launched >= num_iters else False
+        all_done = backend.all_done(results) if launched >= num_iters else False
         time.sleep(1)
     return launched_labels
 
@@ -300,7 +300,7 @@ def run(num_iters, results, backend, frontend, config_sampler, logs, mead_logs, 
 def run_forever(results, backend, scheduler, frontend, logs):
     while True:
         cmd = frontend.command()
-        process_command(cmd, backend, frontend, scheduler, results)
+        process_command(cmd, backend, frontend, scheduler, results, None)
         if backend.any_done():
             exp_hash, job_blob = scheduler.get()
             if exp_hash is not None:
@@ -316,10 +316,10 @@ def run_forever(results, backend, scheduler, frontend, logs):
             frontend.update()
 
 
-def process_command(cmd, backend, frontend, scheduler, results):
+def process_command(cmd, backend, frontend, scheduler, results, xpctl):
     if cmd is not None and isinstance(cmd, dict):
         if cmd['command'] == 'kill':
-            backend.kill(cmd['label'], results)
+            backend.kill(cmd['label'])
             results.set_killed(cmd['label'])
             if scheduler is not None:
                 scheduler.remove(cmd['label'])
@@ -331,3 +331,7 @@ def process_command(cmd, backend, frontend, scheduler, results):
             scheduler.add(cmd['label'], cmd)
             results.insert(cmd['label'], cmd['config'])
             results.save()
+        if cmd['command'] == 'xpctl':
+            if xpctl is not None and not results.get_xpctl(cmd['label']):
+                id_ = xpctl.put_result(cmd['label'])
+                results.set_xpctl(cmd['label'], id_)

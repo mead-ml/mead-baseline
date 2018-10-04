@@ -192,6 +192,7 @@ class MPBackend(LocalGPUBackend):
         :param config: dict, the config for the model.
         :param exp: hpctl.experiment.Experiment, The experiment data object.
         """
+        self.labels.append(label)
         self._free_resources()
         gpu = self._request_gpus(1)
 

@@ -6,7 +6,6 @@ import os
 import math
 import time
 import platform
-import functools
 from enum import Enum
 from pprint import pformat
 from collections import defaultdict
@@ -20,10 +19,6 @@ from hpctl.utils import Label
 __all__ = []
 export = exporter(__all__)
 
-dd_list = functools.partial(defaultdict, list)
-ddd_list = functools.partial(defaultdict, dd_list)
-dddd_list = functools.partial(defaultdict, ddd_list)
-
 
 @six.python_2_unicode_compatible
 class States(Enum):
@@ -35,6 +30,18 @@ class States(Enum):
 
     def __str__(self):
         return self.value
+
+    @classmethod
+    def create(cls, value):
+        if value == str(cls.DONE):
+            return cls.DONE
+        if value == str(cls.KILLED):
+            return cls.KILLED
+        if value == str(cls.RUNNING):
+            return cls.RUNNING
+        if value == str(cls.WAITING):
+            return cls.WAITING
+        return cls.UNKNOWN
 
 
 @export
@@ -203,6 +210,26 @@ class Results(object):
         """Set a job to running.
 
         :param label: hpctl.utils.Label, The label to set as killed.
+        """
+        pass
+
+    def get_label(self, label):
+        """Get the sha1 from the human label.
+
+        :param label: str, The human label
+
+        :returns:
+            hpctl.utils.Label: The label.
+        """
+        pass
+
+    def get_label_prefix(self, label):
+        """Get the sha1 from the human label with a prefix search, 'ab' matches 'abc'
+
+        :param label: str, The sha1
+
+        :returns:
+            tuple (str, hpctl.utils.Label).
         """
         pass
 
@@ -394,45 +421,10 @@ class LocalResults(Results):
     def get_xpctl(self, label):
         return self.results[label.exp][label]['xpctl']
 
-    def get_human(self, label):
-        """Get the human label from the sha1.
-
-        :param label: str, The sha1
-
-        :returns:
-            str, The human label.
-        """
-        return search(label, self.label_to_name, prefix=False)
-
-
-    def get_human_prefix(self, label):
-        """Get the human label from the sha1 with a prefix search, 'ab' matches 'abc'
-
-        :param label: str, The sha1
-
-        :returns:
-            str, The human label.
-        """
-        return search(label, self.label_to_name, prefix=True)
-
     def get_label(self, label):
-        """Get the sha1 from the human label.
-
-        :param label: str, The human label
-
-        :returns:
-            str, The sha1.
-        """
         return search(label, self.name_to_label, prefix=False)
 
     def get_label_prefix(self, label):
-        """Get the sha1 from the human label with a prefix search, 'ab' matches 'abc'
-
-        :param label: str, The sha1
-
-        :returns:
-            str, The human label.
-        """
         return search(label, self.name_to_label, prefix=True)
 
     def get_state(self, label):

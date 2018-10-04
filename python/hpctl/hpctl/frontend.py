@@ -156,7 +156,6 @@ class Console(Frontend):
 
         Linux only.
         """
-        return
         if platform.system() == "Linux":
             r, _, _ = select.select([sys.stdin,], [], [], 0.0)
             if r:
@@ -164,13 +163,8 @@ class Console(Frontend):
                 self.print_count += 1
                 # Simple for now
                 data = data.split()
-                human, sha1 = self.results.get_label_prefix(data[1])
+                _, label = self.results.get_label_prefix(data[1])
                 if len(data) >= 2:
-                    label = Label(
-                        self.experiment_hash,
-                        sha1[0],
-                        human,
-                    )
                     data = {
                         "command": data[0],
                         "label": label

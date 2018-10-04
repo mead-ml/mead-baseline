@@ -70,6 +70,8 @@ class FlaskFrontend(Frontend):
 
     def put_result(self, exp, sha1, name):
         label = Label(exp, sha1, name)
+        if self.xpctl is None:
+            return jsonify({"command": "putresults", "status": "failed", "id": "FAILED"})
         if not self.results.get_xpctl(label):
             id_ = self.xpctl.put_result(label)
             self.results.set_xpctl(label, id_)
@@ -167,12 +169,11 @@ class FlaskFrontend(Frontend):
     def demo_page(self, exp):
         return render_template('demo.html', exp_hash=exp)
 
-    # def get_label(self, exp, name):
-    #     human = None; sha1 = None
-    #     human, sha1 = self.results.get_label_prefix(name)
-    #     if human is None:
-    #         sha1, human = self.results.get_human_prefix(name)
-    #     return jsonify({"sha1": sha1, "human": human[0]})
+    def get_label(self, name):
+        human, label = self.results.get_label_prefix(name)
+        if human is None:
+            return jsonify({"exp": None, "sha1": None, "name": None})
+        return jsonify(dict(**label))
 
 
 def init_app(app, fe, base_url='/hpctl/v1'):
@@ -215,14 +216,9 @@ def init_app(app, fe, base_url='/hpctl/v1'):
     app.route('{}/results/best/<exp>/<phase>/<metric>'.format(base_url), methods={'GET'})(fe.find_best_within)
     # Check if this has be logged to xpctl
     app.route('{}/xpctl/<exp>/<sha1>/<name>'.format(base_url), methods={'GET'})(fe.get_xpctl)
+    # Get the label based on the name
+    app.route('{}/label/<name>'.format(base_url), methods={'GET'})(fe.get_label)
 
-
-
-    # # Get all the labels run for this experiment
-    # app.route('{}/label/<exp>'.format(base_url), methods={'GET'})(fe.labels)
-    # # Sha1 look up from name?
-    # app.route('{}/label/<exp>/<name>'.format(base_url), methods={'GET'})(fe.get_label)
-    # # Get a list of all experiments
     # Simple display
     app.route('{}/demo_data/<exp>'.format(base_url), methods={'GET'})(fe.demo_data)
     app.route('{}/demo_page/<exp>'.format(base_url), methods={'GET'})(fe.demo_page)
