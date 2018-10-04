@@ -92,7 +92,6 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
         self.finetune = kwargs.get('finetune', True)
         self.name = name
         self.scope = kwargs.get('scope', '{}/LUT'.format(self.name))
-        self.x = kwargs.get(self.name, self.create_placeholder(name))
         self.weights = kwargs.get('weights')
         if self.weights is None:
             unif = kwargs.get('unif', 0.1)
@@ -105,7 +104,9 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
         :return: The sub-graph output
         """
         if x is None:
-            x = self.x
+            x = LookupTableEmbeddings.create_placeholder(self.name)
+        self.x = x
+
         return embed(x,
                      self.vsz,
                      self.dsz,
@@ -140,7 +141,6 @@ class CharBoWEmbeddings(TensorFlowEmbeddings):
         self.weights = kwargs.get('weights')
         self.params = kwargs
         self.wsz = None
-        self.xch = kwargs.get(self.name, tf.placeholder(tf.int32, [None, None, None], name=self.name))
         if self.weights is None:
             unif = kwargs.get('unif', 0.1)
             self.weights = np.random.uniform(-unif, unif, (self.vsz, self.dsz))
@@ -150,7 +150,8 @@ class CharBoWEmbeddings(TensorFlowEmbeddings):
 
     def encode(self, x=None):
         if x is None:
-            x = self.x
+            x = CharBoWEmbeddings.create_placeholder(self.name)
+        self.x = x
         return tf.reduce_sum(embed(x,
                                    self.get_vsz(),
                                    self.get_dsz(),
@@ -177,7 +178,7 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
         self.weights = kwargs.get('weights')
         self.params = kwargs
         self.wsz = None
-        self.x = kwargs.get(self.name, tf.placeholder(tf.int32, [None, None, None], name=self.name))
+        self.x = None
         if self.weights is None:
             unif = kwargs.get('unif', 0.1)
             self.weights = np.random.uniform(-unif, unif, (self.vsz, self.dsz))
@@ -187,7 +188,8 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
 
     def encode(self, x=None):
         if x is None:
-            x = self.x
+            x = CharConvEmbeddings.create_placeholder(self.name)
+        self.x = x
         with tf.variable_scope(self.scope):
             Wch = tf.get_variable("Wch",
                                   initializer=tf.constant_initializer(self.weights, dtype=tf.float32, verify_shape=True),

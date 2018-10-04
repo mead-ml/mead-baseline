@@ -375,7 +375,7 @@ class ClassifierModelBase(ClassifierModel):
 
             seed = np.random.randint(10e8)
             init = tf.random_uniform_initializer(-0.05, 0.05, dtype=tf.float32, seed=seed)
-            word_embeddings = model.embed()
+            word_embeddings = model.embed(**kwargs)
             input_sz = word_embeddings.shape[-1]
             pooled = model.pool(word_embeddings, input_sz, init, **kwargs)
             stacked = model.stacked(pooled, init, **kwargs)
@@ -393,15 +393,16 @@ class ClassifierModelBase(ClassifierModel):
         # writer = tf.summary.FileWriter('blah', sess.graph)
         return model
 
-    def embed(self):
+    def embed(self, **kwargs):
         """This method performs "embedding" of the inputs.  The base method here then concatenates along depth
         dimension to form word embeddings
 
         :return: A 3-d vector where the last dimension is the concatenated dimensions of all embeddings
         """
         all_embeddings_out = []
-        for embedding in self.embeddings.values():
-            embeddings_out = embedding.encode()
+        for k, embedding in self.embeddings.items():
+            x = kwargs.get(k, None)
+            embeddings_out = embedding.encode(x)
             all_embeddings_out += [embeddings_out]
         word_embeddings = tf.concat(values=all_embeddings_out, axis=2)
         return word_embeddings
