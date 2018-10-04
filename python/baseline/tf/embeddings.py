@@ -141,6 +141,9 @@ class CharBoWEmbeddings(TensorFlowEmbeddings):
         self.params = kwargs
         self.wsz = None
         self.xch = kwargs.get(self.name, tf.placeholder(tf.int32, [None, None, None], name=self.name))
+        if self.weights is None:
+            unif = kwargs.get('unif', 0.1)
+            self.weights = np.random.uniform(-unif, unif, (self.vsz, self.dsz))
 
     def save_md(self, target):
         write_json({'vsz': self.get_vsz(), 'dsz': self.get_dsz()}, target)
@@ -175,6 +178,9 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
         self.params = kwargs
         self.wsz = None
         self.x = kwargs.get(self.name, tf.placeholder(tf.int32, [None, None, None], name=self.name))
+        if self.weights is None:
+            unif = kwargs.get('unif', 0.1)
+            self.weights = np.random.uniform(-unif, unif, (self.vsz, self.dsz))
 
     def save_md(self, target):
         write_json({'vsz': self.get_vsz(), 'dsz': self.get_dsz()}, target)

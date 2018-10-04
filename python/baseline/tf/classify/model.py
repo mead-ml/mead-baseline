@@ -2,7 +2,6 @@ import tensorflow as tf
 import numpy as np
 from google.protobuf import text_format
 from tensorflow.python.platform import gfile
-from tensorflow.contrib.layers import fully_connected, xavier_initializer
 from baseline.utils import fill_y, listify, write_json, ls_props, read_json
 from baseline.model import ClassifierModel, load_classifier_model, create_classifier_model
 from baseline.tf.tfy import (stacked_lstm,
@@ -376,20 +375,20 @@ class ClassifierModelBase(ClassifierModel):
 
             seed = np.random.randint(10e8)
             init = tf.random_uniform_initializer(-0.05, 0.05, dtype=tf.float32, seed=seed)
-            xavier_init = xavier_initializer(True, seed)
             word_embeddings = model.embed()
             input_sz = word_embeddings.shape[-1]
             pooled = model.pool(word_embeddings, input_sz, init, **kwargs)
             stacked = model.stacked(pooled, init, **kwargs)
 
             # For fully connected layers, use xavier (glorot) transform
-            with tf.contrib.slim.arg_scope(
-                    [fully_connected],
-                    weights_initializer=xavier_init):
-                with tf.variable_scope("output"):
-                    model.logits = tf.identity(fully_connected(stacked, nc, activation_fn=None), name="logits")
-                    model.best = tf.argmax(model.logits, 1, name="best")
-                    model.probs = tf.nn.softmax(model.logits, name="probs")
+            with tf.variable_scope("output"):
+                model.logits = tf.identity(tf.layers.dense(stacked,
+                                                           nc,
+                                                           activation=None,
+                                                           kernel_initializer=tf.glorot_uniform_initializer(seed)),
+                                           name="logits")
+                model.best = tf.argmax(model.logits, 1, name="best")
+                model.probs = tf.nn.softmax(model.logits, name="probs")
         model.sess = sess
         # writer = tf.summary.FileWriter('blah', sess.graph)
         return model
