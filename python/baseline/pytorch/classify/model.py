@@ -165,7 +165,7 @@ class LSTMModel(ClassifierModelBase):
         super(LSTMModel, self).__init__()
 
     def _init_pool(self, dsz, **kwargs):
-        unif = kwargs.get('unif')
+        unif = kwargs.get('unif', 0.1)
         hsz = kwargs.get('rnnsz', kwargs.get('hsz', 100))
         if type(hsz) is list:
             hsz = hsz[0]
@@ -183,7 +183,7 @@ class LSTMModel(ClassifierModelBase):
         return hidden
 
     def make_input(self, batch_dict):
-        inputs = super(LSTMModel).make_input(batch_dict)
+        inputs = super(LSTMModel, self).make_input(batch_dict)
         lengths = inputs['lengths']
         lengths, perm_idx = lengths.sort(0, descending=True)
         for k, value in inputs.items():
@@ -222,18 +222,66 @@ class NBowMaxModel(NBowBase):
         return dmax
 
 
+class CompositePoolingModel(ClassifierModelBase):
+    """Fulfills pooling contract by aggregating pooling from a set of sub-models and concatenates each
+    """
+    def __init__(self):
+        """
+        Construct a composite pooling model
+        """
+        super(CompositePoolingModel, self).__init__()
+        self.SubModels = None
+
+    def _init_pool(self, dsz, **kwargs):
+        self.SubModels = [eval(model) for model in kwargs.get('sub')]
+        pool_sz = 0
+        for SubClass in self.SubModels:
+            pool_sz += SubClass._init_pool(self, dsz, **kwargs)
+        return pool_sz
+
+    def _pool(self, embeddings, lengths):
+        """Cycle each sub-model and call its pool method, then concatenate along final dimension
+
+        :param word_embeddings: The input graph
+        :param dsz: The number of input units
+        :param init: The initializer operation
+        :param kwargs:
+        :return: A pooled composite output
+        """
+
+        pooling = []
+        for SubClass in self.SubModels:
+            pooling += [SubClass._pool(self, embeddings, lengths)]
+        return torch.cat(pooling, -1)
+
+    def make_input(self, batch_dict):
+        """Because the sub-model could contain an LSTM, make sure to sort lengths descending
+
+        :param batch_dict:
+        :return:
+        """
+        inputs = super(CompositePoolingModel, self).make_input(batch_dict)
+        lengths = inputs['lengths']
+        lengths, perm_idx = lengths.sort(0, descending=True)
+        for k, value in inputs.items():
+            inputs[k] = value[perm_idx]
+        return inputs
+
+
 # These define the possible models for this backend
 BASELINE_CLASSIFICATION_MODELS = {
     'default': ConvModel.create,
     'lstm': LSTMModel.create,
     'nbow': NBowModel.create,
-    'nbowmax': NBowMaxModel.create
+    'nbowmax': NBowMaxModel.create,
+    'composite': CompositePoolingModel.create
 }
 BASELINE_CLASSIFICATION_LOADERS = {
     'default': ConvModel.load,
     'lstm': LSTMModel.load,
     'nbow': NBowModel.load,
-    'nbowmax': NBowMaxModel.create
+    'nbowmax': NBowMaxModel.load,
+    'composite': CompositePoolingModel.load
 }
 
 
