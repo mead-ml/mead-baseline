@@ -10,6 +10,10 @@ from hpctl.backend import LocalGPUBackend, Runner
 from hpctl.utils import create_logs
 
 
+__all__ = []
+export = exporter(__all__)
+
+
 def create_mounts(default_mounts, user_mounts, cwd, datacache=None):
     """Create the mounting dict, Mounts are ro except for the cwd and datacache mount.
 
@@ -91,7 +95,7 @@ def run_docker(
         pass
     os.chdir(loc)
 
-    cache = settings.get('datacache')
+    cache = os.path.expanduser(settings.get('datacache'))
 
     # Write config files into working dir
     write_json(config_params, 'config.json')
