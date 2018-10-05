@@ -139,6 +139,9 @@ class CharBoWEmbeddings(TensorFlowEmbeddings):
         self.name = name
         self.scope = kwargs.get('scope', '{}/CharBoWLUT'.format(self.name))
         self.weights = kwargs.get('weights')
+        if self.weights is None:
+            unif = kwargs.get('unif', 0.1)
+            self.weights = np.random.uniform(-unif, unif, (self.vsz, self.dsz))
         self.params = kwargs
         self.wsz = None
         if self.weights is None:
@@ -176,6 +179,9 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
         self.name = name
         self.scope = kwargs.get('scope', '{}/CharLUT'.format(self.name))
         self.weights = kwargs.get('weights')
+        if self.weights is None:
+            unif = kwargs.get('unif', 0.1)
+            self.weights = np.random.uniform(-unif, unif, (self.vsz, self.dsz))
         self.params = kwargs
         self.wsz = None
         self.x = None
