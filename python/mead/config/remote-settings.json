@@ -1,5 +1,5 @@
 {
-    "datacache": "~/.bl-data",
+    "datacache": "/home/blester/.bl-data",
     "reporting_hooks":{
         "visdom": {
             "name": "ZZZZZZZZZZZZ"

@@ -83,17 +83,17 @@ def test_config_sampler_find():
     sample = MagicMock()
     data = {
         'a': {
-            'type': 1,
+            'hpctl': 1,
             'a': 1
         },
         'b': {
             'c': {
-                'type': 1,
+                'hpctl': 1,
                 'a': 2
             }
         },
         'd': {
-            'type': 2
+            'hpctl': 2
         }
     }
     ConfigSampler._find(data, 1, sample)
@@ -108,17 +108,17 @@ def test_keys_are_tuples():
 
     data = {
         'a': {
-            'type': 1,
+            'hpctl': 1,
             'a': 1
         },
         'b': {
             'c': {
-                'type': 1,
+                'hpctl': 1,
                 'a': 2
             }
         },
         'd': {
-            'type': 2
+            'hpctl': 2
         }
     }
     found = ConfigSampler._find(data, 1, sample)

@@ -180,8 +180,8 @@ class DockerBackend(LocalGPUBackend):
     def __init__(self, default_mounts=None, user_mounts=None, **kwargs):
         super(DockerBackend, self).__init__(**kwargs)
         self.client = docker.from_env()
-        self.default_mounts = kwargs.get('default_mounts', [])
-        self.user_mounts = kwargs.get('user_mounts', [])
+        self.default_mounts = default_mounts if default_mounts is not None else []
+        self.user_mounts = user_mounts if user_mounts is not None else []
 
     def launch(
             self,

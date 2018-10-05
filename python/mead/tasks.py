@@ -258,7 +258,7 @@ class Task(object):
         :param features: The `features` sub-section of the mead config
         :return: Returns a ``tuple`` comprised of a ``dict`` of (`feature name`, `Embedding`) and an updated vocab
         """
-        unif = self.config_params['unif']
+        unif = float(self.config_params.get('unif', 0.1))
         keep_unused = self.config_params.get('keep_unused', False)
 
         embeddings_map = dict()

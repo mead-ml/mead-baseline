@@ -115,8 +115,8 @@ class Sampler(object):
         return self.__str__()
 
     def __str__(self):
-        vals = ", ".join([".".join(v) for v in self._values]) if self._values else "nothing"
-        return "<{} sampling on {}.>".format(self.name, vals)
+        vals = ", ".join([".".join(map(str, v)) for v in self._values]) if self._values else "nothing"
+        return "<{} sampling on {}>".format(self.name, vals)
 
 
 @export
@@ -203,12 +203,18 @@ class ConfigSampler(object):
         examples = {}
         for key, value in config.items():
             if isinstance(value, dict):
-                if 'type' in value and value['type'] == type_:
+                if 'hpctl' in value and value['hpctl'] == type_:
                     process_example(examples, key, value)
                 else:
                     nested_example = ConfigSampler._find(value, type_, process_example)
                     for k, v in nested_example.items():
                         examples[tuple([key] + list(k))] = v
+            if isinstance(value, list):
+                for i, item in enumerate(value):
+                    if isinstance(item, dict):
+                        nested_example = ConfigSampler._find(item, type_, process_example)
+                        for k, v in nested_example.items():
+                            examples[tuple([key, i] + list(k))] = v
         return examples
 
     @staticmethod
@@ -224,10 +230,15 @@ class ConfigSampler(object):
         examples = set()
         for key, value in config.items():
             if isinstance(value, dict):
-                if 'type' in value:
-                    examples.add(value['type'])
+                if 'hpctl' in value:
+                    examples.add(value['hpctl'])
                 else:
                     nested_example = ConfigSampler._collect(value)
+                    for type_ in nested_example:
+                        examples.add(type_)
+            if isinstance(value, list):
+                for i, item in enumerate(value):
+                    nested_example = ConfigSampler._collect(item)
                     for type_ in nested_example:
                         examples.add(type_)
         return examples
