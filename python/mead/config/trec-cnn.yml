@@ -21,12 +21,12 @@ features:
     embeddings:
       label: w2v-gn
 
-#  - name: word2
-#    vectorizer:
-#      type: token1d
-#    embeddings:
-#      label: glove-42B
-#      transform: baseline.lowercase
+  - name: word2
+    vectorizer:
+      type: token1d
+    embeddings:
+      label: glove-42B
+      transform: baseline.lowercase
 
 
 train:
