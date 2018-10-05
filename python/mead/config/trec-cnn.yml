@@ -1,4 +1,4 @@
-batchsz: 10
+batchsz: 50
 preproc:
     mxlen: -1
 
