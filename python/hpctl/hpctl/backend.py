@@ -1,7 +1,9 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 import os
+from subprocess import call
 from baseline.utils import export as exporter
+from baseline.utils import import_user_module
 from hpctl.results import States
 
 
@@ -13,25 +15,22 @@ export = exporter(__all__)
 def get_backend(backend_config):
     """Get the backend object.
 
-    :param exp: hpctl.experiment.Experiment, The experiment data object.
-    :param results: hpctl.results.Results, The data results object.
+    :param backend_config: dict, The arguments to initialize the backend.
     """
     backend_type = backend_config['type']
     print("Using backend [{}]".format(backend_type))
 
     if backend_type == "mp":
-        from hpctl.mp import MPBackend
-        Be = MPBackend
+        from hpctl.mp import create_backend
+    elif backend_type == "docker":
+        from hpctl.dock import create_backend
+    elif backend_type == "remote":
+        from hpctl.remote import create_backend
+    else:
+        mod = import_user_module("backend", backend_type)
+        create_backend = mod.create_backend
 
-    if backend_type == "docker":
-        from hpctl.dock import DockerBackend
-        Be = DockerBackend
-
-    if backend_type == "remote":
-        from hpctl.remote import RemoteBackend
-        Be = RemoteBackend
-
-    return Be(**backend_config)
+    return create_backend(**backend_config)
 
 
 @export
@@ -91,6 +90,8 @@ class LocalGPUBackend(Backend):
             print('read: {} from envs'.format(self.real_gpus))
         self.real_gpus = list(map(str, self.real_gpus))
         print("Running Jobs on the following GPU(s), {}".format(self.real_gpus))
+        with open(os.devnull, 'w') as f:
+            call('wall "HPCTL will run jobs on the following GPU(s) {}"'.format(self.real_gpus), shell=True, stdout=f, stderr=f)
         self.jobs = []
         self.label_to_job = {}
         self.gpus_to_job = {gpu: None for gpu in self.real_gpus}

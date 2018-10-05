@@ -219,3 +219,8 @@ class MPBackend(LocalGPUBackend):
         self.label_to_job[label] = job
         self._reserve_gpus(gpu, job)
         self.jobs.append(job)
+
+
+@export
+def create_backend(**kwargs):
+    return MPBackend(**kwargs)

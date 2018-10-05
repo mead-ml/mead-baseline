@@ -12,6 +12,7 @@ from collections import defaultdict
 from multiprocessing.managers import BaseManager
 import numpy as np
 from baseline.utils import export as exporter
+from baseline.utils import import_user_module
 from mead.utils import hash_config
 from hpctl.utils import Label
 
@@ -500,4 +501,7 @@ def get_results(results_config):
     if kind == 'remote':
         from hpctl.remote import RemoteResults
         return RemoteResults(**results_config)
-    return LocalResults.create(**results_config)
+    if kind == 'local':
+        return LocalResults.create(**results_config)
+    mod = import_user_module("results", kind)
+    return mod.create_results(**results_config)

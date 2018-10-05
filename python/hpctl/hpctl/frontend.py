@@ -8,6 +8,7 @@ import select
 import platform
 from multiprocessing import Process, Queue
 from baseline.utils import export as exporter
+from baseline.utils import import_user_module
 from hpctl.utils import Label, color, Colors
 from hpctl.results import States
 
@@ -224,5 +225,7 @@ def get_frontend(frontend_config, results, xpctl):
         q = Queue()
         fe = create_flask(q, results, xpctl)
         return FlaskShim(q, fe, **frontend_config)
-
-    return FRONTENDS[frontend](results, xpctl, **frontend_config)
+    if frontend in FRONTENDS:
+        return FRONTENDS[frontend](results, xpctl, **frontend_config)
+    mod = import_user_module("frontend", frontend)
+    return mod.create_frontend(results, xpctl, **frontend_config)

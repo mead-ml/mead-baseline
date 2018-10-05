@@ -4,6 +4,7 @@ from six.moves import zip, range
 import os
 import json
 import docker
+from baseline.utils import export as exporter
 from baseline.utils import write_json, read_config_file
 from hpctl.backend import LocalGPUBackend, Runner
 from hpctl.utils import create_logs
@@ -131,6 +132,7 @@ def run_docker(
     os.chdir(curr)
     return c, loc
 
+
 class DockerRunner(Runner):
     def __init__(self):
         super(DockerRunner, self).__init__()
@@ -164,6 +166,7 @@ class DockerRunner(Runner):
         self.p.kill()
 
 
+@export
 class DockerBackend(LocalGPUBackend):
     """Backend that launches docker jobs.
 
@@ -210,3 +213,8 @@ class DockerBackend(LocalGPUBackend):
         self.label_to_job[label] = job
         self._reserve_gpus(gpu, job)
         self.jobs.append(job)
+
+
+@export
+def create_backend(**kwargs):
+    return DockerBackend(**kwargs)

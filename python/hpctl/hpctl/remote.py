@@ -46,6 +46,11 @@ class RemoteBackend(Backend):
 
 
 @export
+def create_backend(**kwargs):
+    return RemoteBackend(**kwargs)
+
+
+@export
 class RemoteResults(Results):
     """Interact with the results object via the flask frontend."""
     def __init__(self, host='localhost', port=5000, cache_time=5, **kwargs):
