@@ -12,10 +12,15 @@ model:
     model_type: default
     filtsz: [3]
     dropout: 0.5
-    cmotsz: 100 
+    cmotsz: 100
 
-word_embeddings:
-    label: w2v-gn
+features:
+  - name: word
+    vectorizer:
+      type: token1d
+      transform: baseline.lowercase
+    embeddings:
+      label: w2v-gn
 
 train:
     epochs: 30

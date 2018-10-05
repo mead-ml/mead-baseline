@@ -30,13 +30,6 @@
     "label": "AG"
   },
   {
-    "train_file": "train-tok-shuf.txt",
-    "valid_file": "dev-tok.txt",
-    "test_file": "test-tok.txt",
-    "download": "https://www.dropbox.com/s/shnbgg5xmd7w239/dbpedia_tok.tar.gz?dl=1",
-    "label": "dbpedia"
-  },
-  {
     "train_file": "trec.nodev.utf8",
     "valid_file": "trec.dev.utf8",
     "test_file": "trec.test.utf8",

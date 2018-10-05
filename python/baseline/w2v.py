@@ -30,7 +30,7 @@ class EmbeddingsModel(object):
     def save_md(self, target):
         pass
 
-
+@exporter
 def pool_vec(embeddings, tokens, operation=np.mean):
     if type(tokens) is str:
         tokens = tokens.split()

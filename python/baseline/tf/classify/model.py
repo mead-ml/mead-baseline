@@ -8,6 +8,7 @@ from baseline.tf.tfy import (stacked_lstm,
                              parallel_conv)
 from baseline.tf.embeddings import *
 from baseline.version import __version__
+from tensorflow.contrib.layers import fully_connected
 import os
 import copy
 
@@ -382,8 +383,8 @@ class ClassifierModelBase(ClassifierModel):
 
             # For fully connected layers, use xavier (glorot) transform
             with tf.variable_scope("output"):
-                model.logits = tf.identity(tf.layers.dense(stacked,
-                                                           nc,
+
+                model.logits = tf.identity(tf.layers.dense(stacked, nc,
                                                            activation=None,
                                                            kernel_initializer=tf.glorot_uniform_initializer(seed)),
                                            name="logits")
@@ -437,12 +438,8 @@ class ClassifierModelBase(ClassifierModel):
 
         in_layer = pooled
         for i, hsz in enumerate(hszs):
-            with tf.variable_scope('fc-{}'.format(i)):
-                with tf.contrib.slim.arg_scope(
-                        [fully_connected],
-                        weights_initializer=init):
-                    fc = fully_connected(in_layer, hsz, activation_fn=tf.nn.relu)
-                    in_layer = tf.nn.dropout(fc, self.pkeep)
+            fc = tf.layers.dense(in_layer, hsz, activation=tf.nn.relu, kernel_initializer=init, name='fc-{}'.format(i))
+            in_layer = tf.nn.dropout(fc, self.pkeep, name='fc-dropout-{}'.format(i))
         return in_layer
 
 
