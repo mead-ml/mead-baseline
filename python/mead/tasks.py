@@ -258,7 +258,7 @@ class Task(object):
         :param features: The `features` sub-section of the mead config
         :return: Returns a ``tuple`` comprised of a ``dict`` of (`feature name`, `Embedding`) and an updated vocab
         """
-        unif = self.config_params['unif']
+        unif = self.config_params.get('unif', 0.1)
         keep_unused = self.config_params.get('keep_unused', False)
 
         embeddings_map = dict()
@@ -382,7 +382,9 @@ class ClassifierTask(Task):
         baseline.save_vocabs(self.get_basedir(), self.feat2index)
 
     def _create_model(self):
+        unif = self.config_params.get('unif', 0.1)
         model = self.config_params['model']
+        model['unif'] = model.get('unif', unif)
         lengths_key = model.get('lengths_key', self.primary_key)
         if lengths_key is not None:
             if not lengths_key.endswith('_lengths'):
@@ -405,7 +407,6 @@ Task.register_task(ClassifierTask)
 
 @exporter
 class TaggerTask(Task):
-
 
     def __init__(self, logging_config, mead_settings_config, **kwargs):
         super(TaggerTask, self).__init__(logging_config, mead_settings_config, **kwargs)
@@ -466,8 +467,11 @@ class TaggerTask(Task):
     def _create_model(self):
         labels = self.reader.label2index
         self.config_params['model']['span_type'] = self.config_params['train'].get('span_type')
-        self.config_params['model']["unif"] = self.config_params["unif"]
+
         model = self.config_params['model']
+        unif = self.config_params.get('unif', 0.1)
+        model['unif'] = model.get('unif', unif)
+
         lengths_key = model.get('lengths_key', self.primary_key)
         if lengths_key is not None:
             if not lengths_key.endswith('_lengths'):
@@ -501,7 +505,6 @@ Task.register_task(TaggerTask)
 
 @exporter
 class EncoderDecoderTask(Task):
-
 
     def __init__(self, logging_config, mead_settings_config, **kwargs):
         super(EncoderDecoderTask, self).__init__(logging_config, mead_settings_config, **kwargs)
@@ -606,6 +609,8 @@ class EncoderDecoderTask(Task):
         self.config_params['model']['EOS'] = self.feat2tgt['<EOS>']
         self.config_params['model']["unif"] = self.config_params["unif"]
         model = self.config_params['model']
+        unif = self.config_params.get('unif', 0.1)
+        model['unif'] = model.get('unif', unif)
         lengths_key = model.get('src_lengths_key', self.primary_key)
         if lengths_key is not None:
             if not lengths_key.endswith('_lengths'):
@@ -704,7 +709,8 @@ class LanguageModelingTask(Task):
     def _create_model(self):
 
         model = self.config_params['model']
-        model['unif'] = self.config_params['unif']
+        unif = self.config_params.get('unif', 0.1)
+        model['unif'] = model.get('unif', unif)
         model['batchsz'] = self.config_params['batchsz']
         model['tgt_key'] = self.config_params['loader'].get('tgt_key', self.primary_key)
         if self.backend.params is not None:
