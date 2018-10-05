@@ -7,6 +7,8 @@ from baseline.utils import zip_model
 from baseline.tf.tfy import optimizer
 from baseline.utils import listify, get_model_file
 from baseline.train import Trainer, create_trainer
+import time
+import os
 
 
 class Seq2SeqTrainerTf(Trainer):
@@ -106,7 +108,7 @@ def fit(model, ts, vs, es=None, **kwargs):
     epochs = int(kwargs['epochs']) if 'epochs' in kwargs else 5
     patience = int(kwargs['patience']) if 'patience' in kwargs else epochs
 
-    model_file = get_model_file(kwargs, 'seq2seq', 'tf')
+    model_file = get_model_file('seq2seq', 'tf', kwargs.get('basedir'))
     after_train_fn = kwargs['after_train_fn'] if 'after_train_fn' in kwargs else None
     trainer = create_trainer(Seq2SeqTrainerTf, model, **kwargs)
     init = tf.global_variables_initializer()
@@ -129,6 +131,8 @@ def fit(model, ts, vs, es=None, **kwargs):
 
     for epoch in range(epochs):
 
+        #if after_train_fn is not None:
+        #    after_train_fn(model)
         trainer.train(ts, reporting_fns)
         if after_train_fn is not None:
             after_train_fn(model)
@@ -155,5 +159,4 @@ def fit(model, ts, vs, es=None, **kwargs):
 
         trainer.recover_last_checkpoint()
         trainer.test(es, reporting_fns, phase='Test')
-    if kwargs.get("model_zip", False):
-        zip_model(model_file)
+

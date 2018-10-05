@@ -1,32 +1,47 @@
 import keras.models
 from keras.layers import (Dense,
                           Conv1D,
-                          Embedding,
-                          Input,
                           GlobalMaxPooling1D,
                           Dropout,
                           LSTM,
                           GlobalAveragePooling1D)
 
 from keras.utils import np_utils
-from baseline.utils import listify
-from baseline.model import Classifier, load_classifier_model, create_classifier_model
+from baseline.keras.embeddings import LookupTableEmbeddings
+from baseline.version import __version__
+from baseline.utils import listify, ls_props, write_json, read_json
+from baseline.model import ClassifierModel, load_classifier_model, create_classifier_model
 import json
 
 
-class WordClassifierBase(Classifier):
+class ClassifierModelBase(ClassifierModel):
 
     def __init__(self):
         pass
 
     def save(self, basename):
         self.impl.save(basename, overwrite=True)
+        path = basename.split('/')
+        base = path[-1]
+        outdir = '/'.join(path[:-1])
 
-        with open(basename + '.labels', 'w') as f:
-            json.dump(self.labels, f)
+        # For each embedding, save a record of the keys
 
-        with open(basename + '.vocab', 'w') as f:
-            json.dump(self.vocab, f)
+        embeddings_info = {}
+        for k, v in self.embeddings.items():
+            embeddings_info[k] = v.__class__.__name__
+        state = {
+            "version": __version__,
+            "embeddings": embeddings_info
+            ## "lengths_key": self.lengths_key
+        }
+        for prop in ls_props(self):
+            state[prop] = getattr(self, prop)
+
+        write_json(state, basename + '.state')
+        write_json(self.labels, basename + ".labels")
+        for key, embedding in self.embeddings.items():
+            embedding.save_md(basename + '-{}-md.json'.format(key))
 
     def classify(self, batch_dict):
         batch_time = batch_dict['x']
@@ -45,9 +60,15 @@ class WordClassifierBase(Classifier):
         return results
 
     def make_input(self, batch_dict):
-        x = batch_dict['x']
-        y = np_utils.to_categorical(batch_dict['y'], len(self.labels))
-        return x, y
+        example_dict = dict({})
+        for k, embedding in self.embeddings.items():
+            example_dict[k] = batch_dict[k]
+
+        y = batch_dict.get('y')
+        if y is not None:
+            y = np_utils.to_categorical(batch_dict['y'], len(self.labels))
+            example_dict['y'] = y
+        return example_dict
 
     def get_labels(self):
         return self.labels
@@ -56,60 +77,62 @@ class WordClassifierBase(Classifier):
         return self.vocab
 
 
-class GraphWordClassifierBase(WordClassifierBase):
+class GraphWordClassifierBase(ClassifierModelBase):
 
     def __init__(self):
         super(GraphWordClassifierBase, self).__init__()
 
+    def _embed(self):
+        embeds = []
+        dsz = 0
+        for k, embedding in self.embeddings.items():
+            embeds += [embedding.encode()]
+            dsz += embedding.dsz
+
+        return keras.layers.concatenate(embeds) if len(embeds) > 1 else embeds[0], dsz
+
     @classmethod
     def create(cls, embeddings, labels, **kwargs):
-        w2v = embeddings['word']
         model = cls()
+        model.embeddings = embeddings
         model.labels = labels
-        model.vocab = w2v.vocab
-        mxlen = int(kwargs.get('mxlen', 100))
-        finetune = bool(kwargs.get('finetune', True))
         nc = len(labels)
-        x = Input(shape=(mxlen,), dtype='int32', name='input')
-
-        vocab_size = w2v.weights.shape[0]
-        embedding_dim = w2v.dsz
-
-        lut = Embedding(input_dim=vocab_size, output_dim=embedding_dim, weights=[w2v.weights], input_length=mxlen, trainable=finetune)
-
-        embed = lut(x)
-
-        last_layer, input_dim = model._pool(embed, **kwargs)
+        embed, dsz = model._embed()
+        last_layer = model._pool(embed, dsz, **kwargs)
         last_layer = model._stacked(last_layer, **kwargs)
-
-        dense = Dense(units=nc, input_dim=input_dim, activation='softmax')(last_layer)
-        model.impl = keras.models.Model(inputs=[x], outputs=[dense])
+        dense = Dense(units=nc, activation='softmax')(last_layer)
+        model.impl = keras.models.Model(inputs=[e.x for e in model.embeddings.values()], outputs=[dense])
         model.impl.summary()
         return model
 
-    def _stacked(self, pooled, **kwargs):
-        pass
-
-    def _pool(self, embed, **kwargs):
+    def _pool(self, embed, insz, **kwargs):
         pass
 
     @classmethod
     def load(cls, basename, **kwargs):
-        model = cls()
 
+        model = cls()
         model.impl = keras.models.load_model(basename, **kwargs)
+        state = read_json(basename + '.state')
+        for prop in ls_props(model):
+            if prop in state:
+                setattr(model, prop, state[prop])
+        inputs = dict({(v.name, v) for v in model.impl.inputs})
+
+        model.embeddings = dict()
+        for key, class_name in state['embeddings'].items():
+            md = read_json('{}-{}-md.json'.format(basename, key))
+            embed_args = dict({'vsz': md['vsz'], 'dsz': md['dsz']})
+            embed_args[key] = inputs[key]
+            Constructor = eval(class_name)
+            model.embeddings[key] = Constructor(key, **embed_args)
+
+        ##model.lengths_key = state.get('lengths_key')
+
         with open(basename + '.labels', 'r') as f:
             model.labels = json.load(f)
 
-        with open(basename + '.vocab', 'r') as f:
-            model.vocab = json.load(f)
         return model
-
-
-class ConvModel(GraphWordClassifierBase):
-
-    def __init__(self):
-        super(ConvModel, self).__init__()
 
     def _stacked(self, pooled, **kwargs):
         pdrop = kwargs.get('dropout', 0.5)
@@ -125,7 +148,13 @@ class ConvModel(GraphWordClassifierBase):
             last_layer = Dropout(rate=pdrop)(last_layer)
         return last_layer
 
-    def _pool(self, embed, **kwargs):
+
+class ConvModel(GraphWordClassifierBase):
+
+    def __init__(self):
+        super(ConvModel, self).__init__()
+
+    def _pool(self, embed, insz, **kwargs):
         filtsz = kwargs['filtsz']
         pdrop = kwargs.get('dropout', 0.5)
         cmotsz = kwargs['cmotsz']
@@ -140,150 +169,65 @@ class ConvModel(GraphWordClassifierBase):
         drop1 = Dropout(pdrop)(joined)
 
         last_layer = drop1
-        return last_layer, cmotsz_all
+        return last_layer ##, cmotsz_all
 
 
-class SequentialWordClassifierBase(WordClassifierBase):
-
-    def __init__(self):
-        super(SequentialWordClassifierBase, self).__init__()
-
-    @classmethod
-    def load(cls, basename, **kwargs):
-        model = cls()
-
-        model.impl = keras.models.load_model(basename, **kwargs)
-        with open(basename + '.labels', 'r') as f:
-            model.labels = json.load(f)
-
-        with open(basename + '.vocab', 'r') as f:
-            model.vocab = json.load(f)
-        return model
-
-    def _stacked(self, **kwargs):
-        pdrop = kwargs.get('dropout', 0.5)
-        hszs = listify(kwargs.get('hsz', []))
-        activation_type = kwargs.get('activation', 'relu')
-
-        if len(hszs) == 0:
-            return
-
-        for i, hsz in enumerate(hszs):
-            self.impl.add(Dense(units=hsz, activation=activation_type))
-            self.impl.add(Dropout(rate=pdrop))
-
-    def _pool(self, dsz, **kwargs):
-        pass
-
-    def _embed(self, w2v, **kwargs):
-        finetune = bool(kwargs.get('finetune', True))
-        mxlen = int(kwargs.get('mxlen', 100))
-        vocab_size = w2v.weights.shape[0]
-        embedding_dim = w2v.dsz
-        self.impl.add(Embedding(input_dim=vocab_size, output_dim=embedding_dim,
-                                weights=[w2v.weights], input_length=mxlen, trainable=finetune))
-
-    @classmethod
-    def create(cls, embeddings, labels, **kwargs):
-        w2v = embeddings['word']
-        model = cls()
-        model.labels = labels
-        model.vocab = w2v.vocab
-        nc = len(labels)
-        model.impl = keras.models.Sequential()
-        model._embed(w2v)
-        model._pool(dsz=w2v.dsz, **kwargs)
-        model._stacked(**kwargs)
-        model.impl.add(Dense(units=nc, activation='softmax'))
-        model.impl.summary()
-        return model
-
-
-class LSTMModel(SequentialWordClassifierBase):
+class LSTMModel(GraphWordClassifierBase):
 
     def __init__(self):
         super(LSTMModel, self).__init__()
 
-    def _embed(self, w2v, **kwargs):
-        finetune = bool(kwargs.get('finetune', True))
-        mxlen = int(kwargs.get('mxlen', 100))
-        vocab_size = w2v.weights.shape[0]
-        embedding_dim = w2v.dsz
-        self.impl.add(Embedding(input_dim=vocab_size, mask_zero=True, output_dim=embedding_dim,
-                                weights=[w2v.weights], input_length=mxlen, trainable=finetune))
-    
-    def _pool(self, dsz, **kwargs):
+    def _pool(self, embed, dsz, **kwargs):
         pdrop = kwargs.get('dropout', 0.5)
         mxlen = int(kwargs.get('mxlen', 100))
         nlayers = kwargs.get('layers', 1)
         hsz = kwargs.get('rnnsz', kwargs.get('hsz', 100))
-        insz = dsz
 
+        insz = dsz
+        last_layer = embed
         if type(hsz) is list:
             hsz = hsz[0]
         for _ in range(nlayers-1):
-            self.impl.add(LSTM(hsz, return_sequences=True, input_shape=(mxlen, insz)))
+            last_layer = LSTM(hsz, return_sequences=True, input_shape=(mxlen, insz))(last_layer)
             insz = hsz
-        self.impl.add(LSTM(hsz))
-        self.impl.add(Dropout(pdrop))
 
-    @staticmethod
-    def load(basename, **kwargs):
-        model = LSTMModel()
-
-        model.impl = keras.models.load_model(basename, **kwargs)
-        with open(basename + '.labels', 'r') as f:
-            model.labels = json.load(f)
-
-        with open(basename + '.vocab', 'r') as f:
-            model.vocab = json.load(f)
-        return model
+        drop1 = Dropout(pdrop)(last_layer)
+        last_layer = drop1
+        return last_layer ##, hsz
 
 
-class NBowModel(SequentialWordClassifierBase):
-    def __init__(self):
-        super(NBowModel, self).__init__()
+class NBoWModel(GraphWordClassifierBase):
 
-    def _pool(self, dsz, **kwargs):
+    def __init__(self, PoolingLayer=GlobalAveragePooling1D):
+        super(NBoWModel, self).__init__()
+        self.PoolingLayer = PoolingLayer
+
+    def _pool(self, last_layer, dsz, **kwargs):
         pdrop = kwargs.get('dropout', 0.5)
-        self.impl.add(GlobalAveragePooling1D())
-        self.impl.add(Dropout(rate=pdrop))
+        last_layer = self.PoolingLayer()(last_layer)
+        drop1 = Dropout(pdrop)(last_layer)
+        last_layer = drop1
+        return last_layer
 
 
-class NBowMaxModel(NBowModel):
+class NBoWMaxModel(NBoWModel):
 
     def __init__(self):
-        super(NBowMaxModel, self).__init__()
+        super(NBoWMaxModel, self).__init__(GlobalMaxPooling1D)
 
-    def _pool(self, dsz, **kwargs):
-        pdrop = kwargs.get('dropout', 0.5)
-        self.impl.add(GlobalMaxPooling1D())
-        self.impl.add(Dropout(rate=pdrop))
-
-    @staticmethod
-    def load(basename, **kwargs):
-        model = NBowMaxModel()
-
-        model.impl = keras.models.load_model(basename, **kwargs)
-        with open(basename + '.labels', 'r') as f:
-            model.labels = json.load(f)
-
-        with open(basename + '.vocab', 'r') as f:
-            model.vocab = json.load(f)
-        return model
 
 
 BASELINE_CLASSIFICATION_MODELS = {
     'default': ConvModel.create,
     'lstm': LSTMModel.create,
-    'nbowmax': NBowMaxModel.create,
-    'nbow': NBowModel.create
+    'nbowmax': NBoWMaxModel.create,
+    'nbow': NBoWModel.create
 }
 BASELINE_CLASSIFICATION_LOADERS = {
     'default': ConvModel.load,
     'lstm': LSTMModel.load,
-    'nbowmax': NBowMaxModel.create,
-    'nbow': NBowModel.create
+    'nbowmax': NBoWMaxModel.create,
+    'nbow': NBoWModel.create
 }
 
 

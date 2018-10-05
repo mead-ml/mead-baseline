@@ -31,7 +31,7 @@ class LanguageModelTrainerPyTorch(Trainer):
             return tuple(self.repackage_hidden(v) for v in h)
 
     def _get_dims(self, ts):
-        np_array = ts[0]['x']
+        np_array = ts[0]['y']
         return np_array.shape
 
     def test(self, vs, reporting_fns, phase='Valid'):
@@ -46,8 +46,9 @@ class LanguageModelTrainerPyTorch(Trainer):
 
         for batch_dict in vs:
             inputs = self.model.make_input(batch_dict)
-            output, hidden = self.model(inputs[:-1], hidden)
-            total_loss += self.crit(output, inputs[-1]).data
+            y = inputs.pop('y')
+            output, hidden = self.model(inputs, hidden)
+            total_loss += self.crit(output, y).data
             hidden = self.repackage_hidden(hidden)
             iters += nbptt
         self.valid_epochs += 1
@@ -78,9 +79,10 @@ class LanguageModelTrainerPyTorch(Trainer):
         for batch_dict in ts:
             hidden = self.repackage_hidden(hidden)
             inputs = self.model.make_input(batch_dict)
+            y = inputs.pop('y')
             self.optimizer.zero_grad()
-            output, hidden = self.model(inputs[:-1], hidden)
-            loss = self.crit(output, inputs[-1])
+            output, hidden = self.model(inputs, hidden)
+            loss = self.crit(output, y)
             loss.backward()
             total_loss += loss.data
             iters += nbptt
@@ -112,7 +114,7 @@ def fit(model, ts, vs, es, **kwargs):
     epochs = int(kwargs['epochs']) if 'epochs' in kwargs else 5
     patience = int(kwargs['patience']) if 'patience' in kwargs else epochs
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
-    model_file = get_model_file(kwargs, 'lm', 'pytorch')
+    model_file = get_model_file('lm', 'pytorch', kwargs.get('basedir'))
 
     if do_early_stopping:
         early_stopping_metric = kwargs.get('early_stopping_metric', 'avg_loss')
@@ -137,8 +139,6 @@ def fit(model, ts, vs, es, **kwargs):
             model.save(model_file)
 
         elif test_metrics[early_stopping_metric] < min_metric:
-            #if validation_improvement_fn is not None:
-            #    validation_improvement_fn(early_stopping_metric, test_metrics, epoch, max_metric, last_improved)
             last_improved = epoch
             min_metric = test_metrics[early_stopping_metric]
             print('New min %.3f' % min_metric)

@@ -1,10 +1,10 @@
-import os
 import time
 import tensorflow as tf
 import numpy as np
 from baseline.tf.tfy import optimizer
 from baseline.progress import create_progress_bar
 from baseline.train import EpochReportingTrainer, create_trainer
+import os
 from baseline.utils import to_spans, f_score, listify, revlut, get_model_file
 
 
@@ -34,7 +34,7 @@ class TaggerEvaluatorTf(object):
     def process_batch(self, batch_dict, handle=None, txts=None):
 
         guess = self.model.predict(batch_dict)
-        sentence_lengths = batch_dict['lengths']
+        sentence_lengths = batch_dict[self.model.lengths_key]
         ids = batch_dict['ids']
         truth = batch_dict['y']
         correct_labels = 0
@@ -149,7 +149,7 @@ def fit(model, ts, vs, es, **kwargs):
     conll_output = kwargs.get('conll_output', None)
     span_type = kwargs.get('span_type', 'iob')
     txts = kwargs.get('txts', None)
-    model_file = get_model_file(kwargs, 'tagger', 'tf')
+    model_file = get_model_file('tagger', 'tf', kwargs.get('basedir'))
     after_train_fn = kwargs['after_train_fn'] if 'after_train_fn' in kwargs else None
     trainer = create_trainer(TaggerTrainerTf, model, **kwargs)
     tables = tf.tables_initializer()
@@ -206,5 +206,4 @@ def fit(model, ts, vs, es, **kwargs):
         for reporting in reporting_fns:
             reporting(test_metrics, 0, 'Test')
         trainer.log.debug({'phase': 'Test', 'time': duration})
-    if kwargs.get("model_zip", False):
-        zip_model(model_file)
+

@@ -26,7 +26,40 @@ def main():
     task.read_config(config_params, args.datasets)
     exporter = create_exporter(task, args.exporter_type)
 
-    exporter.run(args.model, args.embeddings, args.output_dir, args.model_version, args.use_preproc)
+    embeddings_set = mead.utils.read_config_file(args.embeddings)
+    embeddings_set = mead.utils.index_by_label(embeddings_set)
+
+    features = list_model_features(args.model + ".state")
+    feature_descs = {}
+    for feat, ty in features.items():
+        f = get_feature_md_object(args.model, feat)
+        f.update({
+            'type': ty
+        })
+        feature_descs[feat] = f
+
+    exporter.run(args.model, embeddings_set, feature_descs, args.output_dir, args.model_version, args.use_preproc)
+
+def list_model_features(model_state_file):
+    """
+    read what features are expected for this model from the state file.
+
+    typically this means `word` and `char`.
+    """
+    state = mead.utils.read_config_file(model_state_file)
+    if 'embeddings' not in state:
+        return []
+
+    return state['embeddings']
+
+def get_feature_md_object(model_name, feature):
+    """
+    return the feature object from the md json file that was saved during training.
+    """
+    feat_file = '-'.join([model_name, feature, 'md']) + '.json'
+    return mead.utils.read_config_file(feat_file)
+
+
 
 
 if __name__ == "__main__":

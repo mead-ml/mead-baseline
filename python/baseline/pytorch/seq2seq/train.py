@@ -44,10 +44,9 @@ class Seq2SeqTrainerPyTorch(Trainer):
         start = time.time()
         pg = create_progress_bar(steps)
         for batch_dict in vs:
-            fx = self._input(batch_dict)
-            tgt = fx[-1]
-            fx = fx[:-1]
-            pred = self.model(fx)
+            input = self._input(batch_dict)
+            tgt = input['tgt']
+            pred = self.model(input)
             loss = self.crit(pred, tgt)
             total_loss += loss.item()
             total += self._total(tgt)
@@ -78,10 +77,9 @@ class Seq2SeqTrainerPyTorch(Trainer):
             start_time = time.time()
             self.steps += 1
             self.optimizer.zero_grad()
-            fx = self._input(batch_dict)
-            tgt = fx[-1]
-            fx = fx[:-1]
-            pred = self.model(fx)
+            input = self._input(batch_dict)
+            tgt = input['tgt']
+            pred = self.model(input)
             loss = self.crit(pred, tgt)
             total_loss += loss.item()
             loss.backward()
@@ -114,7 +112,7 @@ def fit(model, ts, vs, es=None, **kwargs):
 
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
     epochs = int(kwargs.get('epochs', 20))
-    model_file = get_model_file(kwargs, 'seq2seq', 'pytorch')
+    model_file = get_model_file('seq2seq', 'pytorch', kwargs.get('basedir'))
 
     if do_early_stopping:
         early_stopping_metric = kwargs.get('early_stopping_metric', 'avg_loss')
@@ -130,6 +128,10 @@ def fit(model, ts, vs, es=None, **kwargs):
     min_metric = 10000
     last_improved = 0
     for epoch in range(epochs):
+
+
+        #if after_train_fn is not None:
+        #    after_train_fn(model)
 
         trainer.train(ts, reporting_fns)
 

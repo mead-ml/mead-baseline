@@ -35,8 +35,9 @@ class Seq2SeqTrainerDynet(Trainer):
         for batch_dict in loader:
             dy.renew_cg()
             ##self.optimizer.learning_rate = self.decay(self.global_step)
-            src, dst, src_len, tgt = self.model.make_input(batch_dict)
-            output = self.model.forward((src, dst, src_len))
+            inputs = self.model.make_input(batch_dict)
+            tgt = inputs.pop('tgt')
+            output = self.model.forward(inputs)
             loss = self._loss(output, tgt)
             total += self._total(tgt)
             loss_val = loss.npvalue().item()
@@ -76,8 +77,9 @@ class Seq2SeqTrainerDynet(Trainer):
         pg = create_progress_bar(steps)
         for batch_dict in vs:
             dy.renew_cg()
-            src, dst, src_len, tgt = self.model.make_input(batch_dict)
-            output = self.model.forward((src, dst, src_len))
+            inputs = self.model.make_input(batch_dict)
+            tgt = inputs.pop('tgt')
+            output = self.model.forward(inputs)
             loss = self._loss(output, tgt)
             total += self._total(tgt)
             loss_val = loss.npvalue().item()
@@ -100,7 +102,7 @@ def fit(model, ts, vs, es=None, epochs=5, do_early_stopping=True,
     patience = int(kwargs.get('patience', epochs))
     after_train_fn = kwargs.get('after_train_fn', None)
 
-    model_file = get_model_file(kwargs, 'seq2seq', 'dy')
+    model_file = get_model_file('seq2seq', 'dy', kwargs.get('basedir'))
 
     trainer = create_trainer(Seq2SeqTrainerDynet, model, **kwargs)
 

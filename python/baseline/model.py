@@ -4,25 +4,24 @@ from baseline.utils import (
     load_user_tagger_model, create_user_tagger_model,
     load_user_seq2seq_model, create_user_seq2seq_model,
     load_user_lang_model, create_user_lang_model,
+    load_user_embeddings,
     lowercase, revlut,
-    export, wrapped_partial
+    export, wrapped_partial, is_sequence
 )
-from baseline.featurizers import (
-    WordCharLength
-)
+from baseline.vectorizers import Token1DVectorizer, Char2DVectorizer, Dict1DVectorizer, Dict2DVectorizer
 
 __all__ = []
 exporter = export(__all__)
 
 
 @exporter
-class Classifier(object):
+class ClassifierModel(object):
     """Text classifier
     
     Provide an interface to DNN classifiers that use word lookup tables.
     """
     def __init__(self):
-        super(Classifier, self).__init__()
+        super(ClassifierModel, self).__init__()
 
     def save(self, basename):
         """Save this model out
@@ -32,8 +31,8 @@ class Classifier(object):
         """
         pass
 
-    @staticmethod
-    def load(basename, **kwargs):
+    @classmethod
+    def load(cls, basename, **kwargs):
         """Load the model from a basename, including directory
         
         :param basename: Name of the model, not including suffixes
@@ -53,43 +52,12 @@ class Classifier(object):
         """
         pass
 
-    def get_vocab(self, name='word'):
-        """Return the vocabulary, which is a dictionary mapping a word to its word index
-        
-        :return: A dictionary mapping a word to its word index
-        """
-        pass
-
     def get_labels(self):
         """Return a list of labels, where the offset within the list is the location in a confusion matrix, etc.
         
         :return: A list of the labels for the decision
         """
         pass
-
-    def classify_text(self, tokens, **kwargs):
-        """Utility method to convert a list of words comprising a text to indices, and create a single element
-        batch which is then classified.  The returned decision is sorted in descending order of probability.
-
-        At the moment, this method only prepares `x` features in the `batch_dict`.  This means that it cannot
-        be used for models that provide, for instance, character-level features.  In that case, use `classify` directly.
-        
-        :param tokens: A list of words
-        :param mxlen: The maximum length of the words.  List items beyond this edge are removed
-        :param zero_alloc: A function defining an allocator.  Defaults to numpy zeros
-        :param word_trans_fn: A transform on the input word
-        :return: A sorted list of outcomes for a single element batch
-        """
-        featurizer = kwargs.get('featurizer')
-        mxlen = kwargs.get('mxlen', self.mxlen if hasattr(self, 'mxlen') else len(tokens))
-        if featurizer is None:
-            maxw = kwargs.get('mxwlen', self.mxwlen if hasattr(self, 'mxwlen') else max([len(token) for token in tokens]))
-            zero_alloc = kwargs.get('zero_alloc', np.zeros)
-            featurizer = WordCharLength(self, mxlen, maxw, zero_alloc)
-
-        data = featurizer.run(tokens)
-        outcomes = self.classify(data)[0]
-        return sorted(outcomes, key=lambda tup: tup[1], reverse=True)
 
 
 @exporter
@@ -131,6 +99,7 @@ create_seq2seq_model = exporter(
         name='create_seq2seq_model'
     )
 )
+
 
 @exporter
 def create_lang_model(known_creators, embeddings, **kwargs):
@@ -186,7 +155,7 @@ load_lang_model = exporter(
 
 
 @exporter
-class Tagger(object):
+class TaggerModel(object):
     """Structured prediction classifier, AKA a tagger
     
     This class takes a temporal signal, represented as words over time, and characters of words
@@ -194,7 +163,7 @@ class Tagger(object):
     type of chunking (e.g. NER, POS chunks, slot-filling)
     """
     def __init__(self):
-        super(Tagger, self).__init__()
+        super(TaggerModel, self).__init__()
 
     def save(self, basename):
         pass
@@ -204,43 +173,6 @@ class Tagger(object):
         pass
 
     def predict(self, batch_dict):
-        pass
-
-    def predict_text(self, tokens, **kwargs):
-        """
-        Utility function to convert lists of sentence tokens to integer value one-hots which
-        are then passed to the tagger.  The resultant output is then converted back to label and token
-        to be printed.
-
-        This method is not aware of any input features other than words and characters (and lengths).  If you
-        wish to use other features and have a custom model that is aware of those, use `predict` directly.
-
-        :param tokens: (``list``) A list of tokens
-
-        """
-
-        featurizer = kwargs.get('featurizer')
-        if featurizer is None:
-            mxlen = kwargs.get('mxlen', self.mxlen if hasattr(self, 'mxlen') else len(tokens))
-            maxw = kwargs.get('maxw', self.maxw if hasattr(self, 'maxw') else max([len(token) for token in tokens]))
-            zero_alloc = kwargs.get('zero_alloc', np.zeros)
-            featurizer = WordCharLength(self, mxlen, maxw, zero_alloc)
-
-        # This might be inefficient if the label space is large
-
-        label_vocab = revlut(self.get_labels())
-        #lengths = zero_alloc(1, dtype=int)
-        #lengths[0] = min(len(tokens), mxlen)
-
-        data = featurizer.run(tokens)
-        lengths = data['lengths']
-        indices = self.predict(data)[0]
-        output = []
-        for j in range(lengths[0]):
-            output.append((tokens[j], label_vocab[indices[j].item()]))
-        return output
-
-    def get_vocab(self, vocab_type='word'):
         pass
 
     def get_labels(self):
@@ -253,35 +185,38 @@ class LanguageModel(object):
     def __init__(self):
         super(LanguageModel, self).__init__()
 
-    def step(self, batch_time, context):
+    @staticmethod
+    def load(basename, **kwargs):
+        pass
+
+    @classmethod
+    def create(cls, embeddings, **kwargs):
+        pass
+
+    def predict_next(self, batch_dict, **kwargs):
         pass
 
 
 @exporter
-class EncoderDecoder(object):
+class EncoderDecoderModel(object):
 
     def save(self, model_base):
         pass
 
     def __init__(self):
-        super(EncoderDecoder, self).__init__()
-
-    @staticmethod
-    def create(src_vocab, dst_vocab, **kwargs):
-        pass
-
-    def create_loss(self):
-        pass
-
-    def get_src_vocab(self):
-        pass
-
-    def get_dst_vocab(self):
-        pass
+        super(EncoderDecoderModel, self).__init__()
 
     @staticmethod
     def load(basename, **kwargs):
         pass
 
+    @classmethod
+    def create(cls, src_embeddings, dst_embedding, **kwargs):
+        pass
+
+    def create_loss(self):
+        pass
+
     def run(self, source_dict, **kwargs):
         pass
+

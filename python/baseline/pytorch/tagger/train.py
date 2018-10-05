@@ -88,8 +88,10 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
         pg = create_progress_bar(steps)
         for batch_dict in ts:
 
-            x, xch, lengths, y, ids = self.model.make_input(batch_dict)
-            inputs = (x, xch, lengths)
+            inputs = self.model.make_input(batch_dict)
+            y = inputs.pop('y')
+            lengths = inputs['lengths']
+            ids = inputs['ids']
             pred = self.model(inputs)
             correct, count, overlaps, golds, guesses = self.process_output(pred, y.data, lengths, ids, handle, txts)
             total_correct += correct
@@ -135,7 +137,7 @@ def fit(model, ts, vs, es, **kwargs):
 
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
     epochs = int(kwargs.get('epochs', 20))
-    model_file = get_model_file(kwargs, 'tagger', 'pytorch')
+    model_file = get_model_file('tagger', 'pytorch', kwargs.get('basedir'))
     conll_output = kwargs.get('conll_output', None)
     txts = kwargs.get('txts', None)
 

@@ -1,3 +1,4 @@
+model_base: ./trec-qa-lstm
 batchsz: 10
 preproc:
     mxlen: -1
@@ -10,17 +11,27 @@ loader:
 unif: 0.25
 model:
     model_type: lstm
-    hsz: 400
+    rnnsz: 100
+    hsz: 100
     dropout: 0.5
     layers: 1
 
-word_embeddings:
-    label: w2v-gn
+features:
+  - name: word
+    vectorizer:
+      type: token1d
+      transform: baseline.lowercase
+    embeddings:
+      label: w2v-gn
+  - name: word2
+    vectorizer:
+      type: token1d
+    embeddings:
+      label: glove-840B
 
 train:
     epochs: 30
-    optim: adadelta
-    eta: 1.0
-    model_base: ./models/trec
+    optim: adam
+    eta: 0.001
     early_stopping_metric: macro_f1
     patience: 25

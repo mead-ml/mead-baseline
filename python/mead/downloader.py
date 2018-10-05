@@ -6,7 +6,7 @@ import shutil
 import requests
 import os
 import re
-from mead.mime_type import mime_type
+from baseline.mime_type import mime_type
 from baseline.utils import export, read_json, write_json
 
 __all__ = []

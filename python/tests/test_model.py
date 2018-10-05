@@ -22,7 +22,7 @@ def create_dummy_classifier(mxlen=None, mxwlen=None, zero_alloc=None):
     """
     fixture to return a dummy classifier.
     """
-    m = model.Classifier()
+    m = model.ClassifierModel()
     m.classify = MagicMock(name='classify_method')
     m.classify.return_value = CLASS_RESPONSE
 
@@ -39,7 +39,7 @@ def create_dummy_tagger(mxlen=None, mxwlen=None, zero_alloc=None):
     """
     fixture to return a dummy tagger.
     """
-    m = model.Tagger()
+    m = model.TaggerModel()
     m.predict = MagicMock(name='predict_method')
     m.predict.return_value = TAG_RESPONSE
 

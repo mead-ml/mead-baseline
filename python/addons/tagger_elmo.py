@@ -5,13 +5,13 @@ import sys
 from google.protobuf import text_format
 from tensorflow.python.platform import gfile
 from tensorflow.contrib.layers import fully_connected, xavier_initializer
-from baseline.model import Tagger, create_tagger_model, load_tagger_model
+from baseline.model import TaggerModel, create_tagger_model, load_tagger_model
 import tensorflow as tf
 import tensorflow_hub as hub
 import numpy as np
 
 
-class RNNTaggerELMoModel(Tagger):
+class RNNTaggerModelELMoModel(TaggerModel):
 
     def save_values(self, basename):
         self.saver.save(self.sess, basename)
@@ -59,7 +59,7 @@ class RNNTaggerELMoModel(Tagger):
 
     @staticmethod
     def load(basename, **kwargs):
-        model = RNNTaggerELMoModel()
+        model = RNNTaggerModelELMoModel()
         model.sess = kwargs.get('sess', tf.Session())
         checkpoint_name = kwargs.get('checkpoint_name', basename)
         checkpoint_name = checkpoint_name or basename
@@ -169,7 +169,7 @@ class RNNTaggerELMoModel(Tagger):
         return all_loss
 
     def __init__(self):
-        super(RNNTaggerELMoModel, self).__init__()
+        super(RNNTaggerModelELMoModel, self).__init__()
         pass
 
     def get_vocab(self, vocab_type='word'):
@@ -232,7 +232,7 @@ class RNNTaggerELMoModel(Tagger):
 
         word_vec = embeddings['word']
         char_vec = embeddings['char']
-        model = RNNTaggerELMoModel()
+        model = RNNTaggerModelELMoModel()
         model.sess = kwargs.get('sess', tf.Session())
 
         model.mxlen = kwargs.get('maxs', 100)
@@ -260,7 +260,7 @@ class RNNTaggerELMoModel(Tagger):
         model.pdrop_value = pdrop
         model.word_vocab = {}
         model.word_vocab = word_vec.vocab
-        model.i2w = RNNTaggerELMoModel.index2word(model.word_vocab)
+        model.i2w = RNNTaggerModelELMoModel.index2word(model.word_vocab)
         model.char_vocab = char_vec.vocab
         seed = np.random.randint(10e8)
 
@@ -281,7 +281,7 @@ class RNNTaggerELMoModel(Tagger):
         Wch = tf.Variable(tf.constant(char_vec.weights, dtype=tf.float32), name="Wch")
         ce0 = tf.scatter_update(Wch, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, char_dsz]))
 
-        word_char = RNNTaggerELMoModel.pool_chars(Wch, ce0, char_dsz, kwargs, model)
+        word_char = RNNTaggerModelELMoModel.pool_chars(Wch, ce0, char_dsz, kwargs, model)
         nlayers = int(kwargs.get('layers', 1))
         if nlayers > 2:
             raise Exception('Expected 1 or 2 layer stacking only!')
@@ -344,8 +344,8 @@ class RNNTaggerELMoModel(Tagger):
 
 
 def create_model(labels, embeddings, **kwargs):
-    return RNNTaggerELMoModel.create(labels, embeddings, **kwargs)
+    return RNNTaggerModelELMoModel.create(labels, embeddings, **kwargs)
 
 
 def load_model(modelname, **kwargs):
-    return RNNTaggerELMoModel.load(modelname, **kwargs)
+    return RNNTaggerModelELMoModel.load(modelname, **kwargs)

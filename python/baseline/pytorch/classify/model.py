@@ -1,18 +1,14 @@
-import torch
-import torch.nn as nn
-import math
-import json
-from baseline.model import Classifier, load_classifier_model, create_classifier_model
+from baseline.model import ClassifierModel, load_classifier_model, create_classifier_model
 from baseline.pytorch.torchy import *
 from baseline.utils import listify
 import torch.backends.cudnn as cudnn
 cudnn.benchmark = True
 
 
-class WordClassifierBase(nn.Module, Classifier):
+class ClassifierModelBase(nn.Module, ClassifierModel):
 
     def __init__(self):
-        super(WordClassifierBase, self).__init__()
+        super(ClassifierModelBase, self).__init__()
 
     @classmethod
     def load(cls, outname, **kwargs):
@@ -24,96 +20,75 @@ class WordClassifierBase(nn.Module, Classifier):
         torch.save(self, outname)
 
     @classmethod
-    def create(cls, embeddings_set, labels, **kwargs):
-        word_embeddings = embeddings_set['word']
-        char_embeddings = embeddings_set.get('char')
-        finetune = kwargs.get('finetune', True)
-        activation_type = kwargs.get('activation', 'relu')
+    def create(cls, embeddings, labels, **kwargs):
 
         model = cls()
+        model.pdrop = kwargs.get('pdrop', 0.5)
+        model.lengths_key = kwargs.get('lengths_key')
+        input_sz = model._init_embed(embeddings)
         model.gpu = not bool(kwargs.get('nogpu', False))
-
-        model.word_dsz = word_embeddings.dsz
-        model.char_dsz = char_embeddings.dsz if char_embeddings is not None else 0
-        model.pdrop = kwargs.get('dropout', 0.5)
         model.labels = labels
-        model.lut = pytorch_embedding(word_embeddings, finetune)
-        model.vocab = {}
-        model.vocab['word'] = word_embeddings.vocab
-
-        if model.char_dsz > 0:
-            model.char_lut = pytorch_embedding(char_embeddings)
-            model.vocab['char'] = char_embeddings.vocab
-            char_filtsz = kwargs.get('cfiltsz', [3])
-            char_hsz = kwargs.get('char_hsz', 30)
-            model._init_pool_chars(char_hsz, char_filtsz, activation_type)
-            input_sz = model.word_dsz + model.char_comp.outsz
-        else:
-            input_sz = model.word_dsz
-
         model.log_softmax = nn.LogSoftmax(dim=1)
-        nc = len(labels)
-
         pool_dim = model._init_pool(input_sz, **kwargs)
         stacked_dim = model._init_stacked(pool_dim, **kwargs)
-        model._init_output(stacked_dim, nc)
+        model._init_output(stacked_dim, len(labels))
         print(model)
         return model
+
+    def cuda(self, device=None):
+        super(ClassifierModelBase, self).cuda(device=device)
+        for emb in self.embeddings.values():
+            emb.cuda(device)
 
     def create_loss(self):
         return nn.NLLLoss()
 
-    def __init__(self):
-        super(WordClassifierBase, self).__init__()
-
-    def _init_pool_chars(self, char_hsz, char_filtsz, activation_type):
-        self.char_comp = ParallelConv(self.char_dsz, char_hsz, char_filtsz, activation_type, self.pdrop)
-
     def make_input(self, batch_dict):
-        x = batch_dict['x']
-        xch = batch_dict.get('xch')
-        y = batch_dict.get('y')
-        lengths = batch_dict.get('lengths')
-        if self.gpu:
-            x = x.cuda()
-            if xch is not None:
-                xch = xch.cuda()
-            if y is not None:
-                y = y.cuda()
+        """Transform a `batch_dict` into something usable in this model
 
-        return x, xch, lengths, y
+        :param batch_dict: (``dict``) A dictionary containing all inputs to the embeddings for this model
+        :param do_dropout: (``bool``) Should we do dropout.  Defaults to False
+        :return:
+        """
+        example_dict = dict({})
+        for key in self.embeddings.keys():
+            example_dict[key] = torch.from_numpy(batch_dict[key])
+            if self.gpu:
+                example_dict[key] = example_dict[key].cuda()
+
+        # Allow us to track a length, which is needed for BLSTMs
+        if self.lengths_key is not None:
+            example_dict['lengths'] = torch.from_numpy(batch_dict[self.lengths_key])
+            if self.gpu:
+                example_dict['lengths'] = example_dict['lengths'].cuda()
+
+        y = batch_dict.get('y')
+        if y is not None:
+            y = torch.from_numpy(y)
+            if self.gpu is not None:
+                y = y.cuda()
+            example_dict['y'] = y
+
+        return example_dict
 
     def forward(self, input):
         # BxTxC
-        x = input[0]
-        embeddings = self.lut(x)
-        if self.char_dsz > 0:
-            xch = input[1]
-            B, T, W = xch.shape
-            embeddings_char = self._char_encoding(xch.view(-1, W)).view(B, T, self.char_comp.outsz)
-            embeddings = torch.cat([embeddings, embeddings_char], 2)
-        lengths = input[2]
-        pooled = self._pool(embeddings, lengths)
+        embeddings = self._embed(input)
+        pooled = self._pool(embeddings, input['lengths'])
         stacked = self._stacked(pooled)
         return self.output(stacked)
 
+    def _embed(self, input):
+        all_embeddings = []
+        for k, embedding in self.embeddings.items():
+            all_embeddings += [embedding.encode(input[k])]
+        return torch.cat(all_embeddings, 2)
+
     def classify(self, batch_dict):
-        x = batch_dict['x']
-        xch = batch_dict.get('xch')
-        lengths = batch_dict.get('lengths')
-        if type(x) == np.ndarray:
-            x = torch.from_numpy(x)
-        if xch is not None and type(xch) == np.ndarray:
-            xch = torch.from_numpy(xch)
-        if lengths is not None and type(lengths) == np.ndarray:
-            lengths = torch.from_numpy(lengths)
+        examples = self.make_input(batch_dict)
 
         with torch.no_grad():
-            if self.gpu:
-                x = x.cuda()
-                if xch is not None:
-                    xch = xch.cuda()
-            probs = self((x, xch, lengths)).exp()
+            probs = self(examples).exp()
             probs.div_(torch.sum(probs))
             results = []
             batchsz = probs.size(0)
@@ -125,9 +100,6 @@ class WordClassifierBase(nn.Module, Classifier):
     def get_labels(self):
         return self.labels
 
-    def get_vocab(self, name='word'):
-        return self.vocab.get(name)
-
     def _pool(self, embeddings, lengths):
         pass
 
@@ -135,6 +107,14 @@ class WordClassifierBase(nn.Module, Classifier):
         if self.stacked is None:
             return pooled
         return self.stacked(pooled)
+
+    def _init_embed(self, embeddings, **kwargs):
+        self.embeddings = EmbeddingsContainer()
+        input_sz = 0
+        for k, embedding in embeddings.items():
+            self.embeddings[k] = embedding
+            input_sz += embedding.get_dsz()
+        return input_sz
 
     def _init_stacked(self, input_dim, **kwargs):
         hszs = listify(kwargs.get('hsz', []))
@@ -162,18 +142,8 @@ class WordClassifierBase(nn.Module, Classifier):
     def _init_pool(self, dsz, **kwargs):
         pass
 
-    def _char_encoding(self, xch):
 
-        # For starters we need to perform embeddings for each character
-        # (TxB) x W -> (TxB) x W x D
-        char_embeds = self.char_lut(xch)
-        # (TxB) x D x W
-        char_vecs = char_embeds.transpose(1, 2).contiguous()
-        mots = self.char_comp(char_vecs)
-        return mots
-
-
-class ConvModel(WordClassifierBase):
+class ConvModel(ClassifierModelBase):
 
     def __init__(self):
         super(ConvModel, self).__init__()
@@ -189,20 +159,19 @@ class ConvModel(WordClassifierBase):
         return self.parallel_conv(embeddings)
 
 
-class LSTMModel(WordClassifierBase):
+class LSTMModel(ClassifierModelBase):
 
     def __init__(self):
         super(LSTMModel, self).__init__()
 
     def _init_pool(self, dsz, **kwargs):
-        unif = kwargs.get('unif')
+        unif = kwargs.get('unif', 0.1)
         hsz = kwargs.get('rnnsz', kwargs.get('hsz', 100))
         if type(hsz) is list:
             hsz = hsz[0]
-        self.lstm = nn.LSTM(dsz, hsz, 1, bias=True, dropout=self.pdrop)
-        if unif is not None:
-            for weight in self.lstm.parameters():
-                weight.data.uniform_(-unif, unif)
+        weight_init = kwargs.get('weight_init', 'uniform')
+        rnntype = kwargs.get('rnn_type', kwargs.get('rnntype', 'lstm'))
+        self.lstm = pytorch_lstm(dsz, hsz, rnntype, 1, self.pdrop, unif, batch_first=False, initializer=weight_init)
         return hsz
 
     def _pool(self, embeddings, lengths):
@@ -214,31 +183,15 @@ class LSTMModel(WordClassifierBase):
         return hidden
 
     def make_input(self, batch_dict):
-
-        x = batch_dict['x']
-        xch = batch_dict.get('xch')
-        y = batch_dict.get('y')
-        lengths = batch_dict['lengths']
+        inputs = super(LSTMModel, self).make_input(batch_dict)
+        lengths = inputs['lengths']
         lengths, perm_idx = lengths.sort(0, descending=True)
-        x = x[perm_idx]
-        if xch is not None:
-            xch = xch[perm_idx]
-        if y is not None:
-            y = y[perm_idx]
-        if self.gpu:
-            x = x.cuda()
-            if xch is not None:
-                xch = xch.cuda()
-            if y is not None:
-                y = y.cuda()
-
-        if y is not None:
-            y = y.contiguous()
-
-        return x, xch, lengths, y
+        for k, value in inputs.items():
+            inputs[k] = value[perm_idx]
+        return inputs
 
 
-class NBowBase(WordClassifierBase):
+class NBowBase(ClassifierModelBase):
 
     def _init__(self):
         super(NBowBase, self)._init__()
@@ -269,18 +222,66 @@ class NBowMaxModel(NBowBase):
         return dmax
 
 
+class CompositePoolingModel(ClassifierModelBase):
+    """Fulfills pooling contract by aggregating pooling from a set of sub-models and concatenates each
+    """
+    def __init__(self):
+        """
+        Construct a composite pooling model
+        """
+        super(CompositePoolingModel, self).__init__()
+        self.SubModels = None
+
+    def _init_pool(self, dsz, **kwargs):
+        self.SubModels = [eval(model) for model in kwargs.get('sub')]
+        pool_sz = 0
+        for SubClass in self.SubModels:
+            pool_sz += SubClass._init_pool(self, dsz, **kwargs)
+        return pool_sz
+
+    def _pool(self, embeddings, lengths):
+        """Cycle each sub-model and call its pool method, then concatenate along final dimension
+
+        :param word_embeddings: The input graph
+        :param dsz: The number of input units
+        :param init: The initializer operation
+        :param kwargs:
+        :return: A pooled composite output
+        """
+
+        pooling = []
+        for SubClass in self.SubModels:
+            pooling += [SubClass._pool(self, embeddings, lengths)]
+        return torch.cat(pooling, -1)
+
+    def make_input(self, batch_dict):
+        """Because the sub-model could contain an LSTM, make sure to sort lengths descending
+
+        :param batch_dict:
+        :return:
+        """
+        inputs = super(CompositePoolingModel, self).make_input(batch_dict)
+        lengths = inputs['lengths']
+        lengths, perm_idx = lengths.sort(0, descending=True)
+        for k, value in inputs.items():
+            inputs[k] = value[perm_idx]
+        return inputs
+
+
 # These define the possible models for this backend
 BASELINE_CLASSIFICATION_MODELS = {
     'default': ConvModel.create,
     'lstm': LSTMModel.create,
     'nbow': NBowModel.create,
-    'nbowmax': NBowMaxModel.create
+    'nbowmax': NBowMaxModel.create,
+    'composite': CompositePoolingModel.create
 }
 BASELINE_CLASSIFICATION_LOADERS = {
     'default': ConvModel.load,
     'lstm': LSTMModel.load,
     'nbow': NBowModel.load,
-    'nbowmax': NBowMaxModel.create
+    'nbowmax': NBowMaxModel.load,
+    'composite': CompositePoolingModel.load
 }
 
 

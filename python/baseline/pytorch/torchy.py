@@ -2,7 +2,6 @@ import torch
 import numpy as np
 from baseline.utils import lookup_sentence, get_version
 from baseline.utils import crf_mask as crf_m
-from torch.autograd import Variable
 import torch.autograd
 import torch.nn as nn
 import torch.nn.functional as F
@@ -171,8 +170,7 @@ def pytorch_rnn_cell(insz, hsz, rnntype, nlayers, dropout):
 
 
 def pytorch_embedding(x2vec, finetune=True):
-    dsz = x2vec.dsz
-    lut = nn.Embedding(x2vec.vsz + 1, dsz, padding_idx=0)
+    lut = nn.Embedding(x2vec.vsz, x2vec.dsz, padding_idx=0)
     del lut.weight
     lut.weight = nn.Parameter(torch.FloatTensor(x2vec.weights),
                               requires_grad=finetune)
@@ -254,7 +252,7 @@ def pytorch_rnn(insz, hsz, rnntype, nlayers, dropout):
     if rnntype == 'gru':
         rnn = torch.nn.GRU(insz, hsz, nlayers, dropout=dropout)
     elif rnntype == 'blstm':
-        rnn = torch.nn.LSTM(insz, hsz, nlayers, dropout=dropout, bidirectional=True)
+        rnn = torch.nn.LSTM(insz, hsz//2, nlayers, dropout=dropout, bidirectional=True)
         rnn = BiRNNWrapper(rnn, nlayers)
     else:
         rnn = torch.nn.LSTM(insz, hsz, nlayers, dropout=dropout)
@@ -296,8 +294,7 @@ class ParallelConv(nn.Module):
 
 class Highway(nn.Module):
 
-    def __init__(self,
-                 input_size):
+    def __init__(self, input_size):
         super(Highway, self).__init__()
         self.proj = nn.Linear(input_size, input_size)
         self.transform = nn.Linear(input_size, input_size)
@@ -308,6 +305,17 @@ class Highway(nn.Module):
         proj_gate = nn.functional.sigmoid(self.transform(input))
         gated = (proj_gate * proj_result) + ((1 - proj_gate) * input)
         return gated
+
+
+class SkipConnection(nn.Module):
+
+    def __init__(self, input_size, activation='relu'):
+        super(SkipConnection, self).__init__()
+        self.proj = nn.Linear(input_size, input_size)
+        self.activation_fn = pytorch_activation(activation)
+
+    def forward(self, input):
+        return self.activation_fn(self.proj(input)) + input
 
 
 class LayerNorm(nn.Module):
@@ -340,22 +348,22 @@ def pytorch_lstm(insz, hsz, rnntype, nlayers, dropout, unif=0, batch_first=False
     if nlayers == 1:
         dropout = 0.0
     ndir = 2 if rnntype.startswith('b') else 1
-    #print('ndir: %d, rnntype: %s, nlayers: %d, dropout: %.2f, unif: %.2f' % (ndir, rnntype, nlayers, dropout, unif))
-    rnn = torch.nn.LSTM(insz, hsz, nlayers, dropout=dropout, bidirectional=True if ndir > 1 else False, batch_first=batch_first)#, bias=False)
-    if unif > 0:
-        for weight in rnn.parameters():
-            weight.data.uniform_(-unif, unif)
-    elif initializer == "ortho":
+    layer_hsz = hsz // ndir
+    rnn = torch.nn.LSTM(insz, layer_hsz, nlayers, dropout=dropout, bidirectional=True if ndir > 1 else False, batch_first=batch_first)#, bias=False)
+    if initializer == "ortho":
         nn.init.orthogonal(rnn.weight_hh_l0)
         nn.init.orthogonal(rnn.weight_ih_l0)
     elif initializer == "he" or initializer == "kaiming":
         nn.init.kaiming_uniform(rnn.weight_hh_l0)
         nn.init.kaiming_uniform(rnn.weight_ih_l0)
+    elif unif > 0:
+        for weight in rnn.parameters():
+            weight.data.uniform_(-unif, unif)
     else:
         nn.init.xavier_uniform_(rnn.weight_hh_l0)
         nn.init.xavier_uniform_(rnn.weight_ih_l0)
 
-    return rnn, ndir*hsz
+    return rnn
 
 
 class LSTMEncoder(nn.Module):
@@ -363,7 +371,7 @@ class LSTMEncoder(nn.Module):
     def __init__(self, insz, hsz, rnntype, nlayers, dropout, residual=False, unif=0, initializer=None):
         super(LSTMEncoder, self).__init__()
         self.residual = residual
-        self.rnn, self.outsz = pytorch_lstm(insz, hsz, rnntype, nlayers, dropout, unif, False, initializer)
+        self.rnn = pytorch_lstm(insz, hsz, rnntype, nlayers, dropout, unif, False, initializer)
 
     def forward(self, tbc, lengths):
 
@@ -505,6 +513,7 @@ class NoamOpt(object):
 
 def pytorch_prepare_optimizer(model, **kwargs):
 
+    weight_decay = kwargs.get('weight_decay', 0)
     mom = kwargs.get('mom', 0.9)
     optim = kwargs.get('optim', 'sgd')
     eta = kwargs.get('eta', kwargs.get('lr', 0.01))
@@ -512,20 +521,20 @@ def pytorch_prepare_optimizer(model, **kwargs):
     decay_type = kwargs.get('decay_type', None)
 
     if optim == 'adadelta':
-        optimizer = torch.optim.Adadelta(model.parameters(), lr=eta)
+        optimizer = torch.optim.Adadelta(model.parameters(), lr=eta, weight_decay=weight_decay)
     elif optim == 'adam':
-        optimizer = torch.optim.Adam(model.parameters(), lr=eta)
+        optimizer = torch.optim.Adam(model.parameters(), lr=eta, weight_decay=weight_decay)
     elif optim == 'rmsprop':
-        optimizer = torch.optim.RMSprop(model.parameters(), lr=eta)
+        optimizer = torch.optim.RMSprop(model.parameters(), lr=eta, weight_decay=weight_decay)
     elif optim == 'asgd':
-        optimizer = torch.optim.ASGD(model.parameters(), lr=eta)
+        optimizer = torch.optim.ASGD(model.parameters(), lr=eta, weight_decay=weight_decay)
     elif optim == 'noam':
         print('Using NoamOpt, lr will be ignored')
         d_model = kwargs['d_model']
         warmup_steps = kwargs.get('warmup_steps', 4000)
         optimizer = NoamOpt(d_model, model.parameters(), warmup_steps)
     else:
-        optimizer = torch.optim.SGD(model.parameters(), lr=eta, momentum=mom)
+        optimizer = torch.optim.SGD(model.parameters(), lr=eta, momentum=mom, weight_decay=weight_decay)
 
     scheduler = None
     if decay_rate > 0.0 and decay_type is not None:
@@ -584,46 +593,32 @@ def prepare_src(model, tokens, mxlen=100):
     return torch.autograd.Variable(x.view(-1, 1))
 
 
-#def beam_decode_tokens(model, src_tokens, K, idx2word, mxlen=50):
-#    src = prepare_src(model, src_tokens, mxlen)
-#    paths, scores = beam_decode(model, src, K)
-#    path_str = []
-#    for j, path in enumerate(paths):
-#        path_str.append([idx2word[i] for i in path])
-#    return path_str, scores
-    #return beam_decode(model, src, K)
-
-
-def show_examples_pytorch(model, es, rlut1, rlut2, embed2, mxlen, sample, prob_clip, max_examples, reverse):
+def show_examples_pytorch(model, es, rlut1, rlut2, vocab, mxlen, sample, prob_clip, max_examples, reverse):
     si = np.random.randint(0, len(es))
 
     batch_dict = es[si]
 
-    src_array = batch_dict['src']
-    tgt_array = batch_dict['dst']
-    src_len = batch_dict['src_len']
+    src_len_key = model.src_lengths_key
+    src_field = src_len_key.split('_')[0]
 
     if max_examples > 0:
-        max_examples = min(max_examples, src_array.size(0))
-        src_array = src_array[0:max_examples]
-        tgt_array = tgt_array[0:max_examples]
-        src_len = src_len[0:max_examples]
+        max_examples = min(max_examples, batch_dict[src_field].shape[0])
 
-    # TODO: fix this, check for GPU first
-    src_array = src_array.cuda()
-    
-    for src_len_i, src_i, tgt_i in zip(src_len, src_array, tgt_array):
+    for i in range(max_examples):
+
+        example = {}
+        # Batch first, so this gets a single example at once
+        for k, value in batch_dict.items():
+            v = value[i]
+            example[k] = v.reshape((1,) + v.shape)
 
         print('========================================================================')
-        src_len_i = torch.ones(1).fill_(src_len_i).type_as(src_len)
-
-        sent = lookup_sentence(rlut1, src_i.cpu().numpy(), reverse=reverse)
+        sent = lookup_sentence(rlut1, example[src_field].squeeze(), reverse=reverse)
         print('[OP] %s' % sent)
-        sent = lookup_sentence(rlut2, tgt_i.cpu().numpy())
+        sent = lookup_sentence(rlut2, example['tgt'].squeeze())
         print('[Actual] %s' % sent)
-        src_dict = {'src': torch.autograd.Variable(src_i.view(1, -1), requires_grad=False),
-                    'src_len': torch.autograd.Variable(src_len_i, requires_grad=False)}
-        dst_i = model.run(src_dict)[0][0]
+
+        dst_i = model.run(example)[0][0]
         dst_i = [idx.item() for idx in dst_i]
         sent = lookup_sentence(rlut2, dst_i)
         print('Guess: %s' % sent)
@@ -657,230 +652,44 @@ def vec_log_sum_exp(vec, dim):
     return max_scores + torch.log(torch.sum(torch.exp(vec - max_scores_broadcast), dim, keepdim=True))
 
 
-def crf_mask(vocab, span_type, s_idx, e_idx, pad_idx=None):
-    """Create a CRF mask.
+class EmbeddingsContainer(nn.Module):
+    def __init__(self):
+        super(EmbeddingsContainer, self).__init__()
 
-    Returns a Tensor with valid transitions as a 0 and invalid as a 1 for easy use with `masked_fill`
-    """
-    np_mask = crf_m(vocab, span_type, s_idx, e_idx, pad_idx=pad_idx)
-    return torch.from_numpy(np_mask) == 0
+    def __getitem__(self, key):
+        return self._modules[key]
 
+    def __setitem__(self, key, module):
+        self.add_module(key, module)
 
-class CRF(nn.Module):
-    def __init__(self, n_tags, idxs=None, batch_first=True, vocab=None, span_type=None, pad_idx=None):
-        """Initialize the object.
-        :param n_tags: int The number of tags in your output (emission size)
-        :param idxs: Tuple(int. int) The index of the start and stop symbol
-            in emissions.
-        :param vocab: The label vocab of the form vocab[string]: int
-        :param span_type: The tagging span_type used. `IOB`, `IOB2`, or `IOBES`
-        :param pds_idx: The index of the pad symbol in the vocab
-        Note:
-            if idxs is none then the CRF adds these symbols to the emission
-            vectors and n_tags is assumed to be the number of output tags.
-            if idxs is not none then the first element is assumed to be the
-            start index and the second idx is assumed to be the end index. In
-            this case n_tags is assumed to include the start and end symbols.
-            if vocab is not None then a transition mask will be created that
-            limits illegal transitions.
-        """
-        super(CRF, self).__init__()
+    def __delitem__(self, key):
+        del self._modules[key]
 
-        if idxs is None:
-            self.start_idx = n_tags
-            self.end_idx = n_tags + 1
-            self.n_tags = n_tags + 2
-            self.add_ends = True
-        else:
-            self.start_idx, self.end_idx = idxs
-            self.n_tags = n_tags
-            self.add_ends = False
-        self.span_type = None
-        if vocab is not None:
-            assert span_type is not None, "To mask transitions you need to provide a tagging span_type, choices are `IOB`, `BIO` (or `IOB2`), and `IOBES`"
-            # If there weren't start and end idx provided we need to add them.
-            if idxs is None:
-                vocab = vocab.copy()
-                vocab['<GO>'] = self.start_idx
-                vocab['<EOS>'] = self.end_idx
-            self.span_type = span_type
-            self.register_buffer('mask', crf_mask(vocab, span_type, self.start_idx, self.end_idx, pad_idx).unsqueeze(0))
-        else:
-            self.mask = None
+    def __len__(self):
+        return len(self._modules)
 
-        self.transitions_p = nn.Parameter(torch.Tensor(1, self.n_tags, self.n_tags).zero_())
-        self.batch_first = batch_first
+    def __iter__(self):
+        return iter(self._modules)
 
-    def extra_repr(self):
-        str_ = "n_tags=%d, batch_first=%s" % (self.n_tags, self.batch_first)
-        if self.mask is not None:
-            str_ += ", masked=True, span_type=%s" % self.span_type
-        return str_
+    def __contains__(self, key):
+        return key in self._modules
 
-    @staticmethod
-    def _prep_input(input_):
-        ends = torch.Tensor(input_.size()[0], input_.size()[1], 2).fill_(-1e4).to(input_.device)
-        return torch.cat([input_, ends], dim=2)
+    def clear(self):
+        self._modules.clear()
 
-    @property
-    def transitions(self):
-        if self.mask is not None:
-            return self.transitions_p.masked_fill(self.mask, -1e4)
-        return self.transitions_p
+    def pop(self, key):
+        v = self[key]
+        del self[key]
+        return v
 
-    def neg_log_loss(self, unary, tags, lengths):
-        """Neg Log Loss with a Batched CRF.
+    def keys(self):
+        return self._modules.keys()
 
-        :param unary: torch.FloatTensor: [T, B, N] or [B, T, N]
-        :param tags: torch.LongTensor: [T, B] or [B, T]
-        :param lengths: torch.LongTensor: [B]
+    def items(self):
+        return self._modules.items()
 
-        :return: torch.FloatTensor: [B]
-        """
-        # Convert from [B, T, N] -> [T, B, N]
-        if self.batch_first:
-            unary = unary.transpose(0, 1)
-            tags = tags.transpose(0, 1)
-        if self.add_ends:
-            unary = CRF._prep_input(unary)
-        _, batch_size, _ = unary.size()
-        min_lengths = torch.min(lengths)
-        fwd_score = self.forward(unary, lengths, batch_size, min_lengths)
-        gold_score = self.score_sentence(unary, tags, lengths, batch_size, min_lengths)
-        return fwd_score - gold_score
+    def values(self):
+        return self._modules.values()
 
-    def score_sentence(self, unary, tags, lengths, batch_size, min_length):
-        """Score a batch of sentences.
-
-        :param unary: torch.FloatTensor: [T, B, N]
-        :param tags: torch.LongTensor: [T, B]
-        :param lengths: torch.LongTensor: [B]
-        :param batzh_size: int: B
-        :param min_length: torch.LongTensor: []
-
-        :return: torch.FloatTensor: [B]
-        """
-        trans = self.transitions.squeeze(0)  # [N, N]
-        batch_range = torch.arange(batch_size, dtype=torch.int64)  # [B]
-        start = torch.full((1, batch_size), self.start_idx, dtype=tags.dtype, device=tags.device)  # [1, B]
-        tags = torch.cat([start, tags], 0)  # [T, B]
-        scores = torch.zeros(batch_size, requires_grad=True).to(unary.device)  # [B]
-        for i, unary_t in enumerate(unary):
-            new_scores = (
-                trans[tags[i + 1], tags[i]] +
-                unary_t[batch_range, tags[i + 1]]
-            )
-            if i >= min_length:
-                # If we are farther along `T` than your length don't add to your score
-                mask = (i >= lengths)
-                scores = scores + new_scores.masked_fill(mask, 0)
-            else:
-                scores = scores + new_scores
-        # Add stop tag
-        scores = scores + trans[self.end_idx, tags[lengths, batch_range]]
-        return scores
-
-    def forward(self, unary, lengths, batch_size, min_length):
-        """For CRF forward on a batch.
-
-        :param unary: torch.FloatTensor: [T, B, N]
-        :param lengths: torch.LongTensor: [B]
-        :param batzh_size: int: B
-        :param min_length: torch.LongTensor: []
-
-        :return: torch.FloatTensor: [B]
-        """
-        # alphas: [B, 1, N]
-        alphas = torch.Tensor(batch_size, 1, self.n_tags).fill_(-1e4).to(unary.device)
-        alphas[:, 0, self.start_idx] = 0.
-        alphas.requires_grad = True
-
-        trans = self.transitions  # [1, N, N]
-
-        for i, unary_t in enumerate(unary):
-            # unary_t: [B, N]
-            unary_t = unary_t.unsqueeze(2)  # [B, N, 1]
-            # Broadcast alphas along the rows of trans
-            # Broadcast trans along the batch of alphas
-            # [B, 1, N] + [1, N, N] -> [B, N, N]
-            # Broadcast unary_t along the cols of result
-            # [B, N, N] + [B, N, 1] -> [B, N, N]
-            scores = alphas + trans + unary_t
-            new_alphas = vec_log_sum_exp(scores, 2).transpose(1, 2)
-            # If we haven't reached your length zero out old alpha and take new one.
-            # If we are past your length, zero out new_alpha and keep old one.
-
-            if i >= min_length:
-                mask = (i < lengths).view(-1, 1, 1)
-                alphas = alphas.masked_fill(mask, 0) + new_alphas.masked_fill(mask == 0, 0)
-            else:
-                alphas = new_alphas
-
-        terminal_vars = alphas + trans[:, self.end_idx]
-        alphas = vec_log_sum_exp(terminal_vars, 2)
-        return alphas.squeeze()
-
-    def decode(self, unary, lengths):
-        """Do Viterbi decode on a batch.
-
-        :param unary: torch.FloatTensor: [T, B, N] or [B, T, N]
-        :param lengths: torch.LongTensor: [B]
-
-        :return: List[torch.LongTensor]: [B] the paths
-        :return: torch.FloatTensor: [B] the path score
-        """
-        if self.batch_first:
-            unary = unary.transpose(0, 1)
-        if self.add_ends:
-            unary = CRF._prep_input(unary)
-        seq_len, batch_size, _ = unary.size()
-        min_length = torch.min(lengths)
-        batch_range = torch.arange(batch_size, dtype=torch.int64)
-        backpointers = []
-
-        # alphas: [B, 1, N]
-        alphas = torch.Tensor(batch_size, 1, self.n_tags).fill_(-1e4).to(unary.device)
-        alphas[:, 0, self.start_idx] = 0
-        alphas.requires_grad = True
-
-        trans = self.transitions  # [1, N, N]
-
-        for i, unary_t in enumerate(unary):
-            # Broadcast alphas along the rows of trans and trans along the batch of alphas
-            next_tag_var = alphas + trans  # [B, 1, N] + [1, N, N] -> [B, N, N]
-            viterbi, best_tag_ids = torch.max(next_tag_var, 2) # [B, N]
-            backpointers.append(best_tag_ids.data)
-            new_alphas = viterbi + unary_t  # [B, N] + [B, N]
-            new_alphas.unsqueeze_(1)  # Prep for next round
-            # If we haven't reached your length zero out old alpha and take new one.
-            # If we are past your length, zero out new_alpha and keep old one.
-            if i >= min_length:
-                mask = (i < lengths).view(-1, 1, 1)
-                alphas = alphas.masked_fill(mask, 0) + new_alphas.masked_fill(mask == 0, 0)
-            else:
-                alphas = new_alphas
-
-        # Add end tag
-        terminal_var = alphas.squeeze(1) + trans[:, self.end_idx]
-        _, best_tag_id = torch.max(terminal_var, 1)
-        path_score = terminal_var[batch_range, best_tag_id]  # Select best_tag from each batch
-
-        best_path = [best_tag_id]
-        # Flip lengths
-        rev_len = seq_len - lengths - 1
-        for i, backpointer_t in enumerate(reversed(backpointers)):
-            # Get new best tag candidate
-            new_best_tag_id = backpointer_t[batch_range, best_tag_id]
-            # We are going backwards now, if you passed your flipped length then you aren't in your real results yet
-            mask = (i > rev_len)
-            best_tag_id = best_tag_id.masked_fill(mask, 0) + new_best_tag_id.masked_fill(mask == 0, 0)
-            best_path.append(best_tag_id)
-        _ = best_path.pop()
-        best_path.reverse()
-        best_path = torch.stack(best_path)
-        # Return list of paths
-        paths = []
-        best_path = best_path.transpose(0, 1)
-        for path, length in zip(best_path, lengths):
-            paths.append(path[:length])
-        return paths, path_score.squeeze(0)
+    def update(self, modules):
+        raise Exception('Not implemented')

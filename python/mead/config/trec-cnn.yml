@@ -10,17 +10,29 @@ loader:
 unif: 0.25
 model:
     model_type: default
-    filtsz: [3]
+    filtsz: [3,4,5]
     dropout: 0.5
-    cmotsz: 100 
+    cmotsz: 100
 
-word_embeddings:
-    label: w2v-gn
+features:
+  - name: word
+    vectorizer:
+      type: token1d
+    embeddings:
+      label: glove-42B
+      transform: baseline.lowercase
+
+  - name: word2
+    vectorizer:
+      type: token1d
+      transform: baseline.lowercase
+    embeddings:
+      label: w2v-gn
 
 train:
     epochs: 30
     optim: adadelta
     eta: 1.0
     model_base: ./models/trec
-    early_stopping_metric: macro_f1
+    early_stopping_metric: acc
     patience: 25

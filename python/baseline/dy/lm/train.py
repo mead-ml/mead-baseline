@@ -9,15 +9,11 @@ from baseline.dy.dynety import *
 
 
 class LanguageModelTrainerDynet(Trainer):
-    def __init__(
-            self,
-            model,
-            **kwargs
-    ):
+    def __init__(self, model, **kwargs):
         super(LanguageModelTrainerDynet, self).__init__()
         self.model = model
         self.optimizer = optimizer(model, **kwargs)
-        self.decay = lr_decay(**kwargs)
+        self.decay = lr_decay(**kwargs) if kwargs.get('decay_type') is not None else None
         self.global_step = 0
         self.valid_epochs = 0
         self.log = logging.getLogger('baseline.timing')
@@ -37,17 +33,19 @@ class LanguageModelTrainerDynet(Trainer):
         start = time.time()
         for batch_dict in loader:
             dy.renew_cg()
-            self.optimizer.learning_rate = self.decay(self.global_step)
-            input_, labels = self.model.make_input(batch_dict)
-            output, initial_state = self.model.forward(input_, initial_state)
-            loss = self._loss(output, labels)
+            if self.decay is not None:
+                self.optimizer.learning_rate = self.decay(self.global_step)
+            inputs = self.model.make_input(batch_dict)
+            y = inputs.pop('y')
+            output, initial_state = self.model.forward(inputs, initial_state)
+            loss = self._loss(output, y)
             loss_val = loss.npvalue().item()
             total_loss += loss_val
             initial_state = [x.npvalue() for x in initial_state]
             loss.backward()
             self.optimizer.update()
 
-            iters += len(labels)
+            iters += len(y)
             step += 1
             self.global_step += 1
 
@@ -73,14 +71,14 @@ class LanguageModelTrainerDynet(Trainer):
         start = time.time()
         for batch_dict in loader:
             dy.renew_cg()
-            input_, labels = self.model.make_input(batch_dict)
-            output, initial_state = self.model.forward(input_, initial_state, train=False)
-            loss = self._loss(output, labels)
+            inputs = self.model.make_input(batch_dict)
+            y = inputs.pop('y')
+            output, initial_state = self.model.forward(inputs, initial_state, train=False)
+            loss = self._loss(output, y)
             loss_val = loss.npvalue().item()
             total_loss += loss_val
             initial_state = [x.npvalue() for x in initial_state]
-
-            iters += len(labels)
+            iters += len(y)
 
         if phase == 'Valid':
             self.valid_epochs += 1
@@ -96,16 +94,12 @@ class LanguageModelTrainerDynet(Trainer):
         return metrics
 
 
-def fit(model,
-        ts, vs, es=None,
-        epochs=5,
-        do_early_stopping=True, early_stopping_metric='avg_loss',
-        **kwargs):
+def fit(model, ts, vs, es=None, epochs=5, do_early_stopping=True, early_stopping_metric='avg_loss', **kwargs):
 
     patience = int(kwargs.get('patience', epochs))
     after_train_fn = kwargs.get('after_train_fn', None)
 
-    model_file = get_model_file(kwargs, 'lm', 'dy')
+    model_file = get_model_file('lm', 'dy', kwargs.get('basedir'))
 
     trainer = create_trainer(LanguageModelTrainerDynet, model, **kwargs)
 

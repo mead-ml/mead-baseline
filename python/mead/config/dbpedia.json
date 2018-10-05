@@ -1,6 +1,19 @@
 {
+    "basedir": "dbpedia",
     "task": "classify",
     "batchsz": 1024,
+    "features": [
+	{
+	    "name": "word",
+	    "vectorizer": {
+		"type": "token1d",
+		"transform": "baseline.lowercase"
+	    },
+	    "embeddings": {
+		"label": "w2v-gn"
+	    }
+	}
+    ],
     "preproc": {
 	"mxlen": 100,
 	"clean": true
@@ -25,7 +38,6 @@
 	"epochs": 80,
 	"optim": "sgd",
 	"eta": 0.02,
-	"model_base": "./models/dbpedia",
 	"early_stopping_metric": "acc",
         "verbose": true
     }

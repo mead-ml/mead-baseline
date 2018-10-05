@@ -1,12 +1,10 @@
 import os
 import json
 import hashlib
-import zipfile
 import argparse
 from copy import deepcopy
 from collections import OrderedDict
 from baseline.utils import export, str2bool, read_config_file
-from mead.mime_type import mime_type
 
 __all__ = []
 exporter = export(__all__)

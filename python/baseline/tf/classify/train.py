@@ -5,7 +5,7 @@ from baseline.progress import create_progress_bar
 from baseline.utils import listify, get_model_file
 from baseline.tf.tfy import optimizer, _add_ema
 from baseline.train import EpochReportingTrainer, create_trainer
-from baseline.utils import zip_model, verbose_output
+from baseline.utils import verbose_output
 
 class ClassifyTrainerTf(EpochReportingTrainer):
 
@@ -107,7 +107,7 @@ def fit(model, ts, vs, es=None, **kwargs):
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
     verbose = kwargs.get('verbose', {'console': kwargs.get('verbose_console', False), 'file': kwargs.get('verbose_file', None)})
     epochs = int(kwargs.get('epochs', 20))
-    model_file = get_model_file(kwargs, 'classify', 'tf')
+    model_file = get_model_file('classify', 'tf', kwargs.get('basedir'))
     ema = True if kwargs.get('ema_decay') is not None else False
 
     if do_early_stopping:
@@ -154,5 +154,3 @@ def fit(model, ts, vs, es=None, **kwargs):
         print('Reloading best checkpoint')
         trainer.recover_last_checkpoint()
         trainer.test(es, reporting_fns, phase='Test', verbose=verbose)
-    if kwargs.get("model_zip", False):
-        zip_model(model_file)

@@ -6,11 +6,13 @@ import os
 from tensorflow.python.framework.errors_impl import NotFoundError
 import mead.utils
 import mead.exporters
+from baseline.tf.embeddings import *
 from mead.tf.signatures import SignatureInput, SignatureOutput
 from mead.tf.preprocessor import PreprocessorCreator
 from baseline.utils import export
 from baseline.tf.tfy import get_vocab_file_suffixes
 FIELD_NAME = 'text/tokens'
+VOCAB_NAME_TEMPLATE = "vocabs-{type}-{pid}.json"
 
 __all__ = []
 
@@ -36,13 +38,16 @@ class TensorFlowExporter(mead.exporters.Exporter):
         except NotFoundError:
             saver.restore(sess, basename + ".model")
 
-    def run(self, model_file, embeddings, output_dir, model_version, use_preproc):
-        embeddings_set = mead.utils.read_config_file(embeddings)
-        embeddings_set = mead.utils.index_by_label(embeddings_set)
+    def run(self, model_file, embeddings_set, feature_descs, output_dir, model_version, use_preproc):
+        """
+        :embeddings_set an object of all embeddings. read from the embeddings json config.
+        :feature_descs an object describing the features. typically each key will be a
+            dict with keys (type, dsz, vsz)
+        """
         with tf.Graph().as_default():
             config_proto = tf.ConfigProto(allow_soft_placement=True)
             with tf.Session(config=config_proto) as sess:
-                sig_input, sig_output, sig_name = self._run(sess, model_file, embeddings_set, use_preproc=use_preproc)
+                sig_input, sig_output, sig_name = self._run(sess, model_file, embeddings_set, feature_descs, use_preproc=use_preproc)
                 
                 output_path = os.path.join(tf.compat.as_bytes(output_dir),
                                    tf.compat.as_bytes(str(model_version)))
@@ -53,12 +58,10 @@ class TensorFlowExporter(mead.exporters.Exporter):
                 print('Successfully exported model to %s' % output_dir)
 
     @staticmethod
-    def read_vocab(basename, ty):
-        if ty is None:
-            vocab_file = basename
-            ty = 'word'
-        else:
-            vocab_file = "{}-{}.vocab".format(basename, ty)
+    def read_vocab(vocab_file, ty):
+        """
+        reads a vocabulary stored in json format.
+        """
         print('Reading {}'.format(vocab_file))
         with open(vocab_file, 'r') as f:
             vocab = json.load(f)
@@ -96,65 +99,82 @@ class TensorFlowExporter(mead.exporters.Exporter):
         tf_example = tf.parse_example(serialized_tf_example, feature_configs)
         return serialized_tf_example, tf_example
 
-    def _create_vocabs(self, model_file):
+    def _create_vocabs(self, model_file, feature_names):
         """
         :model_file the path-like object to the model and model name.
         :vocab_suffixes the list of vocab types. e.g. 'word', 'char', 'ner'.
         """
         vocabs = {}
         indices = {}
-        if os.path.exists(model_file + '.vocab'):
-            indices['word'], vocabs['word'] = TensorFlowExporter.read_vocab(model_file + '.vocab', ty=None)
-        else:
-            vocab_suffixes = get_vocab_file_suffixes(model_file)
-            for suffix in vocab_suffixes:
-                indices[suffix], vocabs[suffix] = TensorFlowExporter.read_vocab(model_file, suffix)
+        
+        _, _, pid = self.destructure_model_name(model_file)
+
+        for feat in feature_names:
+            f = VOCAB_NAME_TEMPLATE.format(type=feat, pid=pid)
+            if os.path.exists(f):
+                indices[feat], vocabs[feat] = TensorFlowExporter.read_vocab(f, ty=feat)
 
         return indices, vocabs
+    
+    def destructure_model_name(self, model_file):
+        """
+        to get the pid, deconstruct the name of the file
+
+        returns task, backend, pid tuple.
+        """
+        s = model_file.split("-")
+        return s[0], s[2], s[3]
+
 
     def assign_char_lookup(self):
         upchars = tf.constant([chr(i) for i in range(65, 91)])
         self.lchars = tf.constant([chr(i) for i in range(97, 123)])
         self.upchars_lut = tf.contrib.lookup.index_table_from_tensor(mapping=upchars, num_oov_buckets=1, default_value=-1)
 
-    def _initialize_embeddings_map(self, vocabs, embeddings_set):
+    def _initialize_embeddings_map(self, vocabs, feature_descs):
         """
         generate a mapping of vocab_typ (word, char) to the embedding object.
         """
         embeddings = {}
 
         for vocab_type in vocabs.keys():
-            dimension_size = self._get_embedding_dsz(embeddings_set, vocab_type)
-            embeddings[vocab_type] = self._initialize_embedding(dimension_size, vocabs[vocab_type])
+            dimension_size = self.get_feat_dsz(feature_descs, vocab_type)
+            vocab_size = self.get_feat_vsz(feature_descs, vocab_type)
+            vocab_class = self.get_feat_class(feature_descs, vocab_type)
+            embeddings[vocab_type] = self._initialize_embedding(vocab_type, dimension_size, vocab_size, vocab_class, vocabs[vocab_type])
 
         return embeddings
 
-    def _get_embedding_dsz(self, embeddings_set, embed_type):
-        if embed_type == 'word':
-            word_embeddings = self.task.config_params["word_embeddings"]
-            return embeddings_set[word_embeddings["label"]]["dsz"]
-        elif embed_type == 'char':
-            return self.task.config_params["charsz"]
-        else:
-            extra_info = self.task.config_params["extended_embed_info"]
+    def get_feat_dsz(self, feature_descs, feature):
+        if feature not in feature_descs:
+            return None
+        return feature_descs[feature]['dsz']
 
-            if embed_type not in extra_info:
-                raise ValueError("could not find embedding type in configuration. If \
-the embedding is not of type 'word' or 'char', please fill in and put \
-{ %s : {'dsz' : [ENTER_DIMENSION_SIZE_HERE] } } in the \
-'extended_embed_info config object." % (embed_type))
+    def get_feat_class(self, feature_descs, feature):
+        if feature not in feature_descs:
+            return None
+        return globals()[feature_descs[feature]['type']]
 
-            return extra_info[embed_type]['dsz']
+    def get_feat_vsz(self, feature_descs, feature):
+        if feature not in feature_descs:
+            return None
+        return feature_descs[feature]['vsz']
 
-    def _initialize_embedding(self, dimensions_size, vocab):
-        return baseline.RandomInitVecModel(dimensions_size, vocab, False)
+    def _initialize_embedding(self, name, dsz, vsz, vocab_class, vocab):
+        """
+        we directly build TF embedding objects here.
 
-    def _run_preproc(self, model_params, vocabs, model_file, indices, extra_features_required):
+        we pass in the vocab, which is a dict. i'm not sure i need to load weights.
+        """
+        # weights = np.random.uniform(0.0, 0.0, (vsz, dsz))
+        return vocab_class(name, dsz=dsz, vsz=vsz)
+
+    def _run_preproc(self, model_params, vocabs, feature_descs, indices, extra_features_required):
         serialized_tf_example, tf_example = self._create_example(extra_features_required)
         raw_posts = tf_example[FIELD_NAME]
         
         preprocessed, lengths = self._create_preprocessed_input(tf_example, 
-                                                            model_file, 
+                                                            feature_descs, 
                                                             indices,
                                                             extra_features_required)
     
@@ -167,13 +187,13 @@ the embedding is not of type 'word' or 'char', please fill in and put \
         return serialized_tf_example, tf_example, raw_posts, lengths
 
     def _create_preprocessed_input(self, tf_example, 
-                                   model_file, 
+                                   feature_descs, 
                                    indices, 
                                    extra_features_required):
         """
         Create a preprocessor chain inside of the tensorflow graph.
         """
-        mxlen, mxwlen = self._get_max_lens(model_file)
+        mxlen, mxwlen = self._get_max_lens(feature_descs)
 
         preprocessor = PreprocessorCreator(
             indices, self.lchars, self.upchars_lut,
@@ -187,18 +207,16 @@ the embedding is not of type 'word' or 'char', please fill in and put \
 
         return preprocessed, lengths
 
-    def _get_max_lens(self, base_name):
-        mxlen = self.task.config_params['preproc']['mxlen']
-        mxwlen = self.task.config_params['preproc'].get('mxwlen')
-        state = baseline.utils.read_json("{}.state".format(base_name))
-        if 'mxlen' in state:
-            mxlen = state['mxlen']
-        # What should be called mxwlen is called maxw in the state object of this is for backwards compatibility.
-        if 'maxw' in state:
-            mxwlen = state['maxw']
-        if 'mxwlen' in state:
-            mxwlen = state['mxwlen']
-        return mxlen, mxwlen
+    def _get_max_lens(self, feature_descs):
+        """
+        _get_max_lens() restructures the feature_descs object
+        to order them for mxlen and mxwlen, which is word and char.
+        """
+        if 'word' not in feature_descs:
+            raise ValueError('model should have a word feature')
+
+        # TODO(MB): we should know whether chars is a feature at this point.
+        return self.get_feat_dsz(feature_descs, 'word'), self.get_feat_dsz(feature_descs, 'char')
 
     def _create_builder(self, sess, output_path, sig_input, sig_output, sig_name):
         """
@@ -246,21 +264,22 @@ class ClassifyTensorFlowExporter(TensorFlowExporter):
     def __init__(self, task):
         super(ClassifyTensorFlowExporter, self).__init__(task)
 
-    def _run(self, sess, model_file, embeddings_set, use_preproc=True):
-        indices, vocabs = self._create_vocabs(model_file)
+    def _run(self, sess, model_file, embeddings_set, feature_descs, use_preproc=True):
+        mxlen, mxwlen = self._get_max_lens(feature_descs)
+        indices, vocabs = self._create_vocabs(model_file, feature_descs.keys())
         extra_features_required = [x for x in vocabs.keys() if x not in TensorFlowExporter.DEFAULT_VOCABS]
 
         self.assign_char_lookup()
 
         labels = self.load_labels(model_file)
-        mxlen, mxwlen = self._get_max_lens(model_file)
+        
 
         model_params = self.task.config_params["model"]
 
         if use_preproc:
             serialized_tf_example, tf_example, raw_posts, lengths = self._run_preproc(model_params, 
                                                                             vocabs, 
-                                                                            model_file, 
+                                                                            feature_descs, 
                                                                             indices, 
                                                                             extra_features_required)
         
@@ -268,9 +287,8 @@ class ClassifyTensorFlowExporter(TensorFlowExporter):
         model_params["sess"] = sess
         model_params["maxs"] = mxlen
         model_params["maxw"] = mxwlen
-        print(model_params)
 
-        embeddings = self._initialize_embeddings_map(vocabs, embeddings_set)
+        embeddings = self._initialize_embeddings_map(vocabs, feature_descs)
         model = baseline.tf.classify.create_model(embeddings, labels, **model_params)
         softmax_output = tf.nn.softmax(model.logits)
 
@@ -297,8 +315,8 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
         super(TaggerTensorFlowExporter, self).__init__(task)
 
 
-    def _create_model(self, vocabs, labels, embeddings_set, mxlen, model_params):
-        embeddings = self._initialize_embeddings_map(vocabs, embeddings_set)
+    def _create_model(self, vocabs, labels, feature_descs, mxlen, model_params):
+        embeddings = self._initialize_embeddings_map(vocabs, feature_descs)
         model = baseline.tf.tagger.create_model(labels, embeddings, **model_params)
         model.create_loss()
 
@@ -324,9 +342,9 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
 
         return classes, values, model
 
-    def _run(self, sess, model_file, embeddings_set, use_preproc=True):
-        mxlen, mxwlen = self._get_max_lens(model_file)
-        indices, vocabs = self._create_vocabs(model_file)
+    def _run(self, sess, model_file, embeddings_set, feature_descs, use_preproc=True):
+        mxlen, mxwlen = self._get_max_lens(feature_descs)
+        indices, vocabs = self._create_vocabs(model_file, feature_descs.keys())
         self.assign_char_lookup()
 
         labels = self.load_labels(model_file)
@@ -339,7 +357,7 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
         if use_preproc:
             serialized_tf_example, tf_example, raw_posts, lengths = self._run_preproc(model_params, 
                                                                             vocabs, 
-                                                                            model_file, 
+                                                                            feature_descs, 
                                                                             indices, 
                                                                             extra_features_required)
             model_params["lengths"] = lengths
@@ -354,7 +372,7 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
 
         classes, values, model = self._create_model(vocabs, 
                                                     labels, 
-                                                    embeddings_set, 
+                                                    feature_descs, 
                                                     mxlen, 
                                                     model_params)
         self.restore_model(sess, model_file)
@@ -453,7 +471,7 @@ class Seq2SeqTensorFlowExporter(TensorFlowExporter):
             return dense, sentence_length
         return preproc_post
 
-    def _run(self, sess, model_file, embeddings_set):
+    def _run(self, sess, model_file, embeddings_set, feature_descs):
 
         self.word2input, vocab1 = Seq2SeqTensorFlowExporter.read_input_vocab(model_file)
         self.output2word, vocab2 = Seq2SeqTensorFlowExporter.read_output_vocab(model_file)

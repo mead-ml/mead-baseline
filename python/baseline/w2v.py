@@ -1,8 +1,8 @@
 import io
 import contextlib
 import numpy as np
-from baseline.utils import export
-
+from baseline.utils import export, load_user_embeddings, write_json, read_config_file
+from baseline.mime_type import mime_type
 __all__ = []
 exporter = export(__all__)
 
@@ -19,10 +19,73 @@ class EmbeddingsModel(object):
         super(EmbeddingsModel, self).__init__()
 
     def get_dsz(self):
+        pass
+
+    def get_vsz(self):
+        pass
+
+    def get_vocab(self):
+        pass
+
+    def save_md(self, target):
+        pass
+
+@exporter
+def pool_vec(embeddings, tokens, operation=np.mean):
+    if type(tokens) is str:
+        tokens = tokens.split()
+    try:
+        return operation([embeddings.lookup(t, False) for t in tokens], 0)
+    except:
+        return embeddings.weights[0]
+
+
+@exporter
+class WordEmbeddingsModel(object):
+    def __init__(self, **kwargs):
+        super(WordEmbeddingsModel, self).__init__()
+        self.vocab = kwargs.get('vocab')
+        self.vsz = kwargs.get('vsz')
+        self.dsz = kwargs.get('dsz')
+        self.weights = kwargs.get('weights')
+        if 'md_file' in kwargs:
+            md = read_config_file(kwargs['md_file'])
+            self.vocab = md['vocab']
+            self.vsz = md['vsz']
+            self.dsz = md['dsz']
+        if 'weights_file' in kwargs:
+            self.weights = np.load(kwargs['weights_file']).get('arr_0')
+
+        if self.weights is not None:
+            if self.vsz is None:
+                self.vsz = self.weights.shape[0]
+            else:
+                assert self.vsz == self.weights.shape[0]
+            if self.dsz is None:
+                self.dsz = self.weights.shape[1]
+            else:
+                assert self.dsz == self.weights.shape[1]
+
+        elif self.vsz is not None and self.dsz is not None:
+            self.weights = np.zeros((self.vsz, self.dsz))
+
+    def get_dsz(self):
         return self.dsz
 
     def get_vsz(self):
         return self.vsz
+
+    def get_vocab(self):
+        return self.vocab
+
+    def get_weights(self):
+        return self.weights
+
+    def save_md(self, target):
+        write_json({'vsz': self.get_vsz(), 'dsz': self.get_dsz(), 'vocab': self.get_vocab()}, target)
+
+    def save_weights(self, target):
+        np.savez(target, self.weights)
 
     def lookup(self, word, nullifabsent=True):
         if word in self.vocab:
@@ -31,20 +94,12 @@ class EmbeddingsModel(object):
             return None
         return self.nullv
 
-    def mean_vec(self, tokens):
-        if type(tokens) is str:
-            tokens = tokens.split()
-        try:
-            return np.mean([self.lookup(t, False) for t in tokens], 0)
-        except:
-            return self.weights[0]
-
     def __getitem__(self, word):
         return self.lookup(word, nullifabsent=False)
 
 
 @exporter
-class PretrainedEmbeddingsModel(EmbeddingsModel):
+class PretrainedEmbeddingsModel(WordEmbeddingsModel):
 
     def __init__(self, filename, known_vocab=None, unif_weight=None, keep_unused=False, normalize=False, **kwargs):
         super(PretrainedEmbeddingsModel, self).__init__()
@@ -72,32 +127,30 @@ class PretrainedEmbeddingsModel(EmbeddingsModel):
         if normalize is True:
             self.weights = norm_weights(self.weights)
 
-        self.vsz = self.weights.shape[0] - 1
-
-    def _read_vectors(self, filename, idx, known_vocab, keep_unused, **kwargs):
-        pass
-
-
-@exporter
-class Word2VecModel(PretrainedEmbeddingsModel):
-
-    def __init__(self, filename, known_vocab=None, unif_weight=None, keep_unused=False, normalize=False, **kwargs):
-        super(Word2VecModel, self).__init__(filename, known_vocab, unif_weight, keep_unused, normalize, **kwargs)
+        self.vsz = self.weights.shape[0]
 
     def _read_vectors(self, filename, idx, known_vocab, keep_unused, **kwargs):
         use_mmap = bool(kwargs.get('use_mmap', False))
+        read_fn = self._read_word2vec_file
+        is_glove_file = mime_type(filename) == 'text/plain'
+        if use_mmap:
+            if is_glove_file:
+                read_fn = self._read_glove_mmap
+            else:
+                read_fn = self._read_word2vec_mmap
+        elif is_glove_file:
+            read_fn = self._read_glove_file
 
-        read_fn = self._read_vectors_mmap if use_mmap else self._read_vectors_file
         return read_fn(filename, idx, known_vocab, keep_unused)
 
-    def _read_vectors_file(self, filename, idx, known_vocab, keep_unused):
+    def _read_word2vec_file(self, filename, idx, known_vocab, keep_unused):
         word_vectors = []
         with io.open(filename, "rb") as f:
             header = f.readline()
             vsz, dsz = map(int, header.split())
             width = 4 * dsz
             for i in range(vsz):
-                word = Word2VecModel._readtospc(f)
+                word = self._readtospc(f)
                 raw = f.read(width)
                 if keep_unused is False and word not in known_vocab:
                     continue
@@ -110,7 +163,7 @@ class Word2VecModel(PretrainedEmbeddingsModel):
         return word_vectors, dsz, known_vocab, idx
 
     @staticmethod
-    def _read_line_mmap(m, width, start):
+    def _read_word2vec_line_mmap(m, width, start):
         current = start+1
         while m[current:current+1] != b' ':
             current += 1
@@ -119,7 +172,7 @@ class Word2VecModel(PretrainedEmbeddingsModel):
         value = np.fromstring(raw, dtype=np.float32)
         return vocab, value, current+width + 1
 
-    def _read_vectors_mmap(self, filename, idx, known_vocab, keep_unused):
+    def _read_word2vec_mmap(self, filename, idx, known_vocab, keep_unused):
         import mmap
         word_vectors = []
         with io.open(filename, 'rb') as f:
@@ -129,7 +182,7 @@ class Word2VecModel(PretrainedEmbeddingsModel):
                 width = 4 * dsz
                 current = header_end + 1
                 for i in range(vsz):
-                    word, vec, current = Word2VecModel._read_line_mmap(m, width, current)
+                    word, vec, current = self._read_word2vec_line_mmap(m, width, current)
                     if keep_unused is False and word not in known_vocab:
                         continue
                     if known_vocab and word in known_vocab:
@@ -153,20 +206,7 @@ class Word2VecModel(PretrainedEmbeddingsModel):
         # Only strip out normal space and \n not other spaces which are words.
         return s.strip(' \n')
 
-
-@exporter
-class GloVeModel(PretrainedEmbeddingsModel):
-
-    def __init__(self, filename, known_vocab=None, unif_weight=None, keep_unused=False, normalize=False, **kwargs):
-        super(GloVeModel, self).__init__(filename, known_vocab, unif_weight, keep_unused, normalize, **kwargs)
-
-    def _read_vectors(self, filename, idx, known_vocab, keep_unused, **kwargs):
-        use_mmap = bool(kwargs.get('use_mmap', False))
-
-        read_fn = self._read_vectors_mmap if use_mmap else self._read_vectors_file
-        return read_fn(filename, idx, known_vocab, keep_unused)
-
-    def _read_vectors_file(self, filename, idx, known_vocab, keep_unused):
+    def _read_glove_file(self, filename, idx, known_vocab, keep_unused):
         word_vectors = []
         with io.open(filename, "r", encoding="utf-8") as f:
             for line in f:
@@ -185,7 +225,7 @@ class GloVeModel(PretrainedEmbeddingsModel):
         dsz = vec.shape[0]
         return word_vectors, dsz, known_vocab, idx
 
-    def _read_vectors_mmap(self, filename, idx, known_vocab, keep_unused):
+    def _read_glove_mmap(self, filename, idx, known_vocab, keep_unused):
         import mmap
         word_vectors = []
         with io.open(filename, "r", encoding="utf-8") as f:
@@ -195,7 +235,7 @@ class GloVeModel(PretrainedEmbeddingsModel):
                     values = line.split(b" ")
                     if len(values) == 0:
                         break
-                    word = values[0]
+                    word = values[0].decode('utf-8')
                     if word in self.vocab: continue
                     if keep_unused is False and word not in known_vocab:
                         continue
@@ -215,10 +255,10 @@ class RandomInitVecModel(EmbeddingsModel):
     def __init__(self, dsz, known_vocab, counts=True, unif_weight=None):
         super(RandomInitVecModel, self).__init__()
         uw = 0.0 if unif_weight is None else unif_weight
-        self.vocab = {}
+        self.vocab = dict()
         self.vocab["<PAD>"] = 0
         self.dsz = dsz
-        self.vsz = 0
+        self.vsz = 1
 
         if counts is True:
             attested = [v for v, cnt in known_vocab.items() if cnt > 0]
@@ -228,9 +268,22 @@ class RandomInitVecModel(EmbeddingsModel):
         else:
             print('Restoring existing vocab')
             self.vocab = known_vocab
-            self.vsz = len(self.vocab) - 1
+            self.vsz = len(self.vocab)
 
-        self.weights = np.random.uniform(-uw, uw, (self.vsz+1, self.dsz))
+        self.weights = np.random.uniform(-uw, uw, (self.vsz, self.dsz))
 
         self.nullv = np.zeros(self.dsz, dtype=np.float32)
         self.weights[0] = self.nullv
+
+    def get_vocab(self):
+        return self.vocab
+
+    def get_dsz(self):
+        return self.dsz
+
+    def get_vsz(self):
+        return self.vsz
+
+    def save_md(self, target):
+        write_json({'vsz': self.get_vsz(), 'dsz': self.get_dsz(), 'vocab': self.get_vocab()}, target)
+

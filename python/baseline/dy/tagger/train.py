@@ -90,9 +90,10 @@ class TaggerTrainerDyNet(EpochReportingTrainer):
         pg = create_progress_bar(steps)
         for batch_dict in ts:
 
-            x, xch, lengths, y, ids = self.model.make_input(batch_dict)
-            pred = self.model.predict((x, xch), lengths)
-
+            lengths = batch_dict[self.model.lengths_key]
+            ids = batch_dict['ids']
+            y = batch_dict['y']
+            pred = self.model.predict(batch_dict)
             correct, count, overlaps, golds, guesses = self.process_output(pred, y, lengths, ids, handle, txts)
             total_correct += correct
             total_sum += count
@@ -120,8 +121,9 @@ class TaggerTrainerDyNet(EpochReportingTrainer):
         dy.renew_cg()
         for batch_dict in pg(ts):
 
-            x, xch, lengths, y, ids = self.model.make_input(batch_dict)
-            pred = self.model.forward((x, xch), lengths)
+            inputs = self.model.make_input(batch_dict)
+            y = inputs.pop('y')
+            pred = self.model.compute_unaries(inputs)
             if self.autobatchsz is None:
                 losses = self.model.loss(pred, y)
                 loss = dy.sum_batches(losses) / len(losses)
@@ -150,7 +152,7 @@ def fit(model, ts, vs, es, **kwargs):
 
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
     epochs = int(kwargs.get('epochs', 20))
-    model_file = get_model_file(kwargs, 'tagger', 'dynet')
+    model_file = get_model_file('tagger', 'dynet', kwargs.get('basedir'))
     conll_output = kwargs.get('conll_output', None)
     txts = kwargs.get('txts', None)
 

@@ -57,9 +57,9 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
         verbose = kwargs.get("verbose", None)
 
         for batch_dict in loader:
-            vec = self._make_input(batch_dict)
-            y = vec[-1]
-            pred = self.model(vec[:-1])
+            example = self._make_input(batch_dict)
+            y = example.pop('y')
+            pred = self.model(example)
             loss = self.crit(pred, y)
             total_loss += loss.item()
             _add_to_cm(cm, y, pred)
@@ -80,9 +80,9 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
         total_loss = 0
         for batch_dict in loader:
             self.optimizer.zero_grad()
-            vec = self._make_input(batch_dict)
-            y = vec[-1]
-            pred = self.model(vec[:-1])
+            example = self._make_input(batch_dict)
+            y = example.pop('y')
+            pred = self.model(example)
             loss = self.crit(pred, y)
             total_loss += loss.item()
             loss.backward()
@@ -125,7 +125,7 @@ def fit(model, ts, vs, es, **kwargs):
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
     verbose = kwargs.get('verbose', {'console': kwargs.get('verbose_console', False), 'file': kwargs.get('verbose_file', None)})
     epochs = int(kwargs.get('epochs', 20))
-    model_file = get_model_file(kwargs, 'classify', 'pytorch')
+    model_file = get_model_file('classify', 'pytorch', kwargs.get('basedir'))
     if do_early_stopping:
         early_stopping_metric = kwargs.get('early_stopping_metric', 'acc')
         patience = kwargs.get('patience', epochs)

@@ -1,11 +1,14 @@
 import tensorflow as tf
 import json
 from google.protobuf import text_format
-from tensorflow.python.platform import gfile
+from baseline.w2v import WordEmbeddingsModel
 from baseline.tf.tfy import *
 import tensorflow.contrib.seq2seq as tfcontrib_seq2seq
-from baseline.model import EncoderDecoder, load_seq2seq_model, create_seq2seq_model
-from baseline.utils import zip_model, unzip_model
+from baseline.model import EncoderDecoderModel, load_seq2seq_model, create_seq2seq_model
+from baseline.utils import ls_props, read_json
+from baseline.tf.embeddings import *
+from baseline.version import __version__
+import copy
 
 def _temporal_cross_entropy_loss(logits, labels, label_lengths, mx_seq_length):
     """Do cross-entropy loss accounting for sequence lengths
@@ -20,8 +23,6 @@ def _temporal_cross_entropy_loss(logits, labels, label_lengths, mx_seq_length):
     # The labels actual length is 100, and starts with <GO>
     labels = tf.transpose(labels, perm=[1, 0])
     # TxB loss mask
-    # Logits == mxlen=10*batchsz=100
-    # Labels == mxlen=9,batchsz=100
     labels = labels[0:mx_seq_length, :]
     logit_length = tf.to_int32(tf.shape(logits)[0])
     timesteps = tf.to_int32(tf.shape(labels)[0])
@@ -44,9 +45,9 @@ def _temporal_cross_entropy_loss(logits, labels, label_lengths, mx_seq_length):
         return losses
 
 
-class Seq2SeqParallelModel(EncoderDecoder):
+class Seq2SeqParallelModel(EncoderDecoderModel):
 
-    def __init__(self, create_fn, src_vocab_embed, dst_vocab_embed, **kwargs):
+    def __init__(self, create_fn, src_embeddings, tgt_embedding, **kwargs):
         super(Seq2SeqParallelModel, self).__init__()
         # We need to remove these because we may be calling back to our caller, and we need
         # the condition of calling to be non-parallel
@@ -55,40 +56,55 @@ class Seq2SeqParallelModel(EncoderDecoder):
         if gpus == -1:
             gpus = len(os.getenv('CUDA_VISIBLE_DEVICES', os.getenv('NV_GPU', '0')).split(','))
         print('Num GPUs', gpus)
-        mxlen = kwargs.get('mxlen', 100)
+
         self.saver = None
         self.replicas = []
-        self.src = kwargs.get('src', tf.placeholder(tf.int32, [None, mxlen], name="src_parallel"))
-        self.tgt = kwargs.get('tgt', tf.placeholder(tf.int32, [None, mxlen], name="tgt_parallel"))
+        self.parallel_params = dict()
+        split_operations = dict()
+        for key in src_embeddings.keys():
+            EmbeddingType = src_embeddings[key].__class__
+            self.parallel_params[key] = kwargs.get(key, EmbeddingType.create_placeholder('{}_parallel'.format(key)))
+            split_operations[key] = tf.split(self.parallel_params[key], gpus)
+
+        EmbeddingType = tgt_embedding.__class__
+        self.parallel_params['tgt'] = kwargs.get(key, EmbeddingType.create_placeholder('tgt_parallel'.format(key)))
+        split_operations['tgt'] = tf.split(self.parallel_params[key], gpus)
+
+        self.src_lengths_key = kwargs.get('src_lengths_key')
         self.src_len = kwargs.get('src_len', tf.placeholder(tf.int32, [None], name="src_len_parallel"))
+        src_len_splits = tf.split(self.src_len, gpus)
+        split_operations['src_len'] = src_len_splits
+
         self.tgt_len = kwargs.get('tgt_len', tf.placeholder(tf.int32, [None], name="tgt_len_parallel"))
+        tgt_len_splits = tf.split(self.tgt_len, gpus)
+        split_operations['tgt_len'] = tgt_len_splits
+
         self.mx_tgt_len = kwargs.get('mx_tgt_len', tf.placeholder(tf.int32, name="mx_tgt_len"))
         self.pkeep = kwargs.get('pkeep', tf.placeholder_with_default(1.0, (), name="pkeep"))
         self.pdrop_value = kwargs.get('dropout', 0.5)
 
-        src_splits = tf.split(self.src, gpus)
-        tgt_splits = tf.split(self.tgt, gpus)
-        src_len_splits = tf.split(self.src_len, gpus)
-        tgt_len_splits = tf.split(self.tgt_len, gpus)
         losses = []
         sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False))
         with tf.device(tf.DeviceSpec(device_type="CPU")):
-            self.inference = create_fn(src_vocab_embed, dst_vocab_embed, sess=sess, mx_tgt_len=self.mx_tgt_len,
-                                       id=0, pkeep=self.pkeep, **kwargs)
+            self.inference = create_fn(src_embeddings, tgt_embedding, sess=sess, mx_tgt_len=self.mx_tgt_len, pkeep=self.pkeep, id=1, **kwargs)
         for i in range(gpus):
             with tf.device(tf.DeviceSpec(device_type='GPU', device_index=i)):
-                replica = create_fn(src_vocab_embed, dst_vocab_embed, sess=sess,
-                                    src=src_splits[i], tgt=tgt_splits[i],
-                                    src_len=src_len_splits[i], tgt_len=tgt_len_splits[i],
-                                    mx_tgt_len=self.mx_tgt_len,
-                                    id=i+1,
-                                    pkeep=self.pkeep,
-                                    **kwargs)
+
+                kwargs_single = copy.deepcopy(kwargs)
+                kwargs_single['sess'] = sess
+                kwargs_single['pkeep'] = self.pkeep
+                kwargs_single['id'] = i + 1
+                for k, split_operation in split_operations.items():
+                    kwargs_single[k] = split_operation[i]
+                replica = create_fn(src_embeddings, tgt_embedding, **kwargs_single)
                 self.replicas.append(replica)
                 loss_op = replica.create_loss()
                 losses.append(loss_op)
+
         self.loss = tf.reduce_mean(tf.stack(losses))
+
         self.sess = sess
+        self.best = self.inference.best
 
     def create_loss(self):
         return self.loss
@@ -112,34 +128,35 @@ class Seq2SeqParallelModel(EncoderDecoder):
     def make_input(self, batch_dict, do_dropout=False):
         if do_dropout is False:
             return self.inference.make_input(batch_dict)
-        src = batch_dict['src']
-        src_len = batch_dict['src_len']
-        dst = batch_dict['dst']
-        dst_len = batch_dict['dst_len']
 
-        mx_tgt_len = np.max(dst_len)
-        feed_dict = {self.src: src, self.src_len: src_len,
-                     self.tgt: dst, self.tgt_len: dst_len,
-                     self.mx_tgt_len: mx_tgt_len,
-                     self.pkeep: 1.0 - self.pdrop_value}
+        tgt = batch_dict.get['tgt']
+        tgt_len = batch_dict['tgt_len']
+        mx_tgt_len = np.max(tgt_len)
+        pkeep = 1.0 - self.pdrop_value if do_dropout else 1.0
+        feed_dict = {self.pkeep: pkeep, "tgt:0": tgt, self.tgt_len: tgt_len, self.mx_tgt_len: mx_tgt_len}
 
+        for key in self.parallel_params.keys():
+            feed_dict["{}_parallel:0".format(key)] = batch_dict[key]
+
+        # Allow us to track a length, which is needed for BLSTMs
+        feed_dict[self.src_len] = batch_dict[self.src_lengths_key]
         return feed_dict
 
     def load(self, basename, **kwargs):
         self.inference.load(basename, **kwargs)
 
 
-class Seq2SeqModel(EncoderDecoder):
+class Seq2SeqModel(EncoderDecoderModel):
 
     def create_loss(self):
         with tf.variable_scope('Loss{}'.format(self.id), reuse=False):
             # We do not want to count <GO> in our assessment, we do want to count <EOS>
-            return _temporal_cross_entropy_loss(self.preds[:-1, :, :], self.tgt[:, 1:], self.tgt_len - 1, self.mx_tgt_len - 1)
+            return _temporal_cross_entropy_loss(self.preds[:-1, :, :], self.tgt_embedding.x[:, 1:], self.tgt_len - 1, self.mx_tgt_len - 1)
 
     def create_test_loss(self):
         with tf.variable_scope('Loss', reuse=False):
             # We do not want to count <GO> in our assessment, we do want to count <EOS>
-            return _temporal_cross_entropy_loss(self.preds[:-1, :, :], self.tgt[:, 1:], self.tgt_len - 1, self.mx_tgt_len - 1)
+            return _temporal_cross_entropy_loss(self.preds[:-1, :, :], self.tgt_embedding.x[:, 1:], self.tgt_len - 1, self.mx_tgt_len - 1)
 
     def __init__(self):
         super(Seq2SeqModel, self).__init__()
@@ -147,17 +164,7 @@ class Seq2SeqModel(EncoderDecoder):
 
     @staticmethod
     def load(basename, **kwargs):
-        basename = unzip_model(basename)
-        with open(basename + '.state', 'r') as f:
-            state = json.load(f)
-        # FIXME: Need a single name for this.  This is a total hack
-        state["layers"] = state["nlayers"]
-        with open(basename + '-1.vocab', 'r') as f:
-            src_vocab_embed = json.load(f)
-
-        with open(basename + '-2.vocab', 'r') as f:
-            dst_vocab_embed = json.load(f)
-
+        state = read_json(basename + '.state')
         if 'predict' in kwargs:
             state['predict'] = kwargs['predict']
 
@@ -175,32 +182,63 @@ class Seq2SeqModel(EncoderDecoder):
         if 'model_type' in kwargs:
             state['model_type'] = kwargs['model_type']
         elif state['attn']:
+            print('setting to attn')
             state['model_type'] = 'attn' if state['attn'] is True else 'default'
 
-        model = Seq2SeqModel.create(src_vocab_embed, dst_vocab_embed, **state)
+        with open(basename + '.saver') as fsv:
+            saver_def = tf.train.SaverDef()
+            text_format.Merge(fsv.read(), saver_def)
 
+        src_embeddings = dict()
+        src_embeddings_dict = state.pop('src_embeddings')
+        for key, class_name in src_embeddings_dict.items():
+            md = read_json('{}-{}-md.json'.format(basename, key))
+            embed_args = dict({'vsz': md['vsz'], 'dsz': md['dsz']})
+            Constructor = eval(class_name)
+            src_embeddings[key] = Constructor(key, **embed_args)
+
+        tgt_class_name = state.pop('tgt_embedding')
+        md = read_json('{}-tgt-md.json'.format(basename))
+        embed_args = dict({'vsz': md['vsz'], 'dsz': md['dsz']})
+        Constructor = eval(tgt_class_name)
+        tgt_embedding = Constructor('tgt', **embed_args)
+        model = Seq2SeqModel.create(src_embeddings, tgt_embedding, **state)
+        for prop in ls_props(model):
+            if prop in state:
+                setattr(model, prop, state[prop])
         do_init = kwargs.get('init', True)
         if do_init:
             init = tf.global_variables_initializer()
             model.sess.run(init)
 
         model.saver = tf.train.Saver()
-        model.saver.restore(model.sess, basename + '.model')
+        model.saver.restore(model.sess, basename)
         return model
 
-    @staticmethod
-    def create(src_vocab_embed, dst_vocab_embed, **kwargs):
+    @classmethod
+    def create(cls, src_embeddings, tgt_embedding, **kwargs):
 
         gpus = kwargs.get('gpus')
         if gpus is not None:
-            return Seq2SeqParallelModel(Seq2SeqModel.create, src_vocab_embed, dst_vocab_embed, **kwargs)
+            return Seq2SeqParallelModel(Seq2SeqModel.create, src_embeddings, tgt_embedding, **kwargs)
+        model = cls()
+        model.src_embeddings = src_embeddings
+        model.tgt_embedding = tgt_embedding
+        GO = kwargs.get('GO')
+        EOS = kwargs.get('EOS')
+        model.GO = GO
+        model.EOS = EOS
+        model.id = kwargs.get('id', 0)
+        model.src_lengths_key = kwargs.get('src_lengths_key')
+        model.src_len = kwargs.get('src_len', tf.placeholder(tf.int32, [None], name="src_len"))
+        model.tgt_len = kwargs.get('tgt_len', tf.placeholder(tf.int32, [None], name="tgt_len"))
+        #model.tgt = kwargs.get('tgt', tf.placeholder(tf.int32, [None, None], name="tgt"))
+        model.mx_tgt_len = kwargs.get('mx_tgt_len', tf.placeholder(tf.int32, name="mx_tgt_len"))
 
-        model = Seq2SeqModel()
         hsz = int(kwargs['hsz'])
         attn = kwargs.get('model_type') == 'attn'
-        nlayers = int(kwargs.get('layers', 1))
+        layers = int(kwargs.get('layers', 1))
         rnntype = kwargs.get('rnntype', 'lstm')
-        mxlen = kwargs.get('mxlen', 100)
         predict = kwargs.get('predict', False)
         beam_width = kwargs.get('beam', 1) if predict is True else 1
         sampling = kwargs.get('sampling', False)
@@ -208,46 +246,41 @@ class Seq2SeqModel(EncoderDecoder):
         model.sess = kwargs.get('sess', tf.Session())
         model.vdrop = bool(kwargs.get('variational_dropout', False))
         unif = kwargs.get('unif', 0.25)
-        model.src = kwargs.get('src', tf.placeholder(tf.int32, [None, mxlen], name="src"))
-        model.tgt = kwargs.get('tgt', tf.placeholder(tf.int32, [None, mxlen], name="tgt"))
+
         model.pdrop_value = kwargs.get('dropout', 0.5)
-        model.src_len = kwargs.get('src_len', tf.placeholder(tf.int32, [None], name="src_len"))
-        model.tgt_len = kwargs.get('tgt_len', tf.placeholder(tf.int32, [None], name="tgt_len"))
-        model.mx_tgt_len = kwargs.get('mx_tgt_len', tf.placeholder(tf.int32, name="mx_tgt_len"))
+
         model.pkeep = kwargs.get('pkeep', tf.placeholder_with_default(1.0, shape=(), name="pkeep"))
-        model.vocab1 = src_vocab_embed if type(src_vocab_embed) is dict else src_vocab_embed.vocab
-        model.vocab2 = dst_vocab_embed if type(dst_vocab_embed) is dict else dst_vocab_embed.vocab
         attn_type = kwargs.get('attn_type', 'bahdanau').lower()
         model.arc_state = kwargs.get('arc_state', False)
-        model.id = kwargs.get('id', 0)
-        model.mxlen = mxlen
         model.hsz = hsz
-        model.nlayers = nlayers
+        model.layers = layers
         model.rnntype = rnntype
         model.attn = attn
-        GO = model.vocab2['<GO>']
-        EOS = model.vocab2['<EOS>']
-        dst_vsz = len(model.vocab2)
-        model.dsz = kwargs['dsz'] if type(src_vocab_embed) is dict else src_vocab_embed.dsz
 
         with tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE):
 
-            with tf.variable_scope("LUT"):
-                if type(src_vocab_embed) is not dict:
-                    Wi = tf.get_variable("Wi", initializer=tf.constant_initializer(src_vocab_embed.weights, dtype=tf.float32, verify_shape=True), shape=[len(model.vocab1), model.dsz])
-                else:
-                    Wi = tf.get_variable("Wi", initializer=tf.random_uniform_initializer(-unif, unif), shape=[len(model.vocab1), model.dsz])
-                if type(src_vocab_embed) is not dict:
-                    Wo = tf.get_variable("Wo", initializer=tf.constant_initializer(dst_vocab_embed.weights, dtype=tf.float32, verify_shape=True), shape=[len(model.vocab2), model.dsz])
-                else:
-                    Wo = tf.get_variable("Wo",initializer=tf.random_uniform_initializer(-unif, unif), shape=[len(model.vocab2), model.dsz])
-                embed_in = tf.nn.embedding_lookup(Wi, model.src)
+            all_embeddings_src = []
+            for embedding in model.src_embeddings.values():
+                embeddings_out = embedding.encode()
+                all_embeddings_src += [embeddings_out]
+
+            embed_in = tf.concat(values=all_embeddings_src, axis=-1)
+
+            # dynamic_decode creates a scope "decoder" and it pushes operations underneath.
+            # which makes it really hard to get the same objects between train and test
+            # In an ideal world, TF would just let us using tgt_embedding.encode as a function pointer
+            # This works fine for training, but then at decode time its not quite in the right place scope-wise
+            # So instead, for now, we never call .encode() and instead we create our own operator
+            Wo = tf.get_variable("Wo", initializer=tf.constant_initializer(tgt_embedding.weights,
+                                                                           dtype=tf.float32,
+                                                                           verify_shape=True),
+                                 shape=[tgt_embedding.vsz, tgt_embedding.dsz])
 
             with tf.variable_scope("Recurrence"):
-                rnn_enc_tensor, final_encoder_state = model.encode(embed_in, model.src)
+                rnn_enc_tensor, final_encoder_state = model.encode(embed_in)
                 batch_sz = tf.shape(rnn_enc_tensor)[0]
                 with tf.variable_scope("dec", reuse=tf.AUTO_REUSE):
-                    proj = dense_layer(dst_vsz)
+                    proj = dense_layer(tgt_embedding.vsz)
                     rnn_dec_cell = model._attn_cell_w_dropout(rnn_enc_tensor, beam_width, attn_type)
 
                     if beam_width > 1:
@@ -282,14 +315,14 @@ class Seq2SeqModel(EncoderDecoder):
                                 output_layer=proj,
                                 length_penalty_weight=0.0)
                     else:
-                        helper = tf.contrib.seq2seq.TrainingHelper(inputs=tf.nn.embedding_lookup(Wo, model.tgt), sequence_length=model.tgt_len)
+                        helper = tf.contrib.seq2seq.TrainingHelper(inputs=tf.nn.embedding_lookup(Wo, tgt_embedding.x), sequence_length=model.tgt_len)
                         decoder = tf.contrib.seq2seq.BasicDecoder(cell=rnn_dec_cell, helper=helper, initial_state=initial_state, output_layer=proj)
 
+                    # This creates a "decoder" scope
                     final_outputs, final_decoder_state, _ = tf.contrib.seq2seq.dynamic_decode(decoder,
                                                                                               impute_finished=predict is False or beam_width == 1,
                                                                                               swap_memory=True,
-                                                                                              output_time_major=True,
-                                                                                              maximum_iterations=model.mxlen)
+                                                                                              output_time_major=True)
                     if predict is True and beam_width > 1:
                         model.preds = tf.no_op()
                         best = final_outputs.predicted_ids
@@ -304,10 +337,20 @@ class Seq2SeqModel(EncoderDecoder):
                     model.probs = tf.map_fn(lambda x: tf.nn.softmax(x, name='probs'), model.preds)
 
             # writer = tf.summary.FileWriter('blah', model.sess.graph)
+            ##model.GO = GO
+            ##model.EOS = EOS
             return model
 
     def set_saver(self, saver):
         self.saver = saver
+
+    @property
+    def vdrop(self):
+        return self._vdrop
+
+    @vdrop.setter
+    def vdrop(self, value):
+        self._vdrop = value
 
     def _attn_cell_w_dropout(self, rnn_enc_tensor, beam, attn_type):
         cell = multi_rnn_cell_w_dropout(self.hsz, self.pkeep, self.rnntype, self.nlayers, variational=self.vdrop)
@@ -322,10 +365,11 @@ class Seq2SeqModel(EncoderDecoder):
             cell = tf.contrib.seq2seq.AttentionWrapper(cell, attn_mech, self.hsz, name='dyn_attn_cell')
         return cell
 
-    def encode(self, embed_in, src):
+    def encode(self, embed_in):
         with tf.variable_scope('encode'):
             # List to tensor, reform as (T, B, W)
             if self.rnntype == 'blstm':
+
                 nlayers_bi = int(self.nlayers / 2)
                 rnn_fwd_cell = multi_rnn_cell_w_dropout(self.hsz, self.pkeep, self.rnntype, nlayers_bi, variational=self.vdrop)
                 rnn_bwd_cell = multi_rnn_cell_w_dropout(self.hsz, self.pkeep, self.rnntype, nlayers_bi, variational=self.vdrop)
@@ -351,29 +395,42 @@ class Seq2SeqModel(EncoderDecoder):
             # This comes out as a sequence T of (B, D)
             return rnn_enc_tensor, encoder_state
 
-    def save_md(self, model_base):
+    def save_md(self, basename):
 
-        path_and_file = model_base.split('/')
-        outdir = '/'.join(path_and_file[:-1])
-        base = path_and_file[-1]
-        tf.train.write_graph(self.sess.graph_def, outdir, base + '.graph', as_text=False)
-
+        path = basename.split('/')
+        base = path[-1]
+        outdir = '/'.join(path[:-1])
+        src_embeddings_info = {}
+        for k, v in self.src_embeddings.items():
+            src_embeddings_info[k] = v.__class__.__name__
         state = {
-            "attn": self.attn, "hsz": self.hsz, "dsz": self.dsz,
-            "rnntype": self.rnntype, "nlayers": self.nlayers,
-            "mxlen": self.mxlen, "arc_state": self.arc_state }
-        with open(model_base + '.state', 'w') as f:
-            json.dump(state, f)
+            "version": __version__,
+            "src_embeddings": src_embeddings_info,
+            "tgt_embedding": self.tgt_embedding.__class__.__name__,
+            "attn": self.attn,
+            "hsz": self.hsz,
+            "rnntype": self.rnntype,
+            "layers": self.layers,
+            "arc_state": self.arc_state,
+            "EOS": self.EOS,
+            "GO": self.GO
+        }
+        for prop in ls_props(self):
+            state[prop] = getattr(self, prop)
 
-        with open(model_base + '-1.vocab', 'w') as f:
-            json.dump(self.vocab1, f)      
+        write_json(state, basename + '.state')
+        for key, embedding in self.src_embeddings.items():
+            embedding.save_md('{}-{}-md.json'.format(basename, key))
 
-        with open(model_base + '-2.vocab', 'w') as f:
-            json.dump(self.vocab2, f)     
+        self.tgt_embedding.save_md('{}-tgt-md.json'.format(basename))
+
+        tf.train.write_graph(self.sess.graph_def, outdir, base + '.graph', as_text=False)
+        with open(basename + '.saver', 'w') as f:
+            f.write(str(self.saver.as_saver_def()))
 
     def save(self, model_base):
         self.save_md(model_base)
-        self.saver.save(self.sess, model_base + '.model')
+        self.saver.save(self.sess, model_base)
 
     def restore_graph(self, base):
         with open(base + '.graph', 'rb') as gf:
@@ -382,10 +439,8 @@ class Seq2SeqModel(EncoderDecoder):
             self.sess.graph.as_default()
             tf.import_graph_def(gd, name='')
 
-    def run(self, source_dict):
-        src = source_dict['src']
-        src_len = source_dict['src_len']
-        feed_dict = {self.src: src, self.src_len: src_len}
+    def run(self, batch_dict):
+        feed_dict = self.make_input(batch_dict)
         vec = self.sess.run(self.best, feed_dict=feed_dict)
         # (B x K x T)
         if len(vec.shape) == 3:
@@ -401,26 +456,23 @@ class Seq2SeqModel(EncoderDecoder):
         return self.sess.run(self.probs, feed_dict=feed_dict)
 
     def make_input(self, batch_dict, do_dropout=False):
-        src = batch_dict['src']
-        src_len = batch_dict['src_len']
-        dst = batch_dict.get('dst')
 
-        feed_dict = {self.src: src, self.src_len: src_len}
+        pkeep = 1.0 - self.pdrop_value if do_dropout else 1.0
+        feed_dict = {self.pkeep: pkeep}
 
-        if dst is not None:
-            feed_dict[self.tgt] = dst
-            feed_dict[self.tgt_len] = batch_dict['dst_len']
-            feed_dict[self.mx_tgt_len] = np.max(batch_dict['dst_len'])
+        for key in self.src_embeddings.keys():
+            feed_dict["{}:0".format(key)] = batch_dict[key]
 
-        if do_dropout:
-            feed_dict[self.pkeep] = 1.0 - self.pdrop_value
+        if self.src_lengths_key is not None:
+            feed_dict[self.src_len] = batch_dict[self.src_lengths_key]
+
+        tgt = batch_dict.get('tgt')
+        if tgt is not None:
+            feed_dict["tgt:0"] = batch_dict['tgt']
+            feed_dict[self.tgt_len] = batch_dict['tgt_lengths']
+            feed_dict[self.mx_tgt_len] = np.max(batch_dict['tgt_lengths'])
+
         return feed_dict
-
-    def get_src_vocab(self):
-        return self.vocab1
-
-    def get_dst_vocab(self):
-        return self.vocab2
 
 
 BASELINE_SEQ2SEQ_MODELS = {
@@ -433,8 +485,8 @@ BASELINE_SEQ2SEQ_LOADERS = {
 }
 
 
-def create_model(src_vocab_embed, dst_vocab_embed, **kwargs):
-    model = create_seq2seq_model(BASELINE_SEQ2SEQ_MODELS, src_vocab_embed, dst_vocab_embed, **kwargs)
+def create_model(src_embed, tgt_embed, **kwargs):
+    model = create_seq2seq_model(BASELINE_SEQ2SEQ_MODELS, src_embed, tgt_embed, **kwargs)
     return model
 
 

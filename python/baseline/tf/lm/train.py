@@ -57,7 +57,8 @@ class LanguageModelTrainerTf(Trainer):
                 state = vals["final_state"]
             global_step = vals["global_step"]
             total_loss += loss
-            iters += self.model.mxlen
+            # NBPTT
+            iters += ts.nbptt
             step += 1
             if step % 500 == 0:
                 print(total_loss, iters)
@@ -110,7 +111,8 @@ class LanguageModelTrainerTf(Trainer):
             if xfer_state:
                 state = vals["final_state"]
             total_loss += loss
-            iters += self.model.mxlen
+            # NBPTT
+            iters += ts.nbptt
             step += 1
 
         self.log.debug({'phase': phase, "time": time.time() - start})
@@ -126,7 +128,7 @@ def fit(model, ts, vs, es=None, **kwargs):
     epochs = int(kwargs['epochs']) if 'epochs' in kwargs else 5
     patience = int(kwargs['patience']) if 'patience' in kwargs else epochs
 
-    model_file = get_model_file(kwargs, 'lm', 'tf')
+    model_file = get_model_file('lm', 'tf', kwargs.get('basedir'))
     after_train_fn = kwargs['after_train_fn'] if 'after_train_fn' in kwargs else None
     trainer = create_trainer(LanguageModelTrainerTf, model, **kwargs)
     init = tf.global_variables_initializer()
