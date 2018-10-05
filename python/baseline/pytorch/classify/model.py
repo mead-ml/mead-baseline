@@ -165,7 +165,7 @@ class LSTMModel(ClassifierModelBase):
         super(LSTMModel, self).__init__()
 
     def _init_pool(self, dsz, **kwargs):
-        unif = kwargs.get('unif', 0.1)
+        unif = kwargs.get('unif')
         hsz = kwargs.get('rnnsz', kwargs.get('hsz', 100))
         if type(hsz) is list:
             hsz = hsz[0]
