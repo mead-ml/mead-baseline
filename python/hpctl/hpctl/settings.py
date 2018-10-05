@@ -20,7 +20,7 @@ def get_config(config, reporting, extra_args):
 
 def get_settings(settings):
     mead_settings = get_mead_settings(settings)
-    hpctl_settings = mead_settings.get('hpctl', {})
+    hpctl_settings = mead_settings.pop('hpctl', {})
     return hpctl_settings, mead_settings
 
 

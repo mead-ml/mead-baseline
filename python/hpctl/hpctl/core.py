@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 
 import os
 import time
+import json
 from baseline.utils import export as exporter
 from baseline.utils import read_config_file, write_json
 from mead.utils import read_config_file_or_json, hash_config, parse_extra_args
@@ -113,7 +114,7 @@ def serve(settings, hpctl_logging, unknown, **kwargs):
     frontend = get_frontend(frontend_config, results, xpctl)
     scheduler = RoundRobinScheduler()
     try:
-        run_forever(results, backend, scheduler, frontend, logs)
+        run_forever(results, backend, scheduler, frontend, logs, mead_settings)
     except KeyboardInterrupt:
         pass
 
@@ -273,7 +274,7 @@ def run(num_iters, results, backend, frontend, config_sampler, logs, mead_logs, 
     return launched_labels
 
 
-def run_forever(results, backend, scheduler, frontend, logs):
+def run_forever(results, backend, scheduler, frontend, logs, settings):
     while True:
         cmd = frontend.command()
         process_command(cmd, backend, frontend, scheduler, results, None)
@@ -281,6 +282,7 @@ def run_forever(results, backend, scheduler, frontend, logs):
             exp_hash, job_blob = scheduler.get()
             if exp_hash is not None:
                 label, job = job_blob
+                job['settings']['datacache'] = settings.get('datacache', '~/.bl-data')
                 backend.launch(**job)
                 results.set_running(label)
                 frontend.update()
