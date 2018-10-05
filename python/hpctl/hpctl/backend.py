@@ -89,7 +89,8 @@ class LocalGPUBackend(Backend):
         if real_gpus is None:
             self.real_gpus = os.getenv("CUDA_VISIBLE_DEVICES", os.getenv("NV_GPU", "0")).split(',')
             print('read: {} from envs'.format(self.real_gpus))
-        self.real_gpus = map(str, self.real_gpus)
+        self.real_gpus = list(map(str, self.real_gpus))
+        print("Running Jobs on the following GPU(s), {}".format(self.real_gpus))
         self.jobs = []
         self.label_to_job = {}
         self.gpus_to_job = {gpu: None for gpu in self.real_gpus}

@@ -1,10 +1,10 @@
 {
-    "datacache": "/home/blester/.bl-data",
+    "datacache": "~/.bl-data",
     "reporting_hooks":{
         "visdom": {
             "name": "ZZZZZZZZZZZZ"
         },
-        "xpctl": {
+        "xpctl_": {
             "cred": "~/xpctlcred.json.mongo"
         }
     },

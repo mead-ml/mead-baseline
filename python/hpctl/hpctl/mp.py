@@ -140,6 +140,7 @@ class MPRunner(Runner):
     def __init__(self):
         super(MPRunner, self).__init__()
         self.p = None
+        self.name = None
 
     def join(self):
         if self.p is None:
@@ -147,6 +148,7 @@ class MPRunner(Runner):
         self.p.join()
 
     def start(self, func, label, *args, **kwargs):
+        self.name = label.name
         args = tuple([label] + list(args))
         self.p = TmuxProcess(label, target=func, args=args, kwargs=kwargs)
         self.p.start()
@@ -163,6 +165,12 @@ class MPRunner(Runner):
         if self.p is None:
             return
         self.p.terminate()
+
+    def __str__(self):
+        return "<MPRunner: {}>".format(self.name)
+
+    def __repr__(self):
+        return str(self)
 
 
 @export

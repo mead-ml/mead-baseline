@@ -4,14 +4,14 @@
         "visdom": {
             "name": "ZZZZZZZZZZZZ"
         },
-        "xpctl": {
+        "xpctl_": {
             "cred": "/home/blester/xpctlcred.json.mongo"
         }
     },
     "hpctl": {
         "backend": {
             "type": "mp",
-            "real_gpus": [0]
+            "real_gpus": [0, 1, 2]
         },
         "logging": {
             "host": "localhost",

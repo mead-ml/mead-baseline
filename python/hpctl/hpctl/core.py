@@ -160,8 +160,9 @@ def search(
     auto_xpctl = 'xpctl' in mead_config.get('reporting', [])
     if not auto_xpctl:
         xpctl_config = get_xpctl_settings(mead_settings)
-        xpctl_extra = parse_extra_args(['xpctl'], unknown)
-        xpctl_config['label'] = xpctl_extra.get('xpctl', {}).get('label')
+        if xpctl_config is not None:
+            xpctl_extra = parse_extra_args(['xpctl'], unknown)
+            xpctl_config['label'] = xpctl_extra.get('xpctl', {}).get('label')
     results_config = {}
 
     # Set frontend defaults
