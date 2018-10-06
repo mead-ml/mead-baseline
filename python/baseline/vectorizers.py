@@ -272,4 +272,4 @@ def create_vectorizer(**kwargs):
         return Constructor(**kwargs)
     else:
         print('loading user module')
-    return create_user_vectorizer(**kwargs)
+    return create_user_vectorizer(vectorizer_type=vec_type, **kwargs)

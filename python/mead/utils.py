@@ -111,8 +111,6 @@ def order_json(data):
     for (key, value) in sorted(data.items(), key=lambda x: x[0]):
         if isinstance(value, dict):
             value = order_json(value)
-        elif isinstance(value, list):
-            value = sorted(value)
         new[key] = value
     return new
 

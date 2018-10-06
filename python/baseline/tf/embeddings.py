@@ -246,4 +246,4 @@ def create_embeddings(dsz, name, known_vocab=None, **kwargs):
         return {'embeddings': create_fn(model, name, **kwargs), 'vocab': model.get_vocab()}
 
     print('loading user module')
-    return create_user_embeddings(dsz, name, known_vocab, **kwargs)
+    return create_user_embeddings(dsz, name, known_vocab, **kwargs, embed_type=embed_type)

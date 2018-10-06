@@ -475,7 +475,7 @@ def create_user_embeddings(dsz, name, known_vocab, **kwargs):
 def create_user_vectorizer(**kwargs):
     embed_type = kwargs['vectorizer_type']
     mod = import_user_module('vec', embed_type)
-    return mod.load_vectorizer(**kwargs)
+    return mod.create_vectorizer(**kwargs)
 
 
 @exporter
