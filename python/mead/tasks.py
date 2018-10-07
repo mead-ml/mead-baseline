@@ -217,6 +217,11 @@ class Task(object):
         :param kwargs:
         :return:
         """
+        _reporting = reporting
+        reporting = {}
+        if type(_reporting) == list:
+            for k in _reporting:
+                reporting[k] = {}
         default_reporting = self.mead_settings_config.get('reporting_hooks', {})
         # Add default reporting information to the reporting settings.
         for report_type in default_reporting:
@@ -225,7 +230,6 @@ class Task(object):
                     if report_arg not in reporting[report_type]:
                         reporting[report_type][report_arg] = report_val
         reporting_hooks = list(reporting.keys())
-
         self.reporting = baseline.create_reporting_hook(
             reporting_hooks, reporting,
             config_file=self.config_file, task=self.__class__.task_name()
