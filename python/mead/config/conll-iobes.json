@@ -20,6 +20,7 @@
         "hsz": 200,
         "wsz": 30,
         "dropout": 0.5,
+	"dropin": 0.1,
         "rnntype": "blstm",
         "layers": 1,
         "crf_mask": true,
