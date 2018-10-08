@@ -165,6 +165,7 @@ class FlaskFrontend(Frontend):
 
 def init_app(app, fe, base_url='/hpctl/v1'):
     """Bind routes to the functions at runtime so that we can have OOP stuff in the responses."""
+    app.route('/'.format(base_url), methods={'GET'})(fe.index)
     app.route('{}/'.format(base_url), methods={'GET'})(fe.index)
     ## Exploratory
     # Get the list of all experiments
