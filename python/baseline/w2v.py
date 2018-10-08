@@ -109,14 +109,17 @@ class PretrainedEmbeddingsModel(WordEmbeddingsModel):
             keep_unused = True
         uw = 0.0 if unif_weight is None else unif_weight
         self.vocab = {}
-        idx = 1
+        idx = 2
 
         word_vectors, self.dsz, known_vocab, idx = self._read_vectors(filename, idx, known_vocab, keep_unused, **kwargs)
         self.nullv = np.zeros(self.dsz, dtype=np.float32)
-        word_vectors = [self.nullv] + word_vectors
+        self.unkv = np.random.uniform(-uw, uw, self.dsz)
+        word_vectors = [self.nullv, self.unkv] + word_vectors
         self.vocab["<PAD>"] = 0
+        self.vocab["<UNK>"] = 1
 
         if known_vocab is not None:
+            known_vocab.pop("<UNK>")
             unknown = {v: cnt for v, cnt in known_vocab.items() if cnt > 0}
             for v in unknown:
                 word_vectors.append(np.random.uniform(-uw, uw, self.dsz))
@@ -257,23 +260,27 @@ class RandomInitVecModel(EmbeddingsModel):
         uw = 0.0 if unif_weight is None else unif_weight
         self.vocab = dict()
         self.vocab["<PAD>"] = 0
+        self.vocab["<UNK>"] = 1
         self.dsz = dsz
-        self.vsz = 1
+        self.vsz = 2
 
         if counts is True:
+            known_vocab.pop("<UNK>")
             attested = [v for v, cnt in known_vocab.items() if cnt > 0]
             for k, v in enumerate(attested):
                 self.vocab[v] = k + 1
                 self.vsz += 1
         else:
-            print('Restoring existing vocab')
             self.vocab = known_vocab
             self.vsz = len(self.vocab)
 
         self.weights = np.random.uniform(-uw, uw, (self.vsz, self.dsz))
 
         self.nullv = np.zeros(self.dsz, dtype=np.float32)
+        self.unkv = np.random.uniform(-uw, uw, self.dsz)
+
         self.weights[0] = self.nullv
+        self.weights[1] = self.unkv
 
     def get_vocab(self):
         return self.vocab

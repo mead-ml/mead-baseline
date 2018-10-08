@@ -131,9 +131,7 @@ class DictExamples(object):
         :param start: (``int``) The step index
         :param batchsz: (``int``) The batch size
         :param trim: (``bool``) Trim to maximum length in a batch
-        :param vec_alloc: A vector allocator
-        :param vec_shape: A vector shape function
-        :return: batched `x` word vector, `x` character vector, batched `y` vector, `length` vector, `ids`
+        :return batched dictionary
         """
         ex = self.example_list[start]
         keys = ex.keys()

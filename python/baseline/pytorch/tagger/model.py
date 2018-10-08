@@ -6,6 +6,9 @@ import torch.autograd
 
 class RNNTaggerModel(nn.Module, TaggerModel):
 
+    PAD = 0
+    UNK = 1
+
     def save(self, outname):
         torch.save(self, outname)
 
@@ -55,6 +58,7 @@ class RNNTaggerModel(nn.Module, TaggerModel):
         print('RNN [%s]' % rnntype)
 
         pdrop = float(kwargs.get('dropout', 0.5))
+        model.dropin_values = kwargs.get('dropin', {})
         model.labels = labels
         input_sz = model._init_embed(embeddings, **kwargs)
         if model.vdrop:
@@ -91,9 +95,25 @@ class RNNTaggerModel(nn.Module, TaggerModel):
         print(model)
         return model
 
+    def drop_inputs(self, key, field):
+        v = self.dropin_values.get(key, 0)
+
+        if not self.training or v == 0:
+            return field
+        drop_indices = np.where((np.random.random(field.shape) < v) & (field != RNNTaggerModel.PAD))
+        field[drop_indices[0], drop_indices[1]] = RNNTaggerModel.UNK
+        return field
+
+    def input_tensor(self, key, batch_dict, perm_idx):
+        tensor = torch.from_numpy(self.drop_inputs(key, batch_dict[key]))
+        tensor = tensor[perm_idx]
+        tensor = tensor.transpose(0, 1).contiguous()
+        if self.gpu:
+            tensor = tensor.cuda()
+        return tensor
+
     def make_input(self, batch_dict):
         example_dict = dict({})
-
         lengths = torch.from_numpy(batch_dict[self.lengths_key])
         lengths, perm_idx = lengths.sort(0, descending=True)
 
@@ -101,11 +121,7 @@ class RNNTaggerModel(nn.Module, TaggerModel):
             lengths = lengths.cuda()
         example_dict['lengths'] = lengths
         for key in self.embeddings.keys():
-            tensor = torch.from_numpy(batch_dict[key])
-            tensor = tensor[perm_idx]
-            example_dict[key] = tensor.transpose(0, 1).contiguous()
-            if self.gpu:
-                example_dict[key] = example_dict[key].cuda()
+            example_dict[key] = self.input_tensor(key, batch_dict, perm_idx)
 
         y = batch_dict.get('y')
         if y is not None:

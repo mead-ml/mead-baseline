@@ -2,8 +2,6 @@
     "task": "tagger",
     "batchsz": 10,
     "conll_output": "conllresults.conll",
-    "test_thresh": 10,
-    "charsz": 30,
     "unif": 0.1,
     "preproc": {
     },
@@ -35,8 +33,7 @@
     "model": {
         "model_type": "default",
         "cfiltsz": [3],
-        "hsz": 200,
-        "wsz": 30,
+        "hsz": 400,
         "dropout": 0.5,
         "rnntype": "blstm",
         "layers": 1,
