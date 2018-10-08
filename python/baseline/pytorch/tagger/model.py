@@ -32,6 +32,13 @@ class RNNTaggerModel(nn.Module, TaggerModel):
         for k, embedding in embeddings.items():
             self.embeddings[k] = embedding
             input_sz += embedding.get_dsz()
+
+        self.vdrop = bool(kwargs.get('variational_dropout', False))
+        pdrop = float(kwargs.get('dropout', 0.5))
+        if self.vdrop:
+            self.dropout = VariationalDropout(pdrop)
+        else:
+            self.dropout = nn.Dropout(pdrop)
         return input_sz
 
     def _embed(self, input):
@@ -40,34 +47,35 @@ class RNNTaggerModel(nn.Module, TaggerModel):
             all_embeddings += [embedding.encode(input[k])]
         return self.dropout(torch.cat(all_embeddings, 2))
 
+    def _init_encoder(self, input_sz, **kwargs):
+        nlayers = int(kwargs.get('layers', 1))
+        pdrop = float(kwargs.get('dropout', 0.5))
+        rnntype = kwargs.get('rnntype', 'blstm')
+        print('RNN [%s]' % rnntype)
+        unif = kwargs.get('unif', 0)
+        hsz = int(kwargs['hsz'])
+        weight_init = kwargs.get('weight_init', 'uniform')
+        self.encoder = LSTMEncoder(input_sz, hsz, rnntype, nlayers, pdrop, unif=unif, initializer=weight_init)
+        return hsz
+
     @classmethod
     def create(cls, labels, embeddings, **kwargs):
         model = cls()
         model.lengths_key = kwargs.get('lengths_key')
-        hsz = int(kwargs['hsz'])
         model.proj = bool(kwargs.get('proj', False))
         model.use_crf = bool(kwargs.get('crf', False))
         model.crf_mask = bool(kwargs.get('crf_mask', False))
         model.span_type = kwargs.get('span_type')
-        model.vdrop = bool(kwargs.get('variational_dropout', False))
         model.activation_type = kwargs.get('activation', 'tanh')
-        nlayers = int(kwargs.get('layers', 1))
-        rnntype = kwargs.get('rnntype', 'blstm')
-        unif = kwargs.get('unif', 0)
-        model.gpu = False
-        print('RNN [%s]' % rnntype)
 
+        model.gpu = False
         pdrop = float(kwargs.get('dropout', 0.5))
         model.dropin_values = kwargs.get('dropin', {})
         model.labels = labels
-        input_sz = model._init_embed(embeddings, **kwargs)
-        if model.vdrop:
-            model.dropout = VariationalDropout(pdrop)
-        else:
-            model.dropout = nn.Dropout(pdrop)
 
-        weight_init = kwargs.get('weight_init', 'uniform')
-        model.rnn = LSTMEncoder(input_sz, hsz, rnntype, nlayers, pdrop, unif=unif, initializer=weight_init)
+        input_sz = model._init_embed(embeddings, **kwargs)
+        hsz = model._init_encoder(input_sz, **kwargs)
+
         model.decoder = nn.Sequential()
         if model.proj is True:
             append2seq(model.decoder, (
@@ -144,7 +152,7 @@ class RNNTaggerModel(nn.Module, TaggerModel):
     def compute_unaries(self, inputs, lengths):
         words_over_time = self._embed(inputs)
         # output = (T, B, H)
-        output = self.rnn(words_over_time, lengths)
+        output = self.encoder(words_over_time, lengths)
         # stack (T x B, H)
         decoded = self.decoder(output.view(output.size(0)*output.size(1), -1))
 
