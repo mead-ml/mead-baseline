@@ -143,9 +143,8 @@ class RNNTaggerModel(nn.Module, TaggerModel):
 
     def compute_unaries(self, inputs, lengths):
         words_over_time = self._embed(inputs)
-        dropped = self.dropout(words_over_time)
         # output = (T, B, H)
-        output = self.rnn(dropped, lengths)
+        output = self.rnn(words_over_time, lengths)
         # stack (T x B, H)
         decoded = self.decoder(output.view(output.size(0)*output.size(1), -1))
 
