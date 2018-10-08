@@ -95,17 +95,20 @@ class RNNTaggerModel(nn.Module, TaggerModel):
         print(model)
         return model
 
-    def drop_inputs(self, key, field):
+    def drop_inputs(self, key, x):
         v = self.dropin_values.get(key, 0)
 
         if not self.training or v == 0:
-            return field
-        drop_indices = np.where((np.random.random(field.shape) < v) & (field != RNNTaggerModel.PAD))
-        field[drop_indices[0], drop_indices[1]] = RNNTaggerModel.UNK
-        return field
+            return x
+
+        mask_pad = x != RNNTaggerModel.PAD
+        mask_drop = x.new(x.size(0), x.size(1)).bernoulli_(v).byte()
+        x.masked_fill_(mask_pad & mask_drop, RNNTaggerModel.UNK)
+        return x
 
     def input_tensor(self, key, batch_dict, perm_idx):
-        tensor = torch.from_numpy(self.drop_inputs(key, batch_dict[key]))
+        tensor = torch.from_numpy(batch_dict[key])
+        tensor = self.drop_inputs(key, tensor)
         tensor = tensor[perm_idx]
         tensor = tensor.transpose(0, 1).contiguous()
         if self.gpu:
