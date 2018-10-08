@@ -33,7 +33,7 @@
     "model": {
         "model_type": "default",
         "hsz": 400,
-        "dropout": 0.2,
+        "dropout": 0.5,
 	"dropin": {"word": 0.1 },
         "rnntype": "blstm",
         "layers": 1,
