@@ -34,6 +34,7 @@ class Colors(object):
     CYAN = '\033[36;1m'
     RESTORE = '\033[0m'
 
+
 @export
 def color(msg, color):
     if platform.system() == 'Windows':

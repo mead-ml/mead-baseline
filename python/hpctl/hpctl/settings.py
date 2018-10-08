@@ -63,4 +63,4 @@ def get_xpctl_settings(mead_settings):
     xpctl = mead_settings.get('reporting_hooks', {}).get('xpctl', {})
     if 'cred' not in xpctl:
         return None
-    return read_config_file(os.path.expanduser(xpctl['cred']))
+    return read_config_file_or_json(xpctl['cred'])

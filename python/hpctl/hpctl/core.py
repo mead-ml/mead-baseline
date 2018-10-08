@@ -51,6 +51,12 @@ def find(name, root, **kwargs):
         print("Can't find {}".format(name))
 
 
+def force_remote_backend(backend_config):
+    backend_config['type'] = 'remote'
+    backend_config.setdefault('host', 'localhost')
+    backend_config.setdefault('port', 5000)
+
+
 @export
 def launch(
         config, settings,
@@ -69,17 +75,7 @@ def launch(
         task = mead_config.get('task', 'classify')
     _, backend_config = get_ends(hp_settings, unknown)
 
-    # Force remote backend.
-    backend_config['type'] = 'remote'
-    if 'host' not in backend_config:
-        backend_config['host'] = 'localhost'
-    if 'port' not in backend_config:
-        backend_config['port'] = 5000
-
-    # Unpack xpctl creds on client
-    if 'xpctl' in mead_settings.get('reporting_hooks'):
-        if 'cred' in mead_settings['reporting_hooks']['xpctl']:
-            mead_settings['reporting_hooks']['xpctl']['cred'] = read_config_file_or_json(mead_settings['reporting_hooks']['xpctl']['cred'])
+    force_remote_backend(backend_config)
 
     config_sampler = get_config_sampler(mead_config, None)
     label, config = config_sampler.sample()
@@ -117,8 +113,12 @@ def serve(settings, hpctl_logging, unknown, **kwargs):
     frontend_config['type'] = 'flask'
     frontend = get_frontend(frontend_config, results, xpctl)
     scheduler = RoundRobinScheduler()
+
+    cache = mead_settings.get('datacache', '~/.bl-data')
+    xpctl_cred = xpctl_config['cred'] if xpctl is not None else None
+
     try:
-        run_forever(results, backend, scheduler, frontend, logs, mead_settings)
+        run_forever(results, backend, scheduler, frontend, logs, cache, xpctl_cred)
     except KeyboardInterrupt:
         pass
 
@@ -173,12 +173,9 @@ def search(
     # Set frontend defaults
     frontend_config['experiment_hash'] = exp_hash
     default = mead_config['train'].get('early_stopping_metric', 'avg_loss')
-    if 'train' not in frontend_config:
-        frontend_config['train'] = default
-    if 'dev' not in frontend_config:
-        frontend_config['dev'] = default
-    if 'test' not in frontend_config:
-        frontend_config['test'] = default
+    frontend_config.setdefault('train', 'avg_loss')
+    frontend_config.setdefault('dev', default)
+    frontend_config.setdefault('test', default)
 
     # Negotiate remote status
     if backend_config['type'] != 'remote':
@@ -208,6 +205,12 @@ def search(
     return labels, results
 
 
+def force_xpctl(mead_config, label):
+    xpctl = mead_config.setdefault('reporting', {}).setdefault('xpctl', {})
+    if label is not None:
+        xpctl['label'] = label
+
+
 @export
 def verify(
         config, settings,
@@ -220,13 +223,7 @@ def verify(
     """Search for optimal hyperparameters."""
     mead_config = get_config(config, reporting, unknown)
 
-    # Force xpctl
-    report = mead_config.get('reporting', {})
-    xpctl = report.get('xpctl', {})
-    if label is not None:
-        xpctl['label'] = label
-    report['xpctl'] = xpctl
-    mead_config['reporting'] = report
+    force_xpctl(mead_config, label)
 
     return search(config, settings, logging, hpctl_loggins, datasets, embeddings, reporting, unknown, task, num_iters)
 
@@ -278,7 +275,15 @@ def run(num_iters, results, backend, frontend, config_sampler, logs, mead_logs, 
     return launched_labels
 
 
-def run_forever(results, backend, scheduler, frontend, logs, settings):
+def override_client_settings(settings, cache, xpctl_cred):
+    settings['datacache'] = cache
+    if xpctl_cred is None:
+        settings.get('reporting', {}).pop('xpctl', None)
+    else:
+        settings.get('reporting', {}).get('xpctl', {})['cred'] = xpctl_cred
+
+
+def run_forever(results, backend, scheduler, frontend, logs, cache, xpctl_cred):
     while True:
         cmd = frontend.command()
         process_command(cmd, backend, frontend, scheduler, results, None)
@@ -286,8 +291,7 @@ def run_forever(results, backend, scheduler, frontend, logs, settings):
             exp_hash, job_blob = scheduler.get()
             if exp_hash is not None:
                 label, job = job_blob
-                # Update for client-server mismatches
-                job['settings']['datacache'] = settings.get('datacache', '~/.bl-data')
+                override_client_settings(settings, cache, xpctl_cred)
                 backend.launch(**job)
                 results.set_running(label)
                 frontend.update()
