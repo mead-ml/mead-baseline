@@ -4,7 +4,7 @@
         "visdom": {
             "name": "ZZZZZZZZZZZZ"
         },
-        "xpctl_": {
+        "xpctl": {
             "cred": "~/xpctlcred.json.mongo"
         }
     },

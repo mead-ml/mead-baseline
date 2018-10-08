@@ -76,6 +76,11 @@ def launch(
     if 'port' not in backend_config:
         backend_config['port'] = 5000
 
+    # Unpack xpctl creds on client
+    if 'xpctl' in mead_settings.get('reporting_hooks'):
+        if 'cred' in mead_settings['reporting_hooks']['xpctl']:
+            mead_settings['reporting_hooks']['xpctl']['cred'] = read_config_file_or_json(mead_settings['reporting_hooks']['xpctl']['cred'])
+
     config_sampler = get_config_sampler(mead_config, None)
     label, config = config_sampler.sample()
     print(label)
@@ -100,7 +105,6 @@ def serve(settings, hpctl_logging, unknown, **kwargs):
     hp_settings, mead_settings = get_settings(settings)
     frontend_config, backend_config = get_ends(hp_settings, unknown)
     hp_logs, _ = get_logs(hp_settings, {}, hpctl_logging)
-    # Update to handle no xpctl
     xpctl_config = get_xpctl_settings(mead_settings)
     set_root(hp_settings)
 
@@ -282,6 +286,7 @@ def run_forever(results, backend, scheduler, frontend, logs, settings):
             exp_hash, job_blob = scheduler.get()
             if exp_hash is not None:
                 label, job = job_blob
+                # Update for client-server mismatches
                 job['settings']['datacache'] = settings.get('datacache', '~/.bl-data')
                 backend.launch(**job)
                 results.set_running(label)
