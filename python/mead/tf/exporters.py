@@ -280,7 +280,7 @@ class ClassifyTensorFlowExporter(TensorFlowExporter):
         self.restore_model(sess, model_file)
         
         if use_preproc:
-            sig_input = SignatureInput(serialized_tf_example, raw_posts, extra_features_required)
+            sig_input = SignatureInput(serialized_tf_example, tf_example, extra_features_required)
         else:
             sig_input = SignatureInput(None, None, extra_features_required, model=model)
 
