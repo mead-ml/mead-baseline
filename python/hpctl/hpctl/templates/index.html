@@ -15,12 +15,15 @@
     function display() {
         $.getJSON($SCRIPT_ROOT + $BASE + "/experiments", function(data, status) {
             console.log(data);
-            $("#experiments").empty()
+            $("#experiments").empty();
+            $("#experiments").append("<p>Experiments:</p>");
+            $("#experiments").append("<ul>")
             for (var i = 0; i < data.experiments.length; i++) {
-                var line = '<p><a href="' + $SCRIPT_ROOT + $BASE + '/demo_page/' + data.experiments[i] + '">' + data.experiments[i] + '</a></p>';
+                var line = '<li><a href="' + $SCRIPT_ROOT + $BASE + '/demo_page/' + data.experiments[i] + '">' + data.experiments[i] + '</a></li>';
                 console.log(line)
                 $("#experiments").append(line);
             }
+            $("#experiments").append("<ul>")
         });
     }
 
@@ -28,11 +31,39 @@
         display()
         setInterval(display, 5000);
     });
+
+    function getInfo(type) {
+        $.getJSON($SCRIPT_ROOT + $BASE + "/" + type, function(data, status){
+            console.log(data);
+            $("#list").empty();
+            $("#list").append("<p>Available " + type + " are:")
+            $("#list").append("<ul>");
+            for (var i = 0; i < data['labels'].length; i++) {
+                $("#list").append("<li>" + data['labels'][i] + "</li>");
+            }
+            $("#list").append("</ul>");
+        });
+    }
+
+    function getDatasets() {
+        getInfo("datasets");
+    }
+
+    function getEmbeddings() {
+        getInfo("embeddings");
+    }
+
     </script>
 
     <body>
         <h1 id="title">HPCTL</h1>
 
         <div id="experiments"></div>
+
+        <div id="info">
+            <button onClick="getDatasets()">Datasets</button>
+            <button onClick="getEmbeddings()">Embeddings</button>
+        </div>
+        <div id="list"></div>
     </body>
 </html>

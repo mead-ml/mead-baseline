@@ -5,7 +5,7 @@ import time
 import json
 from baseline.utils import export as exporter
 from baseline.utils import read_config_file, write_json
-from mead.utils import read_config_file_or_json, hash_config, parse_extra_args
+from mead.utils import read_config_file_or_json, hash_config, parse_extra_args, index_by_label
 from hpctl.report import get_xpctl
 from hpctl.utils import create_logs
 from hpctl.results import get_results
@@ -83,8 +83,6 @@ def launch(
     send = {
         'label': label,
         'config': config,
-        'datasets': datasets,
-        'embeddings': embeddings,
         'mead_logs': mead_logs,
         'hpctl_logs': hp_logs,
         'task_name': task,
@@ -97,12 +95,15 @@ def launch(
 
 
 @export
-def serve(settings, hpctl_logging, unknown, **kwargs):
+def serve(settings, hpctl_logging, embeddings, datasets, unknown, **kwargs):
     hp_settings, mead_settings = get_settings(settings)
     frontend_config, backend_config = get_ends(hp_settings, unknown)
     hp_logs, _ = get_logs(hp_settings, {}, hpctl_logging)
     xpctl_config = get_xpctl_settings(mead_settings)
     set_root(hp_settings)
+
+    datasets = read_config_file_or_json(datasets)
+    embeddings = read_config_file_or_json(embeddings)
 
     results = get_results({})
     backend = get_backend(backend_config)
@@ -111,6 +112,8 @@ def serve(settings, hpctl_logging, unknown, **kwargs):
     xpctl = get_xpctl(xpctl_config)
 
     frontend_config['type'] = 'flask'
+    frontend_config['datasets'] = index_by_label(datasets)
+    frontend_config['embeddings'] = index_by_label(embeddings)
     frontend = get_frontend(frontend_config, results, xpctl)
     scheduler = RoundRobinScheduler()
 
@@ -118,7 +121,7 @@ def serve(settings, hpctl_logging, unknown, **kwargs):
     xpctl_cred = xpctl_config['cred'] if xpctl is not None else None
 
     try:
-        run_forever(results, backend, scheduler, frontend, logs, cache, xpctl_cred)
+        run_forever(results, backend, scheduler, frontend, logs, cache, xpctl_cred, datasets, embeddings)
     except KeyboardInterrupt:
         pass
 
@@ -285,7 +288,7 @@ def override_client_settings(settings, cache, xpctl_cred):
         settings.get('reporting', {}).get('xpctl', {})['cred'] = xpctl_cred
 
 
-def run_forever(results, backend, scheduler, frontend, logs, cache, xpctl_cred):
+def run_forever(results, backend, scheduler, frontend, logs, cache, xpctl_cred, datasets, embeddings):
     while True:
         cmd = frontend.command()
         process_command(cmd, backend, frontend, scheduler, results, None)
@@ -293,7 +296,9 @@ def run_forever(results, backend, scheduler, frontend, logs, cache, xpctl_cred):
             exp_hash, job_blob = scheduler.get()
             if exp_hash is not None:
                 label, job = job_blob
-                override_client_settings(settings, cache, xpctl_cred)
+                override_client_settings(job['settings'], cache, xpctl_cred)
+                job['embeddings'] = embeddings
+                job['datasets'] = datasets
                 backend.launch(**job)
                 results.set_running(label)
                 frontend.update()

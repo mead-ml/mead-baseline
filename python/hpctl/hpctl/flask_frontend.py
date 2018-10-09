@@ -10,10 +10,12 @@ from hpctl.frontend import Frontend
 
 
 class FlaskFrontend(Frontend):
-    def __init__(self, q, results, xpctl):
+    def __init__(self, q, results, xpctl, embeddings=None, datasets=None, **kwargs):
         self.results = results
         self.queue = q
         self.xpctl = xpctl
+        self.embeddings = {} if embeddings is None else embeddings
+        self.datasets = {} if datasets is None else datasets
 
     def index(self):
         return render_template('index.html')
@@ -162,6 +164,12 @@ class FlaskFrontend(Frontend):
         metrics = self.results.get_metrics(label, phase)
         return jsonify(dict(phase=phase, metrics=metrics, **label))
 
+    def get_embeddings(self):
+        return jsonify({'labels': list(self.embeddings.keys())})
+
+    def get_datasets(self):
+        return jsonify({'labels': list(self.datasets.keys())})
+
 
 def init_app(app, fe, base_url='/hpctl/v1'):
     """Bind routes to the functions at runtime so that we can have OOP stuff in the responses."""
@@ -208,15 +216,19 @@ def init_app(app, fe, base_url='/hpctl/v1'):
     app.route('{}/label/<name>'.format(base_url), methods={'GET'})(fe.get_label)
     # Get all available metrics
     app.route('{}/metrics/<exp>/<sha1>/<name>/<phase>'.format(base_url), methods={'GET'})(fe.get_metrics)
+    # Get a list of all embeddings available to the server
+    app.route('{}/embeddings'.format(base_url), methods={'GET'})(fe.get_embeddings)
+    # Get a list of all the dataset labels
+    app.route('{}/datasets'.format(base_url), methods={'GET'})(fe.get_datasets)
 
     # Simple display
     app.route('{}/demo_data/<exp>'.format(base_url), methods={'GET'})(fe.demo_data)
     app.route('{}/demo_page/<exp>'.format(base_url), methods={'GET'})(fe.demo_page)
 
 
-def create_flask(q, results, xpctl):
+def create_flask(q, results, xpctl, **kwargs):
     app = Flask(__name__)
-    fe = FlaskFrontend(q, results, xpctl)
+    fe = FlaskFrontend(q, results, xpctl, **kwargs)
     init_app(app, fe)
     p = Process(target=app.run)
     return p

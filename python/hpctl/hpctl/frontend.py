@@ -223,7 +223,7 @@ def get_frontend(frontend_config, results, xpctl):
     if frontend == 'flask':
         from hpctl.flask_frontend import create_flask
         q = Queue()
-        fe = create_flask(q, results, xpctl)
+        fe = create_flask(q, results, xpctl, **frontend_config)
         return FlaskShim(q, fe, **frontend_config)
     if frontend in FRONTENDS:
         return FRONTENDS[frontend](results, xpctl, **frontend_config)
