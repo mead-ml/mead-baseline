@@ -519,22 +519,11 @@ def lookup_sentence(rlut, seq, reverse=False, padchar=''):
 
 @exporter
 def topk(k, probs):
-    """Get a sparse index (dictionary of top values).
+    """Get a sparse index (dictionary of top values)."""
+    idx = np.argpartition(probs, probs.size-k)[-k:]
+    sort = idx[np.argsort(probs[idx])][::-1]
+    return dict(zip(sort, probs[sort]))
 
-    Note:
-        mutates input for efficiency
-    """
-    # This would be better:
-    # idx = (-probs).argsort()[:k]
-    lut = {}
-    i = 0
-
-    while i < k:
-        idx = np.argmax(probs)
-        lut[idx] = probs[idx]
-        probs[idx] = -1e9
-        i += 1
-    return lut
 
 @exporter
 def beam_multinomial(k, probs):
