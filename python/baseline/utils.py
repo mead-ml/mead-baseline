@@ -354,7 +354,7 @@ def import_user_module(module_type, model_type):
     """
     sys.path.append(os.path.dirname(os.path.realpath(addons.__file__)))
     module_name = "%s_%s" % (module_type, model_type)
-    print('Loading user model %s' % module_name)
+    #print('Loading user model %s' % module_name)
     mod = importlib.import_module(module_name)
     return mod
 
