@@ -51,12 +51,12 @@ Average scores are listed below.  Our best run so far is 91.37 using IOBES on CO
 
 | dataset             | model type    | metric | method   | eta (LR) |    avg |   max |  hsz |
 | ------------------- | ------------- |------- | -------- | -------- | ------ | ----- |----- |
-| twpos-v03           | CNN-BLSTM     |    acc | adam     |       -- | 89.4   |    -  |  100 |
-| conll 2003 (IOB1)   | CNN-BLSTM-CRF |     f1 | sgd mom. |     0.015| 90.8   | 90.98 |  200 |
-| conll 2003 (BIO)    | CNN-BLSTM-CRF |     f1 | sgd mom. |     0.015| 90.954 | 91.28 |  200 |
-| conll 2003 (IOBES)  | CNN-BLSTM-CRF |     f1 | sgd mom. |     0.015| 91.1   | 91.37 |  200 |
+| twpos-v03           | CNN-BLSTM     |    acc | adam     |       -- | 89.4   |    -  |  200 |
+| conll 2003 (IOB1)   | CNN-BLSTM-CRF |     f1 | sgd mom. |     0.015| 90.8   | 90.98 |  400 |
+| conll 2003 (BIO)    | CNN-BLSTM-CRF |     f1 | sgd mom. |     0.015| 90.954 | 91.28 |  400 |
+| conll 2003 (IOBES)  | CNN-BLSTM-CRF |     f1 | sgd mom. |     0.015| 91.2   | 91.43 |  400 |
 | conll 2003 (IOBES)  | CNN-CNN-CRF   |     f1 | sgd mom. |     0.001| 90.54  | 90.67 |  800 |
-|       atis (mesnil) | CNN-BLSTM     |     f1 | sgd mom. |     0.01 |     -  | 96.74 |  100 |
+|       atis (mesnil) | CNN-BLSTM     |     f1 | sgd mom. |     0.01 |     -  | 96.74 |  200 |
 
 
 ### Testing a trained model on your data
