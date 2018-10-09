@@ -118,10 +118,9 @@ def serve(settings, hpctl_logging, embeddings, datasets, unknown, **kwargs):
     scheduler = RoundRobinScheduler()
 
     cache = mead_settings.get('datacache', '~/.bl-data')
-    xpctl_cred = xpctl_config['cred'] if xpctl is not None else None
 
     try:
-        run_forever(results, backend, scheduler, frontend, logs, cache, xpctl_cred, datasets, embeddings)
+        run_forever(results, backend, scheduler, frontend, logs, cache, xpctl_config, datasets, embeddings)
     except KeyboardInterrupt:
         pass
 
@@ -279,16 +278,16 @@ def run(num_iters, results, backend, frontend, config_sampler, logs, mead_logs, 
     return launched_labels
 
 
-def override_client_settings(settings, cache, xpctl_cred):
+def override_client_settings(settings, cache, xpctl_config):
     """Use server POV for things line cache and xpctl config."""
     settings['datacache'] = cache
-    if xpctl_cred is None:
+    if xpctl_config is None:
         settings.get('reporting', {}).pop('xpctl', None)
     else:
-        settings.get('reporting', {}).get('xpctl', {})['cred'] = xpctl_cred
+        settings.get('reporting', {}).get('xpctl', {})['cred'] = xpctl_config
 
 
-def run_forever(results, backend, scheduler, frontend, logs, cache, xpctl_cred, datasets, embeddings):
+def run_forever(results, backend, scheduler, frontend, logs, cache, xpctl_config, datasets, embeddings):
     while True:
         cmd = frontend.command()
         process_command(cmd, backend, frontend, scheduler, results, None)
@@ -296,7 +295,7 @@ def run_forever(results, backend, scheduler, frontend, logs, cache, xpctl_cred, 
             exp_hash, job_blob = scheduler.get()
             if exp_hash is not None:
                 label, job = job_blob
-                override_client_settings(job['settings'], cache, xpctl_cred)
+                override_client_settings(job['settings'], cache, xpctl_config)
                 job['embeddings'] = embeddings
                 job['datasets'] = datasets
                 backend.launch(**job)

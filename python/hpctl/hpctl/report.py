@@ -35,7 +35,10 @@ class XPCTL(object):
     def put_result(self, label):
         # Wait to create the experiment repo until after the fork
         if self.repo is None:
-            self.repo = ExperimentRepo.create_repo(**self.xpctl_config)
+            try:
+                self.repo = ExperimentRepo.create_repo(**self.xpctl_config)
+            except Exception as e:
+                return str(e)
         loc = os.path.join(label.exp, label.sha1, label.name)
         config_loc = os.path.join(loc, 'config.json')
         config = read_config_file(config_loc)
