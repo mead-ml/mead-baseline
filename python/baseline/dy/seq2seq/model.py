@@ -75,7 +75,7 @@ class Seq2SeqModel(DynetModel, EncoderDecoderModel):
     def _embed(self, batch_dict):
         all_embeddings_lists = []
         for k, embedding in self.embeddings.items():
-            all_embeddings_lists += [embedding.encode(batch_dict[k])]
+            all_embeddings_lists.append(embedding.encode(batch_dict[k]))
 
         embed = dy.concatenate(all_embeddings_lists, d=1)
         return embed
@@ -124,7 +124,7 @@ class Seq2SeqModel(DynetModel, EncoderDecoderModel):
             rnn_output_i = rnn_state.output()
             rnn_output_i = self.dropout(rnn_output_i)
             output_i = attn_fn(rnn_output_i)
-            output += [output_i]
+            output.append(output_i)
         return output
 
     def decode(self, context, final_encoder_state, dst):
@@ -140,7 +140,7 @@ class Seq2SeqModel(DynetModel, EncoderDecoderModel):
             rnn_output_i = rnn_state.output()
             rnn_output_i = self.dropout(rnn_output_i)
             output_i = attn_fn(rnn_output_i)
-            output += [self.preds(output_i)]
+            output.append(self.preds(output_i))
 
         return output
 
@@ -161,7 +161,7 @@ class Seq2SeqModel(DynetModel, EncoderDecoderModel):
             for k, value in batch_dict.items():
                 example[k] = value[b].reshape((1,) + value[b].shape)
             inputs = self.make_input(example)
-            batch += [self.beam_decode(inputs, beam, kwargs.get('mxlen', 100))[0]]
+            batch.append(self.beam_decode(inputs, beam, kwargs.get('mxlen', 100))[0])
 
         return batch
 
@@ -185,7 +185,7 @@ class Seq2SeqModel(DynetModel, EncoderDecoderModel):
             rnn_output_i = rnn_state.output()
             output_i = attn_fn(rnn_output_i)
             output_i = np.argmax(self.preds(output_i).npvalue())
-            output += [output_i]
+            output.append(output_i)
             if output_i == EOS:
                 break
 
@@ -249,7 +249,7 @@ class Seq2SeqModel(DynetModel, EncoderDecoderModel):
                 # For each path, we need to pick that out and add it to the hiddens
                 # This will be (c1, c2, ..., h1, h2, ...)
                 for h_i, h in enumerate(hidden):
-                    new_hidden[h_i] += [dy.pick_batch_elem(h, beam_id)]
+                    new_hidden[h_i].append(dy.pick_batch_elem(h, beam_id))
 
             done = np.array(new_done)
             new_hidden = [dy.concatenate_to_batch(new_h) for new_h in new_hidden]

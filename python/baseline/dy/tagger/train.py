@@ -133,7 +133,7 @@ class TaggerTrainerDyNet(EpochReportingTrainer):
                 dy.renew_cg()
             else:
                 loss = self.model.loss(pred, y)
-                losses += [loss]
+                losses.append(loss)
 
                 if i % self.autobatchsz == 0 or i == last:
                     loss = dy.esum(losses) / len(losses)

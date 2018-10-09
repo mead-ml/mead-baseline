@@ -86,7 +86,7 @@ class GraphWordClassifierBase(ClassifierModelBase):
         embeds = []
         dsz = 0
         for k, embedding in self.embeddings.items():
-            embeds += [embedding.encode()]
+            embeds.append(embedding.encode())
             dsz += embedding.dsz
 
         return keras.layers.concatenate(embeds) if len(embeds) > 1 else embeds[0], dsz

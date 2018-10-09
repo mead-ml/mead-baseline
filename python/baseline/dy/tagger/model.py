@@ -51,7 +51,7 @@ class RNNTaggerModel(DynetModel, TaggerModel):
     def _embed(self, batch_dict):
         all_embeddings_lists = []
         for k, embedding in self.embeddings.items():
-            all_embeddings_lists += [embedding.encode(batch_dict[k])]
+            all_embeddings_lists.append(embedding.encode(batch_dict[k]))
 
         embed = dy.concatenate(all_embeddings_lists, d=1)
         return embed
@@ -112,7 +112,7 @@ class RNNTaggerModel(DynetModel, TaggerModel):
 
             for pred, y_i in zip(preds, y.T):
                 err = element_loss(pred, y_i)
-                errs += [err]
+                errs.append(err)
             return dy.esum(errs)
 
     def dropout(self, input_):

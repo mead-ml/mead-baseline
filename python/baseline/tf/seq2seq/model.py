@@ -262,7 +262,7 @@ class Seq2SeqModel(EncoderDecoderModel):
             all_embeddings_src = []
             for embedding in model.src_embeddings.values():
                 embeddings_out = embedding.encode()
-                all_embeddings_src += [embeddings_out]
+                all_embeddings_src.append(embeddings_out)
 
             embed_in = tf.concat(values=all_embeddings_src, axis=-1)
 

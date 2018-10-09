@@ -134,7 +134,7 @@ class BasicLanguageModel(LanguageModel):
             all_embeddings_out = []
             for embedding in lm.embeddings.values():
                 embeddings_out = embedding.encode()
-                all_embeddings_out += [embeddings_out]
+                all_embeddings_out.append(embeddings_out)
 
             word_embeddings = tf.concat(values=all_embeddings_out, axis=2)
             inputs = tf.nn.dropout(word_embeddings, lm.pkeep)

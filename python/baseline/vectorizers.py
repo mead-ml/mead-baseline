@@ -22,6 +22,9 @@ class Vectorizer(object):
     def get_dims(self):
         pass
 
+    def iterable(self, tokens):
+        pass
+
 
 @exporter
 def identity_trans_fn(x):
@@ -36,12 +39,12 @@ class AbstractVectorizer(Vectorizer):
         self.transform_fn = identity_trans_fn if transform_fn is None else transform_fn
         #print(self.transform_fn)
 
-    def _iterable(self, tokens):
+    def iterable(self, tokens):
         for tok in tokens:
             yield self.transform_fn(tok)
 
     def _next_element(self, tokens, vocab):
-        for atom in self._iterable(tokens):
+        for atom in self.iterable(tokens):
             value = vocab.get(atom)
             if value is None:
                 value = vocab['<UNK>']
@@ -60,7 +63,7 @@ class Token1DVectorizer(AbstractVectorizer):
     def count(self, tokens):
         seen = 0
         counter = collections.Counter()
-        for tok in self._iterable(tokens):
+        for tok in self.iterable(tokens):
             counter[tok] += 1
             seen += 1
             counter['<EOW>'] += 1
@@ -97,6 +100,9 @@ class GOVectorizer(Vectorizer):
         if self.vectorizer.mxlen != -1:
             self.vectorizer.mxlen -= 1
 
+    def iterable(self, tokens):
+        return self.vectorizer.iterable(['<GO>'] + tokens)
+
     def count(self, tokens):
         counter = self.vectorizer.count(tokens)
         counter['<GO>'] += 1
@@ -130,7 +136,7 @@ class Dict1DVectorizer(Token1DVectorizer):
         self.fields = listify(kwargs.get('fields', 'text'))
         self.delim = kwargs.get('token_delim', '@@')
 
-    def _iterable(self, tokens):
+    def iterable(self, tokens):
         return _token_iterator(self, tokens)
 
 
@@ -143,7 +149,7 @@ class AbstractCharVectorizer(AbstractVectorizer):
     def _next_element(self, tokens, vocab):
         OOV = vocab['<UNK>']
         EOW = vocab.get('<EOW>', vocab.get(' '))
-        for token in self._iterable(tokens):
+        for token in self.iterable(tokens):
             for ch in token:
                 yield vocab.get(ch, OOV)
             yield EOW
@@ -162,7 +168,7 @@ class Char2DVectorizer(AbstractCharVectorizer):
     def count(self, tokens):
         seen_tok = 0
         counter = collections.Counter()
-        for token in self._iterable(tokens):
+        for token in self.iterable(tokens):
             self.max_seen_char = max(self.max_seen_char, len(token))
             seen_tok += 1
             for ch in token:
@@ -208,7 +214,7 @@ class Dict2DVectorizer(Char2DVectorizer):
         self.fields = listify(kwargs.get('fields', 'text'))
         self.delim = kwargs.get('token_delim', '@@')
 
-    def _iterable(self, tokens):
+    def iterable(self, tokens):
         return _token_iterator(self, tokens)
 
 
@@ -225,7 +231,7 @@ class Char1DVectorizer(AbstractCharVectorizer):
     def count(self, tokens):
         seen_tok = 0
         counter = collections.Counter()
-        for token in self._iterable(tokens):
+        for token in self.iterable(tokens):
             seen_tok += 1
             for ch in token:
                 counter[ch] += 1

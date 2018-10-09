@@ -149,7 +149,7 @@ class DictExamples(object):
 
             ex = self.example_list[idx]
             for k in keys:
-                batch[k] += [ex[k]]
+                batch[k].append(ex[k])
 
             # Trim all batches along the sort_key if it exists
             if trim and self.sort_key is not None:
@@ -233,7 +233,7 @@ class Seq2SeqExamples(object):
 
             ex = self.example_list[idx]
             for k in keys:
-                batch[k] += [ex[k]]
+                batch[k].append(ex[k])
 
             # Trim all batches along the sort_key if it exists
             if trim and self.src_sort_key is not None:

@@ -81,7 +81,7 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
     def _embed(self, input):
         all_embeddings = []
         for k, embedding in self.embeddings.items():
-            all_embeddings += [embedding.encode(input[k])]
+            all_embeddings.append(embedding.encode(input[k]))
         return torch.cat(all_embeddings, 2)
 
     def classify(self, batch_dict):
@@ -251,7 +251,7 @@ class CompositePoolingModel(ClassifierModelBase):
 
         pooling = []
         for SubClass in self.SubModels:
-            pooling += [SubClass._pool(self, embeddings, lengths)]
+            pooling.append(SubClass._pool(self, embeddings, lengths))
         return torch.cat(pooling, -1)
 
     def make_input(self, batch_dict):

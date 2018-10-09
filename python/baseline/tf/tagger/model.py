@@ -252,7 +252,7 @@ class RNNTaggerModel(TaggerModel):
         all_embeddings_out = []
         for embedding in self.embeddings.values():
             embeddings_out = embedding.encode()
-            all_embeddings_out += [embeddings_out]
+            all_embeddings_out.append(embeddings_out)
         word_embeddings = tf.concat(values=all_embeddings_out, axis=2)
         return word_embeddings
 

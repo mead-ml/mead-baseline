@@ -44,7 +44,7 @@ class RNNTaggerModel(nn.Module, TaggerModel):
     def _embed(self, input):
         all_embeddings = []
         for k, embedding in self.embeddings.items():
-            all_embeddings += [embedding.encode(input[k])]
+            all_embeddings.append(embedding.encode(input[k]))
         return self.dropout(torch.cat(all_embeddings, 2))
 
     def _init_encoder(self, input_sz, **kwargs):

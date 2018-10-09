@@ -146,7 +146,7 @@ class Seq2SeqModel(nn.Module, EncoderDecoderModel):
     def _embed(self, input):
         all_embeddings = []
         for k, embedding in self.src_embeddings.items():
-            all_embeddings += [embedding.encode(input[k])]
+            all_embeddings.append(embedding.encode(input[k]))
         return torch.cat(all_embeddings, 2)
 
     def forward(self, input):
@@ -176,7 +176,7 @@ class Seq2SeqModel(nn.Module, EncoderDecoderModel):
             output_i = self.attn(output_i, context_bth, src_mask)
             output_i = self.dropout(output_i)
             # Attentional outputs
-            outputs += [output_i]
+            outputs.append(output_i)
 
         outputs = torch.stack(outputs)
         return outputs, h_i
@@ -212,7 +212,7 @@ class Seq2SeqModel(nn.Module, EncoderDecoderModel):
             for k, value in batch_dict.items():
                 example[k] = value[b].reshape((1,) + value[b].shape)
             inputs = self.make_input(example)
-            batch += [self.beam_decode(inputs, beam, kwargs.get('mxlen', 100))[0]]
+            batch.append(self.beam_decode(inputs, beam, kwargs.get('mxlen', 100))[0])
 
         return batch
 

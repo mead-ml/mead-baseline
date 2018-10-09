@@ -404,7 +404,7 @@ class ClassifierModelBase(ClassifierModel):
         for k, embedding in self.embeddings.items():
             x = kwargs.get(k, None)
             embeddings_out = embedding.encode(x)
-            all_embeddings_out += [embeddings_out]
+            all_embeddings_out.append(embeddings_out)
         word_embeddings = tf.concat(values=all_embeddings_out, axis=2)
         return word_embeddings
 
@@ -613,7 +613,7 @@ class CompositePoolingModel(ClassifierModelBase):
         SubModels = [eval(model) for model in kwargs.get('sub')]
         pooling = []
         for SubClass in SubModels:
-            pooling += [SubClass.pool(self, word_embeddings, dsz, init, **kwargs)]
+            pooling.append(SubClass.pool(self, word_embeddings, dsz, init, **kwargs))
         return tf.concat(pooling, -1)
 
 

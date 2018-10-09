@@ -287,7 +287,7 @@ def stacked_cnn(inputs, hsz, pkeep, nlayers, filts=[5], activation_fn=tf.nn.relu
                                                                name='conv{}-{}'.format(filt, i)),
                                               pkeep,
                                               name='dropout{}-{}'.format(filt, i))
-            layers += [layer]
+            layers.append(layer)
 
         return tf.concat(values=layers, axis=2)
 

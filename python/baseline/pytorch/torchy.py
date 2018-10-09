@@ -125,8 +125,8 @@ class StackedLSTMCell(nn.Module):
             input = h_i
             if i != self.num_layers - 1:
                 input = self.dropout(input)
-            hs += [h_i]
-            cs += [c_i]
+            hs.append(h_i)
+            cs.append(c_i)
 
         hs = torch.stack(hs)
         cs = torch.stack(cs)
@@ -153,7 +153,7 @@ class StackedGRUCell(nn.Module):
             input = h_i
             if i != self.num_layers:
                 input = self.dropout(input)
-            hs += [h_i]
+            hs.append(h_i)
 
         hs = torch.stack(hs)
 

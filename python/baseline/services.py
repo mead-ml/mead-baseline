@@ -80,12 +80,12 @@ class ClassifierService(object):
         for i, tokens in enumerate(tokens_seq):
             for k, vectorizer in self.vectorizers.items():
                 vec, length = vectorizer.run(tokens, self.vocabs[k])
-                examples[k] += [vec]
+                examples[k].append(vec)
                 if length is not None:
                     lengths_key = '{}_lengths'.format(k)
                     if lengths_key not in examples:
                         examples[lengths_key] = []
-                    examples[lengths_key] += [length]
+                    examples[lengths_key].append(length)
 
         for k in self.vectorizers.keys():
             examples[k] = np.stack(examples[k])

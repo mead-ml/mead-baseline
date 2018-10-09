@@ -96,7 +96,7 @@ class TSVParallelCorpusReader(ParallelCorpusReader):
 
                 tgt = list(filter(lambda x: len(x) != 0, re.split("\s+", splits[1])))
                 example['tgt'], example['tgt_lengths'] = self.tgt_vectorizer.run(tgt, tgt_vocab)
-                ts += [example]
+                ts.append(example)
         return baseline.data.Seq2SeqExamples(ts)
 
 
@@ -137,7 +137,7 @@ class MultiFileParallelCorpusReader(ParallelCorpusReader):
                             example['{}_lengths'.format(k)] = length
                     tgt = re.split("\s+", tgt.strip())
                     example['tgt'], example['tgt_lengths'] = self.tgt_vectorizer.run(tgt, tgt_vocab)
-                    ts += [example]
+                    ts.append(example)
         return baseline.data.Seq2SeqExamples(ts)
 
 
@@ -244,10 +244,10 @@ class CONLLSeqReader(SeqPredictReader):
                         field_name = self.named_fields.get(str(j),
                                                            self.named_fields.get(str(noff), str(j)))
                         token[field_name] = states[j]
-                    tokens += [token]
+                    tokens.append(token)
 
                 else:
-                    examples += [tokens]
+                    examples.append(tokens)
                     tokens = []
 
         return examples
