@@ -231,7 +231,6 @@ the embedding is not of type 'word' or 'char', please fill in and put \
         legacy_init_op = tf.group(tf.tables_initializer(), name='legacy_init_op')
         definition = {}
         definition[sig_name] = prediction_signature
-
         builder.add_meta_graph_and_variables(
             sess, [tf.saved_model.tag_constants.SERVING],
             signature_def_map=definition,
@@ -360,7 +359,7 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
         self.restore_model(sess, model_file)
         
         if use_preproc:
-            sig_input = SignatureInput(serialized_tf_example, raw_posts, extra_features_required)
+            sig_input = SignatureInput(serialized_tf_example, tf_example, extra_features_required)
         else:
             sig_input = SignatureInput(None, None, extra_features_required + ['lengths'], model=model)
 
@@ -488,4 +487,4 @@ class Seq2SeqTensorFlowExporter(TensorFlowExporter):
         sig_input = SignatureInput(serialized_tf_example, raw_posts)
         sig_output = SignatureOutput(classes, None)
 
-        return sig_input, sig_outputl, 'suggest_text'
+        return sig_input, sig_output, 'suggest_text'

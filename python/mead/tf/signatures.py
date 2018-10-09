@@ -45,10 +45,13 @@ class SignatureInput(object):
         return self.predict_sig
 
     def _create_predict_sig(self, tensor):
-        res = {
-            SignatureInput.PREDICT_INPUT_KEY: 
-                tf.saved_model.utils.build_tensor_info(tensor)
-        }
+        res = {}
+        raw_post = tensor['text/tokens']
+        res['tokens'] = tf.saved_model.utils.build_tensor_info(raw_post)
+
+        for extra in self.extra_features:
+            raw = tensor[extra]
+            res[extra] = tf.saved_model.utils.build_tensor_info(raw)
         return res
 
     def _build_predict_signature_from_model(self, model):
