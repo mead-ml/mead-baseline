@@ -164,6 +164,7 @@ def search(
     xpctl_config = None
     auto_xpctl = 'xpctl' in mead_config.get('reporting', [])
     if not auto_xpctl:
+        # If the jobs aren't setup to use xpctl automatically create your own
         xpctl_config = get_xpctl_settings(mead_settings)
         if xpctl_config is not None:
             xpctl_extra = parse_extra_args(['xpctl'], unknown)
@@ -220,7 +221,7 @@ def verify(
         task, num_iters, label,
         **kwargs
 ):
-    """Search for optimal hyperparameters."""
+    """Run an experiment while forcing xpctl on used to run a single config a lot."""
     mead_config = get_config(config, reporting, unknown)
 
     force_xpctl(mead_config, label)
@@ -276,6 +277,7 @@ def run(num_iters, results, backend, frontend, config_sampler, logs, mead_logs, 
 
 
 def override_client_settings(settings, cache, xpctl_cred):
+    """Use server POV for things line cache and xpctl config."""
     settings['datacache'] = cache
     if xpctl_cred is None:
         settings.get('reporting', {}).pop('xpctl', None)
@@ -305,12 +307,14 @@ def run_forever(results, backend, scheduler, frontend, logs, cache, xpctl_cred):
 
 def process_command(cmd, backend, frontend, scheduler, results, xpctl):
     if cmd is not None and isinstance(cmd, dict):
+        # Kill a job
         if cmd['command'] == 'kill':
             backend.kill(cmd['label'])
             results.set_killed(cmd['label'])
             if scheduler is not None:
                 scheduler.remove(cmd['label'])
             frontend.update()
+        # Start a job
         if cmd['command'] == 'launch':
             exp_config = cmd.pop('experiment_config', None)
             if exp_config is not None:
@@ -318,6 +322,7 @@ def process_command(cmd, backend, frontend, scheduler, results, xpctl):
             scheduler.add(cmd['label'], cmd)
             results.insert(cmd['label'], cmd['config'])
             results.save()
+        # Save a run to XPCTL
         if cmd['command'] == 'xpctl':
             if xpctl is not None and not results.get_xpctl(cmd['label']):
                 id_ = xpctl.put_result(cmd['label'])
