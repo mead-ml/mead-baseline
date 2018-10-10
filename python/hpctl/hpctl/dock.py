@@ -50,7 +50,7 @@ def create_mount_dict(mount_dirs, modes):
     return mounts
 
 
-def get_container(framework):
+def get_container_name(framework):
     """Translate the framework into the docker container name."""
     return 'baseline-{}'.format({
         'tensorflow': 'tf',
@@ -104,7 +104,7 @@ def run_docker(
     if 'visdom' in config_params.get('reporting', {}):
         config_params.get('reporting', {})['visdom']['name'] = label.name
 
-    container = get_container(config_params['backend'])
+    container = get_container_name(config_params['backend'])
     command = [
         'mead-train',
         '--config', '$CONFIG',

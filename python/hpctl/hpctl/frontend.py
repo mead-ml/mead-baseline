@@ -125,16 +125,21 @@ class Console(Frontend):
         if not labels:
             return
         max_len = max(map(len, map(lambda x: x.name, labels)))
+        data = {}
         for label in labels:
-            print('{state} {name:{width}} - train ({train_metric}): {train_stat:.3f} at {train_step} dev ({metric}): {dev_stat:.3f} at {dev_step}'.format(
-                state=color_state(self.results.get_state(label)),
+            data[label] = {
+                'state': color_state(self.results.get_state(label)),
+                'train_stat': self.results.get_recent(label, 'Train', self.train),
+                'train_tick': self.results.get_recent(label, 'Train', 'tick'),
+                'dev_stat': self.results.get_recent(label, 'Valid', self.dev),
+                'dev_tick': self.results.get_recent(label, 'Valid', 'tick'),
+            }
+        for label in labels:
+            print('{state} {name:{width}} - train ({train_metric}): {train_stat:.3f} at {train_tick} dev ({metric}): {dev_stat:.3f} at {dev_tick}'.format(
                 name=label.name,
                 train_metric=self.train,
-                train_stat=self.results.get_recent(label, 'Train', self.train),
-                train_step=self.results.get_recent(label, 'Train', 'tick'),
                 metric=self.dev,
-                dev_stat=self.results.get_recent(label, 'Valid', self.dev),
-                dev_step=self.results.get_recent(label, 'Valid', 'tick'),
+                **data[label],
                 width=max_len)
             )
             self.print_count += 1
@@ -185,15 +190,16 @@ class ConsoleDev(Console):
 
     def update(self):
         """Display the best Dev metrics."""
-        reset_screen(self.print_count)
-        self.print_count = 0
         labels, vals, idxs = self.results.get_best_per_label(self.experiment_hash, 'Valid', self.dev)
         if not labels:
             return
         max_len = max(map(len, map(lambda x: x.name, labels)))
-        for label, val, idx in zip(labels, vals, idxs):
+        states = [color_state(self.results.get_state(label)) for label in labels]
+        reset_screen(self.print_count)
+        self.print_count = 0
+        for state, label, val, idx in zip(states, labels, vals, idxs):
             print('{state} {name:{width}} - best dev ({metric}): {stat:.3f} at {step}'.format(
-                state=color_state(self.results.get_state(label)),
+                state=color_state(state),
                 name=label.name, metric=self.dev, stat=val, step=idx,
                 width=max_len)
             )
