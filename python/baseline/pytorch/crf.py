@@ -13,6 +13,7 @@ def crf_mask(vocab, span_type, s_idx, e_idx, pad_idx=None):
     np_mask = crf_m(vocab, span_type, s_idx, e_idx, pad_idx=pad_idx)
     return torch.from_numpy(np_mask) == 0
 
+
 class CRF(nn.Module):
     def __init__(self, n_tags, idxs=None, batch_first=True, vocab=None, span_type=None, pad_idx=None):
         """Initialize the object.

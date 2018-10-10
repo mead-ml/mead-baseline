@@ -5,7 +5,7 @@ from mock import patch, Mock
 tf = pytest.importorskip('tensorflow')
 import baseline
 import baseline.tf.tagger
-from baseline.w2v import Word2VecModel
+from baseline.w2v import PretrainedEmbeddingsModel as  Word2VecModel
 from mead.tasks import TaggerTask
 from mead.tf.exporters import TaggerTensorFlowExporter
 from mead.tf.exporters import FIELD_NAME

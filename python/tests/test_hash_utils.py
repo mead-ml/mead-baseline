@@ -44,13 +44,12 @@ def test_order_json_e2e(data, mixed):
     assert res == data
 
 
-def test_order_json_sorts_list():
-    l = list(range(10))
-    random.shuffle(l)
-    data = {'a': l}
-    gold_data = {'a': list(range(10))}
+def test_order_json_doesnt_sorts_list():
+    gold = list(range(10))
+    random.shuffle(gold)
+    data = {'a': gold}
     res = order_json(data)
-    assert res == gold_data
+    assert res['a'] == gold
 
 
 def test_remove_first_layer(data):

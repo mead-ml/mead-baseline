@@ -971,3 +971,8 @@ def verbose_output(verbose, confusion_matrix):
         print(confusion_matrix)
     if outfile is not None:
         confusion_matrix.save(outfile)
+
+
+@exporter
+def get_env_gpus():
+    return os.getenv('CUDA_VISIBLE_DEVICES', os.getenv('NV_GPU', '0')).split(',')

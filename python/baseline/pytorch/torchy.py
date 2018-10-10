@@ -1,7 +1,6 @@
 import torch
 import numpy as np
 from baseline.utils import lookup_sentence, get_version
-from baseline.utils import crf_mask as crf_m
 import torch.autograd
 import torch.nn as nn
 import torch.nn.functional as F
