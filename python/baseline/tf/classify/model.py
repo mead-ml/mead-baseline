@@ -225,11 +225,9 @@ class ClassifierModelBase(ClassifierModel):
         """
         y = batch_dict.get('y', None)
 
+        feed_dict = {v.x: batch_dict[k] for k, v in self.embeddings.items()}
         pkeep = 1.0 - self.pdrop_value if do_dropout else 1.0
-        feed_dict = {self.pkeep: pkeep}
-
-        for key in self.embeddings.keys():
-            feed_dict["{}:0".format(key)] = batch_dict[key]
+        feed_dict[self.pkeep] = pkeep
 
         # Allow us to track a length, which is needed for BLSTMs
         if self.lengths_key is not None:
