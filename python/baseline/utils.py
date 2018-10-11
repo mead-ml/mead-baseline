@@ -34,16 +34,22 @@ def export(obj, all_list=None):
 
 exporter = export(__all__)
 
+def optional_params(func):
+    @wraps(func)
+    def wrapped(*args, **kwargs):
+        if len(args) == 1 and len(kwargs) == 0 and callable(args[0]):
+            return func(args[0])
+        return lambda x: func(x, *args , **kwargs)
+    return wrapped
+
 
 @exporter
-@parameterize
-def plugin(func, g, name='create_model'):
+@optional_params
+def plugin(cls, name='create_model'):
     """Automatically create a plugin hook for the decorated model.
 
-    Note: Needs to be passed globals().
-
     addons/model.py
-        @plugin(globals())
+        @plugin
         class A: pass
 
     >>> from model import create_model
@@ -52,14 +58,13 @@ def plugin(func, g, name='create_model'):
     <model.A object as ...>
     """
     def create(*args, **kwargs):
-        return func(*args, **kwargs)
+        return cls(*args, **kwargs)
+
+    import inspect
+    g = inspect.stack()[2][0].f_globals
     g[name] = create
 
-    @wraps(func)
-    def make(*args, **kwargs):
-
-        return func(*args, **kwargs)
-    return make
+    return cls
 
 
 @contextmanager
