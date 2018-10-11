@@ -62,10 +62,20 @@ class RNNTaggerModel(TaggerModel):
         with open(basename + '.saver', 'w') as f:
             f.write(str(self.saver.as_saver_def()))
 
+    UNK = 1
+    PAD = 0
+
+    def drop_inputs(self, key, x, do_dropout):
+        v = self.dropin_value.get(key, 0)
+        if do_dropout and v > 0.0:
+            drop_indices = np.where((np.random.random(x.shape) < v) & (x != RNNTaggerModel.PAD))
+            x[drop_indices[0], drop_indices[1]] = RNNTaggerModel.UNK
+        return x
+
     def make_input(self, batch_dict, do_dropout=False):
         y = batch_dict.get('y', None)
 
-        feed_dict = {v.x: batch_dict[k] for k, v in self.embeddings.items()}
+        feed_dict = {v.x: self.drop_inputs(k, batch_dict[k], do_dropout) for k, v in self.embeddings.items()}
         pkeep = 1.0 - self.pdrop_value if do_dropout else 1.0
         feed_dict[self.pkeep] = pkeep
 
@@ -267,6 +277,7 @@ class RNNTaggerModel(TaggerModel):
         # This only exists to make exporting easier
         model.pkeep = kwargs.get('pkeep', tf.placeholder_with_default(1.0, shape=(), name="pkeep"))
         model.pdrop_value = kwargs.get('dropout', 0.5)
+        model.dropin_value = kwargs.get('dropin', {})
         model.sess = kwargs.get('sess', tf.Session())
         hsz = int(kwargs['hsz'])
         model.pdrop_in = kwargs.get('dropin', 0.0)
