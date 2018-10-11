@@ -6,7 +6,7 @@ import socket
 import os
 
 
-@plugin('create_reporting_hook')
+@plugin('reporting_hook')
 class XPCtlReporting(ReportingHook):
     def __init__(self, **kwargs):
         super(XPCtlReporting, self).__init__(**kwargs)

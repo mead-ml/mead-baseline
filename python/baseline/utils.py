@@ -45,7 +45,7 @@ def optional_params(func):
 
 @exporter
 @optional_params
-def plugin(cls, name='create_model'):
+def plugin(cls, name='model'):
     """Automatically create a plugin hook for the decorated model.
 
     addons/model.py
@@ -57,12 +57,20 @@ def plugin(cls, name='create_model'):
     >>> type(a)
     <model.A object as ...>
     """
-    def create(*args, **kwargs):
-        return cls(*args, **kwargs)
-
     import inspect
     g = inspect.stack()[2][0].f_globals
-    g[name] = create
+    if hasattr(cls, 'create'):
+        def create(*args, **kwargs):
+            return cls.create(*args, **kwargs)
+    else:
+        def create(*args, **kwargs):
+            return cls(*args, **kwargs)
+    g['create_{}'.format(name)] = create
+
+    if hasattr(cls, 'load'):
+        def load(*args, **kwargs):
+            return cls.load(*args, **kwargs)
+        g['load_{}'.format(name)] = load
 
     return cls
 
