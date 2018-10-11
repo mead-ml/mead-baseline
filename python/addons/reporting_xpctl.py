@@ -1,11 +1,12 @@
 from baseline.reporting import ReportingHook
 from xpctl.core import ExperimentRepo
-from baseline.utils import read_config_file
+from baseline.utils import read_config_file, plugin
 import getpass
 import socket
 import os
 
 
+@plugin('reporting_hook')
 class XPCtlReporting(ReportingHook):
     def __init__(self, **kwargs):
         super(XPCtlReporting, self).__init__(**kwargs)
@@ -67,7 +68,3 @@ class XPCtlReporting(ReportingHook):
         elif os.path.exists(".graph".format(non_zip)):
             return non_zip
         return None
-
-
-def create_reporting_hook(**kwargs):
-    return XPCtlReporting(**kwargs)
