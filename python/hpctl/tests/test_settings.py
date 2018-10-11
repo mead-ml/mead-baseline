@@ -1,10 +1,16 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
+import os
+import json
 import pytest
+from mock import patch
 from hpctl.core import (
     force_xpctl,
     force_remote_backend,
     override_client_settings,
+)
+from hpctl.settings import (
+    get_xpctl_settings,
 )
 
 
@@ -155,3 +161,29 @@ def test_force_remote_backend_respects_port():
     be = {'port': gold}
     force_remote_backend(be)
     assert be['port'] == gold
+
+
+def test_xpctl_no_reporting():
+    settings = {}
+    xpctl = get_xpctl_settings(settings)
+    assert xpctl is None
+
+
+def test_xpctl_no_xpctl():
+    settings = {'reporting_hooks': {'visdom': None}}
+    xpctl = get_xpctl_settings(settings)
+    assert xpctl is None
+
+
+def test_xpctl_no_cred():
+    settings = {'reporting_hooks': {'xpctl': {'label': 'name'}}}
+    xpctl = get_xpctl_settings(settings)
+    assert xpctl is None
+
+
+def test_xpctl_file_cred():
+    loc = 'xpctlcred_loc'
+    settings = {'reporting_hooks': {'xpctl': {'cred': loc}}}
+    with patch('hpctl.settings.read_config_file_or_json') as read_patch:
+        _ = get_xpctl_settings(settings)
+    read_patch.assert_called_once_with(loc)

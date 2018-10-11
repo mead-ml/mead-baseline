@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 import six
-from six.moves import intern
 
 import os
 import json
@@ -50,9 +49,6 @@ class Label(Mapping):
         self.exp = exp
         self.sha1 = sha1
         self.name = name
-        # intern(self.exp)
-        # intern(self.sha1)
-        # intern(self.name)
 
     @property
     def local(self):

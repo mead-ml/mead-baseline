@@ -35,7 +35,7 @@ def get_logs(hpctl_settings, logging, hpctl_logging):
 def set_root(hpctl_settings, default='delete_me'):
     root = hpctl_settings.get('root', default)
     try:
-        os.mkdir(root)
+        os.makedirs(root)
     except OSError:
         pass
     os.chdir(root)

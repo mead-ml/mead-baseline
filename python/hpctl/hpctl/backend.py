@@ -61,8 +61,8 @@ class Backend(object):
         super(Backend, self).__init__()
         self.labels = []
 
-    def launch(self, label, config, **kwargs):
-        pass
+    def launch(self, label, *args, **kwargs):
+        self.labels.append(label)
 
     def any_done(self):
         pass
@@ -96,10 +96,8 @@ class LocalGPUBackend(Backend):
         self.label_to_job = {}
         self.gpus_to_job = {gpu: None for gpu in self.real_gpus}
 
-    def launch(self, *args, **kwargs):
-        pass
-
     def _free_resources(self):
+        jobs = []
         for job in self.jobs:
             # Update label -> job mapping
             if job.is_done:
@@ -116,7 +114,10 @@ class LocalGPUBackend(Backend):
                         self.gpus_to_job[gpu] = None
 
                 job.join()
-                self.jobs.remove(job)
+            else:
+                jobs.append(job)
+        self.jobs = jobs
+
 
     def _request_gpus(self, count):
         gpus = []
@@ -132,6 +133,8 @@ class LocalGPUBackend(Backend):
             self.gpus_to_job[gpu] = job
 
     def any_done(self):
+        if not self.jobs:
+            return True
         return (
             any(map(lambda x: x.is_done, self.jobs)) or
             any(map(lambda x: x is None, self.gpus_to_job.values()))
