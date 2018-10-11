@@ -35,6 +35,33 @@ def export(obj, all_list=None):
 exporter = export(__all__)
 
 
+@exporter
+@parameterize
+def plugin(func, g, name='create_model'):
+    """Automatically create a plugin hook for the decorated model.
+
+    Note: Needs to be passed globals().
+
+    addons/model.py
+        @plugin(globals())
+        class A: pass
+
+    >>> from model import create_model
+    >>> a = create_model()
+    >>> type(a)
+    <model.A object as ...>
+    """
+    def create(*args, **kwargs):
+        return func(*args, **kwargs)
+    g[name] = create
+
+    @wraps(func)
+    def make(*args, **kwargs):
+
+        return func(*args, **kwargs)
+    return make
+
+
 @contextmanager
 def redirect(from_stream, to_stream):
     original_from = from_stream.fileno()
