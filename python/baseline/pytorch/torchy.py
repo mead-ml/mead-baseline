@@ -381,6 +381,20 @@ class LSTMEncoder(nn.Module):
         return output + tbc if self.residual else output
 
 
+class GRUEncoder(nn.Module):
+
+    def __init__(self, insz, hsz, rnntype, nlayers, dropout, residual=False):
+        super(GRUEncoder, self).__init__()
+        self.residual = residual
+        self.rnn = pytorch_rnn(insz, hsz, rnntype, nlayers, dropout)
+
+    def forward(self, tbc, lengths):
+
+        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths.tolist())
+        output, hidden = self.rnn(packed)
+        output, _ = torch.nn.utils.rnn.pad_packed_sequence(output)
+        return output + tbc if self.residual else output
+
 class BaseAttention(nn.Module):
 
     def __init__(self, hsz):
