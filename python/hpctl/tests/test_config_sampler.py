@@ -1,8 +1,10 @@
 import random
+from functools import partial
 from collections import OrderedDict
 import pytest
+import numpy as np
 from mock import MagicMock, call
-from hpctl.sample import Sampler, GridSampler, ConfigSampler, log_sample
+from hpctl.sample import Sampler, GridSampler, ConfigSampler, log_sample, constrained_sampler
 
 
 def test_grid_sample_len():
@@ -124,3 +126,35 @@ def test_keys_are_tuples():
     found = ConfigSampler._find(data, 1, sample)
     assert ('a',) in found
     assert ('b', 'c') in found
+
+
+def test_constrained_sampling():
+    min_ = -1
+    max_ = 1
+    c_min = -.5
+    c_max = 0.5
+    constraints = ["> {}".format(c_min), "< {}".format(c_max)]
+    sampler = partial(constrained_sampler, np.random.uniform, constraints, min_, max_)
+
+    def test():
+        sample = sampler()
+        assert sample < c_max
+        assert sample > c_min
+
+    for _ in range(1000):
+        test()
+
+
+def test_unconstrained_sampleing():
+    min_ = -1
+    max_ = 1
+    constraints = []
+    sampler = partial(constrained_sampler, np.random.uniform, constraints, min_, max_)
+
+    def test():
+        sample = sampler()
+        assert sample < max_
+        assert sample > min_
+
+    for _ in range(1000):
+        test()

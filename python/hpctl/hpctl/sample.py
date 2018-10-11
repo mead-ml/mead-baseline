@@ -8,10 +8,11 @@ import operator
 from copy import deepcopy
 from gzip import GzipFile
 from random import choice
+from functools import partial
 from itertools import cycle, product
 import numpy as np
 from baseline.utils import export as exporter
-from baseline.utils import import_user_module
+from baseline.utils import import_user_module, listify
 from mead.utils import hash_config
 from hpctl.utils import Label
 
@@ -80,6 +81,13 @@ def max_log_sample(min_, max_, size=1, base='e'):
     if size == 1:
         return (1 - log_sample(1 - max_, 1 - min_, size, base)).item()
     return 1 - log_sample(1 - max_, 1 - min_, size, base)
+
+
+def constrained_sampler(sampler, constraints, *args):
+    sample = sampler(*args)
+    while not all(eval('{} {}'.format(sample, constraint)) for constraint in constraints):
+        sample = sampler(*args)
+    return sample
 
 
 @export
@@ -154,19 +162,40 @@ def add_grid(example, key, value):
     example[(key,)] = value['values']
 
 def add_min_max(example, key, value):
-    example[(key,)] = [value['min'], value['max']]
+    key = (key,)
+    example[key] = [listify(value.get('constraints', DEFAULT_CONSTRAINTS.get(key[-1], []))), value['min'], value['max']]
 
 def add_normal(example, key, value):
-    example[(key,)] = [value['mu'], value['sigma']]
+    key = (key,)
+    example[key] = [listify(value.get('constraints', DEFAULT_CONSTRAINTS.get(key[-1], []))), value['mu'], value['sigma']]
 
+
+DEFAULT_CONSTRAINTS = {
+    'dropout': ['>= 0', '< 1'],
+    'mom': ['< 1', '>= 0'],
+    'eta': '> 0',
+    'hsz': '% 2 == 0',
+}
 
 DEFAULT_SAMPLERS = {
-    'normal': Sampler("normal", add_normal, np.random.normal),
+    'normal': Sampler(
+        "normal", add_normal,
+        partial(constrained_sampler, np.random.normal)
+    ),
     'grid': GridSampler(add_grid),
     'choice': Sampler("choice", add_values, random.choice),
-    'uniform': Sampler("uniform", add_min_max, np.random.uniform),
-    'min_log': Sampler("min_log", add_min_max, min_log_sample),
-    'max_log': Sampler("max_log", add_min_max, max_log_sample),
+    'uniform': Sampler(
+        "uniform", add_min_max,
+        partial(constrained_sampler, np.random.uniform)
+    ),
+    'min_log': Sampler(
+        "min_log", add_min_max,
+        partial(constrained_sampler, min_log_sample)
+    ),
+    'max_log': Sampler(
+        "max_log", add_min_max,
+        partial(constrained_sampler, max_log_sample)
+    ),
 }
 
 

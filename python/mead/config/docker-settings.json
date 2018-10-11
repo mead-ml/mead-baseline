@@ -1,5 +1,10 @@
 {
     "datacache": "/home/blester/.bl-data",
+    "reporting_hooks": {
+        "xpctl": {
+            "cred": "~/xpctlcred.json.mongo"
+        }
+    },
     "hpctl": {
         "backend": {
             "type": "docker",
