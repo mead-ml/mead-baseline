@@ -63,7 +63,7 @@ def launch(
         logging, hpctl_logging,
         datasets, embeddings,
         reporting, unknown,
-        task, **kwargs
+        task, num_iters, **kwargs
 ):
     mead_config = get_config(config, reporting, unknown)
     exp_hash = hash_config(mead_config)
@@ -78,20 +78,21 @@ def launch(
     force_remote_backend(backend_config)
 
     config_sampler = get_config_sampler(mead_config, None)
-    label, config = config_sampler.sample()
-    print(label)
-    send = {
-        'label': label,
-        'config': config,
-        'mead_logs': mead_logs,
-        'hpctl_logs': hp_logs,
-        'task_name': task,
-        'settings': mead_settings,
-        'experiment_config': mead_config,
-    }
-
     be = get_backend(backend_config)
-    be.launch(**send)
+
+    for _ in range(num_iters):
+        label, config = config_sampler.sample()
+        print(label)
+        send = {
+            'label': label,
+            'config': config,
+            'mead_logs': mead_logs,
+            'hpctl_logs': hp_logs,
+            'task_name': task,
+            'settings': mead_settings,
+            'experiment_config': mead_config,
+        }
+        be.launch(**send)
 
 
 @export

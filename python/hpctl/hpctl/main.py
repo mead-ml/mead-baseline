@@ -43,6 +43,7 @@ def add_common_args(p):
     )
     p.add_argument('--reporting', help='reporting hooks', nargs='+')
     p.add_argument('--label', help="The name for the job in xpctl.")
+    p.add_argument('--num_iters', type=int, help="The number of sample to run.", default=2)
 
 
 def print_help(p):
@@ -64,16 +65,15 @@ def main():
     search_parser = subparsers.add_parser('search', description="Explore Hyper Parameters.")
     search_parser.set_defaults(func=search)
     add_common_args(search_parser)
-    search_parser.add_argument('--num_iters', type=int, help="The number of sample to run.", default=2)
 
     verify_parser = subparsers.add_parser('verify', description="Run a config a lot.")
     verify_parser.set_defaults(func=verify)
     add_common_args(verify_parser)
-    verify_parser.add_argument('--num_iters', type=int, help="The number of times to run the job.", default=2)
 
     launch_parser = subparsers.add_parser('launch')
     launch_parser.set_defaults(func=launch)
     add_common_args(launch_parser)
+    launch_parser.set_defaults(num_iters=1)
 
     find_parser = subparsers.add_parser('find', description="Find a file from the human name.")
     find_parser.set_defaults(func=find)
@@ -87,7 +87,6 @@ def main():
     serve_parser = subparsers.add_parser('serve', description="Start a flask server.")
     serve_parser.set_defaults(func=serve)
     add_common_args(serve_parser)
-    serve_parser.add_argument('--num_iters', type=int, help="The number of sample to run.")
     serve_parser.add_argument("--debug", action="store_true")
 
     args, extra = parser.parse_known_args()
