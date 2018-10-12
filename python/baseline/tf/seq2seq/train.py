@@ -6,7 +6,7 @@ import tensorflow as tf
 from baseline.utils import zip_model
 from baseline.tf.tfy import optimizer
 from baseline.utils import listify, get_model_file
-from baseline.train import Trainer, create_trainer, register_trainer
+from baseline.train import Trainer, create_trainer, register_trainer, register_training_func
 import time
 import os
 
@@ -105,6 +105,7 @@ class Seq2SeqTrainerTf(Trainer):
         return metrics
 
 
+@register_training_func('seq2seq')
 def fit(model, ts, vs, es=None, **kwargs):
     epochs = int(kwargs['epochs']) if 'epochs' in kwargs else 5
     patience = int(kwargs['patience']) if 'patience' in kwargs else epochs

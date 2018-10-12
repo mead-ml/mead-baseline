@@ -5,7 +5,7 @@ import torch
 import numpy as np
 from baseline.progress import create_progress_bar
 from baseline.utils import listify, get_model_file
-from baseline.train import Trainer, create_trainer, register_trainer
+from baseline.train import Trainer, create_trainer, register_trainer, register_training_func
 from baseline.pytorch.torchy import pytorch_prepare_optimizer
 
 
@@ -107,6 +107,7 @@ class Seq2SeqTrainerPyTorch(Trainer):
         return metrics
 
 
+@register_training_func('seq2seq')
 def fit(model, ts, vs, es=None, **kwargs):
 
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))

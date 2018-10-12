@@ -21,7 +21,7 @@ exporter = export(__all__)
 class Backend(object):
     """Simple object to represent a deep-learning framework backend
     """
-    def __init__(self, name=None, task=None, embeddings=None, params=None, exporter=None):
+    def __init__(self, name=None, params=None, exporter=None):
         """Initialize the backend, optional with constructor args
 
         :param name: (``str``) Name of the framework: currently one of (`tensorflow`, `pytorch`, `dynet`, `keras`)
@@ -31,8 +31,6 @@ class Backend(object):
         :param exporter: A framework-specific exporter to facilitate exporting to runtime deployment
         """
         self.name = name
-        self.task = task
-        self.embeddings = embeddings
         self.params = params
         self.exporter = exporter
 
@@ -150,13 +148,13 @@ class Task(object):
         self.config_file = kwargs.get('config_file')
         self._setup_task()
         self._configure_reporting(config_params.get('reporting', {}), **kwargs)
-        self._load_addons()
+        self._loader_user_modules()
         self.dataset = datasets_set[self.config_params['dataset']]
         self.reader = self._create_task_specific_reader()
 
-    def _load_addons(self):
-        if 'addons' in self.config_params:
-            for addon in self.config_params['addons']:
+    def _loader_user_modules(self):
+        if 'modules' in self.config_params:
+            for addon in self.config_params['modules']:
                 import_user_module(addon)
 
     def initialize(self, embeddings_index):
@@ -204,7 +202,7 @@ class Task(object):
 
         1. call `_load_dataset()` which initializes the `DataFeed` fields of this class
         2. call `baseline.save_vectorizers()` which write out the bound `vectorizers` fields to a file in the `basedir`
-        3. call `backend.task.fit()` which executes the training procedure and  yields a saved model
+        3. call `backend.train.fit()` which executes the training procedure and  yields a saved model
         4. call `baseline.zip_files()` which zips all files in the `basedir` with the same `PID` as this process
         5. call `_close_reporting_hooks()` which lets the reporting hooks know that the job is finished
         :return: Nothing
@@ -212,7 +210,7 @@ class Task(object):
         self._load_dataset()
         baseline.save_vectorizers(self.get_basedir(), self.vectorizers)
         model = self._create_model()
-        self.backend.task.fit(model, self.train_data, self.valid_data, self.test_data, **self.config_params['train'])
+        baseline.train.fit(model, self.train_data, self.valid_data, self.test_data, **self.config_params['train'])
         baseline.zip_files(self.get_basedir())
         self._close_reporting_hooks()
 
@@ -347,16 +345,10 @@ class ClassifierTask(Task):
                 batched = True
             dy_params.init()
             backend.params = {'pc': _dynet.ParameterCollection(), 'batched': batched}
-            import baseline.dy.embeddings as embeddings
-            import baseline.dy.classify as classify
         else:
-            import baseline.tf.embeddings as embeddings
-            import baseline.tf.classify as classify
             from mead.tf.exporters import ClassifyTensorFlowExporter
             backend.exporter = ClassifyTensorFlowExporter
 
-        backend.embeddings = embeddings
-        backend.task = classify
         return backend
 
     def _create_task_specific_reader(self):
@@ -452,7 +444,6 @@ class TaggerTask(Task):
             import baseline.tf.tagger as tagger
             from mead.tf.exporters import TaggerTensorFlowExporter
             backend.exporter = TaggerTensorFlowExporter
-        backend.embeddings = embeddings
         backend.task = tagger
         return backend
 
@@ -497,7 +488,7 @@ class TaggerTask(Task):
         baseline.save_vectorizers(self.get_basedir(), self.vectorizers)
         model = self._create_model()
         conll_output = self.config_params.get("conll_output", None)
-        self.backend.task.fit(model, self.train_data, self.valid_data, self.test_data, conll_output=conll_output, txts=self.txts, **self.config_params['train'])
+        baseline.train.fit(model, self.train_data, self.valid_data, self.test_data, conll_output=conll_output, txts=self.txts, **self.config_params['train'])
         baseline.zip_files(self.get_basedir())
         return model
 
@@ -558,7 +549,6 @@ class EncoderDecoderTask(Task):
                 from mead.tf.exporters import Seq2SeqTensorFlowExporter
                 backend.exporter = Seq2SeqTensorFlowExporter
 
-        backend.embeddings = embeddings
         backend.task = seq2seq
         return backend
 
@@ -688,7 +678,6 @@ class LanguageModelingTask(Task):
             self.config_params['preproc']['trim'] = False
             import baseline.tf.embeddings as embeddings
             import baseline.tf.lm as lm
-        backend.embeddings = embeddings
         backend.task = lm
         return backend
 

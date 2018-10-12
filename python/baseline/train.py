@@ -66,7 +66,11 @@ BASELINE_TRAINERS = {}
 @exporter
 @optional_params
 def register_trainer(cls, name=None):
-    """Register a function as a plug-in"""
+    """Register a function as a plug-in
+
+    Use this pattern if you want to provide an override to a `Trainer` class.
+
+    """
     if name is None:
         name = cls.__name__
 
@@ -75,6 +79,55 @@ def register_trainer(cls, name=None):
 
     BASELINE_TRAINERS[name] = cls
     return cls
+
+
+BASELINE_FIT_FUNC = {}
+
+
+@exporter
+@optional_params
+def register_training_func(func, task, name=None):
+    """Register a training by-pass
+
+    Use this pattern if you want to change the entire training hook.  Your function will have to fulfill all the
+    behaviors that fit() normally handles
+
+    :param func:
+    :param name:
+    :return:
+    """
+    if task not in BASELINE_FIT_FUNC:
+        BASELINE_FIT_FUNC[task] = {}
+    if name is None:
+        name = 'default'
+
+    if name in BASELINE_FIT_FUNC[task]:
+        raise Exception('Attempting to override the fit function without providing a suitable name')
+
+    BASELINE_FIT_FUNC[task][name] = func
+    return func
+
+
+@exporter
+def fit(model, ts, vs, es, **kwargs):
+    """This method delegates to the registered fit function for each DL framework.  It is possible to provide a by-pass
+    to our defined fit functions for each method (this is considered advanced usage).  In cases where the user wishes
+    to provide their own fit hook, the need to decorate the bypass hook with @register_training_func(name='myname'),
+    and then pass in the `fit_func='myname'` to this.  MEAD handles this automatically -- just pass fit_func: myname
+    in the mead config if you want your own bypass, in which case training is entirely delegate to the 3rd party code.
+
+    This use-case is expected to be extremely uncommon.  More common behavior would be to override the Trainer and use
+    the provided fit function.
+
+    :param model:
+    :param ts:
+    :param vs:
+    :param es:
+    :param kwargs:
+    :return:
+    """
+    fit_func_name = kwargs.get('fit_func', 'default')
+    return BASELINE_FIT_FUNC[model.task_name][fit_func_name](model, ts, vs, es, **kwargs)
 
 
 @exporter

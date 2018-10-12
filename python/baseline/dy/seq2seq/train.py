@@ -2,7 +2,7 @@ import time
 import logging
 from baseline.utils import listify, get_model_file
 from baseline.progress import create_progress_bar
-from baseline.train import Trainer, create_trainer, lr_decay, register_trainer
+from baseline.train import Trainer, create_trainer, lr_decay, register_trainer, register_training_func
 from baseline.dy.dynety import *
 
 
@@ -97,6 +97,7 @@ class Seq2SeqTrainerDynet(Trainer):
         return metrics
 
 
+@register_training_func('seq2seq')
 def fit(model, ts, vs, es=None, epochs=5, do_early_stopping=True,
         early_stopping_metric='avg_loss', **kwargs):
 

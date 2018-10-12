@@ -131,6 +131,8 @@ class ClassifierModel(object):
     
     Provide an interface to DNN classifiers that use word lookup tables.
     """
+    task_name = 'classify'
+
     def __init__(self):
         super(ClassifierModel, self).__init__()
 
@@ -179,6 +181,8 @@ class TaggerModel(object):
     and generates an output label for each time.  This type of model is used for POS tagging or any
     type of chunking (e.g. NER, POS chunks, slot-filling)
     """
+    task_name = 'tagger'
+
     def __init__(self):
         super(TaggerModel, self).__init__()
 
@@ -199,6 +203,8 @@ class TaggerModel(object):
 @exporter
 class LanguageModel(object):
 
+    task_name = 'lm'
+
     def __init__(self):
         super(LanguageModel, self).__init__()
 
@@ -216,6 +222,8 @@ class LanguageModel(object):
 
 @exporter
 class EncoderDecoderModel(object):
+
+    task_name = 'seq2seq'
 
     def save(self, model_base):
         pass

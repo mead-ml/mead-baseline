@@ -101,6 +101,7 @@ class ClassifyTrainerAutobatch(ClassifyTrainerDynet):
         return metrics
 
 
+@register_trainer
 def fit(model, ts, vs, es, epochs=20, do_early_stopping=True, early_stopping_metric='acc', **kwargs):
     autobatchsz = kwargs.get('autobatchsz', 1)
     verbose = kwargs.get('verbose', {'print': kwargs.get('verbose_print', False), 'file': kwargs.get('verbose_file', None)})

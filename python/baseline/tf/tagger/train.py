@@ -3,7 +3,7 @@ import tensorflow as tf
 import numpy as np
 from baseline.tf.tfy import optimizer
 from baseline.progress import create_progress_bar
-from baseline.train import EpochReportingTrainer, create_trainer, register_trainer
+from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
 import os
 from baseline.utils import to_spans, f_score, listify, revlut, get_model_file
 
@@ -143,6 +143,7 @@ class TaggerTrainerTf(EpochReportingTrainer):
         return self.evaluator.test(ts)
 
 
+@register_training_func('tagger')
 def fit(model, ts, vs, es, **kwargs):
     epochs = int(kwargs['epochs']) if 'epochs' in kwargs else 5
     patience = int(kwargs['patience']) if 'patience' in kwargs else epochs

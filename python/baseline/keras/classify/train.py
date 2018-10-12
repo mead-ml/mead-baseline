@@ -1,6 +1,6 @@
 from baseline.utils import listify, get_model_file
 from baseline.progress import create_progress_bar
-from baseline.train import EpochReportingTrainer, create_trainer, register_trainer
+from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
 from keras import metrics
 from keras import optimizers
 import numpy as np
@@ -89,6 +89,7 @@ class ClassifyTrainerKeras(EpochReportingTrainer):
         return test_metrics
 
 
+@register_training_func('classify')
 def fit(model, ts, vs, es=None, **kwargs):
     """
     Train a classifier using Keras

@@ -4,7 +4,7 @@ import dynet as dy
 import numpy as np
 from baseline.utils import listify, get_model_file
 from baseline.progress import create_progress_bar
-from baseline.train import Trainer, create_trainer, lr_decay, register_trainer
+from baseline.train import Trainer, create_trainer, lr_decay, register_trainer, register_training_func
 from baseline.dy.dynety import *
 
 
@@ -95,6 +95,7 @@ class LanguageModelTrainerDynet(Trainer):
         return metrics
 
 
+@register_training_func('lm')
 def fit(model, ts, vs, es=None, epochs=5, do_early_stopping=True, early_stopping_metric='avg_loss', **kwargs):
 
     patience = int(kwargs.get('patience', epochs))

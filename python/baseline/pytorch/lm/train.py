@@ -2,7 +2,7 @@ import time
 import logging
 from baseline.pytorch.torchy import *
 from baseline.utils import listify, revlut, get_model_file
-from baseline.train import Trainer, create_trainer, register_trainer
+from baseline.train import Trainer, create_trainer, register_trainer, register_training_func
 
 
 @register_trainer(name='default')
@@ -111,6 +111,7 @@ class LanguageModelTrainerPyTorch(Trainer):
         return metrics
 
 
+@register_training_func('lm')
 def fit(model, ts, vs, es, **kwargs):
     epochs = int(kwargs['epochs']) if 'epochs' in kwargs else 5
     patience = int(kwargs['patience']) if 'patience' in kwargs else epochs

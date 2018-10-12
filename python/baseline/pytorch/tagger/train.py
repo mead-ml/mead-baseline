@@ -1,7 +1,7 @@
 from baseline.pytorch.torchy import *
 from baseline.utils import listify, to_spans, f_score, revlut, get_model_file
 from baseline.progress import create_progress_bar
-from baseline.train import EpochReportingTrainer, create_trainer, register_trainer
+from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
 
 
 @register_trainer(name='default')
@@ -134,6 +134,7 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
         return metrics
 
 
+@register_training_func('tagger')
 def fit(model, ts, vs, es, **kwargs):
 
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))

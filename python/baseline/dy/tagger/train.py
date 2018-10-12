@@ -2,7 +2,7 @@ import dynet as dy
 import numpy as np
 from baseline.utils import listify, get_model_file, revlut, to_spans, f_score
 from baseline.progress import create_progress_bar
-from baseline.train import EpochReportingTrainer, create_trainer, register_trainer
+from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
 from baseline.dy.dynety import optimizer
 
 
@@ -149,6 +149,7 @@ class TaggerTrainerDyNet(EpochReportingTrainer):
         return metrics
 
 
+@register_training_func('tagger')
 def fit(model, ts, vs, es, **kwargs):
 
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))

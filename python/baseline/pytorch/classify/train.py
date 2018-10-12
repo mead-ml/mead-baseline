@@ -1,7 +1,7 @@
 from baseline.utils import listify, get_model_file
 from baseline.progress import create_progress_bar
 from baseline.confusion import ConfusionMatrix
-from baseline.train import EpochReportingTrainer, create_trainer, register_trainer
+from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
 import torch
 import torch.autograd
 from baseline.utils import verbose_output
@@ -98,6 +98,7 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
         return metrics
 
 
+@register_training_func('classify')
 def fit(model, ts, vs, es, **kwargs):
     """
     Train a classifier using PyTorch
