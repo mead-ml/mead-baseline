@@ -50,6 +50,10 @@ class Runner(object):
     def is_done(self):
         pass
 
+    @property
+    def failed(self):
+        pass
+
     def stop(self):
         pass
 
@@ -60,6 +64,8 @@ class Backend(object):
     def __init__(self):
         super(Backend, self).__init__()
         self.labels = []
+        self.jobs = []
+        self.label_to_job = {}
 
     def launch(self, label, *args, **kwargs):
         self.labels.append(label)
@@ -67,13 +73,22 @@ class Backend(object):
     def any_done(self):
         pass
 
+    def _free_resources(self):
+        pass
+
     def all_done(self, results):
         # Track all label you personally launched and check if they are done.
         undone = []
         for label in self.labels:
+            job = self.label_to_job.get(label)
+            if job is not None and job.is_done and job.failed:
+                results.set_killed(label)
+                self._free_resources()
             state = results.get_state(label)
             if state is not States.DONE and state is not States.KILLED:
                 undone.append(label)
+            else:
+                self.label_to_job.pop(label, None)
         self.labels = undone
         return not self.labels
 
@@ -92,21 +107,12 @@ class LocalGPUBackend(Backend):
         print("Running Jobs on the following GPU(s), {}".format(self.real_gpus))
         with open(os.devnull, 'w') as f:
             call('wall "HPCTL will run jobs on the following GPU(s) {}"'.format(self.real_gpus), shell=True, stdout=f, stderr=f)
-        self.jobs = []
-        self.label_to_job = {}
         self.gpus_to_job = {gpu: None for gpu in self.real_gpus}
 
     def _free_resources(self):
         jobs = []
         for job in self.jobs:
-            # Update label -> job mapping
             if job.is_done:
-                to_del = None
-                for l, cand_job in self.label_to_job.items():
-                    if job == cand_job:
-                        to_del = l
-                if to_del is not None:
-                    del self.label_to_job[to_del]
 
                 # Free gpus
                 for gpu, cand_job in self.gpus_to_job.items():

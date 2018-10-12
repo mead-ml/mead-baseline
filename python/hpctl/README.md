@@ -28,3 +28,6 @@ These are possible settings you can have in the `hpctl` section of the mead sett
    * `train`: The training statistic to print.
    * `dev`: The dev set stat to print (and select best on).
    * `test`: The dev set stat to print.
+
+
+## ConfigSampler

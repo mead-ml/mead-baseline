@@ -307,6 +307,7 @@ def run_forever(results, backend, scheduler, frontend, logs, cache, xpctl_config
             results.update(label, message)
             results.save()
             frontend.update()
+        backend.all_done(results)
 
 
 def process_command(cmd, backend, frontend, scheduler, results, xpctl):

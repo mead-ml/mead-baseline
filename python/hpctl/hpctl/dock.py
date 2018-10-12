@@ -138,12 +138,13 @@ def run_docker(
 
 
 class DockerRunner(Runner):
-    def __init__(self):
+    def __init__(self, client):
         super(DockerRunner, self).__init__()
         self.p = None
+        self.client = client
 
-    def start(self, client, func, *args, **kwargs):
-        self.p, self.loc = func(client, *args, **kwargs)
+    def start(self, func, *args, **kwargs):
+        self.p, self.loc = func(self.client, *args, **kwargs)
         while self.is_done:
             pass
 
@@ -163,6 +164,10 @@ class DockerRunner(Runner):
             return True
         self.p.reload()
         return not self.p.status == 'running'
+
+    @property
+    def failed(self):
+        return False if self.p is None else self.client.api.inspect_container(self.p.id)['State']['ExitCode'] != 0
 
     def stop(self):
         if self.p is None:
@@ -201,9 +206,9 @@ class DockerBackend(LocalGPUBackend):
         self._free_resources()
         gpu = self._request_gpus(1)
 
-        job = DockerRunner()
+        job = DockerRunner(self.client)
         job.start(
-            self.client, run_docker,
+            run_docker,
             label, config,
             self.default_mounts, self.user_mounts,
             mead_logs=mead_logs,

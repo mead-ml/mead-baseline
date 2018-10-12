@@ -108,6 +108,8 @@ class FlaskFrontend(Frontend):
 
     def find_best_across(self, exp, phase, metric):
         label, val, idx = self.results.find_best(exp, phase, metric)
+        if label is None:
+            label = Label(None, None, None)
         res = dict(phase=phase, metric=metric, value=val, tick=idx, **label)
         return jsonify(res)
 
@@ -124,18 +126,20 @@ class FlaskFrontend(Frontend):
 
     def demo_data(self, exp):
         # THIS FUNCTION IS JUST BECAUSE I DIDN'T WANT A FULL BLOWN JAVASCRIPT APP, TO REMOVE
-        # Nan is not part of json so we need  to filter it out.
         labels = self.results.get_labels(exp)
         sha1s = [l.sha1 for l in labels]
         names = [l.name for l in labels]
         status = [self.results.get_state(l) for l in labels]
         status = [str(s).decode('utf-8') if six.PY2 else str(s) for s in status]
         train_stats = [self.results.get_recent(l, 'Train', 'avg_loss') for l in labels]
+        # Nan is not part of json so we need  to filter it out.
         train_stats = [x if not math.isnan(x) else 0.0 for x in train_stats]
         train_ticks = [self.results.get_recent(l, 'Train', 'tick') for l in labels]
-        dev_stats = [self.results.get_recent(l, 'Valid', 'f1') for l in labels]
+        if labels:
+            dev_stats, dev_ticks = zip(*(self.results.get_best(l, 'Valid', 'f1') for l in labels))
+        else:
+            dev_stats = []; dev_ticks = []
         dev_stats = [x if not math.isnan(x) else 0.0 for x in dev_stats]
-        dev_ticks = [self.results.get_recent(l, 'Valid', 'tick') for l in labels]
         xpctls = [self.results.get_xpctl(l) for l in labels]
         res = {
             'status': status,

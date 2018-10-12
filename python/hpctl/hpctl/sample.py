@@ -163,18 +163,20 @@ def add_grid(example, key, value):
 
 def add_min_max(example, key, value):
     key = (key,)
-    example[key] = [listify(value.get('constraints', DEFAULT_CONSTRAINTS.get(key[-1], []))), value['min'], value['max']]
+    c = value.get('constraints', DEFAULT_CONSTRAINTS.get(key[-1], DEFAULT_CONSTRAINTS['default']))
+    example[key] = [listify(c), value['min'], value['max']]
 
 def add_normal(example, key, value):
     key = (key,)
-    example[key] = [listify(value.get('constraints', DEFAULT_CONSTRAINTS.get(key[-1], []))), value['mu'], value['sigma']]
+    c = value.get('constraints', DEFAULT_CONSTRAINTS.get(key[-1], DEFAULT_CONSTRAINTS['default']))
+    example[key] = [listify(c), value['mu'], value['sigma']]
 
 
 DEFAULT_CONSTRAINTS = {
     'dropout': ['>= 0', '< 1'],
     'mom': ['< 1', '>= 0'],
-    'eta': '> 0',
     'hsz': '% 2 == 0',
+    'default': '> 0',
 }
 
 DEFAULT_SAMPLERS = {
@@ -195,6 +197,10 @@ DEFAULT_SAMPLERS = {
     'max_log': Sampler(
         "max_log", add_min_max,
         partial(constrained_sampler, max_log_sample)
+    ),
+    'uniform_int': Sampler(
+        "uniform_int", add_min_max,
+        partial(constrained_sampler, random.randint)
     ),
 }
 

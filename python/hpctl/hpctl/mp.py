@@ -151,15 +151,24 @@ class MPRunner(Runner):
         self.name = label.name
         args = tuple([label] + list(args))
         self.p = TmuxProcess(label, target=func, args=args, kwargs=kwargs)
-        self.p.start()
+        try:
+            self.p.start()
+        except:
+            print("CHILD SHAT THE BED")
         while self.is_done:
             pass
 
     @property
     def is_done(self):
+        return True if self.p is None else not self.p.is_alive()
+
+    @property
+    def failed(self):
         if self.p is None:
-            return True
-        return not self.p.is_alive()
+            return False
+        if self.p.exitcode is None:
+            return False
+        return self.p.exitcode != 0
 
     def stop(self):
         if self.p is None:

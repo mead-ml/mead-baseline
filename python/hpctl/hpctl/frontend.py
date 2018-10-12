@@ -148,6 +148,8 @@ class Console(Frontend):
         """Find and print the best results on the test set."""
         self.update()
         best, _, _ = self.results.find_best(self.experiment_hash, 'Valid', self.dev)
+        if best is None:
+            return
         test = self.results.get_recent(best, 'Test', self.test)
         print("\n{} had a test performance of {} on {}".format(best.name, test, self.test))
         if not self.results.get_xpctl(best) and self.xpctl is not None:

@@ -96,7 +96,8 @@ class RemoteResults(Results):
                 url = self.url, exp=exp, phase=phase, metric=metric
             )
         )
-        return Label(resp['exp'], resp['sha1'], resp['name']), resp['value'], resp['tick']
+        label = Label(resp['exp'], resp['sha1'], resp['name']) if resp['exp'] is not None else None
+        return  label, resp['value'], resp['tick']
 
     def get_best_per_label(self, exp, phase, metric):
         resp = self.get(
