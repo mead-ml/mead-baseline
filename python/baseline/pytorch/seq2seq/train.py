@@ -1,16 +1,15 @@
 import time
 import logging
 import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.autograd import Variable
+
 import numpy as np
 from baseline.progress import create_progress_bar
 from baseline.utils import listify, get_model_file
-from baseline.train import Trainer, create_trainer
+from baseline.train import Trainer, create_trainer, register_trainer
 from baseline.pytorch.torchy import pytorch_prepare_optimizer
 
 
+@register_trainer(name='default')
 class Seq2SeqTrainerPyTorch(Trainer):
 
     def __init__(self, model, **kwargs):
@@ -123,7 +122,7 @@ def fit(model, ts, vs, es=None, **kwargs):
     print('reporting', reporting_fns)
 
     after_train_fn = kwargs.get('after_train_fn', None)
-    trainer = create_trainer(Seq2SeqTrainerPyTorch, model, **kwargs)
+    trainer = create_trainer(model, **kwargs)
 
     min_metric = 10000
     last_improved = 0

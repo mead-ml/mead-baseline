@@ -5,7 +5,7 @@ import logging.config
 
 import os
 import baseline
-from baseline.utils import export
+from baseline.utils import export, import_user_module
 from mead.downloader import EmbeddingDownloader, DataDownloader
 from mead.utils import (
     get_mead_settings,
@@ -150,8 +150,14 @@ class Task(object):
         self.config_file = kwargs.get('config_file')
         self._setup_task()
         self._configure_reporting(config_params.get('reporting', {}), **kwargs)
+        self._load_addons()
         self.dataset = datasets_set[self.config_params['dataset']]
         self.reader = self._create_task_specific_reader()
+
+    def _load_addons(self):
+        if 'addons' in self.config_params:
+            for addon in self.config_params['addons']:
+                import_user_module(addon)
 
     def initialize(self, embeddings_index):
         """
@@ -280,19 +286,14 @@ class Task(object):
                 embed_dsz = embeddings_set[embed_label]['dsz']
                 embed_sha1 = embeddings_set[embed_label].get('sha1', None)
                 embed_file = EmbeddingDownloader(embed_file, embed_dsz, embed_sha1, self.data_download_cache).download()
-                embedding_bundle = self.backend.embeddings.load_embeddings(embed_file,
-                                                                           name,
-                                                                           known_vocab=vocabs[name],
-                                                                           embed_type=embed_type,
-                                                                           **embeddings_section)
+
+                embedding_bundle = baseline.embeddings.load_embeddings(name, embed_file=embed_file, known_vocab=vocabs[name], embed_type=embed_type, **embeddings_section)
 
                 embeddings_map[name] = embedding_bundle['embeddings']
                 out_vocabs[name] = embedding_bundle['vocab']
             else:
                 dsz = embeddings_section.pop('dsz')
-                embedding_bundle = self.backend.embeddings.create_embeddings(dsz, name,
-                                                                             vocabs[name], embed_type=embed_type,
-                                                                             **embeddings_section)
+                embedding_bundle = baseline.embeddings.load_embeddings(name, dsz=dsz, known_vocab=vocabs[name], embed_type=embed_type, **embeddings_section)
                 embeddings_map[name] = embedding_bundle['embeddings']
                 out_vocabs[name] = embedding_bundle['vocab']
 
@@ -393,7 +394,7 @@ class ClassifierTask(Task):
         if self.backend.params is not None:
             for k, v in self.backend.params.items():
                 model[k] = v
-        return self.backend.task.create_model(self.embeddings, self.labels, **model)
+        return baseline.model.create_model(self.embeddings, self.labels, **model)
 
     def _load_dataset(self):
         self.train_data = self.reader.load(self.dataset['train_file'], self.feat2index, self.config_params['batchsz'],
@@ -481,7 +482,7 @@ class TaggerTask(Task):
         if self.backend.params is not None:
             for k, v in self.backend.params.items():
                 model[k] = v
-        return self.backend.task.create_model(labels, self.embeddings, **self.config_params['model'])
+        return baseline.model.create_tagger_model(labels, self.embeddings, **self.config_params['model'])
 
     def _load_dataset(self):
         # TODO: get rid of sort_key=self.primary_key in favor of something explicit?
@@ -619,7 +620,7 @@ class EncoderDecoderTask(Task):
         if self.backend.params is not None:
             for k, v in self.backend.params.items():
                 model[k] = v
-        return self.backend.task.create_model(self.src_embeddings, self.tgt_embeddings, **self.config_params['model'])
+        return baseline.model.create_seq2seq_model(self.src_embeddings, self.tgt_embeddings, **self.config_params['model'])
 
     def train(self):
 
@@ -716,7 +717,7 @@ class LanguageModelingTask(Task):
         if self.backend.params is not None:
             for k, v in self.backend.params.items():
                 model[k] = v
-        return self.backend.task.create_model(self.embeddings, **model)
+        return baseline.model.create_lang_model(self.embeddings, **model)
 
     @staticmethod
     def _num_steps_per_epoch(num_examples, nbptt, batchsz):

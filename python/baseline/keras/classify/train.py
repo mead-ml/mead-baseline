@@ -1,12 +1,13 @@
 from baseline.utils import listify, get_model_file
 from baseline.progress import create_progress_bar
-from baseline.train import EpochReportingTrainer, create_trainer
+from baseline.train import EpochReportingTrainer, create_trainer, register_trainer
 from keras import metrics
 from keras import optimizers
 import numpy as np
 from baseline.confusion import ConfusionMatrix
 
 
+@register_trainer(name='default')
 class ClassifyTrainerKeras(EpochReportingTrainer):
 
     METRIC_REMAP = {'categorical_accuracy': 'acc'}
@@ -113,7 +114,7 @@ def fit(model, ts, vs, es=None, **kwargs):
            What optimizer to use.  Defaults to `adam`
     :return: 
     """
-    trainer = create_trainer(ClassifyTrainerKeras, model, **kwargs)
+    trainer = create_trainer(model, **kwargs)
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
     epochs = int(kwargs.get('epochs', 20))
     model_file = get_model_file('classify', 'keras', kwargs.get('basedir'))

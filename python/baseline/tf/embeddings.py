@@ -1,7 +1,7 @@
 import tensorflow as tf
 from baseline.tf.tfy import embed, pool_chars
-from baseline.utils import write_json, load_user_embeddings, create_user_embeddings
-from baseline.w2v import PretrainedEmbeddingsModel, RandomInitVecModel
+from baseline.utils import write_json
+from baseline.embeddings import register_embeddings
 import numpy as np
 
 
@@ -63,6 +63,7 @@ class TensorFlowEmbeddings(object):
         return cls(name, vsz=model.vsz, dsz=model.dsz, weights=model.weights, **kwargs)
 
 
+@register_embeddings(name='default')
 class LookupTableEmbeddings(TensorFlowEmbeddings):
     """Provide "classic" Lookup-Table based word embeddings
 
@@ -123,6 +124,7 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
         write_json({'vsz': self.vsz, 'dsz': self.dsz}, target)
 
 
+@register_embeddings(name='cbow')
 class CharBoWEmbeddings(TensorFlowEmbeddings):
     """Bag of character embeddings, sum char embeds, so in this case `wsz == dsz`
 
@@ -163,6 +165,7 @@ class CharBoWEmbeddings(TensorFlowEmbeddings):
                                    self.scope), axis=-1, keep_dims=False)
 
 
+@register_embeddings(name='char-conv')
 class CharConvEmbeddings(TensorFlowEmbeddings):
     """dos Santos embeddings extended to parallel filters (AKA Kim character-aware neural language model inputs)
 
@@ -211,39 +214,3 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
     def get_dsz(self):
         return self.wsz
 
-
-# If the embeddings are listed here, than we need to use PretrainedEmbeddingsModel
-# TODO: add/test CBoW to this registry
-BASELINE_EMBEDDING_MODELS = {
-    'default': LookupTableEmbeddings.create,
-    'char-conv': CharConvEmbeddings.create
-}
-
-
-def load_embeddings(filename, name, known_vocab=None, **kwargs):
-
-    embed_type = kwargs.pop('embed_type', 'default')
-    create_fn = BASELINE_EMBEDDING_MODELS.get(embed_type)
-
-    if create_fn is not None:
-        model = PretrainedEmbeddingsModel(filename,
-                                          known_vocab=known_vocab,
-                                          unif_weight=kwargs.pop('unif', 0),
-                                          keep_unused=kwargs.pop('keep_unused', False),
-                                          normalize=kwargs.pop('normalized', False), **kwargs)
-        return {'embeddings': create_fn(model, name, **kwargs), 'vocab': model.get_vocab()}
-    print('loading user module')
-    return load_user_embeddings(filename, name, known_vocab, **kwargs)
-
-
-def create_embeddings(dsz, name, known_vocab=None, **kwargs):
-
-    embed_type = kwargs.pop('embed_type', 'default')
-    create_fn = BASELINE_EMBEDDING_MODELS.get(embed_type)
-
-    if create_fn is not None:
-        model = RandomInitVecModel(dsz, known_vocab=known_vocab, unif_weight=kwargs.pop('unif', 0))
-        return {'embeddings': create_fn(model, name, **kwargs), 'vocab': model.get_vocab()}
-
-    print('loading user module')
-    return create_user_embeddings(dsz, name, known_vocab, **kwargs)

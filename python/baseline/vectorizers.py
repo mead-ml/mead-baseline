@@ -1,5 +1,5 @@
 import numpy as np
-from baseline.utils import export, create_user_vectorizer, listify
+from baseline.utils import export, optional_params, listify
 import collections
 
 
@@ -25,6 +25,21 @@ class Vectorizer(object):
     def iterable(self, tokens):
         pass
 
+BASELINE_VECTORIZERS = {}
+
+
+@exporter
+@optional_params
+def register_vectorizer(cls, name=None):
+    """Register a function as a plug-in"""
+    if name is None:
+        name = cls.__name__
+
+    if name in BASELINE_VECTORIZERS:
+        raise Exception('Error: attempt to re-defined previously registered handler {} in vectorizer registry'.format(name))
+
+    BASELINE_VECTORIZERS[name] = cls
+    return cls
 
 @exporter
 def identity_trans_fn(x):
@@ -37,7 +52,6 @@ class AbstractVectorizer(Vectorizer):
     def __init__(self, transform_fn=None):
         super(AbstractVectorizer, self).__init__()
         self.transform_fn = identity_trans_fn if transform_fn is None else transform_fn
-        #print(self.transform_fn)
 
     def iterable(self, tokens):
         for tok in tokens:
@@ -52,6 +66,7 @@ class AbstractVectorizer(Vectorizer):
 
 
 @exporter
+@register_vectorizer(name='token1d')
 class Token1DVectorizer(AbstractVectorizer):
 
     def __init__(self, **kwargs):
@@ -129,6 +144,7 @@ def _token_iterator(vectorizer, tokens):
 
 
 @exporter
+@register_vectorizer(name='dict1d')
 class Dict1DVectorizer(Token1DVectorizer):
 
     def __init__(self, **kwargs):
@@ -156,6 +172,7 @@ class AbstractCharVectorizer(AbstractVectorizer):
 
 
 @exporter
+@register_vectorizer(name='char2d')
 class Char2DVectorizer(AbstractCharVectorizer):
 
     def __init__(self, **kwargs):
@@ -207,6 +224,7 @@ class Char2DVectorizer(AbstractCharVectorizer):
 
 
 @exporter
+@register_vectorizer(name='dict2d')
 class Dict2DVectorizer(Char2DVectorizer):
 
     def __init__(self, **kwargs):
@@ -219,6 +237,7 @@ class Dict2DVectorizer(Char2DVectorizer):
 
 
 @exporter
+@register_vectorizer(name='char1d')
 class Char1DVectorizer(AbstractCharVectorizer):
 
     def __init__(self, **kwargs):
@@ -261,21 +280,8 @@ class Char1DVectorizer(AbstractCharVectorizer):
         return self.mxlen,
 
 
-BASELINE_KNOWN_VECTORIZERS = {
-    'token1d': Token1DVectorizer,
-    'char2d': Char2DVectorizer,
-    'char1d': Char1DVectorizer,
-    'dict1d': Dict1DVectorizer,
-    'dict2d': Dict2DVectorizer
-}
-
-
 @exporter
 def create_vectorizer(**kwargs):
     vec_type = kwargs.get('vectorizer_type', kwargs.get('type', 'token1d'))
-    Constructor = BASELINE_KNOWN_VECTORIZERS.get(vec_type)
-    if Constructor is not None:
-        return Constructor(**kwargs)
-    else:
-        print('loading user module')
-    return create_user_vectorizer(**kwargs)
+    Constructor = BASELINE_VECTORIZERS.get(vec_type)
+    return Constructor(**kwargs)

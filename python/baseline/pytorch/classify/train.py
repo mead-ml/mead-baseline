@@ -1,7 +1,7 @@
 from baseline.utils import listify, get_model_file
 from baseline.progress import create_progress_bar
 from baseline.confusion import ConfusionMatrix
-from baseline.train import EpochReportingTrainer, create_trainer
+from baseline.train import EpochReportingTrainer, create_trainer, register_trainer
 import torch
 import torch.autograd
 from baseline.utils import verbose_output
@@ -14,6 +14,7 @@ def _add_to_cm(cm, y, pred):
     cm.add_batch(yt.data.numpy(), yp.data.numpy())
 
 
+@register_trainer(name='default')
 class ClassifyTrainerPyTorch(EpochReportingTrainer):
 
     def __init__(self, model, **kwargs):
@@ -135,7 +136,7 @@ def fit(model, ts, vs, es, **kwargs):
     print('reporting', reporting_fns)
 
 
-    trainer = create_trainer(ClassifyTrainerPyTorch, model, **kwargs)
+    trainer = create_trainer(model, **kwargs)
 
     max_metric = 0
     last_improved = 0
@@ -163,5 +164,5 @@ def fit(model, ts, vs, es, **kwargs):
     if es is not None:
         print('Reloading best checkpoint')
         model = torch.load(model_file)
-        trainer = create_trainer(ClassifyTrainerPyTorch, model, **kwargs)
+        trainer = create_trainer(model, **kwargs)
         trainer.test(es, reporting_fns, phase='Test', verbose=verbose)

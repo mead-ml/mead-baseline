@@ -6,11 +6,12 @@ import tensorflow as tf
 from baseline.utils import zip_model
 from baseline.tf.tfy import optimizer
 from baseline.utils import listify, get_model_file
-from baseline.train import Trainer, create_trainer
+from baseline.train import Trainer, create_trainer, register_trainer
 import time
 import os
 
 
+@register_trainer(name='default')
 class Seq2SeqTrainerTf(Trainer):
 
     def __init__(self, model, **kwargs):
@@ -110,7 +111,7 @@ def fit(model, ts, vs, es=None, **kwargs):
 
     model_file = get_model_file('seq2seq', 'tf', kwargs.get('basedir'))
     after_train_fn = kwargs['after_train_fn'] if 'after_train_fn' in kwargs else None
-    trainer = create_trainer(Seq2SeqTrainerTf, model, **kwargs)
+    trainer = create_trainer(model, **kwargs)
     init = tf.global_variables_initializer()
     model.sess.run(init)
     saver = tf.train.Saver()

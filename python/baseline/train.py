@@ -1,10 +1,10 @@
 import time
 import logging
 import numpy as np
-from baseline.utils import create_user_trainer, export
-
+from baseline.utils import export, optional_params
 __all__ = []
 exporter = export(__all__)
+
 
 @exporter
 class Trainer(object):
@@ -60,8 +60,25 @@ class EpochReportingTrainer(Trainer):
         pass
 
 
+BASELINE_TRAINERS = {}
+
+
 @exporter
-def create_trainer(default_create_model_fn, model, **kwargs):
+@optional_params
+def register_trainer(cls, name=None):
+    """Register a function as a plug-in"""
+    if name is None:
+        name = cls.__name__
+
+    if name in BASELINE_TRAINERS:
+        raise Exception('Error: attempt to re-defined previously registered handler {} in trainer registry'.format(name))
+
+    BASELINE_TRAINERS[name] = cls
+    return cls
+
+
+@exporter
+def create_trainer(model, **kwargs):
     """Create the default trainer, or a user-defined one if `trainer_type` is not `default`
 
     :param default_create_model_fn: The constructor for the default trainer (defined in each platform/task)
@@ -69,11 +86,9 @@ def create_trainer(default_create_model_fn, model, **kwargs):
     :param kwargs:
     :return:
     """
-    model_type = kwargs.get('trainer_type', 'default')
-    if model_type == 'default':
-        return default_create_model_fn(model, **kwargs)
-
-    return create_user_trainer(model, **kwargs)
+    trainer_type = kwargs.get('trainer_type', 'default')
+    Constructor = BASELINE_TRAINERS[trainer_type]
+    return Constructor(model, **kwargs)
 
 
 @exporter

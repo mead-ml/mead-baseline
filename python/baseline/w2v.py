@@ -1,7 +1,7 @@
 import io
 import contextlib
 import numpy as np
-from baseline.utils import export, load_user_embeddings, write_json, read_config_file
+from baseline.utils import export, write_json, read_config_file
 from baseline.mime_type import mime_type
 __all__ = []
 exporter = export(__all__)

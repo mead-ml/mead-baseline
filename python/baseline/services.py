@@ -50,7 +50,8 @@ class ClassifierService(object):
             import baseline.pytorch.classify as classify
         else:
             import baseline.dy.classify as classify
-        model = classify.load_model(model_basename, **kwargs)
+
+        model = baseline.model.load_model(model_basename, **kwargs)
         return cls(vocabs, vectorizers, model)
 
     def transform(self, tokens):

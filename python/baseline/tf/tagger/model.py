@@ -8,8 +8,10 @@ from baseline.tf.tfy import *
 from baseline.utils import ls_props, read_json, write_json
 from baseline.tf.embeddings import *
 from baseline.version import __version__
+from baseline.model import register_model
 
 
+@register_model(task='tagger', model_type='default')
 class RNNTaggerModel(TaggerModel):
 
 
@@ -332,19 +334,3 @@ class RNNTaggerModel(TaggerModel):
             model.probs = tf.reshape(preds, [-1, T, nc])
             model.best = tf.argmax(model.probs, 2)
         return model
-
-BASELINE_TAGGER_MODELS = {
-    'default': RNNTaggerModel.create,
-}
-
-BASELINE_TAGGER_LOADERS = {
-    'default': RNNTaggerModel.load
-}
-
-
-def create_model(labels, embeddings, **kwargs):
-    return create_tagger_model(BASELINE_TAGGER_MODELS, labels, embeddings, **kwargs)
-
-
-def load_model(modelname, **kwargs):
-    return load_tagger_model(BASELINE_TAGGER_LOADERS, modelname, **kwargs)

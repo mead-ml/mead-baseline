@@ -1,9 +1,10 @@
 from baseline.pytorch.torchy import *
 from baseline.utils import listify, to_spans, f_score, revlut, get_model_file
 from baseline.progress import create_progress_bar
-from baseline.train import EpochReportingTrainer, create_trainer
+from baseline.train import EpochReportingTrainer, create_trainer, register_trainer
 
 
+@register_trainer(name='default')
 class TaggerTrainerPyTorch(EpochReportingTrainer):
 
     def __init__(self, model, **kwargs):
@@ -152,7 +153,7 @@ def fit(model, ts, vs, es, **kwargs):
     #validation_improvement_fn = kwargs.get('validation_improvement', None)
 
     after_train_fn = kwargs.get('after_train_fn', None)
-    trainer = create_trainer(TaggerTrainerPyTorch, model, **kwargs)
+    trainer = create_trainer(model, **kwargs)
 
     last_improved = 0
     max_metric = 0
@@ -185,5 +186,5 @@ def fit(model, ts, vs, es, **kwargs):
     if es is not None:
         print('Reloading best checkpoint')
         model = torch.load(model_file)
-        trainer = create_trainer(TaggerTrainerPyTorch, model, **kwargs)
+        trainer = create_trainer(model, **kwargs)
         trainer.test(es, reporting_fns, conll_output=conll_output, txts=txts, phase='Test')

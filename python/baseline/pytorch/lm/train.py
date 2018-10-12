@@ -2,9 +2,10 @@ import time
 import logging
 from baseline.pytorch.torchy import *
 from baseline.utils import listify, revlut, get_model_file
-from baseline.train import Trainer, create_trainer
+from baseline.train import Trainer, create_trainer, register_trainer
 
 
+@register_trainer(name='default')
 class LanguageModelTrainerPyTorch(Trainer):
 
     def __init__(self, model, **kwargs):
@@ -125,7 +126,7 @@ def fit(model, ts, vs, es, **kwargs):
     print('reporting', reporting_fns)
 
     after_train_fn = kwargs.get('after_train_fn', None)
-    trainer = create_trainer(LanguageModelTrainerPyTorch, model, **kwargs)
+    trainer = create_trainer(model, **kwargs)
     min_metric = 10000
     last_improved = 0
     for epoch in range(epochs):
@@ -155,5 +156,5 @@ def fit(model, ts, vs, es, **kwargs):
     if es is not None:
         print('Reloading best checkpoint')
         model = torch.load(model_file)
-        trainer = create_trainer(LanguageModelTrainerPyTorch, model, **kwargs)
+        trainer = create_trainer(model, **kwargs)
         trainer.test(es, reporting_fns, phase='Test')

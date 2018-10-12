@@ -2,10 +2,11 @@ import dynet as dy
 import numpy as np
 from baseline.utils import listify, get_model_file, revlut, to_spans, f_score
 from baseline.progress import create_progress_bar
-from baseline.train import EpochReportingTrainer, create_trainer
+from baseline.train import EpochReportingTrainer, create_trainer, register_trainer
 from baseline.dy.dynety import optimizer
 
 
+@register_trainer(name='default')
 class TaggerTrainerDyNet(EpochReportingTrainer):
 
     def __init__(self, model, **kwargs):
@@ -167,7 +168,7 @@ def fit(model, ts, vs, es, **kwargs):
     #validation_improvement_fn = kwargs.get('validation_improvement', None)
 
     after_train_fn = kwargs.get('after_train_fn', None)
-    trainer = create_trainer(TaggerTrainerDyNet, model, **kwargs)
+    trainer = create_trainer(model, **kwargs)
 
     last_improved = 0
     max_metric = 0
@@ -198,5 +199,5 @@ def fit(model, ts, vs, es, **kwargs):
     if es is not None:
         print('Reloading best checkpoint')
         model = model.load(model_file)
-        trainer = create_trainer(TaggerTrainerDyNet, model, **kwargs)
+        trainer = create_trainer(model, **kwargs)
         trainer.test(es, reporting_fns, conll_output=conll_output, txts=txts, phase='Test')
