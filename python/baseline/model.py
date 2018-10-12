@@ -1,6 +1,6 @@
 import numpy as np
 from baseline.utils import (
-    export, optional_params
+    export, optional_params, listify
 )
 
 __all__ = []
@@ -18,14 +18,13 @@ def register_model(cls, task, name=None):
     if name is None:
         name = cls.__name__
 
+    names = listify(name)
+
     if task not in BASELINE_MODELS:
         BASELINE_MODELS[task] = {}
 
     if task not in BASELINE_LOADERS:
         BASELINE_LOADERS[task] = {}
-
-    if name in BASELINE_MODELS[task]:
-        raise Exception('Error: attempt to re-define previously registered handler {} (old: {}, new: {}) for task {} in registry'.format(name, BASELINE_MODELS[task], cls, task))
 
     if hasattr(cls, 'create'):
         def create(*args, **kwargs):
@@ -34,10 +33,14 @@ def register_model(cls, task, name=None):
         def create(*args, **kwargs):
             return cls(*args, **kwargs)
 
-    BASELINE_MODELS[task][name] = create
+    for alias in names:
+        if alias in BASELINE_MODELS[task]:
+            raise Exception('Error: attempt to re-define previously registered handler {} (old: {}, new: {}) for task {} in registry'.format(alias, BASELINE_MODELS[task], cls, task))
 
-    if hasattr(cls, 'load'):
-        BASELINE_LOADERS[task][name] = cls.load
+        BASELINE_MODELS[task][alias] = create
+
+        if hasattr(cls, 'load'):
+            BASELINE_LOADERS[task][alias] = cls.load
     return cls
 
 

@@ -46,21 +46,17 @@ class Backend(object):
         import_user_module('{}.{}'.format(base_pkg_name, task_name))
 
 
+TASK_REGISTRY = {}
+@exporter
+def register_task(cls):
+    TASK_REGISTRY[cls.task_name()] = cls
+    return cls
+
+
 @exporter
 class Task(object):
     """Basic building block for a task of NLP problems, e.g. `tagger`, `classify`, etc.
     """
-    TASK_REGISTRY = {}
-
-    @staticmethod
-    def register_task(TaskClass):
-        """This method registers a class by its task name in the `TASK_REGISTRY`.  When `mead` goes to lookup its
-        `Task` by name, it will return the registered class
-
-        :param TaskClass: A class name
-        :return:
-        """
-        Task.TASK_REGISTRY[TaskClass.task_name()] = TaskClass
 
     def _create_backend(self):
         """This method creates and returns a `Backend` object
@@ -134,7 +130,7 @@ class Task(object):
         :param logging_config: The configuration to read from
         :return:
         """
-        config = Task.TASK_REGISTRY[task](logging_config, mead_config)
+        config = TASK_REGISTRY[task](logging_config, mead_config)
         return config
 
     def read_config(self, config_params, datasets_index, **kwargs):
@@ -307,16 +303,6 @@ class Task(object):
 
         return embeddings_map, out_vocabs
 
-    # FIXME Remove
-    @staticmethod
-    def _log2json(log):
-        s = []
-        with open(log) as f:
-            for line in f:
-                x = line.replace("'", '"')
-                s.append(json.loads(x))
-        return s
-
     def get_basedir(self):
         """Return the base directory if provided, or CWD
         """
@@ -324,6 +310,7 @@ class Task(object):
 
 
 @exporter
+@register_task
 class ClassifierTask(Task):
 
     def __init__(self, logging_config, mead_settings_config, **kwargs):
@@ -394,10 +381,9 @@ class ClassifierTask(Task):
         self.valid_data = self.reader.load(self.dataset['valid_file'], self.feat2index, self.config_params['batchsz'])
         self.test_data = self.reader.load(self.dataset['test_file'], self.feat2index, self.config_params.get('test_batchsz', 1))
 
-Task.register_task(ClassifierTask)
-
 
 @exporter
+@register_task
 class TaggerTask(Task):
 
     def __init__(self, logging_config, mead_settings_config, **kwargs):
@@ -480,10 +466,9 @@ class TaggerTask(Task):
         baseline.zip_files(self.get_basedir())
         return model
 
-Task.register_task(TaggerTask)
-
 
 @exporter
+@register_task
 class EncoderDecoderTask(Task):
 
     def __init__(self, logging_config, mead_settings_config, **kwargs):
@@ -496,7 +481,8 @@ class EncoderDecoderTask(Task):
     def _create_backend(self):
         backend = Backend(self.config_params.get('backend', 'tf'))
         if backend.name == 'pytorch':
-            self.config_params['preproc']['show_ex'] = baseline.pytorch.show_examples_pytorch
+            from baseline.pytorch import show_examples_pytorch
+            self.config_params['preproc']['show_ex'] = show_examples_pytorch
             self.config_params['preproc']['trim'] = True
         else:
             # TODO: why not support DyNet trimming?
@@ -515,11 +501,13 @@ class EncoderDecoderTask(Task):
                     batched = True
                 dy_params.init()
                 backend.params = {'pc': _dynet.ParameterCollection(), 'batched': batched}
-                self.config_params['preproc']['show_ex'] = baseline.dy.show_examples_dynet
+                from baseline.dy import show_examples_dynet
+                self.config_params['preproc']['show_ex'] = show_examples_dynet
                 self.config_params['preproc']['trim'] = True
             else:
                 # FIXME Replace with registration
-                self.config_params['preproc']['show_ex'] = baseline.tf.create_show_examples_tf(self.primary_key)
+                from baseline.tf import show_examples_tf
+                self.config_params['preproc']['show_ex'] = show_examples_tf
                 from mead.tf.exporters import Seq2SeqTensorFlowExporter
                 backend.exporter = Seq2SeqTensorFlowExporter
         backend.load(self.task_name())
@@ -603,10 +591,9 @@ class EncoderDecoderTask(Task):
                                                                                      num_ex, reverse=False)
         super(EncoderDecoderTask, self).train()
 
-Task.register_task(EncoderDecoderTask)
-
 
 @exporter
+@register_task
 class LanguageModelingTask(Task):
 
     def __init__(self, logging_config, mead_settings_config, **kwargs):
@@ -678,6 +665,3 @@ class LanguageModelingTask(Task):
     def _num_steps_per_epoch(num_examples, nbptt, batchsz):
         rest = num_examples // batchsz
         return rest // nbptt
-
-
-Task.register_task(LanguageModelingTask)

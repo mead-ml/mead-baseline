@@ -13,12 +13,13 @@ exporter = export(__all__)
 
 BASELINE_READERS = {}
 
+
 @exporter
 @optional_params
 def register_reader(cls, task, name=None):
-    """Register a function as a plug-in
+    """Register your own `Reader`
 
-    Use this pattern if you want to provide an override to a `Trainer` class.
+    Use this pattern if you want to provide an override to a `Reader` class.
 
     """
     """Register a function as a plug-in"""
@@ -56,8 +57,8 @@ def _build_vocab_for_col(col, files, vectorizers):
 
     for key in vectorizers.keys():
         vocabs[key] = Counter()
-        vocabs[key]['<UNK>'] = 100000  # In case freq cutoffs
         vocabs[key]['<EOS>'] = 100000  # In case freq cutoffs
+
     for file in files:
         if file is None:
             continue
@@ -135,8 +136,10 @@ class MultiFileParallelCorpusReader(ParallelCorpusReader):
 
     def __init__(self, vectorizers, trim=False, **kwargs):
         super(MultiFileParallelCorpusReader, self).__init__(vectorizers, trim)
-        self.src_suffix = kwargs['src_suffix']
-        self.tgt_suffix = kwargs['tgt_suffix']
+        pair_suffix = kwargs['pair_suffix']
+
+        self.src_suffix = pair_suffix[0]
+        self.tgt_suffix = pair_suffix[1]
         if not self.src_suffix.startswith('.'):
             self.src_suffix = '.' + self.src_suffix
         if not self.tgt_suffix.startswith('.'):
@@ -169,6 +172,7 @@ class MultiFileParallelCorpusReader(ParallelCorpusReader):
                     example['tgt'], example['tgt_lengths'] = self.tgt_vectorizer.run(tgt, tgt_vocab)
                     ts.append(example)
         return baseline.data.Seq2SeqExamples(ts)
+
 
 @exporter
 class SeqPredictReader(object):
