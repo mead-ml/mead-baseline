@@ -386,15 +386,8 @@ def ls_props(thing):
 
 @exporter
 def import_user_module(module_name):
-    """Load a module that is in the python path with a canonical name
-
-    This method loads a user-defined model, which must exist in the `PYTHONPATH` and must also
-    follow a fixed naming convention of `{module_type}_{model_type}.py`.  The module is dynamically
-    loaded, at which point its creator or loader function should be called to instantiate the model.
-    This is essentially a plugin, but its implementation is trivial.
-
-    :param module_type: one of `classifier`, `tagger`, `seq2seq`, `lang`
-    :param model_type: A name for the model, which is the suffix
+    """Load a module that is in the python path
+    :param model_name: (``str``) - the name of the module
     :return:
     """
     sys.path.append(os.path.dirname(os.path.realpath(addons.__file__)))

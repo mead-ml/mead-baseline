@@ -11,7 +11,7 @@ from baseline.version import __version__
 from baseline.model import register_model
 
 
-@register_model(task='tagger', model_type='default')
+@register_model(task='tagger', name='default')
 class RNNTaggerModel(TaggerModel):
 
 

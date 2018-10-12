@@ -1,11 +1,25 @@
 import os
 import logging
 import numpy as np
-from baseline.utils import export
-from baseline.utils import import_user_module
+from baseline.utils import export, optional_params
 
 __all__ = []
 exporter = export(__all__)
+
+BASELINE_REPORTING = {}
+
+@exporter
+@optional_params
+def register_reporting(cls, name=None):
+    """Register a function as a plug-in"""
+    if name is None:
+        name = cls.__name__
+
+    if name in BASELINE_REPORTING:
+        raise Exception('Error: attempt to re-defined previously registered handler {} in trainer registry'.format(name))
+
+    BASELINE_REPORTING[name] = cls
+    return cls
 
 
 class ReportingHook(object):
@@ -19,9 +33,10 @@ class ReportingHook(object):
         pass
 
 
+@register_reporting(name='console')
 class ConsoleReporting(ReportingHook):
     def __init__(self, **kwargs):
-        super(CosoleReporting, self).__init__(**kwargs)
+        super(ConsoleReporting, self).__init__(**kwargs)
 
     def step(self, metrics, tick, phase, tick_type=None, **kwargs):
         """Write results to `stdout`
@@ -46,6 +61,7 @@ class ConsoleReporting(ReportingHook):
         print('-------------------------------------------------')
 
 
+@register_reporting(name='logging')
 class LoggingReporting(ReportingHook):
     def __init__(self, **kwargs):
         super(LoggingReporting, self).__init__(**kwargs)
@@ -72,6 +88,7 @@ class LoggingReporting(ReportingHook):
         self.log.info(msg)
 
 
+@register_reporting(name='tensorboard')
 class TensorBoardReporting(ReportingHook):
     """
     To use this:
@@ -102,6 +119,7 @@ class TensorBoardReporting(ReportingHook):
             self.tb_log_value(chart_id, metrics[metric], tick)
 
 
+@register_reporting(name='visdom')
 class VisdomReporting(ReportingHook):
     """
     To use this:
@@ -111,7 +129,7 @@ class VisdomReporting(ReportingHook):
     def __init__(self, **kwargs):
         super(VisdomReporting, self).__init__(**kwargs)
         import visdom
-        name = kwargs.get('visdom_settings').get('name', 'main')
+        name = kwargs.get('name', 'main')
         print('Creating g_vis instance with env {}'.format(name))
         self._vis = visdom.Visdom(env=name, use_incoming_socket=False)
         self._vis_win = {}
@@ -149,48 +167,13 @@ class VisdomReporting(ReportingHook):
 
 
 @exporter
-def tensorboard_reporting(metrics, tick, phase, tick_type=None):
-    """This method will write its results to tensorboard
-
-    :param metrics: A map of metrics to scores
-    :param tick: The time (resolution defined by `tick_type`)
-    :param phase: The phase of training (`Train`, `Valid`, `Test`)
-    :param tick_type: The resolution of tick (`STEP`, `EPOCH`)
-    :return:
-    """
-    # To use this:
-    # tensorboard --logdir runs
-    # http://localhost:6006
-    from tensorboard_logger import configure as tb_configure, log_value as tb_log_value
-    global g_tb_run
-
-    if g_tb_run is None:
-
-        g_tb_run = 'runs/%d' % os.getpid()
-        print('Creating Tensorboard run %s' % g_tb_run)
-        tb_configure(g_tb_run, flush_secs=5)
-
-    for metric in metrics.keys():
-        chart_id = '%s:%s' % (phase, metric)
-        tb_log_value(chart_id, metrics[metric], tick)
-
-
-@exporter
-def create_reporting_hook(reporting_hooks, hook_settings, **kwargs):
+def create_reporting(reporting_hooks, hook_settings, proc_info):
     reporting = [LoggingReporting()]
-    if 'console' in reporting_hooks:
-        reporting.append(ConsoleReporting())
-        reporting_hooks.remove('console')
-    if 'visdom' in reporting_hooks:
-        visdom_settings = hook_settings.get('visdom', {})
-        reporting.append(VisdomReporting(visdom_settings=visdom_settings))
-        reporting_hooks.remove('visdom')
-    if 'tensorboard' in reporting_hooks:
-        tensorboard_settings = hook_settings.get('tensorboard', {})
-        reporting.append(TensorBoardReporting(tensorboard_settings=tensorboard_settings))
-        reporting_hooks.remove('tensorboard')
-    for reporting_hook in reporting_hooks:
-        mod = import_user_module("reporting", reporting_hook)
-        hook_setting = hook_settings.get(reporting_hook, {})
-        reporting.append(mod.create_reporting_hook(hook_setting=hook_setting, **kwargs))
+
+    for name in reporting_hooks:
+        ReportingClass = BASELINE_REPORTING[name]
+        reporting_args = hook_settings.get(name, {})
+        reporting_args.update(proc_info)
+        reporting.append(ReportingClass(**reporting_args))
+
     return reporting
