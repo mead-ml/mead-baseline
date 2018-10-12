@@ -40,8 +40,13 @@ The answer is actually quite simple -- we tell MEAD what additional modules to i
 
 Its defined as a simple class with a decorator that will register the class with Baseline.  The decorator tells Baseline that this class is going to handle any training instantion where the `model_type` given is 'rnf'.
 
-- [Here is the config] that can be used in MEAD to run train this model
+- [Here is the config](../python/mead/config/sst2-rnf-pyt.yml) that can be used in MEAD to run train this model
   - There are two points of interest
     1. the `model_type` is defined as 'rnf'
     2. the `modules` section (a list), tells us python modules to load into MEAD
 
+- Now all I have to do is call `mead-train` (trainer.py)
+
+```
+python trainer.py --config config/sst2-rnf-pyt.yml
+```
