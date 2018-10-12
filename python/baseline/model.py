@@ -7,30 +7,6 @@ __all__ = []
 exporter = export(__all__)
 
 
-BASELINE_EMBEDDINGS = {}
-
-
-@exporter
-@optional_params
-def register_embeddings(cls, name=None):
-    """Register a function as a plug-in"""
-    if name is None:
-        name = cls.__name__
-
-    if name in BASELINE_EMBEDDINGS:
-        raise Exception('Error: attempt to re-defined previously registered handler {} for task {} in registry'.format(name, task))
-
-    BASELINE_EMBEDDINGS[name] = cls
-    return cls
-
-
-@exporter
-def create_embeddings(**kwargs):
-    embed_type = kwargs.get('embed_type', 'default')
-    Constructor = BASELINE_EMBEDDINGS.get(embed_type)
-    return Constructor(**kwargs)
-
-
 BASELINE_MODELS = {}
 BASELINE_LOADERS = {}
 
@@ -49,7 +25,7 @@ def register_model(cls, task, name=None):
         BASELINE_LOADERS[task] = {}
 
     if name in BASELINE_MODELS[task]:
-        raise Exception('Error: attempt to re-defined previously registered handler {} for task {} in registry'.format(name, task))
+        raise Exception('Error: attempt to re-define previously registered handler {} (old: {}, new: {}) for task {} in registry'.format(name, BASELINE_MODELS[task], cls, task))
 
     if hasattr(cls, 'create'):
         def create(*args, **kwargs):

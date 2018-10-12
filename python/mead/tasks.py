@@ -30,9 +30,20 @@ class Backend(object):
         :param params: (``dict``) A dictionary of framework-specific user-data to pass through keyword args to each sub-module
         :param exporter: A framework-specific exporter to facilitate exporting to runtime deployment
         """
-        self.name = name
+        self.name = name.lower()
+        if self.name == 'tensorflow':
+            self.name = 'tf'
+        elif self.name == 'torch' or self.name == 'pyt':
+            self.name = 'pytorch'
+        elif self.name == 'dynet':
+            self.name = 'dy'
         self.params = params
         self.exporter = exporter
+
+    def load(self, task_name):
+        base_pkg_name = 'baseline.{}'.format(self.name)
+        import_user_module(base_pkg_name)
+        import_user_module('{}.{}'.format(base_pkg_name, task_name))
 
 
 @exporter
@@ -148,11 +159,11 @@ class Task(object):
         self.config_file = kwargs.get('config_file')
         self._setup_task()
         self._configure_reporting(config_params.get('reporting', {}), **kwargs)
-        self._loader_user_modules()
+        self._load_user_modules()
         self.dataset = datasets_set[self.config_params['dataset']]
         self.reader = self._create_task_specific_reader()
 
-    def _loader_user_modules(self):
+    def _load_user_modules(self):
         if 'modules' in self.config_params:
             for addon in self.config_params['modules']:
                 import_user_module(addon)
@@ -167,11 +178,10 @@ class Task(object):
         pass
 
     def _create_task_specific_reader(self):
-        """
-        Create a task specific reader, based on the config
-        :return:
-        """
-        pass
+        self._create_vectorizers()
+        reader_params = self.config_params['loader']
+        reader_params['clean_fn'] = reader_params.get('clean_fn', self.config_params['preproc'].get('clean_fn'))
+        return baseline.reader.create_reader(self.task_name(), self.vectorizers, self.config_params['preproc'].get('trim', False), **reader_params)
 
     def _setup_task(self):
         """
@@ -324,16 +334,8 @@ class ClassifierTask(Task):
         return 'classify'
 
     def _create_backend(self):
-        backend = Backend()
-        backend.name = self.config_params.get('backend', 'tensorflow')
-
-        if backend.name == 'pytorch':
-            import baseline.pytorch.embeddings as embeddings
-            import baseline.pytorch.classify as classify
-        elif backend.name == 'keras':
-            import baseline.keras.embeddings as embeddings
-            import baseline.keras.classify as classify
-        elif backend.name == 'dynet':
+        backend = Backend(self.config_params.get('backend', 'tf'))
+        if backend.name == 'dy':
             import _dynet
             dy_params = _dynet.DynetParams()
             dy_params.from_args()
@@ -345,17 +347,14 @@ class ClassifierTask(Task):
                 batched = True
             dy_params.init()
             backend.params = {'pc': _dynet.ParameterCollection(), 'batched': batched}
-        else:
+        elif backend.name == 'tf':
+            # FIXME this should be registered as well!
             from mead.tf.exporters import ClassifyTensorFlowExporter
             backend.exporter = ClassifyTensorFlowExporter
 
-        return backend
+        backend.load(self.task_name())
 
-    def _create_task_specific_reader(self):
-        self._create_vectorizers()
-        return baseline.create_pred_reader(self.vectorizers, clean_fn=self.config_params['preproc']['clean_fn'],
-                                           trim=self.config_params['preproc'].get('trim', False),
-                                           **self.config_params['loader'])
+        return backend
 
     def _setup_task(self):
         super(ClassifierTask, self)._setup_task()
@@ -408,21 +407,12 @@ class TaggerTask(Task):
     def task_name(cls):
         return 'tagger'
 
-    def _create_task_specific_reader(self):
-        self._create_vectorizers()
-        return baseline.create_seq_pred_reader(self.vectorizers, trim=self.config_params['preproc'].get('trim', False),
-                                               **self.config_params['loader'])
-
     def _create_backend(self):
-        backend = Backend()
-        backend.name = self.config_params.get('backend', 'tensorflow')
+        backend = Backend(self.config_params.get('backend', 'tf'))
 
         if backend.name == 'pytorch':
-            print('PyTorch backend')
-            import baseline.pytorch.embeddings as embeddings
-            import baseline.pytorch.tagger as tagger
             self.config_params['preproc']['trim'] = True
-        elif backend.name == 'dynet':
+        elif backend.name == 'dy':
             import _dynet
             dy_params = _dynet.DynetParams()
             dy_params.from_args()
@@ -434,17 +424,15 @@ class TaggerTask(Task):
                                 'Change "batchsz" to 1 and under "train", set "autobatchsz" to your desired batchsz')
             dy_params.init()
             backend.params = {'pc': _dynet.ParameterCollection(), 'batched': False}
-            import baseline.dy.embeddings as embeddings
-            import baseline.dy.tagger as tagger
             self.config_params['preproc']['trim'] = True
         else:
-            print('TensorFlow backend')
             self.config_params['preproc']['trim'] = False
-            import baseline.tf.embeddings as embeddings
-            import baseline.tf.tagger as tagger
+            # FIXME These should be registered instead
             from mead.tf.exporters import TaggerTensorFlowExporter
             backend.exporter = TaggerTensorFlowExporter
-        backend.task = tagger
+
+        backend.load(self.task_name())
+
         return backend
 
     def initialize(self, embeddings):
@@ -505,20 +493,9 @@ class EncoderDecoderTask(Task):
     def task_name(cls):
         return 'seq2seq'
 
-    def _create_task_specific_reader(self):
-        self._create_vectorizers()
-        preproc = self.config_params['preproc']
-        reader = baseline.create_parallel_corpus_reader(self.vectorizers,
-                                                        preproc['trim'],
-                                                        **self.config_params['loader'])
-        return reader
-
     def _create_backend(self):
-        backend = Backend()
-        backend.name = self.config_params.get('backend', 'tensorflow')
+        backend = Backend(self.config_params.get('backend', 'tf'))
         if backend.name == 'pytorch':
-            import baseline.pytorch.embeddings as embeddings
-            import baseline.pytorch.seq2seq as seq2seq
             self.config_params['preproc']['show_ex'] = baseline.pytorch.show_examples_pytorch
             self.config_params['preproc']['trim'] = True
         else:
@@ -538,18 +515,15 @@ class EncoderDecoderTask(Task):
                     batched = True
                 dy_params.init()
                 backend.params = {'pc': _dynet.ParameterCollection(), 'batched': batched}
-                import baseline.dy.embeddings as embeddings
-                import baseline.dy.seq2seq as seq2seq
                 self.config_params['preproc']['show_ex'] = baseline.dy.show_examples_dynet
                 self.config_params['preproc']['trim'] = True
             else:
-                import baseline.tf.embeddings as embeddings
-                import baseline.tf.seq2seq as seq2seq
+                # FIXME Replace with registration
                 self.config_params['preproc']['show_ex'] = baseline.tf.create_show_examples_tf(self.primary_key)
                 from mead.tf.exporters import Seq2SeqTensorFlowExporter
                 backend.exporter = Seq2SeqTensorFlowExporter
+        backend.load(self.task_name())
 
-        backend.task = seq2seq
         return backend
 
     def initialize(self, embeddings):
@@ -644,22 +618,19 @@ class LanguageModelingTask(Task):
 
     def _create_task_specific_reader(self):
         self._create_vectorizers()
-        nbptt = self.config_params['nbptt']
-        reader = baseline.create_lm_reader(self.vectorizers,
-                                           nbptt,
-                                           reader_type=self.config_params['loader']['reader_type'])
-        return reader
+
+        reader_params = self.config_params['loader']
+        reader_params['nbptt'] = reader_params.get('nbptt', self.config_params['nbptt'])
+        reader_params['clean_fn'] = reader_params.get('clean_fn', self.config_params['preproc'].get('clean_fn'))
+        return baseline.reader.create_reader(self.task_name(), self.vectorizers, self.config_params['preproc'].get('trim', False), **reader_params)
 
     def _create_backend(self):
-        backend = Backend()
-        backend.name = self.config_params.get('backend', 'tensorflow')
+        backend = Backend(self.config_params.get('backend', 'tf'))
 
         if backend.name == 'pytorch':
-            import baseline.pytorch.embeddings as embeddings
-            import baseline.pytorch.lm as lm
             self.config_params['preproc']['trim'] = True
 
-        elif backend.name == 'dynet':
+        elif backend.name == 'dy':
             self.config_params['preproc']['trim'] = True
             import _dynet
             dy_params = _dynet.DynetParams()
@@ -672,13 +643,8 @@ class LanguageModelingTask(Task):
                 batched = True
             dy_params.init()
             backend.params = {'pc': _dynet.ParameterCollection(), 'batched': batched}
-            import baseline.dy.embeddings as embeddings
-            import baseline.dy.lm as lm
-        else:
-            self.config_params['preproc']['trim'] = False
-            import baseline.tf.embeddings as embeddings
-            import baseline.tf.lm as lm
-        backend.task = lm
+
+        backend.load(self.task_name())
         return backend
 
     def initialize(self, embeddings):

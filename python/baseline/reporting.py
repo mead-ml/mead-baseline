@@ -8,6 +8,7 @@ exporter = export(__all__)
 
 BASELINE_REPORTING = {}
 
+
 @exporter
 @optional_params
 def register_reporting(cls, name=None):

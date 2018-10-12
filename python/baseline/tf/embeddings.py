@@ -124,47 +124,6 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
         write_json({'vsz': self.vsz, 'dsz': self.dsz}, target)
 
 
-@register_embeddings(name='cbow')
-class CharBoWEmbeddings(TensorFlowEmbeddings):
-    """Bag of character embeddings, sum char embeds, so in this case `wsz == dsz`
-
-    """
-    @classmethod
-    def create_placeholder(cls, name):
-        return tf.placeholder(tf.int32, [None, None, None], name=name)
-
-    def __init__(self, name, **kwargs):
-        super(CharBoWEmbeddings, self).__init__()
-        self.vsz = kwargs.get('vsz')
-        self.dsz = kwargs.get('dsz')
-        self.finetune = kwargs.get('finetune', True)
-        self.name = name
-        self.scope = kwargs.get('scope', '{}/CharBoWLUT'.format(self.name))
-        self.weights = kwargs.get('weights')
-        if self.weights is None:
-            unif = kwargs.get('unif', 0.1)
-            self.weights = np.random.uniform(-unif, unif, (self.vsz, self.dsz))
-        self.params = kwargs
-        self.wsz = None
-        if self.weights is None:
-            unif = kwargs.get('unif', 0.1)
-            self.weights = np.random.uniform(-unif, unif, (self.vsz, self.dsz))
-
-    def save_md(self, target):
-        write_json({'vsz': self.get_vsz(), 'dsz': self.get_dsz()}, target)
-
-    def encode(self, x=None):
-        if x is None:
-            x = CharBoWEmbeddings.create_placeholder(self.name)
-        self.x = x
-        return tf.reduce_sum(embed(x,
-                                   self.get_vsz(),
-                                   self.get_dsz(),
-                                   tf.constant_initializer(self.weights, dtype=tf.float32, verify_shape=True),
-                                   self.finetune,
-                                   self.scope), axis=-1, keep_dims=False)
-
-
 @register_embeddings(name='char-conv')
 class CharConvEmbeddings(TensorFlowEmbeddings):
     """dos Santos embeddings extended to parallel filters (AKA Kim character-aware neural language model inputs)

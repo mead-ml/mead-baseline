@@ -19,7 +19,7 @@ def register_embeddings(cls, name=None):
         name = cls.__name__
 
     if name in BASELINE_EMBEDDINGS:
-        raise Exception('Error: attempt to re-defined previously registered handler {} for embeddings in registry'.format(name))
+        raise Exception('Error: attempt to re-define previously registered handler {} (old: {}, new: {}) in registry'.format(name, BASELINE_EMBEDDINGS[name], cls))
 
     BASELINE_EMBEDDINGS[name] = cls
 

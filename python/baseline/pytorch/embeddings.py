@@ -1,4 +1,3 @@
-from baseline.w2v import PretrainedEmbeddingsModel, RandomInitVecModel
 from baseline.embeddings import register_embeddings
 import torch.nn as nn
 from collections import OrderedDict
