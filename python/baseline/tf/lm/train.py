@@ -3,9 +3,10 @@ import time
 import logging
 from baseline.tf.tfy import *
 from baseline.utils import listify, get_model_file
-from baseline.train import Trainer, create_trainer
+from baseline.train import Trainer, create_trainer, register_trainer, register_training_func
 
 
+@register_trainer(name='default')
 class LanguageModelTrainerTf(Trainer):
 
     def __init__(self, model, **kwargs):
@@ -124,13 +125,14 @@ class LanguageModelTrainerTf(Trainer):
         return metrics
 
 
+@register_training_func('lm')
 def fit(model, ts, vs, es=None, **kwargs):
     epochs = int(kwargs['epochs']) if 'epochs' in kwargs else 5
     patience = int(kwargs['patience']) if 'patience' in kwargs else epochs
 
     model_file = get_model_file('lm', 'tf', kwargs.get('basedir'))
     after_train_fn = kwargs['after_train_fn'] if 'after_train_fn' in kwargs else None
-    trainer = create_trainer(LanguageModelTrainerTf, model, **kwargs)
+    trainer = create_trainer(model, **kwargs)
     init = tf.global_variables_initializer()
     model.sess.run(init)
     saver = tf.train.Saver()

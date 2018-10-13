@@ -1,9 +1,11 @@
 from baseline.pytorch.torchy import *
 from baseline.pytorch.crf import *
-from baseline.model import TaggerModel, create_tagger_model, load_tagger_model
+from baseline.model import TaggerModel
+from baseline.model import register_model
 import torch.autograd
+import os
 
-
+@register_model(task='tagger', name='default')
 class RNNTaggerModel(nn.Module, TaggerModel):
 
     PAD = 0
@@ -19,8 +21,10 @@ class RNNTaggerModel(nn.Module, TaggerModel):
         return self
 
     @staticmethod
-    def load(outname, **kwargs):
-        model = torch.load(outname)
+    def load(filename, **kwargs):
+        if not os.path.exists(filename):
+            filename += '.pyt'
+        model = torch.load(filename)
         return model
 
     def __init__(self):
@@ -59,7 +63,7 @@ class RNNTaggerModel(nn.Module, TaggerModel):
         return hsz
 
     @classmethod
-    def create(cls, labels, embeddings, **kwargs):
+    def create(cls, embeddings, labels, **kwargs):
         model = cls()
         model.lengths_key = kwargs.get('lengths_key')
         model.proj = bool(kwargs.get('proj', False))
@@ -210,19 +214,3 @@ class RNNTaggerModel(nn.Module, TaggerModel):
     def predict(self, batch_dict):
         inputs = self.make_input(batch_dict)
         return self(inputs)
-
-BASELINE_TAGGER_MODELS = {
-    'default': RNNTaggerModel.create,
-}
-
-BASELINE_TAGGER_LOADERS = {
-    'default': RNNTaggerModel.load,
-}
-
-
-def create_model(labels, embeddings, **kwargs):
-    return create_tagger_model(BASELINE_TAGGER_MODELS, labels, embeddings, **kwargs)
-
-
-def load_model(modelname, **kwargs):
-    return load_tagger_model(BASELINE_TAGGER_LOADERS, modelname, **kwargs)

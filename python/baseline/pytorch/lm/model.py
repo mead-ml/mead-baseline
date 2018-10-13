@@ -1,9 +1,11 @@
 from baseline.pytorch.torchy import *
-from baseline.model import create_lang_model, load_lang_model, LanguageModel
+from baseline.model import LanguageModel, register_model
 import torch.autograd
+import os
 import math
 
 
+@register_model(task='lm', name='default')
 class BasicLanguageModel(nn.Module, LanguageModel):
     def __init__(self):
         super(BasicLanguageModel, self).__init__()
@@ -15,8 +17,10 @@ class BasicLanguageModel(nn.Module, LanguageModel):
         return SequenceCriterion(LossFn=nn.CrossEntropyLoss)
 
     @staticmethod
-    def load(outname, **kwargs):
-        model = torch.load(outname)
+    def load(filename, **kwargs):
+        if not os.path.exists(filename):
+            filename += '.pyt'
+        model = torch.load(filename)
         return model
 
     def init_hidden(self, batchsz):
@@ -94,59 +98,3 @@ class BasicLanguageModel(nn.Module, LanguageModel):
 
     def _encoder(self, input):
         return self.dropout(self._embed(input))
-"""
-
-    def _init_char_encoder(self, char_dsz, char_vec, **kwargs):
-        self.cembed = pytorch_embedding(char_vec)
-        filtsz = kwargs['cfiltsz']
-        cmotsz = kwargs['hsz']
-        convs = []
-        for i, fsz in enumerate(filtsz):
-            pad = fsz//2
-            conv = nn.Sequential(
-                nn.Conv1d(char_dsz, cmotsz, fsz, padding=pad),
-                pytorch_activation("relu")
-            )
-            convs.append(conv)
-            # Add the module so its managed correctly
-        self.convs = nn.ModuleList(convs)
-
-        wchsz = cmotsz * len(filtsz)
-        self.highway = nn.Sequential()
-        append2seq(self.highway, (
-            Highway(wchsz),
-            Highway(wchsz)
-        ))
-
-        # Width of concat of parallel convs
-        return wchsz
-
-    def _char_encoder(self, batch_first_words):
-        emb = self.dropout(self.cembed(batch_first_words))
-        embeddings = emb.transpose(1, 2).contiguous()
-        mots = []
-        for conv in self.convs:
-            # In Conv1d, data BxCxT, max over time
-            conv_out = conv(embeddings)
-            mot, _ = conv_out.max(2)
-            mots.append(mot)
-
-        mots = torch.cat(mots, 1)
-        output = self.highway(mots)
-        return self.dropout(output)
-"""
-
-BASELINE_LM_MODELS = {
-    'default': BasicLanguageModel.create
-}
-
-BASELINE_LM_LOADERS = {
-    'default': BasicLanguageModel.load
-}
-
-def create_model(embeddings, **kwargs):
-    lm = create_lang_model(BASELINE_LM_MODELS, embeddings, **kwargs)
-    return lm
-
-def load_model(modelname, **kwargs):
-    return load_lang_model(BASELINE_LM_LOADERS, modelname, **kwargs)

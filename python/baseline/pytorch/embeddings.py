@@ -1,5 +1,4 @@
-from baseline.w2v import PretrainedEmbeddingsModel, RandomInitVecModel
-from baseline.utils import load_user_embeddings, create_user_embeddings
+from baseline.embeddings import register_embeddings
 import torch.nn as nn
 from collections import OrderedDict
 from baseline.pytorch.torchy import (pytorch_embedding,
@@ -25,20 +24,23 @@ class PyTorchEmbeddings(object):
         return self(x)
 
     @classmethod
-    def create(cls, model, **kwargs):
-        return cls(model, **kwargs)
+    def create(cls, model, name, **kwargs):
+        return cls(name, vsz=model.vsz, dsz=model.dsz, weights=model.weights, **kwargs)
 
 
-# TODO: Make these constructors more like TF, DyNet
+@register_embeddings(name='default')
 class LookupTableEmbeddings(nn.Module, PyTorchEmbeddings):
 
-    def __init__(self, model, **kwargs):
+    def __init__(self, name, **kwargs):
         super(LookupTableEmbeddings, self).__init__()
+        self.vsz = kwargs.get('vsz')
+        self.dsz = kwargs.get('dsz')
         self.finetune = kwargs.get('finetune', True)
-        self.vsz = model.get_vsz()
-        self.dsz = model.get_dsz()
-        self.embeddings = pytorch_embedding(model, self.finetune)
-        print(self)
+        weights = kwargs.get('weights')
+        if weights is None:
+            self.embeddings = nn.Embedding(self.vsz, self.dsz, padding_idx=0)
+        else:
+            self.embeddings = pytorch_embedding(weights, self.finetune)
 
     def get_dsz(self):
         return self.dsz
@@ -50,17 +52,36 @@ class LookupTableEmbeddings(nn.Module, PyTorchEmbeddings):
         return self.embeddings(x)
 
 
+@register_embeddings(name='char-conv')
 class CharConvEmbeddings(nn.Module, PyTorchEmbeddings):
 
-    def __init__(self, model, **kwargs):
+    def __init__(self, name, **kwargs):
         super(CharConvEmbeddings, self).__init__()
-        self.embeddings = pytorch_embedding(model)
-        self.vsz = model.get_vsz()
+
+        if self.weights is None:
+            unif = kwargs.get('unif', 0.1)
+            self.weights = np.random.uniform(-unif, unif, (self.vsz, self.dsz))
+        self.params = kwargs
+        self.wsz = None
+        if self.weights is None:
+            unif = kwargs.get('unif', 0.1)
+            self.weights = np.random.uniform(-unif, unif, (self.vsz, self.dsz))
+
+    def __init__(self, name, **kwargs):
+        super(CharConvEmbeddings, self).__init__()
+        self.vsz = kwargs.get('vsz')
+        self.dsz = kwargs.get('dsz')
+        self.finetune = kwargs.get('finetune', True)
+        weights = kwargs.get('weights')
+        if weights is None:
+            self.embeddings = nn.Embedding(self.vsz, self.dsz, padding_idx=0)
+        else:
+            self.embeddings = pytorch_embedding(weights)
         char_filtsz = kwargs.get('cfiltsz', [3])
         char_hsz = kwargs.get('wsz', 30)
         activation_type = kwargs.get('activation', 'tanh')
         pdrop = kwargs.get('pdrop', 0.5)
-        self.char_comp = ParallelConv(model.get_dsz(), char_hsz, char_filtsz, activation_type, pdrop)
+        self.char_comp = ParallelConv(self.dsz, char_hsz, char_filtsz, activation_type, pdrop)
         wchsz = self.char_comp.outsz
         self.linear = pytorch_linear(wchsz, wchsz)
         gating = kwargs.get('gating', 'skip')
@@ -90,39 +111,3 @@ class CharConvEmbeddings(nn.Module, PyTorchEmbeddings):
         mots = self.char_comp(char_vecs)
         gated = self.gating_seq(mots)
         return gated.view(_0, _1, self.char_comp.outsz)
-
-
-# If the embeddings are listed here, than we need to use PretrainedEmbeddingsModel
-BASELINE_EMBEDDING_MODELS = {
-    'default': LookupTableEmbeddings.create,
-    'char-conv': CharConvEmbeddings.create
-}
-
-
-def load_embeddings(filename, name, known_vocab=None, **kwargs):
-
-    embed_type = kwargs.pop('embed_type', 'default')
-    create_fn = BASELINE_EMBEDDING_MODELS.get(embed_type)
-
-    if create_fn is not None:
-        model = PretrainedEmbeddingsModel(filename,
-                                          known_vocab=known_vocab,
-                                          unif_weight=kwargs.pop('unif', 0),
-                                          keep_unused=kwargs.pop('keep_unused', False),
-                                          normalize=kwargs.pop('normalized', False), **kwargs)
-        return {'embeddings': create_fn(model, **kwargs), 'vocab': model.get_vocab()}
-    print('loading user module')
-    return load_user_embeddings(filename, name, known_vocab, **kwargs)
-
-
-def create_embeddings(dsz, name, known_vocab=None, **kwargs):
-
-    embed_type = kwargs.pop('embed_type', 'default')
-    create_fn = BASELINE_EMBEDDING_MODELS.get(embed_type)
-
-    if create_fn is not None:
-        model = RandomInitVecModel(dsz, known_vocab=known_vocab, unif_weight=kwargs.pop('unif', 0))
-        return {'embeddings': create_fn(model, **kwargs), 'vocab': model.get_vocab()}
-
-    print('loading user module')
-    return create_user_embeddings(dsz, name, known_vocab, **kwargs)

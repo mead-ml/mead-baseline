@@ -1,7 +1,7 @@
 import io
 import contextlib
 import numpy as np
-from baseline.utils import export, load_user_embeddings, write_json, read_config_file
+from baseline.utils import export, write_json, read_config_file
 from baseline.mime_type import mime_type
 __all__ = []
 exporter = export(__all__)
@@ -119,7 +119,7 @@ class PretrainedEmbeddingsModel(WordEmbeddingsModel):
         self.vocab["<UNK>"] = 1
 
         if known_vocab is not None:
-            known_vocab.pop("<UNK>")
+            known_vocab.pop("<UNK>", 0)
             unknown = {v: cnt for v, cnt in known_vocab.items() if cnt > 0}
             for v in unknown:
                 word_vectors.append(np.random.uniform(-uw, uw, self.dsz))
@@ -265,7 +265,7 @@ class RandomInitVecModel(EmbeddingsModel):
         self.vsz = 2
 
         if counts is True:
-            known_vocab.pop("<UNK>")
+            known_vocab.pop("<UNK>", 0)
             attested = [v for v, cnt in known_vocab.items() if cnt > 0]
             for k, v in enumerate(attested):
                 self.vocab[v] = k + 1

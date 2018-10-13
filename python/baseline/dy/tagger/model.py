@@ -1,13 +1,13 @@
 import dynet as dy
 from baseline.model import (
     TaggerModel,
-    load_tagger_model,
-    create_tagger_model
+    register_model
 )
 import numpy as np
 from baseline.dy.dynety import CRF, Linear, DynetModel, rnn_forward
 
 
+@register_model(task='tagger', name='default')
 class RNNTaggerModel(DynetModel, TaggerModel):
     def __init__(self, embeddings_set, labels, dropout=0.5, layers=1, **kwargs):
         super(RNNTaggerModel, self).__init__(kwargs['pc'])
@@ -137,19 +137,3 @@ class RNNTaggerModel(DynetModel, TaggerModel):
         self.pc.populate(file_name)
         return self
 
-
-BASELINE_TAGGER_MODELS = {
-    'default': RNNTaggerModel.create,
-}
-
-BASELINE_TAGGER_LOADERS = {
-    'default': RNNTaggerModel.load,
-}
-
-
-def create_model(labels, embeddings, **kwargs):
-    return create_tagger_model(BASELINE_TAGGER_MODELS, embeddings, labels, **kwargs)
-
-
-def load_model(modelname, **kwargs):
-    return load_tagger_model(BASELINE_TAGGER_LOADERS, modelname, **kwargs)

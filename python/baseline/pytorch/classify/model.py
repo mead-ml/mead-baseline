@@ -1,7 +1,8 @@
-from baseline.model import ClassifierModel, load_classifier_model, create_classifier_model
+from baseline.model import ClassifierModel, register_model
 from baseline.pytorch.torchy import *
 from baseline.utils import listify
 import torch.backends.cudnn as cudnn
+import os
 cudnn.benchmark = True
 
 
@@ -11,8 +12,10 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
         super(ClassifierModelBase, self).__init__()
 
     @classmethod
-    def load(cls, outname, **kwargs):
-        model = torch.load(outname)
+    def load(cls, filename, **kwargs):
+        if not os.path.exists(filename):
+            filename += '.pyt'
+        model = torch.load(filename)
         return model
 
     def save(self, outname):
@@ -143,6 +146,7 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
         pass
 
 
+@register_model(task='classify', name='default')
 class ConvModel(ClassifierModelBase):
 
     def __init__(self):
@@ -159,6 +163,7 @@ class ConvModel(ClassifierModelBase):
         return self.parallel_conv(embeddings)
 
 
+@register_model(task='classify', name='lstm')
 class LSTMModel(ClassifierModelBase):
 
     def __init__(self):
@@ -204,6 +209,7 @@ class NBowBase(ClassifierModelBase):
         return super(NBowBase, self)._init_stacked(input_dim, **kwargs)
 
 
+@register_model(task='classify', name='nbow')
 class NBowModel(NBowBase):
 
     def __init__(self):
@@ -213,6 +219,7 @@ class NBowModel(NBowBase):
         return torch.mean(embeddings, 1, False)
 
 
+@register_model(task='classify', name='nbowmax')
 class NBowMaxModel(NBowBase):
     def __init__(self):
         super(NBowMaxModel, self).__init__()
@@ -222,6 +229,7 @@ class NBowMaxModel(NBowBase):
         return dmax
 
 
+@register_model(task='classify', name='composite')
 class CompositePoolingModel(ClassifierModelBase):
     """Fulfills pooling contract by aggregating pooling from a set of sub-models and concatenates each
     """
@@ -267,27 +275,3 @@ class CompositePoolingModel(ClassifierModelBase):
             inputs[k] = value[perm_idx]
         return inputs
 
-
-# These define the possible models for this backend
-BASELINE_CLASSIFICATION_MODELS = {
-    'default': ConvModel.create,
-    'lstm': LSTMModel.create,
-    'nbow': NBowModel.create,
-    'nbowmax': NBowMaxModel.create,
-    'composite': CompositePoolingModel.create
-}
-BASELINE_CLASSIFICATION_LOADERS = {
-    'default': ConvModel.load,
-    'lstm': LSTMModel.load,
-    'nbow': NBowModel.load,
-    'nbowmax': NBowMaxModel.load,
-    'composite': CompositePoolingModel.load
-}
-
-
-def create_model(embeddings, labels, **kwargs):
-    return create_classifier_model(BASELINE_CLASSIFICATION_MODELS, embeddings, labels, **kwargs)
-
-
-def load_model(outname, **kwargs):
-    return load_classifier_model(BASELINE_CLASSIFICATION_LOADERS, outname, **kwargs)

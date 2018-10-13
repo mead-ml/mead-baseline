@@ -1,9 +1,10 @@
 import numpy as np
-from baseline.model import create_seq2seq_model, load_seq2seq_model, EncoderDecoderModel
+from baseline.model import EncoderDecoderModel, register_model
 from baseline.dy.dynety import *
 from baseline.utils import topk
 
 
+@register_model(task='seq2seq', name='default')
 class Seq2SeqModel(DynetModel, EncoderDecoderModel):
 
     def __init__(self, embeddings_in, embeddings_out, **kwargs):
@@ -22,7 +23,7 @@ class Seq2SeqModel(DynetModel, EncoderDecoderModel):
 
         if self.rnntype == 'blstm':
             self.lstm_forward = dy.VanillaLSTMBuilder(layers, src_dsz, self.hsz//2, self.pc)
-            self.lstm_backward = dy.VanillaLSTMBuilder(layers,src_dsz, self.hsz//2, self.pc)
+            self.lstm_backward = dy.VanillaLSTMBuilder(layers, src_dsz, self.hsz//2, self.pc)
         else:
             self.lstm_forward = dy.VanillaLSTMBuilder(layers, src_dsz, self.hsz, self.pc)
             self.lstm_backward = None
@@ -261,6 +262,7 @@ class Seq2SeqModel(DynetModel, EncoderDecoderModel):
         return [p[1:] for p in paths], scores
 
 
+@register_model(task='seq2seq', name='attn')
 class Seq2SeqAttnModel(Seq2SeqModel):
 
     def __init__(self, embeddings_in, embeddings_out, **kwargs):
@@ -273,17 +275,3 @@ class Seq2SeqAttnModel(Seq2SeqModel):
     def input_i(self, embed_i, output_i):
         ##return dy.concatenate([embed_i, output_i])
         return embed_i
-
-BASELINE_SEQ2SEQ_MODELS = {
-    'default': Seq2SeqModel.create,
-    'attn': Seq2SeqAttnModel.create
-}
-
-
-def create_model(embeddings_in, embeddings_out, **kwargs):
-    lm = create_seq2seq_model(BASELINE_SEQ2SEQ_MODELS, embeddings_in, embeddings_out, **kwargs)
-    return lm
-
-
-def load_model(modelname, **kwargs):
-    return load_seq2seq_model(BASELINE_SEQ2SEQ_MODELS, modelname, **kwargs)

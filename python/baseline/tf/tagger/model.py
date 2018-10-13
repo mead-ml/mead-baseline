@@ -8,8 +8,10 @@ from baseline.tf.tfy import *
 from baseline.utils import ls_props, read_json, write_json
 from baseline.tf.embeddings import *
 from baseline.version import __version__
+from baseline.model import register_model
 
 
+@register_model(task='tagger', name='default')
 class RNNTaggerModel(TaggerModel):
 
 
@@ -75,7 +77,8 @@ class RNNTaggerModel(TaggerModel):
     def make_input(self, batch_dict, do_dropout=False):
         y = batch_dict.get('y', None)
 
-        feed_dict = {v.x: self.drop_inputs(k, batch_dict[k], do_dropout) for k, v in self.embeddings.items()}
+        feed_dict = {"{}:0".format(k): batch_dict[k] for k in self.embeddings.keys()}
+        #feed_dict = {v.x: self.drop_inputs(k, batch_dict[k], do_dropout) for k, v in self.embeddings.items()}
         pkeep = 1.0 - self.pdrop_value if do_dropout else 1.0
         feed_dict[self.pkeep] = pkeep
 
@@ -265,7 +268,7 @@ class RNNTaggerModel(TaggerModel):
         return word_embeddings
 
     @classmethod
-    def create(cls, labels, embeddings, **kwargs):
+    def create(cls, embeddings, labels, **kwargs):
 
         model = cls()
         model.embeddings = embeddings
@@ -332,19 +335,3 @@ class RNNTaggerModel(TaggerModel):
             model.probs = tf.reshape(preds, [-1, T, nc])
             model.best = tf.argmax(model.probs, 2)
         return model
-
-BASELINE_TAGGER_MODELS = {
-    'default': RNNTaggerModel.create,
-}
-
-BASELINE_TAGGER_LOADERS = {
-    'default': RNNTaggerModel.load
-}
-
-
-def create_model(labels, embeddings, **kwargs):
-    return create_tagger_model(BASELINE_TAGGER_MODELS, labels, embeddings, **kwargs)
-
-
-def load_model(modelname, **kwargs):
-    return load_tagger_model(BASELINE_TAGGER_LOADERS, modelname, **kwargs)

@@ -169,10 +169,10 @@ def pytorch_rnn_cell(insz, hsz, rnntype, nlayers, dropout):
     return rnn
 
 
-def pytorch_embedding(x2vec, finetune=True):
-    lut = nn.Embedding(x2vec.vsz, x2vec.dsz, padding_idx=0)
+def pytorch_embedding(weights, finetune=True):
+    lut = nn.Embedding(weights.shape[0], weights.shape[1], padding_idx=0)
     del lut.weight
-    lut.weight = nn.Parameter(torch.FloatTensor(x2vec.weights),
+    lut.weight = nn.Parameter(torch.FloatTensor(weights),
                               requires_grad=finetune)
     return lut
 

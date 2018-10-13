@@ -1,11 +1,12 @@
 from baseline.tf.tfy import *
 from baseline.version import __version__
-from baseline.model import create_lang_model, load_lang_model, LanguageModel
+from baseline.model import LanguageModel, register_model
 from baseline.tf.embeddings import *
 from baseline.utils import read_json, write_json, ls_props
 from google.protobuf import text_format
 
 
+@register_model(task='lm', name='default')
 class BasicLanguageModel(LanguageModel):
 
     def __init__(self):
@@ -187,25 +188,3 @@ class BasicLanguageModel(LanguageModel):
         model.saver = tf.train.Saver()
         model.saver.restore(model.sess, basename)
         return model
-
-
-BASELINE_LM_MODELS = {
-    'default': BasicLanguageModel.create
-}
-
-
-# TODO:
-BASELINE_LM_LOADERS = {
-    'default': BasicLanguageModel.load
-}
-
-
-def create_model(embeddings, **kwargs):
-
-    lm = create_lang_model(BASELINE_LM_MODELS, embeddings, **kwargs)
-    return lm
-
-
-def load_model(modelname, **kwargs):
-    return load_lang_model(BASELINE_LM_LOADERS, modelname, **kwargs)
-

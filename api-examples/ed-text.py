@@ -4,6 +4,7 @@ import os
 parser = argparse.ArgumentParser(description='Classify text with a model')
 parser.add_argument('--model', help='A classifier model', required=True, type=str)
 parser.add_argument('--text', help='raw value', type=str)
+parser.add_argument('--backend', help='backend', default='tf')
 
 
 args = parser.parse_known_args()[0]
@@ -20,5 +21,5 @@ else:
 
 print(texts)
 
-m = bl.EncoderDecoderService.load(args.model)
+m = bl.EncoderDecoderService.load(args.model, backend=args.backend)
 print(m.transform(texts))

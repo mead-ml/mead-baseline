@@ -3,12 +3,44 @@ import numpy as np
 from collections import Counter
 import re
 import codecs
-from baseline.utils import import_user_module, revlut, export
+from baseline.utils import import_user_module, revlut, export, optional_params
 from baseline.vectorizers import Dict1DVectorizer, GOVectorizer
 import os
 
 __all__ = []
 exporter = export(__all__)
+
+
+BASELINE_READERS = {}
+
+
+@exporter
+@optional_params
+def register_reader(cls, task, name=None):
+    """Register your own `Reader`
+
+    Use this pattern if you want to provide an override to a `Reader` class.
+
+    """
+    """Register a function as a plug-in"""
+    if name is None:
+        name = cls.__name__
+
+    if task not in BASELINE_READERS:
+        BASELINE_READERS[task] = {}
+
+    if name in BASELINE_READERS[task]:
+        raise Exception('Error: attempt to re-defined previously registered handler {} for task {} in registry'.format(name, task))
+
+    BASELINE_READERS[task][name] = cls
+    return cls
+
+
+@exporter
+def create_reader(task, vectorizers, trim, **kwargs):
+    name = kwargs.get('reader_type', 'default')
+    Constructor = BASELINE_READERS[task][name]
+    return Constructor(vectorizers, trim, **kwargs)
 
 
 @exporter
@@ -25,8 +57,8 @@ def _build_vocab_for_col(col, files, vectorizers):
 
     for key in vectorizers.keys():
         vocabs[key] = Counter()
-        vocabs[key]['<UNK>'] = 100000  # In case freq cutoffs
         vocabs[key]['<EOS>'] = 100000  # In case freq cutoffs
+
     for file in files:
         if file is None:
             continue
@@ -42,9 +74,7 @@ def _build_vocab_for_col(col, files, vectorizers):
 @exporter
 class ParallelCorpusReader(object):
 
-    def __init__(self,
-                 vectorizers,
-                 trim=False):
+    def __init__(self, vectorizers, trim=False):
 
         self.src_vectorizers = {}
         self.tgt_vectorizer = None
@@ -67,11 +97,11 @@ class ParallelCorpusReader(object):
                                              shuffle=shuffle, trim=self.trim, sort_key=sort_key)
 
 
-@exporter
+@register_reader(task='seq2seq', name='tsv')
 class TSVParallelCorpusReader(ParallelCorpusReader):
 
     def __init__(self, vectorizers,
-                 trim=False, src_col_num=0, tgt_col_num=1):
+                 trim=False, src_col_num=0, tgt_col_num=1, **kwargs):
         super(TSVParallelCorpusReader, self).__init__(vectorizers, trim)
         self.src_col_num = src_col_num
         self.tgt_col_num = tgt_col_num
@@ -101,15 +131,18 @@ class TSVParallelCorpusReader(ParallelCorpusReader):
 
 
 @exporter
+@register_reader(task='seq2seq', name='default')
 class MultiFileParallelCorpusReader(ParallelCorpusReader):
 
-    def __init__(self, src_suffix, tgt_suffix, vectorizers, trim=False):
+    def __init__(self, vectorizers, trim=False, **kwargs):
         super(MultiFileParallelCorpusReader, self).__init__(vectorizers, trim)
-        self.src_suffix = src_suffix
-        self.tgt_suffix = tgt_suffix
-        if not src_suffix.startswith('.'):
+        pair_suffix = kwargs['pair_suffix']
+
+        self.src_suffix = pair_suffix[0]
+        self.tgt_suffix = pair_suffix[1]
+        if not self.src_suffix.startswith('.'):
             self.src_suffix = '.' + self.src_suffix
-        if not tgt_suffix.startswith('.'):
+        if not self.tgt_suffix.startswith('.'):
             self.tgt_suffix = '.' + self.tgt_suffix
 
     # 2 possibilities here, either we have a vocab file, e.g. vocab.bpe.32000, or we are going to generate
@@ -142,29 +175,9 @@ class MultiFileParallelCorpusReader(ParallelCorpusReader):
 
 
 @exporter
-def create_parallel_corpus_reader(vectorizers, trim, **kwargs):
-
-    reader_type = kwargs.get('reader_type', 'default')
-
-    if reader_type == 'default':
-        print('Reading parallel file corpus')
-        pair_suffix = kwargs.get('pair_suffix')
-        reader = MultiFileParallelCorpusReader(pair_suffix[0], pair_suffix[1], vectorizers, trim)
-    elif reader_type == 'tsv':
-        print('Reading tab-separated corpus')
-        reader = TSVParallelCorpusReader(vectorizers, trim)
-    else:
-        mod = import_user_module("reader", reader_type)
-        return mod.create_parallel_corpus_reader(vectorizers, trim, **kwargs)
-    return reader
-
-
-@exporter
 class SeqPredictReader(object):
 
-    def __init__(self,
-                 vectorizers,
-                 trim=False):
+    def __init__(self, vectorizers, trim=False):
         self.vectorizers = vectorizers
         self.trim = trim
         self.label2index = {"<PAD>": 0, "<GO>": 1, "<EOS>": 2}
@@ -220,6 +233,7 @@ class SeqPredictReader(object):
 
 
 @exporter
+@register_reader(task='tagger', name='default')
 class CONLLSeqReader(SeqPredictReader):
 
     def __init__(self, vectorizers, trim=False, **kwargs):
@@ -253,19 +267,6 @@ class CONLLSeqReader(SeqPredictReader):
         return examples
 
 
-@exporter
-def create_seq_pred_reader(vectorizers, trim, **kwargs):
-
-    reader_type = kwargs.get('reader_type', 'default')
-
-    if reader_type == 'default':
-        print('Reading CONLL sequence file corpus')
-        reader = CONLLSeqReader(vectorizers, trim, **kwargs)
-    else:
-        mod = import_user_module("reader", reader_type)
-        reader = mod.create_seq_pred_reader(vectorizers, trim, **kwargs)
-    return reader
-
 
 @exporter
 class SeqLabelReader(object):
@@ -281,6 +282,7 @@ class SeqLabelReader(object):
 
 
 @exporter
+@register_reader(task='classify', name='default')
 class TSVSeqLabelReader(SeqLabelReader):
 
     REPLACE = { "'s": " 's ",
@@ -293,15 +295,12 @@ class TSVSeqLabelReader(SeqLabelReader):
                 "!": " ! ",
                 }
 
-    def __init__(
-            self,
-            vectorizers, clean_fn=None, trim=False
-    ):
+    def __init__(self, vectorizers, trim=False, **kwargs):
         super(TSVSeqLabelReader, self).__init__()
 
         self.label2index = {}
         self.vectorizers = vectorizers
-        self.clean_fn = clean_fn
+        self.clean_fn = kwargs.get('clean_fn')
         if self.clean_fn is None:
             self.clean_fn = lambda x: x
         self.trim = trim
@@ -406,24 +405,11 @@ class TSVSeqLabelReader(SeqLabelReader):
 
 
 @exporter
-def create_pred_reader(vectorizers, clean_fn, **kwargs):
-    reader_type = kwargs.get('reader_type', 'default')
-
-    if reader_type == 'default':
-        trim = kwargs.get('trim', False)
-        #splitter = kwargs.get('splitter', '[\t\s]+')
-        reader = TSVSeqLabelReader(vectorizers, clean_fn=clean_fn, trim=trim)
-    else:
-        mod = import_user_module("reader", reader_type)
-        reader = mod.create_pred_reader(vectorizers, clean_fn=clean_fn, **kwargs)
-    return reader
-
-
-@exporter
+@register_reader(task='lm', name='default')
 class LineSeqReader(object):
 
-    def __init__(self, vectorizers, nbptt):
-        self.nbptt = nbptt
+    def __init__(self, vectorizers, trim, **kwargs):
+        self.nbptt = kwargs['nbptt']
         self.vectorizers = vectorizers
 
     def build_vocab(self, files):
@@ -462,14 +448,3 @@ class LineSeqReader(object):
         return baseline.data.SeqWordCharDataFeed(x, self.nbptt, batchsz, tgt_key=tgt_key)
 
 
-
-@exporter
-def create_lm_reader(vectorizers, nbptt, **kwargs):
-    reader_type = kwargs.get('reader_type', 'default')
-
-    if reader_type == 'default':
-        reader = LineSeqReader(vectorizers, nbptt)
-    else:
-        mod = import_user_module("reader", reader_type)
-        reader = mod.create_lm_reader(vectorizers, nbptt, **kwargs)
-    return reader

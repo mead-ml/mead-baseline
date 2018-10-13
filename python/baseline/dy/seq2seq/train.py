@@ -2,10 +2,11 @@ import time
 import logging
 from baseline.utils import listify, get_model_file
 from baseline.progress import create_progress_bar
-from baseline.train import Trainer, create_trainer, lr_decay
+from baseline.train import Trainer, create_trainer, lr_decay, register_trainer, register_training_func
 from baseline.dy.dynety import *
 
 
+@register_trainer(name='default')
 class Seq2SeqTrainerDynet(Trainer):
     def __init__(self, model, **kwargs):
         super(Seq2SeqTrainerDynet, self).__init__()
@@ -96,6 +97,7 @@ class Seq2SeqTrainerDynet(Trainer):
         return metrics
 
 
+@register_training_func('seq2seq')
 def fit(model, ts, vs, es=None, epochs=5, do_early_stopping=True,
         early_stopping_metric='avg_loss', **kwargs):
 
@@ -104,7 +106,7 @@ def fit(model, ts, vs, es=None, epochs=5, do_early_stopping=True,
 
     model_file = get_model_file('seq2seq', 'dy', kwargs.get('basedir'))
 
-    trainer = create_trainer(Seq2SeqTrainerDynet, model, **kwargs)
+    trainer = create_trainer(model, **kwargs)
 
     if do_early_stopping:
         print("Doing early stopping on [{}] with patience [{}]".format(early_stopping_metric, patience))
