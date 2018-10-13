@@ -3,7 +3,7 @@ from baseline.pytorch.crf import *
 from baseline.model import TaggerModel
 from baseline.model import register_model
 import torch.autograd
-
+import os
 
 @register_model(task='tagger', name='default')
 class RNNTaggerModel(nn.Module, TaggerModel):
@@ -21,8 +21,10 @@ class RNNTaggerModel(nn.Module, TaggerModel):
         return self
 
     @staticmethod
-    def load(outname, **kwargs):
-        model = torch.load(outname)
+    def load(filename, **kwargs):
+        if not os.path.exists(filename):
+            filename += '.pyt'
+        model = torch.load(filename)
         return model
 
     def __init__(self):
@@ -61,7 +63,7 @@ class RNNTaggerModel(nn.Module, TaggerModel):
         return hsz
 
     @classmethod
-    def create(cls, labels, embeddings, **kwargs):
+    def create(cls, embeddings, labels, **kwargs):
         model = cls()
         model.lengths_key = kwargs.get('lengths_key')
         model.proj = bool(kwargs.get('proj', False))

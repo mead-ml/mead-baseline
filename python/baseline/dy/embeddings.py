@@ -7,6 +7,7 @@ import dynet as dy
 __all__ = []
 exporter = export(__all__)
 
+
 @exporter
 class DyNetEmbeddings(object):
 

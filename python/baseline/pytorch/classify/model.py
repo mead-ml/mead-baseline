@@ -2,6 +2,7 @@ from baseline.model import ClassifierModel, register_model
 from baseline.pytorch.torchy import *
 from baseline.utils import listify
 import torch.backends.cudnn as cudnn
+import os
 cudnn.benchmark = True
 
 
@@ -11,8 +12,10 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
         super(ClassifierModelBase, self).__init__()
 
     @classmethod
-    def load(cls, outname, **kwargs):
-        model = torch.load(outname)
+    def load(cls, filename, **kwargs):
+        if not os.path.exists(filename):
+            filename += '.pyt'
+        model = torch.load(filename)
         return model
 
     def save(self, outname):

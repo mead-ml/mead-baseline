@@ -225,7 +225,7 @@ class ClassifierModelBase(ClassifierModel):
         """
         y = batch_dict.get('y', None)
 
-        feed_dict = {v.x: batch_dict[k] for k, v in self.embeddings.items()}
+        feed_dict = {"{}:0".format(k): batch_dict[k] for k in self.embeddings.keys()}
         pkeep = 1.0 - self.pdrop_value if do_dropout else 1.0
         feed_dict[self.pkeep] = pkeep
 
@@ -300,6 +300,8 @@ class ClassifierModelBase(ClassifierModel):
         else:
             model.lengths = None
         model.pkeep = tf.get_default_graph().get_tensor_by_name('pkeep:0')
+        model.probs = tf.get_default_graph().get_tensor_by_name('output/probs:0')
+
         model.best = tf.get_default_graph().get_tensor_by_name('output/best:0')
         model.logits = tf.get_default_graph().get_tensor_by_name('output/logits:0')
 

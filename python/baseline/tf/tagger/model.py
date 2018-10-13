@@ -77,7 +77,8 @@ class RNNTaggerModel(TaggerModel):
     def make_input(self, batch_dict, do_dropout=False):
         y = batch_dict.get('y', None)
 
-        feed_dict = {v.x: self.drop_inputs(k, batch_dict[k], do_dropout) for k, v in self.embeddings.items()}
+        feed_dict = {"{}:0".format(k): batch_dict[k] for k in self.embeddings.keys()}
+        #feed_dict = {v.x: self.drop_inputs(k, batch_dict[k], do_dropout) for k, v in self.embeddings.items()}
         pkeep = 1.0 - self.pdrop_value if do_dropout else 1.0
         feed_dict[self.pkeep] = pkeep
 
@@ -267,7 +268,7 @@ class RNNTaggerModel(TaggerModel):
         return word_embeddings
 
     @classmethod
-    def create(cls, labels, embeddings, **kwargs):
+    def create(cls, embeddings, labels, **kwargs):
 
         model = cls()
         model.embeddings = embeddings

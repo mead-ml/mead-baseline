@@ -3,7 +3,7 @@ import numpy as np
 from baseline.utils import listify, get_model_file
 from baseline.progress import create_progress_bar
 from baseline.confusion import ConfusionMatrix
-from baseline.train import EpochReportingTrainer, create_trainer, register_trainer
+from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
 from baseline.dy.dynety import *
 from baseline.utils import verbose_output
 
@@ -101,7 +101,7 @@ class ClassifyTrainerAutobatch(ClassifyTrainerDynet):
         return metrics
 
 
-@register_trainer
+@register_training_func(task='classify')
 def fit(model, ts, vs, es, epochs=20, do_early_stopping=True, early_stopping_metric='acc', **kwargs):
     autobatchsz = kwargs.get('autobatchsz', 1)
     verbose = kwargs.get('verbose', {'print': kwargs.get('verbose_print', False), 'file': kwargs.get('verbose_file', None)})

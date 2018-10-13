@@ -25,8 +25,6 @@ class Backend(object):
         """Initialize the backend, optional with constructor args
 
         :param name: (``str``) Name of the framework: currently one of (`tensorflow`, `pytorch`, `dynet`, `keras`)
-        :param task: Sub-module resolved to handle this task, e.g. (`baseline.tf.classify`)
-        :param embeddings: This is the framework-specific embeddings sub-module, e.g. (`baseline.tf.embeddings`)
         :param params: (``dict``) A dictionary of framework-specific user-data to pass through keyword args to each sub-module
         :param exporter: A framework-specific exporter to facilitate exporting to runtime deployment
         """
@@ -328,6 +326,7 @@ class ClassifierTask(Task):
             dy_params.from_args()
             dy_params.set_requested_gpus(1)
             if 'autobatchsz' in self.config_params['train']:
+                self.config_params['train']['trainer_type'] = 'autobatch'
                 dy_params.set_autobatch(True)
                 batched = False
             else:
@@ -447,7 +446,7 @@ class TaggerTask(Task):
         if self.backend.params is not None:
             for k, v in self.backend.params.items():
                 model[k] = v
-        return baseline.model.create_tagger_model(labels, self.embeddings, **self.config_params['model'])
+        return baseline.model.create_tagger_model(self.embeddings, labels, **self.config_params['model'])
 
     def _load_dataset(self):
         # TODO: get rid of sort_key=self.primary_key in favor of something explicit?
@@ -484,32 +483,29 @@ class EncoderDecoderTask(Task):
             from baseline.pytorch import show_examples_pytorch
             self.config_params['preproc']['show_ex'] = show_examples_pytorch
             self.config_params['preproc']['trim'] = True
-        else:
-            # TODO: why not support DyNet trimming?
-            self.config_params['preproc']['trim'] = False
-            if backend.name == 'dynet':
-                import _dynet
-                import _dynet
-                self.config_params['preproc']['trim'] = True
-                dy_params = _dynet.DynetParams()
-                dy_params.from_args()
-                dy_params.set_requested_gpus(1)
-                if 'autobatchsz' in self.config_params['train']:
-                    dy_params.set_autobatch(True)
-                    batched = False
-                else:
-                    batched = True
-                dy_params.init()
-                backend.params = {'pc': _dynet.ParameterCollection(), 'batched': batched}
-                from baseline.dy import show_examples_dynet
-                self.config_params['preproc']['show_ex'] = show_examples_dynet
-                self.config_params['preproc']['trim'] = True
+        elif backend.name == 'dy':
+            import _dynet
+            dy_params = _dynet.DynetParams()
+            dy_params.from_args()
+            dy_params.set_requested_gpus(1)
+            if 'autobatchsz' in self.config_params['train']:
+                self.config_params['train']['trainer_type'] = 'autobatch'
+                dy_params.set_autobatch(True)
+                batched = False
             else:
-                # FIXME Replace with registration
-                from baseline.tf import show_examples_tf
-                self.config_params['preproc']['show_ex'] = show_examples_tf
-                from mead.tf.exporters import Seq2SeqTensorFlowExporter
-                backend.exporter = Seq2SeqTensorFlowExporter
+                batched = True
+            dy_params.init()
+            backend.params = {'pc': _dynet.ParameterCollection(), 'batched': batched}
+            from baseline.dy import show_examples_dynet
+            self.config_params['preproc']['show_ex'] = show_examples_dynet
+            self.config_params['preproc']['trim'] = True
+        else:
+            self.config_params['preproc']['trim'] = True
+            # FIXME Replace with registration
+            from baseline.tf import show_examples_tf
+            self.config_params['preproc']['show_ex'] = show_examples_tf
+            from mead.tf.exporters import Seq2SeqTensorFlowExporter
+            backend.exporter = Seq2SeqTensorFlowExporter
         backend.load(self.task_name())
 
         return backend

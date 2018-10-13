@@ -3,7 +3,7 @@ import json
 from google.protobuf import text_format
 from baseline.tf.tfy import *
 import tensorflow.contrib.seq2seq as tfcontrib_seq2seq
-from baseline.model import EncoderDecoderModel, load_seq2seq_model, create_seq2seq_model, register_model
+from baseline.model import EncoderDecoderModel, register_model
 from baseline.utils import ls_props, read_json
 from baseline.tf.embeddings import *
 from baseline.version import __version__
@@ -475,22 +475,3 @@ class Seq2SeqModel(EncoderDecoderModel):
             feed_dict[self.mx_tgt_len] = np.max(batch_dict['tgt_lengths'])
 
         return feed_dict
-
-
-BASELINE_SEQ2SEQ_MODELS = {
-    'default': Seq2SeqModel.create,
-    'attn': Seq2SeqModel.create
-}
-BASELINE_SEQ2SEQ_LOADERS = {
-    'default': Seq2SeqModel.load,
-    'attn': Seq2SeqModel.load
-}
-
-
-def create_model(src_embed, tgt_embed, **kwargs):
-    model = create_seq2seq_model(BASELINE_SEQ2SEQ_MODELS, src_embed, tgt_embed, **kwargs)
-    return model
-
-
-def load_model(modelname, **kwargs):
-    return load_seq2seq_model(BASELINE_SEQ2SEQ_LOADERS, modelname, **kwargs)
