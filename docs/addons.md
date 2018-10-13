@@ -22,7 +22,7 @@ Almost all extensions are done by writing a class to handle some aspect of train
 
 ### Inversion of Control and MEAD
 
-MEAD is a program that orchestrates training by delegation of its sub-components to registered handlers.  This is a design pattern known as Inversion of Control (IoC), and its commonly used in plugin architectures, and very powerful, but it can be confusing to the uninitiated.  The basic idea in our case is this:  we know we want to use some training mechanism in some DL framework to train some sort of model for some task.  We want to also properly vectorize inputs and readers.  The typical pattern for this would be to create some pre-registered components for everything, but to allow a user to define their own implementations, and somehow know that these exists and should be called to handle certain events.
+MEAD is a program that orchestrates training by delegation of its sub-components to registered handlers.  This is a design pattern known as Inversion of Control (IoC), and its commonly used in plugin architectures, and very powerful, but it can be confusing to the uninitiated.  The basic idea in our case is this:  we know we want to use some generalized training routine to use some DL framework to train some sort of model for some task.  We want to also properly vectorize inputs and readers.  The typical pattern for this would be to create some pre-registered components for everything, but to allow a user to define their own implementations, and somehow know that these exists and should be called to handle certain events.
 
 The registration process in Baseline makes this easy for MEAD.  All the classes which a researcher wants to use for some hook that MEAD needs to call have to register themselves with a dictionary (usually referred to as a registry).  But wwe want to make this as simple as possible for users.
 
@@ -50,3 +50,9 @@ Its defined as a simple class with a decorator that will register the class with
 ```
 python trainer.py --config config/sst2-rnf-pyt.yml
 ```
+
+We can put our code in any python module that we wish -- for instance, we might have library of registered hooks for training, models and readers.  We can just tell mead about the library in the `modules` section, and then through proper decoration, they become available for training.  Here is an example of a module that customizes several aspects of training:
+  - https://github.com/dpressel/baseline/blob/feature/v1/python/addons/demolib.py
+And here is the corresponding YAML to run this in mead:
+
+  - https://github.com/dpressel/baseline/blob/feature/v1/python/mead/config/sst2-demolib.yml
