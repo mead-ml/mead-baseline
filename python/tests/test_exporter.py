@@ -107,7 +107,7 @@ class ExporterTest(tf.test.TestCase):
             exporter = tagger_exporter()
             mocked_model = Mock()
             exporter._create_model = Mock(return_value=(None, None, mocked_model))
-            exporter.restore_model = Mock()
+            exporter.restore_checkpoint = Mock()
             exporter._run_preproc = Mock(return_value=('srl', 'ex', 'raw', 'lengths'))
 
             
@@ -125,7 +125,7 @@ class ExporterTest(tf.test.TestCase):
             exporter = tagger_exporter()
             mocked_model = Mock()
             exporter._create_model = Mock(return_value=(None, None, mocked_model))
-            exporter.restore_model = Mock()
+            exporter.restore_checkpoint = Mock()
             exporter._run_preproc = Mock(return_value=('srl', 'ex', 'raw', 'lengths'))
 
 
