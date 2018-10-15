@@ -4,12 +4,16 @@ from tensorflow.python.framework.errors_impl import NotFoundError
 import mead.exporters
 from mead.exporters import register_exporter
 from baseline.tf.embeddings import *
-from mead.tf.signatures import SignatureInput, SignatureOutput
 from baseline.utils import export, read_json, ls_props
+from collections import namedtuple
+
 FIELD_NAME = 'text/tokens'
 
 __all__ = []
 exporter = export(__all__)
+
+
+SignatureOutput = namedtuple("SignatureOutput", ("classes", "scores"))
 
 
 @exporter
