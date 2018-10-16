@@ -124,8 +124,8 @@ class StackedLSTMCell(nn.Module):
             input = h_i
             if i != self.num_layers - 1:
                 input = self.dropout(input)
-            hs += [h_i]
-            cs += [c_i]
+            hs.append(h_i)
+            cs.append(c_i)
 
         hs = torch.stack(hs)
         cs = torch.stack(cs)
@@ -152,7 +152,7 @@ class StackedGRUCell(nn.Module):
             input = h_i
             if i != self.num_layers:
                 input = self.dropout(input)
-            hs += [h_i]
+            hs.append(h_i)
 
         hs = torch.stack(hs)
 
@@ -168,10 +168,10 @@ def pytorch_rnn_cell(insz, hsz, rnntype, nlayers, dropout):
     return rnn
 
 
-def pytorch_embedding(x2vec, finetune=True):
-    lut = nn.Embedding(x2vec.vsz, x2vec.dsz, padding_idx=0)
+def pytorch_embedding(weights, finetune=True):
+    lut = nn.Embedding(weights.shape[0], weights.shape[1], padding_idx=0)
     del lut.weight
-    lut.weight = nn.Parameter(torch.FloatTensor(x2vec.weights),
+    lut.weight = nn.Parameter(torch.FloatTensor(weights),
                               requires_grad=finetune)
     return lut
 
@@ -379,6 +379,20 @@ class LSTMEncoder(nn.Module):
         output, _ = torch.nn.utils.rnn.pad_packed_sequence(output)
         return output + tbc if self.residual else output
 
+
+class GRUEncoder(nn.Module):
+
+    def __init__(self, insz, hsz, rnntype, nlayers, dropout, residual=False):
+        super(GRUEncoder, self).__init__()
+        self.residual = residual
+        self.rnn = pytorch_rnn(insz, hsz, rnntype, nlayers, dropout)
+
+    def forward(self, tbc, lengths):
+
+        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths.tolist())
+        output, hidden = self.rnn(packed)
+        output, _ = torch.nn.utils.rnn.pad_packed_sequence(output)
+        return output + tbc if self.residual else output
 
 class BaseAttention(nn.Module):
 

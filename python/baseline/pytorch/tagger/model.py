@@ -1,10 +1,15 @@
 from baseline.pytorch.torchy import *
 from baseline.pytorch.crf import *
-from baseline.model import TaggerModel, create_tagger_model, load_tagger_model
+from baseline.model import TaggerModel
+from baseline.model import register_model
 import torch.autograd
+import os
 
-
+@register_model(task='tagger', name='default')
 class RNNTaggerModel(nn.Module, TaggerModel):
+
+    PAD = 0
+    UNK = 1
 
     def save(self, outname):
         torch.save(self, outname)
@@ -16,8 +21,10 @@ class RNNTaggerModel(nn.Module, TaggerModel):
         return self
 
     @staticmethod
-    def load(outname, **kwargs):
-        model = torch.load(outname)
+    def load(filename, **kwargs):
+        if not os.path.exists(filename):
+            filename += '.pyt'
+        model = torch.load(filename)
         return model
 
     def __init__(self):
@@ -29,41 +36,50 @@ class RNNTaggerModel(nn.Module, TaggerModel):
         for k, embedding in embeddings.items():
             self.embeddings[k] = embedding
             input_sz += embedding.get_dsz()
+
+        self.vdrop = bool(kwargs.get('variational_dropout', False))
+        pdrop = float(kwargs.get('dropout', 0.5))
+        if self.vdrop:
+            self.dropout = VariationalDropout(pdrop)
+        else:
+            self.dropout = nn.Dropout(pdrop)
         return input_sz
 
     def _embed(self, input):
         all_embeddings = []
         for k, embedding in self.embeddings.items():
-            all_embeddings += [embedding.encode(input[k])]
+            all_embeddings.append(embedding.encode(input[k]))
         return self.dropout(torch.cat(all_embeddings, 2))
 
+    def _init_encoder(self, input_sz, **kwargs):
+        nlayers = int(kwargs.get('layers', 1))
+        pdrop = float(kwargs.get('dropout', 0.5))
+        rnntype = kwargs.get('rnntype', 'blstm')
+        print('RNN [%s]' % rnntype)
+        unif = kwargs.get('unif', 0)
+        hsz = int(kwargs['hsz'])
+        weight_init = kwargs.get('weight_init', 'uniform')
+        self.encoder = LSTMEncoder(input_sz, hsz, rnntype, nlayers, pdrop, unif=unif, initializer=weight_init)
+        return hsz
+
     @classmethod
-    def create(cls, labels, embeddings, **kwargs):
+    def create(cls, embeddings, labels, **kwargs):
         model = cls()
         model.lengths_key = kwargs.get('lengths_key')
-        hsz = int(kwargs['hsz'])
         model.proj = bool(kwargs.get('proj', False))
         model.use_crf = bool(kwargs.get('crf', False))
         model.crf_mask = bool(kwargs.get('crf_mask', False))
         model.span_type = kwargs.get('span_type')
-        model.vdrop = bool(kwargs.get('variational_dropout', False))
         model.activation_type = kwargs.get('activation', 'tanh')
-        nlayers = int(kwargs.get('layers', 1))
-        rnntype = kwargs.get('rnntype', 'blstm')
-        unif = kwargs.get('unif', 0)
+
         model.gpu = False
-        print('RNN [%s]' % rnntype)
-
         pdrop = float(kwargs.get('dropout', 0.5))
+        model.dropin_values = kwargs.get('dropin', {})
         model.labels = labels
-        input_sz = model._init_embed(embeddings, **kwargs)
-        if model.vdrop:
-            model.dropout = VariationalDropout(pdrop)
-        else:
-            model.dropout = nn.Dropout(pdrop)
 
-        weight_init = kwargs.get('weight_init', 'uniform')
-        model.rnn = LSTMEncoder(input_sz, hsz, rnntype, nlayers, pdrop, unif=unif, initializer=weight_init)
+        input_sz = model._init_embed(embeddings, **kwargs)
+        hsz = model._init_encoder(input_sz, **kwargs)
+
         model.decoder = nn.Sequential()
         if model.proj is True:
             append2seq(model.decoder, (
@@ -91,9 +107,28 @@ class RNNTaggerModel(nn.Module, TaggerModel):
         print(model)
         return model
 
+    def drop_inputs(self, key, x):
+        v = self.dropin_values.get(key, 0)
+
+        if not self.training or v == 0:
+            return x
+
+        mask_pad = x != RNNTaggerModel.PAD
+        mask_drop = x.new(x.size(0), x.size(1)).bernoulli_(v).byte()
+        x.masked_fill_(mask_pad & mask_drop, RNNTaggerModel.UNK)
+        return x
+
+    def input_tensor(self, key, batch_dict, perm_idx):
+        tensor = torch.from_numpy(batch_dict[key])
+        tensor = self.drop_inputs(key, tensor)
+        tensor = tensor[perm_idx]
+        tensor = tensor.transpose(0, 1).contiguous()
+        if self.gpu:
+            tensor = tensor.cuda()
+        return tensor
+
     def make_input(self, batch_dict):
         example_dict = dict({})
-
         lengths = torch.from_numpy(batch_dict[self.lengths_key])
         lengths, perm_idx = lengths.sort(0, descending=True)
 
@@ -101,11 +136,7 @@ class RNNTaggerModel(nn.Module, TaggerModel):
             lengths = lengths.cuda()
         example_dict['lengths'] = lengths
         for key in self.embeddings.keys():
-            tensor = torch.from_numpy(batch_dict[key])
-            tensor = tensor[perm_idx]
-            example_dict[key] = tensor.transpose(0, 1).contiguous()
-            if self.gpu:
-                example_dict[key] = example_dict[key].cuda()
+            example_dict[key] = self.input_tensor(key, batch_dict, perm_idx)
 
         y = batch_dict.get('y')
         if y is not None:
@@ -124,9 +155,8 @@ class RNNTaggerModel(nn.Module, TaggerModel):
 
     def compute_unaries(self, inputs, lengths):
         words_over_time = self._embed(inputs)
-        dropped = self.dropout(words_over_time)
         # output = (T, B, H)
-        output = self.rnn(dropped, lengths)
+        output = self.encoder(words_over_time, lengths)
         # stack (T x B, H)
         decoded = self.decoder(output.view(output.size(0)*output.size(1), -1))
 
@@ -184,19 +214,3 @@ class RNNTaggerModel(nn.Module, TaggerModel):
     def predict(self, batch_dict):
         inputs = self.make_input(batch_dict)
         return self(inputs)
-
-BASELINE_TAGGER_MODELS = {
-    'default': RNNTaggerModel.create,
-}
-
-BASELINE_TAGGER_LOADERS = {
-    'default': RNNTaggerModel.load,
-}
-
-
-def create_model(labels, embeddings, **kwargs):
-    return create_tagger_model(BASELINE_TAGGER_MODELS, labels, embeddings, **kwargs)
-
-
-def load_model(modelname, **kwargs):
-    return load_tagger_model(BASELINE_TAGGER_LOADERS, modelname, **kwargs)

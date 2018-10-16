@@ -18,7 +18,7 @@
 	{
 	    "name": "char",
 	    "vectorizer": { "type": "dict2d" },
-	    "embeddings": { "dsz": 30, "wsz": 50, "type": "char-conv", "unif": 0.3 }
+	    "embeddings": { "dsz": 30, "wsz": 30, "type": "char-conv" }
 	}
     ],
     "backend": "pytorch",
@@ -32,8 +32,9 @@
     },
     "model": {
         "model_type": "default",
-        "hsz": 200,
-        "dropout": 0.2,
+        "hsz": 400,
+        "dropout": 0.5,
+	"dropin": {"word": 0.1 },
         "rnntype": "blstm",
         "layers": 1,
         "crf_mask": true,

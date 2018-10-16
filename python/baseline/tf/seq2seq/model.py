@@ -1,14 +1,14 @@
 import tensorflow as tf
 import json
 from google.protobuf import text_format
-from baseline.w2v import WordEmbeddingsModel
 from baseline.tf.tfy import *
 import tensorflow.contrib.seq2seq as tfcontrib_seq2seq
-from baseline.model import EncoderDecoderModel, load_seq2seq_model, create_seq2seq_model
+from baseline.model import EncoderDecoderModel, register_model
 from baseline.utils import ls_props, read_json
 from baseline.tf.embeddings import *
 from baseline.version import __version__
 import copy
+
 
 def _temporal_cross_entropy_loss(logits, labels, label_lengths, mx_seq_length):
     """Do cross-entropy loss accounting for sequence lengths
@@ -146,6 +146,7 @@ class Seq2SeqParallelModel(EncoderDecoderModel):
         self.inference.load(basename, **kwargs)
 
 
+@register_model(task='seq2seq', name=['default', 'attn'])
 class Seq2SeqModel(EncoderDecoderModel):
 
     def create_loss(self):
@@ -224,6 +225,7 @@ class Seq2SeqModel(EncoderDecoderModel):
         model = cls()
         model.src_embeddings = src_embeddings
         model.tgt_embedding = tgt_embedding
+        model.tgt_embedding.x = tgt_embedding.create_placeholder(tgt_embedding.name)
         GO = kwargs.get('GO')
         EOS = kwargs.get('EOS')
         model.GO = GO
@@ -262,7 +264,7 @@ class Seq2SeqModel(EncoderDecoderModel):
             all_embeddings_src = []
             for embedding in model.src_embeddings.values():
                 embeddings_out = embedding.encode()
-                all_embeddings_src += [embeddings_out]
+                all_embeddings_src.append(embeddings_out)
 
             embed_in = tf.concat(values=all_embeddings_src, axis=-1)
 
@@ -353,7 +355,7 @@ class Seq2SeqModel(EncoderDecoderModel):
         self._vdrop = value
 
     def _attn_cell_w_dropout(self, rnn_enc_tensor, beam, attn_type):
-        cell = multi_rnn_cell_w_dropout(self.hsz, self.pkeep, self.rnntype, self.nlayers, variational=self.vdrop)
+        cell = multi_rnn_cell_w_dropout(self.hsz, self.pkeep, self.rnntype, self.layers, variational=self.vdrop)
         if self.attn:
             src_len = self.src_len
             if beam > 1:
@@ -370,7 +372,7 @@ class Seq2SeqModel(EncoderDecoderModel):
             # List to tensor, reform as (T, B, W)
             if self.rnntype == 'blstm':
 
-                nlayers_bi = int(self.nlayers / 2)
+                nlayers_bi = int(self.layers / 2)
                 rnn_fwd_cell = multi_rnn_cell_w_dropout(self.hsz, self.pkeep, self.rnntype, nlayers_bi, variational=self.vdrop)
                 rnn_bwd_cell = multi_rnn_cell_w_dropout(self.hsz, self.pkeep, self.rnntype, nlayers_bi, variational=self.vdrop)
                 rnn_enc_tensor, final_encoder_state = tf.nn.bidirectional_dynamic_rnn(rnn_fwd_cell, rnn_bwd_cell,
@@ -386,7 +388,7 @@ class Seq2SeqModel(EncoderDecoderModel):
                 encoder_state = tuple(encoder_state)
             else:
 
-                rnn_enc_cell = multi_rnn_cell_w_dropout(self.hsz, self.pkeep, self.rnntype, self.nlayers, variational=self.vdrop)
+                rnn_enc_cell = multi_rnn_cell_w_dropout(self.hsz, self.pkeep, self.rnntype, self.layers, variational=self.vdrop)
                 rnn_enc_tensor, encoder_state = tf.nn.dynamic_rnn(rnn_enc_cell, embed_in,
                                                                   scope='rnn_enc',
                                                                   sequence_length=self.src_len,
@@ -473,22 +475,3 @@ class Seq2SeqModel(EncoderDecoderModel):
             feed_dict[self.mx_tgt_len] = np.max(batch_dict['tgt_lengths'])
 
         return feed_dict
-
-
-BASELINE_SEQ2SEQ_MODELS = {
-    'default': Seq2SeqModel.create,
-    'attn': Seq2SeqModel.create
-}
-BASELINE_SEQ2SEQ_LOADERS = {
-    'default': Seq2SeqModel.load,
-    'attn': Seq2SeqModel.load
-}
-
-
-def create_model(src_embed, tgt_embed, **kwargs):
-    model = create_seq2seq_model(BASELINE_SEQ2SEQ_MODELS, src_embed, tgt_embed, **kwargs)
-    return model
-
-
-def load_model(modelname, **kwargs):
-    return load_seq2seq_model(BASELINE_SEQ2SEQ_LOADERS, modelname, **kwargs)

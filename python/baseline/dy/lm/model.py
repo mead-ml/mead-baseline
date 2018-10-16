@@ -1,7 +1,8 @@
-from baseline.model import create_lang_model, load_lang_model, LanguageModel
+from baseline.model import LanguageModel, register_model
 from baseline.dy.dynety import *
 
 
+@register_model(task='lm', name='default')
 class BasicLanguageModel(DynetModel, LanguageModel):
 
     @classmethod
@@ -27,7 +28,7 @@ class BasicLanguageModel(DynetModel, LanguageModel):
     def _embed(self, batch_dict):
         all_embeddings_lists = []
         for k, embedding in self.embeddings.items():
-            all_embeddings_lists += [embedding.encode(batch_dict[k])]
+            all_embeddings_lists.append(embedding.encode(batch_dict[k]))
 
         embed = dy.concatenate(all_embeddings_lists, d=1)
         return embed
@@ -62,17 +63,3 @@ class BasicLanguageModel(DynetModel, LanguageModel):
     def load(self, file_name):
         self.pc.populate(file_name)
         return self
-
-
-BASELINE_LM_MODELS = {
-    'default': BasicLanguageModel.create,
-}
-
-
-def create_model(embeddings, **kwargs):
-    lm = create_lang_model(BASELINE_LM_MODELS, embeddings, **kwargs)
-    return lm
-
-
-def load_model(modelname, **kwargs):
-    return load_lang_model(BasicLanguageModel.load, modelname, **kwargs)

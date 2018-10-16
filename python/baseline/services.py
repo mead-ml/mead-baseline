@@ -3,12 +3,18 @@ from baseline.utils import (export,
                             unzip_files,
                             find_model_basename,
                             find_files_with_prefix,
+                            import_user_module,
                             read_json,
                             is_sequence,
                             revlut,
                             load_vectorizers,
                             load_vocabs)
 
+from baseline.model import (load_model,
+                            load_tagger_model,
+                            load_seq2seq_model,
+                            load_lang_model)
+import baseline
 import os
 import pickle
 
@@ -42,15 +48,9 @@ class ClassifierService(object):
         vectorizers = load_vectorizers(directory)
 
         model_basename = find_model_basename(directory)
-        if model_basename.find('-tf-') >= 0:
-            import baseline.tf.classify as classify
-        elif model_basename.find('-keras-') >= 0:
-            import baseline.keras.classify as classify
-        elif model_basename.endswith(".pyt"):
-            import baseline.pytorch.classify as classify
-        else:
-            import baseline.dy.classify as classify
-        model = classify.load_model(model_basename, **kwargs)
+        be = kwargs.get('backend', 'tf')
+        import_user_module('baseline.{}.classify'.format(be))
+        model = load_model(model_basename, **kwargs)
         return cls(vocabs, vectorizers, model)
 
     def transform(self, tokens):
@@ -80,12 +80,12 @@ class ClassifierService(object):
         for i, tokens in enumerate(tokens_seq):
             for k, vectorizer in self.vectorizers.items():
                 vec, length = vectorizer.run(tokens, self.vocabs[k])
-                examples[k] += [vec]
+                examples[k].append(vec)
                 if length is not None:
                     lengths_key = '{}_lengths'.format(k)
                     if lengths_key not in examples:
                         examples[lengths_key] = []
-                    examples[lengths_key] += [length]
+                    examples[lengths_key].append(length)
 
         for k in self.vectorizers.keys():
             examples[k] = np.stack(examples[k])
@@ -122,13 +122,9 @@ class TaggerService(object):
         vectorizers = load_vectorizers(directory)
 
         model_basename = find_model_basename(directory)
-        if model_basename.find('-tf-') >= 0:
-            import baseline.tf.tagger as tagger
-        elif model_basename.endswith(".pyt"):
-            import baseline.pytorch.tagger as tagger
-        else:
-            import baseline.dy.tagger as tagger
-        model = tagger.load_model(model_basename, **kwargs)
+        be = kwargs.get('backend', 'tf')
+        import_user_module('baseline.{}.tagger'.format(be))
+        model = load_tagger_model(model_basename, **kwargs)
         return cls(vocabs, vectorizers, model)
 
     def transform(self, tokens, **kwargs):
@@ -251,14 +247,9 @@ class LanguageModelService(object):
 
         vectorizers = load_vectorizers(directory)
         model_basename = find_model_basename(directory)
-        if model_basename.find('-tf-') >= 0:
-            import baseline.tf.lm as lm
-        elif model_basename.endswith(".pyt"):
-            import baseline.pytorch.lm as lm
-        else:
-            import baseline.dy.lm as lm
-
-        model = lm.load_model(model_basename, **kwargs)
+        be = kwargs.get('backend', 'tf')
+        import_user_module('baseline.{}.lm'.format(be))
+        model = load_lang_model(model_basename, **kwargs)
         return cls(vocabs, vectorizers, model)
 
     # Do a greedy decode for now, everything else will be super slow
@@ -352,14 +343,9 @@ class EncoderDecoderService(object):
         vocabs = load_vocabs(directory)
         vectorizers = load_vectorizers(directory)
         model_basename = find_model_basename(directory)
-        if model_basename.find('-tf-') >= 0:
-            import baseline.tf.seq2seq as seq2seq
-        elif model_basename.endswith(".pyt"):
-            import baseline.pytorch.seq2seq as seq2seq
-        else:
-            import baseline.dy.seq2seq as seq2seq
-
-        model = seq2seq.load_model(model_basename, **kwargs)
+        be = kwargs.get('backend', 'tf')
+        import_user_module('baseline.{}.seq2seq'.format(be))
+        model = load_seq2seq_model(model_basename, **kwargs)
         return cls(vocabs, vectorizers, model)
 
     def transform(self, tokens, **kwargs):

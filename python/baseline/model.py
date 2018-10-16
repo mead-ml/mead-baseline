@@ -1,17 +1,108 @@
 import numpy as np
 from baseline.utils import (
-    load_user_classifier_model, create_user_classifier_model,
-    load_user_tagger_model, create_user_tagger_model,
-    load_user_seq2seq_model, create_user_seq2seq_model,
-    load_user_lang_model, create_user_lang_model,
-    load_user_embeddings,
-    lowercase, revlut,
-    export, wrapped_partial, is_sequence
+    export, optional_params, listify
 )
-from baseline.vectorizers import Token1DVectorizer, Char2DVectorizer, Dict1DVectorizer, Dict2DVectorizer
 
 __all__ = []
 exporter = export(__all__)
+
+
+BASELINE_MODELS = {}
+BASELINE_LOADERS = {}
+
+
+@exporter
+@optional_params
+def register_model(cls, task, name=None):
+    """Register a function as a plug-in"""
+    if name is None:
+        name = cls.__name__
+
+    names = listify(name)
+
+    if task not in BASELINE_MODELS:
+        BASELINE_MODELS[task] = {}
+
+    if task not in BASELINE_LOADERS:
+        BASELINE_LOADERS[task] = {}
+
+    if hasattr(cls, 'create'):
+        def create(*args, **kwargs):
+            return cls.create(*args, **kwargs)
+    else:
+        def create(*args, **kwargs):
+            return cls(*args, **kwargs)
+
+    for alias in names:
+        if alias in BASELINE_MODELS[task]:
+            raise Exception('Error: attempt to re-define previously registered handler {} (old: {}, new: {}) for task {} in registry'.format(alias, BASELINE_MODELS[task], cls, task))
+
+        BASELINE_MODELS[task][alias] = create
+
+        if hasattr(cls, 'load'):
+            BASELINE_LOADERS[task][alias] = cls.load
+    return cls
+
+
+@exporter
+def create_model_for(activity, input_, output_, **kwargs):
+    model_type = kwargs.get('model_type', 'default')
+    creator_fn = BASELINE_MODELS[activity][model_type]
+    print('Calling model ', creator_fn)
+    if output_ is not None:
+        return creator_fn(input_, output_, **kwargs)
+    return creator_fn(input_, **kwargs)
+
+@exporter
+def create_model(embeddings, labels, **kwargs):
+    return create_model_for('classify', embeddings, labels, **kwargs)
+
+
+@exporter
+def create_tagger_model(embeddings, labels, **kwargs):
+    return create_model_for('tagger', embeddings, labels, **kwargs)
+
+
+@exporter
+def create_seq2seq_model(embeddings, labels, **kwargs):
+    return create_model_for('seq2seq', embeddings, labels, **kwargs)
+
+
+@exporter
+def create_lang_model(embeddings, **kwargs):
+    return create_model_for('lm', embeddings, None, **kwargs)
+
+
+@exporter
+def load_model_for(activity, filename, **kwargs):
+    model_type = kwargs.get('model_type', 'default')
+    creator_fn = BASELINE_LOADERS[activity][model_type]
+    print('Calling model ', creator_fn)
+    return creator_fn(filename, **kwargs)
+
+
+@exporter
+def load_embeddings(filename, **kwargs):
+    return load_model_for('embeddings', filename, **kwargs)
+
+@exporter
+def load_model(filename, **kwargs):
+    return load_model_for('classify', filename, **kwargs)
+
+
+@exporter
+def load_tagger_model(filename, **kwargs):
+    return load_model_for('tagger', filename, **kwargs)
+
+
+@exporter
+def load_seq2seq_model(filename, **kwargs):
+    return load_model_for('seq2seq', filename, **kwargs)
+
+
+@exporter
+def load_lang_model(filename, **kwargs):
+    return load_model_for('lm', filename, **kwargs)
 
 
 @exporter
@@ -20,6 +111,8 @@ class ClassifierModel(object):
     
     Provide an interface to DNN classifiers that use word lookup tables.
     """
+    task_name = 'classify'
+
     def __init__(self):
         super(ClassifierModel, self).__init__()
 
@@ -61,100 +154,6 @@ class ClassifierModel(object):
 
 
 @exporter
-def create_model(known_creators, input_, output_, **kwargs):
-    """If `model_type` is given, use it to load an addon model and construct that OW use default
-
-    For classification and tagging tasks input_ is embeddings and output_ is labels
-    For seq2seq tasks input_ is the source embeddings and output_ is the target embeddings
-
-    :param known_creators: Map of baseline creators, keyed by `model_type`, typically a static factory method
-    :param input_: parameter for the input, general word vectors
-    :param output_: parameter for the output, generally labels or output vectors
-    :param kwargs: Anything required to feed the model its parameters
-    :return: A newly created model
-    """
-    model_type = kwargs.get('model_type', 'default')
-    creator_fn = known_creators[model_type] if model_type in known_creators else kwargs['task_fn']
-    print('Calling model ', creator_fn)
-    return creator_fn(input_, output_, **kwargs)
-
-create_classifier_model = exporter(
-    wrapped_partial(
-        create_model,
-        task_fn=create_user_classifier_model,
-        name='create_classifier_model'
-    )
-)
-create_tagger_model = exporter(
-    wrapped_partial(
-        create_model,
-        task_fn=create_user_tagger_model,
-        name='create_tagger_model'
-    )
-)
-create_seq2seq_model = exporter(
-    wrapped_partial(
-        create_model,
-        task_fn=create_user_seq2seq_model,
-        name='create_seq2seq_model'
-    )
-)
-
-
-@exporter
-def create_lang_model(known_creators, embeddings, **kwargs):
-    model_type = kwargs.get('model_type', 'default')
-    if model_type in known_creators:
-        creator_fn = known_creators[model_type]
-        print('Calling baseline model creator ', creator_fn)
-        return creator_fn(embeddings, **kwargs)
-    return create_user_lang_model(embeddings, **kwargs)
-
-
-@exporter
-def load_model(known_loaders, outname, **kwargs):
-    """If `model_type` is given, use it to load an addon model and construct that OW use default
-
-    :param known_loaders: Map of baseline functions to load the model, typically a static factory method
-    :param outname The model name to load
-    :param kwargs: Anything required to feed the model its parameters
-    :return: A restored model
-    """
-    model_type = kwargs.get('model_type', 'default')
-    loader_fn = known_loaders[model_type] if model_type in known_loaders else kwargs['task_fn']
-    return loader_fn(outname, **kwargs)
-
-load_classifier_model = exporter(
-    wrapped_partial(
-        load_model,
-        task_fn=load_user_classifier_model,
-        name='load_classifier_model'
-    )
-)
-load_tagger_model = exporter(
-    wrapped_partial(
-        load_model,
-        task_fn=load_user_tagger_model,
-        name='load_tagger_model'
-    )
-)
-load_seq2seq_model = exporter(
-    wrapped_partial(
-        load_model,
-        task_fn=load_user_seq2seq_model,
-        name='load_seq2seq_model'
-    )
-)
-load_lang_model = exporter(
-    wrapped_partial(
-        load_model,
-        task_fn=load_user_lang_model,
-        name='load_seq2seq_model'
-    )
-)
-
-
-@exporter
 class TaggerModel(object):
     """Structured prediction classifier, AKA a tagger
     
@@ -162,6 +161,8 @@ class TaggerModel(object):
     and generates an output label for each time.  This type of model is used for POS tagging or any
     type of chunking (e.g. NER, POS chunks, slot-filling)
     """
+    task_name = 'tagger'
+
     def __init__(self):
         super(TaggerModel, self).__init__()
 
@@ -182,6 +183,8 @@ class TaggerModel(object):
 @exporter
 class LanguageModel(object):
 
+    task_name = 'lm'
+
     def __init__(self):
         super(LanguageModel, self).__init__()
 
@@ -199,6 +202,8 @@ class LanguageModel(object):
 
 @exporter
 class EncoderDecoderModel(object):
+
+    task_name = 'seq2seq'
 
     def save(self, model_base):
         pass

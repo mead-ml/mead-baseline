@@ -401,7 +401,7 @@ class Transformer(nn.Module, EncoderDecoderModel):
 
         batch = []
         for src_i in src:
-            batch += [self.greedy_decode(src_i.view(1, -1), kwargs.get('mxlen', 100))[:, 1:]]
+            batch.append(self.greedy_decode(src_i.view(1, -1), kwargs.get('mxlen', 100))[:, 1:])
 
         return batch
 

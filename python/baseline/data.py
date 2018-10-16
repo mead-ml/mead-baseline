@@ -131,9 +131,7 @@ class DictExamples(object):
         :param start: (``int``) The step index
         :param batchsz: (``int``) The batch size
         :param trim: (``bool``) Trim to maximum length in a batch
-        :param vec_alloc: A vector allocator
-        :param vec_shape: A vector shape function
-        :return: batched `x` word vector, `x` character vector, batched `y` vector, `length` vector, `ids`
+        :return batched dictionary
         """
         ex = self.example_list[start]
         keys = ex.keys()
@@ -151,7 +149,7 @@ class DictExamples(object):
 
             ex = self.example_list[idx]
             for k in keys:
-                batch[k] += [ex[k]]
+                batch[k].append(ex[k])
 
             # Trim all batches along the sort_key if it exists
             if trim and self.sort_key is not None:
@@ -235,7 +233,7 @@ class Seq2SeqExamples(object):
 
             ex = self.example_list[idx]
             for k in keys:
-                batch[k] += [ex[k]]
+                batch[k].append(ex[k])
 
             # Trim all batches along the sort_key if it exists
             if trim and self.src_sort_key is not None:

@@ -5,7 +5,7 @@ import os
 parser = argparse.ArgumentParser(description='Tag text with a model')
 parser.add_argument('--model', help='A tagger model with extended features', required=True, type=str)
 parser.add_argument('--text', help='raw value', type=str)
-
+parser.add_argument('--backend', help='backend', default='tf')
 
 args = parser.parse_known_args()[0]
 
@@ -20,5 +20,5 @@ else:
     texts = [args.text.split()]
 
 print(texts)
-m = bl.TaggerService.load(args.model)
+m = bl.TaggerService.load(args.model, backend=args.backend)
 print(m.transform(texts))

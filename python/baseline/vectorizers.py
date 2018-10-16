@@ -1,5 +1,5 @@
 import numpy as np
-from baseline.utils import export, create_user_vectorizer, listify
+from baseline.utils import export, optional_params, listify
 import collections
 
 
@@ -22,6 +22,24 @@ class Vectorizer(object):
     def get_dims(self):
         pass
 
+    def iterable(self, tokens):
+        pass
+
+BASELINE_VECTORIZERS = {}
+
+
+@exporter
+@optional_params
+def register_vectorizer(cls, name=None):
+    """Register a function as a plug-in"""
+    if name is None:
+        name = cls.__name__
+
+    if name in BASELINE_VECTORIZERS:
+        raise Exception('Error: attempt to re-defined previously registered handler {} in vectorizer registry'.format(name))
+
+    BASELINE_VECTORIZERS[name] = cls
+    return cls
 
 @exporter
 def identity_trans_fn(x):
@@ -34,14 +52,13 @@ class AbstractVectorizer(Vectorizer):
     def __init__(self, transform_fn=None):
         super(AbstractVectorizer, self).__init__()
         self.transform_fn = identity_trans_fn if transform_fn is None else transform_fn
-        #print(self.transform_fn)
 
-    def _iterable(self, tokens):
+    def iterable(self, tokens):
         for tok in tokens:
             yield self.transform_fn(tok)
 
     def _next_element(self, tokens, vocab):
-        for atom in self._iterable(tokens):
+        for atom in self.iterable(tokens):
             value = vocab.get(atom)
             if value is None:
                 value = vocab['<UNK>']
@@ -49,6 +66,7 @@ class AbstractVectorizer(Vectorizer):
 
 
 @exporter
+@register_vectorizer(name='token1d')
 class Token1DVectorizer(AbstractVectorizer):
 
     def __init__(self, **kwargs):
@@ -60,7 +78,7 @@ class Token1DVectorizer(AbstractVectorizer):
     def count(self, tokens):
         seen = 0
         counter = collections.Counter()
-        for tok in self._iterable(tokens):
+        for tok in self.iterable(tokens):
             counter[tok] += 1
             seen += 1
             counter['<EOW>'] += 1
@@ -97,6 +115,9 @@ class GOVectorizer(Vectorizer):
         if self.vectorizer.mxlen != -1:
             self.vectorizer.mxlen -= 1
 
+    def iterable(self, tokens):
+        return self.vectorizer.iterable(['<GO>'] + tokens)
+
     def count(self, tokens):
         counter = self.vectorizer.count(tokens)
         counter['<GO>'] += 1
@@ -123,6 +144,7 @@ def _token_iterator(vectorizer, tokens):
 
 
 @exporter
+@register_vectorizer(name='dict1d')
 class Dict1DVectorizer(Token1DVectorizer):
 
     def __init__(self, **kwargs):
@@ -130,7 +152,7 @@ class Dict1DVectorizer(Token1DVectorizer):
         self.fields = listify(kwargs.get('fields', 'text'))
         self.delim = kwargs.get('token_delim', '@@')
 
-    def _iterable(self, tokens):
+    def iterable(self, tokens):
         return _token_iterator(self, tokens)
 
 
@@ -143,13 +165,14 @@ class AbstractCharVectorizer(AbstractVectorizer):
     def _next_element(self, tokens, vocab):
         OOV = vocab['<UNK>']
         EOW = vocab.get('<EOW>', vocab.get(' '))
-        for token in self._iterable(tokens):
+        for token in self.iterable(tokens):
             for ch in token:
                 yield vocab.get(ch, OOV)
             yield EOW
 
 
 @exporter
+@register_vectorizer(name='char2d')
 class Char2DVectorizer(AbstractCharVectorizer):
 
     def __init__(self, **kwargs):
@@ -162,7 +185,7 @@ class Char2DVectorizer(AbstractCharVectorizer):
     def count(self, tokens):
         seen_tok = 0
         counter = collections.Counter()
-        for token in self._iterable(tokens):
+        for token in self.iterable(tokens):
             self.max_seen_char = max(self.max_seen_char, len(token))
             seen_tok += 1
             for ch in token:
@@ -201,6 +224,7 @@ class Char2DVectorizer(AbstractCharVectorizer):
 
 
 @exporter
+@register_vectorizer(name='dict2d')
 class Dict2DVectorizer(Char2DVectorizer):
 
     def __init__(self, **kwargs):
@@ -208,11 +232,12 @@ class Dict2DVectorizer(Char2DVectorizer):
         self.fields = listify(kwargs.get('fields', 'text'))
         self.delim = kwargs.get('token_delim', '@@')
 
-    def _iterable(self, tokens):
+    def iterable(self, tokens):
         return _token_iterator(self, tokens)
 
 
 @exporter
+@register_vectorizer(name='char1d')
 class Char1DVectorizer(AbstractCharVectorizer):
 
     def __init__(self, **kwargs):
@@ -225,7 +250,7 @@ class Char1DVectorizer(AbstractCharVectorizer):
     def count(self, tokens):
         seen_tok = 0
         counter = collections.Counter()
-        for token in self._iterable(tokens):
+        for token in self.iterable(tokens):
             seen_tok += 1
             for ch in token:
                 counter[ch] += 1
@@ -255,21 +280,8 @@ class Char1DVectorizer(AbstractCharVectorizer):
         return self.mxlen,
 
 
-BASELINE_KNOWN_VECTORIZERS = {
-    'token1d': Token1DVectorizer,
-    'char2d': Char2DVectorizer,
-    'char1d': Char1DVectorizer,
-    'dict1d': Dict1DVectorizer,
-    'dict2d': Dict2DVectorizer
-}
-
-
 @exporter
 def create_vectorizer(**kwargs):
     vec_type = kwargs.get('vectorizer_type', kwargs.get('type', 'token1d'))
-    Constructor = BASELINE_KNOWN_VECTORIZERS.get(vec_type)
-    if Constructor is not None:
-        return Constructor(**kwargs)
-    else:
-        print('loading user module')
-    return create_user_vectorizer(vectorizer_type=vec_type, **kwargs)
+    Constructor = BASELINE_VECTORIZERS.get(vec_type)
+    return Constructor(**kwargs)

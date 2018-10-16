@@ -1,9 +1,7 @@
 {
     "task": "tagger",
     "batchsz": 10,
-    "conll_output": "conllresults.conll",
-    "test_thresh": 10,
-    "charsz": 30,
+    "conll_output": "conll-iobes-results.conll",
     "unif": 0.1,
     "preproc": {
     },
@@ -34,10 +32,9 @@
     },
     "model": {
         "model_type": "default",
-        "cfiltsz": [3],
-        "hsz": 200,
-        "wsz": 30,
+        "hsz": 400,
         "dropout": 0.5,
+	"dropin": {"word": 0.1 },
         "rnntype": "blstm",
         "layers": 1,
         "crf_mask": true,

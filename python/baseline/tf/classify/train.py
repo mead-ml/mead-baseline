@@ -4,9 +4,11 @@ from baseline.confusion import ConfusionMatrix
 from baseline.progress import create_progress_bar
 from baseline.utils import listify, get_model_file
 from baseline.tf.tfy import optimizer, _add_ema
-from baseline.train import EpochReportingTrainer, create_trainer
+from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
 from baseline.utils import verbose_output
 
+
+@register_trainer(name='default')
 class ClassifyTrainerTf(EpochReportingTrainer):
 
     def __init__(self, model, **kwargs):
@@ -80,6 +82,7 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         self.model.saver.restore(self.model.sess, latest)
 
 
+@register_training_func('classify')
 def fit(model, ts, vs, es=None, **kwargs):
     """
     Train a classifier using TensorFlow
@@ -118,7 +121,7 @@ def fit(model, ts, vs, es=None, **kwargs):
     reporting_fns = listify(kwargs.get('reporting', []))
     print('reporting', reporting_fns)
 
-    trainer = create_trainer(ClassifyTrainerTf, model, **kwargs)
+    trainer = create_trainer(model, **kwargs)
     tables = tf.tables_initializer()
     model.sess.run(tables)
     model.sess.run(tf.global_variables_initializer())

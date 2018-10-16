@@ -9,6 +9,7 @@ try:
     from baseline.progress import *
     from baseline.reporting import *
     from baseline.model import *
+    from baseline.embeddings import *
     from baseline.services import *
     from baseline.train import *
 except ImportError:

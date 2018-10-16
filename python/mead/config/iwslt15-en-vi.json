@@ -10,7 +10,7 @@
 	    "embeddings": { "dsz": 500 }
 	},
 	{
-	    "name": "dst",
+	    "name": "tgt",
 	    "vectorizer": { "type": "token1d"},
 	    "embeddings": { "dsz": 500 }
 	}

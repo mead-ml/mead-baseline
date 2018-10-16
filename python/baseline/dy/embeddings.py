@@ -1,11 +1,12 @@
 from itertools import chain
 import numpy as np
-from baseline.w2v import PretrainedEmbeddingsModel, RandomInitVecModel
 from baseline.dy.dynety import ParallelConv, HighwayConnection, SkipConnection, Linear
-from baseline.utils import create_user_embeddings, load_user_embeddings, export
+from baseline.utils import export
+from baseline.embeddings import register_embeddings
 import dynet as dy
 __all__ = []
 exporter = export(__all__)
+
 
 @exporter
 class DyNetEmbeddings(object):
@@ -35,6 +36,7 @@ class DyNetEmbeddings(object):
         return cls(name, vsz=model.vsz, dsz=model.dsz, weights=model.weights, **kwargs)
 
 
+@register_embeddings(name='default')
 class LookupTableEmbeddings(DyNetEmbeddings):
 
     def __init__(self, name, **kwargs):
@@ -68,6 +70,7 @@ class LookupTableEmbeddings(DyNetEmbeddings):
         return self.vsz
 
 
+@register_embeddings(name='char-conv')
 class CharConvEmbeddings(DyNetEmbeddings):
 
     def __init__(self, name, **kwargs):
@@ -126,38 +129,3 @@ class CharConvEmbeddings(DyNetEmbeddings):
         # Back to T x W x B
         pooled_chars = dy.transpose(pooled_chars)
         return pooled_chars
-
-
-BASELINE_EMBEDDING_MODELS = {
-    'default': LookupTableEmbeddings.create,
-    'char-conv': CharConvEmbeddings.create
-}
-
-
-def load_embeddings(filename, name, known_vocab=None, **kwargs):
-
-    embed_type = kwargs.pop('embed_type', 'default')
-    create_fn = BASELINE_EMBEDDING_MODELS.get(embed_type)
-
-    if create_fn is not None:
-        model = PretrainedEmbeddingsModel(filename,
-                                          known_vocab=known_vocab,
-                                          unif_weight=kwargs.pop('unif', 0),
-                                          keep_unused=kwargs.pop('keep_unused', False),
-                                          normalize=kwargs.pop('normalized', False), **kwargs)
-        return {'embeddings': create_fn(model, name, **kwargs), 'vocab': model.get_vocab()}
-    print('loading user module')
-    return load_user_embeddings(filename, name, known_vocab, **kwargs)
-
-
-def create_embeddings(dsz, name, known_vocab=None, **kwargs):
-
-    embed_type = kwargs.pop('embed_type', 'default')
-    create_fn = BASELINE_EMBEDDING_MODELS.get(embed_type)
-
-    if create_fn is not None:
-        model = RandomInitVecModel(dsz, known_vocab=known_vocab, unif_weight=kwargs.pop('unif', 0))
-        return {'embeddings': create_fn(model, name, **kwargs), 'vocab': model.get_vocab()}
-
-    print('loading user module')
-    return create_user_embeddings(dsz, name, known_vocab, **kwargs)

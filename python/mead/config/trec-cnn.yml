@@ -1,4 +1,4 @@
-batchsz: 10
+batchsz: 50
 preproc:
     mxlen: -1
 
@@ -10,7 +10,7 @@ loader:
 unif: 0.25
 model:
     model_type: default
-    filtsz: [3,4,5]
+    filtsz: [3]
     dropout: 0.5
     cmotsz: 100
 
@@ -19,15 +19,15 @@ features:
     vectorizer:
       type: token1d
     embeddings:
-      label: glove-42B
-      transform: baseline.lowercase
+      label: w2v-gn
 
   - name: word2
     vectorizer:
       type: token1d
-      transform: baseline.lowercase
     embeddings:
-      label: w2v-gn
+      label: glove-42B
+      transform: baseline.lowercase
+
 
 train:
     epochs: 30

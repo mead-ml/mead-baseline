@@ -2,9 +2,11 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 from baseline.pytorch.torchy import *
-from baseline.model import EncoderDecoderModel, load_seq2seq_model, create_seq2seq_model
+from baseline.model import EncoderDecoderModel, register_model
+import os
 
 
+@register_model(task='seq2seq', name='default')
 class Seq2SeqModel(nn.Module, EncoderDecoderModel):
 
     def __init__(self, src_embeddings, tgt_embedding, **kwargs):
@@ -107,6 +109,8 @@ class Seq2SeqModel(nn.Module, EncoderDecoderModel):
         :param kwargs:
         :return:
         """
+        if not os.path.exists(filename):
+            filename += '.pyt'
         model = torch.load(filename)
         return model
 
@@ -146,7 +150,7 @@ class Seq2SeqModel(nn.Module, EncoderDecoderModel):
     def _embed(self, input):
         all_embeddings = []
         for k, embedding in self.src_embeddings.items():
-            all_embeddings += [embedding.encode(input[k])]
+            all_embeddings.append(embedding.encode(input[k]))
         return torch.cat(all_embeddings, 2)
 
     def forward(self, input):
@@ -176,7 +180,7 @@ class Seq2SeqModel(nn.Module, EncoderDecoderModel):
             output_i = self.attn(output_i, context_bth, src_mask)
             output_i = self.dropout(output_i)
             # Attentional outputs
-            outputs += [output_i]
+            outputs.append(output_i)
 
         outputs = torch.stack(outputs)
         return outputs, h_i
@@ -212,7 +216,7 @@ class Seq2SeqModel(nn.Module, EncoderDecoderModel):
             for k, value in batch_dict.items():
                 example[k] = value[b].reshape((1,) + value[b].shape)
             inputs = self.make_input(example)
-            batch += [self.beam_decode(inputs, beam, kwargs.get('mxlen', 100))[0]]
+            batch.append(self.beam_decode(inputs, beam, kwargs.get('mxlen', 100))[0])
 
         return batch
 
@@ -320,6 +324,7 @@ class Seq2SeqModel(nn.Module, EncoderDecoderModel):
         return torch.cat([embed_i, attn_output_i], 1)
 
 
+@register_model(task='seq2seq', name='attn')
 class Seq2SeqAttnModel(Seq2SeqModel):
 
     def __init__(self, src_embeddings, tgt_embedding, **kwargs):
@@ -351,22 +356,3 @@ class Seq2SeqAttnModel(Seq2SeqModel):
             return final_encoder_state, context_zeros
 
 
-
-
-BASELINE_SEQ2SEQ_MODELS = {
-    'default': Seq2SeqModel.create,
-    'attn': Seq2SeqAttnModel.create
-}
-BASELINE_SEQ2SEQ_LOADERS = {
-    'default': Seq2SeqModel.load,
-    'attn': Seq2SeqAttnModel.create
-}
-
-
-def create_model(src_vocab_embed, dst_vocab_embed, **kwargs):
-    model = create_seq2seq_model(BASELINE_SEQ2SEQ_MODELS, src_vocab_embed, dst_vocab_embed, **kwargs)
-    return model
-
-
-def load_model(modelname, **kwargs):
-    return load_seq2seq_model(BASELINE_SEQ2SEQ_LOADERS, modelname, **kwargs)

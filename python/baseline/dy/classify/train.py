@@ -3,7 +3,7 @@ import numpy as np
 from baseline.utils import listify, get_model_file
 from baseline.progress import create_progress_bar
 from baseline.confusion import ConfusionMatrix
-from baseline.train import EpochReportingTrainer, create_trainer
+from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
 from baseline.dy.dynety import *
 from baseline.utils import verbose_output
 
@@ -14,6 +14,7 @@ def _add_to_cm(cm, y, preds, axis=0):
     cm.add_batch(y, best)
 
 
+@register_trainer(name='default')
 class ClassifyTrainerDynet(EpochReportingTrainer):
 
     def __init__(self, model, **kwargs):
@@ -57,6 +58,7 @@ class ClassifyTrainerDynet(EpochReportingTrainer):
         return self._step(loader, self._update)
 
 
+@register_trainer(name='autobatch')
 class ClassifyTrainerAutobatch(ClassifyTrainerDynet):
     def __init__(self, model, autobatchsz=1, **kwargs):
         self.autobatchsz = autobatchsz
@@ -99,6 +101,7 @@ class ClassifyTrainerAutobatch(ClassifyTrainerDynet):
         return metrics
 
 
+@register_training_func(task='classify')
 def fit(model, ts, vs, es, epochs=20, do_early_stopping=True, early_stopping_metric='acc', **kwargs):
     autobatchsz = kwargs.get('autobatchsz', 1)
     verbose = kwargs.get('verbose', {'print': kwargs.get('verbose_print', False), 'file': kwargs.get('verbose_file', None)})
@@ -110,10 +113,11 @@ def fit(model, ts, vs, es, epochs=20, do_early_stopping=True, early_stopping_met
     reporting_fns = listify(kwargs.get('reporting', []))
     print('reporting', reporting_fns)
 
-    if autobatchsz != 1:
-        trainer = create_trainer(ClassifyTrainerAutobatch, model, **kwargs)
-    else:
-        trainer = create_trainer(ClassifyTrainerDynet, model, **kwargs)
+    # Do this check in mead
+    #if autobatchsz != 1:
+    trainer = create_trainer(model, **kwargs)
+    #else:
+    #    trainer = create_trainer(ClassifyTrainerDynet, model, **kwargs)
 
     max_metric = 0
     last_improved = 0

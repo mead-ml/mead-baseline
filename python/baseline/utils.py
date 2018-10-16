@@ -14,6 +14,15 @@ import addons
 __all__ = []
 
 
+def optional_params(func):
+    @wraps(func)
+    def wrapped(*args, **kwargs):
+        if len(args) == 1 and len(kwargs) == 0 and callable(args[0]):
+            return func(args[0])
+        return lambda x: func(x, *args, **kwargs)
+    return wrapped
+
+
 def parameterize(func):
     @wraps(func)
     def decorator(*args, **kwargs):
@@ -231,6 +240,7 @@ def iobes_mask(vocab, start, end, pad=None):
                         mask[vocab[to], vocab[from_]] = small
     return mask
 
+
 @exporter
 def get_version(pkg):
     s = '.'.join(pkg.__version__.split('.')[:2])
@@ -295,6 +305,7 @@ def listify(x):
     if is_sequence(x) or isinstance(x, np.ndarray):
         return x
     return [x] if x is not None else []
+
 
 @exporter
 def read_json(filepath, default_value=None, strict=False):
@@ -363,6 +374,7 @@ def read_config_stream(config_stream):
         config = os.getenv(config_stream[1:])
     return json.loads(config)
 
+
 @exporter
 def write_json(content, filepath):
     with open(filepath, "w") as f:
@@ -375,171 +387,14 @@ def ls_props(thing):
 
 
 @exporter
-def import_user_module(module_type, model_type):
-    """Load a module that is in the python path with a canonical name
-
-    This method loads a user-defined model, which must exist in the `PYTHONPATH` and must also
-    follow a fixed naming convention of `{module_type}_{model_type}.py`.  The module is dynamically
-    loaded, at which point its creator or loader function should be called to instantiate the model.
-    This is essentially a plugin, but its implementation is trivial.
-
-    :param module_type: one of `classifier`, `tagger`, `seq2seq`, `lang`
-    :param model_type: A name for the model, which is the suffix
+def import_user_module(module_name):
+    """Load a module that is in the python path
+    :param model_name: (``str``) - the name of the module
     :return:
     """
     sys.path.append(os.path.dirname(os.path.realpath(addons.__file__)))
-    module_name = "%s_%s" % (module_type, model_type)
-    print('Loading user model %s' % module_name)
     mod = importlib.import_module(module_name)
     return mod
-
-
-@exporter
-def create_user_model(input_, output_, **kwargs):
-    """Create a user-defined model
-
-    This creates a model defined by the user.
-    It first imports a module that must exist in the `PYTHONPATH`, with a named defined as
-    `{task_type}_{model_type}.py`.  Once created, this user-defined model can be trained within
-    the existing training programs
-
-    :param input_: Some type of word vectors for the input
-    :param output_: Things passed dealing with the output
-    :param kwargs:
-    :return: A user-defined model
-    """
-    model_type = kwargs['model_type']
-    mod = import_user_module(kwargs['task_type'], model_type)
-    return mod.create_model(input_, output_, **kwargs)
-
-
-def wrapped_partial(func, name=None, *args, **kwargs):
-    """
-    When we use `functools.partial` the `__name__` is not defined which breaks
-    our export function so we use update wrapper to give it a `__name__`.
-
-    :param name: A new name that is assigned to `__name__` so that the name
-    of the partial can be different than the wrapped function.
-    """
-    partial_func = partial(func, *args, **kwargs)
-    update_wrapper(partial_func, func)
-    if name is not None:
-        partial_func.__name__ = name
-    return partial_func
-
-create_user_classifier_model = exporter(
-    wrapped_partial(
-        create_user_model,
-        task_type='classify',
-        name='create_user_classifier_model'
-    )
-)
-create_user_tagger_model = exporter(
-    wrapped_partial(
-        create_user_model,
-        task_type='tagger',
-        name='create_user_tagger_model'
-    )
-)
-create_user_seq2seq_model = exporter(
-    wrapped_partial(
-        create_user_model,
-        task_type='seq2seq',
-        name='create_user_seq2seq_model'
-    )
-)
-
-
-@exporter
-def create_user_lang_model(embeddings, **kwargs):
-    model_type = kwargs['model_type']
-    mod = import_user_module('lang', model_type)
-    return mod.create_model(embeddings, **kwargs)
-
-
-@exporter
-def load_user_embeddings(embeddings_source, name, known_vocab, **kwargs):
-    embed_type = kwargs['embed_type']
-    mod = import_user_module('embed', embed_type)
-    return mod.load_embeddings(embeddings_source, name, known_vocab, **kwargs)
-
-
-@exporter
-def create_user_embeddings(dsz, name, known_vocab, **kwargs):
-    embed_type = kwargs['embed_type']
-    mod = import_user_module('embed', embed_type)
-    return mod.create_embeddings(dsz, name, known_vocab, **kwargs)
-
-
-@exporter
-def create_user_vectorizer(**kwargs):
-    embed_type = kwargs['vectorizer_type']
-    mod = import_user_module('vec', embed_type)
-    return mod.create_vectorizer(**kwargs)
-
-
-@exporter
-def create_user_trainer(model, **kwargs):
-    """Create a user-defined trainer
-
-    Given a model, create a custom trainer that will train the model.  This requires that the trainer
-    module lives in the `PYTHONPATH`, and is named `trainer_{trainer_type}`.  Once instantiated, this trainer
-    can be used by the `fit()` function within each task type
-
-    :param model: The model to train
-    :param kwargs:
-    :return: A user-defined trainer
-    """
-    model_type = kwargs['trainer_type']
-    mod = import_user_module("trainer", model_type)
-    return mod.create_trainer(model, **kwargs)
-
-
-@exporter
-def load_user_model(outname, **kwargs):
-    """Loads a user-defined model
-
-    This loads a previously serialized model defined by the user.
-    It first imports a module that must exist in the `PYTHONPATH`, with a named defined as
-    `{task_type}_{model_type}.py`.  Once loaded, this user-defined model can be used within the driver programs
-
-    :param outname: The name of the file where the model is serialized
-    :param kwargs:
-    :return: A user-defined model
-    """
-    model_type = kwargs['model_type']
-    mod = import_user_module(kwargs['task_type'], model_type)
-    return mod.load_model(outname, **kwargs)
-
-
-load_user_classifier_model = exporter(
-    wrapped_partial(
-        load_user_model,
-        task_type='classify',
-        name='load_user_classifier_model'
-    )
-)
-load_user_tagger_model = exporter(
-    wrapped_partial(
-        load_user_model,
-        task_type='tagger',
-        name='load_user_tagger_model'
-    )
-)
-load_user_seq2seq_model = exporter(
-    wrapped_partial(
-        load_user_model,
-        task_type='seq2seq',
-        name='load_user_seq2seq_model'
-    )
-)
-load_user_lang_model = exporter(
-    wrapped_partial(
-        load_user_model,
-        task_type='lm',
-        name='load_user_lang_model'
-    )
-)
 
 
 @exporter
@@ -594,6 +449,7 @@ def topk(k, probs):
         probs[idx] = -1e9
         i += 1
     return lut
+
 
 @exporter
 def beam_multinomial(k, probs):
@@ -926,6 +782,7 @@ def unzip_files(zip_path):
             temp_dir = os.path.join(temp_dir, os.listdir(temp_dir)[0])
     return temp_dir
 
+
 @exporter
 def find_model_basename(directory):
     path = os.path.join(directory, [x for x in os.listdir(directory) if 'model' in x and '-md' not in x][0])
@@ -933,9 +790,11 @@ def find_model_basename(directory):
     path = path.split('.')[:-1]
     return '.'.join(path)
 
+
 @exporter
 def find_files_with_prefix(directory, prefix):
     return [os.path.join(directory, x) for x in os.listdir(directory) if x.startswith(prefix)]
+
 
 @exporter
 def zip_files(basedir):
@@ -948,6 +807,7 @@ def zip_files(basedir):
         z.write(f)
         os.remove(f)
     z.close()
+
 
 @exporter
 def zip_model(path):

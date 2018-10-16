@@ -3,7 +3,7 @@ import numpy as np
 from google.protobuf import text_format
 from tensorflow.python.platform import gfile
 from baseline.utils import fill_y, listify, write_json, ls_props, read_json
-from baseline.model import ClassifierModel, load_classifier_model, create_classifier_model
+from baseline.model import ClassifierModel, register_model
 from baseline.tf.tfy import (stacked_lstm,
                              parallel_conv)
 from baseline.tf.embeddings import *
@@ -225,11 +225,9 @@ class ClassifierModelBase(ClassifierModel):
         """
         y = batch_dict.get('y', None)
 
+        feed_dict = {"{}:0".format(k): batch_dict[k] for k in self.embeddings.keys()}
         pkeep = 1.0 - self.pdrop_value if do_dropout else 1.0
-        feed_dict = {self.pkeep: pkeep}
-
-        for key in self.embeddings.keys():
-            feed_dict["{}:0".format(key)] = batch_dict[key]
+        feed_dict[self.pkeep] = pkeep
 
         # Allow us to track a length, which is needed for BLSTMs
         if self.lengths_key is not None:
@@ -302,6 +300,8 @@ class ClassifierModelBase(ClassifierModel):
         else:
             model.lengths = None
         model.pkeep = tf.get_default_graph().get_tensor_by_name('pkeep:0')
+        model.probs = tf.get_default_graph().get_tensor_by_name('output/probs:0')
+
         model.best = tf.get_default_graph().get_tensor_by_name('output/best:0')
         model.logits = tf.get_default_graph().get_tensor_by_name('output/logits:0')
 
@@ -404,7 +404,7 @@ class ClassifierModelBase(ClassifierModel):
         for k, embedding in self.embeddings.items():
             x = kwargs.get(k, None)
             embeddings_out = embedding.encode(x)
-            all_embeddings_out += [embeddings_out]
+            all_embeddings_out.append(embeddings_out)
         word_embeddings = tf.concat(values=all_embeddings_out, axis=2)
         return word_embeddings
 
@@ -443,10 +443,12 @@ class ClassifierModelBase(ClassifierModel):
         return in_layer
 
 
+@register_model(task='classify', name='default')
 class ConvModel(ClassifierModelBase):
     """Current default model for `baseline` classification.  Parallel convolutions of varying receptive field width
     
     """
+
     def __init__(self):
         """Constructor 
         """
@@ -478,10 +480,12 @@ class ConvModel(ClassifierModelBase):
         return combine
 
 
+@register_model(task='classify', name='lstm')
 class LSTMModel(ClassifierModelBase):
     """A simple single-directional single-layer LSTM. No layer-stacking.
     
     """
+
     def __init__(self):
         super(LSTMModel, self).__init__()
         self._vdrop = None
@@ -557,7 +561,9 @@ class NBowBase(ClassifierModelBase):
         return super(NBowBase, self).stacked(pooled, init, **kwargs)
 
 
+@register_model(task='classify', name='nbow')
 class NBowModel(NBowBase):
+
     """Neural Bag-of-Words average pooling (standard) model"""
     def __init__(self):
         super(NBowModel, self).__init__()
@@ -574,7 +580,9 @@ class NBowModel(NBowBase):
         return tf.reduce_mean(word_embeddings, 1, keepdims=False)
 
 
+@register_model(task='classify', name='nbowmax')
 class NBowMaxModel(NBowBase):
+
     """Max-pooling model for Neural Bag-of-Words.  Sometimes does better than avg pooling
     """
     def __init__(self):
@@ -592,7 +600,9 @@ class NBowMaxModel(NBowBase):
         return tf.reduce_max(word_embeddings, 1, keepdims=False)
 
 
+@register_model(task='classify', name='composite')
 class CompositePoolingModel(ClassifierModelBase):
+
     """Fulfills pooling contract by aggregating pooling from a set of sub-models and concatenates each
     """
     def __init__(self):
@@ -613,58 +623,7 @@ class CompositePoolingModel(ClassifierModelBase):
         SubModels = [eval(model) for model in kwargs.get('sub')]
         pooling = []
         for SubClass in SubModels:
-            pooling += [SubClass.pool(self, word_embeddings, dsz, init, **kwargs)]
+            pooling.append(SubClass.pool(self, word_embeddings, dsz, init, **kwargs))
         return tf.concat(pooling, -1)
 
 
-BASELINE_CLASSIFICATION_MODELS = {
-    'default': ConvModel.create,
-    'lstm': LSTMModel.create,
-    'nbow': NBowModel.create,
-    'nbowmax': NBowMaxModel.create,
-    'composite': CompositePoolingModel.create
-}
-BASELINE_CLASSIFICATION_LOADERS = {
-    'default': ConvModel.load,
-    'lstm': LSTMModel.load,
-    'nbow': NBowModel.load,
-    'nbowmax': NBowMaxModel.load
-}
-
-
-def create_model(embeddings, labels, **kwargs):
-    """This function creates a classifier with known embeddings and labels using the `model_type`.
-    If the model is found in a list of known models (keyed off `model_type`), it is constructed using a `create`
-    method known a priori (e.g. `LSTMModel.create`).  If the `mode_type` is a name not found in the dict of known
-    models, try to find a `classify_{model_type}` in the `PYTHONPATH` and load that instead.  This is a plugin facility
-    that allows baseline to be extended with custom models (a common use-case)
-
-    :param embeddings: (``dict``) A dictionary of embeddings sub-graphs or models
-    :param labels: A set of labels
-    :param kwargs: Addon models may have arbitary keyword args.  The known arguments are listed below
-
-    :Keyword Arguments:
-    * *model_type* - (``str``) The key name of this model.  If its not found, we go looking for an addon in the
-      PYTHONPATH and load that module
-    :return: A model
-    """
-    return create_classifier_model(BASELINE_CLASSIFICATION_MODELS, embeddings, labels, **kwargs)
-
-
-def load_model(outname, **kwargs):
-    """This function loads a classifier with known embeddings and labels using the `model_type`.
-    If the model is found in a list of known models (keyed off `model_type`), it is constructed using a `load`
-    method known a priori (e.g. `LSTMModel.create`).  If the `mode_type` is a name not found in the dict of known
-    models, try to find a `classify_{model_type}` in the `PYTHONPATH` and load that instead.  This is a plugin facility
-    that allows baseline to be extended with custom models (a common use-case)
-
-    :param embeddings: (``dict``) A dictionary of embeddings sub-graphs or models
-    :param labels: A set of labels
-    :param kwargs: Addon models may have arbitary keyword args.  The known arguments are listed below
-
-    :Keyword Arguments:
-    * *model_type* - (``str``) The key name of this model.  If its not found, we go looking for an addon in the
-      PYTHONPATH and load that module
-    :return: A model
-    """
-    return load_classifier_model(BASELINE_CLASSIFICATION_LOADERS, outname, **kwargs)

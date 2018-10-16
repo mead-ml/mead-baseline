@@ -3,7 +3,6 @@ import codecs
 import re
 from baseline.progress import create_progress_bar
 from baseline.utils import load_user_model, lowercase
-from baseline.featurizers import create_featurizer 
 import json
 
 

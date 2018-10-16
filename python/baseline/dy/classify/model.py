@@ -1,8 +1,6 @@
 import dynet as dy
 from baseline.model import (
-    ClassifierModel,
-    load_classifier_model,
-    create_classifier_model
+    ClassifierModel, register_model
 )
 from baseline.utils import listify
 from baseline.dy.dynety import *
@@ -40,11 +38,10 @@ class ClassifierModelBase(DynetModel, ClassifierModel):
     def _embed(self, batch_dict):
         all_embeddings_lists = []
         for k, embedding in self.embeddings.items():
-            all_embeddings_lists += [embedding.encode(batch_dict[k])]
+            all_embeddings_lists.append(embedding.encode(batch_dict[k]))
 
         embed = dy.concatenate(all_embeddings_lists, d=1)
         return embed
-
 
     def make_input(self, batch_dict):
         example_dict = dict({})
@@ -125,6 +122,7 @@ class ClassifierModelBase(DynetModel, ClassifierModel):
         return self
 
 
+@register_model(task='classify', name='default')
 class ConvModel(ClassifierModelBase):
     def __init__(self, *args, **kwargs):
         super(ConvModel, self).__init__(*args, **kwargs)
@@ -138,6 +136,7 @@ class ConvModel(ClassifierModelBase):
         return len(filtsz) * cmotsz, call_pool
 
 
+@register_model(task='classify', name='lstm')
 class LSTMModel(ClassifierModelBase):
 
     def _init_pool(self, dsz, layers=1, **kwargs):
@@ -152,6 +151,8 @@ class LSTMModel(ClassifierModelBase):
         return hsz, pool
 
 
+# TODO Merge this with LSTM model!
+@register_model(task='classify', name='blstm')
 class BLSTMModel(ClassifierModelBase):
 
     def _init_pool(self, dsz, layers=1, **kwargs):
@@ -166,6 +167,7 @@ class BLSTMModel(ClassifierModelBase):
         return hsz, pool
 
 
+@register_model(task='classify', name='nbow')
 class NBowModel(ClassifierModelBase):
 
     def _init_pool(self, *args, **kwargs):
@@ -175,6 +177,7 @@ class NBowModel(ClassifierModelBase):
         return args[0], pool
 
 
+@register_model(task='classify', name='nbowmax')
 class NBowMax(ClassifierModelBase):
 
     def _init_pool(self, *args, **kwargs):
@@ -182,28 +185,3 @@ class NBowMax(ClassifierModelBase):
             return dy.emax(input_)
 
         return args[0], pool
-
-
-BASELINE_CLASSIFICATION_MODELS = {
-    'default': ConvModel.create,
-    'lstm': LSTMModel.create,
-    'blstm': BLSTMModel.create,
-    'nbow': NBowModel.create,
-    'nbowmax': NBowMax.create,
-}
-
-BASELINE_CLASSIFICATION_LOADER = {
-    'default': ConvModel.load,
-    'lstm': LSTMModel.load,
-    'blstm': BLSTMModel.load,
-    'nbow': NBowModel.load,
-    'nbowmax': NBowMax.load
-}
-
-
-def create_model(embeddings, labels, **kwargs):
-    return create_classifier_model(BASELINE_CLASSIFICATION_MODELS, embeddings, labels, **kwargs)
-
-
-def load_model(outname, **kwargs):
-    return load_classifier_model(BASELINE_CLASSIFICATION_LOADER, outname, **kwargs)
