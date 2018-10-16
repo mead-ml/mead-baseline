@@ -148,10 +148,12 @@ class NStepProgressClassifyTrainerTf(Trainer):
         self.model.saver.restore(self.model.sess, latest)
 
 
-@register_reporting(name='line')
-class LineReporting(ReportingHook):
+@register_reporting(name='slack')
+class SlackReporting(ReportingHook):
+
     def __init__(self, **kwargs):
-        super(LineReporting, self).__init__(**kwargs)
+        super(SlackReporting, self).__init__(**kwargs)
+        self.webhook = kwargs['webhook']
 
     def step(self, metrics, tick, phase, tick_type=None, **kwargs):
         """Write results to `stdout`
@@ -162,12 +164,15 @@ class LineReporting(ReportingHook):
         :param tick_type: The resolution of tick (`STEP`, `EPOCH`)
         :return:
         """
-        line = '{}\t{}'.format(phase, tick)
-        for k, v in metrics.items():
-            if isinstance(v, numbers.Number):
-                v *= 100.
-                line += '\t%s=%.2f' % (k, v * 100)
-        print(color(line, Colors.BLACK))
+        import requests
+        chunks = ''
+        if phase in ['Valid', 'Test']:
+            chunks += '%s(%d) [Epoch %d] [%s]' % (os.getlogin(), os.getpid(), tick, phase)
+            for k, v in metrics.items():
+                if k not in ['avg_loss', 'perplexity']:
+                    v *= 100.
+                chunks += '\t%s=%.3f' % (k, v)
+            requests.post(self.webhook, json={"text": chunks})
 
 
 @register_training_func('classify', name='test_every_n_epochs')

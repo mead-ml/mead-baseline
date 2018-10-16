@@ -1,3 +1,5 @@
+# To pass in a slack reporting hook, pass in
+# --reporting slack_webhook <hook>
 modules:
   - demolib
 batchsz: 50
@@ -13,8 +15,6 @@ model:
   filtsz: [3,4,5]
   cmotsz: 100
   dropout: 0.5
-reporting:
-  line: {}
 features:
   - name: word
     vectorizer:
