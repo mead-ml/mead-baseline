@@ -3,7 +3,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.python.layers import core as layers_core
 from baseline.utils import lookup_sentence, beam_multinomial, crf_mask as crf_m
-
+import math
 
 def _add_ema(model, decay):
     """Create ops needed to track EMA when training.
@@ -483,16 +483,27 @@ def parallel_conv(input_, filtsz, dsz, motsz, activation_fn=tf.nn.relu):
     return combine, motsz_all
 
 
-def tf_activation(name):
-    """Lookup an activation by string name
+def gelu(x):
+    return 0.5*x*(1+tf.tanh(math.sqrt(2/math.pi)*(x+0.044715*tf.pow(x, 3))))
 
-    :param name: The string name
-    :return: The operation
-    """
-    if name == "tanh":
-            return tf.nn.tanh
-    if name == "sigmoid":
+
+def swish(x):
+    return x*tf.nn.sigmoid(x)
+
+
+def tf_activation(name):
+    if name == 'softmax':
+        return tf.nn.softmax
+    if name == 'tanh':
+        return tf.nn.tanh
+    if name == 'sigmoid':
         return tf.nn.sigmoid
+    if name == 'gelu':
+        return gelu
+    if name == 'swish':
+        return swish
+    if name == 'leaky_relu':
+        return tf.nn.leaky_relu
     return tf.nn.relu
 
 
