@@ -4,6 +4,7 @@ import json
 import hashlib
 import logging
 import zipfile
+import platform
 import importlib
 from contextlib import contextmanager
 from functools import partial, update_wrapper, wraps
@@ -71,6 +72,23 @@ class JSONFormatter(logging.Formatter):
         except TypeError:
             pass
         return super(JSONFormatter, self).format(record)
+
+
+@exporter
+class Colors(object):
+    GREEN = '\033[32;1m'
+    RED = '\033[31;1m'
+    YELLOW = '\033[33;1m'
+    BLACK = '\033[30;1m'
+    CYAN = '\033[36;1m'
+    RESTORE = '\033[0m'
+
+
+@exporter
+def color(msg, color):
+    if platform.system() == 'Windows':
+        return msg
+    return "{}{}{}".format(color, msg, Colors.RESTORE)
 
 
 @exporter

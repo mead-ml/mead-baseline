@@ -4,7 +4,6 @@ import six
 import os
 import json
 import hashlib
-import platform
 from functools import partial
 from collections import Mapping
 from baseline.utils import export as exporter
@@ -23,22 +22,6 @@ hpctl_path = export(
         name='hpctl_path'
     )
 )
-
-@export
-class Colors(object):
-    GREEN = '\033[32;1m'
-    RED = '\033[31;1m'
-    YELLOW = '\033[33;1m'
-    BLACK = '\033[30;1m'
-    CYAN = '\033[36;1m'
-    RESTORE = '\033[0m'
-
-
-@export
-def color(msg, color):
-    if platform.system() == 'Windows':
-        return msg
-    return "{}{}{}".format(color, msg, Colors.RESTORE)
 
 
 @export
