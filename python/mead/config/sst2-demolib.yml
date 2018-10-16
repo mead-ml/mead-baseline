@@ -1,5 +1,5 @@
 # To pass in a slack reporting hook, pass in
-# --reporting slack_webhook <hook>
+# --reporting slack --slack:webhook <hook>
 modules:
   - demolib
 batchsz: 50
