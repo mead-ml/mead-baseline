@@ -156,7 +156,7 @@ class SlackReporting(ReportingHook):
         self.webhook = kwargs['webhook']
 
     def step(self, metrics, tick, phase, tick_type=None, **kwargs):
-        """Write results to `stdout`
+        """Write results to `slack` (webhook)
 
         :param metrics: A map of metrics to scores
         :param tick: The time (resolution defined by `tick_type`)
