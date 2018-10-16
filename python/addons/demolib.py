@@ -1,10 +1,30 @@
-import pandas as pd
-from baseline.reader import register_reader, SeqLabelReader
-from baseline.train import register_trainer, Trainer
-from baseline.tf import *
-from collections import Counter
-from baseline.data import ExampleDataFeed, DictExamples
+from baseline.train import create_trainer, register_trainer, register_training_func, Trainer
+from baseline.embeddings import register_embeddings
+from baseline.reporting import register_reporting, ReportingHook
+from baseline.tf.embeddings import TensorFlowEmbeddings
 from baseline.confusion import ConfusionMatrix
+from baseline.utils import listify, get_model_file, write_json
+from baseline.tf.tfy import optimizer, embed
+import tensorflow as tf
+import numpy as np
+import numbers
+import platform
+import os
+
+# TODO: remove when this goes into baseline.utils
+class Colors(object):
+    GREEN = '\033[32;1m'
+    RED = '\033[31;1m'
+    YELLOW = '\033[33;1m'
+    BLACK = '\033[30;1m'
+    CYAN = '\033[36;1m'
+    RESTORE = '\033[0m'
+
+
+def color(msg, color):
+    if platform.system() == 'Windows':
+        return msg
+    return "{}{}{}".format(color, msg, Colors.RESTORE)
 
 
 @register_embeddings(name='cbow')
@@ -127,3 +147,104 @@ class NStepProgressClassifyTrainerTf(Trainer):
         print('Reloading ' + latest)
         self.model.saver.restore(self.model.sess, latest)
 
+
+@register_reporting(name='line')
+class LineReporting(ReportingHook):
+    def __init__(self, **kwargs):
+        super(LineReporting, self).__init__(**kwargs)
+
+    def step(self, metrics, tick, phase, tick_type=None, **kwargs):
+        """Write results to `stdout`
+
+        :param metrics: A map of metrics to scores
+        :param tick: The time (resolution defined by `tick_type`)
+        :param phase: The phase of training (`Train`, `Valid`, `Test`)
+        :param tick_type: The resolution of tick (`STEP`, `EPOCH`)
+        :return:
+        """
+        line = '{}\t{}'.format(phase, tick)
+        for k, v in metrics.items():
+            if isinstance(v, numbers.Number):
+                v *= 100.
+                line += '\t%s=%.2f' % (k, v * 100)
+        print(color(line, Colors.BLACK))
+
+
+@register_training_func('classify', name='test_every_n_epochs')
+def train(model, ts, vs, es=None, **kwargs):
+    """
+    Train a classifier using TensorFlow
+
+    :param model: The model to train
+    :param ts: A training data set
+    :param vs: A validation data set
+    :param es: A test data set, can be None
+    :param kwargs:
+        See below
+
+    :Keyword Arguments:
+        * *do_early_stopping* (``bool``) --
+          Stop after evaluation data is no longer improving.  Defaults to True
+
+        * *epochs* (``int``) -- how many epochs.  Default to 20
+        * *outfile* -- Model output file, defaults to classifier-model.pyth
+        * *patience* --
+           How many epochs where evaluation is no longer improving before we give up
+        * *reporting* --
+           Callbacks which may be used on reporting updates
+        * Additional arguments are supported, see :func:`baseline.tf.optimize` for full list
+    :return:
+    """
+    n = int(kwargs.get('test_epochs', 5))
+    do_early_stopping = bool(kwargs.get('do_early_stopping', True))
+    epochs = int(kwargs.get('epochs', 20))
+    model_file = get_model_file('classify', 'tf', kwargs.get('basedir'))
+
+    if do_early_stopping:
+        early_stopping_metric = kwargs.get('early_stopping_metric', 'acc')
+        patience = kwargs.get('patience', epochs)
+        print('Doing early stopping on [%s] with patience [%d]' % (early_stopping_metric, patience))
+
+    reporting_fns = listify(kwargs.get('reporting', []))
+    print('reporting', reporting_fns)
+
+    trainer = create_trainer(model, **kwargs)
+    tables = tf.tables_initializer()
+    model.sess.run(tables)
+    model.sess.run(tf.global_variables_initializer())
+    model.set_saver(tf.train.Saver())
+
+    max_metric = 0
+    last_improved = 0
+
+    for epoch in range(epochs):
+
+        trainer.train(ts, reporting_fns)
+        test_metrics = trainer.test(vs, reporting_fns, phase='Valid')
+
+        if epoch > 0 and epoch % n == 0 and epoch < epochs - 1:
+            print(color('Running test', Colors.GREEN))
+            trainer.test(es, reporting_fns, phase='Test')
+
+        if do_early_stopping is False:
+            trainer.checkpoint()
+            trainer.model.save(model_file)
+
+        elif test_metrics[early_stopping_metric] > max_metric:
+            last_improved = epoch
+            max_metric = test_metrics[early_stopping_metric]
+            print('New max %.3f' % max_metric)
+            trainer.checkpoint()
+            trainer.model.save(model_file)
+
+        elif (epoch - last_improved) > patience:
+            print(color('Stopping due to persistent failures to improve', Colors.RED))
+            break
+
+    if do_early_stopping is True:
+        print('Best performance on max_metric %.3f at epoch %d' % (max_metric, last_improved))
+
+    if es is not None:
+        print(color('Reloading best checkpoint', Colors.GREEN))
+        trainer.recover_last_checkpoint()
+        trainer.test(es, reporting_fns, phase='Test')

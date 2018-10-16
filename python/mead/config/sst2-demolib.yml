@@ -13,7 +13,8 @@ model:
   filtsz: [3,4,5]
   cmotsz: 100
   dropout: 0.5
-
+reporting:
+  line: {}
 features:
   - name: word
     vectorizer:
@@ -29,7 +30,8 @@ features:
       dsz: 50
 
 
-train: 
+train:
+  fit_func: test_every_n_epochs
   trainer_type: nsteps
   nsteps: 100
   epochs: 2

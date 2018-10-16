@@ -1,0 +1,47 @@
+{
+    "task": "seq2seq",
+    "num_valid_to_show": 5,
+    "batchsz": 100,
+    "unif": 0.25,
+    "features": [
+	{ 
+	    "name": "src",
+	    "vectorizer": { "type": "token1d"},
+	    "embeddings": { "dsz": 500 }
+	},
+	{
+	    "name": "tgt",
+	    "vectorizer": { "type": "token1d"},
+	    "embeddings": { "dsz": 500 }
+	}
+    ],
+    "preproc": {
+        "mxlen": 100
+    },
+    "backend": "dy",
+    "dataset": "iwslt15-en-vi",
+    "loader": {
+        "reader_type": "default",
+	"pair_suffix": ["en", "vi"]
+    },
+    "model": {
+        "model_type": "attn",
+	"rnntype": "blstm",
+        "hsz": 500,
+        "dropout": 0.5,
+        "layers": 2
+    },
+
+    "word_embeddings": {
+	"dsz": 500
+    },
+    "train": {
+        "epochs": 16,
+        "optim": "adam",
+        "eta": 0.001,
+        "mom": 0.9,
+        "patience": 20,
+	"do_early_stopping": false,
+        "clip": 1.0
+    }
+}
