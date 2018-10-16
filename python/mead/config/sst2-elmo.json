@@ -1,5 +1,6 @@
 {
   "version": 2,
+  "modules": ["vec_text", "embed_elmo"],
   "task": "classify",
   "basedir": "./sst2",
   "batchsz": 50,

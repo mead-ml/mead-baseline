@@ -1,9 +1,11 @@
 import numpy as np
-from baseline.vectorizers import Token1DVectorizer
+from baseline.vectorizers import Token1DVectorizer, register_vectorizer
 
+
+@register_vectorizer(name='text')
 class Text1DVectorizer(Token1DVectorizer):
     def _next_element(self, tokens, vocab):
-        for atom in self._iterable(tokens):
+        for atom in self.iterable(tokens):
             yield atom
 
     def run(self, tokens, vocab):
@@ -21,7 +23,3 @@ class Text1DVectorizer(Token1DVectorizer):
             vec1d = vec1d[::-1]
             return vec1d, None
         return vec1d, valid_length
-
-
-def create_vectorizer(**kwargs):
-    return Text1DVectorizer(**kwargs)

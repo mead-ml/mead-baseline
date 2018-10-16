@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 import os
-from baseline.utils import read_config_file
+from baseline.utils import read_config_file, import_user_module
 from baseline.utils import export as exporter
 from mead.utils import (
     hash_config,
@@ -16,6 +16,11 @@ def get_config(config, reporting, extra_args):
     if reporting is not None:
         mead_config['reporting'] = parse_extra_args(reporting, extra_args)
     return mead_config
+
+
+def load_user_modules(config):
+    for module in config.pop('hpctl_modules', []):
+        import_user_module(module)
 
 
 def get_settings(settings):

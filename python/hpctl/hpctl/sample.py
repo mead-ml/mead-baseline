@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 from six.moves import map, reduce
+from six import with_metaclass
 
 import os
 import math
@@ -12,7 +13,7 @@ from functools import partial
 from itertools import cycle, product
 import numpy as np
 from baseline.utils import export as exporter
-from baseline.utils import import_user_module, listify
+from baseline.utils import import_user_module, listify, optional_params
 from mead.utils import hash_config
 from hpctl.utils import Label
 
@@ -25,6 +26,7 @@ adjectives = GzipFile(os.path.join(loc, "adjectives.gz")).read().decode('utf-8')
 nouns = GzipFile(os.path.join(loc, "nouns.gz"), "r").read().decode('utf-8').rstrip('\n').split('\n')
 
 
+## Real Sampling
 @export
 def random_name():
     """Generate a human readable random name.
@@ -83,6 +85,15 @@ def max_log_sample(min_, max_, size=1, base='e'):
     return 1 - log_sample(1 - max_, 1 - min_, size, base)
 
 
+## Constrained Sampling
+DEFAULT_CONSTRAINTS = {
+    'dropout': ['>= 0', '< 1'],
+    'mom': ['< 1', '>= 0'],
+    'hsz': '% 2 == 0',
+    'default': '> 0',
+}
+
+
 def constrained_sampler(sampler, constraints, *args):
     sample = sampler(*args)
     while not all(eval('{} {}'.format(sample, constraint)) for constraint in constraints):
@@ -90,24 +101,82 @@ def constrained_sampler(sampler, constraints, *args):
     return sample
 
 
+
+# Functions that extract sampling info from a config.
+def add_values(example, key, value):
+    example[(key,)] = [value['values']]
+
+
+def add_grid(example, key, value):
+    example[(key,)] = value['values']
+
+
+def add_min_max(example, key, value):
+    key = (key,)
+    c = value.get('constraints', DEFAULT_CONSTRAINTS.get(key[-1], DEFAULT_CONSTRAINTS['default']))
+    example[key] = [listify(c), value['min'], value['max']]
+
+
+def add_normal(example, key, value):
+    key = (key,)
+    c = value.get('constraints', DEFAULT_CONSTRAINTS.get(key[-1], DEFAULT_CONSTRAINTS['default']))
+    example[key] = [listify(c), value['mu'], value['sigma']]
+
+
+## Registering Samplers
+HPCTL_SAMPLERS = {}
+
+
 @export
-class Sampler(object):
+@optional_params
+def register_sampler(cls, name=None):
+    if cls.name is None:
+        cls.name = name if name is not None else cls.__name__
+    if cls.name in HPCTL_SAMPLERS:
+        raise Exception("Error: attempt to re-define previously registered sampler {} (old: {}, new: {})".format(cls.name, HPCTL_SAMPLERS[cls.name], cls))
+    HPCTL_SAMPLERS[cls.name] = cls
+    return cls
+
+
+# Used to force the _name prop to match between reg and config file.
+class NameProp(type):
+    _name = None
+
+    @property
+    def name(self):
+        return self._name
+
+    @name.setter
+    def name(self, value):
+        self._name = value
+
+
+@export
+class Sampler(with_metaclass(NameProp, object)):
     """An object that samples from some distribution.
 
     :param name: The name of the sampler.
     :param adder: The function that extracts parameters from the config.
     :param sampler: The function that does the real sampling.
     """
-    def __init__(self, name, adder, sampler):
+
+    def __init__(self, adder, sampler):
         super(Sampler, self).__init__()
-        self.name = name
-        self.adder = adder
+        self._adder = adder
         self.sampler = sampler
         self._values = None
 
     @property
+    def name(self):
+        return self._name
+
+    @property
     def values(self):
         return self._values
+
+    @property
+    def adder(self):
+        return self._adder
 
     @values.setter
     def values(self, val):
@@ -128,13 +197,15 @@ class Sampler(object):
 
 
 @export
-class GridSampler(Sampler):
+@register_sampler
+class Grid(Sampler):
     """A special Sampler for going grid search.
 
     :param adder: The function that extracts parameters from the config.
     """
-    def __init__(self, adder):
-        super(GridSampler, self).__init__("grid", adder, None)
+    _name = 'grid'
+    def __init__(self):
+        super(Grid, self).__init__(add_grid, None)
         self.grid_cycles = None
 
     @Sampler.values.setter
@@ -154,57 +225,54 @@ class GridSampler(Sampler):
         return reduce(operator.mul, map(len, self.values.values()))
 
 
-# Functions that extract sampling info from a config.
-def add_values(example, key, value):
-    example[(key,)] = [value['values']]
-
-def add_grid(example, key, value):
-    example[(key,)] = value['values']
-
-def add_min_max(example, key, value):
-    key = (key,)
-    c = value.get('constraints', DEFAULT_CONSTRAINTS.get(key[-1], DEFAULT_CONSTRAINTS['default']))
-    example[key] = [listify(c), value['min'], value['max']]
-
-def add_normal(example, key, value):
-    key = (key,)
-    c = value.get('constraints', DEFAULT_CONSTRAINTS.get(key[-1], DEFAULT_CONSTRAINTS['default']))
-    example[key] = [listify(c), value['mu'], value['sigma']]
+@export
+@register_sampler
+class Normal(Sampler):
+    _name = 'normal'
+    def __init__(self):
+        super(Normal, self).__init__(add_normal, partial(constrained_sampler, np.random.normal))
 
 
-DEFAULT_CONSTRAINTS = {
-    'dropout': ['>= 0', '< 1'],
-    'mom': ['< 1', '>= 0'],
-    'hsz': '% 2 == 0',
-    'default': '> 0',
-}
+@export
+@register_sampler
+class Uniform(Sampler):
+    _name = "uniform"
+    def __init__(self):
+        super(Uniform, self).__init__(add_min_max, partial(constrained_sampler, np.random.uniform))
 
-DEFAULT_SAMPLERS = {
-    'normal': Sampler(
-        "normal", add_normal,
-        partial(constrained_sampler, np.random.normal)
-    ),
-    'grid': GridSampler(add_grid),
-    'choice': Sampler("choice", add_values, random.choice),
-    'uniform': Sampler(
-        "uniform", add_min_max,
-        partial(constrained_sampler, np.random.uniform)
-    ),
-    'min_log': Sampler(
-        "min_log", add_min_max,
-        partial(constrained_sampler, min_log_sample)
-    ),
-    'max_log': Sampler(
-        "max_log", add_min_max,
-        partial(constrained_sampler, max_log_sample)
-    ),
-    'uniform_int': Sampler(
-        "uniform_int", add_min_max,
-        partial(constrained_sampler, random.randint)
-    ),
-}
+@export
+@register_sampler
+class Choice(Sampler):
+    _name = "choice"
+    def __init__(self):
+        super(Choice, self).__init__(add_values, random.choice)
 
 
+@export
+@register_sampler
+class MinLog(Sampler):
+    _name = "min_log"
+    def __init__(self):
+        super(MinLog, self).__init__(add_min_max, partial(constrained_sampler, min_log_sample))
+
+
+@export
+@register_sampler
+class MaxLog(Sampler):
+    _name = "max_log"
+    def __init__(self):
+        super(MaxLog, self).__init__(add_min_max, partial(constrained_sampler, max_log_sample))
+
+
+@export
+@register_sampler
+class UniformInt(Sampler):
+    _name = "uniform_int"
+    def __init__(self):
+        super(UniformInt, self).__init__(add_min_max, partial(constrained_sampler, random.randint))
+
+
+# Whole Config Sampling
 @export
 class ConfigSampler(object):
     """Sample configs based on a template.
@@ -215,7 +283,7 @@ class ConfigSampler(object):
         to sampler objects.
     """
 
-    def __init__(self, config, results, samplers=DEFAULT_SAMPLERS):
+    def __init__(self, config, results, samplers):
         super(ConfigSampler, self).__init__()
         self.config = config
         self.exp = hash_config(config)
@@ -305,27 +373,7 @@ class ConfigSampler(object):
 
 
 @export
-def build_samplers(names, default_samplers=DEFAULT_SAMPLERS):
-    """Create user defined samplers.
-
-    :param names: List[str], The list of user defined sampling classes.
-
-    :returns:
-        dict[name] -> hpctl.sampler.Sampler, A mapping of names to user defined
-            samplers.
-    """
-    samplers = {}
-    for name in names:
-        if name in default_samplers:
-            samplers[name] = default_samplers[name]
-        else:
-            mod = import_user_module("sampler", name)
-            samplers[name] = mod.create_sampler()
-    return samplers
-
-
-@export
-def get_config_sampler(config, results):
+def get_config_sampler(config, results, samplers=HPCTL_SAMPLERS):
     """Create a ConfigSampler that includes user defined ones.
 
     ;param config: dict, The mead config with sampling information.
@@ -333,6 +381,6 @@ def get_config_sampler(config, results):
     :param user_samplers: List[str], The names of user defined samplers.
     """
     needed_samplers = ConfigSampler._collect(config)
-    samplers = build_samplers(needed_samplers)
+    samplers = {name: samplers[name]() for name in needed_samplers}
     config_sampler = ConfigSampler(config, results, samplers=samplers)
     return config_sampler

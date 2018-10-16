@@ -1,9 +1,11 @@
 import tensorflow as tf
 import tensorflow_hub as hub
 from baseline.utils import write_json
+from baseline.embeddings import register_embeddings
 from baseline.tf.embeddings import TensorFlowEmbeddings
 
 
+@register_embeddings(name='elmo')
 class ElmoEmbeddings(TensorFlowEmbeddings):
 
     @classmethod
@@ -34,7 +36,3 @@ class ElmoEmbeddings(TensorFlowEmbeddings):
 
     def save_md(self, target):
         write_json({'vsz': self.vsz, 'dsz': self.dsz}, target)
-
-
-def create_embeddings(dsz, name, known_vocab, **kwargs):
-    return {'embeddings': ElmoEmbeddings(dsz=dsz, name=name, **kwargs), 'vocab': {}}

@@ -4,15 +4,29 @@ import six
 import os
 import json
 import hashlib
-from functools import partial
 from collections import Mapping
+from functools import partial, update_wrapper
+from baseline.utils import write_json
 from baseline.utils import export as exporter
-from baseline.utils import write_json, wrapped_partial
 from mead.utils import convert_path
 
 
 __all__ = []
 export = exporter(__all__)
+
+
+def wrapped_partial(func, name=None, *args, **kwargs):
+    """
+    When we use `functools.partial` the `__name__` is not defined which breaks
+    our export function so we use update wrapper to give it a `__name__`.
+    :param name: A new name that is assigned to `__name__` so that the name
+    of the partial can be different than the wrapped function.
+    """
+    partial_func = partial(func, *args, **kwargs)
+    update_wrapper(partial_func, func)
+    if name is not None:
+        partial_func.__name__ = name
+    return partial_func
 
 
 hpctl_path = export(

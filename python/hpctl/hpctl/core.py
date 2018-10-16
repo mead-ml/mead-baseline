@@ -21,6 +21,7 @@ from hpctl.settings import (
     get_ends,
     set_root,
     get_xpctl_settings,
+    load_user_modules,
 )
 
 
@@ -66,6 +67,7 @@ def launch(
         task, num_iters, **kwargs
 ):
     mead_config = get_config(config, reporting, unknown)
+    load_user_modules(mead_config)
     exp_hash = hash_config(mead_config)
     hp_settings, mead_settings = get_settings(settings)
     hp_logs, mead_logs = get_logs(hp_settings, logging, hpctl_logging)
@@ -149,6 +151,7 @@ def search(
 ):
     """Search for optimal hyperparameters."""
     mead_config = get_config(config, reporting, unknown)
+    load_user_modules(mead_config)
     exp_hash = hash_config(mead_config)
 
     hp_settings, mead_settings = get_settings(settings)
