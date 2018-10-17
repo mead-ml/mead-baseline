@@ -4,11 +4,12 @@ from collections import OrderedDict
 import pytest
 import numpy as np
 from mock import MagicMock, call
-from hpctl.sample import Sampler, GridSampler, ConfigSampler, log_sample, constrained_sampler
+from hpctl.sample import Sampler, Grid, ConfigSampler, log_sample, constrained_sampler
+from . import r_str
 
 
 def test_grid_sample_len():
-    gs = GridSampler(lambda x: None)
+    gs = Grid()
     values = {
         "a": [1, 2, 3],
         "b": [4, 5]
@@ -19,7 +20,7 @@ def test_grid_sample_len():
 
 
 def test_grid_sample():
-    gs = GridSampler(lambda x: None)
+    gs = Grid()
     values = OrderedDict()
     values["a"] = [1, 2, 3]
     values["b"] = [4, 5]
@@ -37,7 +38,7 @@ def test_grid_sample():
 
 
 def test_grid_sample_wraps():
-    gs = GridSampler(lambda x: None)
+    gs = Grid()
     values = OrderedDict()
     values["a"] = [1]
     values["b"] = [4, 5]
@@ -52,7 +53,7 @@ def test_grid_sample_wraps():
 
 
 def test_grid_sampler_all_keys_in_sample():
-    gs = GridSampler(lambda x: None)
+    gs = Grid()
     values = {random.randint(0, 5): [1], random.randint(5, 10): [2]}
     gs.values = values
     sampled = gs.sample()
@@ -73,7 +74,7 @@ def test_log_sample_range():
 
 
 def test_sampler_has_all_keys():
-    s = Sampler("test", lambda x: None, MagicMock)
+    s = Sampler(lambda x: None, MagicMock)
     values = {random.randint(0, 5): [1], random.randint(5, 10): [2]}
     s.values = values
     sampled = s.sample()
@@ -145,7 +146,7 @@ def test_constrained_sampling():
         test()
 
 
-def test_unconstrained_sampleing():
+def test_unconstrained_sampling():
     min_ = -1
     max_ = 1
     constraints = []
@@ -158,3 +159,34 @@ def test_unconstrained_sampleing():
 
     for _ in range(1000):
         test()
+
+
+def test_collect():
+    gold = [r_str() for _ in range(4)]
+    data = {
+        'a': {
+            'hpctl': gold[0],
+            'a': 1
+        },
+        'b': [
+            {
+                "vectorizer": {
+                    'hpctl': gold[1],
+                    'a': 2
+                }
+            },
+            {
+                "embeddings": {
+                    'hpctl': gold[2],
+                    'b': 120
+                }
+            }
+        ],
+        'd': {
+            'hpctl': gold[3]
+        }
+    }
+    print(data)
+    res = ConfigSampler._collect(data)
+    for g in gold:
+        assert g in res

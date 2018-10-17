@@ -106,6 +106,12 @@ def DoneJob():
     return job
 
 
+def FailedJob():
+    job = MagicMock()
+    job.is_done = True
+    return job
+
+
 def test_any_done_none():
     be = LocalGPUBackend()
     be.gpus_to_job = {'a': 'taken', 'b': 'taken'}
@@ -169,7 +175,6 @@ def test_free_resources_one_done():
     assert run_job in be.jobs
     assert be.gpus_to_job[done_gpu] == None
     assert be.gpus_to_job[run_gpu] == run_job
-    assert done_label not in be.label_to_job
     assert run_label in be.label_to_job
     done_job.join.assert_called_once()
     run_job.join.assert_not_called()
@@ -195,8 +200,6 @@ def test_free_resources_multi_done():
     for done_gpu in done_gpus:
         assert be.gpus_to_job[done_gpu] == None
     assert be.gpus_to_job[run_gpu] == run_job
-    for done_label in done_labels:
-        assert done_label not in be.label_to_job
     assert run_label in be.label_to_job
     for done_label in done_labels:
         done_job.join.assert_called_once()
@@ -229,6 +232,29 @@ def test_all_some_not():
     be = LocalGPUBackend()
     be.labels = ['0', '1']
     assert be.all_done(MagicMock()) == False
+
+
+def test_all_done_remove_done():
+    be = LocalGPUBackend()
+    be.labels = ['0', '1']
+    be.label_to_job = {x: None for x in be.labels}
+    res = MagicMock()
+    res.get_state = lambda x: States.DONE if x == '0' else None
+    be.all_done(res)
+    assert '0' not in be.label_to_job
+    assert '1' in be.label_to_job
+
+
+def test_all_done_remove_failed():
+    be = LocalGPUBackend()
+    be.labels = ['0', '1']
+    be.label_to_job = {'0': FailedJob(), '1': None}
+    res = MagicMock()
+    res.get_state = lambda x: States.KILLED if x == '0' else None
+    be.all_done(res)
+    res.set_killed.assert_called_once_with('0')
+    assert '0' not in be.label_to_job
+    assert '1' in be.label_to_job
 
 
 def test_launch():
