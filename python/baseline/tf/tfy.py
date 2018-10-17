@@ -484,7 +484,7 @@ def parallel_conv(input_, filtsz, dsz, motsz, activation_fn=tf.nn.relu):
     return combine, motsz_all
 
 
-def conv1d_k1(x, name, filters, w_init=None, b_init=tf.constant_initializer(0)):
+def time_distributed_projection(x, name, filters, w_init=None, b_init=tf.constant_initializer(0)):
     """Low-order projection (embedding) by flattening the batch and time dims and matmul
 
     :param x: The input tensor
@@ -503,7 +503,6 @@ def conv1d_k1(x, name, filters, w_init=None, b_init=tf.constant_initializer(0)):
         c = tf.matmul(collapse, w)+b
         c = tf.reshape(c, shp[:-1] + [filters])
         return c
-
 
 
 def gelu(x):
