@@ -502,6 +502,8 @@ def tf_activation(name):
         return gelu
     if name == 'swish':
         return swish
+    if name == 'ident':
+        return tf.identity
     if name == 'leaky_relu':
         return tf.nn.leaky_relu
     return tf.nn.relu

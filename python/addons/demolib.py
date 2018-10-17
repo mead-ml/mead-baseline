@@ -7,9 +7,9 @@ from baseline.utils import listify, get_model_file, write_json
 from baseline.tf.tfy import optimizer, embed
 import tensorflow as tf
 import numpy as np
-import numbers
 import platform
 import os
+
 
 # TODO: remove when this goes into baseline.utils
 class Colors(object):

@@ -268,7 +268,7 @@ class RandomInitVecModel(EmbeddingsModel):
             known_vocab.pop("<UNK>", 0)
             attested = [v for v, cnt in known_vocab.items() if cnt > 0]
             for k, v in enumerate(attested):
-                self.vocab[v] = k + 1
+                self.vocab[v] = k + 2  # <PAD>,<UNK>
                 self.vsz += 1
         else:
             self.vocab = known_vocab
