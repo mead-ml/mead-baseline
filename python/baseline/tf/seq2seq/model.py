@@ -347,6 +347,14 @@ class Seq2SeqModel(EncoderDecoderModel):
         self.saver = saver
 
     @property
+    def src_lengths_key(self):
+        return self._src_lengths_key
+
+    @src_lengths_key.setter
+    def src_lengths_key(self, value):
+        self._src_lengths_key = value
+
+    @property
     def vdrop(self):
         return self._vdrop
 
