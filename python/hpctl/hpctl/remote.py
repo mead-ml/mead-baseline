@@ -6,8 +6,8 @@ import cachetools
 from baseline.utils import export as exporter
 from xpctl.core import ExperimentRepo
 from hpctl.utils import Label
-from hpctl.backend import Backend
-from hpctl.results import Results, States
+from hpctl.backend import Backend, register_backend
+from hpctl.results import Results, States, register_results
 
 
 __all__ = []
@@ -22,6 +22,7 @@ def _get(url):
 
 
 @export
+@register_backend('remote')
 class RemoteBackend(Backend):
     def __init__(self, host, port, **kwargs):
         super(RemoteBackend, self).__init__()
@@ -51,6 +52,7 @@ def create_backend(**kwargs):
 
 
 @export
+@register_results('remote')
 class RemoteResults(Results):
     """Interact with the results object via the flask frontend."""
     def __init__(self, host='localhost', port=5000, cache_time=5, **kwargs):
@@ -58,6 +60,10 @@ class RemoteResults(Results):
         self.url = 'http://{host}:{port}/hpctl/v1'.format(host=host, port=port)
         cache = cachetools.TTLCache(maxsize=1000, ttl=cache_time)
         self.get = cachetools.cached(cache)(_get)
+
+    @classmethod
+    def create(cls, **kwargs):
+        return cls(**kwargs)
 
     def add_experiment(self, exp_config):
         requests.post("{url}/experiment/add".format(url=self.url), json=exp_config)

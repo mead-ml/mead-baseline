@@ -3,34 +3,42 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 import os
 from subprocess import call
 from baseline.utils import export as exporter
-from baseline.utils import import_user_module
+from baseline.utils import import_user_module, optional_params
+from hpctl.utils import register
 from hpctl.results import States
 
 
 __all__ = []
 export = exporter(__all__)
+BACKENDS = {}
 
 
 @export
-def get_backend(backend_config):
+@optional_params
+def register_backend(cls, name=None):
+    return register(cls, BACKENDS, name, "backend")
+
+
+def import_backend(backend_type):
+    if backend_type == "docker":
+        backend_type = "dock"
+    try:
+        import_user_module('hpctl.{}'.format(backend_type))
+    except ImportError:
+        pass
+
+
+@export
+def get_backend(backend_config, registry=BACKENDS):
     """Get the backend object.
 
     :param backend_config: dict, The arguments to initialize the backend.
     """
     backend_type = backend_config['type']
     print("Using backend [{}]".format(backend_type))
+    import_backend(backend_type)
 
-    if backend_type == "mp":
-        from hpctl.mp import create_backend
-    elif backend_type == "docker":
-        from hpctl.dock import create_backend
-    elif backend_type == "remote":
-        from hpctl.remote import create_backend
-    else:
-        mod = import_user_module("backend", backend_type)
-        create_backend = mod.create_backend
-
-    return create_backend(**backend_config)
+    return registry[backend_type](**backend_config)
 
 
 @export

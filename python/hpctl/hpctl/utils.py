@@ -15,6 +15,19 @@ __all__ = []
 export = exporter(__all__)
 
 
+@export
+def register(cls, registry, name=None, error=None):
+    if name is None:
+        name = cls.__name__
+    if name in registry:
+        raise Exception('Error: attempt to re-define previously registered {} {} (old: {}, new: {})'.format(error, name, registry[name], cls))
+    if hasattr(cls, 'create'):
+        registry[name] = cls.create
+    else:
+        registry[name] = cls
+    return cls
+
+
 def wrapped_partial(func, name=None, *args, **kwargs):
     """
     When we use `functools.partial` the `__name__` is not defined which breaks

@@ -6,8 +6,8 @@ import json
 import docker
 from baseline.utils import export as exporter
 from baseline.utils import write_json, read_config_file
-from hpctl.backend import LocalGPUBackend, Runner
 from hpctl.utils import create_logs
+from hpctl.backend import LocalGPUBackend, Runner, register_backend
 
 
 __all__ = []
@@ -176,6 +176,7 @@ class DockerRunner(Runner):
 
 
 @export
+@register_backend('docker')
 class DockerBackend(LocalGPUBackend):
     """Backend that launches docker jobs.
 

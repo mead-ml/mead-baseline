@@ -4,7 +4,7 @@ import os
 import time
 import json
 from baseline.utils import export as exporter
-from baseline.utils import read_config_file, write_json
+from baseline.utils import read_config_file, write_json, import_user_module
 from mead.utils import read_config_file_or_json, hash_config, parse_extra_args, index_by_label
 from hpctl.report import get_xpctl
 from hpctl.utils import create_logs
@@ -130,6 +130,7 @@ def serve(settings, hpctl_logging, embeddings, datasets, unknown, **kwargs):
 
 def _remote_monkey_patch(backend_config, hp_logs, results_config, xpctl_config):
     if backend_config.get('type', 'local') == 'remote':
+        import_user_module('hpctl.remote')
         hp_logs['type'] = 'remote'
         results_config['type'] = 'remote'
         results_config['host'] = backend_config['host']

@@ -12,13 +12,20 @@ from collections import defaultdict
 from multiprocessing.managers import BaseManager
 import numpy as np
 from baseline.utils import export as exporter
-from baseline.utils import import_user_module
+from baseline.utils import import_user_module, optional_params
 from mead.utils import hash_config
-from hpctl.utils import Label
+from hpctl.utils import Label, register
 
 
 __all__ = []
 export = exporter(__all__)
+RESULTS = {}
+
+
+@export
+@optional_params
+def register_results(cls, name=None):
+    return register(cls, RESULTS, name, 'results')
 
 
 @six.python_2_unicode_compatible
@@ -286,6 +293,7 @@ class SpecialDefaults(defaultdict):
         return val
 
 @export
+@register_results('local')
 class LocalResults(Results):
     """An object that aggregates results from jobs.
 
@@ -453,9 +461,6 @@ class LocalResults(Results):
     def set_running(self, label):
         self.set_state(label, States.RUNNING)
 
-    def __str__(self):
-        return pformat(self.results)
-
     def __del__(self):
         """When a results object is closed set all running and waiting to killed."""
         for exp in self.results:
@@ -496,12 +501,6 @@ def search(key, table, prefix=True):
     return None
 
 
-def get_results(results_config):
+def get_results(results_config, registry=RESULTS):
     kind = results_config.pop('type', 'local')
-    if kind == 'remote':
-        from hpctl.remote import RemoteResults
-        return RemoteResults(**results_config)
-    if kind == 'local':
-        return LocalResults.create(**results_config)
-    mod = import_user_module("results", kind)
-    return mod.create_results(**results_config)
+    return registry[kind](**results_config)

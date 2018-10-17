@@ -13,7 +13,7 @@ from baseline.utils import export as exporter
 from baseline.utils import write_json, redirect
 from hpctl.results import States
 from hpctl.utils import create_logs, Label
-from hpctl.backend import LocalGPUBackend, Runner
+from hpctl.backend import LocalGPUBackend, Runner, register_backend
 
 
 try:
@@ -183,6 +183,7 @@ class MPRunner(Runner):
 
 
 @export
+@register_backend('mp')
 class MPBackend(LocalGPUBackend):
     """Back end that runs multiprocessing jobs.
 

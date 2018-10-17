@@ -8,6 +8,7 @@ from hpctl.core import (
     force_xpctl,
     force_remote_backend,
     override_client_settings,
+    _remote_monkey_patch,
 )
 from hpctl.settings import (
     get_xpctl_settings,
@@ -187,3 +188,9 @@ def test_xpctl_file_cred():
     with patch('hpctl.settings.read_config_file_or_json') as read_patch:
         _ = get_xpctl_settings(settings)
     read_patch.assert_called_once_with(loc)
+
+
+def test_import_remote():
+    with patch('hpctl.core.import_user_module') as import_mock:
+        _remote_monkey_patch({'type': 'remote', 'host': 'a', 'port': 12}, {}, {}, {})
+    import_mock.assert_called_once_with('hpctl.remote')

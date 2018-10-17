@@ -15,7 +15,7 @@ import numpy as np
 from baseline.utils import export as exporter
 from baseline.utils import import_user_module, listify, optional_params
 from mead.utils import hash_config
-from hpctl.utils import Label
+from hpctl.utils import Label, register
 
 
 __all__ = []
@@ -124,7 +124,7 @@ def add_normal(example, key, value):
 
 
 ## Registering Samplers
-HPCTL_SAMPLERS = {}
+SAMPLERS = {}
 
 
 @export
@@ -132,10 +132,7 @@ HPCTL_SAMPLERS = {}
 def register_sampler(cls, name=None):
     if cls.name is None:
         cls.name = name if name is not None else cls.__name__
-    if cls.name in HPCTL_SAMPLERS:
-        raise Exception("Error: attempt to re-define previously registered sampler {} (old: {}, new: {})".format(cls.name, HPCTL_SAMPLERS[cls.name], cls))
-    HPCTL_SAMPLERS[cls.name] = cls
-    return cls
+    return register(cls, SAMPLERS, cls.name, "sampler")
 
 
 # Used to force the _name prop to match between reg and config file.
@@ -373,7 +370,7 @@ class ConfigSampler(object):
 
 
 @export
-def get_config_sampler(config, results, samplers=HPCTL_SAMPLERS):
+def get_config_sampler(config, results, samplers=SAMPLERS):
     """Create a ConfigSampler that includes user defined ones.
 
     ;param config: dict, The mead config with sampling information.

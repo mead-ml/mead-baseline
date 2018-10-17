@@ -8,13 +8,26 @@ import select
 import platform
 from multiprocessing import Process, Queue
 from baseline.utils import export as exporter
-from baseline.utils import import_user_module, color, Colors
-from hpctl.utils import Label
+from baseline.utils import color, Colors, optional_params
+from hpctl.utils import Label, register
 from hpctl.results import States
 
 
 __all__ = []
 export = exporter(__all__)
+FRONTENDS = {}
+
+
+@export
+@optional_params
+def register_frontend(cls, name=None):
+    return register(cls, FRONTENDS, name, "frontend")
+
+
+@export
+def get_frontend(frontend_config, results, xpctl, registry=FRONTENDS):
+    frontend = frontend_config.pop('type', 'console')
+    return registry[frontend](results, xpctl, **frontend_config)
 
 
 def color_state(state):
@@ -56,6 +69,7 @@ def reset_screen(lines):
 
 
 @export
+@register_frontend(name='dummy')
 class Frontend(object):
     """Frontend object that displays information to user and collects input."""
 
@@ -75,10 +89,10 @@ class Frontend(object):
         pass
 
 
-class FlaskShim(Frontend):
+class Shim(Frontend):
     """A small class that bridges between the core hpctl and the flask server."""
     def __init__(self, q, fe, **kwargs):
-        super(FlaskShim, self).__init__()
+        super(Shim, self).__init__()
         self.queue = q
         self.frontend = fe
         self.frontend.start()
@@ -96,6 +110,17 @@ class FlaskShim(Frontend):
 
 
 @export
+@register_frontend('flask')
+class FlaskShim(Shim):
+    def __init__(self, *args, **kwargs):
+        from hpctl.flask_frontend import create_flask
+        q = Queue()
+        fe = create_flask(q, *args, **kwargs)
+        super(FlaskShim, self).__init__(q, fe, **kwargs)
+
+
+@export
+@register_frontend('console')
 class Console(Frontend):
     header = "{0} hpctl search {0}".format("=" * 42)
     """Frontend that prints all ticks to console.
@@ -182,6 +207,7 @@ class Console(Frontend):
 
 
 @export
+@register_frontend('console_dev')
 class ConsoleDev(Console):
     header = "{0} hpctl search {0}".format("=" * 22)
     """Frontend that prints only the best dev scores to screen.
@@ -206,34 +232,3 @@ class ConsoleDev(Console):
                 width=max_len)
             )
             self.print_count += 1
-
-
-FRONTENDS = {
-    "console": Console,
-    "console_dev": ConsoleDev,
-    "dummy": Frontend,
-    "default": Console,
-    "flask": FlaskShim,
-}
-
-
-@export
-def get_frontend(frontend_config, results, xpctl):
-    """Create a frontend object.
-
-    :param exp: hpctl.experiment.Experiment: The experiment config.
-    :param results: hpctl.results.Results: The data storage object.
-
-    :returns:
-        hpctl.frontend.Frontend: The frontend object.
-    """
-    frontend = frontend_config.pop('type', 'default')
-    if frontend == 'flask':
-        from hpctl.flask_frontend import create_flask
-        q = Queue()
-        fe = create_flask(q, results, xpctl, **frontend_config)
-        return FlaskShim(q, fe, **frontend_config)
-    if frontend in FRONTENDS:
-        return FRONTENDS[frontend](results, xpctl, **frontend_config)
-    mod = import_user_module("frontend", frontend)
-    return mod.create_frontend(results, xpctl, **frontend_config)
