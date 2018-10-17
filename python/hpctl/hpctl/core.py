@@ -67,9 +67,9 @@ def launch(
         task, num_iters, **kwargs
 ):
     mead_config = get_config(config, reporting, unknown)
-    load_user_modules(mead_config)
-    exp_hash = hash_config(mead_config)
     hp_settings, mead_settings = get_settings(settings)
+    load_user_modules(mead_config, hp_settings)
+    exp_hash = hash_config(mead_config)
     hp_logs, mead_logs = get_logs(hp_settings, logging, hpctl_logging)
     datasets = read_config_file_or_json(datasets)
     embeddings = read_config_file_or_json(embeddings)
@@ -100,6 +100,7 @@ def launch(
 @export
 def serve(settings, hpctl_logging, embeddings, datasets, unknown, **kwargs):
     hp_settings, mead_settings = get_settings(settings)
+    load_user_modules({}, hp_settings)
     frontend_config, backend_config = get_ends(hp_settings, unknown)
     hp_logs, _ = get_logs(hp_settings, {}, hpctl_logging)
     xpctl_config = get_xpctl_settings(mead_settings)
@@ -152,10 +153,10 @@ def search(
 ):
     """Search for optimal hyperparameters."""
     mead_config = get_config(config, reporting, unknown)
-    load_user_modules(mead_config)
+    hp_settings, mead_settings = get_settings(settings)
+    load_user_modules(mead_config, hp_settings)
     exp_hash = hash_config(mead_config)
 
-    hp_settings, mead_settings = get_settings(settings)
 
     hp_logs, mead_logs = get_logs(hp_settings, logging, hpctl_logging)
 

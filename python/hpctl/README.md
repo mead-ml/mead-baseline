@@ -133,13 +133,13 @@ Included samplers and their parameters:
 
 #### Addon Samplers
 
-__UPDATE WHEN NEW REG IS MERGED__ When reading a configuration file hpctl first finds all the types of samplers. Anything value for the `"hpctl"` key that is not in the default samplers is assumed to be a user sampler. These are user defined sampling classes. They should be defined in a file called `sampler_XXXX` where `XXXX` is the value of the `"hpctl"` key. There needs to be `create_sampler` function.
+To create your own sampler you should make a class that subclasses the Sampler class. This class should be decorated with `register_sampler`. The name of the file this class is in should be listed in the `hpctl_modules` list in either the config or the settings.
 
 The class should expose 3 things:
 
- 1) A `.name` that is `XXXX`
+ 1) A `.name` that is the name to use in the sampling directives.
  2) A `.adder` which is a callable that takes a dictionary, key, and a dictionary. This second dictionary is the sampling directive and the functions should know how to parse the data in it and saves it into the first dict with the key. The output of this is saved to the `.values` property on the object.
- 3) A `.sample` that produces a new value for the parameters. This returns a dictionary of keys to sampled values.
+ 3) A `.sample` callable that produces a new value for the parameters. This returns a dictionary of keys to sampled values.
 
 
 ### Constraints

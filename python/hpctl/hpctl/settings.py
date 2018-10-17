@@ -18,8 +18,8 @@ def get_config(config, reporting, extra_args):
     return mead_config
 
 
-def load_user_modules(config):
-    for module in config.pop('hpctl_modules', []):
+def load_user_modules(config, settings):
+    for module in config.pop('hpctl_modules', settings.get('hpctl_modules', [])):
         import_user_module(module)
 
 
