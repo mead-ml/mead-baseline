@@ -5,6 +5,7 @@ from tensorflow.python.layers import core as layers_core
 from baseline.utils import lookup_sentence, beam_multinomial, crf_mask as crf_m
 import math
 
+
 def _add_ema(model, decay):
     """Create ops needed to track EMA when training.
 
@@ -483,6 +484,28 @@ def parallel_conv(input_, filtsz, dsz, motsz, activation_fn=tf.nn.relu):
     return combine, motsz_all
 
 
+def conv1d_k1(x, name, filters, w_init=None, b_init=tf.constant_initializer(0)):
+    """Low-order projection (embedding) by flattening the batch and time dims and matmul
+
+    :param x: The input tensor
+    :param name: The name for this scope
+    :param filters: The number of feature maps out
+    :param w_init: An optional weight initializer
+    :param b_init: An optional bias initializer
+    :return:
+    """
+    with tf.variable_scope(name):
+        shp = get_shape_as_list(x)
+        nx = shp[-1]
+        w = tf.get_variable("W", [nx, filters], initializer=w_init)
+        b = tf.get_variable("b", [filters], initializer=b_init)
+        collapse = tf.reshape(x, [-1, nx])
+        c = tf.matmul(collapse, w)+b
+        c = tf.reshape(c, shp[:-1] + [filters])
+        return c
+
+
+
 def gelu(x):
     return 0.5*x*(1+tf.tanh(math.sqrt(2/math.pi)*(x+0.044715*tf.pow(x, 3))))
 
@@ -592,3 +615,35 @@ def embed(x, vsz, dsz, initializer, finetune=True, scope="LUT"):
             word_embeddings = tf.nn.embedding_lookup(W, x)
 
     return word_embeddings
+
+
+def get_shape_as_list(x):
+    """
+    This function makes sure we get a number whenever possible, and otherwise, gives us back
+    a graph operation, but in both cases, presents as a list.  This makes it suitable for a
+    bunch of different operations within TF, and hides away some details that we really dont care about, but are
+    a PITA to get right...
+
+    Borrowed from Alec Radford:
+    https://github.com/openai/finetune-transformer-lm/blob/master/utils.py#L38
+    """
+    ps = x.get_shape().as_list()
+    ts = tf.shape(x)
+    return [ts[i] if ps[i] is None else ps[i] for i in range(len(ps))]
+
+
+def layer_norm(input, name, axis=[-1]):
+
+    def _norm(x, g=None, b=None, e=1e-5, axis=[1]):
+        u = tf.reduce_mean(x, axis=axis, keep_dims=True)
+        s = tf.reduce_mean(tf.square(x-u), axis=axis, keep_dims=True)
+        x = (x - u) * tf.rsqrt(s + e)
+        if g is not None and b is not None:
+            x = x*g + b
+        return x
+
+    with tf.variable_scope(name):
+        n_state = input.get_shape().as_list()[-1]
+        gv = tf.get_variable("g", [n_state], initializer=tf.constant_initializer(1))
+        bv = tf.get_variable("b", [n_state], initializer=tf.constant_initializer(0))
+        return _norm(input, gv, bv, axis=axis)
