@@ -39,18 +39,9 @@ class ELMoClassifierModel(ClassifierModel):
         with open(basename + '.vocab', 'w') as f:
             json.dump(self.vocab, f)
 
-    def set_saver(self, saver):
-        self.saver = saver
-
     def create_loss(self):
 
         with tf.name_scope("loss"):
-            loss = tf.nn.softmax_cross_entropy_with_logits(logits=self.logits, labels=tf.cast(self.y, "float"))
-            all_loss = tf.reduce_mean(loss)
-        return all_loss
-
-    def create_test_loss(self):
-        with tf.name_scope("test_loss"):
             loss = tf.nn.softmax_cross_entropy_with_logits(logits=self.logits, labels=tf.cast(self.y, "float"))
             all_loss = tf.reduce_mean(loss)
         return all_loss
