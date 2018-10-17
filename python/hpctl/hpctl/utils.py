@@ -16,7 +16,7 @@ export = exporter(__all__)
 
 
 @export
-def register(cls, registry, name=None, error=None):
+def register(cls, registry, name=None, error=''):
     if name is None:
         name = cls.__name__
     if name in registry:
