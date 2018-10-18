@@ -113,8 +113,8 @@ class LocalGPUBackend(Backend):
             print('read: {} from envs'.format(self.real_gpus))
         self.real_gpus = list(map(str, self.real_gpus))
         print("Running Jobs on the following GPU(s), {}".format(self.real_gpus))
-        with open(os.devnull, 'w') as f:
-            call('wall "HPCTL will run jobs on the following GPU(s) {}"'.format(self.real_gpus), shell=True, stdout=f, stderr=f)
+        # with open(os.devnull, 'w') as f:
+        #     call('wall "HPCTL will run jobs on the following GPU(s) {}"'.format(self.real_gpus), shell=True, stdout=f, stderr=f)
         self.gpus_to_job = {gpu: None for gpu in self.real_gpus}
 
     def _free_resources(self):

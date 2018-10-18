@@ -152,8 +152,8 @@ class Task(object):
         self.config_params['train']['basedir'] = basedir
         self.config_file = kwargs.get('config_file')
         self._setup_task()
-        self._configure_reporting(config_params.get('reporting', {}), **kwargs)
         self._load_user_modules()
+        self._configure_reporting(config_params.get('reporting', {}), **kwargs)
         self.dataset = datasets_set[self.config_params['dataset']]
         self.reader = self._create_task_specific_reader()
 

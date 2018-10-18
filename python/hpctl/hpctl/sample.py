@@ -301,6 +301,8 @@ class ConfigSampler(object):
             in the main config, values are parameters to the sampling function.
         """
         examples = {}
+        if not isinstance(config, dict):
+            return examples
         for key, value in config.items():
             if isinstance(value, dict):
                 if 'hpctl' in value and value['hpctl'] == type_:
@@ -328,6 +330,8 @@ class ConfigSampler(object):
         :returns: set(str), The names of all used sampling operations.
         """
         examples = set()
+        if not isinstance(config, dict):
+            return examples
         for key, value in config.items():
             if isinstance(value, dict):
                 if 'hpctl' in value:
