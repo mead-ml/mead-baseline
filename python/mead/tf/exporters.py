@@ -262,12 +262,15 @@ class Seq2SeqTensorFlowExporter(TensorFlowExporter):
     def _create_model(self, sess, basename):
         model_params = self.task.config_params["model"]
         model_params["sess"] = sess
+        model_params['predict'] = True
 
         state = read_json(basename + '.state')
         if not state:
             raise RuntimeError("state file not found or is empty")
 
         model_params["src_lengths_key"] = state["src_lengths_key"]
+        model_params['GO'] = state['GO']
+        model_params['EOS'] = state['EOS']
 
         # Re-create the embeddings sub-graph
         embeddings = self.init_embeddings(state[self.SOURCE_STATE_EMBED_KEY].items(), basename)
@@ -284,18 +287,17 @@ class Seq2SeqTensorFlowExporter(TensorFlowExporter):
             if prop in state:
                 setattr(model, prop, state[prop])
 
-        model.create_loss()
-
         # classes = model.tgt_embedding.lookup(tf.cast(model.best, dtype=tf.int64))
         classes = model.best
         self._restore_checkpoint(sess, basename)
 
-        return model, classes, model.preds
+        return model, classes, None
 
     def _create_rpc_call(self, sess, basename):
         model, classes, values = self._create_model(sess, basename)
 
         predict_tensors = {}
+        predict_tensors['src_len'] = tf.saved_model.utils.build_tensor_info(model.src_len)
 
         for k, v in model.src_embeddings.items():
             try:
@@ -306,125 +308,4 @@ class Seq2SeqTensorFlowExporter(TensorFlowExporter):
         sig_input = predict_tensors
         sig_output = SignatureOutput(classes, values)
         return sig_input, sig_output, 'suggest_text'
-
-# @exporter
-# @register_exporter(task='seq2seq', name='default')
-# class Seq2SeqTensorFlowExporter(TensorFlowExporter):
-
-#     def __init__(self, task):
-#         super(Seq2SeqTensorFlowExporter, self).__init__(task)
-
-#     @staticmethod
-#     def read_input_vocab(basename):
-#         vocab_file = '%s-1.vocab' % basename
-#         with open(vocab_file, 'r') as f:
-#             vocab = json.load(f)
-
-#         # Make a vocab list
-#         vocab_list = [''] * len(vocab)
-
-#         for v, i in vocab.items():
-#             vocab_list[i] = v
-
-#         word2input = tf.contrib.lookup.index_table_from_tensor(
-#             tf.constant(vocab_list),
-#             default_value=0,
-#             dtype=tf.string,
-#             name='word2input'
-#         )
-#         return word2input, vocab
-
-#     @staticmethod
-#     def read_output_vocab(basename):
-#         vocab_file = '%s-2.vocab' % basename
-#         with open(vocab_file, 'r') as f:
-#             vocab = json.load(f)
-
-#         # Make a vocab list
-#         vocab_list = [''] * len(vocab)
-
-#         for v, i in vocab.items():
-#             vocab_list[i] = v
-
-#         output2word = tf.contrib.lookup.index_to_string_table_from_tensor(
-#             tf.constant(vocab_list),
-#             default_value='<PAD>',
-#             name='output2word'
-#         )
-
-#         return output2word, vocab
-
-#     def get_dsz(self, embeddings_set):
-#         embeddings_section = self.task.config_params['word_embeddings']
-#         if embeddings_section.get('label', None) is not None:
-#             embed_label = embeddings_section['label']
-#             dsz = embeddings_set[embed_label]['dsz']
-#         else:
-#             dsz = embeddings_section['dsz']
-#         return dsz
-
-#     def _preproc_post_creator(self):
-#         word2input = self.word2input
-
-#         def preproc_post(raw_post):
-#             # raw_post is a "scalar string tensor"
-#             # (https://www.tensorflow.org/versions/r0.12/api_docs/python/image/encoding_and_decoding)
-#             # Split the input string, assuming that whitespace is splitter
-#             # The client should perform any required tokenization for us and join on ' '
-#             #raw_post = tf.Print(raw_post, [raw_post])
-#             mxlen = self.task.config_params['preproc']['mxlen']
-#             raw_tokens = tf.string_split(tf.reshape(raw_post, [-1])).values
-#             npost = tf.reduce_join(raw_tokens[:mxlen], separator=" ")
-#             tokens = tf.string_split(tf.reshape(npost, [-1]))
-#             sentence_length = tf.size(tokens)
-
-#             # Convert the string values to word indices (ints)
-#             indices = word2input.lookup(tokens)
-
-#             # Reshape them out to the proper length
-#             reshaped = tf.sparse_reshape(indices, shape=[-1])
-#             reshaped = tf.sparse_reset_shape(reshaped, new_shape=[mxlen])
-
-#             # Now convert to a dense representation
-#             dense = tf.sparse_tensor_to_dense(reshaped)
-#             dense = tf.contrib.framework.with_shape([mxlen], dense)
-#             dense = tf.cast(dense, tf.int32)
-#             return dense, sentence_length
-#         return preproc_post
-
-#     def _run(self, sess, model_file, embeddings_set, feature_descs):
-
-#         self.word2input, vocab1 = Seq2SeqTensorFlowExporter.read_input_vocab(model_file)
-#         self.output2word, vocab2 = Seq2SeqTensorFlowExporter.read_output_vocab(model_file)
-
-#         # Make the TF example, network input
-#         serialized_tf_example = tf.placeholder(tf.string, name='tf_example')
-#         feature_configs = {
-#             FIELD_NAME: tf.FixedLenFeature(shape=[], dtype=tf.string),
-#         }
-#         tf_example = tf.parse_example(serialized_tf_example, feature_configs)
-#         raw_posts = tf_example[FIELD_NAME]
-
-#         # Run for each post
-#         dense, length = tf.map_fn(self._preproc_post_creator(), raw_posts,
-#                                   dtype=(tf.int32, tf.int32))
-
-#         model_params = self.task.config_params["model"]
-#         model_params["dsz"] = self.get_dsz(embeddings_set)
-#         model_params["src"] = dense
-#         model_params["src_len"] = length
-#         model_params["mx_tgt_len"] = self.task.config_params["preproc"]["mxlen"]
-#         model_params["tgt_len"] = 1
-#         model_params["pkeep"] = 1
-#         model_params["sess"] = sess
-#         model_params["predict"] = True
-#         print(model_params)
-#         model = baseline.tf.seq2seq.create_model(vocab1, vocab2, **model_params)
-#         output = self.output2word.lookup(tf.cast(model.best, dtype=tf.int64))
-
-#         self.restore_checkpoint(sess, model_file)
-
-#         sig_input = SignatureInput(serialized_tf_example, raw_posts)
-#         sig_output = SignatureOutput(classes, None)
-
-#         return sig_input, sig_output, 'suggest_text'
+        
