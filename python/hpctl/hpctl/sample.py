@@ -13,9 +13,9 @@ from functools import partial
 from itertools import cycle, product
 import numpy as np
 from baseline.utils import export as exporter
-from baseline.utils import import_user_module, listify, optional_params
+from baseline.utils import import_user_module, listify, optional_params, register
 from mead.utils import hash_config
-from hpctl.utils import Label, register
+from hpctl.utils import Label
 
 
 __all__ = []

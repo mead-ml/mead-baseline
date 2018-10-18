@@ -51,6 +51,8 @@ def run_job(
         os.environ['CUDA_VISIBLE_DEVICES'] = ','.join(gpus)
     if 'visdom' in config_params.get('reporting', {}):
         config_params.get('reporting', {})['visdom']['name'] = label.name
+    if 'xpctl' in config_params.get('reporting', {}):
+        config_params.get('reporting', {})['xpctl']['label'] = label.name
     config_params['model']['gpus'] = len(gpus)
     print(config_params)
 

@@ -45,6 +45,19 @@ def export(obj, all_list=None):
 exporter = export(__all__)
 
 
+@exporter
+def register(cls, registry, name=None, error=''):
+    if name is None:
+        name = cls.__name__
+    if name in registry:
+        raise Exception('Error: attempt to re-define previously registered {} {} (old: {}, new: {})'.format(error, name, registry[name], cls))
+    if hasattr(cls, 'create'):
+        registry[name] = cls.create
+    else:
+        registry[name] = cls
+    return cls
+
+
 @contextmanager
 def redirect(from_stream, to_stream):
     original_from = from_stream.fileno()

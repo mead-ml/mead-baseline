@@ -3,8 +3,7 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 import os
 from subprocess import call
 from baseline.utils import export as exporter
-from baseline.utils import import_user_module, optional_params
-from hpctl.utils import register
+from baseline.utils import import_user_module, optional_params, register
 from hpctl.results import States
 
 

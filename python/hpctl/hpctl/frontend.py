@@ -8,8 +8,8 @@ import select
 import platform
 from multiprocessing import Process, Queue
 from baseline.utils import export as exporter
-from baseline.utils import color, Colors, optional_params
-from hpctl.utils import Label, register
+from baseline.utils import color, Colors, optional_params, register
+from hpctl.utils import Label
 from hpctl.results import States
 
 

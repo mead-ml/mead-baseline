@@ -1,7 +1,7 @@
 import time
 import logging
 import numpy as np
-from baseline.utils import export, optional_params
+from baseline.utils import export, optional_params, register
 __all__ = []
 exporter = export(__all__)
 
@@ -71,14 +71,7 @@ def register_trainer(cls, name=None):
     Use this pattern if you want to provide an override to a `Trainer` class.
 
     """
-    if name is None:
-        name = cls.__name__
-
-    if name in BASELINE_TRAINERS:
-        raise Exception('Error: attempt to re-defined previously registered handler {} in trainer registry'.format(name))
-
-    BASELINE_TRAINERS[name] = cls
-    return cls
+    return register(cls, BASELINE_TRAINERS, name, 'trainer')
 
 
 BASELINE_FIT_FUNC = {}
