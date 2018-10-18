@@ -14,7 +14,8 @@ exporter = export(__all__)
 def read_config_file_or_json(config, name=''):
     if isinstance(config, (dict, list)):
         return config
-    elif os.path.exists(config):
+    config = os.path.expanduser(config)
+    if os.path.exists(config):
         return read_config_file(config)
     raise Exception('Expected {} config file or a JSON object.'.format(name))
 
@@ -111,8 +112,6 @@ def order_json(data):
     for (key, value) in sorted(data.items(), key=lambda x: x[0]):
         if isinstance(value, dict):
             value = order_json(value)
-        elif isinstance(value, list):
-            value = sorted(value)
         new[key] = value
     return new
 

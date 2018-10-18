@@ -1,24 +1,26 @@
-from baseline.reporting import ReportingHook
-from xpctl.core import ExperimentRepo
-from baseline.utils import read_config_file
+import os
 import getpass
 import socket
-import os
+from baseline.reporting import ReportingHook
+from mead.utils import read_config_file_or_json
+from xpctl.core import ExperimentRepo
+from baseline.reporting import register_reporting
 
-
+@register_reporting(name='xpctl')
 class XPCtlReporting(ReportingHook):
     def __init__(self, **kwargs):
         super(XPCtlReporting, self).__init__(**kwargs)
         # throw exception if the next three can't be read from kwargs
-        self.cred = read_config_file(os.path.expanduser(kwargs['hook_setting']['cred']))
-        self.exp_config = read_config_file(os.path.expanduser(kwargs['config_file']))
+        self.cred = read_config_file_or_json(kwargs['cred'])
+        self.label = kwargs.get('label', None)
+        self.exp_config = read_config_file_or_json(kwargs['config_file'])
         self.task = kwargs['task']
         self.print_fn = print
-        self.username = kwargs['hook_setting'].get('user', getpass.getuser())
-        self.hostname = kwargs['hook_setting'].get('host', socket.gethostname())
+        self.username = kwargs.get('user', getpass.getuser())
+        self.hostname = kwargs.get('host', socket.gethostname())
         self.checkpoint_base = None
-        self.checkpoint_store = kwargs['hook_setting'].get('checkpoint_store', '/data/model-checkpoints')
-        self.save_model = kwargs['hook_setting'].get('save_model', False) # optionally save the model
+        self.checkpoint_store = kwargs.get('checkpoint_store', '/data/model-checkpoints')
+        self.save_model = kwargs.get('save_model', False) # optionally save the model
 
         self.repo = ExperimentRepo().create_repo(**self.cred)
         self.log = []
@@ -54,7 +56,8 @@ class XPCtlReporting(ReportingHook):
                             checkpoint_store=self.checkpoint_store,
                             print_fn=self.print_fn,
                             hostname=self.hostname,
-                            username=self.username)
+                            username=self.username,
+                            label=self.label)
 
     @staticmethod
     def _search_checkpoint_base(task, backend):

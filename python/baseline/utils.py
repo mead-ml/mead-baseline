@@ -4,6 +4,7 @@ import json
 import hashlib
 import logging
 import zipfile
+import platform
 import importlib
 from contextlib import contextmanager
 from functools import partial, update_wrapper, wraps
@@ -44,6 +45,19 @@ def export(obj, all_list=None):
 exporter = export(__all__)
 
 
+@exporter
+def register(cls, registry, name=None, error=''):
+    if name is None:
+        name = cls.__name__
+    if name in registry:
+        raise Exception('Error: attempt to re-define previously registered {} {} (old: {}, new: {})'.format(error, name, registry[name], cls))
+    if hasattr(cls, 'create'):
+        registry[name] = cls.create
+    else:
+        registry[name] = cls
+    return cls
+
+
 @contextmanager
 def redirect(from_stream, to_stream):
     original_from = from_stream.fileno()
@@ -71,6 +85,23 @@ class JSONFormatter(logging.Formatter):
         except TypeError:
             pass
         return super(JSONFormatter, self).format(record)
+
+
+@exporter
+class Colors(object):
+    GREEN = '\033[32;1m'
+    RED = '\033[31;1m'
+    YELLOW = '\033[33;1m'
+    BLACK = '\033[30;1m'
+    CYAN = '\033[36;1m'
+    RESTORE = '\033[0m'
+
+
+@exporter
+def color(msg, color):
+    if platform.system() == 'Windows':
+        return msg
+    return "{}{}{}".format(color, msg, Colors.RESTORE)
 
 
 @exporter
@@ -364,6 +395,8 @@ def read_config_stream(config_stream):
     :param config_stream:
     :return:
     """
+    if isinstance(config_stream, (dict, list)) or config_stream is None:
+        return config_stream
     if os.path.exists(config_stream) and os.path.isfile(config_stream):
         return read_config_file(config_stream)
     config = config_stream
@@ -829,3 +862,8 @@ def verbose_output(verbose, confusion_matrix):
         print(confusion_matrix)
     if outfile is not None:
         confusion_matrix.save(outfile)
+
+
+@exporter
+def get_env_gpus():
+    return os.getenv('CUDA_VISIBLE_DEVICES', os.getenv('NV_GPU', '0')).split(',')

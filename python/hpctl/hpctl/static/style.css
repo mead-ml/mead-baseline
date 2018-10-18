@@ -1,0 +1,23 @@
+body {
+    background-color: 282828;
+}
+
+h1 {
+    color: WhiteSmoke;
+}
+
+p {
+    color: WhiteSmoke;
+}
+
+li {
+    color: WhiteSmoke;
+}
+
+pre {
+    color: WhiteSmoke;
+}
+
+a:link, a:visited, a:hover, a:active {
+    color: WhiteSmoke;
+}

@@ -89,6 +89,8 @@ class ClassifierService(object):
 
         for k in self.vectorizers.keys():
             examples[k] = np.stack(examples[k])
+            lengths_key = '{}_lengths'.format(k)
+            examples[lengths_key] = np.stack(examples[lengths_key])
         outcomes_list = self.model.classify(examples)
         results = []
         for outcomes in outcomes_list:

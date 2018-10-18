@@ -1,0 +1,28 @@
+{
+    "datacache": "~/.bl-data",
+    "reporting_hooks":{
+        "visdom": {
+            "name": "ZZZZZZZZZZZZ"
+        },
+        "xpctl": {
+            "cred": "~/xpctlcred.json.mongo"
+        }
+    },
+    "hpctl": {
+        "backend": {
+            "type": "remote",
+            "host": "localhost",
+            "port": 5000
+        },
+        "logging": {
+            "host": "localhost",
+            "port": 6006
+        },
+        "frontend": {
+            "type": "console",
+            "train": "avg_loss",
+            "dev": "f1",
+            "test": "f1"
+        }
+    }
+}
