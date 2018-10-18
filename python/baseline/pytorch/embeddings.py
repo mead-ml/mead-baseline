@@ -4,9 +4,10 @@ from collections import OrderedDict
 from baseline.pytorch.torchy import (pytorch_embedding,
                                      ParallelConv,
                                      pytorch_linear,
-                                     pytorch_activation,
                                      SkipConnection,
                                      Highway)
+
+import numpy as np
 
 
 class PyTorchEmbeddings(object):
@@ -31,7 +32,7 @@ class PyTorchEmbeddings(object):
 @register_embeddings(name='default')
 class LookupTableEmbeddings(nn.Module, PyTorchEmbeddings):
 
-    def __init__(self, name, **kwargs):
+    def __init__(self, _, **kwargs):
         super(LookupTableEmbeddings, self).__init__()
         self.vsz = kwargs.get('vsz')
         self.dsz = kwargs.get('dsz')
@@ -52,10 +53,11 @@ class LookupTableEmbeddings(nn.Module, PyTorchEmbeddings):
         return self.embeddings(x)
 
 
+
 @register_embeddings(name='char-conv')
 class CharConvEmbeddings(nn.Module, PyTorchEmbeddings):
 
-    def __init__(self, name, **kwargs):
+    def __init__(self, _, **kwargs):
         super(CharConvEmbeddings, self).__init__()
 
         if self.weights is None:
