@@ -65,13 +65,18 @@ BASELINE_TRAINERS = {}
 
 @exporter
 @optional_params
-def register_trainer(cls, name=None):
+def register_trainer(cls, task, name=None):
     """Register a function as a plug-in
 
     Use this pattern if you want to provide an override to a `Trainer` class.
 
     """
-    return register(cls, BASELINE_TRAINERS, name, 'trainer')
+    if task not in BASELINE_TRAINERS:
+        BASELINE_TRAINERS[task] = {}
+    if name is None:
+        name = cls.__name__
+    BASELINE_TRAINERS[task][name] = cls
+    return cls
 
 
 BASELINE_FIT_FUNC = {}
@@ -133,7 +138,7 @@ def create_trainer(model, **kwargs):
     :return:
     """
     trainer_type = kwargs.get('trainer_type', 'default')
-    Constructor = BASELINE_TRAINERS[trainer_type]
+    Constructor = BASELINE_TRAINERS[model.task_name][trainer_type]
     return Constructor(model, **kwargs)
 
 

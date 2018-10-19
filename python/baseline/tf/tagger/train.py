@@ -105,7 +105,8 @@ class TaggerEvaluatorTf(object):
 
         return metrics
 
-@register_trainer(name='default')
+
+@register_trainer(task='tagger', name='default')
 class TaggerTrainerTf(EpochReportingTrainer):
 
     def __init__(self, model, **kwargs):

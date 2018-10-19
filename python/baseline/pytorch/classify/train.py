@@ -14,7 +14,7 @@ def _add_to_cm(cm, y, pred):
     cm.add_batch(yt.data.numpy(), yp.data.numpy())
 
 
-@register_trainer(name='default')
+@register_trainer(task='classify', name='default')
 class ClassifyTrainerPyTorch(EpochReportingTrainer):
 
     def __init__(self, model, **kwargs):

@@ -8,7 +8,7 @@ from baseline.train import Trainer, create_trainer, lr_decay, register_trainer, 
 from baseline.dy.dynety import *
 
 
-@register_trainer(name='default')
+@register_trainer(task='lm', name='default')
 class LanguageModelTrainerDynet(Trainer):
     def __init__(self, model, **kwargs):
         super(LanguageModelTrainerDynet, self).__init__()

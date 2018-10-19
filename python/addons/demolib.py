@@ -71,7 +71,7 @@ class CharBoWEmbeddings(TensorFlowEmbeddings):
         return self.dsz
 
 
-@register_trainer(name='nsteps')
+@register_trainer(task='classify', name='nsteps')
 class NStepProgressClassifyTrainerTf(Trainer):
 
     def __init__(self, model, **kwargs):

@@ -6,7 +6,7 @@ from baseline.train import EpochReportingTrainer, create_trainer, register_train
 from baseline.dy.dynety import optimizer
 
 
-@register_trainer(name='default')
+@register_trainer(task='tagger', name='default')
 class TaggerTrainerDyNet(EpochReportingTrainer):
 
     def __init__(self, model, **kwargs):

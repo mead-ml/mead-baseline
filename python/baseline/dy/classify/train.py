@@ -14,7 +14,7 @@ def _add_to_cm(cm, y, preds, axis=0):
     cm.add_batch(y, best)
 
 
-@register_trainer(name='default')
+@register_trainer(task='classify', name='default')
 class ClassifyTrainerDynet(EpochReportingTrainer):
 
     def __init__(self, model, **kwargs):
@@ -58,7 +58,7 @@ class ClassifyTrainerDynet(EpochReportingTrainer):
         return self._step(loader, self._update)
 
 
-@register_trainer(name='autobatch')
+@register_trainer(task='classify', name='autobatch')
 class ClassifyTrainerAutobatch(ClassifyTrainerDynet):
     def __init__(self, model, autobatchsz=1, **kwargs):
         self.autobatchsz = autobatchsz

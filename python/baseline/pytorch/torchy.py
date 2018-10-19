@@ -605,7 +605,6 @@ def prepare_src(model, tokens, mxlen=100):
         x[j] = idx
     return torch.autograd.Variable(x.view(-1, 1))
 
-
 def show_examples_pytorch(model, es, rlut1, rlut2, vocab, mxlen, sample, prob_clip, max_examples, reverse):
     si = np.random.randint(0, len(es))
 

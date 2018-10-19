@@ -4,7 +4,7 @@ from baseline.progress import create_progress_bar
 from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
 
 
-@register_trainer(name='default')
+@register_trainer(task='tagger', name='default')
 class TaggerTrainerPyTorch(EpochReportingTrainer):
 
     def __init__(self, model, **kwargs):

@@ -8,7 +8,7 @@ from baseline.train import EpochReportingTrainer, create_trainer, register_train
 from baseline.utils import verbose_output
 
 
-@register_trainer(name='default')
+@register_trainer(task='classify', name='default')
 class ClassifyTrainerTf(EpochReportingTrainer):
 
     def __init__(self, model, **kwargs):

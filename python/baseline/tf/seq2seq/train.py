@@ -11,7 +11,7 @@ import time
 import os
 
 
-@register_trainer(name='default')
+@register_trainer(task='seq2seq', name='default')
 class Seq2SeqTrainerTf(Trainer):
 
     def __init__(self, model, **kwargs):

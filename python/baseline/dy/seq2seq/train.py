@@ -6,7 +6,7 @@ from baseline.train import Trainer, create_trainer, lr_decay, register_trainer, 
 from baseline.dy.dynety import *
 
 
-@register_trainer(name='default')
+@register_trainer(task='seq2seq', name='default')
 class Seq2SeqTrainerDynet(Trainer):
     def __init__(self, model, **kwargs):
         super(Seq2SeqTrainerDynet, self).__init__()
