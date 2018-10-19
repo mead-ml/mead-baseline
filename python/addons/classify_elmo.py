@@ -46,7 +46,7 @@ class ELMoClassifierModel(ClassifierModel):
             all_loss = tf.reduce_mean(loss)
         return all_loss
 
-    def classify(self, batch_dict):
+    def predict(self, batch_dict):
         """This method provides a basic routine to run "inference" or predict outputs based on data.
         It runs the `x` tensor in (`BxT`), and turns dropout off, running the network all the way to a softmax
         output

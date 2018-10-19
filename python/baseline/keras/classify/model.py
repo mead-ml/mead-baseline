@@ -43,12 +43,12 @@ class ClassifierModelBase(ClassifierModel):
         for key, embedding in self.embeddings.items():
             embedding.save_md(basename + '-{}-md.json'.format(key))
 
-    def classify(self, batch_dict):
-        batch_time = batch_dict['x']
-        batchsz = batch_time.shape[0]
-        return self.impl.fit(batch_time, batch_size=batchsz)
+    #def classify(self, batch_dict):
+    #    batch_time = batch_dict['x']
+    #    batchsz = batch_time.shape[0]
+    #    return self.impl.fit(batch_time, batch_size=batchsz)
 
-    def classify(self, batch_time):
+    def predict(self, batch_time):
 
         batchsz = batch_time.shape[0]
         probs = self.impl.predict(batch_time, batchsz)

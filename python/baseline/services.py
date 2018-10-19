@@ -53,7 +53,7 @@ class ClassifierService(object):
         model = load_model(model_basename, **kwargs)
         return cls(vocabs, vectorizers, model)
 
-    def transform(self, tokens):
+    def predict(self, tokens):
         """Take tokens and apply the internal vocab and vectorizers.  The tokens should be either a batch of text
         single utterance of type ``list``
         """
@@ -91,7 +91,7 @@ class ClassifierService(object):
             examples[k] = np.stack(examples[k])
             lengths_key = '{}_lengths'.format(k)
             examples[lengths_key] = np.stack(examples[lengths_key])
-        outcomes_list = self.model.classify(examples)
+        outcomes_list = self.model.predict(examples)
         results = []
         for outcomes in outcomes_list:
             results += [sorted(outcomes, key=lambda tup: tup[1], reverse=True)]
@@ -129,7 +129,7 @@ class TaggerService(object):
         model = load_tagger_model(model_basename, **kwargs)
         return cls(vocabs, vectorizers, model)
 
-    def transform(self, tokens, **kwargs):
+    def predict(self, tokens, **kwargs):
         """
         Utility function to convert lists of sentence tokens to integer value one-hots which
         are then passed to the tagger.  The resultant output is then converted back to label and token
@@ -255,7 +255,7 @@ class LanguageModelService(object):
         return cls(vocabs, vectorizers, model)
 
     # Do a greedy decode for now, everything else will be super slow
-    def run(self, tokens, **kwargs):
+    def predict(self, tokens, **kwargs):
         mxlen = kwargs.get('mxlen', 10)
         mxwlen = kwargs.get('mxwlen', 40)
 
@@ -285,7 +285,7 @@ class LanguageModelService(object):
                     else:
                         examples[lengths_key] = np.array(length)
             batch_dict = {k: v.reshape((1,) + v.shape) for k, v in examples.items()}
-            softmax_tokens = self.model.predict_next(batch_dict)
+            softmax_tokens = self.model.predict(batch_dict)
             next_token = np.argmax(softmax_tokens, axis=-1)[-1]
 
             token_str = self.idx_to_token.get(next_token, '<PAD>')
@@ -295,9 +295,6 @@ class LanguageModelService(object):
                 tokens_seq += [token_str]
             token_buffer = [token_str]
         return tokens_seq
-
-
-
 
 
 @exporter
@@ -350,7 +347,7 @@ class EncoderDecoderService(object):
         model = load_seq2seq_model(model_basename, **kwargs)
         return cls(vocabs, vectorizers, model)
 
-    def transform(self, tokens, **kwargs):
+    def predict(self, tokens, **kwargs):
 
         mxlen = 0
         mxwlen = 0
@@ -385,7 +382,7 @@ class EncoderDecoderService(object):
         for k in self.src_vectorizers.keys():
             examples[k] = np.stack(examples[k])
 
-        outcomes = self.model.run(examples)
+        outcomes = self.model.predict(examples)
         results = []
         for i in range(len(outcomes)):
             best = outcomes[i][0]

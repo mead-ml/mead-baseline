@@ -21,4 +21,4 @@ else:
 
 print(texts)
 m = bl.TaggerService.load(args.model, backend=args.backend)
-print(m.transform(texts))
+print(m.predict(texts))
