@@ -12,8 +12,7 @@ from baseline.model import register_model
 
 
 @register_model(task='tagger', name='default')
-class RNNTaggerModel(TaggerModel):
-
+class BasicTaggerModel(TaggerModel):
 
     @property
     def lengths_key(self):
@@ -70,8 +69,8 @@ class RNNTaggerModel(TaggerModel):
     def drop_inputs(self, key, x, do_dropout):
         v = self.dropin_value.get(key, 0)
         if do_dropout and v > 0.0:
-            drop_indices = np.where((np.random.random(x.shape) < v) & (x != RNNTaggerModel.PAD))
-            x[drop_indices[0], drop_indices[1]] = RNNTaggerModel.UNK
+            drop_indices = np.where((np.random.random(x.shape) < v) & (x != BasicTaggerModel.PAD))
+            x[drop_indices[0], drop_indices[1]] = BasicTaggerModel.UNK
         return x
 
     def make_input(self, batch_dict, do_dropout=False):
@@ -219,7 +218,7 @@ class RNNTaggerModel(TaggerModel):
         return all_loss
 
     def __init__(self):
-        super(RNNTaggerModel, self).__init__()
+        super(BasicTaggerModel, self).__init__()
         pass
 
     def get_labels(self):

@@ -606,6 +606,7 @@ def prepare_src(model, tokens, mxlen=100):
         x[j] = idx
     return torch.autograd.Variable(x.view(-1, 1))
 
+
 def show_examples_pytorch(model, es, rlut1, rlut2, vocab, mxlen, sample, prob_clip, max_examples, reverse):
     si = np.random.randint(0, len(es))
 
@@ -631,7 +632,7 @@ def show_examples_pytorch(model, es, rlut1, rlut2, vocab, mxlen, sample, prob_cl
         sent = lookup_sentence(rlut2, example['tgt'].squeeze())
         print('[Actual] %s' % sent)
 
-        dst_i = model.run(example)[0][0]
+        dst_i = model.predict(example)[0][0]
         dst_i = [idx.item() for idx in dst_i]
         sent = lookup_sentence(rlut2, dst_i)
         print('Guess: %s' % sent)

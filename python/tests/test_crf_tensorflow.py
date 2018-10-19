@@ -6,7 +6,7 @@ tf = pytest.importorskip('tensorflow')
 from baseline.w2v import RandomInitVecModel
 from baseline.model import create_tagger_model
 from baseline.utils import crf_mask as np_crf
-from baseline.tf.tagger import RNNTaggerModel
+from baseline.tf.tagger import BasicTaggerModel
 
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
 
@@ -15,7 +15,7 @@ WSZ = 30
 S = '<GO>'
 E = '<EOS>'
 P = '<PAD>'
-SPAN_TYPE="IOB2"
+SPAN_TYPE = "IOB2"
 LOC = os.path.dirname(os.path.realpath(__file__))
 
 
@@ -70,7 +70,7 @@ def test_persists_save(model, save_file):
     model.save_using(tf.train.Saver())
     t1 = model.sess.run(model.A)
     model.save(save_file)
-    m2 = RNNTaggerModel.load(save_file)
+    m2 = BasicTaggerModel.load(save_file)
     t2 = model.sess.run(m2.A)
     np.testing.assert_allclose(t1, t2)
 

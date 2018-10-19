@@ -151,7 +151,7 @@ class Seq2SeqModel(DynetModel, EncoderDecoderModel):
         return lsm
 
     # B x K x T and here T is a list
-    def run(self, batch_dict, beam=1, **kwargs):
+    def predict(self, batch_dict, beam=1, **kwargs):
         self.train = False
         # Bit of a hack
         src_field = self.src_lengths_key.split('_')[0]
