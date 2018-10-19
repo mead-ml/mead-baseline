@@ -5,10 +5,9 @@ import numpy as np
 torch = pytest.importorskip('torch')
 from torch.optim import SGD
 from baseline.w2v import RandomInitVecModel
-from baseline.pytorch.tagger.model import create_model
 from baseline.pytorch.crf import CRF, crf_mask
 from baseline.utils import crf_mask as np_crf
-
+from baseline.model import create_tagger_model
 
 HSZ = 100
 WSZ = 30
@@ -45,7 +44,7 @@ def embeds():
 
 @pytest.fixture
 def model(label_vocab, embeds):
-    return create_model(
+    return create_tagger_model(
         label_vocab, embeds,
         crf=True, crf_mask=True, span_type=SPAN_TYPE,
         hsz=HSZ, cfiltsz=[3], wsz=WSZ,
@@ -107,7 +106,7 @@ def test_mask_used_in_model(label_vocab, model):
 
 
 def test_mask_not_used_in_model(label_vocab, embeds):
-    model = create_model(
+    model = create_tagger_model(
         label_vocab, embeds,
         crf=True,
         hsz=HSZ, cfiltsz=[3], wsz=WSZ,
@@ -119,7 +118,7 @@ def test_mask_not_used_in_model(label_vocab, embeds):
 
 def test_error_when_mask_and_no_span(label_vocab, embeds):
     with pytest.raises(AssertionError):
-        model = create_model(
+        model = create_tagger_model(
             label_vocab, embeds,
             crf=True, crf_mask=True,
             hsz=HSZ, cfiltsz=[3], wsz=WSZ,

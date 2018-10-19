@@ -10,11 +10,12 @@ import copy
 PYT_MAJOR_VERSION = get_version(torch)
 
 
-def sequence_mask(lengths):
+def sequence_mask(lengths, max_len=-1):
     lens = lengths.cpu()
-    max_len = torch.max(lens)
+    if max_len < 0:
+        max_len = torch.max(lens).item()
     # 1 x T
-    row = torch.arange(0, max_len.item()).type_as(lens).view(1, -1)
+    row = torch.arange(0, max_len).type_as(lens).view(1, -1)
     # B x 1
     col = lens.view(-1, 1)
     # Broadcast to B x T, compares increasing number to max

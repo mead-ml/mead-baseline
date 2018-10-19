@@ -4,9 +4,9 @@ import pytest
 import numpy as np
 tf = pytest.importorskip('tensorflow')
 from baseline.w2v import RandomInitVecModel
-from baseline.tf.tagger.model import create_model, RNNTaggerModel
+from baseline.model import create_tagger_model
 from baseline.utils import crf_mask as np_crf
-
+from baseline.tf.tagger import RNNTaggerModel
 
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
 
@@ -17,6 +17,7 @@ E = '<EOS>'
 P = '<PAD>'
 SPAN_TYPE="IOB2"
 LOC = os.path.dirname(os.path.realpath(__file__))
+
 
 @pytest.fixture
 def label_vocab():
@@ -46,7 +47,7 @@ def save_file():
 @pytest.fixture
 def model(label_vocab, embeds):
     tf.reset_default_graph()
-    model = create_model(
+    model = create_tagger_model(
         label_vocab, embeds,
         crf=True, crf_mask=True, span_type=SPAN_TYPE,
         hsz=HSZ, cfiltsz=[3], wsz=WSZ,
@@ -75,7 +76,7 @@ def test_persists_save(model, save_file):
 
 def test_skip_mask(label_vocab, embeds):
     tf.reset_default_graph()
-    model = create_model(
+    model = create_tagger_model(
         label_vocab, embeds,
         crf=True, span_type=SPAN_TYPE,
         hsz=HSZ, cfiltsz=[3], wsz=WSZ,
@@ -88,7 +89,7 @@ def test_skip_mask(label_vocab, embeds):
 
 def test_error_on_mask_and_no_span(label_vocab, embeds):
     tf.reset_default_graph()
-    model = create_model(
+    model = create_tagger_model(
         label_vocab, embeds,
         crf=True, crf_mask=True,
         hsz=HSZ, cfiltsz=[3], wsz=WSZ,
