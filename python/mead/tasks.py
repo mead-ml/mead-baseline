@@ -233,6 +233,11 @@ class Task(object):
                     if report_arg not in reporting[report_type]:
                         reporting[report_type][report_arg] = report_val
         reporting_hooks = list(reporting.keys())
+        for settings in reporting.values():
+            try:
+                import_user_module(settings.get('module', ''))
+            except (ImportError, ValueError):
+                pass
 
         self.reporting = baseline.create_reporting(reporting_hooks,
                                                    reporting,
