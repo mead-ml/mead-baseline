@@ -11,8 +11,7 @@ from baseline.version import __version__
 from baseline.model import register_model
 
 
-@register_model(task='tagger', name='default')
-class BasicTaggerModel(TaggerModel):
+class TaggerModelBase(TaggerModel):
 
     @property
     def lengths_key(self):
@@ -21,14 +20,6 @@ class BasicTaggerModel(TaggerModel):
     @lengths_key.setter
     def lengths_key(self, value):
         self._lengths_key = value
-
-    @property
-    def vdrop(self):
-        return self._vdrop
-
-    @vdrop.setter
-    def vdrop(self, value):
-        self._vdrop = value
 
     def save_values(self, basename):
         self.saver.save(self.sess, basename)
@@ -69,8 +60,8 @@ class BasicTaggerModel(TaggerModel):
     def drop_inputs(self, key, x, do_dropout):
         v = self.dropin_value.get(key, 0)
         if do_dropout and v > 0.0:
-            drop_indices = np.where((np.random.random(x.shape) < v) & (x != BasicTaggerModel.PAD))
-            x[drop_indices[0], drop_indices[1]] = BasicTaggerModel.UNK
+            drop_indices = np.where((np.random.random(x.shape) < v) & (x != TaggerModelBase.PAD))
+            x[drop_indices[0], drop_indices[1]] = TaggerModelBase.UNK
         return x
 
     def make_input(self, batch_dict, do_dropout=False):
@@ -218,7 +209,7 @@ class BasicTaggerModel(TaggerModel):
         return all_loss
 
     def __init__(self):
-        super(BasicTaggerModel, self).__init__()
+        super(TaggerModelBase, self).__init__()
         pass
 
     def get_labels(self):
@@ -264,27 +255,10 @@ class BasicTaggerModel(TaggerModel):
             embeddings_out = embedding.encode()
             all_embeddings_out.append(embeddings_out)
         word_embeddings = tf.concat(values=all_embeddings_out, axis=2)
-        return word_embeddings
+        return tf.nn.dropout(word_embeddings, self.pkeep)
 
     def encode(self, embedseq, **kwargs):
-        rnntype = kwargs.get('rnntype', 'blstm')
-        nlayers = kwargs.get('layers', 1)
-        hsz = int(kwargs['hsz'])
-        if rnntype == 'blstm':
-            rnnfwd = stacked_lstm(hsz//2, self.pkeep, nlayers, self.vdrop)
-            rnnbwd = stacked_lstm(hsz//2, self.pkeep, nlayers, self.vdrop)
-            rnnout, _ = tf.nn.bidirectional_dynamic_rnn(rnnfwd, rnnbwd, embedseq, sequence_length=self.lengths, dtype=tf.float32)
-            # The output of the BRNN function needs to be joined on the H axis
-            rnnout = tf.concat(axis=2, values=rnnout)
-        elif rnntype == 'cnn':
-            filts = kwargs.get('wfiltsz', None)
-            if filts is None:
-                filts = [5]
-            rnnout = stacked_cnn(embedseq, hsz, self.pkeep, nlayers, filts=filts)
-        else:
-            rnnfwd = stacked_lstm(hsz, self.pkeep, nlayers, self.vdrop)
-            rnnout, _ = tf.nn.dynamic_rnn(rnnfwd, embedseq, sequence_length=self.lengths, dtype=tf.float32)
-        return rnnout
+        pass
 
     @classmethod
     def create(cls, embeddings, labels, **kwargs):
@@ -302,7 +276,6 @@ class BasicTaggerModel(TaggerModel):
         model.dropin_value = kwargs.get('dropin', {})
         model.sess = kwargs.get('sess', tf.Session())
         model.pdrop_in = kwargs.get('dropin', 0.0)
-        model.vdrop = kwargs.get('variational_dropout', False)
         model.labels = labels
         model.crf = bool(kwargs.get('crf', False))
         model.crf_mask = bool(kwargs.get('crf_mask', False))
@@ -311,8 +284,7 @@ class BasicTaggerModel(TaggerModel):
         model.feed_input = bool(kwargs.get('feed_input', False))
         model.activation_type = kwargs.get('activation', 'tanh')
 
-        joint = model.embed()
-        embedseq = tf.nn.dropout(joint, model.pkeep)
+        embedseq = model.embed()
         seed = np.random.randint(10e8)
         enc_out = model.encode(embedseq, **kwargs)
 
@@ -337,3 +309,50 @@ class BasicTaggerModel(TaggerModel):
             model.probs = tf.reshape(preds, [-1, T, nc])
             model.best = tf.argmax(model.probs, 2)
         return model
+
+
+@register_model(task='tagger', name='default')
+class RNNTaggerModel(TaggerModelBase):
+
+    @property
+    def vdrop(self):
+        return self._vdrop
+
+    @vdrop.setter
+    def vdrop(self, value):
+        self._vdrop = value
+
+    def __init__(self):
+        super(RNNTaggerModel, self).__init__()
+
+    def encode(self, embedseq, **kwargs):
+        self.vdrop = kwargs.get('variational_dropout', False)
+        rnntype = kwargs.get('rnntype', 'blstm')
+        nlayers = kwargs.get('layers', 1)
+        hsz = int(kwargs['hsz'])
+        if rnntype == 'blstm':
+            rnnfwd = stacked_lstm(hsz//2, self.pkeep, nlayers, self.vdrop)
+            rnnbwd = stacked_lstm(hsz//2, self.pkeep, nlayers, self.vdrop)
+            rnnout, _ = tf.nn.bidirectional_dynamic_rnn(rnnfwd, rnnbwd, embedseq, sequence_length=self.lengths, dtype=tf.float32)
+            # The output of the BRNN function needs to be joined on the H axis
+            rnnout = tf.concat(axis=2, values=rnnout)
+        else:
+            rnnfwd = stacked_lstm(hsz, self.pkeep, nlayers, self.vdrop)
+            rnnout, _ = tf.nn.dynamic_rnn(rnnfwd, embedseq, sequence_length=self.lengths, dtype=tf.float32)
+        return rnnout
+
+
+@register_model(task='tagger', name='cnn')
+class CNNTaggerModel(TaggerModelBase):
+
+    def __init__(self):
+        super(CNNTaggerModel, self).__init__()
+
+    def encode(self, embedseq, **kwargs):
+        nlayers = kwargs.get('layers', 1)
+        hsz = int(kwargs['hsz'])
+        filts = kwargs.get('wfiltsz', None)
+        if filts is None:
+                filts = [5]
+        cnnout = stacked_cnn(embedseq, hsz, self.pkeep, nlayers, filts=filts)
+        return cnnout

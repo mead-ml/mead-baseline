@@ -16,10 +16,10 @@ class ClassifierModelBase(DynetModel, ClassifierModel):
         self.train = True
         self.labels = labels
         n_classes = len(self.labels)
-        dsz = self._init_embed(embeddings)
-        pool_size, self.pool = self._init_pool(dsz, **kwargs)
-        stack_size, self.stacked = self._init_stacked(pool_size, **kwargs)
-        self.output = self._init_output(stack_size, n_classes)
+        dsz = self.init_embed(embeddings)
+        pool_size, self.pool = self.init_pool(dsz, **kwargs)
+        stack_size, self.stacked = self.init_stacked(pool_size, **kwargs)
+        self.output = self.init_output(stack_size, n_classes)
         self.lengths_key = kwargs.get('lengths_key')
 
     def __str__(self):
@@ -28,20 +28,20 @@ class ClassifierModelBase(DynetModel, ClassifierModel):
             return "Batched Model: \n{}".format(str_)
         return str_
 
-    def _init_embed(self, embeddings):
+    def init_embed(self, embeddings):
         dsz = 0
         self.embeddings = embeddings
         for embedding in self.embeddings.values():
             dsz += embedding.get_dsz()
         return dsz
 
-    def _embed(self, batch_dict):
+    def embed(self, batch_dict):
         all_embeddings_lists = []
         for k, embedding in self.embeddings.items():
             all_embeddings_lists.append(embedding.encode(batch_dict[k]))
 
-        embed = dy.concatenate(all_embeddings_lists, d=1)
-        return embed
+        embedded = dy.concatenate(all_embeddings_lists, d=1)
+        return embedded
 
     def make_input(self, batch_dict):
         example_dict = dict({})
@@ -67,7 +67,7 @@ class ClassifierModelBase(DynetModel, ClassifierModel):
 
     def forward(self, batch_dict):
 
-        embedded = self._embed(batch_dict)
+        embedded = self.embed(batch_dict)
         pooled = self.pool(embedded, batch_dict['lengths'])
         stacked = pooled if self.stacked is None else self.stacked(pooled)
         return self.output(stacked)
@@ -83,7 +83,7 @@ class ClassifierModelBase(DynetModel, ClassifierModel):
 
         return input_
 
-    def _init_stacked(self, input_dim, **kwargs):
+    def init_stacked(self, input_dim, **kwargs):
 
         hszs = listify(kwargs.get('hsz', []))
         if len(hszs) == 0:
@@ -104,7 +104,10 @@ class ClassifierModelBase(DynetModel, ClassifierModel):
 
         return hsz, call_stacked
 
-    def _init_output(self, input_dim, n_classes):
+    def init_pool(self, dsz, **kwargs):
+        pass
+
+    def init_output(self, input_dim, n_classes):
         return Linear(n_classes, input_dim, self.pc, name="Output")
 
     @classmethod
@@ -127,7 +130,10 @@ class ConvModel(ClassifierModelBase):
     def __init__(self, *args, **kwargs):
         super(ConvModel, self).__init__(*args, **kwargs)
 
-    def _init_pool(self, dsz, filtsz, cmotsz, **kwargs):
+    def init_pool(self, dsz, **kwargs):
+        filtsz = kwargs['filtsz']
+        cmotsz = kwargs['cmotsz']
+
         parallel_conv = ParallelConv(filtsz, cmotsz, dsz, self.pc)
         def call_pool(embedded, _):
             conv = self.dropout(parallel_conv(embedded))
@@ -139,27 +145,18 @@ class ConvModel(ClassifierModelBase):
 @register_model(task='classify', name='lstm')
 class LSTMModel(ClassifierModelBase):
 
-    def _init_pool(self, dsz, layers=1, **kwargs):
+    def init_pool(self, dsz, **kwargs):
         hsz = kwargs.get('rnnsz', kwargs.get('hsz', 100))
+        rnntype = kwargs.get('rnn_type', kwargs.get('rnntype', 'lstm'))
+
+        layers = kwargs.get('layers', 1)
         if type(hsz) is list:
             hsz = hsz[0]
-        self.rnn = dy.VanillaLSTMBuilder(layers, dsz, hsz, self.pc)
 
-        def pool(input_, lengths):
-            return rnn_encode(self.rnn, input_, lengths)
-
-        return hsz, pool
-
-
-# TODO Merge this with LSTM model!
-@register_model(task='classify', name='blstm')
-class BLSTMModel(ClassifierModelBase):
-
-    def _init_pool(self, dsz, layers=1, **kwargs):
-        hsz = kwargs.get('rnnsz', kwargs.get('hsz', 100))
-        if type(hsz) is list:
-            hsz = hsz[0]
-        self.rnn = dy.BiRNNBuilder(layers, dsz, hsz, self.pc, dy.VanillaLSTMBuilder)
+        if rnntype.startswith('b'):
+            self.rnn = dy.BiRNNBuilder(layers, dsz, hsz, self.pc, dy.VanillaLSTMBuilder)
+        else:
+            self.rnn = dy.VanillaLSTMBuilder(layers, dsz, hsz, self.pc)
 
         def pool(input_, lengths):
             return rnn_encode(self.rnn, input_, lengths)
@@ -170,18 +167,18 @@ class BLSTMModel(ClassifierModelBase):
 @register_model(task='classify', name='nbow')
 class NBowModel(ClassifierModelBase):
 
-    def _init_pool(self, *args, **kwargs):
+    def init_pool(self, dsz, **kwargs):
         def pool(input_, _):
             return dy.esum(input_) / len(input_)
 
-        return args[0], pool
+        return dsz, pool
 
 
 @register_model(task='classify', name='nbowmax')
 class NBowMax(ClassifierModelBase):
 
-    def _init_pool(self, *args, **kwargs):
+    def init_pool(self, dsz, **kwargs):
         def pool(input_, _):
             return dy.emax(input_)
 
-        return args[0], pool
+        return dsz, pool

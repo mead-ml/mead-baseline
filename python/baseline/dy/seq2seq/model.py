@@ -17,7 +17,7 @@ class Seq2SeqModel(DynetModel, EncoderDecoderModel):
         self.rnntype = kwargs['rnntype']
         self.pdrop = kwargs.get('dropout', 0.5)
         self.nc = embeddings_out.vsz
-        src_dsz = self._init_embed(embeddings_in)
+        src_dsz = self.init_embed(embeddings_in)
         self.tgt_embedding = embeddings_out
         self.src_lengths_key = kwargs.get('src_lengths_key')
 
@@ -34,14 +34,14 @@ class Seq2SeqModel(DynetModel, EncoderDecoderModel):
         self.preds = Linear(self.nc, out_dsz, self.pc)
         self.beam_sz = 1
 
-    def _init_embed(self, embeddings):
+    def init_embed(self, embeddings):
         dsz = 0
         self.embeddings = embeddings
         for embedding in self.embeddings.values():
             dsz += embedding.get_dsz()
         return dsz
 
-    def encode_rnn(self, embed_in_seq, src_len):
+    def encoder(self, embed_in_seq, src_len):
         forward, forward_state = rnn_forward_with_state(self.lstm_forward, embed_in_seq, src_len)
         if self.lstm_backward is not None:
             backward, backward_state = rnn_forward_with_state(self.lstm_backward, embed_in_seq, src_len, backward=True)
@@ -73,13 +73,13 @@ class Seq2SeqModel(DynetModel, EncoderDecoderModel):
         print(model)
         return model
 
-    def _embed(self, batch_dict):
+    def embed(self, batch_dict):
         all_embeddings_lists = []
         for k, embedding in self.embeddings.items():
             all_embeddings_lists.append(embedding.encode(batch_dict[k]))
 
-        embed = dy.concatenate(all_embeddings_lists, d=1)
-        return embed
+        embeddings = dy.concatenate(all_embeddings_lists, d=1)
+        return embeddings
 
     def make_input(self, batch_dict):
         example_dict = dict({})
@@ -101,9 +101,9 @@ class Seq2SeqModel(DynetModel, EncoderDecoderModel):
         return self.decode(rnn_enc_seq, final_encoder_state, dst)
 
     def encode(self, example_dict):
-        embed_in_seq = self._embed(example_dict)
+        embed_in_seq = self.embed(example_dict)
         src_len = example_dict['src_len']
-        output, hidden = self.encode_rnn(embed_in_seq, src_len)
+        output, hidden = self.encoder(embed_in_seq, src_len)
         return output, hidden
 
     def input_i(self, embed_i, output_i):
@@ -112,12 +112,12 @@ class Seq2SeqModel(DynetModel, EncoderDecoderModel):
     def bridge(self, final_encoder_state, context):
         return final_encoder_state, context[-1]
 
-    def _attn(self, context_mx):
+    def attn(self, context_mx):
         def ident(x):
             return x
         return ident
 
-    def decode_rnn(self, embed_out_seq, rnn_state, output_i, attn_fn):
+    def decoder(self, embed_out_seq, rnn_state, output_i, attn_fn):
         output = []
         for i, embed_i in enumerate(embed_out_seq):
             embed_i = self.input_i(embed_i, output_i)
@@ -132,7 +132,7 @@ class Seq2SeqModel(DynetModel, EncoderDecoderModel):
         h_i, output_i = self.bridge(final_encoder_state, context)
         context_mx = dy.concatenate_cols(context)
         rnn_state = self.decoder_rnn.initial_state(h_i)
-        attn_fn = self._attn(context_mx)
+        attn_fn = self.attn(context_mx)
         embed_out_seq = self.tgt_embedding.encode(dst)
         output = []
         for i, embed_i in enumerate(embed_out_seq):
@@ -174,7 +174,7 @@ class Seq2SeqModel(DynetModel, EncoderDecoderModel):
         context_mx = dy.concatenate_cols(rnn_enc_seq)
         # rnn_state = self.decoder_rnn.initial_state(final_encoder_state)
         rnn_state = self.decoder_rnn.initial_state(final_encoder_state)
-        attn_fn = self._attn(context_mx)
+        attn_fn = self.attn(context_mx)
 
         output_i = rnn_enc_seq[-1]  # zeros?!
         output = [GO]
@@ -208,7 +208,7 @@ class Seq2SeqModel(DynetModel, EncoderDecoderModel):
         final_encoder_state_k = (dy.concatenate_to_batch([h]*K) for h in hidden)
         num_states = len(hidden)
         rnn_state = self.decoder_rnn.initial_state(final_encoder_state_k)
-        attn_fn = self._attn(context_mx)
+        attn_fn = self.attn(context_mx)
 
         output_i = dy.concatenate_to_batch([rnn_enc_seq[-1]]*K)
         for i in range(mxlen):
@@ -269,7 +269,7 @@ class Seq2SeqAttnModel(Seq2SeqModel):
         super(Seq2SeqAttnModel, self).__init__(embeddings_in, embeddings_out, **kwargs)
         self.attn_module = Attention(kwargs.get('hsz'), self.pc)
 
-    def _attn(self, context):
+    def attn(self, context):
         return self.attn_module(context)
 
     def input_i(self, embed_i, output_i):
