@@ -469,7 +469,7 @@ def show_examples_dynet(model, es, rlut1, rlut2, vocab, mxlen, sample, prob_clip
         print('[OP] %s' % sent)
         sent = lookup_sentence(rlut2, example['tgt'].squeeze())
         print('[Actual] %s' % sent)
-        dst_i = model.run(example)[0][0]
+        dst_i = model.predict(example)[0][0]
         sent = lookup_sentence(rlut2, dst_i)
         print('Guess: %s' % sent)
         print('------------------------------------------------------------------------')

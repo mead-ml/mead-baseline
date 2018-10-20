@@ -5,8 +5,9 @@ from baseline.model import register_model
 import torch.autograd
 import os
 
+
 @register_model(task='tagger', name='default')
-class RNNTaggerModel(nn.Module, TaggerModel):
+class BasicTaggerModel(nn.Module, TaggerModel):
 
     PAD = 0
     UNK = 1
@@ -28,7 +29,7 @@ class RNNTaggerModel(nn.Module, TaggerModel):
         return model
 
     def __init__(self):
-        super(RNNTaggerModel, self).__init__()
+        super(BasicTaggerModel, self).__init__()
 
     def _init_embed(self, embeddings, **kwargs):
         self.embeddings = EmbeddingsContainer()
@@ -113,9 +114,9 @@ class RNNTaggerModel(nn.Module, TaggerModel):
         if not self.training or v == 0:
             return x
 
-        mask_pad = x != RNNTaggerModel.PAD
+        mask_pad = x != BasicTaggerModel.PAD
         mask_drop = x.new(x.size(0), x.size(1)).bernoulli_(v).byte()
-        x.masked_fill_(mask_pad & mask_drop, RNNTaggerModel.UNK)
+        x.masked_fill_(mask_pad & mask_drop, BasicTaggerModel.UNK)
         return x
 
     def input_tensor(self, key, batch_dict, perm_idx):

@@ -7,7 +7,7 @@ import numpy as np
 from baseline.confusion import ConfusionMatrix
 
 
-@register_trainer(name='default')
+@register_trainer(task='classify', name='default')
 class ClassifyTrainerKeras(EpochReportingTrainer):
 
     METRIC_REMAP = {'categorical_accuracy': 'acc'}

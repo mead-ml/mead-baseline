@@ -9,7 +9,7 @@ from baseline.train import Trainer, create_trainer, register_trainer, register_t
 from baseline.pytorch.torchy import pytorch_prepare_optimizer
 
 
-@register_trainer(name='default')
+@register_trainer(task='seq2seq', name='default')
 class Seq2SeqTrainerPyTorch(Trainer):
 
     def __init__(self, model, **kwargs):

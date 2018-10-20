@@ -205,7 +205,7 @@ class Seq2SeqModel(nn.Module, EncoderDecoderModel):
         return pred
 
     # B x K x T and here T is a list
-    def run(self, batch_dict, beam=1, **kwargs):
+    def predict(self, batch_dict, beam=1, **kwargs):
         self.eval()
         batch = []
         # Bit of a hack

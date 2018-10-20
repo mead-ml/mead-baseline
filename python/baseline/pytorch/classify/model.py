@@ -87,7 +87,7 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
             all_embeddings.append(embedding.encode(input[k]))
         return torch.cat(all_embeddings, 2)
 
-    def classify(self, batch_dict):
+    def predict(self, batch_dict):
         examples = self.make_input(batch_dict)
 
         with torch.no_grad():

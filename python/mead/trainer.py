@@ -1,4 +1,6 @@
 import argparse
+from copy import deepcopy
+from itertools import chain
 from baseline.utils import read_config_stream
 import mead
 from mead.utils import convert_path, parse_extra_args
@@ -24,14 +26,16 @@ def main():
 
     if args.gpus is not None:
         config_params['model']['gpus'] = args.gpus
-    if args.reporting is not None:
-        reporting = parse_extra_args(args.reporting, reporting_args)
-        config_params['reporting'] = reporting
+
+    cmd_hooks = args.reporting if args.reporting is not None else []
+    config_hooks = config_params.get('reporting') if config_params.get('reporting') is not None else []
+    reporting = parse_extra_args(set(chain(cmd_hooks, config_hooks)), reporting_args)
+    config_params['reporting'] = reporting
 
     task_name = config_params.get('task', 'classify') if args.task is None else args.task
     print('Task: [{}]'.format(task_name))
     task = mead.Task.get_task_specific(task_name, args.logging, args.settings)
-    task.read_config(config_params, args.datasets, reporting_args=reporting_args, config_file=args.config)
+    task.read_config(config_params, args.datasets, reporting_args=reporting_args, config_file=deepcopy(config_params))
     task.initialize(args.embeddings)
     task.train()
 

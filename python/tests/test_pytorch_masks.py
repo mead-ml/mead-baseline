@@ -31,6 +31,15 @@ class MaskTest(unittest.TestCase):
                     np_mask[i, j] = 1
         np.testing.assert_allclose(mask.data.numpy(), np_mask)
 
+    def test_mask_mxlen(self):
+        mask = sequence_mask(self.lengths, self.seq_len + 10)
+        np_mask = np.zeros((self.batch_size, self.seq_len + 10))
+        for i in range(self.batch_size):
+            for j in range(self.seq_len + 10):
+                if j < self.lengths.data[i]:
+                    np_mask[i, j] = 1
+        np.testing.assert_allclose(mask.data.numpy(), np_mask)
+
     def test_attention_masked_valid_probs(self):
         mask = sequence_mask(self.lengths)
         score_mask = self.scores.masked_fill(mask, -1e9)

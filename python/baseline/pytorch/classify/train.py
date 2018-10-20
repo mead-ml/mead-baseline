@@ -14,13 +14,13 @@ def _add_to_cm(cm, y, pred):
     cm.add_batch(yt.data.numpy(), yp.data.numpy())
 
 
-@register_trainer(name='default')
+@register_trainer(task='classify', name='default')
 class ClassifyTrainerPyTorch(EpochReportingTrainer):
 
     def __init__(self, model, **kwargs):
         super(ClassifyTrainerPyTorch, self).__init__()
         eta = kwargs.get('eta', kwargs.get('lr', 0.01))
-        print('using eta [%.3f]' % eta)
+        print('using eta [%.4f]' % eta)
         optim = kwargs.get('optim', 'sgd')
         weight_decay = float(kwargs.get('weight_decay', 0))
         print('using optim [%s]' % optim)

@@ -172,4 +172,3 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
     # Warning this function is only initialized AFTER encode
     def get_dsz(self):
         return self.wsz
-

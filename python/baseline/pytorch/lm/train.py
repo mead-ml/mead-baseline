@@ -5,7 +5,7 @@ from baseline.utils import listify, revlut, get_model_file
 from baseline.train import Trainer, create_trainer, register_trainer, register_training_func
 
 
-@register_trainer(name='default')
+@register_trainer(task='lm', name='default')
 class LanguageModelTrainerPyTorch(Trainer):
 
     def __init__(self, model, **kwargs):

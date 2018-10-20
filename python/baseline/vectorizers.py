@@ -1,5 +1,5 @@
 import numpy as np
-from baseline.utils import export, optional_params, listify
+from baseline.utils import export, optional_params, listify, register
 import collections
 
 
@@ -32,14 +32,8 @@ BASELINE_VECTORIZERS = {}
 @optional_params
 def register_vectorizer(cls, name=None):
     """Register a function as a plug-in"""
-    if name is None:
-        name = cls.__name__
+    return register(cls, BASELINE_VECTORIZERS, name, 'vectorizer')
 
-    if name in BASELINE_VECTORIZERS:
-        raise Exception('Error: attempt to re-defined previously registered handler {} in vectorizer registry'.format(name))
-
-    BASELINE_VECTORIZERS[name] = cls
-    return cls
 
 @exporter
 def identity_trans_fn(x):

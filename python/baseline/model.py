@@ -134,7 +134,7 @@ class ClassifierModel(object):
         """
         pass
 
-    def classify(self, batch_dict):
+    def predict(self, batch_dict):
         """Classify a batch of text with whatever features the model can use from the batch_dict.
         The indices correspond to get_vocab().get('word', 0)
         
@@ -144,6 +144,10 @@ class ClassifierModel(object):
         :return: A list of lists of tuples (label, value)
         """
         pass
+
+    # deprecated: use predict
+    def classify(self, batch_dict):
+        return self.predict(batch_dict)
 
     def get_labels(self):
         """Return a list of labels, where the offset within the list is the location in a confusion matrix, etc.
@@ -196,7 +200,7 @@ class LanguageModel(object):
     def create(cls, embeddings, **kwargs):
         pass
 
-    def predict_next(self, batch_dict, **kwargs):
+    def predict(self, batch_dict, **kwargs):
         pass
 
 
@@ -222,6 +226,10 @@ class EncoderDecoderModel(object):
     def create_loss(self):
         pass
 
-    def run(self, source_dict, **kwargs):
+    def predict(self, source_dict, **kwargs):
         pass
+
+    # deprecated: use predict
+    def run(self, source_dict, **kwargs):
+        return self.predict(source_dict, **kwargs)
 

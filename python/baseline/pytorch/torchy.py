@@ -1,7 +1,6 @@
 import torch
 import numpy as np
 from baseline.utils import lookup_sentence, get_version
-from baseline.utils import crf_mask as crf_m
 import torch.autograd
 import torch.nn as nn
 import torch.nn.functional as F
@@ -11,11 +10,12 @@ import copy
 PYT_MAJOR_VERSION = get_version(torch)
 
 
-def sequence_mask(lengths):
+def sequence_mask(lengths, max_len=-1):
     lens = lengths.cpu()
-    max_len = torch.max(lens)
+    if max_len < 0:
+        max_len = torch.max(lens).item()
     # 1 x T
-    row = torch.arange(0, max_len.item()).type_as(lens).view(1, -1)
+    row = torch.arange(0, max_len).type_as(lens).view(1, -1)
     # B x 1
     col = lens.view(-1, 1)
     # Broadcast to B x T, compares increasing number to max
@@ -632,7 +632,7 @@ def show_examples_pytorch(model, es, rlut1, rlut2, vocab, mxlen, sample, prob_cl
         sent = lookup_sentence(rlut2, example['tgt'].squeeze())
         print('[Actual] %s' % sent)
 
-        dst_i = model.run(example)[0][0]
+        dst_i = model.predict(example)[0][0]
         dst_i = [idx.item() for idx in dst_i]
         sent = lookup_sentence(rlut2, dst_i)
         print('Guess: %s' % sent)

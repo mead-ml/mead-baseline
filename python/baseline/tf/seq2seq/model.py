@@ -357,6 +357,14 @@ class Seq2SeqModel(EncoderDecoderModel):
         self.saver = saver
 
     @property
+    def src_lengths_key(self):
+        return self._src_lengths_key
+
+    @src_lengths_key.setter
+    def src_lengths_key(self, value):
+        self._src_lengths_key = value
+
+    @property
     def vdrop(self):
         return self._vdrop
 
@@ -451,7 +459,7 @@ class Seq2SeqModel(EncoderDecoderModel):
             self.sess.graph.as_default()
             tf.import_graph_def(gd, name='')
 
-    def run(self, batch_dict):
+    def predict(self, batch_dict):
         feed_dict = self.make_input(batch_dict)
         vec = self.sess.run(self.best, feed_dict=feed_dict)
         # (B x K x T)

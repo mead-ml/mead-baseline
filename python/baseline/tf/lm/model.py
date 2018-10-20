@@ -105,7 +105,7 @@ class BasicLanguageModel(LanguageModel):
 
         return feed_dict
 
-    def predict_next(self, batch_dict):
+    def predict(self, batch_dict):
         feed_dict = self.make_input(batch_dict)
         step_softmax = self.sess.run(self.probs, feed_dict)
         return step_softmax

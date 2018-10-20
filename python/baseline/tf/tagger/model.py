@@ -12,8 +12,7 @@ from baseline.model import register_model
 
 
 @register_model(task='tagger', name='default')
-class RNNTaggerModel(TaggerModel):
-
+class BasicTaggerModel(TaggerModel):
 
     @property
     def lengths_key(self):
@@ -70,8 +69,8 @@ class RNNTaggerModel(TaggerModel):
     def drop_inputs(self, key, x, do_dropout):
         v = self.dropin_value.get(key, 0)
         if do_dropout and v > 0.0:
-            drop_indices = np.where((np.random.random(x.shape) < v) & (x != RNNTaggerModel.PAD))
-            x[drop_indices[0], drop_indices[1]] = RNNTaggerModel.UNK
+            drop_indices = np.where((np.random.random(x.shape) < v) & (x != BasicTaggerModel.PAD))
+            x[drop_indices[0], drop_indices[1]] = BasicTaggerModel.UNK
         return x
 
     def make_input(self, batch_dict, do_dropout=False):
@@ -219,7 +218,7 @@ class RNNTaggerModel(TaggerModel):
         return all_loss
 
     def __init__(self):
-        super(RNNTaggerModel, self).__init__()
+        super(BasicTaggerModel, self).__init__()
         pass
 
     def get_labels(self):
@@ -267,6 +266,26 @@ class RNNTaggerModel(TaggerModel):
         word_embeddings = tf.concat(values=all_embeddings_out, axis=2)
         return word_embeddings
 
+    def encode(self, embedseq, **kwargs):
+        rnntype = kwargs.get('rnntype', 'blstm')
+        nlayers = kwargs.get('layers', 1)
+        hsz = int(kwargs['hsz'])
+        if rnntype == 'blstm':
+            rnnfwd = stacked_lstm(hsz//2, self.pkeep, nlayers, self.vdrop)
+            rnnbwd = stacked_lstm(hsz//2, self.pkeep, nlayers, self.vdrop)
+            rnnout, _ = tf.nn.bidirectional_dynamic_rnn(rnnfwd, rnnbwd, embedseq, sequence_length=self.lengths, dtype=tf.float32)
+            # The output of the BRNN function needs to be joined on the H axis
+            rnnout = tf.concat(axis=2, values=rnnout)
+        elif rnntype == 'cnn':
+            filts = kwargs.get('wfiltsz', None)
+            if filts is None:
+                filts = [5]
+            rnnout = stacked_cnn(embedseq, hsz, self.pkeep, nlayers, filts=filts)
+        else:
+            rnnfwd = stacked_lstm(hsz, self.pkeep, nlayers, self.vdrop)
+            rnnout, _ = tf.nn.dynamic_rnn(rnnfwd, embedseq, sequence_length=self.lengths, dtype=tf.float32)
+        return rnnout
+
     @classmethod
     def create(cls, embeddings, labels, **kwargs):
 
@@ -282,10 +301,7 @@ class RNNTaggerModel(TaggerModel):
         model.pdrop_value = kwargs.get('dropout', 0.5)
         model.dropin_value = kwargs.get('dropin', {})
         model.sess = kwargs.get('sess', tf.Session())
-        hsz = int(kwargs['hsz'])
         model.pdrop_in = kwargs.get('dropin', 0.0)
-        rnntype = kwargs.get('rnntype', 'blstm')
-        nlayers = kwargs.get('layers', 1)
         model.vdrop = kwargs.get('variational_dropout', False)
         model.labels = labels
         model.crf = bool(kwargs.get('crf', False))
@@ -298,40 +314,26 @@ class RNNTaggerModel(TaggerModel):
         joint = model.embed()
         embedseq = tf.nn.dropout(joint, model.pkeep)
         seed = np.random.randint(10e8)
-
-        if rnntype == 'blstm':
-            rnnfwd = stacked_lstm(hsz//2, model.pkeep, nlayers, model.vdrop)
-            rnnbwd = stacked_lstm(hsz//2, model.pkeep, nlayers, model.vdrop)
-            rnnout, _ = tf.nn.bidirectional_dynamic_rnn(rnnfwd, rnnbwd, embedseq, sequence_length=model.lengths, dtype=tf.float32)
-            # The output of the BRNN function needs to be joined on the H axis
-            rnnout = tf.concat(axis=2, values=rnnout)
-        elif rnntype == 'cnn':
-            filts = kwargs.get('wfiltsz', None)
-            if filts is None:
-                filts = [5]
-            rnnout = stacked_cnn(embedseq, hsz, model.pkeep, nlayers, filts=filts)
-        else:
-            rnnfwd = stacked_lstm(hsz, model.pkeep, nlayers, model.vdrop)
-            rnnout, _ = tf.nn.dynamic_rnn(rnnfwd, embedseq, sequence_length=model.lengths, dtype=tf.float32)
+        enc_out = model.encode(embedseq, **kwargs)
 
         with tf.variable_scope("output"):
             if model.feed_input is True:
-                rnnout = tf.concat(axis=2, values=[rnnout, embedseq])
+                enc_out = tf.concat(axis=2, values=[enc_out, embedseq])
 
             # Converts seq to tensor, back to (B,T,W)
-            T = tf.shape(rnnout)[1]
-            H = rnnout.get_shape()[2]
+            T = tf.shape(enc_out)[1]
+            H = enc_out.get_shape()[2]
             # Flatten from [B x T x H] - > [BT x H]
-            rnnout_bt_x_h = tf.reshape(rnnout, [-1, H])
+            enc_out_bt_x_h = tf.reshape(enc_out, [-1, H])
             init = xavier_initializer(True, seed)
 
             with tf.contrib.slim.arg_scope([fully_connected], weights_initializer=init):
                 if model.proj is True:
-                    hidden = tf.nn.dropout(fully_connected(rnnout_bt_x_h, H,
+                    hidden = tf.nn.dropout(fully_connected(enc_out_bt_x_h, H,
                                                            activation_fn=tf_activation(model.activation_type)), model.pkeep)
                     preds = fully_connected(hidden, nc, activation_fn=None, weights_initializer=init)
                 else:
-                    preds = fully_connected(rnnout_bt_x_h, nc, activation_fn=None, weights_initializer=init)
+                    preds = fully_connected(enc_out_bt_x_h, nc, activation_fn=None, weights_initializer=init)
             model.probs = tf.reshape(preds, [-1, T, nc])
             model.best = tf.argmax(model.probs, 2)
         return model

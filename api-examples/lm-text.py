@@ -21,4 +21,4 @@ else:
 print(texts)
 
 m = bl.LanguageModelService.load(args.model)
-print(m.run(texts))
+print(m.predict(texts))

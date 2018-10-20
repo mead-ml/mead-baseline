@@ -1,7 +1,7 @@
 import os
 import logging
 import numpy as np
-from baseline.utils import export, optional_params
+from baseline.utils import export, optional_params, register
 
 __all__ = []
 exporter = export(__all__)
@@ -13,14 +13,7 @@ BASELINE_REPORTING = {}
 @optional_params
 def register_reporting(cls, name=None):
     """Register a function as a plug-in"""
-    if name is None:
-        name = cls.__name__
-
-    if name in BASELINE_REPORTING:
-        raise Exception('Error: attempt to re-defined previously registered handler {} in trainer registry'.format(name))
-
-    BASELINE_REPORTING[name] = cls
-    return cls
+    return register(cls, BASELINE_REPORTING, name, 'reporting')
 
 
 class ReportingHook(object):

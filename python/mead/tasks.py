@@ -152,8 +152,8 @@ class Task(object):
         self.config_params['train']['basedir'] = basedir
         self.config_file = kwargs.get('config_file')
         self._setup_task()
-        self._configure_reporting(config_params.get('reporting', {}), **kwargs)
         self._load_user_modules()
+        self._configure_reporting(config_params.get('reporting', {}), **kwargs)
         self.dataset = datasets_set[self.config_params['dataset']]
         self.reader = self._create_task_specific_reader()
 
@@ -206,7 +206,7 @@ class Task(object):
 
         1. call `_load_dataset()` which initializes the `DataFeed` fields of this class
         2. call `baseline.save_vectorizers()` which write out the bound `vectorizers` fields to a file in the `basedir`
-        3. call `backend.train.fit()` which executes the training procedure and  yields a saved model
+        3. call `baseline.train.fit()` which executes the training procedure and  yields a saved model
         4. call `baseline.zip_files()` which zips all files in the `basedir` with the same `PID` as this process
         5. call `_close_reporting_hooks()` which lets the reporting hooks know that the job is finished
         :return: Nothing
@@ -233,6 +233,11 @@ class Task(object):
                     if report_arg not in reporting[report_type]:
                         reporting[report_type][report_arg] = report_val
         reporting_hooks = list(reporting.keys())
+        for settings in reporting.values():
+            try:
+                import_user_module(settings.get('module', ''))
+            except (ImportError, ValueError):
+                pass
 
         self.reporting = baseline.create_reporting(reporting_hooks,
                                                    reporting,

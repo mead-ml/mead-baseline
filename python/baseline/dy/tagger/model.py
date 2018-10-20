@@ -8,9 +8,9 @@ from baseline.dy.dynety import CRF, Linear, DynetModel, rnn_forward
 
 
 @register_model(task='tagger', name='default')
-class RNNTaggerModel(DynetModel, TaggerModel):
+class BasicTaggerModel(DynetModel, TaggerModel):
     def __init__(self, embeddings_set, labels, dropout=0.5, layers=1, **kwargs):
-        super(RNNTaggerModel, self).__init__(kwargs['pc'])
+        super(BasicTaggerModel, self).__init__(kwargs['pc'])
         self.pdrop = dropout
         self.labels = labels
         self.hsz = int(kwargs['hsz'])
@@ -38,7 +38,7 @@ class RNNTaggerModel(DynetModel, TaggerModel):
         return input_
 
     def __str__(self):
-        str_ = super(RNNTaggerModel, self).__str__()
+        str_ = super(BasicTaggerModel, self).__str__()
         return "Auto-batching: \n{}".format(str_)
 
     def _init_embed(self, embeddings):

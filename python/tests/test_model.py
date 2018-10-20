@@ -63,7 +63,7 @@ def test_classify_config_settings(WordCharLength):
     """
     classifier = create_dummy_classifier()
 
-    WordCharLength.run.return_value = {}
+    WordCharLength.predict.return_value = {}
 
     result = classifier.classify_text(TOKENS, **FULL_CONFIG)
 
@@ -79,7 +79,7 @@ def test_classify_self_settings(WordCharLength):
 
     classifier = create_dummy_classifier(mxlen=999, mxwlen=666)
 
-    WordCharLength.run.return_value = {}
+    WordCharLength.predict.return_value = {}
 
     result = classifier.classify_text(TOKENS, **NO_LENGTH_CONFIG)
 
@@ -95,7 +95,7 @@ def test_classify_token_settings(WordCharLength):
     # mxlen and mxwlen not set in class. it should be determined from tokens.
     classifier = create_dummy_classifier(mxlen=None, mxwlen=None)
 
-    WordCharLength.run.return_value = {}
+    WordCharLength.predict.return_value = {}
 
     result = classifier.classify_text(TOKENS, **NO_LENGTH_CONFIG)
 
@@ -111,7 +111,7 @@ def test_tagger_config_settings(WordCharLength):
     """
     tagger = create_dummy_tagger()
 
-    WordCharLength.run.return_value = {'length': [4]}
+    WordCharLength.predict.return_value = {'length': [4]}
 
     result = tagger.predict_text(TOKENS, **FULL_CONFIG)
 
@@ -126,7 +126,7 @@ def test_tagger_self_settings(WordCharLength):
     """
     tagger = create_dummy_tagger(mxlen=999, mxwlen=666)
 
-    WordCharLength.run.return_value = {'length': [4]}
+    WordCharLength.predict.return_value = {'length': [4]}
 
     result = tagger.predict_text(TOKENS, **NO_LENGTH_CONFIG)
 
@@ -142,7 +142,7 @@ def test_tagger_token_settings(WordCharLength):
     # mxlen and mxwlen not set in class. it should be determined from tokens.
     tagger = create_dummy_tagger(mxlen=None, mxwlen=None)
 
-    WordCharLength.run.return_value = {'length': [4]}
+    WordCharLength.predict.return_value = {'length': [4]}
 
     result = tagger.predict_text(TOKENS, **NO_LENGTH_CONFIG)
 
