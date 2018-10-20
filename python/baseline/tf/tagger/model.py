@@ -9,7 +9,7 @@ from baseline.utils import ls_props, read_json, write_json
 from baseline.tf.embeddings import *
 from baseline.version import __version__
 from baseline.model import register_model
-
+from baseline.utils import listify
 
 class TaggerModelBase(TaggerModel):
 
@@ -353,6 +353,7 @@ class CNNTaggerModel(TaggerModelBase):
         hsz = int(kwargs['hsz'])
         filts = kwargs.get('wfiltsz', None)
         if filts is None:
-                filts = [5]
-        cnnout = stacked_cnn(embedseq, hsz, self.pkeep, nlayers, filts=filts)
+            filts = 5
+
+        cnnout = stacked_cnn(embedseq, hsz, self.pkeep, nlayers, filts=listify(filts))
         return cnnout

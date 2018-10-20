@@ -241,13 +241,15 @@ class CNNTaggerModel(TaggerModelBase):
     def init_encoder(self, input_sz, **kwargs):
         layers = int(kwargs.get('layers', 1))
         pdrop = float(kwargs.get('dropout', 0.5))
-        filtsz = kwargs.get('filtsz', 5)
+        filtsz = kwargs.get('wfiltsz', 5)
         activation_type = kwargs.get('activation_type', 'relu')
         hsz = int(kwargs['hsz'])
-        self.encoder = ConvEncoderStack(input_sz, hsz, filtsz, activation_type, pdrop, layers)
+        self.encoder = ConvEncoderStack(input_sz, hsz, filtsz, pdrop, layers, activation_type)
+        return hsz
 
     def encode(self, tbh, lengths):
-        # tbh
-        bht = tbh.permute([1, 0, 2]).contiguous()
+        # bct
+        bht = tbh.permute(1, 2, 0).contiguous()
         bht = self.encoder(bht)
-        return bht.transpose([1, 2, 0]).contiguous()
+        # bht -> tbh
+        return bht.permute(2, 0, 1).contiguous()

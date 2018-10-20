@@ -349,11 +349,11 @@ class ResidualBlock(nn.Module):
 class SkipConnection(ResidualBlock):
 
     def __init__(self, input_size, activation='relu'):
+        super(SkipConnection, self).__init__(None)
         self.layer = nn.Sequential(
             nn.Linear(input_size, input_size),
             pytorch_activation(activation)
         )
-        super(SkipConnection, self).__init__(self.layer)
 
 
 class LayerNorm(nn.Module):
