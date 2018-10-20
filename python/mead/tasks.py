@@ -145,7 +145,7 @@ class Task(object):
         datasets_index = read_config_file_or_json(datasets_index, 'datasets')
         datasets_set = index_by_label(datasets_index)
         self.config_params = config_params
-        basedir = self.config_params.get('basedir')
+        basedir = self.get_basedir()
         if basedir is not None and not os.path.exists(basedir):
             print('Creating: {}'.format(basedir))
             os.mkdir(basedir)
@@ -309,7 +309,7 @@ class Task(object):
     def get_basedir(self):
         """Return the base directory if provided, or CWD
         """
-        return self.config_params.get('basedir', './')
+        return self.config_params.get('basedir', './{}'.format(self.task_name()))
 
 
 @exporter
@@ -468,6 +468,7 @@ class TaggerTask(Task):
         conll_output = self.config_params.get("conll_output", None)
         baseline.train.fit(model, self.train_data, self.valid_data, self.test_data, conll_output=conll_output, txts=self.txts, **self.config_params['train'])
         baseline.zip_files(self.get_basedir())
+        self._close_reporting_hooks()
         return model
 
 

@@ -112,7 +112,7 @@ class ElmoTaggerTensorFlowExporter(TensorFlowExporter):
         class_tensor = tf.constant(list_of_labels)
         table = tf.contrib.lookup.index_to_string_table_from_tensor(class_tensor)
         classes = table.lookup(tf.to_int64(indices))
-        self.restore_model(sess, model_file)
+        self.restore_checkpoint(sess, model_file)
 
         sig_input = SignatureInput(None, raw_posts)
         sig_output = SignatureOutput(classes, values)

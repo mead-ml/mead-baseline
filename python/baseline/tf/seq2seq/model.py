@@ -218,30 +218,33 @@ class Seq2SeqModel(EncoderDecoderModel):
 
     @classmethod
     def create(cls, src_embeddings, tgt_embedding, **kwargs):
-
+        predict = kwargs.get('predict', False)
         gpus = kwargs.get('gpus')
         if gpus is not None:
             return Seq2SeqParallelModel(Seq2SeqModel.create, src_embeddings, tgt_embedding, **kwargs)
         model = cls()
         model.src_embeddings = src_embeddings
         model.tgt_embedding = tgt_embedding
-        model.tgt_embedding.x = tgt_embedding.create_placeholder(tgt_embedding.name)
+
+        model.src_len = kwargs.get('src_len', tf.placeholder(tf.int32, [None], name="src_len"))
+        model.tgt_len = kwargs.get('tgt_len', tf.placeholder(tf.int32, [None], name="tgt_len"))
+        #model.tgt = kwargs.get('tgt', tf.placeholder(tf.int32, [None, None], name="tgt"))
+        model.mx_tgt_len = kwargs.get('mx_tgt_len', tf.placeholder(tf.int32, name="mx_tgt_len"))
+        model.src_lengths_key = kwargs.get('src_lengths_key')
+
+        if not predict:
+            model.tgt_embedding.x = tgt_embedding.create_placeholder(tgt_embedding.name)
+
         GO = kwargs.get('GO')
         EOS = kwargs.get('EOS')
         model.GO = GO
         model.EOS = EOS
         model.id = kwargs.get('id', 0)
-        model.src_lengths_key = kwargs.get('src_lengths_key')
-        model.src_len = kwargs.get('src_len', tf.placeholder(tf.int32, [None], name="src_len"))
-        model.tgt_len = kwargs.get('tgt_len', tf.placeholder(tf.int32, [None], name="tgt_len"))
-        #model.tgt = kwargs.get('tgt', tf.placeholder(tf.int32, [None, None], name="tgt"))
-        model.mx_tgt_len = kwargs.get('mx_tgt_len', tf.placeholder(tf.int32, name="mx_tgt_len"))
 
         hsz = int(kwargs['hsz'])
         attn = kwargs.get('model_type') == 'attn'
         layers = int(kwargs.get('layers', 1))
         rnntype = kwargs.get('rnntype', 'lstm')
-        predict = kwargs.get('predict', False)
         beam_width = kwargs.get('beam', 1) if predict is True else 1
         sampling = kwargs.get('sampling', False)
         sampling_temp = kwargs.get('sampling_temp', 1.0)
@@ -342,6 +345,13 @@ class Seq2SeqModel(EncoderDecoderModel):
             ##model.GO = GO
             ##model.EOS = EOS
             return model
+    @property
+    def src_lengths_key(self):
+        return self._src_lengths_key
+
+    @src_lengths_key.setter
+    def src_lengths_key(self, value):
+        self._src_lengths_key = value
 
     def set_saver(self, saver):
         self.saver = saver
