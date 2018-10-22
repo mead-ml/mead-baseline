@@ -2,21 +2,23 @@ from baseline.model import LanguageModel, register_model
 from baseline.dy.dynety import *
 
 
-@register_model(task='lm', name='default')
-class BasicLanguageModel(DynetModel, LanguageModel):
+class LanguageModelBase(DynetModel, LanguageModel):
 
     @classmethod
     def create(cls, embeddings, **kwargs):
         return cls(embeddings, **kwargs)
 
     def __init__(self, embeddings, layers=1, hsz=650, dropout=None, **kwargs):
-        super(BasicLanguageModel, self).__init__(kwargs['pc'])
+        super(LanguageModelBase, self).__init__(kwargs['pc'])
         self.tgt_key = kwargs.get('tgt_key')
         vsz = embeddings[self.tgt_key].vsz
         dsz = self.init_embed(embeddings)
-        self._rnn = dy.VanillaLSTMBuilder(layers, dsz, hsz, self.pc)
+        self.init_decode(dsz, layers, hsz, **kwargs)
         self._output = Linear(vsz, hsz, self.pc, name="output")
         self.dropout = dropout
+
+    def init_decode(self, dsz, layers=1, hsz=650, **kwargs):
+        pass
 
     def init_embed(self, embeddings):
         dsz = 0
@@ -46,13 +48,7 @@ class BasicLanguageModel(DynetModel, LanguageModel):
         return [self._output(x) for x in input_]
 
     def decode(self, input_, state, train):
-        if train:
-            if self.dropout is not None:
-                self._rnn.set_dropout(self.dropout)
-        else:
-            self._rnn.disable_dropout()
-        transduced, last_state = rnn_forward_with_state(self._rnn, input_, None, state)
-        return transduced, last_state
+        pass
 
     def forward(self, input_, state=None, train=True):
         input_ = self.embed(input_)
@@ -67,3 +63,23 @@ class BasicLanguageModel(DynetModel, LanguageModel):
     def load(self, file_name):
         self.pc.populate(file_name)
         return self
+
+
+@register_model(task='lm', name='default')
+class RNNLanguageModel(LanguageModelBase):
+
+    def __init__(self, embeddings, layers=1, hsz=650, dropout=None, **kwargs):
+        self._rnn = None
+        super(RNNLanguageModel, self).__init__(embeddings, layers, hsz, dropout, **kwargs)
+
+    def init_decode(self, dsz, layers=1, hsz=650, **kwargs):
+        self._rnn = dy.VanillaLSTMBuilder(layers, dsz, hsz, self.pc)
+
+    def decode(self, input_, state, train):
+        if train:
+            if self.dropout is not None:
+                self._rnn.set_dropout(self.dropout)
+        else:
+            self._rnn.disable_dropout()
+        transduced, last_state = rnn_forward_with_state(self._rnn, input_, None, state)
+        return transduced, last_state

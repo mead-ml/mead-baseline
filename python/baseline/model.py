@@ -53,6 +53,7 @@ def create_model_for(activity, input_, output_, **kwargs):
         return creator_fn(input_, output_, **kwargs)
     return creator_fn(input_, **kwargs)
 
+
 @exporter
 def create_model(embeddings, labels, **kwargs):
     return create_model_for('classify', embeddings, labels, **kwargs)

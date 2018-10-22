@@ -6,43 +6,20 @@ from baseline.utils import read_json, write_json, ls_props
 from google.protobuf import text_format
 
 
-@register_model(task='lm', name='default')
-class BasicLanguageModel(LanguageModel):
+class LanguageModelBase(LanguageModel):
 
     def __init__(self):
-        self.layers = None
-        self.hsz = None
-        self.rnntype = 'lstm'
         self.pkeep = None
         self.saver = None
-
-    @property
-    def vdrop(self):
-        return self._vdrop
-
-    @vdrop.setter
-    def vdrop(self, value):
-        self._vdrop = value
+        self.layers = None
+        self.hsz = None
+        self.probs = None
 
     def save_using(self, saver):
         self.saver = saver
 
     def decode(self, inputs, vsz):
-
-        def cell():
-            return lstm_cell_w_dropout(self.hsz, self.pkeep, variational=self.vdrop)
-
-        rnnfwd = tf.contrib.rnn.MultiRNNCell([cell() for _ in range(self.layers)], state_is_tuple=True)
-        self.initial_state = rnnfwd.zero_state(self.batchsz, tf.float32)
-        rnnout, state = tf.nn.dynamic_rnn(rnnfwd, inputs, initial_state=self.initial_state, dtype=tf.float32)
-        output = tf.reshape(tf.concat(rnnout, 1), [-1, self.hsz])
-        vocab_w = tf.get_variable(
-            "vocab_w", [self.hsz, vsz], dtype=tf.float32)
-        vocab_b = tf.get_variable("vocab_b", [vsz], dtype=tf.float32)
-
-        self.logits = tf.nn.xw_plus_b(output, vocab_w, vocab_b, name="logits")
-        self.probs = tf.nn.softmax(self.logits, name="softmax")
-        self.final_state = state
+        pass
 
     def save_values(self, basename):
         self.saver.save(self.sess, basename)
@@ -57,7 +34,6 @@ class BasicLanguageModel(LanguageModel):
         base = path[-1]
         outdir = '/'.join(path[:-1])
 
-        #state = {'hsz': self.hsz, 'batchsz': self.batchsz, 'layers': self.layers}
         embeddings_info = {}
         for k, v in self.embeddings.items():
             embeddings_info[k] = v.__class__.__name__
@@ -118,8 +94,6 @@ class BasicLanguageModel(LanguageModel):
         lm.y = kwargs.get('y', tf.placeholder(tf.int32, [None, None], name="y"))
         lm.batchsz = kwargs['batchsz']
         lm.sess = kwargs.get('sess', tf.Session())
-        lm.rnntype = kwargs.get('rnntype', 'lstm')
-        lm.vdrop = kwargs.get('variational_dropout', False)
         lm.pkeep = kwargs.get('pkeep', tf.placeholder(tf.float32, name="pkeep"))
         pdrop = kwargs.get('pdrop', 0.5)
         lm.pdrop_value = pdrop
@@ -134,7 +108,7 @@ class BasicLanguageModel(LanguageModel):
 
             inputs = lm.embed()
             lm.layers = kwargs.get('layers', 1)
-            lm.decode(inputs, embeddings[lm.tgt_key].vsz)
+            lm.decode(inputs, embeddings[lm.tgt_key].vsz, **kwargs)
             return lm
 
     def embed(self):
@@ -150,8 +124,8 @@ class BasicLanguageModel(LanguageModel):
         word_embeddings = tf.concat(values=all_embeddings_out, axis=2)
         return tf.nn.dropout(word_embeddings, self.pkeep)
 
-    @staticmethod
-    def load(basename, **kwargs):
+    @classmethod
+    def load(cls, basename, **kwargs):
         state = read_json(basename + '.state')
         if 'predict' in kwargs:
             state['predict'] = kwargs['predict']
@@ -182,7 +156,7 @@ class BasicLanguageModel(LanguageModel):
             Constructor = eval(class_name)
             embeddings[key] = Constructor(key, **embed_args)
 
-        model = BasicLanguageModel.create(embeddings, **state)
+        model = cls.create(embeddings, **state)
         for prop in ls_props(model):
             if prop in state:
                 setattr(model, prop, state[prop])
@@ -195,3 +169,47 @@ class BasicLanguageModel(LanguageModel):
         model.saver = tf.train.Saver()
         model.saver.restore(model.sess, basename)
         return model
+
+
+@register_model(task='lm', name='default')
+class RNNLanguageModel(LanguageModelBase):
+    def __init__(self):
+        super(RNNLanguageModel, self).__init__()
+        self.rnntype = 'lstm'
+
+    @property
+    def vdrop(self):
+        return self._vdrop
+
+    @vdrop.setter
+    def vdrop(self, value):
+        self._vdrop = value
+
+    def decode(self, inputs, vsz, **kwargs):
+
+        def cell():
+            return lstm_cell_w_dropout(self.hsz, self.pkeep, variational=self.vdrop)
+
+        self.rnntype = kwargs.get('rnntype', 'lstm')
+        self.vdrop = kwargs.get('variational_dropout', False)
+
+        rnnfwd = tf.contrib.rnn.MultiRNNCell([cell() for _ in range(self.layers)], state_is_tuple=True)
+        self.initial_state = rnnfwd.zero_state(self.batchsz, tf.float32)
+        rnnout, state = tf.nn.dynamic_rnn(rnnfwd, inputs, initial_state=self.initial_state, dtype=tf.float32)
+        h = tf.reshape(tf.concat(rnnout, 1), [-1, self.hsz])
+        self.logits = self.output(h, vsz)
+        self.probs = tf.nn.softmax(self.logits, name="softmax")
+        self.final_state = state
+
+    def output(self, h, vsz):
+        # Do weight sharing if we can
+        if self.hsz == self.embeddings[self.tgt_key].get_dsz():
+            with tf.variable_scope(self.embeddings[self.tgt_key].scope, reuse=True):
+                W = tf.get_variable("W")
+            return tf.matmul(h, W, transpose_b=True)
+        else:
+            vocab_w = tf.get_variable(
+                "vocab_w", [self.hsz, vsz], dtype=tf.float32)
+            vocab_b = tf.get_variable("vocab_b", [vsz], dtype=tf.float32)
+
+            return tf.nn.xw_plus_b(h, vocab_w, vocab_b, name="logits")

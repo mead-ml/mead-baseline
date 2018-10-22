@@ -5,10 +5,9 @@ import os
 import math
 
 
-@register_model(task='lm', name='default')
-class BasicLanguageModel(nn.Module, LanguageModel):
+class LanguageModelBase(nn.Module, LanguageModel):
     def __init__(self):
-        super(BasicLanguageModel, self).__init__()
+        super(LanguageModelBase, self).__init__()
 
     def save(self, outname):
         torch.save(self, outname)
@@ -16,8 +15,8 @@ class BasicLanguageModel(nn.Module, LanguageModel):
     def create_loss(self):
         return SequenceCriterion(LossFn=nn.CrossEntropyLoss)
 
-    @staticmethod
-    def load(filename, **kwargs):
+    @classmethod
+    def load(cls, filename, **kwargs):
         if not os.path.exists(filename):
             filename += '.pyt'
         model = torch.load(filename)
@@ -61,25 +60,10 @@ class BasicLanguageModel(nn.Module, LanguageModel):
         return input_sz
 
     def init_decode(self, vsz, **kwargs):
-        pdrop = float(kwargs.get('dropout', 0.5))
-        vdrop = bool(kwargs.get('variational_dropout', False))
-        unif = float(kwargs.get('unif', 0.0))
-        if vdrop:
-            self.rnn_dropout = VariationalDropout(pdrop)
-        else:
-            self.rnn_dropout = nn.Dropout(pdrop)
-
-        self.rnn = pytorch_lstm(self.dsz, self.hsz, 'lstm', self.layers, pdrop, batch_first=True)
-        self.decoder = nn.Sequential()
-        append2seq(self.decoder, (
-            pytorch_linear(self.hsz, vsz, unif),
-        ))
+        pass
 
     def decode(self, emb, hidden):
-        output, hidden = self.rnn(emb, hidden)
-        output = self.rnn_dropout(output).contiguous()
-        decoded = self.decoder(output.view(output.size(0)*output.size(1), output.size(2)))
-        return decoded.view(output.size(0), output.size(1), decoded.size(1)), hidden
+        pass
 
     @classmethod
     def create(cls, embeddings, **kwargs):
@@ -99,3 +83,31 @@ class BasicLanguageModel(nn.Module, LanguageModel):
     def forward(self, input, hidden):
         emb = self.embed(input)
         return self.decode(emb, hidden)
+
+
+@register_model(task='lm', name='default')
+class RNNLanguageModel(LanguageModelBase):
+
+    def __init__(self):
+        super(RNNLanguageModel, self).__init__()
+
+    def init_decode(self, vsz, **kwargs):
+        pdrop = float(kwargs.get('dropout', 0.5))
+        vdrop = bool(kwargs.get('variational_dropout', False))
+        unif = float(kwargs.get('unif', 0.0))
+        if vdrop:
+            self.rnn_dropout = VariationalDropout(pdrop)
+        else:
+            self.rnn_dropout = nn.Dropout(pdrop)
+
+        self.rnn = pytorch_lstm(self.dsz, self.hsz, 'lstm', self.layers, pdrop, batch_first=True)
+        self.decoder = nn.Sequential()
+        append2seq(self.decoder, (
+            pytorch_linear(self.hsz, vsz, unif),
+        ))
+
+    def decode(self, emb, hidden):
+        output, hidden = self.rnn(emb, hidden)
+        output = self.rnn_dropout(output).contiguous()
+        decoded = self.decoder(output.view(output.size(0)*output.size(1), output.size(2)))
+        return decoded.view(output.size(0), output.size(1), decoded.size(1)), hidden
