@@ -19,7 +19,7 @@ class RNFWordClassifier(ClassifierModelBase):
     def __init__(self):
         super(RNFWordClassifier, self).__init__()
 
-    def _init_pool(self, dsz, **kwargs):
+    def init_pool(self, dsz, **kwargs):
         self.filtsz = kwargs['filtsz']
         self.mxlen = kwargs.get('mxlen', 100)
         pdrop = kwargs.get('dropout', 0.4)
@@ -29,7 +29,7 @@ class RNFWordClassifier(ClassifierModelBase):
         self.pool_dropout = nn.Dropout(kwargs.get('pool_dropout', 0.))
         return rnnsz
 
-    def _pool(self, btc, lengths):
+    def pool(self, btc, lengths):
 
         btc = self.dropout_pre(btc)
         btfc = ngrams(btc, self.filtsz, self.mxlen)

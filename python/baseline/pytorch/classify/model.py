@@ -28,13 +28,13 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
         model = cls()
         model.pdrop = kwargs.get('pdrop', 0.5)
         model.lengths_key = kwargs.get('lengths_key')
-        input_sz = model._init_embed(embeddings)
+        input_sz = model.init_embed(embeddings)
         model.gpu = not bool(kwargs.get('nogpu', False))
         model.labels = labels
         model.log_softmax = nn.LogSoftmax(dim=1)
-        pool_dim = model._init_pool(input_sz, **kwargs)
-        stacked_dim = model._init_stacked(pool_dim, **kwargs)
-        model._init_output(stacked_dim, len(labels))
+        pool_dim = model.init_pool(input_sz, **kwargs)
+        stacked_dim = model.init_stacked(pool_dim, **kwargs)
+        model.init_output(stacked_dim, len(labels))
         print(model)
         return model
 
@@ -76,12 +76,12 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
 
     def forward(self, input):
         # BxTxC
-        embeddings = self._embed(input)
-        pooled = self._pool(embeddings, input['lengths'])
-        stacked = self._stacked(pooled)
+        embeddings = self.embed(input)
+        pooled = self.pool(embeddings, input['lengths'])
+        stacked = self.stacked(pooled)
         return self.output(stacked)
 
-    def _embed(self, input):
+    def embed(self, input):
         all_embeddings = []
         for k, embedding in self.embeddings.items():
             all_embeddings.append(embedding.encode(input[k]))
@@ -103,15 +103,15 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
     def get_labels(self):
         return self.labels
 
-    def _pool(self, embeddings, lengths):
+    def pool(self, embeddings, lengths):
         pass
 
-    def _stacked(self, pooled):
-        if self.stacked is None:
+    def stacked(self, pooled):
+        if self.stacked_layers is None:
             return pooled
-        return self.stacked(pooled)
+        return self.stacked_layers(pooled)
 
-    def _init_embed(self, embeddings, **kwargs):
+    def init_embed(self, embeddings, **kwargs):
         self.embeddings = EmbeddingsContainer()
         input_sz = 0
         for k, embedding in embeddings.items():
@@ -119,12 +119,12 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
             input_sz += embedding.get_dsz()
         return input_sz
 
-    def _init_stacked(self, input_dim, **kwargs):
+    def init_stacked(self, input_dim, **kwargs):
         hszs = listify(kwargs.get('hsz', []))
         if len(hszs) == 0:
-            self.stacked = None
+            self.stacked_layers = None
             return input_dim
-        self.stacked = nn.Sequential()
+        self.stacked_layers = nn.Sequential()
         layers = []
         in_layer_sz = input_dim
         for i, hsz in enumerate(hszs):
@@ -132,17 +132,17 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
             layers.append(nn.ReLU())
             layers.append(nn.Dropout(self.pdrop))
             in_layer_sz = hsz
-        append2seq(self.stacked, layers)
+        append2seq(self.stacked_layers, layers)
         return in_layer_sz
 
-    def _init_output(self, input_dim, nc):
+    def init_output(self, input_dim, nc):
         self.output = nn.Sequential()
         append2seq(self.output, (
             nn.Linear(input_dim, nc),
             nn.LogSoftmax(dim=1)
         ))
 
-    def _init_pool(self, dsz, **kwargs):
+    def init_pool(self, dsz, **kwargs):
         pass
 
 
@@ -152,13 +152,13 @@ class ConvModel(ClassifierModelBase):
     def __init__(self):
         super(ConvModel, self).__init__()
 
-    def _init_pool(self, dsz, **kwargs):
+    def init_pool(self, dsz, **kwargs):
         filtsz = kwargs['filtsz']
         cmotsz = kwargs['cmotsz']
         self.parallel_conv = ParallelConv(dsz, cmotsz, filtsz, "relu", self.pdrop)
         return self.parallel_conv.outsz
 
-    def _pool(self, btc, lengths):
+    def pool(self, btc, lengths):
         embeddings = btc.transpose(1, 2).contiguous()
         return self.parallel_conv(embeddings)
 
@@ -169,7 +169,7 @@ class LSTMModel(ClassifierModelBase):
     def __init__(self):
         super(LSTMModel, self).__init__()
 
-    def _init_pool(self, dsz, **kwargs):
+    def init_pool(self, dsz, **kwargs):
         unif = kwargs.get('unif')
         hsz = kwargs.get('rnnsz', kwargs.get('hsz', 100))
         if type(hsz) is list:
@@ -179,7 +179,7 @@ class LSTMModel(ClassifierModelBase):
         self.lstm = pytorch_lstm(dsz, hsz, rnntype, 1, self.pdrop, unif, batch_first=False, initializer=weight_init)
         return hsz
 
-    def _pool(self, embeddings, lengths):
+    def pool(self, embeddings, lengths):
 
         embeddings = embeddings.transpose(0, 1)
         packed = torch.nn.utils.rnn.pack_padded_sequence(embeddings, lengths.tolist())
@@ -198,15 +198,15 @@ class LSTMModel(ClassifierModelBase):
 
 class NBowBase(ClassifierModelBase):
 
-    def _init__(self):
-        super(NBowBase, self)._init__()
+    def __init__(self):
+        super(NBowBase, self).__init__()
 
-    def _init_pool(self, dsz, **kwargs):
+    def init_pool(self, dsz, **kwargs):
         return dsz
 
-    def _init_stacked(self, input_dim, **kwargs):
+    def init_stacked(self, input_dim, **kwargs):
         kwargs['hsz'] = kwargs.get('hsz', [100])
-        return super(NBowBase, self)._init_stacked(input_dim, **kwargs)
+        return super(NBowBase, self).init_stacked(input_dim, **kwargs)
 
 
 @register_model(task='classify', name='nbow')
@@ -215,7 +215,7 @@ class NBowModel(NBowBase):
     def __init__(self):
         super(NBowModel, self).__init__()
 
-    def _pool(self, embeddings):
+    def pool(self, embeddings):
         return torch.mean(embeddings, 1, False)
 
 
@@ -224,7 +224,7 @@ class NBowMaxModel(NBowBase):
     def __init__(self):
         super(NBowMaxModel, self).__init__()
 
-    def _pool(self, embeddings, lengths):
+    def pool(self, embeddings, lengths):
         dmax, _ = torch.max(embeddings, 1, False)
         return dmax
 
@@ -240,14 +240,14 @@ class CompositePoolingModel(ClassifierModelBase):
         super(CompositePoolingModel, self).__init__()
         self.SubModels = None
 
-    def _init_pool(self, dsz, **kwargs):
+    def init_pool(self, dsz, **kwargs):
         self.SubModels = [eval(model) for model in kwargs.get('sub')]
         pool_sz = 0
         for SubClass in self.SubModels:
-            pool_sz += SubClass._init_pool(self, dsz, **kwargs)
+            pool_sz += SubClass.init_pool(self, dsz, **kwargs)
         return pool_sz
 
-    def _pool(self, embeddings, lengths):
+    def pool(self, embeddings, lengths):
         """Cycle each sub-model and call its pool method, then concatenate along final dimension
 
         :param word_embeddings: The input graph
@@ -259,7 +259,7 @@ class CompositePoolingModel(ClassifierModelBase):
 
         pooling = []
         for SubClass in self.SubModels:
-            pooling.append(SubClass._pool(self, embeddings, lengths))
+            pooling.append(SubClass.pool(self, embeddings, lengths))
         return torch.cat(pooling, -1)
 
     def make_input(self, batch_dict):

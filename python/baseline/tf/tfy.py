@@ -270,6 +270,7 @@ def stacked_cnn(inputs, hsz, pkeep, nlayers, filts=[5], activation_fn=tf.nn.relu
     with tf.variable_scope(scope):
         layers = []
         for filt in filts:
+            # The first one cannot have a residual conn, since input size may differ
             layer = tf.nn.dropout(tf.layers.conv1d(inputs,
                                                    hsz,
                                                    filt,

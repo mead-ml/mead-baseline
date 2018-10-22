@@ -13,25 +13,25 @@ class BasicLanguageModel(DynetModel, LanguageModel):
         super(BasicLanguageModel, self).__init__(kwargs['pc'])
         self.tgt_key = kwargs.get('tgt_key')
         vsz = embeddings[self.tgt_key].vsz
-        dsz = self._init_embed(embeddings)
+        dsz = self.init_embed(embeddings)
         self._rnn = dy.VanillaLSTMBuilder(layers, dsz, hsz, self.pc)
         self._output = Linear(vsz, hsz, self.pc, name="output")
         self.dropout = dropout
 
-    def _init_embed(self, embeddings):
+    def init_embed(self, embeddings):
         dsz = 0
         self.embeddings = embeddings
         for embedding in self.embeddings.values():
             dsz += embedding.get_dsz()
         return dsz
 
-    def _embed(self, batch_dict):
+    def embed(self, batch_dict):
         all_embeddings_lists = []
         for k, embedding in self.embeddings.items():
             all_embeddings_lists.append(embedding.encode(batch_dict[k]))
 
-        embed = dy.concatenate(all_embeddings_lists, d=1)
-        return embed
+        embedded = dy.concatenate(all_embeddings_lists, d=1)
+        return embedded
 
     def make_input(self, batch_dict):
         example_dict = dict({})
@@ -45,14 +45,18 @@ class BasicLanguageModel(DynetModel, LanguageModel):
     def output(self, input_):
         return [self._output(x) for x in input_]
 
-    def forward(self, input_, state=None, train=True):
-        input_ = self._embed(input_)
+    def decode(self, input_, state, train):
         if train:
             if self.dropout is not None:
                 self._rnn.set_dropout(self.dropout)
         else:
             self._rnn.disable_dropout()
         transduced, last_state = rnn_forward_with_state(self._rnn, input_, None, state)
+        return transduced, last_state
+
+    def forward(self, input_, state=None, train=True):
+        input_ = self.embed(input_)
+        transduced, last_state = self.decode(input_, state, train)
         output = self.output(transduced)
         return output, last_state
 

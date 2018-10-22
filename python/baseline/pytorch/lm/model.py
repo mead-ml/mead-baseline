@@ -28,12 +28,6 @@ class BasicLanguageModel(nn.Module, LanguageModel):
         return (torch.autograd.Variable(weight.new(self.layers, batchsz, self.hsz).zero_()),
                 torch.autograd.Variable(weight.new(self.layers, batchsz, self.hsz).zero_()))
 
-    def _rnnlm(self, emb, hidden):
-        output, hidden = self.rnn(emb, hidden)
-        output = self.rnn_dropout(output).contiguous()
-        decoded = self.decoder(output.view(output.size(0)*output.size(1), output.size(2)))
-        return decoded.view(output.size(0), output.size(1), decoded.size(1)), hidden
-
     def make_input(self, batch_dict):
         example_dict = dict({})
         for key in self.embeddings.keys():
@@ -49,13 +43,16 @@ class BasicLanguageModel(nn.Module, LanguageModel):
             example_dict['y'] = y
         return example_dict
 
-    def _embed(self, input):
+    def embed(self, input):
         all_embeddings = []
         for k, embedding in self.embeddings.items():
             all_embeddings.append(embedding.encode(input[k]))
-        return torch.cat(all_embeddings, 2)
+        embedded = torch.cat(all_embeddings, 2)
+        return self.embed_dropout(embedded)
 
-    def _init_embed(self, embeddings, **kwargs):
+    def init_embed(self, embeddings, **kwargs):
+        pdrop = float(kwargs.get('dropout', 0.5))
+        self.embed_dropout = nn.Dropout(pdrop)
         self.embeddings = EmbeddingsContainer()
         input_sz = 0
         for k, embedding in embeddings.items():
@@ -63,38 +60,42 @@ class BasicLanguageModel(nn.Module, LanguageModel):
             input_sz += embedding.get_dsz()
         return input_sz
 
+    def init_decode(self, vsz, **kwargs):
+        pdrop = float(kwargs.get('dropout', 0.5))
+        vdrop = bool(kwargs.get('variational_dropout', False))
+        unif = float(kwargs.get('unif', 0.0))
+        if vdrop:
+            self.rnn_dropout = VariationalDropout(pdrop)
+        else:
+            self.rnn_dropout = nn.Dropout(pdrop)
+
+        self.rnn = pytorch_lstm(self.dsz, self.hsz, 'lstm', self.layers, pdrop, batch_first=True)
+        self.decoder = nn.Sequential()
+        append2seq(self.decoder, (
+            pytorch_linear(self.hsz, vsz, unif),
+        ))
+
+    def decode(self, emb, hidden):
+        output, hidden = self.rnn(emb, hidden)
+        output = self.rnn_dropout(output).contiguous()
+        decoded = self.decoder(output.view(output.size(0)*output.size(1), output.size(2)))
+        return decoded.view(output.size(0), output.size(1), decoded.size(1)), hidden
+
     @classmethod
     def create(cls, embeddings, **kwargs):
 
         lm = cls()
         lm.gpu = kwargs.get('gpu', True)
         lm.hsz = int(kwargs['hsz'])
-        unif = float(kwargs.get('unif', 0.0))
         lm.layers = int(kwargs.get('layers', 1))
-        pdrop = float(kwargs.get('dropout', 0.5))
         lm.tgt_key = kwargs.get('tgt_key')
         if lm.tgt_key is None:
             raise Exception('Need a `tgt_key` to know which source vocabulary should be used for destination ')
 
-        lm.dsz = lm._init_embed(embeddings, **kwargs)
-        lm.dropout = nn.Dropout(pdrop)
-        lm.rnn = pytorch_lstm(lm.dsz, lm.hsz, 'lstm', lm.layers, pdrop, batch_first=True)
-        lm.decoder = nn.Sequential()
-        append2seq(lm.decoder, (
-            pytorch_linear(lm.hsz, embeddings[lm.tgt_key].get_vsz(), unif),
-        ))
-        lm.vdrop = bool(kwargs.get('variational_dropout', False))
-
-        if lm.vdrop:
-            lm.rnn_dropout = VariationalDropout(pdrop)
-        else:
-            lm.rnn_dropout = nn.Dropout(pdrop)
-
+        lm.dsz = lm.init_embed(embeddings, **kwargs)
+        lm.init_decode(embeddings[lm.tgt_key].get_vsz(), **kwargs)
         return lm
 
     def forward(self, input, hidden):
-        emb = self._encoder(input)
-        return self._rnnlm(emb, hidden)
-
-    def _encoder(self, input):
-        return self.dropout(self._embed(input))
+        emb = self.embed(input)
+        return self.decode(emb, hidden)

@@ -22,13 +22,13 @@ class Seq2SeqModel(nn.Module, EncoderDecoderModel):
         self.GO = kwargs.get('GO')
         self.EOS = kwargs.get('EOS')
         self.gpu = kwargs.get('gpu', True)
-        src_dsz, tgt_dsz = self._init_embed(src_embeddings, tgt_embedding)
+        src_dsz, tgt_dsz = self.init_embed(src_embeddings, tgt_embedding)
         self.src_lengths_key = kwargs.get('src_lengths_key')
-        self._init_encoder(src_dsz, **kwargs)
-        self._init_attn(**kwargs)
-        self._init_decoder(tgt_dsz, **kwargs)
+        self.init_encoder(src_dsz, **kwargs)
+        self.init_attn(**kwargs)
+        self.init_decoder(tgt_dsz, **kwargs)
 
-    def _init_decoder(self, input_dim, **kwargs):
+    def init_decoder(self, input_dim, **kwargs):
         """This is the hook for providing the decoder.  It provides the input size, the rest is up to the impl.
 
         The default implementation provides an RNN cell, followed by a linear projection, out to a softmax
@@ -54,7 +54,7 @@ class Seq2SeqModel(nn.Module, EncoderDecoderModel):
         self.preds = nn.Linear(dec_hsz, tgt_vsz)
         self.probs = nn.LogSoftmax(dim=1)
 
-    def _init_encoder(self, input_dim, **kwargs):
+    def init_encoder(self, input_dim, **kwargs):
         """This is the hook for providing the encoder.  It provides the input size, the rest is up to the impl.
 
         The default implementation provides a cuDNN-accelerated RNN encoder which is optionally bidirectional
@@ -68,7 +68,7 @@ class Seq2SeqModel(nn.Module, EncoderDecoderModel):
         layers = kwargs['layers']
         self.encoder_rnn = pytorch_rnn(input_dim, enc_hsz, rnntype, layers, kwargs.get('dropout', 0.5))
 
-    def _init_embed(self, src_embeddings, tgt_embedding, **kwargs):
+    def init_embed(self, src_embeddings, tgt_embedding, **kwargs):
         """This is the hook for providing embeddings.  It takes in a dictionary of `src_embeddings` and a single
         tgt_embedding` of type `PyTorchEmbedding`
 
@@ -147,7 +147,7 @@ class Seq2SeqModel(nn.Module, EncoderDecoderModel):
                 example['tgt'] = example['tgt'].cuda()
         return example
 
-    def _embed(self, input):
+    def embed(self, input):
         all_embeddings = []
         for k, embedding in self.src_embeddings.items():
             all_embeddings.append(embedding.encode(input[k]))
@@ -159,7 +159,7 @@ class Seq2SeqModel(nn.Module, EncoderDecoderModel):
         return self.decode(rnn_enc_tbh, input['src_len'], final_encoder_state, input['dst'])
 
     def encode(self, input, src_len):
-        embed_in_seq = self._embed(input)
+        embed_in_seq = self.embed(input)
         #if self.training:
         packed = torch.nn.utils.rnn.pack_padded_sequence(embed_in_seq, src_len.data.tolist())
         output_tbh, hidden = self.encoder_rnn(packed)
@@ -168,7 +168,7 @@ class Seq2SeqModel(nn.Module, EncoderDecoderModel):
         #    output_tbh, hidden = self.encoder_rnn(embed_in_seq)
         return output_tbh, hidden
 
-    def decode_rnn(self, context_tbh, h_i, output_i, dst, src_mask):
+    def decoder(self, context_tbh, h_i, output_i, dst, src_mask):
         embed_out_tbh = self.tgt_embedding(dst)
         context_bth = context_tbh.transpose(0, 1)
         outputs = []
@@ -191,7 +191,7 @@ class Seq2SeqModel(nn.Module, EncoderDecoderModel):
         if self.gpu:
             src_mask = src_mask.cuda()
         h_i, output_i = self.bridge(final_encoder_state, context_tbh)
-        output, _ = self.decode_rnn(context_tbh, h_i, output_i, dst, src_mask)
+        output, _ = self.decoder(context_tbh, h_i, output_i, dst, src_mask)
         pred = self.prediction(output)
         # Return as B x T x H
         return pred.transpose(0, 1).contiguous()
@@ -249,7 +249,7 @@ class Seq2SeqModel(nn.Module, EncoderDecoderModel):
                 mask_pad = dst == 0
                 dst = dst.view(1, K)
                 var = torch.autograd.Variable(dst)
-                dec_out, h_i = self.decode_rnn(context, h_i, dec_out, var, src_mask)
+                dec_out, h_i = self.decoder(context, h_i, dec_out, var, src_mask)
                 # 1 x K x V
                 wll = self.prediction(dec_out).data
                 # Just mask wll against end data
@@ -286,14 +286,13 @@ class Seq2SeqModel(nn.Module, EncoderDecoderModel):
 
             return [p[1:] for p in paths], scores
 
-
     def bridge(self, final_encoder_state, context):
         return final_encoder_state, None
 
     def attn(self, output_t, context, src_mask=None):
         return output_t
 
-    def _init_attn(self, **kwargs):
+    def init_attn(self, **kwargs):
         pass
 
     @staticmethod
@@ -331,7 +330,7 @@ class Seq2SeqAttnModel(Seq2SeqModel):
         self.hsz = kwargs['hsz']
         super(Seq2SeqAttnModel, self).__init__(src_embeddings, tgt_embedding, **kwargs)
 
-    def _init_attn(self, **kwargs):
+    def init_attn(self, **kwargs):
         attn_type = kwargs.get('attn_type', 'bahdanau').lower()
         if attn_type == 'dot':
             self.attn_module = LuongDotProductAttention(self.hsz)

@@ -259,6 +259,35 @@ def pytorch_rnn(insz, hsz, rnntype, nlayers, dropout):
     return rnn
 
 
+class ConvEncoder(nn.Module):
+    def __init__(self, insz, outsz, filtsz, pdrop, activation_type='relu'):
+        super(ConvEncoder, self).__init__()
+        self.outsz = outsz
+        pad = filtsz//2
+        self.conv = nn.Conv1d(insz, outsz, filtsz, padding=pad)
+        self.act = pytorch_activation(activation_type)
+        self.dropout = nn.Dropout(pdrop)
+
+    def forward(self, input_bct):
+        conv_out = self.act(self.conv(input_bct))
+        return self.dropout(conv_out)
+
+
+class ConvEncoderStack(nn.Module):
+
+    def __init__(self, insz, outsz, filtsz, pdrop, layers=1, activation_type='relu'):
+        super(ConvEncoderStack, self).__init__()
+
+        first_layer = ConvEncoder(insz, outsz, filtsz, pdrop, activation_type)
+        subsequent_layer = ResidualBlock(ConvEncoder(outsz, outsz, filtsz, pdrop, activation_type))
+        self.layers = nn.ModuleList([first_layer] + [copy.deepcopy(subsequent_layer) for _ in range(layers-1)])
+
+    def forward(self, x):
+        for layer in self.layers:
+            x = layer(x)
+        return x
+
+
 class ParallelConv(nn.Module):
 
     def __init__(self, insz, outsz, filtsz, activation_type, pdrop):
@@ -307,15 +336,24 @@ class Highway(nn.Module):
         return gated
 
 
-class SkipConnection(nn.Module):
+class ResidualBlock(nn.Module):
 
-    def __init__(self, input_size, activation='relu'):
-        super(SkipConnection, self).__init__()
-        self.proj = nn.Linear(input_size, input_size)
-        self.activation_fn = pytorch_activation(activation)
+    def __init__(self, layer):
+        super(ResidualBlock, self).__init__()
+        self.layer = layer
 
     def forward(self, input):
-        return self.activation_fn(self.proj(input)) + input
+        return input + self.layer(input)
+
+
+class SkipConnection(ResidualBlock):
+
+    def __init__(self, input_size, activation='relu'):
+        super(SkipConnection, self).__init__(None)
+        self.layer = nn.Sequential(
+            nn.Linear(input_size, input_size),
+            pytorch_activation(activation)
+        )
 
 
 class LayerNorm(nn.Module):
@@ -394,6 +432,7 @@ class GRUEncoder(nn.Module):
         output, hidden = self.rnn(packed)
         output, _ = torch.nn.utils.rnn.pad_packed_sequence(output)
         return output + tbc if self.residual else output
+
 
 class BaseAttention(nn.Module):
 

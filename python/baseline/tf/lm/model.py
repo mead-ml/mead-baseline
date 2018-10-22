@@ -27,7 +27,7 @@ class BasicLanguageModel(LanguageModel):
     def save_using(self, saver):
         self.saver = saver
 
-    def _rnnlm(self, inputs, vsz):
+    def decode(self, inputs, vsz):
 
         def cell():
             return lstm_cell_w_dropout(self.hsz, self.pkeep, variational=self.vdrop)
@@ -132,16 +132,23 @@ class BasicLanguageModel(LanguageModel):
 
         with tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE, initializer=weight_initializer):
 
-            all_embeddings_out = []
-            for embedding in lm.embeddings.values():
-                embeddings_out = embedding.encode()
-                all_embeddings_out.append(embeddings_out)
-
-            word_embeddings = tf.concat(values=all_embeddings_out, axis=2)
-            inputs = tf.nn.dropout(word_embeddings, lm.pkeep)
+            inputs = lm.embed()
             lm.layers = kwargs.get('layers', 1)
-            lm._rnnlm(inputs, embeddings[lm.tgt_key].vsz)
+            lm.decode(inputs, embeddings[lm.tgt_key].vsz)
             return lm
+
+    def embed(self):
+        """This method performs "embedding" of the inputs.  The base method here then concatenates along depth
+        dimension to form word embeddings
+
+        :return: A 3-d vector where the last dimension is the concatenated dimensions of all embeddings
+        """
+        all_embeddings_out = []
+        for embedding in self.embeddings.values():
+            embeddings_out = embedding.encode()
+            all_embeddings_out.append(embeddings_out)
+        word_embeddings = tf.concat(values=all_embeddings_out, axis=2)
+        return tf.nn.dropout(word_embeddings, self.pkeep)
 
     @staticmethod
     def load(basename, **kwargs):

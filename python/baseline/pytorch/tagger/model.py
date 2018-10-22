@@ -6,8 +6,7 @@ import torch.autograd
 import os
 
 
-@register_model(task='tagger', name='default')
-class BasicTaggerModel(nn.Module, TaggerModel):
+class TaggerModelBase(nn.Module, TaggerModel):
 
     PAD = 0
     UNK = 1
@@ -29,9 +28,9 @@ class BasicTaggerModel(nn.Module, TaggerModel):
         return model
 
     def __init__(self):
-        super(BasicTaggerModel, self).__init__()
+        super(TaggerModelBase, self).__init__()
 
-    def _init_embed(self, embeddings, **kwargs):
+    def init_embed(self, embeddings, **kwargs):
         self.embeddings = EmbeddingsContainer()
         input_sz = 0
         for k, embedding in embeddings.items():
@@ -46,22 +45,17 @@ class BasicTaggerModel(nn.Module, TaggerModel):
             self.dropout = nn.Dropout(pdrop)
         return input_sz
 
-    def _embed(self, input):
+    def embed(self, input):
         all_embeddings = []
         for k, embedding in self.embeddings.items():
             all_embeddings.append(embedding.encode(input[k]))
         return self.dropout(torch.cat(all_embeddings, 2))
 
-    def _init_encoder(self, input_sz, **kwargs):
-        nlayers = int(kwargs.get('layers', 1))
-        pdrop = float(kwargs.get('dropout', 0.5))
-        rnntype = kwargs.get('rnntype', 'blstm')
-        print('RNN [%s]' % rnntype)
-        unif = kwargs.get('unif', 0)
-        hsz = int(kwargs['hsz'])
-        weight_init = kwargs.get('weight_init', 'uniform')
-        self.encoder = LSTMEncoder(input_sz, hsz, rnntype, nlayers, pdrop, unif=unif, initializer=weight_init)
-        return hsz
+    def init_encoder(self, input_sz, **kwargs):
+        pass
+
+    def encode(self, words_over_time, lengths):
+        pass
 
     @classmethod
     def create(cls, embeddings, labels, **kwargs):
@@ -78,8 +72,8 @@ class BasicTaggerModel(nn.Module, TaggerModel):
         model.dropin_values = kwargs.get('dropin', {})
         model.labels = labels
 
-        input_sz = model._init_embed(embeddings, **kwargs)
-        hsz = model._init_encoder(input_sz, **kwargs)
+        input_sz = model.init_embed(embeddings, **kwargs)
+        hsz = model.init_encoder(input_sz, **kwargs)
 
         model.decoder = nn.Sequential()
         if model.proj is True:
@@ -114,9 +108,9 @@ class BasicTaggerModel(nn.Module, TaggerModel):
         if not self.training or v == 0:
             return x
 
-        mask_pad = x != BasicTaggerModel.PAD
+        mask_pad = x != TaggerModelBase.PAD
         mask_drop = x.new(x.size(0), x.size(1)).bernoulli_(v).byte()
-        x.masked_fill_(mask_pad & mask_drop, BasicTaggerModel.UNK)
+        x.masked_fill_(mask_pad & mask_drop, TaggerModelBase.UNK)
         return x
 
     def input_tensor(self, key, batch_dict, perm_idx):
@@ -155,9 +149,9 @@ class BasicTaggerModel(nn.Module, TaggerModel):
         return example_dict
 
     def compute_unaries(self, inputs, lengths):
-        words_over_time = self._embed(inputs)
+        words_over_time = self.embed(inputs)
         # output = (T, B, H)
-        output = self.encoder(words_over_time, lengths)
+        output = self.encode(words_over_time, lengths)
         # stack (T x B, H)
         decoded = self.decoder(output.view(output.size(0)*output.size(1), -1))
 
@@ -215,3 +209,47 @@ class BasicTaggerModel(nn.Module, TaggerModel):
     def predict(self, batch_dict):
         inputs = self.make_input(batch_dict)
         return self(inputs)
+
+
+@register_model(task='tagger', name='default')
+class RNNTaggerModel(TaggerModelBase):
+
+    def __init__(self):
+        super(RNNTaggerModel, self).__init__()
+
+    def init_encoder(self, input_sz, **kwargs):
+        layers = int(kwargs.get('layers', 1))
+        pdrop = float(kwargs.get('dropout', 0.5))
+        rnntype = kwargs.get('rnntype', 'blstm')
+        print('RNN [%s]' % rnntype)
+        unif = kwargs.get('unif', 0)
+        hsz = int(kwargs['hsz'])
+        weight_init = kwargs.get('weight_init', 'uniform')
+        self.encoder = LSTMEncoder(input_sz, hsz, rnntype, layers, pdrop, unif=unif, initializer=weight_init)
+        return hsz
+
+    def encode(self, words_over_time, lengths):
+        return self.encoder(words_over_time, lengths)
+
+
+@register_model(task='tagger', name='cnn')
+class CNNTaggerModel(TaggerModelBase):
+
+    def __init__(self):
+        super(CNNTaggerModel, self).__init__()
+
+    def init_encoder(self, input_sz, **kwargs):
+        layers = int(kwargs.get('layers', 1))
+        pdrop = float(kwargs.get('dropout', 0.5))
+        filtsz = kwargs.get('wfiltsz', 5)
+        activation_type = kwargs.get('activation_type', 'relu')
+        hsz = int(kwargs['hsz'])
+        self.encoder = ConvEncoderStack(input_sz, hsz, filtsz, pdrop, layers, activation_type)
+        return hsz
+
+    def encode(self, tbh, lengths):
+        # bct
+        bht = tbh.permute(1, 2, 0).contiguous()
+        bht = self.encoder(bht)
+        # bht -> tbh
+        return bht.permute(2, 0, 1).contiguous()
