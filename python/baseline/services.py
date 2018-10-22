@@ -33,6 +33,10 @@ class Service(object):
         self.model = model
         self.vocabs = vocabs
 
+        self.channel = None
+        if self.remote:
+            self.channel = grpc.insecure_channel(remote)
+
     def get_vocab(self, vocab_type='word'):
         return self.vocabs.get(vocab_type)
 
@@ -41,6 +45,10 @@ class Service(object):
 
     @classmethod
     def load(cls, bundle, **kwargs):
+        remote = kwargs.get("remote", None)
+        name = kwargs.get("name", None)
+
+        # can delegate
         if os.path.isdir(bundle):
             directory = bundle
         else:
@@ -48,6 +56,9 @@ class Service(object):
 
         vocabs = load_vocabs(directory)
         vectorizers = load_vectorizers(directory)
+
+        if remote:
+            return cls(vocabs, vectorizers, None, remote, name)
 
         model_basename = find_model_basename(directory)
         be = kwargs.get('backend', 'tf')
@@ -97,9 +108,14 @@ class ClassifierService(Service):
 
         for k in self.vectorizers.keys():
             examples[k] = np.stack(examples[k])
-            lengths_key = '{}_lengths'.format(k)
-            examples[lengths_key] = np.stack(examples[lengths_key])
-        outcomes_list = self.model.predict(examples)
+
+        if self.model:
+            outcomes_list = self.model.classify(examples)
+        else:
+            request = create_request(examples, self.name, "predict_text")
+            stub = servicepb.PredictionServiceStub(self.channel)
+            outcomes_list = stub.Predict(request)
+            outcomes_list = deserialize_response(outcomes_list)
         results = []
         for outcomes in outcomes_list:
             results += [sorted(outcomes, key=lambda tup: tup[1], reverse=True)]
@@ -111,7 +127,7 @@ class TaggerService(Service):
     task_name = 'tagger'
     task_load = load_tagger_model
 
-    def predict(self, tokens, **kwargs):
+    def transform(self, tokens, **kwargs):
         """
         Utility function to convert lists of sentence tokens to integer value one-hots which
         are then passed to the tagger.  The resultant output is then converted back to label and token
@@ -224,7 +240,7 @@ class LanguageModelService(Service):
         return super(LanguageModelService, cls).load(bundle, **kwargs)
 
     # Do a greedy decode for now, everything else will be super slow
-    def predict(self, tokens, **kwargs):
+    def run(self, tokens, **kwargs):
         mxlen = kwargs.get('mxlen', 10)
         mxwlen = kwargs.get('mxwlen', 40)
 
@@ -254,7 +270,7 @@ class LanguageModelService(Service):
                     else:
                         examples[lengths_key] = np.array(length)
             batch_dict = {k: v.reshape((1,) + v.shape) for k, v in examples.items()}
-            softmax_tokens = self.model.predict(batch_dict)
+            softmax_tokens = self.model.predict_next(batch_dict)
             next_token = np.argmax(softmax_tokens, axis=-1)[-1]
 
             token_str = self.idx_to_token.get(next_token, '<PAD>')
@@ -290,6 +306,10 @@ class EncoderDecoderService(Service):
             else:
                 self.src_vectorizers[k] = vectorizer
 
+        self.channel = None
+        if self.remote:
+            self.channel = grpc.insecure_channel(remote)
+
     def get_src_vocab(self, vocab_type):
         return self.src_vocabs[vocab_type]
 
@@ -302,7 +322,7 @@ class EncoderDecoderService(Service):
         kwargs['beam'] = kwargs.get('beam', 5)
         return super(EncoderDecoderService, cls).load(bundle, **kwargs)
 
-    def predict(self, tokens, **kwargs):
+    def transform(self, tokens, **kwargs):
 
         mxlen = 0
         mxwlen = 0
@@ -339,7 +359,15 @@ class EncoderDecoderService(Service):
             lengths_key = '{}_lengths'.format(k)
             examples[lengths_key] = np.stack(examples[lengths_key])
 
-        outcomes = self.model.predict(examples)
+        # outcomes = self.model.run(examples)
+        if self.model:
+            outcomes = self.model.run(examples)
+        else:
+            request = create_request(examples, self.name, "suggest_text")
+            stub = servicepb.PredictionServiceStub(self.channel)
+            outcomes = stub.Predict(request)
+            outcomes = deserialize_response(outcomes)
+
         results = []
         for i in range(len(outcomes)):
             best = outcomes[i][0]
