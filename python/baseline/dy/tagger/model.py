@@ -7,7 +7,6 @@ import numpy as np
 from baseline.dy.dynety import CRF, Linear, DynetModel, rnn_forward
 
 
-@register_model(task='tagger', name='default')
 class TaggerModelBase(DynetModel, TaggerModel):
     def __init__(self, embeddings_set, labels, **kwargs):
         super(TaggerModelBase, self).__init__(kwargs['pc'])
@@ -79,7 +78,7 @@ class TaggerModelBase(DynetModel, TaggerModel):
         return example_dict
 
     def compute_unaries(self, batch_dict):
-        embed_list = self._embed(batch_dict)
+        embed_list = self.embed(batch_dict)
         exps = self.encode(embed_list)
         return exps
 
@@ -143,6 +142,7 @@ class TaggerModelBase(DynetModel, TaggerModel):
         return self
 
 
+@register_model(task='tagger', name='default')
 class RNNTaggerModel(TaggerModelBase):
 
     def __init__(self, embeddings_set, labels, **kwargs):

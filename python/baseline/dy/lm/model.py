@@ -45,7 +45,7 @@ class BasicLanguageModel(DynetModel, LanguageModel):
     def output(self, input_):
         return [self._output(x) for x in input_]
 
-    def decoder(self, input_, state, train):
+    def decode(self, input_, state, train):
         if train:
             if self.dropout is not None:
                 self._rnn.set_dropout(self.dropout)
@@ -55,7 +55,7 @@ class BasicLanguageModel(DynetModel, LanguageModel):
         return transduced, last_state
 
     def forward(self, input_, state=None, train=True):
-        input_ = self._embed(input_)
+        input_ = self.embed(input_)
         transduced, last_state = self.decode(input_, state, train)
         output = self.output(transduced)
         return output, last_state
