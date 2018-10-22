@@ -197,10 +197,10 @@ class TaggerModelBase(TaggerModel):
         probs_shape = tf.shape(self.probs)
         bsz = probs_shape[0]
         lsz = len(self.labels)
-        np_gos = np.ones((1, 1, lsz), dtype=np.float32)
+        np_gos = np.full((1, 1, lsz), -1e4, dtype=np.float32)
         np_gos[:, :, self.labels['<GO>']] = 0
         gos = tf.constant(np_gos)
-        start = tf.multiply(tf.fill((bsz, 1, lsz), -1e4), gos)
+        start = tf.tile(gos, [bsz, 1, 1])
         probv = tf.concat([start, self.probs], axis=1)
         viterbi, _ = tf.contrib.crf.crf_decode(probv, self.A, self.lengths)
         self.best = tf.identity(viterbi[:, 1:], name="best")
