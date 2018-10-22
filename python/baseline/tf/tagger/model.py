@@ -202,7 +202,7 @@ class TaggerModelBase(TaggerModel):
         gos = tf.constant(np_gos)
         start = tf.tile(gos, [bsz, 1, 1])
         probv = tf.concat([start, self.probs], axis=1)
-        viterbi, _ = tf.contrib.crf.crf_decode(probv, self.A, self.lengths)
+        viterbi, _ = tf.contrib.crf.crf_decode(probv, self.A, self.lengths + 1)
         self.best = tf.identity(viterbi[:, 1:], name="best")
 
     def _create_word_level_decode(self):
