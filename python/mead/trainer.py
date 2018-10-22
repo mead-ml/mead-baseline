@@ -19,7 +19,11 @@ def main():
     args, reporting_args = parser.parse_known_args()
 
     config_params = read_config_stream(args.config)
-    args.settings = read_config_stream(args.settings)
+    try:
+        args.settings = read_config_stream(args.settings)
+    except:
+        print('Warning: no mead-settings file was found at [{}]'.format(args.config))
+        args.settings = {}
     args.datasets = read_config_stream(args.datasets)
     args.embeddings = read_config_stream(args.embeddings)
     args.logging = read_config_stream(args.logging)
