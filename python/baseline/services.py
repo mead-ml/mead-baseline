@@ -390,7 +390,7 @@ class EncoderDecoderService(Service):
     @classmethod
     def load(cls, bundle, **kwargs):
         kwargs['predict'] = kwargs.get('predict', True)
-        kwargs['beam'] = kwargs.get('beam', 5)
+        kwargs['beam'] = kwargs.get('beam', 30)
         return super(EncoderDecoderService, cls).load(bundle, **kwargs)
 
     def transform(self, tokens, **kwargs):

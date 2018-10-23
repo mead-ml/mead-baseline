@@ -263,6 +263,7 @@ class Seq2SeqTensorFlowExporter(TensorFlowExporter):
         model_params = self.task.config_params["model"]
         model_params["sess"] = sess
         model_params['predict'] = True
+        model_params['beam'] = self.task.config_params.get('beam', 30)
 
         state = read_json(basename + '.state')
         if not state:
