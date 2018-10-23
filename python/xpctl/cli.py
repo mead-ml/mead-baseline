@@ -196,9 +196,10 @@ def lbsummary(task):
 @click.option('--sort', help="specify one metric to sort the results")
 @click.option('--event_type', default='test', help="specify one metric to sort the results")
 @click.option('--n', help='number of experiments', type=int)
+@click.option('--output', help='output file (csv)')
 @click.argument('task')
 @click.argument('sha1')
-def details(user, metric, sort, event_type, task, sha1, n):
+def details(user, metric, sort, event_type, task, sha1, n, output):
     """
     Shows the results for all experiments for a particular config (sha1). Optionally filter out by user(s), metric(s), or sort by one metric. Shows the results on the test data by default, provide event_type (train/valid/test) to see for other datasets.
     """
@@ -216,6 +217,8 @@ def details(user, metric, sort, event_type, task, sha1, n):
         click.echo(result_frame)
     else:
         click.echo("no result found for this query")
+    if output is not None:
+        result_frame.to_csv(os.path.expanduser(output), index=False)
 
 
 # Edit database
