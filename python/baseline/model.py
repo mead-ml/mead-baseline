@@ -234,3 +234,81 @@ class EncoderDecoderModel(object):
     def run(self, source_dict, **kwargs):
         return self.predict(source_dict, **kwargs)
 
+
+class RemoteModel(object):
+    def __init__(self, remote, name, signature):
+        from tensorflow_serving.apis import (predict_pb2 as predictpb, 
+                         inference_pb2 as infpb, 
+                         prediction_service_pb2_grpc as servicepb
+                         )
+        from tensorflow.core.framework import tensor_pb2
+        from tensorflow.core.framework import types_pb2
+        from tensorflow.core.framework import tensor_shape_pb2
+        import grpc
+
+        self.remote = remote
+        self.name = name
+        self.signature = signature
+
+        self.channel = grpc.insecure_channel(remote)
+
+    def classify(self, examples):
+        return self._transform(examples)
+
+    def predict(self, examples):
+        return self._transform(examples)
+
+    def run(self, examples):
+        return self._transform(examples)
+
+    def _transform(self, examples):
+        request = self.create_request(examples)
+        stub = servicepb.PredictionServiceStub(self.channel)
+        outcomes_list = stub.Predict(request)
+        outcomes_list = self.deserialize_response(outcomes_list)
+
+        return outcomes_list
+
+    def create_request(self, examples):
+        request = predictpb.PredictRequest()
+        request.model_spec.name = self.name
+        request.model_spec.signature_name = self.signature
+
+        for feature in examples.keys():
+            num_examples = len(examples[feature])
+            feature_len = len(examples[feature][0])
+
+            shape = (num_examples, feature_len)
+            tensor_proto = tensor_pb2.TensorProto(
+                dtype=types_pb2.DT_FLOAT,
+                tensor_shape=tensor_shape_pb2.TensorShapeProto(dim=[
+                    tensor_shape_pb2.TensorShapeProto.Dim(size=-1 if d is None else d) for d in shape
+                ])
+            )
+            request.inputs[feature].CopyFrom(
+                tensor_proto
+            )
+        
+            return request
+
+    def deserialize_response(self, predict_response):
+        """
+        this is basically a map.
+
+        here's the relevant piece of the proto:
+            map<string, TensorProto> inputs = 2;
+
+        the predict endpoint happens to have the ability to filter output for certain keys, but
+        we do not support this currently. There are two keys we want to extract: classes and scores.
+
+        :params predict_response: a PredictResponse protobuf object, 
+                    as defined in tensorflow_serving proto files
+        """
+        classes = predict_response.outputs.get('classes').string_val
+        scores = predict_response.outputs.get('scores').float_val
+
+        if classes is None or scores is None:
+            return []
+            # how do i log in python??
+        
+        return [(k.decode('utf-8'), v) for k,v in zip(classes, scores)]
