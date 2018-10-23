@@ -609,7 +609,7 @@ class LanguageModelingTask(Task):
         self._create_vectorizers()
 
         reader_params = self.config_params['loader']
-        reader_params['nbptt'] = reader_params.get('nbptt', self.config_params['nbptt'])
+        reader_params['nctx'] = reader_params.get('nctx', self.config_params.get('nctx', self.config_params['nbptt']))
         reader_params['clean_fn'] = reader_params.get('clean_fn', self.config_params['preproc'].get('clean_fn'))
         return baseline.reader.create_reader(self.task_name(), self.vectorizers, self.config_params['preproc'].get('trim', False), **reader_params)
 
@@ -664,6 +664,6 @@ class LanguageModelingTask(Task):
         return baseline.model.create_lang_model(self.embeddings, **model)
 
     @staticmethod
-    def _num_steps_per_epoch(num_examples, nbptt, batchsz):
+    def _num_steps_per_epoch(num_examples, nctx, batchsz):
         rest = num_examples // batchsz
-        return rest // nbptt
+        return rest // nctx

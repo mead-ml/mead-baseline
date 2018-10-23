@@ -18,7 +18,7 @@ class LanguageModelBase(LanguageModel):
     def save_using(self, saver):
         self.saver = saver
 
-    def decode(self, inputs, vsz):
+    def decode(self, inputs):
         pass
 
     def save_values(self, basename):
@@ -108,7 +108,10 @@ class LanguageModelBase(LanguageModel):
 
             inputs = lm.embed()
             lm.layers = kwargs.get('layers', 1)
-            lm.decode(inputs, embeddings[lm.tgt_key].vsz, **kwargs)
+            h = lm.decode(inputs, **kwargs)
+            lm.logits = lm.output(h, embeddings[lm.tgt_key].vsz, **kwargs)
+            lm.probs = tf.nn.softmax(lm.logits, name="softmax")
+
             return lm
 
     def embed(self):
@@ -170,6 +173,20 @@ class LanguageModelBase(LanguageModel):
         model.saver.restore(model.sess, basename)
         return model
 
+    def output(self, h, vsz, **kwargs):
+        # Do weight sharing if we can
+        do_weight_tying = bool(kwargs.get('tie_weights', False))
+        if do_weight_tying and self.hsz == self.embeddings[self.tgt_key].get_dsz():
+            with tf.variable_scope(self.embeddings[self.tgt_key].scope, reuse=True):
+                W = tf.get_variable("W")
+            return tf.matmul(h, W, transpose_b=True, name="logits")
+        else:
+            vocab_w = tf.get_variable(
+                "vocab_w", [self.hsz, vsz], dtype=tf.float32)
+            vocab_b = tf.get_variable("vocab_b", [vsz], dtype=tf.float32)
+
+            return tf.nn.xw_plus_b(h, vocab_w, vocab_b, name="logits")
+
 
 @register_model(task='lm', name='default')
 class RNNLanguageModel(LanguageModelBase):
@@ -185,7 +202,7 @@ class RNNLanguageModel(LanguageModelBase):
     def vdrop(self, value):
         self._vdrop = value
 
-    def decode(self, inputs, vsz, **kwargs):
+    def decode(self, inputs, **kwargs):
 
         def cell():
             return lstm_cell_w_dropout(self.hsz, self.pkeep, variational=self.vdrop)
@@ -197,19 +214,6 @@ class RNNLanguageModel(LanguageModelBase):
         self.initial_state = rnnfwd.zero_state(self.batchsz, tf.float32)
         rnnout, state = tf.nn.dynamic_rnn(rnnfwd, inputs, initial_state=self.initial_state, dtype=tf.float32)
         h = tf.reshape(tf.concat(rnnout, 1), [-1, self.hsz])
-        self.logits = self.output(h, vsz)
-        self.probs = tf.nn.softmax(self.logits, name="softmax")
         self.final_state = state
+        return h
 
-    def output(self, h, vsz):
-        # Do weight sharing if we can
-        if self.hsz == self.embeddings[self.tgt_key].get_dsz():
-            with tf.variable_scope(self.embeddings[self.tgt_key].scope, reuse=True):
-                W = tf.get_variable("W")
-            return tf.matmul(h, W, transpose_b=True)
-        else:
-            vocab_w = tf.get_variable(
-                "vocab_w", [self.hsz, vsz], dtype=tf.float32)
-            vocab_b = tf.get_variable("vocab_b", [vsz], dtype=tf.float32)
-
-            return tf.nn.xw_plus_b(h, vocab_w, vocab_b, name="logits")

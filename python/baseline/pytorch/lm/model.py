@@ -77,12 +77,25 @@ class LanguageModelBase(nn.Module, LanguageModel):
             raise Exception('Need a `tgt_key` to know which source vocabulary should be used for destination ')
 
         lm.dsz = lm.init_embed(embeddings, **kwargs)
-        lm.init_decode(embeddings[lm.tgt_key].get_vsz(), **kwargs)
+        lm.init_decode(**kwargs)
+        lm.init_output(embeddings[lm.tgt_key].get_vsz(), **kwargs)
         return lm
 
     def forward(self, input, hidden):
         emb = self.embed(input)
-        return self.decode(emb, hidden)
+        decoded, hidden = self.decode(emb, hidden)
+        return self.output(decoded), hidden
+
+    def init_output(self, vsz, **kwargs):
+        unif = float(kwargs.get('unif', 0.0))
+        do_weight_tying = bool(kwargs.get('tie_weights', False))
+        self.proj = pytorch_linear(self.hsz, vsz, unif)
+        if do_weight_tying and self.hsz == self.embeddings[self.tgt_key].get_dsz():
+            self.proj.weight = self.embeddings[self.tgt_key].embeddings.weight
+
+    def output(self, x):
+        outputs = self.proj(x)
+        return outputs
 
 
 @register_model(task='lm', name='default')
@@ -91,23 +104,17 @@ class RNNLanguageModel(LanguageModelBase):
     def __init__(self):
         super(RNNLanguageModel, self).__init__()
 
-    def init_decode(self, vsz, **kwargs):
+    def init_decode(self, **kwargs):
         pdrop = float(kwargs.get('dropout', 0.5))
         vdrop = bool(kwargs.get('variational_dropout', False))
-        unif = float(kwargs.get('unif', 0.0))
         if vdrop:
             self.rnn_dropout = VariationalDropout(pdrop)
         else:
             self.rnn_dropout = nn.Dropout(pdrop)
 
         self.rnn = pytorch_lstm(self.dsz, self.hsz, 'lstm', self.layers, pdrop, batch_first=True)
-        self.decoder = nn.Sequential()
-        append2seq(self.decoder, (
-            pytorch_linear(self.hsz, vsz, unif),
-        ))
 
     def decode(self, emb, hidden):
         output, hidden = self.rnn(emb, hidden)
         output = self.rnn_dropout(output).contiguous()
-        decoded = self.decoder(output.view(output.size(0)*output.size(1), output.size(2)))
-        return decoded.view(output.size(0), output.size(1), decoded.size(1)), hidden
+        return output, hidden

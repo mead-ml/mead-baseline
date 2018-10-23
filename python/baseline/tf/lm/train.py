@@ -58,8 +58,7 @@ class LanguageModelTrainerTf(Trainer):
                 state = vals["final_state"]
             global_step = vals["global_step"]
             total_loss += loss
-            # NBPTT
-            iters += ts.nbptt
+            iters += ts.nctx
             step += 1
             if step % 500 == 0:
                 print(total_loss, iters)
@@ -112,8 +111,7 @@ class LanguageModelTrainerTf(Trainer):
             if xfer_state:
                 state = vals["final_state"]
             total_loss += loss
-            # NBPTT
-            iters += ts.nbptt
+            iters += ts.nctx
             step += 1
 
         self.log.debug({'phase': phase, "time": time.time() - start})

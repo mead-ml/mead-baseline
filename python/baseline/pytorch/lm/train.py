@@ -40,7 +40,7 @@ class LanguageModelTrainerPyTorch(Trainer):
         self.model.eval()
         total_loss = 0
         metrics = {}
-        batchsz, nbptt = self._get_dims(vs)
+        batchsz, nctx = self._get_dims(vs)
 
         hidden = self.model.init_hidden(batchsz)
         iters = 0
@@ -51,7 +51,7 @@ class LanguageModelTrainerPyTorch(Trainer):
             output, hidden = self.model(inputs, hidden)
             total_loss += self.crit(output, y).data
             hidden = self.repackage_hidden(hidden)
-            iters += nbptt
+            iters += nctx
         self.valid_epochs += 1
 
         avg_loss = float(total_loss) / iters / batchsz
@@ -73,7 +73,7 @@ class LanguageModelTrainerPyTorch(Trainer):
             self.scheduler.step()
         total_loss = 0
         metrics = {}
-        batchsz, nbptt = self._get_dims(ts)
+        batchsz, nctx = self._get_dims(ts)
         hidden = self.model.init_hidden(batchsz)
         iters = 0
 
@@ -86,7 +86,7 @@ class LanguageModelTrainerPyTorch(Trainer):
             loss = self.crit(output, y)
             loss.backward()
             total_loss += loss.data
-            iters += nbptt
+            iters += nctx
             self.train_steps += 1
             if self.train_steps % 500 == 0:
                 avg_loss = float(total_loss) / iters / batchsz

@@ -409,7 +409,7 @@ class TSVSeqLabelReader(SeqLabelReader):
 class LineSeqReader(object):
 
     def __init__(self, vectorizers, trim, **kwargs):
-        self.nbptt = kwargs['nbptt']
+        self.nctx = kwargs['nctx']
         self.vectorizers = vectorizers
 
     def build_vocab(self, files):
@@ -445,6 +445,6 @@ class LineSeqReader(object):
                 shp[0] = valid_lengths
                 x['{}_dims'.format(k)] = tuple(shp)
 
-        return baseline.data.SeqWordCharDataFeed(x, self.nbptt, batchsz, tgt_key=tgt_key)
+        return baseline.data.SeqWordCharDataFeed(x, self.nctx, batchsz, tgt_key=tgt_key)
 
 

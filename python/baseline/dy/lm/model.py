@@ -14,11 +14,14 @@ class LanguageModelBase(DynetModel, LanguageModel):
         vsz = embeddings[self.tgt_key].vsz
         dsz = self.init_embed(embeddings)
         self.init_decode(dsz, layers, hsz, **kwargs)
-        self._output = Linear(vsz, hsz, self.pc, name="output")
+        self.init_output(vsz, hsz, **kwargs)
         self.dropout = dropout
 
     def init_decode(self, dsz, layers=1, hsz=650, **kwargs):
         pass
+
+    def init_output(self, vsz, hsz=650, **kwargs):
+        self._output = Linear(vsz, hsz, self.pc, name="output")
 
     def init_embed(self, embeddings):
         dsz = 0

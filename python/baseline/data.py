@@ -255,12 +255,12 @@ class SeqWordCharDataFeed(DataFeed):
     """Data feed to return language modeling training data
     """
 
-    def __init__(self, examples, nbptt, batchsz, tgt_key=None):
+    def __init__(self, examples, nctx, batchsz, tgt_key=None):
         """Constructor
         
         :param examples: word tensor
         :param xch: character tensor
-        :param nbptt: Number of steps of BPTT
+        :param nctx: Number of steps of BPTT
         :param batchsz: Batch size
         :param maxw: The maximum word length
         """
@@ -270,11 +270,11 @@ class SeqWordCharDataFeed(DataFeed):
         self.tgt_key = 'x' if tgt_key is None else tgt_key
         num_examples = examples['{}_dims'.format(tgt_key)][0]
         rest = num_examples // batchsz
-        self.steps = rest // nbptt
-        # if num_examples is divisible by batchsz * nbptt (equivalent to rest is divisible by nbptt), we
+        self.steps = rest // nctx
+        # if num_examples is divisible by batchsz * nctx (equivalent to rest is divisible by nctx), we
         # have a problem. reduce rest in that case.
 
-        if rest % nbptt == 0:
+        if rest % nctx == 0:
             rest = rest-1
 
         for k in examples.keys():
@@ -283,7 +283,7 @@ class SeqWordCharDataFeed(DataFeed):
             dim_key = '{}_dims'.format(k)
             shp = examples[dim_key]
             if len(shp) == 2:
-                width = nbptt * shp[1]
+                width = nctx * shp[1]
             else:
                 width = 1
             trunc = batchsz * rest * width
@@ -292,7 +292,7 @@ class SeqWordCharDataFeed(DataFeed):
             print('Truncating {} from {} to {}'.format(k, num_examples, trunc))
             self.examples[k].flatten()
             self.examples[dim_key] = shp
-        self.nbptt = nbptt
+        self.nctx = nctx
         self.batchsz = batchsz
 
     def _batch(self, i):
@@ -308,15 +308,15 @@ class SeqWordCharDataFeed(DataFeed):
             else:
                 width = dims[1]
 
-            example[k] = x[:, i*self.nbptt*width:(i+1)*self.nbptt*width]
+            example[k] = x[:, i*self.nctx * width:(i + 1) * self.nctx * width]
 
             if len(dims) == 1:
-                reshape_dims = (self.batchsz, self.nbptt)
+                reshape_dims = (self.batchsz, self.nctx)
             else:
-                reshape_dims = (self.batchsz, self.nbptt, width)
+                reshape_dims = (self.batchsz, self.nctx, width)
             example[k] = example[k].reshape(reshape_dims)
             if self.tgt_key == k:
-                example['y'] = x[:, i*self.nbptt*width+1:(i+1)*self.nbptt*width+1].reshape(reshape_dims)
+                example['y'] = x[:, i*self.nctx * width + 1:(i + 1) * self.nctx * width + 1].reshape(reshape_dims)
 
         return example
         #return {
