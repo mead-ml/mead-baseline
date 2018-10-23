@@ -41,7 +41,7 @@ def pool_vec(embeddings, tokens, operation=np.mean):
 
 
 @exporter
-class WordEmbeddingsModel(object):
+class WordEmbeddingsModel(EmbeddingsModel):
     def __init__(self, **kwargs):
         super(WordEmbeddingsModel, self).__init__()
         self.vocab = kwargs.get('vocab')

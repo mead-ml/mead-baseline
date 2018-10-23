@@ -1,5 +1,5 @@
 from baseline.pytorch.torchy import *
-from baseline.utils import listify, to_spans, f_score, revlut, get_model_file
+from baseline.utils import listify, to_spans, f_score, revlut, get_model_file, write_sentence_conll
 from baseline.progress import create_progress_bar
 from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
 
@@ -54,22 +54,9 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
             if handle is not None:
                 id = ids[b]
                 txt = txts[id]
-                self._write_sentence_conll(handle, sentence, gold, txt)
+                write_sentence_conll(handle, sentence, gold, txt, self.idx2label)
 
         return correct_labels, total_labels, overlap_count, gold_count, guess_count
-
-    def _write_sentence_conll(self, handle, sentence, gold, txt):
-
-        if len(txt) != len(sentence):
-            txt = txt[:len(sentence)]
-
-        try:
-            for word, truth, guess in zip(txt, gold, sentence):
-                handle.write('%s %s %s\n' % (word, self.idx2label[truth], self.idx2label[guess]))
-            handle.write('\n')
-        except:
-            print('ERROR: Failed to write lines... closing file')
-            handle.close()
 
     def _test(self, ts, **kwargs):
 

@@ -406,6 +406,19 @@ def read_config_stream(config_stream):
     return json.loads(config)
 
 
+def write_sentence_conll(handle, sentence, gold, txt, idx2label):
+
+    if len(txt) != len(sentence):
+        txt = txt[:len(sentence)]
+
+    try:
+        for word, truth, guess in zip(txt, gold, sentence):
+            handle.write('%s %s %s\n' % (word['text'], idx2label[truth], idx2label[guess]))
+        handle.write('\n')
+    except:
+        print('ERROR: Failed to write lines... closing file')
+        handle.close()
+
 @exporter
 def write_json(content, filepath):
     with open(filepath, "w") as f:
