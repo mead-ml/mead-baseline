@@ -50,7 +50,8 @@ class LanguageModelTrainerPyTorch(Trainer):
             y = inputs.pop('y')
             output, hidden = self.model(inputs, hidden)
             total_loss += self.crit(output, y).data
-            hidden = self.repackage_hidden(hidden)
+            if hidden is not None:
+                hidden = self.repackage_hidden(hidden)
             iters += nctx
         self.valid_epochs += 1
 
@@ -78,7 +79,8 @@ class LanguageModelTrainerPyTorch(Trainer):
         iters = 0
 
         for batch_dict in ts:
-            hidden = self.repackage_hidden(hidden)
+            if hidden is not None:
+                hidden = self.repackage_hidden(hidden)
             inputs = self.model.make_input(batch_dict)
             y = inputs.pop('y')
             self.optimizer.zero_grad()

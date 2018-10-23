@@ -23,9 +23,7 @@ class LanguageModelBase(nn.Module, LanguageModel):
         return model
 
     def init_hidden(self, batchsz):
-        weight = next(self.parameters()).data
-        return (torch.autograd.Variable(weight.new(self.layers, batchsz, self.hsz).zero_()),
-                torch.autograd.Variable(weight.new(self.layers, batchsz, self.hsz).zero_()))
+        return None
 
     def make_input(self, batch_dict):
         example_dict = dict({})
@@ -103,6 +101,11 @@ class RNNLanguageModel(LanguageModelBase):
 
     def __init__(self):
         super(RNNLanguageModel, self).__init__()
+
+    def init_hidden(self, batchsz):
+        weight = next(self.parameters()).data
+        return (torch.autograd.Variable(weight.new(self.layers, batchsz, self.hsz).zero_()),
+                torch.autograd.Variable(weight.new(self.layers, batchsz, self.hsz).zero_()))
 
     def init_decode(self, **kwargs):
         pdrop = float(kwargs.get('dropout', 0.5))
