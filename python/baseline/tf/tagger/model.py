@@ -140,8 +140,8 @@ class TaggerModelBase(TaggerModel):
 
         model.y = tf.get_default_graph().get_tensor_by_name('y:0')
         model.pkeep = tf.get_default_graph().get_tensor_by_name('pkeep:0')
-        model.best = tf.get_default_graph().get_tensor_by_name('output/ArgMax:0')
-        model.probs = tf.get_default_graph().get_tensor_by_name('output/Reshape_1:0')  # TODO: rename
+        model.probs = tf.get_default_graph().get_tensor_by_name('output/probs:0')
+        model.best = tf.get_default_graph().get_tensor_by_name('output/best:0')
 
         try:
             model.A = tf.get_default_graph().get_tensor_by_name('Loss/transitions:0')
@@ -193,6 +193,21 @@ class TaggerModelBase(TaggerModel):
             ll, self.A = tf.contrib.crf.crf_log_likelihood(self.probs, self.y, self.lengths)
         return tf.reduce_mean(-ll)
 
+    def _create_sentence_level_decode(self):
+        probs_shape = tf.shape(self.probs)
+        bsz = probs_shape[0]
+        lsz = len(self.labels)
+        np_gos = np.full((1, 1, lsz), -1e4, dtype=np.float32)
+        np_gos[:, :, self.labels['<GO>']] = 0
+        gos = tf.constant(np_gos)
+        start = tf.tile(gos, [bsz, 1, 1])
+        probv = tf.concat([start, self.probs], axis=1)
+        viterbi, _ = tf.contrib.crf.crf_decode(probv, self.A, self.lengths + 1)
+        self.best = tf.identity(viterbi[:, 1:], name="best")
+
+    def _create_word_level_decode(self):
+        self.best = tf.argmax(self.probs, 2, name="best")
+
     def create_loss(self):
 
         with tf.variable_scope("Loss"):
@@ -206,6 +221,14 @@ class TaggerModelBase(TaggerModel):
                 print('crf=False, creating WLL')
                 all_loss = self._compute_word_level_loss(mask)
 
+        with tf.variable_scope(self.out_scope, auxiliary_name_scope=False) as s:
+            with tf.name_scope(s.original_name_scope):
+                if self.crf:
+                    self._create_sentence_level_decode()
+                else:
+                    self._create_word_level_decode()
+
+
         return all_loss
 
     def __init__(self):
@@ -216,33 +239,10 @@ class TaggerModelBase(TaggerModel):
         return self.labels
 
     def predict(self, batch_dict):
-
         feed_dict = self.make_input(batch_dict)
         lengths = batch_dict[self.lengths_key]
-        # We can probably conditionally add the loss here
-        preds = []
-        if self.crf is True:
-
-            probv, tranv = self.sess.run([self.probs, self.A], feed_dict=feed_dict)
-            batch_sz, _, label_sz = probv.shape
-            start = np.full((batch_sz, 1, label_sz), -1e4)
-            start[:, 0, self.labels['<GO>']] = 0
-            probv = np.concatenate([start, probv], 1)
-
-            for pij, sl in zip(probv, lengths):
-                unary = pij[:sl + 1]
-                viterbi, _ = tf.contrib.crf.viterbi_decode(unary, tranv)
-                viterbi = viterbi[1:]
-                preds.append(viterbi)
-        else:
-            # Get batch (B, T)
-            bestv = self.sess.run(self.best, feed_dict=feed_dict)
-            # Each sentence, probv
-            for pij, sl in zip(bestv, lengths):
-                unary = pij[:sl]
-                preds.append(unary)
-
-        return preds
+        bestv = self.sess.run(self.best, feed_dict=feed_dict)
+        return [pij[:sl] for pij, sl in zip(bestv, lengths)]
 
     def embed(self):
         """This method performs "embedding" of the inputs.  The base method here then concatenates along depth
@@ -288,7 +288,7 @@ class TaggerModelBase(TaggerModel):
         seed = np.random.randint(10e8)
         enc_out = model.encode(embedseq, **kwargs)
 
-        with tf.variable_scope("output"):
+        with tf.variable_scope("output") as model.out_scope:
             if model.feed_input is True:
                 enc_out = tf.concat(axis=2, values=[enc_out, embedseq])
 
@@ -306,8 +306,7 @@ class TaggerModelBase(TaggerModel):
                     preds = fully_connected(hidden, nc, activation_fn=None, weights_initializer=init)
                 else:
                     preds = fully_connected(enc_out_bt_x_h, nc, activation_fn=None, weights_initializer=init)
-            model.probs = tf.reshape(preds, [-1, T, nc])
-            model.best = tf.argmax(model.probs, 2)
+            model.probs = tf.reshape(preds, [-1, T, nc], name="probs")
         return model
 
 
