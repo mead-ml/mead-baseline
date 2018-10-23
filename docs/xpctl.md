@@ -170,7 +170,7 @@ xpctl >
   - `--sort`: output all metrics but sort on one. 
   - `--n`: shows the last (by time) _n_ experimental results. 
   - `--event_type`: show results for train/dev/test datasets. defaults to _test_. 
-
+  - `--output`: save the results in an output file.  
 ```
 xpctl > results tagger conll-iobes
 db mongo connection successful with [host]: x.x.x, [port]: num_port
@@ -367,29 +367,8 @@ Task: [tagger]
                                  task
                              num_exps
 user         dataset                 
-blester      conll                  1
-digitalroots wnut                   2
-dpressel     conll                  3
-             conll-bio              5
-             conll-iobes           13
-             sf-ivt                 1
-             twpos                  1
-             wnut                   5
-mbarta       sf-ivt-20180607        3
-root         conll                  1
-             idr-05-14              1
-             idr-18-07-11          10
-             pj-intents-v2.0        1
-             sf-idr-pj-08-16        6
-             slftemplate            1
-             wnut                  12
-schoudhury   idr                    7
-             idr-05-14              1
-             idr-18-07-11           1
-             idr-fca                2
-             sf-idr-pj-08-09        1
-             sf-pj                  1
-             wnut                   5
+...
+...
 xpctl > 
 ```
 
