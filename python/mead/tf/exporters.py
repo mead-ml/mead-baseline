@@ -4,7 +4,7 @@ from tensorflow.python.framework.errors_impl import NotFoundError
 import mead.exporters
 from mead.exporters import register_exporter
 from baseline.tf.embeddings import *
-from baseline.utils import export, read_json, ls_props
+from baseline.utils import export, read_json, ls_props, Offsets
 from collections import namedtuple
 
 FIELD_NAME = 'text/tokens'
@@ -186,7 +186,7 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
         values, indices = tf.nn.top_k(softmax_output, 1)
 
         start_np = np.full((1, 1, len(labels)), -1e4, dtype=np.float32)
-        start_np[:, 0, labels['<GO>']] = 0
+        start_np[:, 0, Offsets.GO] = 0
         start = tf.constant(start_np)
         model.probs = tf.concat([start, model.probs], 1)
 
@@ -269,8 +269,6 @@ class Seq2SeqTensorFlowExporter(TensorFlowExporter):
             raise RuntimeError("state file not found or is empty")
 
         model_params["src_lengths_key"] = state["src_lengths_key"]
-        model_params['GO'] = state['GO']
-        model_params['EOS'] = state['EOS']
 
         # Re-create the embeddings sub-graph
         embeddings = self.init_embeddings(state[self.SOURCE_STATE_EMBED_KEY].items(), basename)

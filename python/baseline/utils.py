@@ -46,6 +46,13 @@ exporter = export(__all__)
 
 
 @exporter
+class Offsets:
+    """Support pre 3.4"""
+    PAD, GO, EOS, UNK, OFFSET = range(0, 5)
+    VALUES = ["<PAD>", "<GO>", "<EOS>", "<UNK>"]
+
+
+@exporter
 def register(cls, registry, name=None, error=''):
     if name is None:
         name = cls.__name__

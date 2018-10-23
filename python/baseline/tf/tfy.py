@@ -2,7 +2,7 @@ import os
 import numpy as np
 import tensorflow as tf
 from tensorflow.python.layers import core as layers_core
-from baseline.utils import lookup_sentence, beam_multinomial, crf_mask as crf_m
+from baseline.utils import lookup_sentence, beam_multinomial, crf_mask as crf_m, Offsets
 import math
 
 
@@ -354,8 +354,6 @@ def show_examples_tf(model, es, rlut1, rlut2, vocab, mxlen, sample, prob_clip, m
     si = np.random.randint(0, len(es))
 
     batch_dict = es[si]
-    GO = vocab['<GO>']
-    EOS = vocab['<EOS>']
     i = 0
     src_lengths_key = model.src_lengths_key
     src_key = src_lengths_key.split('_')[0]
@@ -382,7 +380,7 @@ def show_examples_tf(model, es, rlut1, rlut2, vocab, mxlen, sample, prob_clip, m
         src_i = src_i[np.newaxis, :]
         example[src_key] = src_i
         example[src_lengths_key] = np.array([src_len_i])
-        next_value = GO
+        next_value = Offsets.GO
         for j in range(mxlen):
             tgt_i[0, j] = next_value
             tgt_len_i = np.array([j+1])
@@ -395,7 +393,7 @@ def show_examples_tf(model, es, rlut1, rlut2, vocab, mxlen, sample, prob_clip, m
                 # sampled from
                 next_value = beam_multinomial(prob_clip, output)
 
-            if next_value == EOS:
+            if next_value == Offsets.EOS:
                 break
 
         sent = lookup_sentence(rlut2, tgt_i.squeeze())

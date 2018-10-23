@@ -4,7 +4,7 @@ from google.protobuf import text_format
 from baseline.tf.tfy import *
 import tensorflow.contrib.seq2seq as tfcontrib_seq2seq
 from baseline.model import EncoderDecoderModel, register_model
-from baseline.utils import ls_props, read_json
+from baseline.utils import ls_props, read_json, Offsets
 from baseline.tf.embeddings import *
 from baseline.version import __version__
 import copy
@@ -235,10 +235,6 @@ class Seq2SeqModel(EncoderDecoderModel):
         if not predict:
             model.tgt_embedding.x = tgt_embedding.create_placeholder(tgt_embedding.name)
 
-        GO = kwargs.get('GO')
-        EOS = kwargs.get('EOS')
-        model.GO = GO
-        model.EOS = EOS
         model.id = kwargs.get('id', 0)
 
         hsz = int(kwargs['hsz'])
@@ -301,10 +297,10 @@ class Seq2SeqModel(EncoderDecoderModel):
                     if predict is True:
                         if beam_width == 1:
                             if sampling:
-                                helper = tf.contrib.seq2seq.SamplingEmbeddingHelper(Wo, tf.fill([batch_sz], GO), EOS,
+                                helper = tf.contrib.seq2seq.SamplingEmbeddingHelper(Wo, tf.fill([batch_sz], Offsets.GO), Offsets.EOS,
                                                                                     softmax_temperature=sampling_temp)
                             else:
-                                helper = tf.contrib.seq2seq.GreedyEmbeddingHelper(Wo, tf.fill([batch_sz], GO), EOS)
+                                helper = tf.contrib.seq2seq.GreedyEmbeddingHelper(Wo, tf.fill([batch_sz], Offsets.GO), Offsets.EOS)
                             decoder = tf.contrib.seq2seq.BasicDecoder(cell=rnn_dec_cell, helper=helper,
                                                                       initial_state=initial_state, output_layer=proj)
                         else:
@@ -313,8 +309,8 @@ class Seq2SeqModel(EncoderDecoderModel):
                             decoder = tf.contrib.seq2seq.BeamSearchDecoder(
                                 cell=rnn_dec_cell,
                                 embedding=Wo,
-                                start_tokens=tf.fill([batch_sz], GO),
-                                end_token=EOS,
+                                start_tokens=tf.fill([batch_sz], Offsets.GO),
+                                end_token=Offsets.EOS,
                                 initial_state=initial_state,
                                 beam_width=beam_width,
                                 output_layer=proj,
@@ -342,9 +338,8 @@ class Seq2SeqModel(EncoderDecoderModel):
                     model.probs = tf.map_fn(lambda x: tf.nn.softmax(x, name='probs'), model.preds)
 
             # writer = tf.summary.FileWriter('blah', model.sess.graph)
-            ##model.GO = GO
-            ##model.EOS = EOS
             return model
+
     @property
     def src_lengths_key(self):
         return self._src_lengths_key
@@ -431,9 +426,7 @@ class Seq2SeqModel(EncoderDecoderModel):
             "hsz": self.hsz,
             "rnntype": self.rnntype,
             "layers": self.layers,
-            "arc_state": self.arc_state,
-            "EOS": self.EOS,
-            "GO": self.GO
+            "arc_state": self.arc_state
         }
         for prop in ls_props(self):
             state[prop] = getattr(self, prop)

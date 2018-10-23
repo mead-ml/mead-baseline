@@ -1,5 +1,6 @@
 from baseline.pytorch.torchy import *
 from baseline.pytorch.crf import *
+from baseline.utils import Offsets
 from baseline.model import TaggerModel
 from baseline.model import register_model
 import torch.autograd
@@ -93,11 +94,11 @@ class TaggerModelBase(nn.Module, TaggerModel):
                 assert model.span_type is not None, "A crf mask cannot be used without providing `span_type`"
                 model.crf = CRF(
                     len(labels),
-                    (model.labels.get("<GO>"), model.labels.get("<EOS>")), batch_first=False,
-                    vocab=model.labels, span_type=model.span_type, pad_idx=model.labels.get("<PAD>")
+                    (Offsets.GO, Offsets.EOS), batch_first=False,
+                    vocab=model.labels, span_type=model.span_type, pad_idx=Offsets.PAD
                 )
             else:
-                model.crf = CRF(len(labels), (model.labels.get("<GO>"), model.labels.get("<EOS>")), batch_first=False)
+                model.crf = CRF(len(labels), (Offsets.GO, Offsets.EOS), batch_first=False)
         model.crit = SequenceCriterion(LossFn=nn.CrossEntropyLoss)
         print(model)
         return model

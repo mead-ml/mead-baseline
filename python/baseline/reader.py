@@ -3,7 +3,7 @@ import numpy as np
 from collections import Counter
 import re
 import codecs
-from baseline.utils import import_user_module, revlut, export, optional_params
+from baseline.utils import import_user_module, revlut, export, optional_params, Offsets
 from baseline.vectorizers import Dict1DVectorizer, GOVectorizer
 import os
 
@@ -57,7 +57,6 @@ def _build_vocab_for_col(col, files, vectorizers):
 
     for key in vectorizers.keys():
         vocabs[key] = Counter()
-        vocabs[key]['<EOS>'] = 100000  # In case freq cutoffs
 
     for file in files:
         if file is None:
@@ -180,8 +179,12 @@ class SeqPredictReader(object):
     def __init__(self, vectorizers, trim=False):
         self.vectorizers = vectorizers
         self.trim = trim
-        # TODO: Add <UNK>: 1?
-        self.label2index = {"<PAD>": 0, "<GO>": 1, "<EOS>": 2}
+        #self.label2index = {"<PAD>": 0, "<GO>": 1, "<EOS>": 2}
+        self.label2index = {
+            Offsets.VALUES[Offsets.PAD]: Offsets.PAD,
+            Offsets.VALUES[Offsets.GO]: Offsets.GO,
+            Offsets.VALUES[Offsets.EOS]: Offsets.EOS
+        }
         self.label_vectorizer = Dict1DVectorizer(fields='y', mxlen=-1)
 
     def build_vocab(self, files):
@@ -189,7 +192,6 @@ class SeqPredictReader(object):
         vocabs = {}
         for key in self.vectorizers.keys():
             vocabs[key] = Counter()
-            vocabs[key]['<UNK>'] = 100000  # In case freq cutoffs
 
         labels = Counter()
         for file in files:
@@ -349,7 +351,6 @@ class TSVSeqLabelReader(SeqLabelReader):
         vocab = dict()
         for k in self.vectorizers.keys():
             vocab[k] = Counter()
-            vocab[k]['<UNK>'] = 100000  # In case freq cutoffs
 
         for file in files:
             if file is None:
@@ -419,7 +420,7 @@ class LineSeqReader(object):
         for key in self.vectorizers.keys():
             vocabs[key] = Counter()
             vocabs[key] = Counter()
-            vocabs[key]['<UNK>'] = 100000  # In case freq cutoffs
+
         for file in files:
             if file is None:
                 continue
