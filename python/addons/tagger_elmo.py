@@ -9,6 +9,7 @@ from baseline.model import TaggerModel, create_tagger_model, load_tagger_model
 import tensorflow as tf
 import tensorflow_hub as hub
 import numpy as np
+from baseline.utils import Offsets
 
 
 class RNNTaggerModelELMoModel(TaggerModel):
@@ -144,7 +145,7 @@ class RNNTaggerModelELMoModel(TaggerModel):
                 trainable=True
             )
 
-            self.mask = crf_mask(self.labels, self.span_type, self.labels['<GO>'], self.labels['<EOS>'], self.labels.get('<PAD>'))
+            self.mask = crf_mask(self.labels, self.span_type, Offsets.GO, Offsets.EOS, Offsets.PAD)
             self.inv_mask = tf.cast(tf.equal(self.mask, 0), tf.float32) * tf.constant(-1e4)
 
             self.A = tf.add(tf.multiply(A, self.mask), self.inv_mask, name="transitions")
@@ -189,7 +190,7 @@ class RNNTaggerModelELMoModel(TaggerModel):
             probv, tranv = self.sess.run([self.probs, self.A], feed_dict=feed_dict)
             batch_sz, _, label_sz = probv.shape
             start = np.full((batch_sz, 1, label_sz), -1e4)
-            start[:, 0, self.labels['<GO>']] = 0
+            start[:, 0, Offsets.GO] = 0
             probv = np.concatenate([start, probv], 1)
 
             for pij, sl in zip(probv, lengths):

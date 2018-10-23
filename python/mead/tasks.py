@@ -560,8 +560,6 @@ class EncoderDecoderTask(Task):
                                           self.config_params.get('test_batchsz', 1))
 
     def _create_model(self):
-        self.config_params['model']['GO'] = self.feat2tgt['<GO>']
-        self.config_params['model']['EOS'] = self.feat2tgt['<EOS>']
         self.config_params['model']["unif"] = self.config_params["unif"]
         model = self.config_params['model']
         unif = self.config_params.get('unif', 0.1)

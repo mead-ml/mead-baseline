@@ -1,7 +1,7 @@
 import io
 import contextlib
 import numpy as np
-from baseline.utils import export, write_json, read_config_file
+from baseline.utils import export, write_json, read_config_file, Offsets
 from baseline.mime_type import mime_type
 __all__ = []
 exporter = export(__all__)
@@ -109,17 +109,23 @@ class PretrainedEmbeddingsModel(WordEmbeddingsModel):
             keep_unused = True
         uw = 0.0 if unif_weight is None else unif_weight
         self.vocab = {}
-        idx = 2
+        # Set the start offset to one past the last special token
+        idx = Offsets.OFFSET
 
         word_vectors, self.dsz, known_vocab, idx = self._read_vectors(filename, idx, known_vocab, keep_unused, **kwargs)
         self.nullv = np.zeros(self.dsz, dtype=np.float32)
-        self.unkv = np.random.uniform(-uw, uw, self.dsz)
-        word_vectors = [self.nullv, self.unkv] + word_vectors
-        self.vocab["<PAD>"] = 0
-        self.vocab["<UNK>"] = 1
+        special_tokens = [self.nullv]
+        for i in range(1, len(Offsets.VALUES)):
+            special_tokens.append(np.random.uniform(-uw, uw, self.dsz))
+        word_vectors = special_tokens + word_vectors
+        # Add "well-known" values to the vocab
+        for i, name in enumerate(Offsets.VALUES):
+            self.vocab[name] = i
 
         if known_vocab is not None:
-            known_vocab.pop("<UNK>", 0)
+            # Remove "well-known" values
+            for name in Offsets.VALUES:
+                known_vocab.pop(name, 0)
             unknown = {v: cnt for v, cnt in known_vocab.items() if cnt > 0}
             for v in unknown:
                 word_vectors.append(np.random.uniform(-uw, uw, self.dsz))
@@ -259,16 +265,17 @@ class RandomInitVecModel(EmbeddingsModel):
         super(RandomInitVecModel, self).__init__()
         uw = 0.0 if unif_weight is None else unif_weight
         self.vocab = dict()
-        self.vocab["<PAD>"] = 0
-        self.vocab["<UNK>"] = 1
+        for i, name in enumerate(Offsets.VALUES):
+            self.vocab[name] = i
         self.dsz = dsz
-        self.vsz = 2
+        self.vsz = Offsets.OFFSET
 
         if counts is True:
-            known_vocab.pop("<UNK>", 0)
+            for name in Offsets.VALUES:
+                known_vocab.pop(name, 0)
             attested = [v for v, cnt in known_vocab.items() if cnt > 0]
             for k, v in enumerate(attested):
-                self.vocab[v] = k + 2  # <PAD>,<UNK>
+                self.vocab[v] = k + Offsets.OFFSET
                 self.vsz += 1
         else:
             self.vocab = known_vocab
@@ -277,10 +284,10 @@ class RandomInitVecModel(EmbeddingsModel):
         self.weights = np.random.uniform(-uw, uw, (self.vsz, self.dsz))
 
         self.nullv = np.zeros(self.dsz, dtype=np.float32)
-        self.unkv = np.random.uniform(-uw, uw, self.dsz)
 
         self.weights[0] = self.nullv
-        self.weights[1] = self.unkv
+        for i in range(1, len(Offsets.VALUES)):
+            self.weights[i] = np.random.uniform(-uw, uw, self.dsz)
 
     def get_vocab(self):
         return self.vocab

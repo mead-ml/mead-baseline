@@ -9,7 +9,8 @@ from baseline.utils import ls_props, read_json, write_json
 from baseline.tf.embeddings import *
 from baseline.version import __version__
 from baseline.model import register_model
-from baseline.utils import listify
+from baseline.utils import listify, Offsets
+
 
 class TaggerModelBase(TaggerModel):
 
@@ -184,7 +185,7 @@ class TaggerModelBase(TaggerModel):
                 trainable=True
             )
 
-            self.mask = crf_mask(self.labels, self.span_type, self.labels['<GO>'], self.labels['<EOS>'], self.labels.get('<PAD>'))
+            self.mask = crf_mask(self.labels, self.span_type, Offsets.GO, Offsets.EOS, Offsets.PAD)
             self.inv_mask = tf.cast(tf.equal(self.mask, 0), tf.float32) * tf.constant(-1e4)
 
             self.A = tf.add(tf.multiply(A, self.mask), self.inv_mask, name="transitions")
@@ -198,7 +199,7 @@ class TaggerModelBase(TaggerModel):
         bsz = probs_shape[0]
         lsz = len(self.labels)
         np_gos = np.full((1, 1, lsz), -1e4, dtype=np.float32)
-        np_gos[:, :, self.labels['<GO>']] = 0
+        np_gos[:, :, Offsets.GO] = 0
         gos = tf.constant(np_gos)
         start = tf.tile(gos, [bsz, 1, 1])
         probv = tf.concat([start, self.probs], axis=1)

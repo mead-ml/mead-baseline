@@ -1,7 +1,7 @@
 import numpy as np
 from baseline.model import EncoderDecoderModel, register_model
 from baseline.dy.dynety import *
-from baseline.utils import topk
+from baseline.utils import topk, Offsets
 
 
 @register_model(task='seq2seq', name='default')
@@ -10,8 +10,6 @@ class Seq2SeqModel(DynetModel, EncoderDecoderModel):
     def __init__(self, embeddings_in, embeddings_out, **kwargs):
         super(Seq2SeqModel, self).__init__(kwargs['pc'])
         self.train = True
-        self.GO = kwargs.get('GO')
-        self.EOS = kwargs.get('EOS')
         self.hsz = kwargs['hsz']
         layers = kwargs['layers']
         self.rnntype = kwargs['rnntype']
@@ -167,8 +165,6 @@ class Seq2SeqModel(DynetModel, EncoderDecoderModel):
         return batch
 
     def greedy_decode(self, inputs, mxlen=100):
-        GO = self.vocab2['<GO>']
-        EOS = self.vocab2['<EOS>']
         dy.renew_cg()
         rnn_enc_seq, final_encoder_state = self.encode(inputs)
         context_mx = dy.concatenate_cols(rnn_enc_seq)
@@ -177,7 +173,7 @@ class Seq2SeqModel(DynetModel, EncoderDecoderModel):
         attn_fn = self.attn(context_mx)
 
         output_i = rnn_enc_seq[-1]  # zeros?!
-        output = [GO]
+        output = [Offsets.GO]
         for i in range(mxlen):
             dst_last = np.array(output[-1]).reshape(1, 1)
             embed_i = self.tgt_embedding([dst_last])[-1]
@@ -187,14 +183,12 @@ class Seq2SeqModel(DynetModel, EncoderDecoderModel):
             output_i = attn_fn(rnn_output_i)
             output_i = np.argmax(self.preds(output_i).npvalue())
             output.append(output_i)
-            if output_i == EOS:
+            if output_i == Offsets.EOS:
                 break
 
         return output
 
     def beam_decode(self, inputs, K, mxlen=100):
-        GO = self.GO
-        EOS = self.EOS
         dy.renew_cg()
 
         paths = [[GO] for _ in range(K)]
@@ -242,7 +236,7 @@ class Seq2SeqModel(DynetModel, EncoderDecoderModel):
             for j, best_flat in enumerate(best_idx_flat):
                 beam_id = best_beams[j]
                 best_word = best_idx[j]
-                if best_word == EOS:
+                if best_word == Offsets.EOS:
                     done[j] = True
                 new_done.append(done[beam_id])
                 new_paths.append(paths[beam_id] + [best_word])

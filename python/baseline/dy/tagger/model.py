@@ -5,6 +5,7 @@ from baseline.model import (
 )
 import numpy as np
 from baseline.dy.dynety import CRF, Linear, DynetModel, rnn_forward
+from baseline.utils import Offsets
 
 
 class TaggerModelBase(DynetModel, TaggerModel):
@@ -23,7 +24,7 @@ class TaggerModelBase(DynetModel, TaggerModel):
 
         if self.do_crf:
             vocab = labels if self.crf_mask else None
-            self.crf = CRF(nc, pc=self.pc, idxs=(labels['<GO>'], labels['<EOS>']),
+            self.crf = CRF(nc, pc=self.pc, idxs=(Offsets.GO, Offsets.EOS),
                            vocab=vocab, span_type=self.span_type)
 
         self.activation_type = kwargs.get('activation', 'tanh')

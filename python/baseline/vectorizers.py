@@ -1,5 +1,5 @@
 import numpy as np
-from baseline.utils import export, optional_params, listify, register
+from baseline.utils import export, optional_params, listify, register, Offsets
 import collections
 
 
@@ -118,11 +118,9 @@ class GOVectorizer(Vectorizer):
         return counter
 
     def run(self, tokens, vocab):
-        GO = vocab['<GO>']
-        EOS = vocab['<EOS>']
         vec1d, valid_length = self.vectorizer.run(tokens, vocab)
-        vec1d = np.concatenate([[GO], vec1d])
-        vec1d[valid_length] = EOS
+        vec1d = np.concatenate([[Offsets.GO], vec1d])
+        vec1d[valid_length] = Offsets.EOS
         return vec1d, valid_length + 1
 
     def get_dims(self):

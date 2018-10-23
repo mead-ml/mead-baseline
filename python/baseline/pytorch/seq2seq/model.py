@@ -3,6 +3,7 @@ import torch.nn as nn
 from torch.autograd import Variable
 from baseline.pytorch.torchy import *
 from baseline.model import EncoderDecoderModel, register_model
+from baseline.utils import Offsets
 import os
 
 
@@ -19,8 +20,6 @@ class Seq2SeqModel(nn.Module, EncoderDecoderModel):
         """
         super(Seq2SeqModel, self).__init__()
         self.beam_sz = kwargs.get('beam', 1)
-        self.GO = kwargs.get('GO')
-        self.EOS = kwargs.get('EOS')
         self.gpu = kwargs.get('gpu', True)
         src_dsz, tgt_dsz = self.init_embed(src_embeddings, tgt_embedding)
         self.src_lengths_key = kwargs.get('src_lengths_key')
@@ -227,10 +226,8 @@ class Seq2SeqModel(nn.Module, EncoderDecoderModel):
 
             context, h_i = self.encode(inputs, src_len)
             src_mask = sequence_mask(src_len)
-            GO = self.GO
-            EOS = self.EOS
 
-            paths = [[GO] for _ in range(K)]
+            paths = [[Offsets.GO] for _ in range(K)]
             # K
             scores = torch.FloatTensor([0. for _ in range(K)])
             if self.gpu:
