@@ -3,12 +3,10 @@ import json
 import pytest
 import numpy as np
 tf = pytest.importorskip('tensorflow')
-from baseline.w2v import RandomInitVecModel
-from baseline.model import create_tagger_model
+from baseline.model import create_tagger_model, load_tagger_model
+from baseline.embeddings import load_embeddings
 from baseline.utils import crf_mask as np_crf
-from baseline.tf.tagger import RNNTaggerModel
 
-os.environ['CUDA_VISIBLE_DEVICES'] = ''
 
 HSZ = 100
 WSZ = 30
@@ -19,26 +17,34 @@ SPAN_TYPE = "IOB2"
 LOC = os.path.dirname(os.path.realpath(__file__))
 
 
+@pytest.fixture(scope="module")
+def set_cpu():
+    os.environ['CUDA_VISIBLE_DEVICES'] = ''
+    yield
+    del os.environ['CUDA_VISIBLE_DEVICES']
+
+
 @pytest.fixture
 def label_vocab():
     LOC = os.path.dirname(os.path.realpath(__file__))
     vocab_loc = os.path.join(LOC, "test_data", "crf_vocab")
     return json.load(open(vocab_loc))
 
+
 @pytest.fixture
 def embeds():
+    import baseline.tf.embeddings
     embeds = {}
-    embeds['word'] = RandomInitVecModel(HSZ, {chr(i): i for i in range(100)})
-    embeds['char'] = RandomInitVecModel(WSZ, {chr(i): i for i in range(100)})
+    embeds['word'] = load_embeddings('word', dsz=HSZ, known_vocab={chr(i): i for i in range(100)})['embeddings']
+    embeds['char'] = load_embeddings('char', dsz=WSZ, known_vocab={chr(i): i for i in range(100)})['embeddings']
     return embeds
+
 
 @pytest.fixture
 def save_file():
     base = 'del'
     path = os.path.join(LOC, base)
     yield path
-    os.remove(path + "-char.vocab")
-    os.remove(path + "-word.vocab")
     os.remove(os.path.join(LOC, 'checkpoint'))
     for file_name in os.listdir(LOC):
         if file_name.startswith(base):
@@ -46,9 +52,10 @@ def save_file():
 
 @pytest.fixture
 def model(label_vocab, embeds):
+    from baseline.tf import tagger
     tf.reset_default_graph()
     model = create_tagger_model(
-        label_vocab, embeds,
+        embeds, label_vocab,
         crf=True, crf_mask=True, span_type=SPAN_TYPE,
         hsz=HSZ, cfiltsz=[3], wsz=WSZ,
         layers=2, rnntype="blstm"
@@ -57,27 +64,32 @@ def model(label_vocab, embeds):
     model.sess.run(tf.global_variables_initializer())
     return model
 
+
 def test_mask_used(label_vocab, model):
     transition = model.sess.run(model.A)
     assert transition[label_vocab['O'], label_vocab[S]] == -1e4
+
 
 def test_mask_is_transpose(label_vocab, model):
     transition = model.sess.run(model.mask)
     np_mask = np_crf(label_vocab, SPAN_TYPE, label_vocab[S], label_vocab[E], label_vocab[P])
     np.testing.assert_allclose(transition.T, np_mask)
 
+
 def test_persists_save(model, save_file):
     model.save_using(tf.train.Saver())
     t1 = model.sess.run(model.A)
     model.save(save_file)
-    m2 = RNNTaggerModel.load(save_file)
+    m2 = load_tagger_model(save_file)
     t2 = model.sess.run(m2.A)
     np.testing.assert_allclose(t1, t2)
 
+
 def test_skip_mask(label_vocab, embeds):
     tf.reset_default_graph()
+    from baseline.tf import tagger
     model = create_tagger_model(
-        label_vocab, embeds,
+        embeds, label_vocab,
         crf=True, span_type=SPAN_TYPE,
         hsz=HSZ, cfiltsz=[3], wsz=WSZ,
         layers=2, rnntype="blstm"
@@ -87,10 +99,12 @@ def test_skip_mask(label_vocab, embeds):
     transition = model.sess.run(model.A)
     assert transition[label_vocab['O'], label_vocab[S]] != -1e4
 
+
 def test_error_on_mask_and_no_span(label_vocab, embeds):
     tf.reset_default_graph()
+    from baseline.tf import tagger
     model = create_tagger_model(
-        label_vocab, embeds,
+        embeds, label_vocab,
         crf=True, crf_mask=True,
         hsz=HSZ, cfiltsz=[3], wsz=WSZ,
         layers=2, rnntype="blstm"

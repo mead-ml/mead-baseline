@@ -233,7 +233,6 @@ class TaggerModelBase(TaggerModel):
 
     def __init__(self):
         super(TaggerModelBase, self).__init__()
-        pass
 
     def get_labels(self):
         return self.labels

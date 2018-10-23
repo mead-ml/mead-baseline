@@ -9,9 +9,15 @@ try:
 except ImportError:
     raise unittest.SkipTest('Failed to import tensorflow')
 
-os.environ['CUDA_VISIBLE_DEVICES'] = ''
-
 class ParallelConvTest(tf.test.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        os.environ['CUDA_VISIBLE_DEVICES'] = ''
+
+    @classmethod
+    def tearDownClass(cls):
+        del os.environ['CUDA_VISIBLE_DEVICES']
 
     def setUp(self):
         tf.reset_default_graph()

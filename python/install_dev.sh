@@ -33,6 +33,6 @@ fi
 
 if [ $package = "baseline" ]; then
     if [ $test = "test" ]; then
-        pytest
+        pytest --forked
     fi
 fi

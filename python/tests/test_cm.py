@@ -31,7 +31,7 @@ def test_mc_precision():
     np.testing.assert_allclose(wp, 0.5833333, TOL)
     mp = cm.get_mean_precision()
     np.testing.assert_allclose(mp, 0.5833333, TOL)
-    
+
 def test_mc_recall():
     cm = make_mc_cm()
     recall = cm.get_recall()

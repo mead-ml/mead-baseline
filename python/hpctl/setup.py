@@ -77,7 +77,7 @@ setup(
     setup_requires=[
     ],
     extras_require={
-        'test': ['pytest', 'mock'],
+        'test': ['pytest', 'mock', 'pytest-forked'],
         'docker': ['docker'],
         'remote': ['flask', 'requests', 'cachetools']
     },

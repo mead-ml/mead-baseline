@@ -1,8 +1,8 @@
 import random
 import pytest
 import numpy as np
-dy = pytest.importorskip('dynet')
 from mock import MagicMock, patch
+dy = pytest.importorskip('dynet')
 import baseline
 from baseline.dy.dynety import *
 
@@ -253,80 +253,3 @@ def test_conv_parameter_init_glorot():
     max_ = np.max(conv_weight.as_array())
     np.testing.assert_allclose(min_, -gold, atol=1e-5)
     np.testing.assert_allclose(max_, gold, atol=1e-5)
-
-def test_embedded_dense_shape():
-    dy.renew_cg()
-    pc = dy.ParameterCollection()
-    vsz = random.choice(SIZES)
-    dsz = random.choice(SIZES)
-    seq_len = random.randint(5, 11)
-    input_ = [random.randint(0, vsz) for _ in range(seq_len)]
-    embed = Embedding(vsz, dsz, pc, dense=True)
-    output_ = embed(input_)
-    assert output_.dim() == ((seq_len, dsz), 1)
-
-def test_embedded_shape():
-    dy.renew_cg()
-    pc = dy.ParameterCollection()
-    vsz = random.choice(SIZES)
-    dsz = random.choice(SIZES)
-    seq_len = random.randint(5, 11)
-    input_ = [random.randint(0, vsz) for _ in range(seq_len)]
-    embed = Embedding(vsz, dsz, pc)
-    output_ = embed(input_)
-    assert len(output_) == seq_len
-    for out_ in output_:
-        assert out_.dim() == ((dsz,), 1)
-
-def test_embedded_shape_batched():
-    dy.renew_cg()
-    pc = dy.ParameterCollection()
-    vsz = random.choice(SIZES)
-    dsz = random.choice(SIZES)
-    seq_len = random.randint(5, 11)
-    batch_size = random.randint(5, 11)
-    input_ = [[random.randint(0, vsz) for _ in range(batch_size)] for _ in range(seq_len)]
-    embed = Embedding(vsz, dsz, pc, batched=True)
-    output_ = embed(input_)
-    assert len(output_) == seq_len
-    for out_ in output_:
-        assert out_.dim() == ((dsz, ), batch_size)
-
-def test_embedded_dense_batched():
-    dy.renew_cg()
-    pc = dy.ParameterCollection()
-    vsz = random.choice(SIZES)
-    dsz = random.choice(SIZES)
-    seq_len = random.randint(5, 11)
-    batch_size = random.randint(5, 11)
-    input_ = [[random.randint(0, vsz) for _ in range(batch_size)] for _ in range(seq_len)]
-    embed = Embedding(vsz, dsz, pc, dense=True, batched=True)
-    output_ = embed(input_)
-    output_.dim() == ((dsz, vsz), batch_size)
-
-def test_embedding_from_numpy():
-    dy.renew_cg()
-    pc = dy.ParameterCollection()
-    gold = np.random.randn(200, 100)
-    embed = Embedding(12, 12, pc, embedding_weight=gold)
-    embedding_weights = pc.lookup_parameters_list()[0]
-    np.testing.assert_allclose(gold.T, embedding_weights.npvalue())
-
-def test_embedding_lookup():
-    dy.renew_cg()
-    pc = dy.ParameterCollection()
-    gold = np.random.randn(200, 100)
-    embed = Embedding(12, 12, pc, embedding_weight=gold)
-    idx = random.randint(0, len(gold) - 1)
-    vector = embed([idx])
-    gold_v = gold[idx, :]
-    np.testing.assert_allclose(gold_v, vector[0].npvalue())
-
-def test_embedding_shape():
-    dy.renew_cg()
-    pc = dy.ParameterCollection()
-    vsz = random.choice(SIZES)
-    dsz = random.choice(SIZES)
-    embed = Embedding(vsz, dsz, pc)
-    weights = pc.lookup_parameters_list()[0]
-    assert weights.shape() == (vsz, dsz)

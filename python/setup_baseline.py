@@ -71,7 +71,7 @@ def main():
             'requests',
         ],
         extras_require={
-            'test': ['pytest', 'mock', 'contextdecorator']
+            'test': ['pytest', 'mock', 'contextdecorator', 'pytest-forked']
         },
         entry_points={
             'console_scripts': [
