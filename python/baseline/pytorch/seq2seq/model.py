@@ -242,7 +242,7 @@ class Seq2SeqModel(nn.Module, EncoderDecoderModel):
             for i in range(mxlen):
                 lst = [path[-1] for path in paths]
                 dst = torch.LongTensor(lst).type(inputs[src_field].data.type())
-                mask_eos = dst == EOS
+                mask_eos = dst == Offsets.EOS
                 mask_pad = dst == 0
                 dst = dst.view(1, K)
                 var = torch.autograd.Variable(dst)
