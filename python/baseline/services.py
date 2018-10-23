@@ -212,7 +212,7 @@ class TaggerService(object):
 
         for k in self.vectorizers.keys():
             examples[k] = np.stack(examples[k])
-
+        examples[lengths_key] = np.stack(examples[lengths_key])
         outcomes = self.model.predict(examples)
         outputs = []
         for i, outcome in enumerate(outcomes):

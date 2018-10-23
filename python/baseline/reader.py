@@ -180,6 +180,7 @@ class SeqPredictReader(object):
     def __init__(self, vectorizers, trim=False):
         self.vectorizers = vectorizers
         self.trim = trim
+        # TODO: Add <UNK>: 1?
         self.label2index = {"<PAD>": 0, "<GO>": 1, "<EOS>": 2}
         self.label_vectorizer = Dict1DVectorizer(fields='y', mxlen=-1)
 
