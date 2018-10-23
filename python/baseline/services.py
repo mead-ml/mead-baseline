@@ -175,10 +175,7 @@ class ClassifierService(Service):
         for k in self.vectorizers.keys():
             examples[k] = np.stack(examples[k])
 
-        if self.model:
-            outcomes_list = self.model.classify(examples)
-        else:
-            request = create_request(examples, self.name, "predict_text")
+        outcomes_list = self.model.classify(examples)
             
         results = []
         for outcomes in outcomes_list:
@@ -419,7 +416,7 @@ class EncoderDecoderService(Service):
             lengths_key = '{}_lengths'.format(k)
             examples[lengths_key] = np.stack(examples[lengths_key])
 
-        outcomes = self.model.run(examples)
+        outcomes = self.model.predict(examples)
 
         results = []
         for i in range(len(outcomes)):

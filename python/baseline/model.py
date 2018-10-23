@@ -258,7 +258,7 @@ class RemoteModel(object):
     def predict(self, examples):
         return self._transform(examples)
 
-    def run(self, examples):
+    def predict_next(self, examples):
         return self._transform(examples)
 
     def _transform(self, examples):
