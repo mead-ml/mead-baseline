@@ -40,6 +40,7 @@ class RemoteModel(object):
         self.signature = signature
 
         self.channel = grpc.insecure_channel(remote)
+        self.beam = None
 
     def classify(self, examples):
         return self._transform(examples)
@@ -95,7 +96,9 @@ class RemoteModel(object):
         if not classes:
             # s2s returns int values.
             classes = predict_response.outputs.get('classes').int_val
-            return [classes]
+            results = [classes[x:x+self.beam] for x in range(0, len(classes), self.beam)]
+            results = list(zip(*results)) #transpose
+            return results
 
         scores = predict_response.outputs.get('scores')
         if not scores:
