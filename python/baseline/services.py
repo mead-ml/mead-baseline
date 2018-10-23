@@ -1,22 +1,26 @@
-import numpy as np
-from baseline.utils import (export,
-                            unzip_files,
-                            find_model_basename,
-                            find_files_with_prefix,
-                            import_user_module,
-                            read_json,
-                            is_sequence,
-                            revlut,
-                            load_vectorizers,
-                            load_vocabs)
-
-from baseline.model import (load_model,
-                            load_tagger_model,
-                            load_seq2seq_model,
-                            load_lang_model)
-import baseline
 import os
 import pickle
+import numpy as np
+import baseline
+from baseline.utils import (
+    export,
+    unzip_files,
+    find_model_basename,
+    find_files_with_prefix,
+    import_user_module,
+    read_json,
+    is_sequence,
+    revlut,
+    load_vectorizers,
+    load_vocabs
+)
+from baseline.model import (
+    load_model,
+    load_tagger_model,
+    load_seq2seq_model,
+    load_lang_model
+)
+
 
 __all__ = []
 exporter = export(__all__)
@@ -49,6 +53,7 @@ class ClassifierService(object):
 
         model_basename = find_model_basename(directory)
         be = kwargs.get('backend', 'tf')
+        import_user_module('baseline.{}.embeddings'.format(be))
         import_user_module('baseline.{}.classify'.format(be))
         model = load_model(model_basename, **kwargs)
         return cls(vocabs, vectorizers, model)
@@ -125,6 +130,7 @@ class TaggerService(object):
 
         model_basename = find_model_basename(directory)
         be = kwargs.get('backend', 'tf')
+        import_user_module('baseline.{}.embeddings'.format(be))
         import_user_module('baseline.{}.tagger'.format(be))
         model = load_tagger_model(model_basename, **kwargs)
         return cls(vocabs, vectorizers, model)
@@ -250,6 +256,7 @@ class LanguageModelService(object):
         vectorizers = load_vectorizers(directory)
         model_basename = find_model_basename(directory)
         be = kwargs.get('backend', 'tf')
+        import_user_module('baseline.{}.embeddings'.format(be))
         import_user_module('baseline.{}.lm'.format(be))
         model = load_lang_model(model_basename, **kwargs)
         return cls(vocabs, vectorizers, model)
@@ -343,6 +350,7 @@ class EncoderDecoderService(object):
         vectorizers = load_vectorizers(directory)
         model_basename = find_model_basename(directory)
         be = kwargs.get('backend', 'tf')
+        import_user_module('baseline.{}.embeddings'.format(be))
         import_user_module('baseline.{}.seq2seq'.format(be))
         model = load_seq2seq_model(model_basename, **kwargs)
         return cls(vocabs, vectorizers, model)

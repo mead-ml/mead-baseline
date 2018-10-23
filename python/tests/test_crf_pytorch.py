@@ -4,10 +4,8 @@ import pytest
 import numpy as np
 torch = pytest.importorskip('torch')
 from torch.optim import SGD
-from baseline.w2v import RandomInitVecModel
-from baseline.pytorch.crf import CRF, crf_mask
-from baseline.utils import crf_mask as np_crf
 from baseline.model import create_tagger_model
+from baseline.embeddings import load_embeddings
 
 HSZ = 100
 WSZ = 30
@@ -27,6 +25,7 @@ def label_vocab():
 
 @pytest.fixture
 def crf(label_vocab):
+    from baseline.pytorch.crf import CRF
     return CRF(
         len(label_vocab),
         (label_vocab[S], label_vocab[E]), True,
@@ -36,16 +35,18 @@ def crf(label_vocab):
 
 @pytest.fixture
 def embeds():
+    import baseline.pytorch.embeddings
     embeds = {}
-    embeds['word'] = RandomInitVecModel(HSZ, {chr(i): i for i in range(100)})
-    embeds['char'] = RandomInitVecModel(WSZ, {chr(i): i for i in range(100)})
+    embeds['word'] = load_embeddings('word', dsz=HSZ, known_vocab={chr(i): i for i in range(100)})['embeddings']
+    embeds['char'] = load_embeddings('char', dsz=WSZ, known_vocab={chr(i): i for i in range(100)})['embeddings']
     return embeds
 
 
 @pytest.fixture
 def model(label_vocab, embeds):
+    import baseline.pytorch.tagger.model
     return create_tagger_model(
-        label_vocab, embeds,
+        embeds, label_vocab,
         crf=True, crf_mask=True, span_type=SPAN_TYPE,
         hsz=HSZ, cfiltsz=[3], wsz=WSZ,
         layers=2, rnntype="blstm"
@@ -58,6 +59,7 @@ def test_mask_is_applied(label_vocab, crf):
 
 
 def test_mask_skipped(label_vocab):
+    from baseline.pytorch.crf import CRF
     crf = CRF(
         len(label_vocab),
         (label_vocab[S], label_vocab[E]),
@@ -67,6 +69,7 @@ def test_mask_skipped(label_vocab):
 
 
 def test_error_without_type(label_vocab):
+    from baseline.pytorch.crf import CRF
     with pytest.raises(AssertionError):
         _ = CRF(
             len(label_vocab),
@@ -75,29 +78,27 @@ def test_error_without_type(label_vocab):
         )
 
 
-# Using .cuda() in pytest call is having problems
-# From turning CUDA_VISIBLE_DEVICES off for tensorflow?
+def test_mask_follows_crf_device(crf):
+    assert crf.mask.device == crf.transitions_p.device
+    crf = crf.cuda()
+    assert crf.mask.device == crf.transitions_p.device
 
-# def test_mask_follows_crf_device(crf):
-#     assert crf.mask.device == crf.transitions_p.device
-#     crf = crf.cuda()
-#     assert crf.mask.device == crf.transitions_p.device
 
-# def test_mask_same_after_update(label_vocab, crf):
-#     crf = crf.cuda()
-#     opt = SGD(crf.parameters(), lr=0.01)
-#     m1 = crf.mask.cpu().numpy()
-#     t1 = crf.transitions_p.cpu().detach().numpy()
-#     gold = torch.LongTensor([3, 9, 9, 4, 6, 7, 5]).cuda()
-#     emissions = torch.rand(len(gold), len(label_vocab)).cuda()
-#     l = crf.neg_log_loss(emissions, gold)
-#     l.backward()
-#     opt.step()
-#     m2 = crf.mask.cpu().numpy()
-#     t2 = crf.transitions_p.cpu().detach().numpy()
-#     np.testing.assert_allclose(m1, m2)
-#     with pytest.raises(AssertionError):
-#         np.testing.assert_allclose(t1, t2)
+def test_mask_same_after_update(label_vocab, crf):
+    crf = crf.cuda()
+    opt = SGD(crf.parameters(), lr=0.01)
+    m1 = crf.mask.cpu().numpy()
+    t1 = crf.transitions_p.cpu().detach().numpy()
+    gold = torch.LongTensor([[3, 9, 9, 4, 6, 7, 5]]).cuda()
+    emissions = torch.rand(1, gold.shape[1], len(label_vocab)).cuda()
+    l = crf.neg_log_loss(emissions, gold, torch.LongTensor([gold.shape[1]]))
+    l.backward()
+    opt.step()
+    m2 = crf.mask.cpu().numpy()
+    t2 = crf.transitions_p.cpu().detach().numpy()
+    np.testing.assert_allclose(m1, m2)
+    with pytest.raises(AssertionError):
+        np.testing.assert_allclose(t1, t2)
 
 
 def test_mask_used_in_model(label_vocab, model):
@@ -106,8 +107,9 @@ def test_mask_used_in_model(label_vocab, model):
 
 
 def test_mask_not_used_in_model(label_vocab, embeds):
+    import baseline.pytorch.tagger.model
     model = create_tagger_model(
-        label_vocab, embeds,
+        embeds, label_vocab,
         crf=True,
         hsz=HSZ, cfiltsz=[3], wsz=WSZ,
         layers=2, rnntype="blstm"
@@ -117,9 +119,10 @@ def test_mask_not_used_in_model(label_vocab, embeds):
 
 
 def test_error_when_mask_and_no_span(label_vocab, embeds):
+    import baseline.pytorch.tagger.model
     with pytest.raises(AssertionError):
         model = create_tagger_model(
-            label_vocab, embeds,
+            embeds, label_vocab,
             crf=True, crf_mask=True,
             hsz=HSZ, cfiltsz=[3], wsz=WSZ,
             layers=2, rnntype="blstm"

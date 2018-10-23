@@ -2,15 +2,8 @@ import os
 import pytest
 import numpy as np
 from mock import patch, Mock
-# tf = pytest.importorskip('tensorflow')
-import tensorflow as tf
-import baseline
-import baseline.tf.tagger
+tf = pytest.importorskip('tensorflow')
 from mead.tasks import TaggerTask
-from mead.tf.exporters import (TaggerTensorFlowExporter, 
-                              Seq2SeqTensorFlowExporter, 
-                              ClassifyTensorFlowExporter)
-from mead.tf.exporters import FIELD_NAME
 
 CONFIG_PARAMS = {
     "preproc": {
@@ -52,16 +45,19 @@ def task():
 
 @pytest.fixture
 def tagger_exporter():
+    from mead.tf.exporters import TaggerTensorFlowExporter
     m = TaggerTensorFlowExporter(task())
     return m
 
 @pytest.fixture
 def s2s_exporter():
+    from mead.tf.exporters import Seq2SeqTensorFlowExporter
     m = Seq2SeqTensorFlowExporter(task())
     return m
 
 @pytest.fixture
 def cls_exporter():
+    from mead.tf.exporters import ClassifyTensorFlowExporter
     m = ClassifyTensorFlowExporter(task())
     return m
 
@@ -78,7 +74,7 @@ class ExporterTest(tf.test.TestCase):
     def test_init_embeddings(self, read_json, eval):
         with self.test_session() as sess:
             exporter = s2s_exporter()
-            
+
             out = exporter.init_embeddings([('test', 'class'), ('test2', 'class')], 'basename')
 
             assert 'test' in out and 'test2' in out
@@ -102,7 +98,7 @@ class ExporterTest(tf.test.TestCase):
 
                 exporter._create_model = Mock(side_effect=fake_create_model_exception)
                 sess = Mock()
-                
+
                 with pytest.raises(Exception):
                     sin, sout, sig = exporter._create_rpc_call(sess, 'basename')
 
@@ -119,7 +115,7 @@ class ExporterTest(tf.test.TestCase):
                 mvalues = Mock()
                 def fake_create_model_exception(sess, basename):
                     model = Mock()
-                    
+
                     info = Mock()
                     info.x = 1
                     model.src_embeddings = {'one': info, 'two': info}
@@ -129,7 +125,7 @@ class ExporterTest(tf.test.TestCase):
 
                 exporter._create_model = Mock(side_effect=fake_create_model_exception)
                 sess = Mock()
-                
+
                 sin, sout, sig = exporter._create_rpc_call(sess, 'basename')
 
                 assert 'one' in sin and 'two' in sin
@@ -153,6 +149,7 @@ class ExporterTest(tf.test.TestCase):
     #             sin, sout, sig = exporter._create_rpc_call(sess, 'basename')
 
     # def test_create_example(self):
+    #     from mead.tf.exporters import FIELD_NAME
     #     with self.test_session() as sess:
     #         exporter = tagger_exporter()
     #         serialized_example, example = exporter._create_example([])
@@ -170,7 +167,7 @@ class ExporterTest(tf.test.TestCase):
     #     """
     #     using a regular session as called from inside the model,
     #     run _run(), returning the signature for the exported model
-        
+
     #     we check if the preprocessing fields returned in our mocked
     #     _run_preproc() method are used to call the signature.
     #     """
@@ -181,7 +178,7 @@ class ExporterTest(tf.test.TestCase):
     #         exporter.restore_checkpoint = Mock()
     #         exporter._run_preproc = Mock(return_value=('srl', 'ex', 'raw', 'lengths'))
 
-            
+
     #         with patch('mead.tf.exporters.SignatureInput') as sigin:
     #             sig_in, sig_out, sig_name = exporter._run(sess, TAGGER_MODEL_FILES, None, use_preproc=True)
 

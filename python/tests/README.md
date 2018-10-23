@@ -1,5 +1,16 @@
 # Writing tests
 
+# Dealing with the registry
+
+Baseline uses a global registry (explained [here](https://github.com/dpressel/baseline/blob/feature/v1/docs/addons.md)) to handle both user defined and included models. This causes problems with testing where things try to overwrite each other when the tests are being collected.
+
+To fix this make sure that **all imports** that will import a registered things (models, vectorizers, embeddings, reporting hooks, readers, trainers, and fit funcs) are done inside of the tests themselves.
+
+
+## Running tests
+
+Run tests with `pytest --forked`. This runs tests with each test in its own process.
+
 ## Versions
 
 Support python 2 and 3 in your tests. This means using the `mock` backport library to import `MagicMock` or `patch` rather than `unittest.mock`

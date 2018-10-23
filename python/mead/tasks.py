@@ -41,6 +41,7 @@ class Backend(object):
     def load(self, task_name):
         base_pkg_name = 'baseline.{}'.format(self.name)
         import_user_module(base_pkg_name)
+        import_user_module('{}.embeddings'.format(base_pkg_name))
         import_user_module('{}.{}'.format(base_pkg_name, task_name))
 
 
