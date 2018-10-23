@@ -25,6 +25,14 @@ from baseline.model import (
 __all__ = []
 exporter = export(__all__)
 
+from tensorflow_serving.apis import (predict_pb2 as predictpb, 
+                         inference_pb2 as infpb, 
+                         prediction_service_pb2_grpc as servicepb
+                         )
+# from tensorflow.contrib.utils import make_tensor_proto
+# import tensorflow as tf
+import grpc
+
 class RemoteModel(object):
     def __init__(self, remote, name, signature):
         self.remote = remote
@@ -39,14 +47,15 @@ class RemoteModel(object):
     def predict(self, examples):
         return self._transform(examples)
 
-    def run(self, examples):
+    def predict_next(self, examples):
         return self._transform(examples)
 
     def _transform(self, examples):
         request = self.create_request(examples)
         stub = servicepb.PredictionServiceStub(self.channel)
         outcomes_list = stub.Predict(request)
-        outcomes_list = self.deserialize_response(outcomes_list)
+        #local models return an nbest list. to duplicate, we nest the result in lists.
+        outcomes_list = [self.deserialize_response(outcomes_list)]
 
         return outcomes_list
 
@@ -56,21 +65,18 @@ class RemoteModel(object):
         request.model_spec.signature_name = self.signature
 
         for feature in examples.keys():
-            num_examples = len(examples[feature])
-            feature_len = len(examples[feature][0])
+            if isinstance(examples[feature], np.ndarray): 
+                shape =examples[feature].shape
+            else:
+                shape = [1]
 
-            shape = (num_examples, feature_len)
-            tensor_proto = tensor_pb2.TensorProto(
-                dtype=types_pb2.DT_FLOAT,
-                tensor_shape=tensor_shape_pb2.TensorShapeProto(dim=[
-                    tensor_shape_pb2.TensorShapeProto.Dim(size=-1 if d is None else d) for d in shape
-                ])
-            )
+            import tensorflow
+            tensor_proto = tensorflow.contrib.util.make_tensor_proto(examples[feature], shape=shape)
             request.inputs[feature].CopyFrom(
                 tensor_proto
             )
         
-            return request
+        return request
 
     def deserialize_response(self, predict_response):
         """
@@ -86,13 +92,21 @@ class RemoteModel(object):
                     as defined in tensorflow_serving proto files
         """
         classes = predict_response.outputs.get('classes').string_val
-        scores = predict_response.outputs.get('scores').float_val
+        if not classes:
+            # s2s returns int values.
+            classes = predict_response.outputs.get('classes').int_val
+            return [classes]
 
-        if classes is None or scores is None:
-            return []
-            # how do i log in python??
-        
-        return [(k.decode('utf-8'), v) for k,v in zip(classes, scores)]
+        scores = predict_response.outputs.get('scores')
+        if not scores:
+            return [(k,) for k in classes]
+
+        scores = scores.float_val
+        return [(k, v) for k,v in zip(classes, scores)]
+
+
+@exporter
+class ClassifierService(object):
 
 class Service(object):
     task_name = None
@@ -394,6 +408,7 @@ class EncoderDecoderService(Service):
                 mxwlen = max(mxwlen, len(token))
 
         examples = dict()
+
         for k, vectorizer in self.src_vectorizers.items():
             if hasattr(vectorizer, 'mxlen') and vectorizer.mxlen == -1:
                 vectorizer.mxlen = mxlen
@@ -413,15 +428,12 @@ class EncoderDecoderService(Service):
 
         for k in self.src_vectorizers.keys():
             examples[k] = np.stack(examples[k])
-            lengths_key = '{}_lengths'.format(k)
-            examples[lengths_key] = np.stack(examples[lengths_key])
-
+    
         outcomes = self.model.predict(examples)
 
         results = []
         for i in range(len(outcomes)):
             best = outcomes[i][0]
-
             out = []
             for j in range(len(best)):
                 word = self.tgt_idx_to_token.get(best[j], '<PAD>')

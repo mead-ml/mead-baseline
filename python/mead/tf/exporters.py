@@ -269,6 +269,7 @@ class Seq2SeqTensorFlowExporter(TensorFlowExporter):
             raise RuntimeError("state file not found or is empty")
 
         model_params["src_lengths_key"] = state["src_lengths_key"]
+        self.length_key = state["src_lengths_key"]
 
         # Re-create the embeddings sub-graph
         embeddings = self.init_embeddings(state[self.SOURCE_STATE_EMBED_KEY].items(), basename)
@@ -295,7 +296,7 @@ class Seq2SeqTensorFlowExporter(TensorFlowExporter):
         model, classes, values = self._create_model(sess, basename)
 
         predict_tensors = {}
-        predict_tensors['src_len'] = tf.saved_model.utils.build_tensor_info(model.src_len)
+        predict_tensors[self.length_key] = tf.saved_model.utils.build_tensor_info(model.src_len)
 
         for k, v in model.src_embeddings.items():
             try:

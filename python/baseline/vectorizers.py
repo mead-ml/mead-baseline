@@ -84,7 +84,7 @@ class Token1DVectorizer(AbstractVectorizer):
         if self.mxlen < 0:
             self.mxlen = self.max_seen
 
-        vec1d = np.zeros(self.mxlen, dtype=int)
+        vec1d = np.zeros(self.mxlen, dtype=np.int32)
         for i, atom in enumerate(self._next_element(tokens, vocab)):
             if i == self.mxlen:
                 i -= 1
