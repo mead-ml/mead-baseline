@@ -25,21 +25,17 @@ from baseline.model import (
 __all__ = []
 exporter = export(__all__)
 
-from tensorflow_serving.apis import (predict_pb2 as predictpb, 
-                         inference_pb2 as infpb, 
-                         prediction_service_pb2_grpc as servicepb
-                         )
-# from tensorflow.contrib.utils import make_tensor_proto
-# import tensorflow as tf
-import grpc
-
 class RemoteModel(object):
     def __init__(self, remote, name, signature):
+        self.predictpb = import_user_module('tensorflow_serving.apis.predict_pb2')
+        self.servicepb = import_user_module('tensorflow_serving.apis.prediction_service_pb2_grpc')
+        self.grpc = import_user_module('grpc')
+        
         self.remote = remote
         self.name = name
         self.signature = signature
 
-        self.channel = grpc.insecure_channel(remote)
+        self.channel = self.grpc.insecure_channel(remote)
         self.beam = None
 
     def classify(self, examples):
@@ -53,7 +49,7 @@ class RemoteModel(object):
 
     def _transform(self, examples):
         request = self.create_request(examples)
-        stub = servicepb.PredictionServiceStub(self.channel)
+        stub = self.servicepb.PredictionServiceStub(self.channel)
         outcomes_list = stub.Predict(request)
         #local models return an nbest list. to duplicate, we nest the result in lists.
         outcomes_list = [self.deserialize_response(outcomes_list)]
@@ -61,13 +57,13 @@ class RemoteModel(object):
         return outcomes_list
 
     def create_request(self, examples):
-        request = predictpb.PredictRequest()
+        request = self.predictpb.PredictRequest()
         request.model_spec.name = self.name
         request.model_spec.signature_name = self.signature
 
         for feature in examples.keys():
             if isinstance(examples[feature], np.ndarray): 
-                shape =examples[feature].shape
+                shape = examples[feature].shape
             else:
                 shape = [1]
 
@@ -128,9 +124,6 @@ class Service(object):
 
     @classmethod
     def load(cls, bundle, **kwargs):
-        remote = kwargs.get("remote", None)
-        name = kwargs.get("name", None)
-
         # can delegate
         if os.path.isdir(bundle):
             directory = bundle
@@ -140,8 +133,12 @@ class Service(object):
         vocabs = load_vocabs(directory)
         vectorizers = load_vectorizers(directory)
 
+        remote = kwargs.get("remote", None)
+        name = kwargs.get("name", None)
+
         if remote:
-            return cls(vocabs, vectorizers, None, remote, name)
+            model = RemoteModel(remote, name, "predict_text")
+            return cls(vocabs, vectorizers, model)
 
         model_basename = find_model_basename(directory)
         be = kwargs.get('backend', 'tf')
