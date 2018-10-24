@@ -224,6 +224,38 @@ def Convolution1d(fsz, cmotsz, dsz, pc, strides=(1, 1, 1, 1), name="conv"):
     return conv
 
 
+def dynet_activation(name='relu'):
+    if name == 'tahn':
+        return dy.tahn
+    if name == 'sigmoid':
+        return dy.logistic
+    if name == 'log_sigmoid':
+        return dy.log_sigmoid
+    return dy.rectify
+
+
+def ConvEncoder(insz, outsz, filtsz, pdrop, pc, activation_type='relu', name="conv-encoder"):
+    conv_pc = pc.add_subcollection(name=name)
+    fan_in = insz * filtsz
+    fan_out = outsz * filtsz
+    # Pytorch and Dynet have a gain param that has suggested values based on
+    # the nonlinearity type, this defaults to the one for relu atm.
+    glorot_bounds = 0.5 * np.sqrt(6.0 / (fan_in + fan_out))
+    weight = conv_pc.add_parameters(
+        (1, filtsz, insz, outsz),
+        init=dy.UniformInitializer(glorot_bounds),
+        name='weight'
+    )
+    bias = conv_pc.add_parameters((outsz), name="bias")
+    act = dynet_activation(activation_type)
+
+    def encode(input_):
+        c = dy.conv2d_bias(input_, weight, bias, (1, 1, 1, 1), is_valid=False)
+        activation = act(c)
+        return [x for x in activation]
+
+
+
 def ParallelConv(filtsz, cmotsz, dsz, pc, strides=(1, 1, 1, 1), name="parallel-conv"):
     if isinstance(cmotsz, int):
         cmotsz = [cmotsz] * len(filtsz)
