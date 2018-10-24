@@ -154,17 +154,21 @@ class Seq2SeqModel(nn.Module, EncoderDecoderModel):
 
     def forward(self, input):
         src_len = input['src_len']
+        src_mask = sequence_mask(src_len)
         rnn_enc_tbh, final_encoder_state = self.encode(input, src_len)
-        return self.decode(rnn_enc_tbh, input['src_len'], final_encoder_state, input['dst'])
+        return self.decode(rnn_enc_tbh, src_mask, final_encoder_state, input['dst'])
 
     def encode(self, input, src_len):
+        """
+
+        :param input: ``torch.Tensor`` oriented TxB
+        :param src_len:
+        :return:
+        """
         embed_in_seq = self.embed(input)
-        #if self.training:
         packed = torch.nn.utils.rnn.pack_padded_sequence(embed_in_seq, src_len.data.tolist())
         output_tbh, hidden = self.encoder_rnn(packed)
         output_tbh, _ = torch.nn.utils.rnn.pad_packed_sequence(output_tbh)
-        #else:
-        #    output_tbh, hidden = self.encoder_rnn(embed_in_seq)
         return output_tbh, hidden
 
     def decoder(self, context_tbh, h_i, output_i, dst, src_mask):
@@ -184,9 +188,8 @@ class Seq2SeqModel(nn.Module, EncoderDecoderModel):
         outputs = torch.stack(outputs)
         return outputs, h_i
 
-    def decode(self, context_tbh, src_len, final_encoder_state, dst):
+    def decode(self, context_tbh, src_mask, final_encoder_state, dst):
 
-        src_mask = sequence_mask(src_len)
         if self.gpu:
             src_mask = src_mask.cuda()
         h_i, output_i = self.bridge(final_encoder_state, context_tbh)
