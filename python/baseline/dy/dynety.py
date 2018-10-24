@@ -234,7 +234,7 @@ def dynet_activation(name='relu'):
     return dy.rectify
 
 
-def ConvEncoder(insz, outsz, filtsz, pdrop, pc, activation_type='relu', name="conv-encoder"):
+def ConvEncoder(insz, outsz, filtsz, pc, activation_type='relu', name="conv-encoder"):
     conv_pc = pc.add_subcollection(name=name)
     fan_in = insz * filtsz
     fan_out = outsz * filtsz
@@ -252,8 +252,15 @@ def ConvEncoder(insz, outsz, filtsz, pdrop, pc, activation_type='relu', name="co
     def encode(input_):
         c = dy.conv2d_bias(input_, weight, bias, (1, 1, 1, 1), is_valid=False)
         activation = act(c)
-        return [x for x in activation]
+        return activation
 
+    return encode
+
+
+def ConvEncoderStack(insz, outsz, filtsz, pdrop, pc, layers=1, activation_type='relu')
+    first_layer = ConvEncoder(insz, outsz, filtsz, pc, activation_type)
+    later_layers = [ConvEncoder(outsz, outsz, filtsz, pc, activation_type) for _ in range(layers - 1)]
+    
 
 
 def ParallelConv(filtsz, cmotsz, dsz, pc, strides=(1, 1, 1, 1), name="parallel-conv"):

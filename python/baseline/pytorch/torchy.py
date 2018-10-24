@@ -264,8 +264,6 @@ class ConvEncoder(nn.Module):
         super(ConvEncoder, self).__init__()
         self.outsz = outsz
         pad = filtsz//2
-        print(insz.shape)
-        exit()
         self.conv = nn.Conv1d(insz, outsz, filtsz, padding=pad)
         self.act = pytorch_activation(activation_type)
         self.dropout = nn.Dropout(pdrop)
