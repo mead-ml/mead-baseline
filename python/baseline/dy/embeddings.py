@@ -1,3 +1,4 @@
+import math
 from itertools import chain
 import numpy as np
 from baseline.dy.dynety import ParallelConv, HighwayConnection, SkipConnection, Linear
@@ -68,6 +69,40 @@ class LookupTableEmbeddings(DyNetEmbeddings):
 
     def get_vsz(self):
         return self.vsz
+
+
+@register_embeddings(name="positional")
+class PositionalLookupTableEmbeddings(DyNetEmbeddings):
+    def __init__(self, name, **kwargs):
+        super(PositionalLookupTableEmbeddings, self).__init__(kwargs['pc'])
+        self.vsz = int(kwargs.get('vsz'))
+        self.dsz = int(kwargs.get('dsz'))
+        self.dropout = float(kwargs.get('dropout', 0.1))
+        mxlen = int(kwargs.get('mxlen', 1000))
+        max_timescale = float(kwargs.get('max_timescale', 1e4))
+        log_timescale_inc = math.log(max_timescale) / self.dsz
+        inv_timescale = np.exp(np.arange(0, self.dsz, 2) * -log_timescale_inc)
+        self.embeddings = LookupTableEmbeddings(name, **kwargs)
+        pe = np.zeros((mxlen, self.dsz))
+        position = np.expand_dims(np.arange(mxlen), 1)
+        pe[:, 0::2] = np.sin(position * inv_timescale)
+        pe[:, 1::2] = np.cos(position * inv_timescale)
+        self.pe = pe
+
+    def get_dsz(self):
+        return self.dsz
+
+    def get_vsz(self):
+        return self.vsz
+
+    def encode(self, x, train):
+        embedded = self.embeddings.encode(x)
+        embedded = embedded * math.sqrt(self.dsz)
+        print(embedded.dim())
+        ((seq_len, _), _) = embedded.dim()
+        embedded = embedded + dy.inputTensor(self.pe[:seq_len])
+        embedded = dy.dropout(embedded, self.dropout) if train else embedded
+        return embedded
 
 
 @register_embeddings(name='char-conv')
