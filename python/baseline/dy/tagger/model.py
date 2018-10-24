@@ -4,7 +4,7 @@ from baseline.model import (
     register_model
 )
 import numpy as np
-from baseline.dy.dynety import CRF, Linear, DynetModel, rnn_forward
+from baseline.dy.dynety import CRF, Linear, DynetModel, rnn_forward, ConvEncoderStack
 from baseline.utils import Offsets
 
 
@@ -81,7 +81,6 @@ class TaggerModelBase(DynetModel, TaggerModel):
     def compute_unaries(self, batch_dict):
         embed_list = self.embed(batch_dict)
         exps = self.encode(embed_list)
-        exit()
         return exps
 
     def encode(self, embed_list):
@@ -164,14 +163,15 @@ class CNNTaggerModel(TaggerModelBase):
     def __init__(self, *args, **kwargs):
         super(CNNTaggerModel, self).__init__(*args, **kwargs)
 
-    def init_envoder(self, input_sz, **kwargs):
+    def init_encoder(self, input_sz, **kwargs):
         layers = int(kwargs.get('layers', 1))
         pdrop = float(kwargs.get('dropout', 0.5))
-        filesz = kwargs.get('wfiltsz', 5)
+        filtsz = kwargs.get('wfiltsz', 5)
         activation_type = kwargs.get('activation_type', 'relu')
         hsz = int(kwargs['hsz'])
-        self.encoder = ConvEncoderStack(input_sz, hsz, filtsz, pdrop, layers, activation_type)
+        self.encoder = ConvEncoderStack(filtsz, hsz, input_sz, pdrop, self.pc, layers, activation_type)
         return hsz
 
     def encode(self, embed_list):
-        pass
+        embed_list = dy.transpose(dy.concatenate_cols(embed_list))
+        return [self.output(out) for out in self.encoder(embed_list, self.train)]
