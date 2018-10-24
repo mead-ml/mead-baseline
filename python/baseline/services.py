@@ -26,8 +26,8 @@ __all__ = []
 exporter = export(__all__)
 
 class Service(object):
-    _name = None
-    _load = None
+    task_name = None
+    task_load = None
     def __init__(self, vocabs=None, vectorizers=None, model=None):
         self.vectorizers = vectorizers
         self.model = model
@@ -52,14 +52,14 @@ class Service(object):
         model_basename = find_model_basename(directory)
         be = kwargs.get('backend', 'tf')
         import_user_module('baseline.{}.embeddings'.format(be))
-        import_user_module('baseline.{}.{}'.format(be, cls._name))
-        model = cls._load(model_basename, **kwargs)
+        import_user_module('baseline.{}.{}'.format(be, cls.task_name))
+        model = cls.task_load(model_basename, **kwargs)
         return cls(vocabs, vectorizers, model)
 
 @exporter
 class ClassifierService(Service):
-    _name = 'classify'
-    _load = load_model
+    task_name = 'classify'
+    task_load = load_model
 
     def predict(self, tokens):
         """Take tokens and apply the internal vocab and vectorizers.  The tokens should be either a batch of text
@@ -108,8 +108,8 @@ class ClassifierService(Service):
 
 @exporter
 class TaggerService(Service):
-    _name = 'tagger'
-    _load = load_tagger_model
+    task_name = 'tagger'
+    task_load = load_tagger_model
 
     def predict(self, tokens, **kwargs):
         """
@@ -211,8 +211,8 @@ class TaggerService(Service):
 
 @exporter
 class LanguageModelService(Service):
-    _name = "lm"
-    _load = load_lang_model
+    task_name = "lm"
+    task_load = load_lang_model
 
     def __init__(self, *args, **kwargs):
         super(LanguageModelService, self).__init__(*args, **kwargs)
@@ -268,8 +268,8 @@ class LanguageModelService(Service):
 
 @exporter
 class EncoderDecoderService(Service):
-    _name = 'seq2seq'
-    _load = load_seq2seq_model
+    task_name = 'seq2seq'
+    task_load = load_seq2seq_model
 
     def __init__(self, vocabs=None, vectorizers=None, model=None):
         super(EncoderDecoderService, self).__init__(None, None, model)
