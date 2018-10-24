@@ -6,9 +6,9 @@ from baseline.pytorch.torchy import (pytorch_embedding,
                                      pytorch_linear,
                                      SkipConnection,
                                      Highway)
-
+import torch
 import numpy as np
-
+import math
 
 class PyTorchEmbeddings(object):
 
@@ -113,3 +113,49 @@ class CharConvEmbeddings(nn.Module, PyTorchEmbeddings):
         mots = self.char_comp(char_vecs)
         gated = self.gating_seq(mots)
         return gated.view(_0, _1, self.char_comp.outsz)
+
+
+@register_embeddings(name='positional')
+class PositionalLookupTableEmbeddings(nn.Module, PyTorchEmbeddings):
+
+    def __init__(self, _, **kwargs):
+        super(PositionalLookupTableEmbeddings, self).__init__()
+        self.vsz = kwargs.get('vsz')
+        self.dsz = kwargs.get('dsz')
+        self.dropout = nn.Dropout(kwargs.get('dropout', 0.1))
+        self.finetune = kwargs.get('finetune', True)
+        # This could get us in trouble, if in doubt, pick something big
+        mxlen = kwargs.get('mxlen', 1000)
+        max_timescale = kwargs.get('max_timescale', 1.0e4)
+
+        weights = kwargs.get('weights')
+        if weights is None:
+            self.embeddings = nn.Embedding(self.vsz, self.dsz, padding_idx=0)
+        else:
+            self.embeddings = pytorch_embedding(weights, self.finetune)
+
+        log_timescale_increment = math.log(max_timescale) / self.dsz
+        inv_timescales = torch.exp(torch.arange(0, self.dsz, 2) * -log_timescale_increment)
+
+        pe = torch.zeros(mxlen, self.dsz)
+        position = torch.arange(0, mxlen).unsqueeze(1)
+        pe[:, 0::2] = torch.sin(position * inv_timescales)
+        pe[:, 1::2] = torch.cos(position * inv_timescales)
+        pe = pe.unsqueeze(0)
+        self.register_buffer('pe', pe)
+
+    def get_dsz(self):
+        return self.dsz
+
+    def get_vsz(self):
+        return self.vsz
+
+    def forward(self, x):
+        """Add a positional encoding to the embedding, followed by dropout
+
+        :param x: The temporal signal in, to which the positional embeddings are applied
+        :return: Embedded output
+        """
+        x = self.embeddings(x) * math.sqrt(self.dsz)
+        x = x + self.pe[:, :x.size(1)]
+        return self.dropout(x)
