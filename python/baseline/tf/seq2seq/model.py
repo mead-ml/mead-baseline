@@ -385,19 +385,20 @@ class Seq2SeqModel(EncoderDecoderModel):
             # List to tensor, reform as (T, B, W)
             if self.rnntype == 'blstm':
 
-                nlayers_bi = int(self.layers / 2)
-                rnn_fwd_cell = multi_rnn_cell_w_dropout(self.hsz, self.pkeep, self.rnntype, nlayers_bi, variational=self.vdrop)
-                rnn_bwd_cell = multi_rnn_cell_w_dropout(self.hsz, self.pkeep, self.rnntype, nlayers_bi, variational=self.vdrop)
-                rnn_enc_tensor, final_encoder_state = tf.nn.bidirectional_dynamic_rnn(rnn_fwd_cell, rnn_bwd_cell,
+                rnn_fwd_cell = multi_rnn_cell_w_dropout(self.hsz//2, self.pkeep, self.rnntype, self.layers, variational=self.vdrop)
+                rnn_bwd_cell = multi_rnn_cell_w_dropout(self.hsz//2, self.pkeep, self.rnntype, self.layers, variational=self.vdrop)
+                rnn_enc_tensor, (fw_final_state, bw_final_state) = tf.nn.bidirectional_dynamic_rnn(rnn_fwd_cell, rnn_bwd_cell,
                                                                                       embed_in,
                                                                                       scope='brnn_enc',
                                                                                       sequence_length=self.src_len,
                                                                                       dtype=tf.float32)
+
                 rnn_enc_tensor = tf.concat(rnn_enc_tensor, -1)
                 encoder_state = []
-                for i in range(nlayers_bi):
-                    encoder_state.append(final_encoder_state[0][i])  # forward
-                    encoder_state.append(final_encoder_state[1][i])  # backward
+                for i in range(self.layers):
+                    h = tf.concat([fw_final_state[i].h, bw_final_state[i].h], -1)
+                    c = tf.concat([fw_final_state[i].c, bw_final_state[i].c], -1)
+                    encoder_state.append(tf.contrib.rnn.LSTMStateTuple(h=h, c=c))
                 encoder_state = tuple(encoder_state)
             else:
 
