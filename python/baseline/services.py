@@ -21,12 +21,14 @@ from baseline.model import (
     load_lang_model
 )
 
+from collections import namedtuple
 
 __all__ = []
 exporter = export(__all__)
 
+
 class RemoteModel(object):
-    def __init__(self, remote, name, signature):
+    def __init__(self, remote, name, signature, labels=None):
         self.predictpb = import_user_module('tensorflow_serving.apis.predict_pb2')
         self.servicepb = import_user_module('tensorflow_serving.apis.prediction_service_pb2_grpc')
         self.grpc = import_user_module('grpc')
@@ -37,6 +39,7 @@ class RemoteModel(object):
 
         self.channel = self.grpc.insecure_channel(remote)
         self.beam = None
+        self.labels = labels
 
     def classify(self, examples):
         return self._transform(examples)
@@ -47,12 +50,15 @@ class RemoteModel(object):
     def predict_next(self, examples):
         return self._transform(examples)
 
+    def get_labels(self):
+        return self.labels
+
     def _transform(self, examples):
         request = self.create_request(examples)
         stub = self.servicepb.PredictionServiceStub(self.channel)
         outcomes_list = stub.Predict(request)
         #local models return an nbest list. to duplicate, we nest the result in lists.
-        outcomes_list = [self.deserialize_response(outcomes_list)]
+        outcomes_list = [self.deserialize_response(examples, outcomes_list)]
 
         return outcomes_list
 
@@ -72,12 +78,13 @@ class RemoteModel(object):
             request.inputs[feature].CopyFrom(
                 tensor_proto
             )
-        
+
         return request
 
-    def deserialize_response(self, predict_response):
+    def deserialize_response(self, examples, predict_response):
         """
-        this is basically a map.
+        read the protobuf response from tensorflow serving and decode it according
+        to the signature.
 
         here's the relevant piece of the proto:
             map<string, TensorProto> inputs = 2;
@@ -89,23 +96,30 @@ class RemoteModel(object):
                     as defined in tensorflow_serving proto files
         """
         classes = predict_response.outputs.get('classes').string_val
-        if not classes:
+
+        if self.signature == 'suggest_text':
             # s2s returns int values.
             classes = predict_response.outputs.get('classes').int_val
             results = [classes[x:x+self.beam] for x in range(0, len(classes), self.beam)]
             results = list(zip(*results)) #transpose
             return results
 
-        scores = predict_response.outputs.get('scores')
-        if not scores:
-            return [(k,) for k in classes]
+        if self.signature == 'tag_text':
+            result = []
+            for i, ex in enumerate(examples):
+                length = examples['lengths'][i]
+                result.append([{'token': x, 'label': c} for x,c in zip(ex, classes[length*i:length*(i+1)])])
+            
+            return result
+            
+        if self.signature == 'predict_text':
+            scores = predict_resposne.outputs.get('scores').float_val
+            for i, ex in enumerate(examples):
+                length = examples['lengths'][i]
+                result.append([(c,s) for c,s in zip(classes[length*i:length*(i+1)], scores[length*i:length*(i+1)])])
+            
+            return result
 
-        scores = scores.float_val
-        return [(k, v) for k,v in zip(classes, scores)]
-
-
-@exporter
-class ClassifierService(object):
 
 class Service(object):
     task_name = None
@@ -132,12 +146,13 @@ class Service(object):
 
         vocabs = load_vocabs(directory)
         vectorizers = load_vectorizers(directory)
+        labels = read_json(directory+'_labels.json')
 
         remote = kwargs.get("remote", None)
         name = kwargs.get("name", None)
 
         if remote:
-            model = RemoteModel(remote, name, "predict_text")
+            model = RemoteModel(remote, name, cls.signature_name, labels=labels)
             return cls(vocabs, vectorizers, model)
 
         model_basename = find_model_basename(directory)
@@ -150,6 +165,7 @@ class Service(object):
 @exporter
 class ClassifierService(Service):
     task_name = 'classify'
+    signature_name = 'predict_text'
     task_load = load_model
 
     def predict(self, tokens):
@@ -200,6 +216,7 @@ class ClassifierService(Service):
 @exporter
 class TaggerService(Service):
     task_name = 'tagger'
+    signature_name = 'tag_text'
     task_load = load_tagger_model
 
     def transform(self, tokens, **kwargs):
@@ -283,6 +300,8 @@ class TaggerService(Service):
                         examples[lengths_key] = []
                     examples[lengths_key] += [length]
 
+        examples['lengths'] = [mxlen]
+
         for k in self.vectorizers.keys():
             examples[k] = np.stack(examples[k])
             lengths_key = '{}_lengths'.format(k)
@@ -360,6 +379,7 @@ class LanguageModelService(Service):
 @exporter
 class EncoderDecoderService(Service):
     task_name = 'seq2seq'
+    signature_name = 'suggest_text'
     task_load = load_seq2seq_model
 
     def __init__(self, vocabs=None, vectorizers=None, model=None):

@@ -165,7 +165,7 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
         model_params["sess"] = sess
 
         state = read_json(basename + '.state')
-
+        model_params['span_type'] = state['span_type']
         # Re-create the embeddings sub-graph
         embeddings = dict()
         for key, class_name in state['embeddings'].items():
@@ -173,6 +173,8 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
             embed_args = dict({'vsz': md['vsz'], 'dsz': md['dsz']})
             Constructor = eval(class_name)
             embeddings[key] = Constructor(key, **embed_args)
+                
+            
 
         model = baseline.model.create_model_for(self.task.task_name(), embeddings, labels, **model_params)
 
@@ -190,9 +192,11 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
         start = tf.constant(start_np)
         model.probs = tf.concat([start, model.probs], 1)
 
+        ones = tf.fill(tf.shape(model.lengths), 1)
+        lengths = tf.add(model.lengths, ones)
+
         if model.crf is True:
-            # TODO: how to get this?
-            indices, _ = tf.contrib.crf.crf_decode(model.probs, model.A, tf.constant([model.lengths + 1]))## We are assuming the batchsz is 1 here
+            indices, _ = tf.contrib.crf.crf_decode(model.probs, model.A, lengths)
             indices = indices[:, 1:]
 
         list_of_labels = [''] * len(labels)
@@ -210,6 +214,7 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
         model, classes, values = self._create_model(sess, basename)
 
         predict_tensors = {}
+        predict_tensors['lengths'] = tf.saved_model.utils.build_tensor_info(model.lengths)
 
         for k, v in model.embeddings.items():
             try:
@@ -218,6 +223,7 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
                 raise Exception('Unknown attribute in signature: {}'.format(v))
 
         sig_input = predict_tensors
+        print(sig_input.keys())
         sig_output = SignatureOutput(classes, values)
         return sig_input, sig_output, 'tag_text'
 
@@ -306,6 +312,7 @@ class Seq2SeqTensorFlowExporter(TensorFlowExporter):
                 raise Exception('Unknown attribute in signature: {}'.format(v))
 
         sig_input = predict_tensors
+        print(sig_input)
         sig_output = SignatureOutput(classes, values)
         return sig_input, sig_output, 'suggest_text'
         
