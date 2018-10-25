@@ -113,8 +113,9 @@ class AbstractArcPolicy(ArcPolicy):
         final_encoder_state = self.get_state(encoder_outputs)
         final_encoder_state = tf.contrib.seq2seq.tile_batch(final_encoder_state, multiplier=decoder.beam_width)
 
-        if hasattr(decoder.cell, 'clone'):
-            initial_state = decoder.cell.zero_state(batch_sz*decoder.beam_width, tf.float32)
+        initial_state = decoder.cell.zero_state(batch_sz*decoder.beam_width, tf.float32)
+
+        if hasattr(initial_state, 'clone'):
             initial_state = initial_state.clone(cell_state=final_encoder_state)
         else:
             initial_state = final_encoder_state
