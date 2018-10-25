@@ -59,7 +59,7 @@ def Linear(osz, isz, pc, name="linear"):
     weight = linear_pc.add_parameters((osz, isz), name="weight")
     bias = linear_pc.add_parameters(osz, name="bias")
 
-    def linear(input_):
+    def linear(input_, _=None):
         """
         :param input_: dy.Expression ((isz,), B)
 
@@ -89,9 +89,9 @@ def HighwayConnection(funcs, sz, pc, name="highway"):
         weights.append(highway_pc.add_parameters((sz, sz), name="weight-{}".format(i)))
         biases.append(highway_pc.add_parameters((sz), init=dy.ConstInitializer(-2), name="bias-{}".format(i)))
 
-    def highway(input_):
+    def highway(input_, train):
         for func, weight, bias in zip(funcs, weights, biases):
-            proj = dy.rectify(func(input_))
+            proj = dy.rectify(func(input_, train))
             transform = dy.logistic(dy.affine_transform([bias, weight, input_]))
             input_ = dy.cmult(transform, proj) + dy.cmult(input_, 1 - transform)
         return input_
@@ -100,9 +100,9 @@ def HighwayConnection(funcs, sz, pc, name="highway"):
 
 
 def SkipConnection(funcs, *args, **kwargs):
-    def skip(input_):
+    def skip(input_, train):
         for func in funcs:
-            proj = func(input_)
+            proj = func(input_, train)
             input_ = input_ + proj
         return input_
     return skip
@@ -181,7 +181,7 @@ def rnn_encode(rnn, input_, lengths):
     return dy.concatenate_to_batch(final_states)
 
 
-def Convolution1d(fsz, cmotsz, dsz, pc, strides=(1, 1, 1, 1), name="conv"):
+def Convolution1d(fsz, cmotsz, dsz, pc, strides=(1, 1, 1, 1), activation_type="relu", name="conv"):
     """1D Convolution.
 
     :param fsz: int, Size of conv filter.
@@ -202,8 +202,9 @@ def Convolution1d(fsz, cmotsz, dsz, pc, strides=(1, 1, 1, 1), name="conv"):
         name='weight'
     )
     bias = conv_pc.add_parameters((cmotsz), name="bias")
+    act = dynet_activation(activation_type)
 
-    def conv(input_):
+    def conv(input_, _=None):
         """Perform the 1D conv.
 
         :param input: dy.Expression ((1, T, dsz), B)
@@ -211,17 +212,56 @@ def Convolution1d(fsz, cmotsz, dsz, pc, strides=(1, 1, 1, 1), name="conv"):
         Returns:
             dy.Expression ((cmotsz,), B)
         """
-        # TODO: should be True, right?
         c = dy.conv2d_bias(input_, weight, bias, strides, is_valid=False)
-        activation = dy.rectify(c)
-        # dy.max_dim(x, d=0) is currently slow (see https://github.com/clab/dynet/issues/1011)
-        # So we do the max using max pooling instead.
-        ((_, seq_len, _), _) = activation.dim()
-        pooled = dy.maxpooling2d(activation, [1, seq_len, 1], strides)
-        mot = dy.reshape(pooled, (cmotsz,))
-        return mot
+        return act(c)
 
     return conv
+
+
+def mot_pool(x, strides=(1, 1, 1, 1)):
+    # dy.max_dim(x, d=0) is currently slow (see https://github.com/clab/dynet/issues/1011)
+    # So we do the max using max pooling instead.
+    ((_, seq_len, cmotsz), _) = x.dim()
+    pooled = dy.maxpooling2d(x, [1, seq_len, 1], strides)
+    return dy.reshape(pooled, (cmotsz,))
+
+
+def dynet_activation(name='relu'):
+    if name == 'tahn':
+        return dy.tahn
+    if name == 'sigmoid':
+        return dy.logistic
+    if name == 'log_sigmoid':
+        return dy.log_sigmoid
+    return dy.rectify
+
+
+def ConvEncoder(filtsz, outsz, insz, pdrop, pc, layers=1, activation_type='relu'):
+    conv = Convolution1d(filtsz, outsz, insz, pc, activation_type=activation_type)
+
+    def encode(input_, train):
+        x = conv(input_)
+        x = dy.dropout(x, pdrop) if train else x
+        return x
+
+    return encode
+
+
+def ConvEncoderStack(filtsz, outsz, insz, pdrop, pc, layers=1, activation_type='relu'):
+    first_layer = ConvEncoder(filtsz, outsz, insz, pdrop, pc, activation_type=activation_type)
+    later_layers = [ConvEncoder(filtsz, outsz, outsz, pdrop, pc, activation_type) for _ in range(layers - 1)]
+    residual = SkipConnection(later_layers)
+
+    def encode(input_, train):
+        dims = tuple([1] + list(input_.dim()[0]))
+        input_ = dy.reshape(input_, dims)
+        x = first_layer(input_, train)
+        x = residual(x, train)
+        new_shape = x.dim()[0]
+        x = dy.reshape(x, new_shape[1:])
+        return x
+
+    return encode
 
 
 def ParallelConv(filtsz, cmotsz, dsz, pc, strides=(1, 1, 1, 1), name="parallel-conv"):
@@ -230,12 +270,12 @@ def ParallelConv(filtsz, cmotsz, dsz, pc, strides=(1, 1, 1, 1), name="parallel-c
     conv_pc = pc.add_subcollection(name=name)
     convs = [Convolution1d(fsz, cmot, dsz, conv_pc, strides, name="conv-{}".format(fsz)) for fsz, cmot in zip(filtsz, cmotsz)]
 
-    def conv(input_):
+    def conv(input_, _=None):
         dims = tuple([1] + list(input_.dim()[0]))
         input_ = dy.reshape(input_, dims)
         mots = []
         for conv in convs:
-            mots.append(conv(input_))
+            mots.append(mot_pool(conv(input_)))
         return dy.concatenate(mots)
 
     return conv
