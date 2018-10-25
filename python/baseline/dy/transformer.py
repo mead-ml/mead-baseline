@@ -10,6 +10,12 @@ def subsequent_mask(size):
     return dy.inputTensor(mask), dy.inputTensor(inv_mask)
 
 
+def subsequent_mask_list(size):
+    mask = np.tril(np.ones((size, size))).astype(np.uint8)
+    inv_mask = (mask == 0).astype(np.uint8)
+    return dy.inputTensor(mask), dy.inputTensor(inv_mask)
+
+
 def batch_matmul(x, y):
     """This is a pain to do.
 
@@ -22,7 +28,7 @@ def batch_matmul(x, y):
     Note; This doesn't support broadcasting like the pytorch version.
     """
     ndim = len(x.dim()[0])
-    axis = [ndim - 2 , ndim - 1] + list(range(0, ndim - 2))
+    axis = [ndim - 2, ndim - 1] + list(range(0, ndim - 2))
     x = dy.transpose(x, axis)
     y = dy.transpose(y, axis)
     x_shape, batchsz = x.dim()
@@ -41,6 +47,22 @@ def batch_matmul(x, y):
     z = dy.transpose(z, axis)
 
     return z
+
+
+def folded_affine_transform(bias, weight, x):
+    ndim = len(x.dim()[0])
+    x_shape, batchsz = x.dim()
+    x_mat = x_shape[:2]
+    inners = x_shape[2:]
+    to_batch = np.prod(inners)
+
+    x = dy.reshape(x, x_mat, batch_size=to_batch * batchsz)
+
+    z = weight * x
+    z = dy.reshape(z, tuple([x_mat[0], y_mat[1]] + list(inners)), batch_size=batchsz)
+    axis = list(range(2, ndim)) + [0, 1]
+    z = dy.transpose(z, axis)
+
 
 def swap_last(x):
     """Swap the last two dims like torch.transpose(x, -2, -1)."""
@@ -72,6 +94,17 @@ def scaled_dot_product_attention(query, key, value, masks=None, dropout=None):
         weights = dy.dropout(weights, dropout)
 
     return batch_matmul(weights, value)
+
+def scaled_dot_product_attention_list(query, key, value, masks=None, dropout=None):
+    d_k = query.dim()[0][-1]
+    sqrt_d_k = math.sqrt(d_k)
+    scores = [(x * dy.transpose(y)) / sqrt_d_k for x, y in zip(query, key)]
+    if masks is not None:
+        scores = [dy.cmult(score, masks[0]) + (masks[1] * -1e9) for score in scores]
+    weights = [dy.softmax(score, d=1) for score in scores]
+    if dropout is not None:
+        weights = [dy.dropout(weight, dropout) for weight in weights]
+    return [w * v for w, v in zip(weights, value)]
 
 
 def dot_product_attention(query, key, value, masks=None, dropout=None):

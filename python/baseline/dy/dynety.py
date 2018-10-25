@@ -81,9 +81,9 @@ def FoldedLinear(osz, isz, pc, name="folded-linear"):
         shape, batchsz = input_.dim()
         fold = np.prod(shape[:-1])
         last = shape[-1]
-        input_ = dy.transpose(dy.reshape(input_, (fold, last), batch_size=batchsz))
+        input_ = dy.reshape(input_, (last,), batch_size=fold * batchsz)
         output = dy.affine_transform([bias, weight, input_])
-        return dy.reshape(output, tuple(list(shape[:-1]) + [osz]), batch_size=batchsz)
+        return dy.reshape(output, tuple([osz] + list(shape[:-1])), batch_size=batchsz)
 
     return linear
 
