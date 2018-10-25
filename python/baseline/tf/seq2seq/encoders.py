@@ -1,6 +1,6 @@
 from baseline.tf.tfy import *
 from baseline.tf.embeddings import *
-from baseline.tf.transformer import transformer_decoder_stack, transformer_encoder_stack
+from baseline.tf.transformer import transformer_encoder_stack
 from collections import namedtuple
 
 

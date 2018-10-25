@@ -78,22 +78,76 @@ class TransformerDecoder(DecoderBase):
             vocab_b = tf.get_variable("vocab_b", [vsz], dtype=tf.float32)
             outputs = tf.nn.xw_plus_b(h, vocab_w, vocab_b, name="logits")
         self.preds = tf.transpose(tf.reshape(outputs, [-1, T, vsz]), [1, 0, 2])
-
         best = tf.argmax(self.preds, -1)
         self.output(best)
+
+
+class ArcPolicy(object):
+
+    def __init__(self):
+        pass
+
+    def connect(self, encoder_outputs, decoder, batch_sz):
+        pass
+
+
+class NoArcPolicy(ArcPolicy):
+
+    def __init__(self):
+        super(NoArcPolicy, self).__init__()
+
+    def connect(self, encoder_outputs, decoder, batch_sz):
+        initial_state = decoder.cell.zero_state(batch_sz*decoder.beam_width, tf.float32)
+        return initial_state
+
+
+class AbstractArcPolicy(ArcPolicy):
+
+    def __init__(self):
+        super(AbstractArcPolicy, self).__init__()
+
+    def get_state(self, encoder_outputs):
+        pass
+
+    def connect(self, encoder_outputs, decoder, batch_sz):
+        final_encoder_state = self.get_state(encoder_outputs)
+        final_encoder_state = tf.contrib.seq2seq.tile_batch(final_encoder_state, multiplier=decoder.beam_width)
+
+        if hasattr(decoder.cell, 'clone'):
+            initial_state = decoder.cell.zero_state(batch_sz*decoder.beam_width, tf.float32)
+            initial_state = initial_state.clone(cell_state=final_encoder_state)
+        else:
+            initial_state = final_encoder_state
+        return initial_state
+
+
+class TransferLastHiddenPolicy(AbstractArcPolicy):
+
+    def __init__(self):
+        super(TransferLastHiddenPolicy, self).__init__()
+
+    def get_state(self, encoder_outputs):
+        return encoder_outputs.hidden
+
 
 class RNNDecoder(DecoderBase):
 
     def __init__(self, tgt_embedding, **kwargs):
         super(RNNDecoder, self).__init__(tgt_embedding, **kwargs)
         self.hsz = kwargs['hsz']
+        self.arc_state = kwargs.get('arc_state', True)
+        if self.arc_state:
+            self.arc_policy = TransferLastHiddenPolicy()
+        else:
+            self.arc_policy = NoArcPolicy()
 
     def _create_cell(self, rnn_enc_tensor, src_len, pkeep, rnntype='lstm', layers=1, vdrop=False, **kwargs):
-        cell = multi_rnn_cell_w_dropout(self.hsz, pkeep, rnntype, layers, variational=vdrop)
-        return cell
+        self.cell = multi_rnn_cell_w_dropout(self.hsz, pkeep, rnntype, layers, variational=vdrop)
 
-    def bridge(self, final_encoder_state):
-        return final_encoder_state
+    #def bridge(self, encoder_outputs, batch_sz):
+    #    final_encoder_state = encoder_outputs.hidden
+    #    final_encoder_state = tf.contrib.seq2seq.tile_batch(final_encoder_state, multiplier=self.beam_width)
+    #    return final_encoder_state
 
     def _get_tgt_weights(self):
         Wo = tf.get_variable("Wo", initializer=tf.constant_initializer(self.tgt_embedding.weights,
@@ -116,8 +170,7 @@ class RNNDecoder(DecoderBase):
         with tf.variable_scope("dec", reuse=tf.AUTO_REUSE):
             proj = dense_layer(self.tgt_embedding.vsz)
             self._create_cell(encoder_outputs.output, src_len, pkeep, **kwargs)
-            final_encoder_state = tf.contrib.seq2seq.tile_batch(final_encoder_state, multiplier=self.beam_width)
-            initial_state = self.bridge(final_encoder_state)
+            initial_state = self.arc_policy.connect(encoder_outputs, self, batch_sz)
             # Define a beam-search decoder
             decoder = tf.contrib.seq2seq.BeamSearchDecoder(cell=self.cell,
                                                            embedding=Wo,
@@ -146,11 +199,11 @@ class RNNDecoder(DecoderBase):
         # This works fine for training, but then at decode time its not quite in the right place scope-wise
         # So instead, for now, we never call .encode() and instead we create our own operator
         Wo = self._get_tgt_weights()
-        final_encoder_state = encoder_outputs.hidden
         with tf.variable_scope("dec", reuse=tf.AUTO_REUSE):
             proj = dense_layer(self.tgt_embedding.vsz)
             self._create_cell(encoder_outputs.output, src_len, pkeep, **kwargs)
-            initial_state = self.bridge(final_encoder_state, tf.shape(encoder_outputs.output)[0])
+            batch_sz = tf.shape(encoder_outputs.output)[0]
+            initial_state = self.arc_policy.connect(encoder_outputs, self, batch_sz)
             helper = tf.contrib.seq2seq.TrainingHelper(inputs=tf.nn.embedding_lookup(Wo, self.tgt_embedding.x), sequence_length=tgt_len)
             decoder = tf.contrib.seq2seq.BasicDecoder(cell=self.cell, helper=helper, initial_state=initial_state, output_layer=proj)
             final_outputs, final_decoder_state, _ = tf.contrib.seq2seq.dynamic_decode(decoder,
@@ -166,7 +219,6 @@ class RNNDecoderWithAttn(RNNDecoder):
     def __init__(self, tgt_embedding, **kwargs):
         super(RNNDecoderWithAttn, self).__init__(tgt_embedding, **kwargs)
         self.attn_type = kwargs.get('attn_type', 'bahdanau').lower()
-        self.arc_state = kwargs.get('arc_state', False)
 
     def _create_cell(self, rnn_enc_tensor, src_len, pkeep, rnntype='lstm', layers=1, vdrop=False, **kwargs):
         cell = multi_rnn_cell_w_dropout(self.hsz, pkeep, rnntype, layers, variational=vdrop)
@@ -177,10 +229,5 @@ class RNNDecoderWithAttn(RNNDecoder):
         GlobalAttention = tfcontrib_seq2seq.LuongAttention if self.attn_type == 'luong' else tfcontrib_seq2seq.BahdanauAttention
         attn_mech = GlobalAttention(self.hsz, rnn_enc_tensor, src_len)
         self.cell = tf.contrib.seq2seq.AttentionWrapper(cell, attn_mech, self.hsz, name='dyn_attn_cell')
-        return self.cell
 
-    def bridge(self, final_encoder_state, batch_sz):
-        initial_state = self.cell.zero_state(batch_sz*self.beam_width, tf.float32)
-        if self.arc_state is True:
-            initial_state = initial_state.clone(cell_state=final_encoder_state)
-        return initial_state
+
