@@ -2,6 +2,7 @@ from baseline.tf.tfy import *
 from baseline.version import __version__
 from baseline.model import LanguageModel, register_model
 from baseline.tf.embeddings import *
+from baseline.tf.transformer import transformer_encoder_stack, subsequent_mask
 from baseline.utils import read_json, write_json, ls_props
 from google.protobuf import text_format
 
@@ -217,3 +218,15 @@ class RNNLanguageModel(LanguageModelBase):
         self.final_state = state
         return h
 
+
+@register_model(task='lm', name='transformer')
+class TransformerLanguageModel(LanguageModelBase):
+    def __init__(self):
+        super(TransformerLanguageModel, self).__init__()
+
+    def decode(self, x, **kwargs):
+        layers = kwargs.get('layers', 1)
+        T = get_shape_as_list(x)[1]
+        mask = subsequent_mask(T)
+        x = transformer_encoder_stack(x, mask, 4, self.pkeep, scale=True, layers=layers)
+        return tf.reshape(x, [-1, self.hsz])

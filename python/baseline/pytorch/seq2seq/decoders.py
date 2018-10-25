@@ -11,7 +11,7 @@ from torch.autograd import Variable
 from baseline.pytorch.transformer import subsequent_mask, TransformerDecoderStack
 
 
-class RNNDecoderWrapper(torch.nn.Module):
+class RNNDecoder(torch.nn.Module):
 
     def __init__(self, tgt_embeddings, **kwargs):
         """Construct an RNN decoder.  It provides the input size, the rest is up to the impl.
@@ -22,7 +22,7 @@ class RNNDecoderWrapper(torch.nn.Module):
         :param kwargs:
         :return: void
         """
-        super(RNNDecoderWrapper, self).__init__()
+        super(RNNDecoder, self).__init__()
         self.hsz = kwargs['hsz']
         self.tgt_embeddings = tgt_embeddings
         rnntype = kwargs['rnntype']
@@ -170,7 +170,7 @@ class RNNDecoderWrapper(torch.nn.Module):
             return [p[1:] for p in paths], scores
 
 
-class RNNDecoderWithAttn(RNNDecoderWrapper):
+class RNNDecoderWithAttn(RNNDecoder):
 
     def __init__(self, tgt_embeddings, **kwargs):
         super(RNNDecoderWithAttn, self).__init__(tgt_embeddings, **kwargs)

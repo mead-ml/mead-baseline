@@ -385,7 +385,7 @@ def show_examples_tf(model, es, rlut1, rlut2, vocab, mxlen, sample, prob_clip, m
             tgt_i[0, j] = next_value
             tgt_len_i = np.array([j+1])
             example['tgt_lengths'] = tgt_len_i
-            output = model.step(example)[j]
+            output = model.step(example).squeeze()[j]
             if sample is False:
                 next_value = np.argmax(output)
             else:

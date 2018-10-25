@@ -179,7 +179,7 @@ class Seq2SeqModel(EncoderDecoderModelBase):
         return RNNEncoder(input_dim, **kwargs)
 
     def init_decoder(self, tgt_embedding, **kwargs):
-        return RNNDecoderWrapper(tgt_embedding, self.tgt_embedding.get_vsz(), **kwargs)
+        return RNNDecoder(tgt_embedding, self.tgt_embedding.get_vsz(), **kwargs)
 
 
 @register_model(task='seq2seq', name='attn')
