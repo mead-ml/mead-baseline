@@ -164,8 +164,8 @@ class Console(Frontend):
                 name=label.name,
                 train_metric=self.train,
                 metric=self.dev,
-                **data[label],
-                width=max_len)
+                width=max_len,
+                **data[label])
             )
             self.print_count += 1
 

@@ -91,7 +91,7 @@ class RemoteResults(Results):
     def get_recent(self, label, phase, metric):
         resp = self.get(
             "{url}/result/recent/{exp}/{sha1}/{name}/{phase}/{metric}".format(
-                url = self.url, phase=phase, metric=metric, **label
+                url=self.url, phase=phase, metric=metric, **label
             )
         )
         return resp['value']
