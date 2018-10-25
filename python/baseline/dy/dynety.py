@@ -72,6 +72,22 @@ def Linear(osz, isz, pc, name="linear"):
     return linear
 
 
+def FoldedLinear(osz, isz, pc, name="folded-linear"):
+    linear_pc = pc.add_subcollection(name=name)
+    weight = linear_pc.add_parameters((osz, isz), name="weight")
+    bias = linear_pc.add_parameters(osz, name="bias")
+
+    def linear(input_):
+        shape, batchsz = input_.dim()
+        fold = np.prod(shape[:-1])
+        last = shape[-1]
+        input_ = dy.transpose(dy.reshape(input_, (fold, last), batch_size=batchsz))
+        output = dy.affine_transform([bias, weight, input_])
+        return dy.reshape(output, tuple(list(shape[:-1]) + [osz]), batch_size=batchsz)
+
+    return linear
+
+
 def HighwayConnection(funcs, sz, pc, name="highway"):
     """Highway Connection around arbitrary functions.
 
