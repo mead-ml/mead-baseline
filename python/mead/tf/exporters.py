@@ -1,65 +1,26 @@
 import baseline
 import os
+import shutil
 import datetime
 from tensorflow.python.framework.errors_impl import NotFoundError
 import mead.exporters
 from mead.exporters import register_exporter
 from baseline.tf.embeddings import *
-from baseline.utils import export, read_json, ls_props, Offsets, write_json
+from baseline.utils import (export, 
+                            read_json, 
+                            ls_props, 
+                            Offsets, 
+                            write_json)
 from collections import namedtuple
 
 FIELD_NAME = 'text/tokens'
-ASSET_FILE_NAME = b'model.assets'
+ASSET_FILE_NAME = 'model.assets'
 
 __all__ = []
 exporter = export(__all__)
 
 
 SignatureOutput = namedtuple("SignatureOutput", ("classes", "scores"))
-
-def create_bundle(builder, output_path, assets=None):
-    """Creates the output files for an exported model.
-
-    :builder the tensorflow saved_model builder.
-    :output_path the path to export a model. this includes the model_version name.
-    :assets a dictionary of assets to save alongside the model.
-    """
-    builder.save()
-
-    if assets:
-        asset_file = os.path.join(output_path, ASSET_FILE_NAME)
-        write_json(assets, asset_file)
-
-def create_assets(basename, sig_input, sig_output, sig_name, lengths_key=None):
-    """Save required variables for running an exported model from baseline's services.
-
-    :basename the base model name. e.g. tagger-26075
-    :sig_input the input dictionary
-    :sig_output the output namedTuple
-    :lengths_key the lengths_key from the model.
-        used to translate batch output. Exported models will return a flat list,
-        and it needs to be reshaped into per-example lists. We use this key to tell
-        us which feature holds the sequence legnths.
-
-    """
-    inputs = [k for k in sig_input]
-    outputs =  sig_output._fields
-
-    model_name = basename.split("/")[-1]
-    assets = {
-        'inputs': inputs,
-        'outputs': outputs,
-        'signature_name': sig_name,
-        'metadata': {
-            'exported_model': model_name,
-            'exported_time': str(datetime.datetime.utcnow()),
-        }
-    }
-
-    if lengths_key:
-        assets['lengths_key'] = lengths_key
-
-    return assets
 
 @exporter
 class TensorFlowExporter(mead.exporters.Exporter):
@@ -80,21 +41,17 @@ class TensorFlowExporter(mead.exporters.Exporter):
             saver.restore(sess, basename + ".model")
 
     def run(self, basename, output_dir, model_version, **kwargs):
-        """
-        :param embeddings_set an object of all embeddings. read from the embeddings json config.
-        :param feature_descs an object describing the features. typically each key will be a
-            dict with keys (type, dsz, vsz)
-        """
         with tf.Graph().as_default():
             config_proto = tf.ConfigProto(allow_soft_placement=True)
             with tf.Session(config=config_proto) as sess:
                 sig_input, sig_output, sig_name, assets = self._create_rpc_call(sess, basename)
-                output_path = os.path.join(tf.compat.as_bytes(output_dir), tf.compat.as_bytes(str(model_version)))
+                # output_path = os.path.join(tf.compat.as_bytes(output_dir), tf.compat.as_bytes(str(model_version)))
+                output_path = os.path.join(output_dir, str(model_version))
                 print('Exporting trained model to %s' % output_path)
 
                 try:
                     builder = self._create_saved_model_builder(sess, output_path, sig_input, sig_output, sig_name)
-                    create_bundle(builder, output_path, assets)
+                    create_bundle(builder, output_path, basename, assets)
                     print('Successfully exported model to %s' % output_dir)
                 except AssertionError as e:
                     # model already exists
@@ -372,4 +329,73 @@ class Seq2SeqTensorFlowExporter(TensorFlowExporter):
         assets = create_assets(basename, sig_input, sig_output, sig_name, self.length_key)
 
         return sig_input, sig_output, sig_name, assets
-        
+
+
+def create_bundle(builder, output_path, basename, assets=None):
+    """Creates the output files for an exported model.
+
+    :builder the tensorflow saved_model builder.
+    :output_path the path to export a model. this includes the model_version name.
+    :assets a dictionary of assets to save alongside the model.
+    """
+    builder.save()
+
+    model_name = basename.split("/")[-1]
+    directory = os.path.join('/', *basename.split("/")[:-1])
+
+    save_to_bundle(output_path, directory, assets)
+
+def save_to_bundle(output_path, directory, assets=None):
+    """Save files to the exported bundle.
+
+    :vocabs
+    :vectorizers
+    :labels
+    :assets
+    :output_path  the bundle output_path. vocabs, vectorizers know how to save themselves.
+    """
+    for filename in os.listdir(directory):
+        if filename.startswith('vocabs') or \
+           filename.endswith(".labels") or \
+           filename.startswith('vectorizers'):
+            shutil.copy(os.path.join(directory, filename), os.path.join(output_path, filename))
+    
+    if assets:
+        asset_file = os.path.join(output_path, ASSET_FILE_NAME)
+        write_json(assets, asset_file)
+
+def create_assets(basename, sig_input, sig_output, sig_name, lengths_key=None):
+    """Save required variables for running an exported model from baseline's services.
+
+    :basename the base model name. e.g. /path/to/tagger-26075
+    :sig_input the input dictionary
+    :sig_output the output namedTuple
+    :lengths_key the lengths_key from the model.
+        used to translate batch output. Exported models will return a flat list,
+        and it needs to be reshaped into per-example lists. We use this key to tell
+        us which feature holds the sequence lengths.
+
+    """
+    inputs = [k for k in sig_input]
+    outputs =  sig_output._fields
+    model_name = basename.split("/")[-1]
+    directory = basename.split("/")[:-1]
+
+    metadata = create_metadata(inputs, outputs, sig_name, model_name, lengths_key)
+    return metadata
+
+def create_metadata(inputs, outputs, sig_name, model_name, lengths_key=None):
+    meta = {
+        'inputs': inputs,
+        'outputs': outputs,
+        'signature_name': sig_name,
+        'metadata': {
+            'exported_model': model_name,
+            'exported_time': str(datetime.datetime.utcnow()),
+        }
+    }
+
+    if lengths_key:
+        meta['lengths_key'] = lengths_key
+
+    return meta
