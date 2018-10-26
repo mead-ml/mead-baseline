@@ -25,6 +25,15 @@ class DynetModel(object):
         return '\n'.join(str_)
 
 
+def transpose(x, dim1, dim2):
+    shape, _ = x.dim()
+    dims = list(range(len(shape)))
+    tmp = dims[dim1]
+    dims[dim1] = dims[dim2]
+    dims[dim2] = tmp
+    return dy.transpose(x, dims=dims)
+
+
 def optimizer(model, optim='sgd', eta=0.01, clip=None, mom=0.9, **kwargs):
     if 'lr' in kwargs:
         eta = kwargs['lr']
