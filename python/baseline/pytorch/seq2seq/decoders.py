@@ -42,7 +42,7 @@ class AbstractArcPolicy(ArcPolicy):
         h_size = (batch_size, hsz)
         with torch.no_grad():
             init_zeros = context.data.new(*h_size).zero_()
-        return h_i, init_zeros
+        return h_i, init_zeros, context
 
 
 class TransferLastHiddenPolicy(AbstractArcPolicy):
@@ -130,9 +130,8 @@ class RNNDecoder(torch.nn.Module):
         return torch.cat([embed_i, attn_output_i], 1)
 
     def forward(self, encoder_outputs, embed_out_tbh):
-        context_tbh = encoder_outputs.output
         src_mask = encoder_outputs.src_mask
-        h_i, output_i = self.arc_policy(encoder_outputs, self.hsz)
+        h_i, output_i, context_tbh = self.arc_policy(encoder_outputs, self.hsz)
         output, _ = self.decode_rnn(context_tbh, h_i, output_i, embed_out_tbh, src_mask)
         pred = self.output(output)
         return pred.transpose(0, 1).contiguous()
@@ -170,19 +169,18 @@ class RNNDecoder(torch.nn.Module):
         K = kwargs.get('beam', 2)
         mxlen = kwargs.get('mxlen', 100)
         with torch.no_grad():
-            context = encoder_outputs.output
             src_mask = encoder_outputs.src_mask
             paths = [[Offsets.GO] for _ in range(K)]
             # K
-            scores = torch.FloatTensor([0. for _ in range(K)]).type_as(context)
             # TBH
-            h_i, dec_out = self.arc_policy(encoder_outputs, self.hsz, K)
+            h_i, dec_out, context = self.arc_policy(encoder_outputs, self.hsz, K)
+            scores = torch.FloatTensor([0. for _ in range(K)]).type_as(context)
 
             for i in range(mxlen):
                 lst = [path[-1] for path in paths]
                 dst = torch.LongTensor(lst).type(src.data.type())
-                mask_eos = dst == Offsets.EOS
-                mask_pad = dst == 0
+                mask_eos = (dst == Offsets.EOS).unsqueeze(1)
+                mask_pad = (dst == 0).unsqueeze(1)
                 dst = dst.view(1, K)
                 var = torch.autograd.Variable(dst)
                 dec_out, h_i = self.decode_rnn(context, h_i, dec_out, var, src_mask)
