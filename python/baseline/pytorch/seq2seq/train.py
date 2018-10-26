@@ -129,8 +129,8 @@ def fit(model, ts, vs, es=None, **kwargs):
     last_improved = 0
     for epoch in range(epochs):
 
-        if after_train_fn is not None:
-            after_train_fn(model)
+        #if after_train_fn is not None:
+        #    after_train_fn(model)
 
         trainer.train(ts, reporting_fns)
 
