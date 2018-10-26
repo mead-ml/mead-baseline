@@ -174,8 +174,6 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
             Constructor = eval(class_name)
             embeddings[key] = Constructor(key, **embed_args)
                 
-            
-
         model = baseline.model.create_model_for(self.task.task_name(), embeddings, labels, **model_params)
 
         for prop in ls_props(model):
@@ -199,22 +197,22 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
             indices, _ = tf.contrib.crf.crf_decode(model.probs, model.A, lengths)
             indices = indices[:, 1:]
 
-        list_of_labels = [''] * len(labels)
-        for label, idval in labels.items():
-            list_of_labels[idval] = label
+        # list_of_labels = [''] * len(labels)
+        # for label, idval in labels.items():
+        #     list_of_labels[idval] = label
 
-        class_tensor = tf.constant(list_of_labels)
-        table = tf.contrib.lookup.index_to_string_table_from_tensor(class_tensor)
-        classes = table.lookup(tf.to_int64(indices))
+        # class_tensor = tf.constant(list_of_labels)
+        # table = tf.contrib.lookup.index_to_string_table_from_tensor(class_tensor)
+        # classes = table.lookup(tf.to_int64(indices))
         self._restore_checkpoint(sess, basename)
 
-        return model, classes, values
+        return model, indices, values
 
     def _create_rpc_call(self, sess, basename):
         model, classes, values = self._create_model(sess, basename)
 
         predict_tensors = {}
-        predict_tensors['lengths'] = tf.saved_model.utils.build_tensor_info(model.lengths)
+        predict_tensors[model.lengths_key] = tf.saved_model.utils.build_tensor_info(model.lengths)
 
         for k, v in model.embeddings.items():
             try:

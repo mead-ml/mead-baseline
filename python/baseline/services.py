@@ -31,6 +31,7 @@ class RemoteModel(object):
     def __init__(self, remote, name, signature, labels=None):
         self.predictpb = import_user_module('tensorflow_serving.apis.predict_pb2')
         self.servicepb = import_user_module('tensorflow_serving.apis.prediction_service_pb2_grpc')
+        self.metadatapb = import_user_module('tensorflow_serving.apis.get_model_metadata_pb2')
         self.grpc = import_user_module('grpc')
         
         self.remote = remote
@@ -38,8 +39,30 @@ class RemoteModel(object):
         self.signature = signature
 
         self.channel = self.grpc.insecure_channel(remote)
+        
+        self.input_keys = self.retrieve_remote_signature_inputs()
+
         self.beam = None
         self.labels = labels
+
+    def retrieve_remote_signature_inputs(self):
+        stub = self.servicepb.PredictionServiceStub(self.channel)
+
+        request = self.metadatapb.GetModelMetadataRequest()
+        request.model_spec.name = self.name
+        request.model_spec.signature_name = self.signature
+
+        request.metadata_field.append("signature_def")
+
+        md = stub.GetModelMetadata(request, 10)
+        sigmap = self.metadatapb.SignatureDefMap()
+        binary_sig = md.metadata['signature_def'].Unpack(sigmap)
+
+        signature = sigmap.signature_def[self.signature]
+        print(signature)
+        inputs = signature.inputs
+
+        return [x for x in inputs]
 
     def classify(self, examples):
         return self._transform(examples)
@@ -54,11 +77,14 @@ class RemoteModel(object):
         return self.labels
 
     def _transform(self, examples):
+        valid_example = all(k in examples for k in self.input_keys)
+        if not valid_example:
+            raise ValueError("should have keys: " + ",".join(self.input_keys))
+
         request = self.create_request(examples)
         stub = self.servicepb.PredictionServiceStub(self.channel)
         outcomes_list = stub.Predict(request)
-        #local models return an nbest list. to duplicate, we nest the result in lists.
-        outcomes_list = [self.deserialize_response(examples, outcomes_list)]
+        outcomes_list = self.deserialize_response(examples, outcomes_list)
 
         return outcomes_list
 
@@ -67,7 +93,7 @@ class RemoteModel(object):
         request.model_spec.name = self.name
         request.model_spec.signature_name = self.signature
 
-        for feature in examples.keys():
+        for feature in self.input_keys:
             if isinstance(examples[feature], np.ndarray): 
                 shape = examples[feature].shape
             else:
@@ -95,27 +121,30 @@ class RemoteModel(object):
         :params predict_response: a PredictResponse protobuf object, 
                     as defined in tensorflow_serving proto files
         """
-        classes = predict_response.outputs.get('classes').string_val
+        # classes = predict_response.outputs.get('classes').string_val
 
         if self.signature == 'suggest_text':
             # s2s returns int values.
             classes = predict_response.outputs.get('classes').int_val
             results = [classes[x:x+self.beam] for x in range(0, len(classes), self.beam)]
             results = list(zip(*results)) #transpose
-            return results
+            return [results]
 
         if self.signature == 'tag_text':
+            classes = predict_response.outputs.get('classes').int_val
+            lengths = examples['word_lengths']
             result = []
-            for i, ex in enumerate(examples):
-                length = examples['lengths'][i]
-                result.append([{'token': x, 'label': c} for x,c in zip(ex, classes[length*i:length*(i+1)])])
+            for i in range(examples['word'].shape[0]):
+                ex = examples['word'][i,:]
+                length = lengths[i]
+                result.append([np.int32(x) for x in classes[length*i:length*(i+1)]])
             
             return result
             
         if self.signature == 'predict_text':
             scores = predict_resposne.outputs.get('scores').float_val
             for i, ex in enumerate(examples):
-                length = examples['lengths'][i]
+                length = len(self.get_labels())
                 result.append([(c,s) for c,s in zip(classes[length*i:length*(i+1)], scores[length*i:length*(i+1)])])
             
             return result
@@ -144,9 +173,10 @@ class Service(object):
         else:
             directory = unzip_files(bundle)
 
+        model_basename = find_model_basename(directory)
         vocabs = load_vocabs(directory)
         vectorizers = load_vectorizers(directory)
-        labels = read_json(directory+'_labels.json')
+        labels = read_json(os.path.join(directory, model_basename) + '.labels')
 
         remote = kwargs.get("remote", None)
         name = kwargs.get("name", None)
@@ -155,7 +185,6 @@ class Service(object):
             model = RemoteModel(remote, name, cls.signature_name, labels=labels)
             return cls(vocabs, vectorizers, model)
 
-        model_basename = find_model_basename(directory)
         be = kwargs.get('backend', 'tf')
         import_user_module('baseline.{}.embeddings'.format(be))
         import_user_module('baseline.{}.{}'.format(be, cls.task_name))
@@ -298,14 +327,13 @@ class TaggerService(Service):
                     lengths_key = '{}_lengths'.format(k)
                     if lengths_key not in examples:
                         examples[lengths_key] = []
-                    examples[lengths_key] += [length]
-
-        examples['lengths'] = [mxlen]
+                    examples[lengths_key] += [np.int32(length)]
 
         for k in self.vectorizers.keys():
             examples[k] = np.stack(examples[k])
             lengths_key = '{}_lengths'.format(k)
             examples[lengths_key] = np.stack(examples[lengths_key])
+
         outcomes = self.model.predict(examples)
         outputs = []
         for i, outcome in enumerate(outcomes):
@@ -313,7 +341,7 @@ class TaggerService(Service):
             for j, token in enumerate(tokens_seq[i]):
                 new_token = dict()
                 new_token.update(token)
-                new_token[label_field] = label_vocab[outcome[j].item()]
+                new_token[label_field] = label_vocab[outcome[j].item()] # item is from np.int32
                 output += [new_token]
             outputs += [output]
         return outputs
