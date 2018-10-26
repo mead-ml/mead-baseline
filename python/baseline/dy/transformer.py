@@ -5,7 +5,7 @@ from baseline.dy.dynety import transpose, Linear, dynet_activation, LayerNorm
 
 
 def subsequent_mask(size):
-    mask = np.tril(np.ones((1, size, size))).astype(np.uint8)
+    mask = np.tril(np.ones((size, size, 1))).astype(np.uint8)
     inv_mask = (mask == 0).astype(np.uint8)
     return dy.inputTensor(mask), dy.inputTensor(inv_mask)
 
@@ -16,7 +16,7 @@ def subsequent_mask_list(size):
     return dy.inputTensor(mask), dy.inputTensor(inv_mask)
 
 
-def batch_matmul(x, y):
+def batch_matmul_last(x, y):
     """This is a pain to do.
 
     The idea is to:
@@ -49,6 +49,22 @@ def batch_matmul(x, y):
     return z
 
 
+def batch_matmul(x, y):
+    x_shape, batchsz = x.dim()
+    x_mat = x_shape[:2]
+    sames = x_shape[2:]
+    fold = np.prod(sames)
+    y_shape, _ = y.dim()
+    y_mat = y_shape[:2]
+
+    x = dy.reshape(x, x_mat, batch_size=fold*batchsz)
+    y = dy.reshape(y, y_mat, batch_size=fold*batchsz)
+
+    z = x * y
+    z = dy.reshape(z, tuple([x_mat[0], y_mat[1]] + list(sames)), batch_size=batchsz)
+    return z
+
+
 def last_dim_softmax(x, softmax=dy.softmax):
     """Dynet lets you pick the dim in a softmax but only 0 or 1 so we reshape."""
     shape, batchsz = x.dim()
@@ -62,8 +78,8 @@ def last_dim_softmax(x, softmax=dy.softmax):
 def scaled_dot_product_attention(query, key, value, mask=None, dropout=None):
     d_k = query.dim()[0][-1]
 
-    scores = batch_matmul(query, transpose(key, -2, -1)) / math.sqrt(d_k)
-    if masks is not None:
+    scores = batch_matmul(query, transpose(key, 0, 1)) / math.sqrt(d_k)
+    if mask is not None:
         scores = dy.cmult(scores, mask[0]) + (mask[1] * -1e9)
 
     weights = last_dim_softmax(scores)
@@ -77,7 +93,7 @@ def scaled_dot_product_attention_list(query, key, value, mask=None, dropout=None
     d_k = query.dim()[0][-1]
     sqrt_d_k = math.sqrt(d_k)
     scores = [(x * dy.transpose(y)) / sqrt_d_k for x, y in zip(query, key)]
-    if masks is not None:
+    if mask is not None:
         scores = [dy.cmult(score, mask[0]) + (mask[1] * -1e9) for score in scores]
     weights = [dy.softmax(score, d=1) for score in scores]
     if dropout is not None:
@@ -87,7 +103,7 @@ def scaled_dot_product_attention_list(query, key, value, mask=None, dropout=None
 
 def dot_product_attention(query, key, value, mask=None, dropout=None):
     scores = batch_matmul(query, transpose(key, -2, -1))
-    if masks is not None:
+    if mask is not None:
         scores = dy.cmult(scores, mask[0]) + (mask[1] * -1e9)
 
     weights = last_dim_softmax(scores)
@@ -100,7 +116,7 @@ def dot_product_attention(query, key, value, mask=None, dropout=None):
 
 def dot_product_attention_list(query, key, value, mask=None, dropout=None):
     scores = [(x * dy.transpose(y)) for x, y in zip(query, key)]
-    if masks is not None:
+    if mask is not None:
         scores = [dy.cmult(score, mask[0]) + (mask[1] * -1e9) for score in scores]
     weights = [dy.softmax(score, d=1) for score in scores]
     if dropout is not None:
@@ -134,7 +150,7 @@ def MultiHeadedAttention(h, d_model, dropout, pc, scale=False, name='multi-heade
         value = dy.concatenate(value)
         value = transpose(value, 0, 1)
         drop = dropout if train else None
-        x = attn(query, key, value, masks=mask, dropout=drop)
+        x = attn(query, key, value, mask=mask, dropout=drop)
         x = dy.transpose(x, [1, 0, 2])
         x = dy.reshape(x, (shape[0], h * d_k), batch_size=batchsz)
         x = [p_O(i) for i in x]
