@@ -281,7 +281,8 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
         state = {
             "version": __version__,
             "src_embeddings": src_embeddings_info,
-            "tgt_embedding": self.tgt_embedding.__class__.__name__
+            "tgt_embedding": self.tgt_embedding.__class__.__name__,
+            "hsz": self.hsz
         }
         for prop in ls_props(self):
             state[prop] = getattr(self, prop)
@@ -309,7 +310,7 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
 
     def predict(self, batch_dict):
         feed_dict = self.make_input(batch_dict)
-        vec = self.sess.run(self.best, feed_dict=feed_dict)
+        vec = self.sess.run(self.decoder.best, feed_dict=feed_dict)
         # (B x K x T)
         if len(vec.shape) == 3:
             return vec.transpose(1, 2, 0)
