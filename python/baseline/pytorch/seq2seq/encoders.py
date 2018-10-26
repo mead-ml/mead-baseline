@@ -3,7 +3,12 @@ from baseline.pytorch.torchy import sequence_mask, pytorch_linear, pytorch_rnn
 from baseline.pytorch.transformer import TransformerEncoderStack
 import torch
 
-RNNEncoderOutput = namedtuple("RNNEncoderOutput", ("output", "hidden", "src_mask"))
+
+class Orientation:
+    BTH, TBH = range(0, 2)
+
+
+RNNEncoderOutput = namedtuple("RNNEncoderOutput", ("output", "hidden", "src_mask", "orientation"))
 
 
 def _make_src_mask(output, lengths):
@@ -25,7 +30,10 @@ class RNNEncoder(torch.nn.Module):
         packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths.tolist())
         output, hidden = self.rnn(packed)
         output, _ = torch.nn.utils.rnn.pad_packed_sequence(output)
-        return RNNEncoderOutput(output=output + tbc if self.residual else output, hidden=hidden, src_mask=self.src_mask_fn(output, lengths))
+        return RNNEncoderOutput(output=output + tbc if self.residual else output,
+                                hidden=hidden,
+                                src_mask=self.src_mask_fn(output, lengths),
+                                orientation=Orientation.TBH)
 
 
 TransformerEncoderOutput = namedtuple("TransformerEncoderOutput", ("output", "src_mask"))
@@ -33,15 +41,19 @@ TransformerEncoderOutput = namedtuple("TransformerEncoderOutput", ("output", "sr
 
 class TransformerEncoderWrapper(torch.nn.Module):
 
-    def __init__(self, insz, hsz=None, num_heads=4, layers=1, pdrop=0.5, **kwargs):
+    def __init__(self, insz, hsz=None, num_heads=4, layers=1, dropout=0.5, **kwargs):
         super(TransformerEncoderWrapper, self).__init__()
         if hsz is None:
             hsz = insz
-        self.proj = pytorch_linear(insz, hsz) if hsz != insz else lambda x: x
-        self.transformer = TransformerEncoderStack(num_heads, d_model=hsz, pdrop=pdrop, scale=True, layers=layers)
+        self.proj = pytorch_linear(insz, hsz) if hsz != insz else self._identity
+        self.transformer = TransformerEncoderStack(num_heads, d_model=hsz, pdrop=dropout, scale=True, layers=layers)
+
+    def _identity(self, x):
+        return x
 
     def forward(self, bth, lengths):
         T = bth.shape[1]
         src_mask = sequence_mask(lengths, T).type_as(lengths.data)
-        bth_proj = self.proj(bth)
-        return TransformerEncoderOutput(output=bth_proj, src_mask=src_mask)
+        bth = self.proj(bth)
+        output = self.transformer(bth, src_mask.unsqueeze(1).unsqueeze(1))
+        return TransformerEncoderOutput(output=output, src_mask=src_mask)

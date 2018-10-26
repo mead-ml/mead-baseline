@@ -191,7 +191,7 @@ class Seq2SeqModel(DynetModel, EncoderDecoderModel):
     def beam_decode(self, inputs, K, mxlen=100):
         dy.renew_cg()
 
-        paths = [[GO] for _ in range(K)]
+        paths = [[Offsets.GO] for _ in range(K)]
         # Which beams are done?
         done = np.array([False] * K)
         scores = np.array([0.0]*K)
