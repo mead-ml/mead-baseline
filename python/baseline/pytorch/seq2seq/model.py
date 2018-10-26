@@ -1,6 +1,6 @@
 from baseline.pytorch.torchy import *
 from baseline.pytorch.transformer import *
-from baseline.model import EncoderDecoderModel, register_model
+from baseline.model import EncoderDecoderModel, register_model, create_seq2seq_encoder, create_seq2seq_decoder
 from baseline.pytorch.seq2seq.encoders import *
 from baseline.pytorch.seq2seq.decoders import *
 import os
@@ -8,12 +8,8 @@ import os
 
 class EncoderDecoderModelBase(nn.Module, EncoderDecoderModel):
 
-    INPUT_BT = 0
-    INPUT_TB = 1
-
     def __init__(self, src_embeddings, tgt_embedding, **kwargs):
         super(EncoderDecoderModelBase, self).__init__()
-        self.input_format = EncoderDecoderModelBase.INPUT_BT
         self.beam_sz = kwargs.get('beam', 1)
         self.gpu = kwargs.get('gpu', True)
         src_dsz = self.init_embed(src_embeddings, tgt_embedding)
@@ -38,10 +34,12 @@ class EncoderDecoderModelBase(nn.Module, EncoderDecoderModel):
         return input_sz
 
     def init_encoder(self, input_sz, **kwargs):
-        pass
+        # This is a hack since TF never needs this one, there is not a general constructor param, so shoehorn
+        kwargs['dsz'] = input_sz
+        return create_seq2seq_encoder(**kwargs)
 
     def init_decoder(self, tgt_embedding, **kwargs):
-        pass
+        return create_seq2seq_decoder(tgt_embedding, **kwargs)
 
     def encode(self, input, lengths):
         """
@@ -102,10 +100,7 @@ class EncoderDecoderModelBase(nn.Module, EncoderDecoderModel):
         for key in self.src_embeddings.keys():
             tensor = torch.from_numpy(batch_dict[key])
             tensor = tensor[perm_idx]
-            if self.input_format == EncoderDecoderModelBase.INPUT_TB:
-                example[key] = tensor.transpose(0, 1).contiguous()
-            else:
-                example[key] = tensor
+            example[key] = tensor
 
             if self.gpu:
                 example[key] = example[key].cuda()
@@ -115,8 +110,6 @@ class EncoderDecoderModelBase(nn.Module, EncoderDecoderModel):
             example['dst'] = tgt[:, :-1]
             example['tgt'] = tgt[:, 1:]
             example['dst'] = example['dst'][perm_idx]
-            if self.input_format == EncoderDecoderModelBase.INPUT_TB:
-                example['dst'] = example['dst'].transpose(0, 1).contiguous()
             example['tgt'] = example['tgt'][perm_idx]
             if self.gpu:
                 example['dst'] = example['dst'].cuda()
@@ -153,7 +146,7 @@ class EncoderDecoderModelBase(nn.Module, EncoderDecoderModel):
         return batch
 
 
-@register_model(task='seq2seq', name='default')
+@register_model(task='seq2seq', name=['default', 'attn'])
 class Seq2SeqModel(EncoderDecoderModelBase):
 
     def __init__(self, src_embeddings, tgt_embedding, **kwargs):
@@ -165,43 +158,3 @@ class Seq2SeqModel(EncoderDecoderModelBase):
         :param kwargs:
         """
         super(Seq2SeqModel, self).__init__(src_embeddings, tgt_embedding, **kwargs)
-        self.input_format = EncoderDecoderModelBase.INPUT_TB
-
-    def init_encoder(self, input_dim, **kwargs):
-        """This is the hook for providing the encoder.  It provides the input size, the rest is up to the impl.
-
-        The default implementation provides a cuDNN-accelerated RNN encoder which is optionally bidirectional
-
-        :param input_dim: The input size
-        :param kwargs:
-        :return: void
-        """
-        return RNNEncoder(input_dim, **kwargs)
-
-    def init_decoder(self, tgt_embedding, **kwargs):
-        return RNNDecoder(tgt_embedding, self.tgt_embedding.get_vsz(), **kwargs)
-
-
-@register_model(task='seq2seq', name='attn')
-class Seq2SeqAttnModel(Seq2SeqModel):
-
-    def __init__(self, src_embeddings, tgt_embedding, **kwargs):
-        self.hsz = kwargs['hsz']
-        super(Seq2SeqAttnModel, self).__init__(src_embeddings, tgt_embedding, **kwargs)
-
-    def init_decoder(self, tgt_embedding, **kwargs):
-        return RNNDecoderWithAttn(tgt_embedding, **kwargs)
-
-
-@register_model(task='seq2seq', name='transformer')
-class TransformerModel(EncoderDecoderModelBase):
-
-    def __init__(self, src_embeddings, tgt_embedding, **kwargs):
-        super(TransformerModel, self).__init__(src_embeddings, tgt_embedding, **kwargs)
-
-    def init_decoder(self, tgt_embeddings, **kwargs):
-        return TransformerDecoderWrapper(tgt_embeddings, **kwargs)
-
-    def init_encoder(self, input_sz, **kwargs):
-        return TransformerEncoderWrapper(input_sz, **kwargs)
-
