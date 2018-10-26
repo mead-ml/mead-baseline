@@ -1,7 +1,7 @@
 import math
 import numpy as np
 import dynet as dy
-from baseline.dy.dynety import FoldedLinear
+from baseline.dy.dynety import transpose, Linear, dynet_activation, LayerNorm
 
 
 def subsequent_mask(size):
@@ -49,28 +49,6 @@ def batch_matmul(x, y):
     return z
 
 
-def folded_affine_transform(bias, weight, x):
-    ndim = len(x.dim()[0])
-    x_shape, batchsz = x.dim()
-    x_mat = x_shape[:2]
-    inners = x_shape[2:]
-    to_batch = np.prod(inners)
-
-    x = dy.reshape(x, x_mat, batch_size=to_batch * batchsz)
-
-    z = weight * x
-    z = dy.reshape(z, tuple([x_mat[0], y_mat[1]] + list(inners)), batch_size=batchsz)
-    axis = list(range(2, ndim)) + [0, 1]
-    z = dy.transpose(z, axis)
-
-
-def swap_last(x):
-    """Swap the last two dims like torch.transpose(x, -2, -1)."""
-    ndims = len(x.dim()[0])
-    axis = list(range(ndims - 2)) + [ndims - 1, ndims - 2]
-    return dy.transpose(x, axis)
-
-
 def last_dim_softmax(x, softmax=dy.softmax):
     """Dynet lets you pick the dim in a softmax but only 0 or 1 so we reshape."""
     shape, batchsz = x.dim()
@@ -81,12 +59,12 @@ def last_dim_softmax(x, softmax=dy.softmax):
     return dy.reshape(x, shape, batch_size=batchsz)
 
 
-def scaled_dot_product_attention(query, key, value, masks=None, dropout=None):
+def scaled_dot_product_attention(query, key, value, mask=None, dropout=None):
     d_k = query.dim()[0][-1]
 
-    scores = batch_matmul(query, swap_last(key)) / math.sqrt(d_k)
+    scores = batch_matmul(query, transpose(key, -2, -1)) / math.sqrt(d_k)
     if masks is not None:
-        scores = dy.cmult(scores, masks[0]) + (masks[1] * -1e9)
+        scores = dy.cmult(scores, mask[0]) + (mask[1] * -1e9)
 
     weights = last_dim_softmax(scores)
 
@@ -95,22 +73,22 @@ def scaled_dot_product_attention(query, key, value, masks=None, dropout=None):
 
     return batch_matmul(weights, value)
 
-def scaled_dot_product_attention_list(query, key, value, masks=None, dropout=None):
+def scaled_dot_product_attention_list(query, key, value, mask=None, dropout=None):
     d_k = query.dim()[0][-1]
     sqrt_d_k = math.sqrt(d_k)
     scores = [(x * dy.transpose(y)) / sqrt_d_k for x, y in zip(query, key)]
     if masks is not None:
-        scores = [dy.cmult(score, masks[0]) + (masks[1] * -1e9) for score in scores]
+        scores = [dy.cmult(score, mask[0]) + (mask[1] * -1e9) for score in scores]
     weights = [dy.softmax(score, d=1) for score in scores]
     if dropout is not None:
         weights = [dy.dropout(weight, dropout) for weight in weights]
     return [w * v for w, v in zip(weights, value)]
 
 
-def dot_product_attention(query, key, value, masks=None, dropout=None):
-    scores = batch_matmul(query, swap_last(key))
+def dot_product_attention(query, key, value, mask=None, dropout=None):
+    scores = batch_matmul(query, transpose(key, -2, -1))
     if masks is not None:
-        scores = dy.cmult(scores, masks[0]) + (masks[1] * -1e9)
+        scores = dy.cmult(scores, mask[0]) + (mask[1] * -1e9)
 
     weights = last_dim_softmax(scores)
 
@@ -120,31 +98,142 @@ def dot_product_attention(query, key, value, masks=None, dropout=None):
     return batch_matmul(weights, value)
 
 
+def dot_product_attention_list(query, key, value, mask=None, dropout=None):
+    scores = [(x * dy.transpose(y)) for x, y in zip(query, key)]
+    if masks is not None:
+        scores = [dy.cmult(score, mask[0]) + (mask[1] * -1e9) for score in scores]
+    weights = [dy.softmax(score, d=1) for score in scores]
+    if dropout is not None:
+        weights = [dy.dropout(weight, dropout) for weight in weights]
+    return [w * v for w, v in zip(weights, value)]
+
+
 def MultiHeadedAttention(h, d_model, dropout, pc, scale=False, name='multi-headed-attention'):
     assert d_model % h == 0
     pc = pc.add_subcollection(name=name)
     d_k = d_model // h
-    p_Q = FoldedLinear(d_model, d_model, pc, name="linear-q")
-    p_K = FoldedLinear(d_model, d_model, pc, name="linear-k")
-    p_V = FoldedLinear(d_model, d_model, pc, name="linear-v")
-    p_O = FoldedLinear(d_model, d_model, pc, name="linear-o")
+    p_Q = Linear(d_model, d_model, pc, name="linear-q")
+    p_K = Linear(d_model, d_model, pc, name="linear-k")
+    p_V = Linear(d_model, d_model, pc, name="linear-v")
+    p_O = Linear(d_model, d_model, pc, name="linear-o")
     attn = scaled_dot_product_attention if scale else dot_product_attention
 
     def run(query, key, value, mask=None, train=False):
+        """Input shape ((T, H), B)"""
         shape, batchsz = query.dim()
-        query = p_Q(query)
-        query = dy.reshape(query, (shape[0], h, d_k), batch_size=batchsz)
-        query = dy.transpose(query, [1, 0, 2])
-        key = p_K(key)
-        key = dy.reshape(key, (shape[0], h, d_k), batch_size=batchsz)
-        key = dy.transpose(key, [1, 0, 2])
-        value = p_V(value)
-        value = dy.reshape(value, (shape[0], h, d_k), batch_size=batchsz)
-        value = dy.transpose(value, [1, 0, 2])
+        query = [p_Q(q) for q in query]
+        query = [dy.reshape(q, (1, h, d_k), batch_size=batchsz) for q in query]
+        query = dy.concatenate(query)
+        query = transpose(query, 0, 1)
+        key = [p_K(k) for k in key]
+        key = [dy.reshape(k, (1, h, d_k), batch_size=batchsz) for k in key]
+        key = dy.concatenate(key)
+        key = transpose(key, 0, 1)
+        value = [p_V(v) for v in value]
+        value = [dy.reshape(v, (1, h, d_k), batch_size=batchsz) for v in value]
+        value = dy.concatenate(value)
+        value = transpose(value, 0, 1)
         drop = dropout if train else None
         x = attn(query, key, value, masks=mask, dropout=drop)
         x = dy.transpose(x, [1, 0, 2])
         x = dy.reshape(x, (shape[0], h * d_k), batch_size=batchsz)
-        return p_O(x)
+        x = [p_O(i) for i in x]
+        x = dy.transpose(dy.concatenate_cols(x))
+        return x
 
     return run
+
+
+def FFN(d_model, pdrop, pc, activation_type='relu', d_ff=None, name='ffn'):
+    if d_ff is None:
+        d_ff = 4 * d_model
+    expand = Linear(d_ff, d_model)
+    contract = Linear(d_model, d_ff)
+    act = dynet_activation(activation_type)
+
+    def forward(xs, train=False):
+        """Input shape: ((T, H), B)"""
+        xs = [act(expand(x)) for x in xs]
+        if train:
+            xs = [dy.dropout(x, pdrop) for x in xs]
+        xs = [squeeze(x) for x in xs]
+        xs = dy.transpose(dy.concatenate_cols(xs))
+        return xs
+
+
+def TransformerEncoder(num_heads, d_model, pdrop, pc, scale=True, activation_type='relu', d_ff=None, name='transformer-encoder')
+    pc = pc.add_subcollection(name=name)
+    self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, pc, scale=scale)
+    ffn = FFN(d_model, pdrop, pc, activation_type=activation_type, d_ff=d_ff)
+    ln1 = LayerNorm(d_model, pc)
+    ln2 = LayerNorm(d_model, pc)
+
+    def forward(xs, mask=None, train=False):
+        xs = [ln1(x) for x in xs]
+        xs = dy.transpose(dy.concatenate_cols(xs))
+        y = self_attn(x, x, x, mask, train)
+        y = dy.dropout(y, pdrop) if train else y
+        xs = xs + y
+
+        xs = [ln2(x) for x in xs]
+        xs = dy.transpose(dy.concatenate_cols(xs))
+        y = ffn(xs, train)
+        y = dy.dropout(y, pdrop) if train else y
+        xs = xs + y
+
+        return xs
+
+
+def TransformerEncoderStack(num_heads, d_model, pdrop, pc, scale=True, layers=1, activation_type='relu', d_ff=None, name='transformer-encoder-stack')
+    pc = pc.add_subcollection(name=name)
+    layers = [TransformerEncoder(num_heads, d_model, pdrop, pc, scale=scale, activation_type=activation_type, d_ff=None) for _ in range(layers)]
+    norm = LayerNorm(d_model, pc)
+
+    def forward(xs, mask=None, train=False):
+        for layer in layers:
+            xs = layer(x, mask, train)
+        xs = [norm(x) for x in xs]
+        return dy.transpose(dy.concatenate_cols(xs))
+
+
+def TransformerDecoder(num_heads, d_model, pdrop, pc, scale=True, activation_type='relu', d_ff=None, name='transformer-decoder')
+    pc = pc.add_subcollection(name=name)
+    self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, pc, scale=scale)
+    src_attn = MultiHeadedAttention(num_heads, d_model, pdrop, pc, scale=scale)
+    ffn = FFN(d_model, pdrop, pc, activation_type=activation_type, d_ff=d_ff)
+    ln1 = LayerNorm(d_model, pc)
+    ln2 = LayerNorm(d_model, pc)
+    ln3 = LayerNorm(d_model, pc)
+
+    def forward(xs, memory, src_mask, tgt_mask):
+        xs = [ln1(x) for x in xs]
+        xs = dy.transpose(dy.concatenate_cols(xs))
+        y = self_attn(x, x, x, tgt_mask, train)
+        y = dy.dropout(y, pdrop) if train else y
+        xs = xs + y
+
+        xs = [ln2(x) for x in xs]
+        xs = dy.transpose(dy.concatenate_cols(xs))
+        y = src_attn(x, memory, memory, src_mask)
+        y = dy.dropout(y, pdrop) if train else y
+        xs = xs + y
+
+        xs = [ln3(x) for x in xs]
+        xs = dy.transpose(dy.concatenate_cols(xs))
+        y = ffn(x, train)
+        y = dy.dropout(y, pdrop) if train else y
+        xs = xs + y
+
+        return xs
+
+
+def TransformerDecoderStack(num_heads, d_model, pdrop, pc, scale=True, layers=1, activation_type='relu', d_ff=None, name='transformer-decoder-stack'):
+    pc = pc.add_subcollection(name=name)
+    layers = [TransformerDecoder(num_heads, d_model, pdrop, pc, scale, activation_type, d_ff) for _ in range(layers)]
+    norm = LayerNorm(d_model, pc)
+
+    def forward(x, memory, src_mask, tgt_mask, train):
+        for layer in layers:
+            x = layer(x, memory, src_mask, tgt_mask, train)
+        xs = [norm(x) for x in xs]
+        return dy.transpose(dy.concatenate_cols(xs))

@@ -34,6 +34,17 @@ def transpose(x, dim1, dim2):
     return dy.transpose(x, dims=dims)
 
 
+def LayerNorm(num_features, pc, name='layer-norm'):
+    pc = pc.add_subcollection(name=name)
+    a = pc.add_parameters(num_features, name='a')
+    b = pc.add_parameters(num_features, name='b')
+
+    def norm(x):
+        return dy.layer_norm(x, a, b)
+
+    return norm
+
+
 def optimizer(model, optim='sgd', eta=0.01, clip=None, mom=0.9, **kwargs):
     if 'lr' in kwargs:
         eta = kwargs['lr']
