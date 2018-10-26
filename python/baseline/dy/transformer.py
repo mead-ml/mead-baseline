@@ -145,10 +145,11 @@ def MultiHeadedAttention(h, d_model, dropout, pc, scale=False, name='multi-heade
 
 
 def FFN(d_model, pdrop, pc, activation_type='relu', d_ff=None, name='ffn'):
+    pc = pc.add_subcollection(name=name)
     if d_ff is None:
         d_ff = 4 * d_model
-    expand = Linear(d_ff, d_model)
-    contract = Linear(d_model, d_ff)
+    expand = Linear(d_ff, d_model, pc, name='expand')
+    contract = Linear(d_model, d_ff, pc, name='squeeze')
     act = dynet_activation(activation_type)
 
     def forward(xs, train=False):
@@ -161,7 +162,7 @@ def FFN(d_model, pdrop, pc, activation_type='relu', d_ff=None, name='ffn'):
         return xs
 
 
-def TransformerEncoder(num_heads, d_model, pdrop, pc, scale=True, activation_type='relu', d_ff=None, name='transformer-encoder')
+def TransformerEncoder(num_heads, d_model, pdrop, pc, scale=True, activation_type='relu', d_ff=None, name='transformer-encoder'):
     pc = pc.add_subcollection(name=name)
     self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, pc, scale=scale)
     ffn = FFN(d_model, pdrop, pc, activation_type=activation_type, d_ff=d_ff)
@@ -184,7 +185,7 @@ def TransformerEncoder(num_heads, d_model, pdrop, pc, scale=True, activation_typ
         return xs
 
 
-def TransformerEncoderStack(num_heads, d_model, pdrop, pc, scale=True, layers=1, activation_type='relu', d_ff=None, name='transformer-encoder-stack')
+def TransformerEncoderStack(num_heads, d_model, pdrop, pc, scale=True, layers=1, activation_type='relu', d_ff=None, name='transformer-encoder-stack'):
     pc = pc.add_subcollection(name=name)
     layers = [TransformerEncoder(num_heads, d_model, pdrop, pc, scale=scale, activation_type=activation_type, d_ff=None) for _ in range(layers)]
     norm = LayerNorm(d_model, pc)
@@ -196,7 +197,7 @@ def TransformerEncoderStack(num_heads, d_model, pdrop, pc, scale=True, layers=1,
         return dy.transpose(dy.concatenate_cols(xs))
 
 
-def TransformerDecoder(num_heads, d_model, pdrop, pc, scale=True, activation_type='relu', d_ff=None, name='transformer-decoder')
+def TransformerDecoder(num_heads, d_model, pdrop, pc, scale=True, activation_type='relu', d_ff=None, name='transformer-decoder'):
     pc = pc.add_subcollection(name=name)
     self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, pc, scale=scale)
     src_attn = MultiHeadedAttention(num_heads, d_model, pdrop, pc, scale=scale)

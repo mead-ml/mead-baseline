@@ -34,6 +34,10 @@ def transpose(x, dim1, dim2):
     return dy.transpose(x, dims=dims)
 
 
+def dynet_activation(type_):
+    return dy.rectify
+
+
 def LayerNorm(num_features, pc, name='layer-norm'):
     pc = pc.add_subcollection(name=name)
     a = pc.add_parameters(num_features, name='a')
