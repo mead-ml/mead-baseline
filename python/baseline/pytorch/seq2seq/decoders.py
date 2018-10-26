@@ -245,29 +245,37 @@ class RNNDecoderWithAttn(RNNDecoder):
 
 class TransformerDecoderWrapper(torch.nn.Module):
 
-    def __init__(self, tgt_embeddings, **kwargs):
+    def __init__(self, tgt_embeddings, dropout=0.5, layers=1, hsz=None, num_heads=4, scale=True, **kwargs):
         super(TransformerDecoderWrapper, self).__init__()
-        pdrop = float(kwargs.get('dropout', 0.5))
-        layers = kwargs.get('layers', 1)
-        d_model = int(kwargs.get('d_model', kwargs.get('hsz')))
-        num_heads = kwargs.get('num_heads', 4)
         self.tgt_embeddings = tgt_embeddings
-        self.transformer_decoder = TransformerDecoderStack(num_heads, d_model=d_model, pdrop=pdrop, scale=True, layers=layers)
-        out_dsz = self.tgt_embeddings.get_dsz()
-        ##self.proj = pytorch_linear(d_model, out_dsz) if d_model != out_dsz else self._identity
-        self.preds = pytorch_linear(out_dsz, self.tgt_embeddings.get_vsz())
+        dsz = self.tgt_embeddings.get_dsz()
+        if hsz is None:
+            hsz = dsz
+
+        self.transformer_decoder = TransformerDecoderStack(num_heads, d_model=hsz, pdrop=dropout, scale=scale, layers=layers)
+
+        self.proj_to_dsz = self._identity
+        self.proj_to_hsz = self._identity
+        if hsz != dsz:
+            self.proj_to_hsz = pytorch_linear(dsz, hsz)
+            self.proj_to_dsz = pytorch_linear(hsz, dsz)
+            del self.proj_to_dsz.weight
+            self.proj_to_dsz.weight = torch.nn.Parameter(self.proj_to_hsz.weight.transpose(0, 1), requires_grad=True)
+
+        self.preds = pytorch_linear(dsz, self.tgt_embeddings.get_vsz())
 
     def _identity(self, x):
         return x
 
     def forward(self, encoder_output, dst):
         embed_out_bth = self.tgt_embeddings(dst)
+        embed_out_bth = self.proj_to_hsz(embed_out_bth)
         context_bth = encoder_output.output
         T = embed_out_bth.shape[1]
         dst_mask = subsequent_mask(T).type_as(embed_out_bth)
         src_mask = encoder_output.src_mask.unsqueeze(1).unsqueeze(1)
         output = self.transformer_decoder(embed_out_bth, context_bth, src_mask, dst_mask)
-        ##output = self.proj(output)
+        output = self.proj_to_dsz(output)
         prob = self.output(output)
         return prob
 
