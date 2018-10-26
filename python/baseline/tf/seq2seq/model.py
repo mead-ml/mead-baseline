@@ -238,14 +238,6 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
             # writer = tf.summary.FileWriter('blah', model.sess.graph)
             return model
 
-    @property
-    def src_lengths_key(self):
-        return self._src_lengths_key
-
-    @src_lengths_key.setter
-    def src_lengths_key(self, value):
-        self._src_lengths_key = value
-
     def set_saver(self, saver):
         self.saver = saver
 

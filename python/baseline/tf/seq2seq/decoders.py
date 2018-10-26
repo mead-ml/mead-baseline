@@ -63,8 +63,11 @@ class TransformerDecoder(DecoderBase):
                activation_type='relu',
                d_ff=None, **kwargs):
         src_enc = encoder_outputs.output
-        src_mask = encoder_outputs.src_mask
-
+        if hasattr(encoder_outputs, 'src_mask'):
+            src_mask = encoder_outputs.src_mask
+        else:
+            T = get_shape_as_list(src_enc)[1]
+            src_mask = tf.sequence_mask(src_len, T, dtype=tf.float32)
         tgt_embed = self.tgt_embedding.encode()
         T = get_shape_as_list(tgt_embed)[1]
         tgt_mask = subsequent_mask(T)

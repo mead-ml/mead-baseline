@@ -4,11 +4,15 @@ from baseline.pytorch import (pytorch_rnn_cell,
                               BahdanauAttention,
                               ScaledDotProductAttention,
                               LuongGeneralAttention)
-from baseline.utils import Offsets
+from baseline.utils import Offsets, export
 import torch
 import torch.nn.functional as F
 from torch.autograd import Variable
 from baseline.pytorch.transformer import subsequent_mask, TransformerDecoderStack
+from baseline.model import register_arc_policy, register_decoder, create_seq2seq_arc_policy
+
+__all__ = []
+exporter = export(__all__)
 
 
 class ArcPolicy(torch.nn.Module):
@@ -33,18 +37,19 @@ class AbstractArcPolicy(ArcPolicy):
         context = encoder_output.output
         if beam_width > 1:
             with torch.no_grad():
-                context = context.data.repeat(1, beam_width, 1)
+                context = context.data.repeat(beam_width, 1, 1)
                 if type(h_i) is tuple:
                     h_i = h_i[0].data.repeat(1, beam_width, 1), h_i[1].data.repeat(1, beam_width, 1)
                 else:
                     h_i = h_i.data.repeat(1, beam_width, 1)
-        batch_size = context.size(1)
+        batch_size = context.shape[0]
         h_size = (batch_size, hsz)
         with torch.no_grad():
             init_zeros = context.data.new(*h_size).zero_()
         return h_i, init_zeros, context
 
 
+@register_arc_policy(name='default')
 class TransferLastHiddenPolicy(AbstractArcPolicy):
 
     def __init__(self):
@@ -54,6 +59,7 @@ class TransferLastHiddenPolicy(AbstractArcPolicy):
         return encoder_outputs.hidden
 
 
+@register_arc_policy(name='no_arc')
 class NoArcPolicy(AbstractArcPolicy):
 
     def __init__(self):
@@ -67,6 +73,7 @@ class NoArcPolicy(AbstractArcPolicy):
         return final_encoder_state * 0
 
 
+@register_decoder(name='vanilla')
 class RNNDecoder(torch.nn.Module):
 
     def __init__(self, tgt_embeddings, **kwargs):
@@ -80,12 +87,7 @@ class RNNDecoder(torch.nn.Module):
         """
         super(RNNDecoder, self).__init__()
         self.hsz = kwargs['hsz']
-        self.arc_state = kwargs.get('arc_state', True)
-        if self.arc_state:
-            self.arc_policy = TransferLastHiddenPolicy()
-        else:
-            self.arc_policy = NoArcPolicy()
-
+        self.arc_policy = create_seq2seq_arc_policy(**kwargs)
         self.tgt_embeddings = tgt_embeddings
         rnntype = kwargs['rnntype']
         layers = kwargs['layers']
@@ -129,17 +131,16 @@ class RNNDecoder(torch.nn.Module):
         embed_i = embed_i.squeeze(0)
         return torch.cat([embed_i, attn_output_i], 1)
 
-    def forward(self, encoder_outputs, embed_out_tbh):
+    def forward(self, encoder_outputs, dst):
         src_mask = encoder_outputs.src_mask
-        h_i, output_i, context_tbh = self.arc_policy(encoder_outputs, self.hsz)
-        output, _ = self.decode_rnn(context_tbh, h_i, output_i, embed_out_tbh, src_mask)
-        pred = self.output(output)
+        h_i, output_i, context_bth = self.arc_policy(encoder_outputs, self.hsz)
+        output_tbh, _ = self.decode_rnn(context_bth, h_i, output_i, dst.transpose(0, 1), src_mask)
+        pred = self.output(output_tbh)
         return pred.transpose(0, 1).contiguous()
 
-    def decode_rnn(self, context_tbh, h_i, output_i, dst, src_mask):
-        embed_out_tbh = self.tgt_embeddings(dst)
+    def decode_rnn(self, context_bth, h_i, output_i, dst_tbh, src_mask):
+        embed_out_tbh = self.tgt_embeddings(dst_tbh)
 
-        context_bth = context_tbh.transpose(0, 1)
         outputs = []
 
         for i, embed_i in enumerate(embed_out_tbh.split(1)):
@@ -151,8 +152,8 @@ class RNNDecoder(torch.nn.Module):
             # Attentional outputs
             outputs.append(output_i)
 
-        outputs = torch.stack(outputs)
-        return outputs, h_i
+        outputs_tbh = torch.stack(outputs)
+        return outputs_tbh, h_i
 
     def attn(self, output_t, context, src_mask=None):
         return output_t
@@ -221,6 +222,7 @@ class RNNDecoder(torch.nn.Module):
             return [p[1:] for p in paths], scores
 
 
+@register_decoder(name='default')
 class RNNDecoderWithAttn(RNNDecoder):
 
     def __init__(self, tgt_embeddings, **kwargs):
@@ -241,6 +243,7 @@ class RNNDecoderWithAttn(RNNDecoder):
         return self.attn_module(output_t, context, context, src_mask)
 
 
+@register_decoder(name='transformer')
 class TransformerDecoderWrapper(torch.nn.Module):
 
     def __init__(self, tgt_embeddings, dropout=0.5, layers=1, hsz=None, num_heads=4, scale=True, **kwargs):
