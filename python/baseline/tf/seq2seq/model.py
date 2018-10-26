@@ -232,6 +232,7 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
         model.sess = kwargs.get('sess', tf.Session())
         model.pdrop_value = kwargs.get('dropout', 0.5)
         model.pkeep = kwargs.get('pkeep', tf.placeholder_with_default(1.0, shape=(), name="pkeep"))
+        model.layers = kwargs.get('layers', 1)
 
         with tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE):
             embed_in = model.embed()
@@ -282,7 +283,8 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
             "version": __version__,
             "src_embeddings": src_embeddings_info,
             "tgt_embedding": self.tgt_embedding.__class__.__name__,
-            "hsz": self.hsz
+            "hsz": self.hsz,
+            "layers": self.layers
         }
         for prop in ls_props(self):
             state[prop] = getattr(self, prop)
