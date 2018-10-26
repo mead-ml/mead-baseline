@@ -2,7 +2,7 @@ from baseline.tf.seq2seq.encoders import RNNEncoder, TransformerEncoder
 from baseline.tf.seq2seq.decoders import RNNDecoder, RNNDecoderWithAttn, TransformerDecoder
 from google.protobuf import text_format
 from baseline.tf.tfy import *
-from baseline.model import EncoderDecoderModel, register_model
+from baseline.model import EncoderDecoderModel, register_model, create_seq2seq_decoder, create_seq2seq_encoder, create_seq2seq_arc_policy
 from baseline.utils import ls_props, read_json
 from baseline.tf.embeddings import *
 from baseline.version import __version__
@@ -174,9 +174,6 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
 
         if 'model_type' in kwargs:
             state['model_type'] = kwargs['model_type']
-        elif state['attn']:
-            print('setting to attn')
-            state['model_type'] = 'attn' if state['attn'] is True else 'default'
 
         with open(basename + '.saver') as fsv:
             saver_def = tf.train.SaverDef()
@@ -260,11 +257,11 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
     def src_lengths_key(self, value):
         self._src_lengths_key = value
 
-    def create_encoder(self):
-        pass
+    def create_encoder(self, **kwargs):
+        return create_seq2seq_encoder(**kwargs)
 
     def create_decoder(self, tgt_embedding, **kwargs):
-        pass
+        return create_seq2seq_decoder(tgt_embedding, **kwargs)
 
     def decode(self, encoder_output, **kwargs):
         self.decoder = self.create_decoder(self.tgt_embedding, **kwargs)
@@ -276,7 +273,7 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
 
     def encode(self, embed_in, **kwargs):
         with tf.variable_scope('encode'):
-            self.encoder = self.create_encoder()
+            self.encoder = self.create_encoder(**kwargs)
             return self.encoder.encode(embed_in, self.src_len, self.pkeep, **kwargs)
 
     def save_md(self, basename):
@@ -366,24 +363,3 @@ class Seq2Seq(EncoderDecoderModelBase):
     @vdrop.setter
     def vdrop(self, value):
         self._vdrop = value
-
-    def create_encoder(self):
-        return RNNEncoder()
-
-    def create_decoder(self, tgt_embedding, **kwargs):
-        attn = kwargs.get('model_type') == 'attn'
-        if attn:
-            return RNNDecoderWithAttn(tgt_embedding, **kwargs)
-        return RNNDecoder(tgt_embedding, **kwargs)
-
-
-@register_model(task='seq2seq', name='transformer')
-class TransformerModel(EncoderDecoderModelBase):
-    def __init__(self):
-        super(TransformerModel, self).__init__()
-
-    def create_encoder(self):
-        return TransformerEncoder()
-
-    def create_decoder(self, tgt_embedding, **kwargs):
-        return TransformerDecoder(tgt_embedding, **kwargs)

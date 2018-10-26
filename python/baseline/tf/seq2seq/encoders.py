@@ -1,9 +1,15 @@
 from baseline.tf.tfy import *
 from baseline.tf.embeddings import *
 from baseline.tf.transformer import transformer_encoder_stack
+from baseline.utils import export
+from baseline.model import register_encoder
 from collections import namedtuple
 
+__all__ = []
+exporter = export(__all__)
 
+
+@exporter
 class EncoderBase(object):
 
     def __init__(self):
@@ -16,9 +22,10 @@ class EncoderBase(object):
 RNNEncoderOutput = namedtuple("RNNEncoderOutput", ("output", "hidden"))
 
 
+@register_encoder(name='default')
 class RNNEncoder(EncoderBase):
 
-    def __init__(self):
+    def __init__(self, **kwargs):
         super(EncoderBase, self).__init__()
 
     def encode(self, embed_in, src_len, pkeep, hsz=650, rnntype='blstm', layers=1, vdrop=False, **kwargs):
@@ -54,9 +61,10 @@ class RNNEncoder(EncoderBase):
 TransformerEncoderOutput = namedtuple("TransformerEncoderOutput", ("output", "src_mask"))
 
 
+@register_encoder(name='transformer')
 class TransformerEncoder(EncoderBase):
 
-    def __init__(self):
+    def __init__(self, **kwargs):
         super(TransformerEncoder, self).__init__()
 
     def encode(self,

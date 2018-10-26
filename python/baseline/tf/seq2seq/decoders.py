@@ -1,10 +1,16 @@
 from baseline.tf.tfy import *
 import tensorflow.contrib.seq2seq as tfcontrib_seq2seq
-from baseline.utils import ls_props, read_json, Offsets
+from baseline.utils import ls_props, read_json, Offsets, export
+from baseline.model import register_decoder, register_arc_policy, create_seq2seq_arc_policy
 from baseline.tf.embeddings import *
 from baseline.tf.transformer import transformer_decoder_stack, subsequent_mask
 
 
+__all__ = []
+exporter = export(__all__)
+
+
+@exporter
 class DecoderBase(object):
 
     def __init__(self, tgt_embedding, **kwargs):
@@ -28,6 +34,7 @@ class DecoderBase(object):
         pass
 
 
+@register_decoder(name='transformer')
 class TransformerDecoder(DecoderBase):
 
     def __init__(self, tgt_embedding, **kwargs):
@@ -55,7 +62,6 @@ class TransformerDecoder(DecoderBase):
                scale=True,
                activation_type='relu',
                d_ff=None, **kwargs):
-#        self.tgt_embedding.x = self.tgt_embedding.create_placeholder(self.tgt_embedding.name)
         src_enc = encoder_outputs.output
         src_mask = encoder_outputs.src_mask
 
@@ -81,7 +87,7 @@ class TransformerDecoder(DecoderBase):
         best = tf.argmax(self.preds, -1)
         self.output(best)
 
-
+@exporter
 class ArcPolicy(object):
 
     def __init__(self):
@@ -91,6 +97,7 @@ class ArcPolicy(object):
         pass
 
 
+@register_arc_policy(name='no_arc')
 class NoArcPolicy(ArcPolicy):
 
     def __init__(self):
@@ -122,6 +129,7 @@ class AbstractArcPolicy(ArcPolicy):
         return initial_state
 
 
+@register_arc_policy(name='default')
 class TransferLastHiddenPolicy(AbstractArcPolicy):
 
     def __init__(self):
@@ -131,16 +139,13 @@ class TransferLastHiddenPolicy(AbstractArcPolicy):
         return encoder_outputs.hidden
 
 
+@register_decoder(name='vanilla')
 class RNNDecoder(DecoderBase):
 
     def __init__(self, tgt_embedding, **kwargs):
         super(RNNDecoder, self).__init__(tgt_embedding, **kwargs)
         self.hsz = kwargs['hsz']
-        self.arc_state = kwargs.get('arc_state', True)
-        if self.arc_state:
-            self.arc_policy = TransferLastHiddenPolicy()
-        else:
-            self.arc_policy = NoArcPolicy()
+        self.arc_policy = create_seq2seq_arc_policy(**kwargs)
 
     def _create_cell(self, rnn_enc_tensor, src_len, pkeep, rnntype='lstm', layers=1, vdrop=False, **kwargs):
         self.cell = multi_rnn_cell_w_dropout(self.hsz, pkeep, rnntype, layers, variational=vdrop)
@@ -216,6 +221,7 @@ class RNNDecoder(DecoderBase):
             self.output(best)
 
 
+@register_decoder(name='default')
 class RNNDecoderWithAttn(RNNDecoder):
     def __init__(self, tgt_embedding, **kwargs):
         super(RNNDecoderWithAttn, self).__init__(tgt_embedding, **kwargs)
