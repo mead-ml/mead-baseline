@@ -172,8 +172,10 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
 
         state['sess'] = kwargs.get('sess', tf.Session())
 
-        if 'model_type' in kwargs:
-            state['model_type'] = kwargs['model_type']
+        state['model_type'] = kwargs.get('model_type', 'default')
+        state['encoder_type'] = kwargs.get('encoder_type', 'default')
+        state['decoder_type'] = kwargs.get('decoder_type', 'default')
+        state['arc_policy_type'] = kwargs.get('arc_policy_type', 'default')
 
         with open(basename + '.saver') as fsv:
             saver_def = tf.train.SaverDef()
@@ -295,7 +297,7 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
             f.write(str(self.saver.as_saver_def()))
 
     def save(self, model_base):
-        ##self.save_md(model_base)
+        self.save_md(model_base)
         self.saver.save(self.sess, model_base)
 
     def restore_graph(self, base):
@@ -347,6 +349,7 @@ class Seq2Seq(EncoderDecoderModelBase):
 
     def __init__(self):
         super(Seq2Seq, self).__init__()
+        self._vdrop = False
 
     @property
     def vdrop(self):
