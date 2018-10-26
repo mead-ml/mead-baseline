@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 import copy
-
+from collections import namedtuple
 PYT_MAJOR_VERSION = get_version(torch)
 
 
@@ -21,18 +21,6 @@ def sequence_mask(lengths, max_len=-1):
     # Broadcast to B x T, compares increasing number to max
     mask = row < col
     return mask
-
-
-def classify_bt(model, batch_time):
-    tensor = torch.from_numpy(batch_time) if type(batch_time) == np.ndarray else batch_time
-    probs = model(torch.autograd.Variable(tensor, requires_grad=False).cuda()).exp().data
-    probs.div_(torch.sum(probs))
-    results = []
-    batchsz = probs.size(0)
-    for b in range(batchsz):
-        outcomes = [(model.labels[id_i], prob_i) for id_i, prob_i in enumerate(probs[b])]
-        results.append(outcomes)
-    return results
 
 
 class VariationalDropout(nn.Module):
@@ -57,23 +45,6 @@ class VariationalDropout(nn.Module):
         mask = mask / self.p
         # Broadcast the mask over the sequence
         return mask * input
-
-
-def predict_seq_bt(model, x, xch, lengths):
-    x_t = torch.from_numpy(x) if type(x) == np.ndarray else x
-    xch_t = torch.from_numpy(xch) if type(xch) == np.ndarray else xch
-    len_v = torch.from_numpy(lengths) if type(lengths) == np.ndarray else lengths
-    x_v = torch.autograd.Variable(x_t, requires_grad=False).cuda()
-    xch_v = torch.autograd.Variable(xch_t, requires_grad=False).cuda()
-    #len_v = torch.autograd.Variable(len_t, requires_grad=False)
-    results = model((x_v, xch_v, len_v))
-    #print(results)
-    #if type(x) == np.ndarray:
-    #    # results = results.cpu().numpy()
-    #    # Fix this to not be greedy
-    #    results = np.argmax(results, -1)
-
-    return results
 
 
 def to_scalar(var):
@@ -254,6 +225,9 @@ def pytorch_rnn(insz, hsz, rnntype, nlayers, dropout):
     elif rnntype == 'blstm':
         rnn = torch.nn.LSTM(insz, hsz//2, nlayers, dropout=dropout, bidirectional=True)
         rnn = BiRNNWrapper(rnn, nlayers)
+    elif rnntype == 'bgru':
+        rnn = torch.nn.GRU(insz, hsz//2, nlayers, dropout=dropout, bidirectional=True)
+        rnn = BiRNNWrapper(rnn, nlayers)
     else:
         rnn = torch.nn.LSTM(insz, hsz, nlayers, dropout=dropout)
     return rnn
@@ -410,21 +384,6 @@ class LSTMEncoder(nn.Module):
         super(LSTMEncoder, self).__init__()
         self.residual = residual
         self.rnn = pytorch_lstm(insz, hsz, rnntype, nlayers, dropout, unif, False, initializer)
-
-    def forward(self, tbc, lengths):
-
-        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths.tolist())
-        output, hidden = self.rnn(packed)
-        output, _ = torch.nn.utils.rnn.pad_packed_sequence(output)
-        return output + tbc if self.residual else output
-
-
-class GRUEncoder(nn.Module):
-
-    def __init__(self, insz, hsz, rnntype, nlayers, dropout, residual=False):
-        super(GRUEncoder, self).__init__()
-        self.residual = residual
-        self.rnn = pytorch_rnn(insz, hsz, rnntype, nlayers, dropout)
 
     def forward(self, tbc, lengths):
 

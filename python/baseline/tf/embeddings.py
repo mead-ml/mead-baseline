@@ -1,9 +1,9 @@
 import tensorflow as tf
-from baseline.tf.tfy import embed, pool_chars
+from baseline.tf.tfy import embed, pool_chars, get_shape_as_list
 from baseline.utils import write_json
 from baseline.embeddings import register_embeddings
 import numpy as np
-
+import math
 
 class TensorFlowEmbeddings(object):
     """This provides a base for TensorFlow embeddings sub-graphs
@@ -172,3 +172,74 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
     # Warning this function is only initialized AFTER encode
     def get_dsz(self):
         return self.wsz
+
+
+
+def get_timing_signal_1d(length,
+                         channels,
+                         min_timescale=1.0,
+                         max_timescale=1.0e4,
+                         start_index=0):
+    """Gets a bunch of sinusoids of different frequencies.
+    Each channel of the input Tensor is incremented by a sinusoid of a different
+    frequency and phase.
+    This allows attention to learn to use absolute and relative positions.
+    Timing signals should be added to some precursors of both the query and the
+    memory inputs to attention.
+    The use of relative position is possible because sin(x+y) and cos(x+y) can be
+    expressed in terms of y, sin(x) and cos(x).
+    In particular, we use a geometric sequence of timescales starting with
+    min_timescale and ending with max_timescale.  The number of different
+    timescales is equal to channels / 2. For each timescale, we
+    generate the two sinusoidal signals sin(timestep/timescale) and
+    cos(timestep/timescale).  All of these sinusoids are concatenated in
+    the channels dimension.
+    Args:
+      length: scalar, length of timing signal sequence.
+      channels: scalar, size of timing embeddings to create. The number of
+          different timescales is equal to channels / 2.
+      min_timescale: a float
+      max_timescale: a float
+      start_index: index of first position
+    Returns:
+      a Tensor of timing signals [1, length, channels]
+    """
+    position = tf.to_float(tf.range(length) + start_index)
+    num_timescales = channels // 2
+    log_timescale_increment = (
+        math.log(float(max_timescale) / float(min_timescale)) /
+        tf.maximum(tf.to_float(num_timescales) - 1, 1))
+    inv_timescales = min_timescale * tf.exp(
+        tf.to_float(tf.range(num_timescales)) * -log_timescale_increment)
+    scaled_time = tf.expand_dims(position, 1) * tf.expand_dims(inv_timescales, 0)
+    signal = tf.concat([tf.sin(scaled_time), tf.cos(scaled_time)], axis=1)
+    signal = tf.pad(signal, [[0, 0], [0, tf.mod(channels, 2)]])
+    signal = tf.reshape(signal, [1, length, channels])
+    return signal
+
+
+@register_embeddings(name='positional')
+class PositionalLookupTableEmbeddings(LookupTableEmbeddings):
+
+    def __init__(self, name, **kwargs):
+        """Create a lookup-table based embedding.
+
+        :param name: The name of the feature/placeholder, and a key for the scope
+        :param kwargs:
+
+        :Keyword Arguments: See below
+        * *vsz* -- (``int``) this is the vocabulary (input) size of the lookup table
+        * *dsz* -- (``int``) the output dimension size of this embedding
+        * *finetune* -- (``bool``) (default is `True`) should we allow the sub-graph to learn updated weights
+        * *weights* -- (``numpy.ndarray``) Optional `vsz x dsz` weight matrix for initialization
+        * *scope* -- (``str``) An optional variable scope, by default it will be `{name}/LUT`
+        * *unif* -- (``float``) (defaults to `0.1`) If the weights should be created, what is the random initialization range
+        """
+        super(PositionalLookupTableEmbeddings, self).__init__(name, **kwargs)
+        self.max_timescale = kwargs.get('max_timescale', 1.0e4)
+
+    def encode(self, x=None):
+        x = super(PositionalLookupTableEmbeddings, self).encode(x) * math.sqrt(self.dsz)
+        B, T, C = get_shape_as_list(x)
+        signal = get_timing_signal_1d(T, C, min_timescale=1.0, max_timescale=self.max_timescale, start_index=0)
+        return x + signal
