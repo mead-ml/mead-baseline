@@ -92,22 +92,6 @@ def Linear(osz, isz, pc, name="linear"):
     return linear
 
 
-def FoldedLinear(osz, isz, pc, name="folded-linear"):
-    linear_pc = pc.add_subcollection(name=name)
-    weight = linear_pc.add_parameters((osz, isz), name="weight")
-    bias = linear_pc.add_parameters(osz, name="bias")
-
-    def linear(input_):
-        shape, batchsz = input_.dim()
-        fold = np.prod(shape[:-1])
-        last = shape[-1]
-        input_ = dy.reshape(input_, (last,), batch_size=fold * batchsz)
-        output = dy.affine_transform([bias, weight, input_])
-        return dy.reshape(output, tuple([osz] + list(shape[:-1])), batch_size=batchsz)
-
-    return linear
-
-
 def HighwayConnection(funcs, sz, pc, name="highway"):
     """Highway Connection around arbitrary functions.
 
@@ -158,6 +142,7 @@ def rnn_forward(rnn, input_):
         return rnn.transduce(input_)
     state = rnn.initial_state()
     return state.transduce(input_)
+
 
 def rnn_forward_with_state(rnn, input_, lengths=None, state=None, batched=True, backward=False):
     """Return the output of the final layers and the final state of the RNN.
