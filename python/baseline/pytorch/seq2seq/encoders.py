@@ -33,12 +33,12 @@ TransformerEncoderOutput = namedtuple("TransformerEncoderOutput", ("output", "sr
 
 class TransformerEncoderWrapper(torch.nn.Module):
 
-    def __init__(self, insz, hsz=None, num_heads=4, layers=1, pdrop=0.5, **kwargs):
+    def __init__(self, insz, hsz=None, num_heads=4, layers=1, dropout=0.5, **kwargs):
         super(TransformerEncoderWrapper, self).__init__()
         if hsz is None:
             hsz = insz
-        self.proj = pytorch_linear(insz, hsz) if hsz != insz else self._identity
-        self.transformer = TransformerEncoderStack(num_heads, d_model=hsz, pdrop=pdrop, scale=True, layers=layers)
+        ##self.proj = pytorch_linear(insz, hsz) if hsz != insz else self._identity
+        self.transformer = TransformerEncoderStack(num_heads, d_model=hsz, pdrop=dropout, scale=True, layers=layers)
 
     def _identity(self, x):
         return x
@@ -46,5 +46,6 @@ class TransformerEncoderWrapper(torch.nn.Module):
     def forward(self, bth, lengths):
         T = bth.shape[1]
         src_mask = sequence_mask(lengths, T).type_as(lengths.data)
-        bth_proj = self.proj(bth)
-        return TransformerEncoderOutput(output=bth_proj, src_mask=src_mask)
+        output = self.transformer(bth, src_mask.unsqueeze(1).unsqueeze(1))
+        ##bth_proj = self.proj(bth)
+        return TransformerEncoderOutput(output=output, src_mask=src_mask)

@@ -254,7 +254,7 @@ class TransformerDecoderWrapper(torch.nn.Module):
         self.tgt_embeddings = tgt_embeddings
         self.transformer_decoder = TransformerDecoderStack(num_heads, d_model=d_model, pdrop=pdrop, scale=True, layers=layers)
         out_dsz = self.tgt_embeddings.get_dsz()
-        self.proj = pytorch_linear(d_model, out_dsz) if d_model != out_dsz else self._identity
+        ##self.proj = pytorch_linear(d_model, out_dsz) if d_model != out_dsz else self._identity
         self.preds = pytorch_linear(out_dsz, self.tgt_embeddings.get_vsz())
 
     def _identity(self, x):
@@ -267,7 +267,7 @@ class TransformerDecoderWrapper(torch.nn.Module):
         dst_mask = subsequent_mask(T).type_as(embed_out_bth)
         src_mask = encoder_output.src_mask.unsqueeze(1).unsqueeze(1)
         output = self.transformer_decoder(embed_out_bth, context_bth, src_mask, dst_mask)
-        output = self.proj(output)
+        ##output = self.proj(output)
         prob = self.output(output)
         return prob
 
@@ -289,6 +289,6 @@ class TransformerDecoderWrapper(torch.nn.Module):
         return ys, None
 
     def output(self, x):
-        pred = F.log_softmax(self.preds(x.view(x.size(0)*x.size(1), -1)))
+        pred = F.log_softmax(self.preds(x.view(x.size(0)*x.size(1), -1)), dim=-1)
         pred = pred.view(x.size(0), x.size(1), -1)
         return pred

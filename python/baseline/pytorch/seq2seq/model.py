@@ -202,9 +202,6 @@ class TransformerModel(EncoderDecoderModelBase):
     def init_decoder(self, tgt_embeddings, **kwargs):
         return TransformerDecoderWrapper(tgt_embeddings, **kwargs)
 
-    def decode(self, encoder_output, dst):
-        return self.decoder(encoder_output, dst)
-
     def init_encoder(self, input_sz, **kwargs):
         return TransformerEncoderWrapper(input_sz, **kwargs)
 
