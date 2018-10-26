@@ -37,8 +37,11 @@ class TransformerEncoderWrapper(torch.nn.Module):
         super(TransformerEncoderWrapper, self).__init__()
         if hsz is None:
             hsz = insz
-        self.proj = pytorch_linear(insz, hsz) if hsz != insz else lambda x: x
+        self.proj = pytorch_linear(insz, hsz) if hsz != insz else self._identity
         self.transformer = TransformerEncoderStack(num_heads, d_model=hsz, pdrop=pdrop, scale=True, layers=layers)
+
+    def _identity(self, x):
+        return x
 
     def forward(self, bth, lengths):
         T = bth.shape[1]

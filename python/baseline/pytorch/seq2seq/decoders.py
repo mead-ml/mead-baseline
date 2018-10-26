@@ -11,6 +11,62 @@ from torch.autograd import Variable
 from baseline.pytorch.transformer import subsequent_mask, TransformerDecoderStack
 
 
+class ArcPolicy(torch.nn.Module):
+
+    def __init__(self):
+        super(ArcPolicy, self).__init__()
+
+    def forward(self, encoder_outputs, hsz, beam_width=1):
+        pass
+
+
+class AbstractArcPolicy(ArcPolicy):
+
+    def __init__(self):
+        super(AbstractArcPolicy, self).__init__()
+
+    def get_state(self, encoder_outputs):
+        pass
+
+    def forward(self, encoder_output, hsz, beam_width=1):
+        h_i = self.get_state(encoder_output)
+        context = encoder_output.output
+        if beam_width > 1:
+            with torch.no_grad():
+                context = context.data.repeat(1, beam_width, 1)
+                if type(h_i) is tuple:
+                    h_i = h_i[0].data.repeat(1, beam_width, 1), h_i[1].data.repeat(1, beam_width, 1)
+                else:
+                    h_i = h_i.data.repeat(1, beam_width, 1)
+        batch_size = context.size(1)
+        h_size = (batch_size, hsz)
+        with torch.no_grad():
+            init_zeros = context.data.new(*h_size).zero_()
+        return h_i, init_zeros
+
+
+class TransferLastHiddenPolicy(AbstractArcPolicy):
+
+    def __init__(self):
+        super(TransferLastHiddenPolicy, self).__init__()
+
+    def get_state(self, encoder_outputs):
+        return encoder_outputs.hidden
+
+
+class NoArcPolicy(AbstractArcPolicy):
+
+    def __init__(self):
+        super(NoArcPolicy, self).__init__()
+
+    def get_state(self, encoder_outputs):
+        final_encoder_state = encoder_outputs.hidden
+        if type(final_encoder_state) is tuple:
+            s1, s2 = final_encoder_state
+            return s1 * 0, s2 * 0
+        return final_encoder_state * 0
+
+
 class RNNDecoder(torch.nn.Module):
 
     def __init__(self, tgt_embeddings, **kwargs):
@@ -24,6 +80,12 @@ class RNNDecoder(torch.nn.Module):
         """
         super(RNNDecoder, self).__init__()
         self.hsz = kwargs['hsz']
+        self.arc_state = kwargs.get('arc_state', True)
+        if self.arc_state:
+            self.arc_policy = TransferLastHiddenPolicy()
+        else:
+            self.arc_policy = NoArcPolicy()
+
         self.tgt_embeddings = tgt_embeddings
         rnntype = kwargs['rnntype']
         layers = kwargs['layers']
@@ -70,8 +132,7 @@ class RNNDecoder(torch.nn.Module):
     def forward(self, encoder_outputs, embed_out_tbh):
         context_tbh = encoder_outputs.output
         src_mask = encoder_outputs.src_mask
-        final_encoder_state = encoder_outputs.hidden
-        h_i, output_i = self.bridge(final_encoder_state, context_tbh)
+        h_i, output_i = self.arc_policy(encoder_outputs, self.hsz)
         output, _ = self.decode_rnn(context_tbh, h_i, output_i, embed_out_tbh, src_mask)
         pred = self.output(output)
         return pred.transpose(0, 1).contiguous()
@@ -94,9 +155,6 @@ class RNNDecoder(torch.nn.Module):
         outputs = torch.stack(outputs)
         return outputs, h_i
 
-    def bridge(self, final_encoder_state, context):
-        return final_encoder_state, None
-
     def attn(self, output_t, context, src_mask=None):
         return output_t
 
@@ -109,21 +167,16 @@ class RNNDecoder(torch.nn.Module):
         return pred
 
     def predict_one(self, src, encoder_outputs, **kwargs):
-        K = kwargs.get('beam', 1)
+        K = kwargs.get('beam', 2)
         mxlen = kwargs.get('mxlen', 100)
         with torch.no_grad():
             context = encoder_outputs.output
-            h_i = encoder_outputs.hidden
             src_mask = encoder_outputs.src_mask
-
             paths = [[Offsets.GO] for _ in range(K)]
             # K
             scores = torch.FloatTensor([0. for _ in range(K)]).type_as(context)
             # TBH
-            context = torch.autograd.Variable(context.data.repeat(1, K, 1))
-            h_i = (torch.autograd.Variable(h_i[0].data.repeat(1, K, 1)),
-                   torch.autograd.Variable(h_i[1].data.repeat(1, K, 1)))
-            h_i, dec_out = self.bridge(h_i, context)
+            h_i, dec_out = self.arc_policy(encoder_outputs, self.hsz, K)
 
             for i in range(mxlen):
                 lst = [path[-1] for path in paths]
@@ -189,16 +242,6 @@ class RNNDecoderWithAttn(RNNDecoder):
     def attn(self, output_t, context, src_mask=None):
         return self.attn_module(output_t, context, context, src_mask)
 
-    def bridge(self, final_encoder_state, context):
-        batch_size = context.size(1)
-        h_size = (batch_size, self.hsz)
-        context_zeros = Variable(context.data.new(*h_size).zero_(), requires_grad=False)
-        if type(final_encoder_state) is tuple:
-            s1, s2 = final_encoder_state
-            return (s1, s2), context_zeros
-        else:
-            return final_encoder_state, context_zeros
-
 
 class TransformerDecoderWrapper(torch.nn.Module):
 
@@ -211,8 +254,11 @@ class TransformerDecoderWrapper(torch.nn.Module):
         self.tgt_embeddings = tgt_embeddings
         self.transformer_decoder = TransformerDecoderStack(num_heads, d_model=d_model, pdrop=pdrop, scale=True, layers=layers)
         out_dsz = self.tgt_embeddings.get_dsz()
-        self.proj = pytorch_linear(d_model, out_dsz) if d_model != out_dsz else lambda x: x
+        self.proj = pytorch_linear(d_model, out_dsz) if d_model != out_dsz else self._identity
         self.preds = pytorch_linear(out_dsz, self.tgt_embeddings.get_vsz())
+
+    def _identity(self, x):
+        return x
 
     def forward(self, encoder_output, dst):
         embed_out_bth = self.tgt_embeddings(dst)
