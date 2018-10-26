@@ -233,6 +233,7 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
         model.pdrop_value = kwargs.get('dropout', 0.5)
         model.pkeep = kwargs.get('pkeep', tf.placeholder_with_default(1.0, shape=(), name="pkeep"))
         model.layers = kwargs.get('layers', 1)
+        model.hsz = kwargs['hsz']
 
         with tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE):
             embed_in = model.embed()
