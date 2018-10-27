@@ -61,9 +61,9 @@ class TransformerDecoder(DecoderBase):
             T = get_shape_as_list(src_enc)[1]
             src_mask = tf.sequence_mask(src_len, T, dtype=tf.float32)
 
-        def inner_loop(i, hit_eos, next_id, decoded_ids):
+        def inner_loop(i, hit_eos, decoded_ids):
 
-            tgt_embed = self.tgt_embedding.encode(next_id)
+            tgt_embed = self.tgt_embedding.encode(decoded_ids)
             T = get_shape_as_list(tgt_embed)[1]
             tgt_mask = subsequent_mask(T)
             scope = 'TransformerDecoder'
@@ -82,28 +82,26 @@ class TransformerDecoder(DecoderBase):
                 vocab_b = tf.get_variable("vocab_b", [vsz], dtype=tf.float32)
                 outputs = tf.nn.xw_plus_b(h, vocab_w, vocab_b, name="logits")
 
-            preds = tf.reshape(outputs, [B, vsz])
-            next_id = tf.argmax(preds, axis=1)
+            preds = tf.reshape(outputs, [B, T, vsz])
+            next_id = tf.argmax(preds, axis=-1)[:, -1]
             hit_eos |= tf.equal(next_id, Offsets.EOS)
-            ##next_id = tf.expand_dims(next_id, axis=1) # This makes the id [B x 1] so it can be run in the next step
             next_id = tf.reshape(next_id, [B, 1])
 
             decoded_ids = tf.concat([decoded_ids, next_id], axis=1)
-            return i + 1, hit_eos, next_id, decoded_ids
+            return i + 1, hit_eos, decoded_ids
 
         def is_not_finished(i, hit_eos, *_):
             finished = i >= mxlen
             finished |= tf.reduce_all(hit_eos)
             return tf.logical_not(finished)
 
-        decoded_ids = tf.zeros([B, 0], dtype=tf.int64)
         hit_eos = tf.fill([B], False)
-        next_id = Offsets.GO * tf.ones([B, 1], dtype=tf.int64)
-        _, _, _, decoded_ids = tf.while_loop(is_not_finished, inner_loop, [tf.constant(0), hit_eos, next_id, decoded_ids],
+        decoded_ids = Offsets.GO * tf.ones([B, 1], dtype=tf.int64)
+
+        _, _, decoded_ids = tf.while_loop(is_not_finished, inner_loop, [tf.constant(0), hit_eos, decoded_ids],
             shape_invariants=[
                 tf.TensorShape([]),
                 tf.TensorShape([None]),
-                tf.TensorShape([None, None]),
                 tf.TensorShape([None, None])
 
         ])
