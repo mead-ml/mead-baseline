@@ -1,7 +1,7 @@
 from itertools import chain
 import numpy as np
 import dynet as dy
-from baseline.utils import crf_mask, lookup_sentence
+from baseline.utils import crf_mask, lookup_sentence, sequence_mask as seq_mask
 
 
 class DynetModel(object):
@@ -23,6 +23,13 @@ class DynetModel(object):
         for p in chain(self.pc.lookup_parameters_list(), self.pc.parameters_list()):
             str_.append("{}: {}".format(p.name(), p.shape()))
         return '\n'.join(str_)
+
+
+def sequence_mask(lengths, max_len):
+    mask = seq_mask(lengths, max_len)
+    mask = np.expand_dims(np.transpose(mask), 0)
+    inv_mask = (mask == 0).astype(np.uint8)
+    return dy.inputTensor(mask, batched=True), dy.inputTensor(inv_mask, batched=True)
 
 
 def transpose(x, dim1, dim2):

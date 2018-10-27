@@ -33,6 +33,7 @@ class Seq2SeqModel(DynetModel, EncoderDecoderModel):
         self.beam_sz = 1
 
     def init_embed(self, embeddings):
+        self.i = 0
         dsz = 0
         self.embeddings = embeddings
         for embedding in self.embeddings.values():
@@ -77,6 +78,10 @@ class Seq2SeqModel(DynetModel, EncoderDecoderModel):
             all_embeddings_lists.append(embedding.encode(batch_dict[k]))
 
         embeddings = dy.concatenate(all_embeddings_lists, d=1)
+        print(embeddings.dim())
+        if self.i == 1:
+            exit()
+        self.i += 1
         return embeddings
 
     def make_input(self, batch_dict):

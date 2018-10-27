@@ -152,6 +152,8 @@ def FFN(d_model, pdrop, pc, activation_type='relu', d_ff=None, name='ffn'):
         x = squeeze(x)
         return x
 
+    return forward
+
 
 def TransformerEncoder(num_heads, d_model, pdrop, pc, scale=True, activation_type='relu', d_ff=None, name='transformer-encoder'):
     pc = pc.add_subcollection(name=name)
@@ -174,6 +176,8 @@ def TransformerEncoder(num_heads, d_model, pdrop, pc, scale=True, activation_typ
 
         return x
 
+    return forward
+
 
 def TransformerEncoderStack(num_heads, d_model, pdrop, pc, scale=True, layers=1, activation_type='relu', d_ff=None, name='transformer-encoder-stack'):
     pc = pc.add_subcollection(name=name)
@@ -186,6 +190,8 @@ def TransformerEncoderStack(num_heads, d_model, pdrop, pc, scale=True, layers=1,
             x = layer(x, mask, train)
         x = norm(x)
         return x
+
+    return forward
 
 
 def TransformerDecoder(num_heads, d_model, pdrop, pc, scale=True, activation_type='relu', d_ff=None, name='transformer-decoder'):
@@ -216,6 +222,8 @@ def TransformerDecoder(num_heads, d_model, pdrop, pc, scale=True, activation_typ
 
         return x
 
+    return forward
+
 
 def TransformerDecoderStack(num_heads, d_model, pdrop, pc, scale=True, layers=1, activation_type='relu', d_ff=None, name='transformer-decoder-stack'):
     pc = pc.add_subcollection(name=name)
@@ -228,3 +236,5 @@ def TransformerDecoderStack(num_heads, d_model, pdrop, pc, scale=True, layers=1,
             x = layer(x, memory, src_mask, tgt_mask, train)
         x = norm(x)
         return x
+
+    return forward

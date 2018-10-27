@@ -17,7 +17,7 @@ class EncoderBase(object):
         pass
 
 def _make_sequence_mask(lengths, max_len):
-    return dy.inputTensor(sequence_mask(lengths, T))
+    return dy.inputTensor(sequence_mask(lengths, max_len))
 
 
 @register_encoder(name='default')
@@ -36,6 +36,8 @@ class RNNEncoder(EncoderBase, DynetModel):
         self.src_mask_fn = _make_sequence_mask if create_src_mask else lambda x, y: None
 
     def encode(self, embed_in, src_len, train=False, **kwargs):
+        """Input Shape: ((T, H), B). Output Shape: [((H,), B)] * T"""
+        embed_in = list(embed_in)
         forward, forward_state = rnn_forward_with_state(self.lstm_forward, embed_in, src_len)
         # TODO: add dropout
         if self.lstm_backward is not None:
@@ -46,7 +48,7 @@ class RNNEncoder(EncoderBase, DynetModel):
             output = forward
             hidden = forward_state
         return RNNEncoderOutput(
-            output=output + embed_in if self.residual else output,
+            output=[o + e for o, e in zip(output, embed_in)] if self.residual else output,
             hidden=hidden,
             src_mask=self.src_mask_fn(src_len, len(output))
         )
@@ -63,7 +65,11 @@ class TransformerEncoderWrapper(EncoderBase, DynetModel):
         self.transformer = TransformerEncoderStack(num_heads, d_model=hsz, pc=pc, pdrop=dropout, scale=True, layers=layers)
 
     def encode(self, embed_in, src_len, train=False, **kwargs):
-        src_mask = make_sequence_mask(src_len, len(embed_in))
-        xs = [self.proj(x) for x in embed_in]
-        output = self.transformer(xs, src_mask, train=train)
+        """Input shape: ((T, H), B) Output Shape: [((H,), B)] * T"""
+        T = embed_in.dim()[0][0]
+        embed_in = dy.transpose(embed_in)
+        src_mask = _make_sequence_mask(src_len, T)
+        x = self.proj(embed_in)
+        output = self.transformer(x, src_mask, train=train)
+        print(output.dim())
         return TransformerEncoderOutput(output=output, src_mask=src_mask)
