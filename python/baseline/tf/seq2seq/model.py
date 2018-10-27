@@ -172,8 +172,10 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
 
         state['sess'] = kwargs.get('sess', tf.Session())
 
-        if 'model_type' in kwargs:
-            state['model_type'] = kwargs['model_type']
+        state['model_type'] = kwargs.get('model_type', 'default')
+        state['encoder_type'] = kwargs.get('encoder_type', 'default')
+        state['decoder_type'] = kwargs.get('decoder_type', 'default')
+        state['arc_policy_type'] = kwargs.get('arc_policy_type', 'default')
 
         with open(basename + '.saver') as fsv:
             saver_def = tf.train.SaverDef()
@@ -230,6 +232,8 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
         model.sess = kwargs.get('sess', tf.Session())
         model.pdrop_value = kwargs.get('dropout', 0.5)
         model.pkeep = kwargs.get('pkeep', tf.placeholder_with_default(1.0, shape=(), name="pkeep"))
+        model.layers = kwargs.get('layers', 1)
+        model.hsz = kwargs['hsz']
 
         with tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE):
             embed_in = model.embed()
@@ -279,7 +283,9 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
         state = {
             "version": __version__,
             "src_embeddings": src_embeddings_info,
-            "tgt_embedding": self.tgt_embedding.__class__.__name__
+            "tgt_embedding": self.tgt_embedding.__class__.__name__,
+            "hsz": self.hsz,
+            "layers": self.layers
         }
         for prop in ls_props(self):
             state[prop] = getattr(self, prop)
@@ -295,7 +301,7 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
             f.write(str(self.saver.as_saver_def()))
 
     def save(self, model_base):
-        ##self.save_md(model_base)
+        self.save_md(model_base)
         self.saver.save(self.sess, model_base)
 
     def restore_graph(self, base):
@@ -307,7 +313,7 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
 
     def predict(self, batch_dict):
         feed_dict = self.make_input(batch_dict)
-        vec = self.sess.run(self.best, feed_dict=feed_dict)
+        vec = self.sess.run(self.decoder.best, feed_dict=feed_dict)
         # (B x K x T)
         if len(vec.shape) == 3:
             return vec.transpose(1, 2, 0)
@@ -347,6 +353,7 @@ class Seq2Seq(EncoderDecoderModelBase):
 
     def __init__(self):
         super(Seq2Seq, self).__init__()
+        self._vdrop = False
 
     @property
     def vdrop(self):

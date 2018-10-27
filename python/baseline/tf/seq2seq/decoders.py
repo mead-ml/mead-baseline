@@ -175,7 +175,6 @@ class RNNDecoder(DecoderBase):
         # So instead, for now, we never call .encode() and instead we create our own operator
         Wo = self._get_tgt_weights()
         batch_sz = tf.shape(encoder_outputs.output)[0]
-        final_encoder_state = encoder_outputs.hidden
         with tf.variable_scope("dec", reuse=tf.AUTO_REUSE):
             proj = dense_layer(self.tgt_embedding.vsz)
             self._create_cell(encoder_outputs.output, src_len, pkeep, **kwargs)
