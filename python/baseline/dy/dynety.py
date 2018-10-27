@@ -44,9 +44,15 @@ def LayerNorm(num_features, pc, name='layer-norm'):
     b = pc.add_parameters(num_features, name='b')
 
     def norm(x):
-        return dy.layer_norm(x, a, b)
+        shape, batchsz = x.dim()
+        first = shape[0]
+        fold = np.prod(shape[1:])
+        x = dy.reshape(x, (first,), batch_size=batchsz*fold)
+        x = dy.layer_norm(x, a, b)
+        return dy.reshape(x, shape, batch_size=batchsz)
 
     return norm
+
 
 
 def optimizer(model, optim='sgd', eta=0.01, clip=None, mom=0.9, **kwargs):
