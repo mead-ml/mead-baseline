@@ -19,10 +19,10 @@ class DecoderBase(object):
         self.best = None
         self.probs = None
 
-    def output(self, best, **kwargs):
+    def output(self, best, do_probs=True):
         with tf.variable_scope("Output"):
             self.best = tf.identity(best, name='best')
-            if self.beam_width > 1:
+            if self.beam_width > 1 or not do_probs:
                 self.probs = tf.no_op(name='probs')
             else:
                 self.probs = tf.map_fn(lambda x: tf.nn.softmax(x, name='probs'), self.preds)
@@ -42,6 +42,7 @@ class TransformerDecoder(DecoderBase):
 
     def predict(self,
                 encoder_outputs,
+                src_len,
                 pkeep,
                 layers=1,
                 scope='TransformerDecoder',
@@ -50,7 +51,65 @@ class TransformerDecoder(DecoderBase):
                 activation_type='relu',
                 d_ff=None,
                 **kwargs):
-        raise Exception('Implement me!')
+        mxlen = kwargs.get('mxlen', 100)
+        src_enc = encoder_outputs.output
+        B = get_shape_as_list(src_enc)[0]
+
+        if hasattr(encoder_outputs, 'src_mask'):
+            src_mask = encoder_outputs.src_mask
+        else:
+            T = get_shape_as_list(src_enc)[1]
+            src_mask = tf.sequence_mask(src_len, T, dtype=tf.float32)
+
+        def inner_loop(i, hit_eos, next_id, decoded_ids):
+
+            tgt_embed = self.tgt_embedding.encode(next_id)
+            T = get_shape_as_list(tgt_embed)[1]
+            tgt_mask = subsequent_mask(T)
+            scope = 'TransformerDecoder'
+            h = transformer_decoder_stack(src_enc, tgt_embed, src_mask, tgt_mask, num_heads, pkeep, scale, layers, activation_type, scope, d_ff)
+
+            vsz = self.tgt_embedding.vsz
+            do_weight_tying = bool(kwargs.get('tie_weights', True))  # False
+            hsz = get_shape_as_list(h)[-1]
+            if do_weight_tying and hsz == self.tgt_embedding.get_dsz():
+                with tf.variable_scope(self.tgt_embedding.scope, reuse=True):
+                    W = tf.get_variable("W")
+                    outputs = tf.matmul(h, W, transpose_b=True, name="logits")
+            else:
+                h = tf.reshape(h, [-1, hsz])
+                vocab_w = tf.get_variable("vocab_w", [hsz, vsz], dtype=tf.float32)
+                vocab_b = tf.get_variable("vocab_b", [vsz], dtype=tf.float32)
+                outputs = tf.nn.xw_plus_b(h, vocab_w, vocab_b, name="logits")
+
+            preds = tf.reshape(outputs, [B, vsz])
+            next_id = tf.argmax(preds, axis=1)
+            hit_eos |= tf.equal(next_id, Offsets.EOS)
+            ##next_id = tf.expand_dims(next_id, axis=1) # This makes the id [B x 1] so it can be run in the next step
+            next_id = tf.reshape(next_id, [B, 1])
+
+            decoded_ids = tf.concat([decoded_ids, next_id], axis=1)
+            return i + 1, hit_eos, next_id, decoded_ids
+
+        def is_not_finished(i, hit_eos, *_):
+            finished = i >= mxlen
+            finished |= tf.reduce_all(hit_eos)
+            return tf.logical_not(finished)
+
+        decoded_ids = tf.zeros([B, 0], dtype=tf.int64)
+        hit_eos = tf.fill([B], False)
+        next_id = Offsets.GO * tf.ones([B, 1], dtype=tf.int64)
+        _, _, _, decoded_ids = tf.while_loop(is_not_finished, inner_loop, [tf.constant(0), hit_eos, next_id, decoded_ids],
+            shape_invariants=[
+                tf.TensorShape([]),
+                tf.TensorShape([None]),
+                tf.TensorShape([None, None]),
+                tf.TensorShape([None, None])
+
+        ])
+        self.preds = tf.no_op()
+        best = decoded_ids
+        self.output(best, do_probs=False)
 
     def decode(self, encoder_outputs,
                src_len,

@@ -392,6 +392,7 @@ class EncoderDecoderService(object):
 
         outcomes = self.model.predict(examples)
         results = []
+        ##B = outcomes.shape[0]
         for i in range(len(outcomes)):
             best = outcomes[i][0]
 
