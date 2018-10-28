@@ -25,7 +25,7 @@ class DynetModel(object):
         return '\n'.join(str_)
 
 
-def sequence_mask(lengths, max_len):
+def sequence_mask(lengths, max_len=-1):
     """Build a sequence mask for dynet.
 
     This is a bit weird, most of the time we have dynet as H, T so it would
@@ -118,7 +118,10 @@ def Linear(osz, isz, pc, name="linear"):
         Returns:
             dy.Expression ((osz,), B)
         """
-        output = dy.affine_transform([bias, weight, input_])
+        # Affine Transformation squeezes out a final dim of 1 breaking it when
+        # This func if used for ((H, T), B) -> ((O, T), B)
+        # output = dy.affine_transform([bias, weight, input_])
+        output = bias + weight * input_
         return output
 
     return linear
@@ -515,9 +518,8 @@ def show_examples_dynet(model, es, rlut1, rlut2, vocab, mxlen, sample, prob_clip
     for i in range(max_examples):
         example = {}
         # Batch first, so this gets a single example at once
-        for k, value in batch_dict.items():
-            v = value[i]
-            example[k] = v.reshape((1,) + v.shape)
+        for k, v in batch_dict.items():
+            example[k] = v[i, np.newaxis]
 
         print('========================================================================')
         sent = lookup_sentence(rlut1, example[src_field].squeeze(), reverse=reverse)

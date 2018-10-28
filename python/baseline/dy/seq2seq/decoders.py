@@ -1,3 +1,4 @@
+import numpy as np
 import dynet as dy
 from baseline.utils import Offsets
 from baseline.dy.dynety import DynetModel, Linear, Attention
@@ -30,7 +31,6 @@ class TransferLastHiddenPolicy(ArcPolicy):
         super(TransferLastHiddenPolicy, self).__init__()
 
     def get_state(self, encoder_outputs):
-        print(encoder_outputs.hidden.dim())
         return encoder_outputs.hidden
 
 
@@ -41,14 +41,15 @@ class NoArcPolicy(ArcPolicy):
 
     def get_state(self, encoder_outputs):
         final_state = encoder_outputs.hidden
-        return [x * 0 for x in final_state]
+        shape, batchsz = final_state[0].dim()
+        return [dy.zeros(shape, batch_size=batchsz) for _ in len(final_state)]
 
 
 class DecoderBase(DynetModel):
     def __init__(self, pc):
         super(DecoderBase, self).__init__(pc)
 
-    def __call__(self, encoder_output, dst):
+    def __call__(self, encoder_output, dst, train):
         pass
 
     def predict_one(self, src, encoder_outputs, **kwargs):
@@ -114,7 +115,7 @@ class RNNDecoder(DecoderBase):
         return outputs
 
     def output(self, x):
-        return [dy.log_softmax(self.preds(y)) for y in x]
+        return [self.preds(y) for y in x]
 
 @register_decoder(name='default')
 class RNNDecoderWithAttn(RNNDecoder):
@@ -130,3 +131,47 @@ class RNNDecoderWithAttn(RNNDecoder):
 
     def attn(self, output_t, context, src_mask=None):
         return self._attn(output_t, src_mask)
+
+
+@register_decoder(name='transformer')
+class TransformerDecoderWrapper(DecoderBase):
+    def __init__(self, tgt_embedding, dropout=0.5, layers=1, hsz=None, num_heads=4, scale=True, **kwargs):
+        super(TransformerDecoderWrapper, self).__init__(kwargs['pc'])
+        self.tgt_embedding = tgt_embedding
+        dsz = self.tgt_embedding.get_dsz()
+        hsz = dsz if hsz is None else hsz
+        self.transformer_decoder = TransformerDecoderStack(num_heads, d_model=hsz, pdrop=dropout, scale=scale, layers=layers, pc=self.pc)
+        self.proj_to_hsz = Linear(hsz, dsz, self.pc) if dsz != hsz else self._identity
+        # TODO: Add a way to tie weights
+        self.proj_to_dsz = Linear(dsz, hsz, self.pc) if dsz != hsz else self._identity
+        self.preds = Linear(self.tgt_embedding.get_vsz(), dsz, self.pc)
+
+    @staticmethod
+    def _identity(x):
+        return x
+
+    def output(self, x):
+        return [self.preds(y) for y in dy.transpose(x)]
+
+    def __call__(self, encoder_output, dst, train):
+        embed_out_th_b = self.tgt_embedding.encode(dst)
+        embed_out_ht_b = dy.transpose(embed_out_th_b)
+        embed_out_ht_b = self.proj_to_hsz(embed_out_ht_b)
+        context = dy.concatenate_cols(encoder_output.output)
+        T = embed_out_ht_b.dim()[0][1]
+        dst_mask = subsequent_mask(T)
+        src_mask = encoder_output.src_mask
+        output = self.transformer_decoder(embed_out_ht_b, context, src_mask, dst_mask, train)
+        output = self.proj_to_dsz(output)
+        return self.output(output)
+
+    def predict_one(self, src, encoder_outputs, **kwargs):
+        mxlen = kwargs.get('mxlen', 100)
+        ys = np.full((1, 1), Offsets.GO)
+        for i in range(mxlen - 1):
+            probs = self(encoder_outputs, ys, False)
+            next_word = np.argmax(probs[-1].npvalue())
+            ys = np.concatenate([ys, np.full((1, 1), next_word)], axis=0)
+            if next_word == Offsets.EOS:
+                break
+        return ys.transpose(), None

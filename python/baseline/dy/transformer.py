@@ -116,29 +116,32 @@ def MultiHeadedAttention(h, d_model, dropout, pc, scale=False, name='multi-heade
     p_O = Linear(d_model, d_model, pc, name="linear-o")
     attn = scaled_dot_product_attention if scale else dot_product_attention
 
-    def run(query, key, value, mask=None, train=False):
+    def mha_forward(query, key, value, mask=None, train=False):
         """Input shape ((H, T), B)"""
         shape, batchsz = query.dim()
-        T = shape[1]
         query = p_Q(query)
-        query = dy.reshape(query, (d_k, h, T), batch_size=batchsz)
+        t = query.dim()[0][1]
+        query = dy.reshape(query, (d_k, h, t), batch_size=batchsz)
         query = transpose(query, 1, 2)
 
         key = p_K(key)
-        key = dy.reshape(query, (d_k, h, T), batch_size=batchsz)
+        t = key.dim()[0][1]
+        key = dy.reshape(key, (d_k, h, t), batch_size=batchsz)
         key = transpose(key, 1, 2)
 
         value = p_V(value)
-        value = dy.reshape(value, (d_k, h, T), batch_size=batchsz)
+        t = value.dim()[0][1]
+        value = dy.reshape(value, (d_k, h, t), batch_size=batchsz)
         value = transpose(value, 1, 2)
 
         drop = dropout if train else None
         x = attn(query, key, value, mask=mask, dropout=drop)
-        x = transpose(x, 0, 1)
-        x = dy.reshape(x, (h * d_k, T), batch_size=batchsz)
+        x = transpose(x, 1, 2)
+        t = x.dim()[0][2]
+        x = dy.reshape(x, (h * d_k, t), batch_size=batchsz)
         return p_O(x)
 
-    return run
+    return mha_forward
 
 
 def FFN(d_model, pdrop, pc, activation_type='relu', d_ff=None, name='ffn'):
@@ -149,14 +152,14 @@ def FFN(d_model, pdrop, pc, activation_type='relu', d_ff=None, name='ffn'):
     contract = Linear(d_model, d_ff, pc, name='squeeze')
     act = dynet_activation(activation_type)
 
-    def forward(x, train=False):
+    def ffn_forward(x, train=False):
         """Input shape: ((H, T), B)"""
         x = act(expand(x))
         x = dy.dropout(x, pdrop) if train else x
         x = contract(x)
         return x
 
-    return forward
+    return ffn_forward
 
 
 def TransformerEncoder(num_heads, d_model, pdrop, pc, scale=True, activation_type='relu', d_ff=None, name='transformer-encoder'):
@@ -166,7 +169,7 @@ def TransformerEncoder(num_heads, d_model, pdrop, pc, scale=True, activation_typ
     ln1 = LayerNorm(d_model, pc)
     ln2 = LayerNorm(d_model, pc)
 
-    def forward(x, mask=None, train=False):
+    def encoder_forward(x, mask=None, train=False):
         """Input shape: ((H, T), B)"""
         x = ln1(x)
         y = self_attn(x, x, x, mask, train)
@@ -180,7 +183,7 @@ def TransformerEncoder(num_heads, d_model, pdrop, pc, scale=True, activation_typ
 
         return x
 
-    return forward
+    return encoder_forward
 
 
 def TransformerEncoderStack(num_heads, d_model, pdrop, pc, scale=True, layers=1, activation_type='relu', d_ff=None, name='transformer-encoder-stack'):
@@ -188,14 +191,14 @@ def TransformerEncoderStack(num_heads, d_model, pdrop, pc, scale=True, layers=1,
     layers = [TransformerEncoder(num_heads, d_model, pdrop, pc, scale=scale, activation_type=activation_type, d_ff=None) for _ in range(layers)]
     norm = LayerNorm(d_model, pc)
 
-    def forward(x, mask=None, train=False):
+    def encoder_stack_forward(x, mask=None, train=False):
         """Input shape: ((H, T), B)"""
         for layer in layers:
             x = layer(x, mask, train)
         x = norm(x)
         return x
 
-    return forward
+    return encoder_stack_forward
 
 
 def TransformerDecoder(num_heads, d_model, pdrop, pc, scale=True, activation_type='relu', d_ff=None, name='transformer-decoder'):
@@ -207,7 +210,7 @@ def TransformerDecoder(num_heads, d_model, pdrop, pc, scale=True, activation_typ
     ln2 = LayerNorm(d_model, pc)
     ln3 = LayerNorm(d_model, pc)
 
-    def forward(x, memory, src_mask, tgt_mask):
+    def decoder_forward(x, memory, src_mask, tgt_mask, train=False):
         """Input shape: ((H, T), B)"""
         x = ln1(x)
         y = self_attn(x, x, x, tgt_mask, train)
@@ -226,7 +229,7 @@ def TransformerDecoder(num_heads, d_model, pdrop, pc, scale=True, activation_typ
 
         return x
 
-    return forward
+    return decoder_forward
 
 
 def TransformerDecoderStack(num_heads, d_model, pdrop, pc, scale=True, layers=1, activation_type='relu', d_ff=None, name='transformer-decoder-stack'):
@@ -234,11 +237,11 @@ def TransformerDecoderStack(num_heads, d_model, pdrop, pc, scale=True, layers=1,
     layers = [TransformerDecoder(num_heads, d_model, pdrop, pc, scale, activation_type, d_ff) for _ in range(layers)]
     norm = LayerNorm(d_model, pc)
 
-    def forward(x, memory, src_mask, tgt_mask, train):
+    def decoder_stack_forward(x, memory, src_mask, tgt_mask, train=False):
         """Input shape: ((H, T), B)"""
         for layer in layers:
             x = layer(x, memory, src_mask, tgt_mask, train)
         x = norm(x)
         return x
 
-    return forward
+    return decoder_stack_forward

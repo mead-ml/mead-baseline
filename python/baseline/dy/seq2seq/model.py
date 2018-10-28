@@ -1,3 +1,4 @@
+import numpy as np
 from baseline.model import (
     EncoderDecoderModel,
     register_model,
@@ -85,6 +86,20 @@ class EncoderDecoderModelBase(DynetModel, EncoderDecoderModel):
         encoder_outputs = self.encode(batch_dict, src_len)
         output = self.decode(encoder_outputs, batch_dict['dst'])
         return output
+
+    def predict(self, batch_dict, **kwargs):
+        batch = []
+        src_field = self.src_lengths_key.split('_')[0]
+        B = batch_dict[src_field].shape[0]
+        for b in range(B):
+            dy.renew_cg()
+            example = {}
+            for k, v in batch_dict.items():
+                example[k] = v[b, np.newaxis]
+            inputs = self.make_input(example)
+            encoder_outputs = self.encode(inputs, inputs['src_len'])
+            batch.append(self.decoder.predict_one(inputs['src'], encoder_outputs, **kwargs)[0])
+        return batch
 
 
 @register_model(task='seq2seq', name=['default', 'attn'])
