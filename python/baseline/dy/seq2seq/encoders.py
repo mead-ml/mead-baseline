@@ -1,27 +1,23 @@
 from collections import namedtuple
 import dynet as dy
-from baseline.utils import sequence_mask
 from baseline.model import register_encoder
 from baseline.dy.transformer import TransformerEncoderStack
-from baseline.dy.dynety import DynetModel, Linear, rnn_forward_with_state
+from baseline.dy.dynety import DynetModel, Linear, rnn_forward_with_state, sequence_mask
 
 
 RNNEncoderOutput = namedtuple("RNNEncoderOutput", ("output", "hidden", "src_mask"))
 TransformerEncoderOutput = namedtuple("TransformerEncoderOutput", ("output", "src_mask"))
 
-class EncoderBase(object):
-    def __init__(self, *args, **kwargs):
-        super(EncoderBase, self).__init__(*args, **kwargs)
+class EncoderBase(DynetModel):
+    def __init__(self, pc):
+        super(EncoderBase, self).__init__(pc)
 
     def encode(self, embed_in, src_len, **kwargs):
         pass
 
-def _make_sequence_mask(lengths, max_len):
-    return dy.inputTensor(sequence_mask(lengths, max_len))
-
 
 @register_encoder(name='default')
-class RNNEncoder(EncoderBase, DynetModel):
+class RNNEncoder(EncoderBase):
     def __init__(self, insz, pc, hsz=None, rnntype='blstm', layers=1, pdrop=0.5, residual=False, create_src_mask=True, name='rnn-encoder', **kwargs):
         pc = pc.add_subcollection(name=name)
         super(RNNEncoder, self).__init__(pc)
@@ -33,7 +29,7 @@ class RNNEncoder(EncoderBase, DynetModel):
         else:
             self.lstm_forward = dy.VanillaLSTMBuilder(layers, insz, hidden, self.pc)
             self.lstm_backward = None
-        self.src_mask_fn = _make_sequence_mask if create_src_mask else lambda x, y: None
+        self.src_mask_fn = _make_sequence_mask if create_src_mask else lambda x, y: None, None
 
     def encode(self, embed_in, src_len, train=False, **kwargs):
         """Input Shape: ((T, H), B). Output Shape: [((H,), B)] * T"""
@@ -55,7 +51,7 @@ class RNNEncoder(EncoderBase, DynetModel):
 
 
 @register_encoder(name='transformer')
-class TransformerEncoderWrapper(EncoderBase, DynetModel):
+class TransformerEncoderWrapper(EncoderBase):
     def __init__(self, dsz, pc, hsz=None, num_heads=4, layers=1, dropout=0.5, name='transformer-encoder-wrapper', **kwargs):
         pc = pc.add_subcollection(name=name)
         super(TransformerEncoderWrapper, self).__init__(pc)
@@ -68,8 +64,8 @@ class TransformerEncoderWrapper(EncoderBase, DynetModel):
         """Input shape: ((T, H), B) Output Shape: [((H,), B)] * T"""
         T = embed_in.dim()[0][0]
         embed_in = dy.transpose(embed_in)
-        src_mask = _make_sequence_mask(src_len, T)
+        src_mask = sequence_mask(src_len, T)
+        src_mask = [unsqueeze(m, 2) for m in src_mask]
         x = self.proj(embed_in)
         output = self.transformer(x, src_mask, train=train)
-        print(output.dim())
         return TransformerEncoderOutput(output=output, src_mask=src_mask)

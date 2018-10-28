@@ -26,8 +26,15 @@ class DynetModel(object):
 
 
 def sequence_mask(lengths, max_len):
+    """Build a sequence mask for dynet.
+
+    This is a bit weird, most of the time we have dynet as H, T so it would
+    seem like we would want the mask to be ((1, T), B) but the only places
+    where we do the masking right now is in attention and it makes sense to
+    have it shaped as ((T, 1), B).
+    """
     mask = seq_mask(lengths, max_len)
-    mask = np.expand_dims(np.transpose(mask), 0)
+    mask = np.expand_dims(np.transpose(mask), 1)
     inv_mask = (mask == 0).astype(np.uint8)
     return dy.inputTensor(mask, batched=True), dy.inputTensor(inv_mask, batched=True)
 
