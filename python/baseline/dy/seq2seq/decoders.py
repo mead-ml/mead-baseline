@@ -30,6 +30,7 @@ class TransferLastHiddenPolicy(ArcPolicy):
         super(TransferLastHiddenPolicy, self).__init__()
 
     def get_state(self, encoder_outputs):
+        print(encoder_outputs.hidden.dim())
         return encoder_outputs.hidden
 
 

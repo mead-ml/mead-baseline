@@ -53,7 +53,7 @@ class EncoderDecoderModelBase(DynetModel, EncoderDecoderModel):
         return embeddings
 
     def init_encoder(self, src_dsz, **kwargs):
-        kwargs['insz'] = src_dsz
+        kwargs['dsz'] = src_dsz
         return create_seq2seq_encoder(**kwargs)
 
     def init_decoder(self, tgt_embedding, **kwargs):

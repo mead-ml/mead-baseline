@@ -2,7 +2,7 @@ from collections import namedtuple
 import dynet as dy
 from baseline.model import register_encoder
 from baseline.dy.transformer import TransformerEncoderStack
-from baseline.dy.dynety import DynetModel, Linear, rnn_forward_with_state, sequence_mask
+from baseline.dy.dynety import DynetModel, Linear, rnn_forward_with_state, sequence_mask, unsqueeze
 
 
 RNNEncoderOutput = namedtuple("RNNEncoderOutput", ("output", "hidden", "src_mask"))
@@ -18,16 +18,16 @@ class EncoderBase(DynetModel):
 
 @register_encoder(name='default')
 class RNNEncoder(EncoderBase):
-    def __init__(self, insz, pc, hsz=None, rnntype='blstm', layers=1, pdrop=0.5, residual=False, create_src_mask=True, name='rnn-encoder', **kwargs):
+    def __init__(self, dsz, pc, hsz=None, rnntype='blstm', layers=1, pdrop=0.5, residual=False, create_src_mask=True, name='rnn-encoder', **kwargs):
         pc = pc.add_subcollection(name=name)
         super(RNNEncoder, self).__init__(pc)
         self.residual = residual
-        hidden = hsz if hsz is not None else insz
+        hidden = hsz if hsz is not None else dsz
         if rnntype == 'blstm':
-            self.lstm_forward = dy.VanillaLSTMBuilder(layers, insz, hidden // 2, self.pc)
-            self.lstm_backward = dy.VanillaLSTMBuilder(layers, insz, hidden // 2, self.pc)
+            self.lstm_forward = dy.VanillaLSTMBuilder(layers, dsz, hidden // 2, self.pc)
+            self.lstm_backward = dy.VanillaLSTMBuilder(layers, dsz, hidden // 2, self.pc)
         else:
-            self.lstm_forward = dy.VanillaLSTMBuilder(layers, insz, hidden, self.pc)
+            self.lstm_forward = dy.VanillaLSTMBuilder(layers, dsz, hidden, self.pc)
             self.lstm_backward = None
         self.src_mask_fn = sequence_mask if create_src_mask else lambda x, y: (None, None)
 
@@ -57,10 +57,10 @@ class TransformerEncoderWrapper(EncoderBase):
         super(TransformerEncoderWrapper, self).__init__(pc)
         if hsz is None:
             hsz = dsz
-        self.proj = Linear(dsz, hsz, pc) if hsz != dsz else lambda x: x
+        self.proj = Linear(hsz, dsz, pc) if hsz != dsz else lambda x: x
         self.transformer = TransformerEncoderStack(num_heads, d_model=hsz, pc=pc, pdrop=dropout, scale=True, layers=layers)
 
-    def encode(self, embed_in, src_len, train=False, **kwargs):
+    def __call__(self, embed_in, src_len, train=False, **kwargs):
         """Input shape: ((T, H), B) Output Shape: [((H,), B)] * T"""
         T = embed_in.dim()[0][0]
         embed_in = dy.transpose(embed_in)
@@ -68,4 +68,5 @@ class TransformerEncoderWrapper(EncoderBase):
         src_mask = [unsqueeze(m, 2) for m in src_mask]
         x = self.proj(embed_in)
         output = self.transformer(x, src_mask, train=train)
+        output = [out for out in dy.transpose(output)]
         return TransformerEncoderOutput(output=output, src_mask=src_mask)

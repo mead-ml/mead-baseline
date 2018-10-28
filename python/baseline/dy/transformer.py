@@ -45,7 +45,12 @@ def batch_matmul_last(x, y):
 
 
 def batch_matmul(x, y):
-    """Matmul between first two layers but the rest are ignored."""
+    """Matmul between first two layers but the rest are ignored.
+
+    Input: ((X, Y, ..), B) and ((Y, Z, ..), B)
+    Output: ((X, Z, ..), B)
+
+    """
     x_shape, batchsz = x.dim()
     x_mat = x_shape[:2]
     sames = x_shape[2:]
@@ -72,7 +77,7 @@ def folded_softmax(x, softmax=dy.softmax):
 
 
 def scaled_dot_product_attention(query, key, value, mask=None, dropout=None):
-    """Input Shape: ((D, T, H), B)"""
+    """Input Shape: ((D, T, H), B) Output: ((D, T, H), B)"""
     d_k = query.dim()[0][0]
 
     scores = batch_matmul(transpose(key, 0, 1), query) / math.sqrt(d_k)
@@ -98,7 +103,7 @@ def dot_product_attention(query, key, value, mask=None, dropout=None):
     if dropout is not None:
         weights = dy.dropout(weights, dropout)
 
-    return batch_matmul(weights, value)
+    return batch_matmul(value, weights)
 
 
 def MultiHeadedAttention(h, d_model, dropout, pc, scale=False, name='multi-headed-attention'):
@@ -125,7 +130,7 @@ def MultiHeadedAttention(h, d_model, dropout, pc, scale=False, name='multi-heade
 
         value = p_V(value)
         value = dy.reshape(value, (d_k, h, T), batch_size=batchsz)
-        value = transpose(key, 1, 2)
+        value = transpose(value, 1, 2)
 
         drop = dropout if train else None
         x = attn(query, key, value, mask=mask, dropout=drop)
@@ -148,7 +153,7 @@ def FFN(d_model, pdrop, pc, activation_type='relu', d_ff=None, name='ffn'):
         """Input shape: ((H, T), B)"""
         x = act(expand(x))
         x = dy.dropout(x, pdrop) if train else x
-        x = squeeze(x)
+        x = contract(x)
         return x
 
     return forward
