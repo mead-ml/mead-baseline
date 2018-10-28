@@ -50,7 +50,7 @@ class LookupTableEmbeddings(DyNetEmbeddings):
         self.lookup = dy.lookup_batch if self.batched else dy.lookup
         self.embeddings = self.pc.lookup_parameters_from_numpy(embedding_weight, name=name)
 
-    def encode(self, x):
+    def encode(self, x, train=False):
         """Encode a sequence.
 
         :param input_: List[List[int]] (batched) or List[int] (normal)
@@ -95,10 +95,9 @@ class PositionalLookupTableEmbeddings(DyNetEmbeddings):
     def get_vsz(self):
         return self.vsz
 
-    def encode(self, x, train):
+    def encode(self, x, train=False):
         embedded = self.embeddings.encode(x)
         embedded = embedded * math.sqrt(self.dsz)
-        print(embedded.dim())
         ((seq_len, _), _) = embedded.dim()
         embedded = embedded + dy.inputTensor(self.pe[:seq_len])
         embedded = dy.dropout(embedded, self.dropout) if train else embedded
@@ -151,7 +150,7 @@ class CharConvEmbeddings(DyNetEmbeddings):
     def get_vsz(self):
         return self.vsz
 
-    def encode(self, x):
+    def encode(self, x, train=False):
         xch = x.transpose(0, 2, 1)
         W, T, B = x.shape
         xch = x.reshape(W, -1)

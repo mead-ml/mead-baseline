@@ -313,15 +313,17 @@ def Attention(lstmsz, pc, name="attention"):
         """
         projected_vectors = attention_w1 * encoder_vectors
 
-        def attend(state):
+        def attend(state, mask=None):
             """Calculate the attention weighted sum of the encoder vectors.
 
             :param state: dy.Expression ((H,), B)
             """
             projected_state = attention_w2 * state
             non_lin = dy.tanh(dy.colwise_add(projected_vectors, projected_state))
-            attention_scores = attention_v * non_lin
-            attention_weights = dy.softmax(dy.transpose(attention_scores))
+            attention_scores = dy.transpose(attention_v * non_lin)
+            if mask is not None:
+                attention_scores = dy.cmult(attention_scores, mask[0]) + (mask[1] * -1e9)
+            attention_weights = dy.softmax(attention_scores)
             # Encoder Vectors has data along the columns so a matmul with the
             # weights (which are also a column) creates a sum of encoder weighted
             # by attention weights

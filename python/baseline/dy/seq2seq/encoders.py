@@ -29,9 +29,9 @@ class RNNEncoder(EncoderBase):
         else:
             self.lstm_forward = dy.VanillaLSTMBuilder(layers, insz, hidden, self.pc)
             self.lstm_backward = None
-        self.src_mask_fn = _make_sequence_mask if create_src_mask else lambda x, y: None, None
+        self.src_mask_fn = sequence_mask if create_src_mask else lambda x, y: (None, None)
 
-    def encode(self, embed_in, src_len, train=False, **kwargs):
+    def __call__(self, embed_in, src_len, train=False, **kwargs):
         """Input Shape: ((T, H), B). Output Shape: [((H,), B)] * T"""
         embed_in = list(embed_in)
         forward, forward_state = rnn_forward_with_state(self.lstm_forward, embed_in, src_len)
@@ -39,7 +39,7 @@ class RNNEncoder(EncoderBase):
         if self.lstm_backward is not None:
             backward, backward_state = rnn_forward_with_state(self.lstm_backward, embed_in)
             output = [dy.concatenate([f, b]) for f, b in zip(forward, backward)]
-            hidden = [dy.concatenate([f, b]) for f, b in zip(forward, backward)]
+            hidden = [dy.concatenate([f, b]) for f, b in zip(forward_state, backward_state)]
         else:
             output = forward
             hidden = forward_state
