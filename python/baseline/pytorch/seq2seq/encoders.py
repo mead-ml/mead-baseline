@@ -55,7 +55,6 @@ class TransformerEncoderWrapper(torch.nn.Module):
     def forward(self, bth, lengths):
         T = bth.shape[1]
         src_mask = sequence_mask(lengths, T).type_as(lengths.data)
-        print(src_mask.shape)
         bth = self.proj(bth)
         output = self.transformer(bth, src_mask.unsqueeze(1).unsqueeze(1))
         return TransformerEncoderOutput(output=output, src_mask=src_mask)

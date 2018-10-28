@@ -76,7 +76,6 @@ def scaled_dot_product_attention(query, key, value, mask=None, dropout=None):
     d_k = query.dim()[0][0]
 
     scores = batch_matmul(transpose(key, 0, 1), query) / math.sqrt(d_k)
-    x = scores.npvalue()
     if mask is not None:
         scores = dy.cmult(scores, mask[0]) + (mask[1] * -1e9)
 

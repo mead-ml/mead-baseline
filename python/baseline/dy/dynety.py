@@ -32,6 +32,14 @@ def sequence_mask(lengths, max_len):
     return dy.inputTensor(mask, batched=True), dy.inputTensor(inv_mask, batched=True)
 
 
+def unsqueeze(x, dim):
+    shape, batchsz = x.dim()
+    dim = len(shape) if dim == -1 else dim
+    shape = list(shape)
+    shape.insert(dim, 1)
+    return dy.reshape(x, tuple(shape), batch_size=batchsz)
+
+
 def transpose(x, dim1, dim2):
     shape, _ = x.dim()
     dims = list(range(len(shape)))
