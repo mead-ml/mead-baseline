@@ -234,23 +234,23 @@ class EncoderDecoderModel(object):
     def run(self, source_dict, **kwargs):
         return self.predict(source_dict, **kwargs)
 
-
 class RemoteModel(object):
-    def __init__(self, remote, name, signature):
-        from tensorflow_serving.apis import (predict_pb2 as predictpb, 
-                         inference_pb2 as infpb, 
-                         prediction_service_pb2_grpc as servicepb
-                         )
-        from tensorflow.core.framework import tensor_pb2
-        from tensorflow.core.framework import types_pb2
-        from tensorflow.core.framework import tensor_shape_pb2
-        import grpc
-
+    def __init__(self, remote, name, signature, labels=None, beam=None, lengths_key=None, inputs=[]):
+        self.predictpb = import_user_module('tensorflow_serving.apis.predict_pb2')
+        self.servicepb = import_user_module('tensorflow_serving.apis.prediction_service_pb2_grpc')
+        self.metadatapb = import_user_module('tensorflow_serving.apis.get_model_metadata_pb2')
+        self.grpc = import_user_module('grpc')
+        
         self.remote = remote
         self.name = name
         self.signature = signature
 
-        self.channel = grpc.insecure_channel(remote)
+        self.channel = self.grpc.insecure_channel(remote)
+
+        self.lengths_key = lengths_key
+        self.input_keys = set(inputs)
+        self.beam = beam
+        self.labels = labels
 
     def classify(self, examples):
         return self._transform(examples)
@@ -261,39 +261,44 @@ class RemoteModel(object):
     def predict_next(self, examples):
         return self._transform(examples)
 
+    def get_labels(self):
+        return self.labels
+
     def _transform(self, examples):
+        valid_example = all(k in examples for k in self.input_keys)
+        if not valid_example:
+            raise ValueError("should have keys: " + ",".join(self.input_keys))
+
         request = self.create_request(examples)
-        stub = servicepb.PredictionServiceStub(self.channel)
+        stub = self.servicepb.PredictionServiceStub(self.channel)
         outcomes_list = stub.Predict(request)
-        outcomes_list = self.deserialize_response(outcomes_list)
+        outcomes_list = self.deserialize_response(examples, outcomes_list)
 
         return outcomes_list
 
     def create_request(self, examples):
-        request = predictpb.PredictRequest()
+        request = self.predictpb.PredictRequest()
         request.model_spec.name = self.name
         request.model_spec.signature_name = self.signature
 
-        for feature in examples.keys():
-            num_examples = len(examples[feature])
-            feature_len = len(examples[feature][0])
+        for feature in self.input_keys:
+            if isinstance(examples[feature], np.ndarray): 
+                shape = examples[feature].shape
+            else:
+                shape = [1]
 
-            shape = (num_examples, feature_len)
-            tensor_proto = tensor_pb2.TensorProto(
-                dtype=types_pb2.DT_FLOAT,
-                tensor_shape=tensor_shape_pb2.TensorShapeProto(dim=[
-                    tensor_shape_pb2.TensorShapeProto.Dim(size=-1 if d is None else d) for d in shape
-                ])
-            )
+            import tensorflow
+            tensor_proto = tensorflow.contrib.util.make_tensor_proto(examples[feature], shape=shape)
             request.inputs[feature].CopyFrom(
                 tensor_proto
             )
-        
-            return request
 
-    def deserialize_response(self, predict_response):
+        return request
+
+    def deserialize_response(self, examples, predict_response):
         """
-        this is basically a map.
+        read the protobuf response from tensorflow serving and decode it according
+        to the signature.
 
         here's the relevant piece of the proto:
             map<string, TensorProto> inputs = 2;
@@ -304,11 +309,31 @@ class RemoteModel(object):
         :params predict_response: a PredictResponse protobuf object, 
                     as defined in tensorflow_serving proto files
         """
-        classes = predict_response.outputs.get('classes').string_val
-        scores = predict_response.outputs.get('scores').float_val
+        if self.signature == 'suggest_text':
+            # s2s returns int values.
+            classes = predict_response.outputs.get('classes').int_val
+            results = [classes[x:x+self.beam] for x in range(0, len(classes), self.beam)]
+            results = list(zip(*results)) #transpose
+            return [results]
 
-        if classes is None or scores is None:
-            return []
-            # how do i log in python??
-        
-        return [(k.decode('utf-8'), v) for k,v in zip(classes, scores)]
+        if self.signature == 'tag_text':
+            classes = predict_response.outputs.get('classes').int_val
+            lengths = examples[self.lengths_key]
+            result = []
+            for i in range(examples['word'].shape[0]):
+                length = lengths[i]
+                result.append([np.int32(x) for x in classes[length*i:length*(i+1)]])
+            
+            return result
+            
+        if self.signature == 'predict_text':
+            scores = predict_response.outputs.get('scores').float_val
+            classes = predict_response.outputs.get('classes').string_val
+            result = []
+            num_ex = len(examples[self.lengths_key])
+            for i in range(num_ex):
+                length = len(self.get_labels())
+                d = [(c,s) for c,s in zip(classes[length*i:length*(i+1)], scores[length*i:length*(i+1)])]
+                result.append(d)
+            
+            return result
