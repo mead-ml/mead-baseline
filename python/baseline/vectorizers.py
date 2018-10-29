@@ -234,7 +234,6 @@ class Char1DVectorizer(AbstractCharVectorizer):
 
     def __init__(self, **kwargs):
         super(Char1DVectorizer, self).__init__(kwargs.get('transform_fn'))
-        print(kwargs)
         self.mxlen = kwargs.get('mxlen', -1)
         self.time_reverse = kwargs.get('rev', False)
         self.max_seen_tok = 0

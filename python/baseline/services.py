@@ -102,8 +102,6 @@ class RemoteModel(object):
         :params predict_response: a PredictResponse protobuf object, 
                     as defined in tensorflow_serving proto files
         """
-        # classes = predict_response.outputs.get('classes').string_val
-
         if self.signature == 'suggest_text':
             # s2s returns int values.
             classes = predict_response.outputs.get('classes').int_val
@@ -123,9 +121,13 @@ class RemoteModel(object):
             
         if self.signature == 'predict_text':
             scores = predict_response.outputs.get('scores').float_val
-            for i, ex in enumerate(examples['word'].shape[0]):
+            classes = predict_response.outputs.get('classes').string_val
+            result = []
+            num_ex = len(examples[self.lengths_key])
+            for i in range(num_ex):
                 length = len(self.get_labels())
-                result.append([(c,s) for c,s in zip(classes[length*i:length*(i+1)], scores[length*i:length*(i+1)])])
+                d = [(c,s) for c,s in zip(classes[length*i:length*(i+1)], scores[length*i:length*(i+1)])]
+                result.append(d)
             
             return result
 
