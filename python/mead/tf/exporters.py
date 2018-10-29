@@ -326,7 +326,7 @@ class Seq2SeqTensorFlowExporter(TensorFlowExporter):
         sig_input = predict_tensors
         sig_output = SignatureOutput(classes, values)
         sig_name, 'suggest_text'
-        assets = create_assets(basename, sig_input, sig_output, sig_name, self.length_key)
+        assets = create_assets(basename, sig_input, sig_output, sig_name, self.length_key, beam=model.beam)
 
         return sig_input, sig_output, sig_name, assets
 
@@ -384,7 +384,7 @@ def create_assets(basename, sig_input, sig_output, sig_name, lengths_key=None):
     metadata = create_metadata(inputs, outputs, sig_name, model_name, lengths_key)
     return metadata
 
-def create_metadata(inputs, outputs, sig_name, model_name, lengths_key=None):
+def create_metadata(inputs, outputs, sig_name, model_name, lengths_key=None, beam=None):
     meta = {
         'inputs': inputs,
         'outputs': outputs,
@@ -397,5 +397,8 @@ def create_metadata(inputs, outputs, sig_name, model_name, lengths_key=None):
 
     if lengths_key:
         meta['lengths_key'] = lengths_key
+
+    if beam:
+        meta['beam'] = beam
 
     return meta
