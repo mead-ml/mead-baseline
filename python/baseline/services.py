@@ -28,7 +28,7 @@ exporter = export(__all__)
 
 
 class RemoteModel(object):
-    def __init__(self, remote, name, signature, labels=None):
+    def __init__(self, remote, name, signature, labels=None, beam=None, lengths_key=None, inputs=[]):
         self.predictpb = import_user_module('tensorflow_serving.apis.predict_pb2')
         self.servicepb = import_user_module('tensorflow_serving.apis.prediction_service_pb2_grpc')
         self.metadatapb = import_user_module('tensorflow_serving.apis.get_model_metadata_pb2')
@@ -39,30 +39,11 @@ class RemoteModel(object):
         self.signature = signature
 
         self.channel = self.grpc.insecure_channel(remote)
-        
-        self.input_keys = self.retrieve_remote_signature_inputs()
 
-        self.beam = None
+        self.lengths_key = lengths_key
+        self.input_keys = set(inputs)
+        self.beam = beam
         self.labels = labels
-
-    def retrieve_remote_signature_inputs(self):
-        stub = self.servicepb.PredictionServiceStub(self.channel)
-
-        request = self.metadatapb.GetModelMetadataRequest()
-        request.model_spec.name = self.name
-        request.model_spec.signature_name = self.signature
-
-        request.metadata_field.append("signature_def")
-
-        md = stub.GetModelMetadata(request, 10)
-        sigmap = self.metadatapb.SignatureDefMap()
-        binary_sig = md.metadata['signature_def'].Unpack(sigmap)
-
-        signature = sigmap.signature_def[self.signature]
-        print(signature)
-        inputs = signature.inputs
-
-        return [x for x in inputs]
 
     def classify(self, examples):
         return self._transform(examples)
@@ -132,18 +113,17 @@ class RemoteModel(object):
 
         if self.signature == 'tag_text':
             classes = predict_response.outputs.get('classes').int_val
-            lengths = examples['word_lengths']
+            lengths = examples[self.lengths_key]
             result = []
             for i in range(examples['word'].shape[0]):
-                ex = examples['word'][i,:]
                 length = lengths[i]
                 result.append([np.int32(x) for x in classes[length*i:length*(i+1)]])
             
             return result
             
         if self.signature == 'predict_text':
-            scores = predict_resposne.outputs.get('scores').float_val
-            for i, ex in enumerate(examples):
+            scores = predict_response.outputs.get('scores').float_val
+            for i, ex in enumerate(examples['word'].shape[0]):
                 length = len(self.get_labels())
                 result.append([(c,s) for c,s in zip(classes[length*i:length*(i+1)], scores[length*i:length*(i+1)])])
             
@@ -167,6 +147,12 @@ class Service(object):
 
     @classmethod
     def load(cls, bundle, **kwargs):
+        """Load a model from a bundle.
+
+        This can be either a local model or a remote, exported model.
+
+        :returns a Service implementation
+        """
         # can delegate
         if os.path.isdir(bundle):
             directory = bundle
@@ -176,20 +162,48 @@ class Service(object):
         model_basename = find_model_basename(directory)
         vocabs = load_vocabs(directory)
         vectorizers = load_vectorizers(directory)
-        labels = read_json(os.path.join(directory, model_basename) + '.labels')
-
+        
         remote = kwargs.get("remote", None)
         name = kwargs.get("name", None)
-
         if remote:
-            model = RemoteModel(remote, name, cls.signature_name, labels=labels)
+            beam = kwargs.get('beam', 30)
+            model = Service._create_remote_model(directory, remote, name, cls.signature_name, beam)
             return cls(vocabs, vectorizers, model)
 
+        labels = read_json(os.path.join(directory, model_basename) + '.labels')
         be = kwargs.get('backend', 'tf')
         import_user_module('baseline.{}.embeddings'.format(be))
         import_user_module('baseline.{}.{}'.format(be, cls.task_name))
         model = cls.task_load(model_basename, **kwargs)
         return cls(vocabs, vectorizers, model)
+
+    @staticmethod
+    def _create_remote_model(directory, remote, name, signature_name, beam):
+        """Reads the necessary information from the remote bundle to instatiate
+        a client for a remote model.
+
+        :directory the location of the exported model bundle
+        :remote a url endpoint to hit
+        :name the model name, as defined in tf-serving's model.config
+        :signature_name  the signature to use.
+        :beam used for s2s and found in the kwargs. We default this and pass it in.
+
+        :returns a RemoteModel
+        """
+        assets = read_json(os.path.join(directory, 'model.assets'))
+        model_name = assets['metadata']['exported_model']
+        labels = read_json(os.path.join(directory, model_name) + '.labels')
+        lengths_key = assets.get('lengths_key', None)
+        inputs = assets.get('inputs', [])
+        model = RemoteModel(remote, 
+                            name, 
+                            signature_name, 
+                            labels=labels, 
+                            lengths_key=lengths_key, 
+                            inputs=inputs,
+                            beam=beam)
+
+        return model
 
 @exporter
 class ClassifierService(Service):
@@ -310,7 +324,6 @@ class TaggerService(Service):
         # This might be inefficient if the label space is large
 
         label_vocab = revlut(self.get_labels())
-
         examples = dict()
         for k, vectorizer in self.vectorizers.items():
             if hasattr(vectorizer, 'mxlen') and vectorizer.mxlen == -1:
