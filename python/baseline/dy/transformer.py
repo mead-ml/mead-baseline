@@ -1,79 +1,31 @@
 import math
 import numpy as np
 import dynet as dy
-from baseline.dy.dynety import transpose, Linear, dynet_activation, LayerNorm
+from baseline.dy.dynety import (
+    DynetLayer,
+    Linear, LayerNorm,
+    transpose, unsqueeze,
+    dynet_activation, batch_matmul, folded_softmax
+)
 
 
-def subsequent_mask(size):
-    mask = np.triu(np.ones((size, size))).astype(np.uint8)
+def subsequent_mask(T):
+    """Build a mask to hide the future from self attention.
+
+    Output: ((T, T, 1), 1) to broadcast over both the heads and the batch
+
+    Returns:
+        (dy.Expression, dy.Expression)
+        - The first mask has ones in valid positions and zeros at invalid. This
+          is used to zero out the future using a `dy.cmult`.
+        - The second mask has 1 at invalid positions and zeros at valid. This
+          can be used to fill invalid positions with negative numbers via
+          addition.
+    """
+    mask = np.triu(np.ones((T, T))).astype(np.uint8)
     mask = np.expand_dims(mask, -1)
     inv_mask = (mask == 0).astype(np.uint8)
     return dy.inputTensor(mask), dy.inputTensor(inv_mask)
-
-
-def batch_matmul_last(x, y):
-    """This is a pain to do.
-
-    The idea is to:
-        1. roll the matrix dimensions (last 2) with dy.transpose
-        2. Move the extra dimensions into the batch dim with dy.reshape
-        3. Do a normal matrix mult
-        4. Reshape and roll back with transposes
-
-    Note; This doesn't support broadcasting like the pytorch version.
-    """
-    ndim = len(x.dim()[0])
-    axis = [ndim - 2, ndim - 1] + list(range(0, ndim - 2))
-    x = dy.transpose(x, axis)
-    y = dy.transpose(y, axis)
-    x_shape, batchsz = x.dim()
-    x_mat = x_shape[:2]
-    inners = x_shape[2:]
-    to_batch = np.prod(inners)
-    y_shape, _ = y.dim()
-    y_mat = y_shape[:2]
-
-    x = dy.reshape(x, x_mat, batch_size=to_batch * batchsz)
-    y = dy.reshape(y, y_mat, batch_size=to_batch * batchsz)
-
-    z = x * y
-    z = dy.reshape(z, tuple([x_mat[0], y_mat[1]] + list(inners)), batch_size=batchsz)
-    axis = list(range(2, ndim)) + [0, 1]
-    z = dy.transpose(z, axis)
-
-    return z
-
-
-def batch_matmul(x, y):
-    """Matmul between first two layers but the rest are ignored.
-
-    Input: ((X, Y, ..), B) and ((Y, Z, ..), B)
-    Output: ((X, Z, ..), B)
-
-    """
-    x_shape, batchsz = x.dim()
-    x_mat = x_shape[:2]
-    sames = x_shape[2:]
-    fold = np.prod(sames)
-    y_shape, _ = y.dim()
-    y_mat = y_shape[:2]
-
-    x = dy.reshape(x, x_mat, batch_size=fold*batchsz)
-    y = dy.reshape(y, y_mat, batch_size=fold*batchsz)
-
-    z = x * y
-    z = dy.reshape(z, tuple([x_mat[0], y_mat[1]] + list(sames)), batch_size=batchsz)
-    return z
-
-
-def folded_softmax(x, softmax=dy.softmax):
-    """Dynet only allows for softmax on matrices."""
-    shape, batchsz = x.dim()
-    first = shape[0]
-    flat = np.prod(shape[1:])
-    x = dy.reshape(x, (first, flat), batch_size=batchsz)
-    x = softmax(x, d=0)
-    return dy.reshape(x, shape, batch_size=batchsz)
 
 
 def scaled_dot_product_attention(query, key, value, mask=None, dropout=None):
@@ -106,142 +58,143 @@ def dot_product_attention(query, key, value, mask=None, dropout=None):
     return batch_matmul(value, weights)
 
 
-def MultiHeadedAttention(h, d_model, dropout, pc, scale=False, name='multi-headed-attention'):
-    assert d_model % h == 0
-    pc = pc.add_subcollection(name=name)
-    d_k = d_model // h
-    p_Q = Linear(d_model, d_model, pc, name="linear-q")
-    p_K = Linear(d_model, d_model, pc, name="linear-k")
-    p_V = Linear(d_model, d_model, pc, name="linear-v")
-    p_O = Linear(d_model, d_model, pc, name="linear-o")
-    attn = scaled_dot_product_attention if scale else dot_product_attention
+class MultiHeadedAttention(DynetLayer):
+    def __init__(self, h, d_model, dropout, pc, scale=False, name='multi-headed-attention'):
+        assert d_model % h == 0
+        pc = pc.add_subcollection(name=name)
+        super(MultiHeadedAttention, self).__init__(pc)
+        self.d_k = d_model // h
+        self.h = h
+        self.p_Q = Linear(d_model, d_model, pc, name="linear-q")
+        self.p_K = Linear(d_model, d_model, pc, name="linear-k")
+        self.p_V = Linear(d_model, d_model, pc, name="linear-v")
+        self.p_O = Linear(d_model, d_model, pc, name="linear-o")
+        self.attn = scaled_dot_product_attention if scale else dot_product_attention
+        self.pdrop = dropout
 
-    def mha_forward(query, key, value, mask=None, train=False):
-        """Input shape ((H, T), B)"""
-        shape, batchsz = query.dim()
-        query = p_Q(query)
+    def __call__(self, query, key, value, mask=None, train=False):
+        """Input: ((H, T), B) Output: ((H, T), B)"""
+        _, batchsz = query.dim()
+        query = self.p_Q(query)
         t = query.dim()[0][1]
-        query = dy.reshape(query, (d_k, h, t), batch_size=batchsz)
+        query = dy.reshape(query, (self.d_k, self.h, t), batch_size=batchsz)
         query = transpose(query, 1, 2)
 
-        key = p_K(key)
+        key = self.p_K(key)
         t = key.dim()[0][1]
-        key = dy.reshape(key, (d_k, h, t), batch_size=batchsz)
+        key = dy.reshape(key, (self.d_k, self.h, t), batch_size=batchsz)
         key = transpose(key, 1, 2)
 
-        value = p_V(value)
+        value = self.p_V(value)
         t = value.dim()[0][1]
-        value = dy.reshape(value, (d_k, h, t), batch_size=batchsz)
+        value = dy.reshape(value, (self.d_k, self.h, t), batch_size=batchsz)
         value = transpose(value, 1, 2)
 
-        drop = dropout if train else None
-        x = attn(query, key, value, mask=mask, dropout=drop)
+        pdrop = self.pdrop if train else None
+        x = self.attn(query, key, value, mask=mask, dropout=pdrop)
         x = transpose(x, 1, 2)
         t = x.dim()[0][2]
-        x = dy.reshape(x, (h * d_k, t), batch_size=batchsz)
-        return p_O(x)
-
-    return mha_forward
+        x = dy.reshape(x, (self.h * self.d_k, t), batch_size=batchsz)
+        return self.p_O(x)
 
 
-def FFN(d_model, pdrop, pc, activation_type='relu', d_ff=None, name='ffn'):
-    pc = pc.add_subcollection(name=name)
-    if d_ff is None:
-        d_ff = 4 * d_model
-    expand = Linear(d_ff, d_model, pc, name='expand')
-    contract = Linear(d_model, d_ff, pc, name='squeeze')
-    act = dynet_activation(activation_type)
+class FFN(DynetLayer):
+    def __init__(self, d_model, pdrop, pc, activation_type='relu', d_ff=None, name='ffn'):
+        pc = pc.add_subcollection(name=name)
+        super(FFN, self).__init__(pc)
+        d_ff = 4 * d_model if d_ff is None else d_ff
+        self.expand = Linear(d_ff, d_model, self.pc, name='expand')
+        self.contract = Linear(d_model, d_ff, self.pc, name='contract')
+        self.act = dynet_activation(activation_type)
+        self.pdrop = pdrop
 
-    def ffn_forward(x, train=False):
-        """Input shape: ((H, T), B)"""
-        x = act(expand(x))
-        x = dy.dropout(x, pdrop) if train else x
-        x = contract(x)
-        return x
-
-    return ffn_forward
+    def __call__(self, x, train=False):
+        """Input: ((H, T), B) Output: ((H, T), B)."""
+        x = self.act(self.expand(x))
+        x = dy.dropout(x, self.pdrop) if train else x
+        return self.contract(x)
 
 
-def TransformerEncoder(num_heads, d_model, pdrop, pc, scale=True, activation_type='relu', d_ff=None, name='transformer-encoder'):
-    pc = pc.add_subcollection(name=name)
-    self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, pc, scale=scale)
-    ffn = FFN(d_model, pdrop, pc, activation_type=activation_type, d_ff=d_ff)
-    ln1 = LayerNorm(d_model, pc)
-    ln2 = LayerNorm(d_model, pc)
+class TransformerEncoder(DynetLayer):
+    def __init__(self, num_heads, d_model, pdrop, pc, scale=True, activation_type='relu', d_ff=None, name='transformer-encoder'):
+        pc = pc.add_subcollection(name=name)
+        super(TransformerEncoder, self).__init__(pc)
+        self.self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, self.pc, scale=scale)
+        self.ffn = FFN(d_model, pdrop, self.pc, activation_type=activation_type, d_ff=d_ff)
+        self.ln1 = LayerNorm(d_model, self.pc)
+        self.ln2 = LayerNorm(d_model, self.pc)
+        self.pdrop = pdrop
 
-    def encoder_forward(x, mask=None, train=False):
-        """Input shape: ((H, T), B)"""
-        x = ln1(x)
-        y = self_attn(x, x, x, mask, train)
-        y = dy.dropout(y, pdrop) if train else y
+    def __call__(self, x, mask=None, train=False):
+        """Input: ((H, T), B)"""
+        x = self.ln1(x)
+        y = self.self_attn(x, x, x, mask, train)
+        y = dy.dropout(y, self.pdrop) if train else y
         x = x + y
 
-        x = ln2(x)
-        y = ffn(x, train)
-        y = dy.dropout(y, pdrop) if train else y
+        x = self.ln2(x)
+        y = self.ffn(x, train)
+        y = dy.dropout(y, self.pdrop) if train else y
         x = x + y
 
         return x
 
-    return encoder_forward
 
+class TransformerEncoderStack(DynetLayer):
+    def __init__(self, num_heads, d_model, pdrop, pc, scale=True, layers=1, activation_type='relu', d_ff=None, name='transformer-encoder-stack'):
+        pc = pc.add_subcollection(name=name)
+        super(TransformerEncoderStack, self).__init__(pc)
+        self.layers = [TransformerEncoder(num_heads, d_model, pdrop, self.pc, scale=scale, activation_type=activation_type, d_ff=None) for _ in range(layers)]
+        self.norm = LayerNorm(d_model, pc)
+        self.pdrop = pdrop
 
-def TransformerEncoderStack(num_heads, d_model, pdrop, pc, scale=True, layers=1, activation_type='relu', d_ff=None, name='transformer-encoder-stack'):
-    pc = pc.add_subcollection(name=name)
-    layers = [TransformerEncoder(num_heads, d_model, pdrop, pc, scale=scale, activation_type=activation_type, d_ff=None) for _ in range(layers)]
-    norm = LayerNorm(d_model, pc)
-
-    def encoder_stack_forward(x, mask=None, train=False):
-        """Input shape: ((H, T), B)"""
-        for layer in layers:
+    def __call__(self, x, mask=None, train=False):
+        for layer in self.layers:
             x = layer(x, mask, train)
-        x = norm(x)
+        return self.norm(x)
+
+
+class TransformerDecoder(DynetLayer):
+    def __init__(self, num_heads, d_model, pdrop, pc, scale=True, activation_type='relu', d_ff=None, name='transformer-decoder'):
+        pc = pc.add_subcollection(name=name)
+        super(TransformerDecoder, self).__init__(pc)
+        self.self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, self.pc, scale=scale)
+        self.src_attn = MultiHeadedAttention(num_heads, d_model, pdrop, self.pc, scale=scale)
+        self.ffn = FFN(d_model, pdrop, self.pc, activation_type=activation_type, d_ff=d_ff)
+        self.ln1 = LayerNorm(d_model, self.pc)
+        self.ln2 = LayerNorm(d_model, self.pc)
+        self.ln3 = LayerNorm(d_model, self.pc)
+        self.pdrop = pdrop
+
+    def __call__(self, x, memory, src_mask, tgt_mask, train=False):
+        """Input shape: ((H, T), B)"""
+        x = self.ln1(x)
+        y = self.self_attn(x, x, x, tgt_mask, train)
+        y = dy.dropout(y, self.pdrop) if train else y
+        x = x + y
+
+        x = self.ln2(x)
+        y = self.src_attn(x, memory, memory, src_mask)
+        y = dy.dropout(y, self.pdrop) if train else y
+        x = x + y
+
+        x = self.ln3(x)
+        y = self.ffn(x, train)
+        y = dy.dropout(y, self.pdrop) if train else y
+        x = x + y
+
         return x
 
-    return encoder_stack_forward
 
+class TransformerDecoderStack(DynetLayer):
+    def __init__(self, num_heads, d_model, pdrop, pc, scale=True, layers=1, activation_type='relu', d_ff=None, name='transformer-decoder-stack'):
+        pc = pc.add_subcollection(name=name)
+        super(TransformerDecoderStack, self).__init__(pc)
+        self.layers = [TransformerDecoder(num_heads, d_model, pdrop, self.pc, scale=scale, activation_type=activation_type, d_ff=d_ff) for _ in range(layers)]
+        self.norm = LayerNorm(d_model, self.pc)
 
-def TransformerDecoder(num_heads, d_model, pdrop, pc, scale=True, activation_type='relu', d_ff=None, name='transformer-decoder'):
-    pc = pc.add_subcollection(name=name)
-    self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, pc, scale=scale)
-    src_attn = MultiHeadedAttention(num_heads, d_model, pdrop, pc, scale=scale)
-    ffn = FFN(d_model, pdrop, pc, activation_type=activation_type, d_ff=d_ff)
-    ln1 = LayerNorm(d_model, pc)
-    ln2 = LayerNorm(d_model, pc)
-    ln3 = LayerNorm(d_model, pc)
-
-    def decoder_forward(x, memory, src_mask, tgt_mask, train=False):
-        """Input shape: ((H, T), B)"""
-        x = ln1(x)
-        y = self_attn(x, x, x, tgt_mask, train)
-        y = dy.dropout(y, pdrop) if train else y
-        x = x + y
-
-        x = ln2(x)
-        y = src_attn(x, memory, memory, src_mask)
-        y = dy.dropout(y, pdrop) if train else y
-        x = x + y
-
-        x = ln3(x)
-        y = ffn(x, train)
-        y = dy.dropout(y, pdrop) if train else y
-        x = x + y
-
-        return x
-
-    return decoder_forward
-
-
-def TransformerDecoderStack(num_heads, d_model, pdrop, pc, scale=True, layers=1, activation_type='relu', d_ff=None, name='transformer-decoder-stack'):
-    pc = pc.add_subcollection(name=name)
-    layers = [TransformerDecoder(num_heads, d_model, pdrop, pc, scale, activation_type, d_ff) for _ in range(layers)]
-    norm = LayerNorm(d_model, pc)
-
-    def decoder_stack_forward(x, memory, src_mask, tgt_mask, train=False):
-        """Input shape: ((H, T), B)"""
-        for layer in layers:
+    def __call__(self, x, memory, src_mask, tgt_mask, train=False):
+        """Input: ((H, T), B)"""
+        for layer in self.layers:
             x = layer(x, memory, src_mask, tgt_mask, train)
-        x = norm(x)
-        return x
-
-    return decoder_stack_forward
+        return self.norm(x)

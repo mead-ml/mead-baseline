@@ -25,6 +25,9 @@ class DynetModel(object):
         return '\n'.join(str_)
 
 
+class DynetLayer(DynetModel): pass
+
+
 def sequence_mask(lengths, max_len=-1):
     """Build a sequence mask for dynet.
 
@@ -40,6 +43,7 @@ def sequence_mask(lengths, max_len=-1):
 
 
 def unsqueeze(x, dim):
+    """Add a dimension of size 1 to `x` at position `dim`."""
     shape, batchsz = x.dim()
     dim = len(shape) if dim == -1 else dim
     shape = list(shape)
@@ -47,7 +51,45 @@ def unsqueeze(x, dim):
     return dy.reshape(x, tuple(shape), batch_size=batchsz)
 
 
+def squeeze(x):
+    shape, batchsz = x.dim()
+    shape = tuple(filter(lambda x: x != 1, shape))
+    return dy.reshape(x, shape, batch_size=batchsz)
+
+
+def batch_matmul(x, y):
+    """Matmul between first two layers but the rest are ignored.
+
+    Input: ((X, Y, ..), B) and ((Y, Z, ..), B)
+    Output: ((X, Z, ..), B)
+    """
+    x_shape, batchsz = x.dim()
+    x_mat = x_shape[:2]
+    sames = x_shape[2:]
+    fold = np.prod(sames)
+    y_shape, _ = y.dim()
+    y_mat = y_shape[:2]
+
+    x = dy.reshape(x, x_mat, batch_size=fold*batchsz)
+    y = dy.reshape(y, y_mat, batch_size=fold*batchsz)
+
+    z = x * y
+    z = dy.reshape(z, tuple([x_mat[0], y_mat[1]] + list(sames)), batch_size=batchsz)
+    return z
+
+
+def folded_softmax(x, softmax=dy.softmax):
+    """Dynet only allows for softmax on matrices."""
+    shape, batchsz = x.dim()
+    first = shape[0]
+    flat = np.prod(shape[1:])
+    x = dy.reshape(x, (first, flat), batch_size=batchsz)
+    x = softmax(x, d=0)
+    return dy.reshape(x, shape, batch_size=batchsz)
+
+
 def transpose(x, dim1, dim2):
+    """Swap dimensions `dim1` and `dim2`."""
     shape, _ = x.dim()
     dims = list(range(len(shape)))
     tmp = dims[dim1]
@@ -57,6 +99,7 @@ def transpose(x, dim1, dim2):
 
 
 def dynet_activation(type_):
+    """Get activation functions based on names."""
     return dy.rectify
 
 
@@ -100,18 +143,20 @@ def optimizer(model, optim='sgd', eta=0.01, clip=None, mom=0.9, **kwargs):
     return opt
 
 
-def Linear(osz, isz, pc, name="linear"):
-    """
-    :param osz: int
-    :param isz: int
-    :param pc: dy.ParameterCollection
-    :param name: str
-    """
-    linear_pc = pc.add_subcollection(name=name)
-    weight = linear_pc.add_parameters((osz, isz), name="weight")
-    bias = linear_pc.add_parameters(osz, name="bias")
+class Linear(DynetLayer):
+    def __init__(self, osz, isz, pc, name="linear"):
+        """
+        :param osz: int
+        :param isz: int
+        :param pc: dy.ParameterCollection
+        :param name: str
+        """
+        pc = pc.add_subcollection(name=name)
+        super(Linear, self).__init__(pc)
+        self.weight = self.pc.add_parameters((osz, isz), name="weight")
+        self.bias = self.pc.add_parameters((osz,), name="bias")
 
-    def linear(input_):
+    def __call__(self, input_):
         """
         :param input_: dy.Expression ((isz,), B)
 
@@ -120,11 +165,31 @@ def Linear(osz, isz, pc, name="linear"):
         """
         # Affine Transformation squeezes out a final dim of 1 breaking it when
         # This func if used for ((H, T), B) -> ((O, T), B)
-        # output = dy.affine_transform([bias, weight, input_])
-        output = bias + weight * input_
-        return output
+        # return dy.affine_transform([bias, weight, input_])
+        return self.bias + self.weight * input_
 
-    return linear
+
+def squeeze_and_transpose(x):
+    return dy.transpose(squeeze(x))
+
+
+class WeightShareLinear(DynetLayer):
+    default = 'weight-shared'
+    def __init__(self, osz, weight, pc, transform=None, name=None):
+        name = self.default if name is None else self.default + self.clean(name)
+        pc = pc.add_subcollection(name=name)
+        super(WeightShareLinear, self).__init__(pc)
+        self.weight = weight
+        self.bias = self.pc.add_parameters((osz,), name='bias')
+        self.transform = transform if transform is not None else lambda x: x
+
+    def __call__(self, input_):
+        a = self.transform(self.weight)
+        return self.bias + self.transform(self.weight) * input_
+
+    @staticmethod
+    def clean(name):
+        return name.replace('/', '-').replace('_', '-')
 
 
 def HighwayConnection(funcs, sz, pc, name="highway"):

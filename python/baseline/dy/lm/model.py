@@ -7,7 +7,9 @@ class LanguageModelBase(DynetModel, LanguageModel):
 
     @classmethod
     def create(cls, embeddings, **kwargs):
-        return cls(embeddings, **kwargs)
+        model = cls(embeddings, **kwargs)
+        print(model)
+        return model
 
     def __init__(self, embeddings, layers=1, hsz=650, dropout=None, **kwargs):
         super(LanguageModelBase, self).__init__(kwargs['pc'])
@@ -22,7 +24,12 @@ class LanguageModelBase(DynetModel, LanguageModel):
         pass
 
     def init_output(self, vsz, hsz=650, **kwargs):
-        self._output = Linear(vsz, hsz, self.pc, name="output")
+        do_weight_tying = bool(kwargs.get('tie_weights', False))
+        embed = self.embeddings[self.tgt_key]
+        if do_weight_tying and hsz == embed.get_dsz():
+            self._output = WeightShareLinear(embed.get_vsz(), embed.embeddings, self.pc, transform=squeeze_and_transpose, name=embed.pc.name())
+        else:
+            self._output = Linear(vsz, hsz, self.pc, name="output")
 
     def init_embed(self, embeddings):
         dsz = 0

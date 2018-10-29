@@ -1,7 +1,7 @@
 import numpy as np
 import dynet as dy
 from baseline.utils import Offsets, topk
-from baseline.dy.dynety import DynetModel, Linear, Attention
+from baseline.dy.dynety import DynetModel, Linear, Attention, WeightShareLinear
 from baseline.dy.transformer import subsequent_mask, TransformerDecoderStack
 from baseline.model import (
     register_decoder,
@@ -89,28 +89,26 @@ class RNNDecoder(DecoderBase):
     def init_attn(self, **kwargs):
         pass
 
-    def _attn_first(self, context):
-        pass
-
-    def attn(self, output_t, context, src_mask):
-        return output_t
+    def attn(self, context):
+        """Returns the attention function that takes (output_t, src_mask)."""
+        return lambda output_t, src_mask: output_t
 
     def __call__(self, encoder_outputs, dst, train=False):
         src_mask = encoder_outputs.src_mask
         h_i, output_i, context = self.arc_policy(encoder_outputs, self.hsz)
-        output = self.decode_rnn(context, h_i, output_i, dst, train, src_mask)
+        output = self.decode_rnn(context, h_i, output_i, dst, src_mask, train)
         return self.output(output)
 
-    def decode_rnn(self, context, h_i, output_i, dst, train, src_mask):
+    def decode_rnn(self, context, h_i, output_i, dst, src_mask, train):
         embed_out = self.tgt_embeddings.encode(dst, train)
         outputs = []
-        self._attn_first(context)
+        attn_fn = self.attn(context)
         rnn_state = self.decoder_rnn.initial_state(h_i)
         for embed_i in embed_out:
             embed_i = self.input_i(embed_i, output_i)
             rnn_state = rnn_state.add_input(embed_i)
             rnn_output_i = rnn_state.output()
-            output_i = self.attn(rnn_output_i, None, src_mask)
+            output_i = attn_fn(rnn_output_i, src_mask)
             outputs.append(output_i)
         return outputs
 
@@ -126,9 +124,9 @@ class RNNDecoder(DecoderBase):
         paths = [[Offsets.GO] for _ in range(K)]
         done = np.array([False] * K)
         scores = np.array([0.0] * K)
+        src_mask = encoder_outputs.src_mask
         h_i, dec_out, context = self.arc_policy(encoder_outputs, self.hsz, K)
-        context_mx = dy.concatenate_cols(context)
-        self._attn_first(context)
+        attn_fn = self.attn(context)
         final_encoder_state_k = (dy.concatenate_to_batch([h] * K) for h in h_i)
         num_states = len(h_i)
         rnn_state = self.decoder_rnn.initial_state(final_encoder_state_k)
@@ -139,7 +137,7 @@ class RNNDecoder(DecoderBase):
             embed_i = self.input_i(embed_i, output_i)
             rnn_state = rnn_state.add_input(embed_i)
             rnn_output_i = rnn_state.output()
-            output_i = self.attn(rnn_output_i, context_mx, encoder_outputs.src_mask)
+            output_i = attn_fn(rnn_output_i, src_mask)
             wll = self.prediction([output_i])[-1].npvalue()
             V = wll.shape[0]
             if i > 0:
@@ -187,30 +185,23 @@ class RNNDecoderWithAttn(RNNDecoder):
     def init_attn(self, **kwargs):
         self.attn_module = Attention(self.hsz, self.pc)
 
-    def _attn_first(self, context):
+    def attn(self, context):
         context_mx = dy.concatenate_cols(context)
-        self._attn = self.attn_module(context_mx)
-
-    def attn(self, output_t, context, src_mask=None):
-        return self._attn(output_t, src_mask)
+        return self.attn_module(context_mx)
 
 
 @register_decoder(name='transformer')
 class TransformerDecoderWrapper(DecoderBase):
-    def __init__(self, tgt_embedding, dropout=0.5, layers=1, hsz=None, num_heads=4, scale=True, **kwargs):
-        super(TransformerDecoderWrapper, self).__init__(kwargs['pc'])
+    def __init__(self, tgt_embedding, dropout=0.5, layers=1, hsz=None, num_heads=4, scale=True, name='transformer-decoder-wrapper', **kwargs):
+        pc = kwargs['pc'].add_subcollection(name=name)
+        super(TransformerDecoderWrapper, self).__init__(pc)
         self.tgt_embedding = tgt_embedding
         dsz = self.tgt_embedding.get_dsz()
         hsz = dsz if hsz is None else hsz
         self.transformer_decoder = TransformerDecoderStack(num_heads, d_model=hsz, pdrop=dropout, scale=scale, layers=layers, pc=self.pc)
-        self.proj_to_hsz = Linear(hsz, dsz, self.pc) if dsz != hsz else self._identity
-        # TODO: Add a way to tie weights
-        self.proj_to_dsz = Linear(dsz, hsz, self.pc) if dsz != hsz else self._identity
+        self.proj_to_hsz = Linear(hsz, dsz, self.pc) if dsz != hsz else lambda x: x
+        self.proj_to_dsz = WeightShareLinear(dsz, self.proj_to_hsz.weight, self.pc, transform=dy.transpose, name=self.proj_to_hsz.pc.name()) if dsz != hsz else lambda x: x
         self.preds = Linear(self.tgt_embedding.get_vsz(), dsz, self.pc)
-
-    @staticmethod
-    def _identity(x):
-        return x
 
     def output(self, x):
         return [self.preds(y) for y in dy.transpose(x)]

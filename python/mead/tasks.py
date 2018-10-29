@@ -8,9 +8,10 @@ import baseline
 from baseline.utils import export, import_user_module
 from mead.downloader import EmbeddingDownloader, DataDownloader
 from mead.utils import (
+    index_by_label,
+    normalize_backend,
     get_mead_settings,
     read_config_file_or_json,
-    index_by_label,
 )
 
 
@@ -28,13 +29,7 @@ class Backend(object):
         :param params: (``dict``) A dictionary of framework-specific user-data to pass through keyword args to each sub-module
         :param exporter: A framework-specific exporter to facilitate exporting to runtime deployment
         """
-        self.name = name.lower()
-        if self.name == 'tensorflow':
-            self.name = 'tf'
-        elif self.name == 'torch' or self.name == 'pyt':
-            self.name = 'pytorch'
-        elif self.name == 'dynet':
-            self.name = 'dy'
+        self.name = normalize_backend(name)
         self.params = params
         self.exporter = exporter
 

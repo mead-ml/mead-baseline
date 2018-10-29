@@ -3,7 +3,7 @@ from copy import deepcopy
 from itertools import chain
 from baseline.utils import read_config_stream
 import mead
-from mead.utils import convert_path, parse_extra_args
+from mead.utils import convert_path, parse_extra_args, normalize_backend
 
 
 def main():
@@ -16,6 +16,7 @@ def main():
     parser.add_argument('--task', help='task to run', choices=['classify', 'tagger', 'seq2seq', 'lm'])
     parser.add_argument('--gpus', help='Number of GPUs (defaults to 1)', type=int)
     parser.add_argument('--reporting', help='reporting hooks', nargs='+')
+    parser.add_argument('--backend', help='The deep learning backend to use')
     args, reporting_args = parser.parse_known_args()
 
     config_params = read_config_stream(args.config)
@@ -30,6 +31,9 @@ def main():
 
     if args.gpus is not None:
         config_params['model']['gpus'] = args.gpus
+
+    if args.backend is not None:
+        config_params['backend'] = normalize_backend(args.backend)
 
     cmd_hooks = args.reporting if args.reporting is not None else []
     config_hooks = config_params.get('reporting') if config_params.get('reporting') is not None else []

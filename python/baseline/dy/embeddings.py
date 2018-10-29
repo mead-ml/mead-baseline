@@ -1,7 +1,7 @@
 import math
 from itertools import chain
 import numpy as np
-from baseline.dy.dynety import ParallelConv, HighwayConnection, SkipConnection, Linear
+from baseline.dy.dynety import ParallelConv, HighwayConnection, SkipConnection, Linear, DynetLayer
 from baseline.utils import export
 from baseline.embeddings import register_embeddings
 import dynet as dy
@@ -10,11 +10,10 @@ exporter = export(__all__)
 
 
 @exporter
-class DyNetEmbeddings(object):
+class DyNetEmbeddings(DynetLayer):
 
     def __init__(self, pc):
-        super(DyNetEmbeddings).__init__()
-        self.pc = pc
+        super(DyNetEmbeddings, self).__init__(pc)
 
     def get_vsz(self):
         pass
@@ -41,7 +40,8 @@ class DyNetEmbeddings(object):
 class LookupTableEmbeddings(DyNetEmbeddings):
 
     def __init__(self, name, **kwargs):
-        super(LookupTableEmbeddings, self).__init__(kwargs['pc'])
+        pc = kwargs['pc'].add_subcollection(name=kwargs.get('name', 'lookup'))
+        super(LookupTableEmbeddings, self).__init__(pc)
         self.finetune = kwargs.get('finetune', True)
         self.vsz = kwargs.get('vsz')
         self.dsz = kwargs.get('dsz')
@@ -74,7 +74,8 @@ class LookupTableEmbeddings(DyNetEmbeddings):
 @register_embeddings(name="positional")
 class PositionalLookupTableEmbeddings(DyNetEmbeddings):
     def __init__(self, name, **kwargs):
-        super(PositionalLookupTableEmbeddings, self).__init__(kwargs['pc'])
+        pc = kwargs['pc'].add_subcollection(name=kwargs.get('name', 'positional'))
+        super(PositionalLookupTableEmbeddings, self).__init__(pc)
         self.vsz = int(kwargs.get('vsz'))
         self.dsz = int(kwargs.get('dsz'))
         self.dropout = float(kwargs.get('dropout', 0.1))
@@ -82,6 +83,7 @@ class PositionalLookupTableEmbeddings(DyNetEmbeddings):
         max_timescale = float(kwargs.get('max_timescale', 1e4))
         log_timescale_inc = math.log(max_timescale) / self.dsz
         inv_timescale = np.exp(np.arange(0, self.dsz, 2) * -log_timescale_inc)
+        kwargs['pc'] = self.pc
         self.embeddings = LookupTableEmbeddings(name, **kwargs)
         pe = np.zeros((mxlen, self.dsz))
         position = np.expand_dims(np.arange(mxlen), 1)
@@ -108,7 +110,8 @@ class PositionalLookupTableEmbeddings(DyNetEmbeddings):
 class CharConvEmbeddings(DyNetEmbeddings):
 
     def __init__(self, name, **kwargs):
-        super(CharConvEmbeddings, self).__init__(kwargs['pc'])
+        pc = kwargs['pc'].add_subcollection(name=kwargs.get('name', 'conv-char'))
+        super(CharConvEmbeddings, self).__init__(pc)
         self.vsz = kwargs.get('vsz')
         self.dsz = kwargs.get('dsz')
         self.batched = kwargs.get('batched', False)
