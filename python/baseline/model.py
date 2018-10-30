@@ -262,7 +262,7 @@ class EncoderDecoderModel(object):
     def save(self, model_base):
         pass
 
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
         super(EncoderDecoderModel, self).__init__()
 
     @staticmethod

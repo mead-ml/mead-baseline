@@ -42,7 +42,8 @@ class LanguageModelTrainerDynet(Trainer):
             loss = self._loss(output, y)
             loss_val = loss.npvalue().item()
             total_loss += loss_val
-            initial_state = [x.npvalue() for x in initial_state]
+            if initial_state is not None:
+                initial_state = [x.npvalue() for x in initial_state]
             loss.backward()
             self.optimizer.update()
 
@@ -78,7 +79,8 @@ class LanguageModelTrainerDynet(Trainer):
             loss = self._loss(output, y)
             loss_val = loss.npvalue().item()
             total_loss += loss_val
-            initial_state = [x.npvalue() for x in initial_state]
+            if initial_state is not None:
+                initial_state = [x.npvalue() for x in initial_state]
             iters += len(y)
 
         if phase == 'Valid':

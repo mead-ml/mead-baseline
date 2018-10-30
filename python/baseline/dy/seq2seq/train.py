@@ -18,9 +18,13 @@ class Seq2SeqTrainerDynet(Trainer):
         self.log = logging.getLogger('baseline.timing')
 
     @staticmethod
-    def _loss(outputs, labels):
+    def _loss(outputs, labels, tgt_lengths):
         losses = [dy.pickneglogsoftmax_batch(out, label) for out, label in zip(outputs, labels)]
-        loss = dy.sum_batches(dy.esum(losses))
+        mask, _ = sequence_mask(tgt_lengths, len(losses))
+        mask = dy.transpose(mask)
+        losses = dy.concatenate_cols(losses)
+        masked_loss = dy.cmult(losses, mask)
+        loss = dy.sum_batches(dy.sum_elems(masked_loss))
         return loss
 
     def _total(self, tgt):
@@ -39,7 +43,7 @@ class Seq2SeqTrainerDynet(Trainer):
             inputs = self.model.make_input(batch_dict)
             tgt = inputs.pop('tgt')
             output = self.model.forward(inputs)
-            loss = self._loss(output, tgt)
+            loss = self._loss(output, tgt, batch_dict['tgt_lengths'])
             total += self._total(tgt)
             loss_val = loss.npvalue().item()
             total_loss += loss_val
@@ -81,7 +85,7 @@ class Seq2SeqTrainerDynet(Trainer):
             inputs = self.model.make_input(batch_dict)
             tgt = inputs.pop('tgt')
             output = self.model.forward(inputs)
-            loss = self._loss(output, tgt)
+            loss = self._loss(output, tgt, batch_dict['tgt_lengths'])
             total += self._total(tgt)
             loss_val = loss.npvalue().item()
             total_loss += loss_val

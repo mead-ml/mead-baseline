@@ -112,6 +112,15 @@ def color(msg, color):
 
 
 @exporter
+def sequence_mask(lengths, max_len=-1):
+    if max_len < 0:
+        max_len = np.max(lengths)
+    row = np.arange(0, max_len).reshape(1, -1)
+    col = np.reshape(lengths, (-1, 1))
+    return (row < col).astype(np.uint8)
+
+
+@exporter
 def crf_mask(vocab, span_type, s_idx, e_idx, pad_idx=None):
     """Create a CRF mask.
 

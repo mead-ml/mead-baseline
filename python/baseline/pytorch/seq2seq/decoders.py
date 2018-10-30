@@ -67,7 +67,7 @@ class NoArcPolicy(AbstractArcPolicy):
 
     def get_state(self, encoder_outputs):
         final_encoder_state = encoder_outputs.hidden
-        if type(final_encoder_state) is tuple:
+        if isinstance(final_encoder_state, tuple):
             s1, s2 = final_encoder_state
             return s1 * 0, s2 * 0
         return final_encoder_state * 0
