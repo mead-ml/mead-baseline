@@ -1,5 +1,5 @@
-from baseline.tf.seq2seq.encoders import RNNEncoder, TransformerEncoder
-from baseline.tf.seq2seq.decoders import RNNDecoder, RNNDecoderWithAttn, TransformerDecoder
+from baseline.tf.seq2seq.encoders import *
+from baseline.tf.seq2seq.decoders import *
 from google.protobuf import text_format
 from baseline.tf.tfy import *
 from baseline.model import EncoderDecoderModel, register_model, create_seq2seq_decoder, create_seq2seq_encoder, create_seq2seq_arc_policy

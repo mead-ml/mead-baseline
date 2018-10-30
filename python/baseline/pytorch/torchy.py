@@ -631,7 +631,7 @@ def show_examples_pytorch(model, es, rlut1, rlut2, vocab, mxlen, sample, prob_cl
         print('[Actual] %s' % sent)
 
         dst_i = model.predict(example)[0][0]
-        dst_i = [idx.item() for idx in dst_i]
+        dst_i = [int(idx) for idx in dst_i]
         sent = lookup_sentence(rlut2, dst_i)
         print('Guess: %s' % sent)
         print('------------------------------------------------------------------------')

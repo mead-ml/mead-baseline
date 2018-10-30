@@ -167,22 +167,21 @@ class RNNDecoder(torch.nn.Module):
         return pred
 
     def predict_one(self, src, encoder_outputs, **kwargs):
-        K = kwargs.get('beam', 2)
+        K = kwargs.get('beam', 5)
         mxlen = kwargs.get('mxlen', 100)
         with torch.no_grad():
             src_mask = encoder_outputs.src_mask
             paths = [[Offsets.GO] for _ in range(K)]
-            # K
-            # TBH
             h_i, dec_out, context = self.arc_policy(encoder_outputs, self.hsz, K)
             scores = torch.FloatTensor([0. for _ in range(K)]).type_as(context)
-
+            done_beams = torch.tensor([False] * K).type_as(src_mask).byte()
             for i in range(mxlen):
                 lst = [path[-1] for path in paths]
                 dst = torch.LongTensor(lst).type(src.data.type())
-                mask_eos = (dst == Offsets.EOS).unsqueeze(1)
-                mask_pad = (dst == 0).unsqueeze(1)
+                mask_eos = (dst == Offsets.EOS).view(K, 1)
+                mask_pad = (dst == 0).view(K, 1)
                 dst = dst.view(1, K)
+
                 var = torch.autograd.Variable(dst)
                 dec_out, h_i = self.decode_rnn(context, h_i, dec_out, var, src_mask)
                 # 1 x K x V
@@ -203,11 +202,23 @@ class RNNDecoder(torch.nn.Module):
                 flat_sll = sll.view(-1)
                 best, best_idx = flat_sll.squeeze().topk(K, 0)
                 best_beams = best_idx / V
+
                 best_idx = best_idx % V
                 new_paths = []
+                new_done_beams = [d for d in done_beams]
                 for j, beam_id in enumerate(best_beams):
-                    new_paths.append(paths[beam_id] + [best_idx[j]])
+                    if done_beams[beam_id]:
+                        new_paths.append(paths[beam_id] + [Offsets.PAD])
+                    else:
+                        new_paths.append(paths[beam_id] + [best_idx[j]])
+
+                    if best_idx[j].item() == Offsets.EOS:
+                        new_done_beams[j] = True
+                    else:
+                        new_done_beams[j] = done_beams[beam_id]
+
                     scores[j] = best[j]
+                done_beams = new_done_beams
 
                 # Copy the beam state of the winners
                 for hc in h_i:  # iterate over h, c
