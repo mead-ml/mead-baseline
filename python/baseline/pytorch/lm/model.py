@@ -1,8 +1,8 @@
 from baseline.pytorch.torchy import *
+from baseline.pytorch.transformer import TransformerEncoderStack, subsequent_mask
 from baseline.model import LanguageModel, register_model
 import torch.autograd
 import os
-import math
 
 
 class LanguageModelBase(nn.Module, LanguageModel):
@@ -121,3 +121,24 @@ class RNNLanguageModel(LanguageModelBase):
         output, hidden = self.rnn(emb, hidden)
         output = self.rnn_dropout(output).contiguous()
         return output, hidden
+
+
+@register_model(task='lm', name='transformer')
+class TransformerLanguageModel(LanguageModelBase):
+
+    def __init__(self):
+        super(TransformerLanguageModel, self).__init__()
+
+    def init_decode(self, **kwargs):
+        pdrop = float(kwargs.get('dropout', 0.5))
+        layers = kwargs.get('layers', 1)
+        d_model = int(kwargs.get('d_model', kwargs.get('hsz')))
+        num_heads = kwargs.get('num_heads', 4)
+        self.proj_to_dsz = pytorch_linear(self.dsz, d_model)
+        self.transformer = TransformerEncoderStack(num_heads, d_model=d_model, pdrop=pdrop, scale=True, layers=layers)
+
+    def decode(self, bth, hidden):
+        bth = self.proj_to_dsz(bth)
+        T = bth.shape[1]
+        mask = subsequent_mask(T).type_as(bth)
+        return self.transformer(bth, mask), None

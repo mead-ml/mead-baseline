@@ -1,3 +1,5 @@
+import six
+
 import os
 import sys
 import json
@@ -108,7 +110,16 @@ class Colors(object):
 def color(msg, color):
     if platform.system() == 'Windows':
         return msg
-    return "{}{}{}".format(color, msg, Colors.RESTORE)
+    return u"{}{}{}".format(color, msg, Colors.RESTORE)
+
+
+@exporter
+def sequence_mask(lengths, max_len=-1):
+    if max_len < 0:
+        max_len = np.max(lengths)
+    row = np.arange(0, max_len).reshape(1, -1)
+    col = np.reshape(lengths, (-1, 1))
+    return (row < col).astype(np.uint8)
 
 
 @exporter
@@ -328,7 +339,7 @@ def web_cleanup(word):
 @exporter
 def is_sequence(x):
     import collections
-    if isinstance(x, str):
+    if isinstance(x, six.string_types):
         return False
     return isinstance(x, collections.Sequence)
 

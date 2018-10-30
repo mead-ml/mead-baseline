@@ -2,6 +2,7 @@ from baseline.tf.tfy import *
 from baseline.version import __version__
 from baseline.model import LanguageModel, register_model
 from baseline.tf.embeddings import *
+from baseline.tf.transformer import transformer_encoder_stack, subsequent_mask
 from baseline.utils import read_json, write_json, ls_props
 from google.protobuf import text_format
 
@@ -202,13 +203,13 @@ class RNNLanguageModel(LanguageModelBase):
     def vdrop(self, value):
         self._vdrop = value
 
-    def decode(self, inputs, **kwargs):
+    def decode(self, inputs, rnntype='lstm', variational_dropout=False, **kwargs):
 
         def cell():
             return lstm_cell_w_dropout(self.hsz, self.pkeep, variational=self.vdrop)
 
-        self.rnntype = kwargs.get('rnntype', 'lstm')
-        self.vdrop = kwargs.get('variational_dropout', False)
+        self.rnntype = rnntype
+        self.vdrop = variational_dropout
 
         rnnfwd = tf.contrib.rnn.MultiRNNCell([cell() for _ in range(self.layers)], state_is_tuple=True)
         self.initial_state = rnnfwd.zero_state(self.batchsz, tf.float32)
@@ -217,3 +218,14 @@ class RNNLanguageModel(LanguageModelBase):
         self.final_state = state
         return h
 
+
+@register_model(task='lm', name='transformer')
+class TransformerLanguageModel(LanguageModelBase):
+    def __init__(self):
+        super(TransformerLanguageModel, self).__init__()
+
+    def decode(self, x, num_heads=4, layers=1, scale=True, activation_type='relu', scope='TransformerEncoder', d_ff=None, **kwargs):
+        T = get_shape_as_list(x)[1]
+        mask = subsequent_mask(T)
+        x = transformer_encoder_stack(x, mask, num_heads, self.pkeep, scale, layers, activation_type)
+        return tf.reshape(x, [-1, self.hsz])

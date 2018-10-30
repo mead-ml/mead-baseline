@@ -1,7 +1,7 @@
 from itertools import chain
 import numpy as np
 import dynet as dy
-from baseline.utils import crf_mask, lookup_sentence
+from baseline.utils import crf_mask, lookup_sentence, sequence_mask as seq_mask
 
 
 class DynetModel(object):
@@ -23,6 +23,102 @@ class DynetModel(object):
         for p in chain(self.pc.lookup_parameters_list(), self.pc.parameters_list()):
             str_.append("{}: {}".format(p.name(), p.shape()))
         return '\n'.join(str_)
+
+
+class DynetLayer(DynetModel): pass
+
+
+def sequence_mask(lengths, max_len=-1):
+    """Build a sequence mask for dynet.
+
+    This is a bit weird, most of the time we have dynet as H, T so it would
+    seem like we would want the mask to be ((1, T), B) but the only places
+    where we do the masking right now is in attention and it makes sense to
+    have it shaped as ((T, 1), B).
+    """
+    mask = seq_mask(lengths, max_len)
+    mask = np.expand_dims(np.transpose(mask), 1)
+    inv_mask = (mask == 0).astype(np.uint8)
+    return dy.inputTensor(mask, batched=True), dy.inputTensor(inv_mask, batched=True)
+
+
+def unsqueeze(x, dim):
+    """Add a dimension of size 1 to `x` at position `dim`."""
+    shape, batchsz = x.dim()
+    dim = len(shape) if dim == -1 else dim
+    shape = list(shape)
+    shape.insert(dim, 1)
+    return dy.reshape(x, tuple(shape), batch_size=batchsz)
+
+
+def squeeze(x):
+    shape, batchsz = x.dim()
+    shape = tuple(filter(lambda x: x != 1, shape))
+    return dy.reshape(x, shape, batch_size=batchsz)
+
+
+def batch_matmul(x, y):
+    """Matmul between first two layers but the rest are ignored.
+
+    Input: ((X, Y, ..), B) and ((Y, Z, ..), B)
+    Output: ((X, Z, ..), B)
+    """
+    x_shape, batchsz = x.dim()
+    x_mat = x_shape[:2]
+    sames = x_shape[2:]
+    fold = np.prod(sames)
+    y_shape, _ = y.dim()
+    y_mat = y_shape[:2]
+
+    x = dy.reshape(x, x_mat, batch_size=fold*batchsz)
+    y = dy.reshape(y, y_mat, batch_size=fold*batchsz)
+
+    z = x * y
+    z = dy.reshape(z, tuple([x_mat[0], y_mat[1]] + list(sames)), batch_size=batchsz)
+    return z
+
+
+def folded_softmax(x, softmax=dy.softmax):
+    """Dynet only allows for softmax on matrices."""
+    shape, batchsz = x.dim()
+    first = shape[0]
+    flat = np.prod(shape[1:])
+    x = dy.reshape(x, (first, flat), batch_size=batchsz)
+    x = softmax(x, d=0)
+    return dy.reshape(x, shape, batch_size=batchsz)
+
+
+def transpose(x, dim1, dim2):
+    """Swap dimensions `dim1` and `dim2`."""
+    shape, _ = x.dim()
+    dims = list(range(len(shape)))
+    tmp = dims[dim1]
+    dims[dim1] = dims[dim2]
+    dims[dim2] = tmp
+    return dy.transpose(x, dims=dims)
+
+
+def dynet_activation(type_):
+    """Get activation functions based on names."""
+    return dy.rectify
+
+
+def LayerNorm(num_features, pc, name='layer-norm'):
+    pc = pc.add_subcollection(name=name)
+    a = pc.add_parameters(num_features, name='a')
+    b = pc.add_parameters(num_features, name='b')
+
+    def norm(x):
+        """Layer Norm only handles a vector in dynet so fold extra dims into the batch."""
+        shape, batchsz = x.dim()
+        first = shape[0]
+        fold = np.prod(shape[1:])
+        x = dy.reshape(x, (first,), batch_size=batchsz*fold)
+        x = dy.layer_norm(x, a, b)
+        return dy.reshape(x, shape, batch_size=batchsz)
+
+    return norm
+
 
 
 def optimizer(model, optim='sgd', eta=0.01, clip=None, mom=0.9, **kwargs):
@@ -48,28 +144,53 @@ def optimizer(model, optim='sgd', eta=0.01, clip=None, mom=0.9, **kwargs):
     return opt
 
 
-def Linear(osz, isz, pc, name="linear"):
-    """
-    :param osz: int
-    :param isz: int
-    :param pc: dy.ParameterCollection
-    :param name: str
-    """
-    linear_pc = pc.add_subcollection(name=name)
-    weight = linear_pc.add_parameters((osz, isz), name="weight")
-    bias = linear_pc.add_parameters(osz, name="bias")
+class Linear(DynetLayer):
+    def __init__(self, osz, isz, pc, name="linear"):
+        """
+        :param osz: int
+        :param isz: int
+        :param pc: dy.ParameterCollection
+        :param name: str
+        """
+        pc = pc.add_subcollection(name=name)
+        super(Linear, self).__init__(pc)
+        self.weight = self.pc.add_parameters((osz, isz), name="weight")
+        self.bias = self.pc.add_parameters((osz,), name="bias")
 
-    def linear(input_, _=None):
+    def __call__(self, input_):
         """
         :param input_: dy.Expression ((isz,), B)
 
         Returns:
             dy.Expression ((osz,), B)
         """
-        output = dy.affine_transform([bias, weight, input_])
-        return output
+        # Affine Transformation squeezes out a final dim of 1 breaking it when
+        # This func if used for ((H, T), B) -> ((O, T), B)
+        # return dy.affine_transform([bias, weight, input_])
+        return self.bias + self.weight * input_
 
-    return linear
+
+def squeeze_and_transpose(x):
+    return dy.transpose(squeeze(x))
+
+
+class WeightShareLinear(DynetLayer):
+    default = 'weight-shared'
+    def __init__(self, osz, weight, pc, transform=None, name=None):
+        name = self.default if name is None else self.default + self.clean(name)
+        pc = pc.add_subcollection(name=name)
+        super(WeightShareLinear, self).__init__(pc)
+        self.weight = weight
+        self.bias = self.pc.add_parameters((osz,), name='bias')
+        self.transform = transform if transform is not None else lambda x: x
+
+    def __call__(self, input_):
+        a = self.transform(self.weight)
+        return self.bias + self.transform(self.weight) * input_
+
+    @staticmethod
+    def clean(name):
+        return name.replace('/', '-').replace('_', '-')[:-1]
 
 
 def HighwayConnection(funcs, sz, pc, name="highway"):
@@ -122,6 +243,7 @@ def rnn_forward(rnn, input_):
         return rnn.transduce(input_)
     state = rnn.initial_state()
     return state.transduce(input_)
+
 
 def rnn_forward_with_state(rnn, input_, lengths=None, state=None, batched=True, backward=False):
     """Return the output of the final layers and the final state of the RNN.
@@ -300,15 +422,17 @@ def Attention(lstmsz, pc, name="attention"):
         """
         projected_vectors = attention_w1 * encoder_vectors
 
-        def attend(state):
+        def attend(state, mask=None):
             """Calculate the attention weighted sum of the encoder vectors.
 
             :param state: dy.Expression ((H,), B)
             """
             projected_state = attention_w2 * state
             non_lin = dy.tanh(dy.colwise_add(projected_vectors, projected_state))
-            attention_scores = attention_v * non_lin
-            attention_weights = dy.softmax(dy.transpose(attention_scores))
+            attention_scores = dy.transpose(attention_v * non_lin)
+            if mask is not None:
+                attention_scores = dy.cmult(attention_scores, mask[0]) + (mask[1] * -1e9)
+            attention_weights = dy.softmax(attention_scores)
             # Encoder Vectors has data along the columns so a matmul with the
             # weights (which are also a column) creates a sum of encoder weighted
             # by attention weights
@@ -500,9 +624,8 @@ def show_examples_dynet(model, es, rlut1, rlut2, vocab, mxlen, sample, prob_clip
     for i in range(max_examples):
         example = {}
         # Batch first, so this gets a single example at once
-        for k, value in batch_dict.items():
-            v = value[i]
-            example[k] = v.reshape((1,) + v.shape)
+        for k, v in batch_dict.items():
+            example[k] = v[i, np.newaxis]
 
         print('========================================================================')
         sent = lookup_sentence(rlut1, example[src_field].squeeze(), reverse=reverse)

@@ -1,6 +1,7 @@
+import math
 from itertools import chain
 import numpy as np
-from baseline.dy.dynety import ParallelConv, HighwayConnection, SkipConnection, Linear
+from baseline.dy.dynety import ParallelConv, HighwayConnection, SkipConnection, Linear, DynetLayer
 from baseline.utils import export
 from baseline.embeddings import register_embeddings
 import dynet as dy
@@ -9,11 +10,10 @@ exporter = export(__all__)
 
 
 @exporter
-class DyNetEmbeddings(object):
+class DyNetEmbeddings(DynetLayer):
 
     def __init__(self, pc):
-        super(DyNetEmbeddings).__init__()
-        self.pc = pc
+        super(DyNetEmbeddings, self).__init__(pc)
 
     def get_vsz(self):
         pass
@@ -40,7 +40,8 @@ class DyNetEmbeddings(object):
 class LookupTableEmbeddings(DyNetEmbeddings):
 
     def __init__(self, name, **kwargs):
-        super(LookupTableEmbeddings, self).__init__(kwargs['pc'])
+        pc = kwargs['pc'].add_subcollection(name=kwargs.get('name', 'lookup'))
+        super(LookupTableEmbeddings, self).__init__(pc)
         self.finetune = kwargs.get('finetune', True)
         self.vsz = kwargs.get('vsz')
         self.dsz = kwargs.get('dsz')
@@ -49,7 +50,7 @@ class LookupTableEmbeddings(DyNetEmbeddings):
         self.lookup = dy.lookup_batch if self.batched else dy.lookup
         self.embeddings = self.pc.lookup_parameters_from_numpy(embedding_weight, name=name)
 
-    def encode(self, x):
+    def encode(self, x, train=False):
         """Encode a sequence.
 
         :param input_: List[List[int]] (batched) or List[int] (normal)
@@ -70,11 +71,47 @@ class LookupTableEmbeddings(DyNetEmbeddings):
         return self.vsz
 
 
+@register_embeddings(name="positional")
+class PositionalLookupTableEmbeddings(DyNetEmbeddings):
+    def __init__(self, name, **kwargs):
+        pc = kwargs['pc'].add_subcollection(name=kwargs.get('name', 'positional'))
+        super(PositionalLookupTableEmbeddings, self).__init__(pc)
+        self.vsz = int(kwargs.get('vsz'))
+        self.dsz = int(kwargs.get('dsz'))
+        self.dropout = float(kwargs.get('dropout', 0.1))
+        mxlen = int(kwargs.get('mxlen', 1000))
+        max_timescale = float(kwargs.get('max_timescale', 1e4))
+        log_timescale_inc = math.log(max_timescale) / self.dsz
+        inv_timescale = np.exp(np.arange(0, self.dsz, 2) * -log_timescale_inc)
+        kwargs['pc'] = self.pc
+        self.embeddings = LookupTableEmbeddings(name, **kwargs)
+        pe = np.zeros((mxlen, self.dsz))
+        position = np.expand_dims(np.arange(mxlen), 1)
+        pe[:, 0::2] = np.sin(position * inv_timescale)
+        pe[:, 1::2] = np.cos(position * inv_timescale)
+        self.pe = pe
+
+    def get_dsz(self):
+        return self.dsz
+
+    def get_vsz(self):
+        return self.vsz
+
+    def encode(self, x, train=False):
+        embedded = self.embeddings.encode(x)
+        embedded = embedded * math.sqrt(self.dsz)
+        ((seq_len, _), _) = embedded.dim()
+        embedded = embedded + dy.inputTensor(self.pe[:seq_len])
+        embedded = dy.dropout(embedded, self.dropout) if train else embedded
+        return embedded
+
+
 @register_embeddings(name='char-conv')
 class CharConvEmbeddings(DyNetEmbeddings):
 
     def __init__(self, name, **kwargs):
-        super(CharConvEmbeddings, self).__init__(kwargs['pc'])
+        pc = kwargs['pc'].add_subcollection(name=kwargs.get('name', 'conv-char'))
+        super(CharConvEmbeddings, self).__init__(pc)
         self.vsz = kwargs.get('vsz')
         self.dsz = kwargs.get('dsz')
         self.batched = kwargs.get('batched', False)
@@ -116,7 +153,7 @@ class CharConvEmbeddings(DyNetEmbeddings):
     def get_vsz(self):
         return self.vsz
 
-    def encode(self, x):
+    def encode(self, x, train=False):
         xch = x.transpose(0, 2, 1)
         W, T, B = x.shape
         xch = x.reshape(W, -1)
