@@ -1,6 +1,8 @@
 from baseline.pytorch.torchy import *
 from baseline.pytorch.transformer import *
 from baseline.model import EncoderDecoderModel, register_model, create_seq2seq_encoder, create_seq2seq_decoder
+from baseline.pytorch.seq2seq.encoders import *
+from baseline.pytorch.seq2seq.decoders import *
 
 import os
 

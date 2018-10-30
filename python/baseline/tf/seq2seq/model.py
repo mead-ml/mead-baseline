@@ -1,5 +1,5 @@
-from baseline.tf.seq2seq.encoders import RNNEncoder, TransformerEncoder
-from baseline.tf.seq2seq.decoders import RNNDecoder, RNNDecoderWithAttn, TransformerDecoder
+from baseline.tf.seq2seq.encoders import *
+from baseline.tf.seq2seq.decoders import *
 from google.protobuf import text_format
 from baseline.tf.tfy import *
 from baseline.model import EncoderDecoderModel, register_model, create_seq2seq_decoder, create_seq2seq_encoder, create_seq2seq_arc_policy
@@ -173,9 +173,9 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
         state['sess'] = kwargs.get('sess', tf.Session())
 
         state['model_type'] = kwargs.get('model_type', 'default')
-        state['encoder_type'] = kwargs.get('encoder_type', 'default')
-        state['decoder_type'] = kwargs.get('decoder_type', 'default')
-        state['arc_policy_type'] = kwargs.get('arc_policy_type', 'default')
+        #state['encoder_type'] = kwargs.get('encoder_type', 'default')
+        #state['decoder_type'] = kwargs.get('decoder_type', 'default')
+        #state['arc_policy_type'] = kwargs.get('arc_policy_type', 'default')
 
         with open(basename + '.saver') as fsv:
             saver_def = tf.train.SaverDef()
@@ -318,7 +318,9 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
         if len(vec.shape) == 3:
             return vec.transpose(1, 2, 0)
         else:
-            return vec.transpose(1, 0)
+            return vec.reshape([vec.shape[0]] + [1] + [vec.shape[1]])
+            #return vec.transpose(1, 0)
+        #return vec
 
     def step(self, batch_dict):
         """
