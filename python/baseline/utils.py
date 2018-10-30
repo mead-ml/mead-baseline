@@ -1,3 +1,5 @@
+import six
+
 import os
 import sys
 import json
@@ -108,7 +110,7 @@ class Colors(object):
 def color(msg, color):
     if platform.system() == 'Windows':
         return msg
-    return "{}{}{}".format(color, msg, Colors.RESTORE)
+    return u"{}{}{}".format(color, msg, Colors.RESTORE)
 
 
 @exporter
@@ -337,7 +339,7 @@ def web_cleanup(word):
 @exporter
 def is_sequence(x):
     import collections
-    if isinstance(x, str):
+    if isinstance(x, six.string_types):
         return False
     return isinstance(x, collections.Sequence)
 

@@ -143,7 +143,7 @@ class CharConvEmbeddings(DyNetEmbeddings):
 
         def call(input_):
             x = parallel_conv(input_)
-            return gating(x)
+            return gating(x, None)
 
         return call, cmotsz_total
 

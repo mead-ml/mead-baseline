@@ -25,10 +25,9 @@ from baseline.model import (
 __all__ = []
 exporter = export(__all__)
 
-
-@exporter
-class ClassifierService(object):
-
+class Service(object):
+    task_name = None
+    task_load = None
     def __init__(self, vocabs=None, vectorizers=None, model=None):
         self.vectorizers = vectorizers
         self.model = model
@@ -42,7 +41,6 @@ class ClassifierService(object):
 
     @classmethod
     def load(cls, bundle, **kwargs):
-        # can delegate
         if os.path.isdir(bundle):
             directory = bundle
         else:
@@ -54,9 +52,14 @@ class ClassifierService(object):
         model_basename = find_model_basename(directory)
         be = kwargs.get('backend', 'tf')
         import_user_module('baseline.{}.embeddings'.format(be))
-        import_user_module('baseline.{}.classify'.format(be))
-        model = load_model(model_basename, **kwargs)
+        import_user_module('baseline.{}.{}'.format(be, cls.task_name))
+        model = cls.task_load(model_basename, **kwargs)
         return cls(vocabs, vectorizers, model)
+
+@exporter
+class ClassifierService(Service):
+    task_name = 'classify'
+    task_load = load_model
 
     def predict(self, tokens):
         """Take tokens and apply the internal vocab and vectorizers.  The tokens should be either a batch of text
@@ -104,36 +107,9 @@ class ClassifierService(object):
 
 
 @exporter
-class TaggerService(object):
-
-    def __init__(self, vocabs=None, vectorizers=None, model=None):
-        self.vectorizers = vectorizers
-        self.model = model
-        self.vocabs = vocabs
-
-    def get_vocab(self, vocab_type='word'):
-        return self.vocabs.get(vocab_type)
-
-    def get_labels(self):
-        return self.model.get_labels()
-
-    @classmethod
-    def load(cls, bundle, **kwargs):
-        # can delegate
-        if os.path.isdir(bundle):
-            directory = bundle
-        else:
-            directory = unzip_files(bundle)
-
-        vocabs = load_vocabs(directory)
-        vectorizers = load_vectorizers(directory)
-
-        model_basename = find_model_basename(directory)
-        be = kwargs.get('backend', 'tf')
-        import_user_module('baseline.{}.embeddings'.format(be))
-        import_user_module('baseline.{}.tagger'.format(be))
-        model = load_tagger_model(model_basename, **kwargs)
-        return cls(vocabs, vectorizers, model)
+class TaggerService(Service):
+    task_name = 'tagger'
+    task_load = load_tagger_model
 
     def predict(self, tokens, **kwargs):
         """
@@ -218,7 +194,8 @@ class TaggerService(object):
 
         for k in self.vectorizers.keys():
             examples[k] = np.stack(examples[k])
-        examples[lengths_key] = np.stack(examples[lengths_key])
+            lengths_key = '{}_lengths'.format(k)
+            examples[lengths_key] = np.stack(examples[lengths_key])
         outcomes = self.model.predict(examples)
         outputs = []
         for i, outcome in enumerate(outcomes):
@@ -233,33 +210,18 @@ class TaggerService(object):
 
 
 @exporter
-class LanguageModelService(object):
+class LanguageModelService(Service):
+    task_name = "lm"
+    task_load = load_lang_model
 
-    def __init__(self, vocabs=None, vectorizers=None, model=None):
-        self.vectorizers = vectorizers
-        self.model = model
-        self.vocabs = vocabs
+    def __init__(self, *args, **kwargs):
+        super(LanguageModelService, self).__init__(*args, **kwargs)
         self.idx_to_token = revlut(self.vocabs[self.model.tgt_key])
 
     @classmethod
     def load(cls, bundle, **kwargs):
-
-        # can delegate
-        if os.path.isdir(bundle):
-            directory = bundle
-        else:
-            directory = unzip_files(bundle)
-
         kwargs['batchsz'] = 1
-        vocabs = load_vocabs(directory)
-
-        vectorizers = load_vectorizers(directory)
-        model_basename = find_model_basename(directory)
-        be = kwargs.get('backend', 'tf')
-        import_user_module('baseline.{}.embeddings'.format(be))
-        import_user_module('baseline.{}.lm'.format(be))
-        model = load_lang_model(model_basename, **kwargs)
-        return cls(vocabs, vectorizers, model)
+        return super(LanguageModelService, cls).load(bundle, **kwargs)
 
     # Do a greedy decode for now, everything else will be super slow
     def predict(self, tokens, **kwargs):
@@ -305,13 +267,12 @@ class LanguageModelService(object):
 
 
 @exporter
-class EncoderDecoderService(object):
-
-    def save(self, model_base):
-        pass
+class EncoderDecoderService(Service):
+    task_name = 'seq2seq'
+    task_load = load_seq2seq_model
 
     def __init__(self, vocabs=None, vectorizers=None, model=None):
-        self.model = model
+        super(EncoderDecoderService, self).__init__(None, None, model)
         self.src_vocabs = {}
         self.tgt_vocab = None
         for k, vocab in vocabs.items():
@@ -337,23 +298,9 @@ class EncoderDecoderService(object):
 
     @classmethod
     def load(cls, bundle, **kwargs):
-
-        # can delegate
-        if os.path.isdir(bundle):
-            directory = bundle
-        else:
-            directory = unzip_files(bundle)
-
         kwargs['predict'] = kwargs.get('predict', True)
         kwargs['beam'] = kwargs.get('beam', 5)
-        vocabs = load_vocabs(directory)
-        vectorizers = load_vectorizers(directory)
-        model_basename = find_model_basename(directory)
-        be = kwargs.get('backend', 'tf')
-        import_user_module('baseline.{}.embeddings'.format(be))
-        import_user_module('baseline.{}.seq2seq'.format(be))
-        model = load_seq2seq_model(model_basename, **kwargs)
-        return cls(vocabs, vectorizers, model)
+        return super(EncoderDecoderService, cls).load(bundle, **kwargs)
 
     def predict(self, tokens, **kwargs):
 
@@ -389,6 +336,8 @@ class EncoderDecoderService(object):
 
         for k in self.src_vectorizers.keys():
             examples[k] = np.stack(examples[k])
+            lengths_key = '{}_lengths'.format(k)
+            examples[lengths_key] = np.stack(examples[lengths_key])
 
         outcomes = self.model.predict(examples)
         results = []
