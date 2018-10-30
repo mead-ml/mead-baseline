@@ -30,13 +30,25 @@ class RNNEncoder(EncoderBase):
             self.lstm_forward = dy.VanillaLSTMBuilder(layers, dsz, hidden, self.pc)
             self.lstm_backward = None
         self.src_mask_fn = sequence_mask if create_src_mask else lambda x, y: (None, None)
+        self.pdrop = pdrop
+
+    def dropout(self, train):
+        if train:
+            self.lstm_forward.set_dropout(self.pdrop)
+            if self.lstm_backward is not None:
+                self.lstm_forward.set_dropout(self.pdrop)
+        else:
+            self.lstm_forward.disable_dropout()
+            if self.lstm_backward is not None:
+                self.lstm_forward.disable_dropout()
 
     def __call__(self, embed_in, src_len, train=False, **kwargs):
         """Input Shape: ((T, H), B). Output Shape: [((H,), B)] * T"""
         embed_in = list(embed_in)
+        self.dropout(train)
         forward, forward_state = rnn_forward_with_state(self.lstm_forward, embed_in, src_len)
-        # TODO: add dropout
         if self.lstm_backward is not None:
+
             backward, backward_state = rnn_forward_with_state(self.lstm_backward, embed_in)
             output = [dy.concatenate([f, b]) for f, b in zip(forward, backward)]
             hidden = [dy.concatenate([f, b]) for f, b in zip(forward_state, backward_state)]

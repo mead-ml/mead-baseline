@@ -109,6 +109,7 @@ def LayerNorm(num_features, pc, name='layer-norm'):
     b = pc.add_parameters(num_features, name='b')
 
     def norm(x):
+        """Layer Norm only handles a vector in dynet so fold extra dims into the batch."""
         shape, batchsz = x.dim()
         first = shape[0]
         fold = np.prod(shape[1:])
@@ -189,7 +190,7 @@ class WeightShareLinear(DynetLayer):
 
     @staticmethod
     def clean(name):
-        return name.replace('/', '-').replace('_', '-')
+        return name.replace('/', '-').replace('_', '-')[:-1]
 
 
 def HighwayConnection(funcs, sz, pc, name="highway"):

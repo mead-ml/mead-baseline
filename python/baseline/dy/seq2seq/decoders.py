@@ -20,7 +20,11 @@ class ArcPolicy(object):
     def __call__(self, encoder_output, hsz, beam_width=1):
         h_i = self.get_state(encoder_output)
         context = encoder_output.output
-        _, batchsz = h_i[0].dim()
+        if beam_width > 1:
+            # To vectorize, we need to expand along the batch dimension, K times
+            context = [dy.concatenate_to_batch([c] * beam_width) for c in context]
+            h_i = [dy.concatenate_to_batch([h] * beam_width) for h in h_i]
+        _, batchsz = context[0].dim()
         init_zeros = dy.zeros((hsz,), batch_size=batchsz)
         return h_i, init_zeros, context
 
@@ -119,18 +123,19 @@ class RNNDecoder(DecoderBase):
         return [dy.log_softmax(y) for y in self.output(x)]
 
     def predict_one(self, src, encoder_outputs, **kwargs):
-        K = int(kwargs.get('beam', 2))
+        K = int(kwargs.get('beam', 5))
         mxlen = int(kwargs.get('mxlen', 100))
+
         paths = [[Offsets.GO] for _ in range(K)]
+        # Which beams are done?
         done = np.array([False] * K)
-        scores = np.array([0.0] * K)
-        src_mask = encoder_outputs.src_mask
-        h_i, dec_out, context = self.arc_policy(encoder_outputs, self.hsz, K)
+        scores = np.array([0.0]*K)
+        hidden, output_i, context = self.arc_policy(encoder_outputs, self.hsz, beam_width=K)
+        num_states = len(hidden)
+        rnn_state = self.decoder_rnn.initial_state(hidden)
         attn_fn = self.attn(context)
-        final_encoder_state_k = (dy.concatenate_to_batch([h] * K) for h in h_i)
-        num_states = len(h_i)
-        rnn_state = self.decoder_rnn.initial_state(final_encoder_state_k)
-        output_i = dy.concatenate_to_batch([dec_out] * K)
+        src_mask = encoder_outputs.src_mask
+
         for i in range(mxlen):
             dst_last = np.array([path[-1] for path in paths]).reshape(1, K)
             embed_i = self.tgt_embeddings.encode(dst_last)[-1]
@@ -138,13 +143,15 @@ class RNNDecoder(DecoderBase):
             rnn_state = rnn_state.add_input(embed_i)
             rnn_output_i = rnn_state.output()
             output_i = attn_fn(rnn_output_i, src_mask)
-            wll = self.prediction([output_i])[-1].npvalue()
+            wll = self.prediction([output_i])[-1].npvalue()  # (V,) K
             V = wll.shape[0]
             if i > 0:
-                expanded_history = scores.reshape(scores.shape + (1,))
-                sll = wll.T + expanded_history
+                expanded_history = np.expand_dims(scores, -1)
+                done_mask = np.expand_dims((done == False).astype(np.uint8), -1)
+                sll = np.multiply(wll.T, done_mask) + expanded_history
             else:
                 sll = wll.T
+
             flat_sll = sll.reshape(-1)
 
             bests = topk(K, flat_sll)
@@ -160,10 +167,13 @@ class RNNDecoder(DecoderBase):
             for j, best_flat in enumerate(best_idx_flat):
                 beam_id = best_beams[j]
                 best_word = best_idx[j]
+                if done[j]:
+                    new_paths.append(paths[beam_id] + [Offsets.PAD])
+                else:
+                    new_paths.append(paths[beam_id] + [best_word])
                 if best_word == Offsets.EOS:
                     done[j] = True
                 new_done.append(done[beam_id])
-                new_paths.append(paths[beam_id] + [best_word])
                 scores[j] = bests[best_flat]
                 # For each path, we need to pick that out and add it to the hiddens
                 # This will be (c1, c2, ..., h1, h2, ...)
@@ -174,7 +184,8 @@ class RNNDecoder(DecoderBase):
             new_hidden = [dy.concatenate_to_batch(new_h) for new_h in new_hidden]
             paths = new_paths
             rnn_state = self.decoder_rnn.initial_state(new_hidden)
-        return [p[1:] for p in paths], scores
+
+        return paths, scores
 
 
 @register_decoder(name='default')
