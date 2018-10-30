@@ -1,6 +1,6 @@
 import numpy as np
 from baseline.utils import (
-    export, optional_params, listify
+    export, optional_params, listify, register
 )
 
 __all__ = []
@@ -62,6 +62,55 @@ def create_model(embeddings, labels, **kwargs):
 @exporter
 def create_tagger_model(embeddings, labels, **kwargs):
     return create_model_for('tagger', embeddings, labels, **kwargs)
+
+
+
+BASELINE_SEQ2SEQ_ENCODERS = {}
+
+@exporter
+@optional_params
+def register_encoder(cls, name=None):
+    """Register a function as a plug-in"""
+    return register(cls, BASELINE_SEQ2SEQ_ENCODERS, name, 'encoder')
+
+
+BASELINE_SEQ2SEQ_DECODERS = {}
+
+@exporter
+@optional_params
+def register_decoder(cls, name=None):
+    """Register a function as a plug-in"""
+    return register(cls, BASELINE_SEQ2SEQ_DECODERS, name, 'decoder')
+
+
+BASELINE_SEQ2SEQ_ARC_POLICY = {}
+
+@exporter
+@optional_params
+def register_arc_policy(cls, name=None):
+    """Register a function as a plug-in"""
+    return register(cls, BASELINE_SEQ2SEQ_ARC_POLICY, name, 'decoder')
+
+
+@exporter
+def create_seq2seq_decoder(tgt_embeddings, **kwargs):
+    type = kwargs.get('decoder_type', 'default')
+    Constructor = BASELINE_SEQ2SEQ_DECODERS.get(type)
+    return Constructor(tgt_embeddings, **kwargs)
+
+
+@exporter
+def create_seq2seq_encoder(**kwargs):
+    type = kwargs.get('encoder_type', 'default')
+    Constructor = BASELINE_SEQ2SEQ_ENCODERS.get(type)
+    return Constructor(**kwargs)
+
+
+@exporter
+def create_seq2seq_arc_policy(**kwargs):
+    type = kwargs.get('arc_policy_type', 'default')
+    Constructor = BASELINE_SEQ2SEQ_ARC_POLICY.get(type)
+    return Constructor()
 
 
 @exporter
@@ -213,7 +262,7 @@ class EncoderDecoderModel(object):
     def save(self, model_base):
         pass
 
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
         super(EncoderDecoderModel, self).__init__()
 
     @staticmethod

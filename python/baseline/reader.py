@@ -87,11 +87,11 @@ class ParallelCorpusReader(object):
     def build_vocabs(self, files):
         pass
 
-    def load_examples(self, tsfile, vocab1, vocab2):
+    def load_examples(self, tsfile, vocab1, vocab2, shuffle, sort_key):
         pass
 
     def load(self, tsfile, vocab1, vocab2, batchsz, shuffle=False, sort_key=None):
-        examples = self.load_examples(tsfile, vocab1, vocab2)
+        examples = self.load_examples(tsfile, vocab1, vocab2, shuffle, sort_key)
         return baseline.data.ExampleDataFeed(examples, batchsz,
                                              shuffle=shuffle, trim=self.trim, sort_key=sort_key)
 
@@ -110,7 +110,7 @@ class TSVParallelCorpusReader(ParallelCorpusReader):
         tgt_vocab = _build_vocab_for_col(self.tgt_col_num, files, {'tgt': self.tgt_vectorizer})
         return src_vocab, tgt_vocab['tgt']
 
-    def load_examples(self, tsfile, src_vocabs, tgt_vocab):
+    def load_examples(self, tsfile, src_vocabs, tgt_vocab, do_shuffle, src_sort_key):
         ts = []
         with codecs.open(tsfile, encoding='utf-8', mode='r') as f:
             for line in f:
@@ -126,7 +126,7 @@ class TSVParallelCorpusReader(ParallelCorpusReader):
                 tgt = list(filter(lambda x: len(x) != 0, re.split("\s+", splits[1])))
                 example['tgt'], example['tgt_lengths'] = self.tgt_vectorizer.run(tgt, tgt_vocab)
                 ts.append(example)
-        return baseline.data.Seq2SeqExamples(ts)
+        return baseline.data.Seq2SeqExamples(ts, do_shuffle=do_shuffle, src_sort_key=src_sort_key)
 
 
 @exporter
@@ -155,7 +155,7 @@ class MultiFileParallelCorpusReader(ParallelCorpusReader):
             tgt_vocab = _build_vocab_for_col(0, [f + self.tgt_suffix for f in files], {'tgt': self.tgt_vectorizer})
         return src_vocab, tgt_vocab['tgt']
 
-    def load_examples(self, tsfile, src_vocabs, tgt_vocab):
+    def load_examples(self, tsfile, src_vocabs, tgt_vocab, do_shuffle, src_sort_key):
         ts = []
 
         with codecs.open(tsfile + self.src_suffix, encoding='utf-8', mode='r') as fsrc:
@@ -170,7 +170,7 @@ class MultiFileParallelCorpusReader(ParallelCorpusReader):
                     tgt = re.split("\s+", tgt.strip())
                     example['tgt'], example['tgt_lengths'] = self.tgt_vectorizer.run(tgt, tgt_vocab)
                     ts.append(example)
-        return baseline.data.Seq2SeqExamples(ts)
+        return baseline.data.Seq2SeqExamples(ts, do_shuffle=do_shuffle, src_sort_key=src_sort_key)
 
 
 @exporter
@@ -268,7 +268,6 @@ class CONLLSeqReader(SeqPredictReader):
                     tokens = []
 
         return examples
-
 
 
 @exporter

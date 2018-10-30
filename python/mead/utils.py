@@ -11,6 +11,19 @@ exporter = export(__all__)
 
 
 @exporter
+def normalize_backend(name):
+    name = name.lower()
+    if name == 'tensorflow':
+        name = 'tf'
+    elif name == 'torch' or name == 'pyt':
+        name = 'pytorch'
+    elif name == 'dynet':
+        name = 'dy'
+    return name
+
+
+
+@exporter
 def read_config_file_or_json(config, name=''):
     if isinstance(config, (dict, list)):
         return config

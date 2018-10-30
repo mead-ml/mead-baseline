@@ -12,11 +12,63 @@ FILTER_SIZES = [3, 4, 5]
 class M():
     def __init__(self, pc): self.pc = pc
 
+def test_transpose_positive():
+    dy.renew_cg()
+    B, T, H = 50, 10, 128
+    dims = (B, T, H)
+    gold = (T, B, H)
+    in_ = dy.zeros(dims)
+    res = transpose(in_, 0, 1)
+    assert res.dim()[0] == gold
+
+
+def test_transpose_negative():
+    dy.renew_cg()
+    B, T, H, D = 50, 10, 8, 64
+    dims = (B, H, T, D)
+    gold = (B, H, D, T)
+    in_ = dy.zeros(dims)
+    res = transpose(in_, -2, -1)
+    assert res.dim()[0] == gold
+
+def test_transpose_both():
+    dy.renew_cg()
+    B, T, H = 50, 10, 8
+    dims = (B, T, H)
+    gold = (H, T, B)
+    in_ = dy.zeros(dims)
+    res = transpose(in_, 0, -1)
+    assert res.dim()[0] == gold
+
 def test_optimizer_adadelta():
     dy.renew_cg()
     m = M(dy.ParameterCollection())
     opt = optimizer(m, 'adadelta')
     assert isinstance(opt, dy.AdadeltaTrainer)
+
+# def test_folded_linear():
+#     dy.renew_cg()
+#     dummy_weight = np.random.rand(100, 50)
+#     dummy_bias = np.random.rand(100)
+#     pc_mock = MagicMock()
+#     pc_mock.add_subcollection.return_value = pc_mock
+#     def dummy(shape, *args, **kwargs):
+#         if isinstance(shape, tuple):
+#             return dy.inputTensor(dummy_weight)
+#         return dy.inputTensor(dummy_bias)
+
+#     pc_mock.add_parameters.side_effect = dummy
+#     l = Linear(100, 50, pc_mock)
+#     fl = FoldedLinear(100, 50, pc_mock)
+
+#     input_ = np.random.rand(8, 50)
+#     ls = [l(dy.inputTensor(x)) for x in input_]
+#     fls = fl(dy.inputTensor(input_))
+#     res1 = [x.npvalue() for x in ls]
+#     res1 = np.stack(res1)
+#     res2 = fls.npvalue()
+#     np.testing.assert_allclose(res1, res2)
+
 
 def test_optimizer_adam():
     dy.renew_cg()
@@ -225,7 +277,7 @@ def test_conv_output_shape():
     input_ = dy.inputTensor(np.random.randn(1, seq_len, dsz))
     conv = Convolution1d(fsz, cmotsz, dsz, pc)
     output_ = conv(input_)
-    assert output_.dim() == ((cmotsz,), 1)
+    assert output_.dim() == ((1, seq_len, cmotsz,), 1)
 
 def test_conv_output_shape_batched():
     dy.renew_cg()
@@ -238,7 +290,7 @@ def test_conv_output_shape_batched():
     input_ = dy.concatenate_to_batch([dy.inputTensor(np.random.randn(1, seq_len, dsz)) for _ in range(batch_size)])
     conv = Convolution1d(fsz, cmotsz, dsz, pc)
     output_ = conv(input_)
-    assert output_.dim() == ((cmotsz,), batch_size)
+    assert output_.dim() == ((1, seq_len, cmotsz,), batch_size)
 
 def test_conv_parameter_init_glorot():
     dy.renew_cg()
