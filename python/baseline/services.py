@@ -160,7 +160,7 @@ class TaggerService(Service):
     signature_name = 'tag_text'
     task_load = load_tagger_model
 
-    def transform(self, tokens, **kwargs):
+    def predict(self, tokens, **kwargs):
         """
         Utility function to convert lists of sentence tokens to integer value one-hots which
         are then passed to the tagger.  The resultant output is then converted back to label and token
@@ -352,7 +352,7 @@ class EncoderDecoderService(Service):
         kwargs['beam'] = kwargs.get('beam', 30)
         return super(EncoderDecoderService, cls).load(bundle, **kwargs)
 
-    def transform(self, tokens, **kwargs):
+    def predict(self, tokens, **kwargs):
 
         mxlen = 0
         mxwlen = 0

@@ -1,6 +1,6 @@
 import numpy as np
 from baseline.utils import (
-    export, optional_params, listify
+    export, optional_params, listify, import_user_module
 )
 
 __all__ = []
@@ -252,19 +252,10 @@ class RemoteModel(object):
         self.beam = beam
         self.labels = labels
 
-    def classify(self, examples):
-        return self._transform(examples)
-
-    def predict(self, examples):
-        return self._transform(examples)
-
-    def predict_next(self, examples):
-        return self._transform(examples)
-
     def get_labels(self):
         return self.labels
 
-    def _transform(self, examples):
+    def predict(self, examples):
         valid_example = all(k in examples for k in self.input_keys)
         if not valid_example:
             raise ValueError("should have keys: " + ",".join(self.input_keys))
@@ -320,7 +311,7 @@ class RemoteModel(object):
             classes = predict_response.outputs.get('classes').int_val
             lengths = examples[self.lengths_key]
             result = []
-            for i in range(examples['word'].shape[0]):
+            for i in range(examples[self.lengths_key].shape[0]):
                 length = lengths[i]
                 result.append([np.int32(x) for x in classes[length*i:length*(i+1)]])
             

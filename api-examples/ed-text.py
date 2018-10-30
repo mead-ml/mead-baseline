@@ -23,4 +23,4 @@ else:
 print(texts)
 
 m = bl.EncoderDecoderService.load(args.model, backend=args.backend, remote=args.remote, name=args.name)
-print(m.transform(texts))
+print(m.predict(texts))
