@@ -3,6 +3,7 @@ import logging
 from baseline.pytorch.torchy import *
 from baseline.utils import listify, revlut, get_model_file
 from baseline.train import Trainer, create_trainer, register_trainer, register_training_func
+from baseline.pytorch.optz import OptimizerManager
 
 
 @register_trainer(task='lm', name='default')
@@ -22,7 +23,7 @@ class LanguageModelTrainerPyTorch(Trainer):
             self.crit.cuda()
         self.log = logging.getLogger('baseline.timing')
 
-        self.optimizer, self.scheduler = pytorch_prepare_optimizer(self.model, **kwargs)
+        self.optimizer = OptimizerManager(self.model, **kwargs)
 
     def repackage_hidden(self, h):
         """Wraps hidden states in new Variables, to detach them from their history."""
@@ -70,8 +71,6 @@ class LanguageModelTrainerPyTorch(Trainer):
     def train(self, ts, reporting_fns):
         start_time = time.time()
         self.model.train()
-        if self.scheduler is not None:
-            self.scheduler.step()
         total_loss = 0
         metrics = {}
         batchsz, nctx = self._get_dims(ts)

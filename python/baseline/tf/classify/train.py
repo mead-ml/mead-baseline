@@ -3,7 +3,8 @@ import tensorflow as tf
 from baseline.confusion import ConfusionMatrix
 from baseline.progress import create_progress_bar
 from baseline.utils import listify, get_model_file
-from baseline.tf.tfy import optimizer, _add_ema
+from baseline.tf.tfy import _add_ema
+from baseline.tf.optz import optimizer
 from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
 from baseline.utils import verbose_output
 

@@ -6,6 +6,27 @@ __all__ = []
 exporter = export(__all__)
 
 
+BASELINE_LR_SCHEDULERS = {}
+
+__all__ = []
+exporter = export(__all__)
+
+
+@exporter
+@optional_params
+def register_lr_scheduler(cls, name=None):
+    return register(cls, BASELINE_LR_SCHEDULERS, name, 'lr_scheduler')
+
+
+@exporter
+def create_lr_scheduler(**kwargs):
+    sched_type = kwargs.get('lr_scheduler_type')
+    if sched_type is None:
+        return None
+    Constructor = BASELINE_LR_SCHEDULERS.get(sched_type)
+    return Constructor(**kwargs)
+
+
 @exporter
 class Trainer(object):
 

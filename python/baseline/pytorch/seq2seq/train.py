@@ -6,7 +6,7 @@ import numpy as np
 from baseline.progress import create_progress_bar
 from baseline.utils import listify, get_model_file
 from baseline.train import Trainer, create_trainer, register_trainer, register_training_func
-from baseline.pytorch.torchy import pytorch_prepare_optimizer
+from baseline.pytorch.optz import OptimizerManager
 
 
 @register_trainer(task='seq2seq', name='default')
@@ -18,7 +18,7 @@ class Seq2SeqTrainerPyTorch(Trainer):
         self.gpu = bool(kwargs.get('gpu', True))
         self.clip = float(kwargs.get('clip', 5))
         self.model = model
-        self.optimizer, self.scheduler = pytorch_prepare_optimizer(self.model, **kwargs)
+        self.optimizer = OptimizerManager(self.model, **kwargs)
         self._input = model.make_input
         self.crit = model.create_loss()
         if self.gpu:
@@ -67,8 +67,6 @@ class Seq2SeqTrainerPyTorch(Trainer):
 
         total_loss = total = 0
         duration = 0
-        if self.scheduler is not None:
-            self.scheduler.step()
 
         start = time.time()
         for batch_dict in ts:

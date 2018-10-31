@@ -1,7 +1,7 @@
 import time
 import tensorflow as tf
 import numpy as np
-from baseline.tf.tfy import optimizer
+from baseline.tf.optz import optimizer
 from baseline.progress import create_progress_bar
 from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
 import os
