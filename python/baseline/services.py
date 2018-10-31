@@ -146,7 +146,7 @@ class ClassifierService(Service):
         for k in self.vectorizers.keys():
             examples[k] = np.stack(examples[k])
 
-        outcomes_list = self.model.classify(examples)
+        outcomes_list = self.model.predict(examples)
             
         results = []
         for outcomes in outcomes_list:
@@ -303,7 +303,7 @@ class LanguageModelService(Service):
                     else:
                         examples[lengths_key] = np.array(length)
             batch_dict = {k: v.reshape((1,) + v.shape) for k, v in examples.items()}
-            softmax_tokens = self.model.predict_next(batch_dict)
+            softmax_tokens = self.model.predict(batch_dict)
             next_token = np.argmax(softmax_tokens, axis=-1)[-1]
 
             token_str = self.idx_to_token.get(next_token, '<PAD>')
