@@ -5,8 +5,8 @@ parser = argparse.ArgumentParser(description='Classify text with a model')
 parser.add_argument('--model', help='A classifier model', required=True, type=str)
 parser.add_argument('--text', help='raw value', type=str)
 parser.add_argument('--backend', help='backend', default='tf')
-parser.add_argument('--remote', help='remote endpoint', type=str) # localhost:8500
-parser.add_argument('--name', help='signature name', type=str) 
+parser.add_argument('--remote', help='(optional) remote endpoint', type=str) # localhost:8500
+parser.add_argument('--name', help='(optional) signature name', type=str) 
 
 args = parser.parse_known_args()[0]
 
