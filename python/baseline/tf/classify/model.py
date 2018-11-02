@@ -492,8 +492,9 @@ class ConvModel(ClassifierModelBase):
         """
         cmotsz = kwargs['cmotsz']
         filtsz = kwargs['filtsz']
+        dilations = kwargs.get('dilations', 1)
 
-        combine, _ = parallel_conv(word_embeddings, filtsz, dsz, cmotsz)
+        combine, _ = parallel_conv(word_embeddings, filtsz, dsz, cmotsz, dilations=dilations)
         # Definitely drop out
         with tf.name_scope("dropout"):
             combine = tf.layers.dropout(combine, self.pdrop_value, training=TRAIN_FLAG())

@@ -425,7 +425,7 @@ def highway_conns(inputs, wsz_all, n):
     return inputs
 
 
-def parallel_conv(input_, filtsz, dsz, motsz, activation_fn=tf.nn.relu):
+def parallel_conv(input_, filtsz, dsz, motsz, activation_fn=tf.nn.relu, dilations=1):
     """Do parallel convolutions with multiple filter widths and max-over-time pooling.
 
     :param input_: The inputs in the shape [B, T, H].
@@ -433,17 +433,22 @@ def parallel_conv(input_, filtsz, dsz, motsz, activation_fn=tf.nn.relu):
     :param dsz: The depths of the input (H).
     :param motsz: The number of conv filters to use (can be an int or a list to allow for various sized filters)
     :param activation_fn: The activation function to use (`default=tf.nn.relu`)
+    :param dialtions: `list`: The size of the convolution dilation, There will be holes of size dilations - 1 between each filter weight.
     :Keyword Arguments:
     * *activation_fn* -- (``callable``) The activation function to apply after the convolution and bias add
     """
     if not isinstance(motsz, list):
         motsz = [motsz] * len(filtsz)
+    if not isinstance(dilations, list):
+        dilations = [dilations] * len(filtsz)
+    assert len(filtsz) == len(motsz), "A motsz must be specified for each parallel convolution."
+    assert len(dilations) == len(motsz), "A dilation size must be specified for each parallel convolution."
     DUMMY_AXIS = 1
     TIME_AXIS = 2
     FEATURE_AXIS = 3
     expanded = tf.expand_dims(input_, DUMMY_AXIS)
     mots = []
-    for fsz, cmotsz in zip(filtsz, motsz):
+    for fsz, cmotsz, dil in zip(filtsz, motsz, dilations):
         with tf.variable_scope('cmot-%s' % fsz):
             kernel_shape = [1, fsz, dsz, cmotsz]
             W = tf.get_variable('W', kernel_shape)
@@ -454,7 +459,8 @@ def parallel_conv(input_, filtsz, dsz, motsz, activation_fn=tf.nn.relu):
             conv = tf.nn.conv2d(
                 expanded, W,
                 strides=[1, 1, 1, 1],
-                padding="SAME", name="CONV"
+                padding="SAME", name="CONV",
+                dilations=[1, 1, dil, 1],
             )
             activation = activation_fn(tf.nn.bias_add(conv, b), 'activation')
             mot = tf.reduce_max(activation, [TIME_AXIS], keepdims=True)
