@@ -64,8 +64,8 @@ class PiecewiseDecaySchedulerTensorFlow(object):
 class ZarembaDecaySchedulerTensorFlow(PiecewiseDecaySchedulerTensorFlow):
     """Utility only, just to simplify the JSON"""
     def __init__(self, bounds=None, decay_rate=None, **kwargs):
-        lr = kwargs.get('lr', kwargs.get('eta', -1))
-        values = [lr/(decay_rate**i) for i in range(len(bounds)+1)]
+        lr = float(kwargs.get('lr', kwargs.get('eta', 1.0)))
+        values = [lr/(float(decay_rate)**i) for i in range(len(bounds)+1)]
         super(ZarembaDecaySchedulerTensorFlow, self).__init__(bounds=bounds, values=values)
 
     def __call__(self, lr, global_step):
