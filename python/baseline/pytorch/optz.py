@@ -1,59 +1,69 @@
 import torch
 import numpy as np
-from baseline.train import register_lr_scheduler, create_lr_scheduler
+from baseline.train import (register_lr_scheduler,
+                            create_lr_scheduler,
+                            ConstantScheduler,
+                            WarmupLinearScheduler,
+                            CyclicLRScheduler,
+                            PiecewiseDecayScheduler,
+                            ZarembaDecayScheduler,
+                            CosineDecayScheduler,
+                            InverseTimeDecayScheduler,
+                            ExponentialDecayScheduler)
 import torch.autograd
 import math
 
 
-@register_lr_scheduler('default')
-class ConstantScheduler(object):
+@register_lr_scheduler(name='default')
+class ConstantSchedulerPyTorch(ConstantScheduler):
 
     def __init__(self, **kwargs):
-        super(ConstantScheduler, self).__init__()
-
-    def __call__(self, lr, global_step):
-        return lr
+        super(ConstantScheduler, self).__init__(**kwargs)
 
 
-@register_lr_scheduler('warmup_linear')
-class WarmupLinearScheduler(object):
+@register_lr_scheduler(name='warmup_linear')
+class WarmupLinearSchedulerPyTorch(WarmupLinearScheduler):
 
-    def __init__(self, warmup_steps=16000, **kwargs):
-        super(WarmupLinearScheduler, self).__init__()
-        self.warmup_steps = warmup_steps
-
-    def __call__(self, lr, global_step):
-        x = global_step / self.warmup_steps
-        lr_factor = min(1.0, x)
-        return lr * lr_factor
+    def __init__(self, *args, **kwargs):
+        super(WarmupLinearSchedulerPyTorch, self).__init__(*args, **kwargs)
 
 
-@register_lr_scheduler('warmup_cosine')
-class WarmupCosineScheduler(object):
-    def __init__(self, warmup_steps=16000, **kwargs):
-        super(WarmupCosineScheduler, self).__init__()
-        self.warmup_steps = warmup_steps
+@register_lr_scheduler(name='clr')
+class CyclicLRSchedulerPyTorch(CyclicLRScheduler):
 
-    def __call__(self, lr, global_step):
-        x = global_step / self.warmup_steps
-        if x > 1:
-            return lr * (0.5 * (1 + torch.cos(math.pi * x)))
-        lr_factor = min(1.0, x)
-        return lr * lr_factor
+    def __init__(self, *args, **kwargs):
+        super(CyclicLRSchedulerPyTorch, self).__init(*args, **kwargs)
+
+@register_lr_scheduler(name='piecewise')
+class PiecewiseDecaySchedulerPyTorch(PiecewiseDecayScheduler):
+
+    def __init__(self, *args, **kwargs):
+        super(PiecewiseDecaySchedulerPyTorch, self).__init__(*args, **kwargs)
+
+@register_lr_scheduler(name='zaremba')
+class ZarembaDecaySchedulerPyTorch(ZarembaDecayScheduler):
+
+    def __init__(self, *args, **kwargs):
+        super(ZarembaDecaySchedulerPyTorch, self).__init__(*args, **kwargs)
 
 
-@register_lr_scheduler('invtime')
-class InverseTimeDecayScheduler(object):
+@register_lr_scheduler(name='cosine')
+class CosineDecaySchedulerPyTorch(CosineDecayScheduler):
 
-    def __init__(self, every_n_steps=16000, decay_rate=0.05, **kwargs):
-        self.every_n_steps = every_n_steps
-        self.decay_rate = decay_rate
+    def __init__(self, *args, **kwargs):
+        super(CosineDecaySchedulerPyTorch, self).__init__(*args, **kwargs)
 
-    def __call__(self, lr, global_step):
-        new_lr = lr
-        if global_step % self.every_n_steps:
-            new_lr = lr / (1.0 + self.decay_rate)
-        return new_lr
+@register_lr_scheduler(name='invtime')
+class InverseTimeDecaySchedulerPytorch(InverseTimeDecayScheduler):
+
+    def __init__(self, *args, **kwargs):
+        super(InverseTimeDecayScheduler, self).__init__(*args, **kwargs)
+
+
+@register_lr_scheduler(name='exponential')
+class ExponentialDecaySchedulerPyTorch(ExponentialDecayScheduler):
+    def __init__(self, *args, **kwargs):
+        super(ExponentialDecaySchedulerPyTorch, self).__init__(*args, **kwargs)
 
 
 class AdamW(torch.optim.Optimizer):

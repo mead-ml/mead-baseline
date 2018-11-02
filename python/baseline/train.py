@@ -2,14 +2,134 @@ import time
 import logging
 import numpy as np
 from baseline.utils import export, optional_params, register
+import math
+
+
 __all__ = []
 exporter = export(__all__)
-
 
 BASELINE_LR_SCHEDULERS = {}
 
-__all__ = []
-exporter = export(__all__)
+
+@exporter
+class LearningRateScheduler(object):
+
+    def __init__(self, **kwargs):
+        self.lr = kwargs.get('lr', kwargs.get('eta', 1.0))
+
+
+@exporter
+class ConstantScheduler(LearningRateScheduler):
+
+    def __init__(self, **kwargs):
+        super(ConstantScheduler, self).__init__(**kwargs)
+
+    def __call__(self, global_step):
+        return self.lr
+
+
+@exporter
+class WarmupLinearScheduler(LearningRateScheduler):
+
+    def __init__(self, warmup_steps=16000, **kwargs):
+        super(WarmupLinearScheduler, self).__init__(**kwargs)
+        self.warmup_steps = warmup_steps
+
+    def __call__(self, global_step):
+        lr_factor = min(1.0, global_step / float(self.warmup_steps))
+        return self.lr * lr_factor
+
+
+@exporter
+class CyclicLRScheduler(LearningRateScheduler):
+
+    def __init__(self, max_lr=1e-2, decay_steps=1000, **kwargs):
+        super(CyclicLRScheduler, self).__init__(**kwargs)
+        self.max_lr = max_lr
+        self.decay_steps = decay_steps
+
+    def __call__(self, global_step):
+        cycle = np.floor(1. + global_step / (2. * self.decay_steps))
+        x = np.abs(global_step / self.decay_steps - 2. * cycle + 1.)
+        new_lr = self.lr + (self.max_lr - self.lr) * np.maximum(0., 1. - x)
+        return new_lr
+
+
+@exporter
+class PiecewiseDecayScheduler(LearningRateScheduler):
+
+    def __init__(self, bounds, values, **kwargs):
+        super(PiecewiseDecayScheduler, self).__init__(**kwargs)
+        self.bounds = bounds
+        self.values = values
+
+    def __call__(self, global_step):
+        pos = np.searchsorted(self.bounds, global_step)
+        return self.values[pos]
+
+
+@exporter
+class ZarembaDecayScheduler(PiecewiseDecayScheduler):
+
+    def __init__(self, bounds=None, decay_rate=None, **kwargs):
+        lr = kwargs.get('lr', kwargs.get('eta', 1.0))
+
+        if bounds is None or decay_rate is None:
+            bounds = []
+            values = [lr]
+        else:
+            values = [lr / (decay_rate ** i) for i in range(len(bounds) + 1)]
+        super(ZarembaDecayScheduler, self).__init__(bounds, values, **kwargs)
+
+
+@exporter
+class CosineDecayScheduler(LearningRateScheduler):
+
+    def __init__(self, decay_steps=1000, alpha=0.0, **kwargs):
+        super(CosineDecayScheduler, self).__init__(**kwargs)
+        self.decay_steps = decay_steps
+        self.alpha = alpha
+
+    def decay(self, global_step):
+        global_step = min(global_step, self.bounds)
+        cosine_decay = 0.5 * (1 + np.cos(np.pi * global_step / self.decay_steps))
+        decayed = (1 - self.alpha) * cosine_decay + self.alpha
+        return self.lr * decayed
+
+
+@exporter
+class InverseTimeDecayScheduler(LearningRateScheduler):
+
+    def __init__(self, decay_steps=16000, decay_rate=0.05, staircase=False, **kwargs):
+        super(InverseTimeDecayScheduler, self).__init__(**kwargs)
+        self.decay_steps = decay_steps
+        self.decay_rate = decay_rate
+        self.wrap_fn = math.floor if staircase else self._identity
+
+    def _identity(self, x):
+        return x
+
+    def __call__(self, global_step):
+        t = self.wrap_fn(global_step / self.decay_steps)
+        return self.lr / (1.0 + self.decay_rate * t)
+
+
+@exporter
+class ExponentialDecayScheduler(LearningRateScheduler):
+
+    def __init__(self, decay_steps=16000, decay_rate=0.5, staircase=False, **kwargs):
+        super(ExponentialDecayScheduler, self).__init__(**kwargs)
+        self.decay_steps = decay_steps
+        self.decay_rate = decay_rate
+        self.wrap_fn = math.floor if staircase else self._identity
+
+    def _identity(self, x):
+        return x
+
+    def __call__(self, global_step):
+        t = self.wrap_fn(global_step / float(self.decay_steps))
+        return self.lr * self.decay_rate ** t
+
 
 
 @exporter
@@ -163,66 +283,4 @@ def create_trainer(model, **kwargs):
     return Constructor(model, **kwargs)
 
 
-@exporter
-def lr_decay(decay_type, **kwargs):
-    if decay_type == 'piecewise':
-        return piecewise_decay(**kwargs)
-    elif decay_type == 'staircase':
-        return staircase_decay(**kwargs)
-    elif decay_type == 'cosine':
-        return cosine_decay(**kwargs)
-    elif decay_type == 'zaremba':
-        return zaremba_decay(**kwargs)
-    elif decay_type == 'cyclic':
-        return cyclic_lr(**kwargs)
 
-
-def cyclic_lr(eta, max_eta=1e-2, bounds=1000, **kwargs):
-    def decay(steps):
-        cycle = np.floor(1 + steps / (2 * bounds))
-        x = np.abs(steps / bounds - 2 * cycle + 1)
-        learning_rate = eta + (max_eta - eta) * np.maximum(0., (1 - x))
-        return learning_rate
-    return decay
-
-
-def zaremba_decay(eta=1.0, bounds=None, decay_rate=None, **kwargs):
-    if bounds is None or decay_rate is None:
-        bounds = []
-        values = [eta]
-    else:
-        values = [eta / (decay_rate ** i) for i in range(len(bounds) + 1)]
-    print('Learning rate schedule')
-    print('B', len(bounds), bounds)
-    print('V', len(values), values)
-    return piecewise_decay(bounds, values)
-
-
-def cosine_decay(eta, bounds=1000, alpha=0.0, **kwargs):
-    def decay(steps):
-        step = min(steps, bounds)
-        cosine_decay = 0.5 * (1 + np.cos(np.pi * step / bounds))
-        decayed = (1 - alpha) * cosine_decay + alpha
-        return eta * decayed
-    return decay
-
-
-def exponential_decay(eta, bounds=16000, decay_rate=0.5, staircase=False, **kwargs):
-    if staircase:
-        return staircase_decay(eta, bounds, decay_rate, **kwargs)
-    def decay(step):
-        return eta * decay_rate ** (step / float(bounds))
-    return decay
-
-
-def staircase_decay(eta, bounds=16000, decay_rate=0.5, **kwargs):
-    def decay(step):
-        return eta * decay_rate ** (step // bounds)
-    return decay
-
-
-def piecewise_decay(bounds, values, **kwargs):
-    def decay(step):
-        pos = np.searchsorted(bounds, step)
-        return values[pos]
-    return decay

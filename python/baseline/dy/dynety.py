@@ -121,28 +121,6 @@ def LayerNorm(num_features, pc, name='layer-norm'):
 
 
 
-def optimizer(model, optim='sgd', eta=0.01, clip=None, mom=0.9, **kwargs):
-    if 'lr' in kwargs:
-        eta = kwargs['lr']
-    print('Using eta [{:.4f}]'.format(eta))
-    print('Using optim [{}]'.format(optim))
-    if optim == 'adadelta':
-        opt = dy.AdadeltaTrainer(model.pc)
-    elif optim == 'adam':
-        opt = dy.AdamTrainer(model.pc)
-    elif optim == 'rmsprop':
-        opt = dy.RMSPropTrainer(model.pc, learning_rate=eta)
-    else:
-        if mom == 0 or mom is None:
-            opt = dy.SimpleSGDTrainer(model.pc, learning_rate=eta)
-        else:
-            print('Using mom {:.3f}'.format(mom))
-            opt = dy.MomentumSGDTrainer(model.pc, learning_rate=eta, mom=mom)
-    if clip is not None:
-        opt.set_clip_threshold(clip)
-    opt.set_sparse_updates(False)
-    return opt
-
 
 class Linear(DynetLayer):
     def __init__(self, osz, isz, pc, name="linear"):
