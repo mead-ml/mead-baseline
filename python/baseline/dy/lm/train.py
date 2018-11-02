@@ -27,7 +27,6 @@ class LanguageModelTrainerDynet(Trainer):
         metrics = {}
         total_loss = 0.0
         iters = 0
-        step = 0
         initial_state = None
         start = time.time()
         for batch_dict in loader:
@@ -44,9 +43,8 @@ class LanguageModelTrainerDynet(Trainer):
             self.optimizer.update()
 
             iters += len(y)
-            step += 1
 
-            if step % 500 == 0:
+            if self.optimizer.global_step > 0 and self.optimizer.global_step % 500 == 0:
                 print(total_loss, iters)
                 metrics['avg_loss'] = total_loss / iters
                 metrics['perplexity'] = np.exp(total_loss / iters)

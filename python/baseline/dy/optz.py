@@ -75,7 +75,6 @@ class OptimizerManager(object):
         self._init_optimizer(model, **kwargs)
 
     def _init_optimizer(self, model, **kwargs):
-        wd = float(kwargs.get('weight_decay', 0))
         mom = float(kwargs.get('mom'))
         optim = kwargs.get('optim', 'sgd')
         clip = kwargs.get('clip')

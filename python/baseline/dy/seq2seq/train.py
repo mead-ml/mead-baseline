@@ -33,7 +33,6 @@ class Seq2SeqTrainerDynet(Trainer):
         self.model.train = True
         metrics = {}
         total_loss = 0.0
-        step = 0
         total = 0
         start = time.time()
         for batch_dict in loader:
@@ -48,9 +47,7 @@ class Seq2SeqTrainerDynet(Trainer):
             loss.backward()
             self.optimizer.update()
 
-            step += 1
-
-            if step % 500 == 0:
+            if self.optimizer.global_step > 0 and self.optimizer.global_step % 500 == 0:
                 avg_loss = total_loss / total
                 metrics['avg_loss'] = avg_loss
                 metrics['perplexity'] = np.exp(avg_loss)
