@@ -187,7 +187,7 @@ class OptimizerManager(object):
         self.optimizer.zero_grad()
 
     def update_lr(self):
-        lr = self.lr_function(self.current_lr, self.global_step)
+        lr = self.lr_function(self.global_step)
         for p in self.optimizer.param_groups:
             p['lr'] = lr
         return lr
