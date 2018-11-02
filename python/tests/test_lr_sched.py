@@ -74,6 +74,7 @@ SGDR_LR_CONFIG = {
     "first_decay_steps": 100
 }
 
+
 def test_zaremba():
     tf.reset_default_graph()
     sess = tf.Session()
@@ -131,6 +132,7 @@ def test_piecewise():
     np.allclose(expect_lrs, lrs)
     np.allclose(expect_lrs, lrs_bl)
 
+
 def test_invtime():
     tf.reset_default_graph()
     sess = tf.Session()
@@ -153,8 +155,6 @@ def test_invtime():
         lr_bl = bl_invtime(step)
         lrs_bl += [lr_bl]
     inv_times = [INIT_LR / (1.0 + decay_rate * t) for t in range(NUM_STEPS)]
-    print(lrs_bl[:5])
-    print(lrs[:5])
     assert np.allclose(inv_times, lrs)
     assert np.allclose(inv_times, lrs_bl)
 
@@ -181,10 +181,9 @@ def test_exp():
         lr_bl = bl_exp(step)
         lrs_bl += [lr_bl]
     inv_times = [(INIT_LR * decay_rate ** (t/100.)) for t in range(NUM_STEPS)]
-    print(lrs_bl[:5])
-    print(lrs[:5])
     assert np.allclose(inv_times, lrs)
     assert np.allclose(inv_times, lrs_bl)
+
 
 def test_linear_warmup():
     tf.reset_default_graph()
@@ -225,6 +224,7 @@ def test_constant():
         lr = sess.run(gph, feed_dict={lr_var: INIT_LR, step_var: step})
         assert np.isclose(INIT_LR, lr)
         assert np.isclose(INIT_LR, bl_const(step))
+
 
 def test_cyclic():
     tf.reset_default_graph()

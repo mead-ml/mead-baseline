@@ -4,7 +4,7 @@ import math
 
 
 @register_lr_scheduler('default')
-class ConstantSchedulerPyTorch(object):
+class ConstantSchedulerTensorFlow(object):
     def __init__(self, **kwargs):
         pass
 
