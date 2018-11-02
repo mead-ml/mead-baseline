@@ -95,11 +95,74 @@ class ExponentialDecaySchedulerTensorFlow(object):
         return tf.train.exponential_decay(lr, global_step, self.decay_steps, self.decay_rate, staircase=self.staircase)
 
 
+class AdamWOptimizer(tf.train.Optimizer):
+    """A basic Adam optimizer that includes "correct" L2 weight decay.
+
+    Modified from: https://github.com/google-research/bert/blob/master/optimization.py
+    This does the weight decay slightly differently from PyTorch version, putting it before the update
+    """
+
+    def __init__(self,
+                 learning_rate,
+                 weight_decay=0.0,
+                 beta_1=0.9,
+                 beta_2=0.999,
+                 epsilon=1e-6,
+                 name="AdamWOptimizer"):
+        """Constructs a AdamWOptimizer."""
+        super(AdamWOptimizer, self).__init__(False, name)
+
+        self.learning_rate = learning_rate
+        self.weight_decay = weight_decay
+        self.beta_1 = beta_1
+        self.beta_2 = beta_2
+        self.epsilon = epsilon
+
+    def apply_gradients(self, grads_and_vars, global_step=None, name=None):
+        assignments = []
+        for (grad, param) in grads_and_vars:
+            if grad is None or param is None:
+                continue
+
+            param_name = self._get_variable_name(param.name)
+
+            m = tf.get_variable(
+                name=param_name + "/adam_m",
+                shape=param.shape.as_list(),
+                dtype=tf.float32,
+                trainable=False,
+                initializer=tf.zeros_initializer())
+            v = tf.get_variable(
+                name=param_name + "/adam_v",
+                shape=param.shape.as_list(),
+                dtype=tf.float32,
+                trainable=False,
+                initializer=tf.zeros_initializer())
+
+            # Standard Adam update.
+            next_m = (
+                tf.multiply(self.beta_1, m) + tf.multiply(1.0 - self.beta_1, grad))
+            next_v = (
+                tf.multiply(self.beta_2, v) + tf.multiply(1.0 - self.beta_2,
+                                                          tf.square(grad)))
+
+            update = next_m / (tf.sqrt(next_v) + self.epsilon)
+            update += self.weight_decay * param
+            update_with_lr = self.learning_rate * update
+            next_param = param - update_with_lr
+
+            assignments.extend(
+                [param.assign(next_param),
+                 m.assign(next_m),
+                 v.assign(next_v)])
+        return tf.group(*assignments, name=name)
+
+
 def optimizer(loss_fn, **kwargs):
 
     global_step = tf.Variable(0, trainable=False)
     clip = kwargs.get('clip', None)
-    mom = kwargs.get('mom', 0.9)
+    mom = float(kwargs.get('mom', 0.9))
     optim = kwargs.get('optim', 'sgd')
     eta = kwargs.get('lr', kwargs.get('eta', 0.01))
     lr_scheduler = create_lr_scheduler(**kwargs)
@@ -112,6 +175,9 @@ def optimizer(loss_fn, **kwargs):
     elif optim == 'adam':
         print('adam', eta)
         optz = lambda lr: tf.train.AdamOptimizer(lr)
+    elif optim == 'adamw':
+        wd = float(kwargs.get('weight_decay', 0))
+        optz = lambda lr: AdamWOptimizer(lr, weight_decay=wd)
     elif optim == 'rmsprop':
         print('rmsprop', eta)
         optz = lambda lr: tf.train.RMSPropOptimizer(lr, momentum=mom)
