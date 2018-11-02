@@ -171,6 +171,7 @@ class Task(object):
         self._create_vectorizers()
         reader_params = self.config_params['loader']
         reader_params['clean_fn'] = reader_params.get('clean_fn', self.config_params['preproc'].get('clean_fn'))
+        reader_params['mxlen'] = self.vectorizers[self.primary_key].mxlen
         return baseline.reader.create_reader(self.task_name(), self.vectorizers, self.config_params['preproc'].get('trim', False), **reader_params)
 
     def _setup_task(self):
@@ -607,6 +608,7 @@ class LanguageModelingTask(Task):
         reader_params = self.config_params['loader']
         reader_params['nctx'] = reader_params.get('nctx', self.config_params.get('nctx', self.config_params['nbptt']))
         reader_params['clean_fn'] = reader_params.get('clean_fn', self.config_params['preproc'].get('clean_fn'))
+        reader_params['mxlen'] = self.vectorizers[self.primary_key].mxlen
         return baseline.reader.create_reader(self.task_name(), self.vectorizers, self.config_params['preproc'].get('trim', False), **reader_params)
 
     def _create_backend(self):

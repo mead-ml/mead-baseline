@@ -176,16 +176,16 @@ class MultiFileParallelCorpusReader(ParallelCorpusReader):
 @exporter
 class SeqPredictReader(object):
 
-    def __init__(self, vectorizers, trim=False):
+    def __init__(self, vectorizers, trim=False, mxlen=-1, **kwargs):
+        super(SeqPredictReader, self).__init__()
         self.vectorizers = vectorizers
         self.trim = trim
-        #self.label2index = {"<PAD>": 0, "<GO>": 1, "<EOS>": 2}
         self.label2index = {
             Offsets.VALUES[Offsets.PAD]: Offsets.PAD,
             Offsets.VALUES[Offsets.GO]: Offsets.GO,
             Offsets.VALUES[Offsets.EOS]: Offsets.EOS
         }
-        self.label_vectorizer = Dict1DVectorizer(fields='y', mxlen=-1)
+        self.label_vectorizer = Dict1DVectorizer(fields='y', mxlen=mxlen)
 
     def build_vocab(self, files):
 
@@ -240,7 +240,7 @@ class SeqPredictReader(object):
 class CONLLSeqReader(SeqPredictReader):
 
     def __init__(self, vectorizers, trim=False, **kwargs):
-        super(CONLLSeqReader, self).__init__(vectorizers, trim)
+        super(CONLLSeqReader, self).__init__(vectorizers, trim, **kwargs)
         self.named_fields = kwargs.get('named_fields', {})
 
     def read_examples(self, tsfile):
