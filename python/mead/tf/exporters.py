@@ -306,7 +306,7 @@ class Seq2SeqTensorFlowExporter(TensorFlowExporter):
                 setattr(model, prop, state[prop])
 
         # classes = model.tgt_embedding.lookup(tf.cast(model.best, dtype=tf.int64))
-        classes = model.best
+        classes = model.decoder.best
         self._restore_checkpoint(sess, basename)
 
         return model, classes, None
@@ -325,8 +325,8 @@ class Seq2SeqTensorFlowExporter(TensorFlowExporter):
 
         sig_input = predict_tensors
         sig_output = SignatureOutput(classes, values)
-        sig_name, 'suggest_text'
-        assets = create_assets(basename, sig_input, sig_output, sig_name, self.length_key, beam=model.beam)
+        sig_name = 'suggest_text'
+        assets = create_assets(basename, sig_input, sig_output, sig_name, self.length_key, beam=model.decoder.beam_width)
 
         return sig_input, sig_output, sig_name, assets
 
@@ -364,7 +364,7 @@ def save_to_bundle(output_path, directory, assets=None):
         asset_file = os.path.join(output_path, ASSET_FILE_NAME)
         write_json(assets, asset_file)
 
-def create_assets(basename, sig_input, sig_output, sig_name, lengths_key=None):
+def create_assets(basename, sig_input, sig_output, sig_name, lengths_key=None, beam=None):
     """Save required variables for running an exported model from baseline's services.
 
     :basename the base model name. e.g. /path/to/tagger-26075
@@ -381,7 +381,7 @@ def create_assets(basename, sig_input, sig_output, sig_name, lengths_key=None):
     model_name = basename.split("/")[-1]
     directory = basename.split("/")[:-1]
 
-    metadata = create_metadata(inputs, outputs, sig_name, model_name, lengths_key)
+    metadata = create_metadata(inputs, outputs, sig_name, model_name, lengths_key, beam=beam)
     return metadata
 
 def create_metadata(inputs, outputs, sig_name, model_name, lengths_key=None, beam=None):
