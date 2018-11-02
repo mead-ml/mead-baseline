@@ -5,6 +5,7 @@ from baseline.progress import create_progress_bar
 from baseline.confusion import ConfusionMatrix
 from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
 from baseline.dy.dynety import *
+from baseline.dy.optz import *
 from baseline.utils import verbose_output
 
 
@@ -21,7 +22,7 @@ class ClassifyTrainerDynet(EpochReportingTrainer):
         super(ClassifyTrainerDynet, self).__init__()
         self.model = model
         self.labels = model.labels
-        self.optimizer = optimizer(model, **kwargs)
+        self.optimizer = OptimizerManager(model, **kwargs)
 
     def _update(self, loss):
         loss.backward()

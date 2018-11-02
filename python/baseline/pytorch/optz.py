@@ -1,5 +1,5 @@
 import torch
-import numpy as np
+import torch.autograd
 from baseline.train import (register_lr_scheduler,
                             create_lr_scheduler,
                             ConstantScheduler,
@@ -10,7 +10,6 @@ from baseline.train import (register_lr_scheduler,
                             CosineDecayScheduler,
                             InverseTimeDecayScheduler,
                             ExponentialDecayScheduler)
-import torch.autograd
 import math
 
 
@@ -18,7 +17,7 @@ import math
 class ConstantSchedulerPyTorch(ConstantScheduler):
 
     def __init__(self, **kwargs):
-        super(ConstantScheduler, self).__init__(**kwargs)
+        super(ConstantSchedulerPyTorch, self).__init__(**kwargs)
 
 
 @register_lr_scheduler(name='warmup_linear')
@@ -34,11 +33,13 @@ class CyclicLRSchedulerPyTorch(CyclicLRScheduler):
     def __init__(self, *args, **kwargs):
         super(CyclicLRSchedulerPyTorch, self).__init(*args, **kwargs)
 
+
 @register_lr_scheduler(name='piecewise')
 class PiecewiseDecaySchedulerPyTorch(PiecewiseDecayScheduler):
 
     def __init__(self, *args, **kwargs):
         super(PiecewiseDecaySchedulerPyTorch, self).__init__(*args, **kwargs)
+
 
 @register_lr_scheduler(name='zaremba')
 class ZarembaDecaySchedulerPyTorch(ZarembaDecayScheduler):
@@ -53,11 +54,12 @@ class CosineDecaySchedulerPyTorch(CosineDecayScheduler):
     def __init__(self, *args, **kwargs):
         super(CosineDecaySchedulerPyTorch, self).__init__(*args, **kwargs)
 
+
 @register_lr_scheduler(name='invtime')
 class InverseTimeDecaySchedulerPytorch(InverseTimeDecayScheduler):
 
     def __init__(self, *args, **kwargs):
-        super(InverseTimeDecayScheduler, self).__init__(*args, **kwargs)
+        super(InverseTimeDecaySchedulerPytorch, self).__init__(*args, **kwargs)
 
 
 @register_lr_scheduler(name='exponential')
