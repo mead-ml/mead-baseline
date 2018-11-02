@@ -2,8 +2,9 @@ import time
 import logging
 from baseline.utils import listify, get_model_file
 from baseline.progress import create_progress_bar
-from baseline.train import Trainer, create_trainer, lr_decay, register_trainer, register_training_func
+from baseline.train import Trainer, create_trainer, register_trainer, register_training_func
 from baseline.dy.dynety import *
+from baseline.dy.optz import *
 
 
 @register_trainer(task='seq2seq', name='default')
@@ -11,9 +12,7 @@ class Seq2SeqTrainerDynet(Trainer):
     def __init__(self, model, **kwargs):
         super(Seq2SeqTrainerDynet, self).__init__()
         self.model = model
-        self.optimizer = optimizer(model, **kwargs)
-        ##self.decay = lr_decay(**kwargs)
-        self.global_step = 0
+        self.optimizer = OptimizerManager(model, **kwargs)
         self.valid_epochs = 0
         self.log = logging.getLogger('baseline.timing')
 
@@ -34,12 +33,10 @@ class Seq2SeqTrainerDynet(Trainer):
         self.model.train = True
         metrics = {}
         total_loss = 0.0
-        step = 0
         total = 0
         start = time.time()
         for batch_dict in loader:
             dy.renew_cg()
-            ##self.optimizer.learning_rate = self.decay(self.global_step)
             inputs = self.model.make_input(batch_dict)
             tgt = inputs.pop('tgt')
             output = self.model.forward(inputs)
@@ -50,22 +47,19 @@ class Seq2SeqTrainerDynet(Trainer):
             loss.backward()
             self.optimizer.update()
 
-            step += 1
-            self.global_step += 1
-
-            if step % 500 == 0:
+            if self.optimizer.global_step > 0 and self.optimizer.global_step % 500 == 0:
                 avg_loss = total_loss / total
                 metrics['avg_loss'] = avg_loss
                 metrics['perplexity'] = np.exp(avg_loss)
                 for reporting in reporting_fns:
-                    reporting(metrics, self.global_step, 'Train')
+                    reporting(metrics, self.optimizer.global_step, 'Train')
 
         self.log.debug({'phase': 'Train', 'time': time.time() - start})
         avg_loss = total_loss / total
         metrics['avg_loss'] = avg_loss
         metrics['perplexity'] = np.exp(avg_loss)
         for reporting in reporting_fns:
-            reporting(metrics, self.global_step, 'Train')
+            reporting(metrics, self.optimizer.global_step, 'Train')
         return metrics
 
     def test(self, vs, reporting_fns, phase):

@@ -1,7 +1,9 @@
 import os
 import time
 import logging
-from baseline.tf.tfy import *
+import numpy as np
+import tensorflow as tf
+from baseline.tf.optz import optimizer
 from baseline.utils import listify, get_model_file
 from baseline.train import Trainer, create_trainer, register_trainer, register_training_func
 

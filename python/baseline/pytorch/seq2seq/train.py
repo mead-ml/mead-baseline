@@ -6,7 +6,7 @@ import numpy as np
 from baseline.progress import create_progress_bar
 from baseline.utils import listify, get_model_file
 from baseline.train import Trainer, create_trainer, register_trainer, register_training_func
-from baseline.pytorch.torchy import pytorch_prepare_optimizer
+from baseline.pytorch.optz import OptimizerManager
 
 
 @register_trainer(task='seq2seq', name='default')
@@ -14,11 +14,10 @@ class Seq2SeqTrainerPyTorch(Trainer):
 
     def __init__(self, model, **kwargs):
         super(Seq2SeqTrainerPyTorch, self).__init__()
-        self.steps = 0
         self.gpu = bool(kwargs.get('gpu', True))
         self.clip = float(kwargs.get('clip', 5))
         self.model = model
-        self.optimizer, self.scheduler = pytorch_prepare_optimizer(self.model, **kwargs)
+        self.optimizer = OptimizerManager(self.model, **kwargs)
         self._input = model.make_input
         self.crit = model.create_loss()
         if self.gpu:
@@ -67,14 +66,11 @@ class Seq2SeqTrainerPyTorch(Trainer):
 
         total_loss = total = 0
         duration = 0
-        if self.scheduler is not None:
-            self.scheduler.step()
 
         start = time.time()
         for batch_dict in ts:
 
             start_time = time.time()
-            self.steps += 1
             self.optimizer.zero_grad()
             input = self._input(batch_dict)
             tgt = input['tgt']
@@ -87,14 +83,14 @@ class Seq2SeqTrainerPyTorch(Trainer):
             self.optimizer.step()
             duration += time.time() - start_time
 
-            if self.steps % 500 == 0:
+            if self.optimizer.global_step > 0 and self.optimizer.global_step % 500 == 0:
                 print('Step time (%.3f sec)' % (duration / 500.))
                 duration = 0
                 avg_loss = float(total_loss)/total
                 metrics['avg_loss'] = avg_loss
                 metrics['perplexity'] = np.exp(avg_loss)
                 for reporting in reporting_fns:
-                    reporting(metrics, self.steps, 'Train')
+                    reporting(metrics, self.optimizer.global_step, 'Train')
 
         self.log.debug({'phase': 'Train', 'time': time.time() - start})
         self.train_epochs += 1
@@ -102,7 +98,7 @@ class Seq2SeqTrainerPyTorch(Trainer):
         metrics['avg_loss'] = avg_loss
         metrics['perplexity'] = np.exp(avg_loss)
         for reporting in reporting_fns:
-            reporting(metrics, self.steps, 'Train')
+            reporting(metrics, self.optimizer.global_step, 'Train')
 
         return metrics
 

@@ -3,6 +3,7 @@ import logging
 from baseline.pytorch.torchy import *
 from baseline.utils import listify, revlut, get_model_file
 from baseline.train import Trainer, create_trainer, register_trainer, register_training_func
+from baseline.pytorch.optz import OptimizerManager
 
 
 @register_trainer(task='lm', name='default')
@@ -10,7 +11,6 @@ class LanguageModelTrainerPyTorch(Trainer):
 
     def __init__(self, model, **kwargs):
         super(LanguageModelTrainerPyTorch, self).__init__()
-        self.train_steps = 0
         self.valid_epochs = 0
         self.model = model
         self.clip = float(kwargs.get('clip', 5))
@@ -22,7 +22,7 @@ class LanguageModelTrainerPyTorch(Trainer):
             self.crit.cuda()
         self.log = logging.getLogger('baseline.timing')
 
-        self.optimizer, self.scheduler = pytorch_prepare_optimizer(self.model, **kwargs)
+        self.optimizer = OptimizerManager(self.model, **kwargs)
 
     def repackage_hidden(self, h):
         """Wraps hidden states in new Variables, to detach them from their history."""
@@ -70,8 +70,6 @@ class LanguageModelTrainerPyTorch(Trainer):
     def train(self, ts, reporting_fns):
         start_time = time.time()
         self.model.train()
-        if self.scheduler is not None:
-            self.scheduler.step()
         total_loss = 0
         metrics = {}
         batchsz, nctx = self._get_dims(ts)
@@ -89,13 +87,12 @@ class LanguageModelTrainerPyTorch(Trainer):
             loss.backward()
             total_loss += loss.data
             iters += nctx
-            self.train_steps += 1
-            if self.train_steps % 500 == 0:
+            if self.optimizer.global_step > 0 and self.optimizer.global_step % 500 == 0:
                 avg_loss = float(total_loss) / iters / batchsz
                 metrics['avg_loss'] = avg_loss
                 metrics['perplexity'] = np.exp(avg_loss)
                 for reporting in reporting_fns:
-                    reporting(metrics, self.train_steps, 'Train')
+                    reporting(metrics, self.optimizer.global_step, 'Train')
 
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.clip)
             self.optimizer.step()
@@ -109,7 +106,7 @@ class LanguageModelTrainerPyTorch(Trainer):
         self.log.debug({'phase': 'Train', 'time': duration})
 
         for reporting in reporting_fns:
-            reporting(metrics, self.train_epochs * len(ts), 'Train')
+            reporting(metrics, self.optimizer.global_step, 'Train')
         return metrics
 
 

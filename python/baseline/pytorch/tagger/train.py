@@ -2,6 +2,7 @@ from baseline.pytorch.torchy import *
 from baseline.utils import listify, to_spans, f_score, revlut, get_model_file, write_sentence_conll
 from baseline.progress import create_progress_bar
 from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
+from baseline.pytorch.optz import OptimizerManager
 
 
 @register_trainer(task='tagger', name='default')
@@ -19,7 +20,7 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
         self.model = model
         self.idx2label = revlut(self.model.labels)
         self.clip = float(kwargs.get('clip', 5))
-        self.optimizer, self.scheduler = pytorch_prepare_optimizer(self.model, **kwargs)
+        self.optimizer = OptimizerManager(self.model, **kwargs)
         if self.gpu:
             self.model = model.to_gpu()
 
@@ -101,9 +102,6 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
         total_loss = 0
         metrics = {}
         steps = len(ts)
-        if self.scheduler is not None:
-            self.scheduler.step()
-            #print(self.optimizer.param_groups[0]['lr'])
         pg = create_progress_bar(steps)
         for batch_dict in ts:
 
