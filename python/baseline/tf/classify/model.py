@@ -375,7 +375,6 @@ class ClassifierModelBase(ClassifierModel):
         nc = len(labels)
         model.y = kwargs.get('y', tf.placeholder(tf.int32, [None, nc], name="y"))
         # This only exists to make exporting easier
-        model.training = kwargs.get('training', tf.placeholder_with_default(0, shape=(), name="training"))
         model.pdrop_value = kwargs.get('dropout', 0.5)
         # This only exists to make exporting easier
 
