@@ -71,7 +71,9 @@ def main():
             'requests',
         ],
         extras_require={
-            'test': ['pytest', 'mock', 'contextdecorator', 'pytest-forked']
+            'test': ['pytest', 'mock', 'contextdecorator', 'pytest-forked'],
+            'report': ['visdom', 'tensorboardX'],
+            'yaml': ['pyyaml'],
         },
         entry_points={
             'console_scripts': [
