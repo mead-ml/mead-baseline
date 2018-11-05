@@ -78,7 +78,7 @@ class TaggerModelBase(TaggerModel):
     def make_input(self, batch_dict, train=False):
         feed_dict = new_placeholder_dict(train)
         for k in self.embeddings.keys():
-            feed_dict["{}:0".format(k)] = batch_dict[k]
+            feed_dict["{}:0".format(k)] = self.drop_inputs(k, batch_dict[k], train)
         y = batch_dict.get('y', None)
 
         #feed_dict = {v.x: self.drop_inputs(k, batch_dict[k], do_dropout) for k, v in self.embeddings.items()}

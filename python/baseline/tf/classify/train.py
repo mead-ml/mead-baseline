@@ -38,7 +38,7 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         steps = len(loader)
         pg = create_progress_bar(steps)
         for batch_dict in loader:
-            feed_dict = self.model.make_input(batch_dict, do_dropout=True)
+            feed_dict = self.model.make_input(batch_dict, True)
             _, step, lossv = self.sess.run([self.train_op, self.global_step, self.loss], feed_dict=feed_dict)
             total_loss += lossv
             pg.update()

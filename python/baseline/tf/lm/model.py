@@ -19,7 +19,7 @@ class LanguageModelBase(LanguageModel):
     def pkeep(self):
         """This property is provided for models that wish to access the default `pdrop_value` property.
 
-        The property here uses `pdrop_value` and the `training` flag to determine how much dropout to apply (if any)
+        The property here uses `pdrop_value` and the `TRAIN_FLAG` to determine how much dropout to apply (if any)
 
         :return:
         """
@@ -103,7 +103,6 @@ class LanguageModelBase(LanguageModel):
         lm.y = kwargs.get('y', tf.placeholder(tf.int32, [None, None], name="y"))
         lm.batchsz = kwargs['batchsz']
         lm.sess = kwargs.get('sess', tf.Session())
-        lm.training = kwargs.get('training', tf.placeholder(tf.int32, name="training"))
         lm.pdrop_value = kwargs.get('pdrop', 0.5)
         lm.hsz = kwargs['hsz']
         lm.tgt_key = kwargs.get('tgt_key')

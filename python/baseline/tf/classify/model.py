@@ -64,7 +64,6 @@ class ClassifyParallelModel(ClassifierModel):
 
                 kwargs_single = copy.deepcopy(kwargs)
                 kwargs_single['sess'] = sess
-                kwargs_single['training'] = 1
 
                 for k, split_operation in split_operations.items():
                     kwargs_single[k] = split_operation[i]
@@ -220,7 +219,7 @@ class ClassifierModelBase(ClassifierModel):
         """Transform a `batch_dict` into a TensorFlow `feed_dict`
 
         :param batch_dict: (``dict``) A dictionary containing all inputs to the embeddings for this model
-        :param do_dropout: (``bool``) Should we do dropout.  Defaults to False
+        :param train: (``bool``) Are we training.  Defaults to False
         :return:
         """
         y = batch_dict.get('y', None)
@@ -298,7 +297,6 @@ class ClassifierModelBase(ClassifierModel):
 
         else:
             model.lengths = None
-        model.training = tf.get_default_graph().get_tensor_by_name('training:0')
         model.probs = tf.get_default_graph().get_tensor_by_name('output/probs:0')
 
         model.best = tf.get_default_graph().get_tensor_by_name('output/best:0')

@@ -128,7 +128,7 @@ class NStepProgressClassifyTrainerTf(Trainer):
         total_loss = 0
         steps = len(loader)
         for batch_dict in loader:
-            feed_dict = self.model.make_input(batch_dict, do_dropout=True)
+            feed_dict = self.model.make_input(batch_dict, train=True)
             _, step, lossv = self.sess.run([self.train_op, self.global_step, self.loss], feed_dict=feed_dict)
             total_loss += lossv
             if step % self.nsteps == 0:

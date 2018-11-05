@@ -37,14 +37,14 @@ class RNNTaggerModelGazetteerModel(Tagger):
         with open(basename + '-gaz.vocab', 'w') as f:
             json.dump(self.gazette_vocab, f)
 
-    def make_input(self, batch_dict, do_dropout=False):
+    def make_input(self, batch_dict, train=False):
         x = batch_dict['x']
         y = batch_dict.get('y', None)
         xch = batch_dict['xch']
         lengths = batch_dict['lengths']
         word_gazette = batch_dict["gaz"]
 
-        pkeep = 1.0-self.pdrop_value if do_dropout else 1.0
+        pkeep = 1.0-self.pdrop_value if train else 1.0
         feed_dict = {self.x: x, self.xch: xch, self.gaz: word_gazette, self.lengths: lengths, self.pkeep: pkeep}
         if y is not None:
             feed_dict[self.y] = y

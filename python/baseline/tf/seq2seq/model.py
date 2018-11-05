@@ -86,13 +86,12 @@ class Seq2SeqParallelModel(EncoderDecoderModel):
         sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False))
         with tf.device(tf.DeviceSpec(device_type="CPU")):
             self.inference = create_fn(src_embeddings, tgt_embedding, sess=sess,
-                                       mx_tgt_len=self.mx_tgt_len, training=0, id=1, **kwargs)
+                                       mx_tgt_len=self.mx_tgt_len, id=1, **kwargs)
         for i in range(gpus):
             with tf.device(tf.DeviceSpec(device_type='GPU', device_index=i)):
 
                 kwargs_single = copy.deepcopy(kwargs)
                 kwargs_single['sess'] = sess
-                kwargs_single['training'] = 1
                 kwargs_single['id'] = i + 1
                 for k, split_operation in split_operations.items():
                     kwargs_single[k] = split_operation[i]
@@ -235,7 +234,6 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
         model.id = kwargs.get('id', 0)
         model.sess = kwargs.get('sess', tf.Session())
         model.pdrop_value = kwargs.get('dropout', 0.5)
-        model.training = kwargs.get('training', tf.placeholder_with_default(0, shape=(), name="training"))
         model.layers = kwargs.get('layers', 1)
         model.hsz = kwargs['hsz']
 
@@ -261,7 +259,7 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
     def pkeep(self):
         """This property is provided for models that wish to access the default `pdrop_value` property.
 
-        The property here uses `pdrop_value` and the `training` flag to determine how much dropout to apply (if any)
+        The property here uses `pdrop_value` and the `TRAIN_FLAG()` to determine how much dropout to apply (if any)
 
         :return:
         """
