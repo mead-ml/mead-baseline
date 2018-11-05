@@ -19,62 +19,6 @@ class M():
     def __init__(self, pc): self.pc = pc
 
 
-def test_optimizer_adadelta():
-    m = M(dy.ParameterCollection())
-    opt = optimizer(m, 'adadelta')
-    assert isinstance(opt, dy.AdadeltaTrainer)
-
-
-def test_optimizer_adam():
-    m = M(dy.ParameterCollection())
-    opt = optimizer(m, 'adam')
-    assert isinstance(opt, dy.AdamTrainer)
-
-def test_optimizer_rmsprop():
-    gold_lr = 5.0
-    m = M(dy.ParameterCollection())
-    opt = optimizer(m, 'rmsprop', eta=gold_lr)
-    assert isinstance(opt, dy.RMSPropTrainer)
-    assert opt.learning_rate == gold_lr
-
-def test_optimizer_sgd():
-    gold_lr = 5.0
-    m = M(dy.ParameterCollection())
-    opt = optimizer(m, 'sgd', eta=gold_lr, mom=0.0)
-    assert isinstance(opt, dy.SimpleSGDTrainer)
-    assert opt.learning_rate == gold_lr
-
-def test_optimizer_momentum_sgd():
-    gold_lr = 5.0
-    gold_mom = 0.1
-    m = M(dy.ParameterCollection())
-    opt = optimizer(m, 'sgd', eta=gold_lr, mom=gold_mom)
-    assert isinstance(opt, dy.MomentumSGDTrainer)
-    assert opt.learning_rate == gold_lr
-    # Dynet doesn't expose the mom value in the trainer
-    # assert opt.mom == gold_mom
-
-def test_optimizer_lr_works_too():
-    gold_lr = 5.0
-    m = M(dy.ParameterCollection())
-    opt = optimizer(m, 'sgd', lr=gold_lr, mom=0.0)
-    assert isinstance(opt, dy.SimpleSGDTrainer)
-    assert opt.learning_rate == gold_lr
-
-def test_optimizer_clip_not_called():
-    m = M(dy.ParameterCollection())
-    with patch('baseline.dy.dynety.dy.AdamTrainer') as opt_mock:
-        opt_mock.return_value = MagicMock()
-        opt = optimizer(m, 'adam')
-        assert opt.set_clip_threshold.call_count == 0
-
-def test_optimizer_clip_not_called():
-    m = M(dy.ParameterCollection())
-    with patch('baseline.dy.dynety.dy.AdamTrainer') as opt_mock:
-        opt_mock.return_value = MagicMock()
-        opt = optimizer(m, 'adam', clip=5.0)
-        assert opt.set_clip_threshold.call_count == 1
-
 def test_linear_params_present():
     pc = dy.ParameterCollection()
     linear = Linear(12, 6, pc)
