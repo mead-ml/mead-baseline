@@ -84,10 +84,18 @@ class LoggingReporting(ReportingHook):
 
 @register_reporting(name='tensorboard')
 class TensorBoardReporting(ReportingHook):
+    """Log results to tensorboard.
+
+    Writes tensorboard logs to a directory specified in the `mead-settings`
+    section for tensorboard. Otherwise it defaults to `runs`.
+    """
     def __init__(self, **kwargs):
         super(TensorBoardReporting, self).__init__(**kwargs)
         from tensorboardX import SummaryWriter
-        log_dir = kwargs.get('log_dir', 'runs')
+        base_dir = kwargs.get('base_dir', '.')
+        log_dir = os.path.expanduser(kwargs.get('log_dir', 'runs'))
+        if not os.path.isabs(log_dir):
+            log_dir = os.path.join(base_dir, log_dir)
         log_dir = os.path.join(log_dir, str(os.getpid()))
         flush_secs = int(kwargs.get('flush_secs', 2))
         self._log = SummaryWriter(log_dir, flush_secs=flush_secs)
