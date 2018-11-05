@@ -1,7 +1,7 @@
 import pytest
 from mock import patch, MagicMock
 import numpy as np
-import dynet as dy
+dy = pytest.importorskip('dynet')
 from baseline.dy.dynety import sequence_mask
 from baseline.dy.transformer import subsequent_mask
 from baseline.dy.transformer import MultiHeadedAttention as MHA

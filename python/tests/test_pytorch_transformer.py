@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-import torch
+torch = pytest.importorskip('torch')
 from baseline.pytorch.torchy import sequence_mask
 from baseline.pytorch.transformer import subsequent_mask
 from baseline.pytorch.transformer import scaled_dot_product_attention as sdpa
