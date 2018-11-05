@@ -85,13 +85,14 @@ class Seq2SeqParallelModel(EncoderDecoderModel):
         losses = []
         sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False))
         with tf.device(tf.DeviceSpec(device_type="CPU")):
-            self.inference = create_fn(src_embeddings, tgt_embedding, sess=sess, mx_tgt_len=self.mx_tgt_len, pkeep=self.pkeep, id=1, **kwargs)
+            self.inference = create_fn(src_embeddings, tgt_embedding, sess=sess,
+                                       mx_tgt_len=self.mx_tgt_len, training=0, id=1, **kwargs)
         for i in range(gpus):
             with tf.device(tf.DeviceSpec(device_type='GPU', device_index=i)):
 
                 kwargs_single = copy.deepcopy(kwargs)
                 kwargs_single['sess'] = sess
-                kwargs_single['pkeep'] = self.pkeep
+                kwargs_single['training'] = 1
                 kwargs_single['id'] = i + 1
                 for k, split_operation in split_operations.items():
                     kwargs_single[k] = split_operation[i]
@@ -124,15 +125,18 @@ class Seq2SeqParallelModel(EncoderDecoderModel):
         """
         return self.inference.step(batch_dict)
 
-    def make_input(self, batch_dict, do_dropout=False):
-        if do_dropout is False:
+    def make_input(self, batch_dict, train=False):
+        if train is False:
             return self.inference.make_input(batch_dict)
+
+        feed_dict = new_placeholder_dict(train)
 
         tgt = batch_dict.get['tgt']
         tgt_len = batch_dict['tgt_len']
         mx_tgt_len = np.max(tgt_len)
-        pkeep = 1.0 - self.pdrop_value if do_dropout else 1.0
-        feed_dict = {self.pkeep: pkeep, "tgt:0": tgt, self.tgt_len: tgt_len, self.mx_tgt_len: mx_tgt_len}
+        feed_dict["tgt:0"] = tgt
+        feed_dict[self.tgt_len] = tgt_len
+        feed_dict[self.mx_tgt_len] = mx_tgt_len
 
         for key in self.parallel_params.keys():
             feed_dict["{}_parallel:0".format(key)] = batch_dict[key]
@@ -231,7 +235,7 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
         model.id = kwargs.get('id', 0)
         model.sess = kwargs.get('sess', tf.Session())
         model.pdrop_value = kwargs.get('dropout', 0.5)
-        model.pkeep = kwargs.get('pkeep', tf.placeholder_with_default(1.0, shape=(), name="pkeep"))
+        model.training = kwargs.get('training', tf.placeholder_with_default(0, shape=(), name="training"))
         model.layers = kwargs.get('layers', 1)
         model.hsz = kwargs['hsz']
 
@@ -252,6 +256,16 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
     @src_lengths_key.setter
     def src_lengths_key(self, value):
         self._src_lengths_key = value
+
+    @property
+    def pkeep(self):
+        """This property is provided for models that wish to access the default `pdrop_value` property.
+
+        The property here uses `pdrop_value` and the `training` flag to determine how much dropout to apply (if any)
+
+        :return:
+        """
+        return 1.0 - self.pdrop_value * TRAIN_FLAG()
 
     def create_encoder(self, **kwargs):
         return create_seq2seq_encoder(**kwargs)
@@ -330,10 +344,9 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
         x = self.sess.run(self.decoder.probs, feed_dict=feed_dict)
         return x
 
-    def make_input(self, batch_dict, do_dropout=False):
+    def make_input(self, batch_dict, train=False):
 
-        pkeep = 1.0 - self.pdrop_value if do_dropout else 1.0
-        feed_dict = {self.pkeep: pkeep}
+        feed_dict = new_placeholder_dict(train)
 
         for key in self.src_embeddings.keys():
             feed_dict["{}:0".format(key)] = batch_dict[key]

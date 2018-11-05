@@ -5,7 +5,9 @@ from tensorflow.python.platform import gfile
 from baseline.utils import fill_y, listify, write_json, ls_props, read_json
 from baseline.model import ClassifierModel, register_model
 from baseline.tf.tfy import (stacked_lstm,
-                             parallel_conv)
+                             parallel_conv,
+                             TRAIN_FLAG,
+                             new_placeholder_dict)
 from baseline.tf.embeddings import *
 from baseline.version import __version__
 from tensorflow.contrib.layers import fully_connected
@@ -47,7 +49,6 @@ class ClassifyParallelModel(ClassifierModel):
 
         # This only exists to make exporting easier
         self.y = kwargs.get('y', tf.placeholder(tf.int32, [None, nc], name="y_parallel"))
-        self.pkeep = kwargs.get('pkeep', tf.placeholder_with_default(1.0, shape=(), name="pkeep"))
         self.pdrop_value = kwargs.get('dropout', 0.5)
 
         y_splits = tf.split(self.y, gpus)
@@ -63,7 +64,7 @@ class ClassifyParallelModel(ClassifierModel):
 
                 kwargs_single = copy.deepcopy(kwargs)
                 kwargs_single['sess'] = sess
-                kwargs_single['pkeep'] = self.pkeep
+                kwargs_single['training'] = 1
 
                 for k, split_operation in split_operations.items():
                     kwargs_single[k] = split_operation[i]
@@ -90,13 +91,12 @@ class ClassifyParallelModel(ClassifierModel):
         self.inference.saver = saver
         self.saver = saver
 
-    def make_input(self, batch_dict, do_dropout=False):
-        if do_dropout is False:
+    def make_input(self, batch_dict, train=False):
+        if train is False:
             return self.inference.make_input(batch_dict)
 
         y = batch_dict.get('y', None)
-        pkeep = 1.0 - self.pdrop_value if do_dropout else 1.0
-        feed_dict = {self.pkeep: pkeep}
+        feed_dict = new_placeholder_dict(True)
 
         for key in self.parallel_params.keys():
             feed_dict["{}_parallel:0".format(key)] = batch_dict[key]
@@ -216,7 +216,7 @@ class ClassifierModelBase(ClassifierModel):
             results.append(outcomes)
         return results
 
-    def make_input(self, batch_dict, do_dropout=False):
+    def make_input(self, batch_dict, train=False):
         """Transform a `batch_dict` into a TensorFlow `feed_dict`
 
         :param batch_dict: (``dict``) A dictionary containing all inputs to the embeddings for this model
@@ -224,10 +224,9 @@ class ClassifierModelBase(ClassifierModel):
         :return:
         """
         y = batch_dict.get('y', None)
-
-        feed_dict = {"{}:0".format(k): batch_dict[k] for k in self.embeddings.keys()}
-        pkeep = 1.0 - self.pdrop_value if do_dropout else 1.0
-        feed_dict[self.pkeep] = pkeep
+        feed_dict = new_placeholder_dict(train)
+        for k in self.embeddings.keys():
+            feed_dict["{}:0".format(k)] = batch_dict[k]
 
         # Allow us to track a length, which is needed for BLSTMs
         if self.lengths_key is not None:
@@ -299,7 +298,7 @@ class ClassifierModelBase(ClassifierModel):
 
         else:
             model.lengths = None
-        model.pkeep = tf.get_default_graph().get_tensor_by_name('pkeep:0')
+        model.training = tf.get_default_graph().get_tensor_by_name('training:0')
         model.probs = tf.get_default_graph().get_tensor_by_name('output/probs:0')
 
         model.best = tf.get_default_graph().get_tensor_by_name('output/best:0')
@@ -316,6 +315,16 @@ class ClassifierModelBase(ClassifierModel):
     @lengths_key.setter
     def lengths_key(self, value):
         self._lengths_key = value
+
+    @property
+    def pkeep(self):
+        """This property is provided for models that wish to access the default `pdrop_value` property.
+
+        The property here uses `pdrop_value` and the `training` flag to determine how much dropout to apply (if any)
+
+        :return:
+        """
+        return 1.0 - self.pdrop_value * TRAIN_FLAG()
 
     @classmethod
     def create(cls, embeddings, labels, **kwargs):
@@ -368,7 +377,7 @@ class ClassifierModelBase(ClassifierModel):
         nc = len(labels)
         model.y = kwargs.get('y', tf.placeholder(tf.int32, [None, nc], name="y"))
         # This only exists to make exporting easier
-        model.pkeep = kwargs.get('pkeep', tf.placeholder_with_default(1.0, shape=(), name="pkeep"))
+        model.training = kwargs.get('training', tf.placeholder_with_default(0, shape=(), name="training"))
         model.pdrop_value = kwargs.get('dropout', 0.5)
         # This only exists to make exporting easier
 
