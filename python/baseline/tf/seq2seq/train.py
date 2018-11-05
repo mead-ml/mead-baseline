@@ -49,7 +49,7 @@ class Seq2SeqTrainerTf(Trainer):
         for batch_dict in ts:
             start_time = time.time()
             steps += 1
-            feed_dict = self.model.make_input(batch_dict, do_dropout=True)
+            feed_dict = self.model.make_input(batch_dict, True)
             vals = self.model.sess.run(fetches, feed_dict=feed_dict)
             global_step = vals["global_step"]
             lossv = vals["loss"]
