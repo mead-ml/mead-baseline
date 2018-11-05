@@ -68,6 +68,14 @@ class TaggerModelBase(TaggerModel):
     UNK = 1
     PAD = 0
 
+    @property
+    def dropin_value(self):
+        return self._dropin_value
+
+    @dropin_value.setter
+    def dropin_value(self, dict_value):
+        self._dropin_value = dict_value
+
     def drop_inputs(self, key, x, do_dropout):
         v = self.dropin_value.get(key, 0)
         if do_dropout and v > 0.0:
