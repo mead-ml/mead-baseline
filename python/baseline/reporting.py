@@ -84,33 +84,26 @@ class LoggingReporting(ReportingHook):
 
 @register_reporting(name='tensorboard')
 class TensorBoardReporting(ReportingHook):
-    """
-    To use this:
-     - tensorboard --logdir runs
-     - http://localhost:6006
+    """Log results to tensorboard.
+
+    Writes tensorboard logs to a directory specified in the `mead-settings`
+    section for tensorboard. Otherwise it defaults to `runs`.
     """
     def __init__(self, **kwargs):
         super(TensorBoardReporting, self).__init__(**kwargs)
-        from tensorboard_logger import configure as tb_configure, log_value as tb_log_value
-        self.tb_configure = tb_configure
-        self.tb_log_value = tb_log_value
-        self.g_tb_run = 'runs/%d' % os.getpid()
+        from tensorboardX import SummaryWriter
+        base_dir = kwargs.get('base_dir', '.')
+        log_dir = os.path.expanduser(kwargs.get('log_dir', 'runs'))
+        if not os.path.isabs(log_dir):
+            log_dir = os.path.join(base_dir, log_dir)
+        log_dir = os.path.join(log_dir, str(os.getpid()))
+        flush_secs = int(kwargs.get('flush_secs', 2))
+        self._log = SummaryWriter(log_dir, flush_secs=flush_secs)
 
     def step(self, metrics, tick, phase, tick_type=None, **kwargs):
-        """This method will write its results to tensorboard
-
-        :param metrics: A map of metrics to scores
-        :param tick: The time (resolution defined by `tick_type`)
-        :param phase: The phase of training (`Train`, `Valid`, `Test`)
-        :param tick_type: The resolution of tick (`STEP`, `EPOCH`)
-        :return:
-        """
-        print('Creating Tensorboard run %s' % self.g_tb_run)
-        self.tb_configure(self.g_tb_run, flush_secs=5)
-
         for metric in metrics.keys():
-            chart_id = '%s:%s' % (phase, metric)
-            self.tb_log_value(chart_id, metrics[metric], tick)
+            name = "{}/{}".format(phase, metric)
+            self._log.add_scalar(name, metrics[metric], tick)
 
 
 @register_reporting(name='visdom')

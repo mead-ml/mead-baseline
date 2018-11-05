@@ -238,7 +238,7 @@ class Task(object):
 
         self.reporting = baseline.create_reporting(reporting_hooks,
                                                    reporting,
-                                                   {'config_file': self.config_file, 'task': self.__class__.task_name()})
+                                                   {'config_file': self.config_file, 'task': self.__class__.task_name(), 'base_dir': self.get_basedir()})
 
         self.config_params['train']['reporting'] = [x.step for x in self.reporting]
         logging.basicConfig(level=logging.DEBUG)
