@@ -18,9 +18,9 @@ from baseline.model import (
     load_model,
     load_tagger_model,
     load_seq2seq_model,
-    load_lang_model,
-    RemoteModel
+    load_lang_model
 )
+from baseline.tf.remote import RemoteTFModel
 
 from collections import namedtuple
 
@@ -60,23 +60,25 @@ class Service(object):
         model_basename = find_model_basename(directory)
         vocabs = load_vocabs(directory)
         vectorizers = load_vectorizers(directory)
+
+        be = kwargs.get('backend', 'tf')
         
         remote = kwargs.get("remote", None)
         name = kwargs.get("name", None)
         if remote:
             beam = kwargs.get('beam', 30)
-            model = Service._create_remote_model(directory, remote, name, cls.signature_name, beam)
+            model = Service._create_remote_model(directory, be, remote, name, cls.signature_name, beam)
             return cls(vocabs, vectorizers, model)
 
         labels = read_json(os.path.join(directory, model_basename) + '.labels')
-        be = kwargs.get('backend', 'tf')
+        
         import_user_module('baseline.{}.embeddings'.format(be))
         import_user_module('baseline.{}.{}'.format(be, cls.task_name))
         model = cls.task_load(model_basename, **kwargs)
         return cls(vocabs, vectorizers, model)
 
     @staticmethod
-    def _create_remote_model(directory, remote, name, signature_name, beam):
+    def _create_remote_model(directory, backend, remote, name, signature_name, beam):
         """Reads the necessary information from the remote bundle to instatiate
         a client for a remote model.
 
@@ -93,13 +95,18 @@ class Service(object):
         labels = read_json(os.path.join(directory, model_name) + '.labels')
         lengths_key = assets.get('lengths_key', None)
         inputs = assets.get('inputs', [])
-        model = RemoteModel(remote, 
-                            name, 
-                            signature_name, 
-                            labels=labels, 
-                            lengths_key=lengths_key, 
-                            inputs=inputs,
-                            beam=beam)
+
+        model = None
+        if backend == 'tf':
+            model = RemoteTFModel(remote, 
+                                name, 
+                                signature_name, 
+                                labels=labels, 
+                                lengths_key=lengths_key, 
+                                inputs=inputs,
+                                beam=beam)
+        else:
+            raise ValueError("only Tensorflow is currently supported for remote Services")
 
         return model
 
