@@ -45,7 +45,7 @@ def sequence_mask(lengths, max_len=-1):
 def unsqueeze(x, dim):
     """Add a dimension of size 1 to `x` at position `dim`."""
     shape, batchsz = x.dim()
-    dim = len(shape) if dim == -1 else dim
+    dim = len(shape) + dim + 1 if dim < 0 else dim
     shape = list(shape)
     shape.insert(dim, 1)
     return dy.reshape(x, tuple(shape), batch_size=batchsz)
