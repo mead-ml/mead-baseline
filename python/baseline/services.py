@@ -20,7 +20,7 @@ from baseline.model import (
     load_seq2seq_model,
     load_lang_model
 )
-from baseline.tf.remote import RemoteTFModel
+from baseline.tf.remote import RemoteModelTensorFlow
 
 from collections import namedtuple
 
@@ -280,7 +280,7 @@ class LanguageModelService(Service):
         return super(LanguageModelService, cls).load(bundle, **kwargs)
 
     # Do a greedy decode for now, everything else will be super slow
-    def run(self, tokens, **kwargs):
+    def predict(self, tokens, **kwargs):
         mxlen = kwargs.get('mxlen', 10)
         mxwlen = kwargs.get('mxwlen', 40)
 

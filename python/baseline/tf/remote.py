@@ -1,7 +1,7 @@
 import numpy as np
 from baseline.utils import import_user_module
 
-class RemoteTFModel(object):
+class RemoteModelTensorFlow(object):
     def __init__(self, remote, name, signature, labels=None, beam=None, lengths_key=None, inputs=[]):
         self.predictpb = import_user_module('tensorflow_serving.apis.predict_pb2')
         self.servicepb = import_user_module('tensorflow_serving.apis.prediction_service_pb2_grpc')
