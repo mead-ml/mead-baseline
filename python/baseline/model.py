@@ -1,6 +1,6 @@
 import numpy as np
 from baseline.utils import (
-    export, optional_params, listify, import_user_module, register
+    export, optional_params, listify, register
 )
 
 __all__ = []
