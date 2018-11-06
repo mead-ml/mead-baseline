@@ -98,7 +98,7 @@ class Service(object):
 
         model = None
         if backend == 'tf':
-            model = RemoteTFModel(remote, 
+            model = RemoteModelTensorFlow(remote, 
                                 name, 
                                 signature_name, 
                                 labels=labels, 
