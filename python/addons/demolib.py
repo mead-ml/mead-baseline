@@ -2,29 +2,13 @@ from baseline.train import create_trainer, register_trainer, register_training_f
 from baseline.embeddings import register_embeddings
 from baseline.reporting import register_reporting, ReportingHook
 from baseline.tf.embeddings import TensorFlowEmbeddings
+from baseline.tf.optz import optimizer
 from baseline.confusion import ConfusionMatrix
-from baseline.utils import listify, get_model_file, write_json
-from baseline.tf.tfy import optimizer, embed
+from baseline.utils import listify, get_model_file, write_json, color, Colors
+from baseline.tf.tfy import embed
 import tensorflow as tf
-import numpy as np
-import platform
 import os
-
-
-# TODO: remove when this goes into baseline.utils
-class Colors(object):
-    GREEN = '\033[32;1m'
-    RED = '\033[31;1m'
-    YELLOW = '\033[33;1m'
-    BLACK = '\033[30;1m'
-    CYAN = '\033[36;1m'
-    RESTORE = '\033[0m'
-
-
-def color(msg, color):
-    if platform.system() == 'Windows':
-        return msg
-    return "{}{}{}".format(color, msg, Colors.RESTORE)
+import numpy as np
 
 
 @register_embeddings(name='cbow')
