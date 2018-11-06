@@ -10,11 +10,20 @@ from google.protobuf import text_format
 class LanguageModelBase(LanguageModel):
 
     def __init__(self):
-        self.pkeep = None
         self.saver = None
         self.layers = None
         self.hsz = None
         self.probs = None
+
+    @property
+    def pkeep(self):
+        """This property is provided for models that wish to access the default `pdrop_value` property.
+
+        The property here uses `pdrop_value` and the `TRAIN_FLAG` to determine how much dropout to apply (if any)
+
+        :return:
+        """
+        return 1.0 - self.pdrop_value * TRAIN_FLAG()
 
     def save_using(self, saver):
         self.saver = saver
@@ -67,10 +76,9 @@ class LanguageModelBase(LanguageModel):
             loss = tf.reduce_sum(example_loss) / self.batchsz
             return loss
 
-    def make_input(self, batch_dict, do_dropout=False):
+    def make_input(self, batch_dict, train=False):
 
-        pkeep = 1.0 - self.pdrop_value if do_dropout else 1.0
-        feed_dict = {self.pkeep: pkeep}
+        feed_dict = new_placeholder_dict(train)
 
         for key in self.embeddings.keys():
 
@@ -95,9 +103,7 @@ class LanguageModelBase(LanguageModel):
         lm.y = kwargs.get('y', tf.placeholder(tf.int32, [None, None], name="y"))
         lm.batchsz = kwargs['batchsz']
         lm.sess = kwargs.get('sess', tf.Session())
-        lm.pkeep = kwargs.get('pkeep', tf.placeholder(tf.float32, name="pkeep"))
-        pdrop = kwargs.get('pdrop', 0.5)
-        lm.pdrop_value = pdrop
+        lm.pdrop_value = kwargs.get('pdrop', 0.5)
         lm.hsz = kwargs['hsz']
         lm.tgt_key = kwargs.get('tgt_key')
         if lm.tgt_key is None:

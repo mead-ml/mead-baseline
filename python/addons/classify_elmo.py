@@ -65,11 +65,11 @@ class ELMoClassifierModel(ClassifierModel):
             results.append(outcomes)
         return results
 
-    def make_input(self, batch_dict, do_dropout=False):
+    def make_input(self, batch_dict, train=False):
         x = batch_dict['x']
         y = batch_dict['y']
         lengths = batch_dict['lengths']
-        pkeep = 1.0 - self.pdrop_value if do_dropout else 1
+        pkeep = 1.0 - self.pdrop_value if train else 1
         return {self.x: x, self.lengths: lengths, self.y: fill_y(len(self.labels), y), self.pkeep: pkeep}
 
     def get_labels(self):

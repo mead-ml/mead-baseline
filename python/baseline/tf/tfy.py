@@ -6,6 +6,26 @@ from baseline.utils import lookup_sentence, beam_multinomial, crf_mask as crf_m,
 import math
 
 
+BASELINE_TF_TRAIN_FLAG = None
+
+
+def TRAIN_FLAG():
+    """Create a global training flag on first use"""
+    global BASELINE_TF_TRAIN_FLAG
+    if BASELINE_TF_TRAIN_FLAG is not None:
+        return BASELINE_TF_TRAIN_FLAG
+
+    BASELINE_TF_TRAIN_FLAG = tf.placeholder_with_default(0.0, shape=(), name="TRAIN_FLAG")
+    return BASELINE_TF_TRAIN_FLAG
+
+
+def new_placeholder_dict(train):
+    global BASELINE_TF_TRAIN_FLAG
+    if train:
+        return {BASELINE_TF_TRAIN_FLAG: 1}
+    return {}
+
+
 def _add_ema(model, decay):
     """Create ops needed to track EMA when training.
 

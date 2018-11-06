@@ -40,7 +40,7 @@ class RNNTaggerModelELMoModel(TaggerModel):
         with open(basename + '-char.vocab', 'w') as f:
             json.dump(self.char_vocab, f)
 
-    def make_input(self, batch_dict, do_dropout=False):
+    def make_input(self, batch_dict, train=False):
         x = batch_dict['x']
         x_lc = batch_dict['x_lc']
         #np.set_printoptions(threshold=20)
@@ -48,7 +48,7 @@ class RNNTaggerModelELMoModel(TaggerModel):
         xch = batch_dict['xch']
         lengths = batch_dict['lengths']
 
-        pkeep = 1.0-self.pdrop_value if do_dropout else 1.0
+        pkeep = 1.0-self.pdrop_value if train else 1.0
         feed_dict = {self.x: x, self.x_lc: x_lc, self.xch: xch, self.lengths: lengths, self.pkeep: pkeep}
         if y is not None:
             feed_dict[self.y] = y

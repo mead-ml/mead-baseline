@@ -50,7 +50,6 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
         """Transform a `batch_dict` into something usable in this model
 
         :param batch_dict: (``dict``) A dictionary containing all inputs to the embeddings for this model
-        :param do_dropout: (``bool``) Should we do dropout.  Defaults to False
         :return:
         """
         example_dict = dict({})
