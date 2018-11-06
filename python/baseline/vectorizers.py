@@ -67,7 +67,16 @@ class Token1DVectorizer(AbstractVectorizer):
         super(Token1DVectorizer, self).__init__(kwargs.get('transform_fn'))
         self.time_reverse = kwargs.get('rev', False)
         self.mxlen = kwargs.get('mxlen', -1)
+        self.min_f = kwargs.get('min_f', -1)
         self.max_seen = 0
+
+    @property
+    def min_f(self):
+        return self._min_f
+
+    @min_f.setter
+    def min_f(self, value):
+        self._min_f = value
 
     def count(self, tokens):
         seen = 0
@@ -108,6 +117,10 @@ class GOVectorizer(Vectorizer):
         self.vectorizer = vectorizer
         if self.vectorizer.mxlen != -1:
             self.vectorizer.mxlen -= 1
+
+    @property
+    def min_f(self):
+        return self.vectorizer.min_f
 
     def iterable(self, tokens):
         return self.vectorizer.iterable(['<GO>'] + tokens)
@@ -170,6 +183,7 @@ class Char2DVectorizer(AbstractCharVectorizer):
     def __init__(self, **kwargs):
         super(Char2DVectorizer, self).__init__(kwargs.get('transform_fn'))
         self.mxlen = kwargs.get('mxlen', -1)
+        self.min_f = kwargs.get('min_f', -1)
         self.mxwlen = kwargs.get('mxwlen', -1)
         self.max_seen_tok = 0
         self.max_seen_char = 0
@@ -236,6 +250,7 @@ class Char1DVectorizer(AbstractCharVectorizer):
         super(Char1DVectorizer, self).__init__(kwargs.get('transform_fn'))
         print(kwargs)
         self.mxlen = kwargs.get('mxlen', -1)
+        self.min_f = kwargs.get('min_f', -1)
         self.time_reverse = kwargs.get('rev', False)
         self.max_seen_tok = 0
 
