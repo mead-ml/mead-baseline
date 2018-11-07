@@ -85,7 +85,7 @@ class Seq2SeqParallelModel(EncoderDecoderModel):
         sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False))
         with tf.device(tf.DeviceSpec(device_type="CPU")):
             self.inference = create_fn(src_embeddings, tgt_embedding, sess=sess,
-                                       mx_tgt_len=self.mx_tgt_len, id=1, **kwargs)
+                                       mx_tgt_len=self.mx_tgt_len, id=0, **kwargs)
         for i in range(gpus):
             with tf.device(tf.DeviceSpec(device_type='GPU', device_index=i)):
 
