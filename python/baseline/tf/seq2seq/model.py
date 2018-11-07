@@ -130,10 +130,8 @@ class Seq2SeqParallelModel(EncoderDecoderModel):
 
         feed_dict = new_placeholder_dict(train)
 
-        tgt = batch_dict.get['tgt']
         tgt_len = batch_dict['tgt_len']
         mx_tgt_len = np.max(tgt_len)
-        feed_dict["tgt:0"] = tgt
         feed_dict[self.tgt_len] = tgt_len
         feed_dict[self.mx_tgt_len] = mx_tgt_len
 
@@ -210,14 +208,20 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
         model.saver.restore(model.sess, basename)
         return model
 
-    def embed(self):
-        all_embeddings_src = []
-        for embedding in self.src_embeddings.values():
-            embeddings_out = embedding.encode()
-            all_embeddings_src.append(embeddings_out)
+    def embed(self, **kwargs):
+        """This method performs "embedding" of the inputs.  The base method here then concatenates along depth
+        dimension to form word embeddings
 
-        embed_in = tf.concat(values=all_embeddings_src, axis=-1)
-        return embed_in
+        :return: A 3-d vector where the last dimension is the concatenated dimensions of all embeddings
+        """
+        all_embeddings_src = []
+        for k, embedding in self.src_embeddings.items():
+            x = kwargs.get(k, None)
+            embeddings_out = embedding.encode(x)
+            all_embeddings_src.append(embeddings_out)
+        word_embeddings = tf.concat(values=all_embeddings_src, axis=-1)
+        return word_embeddings
+
 
     @classmethod
     def create(cls, src_embeddings, tgt_embedding, **kwargs):
