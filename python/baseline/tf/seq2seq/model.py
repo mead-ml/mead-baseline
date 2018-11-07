@@ -79,7 +79,6 @@ class Seq2SeqParallelModel(EncoderDecoderModel):
         split_operations['tgt_len'] = tgt_len_splits
 
         self.mx_tgt_len = kwargs.get('mx_tgt_len', tf.placeholder(tf.int32, name="mx_tgt_len"))
-        self.pkeep = kwargs.get('pkeep', tf.placeholder_with_default(1.0, (), name="pkeep"))
         self.pdrop_value = kwargs.get('dropout', 0.5)
 
         losses = []
@@ -91,6 +90,7 @@ class Seq2SeqParallelModel(EncoderDecoderModel):
             with tf.device(tf.DeviceSpec(device_type='GPU', device_index=i)):
 
                 kwargs_single = copy.deepcopy(kwargs)
+                kwargs_single['mx_tgt_len'] = self.mx_tgt_len
                 kwargs_single['sess'] = sess
                 kwargs_single['id'] = i + 1
                 for k, split_operation in split_operations.items():
