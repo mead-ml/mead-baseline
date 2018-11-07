@@ -68,4 +68,18 @@ def test_num_lines():
         iter_mock.__iter__.return_value = range(gold)
         open_patch.return_value = file_mock
         lines = num_lines(file_name)
+        assert lines == gold
         open_patch.assert_called_once_with(file_name, encoding='utf-8', mode='r')
+
+
+def test_num_lines_closes_file():
+    gold = random.randint(0, 100)
+    file_name = "replace with a random name"
+    with patch('baseline.reader.codecs.open') as open_patch:
+        file_mock = MagicMock()
+        iter_mock = MagicMock()
+        file_mock.__enter__.return_value = iter_mock
+        iter_mock.__iter__.return_value = range(gold)
+        open_patch.return_value = file_mock
+        lines = num_lines(file_name)
+        file_mock.__exit__.assert_called_once()
