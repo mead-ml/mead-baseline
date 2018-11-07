@@ -103,7 +103,7 @@ class Seq2SeqParallelModel(EncoderDecoderModel):
         self.loss = tf.reduce_mean(tf.stack(losses))
 
         self.sess = sess
-        self.best = self.inference.best
+        ##self.best = self.inference.best
 
     def create_loss(self):
         return self.loss
@@ -130,10 +130,8 @@ class Seq2SeqParallelModel(EncoderDecoderModel):
 
         feed_dict = new_placeholder_dict(train)
 
-        tgt_len = batch_dict['tgt_len']
-        mx_tgt_len = np.max(tgt_len)
-        feed_dict[self.tgt_len] = tgt_len
-        feed_dict[self.mx_tgt_len] = mx_tgt_len
+        feed_dict[self.tgt_len] = batch_dict['tgt_lengths']
+        feed_dict[self.mx_tgt_len] = np.max(batch_dict['tgt_lengths'])
 
         for key in self.parallel_params.keys():
             feed_dict["{}_parallel:0".format(key)] = batch_dict[key]
