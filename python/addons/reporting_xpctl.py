@@ -3,13 +3,13 @@ from __future__ import print_function
 import os
 import getpass
 import socket
-from baseline.reporting import ReportingHook
+from baseline.reporting import EpochReportingHook
 from mead.utils import read_config_file_or_json
 from xpctl.core import ExperimentRepo
 from baseline.reporting import register_reporting
 
 @register_reporting(name='xpctl')
-class XPCtlReporting(ReportingHook):
+class XPCtlReporting(EpochReportingHook):
     def __init__(self, **kwargs):
         super(XPCtlReporting, self).__init__(**kwargs)
         # throw exception if the next three can't be read from kwargs
@@ -27,7 +27,7 @@ class XPCtlReporting(ReportingHook):
         self.repo = ExperimentRepo().create_repo(**self.cred)
         self.log = []
 
-    def step(self, metrics, tick, phase, tick_type=None, **kwargs):
+    def _step(self, metrics, tick, phase, tick_type, **kwargs):
         """Write intermediate results to a logging memory object that ll be pushed to the xpctl repo
 
         :param metrics: A map of metrics to scores
@@ -36,11 +36,6 @@ class XPCtlReporting(ReportingHook):
         :param tick_type: The resolution of tick (`STEP`, `EPOCH`)
         :return:
         """
-        if tick_type is None:
-            tick_type = 'STEP'
-            if phase in ['Valid', 'Test']:
-                tick_type = 'EPOCH'
-
         msg = {'tick_type': tick_type, 'tick': tick, 'phase': phase}
         for k, v in metrics.items():
             msg[k] = v

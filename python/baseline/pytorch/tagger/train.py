@@ -1,7 +1,9 @@
-from baseline.pytorch.torchy import *
-from baseline.utils import listify, to_spans, f_score, revlut, get_model_file, write_sentence_conll
+import six
+import time
 from baseline.progress import create_progress_bar
+from baseline.utils import listify, to_spans, f_score, revlut, get_model_file, write_sentence_conll
 from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
+from baseline.pytorch.torchy import *
 from baseline.pytorch.optz import OptimizerManager
 
 
@@ -23,6 +25,11 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
         self.optimizer = OptimizerManager(self.model, **kwargs)
         if self.gpu:
             self.model = model.to_gpu()
+        self.nsteps = kwargs.get('nsteps', six.MAXSIZE)
+
+    @staticmethod
+    def _get_batchsz(batch_dict):
+        return batch_dict['y'].shape[0]
 
     def process_output(self, guess, truth, sentence_lengths, ids, handle=None, txts=None):
 
@@ -75,7 +82,7 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
         if conll_output is not None and txts is not None:
             handle = open(conll_output, "w")
         pg = create_progress_bar(steps)
-        for batch_dict in ts:
+        for batch_dict in pg(ts):
 
             inputs = self.model.make_input(batch_dict)
             y = inputs.pop('y')
@@ -88,34 +95,42 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
             total_gold_count += golds
             total_guess_count += guesses
             total_overlap_count += overlaps
-            pg.update()
 
-        pg.done()
         total_acc = total_correct / float(total_sum)
         # Only show the fscore if requested
         metrics['f1'] = f_score(total_overlap_count, total_gold_count, total_guess_count)
         metrics['acc'] = total_acc
         return metrics
 
-    def _train(self, ts):
+    def _train(self, ts, **kwargs):
         self.model.train()
-        total_loss = 0
-        metrics = {}
+        reporting_fns = kwargs.get('reporting_fns', [])
+        epoch_loss = 0
+        epoch_norm = 0
         steps = len(ts)
         pg = create_progress_bar(steps)
-        for batch_dict in ts:
-
+        for batch_dict in pg(ts):
             inputs = self.model.make_input(batch_dict)
             self.optimizer.zero_grad()
             loss = self.model.compute_loss(inputs)
-            total_loss += loss.item()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.clip)
             self.optimizer.step()
-            pg.update()
+            bsz = self._get_batchsz(batch_dict)
+            report_loss = loss.item() * bsz
+            epoch_loss += report_loss
+            epoch_norm += bsz
+            self.nstep_agg += report_loss
+            self.nstep_div += bsz
+            if (self.optimizer.global_step + 1) % self.nsteps == 0:
+                metrics = self.calc_metrics(self.nstep_agg, self.nstep_div)
+                self.report(
+                    self.optimizer.global_step + 1, metrics, self.nstep_start,
+                    'Train', 'STEP', reporting_fns
+                )
+                self.reset_nstep()
 
-        pg.done()
-        metrics['avg_loss'] = float(total_loss)/steps
+        metrics = self.calc_metrics(epoch_loss, epoch_norm)
         return metrics
 
 

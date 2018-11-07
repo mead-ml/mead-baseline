@@ -1,4 +1,5 @@
-{   "version":2,
+{
+    "version":2,
     "basedir":"ptb-med",
     "task": "lm",
     "basedir": "ptb-med",
@@ -7,31 +8,22 @@
     "nbptt": 35,
     "preproc": {
     },
-    "features": [{
-        "name": "word",
-        "vectorizer": {
-          "type":"token1d",
-          "fields":"text"
-        },
-        "embeddings": {"label":"w2v-gn"}
-   }],
+    "features": [
+        {
+            "name": "word",
+            "vectorizer": {
+                "type":"token1d",
+                "fields":"text"
+            },
+            "embeddings": {"label":"w2v-gn"}
+        }
+    ],
     "backend": "tensorflow",
     "dataset": "ptb",
     "loader": {
         "reader_type": "default",
         "tgt_key": "word"
     },
-    "features": [
-        {
-            "name": "word",
-            "vectorizer": {
-                "type": "token1d",
-                "fields": "text"
-            },
-            "embeddings": {"label": "w2v-gn"}
-        }
-
-    ],
     "model": {
         "model_type": "default",
         "hsz": 650,
@@ -43,13 +35,14 @@
     "train": {
         "epochs": 39,
         "decay_rate": 1.2,
-        "patience": 40000,
+        "patience": 20,
         "optim": "sgd",
         "start_decay_epoch": 6,
         "lr_scheduler_type": "zaremba",
-        "eta": 1.0,
+        "eta": 35.0,
         "mom": 0.0,
+        "nsteps": 500,
         "do_early_stopping": true,
-        "clip": 5.0
+        "clip": 0.25
     }
 }

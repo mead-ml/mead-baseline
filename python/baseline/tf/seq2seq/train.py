@@ -6,8 +6,6 @@ import tensorflow as tf
 from baseline.tf.optz import optimizer
 from baseline.utils import listify, get_model_file
 from baseline.train import Trainer, create_trainer, register_trainer, register_training_func
-import time
-import os
 
 
 @register_trainer(task='seq2seq', name='default')
@@ -21,6 +19,7 @@ class Seq2SeqTrainerTf(Trainer):
         self.model = model
         self.global_step, self.train_op = optimizer(self.loss, colocate_gradients_with_ops=True, **kwargs)
         self.log = logging.getLogger('baseline.timing')
+        self.nsteps = kwargs.get('nsteps', 500)
 
     def checkpoint(self):
         self.model.saver.save(self.model.sess, "./tf-seq2seq-%d/seq2seq" % os.getpid(), global_step=self.global_step)
@@ -33,37 +32,46 @@ class Seq2SeqTrainerTf(Trainer):
     def prepare(self, saver):
         self.model.set_saver(saver)
 
+    def _num_toks(self, lens):
+        return np.sum(lens)
+
+    def calc_metrics(self, agg, norm):
+        metrics = super(Seq2SeqTrainerTf, self).calc_metrics(agg, norm)
+        metrics['perplexity'] = np.exp(metrics['avg_loss'])
+        return metrics
+
     def train(self, ts, reporting_fns):
-        total_loss = 0
-        steps = 0
-        metrics = {}
-        duration = 0
+        epoch_loss = 0
+        epoch_toks = 0
 
         start = time.time()
+        self.nstep_start = start
         for batch_dict in ts:
-            start_time = time.time()
-            steps += 1
             feed_dict = self.model.make_input(batch_dict, True)
             _, global_step, lossv = self.sess.run([self.train_op, self.global_step, self.loss], feed_dict=feed_dict)
 
-            total_loss += lossv
-            duration += time.time() - start_time
+            toks = self._num_toks(batch_dict['tgt_lengths'])
+            report_loss = lossv * toks
 
-            if steps % 500 == 0:
-                print('Step time (%.3f sec)' % (duration / 500.))
-                duration = 0
-                metrics['avg_loss'] = total_loss / steps
-                metrics['perplexity'] = np.exp(total_loss / steps)
-                for reporting in reporting_fns:
-                    reporting(metrics, global_step.item(), 'Train')
+            epoch_loss += report_loss
+            epoch_toks += toks
+            self.nstep_agg += report_loss
+            self.nstep_div += toks
 
-        assert(steps == len(ts))
+            if (global_step + 1) % self.nsteps == 0:
+                metrics = self.calc_metrics(self.nstep_agg, self.nstep_div)
+                self.report(
+                    global_step + 1, metrics, self.nstep_start,
+                    'Train', 'STEP', reporting_fns
+                )
+                self.reset_nstep()
 
-        self.log.debug({'phase': 'Train', 'time': time.time() - start})
-        metrics['avg_loss'] = total_loss / steps
-        metrics['perplexity'] = np.exp(total_loss / steps)
-        for reporting in reporting_fns:
-            reporting(metrics, global_step.item(), 'Train')
+        metrics = self.calc_metrics(epoch_loss, epoch_toks)
+        self.train_epochs += 1
+        self.report(
+            self.train_epochs, metrics, start,
+            'Train', 'EPOCH', reporting_fns
+        )
         return metrics
 
     def test(self, vs, reporting_fns, phase='Valid'):
@@ -73,24 +81,23 @@ class Seq2SeqTrainerTf(Trainer):
             epochs = self.valid_epochs
 
         total_loss = 0
-        steps = len(vs)
+        total_toks = 0
         metrics = {}
 
         start = time.time()
         for batch_dict in vs:
 
             feed_dict = self.model.make_input(batch_dict)
-            vals = self.sess.run([self.test_loss], feed_dict=feed_dict)
-            lossv = vals[0]
-            total_loss += lossv
+            lossv = self.model.sess.run(self.test_loss, feed_dict=feed_dict)
+            toks = self._num_toks(batch_dict['tgt_lengths'])
+            total_loss += lossv * toks
+            total_toks += toks
 
-        self.log.debug({'phase': phase, 'time': time.time() - start})
-        avg_loss = total_loss/steps
-        metrics['avg_loss'] = avg_loss
-        metrics['perplexity'] = np.exp(avg_loss)
-        for reporting in reporting_fns:
-            reporting(metrics, epochs, phase)
-        return metrics
+        metrics = self.calc_metrics(total_loss, total_toks)
+        self.report(
+            epochs, metrics, start,
+            phase, 'EPOCH', reporting_fns
+        )
 
 
 @register_training_func('seq2seq')
@@ -150,4 +157,3 @@ def fit(model, ts, vs, es=None, **kwargs):
 
         trainer.recover_last_checkpoint()
         trainer.test(es, reporting_fns, phase='Test')
-

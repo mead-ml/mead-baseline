@@ -10,58 +10,73 @@ from baseline.dy.dynety import *
 
 @register_trainer(task='lm', name='default')
 class LanguageModelTrainerDynet(Trainer):
+
     def __init__(self, model, **kwargs):
         super(LanguageModelTrainerDynet, self).__init__()
         self.model = model
         self.optimizer = OptimizerManager(model, **kwargs)
-        self.valid_epochs = 0
         self.log = logging.getLogger('baseline.timing')
+        self.nsteps = kwargs.get('nsteps', 500)
 
     @staticmethod
     def _loss(outputs, labels):
         losses = [dy.pickneglogsoftmax_batch(out, label) for out, label in zip(outputs, labels)]
-        loss = dy.mean_batches(dy.esum(losses))
+        loss = dy.mean_batches(dy.average(losses))
         return loss
+
+    @staticmethod
+    def _num_toks(batch_dict):
+        return np.prod(batch_dict['y'].shape)
+
+    def calc_metrics(self, agg, norm):
+        metrics = super(LanguageModelTrainerDynet, self).calc_metrics(agg, norm)
+        metrics['perplexity'] = np.exp(metrics['avg_loss'])
+        return metrics
 
     def train(self, loader, reporting_fns, **kwargs):
         metrics = {}
-        total_loss = 0.0
-        iters = 0
+        epoch_loss = 0.0
+        epoch_toks = 0
         initial_state = None
         start = time.time()
+        self.nstep_start = start
         for batch_dict in loader:
             dy.renew_cg()
             inputs = self.model.make_input(batch_dict)
             y = inputs.pop('y')
             output, initial_state = self.model.forward(inputs, initial_state)
             loss = self._loss(output, y)
-            loss_val = loss.npvalue().item()
-            total_loss += loss_val
+            toks = self._num_toks(batch_dict)
+            loss_val = loss.npvalue().item() * toks
+            epoch_loss += loss_val
+            epoch_toks += toks
+            self.nstep_agg += loss_val
+            self.nstep_div += toks
             if initial_state is not None:
                 initial_state = [x.npvalue() for x in initial_state]
             loss.backward()
             self.optimizer.update()
 
-            iters += len(y)
+            if (self.optimizer.global_step + 1) % self.nsteps == 0:
+                metrics = self.calc_metrics(self.nstep_agg, self.nstep_div)
+                self.report(
+                    self.optimizer.global_step + 1, metrics, self.nstep_start,
+                    'Train', 'STEP', reporting_fns
+                )
+                self.reset_nstep()
 
-            if self.optimizer.global_step > 0 and self.optimizer.global_step % 500 == 0:
-                print(total_loss, iters)
-                metrics['avg_loss'] = total_loss / iters
-                metrics['perplexity'] = np.exp(total_loss / iters)
-                for reporting in reporting_fns:
-                    reporting(metrics, self.optimizer.global_step, 'Train')
-
-        self.log.debug({'phase': 'Train', 'time': time.time() - start})
-        metrics['avg_loss'] = total_loss / iters
-        metrics['perplexity'] = np.exp(total_loss / iters)
-        for reporting in reporting_fns:
-            reporting(metrics, self.optimizer.global_step, 'Train')
+        metrics = self.calc_metrics(epoch_loss, epoch_toks)
+        self.train_epochs += 1
+        self.report(
+            self.train_epochs, metrics, start,
+            'Train', 'EPOCH', reporting_fns
+        )
         return metrics
 
     def test(self, loader, reporting_fns, phase, **kwargs):
         metrics = {}
         total_loss = 0.0
-        iters = 0
+        total_toks = 0
         initial_state = None
         start = time.time()
         for batch_dict in loader:
@@ -70,23 +85,23 @@ class LanguageModelTrainerDynet(Trainer):
             y = inputs.pop('y')
             output, initial_state = self.model.forward(inputs, initial_state, train=False)
             loss = self._loss(output, y)
-            loss_val = loss.npvalue().item()
+            toks = self._num_toks(batch_dict)
+            loss_val = loss.npvalue().item() * toks
             total_loss += loss_val
+            total_toks += toks
             if initial_state is not None:
                 initial_state = [x.npvalue() for x in initial_state]
-            iters += len(y)
 
+        epochs = 0
         if phase == 'Valid':
             self.valid_epochs += 1
-            output = self.valid_epochs
-        else:
-            output = 0
+            epochs = self.valid_epochs
 
-        self.log.debug({'phase': phase, 'time': time.time() - start})
-        metrics['avg_loss'] = total_loss / iters
-        metrics['perplexity'] = np.exp(total_loss / iters)
-        for reporting in reporting_fns:
-            reporting(metrics, output, phase)
+        metrics = self.calc_metrics(total_loss, total_toks)
+        self.report(
+            epochs, metrics, start,
+            phase, 'EPOCH', reporting_fns
+        )
         return metrics
 
 

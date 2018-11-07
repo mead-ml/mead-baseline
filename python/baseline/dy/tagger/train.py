@@ -1,9 +1,11 @@
+import six
+import time
 import dynet as dy
 import numpy as np
-from baseline.utils import listify, get_model_file, revlut, to_spans, f_score, write_sentence_conll
-from baseline.progress import create_progress_bar
-from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
 from baseline.dy.optz import *
+from baseline.progress import create_progress_bar
+from baseline.utils import listify, get_model_file, revlut, to_spans, f_score, write_sentence_conll
+from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
 
 
 @register_trainer(task='tagger', name='default')
@@ -20,10 +22,7 @@ class TaggerTrainerDyNet(EpochReportingTrainer):
         self.autobatchsz = kwargs.get('autobatchsz')
         self.labels = model.labels
         self.optimizer = OptimizerManager(model, **kwargs)
-
-    def _update(self, loss):
-        loss.backward()
-        self.optimizer.update()
+        self.nsteps = kwargs.get('nsteps', six.MAXSIZE)
 
     # Guess is a list over time
     def process_output(self, guess, truth, sentence_lengths, ids, handle=None, txts=None):
@@ -61,7 +60,6 @@ class TaggerTrainerDyNet(EpochReportingTrainer):
         return correct_labels, total_labels, overlap_count, gold_count, guess_count
 
 
-
     def _test(self, ts, **kwargs):
 
         self.model.train = False
@@ -78,7 +76,7 @@ class TaggerTrainerDyNet(EpochReportingTrainer):
         if conll_output is not None and txts is not None:
             handle = open(conll_output, "w")
         pg = create_progress_bar(steps)
-        for batch_dict in ts:
+        for batch_dict in pg(ts):
 
             lengths = batch_dict[self.model.lengths_key]
             ids = batch_dict['ids']
@@ -90,23 +88,29 @@ class TaggerTrainerDyNet(EpochReportingTrainer):
             total_gold_count += golds
             total_guess_count += guesses
             total_overlap_count += overlaps
-            pg.update()
 
-        pg.done()
         total_acc = total_correct / float(total_sum)
         # Only show the fscore if requested
         metrics['f1'] = f_score(total_overlap_count, total_gold_count, total_guess_count)
         metrics['acc'] = total_acc
         return metrics
 
-    def _train(self, ts):
+    @staticmethod
+    def _get_batchsz(y):
+        # Because we only support autobatch this is just 1
+        return 1
+
+    def _train(self, ts, **kwargs):
         self.model.train = True
-        total_loss = 0
+        reporting_fns = kwargs.get('reporting_fns', [])
+        epoch_loss = 0
+        epoch_norm = 0
+        auto_norm = 0
         metrics = {}
         steps = len(ts)
-        last = steps - 1
+        last = steps
         losses = []
-        i = 0
+        i = 1
         pg = create_progress_bar(steps)
         dy.renew_cg()
         for batch_dict in pg(ts):
@@ -114,27 +118,55 @@ class TaggerTrainerDyNet(EpochReportingTrainer):
             inputs = self.model.make_input(batch_dict)
             y = inputs.pop('y')
             pred = self.model.compute_unaries(inputs)
+            bsz = self._get_batchsz(y)
             if self.autobatchsz is None:
                 losses = self.model.loss(pred, y)
-                loss = dy.sum_batches(losses) / len(losses)
-                total_loss += loss.npvalue().item()
+                loss = dy.mean_batches(losses)
+                lossv = loss.npvalue().item()
+                report_loss = lossv * bsz
+                epoch_loss += report_loss
+                epoch_norm += bsz
+                self.nstep_agg += report_loss
+                self.nstep_div += bsz
                 loss.backward()
                 self.optimizer.update()
                 dy.renew_cg()
+                # TODO: Abstract this somewhat, or else once we have a batched tagger have 2 trainers
+                if (self.optimizer.global_step + 1) % self.nsteps == 0:
+                    metrics = self.calc_metrics(self.nstep_agg, self.nstep_div)
+                    self.report(
+                        self.optimizer.global_step + 1, metrics, self.nstep_start,
+                        'Train', 'STEP', reporting_fns
+                    )
+                    self.reset_nstep()
             else:
                 loss = self.model.loss(pred, y)
                 losses.append(loss)
+                self.nstep_div += bsz
+                epoch_norm += bsz
+                auto_norm += bsz
 
                 if i % self.autobatchsz == 0 or i == last:
-                    loss = dy.esum(losses) / len(losses)
-                    total_loss += loss.npvalue().item()
+                    loss = dy.average(losses)
+                    lossv = loss.npvalue().item()
                     loss.backward()
                     self.optimizer.update()
+                    report_loss = lossv * auto_norm
+                    epoch_loss += report_loss
+                    self.nstep_agg += report_loss
                     losses = []
                     dy.renew_cg()
+                    if (self.optimizer.global_step + 1) % self.nsteps == 0:
+                        metrics = self.calc_metrics(self.nstep_agg, self.nstep_div)
+                        self.report(
+                            self.optimizer.global_step + 1, metrics, self.nstep_start,
+                            'Train', 'STEP', reporting_fns
+                        )
+                        self.reset_nstep()
+                    auto_norm = 0
             i += 1
 
-        metrics['avg_loss'] = total_loss / float(steps)
+        metrics = self.calc_metrics(epoch_loss, epoch_norm)
         return metrics
 
 

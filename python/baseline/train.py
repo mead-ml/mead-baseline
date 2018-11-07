@@ -179,9 +179,33 @@ def create_lr_scheduler(**kwargs):
 class Trainer(object):
 
     def __init__(self):
+        super(Trainer, self).__init__()
         self.train_epochs = 0
         self.valid_epochs = 0
-        pass
+        self.nsteps = None
+        self.nstep_agg = 0
+        self.nstep_div = 0
+        self.nstep_start = 0
+        self.log = logging.getLogger('baseline.timing')
+
+    def report(self, step, metrics, start, phase, tt, reporting_fns):
+        elapsed = time.time() - start
+        for reporting in reporting_fns:
+            reporting(metrics, step, phase, tt)
+        self.log.debug({
+            'tick_type': tt, 'tick': step, 'phase': phase,
+            'time': elapsed / float(self.nsteps),
+            'step/sec': self.nsteps / float(elapsed)
+        })
+
+    def reset_nstep(self):
+        self.nstep_agg = 0
+        self.nstep_div = 0
+        self.nstep_start = time.time()
+
+    @staticmethod
+    def calc_metrics(agg, norm):
+        return {'avg_loss': agg / float(norm)}
 
     def test(self, loader, reporting_fns):
         pass
@@ -195,31 +219,29 @@ class EpochReportingTrainer(Trainer):
 
     def __init__(self):
         super(EpochReportingTrainer, self).__init__()
-        self.log = logging.getLogger('baseline.timing')
 
     def train(self, ts, reporting_fns):
         start_time = time.time()
-        metrics = self._train(ts)
-        duration = time.time() - start_time
-        self.log.debug({'phase': 'Train', 'time': duration})
+        self.nstep_start = start_time
+        metrics = self._train(ts, reporting_fns=reporting_fns)
         self.train_epochs += 1
-
-        for reporting in reporting_fns:
-            reporting(metrics, self.train_epochs * len(ts), 'Train')
+        self.report(
+            self.train_epochs, metrics, start_time,
+            'Train', 'EPOCH', reporting_fns
+        )
         return metrics
 
     def test(self, vs, reporting_fns, phase='Valid', **kwargs):
         start_time = time.time()
         metrics = self._test(vs, **kwargs)
-        duration = time.time() - start_time
-        self.log.debug({'phase': phase, 'time': duration})
         epochs = 0
         if phase == 'Valid':
             self.valid_epochs += 1
             epochs = self.valid_epochs
-
-        for reporting in reporting_fns:
-            reporting(metrics, epochs, phase)
+        self.report(
+            epochs, metrics, start_time,
+            phase, 'EPOCH', reporting_fns
+        )
         return metrics
 
     def _train(self, ts):

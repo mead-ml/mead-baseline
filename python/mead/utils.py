@@ -140,14 +140,16 @@ KEYS = {
     ('train', 'verbose'),
     ('train', 'model_base'),
     ('train', 'model_zip'),
-    ('test_batchsz')
+    ('train', 'nsteps'),
+    ('test_batchsz'),
+    ('basedir'),
 }
 
 
 @exporter
 def remove_extra_keys(config, keys=KEYS):
     """Remove config items that don't effect the model.
-    When base most things off of the sha1 hash of the model configs but there
+    We base most things off of the sha1 hash of the model configs but there
     is a problem. Some things in the config file don't effect the model such
     as the name of the `conll_output` file or if you are using `visdom`
     reporting. This strips out these kind of things so that as long as the model
@@ -155,7 +157,7 @@ def remove_extra_keys(config, keys=KEYS):
     :param config: dict, The json data.
     :param keys: Set[Tuple[str]], The keys to remove.
     :returns:
-        dict, The data with certain keys removed.
+        dict, The config with certain keys removed.
     """
     c = deepcopy(config)
     for key in keys:

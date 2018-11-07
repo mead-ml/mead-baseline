@@ -1,7 +1,6 @@
 import time
 import logging
 import torch
-
 import numpy as np
 from baseline.progress import create_progress_bar
 from baseline.utils import listify, get_model_file
@@ -24,15 +23,20 @@ class Seq2SeqTrainerPyTorch(Trainer):
             self.model = torch.nn.DataParallel(model).cuda()
             self.crit.cuda()
         self.log = logging.getLogger('baseline.timing')
+        self.nsteps = kwargs.get('nsteps', 500)
 
-    def _total(self, tgt):
-        tgtt = tgt.data.long()
-        return torch.sum(tgtt.ne(0)).item()
+    @staticmethod
+    def _num_toks(tgt_lens):
+        return np.sum(tgt_lens)
+
+    def calc_metrics(self, agg, norm):
+        metrics = super(Seq2SeqTrainerPyTorch, self).calc_metrics(agg, norm)
+        metrics['perplexity'] = np.exp(metrics['avg_loss'])
+        return metrics
 
     def test(self, vs, reporting_fns, phase):
         self.model.eval()
-        metrics = {}
-        total_loss = total = 0
+        total_loss = total_toks = 0
         steps = len(vs)
         epochs = 0
         if phase == 'Valid':
@@ -41,65 +45,64 @@ class Seq2SeqTrainerPyTorch(Trainer):
 
         start = time.time()
         pg = create_progress_bar(steps)
-        for batch_dict in vs:
-            input = self._input(batch_dict)
-            tgt = input['tgt']
-            pred = self.model(input)
+        for batch_dict in pg(vs):
+            input_ = self._input(batch_dict)
+            tgt = input_['tgt']
+            tgt_lens = batch_dict['tgt_lengths']
+            pred = self.model(input_)
             loss = self.crit(pred, tgt)
-            total_loss += loss.item()
-            total += self._total(tgt)
-            pg.update()
-        pg.done()
+            toks = self._num_toks(tgt_lens)
+            total_loss += loss.item() * toks
+            total_toks += toks
 
-        self.log.debug({'phase': phase, 'time': time.time() - start})
-        avg_loss = float(total_loss)/total
-        metrics['avg_loss'] = avg_loss
-        metrics['perplexity'] = np.exp(avg_loss)
-        for reporting in reporting_fns:
-            reporting(metrics, epochs, phase)
+        metrics = self.calc_metrics(total_loss, total_toks)
+        self.report(
+            epochs, metrics, start,
+            phase, 'EPOCH', reporting_fns
+        )
         return metrics
 
     def train(self, ts, reporting_fns):
         self.model.train()
 
-        metrics = {}
-
-        total_loss = total = 0
-        duration = 0
+        epoch_loss = 0
+        epoch_toks = 0
 
         start = time.time()
+        self.nstep_start = start
         for batch_dict in ts:
 
             start_time = time.time()
             self.optimizer.zero_grad()
-            input = self._input(batch_dict)
-            tgt = input['tgt']
-            pred = self.model(input)
+            input_ = self._input(batch_dict)
+            tgt = input_['tgt']
+            pred = self.model(input_)
             loss = self.crit(pred, tgt)
-            total_loss += loss.item()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.clip)
-            total += self._total(tgt)
             self.optimizer.step()
-            duration += time.time() - start_time
+            tgt_lens = batch_dict['tgt_lengths']
+            tok_count = self._num_toks(tgt_lens)
+            reporting_loss = loss.item() * tok_count
+            epoch_loss += reporting_loss
+            epoch_toks += tok_count
+            self.nstep_agg += reporting_loss
+            self.nstep_div += tok_count
 
-            if self.optimizer.global_step > 0 and self.optimizer.global_step % 500 == 0:
-                print('Step time (%.3f sec)' % (duration / 500.))
-                duration = 0
-                avg_loss = float(total_loss)/total
-                metrics['avg_loss'] = avg_loss
-                metrics['perplexity'] = np.exp(avg_loss)
-                for reporting in reporting_fns:
-                    reporting(metrics, self.optimizer.global_step, 'Train')
+            if (self.optimizer.global_step + 1) % self.nsteps == 0:
+                metrics = self.calc_metrics(self.nstep_agg, self.nstep_div)
+                self.report(
+                    self.optimizer.global_step + 1, metrics, self.nstep_start,
+                    'Train', 'STEP', reporting_fns
+                )
+                self.reset_nstep()
 
-        self.log.debug({'phase': 'Train', 'time': time.time() - start})
+        metrics = self.calc_metrics(epoch_loss, epoch_toks)
         self.train_epochs += 1
-        avg_loss = float(total_loss)/total
-        metrics['avg_loss'] = avg_loss
-        metrics['perplexity'] = np.exp(avg_loss)
-        for reporting in reporting_fns:
-            reporting(metrics, self.optimizer.global_step, 'Train')
-
+        self.report(
+            self.train_epochs, metrics, start,
+            'Train', 'EPOCH', reporting_fns
+        )
         return metrics
 
 

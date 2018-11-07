@@ -1,4 +1,6 @@
+import six
 import os
+import time
 import tensorflow as tf
 from baseline.confusion import ConfusionMatrix
 from baseline.progress import create_progress_bar
@@ -19,6 +21,7 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         self.test_loss = model.create_test_loss()
         self.model = model
         self.global_step, train_op = optimizer(self.loss, colocate_gradients_with_ops=True, **kwargs)
+        self.nsteps = kwargs.get('nsteps', six.MAXSIZE)
         decay = kwargs.get('ema_decay', None)
         if decay is not None:
             self.ema = True
@@ -29,23 +32,39 @@ class ClassifyTrainerTf(EpochReportingTrainer):
             self.ema = False
             self.train_op = train_op
 
-    def _train(self, loader):
+    @staticmethod
+    def _get_batchsz(batch_dict):
+        return len(batch_dict['y'])
+
+    def _train(self, loader, **kwargs):
 
         if self.ema:
             self.sess.run(self.ema_restore)
 
-        total_loss = 0
+        reporting_fns = kwargs.get('reporting_fns', [])
+        epoch_loss = 0
+        epoch_div = 0
         steps = len(loader)
         pg = create_progress_bar(steps)
-        for batch_dict in loader:
+        for batch_dict in pg(loader):
             feed_dict = self.model.make_input(batch_dict, True)
             _, step, lossv = self.sess.run([self.train_op, self.global_step, self.loss], feed_dict=feed_dict)
-            total_loss += lossv
-            pg.update()
+            batchsz = self._get_batchsz(batch_dict)
+            report_lossv = lossv * batchsz
+            epoch_loss += report_lossv
+            epoch_div += batchsz
+            self.nstep_agg += report_lossv
+            self.nstep_div += batchsz
 
-        pg.done()
-        metrics = {}
-        metrics['avg_loss'] = total_loss/float(steps)
+            if (step + 1) % self.nsteps == 0:
+                metrics = self.calc_metrics(self.nstep_agg, self.nstep_div)
+                self.report(
+                    step + 1, metrics, self.nstep_start,
+                    'Train', 'STEP', reporting_fns
+                )
+                self.reset_nstep()
+
+        metrics = self.calc_metrics(epoch_loss, epoch_div)
         return metrics
 
     def _test(self, loader, **kwargs):
@@ -56,20 +75,21 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         cm = ConfusionMatrix(self.model.labels)
         steps = len(loader)
         total_loss = 0
+        total_norm = 0
         verbose = kwargs.get("verbose", None)
 
         pg = create_progress_bar(steps)
-        for batch_dict in loader:
+        for batch_dict in pg(loader):
             y = batch_dict['y']
             feed_dict = self.model.make_input(batch_dict)
             guess, lossv = self.sess.run([self.model.best, self.test_loss], feed_dict=feed_dict)
-            total_loss += lossv
+            batchsz = self._get_batchsz(batch_dict)
+            total_loss += lossv * batchsz
+            total_norm += batchsz
             cm.add_batch(y, guess)
-            pg.update()
 
-        pg.done()
         metrics = cm.get_all_metrics()
-        metrics['avg_loss'] = total_loss/float(steps)
+        metrics['avg_loss'] = total_loss / float(total_norm)
         verbose_output(verbose, cm)
 
         return metrics

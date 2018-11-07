@@ -106,3 +106,13 @@ It was run on the latest code as of 8/24/2017, with 25 epochs with adadelta as a
 Note that these are randomly initialized and these numbers will vary
 (IOW, don't assume that one implementation is guaranteed to outperform the others from a single run).
 
+
+#### Losses and Reporting
+
+When training the loss that is optimized is the total loss averaged over the number of examples in the mini-batch.
+
+When reporting the loss reported every nsteps is the total loss averaged over the number of examples that appeared in these nsteps number of minibatches.
+
+When reporting the loss at the end of an epoch it is the total loss averaged over the number of examples seen in the whole epoch.
+
+Metrics like accuracy and f1 are computed at the example level.

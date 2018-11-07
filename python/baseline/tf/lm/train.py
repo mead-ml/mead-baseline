@@ -18,6 +18,7 @@ class LanguageModelTrainerTf(Trainer):
         self.test_loss = model.create_test_loss()
         self.global_step, self.train_op = optimizer(self.loss, **kwargs)
         self.log = logging.getLogger('baseline.timing')
+        self.nsteps = kwargs.get('nsteps', 500)
 
     def checkpoint(self):
         self.model.saver.save(self.model.sess, "./tf-lm-%d/lm" % os.getpid(), global_step=self.global_step)
@@ -27,9 +28,13 @@ class LanguageModelTrainerTf(Trainer):
         print("Reloading " + latest)
         self.model.saver.restore(self.model.sess, latest)
 
+    @staticmethod
+    def _num_toks(batch):
+        return np.prod(batch['y'].shape)
+
     def train(self, ts, reporting_fns):
-        total_loss = 0.0
-        iters = 0
+        epoch_loss = 0.0
+        epoch_toks = 0
 
         xfer_state = hasattr(self.model, 'initial_state')
         if xfer_state:
@@ -38,14 +43,14 @@ class LanguageModelTrainerTf(Trainer):
         fetches = {
             "loss": self.loss,
             "train_op": self.train_op,
-            "global_step": self.global_step}
+            "global_step": self.global_step
+        }
 
         if xfer_state:
             fetches["final_state"] = self.model.final_state
 
-        metrics = {}
-
         start = time.time()
+        self.nstep_start = start
         for batch_dict in ts:
 
             feed_dict = self.model.make_input(batch_dict, True)
@@ -60,25 +65,37 @@ class LanguageModelTrainerTf(Trainer):
             if xfer_state:
                 state = vals["final_state"]
             global_step = vals["global_step"]
-            total_loss += loss
-            iters += ts.nctx
-            if global_step > 0 and global_step % 500 == 0:
-                metrics['avg_loss'] = total_loss / iters
-                metrics['perplexity'] = np.exp(total_loss / iters)
-                for reporting in reporting_fns:
-                    reporting(metrics, global_step, 'Train')
+            toks = self._num_toks(batch_dict)
+            report_loss = loss * toks
+            epoch_loss += report_loss
+            epoch_toks += toks
+            self.nstep_agg += report_loss
+            self.nstep_div += toks
 
-        self.log.debug({'phase': 'Train', "time": time.time() - start})
-        metrics['avg_loss'] = total_loss / iters
-        metrics['perplexity'] = np.exp(total_loss / iters)
+            if (global_step + 1) % self.nsteps == 0:
+                metrics = self.calc_metrics(self.nstep_agg, self.nstep_div)
+                self.report(
+                    global_step + 1, metrics, self.nstep_start,
+                    'Train', 'STEP', reporting_fns
+                )
+                self.reset_nstep()
 
-        for reporting in reporting_fns:
-            reporting(metrics, global_step, 'Train')
+        metrics = self.calc_metrics(epoch_loss, epoch_toks)
+        self.train_epochs += 1
+        self.report(
+            self.train_epochs, metrics, start,
+            'Train', 'EPOCH', reporting_fns
+        )
+        return metrics
+
+    def calc_metrics(self, agg, norm):
+        metrics = super(LanguageModelTrainerTf, self).calc_metrics(agg, norm)
+        metrics['perplexity'] = np.exp(metrics['avg_loss'])
         return metrics
 
     def test(self, ts, reporting_fns, phase):
         total_loss = 0.0
-        iters = 0
+        total_toks = 0
         epochs = 0
         if phase == 'Valid':
             self.valid_epochs += 1
@@ -100,7 +117,6 @@ class LanguageModelTrainerTf(Trainer):
         start = time.time()
 
         for batch_dict in ts:
-
             feed_dict = self.model.make_input(batch_dict, False)
             if xfer_state:
                 for i, (c, h) in enumerate(self.model.initial_state):
@@ -109,18 +125,17 @@ class LanguageModelTrainerTf(Trainer):
 
             vals = self.model.sess.run(fetches, feed_dict)
             loss = vals["loss"]
+            toks = self._num_toks(batch_dict)
             if xfer_state:
                 state = vals["final_state"]
-            total_loss += loss
-            iters += ts.nctx
-            step += 1
+            total_loss += loss * toks
+            total_toks += toks
 
-        self.log.debug({'phase': phase, "time": time.time() - start})
-        metrics['avg_loss'] = total_loss / iters
-        metrics['perplexity'] = np.exp(total_loss / iters)
-
-        for reporting in reporting_fns:
-            reporting(metrics, epochs, phase)
+        metrics = self.calc_metrics(total_loss, total_toks)
+        self.report(
+            epochs, metrics, start,
+            phase, 'EPOCH', reporting_fns
+        )
         return metrics
 
 
@@ -178,5 +193,3 @@ def fit(model, ts, vs, es=None, **kwargs):
     if es is not None:
         trainer.recover_last_checkpoint()
         trainer.test(es, reporting_fns, phase='Test')
-
-

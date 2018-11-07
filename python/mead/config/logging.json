@@ -51,7 +51,7 @@
         "baseline.timing": {
             "level": "DEBUG",
             "handlers": ["timing_file_handler"],
-            "propagate": "no"
+            "propagate": false
         }
     },
 

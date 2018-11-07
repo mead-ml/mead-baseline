@@ -1,11 +1,12 @@
+import six
+import os
 import time
-import tensorflow as tf
 import numpy as np
+import tensorflow as tf
 from baseline.tf.optz import optimizer
 from baseline.progress import create_progress_bar
-from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
-import os
 from baseline.utils import to_spans, f_score, listify, revlut, get_model_file, write_sentence_conll
+from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
 
 
 class TaggerEvaluatorTf(object):
@@ -72,23 +73,22 @@ class TaggerEvaluatorTf(object):
         if conll_output is not None and txts is not None:
             handle = open(conll_output, "w")
 
-        for batch_dict in ts:
-            correct, count, overlaps, golds, guesses = self.process_batch(batch_dict, handle, txts)
-            total_correct += correct
-            total_sum += count
-            total_gold_count += golds
-            total_guess_count += guesses
-            total_overlap_count += overlaps
-            pg.update()
-        pg.done()
+        try:
+            for batch_dict in pg(ts):
+                correct, count, overlaps, golds, guesses = self.process_batch(batch_dict, handle, txts)
+                total_correct += correct
+                total_sum += count
+                total_gold_count += golds
+                total_guess_count += guesses
+                total_overlap_count += overlaps
 
-        total_acc = total_correct / float(total_sum)
-        # Only show the fscore if requested
-        metrics['f1'] = f_score(total_overlap_count, total_gold_count, total_guess_count)
-        metrics['acc'] = total_acc
-
-        if handle is not None:
-            handle.close()
+            total_acc = total_correct / float(total_sum)
+            # Only show the fscore if requested
+            metrics['f1'] = f_score(total_overlap_count, total_gold_count, total_guess_count)
+            metrics['acc'] = total_acc
+        finally:
+            if handle is not None:
+                handle.close()
 
         return metrics
 
@@ -104,6 +104,7 @@ class TaggerTrainerTf(EpochReportingTrainer):
         verbose = kwargs.get('verbose', False)
         self.evaluator = TaggerEvaluatorTf(model, span_type, verbose)
         self.global_step, self.train_op = optimizer(self.loss, **kwargs)
+        self.nsteps = kwargs.get('nsteps', six.MAXSIZE)
 
     def checkpoint(self):
         self.model.saver.save(self.model.sess, "./tf-tagger-%d/tagger" % os.getpid(), global_step=self.global_step)
@@ -113,18 +114,34 @@ class TaggerTrainerTf(EpochReportingTrainer):
         print("Reloading " + latest)
         self.model.saver.restore(self.model.sess, latest)
 
-    def _train(self, ts):
-        total_loss = 0
+    @staticmethod
+    def _get_batchsz(batch_dict):
+        return batch_dict['y'].shape[0]
+
+    def _train(self, ts, **kwargs):
+        reporting_fns = kwargs.get('reporting_fns', [])
+        epoch_loss = 0
+        epoch_norm = 0
         steps = len(ts)
-        metrics = {}
         pg = create_progress_bar(steps)
-        for batch_dict in ts:
+        for batch_dict in pg(ts):
             feed_dict = self.model.make_input(batch_dict, True)
             _, step, lossv = self.model.sess.run([self.train_op, self.global_step, self.loss], feed_dict=feed_dict)
-            total_loss += lossv
-            pg.update()
-        pg.done()
-        metrics['avg_loss'] = float(total_loss)/steps
+            bsz = self._get_batchsz(batch_dict)
+            report_loss = lossv * bsz
+            epoch_loss += report_loss
+            epoch_norm += bsz
+            self.nstep_agg += report_loss
+            self.nstep_div += bsz
+            if (step + 1) % self.nsteps == 0:
+                metrics = self.calc_metrics(self.nstep_agg, self.nstep_div)
+                self.report(
+                    step + 1, metrics, self.nstep_start,
+                    'Train', 'STEP', reporting_fns
+                )
+                self.reset_nstep()
+
+        metrics = self.calc_metrics(epoch_loss, epoch_norm)
         return metrics
 
     def _test(self, ts):

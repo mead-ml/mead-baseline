@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from baseline.utils import lookup_sentence, get_version
+from baseline.utils import lookup_sentence, get_version, Offsets
 import torch.autograd
 import torch.nn as nn
 import torch.nn.functional as F
@@ -66,15 +66,33 @@ def log_sum_exp(vec):
 
 class SequenceCriterion(nn.Module):
 
-    def __init__(self, LossFn=nn.NLLLoss):
+    def __init__(self, LossFn=nn.NLLLoss, avg='token'):
         super(SequenceCriterion, self).__init__()
-        self.crit = LossFn(ignore_index=0, size_average=False)
+        if avg == 'token':
+            # self.crit = LossFn(ignore_index=Offsets.PAD, reduction='elementwise-mean')
+            self.crit = LossFn(ignore_index=Offsets.PAD, size_average=True)
+            self._norm = self._no_norm
+        else:
+            self.crit = LossFn(ignore_index=Offsets.PAD, size_average=False)
+            self._norm = self._batch_norm
+
+    def _batch_norm(self, loss, inputs):
+        return loss / inputs.size()[0]
+
+    def _no_norm(self, loss, inputs):
+        return loss
 
     def forward(self, inputs, targets):
-        # This is BxT, which is what we want!
+        """Evaluate some loss over a sequence.
+
+        :param inputs: torch.FloatTensor, [B, .., C] The scores from the model. Batch First
+        :param targets: torch.LongTensor, The labels.
+
+        :returns: torch.FloatTensor, The loss.
+        """
         total_sz = targets.nelement()
         loss = self.crit(inputs.view(total_sz, -1), targets.view(total_sz))
-        return loss
+        return self._norm(loss, inputs)
 
 
 class StackedLSTMCell(nn.Module):
