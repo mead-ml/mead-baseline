@@ -231,9 +231,9 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
         model = cls()
         model.src_embeddings = src_embeddings
         model.tgt_embedding = tgt_embedding
-        model.src_len = kwargs.get('src_len', tf.placeholder(tf.int32, [None], name="src_len"))
-        model.tgt_len = kwargs.get('tgt_len', tf.placeholder(tf.int32, [None], name="tgt_len"))
-        model.mx_tgt_len = kwargs.get('mx_tgt_len', tf.placeholder(tf.int32, name="mx_tgt_len"))
+        model.src_len = kwargs.pop('src_len', tf.placeholder(tf.int32, [None], name="src_len"))
+        model.tgt_len = kwargs.pop('tgt_len', tf.placeholder(tf.int32, [None], name="tgt_len"))
+        model.mx_tgt_len = kwargs.pop('mx_tgt_len', tf.placeholder(tf.int32, name="mx_tgt_len"))
         model.src_lengths_key = kwargs.get('src_lengths_key')
         model.id = kwargs.get('id', 0)
         model.sess = kwargs.get('sess', tf.Session())
