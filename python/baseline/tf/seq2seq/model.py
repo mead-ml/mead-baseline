@@ -241,7 +241,7 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
         model.hsz = kwargs['hsz']
 
         with tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE):
-            embed_in = model.embed()
+            embed_in = model.embed(**kwargs)
             encoder_output = model.encode(embed_in, **kwargs)
             model.decode(encoder_output, **kwargs)
             # writer = tf.summary.FileWriter('blah', model.sess.graph)
