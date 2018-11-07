@@ -54,8 +54,10 @@ def test_no_filters(data):
     vectorizers = {k: MagicMock() for k in keys}
     vectorizers[keys[0]].min_f = -1
     vectorizers[keys[1]].min_f = -1
-    vocab = _filter_vocab(vocab, vectorizers)
-    assert vocab == gold
+    with patch('baseline.reader.filter') as filt_mock:
+        filt_mock.return_value = [('a', 1)]
+        vocab = _filter_vocab(vocab, vectorizers)
+    filt_mock.assert_not_called
 
 
 def test_num_lines():

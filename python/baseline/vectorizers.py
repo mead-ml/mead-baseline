@@ -188,6 +188,14 @@ class Char2DVectorizer(AbstractCharVectorizer):
         self.max_seen_tok = 0
         self.max_seen_char = 0
 
+    @property
+    def min_f(self):
+        return self._min_f
+
+    @min_f.setter
+    def min_f(self, value):
+        self._min_f = value
+
     def count(self, tokens):
         seen_tok = 0
         counter = collections.Counter()
@@ -253,6 +261,14 @@ class Char1DVectorizer(AbstractCharVectorizer):
         self.min_f = kwargs.get('min_f', -1)
         self.time_reverse = kwargs.get('rev', False)
         self.max_seen_tok = 0
+
+    @property
+    def min_f(self):
+        return self._min_f
+
+    @min_f.setter
+    def min_f(self, value):
+        self._min_f = value
 
     def count(self, tokens):
         seen_tok = 0

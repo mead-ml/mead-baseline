@@ -1,11 +1,13 @@
-import baseline.data
-import numpy as np
-from collections import Counter
+from six.moves import filter
+
+import os
 import re
 import codecs
-from baseline.utils import import_user_module, revlut, export, optional_params, Offsets
+from collections import Counter
+import numpy as np
+import baseline.data
 from baseline.vectorizers import Dict1DVectorizer, GOVectorizer
-import os
+from baseline.utils import import_user_module, revlut, export, optional_params, Offsets
 
 __all__ = []
 exporter = export(__all__)
@@ -66,6 +68,9 @@ def _filter_vocab(vocab, vectorizers):
     :returns: `dict[dict]`: A dict of new filtered vocabs.
     """
     for k, v in vectorizers.items():
+        # If we don't filter then skip to save an iteration through the vocab
+        if v.min_f == -1:
+            continue
         vocab[k] = dict(filter(lambda x: x[1] >= v.min_f, vocab[k].items()))
     return vocab
 
