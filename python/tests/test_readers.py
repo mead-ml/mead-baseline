@@ -27,10 +27,8 @@ def data():
 def test_filters_one(data):
     keys, words, vocab = data
     gold = deepcopy(vocab)
-    vectorizers = {k: MagicMock() for k in keys}
-    vectorizers[keys[0]].min_f = 5
-    vectorizers[keys[1]].min_f = 2
-    vocab = _filter_vocab(vocab, vectorizers)
+    min_f = {keys[0]: 5, keys[1]: 2}
+    vocab = _filter_vocab(vocab, min_f)
     assert 'a' not in vocab[keys[0]]
     assert 'b' not in vocab[keys[0]]
     assert 'c' in vocab[keys[0]]
@@ -39,10 +37,8 @@ def test_filters_one(data):
 
 def test_filters_both(data):
     keys, words, vocab = data
-    vectorizers = {k: MagicMock() for k in keys}
-    vectorizers[keys[0]].min_f = 6
-    vectorizers[keys[1]].min_f = 6
-    vocab = _filter_vocab(vocab, vectorizers)
+    min_f = dict.fromkeys(keys, 6)
+    vocab = _filter_vocab(vocab, min_f)
     assert 'a' not in vocab[keys[0]] and 'a' not in vocab[keys[1]]
     assert 'b' not in vocab[keys[0]] and 'b' not in vocab[keys[1]]
     assert 'c' in vocab[keys[0]] and 'c' in vocab[keys[1]]
@@ -50,14 +46,20 @@ def test_filters_both(data):
 
 def test_no_filters(data):
     keys, words, vocab = data
-    gold = deepcopy(vocab)
-    vectorizers = {k: MagicMock() for k in keys}
-    vectorizers[keys[0]].min_f = -1
-    vectorizers[keys[1]].min_f = -1
+    min_f = dict.fromkeys(keys, -1)
     with patch('baseline.reader.filter') as filt_mock:
         filt_mock.return_value = [('a', 1)]
-        vocab = _filter_vocab(vocab, vectorizers)
-    filt_mock.assert_not_called
+        _ = _filter_vocab(vocab, min_f)
+    filt_mock.assert_not_called()
+
+
+def test_one_filters(data):
+    keys, words, vocab = data
+    min_f = {keys[0]: -1, keys[1]: 1}
+    with patch('baseline.reader.filter') as filt_mock:
+        filt_mock.return_value = [('a', 1)]
+        _ = _filter_vocab(vocab, min_f)
+    filt_mock.assert_called_once()
 
 
 def test_num_lines():

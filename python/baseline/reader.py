@@ -55,23 +55,22 @@ def num_lines(filename):
         return sum(1 for _ in f)
 
 
-def _filter_vocab(vocab, vectorizers):
+def _filter_vocab(vocab, min_fs):
     """Filter down the vocab based on rules in the vectorizers.
 
-    Note:
-        Currently this only does filtering based on minimum frequency. It could
-        be extended to do other things like max vocab size or unk frequency.
+    :param vocab: `dict[Counter]`: A dict of vocabs.
+    :param min_fs: `dict[int]: A dict of cutoffs.
 
-    :param vocab: `dict[Counter]`: A dict of vocabs, one for each vectorizer.
-    :param vectorizers: `dict[Vectorizer]: A dict of Vectorizers with keys matching vocab
+    Note:
+        Any key in the min_fs dict should appear in the vocab dict.
 
     :returns: `dict[dict]`: A dict of new filtered vocabs.
     """
-    for k, v in vectorizers.items():
+    for k, min_f in min_fs.items():
         # If we don't filter then skip to save an iteration through the vocab
-        if v.min_f == -1:
+        if min_f == -1:
             continue
-        vocab[k] = dict(filter(lambda x: x[1] >= v.min_f, vocab[k].items()))
+        vocab[k] = dict(filter(lambda x: x[1] >= min_f, vocab[k].items()))
     return vocab
 
 
@@ -107,7 +106,7 @@ class ParallelCorpusReader(object):
                 self.src_vectorizers[k] = vectorizer
         self.trim = trim
 
-    def build_vocabs(self, files):
+    def build_vocabs(self, files, **kwargs):
         pass
 
     def load_examples(self, tsfile, vocab1, vocab2, shuffle, sort_key):
@@ -128,11 +127,13 @@ class TSVParallelCorpusReader(ParallelCorpusReader):
         self.src_col_num = src_col_num
         self.tgt_col_num = tgt_col_num
 
-    def build_vocabs(self, files):
+    def build_vocabs(self, files, **kwargs):
         src_vocab = _build_vocab_for_col(self.src_col_num, files, self.src_vectorizers)
         tgt_vocab = _build_vocab_for_col(self.tgt_col_num, files, {'tgt': self.tgt_vectorizer})
-        src_vocab = _filter_vocab(src_vocab, self.src_vectorizers)
-        tgt_vocab = _filter_vocab(tgt_vocab, {'tgt': self.tgt_vectorizer})
+        min_f = kwargs.get('min_f', {})
+        tgt_min_f = {'tgt': min_f.pop('tgt', -1)}
+        src_vocab = _filter_vocab(src_vocab, min_f)
+        tgt_vocab = _filter_vocab(tgt_vocab, tgt_min_f)
         return src_vocab, tgt_vocab['tgt']
 
     def load_examples(self, tsfile, src_vocabs, tgt_vocab, do_shuffle, src_sort_key):
@@ -171,15 +172,17 @@ class MultiFileParallelCorpusReader(ParallelCorpusReader):
 
     # 2 possibilities here, either we have a vocab file, e.g. vocab.bpe.32000, or we are going to generate
     # from each column
-    def build_vocabs(self, files):
+    def build_vocabs(self, files, **kwargs):
         if len(files) == 1 and os.path.exists(files[0]):
             src_vocab = _build_vocab_for_col(0, files, self.src_vectorizers)
             tgt_vocab = _build_vocab_for_col(0, files, {'tgt': self.tgt_vectorizer})
         else:
             src_vocab = _build_vocab_for_col(0, [f + self.src_suffix for f in files], self.src_vectorizers)
             tgt_vocab = _build_vocab_for_col(0, [f + self.tgt_suffix for f in files], {'tgt': self.tgt_vectorizer})
-        src_vocab = _filter_vocab(src_vocab, self.src_vectorizers)
-        tgt_vocab = _filter_vocab(tgt_vocab, {'tgt': self.tgt_vectorizer})
+        min_f = kwargs.get('min_f', {})
+        tgt_min_f = {'tgt': min_f.pop('tgt', -1)}
+        src_vocab = _filter_vocab(src_vocab, min_f)
+        tgt_vocab = _filter_vocab(tgt_vocab, tgt_min_f)
         return src_vocab, tgt_vocab['tgt']
 
     def load_examples(self, tsfile, src_vocabs, tgt_vocab, do_shuffle, src_sort_key):
@@ -214,7 +217,7 @@ class SeqPredictReader(object):
         }
         self.label_vectorizer = Dict1DVectorizer(fields='y', mxlen=mxlen)
 
-    def build_vocab(self, files):
+    def build_vocab(self, files, **kwargs):
 
         vocabs = {}
         for key in self.vectorizers.keys():
@@ -232,7 +235,7 @@ class SeqPredictReader(object):
                     vocab_example = vectorizer.count(example)
                     vocabs[k].update(vocab_example)
 
-        vocabs = _filter_vocab(vocabs, self.vectorizers)
+        vocabs = _filter_vocab(vocabs, kwargs.get('min_f', {}))
         base_offset = len(self.label2index)
         for i, k in enumerate(labels.keys()):
             self.label2index[k] = i + base_offset
@@ -396,7 +399,7 @@ class TSVSeqLabelReader(SeqLabelReader):
                         self.label2index[label] = label_idx
                         label_idx += 1
 
-        vocab = _filter_vocab(vocab, self.vectorizers)
+        vocab = _filter_vocab(vocab, kwargs.get('min_f', {}))
 
         return vocab, self.get_labels()
 
@@ -443,7 +446,7 @@ class LineSeqReader(object):
         self.nctx = kwargs['nctx']
         self.vectorizers = vectorizers
 
-    def build_vocab(self, files):
+    def build_vocab(self, files, **kwargs):
 
         vocabs = {}
         for key in self.vectorizers.keys():
@@ -461,7 +464,7 @@ class LineSeqReader(object):
                 for k, vectorizer in self.vectorizers.items():
                     vocabs[k].update(vectorizer.count(sentences))
 
-        vocabs = _filter_vocab(vocabs, self.vectorizers)
+        vocabs = _filter_vocab(vocabs, kwargs.get('min_f', {}))
         return vocabs
 
     def load(self, filename, vocabs, batchsz, tgt_key='x'):
