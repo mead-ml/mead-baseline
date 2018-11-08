@@ -53,7 +53,7 @@ class Seq2SeqParallelModel(EncoderDecoderModel):
         on the input tensor and feeding the splits to each of the underlying replicas.  The way we do this is to take in
         the creation function for a single graph and call it N times while passing in the splits as kwargs.
 
-        Because our `create_fn` (typically `cls.create()` where `cls` is a sub-class of EncoderDecoderModel) allows
+        Because our `create_fn` (typically `cls.create()` where `cls` is a sub-class of EncoderDecoderModelBase) allows
         us to inject its inputs through keyword arguments instead of creating its own placeholders, we can inject each
         split into the inputs which causes each replica to be a sub-graph of this parent graph.  For this to work,
         this class also has to have its own placeholders, which it uses as inputs.
@@ -68,7 +68,7 @@ class Seq2SeqParallelModel(EncoderDecoderModel):
         :param create_fn: This function is actually our caller, who creates the graph (if no `gpus` arg)
         :param src_embeddings: This is the set of src embeddings sub-graphs
         :param tgt_embedding: This is the tgt embeddings sub-graph
-        :param kwargs: See below, also see ``EncoderDecoderModel.create`` for kwargs that are not specific to multi-GPU
+        :param kwargs: See below, also see ``EncoderDecoderModelBase.create`` for kwargs that are not specific to multi-GPU
 
         :Keyword Arguments:
         * *gpus* -- (``int``) - The number of GPUs to create replicas on
@@ -307,11 +307,11 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
     def create_encoder(self, **kwargs):
         return create_seq2seq_encoder(**kwargs)
 
-    def create_decoder(self, tgt_embedding, **kwargs):
-        return create_seq2seq_decoder(tgt_embedding, **kwargs)
+    def create_decoder(self, **kwargs):
+        return create_seq2seq_decoder(self.tgt_embedding, **kwargs)
 
     def decode(self, encoder_output, **kwargs):
-        self.decoder = self.create_decoder(self.tgt_embedding, **kwargs)
+        self.decoder = self.create_decoder(**kwargs)
         predict = kwargs.get('predict', False)
         if predict:
             self.decoder.predict(encoder_output, self.src_len, self.pkeep, **kwargs)

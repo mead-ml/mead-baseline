@@ -256,7 +256,7 @@ class RNNDecoder(DecoderBase):
             self.output(best)
 
     def decode(self, encoder_outputs, src_len, tgt_len, pkeep, **kwargs):
-        self.tgt_embedding.x = kwargs.get('tgt', self.tgt_embedding.create_placeholder(self.tgt_embedding.name))
+        self.tgt_embedding.x = kwargs.get('tgt', self.tgt_embedding.create_placeholder('tgt'))
 
         # dynamic_decode creates a scope "decoder" and it pushes operations underneath.
         # which makes it really hard to get the same objects between train and test
@@ -269,7 +269,7 @@ class RNNDecoder(DecoderBase):
             self._create_cell(encoder_outputs.output, src_len, pkeep, **kwargs)
             batch_sz = tf.shape(encoder_outputs.output)[0]
             initial_state = self.arc_policy.connect(encoder_outputs, self, batch_sz)
-            helper = tf.contrib.seq2seq.TrainingHelper(inputs=tf.nn.embedding_lookup(Wo, self.tgt_embedding.x), sequence_length=tgt_len)
+            helper = tf.contrib.seq2seq.TrainingHelper(inputs=tf.nn.embedding_lookup(Wo, self.tgt_embedding.x), sequence_length=tgt_lens)
             decoder = tf.contrib.seq2seq.BasicDecoder(cell=self.cell, helper=helper, initial_state=initial_state, output_layer=proj)
             final_outputs, final_decoder_state, _ = tf.contrib.seq2seq.dynamic_decode(decoder,
                                                                                       impute_finished=True,
