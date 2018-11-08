@@ -18,6 +18,34 @@ import copy
 class ClassifyParallelModel(ClassifierModel):
 
     def __init__(self, create_fn, embeddings, labels, **kwargs):
+        """Create N replica graphs for GPU + 1 for inference on CPU
+
+        The basic idea of the constructor is to create several replicas for training by creating a `tf.split` operation
+        on the input tensor and feeding the splits to each of the underlying replicas.  The way we do this is to take in
+        the creation function for a single graph and call it N times while passing in the splits as kwargs.
+
+        Because our `create_fn` (typically `cls.create()` where `cls` is a sub-class of ClassifierModelBase) allows
+        us to inject its inputs through keyword arguments instead of creating its own placeholders, we can inject each
+        split into the inputs which causes each replica to be a sub-graph of this parent graph.  For this to work,
+        this class also has to have its own placeholders, which it uses as inputs.
+
+        Any time we are doing validation during the training process, we delegate the request to the underlying member
+        variable `.inference` (which is sharing its weights with the other replicas).  This also happens on `save()`,
+        allowing us to create a perfectly normal single sub-graph checkpoint for later inference.
+
+        The actual way that we accomplish the replica creation is by copying the input keyword arguments and injecting
+        any parallel operations (splits) by deep-copy and update to the dictionary.
+
+        :param create_fn: This function is actually our caller, who creates the graph (if no `gpus` arg)
+        :param embeddings: This is the set of embeddings sub-graphs
+        :param labels: This is the labels
+        :param kwargs: See below, also see ``ClassifierModelBase.create`` for kwargs that are not specific to multi-GPU
+
+        :Keyword Arguments:
+        * *gpus* -- (``int``) - The number of GPUs to create replicas on
+        * *lengths_key* -- (``str``) - A string representing the key for the src tensor whose lengths should be used
+
+        """
         super(ClassifyParallelModel, self).__init__()
         # We need to remove these because we may be calling back to our caller, and we need
         # the condition of calling to be non-parallel
@@ -49,7 +77,6 @@ class ClassifyParallelModel(ClassifierModel):
 
         # This only exists to make exporting easier
         self.y = kwargs.get('y', tf.placeholder(tf.int32, [None, nc], name="y_parallel"))
-        self.pdrop_value = kwargs.get('dropout', 0.5)
 
         y_splits = tf.split(self.y, gpus)
         split_operations['y'] = y_splits
@@ -73,7 +100,6 @@ class ClassifyParallelModel(ClassifierModel):
                 losses.append(loss_op)
 
         self.loss = tf.reduce_mean(tf.stack(losses))
-
         self.sess = sess
         self.best = self.inference.best
 

@@ -47,6 +47,35 @@ def _temporal_cross_entropy_loss(logits, labels, label_lengths, mx_seq_length):
 class Seq2SeqParallelModel(EncoderDecoderModel):
 
     def __init__(self, create_fn, src_embeddings, tgt_embedding, **kwargs):
+        """Create N replica graphs for GPU + 1 for inference on CPU
+
+        The basic idea of the constructor is to create several replicas for training by creating a `tf.split` operation
+        on the input tensor and feeding the splits to each of the underlying replicas.  The way we do this is to take in
+        the creation function for a single graph and call it N times while passing in the splits as kwargs.
+
+        Because our `create_fn` (typically `cls.create()` where `cls` is a sub-class of EncoderDecoderModel) allows
+        us to inject its inputs through keyword arguments instead of creating its own placeholders, we can inject each
+        split into the inputs which causes each replica to be a sub-graph of this parent graph.  For this to work,
+        this class also has to have its own placeholders, which it uses as inputs.
+
+        Any time we are doing validation during the training process, we delegate the request to the underlying member
+        variable `.inference` (which is sharing its weights with the other replicas).  This also happens on `save()`,
+        allowing us to create a perfectly normal single sub-graph checkpoint for later inference.
+
+        The actual way that we accomplish the replica creation is by copying the input keyword arguments and injecting
+        any parallel operations (splits) by deep-copy and update to the dictionary.
+
+        :param create_fn: This function is actually our caller, who creates the graph (if no `gpus` arg)
+        :param src_embeddings: This is the set of src embeddings sub-graphs
+        :param tgt_embedding: This is the tgt embeddings sub-graph
+        :param kwargs: See below, also see ``EncoderDecoderModel.create`` for kwargs that are not specific to multi-GPU
+
+        :Keyword Arguments:
+        * *gpus* -- (``int``) - The number of GPUs to create replicas on
+        * *src_lengths_key* -- (``str``) - A string representing the key for the src tensor whose lengths should be used
+        * *mx_tgt_len* -- (``int``) - An optional max length (or we will use the max length of the batch using a placeholder)
+
+        """
         super(Seq2SeqParallelModel, self).__init__()
         # We need to remove these because we may be calling back to our caller, and we need
         # the condition of calling to be non-parallel
@@ -66,7 +95,7 @@ class Seq2SeqParallelModel(EncoderDecoderModel):
             split_operations[key] = tf.split(self.parallel_params[key], gpus)
 
         EmbeddingType = tgt_embedding.__class__
-        self.parallel_params['tgt'] = kwargs.get(key, EmbeddingType.create_placeholder('tgt_parallel'.format(key)))
+        self.parallel_params['tgt'] = kwargs.get('tgt', EmbeddingType.create_placeholder('tgt_parallel'.format(key)))
         split_operations['tgt'] = tf.split(self.parallel_params[key], gpus)
 
         self.src_lengths_key = kwargs.get('src_lengths_key')
@@ -79,28 +108,36 @@ class Seq2SeqParallelModel(EncoderDecoderModel):
         split_operations['tgt_len'] = tgt_len_splits
 
         self.mx_tgt_len = kwargs.get('mx_tgt_len', tf.placeholder(tf.int32, name="mx_tgt_len"))
-        self.pdrop_value = kwargs.get('dropout', 0.5)
 
         losses = []
         sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False))
-        kwargs_infer = copy.deepcopy(kwargs)
+
         with tf.device(tf.DeviceSpec(device_type="CPU")):
+            kwargs_infer = copy.deepcopy(kwargs)
+            # For the inference model, load it up on the CPU
+            # This shares a sub-graph with its replicas after the inputs
+            # It doesnt share the inputs, as these are placeholders, and the replicas are `tf.split` ops
             self.inference = create_fn(src_embeddings, tgt_embedding, sess=sess,
-                                       mx_tgt_len=self.mx_tgt_len, id=0, **kwargs_infer)
+                                       mx_tgt_len=self.mx_tgt_len, **kwargs_infer)
         for i in range(gpus):
             with tf.device(tf.DeviceSpec(device_type='GPU', device_index=i)):
 
+                # Copy the input keyword args and update them
                 kwargs_single = copy.deepcopy(kwargs)
-                kwargs_single['mx_tgt_len'] = self.mx_tgt_len
-                kwargs_single['sess'] = sess
-                kwargs_single['id'] = i + 1
+                # For each split operator, there are N parts, take the part at index `i` and inject it for its key
+                # this prevents the `create_fn` from making a placeholder for this operation
                 for k, split_operation in split_operations.items():
                     kwargs_single[k] = split_operation[i]
-                replica = create_fn(src_embeddings, tgt_embedding, **kwargs_single)
+                # Create the replica
+                replica = create_fn(src_embeddings, tgt_embedding, sess=sess, mx_tgt_len=self.mx_tgt_len, id=i+1, **kwargs_single)
+                # Add the replica to the set
                 self.replicas.append(replica)
+                # Make a replica specific loss
                 loss_op = replica.create_loss()
+                # Append to losses
                 losses.append(loss_op)
 
+        # The training loss is the mean of all replica losses
         self.loss = tf.reduce_mean(tf.stack(losses))
 
         self.sess = sess
@@ -130,12 +167,12 @@ class Seq2SeqParallelModel(EncoderDecoderModel):
             return self.inference.make_input(batch_dict)
 
         feed_dict = new_placeholder_dict(train)
-
+        feed_dict['tgt_parallel:0']
         feed_dict[self.tgt_len] = batch_dict['tgt_lengths']
         feed_dict[self.mx_tgt_len] = np.max(batch_dict['tgt_lengths'])
 
         for key in self.parallel_params.keys():
-            feed_dict["{}_parallel:0".format(key)] = batch_dict[key]
+            feed_dict['{}_parallel:0'.format(key)] = batch_dict[key]
 
         # Allow us to track a length, which is needed for BLSTMs
         feed_dict[self.src_len] = batch_dict[self.src_lengths_key]
