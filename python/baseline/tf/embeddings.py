@@ -5,6 +5,7 @@ from baseline.embeddings import register_embeddings
 import numpy as np
 import math
 
+
 class TensorFlowEmbeddings(object):
     """This provides a base for TensorFlow embeddings sub-graphs
 
@@ -13,6 +14,12 @@ class TensorFlowEmbeddings(object):
         """Constructor
         """
         pass
+
+    def detached_ref(self):
+        """This will detach any attached input and reference the same sub-graph otherwise
+
+        :return:
+        """
 
     def get_dsz(self):
         """Get the number of output dimension of this operation
@@ -98,6 +105,20 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
             unif = kwargs.get('unif', 0.1)
             self.weights = np.random.uniform(-unif, unif, (self.vsz, self.dsz))
 
+    def detached_ref(self):
+        """This will detach any attached input and reference the same sub-graph otherwise
+
+        :return:
+        """
+        if self.weights is None:
+            raise Exception('You must initialize `weights` in order to use this method')
+        return LookupTableEmbeddings(self.name,
+                                     vsz=self.vsz,
+                                     dsz=self.dsz,
+                                     finetune=self.finetune,
+                                     scope=self.scope,
+                                     weights=self.weights)
+
     def encode(self, x=None):
         """Build a simple Lookup Table and set as input `x` if it exists, or `self.x` otherwise.
 
@@ -151,6 +172,21 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
             unif = kwargs.get('unif', 0.1)
             self.weights = np.random.uniform(-unif, unif, (self.vsz, self.dsz))
 
+    def detached_ref(self):
+        """This will detach any attached input and reference the same sub-graph otherwise
+
+        :return:
+        """
+        if self.weights is None:
+            raise Exception('You must initialize `weights` in order to use this method')
+        return CharConvEmbeddings(self.name,
+                                  vsz=self.vsz,
+                                  dsz=self.dsz,
+                                  finetune=self.finetune,
+                                  scope=self.scope,
+                                  weights=self.weights,
+                                  **self.params)
+
     def save_md(self, target):
         write_json({'vsz': self.get_vsz(), 'dsz': self.get_dsz()}, target)
 
@@ -172,7 +208,6 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
     # Warning this function is only initialized AFTER encode
     def get_dsz(self):
         return self.wsz
-
 
 
 def get_timing_signal_1d(length,
@@ -237,6 +272,21 @@ class PositionalLookupTableEmbeddings(LookupTableEmbeddings):
         """
         super(PositionalLookupTableEmbeddings, self).__init__(name, **kwargs)
         self.max_timescale = kwargs.get('max_timescale', 1.0e4)
+
+    def detached_ref(self):
+        """This will detach any attached input and reference the same sub-graph otherwise
+
+        :return:
+        """
+        if self.weights is None:
+            raise Exception('You must initialize `weights` in order to use this method')
+        return PositionalLookupTableEmbeddings(self.name,
+                                               vsz=self.vsz,
+                                               dsz=self.dsz,
+                                               finetune=self.finetune,
+                                               scope=self.scope,
+                                               weights=self.weights,
+                                               max_timescale=self.max_timescale)
 
     def encode(self, x=None):
         x = super(PositionalLookupTableEmbeddings, self).encode(x) * math.sqrt(self.dsz)

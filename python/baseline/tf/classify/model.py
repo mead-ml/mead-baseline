@@ -85,6 +85,7 @@ class ClassifyParallelModel(ClassifierModel):
 
         sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False)) 
         with tf.device(tf.DeviceSpec(device_type="CPU")):
+            # This change is required since we attach our .x onto the object in v1
             self.inference = create_fn(embeddings, labels, sess=sess, **kwargs)
         for i in range(gpus):
             with tf.device(tf.DeviceSpec(device_type='GPU', device_index=i)):
@@ -94,7 +95,7 @@ class ClassifyParallelModel(ClassifierModel):
 
                 for k, split_operation in split_operations.items():
                     kwargs_single[k] = split_operation[i]
-                replica = create_fn(embeddings, labels, **kwargs_single)
+                replica = create_fn({k: v.detached_ref() for k, v in embeddings.items()}, labels, **kwargs_single)
                 self.replicas.append(replica)
                 loss_op = replica.create_loss()
                 losses.append(loss_op)

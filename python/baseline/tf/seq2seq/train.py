@@ -40,19 +40,12 @@ class Seq2SeqTrainerTf(Trainer):
         metrics = {}
         duration = 0
 
-        fetches = {
-            "loss": self.loss,
-            "train_op": self.train_op,
-            "global_step": self.global_step}
-
         start = time.time()
         for batch_dict in ts:
             start_time = time.time()
             steps += 1
             feed_dict = self.model.make_input(batch_dict, True)
-            vals = self.model.sess.run(fetches, feed_dict=feed_dict)
-            global_step = vals["global_step"]
-            lossv = vals["loss"]
+            _, global_step, lossv = self.sess.run([self.train_op, self.global_step, self.loss], feed_dict=feed_dict)
 
             total_loss += lossv
             duration += time.time() - start_time
@@ -80,10 +73,6 @@ class Seq2SeqTrainerTf(Trainer):
             self.valid_epochs += 1
             epochs = self.valid_epochs
 
-        fetches = {
-            "loss": self.test_loss,
-        }
-
         total_loss = 0
         steps = len(vs)
         metrics = {}
@@ -92,8 +81,8 @@ class Seq2SeqTrainerTf(Trainer):
         for batch_dict in vs:
 
             feed_dict = self.model.make_input(batch_dict)
-            vals = self.model.sess.run(fetches, feed_dict)
-            lossv = vals["loss"]
+            vals = self.sess.run([self.test_loss], feed_dict=feed_dict)
+            lossv = vals[0]
             total_loss += lossv
 
         self.log.debug({'phase': phase, 'time': time.time() - start})
@@ -135,6 +124,7 @@ def fit(model, ts, vs, es=None, **kwargs):
 
         #if after_train_fn is not None:
         #    after_train_fn(model)
+
         trainer.train(ts, reporting_fns)
         if after_train_fn is not None:
             after_train_fn(model)

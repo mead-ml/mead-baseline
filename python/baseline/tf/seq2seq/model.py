@@ -92,19 +92,19 @@ class Seq2SeqParallelModel(EncoderDecoderModel):
         for key in src_embeddings.keys():
             EmbeddingType = src_embeddings[key].__class__
             self.parallel_params[key] = kwargs.get(key, EmbeddingType.create_placeholder('{}_parallel'.format(key)))
-            split_operations[key] = tf.split(self.parallel_params[key], gpus)
+            split_operations[key] = tf.split(self.parallel_params[key], gpus, name='{}_split'.format(key))
 
         EmbeddingType = tgt_embedding.__class__
-        self.parallel_params['tgt'] = kwargs.get('tgt', EmbeddingType.create_placeholder('tgt_parallel'.format(key)))
-        split_operations['tgt'] = tf.split(self.parallel_params['tgt'], gpus)
+        self.parallel_params['tgt'] = kwargs.get('tgt', EmbeddingType.create_placeholder('tgt_parallel'))
+        split_operations['tgt'] = tf.split(self.parallel_params['tgt'], gpus, name='tgt_split')
 
         self.src_lengths_key = kwargs.get('src_lengths_key')
         self.src_len = kwargs.get('src_len', tf.placeholder(tf.int32, [None], name="src_len_parallel"))
-        src_len_splits = tf.split(self.src_len, gpus)
+        src_len_splits = tf.split(self.src_len, gpus, name='src_len_split')
         split_operations['src_len'] = src_len_splits
 
         self.tgt_len = kwargs.get('tgt_len', tf.placeholder(tf.int32, [None], name="tgt_len_parallel"))
-        tgt_len_splits = tf.split(self.tgt_len, gpus)
+        tgt_len_splits = tf.split(self.tgt_len, gpus, name='tgt_len_split')
         split_operations['tgt_len'] = tgt_len_splits
 
         self.mx_tgt_len = kwargs.get('mx_tgt_len', tf.placeholder(tf.int32, name="mx_tgt_len"))
@@ -113,12 +113,13 @@ class Seq2SeqParallelModel(EncoderDecoderModel):
         sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False))
 
         with tf.device(tf.DeviceSpec(device_type="CPU")):
+            # This change is a bit cleaner since we pop some fields in the sub model
             kwargs_infer = copy.deepcopy(kwargs)
+            # This change is required since we attach our .x onto the object in v1
             # For the inference model, load it up on the CPU
             # This shares a sub-graph with its replicas after the inputs
             # It doesnt share the inputs, as these are placeholders, and the replicas are `tf.split` ops
-            self.inference = create_fn(src_embeddings, tgt_embedding, sess=sess,
-                                       mx_tgt_len=self.mx_tgt_len, **kwargs_infer)
+            self.inference = create_fn(src_embeddings, tgt_embedding, sess=sess, **kwargs_infer)
         for i in range(gpus):
             with tf.device(tf.DeviceSpec(device_type='GPU', device_index=i)):
 
@@ -129,7 +130,12 @@ class Seq2SeqParallelModel(EncoderDecoderModel):
                 for k, split_operation in split_operations.items():
                     kwargs_single[k] = split_operation[i]
                 # Create the replica
-                replica = create_fn(src_embeddings, tgt_embedding, sess=sess, mx_tgt_len=self.mx_tgt_len, id=i+1, **kwargs_single)
+                replica = create_fn({k: v.detached_ref() for k, v in src_embeddings.items()},
+                                    tgt_embedding.detached_ref(),
+                                    sess=sess,
+                                    mx_tgt_len=self.mx_tgt_len,
+                                    id=i+1,
+                                    **kwargs_single)
                 # Add the replica to the set
                 self.replicas.append(replica)
                 # Make a replica specific loss
@@ -184,12 +190,12 @@ class Seq2SeqParallelModel(EncoderDecoderModel):
 class EncoderDecoderModelBase(EncoderDecoderModel):
 
     def create_loss(self):
-        with tf.variable_scope('Loss{}'.format(self.id), reuse=False):
+        with tf.variable_scope('loss{}'.format(self.id)):
             # We do not want to count <GO> in our assessment, we do want to count <EOS>
             return _temporal_cross_entropy_loss(self.decoder.preds[:-1, :, :], self.tgt_embedding.x[:, 1:], self.tgt_len - 1, self.mx_tgt_len - 1)
 
     def create_test_loss(self):
-        with tf.variable_scope('Loss', reuse=False):
+        with tf.variable_scope('test_loss'):
             # We do not want to count <GO> in our assessment, we do want to count <EOS>
             return _temporal_cross_entropy_loss(self.decoder.preds[:-1, :, :], self.tgt_embedding.x[:, 1:], self.tgt_len - 1, self.mx_tgt_len - 1)
 
