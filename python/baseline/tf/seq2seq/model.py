@@ -167,7 +167,6 @@ class Seq2SeqParallelModel(EncoderDecoderModel):
             return self.inference.make_input(batch_dict)
 
         feed_dict = new_placeholder_dict(train)
-        feed_dict['tgt_parallel:0']
         feed_dict[self.tgt_len] = batch_dict['tgt_lengths']
         feed_dict[self.mx_tgt_len] = np.max(batch_dict['tgt_lengths'])
 
