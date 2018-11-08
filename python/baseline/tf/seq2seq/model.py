@@ -96,7 +96,7 @@ class Seq2SeqParallelModel(EncoderDecoderModel):
 
         EmbeddingType = tgt_embedding.__class__
         self.parallel_params['tgt'] = kwargs.get('tgt', EmbeddingType.create_placeholder('tgt_parallel'.format(key)))
-        split_operations['tgt'] = tf.split(self.parallel_params[key], gpus)
+        split_operations['tgt'] = tf.split(self.parallel_params['tgt'], gpus)
 
         self.src_lengths_key = kwargs.get('src_lengths_key')
         self.src_len = kwargs.get('src_len', tf.placeholder(tf.int32, [None], name="src_len_parallel"))
