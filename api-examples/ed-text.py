@@ -6,9 +6,12 @@ parser = argparse.ArgumentParser(description='Classify text with a model')
 parser.add_argument('--model', help='A classifier model', required=True, type=str)
 parser.add_argument('--text', help='raw value or a file', type=str)
 parser.add_argument('--backend', help='backend', default='tf')
+parser.add_argument('--remote', help='(optional) remote endpoint', type=str) # localhost:8500
+parser.add_argument('--name', help='(optional) signature name', type=str) 
 parser.add_argument('--target', help='A file to write decoded output (or print to screen)')
 parser.add_argument('--tsv', help='print tab separated', type=bl.str2bool, default=False)
 parser.add_argument('--batchsz', help='Size of a batch to pass at once', default=256)
+
 args = parser.parse_known_args()[0]
 
 batches = []
@@ -29,7 +32,7 @@ else:
     batch = [args.text.split()]
     batches.append(batch)
 
-m = bl.EncoderDecoderService.load(args.model, backend=args.backend)
+m = bl.EncoderDecoderService.load(args.model, backend=args.backend, remote=args.remote, name=args.name)
 
 f = open(args.target, 'w') if args.target is not None else None
 
@@ -47,3 +50,4 @@ for texts in batches:
 
 if f is not None:
     f.close()
+

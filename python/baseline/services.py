@@ -20,10 +20,13 @@ from baseline.model import (
     load_seq2seq_model,
     load_lang_model
 )
+from baseline.tf.remote import RemoteModelTensorFlow
 
+from collections import namedtuple
 
 __all__ = []
 exporter = export(__all__)
+
 
 class Service(object):
     task_name = None
@@ -32,6 +35,7 @@ class Service(object):
         self.vectorizers = vectorizers
         self.model = model
         self.vocabs = vocabs
+            
 
     def get_vocab(self, vocab_type='word'):
         return self.vocabs.get(vocab_type)
@@ -41,24 +45,75 @@ class Service(object):
 
     @classmethod
     def load(cls, bundle, **kwargs):
+        """Load a model from a bundle.
+
+        This can be either a local model or a remote, exported model.
+
+        :returns a Service implementation
+        """
+        # can delegate
         if os.path.isdir(bundle):
             directory = bundle
         else:
             directory = unzip_files(bundle)
 
+        model_basename = find_model_basename(directory)
         vocabs = load_vocabs(directory)
         vectorizers = load_vectorizers(directory)
 
-        model_basename = find_model_basename(directory)
         be = kwargs.get('backend', 'tf')
+        
+        remote = kwargs.get("remote", None)
+        name = kwargs.get("name", None)
+        if remote:
+            beam = kwargs.get('beam', 30)
+            model = Service._create_remote_model(directory, be, remote, name, cls.signature_name, beam)
+            return cls(vocabs, vectorizers, model)
+
+        labels = read_json(os.path.join(directory, model_basename) + '.labels')
+        
         import_user_module('baseline.{}.embeddings'.format(be))
         import_user_module('baseline.{}.{}'.format(be, cls.task_name))
         model = cls.task_load(model_basename, **kwargs)
         return cls(vocabs, vectorizers, model)
 
+    @staticmethod
+    def _create_remote_model(directory, backend, remote, name, signature_name, beam):
+        """Reads the necessary information from the remote bundle to instatiate
+        a client for a remote model.
+
+        :directory the location of the exported model bundle
+        :remote a url endpoint to hit
+        :name the model name, as defined in tf-serving's model.config
+        :signature_name  the signature to use.
+        :beam used for s2s and found in the kwargs. We default this and pass it in.
+
+        :returns a RemoteModel
+        """
+        assets = read_json(os.path.join(directory, 'model.assets'))
+        model_name = assets['metadata']['exported_model']
+        labels = read_json(os.path.join(directory, model_name) + '.labels')
+        lengths_key = assets.get('lengths_key', None)
+        inputs = assets.get('inputs', [])
+
+        model = None
+        if backend == 'tf':
+            model = RemoteModelTensorFlow(remote, 
+                                name, 
+                                signature_name, 
+                                labels=labels, 
+                                lengths_key=lengths_key, 
+                                inputs=inputs,
+                                beam=beam)
+        else:
+            raise ValueError("only Tensorflow is currently supported for remote Services")
+
+        return model
+
 @exporter
 class ClassifierService(Service):
     task_name = 'classify'
+    signature_name = 'predict_text'
     task_load = load_model
 
     def predict(self, tokens):
@@ -97,9 +152,9 @@ class ClassifierService(Service):
 
         for k in self.vectorizers.keys():
             examples[k] = np.stack(examples[k])
-            lengths_key = '{}_lengths'.format(k)
-            examples[lengths_key] = np.stack(examples[lengths_key])
+
         outcomes_list = self.model.predict(examples)
+            
         results = []
         for outcomes in outcomes_list:
             results += [sorted(outcomes, key=lambda tup: tup[1], reverse=True)]
@@ -109,6 +164,7 @@ class ClassifierService(Service):
 @exporter
 class TaggerService(Service):
     task_name = 'tagger'
+    signature_name = 'tag_text'
     task_load = load_tagger_model
 
     def predict(self, tokens, **kwargs):
@@ -173,7 +229,6 @@ class TaggerService(Service):
         # This might be inefficient if the label space is large
 
         label_vocab = revlut(self.get_labels())
-
         examples = dict()
         for k, vectorizer in self.vectorizers.items():
             if hasattr(vectorizer, 'mxlen') and vectorizer.mxlen == -1:
@@ -190,12 +245,13 @@ class TaggerService(Service):
                     lengths_key = '{}_lengths'.format(k)
                     if lengths_key not in examples:
                         examples[lengths_key] = []
-                    examples[lengths_key] += [length]
+                    examples[lengths_key] += [np.int32(length)]
 
         for k in self.vectorizers.keys():
             examples[k] = np.stack(examples[k])
             lengths_key = '{}_lengths'.format(k)
             examples[lengths_key] = np.stack(examples[lengths_key])
+
         outcomes = self.model.predict(examples)
         outputs = []
         for i, outcome in enumerate(outcomes):
@@ -203,7 +259,7 @@ class TaggerService(Service):
             for j, token in enumerate(tokens_seq[i]):
                 new_token = dict()
                 new_token.update(token)
-                new_token[label_field] = label_vocab[outcome[j].item()]
+                new_token[label_field] = label_vocab[outcome[j].item()] # item is from np.int32
                 output += [new_token]
             outputs += [output]
         return outputs
@@ -269,6 +325,7 @@ class LanguageModelService(Service):
 @exporter
 class EncoderDecoderService(Service):
     task_name = 'seq2seq'
+    signature_name = 'suggest_text'
     task_load = load_seq2seq_model
 
     def __init__(self, vocabs=None, vectorizers=None, model=None):
@@ -299,7 +356,7 @@ class EncoderDecoderService(Service):
     @classmethod
     def load(cls, bundle, **kwargs):
         kwargs['predict'] = kwargs.get('predict', True)
-        kwargs['beam'] = kwargs.get('beam', 5)
+        kwargs['beam'] = kwargs.get('beam', 30)
         return super(EncoderDecoderService, cls).load(bundle, **kwargs)
 
     def predict(self, tokens, **kwargs):
@@ -317,6 +374,7 @@ class EncoderDecoderService(Service):
                 mxwlen = max(mxwlen, len(token))
 
         examples = dict()
+
         for k, vectorizer in self.src_vectorizers.items():
             if hasattr(vectorizer, 'mxlen') and vectorizer.mxlen == -1:
                 vectorizer.mxlen = mxlen
@@ -336,15 +394,13 @@ class EncoderDecoderService(Service):
 
         for k in self.src_vectorizers.keys():
             examples[k] = np.stack(examples[k])
-            lengths_key = '{}_lengths'.format(k)
-            examples[lengths_key] = np.stack(examples[lengths_key])
-
+    
         outcomes = self.model.predict(examples)
+
         results = []
         ##B = outcomes.shape[0]
         for i in range(len(outcomes)):
             best = outcomes[i][0]
-
             out = []
             for j in range(len(best)):
                 word = self.tgt_idx_to_token.get(best[j], '<PAD>')

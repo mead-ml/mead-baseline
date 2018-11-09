@@ -1,20 +1,26 @@
 import baseline
 import os
+import shutil
+import datetime
 from tensorflow.python.framework.errors_impl import NotFoundError
 import mead.exporters
 from mead.exporters import register_exporter
 from baseline.tf.embeddings import *
-from baseline.utils import export, read_json, ls_props, Offsets
+from baseline.utils import (export, 
+                            read_json, 
+                            ls_props, 
+                            Offsets, 
+                            write_json)
 from collections import namedtuple
 
 FIELD_NAME = 'text/tokens'
+ASSET_FILE_NAME = 'model.assets'
 
 __all__ = []
 exporter = export(__all__)
 
 
 SignatureOutput = namedtuple("SignatureOutput", ("classes", "scores"))
-
 
 @exporter
 class TensorFlowExporter(mead.exporters.Exporter):
@@ -35,20 +41,25 @@ class TensorFlowExporter(mead.exporters.Exporter):
             saver.restore(sess, basename + ".model")
 
     def run(self, basename, output_dir, model_version, **kwargs):
-        """
-        :param embeddings_set an object of all embeddings. read from the embeddings json config.
-        :param feature_descs an object describing the features. typically each key will be a
-            dict with keys (type, dsz, vsz)
-        """
         with tf.Graph().as_default():
             config_proto = tf.ConfigProto(allow_soft_placement=True)
             with tf.Session(config=config_proto) as sess:
-                sig_input, sig_output, sig_name = self._create_rpc_call(sess, basename)
-                output_path = os.path.join(tf.compat.as_bytes(output_dir), tf.compat.as_bytes(str(model_version)))
+                sig_input, sig_output, sig_name, assets = self._create_rpc_call(sess, basename)
+                # output_path = os.path.join(tf.compat.as_bytes(output_dir), tf.compat.as_bytes(str(model_version)))
+                output_path = os.path.join(output_dir, str(model_version))
                 print('Exporting trained model to %s' % output_path)
-                builder = self._create_saved_model_builder(sess, output_path, sig_input, sig_output, sig_name)
-                builder.save()
-                print('Successfully exported model to %s' % output_dir)
+
+                try:
+                    builder = self._create_saved_model_builder(sess, output_path, sig_input, sig_output, sig_name)
+                    create_bundle(builder, output_path, basename, assets)
+                    print('Successfully exported model to %s' % output_dir)
+                except AssertionError as e:
+                    # model already exists
+                    raise e
+                except Exception as e:
+                    # export process broke.
+                    # TODO(MB): we should remove the directory, if one has been saved already.
+                    raise e
 
     def _create_saved_model_builder(self, sess, output_path, sig_input, sig_output, sig_name):
         """
@@ -149,7 +160,9 @@ class ClassifyTensorFlowExporter(TensorFlowExporter):
 
         sig_input = predict_tensors
         sig_output = SignatureOutput(classes, values)
-        return sig_input, sig_output, 'predict_text'
+        sig_name = 'predict_text'
+        assets = create_assets(basename, sig_input, sig_output, sig_name, model.lengths_key)
+        return sig_input, sig_output, sig_name, assets
 
 
 @exporter
@@ -165,7 +178,7 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
         model_params["sess"] = sess
 
         state = read_json(basename + '.state')
-
+        model_params['span_type'] = state['span_type']
         # Re-create the embeddings sub-graph
         embeddings = dict()
         for key, class_name in state['embeddings'].items():
@@ -173,7 +186,7 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
             embed_args = dict({'vsz': md['vsz'], 'dsz': md['dsz']})
             Constructor = eval(class_name)
             embeddings[key] = Constructor(key, **embed_args)
-
+                
         model = baseline.model.create_model_for(self.task.task_name(), embeddings, labels, **model_params)
 
         for prop in ls_props(model):
@@ -190,9 +203,11 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
         start = tf.constant(start_np)
         model.probs = tf.concat([start, model.probs], 1)
 
+        ones = tf.fill(tf.shape(model.lengths), 1)
+        lengths = tf.add(model.lengths, ones)
+
         if model.crf is True:
-            # TODO: how to get this?
-            indices, _ = tf.contrib.crf.crf_decode(model.probs, model.A, tf.constant([model.lengths + 1]))## We are assuming the batchsz is 1 here
+            indices, _ = tf.contrib.crf.crf_decode(model.probs, model.A, lengths)
             indices = indices[:, 1:]
 
         list_of_labels = [''] * len(labels)
@@ -204,12 +219,13 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
         classes = table.lookup(tf.to_int64(indices))
         self._restore_checkpoint(sess, basename)
 
-        return model, classes, values
+        return model, indices, values
 
     def _create_rpc_call(self, sess, basename):
         model, classes, values = self._create_model(sess, basename)
 
         predict_tensors = {}
+        predict_tensors[model.lengths_key] = tf.saved_model.utils.build_tensor_info(model.lengths)
 
         for k, v in model.embeddings.items():
             try:
@@ -219,7 +235,9 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
 
         sig_input = predict_tensors
         sig_output = SignatureOutput(classes, values)
-        return sig_input, sig_output, 'tag_text'
+        sig_name = 'tag_text'
+        assets = create_assets(basename, sig_input, sig_output, sig_name, model.lengths_key)
+        return sig_input, sig_output, sig_name, assets
 
 
 @exporter
@@ -263,12 +281,14 @@ class Seq2SeqTensorFlowExporter(TensorFlowExporter):
         model_params = self.task.config_params["model"]
         model_params["sess"] = sess
         model_params['predict'] = True
+        model_params['beam'] = self.task.config_params.get('beam', 30)
 
         state = read_json(basename + '.state')
         if not state:
             raise RuntimeError("state file not found or is empty")
 
         model_params["src_lengths_key"] = state["src_lengths_key"]
+        self.length_key = state["src_lengths_key"]
 
         # Re-create the embeddings sub-graph
         embeddings = self.init_embeddings(state[self.SOURCE_STATE_EMBED_KEY].items(), basename)
@@ -286,7 +306,7 @@ class Seq2SeqTensorFlowExporter(TensorFlowExporter):
                 setattr(model, prop, state[prop])
 
         # classes = model.tgt_embedding.lookup(tf.cast(model.best, dtype=tf.int64))
-        classes = model.best
+        classes = model.decoder.best
         self._restore_checkpoint(sess, basename)
 
         return model, classes, None
@@ -295,7 +315,7 @@ class Seq2SeqTensorFlowExporter(TensorFlowExporter):
         model, classes, values = self._create_model(sess, basename)
 
         predict_tensors = {}
-        predict_tensors['src_len'] = tf.saved_model.utils.build_tensor_info(model.src_len)
+        predict_tensors[self.length_key] = tf.saved_model.utils.build_tensor_info(model.src_len)
 
         for k, v in model.src_embeddings.items():
             try:
@@ -305,5 +325,80 @@ class Seq2SeqTensorFlowExporter(TensorFlowExporter):
 
         sig_input = predict_tensors
         sig_output = SignatureOutput(classes, values)
-        return sig_input, sig_output, 'suggest_text'
-        
+        sig_name = 'suggest_text'
+        assets = create_assets(basename, sig_input, sig_output, sig_name, self.length_key, beam=model.decoder.beam_width)
+
+        return sig_input, sig_output, sig_name, assets
+
+
+def create_bundle(builder, output_path, basename, assets=None):
+    """Creates the output files for an exported model.
+
+    :builder the tensorflow saved_model builder.
+    :output_path the path to export a model. this includes the model_version name.
+    :assets a dictionary of assets to save alongside the model.
+    """
+    builder.save()
+
+    model_name = basename.split("/")[-1]
+    directory = os.path.join('/', *basename.split("/")[:-1])
+
+    save_to_bundle(output_path, directory, assets)
+
+def save_to_bundle(output_path, directory, assets=None):
+    """Save files to the exported bundle.
+
+    :vocabs
+    :vectorizers
+    :labels
+    :assets
+    :output_path  the bundle output_path. vocabs, vectorizers know how to save themselves.
+    """
+    for filename in os.listdir(directory):
+        if filename.startswith('vocabs') or \
+           filename.endswith(".labels") or \
+           filename.startswith('vectorizers'):
+            shutil.copy(os.path.join(directory, filename), os.path.join(output_path, filename))
+    
+    if assets:
+        asset_file = os.path.join(output_path, ASSET_FILE_NAME)
+        write_json(assets, asset_file)
+
+def create_assets(basename, sig_input, sig_output, sig_name, lengths_key=None, beam=None):
+    """Save required variables for running an exported model from baseline's services.
+
+    :basename the base model name. e.g. /path/to/tagger-26075
+    :sig_input the input dictionary
+    :sig_output the output namedTuple
+    :lengths_key the lengths_key from the model.
+        used to translate batch output. Exported models will return a flat list,
+        and it needs to be reshaped into per-example lists. We use this key to tell
+        us which feature holds the sequence lengths.
+
+    """
+    inputs = [k for k in sig_input]
+    outputs =  sig_output._fields
+    model_name = basename.split("/")[-1]
+    directory = basename.split("/")[:-1]
+
+    metadata = create_metadata(inputs, outputs, sig_name, model_name, lengths_key, beam=beam)
+    return metadata
+
+def create_metadata(inputs, outputs, sig_name, model_name, lengths_key=None, beam=None):
+    meta = {
+        'inputs': inputs,
+        'outputs': outputs,
+        'signature_name': sig_name,
+        'metadata': {
+            'exported_model': model_name,
+            'exported_time': str(datetime.datetime.utcnow()),
+        }
+    }
+
+    if lengths_key:
+        meta['lengths_key'] = lengths_key
+
+    if beam:
+        meta['beam'] = beam
+
+    return meta

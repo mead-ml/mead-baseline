@@ -282,4 +282,3 @@ class EncoderDecoderModel(object):
     # deprecated: use predict
     def run(self, source_dict, **kwargs):
         return self.predict(source_dict, **kwargs)
-

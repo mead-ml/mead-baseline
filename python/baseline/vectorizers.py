@@ -84,7 +84,7 @@ class Token1DVectorizer(AbstractVectorizer):
         if self.mxlen < 0:
             self.mxlen = self.max_seen
 
-        vec1d = np.zeros(self.mxlen, dtype=int)
+        vec1d = np.zeros(self.mxlen, dtype=np.int32)
         for i, atom in enumerate(self._next_element(tokens, vocab)):
             if i == self.mxlen:
                 i -= 1
@@ -195,7 +195,7 @@ class Char2DVectorizer(AbstractCharVectorizer):
 
         EOW = vocab.get('<EOW>', vocab.get(' '))
 
-        vec2d = np.zeros((self.mxlen, self.mxwlen), dtype=int)
+        vec2d = np.zeros((self.mxlen, self.mxwlen), dtype=np.int32)
         i = 0
         j = 0
         for atom in self._next_element(tokens, vocab):
@@ -234,7 +234,6 @@ class Char1DVectorizer(AbstractCharVectorizer):
 
     def __init__(self, **kwargs):
         super(Char1DVectorizer, self).__init__(kwargs.get('transform_fn'))
-        print(kwargs)
         self.mxlen = kwargs.get('mxlen', -1)
         self.time_reverse = kwargs.get('rev', False)
         self.max_seen_tok = 0
@@ -258,7 +257,7 @@ class Char1DVectorizer(AbstractCharVectorizer):
         if self.mxlen < 0:
             self.mxlen = self.max_seen_tok
 
-        vec1d = np.zeros(self.mxlen, dtype=int)
+        vec1d = np.zeros(self.mxlen, dtype=np.int32)
         for i, atom in enumerate(self._next_element(tokens, vocab)):
             if i == self.mxlen:
                 i -= 1
