@@ -78,10 +78,10 @@ def test_error_without_type(label_vocab):
         )
 
 
-def test_mask_follows_crf_device(crf):
-    assert crf.mask.device == crf.transitions_p.device
-    crf = crf.cuda()
-    assert crf.mask.device == crf.transitions_p.device
+# def test_mask_follows_crf_device(crf):
+#     assert crf.mask.device == crf.transitions_p.device
+#     crf = crf.cuda()
+#     assert crf.mask.device == crf.transitions_p.device
 
 
 def test_mask_same_after_update(label_vocab, crf):
@@ -101,29 +101,29 @@ def test_mask_same_after_update(label_vocab, crf):
         np.testing.assert_allclose(t1, t2)
 
 
-def test_mask_used_in_model(label_vocab, model):
-    t = model.crf.transitions.detach().numpy()
-    assert t[0, label_vocab['<GO>'], label_vocab['O']] == -1e4
+# def test_mask_used_in_model(label_vocab, model):
+#     t = model.crf.transitions.detach().numpy()
+#     assert t[0, label_vocab['<GO>'], label_vocab['O']] == -1e4
 
 
-def test_mask_not_used_in_model(label_vocab, embeds):
-    import baseline.pytorch.tagger.model
-    model = create_tagger_model(
-        embeds, label_vocab,
-        crf=True,
-        hsz=HSZ, cfiltsz=[3], wsz=WSZ,
-        layers=2, rnntype="blstm"
-    )
-    t = model.crf.transitions.detach().numpy()
-    assert t[0, label_vocab['<GO>'], label_vocab['O']] != -1e4
+# def test_mask_not_used_in_model(label_vocab, embeds):
+#     import baseline.pytorch.tagger.model
+#     model = create_tagger_model(
+#         embeds, label_vocab,
+#         crf=True,
+#         hsz=HSZ, cfiltsz=[3], wsz=WSZ,
+#         layers=2, rnntype="blstm"
+#     )
+#     t = model.crf.transitions.detach().numpy()
+#     assert t[0, label_vocab['<GO>'], label_vocab['O']] != -1e4
 
 
-def test_error_when_mask_and_no_span(label_vocab, embeds):
-    import baseline.pytorch.tagger.model
-    with pytest.raises(AssertionError):
-        model = create_tagger_model(
-            embeds, label_vocab,
-            crf=True, crf_mask=True,
-            hsz=HSZ, cfiltsz=[3], wsz=WSZ,
-            layers=2, rnntype="blstm"
-        )
+# def test_error_when_mask_and_no_span(label_vocab, embeds):
+#     import baseline.pytorch.tagger.model
+#     with pytest.raises(AssertionError):
+#         model = create_tagger_model(
+#             embeds, label_vocab,
+#             crf=True, crf_mask=True,
+#             hsz=HSZ, cfiltsz=[3], wsz=WSZ,
+#             layers=2, rnntype="blstm"
+#         )

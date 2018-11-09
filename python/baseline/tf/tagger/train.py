@@ -1,7 +1,7 @@
 import time
 import tensorflow as tf
 import numpy as np
-from baseline.tf.tfy import optimizer
+from baseline.tf.optz import optimizer
 from baseline.progress import create_progress_bar
 from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
 import os
@@ -119,7 +119,7 @@ class TaggerTrainerTf(EpochReportingTrainer):
         metrics = {}
         pg = create_progress_bar(steps)
         for batch_dict in ts:
-            feed_dict = self.model.make_input(batch_dict, do_dropout=True)
+            feed_dict = self.model.make_input(batch_dict, True)
             _, step, lossv = self.model.sess.run([self.train_op, self.global_step, self.loss], feed_dict=feed_dict)
             total_loss += lossv
             pg.update()

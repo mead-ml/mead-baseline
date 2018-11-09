@@ -445,7 +445,7 @@ def write_json(content, filepath):
 
 @exporter
 def ls_props(thing):
-    return [x for x in dir(thing) if isinstance(getattr(type(thing), x, None), property)]
+    return [x for x in dir(thing) if isinstance(getattr(type(thing), x, None), property) and not x.startswith('pkeep')]
 
 
 @exporter

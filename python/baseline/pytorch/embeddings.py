@@ -10,6 +10,7 @@ import torch
 import numpy as np
 import math
 
+
 class PyTorchEmbeddings(object):
 
     def __init__(self):

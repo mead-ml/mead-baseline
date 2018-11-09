@@ -22,6 +22,16 @@ class TaggerModelBase(TaggerModel):
     def lengths_key(self, value):
         self._lengths_key = value
 
+    @property
+    def pkeep(self):
+        """This property is provided for models that wish to access the default `pdrop_value` property.
+
+        The property here uses `pdrop_value` and the `training` flag to determine how much dropout to apply (if any)
+
+        :return:
+        """
+        return 1.0 - self.pdrop_value * TRAIN_FLAG()
+
     def save_values(self, basename):
         self.saver.save(self.sess, basename)
 
@@ -58,6 +68,14 @@ class TaggerModelBase(TaggerModel):
     UNK = 1
     PAD = 0
 
+    @property
+    def dropin_value(self):
+        return self._dropin_value
+
+    @dropin_value.setter
+    def dropin_value(self, dict_value):
+        self._dropin_value = dict_value
+
     def drop_inputs(self, key, x, do_dropout):
         v = self.dropin_value.get(key, 0)
         if do_dropout and v > 0.0:
@@ -65,13 +83,13 @@ class TaggerModelBase(TaggerModel):
             x[drop_indices[0], drop_indices[1]] = TaggerModelBase.UNK
         return x
 
-    def make_input(self, batch_dict, do_dropout=False):
+    def make_input(self, batch_dict, train=False):
+        feed_dict = new_placeholder_dict(train)
+        for k in self.embeddings.keys():
+            feed_dict["{}:0".format(k)] = self.drop_inputs(k, batch_dict[k], train)
         y = batch_dict.get('y', None)
 
-        feed_dict = {"{}:0".format(k): batch_dict[k] for k in self.embeddings.keys()}
         #feed_dict = {v.x: self.drop_inputs(k, batch_dict[k], do_dropout) for k, v in self.embeddings.items()}
-        pkeep = 1.0 - self.pdrop_value if do_dropout else 1.0
-        feed_dict[self.pkeep] = pkeep
 
         # Allow us to track a length, which is needed for BLSTMs
         feed_dict[self.lengths] = batch_dict[self.lengths_key]
@@ -140,7 +158,6 @@ class TaggerModelBase(TaggerModel):
         model.lengths = tf.get_default_graph().get_tensor_by_name('lengths:0')
 
         model.y = tf.get_default_graph().get_tensor_by_name('y:0')
-        model.pkeep = tf.get_default_graph().get_tensor_by_name('pkeep:0')
         model.probs = tf.get_default_graph().get_tensor_by_name('output/probs:0')
         model.best = tf.get_default_graph().get_tensor_by_name('output/best:0')
 
@@ -229,7 +246,6 @@ class TaggerModelBase(TaggerModel):
                 else:
                     self._create_word_level_decode()
 
-
         return all_loss
 
     def __init__(self):
@@ -271,7 +287,6 @@ class TaggerModelBase(TaggerModel):
         nc = len(labels)
         model.y = kwargs.get('y', tf.placeholder(tf.int32, [None, None], name="y"))
         # This only exists to make exporting easier
-        model.pkeep = kwargs.get('pkeep', tf.placeholder_with_default(1.0, shape=(), name="pkeep"))
         model.pdrop_value = kwargs.get('dropout', 0.5)
         model.dropin_value = kwargs.get('dropin', {})
         model.sess = kwargs.get('sess', tf.Session())

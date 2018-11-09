@@ -1,11 +1,13 @@
-import baseline.data
-import numpy as np
-from collections import Counter
+from six.moves import filter
+
+import os
 import re
 import codecs
-from baseline.utils import import_user_module, revlut, export, optional_params, Offsets
+from collections import Counter
+import numpy as np
+import baseline.data
 from baseline.vectorizers import Dict1DVectorizer, GOVectorizer
-import os
+from baseline.utils import import_user_module, revlut, export, optional_params, Offsets
 
 __all__ = []
 exporter = export(__all__)
@@ -22,7 +24,6 @@ def register_reader(cls, task, name=None):
     Use this pattern if you want to provide an override to a `Reader` class.
 
     """
-    """Register a function as a plug-in"""
     if name is None:
         name = cls.__name__
 
@@ -45,11 +46,32 @@ def create_reader(task, vectorizers, trim, **kwargs):
 
 @exporter
 def num_lines(filename):
-    lines = 0
+    """Counts the number of lines in a file.
+
+    :param filename: `str` The name of the file to count the lines of.
+    :returns: `int` The number of lines.
+    """
     with codecs.open(filename, encoding='utf-8', mode='r') as f:
-        for _ in f:
-            lines = lines + 1
-    return lines
+        return sum(1 for _ in f)
+
+
+def _filter_vocab(vocab, min_fs):
+    """Filter down the vocab based on rules in the vectorizers.
+
+    :param vocab: `dict[Counter]`: A dict of vocabs.
+    :param min_fs: `dict[int]: A dict of cutoffs.
+
+    Note:
+        Any key in the min_fs dict should appear in the vocab dict.
+
+    :returns: `dict[dict]`: A dict of new filtered vocabs.
+    """
+    for k, min_f in min_fs.items():
+        # If we don't filter then skip to save an iteration through the vocab
+        if min_f == -1:
+            continue
+        vocab[k] = dict(filter(lambda x: x[1] >= min_f, vocab[k].items()))
+    return vocab
 
 
 def _build_vocab_for_col(col, files, vectorizers):
@@ -84,7 +106,7 @@ class ParallelCorpusReader(object):
                 self.src_vectorizers[k] = vectorizer
         self.trim = trim
 
-    def build_vocabs(self, files):
+    def build_vocabs(self, files, **kwargs):
         pass
 
     def load_examples(self, tsfile, vocab1, vocab2, shuffle, sort_key):
@@ -105,9 +127,13 @@ class TSVParallelCorpusReader(ParallelCorpusReader):
         self.src_col_num = src_col_num
         self.tgt_col_num = tgt_col_num
 
-    def build_vocabs(self, files):
+    def build_vocabs(self, files, **kwargs):
         src_vocab = _build_vocab_for_col(self.src_col_num, files, self.src_vectorizers)
         tgt_vocab = _build_vocab_for_col(self.tgt_col_num, files, {'tgt': self.tgt_vectorizer})
+        min_f = kwargs.get('min_f', {})
+        tgt_min_f = {'tgt': min_f.pop('tgt', -1)}
+        src_vocab = _filter_vocab(src_vocab, min_f)
+        tgt_vocab = _filter_vocab(tgt_vocab, tgt_min_f)
         return src_vocab, tgt_vocab['tgt']
 
     def load_examples(self, tsfile, src_vocabs, tgt_vocab, do_shuffle, src_sort_key):
@@ -146,13 +172,17 @@ class MultiFileParallelCorpusReader(ParallelCorpusReader):
 
     # 2 possibilities here, either we have a vocab file, e.g. vocab.bpe.32000, or we are going to generate
     # from each column
-    def build_vocabs(self, files):
+    def build_vocabs(self, files, **kwargs):
         if len(files) == 1 and os.path.exists(files[0]):
             src_vocab = _build_vocab_for_col(0, files, self.src_vectorizers)
             tgt_vocab = _build_vocab_for_col(0, files, {'tgt': self.tgt_vectorizer})
         else:
             src_vocab = _build_vocab_for_col(0, [f + self.src_suffix for f in files], self.src_vectorizers)
             tgt_vocab = _build_vocab_for_col(0, [f + self.tgt_suffix for f in files], {'tgt': self.tgt_vectorizer})
+        min_f = kwargs.get('min_f', {})
+        tgt_min_f = {'tgt': min_f.pop('tgt', -1)}
+        src_vocab = _filter_vocab(src_vocab, min_f)
+        tgt_vocab = _filter_vocab(tgt_vocab, tgt_min_f)
         return src_vocab, tgt_vocab['tgt']
 
     def load_examples(self, tsfile, src_vocabs, tgt_vocab, do_shuffle, src_sort_key):
@@ -176,18 +206,18 @@ class MultiFileParallelCorpusReader(ParallelCorpusReader):
 @exporter
 class SeqPredictReader(object):
 
-    def __init__(self, vectorizers, trim=False):
+    def __init__(self, vectorizers, trim=False, mxlen=-1, **kwargs):
+        super(SeqPredictReader, self).__init__()
         self.vectorizers = vectorizers
         self.trim = trim
-        #self.label2index = {"<PAD>": 0, "<GO>": 1, "<EOS>": 2}
         self.label2index = {
             Offsets.VALUES[Offsets.PAD]: Offsets.PAD,
             Offsets.VALUES[Offsets.GO]: Offsets.GO,
             Offsets.VALUES[Offsets.EOS]: Offsets.EOS
         }
-        self.label_vectorizer = Dict1DVectorizer(fields='y', mxlen=-1)
+        self.label_vectorizer = Dict1DVectorizer(fields='y', mxlen=mxlen)
 
-    def build_vocab(self, files):
+    def build_vocab(self, files, **kwargs):
 
         vocabs = {}
         for key in self.vectorizers.keys():
@@ -205,6 +235,7 @@ class SeqPredictReader(object):
                     vocab_example = vectorizer.count(example)
                     vocabs[k].update(vocab_example)
 
+        vocabs = _filter_vocab(vocabs, kwargs.get('min_f', {}))
         base_offset = len(self.label2index)
         for i, k in enumerate(labels.keys()):
             self.label2index[k] = i + base_offset
@@ -240,7 +271,7 @@ class SeqPredictReader(object):
 class CONLLSeqReader(SeqPredictReader):
 
     def __init__(self, vectorizers, trim=False, **kwargs):
-        super(CONLLSeqReader, self).__init__(vectorizers, trim)
+        super(CONLLSeqReader, self).__init__(vectorizers, trim, **kwargs)
         self.named_fields = kwargs.get('named_fields', {})
 
     def read_examples(self, tsfile):
@@ -332,13 +363,13 @@ class TSVSeqLabelReader(SeqLabelReader):
 
     def build_vocab(self, files, **kwargs):
         """Take a directory (as a string), or an array of files and build a vocabulary
-        
+
         Take in a directory or an array of individual files (as a list).  If the argument is
         a string, it may be a directory, in which case, all files in the directory will be loaded
         to form a vocabulary.
-        
+
         :param files: Either a directory (str), or an array of individual files
-        :return: 
+        :return:
         """
         label_idx = len(self.label2index)
         if type(files) == str:
@@ -367,6 +398,8 @@ class TSVSeqLabelReader(SeqLabelReader):
                     if label not in self.label2index:
                         self.label2index[label] = label_idx
                         label_idx += 1
+
+        vocab = _filter_vocab(vocab, kwargs.get('min_f', {}))
 
         return vocab, self.get_labels()
 
@@ -413,7 +446,7 @@ class LineSeqReader(object):
         self.nctx = kwargs['nctx']
         self.vectorizers = vectorizers
 
-    def build_vocab(self, files):
+    def build_vocab(self, files, **kwargs):
 
         vocabs = {}
         for key in self.vectorizers.keys():
@@ -430,6 +463,8 @@ class LineSeqReader(object):
                     sentences += line.split() + ['<EOS>']
                 for k, vectorizer in self.vectorizers.items():
                     vocabs[k].update(vectorizer.count(sentences))
+
+        vocabs = _filter_vocab(vocabs, kwargs.get('min_f', {}))
         return vocabs
 
     def load(self, filename, vocabs, batchsz, tgt_key='x'):
@@ -447,5 +482,3 @@ class LineSeqReader(object):
                 x['{}_dims'.format(k)] = tuple(shp)
 
         return baseline.data.SeqWordCharDataFeed(x, self.nctx, batchsz, tgt_key=tgt_key)
-
-

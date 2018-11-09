@@ -6,6 +6,26 @@ from baseline.utils import lookup_sentence, beam_multinomial, crf_mask as crf_m,
 import math
 
 
+BASELINE_TF_TRAIN_FLAG = None
+
+
+def TRAIN_FLAG():
+    """Create a global training flag on first use"""
+    global BASELINE_TF_TRAIN_FLAG
+    if BASELINE_TF_TRAIN_FLAG is not None:
+        return BASELINE_TF_TRAIN_FLAG
+
+    BASELINE_TF_TRAIN_FLAG = tf.placeholder_with_default(0.0, shape=(), name="TRAIN_FLAG")
+    return BASELINE_TF_TRAIN_FLAG
+
+
+def new_placeholder_dict(train):
+    global BASELINE_TF_TRAIN_FLAG
+    if train:
+        return {BASELINE_TF_TRAIN_FLAG: 1}
+    return {}
+
+
 def _add_ema(model, decay):
     """Create ops needed to track EMA when training.
 
@@ -130,76 +150,6 @@ def get_vocab_file_suffixes(model_file):
     full_base = os.path.join(basepath, model_name)
     # the length of the name plus 1 for the hyphen separating the suffix.
     return [x[len(full_base)+1:] for x in filenames if x.startswith(full_base)]
-
-
-def optimizer(loss_fn, **kwargs):
-
-    global_step = tf.Variable(0, trainable=False)
-    clip = kwargs.get('clip', None)
-    mom = kwargs.get('mom', 0.9)
-    optim = kwargs.get('optim', 'sgd')
-    eta = kwargs.get('eta', kwargs.get('lr', 0.01))
-    decay_type = kwargs.get('decay_type', None)
-    decay_fn = None
-    colocate_gradients_with_ops = bool(kwargs.get('colocate_gradients_with_ops', False))
-    if decay_type == 'piecewise':
-        boundaries = kwargs.get('bounds', None)
-        decay_values = kwargs.get('decay_values', None)
-        decay_fn = lambda lr, global_step: tf.train.piecewise_constant(global_step, boundaries, decay_values)
-
-    elif decay_type == 'staircase':
-        at_step = int(kwargs.get('bounds', 16000))
-        decay_rate = float(kwargs.get('decay_rate', 0.5))
-        decay_fn = lambda lr, global_step: tf.train.exponential_decay(lr, global_step, at_step, decay_rate, staircase=True)
-
-    elif decay_type == 'invtime':
-        decay_rate = float(kwargs.get('decay_rate', 0.05))
-        at_step = int(kwargs.get('bounds', 16000))
-        decay_fn = lambda lr, global_step: tf.train.inverse_time_decay(lr, global_step, at_step, decay_rate, staircase=False)
-
-    # warm restarts in master, not in 1.5 yet
-    #elif decay_type == 'sgdr':
-    #    at_step = kwargs.get('bounds', 1000)
-    #    decay_fn = lambda lr, global_step: tf.train.cosine_decay_restarts(lr, global_step, first_decay_steps=at_step)
-
-    elif decay_type == 'cosine':
-        at_step = kwargs.get('bounds', 1000)
-        decay_fn = lambda lr, global_step: tf.train.cosine_decay(lr, global_step, at_step)
-
-    elif decay_type == 'lincos':
-        at_step = kwargs.get('bounds', 1000)
-        decay_fn = lambda lr, global_step: tf.train.linear_cosine_decay(lr, global_step, at_step)
-
-    elif decay_type == 'zaremba':
-        boundaries = kwargs.get('bounds', None)
-        decay_rate = float(kwargs.get('decay_rate', None))
-        values = [eta/(decay_rate**i) for i in range(len(boundaries)+1)]
-        print('Learning rate schedule:')
-        print('B', len(boundaries), boundaries)
-        print('V', len(values), values)
-        decay_fn = lambda lr, global_step: tf.train.piecewise_constant(global_step, boundaries, values)
-
-    if optim == 'adadelta':
-        print('adadelta', eta)
-        optz = lambda lr: tf.train.AdadeltaOptimizer(lr, 0.95, 1e-6)
-    elif optim == 'adam':
-        print('adam', eta)
-        optz = lambda lr: tf.train.AdamOptimizer(lr)
-    elif optim == 'rmsprop':
-        print('rmsprop', eta)
-        optz = lambda lr: tf.train.RMSPropOptimizer(lr, momentum=mom)
-    elif mom > 0:
-        print('sgd-mom', eta, mom)
-        optz = lambda lr: tf.train.MomentumOptimizer(lr, mom)
-    else:
-        print('sgd')
-        optz = lambda lr: tf.train.GradientDescentOptimizer(lr)
-
-    print('clip', clip)
-    print('decay', decay_fn)
-    return global_step, tf.contrib.layers.optimize_loss(loss_fn, global_step, eta, optz,
-                                                        colocate_gradients_with_ops=colocate_gradients_with_ops,
-                                                        clip_gradients=clip, learning_rate_decay_fn=decay_fn)
 
 
 def dense_layer(output_layer_depth):
@@ -633,8 +583,8 @@ def get_shape_as_list(x):
 def layer_norm(input, name, axis=[-1]):
 
     def _norm(x, g=None, b=None, e=1e-5, axis=[1]):
-        u = tf.reduce_mean(x, axis=axis, keep_dims=True)
-        s = tf.reduce_mean(tf.square(x-u), axis=axis, keep_dims=True)
+        u = tf.reduce_mean(x, axis=axis, keepdims=True)
+        s = tf.reduce_mean(tf.square(x-u), axis=axis, keepdims=True)
         x = (x - u) * tf.rsqrt(s + e)
         if g is not None and b is not None:
             x = x*g + b

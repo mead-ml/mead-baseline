@@ -26,7 +26,7 @@
     "model": {
         "model_type": "default",
 	"tie_weights": "true",
-        "hsz": 200,
+        "hsz": 300,
         "dropout": 0.5,
         "layers": 2
     },

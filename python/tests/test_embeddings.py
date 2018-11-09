@@ -7,6 +7,7 @@ import pytest
 import numpy as np
 from baseline.w2v import *
 from baseline.w2v import norm_weights
+from baseline.utils import Offsets
 
 loc = os.path.dirname(os.path.realpath(__file__))
 GLOVE_FILE = os.path.join(loc, "test_data", "glove_test.txt")
@@ -21,8 +22,8 @@ def random_model():
 
 
 def test_glove_vsz():
-    # Demo data + <PAD> and <UNK>
-    gold_vsz = 12
+    # Demo data = 10
+    gold_vsz = 10 + len(Offsets.VALUES)
     wv = PretrainedEmbeddingsModel(GLOVE_FILE, keep_unused=True)
     assert wv.get_vsz() == gold_vsz
 
@@ -34,7 +35,7 @@ def test_glove_dsz():
 
 
 def test_w2v_vsz():
-    gold_vsz = 12
+    gold_vsz = 10 + len(Offsets.VALUES)
     wv = PretrainedEmbeddingsModel(W2V_FILE, keep_unused=True)
     assert wv.get_vsz() == gold_vsz
 

@@ -5,6 +5,7 @@ from baseline.train import EpochReportingTrainer, create_trainer, register_train
 import torch
 import torch.autograd
 from baseline.utils import verbose_output
+from baseline.pytorch.optz import OptimizerManager
 
 
 def _add_to_cm(cm, y, pred):
@@ -19,30 +20,9 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
 
     def __init__(self, model, **kwargs):
         super(ClassifyTrainerPyTorch, self).__init__()
-        eta = kwargs.get('eta', kwargs.get('lr', 0.01))
-        print('using eta [%.4f]' % eta)
-        optim = kwargs.get('optim', 'sgd')
-        weight_decay = float(kwargs.get('weight_decay', 0))
-        print('using optim [%s]' % optim)
         self.clip = float(kwargs.get('clip', 5))
-        parameters = filter(lambda p: p.requires_grad, model.parameters())
         self.labels = model.labels
-        if optim == 'adadelta':
-            print('Using adadelta, ignoring learning rate')
-            self.optimizer = torch.optim.Adadelta(parameters, weight_decay=weight_decay)
-        elif optim == 'adam':
-            self.optimizer = torch.optim.Adam(parameters, weight_decay=weight_decay)
-        elif optim == 'adagrad':
-            self.optimizer = torch.optim.Adagrad(parameters, weight_decay=weight_decay)
-        elif optim == 'rmsprop':
-            self.optimizer = torch.optim.RMSprop(model.parameters(), lr=eta, weight_decay=weight_decay)
-        elif optim == 'asgd':
-            self.optimizer = torch.optim.ASGD(model.parameters(), lr=eta)
-        else:
-            mom = kwargs.get('mom', 0.9)
-            print('using mom [%.3f]' % mom)
-            self.optimizer = torch.optim.SGD(parameters, lr=eta, momentum=mom, weight_decay=weight_decay)
-
+        self.optimizer = OptimizerManager(model, **kwargs)
         self.crit = model.create_loss().cuda()
         self.model = torch.nn.DataParallel(model).cuda()
 

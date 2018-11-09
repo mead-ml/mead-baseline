@@ -10,11 +10,20 @@ from google.protobuf import text_format
 class LanguageModelBase(LanguageModel):
 
     def __init__(self):
-        self.pkeep = None
         self.saver = None
         self.layers = None
         self.hsz = None
         self.probs = None
+
+    @property
+    def pkeep(self):
+        """This property is provided for models that wish to access the default `pdrop_value` property.
+
+        The property here uses `pdrop_value` and the `TRAIN_FLAG` to determine how much dropout to apply (if any)
+
+        :return:
+        """
+        return 1.0 - self.pdrop_value * TRAIN_FLAG()
 
     def save_using(self, saver):
         self.saver = saver
@@ -59,18 +68,17 @@ class LanguageModelBase(LanguageModel):
 
     def create_loss(self):
         with tf.variable_scope("Loss"):
+            vsz = self.embeddings[self.tgt_key].vsz
             targets = tf.reshape(self.y, [-1])
-            loss = tf.contrib.legacy_seq2seq.sequence_loss_by_example(
-                [self.logits],
-                [targets],
-                [tf.ones([tf.size(targets)], dtype=tf.float32)])
-            loss = tf.reduce_sum(loss) / self.batchsz
+            bt_x_v = tf.nn.log_softmax(tf.reshape(self.logits, [-1, vsz]), axis=-1)
+            one_hots = tf.one_hot(targets, vsz)
+            example_loss = -tf.reduce_sum(one_hots * bt_x_v, axis=-1)
+            loss = tf.reduce_sum(example_loss) / self.batchsz
             return loss
 
-    def make_input(self, batch_dict, do_dropout=False):
+    def make_input(self, batch_dict, train=False):
 
-        pkeep = 1.0 - self.pdrop_value if do_dropout else 1.0
-        feed_dict = {self.pkeep: pkeep}
+        feed_dict = new_placeholder_dict(train)
 
         for key in self.embeddings.keys():
 
@@ -95,9 +103,7 @@ class LanguageModelBase(LanguageModel):
         lm.y = kwargs.get('y', tf.placeholder(tf.int32, [None, None], name="y"))
         lm.batchsz = kwargs['batchsz']
         lm.sess = kwargs.get('sess', tf.Session())
-        lm.pkeep = kwargs.get('pkeep', tf.placeholder(tf.float32, name="pkeep"))
-        pdrop = kwargs.get('pdrop', 0.5)
-        lm.pdrop_value = pdrop
+        lm.pdrop_value = kwargs.get('pdrop', 0.5)
         lm.hsz = kwargs['hsz']
         lm.tgt_key = kwargs.get('tgt_key')
         if lm.tgt_key is None:
@@ -177,15 +183,14 @@ class LanguageModelBase(LanguageModel):
     def output(self, h, vsz, **kwargs):
         # Do weight sharing if we can
         do_weight_tying = bool(kwargs.get('tie_weights', False))
+        vocab_b = tf.get_variable("vocab_b", [vsz],  initializer=tf.zeros_initializer(), dtype=tf.float32)
         if do_weight_tying and self.hsz == self.embeddings[self.tgt_key].get_dsz():
             with tf.variable_scope(self.embeddings[self.tgt_key].scope, reuse=True):
                 W = tf.get_variable("W")
-            return tf.matmul(h, W, transpose_b=True, name="logits")
+            return tf.matmul(h, W, transpose_b=True, name="logits") + vocab_b
         else:
             vocab_w = tf.get_variable(
                 "vocab_w", [self.hsz, vsz], dtype=tf.float32)
-            vocab_b = tf.get_variable("vocab_b", [vsz], dtype=tf.float32)
-
             return tf.nn.xw_plus_b(h, vocab_w, vocab_b, name="logits")
 
 

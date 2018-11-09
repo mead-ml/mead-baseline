@@ -5,7 +5,9 @@ from tensorflow.python.platform import gfile
 from baseline.utils import fill_y, listify, write_json, ls_props, read_json
 from baseline.model import ClassifierModel, register_model
 from baseline.tf.tfy import (stacked_lstm,
-                             parallel_conv)
+                             parallel_conv,
+                             TRAIN_FLAG,
+                             new_placeholder_dict)
 from baseline.tf.embeddings import *
 from baseline.version import __version__
 from tensorflow.contrib.layers import fully_connected
@@ -16,6 +18,34 @@ import copy
 class ClassifyParallelModel(ClassifierModel):
 
     def __init__(self, create_fn, embeddings, labels, **kwargs):
+        """Create N replica graphs for GPU + 1 for inference on CPU
+
+        The basic idea of the constructor is to create several replicas for training by creating a `tf.split` operation
+        on the input tensor and feeding the splits to each of the underlying replicas.  The way we do this is to take in
+        the creation function for a single graph and call it N times while passing in the splits as kwargs.
+
+        Because our `create_fn` (typically `cls.create()` where `cls` is a sub-class of ClassifierModelBase) allows
+        us to inject its inputs through keyword arguments instead of creating its own placeholders, we can inject each
+        split into the inputs which causes each replica to be a sub-graph of this parent graph.  For this to work,
+        this class also has to have its own placeholders, which it uses as inputs.
+
+        Any time we are doing validation during the training process, we delegate the request to the underlying member
+        variable `.inference` (which is sharing its weights with the other replicas).  This also happens on `save()`,
+        allowing us to create a perfectly normal single sub-graph checkpoint for later inference.
+
+        The actual way that we accomplish the replica creation is by copying the input keyword arguments and injecting
+        any parallel operations (splits) by deep-copy and update to the dictionary.
+
+        :param create_fn: This function is actually our caller, who creates the graph (if no `gpus` arg)
+        :param embeddings: This is the set of embeddings sub-graphs
+        :param labels: This is the labels
+        :param kwargs: See below, also see ``ClassifierModelBase.create`` for kwargs that are not specific to multi-GPU
+
+        :Keyword Arguments:
+        * *gpus* -- (``int``) - The number of GPUs to create replicas on
+        * *lengths_key* -- (``str``) - A string representing the key for the src tensor whose lengths should be used
+
+        """
         super(ClassifyParallelModel, self).__init__()
         # We need to remove these because we may be calling back to our caller, and we need
         # the condition of calling to be non-parallel
@@ -47,8 +77,6 @@ class ClassifyParallelModel(ClassifierModel):
 
         # This only exists to make exporting easier
         self.y = kwargs.get('y', tf.placeholder(tf.int32, [None, nc], name="y_parallel"))
-        self.pkeep = kwargs.get('pkeep', tf.placeholder_with_default(1.0, shape=(), name="pkeep"))
-        self.pdrop_value = kwargs.get('dropout', 0.5)
 
         y_splits = tf.split(self.y, gpus)
         split_operations['y'] = y_splits
@@ -57,23 +85,22 @@ class ClassifyParallelModel(ClassifierModel):
 
         sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False)) 
         with tf.device(tf.DeviceSpec(device_type="CPU")):
+            # This change is required since we attach our .x onto the object in v1
             self.inference = create_fn(embeddings, labels, sess=sess, **kwargs)
         for i in range(gpus):
             with tf.device(tf.DeviceSpec(device_type='GPU', device_index=i)):
 
                 kwargs_single = copy.deepcopy(kwargs)
                 kwargs_single['sess'] = sess
-                kwargs_single['pkeep'] = self.pkeep
 
                 for k, split_operation in split_operations.items():
                     kwargs_single[k] = split_operation[i]
-                replica = create_fn(embeddings, labels, **kwargs_single)
+                replica = create_fn({k: v.detached_ref() for k, v in embeddings.items()}, labels, **kwargs_single)
                 self.replicas.append(replica)
                 loss_op = replica.create_loss()
                 losses.append(loss_op)
 
         self.loss = tf.reduce_mean(tf.stack(losses))
-
         self.sess = sess
         self.best = self.inference.best
 
@@ -90,13 +117,12 @@ class ClassifyParallelModel(ClassifierModel):
         self.inference.saver = saver
         self.saver = saver
 
-    def make_input(self, batch_dict, do_dropout=False):
-        if do_dropout is False:
+    def make_input(self, batch_dict, train=False):
+        if train is False:
             return self.inference.make_input(batch_dict)
 
         y = batch_dict.get('y', None)
-        pkeep = 1.0 - self.pdrop_value if do_dropout else 1.0
-        feed_dict = {self.pkeep: pkeep}
+        feed_dict = new_placeholder_dict(True)
 
         for key in self.parallel_params.keys():
             feed_dict["{}_parallel:0".format(key)] = batch_dict[key]
@@ -216,18 +242,17 @@ class ClassifierModelBase(ClassifierModel):
             results.append(outcomes)
         return results
 
-    def make_input(self, batch_dict, do_dropout=False):
+    def make_input(self, batch_dict, train=False):
         """Transform a `batch_dict` into a TensorFlow `feed_dict`
 
         :param batch_dict: (``dict``) A dictionary containing all inputs to the embeddings for this model
-        :param do_dropout: (``bool``) Should we do dropout.  Defaults to False
+        :param train: (``bool``) Are we training.  Defaults to False
         :return:
         """
         y = batch_dict.get('y', None)
-
-        feed_dict = {"{}:0".format(k): batch_dict[k] for k in self.embeddings.keys()}
-        pkeep = 1.0 - self.pdrop_value if do_dropout else 1.0
-        feed_dict[self.pkeep] = pkeep
+        feed_dict = new_placeholder_dict(train)
+        for k in self.embeddings.keys():
+            feed_dict["{}:0".format(k)] = batch_dict[k]
 
         # Allow us to track a length, which is needed for BLSTMs
         if self.lengths_key is not None:
@@ -299,7 +324,6 @@ class ClassifierModelBase(ClassifierModel):
 
         else:
             model.lengths = None
-        model.pkeep = tf.get_default_graph().get_tensor_by_name('pkeep:0')
         model.probs = tf.get_default_graph().get_tensor_by_name('output/probs:0')
 
         model.best = tf.get_default_graph().get_tensor_by_name('output/best:0')
@@ -316,6 +340,16 @@ class ClassifierModelBase(ClassifierModel):
     @lengths_key.setter
     def lengths_key(self, value):
         self._lengths_key = value
+
+    @property
+    def pkeep(self):
+        """This property is provided for models that wish to access the default `pdrop_value` property.
+
+        The property here uses `pdrop_value` and the `training` flag to determine how much dropout to apply (if any)
+
+        :return:
+        """
+        return 1.0 - self.pdrop_value * TRAIN_FLAG()
 
     @classmethod
     def create(cls, embeddings, labels, **kwargs):
@@ -368,7 +402,6 @@ class ClassifierModelBase(ClassifierModel):
         nc = len(labels)
         model.y = kwargs.get('y', tf.placeholder(tf.int32, [None, nc], name="y"))
         # This only exists to make exporting easier
-        model.pkeep = kwargs.get('pkeep', tf.placeholder_with_default(1.0, shape=(), name="pkeep"))
         model.pdrop_value = kwargs.get('dropout', 0.5)
         # This only exists to make exporting easier
 

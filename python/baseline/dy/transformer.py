@@ -46,11 +46,11 @@ def scaled_dot_product_attention(query, key, value, mask=None, dropout=None):
 
 def dot_product_attention(query, key, value, mask=None, dropout=None):
     """Input Shape: ((D, T, H), B)"""
-    scores = batch_matmul(query, transpose(key, -2, -1))
+    scores = batch_matmul(transpose(key, 0, 1), query)
     if mask is not None:
         scores = dy.cmult(scores, mask[0]) + (mask[1] * -1e9)
 
-    weights = last_dim_softmax(scores)
+    weights = folded_softmax(scores)
 
     if dropout is not None:
         weights = dy.dropout(weights, dropout)

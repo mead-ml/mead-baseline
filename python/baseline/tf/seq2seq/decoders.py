@@ -125,7 +125,7 @@ class TransformerDecoder(DecoderBase):
         else:
             T = get_shape_as_list(src_enc)[1]
             src_mask = tf.sequence_mask(src_len, T, dtype=tf.float32)
-        tgt_embed = self.tgt_embedding.encode()
+        tgt_embed = self.tgt_embedding.encode(kwargs.get('tgt'))
         T = get_shape_as_list(tgt_embed)[1]
         tgt_mask = subsequent_mask(T)
         scope = 'TransformerDecoder'
@@ -256,7 +256,7 @@ class RNNDecoder(DecoderBase):
             self.output(best)
 
     def decode(self, encoder_outputs, src_len, tgt_len, pkeep, **kwargs):
-        self.tgt_embedding.x = self.tgt_embedding.create_placeholder(self.tgt_embedding.name)
+        self.tgt_embedding.x = kwargs.get('tgt', self.tgt_embedding.create_placeholder('tgt'))
 
         # dynamic_decode creates a scope "decoder" and it pushes operations underneath.
         # which makes it really hard to get the same objects between train and test

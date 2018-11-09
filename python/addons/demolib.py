@@ -2,29 +2,13 @@ from baseline.train import create_trainer, register_trainer, register_training_f
 from baseline.embeddings import register_embeddings
 from baseline.reporting import register_reporting, ReportingHook
 from baseline.tf.embeddings import TensorFlowEmbeddings
+from baseline.tf.optz import optimizer
 from baseline.confusion import ConfusionMatrix
-from baseline.utils import listify, get_model_file, write_json
-from baseline.tf.tfy import optimizer, embed
+from baseline.utils import listify, get_model_file, write_json, color, Colors
+from baseline.tf.tfy import embed
 import tensorflow as tf
-import numpy as np
-import platform
 import os
-
-
-# TODO: remove when this goes into baseline.utils
-class Colors(object):
-    GREEN = '\033[32;1m'
-    RED = '\033[31;1m'
-    YELLOW = '\033[33;1m'
-    BLACK = '\033[30;1m'
-    CYAN = '\033[36;1m'
-    RESTORE = '\033[0m'
-
-
-def color(msg, color):
-    if platform.system() == 'Windows':
-        return msg
-    return "{}{}{}".format(color, msg, Colors.RESTORE)
+import numpy as np
 
 
 @register_embeddings(name='cbow')
@@ -61,7 +45,7 @@ class CharBoWEmbeddings(TensorFlowEmbeddings):
                                    self.get_dsz(),
                                    tf.constant_initializer(self.weights, dtype=tf.float32),
                                    self.finetune,
-                                   self.scope), axis=2, keep_dims=False)
+                                   self.scope), axis=2, keepdims=False)
 
     def get_vsz(self):
         return self.vsz
@@ -128,7 +112,7 @@ class NStepProgressClassifyTrainerTf(Trainer):
         total_loss = 0
         steps = len(loader)
         for batch_dict in loader:
-            feed_dict = self.model.make_input(batch_dict, do_dropout=True)
+            feed_dict = self.model.make_input(batch_dict, train=True)
             _, step, lossv = self.sess.run([self.train_op, self.global_step, self.loss], feed_dict=feed_dict)
             total_loss += lossv
             if step % self.nsteps == 0:

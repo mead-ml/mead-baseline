@@ -2,6 +2,7 @@
     "task": "seq2seq",
     "num_valid_to_show": 0,
     "batchsz": 100,
+    "basedir": "iwslt16-en-vi-s2s",
     "unif": 0.25,
     "features": [
 	{ 

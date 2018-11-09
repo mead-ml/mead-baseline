@@ -3,7 +3,7 @@ import numpy as np
 from baseline.utils import listify, get_model_file, revlut, to_spans, f_score, write_sentence_conll
 from baseline.progress import create_progress_bar
 from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
-from baseline.dy.dynety import optimizer
+from baseline.dy.optz import *
 
 
 @register_trainer(task='tagger', name='default')
@@ -19,7 +19,7 @@ class TaggerTrainerDyNet(EpochReportingTrainer):
         self.idx2label = revlut(self.model.labels)
         self.autobatchsz = kwargs.get('autobatchsz')
         self.labels = model.labels
-        self.optimizer = optimizer(model, **kwargs)
+        self.optimizer = OptimizerManager(model, **kwargs)
 
     def _update(self, loss):
         loss.backward()
