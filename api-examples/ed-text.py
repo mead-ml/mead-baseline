@@ -43,7 +43,7 @@ for texts in batches:
         else:
             line = dst_str
 
-        print(line, file=f)
+        print(line, file=f, flush=True)
 
 if f is not None:
     f.close()
