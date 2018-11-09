@@ -8,7 +8,7 @@ parser.add_argument('--text', help='raw value or a file', type=str)
 parser.add_argument('--backend', help='backend', default='tf')
 parser.add_argument('--target', help='A file to write decoded output (or print to screen)')
 parser.add_argument('--tsv', help='print tab separated', type=bl.str2bool, default=False)
-parser.add_argument('--batchsz', help='Size of a batch to pass at once', default=128)
+parser.add_argument('--batchsz', help='Size of a batch to pass at once', default=256)
 args = parser.parse_known_args()[0]
 
 batches = []
