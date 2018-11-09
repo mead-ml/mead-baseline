@@ -350,5 +350,5 @@ class EncoderDecoderService(Service):
                 word = self.tgt_idx_to_token.get(best[j], '<PAD>')
                 if word != '<PAD>' and word != '<EOS>':
                     out += [word]
-        results += [out]
+            results += [out]
         return results
