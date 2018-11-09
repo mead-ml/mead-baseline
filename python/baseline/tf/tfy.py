@@ -583,8 +583,8 @@ def get_shape_as_list(x):
 def layer_norm(input, name, axis=[-1]):
 
     def _norm(x, g=None, b=None, e=1e-5, axis=[1]):
-        u = tf.reduce_mean(x, axis=axis, keep_dims=True)
-        s = tf.reduce_mean(tf.square(x-u), axis=axis, keep_dims=True)
+        u = tf.reduce_mean(x, axis=axis, keepdims=True)
+        s = tf.reduce_mean(tf.square(x-u), axis=axis, keepdims=True)
         x = (x - u) * tf.rsqrt(s + e)
         if g is not None and b is not None:
             x = x*g + b

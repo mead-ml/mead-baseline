@@ -45,7 +45,7 @@ class CharBoWEmbeddings(TensorFlowEmbeddings):
                                    self.get_dsz(),
                                    tf.constant_initializer(self.weights, dtype=tf.float32),
                                    self.finetune,
-                                   self.scope), axis=2, keep_dims=False)
+                                   self.scope), axis=2, keepdims=False)
 
     def get_vsz(self):
         return self.vsz
