@@ -44,3 +44,6 @@ for texts in batches:
             line = dst_str
 
         print(line, file=f)
+
+if f is not None:
+    f.close()
