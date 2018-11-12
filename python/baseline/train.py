@@ -281,6 +281,3 @@ def create_trainer(model, **kwargs):
     trainer_type = kwargs.get('trainer_type', 'default')
     Constructor = BASELINE_TRAINERS[model.task_name][trainer_type]
     return Constructor(model, **kwargs)
-
-
-
