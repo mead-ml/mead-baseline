@@ -1,3 +1,4 @@
+version: 2
 task: classify
 batchsz: 1
 preproc:
@@ -5,18 +6,22 @@ preproc:
   rev: false
   clean: true
   trim: true
+features:
+ - name: word
+   vectorizer: 
+     type: token1d
+   embeddings:
+     label: w2v-gn
+   unif: 0.25
 backend: dynet
 dataset: SST2
 loader:
   reader_type: default
-unif: 0.25
 model:
   model_type: lstm
   rnnsz: 256
   dropout: 0.5
   finetune: true
-word_embeddings:
-  label: w2v-gn
 train:
   epochs: 2
   optim: adam

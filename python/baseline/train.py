@@ -141,6 +141,7 @@ def register_lr_scheduler(cls, name=None):
 @exporter
 def create_lr_scheduler(**kwargs):
     sched_type = kwargs.get('lr_scheduler_type')
+    print('LOOKY HERE', sched_type) 
     if sched_type is None:
         return None
     Constructor = BASELINE_LR_SCHEDULERS.get(sched_type)
