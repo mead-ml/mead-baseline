@@ -1,5 +1,7 @@
 {
+    "version":2,
     "task": "tagger",
+    "modules":["vec_text","embed_elmo"],
     "batchsz": 20,
     "conll_output": "wnutresults.conll",
     "charsz": 16,
@@ -9,10 +11,32 @@
 	"mxwlen": 40,
 	"lower": true
     },
+    "features": [
+       {"name":"word",
+        "vectorizer": {
+          "type":"dict1d",
+          "fields":"text",
+          "transform": "baseline.lowercase"
+       },
+       "embeddings": {"label":"glove-42B"}
+       },
+       {"name":"char",
+        "vectorizer": {"type":"dict2d"},
+        "embeddings": {"dsz":16,"wsz":"10","cfiltsz":[3],"type":"char-conv"}
+       },
+       {"name":"elmo",
+        "vectorizer": {"type":"text" },
+        "embeddings": {"type":"elmo","dsz":1024}
+       }
+    ],
     "backend": "tensorflow",
     "dataset": "wnut",
     "loader": {
-	"reader_type": "conllcased"
+	"reader_type": "default",
+        "named_fields": {
+          "0":"text",
+          "-1":"y"
+     }
     },
     "model": {
 	"model_type": "elmo",
@@ -26,7 +50,6 @@
         "crf_mask": "true",
 	"crf": 1
     },
-    "word_embeddings": {"label": "glove-42B"},
     "train": {
 	"epochs": 60,
 	"optim": "sgd",
