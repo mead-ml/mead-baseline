@@ -1,4 +1,5 @@
-{
+{   "version":2,
+    "basedir":"ptb-med",
     "task": "lm",
     "batchsz": 20,
     "unif": 0.05,
@@ -8,6 +9,14 @@
         "mxwlen": 40,
         "lower": true
     },
+    "features": [{
+        "name": "word",
+        "vectorizer": {
+          "type":"token1d",
+          "fields":"text"
+        },
+        "embeddings": {"label":"w2v-gn"}
+   }],
     "backend": "tensorflow",
     "dataset": "ptb",
     "loader": {
@@ -17,9 +26,6 @@
         "model_type": "default",
         "hsz": 650,
         "layers": 2 
-    },
-    "word_embeddings": {
-        "label": "w2v-gn"
     },
     "train": {
         "epochs": 39,
