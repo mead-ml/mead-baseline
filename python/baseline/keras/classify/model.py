@@ -148,7 +148,7 @@ class GraphWordClassifierBase(ClassifierModelBase):
             last_layer = Dropout(rate=pdrop)(last_layer)
         return last_layer
 
-
+@register_model(task='classify', name='default')
 class ConvModel(GraphWordClassifierBase):
 
     def __init__(self):
@@ -171,7 +171,7 @@ class ConvModel(GraphWordClassifierBase):
         last_layer = drop1
         return last_layer ##, cmotsz_all
 
-
+@register_model(task='classify', name='lstm')
 class LSTMModel(GraphWordClassifierBase):
 
     def __init__(self):
@@ -195,7 +195,7 @@ class LSTMModel(GraphWordClassifierBase):
         last_layer = drop1
         return last_layer ##, hsz
 
-
+@register_model(task='classify', name='nbow')
 class NBoWModel(GraphWordClassifierBase):
 
     def __init__(self, PoolingLayer=GlobalAveragePooling1D):
@@ -209,7 +209,7 @@ class NBoWModel(GraphWordClassifierBase):
         last_layer = drop1
         return last_layer
 
-
+@register_model(task='classify', name='nbow_max')
 class NBoWMaxModel(NBoWModel):
 
     def __init__(self):
