@@ -33,7 +33,7 @@
         "patience": 40000,
         "optim": "sgd",
         "start_decay_epoch": 6,
-        "decay_type": "zaremba",
+        "lr_scheduler_type": "zaremba",
         "eta": 1.0,
         "mom": 0.0,
         "do_early_stopping": true,
