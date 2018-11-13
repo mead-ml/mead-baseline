@@ -10,7 +10,8 @@ from keras.utils import np_utils
 from baseline.keras.embeddings import LookupTableEmbeddings
 from baseline.version import __version__
 from baseline.utils import listify, ls_props, write_json, read_json
-from baseline.model import ClassifierModel, load_classifier_model, create_classifier_model
+from baseline.model import ClassifierModel, register_model 
+#load_classifier_model, create_classifier_model
 import json
 
 
