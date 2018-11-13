@@ -1,5 +1,6 @@
 import numpy as np
 from baseline.utils import import_user_module
+import tensorflow as tf
 
 class RemoteModelTensorFlow(object):
     def __init__(self, remote, name, signature, labels=None, beam=None, lengths_key=None, inputs=[]):
@@ -46,7 +47,7 @@ class RemoteModelTensorFlow(object):
                 shape = [1]
 
             import tensorflow
-            tensor_proto = tensorflow.contrib.util.make_tensor_proto(examples[feature], shape=shape)
+            tensor_proto = tensorflow.contrib.util.make_tensor_proto(examples[feature], shape=shape, dtype=tf.int32)
             request.inputs[feature].CopyFrom(
                 tensor_proto
             )
