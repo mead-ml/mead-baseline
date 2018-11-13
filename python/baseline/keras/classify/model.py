@@ -7,6 +7,7 @@ from keras.layers import (Dense,
                           GlobalAveragePooling1D)
 
 from keras.utils import np_utils
+from keras import backend as K
 from baseline.keras.embeddings import LookupTableEmbeddings
 from baseline.version import __version__
 from baseline.utils import listify, ls_props, write_json, read_json
@@ -111,14 +112,15 @@ class GraphWordClassifierBase(ClassifierModelBase):
 
     @classmethod
     def load(cls, basename, **kwargs):
-
+        K.clear_session()
         model = cls()
         model.impl = keras.models.load_model(basename, **kwargs)
         state = read_json(basename + '.state')
         for prop in ls_props(model):
             if prop in state:
                 setattr(model, prop, state[prop])
-        inputs = dict({(v.name, v) for v in model.impl.inputs})
+        inputs = dict({(v.name[:v.name.find(':')], v) for v in model.impl.inputs})
+        print("LOOK AT THIS",inputs)
 
         model.embeddings = dict()
         for key, class_name in state['embeddings'].items():
@@ -191,7 +193,7 @@ class LSTMModel(GraphWordClassifierBase):
         for _ in range(nlayers-1):
             last_layer = LSTM(hsz, return_sequences=True, input_shape=(mxlen, insz))(last_layer)
             insz = hsz
-
+        last_layer = LSTM(hsz, return_sequences=False)
         drop1 = Dropout(pdrop)(last_layer)
         last_layer = drop1
         return last_layer ##, hsz
