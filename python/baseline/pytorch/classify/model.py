@@ -66,7 +66,7 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
 
         y = batch_dict.get('y')
         if y is not None:
-            y = torch.from_numpy(y)
+            y = torch.from_numpy(y).to(torch.long)
             if self.gpu is not None:
                 y = y.cuda()
             example_dict['y'] = y

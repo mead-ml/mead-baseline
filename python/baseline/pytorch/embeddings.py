@@ -51,6 +51,7 @@ class LookupTableEmbeddings(nn.Module, PyTorchEmbeddings):
         return self.vsz
 
     def forward(self, x):
+        x = x.to(torch.long)
         return self.embeddings(x)
 
 
@@ -106,6 +107,7 @@ class CharConvEmbeddings(nn.Module, PyTorchEmbeddings):
         # For starters we need to perform embeddings for each character
         # (TxB) x W -> (TxB) x W x D
         _0, _1, W = xch.shape
+        xch = xch.to(torch.long)
         char_embeds = self.embeddings(xch.view(-1, W))
         # (TxB) x D x W
         char_vecs = char_embeds.transpose(1, 2).contiguous()

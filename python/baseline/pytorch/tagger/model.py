@@ -136,7 +136,7 @@ class TaggerModelBase(nn.Module, TaggerModel):
 
         y = batch_dict.get('y')
         if y is not None:
-            y = torch.from_numpy(y)[perm_idx]
+            y = torch.from_numpy(y)[perm_idx].to(torch.long)
             if self.gpu is not None:
                 y = y.cuda()
             example_dict['y'] = y
