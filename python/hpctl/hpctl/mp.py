@@ -156,7 +156,7 @@ class MPRunner(Runner):
         try:
             self.p.start()
         except:
-            print("CHILD SHAT THE BED")
+            print("Failure to start tmux process")
         while self.is_done:
             pass
 
