@@ -65,9 +65,6 @@ class TaggerModelBase(TaggerModel):
         with open(basename + '.saver', 'w') as f:
             f.write(str(self.saver.as_saver_def()))
 
-    UNK = 1
-    PAD = 0
-
     @property
     def dropin_value(self):
         return self._dropin_value
@@ -79,8 +76,8 @@ class TaggerModelBase(TaggerModel):
     def drop_inputs(self, key, x, do_dropout):
         v = self.dropin_value.get(key, 0)
         if do_dropout and v > 0.0:
-            drop_indices = np.where((np.random.random(x.shape) < v) & (x != TaggerModelBase.PAD))
-            x[drop_indices[0], drop_indices[1]] = TaggerModelBase.UNK
+            drop_indices = np.where((np.random.random(x.shape) < v) & (x != Offsets.PAD))
+            x[drop_indices[0], drop_indices[1]] = Offsets.UNK
         return x
 
     def make_input(self, batch_dict, train=False):
