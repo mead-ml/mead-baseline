@@ -240,12 +240,13 @@ class LanguageModelBase(LanguageModel):
         gpus = kwargs.get('gpus')
         if gpus is not None:
             return LanguageParallelModel(cls.create, embeddings, **kwargs)
-
+        else:
+            gpus = 1
         lm = cls()
         lm.id = kwargs.get('id', 0)
         lm.embeddings = embeddings
         lm.y = kwargs.get('y', tf.placeholder(tf.int32, [None, None], name="y"))
-        lm.batchsz = kwargs['batchsz']
+        lm.batchsz = kwargs['batchsz'] // gpus
         lm.sess = kwargs.get('sess', tf.Session())
         lm.pdrop_value = kwargs.get('pdrop', 0.5)
         lm.hsz = kwargs['hsz']
