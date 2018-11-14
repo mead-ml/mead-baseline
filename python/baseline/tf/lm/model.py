@@ -237,6 +237,7 @@ class LanguageModelBase(LanguageModel):
         gpus = kwargs.get('gpus', 1)
         if gpus == -1:
             gpus = len(os.getenv('CUDA_VISIBLE_DEVICES', os.getenv('NV_GPU', '0')).split(','))
+            kwargs['gpus'] = gpus
         if gpus > 1:
             return DataParallelLanguageModel(cls.create, embeddings, **kwargs)
         lm = cls()

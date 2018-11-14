@@ -383,6 +383,7 @@ class ClassifierModelBase(ClassifierModel):
         gpus = kwargs.get('gpus', 1)
         if gpus == -1:
             gpus = len(os.getenv('CUDA_VISIBLE_DEVICES', os.getenv('NV_GPU', '0')).split(','))
+            kwargs['gpus'] = gpus
         if gpus > 1:
             return ClassifyParallelModel(cls.create, embeddings, labels, **kwargs)
         sess = kwargs.get('sess', tf.Session())
