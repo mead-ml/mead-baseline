@@ -193,7 +193,7 @@ class LSTMModel(GraphWordClassifierBase):
         for _ in range(nlayers-1):
             last_layer = LSTM(hsz, return_sequences=True, input_shape=(mxlen, insz))(last_layer)
             insz = hsz
-        last_layer = LSTM(hsz, return_sequences=False)
+        last_layer = LSTM(hsz, return_sequences=False)(last_layer)
         drop1 = Dropout(pdrop)(last_layer)
         last_layer = drop1
         return last_layer ##, hsz
