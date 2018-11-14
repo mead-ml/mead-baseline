@@ -4,10 +4,7 @@
     "batchsz": 20,
     "unif": 0.05,
     "nbptt": 35,
-    "charsz": 16,
     "preproc": {
-        "mxwlen": 40,
-        "lower": true
     },
     "backend": "tensorflow",
     "dataset": "ptb",
@@ -29,7 +26,10 @@
     "model": {
         "model_type": "default",
         "hsz": 650,
-        "layers": 2
+        "layers": 2,
+        "vdrop": false,
+        "tie_weights": true,
+        "pdrop": 0.5
     },
     "train": {
         "epochs": 39,
