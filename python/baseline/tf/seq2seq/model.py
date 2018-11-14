@@ -44,7 +44,7 @@ def _temporal_cross_entropy_loss(logits, labels, label_lengths, mx_seq_length):
         return losses
 
 
-class Seq2SeqParallelModel(EncoderDecoderModel):
+class DataParallelEncoderDecoderModel(EncoderDecoderModel):
 
     def __init__(self, create_fn, src_embeddings, tgt_embedding, **kwargs):
         """Create N replica graphs for GPU + 1 for inference on CPU
@@ -76,7 +76,7 @@ class Seq2SeqParallelModel(EncoderDecoderModel):
         * *mx_tgt_len* -- (``int``) - An optional max length (or we will use the max length of the batch using a placeholder)
 
         """
-        super(Seq2SeqParallelModel, self).__init__()
+        super(DataParallelEncoderDecoderModel, self).__init__()
         # We need to remove these because we may be calling back to our caller, and we need
         # the condition of calling to be non-parallel
         gpus = kwargs.pop('gpus', -1)
@@ -266,9 +266,11 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
 
     @classmethod
     def create(cls, src_embeddings, tgt_embedding, **kwargs):
-        gpus = kwargs.get('gpus')
-        if gpus is not None:
-            return Seq2SeqParallelModel(cls.create, src_embeddings, tgt_embedding, **kwargs)
+        gpus = kwargs.get('gpus', 1)
+        if gpus == -1:
+            gpus = len(os.getenv('CUDA_VISIBLE_DEVICES', os.getenv('NV_GPU', '0')).split(','))
+        if gpus > 1:
+            return DataParallelEncoderDecoderModel(cls.create, src_embeddings, tgt_embedding, **kwargs)
         model = cls()
         model.src_embeddings = src_embeddings
         model.tgt_embedding = tgt_embedding

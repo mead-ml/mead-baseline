@@ -14,7 +14,7 @@ def main():
     parser.add_argument('--embeddings', help='json library of embeddings', default='config/embeddings.json', type=convert_path)
     parser.add_argument('--logging', help='json file for logging', default='config/logging.json', type=convert_path)
     parser.add_argument('--task', help='task to run', choices=['classify', 'tagger', 'seq2seq', 'lm'])
-    parser.add_argument('--gpus', help='Number of GPUs (defaults to 1)', type=int)
+    parser.add_argument('--gpus', help='Number of GPUs (defaults to number available)', type=int, default=-1)
     parser.add_argument('--reporting', help='reporting hooks', nargs='+')
     parser.add_argument('--backend', help='The deep learning backend to use')
     args, reporting_args = parser.parse_known_args()

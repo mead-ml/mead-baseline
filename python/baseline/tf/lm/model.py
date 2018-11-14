@@ -8,7 +8,7 @@ from google.protobuf import text_format
 import copy
 
 
-class LanguageParallelModel(LanguageModel):
+class DataParallelLanguageModel(LanguageModel):
 
     def __init__(self, create_fn, embeddings, **kwargs):
         """Create N replica graphs for GPU + 1 for inference on CPU
@@ -40,13 +40,10 @@ class LanguageParallelModel(LanguageModel):
         * *mx_tgt_len* -- (``int``) - An optional max length (or we will use the max length of the batch using a placeholder)
 
         """
-        super(LanguageParallelModel, self).__init__()
+        super(DataParallelLanguageModel, self).__init__()
         # We need to remove these because we may be calling back to our caller, and we need
         # the condition of calling to be non-parallel
-        gpus = kwargs.pop('gpus', -1)
-        # If the gpu ID is set to -1, use CUDA_VISIBLE_DEVICES to figure it out
-        if gpus == -1:
-            gpus = len(os.getenv('CUDA_VISIBLE_DEVICES', os.getenv('NV_GPU', '0')).split(','))
+        gpus = kwargs.pop('gpus')
         print('Num GPUs', gpus)
 
         self.saver = None
@@ -237,9 +234,11 @@ class LanguageModelBase(LanguageModel):
 
     @classmethod
     def create(cls, embeddings, **kwargs):
-        gpus = kwargs.get('gpus')
-        if gpus is not None:
-            return LanguageParallelModel(cls.create, embeddings, **kwargs)
+        gpus = kwargs.get('gpus', 1)
+        if gpus == -1:
+            gpus = len(os.getenv('CUDA_VISIBLE_DEVICES', os.getenv('NV_GPU', '0')).split(','))
+        if gpus > 1:
+            return DataParallelLanguageModel(cls.create, embeddings, **kwargs)
         lm = cls()
         lm.id = kwargs.get('id', 0)
         lm.embeddings = embeddings
