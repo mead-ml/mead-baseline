@@ -33,7 +33,7 @@ class LanguageModelTrainerTf(Trainer):
 
         xfer_state = hasattr(self.model, 'initial_state')
         if xfer_state:
-            state = self.model.sess.run(self.model.initial_state)
+            state = self.model.sess.run(self.model.initial_state, self.model.make_input(ts[0], True))
 
         fetches = {
             "loss": self.loss,
@@ -88,7 +88,7 @@ class LanguageModelTrainerTf(Trainer):
         xfer_state = hasattr(self.model, 'initial_state')
 
         if xfer_state:
-            state = self.model.sess.run(self.model.initial_state)
+            state = self.model.sess.run(self.model.initial_state, self.model.make_input(ts[0], False))
 
         fetches = {
             "loss": self.test_loss,

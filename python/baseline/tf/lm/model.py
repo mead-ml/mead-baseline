@@ -207,7 +207,7 @@ class LanguageModelBase(LanguageModel):
             bt_x_v = tf.nn.log_softmax(tf.reshape(self.logits, [-1, vsz]), axis=-1)
             one_hots = tf.one_hot(targets, vsz)
             example_loss = -tf.reduce_sum(one_hots * bt_x_v, axis=-1)
-            loss = tf.reduce_sum(example_loss) / self.batchsz
+            loss = tf.reduce_sum(example_loss) / tf.cast(tf.shape(self.y)[0], dtype=tf.float32)
             return loss
 
     def create_loss(self):
@@ -240,13 +240,10 @@ class LanguageModelBase(LanguageModel):
         gpus = kwargs.get('gpus')
         if gpus is not None:
             return LanguageParallelModel(cls.create, embeddings, **kwargs)
-        else:
-            gpus = 1
         lm = cls()
         lm.id = kwargs.get('id', 0)
         lm.embeddings = embeddings
         lm.y = kwargs.get('y', tf.placeholder(tf.int32, [None, None], name="y"))
-        lm.batchsz = kwargs['batchsz'] // gpus
         lm.sess = kwargs.get('sess', tf.Session())
         lm.pdrop_value = kwargs.get('pdrop', 0.5)
         lm.hsz = kwargs['hsz']
@@ -294,9 +291,6 @@ class LanguageModelBase(LanguageModel):
 
         if 'beam' in kwargs:
             state['beam'] = kwargs['beam']
-
-        if 'batchsz' in kwargs:
-            state['batchsz'] = kwargs['batchsz']
 
         state['sess'] = kwargs.get('sess', tf.Session())
 
@@ -363,7 +357,7 @@ class RNNLanguageModel(LanguageModelBase):
         self.vdrop = variational_dropout
 
         rnnfwd = tf.contrib.rnn.MultiRNNCell([cell() for _ in range(self.layers)], state_is_tuple=True)
-        self.initial_state = rnnfwd.zero_state(self.batchsz, tf.float32)
+        self.initial_state = rnnfwd.zero_state(tf.shape(inputs)[0], tf.float32)
         rnnout, state = tf.nn.dynamic_rnn(rnnfwd, inputs, initial_state=self.initial_state, dtype=tf.float32)
         h = tf.reshape(tf.concat(rnnout, 1), [-1, self.hsz])
         self.final_state = state
