@@ -31,11 +31,11 @@ exporter = export(__all__)
 class Service(object):
     task_name = None
     task_load = None
+
     def __init__(self, vocabs=None, vectorizers=None, model=None):
         self.vectorizers = vectorizers
         self.model = model
         self.vocabs = vocabs
-            
 
     def get_vocab(self, vocab_type='word'):
         return self.vocabs.get(vocab_type)
@@ -62,7 +62,7 @@ class Service(object):
         vectorizers = load_vectorizers(directory)
 
         be = kwargs.get('backend', 'tf')
-        
+
         remote = kwargs.get("remote", None)
         name = kwargs.get("name", None)
         if remote:
@@ -71,7 +71,7 @@ class Service(object):
             return cls(vocabs, vectorizers, model)
 
         labels = read_json(os.path.join(directory, model_basename) + '.labels')
-        
+
         import_user_module('baseline.{}.embeddings'.format(be))
         import_user_module('baseline.{}.{}'.format(be, cls.task_name))
         model = cls.task_load(model_basename, **kwargs)
@@ -98,11 +98,11 @@ class Service(object):
 
         model = None
         if backend == 'tf':
-            model = RemoteModelTensorFlow(remote, 
-                                name, 
-                                signature_name, 
-                                labels=labels, 
-                                lengths_key=lengths_key, 
+            model = RemoteModelTensorFlow(remote,
+                                name,
+                                signature_name,
+                                labels=labels,
+                                lengths_key=lengths_key,
                                 inputs=inputs,
                                 beam=beam)
         else:
@@ -154,7 +154,7 @@ class ClassifierService(Service):
             examples[k] = np.stack(examples[k])
 
         outcomes_list = self.model.predict(examples)
-            
+
         results = []
         for outcomes in outcomes_list:
             results += [sorted(outcomes, key=lambda tup: tup[1], reverse=True)]
@@ -394,7 +394,7 @@ class EncoderDecoderService(Service):
 
         for k in self.src_vectorizers.keys():
             examples[k] = np.stack(examples[k])
-    
+
         outcomes = self.model.predict(examples)
 
         results = []
