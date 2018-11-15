@@ -523,23 +523,6 @@ def long_tensor_alloc(dims, dtype=None):
     return torch.LongTensor(*dims)
 
 
-def prepare_src(model, tokens, mxlen=100):
-    src_vocab = model.get_src_vocab()
-    length = min(len(tokens), mxlen)
-    x = torch.LongTensor(length).zero_()
-
-    for j in range(length):
-        word = tokens[j]
-        if word not in src_vocab:
-            if word != '':
-                print(word)
-                idx = 0
-        else:
-            idx = src_vocab[word]
-        x[j] = idx
-    return torch.autograd.Variable(x.view(-1, 1))
-
-
 def show_examples_pytorch(model, es, rlut1, rlut2, vocab, mxlen, sample, prob_clip, max_examples, reverse):
     si = np.random.randint(0, len(es))
 

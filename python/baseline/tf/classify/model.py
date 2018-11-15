@@ -49,12 +49,8 @@ class ClassifyParallelModel(ClassifierModel):
         super(ClassifyParallelModel, self).__init__()
         # We need to remove these because we may be calling back to our caller, and we need
         # the condition of calling to be non-parallel
-        gpus = kwargs.pop('gpus', -1)
-        # If the gpu ID is set to -1, use CUDA_VISIBLE_DEVICES to figure it out
-        if gpus == -1:
-            gpus = len(os.getenv('CUDA_VISIBLE_DEVICES', os.getenv('NV_GPU', '0')).split(','))
+        gpus = kwargs.pop('gpus')
         print('Num GPUs', gpus)
-
         self.labels = labels
         nc = len(labels)
 
@@ -384,9 +380,11 @@ class ClassifierModelBase(ClassifierModel):
         :return: A fully-initialized tensorflow classifier 
         """
 
-        gpus = kwargs.get('gpus')
-        # If we are parallelized, we will use the wrapper object ClassifyParallelModel and this creation function
-        if gpus is not None:
+        gpus = kwargs.get('gpus', 1)
+        if gpus == -1:
+            gpus = len(os.getenv('CUDA_VISIBLE_DEVICES', os.getenv('NV_GPU', '0')).split(','))
+            kwargs['gpus'] = gpus
+        if gpus > 1:
             return ClassifyParallelModel(cls.create, embeddings, labels, **kwargs)
         sess = kwargs.get('sess', tf.Session())
 

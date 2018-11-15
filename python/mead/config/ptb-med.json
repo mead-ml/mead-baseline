@@ -1,13 +1,11 @@
 {   "version":2,
     "basedir":"ptb-med",
     "task": "lm",
+    "basedir": "ptb-med",
     "batchsz": 20,
     "unif": 0.05,
     "nbptt": 35,
-    "charsz": 16,
     "preproc": {
-        "mxwlen": 40,
-        "lower": true
     },
     "features": [{
         "name": "word",
@@ -20,12 +18,27 @@
     "backend": "tensorflow",
     "dataset": "ptb",
     "loader": {
-        "reader_type": "default"
+        "reader_type": "default",
+        "tgt_key": "word"
     },
+    "features": [
+        {
+            "name": "word",
+            "vectorizer": {
+                "type": "token1d",
+                "fields": "text"
+            },
+            "embeddings": {"label": "w2v-gn"}
+        }
+
+    ],
     "model": {
         "model_type": "default",
         "hsz": 650,
-        "layers": 2 
+        "layers": 2,
+        "vdrop": false,
+        "tie_weights": true,
+        "pdrop": 0.5
     },
     "train": {
         "epochs": 39,

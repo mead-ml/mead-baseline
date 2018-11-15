@@ -15,6 +15,7 @@ class LanguageModelTrainerTf(Trainer):
         super(LanguageModelTrainerTf, self).__init__()
         self.model = model
         self.loss = model.create_loss()
+        self.test_loss = model.create_test_loss()
         self.global_step, self.train_op = optimizer(self.loss, **kwargs)
         self.log = logging.getLogger('baseline.timing')
 
@@ -32,7 +33,7 @@ class LanguageModelTrainerTf(Trainer):
 
         xfer_state = hasattr(self.model, 'initial_state')
         if xfer_state:
-            state = self.model.sess.run(self.model.initial_state)
+            state = self.model.sess.run(self.model.initial_state, self.model.make_input(ts[0], True))
 
         fetches = {
             "loss": self.loss,
@@ -87,10 +88,10 @@ class LanguageModelTrainerTf(Trainer):
         xfer_state = hasattr(self.model, 'initial_state')
 
         if xfer_state:
-            state = self.model.sess.run(self.model.initial_state)
+            state = self.model.sess.run(self.model.initial_state, self.model.make_input(ts[0], False))
 
         fetches = {
-            "loss": self.loss,
+            "loss": self.test_loss,
         }
 
         if xfer_state:
@@ -136,7 +137,7 @@ def fit(model, ts, vs, es=None, **kwargs):
     init = tf.global_variables_initializer()
     model.sess.run(init)
     saver = tf.train.Saver()
-    model.save_using(saver)
+    model.set_saver(saver)
 
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
 

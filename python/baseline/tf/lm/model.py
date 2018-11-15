@@ -5,6 +5,137 @@ from baseline.tf.embeddings import *
 from baseline.tf.transformer import transformer_encoder_stack, subsequent_mask
 from baseline.utils import read_json, write_json, ls_props
 from google.protobuf import text_format
+import copy
+
+
+class DataParallelLanguageModel(LanguageModel):
+
+    def __init__(self, create_fn, embeddings, **kwargs):
+        """Create N replica graphs for GPU + 1 for inference on CPU
+
+        The basic idea of the constructor is to create several replicas for training by creating a `tf.split` operation
+        on the input tensor and feeding the splits to each of the underlying replicas.  The way we do this is to take in
+        the creation function for a single graph and call it N times while passing in the splits as kwargs.
+
+        Because our `create_fn` (typically `cls.create()` where `cls` is a sub-class of LanguageModelBase) allows
+        us to inject its inputs through keyword arguments instead of creating its own placeholders, we can inject each
+        split into the inputs which causes each replica to be a sub-graph of this parent graph.  For this to work,
+        this class also has to have its own placeholders, which it uses as inputs.
+
+        Any time we are doing validation during the training process, we delegate the request to the underlying member
+        variable `.inference` (which is sharing its weights with the other replicas).  This also happens on `save()`,
+        allowing us to create a perfectly normal single sub-graph checkpoint for later inference.
+
+        The actual way that we accomplish the replica creation is by copying the input keyword arguments and injecting
+        any parallel operations (splits) by deep-copy and update to the dictionary.
+
+        :param create_fn: This function is actually our caller, who creates the graph (if no `gpus` arg)
+        :param src_embeddings: This is the set of src embeddings sub-graphs
+        :param tgt_embedding: This is the tgt embeddings sub-graph
+        :param kwargs: See below, also see ``EncoderDecoderModelBase.create`` for kwargs that are not specific to multi-GPU
+
+        :Keyword Arguments:
+        * *gpus* -- (``int``) - The number of GPUs to create replicas on
+        * *src_lengths_key* -- (``str``) - A string representing the key for the src tensor whose lengths should be used
+        * *mx_tgt_len* -- (``int``) - An optional max length (or we will use the max length of the batch using a placeholder)
+
+        """
+        super(DataParallelLanguageModel, self).__init__()
+        # We need to remove these because we may be calling back to our caller, and we need
+        # the condition of calling to be non-parallel
+        gpus = kwargs.pop('gpus')
+        print('Num GPUs', gpus)
+
+        self.saver = None
+        self.replicas = []
+        self.parallel_params = dict()
+        split_operations = dict()
+
+        self.tgt_key = kwargs.get('tgt_key')
+        if self.tgt_key is None:
+            raise Exception('Need a `tgt_key` to know which source vocabulary should be used for destination ')
+
+        for key in embeddings.keys():
+            EmbeddingType = embeddings[key].__class__
+            self.parallel_params[key] = kwargs.get(key, EmbeddingType.create_placeholder('{}_parallel'.format(key)))
+            split_operations[key] = tf.split(self.parallel_params[key], gpus, name='{}_split'.format(key))
+
+            if self.tgt_key == key:
+                self.parallel_params['y'] = kwargs.get('y', EmbeddingType.create_placeholder('y_parallel'))
+                y_splits = tf.split(self.parallel_params['y'], gpus)
+                split_operations['y'] = y_splits
+
+        losses = []
+        sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False))
+
+        with tf.device(tf.DeviceSpec(device_type="CPU")):
+            # This change is a bit cleaner since we pop some fields in the sub model
+            kwargs_infer = copy.deepcopy(kwargs)
+            # This change is required since we attach our .x onto the object in v1
+            # For the inference model, load it up on the CPU
+            # This shares a sub-graph with its replicas after the inputs
+            # It doesnt share the inputs, as these are placeholders, and the replicas are `tf.split` ops
+            self.inference = create_fn(embeddings, sess=sess, **kwargs_infer)
+        for i in range(gpus):
+            with tf.device(tf.DeviceSpec(device_type='GPU', device_index=i)):
+
+                # Copy the input keyword args and update them
+                kwargs_single = copy.deepcopy(kwargs)
+                # For each split operator, there are N parts, take the part at index `i` and inject it for its key
+                # this prevents the `create_fn` from making a placeholder for this operation
+                for k, split_operation in split_operations.items():
+                    kwargs_single[k] = split_operation[i]
+                # Create the replica
+                replica = create_fn({k: v.detached_ref() for k, v in embeddings.items()},
+                                    sess=sess,
+                                    id=i+1,
+                                    **kwargs_single)
+                # Add the replica to the set
+                self.replicas.append(replica)
+                # Make a replica specific loss
+                loss_op = replica.create_loss()
+                # Append to losses
+                losses.append(loss_op)
+
+        # The training loss is the mean of all replica losses
+        self.loss = tf.reduce_mean(tf.stack(losses))
+
+        self.sess = sess
+        ##self.best = self.inference.best
+
+    def create_loss(self):
+        return self.loss
+
+    def create_test_loss(self):
+        return self.inference.create_test_loss()
+
+    def save(self, model_base):
+        return self.inference.save(model_base)
+
+    def set_saver(self, saver):
+        self.inference.saver = saver
+        self.saver = saver
+
+    def step(self, batch_dict):
+        """
+        Generate probability distribution over output V for next token
+        """
+        return self.inference.step(batch_dict)
+
+    def make_input(self, batch_dict, train=False):
+        if train is False:
+            return self.inference.make_input(batch_dict)
+
+        feed_dict = new_placeholder_dict(train)
+        for key in self.parallel_params.keys():
+            feed_dict['{}_parallel:0'.format(key)] = batch_dict[key]
+
+        # Allow us to track a length, which is needed for BLSTMs
+        feed_dict['y_parallel:0'] = batch_dict['y']
+        return feed_dict
+
+    def load(self, basename, **kwargs):
+        self.inference.load(basename, **kwargs)
 
 
 class LanguageModelBase(LanguageModel):
@@ -25,7 +156,7 @@ class LanguageModelBase(LanguageModel):
         """
         return 1.0 - self.pdrop_value * TRAIN_FLAG()
 
-    def save_using(self, saver):
+    def set_saver(self, saver):
         self.saver = saver
 
     def decode(self, inputs):
@@ -66,15 +197,21 @@ class LanguageModelBase(LanguageModel):
         with open(basename + '.saver', 'w') as f:
             f.write(str(self.saver.as_saver_def()))
 
-    def create_loss(self):
-        with tf.variable_scope("Loss"):
+    def _create_loss(self, scope):
+        with tf.variable_scope(scope):
             vsz = self.embeddings[self.tgt_key].vsz
             targets = tf.reshape(self.y, [-1])
             bt_x_v = tf.nn.log_softmax(tf.reshape(self.logits, [-1, vsz]), axis=-1)
             one_hots = tf.one_hot(targets, vsz)
             example_loss = -tf.reduce_sum(one_hots * bt_x_v, axis=-1)
-            loss = tf.reduce_sum(example_loss) / self.batchsz
+            loss = tf.reduce_sum(example_loss) / tf.cast(tf.shape(self.y)[0], dtype=tf.float32)
             return loss
+
+    def create_loss(self):
+        return self._create_loss(scope='loss{}'.format(self.id))
+
+    def create_test_loss(self):
+        return self._create_loss(scope='test_loss')
 
     def make_input(self, batch_dict, train=False):
 
@@ -97,11 +234,16 @@ class LanguageModelBase(LanguageModel):
 
     @classmethod
     def create(cls, embeddings, **kwargs):
-
+        gpus = kwargs.get('gpus', 1)
+        if gpus == -1:
+            gpus = len(os.getenv('CUDA_VISIBLE_DEVICES', os.getenv('NV_GPU', '0')).split(','))
+            kwargs['gpus'] = gpus
+        if gpus > 1:
+            return DataParallelLanguageModel(cls.create, embeddings, **kwargs)
         lm = cls()
+        lm.id = kwargs.get('id', 0)
         lm.embeddings = embeddings
         lm.y = kwargs.get('y', tf.placeholder(tf.int32, [None, None], name="y"))
-        lm.batchsz = kwargs['batchsz']
         lm.sess = kwargs.get('sess', tf.Session())
         lm.pdrop_value = kwargs.get('pdrop', 0.5)
         lm.hsz = kwargs['hsz']
@@ -113,7 +255,7 @@ class LanguageModelBase(LanguageModel):
 
         with tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE, initializer=weight_initializer):
 
-            inputs = lm.embed()
+            inputs = lm.embed(**kwargs)
             lm.layers = kwargs.get('layers', 1)
             h = lm.decode(inputs, **kwargs)
             lm.logits = lm.output(h, embeddings[lm.tgt_key].vsz, **kwargs)
@@ -121,17 +263,18 @@ class LanguageModelBase(LanguageModel):
 
             return lm
 
-    def embed(self):
+    def embed(self, **kwargs):
         """This method performs "embedding" of the inputs.  The base method here then concatenates along depth
         dimension to form word embeddings
 
         :return: A 3-d vector where the last dimension is the concatenated dimensions of all embeddings
         """
-        all_embeddings_out = []
-        for embedding in self.embeddings.values():
-            embeddings_out = embedding.encode()
-            all_embeddings_out.append(embeddings_out)
-        word_embeddings = tf.concat(values=all_embeddings_out, axis=2)
+        all_embeddings_src = []
+        for k, embedding in self.embeddings.items():
+            x = kwargs.get(k, None)
+            embeddings_out = embedding.encode(x)
+            all_embeddings_src.append(embeddings_out)
+        word_embeddings = tf.concat(values=all_embeddings_src, axis=-1)
         return tf.nn.dropout(word_embeddings, self.pkeep)
 
     @classmethod
@@ -148,9 +291,6 @@ class LanguageModelBase(LanguageModel):
 
         if 'beam' in kwargs:
             state['beam'] = kwargs['beam']
-
-        if 'batchsz' in kwargs:
-            state['batchsz'] = kwargs['batchsz']
 
         state['sess'] = kwargs.get('sess', tf.Session())
 
@@ -217,7 +357,7 @@ class RNNLanguageModel(LanguageModelBase):
         self.vdrop = variational_dropout
 
         rnnfwd = tf.contrib.rnn.MultiRNNCell([cell() for _ in range(self.layers)], state_is_tuple=True)
-        self.initial_state = rnnfwd.zero_state(self.batchsz, tf.float32)
+        self.initial_state = rnnfwd.zero_state(tf.shape(inputs)[0], tf.float32)
         rnnout, state = tf.nn.dynamic_rnn(rnnfwd, inputs, initial_state=self.initial_state, dtype=tf.float32)
         h = tf.reshape(tf.concat(rnnout, 1), [-1, self.hsz])
         self.final_state = state

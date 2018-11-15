@@ -2,8 +2,7 @@ import os
 import json
 import logging
 import logging.config
-
-import os
+import numpy as np
 import baseline
 from baseline.utils import export, import_user_module
 from mead.downloader import EmbeddingDownloader, DataDownloader
@@ -665,6 +664,24 @@ class LanguageModelingTask(Task):
             for k, v in self.backend.params.items():
                 model[k] = v
         return baseline.model.create_lang_model(self.embeddings, **model)
+
+    def train(self):
+        self._load_dataset()
+        if self.config_params['train'].get('lr_scheduler_type', None) == 'zaremba':
+            first_range = int(self.config_params['train']['start_decay_epoch'] * self.train_data.steps)
+            self.config_params['train']['bounds'] = [first_range] + list(
+                np.arange(
+                    self.config_params['train']['start_decay_epoch'] + 1,
+                    self.config_params['train']['epochs'] + 1,
+                    dtype=np.int32
+                ) * self.train_data.steps
+            )
+        baseline.save_vectorizers(self.get_basedir(), self.vectorizers)
+        model = self._create_model()
+        baseline.train.fit(model, self.train_data, self.valid_data, self.test_data, **self.config_params['train'])
+        baseline.zip_files(self.get_basedir())
+        self._close_reporting_hooks()
+
 
     @staticmethod
     def _num_steps_per_epoch(num_examples, nctx, batchsz):

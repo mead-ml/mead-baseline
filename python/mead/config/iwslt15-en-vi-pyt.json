@@ -32,9 +32,6 @@
         "layers": 2
     },
 
-    "word_embeddings": {
-	"dsz": 500
-    },
     "train": {
         "epochs": 16,
         "optim": "adam",
