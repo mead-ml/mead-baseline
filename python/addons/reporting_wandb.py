@@ -19,5 +19,6 @@ class WandbReporting(ReportingHook):
         wandb.init()
 
     def step(self, metrics, tick, phase, tick_type=None, **kwargs):
+        metrics = {'{}/{}'.format(phase,key):metrics[key] for key in metrics}
         wandb.log(metrics)
 
