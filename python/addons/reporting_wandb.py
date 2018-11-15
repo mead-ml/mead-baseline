@@ -5,16 +5,17 @@ import wandb
 
 @register_reporting(name="wandb")
 class WandbReporting(ReportingHook):
-    """Log results to tensorboard.
-
-    Writes tensorboard logs to a directory specified in the `mead-settings`
-    section for tensorboard. Otherwise it defaults to `runs`.
+    """Log results to wandb.
+    
+    pip install wandb
+    create a profile with wandb: https://wandb.auth0.com/
+    wandb login
+    more info: https://github.com/wandb/examples
     """
     def __init__(self, **kwargs):
         super(WandbReporting, self).__init__(**kwargs)
         """"
-        -  create a profile with wandb: https://wandb.auth0.com/
-        -  wandb init
+        first do `wandb init` on terminal.
         """
         wandb.init()
 
