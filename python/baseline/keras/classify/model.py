@@ -120,7 +120,6 @@ class GraphWordClassifierBase(ClassifierModelBase):
             if prop in state:
                 setattr(model, prop, state[prop])
         inputs = dict({(v.name[:v.name.find(':')], v) for v in model.impl.inputs})
-        print("LOOK AT THIS",inputs)
 
         model.embeddings = dict()
         for key, class_name in state['embeddings'].items():
