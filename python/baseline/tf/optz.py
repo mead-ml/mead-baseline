@@ -117,6 +117,14 @@ class AdamWOptimizer(tf.train.Optimizer):
         self.beta_2 = beta_2
         self.epsilon = epsilon
 
+    def _get_variable_name(self, param_name):
+        import re
+        """Get the variable name from the tensor name."""
+        m = re.match("^(.*):\\d+$", param_name)
+        if m is not None:
+            param_name = m.group(1)
+        return param_name
+
     def apply_gradients(self, grads_and_vars, global_step=None, name=None):
         assignments = []
         for (grad, param) in grads_and_vars:
