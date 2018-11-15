@@ -1,41 +1,64 @@
 {
+    "version":2,
     "task": "tagger",
+    "modules":["vec_text","embed_elmo"],
     "batchsz": 20,
     "conll_output": "wnutresults.conll",
     "charsz": 16,
     "unif": 0.1,
     "preproc": {
-	"mxlen": 60,
-	"mxwlen": 40,
-	"lower": true
+        "mxlen": 60,
+        "mxwlen": 40,
+        "lower": true
     },
+    "features": [
+        {
+            "name":"word",
+            "vectorizer": {
+                "type":"dict1d",
+                "fields":"text",
+                  "transform": "baseline.lowercase"
+            },
+            "embeddings": {"label":"glove-42B"}
+        },
+        {
+            "name":"char",
+            "vectorizer": {"type":"dict2d"},
+            "embeddings": {"dsz":16,"wsz":10,"cfiltsz":[3],"type":"char-conv"}
+        },
+        {
+            "name":"elmo",
+            "vectorizer": {"type":"dict_text","fields": "text"},
+            "embeddings": {"type":"elmo","dsz":1024}
+        }
+    ],
     "backend": "tensorflow",
     "dataset": "wnut",
     "loader": {
-	"reader_type": "conllcased"
+    "reader_type": "default",
+        "named_fields": {
+            "0":"text",
+            "-1":"y"
+        }
     },
     "model": {
-	"model_type": "elmo",
-	"cfiltsz": [
-	    3
-	],
-	"hsz": 512,
-	"wsz": 10,
-	"dropout": 0.5,
-	"rnntype": "blstm",
-        "crf_mask": "true",
-	"crf": 1
+        "model_type": "default",
+        "hsz": 512,
+        "wsz": 10,
+        "dropout": 0.5,
+        "rnntype": "blstm",
+        "crf_mask": true,
+        "crf": 1
     },
-    "word_embeddings": {"label": "glove-42B"},
     "train": {
-	"epochs": 60,
-	"optim": "sgd",
-	"decay": 0,
-	"eta": 0.01,
-	"mom": 0.9,
-	"patience": 20,
-	"early_stopping_metric": "f1",
+        "epochs": 60,
+        "optim": "sgd",
+        "decay": 0,
+        "eta": 0.01,
+        "mom": 0.9,
+        "patience": 20,
+        "early_stopping_metric": "f1",
         "span_type": "bio",
-	"clip": 5.0
+        "clip": 5.0
     }
 }

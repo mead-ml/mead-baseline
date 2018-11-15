@@ -75,7 +75,7 @@ class OptimizerManager(object):
         self._init_optimizer(model, **kwargs)
 
     def _init_optimizer(self, model, **kwargs):
-        mom = float(kwargs.get('mom'))
+        mom = float(kwargs.get('mom',0.0))
         optim = kwargs.get('optim', 'sgd')
         clip = kwargs.get('clip')
 

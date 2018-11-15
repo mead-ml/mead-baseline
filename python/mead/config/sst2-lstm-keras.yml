@@ -1,3 +1,4 @@
+version: 2
 batchsz: 50
 preproc: 
   mxlen: 100
@@ -5,6 +6,12 @@ preproc:
   clean: true
 backend: keras
 dataset: SST2
+features: 
+  - name: word
+    vectorizer:
+      type: token1d
+    embeddings:
+      label: w2v-gn
 loader: 
   reader_type: default
 unif: 0.25
@@ -13,8 +20,6 @@ model:
   hsz: 100
   dropout: 0.5
   finetune: true
-word_embeddings: 
-  label: w2v-gn
 train: 
   epochs: 20
   optim: adam

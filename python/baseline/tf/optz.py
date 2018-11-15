@@ -67,7 +67,6 @@ class ZarembaDecaySchedulerTensorFlow(PiecewiseDecaySchedulerTensorFlow):
         lr = float(kwargs.get('lr', kwargs.get('eta', 1.0)))
         values = [lr/(float(decay_rate)**i) for i in range(len(bounds)+1)]
         super(ZarembaDecaySchedulerTensorFlow, self).__init__(bounds=bounds, values=values)
-
     def __call__(self, lr, global_step):
         return tf.train.piecewise_constant(global_step, self.bounds, self.values)
 

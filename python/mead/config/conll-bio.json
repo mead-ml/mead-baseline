@@ -1,4 +1,5 @@
 {
+    "version":2,
     "task": "tagger",
     "batchsz": 10,
     "conll_output": "conll-bio-results.conll",
@@ -9,10 +10,30 @@
         "mxwlen": -1,
         "lower": true
     },
+    "features": [
+	{
+	    "name": "word",
+	    "vectorizer": {
+		"type": "dict1d",
+		"fields": "text",
+		"transform": "baseline.lowercase"
+	    },
+	    "embeddings": { "label": "glove-6B-100" }
+	},
+	{
+	    "name": "char",
+	    "vectorizer": { "type": "dict2d" },
+	    "embeddings": { "dsz": 30, "wsz": 30, "type": "char-conv" }
+	}
+    ],
     "backend": "pytorch",
     "dataset": "conll-bio",
     "loader": {
-        "reader_type": "default"
+        "reader_type": "default",
+        "named_fields": {
+	    "0":"text",
+            "-1":"y"      
+	}
     },
     "model": {
         "model_type": "default",
@@ -24,10 +45,6 @@
         "layers": 1,
         "crf_mask": true,
         "crf": 1
-    },
-
-    "word_embeddings": {
-        "label": "glove-6B-100"
     },
     "train": {
         "epochs": 80,
