@@ -31,21 +31,23 @@ class SepConvWordClassifier(GraphWordClassifierBase):
         pdrop = kwargs.get('dropout', 0.5)
         cmotsz = kwargs['cmotsz']
         poolsz = kwargs.get('poolsz', 2)
+        
 
+        input_ = embed
         for _ in range(blocks - 1):
-            drop1 = Dropout(rate=pdrop)(embed)
-            Sep1 = SeparableConv1D(filters=cmotsz, kernel_size=filtsz, activation='relu',
+            drop1 = Dropout(rate=pdrop)(input_)
+            sep1 = SeparableConv1D(filters=cmotsz, kernel_size=filtsz, activation='relu',
                                           bias_initializer='random_uniform', depthwise_initializer='random_uniform',
                                           padding='same')(drop1)
-            Sep2 = SeparableConv1D(filters=cmotsz, kernel_size=filtsz, activation='relu',
+            sep2 = SeparableConv1D(filters=cmotsz, kernel_size=filtsz, activation='relu',
                                           bias_initializer='random_uniform', depthwise_initializer='random_uniform',
-                                          padding='same')(Sep1)
-            maxpool = MaxPooling1D(pool_size=poolsz)(Sep2)
+                                          padding='same')(sep1)
+            input_ = MaxPooling1D(pool_size=poolsz)(sep2)
 
-        Sep3 = SeparableConv1D(filters=cmotsz*2, kernel_size=filtsz, activation='relu',
+        sep3 = SeparableConv1D(filters=cmotsz*2, kernel_size=filtsz, activation='relu',
                                       bias_initializer='random_uniform', depthwise_initializer='random_uniform',
-                                      padding='same')(maxpool)
-        global_average_pooling = GlobalAveragePooling1D()(Sep3)
+                                      padding='same')(input_)
+        global_average_pooling = GlobalAveragePooling1D()(sep3)
         drop2 = Dropout(rate=pdrop)(global_average_pooling)
             
         return drop2
