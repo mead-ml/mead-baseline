@@ -1,6 +1,6 @@
 version: 2
 batchsz: 50
-modules: [sepcnn]
+modules: [classify_sepcnn]
 basedir: sst2-sepcnn-keras
 preproc: 
   mxlen: 100

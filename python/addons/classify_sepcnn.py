@@ -1,5 +1,5 @@
 from baseline.keras.classify import GraphWordClassifierBase
-
+from baseline.model import register_model
 from keras.layers import (MaxPooling1D,
                           Dropout,
                           SeparableConv1D,
@@ -16,7 +16,8 @@ class SepConvWordClassifier(GraphWordClassifierBase):
         """
         super(SepConvWordClassifier, self).__init__()
 
-    def _pool(self, dsz, **kwargs):
+    def _pool(self, embed, insz, **kwargs):
+
         """Override the base method from parent to provide text pooling facility.
         Here that is a stack of depthwise separable convolutions with interleaved max pooling followed by a global
         avg-over-time pooling
@@ -41,16 +42,11 @@ class SepConvWordClassifier(GraphWordClassifierBase):
                                           padding='same')(Sep1)
             maxpool = MaxPooling1D(pool_size=poolsz)(Sep2)
 
-            Sep3 = SeparableConv1D(filters=cmotsz*2, kernel_size=filtsz, activation='relu',
+        Sep3 = SeparableConv1D(filters=cmotsz*2, kernel_size=filtsz, activation='relu',
                                       bias_initializer='random_uniform', depthwise_initializer='random_uniform',
                                       padding='same')(maxpool)
-            global_average_pooling = GlobalAveragePooling1D()(Sep3)
-            drop2 = Dropout(rate=pdrop)(global_average_pooling)
+        global_average_pooling = GlobalAveragePooling1D()(Sep3)
+        drop2 = Dropout(rate=pdrop)(global_average_pooling)
+            
+        return drop2
 
-
-def create_model(embeddings, labels, **kwargs):
-    return SepConvWordClassifier.create(embeddings, labels, **kwargs)
-
-
-def load_model(name, **kwargs):
-    return SepConvWordClassifier.load(name, **kwargs)
