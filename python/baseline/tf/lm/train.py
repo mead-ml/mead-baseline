@@ -42,7 +42,7 @@ class LanguageModelTrainerTf(Trainer):
 
         if xfer_state:
             fetches["final_state"] = self.model.final_state
-        step = 0
+
         metrics = {}
 
         start = time.time()
@@ -59,23 +59,22 @@ class LanguageModelTrainerTf(Trainer):
 
             if xfer_state:
                 state = vals["final_state"]
-            global_step = vals["global_step"]
+            global_step = vals["global_step"].item()
             total_loss += loss
             iters += ts.nctx
-            step += 1
-            if step % 500 == 0:
+            if global_step > 0 and global_step % 500 == 0:
                 print(total_loss, iters)
                 metrics['avg_loss'] = total_loss / iters
                 metrics['perplexity'] = np.exp(total_loss / iters)
                 for reporting in reporting_fns:
-                    reporting(metrics, global_step.item(), 'Train')
+                    reporting(metrics, global_step, 'Train')
 
         self.log.debug({'phase': 'Train', "time": time.time() - start})
         metrics['avg_loss'] = total_loss / iters
         metrics['perplexity'] = np.exp(total_loss / iters)
 
         for reporting in reporting_fns:
-            reporting(metrics, global_step.item(), 'Train')
+            reporting(metrics, global_step, 'Train')
         return metrics
 
     def test(self, ts, reporting_fns, phase):
