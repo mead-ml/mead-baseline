@@ -50,12 +50,11 @@ class ClassifierModelBase(ClassifierModel):
     #    batchsz = batch_time.shape[0]
     #    return self.impl.fit(batch_time, batch_size=batchsz)
 
-    def predict(self, batch_time):
-
-        batchsz = batch_time.shape[0]
-        probs = self.impl.predict(batch_time, batchsz)
-
+    def predict(self, batch_dict):
+        example_dict = self.make_input(batch_dict)
+        probs = self.impl.predict_on_batch(example_dict)
         results = []
+        batchsz = probs.shape[0]
         for b in range(batchsz):
             outcomes = [(self.labels[id_i], prob_i) for id_i, prob_i in enumerate(probs[b])]
             results.append(outcomes)
@@ -114,7 +113,7 @@ class GraphWordClassifierBase(ClassifierModelBase):
     def load(cls, basename, **kwargs):
         K.clear_session()
         model = cls()
-        model.impl = keras.models.load_model(basename, **kwargs)
+        model.impl = keras.models.load_model(basename)
         state = read_json(basename + '.state')
         for prop in ls_props(model):
             if prop in state:
@@ -216,26 +215,3 @@ class NBoWMaxModel(NBoWModel):
 
     def __init__(self):
         super(NBoWMaxModel, self).__init__(GlobalMaxPooling1D)
-
-
-
-BASELINE_CLASSIFICATION_MODELS = {
-    'default': ConvModel.create,
-    'lstm': LSTMModel.create,
-    'nbowmax': NBoWMaxModel.create,
-    'nbow': NBoWModel.create
-}
-BASELINE_CLASSIFICATION_LOADERS = {
-    'default': ConvModel.load,
-    'lstm': LSTMModel.load,
-    'nbowmax': NBoWMaxModel.create,
-    'nbow': NBoWModel.create
-}
-
-
-def create_model(embeddings, labels, **kwargs):
-    return create_classifier_model(BASELINE_CLASSIFICATION_MODELS, embeddings, labels, **kwargs)
-
-
-def load_model(outname, **kwargs):
-    return load_classifier_model(BASELINE_CLASSIFICATION_LOADERS, outname, **kwargs)
