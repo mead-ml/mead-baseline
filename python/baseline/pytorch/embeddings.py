@@ -136,10 +136,10 @@ class PositionalLookupTableEmbeddings(nn.Module, PyTorchEmbeddings):
             self.embeddings = pytorch_embedding(weights, self.finetune)
 
         log_timescale_increment = math.log(max_timescale) / self.dsz
-        inv_timescales = torch.exp(torch.arange(0, self.dsz, 2) * -log_timescale_increment)
+        inv_timescales = torch.exp(torch.arange(0, self.dsz, 2).float() * -log_timescale_increment)
 
         pe = torch.zeros(mxlen, self.dsz)
-        position = torch.arange(0, mxlen).unsqueeze(1)
+        position = torch.arange(0, mxlen).float().unsqueeze(1)
         pe[:, 0::2] = torch.sin(position * inv_timescales)
         pe[:, 1::2] = torch.cos(position * inv_timescales)
         pe = pe.unsqueeze(0)
