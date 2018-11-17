@@ -59,11 +59,10 @@ class LanguageModelTrainerTf(Trainer):
 
             if xfer_state:
                 state = vals["final_state"]
-            global_step = vals["global_step"].item()
+            global_step = vals["global_step"]
             total_loss += loss
             iters += ts.nctx
             if global_step > 0 and global_step % 500 == 0:
-                print(total_loss, iters)
                 metrics['avg_loss'] = total_loss / iters
                 metrics['perplexity'] = np.exp(total_loss / iters)
                 for reporting in reporting_fns:
