@@ -33,7 +33,7 @@
         "epochs": 40,
         "optim": "adamw",
         "weight_decay": 1e-8,
-        "eta": 3e-4,
+        "eta": 4e-4,
         "do_early_stopping": true,
         "clip": 0.5 
     }
