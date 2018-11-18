@@ -39,8 +39,8 @@
         "dropout": 0.5,
         "rnntype": "blstm",
         "layers": 1,
-        "crf_mask": true,
-	"crf": true 
+        "constrain_decode": true,
+        "crf": true
     },
     "train": {
         "epochs": 80,

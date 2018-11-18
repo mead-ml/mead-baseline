@@ -4,7 +4,7 @@ import logging
 import logging.config
 import numpy as np
 import baseline
-from baseline.utils import export, import_user_module
+from baseline.utils import export, import_user_module, Offsets
 from mead.downloader import EmbeddingDownloader, DataDownloader
 from mead.utils import (
     index_by_label,
@@ -34,9 +34,10 @@ class Backend(object):
 
     def load(self, task_name):
         base_pkg_name = 'baseline.{}'.format(self.name)
-        import_user_module(base_pkg_name)
+        mod = import_user_module(base_pkg_name)
         import_user_module('{}.embeddings'.format(base_pkg_name))
         import_user_module('{}.{}'.format(base_pkg_name, task_name))
+        self.transition_mask = mod.transition_mask
 
 
 TASK_REGISTRY = {}
@@ -437,7 +438,13 @@ class TaggerTask(Task):
 
     def _create_model(self):
         labels = self.reader.label2index
-        self.config_params['model']['span_type'] = self.config_params['train'].get('span_type')
+        span_type = self.config_params['train'].get('span_type')
+        constrain = bool(self.config_params['model'].get('constrain_decode', False))
+        self.config_params['model']['span_type'] = span_type
+        if span_type is not None and constrain:
+            self.config_params['model']['constraint'] = self.backend.transition_mask(
+                labels, span_type, Offsets.GO, Offsets.EOS, Offsets.PAD
+            )
 
         model = self.config_params['model']
         unif = self.config_params.get('unif', 0.1)

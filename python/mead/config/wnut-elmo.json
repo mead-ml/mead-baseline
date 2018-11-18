@@ -47,7 +47,7 @@
         "wsz": 10,
         "dropout": 0.5,
         "rnntype": "blstm",
-        "crf_mask": true,
+        "constrain_decode": true,
         "crf": 1
     },
     "train": {

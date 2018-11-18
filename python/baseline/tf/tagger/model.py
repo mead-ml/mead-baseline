@@ -190,8 +190,7 @@ class TaggerModelBase(TaggerModel):
 
     def _compute_sentence_level_loss(self):
 
-        if self.crf_mask:
-            assert self.span_type is not None, "To mask transitions you need to provide a tagging span_type, choices are `IOB`, `BIO` (or `IOB2`), and `IOBES`"
+        if self.constraint is not None:
             A = tf.get_variable(
                 "transitions_raw",
                 shape=(len(self.labels), len(self.labels)),
@@ -199,8 +198,8 @@ class TaggerModelBase(TaggerModel):
                 trainable=True
             )
 
-            self.mask = crf_mask(self.labels, self.span_type, Offsets.GO, Offsets.EOS, Offsets.PAD)
-            self.inv_mask = tf.cast(tf.equal(self.mask, 0), tf.float32) * tf.constant(-1e4)
+            self.mask, inv_mask = self.constraint
+            self.inv_mask = inv_mask * tf.constant(-1e4)
 
             self.A = tf.add(tf.multiply(A, self.mask), self.inv_mask, name="transitions")
             ll, self.A = tf.contrib.crf.crf_log_likelihood(self.probs, self.y, self.lengths, self.A)
@@ -208,16 +207,16 @@ class TaggerModelBase(TaggerModel):
             ll, self.A = tf.contrib.crf.crf_log_likelihood(self.probs, self.y, self.lengths)
         return tf.reduce_mean(-ll)
 
-    def _create_sentence_level_decode(self):
-        probs_shape = tf.shape(self.probs)
-        bsz = probs_shape[0]
+    def _create_sentence_level_decode(self, trans, norm=False):
+        bsz = tf.shape(self.probs)[0]
         lsz = len(self.labels)
         np_gos = np.full((1, 1, lsz), -1e4, dtype=np.float32)
         np_gos[:, :, Offsets.GO] = 0
         gos = tf.constant(np_gos)
         start = tf.tile(gos, [bsz, 1, 1])
+        start = tf.nn.log_softmax(start, axis=-1) if norm else start
         probv = tf.concat([start, self.probs], axis=1)
-        viterbi, _ = tf.contrib.crf.crf_decode(probv, self.A, self.lengths + 1)
+        viterbi, _ = tf.contrib.crf.crf_decode(probv, trans, self.lengths + 1)
         self.best = tf.identity(viterbi[:, 1:], name="best")
 
     def _create_word_level_decode(self):
@@ -239,9 +238,13 @@ class TaggerModelBase(TaggerModel):
         with tf.variable_scope(self.out_scope, auxiliary_name_scope=False) as s:
             with tf.name_scope(s.original_name_scope):
                 if self.crf:
-                    self._create_sentence_level_decode()
+                    self._create_sentence_level_decode(self.A)
                 else:
-                    self._create_word_level_decode()
+                    if self.constraint is not None:
+                        self.constraint = tf.nn.log_softmax(self.constraint[1] * tf.constant(-1e4), axis=-1)
+                        self._create_sentence_level_decode(self.constraint, norm=True)
+                    else:
+                        self._create_word_level_decode()
 
         return all_loss
 
@@ -295,6 +298,7 @@ class TaggerModelBase(TaggerModel):
         model.proj = bool(kwargs.get('proj', False))
         model.feed_input = bool(kwargs.get('feed_input', False))
         model.activation_type = kwargs.get('activation', 'tanh')
+        model.constraint = kwargs.get('constraint')
 
         embedseq = model.embed()
         seed = np.random.randint(10e8)

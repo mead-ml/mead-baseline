@@ -123,10 +123,21 @@ def sequence_mask(lengths, max_len=-1):
 
 
 @exporter
-def crf_mask(vocab, span_type, s_idx, e_idx, pad_idx=None):
+def transition_mask(vocab, span_type, s_idx, e_idx, pad_idx=None):
     """Create a CRF mask.
 
     Returns a mask with invalid moves as 0 and valid as 1.
+
+    :param vocab: dict, Label vocabulary mapping name to index.
+    :param span_type: str, The sequence labeling formalism {IOB, IOB2, BIO, or IOBES}
+    :param s_idx: int, What is the index of the GO symbol?
+    :param e_idx: int, What is the index of the EOS symbol?
+    :param pad_idx: int, What is the index of the PAD symbol?
+
+    Note:
+        In this mask the PAD symbol is between the last symbol and EOS, PADS can
+        only move to pad and the EOS. Any symbol that can move to an EOS can also
+        move to a pad.
     """
     rev_lut = {v: k for k, v in vocab.items()}
     start = rev_lut[s_idx]

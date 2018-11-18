@@ -1,58 +1,43 @@
 import torch
-from baseline.utils import crf_mask as crf_m
+from baseline.utils import transition_mask as transition_mask_np
 import torch.autograd
 import torch.nn as nn
+import torch.nn.functional as F
 from baseline.pytorch.torchy import vec_log_sum_exp
 
 
-def crf_mask(vocab, span_type, s_idx, e_idx, pad_idx=None):
-    """Create a CRF mask.
+def transition_mask(vocab, span_type, s_idx, e_idx, pad_idx=None):
+    """Create a mask to enforce span sequence transition constraints.
 
     Returns a Tensor with valid transitions as a 0 and invalid as a 1 for easy use with `masked_fill`
     """
-    np_mask = crf_m(vocab, span_type, s_idx, e_idx, pad_idx=pad_idx)
+    np_mask = transition_mask_np(vocab, span_type, s_idx, e_idx, pad_idx=pad_idx)
     return torch.from_numpy(np_mask) == 0
 
 
 class CRF(nn.Module):
-    def __init__(self, n_tags, idxs=None, batch_first=True, vocab=None, span_type=None, pad_idx=None):
+
+    def __init__(self, n_tags, idxs, batch_first=True, mask=None):
         """Initialize the object.
-        :param n_tags: int The number of tags in your output (emission size)
-        :param idxs: Tuple(int. int) The index of the start and stop symbol
+        :param n_tags: int, The number of tags in your output (emission size)
+        :param idxs: Tuple(int. int), The index of the start and stop symbol
             in emissions.
-        :param vocab: The label vocab of the form vocab[string]: int
-        :param span_type: The tagging span_type used. `IOB`, `IOB2`, or `IOBES`
-        :param pds_idx: The index of the pad symbol in the vocab
+        :param batch_first: bool, if the input [B, T, ...] or [T, B, ...]
+        :param mask: torch.ByteTensor, Constraints on the transitions [1, N, N]
+
         Note:
             if idxs is none then the CRF adds these symbols to the emission
             vectors and n_tags is assumed to be the number of output tags.
             if idxs is not none then the first element is assumed to be the
             start index and the second idx is assumed to be the end index. In
             this case n_tags is assumed to include the start and end symbols.
-            if vocab is not None then a transition mask will be created that
-            limits illegal transitions.
         """
         super(CRF, self).__init__()
 
-        if idxs is None:
-            self.start_idx = n_tags
-            self.end_idx = n_tags + 1
-            self.n_tags = n_tags + 2
-            self.add_ends = True
-        else:
-            self.start_idx, self.end_idx = idxs
-            self.n_tags = n_tags
-            self.add_ends = False
-        self.span_type = None
-        if vocab is not None:
-            assert span_type is not None, "To mask transitions you need to provide a tagging span_type, choices are `IOB`, `BIO` (or `IOB2`), and `IOBES`"
-            # If there weren't start and end idx provided we need to add them.
-            if idxs is None:
-                vocab = vocab.copy()
-                vocab['<GO>'] = self.start_idx
-                vocab['<EOS>'] = self.end_idx
-            self.span_type = span_type
-            self.register_buffer('mask', crf_mask(vocab, span_type, self.start_idx, self.end_idx, pad_idx).unsqueeze(0))
+        self.start_idx, self.end_idx = idxs
+        self.n_tags = n_tags
+        if mask is not None:
+            self.register_buffer('mask', mask)
         else:
             self.mask = None
 
@@ -62,13 +47,8 @@ class CRF(nn.Module):
     def extra_repr(self):
         str_ = "n_tags=%d, batch_first=%s" % (self.n_tags, self.batch_first)
         if self.mask is not None:
-            str_ += ", masked=True, span_type=%s" % self.span_type
+            str_ += ", masked=True"
         return str_
-
-    @staticmethod
-    def _prep_input(input_):
-        ends = torch.Tensor(input_.size()[0], input_.size()[1], 2).fill_(-1e4).to(input_.device)
-        return torch.cat([input_, ends], dim=2)
 
     @property
     def transitions(self):
@@ -89,8 +69,6 @@ class CRF(nn.Module):
         if self.batch_first:
             unary = unary.transpose(0, 1)
             tags = tags.transpose(0, 1)
-        if self.add_ends:
-            unary = CRF._prep_input(unary)
         _, batch_size, _ = unary.size()
         min_lengths = torch.min(lengths)
         fwd_score = self.forward(unary, lengths, batch_size, min_lengths)
@@ -179,56 +157,62 @@ class CRF(nn.Module):
         """
         if self.batch_first:
             unary = unary.transpose(0, 1)
-        if self.add_ends:
-            unary = CRF._prep_input(unary)
-        seq_len, batch_size, _ = unary.size()
-        min_length = torch.min(lengths)
-        batch_range = torch.arange(batch_size, dtype=torch.int64)
-        backpointers = []
-
-        # alphas: [B, 1, N]
-        alphas = torch.Tensor(batch_size, 1, self.n_tags).fill_(-1e4).to(unary.device)
-        alphas[:, 0, self.start_idx] = 0
-        alphas.requires_grad = True
-
         trans = self.transitions  # [1, N, N]
+        return viterbi(unary, trans, lengths, self.start_idx, self.end_idx)
 
-        for i, unary_t in enumerate(unary):
-            # Broadcast alphas along the rows of trans and trans along the batch of alphas
-            next_tag_var = alphas + trans  # [B, 1, N] + [1, N, N] -> [B, N, N]
-            viterbi, best_tag_ids = torch.max(next_tag_var, 2) # [B, N]
-            backpointers.append(best_tag_ids.data)
-            new_alphas = viterbi + unary_t  # [B, N] + [B, N]
-            new_alphas.unsqueeze_(1)  # Prep for next round
-            # If we haven't reached your length zero out old alpha and take new one.
-            # If we are past your length, zero out new_alpha and keep old one.
-            if i >= min_length:
-                mask = (i < lengths).view(-1, 1, 1)
-                alphas = alphas.masked_fill(mask, 0) + new_alphas.masked_fill(mask == 0, 0)
-            else:
-                alphas = new_alphas
 
-        # Add end tag
-        terminal_var = alphas.squeeze(1) + trans[:, self.end_idx]
-        _, best_tag_id = torch.max(terminal_var, 1)
-        path_score = terminal_var[batch_range, best_tag_id]  # Select best_tag from each batch
+def viterbi(unary, trans, lengths, start_idx, end_idx, norm=False):
+    """Do Viterbi decode on a batch.
 
-        best_path = [best_tag_id]
-        # Flip lengths
-        rev_len = seq_len - lengths - 1
-        for i, backpointer_t in enumerate(reversed(backpointers)):
-            # Get new best tag candidate
-            new_best_tag_id = backpointer_t[batch_range, best_tag_id]
-            # We are going backwards now, if you passed your flipped length then you aren't in your real results yet
-            mask = (i > rev_len)
-            best_tag_id = best_tag_id.masked_fill(mask, 0) + new_best_tag_id.masked_fill(mask == 0, 0)
-            best_path.append(best_tag_id)
-        _ = best_path.pop()
-        best_path.reverse()
-        best_path = torch.stack(best_path)
-        # Return list of paths
-        paths = []
-        best_path = best_path.transpose(0, 1)
-        for path, length in zip(best_path, lengths):
-            paths.append(path[:length])
-        return paths, path_score.squeeze(0)
+    :param unary: torch.FloatTensor: [T, B, N]
+    :param trans: torch.FloatTensor: [1, N, N]
+
+    :return: List[torch.LongTensor]: [[T] .. B] that paths
+    :return: torch.FloatTensor: [B] the path scores
+    """
+    seq_len, batch_size, tag_size = unary.size()
+    min_length = torch.min(lengths)
+    batch_range = torch.arange(batch_size, dtype=torch.int64)
+    backpointers = []
+
+    # Alphas: [B, 1, N]
+    alphas = torch.Tensor(batch_size, 1, tag_size).fill_(-1e4).to(unary.device)
+    alphas[:, 0, start_idx] = 0
+    alphas = F.log_softmax(alphas, dim=-1) if norm else alphas
+
+    for i, unary_t in enumerate(unary):
+        next_tag_var = alphas + trans
+        viterbi, best_tag_ids = torch.max(next_tag_var, 2)
+        backpointers.append(best_tag_ids.data)
+        new_alphas = viterbi + unary_t
+        new_alphas.unsqueeze_(1)
+        if i >= min_length:
+            mask = (i < lengths).view(-1, 1, 1)
+            alphas = alphas.masked_fill(mask, 0) + new_alphas.masked_fill(mask == 0, 0)
+        else:
+            alphas = new_alphas
+
+    # Add end tag
+    terminal_var = alphas.squeeze(1) + trans[:, end_idx]
+    _, best_tag_id = torch.max(terminal_var, 1)
+    path_score = terminal_var[batch_range, best_tag_id]  # Select best_tag from each batch
+
+    best_path = [best_tag_id]
+    # Flip lengths
+    rev_len = seq_len - lengths - 1
+    for i, backpointer_t in enumerate(reversed(backpointers)):
+        # Get new best tag candidate
+        new_best_tag_id = backpointer_t[batch_range, best_tag_id]
+        # We are going backwards now, if you passed your flipped length then you aren't in your real results yet
+        mask = (i > rev_len)
+        best_tag_id = best_tag_id.masked_fill(mask, 0) + new_best_tag_id.masked_fill(mask == 0, 0)
+        best_path.append(best_tag_id)
+    _ = best_path.pop()
+    best_path.reverse()
+    best_path = torch.stack(best_path)
+    # Return list of paths
+    paths = []
+    best_path = best_path.transpose(0, 1)
+    for path, length in zip(best_path, lengths):
+        paths.append(path[:length])
+    return paths, path_score.squeeze(0)
