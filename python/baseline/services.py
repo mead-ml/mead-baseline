@@ -20,9 +20,6 @@ from baseline.model import (
     load_seq2seq_model,
     load_lang_model
 )
-from baseline.tf.remote import RemoteModelTensorFlow
-
-from collections import namedtuple
 
 __all__ = []
 exporter = export(__all__)
@@ -98,6 +95,7 @@ class Service(object):
 
         model = None
         if backend == 'tf':
+            from baseline.tf.remote import RemoteModelTensorFlow
             model = RemoteModelTensorFlow(remote,
                                 name,
                                 signature_name,
