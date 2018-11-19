@@ -17,7 +17,7 @@
 	}
     ],
     "preproc": {
-        "mxlen": 100
+        "mxlen": 50
     },
     "backend": "tensorflow",
     "dataset": "iwslt15-en-vi",

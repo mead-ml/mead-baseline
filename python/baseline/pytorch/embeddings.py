@@ -54,7 +54,6 @@ class LookupTableEmbeddings(nn.Module, PyTorchEmbeddings):
         return self.embeddings(x)
 
 
-
 @register_embeddings(name='char-conv')
 class CharConvEmbeddings(nn.Module, PyTorchEmbeddings):
 
