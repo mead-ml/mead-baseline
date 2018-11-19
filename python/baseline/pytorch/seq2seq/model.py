@@ -140,7 +140,10 @@ class EncoderDecoderModelBase(nn.Module, EncoderDecoderModel):
         for b in range(B):
             example = dict({})
             for k, value in batch_dict.items():
-                example[k] = value[b].reshape((1,) + value[b].shape)
+                if isinstance(value, list):
+                    example[k] = np.array([value[b]])
+                else:
+                    example[k] = value[b].reshape((1,) + value[b].shape)
             inputs = self.make_input(example)
             encoder_outputs = self.encode(inputs, inputs['src_len'])
             batch.append(self.decoder.predict_one(inputs['src'], encoder_outputs, **kwargs)[0])

@@ -10,6 +10,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 from baseline.pytorch.transformer import subsequent_mask, TransformerDecoderStack
 from baseline.model import register_arc_policy, register_decoder, create_seq2seq_arc_policy
+import numpy as np
 
 __all__ = []
 exporter = export(__all__)
@@ -230,7 +231,7 @@ class RNNDecoder(torch.nn.Module):
                         dst_beam.data.copy_(src_beam.data)
                 paths = new_paths
 
-            return [p[1:] for p in paths], scores
+            return np.stack([np.array(p[1:]) for p in paths]), scores
 
 
 @register_decoder(name='default')
