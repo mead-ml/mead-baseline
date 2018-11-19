@@ -7,12 +7,12 @@
 	{ 
 	    "name": "src",
 	    "vectorizer": { "type": "token1d"},
-	    "embeddings": { "dsz": 512 }
+	    "embeddings": { "dsz": 1024 }
 	},
 	{
 	    "name": "tgt",
 	    "vectorizer": { "type": "token1d"},
-	    "embeddings": { "dsz": 512 }
+	    "embeddings": { "dsz": 1024 }
 	}
     ],
     "preproc": {
