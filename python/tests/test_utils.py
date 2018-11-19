@@ -31,9 +31,9 @@ def test_visible(cuda_visible):
     assert gpus == cuda_visible
 
 
-def test_nv_gpu(nv_gpu):
-    gpus = get_env_gpus()
-    assert gpus == nv_gpu
+#def test_nv_gpu(nv_gpu):
+#    gpus = get_env_gpus()
+#    assert gpus == nv_gpu
 
 
 def test_visible_first(cuda_visible, nv_gpu):
