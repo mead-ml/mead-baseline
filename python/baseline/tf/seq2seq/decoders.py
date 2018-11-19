@@ -207,13 +207,14 @@ class RNNDecoder(DecoderBase):
         self.hsz = kwargs['hsz']
         self.arc_policy = create_seq2seq_arc_policy(**kwargs)
 
+        self.do_weight_tying = bool(kwargs.get('tie_weights', False))
+        if self.do_weight_tying:
+            if self.hsz != self.tgt_embedding.get_dsz():
+                raise ValueError("weight tying requires hsz == embedding dsz, \
+got {} hsz and {} dsz".format(self.hsz, self.tgt_embedding.get_dsz()))
+
     def _create_cell(self, rnn_enc_tensor, src_len, pkeep, rnntype='lstm', layers=1, vdrop=False, **kwargs):
         self.cell = multi_rnn_cell_w_dropout(self.hsz, pkeep, rnntype, layers, variational=vdrop)
-
-    #def bridge(self, encoder_outputs, batch_sz):
-    #    final_encoder_state = encoder_outputs.hidden
-    #    final_encoder_state = tf.contrib.seq2seq.tile_batch(final_encoder_state, multiplier=self.beam_width)
-    #    return final_encoder_state
 
     def _get_tgt_weights(self):
         Wo = tf.get_variable("Wo", initializer=tf.constant_initializer(self.tgt_embedding.weights,
@@ -265,7 +266,11 @@ class RNNDecoder(DecoderBase):
         # So instead, for now, we never call .encode() and instead we create our own operator
         Wo = self._get_tgt_weights()
         with tf.variable_scope("dec", reuse=tf.AUTO_REUSE):
-            proj = dense_layer(self.tgt_embedding.vsz)
+            tie_shape = [Wo.get_shape()[-1], Wo.get_shape()[0]]
+            with tf.variable_scope("Share", custom_getter=tie_weight(Wo, tie_shape)):
+                proj = tf.layers.Dense(self.tgt_embedding.vsz, 
+                                       use_bias=False)
+
             self._create_cell(encoder_outputs.output, src_len, pkeep, **kwargs)
             batch_sz = tf.shape(encoder_outputs.output)[0]
             initial_state = self.arc_policy.connect(encoder_outputs, self, batch_sz)

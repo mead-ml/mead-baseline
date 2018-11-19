@@ -105,6 +105,12 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
             unif = kwargs.get('unif', 0.1)
             self.weights = np.random.uniform(-unif, unif, (self.vsz, self.dsz))
 
+    def get_dsz(self):
+        return self.dsz
+
+    def get_vsz(self):
+        return self.vsz
+
     def detached_ref(self):
         """This will detach any attached input and reference the same sub-graph otherwise
 
