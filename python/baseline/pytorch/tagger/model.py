@@ -18,7 +18,8 @@ class TaggerModelBase(nn.Module, TaggerModel):
     def to_gpu(self):
         self.gpu = True
         self.cuda()
-        self.crit.cuda()
+        if not self.use_crf:
+            self.crit.cuda()
         return self
 
     @staticmethod
@@ -64,11 +65,9 @@ class TaggerModelBase(nn.Module, TaggerModel):
         model.lengths_key = kwargs.get('lengths_key')
         model.proj = bool(kwargs.get('proj', False))
         model.use_crf = bool(kwargs.get('crf', False))
-        model.crf_mask = bool(kwargs.get('crf_mask', False))
-        model.span_type = kwargs.get('span_type')
         model.activation_type = kwargs.get('activation', 'tanh')
+        constraint = kwargs.get('constraint')
 
-        model.gpu = False
         pdrop = float(kwargs.get('dropout', 0.5))
         model.dropin_values = kwargs.get('dropin', {})
         model.labels = labels
@@ -90,16 +89,19 @@ class TaggerModelBase(nn.Module, TaggerModel):
             ))
 
         if model.use_crf:
-            if model.crf_mask:
-                assert model.span_type is not None, "A crf mask cannot be used without providing `span_type`"
-                model.crf = CRF(
-                    len(labels),
-                    (Offsets.GO, Offsets.EOS), batch_first=False,
-                    vocab=model.labels, span_type=model.span_type, pad_idx=Offsets.PAD
-                )
+            if constraint is not None: constraint = constraint.unsqueeze(0)
+            model.crf = CRF(
+                len(labels),
+                (Offsets.GO, Offsets.EOS), batch_first=False,
+                mask=constraint
+            )
+        else:
+            if constraint is not None:
+                constraint = F.log_softmax(torch.zeros(constraint.shape).masked_fill(constraint, -1e4), dim=0)
+                model.register_buffer('constraint', constraint.unsqueeze(0))
             else:
-                model.crf = CRF(len(labels), (Offsets.GO, Offsets.EOS), batch_first=False)
-        model.crit = SequenceCriterion(LossFn=nn.CrossEntropyLoss)
+                model.constraint = None
+            model.crit = SequenceCriterion(LossFn=nn.CrossEntropyLoss)
         print(model)
         return model
 
@@ -155,7 +157,6 @@ class TaggerModelBase(nn.Module, TaggerModel):
         output = self.encode(words_over_time, lengths)
         # stack (T x B, H)
         decoded = self.decoder(output.view(output.size(0)*output.size(1), -1))
-
         # back to T x B x H
         decoded = decoded.view(output.size(0), output.size(1), -1)
 
@@ -164,17 +165,19 @@ class TaggerModelBase(nn.Module, TaggerModel):
     def forward(self, input):
         lengths = input['lengths']
         probv = self.compute_unaries(input, lengths)
+        lengths = lengths.to(probv.device)
         if self.use_crf is True:
-            lengths = lengths.cuda()
             preds, _ = self.crf.decode(probv, lengths)
         else:
-            # Get batch (B, T)
-            probv = probv.transpose(0, 1)
-            preds = []
-            for pij, sl in zip(probv, lengths):
-                _, unary = torch.max(pij[:sl], 1)
-                preds.append(unary.data)
-
+            if self.constraint is not None:
+                probv = F.log_softmax(probv, dim=-1)
+                preds, _ = viterbi(probv, self.constraint, lengths, Offsets.GO, Offsets.EOS, norm=True)
+            else:
+                probv = probv.transpose(0, 1)
+                preds = []
+                for pij, sl in zip(probv, lengths):
+                    _, unary = torch.max(pij[:sl], 1)
+                    preds.append(unary.data)
         return preds
 
     def compute_loss(self, inputs):
@@ -187,7 +190,7 @@ class TaggerModelBase(nn.Module, TaggerModel):
         if self.use_crf is True:
             # Get tags as [T, B]
             tags = tags.transpose(0, 1)
-            lengths = lengths.cuda()
+            lengths = lengths.to(probv.device)
             batch_loss = torch.mean(self.crf.neg_log_loss(probv, tags.data, lengths))
         else:
             # Get batch (B, T)

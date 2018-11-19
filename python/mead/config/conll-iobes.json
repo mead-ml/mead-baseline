@@ -37,7 +37,7 @@
 	"dropin": {"word": 0.1 },
         "rnntype": "blstm",
         "layers": 1,
-        "crf_mask": true,
+        "constrain_decode": true,
         "crf": 1
     },
     "train": {

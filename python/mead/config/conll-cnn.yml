@@ -40,7 +40,7 @@ model:
   rnntype: cnn
   layers: 2
   crf: 1
-  crf_mask: true
+  constrain_decode: true
   activation: relu
 train:
   epochs: 600

@@ -4,7 +4,7 @@ from baseline.model import (
     register_model
 )
 import numpy as np
-from baseline.dy.dynety import CRF, Linear, DynetModel, rnn_forward, ConvEncoderStack
+from baseline.dy.dynety import CRF, Linear, DynetModel, rnn_forward, ConvEncoderStack, viterbi
 from baseline.utils import Offsets
 
 
@@ -16,16 +16,15 @@ class TaggerModelBase(DynetModel, TaggerModel):
         self.pdrop = kwargs.get('dropout', 0.5)
         self.rnntype = kwargs.get('rnntype', 'blstm')
         self.do_crf = bool(kwargs.get('crf', False))
-        self.crf_mask = bool(kwargs.get('crf_mask', False))
-        self.span_type = kwargs.get('span_type')
+        self.constraint = kwargs.get('constraint')
         self.lengths_key = kwargs.get('lengths_key')
         dsz = self.init_embed(embeddings_set)
         nc = len(self.labels)
 
         if self.do_crf:
-            vocab = labels if self.crf_mask else None
-            self.crf = CRF(nc, pc=self.pc, idxs=(Offsets.GO, Offsets.EOS),
-                           vocab=vocab, span_type=self.span_type)
+            self.crf = CRF(
+                nc, self.pc, idxs=(Offsets.GO, Offsets.EOS), mask=self.constraint
+            )
 
         self.activation_type = kwargs.get('activation', 'tanh')
         self.init_encoder(dsz, **kwargs)
@@ -93,6 +92,13 @@ class TaggerModelBase(DynetModel, TaggerModel):
         unaries = self.compute_unaries(inputs)
         if self.do_crf is True:
             best_path, path_score = self.crf.decode(unaries)
+        elif self.constraint is not None:
+            best_path, path_score = viterbi(
+                unaries,
+                dy.log_softmax(dy.inputTensor(self.constraint[1] * -1e4)),
+                Offsets.GO, Offsets.EOS,
+                norm=True
+            )
         else:
             best_path = [np.argmax(x.npvalue(), axis=0) for x in unaries]
         # TODO: RN using autobatching, so none of this is really useful

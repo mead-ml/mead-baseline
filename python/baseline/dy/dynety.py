@@ -1,8 +1,16 @@
 from itertools import chain
 import numpy as np
 import dynet as dy
-from baseline.utils import crf_mask, lookup_sentence, sequence_mask as seq_mask
+from baseline.utils import (
+    lookup_sentence,
+    transition_mask as transition_mask_np,
+    sequence_mask as seq_mask
+)
 
+def transition_mask(vocab, span_type, s_idx, e_idx, pad_idx):
+    mask = transition_mask_np(vocab, span_type, s_idx, pad_idx)
+    inv_mask = (mask == 0).astype(np.float32)
+    return mask, inv_mask
 
 class DynetModel(object):
     def __init__(self, pc=None):
@@ -120,8 +128,6 @@ def LayerNorm(num_features, pc, name='layer-norm'):
     return norm
 
 
-
-
 class Linear(DynetLayer):
     def __init__(self, osz, isz, pc, name="linear"):
         """
@@ -135,7 +141,7 @@ class Linear(DynetLayer):
         self.weight = self.pc.add_parameters((osz, isz), name="weight")
         self.bias = self.pc.add_parameters((osz,), name="bias")
 
-    def __call__(self, input_):
+    def __call__(self, input_, train=None):
         """
         :param input_: dy.Expression ((isz,), B)
 
@@ -425,7 +431,7 @@ def Attention(lstmsz, pc, name="attention"):
 class CRF(DynetModel):
     """Linear Chain CRF in Dynet."""
 
-    def __init__(self, n_tags, pc=None, idxs=None, vocab=None, span_type=None, pad_idx=None):
+    def __init__(self, n_tags, pc, idxs=None, mask=None):
         """Initialize the object.
 
         :param n_tags: int The number of tags in your output (emission size)
@@ -443,28 +449,15 @@ class CRF(DynetModel):
             if vocab is not None then we create a mask to reduce the probability of
             illegal transitions.
         """
-        super(CRF, self).__init__()
-        if pc is not None:
-            self.pc = pc.add_subcollection(name="crf")
-        if idxs is None:
-            self.start_idx = n_tags
-            self.end_idx = n_tags + 1
-            self.n_tags = n_tags + 2
-            self.add_ends = True
+        pc = pc.add_subcollection(name="crf")
+        super(CRF, self).__init__(pc)
+        self.start_idx, self.end_idx = idxs
+        self.n_tags = n_tags
+        if mask is not None:
+            self.mask = mask[0]
+            self.inv_mask = mask[1] * -1e4
         else:
-            self.start_idx, self.end_idx = idxs
-            self.n_tags = n_tags
-            self.add_ends = False
-        self.mask = None
-        if vocab is not None:
-            assert span_type is not None, "To mask transitions you need to provide a tagging span_type, choices are `IOB`, `BIO` (or `IOB2`), and `IOBES`"
-            if idxs is None:
-                vocab = vocab.copy()
-                vocab['<GO>'] = self.start_idx
-                vocab['<EOS>'] = self.end_idx
-            self.mask = crf_mask(vocab, span_type, self.start_idx, self.end_idx, pad_idx)
-            self.inv_mask = (self.mask == 0) * -1e4
-
+            self.mask = mask
         self.transitions_p = self.pc.add_parameters((self.n_tags, self.n_tags), name="transition")
 
     @property
@@ -472,17 +465,6 @@ class CRF(DynetModel):
         if self.mask is not None:
             return dy.cmult(self.transitions_p, dy.inputTensor(self.mask)) + dy.inputTensor(self.inv_mask)
         return self.transitions_p
-
-    @staticmethod
-    def _prep_input(emissions):
-        """Append scores for start and end to the emission.
-
-        :param emissions: List[dy.Expression ((H,), B)]
-
-        Returns:
-            List[dy.Expression ((H + 2,), B)]
-        """
-        return [dy.concatenate([e, dy.inputVector([-1e4, -1e4])], d=0) for e in emissions]
 
     def score_sentence(self, emissions, tags):
         """Get the score of a given sentence.
@@ -513,8 +495,6 @@ class CRF(DynetModel):
         Returns:
             dy.Expression ((1,), B)
         """
-        if self.add_ends:
-            emissions = CRF._prep_input(emissions)
         viterbi_score = self._forward(emissions)
         gold_score = self.score_sentence(emissions, tags)
         # CRF Loss: P_real / P_1..N -> -log(CRF Loss)
@@ -559,33 +539,37 @@ class CRF(DynetModel):
         Returns:
             List[int], dy.Expression ((1,), B)
         """
-        if self.add_ends:
-            emissions = CRF._prep_input(emissions)
-        backpointers = []
-        transitions = self.transitions
+        transition = self.transitions
+        return viterbi(emissions, transition, self.start_idx, self.end_idx)
 
-        inits = [-1e4] * self.n_tags
-        inits[self.start_idx] = 0
-        alphas = dy.inputVector(inits)
 
-        for emission in emissions:
-            next_vars = dy.colwise_add(dy.transpose(transitions), alphas)
-            best_tags = np.argmax(next_vars.npvalue(), 0)
-            v_t = dy.max_dim(next_vars, 0)
-            alphas = v_t + emission
-            backpointers.append(best_tags)
+def viterbi(emissions, transition, start_idx, end_idx, norm=False):
+    n_tags = emissions[0].dim()[0][0]
+    backpointers = []
 
-        terminal_expr = alphas + dy.pick(transitions, self.end_idx)
-        best_tag = np.argmax(terminal_expr.npvalue())
-        path_score = dy.pick(terminal_expr, best_tag)
+    inits = [-1e4] * n_tags
+    inits[start_idx] = 0
+    alphas = dy.inputVector(inits)
+    alphas = dy.log_softmax(alphas) if norm else alphas
 
-        best_path = [best_tag]
-        for bp_t in reversed(backpointers):
-            best_tag = bp_t[best_tag]
-            best_path.append(best_tag)
-        _ = best_path.pop()
-        best_path.reverse()
-        return best_path, path_score
+    for emission in emissions:
+        next_vars = dy.colwise_add(dy.transpose(transition), alphas)
+        best_tags = np.argmax(next_vars.npvalue(), 0)
+        v_t = dy.max_dim(next_vars, 0)
+        alphas = v_t + emission
+        backpointers.append(best_tags)
+
+    terminal_expr = alphas + dy.pick(transition, end_idx)
+    best_tag = np.argmax(terminal_expr.npvalue())
+    path_score = dy.pick(terminal_expr, best_tag)
+
+    best_path = [best_tag]
+    for bp_t in reversed(backpointers):
+        best_tag = bp_t[best_tag]
+        best_path.append(best_tag)
+    _ = best_path.pop()
+    best_path.reverse()
+    return best_path, path_score
 
 
 def show_examples_dynet(model, es, rlut1, rlut2, vocab, mxlen, sample, prob_clip, max_examples, reverse):
