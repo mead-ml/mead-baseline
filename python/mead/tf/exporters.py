@@ -6,6 +6,7 @@ from tensorflow.python.framework.errors_impl import NotFoundError
 import mead.exporters
 from mead.exporters import register_exporter
 from baseline.tf.embeddings import *
+from baseline.tf.tfy import transition_mask
 from baseline.utils import (export, 
                             read_json, 
                             ls_props, 
@@ -72,7 +73,7 @@ class TensorFlowExporter(mead.exporters.Exporter):
 
         classes_output_tensor = tf.saved_model.utils.build_tensor_info(
             sig_output.classes)
-        
+
         output_def_map = {
             tf.saved_model.signature_constants.CLASSIFY_OUTPUT_CLASSES: classes_output_tensor
         }
@@ -178,7 +179,10 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
         model_params["sess"] = sess
 
         state = read_json(basename + '.state')
-        model_params['span_type'] = state['span_type']
+        if state.get('constrain_decode', False):
+            constraint = transition_mask(labels, self.task.config_params['train']['span_type'], Offsets.GO, Offsets.EOS, Offsets.PAD)
+            model_params['constraint'] = constraint
+
         # Re-create the embeddings sub-graph
         embeddings = dict()
         for key, class_name in state['embeddings'].items():
@@ -186,7 +190,7 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
             embed_args = dict({'vsz': md['vsz'], 'dsz': md['dsz']})
             Constructor = eval(class_name)
             embeddings[key] = Constructor(key, **embed_args)
-                
+
         model = baseline.model.create_model_for(self.task.task_name(), embeddings, labels, **model_params)
 
         for prop in ls_props(model):
