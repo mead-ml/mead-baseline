@@ -191,6 +191,15 @@ def pytorch_linear(in_sz, out_sz, unif=0, initializer=None):
     l.bias.data.zero_()
     return l
 
+def tie_weight(to_layer, from_layer):
+    """Assigns a weight object to the layer weights.
+
+    This method exists to duplicate baseline functionality across packages.
+
+    :param to_layer: the pytorch layer to assign weights to  
+    :param from_layer: pytorch layer to retrieve weights from  
+    """
+    to_layer.weight = from_layer.weight
 
 def pytorch_clone_module(module_, N):
     return nn.ModuleList([copy.deepcopy(module_) for _ in range(N)])

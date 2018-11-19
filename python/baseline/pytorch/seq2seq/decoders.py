@@ -3,7 +3,8 @@ from baseline.pytorch import (pytorch_rnn_cell,
                               LuongDotProductAttention,
                               BahdanauAttention,
                               ScaledDotProductAttention,
-                              LuongGeneralAttention)
+                              LuongGeneralAttention,
+                              tie_weight)
 from baseline.utils import Offsets, export
 import torch
 import torch.nn.functional as F
@@ -102,7 +103,17 @@ class RNNDecoder(torch.nn.Module):
         self.decoder_rnn = pytorch_rnn_cell(dsz, self.hsz, rnntype, layers, pdrop)
         self.dropout = torch.nn.Dropout(pdrop)
         self.init_attn(**kwargs)
+
+        do_weight_tying = bool(kwargs.get('tie_weights', False))
+        is_valid_tying = self.hsz == self.tgt_embeddings.get_dsz()
+
         self.preds = pytorch_linear(self.hsz, self.tgt_embeddings.get_vsz())
+        if do_weight_tying:
+            if is_valid_tying:
+                tie_weight(self.preds, self.tgt_embeddings.embeddings)
+            else:
+                raise ValueError("weight tying only valid when prediction projection \
+layer's hidden size == embedding weight dimensions")
 
     @staticmethod
     def _basic_input(dst_embed_i, _):
@@ -275,6 +286,13 @@ class TransformerDecoderWrapper(torch.nn.Module):
             self.proj_to_dsz.weight = torch.nn.Parameter(self.proj_to_hsz.weight.transpose(0, 1), requires_grad=True)
 
         self.preds = pytorch_linear(dsz, self.tgt_embeddings.get_vsz())
+
+        do_weight_tying = bool(kwargs.get('tie_weights', False))
+
+        self.preds = pytorch_linear(self.hsz, self.tgt_embeddings.get_vsz())
+        if do_weight_tying:
+            self.preds.weight = self.tgt_embeddings.weight.transpose(0, 1)
+
 
     def _identity(self, x):
         return x
