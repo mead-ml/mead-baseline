@@ -20,8 +20,6 @@ from baseline.model import (
     load_seq2seq_model,
     load_lang_model
 )
-from baseline.tf.remote import RemoteModelTensorFlow
-
 from collections import namedtuple
 
 __all__ = []
@@ -98,13 +96,14 @@ class Service(object):
 
         model = None
         if backend == 'tf':
-            model = RemoteModelTensorFlow(remote, 
-                                name, 
-                                signature_name, 
-                                labels=labels, 
-                                lengths_key=lengths_key, 
-                                inputs=inputs,
-                                beam=beam)
+            tf = import_user_module('baseline.tf.remote')
+            model = tf.RemoteModelTensorFlow(remote, 
+                                             name, 
+                                             signature_name, 
+                                             labels=labels, 
+                                             lengths_key=lengths_key, 
+                                             inputs=inputs,
+                                             beam=beam)
         else:
             raise ValueError("only Tensorflow is currently supported for remote Services")
 
