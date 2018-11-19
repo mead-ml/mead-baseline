@@ -51,8 +51,7 @@ class TaggerModelBase(TaggerModel):
             'embeddings': embeddings_info,
             'crf': self.crf,
             'proj': self.proj,
-            'crf_mask': self.crf_mask,
-            'span_type': self.span_type
+            'constrain_decode': True if self.constraint is not None else False
         }
         for prop in ls_props(self):
             state[prop] = getattr(self, prop)
@@ -149,8 +148,6 @@ class TaggerModelBase(TaggerModel):
             model.embeddings[key] = Constructor(key, **embed_args)
 
         model.crf = bool(state.get('crf', False))
-        model.crf_mask = bool(state.get('crf_mask', False))
-        model.span_type = state.get('span_type')
         model.proj = bool(state.get('proj', False))
         model.lengths = tf.get_default_graph().get_tensor_by_name('lengths:0')
 
