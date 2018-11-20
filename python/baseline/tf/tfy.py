@@ -160,6 +160,21 @@ def dense_layer(output_layer_depth):
     return output_layer
 
 
+def tie_weight(weight, tie_shape):
+    """Higher order function to share weights between two layers.
+
+    Tensorflow will take a custom_getter inside of a variable scope.
+    This method creates a getter that looks for a match in shapes. If they match,
+    The weights are transposed and shared.
+
+    """
+    def tie_getter(getter, name, *args, **kwargs):
+        if kwargs['shape'] == tie_shape:
+            return tf.transpose(weight)
+        return getter("{}".format(name), *args, **kwargs)
+    return tie_getter
+
+
 def lstm_cell(hsz, forget_bias=1.0):
     """Produce a single cell with no dropout
 

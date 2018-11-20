@@ -1,7 +1,7 @@
 import numpy as np
 import dynet as dy
 from baseline.utils import Offsets, topk
-from baseline.dy.dynety import DynetModel, Linear, Attention, WeightShareLinear
+from baseline.dy.dynety import DynetModel, Linear, Attention, WeightShareLinear, squeeze_and_transpose
 from baseline.dy.transformer import subsequent_mask, TransformerDecoderStack
 from baseline.model import (
     register_decoder,
@@ -80,7 +80,17 @@ class RNNDecoder(DecoderBase):
         self.pdrop = kwargs.get('dropout', 0.5)
         self.decoder_rnn = dy.VanillaLSTMBuilder(layers, dsz, self.hsz, self.pc)
         self.init_attn(**kwargs)
-        self.preds = Linear(self.tgt_embeddings.get_vsz(), self.hsz, self.pc)
+
+        do_weight_tying = bool(kwargs.get('tie_weights', False))
+
+        if do_weight_tying:
+            if self.hsz == tgt_embeddings.get_dsz():
+                self.preds = WeightShareLinear(tgt_embeddings.get_vsz(), tgt_embeddings.embeddings, self.pc, transform=squeeze_and_transpose, name=tgt_embeddings.pc.name())
+            else:
+                raise ValueError("weight tying only valid when prediction projection \
+layer's hidden size == embedding weight dimensions")
+        else:
+            self.preds = Linear(self.tgt_embeddings.get_vsz(), self.hsz, self.pc)
 
     @staticmethod
     def _basic_input(dst_embed_i, _):
