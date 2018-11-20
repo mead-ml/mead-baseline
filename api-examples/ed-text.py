@@ -10,7 +10,7 @@ parser.add_argument('--remote', help='(optional) remote endpoint', type=str) # l
 parser.add_argument('--name', help='(optional) signature name', type=str) 
 parser.add_argument('--target', help='A file to write decoded output (or print to screen)')
 parser.add_argument('--tsv', help='print tab separated', type=bl.str2bool, default=False)
-parser.add_argument('--batchsz', help='Size of a batch to pass at once', default=256)
+parser.add_argument('--batchsz', help='Size of a batch to pass at once', default=32, type=int)
 
 args = parser.parse_known_args()[0]
 

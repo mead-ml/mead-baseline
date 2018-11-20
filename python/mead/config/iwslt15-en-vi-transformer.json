@@ -39,7 +39,7 @@
         "optim": "adam",
         "lr_scheduler_type": "warmup_linear",
         "warmup_steps": 800,
-        "eta": 0.003,
+        "eta": 0.001,
         "patience": 20,
 	    "do_early_stopping": false,
         "clip": 1.0

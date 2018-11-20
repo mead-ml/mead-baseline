@@ -28,7 +28,6 @@
     "model": {
         "model_type": "default",
         "rnntype": "blstm",
-	"attn_type": "luong",
         "hsz": 512,
         "dropout": 0.2,
         "layers": 2
