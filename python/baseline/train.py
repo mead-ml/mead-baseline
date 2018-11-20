@@ -1,7 +1,7 @@
 import time
 import logging
 import numpy as np
-from baseline.utils import export, optional_params, register
+from baseline.utils import export, optional_params, register, listify
 import math
 
 
@@ -17,6 +17,21 @@ class LearningRateScheduler(object):
     def __init__(self, **kwargs):
         self.lr = kwargs.get('lr', kwargs.get('eta', 1.0))
 
+    @staticmethod
+    def _identity(x):
+        return x
+
+
+@exporter
+class WarmupLearningRateScheduler(LearningRateScheduler):
+    def __init__(self, warmup_steps=16000, **kwargs):
+        super(WarmupLearningRateScheduler, self).__init__(**kwargs)
+        self._warmup_steps = warmup_steps
+
+    @property
+    def warmup_steps(self):
+        return self._warmup_steps
+
 
 @exporter
 class ConstantScheduler(LearningRateScheduler):
@@ -29,11 +44,7 @@ class ConstantScheduler(LearningRateScheduler):
 
 
 @exporter
-class WarmupLinearScheduler(LearningRateScheduler):
-
-    def __init__(self, warmup_steps=16000, **kwargs):
-        super(WarmupLinearScheduler, self).__init__(**kwargs)
-        self.warmup_steps = warmup_steps
+class WarmupLinearScheduler(WarmupLearningRateScheduler):
 
     def __call__(self, global_step):
         lr_factor = min(1.0, global_step / float(self.warmup_steps))
@@ -104,10 +115,7 @@ class InverseTimeDecayScheduler(LearningRateScheduler):
         super(InverseTimeDecayScheduler, self).__init__(**kwargs)
         self.decay_steps = decay_steps
         self.decay_rate = decay_rate
-        self.wrap_fn = math.floor if staircase else self._identity
-
-    def _identity(self, x):
-        return x
+        self.wrap_fn = math.floor if staircase else LearningRateScheduler._identity
 
     def __call__(self, global_step):
         t = self.wrap_fn(global_step / self.decay_steps)
@@ -121,15 +129,23 @@ class ExponentialDecayScheduler(LearningRateScheduler):
         super(ExponentialDecayScheduler, self).__init__(**kwargs)
         self.decay_steps = decay_steps
         self.decay_rate = decay_rate
-        self.wrap_fn = math.floor if staircase else self._identity
-
-    def _identity(self, x):
-        return x
+        self.wrap_fn = math.floor if staircase else LearningRateScheduler._identity
 
     def __call__(self, global_step):
         t = self.wrap_fn(global_step / float(self.decay_steps))
         return self.lr * self.decay_rate ** t
 
+@exporter
+class CompositeLRScheduler(LearningRateScheduler):
+    def __init__(self, warm=None, rest=None, **kwargs):
+        super(CompositeLRScheduler, self).__init__(**kwargs)
+        self.warm = warm
+        self.rest = rest
+
+    def __call__(self, global_step):
+        if global_step < self.warm.warmup_steps:
+            return self.warm(global_step)
+        return self.rest(global_step - self.warm.warmup_steps)
 
 
 @exporter
@@ -140,10 +156,22 @@ def register_lr_scheduler(cls, name=None):
 
 @exporter
 def create_lr_scheduler(**kwargs):
+    """Create a learning rate scheduler.
+
+    :Keyword Arguments:
+      * *lr_scheduler_type* `str` or `list` The name of the learning rate scheduler
+          if list then the first scheduler should be a warmup scheduler.
+    """
     sched_type = kwargs.get('lr_scheduler_type')
     if sched_type is None:
         return None
-    Constructor = BASELINE_LR_SCHEDULERS.get(sched_type)
+    sched_type = listify(sched_type)
+    if len(sched_type) == 2:
+        warm = BASELINE_LR_SCHEDULERS.get(sched_type[0])(**kwargs)
+        assert isinstance(warm, WarmupLearningRateScheduler), "First LR Scheduler must be a warmup scheduler."
+        rest = BASELINE_LR_SCHEDULERS.get(sched_type[1])(**kwargs)
+        return BASELINE_LR_SCHEDULERS.get('composite')(warm=warm, rest=rest, **kwargs)
+    Constructor = BASELINE_LR_SCHEDULERS.get(sched_type[0])
     return Constructor(**kwargs)
 
 

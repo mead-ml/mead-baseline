@@ -1,5 +1,5 @@
 import tensorflow as tf
-from baseline.train import register_lr_scheduler, create_lr_scheduler
+from baseline.train import register_lr_scheduler, create_lr_scheduler, WarmupLearningRateScheduler
 import math
 
 
@@ -13,11 +13,10 @@ class ConstantSchedulerTensorFlow(object):
 
 
 @register_lr_scheduler('warmup_linear')
-class WarmupLinearSchedulerTensorFlow(object):
+class WarmupLinearSchedulerTensorFlow(WarmupLearningRateScheduler):
 
-    def __init__(self, warmup_steps=16000, **kwargs):
-        super(WarmupLinearSchedulerTensorFlow, self).__init__()
-        self.warmup_steps = warmup_steps
+    def __init__(self, **kwargs):
+        super(WarmupLinearSchedulerTensorFlow, self).__init__(**kwargs)
 
     def __call__(self, lr, global_step):
         return tf.minimum(1.0, tf.cast(global_step / self.warmup_steps, dtype=tf.float32)) * lr
@@ -92,6 +91,26 @@ class ExponentialDecaySchedulerTensorFlow(object):
 
     def __call__(self, lr, global_step):
         return tf.train.exponential_decay(lr, global_step, self.decay_steps, self.decay_rate, staircase=self.staircase)
+
+
+@register_lr_scheduler('composite')
+class CompositeLRSchedulerTensorFlow(object):
+    def __init__(self, warm=None, rest=None, **kwargs):
+        self.warm = warm
+        self.rest = rest
+
+    def __call__(self, lr, global_step):
+        warm_tensor = self.warm(lr, global_step)
+        def call_warm(): return warm_tensor
+
+        rest_step = tf.subtract(global_step, tf.constant(self.warm.warmup_steps))
+        rest_tensor = self.rest(lr, rest_step)
+        def call_rest(): return rest_tensor
+
+        return tf.cond(
+            global_step < self.warm.warmup_steps,
+            call_warm, call_rest
+        )
 
 
 class AdamWOptimizer(tf.train.Optimizer):
