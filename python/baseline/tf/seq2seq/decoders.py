@@ -267,9 +267,13 @@ got {} hsz and {} dsz".format(self.hsz, self.tgt_embedding.get_dsz()))
         Wo = self._get_tgt_weights()
         with tf.variable_scope("dec", reuse=tf.AUTO_REUSE):
             tie_shape = [Wo.get_shape()[-1], Wo.get_shape()[0]]
-            with tf.variable_scope("Share", custom_getter=tie_weight(Wo, tie_shape)):
+            if self.do_weight_tying:
+                with tf.variable_scope("Share", custom_getter=tie_weight(Wo, tie_shape)):
+                    proj = tf.layers.Dense(self.tgt_embedding.vsz, 
+                                        use_bias=False)
+            else:
                 proj = tf.layers.Dense(self.tgt_embedding.vsz, 
-                                       use_bias=False)
+                                        use_bias=False)
 
             self._create_cell(encoder_outputs.output, src_len, pkeep, **kwargs)
             batch_sz = tf.shape(encoder_outputs.output)[0]
