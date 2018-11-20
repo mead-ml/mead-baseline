@@ -1,16 +1,19 @@
+import math
 import torch
 import torch.autograd
-from baseline.train import (register_lr_scheduler,
-                            create_lr_scheduler,
-                            ConstantScheduler,
-                            WarmupLinearScheduler,
-                            CyclicLRScheduler,
-                            PiecewiseDecayScheduler,
-                            ZarembaDecayScheduler,
-                            CosineDecayScheduler,
-                            InverseTimeDecayScheduler,
-                            ExponentialDecayScheduler)
-import math
+from baseline.train import (
+    register_lr_scheduler,
+    create_lr_scheduler,
+    ConstantScheduler,
+    WarmupLinearScheduler,
+    CyclicLRScheduler,
+    PiecewiseDecayScheduler,
+    ZarembaDecayScheduler,
+    CosineDecayScheduler,
+    InverseTimeDecayScheduler,
+    ExponentialDecayScheduler,
+    CompositeLRScheduler,
+)
 
 
 @register_lr_scheduler(name='default')
@@ -66,6 +69,9 @@ class InverseTimeDecaySchedulerPytorch(InverseTimeDecayScheduler):
 class ExponentialDecaySchedulerPyTorch(ExponentialDecayScheduler):
     def __init__(self, *args, **kwargs):
         super(ExponentialDecaySchedulerPyTorch, self).__init__(*args, **kwargs)
+
+@register_lr_scheduler(name='composite')
+class CompositeLRSchedulerPyTorch(CompositeLRScheduler): pass
 
 
 class AdamW(torch.optim.Optimizer):

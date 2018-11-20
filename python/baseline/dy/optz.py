@@ -1,17 +1,17 @@
 import dynet as dy
-from baseline.train import create_lr_scheduler, register_lr_scheduler
-
-from baseline.train import (register_lr_scheduler,
-                            create_lr_scheduler,
-                            ConstantScheduler,
-                            WarmupLinearScheduler,
-                            CyclicLRScheduler,
-                            PiecewiseDecayScheduler,
-                            ZarembaDecayScheduler,
-                            CosineDecayScheduler,
-                            InverseTimeDecayScheduler,
-                            ExponentialDecayScheduler)
-import math
+from baseline.train import (
+    register_lr_scheduler,
+    create_lr_scheduler,
+    ConstantScheduler,
+    WarmupLinearScheduler,
+    CyclicLRScheduler,
+    PiecewiseDecayScheduler,
+    ZarembaDecayScheduler,
+    CosineDecayScheduler,
+    InverseTimeDecayScheduler,
+    ExponentialDecayScheduler,
+    CompositeLRScheduler,
+)
 
 
 @register_lr_scheduler(name='default')
@@ -64,6 +64,11 @@ class InverseTimeDecaySchedulerDyNet(InverseTimeDecayScheduler):
 class ExponentialDecaySchedulerDyNet(ExponentialDecayScheduler):
     def __init__(self, *args, **kwargs):
         super(ExponentialDecaySchedulerDyNet, self).__init__(*args, **kwargs)
+
+
+@register_lr_scheduler(name='composite')
+class CompositeLRSchedulerDyNet(CompositeLRScheduler): pass
+
 
 class OptimizerManager(object):
 

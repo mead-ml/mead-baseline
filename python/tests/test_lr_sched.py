@@ -52,6 +52,10 @@ LINEAR_WARMUP_LR_CONFIG = {
     "lr": INIT_LR
 }
 
+COMPOSITE_LR_CONFIG = LINEAR_WARMUP_LR_CONFIG.copy()
+COMPOSITE_LR_CONFIG.update(EXP_LR_CONFIG)
+COMPOSITE_LR_CONFIG['lr_scheduler_type'] = ['warmup_linear', 'exponential']
+
 BOUNDS = [1, 2, 4, 10, 50]
 ZAREMBA_DECAY_RATE = 1.2
 ZAREMBA_DECAY_VALUES = [INIT_LR/(ZAREMBA_DECAY_RATE**i) for i in range(len(BOUNDS)+1)]
@@ -205,6 +209,31 @@ def test_linear_warmup():
 
     expected_lrs = [INIT_LR*min(1.0, step / warmup_steps) for step in range(NUM_STEPS)]
     assert np.allclose(expected_lrs, lrs)
+
+
+def test_composite_warmup():
+    tf.reset_default_graph()
+    warmup_steps = COMPOSITE_LR_CONFIG['warmup_steps']
+    decay_rate = EXP_LR_CONFIG['decay_rate']
+    with tf.Session() as sess:
+        lr_sched = create_lr_scheduler(**COMPOSITE_LR_CONFIG)
+        lr_var = tf.placeholder(tf.float32, name='lr')
+        step_var = tf.placeholder(tf.int32, name='step')
+
+        out = lr_sched(lr_var, step_var)
+        sess.run(tf.global_variables_initializer())
+
+        lrs = [sess.run(out, {lr_var: INIT_LR, step_var: step}) for step in range(NUM_STEPS)]
+
+        warmup_expected = [INIT_LR * min(1.0, step / warmup_steps) for step in range(NUM_STEPS)]
+        exp_expected = [(INIT_LR * decay_rate ** (t/100.)) for t in range(NUM_STEPS)]
+
+    for step in range(NUM_STEPS):
+        if step < warmup_steps:
+            assert np.allclose(lrs[step], warmup_expected[step])
+        else:
+            assert np.allclose(lrs[step], exp_expected[step - warmup_steps])
+
 
 
 def test_constant():

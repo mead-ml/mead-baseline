@@ -1,8 +1,10 @@
+import six
 import pytest
 import numpy as np
-from mock import patch
+from mock import patch, MagicMock
 import baseline
 from baseline.train import (
+    create_lr_scheduler,
     CosineDecayScheduler,
     CyclicLRScheduler,
     ExponentialDecayScheduler,
@@ -11,6 +13,7 @@ from baseline.train import (
     PiecewiseDecayScheduler,
     ZarembaDecayScheduler,
     InverseTimeDecayScheduler,
+    CompositeLRScheduler,
 )
 
 
@@ -160,3 +163,34 @@ def test_inverse_time_is_flat():
     lr_after2 = ti(after2)
     assert lr_before != lr_after
     assert lr_after == lr_after2
+
+
+def test_composite_calls_warm():
+    warmup_steps = np.random.randint(50, 101)
+    warm = MagicMock()
+    warm.warmup_steps = warmup_steps
+    rest = MagicMock()
+    lr = CompositeLRScheduler(warm=warm, rest=rest)
+    step = np.random.randint(0, warmup_steps)
+    _ = lr(step)
+    warm.assert_called_once_with(step)
+    rest.assert_not_called()
+
+
+def test_composite_calls_rest():
+    warmup_steps = np.random.randint(50, 101)
+    warm = MagicMock()
+    warm.warmup_steps = warmup_steps
+    rest = MagicMock()
+    lr = CompositeLRScheduler(warm=warm, rest=rest)
+    step = np.random.randint(warmup_steps + 1, six.MAXSIZE)
+    _ = lr(step)
+    warm.assert_not_called()
+    rest.assert_called_once_with(step - warmup_steps)
+
+
+def test_composite_error():
+    pytest.importorskip('torch')
+    from baseline.pytorch.optz import CompositeLRSchedulerPyTorch
+    with pytest.raises(AssertionError):
+        _ = create_lr_scheduler(**{"lr_scheduler_type": ["exponential", "zaremba"]})
