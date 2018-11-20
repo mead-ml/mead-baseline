@@ -286,6 +286,14 @@ class RNNDecoderWithAttn(RNNDecoder):
         super(RNNDecoderWithAttn, self).__init__(tgt_embedding, **kwargs)
         self.attn_type = kwargs.get('attn_type', 'bahdanau').lower()
 
+    @property
+    def attn_type(self):
+        return self._attn_type
+
+    @attn_type.setter
+    def attn_type(self, type):
+        self._attn_type = type
+
     def _create_cell(self, rnn_enc_tensor, src_len, pkeep, rnntype='lstm', layers=1, vdrop=False, **kwargs):
         cell = multi_rnn_cell_w_dropout(self.hsz, pkeep, rnntype, layers, variational=vdrop)
         if self.beam_width > 1:

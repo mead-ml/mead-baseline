@@ -332,6 +332,11 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
             self.encoder = self.create_encoder(**kwargs)
             return self.encoder.encode(embed_in, self.src_len, self.pkeep, **kwargs)
 
+    @staticmethod
+    def _write_props_to_state(obj, state):
+        for prop in ls_props(obj):
+            state[prop] = getattr(obj, prop)
+
     def save_md(self, basename):
 
         path = basename.split('/')
@@ -347,8 +352,9 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
             "hsz": self.hsz,
             "layers": self.layers
         }
-        for prop in ls_props(self):
-            state[prop] = getattr(self, prop)
+        self._write_props_to_state(self, state)
+        self._write_props_to_state(self.encoder, state)
+        self._write_props_to_state(self.decoder, state)
 
         write_json(state, basename + '.state')
         for key, embedding in self.src_embeddings.items():
