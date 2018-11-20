@@ -25,11 +25,15 @@ def label_vocab():
 
 @pytest.fixture
 def crf(label_vocab):
-    from baseline.pytorch.crf import CRF
+    from baseline.pytorch.crf import CRF, transition_mask
+    mask = transition_mask(
+        label_vocab, SPAN_TYPE,
+        label_vocab[S], label_vocab[E], label_vocab[P]
+    )
     return CRF(
         len(label_vocab),
         (label_vocab[S], label_vocab[E]), True,
-        label_vocab, SPAN_TYPE, label_vocab[P]
+        mask
     )
 
 
@@ -66,16 +70,6 @@ def test_mask_skipped(label_vocab):
     )
     t = crf.transitions.detach().numpy()
     assert t[0, label_vocab['<GO>'], label_vocab['O']] != -1e4
-
-
-def test_error_without_type(label_vocab):
-    from baseline.pytorch.crf import CRF
-    with pytest.raises(AssertionError):
-        _ = CRF(
-            len(label_vocab),
-            (label_vocab[S], label_vocab[E]), True,
-            label_vocab
-        )
 
 
 # def test_mask_follows_crf_device(crf):

@@ -5,7 +5,8 @@ import numpy as np
 tf = pytest.importorskip('tensorflow')
 from baseline.model import create_tagger_model, load_tagger_model
 from baseline.embeddings import load_embeddings
-from baseline.utils import crf_mask as np_crf
+from baseline.utils import transition_mask as np_transition_mask
+from baseline.tf.tfy import transition_mask
 
 
 HSZ = 100
@@ -51,18 +52,21 @@ def save_file():
             os.remove(os.path.join(LOC, file_name))
 
 @pytest.fixture
-def model(label_vocab, embeds):
+def model(label_vocab, embeds, mask):
     from baseline.tf import tagger
-    tf.reset_default_graph()
     model = create_tagger_model(
         embeds, label_vocab,
-        crf=True, crf_mask=True, span_type=SPAN_TYPE,
+        crf=True, constraint=mask,
         hsz=HSZ, cfiltsz=[3], wsz=WSZ,
         layers=2, rnntype="blstm"
     )
     model.create_loss()
     model.sess.run(tf.global_variables_initializer())
     return model
+
+@pytest.fixture
+def mask(label_vocab):
+    return transition_mask(label_vocab, SPAN_TYPE, label_vocab[S], label_vocab[E], label_vocab[P])
 
 
 def test_mask_used(label_vocab, model):
@@ -72,7 +76,7 @@ def test_mask_used(label_vocab, model):
 
 def test_mask_is_transpose(label_vocab, model):
     transition = model.sess.run(model.mask)
-    np_mask = np_crf(label_vocab, SPAN_TYPE, label_vocab[S], label_vocab[E], label_vocab[P])
+    np_mask = np_transition_mask(label_vocab, SPAN_TYPE, label_vocab[S], label_vocab[E], label_vocab[P])
     np.testing.assert_allclose(transition.T, np_mask)
 
 
@@ -85,12 +89,11 @@ def test_persists_save(model, save_file):
     np.testing.assert_allclose(t1, t2)
 
 
-def test_skip_mask(label_vocab, embeds):
-    tf.reset_default_graph()
+def test_skip_mask(label_vocab, embeds, mask):
     from baseline.tf import tagger
     model = create_tagger_model(
         embeds, label_vocab,
-        crf=True, span_type=SPAN_TYPE,
+        crf=True,
         hsz=HSZ, cfiltsz=[3], wsz=WSZ,
         layers=2, rnntype="blstm"
     )
@@ -98,16 +101,3 @@ def test_skip_mask(label_vocab, embeds):
     model.sess.run(tf.global_variables_initializer())
     transition = model.sess.run(model.A)
     assert transition[label_vocab['O'], label_vocab[S]] != -1e4
-
-
-def test_error_on_mask_and_no_span(label_vocab, embeds):
-    tf.reset_default_graph()
-    from baseline.tf import tagger
-    model = create_tagger_model(
-        embeds, label_vocab,
-        crf=True, crf_mask=True,
-        hsz=HSZ, cfiltsz=[3], wsz=WSZ,
-        layers=2, rnntype="blstm"
-    )
-    with pytest.raises(AssertionError):
-        model.create_loss()

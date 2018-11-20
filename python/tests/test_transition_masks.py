@@ -1,5 +1,5 @@
 import pytest
-from baseline.utils import crf_mask
+from baseline.utils import transition_mask
 
 IOBv = {
     "<PAD>": 0,
@@ -31,22 +31,22 @@ IOBESv = {
 
 @pytest.fixture
 def IOB():
-    return crf_mask(IOBv, "IOB", IOBv['<GO>'], IOBv['<EOS>'], IOBv['<PAD>'])
+    return transition_mask(IOBv, "IOB", IOBv['<GO>'], IOBv['<EOS>'], IOBv['<PAD>'])
 
 @pytest.fixture
 def BIO():
-    return crf_mask(IOBv, "BIO", IOBv['<GO>'], IOBv['<EOS>'], IOBv['<PAD>'])
+    return transition_mask(IOBv, "BIO", IOBv['<GO>'], IOBv['<EOS>'], IOBv['<PAD>'])
 
 @pytest.fixture
 def IOBES():
-    return crf_mask(IOBESv, "IOBES", IOBESv['<GO>'], IOBESv['<EOS>'], IOBESv['<PAD>'])
+    return transition_mask(IOBESv, "IOBES", IOBESv['<GO>'], IOBESv['<EOS>'], IOBESv['<PAD>'])
 
 def test_IOB_shape(IOB):
     assert IOB.shape == (len(IOBv), len(IOBv))
 
 def test_BIO_shape(BIO):
     assert BIO.shape == (len(IOBv), len(IOBv))
-    mask = crf_mask(IOBv, "IOB2", IOBv['<GO>'], IOBv['<EOS>'], IOBv['<PAD>'])
+    mask = transition_mask(IOBv, "IOB2", IOBv['<GO>'], IOBv['<EOS>'], IOBv['<PAD>'])
     assert mask.shape == (len(IOBv), len(IOBv))
 
 def test_IOBES_shape(IOBES):
