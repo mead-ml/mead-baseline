@@ -38,8 +38,9 @@
 	"start_decay_epoch": 8,
 	"decay_rate": 2.0,
 	"decay_type": "zaremba",
+        "mom": 0.9,
         "lr": 1.0,
 	"do_early_stopping": false,
-        "clip": 1.0
+        "clip": 5.0
     }
 }
