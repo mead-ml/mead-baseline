@@ -1,7 +1,7 @@
 import tensorflow as tf
 
 class PreprocessorCreator(object):
-    def __init__(self, indices, lchars, upchars_lut, task, token_key, extra_feats, mxlen=None, mxwlen=None):
+    def __init__(self, indices, lchars, upchars_lut, task, token_key, mxlen=None, mxwlen=None):
         """
         indices are created during vocab creation.
         """
@@ -14,7 +14,6 @@ class PreprocessorCreator(object):
 
         self.task = task
         self.token_key = token_key
-        self.extra_feats = extra_feats
         if mxlen is None:
             mxlen = self.task.config_params['preproc']['mxlen']
         self.mxlen = mxlen
@@ -41,12 +40,6 @@ class PreprocessorCreator(object):
             chars, _ = self._create_char_vectors_from_post(nraw_post, mxlen, mxwlen)
             preprocs['char'] = chars
 
-
-        for extra in self.extra_feats:
-            index = self.indices[extra]
-            nraw = self._reform_raw(post_mappings[extra], mxlen)
-            t, _ = self._create_vectors_from_post(nraw, mxlen, index)
-            preprocs[extra] = t
 
         return preprocs, sentence_length
 
