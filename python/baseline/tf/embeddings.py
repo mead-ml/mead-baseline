@@ -190,11 +190,6 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
         self.wsz = wsz
         self.weights = weights
         
-        if self.weights is None:
-            unif = kwargs.get('unif', 0.1)
-            self.weights = np.random.uniform(-unif, unif, (self.vsz, self.dsz))
-        self.params = kwargs
-        self.wsz = None
         self.x = None
         if self.weights is None:
             unif = kwargs.get('unif', 0.1)

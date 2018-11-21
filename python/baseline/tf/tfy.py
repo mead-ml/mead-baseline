@@ -553,7 +553,7 @@ def pool_chars(x_char, Wch, ce0, char_dsz, nfeat_factor=None,
             char_bt_x_w = tf.reshape(x_char, [-1, mxwlen])
             cembed = tf.nn.embedding_lookup(Wch, char_bt_x_w, name="embeddings")
             cmot, num_filts = char_word_conv_embeddings(cembed, filtsz, char_dsz, nfeats,
-                                                        activation_fn=tf_activation(activation_type),
+                                                        activation_fn=tf_activation(activation),
                                                         gating=gating_fn,
                                                         num_gates=num_gates)
             word_char = tf.reshape(cmot, [-1, mxlen, num_filts])
