@@ -95,8 +95,8 @@ class Service(object):
 
         model = None
         if backend == 'tf':
-            from baseline.tf.remote import RemoteModelTensorFlow
-            model = RemoteModelTensorFlow(remote,
+            from baseline.tf.remote import RemoteModelTensorFlowGRPC
+            model = RemoteModelTensorFlowGRPC(remote,
                                 name,
                                 signature_name,
                                 labels=labels,

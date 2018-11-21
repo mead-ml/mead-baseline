@@ -448,6 +448,7 @@ def write_sentence_conll(handle, sentence, gold, txt, idx2label):
         print('ERROR: Failed to write lines... closing file')
         handle.close()
 
+
 @exporter
 def write_json(content, filepath):
     with open(filepath, "w") as f:
@@ -456,12 +457,18 @@ def write_json(content, filepath):
 
 @exporter
 def ls_props(thing):
+    """List all of the properties on some object, but ignore anything starting with `pkeep`
+
+    :param thing: Some object
+    :return: The list of properties
+    """
     return [x for x in dir(thing) if isinstance(getattr(type(thing), x, None), property) and not x.startswith('pkeep')]
 
 
 @exporter
 def import_user_module(module_name):
     """Load a module that is in the python path
+
     :param model_name: (``str``) - the name of the module
     :return:
     """
@@ -637,6 +644,7 @@ def convert_bio_to_iobes(ifile, ofile):
 
             writer.write(' '.join(tokens[:-1]) + ' ' + updated_label + '\n')
             prev = tokens[-1]
+
 
 @exporter
 def to_spans(sequence, lut, span_type, verbose=False):

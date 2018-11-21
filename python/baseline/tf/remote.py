@@ -2,7 +2,9 @@ import numpy as np
 from baseline.utils import import_user_module
 import tensorflow as tf
 
-class RemoteModelTensorFlow(object):
+
+class RemoteModelTensorFlowGRPC(object):
+
     def __init__(self, remote, name, signature, labels=None, beam=None, lengths_key=None, inputs=[]):
         self.predictpb = import_user_module('tensorflow_serving.apis.predict_pb2')
         self.servicepb = import_user_module('tensorflow_serving.apis.prediction_service_pb2_grpc')
@@ -92,7 +94,7 @@ class RemoteModelTensorFlow(object):
             num_ex = len(examples[self.lengths_key])
             for i in range(num_ex):
                 length = len(self.get_labels())
-                d = [(c,s) for c,s in zip(classes[length*i:length*(i+1)], scores[length*i:length*(i+1)])]
+                d = [(c, s) for c, s in zip(classes[length*i:length*(i+1)], scores[length*i:length*(i+1)])]
                 result.append(d)
             
             return result

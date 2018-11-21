@@ -182,7 +182,7 @@ def lstm_cell(hsz, forget_bias=1.0):
     :param forget_bias: (``int``) Defaults to 1
     :return: a cell
     """
-    return tf.contrib.rnn.BasicLSTMCell(hsz, forget_bias=forget_bias, state_is_tuple=True)
+    return tf.contrib.rnn.LSTMCell(hsz, forget_bias=forget_bias, state_is_tuple=True)
 
 
 def lstm_cell_w_dropout(hsz, pkeep, forget_bias=1.0, variational=True):
@@ -195,7 +195,7 @@ def lstm_cell_w_dropout(hsz, pkeep, forget_bias=1.0, variational=True):
     :return: a cell
    """
     return tf.contrib.rnn.DropoutWrapper(
-        tf.contrib.rnn.BasicLSTMCell(hsz, forget_bias=forget_bias, state_is_tuple=True),
+        tf.contrib.rnn.LSTMCell(hsz, forget_bias=forget_bias, state_is_tuple=True),
         output_keep_prob=pkeep,
         state_keep_prob=pkeep if variational else 1.0,
         variational_recurrent=variational,
@@ -271,7 +271,7 @@ def rnn_cell(hsz, rnntype, st=None):
     :return: a cell
     """
     if st is not None:
-        cell = tf.contrib.rnn.BasicLSTMCell(hsz, state_is_tuple=st) if rnntype.endswith('lstm') else tf.contrib.rnn.GRUCell(hsz)
+        cell = tf.contrib.rnn.LSTMCell(hsz, state_is_tuple=st) if rnntype.endswith('lstm') else tf.contrib.rnn.GRUCell(hsz)
     else:
         cell = tf.contrib.rnn.LSTMCell(hsz) if rnntype.endswith('lstm') else tf.contrib.rnn.GRUCell(hsz)
     return cell

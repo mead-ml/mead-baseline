@@ -234,7 +234,7 @@ def verify(
 
     force_xpctl(mead_config, label)
 
-    return search(config, settings, logging, hpctl_loggins, datasets, embeddings, reporting, unknown, task, num_iters)
+    return search(config, settings, logging, hpctl_logging, datasets, embeddings, reporting, unknown, task, num_iters)
 
 
 @export

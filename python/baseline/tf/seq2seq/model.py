@@ -213,11 +213,7 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
             state['beam'] = kwargs['beam']
 
         state['sess'] = kwargs.get('sess', tf.Session())
-
         state['model_type'] = kwargs.get('model_type', 'default')
-        #state['encoder_type'] = kwargs.get('encoder_type', 'default')
-        #state['decoder_type'] = kwargs.get('decoder_type', 'default')
-        #state['arc_policy_type'] = kwargs.get('arc_policy_type', 'default')
 
         with open(basename + '.saver') as fsv:
             saver_def = tf.train.SaverDef()
@@ -361,21 +357,12 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
             embedding.save_md('{}-{}-md.json'.format(basename, key))
 
         self.tgt_embedding.save_md('{}-tgt-md.json'.format(basename))
-
-        tf.train.write_graph(self.sess.graph_def, outdir, base + '.graph', as_text=False)
         with open(basename + '.saver', 'w') as f:
             f.write(str(self.saver.as_saver_def()))
 
     def save(self, model_base):
         self.save_md(model_base)
         self.saver.save(self.sess, model_base)
-
-    def restore_graph(self, base):
-        with open(base + '.graph', 'rb') as gf:
-            gd = tf.GraphDef()
-            gd.ParseFromString(gf.read())
-            self.sess.graph.as_default()
-            tf.import_graph_def(gd, name='')
 
     def predict(self, batch_dict):
         feed_dict = self.make_input(batch_dict)

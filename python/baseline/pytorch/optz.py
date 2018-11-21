@@ -160,13 +160,20 @@ class OptimizerManager(object):
         if optim == 'adadelta':
             self.optimizer = torch.optim.Adadelta(model.parameters(), lr=self.current_lr, weight_decay=wd)
         elif optim == 'adam':
-            self.optimizer = torch.optim.Adam(model.parameters(), lr=self.current_lr, weight_decay=wd)
+            self.optimizer = torch.optim.Adam(model.parameters(),
+                                              lr=self.current_lr,
+                                              betas=(kwargs.get('beta1', 0.9), kwargs.get('beta2', 0.999)),
+                                              eps=kwargs.get('epsilon', 1e-8), weight_decay=wd)
         elif optim == 'rmsprop':
-            self.optimizer = torch.optim.RMSprop(model.parameters(), lr=self.current_lr, weight_decay=wd)
+            self.optimizer = torch.optim.RMSprop(model.parameters(), lr=self.current_lr, weight_decay=wd, momentum=kwargs.get('mom', 0.0))
         elif optim == 'asgd':
             self.optimizer = torch.optim.ASGD(model.parameters(), lr=self.current_lr, weight_decay=wd)
         elif optim == 'adamw':
-            self.optimizer = AdamW(model.parameters(), set_lr=self.update_lr, lr=self.current_lr, weight_decay=wd)
+            self.optimizer = AdamW(model.parameters(),
+                                   set_lr=self.update_lr,
+                                   lr=self.current_lr,
+                                   betas=(kwargs.get('beta1', 0.9), kwargs.get('beta2', 0.999)),
+                                   eps=kwargs.get('epsilon', 1e-8), weight_decay=wd)
             self.step = self._step_and_update
         else:
             self.optimizer = torch.optim.SGD(model.parameters(), lr=self.current_lr, momentum=kwargs.get('mom', 0.9), weight_decay=wd)

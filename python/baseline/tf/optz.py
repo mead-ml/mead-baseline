@@ -188,28 +188,27 @@ def optimizer(loss_fn, **kwargs):
 
     global_step = tf.Variable(0, trainable=False)
     clip = kwargs.get('clip', None)
-    mom = float(kwargs.get('mom', 0.9))
     optim = kwargs.get('optim', 'sgd')
     eta = kwargs.get('lr', kwargs.get('eta', 0.01))
     lr_scheduler = create_lr_scheduler(**kwargs)
     decay_fn = None
     colocate_gradients_with_ops = bool(kwargs.get('colocate_gradients_with_ops', False))
-
+    sgd_mom = float(kwargs.get('mom', 0.9))
     if optim == 'adadelta':
         print('adadelta', eta)
         optz = lambda lr: tf.train.AdadeltaOptimizer(lr, 0.95, 1e-6)
     elif optim == 'adam':
         print('adam', eta)
-        optz = lambda lr: tf.train.AdamOptimizer(lr)
+        optz = lambda lr: tf.train.AdamOptimizer(lr, kwargs.get('beta1', 0.9), kwargs.get('beta2', 0.999), kwargs.get('epsilon', 1e-8))
     elif optim == 'adamw':
         wd = float(kwargs.get('weight_decay', 0))
-        optz = lambda lr: AdamWOptimizer(lr, weight_decay=wd)
+        optz = lambda lr: AdamWOptimizer(lr, wd, kwargs.get('beta1', 0.9), kwargs.get('beta2', 0.999), kwargs.get('epsilon', 1e-8))
     elif optim == 'rmsprop':
         print('rmsprop', eta)
-        optz = lambda lr: tf.train.RMSPropOptimizer(lr, momentum=mom)
-    elif mom > 0:
-        print('sgd-mom', eta, mom)
-        optz = lambda lr: tf.train.MomentumOptimizer(lr, mom)
+        optz = lambda lr: tf.train.RMSPropOptimizer(lr, momentum=float(kwargs.get('mom', 0.0)))
+    elif sgd_mom > 0:
+        print('sgd-mom', eta, sgd_mom)
+        optz = lambda lr: tf.train.MomentumOptimizer(lr, sgd_mom)
     else:
         print('sgd')
         optz = lambda lr: tf.train.GradientDescentOptimizer(lr)

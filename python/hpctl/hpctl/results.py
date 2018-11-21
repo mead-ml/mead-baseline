@@ -265,7 +265,7 @@ class Results(object):
 
 
 class SpecialDefaults(defaultdict):
-    """This is a defaultdict where the key can effect the default value.
+    """This is a defaultdict where the key can affect the default value.
 
     Using the default dict instead of having to check and add elements all the
     help develop the results object quickly but sometimes if you sent bad
@@ -291,6 +291,7 @@ class SpecialDefaults(defaultdict):
         else:
             val = self[key] = None
         return val
+
 
 @export
 @register_results('local')

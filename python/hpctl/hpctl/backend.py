@@ -131,7 +131,6 @@ class LocalGPUBackend(Backend):
                 jobs.append(job)
         self.jobs = jobs
 
-
     def _request_gpus(self, count):
         gpus = []
         for gpu, job in self.gpus_to_job.items():
@@ -152,7 +151,6 @@ class LocalGPUBackend(Backend):
             any(map(lambda x: x.is_done, self.jobs)) or
             any(map(lambda x: x is None, self.gpus_to_job.values()))
         )
-
 
     def kill(self, label):
         if label not in self.label_to_job:

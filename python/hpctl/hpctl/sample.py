@@ -195,7 +195,7 @@ class Sampler(with_metaclass(NameProp, object)):
 @export
 @register_sampler
 class Grid(Sampler):
-    """A special Sampler for going grid search.
+    """A special Sampler for doing grid search.
 
     :param adder: The function that extracts parameters from the config.
     """
@@ -225,6 +225,7 @@ class Grid(Sampler):
 @register_sampler
 class Normal(Sampler):
     _name = 'normal'
+
     def __init__(self):
         super(Normal, self).__init__(add_normal, partial(constrained_sampler, np.random.normal))
 
@@ -233,13 +234,16 @@ class Normal(Sampler):
 @register_sampler
 class Uniform(Sampler):
     _name = "uniform"
+
     def __init__(self):
         super(Uniform, self).__init__(add_min_max, partial(constrained_sampler, np.random.uniform))
+
 
 @export
 @register_sampler
 class Choice(Sampler):
     _name = "choice"
+
     def __init__(self):
         super(Choice, self).__init__(add_values, random.choice)
 
@@ -248,6 +252,7 @@ class Choice(Sampler):
 @register_sampler
 class MinLog(Sampler):
     _name = "min_log"
+
     def __init__(self):
         super(MinLog, self).__init__(add_min_max, partial(constrained_sampler, min_log_sample))
 
@@ -256,6 +261,7 @@ class MinLog(Sampler):
 @register_sampler
 class MaxLog(Sampler):
     _name = "max_log"
+
     def __init__(self):
         super(MaxLog, self).__init__(add_min_max, partial(constrained_sampler, max_log_sample))
 
@@ -264,6 +270,7 @@ class MaxLog(Sampler):
 @register_sampler
 class UniformInt(Sampler):
     _name = "uniform_int"
+
     def __init__(self):
         super(UniformInt, self).__init__(add_min_max, partial(constrained_sampler, random.randint))
 
