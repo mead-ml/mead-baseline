@@ -29,7 +29,7 @@ class TensorFlowExporter(mead.exporters.Exporter):
     def __init__(self, task):
         super(TensorFlowExporter, self).__init__(task)
 
-    def _run(self, sess, basename):
+    def _run(self, sess, basename, **kwargs):
         pass
 
     def _restore_checkpoint(self, sess, basename):
@@ -100,7 +100,7 @@ class TensorFlowExporter(mead.exporters.Exporter):
 
         return builder
 
-    def _create_rpc_call(self, sess, basename):
+    def _create_rpc_call(self, sess, basename, **kwargs):
         pass
 
 
@@ -154,11 +154,12 @@ class ClassifyTensorFlowExporter(TensorFlowExporter):
         predict_tensors = {}
 
         for k, v in model.embeddings.items():
+            print(k)
             try:
                 predict_tensors[k] = tf.saved_model.utils.build_tensor_info(v.x)
             except:
                 raise Exception('Unknown attribute in signature: {}'.format(v))
-
+        sys.exit(1)
         sig_input = predict_tensors
         sig_output = SignatureOutput(classes, values)
         sig_name = 'predict_text'
@@ -343,11 +344,10 @@ def create_bundle(builder, output_path, basename, assets=None):
     :assets a dictionary of assets to save alongside the model.
     """
     builder.save()
-
-    model_name = basename.split("/")[-1]
     directory = os.path.join('/', *basename.split("/")[:-1])
 
     save_to_bundle(output_path, directory, assets)
+
 
 def save_to_bundle(output_path, directory, assets=None):
     """Save files to the exported bundle.
