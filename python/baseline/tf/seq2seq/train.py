@@ -18,7 +18,6 @@ class Seq2SeqTrainerTf(Trainer):
         self.test_loss = model.create_test_loss()
         self.model = model
         self.global_step, self.train_op = optimizer(self.loss, colocate_gradients_with_ops=True, **kwargs)
-        self.log = logging.getLogger('baseline.timing')
         self.nsteps = kwargs.get('nsteps', 500)
 
     def checkpoint(self):

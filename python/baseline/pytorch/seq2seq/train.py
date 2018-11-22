@@ -22,7 +22,6 @@ class Seq2SeqTrainerPyTorch(Trainer):
         if self.gpu:
             self.model = torch.nn.DataParallel(model).cuda()
             self.crit.cuda()
-        self.log = logging.getLogger('baseline.timing')
         self.nsteps = kwargs.get('nsteps', 500)
 
     @staticmethod

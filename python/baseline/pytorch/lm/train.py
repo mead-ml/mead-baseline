@@ -19,7 +19,6 @@ class LanguageModelTrainerPyTorch(Trainer):
         if self.gpu:
             self.model = self.model.cuda()
             self.crit.cuda()
-        self.log = logging.getLogger('baseline.timing')
         self.nsteps = kwargs.get('nsteps', 500)
 
         self.optimizer = OptimizerManager(self.model, **kwargs)

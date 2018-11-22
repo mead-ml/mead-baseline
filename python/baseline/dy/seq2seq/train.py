@@ -14,7 +14,6 @@ class Seq2SeqTrainerDynet(Trainer):
         super(Seq2SeqTrainerDynet, self).__init__()
         self.model = model
         self.optimizer = OptimizerManager(model, **kwargs)
-        self.log = logging.getLogger('baseline.timing')
         self.nsteps = kwargs.get('nsteps', 500)
 
     @staticmethod
@@ -24,7 +23,7 @@ class Seq2SeqTrainerDynet(Trainer):
         mask = dy.transpose(mask)
         losses = dy.concatenate_cols(losses)
         masked_loss = dy.cmult(losses, mask)
-        loss = dy.mean_batches(dy.cdiv(dy.sum_elems(masked_loss), dy.sum_elems(mask)))
+        loss = dy.cdiv(dy.sum_batches(dy.sum_elems(masked_loss)), dy.sum_batches(dy.sum_elems(mask)))
         return loss
 
     @staticmethod
@@ -52,7 +51,7 @@ class Seq2SeqTrainerDynet(Trainer):
             loss_val = loss.npvalue().item()
             loss.backward()
             self.optimizer.update()
-            tok_count = self._num_toks(tgt)
+            tok_count = self._num_toks(tgt_lens)
             report_loss = loss_val * tok_count
             epoch_loss += report_loss
             epoch_toks += tok_count

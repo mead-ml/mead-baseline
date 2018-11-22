@@ -15,7 +15,6 @@ class LanguageModelTrainerDynet(Trainer):
         super(LanguageModelTrainerDynet, self).__init__()
         self.model = model
         self.optimizer = OptimizerManager(model, **kwargs)
-        self.log = logging.getLogger('baseline.timing')
         self.nsteps = kwargs.get('nsteps', 500)
 
     @staticmethod

@@ -17,7 +17,6 @@ class LanguageModelTrainerTf(Trainer):
         self.loss = model.create_loss()
         self.test_loss = model.create_test_loss()
         self.global_step, self.train_op = optimizer(self.loss, **kwargs)
-        self.log = logging.getLogger('baseline.timing')
         self.nsteps = kwargs.get('nsteps', 500)
 
     def checkpoint(self):
