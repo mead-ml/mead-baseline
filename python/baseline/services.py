@@ -93,16 +93,10 @@ class Service(object):
         lengths_key = assets.get('lengths_key', None)
         inputs = assets.get('inputs', [])
 
-        model = None
         if backend == 'tf':
-            from baseline.tf.remote import RemoteModelTensorFlowGRPC
-            model = RemoteModelTensorFlowGRPC(remote,
-                                name,
-                                signature_name,
-                                labels=labels,
-                                lengths_key=lengths_key,
-                                inputs=inputs,
-                                beam=beam)
+            remote_models = import_user_module('baseline.tf.remote')
+            RemoteModel = remote_models.RemoteModelTensorFlowREST if remote.startswith('http') else remote_models.RemoteModelTensorFlowGRPC
+            model = RemoteModel(remote, name, signature_name, labels=labels, lengths_key=lengths_key, inputs=inputs, beam=beam)
         else:
             raise ValueError("only Tensorflow is currently supported for remote Services")
 
@@ -257,7 +251,7 @@ class TaggerService(Service):
             for j, token in enumerate(tokens_seq[i]):
                 new_token = dict()
                 new_token.update(token)
-                new_token[label_field] = label_vocab[outcome[j].item()] # item is from np.int32
+                new_token[label_field] = label_vocab[np.int32(outcome[j])]  # item is from np.int32
                 output += [new_token]
             outputs += [output]
         return outputs
