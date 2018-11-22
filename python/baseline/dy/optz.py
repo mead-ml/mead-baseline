@@ -99,7 +99,7 @@ class OptimizerManager(object):
         if optim == 'adadelta':
             self.optimizer = dy.AdadeltaTrainer(model.pc)
         elif optim == 'adam':
-            self.optimizer = dy.AdamTrainer(model.pc, beta_1=kwargs.get('beta1', 0.9), beta_2=kwargs.get('beta2', 0.999), eps=kwargs.get('epsilon', 1e-8))
+            self.optimizer = dy.AdamTrainer(model.pc, alpha=self.current_lr, beta_1=kwargs.get('beta1', 0.9), beta_2=kwargs.get('beta2', 0.999), eps=kwargs.get('epsilon', 1e-8))
         elif optim == 'rmsprop':
             self.optimizer = dy.RMSPropTrainer(model.pc, learning_rate=self.current_lr)
         else:
