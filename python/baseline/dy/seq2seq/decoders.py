@@ -114,6 +114,10 @@ layer's hidden size == embedding weight dimensions")
         return self.output(output)
 
     def decode_rnn(self, context, h_i, output_i, dst, src_mask, train):
+        if train:
+            self.decoder_rnn.set_dropout(self.pdrop)
+        else:
+            self.decoder_rnn.disable_dropout()
         embed_out = self.tgt_embeddings.encode(dst, train)
         outputs = []
         attn_fn = self.attn(context)
