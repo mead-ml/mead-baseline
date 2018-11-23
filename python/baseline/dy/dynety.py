@@ -1,3 +1,4 @@
+import math
 from itertools import chain
 import numpy as np
 import dynet as dy
@@ -7,10 +8,12 @@ from baseline.utils import (
     sequence_mask as seq_mask
 )
 
+
 def transition_mask(vocab, span_type, s_idx, e_idx, pad_idx):
     mask = transition_mask_np(vocab, span_type, s_idx, pad_idx)
     inv_mask = (mask == 0).astype(np.float32)
     return mask, inv_mask
+
 
 class DynetModel(object):
     def __init__(self, pc=None):
@@ -272,6 +275,7 @@ def rnn_forward_with_state(rnn, input_, lengths=None, state=None, batched=True, 
         outputs = list(reversed(outputs))
     return outputs, final_state
 
+
 def rnn_encode(rnn, input_, lengths):
     """Return the final output for each batch based on lengths.
 
@@ -387,45 +391,112 @@ def ParallelConv(filtsz, cmotsz, dsz, pc, strides=(1, 1, 1, 1), name="parallel-c
     return conv
 
 
-def Attention(lstmsz, pc, name="attention"):
-    """Vectorized Bahdanau Attention.
+def attention(attn_type='bahdanau', *args, **kwargs):
+    attn_type= attn_type.lower()
+    if attn_type == 'dot':
+        return DotProductAttention(*args, **kwargs)
+    if attn_type in {'concat', 'bahdanau'}:
+        return BahdanauAttention(*args, **kwargs)
+    if attn_type == 'sdp':
+        return ScaledDotProductAttention(*args, **kwargs)
+    return LoungAttention(*args, **kwargs)
 
-    :param lstmsz: int
-    :param pc: dy.ParameterCollection
-    """
-    attn_pc = pc.add_subcollection(name=name)
-    attention_w1 = attn_pc.add_parameters((lstmsz, lstmsz), name='encoder-projection')
-    attention_w2 = attn_pc.add_parameters((lstmsz, lstmsz), name='decoder-projection')
-    attention_v = attn_pc.add_parameters((1, lstmsz), name='attention-vector')
 
-    def attention(encoder_vectors):
-        """Compute the projected encoder vectors once per decoder.
+class Attention(DynetLayer):
+    def __init__(self, hsz, pc, name):
+        pc = pc.add_subcollection(name=name)
+        super(Attention, self).__init__(pc)
+        self.hsz = hsz
+        self.down_proj = Linear(hsz, 2 * hsz, self.pc)
 
-        :param encoder_vectors: dy.Expression ((H, T), B)
-            often from dy.concatenate_cols([lstm.transduce(embedded)])
-        """
-        projected_vectors = attention_w1 * encoder_vectors
+    def cache_encoder(self, context_vectors):
+        self.context = dy.concatenate_cols(context_vectors)
 
-        def attend(state, mask=None):
-            """Calculate the attention weighted sum of the encoder vectors.
+    def __call__(self, query, values, mask=None):
+        attn = self._attend(query, mask)
+        return self._combine(attn, query)
 
-            :param state: dy.Expression ((H,), B)
-            """
-            projected_state = attention_w2 * state
-            non_lin = dy.tanh(dy.colwise_add(projected_vectors, projected_state))
-            attention_scores = dy.transpose(attention_v * non_lin)
-            if mask is not None:
-                attention_scores = dy.cmult(attention_scores, mask[0]) + (mask[1] * -1e9)
-            attention_weights = dy.softmax(attention_scores)
-            # Encoder Vectors has data along the columns so a matmul with the
-            # weights (which are also a column) creates a sum of encoder weighted
-            # by attention weights
-            output_vector = encoder_vectors * attention_weights
-            return dy.reshape(output_vector, (lstmsz,))
+    def _attend(self, query, mask):
+        pass
 
-        return attend
+    def _combine(self, attn, query):
+        # Encoder Vectors has data along the columns so a matmul with the
+        # weights (which are also a column) creates a sum of encoder weighted
+        # by attention weights
+        # self.context ((H, T), B)
+        # attn         ((T, 1), B)
+        output_vector = self.context * attn  # ((H, 1), B)
+        output_vector = dy.reshape(output_vector, (self.hsz,))
+        cat = dy.concatenate([output_vector, query])
+        return dy.tanh(self.down_proj(cat))
 
-    return attention
+
+class BahdanauAttention(Attention):
+    def __init__(self, hsz, pc, name="bahdanau-attention"):
+        super(BahdanauAttention, self).__init__(hsz, pc, name)
+        self.encoder = self.pc.add_parameters((hsz, hsz), name='encoder-projection')
+        self.decoder = self.pc.add_parameters((hsz, hsz), name='decoder-projection')
+        self.v = self.pc.add_parameters((1, hsz), name='attention-vector')
+
+    def cache_encoder(self, context_vectors):
+        self.context = dy.concatenate_cols(context_vectors)
+        self.context_proj = self.encoder * self.context
+
+    def _attend(self, query, mask=None):
+        projected_state = self.decoder * query
+        non_lin = dy.tanh(dy.colwise_add(self.context_proj, projected_state))
+        attention_scores = dy.transpose(self.v * non_lin)
+        if mask is not None:
+            attention_scores = dy.cmult(attention_scores, mask[0]) + (mask[1] * dy.scalarInput(-1e9))
+        return dy.softmax(attention_scores)
+
+    def _combine(self, attn, query):
+        output_vector = self.context * attn
+        output_vector = dy.reshape(output_vector, (self.hsz,))
+        cat = dy.concatenate([output_vector, query])
+        return self.down_proj(cat)
+
+
+class DotProductAttention(Attention):
+    def __init__(self, hsz, pc, name="dot-product-attention"):
+        super(DotProductAttention, self).__init__(hsz, pc, name)
+
+    def _attend(self, query, mask=None):
+        query = unsqueeze(query, 0)
+        attn_scores = dy.transpose(query * self.context)
+        if mask is not None:
+            attn_scores = dy.cmult(attention_scores, mask[0]) + (mask[1] * dy.scalarInput(-1e9))
+        return dy.softmax(attn_scores)
+
+
+class ScaledDotProductAttention(Attention):
+    def __init__(self, hsz, pc, name="scaled-dot-product-attention"):
+        super(ScaledDotProductAttention, self).__init__(hsz, pc, name)
+        self.scale = math.sqrt(self.hsz)
+
+    def _attend(self, query, mask=None):
+        query = unsqueeze(query, 0)
+        attn_scores = dy.cdiv(dy.transpose(query * self.context), dy.scalarInput(self.scale))
+        if mask is not None:
+            attn_scores = dy.cmult(attention_scores, mask[0]) + (mask[1] * dy.scalarInput(-1e9))
+        return dy.softmax(attn_scores)
+
+
+class LoungAttention(Attention):
+    def __init__(self, hsz, pc, name="bilinear-attention"):
+        super(LoungAttention, self).__init__(hsz, pc, name)
+        self.A = self.pc.add_parameters((self.hsz, self.hsz), name="bilinear-weight")
+
+    def cache_encoder(self, context_vectors):
+        self.context = dy.concatenate_cols(context_vectors)  # ((H, T), B)
+        self.context_proj = self.A * self.context
+
+    def _attend(self, query, mask=None):
+        query = unsqueeze(query, 0) # ((1, H), B)
+        attn_scores = dy.transpose(query * self.context)  # ((T, 1), B)
+        if mask is not None:
+            attn_scores = dy.cmult(attention_scores, mask[0]) + (mask[1] * dy.scalarInput(-1e9))
+        return dy.softmax(attn_scores)
 
 
 class CRF(DynetModel):
