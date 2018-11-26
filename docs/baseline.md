@@ -69,3 +69,7 @@ If you have a problem where the input is the same as a `baseline` task, you can 
 
 Then pass `--model_type {model}` to the driver program for that task.  The driver program will look to see if it has an implementation within the library and will not find the one in its registry.  So it will import the module and call its `create_model` function with the arguments and use the provided model.
 
+
+#### A note about losses and reporting
+
+When tracking losses for reporting the average on the loss is undone and the total loss is tracked. At the end of the epoch this total loss is averaged over all of the examples seen. This allows for statistically correct reporting when the size of a batch is variable. NStep reporting can stride dev evaluations so it is possible for there to be a spike in nstep times if that step happens to have a dev set evaluation run during it.

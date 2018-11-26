@@ -26,13 +26,35 @@ class ReportingHook(object):
     def done(self, **kwargs):
         pass
 
+    @staticmethod
+    def _infer_tick_type(phase, tick_type):
+        if tick_type is None:
+            tick_type = 'STEP'
+            if phase in {'Valid', 'Test'}:
+                tick_type = 'EPOCH'
+        return tick_type
+
+
+class EpochReportingHook(ReportingHook):
+    def step(self, metrics, tick, phase, tick_type=None, **kwargs):
+        tick_type = ReportingHook._infer_tick_type(phase, tick_type)
+        if tick_type == 'EPOCH':
+            self._step(metrics, tick, phase, tick_type, **kwargs)
+
+
+class StepReportingHook(ReportingHook):
+    def step(self, metrics, tick, phase, tick_type=None, **kwargs):
+        tick_type = ReportingHook._infer_tick_type(phase, tick_type)
+        if tick_type == 'STEP':
+            self._step(metrics, tick, phase, tick_type, **kwargs)
+
 
 @register_reporting(name='console')
-class ConsoleReporting(ReportingHook):
+class ConsoleReporting(EpochReportingHook):
     def __init__(self, **kwargs):
         super(ConsoleReporting, self).__init__(**kwargs)
 
-    def step(self, metrics, tick, phase, tick_type=None, **kwargs):
+    def _step(self, metrics, tick, phase, tick_type=None, **kwargs):
         """Write results to `stdout`
 
         :param metrics: A map of metrics to scores
@@ -41,11 +63,6 @@ class ConsoleReporting(ReportingHook):
         :param tick_type: The resolution of tick (`STEP`, `EPOCH`)
         :return:
         """
-        if tick_type is None:
-            tick_type = 'STEP'
-            if phase in ['Valid', 'Test']:
-                tick_type = 'EPOCH'
-
         print('%s [%d] [%s]' % (tick_type, tick, phase))
         print('=================================================')
         for k, v in metrics.items():
@@ -55,13 +72,34 @@ class ConsoleReporting(ReportingHook):
         print('-------------------------------------------------')
 
 
+@register_reporting(name='step_logging')
+class StepLoggingReporting(StepReportingHook):
+    def __init__(self, **kwargs):
+        super(StepLoggingReporting, self).__init__(**kwargs)
+        self.log = logging.getLogger()
+
+    def _step(self, metrics, tick, phase, tick_type=None, **kwargs):
+        """Write results to Python's `logging` module under `root`
+
+        :param metrics: A map of metrics to scores
+        :param tick: The time (resolution defined by `tick_type`)
+        :param phase: The phase of training (`Train`, `Valid`, `Test`)
+        :param tick_type: The resolution of tick (`STEP`, `EPOCH`)
+        :return:
+        """
+        msg = {'tick_type': tick_type, 'tick': tick, 'phase': phase }
+        for k, v in metrics.items():
+            msg[k] = v
+        self.log.info(msg)
+
+
 @register_reporting(name='logging')
-class LoggingReporting(ReportingHook):
+class LoggingReporting(EpochReportingHook):
     def __init__(self, **kwargs):
         super(LoggingReporting, self).__init__(**kwargs)
         self.log = logging.getLogger('baseline.reporting')
 
-    def step(self, metrics, tick, phase, tick_type=None, **kwargs):
+    def _step(self, metrics, tick, phase, tick_type=None, **kwargs):
         """Write results to Python's `logging` module under `baseline.reporting`
 
         :param metrics: A map of metrics to scores
@@ -70,12 +108,6 @@ class LoggingReporting(ReportingHook):
         :param tick_type: The resolution of tick (`STEP`, `EPOCH`)
         :return:
         """
-
-        if tick_type is None:
-            tick_type = 'STEP'
-            if phase in ['Valid', 'Test']:
-                tick_type = 'EPOCH'
-
         msg = {'tick_type': tick_type, 'tick': tick, 'phase': phase }
         for k, v in metrics.items():
             msg[k] = v
@@ -101,8 +133,9 @@ class TensorBoardReporting(ReportingHook):
         self._log = SummaryWriter(log_dir, flush_secs=flush_secs)
 
     def step(self, metrics, tick, phase, tick_type=None, **kwargs):
+        tick_type = ReportingHook._infer_tick_type(phase, tick_type)
         for metric in metrics.keys():
-            name = "{}/{}".format(phase, metric)
+            name = "{}/{}/{}".format(phase, tick_type, metric)
             self._log.add_scalar(name, metrics[metric], tick)
 
 
@@ -130,8 +163,9 @@ class VisdomReporting(ReportingHook):
         :param tick_type: The resolution of tick (`STEP`, `EPOCH`)
         :return:
         """
+        tick_type = ReportingHook._infer_tick_type(phase, tick_type)
         for metric in metrics.keys():
-            chart_id = '(%s) %s' % (phase, metric)
+            chart_id = '({} - {}) {}'.format(phase, tick_type, metric)
             if chart_id not in self._vis_win:
                 print('Creating visualization for %s' % chart_id)
                 self._vis_win[chart_id] = self._vis.line(
@@ -156,6 +190,8 @@ class VisdomReporting(ReportingHook):
 @exporter
 def create_reporting(reporting_hooks, hook_settings, proc_info):
     reporting = [LoggingReporting()]
+    if proc_info['task'] in {'seq2seq', 'lm'}:
+        reporting.append(StepLoggingReporting())
 
     for name in reporting_hooks:
         ReportingClass = BASELINE_REPORTING[name]

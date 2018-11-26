@@ -34,11 +34,13 @@ class CyclicLRSchedulerDyNet(CyclicLRScheduler):
     def __init__(self, *args, **kwargs):
         super(CyclicLRSchedulerDyNet, self).__init(*args, **kwargs)
 
+
 @register_lr_scheduler(name='piecewise')
 class PiecewiseDecaySchedulerDyNet(PiecewiseDecayScheduler):
 
     def __init__(self, *args, **kwargs):
         super(PiecewiseDecaySchedulerDyNet, self).__init__(*args, **kwargs)
+
 
 @register_lr_scheduler(name='zaremba')
 class ZarembaDecaySchedulerDyNet(ZarembaDecayScheduler):
@@ -52,6 +54,7 @@ class CosineDecaySchedulerDyNet(CosineDecayScheduler):
 
     def __init__(self, *args, **kwargs):
         super(CosineDecaySchedulerDyNet, self).__init__(*args, **kwargs)
+
 
 @register_lr_scheduler(name='invtime')
 class InverseTimeDecaySchedulerDyNet(InverseTimeDecayScheduler):
@@ -79,8 +82,16 @@ class OptimizerManager(object):
         self.lr_function = create_lr_scheduler(**kwargs)
         self._init_optimizer(model, **kwargs)
 
+    @property
+    def global_step(self):
+        return self._global_step
+
+    @global_step.setter
+    def global_step(self, value):
+        self._global_step = value
+
     def _init_optimizer(self, model, **kwargs):
-        mom = float(kwargs.get('mom',0.0))
+        mom = float(kwargs.get('mom', 0.0))
         optim = kwargs.get('optim', 'sgd')
         clip = kwargs.get('clip')
 
@@ -88,7 +99,7 @@ class OptimizerManager(object):
         if optim == 'adadelta':
             self.optimizer = dy.AdadeltaTrainer(model.pc)
         elif optim == 'adam':
-            self.optimizer = dy.AdamTrainer(model.pc, beta_1=kwargs.get('beta1', 0.9), beta_2=kwargs.get('beta2', 0.999), eps=kwargs.get('epsilon', 1e-8))
+            self.optimizer = dy.AdamTrainer(model.pc, alpha=self.current_lr, beta_1=kwargs.get('beta1', 0.9), beta_2=kwargs.get('beta2', 0.999), eps=kwargs.get('epsilon', 1e-8))
         elif optim == 'rmsprop':
             self.optimizer = dy.RMSPropTrainer(model.pc, learning_rate=self.current_lr)
         else:
@@ -116,7 +127,3 @@ class OptimizerManager(object):
 
     def zero_grad(self):
         self.optimizer.zero_grad()
-
-
-
-

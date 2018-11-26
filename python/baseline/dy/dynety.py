@@ -141,7 +141,7 @@ class Linear(DynetLayer):
         self.weight = self.pc.add_parameters((osz, isz), name="weight")
         self.bias = self.pc.add_parameters((osz,), name="bias")
 
-    def __call__(self, input_, train=None):
+    def __call__(self, input_, train=False):
         """
         :param input_: dy.Expression ((isz,), B)
 

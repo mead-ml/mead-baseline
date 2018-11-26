@@ -11,12 +11,12 @@ import copy
 
 def _temporal_cross_entropy_loss(logits, labels, label_lengths, mx_seq_length):
     """Do cross-entropy loss accounting for sequence lengths
-    
+
     :param logits: a `Tensor` with shape `[timesteps, batch, timesteps, vocab]`
     :param labels: an integer `Tensor` with shape `[batch, timesteps]`
     :param label_lengths: The actual length of the target text.  Assume right-padded
     :param mx_seq_length: The maximum length of the sequence
-    :return: 
+    :return:
     """
 
     # The labels actual length is 100, and starts with <GO>

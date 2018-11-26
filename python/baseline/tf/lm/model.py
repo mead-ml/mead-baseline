@@ -204,7 +204,7 @@ class LanguageModelBase(LanguageModel):
             bt_x_v = tf.nn.log_softmax(tf.reshape(self.logits, [-1, vsz]), axis=-1)
             one_hots = tf.one_hot(targets, vsz)
             example_loss = -tf.reduce_sum(one_hots * bt_x_v, axis=-1)
-            loss = tf.reduce_sum(example_loss) / tf.cast(tf.shape(self.y)[0], dtype=tf.float32)
+            loss = tf.reduce_mean(example_loss)
             return loss
 
     def create_loss(self):

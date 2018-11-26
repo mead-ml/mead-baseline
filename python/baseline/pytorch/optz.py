@@ -152,6 +152,14 @@ class OptimizerManager(object):
         self.lr_function = create_lr_scheduler(**kwargs)
         self._init_optimizer(model, **kwargs)
 
+    @property
+    def global_step(self):
+        return self._global_step
+
+    @global_step.setter
+    def global_step(self, value):
+        self._global_step = value
+
     def _init_optimizer(self, model, **kwargs):
         wd = float(kwargs.get('weight_decay', 0))
         optim = kwargs.get('optim', 'sgd')

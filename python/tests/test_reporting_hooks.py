@@ -6,6 +6,7 @@ pytest.importorskip('tensorboardX')
 import numpy as np
 import baseline.reporting
 from baseline.reporting import TensorBoardReporting
+from baseline.reporting import ReportingHook
 
 
 def random_str(len_=None, min_=5, max_=21):
@@ -59,3 +60,51 @@ def test_absolute_log_dir(patches):
     _ = TensorBoardReporting(log_dir=log_dir, flush_secs=2, base_dir=base_dir)
     gold = os.path.join(log_dir, str(pid))
     w_patch.assert_called_once_with(gold, flush_secs=2)
+
+
+def test_infer_type_train():
+    hook = ReportingHook()
+    gold = 'STEP'
+    phase = 'Train'
+    tt = hook._infer_tick_type(phase, None)
+    assert tt == gold
+
+
+def test_infer_type_test():
+    hook = ReportingHook()
+    gold = 'EPOCH'
+    phase = 'Test'
+    tt = hook._infer_tick_type(phase, None)
+    assert tt == gold
+
+
+def test_infer_type_valid():
+    hook = ReportingHook()
+    gold = 'EPOCH'
+    phase = 'Valid'
+    tt = hook._infer_tick_type(phase, None)
+    assert tt == gold
+
+
+def test_infer_type_override_train():
+    hook = ReportingHook()
+    gold = 'EPOCH'
+    phase = 'Train'
+    tt = hook._infer_tick_type(phase, gold)
+    assert tt == gold
+
+
+def test_infer_type_override_valid():
+    hook = ReportingHook()
+    gold = 'STEP'
+    phase = 'Valid'
+    tt = hook._infer_tick_type(phase, gold)
+    assert tt == gold
+
+
+def test_infer_type_override_test():
+    hook = ReportingHook()
+    gold = 'STEP'
+    phase = 'Test'
+    tt = hook._infer_tick_type(phase, gold)
+    assert tt == gold

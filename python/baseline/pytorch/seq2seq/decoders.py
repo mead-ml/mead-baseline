@@ -174,7 +174,7 @@ layer's hidden size == embedding weight dimensions")
         pass
 
     def output(self, x):
-        pred = F.log_softmax(self.preds(x.view(x.size(0)*x.size(1), -1)))
+        pred = F.log_softmax(self.preds(x.view(x.size(0)*x.size(1), -1)), dim=-1)
         pred = pred.view(x.size(0), x.size(1), -1)
         return pred
 

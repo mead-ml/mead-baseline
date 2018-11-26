@@ -79,4 +79,15 @@ You can write your own featurizer (`featurizer_<featurizer_type>.py`) and keep i
 python tag.py --input elmo-tester.conll --output elmo-tester-out.conll --model mead/elmo-2/tagger-model-tf-2658 --mxlen 60 --mxwlen 40 --model_type elmo --featurizer_type elmo
 ```
 
-We support loading tagger models defined in [TensorFlow](../python/baseline/tf/tagger/model.py) and [PyTorch](../python/baseline/pytorch/tagger/model.py). 
+We support loading tagger models defined in [TensorFlow](../python/baseline/tf/tagger/model.py) and [PyTorch](../python/baseline/pytorch/tagger/model.py).
+
+
+#### Losses and Reporting
+
+The loss that is optimized depends on if a Conditional Random Field (CRF) is used or not. If a CRF is used then the loss is the crf loss averaged over the number of examples in the mini-batch. When using a word level loss the loss is the sum of the cross entropy loss of each token averaged over the number of examples in the mini-batch. Both of these are batch level losses.
+
+When reporting the loss every nsteps for the crf the loss is the total crf loss divided by the number of examples in the last nstep number of mini-batches. For word level loss it is the total word level loss divided by the number of examples in the last nstep number of batches.
+
+The epoch loss is the total loss averaged over the total number of examples in the epoch.
+
+Accuracy is computed on the token level and F1 is computed on the span level.

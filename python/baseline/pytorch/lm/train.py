@@ -11,7 +11,6 @@ class LanguageModelTrainerPyTorch(Trainer):
 
     def __init__(self, model, **kwargs):
         super(LanguageModelTrainerPyTorch, self).__init__()
-        self.valid_epochs = 0
         self.model = model
         self.clip = float(kwargs.get('clip', 5))
         self.gpu = not bool(kwargs.get('nogpu', False))
@@ -20,7 +19,7 @@ class LanguageModelTrainerPyTorch(Trainer):
         if self.gpu:
             self.model = self.model.cuda()
             self.crit.cuda()
-        self.log = logging.getLogger('baseline.timing')
+        self.nsteps = kwargs.get('nsteps', 500)
 
         self.optimizer = OptimizerManager(self.model, **kwargs)
 
@@ -31,50 +30,57 @@ class LanguageModelTrainerPyTorch(Trainer):
         else:
             return tuple(self.repackage_hidden(v) for v in h)
 
-    def _get_dims(self, ts):
-        np_array = ts[0]['y']
-        return np_array.shape
+    @staticmethod
+    def _get_dims(batch_dict):
+        return batch_dict['y'].shape
+
+    @staticmethod
+    def _num_toks(batch_dict):
+        return np.prod(LanguageModelTrainerPyTorch._get_dims(batch_dict))
+
+    def calc_metrics(self, agg, norm):
+        metrics = super(LanguageModelTrainerPyTorch, self).calc_metrics(agg, norm)
+        metrics['perplexity'] = np.exp(metrics['avg_loss'])
+        return metrics
 
     def test(self, vs, reporting_fns, phase='Valid'):
-        start_time = time.time()
+        epoch = 0
+        if phase == 'Valid':
+            self.valid_epochs += 1
+            epoch = self.valid_epochs
+        start = time.time()
         self.model.eval()
         total_loss = 0
+        total_toks = 0
         metrics = {}
-        batchsz, nctx = self._get_dims(vs)
+        batchsz, nctx = self._get_dims(vs[0])
 
         hidden = self.model.init_hidden(batchsz)
-        iters = 0
 
         for batch_dict in vs:
             inputs = self.model.make_input(batch_dict)
             y = inputs.pop('y')
             output, hidden = self.model(inputs, hidden)
-            total_loss += self.crit(output, y).data
+            toks = self._num_toks(batch_dict)
+            total_loss += self.crit(output, y).item() * toks
+            total_toks += toks
             if hidden is not None:
                 hidden = self.repackage_hidden(hidden)
-            iters += nctx
-        self.valid_epochs += 1
-
-        avg_loss = float(total_loss) / iters / batchsz
-        metrics['avg_loss'] = avg_loss
-        metrics['perplexity'] = np.exp(avg_loss)
-
-        duration = time.time() - start_time
-        print('%s time (%.3f sec)' % (phase, duration))
-        self.log.debug({'phase': phase, 'time': duration})
-
-        for reporting in reporting_fns:
-            reporting(metrics, self.valid_epochs, phase)
+        metrics = self.calc_metrics(total_loss, total_toks)
+        self.report(
+            epoch, metrics, start,
+            phase, 'EPOCH', reporting_fns
+        )
         return metrics
 
     def train(self, ts, reporting_fns):
-        start_time = time.time()
+        start = time.time()
+        self.nstep_start = start
         self.model.train()
-        total_loss = 0
-        metrics = {}
-        batchsz, nctx = self._get_dims(ts)
+        epoch_loss = 0
+        epoch_toks = 0
+        batchsz, nctx = self._get_dims(ts[0])
         hidden = self.model.init_hidden(batchsz)
-        iters = 0
 
         for batch_dict in ts:
             if hidden is not None:
@@ -85,28 +91,28 @@ class LanguageModelTrainerPyTorch(Trainer):
             output, hidden = self.model(inputs, hidden)
             loss = self.crit(output, y)
             loss.backward()
-            total_loss += loss.data
-            iters += nctx
-            if self.optimizer.global_step > 0 and self.optimizer.global_step % 500 == 0:
-                avg_loss = float(total_loss) / iters / batchsz
-                metrics['avg_loss'] = avg_loss
-                metrics['perplexity'] = np.exp(avg_loss)
-                for reporting in reporting_fns:
-                    reporting(metrics, self.optimizer.global_step, 'Train')
-
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.clip)
             self.optimizer.step()
+            toks = self._num_toks(batch_dict)
+            report_loss = loss.item() * toks
+            epoch_loss += report_loss
+            epoch_toks += toks
+            self.nstep_agg += report_loss
+            self.nstep_div += toks
+            if (self.optimizer.global_step + 1) % self.nsteps == 0:
+                metrics = self.calc_metrics(self.nstep_agg, self.nstep_div)
+                self.report(
+                    self.optimizer.global_step + 1, metrics, self.nstep_start,
+                    'Train', 'STEP', reporting_fns
+                )
+                self.reset_nstep()
 
-        avg_loss = float(total_loss) / iters / batchsz
-        metrics['avg_loss'] = avg_loss
-        metrics['perplexity'] = np.exp(avg_loss)
-
-        duration = time.time() - start_time
-        print('Training time (%.3f sec)' % duration)
-        self.log.debug({'phase': 'Train', 'time': duration})
-
-        for reporting in reporting_fns:
-            reporting(metrics, self.optimizer.global_step, 'Train')
+        metrics = self.calc_metrics(epoch_loss, epoch_toks)
+        self.train_epochs += 1
+        self.report(
+            self.train_epochs, metrics, start,
+            'Train', 'EPOCH', reporting_fns
+        )
         return metrics
 
 

@@ -101,7 +101,7 @@ class TaggerModelBase(nn.Module, TaggerModel):
                 model.register_buffer('constraint', constraint.unsqueeze(0))
             else:
                 model.constraint = None
-            model.crit = SequenceCriterion(LossFn=nn.CrossEntropyLoss)
+            model.crit = SequenceCriterion(LossFn=nn.CrossEntropyLoss, avg='batch')
         print(model)
         return model
 
@@ -194,13 +194,8 @@ class TaggerModelBase(nn.Module, TaggerModel):
             batch_loss = torch.mean(self.crf.neg_log_loss(probv, tags.data, lengths))
         else:
             # Get batch (B, T)
-            probv = probv.transpose(0, 1)
-            for pij, gold, sl in zip(probv, tags, lengths):
-                unary = pij[:sl]
-                gold_tags = gold[:sl]
-                total_tags += len(gold_tags)
-                batch_loss += self.crit(unary, gold_tags)
-            batch_loss /= probv.shape[0]
+            probv = probv.transpose(0, 1).contiguous()
+            batch_loss = self.crit(probv, tags)
 
         return batch_loss
 

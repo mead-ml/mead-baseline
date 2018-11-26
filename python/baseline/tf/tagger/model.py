@@ -181,7 +181,7 @@ class TaggerModelBase(TaggerModel):
         cross_entropy = tf.one_hot(self.y, nc, axis=-1) * tf.log(tf.nn.softmax(self.probs))
         cross_entropy = -tf.reduce_sum(cross_entropy, reduction_indices=2)
         cross_entropy *= mask
-        cross_entropy = tf.reduce_sum(cross_entropy, reduction_indices=1)
+        cross_entropy = tf.reduce_sum(cross_entropy, axis=1)
         all_loss = tf.reduce_mean(cross_entropy, name="loss")
         return all_loss
 

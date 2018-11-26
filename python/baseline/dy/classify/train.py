@@ -1,3 +1,5 @@
+import six
+import time
 import dynet as dy
 import numpy as np
 from baseline.utils import listify, get_model_file
@@ -23,16 +25,37 @@ class ClassifyTrainerDynet(EpochReportingTrainer):
         self.model = model
         self.labels = model.labels
         self.optimizer = OptimizerManager(model, **kwargs)
+        self.nsteps = kwargs.get('nsteps', six.MAXSIZE)
 
     def _update(self, loss):
         loss.backward()
         self.optimizer.update()
 
-    def _step(self, loader, update, verbose=None):
+    def _log(self, steps, loss, norm, reporting_fns):
+        self.nstep_agg += loss
+        self.nstep_div += norm
+        if (steps + 1) % self.nsteps == 0:
+            metrics = self.calc_metrics(self.nstep_agg, self.nstep_div)
+            self.report(
+                steps + 1, metrics, self.nstep_start,
+                'Train', 'STEP', reporting_fns
+            )
+            self.reset_nstep()
+
+    def _dummy_log(self, *args):
+        """This is a no op that validation calls to avoid adding to the nstep totals."""
+        pass
+
+    @staticmethod
+    def _get_batchsz(batch_dict):
+        return len(batch_dict['y'])
+
+    def _step(self, loader, update, log, reporting_fns, verbose=None):
         steps = len(loader)
         pg = create_progress_bar(steps)
         cm = ConfusionMatrix(self.labels)
-        total_loss = 0
+        epoch_loss = 0
+        epoch_div = 0
 
         for batch_dict in pg(loader):
             dy.renew_cg()
@@ -40,23 +63,27 @@ class ClassifyTrainerDynet(EpochReportingTrainer):
             ys = inputs.pop('y')
             preds = self.model.forward(inputs)
             losses = self.model.loss(preds, ys)
-            loss = dy.sum_batches(losses)
-            total_loss += loss.npvalue().item()
+            loss = dy.mean_batches(losses)
+            batchsz = self._get_batchsz(batch_dict)
+            lossv = loss.npvalue().item() * batchsz
+            epoch_loss += lossv
+            epoch_div += batchsz
             _add_to_cm(cm, ys, preds.npvalue())
             update(loss)
+            log(self.optimizer.global_step, lossv, batchsz, reporting_fns)
 
         metrics = cm.get_all_metrics()
-        metrics['avg_loss'] = total_loss / float(steps)
+        metrics['avg_loss'] = epoch_loss / float(epoch_div)
         verbose_output(verbose, cm)
         return metrics
 
     def _test(self, loader, **kwargs):
         self.model.train = False
-        return self._step(loader, lambda x: None, kwargs.get("verbose", None))
+        return self._step(loader, lambda x: None, self._dummy_log, [], kwargs.get("verbose", None))
 
-    def _train(self, loader):
+    def _train(self, loader, **kwargs):
         self.model.train = True
-        return self._step(loader, self._update)
+        return self._step(loader, self._update, self._log, kwargs.get('reporting_fns', []))
 
 
 @register_trainer(task='classify', name='autobatch')
@@ -65,15 +92,15 @@ class ClassifyTrainerAutobatch(ClassifyTrainerDynet):
         self.autobatchsz = autobatchsz
         super(ClassifyTrainerAutobatch, self).__init__(model, **kwargs)
 
-    def _step(self, loader, update, verbose=None):
+    def _step(self, loader, update, log, reporting_fns, verbose=None):
         steps = len(loader)
         pg = create_progress_bar(steps)
         cm = ConfusionMatrix(self.labels)
-        total_loss = 0
-        i = 1
+        epoch_loss = 0
+        epoch_div = 0
         preds, losses, ys = [], [], []
         dy.renew_cg()
-        for batch_dict in pg(loader):
+        for i, batch_dict in enumerate(pg(loader), 1):
             inputs = self.model.make_input(batch_dict)
             y = inputs.pop('y')
             pred = self.model.forward(inputs)
@@ -82,22 +109,27 @@ class ClassifyTrainerAutobatch(ClassifyTrainerDynet):
             losses.append(loss)
             ys.append(y)
             if i % self.autobatchsz == 0:
-                loss = dy.esum(losses)
+                loss = dy.average(losses)
                 preds = dy.concatenate_cols(preds)
-                total_loss += loss.npvalue().item()
+                batchsz = len(losses)
+                lossv = loss.npvalue().item() * batchsz
+                epoch_loss += lossv
+                epoch_div += batchsz
                 _add_to_cm(cm, np.array(ys), preds.npvalue())
                 update(loss)
+                log(self.optimizer.global_step, lossv, batchsz, reporting_fns)
                 preds, losses, ys = [], [], []
                 dy.renew_cg()
-            i += 1
-        loss = dy.esum(losses)
+        loss = dy.average(losses)
         preds = dy.concatenate_cols(preds)
-        total_loss += loss.npvalue().item()
+        batchsz = len(losses)
+        epoch_loss += loss.npvalue().item() * batchsz
+        epoch_div += batchsz
         _add_to_cm(cm, np.array(ys), preds.npvalue())
         update(loss)
 
         metrics = cm.get_all_metrics()
-        metrics['avg_loss'] = total_loss / float(steps)
+        metrics['avg_loss'] = epoch_loss / float(epoch_div)
         verbose_output(verbose, cm)
         return metrics
 
@@ -114,11 +146,7 @@ def fit(model, ts, vs, es, epochs=20, do_early_stopping=True, early_stopping_met
     reporting_fns = listify(kwargs.get('reporting', []))
     print('reporting', reporting_fns)
 
-    # Do this check in mead
-    #if autobatchsz != 1:
     trainer = create_trainer(model, **kwargs)
-    #else:
-    #    trainer = create_trainer(ClassifyTrainerDynet, model, **kwargs)
 
     max_metric = 0
     last_improved = 0

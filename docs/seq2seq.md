@@ -22,3 +22,11 @@ The English-Vietnamese dataset is from https://nlp.stanford.edu/projects/nmt/ an
 | iwslt15-en-vi  |  BLEU  | adam   |  0.001   | TensorFlow | 25.21  | blstm   |      2 |     0.5 |   512  |  512  |    16  |
 | newstest2015.(de\|en) | BLEU | adam | 0.001  | TensorFlow | 27.92  | blstm   |      4 |     0.5 |   512  |  512  |    12  |
 
+
+#### Losses and Reporting
+
+The loss that is optimized is the total loss divided by the total number of non-masked tokens in the mini-batch (token level loss).
+
+When reporting the loss every nsteps it is the total loss divided by the total number of non-masked tokens in the last nstep number of mini-batches. The perplexity is e to this loss.
+
+The epoch loss is the total loss averaged over the total number of non-masked tokens in the whole epoch. The perplexity is e to this loss.

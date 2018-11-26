@@ -1,7 +1,7 @@
 {
     "version": 2,
     "task": "tagger",
-    "batchsz": 1,
+    "batchsz": 10,
     "conll_output": "conll-iobes-results.conll",
     "unif": 0.1,
     "preproc": {
@@ -54,11 +54,11 @@
         "epochs": 100,
         "optim": "sgd",
         "eta": 0.015,
-        "autobatchsz": 10,
         "mom": 0.9,
         "patience": 40,
         "early_stopping_metric": "f1",
         "clip": 5.0,
+        "nsteps": 100,
         "span_type": "iobes"
     }
 }
