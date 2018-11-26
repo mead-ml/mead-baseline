@@ -6,13 +6,13 @@ from baseline.utils import lookup_sentence, beam_multinomial, Offsets
 from baseline.utils import transition_mask as transition_mask_np
 import math
 
-
 BASELINE_TF_TRAIN_FLAG = None
 
 
 def TRAIN_FLAG():
     """Create a global training flag on first use"""
     global BASELINE_TF_TRAIN_FLAG
+
     if BASELINE_TF_TRAIN_FLAG is not None:
         return BASELINE_TF_TRAIN_FLAG
 

@@ -97,6 +97,7 @@ class Seq2SeqTrainerTf(Trainer):
             epochs, metrics, start,
             phase, 'EPOCH', reporting_fns
         )
+        return metrics
 
 
 @register_training_func('seq2seq')

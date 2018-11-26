@@ -111,8 +111,6 @@ class LanguageModelTrainerTf(Trainer):
         if xfer_state:
             fetches["final_state"] = self.model.final_state
 
-        step = 0
-        metrics = {}
         start = time.time()
 
         for batch_dict in ts:
