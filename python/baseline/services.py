@@ -14,20 +14,14 @@ from baseline.utils import (
     load_vectorizers,
     load_vocabs
 )
-from baseline.model import (
-    load_model,
-    load_tagger_model,
-    load_seq2seq_model,
-    load_lang_model
-)
+from baseline.model import load_model_for
+
 
 __all__ = []
 exporter = export(__all__)
 
 
 class Service(object):
-    task_name = None
-    task_load = None
 
     def __init__(self, vocabs=None, vectorizers=None, model=None):
         self.vectorizers = vectorizers
@@ -39,6 +33,14 @@ class Service(object):
 
     def get_labels(self):
         return self.model.get_labels()
+
+    @classmethod
+    def signature_name(cls):
+        raise Exception("Undefined signature name")
+
+    @classmethod
+    def task_name(cls):
+        raise Exception("Undefined task name")
 
     @classmethod
     def load(cls, bundle, **kwargs):
@@ -64,14 +66,15 @@ class Service(object):
         name = kwargs.get("name", None)
         if remote:
             beam = kwargs.get('beam', 30)
-            model = Service._create_remote_model(directory, be, remote, name, cls.signature_name, beam)
+            model = Service._create_remote_model(directory, be, remote, name, cls.signature_name(), beam)
             return cls(vocabs, vectorizers, model)
 
-        labels = read_json(os.path.join(directory, model_basename) + '.labels')
+        # Currently nothing to do here
+        # labels = read_json(os.path.join(directory, model_basename) + '.labels')
 
         import_user_module('baseline.{}.embeddings'.format(be))
-        import_user_module('baseline.{}.{}'.format(be, cls.task_name))
-        model = cls.task_load(model_basename, **kwargs)
+        import_user_module('baseline.{}.{}'.format(be, cls.task_name()))
+        model = load_model_for(cls.task_name(), model_basename, **kwargs)
         return cls(vocabs, vectorizers, model)
 
     @staticmethod
@@ -102,11 +105,17 @@ class Service(object):
 
         return model
 
+
 @exporter
 class ClassifierService(Service):
-    task_name = 'classify'
-    signature_name = 'predict_text'
-    task_load = load_model
+
+    @classmethod
+    def task_name(cls):
+        return 'classify'
+
+    @classmethod
+    def signature_name(cls):
+        return 'predict_text'
 
     def predict(self, tokens):
         """Take tokens and apply the internal vocab and vectorizers.  The tokens should be either a batch of text
@@ -155,9 +164,14 @@ class ClassifierService(Service):
 
 @exporter
 class TaggerService(Service):
-    task_name = 'tagger'
-    signature_name = 'tag_text'
-    task_load = load_tagger_model
+
+    @classmethod
+    def task_name(cls):
+        return 'tagger'
+
+    @classmethod
+    def signature_name(cls):
+        return 'tag_text'
 
     def predict(self, tokens, **kwargs):
         """
@@ -259,8 +273,10 @@ class TaggerService(Service):
 
 @exporter
 class LanguageModelService(Service):
-    task_name = "lm"
-    task_load = load_lang_model
+
+    @classmethod
+    def task_name(cls):
+        return "lm"
 
     def __init__(self, *args, **kwargs):
         super(LanguageModelService, self).__init__(*args, **kwargs)
@@ -316,9 +332,14 @@ class LanguageModelService(Service):
 
 @exporter
 class EncoderDecoderService(Service):
-    task_name = 'seq2seq'
-    signature_name = 'suggest_text'
-    task_load = load_seq2seq_model
+
+    @classmethod
+    def task_name(cls):
+        return 'seq2seq'
+
+    @classmethod
+    def signature_name(cls):
+        return 'suggest_text'
 
     def __init__(self, vocabs=None, vectorizers=None, model=None):
         super(EncoderDecoderService, self).__init__(None, None, model)
@@ -339,7 +360,7 @@ class EncoderDecoderService(Service):
             else:
                 self.src_vectorizers[k] = vectorizer
 
-    def get_src_vocab(self, vocab_type):
+    def src_vocab(self, vocab_type):
         return self.src_vocabs[vocab_type]
 
     def get_tgt_vocab(self):
