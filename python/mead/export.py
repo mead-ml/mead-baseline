@@ -7,7 +7,7 @@ from mead.exporters import create_exporter
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Train a text classifier')
+    parser = argparse.ArgumentParser(description='Export a model')
     parser.add_argument('--config', help='JSON Configuration for an experiment', required=True, type=convert_path)
     parser.add_argument('--settings', help='JSON Configuration for mead', required=False, default='config/mead-settings.json', type=convert_path)
     parser.add_argument('--datasets', help='json library of dataset labels', default='config/datasets.json', type=convert_path)
@@ -17,7 +17,6 @@ def main():
     parser.add_argument('--model', help='model name', required=True, type=unzip_model)
     parser.add_argument('--model_version', help='model_version', default=1)
     parser.add_argument('--output_dir', help='output dir', default='./models')
-    parser.add_argument('--no_preproc', help="skip preprocessing", dest='use_preproc', action='store_false')
     parser.add_argument('--beam', help='beam_width', default=30, type=int)
 
     args = parser.parse_args()

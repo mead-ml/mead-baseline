@@ -14,6 +14,7 @@ from mead.utils import (
 )
 
 
+
 __all__ = []
 exporter = export(__all__)
 
@@ -688,7 +689,6 @@ class LanguageModelingTask(Task):
         baseline.train.fit(model, self.train_data, self.valid_data, self.test_data, **self.config_params['train'])
         baseline.zip_files(self.get_basedir())
         self._close_reporting_hooks()
-
 
     @staticmethod
     def _num_steps_per_epoch(num_examples, nctx, batchsz):
