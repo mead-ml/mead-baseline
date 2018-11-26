@@ -265,7 +265,7 @@ class TaggerService(Service):
             for j, token in enumerate(tokens_seq[i]):
                 new_token = dict()
                 new_token.update(token)
-                new_token[label_field] = label_vocab[np.int32(outcome[j])]  # item is from np.int32
+                new_token[label_field] = label_vocab[np.int32(outcome[j])]
                 output += [new_token]
             outputs += [output]
         return outputs
