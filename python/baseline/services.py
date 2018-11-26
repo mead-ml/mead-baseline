@@ -65,7 +65,7 @@ class Service(object):
         remote = kwargs.get("remote", None)
         name = kwargs.get("name", None)
         if remote:
-            beam = kwargs.get('beam', 30)
+            beam = kwargs.get('beam', 10)
             model = Service._create_remote_model(directory, be, remote, name, cls.signature_name(), beam)
             return cls(vocabs, vectorizers, model)
 
@@ -369,7 +369,7 @@ class EncoderDecoderService(Service):
     @classmethod
     def load(cls, bundle, **kwargs):
         kwargs['predict'] = kwargs.get('predict', True)
-        kwargs['beam'] = kwargs.get('beam', 30)
+        kwargs['beam'] = kwargs.get('beam', 10)
         return super(EncoderDecoderService, cls).load(bundle, **kwargs)
 
     def predict(self, tokens, **kwargs):
