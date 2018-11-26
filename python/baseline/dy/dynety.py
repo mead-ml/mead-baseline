@@ -405,7 +405,7 @@ def attention(attn_type='bahdanau', *args, **kwargs):
         return BahdanauAttention(*args, **kwargs)
     if attn_type == 'sdp':
         return ScaledDotProductAttention(*args, **kwargs)
-    return LoungAttention(*args, **kwargs)
+    return LuongAttention(*args, **kwargs)
 
 
 class Attention(DynetLayer):
@@ -414,7 +414,7 @@ class Attention(DynetLayer):
         pc = pc.add_subcollection(name=name)
         super(Attention, self).__init__(pc)
         self.hsz = hsz
-        self.down_proj = Linear(hsz, 2 * hsz, self.pc)
+        self.down_proj = Linear(hsz, 2 * hsz, self.pc, name='combine')
 
     def cache_encoder(self, context_vectors):
         """Cache transformations to the encoder vectors.
@@ -488,10 +488,10 @@ class BahdanauAttention(Attention):
         # mask  ((T, 1), B)
         projected_state = self.decoder * query  # ((H,), B)
         non_lin = dy.tanh(dy.colwise_add(self.context_proj, projected_state))  # ((H, T), B)
-        attention_scores = dy.transpose(self.v * non_lin)  # ((1, H), B) * ((H, T), B) -> ((1, T), B) -> ((T, 1), B)
+        attn_scores = dy.transpose(self.v * non_lin)  # ((1, H), B) * ((H, T), B) -> ((1, T), B) -> ((T, 1), B)
         if mask is not None:
-            attention_scores = dy.cmult(attention_scores, mask[0]) + (mask[1] * dy.scalarInput(-1e9))
-        return dy.softmax(attention_scores)  # ((T, 1), B)
+            attn_scores = dy.cmult(attn_scores, mask[0]) + (mask[1] * dy.scalarInput(-1e9))
+        return dy.softmax(attn_scores)  # ((T, 1), B)
 
 
 class DotProductAttention(Attention):
@@ -505,7 +505,7 @@ class DotProductAttention(Attention):
         # ((1, H), B) * ((H, T), B) -> ((1, T), B) -> ((T, 1), B)
         attn_scores = dy.transpose(query * self.context)
         if mask is not None:
-            attn_scores = dy.cmult(attention_scores, mask[0]) + (mask[1] * dy.scalarInput(-1e9))
+            attn_scores = dy.cmult(attn_scores, mask[0]) + (mask[1] * dy.scalarInput(-1e9))
         return dy.softmax(attn_scores)  # ((T, 1), B)
 
     def _combine(self, attn, query):
@@ -525,7 +525,7 @@ class ScaledDotProductAttention(Attention):
         # ((1, H), B) * ((H, T), B) -> ((1, T), B) -> ((T, 1), B)
         attn_scores = dy.cdiv(dy.transpose(query * self.context), dy.scalarInput(self.scale))
         if mask is not None:
-            attn_scores = dy.cmult(attention_scores, mask[0]) + (mask[1] * dy.scalarInput(-1e9))
+            attn_scores = dy.cmult(attn_scores, mask[0]) + (mask[1] * dy.scalarInput(-1e9))
         return dy.softmax(attn_scores)  # ((T, 1), B)
 
     def _combine(self, attn, query):
@@ -533,9 +533,9 @@ class ScaledDotProductAttention(Attention):
         return dy.tanh(comb)
 
 
-class LoungAttention(Attention):
+class LuongAttention(Attention):
     def __init__(self, hsz, pc, name="bilinear-attention"):
-        super(LoungAttention, self).__init__(hsz, pc, name)
+        super(LuongAttention, self).__init__(hsz, pc, name)
         self.A = self.pc.add_parameters((self.hsz, self.hsz), name="bilinear-weight")
 
     def cache_encoder(self, context_vectors):
@@ -548,11 +548,11 @@ class LoungAttention(Attention):
         # ((1, H), B) * ((H, T), B) -> ((1, T), B) -> ((T, 1), B)
         attn_scores = dy.transpose(query * self.context)
         if mask is not None:
-            attn_scores = dy.cmult(attention_scores, mask[0]) + (mask[1] * dy.scalarInput(-1e9))
+            attn_scores = dy.cmult(attn_scores, mask[0]) + (mask[1] * dy.scalarInput(-1e9))
         return dy.softmax(attn_scores)
 
     def _combine(self, attn, query):
-        comb = super(LoungAttention, self)._combine(attn, query)
+        comb = super(LuongAttention, self)._combine(attn, query)
         return dy.tanh(comb)
 
 
