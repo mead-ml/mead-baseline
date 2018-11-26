@@ -5,7 +5,19 @@ from baseline.utils import import_user_module
 class RemoteModelTensorFlowREST(object):
 
     def __init__(self, remote, name, signature, labels=None, beam=None, lengths_key=None, inputs=[], version=None):
+        """A remote model that lives on TF serving with REST transport
 
+        This type of model currently depends on the `requests` module as a dependency for HTTP
+
+        :param remote: The remote endpoint
+        :param name:  The name of the model
+        :param signature: The model signature
+        :param labels: The labels (defaults to None)
+        :param beam: The beam width (defaults to None)
+        :param lengths_key: Which key is used for the length of the input vector (defaults to None)
+        :param inputs: The inputs (defaults to empty list)
+        :param version: The model version (defaults to None)
+        """
         self.remote = remote
         self.name = name
         self.signature = signature
@@ -16,9 +28,18 @@ class RemoteModelTensorFlowREST(object):
         self.version = version
 
     def get_labels(self):
+        """Return the model's labels
+
+        :return: The model's labels
+        """
         return self.labels
 
     def predict(self, examples):
+        """Run prediction over HTTP/REST.
+
+        :param examples: The input examples
+        :return: The outcomes
+        """
         import requests
 
         valid_example = all(k in examples for k in self.input_keys)
@@ -38,8 +59,7 @@ class RemoteModelTensorFlowREST(object):
         read the JSON response from tensorflow serving and decode it according
         to the signature.
         :param examples: Input examples
-        :param predict_response: a PredictResponse protobuf object,
-                    as defined in tensorflow_serving proto files
+        :param predict_response: an HTTP/REST output
         """
         if self.signature == 'suggest_text':
             # s2s returns int values.
@@ -87,6 +107,19 @@ class RemoteModelTensorFlowREST(object):
 class RemoteModelTensorFlowGRPC(object):
 
     def __init__(self, remote, name, signature, labels=None, beam=None, lengths_key=None, inputs=[]):
+        """A remote model that lives on TF serving with gRPC transport
+
+        When using this type of model, there is an external dependency on the `grpc` package, as well as the
+        TF serving protobuf stub files.  There is also currently a dependency on `tensorflow`
+
+        :param remote: The remote endpoint
+        :param name:  The name of the model
+        :param signature: The model signature
+        :param labels: The labels (defaults to None)
+        :param beam: The beam width (defaults to None)
+        :param lengths_key: Which key is used for the length of the input vector (defaults to None)
+        :param inputs: The inputs (defaults to empty list)
+        """
         self.predictpb = import_user_module('tensorflow_serving.apis.predict_pb2')
         self.servicepb = import_user_module('tensorflow_serving.apis.prediction_service_pb2_grpc')
         self.metadatapb = import_user_module('tensorflow_serving.apis.get_model_metadata_pb2')
@@ -104,9 +137,18 @@ class RemoteModelTensorFlowGRPC(object):
         self.labels = labels
 
     def get_labels(self):
+        """Return the model's labels
+
+        :return: The model's labels
+        """
         return self.labels
 
     def predict(self, examples):
+        """Run prediction over gRPC
+
+        :param examples: The input examples
+        :return: The outcomes
+        """
         valid_example = all(k in examples for k in self.input_keys)
         if not valid_example:
             raise ValueError("should have keys: " + ",".join(self.input_keys))
@@ -119,6 +161,7 @@ class RemoteModelTensorFlowGRPC(object):
         return outcomes_list
 
     def create_request(self, examples):
+        # TODO: Remove TF dependency client side
         import tensorflow as tf
 
         request = self.predictpb.PredictRequest()
