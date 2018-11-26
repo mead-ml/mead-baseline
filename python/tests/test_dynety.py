@@ -286,6 +286,26 @@ def test_squeeze_right_number():
     assert len(out.dim()[0]) == gold
 
 
+def test_squeeze_dim():
+    ndims = np.random.randint(2, 4)
+    dims = np.random.randint(2, 10, size=ndims)
+    single = np.random.randint(0, ndims)
+    dims[single] = 1
+    gold = tuple(x for i, x in enumerate(dims) if i != single)
+    in_ = dy.random_normal(tuple(dims))
+    res = squeeze(in_, single)
+    assert res.dim()[0] == gold
+
+
+def test_squeeze_invalid_dim():
+    ndims = np.random.randint(2, 4)
+    dims = np.random.randint(2, 10, size=ndims)
+    dim = np.random.randint(0, ndims)
+    in_ = dy.random_normal(tuple(dims))
+    with pytest.raises(AssertionError):
+        squeeze(in_, dim)
+
+
 def test_unsqueeze_right_number():
     ndims = np.random.randint(2, 4)
     dims = np.random.randint(1, 10, size=ndims)

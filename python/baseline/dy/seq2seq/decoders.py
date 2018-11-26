@@ -1,7 +1,7 @@
 import numpy as np
 import dynet as dy
 from baseline.utils import Offsets, topk
-from baseline.dy.dynety import DynetModel, Linear, Attention, WeightShareLinear, squeeze_and_transpose
+from baseline.dy.dynety import DynetModel, Linear, WeightShareLinear, squeeze_and_transpose, attention
 from baseline.dy.transformer import subsequent_mask, TransformerDecoderStack
 from baseline.model import (
     register_decoder,
@@ -103,9 +103,11 @@ layer's hidden size == embedding weight dimensions")
     def init_attn(self, **kwargs):
         pass
 
-    def attn(self, context):
-        """Returns the attention function that takes (output_t, src_mask)."""
-        return lambda output_t, src_mask: output_t
+    def attn_cache(self, context):
+        pass
+
+    def attn(self, query, mask):
+        return query
 
     def __call__(self, encoder_outputs, dst, train=False):
         src_mask = encoder_outputs.src_mask
@@ -120,13 +122,13 @@ layer's hidden size == embedding weight dimensions")
             self.decoder_rnn.disable_dropout()
         embed_out = self.tgt_embeddings.encode(dst, train)
         outputs = []
-        attn_fn = self.attn(context)
+        self.attn_cache(context)
         rnn_state = self.decoder_rnn.initial_state(h_i)
         for embed_i in embed_out:
             embed_i = self.input_i(embed_i, output_i)
             rnn_state = rnn_state.add_input(embed_i)
             rnn_output_i = rnn_state.output()
-            output_i = attn_fn(rnn_output_i, src_mask)
+            output_i = self.attn(rnn_output_i, src_mask)
             outputs.append(output_i)
         return outputs
 
@@ -208,11 +210,14 @@ class RNNDecoderWithAttn(RNNDecoder):
         super(RNNDecoderWithAttn, self).__init__(tgt_embeddings, **kwargs)
 
     def init_attn(self, **kwargs):
-        self.attn_module = Attention(self.hsz, self.pc)
+        attn_type = kwargs.get('attn_type', 'bahdanau')
+        self.attn_module = attention(attn_type, self.hsz, self.pc)
 
-    def attn(self, context):
-        context_mx = dy.concatenate_cols(context)
-        return self.attn_module(context_mx)
+    def attn_cache(self, context):
+        self.attn_module.cache_encoder(context)
+
+    def attn(self, query, mask):
+        return self.attn_module(query, mask)
 
 
 @register_decoder(name='transformer')
