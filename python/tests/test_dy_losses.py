@@ -1,8 +1,6 @@
 import pytest
 import numpy as np
 dy = pytest.importorskip('dynet')
-from baseline.dy.seq2seq.train import Seq2SeqTrainerDynet
-from baseline.dy.lm.train import LanguageModelTrainerDynet
 
 
 @pytest.fixture
@@ -36,6 +34,7 @@ def lengths(shapes):
 
 
 def test_masked_token_level_loss(shapes, logits, labels, lengths):
+    from baseline.dy.seq2seq.train import Seq2SeqTrainerDynet
     dy.renew_cg()
     B, S, C = shapes
     dy_logits = [dy.inputTensor(x, batched=True) for x in logits.transpose(1, 2, 0)]
@@ -55,6 +54,7 @@ def test_masked_token_level_loss(shapes, logits, labels, lengths):
 
 
 def test_token_level_loss(shapes, logits, labels, lengths):
+    from baseline.dy.lm.train import LanguageModelTrainerDynet
     dy.renew_cg()
     B, S, C = shapes
     dy_logits = [dy.inputTensor(x, batched=True) for x in logits.transpose(1, 2, 0)]

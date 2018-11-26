@@ -10,6 +10,7 @@ from mead.utils import (
     index_by_label,
     normalize_backend,
     get_mead_settings,
+    print_dataset_info,
     read_config_file_or_json,
 )
 
@@ -97,7 +98,7 @@ class Task(object):
                 self.primary_key = key
             vectorizer_section = feature.get('vectorizer', {'type': 'token1d'})
             vectorizer_section['mxlen'] = vectorizer_section.get('mxlen', self.config_params['preproc'].get('mxlen', -1))
-            vectorizer_section['mxwlen'] = vectorizer_section.get('mxlen', self.config_params['preproc'].get('mxwlen', -1))
+            vectorizer_section['mxwlen'] = vectorizer_section.get('mxwlen', self.config_params['preproc'].get('mxwlen', -1))
             if 'transform' in vectorizer_section:
                 vectorizer_section['transform_fn'] = eval(vectorizer_section['transform'])
             vectorizer = baseline.create_vectorizer(**vectorizer_section)
@@ -362,8 +363,13 @@ class ClassifierTask(Task):
         embeddings = read_config_file_or_json(embeddings, 'embeddings')
         embeddings_set = index_by_label(embeddings)
         self.dataset = DataDownloader(self.dataset, self.data_download_cache).download()
-        print("[train file]: {}\n[valid file]: {}\n[test file]: {}".format(self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']))
-        vocab, self.labels = self.reader.build_vocab([self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']], min_f=Task._get_min_f(self.config_params))
+        print_dataset_info(self.dataset)
+        vocab, self.labels = self.reader.build_vocab(
+            [self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']],
+            min_f=Task._get_min_f(self.config_params),
+            vocab_file=self.dataset.get('vocab_file'),
+            label_file=self.dataset.get('label_file')
+        )
         self.embeddings, self.feat2index = self._create_embeddings(embeddings_set, vocab, self.config_params['features'])
         baseline.save_vocabs(self.get_basedir(), self.feat2index)
 
@@ -430,10 +436,13 @@ class TaggerTask(Task):
 
     def initialize(self, embeddings):
         self.dataset = DataDownloader(self.dataset, self.data_download_cache).download()
-        print("[train file]: {}\n[valid file]: {}\n[test file]: {}".format(self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']))
+        print_dataset_info(self.dataset)
         embeddings = read_config_file_or_json(embeddings, 'embeddings')
         embeddings_set = index_by_label(embeddings)
-        vocabs = self.reader.build_vocab([self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']], min_f=Task._get_min_f(self.config_params))
+        vocabs = self.reader.build_vocab(
+            [self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']],
+            min_f=Task._get_min_f(self.config_params),
+        )
         self.embeddings, self.feat2index = self._create_embeddings(embeddings_set, vocabs, self.config_params['features'])
         baseline.save_vocabs(self.get_basedir(), self.feat2index)
 
@@ -529,12 +538,12 @@ class EncoderDecoderTask(Task):
         embeddings = read_config_file_or_json(embeddings, 'embeddings')
         embeddings_set = index_by_label(embeddings)
         self.dataset = DataDownloader(self.dataset, self.data_download_cache, True).download()
-        print("[train file]: {}\n[valid file]: {}\n[test file]: {}\n[vocab file]: {}".format(self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file'], self.dataset.get('vocab_file',"None")))
-        vocab_file = self.dataset.get('vocab_file')
-        if vocab_file is not None:
-            vocab1, vocab2 = self.reader.build_vocabs([vocab_file], min_f=Task._get_min_f(self.config_params))
-        else:
-            vocab1, vocab2 = self.reader.build_vocabs([self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']], min_f=Task._get_min_f(self.config_params))
+        print_dataset_info(self.dataset)
+        vocab1, vocab2 = self.reader.build_vocabs(
+            [self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']],
+            min_f=Task._get_min_f(self.config_params),
+            vocab_file=self.dataset.get('vocab_file')
+        )
 
         # To keep the config file simple, share a list between source and destination (tgt)
         features_src = []
@@ -650,8 +659,12 @@ class LanguageModelingTask(Task):
         embeddings = read_config_file_or_json(embeddings, 'embeddings')
         embeddings_set = index_by_label(embeddings)
         self.dataset = DataDownloader(self.dataset, self.data_download_cache).download()
-        print("[train file]: {}\n[valid file]: {}\n[test file]: {}".format(self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']))
-        vocabs = self.reader.build_vocab([self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']], min_f=Task._get_min_f(self.config_params))
+        print_dataset_info(self.dataset)
+        vocabs = self.reader.build_vocab(
+            [self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']],
+            min_f=Task._get_min_f(self.config_params),
+            vocab_file=self.dataset.get('vocab_file')
+        )
         self.embeddings, self.feat2index = self._create_embeddings(embeddings_set, vocabs, self.config_params['features'])
         baseline.save_vocabs(self.get_basedir(), self.feat2index)
 
