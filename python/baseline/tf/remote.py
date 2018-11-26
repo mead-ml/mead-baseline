@@ -4,7 +4,7 @@ from baseline.utils import import_user_module
 
 class RemoteModelTensorFlowREST(object):
 
-    def __init__(self, remote, name, signature, labels=None, beam=None, lengths_key=None, inputs=[]):
+    def __init__(self, remote, name, signature, labels=None, beam=None, lengths_key=None, inputs=[], version=None):
 
         self.remote = remote
         self.name = name
@@ -13,6 +13,7 @@ class RemoteModelTensorFlowREST(object):
         self.input_keys = set(inputs)
         self.beam = beam
         self.labels = labels
+        self.version = version
 
     def get_labels(self):
         return self.labels
@@ -24,7 +25,8 @@ class RemoteModelTensorFlowREST(object):
         if not valid_example:
             raise ValueError("should have keys: " + ",".join(self.input_keys))
 
-        url = '{}/v1/models/{}/versions/1:predict'.format(self.remote, self.name)
+        v_str = '/versions/{}'.format(self.version) if self.version is not None else ''
+        url = '{}/v1/models/{}{}:predict'.format(self.remote, self.name, v_str)
         request = self.create_request(examples)
         outcomes_list = requests.post(url, json=request)
         outcomes_list = outcomes_list.json()['outputs']
