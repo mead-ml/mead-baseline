@@ -183,10 +183,11 @@ def model_fn(features, labels, mode, params):
 
     bl.tf.SET_TRAIN_FLAG(True)
     model = bl.model.create_model(embeddings, labels=params['labels'], word=features['word'], y=y, **model_params)
+    loss = model.create_loss()
 
     optimizer = tf.train.AdamOptimizer()
-    loss = model.create_loss()
     train_op = optimizer.minimize(loss=loss, global_step=tf.train.get_global_step())
+    #global_step, train_op = bl.tf.optz.optimizer(loss, optim='adam')
 
     return tf.estimator.EstimatorSpec(mode=mode, predictions=model.logits,
                                       loss=loss,
