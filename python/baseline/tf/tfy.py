@@ -199,14 +199,16 @@ def lstm_cell_w_dropout(hsz, pdrop, forget_bias=1.0, variational=True, training=
     :param variational (``bool``) variational recurrence is on
     :param training (``bool``) are we training? (defaults to ``False``)
     :return: a cell
-   """
-    return tf.contrib.rnn.DropoutWrapper(
-        tf.contrib.rnn.LSTMCell(hsz, forget_bias=forget_bias, state_is_tuple=True),
-        output_keep_prob=1.0 if training else 1.0-pdrop,
-        state_keep_prob=1.0-pdrop if variational and training else 1.0,
-        variational_recurrent=variational,
-        dtype=tf.float32
-    )
+    """
+    output_keep_prob = tf.contrib.framework.smart_cond(TRAIN_FLAG(), lambda: 1.0 - pdrop, lambda: 1.0)
+    state_keep_prob = tf.contrib.framework.smart_cond(TRAIN_FLAG(), lambda: 1.0 - pdrop if variational else 1.0, lambda: 1.0)
+    cell = tf.contrib.rnn.LSTMCell(hsz, forget_bias=forget_bias, state_is_tuple=True)
+    output = tf.contrib.rnn.DropoutWrapper(cell,
+                                           output_keep_prob=output_keep_prob,
+                                           state_keep_prob=state_keep_prob,
+                                           variational_recurrent=variational,
+                                           dtype=tf.float32)
+    return output
 
 
 def stacked_lstm(hsz, pdrop, nlayers, variational=False, training=False):
@@ -296,13 +298,15 @@ def rnn_cell_w_dropout(hsz, pdrop, rnntype, st=None, variational=False, training
     :param training: (``bool``) Are we training?  Defaults to ``False``
     :return: a cell
     """
+    output_keep_prob = tf.contrib.framework.smart_cond(TRAIN_FLAG(), lambda: 1.0 - pdrop, lambda: 1.0)
+    state_keep_prob = tf.contrib.framework.smart_cond(TRAIN_FLAG(), lambda: 1.0 - pdrop if variational else 1.0, lambda: 1.0)
     cell = rnn_cell(hsz, rnntype, st)
-    return tf.contrib.rnn.DropoutWrapper(
-        cell,
-        output_keep_prob=1.0-pdrop if training else 1.0,
-        state_keep_prob=1.0-pdrop if variational else 1.0,
-        variational_recurrent=variational
-    )
+    output = tf.contrib.rnn.DropoutWrapper(cell,
+                                           output_keep_prob=output_keep_prob,
+                                           state_keep_prob=state_keep_prob,
+                                           variational_recurrent=variational,
+                                           dtype=tf.float32)
+    return output
 
 
 def multi_rnn_cell_w_dropout(hsz, pdrop, rnntype, num_layers, variational=False, training=False):
