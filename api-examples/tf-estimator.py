@@ -7,6 +7,15 @@ import os
 import argparse
 tf.logging.set_verbosity(tf.logging.INFO)
 
+
+def to_tensors(ts):
+    X = []
+    y = []
+    for sample in ts:
+        X.append(sample['word'].squeeze())
+        y.append(sample['y'].squeeze())
+    return np.stack(X), np.stack(y)
+
 parser = argparse.ArgumentParser(description='Train a Baseline model with TensorFlow Estimator API')
 parser.add_argument('--export_dir', help='Directory for TF export (for serving)', default='./models', type=str)
 parser.add_argument('--checkpoint_dir', help='Directory for model checkpoints', default='./checkpoints', type=str)
@@ -40,18 +49,6 @@ model_params = {
 if args.stacksz is not None:
     model_params['hsz'] = args.stacksz
 
-
-
-
-# The `vectorizer`'s job is to take in a set of tokens and turn them into a numpy array
-
-def to_tensors(ts):
-    X = []
-    y = []
-    for sample in ts:
-        X.append(sample['word'].squeeze())
-        y.append(sample['y'].squeeze())
-    return np.stack(X), np.stack(y)
 
 feature_desc = {
     'word': {
@@ -115,6 +112,12 @@ def eval_input_fn():
     _ = dataset.make_one_shot_iterator()
     return dataset
 
+def predict_input_fn():
+    dataset = tf.data.Dataset.from_tensor_slices((X_test, y_test))
+    dataset = dataset.batch(args.batchsz)
+    dataset = dataset.map(lambda x, y: ({'word': x}, y))
+    _ = dataset.make_one_shot_iterator()
+    return dataset
 
 def server_input_fn():
     tensors = {
@@ -139,8 +142,13 @@ def fit(estimator):
         eval_results = estimator.evaluate(input_fn=eval_input_fn)
         print(eval_results)
 
-    predictions = np.array([p['classes'] for p in estimator.predict(input_fn=eval_input_fn)])
-    print(predictions)
+    predictions = np.array([p['classes'] for p in estimator.predict(input_fn=predict_input_fn)])
+
+    cm = bl.ConfusionMatrix(labels)
+    for truth, guess in zip(y_test, predictions):
+        cm.add(truth, guess)
+
+    print(cm.get_all_metrics())
 
 
 def model_fn(features, labels, mode, params):
