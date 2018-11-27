@@ -97,7 +97,7 @@ class Service(object):
         inputs = assets.get('inputs', [])
 
         if backend == 'tf':
-            remote_models = import_user_module('baseline.tf.remote')
+            remote_models = import_user_module('baseline.remote')
             RemoteModel = remote_models.RemoteModelTensorFlowREST if remote.startswith('http') else remote_models.RemoteModelTensorFlowGRPC
             model = RemoteModel(remote, name, signature_name, labels=labels, lengths_key=lengths_key, inputs=inputs, beam=beam)
         else:
