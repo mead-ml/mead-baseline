@@ -198,17 +198,28 @@ class Char2DVectorizer(AbstractCharVectorizer):
         vec2d = np.zeros((self.mxlen, self.mxwlen), dtype=int)
         i = 0
         j = 0
+        over = False
         for atom in self._next_element(tokens, vocab):
+            if over:
+                # If if we have gone over mxwlen burn tokens until we hit end of word
+                if atom == EOW:
+                    over = False
+                continue
             if i == self.mxlen:
-                i -= 1
                 break
-            if atom == EOW or j == self.mxwlen:
+            if atom == EOW:
                 i += 1
                 j = 0
+                continue
+            elif j == self.mxwlen:
+                over = True
+                i += 1
+                j = 0
+                continue
             else:
                 vec2d[i, j] = atom
                 j += 1
-        valid_length = i + 1
+        valid_length = i
         return vec2d, valid_length
 
     def get_dims(self):
