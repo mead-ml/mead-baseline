@@ -124,11 +124,16 @@ class TensorBoardReporting(ReportingHook):
     def __init__(self, **kwargs):
         super(TensorBoardReporting, self).__init__(**kwargs)
         from tensorboardX import SummaryWriter
+        # Base dir is often the dir created to save the model into
         base_dir = kwargs.get('base_dir', '.')
         log_dir = os.path.expanduser(kwargs.get('log_dir', 'runs'))
         if not os.path.isabs(log_dir):
             log_dir = os.path.join(base_dir, log_dir)
-        log_dir = os.path.join(log_dir, str(os.getpid()))
+        # Run dir is the name of an individual run
+        run_dir = kwargs.get('run_dir')
+        pid = str(os.getpid())
+        run_dir = '{}-{}'.format(run_dir, pid) if run_dir is not None else pid
+        log_dir = os.path.join(log_dir, run_dir)
         flush_secs = int(kwargs.get('flush_secs', 2))
         self._log = SummaryWriter(log_dir, flush_secs=flush_secs)
 
