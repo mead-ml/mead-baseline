@@ -62,6 +62,21 @@ def test_absolute_log_dir(patches):
     w_patch.assert_called_once_with(gold, flush_secs=2)
 
 
+def test_no_run_dir(patches):
+    p_patch, pid, w_patch = patches
+    _ = TensorBoardReporting(flush_secs=2)
+    gold = os.path.join('.', 'runs', str(pid))
+    w_patch.assert_called_once_with(gold, flush_secs=2)
+
+
+def test_run_dir(patches):
+    p_patch, pid, w_patch = patches
+    run_dir = random_str()
+    _ = TensorBoardReporting(flush_secs=2, run_dir=run_dir)
+    gold = os.path.join('.', 'runs', '{}-{}'.format(run_dir, pid))
+    w_patch.assert_called_once_with(gold, flush_secs=2)
+
+
 def test_infer_type_train():
     hook = ReportingHook()
     gold = 'STEP'
