@@ -152,7 +152,7 @@ def model_fn(features, labels, mode, params):
 params = {'labels': labels}
 
 if NUM_GPUS > 1:
-    distribute = tf.contrib.distribute.MirroredStrategy(num_gpus=num_gpus)
+    distribute = tf.contrib.distribute.MirroredStrategy(num_gpus=NUM_GPUS)
 else:
     distribute = None
 
