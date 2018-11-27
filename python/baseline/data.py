@@ -10,9 +10,9 @@ exporter = export(__all__)
 @exporter
 class DataFeed(object):
     """Data collection that, when iterated, produces an epoch of data
-    
+
     This class manages producing a dataset to the trainer, by iterating an epoch and producing
-    a single step at a time.  The data can be shuffled per epoch, if requested, otherwise it is 
+    a single step at a time.  The data can be shuffled per epoch, if requested, otherwise it is
     returned in the order of the dateset
     """
     def __init__(self):
@@ -39,18 +39,18 @@ class DataFeed(object):
 class ExampleDataFeed(DataFeed):
 
     """Abstract base class that works on a list of examples
-    
+
     """
     def __init__(self, examples, batchsz, **kwargs):
         """Constructor from a list of examples
-        
+
         Use the examples requested to provide data.  Options for batching and shuffling are supported,
         along with some optional processing function pointers
-        
-        :param examples: A list of examples 
+
+        :param examples: A list of examples
         :param batchsz: Batch size per step
         :param kwargs: See below
-        
+
         :Keyword Arguments:
             * *shuffle* -- Shuffle the data per epoch? Defaults to `False`
             * *vec_alloc* -- Allocate a new tensor.  Defaults to ``numpy.zeros``
@@ -59,13 +59,20 @@ class ExampleDataFeed(DataFeed):
                 This can lead to batches being shorter than the maximum length provided to the system.
                 Not supported in all frameworks.
             * *src_vec_trans* -- A transform function to use on the source tensor (`None`)
+            * *truncate* -- bool, If true the datastream will be cut short when
+                a full batch cannot be made, otherwise the final batch is smaller
+                than normal batches.
         """
         super(ExampleDataFeed, self).__init__()
 
         self.examples = examples
         self.batchsz = batchsz
         self.shuffle = bool(kwargs.get('shuffle', False))
-        self.steps = int(math.floor(len(self.examples)/float(batchsz)))
+        self.truncate = bool(kwargs.get('truncate', False))
+        if self.truncate:
+            self.steps = int(math.floor(len(self.examples) / float(batchsz)))
+        else:
+            self.steps = (len(self.examples) + batchsz - 1) // batchsz
         self.trim = bool(kwargs.get('trim', False))
 
     def _batch(self, i):
@@ -101,7 +108,7 @@ class DictExamples(object):
 
     def __getitem__(self, i):
         """Get a single example
-        
+
         :param i: (``int``) simple index
         :return: an example
         """
@@ -109,7 +116,7 @@ class DictExamples(object):
 
     def __len__(self):
         """Number of examples
-        
+
         :return: (``int``) length of data
         """
         return len(self.example_list)
@@ -145,7 +152,7 @@ class DictExamples(object):
 
         for i in range(batchsz):
             if idx >= sz:
-                idx = 0
+                break
 
             ex = self.example_list[idx]
             for k in keys:
@@ -168,8 +175,8 @@ class Seq2SeqExamples(object):
     """
     def __init__(self, example_list, do_shuffle=True, src_sort_key=None):
         """Constructor
-        
-        :param example_list: Training pair examples 
+
+        :param example_list: Training pair examples
         :param do_shuffle: Shuffle the data (defaults to `True`)
         :param do_sort: Sort the data (defaults to `True`)
         """
@@ -229,7 +236,7 @@ class Seq2SeqExamples(object):
         max_tgt_len = 0
         for i in range(batchsz):
             if idx >= sz:
-                idx = 0
+                break
 
             ex = self.example_list[idx]
             for k in keys:
@@ -257,7 +264,7 @@ class SeqWordCharDataFeed(DataFeed):
 
     def __init__(self, examples, nctx, batchsz, tgt_key=None):
         """Constructor
-        
+
         :param examples: word tensor
         :param xch: character tensor
         :param nctx: Number of steps of BPTT
@@ -324,4 +331,3 @@ class SeqWordCharDataFeed(DataFeed):
         #    'xch': self.xch[:, i*self.stride_ch:(i+1)*self.stride_ch].reshape((self.batchsz, self.nbptt, self.wsz)),
         #    'y': self.x[:, i*self.nbptt+1:(i+1)*self.nbptt+1].reshape((self.batchsz, self.nbptt))
         #}
-
