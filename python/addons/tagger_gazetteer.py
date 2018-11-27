@@ -248,17 +248,17 @@ class RNNTaggerModelGazetteerModel(Tagger):
         #join for gazette embeddings
         joint = tf.concat(values=[joint, gazembed], axis=2)
 
-        embedseq = tf.nn.dropout(joint, model.pkeep)
+        embedseq = tf.layers.dropout(joint, model.pdrop_value, training=TRAIN_FLAG())
 
         if rnntype == 'blstm':
-            rnnfwd = stacked_lstm(hsz, model.pkeep, nlayers)
-            rnnbwd = stacked_lstm(hsz, model.pkeep, nlayers)
+            rnnfwd = stacked_lstm(hsz, model.pkeep, nlayers, training=TRAIN_FLAG())
+            rnnbwd = stacked_lstm(hsz, model.pkeep, nlayers, training=TRAIN_FLAG())
             rnnout, _ = tf.nn.bidirectional_dynamic_rnn(rnnfwd, rnnbwd, embedseq, sequence_length=model.lengths,
                                                         dtype=tf.float32)
             # The output of the BRNN function needs to be joined on the H axis
             rnnout = tf.concat(axis=2, values=rnnout)
         else:
-            rnnfwd = stacked_lstm(hsz, model.pkeep, nlayers)
+            rnnfwd = stacked_lstm(hsz, model.pkeep, nlayers, training=TRAIN_FLAG())
             rnnout, _ = tf.nn.dynamic_rnn(rnnfwd, embedseq, sequence_length=model.lengths, dtype=tf.float32)
         with tf.variable_scope("output"):
             # Converts seq to tensor, back to (B,T,W)
@@ -273,7 +273,7 @@ class RNNTaggerModelGazetteerModel(Tagger):
             init = xavier_initializer(True, seed)
 
             with tf.contrib.slim.arg_scope([fully_connected], weights_initializer=init):
-                hidden = tf.nn.dropout(fully_connected(rnnout_bt_x_h, hsz, activation_fn=tf.nn.tanh), model.pkeep)
+                hidden = tf.layers.dropout(fully_connected(rnnout_bt_x_h, hsz, activation_fn=tf.nn.tanh), model.pdrop_value, training=TRAIN_FLAG())
                 preds = fully_connected(hidden, nc, activation_fn=None, weights_initializer=init)
             model.probs = tf.reshape(preds, [-1, mxlen, nc])
             model.best = tf.argmax(model.probs, 2)

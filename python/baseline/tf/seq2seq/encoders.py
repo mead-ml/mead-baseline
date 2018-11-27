@@ -15,7 +15,7 @@ class EncoderBase(object):
     def __init__(self):
         pass
 
-    def encode(self, embed_in, src_len, pkeep, **kwargs):
+    def encode(self, embed_in, src_len, pdrop, **kwargs):
         pass
 
 
@@ -28,11 +28,11 @@ class RNNEncoder(EncoderBase):
     def __init__(self, **kwargs):
         super(EncoderBase, self).__init__()
 
-    def encode(self, embed_in, src_len, pkeep, hsz=650, rnntype='blstm', layers=1, vdrop=False, **kwargs):
+    def encode(self, embed_in, src_len, pdrop, hsz=650, rnntype='blstm', layers=1, vdrop=False, **kwargs):
 
         if rnntype == 'blstm':
-            rnn_fwd_cell = multi_rnn_cell_w_dropout(hsz//2, pkeep, rnntype, layers, variational=vdrop)
-            rnn_bwd_cell = multi_rnn_cell_w_dropout(hsz//2, pkeep, rnntype, layers, variational=vdrop)
+            rnn_fwd_cell = multi_rnn_cell_w_dropout(hsz//2, pdrop, rnntype, layers, variational=vdrop, training=TRAIN_FLAG())
+            rnn_bwd_cell = multi_rnn_cell_w_dropout(hsz//2, pdrop, rnntype, layers, variational=vdrop, training=TRAIN_FLAG())
             rnn_enc_tensor, (fw_final_state, bw_final_state) = tf.nn.bidirectional_dynamic_rnn(rnn_fwd_cell, rnn_bwd_cell,
                                                                                                embed_in,
                                                                                                scope='brnn_enc',
@@ -48,7 +48,7 @@ class RNNEncoder(EncoderBase):
             encoder_state = tuple(encoder_state)
         else:
 
-            rnn_enc_cell = multi_rnn_cell_w_dropout(hsz, pkeep, rnntype, layers, variational=vdrop)
+            rnn_enc_cell = multi_rnn_cell_w_dropout(hsz, pdrop, rnntype, layers, variational=vdrop, training=TRAIN_FLAG())
             rnn_enc_tensor, encoder_state = tf.nn.dynamic_rnn(rnn_enc_cell, embed_in,
                                                               scope='rnn_enc',
                                                               sequence_length=src_len,
@@ -70,7 +70,7 @@ class TransformerEncoder(EncoderBase):
     def encode(self,
                embed_in,
                src_len,
-               pkeep,
+               pdrop,
                hsz=650,
                num_heads=4,
                layers=1,
@@ -85,7 +85,7 @@ class TransformerEncoder(EncoderBase):
         new_shp = [shp[0]] + [1, 1] + shp[1:]
         src_mask = tf.reshape(src_mask, new_shp)
         encoder_output = transformer_encoder_stack(embed_in, src_mask, num_heads,
-                                                   pkeep, scale, layers, activation_type, scope, d_ff)
+                                                   pdrop, scale, layers, activation_type, scope, d_ff)
         # This comes out as a sequence T of (B, D)
         return TransformerEncoderOutput(output=encoder_output, src_mask=src_mask)
 

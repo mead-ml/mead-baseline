@@ -5,7 +5,8 @@ from tensorflow.python.platform import gfile
 import json
 from tensorflow.contrib.layers import fully_connected, xavier_initializer
 from baseline.utils import fill_y
-from baseline.model import ClassifierModel, load_classifier_model, create_classifier_model
+from baseline.tf.tfy import TRAIN_FLAG
+from baseline.model import ClassifierModel, load_model, create_model
 import tensorflow_hub as hub
 
 
@@ -255,7 +256,7 @@ class ELMoClassifierModel(ClassifierModel):
         combine = tf.reshape(tf.concat(values=mots, axis=3), [-1, wsz_all])
         # Definitely drop out
         with tf.name_scope("dropout"):
-            combine = tf.nn.dropout(combine, self.pkeep)
+            combine = tf.layers.dropout(combine, self.pdrop_value, training=TRAIN_FLAG())
         return combine
 
     def stacked(self, pooled, init, **kwargs):

@@ -288,7 +288,7 @@ class RNNTaggerModelELMoModel(TaggerModel):
             raise Exception('Expected 1 or 2 layer stacking only!')
 
         joint = word_char if word_vec is None else tf.concat(values=[wembed, welmo, word_char], axis=2)
-        embedseq = tf.nn.dropout(joint, model.pkeep)
+        embedseq = tf.layers.dropout(joint, model.pdrop_value, training=TRAIN_FLAG())
 
         with tf.variable_scope("brnn1"):
 
@@ -305,7 +305,7 @@ class RNNTaggerModelELMoModel(TaggerModel):
                 rnn2, _ = tf.nn.bidirectional_dynamic_rnn(rnnfwd, rnnbwd, rnnout, sequence_length=model.lengths, dtype=tf.float32)
                 # The output of the BRNN function needs to be joined on the H axis
                 rnn2 = tf.concat(axis=2, values=rnn2)
-                rnnout = tf.nn.dropout(tf.concat(axis=2, values=[rnnout, rnn2]), model.pkeep)
+                rnnout = tf.layers.dropout(tf.concat(axis=2, values=[rnnout, rnn2]), model.pdrop_value, training=TRAIN_FLAG())
 
         with tf.variable_scope("output"):
 
@@ -317,8 +317,8 @@ class RNNTaggerModelELMoModel(TaggerModel):
 
             with tf.contrib.slim.arg_scope([fully_connected], weights_initializer=init):
                 if model.proj is True:
-                    hidden = tf.nn.dropout(fully_connected(rnnout_bt_x_h, hsz,
-                                                           activation_fn=tf_activation(model.activation_type)), model.pkeep)
+                    hidden = tf.layers.dropout(fully_connected(rnnout_bt_x_h, hsz,
+                                                           activation_fn=tf_activation(model.activation_type)), model.pdrop_value, training=TRAIN_FLAG())
                     preds = fully_connected(hidden, nc, activation_fn=None, weights_initializer=init)
                 else:
                     preds = fully_connected(rnnout_bt_x_h, nc, activation_fn=None, weights_initializer=init)

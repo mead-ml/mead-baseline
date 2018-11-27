@@ -9,19 +9,24 @@ import math
 BASELINE_TF_TRAIN_FLAG = None
 
 
+def SET_TRAIN_FLAG(X):
+    global BASELINE_TF_TRAIN_FLAG
+    BASELINE_TF_TRAIN_FLAG = X
+
+
 def TRAIN_FLAG():
     """Create a global training flag on first use"""
     global BASELINE_TF_TRAIN_FLAG
-
     if BASELINE_TF_TRAIN_FLAG is not None:
         return BASELINE_TF_TRAIN_FLAG
 
-    BASELINE_TF_TRAIN_FLAG = tf.placeholder_with_default(0.0, shape=(), name="TRAIN_FLAG")
+    BASELINE_TF_TRAIN_FLAG = tf.placeholder_with_default(False, shape=(), name="TRAIN_FLAG")
     return BASELINE_TF_TRAIN_FLAG
 
 
 def new_placeholder_dict(train):
     global BASELINE_TF_TRAIN_FLAG
+
     if train:
         return {BASELINE_TF_TRAIN_FLAG: 1}
     return {}
@@ -185,50 +190,52 @@ def lstm_cell(hsz, forget_bias=1.0):
     return tf.contrib.rnn.LSTMCell(hsz, forget_bias=forget_bias, state_is_tuple=True)
 
 
-def lstm_cell_w_dropout(hsz, pkeep, forget_bias=1.0, variational=True):
+def lstm_cell_w_dropout(hsz, pdrop, forget_bias=1.0, variational=True, training=False):
     """Produce a single cell with dropout
 
     :param hsz: (``int``) The number of hidden units per LSTM
-    :param pkeep: (``int``) The probability of keeping a unit value during dropout
+    :param pdrop: (``int``) The probability of keeping a unit value during dropout
     :param forget_bias: (``int``) Defaults to 1
     :param variational (``bool``) variational recurrence is on
+    :param training (``bool``) are we training? (defaults to ``False``)
     :return: a cell
    """
     return tf.contrib.rnn.DropoutWrapper(
         tf.contrib.rnn.LSTMCell(hsz, forget_bias=forget_bias, state_is_tuple=True),
-        output_keep_prob=pkeep,
-        state_keep_prob=pkeep if variational else 1.0,
+        output_keep_prob=1.0 if training else 1.0-pdrop,
+        state_keep_prob=1.0-pdrop if variational and training else 1.0,
         variational_recurrent=variational,
         dtype=tf.float32
     )
 
 
-def stacked_lstm(hsz, pkeep, nlayers, variational=False):
+def stacked_lstm(hsz, pdrop, nlayers, variational=False, training=False):
     """Produce a stack of LSTMs with dropout performed on all but the last layer.
 
     :param hsz: (``int``) The number of hidden units per LSTM
-    :param pkeep: (``int``) The probability of keeping a unit value during dropout
+    :param pdrop: (``int``) The probability of dropping a unit value during dropout
     :param nlayers: (``int``) The number of layers of LSTMs to stack
     :param variational (``bool``) variational recurrence is on
+    :param training (``bool``) Are we training? (defaults to ``False``)
     :return: a stacked cell
     """
     if variational:
         return tf.contrib.rnn.MultiRNNCell(
-            [lstm_cell_w_dropout(hsz, pkeep, variational=variational) for _ in range(nlayers)],
+            [lstm_cell_w_dropout(hsz, pdrop, variational=variational, training=training) for _ in range(nlayers)],
             state_is_tuple=True
         )
     return tf.contrib.rnn.MultiRNNCell(
-        [lstm_cell_w_dropout(hsz, pkeep) if i < nlayers - 1 else lstm_cell(hsz) for i in range(nlayers)],
+        [lstm_cell_w_dropout(hsz, pdrop, training=training) if i < nlayers - 1 else lstm_cell(hsz) for i in range(nlayers)],
         state_is_tuple=True
     )
 
 
-def stacked_cnn(inputs, hsz, pkeep, nlayers, filts=[5], activation_fn=tf.nn.relu, scope='StackedCNN'):
+def stacked_cnn(inputs, hsz, pdrop, nlayers, filts=[5], activation_fn=tf.nn.relu, scope='StackedCNN'):
     """Produce a stack of parallel or single convolution layers with residual connections and dropout between each
 
     :param inputs: The input
     :param hsz: (``int``) The number of hidden units per filter
-    :param pkeep: (``float``) The probability of keeping a unit value during dropout
+    :param pdrop: (``float``) The probability of dropout
     :param nlayers: (``int``) The number of layers of parallel convolutions to stack
     :param filts: (``list``) A list of parallel filter widths to apply
     :param activation_fn: (``func``) A function for activation
@@ -239,23 +246,23 @@ def stacked_cnn(inputs, hsz, pkeep, nlayers, filts=[5], activation_fn=tf.nn.relu
         layers = []
         for filt in filts:
             # The first one cannot have a residual conn, since input size may differ
-            layer = tf.nn.dropout(tf.layers.conv1d(inputs,
+            layer = tf.layers.dropout(tf.layers.conv1d(inputs,
                                                    hsz,
                                                    filt,
                                                    activation=activation_fn,
                                                    padding="same",
                                                    name='conv{}-0'.format(filt)),
-                                  pkeep,
+                                  pdrop, training=TRAIN_FLAG(),
                                   name='dropout{}-0'.format(filt))
 
             for i in range(1, nlayers):
-                layer = layer + tf.nn.dropout(tf.layers.conv1d(inputs,
+                layer = layer + tf.layers.dropout(tf.layers.conv1d(inputs,
                                                                hsz,
                                                                filt,
                                                                activation=activation_fn,
                                                                padding="same",
                                                                name='conv{}-{}'.format(filt, i)),
-                                              pkeep,
+                                              pdrop, training=TRAIN_FLAG(),
                                               name='dropout{}-{}'.format(filt, i))
             layers.append(layer)
 
@@ -277,42 +284,44 @@ def rnn_cell(hsz, rnntype, st=None):
     return cell
 
 
-def rnn_cell_w_dropout(hsz, pkeep, rnntype, st=None, variational=False):
+def rnn_cell_w_dropout(hsz, pdrop, rnntype, st=None, variational=False, training=False):
 
     """Produce a single RNN cell with dropout
 
     :param hsz: (``int``) The number of hidden units per LSTM
     :param rnntype: (``str``): `lstm` or `gru`
-    :param pkeep: (``int``) The probability of keeping a unit value during dropout
+    :param pdrop: (``int``) The probability of dropping a unit value during dropout
     :param st: (``bool``) state is tuple? defaults to `None`
     :param variational: (``bool``) Variational recurrence is on
+    :param training: (``bool``) Are we training?  Defaults to ``False``
     :return: a cell
     """
     cell = rnn_cell(hsz, rnntype, st)
     return tf.contrib.rnn.DropoutWrapper(
         cell,
-        output_keep_prob=pkeep,
-        state_keep_prob=pkeep if variational else 1.0,
+        output_keep_prob=1.0-pdrop if training else 1.0,
+        state_keep_prob=1.0-pdrop if variational else 1.0,
         variational_recurrent=variational
     )
 
 
-def multi_rnn_cell_w_dropout(hsz, pkeep, rnntype, num_layers, variational=False):
+def multi_rnn_cell_w_dropout(hsz, pdrop, rnntype, num_layers, variational=False, training=False):
     """Produce a stack of RNNs with dropout performed on all but the last layer.
 
     :param hsz: (``int``) The number of hidden units per RNN
-    :param pkeep: (``int``) The probability of keeping a unit value during dropout
+    :param pdrop: (``int``) The probability of dropping a unit value during dropout
     :param rnntype: (``str``) The type of RNN to use - `lstm` or `gru`
     :param num_layers: (``int``) The number of layers of RNNs to stack
+    :param training: (``bool``) Are we training? Defaults to ``False``
     :return: a stacked cell
     """
     if variational:
         return tf.contrib.rnn.MultiRNNCell(
-            [rnn_cell_w_dropout(hsz, pkeep, rnntype, variational) for _ in range(num_layers)],
+            [rnn_cell_w_dropout(hsz, pdrop, rnntype, variational, training) for _ in range(num_layers)],
             state_is_tuple=True
         )
     return tf.contrib.rnn.MultiRNNCell(
-        [rnn_cell_w_dropout(hsz, pkeep, rnntype) if i < num_layers - 1 else rnn_cell_w_dropout(hsz, 1.0, rnntype) for i in range(num_layers)],
+        [rnn_cell_w_dropout(hsz, pdrop, rnntype, training) if i < num_layers - 1 else rnn_cell_w_dropout(hsz, 1.0, rnntype) for i in range(num_layers)],
         state_is_tuple=True
     )
 

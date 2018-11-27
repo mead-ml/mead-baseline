@@ -299,16 +299,6 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
     def src_lengths_key(self, value):
         self._src_lengths_key = value
 
-    @property
-    def pkeep(self):
-        """This property is provided for models that wish to access the default `pdrop_value` property.
-
-        The property here uses `pdrop_value` and the `TRAIN_FLAG()` to determine how much dropout to apply (if any)
-
-        :return:
-        """
-        return 1.0 - self.pdrop_value * TRAIN_FLAG()
-
     def create_encoder(self, **kwargs):
         return create_seq2seq_encoder(**kwargs)
 
@@ -319,14 +309,14 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
         self.decoder = self.create_decoder(**kwargs)
         predict = kwargs.get('predict', False)
         if predict:
-            self.decoder.predict(encoder_output, self.src_len, self.pkeep, **kwargs)
+            self.decoder.predict(encoder_output, self.src_len, self.pdrop_value, **kwargs)
         else:
-            self.decoder.decode(encoder_output, self.src_len, self.tgt_len, self.pkeep, **kwargs)
+            self.decoder.decode(encoder_output, self.src_len, self.tgt_len, self.pdrop_value, **kwargs)
 
     def encode(self, embed_in, **kwargs):
         with tf.variable_scope('encode'):
             self.encoder = self.create_encoder(**kwargs)
-            return self.encoder.encode(embed_in, self.src_len, self.pkeep, **kwargs)
+            return self.encoder.encode(embed_in, self.src_len, self.pdrop_value, **kwargs)
 
     @staticmethod
     def _write_props_to_state(obj, state):
