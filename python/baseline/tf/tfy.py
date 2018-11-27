@@ -516,7 +516,9 @@ def char_word_conv_embeddings(char_vec, filtsz, char_dsz, nfeats, activation_fn=
     return joined, wsz_all
 
 
-def pool_chars(x_char, Wch, ce0, char_dsz, **kwargs):
+def pool_chars(x_char, Wch, ce0, char_dsz, nfeat_factor=None, 
+               cfiltsz=[3], max_feat=200, gating='skip',
+               num_gates=1, activation='tanh', wsz=30):
     """Take in a tensor of characters (B x maxs x maxw) and do character convolution
 
     :param x_char: TF tensor for input characters, (B x maxs x maxw)
@@ -535,25 +537,23 @@ def pool_chars(x_char, Wch, ce0, char_dsz, **kwargs):
     :return: The character compositional embedding and the number of hidden units as a tuple
 
     """
-    filtsz = kwargs.get('cfiltsz', [3])
-    if 'nfeat_factor' in kwargs:
-        max_feat = kwargs.get('max_feat', 200)
-        nfeats = [min(kwargs['nfeat_factor'] * fsz, max_feat) for fsz in filtsz]
+    filtsz = cfiltsz
+    if nfeat_factor:
+        max_feat = max_feat
+        nfeats = [min(nfeat_factor * fsz, max_feat) for fsz in filtsz]
     else:
-        nfeats = kwargs.get('wsz', 30)
+        nfeats = wsz
     mxlen = tf.shape(x_char)[1]
-    gating = kwargs.get('gating', "skip")
+
     gating_fn = highway_conns if gating.startswith('highway') else skip_conns
-    num_gates = int(kwargs.get('num_gates', 1))
-    # print(gating_fn, num_gates)
-    activation_type = kwargs.get('activation', 'tanh')
+
     with tf.variable_scope("Chars2Word"):
         with tf.control_dependencies([ce0]):
             mxwlen = tf.shape(x_char)[-1]
             char_bt_x_w = tf.reshape(x_char, [-1, mxwlen])
             cembed = tf.nn.embedding_lookup(Wch, char_bt_x_w, name="embeddings")
             cmot, num_filts = char_word_conv_embeddings(cembed, filtsz, char_dsz, nfeats,
-                                                        activation_fn=tf_activation(activation_type),
+                                                        activation_fn=tf_activation(activation),
                                                         gating=gating_fn,
                                                         num_gates=num_gates)
             word_char = tf.reshape(cmot, [-1, mxlen, num_filts])
