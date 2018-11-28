@@ -57,7 +57,8 @@ parser.add_argument('--test', help='Testing file', default='../data/stsa.binary.
 parser.add_argument('--embeddings', help='Pretrained embeddings file', default='/data/embeddings/GoogleNews-vectors-negative300.bin')
 parser.add_argument('--ll', help='Log level', type=str, default='info')
 parser.add_argument('--tf_ll', help='TensorFlow Log level', type=str, default='warning')
-
+parser.add_argument('--lr', help='Learning rate', type=float, default=0.001)
+parser.add_argument('--optim', help='Optimizer (sgd, adam) (default is adam)', type=str, default='adam')
 args = parser.parse_known_args()[0]
 
 logging.basicConfig(level=get_logging_level(args.ll))
@@ -78,7 +79,7 @@ if args.stacksz is not None:
 
 feature_desc = {
     'word': {
-        'vectorizer': bl.Token1DVectorizer(mxlen=args.mxlen),
+        'vectorizer': bl.Token1DVectorizer(mxlen=args.mxlen, transform_fn=bl.lowercase),
         'embed': {'file': args.embeddings, 'type': 'default', 'unif': 0.25}
     }
 }
@@ -211,7 +212,8 @@ def model_fn(features, labels, mode, params):
     model = bl.model.create_model(embeddings, labels=params['labels'], word=features['word'], y=y, **model_params)
     loss = model.create_loss()
 
-    optimizer = tf.train.AdamOptimizer()
+    Optimizer = tf.train.GradientDescentOptimizer if args.optim == 'sgd' else tf.train.AdamOptimizer
+    optimizer = Optimizer(learning_rate=args.lr)
     train_op = optimizer.minimize(loss=loss, global_step=tf.train.get_global_step())
     #global_step, train_op = bl.tf.optz.optimizer(loss, optim='adam')
 
