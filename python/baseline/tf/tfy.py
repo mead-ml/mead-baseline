@@ -232,7 +232,7 @@ def stacked_lstm(hsz, pdrop, nlayers, variational=False, training=False):
     )
 
 
-def stacked_cnn(inputs, hsz, pdrop, nlayers, filts=[5], activation_fn=tf.nn.relu, scope='StackedCNN'):
+def stacked_cnn(inputs, hsz, pdrop, nlayers, filts=[5], activation_fn=tf.nn.relu, scope='StackedCNN', training=False):
     """Produce a stack of parallel or single convolution layers with residual connections and dropout between each
 
     :param inputs: The input
@@ -254,7 +254,7 @@ def stacked_cnn(inputs, hsz, pdrop, nlayers, filts=[5], activation_fn=tf.nn.relu
                                                    activation=activation_fn,
                                                    padding="same",
                                                    name='conv{}-0'.format(filt)),
-                                  pdrop, training=TRAIN_FLAG(),
+                                  pdrop, training=training,
                                   name='dropout{}-0'.format(filt))
 
             for i in range(1, nlayers):
@@ -264,7 +264,7 @@ def stacked_cnn(inputs, hsz, pdrop, nlayers, filts=[5], activation_fn=tf.nn.relu
                                                                activation=activation_fn,
                                                                padding="same",
                                                                name='conv{}-{}'.format(filt, i)),
-                                              pdrop, training=TRAIN_FLAG(),
+                                              pdrop, training=training,
                                               name='dropout{}-{}'.format(filt, i))
             layers.append(layer)
 

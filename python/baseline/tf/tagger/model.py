@@ -357,5 +357,5 @@ class CNNTaggerModel(TaggerModelBase):
         if filts is None:
             filts = 5
 
-        cnnout = stacked_cnn(embedseq, hsz, self.pdrop_value, nlayers, filts=listify(filts))
+        cnnout = stacked_cnn(embedseq, hsz, self.pdrop_value, nlayers, filts=listify(filts), training=TRAIN_FLAG())
         return cnnout
