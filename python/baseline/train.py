@@ -188,14 +188,24 @@ class Trainer(object):
         self.nstep_start = 0
         self.log = logging.getLogger('baseline.timing')
 
-    def report(self, step, metrics, start, phase, tt, reporting_fns):
+    def report(self, step, metrics, start, phase, tt, reporting_fns, steps=1):
+        """Make a report (both metric and timinging).
+
+        :param step: `int` The step number of this report (epoch or nstep number).
+        :param metrics: `dict` The metrics to report.
+        :param start: `int` The starting time of this segment.
+        :param phase: `str` The phase type. {'Train', 'Valid', 'Test'}
+        :param tt: `str` The tick type. {'STEP', 'EPOCH'}
+        :param reporting_fns: `List[Callable]` The list of reporting functions to call.
+        :param steps: `int` The number of steps in this segment, used to normalize the time.
+        """
         elapsed = time.time() - start
         for reporting in reporting_fns:
             reporting(metrics, step, phase, tt)
         self.log.debug({
             'tick_type': tt, 'tick': step, 'phase': phase,
-            'time': elapsed / float(self.nsteps),
-            'step/sec': self.nsteps / float(elapsed)
+            'time': elapsed / float(steps),
+            'step/sec': steps / float(elapsed)
         })
 
     def reset_nstep(self):
