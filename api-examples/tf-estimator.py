@@ -212,10 +212,10 @@ def model_fn(features, labels, mode, params):
     model = bl.model.create_model(embeddings, labels=params['labels'], word=features['word'], y=y, **model_params)
     loss = model.create_loss()
 
-    Optimizer = tf.train.GradientDescentOptimizer if args.optim == 'sgd' else tf.train.AdamOptimizer
-    optimizer = Optimizer(learning_rate=args.lr)
-    train_op = optimizer.minimize(loss=loss, global_step=tf.train.get_global_step())
-    #global_step, train_op = bl.tf.optz.optimizer(loss, optim='adam')
+    #optimizer = tf.train.AdamOptimizer(learning_rate=args.lr)
+    #train_op = optimizer.minimize(loss=loss, global_step=tf.train.get_global_step())
+    colocate = True if args.gpus > 1 else False
+    global_step, train_op = bl.tf.optz.optimizer(loss, optim=args.optim, eta=args.lr, colocate_gradients_with_ops=colocate)
 
     return tf.estimator.EstimatorSpec(mode=mode, predictions=model.logits,
                                       loss=loss,
