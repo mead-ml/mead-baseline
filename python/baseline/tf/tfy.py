@@ -200,8 +200,8 @@ def lstm_cell_w_dropout(hsz, pdrop, forget_bias=1.0, variational=True, training=
     :param training (``bool``) are we training? (defaults to ``False``)
     :return: a cell
     """
-    output_keep_prob = tf.contrib.framework.smart_cond(TRAIN_FLAG(), lambda: 1.0 - pdrop, lambda: 1.0)
-    state_keep_prob = tf.contrib.framework.smart_cond(TRAIN_FLAG(), lambda: 1.0 - pdrop if variational else 1.0, lambda: 1.0)
+    output_keep_prob = tf.contrib.framework.smart_cond(training, lambda: 1.0 - pdrop, lambda: 1.0)
+    state_keep_prob = tf.contrib.framework.smart_cond(training, lambda: 1.0 - pdrop if variational else 1.0, lambda: 1.0)
     cell = tf.contrib.rnn.LSTMCell(hsz, forget_bias=forget_bias, state_is_tuple=True)
     output = tf.contrib.rnn.DropoutWrapper(cell,
                                            output_keep_prob=output_keep_prob,
@@ -298,8 +298,8 @@ def rnn_cell_w_dropout(hsz, pdrop, rnntype, st=None, variational=False, training
     :param training: (``bool``) Are we training?  Defaults to ``False``
     :return: a cell
     """
-    output_keep_prob = tf.contrib.framework.smart_cond(TRAIN_FLAG(), lambda: 1.0 - pdrop, lambda: 1.0)
-    state_keep_prob = tf.contrib.framework.smart_cond(TRAIN_FLAG(), lambda: 1.0 - pdrop if variational else 1.0, lambda: 1.0)
+    output_keep_prob = tf.contrib.framework.smart_cond(training, lambda: 1.0 - pdrop, lambda: 1.0)
+    state_keep_prob = tf.contrib.framework.smart_cond(training, lambda: 1.0 - pdrop if variational else 1.0, lambda: 1.0)
     cell = rnn_cell(hsz, rnntype, st)
     output = tf.contrib.rnn.DropoutWrapper(cell,
                                            output_keep_prob=output_keep_prob,
