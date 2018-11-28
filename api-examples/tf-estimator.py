@@ -1,11 +1,31 @@
 import baseline as bl
 import baseline.tf.embeddings
 import baseline.tf.classify
+import time
 import tensorflow as tf
 import numpy as np
 import os
 import argparse
-tf.logging.set_verbosity(tf.logging.INFO)
+import logging
+log = logging.getLogger('baseline.timing')
+
+
+def get_logging_level(ll):
+    ll = ll.lower()
+    if ll == 'debug':
+        return logging.DEBUG
+    if ll == 'info':
+        return logging.INFO
+    return logging.WARNING
+
+
+def get_tf_logging_level(ll):
+    ll = ll.lower()
+    if ll == 'debug':
+        return tf.logging.DEBUG
+    if ll == 'info':
+        return logging.INFO
+    return tf.logging.WARN
 
 
 def to_tensors(ts):
@@ -35,8 +55,14 @@ parser.add_argument('--train', help='Training file', default='../data/stsa.binar
 parser.add_argument('--valid', help='Validation file', default='../data/stsa.binary.dev')
 parser.add_argument('--test', help='Testing file', default='../data/stsa.binary.test')
 parser.add_argument('--embeddings', help='Pretrained embeddings file', default='/data/embeddings/GoogleNews-vectors-negative300.bin')
+parser.add_argument('--ll', help='Log level', type=str, default='info')
+parser.add_argument('--tf_ll', help='TensorFlow Log level', type=str, default='warning')
 
 args = parser.parse_known_args()[0]
+
+logging.basicConfig(level=get_logging_level(args.ll))
+tf.logging.set_verbosity(get_tf_logging_level(args.tf_ll))
+
 
 pool_field = 'cmotsz' if args.model_type == 'default' else 'rnnsz'
 
@@ -136,12 +162,12 @@ def one_epoch(X_train):
 def fit(estimator):
 
     for i in range(args.epochs):
-
+        start_time = time.time()
         estimator.train(input_fn=train_input_fn, steps=one_epoch(X_train))
-
+        elapsed = time.time() - start_time
+        log.info('EPOCH {} {}s'.format(i+1, elapsed))
         eval_results = estimator.evaluate(input_fn=eval_input_fn)
         print(eval_results)
-
     predictions = np.array([p['classes'] for p in estimator.predict(input_fn=predict_input_fn)])
 
     cm = bl.ConfusionMatrix(labels)
