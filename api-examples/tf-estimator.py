@@ -9,7 +9,7 @@ import argparse
 import logging
 log = logging.getLogger('baseline.timing')
 NUM_PREFETCH = 2
-
+SHUF_BUF_SZ = 5000
 def get_logging_level(ll):
     ll = ll.lower()
     if ll == 'debug':
@@ -124,8 +124,10 @@ X_test, y_test = to_tensors(reader.load(test_file, vocabs=vocabs, batchsz=1))
 
 def train_input_fn():
     dataset = tf.data.Dataset.from_tensor_slices((X_train, y_train))
-    dataset = dataset.shuffle(buffer_size=len(X_train))
-    dataset = dataset.batch(args.batchsz)
+    dataset = dataset.shuffle(buffer_size=SHUF_BUF_SZ)
+    # https://github.com/tensorflow/tensorflow/blob/master/tensorflow/contrib/distribute/README.md
+    # effective_batch_sz = args.batchsz*args.gpus
+    dataset = dataset.batch(args.batchsz//args.gpus)
     dataset = dataset.map(lambda x, y: ({'word': x}, y))
     dataset = dataset.repeat(args.epochs)
     dataset = dataset.prefetch(NUM_PREFETCH)
@@ -139,6 +141,7 @@ def eval_input_fn():
     dataset = dataset.map(lambda x, y: ({'word': x}, y))
     _ = dataset.make_one_shot_iterator()
     return dataset
+
 
 def predict_input_fn():
     dataset = tf.data.Dataset.from_tensor_slices((X_test, y_test))
@@ -158,6 +161,13 @@ def server_input_fn():
 
 
 def one_epoch(X_train):
+    """
+
+    effective_batch_sz = args.batchsz = gpu_batchsz*args.gpus
+
+    :param X_train:
+    :return:
+    """
     return len(X_train)//args.batchsz
 
 
@@ -225,12 +235,7 @@ params = {'labels': labels}
 
 checkpoint_dir = '{}-{}'.format(args.checkpoint_dir, os.getpid())
 if args.gpus > 1:
-    try:
-        from tf.contrib.distribute import MirroredStrategy
-        config = tf.estimator.RunConfig(model_dir=checkpoint_dir, train_distribute=MirroredStrategy(num_gpus=args.gpus))
-    except ImportError:
-        print('Warning, MirroredStrategy is not available')
-        config = tf.estimator.RunConfig(model_dir=checkpoint_dir)
+    config = tf.estimator.RunConfig(model_dir=checkpoint_dir, train_distribute=tf.contrib.distributeMirroredStrategy(num_gpus=args.gpus))
 else:
     config = tf.estimator.RunConfig(model_dir=checkpoint_dir)
 
