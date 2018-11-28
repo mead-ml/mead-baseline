@@ -8,7 +8,7 @@ import os
 import argparse
 import logging
 log = logging.getLogger('baseline.timing')
-
+NUM_PREFETCH = 2
 
 def get_logging_level(ll):
     ll = ll.lower()
@@ -40,7 +40,7 @@ parser = argparse.ArgumentParser(description='Train a Baseline model with Tensor
 parser.add_argument('--export_dir', help='Directory for TF export (for serving)', default='./models', type=str)
 parser.add_argument('--checkpoint_dir', help='Directory for model checkpoints', default='./checkpoints', type=str)
 parser.add_argument('--model_type', help='What type of model to build', type=str, default='default')
-parser.add_argument('--poolsz', help='How many hidden units for pooling', type=int, default=200)
+parser.add_argument('--poolsz', help='How many hidden units for pooling', type=int, default=100)
 parser.add_argument('--stacksz', help='How many hidden units for stacking', type=int, nargs='+')
 parser.add_argument('--text', help='raw value', type=str)
 parser.add_argument('--backend', help='backend', default='tf')
@@ -48,9 +48,8 @@ parser.add_argument('--remote', help='(optional) remote endpoint', type=str) # l
 parser.add_argument('--name', help='(optional) signature name', type=str)
 parser.add_argument('--epochs', help='Number of epochs to train', type=int, default=2)
 parser.add_argument('--batchsz', help='Batch size', type=int, default=50)
-parser.add_argument('--gpus', help='Num GPUs', type=int, default=1)
 parser.add_argument('--filts', help='Parallel convolution filter widths (if default model)', type=int, default=[3, 4, 5], nargs='+')
-parser.add_argument('--mxlen', help='Maximum post length (number of words) during training', type=int, default=40)
+parser.add_argument('--mxlen', help='Maximum post length (number of words) during training', type=int, default=100)
 parser.add_argument('--train', help='Training file', default='../data/stsa.binary.phrases.train')
 parser.add_argument('--valid', help='Validation file', default='../data/stsa.binary.dev')
 parser.add_argument('--test', help='Testing file', default='../data/stsa.binary.test')
@@ -59,6 +58,7 @@ parser.add_argument('--ll', help='Log level', type=str, default='info')
 parser.add_argument('--tf_ll', help='TensorFlow Log level', type=str, default='warning')
 parser.add_argument('--lr', help='Learning rate', type=float, default=0.001)
 parser.add_argument('--optim', help='Optimizer (sgd, adam) (default is adam)', type=str, default='adam')
+parser.add_argument('--gpus', help='Number of GPUs to use', default=1)
 args = parser.parse_known_args()[0]
 
 logging.basicConfig(level=get_logging_level(args.ll))
@@ -127,7 +127,8 @@ def train_input_fn():
     dataset = dataset.shuffle(buffer_size=len(X_train))
     dataset = dataset.batch(args.batchsz)
     dataset = dataset.map(lambda x, y: ({'word': x}, y))
-    dataset = dataset.repeat()
+    dataset = dataset.repeat(args.epochs)
+    dataset = dataset.prefetch(NUM_PREFETCH)
     _ = dataset.make_one_shot_iterator()
     return dataset
 
@@ -222,14 +223,17 @@ def model_fn(features, labels, mode, params):
                                       train_op=train_op)
 params = {'labels': labels}
 
-if args.gpus > 1:
-    distribute = tf.contrib.distribute.MirroredStrategy(num_gpus=args.gpus)
-else:
-    distribute = None
-
-# Pass to RunConfig
 checkpoint_dir = '{}-{}'.format(args.checkpoint_dir, os.getpid())
-config = tf.estimator.RunConfig(model_dir=checkpoint_dir)
+if args.gpus > 1:
+    try:
+        from tf.contrib.distribute import MirroredStrategy
+        config = tf.estimator.RunConfig(model_dir=checkpoint_dir, train_distribute=MirroredStrategy())
+    except ImportError:
+        print('Warning, MirroredStrategy is not available')
+        config = tf.estimator.RunConfig(model_dir=checkpoint_dir)
+else:
+    config = tf.estimator.RunConfig(model_dir=checkpoint_dir)
+
 estimator = tf.estimator.Estimator(model_fn=model_fn, config=config, params=params)
 
 fit(estimator)
