@@ -58,7 +58,7 @@ parser.add_argument('--ll', help='Log level', type=str, default='info')
 parser.add_argument('--tf_ll', help='TensorFlow Log level', type=str, default='warning')
 parser.add_argument('--lr', help='Learning rate', type=float, default=0.001)
 parser.add_argument('--optim', help='Optimizer (sgd, adam) (default is adam)', type=str, default='adam')
-parser.add_argument('--gpus', help='Number of GPUs to use', default=1)
+parser.add_argument('--gpus', help='Number of GPUs to use', default=1, type=int)
 args = parser.parse_known_args()[0]
 
 logging.basicConfig(level=get_logging_level(args.ll))
@@ -227,7 +227,7 @@ checkpoint_dir = '{}-{}'.format(args.checkpoint_dir, os.getpid())
 if args.gpus > 1:
     try:
         from tf.contrib.distribute import MirroredStrategy
-        config = tf.estimator.RunConfig(model_dir=checkpoint_dir, train_distribute=MirroredStrategy())
+        config = tf.estimator.RunConfig(model_dir=checkpoint_dir, train_distribute=MirroredStrategy(num_gpus=args.gpus))
     except ImportError:
         print('Warning, MirroredStrategy is not available')
         config = tf.estimator.RunConfig(model_dir=checkpoint_dir)
