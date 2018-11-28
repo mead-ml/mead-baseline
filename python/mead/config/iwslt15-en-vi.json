@@ -34,10 +34,10 @@
         "layers": 2
     },
     "train": {
-        "epochs": 16,
+        "epochs": 32,
         "optim": "adam",
-        "eta": 0.003,
-	"do_early_stopping": false,
+        "eta": 0.001,
+	"do_early_stopping": true,
         "clip": 1.0
     }
 }
