@@ -17,15 +17,6 @@
 	    "embeddings": { "label": "glove-6B-100" }
 	},
 	{
-	    "name": "senna",
-	    "vectorizer": {
-		"type": "dict1d",
-		"fields": "text",
-		"transform": "baseline.lowercase"
-	    },
-	    "embeddings": { "label": "senna" }
-	},
-	{
 	    "name": "char",
 	    "vectorizer": { "type": "dict2d" },
 	    "embeddings": { "dsz": 30, "wsz": 30, "type": "char-conv" }
