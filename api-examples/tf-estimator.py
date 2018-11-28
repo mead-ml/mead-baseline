@@ -181,7 +181,7 @@ def fit(estimator):
 def model_fn(features, labels, mode, params):
 
     if labels is not None:
-        y = tf.one_hot(tf.reshape(labels, [-1, 1]), 2)
+        y = tf.one_hot(tf.reshape(labels, [-1, 1]), len(params['labels']))
 
     if mode == tf.estimator.ModeKeys.PREDICT:
         bl.tf.SET_TRAIN_FLAG(False)
