@@ -137,7 +137,7 @@ class TaggerTrainerTf(EpochReportingTrainer):
                 metrics = self.calc_metrics(self.nstep_agg, self.nstep_div)
                 self.report(
                     step + 1, metrics, self.nstep_start,
-                    'Train', 'STEP', reporting_fns
+                    'Train', 'STEP', reporting_fns, self.nsteps
                 )
                 self.reset_nstep()
 

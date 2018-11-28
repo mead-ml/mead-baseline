@@ -136,7 +136,7 @@ class TaggerTrainerDyNet(EpochReportingTrainer):
                     metrics = self.calc_metrics(self.nstep_agg, self.nstep_div)
                     self.report(
                         self.optimizer.global_step + 1, metrics, self.nstep_start,
-                        'Train', 'STEP', reporting_fns
+                        'Train', 'STEP', reporting_fns, self.nsteps
                     )
                     self.reset_nstep()
             else:
@@ -160,7 +160,7 @@ class TaggerTrainerDyNet(EpochReportingTrainer):
                         metrics = self.calc_metrics(self.nstep_agg, self.nstep_div)
                         self.report(
                             self.optimizer.global_step + 1, metrics, self.nstep_start,
-                            'Train', 'STEP', reporting_fns
+                            'Train', 'STEP', reporting_fnsa, self.nsteps
                         )
                         self.reset_nstep()
                     auto_norm = 0
