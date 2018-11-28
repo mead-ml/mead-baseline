@@ -226,6 +226,7 @@ got {} hsz and {} dsz".format(self.hsz, self.tgt_embedding.get_dsz()))
     def predict(self, encoder_outputs, src_len, pdrop, **kwargs):
 
         beam_width = kwargs.get('beam', 1)
+        mxlen = kwargs.get('mxlen', 100)
         # dynamic_decode creates a scope "decoder" and it pushes operations underneath.
         # which makes it really hard to get the same objects between train and test
         # In an ideal world, TF would just let us using tgt_embedding.encode as a function pointer
@@ -251,7 +252,8 @@ got {} hsz and {} dsz".format(self.hsz, self.tgt_embedding.get_dsz()))
             final_outputs, final_decoder_state, _ = tf.contrib.seq2seq.dynamic_decode(decoder,
                                                                                       impute_finished=False,
                                                                                       swap_memory=True,
-                                                                                      output_time_major=True)
+                                                                                      output_time_major=True,
+                                                                                      maximum_iterations=mxlen)
             self.preds = tf.no_op()
             best = final_outputs.predicted_ids
             self.output(best)
