@@ -190,7 +190,7 @@ def lstm_cell(hsz, forget_bias=1.0):
     return tf.contrib.rnn.LSTMCell(hsz, forget_bias=forget_bias, state_is_tuple=True)
 
 
-def lstm_cell_w_dropout(hsz, pdrop, forget_bias=1.0, variational=True, training=False):
+def lstm_cell_w_dropout(hsz, pdrop, forget_bias=1.0, variational=False, training=False):
     """Produce a single cell with dropout
 
     :param hsz: (``int``) The number of hidden units per LSTM
