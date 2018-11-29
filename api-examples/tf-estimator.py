@@ -196,7 +196,7 @@ def model_fn(features, labels, mode, params):
 
     if mode == tf.estimator.ModeKeys.PREDICT:
         bl.tf.SET_TRAIN_FLAG(False)
-        model = bl.model.create_model(embeddings, labels=params['labels'], word=features['word'], y=None, **model_params)
+        model = bl.model.create_model(embeddings, labels=params['labels'], word=features['word'], y=None, sess=None, **model_params)
         predictions = {
             'classes': model.best,
             'probabilities': model.probs,
@@ -207,7 +207,7 @@ def model_fn(features, labels, mode, params):
 
     elif mode == tf.estimator.ModeKeys.EVAL:
         bl.tf.SET_TRAIN_FLAG(False)
-        model = bl.model.create_model(embeddings, labels=params['labels'], word=features['word'], y=y, **model_params)
+        model = bl.model.create_model(embeddings, labels=params['labels'], word=features['word'], y=y, sess=None, **model_params)
         loss = model.create_loss()
         predictions = {
             'classes': model.best,
@@ -220,10 +220,11 @@ def model_fn(features, labels, mode, params):
         return tf.estimator.EstimatorSpec(mode=mode, predictions=model.logits, loss=loss, eval_metric_ops=eval_metric_ops)
 
     bl.tf.SET_TRAIN_FLAG(True)
-    model = bl.model.create_model(embeddings, labels=params['labels'], word=features['word'], y=y, **model_params)
+    model = bl.model.create_model(embeddings, labels=params['labels'], word=features['word'], y=y, sess=None, **model_params)
     loss = model.create_loss()
-
-    #optimizer = tf.train.AdamOptimizer(learning_rate=args.lr)
+    #Optimizer = tf.train.GradientDescentOptimizer if args.optim == 'sgd' else tf.train.AdamOptimizer
+    #print(Optimizer)
+    #optimizer = Optimizer(learning_rate=args.lr)
     #train_op = optimizer.minimize(loss=loss, global_step=tf.train.get_global_step())
     colocate = True if args.gpus > 1 else False
     global_step, train_op = bl.tf.optz.optimizer(loss, optim=args.optim, eta=args.lr, colocate_gradients_with_ops=colocate)
