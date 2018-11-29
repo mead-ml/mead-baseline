@@ -22,16 +22,6 @@ class TaggerModelBase(TaggerModel):
     def lengths_key(self, value):
         self._lengths_key = value
 
-    @property
-    def pkeep(self):
-        """This property is provided for models that wish to access the default `pdrop_value` property.
-
-        The property here uses `pdrop_value` and the `training` flag to determine how much dropout to apply (if any)
-
-        :return:
-        """
-        return 1.0 - self.pdrop_value * TRAIN_FLAG()
-
     def save_values(self, basename):
         self.saver.save(self.sess, basename)
 
@@ -268,7 +258,7 @@ class TaggerModelBase(TaggerModel):
             embeddings_out = embedding.encode()
             all_embeddings_out.append(embeddings_out)
         word_embeddings = tf.concat(values=all_embeddings_out, axis=2)
-        return tf.nn.dropout(word_embeddings, self.pkeep)
+        return tf.layers.dropout(word_embeddings, self.pdrop_value, training=TRAIN_FLAG())
 
     def encode(self, embedseq, **kwargs):
         pass
@@ -314,8 +304,8 @@ class TaggerModelBase(TaggerModel):
 
             with tf.contrib.slim.arg_scope([fully_connected], weights_initializer=init):
                 if model.proj is True:
-                    hidden = tf.nn.dropout(fully_connected(enc_out_bt_x_h, H,
-                                                           activation_fn=tf_activation(model.activation_type)), model.pkeep)
+                    hidden = tf.layers.dropout(fully_connected(enc_out_bt_x_h, H,
+                                                           activation_fn=tf_activation(model.activation_type)), model.pdrop_value, training=TRAIN_FLAG())
                     preds = fully_connected(hidden, nc, activation_fn=None, weights_initializer=init)
                 else:
                     preds = fully_connected(enc_out_bt_x_h, nc, activation_fn=None, weights_initializer=init)
@@ -343,13 +333,13 @@ class RNNTaggerModel(TaggerModelBase):
         nlayers = kwargs.get('layers', 1)
         hsz = int(kwargs['hsz'])
         if rnntype == 'blstm':
-            rnnfwd = stacked_lstm(hsz//2, self.pkeep, nlayers, self.vdrop)
-            rnnbwd = stacked_lstm(hsz//2, self.pkeep, nlayers, self.vdrop)
+            rnnfwd = stacked_lstm(hsz//2, self.pdrop_value, nlayers, self.vdrop, training=TRAIN_FLAG())
+            rnnbwd = stacked_lstm(hsz//2, self.pdrop_value, nlayers, self.vdrop, training=TRAIN_FLAG())
             rnnout, _ = tf.nn.bidirectional_dynamic_rnn(rnnfwd, rnnbwd, embedseq, sequence_length=self.lengths, dtype=tf.float32)
             # The output of the BRNN function needs to be joined on the H axis
             rnnout = tf.concat(axis=2, values=rnnout)
         else:
-            rnnfwd = stacked_lstm(hsz, self.pkeep, nlayers, self.vdrop)
+            rnnfwd = stacked_lstm(hsz, self.pdrop_value, nlayers, self.vdrop, training=TRAIN_FLAG())
             rnnout, _ = tf.nn.dynamic_rnn(rnnfwd, embedseq, sequence_length=self.lengths, dtype=tf.float32)
         return rnnout
 
@@ -367,5 +357,5 @@ class CNNTaggerModel(TaggerModelBase):
         if filts is None:
             filts = 5
 
-        cnnout = stacked_cnn(embedseq, hsz, self.pkeep, nlayers, filts=listify(filts))
+        cnnout = stacked_cnn(embedseq, hsz, self.pdrop_value, nlayers, filts=listify(filts), training=TRAIN_FLAG())
         return cnnout

@@ -32,7 +32,6 @@ features:
 
 train:
   fit_func: test_every_n_epochs
-  trainer_type: nsteps
   nsteps: 100
   epochs: 2
   optim: adadelta

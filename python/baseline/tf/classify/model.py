@@ -337,16 +337,6 @@ class ClassifierModelBase(ClassifierModel):
     def lengths_key(self, value):
         self._lengths_key = value
 
-    @property
-    def pkeep(self):
-        """This property is provided for models that wish to access the default `pdrop_value` property.
-
-        The property here uses `pdrop_value` and the `training` flag to determine how much dropout to apply (if any)
-
-        :return:
-        """
-        return 1.0 - self.pdrop_value * TRAIN_FLAG()
-
     @classmethod
     def create(cls, embeddings, labels, **kwargs):
         """The main method for creating all :class:`WordBasedModel` types.
@@ -372,8 +362,6 @@ class ClassifierModelBase(ClassifierModel):
         * *finetune* -- Are we doing fine-tuning of word embeddings (defaults to `True`)
         * *mxlen* -- The maximum signal (`x` tensor temporal) length (defaults to `100`)
         * *dropout* -- This indicates how much dropout should be applied to the model when training.
-        * *pkeep* -- By default, this is a `tf.placeholder`, but it can be passed in as part of a sub-graph.
-            This is useful for exporting tensorflow models or potentially for using input tf queues
         * *filtsz* -- This is actually a top-level param due to an unfortunate coupling between the pooling layer
             and the input, which, for convolution, requires input padding.
         
@@ -470,7 +458,7 @@ class ClassifierModelBase(ClassifierModel):
         in_layer = pooled
         for i, hsz in enumerate(hszs):
             fc = tf.layers.dense(in_layer, hsz, activation=tf.nn.relu, kernel_initializer=init, name='fc-{}'.format(i))
-            in_layer = tf.nn.dropout(fc, self.pkeep, name='fc-dropout-{}'.format(i))
+            in_layer = tf.layers.dropout(fc, self.pdrop_value, training=TRAIN_FLAG(), name='fc-dropout-{}'.format(i))
         return in_layer
 
 
@@ -507,7 +495,7 @@ class ConvModel(ClassifierModelBase):
         combine, _ = parallel_conv(word_embeddings, filtsz, dsz, cmotsz)
         # Definitely drop out
         with tf.name_scope("dropout"):
-            combine = tf.nn.dropout(combine, self.pkeep)
+            combine = tf.layers.dropout(combine, self.pdrop_value, training=TRAIN_FLAG())
         return combine
 
 
@@ -553,8 +541,8 @@ class LSTMModel(ClassifierModelBase):
         nlayers = int(kwargs.get('layers', 1))
 
         if rnntype == 'blstm':
-            rnnfwd = stacked_lstm(hsz//2, self.pkeep, nlayers, variational=vdrop)
-            rnnbwd = stacked_lstm(hsz//2, self.pkeep, nlayers, variational=vdrop)
+            rnnfwd = stacked_lstm(hsz//2, self.pdrop_value, nlayers, variational=vdrop, training=TRAIN_FLAG())
+            rnnbwd = stacked_lstm(hsz//2, self.pdrop_value, nlayers, variational=vdrop, training=TRAIN_FLAG())
             ((_, _), (fw_final_state, bw_final_state)) = tf.nn.bidirectional_dynamic_rnn(rnnfwd,
                                                                                          rnnbwd,
                                                                                          word_embeddings,
@@ -565,7 +553,7 @@ class LSTMModel(ClassifierModelBase):
             out_hsz = hsz
 
         else:
-            rnnfwd = stacked_lstm(hsz, self.pkeep, nlayers, variational=vdrop)
+            rnnfwd = stacked_lstm(hsz, self.pdrop_value, nlayers, variational=vdrop, training=TRAIN_FLAG())
             (_, (output_state)) = tf.nn.dynamic_rnn(rnnfwd, word_embeddings, sequence_length=self.lengths, dtype=tf.float32)
             output_state = output_state[-1].h
             out_hsz = hsz

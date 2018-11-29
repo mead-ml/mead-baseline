@@ -186,7 +186,8 @@ class AdamWOptimizer(tf.train.Optimizer):
 
 def optimizer(loss_fn, **kwargs):
 
-    global_step = tf.Variable(0, trainable=False)
+    #global_step = tf.Variable(0, trainable=False)
+    global_step = tf.train.get_or_create_global_step()
     clip = kwargs.get('clip', None)
     optim = kwargs.get('optim', 'sgd')
     eta = kwargs.get('lr', kwargs.get('eta', 0.01))
@@ -217,5 +218,6 @@ def optimizer(loss_fn, **kwargs):
     print('decay', decay_fn)
     return global_step, tf.contrib.layers.optimize_loss(loss_fn, global_step, eta, optz,
                                                         colocate_gradients_with_ops=colocate_gradients_with_ops,
-                                                        clip_gradients=clip, learning_rate_decay_fn=lr_scheduler)
+                                                        clip_gradients=clip, learning_rate_decay_fn=lr_scheduler,
+                                                        increment_global_step=True)
 

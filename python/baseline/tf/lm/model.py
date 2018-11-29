@@ -146,16 +146,6 @@ class LanguageModelBase(LanguageModel):
         self.hsz = None
         self.probs = None
 
-    @property
-    def pkeep(self):
-        """This property is provided for models that wish to access the default `pdrop_value` property.
-
-        The property here uses `pdrop_value` and the `TRAIN_FLAG` to determine how much dropout to apply (if any)
-
-        :return:
-        """
-        return 1.0 - self.pdrop_value * TRAIN_FLAG()
-
     def set_saver(self, saver):
         self.saver = saver
 
@@ -275,7 +265,7 @@ class LanguageModelBase(LanguageModel):
             embeddings_out = embedding.encode(x)
             all_embeddings_src.append(embeddings_out)
         word_embeddings = tf.concat(values=all_embeddings_src, axis=-1)
-        return tf.nn.dropout(word_embeddings, self.pkeep)
+        return tf.layers.dropout(word_embeddings, rate=self.pdrop_value, training=TRAIN_FLAG())
 
     @classmethod
     def load(cls, basename, **kwargs):
@@ -351,7 +341,7 @@ class RNNLanguageModel(LanguageModelBase):
     def decode(self, inputs, rnntype='lstm', variational_dropout=False, **kwargs):
 
         def cell():
-            return lstm_cell_w_dropout(self.hsz, self.pkeep, variational=self.vdrop)
+            return lstm_cell_w_dropout(self.hsz, self.pdrop_value, variational=self.vdrop, training=TRAIN_FLAG())
 
         self.rnntype = rnntype
         self.vdrop = variational_dropout
@@ -372,5 +362,5 @@ class TransformerLanguageModel(LanguageModelBase):
     def decode(self, x, num_heads=4, layers=1, scale=True, activation_type='relu', scope='TransformerEncoder', d_ff=None, **kwargs):
         T = get_shape_as_list(x)[1]
         mask = subsequent_mask(T)
-        x = transformer_encoder_stack(x, mask, num_heads, self.pkeep, scale, layers, activation_type)
+        x = transformer_encoder_stack(x, mask, num_heads, self.pdrop_value, scale, layers, activation_type)
         return tf.reshape(x, [-1, self.hsz])

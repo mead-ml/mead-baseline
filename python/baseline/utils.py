@@ -457,12 +457,12 @@ def write_json(content, filepath):
 
 @exporter
 def ls_props(thing):
-    """List all of the properties on some object, but ignore anything starting with `pkeep`
+    """List all of the properties on some object
 
     :param thing: Some object
     :return: The list of properties
     """
-    return [x for x in dir(thing) if isinstance(getattr(type(thing), x, None), property) and not x.startswith('pkeep')]
+    return [x for x in dir(thing) if isinstance(getattr(type(thing), x, None), property)]
 
 
 @exporter
