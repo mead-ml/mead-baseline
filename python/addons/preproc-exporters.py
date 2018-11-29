@@ -4,20 +4,80 @@ import json
 import baseline
 import os
 from mead.exporters import register_exporter
+from baseline.tf.embeddings import *
 import mead.utils
 import mead.exporters
 from mead.tf.exporters import TensorFlowExporter, create_bundle, create_assets, create_metadata
 from mead.tf.preprocessor import PreprocessorCreator
 from baseline.utils import export
-from baseline.tf.tfy import get_vocab_file_suffixes
 from collections import namedtuple
 from baseline.utils import ls_props, read_json
-
 
 FIELD_NAME = 'text/tokens'
 
 __all__ = []
 exporter = export(__all__)
+
+class SignatureInput(object):
+    BASE_TENSOR_INPUT_NAMES = ['x', 'xch']
+
+    CLASSIFY_INPUT_KEY = tf.saved_model.signature_constants.CLASSIFY_INPUTS
+    PREDICT_INPUT_KEY = 'tokens'
+
+    def __init__(self, classify=None, predict=None):
+        """
+        accepts the preprocessed tensors for classify and predict along with
+        a list of extra features that a model may define.
+
+        Because we allow random extra features, we inspect the model for
+        the related tensor. this is only currently supported for the predict
+        endpoint.
+        """
+        self.input_list = SignatureInput.BASE_TENSOR_INPUT_NAMES
+
+        if classify is not None:
+            self.classify_sig = self._create_classify_sig(classify)
+
+        elif predict is not None:
+            self.predict_sig = self._create_predict_sig(predict)
+
+    @property
+    def classify(self):
+        return self.classify_sig or {}
+
+    def _create_classify_sig(self, tensor):
+        res = {
+            SignatureInput.CLASSIFY_INPUT_KEY:
+                tf.saved_model.utils.build_tensor_info(tensor)
+        }
+        return res
+
+    @property
+    def predict(self):
+        return self.predict_sig
+
+    def _create_predict_sig(self, tensor):
+        res = {}
+        raw_post = tensor['text/tokens']
+        res['tokens'] = tf.saved_model.utils.build_tensor_info(raw_post)
+
+        for extra in self.extra_features:
+            raw = tensor[extra]
+            res[extra] = tf.saved_model.utils.build_tensor_info(raw)
+        return res
+
+    def _build_predict_signature_from_model(self, model):
+        predict_tensors = {}
+
+        for v in self.input_list:
+            try:
+                val = getattr(model, v)
+                predict_tensors[v] = tf.saved_model.utils.build_tensor_info(val)
+            except:
+                pass # ugh
+
+        return predict_tensors
+
 SignatureOutput = namedtuple("SignatureOutput", ("classes", "scores"))
 
 
@@ -38,14 +98,14 @@ class TensorFlowPreProcExporter(TensorFlowExporter):
         with tf.Graph().as_default():
             config_proto = tf.ConfigProto(allow_soft_placement=True)
             with tf.Session(config=config_proto) as sess:
-                sig_input, sig_output, sig_name, assets = self._create_rpc_call(sess, basename, embeddings_set=embeddings_set)
+                sig_input, sig_output, sig_name = self._create_rpc_call(sess, basename, embeddings_set=embeddings_set)
 
                 output_path = os.path.join(output_dir, str(model_version))
                 print('Exporting trained model to %s' % output_path)
 
                 try:
                     builder = self._create_saved_model_builder(sess, output_path, sig_input, sig_output, sig_name)
-                    create_bundle(builder, output_path, basename, assets)
+                    #create_bundle(builder, output_path, basename, assets)
                     print('Successfully exported model to %s' % output_dir)
                 except AssertionError as e:
                     # model already exists
@@ -56,13 +116,7 @@ class TensorFlowPreProcExporter(TensorFlowExporter):
                     raise e
 
     @staticmethod
-    def read_vocab(basename, ty):
-        if ty is None:
-            vocab_file = basename
-            ty = 'word'
-        else:
-            vocab_file = "{}-{}.vocab".format(basename, ty)
-        print('Reading {}'.format(vocab_file))
+    def read_vocab(vocab_file, ty='word'):
         with open(vocab_file, 'r') as f:
             vocab = json.load(f)
 
@@ -87,9 +141,13 @@ class TensorFlowPreProcExporter(TensorFlowExporter):
             labels = json.load(f)
         return labels
 
-    def _create_example(self):
+    @staticmethod
+    def _create_example():
         serialized_tf_example = tf.placeholder(tf.string, name='tf_example')
-        tf_example = tf.parse_example(serialized_tf_example)
+        feature_configs = {
+            FIELD_NAME: tf.FixedLenFeature(shape=[], dtype=tf.string),
+        }
+        tf_example = tf.parse_example(serialized_tf_example, feature_configs)
         return serialized_tf_example, tf_example
 
     def _create_vocabs(self, model_file):
@@ -99,13 +157,14 @@ class TensorFlowPreProcExporter(TensorFlowExporter):
         """
         vocabs = {}
         indices = {}
-        if os.path.exists(model_file + '.vocab'):
-            indices['word'], vocabs['word'] = TensorFlowExporter.read_vocab(model_file + '.vocab', ty=None)
-        else:
-            vocab_suffixes = get_vocab_file_suffixes(model_file)
-            for suffix in vocab_suffixes:
-                indices[suffix], vocabs[suffix] = TensorFlowExporter.read_vocab(model_file, suffix)
-
+        model_pid = model_file.split("-")[-1]
+        model_base = os.path.split(model_file)[0]
+        word_vocab_file = os.path.join(model_base, "vocabs-word-{}.json".format(model_pid))
+        char_vocab_file = os.path.join(model_base, "vocabs-char-{}.json".format(model_pid))
+        if os.path.exists(word_vocab_file):
+            indices['word'], vocabs['word'] = self.read_vocab(word_vocab_file)
+        if os.path.exists(char_vocab_file):
+            indices['char'], vocabs['char'] = self.read_vocab(char_vocab_file, ty='char')
         return indices, vocabs
 
     def assign_char_lookup(self):
@@ -182,7 +241,7 @@ class TensorFlowPreProcExporter(TensorFlowExporter):
 
 
 @exporter
-@register_exporter(task='classify-preproc', name='default')
+@register_exporter(task='classify', name='preproc')
 class ClassifyTensorFlowPreProcExporter(TensorFlowPreProcExporter):
 
     def __init__(self, task):
@@ -193,7 +252,6 @@ class ClassifyTensorFlowPreProcExporter(TensorFlowPreProcExporter):
         indices, vocabs = self._create_vocabs(basename)
         embeddings_set = kwargs.get('embeddings_set')
         labels = self.load_labels(basename)
-        embeddings = self._initialize_embeddings_map(vocabs, embeddings_set)
 
         # Read the state file
         state = read_json(basename + '.state')
@@ -202,6 +260,13 @@ class ClassifyTensorFlowPreProcExporter(TensorFlowPreProcExporter):
 
         model_params["sess"] = sess
         print(model_params)
+
+        embeddings = dict()
+        for key, class_name in state['embeddings'].items():
+            md = read_json('{}-{}-md.json'.format(basename, key))
+            embed_args = dict({'vsz': md['vsz'], 'dsz': md['dsz']})
+            Constructor = eval(class_name)
+            embeddings[key] = Constructor(key, **embed_args)
 
         # Instantiate a graph
         model = baseline.model.create_model_for(self.task.task_name(), embeddings, labels, **model_params)
@@ -225,16 +290,15 @@ class ClassifyTensorFlowPreProcExporter(TensorFlowPreProcExporter):
         indices, vocabs = self._create_vocabs(basename)
         self.assign_char_lookup()
         model_params = self.task.config_params["model"]
-
         serialized_tf_example, tf_example, raw_posts, lengths = self._run_preproc(model_params,
                                                                                   vocabs,
                                                                                   basename,
                                                                                   indices)
-        sig_input = {} #SignatureInput(serialized_tf_example, tf_example)
+        sig_input = SignatureInput(serialized_tf_example, tf_example)
 
         sig_output = SignatureOutput(classes, values)
         sig_name = 'predict_text'
-        assets = create_assets(basename, sig_input, sig_output, sig_name, model.lengths_key)
-        return sig_input, sig_output, sig_name, assets
+        #assets = create_assets(basename, sig_input, sig_output, sig_name, model.lengths_key)
+        return sig_input, sig_output, sig_name#, assets
 
 
