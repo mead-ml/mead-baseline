@@ -113,4 +113,4 @@ ts = reader.load(train_file, vocabs=vocabs, batchsz=args.batchsz)
 vs = reader.load(valid_file, vocabs=vocabs, batchsz=args.batchsz)
 es = reader.load(test_file, vocabs=vocabs, batchsz=args.batchsz)
 
-bl.train.fit(model, ts, vs, es, epochs=args.epochs, optim=args.optim, eta=args.lr)
+bl.train.fit(model, ts, vs, es, epochs=args.epochs, optim=args.optim, eta=args.lr, reporting=[r.step for r in (bl.reporting.LoggingReporting(),)])

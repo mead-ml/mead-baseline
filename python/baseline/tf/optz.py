@@ -196,26 +196,26 @@ def optimizer(loss_fn, **kwargs):
     colocate_gradients_with_ops = bool(kwargs.get('colocate_gradients_with_ops', False))
     sgd_mom = float(kwargs.get('mom', 0.9))
     if optim == 'adadelta':
-        print('adadelta', eta)
+        #print('adadelta', eta)
         optz = lambda lr: tf.train.AdadeltaOptimizer(lr, 0.95, 1e-6)
     elif optim == 'adam':
-        print('adam', eta)
+        #print('adam', eta)
         optz = lambda lr: tf.train.AdamOptimizer(lr, kwargs.get('beta1', 0.9), kwargs.get('beta2', 0.999), kwargs.get('epsilon', 1e-8))
     elif optim == 'adamw':
         wd = float(kwargs.get('weight_decay', 0))
         optz = lambda lr: AdamWOptimizer(lr, wd, kwargs.get('beta1', 0.9), kwargs.get('beta2', 0.999), kwargs.get('epsilon', 1e-8))
     elif optim == 'rmsprop':
-        print('rmsprop', eta)
+        #print('rmsprop', eta)
         optz = lambda lr: tf.train.RMSPropOptimizer(lr, momentum=float(kwargs.get('mom', 0.0)))
     elif sgd_mom > 0:
-        print('sgd-mom', eta, sgd_mom)
+        #print('sgd-mom', eta, sgd_mom)
         optz = lambda lr: tf.train.MomentumOptimizer(lr, sgd_mom)
     else:
-        print('sgd')
+        #print('sgd')
         optz = lambda lr: tf.train.GradientDescentOptimizer(lr)
 
-    print('clip', clip)
-    print('decay', decay_fn)
+    #print('clip', clip)
+    #print('decay', decay_fn)
     return global_step, tf.contrib.layers.optimize_loss(loss_fn, global_step, eta, optz,
                                                         colocate_gradients_with_ops=colocate_gradients_with_ops,
                                                         clip_gradients=clip, learning_rate_decay_fn=lr_scheduler,

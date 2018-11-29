@@ -16,6 +16,7 @@ def register_reporting(cls, name=None):
     return register(cls, BASELINE_REPORTING, name, 'reporting')
 
 
+@exporter
 class ReportingHook(object):
     def __init__(self, **kwargs):
         pass
