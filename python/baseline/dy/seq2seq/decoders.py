@@ -149,7 +149,7 @@ layer's hidden size == embedding weight dimensions")
         hidden, output_i, context = self.arc_policy(encoder_outputs, self.hsz, beam_width=K)
         num_states = len(hidden)
         rnn_state = self.decoder_rnn.initial_state(hidden)
-        attn_fn = self.attn(context)
+        self.attn_cache(context)
         src_mask = encoder_outputs.src_mask
 
         for i in range(mxlen):
@@ -158,7 +158,7 @@ layer's hidden size == embedding weight dimensions")
             embed_i = self.input_i(embed_i, output_i)
             rnn_state = rnn_state.add_input(embed_i)
             rnn_output_i = rnn_state.output()
-            output_i = attn_fn(rnn_output_i, src_mask)
+            output_i = self.attn(rnn_output_i, src_mask)
             wll = self.prediction([output_i])[-1].npvalue()  # (V,) K
             V = wll.shape[0]
             if i > 0:
