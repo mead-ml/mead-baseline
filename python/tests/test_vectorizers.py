@@ -2,12 +2,13 @@ import string
 import pytest
 import numpy as np
 from baseline.utils import Offsets
-from baseline.vectorizers import Char2DVectorizer
+from baseline.vectorizers import Char2DVectorizer, Char1DVectorizer
 
 
 @pytest.fixture
 def vocab():
     vocab = {k: i for i, k in enumerate(Offsets.VALUES)}
+    vocab['<EOW>'] = len(vocab)
     for i, k in enumerate(string.ascii_lowercase, len(vocab)): vocab[k] = i
     return vocab
 
@@ -69,3 +70,22 @@ def test_char_2d_run_values(vocab):
     for i, word in enumerate(input_):
         for j, char in enumerate(word):
             assert res[i, j] == vocab[char]
+
+
+def test_char_1d_shape(vocab):
+    mxlen = np.random.randint(3, 15)
+    input_ = ['a']
+    vect = Char1DVectorizer(mxlen=mxlen)
+    res, _ = vect.run(input_, vocab)
+    assert res.shape == (mxlen,)
+
+
+def test_char_1d_cut_off_mxlen(vocab):
+    mxlen = np.random.randint(3, 15)
+    extra = np.random.randint(5, 10)
+    input_ = ['a' * mxlen + 'b' * extra]
+    vect = Char1DVectorizer(mxlen=mxlen)
+    res, _ = vect.run(input_, vocab)
+    assert res.shape == (mxlen,)
+    assert all(res == vocab['a'])
+    assert vocab['b'] not in res

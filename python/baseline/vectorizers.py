@@ -272,6 +272,7 @@ class Char1DVectorizer(AbstractCharVectorizer):
         for i, atom in enumerate(self._next_element(tokens, vocab)):
             if i == self.mxlen:
                 i -= 1
+                break
             vec1d[i] = atom
         if self.time_reverse:
             vec1d = vec1d[::-1]
