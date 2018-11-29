@@ -235,7 +235,7 @@ params = {'labels': labels}
 
 checkpoint_dir = '{}-{}'.format(args.checkpoint_dir, os.getpid())
 if args.gpus > 1:
-    config = tf.estimator.RunConfig(model_dir=checkpoint_dir, train_distribute=tf.contrib.distributeMirroredStrategy(num_gpus=args.gpus))
+    config = tf.estimator.RunConfig(model_dir=checkpoint_dir, train_distribute=tf.contrib.distribute.MirroredStrategy(num_gpus=args.gpus))
 else:
     config = tf.estimator.RunConfig(model_dir=checkpoint_dir)
 
