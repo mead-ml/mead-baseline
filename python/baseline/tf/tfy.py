@@ -321,11 +321,11 @@ def multi_rnn_cell_w_dropout(hsz, pdrop, rnntype, num_layers, variational=False,
     """
     if variational:
         return tf.contrib.rnn.MultiRNNCell(
-            [rnn_cell_w_dropout(hsz, pdrop, rnntype, variational, training) for _ in range(num_layers)],
+            [rnn_cell_w_dropout(hsz, pdrop, rnntype, variational=variational, training=training) for _ in range(num_layers)],
             state_is_tuple=True
         )
     return tf.contrib.rnn.MultiRNNCell(
-        [rnn_cell_w_dropout(hsz, pdrop, rnntype, training) if i < num_layers - 1 else rnn_cell_w_dropout(hsz, 1.0, rnntype) for i in range(num_layers)],
+        [rnn_cell_w_dropout(hsz, pdrop, rnntype, training=training) if i < num_layers - 1 else rnn_cell_w_dropout(hsz, 1.0, rnntype) for i in range(num_layers)],
         state_is_tuple=True
     )
 

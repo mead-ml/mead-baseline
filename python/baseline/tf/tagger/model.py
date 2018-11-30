@@ -135,7 +135,7 @@ class TaggerModelBase(TaggerModel):
             embed_args = dict({'vsz': md['vsz'], 'dsz': md['dsz']})
             embed_args[key] = tf.get_default_graph().get_tensor_by_name('{}:0'.format(key))
             Constructor = eval(class_name)
-            model.embeddings[key] = Constructor.create(key, **embed_args)
+            model.embeddings[key] = Constructor(key, **embed_args)
 
         model.crf = bool(state.get('crf', False))
         model.proj = bool(state.get('proj', False))

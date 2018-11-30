@@ -225,13 +225,13 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
             md = read_json('{}-{}-md.json'.format(basename, key))
             embed_args = dict({'vsz': md['vsz'], 'dsz': md['dsz']})
             Constructor = eval(class_name)
-            src_embeddings[key] = Constructor.create(key, **embed_args)
+            src_embeddings[key] = Constructor(key, **embed_args)
 
         tgt_class_name = state.pop('tgt_embedding')
         md = read_json('{}-tgt-md.json'.format(basename))
         embed_args = dict({'vsz': md['vsz'], 'dsz': md['dsz']})
         Constructor = eval(tgt_class_name)
-        tgt_embedding = Constructor.create('tgt', **embed_args)
+        tgt_embedding = Constructor('tgt', **embed_args)
         model = cls.create(src_embeddings, tgt_embedding, **state)
         for prop in ls_props(model):
             if prop in state:
