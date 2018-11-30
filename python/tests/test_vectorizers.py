@@ -89,3 +89,13 @@ def test_char_1d_cut_off_mxlen(vocab):
     assert res.shape == (mxlen,)
     assert all(res == vocab['a'])
     assert vocab['b'] not in res
+
+
+def test_char_1d_no_eow(vocab):
+    del vocab['<EOW>']
+    mxlen = np.random.randint(3, 15)
+    input_ = ['a']
+    vect = Char1DVectorizer(mxlen=mxlen)
+    res, _ = vect.run(input_, vocab)
+    assert res[0] == vocab['a']
+    assert res[1] == Offsets.PAD
