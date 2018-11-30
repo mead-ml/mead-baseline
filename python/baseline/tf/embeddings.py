@@ -169,15 +169,10 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
     def __init__(self, name, **kwargs):
         super(CharConvEmbeddings, self).__init__()
 
-        self.scope = kwargs.get('scope', '{}/CharLUT'.format(self.name))
-
         self.name = name
-
+        self.scope = kwargs.get('scope', '{}/CharLUT'.format(self.name))
         self.vsz = kwargs.get('vsz')
         self.dsz = kwargs.get('dsz')
-        self.finetune = kwargs.get('finetune', True)
-        self.name = name
-        self.scope = kwargs.get('scope', '{}/LUT'.format(self.name))
         self.weights = kwargs.get('weights')
         self.finetune = kwargs.get('finetune', True)
         self.nfeat_factor = kwargs.get('nfeat_factor', None)
