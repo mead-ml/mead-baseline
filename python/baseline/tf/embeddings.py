@@ -80,7 +80,7 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
     def create_placeholder(cls, name):
         return tf.placeholder(tf.int32, [None, None], name=name)
 
-    def __init__(self, name, vsz, dsz, scope, finetune=True, weights=None):
+    def __init__(self, name, **kwargs):
         """Create a lookup-table based embedding.
 
         :param name: The name of the feature/placeholder, and a key for the scope
@@ -95,12 +95,13 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
         * *unif* -- (``float``) (defaults to `0.1`) If the weights should be created, what is the random initialization range
         """
         super(LookupTableEmbeddings, self).__init__()
+
+        self.vsz = kwargs.get('vsz')
+        self.dsz = kwargs.get('dsz')
+        self.finetune = kwargs.get('finetune', True)
         self.name = name
-        self.vsz = vsz
-        self.dsz = dsz
-        self.scope = scope
-        self.finetune = finetune
-        self.weights = weights
+        self.scope = kwargs.get('scope', '{}/LUT'.format(self.name))
+        self.weights = kwargs.get('weights')
 
         if self.weights is None:
             unif = kwargs.get('unif', 0.1)
@@ -128,13 +129,7 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
 
     @classmethod
     def create(cls, model, name, **kwargs):
-        vsz = model.vsz
-        dsz = model.dsz
-        weights = model.weights
-        finetune = kwargs.get('finetune', True)
-        scope = kwargs.get('scope', '{}/LUT'.format(name))
-
-        return cls(name, vsz, dsz, scope, finetune, weights)
+        return cls(name, vsz=model.vsz, dsz=model.dsz, weights=model.weights, **kwargs)
 
     def encode(self, x=None):
         """Build a simple Lookup Table and set as input `x` if it exists, or `self.x` otherwise.
@@ -171,24 +166,23 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
     def create_placeholder(cls, name):
         return tf.placeholder(tf.int32, [None, None, None], name=name)
 
-    def __init__(self, name, vsz, dsz, scope, finetune=True, nfeat_factor=None,
-                 cfiltsz=[3], max_feat=30, gating='skip', num_gates=1, 
-                 activation='tanh', wsz=30, weights=None):
+    def __init__(self, name, **kwargs):
         super(CharConvEmbeddings, self).__init__()
 
         self.name = name
-        self.vsz = vsz
-        self.dsz = dsz
-        self.scope = scope
-        self.finetune = finetune
-        self.nfeat_factor = nfeat_factor
-        self.cfiltsz = cfiltsz
-        self.max_feat = max_feat
-        self.gating = gating
-        self.num_gates = num_gates
-        self.activation = activation
-        self.wsz = wsz
-        self.weights = weights
+        self.scope = kwargs.get('scope', '{}/CharLUT'.format(self.name))
+        self.vsz = kwargs.get('vsz')
+        self.dsz = kwargs.get('dsz')
+        self.weights = kwargs.get('weights')
+        self.finetune = kwargs.get('finetune', True)
+        self.nfeat_factor = kwargs.get('nfeat_factor', None)
+        self.cfiltsz = kwargs.get('cfiltsz', [3])
+        self.max_feat = kwargs.get('max_feat', 30)
+        self.gating = kwargs.get('gating', 'skip')
+        self.num_gates = kwargs.get('num_gates', 1)
+        self.activation = kwargs.get('activation', 'tanh')
+        self.wsz = kwargs.get('wsz', 30)
+        self.weights = kwargs.get('weights', None)
         
         self.x = None
         if self.weights is None:
@@ -202,11 +196,11 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
         """
         if self.weights is None:
             raise Exception('You must initialize `weights` in order to use this method')
-        return CharConvEmbeddings(self.name, self.vsz, self.dsz, self.scope, 
-                                  self.finetune, self.nfeat_factor,
-                                  self.cfiltsz, self.max_feat, self.gating, 
-                                  self.num_gates, self.activation, self.wsz, 
-                                  self.weights)
+        return CharConvEmbeddings(name=self.name, vsz=self.vsz, dsz=self.dsz, scope=self.scope,
+                                  finetune=self.finetune, nfeat_factor=self.nfeat_factor,
+                                  cfiltsz=self.cfiltsz, max_feat=self.max_feat, gating=self.gating,
+                                  num_gates=self.num_gates, activation=self.activation, wsz=self.wsz,
+                                  weights=self.weights)
 
     def save_md(self, target):
         write_json({'vsz': self.get_vsz(), 'dsz': self.get_dsz()}, target)
@@ -234,21 +228,7 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
 
     @classmethod
     def create(cls, model, name, **kwargs):
-        vsz = model.vsz
-        dsz = model.dsz
-        weights = model.weights
-        finetune = kwargs.get('finetune', True)
-        scope = kwargs.get('scope', '{}/CharLUT'.format(name))
-        nfeat_factor = kwargs.get('nfeat_factor')
-        cfiltsz = kwargs.get('cfiltsz', [3])
-        max_feat = kwargs.get('max_feat', 200)
-        gating = kwargs.get('gating', 'skip')
-        num_gates = kwargs.get('num_gates', 1)
-        activation = kwargs.get('activation', 'tanh')
-        wsz = kwargs.get('kwargs', 30)
-
-        return cls(name, vsz, dsz, scope, finetune, nfeat_factor,
-                   cfiltsz, max_feat, gating, num_gates, activation, wsz, weights)
+        return cls(name=name, vsz=model.vsz, dsz=model.dsz, weights=model.weights, **kwargs)
 
 
 def get_timing_signal_1d(length,
@@ -297,7 +277,7 @@ def get_timing_signal_1d(length,
 @register_embeddings(name='positional')
 class PositionalLookupTableEmbeddings(LookupTableEmbeddings):
 
-    def __init__(self, name, vsz, dsz, scope, finetune=True, weights=None, unif=0.1):
+    def __init__(self, name, **kwargs):
         """Create a lookup-table based embedding.
 
         :param name: The name of the feature/placeholder, and a key for the scope
@@ -337,11 +317,4 @@ class PositionalLookupTableEmbeddings(LookupTableEmbeddings):
 
     @classmethod
     def create(cls, model, name, **kwargs):
-        vsz = model.vsz
-        dsz = model.dsz
-        weights = model.weights
-        finetune = kwargs.get('finetune', True)
-        scope = kwargs.get('scope', '{}/LUT'.format(name))
-        unif = kwargs.get('unif', 0.1)
-
-        return cls(name, vsz, dsz, scope, finetune, weights, unif)
+        return cls(name, vsz=model.vsz, dsz=model.dsz, weights=model.weights, **kwargs)

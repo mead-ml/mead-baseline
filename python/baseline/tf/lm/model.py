@@ -294,7 +294,7 @@ class LanguageModelBase(LanguageModel):
             md = read_json('{}-{}-md.json'.format(basename, key))
             embed_args = dict({'vsz': md['vsz'], 'dsz': md['dsz']})
             Constructor = eval(class_name)
-            embeddings[key] = Constructor.create(key, **embed_args)
+            embeddings[key] = Constructor(key, **embed_args)
 
         model = cls.create(embeddings, **state)
         for prop in ls_props(model):
