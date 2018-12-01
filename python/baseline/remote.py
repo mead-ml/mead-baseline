@@ -223,3 +223,64 @@ class RemoteModelTensorFlowGRPC(object):
                 result.append(d)
             
             return result
+
+
+class RemoteModelTensorFlowGRPCPreproc(RemoteModelTensorFlowGRPC):
+    def create_request(self, examples):
+        # TODO: Remove TF dependency client side
+        import tensorflow as tf
+
+        request = self.predictpb.PredictRequest()
+        request.model_spec.name = self.name
+        request.model_spec.signature_name = self.signature
+
+        request.inputs['tokens'].CopyFrom(
+            tf.contrib.util.make_tensor_proto(examples, shape=[len(examples), 1])
+        )
+
+        return request
+
+    def predict(self, examples):
+        """Run prediction over gRPC
+
+        :param examples: The input examples
+        :return: The outcomes
+        """
+        request = self.create_request(examples)
+        stub = self.servicepb.PredictionServiceStub(self.channel)
+        outcomes_list = stub.Predict(request)
+        outcomes_list = self.deserialize_response(examples, outcomes_list)
+
+        return outcomes_list
+
+    def deserialize_response(self, examples, predict_response):
+        """
+        read the protobuf response from tensorflow serving and decode it according
+        to the signature.
+
+        here's the relevant piece of the proto:
+            map<string, TensorProto> inputs = 2;
+
+        the predict endpoint happens to have the ability to filter output for certain keys, but
+        we do not support this currently. There are two keys we want to extract: classes and scores.
+
+        :params predict_response: a PredictResponse protobuf object,
+                    as defined in tensorflow_serving proto files
+        """
+        if self.signature == 'suggest_text':
+            raise NotImplementedError
+
+        if self.signature == 'tag_text':
+            raise NotImplementedError
+
+        if self.signature == 'predict_text':
+            scores = predict_response.outputs.get('scores').float_val
+            classes = predict_response.outputs.get('classes').string_val
+            result = []
+            num_ex = len(examples)
+            length = len(self.get_labels())
+            for i in range(num_ex):
+                d = [(c, s) for c, s in zip(classes[length*i:length*(i+1)], scores[length*i:length*(i+1)])]
+                result.append(d)
+
+            return result

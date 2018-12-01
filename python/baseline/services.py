@@ -66,7 +66,7 @@ class Service(object):
         name = kwargs.get("name", None)
         if remote:
             beam = kwargs.get('beam', 10)
-            model = Service._create_remote_model(directory, be, remote, name, cls.signature_name(), beam)
+            model = Service._create_remote_model(directory, be, remote, name, cls.signature_name(), beam, preproc=kwargs.get('preproc', False))
             return cls(vocabs, vectorizers, model)
 
         # Currently nothing to do here
@@ -78,7 +78,7 @@ class Service(object):
         return cls(vocabs, vectorizers, model)
 
     @staticmethod
-    def _create_remote_model(directory, backend, remote, name, signature_name, beam):
+    def _create_remote_model(directory, backend, remote, name, signature_name, beam, preproc=False):
         """Reads the necessary information from the remote bundle to instatiate
         a client for a remote model.
 
@@ -97,8 +97,13 @@ class Service(object):
         inputs = assets.get('inputs', [])
 
         if backend == 'tf':
-            remote_models = import_user_module('baseline.remote')
-            RemoteModel = remote_models.RemoteModelTensorFlowREST if remote.startswith('http') else remote_models.RemoteModelTensorFlowGRPC
+            remote_models = import_user_module('baseline.tf.remote')
+            if remote.startswith('http'):
+                RemoteModel = remote_models.RemoteModelTensorFlowREST
+            elif preproc:
+                RemoteModel = remote_models.RemoteModelTensorFlowGRPCPreproc
+            else:
+                RemoteModel = remote_models.RemoteModelTensorFlowGRPC
             model = RemoteModel(remote, name, signature_name, labels=labels, lengths_key=lengths_key, inputs=inputs, beam=beam)
         else:
             raise ValueError("only Tensorflow is currently supported for remote Services")
@@ -117,42 +122,46 @@ class ClassifierService(Service):
     def signature_name(cls):
         return 'predict_text'
 
-    def predict(self, tokens):
+    def predict(self, tokens, preproc=False):
         """Take tokens and apply the internal vocab and vectorizers.  The tokens should be either a batch of text
         single utterance of type ``list``
         """
-        mxlen = 0
-        mxwlen = 0
-        if type(tokens[0]) == str:
-            tokens_seq = (tokens,)
-        else:
-            tokens_seq = tokens
+        if not preproc:
+            mxlen = 0
+            mxwlen = 0
+            if type(tokens[0]) == str:
+                tokens_seq = (tokens,)
+            else:
+                tokens_seq = tokens
 
-        for tokens in tokens_seq:
-            mxlen = max(mxlen, len(tokens))
-            for token in tokens:
-                mxwlen = max(mxwlen, len(token))
+            for tokens in tokens_seq:
+                mxlen = max(mxlen, len(tokens))
+                for token in tokens:
+                    mxwlen = max(mxwlen, len(token))
 
-        examples = dict()
-        for k, vectorizer in self.vectorizers.items():
-            if hasattr(vectorizer, 'mxlen') and vectorizer.mxlen == -1:
-                vectorizer.mxlen = mxlen
-            if hasattr(vectorizer, 'mxwlen') and vectorizer.mxwlen == -1:
-                vectorizer.mxwlen = mxwlen
-            examples[k] = []
-
-        for i, tokens in enumerate(tokens_seq):
+            examples = dict()
             for k, vectorizer in self.vectorizers.items():
-                vec, length = vectorizer.run(tokens, self.vocabs[k])
-                examples[k].append(vec)
-                if length is not None:
-                    lengths_key = '{}_lengths'.format(k)
-                    if lengths_key not in examples:
-                        examples[lengths_key] = []
-                    examples[lengths_key].append(length)
+                if hasattr(vectorizer, 'mxlen') and vectorizer.mxlen == -1:
+                    vectorizer.mxlen = mxlen
+                if hasattr(vectorizer, 'mxwlen') and vectorizer.mxwlen == -1:
+                    vectorizer.mxwlen = mxwlen
+                examples[k] = []
 
-        for k in self.vectorizers.keys():
-            examples[k] = np.stack(examples[k])
+            for i, tokens in enumerate(tokens_seq):
+                for k, vectorizer in self.vectorizers.items():
+                    vec, length = vectorizer.run(tokens, self.vocabs[k])
+                    examples[k].append(vec)
+                    if length is not None:
+                        lengths_key = '{}_lengths'.format(k)
+                        if lengths_key not in examples:
+                            examples[lengths_key] = []
+                        examples[lengths_key].append(length)
+
+            for k in self.vectorizers.keys():
+                examples[k] = np.stack(examples[k])
+
+        else:
+            examples = [" ".join(x) for x in tokens]
 
         outcomes_list = self.model.predict(examples)
 

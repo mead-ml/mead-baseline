@@ -10,7 +10,6 @@ def main():
     parser = argparse.ArgumentParser(description='Export a model')
     parser.add_argument('--config', help='JSON Configuration for an experiment', required=True, type=convert_path)
     parser.add_argument('--settings', help='JSON Configuration for mead', required=False, default='config/mead-settings.json', type=convert_path)
-    parser.add_argument('--embeddings', help='json library of embeddings', default='config/embeddings.json', type=convert_path)
     parser.add_argument('--datasets', help='json library of dataset labels', default='config/datasets.json', type=convert_path)
     parser.add_argument('--logging', help='json file for logging', default='config/logging.json', type=convert_path)
     parser.add_argument('--task', help='task to run', choices=['classify', 'tagger', 'seq2seq', 'lm'])
@@ -32,7 +31,7 @@ def main():
     task = mead.Task.get_task_specific(task_name, args.logging, args.settings)
     task.read_config(config_params, args.datasets)
     exporter = create_exporter(task, args.exporter_type)
-    exporter.run(args.model, args.output_dir, args.model_version, embeddings=args.embeddings)
+    exporter.run(args.model, args.output_dir, args.model_version)
 
 
 if __name__ == "__main__":
