@@ -97,7 +97,7 @@ class Service(object):
         inputs = assets.get('inputs', [])
 
         if backend == 'tf':
-            remote_models = import_user_module('baseline.tf.remote')
+            remote_models = import_user_module('baseline.remote')
             if remote.startswith('http'):
                 RemoteModel = remote_models.RemoteModelTensorFlowREST
             elif preproc:
@@ -162,7 +162,7 @@ class ClassifierService(Service):
 
         else:
             examples = [" ".join(x) for x in tokens]
-
+        print(examples)
         outcomes_list = self.model.predict(examples)
 
         results = []
