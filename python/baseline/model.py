@@ -127,7 +127,7 @@ def create_lang_model(embeddings, **kwargs):
 def load_model_for(activity, filename, **kwargs):
     model_type = kwargs.get('model_type', 'default')
     creator_fn = BASELINE_LOADERS[activity][model_type]
-    print('Calling model ', creator_fn)
+    #print('Calling model ', creator_fn)
     return creator_fn(filename, **kwargs)
 
 

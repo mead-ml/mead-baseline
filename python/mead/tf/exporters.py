@@ -166,7 +166,7 @@ class ClassifyTensorFlowExporter(TensorFlowExporter):
                 predict_tensors[k] = tf.saved_model.utils.build_tensor_info(v.x)
             except:
                 raise Exception('Unknown attribute in signature: {}'.format(v))
-        sys.exit(1)
+
         sig_input = predict_tensors
         sig_output = SignatureOutput(classes, values)
         sig_name = 'predict_text'

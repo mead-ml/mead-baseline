@@ -11,7 +11,7 @@ class Exporter(object):
         super(Exporter, self).__init__()
         self.task = task
 
-    def run(self, model_file, output_dir, model_version, **kwargs):
+    def run(self, model_file, output_dir, model_version):
         pass
 
 
