@@ -156,7 +156,7 @@ class AbstractCharVectorizer(AbstractVectorizer):
 
     def _next_element(self, tokens, vocab):
         OOV = vocab['<UNK>']
-        EOW = vocab.get('<EOW>', vocab.get(' '))
+        EOW = vocab.get('<EOW>', vocab.get(' ', Offsets.PAD))
         for token in self.iterable(tokens):
             for ch in token:
                 yield vocab.get(ch, OOV)
@@ -193,7 +193,7 @@ class Char2DVectorizer(AbstractCharVectorizer):
         if self.mxwlen < 0:
             self.mxwlen = self.max_seen_char
 
-        EOW = vocab.get('<EOW>', vocab.get(' '))
+        EOW = vocab.get('<EOW>', vocab.get(' ', Offsets.PAD))
 
         vec2d = np.zeros((self.mxlen, self.mxwlen), dtype=int)
         i = 0
@@ -272,6 +272,7 @@ class Char1DVectorizer(AbstractCharVectorizer):
         for i, atom in enumerate(self._next_element(tokens, vocab)):
             if i == self.mxlen:
                 i -= 1
+                break
             vec1d[i] = atom
         if self.time_reverse:
             vec1d = vec1d[::-1]
