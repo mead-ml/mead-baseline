@@ -4,7 +4,7 @@ from baseline.tf.embeddings import *
 from preprocessors import Token1DPreprocessorCreator
 from baseline.utils import export
 from collections import namedtuple
-from mead.tf.exporters import ClassifyTensorFlowExporter
+from mead.tf.exporters import ClassifyTensorFlowExporter, create_assets
 
 __all__ = []
 exporter = export(__all__)
@@ -24,7 +24,6 @@ class ClassifyTensorFlowPreProcExporter(ClassifyTensorFlowExporter):
         pid = model_file.split("-")[-1]
         features = ["word"]
         preprocessor = Token1DPreprocessorCreator(model_base_dir, pid, features)
-        assets = {}
         model_params = self.task.config_params["model"]
         tf_example, preprocessed = preprocessor.run()
         for feature in preprocessed:
@@ -33,5 +32,6 @@ class ClassifyTensorFlowPreProcExporter(ClassifyTensorFlowExporter):
         sig_input = {'tokens': tf.saved_model.utils.build_tensor_info(tf_example['text/tokens'])}
         sig_output = SignatureOutput(classes, values)
         sig_name = 'predict_text'
+        assets = create_assets(model_file, sig_input, sig_output, sig_name, model.lengths_key)
         return sig_input, sig_output, sig_name, assets
 
