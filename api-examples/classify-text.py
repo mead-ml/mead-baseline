@@ -25,4 +25,7 @@ else:
 
 m = bl.ClassifierService.load(args.model, backend=args.backend, remote=args.remote, name=args.name, preproc=args.preproc)
 for text, output in zip(texts, m.predict(texts, preproc=args.preproc)):
-    print("{},{}".format(" ".join(text), output[0][0].decode('ascii')))
+    if type(output[0][0]) is not str:  # remote models return binary strings
+        print("{},{}".format(" ".join(text), output[0][0].decode('ascii')))
+    else:
+        print("{},{}".format(" ".join(text), output[0][0]))
