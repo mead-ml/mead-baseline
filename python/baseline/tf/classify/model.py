@@ -13,7 +13,7 @@ from baseline.version import __version__
 from tensorflow.contrib.layers import fully_connected
 import os
 import copy
-
+import copy
 
 class ClassifyParallelModel(ClassifierModel):
 
@@ -169,27 +169,15 @@ class ClassifierModelBase(ClassifierModel):
         :param basename:
         :return:
         """
-        path = basename.split('/')
-        base = path[-1]
-        outdir = '/'.join(path[:-1])
-
         # For each embedding, save a record of the keys
+        #for prop in ls_props(self):
+        #    self.state[prop] = getattr(self, prop)
 
-        embeddings_info = {}
-        for k, v in self.embeddings.items():
-            embeddings_info[k] = v.__class__.__name__
-        state = {
-            "version": __version__,
-            "embeddings": embeddings_info
-        }
-        for prop in ls_props(self):
-            state[prop] = getattr(self, prop)
-
-        write_json(state, basename + '.state')
+        write_json(self.state, basename + '.state')
         write_json(self.labels, basename + ".labels")
         for key, embedding in self.embeddings.items():
             embedding.save_md(basename + '-{}-md.json'.format(key))
-        tf.train.write_graph(self.sess.graph_def, outdir, base + '.graph', as_text=False)
+       # tf.train.write_graph(self.sess.graph_def, outdir, base + '.graph', as_text=False)
         with open(basename + '.saver', 'w') as f:
             f.write(str(self.saver.as_saver_def()))
 
@@ -281,61 +269,47 @@ class ClassifierModelBase(ClassifierModel):
         
         :return: A restored model
         """
-        sess = kwargs.get('session', kwargs.get('sess', tf.Session()))
-        model = cls()
-        with open(basename + '.saver') as fsv:
-            saver_def = tf.train.SaverDef()
-            text_format.Merge(fsv.read(), saver_def)
-
-        checkpoint_name = kwargs.get('checkpoint_name', basename)
-        checkpoint_name = checkpoint_name or basename
-
         state = read_json(basename + '.state')
-
-        for prop in ls_props(model):
-            if prop in state:
-                setattr(model, prop, state[prop])
-
-        with gfile.FastGFile(basename + '.graph', 'rb') as f:
-            gd = tf.GraphDef()
-            gd.ParseFromString(f.read())
-            sess.graph.as_default()
-            tf.import_graph_def(gd, name='')
-            try:
-                sess.run(saver_def.restore_op_name, {saver_def.filename_tensor_name: checkpoint_name})
-            except:
-                # Backwards compat
-                sess.run(saver_def.restore_op_name, {saver_def.filename_tensor_name: checkpoint_name + ".model"})
-
-        model.embeddings = dict()
-        for key, class_name in state['embeddings'].items():
+        state['sess'] = kwargs.pop('sess', tf.Session())
+        state['model_type'] = kwargs.get('model_type', 'default')
+        embeddings = dict()
+        embeddings_dict = state.pop('embeddings')
+        for key, class_name in embeddings_dict.items():
             md = read_json('{}-{}-md.json'.format(basename, key))
             embed_args = dict({'vsz': md['vsz'], 'dsz': md['dsz']})
-            embed_args[key] = tf.get_default_graph().get_tensor_by_name('{}:0'.format(key))
             Constructor = eval(class_name)
-            model.embeddings[key] = Constructor(key, **embed_args)
+            embeddings[key] = Constructor(key, **embed_args)
+        labels = read_json(basename + '.labels')
+        model = cls.create(embeddings, labels, **state)
+        model.state = state
+        #for prop in ls_props(model):
+        #    if prop in state:
+        #        setattr(model, prop, state[prop])
+        do_init = kwargs.get('init', True)
+        if do_init:
+            init = tf.global_variables_initializer()
+            model.sess.run(init)
 
-        if model.lengths_key is not None:
-            model.lengths = tf.get_default_graph().get_tensor_by_name('lengths:0')
-
-        else:
-            model.lengths = None
-        model.probs = tf.get_default_graph().get_tensor_by_name('output/probs:0')
-
-        model.best = tf.get_default_graph().get_tensor_by_name('output/best:0')
-        model.logits = tf.get_default_graph().get_tensor_by_name('output/logits:0')
-
-        model.labels = read_json(basename + '.labels')
-        model.sess = sess
+        #model.sess = sess
         return model
 
-    @property
     def lengths_key(self):
         return self._lengths_key
 
-    @lengths_key.setter
     def lengths_key(self, value):
         self._lengths_key = value
+
+    def _create_model_state(self, **kwargs):
+        embeddings_info = {}
+        for k, v in self.embeddings.items():
+            embeddings_info[k] = v.__class__.__name__
+        sess = kwargs.pop('sess', tf.Session())
+        self.state = copy.deepcopy(kwargs)
+        kwargs['sess'] = sess
+        self.state.update({
+            "version": __version__,
+            "embeddings": embeddings_info,
+        })
 
     @classmethod
     def create(cls, embeddings, labels, **kwargs):
@@ -374,10 +348,11 @@ class ClassifierModelBase(ClassifierModel):
             kwargs['gpus'] = gpus
         if gpus > 1:
             return ClassifyParallelModel(cls.create, embeddings, labels, **kwargs)
-        sess = kwargs.get('sess', tf.Session())
 
         model = cls()
         model.embeddings = embeddings
+        model._create_model_state(**kwargs)
+        model.sess = kwargs.get('sess', tf.Session())
         model.lengths_key = kwargs.get('lengths_key')
         if model.lengths_key is not None:
             model.lengths = kwargs.get('lengths', tf.placeholder(tf.int32, [None], name="lengths"))
@@ -409,7 +384,7 @@ class ClassifierModelBase(ClassifierModel):
                                            name="logits")
                 model.best = tf.argmax(model.logits, 1, name="best")
                 model.probs = tf.nn.softmax(model.logits, name="probs")
-        model.sess = sess
+
         # writer = tf.summary.FileWriter('blah', sess.graph)
         return model
 
@@ -507,15 +482,6 @@ class LSTMModel(ClassifierModelBase):
 
     def __init__(self):
         super(LSTMModel, self).__init__()
-        self._vdrop = None
-
-    @property
-    def vdrop(self):
-        return self._vdrop
-
-    @vdrop.setter
-    def vdrop(self, value):
-        self._vdrop = value
 
     def pool(self, word_embeddings, dsz, init, **kwargs):
         """LSTM with dropout yielding a final-state as output

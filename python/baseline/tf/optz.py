@@ -192,7 +192,6 @@ def optimizer(loss_fn, **kwargs):
     optim = kwargs.get('optim', 'sgd')
     eta = kwargs.get('lr', kwargs.get('eta', 0.01))
     lr_scheduler = create_lr_scheduler(**kwargs)
-    decay_fn = None
     colocate_gradients_with_ops = bool(kwargs.get('colocate_gradients_with_ops', False))
     sgd_mom = float(kwargs.get('mom', 0.9))
     if optim == 'adadelta':

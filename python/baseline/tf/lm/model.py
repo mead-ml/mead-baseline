@@ -160,32 +160,9 @@ class LanguageModelBase(LanguageModel):
         self.save_values(basename)
 
     def save_md(self, basename):
-
-        path = basename.split('/')
-        base = path[-1]
-        outdir = '/'.join(path[:-1])
-
-        embeddings_info = {}
-        for k, v in self.embeddings.items():
-            embeddings_info[k] = v.__class__.__name__
-        state = {
-            "version": __version__,
-            "embeddings": embeddings_info,
-            "hsz": self.hsz,
-            "layers": self.layers,
-            "tgt_key": self.tgt_key
-        }
-        for prop in ls_props(self):
-            state[prop] = getattr(self, prop)
-
-        write_json(state, basename + '.state')
+        write_json(self.state, basename + '.state')
         for key, embedding in self.embeddings.items():
             embedding.save_md('{}-{}-md.json'.format(basename, key))
-
-        write_json(state, basename + '.state')
-        tf.train.write_graph(self.sess.graph_def, outdir, base + '.graph', as_text=False)
-        with open(basename + '.saver', 'w') as f:
-            f.write(str(self.saver.as_saver_def()))
 
     def _create_loss(self, scope):
         with tf.variable_scope(scope):
@@ -222,6 +199,18 @@ class LanguageModelBase(LanguageModel):
         step_softmax = self.sess.run(self.probs, feed_dict)
         return step_softmax
 
+    def _create_model_state(self, **kwargs):
+        embeddings_info = {}
+        for k, v in self.embeddings.items():
+            embeddings_info[k] = v.__class__.__name__
+        sess = kwargs.pop('sess', tf.Session())
+        self.state = copy.deepcopy(kwargs)
+        kwargs['sess'] = sess
+        self.state.update({
+            "version": __version__,
+            "embeddings": embeddings_info,
+        })
+
     @classmethod
     def create(cls, embeddings, **kwargs):
         gpus = kwargs.get('gpus', 1)
@@ -231,8 +220,9 @@ class LanguageModelBase(LanguageModel):
         if gpus > 1:
             return DataParallelLanguageModel(cls.create, embeddings, **kwargs)
         lm = cls()
-        lm.id = kwargs.get('id', 0)
         lm.embeddings = embeddings
+        lm._create_model_state(**kwargs)
+        lm.id = kwargs.get('id', 0)
         lm.y = kwargs.get('y', tf.placeholder(tf.int32, [None, None], name="y"))
         lm.sess = kwargs.get('sess', tf.Session())
         lm.pdrop_value = kwargs.get('pdrop', 0.5)
@@ -283,10 +273,6 @@ class LanguageModelBase(LanguageModel):
             state['beam'] = kwargs['beam']
 
         state['sess'] = kwargs.get('sess', tf.Session())
-
-        with open(basename + '.saver') as fsv:
-            saver_def = tf.train.SaverDef()
-            text_format.Merge(fsv.read(), saver_def)
 
         embeddings = dict()
         embeddings_dict = state.pop('embeddings')
