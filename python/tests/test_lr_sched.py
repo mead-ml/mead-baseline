@@ -3,15 +3,17 @@ import json
 import pytest
 import numpy as np
 tf = pytest.importorskip('tensorflow')
-from baseline.tf.optz import *
-from baseline.train import (ConstantScheduler,
-                            WarmupLinearScheduler,
-                            CyclicLRScheduler,
-                            PiecewiseDecayScheduler,
-                            ZarembaDecayScheduler,
-                            CosineDecayScheduler,
-                            InverseTimeDecayScheduler,
-                            ExponentialDecayScheduler)
+from baseline.train import (
+    create_lr_scheduler,
+    ConstantScheduler,
+    WarmupLinearScheduler,
+    CyclicLRScheduler,
+    PiecewiseDecayScheduler,
+    ZarembaDecayScheduler,
+    CosineDecayScheduler,
+    InverseTimeDecayScheduler,
+    ExponentialDecayScheduler
+)
 import numpy as np
 
 
@@ -80,6 +82,7 @@ SGDR_LR_CONFIG = {
 
 
 def test_zaremba():
+    from baseline.tf import optz
     tf.reset_default_graph()
     sess = tf.Session()
 
@@ -109,6 +112,7 @@ def test_zaremba():
 
 
 def test_piecewise():
+    from baseline.tf import optz
     tf.reset_default_graph()
     sess = tf.Session()
 
@@ -138,6 +142,7 @@ def test_piecewise():
 
 
 def test_invtime():
+    from baseline.tf import optz
     tf.reset_default_graph()
     sess = tf.Session()
 
@@ -164,6 +169,7 @@ def test_invtime():
 
 
 def test_exp():
+    from baseline.tf import optz
     tf.reset_default_graph()
     sess = tf.Session()
 
@@ -190,6 +196,7 @@ def test_exp():
 
 
 def test_linear_warmup():
+    from baseline.tf import optz
     tf.reset_default_graph()
     sess = tf.Session()
 
@@ -212,6 +219,7 @@ def test_linear_warmup():
 
 
 def test_composite_warmup():
+    from baseline.tf import optz
     tf.reset_default_graph()
     warmup_steps = COMPOSITE_LR_CONFIG['warmup_steps']
     decay_rate = EXP_LR_CONFIG['decay_rate']
@@ -237,6 +245,7 @@ def test_composite_warmup():
 
 
 def test_constant():
+    from baseline.tf import optz
     tf.reset_default_graph()
     sess = tf.Session()
 
@@ -256,6 +265,7 @@ def test_constant():
 
 
 def test_cyclic():
+    from baseline.tf import optz
     tf.reset_default_graph()
     sess = tf.Session()
 

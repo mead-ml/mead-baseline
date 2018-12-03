@@ -1,13 +1,15 @@
+import six
 from six.moves import filter
 
 import os
 import re
 import codecs
+from itertools import chain
 from collections import Counter
 import numpy as np
 import baseline.data
 from baseline.vectorizers import Dict1DVectorizer, GOVectorizer
-from baseline.utils import import_user_module, revlut, export, optional_params, Offsets
+from baseline.utils import import_user_module, revlut, export, optional_params, Offsets, listify
 
 __all__ = []
 exporter = export(__all__)
@@ -74,22 +76,63 @@ def _filter_vocab(vocab, min_fs):
     return vocab
 
 
-def _build_vocab_for_col(col, files, vectorizers):
-    vocabs = dict()
+def _read_from_col(col, files):
+    """Read from a single column of a file.
 
-    for key in vectorizers.keys():
-        vocabs[key] = Counter()
+    :param col: `int`: The column to read from.
+    :param files: List[str]: A list of files to read from.
 
-    for file in files:
-        if file is None:
+    :returns: List[str]: The text from the col of each file.
+    """
+    text = []
+    for file_name in files:
+        if file_name is None:
             continue
-        with codecs.open(file, encoding='utf-8', mode='r') as f:
+        with codecs.open(file_name, encoding='utf-8', mode='r') as f:
             for line in f:
-                cols = re.split("\t", line)
-                text = re.split("\s", cols[col])
-                for key, vectorizer in vectorizers.items():
-                    vocabs[key].update(vectorizer.count(text))
-    return vocabs
+                line = line.rstrip('\n')
+                if line == "": continue
+                cols = re.split(r'\t', line)
+                text.append(re.split(r'\s', cols[col]))
+    return text
+
+
+def _build_vocab_for_col(col, files, vectorizers, text=None):
+    """Build vocab from a single column in file. (separated by `\t`).
+
+    Used to read a vocab from a single conll column, read a vocab from the
+    source or target of a seq2seq file, or reading from a vocab file.
+
+    :param col: `int`: The column to read from.
+    :param files: List[str]: A list of files to read from.
+    :param vectorizers: dict[str] -> Vectorizer: The vectorizer to use to count the column
+    :param text: List[str]: The text from the columns or None
+
+    :returns: dict[str] -> dict[str] -> int: The vocabs.
+    """
+    text = _read_from_col(col, files) if text is None else text
+    vocab = {k: Counter() for k in vectorizers}
+    for t in text:
+        for k, vect in vectorizers.items():
+            vocab[k].update(vect.count(t))
+    return vocab
+
+
+def _check_lens(vectorizers):
+    failures = set()
+    for k, vect in vectorizers.items():
+        mxlen = getattr(vect, 'mxlen', None)
+        if mxlen == -1:
+            failures.add(k)
+    return failures
+
+
+def _vocab_allowed(vectorizers):
+    fails = _check_lens(vectorizers)
+    if fails:
+        fail_str = "When using a vocab file mxlen for vectorizers must not be `-1`\n"
+        vect_str = "\n".join("\t{}".format(fails))
+        raise RuntimeError(fail_str + vect_str)
 
 
 @exporter
@@ -130,6 +173,16 @@ class TSVParallelCorpusReader(ParallelCorpusReader):
         self.tgt_col_num = tgt_col_num
 
     def build_vocabs(self, files, **kwargs):
+        vocab_file = kwargs.get('vocab_file')
+        if vocab_file is not None:
+            all_vects = self.src_vectorizers.copy()
+            all_vects['tgt'] = self.tgt_vectorizer
+            _vocab_allowed(all_vects)
+            # Only read the file once
+            text = _read_from_col(0, listify(vocab_file))
+            src_vocab = _build_vocab_for_col(None, None, self.src_vectorizers, text=text)
+            tgt_vocab = _build_vocab_for_col(None, None, {'tgt': self.tgt_vectorizer}, text=text)
+            return src_vocab, tgt_vocab['tgt']
         src_vocab = _build_vocab_for_col(self.src_col_num, files, self.src_vectorizers)
         tgt_vocab = _build_vocab_for_col(self.tgt_col_num, files, {'tgt': self.tgt_vectorizer})
         min_f = kwargs.get('min_f', {})
@@ -172,15 +225,19 @@ class MultiFileParallelCorpusReader(ParallelCorpusReader):
         if not self.tgt_suffix.startswith('.'):
             self.tgt_suffix = '.' + self.tgt_suffix
 
-    # 2 possibilities here, either we have a vocab file, e.g. vocab.bpe.32000, or we are going to generate
-    # from each column
     def build_vocabs(self, files, **kwargs):
-        if len(files) == 1 and os.path.exists(files[0]):
-            src_vocab = _build_vocab_for_col(0, files, self.src_vectorizers)
-            tgt_vocab = _build_vocab_for_col(0, files, {'tgt': self.tgt_vectorizer})
-        else:
-            src_vocab = _build_vocab_for_col(0, [f + self.src_suffix for f in files], self.src_vectorizers)
-            tgt_vocab = _build_vocab_for_col(0, [f + self.tgt_suffix for f in files], {'tgt': self.tgt_vectorizer})
+        vocab_file = kwargs.get('vocab_file')
+        if vocab_file is not None:
+            all_vects = self.src_vectorizers.copy()
+            all_vects['tgt'] = self.tgt_vectorizer
+            _vocab_allowed(all_vects)
+            # Only read the file once.
+            text = _read_from_col(0, listify(vocab_file))
+            src_vocab = _build_vocab_for_col(None, None, self.src_vectorizers, text=text)
+            tgt_vocab = _build_vocab_for_col(None, None, {'tgt': self.tgt_vectorizer}, text=text)
+            return src_vocab, tgt_vocab['tgt']
+        src_vocab = _build_vocab_for_col(0, [f + self.src_suffix for f in files], self.src_vectorizers)
+        tgt_vocab = _build_vocab_for_col(0, [f + self.tgt_suffix for f in files], {'tgt': self.tgt_vectorizer})
         min_f = kwargs.get('min_f', {})
         tgt_min_f = {'tgt': min_f.pop('tgt', -1)}
         src_vocab = _filter_vocab(src_vocab, min_f)
@@ -221,10 +278,7 @@ class SeqPredictReader(object):
         self.label_vectorizer = Dict1DVectorizer(fields='y', mxlen=mxlen)
 
     def build_vocab(self, files, **kwargs):
-
-        vocabs = {}
-        for key in self.vectorizers.keys():
-            vocabs[key] = Counter()
+        vocabs = {k: Counter() for k in self.vectorizers.keys()}
 
         labels = Counter()
         for file in files:
@@ -375,21 +429,28 @@ class TSVSeqLabelReader(SeqLabelReader):
         :param files: Either a directory (str), or an array of individual files
         :return:
         """
+        vocab_file = kwargs.get('vocab_file')
+        label_file = kwargs.get('label_file')
+        if vocab_file is not None and label_file is not None:
+            _vocab_allowed(self.vectorizers)
+            vocab = _build_vocab_for_col(0, listify(vocab_file), self.vectorizers)
+            labels = Counter(chain(*_read_from_col(0, listify(label_file))))
+            self.label2index = {l: i for i, l in enumerate(labels)}
+            return vocab, self.get_labels()
+
         label_idx = len(self.label2index)
-        if type(files) == str:
+        if isinstance(files, six.string_types):
             if os.path.isdir(files):
                 base = files
                 files = filter(os.path.isfile, [os.path.join(base, x) for x in os.listdir(base)])
             else:
                 files = [files]
-        vocab = dict()
-        for k in self.vectorizers.keys():
-            vocab[k] = Counter()
+        vocab = {k: Counter() for k in self.vectorizers.keys()}
 
-        for file in files:
-            if file is None:
+        for file_name in files:
+            if file_name is None:
                 continue
-            with codecs.open(file, encoding='utf-8', mode='r') as f:
+            with codecs.open(file_name, encoding='utf-8', mode='r') as f:
                 for il, line in enumerate(f):
                     label, text = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn)
                     if len(text) == 0:
@@ -452,11 +513,12 @@ class LineSeqReader(object):
         self.vectorizers = vectorizers
 
     def build_vocab(self, files, **kwargs):
+        vocab_file = kwargs.get('vocab_file')
+        if vocab_file is not None:
+            _vocab_allowed(self.vectorizers)
+            return _build_vocab_for_col(0, listify(vocab_file), self.vectorizers)
 
-        vocabs = {}
-        for key in self.vectorizers.keys():
-            vocabs[key] = Counter()
-            vocabs[key] = Counter()
+        vocabs = {k: Counter() for k in self.vectorizers.keys()}
 
         for file in files:
             if file is None:
