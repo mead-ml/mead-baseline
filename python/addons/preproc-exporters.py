@@ -29,7 +29,7 @@ class ClassifyTensorFlowPreProcExporter(ClassifyTensorFlowExporter):
         for feature in preprocessed:
             model_params[feature] = preprocessed[feature]
         model, classes, values = self._create_model(sess, model_file)
-        sig_input = {'tokens': tf.saved_model.utils.build_tensor_info(tf_example['text/tokens'])}
+        sig_input = {'tokens': tf.saved_model.utils.build_tensor_info(tf_example[preprocessor.FIELD_NAME])}
         sig_output = SignatureOutput(classes, values)
         sig_name = 'predict_text'
         assets = create_assets(model_file, sig_input, sig_output, sig_name, model.lengths_key)

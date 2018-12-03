@@ -162,6 +162,7 @@ class ClassifierService(Service):
 
         else:
             examples = [" ".join(x) for x in tokens]
+
         outcomes_list = self.model.predict(examples)
 
         results = []

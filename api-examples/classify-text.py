@@ -17,11 +17,11 @@ if os.path.exists(args.text) and os.path.isfile(args.text):
     texts = []
     with open(args.text, 'r') as f:
         for line in f:
-            text = line.strip().split(" ")
+            text = line.strip().split()
             texts += [text]
 
 else:
-    texts = [args.text.split(" ")]
+    texts = [args.text.split()]
 
 m = bl.ClassifierService.load(args.model, backend=args.backend, remote=args.remote, name=args.name, preproc=args.preproc)
 for text, output in zip(texts, m.predict(texts, preproc=args.preproc)):
