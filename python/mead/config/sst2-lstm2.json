@@ -7,7 +7,12 @@
 	    "name": "word",
 	    "vectorizer": { "type": "token1d" },
 	    "embeddings": { "label": "glove-840B" }
-	}
+	},
+	{
+	    "name": "word2",
+	    "vectorizer": { "type": "token1d" },
+	    "embeddings": { "label": "w2v-gn" }
+	}		 
     ],
     "preproc": {
 	"mxlen": 100,

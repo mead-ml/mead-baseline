@@ -31,7 +31,7 @@
       "vectorizer": {
         "type": "dict2d"
       },
-      "embeddings": { "dsz": 30, "wsz": 50, "type": "char-conv" }
+      "embeddings": { "dsz": 30, "wsz": 30, "type": "char-conv" }
     }
   ],
   "preproc": {
