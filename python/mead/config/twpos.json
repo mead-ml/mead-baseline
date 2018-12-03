@@ -48,7 +48,7 @@
 		"dsz": 30,
 		"wsz": 30,
 		"type": "char-conv",
-		"cfiltsz": [1,2,3,4,5,7]
+		"cfiltsz": [3]
 	    }
 	}
     ],
