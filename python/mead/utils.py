@@ -22,6 +22,18 @@ def normalize_backend(name):
     return name
 
 
+@exporter
+def print_dataset_info(dataset):
+    print("[train file]: {}".format(dataset['train_file']))
+    print("[valid file]: {}".format(dataset['valid_file']))
+    print("[test file]: {}".format(dataset['test_file']))
+    vocab_file = dataset.get('vocab_file')
+    if vocab_file is not None:
+        print("[vocab file]: {}".format(vocab_file))
+    label_file = dataset.get('label_file')
+    if label_file is not None:
+        print("[label file]: {}".format(label_file))
+
 
 @exporter
 def read_config_file_or_json(config, name=''):
