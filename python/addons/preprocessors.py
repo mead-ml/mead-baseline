@@ -2,16 +2,16 @@ import json
 import tensorflow as tf
 import os
 
-FIELD_NAME = 'text/tokens'
-
 
 class PreprocessorCreator(object):
     """
     Generic class for creating using tensorflow ops
     """
+
     def __init__(self, model_base_dir, pid, features, **kwargs):
         self.indices, self.vocabs = self.create_vocabs(model_base_dir, pid, features)
         self.vectorizers = self.create_vectorizers(model_base_dir, pid)
+        self.FIELD_NAME = None
 
     @staticmethod
     def _read_vocab(vocab_file, feature_name):
@@ -26,7 +26,7 @@ class PreprocessorCreator(object):
 
         tok2index = tf.contrib.lookup.index_table_from_tensor(
             tf.constant(vocab_list),
-            default_value=0,
+            default_value=3, # This is since we have moved all <UNK>s to 3
             dtype=tf.string,
             name='%s2index' % feature_name
         )
@@ -45,7 +45,8 @@ class PreprocessorCreator(object):
                 indices[feature], vocabs[feature] = self._read_vocab(feature_vocab_file, feature)
         return indices, vocabs
 
-    def create_vectorizers(self, model_base_dir, pid):
+    @staticmethod
+    def create_vectorizers(model_base_dir, pid):
         """
         :model_file the path-like object to the model and model name.
         :vocab_suffixes the list of vocab types. e.g. 'word', 'char', 'ner'.
@@ -58,11 +59,10 @@ class PreprocessorCreator(object):
         self.lchars = tf.constant([chr(i) for i in range(97, 123)])
         self.upchars_lut = tf.contrib.lookup.index_table_from_tensor(mapping=upchars, num_oov_buckets=1, default_value=-1)
 
-    @staticmethod
-    def _create_example():
+    def _create_example(self):
         serialized_tf_example = tf.placeholder(tf.string, name='tf_example')
         feature_configs = {
-            FIELD_NAME: tf.FixedLenFeature(shape=[], dtype=tf.string),
+            self.FIELD_NAME: tf.FixedLenFeature(shape=[], dtype=tf.string),
         }
         tf_example = tf.parse_example(serialized_tf_example, feature_configs)
         return tf_example
@@ -93,6 +93,7 @@ class Token1DPreprocessorCreator(PreprocessorCreator):
     def __init__(self, model_base_dir, pid, features, **kwargs):
         super(Token1DPreprocessorCreator, self).__init__(model_base_dir, pid, features, **kwargs)
         self.mxlen = self.vectorizers['word'].mxlen
+        self.FIELD_NAME = 'text/tokens'
 
     def reform_raw(self, raw):
         """
@@ -103,14 +104,6 @@ class Token1DPreprocessorCreator(PreprocessorCreator):
         # sentence length <= mxlen
         raw_post = tf.reduce_join(raw_tokens[:self.mxlen], separator=" ")
         return raw_post
-
-    def preproc_word(self, post_mappings):
-        # Split the input string, assuming that whitespace is splitter
-        # The client should perform any required tokenization for us and join on ' '
-
-        raw_post = post_mappings[FIELD_NAME]
-        raw_post = self.reform_raw(raw_post)
-        return {'word': self.create_word_vectors_from_post(raw_post)}
 
     def create_word_vectors_from_post(self, raw_post):
         # vocab has only lowercase words
@@ -126,6 +119,14 @@ class Token1DPreprocessorCreator(PreprocessorCreator):
         # Reshape them out to the proper length
         reshaped_words = tf.sparse_reshape(word_indices, shape=[-1])
         return self.reshape_indices(reshaped_words, [self.mxlen])
+
+    def preproc_word(self, post_mappings):
+        # Split the input string, assuming that whitespace is splitter
+        # The client should perform any required tokenization for us and join on ' '
+
+        raw_post = post_mappings[self.FIELD_NAME]
+        raw_post = self.reform_raw(raw_post)
+        return {'word': self.create_word_vectors_from_post(raw_post)}
 
     def create_preprocessed_input(self, tf_example):
         """
