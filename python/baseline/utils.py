@@ -8,7 +8,6 @@ import logging
 import zipfile
 import platform
 import importlib
-from collections import Mapping
 from contextlib import contextmanager
 from functools import partial, update_wrapper, wraps
 import numpy as np
@@ -48,23 +47,8 @@ def export(obj, all_list=None):
 exporter = export(__all__)
 
 
-class UnpackableOffsets(type):
-    def __iter__(self):
-        for x in self.VALUES:
-            yield x
-
-    def __getitem__(self, item):
-        item = item[1:-1]
-        return getattr(self, item)
-
-    def __len__(self):
-        return len(self.VALUES)
-
-# Multi-inheritance from multiple metaclasses requires a explicit metaclass
-class UnpackableOffsetsMapping(UnpackableOffsets, Mapping): pass
-
 @exporter
-class Offsets(six.with_metaclass(UnpackableOffsetsMapping)):
+class Offsets:
     """Support pre 3.4"""
     PAD, GO, EOS, UNK, OFFSET = range(0, 5)
     VALUES = ["<PAD>", "<GO>", "<EOS>", "<UNK>"]
