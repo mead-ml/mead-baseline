@@ -137,21 +137,28 @@ def get_basepath_or_cwd(model_file):
 
 
 # TODO: deprecated, remove this!
-"""
 def get_vocab_file_suffixes(model_file):
 
-        The vocabs are stored in the same directory as the model file
-        with name such as `vocabs-word-<pid>.json`
-        :param model_file: the nonspecific path to the model. this could be
+    """Because our operations assume knowledge of the model name, we
+    only need to return the suffix appended onto the end of the model
+    name in the file.
+
+    we make the assumption that a suffix is denoted with a hyphen.
+
+    e.g.  a vocab file name = tagger-model-tf-30803-word.vocab
+          would return ['word']
+
+    :param model_file: the nonspecific path to the model. this could be
                 /data/model/<model_name>. we need to remove the model name.
     :return:
+    """
     filenames = _find_files_by_type(model_file, 'vocab')
     model_name = model_file.split('/')[-1]
     basepath = get_basepath_or_cwd(model_file)
     full_base = os.path.join(basepath, model_name)
     # the length of the name plus 1 for the hyphen separating the suffix.
     return [x[len(full_base)+1:] for x in filenames if x.startswith(full_base)]
-"""
+
 
 def dense_layer(output_layer_depth):
     output_layer = layers_core.Dense(output_layer_depth, use_bias=False, dtype=tf.float32, name="dense")
