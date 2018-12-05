@@ -100,6 +100,7 @@ class TensorFlowExporter(mead.exporters.Exporter):
         legacy_init_op = tf.group(tf.tables_initializer(), name='legacy_init_op')
         definition = dict({})
         definition[sig_name] = prediction_signature
+
         builder.add_meta_graph_and_variables(
             sess, [tf.saved_model.tag_constants.SERVING],
             signature_def_map=definition,
@@ -286,7 +287,7 @@ class Seq2SeqTensorFlowExporter(TensorFlowExporter):
             embed_args = dict({'vsz': md['vsz'], 'dsz': md['dsz']})
             Constructor = eval(class_name)
             embeddings[key] = Constructor(key, **embed_args)
-
+        
         return embeddings
 
     def _create_model(self, sess, basename):
@@ -351,10 +352,13 @@ def create_bundle(builder, output_path, basename, assets=None):
     :assets a dictionary of assets to save alongside the model.
     """
     builder.save()
-    directory = os.path.join('/', *basename.split("/")[:-1])
+
+    model_name = basename.split("/")[-1]
+    directory = os.path.join('./', *basename.split("/")[:-1])
 
     save_to_bundle(output_path, directory, assets)
 
+    save_to_bundle(output_path, directory, assets)
 
 def save_to_bundle(output_path, directory, assets=None):
     """Save files to the exported bundle.
