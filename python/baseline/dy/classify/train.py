@@ -2,7 +2,7 @@ import six
 import time
 import dynet as dy
 import numpy as np
-from baseline.utils import listify, get_model_file
+from baseline.utils import listify, get_model_file, get_metric_cmp
 from baseline.progress import create_progress_bar
 from baseline.confusion import ConfusionMatrix
 from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
@@ -139,8 +139,11 @@ def fit(model, ts, vs, es, epochs=20, do_early_stopping=True, early_stopping_met
     autobatchsz = kwargs.get('autobatchsz', 1)
     verbose = kwargs.get('verbose', {'print': kwargs.get('verbose_print', False), 'file': kwargs.get('verbose_file', None)})
     model_file = get_model_file('classify', 'dynet', kwargs.get('basedir'))
+
+    best_metric = 0
     if do_early_stopping:
         patience = kwargs.get('patience', epochs)
+        early_stopping_cmp, best_metric = get_metric_cmp(early_stopping_metric, kwargs.get('early_stopping_cmp'))
         print('Doing early stopping on [{}] with patience [{}]'.format(early_stopping_metric, patience))
 
     reporting_fns = listify(kwargs.get('reporting', []))
@@ -148,7 +151,6 @@ def fit(model, ts, vs, es, epochs=20, do_early_stopping=True, early_stopping_met
 
     trainer = create_trainer(model, **kwargs)
 
-    max_metric = 0
     last_improved = 0
 
     for epoch in range(epochs):
@@ -158,10 +160,10 @@ def fit(model, ts, vs, es, epochs=20, do_early_stopping=True, early_stopping_met
         if do_early_stopping is False:
             model.save(model_file)
 
-        elif test_metrics[early_stopping_metric] > max_metric:
+        elif early_stopping_cmp(test_metrics[early_stopping_metric], best_metric):
             last_improved = epoch
-            max_metric = test_metrics[early_stopping_metric]
-            print('New max {:.3f}'.format(max_metric))
+            best_metric = test_metrics[early_stopping_metric]
+            print('New best {:.3f}'.format(best_metric))
             model.save(model_file)
 
         elif (epoch - last_improved) > patience:
@@ -169,7 +171,7 @@ def fit(model, ts, vs, es, epochs=20, do_early_stopping=True, early_stopping_met
             break
 
     if do_early_stopping is True:
-        print('Best performance on max_metric {:.3f} at epoch {}'.format(max_metric, last_improved))
+        print('Best performance on {}: {:.3f} at epoch {}'.format(early_stopping_metric, best_metric, last_improved))
 
     if es is not None:
         print('Reloading best checkpoint')

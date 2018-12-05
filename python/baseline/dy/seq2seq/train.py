@@ -1,7 +1,7 @@
 import time
 import logging
 from baseline.progress import create_progress_bar
-from baseline.utils import listify, get_model_file
+from baseline.utils import listify, get_model_file, get_metric_cmp
 from baseline.train import Trainer, create_trainer, register_trainer, register_training_func
 from baseline.dy.optz import *
 from baseline.dy.dynety import *
@@ -116,13 +116,14 @@ def fit(model, ts, vs, es=None, epochs=5, do_early_stopping=True,
 
     trainer = create_trainer(model, **kwargs)
 
+    best_metric = 1000
     if do_early_stopping:
+        early_stopping_cmp, best_metric = get_metric_cmp(early_stopping_metric, kwargs.get('early_stopping_cmp'))
         print("Doing early stopping on [{}] with patience [{}]".format(early_stopping_metric, patience))
 
     reporting_fns = listify(kwargs.get('reporting', []))
     print('reporting', reporting_fns)
 
-    min_metric = 10000
     last_improved = 0
 
     #if after_train_fn is not None:
@@ -137,10 +138,10 @@ def fit(model, ts, vs, es=None, epochs=5, do_early_stopping=True,
         if do_early_stopping is False:
             model.save(model_file)
 
-        elif test_metrics[early_stopping_metric] < min_metric:
+        elif early_stopping_cmp(test_metrics[early_stopping_metric], best_metric):
             last_improved = epoch
-            min_metric = test_metrics[early_stopping_metric]
-            print("New min {:.3f}".format(min_metric))
+            best_metric = test_metrics[early_stopping_metric]
+            print("New best {:.3f}".format(best_metric))
             model.save(model_file)
 
         elif (epoch - last_improved) > patience:
@@ -148,7 +149,7 @@ def fit(model, ts, vs, es=None, epochs=5, do_early_stopping=True,
             break
 
     if do_early_stopping is True:
-        print('Best performance on min_metric {:.3f} at epoch {}'.format(min_metric, last_improved))
+        print('Best performance on {}: {:.3f} at epoch {}'.format(early_stopping_metric, best_metric, last_improved))
 
     if es is not None:
         print('Reloading best checkpoint')

@@ -4,8 +4,8 @@ import dynet as dy
 import numpy as np
 from baseline.dy.optz import *
 from baseline.progress import create_progress_bar
-from baseline.utils import listify, get_model_file, revlut, to_spans, f_score, write_sentence_conll
 from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
+from baseline.utils import listify, get_model_file, revlut, to_spans, f_score, write_sentence_conll, get_metric_cmp
 
 
 @register_trainer(task='tagger', name='default')
@@ -179,8 +179,10 @@ def fit(model, ts, vs, es, **kwargs):
     conll_output = kwargs.get('conll_output', None)
     txts = kwargs.get('txts', None)
 
+    best_metric = 0
     if do_early_stopping:
         early_stopping_metric = kwargs.get('early_stopping_metric', 'acc')
+        early_stopping_cmp, best_metric = get_metric_cmp(early_stopping_metric, kwargs.get('early_stopping_metric'))
         patience = kwargs.get('patience', epochs)
         print('Doing early stopping on [%s] with patience [%d]' % (early_stopping_metric, patience))
 
@@ -193,7 +195,6 @@ def fit(model, ts, vs, es, **kwargs):
     trainer = create_trainer(model, **kwargs)
 
     last_improved = 0
-    max_metric = 0
     for epoch in range(epochs):
 
         trainer.train(ts, reporting_fns)
@@ -204,10 +205,10 @@ def fit(model, ts, vs, es, **kwargs):
         if do_early_stopping is False:
             model.save(model_file)
 
-        elif test_metrics[early_stopping_metric] > max_metric:
+        elif early_stopping_cmp(test_metrics[early_stopping_metric], best_metric):
             last_improved = epoch
-            max_metric = test_metrics[early_stopping_metric]
-            print('New max %.3f' % max_metric)
+            best_metric = test_metrics[early_stopping_metric]
+            print('New max %.3f' % best_metric)
             model.save(model_file)
 
 
@@ -216,7 +217,7 @@ def fit(model, ts, vs, es, **kwargs):
             break
 
     if do_early_stopping is True:
-        print('Best performance on max_metric %.3f at epoch %d' % (max_metric, last_improved))
+        print('Best performance on %s: %.3f at epoch %d' % (early_stopping_metric, best_metric, last_improved))
 
     if es is not None:
         print('Reloading best checkpoint')

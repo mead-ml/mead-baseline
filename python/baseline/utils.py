@@ -8,6 +8,7 @@ import logging
 import zipfile
 import platform
 import importlib
+from operator import lt, le, gt, ge
 from contextlib import contextmanager
 from functools import partial, update_wrapper, wraps
 import numpy as np
@@ -917,3 +918,26 @@ def verbose_output(verbose, confusion_matrix):
 @exporter
 def get_env_gpus():
     return os.getenv('CUDA_VISIBLE_DEVICES', os.getenv('NV_GPU', '0')).split(',')
+
+
+LESS_THAN_METRICS = {"avg_loss", "loss", "perplexity", "ppl"}
+
+
+@exporter
+def get_metric_cmp(metric, user_cmp=None, less_than_metrics=LESS_THAN_METRICS):
+    if user_cmp is not None:
+        return _try_user_cmp(user_cmp)
+    if metric in less_than_metrics:
+        return lt, six.MAXSIZE
+    return gt, 0
+
+
+def _try_user_cmp(user_cmp):
+    user_cmp = user_cmp.lower()
+    if user_cmp in {"lt", "less", "less than", "<", "less_than"}:
+        return lt, six.MAXSIZE
+    if user_cmp in {"le", "lte", "<="}:
+        return le, six.MAXSIZE
+    if user_cmp in {"ge", "gte", ">="}:
+        return ge, 0
+    return gt, 0
