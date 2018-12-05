@@ -41,7 +41,7 @@ class TensorFlowExporter(mead.exporters.Exporter):
         except NotFoundError:
             saver.restore(sess, basename + ".model")
 
-    def run(self, basename, output_dir, model_version):
+    def run(self, basename, output_dir, model_version, **kwargs):
         with tf.Graph().as_default():
             config_proto = tf.ConfigProto(allow_soft_placement=True)
             with tf.Session(config=config_proto) as sess:
