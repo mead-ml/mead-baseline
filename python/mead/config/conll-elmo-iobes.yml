@@ -2,14 +2,12 @@ version: 2
 modules: [vec_text,embed_elmo]
 task: tagger
 batchsz: 10
-conll_output: conll-elmo-bio.conll
-charsz: 30
+conll_output: conll-elmo-iobes.conll
 unif: 0.1
 
 preproc: 
     mxlen: -1
     mxwlen: -1
-    lower: false 
 features:
  - name: word
    vectorizer:
@@ -22,7 +20,7 @@ features:
    vectorizer:
      type: dict2d
    embeddings:
-     dsz: 16
+     dsz: 30
      wsz: 30
      cfiltsz: [3]
      type: char-conv
@@ -34,7 +32,7 @@ features:
      type: elmo
      dsz: 1024
 backend: tensorflow
-dataset: conll-bio
+dataset: conll-iobes
 
 loader: 
     reader_type: default
@@ -53,10 +51,6 @@ model:
     constrain_decode: true
     crf: 1
 
-
-word_embeddings: 
-    label: glove-6B-100
-
 train: 
     epochs: 50
     optim: sgd
@@ -65,4 +59,4 @@ train:
     patience: 15
     early_stopping_metric: f1
     clip: 5.0
-    span_type: bio
+    span_type: iobes 
