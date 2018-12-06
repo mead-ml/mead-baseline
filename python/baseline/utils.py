@@ -12,7 +12,7 @@ from contextlib import contextmanager
 from functools import partial, update_wrapper, wraps
 import numpy as np
 import addons
-
+import collections
 
 __all__ = []
 
@@ -822,7 +822,7 @@ def save_vocabs(basedir, embeds_or_vocabs, name='vocabs'):
     for k, embeds_or_vocabs in embeds_or_vocabs.items():
         save_md = '{}/{}-{}-{}.json'.format(basedir, name, k, os.getpid())
         # Its a vocab
-        if type(embeds_or_vocabs) == dict:
+        if isinstance(embeds_or_vocabs, collections.Mapping):
             write_json(embeds_or_vocabs, save_md)
         # Type is embeds
         else:
