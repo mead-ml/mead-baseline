@@ -1,0 +1,55 @@
+{
+    "version": 2,
+    "task": "classify",
+    "basedir": "./sst2",
+    "batchsz": 50,
+    "modules": ["embed_bert"],
+    "features": 
+    [
+	{
+	    "name": "bert",
+	    "vectorizer": {
+		"type": "wordpiece1d",
+		"vocab_file": "/home/dpressel/dev/work/bert/cased_L-12_H-768_A-12/vocab.txt"
+	    },
+	    "embeddings": {
+		"type": "bert",
+		"dsz": 3072,
+		"vocab_file": "/home/dpressel/dev/work/bert/cased_L-12_H-768_A-12/vocab.txt",
+		"bert_config": "/home/dpressel/dev/work/bert/cased_L-12_H-768_A-12/bert_config.json",
+		"embed_file": "/home/dpressel/dev/work/bert/cased_L-12_H-768_A-12/bert_model.ckpt"
+	    }
+	}
+    ],
+    "preproc": {
+	"mxlen": 100
+    },
+    "backend": "tensorflow",
+    "dataset": "SST2",
+    "loader": {
+	"reader_type": "default"
+    },
+    "unif": 0.25,
+    "model": {
+	"model_type": "nbow",
+	"filtsz": [
+	    3,
+	    4,
+	    5
+	],
+	"cmotsz": 100,
+	"dropout": 0.5,
+	"finetune": true
+    },
+    "train": {
+	"epochs": 2,
+	"optim": "adamw",
+	"eta": 0.0008,
+	"weight_decay": 1e-8,
+	"early_stopping_metric": "acc",
+	"verbose": {
+	    "console": true,
+	    "file": "sst2-cm.csv"
+	}
+    }
+}
