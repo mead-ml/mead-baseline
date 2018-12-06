@@ -2,7 +2,7 @@ import os
 from copy import deepcopy
 from functools import partial
 import pytest
-from baseline.utils import get_env_gpus, Offsets
+from baseline.utils import get_env_gpus
 
 
 @pytest.fixture
@@ -49,24 +49,3 @@ def test_none(remove_envs):
     assert gpus == gold
 
 
-def test_offsets_double_star():
-    gold = {k: i for i, k in enumerate(Offsets.VALUES)}
-    assert dict(**Offsets) == gold
-
-
-def test_offsets_single_star():
-    gold = deepcopy(Offsets.VALUES)
-    def collect(*args):
-        return list(args)
-    assert collect(*Offsets) == gold
-
-
-def test_offsets_lengths():
-    gold = len(Offsets.VALUES)
-    assert len(Offsets) == gold
-
-
-def test_offsets_get_item():
-    for i, item in enumerate(Offsets.VALUES):
-        res = Offsets[item]
-        assert res == i
