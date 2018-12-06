@@ -13,7 +13,6 @@ from baseline.version import __version__
 from tensorflow.contrib.layers import fully_connected
 import os
 import copy
-import copy
 
 class ClassifyParallelModel(ClassifierModel):
 
