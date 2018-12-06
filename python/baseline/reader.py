@@ -478,7 +478,6 @@ class TSVSeqLabelReader(SeqLabelReader):
 
         shuffle = kwargs.get('shuffle', False)
         sort_key = kwargs.get('sort_key', None)
-        truncate = kwargs.get('truncate', False)
         if sort_key is not None and not sort_key.endswith('_lengths'):
             sort_key += '_lengths'
 

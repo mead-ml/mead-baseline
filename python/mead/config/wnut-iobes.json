@@ -1,8 +1,8 @@
 {
     "task": "tagger",
-    "basedir": "wnut",
+    "basedir": "wnut-iobes",
     "batchsz": 20,
-    "conll_output": "wnutresults.conll",
+    "conll_output": "wnut-iobes-results.conll",
     "unif": 0.1,
     "preproc": {
 	"mxlen": 60,
@@ -25,7 +25,7 @@
 	}
     ],
     "backend": "pytorch",
-    "dataset": "wnut",
+    "dataset": "wnut-iobes",
     "loader": {
 	"reader_type": "default",
         "named_fields": {
@@ -54,7 +54,7 @@
 	"patience": 20,
 	"early_stopping_metric": "f1",
 	"clip": 5.0,
-        "span_type": "bio"
+        "span_type": "iobes"
     }
 }
 

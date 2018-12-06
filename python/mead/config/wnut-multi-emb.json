@@ -19,6 +19,24 @@
 	    "embeddings": { "label": "glove-twitter-27B"}
 	},
 	{
+	    "name": "word2",
+	    "vectorizer": {
+		"type": "dict1d",
+		"fields": "text",
+                "transform": "baseline.lowercase"
+	    },
+	    "embeddings": { "label": "glove-42B"}
+	},
+        {
+            "name": "word3",
+            "vectorizer": {
+                "type": "dict1d",
+                "fields": "text",
+                "transform": "baseline.web_cleanup"
+            },
+            "embeddings": { "label": "w2v-twitter-30M" }
+        },
+	{
 	    "name": "char",
 	    "vectorizer": { "type": "dict2d" },
 	    "embeddings": { "dsz": 30, "wsz": 30, "type": "char-conv" }

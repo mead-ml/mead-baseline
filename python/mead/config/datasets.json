@@ -82,6 +82,14 @@
     "sha1":"0163d877fac98a2063ca4bcb005c26b3786b8e81",
     "label": "wnut"
   },
+
+  {
+    "train_file": "wnut17train.conll.iobes",
+    "valid_file": "wnut17dev.conll.iobes",
+    "test_file": "wnut17test.conll.iobes",
+    "download": "https://www.dropbox.com/s/ue7zfvzhfhpdksz/wnut17-iobes.tar.gz?dl=1",
+    "label": "wnut-iobes"
+  },
   {
     "train_file": "atis-2.train.conll",
     "valid_file": "atis-2.dev.conll",
