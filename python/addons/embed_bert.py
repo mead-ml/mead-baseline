@@ -1375,7 +1375,7 @@ class BERTEmbeddings(TensorFlowEmbeddings):
     @classmethod
     def create_placeholder(cls, name):
         #input_ids = tf.placeholder(tf.int32, shape=(None, FLAGS.max_seq_length), name='input_ids')
-        return tf.placeholder(tf.int32, [None, 100], name=name)
+        return tf.placeholder(tf.int32, [None, None], name=name)
 
     def __init__(self, name, **kwargs):
         super(BERTEmbeddings, self).__init__()
@@ -1387,7 +1387,7 @@ class BERTEmbeddings(TensorFlowEmbeddings):
         self.vsz = self.bert_config.vocab_size
         assert self.vsz == len(self.vocab)
         self.use_one_hot_embeddings = kwargs.get('use_one_hot_embeddings', False)
-        self.layer_indices = [-1, -2, -3, -4]
+        self.layer_indices = kwargs.get('layers', [-1, -2, -3, -4])
         self.operator = kwargs.get('operator', 'concat')
 
     def get_vocab(self):
@@ -1400,7 +1400,6 @@ class BERTEmbeddings(TensorFlowEmbeddings):
         return c
 
     def encode(self, x=None):
-        print('XXXXX', x)
         if x is None:
             x = BERTEmbeddings.create_placeholder(self.name)
         self.x = x
@@ -1416,8 +1415,10 @@ class BERTEmbeddings(TensorFlowEmbeddings):
 
         layers = [all_layers[layer_index] for layer_index in self.layer_indices]
         if self.operator == 'concat':
-            return tf.concat(layers, axis=-1)
-        return tf.reduce_mean(layers, axis=-1)
-
+            z = tf.concat(layers, axis=-1)
+        else:
+            z = tf.reduce_mean(layers, axis=-1)
+        z = tf.stop_gradient(z)
+        return z
     def save_md(self, target):
         write_json({'vsz': self.vsz, 'dsz': self.dsz}, target)
