@@ -13,19 +13,6 @@ This is inspired by Yoon Kim's paper "Convolutional Neural Networks for Sentence
 Temporal convolutional output total number of feature maps is configurable (this also defines the size of the max over time layer, by definition). This code offers several optimization options (adagrad, adadelta, adam and vanilla sgd, with and without momentum).  The Kim paper uses adadelta, which works well, but vanilla SGD and Adam often work well.
 
 Despite the simplicity of this approach, on many datasets this model performs better than other strong baselines such as NBSVM.
-
-Here are some places where this code is known to perform well:
-
-  - Binary classification of sentences (SST2 - SST binary task)
-    - Consistently beats RNTN using static embeddings, much simpler model
-  - Binary classification of Tweets (SemEval balanced binary splits)
-    - Consistent improvement over NBSVM even with char-ngrams included and distance lexicons (compared using [NBSVM-XL](https://github.com/dpressel/nbsvm-xl))
-  - Stanford Politeness Corpus
-    - Consistent improvement over [extended algorithm](https://github.com/sudhof/politeness) from authors using a decimation split (descending rank heldout)
-  - Language Detection (using word and char embeddings)
-  - Question Categorization (QA trec)
-  - Intent detection
-
 There are some options in each implementation that might vary slightly, but this approach should do at least as well as the original paper.
 
 ### With Fine-tuning Embedding (LookupTable) layer
@@ -62,7 +49,7 @@ Here are the last observed performance scores using with fine-tuning on the Stan
 Note that these are randomly initialized and these numbers will vary
 (IOW, don't assume that one implementation is guaranteed to outperform the others from a single run).
 
-On my laptop, each implementation for SST2 takes between 15 - 30s per epoch depending on the deep learning framework (TensorFlow and PyTorch are fastest, and about the same speed)
+On a typical GPU, each implementation for SST2 takes between 15 - 30s per epoch depending on the deep learning framework (TensorFlow and PyTorch are fastest, and about the same speed)
 
 ## LSTM Model
 
