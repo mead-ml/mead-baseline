@@ -1,6 +1,6 @@
 # Sequence tagging using CNN-BLSTM-CRF
 
-Our Baseline Tagger is a SoTA model architecture, and supports flexible embeddings, including contextual embeddings and one or more pre-trained sets of word embeddings.  It has been shown that character-level modeling is important in deep models to support morpho-syntatic structure for tagging tasks.
+Our Baseline Tagger is a State-of-the-Art model architecture, and supports flexible embeddings, including contextual embeddings and one or more pre-trained sets of word embeddings.  It has been shown that character-level modeling is important in deep models to support morpho-syntatic structure for tagging tasks.
 
 ## CNN-BLSTM-CRF
 
@@ -23,9 +23,9 @@ To change the backend between TensorFlow and PyTorch, just change the `backend` 
 ## NER Tagging
 
 
-For NER reporting, we will report an F1 score on at each validation pass, and will use F1 for early-stopping as well.
+For NER reporting, we report an F1 score on at each validation pass, and use F1 for early-stopping.
 
-For tasks that require global coherency like NER tagging, it has been shown that using a transition matrix between label states in conjunction with the output RNN tags improves performance.  This makes the tagger a linear chain CRF, and we can do this by simply adding another layer on top of our RNN output.  A simple technique that performs nearly as well is to replace the CRF with a coarse constrained decoder at inference time that simply checks for IOBES violations and effectively zeros out those transitions.
+For tasks that require global coherency like NER tagging, it has been shown that using a linear chain CRF to learn a transition matrix between label states in conjunction with the output RNN tags improves performance.  A simple technique that performs nearly as well is to replace the CRF with a coarse constrained decoder at inference time that simply checks for IOBES violations and effectively zeros out those transitions.
 
 ### CONLL2003
 
@@ -37,7 +37,7 @@ Our default [mead](mead.md) configuration is SoTA for models without contextual 
 python trainer.py --config config/conll.json
 ```
 
-- We find (along with most other papers/implementors) that IOBES (BMES), on average, out-performs BIO (IOB2).  We also find that IOB2 out-performs IOB1 (the original format in which the data is provided).  Note these details do not change the actual model itself, it just trains the model in a way that seems to cause it to learn better, and when comparing implementations, its important to take note of which of the three formats are used.
+- We find (along with most other researchers) that IOBES (BMES), on average, out-performs BIO (IOB2).  We also find that IOB2 out-performs IOB1 (the original format in which the data is provided).  Note these details do not change the actual model itself, it just trains the model in a way that seems to cause it to learn better, and when comparing implementations, its important to take note of which of the three formats are used.
 
 #### Constrained Decoding Model without CRF
 
