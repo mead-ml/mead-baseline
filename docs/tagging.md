@@ -59,7 +59,7 @@ Our default model provides a strong baseline for WNUT17, and  can be trained wit
 python trainer.py --config config/wnut.json
 ```
 
-#### Constrained Decoding Model without CRF*
+#### Constrained Decoding Model without CRF
 
 Our constrained decoder model can be run as follows:
 
