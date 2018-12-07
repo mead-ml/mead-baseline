@@ -9,8 +9,6 @@ For the lookup-table embeddings, you can control whether or not the embeddings s
 
 ## Convolution Model
 
-This code provides PyTorch, TensorFlow, DyNet and Keras implementations. 
-
 *Details*
 
 This is inspired by Yoon Kim's paper "Convolutional Neural Networks for Sentence Classification", and before that Collobert's "Sentence Level Approach."  The implementations provided here are basically the Kim static and non-static models.
@@ -30,8 +28,6 @@ python trainer.py --config config/sst2.json
 
 ## LSTM Model
 
-Provides a simple LSTM and BLSTM for text classification with PyTorch, TensorFlow and DyNet
-
 *Details*
 
 The LSTM's final hidden state is passed to the final layer.  The use of an LSTM instead of parallel convolutional filters is the main differentiator between this model and the default model (CMOT) above.  To request the LSTM classifier instead of the default, pass `"model_type": "lstm"` to the driver program.
@@ -46,7 +42,7 @@ python trainer.py --config config/sst2-lstm.json
 
 Two different pooling methods for NBoW are supported: max (`"model_type": "nbowmax"`) and average (`"model_type": "nbow"`).  Passing `"layers": <N>` defines the number of hidden layers, and passing `"hsz": <HU>` defines the number of hidden units for each layer.
 
-## Performance
+## Classifier Performance
 
 We run each experiment 10 times and list the performance, configuration, and metrics below
 
