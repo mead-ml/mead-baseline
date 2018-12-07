@@ -71,43 +71,23 @@ Our constrained decoder model can be run as follows:
 python trainer.py --config config/wnut-no-crf.json
 ```
 
-### Latest Runs
+### Model Performance
 
-Here are some observed performance scores on various dataset.  In general, our observed peformance is very similar to this recent paper: https://arxiv.org/pdf/1806.04470.pdf
-Average scores are listed below.  Our best run so far is 91.37 using IOBES on CONLL2003.  This [same model with ELMo](../python/addons) achieves an F1 of 92.
+We have run each model 10 times and here we show the performance for each configuration.  All NER models are trained with IOBES tags.  The ELMo configurations are done using our [ELMo Embeddings addon](../python/addons/embed_elmo.py).
 
-| dataset             | model type    | metric | method   | eta (LR) |    avg |   max |  hsz |
-| ------------------- | ------------- |------- | -------- | -------- | ------ | ----- |----- |
-| twpos-v03           | CNN-BLSTM     |    acc | adam     |       -- | 89.4   |    -  |  100 |
-| conll 2003 (IOB1)   | CNN-BLSTM-CRF |     f1 | sgd mom. |     0.015| 90.8   | 90.98 |  200 |
-| conll 2003 (BIO)    | CNN-BLSTM-CRF |     f1 | sgd mom. |     0.015| 90.954 | 91.28 |  200 |
-| conll 2003 (IOBES)  | CNN-BLSTM-CRF |     f1 | sgd mom. |     0.015| 91.1   | 91.37 |  200 |
-| conll 2003 (IOBES)  | CNN-CNN-CRF   |     f1 | sgd mom. |     0.001| 90.54  | 90.67 |  800 |
-|       atis (mesnil) | CNN-BLSTM     |     f1 | sgd mom. |     0.01 |     -  | 96.74 |  100 |
+| config                                                       | dataset   | model                | metric | mean  |  std  | min   | max   |
+| ------------------------------------------------------------ | --------- | -------------------- |------- | ------| ----- | ----- | ----- |
+| [twpos.json](../python/mead/config/twpos.json)               | twpos-v03 | CNN-BLSTM-CRF        |    acc | 90.75 | 0.140 | 90.53 | 91.02 |
+| [conll.json](../python/mead/config/conll.json)               | CONLL2003 | CNN-BLSTM-CRF        |     f1 | 91.47 | 0.247 | 91.15 | 92.00 |
+| [conll-no-crf.json](../python/mead/config/conll-no-crf.json) | CONLL2003 | CNN-BLSTM-constrain  |     f1 | 91.44 | 0.232 | 91.17 | 91.90 |
+| [conll-elmo.json](../python/mead/config/conll-elmo.json)     | CONLL2003 | CNN-BLSTM-CRF        |     f1 | 92.26 | 0.157 | 92.00 | 92.48 |
+| [wnut.json](../python/mead/config/wnut.json)                 | WNUT17    | CNN-BLSTM-CRF        |     f1 | 40.33 | 1.13  | 38.38 | 41.90 |
+| [wnut-no-crf.json](../python/mead/config/wnut-no-crf.json)   | WNUT17    | CNN-BLSTM-constrain  |     f1 | 40.59 | 1.06  | 37.96 | 41.71 |
 
 
 ### Testing a trained model on your data
 
-You can use [`tag.py`](../python/tag.py) to load a sequence tagger checkpoint, predict the labels for an input conll file and produce the output in the same format. The second column is the predicted label.
-
-Run the code like this:
-```
-python tag.py --input conll-tester.conll --output out-conll-tester.conll --model mead/tagger/tagger-model-tf-7097 --mxlen 124 --mxwlen 61
-```
-`tag.py` also supports multiple features in the conll file. However, you need to create a JSON file (dictionary) with the index of the features in the format: `{feature-name:feature-index}` (eg. `{"gaz":1}`) where the `gaz` feature is the second column in the conll file. To run the code use: 
-
-```
-python tag.py --input gaz-tester.conll --output gaz-tester-out-1.conll --model mead/tagger-gaz/tagger-model-tf-12509 --mxlen 60 --mxwlen 40 --model_type gazetteer --features features.json --featurizer_type multifeature
-```
-
-You can write your own featurizer (`featurizer_<featurizer_type>.py`) and keep it in your PYTHONPATH. For an example, see [featurizer_elmo.py](../python/addons/featurizer_elmo.py). The `featurizer_type` should be passed as an argument as shown below:
-
-```
-python tag.py --input elmo-tester.conll --output elmo-tester-out.conll --model mead/elmo-2/tagger-model-tf-2658 --mxlen 60 --mxwlen 40 --model_type elmo --featurizer_type elmo
-```
-
-We support loading tagger models defined in [TensorFlow](../python/baseline/tf/tagger/model.py) and [PyTorch](../python/baseline/pytorch/tagger/model.py).
-
+You can use [`tag-text.py`](../api-examples/tag-text.py) to load a sequence tagger checkpoint and predict its labels
 
 #### Losses and Reporting
 
