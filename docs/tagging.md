@@ -12,7 +12,7 @@ The character-level embeddings are based on Character-Aware Neural Language Mode
 
 Twitter is a challenging data source for tagging problems.  The [TweetNLP project](http://www.cs.cmu.edu/~ark/TweetNLP) includes hand annotated POS data. The original taggers used for this task are described [here](http://www.cs.cmu.edu/~ark/TweetNLP/gimpel+etal.acl11.pdf).  The baseline that they compared their algorithm against got 83.38% accuracy.  The final model got 89.37% accuracy with many custom features.  Below, our simple BLSTM baseline with no custom features, and a very coarse approach to compositional character to word modeling significantly out-performs this.
 
-Our Baseline default model is a CNN-BLSTM-CRF with 3 sets of word embeddings. To run it:
+To run our default model:
 
 ```
 python --config config/twpos.json
