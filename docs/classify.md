@@ -30,7 +30,7 @@ python trainer.py --config config/sst2.json
 
 *Details*
 
-The LSTM's final hidden state is passed to the final layer.  The use of an LSTM instead of parallel convolutional filters is the main differentiator between this model and the default model (CMOT) above.  To request the LSTM classifier instead of the default, pass `"model_type": "lstm"` to the driver program.
+The LSTM's final hidden state is passed to the final layer.  The use of an LSTM instead of parallel convolutional filters is the main differentiator between this model and the default model (CMOT) above.  To request the LSTM classifier instead of the default, set `"model_type": "lstm"` in the mead config file.
 
 The command below executes an LSTM classifier with 2 sets of pre-trained word embeddings
 
