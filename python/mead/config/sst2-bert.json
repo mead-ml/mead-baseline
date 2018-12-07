@@ -2,7 +2,7 @@
     "version": 2,
     "task": "classify",
     "basedir": "./sst2",
-    "batchsz": 200,
+    "batchsz": 50,
     "modules": ["embed_bert"],
     "features": 
     [
@@ -19,7 +19,7 @@
 		"bert_config": "../../../bert/uncased_L-12_H-768_A-12/bert_config.json",
 		"embed_file": "../../../bert/uncased_L-12_H-768_A-12/bert_model.ckpt",
                 "operator": "concat",
-                "layers": [-1]
+                "layers": [-1,-2, -3, -4]
 	    }
 	}
     ],
@@ -40,9 +40,9 @@
 	"finetune": true
     },
     "train": {
-	"epochs": 5,
+	"epochs": 20,
 	"optim": "adamw",
-	"eta": 0.0003,
+	"eta": 0.00025,
         "weight_decay": 1.0e-5,
 	"early_stopping_metric": "acc",
 	"verbose": {
