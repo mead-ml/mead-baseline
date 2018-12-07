@@ -1,6 +1,6 @@
 # Sentence Classification
 
-There are several models built in to the `baseline` codebase.  These are summarized individually in the sections below, and an overall performance summary is given.
+There are several models built in to the `baseline` codebase.  These are summarized individually in the sections below, and an overall performance summary is given at the bottom
 
 ## A Note About Fine-Tuning and Embeddings
 
@@ -28,16 +28,6 @@ To run, use this command:
 python trainer.py --config config/sst2.json
 ```
 
-### Performance
-
-We run each experiment 10 times and list the performance, configuration, and metrics below
-
-| config                                                       | dataset   | model                | metric | mean  |  std  | min   | max   |
-| ------------------------------------------------------------ | --------- | -------------------- |------- | ------| ----- | ----- | ----- |
-| [sst2.json](../python/mead/config/sst2.json)                 | SST2      | CNN-3,4,5            |    acc | 90.75 | 0.140 | 90.53 | 91.02 |
-| [trec-cnn.yml](../python/mead/config/trec-cnn.yml)           | TREC-QA   | CNN-3                |    acc | 92.33 | 0.56  | 91.2  | 93.2  |
-| [ag-news.json](../python/mead/config/ag-news.json)           | AGNEWS    | CNN-3,4,5            |    acc | 92.51 | 0.199 | 92.07 | 92.83 |
-
 ## LSTM Model
 
 Provides a simple LSTM and BLSTM for text classification with PyTorch, TensorFlow and DyNet
@@ -46,22 +36,27 @@ Provides a simple LSTM and BLSTM for text classification with PyTorch, TensorFlo
 
 The LSTM's final hidden state is passed to the final layer.  The use of an LSTM instead of parallel convolutional filters is the main differentiator between this model and the default model (CMOT) above.  To request the LSTM classifier instead of the default, pass `"model_type": "lstm"` to the driver program.
 
-The command below executes an LSTM classifier with 3 sets of pre-trained word embeddings
+The command below executes an LSTM classifier with 2 sets of pre-trained word embeddings
 
 ```
 python trainer.py --config config/sst2-lstm.json
 ```
 
-
-
-| config                                                       | dataset   | model                | metric | mean  |  std  | min   | max   |
-| ------------------------------------------------------------ | --------- | -------------------- |------- | ------| ----- | ----- | ----- |
-| [sst2-lstm.json](../python/mead/config/sst2-lstm.json)       | SST2      | LSTM                 |    acc | 88.57 | 0.443 | 87.59 | 89.24 |
-
-
 ## Neural Bag of Words (NBoW) Model (Max and Average Pooling)
 
 Two different pooling methods for NBoW are supported: max (`"model_type": "nbowmax"`) and average (`"model_type": "nbow"`).  Passing `"layers": <N>` defines the number of hidden layers, and passing `"hsz": <HU>` defines the number of hidden units for each layer.
+
+## Performance
+
+We run each experiment 10 times and list the performance, configuration, and metrics below
+
+| config                                                           | dataset   | model                | metric | mean  |  std  | min   | max   |
+| ---------------------------------------------------------------- | --------- | -------------------- |------- | ------| ----- | ----- | ----- |
+| [sst2-lstm.json](../python/mead/config/sst2-lstm.json)           | SST2      | LSTM 2 Embeddings    |    acc | 88.57 | 0.443 | 87.59 | 89.24 |
+| [sst2-lstm-840b.json](../python/mead/config/sst2-lstm-840b.json) | SST2      | LSTM 1 Embedding     |    acc | 88.39 | 0.45  | 87.42 | 89.07 |
+| [sst2.json](../python/mead/config/sst2.json)                     | SST2      | CNN-3,4,5            |    acc | 90.75 | 0.140 | 90.53 | 91.02 |
+| [trec-cnn.yml](../python/mead/config/trec-cnn.yml)               | TREC-QA   | CNN-3                |    acc | 92.33 | 0.56  | 91.2  | 93.2  |
+| [ag-news.json](../python/mead/config/ag-news.json)               | AGNEWS    | CNN-3,4,5            |    acc | 92.51 | 0.199 | 92.07 | 92.83 |
 
 ## Multiple GPUs
 
