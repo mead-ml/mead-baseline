@@ -3,7 +3,7 @@ import logging
 import torch
 import numpy as np
 from baseline.progress import create_progress_bar
-from baseline.utils import listify, get_model_file
+from baseline.utils import listify, get_model_file, get_metric_cmp
 from baseline.train import Trainer, create_trainer, register_trainer, register_training_func
 from baseline.pytorch.optz import OptimizerManager
 
@@ -112,8 +112,10 @@ def fit(model, ts, vs, es=None, **kwargs):
     epochs = int(kwargs.get('epochs', 20))
     model_file = get_model_file('seq2seq', 'pytorch', kwargs.get('basedir'))
 
+    best_metric = 10000
     if do_early_stopping:
         early_stopping_metric = kwargs.get('early_stopping_metric', 'avg_loss')
+        early_stopping_cmp, best_metric = get_metric_cmp(early_stopping_metric, kwargs.get('early_stopping_cmp'))
         patience = kwargs.get('patience', epochs)
         print('Doing early stopping on [%s] with patience [%d]' % (early_stopping_metric, patience))
 
@@ -123,7 +125,6 @@ def fit(model, ts, vs, es=None, **kwargs):
     after_train_fn = kwargs.get('after_train_fn', None)
     trainer = create_trainer(model, **kwargs)
 
-    min_metric = 10000
     last_improved = 0
     for epoch in range(epochs):
 
@@ -140,10 +141,10 @@ def fit(model, ts, vs, es=None, **kwargs):
         if do_early_stopping is False:
             model.save(model_file)
 
-        elif test_metrics[early_stopping_metric] < min_metric:
+        elif early_stopping_cmp(test_metrics[early_stopping_metric], best_metric):
             last_improved = epoch
-            min_metric = test_metrics[early_stopping_metric]
-            print('New min %.3f' % min_metric)
+            best_metric = test_metrics[early_stopping_metric]
+            print('New best %.3f' % best_metric)
             model.save(model_file)
 
         elif (epoch - last_improved) > patience:
@@ -151,7 +152,7 @@ def fit(model, ts, vs, es=None, **kwargs):
             break
 
     if do_early_stopping is True:
-        print('Best performance on min_metric %.3f at epoch %d' % (min_metric, last_improved))
+        print('Best performance on %s: %.3f at epoch %d' % (early_stopping_metric, best_metric, last_improved))
 
     if es is not None:
         model.load(model_file)

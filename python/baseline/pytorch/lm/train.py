@@ -1,7 +1,7 @@
 import time
 import logging
 from baseline.pytorch.torchy import *
-from baseline.utils import listify, revlut, get_model_file
+from baseline.utils import listify, revlut, get_model_file, get_metric_cmp
 from baseline.train import Trainer, create_trainer, register_trainer, register_training_func
 from baseline.pytorch.optz import OptimizerManager
 
@@ -123,8 +123,10 @@ def fit(model, ts, vs, es, **kwargs):
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
     model_file = get_model_file('lm', 'pytorch', kwargs.get('basedir'))
 
+    best_metric = 10000
     if do_early_stopping:
         early_stopping_metric = kwargs.get('early_stopping_metric', 'avg_loss')
+        early_stopping_cmp, best_metric = get_metric_cmp(early_stopping_metric, kwargs.get('early_stopping_cmp'))
         patience = kwargs.get('patience', epochs)
         print('Doing early stopping on [%s] with patience [%d]' % (early_stopping_metric, patience))
 
@@ -133,7 +135,6 @@ def fit(model, ts, vs, es, **kwargs):
 
     after_train_fn = kwargs.get('after_train_fn', None)
     trainer = create_trainer(model, **kwargs)
-    min_metric = 10000
     last_improved = 0
     for epoch in range(epochs):
 
@@ -145,10 +146,10 @@ def fit(model, ts, vs, es, **kwargs):
         if do_early_stopping is False:
             model.save(model_file)
 
-        elif test_metrics[early_stopping_metric] < min_metric:
+        elif early_stopping_cmp(test_metrics[early_stopping_metric], best_metric):
             last_improved = epoch
-            min_metric = test_metrics[early_stopping_metric]
-            print('New min %.3f' % min_metric)
+            best_metric = test_metrics[early_stopping_metric]
+            print('New best %.3f' % best_metric)
             model.save(model_file)
 
 
@@ -157,7 +158,7 @@ def fit(model, ts, vs, es, **kwargs):
             break
 
     if do_early_stopping is True:
-        print('Best performance on max_metric %.3f at epoch %d' % (min_metric, last_improved))
+        print('Best performance on %s: %.3f at epoch %d' % (early_stopping_metric, best_metric, last_improved))
 
     if es is not None:
         print('Reloading best checkpoint')
