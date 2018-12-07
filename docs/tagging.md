@@ -1,6 +1,6 @@
 # Sequence tagging using CNN-BLSTM-CRF
 
-Our Baseline Tagger is a SoTA model architecture, and supports flexible embeddings, including contextual embeddings (to produce SoTA models) and one or more pre-trained sets of word embeddings.  It has been shown that character-level modeling is important in deep models to support morpho-syntatic structure for tagging tasks.
+Our Baseline Tagger is a SoTA model architecture, and supports flexible embeddings, including contextual embeddings and one or more pre-trained sets of word embeddings.  It has been shown that character-level modeling is important in deep models to support morpho-syntatic structure for tagging tasks.
 
 ## CNN-BLSTM-CRF
 
