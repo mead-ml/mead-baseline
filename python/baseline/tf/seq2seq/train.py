@@ -14,6 +14,7 @@ from baseline.utils import (
 )
 from baseline.train import Trainer, create_trainer, register_trainer, register_training_func
 from baseline.bleu import bleu
+from baseline.tf.tfy import SET_TRAIN_FLAG
 
 
 @register_trainer(task='seq2seq', name='default')
@@ -39,6 +40,7 @@ class Seq2SeqTrainerTf(Trainer):
         print('Reloading ' + latest)
         g = tf.Graph()
         with g.as_default():
+            SET_TRAIN_FLAG(None)
             sess = tf.Session()
             self.model = self.model.load(latest, predict=True, beam=self.beam, session=sess)
 
