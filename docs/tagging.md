@@ -1,86 +1,88 @@
-# Structured Prediction using CNN-BLSTM-CRF
+# Sequence tagging using CNN-BLSTM-CRF
 
-This code is useful for tagging tasks, e.g., POS tagging, chunking and NER tagging.  Recently, several researchers have proposed using RNNs for tagging, particularly LSTMs.  These models do back-propagation through time (BPTT)
-and then apply a shared fully connected layer per RNN output to produce a label.
-A common modification is to use Bidirectional LSTMs -- one in the forward direction, and one in the backward direction.  This usually improves the resolution of the tagger significantly.  That is the default approach taken here.
-
-To execute these models it is necessary to form word vectors.  It has been shown that character-level modeling is important in deep models to support morpho-syntatic structure for tagging tasks.
-It seems that a good baseline should combine word vectors and character-level compositions of words.
+Our Baseline Tagger is a State-of-the-Art model architecture, and supports flexible embeddings, including contextual embeddings and one or more pre-trained sets of word embeddings.  It has been shown that character-level modeling is important in deep models to support morpho-syntatic structure for tagging tasks.
 
 ## CNN-BLSTM-CRF
 
 The code uses word and character-level word embeddings.  For character-level processing, a character vector depth is selected, along with a word-vector depth. 
 
-The character-level embeddings are based on Character-Aware Neural Language Models (Kim, Jernite, Sontag, Rush) and dos Santos 2014 (though the latter's tagging model is quite different).  Unlike dos Santos' approach, here parallel filters are applied during the convolution (which is like the Kim approach). Unlike the Kim approach residual connections of like size filters are used, and since they improve performance for tagging, word vectors are also used.
+The character-level embeddings are based on Character-Aware Neural Language Models (Kim, Jernite, Sontag, Rush) and dos Santos 2014 (though the latter's tagging model is quite different).  Unlike dos Santos' approach, here, one or more parallel filters are applied during the convolution (which is like the Kim approach). Unlike the Kim approach residual connections of like size filters are used, and since they improve performance for tagging, word vectors are also used.
 
-Twitter is a challenging data source for tagging problems.  The [TweetNLP project](http://www.cs.cmu.edu/~ark/TweetNLP) includes hand annotated POS data. The original taggers used for this task are described [here](http://www.cs.cmu.edu/~ark/TweetNLP/gimpel+etal.acl11.pdf).  The baseline that they compared their algorithm against got 83.38% accuracy.  The final model got 89.37% accuracy with many custom features.  Below, our simple BLSTM baseline with no custom features, and a very coarse approach to compositional character to word modeling still gets equivalent results.
+## Part-of-Speech Tagging
 
-## Running It
+Twitter is a challenging data source for tagging problems.  The [TweetNLP project](http://www.cs.cmu.edu/~ark/TweetNLP) includes hand annotated POS data. The original taggers used for this task are described [here](http://www.cs.cmu.edu/~ark/TweetNLP/gimpel+etal.acl11.pdf).  The baseline that they compared their algorithm against got 83.38% accuracy.  The final model got 89.37% accuracy with many custom features.  Below, our simple BLSTM baseline with no custom features, and a very coarse approach to compositional character to word modeling significantly out-performs this.
 
-Here is an example using convolutional filters for character embeddings, alongside word embeddings.  This is basically a combination of the dos Santos approach with the Kim parallel filter idea:
+To run our default model:
 
 ```
-python --config config/conll-twpos.json
+python --config config/twpos.json
 ```
 
 To change the backend between TensorFlow and PyTorch, just change the `backend` parameter (to `tensorflow` or `pytorch`).  For DyNet, we employ autobatching, which also affects the reader, so in addition to setting the `backend` to `dynet`, set the `batchsz` to `1`, and then set the `autobatchsz` under the `train` parameters to the desired batch size. See the example configs under [mead](../python/mead/config) for details.
 
-### NER (and other IOB-type) Tagging
+## NER Tagging
 
-NER tagging can be performed with a BLSTM, and optionally, a top-level CRF. This will report an F1 score on at each validation pass, and will use F1 for early-stopping as well.
 
-For tasks that require global coherency like NER tagging, it has been shown that using a transition matrix between label states in conjunction with the output RNN tags improves performance.  This makes the tagger a linear chain CRF, and we can do this by simply adding another layer on top of our RNN output.
+For NER reporting, we report an F1 score on at each validation pass, and use F1 for early-stopping.
 
-The [mead](mead.md)  configuration below yields a very similar model to this paper: https://arxiv.org/pdf/1603.01354.pdf and yields near-SoTA performance.
+For tasks that require global coherency like NER tagging, it has been shown that using a linear chain CRF to learn a transition matrix between label states in conjunction with the output RNN tags improves performance.  A simple technique that performs nearly as well is to replace the CRF with a coarse constrained decoder at inference time that simply checks for IOBES violations and effectively zeros out those transitions.
+
+### CONLL2003
+
+#### CRF Model
+
+Our default [mead](mead.md) configuration is SoTA for models without contextual embeddings or co-training, and is run with this command:
 
 ```
-python trainer.py --config config/conll-iobes.json
-python trainer.py --config config/conll-bio.json
+python trainer.py --config config/conll.json
 ```
 
-- We find (along with most other papers/implementors) that IOBES (BMES), on average, out-performs BIO (IOB2).  We also find that IOB2 out-performs IOB1 (the original format in which the data is provided).  Note these details do not change the actual model itself, it just trains the model in a way that seems to cause it to learn better, and when comparing implementations, its important to take note of which of the three formats are used.
+- We find (along with most other researchers) that IOBES (BMES), on average, out-performs BIO (IOB2).  We also find that IOB2 out-performs IOB1 (the original format in which the data is provided).  Note these details do not change the actual model itself, it just trains the model in a way that seems to cause it to learn better, and when comparing implementations, its important to take note of which of the three formats are used.
 
-## Status
+#### Constrained Decoding Model without CRF
 
-This model is implemented in TensorFlow and PyTorch.
+Our constrained decoder can be run with the following command:
 
-### Latest Runs
+```
+python trainer.py --config config/conll-no-crf.json
+```
 
-Here are some observed performance scores on various dataset.  In general, our observed peformance is very similar to this recent paper: https://arxiv.org/pdf/1806.04470.pdf
-Average scores are listed below.  Our best run so far is 91.37 using IOBES on CONLL2003.  This [same model with ELMo](../python/addons) achieves an F1 of 92.
+### WNUT17
 
-| dataset             | model type    | metric | method   | eta (LR) |    avg |   max |  hsz |
-| ------------------- | ------------- |------- | -------- | -------- | ------ | ----- |----- |
-| twpos-v03           | CNN-BLSTM     |    acc | adam     |       -- | 89.4   |    -  |  100 |
-| conll 2003 (IOB1)   | CNN-BLSTM-CRF |     f1 | sgd mom. |     0.015| 90.8   | 90.98 |  200 |
-| conll 2003 (BIO)    | CNN-BLSTM-CRF |     f1 | sgd mom. |     0.015| 90.954 | 91.28 |  200 |
-| conll 2003 (IOBES)  | CNN-BLSTM-CRF |     f1 | sgd mom. |     0.015| 91.1   | 91.37 |  200 |
-| conll 2003 (IOBES)  | CNN-CNN-CRF   |     f1 | sgd mom. |     0.001| 90.54  | 90.67 |  800 |
-|       atis (mesnil) | CNN-BLSTM     |     f1 | sgd mom. |     0.01 |     -  | 96.74 |  100 |
+WNUT17 is a task that deals with NER for rare and emerging entities on Twitter.  Scores are typically much lower on this task than for traditional NER tagging
 
+#### CRF
+
+Our default model provides a strong baseline for WNUT17, and  can be trained with this command:
+
+```
+python trainer.py --config config/wnut.json
+```
+
+#### Constrained Decoding Model without CRF
+
+Our constrained decoder model can be run as follows:
+
+```
+python trainer.py --config config/wnut-no-crf.json
+```
+
+### Model Performance
+
+We have done extensive testing on our tagger architecture.  Here are the results after runing each model 10 times for each configuration.  All NER models are trained with IOBES tags.  The ELMo configurations are done using our [ELMo Embeddings addon](../python/addons/embed_elmo.py).
+
+| config                                                       | dataset   | model                | metric | mean  |  std  | min   | max   |
+| ------------------------------------------------------------ | --------- | -------------------- |------- | ------| ----- | ----- | ----- |
+| [twpos.json](../python/mead/config/twpos.json)               | twpos-v03 | CNN-BLSTM-CRF        |    acc | 90.75 | 0.140 | 90.53 | 91.02 |
+| [conll.json](../python/mead/config/conll.json)               | CONLL2003 | CNN-BLSTM-CRF        |     f1 | 91.47 | 0.247 | 91.15 | 92.00 |
+| [conll-no-crf.json](../python/mead/config/conll-no-crf.json) | CONLL2003 | CNN-BLSTM-constrain  |     f1 | 91.44 | 0.232 | 91.17 | 91.90 |
+| [conll-elmo.json](../python/mead/config/conll-elmo.json)     | CONLL2003 | CNN-BLSTM-CRF        |     f1 | 92.26 | 0.157 | 92.00 | 92.48 |
+| [wnut.json](../python/mead/config/wnut.json)                 | WNUT17    | CNN-BLSTM-CRF        |     f1 | 40.33 | 1.13  | 38.38 | 41.90 |
+| [wnut-no-crf.json](../python/mead/config/wnut-no-crf.json)   | WNUT17    | CNN-BLSTM-constrain  |     f1 | 40.59 | 1.06  | 37.96 | 41.71 |
 
 ### Testing a trained model on your data
 
-You can use [`tag.py`](../python/tag.py) to load a sequence tagger checkpoint, predict the labels for an input conll file and produce the output in the same format. The second column is the predicted label.
-
-Run the code like this:
-```
-python tag.py --input conll-tester.conll --output out-conll-tester.conll --model mead/tagger/tagger-model-tf-7097 --mxlen 124 --mxwlen 61
-```
-`tag.py` also supports multiple features in the conll file. However, you need to create a JSON file (dictionary) with the index of the features in the format: `{feature-name:feature-index}` (eg. `{"gaz":1}`) where the `gaz` feature is the second column in the conll file. To run the code use: 
-
-```
-python tag.py --input gaz-tester.conll --output gaz-tester-out-1.conll --model mead/tagger-gaz/tagger-model-tf-12509 --mxlen 60 --mxwlen 40 --model_type gazetteer --features features.json --featurizer_type multifeature
-```
-
-You can write your own featurizer (`featurizer_<featurizer_type>.py`) and keep it in your PYTHONPATH. For an example, see [featurizer_elmo.py](../python/addons/featurizer_elmo.py). The `featurizer_type` should be passed as an argument as shown below:
-
-```
-python tag.py --input elmo-tester.conll --output elmo-tester-out.conll --model mead/elmo-2/tagger-model-tf-2658 --mxlen 60 --mxwlen 40 --model_type elmo --featurizer_type elmo
-```
-
-We support loading tagger models defined in [TensorFlow](../python/baseline/tf/tagger/model.py) and [PyTorch](../python/baseline/pytorch/tagger/model.py).
-
+You can use [`tag-text.py`](../api-examples/tag-text.py) to load a sequence tagger checkpoint and predict its labels
 
 #### Losses and Reporting
 
