@@ -322,6 +322,7 @@ class ClassifierModelBase(ClassifierModel):
             model.lengths = None
         model.probs = tf.get_default_graph().get_tensor_by_name('output/probs:0')
 
+
         model.best = tf.get_default_graph().get_tensor_by_name('output/best:0')
         model.logits = tf.get_default_graph().get_tensor_by_name('output/logits:0')
 

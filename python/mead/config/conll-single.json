@@ -35,6 +35,7 @@
         "hsz": 400,
         "dropout": 0.5,
 	"dropin": {"word": 0.1 },
+
         "rnntype": "blstm",
         "layers": 1,
         "constrain_decode": true,

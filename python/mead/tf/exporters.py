@@ -42,6 +42,7 @@ class TensorFlowExporter(mead.exporters.Exporter):
             saver.restore(sess, basename + ".model")
 
     def run(self, basename, output_dir, model_version, **kwargs):
+
         with tf.Graph().as_default():
             config_proto = tf.ConfigProto(allow_soft_placement=True)
             with tf.Session(config=config_proto) as sess:
@@ -92,7 +93,6 @@ class TensorFlowExporter(mead.exporters.Exporter):
         legacy_init_op = tf.group(tf.tables_initializer(), name='legacy_init_op')
         definition = dict({})
         definition[sig_name] = prediction_signature
-
         builder.add_meta_graph_and_variables(
             sess, [tf.saved_model.tag_constants.SERVING],
             signature_def_map=definition,
@@ -278,8 +278,9 @@ class Seq2SeqTensorFlowExporter(TensorFlowExporter):
             embed_args = dict({'vsz': md['vsz'], 'dsz': md['dsz']})
             Constructor = eval(class_name)
             embeddings[key] = Constructor(key, **embed_args)
-        
+
         return embeddings
+
 
     def _create_model(self, sess, basename):
         model_params = self.task.config_params["model"]
@@ -406,3 +407,4 @@ def create_metadata(inputs, outputs, sig_name, model_name, lengths_key=None, bea
         meta['beam'] = beam
 
     return meta
+
