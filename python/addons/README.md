@@ -17,7 +17,7 @@ These models are coded in a backend that is supported by baseline (currently eit
      - https://www.tensorflow.org/hub/installation
 
   - This provides ELMo embeddings to use with any model
-  - The peformance of this model is listed under the [tagger section](../docs/tagger.md)
+  - The peformance of this model is listed under the [tagger section](../../docs/tagger.md)
 
   - For example, you can run this with CONLL2003 as follows:
 
