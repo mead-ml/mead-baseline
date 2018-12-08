@@ -4,7 +4,12 @@ import numpy as np
 tf = pytest.importorskip('tensorflow')
 from baseline.tf.tfy import _add_ema
 
-os.environ['CUDA_VISIBLE_DEVICES'] = ''
+
+@pytest.fixture(scope="module")
+def set_cpu():
+    os.environ['CUDA_VISIBLE_DEVICES'] = ''
+    yield
+    del os.environ['CUDA_VISIBLE_DEVICES']
 
 
 class Model:

@@ -1,22 +1,46 @@
 import os
 import json
 import hashlib
-import zipfile
 import argparse
 from copy import deepcopy
 from collections import OrderedDict
 from baseline.utils import export, str2bool, read_config_file
-from mead.mime_type import mime_type
 
 __all__ = []
 exporter = export(__all__)
 
 
 @exporter
+def normalize_backend(name):
+    name = name.lower()
+    if name == 'tensorflow':
+        name = 'tf'
+    elif name == 'torch' or name == 'pyt':
+        name = 'pytorch'
+    elif name == 'dynet':
+        name = 'dy'
+    return name
+
+
+@exporter
+def print_dataset_info(dataset):
+    print("[train file]: {}".format(dataset['train_file']))
+    print("[valid file]: {}".format(dataset['valid_file']))
+    print("[test file]: {}".format(dataset['test_file']))
+    vocab_file = dataset.get('vocab_file')
+    if vocab_file is not None:
+        print("[vocab file]: {}".format(vocab_file))
+    label_file = dataset.get('label_file')
+    if label_file is not None:
+        print("[label file]: {}".format(label_file))
+
+
+@exporter
 def read_config_file_or_json(config, name=''):
     if isinstance(config, (dict, list)):
         return config
-    elif os.path.exists(config):
+    config = os.path.expanduser(config)
+    if os.path.exists(config):
         return read_config_file(config)
     raise Exception('Expected {} config file or a JSON object.'.format(name))
 
@@ -113,8 +137,6 @@ def order_json(data):
     for (key, value) in sorted(data.items(), key=lambda x: x[0]):
         if isinstance(value, dict):
             value = order_json(value)
-        elif isinstance(value, list):
-            value = sorted(value)
         new[key] = value
     return new
 
@@ -130,14 +152,16 @@ KEYS = {
     ('train', 'verbose'),
     ('train', 'model_base'),
     ('train', 'model_zip'),
-    ('test_batchsz')
+    ('train', 'nsteps'),
+    ('test_batchsz'),
+    ('basedir'),
 }
 
 
 @exporter
 def remove_extra_keys(config, keys=KEYS):
     """Remove config items that don't effect the model.
-    When base most things off of the sha1 hash of the model configs but there
+    We base most things off of the sha1 hash of the model configs but there
     is a problem. Some things in the config file don't effect the model such
     as the name of the `conll_output` file or if you are using `visdom`
     reporting. This strips out these kind of things so that as long as the model
@@ -145,7 +169,7 @@ def remove_extra_keys(config, keys=KEYS):
     :param config: dict, The json data.
     :param keys: Set[Tuple[str]], The keys to remove.
     :returns:
-        dict, The data with certain keys removed.
+        dict, The config with certain keys removed.
     """
     c = deepcopy(config)
     for key in keys:

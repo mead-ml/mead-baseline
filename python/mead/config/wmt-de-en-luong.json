@@ -1,0 +1,44 @@
+{
+    "task": "seq2seq",
+    "num_valid_to_show": 0,
+    "batchsz": 128,
+    "unif": 0.1,
+    "features": [
+	{ 
+	    "name": "src",
+	    "vectorizer": { "type": "token1d"},
+	    "embeddings": { "dsz": 1024 }
+	},
+	{
+	    "name": "tgt",
+	    "vectorizer": { "type": "token1d"},
+	    "embeddings": { "dsz": 1024 }
+	}
+    ],
+    "preproc": {
+        "mxlen": 50
+    },
+    "backend": "tensorflow",
+    "dataset": "wmt14-de-en",
+    "loader": {
+        "reader_type": "default",
+        "pair_suffix": ["de", "en"]
+    },
+    "model": {
+        "model_type": "attn",
+        "rnntype": "blstm",
+        "hsz": 1024,
+        "dropout": 0.2,
+        "layers": 4
+    },
+    "train": {
+        "epochs": 10,
+        "optim": "sgd",
+	"start_decay_epoch": 5,
+        "decay_rate": 2.0,
+	"decay_type": "zaremba",
+        "lr": 1.0,
+        "do_early_stopping": false,
+        "clip": 5.0
+    }
+}

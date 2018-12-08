@@ -62,5 +62,11 @@
     "file": "https://www.dropbox.com/s/s8q2feew1fmwl3p/senna-50.txt.gz?dl=1",
     "sha1": "5258af089f40f9071bbb8f4f5ac2b2f35b18fea2",
     "dsz": 50
+  },
+  { 
+    "label": "wnut-gaz",
+    "file": "https://www.dropbox.com/s/3p76mbx50uk22m7/wnut-gaz.txt?dl=1",
+    "sha1": "83f6ebdd1c8351ff37e0b8bf00d27faca6f5e685",
+    "dsz": "7"
   }
 ]

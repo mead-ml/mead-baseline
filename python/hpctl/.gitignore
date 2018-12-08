@@ -1,0 +1,17 @@
+.python-version
+dist/*
+build/*
+*.egg*
+*.pyc
+*.so
+__pycache__/
+*/.ipynb_checkpoints/
+.pytest_cache/
+*.html
+*.p
+*.npy
+*/data/*
+.mypy_cache/
+*.pyt
+tmp-logging*.json
+MANIFEST.in

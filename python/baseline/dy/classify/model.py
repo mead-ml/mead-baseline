@@ -1,63 +1,74 @@
 import dynet as dy
 from baseline.model import (
-    Classifier,
-    load_classifier_model,
-    create_classifier_model
+    ClassifierModel, register_model
 )
 from baseline.utils import listify
 from baseline.dy.dynety import *
 
 
-class WordClassifierBase(Classifier, DynetModel):
+class ClassifierModelBase(DynetModel, ClassifierModel):
 
-    def __init__(
-            self,
-            embeddings, labels,
-            finetune=True, dense=False,
-            dropout=0.5, batched=False,
-            **kwargs
-    ):
-        super(WordClassifierBase, self).__init__()
+    def __init__(self, embeddings, labels, dropout=0.5, batched=False, **kwargs):
+        super(ClassifierModelBase, self).__init__(kwargs['pc'])
 
         self.batched = batched
         self.pdrop = dropout
         self.train = True
-
-        vsz = len(embeddings['word'].vocab)
-        dsz = embeddings['word'].dsz
-
-        self.vocab = {}
-        self.vocab['word'] = embeddings['word'].vocab
-
-        self.embed_word = Embedding(
-            vsz, dsz, self.pc,
-            embeddings['word'].weights, finetune, dense, self.batched
-        )
-
         self.labels = labels
         n_classes = len(self.labels)
-
-        pool_size, self.pool = self._init_pool(dsz, **kwargs)
-        stack_size, self.stacked = self._init_stacked(pool_size, **kwargs)
-        self.output = self._init_output(stack_size, n_classes)
+        dsz = self.init_embed(embeddings)
+        pool_size, self.pool = self.init_pool(dsz, **kwargs)
+        stack_size, self.stacked = self.init_stacked(pool_size, **kwargs)
+        self.output = self.init_output(stack_size, n_classes)
+        self.lengths_key = kwargs.get('lengths_key')
 
     def __str__(self):
-        str_ = super(WordClassifierBase, self).__str__()
+        str_ = super(ClassifierModelBase, self).__str__()
         if self.batched:
             return "Batched Model: \n{}".format(str_)
         return str_
 
-    def make_input(self, batch_dict):
-        x = batch_dict['x']
-        y = batch_dict['y']
-        lengths = batch_dict['lengths']
-        if self.batched:
-            return x.T, y.T, lengths.T
-        return x[0], y[0], lengths
+    def init_embed(self, embeddings):
+        dsz = 0
+        self.embeddings = embeddings
+        for embedding in self.embeddings.values():
+            dsz += embedding.get_dsz()
+        return dsz
 
-    def forward(self, input_, lengths):
-        embedded = self.embed_word(input_)
-        pooled = self.pool(embedded, lengths)
+    def embed(self, batch_dict):
+        all_embeddings_lists = []
+        for k, embedding in self.embeddings.items():
+            all_embeddings_lists.append(embedding.encode(batch_dict[k]))
+
+        embedded = dy.concatenate(all_embeddings_lists, d=1)
+        return embedded
+
+    def make_input(self, batch_dict):
+        example_dict = dict({})
+        for k in self.embeddings.keys():
+            if self.batched:
+                example_dict[k] = batch_dict[k].T
+            else:
+                example_dict[k] = batch_dict[k][0]
+
+        if self.lengths_key is not None:
+            lengths = batch_dict[self.lengths_key]
+            if self.batched:
+                example_dict['lengths'] = lengths.T
+            else:
+                example_dict['lengths'] = lengths
+
+        if 'y' in batch_dict:
+            if self.batched:
+                example_dict['y'] = batch_dict['y'].T
+            else:
+                example_dict['y'] = batch_dict['y'][0]
+        return example_dict
+
+    def forward(self, batch_dict):
+
+        embedded = self.embed(batch_dict)
+        pooled = self.pool(embedded, batch_dict['lengths'])
         stacked = pooled if self.stacked is None else self.stacked(pooled)
         return self.output(stacked)
 
@@ -69,9 +80,10 @@ class WordClassifierBase(Classifier, DynetModel):
     def dropout(self, input_):
         if self.train:
             return dy.dropout(input_, self.pdrop)
+
         return input_
 
-    def _init_stacked(self, input_dim, **kwargs):
+    def init_stacked(self, input_dim, **kwargs):
 
         hszs = listify(kwargs.get('hsz', []))
         if len(hszs) == 0:
@@ -92,7 +104,10 @@ class WordClassifierBase(Classifier, DynetModel):
 
         return hsz, call_stacked
 
-    def _init_output(self, input_dim, n_classes):
+    def init_pool(self, dsz, **kwargs):
+        pass
+
+    def init_output(self, input_dim, n_classes):
         return Linear(n_classes, input_dim, self.pc, name="Output")
 
     @classmethod
@@ -110,26 +125,38 @@ class WordClassifierBase(Classifier, DynetModel):
         return self
 
 
-class ConvModel(WordClassifierBase):
+@register_model(task='classify', name='default')
+class ConvModel(ClassifierModelBase):
     def __init__(self, *args, **kwargs):
-        kwargs['dense'] = True
         super(ConvModel, self).__init__(*args, **kwargs)
 
-    def _init_pool(self, dsz, filtsz, cmotsz, **kwargs):
+    def init_pool(self, dsz, **kwargs):
+        filtsz = kwargs['filtsz']
+        cmotsz = kwargs['cmotsz']
+
         parallel_conv = ParallelConv(filtsz, cmotsz, dsz, self.pc)
-        def call_pool(input_, _):
-            return parallel_conv(input_)
+        def call_pool(embedded, _):
+            conv = self.dropout(parallel_conv(embedded))
+            return conv
 
         return len(filtsz) * cmotsz, call_pool
 
 
-class LSTMModel(WordClassifierBase):
+@register_model(task='classify', name='lstm')
+class LSTMModel(ClassifierModelBase):
 
-    def _init_pool(self, dsz, layers=1, **kwargs):
+    def init_pool(self, dsz, **kwargs):
         hsz = kwargs.get('rnnsz', kwargs.get('hsz', 100))
+        rnntype = kwargs.get('rnn_type', kwargs.get('rnntype', 'lstm'))
+
+        layers = kwargs.get('layers', 1)
         if type(hsz) is list:
             hsz = hsz[0]
-        self.rnn = dy.VanillaLSTMBuilder(layers, dsz, hsz, self.pc)
+
+        if rnntype.startswith('b'):
+            self.rnn = dy.BiRNNBuilder(layers, dsz, hsz, self.pc, dy.VanillaLSTMBuilder)
+        else:
+            self.rnn = dy.VanillaLSTMBuilder(layers, dsz, hsz, self.pc)
 
         def pool(input_, lengths):
             return rnn_encode(self.rnn, input_, lengths)
@@ -137,58 +164,21 @@ class LSTMModel(WordClassifierBase):
         return hsz, pool
 
 
-class BLSTMModel(WordClassifierBase):
+@register_model(task='classify', name='nbow')
+class NBowModel(ClassifierModelBase):
 
-    def _init_pool(self, dsz, layers=1, **kwargs):
-        hsz = kwargs.get('rnnsz', kwargs.get('hsz', 100))
-        if type(hsz) is list:
-            hsz = hsz[0]
-        self.rnn = dy.BiRNNBuilder(layers, dsz, hsz, self.pc, dy.VanillaLSTMBuilder)
-
-        def pool(input_, lengths):
-            return rnn_encode(self.rnn, input_, lengths)
-
-        return hsz, pool
-
-
-class NBowModel(WordClassifierBase):
-
-    def _init_pool(self, *args, **kwargs):
+    def init_pool(self, dsz, **kwargs):
         def pool(input_, _):
             return dy.esum(input_) / len(input_)
 
-        return args[0], pool
+        return dsz, pool
 
 
-class NBowMax(WordClassifierBase):
+@register_model(task='classify', name='nbowmax')
+class NBowMax(ClassifierModelBase):
 
-    def _init_pool(self, *args, **kwargs):
+    def init_pool(self, dsz, **kwargs):
         def pool(input_, _):
             return dy.emax(input_)
 
-        return args[0], pool
-
-
-BASELINE_CLASSIFICATION_MODELS = {
-    'default': ConvModel.create,
-    'lstm': LSTMModel.create,
-    'blstm': BLSTMModel.create,
-    'nbow': NBowModel.create,
-    'nbowmax': NBowMax.create,
-}
-
-BASELINE_CLASSIFICATION_LOADER = {
-    'default': ConvModel.load,
-    'lstm': LSTMModel.load,
-    'blstm': BLSTMModel.load,
-    'nbow': NBowModel.load,
-    'nbowmax': NBowMax.load
-}
-
-
-def create_model(embeddings, labels, **kwargs):
-    return create_classifier_model(BASELINE_CLASSIFICATION_MODELS, embeddings, labels, **kwargs)
-
-
-def load_model(outname, **kwargs):
-    return load_classifier_model(BASELINE_CLASSIFICATION_LOADER, outname, **kwargs)
+        return dsz, pool

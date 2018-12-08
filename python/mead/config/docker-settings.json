@@ -1,0 +1,30 @@
+{
+    "datacache": "/home/blester/.bl-data",
+    "reporting_hooks": {
+        "xpctl": {
+            "cred": "~/xpctlcred.json.mongo"
+        }
+    },
+    "hpctl": {
+        "backend": {
+            "type": "docker",
+            "real_gpus": [0],
+            "default_mounts": [
+                "/data/embeddings",
+                "/data/datasets",
+                "/data/model-store",
+                "/data/model-checkpoints"
+            ]
+        },
+        "logging": {
+            "host": "127.0.0.1",
+            "port": 6006
+        },
+        "frontend": {
+            "type": "console",
+            "train": "avg_loss",
+            "dev": "f1",
+            "test": "f1"
+        }
+    }
+}

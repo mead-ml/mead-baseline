@@ -71,13 +71,16 @@ def main():
             'requests',
         ],
         extras_require={
-            'test': ['pytest', 'mock', 'contextdecorator']
+            'test': ['pytest', 'mock', 'contextdecorator', 'pytest-forked'],
+            'report': ['visdom', 'tensorboardX'],
+            'yaml': ['pyyaml'],
         },
         entry_points={
             'console_scripts': [
                 'mead-train = mead.trainer:main',
                 'mead-export = mead.export:main',
                 'mead-clean = mead.clean:main',
+                'bleu = baseline.bleu:main'
             ]
         },
         classifiers={

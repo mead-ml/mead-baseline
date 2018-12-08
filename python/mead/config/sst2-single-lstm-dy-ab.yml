@@ -1,0 +1,31 @@
+version: 2
+task: classify
+batchsz: 1
+preproc:
+  mxlen: -1
+  rev: false
+  clean: true
+  trim: true
+features:
+ - name: word
+   vectorizer: 
+     type: token1d
+   embeddings:
+     label: w2v-gn
+   unif: 0.25
+backend: dynet
+dataset: SST2
+loader:
+  reader_type: default
+model:
+  model_type: lstm
+  rnnsz: 256
+  dropout: 0.5
+  finetune: true
+train:
+  epochs: 2
+  optim: adam
+  eta: 0.0003
+  model_base: ./models/sst2
+  early_stopping_metric: acc
+  autobatchsz: 50

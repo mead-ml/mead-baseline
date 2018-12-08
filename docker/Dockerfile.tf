@@ -14,6 +14,8 @@ COPY docs /baseline/docs
 
 RUN  cd /baseline/python/ && bash ./install_dev.sh baseline no_test && bash ./install_dev.sh xpctl no_test
 
+RUN cd /baseline/python/hpctl && pip install -e .[docker]
+
 VOLUME ["/data/embeddings", "/data/model-store", "/data/datasets", "/data/model-checkpoints"]
 
 ENV LC_ALL=C.UTF-8

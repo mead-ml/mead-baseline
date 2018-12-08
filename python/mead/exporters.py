@@ -1,9 +1,8 @@
-from mead.tasks import *
-from mead.utils import *
-from baseline.utils import export, import_user_module
+from baseline.utils import export, optional_params
 
 __all__ = []
 exporter = export(__all__)
+
 
 @exporter
 class Exporter(object):
@@ -12,13 +11,33 @@ class Exporter(object):
         super(Exporter, self).__init__()
         self.task = task
 
-    def run(self, model_file, embeddings, output_dir, model_version, **kwargs):
+    def run(self, model_file, output_dir, model_version, **kwargs):
         pass
 
 
-def create_exporter(task, exporter_type):
-    if exporter_type == 'default':
-        return task.ExporterType(task)
-    else:
-        mod = import_user_module("exporter", exporter_type)
-        return mod.create_exporter(task, exporter_type)
+BASELINE_EXPORTERS = {}
+
+
+@exporter
+@optional_params
+def register_exporter(cls, task, name=None):
+    """Register an exporter
+
+    Use this pattern if you want to provide an override to a `Exporter` class.
+
+    """
+    if name is None:
+        name = cls.__name__
+
+    if task not in BASELINE_EXPORTERS:
+        BASELINE_EXPORTERS[task] = {}
+
+    if name in BASELINE_EXPORTERS[task]:
+        raise Exception('Error: attempt to re-defined previously registered handler {} in exporter registry'.format(name))
+
+    BASELINE_EXPORTERS[task][name] = cls
+    return cls
+
+
+def create_exporter(task, name=None):
+    return BASELINE_EXPORTERS[task.task_name()][name](task)

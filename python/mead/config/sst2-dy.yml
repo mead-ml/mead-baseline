@@ -1,8 +1,8 @@
 task: classify
+basedir: sst2-dy
 batchsz: 50
 preproc:
-  mxlen: -1
-  rev: false
+  mxlen: 100
   clean: true
 backend: dynet
 dataset: SST2
@@ -14,15 +14,17 @@ model:
   filtsz: [3,4,5]
   cmotsz: 100
   dropout: 0.5
-  finetune: true
-  batched: true
-word_embeddings:
-  label: w2v-gn
+features:
+  - name: word
+    vectorizer:
+      type: token1d
+      transform: baseline.lowercase
+    embeddings:
+      label: w2v-gn
 train:
   epochs: 2
   optim: adadelta
   eta: 1.0
-  model_base: ./models/sst2
   early_stopping_metric: acc
   verbose:
     console: True

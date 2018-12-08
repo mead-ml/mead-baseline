@@ -1,11 +1,15 @@
+import six
+import time
 import dynet as dy
 import numpy as np
-from baseline.utils import listify, get_model_file
+from baseline.utils import listify, get_model_file, get_metric_cmp
 from baseline.progress import create_progress_bar
 from baseline.confusion import ConfusionMatrix
-from baseline.train import EpochReportingTrainer, create_trainer
+from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
 from baseline.dy.dynety import *
+from baseline.dy.optz import *
 from baseline.utils import verbose_output
+
 
 def _add_to_cm(cm, y, preds, axis=0):
     best = np.argmax(preds, axis=axis)
@@ -13,114 +17,140 @@ def _add_to_cm(cm, y, preds, axis=0):
     cm.add_batch(y, best)
 
 
+@register_trainer(task='classify', name='default')
 class ClassifyTrainerDynet(EpochReportingTrainer):
 
-    def __init__(
-            self,
-            model,
-            **kwargs
-    ):
+    def __init__(self, model, **kwargs):
         super(ClassifyTrainerDynet, self).__init__()
         self.model = model
         self.labels = model.labels
-        self.optimizer = optimizer(model, **kwargs)
+        self.optimizer = OptimizerManager(model, **kwargs)
+        self.nsteps = kwargs.get('nsteps', six.MAXSIZE)
 
     def _update(self, loss):
         loss.backward()
         self.optimizer.update()
 
-    def _step(self, loader, update, verbose=None):
+    def _log(self, steps, loss, norm, reporting_fns):
+        self.nstep_agg += loss
+        self.nstep_div += norm
+        if (steps + 1) % self.nsteps == 0:
+            metrics = self.calc_metrics(self.nstep_agg, self.nstep_div)
+            self.report(
+                steps + 1, metrics, self.nstep_start,
+                'Train', 'STEP', reporting_fns, self.nsteps
+            )
+            self.reset_nstep()
+
+    def _dummy_log(self, *args):
+        """This is a no op that validation calls to avoid adding to the nstep totals."""
+        pass
+
+    @staticmethod
+    def _get_batchsz(batch_dict):
+        return len(batch_dict['y'])
+
+    def _step(self, loader, update, log, reporting_fns, verbose=None):
         steps = len(loader)
         pg = create_progress_bar(steps)
         cm = ConfusionMatrix(self.labels)
-        total_loss = 0
+        epoch_loss = 0
+        epoch_div = 0
 
         for batch_dict in pg(loader):
             dy.renew_cg()
-            xs, ys, ls = self.model.make_input(batch_dict)
-            preds = self.model.forward(xs, ls)
+            inputs = self.model.make_input(batch_dict)
+            ys = inputs.pop('y')
+            preds = self.model.forward(inputs)
             losses = self.model.loss(preds, ys)
-            loss = dy.sum_batches(losses)
-            total_loss += loss.npvalue().item()
+            loss = dy.mean_batches(losses)
+            batchsz = self._get_batchsz(batch_dict)
+            lossv = loss.npvalue().item() * batchsz
+            epoch_loss += lossv
+            epoch_div += batchsz
             _add_to_cm(cm, ys, preds.npvalue())
             update(loss)
+            log(self.optimizer.global_step, lossv, batchsz, reporting_fns)
 
         metrics = cm.get_all_metrics()
-        metrics['avg_loss'] = total_loss / float(steps)
+        metrics['avg_loss'] = epoch_loss / float(epoch_div)
         verbose_output(verbose, cm)
         return metrics
 
     def _test(self, loader, **kwargs):
-        return self._step(loader, lambda x: None, kwargs.get("verbose", None))
+        self.model.train = False
+        return self._step(loader, lambda x: None, self._dummy_log, [], kwargs.get("verbose", None))
 
-    def _train(self, loader):
-        return self._step(loader, self._update)
+    def _train(self, loader, **kwargs):
+        self.model.train = True
+        return self._step(loader, self._update, self._log, kwargs.get('reporting_fns', []))
 
 
+@register_trainer(task='classify', name='autobatch')
 class ClassifyTrainerAutobatch(ClassifyTrainerDynet):
     def __init__(self, model, autobatchsz=1, **kwargs):
         self.autobatchsz = autobatchsz
         super(ClassifyTrainerAutobatch, self).__init__(model, **kwargs)
 
-    def _step(self, loader, update, verbose=None):
+    def _step(self, loader, update, log, reporting_fns, verbose=None):
         steps = len(loader)
         pg = create_progress_bar(steps)
         cm = ConfusionMatrix(self.labels)
-        total_loss = 0
-        i = 1
+        epoch_loss = 0
+        epoch_div = 0
         preds, losses, ys = [], [], []
         dy.renew_cg()
-        for batch_dict in pg(loader):
-            x, y, l = self.model.make_input(batch_dict)
-            pred = self.model.forward(x, l)
+        for i, batch_dict in enumerate(pg(loader), 1):
+            inputs = self.model.make_input(batch_dict)
+            y = inputs.pop('y')
+            pred = self.model.forward(inputs)
             preds.append(pred)
             loss = self.model.loss(pred, y)
             losses.append(loss)
             ys.append(y)
             if i % self.autobatchsz == 0:
-                loss = dy.esum(losses)
+                loss = dy.average(losses)
                 preds = dy.concatenate_cols(preds)
-                total_loss += loss.npvalue().item()
+                batchsz = len(losses)
+                lossv = loss.npvalue().item() * batchsz
+                epoch_loss += lossv
+                epoch_div += batchsz
                 _add_to_cm(cm, np.array(ys), preds.npvalue())
                 update(loss)
+                log(self.optimizer.global_step, lossv, batchsz, reporting_fns)
                 preds, losses, ys = [], [], []
                 dy.renew_cg()
-            i += 1
-        loss = dy.esum(losses)
+        loss = dy.average(losses)
         preds = dy.concatenate_cols(preds)
-        total_loss += loss.npvalue().item()
+        batchsz = len(losses)
+        epoch_loss += loss.npvalue().item() * batchsz
+        epoch_div += batchsz
         _add_to_cm(cm, np.array(ys), preds.npvalue())
         update(loss)
 
         metrics = cm.get_all_metrics()
-        metrics['avg_loss'] = total_loss / float(steps)
+        metrics['avg_loss'] = epoch_loss / float(epoch_div)
         verbose_output(verbose, cm)
         return metrics
 
 
-def fit(
-        model,
-        ts, vs, es,
-        epochs=20,
-        do_early_stopping=True, early_stopping_metric='acc',
-        **kwargs
-):
+@register_training_func(task='classify')
+def fit(model, ts, vs, es, epochs=20, do_early_stopping=True, early_stopping_metric='acc', **kwargs):
     autobatchsz = kwargs.get('autobatchsz', 1)
     verbose = kwargs.get('verbose', {'print': kwargs.get('verbose_print', False), 'file': kwargs.get('verbose_file', None)})
-    model_file = get_model_file(kwargs, 'classify', 'dynet')
+    model_file = get_model_file('classify', 'dynet', kwargs.get('basedir'))
+
+    best_metric = 0
     if do_early_stopping:
         patience = kwargs.get('patience', epochs)
+        early_stopping_cmp, best_metric = get_metric_cmp(early_stopping_metric, kwargs.get('early_stopping_cmp'))
         print('Doing early stopping on [{}] with patience [{}]'.format(early_stopping_metric, patience))
 
     reporting_fns = listify(kwargs.get('reporting', []))
     print('reporting', reporting_fns)
 
-    if autobatchsz != 1:
-        trainer = create_trainer(ClassifyTrainerAutobatch, model, **kwargs)
-    else:
-        trainer = create_trainer(ClassifyTrainerDynet, model, **kwargs)
+    trainer = create_trainer(model, **kwargs)
 
-    max_metric = 0
     last_improved = 0
 
     for epoch in range(epochs):
@@ -130,10 +160,10 @@ def fit(
         if do_early_stopping is False:
             model.save(model_file)
 
-        elif test_metrics[early_stopping_metric] > max_metric:
+        elif early_stopping_cmp(test_metrics[early_stopping_metric], best_metric):
             last_improved = epoch
-            max_metric = test_metrics[early_stopping_metric]
-            print('New max {:.3f}'.format(max_metric))
+            best_metric = test_metrics[early_stopping_metric]
+            print('New best {:.3f}'.format(best_metric))
             model.save(model_file)
 
         elif (epoch - last_improved) > patience:
@@ -141,7 +171,7 @@ def fit(
             break
 
     if do_early_stopping is True:
-        print('Best performance on max_metric {:.3f} at epoch {}'.format(max_metric, last_improved))
+        print('Best performance on {}: {:.3f} at epoch {}'.format(early_stopping_metric, best_metric, last_improved))
 
     if es is not None:
         print('Reloading best checkpoint')

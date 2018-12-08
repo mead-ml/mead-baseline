@@ -1,0 +1,62 @@
+version: 2
+modules: [vec_text,embed_elmo]
+task: tagger
+batchsz: 10
+conll_output: conll-elmo-iobes.conll
+unif: 0.1
+
+preproc: 
+    mxlen: -1
+    mxwlen: -1
+features:
+ - name: word
+   vectorizer:
+     type: dict1d
+     fields: text
+     transform: baseline.lowercase
+   embeddings: 
+     label: glove-6B-100
+ - name: char
+   vectorizer:
+     type: dict2d
+   embeddings:
+     dsz: 30
+     wsz: 30
+     cfiltsz: [3]
+     type: char-conv
+ - name: elmo
+   vectorizer:
+     type: dict_text
+     fields: text
+   embeddings: 
+     type: elmo
+     dsz: 1024
+backend: tensorflow
+dataset: conll-iobes
+
+loader: 
+    reader_type: default
+    named_fields:
+       "0": text
+       "-1": y
+
+model: 
+    model_type: default
+    cfiltsz: [3]
+    hsz: 256
+    wsz: 30
+    dropout: 0.5
+    rnntype: blstm
+    layers: 2
+    constrain_decode: true
+    crf: 1
+
+train: 
+    epochs: 50
+    optim: sgd
+    eta: 0.015
+    mom: 0.9
+    patience: 15
+    early_stopping_metric: f1
+    clip: 5.0
+    span_type: iobes 

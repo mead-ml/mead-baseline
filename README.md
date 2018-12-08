@@ -1,15 +1,13 @@
 Baseline
 =========
 
-[**Baseline v1.0 is nearing release**](docs/v1.md): This release makes improvements to the APIs, adds a new component for hyper-parameter tuning, improves the baseline models and makes them more extensible (and easier to export).
+[v1.0](docs/v1.md):
 
 Baseline is a library for reproducible deep learning research and fast model development for NLP. The library provides easily extensible abstractions and implementations for data loading, model development, training and export of deep learning architectures. It also provides implementations for simple, high-performance, deep learning models for various NLP tasks, against which newly developed models can be compared. Deep learning experiments are hard to reproduce, Baseline provides functionalities to track them. The goal is to allow a researcher to focus on model development, delegating the repetitive tasks to the library.
 
-
-
 It has three components: 
 
-- [**baseline-core**](docs/baseline.md): An object-oriented Python library for rapid development of deep learning algorithms. The library provides extensible base classes for common components in a deep learning architecture (data loading, model development, training, evaluation, and export) in TensorFlow, PyTorch and DyNet. In addition, it provides strong, deep learning baselines for four fundamental NLP tasks -- Classification, Sequence Tagging, Sequence-to-Sequence Encoder-Decoders and Language Modeling. Many NLP problems can be seen as variants of these tasks. For example, Part of Speech (POS) Tagging, Named Entity Recognition (NER) and Slot-filling are all Sequence Tagging tasks, Neural Machine Translation (NMT) is typically modeled as an Encoder-Decoder task. An end-user can easily implement a new model and delegate the rest to the library.
+- [**baseline-core**](docs/baseline.md): An object-oriented Python library for rapid development of deep learning algorithms. The library provides extensible base classes for common components in a deep learning architecture (data loading, model development, training, evaluation, and export) in TensorFlow, PyTorch and DyNet. In addition, it provides strong, deep learning baselines for four fundamental NLP tasks -- [Classification](./docs/classify.md), [Sequence Tagging](./docs/tagging.md), [Sequence-to-Sequence Encoder-Decoders](./docs/seq2seq.md) and [Language Modeling](./docs/lm.md). Many NLP problems can be seen as variants of these tasks. For example, Part of Speech (POS) Tagging, Named Entity Recognition (NER) and Slot-filling are all Sequence Tagging tasks, Neural Machine Translation (NMT) is typically modeled as an Encoder-Decoder task. An end-user can easily implement a new model and delegate the rest to the library.
 
 - [**mead**](docs/mead.md): A library built on  for fast Modeling, Experimentation And Development. It contains driver programs to run experiments from JSON configuration files to completely control the reader, trainer, model, and hyper-parameters. 
   

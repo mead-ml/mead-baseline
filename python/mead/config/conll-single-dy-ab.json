@@ -1,0 +1,58 @@
+{
+    "task": "tagger",
+    "batchsz": 1,
+    "conll_output": "conll-bio-results.conll",
+    "charsz": 30,
+    "unif": 0.1,
+    "preproc": {
+    },
+    "features": [
+	{
+	    "name": "word",
+	    "vectorizer": {
+		"type": "dict1d",
+		"fields": "text",
+		"transform": "baseline.lowercase"
+	    },
+	    "embeddings": { "label": "glove-6B-100" }
+	},
+	{
+	    "name": "char",
+	    "vectorizer": { "type": "dict2d" },
+	    "embeddings": { "dsz": 30, "wsz": 30, "type": "char-conv" }
+	}
+    ],
+    "backend": "dynet",
+    "dataset": "conll-iobes",
+    "loader": {
+        "reader_type": "default",
+	"named_fields": {
+	    "0": "text",
+	    "-1": "y"
+	}
+    },
+    "model": {
+        "model_type": "default",
+        "cfiltsz": [3],
+        "hsz": 400,
+        "wsz": 50,
+        "dropout": 0.5,
+        "rnntype": "blstm",
+        "layers": 1,
+        "constrain_decode": true,
+        "crf": true
+    },
+    "train": {
+        "epochs": 80,
+        "autobatchsz": 10,
+        "optim": "sgd",
+        "decay_rate": 0.05,
+        "eta": 0.015,
+        "mom": 0.9,
+        "patience": 40,
+        "early_stopping_metric": "f1",
+        "clip": 5.0,
+        "span_type": "iobes"
+    }
+}
+

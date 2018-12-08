@@ -1,9 +1,13 @@
-from baseline.pytorch.torchy import *
-from baseline.utils import listify, to_spans, f_score, revlut, get_model_file
+import six
+import time
 from baseline.progress import create_progress_bar
-from baseline.train import EpochReportingTrainer, create_trainer
+from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
+from baseline.utils import listify, to_spans, f_score, revlut, get_model_file, write_sentence_conll, get_metric_cmp
+from baseline.pytorch.torchy import *
+from baseline.pytorch.optz import OptimizerManager
 
 
+@register_trainer(task='tagger', name='default')
 class TaggerTrainerPyTorch(EpochReportingTrainer):
 
     def __init__(self, model, **kwargs):
@@ -18,9 +22,14 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
         self.model = model
         self.idx2label = revlut(self.model.labels)
         self.clip = float(kwargs.get('clip', 5))
-        self.optimizer, self.scheduler = pytorch_prepare_optimizer(self.model, **kwargs)
+        self.optimizer = OptimizerManager(self.model, **kwargs)
         if self.gpu:
             self.model = model.to_gpu()
+        self.nsteps = kwargs.get('nsteps', six.MAXSIZE)
+
+    @staticmethod
+    def _get_batchsz(batch_dict):
+        return batch_dict['y'].shape[0]
 
     def process_output(self, guess, truth, sentence_lengths, ids, handle=None, txts=None):
 
@@ -53,22 +62,9 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
             if handle is not None:
                 id = ids[b]
                 txt = txts[id]
-                self._write_sentence_conll(handle, sentence, gold, txt)
+                write_sentence_conll(handle, sentence, gold, txt, self.idx2label)
 
         return correct_labels, total_labels, overlap_count, gold_count, guess_count
-
-    def _write_sentence_conll(self, handle, sentence, gold, txt):
-
-        if len(txt) != len(sentence):
-            txt = txt[:len(sentence)]
-
-        try:
-            for word, truth, guess in zip(txt, gold, sentence):
-                handle.write('%s %s %s\n' % (word, self.idx2label[truth], self.idx2label[guess]))
-            handle.write('\n')
-        except:
-            print('ERROR: Failed to write lines... closing file')
-            handle.close()
 
     def _test(self, ts, **kwargs):
 
@@ -86,10 +82,12 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
         if conll_output is not None and txts is not None:
             handle = open(conll_output, "w")
         pg = create_progress_bar(steps)
-        for batch_dict in ts:
+        for batch_dict in pg(ts):
 
-            x, xch, lengths, y, ids = self.model.make_input(batch_dict)
-            inputs = (x, xch, lengths)
+            inputs = self.model.make_input(batch_dict)
+            y = inputs.pop('y')
+            lengths = inputs['lengths']
+            ids = inputs['ids']
             pred = self.model(inputs)
             correct, count, overlaps, golds, guesses = self.process_output(pred, y.data, lengths, ids, handle, txts)
             total_correct += correct
@@ -97,50 +95,58 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
             total_gold_count += golds
             total_guess_count += guesses
             total_overlap_count += overlaps
-            pg.update()
 
-        pg.done()
         total_acc = total_correct / float(total_sum)
         # Only show the fscore if requested
         metrics['f1'] = f_score(total_overlap_count, total_gold_count, total_guess_count)
         metrics['acc'] = total_acc
         return metrics
 
-    def _train(self, ts):
+    def _train(self, ts, **kwargs):
         self.model.train()
-        total_loss = 0
-        metrics = {}
+        reporting_fns = kwargs.get('reporting_fns', [])
+        epoch_loss = 0
+        epoch_norm = 0
         steps = len(ts)
-        if self.scheduler is not None:
-            self.scheduler.step()
-            #print(self.optimizer.param_groups[0]['lr'])
         pg = create_progress_bar(steps)
-        for batch_dict in ts:
-
+        for batch_dict in pg(ts):
             inputs = self.model.make_input(batch_dict)
             self.optimizer.zero_grad()
             loss = self.model.compute_loss(inputs)
-            total_loss += loss.item()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.clip)
             self.optimizer.step()
-            pg.update()
+            bsz = self._get_batchsz(batch_dict)
+            report_loss = loss.item() * bsz
+            epoch_loss += report_loss
+            epoch_norm += bsz
+            self.nstep_agg += report_loss
+            self.nstep_div += bsz
+            if (self.optimizer.global_step + 1) % self.nsteps == 0:
+                metrics = self.calc_metrics(self.nstep_agg, self.nstep_div)
+                self.report(
+                    self.optimizer.global_step + 1, metrics, self.nstep_start,
+                    'Train', 'STEP', reporting_fns, self.nsteps
+                )
+                self.reset_nstep()
 
-        pg.done()
-        metrics['avg_loss'] = float(total_loss)/steps
+        metrics = self.calc_metrics(epoch_loss, epoch_norm)
         return metrics
 
 
+@register_training_func('tagger')
 def fit(model, ts, vs, es, **kwargs):
 
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
     epochs = int(kwargs.get('epochs', 20))
-    model_file = get_model_file(kwargs, 'tagger', 'pytorch')
+    model_file = get_model_file('tagger', 'pytorch', kwargs.get('basedir'))
     conll_output = kwargs.get('conll_output', None)
     txts = kwargs.get('txts', None)
 
+    best_metric = 0
     if do_early_stopping:
         early_stopping_metric = kwargs.get('early_stopping_metric', 'acc')
+        early_stopping_cmp, best_metric = get_metric_cmp(early_stopping_metric, kwargs.get('early_stopping_cmp'))
         patience = kwargs.get('patience', epochs)
         print('Doing early stopping on [%s] with patience [%d]' % (early_stopping_metric, patience))
 
@@ -150,10 +156,9 @@ def fit(model, ts, vs, es, **kwargs):
     #validation_improvement_fn = kwargs.get('validation_improvement', None)
 
     after_train_fn = kwargs.get('after_train_fn', None)
-    trainer = create_trainer(TaggerTrainerPyTorch, model, **kwargs)
+    trainer = create_trainer(model, **kwargs)
 
     last_improved = 0
-    max_metric = 0
     for epoch in range(epochs):
 
         trainer.train(ts, reporting_fns)
@@ -164,12 +169,12 @@ def fit(model, ts, vs, es, **kwargs):
         if do_early_stopping is False:
             model.save(model_file)
 
-        elif test_metrics[early_stopping_metric] > max_metric:
+        elif early_stopping_cmp(test_metrics[early_stopping_metric], best_metric):
             #if validation_improvement_fn is not None:
             #    validation_improvement_fn(early_stopping_metric, test_metrics, epoch, max_metric, last_improved)
             last_improved = epoch
-            max_metric = test_metrics[early_stopping_metric]
-            print('New max %.3f' % max_metric)
+            best_metric = test_metrics[early_stopping_metric]
+            print('New best %.3f' % best_metric)
             model.save(model_file)
 
 
@@ -178,10 +183,10 @@ def fit(model, ts, vs, es, **kwargs):
             break
 
     if do_early_stopping is True:
-        print('Best performance on max_metric %.3f at epoch %d' % (max_metric, last_improved))
+        print('Best performance on %s: %.3f at epoch %d' % (early_stopping_metric, best_metric, last_improved))
 
     if es is not None:
         print('Reloading best checkpoint')
         model = torch.load(model_file)
-        trainer = create_trainer(TaggerTrainerPyTorch, model, **kwargs)
+        trainer = create_trainer(model, **kwargs)
         trainer.test(es, reporting_fns, conll_output=conll_output, txts=txts, phase='Test')

@@ -1,307 +1,164 @@
-import torch
-import torch.nn as nn
-from torch.autograd import Variable
 from baseline.pytorch.torchy import *
-from baseline.model import EncoderDecoder, load_seq2seq_model, create_seq2seq_model
+from baseline.pytorch.transformer import *
+from baseline.model import EncoderDecoderModel, register_model, create_seq2seq_encoder, create_seq2seq_decoder
+from baseline.pytorch.seq2seq.encoders import *
+from baseline.pytorch.seq2seq.decoders import *
+
+import os
 
 
-class Seq2SeqBase(nn.Module, EncoderDecoder):
+class EncoderDecoderModelBase(nn.Module, EncoderDecoderModel):
 
-    def __init__(self, embeddings_in, embeddings_out):
-        super(Seq2SeqBase, self).__init__()
-        self.embed_in = pytorch_embedding(embeddings_in)
-        self.embed_out = pytorch_embedding(embeddings_out)
-        self.nc = embeddings_out.vsz + 1
-        self.vocab1 = embeddings_in.vocab
-        self.vocab2 = embeddings_out.vocab
-        self.beam_sz = 1
+    def __init__(self, src_embeddings, tgt_embedding, **kwargs):
+        super(EncoderDecoderModelBase, self).__init__()
+        self.beam_sz = kwargs.get('beam', 1)
+        self.gpu = kwargs.get('gpu', True)
+        src_dsz = self.init_embed(src_embeddings, tgt_embedding)
+        self.src_lengths_key = kwargs.get('src_lengths_key')
+        self.encoder = self.init_encoder(src_dsz, **kwargs)
+        self.decoder = self.init_decoder(tgt_embedding, **kwargs)
 
-    def get_src_vocab(self):
-        return self.vocab1
+    def init_embed(self, src_embeddings, tgt_embedding, **kwargs):
+        """This is the hook for providing embeddings.  It takes in a dictionary of `src_embeddings` and a single
+        tgt_embedding` of type `PyTorchEmbedding`
 
-    def get_dst_vocab(self):
-        return self.vocab2
+        :param src_embeddings: (``dict``) A dictionary of PyTorchEmbeddings, one per embedding
+        :param tgt_embedding: (``PyTorchEmbeddings``) A single PyTorchEmbeddings object
+        :param kwargs:
+        :return: Return the aggregate embedding input size
+        """
+        self.src_embeddings = EmbeddingsContainer()
+        input_sz = 0
+        for k, embedding in src_embeddings.items():
+            self.src_embeddings[k] = embedding
+            input_sz += embedding.get_dsz()
+        return input_sz
+
+    def init_encoder(self, input_sz, **kwargs):
+        # This is a hack since TF never needs this one, there is not a general constructor param, so shoehorn
+        kwargs['dsz'] = input_sz
+        return create_seq2seq_encoder(**kwargs)
+
+    def init_decoder(self, tgt_embedding, **kwargs):
+        return create_seq2seq_decoder(tgt_embedding, **kwargs)
+
+    def encode(self, input, lengths):
+        """
+
+        :param input:
+        :param lengths:
+        :return:
+        """
+        embed_in_seq = self.embed(input)
+        return self.encoder(embed_in_seq, lengths)
+
+    def decode(self, encoder_outputs, dst):
+        return self.decoder(encoder_outputs, dst)
 
     def save(self, model_file):
+        """Save the model out
+
+        :param model_file: (``str``) The filename
+        :return:
+        """
         torch.save(self, model_file)
 
     def create_loss(self):
+        """Create a loss function.
+
+        :return:
+        """
         return SequenceCriterion()
 
     @classmethod
-    def load(cls, outname, **kwargs):
-        model = torch.load(outname)
+    def load(cls, filename, **kwargs):
+        """Load a model from file
+
+        :param filename: (``str``) The filename
+        :param kwargs:
+        :return:
+        """
+        if not os.path.exists(filename):
+            filename += '.pyt'
+        model = torch.load(filename)
         return model
 
     @classmethod
-    def create(cls, input_embeddings, output_embeddings, **kwargs):
-
-        model = cls(input_embeddings, output_embeddings, **kwargs)
+    def create(cls, src_embeddings, tgt_embedding, **kwargs):
+        model = cls(src_embeddings, tgt_embedding, **kwargs)
         print(model)
         return model
 
     def make_input(self, batch_dict):
-        src = batch_dict['src']
-        src_len = batch_dict['src_len']
-        tgt = batch_dict['dst']
+        example = dict({})
 
-        dst = tgt[:, :-1]
-        tgt = tgt[:, 1:]
-
-        src_len, perm_idx = src_len.sort(0, descending=True)
-        src = src[perm_idx]
-        dst = dst[perm_idx]
-        tgt = tgt[perm_idx]
+        lengths = torch.from_numpy(batch_dict[self.src_lengths_key])
+        lengths, perm_idx = lengths.sort(0, descending=True)
 
         if self.gpu:
-            src = src.cuda()
-            dst = dst.cuda()
-            tgt = tgt.cuda()
-            src_len = src_len.cuda()
+            lengths = lengths.cuda()
+        example['src_len'] = lengths
+        for key in self.src_embeddings.keys():
+            tensor = torch.from_numpy(batch_dict[key])
+            tensor = tensor[perm_idx]
+            example[key] = tensor
 
-        return Variable(src), Variable(dst), Variable(src_len, requires_grad=False), Variable(tgt)
+            if self.gpu:
+                example[key] = example[key].cuda()
 
-    # Input better be xch, x
+        if 'tgt' in batch_dict:
+            tgt = torch.from_numpy(batch_dict['tgt'])
+            example['dst'] = tgt[:, :-1]
+            example['tgt'] = tgt[:, 1:]
+            example['dst'] = example['dst'][perm_idx]
+            example['tgt'] = example['tgt'][perm_idx]
+            if self.gpu:
+                example['dst'] = example['dst'].cuda()
+                example['tgt'] = example['tgt'].cuda()
+        return example
+
+    def embed(self, input):
+        all_embeddings = []
+        for k, embedding in self.src_embeddings.items():
+            all_embeddings.append(embedding.encode(input[k]))
+        return torch.cat(all_embeddings, 2)
+
     def forward(self, input):
-        src = input[0]
-        dst = input[1]
-        src_len = input[2]
-        rnn_enc_tbh, final_encoder_state = self.encode(src, src_len)
-        return self.decode(rnn_enc_tbh, src_len, final_encoder_state, dst)
-
-    def encode(self, src_bth, src_len):
-        src = src_bth.transpose(0, 1).contiguous()
-        embed_in_seq = self.embed_in(src)
-        packed = torch.nn.utils.rnn.pack_padded_sequence(embed_in_seq, src_len.data.tolist())
-        output_tbh, hidden = self.encoder_rnn(packed)
-        output_tbh, _ = torch.nn.utils.rnn.pad_packed_sequence(output_tbh)
-        return output_tbh, hidden
-
-    def input_i(self, embed_i, output_i):
-        pass
-
-    def bridge(self, final_encoder_state, context):
-        pass
-
-    def attn(self, output_t, context, src_mask=None):
-        pass
-
-    def decode_rnn(self, context_tbh, h_i, output_i, dst, src_mask):
-        embed_out_tbh = self.embed_out(dst)
-        context_bth = context_tbh.transpose(0, 1)
-        outputs = []
-
-        for i, embed_i in enumerate(embed_out_tbh.split(1)):
-            embed_i = self.input_i(embed_i, output_i)
-            output_i, h_i = self.decoder_rnn(embed_i, h_i)
-            output_i = self.attn(output_i, context_bth, src_mask)
-            output_i = self.dropout(output_i)
-            outputs += [output_i]
-
-        outputs = torch.stack(outputs)
-        return outputs, h_i
-
-    def decode(self, context_tbh, src_len, final_encoder_state, dst):
-
-        src_mask = sequence_mask(src_len)
-        if self.gpu:
-            src_mask = src_mask.cuda()
-        dst = dst.transpose(0, 1).contiguous()
-
-        h_i, output_i = self.bridge(final_encoder_state, context_tbh)
-        output, _ = self.decode_rnn(context_tbh, h_i, output_i, dst, src_mask)
-        pred = self.prediction(output)
-        return pred.transpose(0, 1).contiguous()
-
-    def prediction(self, output):
-        # Reform batch as (T x B, D)
-        pred = self.probs(self.preds(output.view(output.size(0)*output.size(1),
-                                                 -1)))
-        # back to T x B x H -> B x T x H
-        pred = pred.view(output.size(0), output.size(1), -1)
-        return pred
+        src_len = input['src_len']
+        encoder_outputs = self.encode(input, src_len)
+        output = self.decode(encoder_outputs, input['dst'])
+        # Return as B x T x H
+        return output
 
     # B x K x T and here T is a list
-    def run(self, batch_dict, **kwargs):
-        src = batch_dict['src']
-        src_len = batch_dict['src_len']
-        src = torch.from_numpy(src) if type(src) == np.ndarray else src
-        if type(src_len) == int:
-            src_len = np.array([src_len])
-        src_len = torch.from_numpy(src_len) if type(src_len) == np.ndarray else src_len
-        if torch.is_tensor(src):
-            src = torch.autograd.Variable(src, requires_grad=False)
-        if torch.is_tensor(src_len):
-            src_len = torch.autograd.Variable(src_len, requires_grad=False)
-
-        if self.gpu:
-            src = src.cuda()
-            src_len = src_len.cuda()
+    def predict(self, batch_dict, **kwargs):
+        self.eval()
         batch = []
-        for src_i, src_len_i in zip(src, src_len):
-            src_len_i = src_len_i.unsqueeze(0)
-            batch += [self.beam_decode(src_i.view(1, -1), src_len_i, kwargs.get('beam', 1))[0]]
-
+        # Bit of a hack
+        src_field = self.src_lengths_key.split('_')[0]
+        B = batch_dict[src_field].shape[0]
+        for b in range(B):
+            example = dict({})
+            for k, value in batch_dict.items():
+                if isinstance(value, list):
+                    example[k] = np.array([value[b]])
+                else:
+                    example[k] = value[b].reshape((1,) + value[b].shape)
+            inputs = self.make_input(example)
+            encoder_outputs = self.encode(inputs, inputs['src_len'])
+            batch.append(self.decoder.predict_one(inputs['src'], encoder_outputs, **kwargs)[0])
         return batch
 
-    def beam_decode(self, src, src_len, K):
-        with torch.no_grad():
 
-            T = src.size(1)
-            context, h_i = self.encode(src, src_len)
-            src_mask = sequence_mask(src_len)
-            dst_vocab = self.get_dst_vocab()
-            GO = dst_vocab['<GO>']
-            EOS = dst_vocab['<EOS>']
+@register_model(task='seq2seq', name=['default', 'attn'])
+class Seq2SeqModel(EncoderDecoderModelBase):
 
-            paths = [[GO] for _ in range(K)]
-            # K
-            scores = torch.FloatTensor([0. for _ in range(K)])
-            if self.gpu:
-                scores = scores.cuda()
-                src_mask = src_mask.cuda()
-            # TBH
-            context = torch.autograd.Variable(context.data.repeat(1, K, 1))
-            h_i = (torch.autograd.Variable(h_i[0].data.repeat(1, K, 1)),
-                   torch.autograd.Variable(h_i[1].data.repeat(1, K, 1)))
-            h_i, dec_out = self.bridge(h_i, context)
+    def __init__(self, src_embeddings, tgt_embedding, **kwargs):
+        """This base model is extensible for attention and other uses.  It declares minimal fields allowing the
+        subclass to take over most of the duties for drastically different implementations
 
-            for i in range(T):
-                lst = [path[-1] for path in paths]
-                dst = torch.LongTensor(lst).type(src.data.type())
-                mask_eos = dst == EOS
-                mask_pad = dst == 0
-                dst = dst.view(1, K)
-                var = torch.autograd.Variable(dst)
-                dec_out, h_i = self.decode_rnn(context, h_i, dec_out, var, src_mask)
-                # 1 x K x V
-                wll = self.prediction(dec_out).data
-                # Just mask wll against end data
-                V = wll.size(-1)
-                dec_out = dec_out.squeeze(0)  # get rid of T=t dimension
-                # K x V
-                wll = wll.squeeze(0)  # get rid of T=t dimension
-
-                if i > 0:
-                    expanded_history = scores.unsqueeze(1).expand_as(wll)
-                    wll.masked_fill_(mask_eos | mask_pad, 0)
-                    sll = wll + expanded_history
-                else:
-                    sll = wll[0]
-
-                flat_sll = sll.view(-1)
-                best, best_idx = flat_sll.squeeze().topk(K, 0)
-                best_beams = best_idx / V
-                best_idx = best_idx % V
-                new_paths = []
-                for j, beam_id in enumerate(best_beams):
-                    new_paths.append(paths[beam_id] + [best_idx[j]])
-                    scores[j] = best[j]
-
-                # Copy the beam state of the winners
-                for hc in h_i:  # iterate over h, c
-                    old_beam_state = hc.clone()
-                    for i, beam_id in enumerate(best_beams):
-                        H = hc.size(2)
-                        src_beam = old_beam_state.view(-1, K, H)[:, beam_id]
-                        dst_beam = hc.view(-1, K, H)[:, i]
-                        dst_beam.data.copy_(src_beam.data)
-                paths = new_paths
-
-            return [p[1:] for p in paths], scores
-
-
-class Seq2SeqModel(Seq2SeqBase):
-
-    def __init__(self, embeddings_in, embeddings_out, **kwargs):
-        super(Seq2SeqModel, self).__init__(embeddings_in, embeddings_out)
-
-        self.hsz = kwargs['hsz']
-        nlayers = kwargs['layers']
-        rnntype = kwargs['rnntype']
-        pdrop = kwargs.get('dropout', 0.5)
-        enc_hsz = self.hsz
-        if rnntype == 'blstm':
-            enc_hsz = enc_hsz // 2
-        dsz = embeddings_in.dsz
-        self.gpu = kwargs.get('gpu', True)
-        self.dropout = nn.Dropout(pdrop)
-        self.encoder_rnn = pytorch_rnn(dsz, enc_hsz, rnntype, nlayers, pdrop)
-        self.preds = nn.Linear(self.hsz, self.nc)
-        self.decoder_rnn = pytorch_rnn_cell(dsz, self.hsz, rnntype, nlayers, pdrop)
-        self.probs = nn.LogSoftmax(dim=1)
-
-    def input_i(self, embed_i, output_i):
-        return embed_i.squeeze(0)
-
-    def bridge(self, final_encoder_state, context):
-        return final_encoder_state, None
-
-    def attn(self, output_t, context, src_mask=None):
-        return output_t
-
-
-class Seq2SeqAttnModel(Seq2SeqBase):
-
-    def __init__(self, embeddings_in, embeddings_out, **kwargs):
-        super(Seq2SeqAttnModel, self).__init__(embeddings_in, embeddings_out)
-        self.hsz = kwargs['hsz']
-        nlayers = kwargs['layers']
-        rnntype = kwargs['rnntype']
-        pdrop = kwargs.get('dropout', 0.5)
-        enc_hsz = self.hsz
-        if rnntype == 'blstm':
-            enc_hsz = enc_hsz // 2
-        dsz = embeddings_in.dsz
-        self.gpu = kwargs.get('gpu', True)
-        self.encoder_rnn = pytorch_rnn(dsz, enc_hsz, rnntype, nlayers, pdrop)
-        self.dropout = nn.Dropout(pdrop)
-        self.decoder_rnn = pytorch_rnn_cell(self.hsz + dsz, self.hsz, rnntype, nlayers, pdrop)
-        self.preds = nn.Linear(self.hsz, self.nc)
-        self.probs = nn.LogSoftmax(dim=1)
-        self.nlayers = nlayers
-        attn_type = kwargs.get('attn_type', 'bahdanau').lower()
-        if attn_type == 'dot':
-            self.attn_module = LuongDotProductAttention(self.hsz)
-        elif attn_type == 'concat' or attn_type == 'bahdanau':
-            self.attn_module = BahdanauAttention(self.hsz)
-        elif attn_type == 'sdp':
-            self.attn_module = ScaledDotProductAttention(self.hsz)
-        else:
-            self.attn_module = LuongGeneralAttention(self.hsz)
-
-    def attn(self, output_t, context, src_mask=None):
-        return self.attn_module(output_t, context, context, src_mask)
-
-    def bridge(self, final_encoder_state, context):
-        batch_size = context.size(1)
-        h_size = (batch_size, self.hsz)
-        context_zeros = Variable(context.data.new(*h_size).zero_(), requires_grad=False)
-        if type(final_encoder_state) is tuple:
-            s1, s2 = final_encoder_state
-            return (s1, s2), context_zeros
-        else:
-            return final_encoder_state, context_zeros
-
-    def input_i(self, embed_i, output_i):
-        embed_i = embed_i.squeeze(0)
-        return torch.cat([embed_i, output_i], 1)
-
-
-BASELINE_SEQ2SEQ_MODELS = {
-    'default': Seq2SeqModel.create,
-    'attn': Seq2SeqAttnModel.create
-}
-BASELINE_SEQ2SEQ_LOADERS = {
-    'default': Seq2SeqModel.load,
-    'attn': Seq2SeqAttnModel.create
-}
-
-
-def create_model(src_vocab_embed, dst_vocab_embed, **kwargs):
-    model = create_seq2seq_model(BASELINE_SEQ2SEQ_MODELS, src_vocab_embed, dst_vocab_embed, **kwargs)
-    return model
-
-
-def load_model(modelname, **kwargs):
-    return load_seq2seq_model(BASELINE_SEQ2SEQ_LOADERS, modelname, **kwargs)
+        :param src_embeddings: (``dict``) A dictionary of PyTorchEmbeddings
+        :param tgt_embedding: (``PyTorchEmbeddings``) A single PyTorchEmbeddings object
+        :param kwargs:
+        """
+        super(Seq2SeqModel, self).__init__(src_embeddings, tgt_embedding, **kwargs)

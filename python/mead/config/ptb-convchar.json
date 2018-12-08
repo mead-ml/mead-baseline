@@ -11,30 +11,36 @@
     "backend": "tensorflow",
     "dataset": "ptb",
     "loader": {
-        "reader_type": "default"
+	"reader_type": "default",
+	"tgt_key": "word"
     },
+    "features": [{
+	"name": "word",
+	"vectorizer": {
+	    "type": "token1d",
+	    "fields": "conv-char",
+
+	},
+	"embeddings": {
+	    "cfiltsz": [1,2,3,4,5,6,7], 
+            "nfeat_factor": 50,
+            "gating": "highway",
+            "num_gates": 2
+	    "dsz": 650
+	}
+    }],
     "model": {
-        "model_type": "convchar",
-        "cfiltsz": [1,2,3,4,5,6,7],
-        "nfeat_factor": 50,
+        "model_type": "default",
         "hsz": 650,
         "layers": 2,
-        "gating": "highway",
-        "num_gates": 2
-    },
-    "word_embeddings": {
-        "dsz": 0
     },
     "train": {
         "epochs": 25,
-        "decay_rate": 1.6,
         "patience": 40000,
         "optim": "sgd",
-        "start_decay_epoch": 10,
-        "decay_type": "zaremba",
-        "eta": 1.0,
+        "eta": 20.0,
         "mom": 0.0,
         "do_early_stopping": true,
-        "clip": 5.0
+        "clip": 0.25
     }
 }

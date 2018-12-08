@@ -1,10 +1,13 @@
 # Sentence Classification
 
-There are several models built in to the `baseline` codebase.  These are summarized individually in the sections below
+There are several models built in to the `baseline` codebase.  These are summarized individually in the sections below, and an overall performance summary is given at the bottom
+
+## A Note About Fine-Tuning and Embeddings
+
+For the lookup-table embeddings, you can control whether or not the embeddings should be fine-tuned by passing a boolean `finetune` in for the `embeddings` section of the mead config.  If you are using random weights, you definitely should fine tune.  If you are using pre-trained embeddings, it may be worth experimenting with this option.  The default behavior is to fine-tune embeddings.  We randomly initialize unattested words and add them to the weight matrix for the Lookup Table.  This can be controlled with the 'unif' parameter in the driver program.
+
 
 ## Convolution Model
-
-This code provides PyTorch, TensorFlow, DyNet and Keras implementations. 
 
 *Details*
 
@@ -13,69 +16,23 @@ This is inspired by Yoon Kim's paper "Convolutional Neural Networks for Sentence
 Temporal convolutional output total number of feature maps is configurable (this also defines the size of the max over time layer, by definition). This code offers several optimization options (adagrad, adadelta, adam and vanilla sgd, with and without momentum).  The Kim paper uses adadelta, which works well, but vanilla SGD and Adam often work well.
 
 Despite the simplicity of this approach, on many datasets this model performs better than other strong baselines such as NBSVM.
-
-Here are some places where this code is known to perform well:
-
-  - Binary classification of sentences (SST2 - SST binary task)
-    - Consistently beats RNTN using static embeddings, much simpler model
-  - Binary classification of Tweets (SemEval balanced binary splits)
-    - Consistent improvement over NBSVM even with char-ngrams included and distance lexicons (compared using [NBSVM-XL](https://github.com/dpressel/nbsvm-xl))
-  - Stanford Politeness Corpus
-    - Consistent improvement over [extended algorithm](https://github.com/sudhof/politeness) from authors using a decimation split (descending rank heldout)
-  - Language Detection (using word and char embeddings)
-  - Question Categorization (QA trec)
-  - Intent detection
-
 There are some options in each implementation that might vary slightly, but this approach should do at least as well as the original paper.
-
-### With Fine-tuning Embedding (LookupTable) layer
-
-The (default) fine-tuning approach loads the word2vec weight matrix into an Lookup Table.  As we can see from the Kim paper, dynamic/fine-tuning embedding models do not always out-perform static models, However, they tend to do better.
-
-We randomly initialize unattested words and add them to the weight matrix for the Lookup Table.  This can be controlled with the 'unif' parameter in the driver program.
-
-### Static, "frozen" Embedding (LookupTable) layer
-
-The static (no fine-tuning) model usually has decent performance, and the code is very simple to implement from scratch, as long as you have access to a fast convolution operator.  For most cases, fine-tuning is preferred.
-
-### Running It
 
 Early stopping with patience is supported.  There are many hyper-parameters that you can tune, which may yield many different models.
 
-[Here](../python/mead/config/sst2.json) is a tensorflow example running Stanford Sentiment Treebank 2 data with adadelta:
+To run, use this command:
 
 ```
 python trainer.py --config config/sst2.json
 ```
 
-### Latest Runs
-
-Here are the last observed performance scores using with fine-tuning on the Stanford Sentiment Treebank 2 (SST2), dbpedia and TREC-QA (config [here](../python/mead/config/trec-cnn.yml)):
-
-| Dataset | Results    |
-| ------- | ---------- | 
-| sst2    |       87.9 |
-| dbpedia |     99.054 | 
-| trec-qa |       94.6 |
-| AG      |       92.5 |
-
-Note that these are randomly initialized and these numbers will vary
-(IOW, don't assume that one implementation is guaranteed to outperform the others from a single run).
-
-On my laptop, each implementation for SST2 takes between 15 - 30s per epoch depending on the deep learning framework (TensorFlow and PyTorch are fastest, and about the same speed)
-
 ## LSTM Model
-
-Provides a simple LSTM and BLSTM for text classification with PyTorch, TensorFlow and DyNet
 
 *Details*
 
-The LSTM's final hidden state is passed to the final layer.  The use of an LSTM instead of parallel convolutional filters is the main differentiator between this model and the default model (CMOT) above.  To request the LSTM classifier instead of the default, pass `"model_type": "lstm"` to the driver program.
+The LSTM's final hidden state is passed to the final layer.  The use of an LSTM instead of parallel convolutional filters is the main differentiator between this model and the default model (CMOT) above.  To request the LSTM classifier instead of the default, set `"model_type": "lstm"` in the mead config file.
 
-### Running It
-
-This model is run similarly to the model above.
-[Here](../pythom/mead/config/sst2-lstm.json) is an example running Stanford Sentiment Treebank 2 data with adadelta using TensorFlow:
+The command below executes an LSTM classifier with 2 sets of pre-trained word embeddings
 
 ```
 python trainer.py --config config/sst2-lstm.json
@@ -85,24 +42,29 @@ python trainer.py --config config/sst2-lstm.json
 
 Two different pooling methods for NBoW are supported: max (`"model_type": "nbowmax"`) and average (`"model_type": "nbow"`).  Passing `"layers": <N>` defines the number of hidden layers, and passing `"hsz": <HU>` defines the number of hidden units for each layer.
 
-### Status
+## Classifier Performance
+
+We run each experiment 10 times and list the performance, configuration, and metrics below
+
+| config                                                           | dataset   | model                | metric | mean  |  std  | min   | max   |
+| ---------------------------------------------------------------- | --------- | -------------------- |------- | ------| ----- | ----- | ----- |
+| [sst2-lstm.json](../python/mead/config/sst2-lstm.json)           | SST2      | LSTM 2 Embeddings    |    acc | 88.57 | 0.443 | 87.59 | 89.24 |
+| [sst2-lstm-840b.json](../python/mead/config/sst2-lstm-840b.json) | SST2      | LSTM 1 Embedding     |    acc | 88.39 | 0.45  | 87.42 | 89.07 |
+| [sst2.json](../python/mead/config/sst2.json)                     | SST2      | CNN-3,4,5            |    acc | 87.32 | 0.31  | 86.60 | 87.58 |
+| [trec-cnn.yml](../python/mead/config/trec-cnn.yml)               | TREC-QA   | CNN-3                |    acc | 92.33 | 0.56  | 91.2  | 93.2  |
+| [ag-news.json](../python/mead/config/ag-news.json)               | AGNEWS    | CNN-3,4,5            |    acc | 92.51 | 0.199 | 92.07 | 92.83 |
+
+## Multiple GPUs
+
+Multi-GPU support can be setting the `CUDA_VISIBLE_DEVICES` environment variable to create a mask of GPUs that are visible to the program.
 
 
-This model is implemented in TensorFlow, PyTorch and DyNet. Multi-GPU support can be enabled by passing `--gpus <N>` to the `mead-train`.  `--gpus -1` is a special case that tells the driver to run with all available GPUs.  The `CUDA_VISIBLE_DEVICES` environment variable should be set to create a mask of GPUs that are visible to the program.
+## Losses and Reporting
 
-### Latest Runs
+When training the loss that is optimized is the total loss averaged over the number of examples in the mini-batch.
 
-Here are the last observed performance scores using _classify_sentence_ with fine-tuning on the Stanford Sentiment Treebank 2 (sst2) with a single hidden layer (the default), and `hsz=100` (the default)
+When reporting the loss reported every nsteps is the total loss averaged over the number of examples that appeared in these nsteps number of minibatches.
 
-It was run on the latest code as of 8/24/2017, with 25 epochs with adadelta as an optimizer:
+When reporting the loss at the end of an epoch it is the total loss averaged over the number of examples seen in the whole epoch.
 
-#### NBoW Results
-
-| model_type | Dataset | TensorFlow | PyTorch | 
-|------------| ------- | ---------- | ------- | 
-| nbowmax    | sst2    |       82.8 |  84.1   |
-| nbow       | sst2    |       84.2 |  82.9   |
-
-Note that these are randomly initialized and these numbers will vary
-(IOW, don't assume that one implementation is guaranteed to outperform the others from a single run).
-
+Metrics like accuracy and f1 are computed at the example level.

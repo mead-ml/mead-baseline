@@ -1,0 +1,39 @@
+{
+  "task": "classify",
+  "batchsz": 50,
+  "features": [
+    {
+      "name": "word",
+      "vectorizer": {
+        "type": "token1d",
+        "rev": true
+      },
+      "embeddings": {
+        "label": "glove-840B"
+      }
+    }
+  ],
+  "preproc": {
+    "mxlen": 100,
+    "clean": true
+  },
+  "backend": "tensorflow",
+  "dataset": "SST2",
+  "loader": {
+    "reader_type": "default"
+  },
+  "unif": 0.25,
+  "model": {
+    "model_type": "lstm",
+    "hsz": 200,
+    "dropout": 0.5,
+    "finetune": true
+  },
+  "train": {
+    "epochs": 2,
+    "optim": "adadelta",
+    "model_base": "./models/sst2-lstm",
+    "eta": 1.0,
+    "early_stopping_metric": "acc"
+  }
+}

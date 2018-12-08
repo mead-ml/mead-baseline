@@ -1,17 +1,30 @@
+import six
+
 import os
 import sys
 import json
 import hashlib
 import logging
 import zipfile
+import platform
 import importlib
+from operator import lt, le, gt, ge
 from contextlib import contextmanager
 from functools import partial, update_wrapper, wraps
 import numpy as np
 import addons
-
+import collections
 
 __all__ = []
+
+
+def optional_params(func):
+    @wraps(func)
+    def wrapped(*args, **kwargs):
+        if len(args) == 1 and len(kwargs) == 0 and callable(args[0]):
+            return func(args[0])
+        return lambda x: func(x, *args, **kwargs)
+    return wrapped
 
 
 def parameterize(func):
@@ -33,6 +46,26 @@ def export(obj, all_list=None):
 
 
 exporter = export(__all__)
+
+
+@exporter
+class Offsets:
+    """Support pre 3.4"""
+    PAD, GO, EOS, UNK, OFFSET = range(0, 5)
+    VALUES = ["<PAD>", "<GO>", "<EOS>", "<UNK>"]
+
+
+@exporter
+def register(cls, registry, name=None, error=''):
+    if name is None:
+        name = cls.__name__
+    if name in registry:
+        raise Exception('Error: attempt to re-define previously registered {} {} (old: {}, new: {})'.format(error, name, registry[name], cls))
+    if hasattr(cls, 'create'):
+        registry[name] = cls.create
+    else:
+        registry[name] = cls
+    return cls
 
 
 @contextmanager
@@ -65,10 +98,47 @@ class JSONFormatter(logging.Formatter):
 
 
 @exporter
-def crf_mask(vocab, span_type, s_idx, e_idx, pad_idx=None):
+class Colors(object):
+    GREEN = '\033[32;1m'
+    RED = '\033[31;1m'
+    YELLOW = '\033[33;1m'
+    BLACK = '\033[30;1m'
+    CYAN = '\033[36;1m'
+    RESTORE = '\033[0m'
+
+
+@exporter
+def color(msg, color):
+    if platform.system() == 'Windows':
+        return msg
+    return u"{}{}{}".format(color, msg, Colors.RESTORE)
+
+
+@exporter
+def sequence_mask(lengths, max_len=-1):
+    if max_len < 0:
+        max_len = np.max(lengths)
+    row = np.arange(0, max_len).reshape(1, -1)
+    col = np.reshape(lengths, (-1, 1))
+    return (row < col).astype(np.uint8)
+
+
+@exporter
+def transition_mask(vocab, span_type, s_idx, e_idx, pad_idx=None):
     """Create a CRF mask.
 
     Returns a mask with invalid moves as 0 and valid as 1.
+
+    :param vocab: dict, Label vocabulary mapping name to index.
+    :param span_type: str, The sequence labeling formalism {IOB, IOB2, BIO, or IOBES}
+    :param s_idx: int, What is the index of the GO symbol?
+    :param e_idx: int, What is the index of the EOS symbol?
+    :param pad_idx: int, What is the index of the PAD symbol?
+
+    Note:
+        In this mask the PAD symbol is between the last symbol and EOS, PADS can
+        only move to pad and the EOS. Any symbol that can move to an EOS can also
+        move to a pad.
     """
     rev_lut = {v: k for k, v in vocab.items()}
     start = rev_lut[s_idx]
@@ -231,18 +301,6 @@ def iobes_mask(vocab, start, end, pad=None):
                         mask[vocab[to], vocab[from_]] = small
     return mask
 
-@exporter
-def listify(x):
-    """Take a scalar or list and make it a list
-
-    :param x: The input to convert
-    :return: A list
-    """
-    if isinstance(x, (list, tuple, np.ndarray)):
-        return x
-    if x is None:
-        return []
-    return [x]
 
 @exporter
 def get_version(pkg):
@@ -267,6 +325,47 @@ def str2bool(v):
 @exporter
 def lowercase(x):
     return x.lower()
+
+UNREP_EMOTICONS = (
+    ':)',
+    ':(((',
+    ':D',
+    '=)',
+    ':-)',
+    '=(',
+    '(=',
+    '=[[',
+)
+
+@exporter
+def web_cleanup(word):
+    if word.startswith('http'): return 'URL'
+    if word.startswith('@'): return '@@@@'
+    if word.startswith('#'): return '####'
+    if word == '"': return ','
+    if word in UNREP_EMOTICONS: return ';)'
+    if word == '<3': return '&lt;3'
+    return word
+
+
+@exporter
+def is_sequence(x):
+    import collections
+    if isinstance(x, six.string_types):
+        return False
+    return isinstance(x, collections.Sequence)
+
+
+@exporter
+def listify(x):
+    """Take a scalar or list and make it a list iff not already a sequence or numpy array
+
+    :param x: The input to convert
+    :return: A list
+    """
+    if is_sequence(x) or isinstance(x, np.ndarray):
+        return x
+    return [x] if x is not None else []
 
 
 @exporter
@@ -326,6 +425,8 @@ def read_config_stream(config_stream):
     :param config_stream:
     :return:
     """
+    if isinstance(config_stream, (dict, list)) or config_stream is None:
+        return config_stream
     if os.path.exists(config_stream) and os.path.isfile(config_stream):
         return read_config_file(config_stream)
     config = config_stream
@@ -334,158 +435,51 @@ def read_config_stream(config_stream):
         config = os.getenv(config_stream[1:])
     return json.loads(config)
 
+
+def write_sentence_conll(handle, sentence, gold, txt, idx2label):
+
+    if len(txt) != len(sentence):
+        txt = txt[:len(sentence)]
+
+    try:
+        for word, truth, guess in zip(txt, gold, sentence):
+            handle.write('%s %s %s\n' % (word['text'], idx2label[truth], idx2label[guess]))
+        handle.write('\n')
+    except:
+        print('ERROR: Failed to write lines... closing file')
+        handle.close()
+
+
 @exporter
 def write_json(content, filepath):
     with open(filepath, "w") as f:
         json.dump(content, f, indent=True)
 
+
 @exporter
-def import_user_module(module_type, model_type):
-    """Load a module that is in the python path with a canonical name
+def ls_props(thing):
+    """List all of the properties on some object
 
-    This method loads a user-defined model, which must exist in the `PYTHONPATH` and must also
-    follow a fixed naming convention of `{module_type}_{model_type}.py`.  The module is dynamically
-    loaded, at which point its creator or loader function should be called to instantiate the model.
-    This is essentially a plugin, but its implementation is trivial.
+    :param thing: Some object
+    :return: The list of properties
+    """
+    return [x for x in dir(thing) if isinstance(getattr(type(thing), x, None), property)]
 
-    :param module_type: one of `classifier`, `tagger`, `seq2seq`, `lang`
-    :param model_type: A name for the model, which is the suffix
+
+@exporter
+def import_user_module(module_name):
+    """Load a module that is in the python path
+
+    :param model_name: (``str``) - the name of the module
     :return:
     """
     sys.path.append(os.path.dirname(os.path.realpath(addons.__file__)))
-    module_name = "%s_%s" % (module_type, model_type)
-    #print('Loading user model %s' % module_name)
     mod = importlib.import_module(module_name)
     return mod
 
-@exporter
-def create_user_model(input_, output_, **kwargs):
-    """Create a user-defined model
-
-    This creates a model defined by the user.
-    It first imports a module that must exist in the `PYTHONPATH`, with a named defined as
-    `{task_type}_{model_type}.py`.  Once created, this user-defined model can be trained within
-    the existing training programs
-
-    :param input_: Some type of word vectors for the input
-    :param output_: Things passed dealing with the output
-    :param kwargs:
-    :return: A user-defined model
-    """
-    model_type = kwargs['model_type']
-    mod = import_user_module(kwargs['task_type'], model_type)
-    return mod.create_model(input_, output_, **kwargs)
-
-def wrapped_partial(func, name=None, *args, **kwargs):
-    """
-    When we use `functools.partial` the `__name__` is not defined which breaks
-    our export function so we use update wrapper to give it a `__name__`.
-
-    :param name: A new name that is assigned to `__name__` so that the name
-    of the partial can be different than the wrapped function.
-    """
-    partial_func = partial(func, *args, **kwargs)
-    update_wrapper(partial_func, func)
-    if name is not None:
-        partial_func.__name__ = name
-    return partial_func
-
-create_user_classifier_model = exporter(
-    wrapped_partial(
-        create_user_model,
-        task_type='classify',
-        name='create_user_classifier_model'
-    )
-)
-create_user_tagger_model = exporter(
-    wrapped_partial(
-        create_user_model,
-        task_type='tagger',
-        name='create_user_tagger_model'
-    )
-)
-create_user_seq2seq_model = exporter(
-    wrapped_partial(
-        create_user_model,
-        task_type='seq2seq',
-        name='create_user_seq2seq_model'
-    )
-)
-
 
 @exporter
-def create_user_lang_model(embeddings, **kwargs):
-    model_type = kwargs['model_type']
-    mod = import_user_module('lang', model_type)
-    return mod.create_model(embeddings, **kwargs)
-
-
-@exporter
-def create_user_trainer(model, **kwargs):
-    """Create a user-defined trainer
-
-    Given a model, create a custom trainer that will train the model.  This requires that the trainer
-    module lives in the `PYTHONPATH`, and is named `trainer_{trainer_type}`.  Once instantiated, this trainer
-    can be used by the `fit()` function within each task type
-
-    :param model: The model to train
-    :param kwargs:
-    :return: A user-defined trainer
-    """
-    model_type = kwargs['trainer_type']
-    mod = import_user_module("trainer", model_type)
-    return mod.create_trainer(model, **kwargs)
-
-
-@exporter
-def load_user_model(outname, **kwargs):
-    """Loads a user-defined model
-
-    This loads a previously serialized model defined by the user.
-    It first imports a module that must exist in the `PYTHONPATH`, with a named defined as
-    `{task_type}_{model_type}.py`.  Once loaded, this user-defined model can be used within the driver programs
-
-    :param outname: The name of the file where the model is serialized
-    :param kwargs:
-    :return: A user-defined model
-    """
-    model_type = kwargs['model_type']
-    mod = import_user_module(kwargs['task_type'], model_type)
-    return mod.load_model(outname, **kwargs)
-
-
-load_user_classifier_model = exporter(
-    wrapped_partial(
-        load_user_model,
-        task_type='classify',
-        name='load_user_classifier_model'
-    )
-)
-load_user_tagger_model = exporter(
-    wrapped_partial(
-        load_user_model,
-        task_type='tagger',
-        name='load_user_tagger_model'
-    )
-)
-load_user_seq2seq_model = exporter(
-    wrapped_partial(
-        load_user_model,
-        task_type='seq2seq',
-        name='load_user_seq2seq_model'
-    )
-)
-load_user_lang_model = exporter(
-    wrapped_partial(
-        load_user_model,
-        task_type='lm',
-        name='load_user_lang_model'
-    )
-)
-
-
-@exporter
-def get_model_file(dictionary, task, platform):
+def get_model_file(task, platform, basedir=None):
     """Model name file helper to abstract different DL platforms (FWs)
 
     :param dictionary:
@@ -493,7 +487,8 @@ def get_model_file(dictionary, task, platform):
     :param platform:
     :return:
     """
-    base = dictionary.get('outfile', './%s-model' % task)
+    basedir = './' if basedir is None else basedir
+    base = '{}/{}-model'.format(basedir, task)
     rid = os.getpid()
     if platform.startswith('pyt'):
         name = '%s-%d.pyt' % (base, rid)
@@ -514,7 +509,14 @@ def lookup_sentence(rlut, seq, reverse=False, padchar=''):
     :return:
     """
     s = seq[::-1] if reverse else seq
-    return (' '.join([rlut[idx] if rlut[idx] != '<PAD>' else padchar for idx in s])).strip()
+    res = []
+    for idx in s:
+        char = padchar
+        if idx == Offsets.EOS: break
+        if idx != Offsets.PAD and idx != Offsets.GO:
+            char = rlut[idx]
+        res.append(char)
+    return (' '.join(res)).strip()
 
 
 @exporter
@@ -523,6 +525,7 @@ def topk(k, probs):
     idx = np.argpartition(probs, probs.size-k)[-k:]
     sort = idx[np.argsort(probs[idx])][::-1]
     return dict(zip(sort, probs[sort]))
+
 
 
 @exporter
@@ -558,26 +561,6 @@ def fill_y(nc, yidx):
     xidx = np.arange(0, yidx.shape[0], 1)
     dense = np.zeros((yidx.shape[0], nc), dtype=int)
     dense[xidx, yidx] = 1
-    return dense
-
-
-@exporter
-def seq_fill_y(nc, yidx):
-    """Convert a `BxT` sparse array to a dense one, to expand labels 
-    
-    :param nc: (``int``) The number of labels
-    :param yidx: The sparse array of the labels
-    :return: A dense array
-    """
-    batchsz = yidx.shape[0]
-    siglen = yidx.shape[1]
-    dense = np.zeros((batchsz, siglen, nc), dtype=np.int)
-    for i in range(batchsz):
-        for j in range(siglen):
-            idx = int(yidx[i, j])
-            if idx > 0:
-                dense[i, j, idx] = 1
-
     return dense
 
 
@@ -658,6 +641,7 @@ def convert_bio_to_iobes(ifile, ofile):
 
             writer.write(' '.join(tokens[:-1]) + ' ' + updated_label + '\n')
             prev = tokens[-1]
+
 
 @exporter
 def to_spans(sequence, lut, span_type, verbose=False):
@@ -823,6 +807,87 @@ def unzip_model(path):
 
 
 @exporter
+def save_vectorizers(basedir, vectorizers, name='vectorizers'):
+    import pickle
+    save_md_file = '{}/{}-{}.pkl'.format(basedir, name, os.getpid())
+    with open(save_md_file, 'wb') as f:
+        pickle.dump(vectorizers, f)
+
+
+@exporter
+def save_vocabs(basedir, embeds_or_vocabs, name='vocabs'):
+    for k, embeds_or_vocabs in embeds_or_vocabs.items():
+        save_md = '{}/{}-{}-{}.json'.format(basedir, name, k, os.getpid())
+        # Its a vocab
+        if isinstance(embeds_or_vocabs, collections.Mapping):
+            write_json(embeds_or_vocabs, save_md)
+        # Type is embeds
+        else:
+            write_json(embeds_or_vocabs.vocab, save_md)
+
+
+@exporter
+def load_vocabs(directory):
+    vocab_fnames = find_files_with_prefix(directory, 'vocabs')
+    vocabs = {}
+    for f in vocab_fnames:
+        print(f)
+        k = f.split('-')[-2]
+        vocab = read_json(f)
+        vocabs[k] = vocab
+    return vocabs
+
+
+@exporter
+def load_vectorizers(directory):
+    import pickle
+    vectorizers_fname = find_files_with_prefix(directory, 'vectorizers')[0]
+    with open(vectorizers_fname, "rb") as f:
+        vectorizers = pickle.load(f)
+    return vectorizers
+
+
+@exporter
+def unzip_files(zip_path):
+    with open(zip_path, 'rb') as f:
+        sha1 = hashlib.sha1(f.read()).hexdigest()
+        temp_dir = os.path.join("/tmp/", sha1)
+        if not os.path.exists(temp_dir):
+            print("unzipping model")
+            with zipfile.ZipFile(zip_path, "r") as zip_ref:
+                zip_ref.extractall(temp_dir)
+        if len(os.listdir(temp_dir)) == 1:  # a directory was zipped v files
+            temp_dir = os.path.join(temp_dir, os.listdir(temp_dir)[0])
+    return temp_dir
+
+
+@exporter
+def find_model_basename(directory):
+    path = os.path.join(directory, [x for x in os.listdir(directory) if 'model' in x and '-md' not in x][0])
+    print(path)
+    path = path.split('.')[:-1]
+    return '.'.join(path)
+
+
+@exporter
+def find_files_with_prefix(directory, prefix):
+    return [os.path.join(directory, x) for x in os.listdir(directory) if x.startswith(prefix)]
+
+
+@exporter
+def zip_files(basedir):
+    pid = str(os.getpid())
+    tgt_zip_base = os.path.abspath(basedir)
+    model_files = [x for x in os.listdir(basedir) if x.find(pid) >= 0 and os.path.isfile(os.path.join(basedir, x))]
+    z = zipfile.ZipFile("{}-{}.zip".format(tgt_zip_base, pid), "w")
+    for f in model_files:
+        f = os.path.join(basedir, f)
+        z.write(f)
+        os.remove(f)
+    z.close()
+
+
+@exporter
 def zip_model(path):
     """zips the model files"""
     print("zipping model files")
@@ -844,3 +909,100 @@ def verbose_output(verbose, confusion_matrix):
         print(confusion_matrix)
     if outfile is not None:
         confusion_matrix.save(outfile)
+
+
+@exporter
+def get_env_gpus():
+    return os.getenv('CUDA_VISIBLE_DEVICES', os.getenv('NV_GPU', '0')).split(',')
+
+
+LESS_THAN_METRICS = {"avg_loss", "loss", "perplexity", "ppl"}
+
+
+@exporter
+def get_metric_cmp(metric, user_cmp=None, less_than_metrics=LESS_THAN_METRICS):
+    if user_cmp is not None:
+        return _try_user_cmp(user_cmp)
+    if metric in less_than_metrics:
+        return lt, six.MAXSIZE
+    return gt, 0
+
+
+def _try_user_cmp(user_cmp):
+    user_cmp = user_cmp.lower()
+    if user_cmp in {"lt", "less", "less than", "<", "less_than"}:
+        return lt, six.MAXSIZE
+    if user_cmp in {"le", "lte", "<="}:
+        return le, six.MAXSIZE
+    if user_cmp in {"ge", "gte", ">="}:
+        return ge, 0
+    return gt, 0
+
+
+@exporter
+def show_examples(model, es, rlut1, rlut2, vocab, mxlen, sample, prob_clip, max_examples, reverse):
+    si = np.random.randint(0, len(es))
+
+    batch_dict = es[si]
+
+    lengths_key = model.src_lengths_key
+    src_field = lengths_key.split('_')[0]
+    src_array = batch_dict[src_field]
+    if max_examples > 0:
+        max_examples = min(max_examples, src_array.shape[0])
+
+    for i in range(max_examples):
+        example = {}
+        # Batch first, so this gets a single example at once
+        for k, v in batch_dict.items():
+            example[k] = v[i, np.newaxis]
+
+        print('========================================================================')
+        sent = lookup_sentence(rlut1, example[src_field].squeeze(), reverse=reverse)
+        print('[OP] %s' % sent)
+        sent = lookup_sentence(rlut2, example['tgt'].squeeze())
+        print('[Actual] %s' % sent)
+        dst_i = model.predict(example)[0][0]
+        sent = lookup_sentence(rlut2, dst_i)
+        print('Guess: %s' % sent)
+        print('------------------------------------------------------------------------')
+
+
+@exporter
+def convert_seq2seq_golds(indices, lengths, rlut, subword_fix=lambda x: x):
+    """Convert indices to words and format like a bleu reference corpus.
+
+    :param indices: The indices of the gold sentence. Should be in the shape
+        `[B, T]`. Iterating though axis=1 should yield ints.
+    :param lengths: The length of the gold sentences.
+    :param rlut: `dict[int] -> str` A lookup table from indices to words.
+
+    :returns: List[List[List[str]]] Shape is [B, 1, T] where T is the number of
+        words in that gold sentence
+    """
+    golds = []
+    for idx, l in zip(indices, lengths):
+        gold = idx[:l]
+        gold_str = lookup_sentence(rlut, gold)
+        gold = subword_fix(gold_str.split())
+        golds.append([gold])
+    return golds
+
+
+@exporter
+def convert_seq2seq_preds(indices, rlut, subword_fix=lambda x: x):
+    """Convert indices to words and format like a bleu hypothesis corpus.
+
+    :param indices: The indices of the predicted sentence. Should be in the
+        shape `[B, T]`. Iterating though axis=1 should yield ints.
+    :param rlut: `dict[int] -> str` A lookup table from indices to words.
+
+    :returns: List[List[str]] Shape is [B, T] where T is the number of
+        words in that predicted sentence
+    """
+    preds = []
+    for idx in indices:
+        pred_str = lookup_sentence(rlut, idx)
+        pred = subword_fix(pred_str.split())
+        preds.append(pred)
+    return preds

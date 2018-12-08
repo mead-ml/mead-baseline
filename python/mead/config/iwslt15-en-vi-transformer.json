@@ -1,0 +1,47 @@
+{
+    "task": "seq2seq",
+    "num_valid_to_show": 0,
+    "batchsz": 128,
+    "basedir": "iwslt15-en-vi-transformer",
+    "unif": 0.25,
+    "features": [
+	{ 
+	    "name": "src",
+	    "vectorizer": { "type": "token1d"},
+	    "embeddings": { "dsz": 512, "type": "positional" }
+	},
+	{
+	    "name": "tgt",
+	    "vectorizer": { "type": "token1d"},
+	    "embeddings": { "dsz": 512, "type": "positional" }
+	}
+    ],
+    "preproc": {
+        "mxlen": 50
+    },
+    "backend": "tensorflow",
+    "dataset": "iwslt15-en-vi",
+    "loader": {
+        "reader_type": "default",
+	    "pair_suffix": ["en", "vi"]
+    },
+
+    "model": {
+        "model_type": "default",
+        "encoder_type": "transformer",
+        "decoder_type": "transformer",
+        "hsz": 512,
+        "dropout": 0.5,
+        "layers": 2
+    },
+    "train": {
+        "epochs": 16,
+        "optim": "adam",
+        "lr_scheduler_type": "warmup_linear",
+        "warmup_steps": 800,
+        "eta": 0.001,
+        "patience": 20,
+	    "do_early_stopping": false,
+        "clip": 1.0
+    }
+}

@@ -1,5 +1,6 @@
 import re
-import six.moves
+import sys
+import six
 from baseline.utils import export
 
 __all__ = []
@@ -9,7 +10,7 @@ exporter = export(__all__)
 @exporter
 class Progress(object):
     """Progress hook
-    
+
     Provide interface for progress updates
     """
     def __init__(self):
@@ -17,25 +18,25 @@ class Progress(object):
 
     def update(self, step=1):
         """Update progress by number of `steps`
-        
+
         :param step: The number of tasks completed
-        :return: 
+        :return:
         """
         pass
 
     def done(self):
         """Triggered when all tasks are completed
-        
-        :return: 
+
+        :return:
         """
         pass
 
 @exporter
 class ProgressBarJupyter(Progress):
     """Simple Jupyter progress bar
-    
+
     Writes a progress bar to an ipython widget
-    
+
     """
     def __init__(self, total):
         super(ProgressBarJupyter, self).__init__()
@@ -58,9 +59,9 @@ class ProgressBarJupyter(Progress):
 @exporter
 class ProgressBarTerminal(Progress):
     """Simple terminal-based progress bar
-    
+
     Writes a progress bar to the terminal, using a designated `symbol` (which defaults to `=`)
-    
+
     """
     DEFAULT = 'Progress: %(bar)s %(percent)3d%%'
     FULL = '%(bar)s %(current)d/%(total)d (%(percent)3d%%) %(remaining)d to go'
@@ -76,14 +77,15 @@ class ProgressBarTerminal(Progress):
             r'\g<name>%dd' % len(str(total)), fmt)
 
         self.current = 0
+        self.print_ = six.print_ if sys.stdout.isatty() else lambda *args, **kwargs: None
         # Force initial print of pg for when steps are long.
         self.update(step=0)
 
     def update(self, step=1):
         """Update progress bar by number of `steps`
-        
+
         :param step: The number of tasks completed
-        :return: 
+        :return:
         """
         self.current += step
         percent = self.current / float(self.total)
@@ -98,12 +100,12 @@ class ProgressBarTerminal(Progress):
             'percent': percent * 100,
             'remaining': remaining
         }
-        six.print_('\r' + self.fmt % args, end='')
+        self.print_('\r' + self.fmt % args, end='')
 
     def done(self):
         """All tasks are finished, complete the progress bar
-        
-        :return: 
+
+        :return:
         """
         self.current = self.total
         self.update(step=0)
@@ -126,7 +128,7 @@ g_Progress = ProgressBarTerminal
 @exporter
 def set_global_progress_bar(type):
     """Sets the global factory for progress bars
-    
+
     :param type: A string (`terminal` and `jupyter` will provide different implementations, otherwise its null)
     :return: The global
     """

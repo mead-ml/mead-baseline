@@ -22,7 +22,7 @@ class CONLLSeqMixedCaseReader(CONLLSeqReader):
         chars_vocab = vocabs['char']
         mxlen = self.max_sentence_length
         maxw = self.max_word_length
-        extracted = self.read_lines(filename)
+        extracted = self.read_examples(filename)
         texts = extracted['texts']
         labels = extracted['labels']
 

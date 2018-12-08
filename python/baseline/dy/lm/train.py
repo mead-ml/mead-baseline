@@ -2,120 +2,126 @@ import time
 import logging
 import dynet as dy
 import numpy as np
-from baseline.utils import listify, get_model_file
-from baseline.progress import create_progress_bar
-from baseline.train import Trainer, create_trainer, lr_decay
+from baseline.utils import listify, get_model_file, get_metric_cmp
+from baseline.train import Trainer, create_trainer, register_trainer, register_training_func
+from baseline.dy.optz import OptimizerManager
 from baseline.dy.dynety import *
 
 
+@register_trainer(task='lm', name='default')
 class LanguageModelTrainerDynet(Trainer):
-    def __init__(
-            self,
-            model,
-            **kwargs
-    ):
+
+    def __init__(self, model, **kwargs):
         super(LanguageModelTrainerDynet, self).__init__()
         self.model = model
-        self.optimizer = optimizer(model, **kwargs)
-        self.decay = lr_decay(**kwargs)
-        self.global_step = 0
-        self.valid_epochs = 0
-        self.log = logging.getLogger('baseline.timing')
+        self.optimizer = OptimizerManager(model, **kwargs)
+        self.nsteps = kwargs.get('nsteps', 500)
 
     @staticmethod
     def _loss(outputs, labels):
         losses = [dy.pickneglogsoftmax_batch(out, label) for out, label in zip(outputs, labels)]
-        loss = dy.mean_batches(dy.esum(losses))
+        loss = dy.mean_batches(dy.average(losses))
         return loss
+
+    @staticmethod
+    def _num_toks(batch_dict):
+        return np.prod(batch_dict['y'].shape)
+
+    def calc_metrics(self, agg, norm):
+        metrics = super(LanguageModelTrainerDynet, self).calc_metrics(agg, norm)
+        metrics['perplexity'] = np.exp(metrics['avg_loss'])
+        return metrics
 
     def train(self, loader, reporting_fns, **kwargs):
         metrics = {}
-        total_loss = 0.0
-        iters = 0
-        step = 0
+        epoch_loss = 0.0
+        epoch_toks = 0
         initial_state = None
         start = time.time()
+        self.nstep_start = start
         for batch_dict in loader:
             dy.renew_cg()
-            self.optimizer.learning_rate = self.decay(self.global_step)
-            input_, labels = self.model.make_input(batch_dict)
-            output, initial_state = self.model.forward(input_, initial_state)
-            loss = self._loss(output, labels)
-            loss_val = loss.npvalue().item()
-            total_loss += loss_val
-            initial_state = [x.npvalue() for x in initial_state]
+            inputs = self.model.make_input(batch_dict)
+            y = inputs.pop('y')
+            output, initial_state = self.model.forward(inputs, initial_state)
+            loss = self._loss(output, y)
+            toks = self._num_toks(batch_dict)
+            loss_val = loss.npvalue().item() * toks
+            epoch_loss += loss_val
+            epoch_toks += toks
+            self.nstep_agg += loss_val
+            self.nstep_div += toks
+            if initial_state is not None:
+                initial_state = [x.npvalue() for x in initial_state]
             loss.backward()
             self.optimizer.update()
 
-            iters += len(labels)
-            step += 1
-            self.global_step += 1
+            if (self.optimizer.global_step + 1) % self.nsteps == 0:
+                metrics = self.calc_metrics(self.nstep_agg, self.nstep_div)
+                self.report(
+                    self.optimizer.global_step + 1, metrics, self.nstep_start,
+                    'Train', 'STEP', reporting_fns, self.nsteps
+                )
+                self.reset_nstep()
 
-            if step % 500 == 0:
-                print(total_loss, iters)
-                metrics['avg_loss'] = total_loss / iters
-                metrics['perplexity'] = np.exp(total_loss / iters)
-                for reporting in reporting_fns:
-                    reporting(metrics, self.global_step, 'Train')
-
-        self.log.debug({'phase': 'Train', 'time': time.time() - start})
-        metrics['avg_loss'] = total_loss / iters
-        metrics['perplexity'] = np.exp(total_loss / iters)
-        for reporting in reporting_fns:
-            reporting(metrics, self.global_step, 'Train')
+        metrics = self.calc_metrics(epoch_loss, epoch_toks)
+        self.train_epochs += 1
+        self.report(
+            self.train_epochs, metrics, start,
+            'Train', 'EPOCH', reporting_fns
+        )
         return metrics
 
     def test(self, loader, reporting_fns, phase, **kwargs):
         metrics = {}
         total_loss = 0.0
-        iters = 0
+        total_toks = 0
         initial_state = None
         start = time.time()
         for batch_dict in loader:
             dy.renew_cg()
-            input_, labels = self.model.make_input(batch_dict)
-            output, initial_state = self.model.forward(input_, initial_state, train=False)
-            loss = self._loss(output, labels)
-            loss_val = loss.npvalue().item()
+            inputs = self.model.make_input(batch_dict)
+            y = inputs.pop('y')
+            output, initial_state = self.model.forward(inputs, initial_state, train=False)
+            loss = self._loss(output, y)
+            toks = self._num_toks(batch_dict)
+            loss_val = loss.npvalue().item() * toks
             total_loss += loss_val
-            initial_state = [x.npvalue() for x in initial_state]
+            total_toks += toks
+            if initial_state is not None:
+                initial_state = [x.npvalue() for x in initial_state]
 
-            iters += len(labels)
-
+        epochs = 0
         if phase == 'Valid':
             self.valid_epochs += 1
-            output = self.valid_epochs
-        else:
-            output = 0
+            epochs = self.valid_epochs
 
-        self.log.debug({'phase': phase, 'time': time.time() - start})
-        metrics['avg_loss'] = total_loss / iters
-        metrics['perplexity'] = np.exp(total_loss / iters)
-        for reporting in reporting_fns:
-            reporting(metrics, output, phase)
+        metrics = self.calc_metrics(total_loss, total_toks)
+        self.report(
+            epochs, metrics, start,
+            phase, 'EPOCH', reporting_fns
+        )
         return metrics
 
 
-def fit(model,
-        ts, vs, es=None,
-        epochs=5,
-        do_early_stopping=True, early_stopping_metric='avg_loss',
-        **kwargs):
+@register_training_func('lm')
+def fit(model, ts, vs, es=None, epochs=5, do_early_stopping=True, early_stopping_metric='avg_loss', **kwargs):
 
     patience = int(kwargs.get('patience', epochs))
     after_train_fn = kwargs.get('after_train_fn', None)
 
-    model_file = get_model_file(kwargs, 'lm', 'dy')
+    model_file = get_model_file('lm', 'dy', kwargs.get('basedir'))
 
-    trainer = create_trainer(LanguageModelTrainerDynet, model, **kwargs)
+    trainer = create_trainer(model, **kwargs)
 
+    best_metric = 10000
     if do_early_stopping:
+        early_stopping_cmp, best_metric = get_metric_cmp(early_stopping_metric, kwargs.get('early_stopping_cmp'))
         print("Doing early stopping on [{}] with patience [{}]".format(early_stopping_metric, patience))
 
     reporting_fns = listify(kwargs.get('reporting', []))
     print('reporting', reporting_fns)
 
-    min_metric = 10000
     last_improved = 0
 
     for epoch in range(epochs):
@@ -128,10 +134,10 @@ def fit(model,
         if do_early_stopping is False:
             model.save(model_file)
 
-        elif test_metrics[early_stopping_metric] < min_metric:
+        elif early_stopping_cmp(test_metrics[early_stopping_metric], best_metric):
             last_improved = epoch
-            min_metric = test_metrics[early_stopping_metric]
-            print("New min {:.3f}".format(min_metric))
+            best_metric = test_metrics[early_stopping_metric]
+            print("New best {:.3f}".format(best_metric))
             model.save(model_file)
 
         elif (epoch - last_improved) > patience:
@@ -139,7 +145,7 @@ def fit(model,
             break
 
     if do_early_stopping is True:
-        print('Best performance on min_metric {:.3f} at epoch {}'.format(min_metric, last_improved))
+        print('Best performance on {}: {:.3f} at epoch {}'.format(early_stopping_metric, best_metric, last_improved))
 
     if es is not None:
         print('Reloading best checkpoint')

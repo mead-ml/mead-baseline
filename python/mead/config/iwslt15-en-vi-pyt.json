@@ -1,0 +1,45 @@
+{
+    "task": "seq2seq",
+    "num_valid_to_show": 0,
+    "batchsz": 128,
+    "basedir": "iwslt15-en-vi-s2s-pyt",
+    "unif": 0.25,
+    "features": [
+	{ 
+	    "name": "src",
+	    "vectorizer": { "type": "token1d"},
+	    "embeddings": { "dsz": 512 }
+	},
+	{
+	    "name": "tgt",
+	    "vectorizer": { "type": "token1d"},
+	    "embeddings": { "dsz": 512 }
+	}
+    ],
+    "preproc": {
+        "mxlen": 50
+    },
+    "backend": "pytorch",
+    "dataset": "iwslt15-en-vi",
+    "loader": {
+        "reader_type": "default",
+	"pair_suffix": ["en", "vi"]
+    },
+
+    "model": {
+        "model_type": "attn",
+        "rnntype": "blstm",
+        "hsz": 512,
+        "dropout": 0.5,
+        "layers": 2
+    },
+    "train": {
+        "epochs": 16,
+        "optim": "adam",
+        "eta": 0.001,
+        "patience": 20,
+	"do_early_stopping": false,
+        "clip": 1.0
+    }
+}
+

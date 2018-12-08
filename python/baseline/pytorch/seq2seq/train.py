@@ -1,123 +1,151 @@
 import time
 import logging
 import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.autograd import Variable
 import numpy as np
 from baseline.progress import create_progress_bar
-from baseline.utils import listify, get_model_file
-from baseline.train import Trainer, create_trainer
-from baseline.pytorch.torchy import pytorch_prepare_optimizer
+from baseline.utils import listify, get_model_file, get_metric_cmp
+from baseline.train import Trainer, create_trainer, register_trainer, register_training_func
+from baseline.pytorch.optz import OptimizerManager
+from baseline.bleu import bleu
+from baseline.utils import convert_seq2seq_golds, convert_seq2seq_preds
 
 
+@register_trainer(task='seq2seq', name='default')
 class Seq2SeqTrainerPyTorch(Trainer):
 
     def __init__(self, model, **kwargs):
         super(Seq2SeqTrainerPyTorch, self).__init__()
-        self.steps = 0
         self.gpu = bool(kwargs.get('gpu', True))
         self.clip = float(kwargs.get('clip', 5))
         self.model = model
-        self.optimizer, self.scheduler = pytorch_prepare_optimizer(self.model, **kwargs)
+        self.optimizer = OptimizerManager(self.model, **kwargs)
         self._input = model.make_input
+        self._predict = model.predict
         self.crit = model.create_loss()
+        self.tgt_rlut = kwargs['tgt_rlut']
         if self.gpu:
             self.model = torch.nn.DataParallel(model).cuda()
             self.crit.cuda()
-        self.log = logging.getLogger('baseline.timing')
+        self.nsteps = kwargs.get('nsteps', 500)
 
-    def _total(self, tgt):
-        tgtt = tgt.data.long()
-        return torch.sum(tgtt.ne(0)).item()
+    @staticmethod
+    def _num_toks(tgt_lens):
+        return np.sum(tgt_lens)
+
+    def calc_metrics(self, agg, norm):
+        metrics = super(Seq2SeqTrainerPyTorch, self).calc_metrics(agg, norm)
+        metrics['perplexity'] = np.exp(metrics['avg_loss'])
+        return metrics
 
     def test(self, vs, reporting_fns, phase):
+        if phase == 'Test':
+            return self._evaluate(vs, reporting_fns)
+
         self.model.eval()
-        metrics = {}
-        total_loss = total = 0
+        total_loss = total_toks = 0
         steps = len(vs)
-        epochs = 0
-        if phase == 'Valid':
-            self.valid_epochs += 1
-            epochs = self.valid_epochs
+        self.valid_epochs += 1
+        preds = []
+        golds = []
 
         start = time.time()
         pg = create_progress_bar(steps)
-        for batch_dict in vs:
-            fx = self._input(batch_dict)
-            tgt = fx[-1]
-            fx = fx[:-1]
-            pred = self.model(fx)
+        for batch_dict in pg(vs):
+            input_ = self._input(batch_dict)
+            tgt = input_['tgt']
+            tgt_lens = batch_dict['tgt_lengths']
+            pred = self.model(input_)
             loss = self.crit(pred, tgt)
-            total_loss += loss.item()
-            total += self._total(tgt)
-            pg.update()
-        pg.done()
+            toks = self._num_toks(tgt_lens)
+            total_loss += loss.item() * toks
+            total_toks += toks
+            _, top_pred = torch.max(pred, dim=-1)
+            preds.extend(convert_seq2seq_preds(top_pred.cpu().numpy(), self.tgt_rlut))
+            golds.extend(convert_seq2seq_golds(tgt.cpu().numpy(), tgt_lens, self.tgt_rlut))
 
-        self.log.debug({'phase': phase, 'time': time.time() - start})
-        avg_loss = float(total_loss)/total
-        metrics['avg_loss'] = avg_loss
-        metrics['perplexity'] = np.exp(avg_loss)
-        for reporting in reporting_fns:
-            reporting(metrics, epochs, phase)
+        metrics = self.calc_metrics(total_loss, total_toks)
+        metrics['bleu'] = bleu(preds, golds)[0]
+        self.report(
+            self.valid_epochs, metrics, start,
+            phase, 'EPOCH', reporting_fns
+        )
         return metrics
+
+
+    def _evaluate(self, es, reporting_fns):
+        self.model.eval()
+        pg = create_progress_bar(len(es))
+        preds = []
+        golds = []
+        start = time.time()
+        for batch_dict in pg(es):
+            tgt = batch_dict['tgt']
+            tgt_lens = batch_dict['tgt_lengths']
+            pred = [p[0] for p in self._predict(batch_dict)]
+            preds.extend(convert_seq2seq_preds(pred, self.tgt_rlut))
+            golds.extend(convert_seq2seq_golds(tgt, tgt_lens, self.tgt_rlut))
+        metrics = {'bleu': bleu(preds, golds)[0]}
+        self.report(
+            0, metrics, start, 'Test', 'EPOCH', reporting_fns
+        )
+        return metrics
+
 
     def train(self, ts, reporting_fns):
         self.model.train()
 
-        metrics = {}
-
-        total_loss = total = 0
-        duration = 0
-        if self.scheduler is not None:
-            self.scheduler.step()
+        epoch_loss = 0
+        epoch_toks = 0
 
         start = time.time()
+        self.nstep_start = start
         for batch_dict in ts:
 
             start_time = time.time()
-            self.steps += 1
             self.optimizer.zero_grad()
-            fx = self._input(batch_dict)
-            tgt = fx[-1]
-            fx = fx[:-1]
-            pred = self.model(fx)
+            input_ = self._input(batch_dict)
+            tgt = input_['tgt']
+            pred = self.model(input_)
             loss = self.crit(pred, tgt)
-            total_loss += loss.item()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.clip)
-            total += self._total(tgt)
             self.optimizer.step()
-            duration += time.time() - start_time
+            tgt_lens = batch_dict['tgt_lengths']
+            tok_count = self._num_toks(tgt_lens)
+            reporting_loss = loss.item() * tok_count
+            epoch_loss += reporting_loss
+            epoch_toks += tok_count
+            self.nstep_agg += reporting_loss
+            self.nstep_div += tok_count
 
-            if self.steps % 500 == 0:
-                print('Step time (%.3f sec)' % (duration / 500.))
-                duration = 0
-                avg_loss = float(total_loss)/total
-                metrics['avg_loss'] = avg_loss
-                metrics['perplexity'] = np.exp(avg_loss)
-                for reporting in reporting_fns:
-                    reporting(metrics, self.steps, 'Train')
+            if (self.optimizer.global_step + 1) % self.nsteps == 0:
+                metrics = self.calc_metrics(self.nstep_agg, self.nstep_div)
+                self.report(
+                    self.optimizer.global_step + 1, metrics, self.nstep_start,
+                    'Train', 'STEP', reporting_fns, self.nsteps
+                )
+                self.reset_nstep()
 
-        self.log.debug({'phase': 'Train', 'time': time.time() - start})
+        metrics = self.calc_metrics(epoch_loss, epoch_toks)
         self.train_epochs += 1
-        avg_loss = float(total_loss)/total
-        metrics['avg_loss'] = avg_loss
-        metrics['perplexity'] = np.exp(avg_loss)
-        for reporting in reporting_fns:
-            reporting(metrics, self.steps, 'Train')
-
+        self.report(
+            self.train_epochs, metrics, start,
+            'Train', 'EPOCH', reporting_fns
+        )
         return metrics
 
 
+@register_training_func('seq2seq')
 def fit(model, ts, vs, es=None, **kwargs):
 
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
     epochs = int(kwargs.get('epochs', 20))
-    model_file = get_model_file(kwargs, 'seq2seq', 'pytorch')
+    model_file = get_model_file('seq2seq', 'pytorch', kwargs.get('basedir'))
 
+    best_metric = 0
     if do_early_stopping:
-        early_stopping_metric = kwargs.get('early_stopping_metric', 'avg_loss')
+        early_stopping_metric = kwargs.get('early_stopping_metric', 'bleu')
+        early_stopping_cmp, best_metric = get_metric_cmp(early_stopping_metric, kwargs.get('early_stopping_cmp'))
         patience = kwargs.get('patience', epochs)
         print('Doing early stopping on [%s] with patience [%d]' % (early_stopping_metric, patience))
 
@@ -125,12 +153,10 @@ def fit(model, ts, vs, es=None, **kwargs):
     print('reporting', reporting_fns)
 
     after_train_fn = kwargs.get('after_train_fn', None)
-    trainer = create_trainer(Seq2SeqTrainerPyTorch, model, **kwargs)
+    trainer = create_trainer(model, **kwargs)
 
-    min_metric = 10000
     last_improved = 0
     for epoch in range(epochs):
-
         trainer.train(ts, reporting_fns)
 
         if after_train_fn is not None:
@@ -141,10 +167,10 @@ def fit(model, ts, vs, es=None, **kwargs):
         if do_early_stopping is False:
             model.save(model_file)
 
-        elif test_metrics[early_stopping_metric] < min_metric:
+        elif early_stopping_cmp(test_metrics[early_stopping_metric], best_metric):
             last_improved = epoch
-            min_metric = test_metrics[early_stopping_metric]
-            print('New min %.3f' % min_metric)
+            best_metric = test_metrics[early_stopping_metric]
+            print('New best %.3f' % best_metric)
             model.save(model_file)
 
         elif (epoch - last_improved) > patience:
@@ -152,7 +178,7 @@ def fit(model, ts, vs, es=None, **kwargs):
             break
 
     if do_early_stopping is True:
-        print('Best performance on min_metric %.3f at epoch %d' % (min_metric, last_improved))
+        print('Best performance on %s: %.3f at epoch %d' % (early_stopping_metric, best_metric, last_improved))
 
     if es is not None:
         model.load(model_file)

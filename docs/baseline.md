@@ -34,16 +34,9 @@ The Baseline module has dependencies on:
 
 We provide different [reporting hooks](reporting.md) for displaying the results on console/ saving to a log file or database or visualizations. All reporting hooks can be run simultaneously.
 
-## Running the codes
+## Running the code
 
-The driver programs available in baseline are:
-
-- **Classification**: _train_: [classify_sentence.py](../python/classify_sentence.py) 
-- **Sequence Tagging**: _train_ : [tag_char_rnn.py](../python/tag_char_rnn.py), _test_: [tag.py](../python/tag.py)
-- **Language Modeling**: _train_: [wchar_lm.py](../python/wchar_lm.py) 
-- **Encoder Decoder**: _train_ [seq2seq.py](../python/seq2seq.py), _test_: [translate.py](../python/translate.py)  
-  
-However, we recommend training the models through [mead](../python/mead/README.md). For running through mead, use the [trainer.py](../python/mead/trainer.py) utility in the directory:
+The easiest way to train is using [mead](../python/mead/README.md). For running through mead, use the [trainer.py](../python/mead/trainer.py) utility in the directory:
 
 ```
 python trainer.py --config config/conll.json --task tagger
@@ -51,15 +44,17 @@ python trainer.py --config config/conll.json --task tagger
 
 See more running options in [trainer.py](../python/mead/trainer.py).
 
-To run these codes `baseline/python` should be available in your `PYTHONPATH` variable.  
+To run this code `baseline/python` should be available in your `PYTHONPATH` variable.
 
-### Installing Baseline as a Python Package
+It is possible to use the Baseline models without mead as in this [example using tf estimators](../api-examples/tf-estimator.py).
+
+## Installing Baseline as a Python Package
 
 Baseline can be installed as a python package using the script [install_dev.sh](../python/install_dev.sh). To install, run the command: `./install.sh baseline`. Once installed, you can use the commands: `mead-train` and `mead-export` to  run the [trainer](../python/mead/trainer.py) or the [exporter](../python/mead/export.py) (with the same options as before) w/o putting baseline in PYTHONPATH. 
 
 ## Baseline as an API
 
-The latest code provides a high-level Python API to access common deep-learning NLP approaches.  This should facilitate faster research in any language, as these tasks are fairly standard for NLP.  The data loaders and data feeds are all reusable, as are the basic harnesses for the APIs.  To get an understanding for how to structure a program to use baseline, have a look at the command line programs for each task.
+The code provides a high-level Python API to access common deep-learning NLP approaches.  This should facilitate faster research in any language, as these tasks are fairly standard for NLP.  The data loaders and data feeds are all reusable, as are the basic harnesses for the APIs.  To get an understanding for how to structure a program, have a look at the [api-examples](../api-examples).
 
 You can also think of the library itself as an abstraction layer at the "solution" or algorithm level with sub-modules built with each framework. Adding a new framework is straightforward using the methods shown in the library.
 
@@ -69,3 +64,35 @@ If you have a problem where the input is the same as a `baseline` task, you can 
 
 Then pass `--model_type {model}` to the driver program for that task.  The driver program will look to see if it has an implementation within the library and will not find the one in its registry.  So it will import the module and call its `create_model` function with the arguments and use the provided model.
 
+
+### Training details
+
+#### A note about losses and reporting
+
+When tracking losses for reporting the average on the loss is undone and the total loss is tracked. At the end of the epoch this total loss is averaged over all of the examples seen. This allows for statistically correct reporting when the size of a batch is variable. NStep reporting can stride dev evaluations so it is possible for there to be a spike in nstep times if that step happens to have a dev set evaluation run during it.
+
+
+#### Injecting inputs & avoiding placeholders in TensorFlow
+
+The Baseline models are defined to support input inject, which bypasses placeholder creation.  This means that from custom user code, it is possible to directly inject the inputs. In the example below, we assume that embeddings is a dict containing the single key 'word', and we inject the input to that embedding via keyword arguments:
+
+```
+model = bl.model.create_model(embeddings, labels=params['labels'], word=word_source, y=y, **model_params)
+```
+
+This allows the user to access some of the advanced input capabilities in TensorFlow like `tf.dataset`s and `tf.Queue`s
+
+#### TRAIN_FLAG() in TensorFlow backend
+
+In the TensorFlow backend, we use a global method function `TRAIN_FLAG()` to determine if things like dropout should be applied.  If the user is running `mead` to train (which is the typical case), this flag is automatically defined as a `tf.placeholder` that will default `False` (meaning no dropout will be applied).
+
+This is convenient because it is possible to use the same graph definition for training and evaluation by simply re-defining the placeholder to `True` when we are training.
+
+However, in some cases, we may wish to define multiple graphs, in which case this default behavior may not be suitable.  A typical example of this would be if the user is running a Baseline model outside of `mead` and wants to define separate graphs depending on what mode is running.  In this case, the `TRAIN_FLAG()` may be better suited as a boolean.  To facilitate this, we provide a method which allows the user to override the value of the `TRAIN_FLAG()` on demand.  This makes it possible to do code such as:
+
+```
+bl.tf.SET_TRAIN_FLAG(True)
+model = bl.model.create_model(embeddings, labels=params['labels'], word=features['word'], y=y, **model_params)
+```
+
+This is particularly helpful when using the `tf.estimator` API.  See [this example](../api-examples/tf-estimator.py) for details

@@ -1,10 +1,23 @@
 {
     "task": "seq2seq",
-    "num_valid_to_show": 5,
+    "num_valid_to_show": 0,
     "batchsz": 100,
+    "basedir": "iwslt15-en-vi-s2s",
     "unif": 0.25,
+    "features": [
+	{ 
+	    "name": "src",
+	    "vectorizer": { "type": "token1d"},
+	    "embeddings": { "dsz": 512 }
+	},
+	{
+	    "name": "tgt",
+	    "vectorizer": { "type": "token1d"},
+	    "embeddings": { "dsz": 512 }
+	}
+    ],
     "preproc": {
-        "mxlen": 100
+        "mxlen": 50
     },
     "backend": "tensorflow",
     "dataset": "iwslt15-en-vi",
@@ -12,25 +25,19 @@
         "reader_type": "default",
 	"pair_suffix": ["en", "vi"]
     },
+
     "model": {
         "model_type": "attn",
         "rnntype": "blstm",
-        "hsz": 500,
+        "hsz": 512,
         "dropout": 0.5,
         "layers": 2
     },
-
-    "word_embeddings": {
-	"dsz": 500
-    },
     "train": {
-        "epochs": 16,
+        "epochs": 32,
         "optim": "adam",
-        "decay": 0,
         "eta": 0.001,
-        "mom": 0.9,
-        "patience": 20,
-	"do_early_stopping": false,
+	"do_early_stopping": true,
         "clip": 1.0
     }
 }

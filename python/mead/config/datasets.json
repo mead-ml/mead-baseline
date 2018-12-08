@@ -30,13 +30,6 @@
     "label": "AG"
   },
   {
-    "train_file": "train-tok-shuf.txt",
-    "valid_file": "dev-tok.txt",
-    "test_file": "test-tok.txt",
-    "download": "https://www.dropbox.com/s/shnbgg5xmd7w239/dbpedia_tok.tar.gz?dl=1",
-    "label": "dbpedia"
-  },
-  {
     "train_file": "trec.nodev.utf8",
     "valid_file": "trec.dev.utf8",
     "test_file": "trec.test.utf8",
@@ -88,6 +81,14 @@
     "download": "https://www.dropbox.com/s/fc7sqt9tpxh3c5d/wnut17.tar.gz?dl=1",
     "sha1":"0163d877fac98a2063ca4bcb005c26b3786b8e81",
     "label": "wnut"
+  },
+
+  {
+    "train_file": "wnut17train.conll.iobes",
+    "valid_file": "wnut17dev.conll.iobes",
+    "test_file": "wnut17test.conll.iobes",
+    "download": "https://www.dropbox.com/s/ue7zfvzhfhpdksz/wnut17-iobes.tar.gz?dl=1",
+    "label": "wnut-iobes"
   },
   {
     "train_file": "atis-2.train.conll",
