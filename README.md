@@ -1,11 +1,9 @@
 Baseline
 =========
 
-[**Baseline v1.0 is nearing release**](docs/v1.md): This release makes improvements to the APIs, adds a new component for hyper-parameter tuning, improves the baseline models and makes them more extensible (and easier to export).
+[v1.0](docs/v1.md):
 
 Baseline is a library for reproducible deep learning research and fast model development for NLP. The library provides easily extensible abstractions and implementations for data loading, model development, training and export of deep learning architectures. It also provides implementations for simple, high-performance, deep learning models for various NLP tasks, against which newly developed models can be compared. Deep learning experiments are hard to reproduce, Baseline provides functionalities to track them. The goal is to allow a researcher to focus on model development, delegating the repetitive tasks to the library.
-
-
 
 It has three components: 
 
