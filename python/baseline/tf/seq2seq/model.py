@@ -358,12 +358,9 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
         feed_dict = self.make_input(batch_dict)
         vec = self.sess.run(self.decoder.best, feed_dict=feed_dict)
         # (B x K x T)
-        if len(vec.shape) == 3:
-            return vec.transpose(1, 2, 0)
-        else:
-            return vec.reshape([vec.shape[0]] + [1] + [vec.shape[1]])
-            #return vec.transpose(1, 0)
-        #return vec
+        if len(vec.shape) == 2:
+            vec = np.expand_dims(vec, axis=1)
+        return vec.transpose(1, 2, 0)
 
     def step(self, batch_dict):
         """

@@ -1,5 +1,6 @@
+import pytest
 import numpy as np
-import torch
+torch = pytest.importorskip('torch')
 import torch.nn as nn
 from baseline.pytorch.torchy import pytorch_linear
 
@@ -9,7 +10,7 @@ class TiedWeights(nn.Module):
         self.tgt_embeddings = nn.Embedding(100, 10) # vsz, dsz
         self.preds = pytorch_linear(10, 100) # hsz, output_sz
         self.preds.weight = self.tgt_embeddings.weight # tied weights
-    
+
     def forward(self, input_vec):
         return self.preds(self.tgt_embeddings(input_vec))
 

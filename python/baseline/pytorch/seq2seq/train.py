@@ -6,6 +6,8 @@ from baseline.progress import create_progress_bar
 from baseline.utils import listify, get_model_file, get_metric_cmp
 from baseline.train import Trainer, create_trainer, register_trainer, register_training_func
 from baseline.pytorch.optz import OptimizerManager
+from baseline.bleu import bleu
+from baseline.utils import convert_seq2seq_golds, convert_seq2seq_preds
 
 
 @register_trainer(task='seq2seq', name='default')
@@ -18,7 +20,9 @@ class Seq2SeqTrainerPyTorch(Trainer):
         self.model = model
         self.optimizer = OptimizerManager(self.model, **kwargs)
         self._input = model.make_input
+        self._predict = model.predict
         self.crit = model.create_loss()
+        self.tgt_rlut = kwargs['tgt_rlut']
         if self.gpu:
             self.model = torch.nn.DataParallel(model).cuda()
             self.crit.cuda()
@@ -34,13 +38,15 @@ class Seq2SeqTrainerPyTorch(Trainer):
         return metrics
 
     def test(self, vs, reporting_fns, phase):
+        if phase == 'Test':
+            return self._evaluate(vs, reporting_fns)
+
         self.model.eval()
         total_loss = total_toks = 0
         steps = len(vs)
-        epochs = 0
-        if phase == 'Valid':
-            self.valid_epochs += 1
-            epochs = self.valid_epochs
+        self.valid_epochs += 1
+        preds = []
+        golds = []
 
         start = time.time()
         pg = create_progress_bar(steps)
@@ -53,13 +59,37 @@ class Seq2SeqTrainerPyTorch(Trainer):
             toks = self._num_toks(tgt_lens)
             total_loss += loss.item() * toks
             total_toks += toks
+            _, top_pred = torch.max(pred, dim=-1)
+            preds.extend(convert_seq2seq_preds(top_pred.cpu().numpy(), self.tgt_rlut))
+            golds.extend(convert_seq2seq_golds(tgt.cpu().numpy(), tgt_lens, self.tgt_rlut))
 
         metrics = self.calc_metrics(total_loss, total_toks)
+        metrics['bleu'] = bleu(preds, golds)[0]
         self.report(
-            epochs, metrics, start,
+            self.valid_epochs, metrics, start,
             phase, 'EPOCH', reporting_fns
         )
         return metrics
+
+
+    def _evaluate(self, es, reporting_fns):
+        self.model.eval()
+        pg = create_progress_bar(len(es))
+        preds = []
+        golds = []
+        start = time.time()
+        for batch_dict in pg(es):
+            tgt = batch_dict['tgt']
+            tgt_lens = batch_dict['tgt_lengths']
+            pred = [p[0] for p in self._predict(batch_dict)]
+            preds.extend(convert_seq2seq_preds(pred, self.tgt_rlut))
+            golds.extend(convert_seq2seq_golds(tgt, tgt_lens, self.tgt_rlut))
+        metrics = {'bleu': bleu(preds, golds)[0]}
+        self.report(
+            0, metrics, start, 'Test', 'EPOCH', reporting_fns
+        )
+        return metrics
+
 
     def train(self, ts, reporting_fns):
         self.model.train()
@@ -112,9 +142,9 @@ def fit(model, ts, vs, es=None, **kwargs):
     epochs = int(kwargs.get('epochs', 20))
     model_file = get_model_file('seq2seq', 'pytorch', kwargs.get('basedir'))
 
-    best_metric = 10000
+    best_metric = 0
     if do_early_stopping:
-        early_stopping_metric = kwargs.get('early_stopping_metric', 'avg_loss')
+        early_stopping_metric = kwargs.get('early_stopping_metric', 'bleu')
         early_stopping_cmp, best_metric = get_metric_cmp(early_stopping_metric, kwargs.get('early_stopping_cmp'))
         patience = kwargs.get('patience', epochs)
         print('Doing early stopping on [%s] with patience [%d]' % (early_stopping_metric, patience))
@@ -127,10 +157,6 @@ def fit(model, ts, vs, es=None, **kwargs):
 
     last_improved = 0
     for epoch in range(epochs):
-
-        #if after_train_fn is not None:
-        #    after_train_fn(model)
-
         trainer.train(ts, reporting_fns)
 
         if after_train_fn is not None:

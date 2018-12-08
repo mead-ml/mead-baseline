@@ -509,7 +509,14 @@ def lookup_sentence(rlut, seq, reverse=False, padchar=''):
     :return:
     """
     s = seq[::-1] if reverse else seq
-    return (' '.join([rlut[idx] if rlut[idx] != '<PAD>' else padchar for idx in s])).strip()
+    res = []
+    for idx in s:
+        char = padchar
+        if idx == Offsets.EOS: break
+        if idx != Offsets.PAD and idx != Offsets.GO:
+            char = rlut[idx]
+        res.append(char)
+    return (' '.join(res)).strip()
 
 
 @exporter
@@ -941,3 +948,72 @@ def _try_user_cmp(user_cmp):
     if user_cmp in {"ge", "gte", ">="}:
         return ge, 0
     return gt, 0
+
+
+@exporter
+def show_examples(model, es, rlut1, rlut2, vocab, mxlen, sample, prob_clip, max_examples, reverse):
+    si = np.random.randint(0, len(es))
+
+    batch_dict = es[si]
+
+    lengths_key = model.src_lengths_key
+    src_field = lengths_key.split('_')[0]
+    src_array = batch_dict[src_field]
+    if max_examples > 0:
+        max_examples = min(max_examples, src_array.shape[0])
+
+    for i in range(max_examples):
+        example = {}
+        # Batch first, so this gets a single example at once
+        for k, v in batch_dict.items():
+            example[k] = v[i, np.newaxis]
+
+        print('========================================================================')
+        sent = lookup_sentence(rlut1, example[src_field].squeeze(), reverse=reverse)
+        print('[OP] %s' % sent)
+        sent = lookup_sentence(rlut2, example['tgt'].squeeze())
+        print('[Actual] %s' % sent)
+        dst_i = model.predict(example)[0][0]
+        sent = lookup_sentence(rlut2, dst_i)
+        print('Guess: %s' % sent)
+        print('------------------------------------------------------------------------')
+
+
+@exporter
+def convert_seq2seq_golds(indices, lengths, rlut, subword_fix=lambda x: x):
+    """Convert indices to words and format like a bleu reference corpus.
+
+    :param indices: The indices of the gold sentence. Should be in the shape
+        `[B, T]`. Iterating though axis=1 should yield ints.
+    :param lengths: The length of the gold sentences.
+    :param rlut: `dict[int] -> str` A lookup table from indices to words.
+
+    :returns: List[List[List[str]]] Shape is [B, 1, T] where T is the number of
+        words in that gold sentence
+    """
+    golds = []
+    for idx, l in zip(indices, lengths):
+        gold = idx[:l]
+        gold_str = lookup_sentence(rlut, gold)
+        gold = subword_fix(gold_str.split())
+        golds.append([gold])
+    return golds
+
+
+@exporter
+def convert_seq2seq_preds(indices, rlut, subword_fix=lambda x: x):
+    """Convert indices to words and format like a bleu hypothesis corpus.
+
+    :param indices: The indices of the predicted sentence. Should be in the
+        shape `[B, T]`. Iterating though axis=1 should yield ints.
+    :param rlut: `dict[int] -> str` A lookup table from indices to words.
+
+    :returns: List[List[str]] Shape is [B, T] where T is the number of
+        words in that predicted sentence
+    """
+    preds = []
+    for idx in indices:
+        pred_str = lookup_sentence(rlut, idx)
+        pred = subword_fix(pred_str.split())
+        preds.append(pred)
+    return preds

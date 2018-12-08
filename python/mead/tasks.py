@@ -4,7 +4,7 @@ import logging
 import logging.config
 import numpy as np
 import baseline
-from baseline.utils import export, import_user_module, Offsets
+from baseline.utils import export, import_user_module, Offsets, show_examples
 from mead.downloader import EmbeddingDownloader, DataDownloader
 from mead.utils import (
     index_by_label,
@@ -503,9 +503,8 @@ class EncoderDecoderTask(Task):
 
     def _create_backend(self):
         backend = Backend(self.config_params.get('backend', 'tf'))
+        self.config_params['preproc']['show_ex'] = show_examples
         if backend.name == 'pytorch':
-            from baseline.pytorch import show_examples_pytorch
-            self.config_params['preproc']['show_ex'] = show_examples_pytorch
             self.config_params['preproc']['trim'] = True
         elif backend.name == 'dy':
             import _dynet
@@ -520,14 +519,9 @@ class EncoderDecoderTask(Task):
                 batched = True
             dy_params.init()
             backend.params = {'pc': _dynet.ParameterCollection(), 'batched': batched}
-            from baseline.dy import show_examples_dynet
-            self.config_params['preproc']['show_ex'] = show_examples_dynet
             self.config_params['preproc']['trim'] = True
         else:
             self.config_params['preproc']['trim'] = True
-            # FIXME Replace with registration
-            from baseline.tf import show_examples_tf
-            self.config_params['preproc']['show_ex'] = show_examples_tf
             from mead.tf.exporters import Seq2SeqTensorFlowExporter
             backend.exporter = Seq2SeqTensorFlowExporter
         backend.load(self.task_name())
@@ -598,17 +592,18 @@ class EncoderDecoderTask(Task):
 
         num_ex = self.config_params['num_valid_to_show']
 
+        rlut1 = baseline.revlut(self.feat2src[self.primary_key])
+        rlut2 = baseline.revlut(self.feat2tgt)
         if num_ex > 0:
             print('Showing examples')
             preproc = self.config_params['preproc']
             show_ex_fn = preproc['show_ex']
-            rlut1 = baseline.revlut(self.feat2src[self.primary_key])
-            rlut2 = baseline.revlut(self.feat2tgt)
             self.config_params['train']['after_train_fn'] = lambda model: show_ex_fn(model,
                                                                                      self.valid_data, rlut1, rlut2,
                                                                                      self.feat2tgt,
                                                                                      preproc['mxlen'], False, 0,
                                                                                      num_ex, reverse=False)
+        self.config_params['train']['tgt_rlut'] = rlut2
         super(EncoderDecoderTask, self).train()
 
 

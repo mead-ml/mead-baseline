@@ -1,5 +1,6 @@
+import pytest
 import numpy as np
-import tensorflow as tf
+tf = pytest.importorskip('tensorflow')
 from baseline.tf.tfy import tie_weight
 
 def test_sharing():

@@ -550,38 +550,6 @@ def long_tensor_alloc(dims, dtype=None):
     return torch.LongTensor(*dims)
 
 
-def show_examples_pytorch(model, es, rlut1, rlut2, vocab, mxlen, sample, prob_clip, max_examples, reverse):
-    si = np.random.randint(0, len(es))
-
-    batch_dict = es[si]
-
-    src_len_key = model.src_lengths_key
-    src_field = src_len_key.split('_')[0]
-
-    if max_examples > 0:
-        max_examples = min(max_examples, batch_dict[src_field].shape[0])
-
-    for i in range(max_examples):
-
-        example = {}
-        # Batch first, so this gets a single example at once
-        for k, value in batch_dict.items():
-            v = value[i]
-            example[k] = v.reshape((1,) + v.shape)
-
-        print('========================================================================')
-        sent = lookup_sentence(rlut1, example[src_field].squeeze(), reverse=reverse)
-        print('[OP] %s' % sent)
-        sent = lookup_sentence(rlut2, example['tgt'].squeeze())
-        print('[Actual] %s' % sent)
-
-        dst_i = model.predict(example)[0][0]
-        dst_i = [int(idx) for idx in dst_i]
-        sent = lookup_sentence(rlut2, dst_i)
-        print('Guess: %s' % sent)
-        print('------------------------------------------------------------------------')
-
-
 # Some of this code is borrowed from here:
 # https://github.com/rguthrie3/DeepLearningForNLPInPytorch
 def argmax(vec):

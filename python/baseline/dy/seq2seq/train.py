@@ -1,8 +1,20 @@
 import time
 import logging
+from baseline.bleu import bleu
 from baseline.progress import create_progress_bar
-from baseline.utils import listify, get_model_file, get_metric_cmp
-from baseline.train import Trainer, create_trainer, register_trainer, register_training_func
+from baseline.utils import (
+    listify,
+    get_model_file,
+    get_metric_cmp,
+    convert_seq2seq_golds,
+    convert_seq2seq_preds
+)
+from baseline.train import (
+    Trainer,
+    create_trainer,
+    register_trainer,
+    register_training_func
+)
 from baseline.dy.optz import *
 from baseline.dy.dynety import *
 
@@ -14,6 +26,7 @@ class Seq2SeqTrainerDynet(Trainer):
         super(Seq2SeqTrainerDynet, self).__init__()
         self.model = model
         self.optimizer = OptimizerManager(model, **kwargs)
+        self.tgt_rlut = kwargs['tgt_rlut']
         self.nsteps = kwargs.get('nsteps', 500)
 
     @staticmethod
@@ -75,13 +88,15 @@ class Seq2SeqTrainerDynet(Trainer):
         return metrics
 
     def test(self, vs, reporting_fns, phase):
+        if phase == 'Test':
+            return self._evaluate(vs, reporting_fns)
         self.model.train = False
         total_loss = total_toks = 0
         steps = len(vs)
-        epochs = 0
-        if phase == 'Valid':
-            self.valid_epochs += 1
-            epochs = self.valid_epochs
+        self.valid_epochs += 1
+
+        preds = []
+        golds = []
 
         start = time.time()
         pg = create_progress_bar(steps)
@@ -97,17 +112,40 @@ class Seq2SeqTrainerDynet(Trainer):
             total_loss += loss_val * toks
             total_toks += toks
 
+            top_preds = np.transpose(np.stack([np.argmax(o.npvalue(), axis=0) for o in output]))
+            if len(top_preds.shape) == 1: top_preds = np.expand_dims(top_preds, 0)
+            preds.extend(convert_seq2seq_preds(top_preds, self.tgt_rlut))
+            golds.extend(convert_seq2seq_golds(tgt.T, tgt_lens, self.tgt_rlut))
+
         metrics = self.calc_metrics(total_loss, total_toks)
+        metrics['bleu'] = bleu(preds, golds)[0]
         self.report(
-            epochs, metrics, start,
+            self.valid_epochs, metrics, start,
             phase, 'EPOCH', reporting_fns
         )
         return metrics
 
+    def _evaluate(self, es, reporting_fns):
+        self.model.train = False
+        pg = create_progress_bar(len(es))
+        preds = []
+        golds = []
+        start = time.time()
+        for batch_dict in pg(es):
+            tgt = batch_dict['tgt']
+            tgt_lens = batch_dict['tgt_lengths']
+            pred = [p[0] for p in self.model.predict(batch_dict)]
+            preds.extend(convert_seq2seq_preds(pred, self.tgt_rlut))
+            golds.extend(convert_seq2seq_golds(tgt, tgt_lens, self.tgt_rlut))
+        metrics = {'bleu': bleu(preds, golds)[0]}
+        self.report(
+            0, metrics, start, 'Test', 'EPOCH', reporting_fns
+        )
+
 
 @register_training_func('seq2seq')
 def fit(model, ts, vs, es=None, epochs=5, do_early_stopping=True,
-        early_stopping_metric='avg_loss', **kwargs):
+        early_stopping_metric='bleu', **kwargs):
 
     patience = int(kwargs.get('patience', epochs))
     after_train_fn = kwargs.get('after_train_fn', None)
@@ -116,7 +154,7 @@ def fit(model, ts, vs, es=None, epochs=5, do_early_stopping=True,
 
     trainer = create_trainer(model, **kwargs)
 
-    best_metric = 1000
+    best_metric = 0
     if do_early_stopping:
         early_stopping_cmp, best_metric = get_metric_cmp(early_stopping_metric, kwargs.get('early_stopping_cmp'))
         print("Doing early stopping on [{}] with patience [{}]".format(early_stopping_metric, patience))
@@ -126,8 +164,6 @@ def fit(model, ts, vs, es=None, epochs=5, do_early_stopping=True,
 
     last_improved = 0
 
-    #if after_train_fn is not None:
-    #    after_train_fn(model)
     for epoch in range(epochs):
         trainer.train(ts, reporting_fns)
         if after_train_fn is not None:

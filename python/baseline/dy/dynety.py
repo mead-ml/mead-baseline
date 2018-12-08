@@ -698,32 +698,3 @@ def viterbi(emissions, transition, start_idx, end_idx, norm=False):
     _ = best_path.pop()
     best_path.reverse()
     return best_path, path_score
-
-
-def show_examples_dynet(model, es, rlut1, rlut2, vocab, mxlen, sample, prob_clip, max_examples, reverse):
-    si = np.random.randint(0, len(es))
-
-    batch_dict = es[si]
-
-    lengths_key = model.src_lengths_key
-    src_field = lengths_key.split('_')[0]
-    src_array = batch_dict[src_field]
-    if max_examples > 0:
-        max_examples = min(max_examples, src_array.shape[0])
-
-    for i in range(max_examples):
-        example = {}
-        # Batch first, so this gets a single example at once
-        for k, v in batch_dict.items():
-            example[k] = v[i, np.newaxis]
-
-        print('========================================================================')
-        sent = lookup_sentence(rlut1, example[src_field].squeeze(), reverse=reverse)
-        print('[OP] %s' % sent)
-        sent = lookup_sentence(rlut2, example['tgt'].squeeze())
-        print('[Actual] %s' % sent)
-        dst_i = model.predict(example)[0][0]
-        sent = lookup_sentence(rlut2, dst_i)
-        print('Guess: %s' % sent)
-        print('------------------------------------------------------------------------')
-
