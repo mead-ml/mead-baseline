@@ -21,8 +21,7 @@
     "unif": 0.25,
     "model": {
 	"model_type": "default",
-	"filtsz": [3,4,5],
-	"cmotsz": 200,
+	"rnnsz": 200,
 	"dropout": 0.5,
 	"finetune": true
     },
