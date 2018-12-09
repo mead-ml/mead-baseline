@@ -29,3 +29,4 @@ mead-train --config config/conll-elmo.yml
   - This is a PyTorch reimplemenation of the paper [Convolutional Neural Networks with Recurrent Neural Filters](https://www.groundai.com/project/convolutional-neural-networks-with-recurrent-neural-filters/) by Yi Yang
   - The original paper is here: https://arxiv.org/abs/1808.09315
   - The original Keras code is here: https://github.com/bloomberg/cnn-rnf
+
