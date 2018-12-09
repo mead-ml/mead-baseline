@@ -30,6 +30,6 @@ mead-train --config config/conll-elmo.yml
   - The original paper is here: https://arxiv.org/abs/1808.09315
   - The original Keras code is here: https://github.com/bloomberg/cnn-rnf
 
-- [Depthwise Separable Convolutional classifier] (classify_sepcnn.py)
+- [Depthwise Separable Convolutional classifier](classify_sepcnn.py)
   - This adds the Keras `sepcnn` model discussed in the [ML text-classification guide from google](https://developers.google.com/machine-learning/guides/text-classification/) to the Baseline ecosystem
 
