@@ -1,6 +1,6 @@
 {
     "task": "classify",
-    "basedir": "ag-news"
+    "basedir": "ag-news",
     "batchsz": 100,
     "preproc": {
 	"mxlen": 100,
