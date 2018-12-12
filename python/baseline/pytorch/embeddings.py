@@ -1,14 +1,19 @@
-from baseline.embeddings import register_embeddings
-import torch.nn as nn
-from collections import OrderedDict
-from baseline.pytorch.torchy import (pytorch_embedding,
-                                     ParallelConv,
-                                     pytorch_linear,
-                                     SkipConnection,
-                                     Highway)
-import torch
-import numpy as np
 import math
+from collections import OrderedDict
+import numpy as np
+import torch
+import torch.nn as nn
+from baseline.utils import Offsets
+from baseline.embeddings import register_embeddings
+from baseline.pytorch.torchy import (
+    pytorch_embedding,
+    ParallelConv,
+    pytorch_linear,
+    SkipConnection,
+    Highway,
+    pytorch_lstm,
+    BiRNNWrapper,
+)
 
 
 class PyTorchEmbeddings(object):
@@ -159,3 +164,49 @@ class PositionalLookupTableEmbeddings(nn.Module, PyTorchEmbeddings):
         x = self.embeddings(x) * math.sqrt(self.dsz)
         x = x + self.pe[:, :x.size(1)]
         return self.dropout(x)
+
+
+@register_embeddings(name='char-lstm')
+class CharLSTMEmbeddings(nn.Module, PyTorchEmbeddings):
+    def __init__(self, name, **kwargs):
+        super(CharLSTMEmbeddings, self).__init__()
+        self.vsz = kwargs.get('vsz')
+        self.dsz = kwargs.get('dsz')
+        self.finetune = kwargs.get('finetune', True)
+        weights = kwargs.get('weights')
+        if weights is None:
+            self.embeddings = nn.Embedding(self.vsz, self.dsz, padding_idx=Offsets.PAD)
+        else:
+            self.embeddings = pytorch_embedding(weights)
+        self.lstmsz = kwargs.get('lstmsz', 50)
+        layers = kwargs.get('layers', 1)
+        pdrop = kwargs.get('pdrop', 0.5)
+        rnn_type = kwargs.get('rnn_type', 'blstm')
+        unif = kwargs.get('unif', 0)
+        weight_init = kwargs.get('weight_init', 'uniform')
+        self.char_comp = BiRNNWrapper(pytorch_lstm(self.dsz, self.lstmsz, rnn_type, layers, pdrop, unif=unif, initializer=weight_init, batch_first=False), layers)
+
+
+    def forward(self, xch):
+        B, T, W = xch.shape
+        flat_chars = xch.view(-1, W)
+        char_embeds = self.embeddings(flat_chars)
+
+        # Lengths
+        lengths = torch.sum(flat_chars != Offsets.PAD, dim=1)
+        sorted_word_lengths, perm_idx = lengths.sort(0, descending=True)
+        # Hotfix for no char spaces.
+        sorted_word_lengths.masked_fill_(sorted_word_lengths == 0, 1)
+        sorted_feats = char_embeds[perm_idx].transpose(0, 1).contiguous()
+
+        packed = torch.nn.utils.rnn.pack_padded_sequence(sorted_feats, sorted_word_lengths.tolist())
+        _, hidden = self.char_comp(packed)
+        hidden = tuple(h[-1, :, :] for h in hidden)
+        results = tuple(h.scatter_(0, perm_idx.unsqueeze(-1).expand_as(h), h) for h in hidden)
+        return results[0].reshape((B, T, -1))
+
+    def get_dsz(self):
+        return self.lstmsz
+
+    def get_vsz(self):
+        return self.vsz

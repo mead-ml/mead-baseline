@@ -1,8 +1,8 @@
 import math
 from itertools import chain
 import numpy as np
-from baseline.dy.dynety import ParallelConv, HighwayConnection, SkipConnection, Linear, DynetLayer
-from baseline.utils import export
+from baseline.dy.dynety import ParallelConv, HighwayConnection, SkipConnection, Linear, DynetLayer, rnn_forward_with_state
+from baseline.utils import export, Offsets
 from baseline.embeddings import register_embeddings
 import dynet as dy
 __all__ = []
@@ -21,7 +21,7 @@ class DyNetEmbeddings(DynetLayer):
     def get_dsz(self):
         pass
 
-    def encode(self, x):
+    def encode(self, x, train=False):
         pass
 
     @classmethod
@@ -141,9 +141,9 @@ class CharConvEmbeddings(DyNetEmbeddings):
         funcs = [Linear(cmotsz_total, cmotsz_total, self.pc, name="linear-{}".format(i)) for i in range(num_gates)]
         gating = gate(funcs, cmotsz_total, self.pc)
 
-        def call(input_):
+        def call(input_, train):
             x = parallel_conv(input_)
-            return gating(x, None)
+            return gating(x, train)
 
         return call, cmotsz_total
 
@@ -161,8 +161,56 @@ class CharConvEmbeddings(DyNetEmbeddings):
         embedded = [self.lookup(self.embeddings, v, self.finetune) for v in xch]
         embed_chars_vec = dy.concatenate(embedded)
         embed_chars_vec = dy.reshape(embed_chars_vec, (W, self.dsz), T*B)
-        pooled_chars = self.pool(embed_chars_vec)
+        pooled_chars = self.pool(embed_chars_vec, train)
         pooled_chars = dy.reshape(pooled_chars, (self.wsz, T), B)
         # Back to T x W x B
         pooled_chars = dy.transpose(pooled_chars)
         return pooled_chars
+
+
+@register_embeddings(name='char-lstm')
+class CharLSTMEmbeddings(DyNetEmbeddings):
+
+    def __init__(self, name, **kwargs):
+        pc = kwargs['pc'].add_subcollection(name=kwargs.get('name', 'char-lstm'))
+        super(CharLSTMEmbeddings, self).__init__(pc)
+        self.vsz = kwargs.get('vsz')
+        self.dsz = kwargs.get('dsz')
+        self.finetune = kwargs.get('finetune', True)
+        self.name = name
+        weights = kwargs.get('weights')
+        self.embeddings = self.pc.lookup_parameters_from_numpy(weights, name=name)
+        self.lstmsz = kwargs.get('lstmsz', 50)
+        layers = kwargs.get('layers', 1)
+        self.pdrop = kwargs.get('pdrop', 0.5)
+        self.lookup = dy.lookup_batch
+        self.lstm_fwd = dy.LSTMBuilder(layers, self.dsz, self.lstmsz // 2, model=self.pc)
+        self.lstm_bwd = dy.LSTMBuilder(layers, self.dsz, self.lstmsz // 2, model=self.pc)
+
+    def get_dsz(self):
+        return self.lstmsz
+
+    def get_vsz(self):
+        return self.vsz
+
+    def encode(self, x, train=False):
+        if train:
+            self.lstm_fwd.set_dropout(self.pdrop)
+            self.lstm_bwd.set_dropout(self.pdrop)
+        else:
+            self.lstm_fwd.disable_dropout()
+            self.lstm_bwd.disable_dropout()
+
+        W, T, B = x.shape
+        xch = x.reshape(W, -1)
+
+        word_lens = np.sum(xch != Offsets.PAD, axis=0)
+
+        embed_chars = [self.lookup(self.embeddings, v, self.finetune) for v in xch]
+
+        _, fwd_state = rnn_forward_with_state(self.lstm_fwd, embed_chars, lengths=word_lens)
+        _, bwd_state = rnn_forward_with_state(self.lstm_bwd, embed_chars, lengths=word_lens, backward=True)
+
+        state = dy.concatenate([fwd_state[-1], bwd_state[-1]])
+        state = dy.transpose(dy.reshape(state, (self.lstmsz, T), batch_size=B))
+        return state

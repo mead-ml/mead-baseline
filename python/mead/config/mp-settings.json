@@ -1,17 +1,15 @@
 {
     "datacache": "~/.bl-data",
     "reporting_hooks":{
-        "visdom": {
-            "name": "ZZZZZZZZZZZZ"
-        },
         "xpctl": {
-            "cred": "~/xpctlcred.json"
+            "cred": "~/xpctlcred.json.remote",
+            "module": "reporting_xpctl"
         }
     },
     "hpctl": {
         "backend": {
             "type": "mp",
-            "real_gpus": [0, 1, 2, 3, 4, 5, 6]
+            "real_gpus": [0]
         },
         "logging": {
             "host": "localhost",

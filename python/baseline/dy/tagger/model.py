@@ -29,6 +29,7 @@ class TaggerModelBase(DynetModel, TaggerModel):
         self.activation_type = kwargs.get('activation', 'tanh')
         self.init_encoder(dsz, **kwargs)
         self.output = self.init_output(self.hsz, nc)
+        self.train = True
 
     def init_encoder(self, input_sz, **kwargs):
         pass
@@ -52,7 +53,7 @@ class TaggerModelBase(DynetModel, TaggerModel):
     def embed(self, batch_dict):
         all_embeddings_lists = []
         for k, embedding in self.embeddings.items():
-            all_embeddings_lists.append(embedding.encode(batch_dict[k]))
+            all_embeddings_lists.append(embedding.encode(batch_dict[k], self.train))
 
         embedded = dy.concatenate(all_embeddings_lists, d=1)
         embed_list = [self.dropout(e) for e in embedded]
