@@ -14,11 +14,11 @@ class ElmoEmbeddings(TensorFlowEmbeddings):
 
     def __init__(self, name, **kwargs):
         super(ElmoEmbeddings, self).__init__()
-        self.elmo = hub.Module("https://tfhub.dev/google/elmo/2", trainable=True)
         self.vsz = None
         self.dsz = kwargs.get('dsz')
         self.finetune = kwargs.get('finetune', True)
         self.name = name
+        self.elmo = hub.Module("https://tfhub.dev/google/elmo/2", trainable=self.finetune)
 
     def encode(self, x=None):
         if x is None:
@@ -33,6 +33,11 @@ class ElmoEmbeddings(TensorFlowEmbeddings):
                 'sequence_len': lengths,
             },
             signature="tokens", as_dict=True)['elmo']
+
+    def detached_ref(self):
+        return ElmoEmbeddings(
+            self.name, dsz=self.dsz, vsz=self.vsz, finetune=self.finetune
+        )
 
     def save_md(self, target):
         write_json({'vsz': self.vsz, 'dsz': self.dsz}, target)
