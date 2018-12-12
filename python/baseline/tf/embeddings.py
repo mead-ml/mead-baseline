@@ -20,6 +20,7 @@ class TensorFlowEmbeddings(object):
 
         :return:
         """
+        raise NotImplementedError
 
     def get_dsz(self):
         """Get the number of output dimension of this operation

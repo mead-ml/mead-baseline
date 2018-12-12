@@ -1,3 +1,4 @@
+import os
 import tensorflow as tf
 import tensorflow_hub as hub
 from baseline.utils import write_json
@@ -18,6 +19,9 @@ class ElmoEmbeddings(TensorFlowEmbeddings):
         self.dsz = kwargs.get('dsz')
         self.finetune = kwargs.get('finetune', True)
         self.name = name
+        self.cache_dir = kwargs.get('cache_dir')
+        if self.cache_dir is not None:
+            os.environ['TFHUB_CACHE_DIR'] = os.path.expanduser(self.cache_dir)
         self.elmo = hub.Module("https://tfhub.dev/google/elmo/2", trainable=self.finetune)
 
     def encode(self, x=None):
@@ -36,7 +40,7 @@ class ElmoEmbeddings(TensorFlowEmbeddings):
 
     def detached_ref(self):
         return ElmoEmbeddings(
-            self.name, dsz=self.dsz, vsz=self.vsz, finetune=self.finetune
+            self.name, dsz=self.dsz, vsz=self.vsz, finetune=self.finetune, cache_dir=self.cache_dir
         )
 
     def save_md(self, target):
