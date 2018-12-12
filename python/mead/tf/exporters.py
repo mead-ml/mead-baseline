@@ -281,7 +281,6 @@ class Seq2SeqTensorFlowExporter(TensorFlowExporter):
 
         return embeddings
 
-
     def _create_model(self, sess, basename):
         model_params = self.task.config_params["model"]
         model_params["sess"] = sess
