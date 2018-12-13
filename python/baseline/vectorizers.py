@@ -101,16 +101,17 @@ class Token1DVectorizer(AbstractVectorizer):
         return self.mxlen,
 
 
+
 @exporter
 class GOVectorizer(Vectorizer):
 
     def __init__(self, vectorizer):
         self.vectorizer = vectorizer
         if self.vectorizer.mxlen != -1:
-            self.vectorizer.mxlen -= 1
+            self.vectorizer.mxlen -= 2
 
     def iterable(self, tokens):
-        return self.vectorizer.iterable(['<GO>'] + tokens)
+        raise Exception("Not implemented")
 
     def count(self, tokens):
         counter = self.vectorizer.count(tokens)
@@ -119,12 +120,11 @@ class GOVectorizer(Vectorizer):
 
     def run(self, tokens, vocab):
         vec1d, valid_length = self.vectorizer.run(tokens, vocab)
-        vec1d = np.concatenate([[Offsets.GO], vec1d])
-        vec1d[valid_length] = Offsets.EOS
-        return vec1d, valid_length + 1
+        vec1d = np.concatenate([[Offsets.GO], vec1d, [Offsets.EOS]])
+        return vec1d, valid_length + 2
 
     def get_dims(self):
-        return self.vectorizer.get_dims()[0] + 1,
+        return self.vectorizer.get_dims()[0] + 2,
 
 
 def _token_iterator(vectorizer, tokens):
