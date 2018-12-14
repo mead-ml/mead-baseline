@@ -278,6 +278,7 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
         model.id = kwargs.get('id', 0)
         model.sess = kwargs.get('sess', tf.Session())
         model.pdrop_value = kwargs.get('dropout', 0.5)
+        model.dropin_value = kwargs.get('dropin', {})
         model.layers = kwargs.get('layers', 1)
         model.hsz = kwargs['hsz']
 
@@ -326,8 +327,6 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
     def save_md(self, basename):
 
         path = basename.split('/')
-        base = path[-1]
-        outdir = '/'.join(path[:-1])
         src_embeddings_info = {}
         for k, v in self.src_embeddings.items():
             src_embeddings_info[k] = v.__class__.__name__
@@ -370,12 +369,28 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
         x = self.sess.run(self.decoder.probs, feed_dict=feed_dict)
         return x
 
+
+    @property
+    def dropin_value(self):
+        return self._dropin_value
+
+    @dropin_value.setter
+    def dropin_value(self, dict_value):
+        self._dropin_value = dict_value
+
+    def drop_inputs(self, key, x, do_dropout):
+        v = self.dropin_value.get(key, 0)
+        if do_dropout and v > 0.0:
+            drop_indices = np.where((np.random.random(x.shape) < v) & (x != Offsets.PAD))
+            x[drop_indices[0], drop_indices[1]] = Offsets.UNK
+        return x
+
     def make_input(self, batch_dict, train=False):
 
         feed_dict = new_placeholder_dict(train)
 
         for key in self.src_embeddings.keys():
-            feed_dict["{}:0".format(key)] = batch_dict[key]
+            feed_dict["{}:0".format(key)] = self.drop_inputs(key, batch_dict[key], train)
 
         if self.src_lengths_key is not None:
             feed_dict[self.src_len] = batch_dict[self.src_lengths_key]

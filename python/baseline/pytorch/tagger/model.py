@@ -9,9 +9,6 @@ import os
 
 class TaggerModelBase(nn.Module, TaggerModel):
 
-    PAD = 0
-    UNK = 1
-
     def save(self, outname):
         torch.save(self, outname)
 
@@ -111,9 +108,9 @@ class TaggerModelBase(nn.Module, TaggerModel):
         if not self.training or v == 0:
             return x
 
-        mask_pad = x != TaggerModelBase.PAD
+        mask_pad = x != Offsets.PAD
         mask_drop = x.new(x.size(0), x.size(1)).bernoulli_(v).byte()
-        x.masked_fill_(mask_pad & mask_drop, TaggerModelBase.UNK)
+        x.masked_fill_(mask_pad & mask_drop, Offsets.UNK)
         return x
 
     def input_tensor(self, key, batch_dict, perm_idx):

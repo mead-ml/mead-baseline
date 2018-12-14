@@ -15,6 +15,7 @@ class EncoderDecoderModelBase(nn.Module, EncoderDecoderModel):
         self.gpu = kwargs.get('gpu', True)
         src_dsz = self.init_embed(src_embeddings, tgt_embedding)
         self.src_lengths_key = kwargs.get('src_lengths_key')
+        self.dropin_values = kwargs.get('dropin', {})
         self.encoder = self.init_encoder(src_dsz, **kwargs)
         self.decoder = self.init_decoder(tgt_embedding, **kwargs)
 
@@ -89,6 +90,25 @@ class EncoderDecoderModelBase(nn.Module, EncoderDecoderModel):
         print(model)
         return model
 
+    def drop_inputs(self, key, x):
+        v = self.dropin_values.get(key, 0)
+
+        if not self.training or v == 0:
+            return x
+
+        mask_pad = x != Offsets.PAD
+        mask_drop = x.new(x.size(0), x.size(1)).bernoulli_(v).byte()
+        x.masked_fill_(mask_pad & mask_drop, Offsets.UNK)
+        return x
+
+    def input_tensor(self, key, batch_dict, perm_idx):
+        tensor = torch.from_numpy(batch_dict[key])
+        tensor = self.drop_inputs(key, tensor)
+        tensor = tensor[perm_idx]
+        if self.gpu:
+            tensor = tensor.cuda()
+        return tensor
+
     def make_input(self, batch_dict):
         example = dict({})
 
@@ -99,12 +119,7 @@ class EncoderDecoderModelBase(nn.Module, EncoderDecoderModel):
             lengths = lengths.cuda()
         example['src_len'] = lengths
         for key in self.src_embeddings.keys():
-            tensor = torch.from_numpy(batch_dict[key])
-            tensor = tensor[perm_idx]
-            example[key] = tensor
-
-            if self.gpu:
-                example[key] = example[key].cuda()
+            example[key] = self.input_tensor(key, batch_dict, perm_idx)
 
         if 'tgt' in batch_dict:
             tgt = torch.from_numpy(batch_dict['tgt'])
@@ -146,7 +161,7 @@ class EncoderDecoderModelBase(nn.Module, EncoderDecoderModel):
                     example[k] = value[b].reshape((1,) + value[b].shape)
             inputs = self.make_input(example)
             encoder_outputs = self.encode(inputs, inputs['src_len'])
-            batch.append(self.decoder.predict_one(inputs['src'], encoder_outputs, **kwargs)[0])
+            batch.append(self.decoder.predict_one(inputs[src_field], encoder_outputs, **kwargs)[0])
         return batch
 
 
