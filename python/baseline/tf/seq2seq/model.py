@@ -381,6 +381,11 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
     def drop_inputs(self, key, x, do_dropout):
         v = self.dropin_value.get(key, 0)
         if do_dropout and v > 0.0:
+
+            #do_drop = (np.random.random(x.shape) < v)
+            #if do_drop:
+            #    drop_indices = np.where(x != Offsets.PAD)
+            #    x[drop_indices[0], drop_indices[1]] = Offsets.PAD
             drop_indices = np.where((np.random.random(x.shape) < v) & (x != Offsets.PAD))
             x[drop_indices[0], drop_indices[1]] = Offsets.UNK
         return x

@@ -120,7 +120,8 @@ class GOVectorizer(Vectorizer):
 
     def run(self, tokens, vocab):
         vec1d, valid_length = self.vectorizer.run(tokens, vocab)
-        vec1d = np.concatenate([[Offsets.GO], vec1d, [Offsets.EOS]])
+        vec1d = np.concatenate([[Offsets.GO], vec1d, [Offsets.PAD]])
+        vec1d[valid_length+1] = Offsets.EOS
         return vec1d, valid_length + 2
 
     def get_dims(self):

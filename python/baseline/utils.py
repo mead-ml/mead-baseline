@@ -327,15 +327,6 @@ def lowercase(x):
     return x.lower()
 
 
-@exporter
-def extract_slot(x):
-    return x.strip().split('[')[0]
-
-@exporter
-def extract_value(x):
-    return x.strip().split('[')[1].split(']')[0]
-
-
 UNREP_EMOTICONS = (
     ':)',
     ':(((',

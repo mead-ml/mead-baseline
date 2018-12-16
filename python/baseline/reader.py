@@ -76,7 +76,7 @@ def _filter_vocab(vocab, min_fs):
     return vocab
 
 
-def _read_from_col(col, files):
+def _read_from_col(col, files, col_splitter=r'\t', word_splitter=r'\s'):
     """Read from a single column of a file.
 
     :param col: `int`: The column to read from.
@@ -92,12 +92,12 @@ def _read_from_col(col, files):
             for line in f:
                 line = line.rstrip('\n')
                 if line == "": continue
-                cols = re.split(r'\t', line)
-                text.append(re.split(r'\s', cols[col]))
+                cols = re.split(col_splitter, line)
+                text.append(re.split(word_splitter, cols[col]))
     return text
 
 
-def _build_vocab_for_col(col, files, vectorizers, text=None):
+def _build_vocab_for_col(col, files, vectorizers, text=None, col_splitter=r'\t', word_splitter=r'\s'):
     """Build vocab from a single column in file. (separated by `\t`).
 
     Used to read a vocab from a single conll column, read a vocab from the
@@ -110,7 +110,7 @@ def _build_vocab_for_col(col, files, vectorizers, text=None):
 
     :returns: dict[str] -> dict[str] -> int: The vocabs.
     """
-    text = _read_from_col(col, files) if text is None else text
+    text = _read_from_col(col, files, col_splitter, word_splitter) if text is None else text
     vocab = {k: Counter() for k in vectorizers}
     for t in text:
         for k, vect in vectorizers.items():
