@@ -134,7 +134,8 @@ class TransformerDecoder(DecoderBase):
         vsz = self.tgt_embedding.vsz
         do_weight_tying = bool(kwargs.get('tie_weights', True))  # False
         hsz = get_shape_as_list(h)[-1]
-        if False: #do_weight_tying and hsz == self.tgt_embedding.get_dsz():
+        if do_weight_tying and hsz == self.tgt_embedding.get_dsz():
+            h = tf.reshape(h, [-1, hsz])
             with tf.variable_scope(self.tgt_embedding.scope, reuse=True):
                 W = tf.get_variable("W")
                 outputs = tf.matmul(h, W, transpose_b=True, name="logits")
