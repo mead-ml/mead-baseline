@@ -290,7 +290,7 @@ class TransformerDecoderWrapper(torch.nn.Module):
 
         do_weight_tying = bool(kwargs.get('tie_weights', False))
 
-        self.preds = pytorch_linear(self.hsz, self.tgt_embeddings.get_vsz())
+        self.preds = pytorch_linear(hsz, self.tgt_embeddings.get_vsz())
         if do_weight_tying:
             self.preds.weight = self.tgt_embeddings.weight.transpose(0, 1)
 
