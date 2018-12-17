@@ -272,23 +272,30 @@ got {} hsz and {} dsz".format(self.hsz, self.tgt_embedding.get_dsz()))
             tie_shape = [Wo.get_shape()[-1], Wo.get_shape()[0]]
             if self.do_weight_tying:
                 with tf.variable_scope("Share", custom_getter=tie_weight(Wo, tie_shape)):
-                    proj = tf.layers.Dense(self.tgt_embedding.vsz, 
-                                        use_bias=False)
+                    proj = tf.layers.Dense(self.tgt_embedding.vsz, use_bias=False)
             else:
-                proj = tf.layers.Dense(self.tgt_embedding.vsz, 
-                                        use_bias=False)
+                proj = tf.layers.Dense(self.tgt_embedding.vsz, use_bias=False)
 
             self._create_cell(encoder_outputs.output, src_len, pdrop, **kwargs)
             batch_sz = tf.shape(encoder_outputs.output)[0]
             initial_state = self.arc_policy.connect(encoder_outputs, self, batch_sz)
+
+
             helper = tf.contrib.seq2seq.TrainingHelper(inputs=tf.nn.embedding_lookup(Wo, self.tgt_embedding.x), sequence_length=tgt_len)
+            helper2 = tf.contrib.seq2seq.GreedyEmbeddingHelper(Wo, tf.fill([batch_sz], Offsets.GO), Offsets.EOS)
             decoder = tf.contrib.seq2seq.BasicDecoder(cell=self.cell, helper=helper, initial_state=initial_state, output_layer=proj)
             final_outputs, final_decoder_state, _ = tf.contrib.seq2seq.dynamic_decode(decoder,
                                                                                       impute_finished=True,
                                                                                       swap_memory=True,
                                                                                       output_time_major=True)
             self.preds = final_outputs.rnn_output
-            best = final_outputs.sample_id
+
+            decoder2 = tf.contrib.seq2seq.BasicDecoder(cell=self.cell, helper=helper2, initial_state=initial_state, output_layer=proj)
+            final_outputs2, final_decoder_state2, _ = tf.contrib.seq2seq.dynamic_decode(decoder2,
+                                                                                      impute_finished=True,
+                                                                                      swap_memory=True,
+                                                                                      output_time_major=True)
+            best = final_outputs2.sample_id
             self.output(best)
 
 
