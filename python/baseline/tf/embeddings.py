@@ -128,10 +128,6 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
                                      finetune=self.finetune,
                                      weights=self.weights)
 
-    @classmethod
-    def create(cls, model, name, **kwargs):
-        return cls(name, vsz=model.vsz, dsz=model.dsz, weights=model.weights, **kwargs)
-
     def encode(self, x=None):
         """Build a simple Lookup Table and set as input `x` if it exists, or `self.x` otherwise.
 
@@ -226,10 +222,6 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
     # Warning this function is only initialized AFTER encode
     def get_dsz(self):
         return self.wsz
-
-    @classmethod
-    def create(cls, model, name, **kwargs):
-        return cls(name=name, vsz=model.vsz, dsz=model.dsz, weights=model.weights, **kwargs)
 
 
 def get_timing_signal_1d(length,

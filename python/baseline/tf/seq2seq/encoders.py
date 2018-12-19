@@ -26,7 +26,7 @@ RNNEncoderOutput = namedtuple("RNNEncoderOutput", ("output", "hidden"))
 class RNNEncoder(EncoderBase):
 
     def __init__(self, **kwargs):
-        super(EncoderBase, self).__init__()
+        super(RNNEncoder, self).__init__()
 
     def encode(self, embed_in, src_len, pdrop, hsz=650, rnntype='blstm', layers=1, vdrop=False, **kwargs):
 
