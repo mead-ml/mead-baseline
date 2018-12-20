@@ -261,6 +261,7 @@ got {} hsz and {} dsz".format(self.hsz, self.tgt_embedding.get_dsz()))
 
     def decode(self, encoder_outputs, src_len, tgt_len, pdrop, **kwargs):
         self.tgt_embedding.x = kwargs.get('tgt', self.tgt_embedding.create_placeholder('tgt'))
+        mxlen = kwargs.get('mxlen', 100)
 
         # dynamic_decode creates a scope "decoder" and it pushes operations underneath.
         # which makes it really hard to get the same objects between train and test
@@ -294,7 +295,8 @@ got {} hsz and {} dsz".format(self.hsz, self.tgt_embedding.get_dsz()))
             final_outputs2, final_decoder_state2, _ = tf.contrib.seq2seq.dynamic_decode(decoder2,
                                                                                       impute_finished=True,
                                                                                       swap_memory=True,
-                                                                                      output_time_major=True)
+                                                                                      output_time_major=True,
+                                                                                      maximum_iterations=mxlen)
             best = final_outputs2.sample_id
             self.output(best)
 
