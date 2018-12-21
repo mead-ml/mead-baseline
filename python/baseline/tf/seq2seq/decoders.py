@@ -18,6 +18,7 @@ class DecoderBase(object):
         self.beam_width = kwargs.get('beam', 1)
         self.best = None
         self.probs = None
+        self.preds = None
 
     def output(self, best, do_probs=True):
         with tf.variable_scope("Output"):
@@ -207,7 +208,7 @@ class RNNDecoder(DecoderBase):
         super(RNNDecoder, self).__init__(tgt_embedding, **kwargs)
         self.hsz = kwargs['hsz']
         self.arc_policy = create_seq2seq_arc_policy(**kwargs)
-
+        self.final_decoder_state = None
         self.do_weight_tying = bool(kwargs.get('tie_weights', False))
         if self.do_weight_tying:
             if self.hsz != self.tgt_embedding.get_dsz():
@@ -255,6 +256,7 @@ got {} hsz and {} dsz".format(self.hsz, self.tgt_embedding.get_dsz()))
                                                                                       swap_memory=True,
                                                                                       output_time_major=True,
                                                                                       maximum_iterations=mxlen)
+            self.final_decoder_state = final_decoder_state
             self.preds = tf.no_op()
             best = final_outputs.predicted_ids
             self.output(best)
@@ -281,23 +283,28 @@ got {} hsz and {} dsz".format(self.hsz, self.tgt_embedding.get_dsz()))
             batch_sz = tf.shape(encoder_outputs.output)[0]
             initial_state = self.arc_policy.connect(encoder_outputs, self, batch_sz)
 
+            # Two paths depending on training or evaluating (during training)
+            # Normal expected inference path is BeamDecoder using .predict()
+            training_helper = tf.contrib.seq2seq.TrainingHelper(inputs=tf.nn.embedding_lookup(Wo, self.tgt_embedding.x), sequence_length=tgt_len)
+            greedy_helper = tf.contrib.seq2seq.GreedyEmbeddingHelper(Wo, tf.fill([batch_sz], Offsets.GO), Offsets.EOS)
+            decoder = tf.contrib.seq2seq.BasicDecoder(cell=self.cell, helper=training_helper,
+                                                      initial_state=initial_state, output_layer=proj)
+            training_outputs, self.final_decoder_state, _ = tf.contrib.seq2seq.dynamic_decode(decoder,
+                                                                                              impute_finished=True,
+                                                                                              swap_memory=True,
+                                                                                              output_time_major=True)
 
-            helper = tf.contrib.seq2seq.TrainingHelper(inputs=tf.nn.embedding_lookup(Wo, self.tgt_embedding.x), sequence_length=tgt_len)
-            helper2 = tf.contrib.seq2seq.GreedyEmbeddingHelper(Wo, tf.fill([batch_sz], Offsets.GO), Offsets.EOS)
-            decoder = tf.contrib.seq2seq.BasicDecoder(cell=self.cell, helper=helper, initial_state=initial_state, output_layer=proj)
-            final_outputs, final_decoder_state, _ = tf.contrib.seq2seq.dynamic_decode(decoder,
-                                                                                      impute_finished=True,
-                                                                                      swap_memory=True,
-                                                                                      output_time_major=True)
-            self.preds = final_outputs.rnn_output
+            self.preds = training_outputs.rnn_output
 
-            decoder2 = tf.contrib.seq2seq.BasicDecoder(cell=self.cell, helper=helper2, initial_state=initial_state, output_layer=proj)
-            final_outputs2, final_decoder_state2, _ = tf.contrib.seq2seq.dynamic_decode(decoder2,
-                                                                                      impute_finished=True,
-                                                                                      swap_memory=True,
-                                                                                      output_time_major=True,
-                                                                                      maximum_iterations=mxlen)
-            best = final_outputs2.sample_id
+            greedy_decoder = tf.contrib.seq2seq.BasicDecoder(cell=self.cell,
+                                                             helper=greedy_helper,
+                                                             initial_state=initial_state, output_layer=proj)
+            greedy_outputs, _, _ = tf.contrib.seq2seq.dynamic_decode(greedy_decoder,
+                                                                     impute_finished=True,
+                                                                     swap_memory=True,
+                                                                     output_time_major=True,
+                                                                     maximum_iterations=mxlen)
+            best = greedy_outputs.sample_id
             self.output(best)
 
 

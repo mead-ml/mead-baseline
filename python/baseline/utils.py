@@ -512,6 +512,7 @@ def lookup_sentence(rlut, seq, reverse=False, padchar=''):
     s = seq[::-1] if reverse else seq
     res = []
     for idx in s:
+        idx = int(idx)
         char = padchar
         if idx == Offsets.EOS: break
         if idx != Offsets.PAD and idx != Offsets.GO:
