@@ -43,6 +43,9 @@ class TensorFlowEmbeddings(object):
         """
         pass
 
+    def __call__(self, x):
+        return self.encode(x)
+
     def save_md(self):
         """Save the meta-data associated with this object, namely the `vsz` and `dsz`
 
