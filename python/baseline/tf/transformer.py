@@ -1,6 +1,6 @@
 import tensorflow as tf
 from baseline.tf.tfy import tf_activation, get_shape_as_list, layer_norm, time_distributed_projection
-from baseline.tf.tfy import TRAIN_FLAG
+from baseline.tf.layers import TRAIN_FLAG
 
 def split_heads(x, num_heads):
     shp = get_shape_as_list(x)

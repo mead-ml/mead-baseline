@@ -4,10 +4,8 @@ from google.protobuf import text_format
 from tensorflow.python.platform import gfile
 from baseline.utils import fill_y, listify, write_json, ls_props, read_json
 from baseline.model import ClassifierModel, register_model
-from baseline.tf.tfy import (stacked_lstm,
-                             parallel_conv,
-                             TRAIN_FLAG,
-                             new_placeholder_dict)
+from baseline.tf.layers import TRAIN_FLAG, new_placeholder_dict, BiLSTMEncoder, LSTMEncoder
+from baseline.tf.tfy import parallel_conv
 from baseline.tf.embeddings import *
 from baseline.version import __version__
 from tensorflow.contrib.layers import fully_connected
@@ -493,7 +491,7 @@ class ConvModel(ClassifierModelBase):
         cmotsz = kwargs['cmotsz']
         filtsz = kwargs['filtsz']
 
-        combine, _ = parallel_conv(word_embeddings, filtsz, dsz, cmotsz)
+        combine = parallel_conv(word_embeddings, filtsz, dsz, cmotsz)
         # Definitely drop out
         with tf.name_scope("dropout"):
             combine = tf.layers.dropout(combine, self.pdrop_value, training=TRAIN_FLAG())

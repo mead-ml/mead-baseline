@@ -36,27 +36,27 @@ class ParallelConvTest(tf.test.TestCase):
         self.p = tf.placeholder(tf.float32, shape=(None, self.seqsz, self.embedsz))
 
     def test_output_batch_shape_int_arg(self):
-        conv, _ = parallel_conv(self.p, self.filtsz, self.embedsz, self.motsz)
+        conv = parallel_conv(self.p, self.filtsz, self.embedsz, self.motsz)
         with self.test_session() as sess:
             sess.run(tf.global_variables_initializer())
             self.assertEqual(conv.eval({self.p: self.input}).shape[0], self.batchsz)
 
     def test_output_batch_shape_list_arg(self):
         motsz = [self.motsz] * len(self.filtsz)
-        conv, _ = parallel_conv(self.p, self.filtsz, self.embedsz, motsz)
+        conv = parallel_conv(self.p, self.filtsz, self.embedsz, motsz)
         with self.test_session() as sess:
             sess.run(tf.global_variables_initializer())
             self.assertEqual(conv.eval({self.p: self.input}).shape[0], self.batchsz)
 
     def test_output_feature_shape_int_arg(self):
-        conv, _ = parallel_conv(self.p, self.filtsz, self.embedsz, self.motsz)
+        conv = parallel_conv(self.p, self.filtsz, self.embedsz, self.motsz)
         with self.test_session() as sess:
             sess.run(tf.global_variables_initializer())
             self.assertEqual(conv.eval({self.p: self.input}).shape[1], self.motsz * self.num_filt)
 
     def test_output_feature_shape_list_arg(self):
         motsz = [self.nfeat_factor * fsz for fsz in self.filtsz]
-        conv, _ = parallel_conv(self.p, self.filtsz, self.embedsz, motsz)
+        conv = parallel_conv(self.p, self.filtsz, self.embedsz, motsz)
         with self.test_session() as sess:
             sess.run(tf.global_variables_initializer())
             self.assertEqual(conv.eval({self.p: self.input}).shape[1], sum(motsz))
@@ -70,28 +70,28 @@ class ParallelConvTest(tf.test.TestCase):
         to set the right size. This test makes sure that needed size information
         is present. This test would have caught the break in the classify method.
         """
-        conv, _ = parallel_conv(self.p, self.filtsz, self.embedsz, self.motsz)
+        conv = parallel_conv(self.p, self.filtsz, self.embedsz, self.motsz)
         conv_shape = conv.get_shape().as_list()
         self.assertEqual(conv_shape, [None, self.motsz * len(self.filtsz)])
 
     def test_shape_available_list(self):
         """Same as the `test_shape_available_int` commnet."""
         motsz = [self.nfeat_factor * fsz for fsz in self.filtsz]
-        conv, _ = parallel_conv(self.p, self.filtsz, self.embedsz, motsz)
+        conv = parallel_conv(self.p, self.filtsz, self.embedsz, motsz)
         conv_shape = conv.get_shape().as_list()
         self.assertEqual(conv_shape, [None, sum(motsz)])
 
     def test_conv_called(self):
         with patch('baseline.tf.tfy.tf.nn.conv2d') as conv_mock:
             conv_mock.return_value = tf.zeros((self.batchsz, 1, self.seqsz, self.motsz))
-            conv, _ = parallel_conv(self.p, self.filtsz, self.embedsz, self.motsz)
+            conv = parallel_conv(self.p, self.filtsz, self.embedsz, self.motsz)
             self.assertEqual(conv_mock.call_count, self.num_filt)
 
     def test_list_and_number_args_equal(self):
         with tf.variable_scope("TEST"):
-            conv1, _ = parallel_conv(self.p, self.filtsz, self.embedsz, self.motsz)
+            conv1 = parallel_conv(self.p, self.filtsz, self.embedsz, self.motsz)
         with tf.variable_scope("TEST", reuse=True):
-            conv2, _ = parallel_conv(self.p, self.filtsz, self.embedsz, [self.motsz] * len(self.filtsz))
+            conv2 = parallel_conv(self.p, self.filtsz, self.embedsz, [self.motsz] * len(self.filtsz))
         with self.test_session() as sess:
             sess.run(tf.global_variables_initializer())
             np.testing.assert_allclose(conv1.eval({self.p: self.input}), conv2.eval({self.p: self.input}))

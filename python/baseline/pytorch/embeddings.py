@@ -88,19 +88,20 @@ class CharConvEmbeddings(nn.Module, PyTorchEmbeddings):
         char_hsz = kwargs.get('wsz', 30)
         activation_type = kwargs.get('activation', 'tanh')
         pdrop = kwargs.get('pdrop', 0.5)
-        self.char_comp = ParallelConv(self.dsz, char_hsz, char_filtsz, activation_type, pdrop)
-        wchsz = self.char_comp.outsz
-        self.linear = pytorch_linear(wchsz, wchsz)
+        cconv = ParallelConv(self.dsz, char_hsz, char_filtsz, activation_type)
+        self.wchsz = cconv.outsz
+        self.char_comp = nn.Sequential([cconv, nn.Dropout(self.pdrop)])
+        self.linear = pytorch_linear(self.wchsz, self.wchsz)
         gating = kwargs.get('gating', 'skip')
         GatingConnection = SkipConnection if gating == 'skip' else Highway
         num_gates = kwargs.get('num_gates', 1)
         self.gating_seq = nn.Sequential(OrderedDict(
-            [('gate-{}'.format(i), GatingConnection(wchsz)) for i in range(num_gates)]
+            [('gate-{}'.format(i), GatingConnection(self.wchsz)) for i in range(num_gates)]
         ))
         print(self)
 
     def get_dsz(self):
-        return self.char_comp.outsz
+        return self.wsz
 
     def get_vsz(self):
         return self.vsz
