@@ -1,7 +1,6 @@
 import tensorflow as tf
 from baseline.tf.tfy import *
 
-
 def transformer_encoder(x, src_mask, scope, num_heads, pdrop, scale=True, activation_type='relu', d_ff=None):
     d_model = get_shape_as_list(x)[-1]
     return TransformerEncoder(d_model, num_heads, pdrop, scale, activation_type, d_ff, name=scope)(x, TRAIN_FLAG(),

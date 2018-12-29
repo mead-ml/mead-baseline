@@ -2,6 +2,7 @@ import os
 import copy
 import logging
 from itertools import chain
+import tensorflow as tf
 from baseline.tf.embeddings import *
 from eight_mile.tf.layers import *
 from baseline.version import __version__
@@ -294,6 +295,7 @@ class EmbedPoolStackClassifier(ClassifierModelBase):
 
 
     def pool(self, dsz, **kwargs):
+
         """This method performs a transformation between a temporal signal and a fixed representation
 
         :param word_embeddings: The output of the embedded lookup, which is the starting point for this operation

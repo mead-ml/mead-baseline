@@ -29,7 +29,6 @@ def reload_embeddings(embeddings_dict, basename):
         embeddings[key] = Constructor(key, **embed_args)
     return embeddings
 
-
 def _add_ema(model, decay):
     """Create ops needed to track EMA when training.
 
@@ -85,6 +84,7 @@ def _add_ema(model, decay):
     ), name="restore_backups")
 
     return ema_op, load, restore_vars
+
 
 def dense_layer(output_layer_depth):
     output_layer = tf.layers.Dense(output_layer_depth, use_bias=False, dtype=tf.float32, name="dense")
@@ -142,15 +142,12 @@ def stacked_cnn(inputs, hsz, pdrop, nlayers, filts=[5], activation_fn=tf.nn.relu
     return ParallelConvEncoderStack(get_shape_as_list(inputs)[-1], hsz, pdrop, nlayers, filts, activation_fn)(inputs, training)
 
 
+
 def skip_conns(inputs, wsz_all, n, activation_fn='relu'):
     x = inputs
     for i in range(n):
         x = SkipConnection(wsz_all, activation_fn)(x)
     return x
-
-def stacked_dense(inputs, init, hszs=[], pdrop_value=0.5):
-    return DenseStack(hszs, pdrop_value=pdrop_value, init=init)(inputs)
-
 
 def layer_norm(input, name, axis=[-1]):
     return LayerNorm(name=name, axis=axis)(input)
@@ -215,6 +212,7 @@ def create_session():
     allocate additional memory which isnt available since TF by default
     hogs it all.
 
+
     This also provides an abstraction that can be extended later to offer
     more config params that raw `tf.Session()` calls dont
 
@@ -224,6 +222,11 @@ def create_session():
     config.gpu_options.allow_growth = True
     return tf.Session(config=config)
 
+#def highway_conns(inputs, wsz_all, n):
+#    x = inputs
+#    for i in range(n):
+#        x = Highway(wsz_all, name="highway-{}".format(i))(x)
+#    return x
 
 def reload_lower_layers(sess, checkpoint):
     """
@@ -355,4 +358,15 @@ def pool_chars(x_char, Wch, ce0, char_dsz, nfeat_factor=None,
             word_char = tf.reshape(cmot, [-1, mxlen, num_filts])
 
     return word_char, num_filts
+
+def stacked_dense(inputs, init, hszs=[], pdrop_value=0.5):
+    """Stack 1 or more hidden layers, optionally (forming an MLP)
+
+    :param pooled: The fixed representation of the model
+    :param init: The tensorflow initializer
+    :param hsz -- (``list``) The list of number of hidden units (defaults to `[]`, indicating no stacking)
+
+    :return: The final layer
+    """
+    return DenseStack(hszs, pdrop_value=pdrop_value, init=init)(inputs)
 

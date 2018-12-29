@@ -68,14 +68,58 @@ def tf_activation(name):
     return tf.nn.relu
 
 
+class ParallelConvEncoder(tf.keras.layers.Layer):
+    DUMMY_AXIS = 1
+    TIME_AXIS = 2
+    FEATURE_AXIS = 3
+
+    def __init__(self, dsz, motsz, filtsz, activation='relu', name=None):
+
+        super(ParallelConv, self).__init__(name=name)
+        self.Ws = []
+        self.bs = []
+        self.activation = tf_activation(activation)
+
+        if not isinstance(motsz, list):
+            motsz = [motsz] * len(filtsz)
+
+        for fsz, cmotsz in zip(filtsz, motsz):
+            kernel_shape = [1, int(fsz), int(dsz), int(cmotsz)]
+            self.Ws.append(self.add_variable('cmot-{}/W'.format(fsz), shape=kernel_shape))
+            self.bs.append(self.add_variable('cmot-{}/b'.format(fsz), shape=[cmotsz], initializer=tf.constant_initializer(0.0)))
+
+        self.output_dim = sum(motsz)
+
+    def call(self, inputs):
+
+        parallels = []
+        expanded = tf.expand_dims(inputs, ParallelConv.DUMMY_AXIS)
+        for W, b in zip(self.Ws, self.bs):
+            conv = tf.nn.conv2d(
+                expanded, W,
+                strides=[1, 1, 1, 1],
+                padding="SAME", name="CONV"
+            )
+            activation = self.activation(tf.nn.bias_add(conv, b), 'activation')
+            parallels.append(activation)
+        combine = tf.reshape(tf.concat(values=activation, axis=ParallelConv.FEATURE_AXIS), [-1, self.output_dim])
+        return combine
+
+    def compute_output_shape(self, input_shape):
+        return input_shape[:-1] + [self.output_dim]
+
+    @property
+    def requires_length(self):
+        return False
+
 class ParallelConv(tf.keras.layers.Layer):
     DUMMY_AXIS = 1
     TIME_AXIS = 2
     FEATURE_AXIS = 3
 
-    def __init__(self, dsz, motsz, filtsz, activation='relu'):
+    def __init__(self, dsz, motsz, filtsz, activation='relu', name=None):
 
-        super(ParallelConv, self).__init__()
+        super(ParallelConv, self).__init__(name=name)
         self.Ws = []
         self.bs = []
         self.activation = tf_activation(activation)
@@ -132,7 +176,6 @@ def rnn_signal(output, hidden):
     return output
 
 
-
 def lstm_cell(hsz, forget_bias=1.0):
     """Produce a single cell with no dropout
 
@@ -164,27 +207,6 @@ def lstm_cell_w_dropout(hsz, pdrop, forget_bias=1.0, variational=False, training
     return output
 
 
-def stacked_lstm(hsz, pdrop, nlayers, variational=False, training=False):
-    """Produce a stack of LSTMs with dropout performed on all but the last layer.
-
-    :param hsz: (``int``) The number of hidden units per LSTM
-    :param pdrop: (``int``) The probability of dropping a unit value during dropout
-    :param nlayers: (``int``) The number of layers of LSTMs to stack
-    :param variational (``bool``) variational recurrence is on
-    :param training (``bool``) Are we training? (defaults to ``False``)
-    :return: a stacked cell
-    """
-    if variational:
-        return tf.contrib.rnn.MultiRNNCell(
-            [lstm_cell_w_dropout(hsz, pdrop, variational=variational, training=training) for _ in range(nlayers)],
-            state_is_tuple=True
-        )
-    return tf.contrib.rnn.MultiRNNCell(
-        [lstm_cell_w_dropout(hsz, pdrop, training=training) if i < nlayers - 1 else lstm_cell(hsz) for i in range(nlayers)],
-        state_is_tuple=True
-    )
-
-
 def rnn_cell(hsz, rnntype, st=None):
     """Produce a single RNN cell
 
@@ -200,53 +222,9 @@ def rnn_cell(hsz, rnntype, st=None):
     return cell
 
 
-def rnn_cell_w_dropout(hsz, pdrop, rnntype, st=None, variational=False, training=False):
-
-    """Produce a single RNN cell with dropout
-
-    :param hsz: (``int``) The number of hidden units per LSTM
-    :param rnntype: (``str``): `lstm` or `gru`
-    :param pdrop: (``int``) The probability of dropping a unit value during dropout
-    :param st: (``bool``) state is tuple? defaults to `None`
-    :param variational: (``bool``) Variational recurrence is on
-    :param training: (``bool``) Are we training?  Defaults to ``False``
-    :return: a cell
-    """
-    output_keep_prob = tf.contrib.framework.smart_cond(training, lambda: 1.0 - pdrop, lambda: 1.0)
-    state_keep_prob = tf.contrib.framework.smart_cond(training, lambda: 1.0 - pdrop if variational else 1.0, lambda: 1.0)
-    cell = rnn_cell(hsz, rnntype, st)
-    output = tf.contrib.rnn.DropoutWrapper(cell,
-                                           output_keep_prob=output_keep_prob,
-                                           state_keep_prob=state_keep_prob,
-                                           variational_recurrent=variational,
-                                           dtype=tf.float32)
-    return output
-
-
-def multi_rnn_cell_w_dropout(hsz, pdrop, rnntype, num_layers, variational=False, training=False):
-    """Produce a stack of RNNs with dropout performed on all but the last layer.
-
-    :param hsz: (``int``) The number of hidden units per RNN
-    :param pdrop: (``int``) The probability of dropping a unit value during dropout
-    :param rnntype: (``str``) The type of RNN to use - `lstm` or `gru`
-    :param num_layers: (``int``) The number of layers of RNNs to stack
-    :param training: (``bool``) Are we training? Defaults to ``False``
-    :return: a stacked cell
-    """
-    if variational:
-        return tf.contrib.rnn.MultiRNNCell(
-            [rnn_cell_w_dropout(hsz, pdrop, rnntype, variational=variational, training=training) for _ in range(num_layers)],
-            state_is_tuple=True
-        )
-    return tf.contrib.rnn.MultiRNNCell(
-        [rnn_cell_w_dropout(hsz, pdrop, rnntype, training=training) if i < num_layers - 1 else rnn_cell_w_dropout(hsz, 1.0, rnntype) for i in range(num_layers)],
-        state_is_tuple=True
-    )
-
-
 class LSTMEncoder(tf.keras.Model):
 
-    def __init__(self, hsz, pdrop, nlayers, variational=False, output_fn=None, requires_length=True):
+    def __init__(self, hsz, pdrop, nlayers, variational=False, output_fn=None, requires_length=True, name=None):
         """Produce a stack of LSTMs with dropout performed on all but the last layer.
 
         :param hsz: (``int``) The number of hidden units per LSTM
@@ -256,7 +234,7 @@ class LSTMEncoder(tf.keras.Model):
         :param training (``bool``) Are we training? (defaults to ``False``)
         :return: a stacked cell
         """
-        super(LSTMEncoder, self).__init__()
+        super(LSTMEncoder, self).__init__(name=name)
         self._requires_length = requires_length
 
         if variational:
@@ -279,9 +257,51 @@ class LSTMEncoder(tf.keras.Model):
     def requires_length(self):
         return self._requires_length
 
+
+class StackedParallelConvEncoder(tf.keras.Model):
+
+    def __init__(self, dsz, hsz, pdrop, layers, filts=[5], activation='relu', name=None):
+        super(StackedParallelConvEncoder, self).__init__(name=name)
+        filts = listify(filts)
+        self.layer_1 = tf.keras.Sequential([ParallelConvEncoder(dsz, hsz, filts), tf.keras.layers.Dropout(pdrop)])
+
+        self.subsequent = []
+        for i in range(layers):
+            new_block = tf.keras.Sequential([ParallelConvEncoder(hsz, hsz, filts), tf.keras.layers.Dropout(pdrop)])
+            self.subsequent.append(ResidualBlock(new_block))
+
+    def call(self, inputs, training=False):
+        x = self.layer_1(inputs, training)
+        for layer in self.subsequent:
+            x = layer(x)
+        return layer
+
+
+class LayerNorm(tf.keras.layers.Layer):
+    def __init__(self, axis=-1,
+                 epsilon=1e-5,
+                 name=None):
+        super(LayerNorm, self).__init__(name=name)
+        self.axis = listify(axis)
+        self.epsilon = epsilon
+
+    def build(self, input_shape):
+        n_state = input_shape[-1]
+        self.gv = self.add_variable("g", [n_state], initializer=tf.constant_initializer(1))
+        self.bv = self.add_variable("b", [n_state], initializer=tf.constant_initializer(0))
+        super(LayerNorm, self).build(input_shape)
+
+    def call(self, x, mask=None):
+        u = tf.reduce_mean(x, axis=self.axis, keepdims=True)
+        s = tf.reduce_mean(tf.square(x-u), axis=self.axis, keepdims=True)
+        x = (x - u) * tf.rsqrt(s + self.epsilon)
+        x = x * self.gv + self.bv
+        return x
+
+
 class BiLSTMEncoder(tf.keras.Model):
 
-    def __init__(self, hsz, pdrop, nlayers, variational=False, output_fn=None, requires_length=True):
+    def __init__(self, hsz, pdrop, nlayers, variational=False, output_fn=None, requires_length=True, name=None):
         """Produce a stack of LSTMs with dropout performed on all but the last layer.
 
         :param hsz: (``int``) The number of hidden units per LSTM
@@ -291,7 +311,7 @@ class BiLSTMEncoder(tf.keras.Model):
         :param training (``bool``) Are we training? (defaults to ``False``)
         :return: a stacked cell
         """
-        super(BiLSTMEncoder, self).__init__()
+        super(BiLSTMEncoder, self).__init__(name=name)
         self._requires_length = requires_length
         if variational:
             self.fwd_rnn = tf.contrib.rnn.MultiRNNCell([lstm_cell_w_dropout(hsz, pdrop, variational=variational, training=TRAIN_FLAG()) for _ in
@@ -327,13 +347,13 @@ class BiLSTMEncoder(tf.keras.Model):
 
 class EmbeddingsStack(tf.keras.Model):
 
-    def __init__(self, embeddings_dict, requires_length=False):
+    def __init__(self, embeddings_dict, requires_length=False, name=None):
         """Takes in a dictionary where the keys are the input tensor names, and the values are the embeddings
 
         :param embeddings_dict: (``dict``) dictionary of each feature embedding
         """
 
-        super(EmbeddingsStack, self).__init__()
+        super(EmbeddingsStack, self).__init__(name=name)
         self.embeddings = embeddings_dict
         self._requires_length = requires_length
 
@@ -358,8 +378,8 @@ class EmbeddingsStack(tf.keras.Model):
 
 class DenseStack(tf.keras.Model):
 
-    def __init__(self, hsz, activation='relu', pdrop_value=0.5, init=None):
-        super(DenseStack, self).__init__()
+    def __init__(self, hsz, activation='relu', pdrop_value=0.5, init=None, name=None):
+        super(DenseStack, self).__init__(name=name)
         hszs = listify(hsz)
         self.layer_stack = [tf.keras.layers.Dense(hsz, kernel_initializer=init, activation=activation) for hsz in hszs]
         self.dropout = tf.keras.layers.Dropout(pdrop_value)
@@ -389,8 +409,8 @@ class DenseStack(tf.keras.Model):
 
 class Highway(tf.keras.Model):
 
-    def __init__(self, input_size):
-        super(Highway, self).__init__()
+    def __init__(self, input_size, name=None):
+        super(Highway, self).__init__(name=name)
         self.proj = tf.keras.layers.Dense(input_size, activation='relu')
         self.transform = tf.keras.layers.Dense(input_size, bias_initializer=tf.keras.initializers.Constant(value=-2.0), activation='sigmoid')
 
@@ -407,8 +427,8 @@ class Highway(tf.keras.Model):
 
 class ResidualBlock(tf.keras.Model):
 
-    def __init__(self, layer=None):
-        super(ResidualBlock, self).__init__()
+    def __init__(self, layer=None, name=None):
+        super(ResidualBlock, self).__init__(name=name)
         self.layer = layer
 
     def call(self, inputs):
@@ -464,22 +484,154 @@ class TimeDistributedProjection(tf.keras.layers.Layer):
         return False
 
 
-#class ClassificationSequentialModel(tf.keras.Model):
-#
-#    def __init__(self, nc, sequence):
-#        super(ClassificationSequentialModel, self).__init__()
-#        self.sequence = sequence
-#        self.requires_length = [isinstance(module, (LSTMEncoder, BiLSTMEncoder)) for module in sequence]
-#
-#    def call(self, inputs, training=None, mask=None):
-#        lengths = inputs.pop('lengths')
-#        for i, module in enumerate(self.sequence):
-#            if self.requires_length[i]:
-#                x = module((x, lengths))
-#            else:
-#                x = module(x)
-#        x = self.output_layer(x)
-#        return x
+def scaled_dot_product_attention(query, key, value, pdrop=0.0, mask=None, training=False):
+    w = tf.matmul(query, key, transpose_b=True)
+
+    w *= tf.rsqrt(tf.to_float(tf.shape(query)[2]))
+
+    if mask is not None:
+        w = w * mask + -1e9 * (1 - mask)
+
+    weights = tf.nn.softmax(w, name="attention_weights")
+    weights = tf.layers.dropout(weights, pdrop, training=training)
+    return tf.matmul(weights, value)
+
+
+def dot_product_attention(query, key, value, pdrop=0.0, mask=None, training=False):
+    w = tf.matmul(query, key, transpose_b=True)
+
+    if mask is not None:
+        w = w * mask + -1e9 * (1 - mask)
+
+    weights = tf.nn.softmax(w, name="attention_weights")
+    weights = tf.layers.dropout(weights, pdrop, training=training)
+    return tf.matmul(weights, value)
+
+
+def split_heads(x, num_heads):
+    shp = get_shape_as_list(x)
+    dsz = shp[-1]
+    r = tf.reshape(x, shp[:-1] + [num_heads, dsz // num_heads])
+    # (B, T, num_heads, d_k) -> (B, num_heads, T, d_k)
+    return tf.transpose(r, [0, 2, 1, 3])
+
+
+def combine_heads(x):
+    x = tf.transpose(x, [0, 2, 1, 3])
+    shp = get_shape_as_list(x)
+    num_heads, head_sz = shp[-2:]
+    new_x_shape = shp[:-2]+[num_heads * head_sz]
+    new_x = tf.reshape(x, new_x_shape)
+    return new_x
+
+
+class MultiHeadedAttention(tf.keras.Model):
+    """
+    Multi-headed attention from https://arxiv.org/abs/1706.03762 via http://nlp.seas.harvard.edu/2018/04/03/attention.html
+
+    Multi-headed attention provides multiple looks of low-order projections K, Q and V using an attention function
+    (specifically `scaled_dot_product_attention` in the paper.  This allows multiple relationships to be illuminated
+    via attention on different positional and representational information from each head.
+
+    The number of heads `h` times the low-order projection dim `d_k` is equal to `d_model` (which is asserted upfront).
+    This means that each weight matrix can be simply represented as a linear transformation from `d_model` to `d_model`,
+    and partitioned into heads after the fact.
+
+    Finally, an output projection is applied which brings the output space back to `d_model`, in preparation for the
+    sub-sequent `FFN` sub-layer.
+
+    There are 3 uses of multi-head attention in the Transformer.
+    For encoder-decoder layers, the queries come from the previous decoder layer, and the memory keys come from
+    the encoder.  For encoder layers, the K, Q and V all come from the output of the previous layer of the encoder.
+    And for self-attention in the decoder, K, Q and V all come from the decoder, but here it is masked to prevent using
+    future values
+    """
+    def __init__(self, h, d_model, dropout=0.1, scale=False):
+        """Constructor for multi-headed attention
+
+        :param h: The number of heads
+        :param d_model: The model hidden size
+        :param dropout (``float``): The amount of dropout to use
+        :param attn_fn: A function to apply attention, defaults to SDP
+        """
+        super(MultiHeadedAttention, self).__init__()
+        assert d_model % h == 0
+        self.d_k = d_model // h
+        self.h = h
+        self.w_Q = TimeDistributedProjection(d_model)
+        self.w_K = TimeDistributedProjection(d_model)
+        self.w_V = TimeDistributedProjection(d_model)
+        self.w_O = TimeDistributedProjection(d_model)
+        self.attn_fn = scaled_dot_product_attention if scale else dot_product_attention
+        self.attn = None
+        self.dropout = tf.keras.layers.Dropout(dropout)
+
+    def call(self, qkv, training=False, mask=None):
+        query, key, value = qkv
+        batchsz = query.size(0)
+
+        # (B, H, T, D)
+        query = split_heads(self.w_Q(query), self.h)
+        key = split_heads(self.w_K(key), self.h)
+        value = split_heads(self.w_V(value), self.h)
+        x, self.attn = self.attn_fn(query, key, value, mask=mask, pdrop=self.dropout)
+
+        x = x.transpose(1, 2).contiguous() \
+            .view(batchsz, -1, self.h * self.d_k)
+        return self.w_O(x)
+
+
+class TransformerEncoder(tf.keras.Model):
+
+    def __init__(self, d_model, num_heads, pdrop, scale=True, activation_type='relu', d_ff=None, name=None):
+        super(TransformerEncoder, self).__init__(name=name)
+        if d_ff is None:
+            d_ff = 4*d_model
+        self.ln1 = LayerNorm(name='ln_1')
+        self.multi_head_attention = MultiHeadedAttention(num_heads, d_model, pdrop, scale)
+        self.dropout = tf.keras.layers.Dropout(pdrop)
+        self.ln2 = LayerNorm(name='ln_2')
+        self.ffn = FFN(d_model, pdrop, activation_type, d_ff, name='ffn')
+
+    def call(self, inputs, training=False, mask=None):
+        x = inputs
+        x = self.ln1(x)
+        x = self.multi_head_attention((x, x, x), training, mask)
+        x = x + self.dropout(x, training)
+        x = self.ln2(x)
+        x = self.ffn(x, training, mask)
+        x = x + self.dropout(x, training)
+        return x
+
+
+class FFN(tf.keras.Model):
+    """
+    FFN from https://arxiv.org/abs/1706.03762 via http://nlp.seas.harvard.edu/2018/04/03/attention.html
+
+    The `FFN` layer is block in the Transformer that follows multi-headed self-attention.  It consists
+    of an expansion from `d_model` to `d_ff` (with sub-sequent relu and dropout), followed by a squeeze
+    layer that pushes it back to `d_model`.  In the `tensor2tensor` codebase, this is implemented as convolution of
+    size 1 over the temporal sequence, which is equivalent, but in PyTorch, we dont need to do anything explicitly,
+    thanks to https://github.com/pytorch/pytorch/pull/1935!
+
+    """
+    def __init__(self, d_model, pdrop, activation_type='relu', d_ff=None, name=None):
+        """Constructor, takes in model size (which is the external currency of each block) and the feed-forward size
+
+        :param d_model: The model size.  This is the size passed through each block
+        :param d_ff: The feed-forward internal size, which is typical 4x larger, used internally
+        :param pdrop: The probability of dropping output
+        """
+        super(FFN, self).__init__(name=name)
+        if d_ff is None:
+            d_ff = 4 * d_model
+        self.expansion = TimeDistributedProjection(d_ff)
+        self.squeeze = TimeDistributedProjection(d_model)
+        self.dropout = tf.keras.layers.Dropout(pdrop)
+        self.act = tf.keras.layers.Activation(activation_type)
+
+    def call(self, inputs, training=False, mask=None):
+        return self.squeeze(self.dropout(self.act(self.expansion(inputs)), training))
 
 
 class EmbedPoolStackModel(tf.keras.Model):
