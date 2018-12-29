@@ -72,7 +72,7 @@ def transformer_encoder(x, src_mask, scope, num_heads, pdrop, scale=True, activa
         a = multi_headed_attention(q, k, v, 'attn', d_model, num_heads, pdrop, scale=scale, mask=src_mask)
         x = x + tf.layers.dropout(a, pdrop, training=TRAIN_FLAG())
         x = layer_norm(x, 'ln_2')
-        m = ffn(a, 'ffn', pdrop, d_ff=d_ff, activation_type=activation_type)
+        m = ffn(x, 'ffn', pdrop, d_ff=d_ff, activation_type=activation_type)
         h = x + tf.layers.dropout(m, pdrop, training=TRAIN_FLAG())
         return h
 
