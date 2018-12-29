@@ -14,7 +14,12 @@ parser.add_argument('--device', help='device')
 parser.add_argument('--preproc', help='(optional) where to perform preprocessing', choices={'client', 'server'},
                     default='client')
 parser.add_argument('--batchsz', help='batch size when --text is a file', default=100, type=int)
+parser.add_argument('--model_type', type=str, default='default')
+parser.add_argument('--modules', default=[])
 args = parser.parse_args()
+
+for mod_name in args.modules:
+    bl.import_user_module(mod_name)
 
 if os.path.exists(args.text) and os.path.isfile(args.text):
     texts = []
@@ -29,7 +34,7 @@ batched = [texts[i:i + args.batchsz] for i in range(0, len(texts), args.batchsz)
 
 m = bl.ClassifierService.load(args.model, backend=args.backend, remote=args.remote,
                               name=args.name, preproc=args.preproc,
-                              device=args.device)
+                              device=args.device, model_type=args.model_type)
 for texts in batched:
     for text, output in zip(texts, m.predict(texts)):
         print("{}, {}".format(" ".join(text), output[0][0]))

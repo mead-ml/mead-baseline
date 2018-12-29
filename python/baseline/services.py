@@ -480,8 +480,7 @@ class LanguageModelService(Service):
                         examples[lengths_key] = np.array(length)
             batch_dict = {k: v.reshape((1,) + v.shape) for k, v in examples.items()}
             softmax_tokens = self.model.predict(batch_dict)
-            next_token = np.argmax(softmax_tokens, axis=-1)[-1]
-
+            next_token = np.argmax(softmax_tokens[:, -1, :], axis=-1)[0]
             token_str = self.idx_to_token.get(next_token, '<PAD>')
             if token_str == '<EOS>':
                 break

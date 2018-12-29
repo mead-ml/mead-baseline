@@ -1,7 +1,6 @@
 import logging
 import tensorflow as tf
 from baseline.train import register_lr_scheduler, create_lr_scheduler, WarmupLearningRateScheduler
-import math
 
 
 logger = logging.getLogger('baseline')
@@ -130,11 +129,15 @@ class CompositeLRSchedulerTensorFlow(object):
 
     def __call__(self, lr, global_step):
         warm_tensor = self.warm(lr, global_step)
-        def call_warm(): return warm_tensor
+
+        def call_warm():
+            return warm_tensor
 
         rest_step = tf.subtract(global_step, tf.constant(self.warm.warmup_steps, dtype=global_step.dtype))
         rest_tensor = self.rest(lr, rest_step)
-        def call_rest(): return rest_tensor
+
+        def call_rest():
+            return rest_tensor
 
         return tf.identity(tf.cond(
             global_step < self.warm.warmup_steps,

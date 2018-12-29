@@ -8,11 +8,12 @@ from baseline.embeddings import register_embeddings
 from baseline.pytorch.torchy import (
     pytorch_embedding,
     ParallelConv,
-    pytorch_linear,
+    Dense,
     SkipConnection,
     Highway,
-    pytorch_lstm,
-    BiRNNWrapper,
+    rnn_bi_hidden,
+    BiLSTMEncoder,
+    WithDropout
 )
 
 
@@ -38,7 +39,7 @@ class PyTorchEmbeddings(nn.Module):
 @register_embeddings(name='default')
 class LookupTableEmbeddings(PyTorchEmbeddings):
 
-    def __init__(self, _, **kwargs):
+    def __init__(self, _=None, **kwargs):
         super(LookupTableEmbeddings, self).__init__(_, **kwargs)
         self.vsz = kwargs.get('vsz')
         self.dsz = kwargs.get('dsz')
@@ -62,41 +63,36 @@ class LookupTableEmbeddings(PyTorchEmbeddings):
 @register_embeddings(name='char-conv')
 class CharConvEmbeddings(PyTorchEmbeddings):
 
-    def __init__(self, name, **kwargs):
-        super(CharConvEmbeddings, self).__init__()
+    def __init__(self, _=None, **kwargs):
+        super(CharConvEmbeddings, self).__init__(_, **kwargs)
         self.vsz = kwargs.get('vsz')
-        self.dsz = kwargs.get('dsz')
+        dsz = kwargs.get('dsz')
         self.finetune = kwargs.get('finetune', True)
         weights = kwargs.get('weights')
         if weights is None:
-            self.embeddings = nn.Embedding(self.vsz, self.dsz, padding_idx=0)
+            self.embeddings = nn.Embedding(self.vsz, dsz, padding_idx=0)
         else:
             self.embeddings = pytorch_embedding(weights)
         char_filtsz = kwargs.get('cfiltsz', [3])
         if is_sequence(char_filtsz[0]):
-            char_hsz = [pair[1] for pair in char_filtsz]
+            wsz_single = [pair[1] for pair in char_filtsz]
             char_filtsz = [pair[0] for pair in char_filtsz]
         else:
-            char_hsz = kwargs.get('wsz', 30)
+            wsz_single = kwargs.get('wsz', 30)
 
         activation_type = kwargs.get('activation', 'tanh')
         pdrop = kwargs.get('pdrop', 0.5)
-        self.char_comp = ParallelConv(self.dsz, char_hsz, char_filtsz, activation_type, pdrop)
-        wchsz = self.char_comp.outsz
-        self.linear = pytorch_linear(wchsz, wchsz)
+        self.char_comp = WithDropout(ParallelConv(dsz, wsz_single, char_filtsz, activation_type), pdrop)
         gating = kwargs.get('gating', 'skip')
         GatingConnection = SkipConnection if gating == 'skip' else Highway
         num_gates = kwargs.get('num_gates', 1)
-
-        gates = [('gate-{}'.format(i), GatingConnection(wchsz)) for i in range(num_gates)]
-        projsz = kwargs.get('projsz')
-        if projsz is not None:
-            gates.append(('proj', pytorch_linear(self.char_comp.outsz, projsz)))
-            self.char_comp.outsz = projsz
-        self.gating_seq = nn.Sequential(OrderedDict(gates))
+        self.gating_seq = nn.Sequential(OrderedDict(
+            [('gate-{}'.format(i), GatingConnection(self.char_comp.output_dim)) for i in range(num_gates)]
+        ))
+        print(self)
 
     def get_dsz(self):
-        return self.char_comp.outsz
+        return self.char_comp.output_dim
 
     def get_vsz(self):
         return self.vsz
@@ -106,20 +102,20 @@ class CharConvEmbeddings(PyTorchEmbeddings):
         # For starters we need to perform embeddings for each character
         # (TxB) x W -> (TxB) x W x D
         _0, _1, W = xch.shape
-        char_embeds = self.embeddings(xch.view(-1, W))
+        char_vecs = self.embeddings(xch.view(-1, W))
         # (TxB) x D x W
-        char_vecs = char_embeds.transpose(1, 2).contiguous()
+        #char_vecs = char_embeds.transpose(1, 2).contiguous()
 
         #        pytorch_activation(self.activation_type)
         mots = self.char_comp(char_vecs)
         gated = self.gating_seq(mots)
-        return gated.view(_0, _1, self.char_comp.outsz)
+        return gated.view(_0, _1, self.get_dsz())
 
 
 @register_embeddings(name='positional-char-conv')
 class PositionalCharConvEmbeddings(CharConvEmbeddings):
 
-    def __init__(self, _, **kwargs):
+    def __init__(self, _=None, **kwargs):
         super(PositionalCharConvEmbeddings, self).__init__(_, **kwargs)
 
         self.dropout = nn.Dropout(kwargs.get('dropout', 0.1))
@@ -159,7 +155,7 @@ class PositionalCharConvEmbeddings(CharConvEmbeddings):
 @register_embeddings(name='positional')
 class PositionalLookupTableEmbeddings(LookupTableEmbeddings):
 
-    def __init__(self, _, **kwargs):
+    def __init__(self, _=None, **kwargs):
         super(PositionalLookupTableEmbeddings, self).__init__(_, **kwargs)
         self.dropout = nn.Dropout(kwargs.get('dropout', 0.1))
         # This could get us in trouble, if in doubt, pick something big
@@ -195,7 +191,7 @@ class PositionalLookupTableEmbeddings(LookupTableEmbeddings):
 
 @register_embeddings(name='learned-positional')
 class LearnedPositionalLookupTableEmbeddings(LookupTableEmbeddings):
-    def __init__(self, _, **kwargs):
+    def __init__(self, _=None, **kwargs):
         super(LearnedPositionalLookupTableEmbeddings, self).__init__(_, **kwargs)
         self.mxlen = int(kwargs.get('mxlen', 512))
         self.pos_embeddings = nn.Embedding(self.mxlen, self.dsz, padding_idx=0)
@@ -213,23 +209,22 @@ class LearnedPositionalLookupTableEmbeddings(LookupTableEmbeddings):
 
 @register_embeddings(name='char-lstm')
 class CharLSTMEmbeddings(PyTorchEmbeddings):
-    def __init__(self, name, **kwargs):
-        super(CharLSTMEmbeddings, self).__init__(name, **kwargs)
+    def __init__(self, _=None, **kwargs):
+        super(CharLSTMEmbeddings, self).__init__(_, **kwargs)
         self.vsz = kwargs.get('vsz')
-        self.dsz = kwargs.get('dsz')
+        dsz = kwargs.get('dsz')
         self.finetune = kwargs.get('finetune', True)
         weights = kwargs.get('weights')
         if weights is None:
-            self.embeddings = nn.Embedding(self.vsz, self.dsz, padding_idx=Offsets.PAD)
+            self.embeddings = nn.Embedding(self.vsz, dsz, padding_idx=Offsets.PAD)
         else:
             self.embeddings = pytorch_embedding(weights)
         self.lstmsz = kwargs.get('lstmsz', 50)
         layers = kwargs.get('layers', 1)
         pdrop = kwargs.get('pdrop', 0.5)
-        rnn_type = kwargs.get('rnn_type', 'blstm')
         unif = kwargs.get('unif', 0)
         weight_init = kwargs.get('weight_init', 'uniform')
-        self.char_comp = BiRNNWrapper(pytorch_lstm(self.dsz, self.lstmsz, rnn_type, layers, pdrop, unif=unif, initializer=weight_init, batch_first=False), layers)
+        self.char_comp = BiLSTMEncoder(dsz, self.lstmsz, layers, pdrop, unif=unif, initializer=weight_init, output_fn=rnn_bi_hidden)
 
     def forward(self, xch):
         B, T, W = xch.shape
@@ -244,7 +239,7 @@ class CharLSTMEmbeddings(PyTorchEmbeddings):
         sorted_feats = char_embeds[perm_idx].transpose(0, 1).contiguous()
 
         packed = torch.nn.utils.rnn.pack_padded_sequence(sorted_feats, sorted_word_lengths.tolist())
-        _, hidden = self.char_comp(packed)
+        hidden = self.char_comp(packed)
         hidden = tuple(h[-1, :, :] for h in hidden)
         results = tuple(h.scatter_(0, perm_idx.unsqueeze(-1).expand_as(h), h) for h in hidden)
         return results[0].reshape((B, T, -1))

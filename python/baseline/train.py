@@ -9,7 +9,6 @@ __all__ = []
 exporter = export(__all__)
 
 BASELINE_LR_SCHEDULERS = {}
-logger = logging.getLogger('baseline')
 
 
 @exporter
@@ -22,9 +21,6 @@ class LearningRateScheduler(object):
     def _identity(x):
         return x
 
-    def __str__(self):
-        return "{}(eta={})".format(type(self).__name__, self.lr)
-
 
 @exporter
 class WarmupLearningRateScheduler(LearningRateScheduler):
@@ -35,9 +31,6 @@ class WarmupLearningRateScheduler(LearningRateScheduler):
     @property
     def warmup_steps(self):
         return self._warmup_steps
-
-    def __str__(self):
-        return "{}(eta={}, warmup_steps={})".format(type(self).__name__, self.lr, self.warmup_steps)
 
 
 @exporter
@@ -55,8 +48,8 @@ class WarmupLinearScheduler(WarmupLearningRateScheduler):
 
     def __call__(self, global_step):
         lr_factor = min(1.0, global_step / float(self.warmup_steps))
-        new_lr = self.lr * lr_factor
-        return new_lr
+        return self.lr * lr_factor
+
 
 @exporter
 class CyclicLRScheduler(LearningRateScheduler):
@@ -72,9 +65,6 @@ class CyclicLRScheduler(LearningRateScheduler):
         new_lr = self.lr + (self.max_lr - self.lr) * np.maximum(0., 1. - x)
         return new_lr
 
-    def __str__(self):
-        return "{}(eta={}, max_lr={}, decay_steps={})".format(type(self).__name__, self.lr, self.max_lr, self.decay_steps)
-
 
 @exporter
 class PiecewiseDecayScheduler(LearningRateScheduler):
@@ -88,16 +78,12 @@ class PiecewiseDecayScheduler(LearningRateScheduler):
         pos = np.searchsorted(self.bounds, global_step)
         return self.values[pos]
 
-    def __str__(self):
-        return "{}(eta={}, bounds={}, values={})".format(type(self).__name__, self.lr, self.bounds, self.values)
-
 
 @exporter
 class ZarembaDecayScheduler(PiecewiseDecayScheduler):
 
     def __init__(self, bounds=None, decay_rate=None, **kwargs):
         lr = kwargs.get('lr', kwargs.get('eta', 1.0))
-        self.decay_rate = decay_rate
 
         if bounds is None or decay_rate is None:
             bounds = []
@@ -105,10 +91,6 @@ class ZarembaDecayScheduler(PiecewiseDecayScheduler):
         else:
             values = [lr / (decay_rate ** i) for i in range(len(bounds) + 1)]
         super(ZarembaDecayScheduler, self).__init__(bounds, values, **kwargs)
-
-    def __str__(self):
-        base_str = super(ZarembaDecayScheduler, self).__str__()
-        return base_str[:-1] + ", decay_rate={})".format(self.decay_rate)
 
 
 @exporter
@@ -121,13 +103,9 @@ class CosineDecayScheduler(LearningRateScheduler):
 
     def __call__(self, global_step):
         global_step = min(global_step, self.decay_steps)
-        # global_step = global_step % self.decay_steps
         cosine_decay = 0.5 * (1 + np.cos(np.pi * global_step / self.decay_steps))
         decayed = (1 - self.alpha) * cosine_decay + self.alpha
         return self.lr * decayed
-
-    def __str__(self):
-        return "{}(eta={}, decay_steps={}, alpha={})".format(type(self).__name__, self.lr, self.decay_steps, self.alpha)
 
 
 @exporter
@@ -137,16 +115,11 @@ class InverseTimeDecayScheduler(LearningRateScheduler):
         super(InverseTimeDecayScheduler, self).__init__(**kwargs)
         self.decay_steps = decay_steps
         self.decay_rate = decay_rate
-        self.staircase = staircase
         self.wrap_fn = math.floor if staircase else LearningRateScheduler._identity
 
     def __call__(self, global_step):
         t = self.wrap_fn(global_step / self.decay_steps)
         return self.lr / (1.0 + self.decay_rate * t)
-
-    def __str__(self):
-        s = "{}(eta={}, decay_steps={}, decay_rate={}".format(type(self).__name__, self.lr, self.decay_steps, self.decay_rate)
-        return s + (", staircase=True)" if self.staircase else ")")
 
 
 @exporter
@@ -156,17 +129,11 @@ class ExponentialDecayScheduler(LearningRateScheduler):
         super(ExponentialDecayScheduler, self).__init__(**kwargs)
         self.decay_steps = decay_steps
         self.decay_rate = decay_rate
-        self.staircase = staircase
         self.wrap_fn = math.floor if staircase else LearningRateScheduler._identity
 
     def __call__(self, global_step):
         t = self.wrap_fn(global_step / float(self.decay_steps))
         return self.lr * self.decay_rate ** t
-
-    def __str__(self):
-        s = "{}(eta={}, decay_steps={}, decay_rate={}".format(type(self).__name__, self.lr, self.decay_steps, self.decay_rate)
-        return s + (", staircase=True)" if self.staircase else ")")
-
 
 @exporter
 class CompositeLRScheduler(LearningRateScheduler):
@@ -179,9 +146,6 @@ class CompositeLRScheduler(LearningRateScheduler):
         if global_step < self.warm.warmup_steps:
             return self.warm(global_step)
         return self.rest(global_step - self.warm.warmup_steps)
-
-    def __str__(self):
-        return "LRScheduler({}, {})".format(self.warm, self.rest)
 
 
 @exporter
@@ -208,9 +172,7 @@ def create_lr_scheduler(**kwargs):
         rest = BASELINE_LR_SCHEDULERS.get(sched_type[1])(**kwargs)
         return BASELINE_LR_SCHEDULERS.get('composite')(warm=warm, rest=rest, **kwargs)
     Constructor = BASELINE_LR_SCHEDULERS.get(sched_type[0])
-    lrs = Constructor(**kwargs)
-    logger.info(lrs)
-    return lrs
+    return Constructor(**kwargs)
 
 
 @exporter
@@ -268,10 +230,10 @@ class EpochReportingTrainer(Trainer):
     def __init__(self):
         super(EpochReportingTrainer, self).__init__()
 
-    def train(self, ts, reporting_fns):
+    def train(self, ts, reporting_fns, **kwargs):
         start_time = time.time()
         self.nstep_start = start_time
-        metrics = self._train(ts, reporting_fns=reporting_fns)
+        metrics = self._train(ts, reporting_fns=reporting_fns, **kwargs)
         self.train_epochs += 1
         self.report(
             self.train_epochs, metrics, start_time,
@@ -346,7 +308,7 @@ def register_training_func(func, task, name=None):
 
 
 @exporter
-def fit(model, ts, vs, es, **kwargs):
+def fit(model_params, ts, vs, es, **kwargs):
     """This method delegates to the registered fit function for each DL framework.  It is possible to provide a by-pass
     to our defined fit functions for each method (this is considered advanced usage).  In cases where the user wishes
     to provide their own fit hook, the need to decorate the bypass hook with @register_training_func(name='myname'),
@@ -363,12 +325,16 @@ def fit(model, ts, vs, es, **kwargs):
     :param kwargs:
     :return:
     """
+    if type(model_params) is dict:
+        task_name = model_params['task']
+    else:
+        task_name = model_params.task_name
     fit_func_name = kwargs.get('fit_func', 'default')
-    return BASELINE_FIT_FUNC[model.task_name][fit_func_name](model, ts, vs, es, **kwargs)
+    return BASELINE_FIT_FUNC[task_name][fit_func_name](model_params, ts, vs, es, **kwargs)
 
 
 @exporter
-def create_trainer(model, **kwargs):
+def create_trainer(model_params, **kwargs):
     """Create the default trainer, or a user-defined one if `trainer_type` is not `default`
 
     :param default_create_model_fn: The constructor for the default trainer (defined in each platform/task)
@@ -377,5 +343,22 @@ def create_trainer(model, **kwargs):
     :return:
     """
     trainer_type = kwargs.get('trainer_type', 'default')
-    Constructor = BASELINE_TRAINERS[model.task_name][trainer_type]
-    return Constructor(model, **kwargs)
+    if type(model_params) is dict:
+        task_name = model_params['task']
+    else:
+        task_name = model_params.task_name
+    Constructor = BASELINE_TRAINERS[task_name][trainer_type]
+    return Constructor(model_params, **kwargs)
+
+
+def calc_lr_params(train_params, num_steps):
+    # This belongs in the trainer!
+    if train_params.get('lr_scheduler_type', None) == 'zaremba':
+        first_range = int(train_params['start_decay_epoch'] * num_steps)
+        train_params['bounds'] = [first_range] + list(
+            np.arange(
+                train_params['start_decay_epoch'] + 1,
+                train_params['epochs'] + 1,
+                dtype=np.int32
+            ) * num_steps
+        )

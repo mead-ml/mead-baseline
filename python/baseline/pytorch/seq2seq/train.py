@@ -8,6 +8,7 @@ from baseline.train import Trainer, create_trainer, register_trainer, register_t
 from baseline.pytorch.optz import OptimizerManager
 from baseline.bleu import bleu
 from baseline.utils import convert_seq2seq_golds, convert_seq2seq_preds
+from baseline.model import create_model_for
 
 logger = logging.getLogger('baseline')
 
@@ -17,22 +18,37 @@ class Seq2SeqTrainerPyTorch(Trainer):
 
     def __init__(self, model, **kwargs):
         super(Seq2SeqTrainerPyTorch, self).__init__()
-        self.gpu = bool(kwargs.get('gpu', True))
+        if type(model) is dict:
+            model = create_model_for('seq2seq', **model)
+
         self.clip = float(kwargs.get('clip', 5))
         self.model = model
         self.optimizer = OptimizerManager(self.model, **kwargs)
         self._input = model.make_input
         self._predict = model.predict
-        self.crit = model.create_loss()
         self.tgt_rlut = kwargs['tgt_rlut']
-        if self.gpu:
-            self.model = torch.nn.DataParallel(model).cuda()
-            self.crit.cuda()
+
+        if self.gpus > 0:
+            self.crit = model.create_loss().cuda()
+            if self.gpus > 1:
+                self.model = torch.nn.DataParallel(model).cuda()
+            else:
+                self.model.cuda()
+        else:
+            logger.warning("Requested training on CPU.  This will be slow.")
+            self.crit = model.create_loss()
+
         self.nsteps = kwargs.get('nsteps', 500)
 
     @staticmethod
     def _num_toks(tgt_lens):
         return np.sum(tgt_lens)
+
+    def save(self, model_file):
+        self._get_pytorch_model().save(model_file)
+
+    def _get_pytorch_model(self):
+        return self.model.module if self.gpus > 1 else self.model
 
     def calc_metrics(self, agg, norm):
         metrics = super(Seq2SeqTrainerPyTorch, self).calc_metrics(agg, norm)
@@ -73,7 +89,6 @@ class Seq2SeqTrainerPyTorch(Trainer):
         )
         return metrics
 
-
     def _evaluate(self, es, reporting_fns, **kwargs):
         self.model.eval()
         pg = create_progress_bar(len(es))
@@ -91,7 +106,6 @@ class Seq2SeqTrainerPyTorch(Trainer):
             0, metrics, start, 'Test', 'EPOCH', reporting_fns
         )
         return metrics
-
 
     def train(self, ts, reporting_fns):
         self.model.train()
@@ -138,7 +152,7 @@ class Seq2SeqTrainerPyTorch(Trainer):
 
 
 @register_training_func('seq2seq')
-def fit(model, ts, vs, es=None, **kwargs):
+def fit(model_params, ts, vs, es=None, **kwargs):
 
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
     epochs = int(kwargs.get('epochs', 20))
@@ -155,25 +169,25 @@ def fit(model, ts, vs, es=None, **kwargs):
     logger.info('reporting %s', reporting_fns)
 
     after_train_fn = kwargs.get('after_train_fn', None)
-    trainer = create_trainer(model, **kwargs)
+    trainer = create_trainer(model_params, **kwargs)
 
     last_improved = 0
     for epoch in range(epochs):
         trainer.train(ts, reporting_fns)
 
         if after_train_fn is not None:
-            after_train_fn(model)
+            after_train_fn(trainer.model)
 
         test_metrics = trainer.test(vs, reporting_fns, phase='Valid')
 
         if do_early_stopping is False:
-            model.save(model_file)
+            trainer.save(model_file)
 
         elif early_stopping_cmp(test_metrics[early_stopping_metric], best_metric):
             last_improved = epoch
             best_metric = test_metrics[early_stopping_metric]
             logger.info('New best %.3f', best_metric)
-            model.save(model_file)
+            trainer.save(model_file)
 
         elif (epoch - last_improved) > patience:
             logger.info('Stopping due to persistent failures to improve')
@@ -183,7 +197,7 @@ def fit(model, ts, vs, es=None, **kwargs):
         logger.info('Best performance on %s: %.3f at epoch %d', early_stopping_metric, best_metric, last_improved)
 
     if es is not None:
-        model.load(model_file)
+        model = torch.load(model_file)
         trainer = Seq2SeqTrainerPyTorch(model, **kwargs)
         test_metrics = trainer.test(es, reporting_fns, phase='Test')
     return test_metrics

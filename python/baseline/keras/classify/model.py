@@ -210,7 +210,7 @@ class NBoWModel(GraphWordClassifierBase):
         last_layer = drop1
         return last_layer
 
-@register_model(task='classify', name='nbow_max')
+@register_model(task='classify', name='nbowmax')
 class NBoWMaxModel(NBoWModel):
 
     def __init__(self):

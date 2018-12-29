@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 import numpy as np
-from baseline.pytorch.torchy import pytorch_linear, pytorch_activation
+from baseline.pytorch.torchy import pytorch_linear, get_activation
 from baseline.pytorch.torchy import pytorch_clone_module
 
 
@@ -126,7 +126,7 @@ class TransformerEncoder(nn.Module):
         self.d_ff = d_ff if d_ff is not None else 4 * d_model
         self.self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale=scale)
         self.ffn = nn.Sequential(pytorch_linear(self.d_model, self.d_ff),
-                                 pytorch_activation(activation_type),
+                                 get_activation(activation_type),
                                  pytorch_linear(self.d_ff, self.d_model))
         self.ln1 = nn.LayerNorm(self.d_model, eps=1e-12)
         self.ln2 = nn.LayerNorm(self.d_model, eps=1e-12)
@@ -156,7 +156,7 @@ class TransformerDecoder(nn.Module):
         self.self_attn = MultiHeadedAttention(num_heads, self.d_model, pdrop, scale=scale)
         self.src_attn = MultiHeadedAttention(num_heads, self.d_model, pdrop, scale=scale)
         self.ffn = nn.Sequential(pytorch_linear(self.d_model, self.d_ff),
-                                 pytorch_activation(activation_type),
+                                 get_activation(activation_type),
                                  pytorch_linear(self.d_ff, self.d_model))
 
         self.ln1 = nn.LayerNorm(self.d_model, eps=1e-12)

@@ -4,7 +4,7 @@ from baseline.pytorch.torchy import *
 from baseline.utils import listify, revlut, get_model_file, get_metric_cmp
 from baseline.train import Trainer, create_trainer, register_trainer, register_training_func
 from baseline.pytorch.optz import OptimizerManager
-
+from baseline.model import create_model_for
 logger = logging.getLogger('baseline')
 
 
@@ -13,16 +13,21 @@ class LanguageModelTrainerPyTorch(Trainer):
 
     def __init__(self, model, **kwargs):
         super(LanguageModelTrainerPyTorch, self).__init__()
+        if type(model) is dict:
+            model = create_model_for('lm', **model)
         self.model = model
         self.clip = float(kwargs.get('clip', 5))
-        self.gpu = not bool(kwargs.get('nogpu', False))
-        self.crit = model.create_loss()
+        if self.gpus > 0:
+            self.crit = model.create_loss().cuda()
+            if self.gpus > 1:
+                self.model = torch.nn.DataParallel(model).cuda()
+            else:
+                self.model.cuda()
+        else:
+            logger.warning("Requested training on CPU.  This will be slow.")
+            self.crit = model.create_loss()
 
-        if self.gpu:
-            self.model = self.model.cuda()
-            self.crit.cuda()
         self.nsteps = kwargs.get('nsteps', 500)
-
         self.optimizer = OptimizerManager(self.model, **kwargs)
 
     def repackage_hidden(self, h):
@@ -31,6 +36,12 @@ class LanguageModelTrainerPyTorch(Trainer):
             return h.detach()
         else:
             return tuple(self.repackage_hidden(v) for v in h)
+
+    def save(self, model_file):
+        self._get_pytorch_model().save(model_file)
+
+    def _get_pytorch_model(self):
+        return self.model.module if self.gpus > 1 else self.model
 
     @staticmethod
     def _get_dims(batch_dict):
@@ -54,13 +65,12 @@ class LanguageModelTrainerPyTorch(Trainer):
         self.model.eval()
         total_loss = 0
         total_toks = 0
-        metrics = {}
         batchsz, nctx = self._get_dims(vs[0])
 
-        hidden = self.model.init_hidden(batchsz)
+        hidden = self._get_pytorch_model().init_hidden(batchsz)
 
         for batch_dict in vs:
-            inputs = self.model.make_input(batch_dict)
+            inputs = self._get_pytorch_model().make_input(batch_dict)
             y = inputs.pop('y')
             output, hidden = self.model(inputs, hidden)
             toks = self._num_toks(batch_dict)
@@ -82,12 +92,12 @@ class LanguageModelTrainerPyTorch(Trainer):
         epoch_loss = 0
         epoch_toks = 0
         batchsz, nctx = self._get_dims(ts[0])
-        hidden = self.model.init_hidden(batchsz)
+        hidden = self._get_pytorch_model().init_hidden(batchsz)
 
         for batch_dict in ts:
             if hidden is not None:
                 hidden = self.repackage_hidden(hidden)
-            inputs = self.model.make_input(batch_dict)
+            inputs = self._get_pytorch_model().make_input(batch_dict)
             y = inputs.pop('y')
             self.optimizer.zero_grad()
             output, hidden = self.model(inputs, hidden)
@@ -146,13 +156,13 @@ def fit(model, ts, vs, es, **kwargs):
         test_metrics = trainer.test(vs, reporting_fns, phase='Valid')
 
         if do_early_stopping is False:
-            model.save(model_file)
+            trainer.save(model_file)
 
         elif early_stopping_cmp(test_metrics[early_stopping_metric], best_metric):
             last_improved = epoch
             best_metric = test_metrics[early_stopping_metric]
             logger.info('New best %.3f', best_metric)
-            model.save(model_file)
+            trainer.save(model_file)
 
 
         elif (epoch - last_improved) > patience:

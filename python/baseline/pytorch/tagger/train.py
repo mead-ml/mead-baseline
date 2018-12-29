@@ -6,6 +6,7 @@ from baseline.utils import listify, to_spans, f_score, revlut, get_model_file, w
 from baseline.pytorch.torchy import *
 from baseline.pytorch.optz import OptimizerManager
 from baseline.utils import span_f1, per_entity_f1, conlleval_output
+from baseline.model import create_model_for
 
 logger = logging.getLogger('baseline')
 
@@ -15,6 +16,9 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
 
     def __init__(self, model, **kwargs):
         super(TaggerTrainerPyTorch, self).__init__()
+        if type(model) is dict:
+            model = create_model_for('tagger', **model)
+
         self.gpus = int(kwargs.get('gpus', 1))
         # By default support IOB1/IOB2
         self.span_type = kwargs.get('span_type', 'iob')
@@ -35,6 +39,9 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
 
         self.nsteps = kwargs.get('nsteps', six.MAXSIZE)
 
+    def save(self, model_file):
+        self.model.save(model_file)
+
     @staticmethod
     def _get_batchsz(batch_dict):
         return batch_dict['y'].shape[0]
@@ -51,7 +58,9 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
 
         # For each sentence
         for b in range(len(guess)):
-            sentence = guess[b].cpu().numpy()
+            sentence = guess[b]
+            if isinstance(sentence, torch.Tensor):
+                sentence = sentence.cpu().numpy()
             sentence_length = sentence_lengths[b]
 
             gold = truth_n[b, :sentence_length]
@@ -91,7 +100,8 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
             y = inputs.pop('y')
             lengths = inputs['lengths']
             ids = inputs['ids']
-            pred = self.model(inputs)
+            with torch.no_grad():
+                pred = self.model(inputs)
             correct, count, golds, guesses = self.process_output(pred, y.data, lengths, ids, handle, txts)
             total_correct += correct
             total_sum += count
@@ -142,7 +152,7 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
 
 
 @register_training_func('tagger')
-def fit(model, ts, vs, es, **kwargs):
+def fit(model_params, ts, vs, es, **kwargs):
 
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
     epochs = int(kwargs.get('epochs', 20))
@@ -160,30 +170,25 @@ def fit(model, ts, vs, es, **kwargs):
     reporting_fns = listify(kwargs.get('reporting', []))
     logger.info('reporting %s', reporting_fns)
 
-    #validation_improvement_fn = kwargs.get('validation_improvement', None)
-
     after_train_fn = kwargs.get('after_train_fn', None)
-    trainer = create_trainer(model, **kwargs)
+    trainer = create_trainer(model_params, **kwargs)
 
     last_improved = 0
     for epoch in range(epochs):
 
         trainer.train(ts, reporting_fns)
         if after_train_fn is not None:
-            after_train_fn(model)
+            after_train_fn(trainer.model)
         test_metrics = trainer.test(vs, reporting_fns, phase='Valid')
 
         if do_early_stopping is False:
-            model.save(model_file)
+            trainer.save(model_file)
 
         elif early_stopping_cmp(test_metrics[early_stopping_metric], best_metric):
-            #if validation_improvement_fn is not None:
-            #    validation_improvement_fn(early_stopping_metric, test_metrics, epoch, max_metric, last_improved)
             last_improved = epoch
             best_metric = test_metrics[early_stopping_metric]
             logger.info('New best %.3f', best_metric)
-            model.save(model_file)
-
+            trainer.save(model_file)
 
         elif (epoch - last_improved) > patience:
             logger.info('Stopping due to persistent failures to improve')

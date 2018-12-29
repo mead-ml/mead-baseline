@@ -1,4 +1,5 @@
 from baseline.tf.tfy import *
+from baseline.tf.layers import multi_rnn_cell_w_dropout, TRAIN_FLAG
 import tensorflow.contrib.seq2seq as tfcontrib_seq2seq
 from baseline.utils import ls_props, read_json, Offsets, export
 from baseline.model import register_decoder, register_arc_policy, create_seq2seq_arc_policy
@@ -229,7 +230,7 @@ got {} hsz and {} dsz".format(self.hsz, self.tgt_embedding.get_dsz()))
         self.cell = multi_rnn_cell_w_dropout(self.hsz, pdrop, rnntype, layers, variational=vdrop, training=TRAIN_FLAG())
 
     def _get_tgt_weights(self):
-        Wo = tf.get_variable("Wo", initializer=tf.constant_initializer(self.tgt_embedding.weights,
+        Wo = tf.get_variable("Wo", initializer=tf.constant_initializer(self.tgt_embedding._weights,
                                                                        dtype=tf.float32,
                                                                        verify_shape=True),
                              shape=[self.tgt_embedding.vsz, self.tgt_embedding.dsz])

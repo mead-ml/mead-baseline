@@ -10,6 +10,8 @@ from baseline.progress import create_progress_bar
 from baseline.utils import listify, get_model_file, get_metric_cmp
 from baseline.pytorch.optz import OptimizerManager
 from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
+from baseline.model import create_model_for
+
 logger = logging.getLogger('baseline')
 
 
@@ -25,6 +27,8 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
 
     def __init__(self, model, **kwargs):
         super(ClassifyTrainerPyTorch, self).__init__()
+        if type(model) is dict:
+            model = create_model_for('classify', **model)
         self.clip = float(kwargs.get('clip', 5))
         self.labels = model.labels
         self.gpus = int(kwargs.get('gpus', 1))
@@ -45,10 +49,14 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
             self.model = model
         self.nsteps = kwargs.get('nsteps', six.MAXSIZE)
 
+    def _get_pytorch_model(self):
+        return self.model.module if self.gpus > 1 else self.model
+
+    def save(self, model_file):
+        self._get_pytorch_model().save(model_file)
+
     def _make_input(self, batch_dict):
-        if self.gpus > 1:
-            return self.model.module.make_input(batch_dict)
-        return self.model.make_input(batch_dict)
+        return self._get_pytorch_model().make_input(batch_dict)
 
     @staticmethod
     def _get_batchsz(batch_dict):
@@ -130,10 +138,10 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
 
 
 @register_training_func('classify')
-def fit(model, ts, vs, es, **kwargs):
+def fit(model_params, ts, vs, es, **kwargs):
     """
     Train a classifier using PyTorch
-    :param model: The model to train
+    :param model_params: The model to train
     :param ts: A training data set
     :param vs: A validation data set
     :param es: A test data set, can be None
@@ -171,9 +179,7 @@ def fit(model, ts, vs, es, **kwargs):
 
     reporting_fns = listify(kwargs.get('reporting', []))
     logger.info('reporting %s', reporting_fns)
-
-
-    trainer = create_trainer(model, **kwargs)
+    trainer = create_trainer(model_params, **kwargs)
 
     last_improved = 0
 
@@ -182,13 +188,13 @@ def fit(model, ts, vs, es, **kwargs):
         test_metrics = trainer.test(vs, reporting_fns)
 
         if do_early_stopping is False:
-            model.save(model_file)
+            trainer.save(model_file)
 
         elif early_stopping_cmp(test_metrics[early_stopping_metric], best_metric):
             last_improved = epoch
             best_metric = test_metrics[early_stopping_metric]
             logger.info('New best %.3f', best_metric)
-            model.save(model_file)
+            trainer.save(model_file)
 
         elif (epoch - last_improved) > patience:
             logger.info('Stopping due to persistent failures to improve')

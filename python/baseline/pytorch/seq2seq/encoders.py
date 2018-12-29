@@ -1,5 +1,5 @@
 from collections import namedtuple
-from baseline.pytorch.torchy import sequence_mask, pytorch_linear, pytorch_rnn
+from baseline.pytorch.torchy import sequence_mask, pytorch_linear, pytorch_lstm
 from baseline.pytorch.transformer import TransformerEncoderStack
 from baseline.model import register_encoder
 import torch
@@ -21,7 +21,7 @@ class RNNEncoder(torch.nn.Module):
         super(RNNEncoder, self).__init__()
         self.residual = residual
         hidden = hsz if hsz is not None else dsz
-        self.rnn = pytorch_rnn(dsz, hidden, rnntype, layers, pdrop)
+        self.rnn = pytorch_lstm(dsz, hidden, rnntype, layers, pdrop)
         self.src_mask_fn = _make_src_mask if create_src_mask is True else lambda x, y: None
 
     def forward(self, btc, lengths):

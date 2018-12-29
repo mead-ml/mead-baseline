@@ -48,7 +48,7 @@ class LanguageModelBase(nn.Module, LanguageModel):
         all_embeddings = []
         for k in self.src_keys:
             embedding = self.embeddings[k]
-            all_embeddings.append(embedding.encode(input[k]))
+            all_embeddings.append(embedding(input[k]))
         embedded = torch.cat(all_embeddings, -1)
         embedded_dropout = self.embed_dropout(embedded)
         if self.embeddings_proj:

@@ -636,7 +636,7 @@ class TSVSeqLabelReader(SeqLabelReader):
 @register_reader(task='lm', name='default')
 class LineSeqReader(object):
 
-    def __init__(self, vectorizers, trim, **kwargs):
+    def __init__(self, vectorizers, trim=False, **kwargs):
         self.nctx = kwargs['nctx']
         self.vectorizers = vectorizers
 
