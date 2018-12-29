@@ -3,8 +3,7 @@ import numpy as np
 import tensorflow as tf
 from baseline.utils import write_json, Offsets
 from baseline.embeddings import register_embeddings
-from baseline.tf.tfy import pool_chars, get_shape_as_list
-from baseline.tf.layers import stacked_lstm
+from baseline.tf.tfy import pool_chars, get_shape_as_list, stacked_lstm
 
 
 class TensorFlowEmbeddings(tf.keras.layers.Layer):

@@ -1,22 +1,7 @@
 import tensorflow as tf
 from baseline.tf.tfy import tf_activation, get_shape_as_list, layer_norm, time_distributed_projection
-from baseline.tf.layers import TRAIN_FLAG
+from baseline.tf.layers import TRAIN_FLAG, FFN, split_heads, combine_heads, TransformerEncoder
 
-def split_heads(x, num_heads):
-    shp = get_shape_as_list(x)
-    dsz = shp[-1]
-    r = tf.reshape(x, shp[:-1] + [num_heads, dsz // num_heads])
-    # (B, T, num_heads, d_k) -> (B, num_heads, T, d_k)
-    return tf.transpose(r, [0, 2, 1, 3])
-
-
-def combine_heads(x):
-    x = tf.transpose(x, [0, 2, 1, 3])
-    shp = get_shape_as_list(x)
-    num_heads, head_sz = shp[-2:]
-    new_x_shape = shp[:-2]+[num_heads * head_sz]
-    new_x = tf.reshape(x, new_x_shape)
-    return new_x
 
 
 def self_attention_qkv(x, d_model, scope='self_attn'):
@@ -50,31 +35,31 @@ def multi_headed_attention(q, k, v, scope, d_model, num_heads, pdrop, scale=Fals
 
 
 def ffn(x, scope, pdrop, d_ff=None, activation_type='relu'):
-    with tf.variable_scope(scope):
-        d_model = get_shape_as_list(x)[-1]
-        if d_ff is None:
-            d_ff = 4 * d_model
-        act = tf_activation(activation_type)
-        expansion = act(time_distributed_projection(x, name='ffn_ff', filters=d_ff))
-        dropped = tf.layers.dropout(expansion, pdrop, training=TRAIN_FLAG())
-        squeeze = time_distributed_projection(dropped, name='ffn_model', filters=d_model)
-        return squeeze
+    d_model = get_shape_as_list(x)[-1]
+    return FFN(d_model, pdrop, activation_type, d_ff, name=scope)(x, training=TRAIN_FLAG())
 
+
+
+
+#def transformer_encoder(x, src_mask, scope, num_heads, pdrop, scale=True, activation_type='relu', d_ff=None):
+#
+#    with tf.variable_scope(scope):
+#        d_model = get_shape_as_list(x)[-1]
+#        if d_ff is None:
+#            d_ff = 4*d_model
+#        x = layer_norm(x, 'ln_1')
+#        q, k, v = self_attention_qkv(x, d_model)
+#        a = multi_headed_attention(q, k, v, 'attn', d_model, num_heads, pdrop, scale=scale, mask=src_mask)
+#        x = x + tf.layers.dropout(a, pdrop, training=TRAIN_FLAG())
+#        x = layer_norm(x, 'ln_2')
+#        m = ffn(x, 'ffn', pdrop, d_ff=d_ff, activation_type=activation_type)
+#        h = x + tf.layers.dropout(m, pdrop, training=TRAIN_FLAG())
+#        return h
 
 def transformer_encoder(x, src_mask, scope, num_heads, pdrop, scale=True, activation_type='relu', d_ff=None):
-
-    with tf.variable_scope(scope):
-        d_model = get_shape_as_list(x)[-1]
-        if d_ff is None:
-            d_ff = 4*d_model
-        x = layer_norm(x, 'ln_1')
-        q, k, v = self_attention_qkv(x, d_model)
-        a = multi_headed_attention(q, k, v, 'attn', d_model, num_heads, pdrop, scale=scale, mask=src_mask)
-        x = x + tf.layers.dropout(a, pdrop, training=TRAIN_FLAG())
-        x = layer_norm(x, 'ln_2')
-        m = ffn(a, 'ffn', pdrop, d_ff=d_ff, activation_type=activation_type)
-        h = x + tf.layers.dropout(m, pdrop, training=TRAIN_FLAG())
-        return h
+    d_model = get_shape_as_list(x)[-1]
+    return TransformerEncoder(d_model, num_heads, pdrop, scale, activation_type, d_ff, name=scope)(x, TRAIN_FLAG(),
+                                                                                                   src_mask)
 
 
 def transformer_decoder(src, tgt, src_mask, tgt_mask, scope, num_heads, pdrop, scale=True, activation_type='relu', d_ff=None):

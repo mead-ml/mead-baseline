@@ -5,7 +5,7 @@ from tensorflow.python.platform import gfile
 from baseline.utils import fill_y, listify, write_json, ls_props, read_json
 from baseline.model import ClassifierModel, register_model
 from baseline.tf.layers import TRAIN_FLAG, new_placeholder_dict, BiLSTMEncoder, LSTMEncoder
-from baseline.tf.tfy import parallel_conv
+from baseline.tf.tfy import parallel_conv, stacked_dense
 from baseline.tf.embeddings import *
 from baseline.version import __version__
 from tensorflow.contrib.layers import fully_connected
@@ -426,6 +426,8 @@ class ClassifierModelBase(ClassifierModel):
         word_embeddings = tf.concat(values=all_embeddings_out, axis=2)
         return word_embeddings
 
+
+
     def pool(self, word_embeddings, dsz, init, **kwargs):
         """This method performs a transformation between a temporal signal and a fixed representation
         
@@ -451,14 +453,7 @@ class ClassifierModelBase(ClassifierModel):
         """
 
         hszs = listify(kwargs.get('hsz', []))
-        if len(hszs) == 0:
-            return pooled
-
-        in_layer = pooled
-        for i, hsz in enumerate(hszs):
-            fc = tf.layers.dense(in_layer, hsz, activation=tf.nn.relu, kernel_initializer=init, name='fc-{}'.format(i))
-            in_layer = tf.layers.dropout(fc, self.pdrop_value, training=TRAIN_FLAG(), name='fc-dropout-{}'.format(i))
-        return in_layer
+        return stacked_dense(pooled, init, hszs=hszs, pdrop_value=self.pdrop_value)
 
 
 @register_model(task='classify', name='default')

@@ -1,13 +1,6 @@
-import os
 import numpy as np
-import tensorflow as tf
-from tensorflow.python.layers import core as layers_core
-from baseline.utils import lookup_sentence, beam_multinomial, Offsets
-from baseline.utils import transition_mask as transition_mask_np, listify
+from baseline.utils import transition_mask as transition_mask_np
 from baseline.tf.layers import *
-
-import math
-
 
 def _add_ema(model, decay):
     """Create ops needed to track EMA when training.
@@ -76,19 +69,6 @@ def transition_mask(vocab, span_type, s_idx, e_idx, pad_idx=None):
     return tf.constant(mask), tf.constant(inv_mask)
 
 
-def get_basepath_or_cwd(model_file):
-    """
-    inspects the model_file variable for a directory name.
-
-    if no directory is found, returns current working dir.
-    """
-    basepath = os.path.dirname(model_file)
-    if not os.path.isdir(basepath):
-        basepath = os.getcwd()
-
-    return basepath
-
-
 def dense_layer(output_layer_depth):
     output_layer = tf.keras.layers.Dense(output_layer_depth, use_bias=False, dtype=tf.float32, name="dense")
     return output_layer
@@ -121,98 +101,24 @@ def stacked_cnn(inputs, hsz, pdrop, nlayers, filts=[5], activation_fn=tf.nn.relu
     :param scope: A string name to scope this operation
     :return: a stacked CNN
     """
-    with tf.variable_scope(scope):
-        layers = []
-        for filt in filts:
-            # The first one cannot have a residual conn, since input size may differ
-            layer = tf.layers.dropout(tf.layers.conv1d(inputs,
-                                                   hsz,
-                                                   filt,
-                                                   activation=activation_fn,
-                                                   padding="same",
-                                                   name='conv{}-0'.format(filt)),
-                                  pdrop, training=training,
-                                  name='dropout{}-0'.format(filt))
-
-            for i in range(1, nlayers):
-                layer = layer + tf.layers.dropout(tf.layers.conv1d(inputs,
-                                                               hsz,
-                                                               filt,
-                                                               activation=activation_fn,
-                                                               padding="same",
-                                                               name='conv{}-{}'.format(filt, i)),
-                                              pdrop, training=training,
-                                              name='dropout{}-{}'.format(filt, i))
-            layers.append(layer)
-
-        return tf.concat(values=layers, axis=2)
+    return StackedParallelConvEncoder(get_shape_as_list(inputs)[-1], hsz, pdrop, nlayers, filts, activation_fn)(inputs, training)
 
 
-def skip_conns_layers(inputs, wsz_all, n, activation_fn='relu'):
+def skip_conns(inputs, wsz_all, n, activation_fn='relu'):
     x = inputs
     for i in range(n):
         x = SkipConnection(wsz_all, activation_fn)(x)
     return x
 
 
-def skip_conns(inputs, wsz_all, n, activation_fn='relu', use_layers=True):
-    """Produce one or more skip connection layers
-
-    :param inputs: The sub-graph input
-    :param wsz_all: The number of units
-    :param n: How many layers of gating
-    :return: graph output
-    """
-    if use_layers:
-        return skip_conns_layers(inputs, wsz_all, n, activation_fn)
-    activation_fn = tf_activation(activation_fn)
-    for i in range(n):
-        with tf.variable_scope("skip-%d" % i):
-            W_p = tf.get_variable("W_p", [wsz_all, wsz_all])
-            b_p = tf.get_variable("B_p", [1, wsz_all], initializer=tf.constant_initializer(0.0))
-            proj = activation_fn(tf.matmul(inputs, W_p) + b_p, "skip_activation")
-
-        inputs = inputs + proj
-    return inputs
-
-
-def highway_conns_layers(inputs, wsz_all, n):
+def highway_conns(inputs, wsz_all, n):
     x = inputs
     for i in range(n):
-        x = Highway(wsz_all)(x)
+        x = Highway(wsz_all, name="highway-{}".format(i))(x)
     return x
 
 
-def highway_conns(inputs, wsz_all, n, use_layers=True):
-    """Produce one or more highway connection layers
-
-    :param inputs: The sub-graph input
-    :param wsz_all: The number of units
-    :param n: How many layers of gating
-    :return: graph output
-    """
-    if use_layers:
-        return highway_conns_layers(inputs, wsz_all, n)
-
-    for i in range(n):
-        with tf.variable_scope("highway-%d" % i):
-            W_p = tf.get_variable("W_p", [wsz_all, wsz_all])
-            b_p = tf.get_variable("B_p", [1, wsz_all], initializer=tf.constant_initializer(0.0))
-            proj = tf.nn.relu(tf.matmul(inputs, W_p) + b_p, "relu-proj")
-
-            W_t = tf.get_variable("W_t", [wsz_all, wsz_all])
-            b_t = tf.get_variable("B_t", [1, wsz_all], initializer=tf.constant_initializer(-2.0))
-            transform = tf.nn.sigmoid(tf.matmul(inputs, W_t) + b_t, "sigmoid-transform")
-
-        inputs = tf.multiply(transform, proj) + tf.multiply(inputs, 1 - transform)
-    return inputs
-
-
-def parallel_conv_layers(input_, filtsz, dsz, motsz, activation_fn='relu'):
-    return ParallelConv(dsz, motsz, filtsz, activation_fn)(input_)
-
-
-def parallel_conv(input_, filtsz, dsz, motsz, activation_fn='relu', use_layers=True):
+def parallel_conv(input_, filtsz, dsz, motsz, activation_fn='relu'):
     """Do parallel convolutions with multiple filter widths and max-over-time pooling.
 
     :param input_: The inputs in the shape [B, T, H].
@@ -223,37 +129,10 @@ def parallel_conv(input_, filtsz, dsz, motsz, activation_fn='relu', use_layers=T
     :Keyword Arguments:
     * *activation_fn* -- (``callable``) The activation function to apply after the convolution and bias add
     """
-    if use_layers:
-        return parallel_conv_layers(input_, filtsz, dsz, motsz, activation_fn)
-    if not isinstance(motsz, list):
-        motsz = [motsz] * len(filtsz)
-    DUMMY_AXIS = 1
-    TIME_AXIS = 2
-    FEATURE_AXIS = 3
-    expanded = tf.expand_dims(input_, DUMMY_AXIS)
-    mots = []
-    for fsz, cmotsz in zip(filtsz, motsz):
-        with tf.variable_scope('cmot-%s' % fsz):
-            kernel_shape = [1, fsz, dsz, cmotsz]
-            W = tf.get_variable('W', kernel_shape)
-            b = tf.get_variable(
-                'b', [cmotsz],
-                initializer=tf.constant_initializer(0.0)
-            )
-            conv = tf.nn.conv2d(
-                expanded, W,
-                strides=[1, 1, 1, 1],
-                padding="SAME", name="CONV"
-            )
-            activation = activation_fn(tf.nn.bias_add(conv, b), 'activation')
-            mot = tf.reduce_max(activation, [TIME_AXIS], keepdims=True)
-            mots.append(mot)
-    motsz_all = sum(motsz)
-    combine = tf.reshape(tf.concat(values=mots, axis=FEATURE_AXIS), [-1, motsz_all])
-    return combine
+    return ParallelConv(dsz, motsz, filtsz, activation_fn)(input_)
 
 
-def time_distributed_projection(x, name, filters, w_init=None, b_init=tf.constant_initializer(0)):
+def time_distributed_projection(x, name, filters):
     """Low-order projection (embedding) by flattening the batch and time dims and matmul
 
     :param x: The input tensor
@@ -263,15 +142,8 @@ def time_distributed_projection(x, name, filters, w_init=None, b_init=tf.constan
     :param b_init: An optional bias initializer
     :return:
     """
-    with tf.variable_scope(name):
-        shp = get_shape_as_list(x)
-        nx = shp[-1]
-        w = tf.get_variable("W", [nx, filters], initializer=w_init)
-        b = tf.get_variable("b", [filters], initializer=b_init)
-        collapse = tf.reshape(x, [-1, nx])
-        c = tf.matmul(collapse, w)+b
-        c = tf.reshape(c, shp[:-1] + [filters])
-        return c
+    return TimeDistributedProjection(filters, name)(x)
+
 
 def char_word_conv_embeddings(char_vec, filtsz, char_dsz, nfeats, activation_fn=tf.nn.tanh, gating=skip_conns, num_gates=1):
     """This wrapper takes in a character vector as input and performs parallel convolutions on it, followed by a
@@ -340,18 +212,95 @@ def pool_chars(x_char, Wch, ce0, char_dsz, nfeat_factor=None,
     return word_char, num_filts
 
 
+def stacked_lstm(hsz, pdrop, nlayers, variational=False, training=False):
+    """Produce a stack of LSTMs with dropout performed on all but the last layer.
+
+    :param hsz: (``int``) The number of hidden units per LSTM
+    :param pdrop: (``int``) The probability of dropping a unit value during dropout
+    :param nlayers: (``int``) The number of layers of LSTMs to stack
+    :param variational (``bool``) variational recurrence is on
+    :param training (``bool``) Are we training? (defaults to ``False``)
+    :return: a stacked cell
+    """
+    if variational:
+        return tf.contrib.rnn.MultiRNNCell(
+            [lstm_cell_w_dropout(hsz, pdrop, variational=variational, training=training) for _ in range(nlayers)],
+            state_is_tuple=True
+        )
+    return tf.contrib.rnn.MultiRNNCell(
+        [lstm_cell_w_dropout(hsz, pdrop, training=training) if i < nlayers - 1 else lstm_cell(hsz) for i in range(nlayers)],
+        state_is_tuple=True
+    )
+
+
+def stacked_dense(inputs, init, hszs=[], pdrop_value=0.5):
+    """Stack 1 or more hidden layers, optionally (forming an MLP)
+
+    :param pooled: The fixed representation of the model
+    :param init: The tensorflow initializer
+    :param hsz -- (``list``) The list of number of hidden units (defaults to `[]`, indicating no stacking)
+
+    :return: The final layer
+    """
+    return DenseStack(hszs, pdrop_value=pdrop_value, init=init)(inputs)
+
+
 def layer_norm(input, name, axis=[-1]):
 
-    def _norm(x, g=None, b=None, e=1e-5, axis=[1]):
-        u = tf.reduce_mean(x, axis=axis, keepdims=True)
-        s = tf.reduce_mean(tf.square(x-u), axis=axis, keepdims=True)
-        x = (x - u) * tf.rsqrt(s + e)
-        if g is not None and b is not None:
-            x = x*g + b
-        return x
+    return LayerNorm(name=name, axis=axis)(input)
+    #def _norm(x, g=None, b=None, e=1e-5, axis=[1]):
+    #    u = tf.reduce_mean(x, axis=axis, keepdims=True)
+    #    s = tf.reduce_mean(tf.square(x-u), axis=axis, keepdims=True)
+    #    x = (x - u) * tf.rsqrt(s + e)
+    #    if g is not None and b is not None:
+    #        x = x*g + b
+    #    return x
+    #
+    #with tf.variable_scope(name):
+    #    n_state = input.get_shape().as_list()[-1]
+    #    gv = tf.get_variable("g", [n_state], initializer=tf.constant_initializer(1))
+    #    bv = tf.get_variable("b", [n_state], initializer=tf.constant_initializer(0))
+    #    return _norm(input, gv, bv, axis=axis)
 
-    with tf.variable_scope(name):
-        n_state = input.get_shape().as_list()[-1]
-        gv = tf.get_variable("g", [n_state], initializer=tf.constant_initializer(1))
-        bv = tf.get_variable("b", [n_state], initializer=tf.constant_initializer(0))
-        return _norm(input, gv, bv, axis=axis)
+
+def rnn_cell_w_dropout(hsz, pdrop, rnntype, st=None, variational=False, training=False):
+
+    """Produce a single RNN cell with dropout
+
+    :param hsz: (``int``) The number of hidden units per LSTM
+    :param rnntype: (``str``): `lstm` or `gru`
+    :param pdrop: (``int``) The probability of dropping a unit value during dropout
+    :param st: (``bool``) state is tuple? defaults to `None`
+    :param variational: (``bool``) Variational recurrence is on
+    :param training: (``bool``) Are we training?  Defaults to ``False``
+    :return: a cell
+    """
+    output_keep_prob = tf.contrib.framework.smart_cond(training, lambda: 1.0 - pdrop, lambda: 1.0)
+    state_keep_prob = tf.contrib.framework.smart_cond(training, lambda: 1.0 - pdrop if variational else 1.0, lambda: 1.0)
+    cell = rnn_cell(hsz, rnntype, st)
+    output = tf.contrib.rnn.DropoutWrapper(cell,
+                                           output_keep_prob=output_keep_prob,
+                                           state_keep_prob=state_keep_prob,
+                                           variational_recurrent=variational,
+                                           dtype=tf.float32)
+    return output
+
+
+def multi_rnn_cell_w_dropout(hsz, pdrop, rnntype, num_layers, variational=False, training=False):
+    """Produce a stack of RNNs with dropout performed on all but the last layer.
+
+    :param hsz: (``int``) The number of hidden units per RNN
+    :param pdrop: (``int``) The probability of dropping a unit value during dropout
+    :param rnntype: (``str``) The type of RNN to use - `lstm` or `gru`
+    :param num_layers: (``int``) The number of layers of RNNs to stack
+    :param training: (``bool``) Are we training? Defaults to ``False``
+    :return: a stacked cell
+    """
+    if variational:
+        return tf.contrib.rnn.MultiRNNCell(
+            [rnn_cell_w_dropout(hsz, pdrop, rnntype, variational=variational, training=training) for _ in range(num_layers)],
+            state_is_tuple=True
+        )
+    return tf.contrib.rnn.MultiRNNCell(
+        [rnn_cell_w_dropout(hsz, pdrop, rnntype, training=training) if i < num_layers - 1 else rnn_cell_w_dropout(hsz, 1.0, rnntype) for i in range(num_layers)],
+        state_is_tuple=True)
