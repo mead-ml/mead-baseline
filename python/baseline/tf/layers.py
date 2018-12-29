@@ -114,26 +114,6 @@ class ParallelConv(tf.keras.layers.Layer):
         return False
 
 
-class ParallelConvK(tf.keras.Model):
-
-    def __init__(self, filtsz, motsz, activation='relu'):
-        super(ParallelConvK, self).__init__()
-        self.cmots = []
-        for i, fsz in enumerate(filtsz):
-            self.cmots.append(tf.keras.Sequential([tf.keras.layers.Conv1D(motsz, fsz, activation=activation),
-                                                   tf.keras.layers.GlobalMaxPooling1D()]))
-
-    def call(self, inputs):
-        mots = []
-        for cmot in self.cmots:
-            mots.append(cmot(inputs))
-        return tf.concat(mots, -1)
-
-    @property
-    def requires_length(self):
-        return False
-
-
 def tensor_and_lengths(inputs):
     if isinstance(inputs, (list, tuple)):
         in_tensor, lengths = inputs
