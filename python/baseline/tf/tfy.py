@@ -208,21 +208,16 @@ def stacked_dense(inputs, init, hszs=[], pdrop_value=0.5):
 
 
 def layer_norm(input, name, axis=[-1]):
-
     return LayerNorm(name=name, axis=axis)(input)
-    #def _norm(x, g=None, b=None, e=1e-5, axis=[1]):
-    #    u = tf.reduce_mean(x, axis=axis, keepdims=True)
-    #    s = tf.reduce_mean(tf.square(x-u), axis=axis, keepdims=True)
-    #    x = (x - u) * tf.rsqrt(s + e)
-    #    if g is not None and b is not None:
-    #        x = x*g + b
-    #    return x
-    #
-    #with tf.variable_scope(name):
-    #    n_state = input.get_shape().as_list()[-1]
-    #    gv = tf.get_variable("g", [n_state], initializer=tf.constant_initializer(1))
-    #    bv = tf.get_variable("b", [n_state], initializer=tf.constant_initializer(0))
-    #    return _norm(input, gv, bv, axis=axis)
+
+
+def lstm_encoder(embedseq, lengths, hsz, pdrop_value=0.5, variational_dropout=False, rnntype='blstm', layers=1):
+
+    if rnntype == 'blstm':
+        Encoder = BiLSTMEncoder
+    else:
+        Encoder = LSTMEncoder
+    return Encoder(hsz, pdrop_value, layers, variational_dropout, rnn_signal)((embedseq, lengths), training=TRAIN_FLAG())
 
 
 def rnn_cell_w_dropout(hsz, pdrop, rnntype, st=None, variational=False, training=False):
@@ -267,25 +262,3 @@ def multi_rnn_cell_w_dropout(hsz, pdrop, rnntype, num_layers, variational=False,
         [rnn_cell_w_dropout(hsz, pdrop, rnntype, training=training) if i < num_layers - 1 else rnn_cell_w_dropout(hsz, 1.0, rnntype) for i in range(num_layers)],
         state_is_tuple=True)
 
-
-#def lstm_encoder(self, embedseq, lengths, hsz, variational_dropout=False, rnntype='blstm', layers=1, **kwargs):
-#    if rnntype == 'blstm':
-#        rnnfwd = stacked_lstm(hsz//2, self.pdrop_value, layers, variational_dropout, training=TRAIN_FLAG())
-#        rnnbwd = stacked_lstm(hsz//2, self.pdrop_value, layers, variational_dropout, training=TRAIN_FLAG())
-#        rnnout, _ = tf.nn.bidirectional_dynamic_rnn(rnnfwd, rnnbwd, embedseq, sequence_length=lengths, dtype=tf.float32)
-#        # The output of the BRNN function needs to be joined on the H axis
-#        rnnout = tf.concat(axis=2, values=rnnout)
-#    else:
-#        rnnfwd = stacked_lstm(hsz, self.pdrop_value, layers, variational_dropout, training=TRAIN_FLAG())
-#        rnnout, _ = tf.nn.dynamic_rnn(rnnfwd, embedseq, sequence_length=lengths, dtype=tf.float32)
-#    return rnnout
-
-
-def lstm_encoder(embedseq, lengths, hsz, pdrop_value=0.5, variational_dropout=False, rnntype='blstm', layers=1):
-
-    if rnntype == 'blstm':
-        Encoder = BiLSTMEncoder
-    else:
-        Encoder = LSTMEncoder
-
-    return Encoder(hsz, pdrop_value, layers, variational_dropout, rnn_signal)((embedseq, lengths), training=TRAIN_FLAG())
