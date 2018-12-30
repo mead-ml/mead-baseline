@@ -333,16 +333,8 @@ class RNNTaggerModel(TaggerModelBase):
         rnntype = kwargs.get('rnntype', 'blstm')
         nlayers = kwargs.get('layers', 1)
         hsz = int(kwargs['hsz'])
-        if rnntype == 'blstm':
-            rnnfwd = stacked_lstm(hsz//2, self.pdrop_value, nlayers, self.vdrop, training=TRAIN_FLAG())
-            rnnbwd = stacked_lstm(hsz//2, self.pdrop_value, nlayers, self.vdrop, training=TRAIN_FLAG())
-            rnnout, _ = tf.nn.bidirectional_dynamic_rnn(rnnfwd, rnnbwd, embedseq, sequence_length=self.lengths, dtype=tf.float32)
-            # The output of the BRNN function needs to be joined on the H axis
-            rnnout = tf.concat(axis=2, values=rnnout)
-        else:
-            rnnfwd = stacked_lstm(hsz, self.pdrop_value, nlayers, self.vdrop, training=TRAIN_FLAG())
-            rnnout, _ = tf.nn.dynamic_rnn(rnnfwd, embedseq, sequence_length=self.lengths, dtype=tf.float32)
-        return rnnout
+        return lstm_encoder(embedseq, self.lengths, hsz, self.pdrop_value, self.vdrop, rnntype, nlayers)
+
 
 
 @register_model(task='tagger', name='cnn')

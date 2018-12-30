@@ -90,17 +90,6 @@ def tie_weight(weight, tie_shape):
 
 
 def stacked_cnn(inputs, hsz, pdrop, nlayers, filts=[5], activation_fn=tf.nn.relu, scope='StackedCNN', training=False):
-    """Produce a stack of parallel or single convolution layers with residual connections and dropout between each
-
-    :param inputs: The input
-    :param hsz: (``int``) The number of hidden units per filter
-    :param pdrop: (``float``) The probability of dropout
-    :param nlayers: (``int``) The number of layers of parallel convolutions to stack
-    :param filts: (``list``) A list of parallel filter widths to apply
-    :param activation_fn: (``func``) A function for activation
-    :param scope: A string name to scope this operation
-    :return: a stacked CNN
-    """
     return StackedParallelConvEncoder(get_shape_as_list(inputs)[-1], hsz, pdrop, nlayers, filts, activation_fn)(inputs, training)
 
 
@@ -119,29 +108,10 @@ def highway_conns(inputs, wsz_all, n):
 
 
 def parallel_conv(input_, filtsz, dsz, motsz, activation_fn='relu'):
-    """Do parallel convolutions with multiple filter widths and max-over-time pooling.
-
-    :param input_: The inputs in the shape [B, T, H].
-    :param filtsz: The list of filter widths to use.
-    :param dsz: The depths of the input (H).
-    :param motsz: The number of conv filters to use (can be an int or a list to allow for various sized filters)
-    :param activation_fn: The activation function to use (`default=tf.nn.relu`)
-    :Keyword Arguments:
-    * *activation_fn* -- (``callable``) The activation function to apply after the convolution and bias add
-    """
     return ParallelConv(dsz, motsz, filtsz, activation_fn)(input_)
 
 
 def time_distributed_projection(x, name, filters):
-    """Low-order projection (embedding) by flattening the batch and time dims and matmul
-
-    :param x: The input tensor
-    :param name: The name for this scope
-    :param filters: The number of feature maps out
-    :param w_init: An optional weight initializer
-    :param b_init: An optional bias initializer
-    :return:
-    """
     return TimeDistributedProjection(filters, name)(x)
 
 
@@ -234,14 +204,6 @@ def stacked_lstm(hsz, pdrop, nlayers, variational=False, training=False):
 
 
 def stacked_dense(inputs, init, hszs=[], pdrop_value=0.5):
-    """Stack 1 or more hidden layers, optionally (forming an MLP)
-
-    :param pooled: The fixed representation of the model
-    :param init: The tensorflow initializer
-    :param hsz -- (``list``) The list of number of hidden units (defaults to `[]`, indicating no stacking)
-
-    :return: The final layer
-    """
     return DenseStack(hszs, pdrop_value=pdrop_value, init=init)(inputs)
 
 
@@ -304,3 +266,26 @@ def multi_rnn_cell_w_dropout(hsz, pdrop, rnntype, num_layers, variational=False,
     return tf.contrib.rnn.MultiRNNCell(
         [rnn_cell_w_dropout(hsz, pdrop, rnntype, training=training) if i < num_layers - 1 else rnn_cell_w_dropout(hsz, 1.0, rnntype) for i in range(num_layers)],
         state_is_tuple=True)
+
+
+#def lstm_encoder(self, embedseq, lengths, hsz, variational_dropout=False, rnntype='blstm', layers=1, **kwargs):
+#    if rnntype == 'blstm':
+#        rnnfwd = stacked_lstm(hsz//2, self.pdrop_value, layers, variational_dropout, training=TRAIN_FLAG())
+#        rnnbwd = stacked_lstm(hsz//2, self.pdrop_value, layers, variational_dropout, training=TRAIN_FLAG())
+#        rnnout, _ = tf.nn.bidirectional_dynamic_rnn(rnnfwd, rnnbwd, embedseq, sequence_length=lengths, dtype=tf.float32)
+#        # The output of the BRNN function needs to be joined on the H axis
+#        rnnout = tf.concat(axis=2, values=rnnout)
+#    else:
+#        rnnfwd = stacked_lstm(hsz, self.pdrop_value, layers, variational_dropout, training=TRAIN_FLAG())
+#        rnnout, _ = tf.nn.dynamic_rnn(rnnfwd, embedseq, sequence_length=lengths, dtype=tf.float32)
+#    return rnnout
+
+
+def lstm_encoder(embedseq, lengths, hsz, pdrop_value=0.5, variational_dropout=False, rnntype='blstm', layers=1):
+
+    if rnntype == 'blstm':
+        Encoder = BiLSTMEncoder
+    else:
+        Encoder = LSTMEncoder
+
+    return Encoder(hsz, pdrop_value, layers, variational_dropout, rnn_signal)((embedseq, lengths), training=TRAIN_FLAG())
