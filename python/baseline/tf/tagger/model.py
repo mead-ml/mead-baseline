@@ -325,7 +325,6 @@ class RNNTaggerModel(TaggerModelBase):
         Encoder = BiLSTMEncoder if rnntype == 'blstm' else LSTMEncoder
         return Encoder(hsz, nlayers, self.pdrop_value, self.vdrop, rnn_signal)
 
-
 @register_model(task='tagger', name='cnn')
 class CNNTaggerModel(TaggerModelBase):
 

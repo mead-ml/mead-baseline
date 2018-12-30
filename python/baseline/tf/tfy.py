@@ -142,12 +142,12 @@ def stacked_cnn(inputs, hsz, pdrop, nlayers, filts=[5], activation_fn=tf.nn.relu
     return ParallelConvEncoderStack(get_shape_as_list(inputs)[-1], hsz, pdrop, nlayers, filts, activation_fn)(inputs, training)
 
 
-
 def skip_conns(inputs, wsz_all, n, activation_fn='relu'):
     x = inputs
     for i in range(n):
         x = SkipConnection(wsz_all, activation_fn)(x)
     return x
+
 
 def layer_norm(input, name, axis=[-1]):
     return LayerNorm(name=name, axis=axis)(input)
@@ -262,29 +262,10 @@ def highway_conns(inputs, wsz_all, n):
 
 
 def parallel_conv(input_, filtsz, dsz, motsz, activation_fn='relu'):
-    """Do parallel convolutions with multiple filter widths and max-over-time pooling.
-
-    :param input_: The inputs in the shape [B, T, H].
-    :param filtsz: The list of filter widths to use.
-    :param dsz: The depths of the input (H).
-    :param motsz: The number of conv filters to use (can be an int or a list to allow for various sized filters)
-    :param activation_fn: The activation function to use (`default=tf.nn.relu`)
-    :Keyword Arguments:
-    * *activation_fn* -- (``callable``) The activation function to apply after the convolution and bias add
-    """
     return ParallelConv(dsz, motsz, filtsz, activation_fn)(input_)
 
 
 def time_distributed_projection(x, name, filters):
-    """Low-order projection (embedding) by flattening the batch and time dims and matmul
-
-    :param x: The input tensor
-    :param name: The name for this scope
-    :param filters: The number of feature maps out
-    :param w_init: An optional weight initializer
-    :param b_init: An optional bias initializer
-    :return:
-    """
     return TimeDistributedProjection(filters, name)(x)
 
 
@@ -360,13 +341,4 @@ def pool_chars(x_char, Wch, ce0, char_dsz, nfeat_factor=None,
     return word_char, num_filts
 
 def stacked_dense(inputs, init, hszs=[], pdrop_value=0.5):
-    """Stack 1 or more hidden layers, optionally (forming an MLP)
-
-    :param pooled: The fixed representation of the model
-    :param init: The tensorflow initializer
-    :param hsz -- (``list``) The list of number of hidden units (defaults to `[]`, indicating no stacking)
-
-    :return: The final layer
-    """
     return DenseStack(hszs, pdrop_value=pdrop_value, init=init)(inputs)
-
