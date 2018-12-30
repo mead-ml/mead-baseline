@@ -19,12 +19,12 @@
                 "type": "token1d",
                 "fields": "text"
             },
-            "embeddings": {"label": "w2v-gn", "type": "positional"}
+            "embeddings": {"dsz": 640, "type": "positional"}
         }
 
     ],
     "model": {
-        "model_type": "default",
+        "model_type": "transformer",
         "hsz": 640,
         "layers": 2,
         "pdrop": 0.5
