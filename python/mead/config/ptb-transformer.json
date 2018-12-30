@@ -20,6 +20,7 @@
                 "fields": "text"
             },
             "embeddings": {"dsz":  300, "type": "positional"}
+
         }
 
     ],

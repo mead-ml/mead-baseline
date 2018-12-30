@@ -287,7 +287,6 @@ class LayerNorm(tf.keras.layers.Layer):
         return x
 
 
-
 class LSTMEncoder(tf.keras.Model):
 
     def __init__(self, hsz, pdrop, nlayers, variational=False, output_fn=None, requires_length=True, name=None, **kwargs):
@@ -531,7 +530,7 @@ def scaled_dot_product_attention(query, key, value, pdrop=0.0, mask=None, traini
 
     weights = tf.nn.softmax(w, name="attention_weights")
     weights = tf.layers.dropout(weights, pdrop, training=training)
-    return tf.matmul(weights, value)
+    return tf.matmul(weights, value), weights
 
 
 def dot_product_attention(query, key, value, pdrop=0.0, mask=None, training=False):
@@ -542,7 +541,7 @@ def dot_product_attention(query, key, value, pdrop=0.0, mask=None, training=Fals
 
     weights = tf.nn.softmax(w, name="attention_weights")
     weights = tf.layers.dropout(weights, pdrop, training=training)
-    return tf.matmul(weights, value)
+    return tf.matmul(weights, value), weights
 
 
 def split_heads(x, num_heads):
@@ -605,16 +604,13 @@ class MultiHeadedAttention(tf.keras.Model):
 
     def call(self, qkv, training=False, mask=None):
         query, key, value = qkv
-        batchsz = query.size(0)
 
         # (B, H, T, D)
         query = split_heads(self.w_Q(query), self.h)
         key = split_heads(self.w_K(key), self.h)
         value = split_heads(self.w_V(value), self.h)
         x, self.attn = self.attn_fn(query, key, value, mask=mask, pdrop=self.dropout)
-
-        x = x.transpose(1, 2).contiguous() \
-            .view(batchsz, -1, self.h * self.d_k)
+        x = combine_heads(x)
         return self.w_O(x)
 
 
@@ -680,14 +676,14 @@ class TransformerEncoderStack(tf.keras.Model):
 
     def __init__(self, d_model, num_heads, pdrop, scale=True, layers=1, activation_type='relu', d_ff=None, name=None, **kwargs):
         super(TransformerEncoderStack, self).__init__(name=name)
-        self.layers = []
+        self.encoders = []
         self.ln = LayerNorm(name='ln_out')
         for i in range(layers):
-            self.layers.append(TransformerEncoder(d_model, num_heads, pdrop, scale, activation_type, d_ff))
+            self.encoders.append(TransformerEncoder(d_model, num_heads, pdrop, scale, activation_type, d_ff))
 
     def call(self, inputs, training=False, mask=None):
         x = inputs
-        for layer in self.layers:
+        for layer in self.encoders:
             x = layer(x, training, mask)
         return self.ln(x)
 
@@ -695,14 +691,14 @@ class TransformerEncoderStack(tf.keras.Model):
 class TransformerDecoderStack(tf.keras.Model):
     def __init__(self, d_model, num_heads, pdrop, scale=True, layers=1, activation_type='relu', d_ff=None, name=None, **kwargs):
         super(TransformerDecoderStack, self).__init__()
-        self.layers = []
+        self.decoders = []
         self.ln = LayerNorm(name='ln_out')
         for i in range(layers):
-            self.layers.append(TransformerDecoder(d_model, num_heads, pdrop, scale, activation_type, d_ff, name))
+            self.decoders.append(TransformerDecoder(d_model, num_heads, pdrop, scale, activation_type, d_ff, name))
 
     def call(self, inputs, training=False, mask=None):
         x = inputs
-        for layer in self.layers:
+        for layer in self.decoders:
             x = layer(x, training, mask)
         return self.ln(x)
 
