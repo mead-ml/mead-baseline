@@ -1,5 +1,6 @@
 import tensorflow as tf
-from baseline.utils import listify
+import numpy as np
+from baseline.utils import listify, Offsets
 import math
 BASELINE_TF_TRAIN_FLAG = None
 
@@ -588,20 +589,86 @@ class TransformerEncoder(tf.keras.Model):
         if d_ff is None:
             d_ff = 4*d_model
         self.ln1 = LayerNorm(name='ln_1')
-        self.multi_head_attention = MultiHeadedAttention(num_heads, d_model, pdrop, scale)
+        self.self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale)
         self.dropout = tf.keras.layers.Dropout(pdrop)
         self.ln2 = LayerNorm(name='ln_2')
-        self.ffn = FFN(d_model, pdrop, activation_type, d_ff, name='ffn')
+        self.feed_forward = FFN(d_model, pdrop, activation_type, d_ff, name='ffn')
 
     def call(self, inputs, training=False, mask=None):
         x = inputs
+
         x = self.ln1(x)
-        x = self.multi_head_attention((x, x, x), training, mask)
-        x = x + self.dropout(x, training)
+        x = x + self.dropout(self.self_attn((x, x, x), training, mask), training)
+
         x = self.ln2(x)
-        x = self.ffn(x, training, mask)
-        x = x + self.dropout(x, training)
+
+        x = x + self.dropout(self.feed_forward(x, training, mask), training)
         return x
+
+
+class TransformerDecoder(tf.keras.Model):
+
+    def __init__(self, d_model, num_heads, pdrop, scale=True, activation_type='relu', d_ff=None, name=None):
+        super(TransformerEncoder, self).__init__(name=name)
+        if d_ff is None:
+            d_ff = 4*d_model
+
+        self.self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale)
+        self.src_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale)
+        self.dropout = tf.keras.layers.Dropout(pdrop)
+        self.ln1 = LayerNorm(name='ln_1')
+        self.ln2 = LayerNorm(name='ln_2')
+        self.ln3 = LayerNorm(name='ln_3')
+        self.feed_forward = FFN(d_model, pdrop, activation_type, d_ff, name='ffn')
+
+    def call(self, inputs, training=False, mask=None):
+        memory, x = inputs
+        x = self.ln1(x)
+        src_mask = None
+        tgt_mask = None
+        if mask is not None:
+            src_mask, tgt_mask = mask
+
+        x = self.ln1(x)
+        x = x + self.dropout(self.self_attn((x, x, x), training, tgt_mask))
+
+        x = self.ln2(x)
+        x = x + self.dropout(self.src_attn((x, memory, memory), src_mask))
+
+        x = self.ln3(x)
+        x = x + self.dropout(self.feed_forward(x, training, mask))
+        return x
+
+
+class TransformerEncoderStack(tf.keras.Model):
+
+    def __init__(self, d_model, num_heads, pdrop, scale=True, layers=1, activation_type='relu', d_ff=None, name=None):
+        super(TransformerEncoderStack, self).__init__(name=name)
+        self.layers = []
+        self.ln = LayerNorm(name='ln_out')
+        for i in range(layers):
+            self.layers.append(TransformerEncoder(d_model, num_heads, pdrop, scale, activation_type, d_ff))
+
+    def call(self, inputs, training=False, mask=None):
+        x = inputs
+        for layer in self.layers:
+            x = layer(x, training, mask)
+        return self.ln(x)
+
+
+class TransformerDecoderStack(tf.keras.Model):
+    def __init__(self, d_model, num_heads, pdrop, scale=True, layers=1, activation_type='relu', d_ff=None, name=None):
+        super(TransformerDecoderStack, self).__init__()
+        self.layers = []
+        self.ln = LayerNorm(name='ln_out')
+        for i in range(layers):
+            self.layers.append(TransformerDecoder(d_model, num_heads, pdrop, scale, activation_type, d_ff, name))
+
+    def call(self, inputs, training=False, mask=None):
+        x = inputs
+        for layer in self.layers:
+            x = layer(x, training, mask)
+        return self.ln(x)
 
 
 class FFN(tf.keras.Model):
@@ -661,4 +728,90 @@ class EmbedPoolStackModel(tf.keras.Model):
         return self.output_layer(stacked)
 
 
+class CRF(tf.keras.layers.Layer):
 
+    def __init__(self, num_tags, constraint_mask=None, name=None):
+        """Initialize the object.
+        :param n_tags: int, The number of tags in your output (emission size)
+        :param idxs: Tuple(int. int), The index of the start and stop symbol
+            in emissions.
+        :param batch_first: bool, if the input [B, T, ...] or [T, B, ...]
+        :param mask: torch.ByteTensor, Constraints on the transitions [1, N, N]
+
+        Note:
+            if idxs is none then the CRF adds these symbols to the emission
+            vectors and n_tags is assumed to be the number of output tags.
+            if idxs is not none then the first element is assumed to be the
+            start index and the second idx is assumed to be the end index. In
+            this case n_tags is assumed to include the start and end symbols.
+        """
+        super(CRF, self).__init__(name=name)
+
+        self.A = self.add_variable("transitions_raw", shape=(num_tags, num_tags), dtype=tf.float32)
+        self.num_tags = num_tags
+        self.mask = None
+        self.inv_mask = None
+        if constraint_mask is not None:
+            self.mask, inv_mask = constraint_mask
+            self.inv_mask = inv_mask * tf.constant(-1e4)
+
+    @property
+    def transitions(self):
+        if self.inv_mask is not None:
+            return (self.A * self.mask) + self.inv_mask
+        return self.A
+
+    def score_sentence(self, unary, tags, lengths):
+        """Score a batch of sentences.
+
+        :param unary: torch.FloatTensor: [T, B, N]
+        :param tags: torch.LongTensor: [T, B]
+        :param lengths: torch.LongTensor: [B]
+        :param batzh_size: int: B
+        :param min_length: torch.LongTensor: []
+
+        :return: torch.FloatTensor: [B]
+        """
+        return tf.contrib.crf.crf_sequence_score(unary, tags, lengths, self.transitions)
+
+    def call(self, inputs, training=False, mask=None):
+
+        unary, lengths = inputs
+        if training:
+            return tf.contrib.crf.crf_log_norm(unary, lengths, self.transitions)
+
+        else:
+            return self.decode(unary, lengths)
+
+    def decode(self, unary, lengths):
+        """Do Viterbi decode on a batch.
+
+        :param unary: torch.FloatTensor: [T, B, N] or [B, T, N]
+        :param lengths: torch.LongTensor: [B]
+
+        :return: List[torch.LongTensor]: [B] the paths
+        :return: torch.FloatTensor: [B] the path score
+        """
+        bsz = tf.shape(unary)[0]
+        lsz = self.num_tags
+        np_gos = np.full((1, 1, lsz), -1e4, dtype=np.float32)
+        np_gos[:, :, Offsets.GO] = 0
+        gos = tf.constant(np_gos)
+        start = tf.tile(gos, [bsz, 1, 1])
+        probv = tf.concat([start, unary], axis=1)
+        viterbi, _ = tf.contrib.crf.crf_decode(probv, self.transitions, lengths + 1)
+        return tf.identity(viterbi[:, 1:], name="best")
+
+    def neg_log_loss(self, unary, tags, lengths):
+        """Neg Log Loss with a Batched CRF.
+
+        :param unary: torch.FloatTensor: [T, B, N] or [B, T, N]
+        :param tags: torch.LongTensor: [T, B] or [B, T]
+        :param lengths: torch.LongTensor: [B]
+
+        :return: torch.FloatTensor: [B]
+        """
+        fwd_score = self((unary, lengths), training=True)
+        gold_score = self.score_sentence(unary, tags, lengths)
+        log_likelihood = gold_score - fwd_score
+        return -tf.reduce_mean(log_likelihood)
