@@ -174,6 +174,8 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
     def __init__(self, name, **kwargs):
         super(CharConvEmbeddings, self).__init__()
 
+
+
         self._name = name
         self.scope = kwargs.get('scope', '{}/CharLUT'.format(self.name))
         self.vsz = kwargs.get('vsz')
@@ -192,6 +194,11 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
         if self._weights is None:
             unif = kwargs.get('unif', 0.1)
             self._weights = np.random.uniform(-unif, unif, (self.vsz, self.dsz))
+
+        self.Wch = self.add_variable('{}/Wch'.format(self.scope),
+                                     initializer=tf.constant_initializer(self._weights, dtype=tf.float32,
+                                                                         verify_shape=True),
+                                     shape=[self.vsz, self.dsz], trainable=True)
 
     def detached_ref(self):
         """This will detach any attached input and reference the same sub-graph otherwise
@@ -213,15 +220,12 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
         if x is None:
             x = CharConvEmbeddings.create_placeholder(self.name)
         self.x = x
-        with tf.variable_scope(self.scope):
-            Wch = tf.get_variable("Wch",
-                                  initializer=tf.constant_initializer(self._weights, dtype=tf.float32, verify_shape=True),
-                                  shape=[self.vsz, self.dsz], trainable=True)
-            ech0 = tf.scatter_update(Wch, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, self.dsz]))
-            char_comp, self.wsz = pool_chars(x, Wch, ech0, self.dsz, self.nfeat_factor,
-                                  self.cfiltsz, self.max_feat, self.gating, 
-                                  self.num_gates, self.activation, self.wsz)
-            return char_comp
+
+        ech0 = tf.scatter_update(self.Wch, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, self.dsz]))
+        char_comp, self.wsz = pool_chars(x, self.Wch, ech0, self.dsz, self.nfeat_factor,
+                                         self.cfiltsz, self.max_feat, self.gating,
+                                         self.num_gates, self.activation, self.wsz)
+        return char_comp
 
     def get_vsz(self):
         return self.vsz
