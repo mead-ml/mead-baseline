@@ -295,21 +295,10 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
             unif = kwargs.get('unif', 0.1)
             self._weights = np.random.uniform(-unif, unif, (self.vsz, self.dsz))
 
-        with tf.device("/cpu:0"):
-            with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
-                self.Wch = tf.get_variable('Wch',
-                                           initializer=tf.constant_initializer(self._weights, dtype=tf.float32,
-                                                                               verify_shape=True),
-                                           shape=[self.vsz, self.dsz], trainable=True)
-        # These are the actual final filter sizes and num features
-        self.filtsz, self.nfeats = self._get_filtsz()
-        self.outsz = np.sum(self.nfeats)
-
-        if self.projsz:
-            with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
-                self.Wp = tf.get_variable('Wp', shape=[self.outsz, self.projsz], trainable=True)
-                self.bp = tf.get_variable('bp', shape=[self.projsz], trainable=True, initializer=tf.constant_initializer(0.0))
-            self.outsz = self.projsz
+        self.Wch = self.add_variable('{}/Wch'.format(self.scope),
+                                     initializer=tf.constant_initializer(self._weights, dtype=tf.float32,
+                                                                         verify_shape=True),
+                                     shape=[self.vsz, self.dsz], trainable=True)
 
     def detached_ref(self):
         """This will detach any attached input and reference the same sub-graph otherwise
@@ -334,19 +323,11 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
             x = CharConvEmbeddings.create_placeholder(self.name)
         self.x = x
 
-        #if self.projsz:
-        #    cmot = tf.matmul(cmot, self.Wp) + self.bp
-        #word_char = tf.reshape(cmot, [-1, mxlen, self.outsz])
-
-        with tf.variable_scope(self.scope):
-            Wch = tf.get_variable("Wch",
-                                  initializer=tf.constant_initializer(self._weights, dtype=tf.float32, verify_shape=True),
-                                  shape=[self.vsz, self.dsz], trainable=True)
-            ech0 = tf.scatter_update(Wch, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, self.dsz]))
-            char_comp, self.wsz = pool_chars(x, Wch, ech0, self.dsz, self.nfeat_factor,
-                                  self.cfiltsz, self.max_feat, self.gating, 
-                                  self.num_gates, self.activation, self.wsz)
-            return char_comp
+        ech0 = tf.scatter_update(self.Wch, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, self.dsz]))
+        char_comp, self.wsz = pool_chars(x, self.Wch, ech0, self.dsz, self.nfeat_factor,
+                                         self.cfiltsz, self.max_feat, self.gating,
+                                         self.num_gates, self.activation, self.wsz)
+        return char_comp
 
     def get_vsz(self):
         return self.vsz

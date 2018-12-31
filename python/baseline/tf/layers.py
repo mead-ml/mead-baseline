@@ -383,7 +383,7 @@ class EmbeddingsStack(tf.keras.Model):
         self.embeddings = embeddings_dict
         self._requires_length = requires_length
 
-    def call(self, inputs):
+    def call(self, inputs, training=False, mask=None):
         """This method performs "embedding" of the inputs.  The base method here then concatenates along depth
         dimension to form word embeddings
 
@@ -418,7 +418,7 @@ class DenseStack(tf.keras.Model):
         self.layer_stack = [tf.keras.layers.Dense(hsz, kernel_initializer=init, activation=activation) for hsz in hszs]
         self.dropout = tf.keras.layers.Dropout(pdrop_value)
 
-    def call(self, inputs, training=False):
+    def call(self, inputs, training=False, mask=None):
         """Stack 1 or more hidden layers, optionally (forming an MLP)
 
         :param inputs: The fixed representation of the model
@@ -731,6 +731,29 @@ class FFN(tf.keras.Model):
 
     def call(self, inputs, training=False, mask=None):
         return self.squeeze(self.dropout(self.act(self.expansion(inputs)), training))
+
+
+class TaggerModel(tf.keras.Model):
+
+    def __init__(self, nc, embeddings, transducer, decoder=None):
+        super(TaggerModel, self).__init__()
+        self.embed_model = EmbeddingsStack(embeddings)
+        self.transducer_model = transducer
+        self.proj_layer = TimeDistributedProjection(nc)
+        if decoder is None:
+            self.decoder_model = CRF(nc)
+
+    def transduce(self, inputs, training=None, mask=None):
+        lengths = inputs.get('lengths')
+
+        embedded = self.embed_model(inputs, training, mask)
+        embedded = (embedded, lengths)
+        transduced = self.proj_layer(self.transducer_model(embedded, training))
+        return transduced
+
+    def call(self, inputs, training=None, mask=None):
+        transduced = self.transduce(inputs, training, mask)
+        return self.decoder_model((transduced, inputs.get('lengths')))
 
 
 class EmbedPoolStackModel(tf.keras.Model):
