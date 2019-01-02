@@ -3,6 +3,7 @@ import copy
 import logging
 from itertools import chain
 import tensorflow as tf
+
 from baseline.tf.embeddings import *
 from eight_mile.tf.layers import *
 from baseline.version import __version__
@@ -262,7 +263,9 @@ class ClassifierModelBase(ClassifierModel):
         model.pdrop_value = kwargs.get('dropout', 0.5)
         model.sess = kwargs.get('sess', create_session())
         model.labels = labels
+
         nc = len(labels)
+        model.labels = labels
         model.y = kwargs.get('y', tf.placeholder(tf.int32, [None, nc], name="y"))
         model.create_layers(**kwargs)
         model.logits = tf.identity(model.layers(inputs), name="logits")
@@ -277,7 +280,6 @@ class ClassifierModelBase(ClassifierModel):
         :return: A 3-d vector where the last dimension is the concatenated dimensions of all embeddings
         """
         return EmbeddingsStack(self.embeddings)
-
 
 
 class EmbedPoolStackClassifier(ClassifierModelBase):
@@ -295,7 +297,6 @@ class EmbedPoolStackClassifier(ClassifierModelBase):
 
 
     def pool(self, dsz, **kwargs):
-
         """This method performs a transformation between a temporal signal and a fixed representation
 
         :param word_embeddings: The output of the embedded lookup, which is the starting point for this operation
@@ -398,6 +399,7 @@ class LSTMModel(EmbedPoolStackClassifier):
 
 
 class NBowBase(EmbedPoolStackClassifier):
+
     """Neural Bag-of-Words Model base class.  Defines stacking of fully-connected layers, but leaves pooling to derived
     """
     def __init__(self):
@@ -419,7 +421,7 @@ class NBowModel(NBowBase):
     def __init__(self):
         super(NBowModel, self).__init__()
 
-    def pool(self, word_embeddings, dsz, init, **kwargs):
+    def pool(self, dsz, **kwargs):
         """Do average pooling on input embeddings, yielding a `dsz` output layer
 
         :param word_embeddings: The word embedding input
@@ -428,7 +430,7 @@ class NBowModel(NBowBase):
         :param kwargs: None
         :return: The average pooling representation
         """
-        return tf.divide(tf.reduce_sum(word_embeddings, 1, keepdims=False), tf.cast(tf.expand_dims(self.lengths, -1), tf.float32))
+        return tf.keras.layers.GlobalAveragePooling1D()
 
 
 @register_model(task='classify', name='nbowmax')
@@ -448,7 +450,7 @@ class NBowMaxModel(NBowBase):
         :param kwargs: None
         :return: The max pooling representation
         """
-        return tf.reduce_max(word_embeddings, 1, keepdims=False)
+        return tf.keras.layers.GlobalMaxPooling1D()
 
 
 @register_model(task='classify', name='fine-tune')

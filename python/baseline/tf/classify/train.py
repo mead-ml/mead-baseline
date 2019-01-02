@@ -446,7 +446,6 @@ def fit_datasets(model_params, ts, vs, es=None, **kwargs):
 
     TRAIN_FLAG()
     trainer = create_trainer(model_params, **kwargs)
-
     last_improved = 0
 
     for epoch in range(epochs):

@@ -187,6 +187,16 @@ def rnn_signal(output, hidden):
     return output
 
 
+def rnn_hidden(output, output_state):
+    output_state = output_state[-1].h
+    return output_state
+
+def rnn_bi_hidden(output, output_state):
+    fw_final_state, bw_final_state = output_state
+    output_state = fw_final_state[-1].h + bw_final_state[-1].h
+    return output_state
+
+
 def lstm_cell(hsz, forget_bias=1.0):
     """Produce a single cell with no dropout
 
@@ -396,6 +406,13 @@ class EmbeddingsStack(tf.keras.Model):
             all_embeddings_out.append(embeddings_out)
         word_embeddings = tf.concat(values=all_embeddings_out, axis=-1)
         return word_embeddings
+
+    @property
+    def dsz(self):
+        total_dsz = 0
+        for embeddings in self.embeddings.values():
+            total_dsz += embeddings.get_dsz()
+        return total_dsz
 
     @property
     def requires_length(self):
@@ -733,56 +750,6 @@ class FFN(tf.keras.Model):
         return self.squeeze(self.dropout(self.act(self.expansion(inputs)), training))
 
 
-class TaggerModel(tf.keras.Model):
-
-    def __init__(self, nc, embeddings, transducer, decoder=None):
-        super(TaggerModel, self).__init__()
-        self.embed_model = EmbeddingsStack(embeddings)
-        self.transducer_model = transducer
-        self.proj_layer = TimeDistributedProjection(nc)
-        if decoder is None:
-            self.decoder_model = CRF(nc)
-
-    def transduce(self, inputs, training=None, mask=None):
-        lengths = inputs.get('lengths')
-
-        embedded = self.embed_model(inputs, training, mask)
-        embedded = (embedded, lengths)
-        transduced = self.proj_layer(self.transducer_model(embedded, training))
-        return transduced
-
-    def call(self, inputs, training=None, mask=None):
-        transduced = self.transduce(inputs, training, mask)
-        return self.decoder_model((transduced, inputs.get('lengths')))
-
-
-class EmbedPoolStackModel(tf.keras.Model):
-
-    def __init__(self, nc, embeddings, pool_model, stack_model=None):
-        super(EmbedPoolStackModel, self).__init__()
-        assert isinstance(embeddings, dict)
-
-        self.embed_model = EmbeddingsStack(embeddings)
-
-        self.pool_requires_length = False
-        if hasattr(pool_model, 'requires_length'):
-            self.pool_requires_length = pool_model.requires_length
-        self.output_layer = tf.keras.layers.Dense(nc)
-        self.pool_model = pool_model
-        self.stack_model = stack_model
-
-    def call(self, inputs, training=None, mask=None):
-        lengths = inputs.get('lengths')
-
-        embedded = self.embed_model(inputs)
-
-        if self.pool_requires_length:
-            embedded = (embedded, lengths)
-        pooled = self.pool_model(embedded)
-        stacked = self.stack_model(pooled) if self.stack_model is not None else pooled
-        return self.output_layer(stacked)
-
-
 class CRF(tf.keras.layers.Layer):
 
     def __init__(self, num_tags, constraint_mask=None, name=None):
@@ -870,3 +837,64 @@ class CRF(tf.keras.layers.Layer):
         gold_score = self.score_sentence(unary, tags, lengths)
         log_likelihood = gold_score - fwd_score
         return -tf.reduce_mean(log_likelihood)
+
+
+class SequenceModel(tf.keras.Model):
+
+    def __init__(self, nc, embeddings, transducer, decoder=None):
+        self.embed_model = EmbeddingsStack(embeddings)
+        self.transducer_model = transducer
+        self.proj_layer = TimeDistributedProjection(nc)
+        self.decoder_model = decoder
+
+    def transduce(self, inputs, training=None, mask=None):
+        lengths = inputs.get('lengths')
+
+        embedded = self.embed_model(inputs, training, mask)
+        embedded = (embedded, lengths)
+        transduced = self.proj_layer(self.transducer_model(embedded, training))
+        return transduced
+
+    def decode(self, transduced, lengths):
+        return self.decoder_model((transduced, lengths))
+
+    def call(self, inputs, training=None, mask=None):
+        transduced = self.transduce(inputs, training, mask)
+        return self.decode(transduced, inputs.get('lengths'))
+
+
+class TaggerModel(SequenceModel):
+
+    def __init__(self, nc, embeddings, transducer, decoder=None):
+        decoder_model = CRF(nc) if decoder is None else decoder
+        super(TaggerModel, self).__init__(nc, embeddings, transducer, decoder_model)
+
+
+class EmbedPoolStackModel(tf.keras.Model):
+
+    def __init__(self, nc, embeddings, pool_model, stack_model=None):
+        super(EmbedPoolStackModel, self).__init__()
+        if isinstance(embeddings, dict):
+            self.embed_model = EmbeddingsStack(embeddings)
+        else:
+            assert isinstance(embeddings, EmbeddingsStack)
+            self.embed_model = embeddings
+
+        self.pool_requires_length = False
+        if hasattr(pool_model, 'requires_length'):
+            self.pool_requires_length = pool_model.requires_length
+        self.output_layer = tf.keras.layers.Dense(nc)
+        self.pool_model = pool_model
+        self.stack_model = stack_model
+
+    def call(self, inputs, training=None, mask=None):
+        lengths = inputs.get('lengths')
+
+        embedded = self.embed_model(inputs)
+
+        if self.pool_requires_length:
+            embedded = (embedded, lengths)
+        pooled = self.pool_model(embedded)
+        stacked = self.stack_model(pooled) if self.stack_model is not None else pooled
+        return self.output_layer(stacked)
+
