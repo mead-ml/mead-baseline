@@ -10,6 +10,7 @@ from eight_mile.pytorch.layers import *
 
 PYT_MAJOR_VERSION = get_version(torch)
 
+
 class SequenceCriterion(nn.Module):
 
     def __init__(self, LossFn=nn.NLLLoss, avg='token'):

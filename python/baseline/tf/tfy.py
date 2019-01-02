@@ -291,7 +291,7 @@ def char_word_conv_embeddings(char_vec, filtsz, char_dsz, nfeats, activation_fn=
     return joined, wsz_all
 
 
-def pool_chars(x_char, Wch, ce0, char_dsz, nfeat_factor=None, 
+def pool_chars(x_char, Wch, ce0, char_dsz, nfeat_factor=None,
                cfiltsz=[3], max_feat=200, gating='skip',
                num_gates=1, activation_name='tanh', wsz=30):
     """Take in a tensor of characters (B x maxs x maxw) and do character convolution

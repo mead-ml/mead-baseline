@@ -3,8 +3,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 import numpy as np
-from baseline.pytorch.torchy import pytorch_linear, get_activation
-from baseline.pytorch.torchy import pytorch_clone_module
+
+from baseline.pytorch.torchy import pytorch_linear, get_activation, LayerNorm
+from baseline.pytorch.torchy import pytorch_clone_module, sequence_mask
+
 
 
 def subsequent_mask(size):
