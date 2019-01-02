@@ -120,9 +120,6 @@ def predict_input_fn():
     _ = dataset.make_one_shot_iterator()
     return dataset
 
-def rnn_hidden(output, output_state):
-    output_state = output_state[-1].h
-    return output_state
 
 model = EmbedPoolStackModel(2, embeddings, ParallelConv(300, 100, [3, 4, 5]), Highway(300))
 

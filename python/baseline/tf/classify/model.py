@@ -2,132 +2,13 @@ import tensorflow as tf
 import numpy as np
 from google.protobuf import text_format
 from tensorflow.python.platform import gfile
-from baseline.utils import fill_y, listify, write_json, ls_props, read_json
+from baseline.utils import fill_y, listify, ls_props, read_json
 from baseline.model import ClassifierModel, register_model
-from baseline.tf.layers import TRAIN_FLAG, new_placeholder_dict, BiLSTMEncoder, LSTMEncoder
-from baseline.tf.tfy import parallel_conv, stacked_dense
+from baseline.tf.layers import TRAIN_FLAG, new_placeholder_dict, BiLSTMEncoder, LSTMEncoder, rnn_hidden, rnn_bi_hidden
 from baseline.tf.embeddings import *
 from baseline.version import __version__
-from tensorflow.contrib.layers import fully_connected
-import os
-import copy
+from baseline.tf.layers import EmbedPoolStackModel, EmbeddingsStack, ParallelConv, DenseStack, BiLSTMEncoder
 
-
-class ClassifyParallelModel(ClassifierModel):
-
-    def __init__(self, create_fn, embeddings, labels, **kwargs):
-        """Create N replica graphs for GPU + 1 for inference on CPU
-
-        The basic idea of the constructor is to create several replicas for training by creating a `tf.split` operation
-        on the input tensor and feeding the splits to each of the underlying replicas.  The way we do this is to take in
-        the creation function for a single graph and call it N times while passing in the splits as kwargs.
-
-        Because our `create_fn` (typically `cls.create()` where `cls` is a sub-class of ClassifierModelBase) allows
-        us to inject its inputs through keyword arguments instead of creating its own placeholders, we can inject each
-        split into the inputs which causes each replica to be a sub-graph of this parent graph.  For this to work,
-        this class also has to have its own placeholders, which it uses as inputs.
-
-        Any time we are doing validation during the training process, we delegate the request to the underlying member
-        variable `.inference` (which is sharing its weights with the other replicas).  This also happens on `save()`,
-        allowing us to create a perfectly normal single sub-graph checkpoint for later inference.
-
-        The actual way that we accomplish the replica creation is by copying the input keyword arguments and injecting
-        any parallel operations (splits) by deep-copy and update to the dictionary.
-
-        :param create_fn: This function is actually our caller, who creates the graph (if no `gpus` arg)
-        :param embeddings: This is the set of embeddings sub-graphs
-        :param labels: This is the labels
-        :param kwargs: See below, also see ``ClassifierModelBase.create`` for kwargs that are not specific to multi-GPU
-
-        :Keyword Arguments:
-        * *gpus* -- (``int``) - The number of GPUs to create replicas on
-        * *lengths_key* -- (``str``) - A string representing the key for the src tensor whose lengths should be used
-
-        """
-        super(ClassifyParallelModel, self).__init__()
-        # We need to remove these because we may be calling back to our caller, and we need
-        # the condition of calling to be non-parallel
-        gpus = kwargs.pop('gpus')
-        print('Num GPUs', gpus)
-        self.labels = labels
-        nc = len(labels)
-
-        self.saver = None
-        self.replicas = []
-        self.parallel_params = dict()
-        split_operations = dict()
-        for key in embeddings.keys():
-            EmbeddingsType = embeddings[key].__class__
-            self.parallel_params[key] = kwargs.get(key, EmbeddingsType.create_placeholder('{}_parallel'.format(key)))
-            split_operations[key] = tf.split(self.parallel_params[key], gpus)
-
-        self.lengths_key = kwargs.get('lengths_key')
-        if self.lengths_key is not None:
-            self.lengths = kwargs.get('lengths', tf.placeholder(tf.int32, [None], name="lengths_parallel"))
-            lengths_splits = tf.split(self.lengths, gpus)
-            split_operations['lengths'] = lengths_splits
-        else:
-            self.lengths = None
-
-        # This only exists to make exporting easier
-        self.y = kwargs.get('y', tf.placeholder(tf.int32, [None, nc], name="y_parallel"))
-
-        y_splits = tf.split(self.y, gpus)
-        split_operations['y'] = y_splits
-        losses = []
-        self.labels = labels
-
-        sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False)) 
-        with tf.device(tf.DeviceSpec(device_type="CPU")):
-            # This change is required since we attach our .x onto the object in v1
-            self.inference = create_fn(embeddings, labels, sess=sess, **kwargs)
-        for i in range(gpus):
-            with tf.device(tf.DeviceSpec(device_type='GPU', device_index=i)):
-
-                kwargs_single = copy.deepcopy(kwargs)
-                kwargs_single['sess'] = sess
-
-                for k, split_operation in split_operations.items():
-                    kwargs_single[k] = split_operation[i]
-                replica = create_fn({k: v.detached_ref() for k, v in embeddings.items()}, labels, **kwargs_single)
-                self.replicas.append(replica)
-                loss_op = replica.create_loss()
-                losses.append(loss_op)
-
-        self.loss = tf.reduce_mean(tf.stack(losses))
-        self.sess = sess
-        self.best = self.inference.best
-
-    def create_loss(self):
-        return self.loss
-
-    def create_test_loss(self):
-        return self.inference.create_test_loss()
-
-    def save(self, model_base):
-        return self.inference.save(model_base)
-
-    def set_saver(self, saver):
-        self.inference.saver = saver
-        self.saver = saver
-
-    def make_input(self, batch_dict, train=False):
-        if train is False:
-            return self.inference.make_input(batch_dict)
-
-        y = batch_dict.get('y', None)
-        feed_dict = new_placeholder_dict(True)
-
-        for key in self.parallel_params.keys():
-            feed_dict["{}_parallel:0".format(key)] = batch_dict[key]
-
-        # Allow us to track a length, which is needed for BLSTMs
-        if self.lengths_key is not None:
-            feed_dict[self.lengths] = batch_dict[self.lengths_key]
-
-        if y is not None:
-            feed_dict[self.y] = fill_y(len(self.labels), y)
-        return feed_dict
 
 
 class ClassifierModelBase(ClassifierModel):
@@ -228,7 +109,7 @@ class ClassifierModelBase(ClassifierModel):
         :return: Each outcome as a ``list`` of tuples `(label, probability)`
         """
         feed_dict = self.make_input(batch_dict)
-        probs = self.sess.run(self.probs, feed_dict=feed_dict)
+        probs = self.impl(feed_dict)
         results = []
         batchsz = probs.shape[0]
         for b in range(batchsz):
@@ -367,49 +248,34 @@ class ClassifierModelBase(ClassifierModel):
         :return: A fully-initialized tensorflow classifier 
         """
 
-        gpus = kwargs.get('gpus', 1)
-        if gpus == -1:
-            gpus = len(os.getenv('CUDA_VISIBLE_DEVICES', os.getenv('NV_GPU', '0')).split(','))
-            kwargs['gpus'] = gpus
-        if gpus > 1:
-            return ClassifyParallelModel(cls.create, embeddings, labels, **kwargs)
-        sess = kwargs.get('sess', tf.Session())
-
         model = cls()
         model.embeddings = embeddings
+
+        inputs = {}
+        for k, embedding in embeddings.items():
+            x = kwargs.get(k, embedding.create_placeholder(name=k))
+            inputs[k] = x
+
+        model.pdrop_value = kwargs.get('dropout', 0.5)
+        model.sess = kwargs.get('sess', tf.Session())
         model.lengths_key = kwargs.get('lengths_key')
         if model.lengths_key is not None:
             model.lengths = kwargs.get('lengths', tf.placeholder(tf.int32, [None], name="lengths"))
         else:
             model.lengths = None
 
-        model.labels = labels
         nc = len(labels)
+        model.labels = labels
         model.y = kwargs.get('y', tf.placeholder(tf.int32, [None, nc], name="y"))
-        # This only exists to make exporting easier
-        model.pdrop_value = kwargs.get('dropout', 0.5)
-        # This only exists to make exporting easier
+        embeddings_stack = model.embed(**kwargs)
+        pool = model.pool(embeddings_stack.dsz, **kwargs)
+        stacking = model.stacked(**kwargs)
+        model.layers = EmbedPoolStackModel(nc, embeddings_stack, pool, stacking)
 
-        with tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE):
+        model.logits = tf.identity(model.layers(inputs), name="logits")
+        model.best = tf.argmax(model.logits, 1, name="best")
+        model.probs = tf.nn.softmax(model.logits, name="probs")
 
-            seed = np.random.randint(10e8)
-            init = tf.random_uniform_initializer(-0.05, 0.05, dtype=tf.float32, seed=seed)
-            word_embeddings = model.embed(**kwargs)
-            input_sz = word_embeddings.shape[-1]
-            pooled = model.pool(word_embeddings, input_sz, init, **kwargs)
-            stacked = model.stacked(pooled, init, **kwargs)
-
-            # For fully connected layers, use xavier (glorot) transform
-            with tf.variable_scope("output"):
-
-                model.logits = tf.identity(tf.layers.dense(stacked, nc,
-                                                           activation=None,
-                                                           kernel_initializer=tf.glorot_uniform_initializer(seed)),
-                                           name="logits")
-                model.best = tf.argmax(model.logits, 1, name="best")
-                model.probs = tf.nn.softmax(model.logits, name="probs")
-        model.sess = sess
-        # writer = tf.summary.FileWriter('blah', sess.graph)
         return model
 
     def embed(self, **kwargs):
@@ -418,17 +284,9 @@ class ClassifierModelBase(ClassifierModel):
 
         :return: A 3-d vector where the last dimension is the concatenated dimensions of all embeddings
         """
-        all_embeddings_out = []
-        for k, embedding in self.embeddings.items():
-            x = kwargs.get(k, None)
-            embeddings_out = embedding.encode(x)
-            all_embeddings_out.append(embeddings_out)
-        word_embeddings = tf.concat(values=all_embeddings_out, axis=2)
-        return word_embeddings
+        return EmbeddingsStack(self.embeddings)
 
-
-
-    def pool(self, word_embeddings, dsz, init, **kwargs):
+    def pool(self, dsz, **kwargs):
         """This method performs a transformation between a temporal signal and a fixed representation
         
         :param word_embeddings: The output of the embedded lookup, which is the starting point for this operation
@@ -439,7 +297,7 @@ class ClassifierModelBase(ClassifierModel):
         """
         pass
 
-    def stacked(self, pooled, init, **kwargs):
+    def stacked(self, **kwargs):
         """Stack 1 or more hidden layers, optionally (forming an MLP)
 
         :param pooled: The fixed representation of the model
@@ -453,7 +311,9 @@ class ClassifierModelBase(ClassifierModel):
         """
 
         hszs = listify(kwargs.get('hsz', []))
-        return stacked_dense(pooled, init, hszs=hszs, pdrop_value=self.pdrop_value)
+        if len(hszs) == 0:
+            return None
+        return DenseStack(hszs, pdrop_value=self.pdrop_value)
 
 
 @register_model(task='classify', name='default')
@@ -467,7 +327,7 @@ class ConvModel(ClassifierModelBase):
         """
         super(ConvModel, self).__init__()
 
-    def pool(self, word_embeddings, dsz, init, **kwargs):
+    def pool(self, dsz, **kwargs):
         """Do parallel convolutional filtering with varied receptive field widths, followed by max-over-time pooling
         
         :param word_embeddings: The word embeddings, which are inputs here
@@ -485,12 +345,8 @@ class ConvModel(ClassifierModelBase):
         """
         cmotsz = kwargs['cmotsz']
         filtsz = kwargs['filtsz']
-
-        combine = parallel_conv(word_embeddings, filtsz, dsz, cmotsz)
-        # Definitely drop out
-        with tf.name_scope("dropout"):
-            combine = tf.layers.dropout(combine, self.pdrop_value, training=TRAIN_FLAG())
-        return combine
+        conv = ParallelConv(dsz, cmotsz, filtsz)
+        return tf.keras.Sequential([conv, tf.keras.layers.Dropout(self.pdrop_value)])
 
 
 @register_model(task='classify', name='lstm')
@@ -511,7 +367,7 @@ class LSTMModel(ClassifierModelBase):
     def vdrop(self, value):
         self._vdrop = value
 
-    def pool(self, word_embeddings, dsz, init, **kwargs):
+    def pool(self, dsz, **kwargs):
         """LSTM with dropout yielding a final-state as output
         
         :param word_embeddings: The input word embeddings
@@ -535,25 +391,10 @@ class LSTMModel(ClassifierModelBase):
         nlayers = int(kwargs.get('layers', 1))
 
         if rnntype == 'blstm':
-            rnnfwd = stacked_lstm(hsz//2, self.pdrop_value, nlayers, variational=vdrop, training=TRAIN_FLAG())
-            rnnbwd = stacked_lstm(hsz//2, self.pdrop_value, nlayers, variational=vdrop, training=TRAIN_FLAG())
-            ((_, _), (fw_final_state, bw_final_state)) = tf.nn.bidirectional_dynamic_rnn(rnnfwd,
-                                                                                         rnnbwd,
-                                                                                         word_embeddings,
-                                                                                         sequence_length=self.lengths,
-                                                                                         dtype=tf.float32)
-            # The output of the BRNN function needs to be joined on the H axis
-            output_state = fw_final_state[-1].h + bw_final_state[-1].h
-            out_hsz = hsz
+            return BiLSTMEncoder(hsz, self.pdrop_value, nlayers, vdrop, output_fn=rnn_bi_hidden)
 
-        else:
-            rnnfwd = stacked_lstm(hsz, self.pdrop_value, nlayers, variational=vdrop, training=TRAIN_FLAG())
-            (_, (output_state)) = tf.nn.dynamic_rnn(rnnfwd, word_embeddings, sequence_length=self.lengths, dtype=tf.float32)
-            output_state = output_state[-1].h
-            out_hsz = hsz
+        return LSTMEncoder(hsz, self.pdrop_value, nlayers, vdrop, output_fn=rnn_hidden)
 
-        combine = tf.reshape(output_state, [-1, out_hsz])
-        return combine
 
 
 class NBowBase(ClassifierModelBase):
@@ -562,7 +403,7 @@ class NBowBase(ClassifierModelBase):
     def __init__(self):
         super(NBowBase, self).__init__()
 
-    def stacked(self, pooled, init, **kwargs):
+    def stacked(self, **kwargs):
         """Force at least one hidden layer here
 
         :param pooled:
@@ -571,7 +412,8 @@ class NBowBase(ClassifierModelBase):
         :return:
         """
         kwargs['hsz'] = kwargs.get('hsz', [100])
-        return super(NBowBase, self).stacked(pooled, init, **kwargs)
+
+        return super(NBowBase, self).stacked(**kwargs)
 
 
 @register_model(task='classify', name='nbow')
@@ -581,7 +423,7 @@ class NBowModel(NBowBase):
     def __init__(self):
         super(NBowModel, self).__init__()
 
-    def pool(self, word_embeddings, dsz, init, **kwargs):
+    def pool(self, dsz, **kwargs):
         """Do average pooling on input embeddings, yielding a `dsz` output layer
         
         :param word_embeddings: The word embedding input
@@ -590,7 +432,7 @@ class NBowModel(NBowBase):
         :param kwargs: None
         :return: The average pooling representation
         """
-        return tf.reduce_mean(word_embeddings, 1, keepdims=False)
+        return tf.keras.layers.GlobalAveragePooling1D()
 
 
 @register_model(task='classify', name='nbowmax')
@@ -610,7 +452,7 @@ class NBowMaxModel(NBowBase):
         :param kwargs: None
         :return: The max pooling representation
         """
-        return tf.reduce_max(word_embeddings, 1, keepdims=False)
+        return tf.keras.layers.GlobalMaxPooling1D()
 
 
 @register_model(task='classify', name='composite')

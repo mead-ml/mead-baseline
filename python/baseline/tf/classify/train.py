@@ -9,6 +9,7 @@ from baseline.tf.tfy import _add_ema
 from baseline.tf.optz import optimizer
 from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
 from baseline.utils import verbose_output
+from baseline.tf.layers import TRAIN_FLAG
 
 
 @register_trainer(task='classify', name='default')
@@ -144,6 +145,7 @@ def fit(model, ts, vs, es=None, **kwargs):
     reporting_fns = listify(kwargs.get('reporting', []))
     print('reporting', reporting_fns)
 
+    TRAIN_FLAG()
     trainer = create_trainer(model, **kwargs)
     tables = tf.tables_initializer()
     model.sess.run(tables)
