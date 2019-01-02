@@ -5,7 +5,7 @@
     "basedir": "iwslt15-en-vi-transformer",
     "unif": 0.25,
     "features": [
-	{ 
+	{
 	    "name": "src",
 	    "vectorizer": { "type": "token1d"},
 	    "embeddings": { "dsz": 512, "type": "positional" }

@@ -59,8 +59,8 @@ class Seq2SeqTrainerPyTorch(Trainer):
             toks = self._num_toks(tgt_lens)
             total_loss += loss.item() * toks
             total_toks += toks
-            _, top_pred = torch.max(pred, dim=-1)
-            preds.extend(convert_seq2seq_preds(top_pred.cpu().numpy(), self.tgt_rlut))
+            greedy_preds = [p[0] for p in self._predict(input_, beam=1, make_input=False)]
+            preds.extend(convert_seq2seq_preds(greedy_preds, self.tgt_rlut))
             golds.extend(convert_seq2seq_golds(tgt.cpu().numpy(), tgt_lens, self.tgt_rlut))
 
         metrics = self.calc_metrics(total_loss, total_toks)

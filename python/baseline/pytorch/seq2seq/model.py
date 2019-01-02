@@ -109,7 +109,13 @@ class EncoderDecoderModelBase(nn.Module, EncoderDecoderModel):
             tensor = tensor.cuda()
         return tensor
 
-    def make_input(self, batch_dict):
+    def make_input(self, batch_dict, perm=False):
+        """Prepare the input.
+
+        :param batch_dict: `dict`: The data.
+        :param perm: `bool`: If True return the permutation index
+            so that you can undo the sort if you want.
+        """
         example = dict({})
 
         lengths = torch.from_numpy(batch_dict[self.src_lengths_key])
@@ -130,6 +136,7 @@ class EncoderDecoderModelBase(nn.Module, EncoderDecoderModel):
             if self.gpu:
                 example['dst'] = example['dst'].cuda()
                 example['tgt'] = example['tgt'].cuda()
+        if perm: return example, perm_idx
         return example
 
     def embed(self, input):
@@ -145,24 +152,26 @@ class EncoderDecoderModelBase(nn.Module, EncoderDecoderModel):
         # Return as B x T x H
         return output
 
-    # B x K x T and here T is a list
     def predict(self, batch_dict, **kwargs):
+        """Predict based on the batch.
+
+        If `make_input` is True then run make_input on the batch_dict.
+        This is false for being used during dev eval where the inputs
+        are already transformed.
+        """
         self.eval()
-        batch = []
-        # Bit of a hack
-        src_field = self.src_lengths_key.split('_')[0]
-        B = batch_dict[src_field].shape[0]
-        for b in range(B):
-            example = dict({})
-            for k, value in batch_dict.items():
-                if isinstance(value, list):
-                    example[k] = np.array([value[b]])
-                else:
-                    example[k] = value[b].reshape((1,) + value[b].shape)
-            inputs = self.make_input(example)
-            encoder_outputs = self.encode(inputs, inputs['src_len'])
-            batch.append(self.decoder.predict_one(inputs[src_field], encoder_outputs, **kwargs)[0])
-        return batch
+        make = kwargs.get('make_input', True)
+        if make:
+            inputs, perm_idx = self.make_input(batch_dict, perm=True)
+        else:
+            inputs = batch_dict
+        encoder_outputs = self.encode(inputs, inputs['src_len'])
+        outs, lengths, scores = self.decoder.beam_search(encoder_outputs, **kwargs)
+        if make:
+            outs = unsort_batch(outs, perm_idx)
+            lengths = unsort_batch(lengths, perm_idx)
+            scores = unsort_batch(scores, perm_idx)
+        return outs.cpu().numpy()
 
 
 @register_model(task='seq2seq', name=['default', 'attn'])

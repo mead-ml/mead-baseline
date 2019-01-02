@@ -112,9 +112,8 @@ class Seq2SeqTrainerDynet(Trainer):
             total_loss += loss_val * toks
             total_toks += toks
 
-            top_preds = np.transpose(np.stack([np.argmax(o.npvalue(), axis=0) for o in output]))
-            if len(top_preds.shape) == 1: top_preds = np.expand_dims(top_preds, 0)
-            preds.extend(convert_seq2seq_preds(top_preds, self.tgt_rlut))
+            pred = [p[0] for p in self.model.predict(batch_dict, beam=1)]
+            preds.extend(convert_seq2seq_preds(pred, self.tgt_rlut))
             golds.extend(convert_seq2seq_golds(tgt.T, tgt_lens, self.tgt_rlut))
 
         metrics = self.calc_metrics(total_loss, total_toks)
@@ -141,6 +140,7 @@ class Seq2SeqTrainerDynet(Trainer):
         self.report(
             0, metrics, start, 'Test', 'EPOCH', reporting_fns
         )
+        return metrics
 
 
 @register_training_func('seq2seq')

@@ -11,18 +11,6 @@ exporter = export(__all__)
 
 
 @exporter
-def normalize_backend(name):
-    name = name.lower()
-    if name == 'tensorflow':
-        name = 'tf'
-    elif name == 'torch' or name == 'pyt':
-        name = 'pytorch'
-    elif name == 'dynet':
-        name = 'dy'
-    return name
-
-
-@exporter
 def print_dataset_info(dataset):
     print("[train file]: {}".format(dataset['train_file']))
     print("[valid file]: {}".format(dataset['valid_file']))

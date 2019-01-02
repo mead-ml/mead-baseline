@@ -353,7 +353,7 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
         self.save_md(model_base)
         self.saver.save(self.sess, model_base)
 
-    def predict(self, batch_dict):
+    def predict(self, batch_dict, **kwargs):
         feed_dict = self.make_input(batch_dict)
         vec = self.sess.run(self.decoder.best, feed_dict=feed_dict)
         # (B x K x T)
