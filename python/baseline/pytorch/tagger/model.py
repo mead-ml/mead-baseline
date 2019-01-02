@@ -76,7 +76,7 @@ class TaggerModelBase(nn.Module, TaggerModel):
         if model.proj is True:
             append2seq(model.decoder, (
                 pytorch_linear(hsz, hsz),
-                pytorch_activation(model.activation_type),
+                get_activation(model.activation_type),
                 nn.Dropout(pdrop),
                 pytorch_linear(hsz, len(model.labels))
             ))

@@ -166,7 +166,7 @@ def pytorch_embedding(weights, finetune=True):
     return lut
 
 
-def pytorch_activation(name="relu"):
+def get_activation(name="relu"):
     if name == "tanh":
         return nn.Tanh()
     if name == "identity":
@@ -266,7 +266,7 @@ class ConvEncoder(nn.Module):
         self.outsz = outsz
         pad = filtsz//2
         self.conv = nn.Conv1d(insz, outsz, filtsz, padding=pad)
-        self.act = pytorch_activation(activation_type)
+        self.act = get_activation(activation_type)
         self.dropout = nn.Dropout(pdrop)
 
     def forward(self, input_bct):
@@ -304,7 +304,7 @@ class ParallelConv(nn.Module):
             pad = fsz//2
             conv = nn.Sequential(
                 nn.Conv1d(insz, outsz_filts[i], fsz, padding=pad),
-                pytorch_activation(activation_type)
+                get_activation(activation_type)
             )
             convs.append(conv)
             # Add the module so its managed correctly
@@ -353,7 +353,7 @@ class SkipConnection(ResidualBlock):
         super(SkipConnection, self).__init__(None)
         self.layer = nn.Sequential(
             nn.Linear(input_size, input_size),
-            pytorch_activation(activation)
+            get_activation(activation)
         )
 
 

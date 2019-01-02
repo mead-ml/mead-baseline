@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 import numpy as np
-from baseline.pytorch.torchy import pytorch_linear, pytorch_activation, LayerNorm
+from baseline.pytorch.torchy import pytorch_linear, get_activation, LayerNorm
 from baseline.pytorch.torchy import pytorch_clone_module, sequence_mask
 from collections import namedtuple
 
@@ -144,7 +144,7 @@ class FFN(nn.Module):
         self.expansion = pytorch_linear(d_model, d_ff)
         self.squeeze = pytorch_linear(d_ff, d_model)
         self.dropout = nn.Dropout(pdrop)
-        self.act = pytorch_activation(activation_type)
+        self.act = get_activation(activation_type)
 
     def forward(self, x):
         """Expand to `d_ff` then activation, followed by a squeeze operation back down to `d_model`

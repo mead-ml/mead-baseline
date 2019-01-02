@@ -51,7 +51,7 @@ def get_shape_as_list(x):
     return [ts[i] if ps[i] is None else ps[i] for i in range(len(ps))]
 
 
-def tf_activation(name):
+def get_activation(name):
     if name == 'softmax':
         return tf.nn.softmax
     if name == 'tanh':
@@ -74,12 +74,12 @@ class ParallelConvEncoder(tf.keras.layers.Layer):
     TIME_AXIS = 2
     FEATURE_AXIS = 3
 
-    def __init__(self, dsz, motsz, filtsz, activation='relu', name=None, **kwargs):
+    def __init__(self, dsz, motsz, filtsz, activation_name='relu', name=None, **kwargs):
 
         super(ParallelConv, self).__init__(name=name)
         self.Ws = []
         self.bs = []
-        self.activation = tf_activation(activation)
+        self.activation = get_activation(activation_name)
 
         if not isinstance(motsz, list):
             motsz = [motsz] * len(filtsz)
@@ -101,8 +101,8 @@ class ParallelConvEncoder(tf.keras.layers.Layer):
                 strides=[1, 1, 1, 1],
                 padding="SAME", name="CONV"
             )
-            activation = self.activation(tf.nn.bias_add(conv, b), 'activation')
-            parallels.append(activation)
+            parallels.activation(tf.nn.bias_add(conv, b), 'activation')
+            parallels.append(get_activation)
         combine = tf.reshape(tf.concat(values=parallels, axis=ParallelConv.FEATURE_AXIS), [-1, self.output_dim])
         return combine
 
@@ -130,7 +130,7 @@ class ParallelConv(tf.keras.layers.Layer):
         super(ParallelConv, self).__init__(name=name)
         self.Ws = []
         self.bs = []
-        self.activation = tf_activation(activation)
+        self.activation = get_activation(activation)
 
         if not isinstance(motsz, list):
             motsz = [motsz] * len(filtsz)
@@ -245,23 +245,23 @@ def rnn_cell(hsz, rnntype, st=None):
 
 class StackedParallelConvEncoder(tf.keras.Model):
 
-    def __init__(self, dsz, hsz, pdrop, layers, filts=[5], activation='relu', name=None, **kwargs):
+    def __init__(self, dsz, hsz, pdrop, layers, filts=[5], activation_name='relu', name=None, **kwargs):
         """Produce a stack of parallel or single convolution layers with residual connections and dropout between each
 
         :param hsz: (``int``) The number of hidden units per filter
         :param pdrop: (``float``) The probability of dropout
         :param layers: (``int``) The number of layers of parallel convolutions to stack
         :param filts: (``list``) A list of parallel filter widths to apply
-        :param activation: (``str``) A name for activation
+        :param activation_name: (``str``) A name for activation
         :param name: A string name to scope this operation
         """
         super(StackedParallelConvEncoder, self).__init__(name=name)
         filts = listify(filts)
-        self.layer_1 = tf.keras.Sequential([ParallelConvEncoder(dsz, hsz, filts, activation), tf.keras.layers.Dropout(pdrop)])
+        self.layer_1 = tf.keras.Sequential([ParallelConvEncoder(dsz, hsz, filts, activation_name), tf.keras.layers.Dropout(pdrop)])
 
         self.subsequent = []
         for i in range(layers):
-            new_block = tf.keras.Sequential([ParallelConvEncoder(hsz, hsz, filts, activation), tf.keras.layers.Dropout(pdrop)])
+            new_block = tf.keras.Sequential([ParallelConvEncoder(hsz, hsz, filts, activation_name), tf.keras.layers.Dropout(pdrop)])
             self.subsequent.append(ResidualBlock(new_block))
 
     def call(self, inputs, training=False):
