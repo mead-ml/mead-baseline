@@ -3,7 +3,7 @@ import json
 from google.protobuf import text_format
 from tensorflow.python.platform import gfile
 from tensorflow.contrib.layers import fully_connected, xavier_initializer
-from baseline.model import TaggerModel, create_tagger_model, load_tagger_model
+from baseline.model import TaggerModel
 from baseline.tf.tfy import *
 from baseline.utils import ls_props, read_json, write_json
 from baseline.tf.embeddings import *
@@ -41,7 +41,6 @@ class TaggerModelBase(TaggerModel):
             'version': __version__,
             'embeddings': embeddings_info,
             'crf': self.crf,
-            'proj': self.proj,
             'constrain_decode': True if self.constraint is not None else False
         }
         for prop in ls_props(self):
@@ -165,76 +164,8 @@ class TaggerModelBase(TaggerModel):
     def save_using(self, saver):
         self.saver = saver
 
-    def _compute_word_level_loss(self, mask):
-
-        nc = len(self.labels)
-        # Cross entropy loss
-        cross_entropy = tf.one_hot(self.y, nc, axis=-1) * tf.log(tf.nn.softmax(self.probs))
-        cross_entropy = -tf.reduce_sum(cross_entropy, reduction_indices=2)
-        cross_entropy *= mask
-        cross_entropy = tf.reduce_sum(cross_entropy, axis=1)
-        all_loss = tf.reduce_mean(cross_entropy, name="loss")
-        return all_loss
-
-    def _compute_sentence_level_loss(self):
-
-        if self.constraint is not None:
-            A = tf.get_variable(
-                "transitions_raw",
-                shape=(len(self.labels), len(self.labels)),
-                dtype=tf.float32,
-                trainable=True
-            )
-
-            self.mask, inv_mask = self.constraint
-            self.inv_mask = inv_mask * tf.constant(-1e4)
-
-            self.A = tf.add(tf.multiply(A, self.mask), self.inv_mask, name="transitions")
-            ll, self.A = tf.contrib.crf.crf_log_likelihood(self.probs, self.y, self.lengths, self.A)
-        else:
-            ll, self.A = tf.contrib.crf.crf_log_likelihood(self.probs, self.y, self.lengths)
-        return tf.reduce_mean(-ll)
-
-    def _create_sentence_level_decode(self, trans, norm=False):
-        bsz = tf.shape(self.probs)[0]
-        lsz = len(self.labels)
-        np_gos = np.full((1, 1, lsz), -1e4, dtype=np.float32)
-        np_gos[:, :, Offsets.GO] = 0
-        gos = tf.constant(np_gos)
-        start = tf.tile(gos, [bsz, 1, 1])
-        start = tf.nn.log_softmax(start, axis=-1) if norm else start
-        probv = tf.concat([start, self.probs], axis=1)
-        viterbi, _ = tf.contrib.crf.crf_decode(probv, trans, self.lengths + 1)
-        self.best = tf.identity(viterbi[:, 1:], name="best")
-
-    def _create_word_level_decode(self):
-        self.best = tf.argmax(self.probs, 2, name="best")
-
     def create_loss(self):
-
-        with tf.variable_scope("Loss"):
-            gold = tf.cast(self.y, tf.float32)
-            mask = tf.sign(gold)
-
-            if self.crf is True:
-                print('crf=True, creating SLL')
-                all_loss = self._compute_sentence_level_loss()
-            else:
-                print('crf=False, creating WLL')
-                all_loss = self._compute_word_level_loss(mask)
-
-        with tf.variable_scope(self.out_scope, auxiliary_name_scope=False) as s:
-            with tf.name_scope(s.original_name_scope):
-                if self.crf:
-                    self._create_sentence_level_decode(self.A)
-                else:
-                    if self.constraint is not None:
-                        self.constraint = tf.nn.log_softmax(self.constraint[1] * tf.constant(-1e4), axis=-1)
-                        self._create_sentence_level_decode(self.constraint, norm=True)
-                    else:
-                        self._create_word_level_decode()
-
-        return all_loss
+        return self.layers.neg_log_loss(self.probs, self.y, self.lengths)
 
     def __init__(self):
         super(TaggerModelBase, self).__init__()
@@ -248,21 +179,19 @@ class TaggerModelBase(TaggerModel):
         bestv = self.sess.run(self.best, feed_dict=feed_dict)
         return [pij[:sl] for pij, sl in zip(bestv, lengths)]
 
-    def embed(self):
-        """This method performs "embedding" of the inputs.  The base method here then concatenates along depth
-        dimension to form word embeddings
+    def embed(self, **kwargs):
+        return EmbeddingsStack(self.embeddings, self.pdrop_value)
 
-        :return: A 3-d vector where the last dimension is the concatenated dimensions of all embeddings
-        """
-        all_embeddings_out = []
-        for embedding in self.embeddings.values():
-            embeddings_out = embedding.encode()
-            all_embeddings_out.append(embeddings_out)
-        word_embeddings = tf.concat(values=all_embeddings_out, axis=2)
-        return tf.layers.dropout(word_embeddings, self.pdrop_value, training=TRAIN_FLAG())
-
-    def encode(self, embedseq, **kwargs):
+    def encode(self, **kwargs):
         pass
+
+    def decode(self, **kwargs):
+        self.crf = bool(kwargs.get('crf', False))
+        self.crf_mask = bool(kwargs.get('crf_mask', False))
+        self.constraint = kwargs.get('constraint')
+        if self.crf:
+            return CRF(len(self.labels), self.constraint)
+        return TaggerGreedyDecoder(len(self.labels), self.constraint)
 
     @classmethod
     def create(cls, embeddings, labels, **kwargs):
@@ -280,37 +209,20 @@ class TaggerModelBase(TaggerModel):
         model.sess = kwargs.get('sess', tf.Session())
         model.pdrop_in = kwargs.get('dropin', 0.0)
         model.labels = labels
-        model.crf = bool(kwargs.get('crf', False))
-        model.crf_mask = bool(kwargs.get('crf_mask', False))
         model.span_type = kwargs.get('span_type')
-        model.proj = bool(kwargs.get('proj', False))
-        model.feed_input = bool(kwargs.get('feed_input', False))
-        model.activation_type = kwargs.get('activation', 'tanh')
-        model.constraint = kwargs.get('constraint')
 
-        embedseq = model.embed()
-        seed = np.random.randint(10e8)
-        enc_out = model.encode(embedseq, **kwargs)
+        inputs = {'lengths': model.lengths}
+        for k, embedding in embeddings.items():
+            x = kwargs.get(k, embedding.create_placeholder(name=k))
+            inputs[k] = x
 
-        with tf.variable_scope("output") as model.out_scope:
-            if model.feed_input is True:
-                enc_out = tf.concat(axis=2, values=[enc_out, embedseq])
+        embed_model = model.embed(**kwargs)
+        transduce_model = model.encode(**kwargs)
+        decode_model = model.decode(**kwargs)
 
-            # Converts seq to tensor, back to (B,T,W)
-            T = tf.shape(enc_out)[1]
-            H = enc_out.get_shape()[2]
-            # Flatten from [B x T x H] - > [BT x H]
-            enc_out_bt_x_h = tf.reshape(enc_out, [-1, H])
-            init = xavier_initializer(True, seed)
-
-            with tf.contrib.slim.arg_scope([fully_connected], weights_initializer=init):
-                if model.proj is True:
-                    hidden = tf.layers.dropout(fully_connected(enc_out_bt_x_h, H,
-                                                           activation_fn=tf_activation(model.activation_type)), model.pdrop_value, training=TRAIN_FLAG())
-                    preds = fully_connected(hidden, nc, activation_fn=None, weights_initializer=init)
-                else:
-                    preds = fully_connected(enc_out_bt_x_h, nc, activation_fn=None, weights_initializer=init)
-            model.probs = tf.reshape(preds, [-1, T, nc], name="probs")
+        model.layers = TagSequenceModel(nc, embed_model, transduce_model, decode_model)
+        model.probs = model.layers.transduce(inputs)
+        model.best = model.layers.decode(model.probs, model.lengths)
         return model
 
 
@@ -328,13 +240,20 @@ class RNNTaggerModel(TaggerModelBase):
     def __init__(self):
         super(RNNTaggerModel, self).__init__()
 
-    def encode(self, embedseq, **kwargs):
+    def encode(self, **kwargs):
         self.vdrop = kwargs.get('variational_dropout', False)
         rnntype = kwargs.get('rnntype', 'blstm')
         nlayers = kwargs.get('layers', 1)
         hsz = int(kwargs['hsz'])
-        return lstm_encoder(embedseq, self.lengths, hsz, self.pdrop_value, self.vdrop, rnntype, nlayers)
 
+        if rnntype == 'blstm':
+            Encoder = BiLSTMEncoder
+        else:
+            Encoder = LSTMEncoder
+        return Encoder(hsz, self.pdrop_value, nlayers, self.vdrop, rnn_signal)
+            #((embedseq, lengths),
+            #                                                                      training=TRAIN_FLAG())
+        #return lstm_encoder(embedseq, self.lengths, hsz, self.pdrop_value, self.vdrop, rnntype, nlayers)
 
 
 @register_model(task='tagger', name='cnn')
@@ -343,12 +262,13 @@ class CNNTaggerModel(TaggerModelBase):
     def __init__(self):
         super(CNNTaggerModel, self).__init__()
 
-    def encode(self, embedseq, **kwargs):
+    def encode(self, **kwargs):
         nlayers = kwargs.get('layers', 1)
         hsz = int(kwargs['hsz'])
         filts = kwargs.get('wfiltsz', None)
         if filts is None:
             filts = 5
 
-        cnnout = stacked_cnn(embedseq, hsz, self.pdrop_value, nlayers, filts=listify(filts), training=TRAIN_FLAG())
+        # motsz, filtsz, activation='relu', name=None, **kwargs):
+        cnnout = ParallelConvEncoder(self.layers.embed_model.dsz, hsz, listify(filts))
         return cnnout

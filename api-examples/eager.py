@@ -1,7 +1,7 @@
 
 from baseline.utils import listify
 import baseline
-from baseline.tf.layers import *
+import baseline.tf.layers as L
 from baseline.tf.embeddings import LookupTableEmbeddings
 from baseline.w2v import PretrainedEmbeddingsModel, RandomInitVecModel
 import tensorflow as tf
@@ -121,7 +121,7 @@ def predict_input_fn():
     return dataset
 
 
-model = EmbedPoolStackModel(2, embeddings, ParallelConv(300, 100, [3, 4, 5]), Highway(300))
+model = L.EmbedPoolStackModel(2, embeddings, L.ParallelConv(300, 100, [3, 4, 5]), L.Highway(300))
 
 train_loss_results = []
 train_accuracy_results = []

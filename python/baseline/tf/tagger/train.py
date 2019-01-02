@@ -7,7 +7,7 @@ from baseline.tf.optz import optimizer
 from baseline.progress import create_progress_bar
 from baseline.utils import to_spans, f_score, listify, revlut, get_model_file, write_sentence_conll, get_metric_cmp
 from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
-
+from baseline.tf.layers import TRAIN_FLAG
 
 class TaggerEvaluatorTf(object):
 
@@ -157,6 +157,7 @@ def fit(model, ts, vs, es, **kwargs):
     txts = kwargs.get('txts', None)
     model_file = get_model_file('tagger', 'tf', kwargs.get('basedir'))
     after_train_fn = kwargs['after_train_fn'] if 'after_train_fn' in kwargs else None
+    TRAIN_FLAG()
     trainer = create_trainer(model, **kwargs)
     tables = tf.tables_initializer()
     model.sess.run(tables)

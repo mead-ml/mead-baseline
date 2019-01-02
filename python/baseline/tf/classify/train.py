@@ -49,7 +49,7 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         pg = create_progress_bar(steps)
         for batch_dict in pg(loader):
             feed_dict = self.model.make_input(batch_dict, True)
-            _, step, lossv = self.sess.run([self.train_op, self.global_step, self.loss], feed_dict=feed_dict)
+            _, step, lossv = self.sess.run([self.train_op, self.global_step, model.neg_log_loss], feed_dict=feed_dict)
             batchsz = self._get_batchsz(batch_dict)
             report_lossv = lossv * batchsz
             epoch_loss += report_lossv

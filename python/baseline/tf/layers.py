@@ -383,7 +383,7 @@ class BiLSTMEncoder(tf.keras.Model):
 
 class EmbeddingsStack(tf.keras.Model):
 
-    def __init__(self, embeddings_dict, requires_length=False, name=None, **kwargs):
+    def __init__(self, embeddings_dict, dropout_rate=0.0, requires_length=False, name=None, **kwargs):
         """Takes in a dictionary where the keys are the input tensor names, and the values are the embeddings
 
         :param embeddings_dict: (``dict``) dictionary of each feature embedding
@@ -391,6 +391,7 @@ class EmbeddingsStack(tf.keras.Model):
 
         super(EmbeddingsStack, self).__init__(name=name)
         self.embeddings = embeddings_dict
+        self.dropout = tf.keras.layers.Dropout(dropout_rate)
         self._requires_length = requires_length
 
     def call(self, inputs, training=False, mask=None):
@@ -405,7 +406,7 @@ class EmbeddingsStack(tf.keras.Model):
             embeddings_out = embedding(x)
             all_embeddings_out.append(embeddings_out)
         word_embeddings = tf.concat(values=all_embeddings_out, axis=-1)
-        return word_embeddings
+        return self.dropout(word_embeddings)
 
     @property
     def dsz(self):
@@ -750,6 +751,51 @@ class FFN(tf.keras.Model):
         return self.squeeze(self.dropout(self.act(self.expansion(inputs)), training))
 
 
+class TaggerGreedyDecoder(tf.keras.layers.Layer):
+
+    def __init__(self, num_tags, constraint_mask=None, name=None):
+        self.num_tags = num_tags
+        self.inv_mask = None
+        if constraint_mask is not None:
+            _, inv_mask = constraint_mask
+            self.inv_mask = inv_mask * tf.constant(-1e4)
+
+        self.A = self.add_variable("transitions_raw", shape=(num_tags, num_tags), dtype=tf.float32, init='zeros', trainable=False)
+
+    @property
+    def transitions(self):
+        if self.inv_mask is not None:
+            return tf.nn.log_softmax(self.A + self.inv_mask)
+        return self.A
+
+    def neg_log_loss(self, unary, tags, lengths):
+        # Cross entropy loss
+        mask = tf.sequence_mask(lengths)
+        cross_entropy = tf.one_hot(tags, self.num_tags, axis=-1) * tf.log(tf.nn.softmax(unary))
+        cross_entropy = -tf.reduce_sum(cross_entropy, reduction_indices=2)
+        cross_entropy *= mask
+        cross_entropy = tf.reduce_sum(cross_entropy, axis=1)
+        all_loss = tf.reduce_mean(cross_entropy, name="loss")
+        return all_loss
+
+    def call(self, inputs, training=False, mask=None):
+
+        unary, lengths = inputs
+
+        if self.inv_mask is not None:
+            bsz = tf.shape(unary)[0]
+            lsz = self.num_tags
+            np_gos = np.full((1, 1, lsz), -1e4, dtype=np.float32)
+            np_gos[:, :, Offsets.GO] = 0
+            gos = tf.constant(np_gos)
+            start = tf.tile(gos, [bsz, 1, 1])
+            probv = tf.concat([start, unary], axis=1)
+            viterbi, _ = tf.contrib.crf.crf_decode(probv, self.transitions, lengths + 1)
+            return tf.identity(viterbi[:, 1:], name="best")
+        else:
+            return tf.argmax(self.probs, 2, name="best")
+
+
 class CRF(tf.keras.layers.Layer):
 
     def __init__(self, num_tags, constraint_mask=None, name=None):
@@ -801,7 +847,6 @@ class CRF(tf.keras.layers.Layer):
         unary, lengths = inputs
         if training:
             return tf.contrib.crf.crf_log_norm(unary, lengths, self.transitions)
-
         else:
             return self.decode(unary, lengths)
 
@@ -819,8 +864,12 @@ class CRF(tf.keras.layers.Layer):
         np_gos = np.full((1, 1, lsz), -1e4, dtype=np.float32)
         np_gos[:, :, Offsets.GO] = 0
         gos = tf.constant(np_gos)
+
         start = tf.tile(gos, [bsz, 1, 1])
+        start = tf.nn.log_softmax(start, axis=-1)
+
         probv = tf.concat([start, unary], axis=1)
+
         viterbi, _ = tf.contrib.crf.crf_decode(probv, self.transitions, lengths + 1)
         return tf.identity(viterbi[:, 1:], name="best")
 
@@ -841,8 +890,13 @@ class CRF(tf.keras.layers.Layer):
 
 class SequenceModel(tf.keras.Model):
 
-    def __init__(self, nc, embeddings, transducer, decoder=None):
-        self.embed_model = EmbeddingsStack(embeddings)
+    def __init__(self, nc, embeddings, transducer, decoder=None, name=None):
+        super(SequenceModel, self).__init__(name=name)
+        if isinstance(embeddings, dict):
+            self.embed_model = EmbeddingsStack(embeddings)
+        else:
+            assert isinstance(embeddings, EmbeddingsStack)
+            self.embed_model = embeddings
         self.transducer_model = transducer
         self.proj_layer = TimeDistributedProjection(nc)
         self.decoder_model = decoder
@@ -863,12 +917,14 @@ class SequenceModel(tf.keras.Model):
         return self.decode(transduced, inputs.get('lengths'))
 
 
-class TaggerModel(SequenceModel):
+class TagSequenceModel(SequenceModel):
 
-    def __init__(self, nc, embeddings, transducer, decoder=None):
+    def __init__(self, nc, embeddings, transducer, decoder=None, name=None):
         decoder_model = CRF(nc) if decoder is None else decoder
-        super(TaggerModel, self).__init__(nc, embeddings, transducer, decoder_model)
+        super(TagSequenceModel, self).__init__(nc, embeddings, transducer, decoder_model, name)
 
+    def neg_log_loss(self, unary, tags, lengths):
+        return self.decoder_model.neg_log_loss(unary, tags, lengths)
 
 class EmbedPoolStackModel(tf.keras.Model):
 
