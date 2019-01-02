@@ -26,6 +26,7 @@ NUM_PREFETCH = 2
 SHUF_BUF_SZ = 5000
 
 
+
 def to_tensors(ts, lengths_key):
     """Convert a data feed into a tuple of `features` (`dict`) and `y` values
 
@@ -347,7 +348,6 @@ def fit_datasets(model_params, ts, vs, es=None, **kwargs):
     span_type = kwargs.get('span_type', 'iob')
     txts = kwargs.get('txts', None)
     model_file = get_model_file('tagger', 'tf', kwargs.get('basedir'))
-
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
     verbose = kwargs.get('verbose', {'console': kwargs.get('verbose_console', False), 'file': kwargs.get('verbose_file', None)})
     epochs = int(kwargs.get('epochs', 20))

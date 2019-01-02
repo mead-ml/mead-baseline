@@ -86,6 +86,7 @@ class TaggerModelBase(TaggerModel):
         if 'constraint' in kwargs:
             self._state['constraint'] = True
 
+
     @property
     def dropin_value(self):
         """Dropout on the input as a `Dict[str, float]`, one per embedding (keyed off the feature name)
@@ -199,6 +200,7 @@ class TaggerModelBase(TaggerModel):
         """
         return self.layers.neg_log_loss(self.probs, self.y, self.lengths)
 
+
     def get_labels(self):
         """Get the labels (names of each class)
         :return: (`List[str]`) The labels
@@ -244,7 +246,6 @@ class TaggerModelBase(TaggerModel):
         if self.crf:
             return CRF(len(self.labels), self.constraint)
         return TaggerGreedyDecoder(len(self.labels), self.constraint)
-
 
     @classmethod
     def create(cls, embeddings, labels, **kwargs):
@@ -324,6 +325,7 @@ class RNNTaggerModel(TaggerModelBase):
         hsz = int(kwargs['hsz'])
         Encoder = BiLSTMEncoder if rnntype == 'blstm' else LSTMEncoder
         return Encoder(hsz, nlayers, self.pdrop_value, self.vdrop, rnn_signal)
+
 
 @register_model(task='tagger', name='cnn')
 class CNNTaggerModel(TaggerModelBase):
