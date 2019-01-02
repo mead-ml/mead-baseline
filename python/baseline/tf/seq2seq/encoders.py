@@ -1,6 +1,5 @@
 from baseline.tf.tfy import *
 from baseline.tf.embeddings import *
-from baseline.tf.layers import multi_rnn_cell_w_dropout, TRAIN_FLAG
 from baseline.tf.transformer import transformer_encoder_stack
 from baseline.utils import export, MAGIC_VARS
 from baseline.model import register_encoder

@@ -85,6 +85,7 @@ def model_creator(model_params):
     return model_fn
 
 
+
 @register_trainer(task='classify', name='default')
 class ClassifyTrainerTf(EpochReportingTrainer):
     """A Trainer to use if not using tf Estimators
@@ -175,6 +176,7 @@ class ClassifyTrainerTf(EpochReportingTrainer):
             else:
                 feed_dict = self.model.make_input(batch_dict, True)
                 _, step, lossv = self.sess.run([self.train_op, self.global_step, self.loss], feed_dict=feed_dict)
+
 
             batchsz = self._get_batchsz(batch_dict)
             report_lossv = lossv * batchsz

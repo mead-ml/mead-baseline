@@ -3,7 +3,6 @@ from itertools import chain
 from baseline.tf.seq2seq.encoders import *
 from baseline.tf.seq2seq.decoders import *
 from baseline.tf.tfy import *
-from baseline.tf.layers import new_placeholder_dict
 from baseline.model import EncoderDecoderModel, register_model, create_seq2seq_decoder, create_seq2seq_encoder, create_seq2seq_arc_policy
 from baseline.utils import ls_props, read_json, MAGIC_VARS
 from baseline.tf.embeddings import *

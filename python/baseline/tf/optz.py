@@ -2,7 +2,6 @@ import logging
 import tensorflow as tf
 from baseline.train import register_lr_scheduler, create_lr_scheduler, WarmupLearningRateScheduler
 
-
 logger = logging.getLogger('baseline')
 
 

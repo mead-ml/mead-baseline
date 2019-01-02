@@ -7,6 +7,7 @@ import tensorflow as tf
 from baseline.tf.embeddings import *
 from eight_mile.tf.layers import *
 from baseline.version import __version__
+
 from baseline.utils import (
     fill_y,
     listify,
@@ -25,6 +26,7 @@ from baseline.tf.tfy import (
     tf_device_wrapper,
     create_session
 )
+
 
 
 logger = logging.getLogger('baseline')
