@@ -5,7 +5,7 @@ from baseline.train import EpochReportingTrainer, create_trainer, register_train
 from baseline.utils import listify, to_spans, f_score, revlut, get_model_file, write_sentence_conll, get_metric_cmp
 from baseline.pytorch.torchy import *
 from baseline.pytorch.optz import OptimizerManager
-from baseline.tf.layers import TRAIN_FLAG
+from baseline.tf.tfy import TRAIN_FLAG
 
 @register_trainer(task='tagger', name='default')
 class TaggerTrainerPyTorch(EpochReportingTrainer):

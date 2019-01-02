@@ -1,7 +1,7 @@
 
 from baseline.utils import listify
 import baseline
-import baseline.tf.layers as L
+import eight_mile.tf.layers as L
 from baseline.tf.embeddings import LookupTableEmbeddings
 from baseline.w2v import PretrainedEmbeddingsModel, RandomInitVecModel
 import tensorflow as tf

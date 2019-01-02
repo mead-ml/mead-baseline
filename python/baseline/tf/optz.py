@@ -1,6 +1,5 @@
 import tensorflow as tf
 from baseline.train import register_lr_scheduler, create_lr_scheduler, WarmupLearningRateScheduler
-import math
 
 
 @register_lr_scheduler('default')

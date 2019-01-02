@@ -1,10 +1,5 @@
-import tensorflow as tf
-from baseline.tf.tfy import get_shape_as_list
-from baseline.tf.layers import (TRAIN_FLAG,
-                                TransformerEncoder,
-                                TransformerEncoderStack,
-                                TransformerDecoder,
-                                TransformerDecoderStack)
+from baseline.tf.tfy import *
+
 
 
 def transformer_encoder(x, src_mask, scope, num_heads, pdrop, scale=True, activation_type='relu', d_ff=None):

@@ -7,7 +7,7 @@ from baseline.tf.optz import optimizer
 from baseline.progress import create_progress_bar
 from baseline.utils import to_spans, f_score, listify, revlut, get_model_file, write_sentence_conll, get_metric_cmp
 from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
-from baseline.tf.layers import TRAIN_FLAG
+from baseline.tf.tfy import TRAIN_FLAG
 
 class TaggerEvaluatorTf(object):
 

@@ -4,10 +4,9 @@ from google.protobuf import text_format
 from tensorflow.python.platform import gfile
 from baseline.utils import fill_y, listify, ls_props, read_json
 from baseline.model import ClassifierModel, register_model
-from baseline.tf.layers import TRAIN_FLAG, new_placeholder_dict, BiLSTMEncoder, LSTMEncoder, rnn_hidden, rnn_bi_hidden
+from baseline.tf.tfy import *
 from baseline.tf.embeddings import *
 from baseline.version import __version__
-from baseline.tf.layers import EmbedPoolStackModel, EmbeddingsStack, ParallelConv, DenseStack, BiLSTMEncoder
 
 
 

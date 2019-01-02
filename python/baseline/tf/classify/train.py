@@ -5,11 +5,10 @@ import tensorflow as tf
 from baseline.confusion import ConfusionMatrix
 from baseline.progress import create_progress_bar
 from baseline.utils import listify, get_model_file, get_metric_cmp
-from baseline.tf.tfy import _add_ema
+from baseline.tf.tfy import _add_ema, TRAIN_FLAG
 from baseline.tf.optz import optimizer
 from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
 from baseline.utils import verbose_output
-from baseline.tf.layers import TRAIN_FLAG
 
 
 @register_trainer(task='classify', name='default')
@@ -49,7 +48,7 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         pg = create_progress_bar(steps)
         for batch_dict in pg(loader):
             feed_dict = self.model.make_input(batch_dict, True)
-            _, step, lossv = self.sess.run([self.train_op, self.global_step, model.neg_log_loss], feed_dict=feed_dict)
+            _, step, lossv = self.sess.run([self.train_op, self.global_step, self.loss], feed_dict=feed_dict)
             batchsz = self._get_batchsz(batch_dict)
             report_lossv = lossv * batchsz
             epoch_loss += report_lossv

@@ -103,7 +103,7 @@ class ParallelConvEncoder(tf.keras.layers.Layer):
             )
             activation = self.activation(tf.nn.bias_add(conv, b), 'activation')
             parallels.append(activation)
-        combine = tf.reshape(tf.concat(values=activation, axis=ParallelConv.FEATURE_AXIS), [-1, self.output_dim])
+        combine = tf.reshape(tf.concat(values=parallels, axis=ParallelConv.FEATURE_AXIS), [-1, self.output_dim])
         return combine
 
     def compute_output_shape(self, input_shape):

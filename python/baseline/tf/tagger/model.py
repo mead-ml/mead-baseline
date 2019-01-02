@@ -7,7 +7,7 @@ from baseline.model import TaggerModel
 from baseline.tf.tfy import *
 from baseline.utils import ls_props, read_json, write_json
 from baseline.tf.embeddings import *
-from baseline.tf.layers import TRAIN_FLAG, new_placeholder_dict
+from baseline.tf.tfy import TRAIN_FLAG, new_placeholder_dict
 from baseline.version import __version__
 from baseline.model import register_model
 from baseline.utils import listify, Offsets

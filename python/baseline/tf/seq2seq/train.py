@@ -14,7 +14,7 @@ from baseline.utils import (
 )
 from baseline.train import Trainer, create_trainer, register_trainer, register_training_func
 from baseline.bleu import bleu
-from baseline.tf.layers import SET_TRAIN_FLAG
+from baseline.tf.tfy import SET_TRAIN_FLAG
 
 
 @register_trainer(task='seq2seq', name='default')

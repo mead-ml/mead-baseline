@@ -1,6 +1,6 @@
 import numpy as np
 from baseline.utils import transition_mask as transition_mask_np
-from baseline.tf.layers import *
+from eight_mile.tf.layers import *
 
 def _add_ema(model, decay):
     """Create ops needed to track EMA when training.

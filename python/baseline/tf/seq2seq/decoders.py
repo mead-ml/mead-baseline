@@ -1,5 +1,4 @@
 from baseline.tf.tfy import *
-from baseline.tf.layers import multi_rnn_cell_w_dropout, TRAIN_FLAG
 import tensorflow.contrib.seq2seq as tfcontrib_seq2seq
 from baseline.utils import ls_props, read_json, Offsets, export
 from baseline.model import register_decoder, register_arc_policy, create_seq2seq_arc_policy
