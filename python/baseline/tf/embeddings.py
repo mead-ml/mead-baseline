@@ -315,8 +315,10 @@ class PositionalLookupTableEmbeddings(LookupTableEmbeddings):
     def create(cls, model, name, **kwargs):
         return cls(name, vsz=model.vsz, dsz=model.dsz, weights=model.weights, **kwargs)
 
+
 @register_embeddings(name='char-lstm')
 class CharLSTMEmbeddings(TensorFlowEmbeddings):
+
     @classmethod
     def create_placeholder(cls, name):
         return tf.placeholder(tf.int32, [None, None, None], name=name)
@@ -338,10 +340,10 @@ class CharLSTMEmbeddings(TensorFlowEmbeddings):
             unif = kwargs.get('unif', 0.1)
             self.weights = np.random.uniform(-unif, unif, (self.vsz, self.dsz))
 
-    def detach_ref(self):
+    def detached_ref(self):
         if self.weights is None:
             raise Exception('You must initialize `weights` in order to use this method.')
-        return LampleLSTMEmbeddings(
+        return CharLSTMEmbeddings(
             name=self.name, vsz=self.vsz, dsz=self.dsz, scope=self.scope,
             finetune=self.finetune, lstmsz=self.lstmsz, layers=self.layers,
             dprop=self.pdrop, rnn_type=self.rnn_type, weights=self.weights,
@@ -349,7 +351,7 @@ class CharLSTMEmbeddings(TensorFlowEmbeddings):
 
     def encode(self, x=None):
         if x is None:
-            x = LampleLSTMEmbeddings.create_placeholder(self.name)
+            x = CharLSTMEmbeddings.create_placeholder(self.name)
         self.x = x
         with tf.variable_scope(self.scope):
             Wch = tf.get_variable(
