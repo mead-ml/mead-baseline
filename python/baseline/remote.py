@@ -50,7 +50,10 @@ class RemoteModelTensorFlowREST(object):
         url = '{}/v1/models/{}{}:predict'.format(self.remote, self.name, v_str)
         request = self.create_request(examples)
         outcomes_list = requests.post(url, json=request)
-        outcomes_list = outcomes_list.json()['outputs']
+        outcomes_list = outcomes_list.json()
+        if "error" in outcomes_list:
+            raise ValueError("remote server returns error: {0}".format(outcomes_list["error"]))
+        outcomes_list = outcomes_list["outputs"]
         outcomes_list = self.deserialize_response(examples, outcomes_list)
         return outcomes_list
 
