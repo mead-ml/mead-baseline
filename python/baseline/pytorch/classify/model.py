@@ -154,8 +154,10 @@ class ConvModel(ClassifierModelBase):
     def init_pool(self, dsz, **kwargs):
         filtsz = kwargs['filtsz']
         cmotsz = kwargs['cmotsz']
-        self.parallel_conv = nn.Sequential([ParallelConv(dsz, cmotsz, filtsz, "relu"), nn.Dropout(self.pdrop)])
-        return self.parallel_conv.outsz
+        conv = ParallelConv(dsz, cmotsz, filtsz, "relu")
+        outsz = conv.output_dim
+        self.parallel_conv = nn.Sequential(conv, nn.Dropout(self.pdrop))
+        return outsz
 
     def pool(self, btc, lengths):
         embeddings = btc.transpose(1, 2).contiguous()

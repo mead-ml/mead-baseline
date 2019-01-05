@@ -13,7 +13,7 @@ class TensorFlowEmbeddings(tf.keras.layers.Layer):
     def __init__(self, trainable=True, name=None, dtype=tf.float32):
         """Constructor
         """
-        super(TensorFlowEmbeddings, self).__init__(trainable, name, dtype)
+        super(TensorFlowEmbeddings, self).__init__(trainable=trainable, name=name, dtype=dtype)
 
     def detached_ref(self):
         """This will detach any attached input and reference the same sub-graph otherwise
@@ -72,6 +72,20 @@ class TensorFlowEmbeddings(tf.keras.layers.Layer):
         :return:
         """
         return cls(name, vsz=model.vsz, dsz=model.dsz, weights=model.weights, **kwargs)
+
+    def save_md(self, target):
+        """Save the metadata associated with this embedding as a JSON file
+
+        :param target: The name of the output file
+        :return:
+        """
+        write_json(self.get_config(), target)
+
+    def get_config(self):
+        config = super(LookupTableEmbeddings, self).get_config()
+        config['dsz'] = self.get_dsz()
+        config['vsz'] = self.get_vsz()
+        return config
 
 
 @register_embeddings(name='default')
@@ -153,14 +167,6 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
 
         return word_embeddings
 
-    def save_md(self, target):
-        """Save the metadata associated with this embedding as a JSON file
-
-        :param target: The name of the output file
-        :return:
-        """
-        write_json({'vsz': self.vsz, 'dsz': self.dsz}, target)
-
 
 @register_embeddings(name='char-conv')
 class CharConvEmbeddings(TensorFlowEmbeddings):
@@ -173,9 +179,6 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
 
     def __init__(self, name, **kwargs):
         super(CharConvEmbeddings, self).__init__()
-
-
-
         self._name = name
         self.scope = kwargs.get('scope', '{}/CharLUT'.format(self.name))
         self.vsz = kwargs.get('vsz')
@@ -212,9 +215,6 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
                                   cfiltsz=self.cfiltsz, max_feat=self.max_feat, gating=self.gating,
                                   num_gates=self.num_gates, activation=self.activation, wsz=self.wsz,
                                   weights=self._weights)
-
-    def save_md(self, target):
-        write_json({'vsz': self.get_vsz(), 'dsz': self.get_dsz()}, target)
 
     def encode(self, x=None):
         if x is None:
@@ -323,6 +323,7 @@ class PositionalLookupTableEmbeddings(LookupTableEmbeddings):
     def create(cls, model, name, **kwargs):
         return cls(name, vsz=model.vsz, dsz=model.dsz, weights=model.weights, **kwargs)
 
+
 @register_embeddings(name='char-lstm')
 class CharLSTMEmbeddings(TensorFlowEmbeddings):
     @classmethod
@@ -349,7 +350,7 @@ class CharLSTMEmbeddings(TensorFlowEmbeddings):
     def detach_ref(self):
         if self.weights is None:
             raise Exception('You must initialize `weights` in order to use this method.')
-        return LampleLSTMEmbeddings(
+        return CharLSTMEmbeddings(
             name=self.name, vsz=self.vsz, dsz=self.dsz, scope=self.scope,
             finetune=self.finetune, lstmsz=self.lstmsz, layers=self.layers,
             dprop=self.pdrop, rnn_type=self.rnn_type, weights=self.weights,
@@ -357,7 +358,7 @@ class CharLSTMEmbeddings(TensorFlowEmbeddings):
 
     def encode(self, x=None):
         if x is None:
-            x = LampleLSTMEmbeddings.create_placeholder(self.name)
+            x = CharLSTMEmbeddings.create_placeholder(self.name)
         self.x = x
         with tf.variable_scope(self.scope):
             Wch = tf.get_variable(
@@ -390,5 +391,6 @@ class CharLSTMEmbeddings(TensorFlowEmbeddings):
     def get_vsz(self):
         return self.vsz
 
-    def save_md(self, target):
-        write_json({'vsz': self.vsz, 'dsz': self.dsz, 'lstmsz': self.lstmsz}, target)
+    def get_config(self):
+        config = super(CharLSTMEmbeddings, self).get_config()
+        config['lstmsz'] = self.lstmsz

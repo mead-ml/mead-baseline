@@ -9,7 +9,6 @@ from baseline.tf.embeddings import *
 from baseline.version import __version__
 
 
-
 class ClassifierModelBase(ClassifierModel):
     """Base for all baseline implementations of token-based classifiers
     
@@ -30,7 +29,7 @@ class ClassifierModelBase(ClassifierModel):
         super(ClassifierModelBase, self).__init__()
 
     def set_saver(self, saver):
-        self.saver = saver
+        pass
 
     def save_values(self, basename):
         """Save tensor files out
@@ -38,7 +37,7 @@ class ClassifierModelBase(ClassifierModel):
         :param basename: Base name of model
         :return:
         """
-        self.saver.save(self.sess, basename)
+        tf.keras.models.save_model(self.layers, basename, include_optimizer=False)
 
     def save_md(self, basename):
         """This method saves out a `.state` file containing meta-data from these classes and any info
@@ -161,29 +160,15 @@ class ClassifierModelBase(ClassifierModel):
         """
         sess = kwargs.get('session', kwargs.get('sess', tf.Session()))
         model = cls()
-        with open(basename + '.saver') as fsv:
-            saver_def = tf.train.SaverDef()
-            text_format.Merge(fsv.read(), saver_def)
 
         checkpoint_name = kwargs.get('checkpoint_name', basename)
         checkpoint_name = checkpoint_name or basename
-
+        model.layers = tf.keras.models.load_model(checkpoint_name)
         state = read_json(basename + '.state')
 
         for prop in ls_props(model):
             if prop in state:
                 setattr(model, prop, state[prop])
-
-        with gfile.FastGFile(basename + '.graph', 'rb') as f:
-            gd = tf.GraphDef()
-            gd.ParseFromString(f.read())
-            sess.graph.as_default()
-            tf.import_graph_def(gd, name='')
-            try:
-                sess.run(saver_def.restore_op_name, {saver_def.filename_tensor_name: checkpoint_name})
-            except:
-                # Backwards compat
-                sess.run(saver_def.restore_op_name, {saver_def.filename_tensor_name: checkpoint_name + ".model"})
 
         model.embeddings = dict()
         for key, class_name in state['embeddings'].items():
@@ -200,9 +185,6 @@ class ClassifierModelBase(ClassifierModel):
             model.lengths = None
         model.probs = tf.get_default_graph().get_tensor_by_name('output/probs:0')
 
-
-        model.best = tf.get_default_graph().get_tensor_by_name('output/best:0')
-        model.logits = tf.get_default_graph().get_tensor_by_name('output/logits:0')
 
         model.labels = read_json(basename + '.labels')
         model.sess = sess
@@ -344,7 +326,7 @@ class ConvModel(ClassifierModelBase):
         """
         cmotsz = kwargs['cmotsz']
         filtsz = kwargs['filtsz']
-        conv = ParallelConv(dsz, cmotsz, filtsz)
+        conv = ParallelConv((None,dsz), cmotsz, filtsz)
         return tf.keras.Sequential([conv, tf.keras.layers.Dropout(self.pdrop_value)])
 
 
@@ -390,10 +372,9 @@ class LSTMModel(ClassifierModelBase):
         nlayers = int(kwargs.get('layers', 1))
 
         if rnntype == 'blstm':
-            return BiLSTMEncoder(hsz, self.pdrop_value, nlayers, vdrop, output_fn=rnn_bi_hidden)
+            return BiLSTMEncoder(hsz, nlayers, self.pdrop_value, vdrop, output_fn=rnn_bi_hidden)
 
-        return LSTMEncoder(hsz, self.pdrop_value, nlayers, vdrop, output_fn=rnn_hidden)
-
+        return LSTMEncoder(hsz, nlayers, self.pdrop_value, vdrop, output_fn=rnn_hidden)
 
 
 class NBowBase(ClassifierModelBase):

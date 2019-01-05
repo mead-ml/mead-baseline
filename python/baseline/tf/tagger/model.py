@@ -250,7 +250,7 @@ class RNNTaggerModel(TaggerModelBase):
             Encoder = BiLSTMEncoder
         else:
             Encoder = LSTMEncoder
-        return Encoder(hsz, self.pdrop_value, nlayers, self.vdrop, rnn_signal)
+        return Encoder(hsz, nlayers, self.pdrop_value, self.vdrop, rnn_signal)
             #((embedseq, lengths),
             #                                                                      training=TRAIN_FLAG())
         #return lstm_encoder(embedseq, self.lengths, hsz, self.pdrop_value, self.vdrop, rnntype, nlayers)

@@ -521,6 +521,8 @@ def lookup_sentence(rlut, seq, reverse=False, padchar=''):
     return (' '.join(res)).strip()
 
 
+
+
 @exporter
 def topk(k, probs):
     """Get a sparse index (dictionary of top values)."""

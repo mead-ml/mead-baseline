@@ -11,8 +11,8 @@ from baseline.pytorch.torchy import (
     pytorch_linear,
     SkipConnection,
     Highway,
-    pytorch_lstm,
-    BiRNNWrapper,
+    rnn_bi_hidden,
+    BiLSTMEncoder,
 )
 
 
@@ -89,8 +89,8 @@ class CharConvEmbeddings(nn.Module, PyTorchEmbeddings):
         activation_type = kwargs.get('activation', 'tanh')
         pdrop = kwargs.get('pdrop', 0.5)
         cconv = ParallelConv(self.dsz, char_hsz, char_filtsz, activation_type)
-        self.wchsz = cconv.outsz
-        self.char_comp = nn.Sequential([cconv, nn.Dropout(self.pdrop)])
+        self.wchsz = cconv.output_dim
+        self.char_comp = nn.Sequential(cconv, nn.Dropout(pdrop))
         self.linear = pytorch_linear(self.wchsz, self.wchsz)
         gating = kwargs.get('gating', 'skip')
         GatingConnection = SkipConnection if gating == 'skip' else Highway
@@ -101,7 +101,7 @@ class CharConvEmbeddings(nn.Module, PyTorchEmbeddings):
         print(self)
 
     def get_dsz(self):
-        return self.wsz
+        return self.wchsz
 
     def get_vsz(self):
         return self.vsz
@@ -118,7 +118,7 @@ class CharConvEmbeddings(nn.Module, PyTorchEmbeddings):
         #        pytorch_activation(self.activation_type)
         mots = self.char_comp(char_vecs)
         gated = self.gating_seq(mots)
-        return gated.view(_0, _1, self.char_comp.outsz)
+        return gated.view(_0, _1, self.get_dsz())
 
 
 @register_embeddings(name='positional')
@@ -185,7 +185,7 @@ class CharLSTMEmbeddings(nn.Module, PyTorchEmbeddings):
         rnn_type = kwargs.get('rnn_type', 'blstm')
         unif = kwargs.get('unif', 0)
         weight_init = kwargs.get('weight_init', 'uniform')
-        self.char_comp = BiRNNWrapper(pytorch_lstm(self.dsz, self.lstmsz, rnn_type, layers, pdrop, unif=unif, initializer=weight_init, batch_first=False), layers)
+        self.char_comp = BiLSTMEncoder(self.dsz, self.lstmsz, layers, pdrop, unif=unif, initializer=weight_init, output_fn=rnn_bi_hidden)
 
 
     def forward(self, xch):
@@ -201,7 +201,7 @@ class CharLSTMEmbeddings(nn.Module, PyTorchEmbeddings):
         sorted_feats = char_embeds[perm_idx].transpose(0, 1).contiguous()
 
         packed = torch.nn.utils.rnn.pack_padded_sequence(sorted_feats, sorted_word_lengths.tolist())
-        _, hidden = self.char_comp(packed)
+        hidden = self.char_comp(packed)
         hidden = tuple(h[-1, :, :] for h in hidden)
         results = tuple(h.scatter_(0, perm_idx.unsqueeze(-1).expand_as(h), h) for h in hidden)
         return results[0].reshape((B, T, -1))

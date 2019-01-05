@@ -221,11 +221,15 @@ class RNNTaggerModel(TaggerModelBase):
         unif = kwargs.get('unif', 0)
         hsz = int(kwargs['hsz'])
         weight_init = kwargs.get('weight_init', 'uniform')
-        self.encoder = LSTMEncoder(input_sz, hsz, rnntype, layers, pdrop, unif=unif, initializer=weight_init)
+        if rnntype == 'lstm':
+            Encoder = LSTMEncoder
+        else:
+            Encoder = BiLSTMEncoder
+        self.encoder = Encoder(input_sz, hsz, layers, pdrop, unif=unif, initializer=weight_init, output_fn=rnn_signal)
         return hsz
 
     def encode(self, words_over_time, lengths):
-        return self.encoder(words_over_time, lengths)
+        return self.encoder((words_over_time, lengths))
 
 
 @register_model(task='tagger', name='cnn')
