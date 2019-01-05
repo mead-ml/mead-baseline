@@ -186,3 +186,4 @@ def unsort_batch(batch, perm_idx):
     extra_dims = [1] * diff
     perm_idx = perm_idx.view([-1] + extra_dims)
     return batch.scatter_(0, perm_idx.expand_as(batch), batch)
+

@@ -31,7 +31,6 @@ from baseline.tf.tfy import (
 
 logger = logging.getLogger('baseline')
 
-
 class ClassifierModelBase(ClassifierModel):
     """Base for all baseline implementations of token-based classifiers
 
@@ -53,7 +52,7 @@ class ClassifierModelBase(ClassifierModel):
         self._unserializable = []
 
     def set_saver(self, saver):
-        self.saver = saver
+        pass
 
     def save_values(self, basename):
         """Save tensor files out
@@ -61,7 +60,7 @@ class ClassifierModelBase(ClassifierModel):
         :param basename: Base name of model
         :return:
         """
-        self.saver.save(self.sess, basename)
+        tf.keras.models.save_model(self.layers, basename, include_optimizer=False)
 
     def save_md(self, basename):
         """This method saves out a `.state` file containing meta-data from these classes and any info

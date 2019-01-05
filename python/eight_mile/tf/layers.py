@@ -20,6 +20,17 @@ def TRAIN_FLAG():
     return BASELINE_TF_TRAIN_FLAG
 
 
+# Mapped
+def tensor_and_lengths(inputs):
+    if isinstance(inputs, (list, tuple)):
+        in_tensor, lengths = inputs
+    else:
+        in_tensor = inputs
+        lengths = None  ##tf.reduce_sum(tf.cast(tf.not_equal(inputs, 0), tf.int32), axis=1)
+
+    return in_tensor, lengths
+
+
 def new_placeholder_dict(train):
     global BASELINE_TF_TRAIN_FLAG
 
@@ -51,7 +62,8 @@ def get_shape_as_list(x):
     return [ts[i] if ps[i] is None else ps[i] for i in range(len(ps))]
 
 
-def get_activation(name):
+# Mapped
+def get_activation(name='relu'):
     if name == 'softmax':
         return tf.nn.softmax
     if name == 'tanh':
@@ -114,12 +126,13 @@ class ParallelConvEncoder(tf.keras.layers.Layer):
         return False
 
 
+# Mapped
 class ParallelConv(tf.keras.layers.Layer):
     DUMMY_AXIS = 1
     TIME_AXIS = 2
     FEATURE_AXIS = 3
 
-    def __init__(self, dsz, motsz, filtsz, activation='relu', name=None, **kwargs):
+    def __init__(self, insz, outsz, filtsz, activation='relu', name=None, **kwargs):
         """Do parallel convolutions with multiple filter widths and max-over-time pooling.
 
         :param filtsz: The list of filter widths to use.
@@ -132,11 +145,11 @@ class ParallelConv(tf.keras.layers.Layer):
         self.bs = []
         self.activation = get_activation(activation)
 
-        if not isinstance(motsz, list):
-            motsz = [motsz] * len(filtsz)
+        if not isinstance(outsz, list):
+            motsz = [outsz] * len(filtsz)
 
-        for fsz, cmotsz in zip(filtsz, motsz):
-            kernel_shape = [1, int(fsz), int(dsz), int(cmotsz)]
+        for fsz, cmotsz in zip(filtsz, outsz):
+            kernel_shape = [1, int(fsz), int(insz), int(cmotsz)]
             self.Ws.append(self.add_variable('cmot-{}/W'.format(fsz), shape=kernel_shape))
             self.bs.append(self.add_variable('cmot-{}/b'.format(fsz), shape=[cmotsz], initializer=tf.constant_initializer(0.0)))
 
@@ -168,29 +181,20 @@ class ParallelConv(tf.keras.layers.Layer):
     def requires_length(self):
         return False
 
-
-def tensor_and_lengths(inputs):
-    if isinstance(inputs, (list, tuple)):
-        in_tensor, lengths = inputs
-    else:
-        in_tensor = inputs
-        lengths = None  ##tf.reduce_sum(tf.cast(tf.not_equal(inputs, 0), tf.int32), axis=1)
-
-    return in_tensor, lengths
-
-
+# Mapped
 def rnn_ident(output, hidden):
     return output, hidden
 
-
+# Mapped
 def rnn_signal(output, hidden):
     return output
 
-
+# Mapped
 def rnn_hidden(output, output_state):
     output_state = output_state[-1].h
     return output_state
 
+# Mapped
 def rnn_bi_hidden(output, output_state):
     fw_final_state, bw_final_state = output_state
     output_state = fw_final_state[-1].h + bw_final_state[-1].h
@@ -277,8 +281,9 @@ class StackedParallelConvEncoder(tf.keras.Model):
         return layer
 
 
+# Mapped
 class LayerNorm(tf.keras.layers.Layer):
-    def __init__(self, axis=-1, epsilon=1e-5, name=None, **kwargs):
+    def __init__(self, epsilon=1e-6, axis=-1, name=None, **kwargs):
         super(LayerNorm, self).__init__(name=name)
         self.axis = listify(axis)
         self.epsilon = epsilon
@@ -297,16 +302,19 @@ class LayerNorm(tf.keras.layers.Layer):
         return x
 
 
+# Mapped
 class LSTMEncoder(tf.keras.Model):
 
-    def __init__(self, hsz, pdrop, nlayers, variational=False, output_fn=None, requires_length=True, name=None, **kwargs):
+    def __init__(self, hsz, nlayers, pdrop=0.0, variational=False, output_fn=None, requires_length=True, name=None, **kwargs):
         """Produce a stack of LSTMs with dropout performed on all but the last layer.
 
         :param hsz: (``int``) The number of hidden units per LSTM
-        :param pdrop: (``int``) The probability of dropping a unit value during dropout
         :param nlayers: (``int``) The number of layers of LSTMs to stack
-        :param variational (``bool``) variational recurrence is on
-        :param training (``bool``) Are we training? (defaults to ``False``)
+        :param pdrop: (``int``) The probability of dropping a unit value during dropout
+        :param variational: (``bool``) variational recurrence is on
+        :param output_fn: A function that filters output to decide what to return
+        :param requires_length: (``bool``) Does the input require an input length (defaults to ``True``)
+        :param name: (``str``) Optional, defaults to `None`
         :return: a stacked cell
         """
         super(LSTMEncoder, self).__init__(name=name)
@@ -333,14 +341,15 @@ class LSTMEncoder(tf.keras.Model):
         return self._requires_length
 
 
+# Mapped
 class BiLSTMEncoder(tf.keras.Model):
 
-    def __init__(self, hsz, pdrop, nlayers, variational=False, output_fn=None, requires_length=True, name=None, **kwargs):
+    def __init__(self, hsz, nlayers, pdrop=0.0, variational=False, output_fn=None, requires_length=True, name=None, **kwargs):
         """Produce a stack of LSTMs with dropout performed on all but the last layer.
 
         :param hsz: (``int``) The number of hidden units per LSTM
-        :param pdrop: (``int``) The probability of dropping a unit value during dropout
         :param nlayers: (``int``) The number of layers of LSTMs to stack
+        :param pdrop: (``int``) The probability of dropping a unit value during dropout
         :param variational (``bool``) variational recurrence is on
         :param training (``bool``) Are we training? (defaults to ``False``)
         :return: a stacked cell

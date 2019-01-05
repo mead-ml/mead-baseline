@@ -104,6 +104,7 @@ def get_activation(name="relu"):
         return nn.Hardtanh()
     if name == 'leaky_relu':
         return nn.LeakyReLU()
+
     if name == "prelu":
         return nn.PReLU()
     if name == "sigmoid":
@@ -114,6 +115,7 @@ def get_activation(name="relu"):
         return nn.LogSoftmax(dim=-1)
     if name == "softmax":
         return nn.Softmax(dim=-1)
+
     return nn.ReLU()
 
 
@@ -218,6 +220,7 @@ class ParallelConv(nn.Module):
             self.transform_input = tbh2bht
         else:
             self.transform_input = ident
+
         if type(outsz) == int:
             outsz_filts = len(filtsz) * [outsz]
 
@@ -235,8 +238,8 @@ class ParallelConv(nn.Module):
     def forward(self, inputs):
         # TODO: change the input to btc?
         mots = []
-
         input_bct = self.transform_input(inputs)
+
         for conv in self.convs:
             # In Conv1d, data BxCxT, max over time
             conv_out = conv(input_bct)
@@ -265,7 +268,6 @@ class Highway(nn.Module):
         gated = (proj_gate * proj_result) + ((1 - proj_gate) * input)
         return gated
 
-
 def pytorch_linear(in_sz, out_sz, unif=0, initializer=None):
     l = nn.Linear(in_sz, out_sz)
     if unif > 0:
@@ -292,7 +294,6 @@ class Dense(nn.Module):
     def forward(self, input):
         return self.activation(self.layer(input))
 
-
 # Mapped
 class ResidualBlock(nn.Module):
 
@@ -313,6 +314,7 @@ class SkipConnection(ResidualBlock):
         super(SkipConnection, self).__init__(None)
         self.layer = Dense(input_size, input_size, activation=activation)
         self.output_dim = input_size
+
 
 # Mapped
 class LayerNorm(nn.Module):
@@ -596,7 +598,6 @@ class DenseStack(nn.Module):
     @property
     def requires_length(self):
         return False
-
 
 class BaseAttention(nn.Module):
 

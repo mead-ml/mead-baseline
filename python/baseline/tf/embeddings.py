@@ -109,6 +109,20 @@ class TensorFlowEmbeddings(tf.keras.layers.Layer):
         config.update(self._state)
         return config
 
+    def save_md(self, target):
+        """Save the metadata associated with this embedding as a JSON file
+
+        :param target: The name of the output file
+        :return:
+        """
+        write_json(self.get_config(), target)
+
+    def get_config(self):
+        config = super(LookupTableEmbeddings, self).get_config()
+        config['dsz'] = self.get_dsz()
+        config['vsz'] = self.get_vsz()
+        return config
+
 
 @register_embeddings(name='default')
 class LookupTableEmbeddings(TensorFlowEmbeddings):
@@ -194,8 +208,6 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
         #with tf.control_dependencies([e0]):
         #    word_embeddings = tf.nn.embedding_lookup(self.W, self.x)
         return word_embeddings
-
-
 
 @register_embeddings(name='large-lut')
 class LargeLookupTableEmbeddings(LookupTableEmbeddings):
@@ -314,9 +326,6 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
                                   dropin=self.dropin,
                                   projsz=self.projsz,
                                   weights=self._weights)
-
-    def save_md(self, target):
-        write_json({'vsz': self.get_vsz(), 'dsz': self.get_dsz()}, target)
 
     def encode(self, x=None):
         if x is None:
@@ -578,6 +587,7 @@ class LearnedPositionalCharConvEmbeddings(CharConvEmbeddings):
 
 
 
+
 @register_embeddings(name='char-lstm')
 class CharLSTMEmbeddings(TensorFlowEmbeddings):
     @classmethod
@@ -613,6 +623,7 @@ class CharLSTMEmbeddings(TensorFlowEmbeddings):
     def encode(self, x=None):
         if x is None:
             x = CharLSTMEmbeddings.create_placeholder(self._name)
+
         self.x = x
         with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
             Wch = tf.get_variable(
