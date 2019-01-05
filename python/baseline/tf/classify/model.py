@@ -326,7 +326,7 @@ class ConvModel(ClassifierModelBase):
         """
         cmotsz = kwargs['cmotsz']
         filtsz = kwargs['filtsz']
-        conv = ParallelConv((None,dsz), cmotsz, filtsz)
+        conv = ParallelConv(dsz, cmotsz, filtsz)
         return tf.keras.Sequential([conv, tf.keras.layers.Dropout(self.pdrop_value)])
 
 
