@@ -40,10 +40,17 @@ class VariationalDropout(nn.Module):
         return mask * input
 
 
+class Identity(nn.Module):
+    def __init__(self):
+        super(Identity, self).__init__()
+
+    def forward(self, inputs):
+        return inputs
+
 # Mapped
 def get_activation(name="relu"):
     if name is None or name == "ident":
-        return nn.Identity()
+        return ident
     if name == "tanh":
         return nn.Tanh()
     if name == "hardtanh":
@@ -57,9 +64,9 @@ def get_activation(name="relu"):
     if name == "log_sigmoid":
         return nn.LogSigmoid()
     if name == "log_softmax":
-        return nn.LogSoftmax()
+        return nn.LogSoftmax(dim=-1)
     if name == "softmax":
-        return nn.Softmax()
+        return nn.Softmax(dim=-1)
     return nn.ReLU()
 
 
@@ -230,7 +237,7 @@ class Dense(nn.Module):
         self.output_dim = outsz
 
     def forward(self, input):
-        return self.layer(input)
+        return self.activation(self.layer(input))
 
 
 
@@ -514,7 +521,7 @@ class DenseStack(nn.Module):
         self.layer_stack = nn.Sequential()
         current = insz
         for i, hsz in hszs:
-            self.layer_stack.append(WithDropout(Dense(current, hsz), pdrop_value))
+            self.layer_stack.append(WithDropout(Dense(current, hsz, activation=activation_name), pdrop_value))
             current = hsz
 
     def forward(self, inputs):
@@ -532,7 +539,7 @@ class DenseStack(nn.Module):
         """
         x = inputs
         for layer in self.layer_stack:
-            x = layer(x, training)
+            x = layer(x)
         return x
 
     @property
@@ -655,7 +662,7 @@ class EmbedPoolStackModel(nn.Module):
 
         self.pool_model = pool_model
         output_dim = self.pool_model.output_dim if stack_model is None else stack_model.output_dim
-        self.output_layer = nn.Sequential(nn.Linear(output_dim, nc), nn.LogSoftmax())
+        self.output_layer = Dense(output_dim, nc, activation="log_softmax")
         self.stack_model = stack_model
 
     def forward(self, inputs):

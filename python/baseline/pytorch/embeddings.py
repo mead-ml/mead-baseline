@@ -8,7 +8,7 @@ from baseline.embeddings import register_embeddings
 from baseline.pytorch.torchy import (
     pytorch_embedding,
     ParallelConv,
-    pytorch_linear,
+    Dense,
     SkipConnection,
     Highway,
     rnn_bi_hidden,
@@ -78,7 +78,6 @@ class CharConvEmbeddings(nn.Module, PyTorchEmbeddings):
         activation_type = kwargs.get('activation', 'tanh')
         pdrop = kwargs.get('pdrop', 0.5)
         self.char_comp = WithDropout(ParallelConv(dsz, wsz_single, char_filtsz, activation_type), pdrop)
-        self.linear = pytorch_linear(self.char_comp.output_dim, self.char_comp.output_dim)
         gating = kwargs.get('gating', 'skip')
         GatingConnection = SkipConnection if gating == 'skip' else Highway
         num_gates = kwargs.get('num_gates', 1)
