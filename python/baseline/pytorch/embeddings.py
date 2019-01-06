@@ -13,6 +13,7 @@ from baseline.pytorch.torchy import (
     Highway,
     rnn_bi_hidden,
     BiLSTMEncoder,
+    WithDropout
 )
 
 
@@ -62,46 +63,32 @@ class LookupTableEmbeddings(nn.Module, PyTorchEmbeddings):
 @register_embeddings(name='char-conv')
 class CharConvEmbeddings(nn.Module, PyTorchEmbeddings):
 
-    def __init__(self, _, **kwargs):
-        super(CharConvEmbeddings, self).__init__()
-
-        if self.weights is None:
-            unif = kwargs.get('unif', 0.1)
-            self.weights = np.random.uniform(-unif, unif, (self.vsz, self.dsz))
-        self.params = kwargs
-        self.wsz = None
-        if self.weights is None:
-            unif = kwargs.get('unif', 0.1)
-            self.weights = np.random.uniform(-unif, unif, (self.vsz, self.dsz))
-
     def __init__(self, name, **kwargs):
         super(CharConvEmbeddings, self).__init__()
         self.vsz = kwargs.get('vsz')
-        self.dsz = kwargs.get('dsz')
+        dsz = kwargs.get('dsz')
         self.finetune = kwargs.get('finetune', True)
         weights = kwargs.get('weights')
         if weights is None:
-            self.embeddings = nn.Embedding(self.vsz, self.dsz, padding_idx=0)
+            self.embeddings = nn.Embedding(self.vsz, dsz, padding_idx=0)
         else:
             self.embeddings = pytorch_embedding(weights)
         char_filtsz = kwargs.get('cfiltsz', [3])
-        char_hsz = kwargs.get('wsz', 30)
+        wsz_single = kwargs.get('wsz', 30)
         activation_type = kwargs.get('activation', 'tanh')
         pdrop = kwargs.get('pdrop', 0.5)
-        cconv = ParallelConv(self.dsz, char_hsz, char_filtsz, activation_type)
-        self.wchsz = cconv.output_dim
-        self.char_comp = nn.Sequential(cconv, nn.Dropout(pdrop))
-        self.linear = pytorch_linear(self.wchsz, self.wchsz)
+        self.char_comp = WithDropout(ParallelConv(dsz, wsz_single, char_filtsz, activation_type), pdrop)
+        self.linear = pytorch_linear(self.char_comp.output_dim, self.char_comp.output_dim)
         gating = kwargs.get('gating', 'skip')
         GatingConnection = SkipConnection if gating == 'skip' else Highway
         num_gates = kwargs.get('num_gates', 1)
         self.gating_seq = nn.Sequential(OrderedDict(
-            [('gate-{}'.format(i), GatingConnection(self.wchsz)) for i in range(num_gates)]
+            [('gate-{}'.format(i), GatingConnection(self.char_comp.output_dim)) for i in range(num_gates)]
         ))
         print(self)
 
     def get_dsz(self):
-        return self.wchsz
+        return self.char_comp.output_dim
 
     def get_vsz(self):
         return self.vsz
@@ -111,9 +98,9 @@ class CharConvEmbeddings(nn.Module, PyTorchEmbeddings):
         # For starters we need to perform embeddings for each character
         # (TxB) x W -> (TxB) x W x D
         _0, _1, W = xch.shape
-        char_embeds = self.embeddings(xch.view(-1, W))
+        char_vecs = self.embeddings(xch.view(-1, W))
         # (TxB) x D x W
-        char_vecs = char_embeds.transpose(1, 2).contiguous()
+        #char_vecs = char_embeds.transpose(1, 2).contiguous()
 
         #        pytorch_activation(self.activation_type)
         mots = self.char_comp(char_vecs)
@@ -172,11 +159,11 @@ class CharLSTMEmbeddings(nn.Module, PyTorchEmbeddings):
     def __init__(self, name, **kwargs):
         super(CharLSTMEmbeddings, self).__init__()
         self.vsz = kwargs.get('vsz')
-        self.dsz = kwargs.get('dsz')
+        dsz = kwargs.get('dsz')
         self.finetune = kwargs.get('finetune', True)
         weights = kwargs.get('weights')
         if weights is None:
-            self.embeddings = nn.Embedding(self.vsz, self.dsz, padding_idx=Offsets.PAD)
+            self.embeddings = nn.Embedding(self.vsz, dsz, padding_idx=Offsets.PAD)
         else:
             self.embeddings = pytorch_embedding(weights)
         self.lstmsz = kwargs.get('lstmsz', 50)
@@ -185,7 +172,7 @@ class CharLSTMEmbeddings(nn.Module, PyTorchEmbeddings):
         rnn_type = kwargs.get('rnn_type', 'blstm')
         unif = kwargs.get('unif', 0)
         weight_init = kwargs.get('weight_init', 'uniform')
-        self.char_comp = BiLSTMEncoder(self.dsz, self.lstmsz, layers, pdrop, unif=unif, initializer=weight_init, output_fn=rnn_bi_hidden)
+        self.char_comp = BiLSTMEncoder(dsz, self.lstmsz, layers, pdrop, unif=unif, initializer=weight_init, output_fn=rnn_bi_hidden)
 
 
     def forward(self, xch):

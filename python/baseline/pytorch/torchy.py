@@ -156,19 +156,6 @@ def pytorch_conv1d(in_channels, out_channels, fsz, unif=0, padding=0, initialize
     return c
 
 
-def pytorch_linear(in_sz, out_sz, unif=0, initializer=None):
-    l = nn.Linear(in_sz, out_sz)
-    if unif > 0:
-        l.weight.data.uniform_(-unif, unif)
-    elif initializer == "ortho":
-        nn.init.orthogonal(l.weight)
-    elif initializer == "he" or initializer == "kaiming":
-        nn.init.kaiming_uniform(l.weight)
-    else:
-        nn.init.xavier_uniform_(l.weight)
-
-    l.bias.data.zero_()
-    return l
 
 def tie_weight(to_layer, from_layer):
     """Assigns a weight object to the layer weights.

@@ -90,7 +90,7 @@ def tie_weight(weight, tie_shape):
 
 
 def stacked_cnn(inputs, hsz, pdrop, nlayers, filts=[5], activation_fn=tf.nn.relu, scope='StackedCNN', training=False):
-    return StackedParallelConvEncoder(get_shape_as_list(inputs)[-1], hsz, pdrop, nlayers, filts, activation_fn)(inputs, training)
+    return ParallelConvEncoderStack(get_shape_as_list(inputs)[-1], hsz, pdrop, nlayers, filts, activation_fn)(inputs, training)
 
 
 def skip_conns(inputs, wsz_all, n, activation_fn='relu'):

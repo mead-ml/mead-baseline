@@ -81,49 +81,36 @@ def get_activation(name='relu'):
     return tf.nn.relu
 
 
-class ParallelConvEncoder(tf.keras.layers.Layer):
-    DUMMY_AXIS = 1
-    TIME_AXIS = 2
-    FEATURE_AXIS = 3
+# Mapped
+class ConvEncoder(tf.keras.Model):
+    def __init__(self, outsz, filtsz, pdrop, activation_type='relu'):
+        super(ConvEncoder, self).__init__()
+        self.output_dim = outsz
+        self.conv = tf.keras.layers.Conv1D(filters=outsz, kernel_size=filtsz, padding='same')
+        self.act = get_activation(activation_type)
+        self.dropout = tf.keras.layers.Dropout(pdrop)
 
-    def __init__(self, dsz, motsz, filtsz, activation_name='relu', name=None, **kwargs):
+    def call(self, inputs, training=False):
+        conv_out = self.act(self.conv(inputs))
+        return self.dropout(conv_out)
 
-        super(ParallelConv, self).__init__(name=name)
-        self.Ws = []
-        self.bs = []
-        self.activation = get_activation(activation_name)
 
-        if not isinstance(motsz, list):
-            motsz = [motsz] * len(filtsz)
+# Mapped
+class ConvEncoderStack(tf.keras.Model):
 
-        for fsz, cmotsz in zip(filtsz, motsz):
-            kernel_shape = [1, int(fsz), int(dsz), int(cmotsz)]
-            self.Ws.append(self.add_variable('cmot-{}/W'.format(fsz), shape=kernel_shape))
-            self.bs.append(self.add_variable('cmot-{}/b'.format(fsz), shape=[cmotsz], initializer=tf.constant_initializer(0.0)))
+    def __init__(self, outsz, filtsz, pdrop, layers=1, activation_type='relu'):
+        super(ConvEncoderStack, self).__init__()
 
-        self.output_dim = sum(motsz)
+        first_layer = ConvEncoder(outsz, filtsz, pdrop, activation_type)
+        self.layers.append(first_layer)
+        for i in range(layers-1):
+            subsequent_layer = ResidualBlock(ConvEncoder(outsz, filtsz, pdrop, activation_type))
+            self.layers.append(subsequent_layer)
 
-    def call(self, inputs):
-
-        parallels = []
-        expanded = tf.expand_dims(inputs, ParallelConv.DUMMY_AXIS)
-        for W, b in zip(self.Ws, self.bs):
-            conv = tf.nn.conv2d(
-                expanded, W,
-                strides=[1, 1, 1, 1],
-                padding="SAME", name="CONV"
-            )
-            parallels.activation(tf.nn.bias_add(conv, b), 'activation')
-            parallels.append(get_activation)
-        combine = tf.reshape(tf.concat(values=parallels, axis=ParallelConv.FEATURE_AXIS), [-1, self.output_dim])
-        return combine
-
-    def compute_output_shape(self, input_shape):
-        return input_shape[:-1] + [self.output_dim]
-
-    @property
-    def requires_length(self):
-        return False
+    def call(self, inputs, training=False):
+        for layer in self.layers:
+            x = layer(x, training)
+        return x
 
 
 # Mapped
@@ -245,40 +232,6 @@ def rnn_cell(hsz, rnntype, st=None):
     else:
         cell = tf.contrib.rnn.LSTMCell(hsz) if rnntype.endswith('lstm') else tf.contrib.rnn.GRUCell(hsz)
     return cell
-
-
-class StackedParallelConvEncoder(tf.keras.Model):
-
-    def __init__(self, dsz, hsz, pdrop, layers, filts=[5], activation_name='relu', name=None, **kwargs):
-        """Produce a stack of parallel or single convolution layers with residual connections and dropout between each
-
-        :param hsz: (``int``) The number of hidden units per filter
-        :param pdrop: (``float``) The probability of dropout
-        :param layers: (``int``) The number of layers of parallel convolutions to stack
-        :param filts: (``list``) A list of parallel filter widths to apply
-        :param activation_name: (``str``) A name for activation
-        :param name: A string name to scope this operation
-        """
-        super(StackedParallelConvEncoder, self).__init__(name=name)
-        filts = listify(filts)
-        self.layer_1 = tf.keras.Sequential([ParallelConvEncoder(dsz, hsz, filts, activation_name), tf.keras.layers.Dropout(pdrop)])
-
-        self.subsequent = []
-        for i in range(layers):
-            new_block = tf.keras.Sequential([ParallelConvEncoder(hsz, hsz, filts, activation_name), tf.keras.layers.Dropout(pdrop)])
-            self.subsequent.append(ResidualBlock(new_block))
-
-    def call(self, inputs, training=False):
-        """
-
-        :param inputs: The input
-        :param training:
-        :return: a stacked CNN
-        """
-        x = self.layer_1(inputs, training)
-        for layer in self.subsequent:
-            x = layer(x)
-        return layer
 
 
 # Mapped
@@ -428,10 +381,14 @@ class EmbeddingsStack(tf.keras.Model):
     def requires_length(self):
         return self.requires_length
 
+    @property
+    def output_dim(self):
+        return self.dsz
+
 
 class DenseStack(tf.keras.Model):
 
-    def __init__(self, hsz, activation='relu', pdrop_value=0.5, init=None, name=None, **kwargs):
+    def __init__(self, hsz, activation_name='relu', pdrop_value=0.5, init=None, name=None, **kwargs):
         """Stack 1 or more hidden layers, optionally (forming an MLP)
 
         :param hsz: (``int``) The number of hidden units
@@ -442,7 +399,7 @@ class DenseStack(tf.keras.Model):
         """
         super(DenseStack, self).__init__(name=name)
         hszs = listify(hsz)
-        self.layer_stack = [tf.keras.layers.Dense(hsz, kernel_initializer=init, activation=activation) for hsz in hszs]
+        self.layer_stack = [tf.keras.layers.Dense(hsz, kernel_initializer=init, activation=activation_name) for hsz in hszs]
         self.dropout = tf.keras.layers.Dropout(pdrop_value)
 
     def call(self, inputs, training=False, mask=None):
@@ -467,6 +424,21 @@ class DenseStack(tf.keras.Model):
     @property
     def requires_length(self):
         return False
+
+
+class WithDropout(tf.keras.Model):
+
+    def __init__(self, layer, pdrop=0.5):
+        super(WithDropout, self).__init__()
+        self.layer = layer
+        self.dropout = tf.keras.layers.Dropout(pdrop)
+
+    def call(self, inputs, training=False):
+        return self.dropout(self.layer(inputs), training)
+
+    @property
+    def output_dim(self):
+        return self.layer.output_dim
 
 
 class Highway(tf.keras.Model):
@@ -934,6 +906,7 @@ class TagSequenceModel(SequenceModel):
 
     def neg_log_loss(self, unary, tags, lengths):
         return self.decoder_model.neg_log_loss(unary, tags, lengths)
+
 
 class EmbedPoolStackModel(tf.keras.Model):
 

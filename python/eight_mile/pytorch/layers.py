@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import copy
 import math
+from baseline.utils import listify, Offsets
 
 # Mapped
 def tensor_and_lengths(inputs):
@@ -41,10 +42,10 @@ class VariationalDropout(nn.Module):
 
 # Mapped
 def get_activation(name="relu"):
+    if name is None:
+        return nn.Identity()
     if name == "tanh":
         return nn.Tanh()
-    if name == "identity":
-        return nn.Identity()
     if name == "hardtanh":
         return nn.Hardtanh()
     if name == "prelu":
@@ -93,13 +94,11 @@ def rnn_bi_hidden(output, output_state):
 #        rnn = torch.nn.LSTM(insz, hsz, nlayers, dropout=dropout)
 #    return rnn
 
-
-
-
+# Mapped
 class ConvEncoder(nn.Module):
     def __init__(self, insz, outsz, filtsz, pdrop, activation_type='relu'):
         super(ConvEncoder, self).__init__()
-        self.outsz = outsz
+        self.output_dim = outsz
         pad = filtsz//2
         self.conv = nn.Conv1d(insz, outsz, filtsz, padding=pad)
         self.act = get_activation(activation_type)
@@ -110,6 +109,7 @@ class ConvEncoder(nn.Module):
         return self.dropout(conv_out)
 
 
+# Mapped
 class ConvEncoderStack(nn.Module):
 
     def __init__(self, insz, outsz, filtsz, pdrop, layers=1, activation_type='relu'):
@@ -118,6 +118,7 @@ class ConvEncoderStack(nn.Module):
         first_layer = ConvEncoder(insz, outsz, filtsz, pdrop, activation_type)
         subsequent_layer = ResidualBlock(ConvEncoder(outsz, outsz, filtsz, pdrop, activation_type))
         self.layers = nn.ModuleList([first_layer] + [copy.deepcopy(subsequent_layer) for _ in range(layers-1)])
+        self.output_dim = outsz
 
     def forward(self, x):
         for layer in self.layers:
@@ -125,14 +126,32 @@ class ConvEncoderStack(nn.Module):
         return x
 
 
+def bth2bht(t):
+    return t.transpose(1, 2).contiguous()
+
+
+def ident(t):
+    return t
+
+
+def tbh2bht(t):
+    return t.permute(1, 2, 0).contiguous()
+
+
 # Mapped
 class ParallelConv(nn.Module):
 
-    def __init__(self, insz, outsz, filtsz, activation_type):
+    def __init__(self, insz, outsz, filtsz, activation_type, input_fmt="bth"):
         super(ParallelConv, self).__init__()
         convs = []
         outsz_filts = outsz
-
+        input_fmt = input_fmt.lower()
+        if input_fmt == 'bth' or input_fmt == 'btc':
+            self.transform_input = bth2bht
+        elif input_fmt == 'tbh' or input_fmt == 'tbc':
+            self.transform_input = tbh2bht
+        else:
+            self.transform_input = ident
         if type(outsz) == int:
             outsz_filts = len(filtsz) * [outsz]
 
@@ -147,9 +166,11 @@ class ParallelConv(nn.Module):
             # Add the module so its managed correctly
         self.convs = nn.ModuleList(convs)
 
-    def forward(self, input_bct):
+    def forward(self, inputs):
         # TODO: change the input to btc?
         mots = []
+
+        input_bct = self.transform_input(inputs)
         for conv in self.convs:
             # In Conv1d, data BxCxT, max over time
             conv_out = conv(input_bct)
@@ -170,6 +191,7 @@ class Highway(nn.Module):
         self.proj = nn.Linear(input_size, input_size)
         self.transform = nn.Linear(input_size, input_size)
         self.transform.bias.data.fill_(-2.0)
+        self.output_dim = input_size
 
     def forward(self, input):
         proj_result = nn.functional.relu(self.proj(input))
@@ -177,12 +199,44 @@ class Highway(nn.Module):
         gated = (proj_gate * proj_result) + ((1 - proj_gate) * input)
         return gated
 
+
+def pytorch_linear(in_sz, out_sz, unif=0, initializer=None):
+    l = nn.Linear(in_sz, out_sz)
+    if unif > 0:
+        l.weight.data.uniform_(-unif, unif)
+    elif initializer == "ortho":
+        nn.init.orthogonal(l.weight)
+    elif initializer == "he" or initializer == "kaiming":
+        nn.init.kaiming_uniform(l.weight)
+    else:
+        nn.init.xavier_uniform_(l.weight)
+
+    l.bias.data.zero_()
+    return l
+
+
+class Dense(nn.Module):
+
+    def __init__(self, insz, outsz, activation=None, unif=0, initializer=None):
+        super(Dense, self).__init__()
+        self.layer = pytorch_linear(insz, outsz, unif, initializer)
+        self.activation = get_activation(activation)
+        self.output_dim = outsz
+
+    def forward(self, input):
+        return self.layer(input)
+
+
+
+
 # Mapped
 class ResidualBlock(nn.Module):
 
     def __init__(self, layer=None, **kwargs):
         super(ResidualBlock, self).__init__()
         self.layer = layer
+        if self.layer is not None and hasattr(layer, 'output_dim'):
+            self.output_dim = layer.output_dim
 
     def forward(self, input):
         return input + self.layer(input)
@@ -193,11 +247,8 @@ class SkipConnection(ResidualBlock):
 
     def __init__(self, input_size, activation='relu'):
         super(SkipConnection, self).__init__(None)
-        self.layer = nn.Sequential(
-            nn.Linear(input_size, input_size),
-            get_activation(activation)
-        )
-
+        self.layer = Dense(input_size, input_size, activation=activation)
+        self.output_dim = input_size
 
 # Mapped
 class LayerNorm(nn.Module):
@@ -218,6 +269,7 @@ class LayerNorm(nn.Module):
         self.a = nn.Parameter(torch.ones(num_features))
         self.b = nn.Parameter(torch.zeros(num_features))
         self.eps = eps
+        self.output_dim = num_features
 
     def forward(self, x):
         mean = x.mean(-1, keepdim=True)
@@ -281,7 +333,7 @@ class LSTMEncoder(nn.Module):
             nn.init.xavier_uniform_(self.rnn.weight_hh_l0)
             nn.init.xavier_uniform_(self.rnn.weight_ih_l0)
         self.output_fn = rnn_ident if output_fn is None else output_fn
-        print(self.output_fn)
+        self.output_dim = hsz
 
     def forward(self, inputs):
         tbc, lengths = tensor_and_lengths(inputs)
@@ -328,7 +380,7 @@ class BiLSTMEncoder(nn.Module):
             nn.init.xavier_uniform_(self.rnn.weight_hh_l0)
             nn.init.xavier_uniform_(self.rnn.weight_ih_l0)
         self.output_fn = rnn_ident if output_fn is None else output_fn
-        print(self.output_fn)
+        self.output_dim = hsz
 
     def forward(self, inputs):
         tbc, lengths = tensor_and_lengths(inputs)
@@ -340,7 +392,6 @@ class BiLSTMEncoder(nn.Module):
     @property
     def requires_length(self):
         return self._requires_length
-
 
 
 class EmbeddingsContainer(nn.Module):
@@ -385,6 +436,102 @@ class EmbeddingsContainer(nn.Module):
     def update(self, modules):
         raise Exception('Not implemented')
 
+
+class EmbeddingsStack(nn.Module):
+
+    def __init__(self, embeddings_dict, dropout_rate=0.0, requires_length=False, **kwargs):
+        """Takes in a dictionary where the keys are the input tensor names, and the values are the embeddings
+
+        :param embeddings_dict: (``dict``) dictionary of each feature embedding
+        """
+
+        super(EmbeddingsStack, self).__init__()
+
+        self.embeddings = EmbeddingsContainer()
+        #input_sz = 0
+        for k, embedding in embeddings_dict.items():
+            self.embeddings[k] = embedding
+            #input_sz += embedding.get_dsz()
+
+        self.dropout = nn.Dropout(dropout_rate)
+        self._requires_length = requires_length
+
+    def cuda(self, device=None):
+        super(EmbeddingsStack, self).cuda(device=device)
+        for emb in self.embeddings.values():
+            emb.cuda(device)
+
+    def forward(self, inputs):
+        """This method performs "embedding" of the inputs.  The base method here then concatenates along depth
+        dimension to form word embeddings
+
+        :return: A 3-d vector where the last dimension is the concatenated dimensions of all embeddings
+        """
+        all_embeddings_out = []
+        for k, embedding in self.embeddings.items():
+            x = inputs[k]
+            embeddings_out = embedding(x)
+            all_embeddings_out.append(embeddings_out)
+        word_embeddings = torch.cat(all_embeddings_out, -1)
+        return self.dropout(word_embeddings)
+
+    @property
+    def dsz(self):
+        total_dsz = 0
+        for embeddings in self.embeddings.values():
+            total_dsz += embeddings.get_dsz()
+        return total_dsz
+
+    @property
+    def output_dim(self):
+        return self.dsz
+
+    @property
+    def requires_length(self):
+        return self.requires_length
+
+
+class DenseStack(nn.Module):
+
+    def __init__(self, insz, hsz, activation_name='relu', pdrop_value=0.5, init=None, **kwargs):
+        """Stack 1 or more hidden layers, optionally (forming an MLP)
+
+        :param hsz: (``int``) The number of hidden units
+        :param activation:  (``str``) The name of the activation function to use
+        :param pdrop_value: (``float``) The dropout probability
+        :param init: The tensorflow initializer
+
+        """
+        super(DenseStack, self).__init__()
+        hszs = listify(hsz)
+        self.output_dim = hsz[-1]
+        self.layer_stack = nn.Sequential()
+        current = insz
+        for i, hsz in hszs:
+            self.layer_stack.append(WithDropout(Dense(current, hsz), pdrop_value))
+            current = hsz
+
+    def forward(self, inputs):
+        """Stack 1 or more hidden layers, optionally (forming an MLP)
+
+        :param inputs: The fixed representation of the model
+        :param training: (``bool``) A boolean specifying if we are training or not
+        :param init: The tensorflow initializer
+        :param kwargs: See below
+
+        :Keyword Arguments:
+        * *hsz* -- (``int``) The number of hidden units (defaults to `100`)
+
+        :return: The final layer
+        """
+        x = inputs
+        for layer in self.layer_stack:
+            x = layer(x, training)
+        return x
+
+    @property
+    def requires_length(self):
+        return False
 
 
 class BaseAttention(nn.Module):
@@ -484,3 +631,49 @@ class BahdanauAttention(BaseAttention):
         attended = torch.cat([c_t, query_t], -1)
         attended = self.W_c(attended)
         return attended
+
+
+class EmbedPoolStackModel(nn.Module):
+
+    def __init__(self, nc, embeddings, pool_model, stack_model=None):
+        super(EmbedPoolStackModel, self).__init__()
+        if isinstance(embeddings, dict):
+            self.embed_model = EmbeddingsStack(embeddings)
+        else:
+            assert isinstance(embeddings, EmbeddingsStack)
+            self.embed_model = embeddings
+
+        self.pool_requires_length = False
+        if hasattr(pool_model, 'requires_length'):
+            self.pool_requires_length = pool_model.requires_length
+
+        self.pool_model = pool_model
+        output_dim = self.pool_model.output_dim if stack_model is None else stack_model.output_dim
+        self.output_layer = nn.Sequential(nn.Linear(output_dim, nc), nn.LogSoftmax())
+        self.stack_model = stack_model
+
+    def forward(self, inputs):
+        lengths = inputs.get('lengths')
+
+        embedded = self.embed_model(inputs)
+
+        if self.pool_requires_length:
+            embedded = (embedded, lengths)
+        pooled = self.pool_model(embedded)
+        stacked = self.stack_model(pooled) if self.stack_model is not None else pooled
+        return self.output_layer(stacked)
+
+
+class WithDropout(nn.Module):
+
+    def __init__(self, layer, pdrop=0.5):
+        super(WithDropout, self).__init__()
+        self.layer = layer
+        self.dropout = nn.Dropout(pdrop)
+
+    def forward(self, inputs):
+        return self.dropout(self.layer(inputs))
+
+    @property
+    def output_dim(self):
+        return self.layer.output_dim

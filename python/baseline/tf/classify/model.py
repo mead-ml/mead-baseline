@@ -326,8 +326,7 @@ class ConvModel(ClassifierModelBase):
         """
         cmotsz = kwargs['cmotsz']
         filtsz = kwargs['filtsz']
-        conv = ParallelConv(dsz, cmotsz, filtsz)
-        return tf.keras.Sequential([conv, tf.keras.layers.Dropout(self.pdrop_value)])
+        return WithDropout(ParallelConv(dsz, cmotsz, filtsz), self.pdrop_value)
 
 
 @register_model(task='classify', name='lstm')
