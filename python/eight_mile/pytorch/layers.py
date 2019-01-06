@@ -292,6 +292,7 @@ class Dense(nn.Module):
     def forward(self, input):
         return self.activation(self.layer(input))
 
+
 # Mapped
 class ResidualBlock(nn.Module):
 
