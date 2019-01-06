@@ -104,7 +104,6 @@ def get_activation(name="relu"):
         return nn.Hardtanh()
     if name == 'leaky_relu':
         return nn.LeakyReLU()
-
     if name == "prelu":
         return nn.PReLU()
     if name == "sigmoid":
@@ -115,7 +114,6 @@ def get_activation(name="relu"):
         return nn.LogSoftmax(dim=-1)
     if name == "softmax":
         return nn.Softmax(dim=-1)
-
     return nn.ReLU()
 
 

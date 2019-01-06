@@ -64,6 +64,8 @@ def get_shape_as_list(x):
 
 # Mapped
 def get_activation(name='relu'):
+    if name is None or name == 'ident':
+        return tf.nn.identity
     if name == 'softmax':
         return tf.nn.softmax
     if name == 'tanh':
@@ -74,7 +76,6 @@ def get_activation(name='relu'):
         return gelu
     if name == 'swish':
         return swish
-    if name == 'ident':
         return tf.identity
     if name == 'leaky_relu':
         return tf.nn.leaky_relu
