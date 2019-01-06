@@ -42,18 +42,24 @@ class VariationalDropout(nn.Module):
 
 # Mapped
 def get_activation(name="relu"):
-    if name is None:
+    if name is None or name == "ident":
         return nn.Identity()
     if name == "tanh":
         return nn.Tanh()
     if name == "hardtanh":
         return nn.Hardtanh()
+    if name == 'leaky_relu':
+        return nn.LeakyReLU()
     if name == "prelu":
         return nn.PReLU()
     if name == "sigmoid":
         return nn.Sigmoid()
     if name == "log_sigmoid":
         return nn.LogSigmoid()
+    if name == "log_softmax":
+        return nn.LogSoftmax()
+    if name == "softmax":
+        return nn.Softmax()
     return nn.ReLU()
 
 
