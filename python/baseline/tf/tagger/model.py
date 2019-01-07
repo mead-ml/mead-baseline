@@ -13,6 +13,8 @@ from baseline.utils import listify, Offsets
 
 
 class TaggerModelBase(TaggerModel):
+    def __init__(self):
+        super(TaggerModelBase, self).__init__()
 
     @property
     def lengths_key(self):
@@ -22,11 +24,29 @@ class TaggerModelBase(TaggerModel):
     def lengths_key(self, value):
         self._lengths_key = value
 
+    @property
+    def dropin_value(self):
+        return self._dropin_value
+
+    @dropin_value.setter
+    def dropin_value(self, dict_value):
+        self._dropin_value = dict_value
+
+    def drop_inputs(self, key, x, do_dropout):
+        v = self.dropin_value.get(key, 0)
+        if do_dropout and v > 0.0:
+            drop_indices = np.where((np.random.random(x.shape) < v) & (x != Offsets.PAD))
+            x[drop_indices[0], drop_indices[1]] = Offsets.UNK
+        return x
+
+    def save(self, basename):
+        self.save_md(basename)
+        self.save_values(basename)
+
     def save_values(self, basename):
         self.saver.save(self.sess, basename)
 
     def save_md(self, basename):
-
         path = basename.split('/')
         base = path[-1]
         outdir = '/'.join(path[:-1])
@@ -54,21 +74,6 @@ class TaggerModelBase(TaggerModel):
         with open(basename + '.saver', 'w') as f:
             f.write(str(self.saver.as_saver_def()))
 
-    @property
-    def dropin_value(self):
-        return self._dropin_value
-
-    @dropin_value.setter
-    def dropin_value(self, dict_value):
-        self._dropin_value = dict_value
-
-    def drop_inputs(self, key, x, do_dropout):
-        v = self.dropin_value.get(key, 0)
-        if do_dropout and v > 0.0:
-            drop_indices = np.where((np.random.random(x.shape) < v) & (x != Offsets.PAD))
-            x[drop_indices[0], drop_indices[1]] = Offsets.UNK
-        return x
-
     def make_input(self, batch_dict, train=False):
         feed_dict = new_placeholder_dict(train)
         for k in self.embeddings.keys():
@@ -83,10 +88,6 @@ class TaggerModelBase(TaggerModel):
         if y is not None:
             feed_dict[self.y] = y
         return feed_dict
-
-    def save(self, basename):
-        self.save_md(basename)
-        self.save_values(basename)
 
     @classmethod
     def load(cls, basename, **kwargs):
@@ -234,9 +235,6 @@ class TaggerModelBase(TaggerModel):
                         self._create_word_level_decode()
 
         return all_loss
-
-    def __init__(self):
-        super(TaggerModelBase, self).__init__()
 
     def get_labels(self):
         return self.labels
