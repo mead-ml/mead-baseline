@@ -35,7 +35,7 @@
         "layers": 2
     },
     "train": {
-        "epochs": 16,
+        "epochs": 1,
         "optim": "adam",
         "lr_scheduler_type": "warmup_linear",
         "warmup_steps": 800,
