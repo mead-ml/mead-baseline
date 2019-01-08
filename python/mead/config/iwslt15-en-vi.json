@@ -34,7 +34,7 @@
         "layers": 2
     },
     "train": {
-        "epochs": 1,
+        "epochs": 32,
         "optim": "adam",
         "eta": 0.001,
 	"do_early_stopping": true,
