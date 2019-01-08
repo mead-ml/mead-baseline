@@ -7,7 +7,7 @@ from mock import patch, MagicMock
 torch = pytest.importorskip('torch')
 from baseline.utils import Offsets
 from baseline.pytorch.torchy import vec_log_sum_exp
-from baseline.pytorch.crf import CRF, viterbi, transition_mask
+from eight_mile.pytorch.layers import CRF, viterbi, transition_mask
 
 
 def explicit_log_sum_exp(xs):
@@ -111,7 +111,6 @@ def build_emission(emission):
             e_[i] = emiss[i].item()
         es.append(e_)
     return es
-
 
 @pytest.fixture
 def generate_batch():

@@ -60,7 +60,6 @@ class TaggerModelBase(nn.Module, TaggerModel):
 
         if use_crf:
             decoder_model = CRF(len(labels), constraint_mask=constraint, batch_first=False)
-
         else:
             decoder_model = TaggerGreedyDecoder(len(labels), constraint_mask=constraint)
 

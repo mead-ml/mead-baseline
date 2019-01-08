@@ -171,7 +171,6 @@ def long_tensor_alloc(dims, dtype=None):
         return torch.LongTensor(dims)
     return torch.LongTensor(*dims)
 
-
 def unsort_batch(batch, perm_idx):
     """Undo the sort on a batch of tensors done for packing the data in the RNN.
 
@@ -186,4 +185,5 @@ def unsort_batch(batch, perm_idx):
     extra_dims = [1] * diff
     perm_idx = perm_idx.view([-1] + extra_dims)
     return batch.scatter_(0, perm_idx.expand_as(batch), batch)
+
 

@@ -764,6 +764,7 @@ class FFN(tf.keras.Model):
 class TaggerGreedyDecoder(tf.keras.layers.Layer):
 
     def __init__(self, num_tags, constraint_mask=None, name=None):
+        super(TaggerGreedyDecoder, self).__init__(name=name)
         self.num_tags = num_tags
         self.inv_mask = None
         if constraint_mask is not None:
@@ -810,18 +811,9 @@ class CRF(tf.keras.layers.Layer):
 
     def __init__(self, num_tags, constraint_mask=None, name=None):
         """Initialize the object.
-        :param n_tags: int, The number of tags in your output (emission size)
-        :param idxs: Tuple(int. int), The index of the start and stop symbol
-            in emissions.
-        :param batch_first: bool, if the input [B, T, ...] or [T, B, ...]
-        :param mask: torch.ByteTensor, Constraints on the transitions [1, N, N]
-
-        Note:
-            if idxs is none then the CRF adds these symbols to the emission
-            vectors and n_tags is assumed to be the number of output tags.
-            if idxs is not none then the first element is assumed to be the
-            start index and the second idx is assumed to be the end index. In
-            this case n_tags is assumed to include the start and end symbols.
+        :param num_tags: int, The number of tags in your output (emission size)
+        :param constraint_mask: torch.ByteTensor, Constraints on the transitions [1, N, N]
+        :param name: str, Optional name, defaults to `None`
         """
         super(CRF, self).__init__(name=name)
 
