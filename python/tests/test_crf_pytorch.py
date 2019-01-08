@@ -25,15 +25,15 @@ def label_vocab():
 
 @pytest.fixture
 def crf(label_vocab):
-    from baseline.pytorch.crf import CRF, transition_mask
+    from baseline.pytorch.torchy import CRF, transition_mask
     mask = transition_mask(
         label_vocab, SPAN_TYPE,
         label_vocab[S], label_vocab[E], label_vocab[P]
     )
     return CRF(
         len(label_vocab),
-        (label_vocab[S], label_vocab[E]), True,
-        mask
+        idxs=(label_vocab[S], label_vocab[E]), batch_first=True,
+        constraint_mask=mask
     )
 
 
@@ -63,10 +63,10 @@ def test_mask_is_applied(label_vocab, crf):
 
 
 def test_mask_skipped(label_vocab):
-    from baseline.pytorch.crf import CRF
+    from baseline.pytorch.torchy import CRF
     crf = CRF(
         len(label_vocab),
-        (label_vocab[S], label_vocab[E]),
+        idxs=(label_vocab[S], label_vocab[E]),
     )
     t = crf.transitions.detach().numpy()
     assert t[0, label_vocab['<GO>'], label_vocab['O']] != -1e4

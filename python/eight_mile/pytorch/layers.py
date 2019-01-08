@@ -4,6 +4,53 @@ import torch.nn.functional as F
 import copy
 import math
 from baseline.utils import listify, Offsets
+from baseline.utils import transition_mask as transition_mask_np
+import torch.autograd
+
+
+def sequence_mask(lengths, max_len=-1):
+    lens = lengths.cpu()
+    if max_len < 0:
+        max_len = torch.max(lens).item()
+    # 1 x T
+    row = torch.arange(0, max_len).type_as(lens).view(1, -1)
+    # B x 1
+    col = lens.view(-1, 1)
+    # Broadcast to B x T, compares increasing number to max
+    mask = row < col
+    return mask
+
+
+def to_scalar(var):
+    # returns a python float
+    return var.view(-1).data.tolist()[0]
+
+
+def log_sum_exp(vec):
+    max_score = vec[0, argmax(vec)]
+    max_score_broadcast = max_score.view(1, -1).expand(1, vec.size()[1])
+    return max_score + torch.log(torch.sum(torch.exp(vec - max_score_broadcast)))
+
+
+# Some of this code is borrowed from here:
+# https://github.com/rguthrie3/DeepLearningForNLPInPytorch
+def argmax(vec):
+    # return the argmax as a python int
+    _, idx = torch.max(vec, 1)
+    return idx.data[0]
+
+
+def vec_log_sum_exp(vec, dim):
+    """Vectorized version of log-sum-exp
+
+    :param vec: Vector
+    :param dim: What dimension to operate on
+    :return:
+    """
+    max_scores, idx = torch.max(vec, dim, keepdim=True)
+    max_scores_broadcast = max_scores.expand_as(vec)
+    return max_scores + torch.log(torch.sum(torch.exp(vec - max_scores_broadcast), dim, keepdim=True))
+
 
 # Mapped
 def tensor_and_lengths(inputs):
@@ -150,6 +197,12 @@ def ident(t):
 def tbh2bht(t):
     return t.permute(1, 2, 0).contiguous()
 
+def tbh2bht(t):
+    return t.transpose(0, 1).contiguous()
+
+
+def bth2tbh(t):
+    return t.transpose(0, 1).contiguous()
 
 # Mapped
 class ParallelConv(nn.Module):
@@ -653,7 +706,6 @@ class EmbedPoolStackModel(nn.Module):
         if isinstance(embeddings, dict):
             self.embed_model = EmbeddingsStack(embeddings)
         else:
-            assert isinstance(embeddings, EmbeddingsStack)
             self.embed_model = embeddings
 
         self.pool_requires_length = False
@@ -690,3 +742,305 @@ class WithDropout(nn.Module):
     @property
     def output_dim(self):
         return self.layer.output_dim
+
+
+
+def transition_mask(vocab, span_type, s_idx, e_idx, pad_idx=None):
+    """Create a mask to enforce span sequence transition constraints.
+
+    Returns a Tensor with valid transitions as a 0 and invalid as a 1 for easy use with `masked_fill`
+    """
+    np_mask = transition_mask_np(vocab, span_type, s_idx, e_idx, pad_idx=pad_idx)
+    return torch.from_numpy(np_mask) == 0
+
+
+def viterbi(unary, trans, lengths, start_idx, end_idx, norm=False):
+    """Do Viterbi decode on a batch.
+
+    :param unary: torch.FloatTensor: [T, B, N]
+    :param trans: torch.FloatTensor: [1, N, N]
+
+    :return: List[torch.LongTensor]: [[T] .. B] that paths
+    :return: torch.FloatTensor: [B] the path scores
+    """
+    seq_len, batch_size, tag_size = unary.size()
+    min_length = torch.min(lengths)
+    batch_range = torch.arange(batch_size, dtype=torch.int64)
+    backpointers = []
+
+    # Alphas: [B, 1, N]
+    alphas = torch.Tensor(batch_size, 1, tag_size).fill_(-1e4).to(unary.device)
+    alphas[:, 0, start_idx] = 0
+    alphas = F.log_softmax(alphas, dim=-1) if norm else alphas
+
+    for i, unary_t in enumerate(unary):
+        next_tag_var = alphas + trans
+        viterbi, best_tag_ids = torch.max(next_tag_var, 2)
+        backpointers.append(best_tag_ids.data)
+        new_alphas = viterbi + unary_t
+        new_alphas.unsqueeze_(1)
+        if i >= min_length:
+            mask = (i < lengths).view(-1, 1, 1)
+            alphas = alphas.masked_fill(mask, 0) + new_alphas.masked_fill(mask == 0, 0)
+        else:
+            alphas = new_alphas
+
+    # Add end tag
+    terminal_var = alphas.squeeze(1) + trans[:, end_idx]
+    _, best_tag_id = torch.max(terminal_var, 1)
+    path_score = terminal_var[batch_range, best_tag_id]  # Select best_tag from each batch
+
+    best_path = [best_tag_id]
+    # Flip lengths
+    rev_len = seq_len - lengths - 1
+    for i, backpointer_t in enumerate(reversed(backpointers)):
+        # Get new best tag candidate
+        new_best_tag_id = backpointer_t[batch_range, best_tag_id]
+        # We are going backwards now, if you passed your flipped length then you aren't in your real results yet
+        mask = (i > rev_len)
+        best_tag_id = best_tag_id.masked_fill(mask, 0) + new_best_tag_id.masked_fill(mask == 0, 0)
+        best_path.append(best_tag_id)
+    _ = best_path.pop()
+    best_path.reverse()
+    best_path = torch.stack(best_path)
+    # Return list of paths
+    paths = []
+    best_path = best_path.transpose(0, 1)
+    for path, length in zip(best_path, lengths):
+        paths.append(path[:length])
+    return paths, path_score.squeeze(0)
+
+
+class TaggerGreedyDecoder(nn.Module):
+
+    def __init__(self, num_tags, constraint_mask=None, batch_first=True):
+        super(TaggerGreedyDecoder, self).__init__()
+        self.num_tags = num_tags
+
+        if constraint_mask is not None:
+            self.mask = F.log_softmax(torch.zeros(constraint_mask.shape).masked_fill(constraint_mask, -1e4), dim=0)
+            self.register_buffer('constraint', self.mask.unsqueeze(0))
+        self.to_batch_first = ident if batch_first else tbh2bht
+        self.to_time_first = bth2tbh if batch_first else ident
+
+    @property
+    def transitions(self):
+        return self.mask
+
+    def neg_log_loss(self, inputs, tags, lengths):
+        # Cross entropy loss
+        unaries = self.to_batch_first(inputs)
+        loss = F.cross_entropy(unaries, tags, size_average=False, ignore_index=Offsets.PAD)
+        batch_size = inputs.size()[0]
+        loss /= batch_size
+        return loss
+
+    def call(self, inputs):
+
+        unaries, lengths = inputs
+        if self.constraint is not None:
+            probv = self.to_time_first(unaries)
+            probv = F.log_softmax(probv, dim=-1)
+            preds, _ = viterbi(probv, self.constraint, lengths, Offsets.GO, Offsets.EOS, norm=True)
+        else:
+            probv = self.to_batch_first(unaries)
+            preds = []
+            for pij, sl in zip(probv, lengths):
+                _, unary = torch.max(pij[:sl], 1)
+                preds.append(unary.data)
+        return preds
+
+
+class CRF(nn.Module):
+
+    def __init__(self, num_tags, constraint_mask=None, batch_first=True, idxs=(Offsets.GO, Offsets.EOS)):
+        """Initialize the object.
+        :param num_tags: int, The number of tags in your output (emission size)
+        :param idxs: Tuple(int. int), The index of the start and stop symbol
+            in emissions.
+        :param batch_first: bool, if the input [B, T, ...] or [T, B, ...]
+        :param mask: torch.ByteTensor, Constraints on the transitions [1, N, N]
+
+        Note:
+            if idxs is none then the CRF adds these symbols to the emission
+            vectors and n_tags is assumed to be the number of output tags.
+            if idxs is not none then the first element is assumed to be the
+            start index and the second idx is assumed to be the end index. In
+            this case n_tags is assumed to include the start and end symbols.
+        """
+        super(CRF, self).__init__()
+        self.start_idx, self.end_idx = idxs
+        self.num_tags = num_tags
+        if constraint_mask is not None:
+            self.register_buffer('mask', constraint_mask)
+        else:
+            self.mask = None
+
+        self.transitions_p = nn.Parameter(torch.Tensor(1, self.num_tags, self.num_tags).zero_())
+        self.batch_first = batch_first
+
+    def extra_repr(self):
+        str_ = "n_tags=%d, batch_first=%s" % (self.num_tags, self.batch_first)
+        if self.mask is not None:
+            str_ += ", masked=True"
+        return str_
+
+    @property
+    def transitions(self):
+        if self.mask is not None:
+            return self.transitions_p.masked_fill(self.mask, -1e4)
+        return self.transitions_p
+
+    def neg_log_loss(self, unary, tags, lengths):
+        """Neg Log Loss with a Batched CRF.
+
+        :param unary: torch.FloatTensor: [T, B, N] or [B, T, N]
+        :param tags: torch.LongTensor: [T, B] or [B, T]
+        :param lengths: torch.LongTensor: [B]
+
+        :return: torch.FloatTensor: [B]
+        """
+        # Convert from [B, T, N] -> [T, B, N]
+        if self.batch_first:
+            unary = unary.transpose(0, 1)
+            tags = tags.transpose(0, 1)
+        _, batch_size, _ = unary.size()
+        fwd_score = self.forward_alg(unary, lengths)  # TODO: shouldnt this call __call__?
+        gold_score = self.score_sentence(unary, tags, lengths)
+
+        loss = fwd_score - gold_score
+        batch_loss = torch.mean(loss)
+        return batch_loss
+
+    def score_sentence(self, unary, tags, lengths):
+        """Score a batch of sentences.
+
+        :param unary: torch.FloatTensor: [T, B, N]
+        :param tags: torch.LongTensor: [T, B]
+        :param lengths: torch.LongTensor: [B]
+        :param batzh_size: int: B
+        :param min_length: torch.LongTensor: []
+
+        :return: torch.FloatTensor: [B]
+        """
+        min_length = torch.min(lengths)
+        batch_size = lengths.shape[0]
+        trans = self.transitions.squeeze(0)  # [N, N]
+        batch_range = torch.arange(batch_size, dtype=torch.int64)  # [B]
+        start = torch.full((1, batch_size), self.start_idx, dtype=tags.dtype, device=tags.device)  # [1, B]
+        tags = torch.cat([start, tags], 0)  # [T, B]
+        scores = torch.zeros(batch_size, requires_grad=True).to(unary.device)  # [B]
+        for i, unary_t in enumerate(unary):
+            new_scores = (
+                trans[tags[i + 1], tags[i]] +
+                unary_t[batch_range, tags[i + 1]]
+            )
+            if i >= min_length:
+                # If we are farther along `T` than your length don't add to your score
+                mask = (i >= lengths)
+                scores = scores + new_scores.masked_fill(mask, 0)
+            else:
+                scores = scores + new_scores
+        # Add stop tag
+        scores = scores + trans[self.end_idx, tags[lengths, batch_range]]
+        return scores
+
+    def forward_alg(self, unary, lengths):
+        """For CRF forward on a batch.
+
+        :param unary: torch.FloatTensor: [T, B, N]
+        :param lengths: torch.LongTensor: [B]
+
+        :return: torch.FloatTensor: [B]
+        """
+        # alphas: [B, 1, N]
+        min_length = torch.min(lengths)
+        batch_size = lengths.shape[0]
+        alphas = torch.Tensor(batch_size, 1, self.num_tags).fill_(-1e4).to(unary.device)
+        alphas[:, 0, self.start_idx] = 0.
+        alphas.requires_grad = True
+
+        trans = self.transitions  # [1, N, N]
+
+        for i, unary_t in enumerate(unary):
+            # unary_t: [B, N]
+            unary_t = unary_t.unsqueeze(2)  # [B, N, 1]
+            # Broadcast alphas along the rows of trans
+            # Broadcast trans along the batch of alphas
+            # [B, 1, N] + [1, N, N] -> [B, N, N]
+            # Broadcast unary_t along the cols of result
+            # [B, N, N] + [B, N, 1] -> [B, N, N]
+            scores = alphas + trans + unary_t
+            new_alphas = vec_log_sum_exp(scores, 2).transpose(1, 2)
+            # If we haven't reached your length zero out old alpha and take new one.
+            # If we are past your length, zero out new_alpha and keep old one.
+
+            if i >= min_length:
+                mask = (i < lengths).view(-1, 1, 1)
+                alphas = alphas.masked_fill(mask, 0) + new_alphas.masked_fill(mask == 0, 0)
+            else:
+                alphas = new_alphas
+
+        terminal_vars = alphas + trans[:, self.end_idx]
+        alphas = vec_log_sum_exp(terminal_vars, 2)
+        return alphas.squeeze()
+
+    def forward(self, inputs):
+        unary, lengths = inputs
+        if self.training:
+            return self.forward_alg(unary, lengths)
+
+        with torch.no_grad():
+            return self.decode(unary, lengths)[0]
+
+    def decode(self, unary, lengths):
+        """Do Viterbi decode on a batch.
+
+        :param unary: torch.FloatTensor: [T, B, N] or [B, T, N]
+        :param lengths: torch.LongTensor: [B]
+
+        :return: List[torch.LongTensor]: [B] the paths
+        :return: torch.FloatTensor: [B] the path score
+        """
+        if self.batch_first:
+            unary = unary.transpose(0, 1)
+        trans = self.transitions  # [1, N, N]
+        return viterbi(unary, trans, lengths, self.start_idx, self.end_idx)
+
+
+class SequenceModel(nn.Module):
+
+    def __init__(self, nc, embeddings, transducer, decoder=None):
+        super(SequenceModel, self).__init__()
+        if isinstance(embeddings, dict):
+            self.embed_model = EmbeddingsStack(embeddings)
+        else:
+            self.embed_model = embeddings
+        self.transducer_model = transducer
+        self.proj_layer = Dense(transducer.output_dim, nc)
+        self.decoder_model = decoder
+
+    def transduce(self, inputs):
+        lengths = inputs.get('lengths')
+
+        embedded = self.embed_model(inputs)
+        embedded = (embedded, lengths)
+        transduced = self.proj_layer(self.transducer_model(embedded))
+        return transduced
+
+    def decode(self, transduced, lengths):
+        return self.decoder_model((transduced, lengths))
+
+    def forward(self, inputs):
+        transduced = self.transduce(inputs)
+        return self.decode(transduced, inputs.get('lengths'))
+
+
+class TagSequenceModel(SequenceModel):
+
+    def __init__(self, nc, embeddings, transducer, decoder=None, name=None):
+        decoder_model = CRF(nc) if decoder is None else decoder
+        super(TagSequenceModel, self).__init__(nc, embeddings, transducer, decoder_model)
+
+    def neg_log_loss(self, unary, tags, lengths):
+        return self.decoder_model.neg_log_loss(unary, tags, lengths)

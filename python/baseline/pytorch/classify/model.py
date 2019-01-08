@@ -38,9 +38,6 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
         print(model)
         return model
 
-    def init_embed(self, **kwargs):
-        return EmbeddingsStack(self.embeddings)
-
     def cuda(self, device=None):
         super(ClassifierModelBase, self).cuda(device=device)
 
@@ -103,6 +100,9 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
 
     def init_pool(self, dsz, **kwargs):
         pass
+
+    def init_embed(self, **kwargs):
+        return EmbeddingsStack(self.embeddings)
 
 
 @register_model(task='classify', name='default')

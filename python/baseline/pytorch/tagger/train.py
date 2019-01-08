@@ -44,8 +44,9 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
         # For each sentence
         for b in range(len(guess)):
 
-            sentence = guess[b].cpu().numpy()
-
+            sentence = guess[b]
+            if isinstance(sentence, torch.Tensor):
+                sentence = sentence.cpu().numpy()
             sentence_length = sentence_lengths[b]
             gold = truth_n[b, :sentence_length]
             correct_labels += np.sum(np.equal(sentence, gold))
@@ -88,7 +89,8 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
             y = inputs.pop('y')
             lengths = inputs['lengths']
             ids = inputs['ids']
-            pred = self.model(inputs)
+            with torch.no_grad():
+                pred = self.model(inputs)
             correct, count, overlaps, golds, guesses = self.process_output(pred, y.data, lengths, ids, handle, txts)
             total_correct += correct
             total_sum += count

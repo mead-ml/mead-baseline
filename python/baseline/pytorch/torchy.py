@@ -11,36 +11,6 @@ from eight_mile.pytorch.layers import *
 PYT_MAJOR_VERSION = get_version(torch)
 
 
-def sequence_mask(lengths, max_len=-1):
-    lens = lengths.cpu()
-    if max_len < 0:
-        max_len = torch.max(lens).item()
-    # 1 x T
-    row = torch.arange(0, max_len).type_as(lens).view(1, -1)
-    # B x 1
-    col = lens.view(-1, 1)
-    # Broadcast to B x T, compares increasing number to max
-    mask = row < col
-    return mask
-
-
-def to_scalar(var):
-    # returns a python float
-    return var.view(-1).data.tolist()[0]
-
-
-def argmax(vec):
-    # return the argmax as a python int
-    _, idx = torch.max(vec, 1)
-    return to_scalar(idx)
-
-
-def log_sum_exp(vec):
-    max_score = vec[0, argmax(vec)]
-    max_score_broadcast = max_score.view(1, -1).expand(1, vec.size()[1])
-    return max_score + torch.log(torch.sum(torch.exp(vec - max_score_broadcast)))
-
-
 class SequenceCriterion(nn.Module):
 
     def __init__(self, LossFn=nn.NLLLoss, avg='token'):
@@ -201,29 +171,3 @@ def long_tensor_alloc(dims, dtype=None):
         return torch.LongTensor(dims)
     return torch.LongTensor(*dims)
 
-
-# Some of this code is borrowed from here:
-# https://github.com/rguthrie3/DeepLearningForNLPInPytorch
-def argmax(vec):
-    # return the argmax as a python int
-    _, idx = torch.max(vec, 1)
-    return idx.data[0]
-
-
-# Compute log sum exp in a numerically stable way for the forward algorithm
-def log_sum_exp(vec):
-    max_score = vec[0, argmax(vec)]
-    max_score_broadcast = max_score.view(1, -1).expand(1, vec.size()[1])
-    return max_score + torch.log(torch.sum(torch.exp(vec - max_score_broadcast)))
-
-
-def vec_log_sum_exp(vec, dim):
-    """Vectorized version of log-sum-exp
-
-    :param vec: Vector
-    :param dim: What dimension to operate on
-    :return:
-    """
-    max_scores, idx = torch.max(vec, dim, keepdim=True)
-    max_scores_broadcast = max_scores.expand_as(vec)
-    return max_scores + torch.log(torch.sum(torch.exp(vec - max_scores_broadcast), dim, keepdim=True))

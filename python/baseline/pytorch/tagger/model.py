@@ -1,5 +1,4 @@
 from baseline.pytorch.torchy import *
-from baseline.pytorch.crf import *
 from baseline.utils import Offsets
 from baseline.model import TaggerModel
 from baseline.model import register_model
@@ -15,8 +14,6 @@ class TaggerModelBase(nn.Module, TaggerModel):
     def to_gpu(self):
         self.gpu = True
         self.cuda()
-        if not self.use_crf:
-            self.crit.cuda()
         return self
 
     @staticmethod
@@ -29,77 +26,41 @@ class TaggerModelBase(nn.Module, TaggerModel):
     def __init__(self):
         super(TaggerModelBase, self).__init__()
 
-    def init_embed(self, embeddings, **kwargs):
-        self.embeddings = EmbeddingsContainer()
-        input_sz = 0
-        for k, embedding in embeddings.items():
-            self.embeddings[k] = embedding
-            input_sz += embedding.get_dsz()
-
-        self.vdrop = bool(kwargs.get('variational_dropout', False))
-        pdrop = float(kwargs.get('dropout', 0.5))
-        if self.vdrop:
-            self.dropout = VariationalDropout(pdrop)
-        else:
-            self.dropout = nn.Dropout(pdrop)
-        return input_sz
-
-    def embed(self, input):
-        all_embeddings = []
-        for k, embedding in self.embeddings.items():
-            all_embeddings.append(embedding.encode(input[k]))
-        return self.dropout(torch.cat(all_embeddings, 2))
-
-    def init_encoder(self, input_sz, **kwargs):
+    def init_pool(self, dsz, **kwargs):
         pass
 
-    def encode(self, words_over_time, lengths):
+    def init_embed(self, **kwargs):
+        return WithDropout(EmbeddingsStack(self.embeddings), self.pdrop)
+
+    def init_encoder(self, input_sz, **kwargs):
         pass
 
     @classmethod
     def create(cls, embeddings, labels, **kwargs):
         model = cls()
         model.lengths_key = kwargs.get('lengths_key')
-        model.proj = bool(kwargs.get('proj', False))
-        model.use_crf = bool(kwargs.get('crf', False))
-        model.activation_type = kwargs.get('activation', 'tanh')
-        constraint = kwargs.get('constraint')
+        model.embeddings = embeddings
+        model.pdrop = float(kwargs.get('dropout', 0.5))
 
-        pdrop = float(kwargs.get('dropout', 0.5))
+        model.activation_type = kwargs.get('activation', 'tanh')
+
         model.dropin_values = kwargs.get('dropin', {})
         model.labels = labels
 
-        input_sz = model.init_embed(embeddings, **kwargs)
-        hsz = model.init_encoder(input_sz, **kwargs)
+        embed_model = model.init_embed(**kwargs)
+        transducer_model = model.init_encoder(embed_model.output_dim, **kwargs)
 
-        model.decoder = nn.Sequential()
-        if model.proj is True:
-            append2seq(model.decoder, (
-                pytorch_linear(hsz, hsz),
-                get_activation(model.activation_type),
-                nn.Dropout(pdrop),
-                pytorch_linear(hsz, len(model.labels))
-            ))
-        else:
-            append2seq(model.decoder, (
-                pytorch_linear(hsz, len(model.labels)),
-            ))
+        use_crf = bool(kwargs.get('crf', False))
+        constraint = kwargs.get('constraint')
+        if constraint is not None: constraint = constraint.unsqueeze(0)
 
-        if model.use_crf:
-            if constraint is not None: constraint = constraint.unsqueeze(0)
-            model.crf = CRF(
-                len(labels),
-                (Offsets.GO, Offsets.EOS), batch_first=False,
-                mask=constraint
-            )
+        if use_crf:
+            decoder_model = CRF(len(labels), constraint_mask=constraint, batch_first=False)
         else:
-            if constraint is not None:
-                constraint = F.log_softmax(torch.zeros(constraint.shape).masked_fill(constraint, -1e4), dim=0)
-                model.register_buffer('constraint', constraint.unsqueeze(0))
-            else:
-                model.constraint = None
-            model.crit = SequenceCriterion(LossFn=nn.CrossEntropyLoss, avg='batch')
-        print(model)
+            decoder_model = TaggerGreedyDecoder(len(labels), constraint_mask=constraint)
+
+        model.layers = TagSequenceModel(len(labels), embed_model, transducer_model, decoder_model)
+        print(model.layers)
         return model
 
     def drop_inputs(self, key, x):
@@ -148,53 +109,14 @@ class TaggerModelBase(nn.Module, TaggerModel):
             example_dict['ids'] = ids
         return example_dict
 
-    def compute_unaries(self, inputs, lengths):
-        words_over_time = self.embed(inputs)
-        # output = (T, B, H)
-        output = self.encode(words_over_time, lengths)
-        # stack (T x B, H)
-        decoded = self.decoder(output.view(output.size(0)*output.size(1), -1))
-        # back to T x B x H
-        decoded = decoded.view(output.size(0), output.size(1), -1)
-
-        return decoded
-
     def forward(self, input):
-        lengths = input['lengths']
-        probv = self.compute_unaries(input, lengths)
-        lengths = lengths.to(probv.device)
-        if self.use_crf is True:
-            preds, _ = self.crf.decode(probv, lengths)
-        else:
-            if self.constraint is not None:
-                probv = F.log_softmax(probv, dim=-1)
-                preds, _ = viterbi(probv, self.constraint, lengths, Offsets.GO, Offsets.EOS, norm=True)
-            else:
-                probv = probv.transpose(0, 1)
-                preds = []
-                for pij, sl in zip(probv, lengths):
-                    _, unary = torch.max(pij[:sl], 1)
-                    preds.append(unary.data)
-        return preds
+        return self.layers(input)
 
     def compute_loss(self, inputs):
+        tags = inputs['y'].transpose(0, 1)
         lengths = inputs['lengths']
-        tags = inputs['y']
-
-        probv = self.compute_unaries(inputs, lengths)
-        batch_loss = 0.
-        total_tags = 0.
-        if self.use_crf is True:
-            # Get tags as [T, B]
-            tags = tags.transpose(0, 1)
-            lengths = lengths.to(probv.device)
-            batch_loss = torch.mean(self.crf.neg_log_loss(probv, tags.data, lengths))
-        else:
-            # Get batch (B, T)
-            probv = probv.transpose(0, 1).contiguous()
-            batch_loss = self.crit(probv, tags)
-
-        return batch_loss
+        unaries = self.layers.transduce(inputs)
+        return self.layers.neg_log_loss(unaries, tags, lengths)
 
     def get_vocab(self, vocab_type='word'):
         return self.word_vocab if vocab_type == 'word' else self.char_vocab
@@ -225,11 +147,7 @@ class RNNTaggerModel(TaggerModelBase):
             Encoder = LSTMEncoder
         else:
             Encoder = BiLSTMEncoder
-        self.encoder = Encoder(input_sz, hsz, layers, pdrop, unif=unif, initializer=weight_init, output_fn=rnn_signal)
-        return hsz
-
-    def encode(self, words_over_time, lengths):
-        return self.encoder((words_over_time, lengths))
+        return Encoder(input_sz, hsz, layers, pdrop, unif=unif, initializer=weight_init, output_fn=rnn_signal)
 
 
 @register_model(task='tagger', name='cnn')
