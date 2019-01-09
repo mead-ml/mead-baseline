@@ -1,9 +1,8 @@
 import torch
-from baseline.utils import transition_mask as transition_mask_np, Offsets
-import torch.autograd
 import torch.nn as nn
 import torch.nn.functional as F
 from baseline.pytorch.torchy import vec_log_sum_exp, sequence_mask
+from baseline.utils import transition_mask as transition_mask_np, Offsets
 
 
 def transition_mask(vocab, span_type, s_idx, e_idx, pad_idx=None):
@@ -70,19 +69,17 @@ class CRF(nn.Module):
             unary = unary.transpose(0, 1)
             tags = tags.transpose(0, 1)
         _, batch_size, _ = unary.size()
-        min_lengths = torch.min(lengths)
-        fwd_score = self.forward(unary, lengths, batch_size, min_lengths)
-        gold_score = self.score_sentence(unary, tags, lengths, batch_size, min_lengths)
+        fwd_score = self.forward(unary, lengths, batch_size)
+        gold_score = self.score_sentence(unary, tags, lengths, batch_size)
         return fwd_score - gold_score
 
-    def score_sentence(self, unary, tags, lengths, batch_size, min_length):
+    def score_sentence(self, unary, tags, lengths, batch_size):
         """Score a batch of sentences.
 
         :param unary: torch.FloatTensor: [T, B, N]
         :param tags: torch.LongTensor: [T, B]
         :param lengths: torch.LongTensor: [B]
-        :param batzh_size: int: B
-        :param min_length: torch.LongTensor: []
+        :param batch_size: int: B
 
         :return: torch.FloatTensor: [B]
         """
@@ -108,16 +105,16 @@ class CRF(nn.Module):
         scores = scores + eos_scores
         return scores
 
-    def forward(self, unary, lengths, batch_size, min_length):
+    def forward(self, unary, lengths, batch_size):
         """For CRF forward on a batch.
 
         :param unary: torch.FloatTensor: [T, B, N]
         :param lengths: torch.LongTensor: [B]
-        :param batzh_size: int: B
-        :param min_length: torch.LongTensor: []
+        :param batch_size: int: B
 
         :return: torch.FloatTensor: [B]
         """
+        min_length = torch.min(lengths)
         # alphas: [B, 1, N]
         alphas = torch.Tensor(batch_size, 1, self.n_tags).fill_(-1e4).to(unary.device)
         alphas[:, 0, self.start_idx] = 0.
@@ -168,6 +165,10 @@ def viterbi(unary, trans, lengths, start_idx, end_idx, norm=False):
 
     :param unary: torch.FloatTensor: [T, B, N]
     :param trans: torch.FloatTensor: [1, N, N]
+    :param lengths: torch.LongTensor: [B]
+    :param start_idx: int: The index of the go token
+    :param end_idx: int: The index of the eos token
+    :param norm: bool: Should the initial state be normalized?
 
     :return: List[torch.LongTensor]: [[T] .. B] that paths
     :return: torch.FloatTensor: [B] the path scores
