@@ -489,14 +489,14 @@ def beam_search(
             # Select the lengths to keep tracking based on the valid beams left.
             lengths = lengths.view(-1)[flat_beams].view((bsz, K))
 
+            extra = update(flat_beams, extra)
+
             # Updated lengths based on if we hit EOS
             last = paths[:, :, -1]
             eoses = (last == Offsets.EOS)
             lengths = update_lengths(lengths, eoses, i + 1)
             if (lengths != 0).all():
                 break
-
-            extra = update(flat_beams, extra)
         else:
             # This runs if the loop didn't break meaning one beam hit the max len
             # Add an EOS to anything that hasn't hit the end. This makes the scores real.
