@@ -353,13 +353,13 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
         self.save_md(model_base)
         self.saver.save(self.sess, model_base)
 
-    def predict(self, batch_dict):
+    def predict(self, batch_dict, **kwargs):
         feed_dict = self.make_input(batch_dict)
         vec = self.sess.run(self.decoder.best, feed_dict=feed_dict)
         # (B x K x T)
-        if len(vec.shape) == 2:
-            vec = np.expand_dims(vec, axis=1)
-        return vec.transpose(1, 2, 0)
+        if len(vec.shape) == 3:
+            return vec.transpose(1, 2, 0)
+        return np.expand_dims(vec, axis=1)
 
     def step(self, batch_dict):
         """

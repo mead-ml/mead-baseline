@@ -41,6 +41,10 @@ class TransformerDecoder(DecoderBase):
     def __init__(self, tgt_embedding, **kwargs):
         super(TransformerDecoder, self).__init__(tgt_embedding, **kwargs)
 
+    @property
+    def decoder_type(self):
+        return 'transformer'
+
     def predict(self,
                 encoder_outputs,
                 src_len,
@@ -73,12 +77,12 @@ class TransformerDecoder(DecoderBase):
             vsz = self.tgt_embedding.vsz
             do_weight_tying = bool(kwargs.get('tie_weights', True))  # False
             hsz = get_shape_as_list(h)[-1]
+            h = tf.reshape(h, [-1, hsz])
             if do_weight_tying and hsz == self.tgt_embedding.get_dsz():
                 with tf.variable_scope(self.tgt_embedding.scope, reuse=True):
                     W = tf.get_variable("W")
                     outputs = tf.matmul(h, W, transpose_b=True, name="logits")
             else:
-                h = tf.reshape(h, [-1, hsz])
                 vocab_w = tf.get_variable("vocab_w", [hsz, vsz], dtype=tf.float32)
                 vocab_b = tf.get_variable("vocab_b", [vsz], dtype=tf.float32)
                 outputs = tf.nn.xw_plus_b(h, vocab_w, vocab_b, name="logits")
@@ -215,6 +219,10 @@ class RNNDecoder(DecoderBase):
                 raise ValueError("weight tying requires hsz == embedding dsz, \
 got {} hsz and {} dsz".format(self.hsz, self.tgt_embedding.get_dsz()))
 
+    @property
+    def decoder_type(self):
+        return 'vanilla'
+
     def _create_cell(self, rnn_enc_tensor, src_len, pdrop, rnntype='lstm', layers=1, vdrop=False, **kwargs):
         self.cell = multi_rnn_cell_w_dropout(self.hsz, pdrop, rnntype, layers, variational=vdrop, training=TRAIN_FLAG())
 
@@ -315,6 +323,10 @@ class RNNDecoderWithAttn(RNNDecoder):
         self.attn_type = kwargs.get('attn_type', 'bahdanau').lower()
 
     @property
+    def decoder_type(self):
+        return 'default'
+
+    @property
     def attn_type(self):
         return self._attn_type
 
@@ -331,5 +343,3 @@ class RNNDecoderWithAttn(RNNDecoder):
         GlobalAttention = tfcontrib_seq2seq.LuongAttention if self.attn_type == 'luong' else tfcontrib_seq2seq.BahdanauAttention
         attn_mech = GlobalAttention(self.hsz, rnn_enc_tensor, src_len)
         self.cell = tf.contrib.seq2seq.AttentionWrapper(cell, attn_mech, self.hsz, name='dyn_attn_cell')
-
-
