@@ -1,22 +1,16 @@
-
-from baseline.utils import listify
 import baseline
 import eight_mile.tf.layers as L
-from baseline.tf.embeddings import LookupTableEmbeddings
-from baseline.w2v import PretrainedEmbeddingsModel, RandomInitVecModel
 import tensorflow as tf
 import logging
 import numpy as np
+import time
+
 tf.enable_eager_execution()
-
-### LIB
-
-
-
-### END LIB
 
 NUM_PREFETCH = 2
 SHUF_BUF_SZ = 5000
+
+
 def get_logging_level(ll):
     ll = ll.lower()
     if ll == 'debug':
@@ -136,13 +130,11 @@ def loss(model, x, y):
   return tf.losses.sparse_softmax_cross_entropy(labels=y, logits=y_)
 
 
-
 def grad(model, inputs, targets):
   with tf.GradientTape() as tape:
     loss_value = loss(model, inputs, targets)
   return loss_value, tape.gradient(loss_value, model.trainable_variables)
 
-import time
 num_epochs = 2
 for epoch in range(num_epochs):
 
