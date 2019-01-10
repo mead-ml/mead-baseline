@@ -84,11 +84,11 @@ def get_activation(name='relu'):
 
 # Mapped
 class ConvEncoder(tf.keras.Model):
-    def __init__(self, outsz, filtsz, pdrop, activation_type='relu'):
+    def __init__(self, outsz, filtsz, pdrop, activation='relu'):
         super(ConvEncoder, self).__init__()
         self.output_dim = outsz
         self.conv = tf.keras.layers.Conv1D(filters=outsz, kernel_size=filtsz, padding='same')
-        self.act = get_activation(activation_type)
+        self.act = get_activation(activation)
         self.dropout = tf.keras.layers.Dropout(pdrop)
 
     def call(self, inputs, training=False):
@@ -99,13 +99,13 @@ class ConvEncoder(tf.keras.Model):
 # Mapped
 class ConvEncoderStack(tf.keras.Model):
 
-    def __init__(self, outsz, filtsz, pdrop, layers=1, activation_type='relu'):
+    def __init__(self, outsz, filtsz, pdrop, layers=1, activation='relu'):
         super(ConvEncoderStack, self).__init__()
 
-        first_layer = ConvEncoder(outsz, filtsz, pdrop, activation_type)
+        first_layer = ConvEncoder(outsz, filtsz, pdrop, activation)
         self.layers.append(first_layer)
         for i in range(layers-1):
-            subsequent_layer = ResidualBlock(ConvEncoder(outsz, filtsz, pdrop, activation_type))
+            subsequent_layer = ResidualBlock(ConvEncoder(outsz, filtsz, pdrop, activation))
             self.layers.append(subsequent_layer)
 
     def call(self, inputs, training=False):
@@ -389,7 +389,7 @@ class EmbeddingsStack(tf.keras.Model):
 
 class DenseStack(tf.keras.Model):
 
-    def __init__(self, hsz, activation_name='relu', pdrop_value=0.5, init=None, name=None, **kwargs):
+    def __init__(self, hsz, activation='relu', pdrop_value=0.5, init=None, name=None, **kwargs):
         """Stack 1 or more hidden layers, optionally (forming an MLP)
 
         :param hsz: (``int``) The number of hidden units
@@ -400,7 +400,7 @@ class DenseStack(tf.keras.Model):
         """
         super(DenseStack, self).__init__(name=name)
         hszs = listify(hsz)
-        self.layer_stack = [tf.keras.layers.Dense(hsz, kernel_initializer=init, activation=activation_name) for hsz in hszs]
+        self.layer_stack = [tf.keras.layers.Dense(hsz, kernel_initializer=init, activation=activation) for hsz in hszs]
         self.dropout = tf.keras.layers.Dropout(pdrop_value)
 
     def call(self, inputs, training=False, mask=None):
@@ -616,7 +616,7 @@ class MultiHeadedAttention(tf.keras.Model):
 
 class TransformerEncoder(tf.keras.Model):
 
-    def __init__(self, d_model, num_heads, pdrop, scale=True, activation_type='relu', d_ff=None, name=None):
+    def __init__(self, d_model, num_heads, pdrop, scale=True, activation='relu', d_ff=None, name=None):
         super(TransformerEncoder, self).__init__(name=name)
         if d_ff is None:
             d_ff = 4*d_model
@@ -624,7 +624,7 @@ class TransformerEncoder(tf.keras.Model):
         self.self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale)
         self.dropout = tf.keras.layers.Dropout(pdrop)
         self.ln2 = LayerNorm(name='ln_2')
-        self.feed_forward = FFN(d_model, pdrop, activation_type, d_ff, name='ffn')
+        self.feed_forward = FFN(d_model, pdrop, activation, d_ff, name='ffn')
 
     def call(self, inputs, training=False, mask=None):
         x = inputs
@@ -640,7 +640,7 @@ class TransformerEncoder(tf.keras.Model):
 
 class TransformerDecoder(tf.keras.Model):
 
-    def __init__(self, d_model, num_heads, pdrop, scale=True, activation_type='relu', d_ff=None, name=None):
+    def __init__(self, d_model, num_heads, pdrop, scale=True, activation='relu', d_ff=None, name=None):
         super(TransformerEncoder, self).__init__(name=name)
         if d_ff is None:
             d_ff = 4*d_model
@@ -651,7 +651,7 @@ class TransformerDecoder(tf.keras.Model):
         self.ln1 = LayerNorm(name='ln_1')
         self.ln2 = LayerNorm(name='ln_2')
         self.ln3 = LayerNorm(name='ln_3')
-        self.feed_forward = FFN(d_model, pdrop, activation_type, d_ff, name='ffn')
+        self.feed_forward = FFN(d_model, pdrop, activation, d_ff, name='ffn')
 
     def call(self, inputs, training=False, mask=None):
         memory, x = inputs
@@ -674,12 +674,12 @@ class TransformerDecoder(tf.keras.Model):
 
 class TransformerEncoderStack(tf.keras.Model):
 
-    def __init__(self, d_model, num_heads, pdrop, scale=True, layers=1, activation_type='relu', d_ff=None, name=None, **kwargs):
+    def __init__(self, d_model, num_heads, pdrop, scale=True, layers=1, activation='relu', d_ff=None, name=None, **kwargs):
         super(TransformerEncoderStack, self).__init__(name=name)
         self.encoders = []
         self.ln = LayerNorm(name='ln_out')
         for i in range(layers):
-            self.encoders.append(TransformerEncoder(d_model, num_heads, pdrop, scale, activation_type, d_ff))
+            self.encoders.append(TransformerEncoder(d_model, num_heads, pdrop, scale, activation, d_ff))
 
     def call(self, inputs, training=False, mask=None):
         x = inputs
@@ -689,12 +689,13 @@ class TransformerEncoderStack(tf.keras.Model):
 
 
 class TransformerDecoderStack(tf.keras.Model):
-    def __init__(self, d_model, num_heads, pdrop, scale=True, layers=1, activation_type='relu', d_ff=None, name=None, **kwargs):
+    def __init__(self, d_model, num_heads, pdrop, scale=True, layers=1, activation='relu', d_ff=None, name=None, **kwargs):
         super(TransformerDecoderStack, self).__init__()
         self.decoders = []
         self.ln = LayerNorm(name='ln_out')
         for i in range(layers):
-            self.decoders.append(TransformerDecoder(d_model, num_heads, pdrop, scale, activation_type, d_ff, name))
+            self.decoders.append(TransformerDecoder(d_model, num_heads, pdrop, scale, activation, d_ff, name))
+
 
     def call(self, inputs, training=False, mask=None):
         x = inputs
@@ -714,7 +715,7 @@ class FFN(tf.keras.Model):
     thanks to https://github.com/pytorch/pytorch/pull/1935!
 
     """
-    def __init__(self, d_model, pdrop, activation_type='relu', d_ff=None, name=None):
+    def __init__(self, d_model, pdrop, activation='relu', d_ff=None, name=None):
         """Constructor, takes in model size (which is the external currency of each block) and the feed-forward size
 
         :param d_model: The model size.  This is the size passed through each block
@@ -727,7 +728,7 @@ class FFN(tf.keras.Model):
         self.expansion = TimeDistributedProjection(d_ff)
         self.squeeze = TimeDistributedProjection(d_model)
         self.dropout = tf.keras.layers.Dropout(pdrop)
-        self.act = tf.keras.layers.Activation(activation_type)
+        self.act = tf.keras.layers.Activation(activation)
 
     def call(self, inputs, training=False, mask=None):
         return self.squeeze(self.dropout(self.act(self.expansion(inputs)), training))

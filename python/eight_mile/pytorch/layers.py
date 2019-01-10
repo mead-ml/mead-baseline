@@ -156,12 +156,12 @@ def rnn_bi_hidden(output, output_state):
 
 # Mapped
 class ConvEncoder(nn.Module):
-    def __init__(self, insz, outsz, filtsz, pdrop, activation_type='relu'):
+    def __init__(self, insz, outsz, filtsz, pdrop, activation='relu'):
         super(ConvEncoder, self).__init__()
         self.output_dim = outsz
         pad = filtsz//2
         self.conv = nn.Conv1d(insz, outsz, filtsz, padding=pad)
-        self.act = get_activation(activation_type)
+        self.act = get_activation(activation)
         self.dropout = nn.Dropout(pdrop)
 
     def forward(self, input_bct):
@@ -172,11 +172,11 @@ class ConvEncoder(nn.Module):
 # Mapped
 class ConvEncoderStack(nn.Module):
 
-    def __init__(self, insz, outsz, filtsz, pdrop, layers=1, activation_type='relu'):
+    def __init__(self, insz, outsz, filtsz, pdrop, layers=1, activation='relu'):
         super(ConvEncoderStack, self).__init__()
 
-        first_layer = ConvEncoder(insz, outsz, filtsz, pdrop, activation_type)
-        subsequent_layer = ResidualBlock(ConvEncoder(outsz, outsz, filtsz, pdrop, activation_type))
+        first_layer = ConvEncoder(insz, outsz, filtsz, pdrop, activation)
+        subsequent_layer = ResidualBlock(ConvEncoder(outsz, outsz, filtsz, pdrop, activation))
         self.layers = nn.ModuleList([first_layer] + [copy.deepcopy(subsequent_layer) for _ in range(layers-1)])
         self.output_dim = outsz
 
@@ -207,7 +207,7 @@ def bth2tbh(t):
 # Mapped
 class ParallelConv(nn.Module):
 
-    def __init__(self, insz, outsz, filtsz, activation_type, input_fmt="bth"):
+    def __init__(self, insz, outsz, filtsz, activation='relu', input_fmt="bth"):
         super(ParallelConv, self).__init__()
         convs = []
         outsz_filts = outsz
@@ -226,7 +226,7 @@ class ParallelConv(nn.Module):
             pad = fsz//2
             conv = nn.Sequential(
                 nn.Conv1d(insz, outsz_filts[i], fsz, padding=pad),
-                get_activation(activation_type)
+                get_activation(activation)
             )
             convs.append(conv)
             # Add the module so its managed correctly
@@ -291,8 +291,6 @@ class Dense(nn.Module):
 
     def forward(self, input):
         return self.activation(self.layer(input))
-
-
 
 
 # Mapped
@@ -559,7 +557,7 @@ class EmbeddingsStack(nn.Module):
 
 class DenseStack(nn.Module):
 
-    def __init__(self, insz, hsz, activation_name='relu', pdrop_value=0.5, init=None, **kwargs):
+    def __init__(self, insz, hsz, activation='relu', pdrop_value=0.5, init=None, **kwargs):
         """Stack 1 or more hidden layers, optionally (forming an MLP)
 
         :param hsz: (``int``) The number of hidden units
@@ -574,7 +572,7 @@ class DenseStack(nn.Module):
         self.layer_stack = nn.Sequential()
         current = insz
         for i, hsz in hszs:
-            self.layer_stack.append(WithDropout(Dense(current, hsz, activation=activation_name), pdrop_value))
+            self.layer_stack.append(WithDropout(Dense(current, hsz, activation=activation), pdrop_value))
             current = hsz
 
     def forward(self, inputs):
@@ -728,6 +726,10 @@ class EmbedPoolStackModel(nn.Module):
         stacked = self.stack_model(pooled) if self.stack_model is not None else pooled
         return self.output_layer(stacked)
 
+    #def cuda(self, device=None):
+    #    super(EmbedPoolStackModel, self).cuda(device=device)
+    #    self.embed_model.cuda(device=device)
+
 
 class WithDropout(nn.Module):
 
@@ -742,7 +744,6 @@ class WithDropout(nn.Module):
     @property
     def output_dim(self):
         return self.layer.output_dim
-
 
 
 def transition_mask(vocab, span_type, s_idx, e_idx, pad_idx=None):
@@ -1038,7 +1039,7 @@ class SequenceModel(nn.Module):
 
 class TagSequenceModel(SequenceModel):
 
-    def __init__(self, nc, embeddings, transducer, decoder=None, name=None):
+    def __init__(self, nc, embeddings, transducer, decoder=None):
         decoder_model = CRF(nc) if decoder is None else decoder
         super(TagSequenceModel, self).__init__(nc, embeddings, transducer, decoder_model)
 
