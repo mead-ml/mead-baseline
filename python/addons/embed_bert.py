@@ -1417,7 +1417,7 @@ class BERTEmbeddings(TensorFlowEmbeddings):
         if self.operator == 'concat':
             z = tf.concat(layers, axis=-1)
         else:
-            z = tf.reduce_mean(layers, axis=-1)
+            z = tf.reduce_mean(tf.add_n(layers), axis=-1, keepdims=True)
         z = tf.stop_gradient(z)
         return z
     def save_md(self, target):
