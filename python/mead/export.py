@@ -18,6 +18,7 @@ def main():
     parser.add_argument('--model_version', help='model_version', default=1)
     parser.add_argument('--output_dir', help='output dir', default='./models')
     parser.add_argument('--beam', help='beam_width', default=30, type=int)
+    parser.add_argument('--is_remote', help='if True, separate items for remote server and client. If False bundle everything together', default=True, type=lambda x: (str(x).lower() == 'true'))
 
     args = parser.parse_args()
 
@@ -31,7 +32,7 @@ def main():
     task = mead.Task.get_task_specific(task_name, args.logging, args.settings)
     task.read_config(config_params, args.datasets)
     exporter = create_exporter(task, args.exporter_type)
-    exporter.run(args.model, args.output_dir, args.model_version)
+    exporter.run(args.model, args.output_dir, args.model_version, remote=args.is_remote)
 
 if __name__ == "__main__":
     main()
