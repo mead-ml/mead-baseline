@@ -1,9 +1,8 @@
 import torch
-from baseline.utils import transition_mask as transition_mask_np
-import torch.autograd
 import torch.nn as nn
 import torch.nn.functional as F
-from baseline.pytorch.torchy import vec_log_sum_exp
+from baseline.pytorch.torchy import vec_log_sum_exp, sequence_mask
+from baseline.utils import transition_mask as transition_mask_np, Offsets
 
 
 def transition_mask(vocab, span_type, s_idx, e_idx, pad_idx=None):
@@ -17,7 +16,7 @@ def transition_mask(vocab, span_type, s_idx, e_idx, pad_idx=None):
 
 class CRF(nn.Module):
 
-    def __init__(self, n_tags, idxs, batch_first=True, mask=None):
+    def __init__(self, n_tags, idxs=(Offsets.GO, Offsets.EOS), batch_first=True, mask=None):
         """Initialize the object.
         :param n_tags: int, The number of tags in your output (emission size)
         :param idxs: Tuple(int. int), The index of the start and stop symbol
@@ -70,52 +69,52 @@ class CRF(nn.Module):
             unary = unary.transpose(0, 1)
             tags = tags.transpose(0, 1)
         _, batch_size, _ = unary.size()
-        min_lengths = torch.min(lengths)
-        fwd_score = self.forward(unary, lengths, batch_size, min_lengths)
-        gold_score = self.score_sentence(unary, tags, lengths, batch_size, min_lengths)
+        fwd_score = self.forward(unary, lengths, batch_size)
+        gold_score = self.score_sentence(unary, tags, lengths, batch_size)
         return fwd_score - gold_score
 
-    def score_sentence(self, unary, tags, lengths, batch_size, min_length):
+    def score_sentence(self, unary, tags, lengths, batch_size):
         """Score a batch of sentences.
 
         :param unary: torch.FloatTensor: [T, B, N]
         :param tags: torch.LongTensor: [T, B]
         :param lengths: torch.LongTensor: [B]
-        :param batzh_size: int: B
-        :param min_length: torch.LongTensor: []
+        :param batch_size: int: B
 
         :return: torch.FloatTensor: [B]
         """
         trans = self.transitions.squeeze(0)  # [N, N]
-        batch_range = torch.arange(batch_size, dtype=torch.int64)  # [B]
         start = torch.full((1, batch_size), self.start_idx, dtype=tags.dtype, device=tags.device)  # [1, B]
-        tags = torch.cat([start, tags], 0)  # [T, B]
-        scores = torch.zeros(batch_size, requires_grad=True).to(unary.device)  # [B]
-        for i, unary_t in enumerate(unary):
-            new_scores = (
-                trans[tags[i + 1], tags[i]] +
-                unary_t[batch_range, tags[i + 1]]
-            )
-            if i >= min_length:
-                # If we are farther along `T` than your length don't add to your score
-                mask = (i >= lengths)
-                scores = scores + new_scores.masked_fill(mask, 0)
-            else:
-                scores = scores + new_scores
+        tags = torch.cat([start, tags], 0)  # [T + 1, B]
+
+        # Unfold gives me all slices of size 2 (this tag next tag) from dimension T
+        tag_pairs = tags.unfold(0, 2, 1)
+        # Move the pair dim to the front and split it into two
+        indices = tag_pairs.permute(2, 0, 1).chunk(2)
+        trans_score = trans[[indices[1], indices[0]]].squeeze(0)
+        # Pull out the values of the tags from the unary scores.
+        unary_score = unary.gather(2, tags[1:].unsqueeze(-1)).squeeze(-1)
+
+        mask = sequence_mask(lengths).transpose(0, 1).to(tags.device)
+        scores = unary_score + trans_score
+        scores = scores.masked_fill(mask == 0, 0)
+        scores = scores.sum(0)
+
         # Add stop tag
-        scores = scores + trans[self.end_idx, tags[lengths, batch_range]]
+        eos_scores = trans[self.end_idx, tags.gather(0, lengths.unsqueeze(0)).squeeze(0)]
+        scores = scores + eos_scores
         return scores
 
-    def forward(self, unary, lengths, batch_size, min_length):
+    def forward(self, unary, lengths, batch_size):
         """For CRF forward on a batch.
 
         :param unary: torch.FloatTensor: [T, B, N]
         :param lengths: torch.LongTensor: [B]
-        :param batzh_size: int: B
-        :param min_length: torch.LongTensor: []
+        :param batch_size: int: B
 
         :return: torch.FloatTensor: [B]
         """
+        min_length = torch.min(lengths)
         # alphas: [B, 1, N]
         alphas = torch.Tensor(batch_size, 1, self.n_tags).fill_(-1e4).to(unary.device)
         alphas[:, 0, self.start_idx] = 0.
@@ -166,13 +165,16 @@ def viterbi(unary, trans, lengths, start_idx, end_idx, norm=False):
 
     :param unary: torch.FloatTensor: [T, B, N]
     :param trans: torch.FloatTensor: [1, N, N]
+    :param lengths: torch.LongTensor: [B]
+    :param start_idx: int: The index of the go token
+    :param end_idx: int: The index of the eos token
+    :param norm: bool: Should the initial state be normalized?
 
     :return: List[torch.LongTensor]: [[T] .. B] that paths
     :return: torch.FloatTensor: [B] the path scores
     """
     seq_len, batch_size, tag_size = unary.size()
     min_length = torch.min(lengths)
-    batch_range = torch.arange(batch_size, dtype=torch.int64)
     backpointers = []
 
     # Alphas: [B, 1, N]
@@ -194,15 +196,14 @@ def viterbi(unary, trans, lengths, start_idx, end_idx, norm=False):
 
     # Add end tag
     terminal_var = alphas.squeeze(1) + trans[:, end_idx]
-    _, best_tag_id = torch.max(terminal_var, 1)
-    path_score = terminal_var[batch_range, best_tag_id]  # Select best_tag from each batch
+    path_score, best_tag_id = torch.max(terminal_var, 1)
 
     best_path = [best_tag_id]
     # Flip lengths
     rev_len = seq_len - lengths - 1
     for i, backpointer_t in enumerate(reversed(backpointers)):
         # Get new best tag candidate
-        new_best_tag_id = backpointer_t[batch_range, best_tag_id]
+        new_best_tag_id = backpointer_t.gather(1, best_tag_id.unsqueeze(1)).squeeze(1)
         # We are going backwards now, if you passed your flipped length then you aren't in your real results yet
         mask = (i > rev_len)
         best_tag_id = best_tag_id.masked_fill(mask, 0) + new_best_tag_id.masked_fill(mask == 0, 0)

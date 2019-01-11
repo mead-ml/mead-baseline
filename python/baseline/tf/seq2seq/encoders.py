@@ -28,6 +28,10 @@ class RNNEncoder(EncoderBase):
     def __init__(self, **kwargs):
         super(RNNEncoder, self).__init__()
 
+    @property
+    def encoder_type(self):
+        return 'default'
+
     def encode(self, embed_in, src_len, pdrop, hsz=650, rnntype='blstm', layers=1, vdrop=False, **kwargs):
 
         if rnntype == 'blstm':
@@ -66,6 +70,10 @@ class TransformerEncoder(EncoderBase):
 
     def __init__(self, **kwargs):
         super(TransformerEncoder, self).__init__()
+
+    @property
+    def encoder_type(self):
+        return 'transformer'
 
     def encode(self,
                embed_in,
