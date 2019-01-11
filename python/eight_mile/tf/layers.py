@@ -133,10 +133,11 @@ class ParallelConv(tf.keras.layers.Layer):
         self.bs = []
         self.activation = get_activation(activation)
 
+        motsz = outsz
         if not isinstance(outsz, list):
             motsz = [outsz] * len(filtsz)
 
-        for fsz, cmotsz in zip(filtsz, outsz):
+        for fsz, cmotsz in zip(filtsz, motsz):
             kernel_shape = [1, int(fsz), int(insz), int(cmotsz)]
             self.Ws.append(self.add_variable('cmot-{}/W'.format(fsz), shape=kernel_shape))
             self.bs.append(self.add_variable('cmot-{}/b'.format(fsz), shape=[cmotsz], initializer=tf.constant_initializer(0.0)))
