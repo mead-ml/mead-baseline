@@ -1,4 +1,5 @@
 import baseline
+import baseline.tf.embeddings
 import eight_mile.tf.layers as L
 import tensorflow as tf
 import logging
