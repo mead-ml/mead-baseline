@@ -329,6 +329,9 @@ def update_lengths(lengths, eoses, idx):
 def gnmt_length_penalty(lengths, alpha=0.8):
     """Calculate a length penalty from https://arxiv.org/pdf/1609.08144.pdf
 
+    The paper states the penalty as (5 + |Y|)^a / (5 + 1)^a. This is impelmented
+    as ((5 + |Y|) / 6)^a for a (very) tiny performance boost
+
     :param lengths: `torch.LongTensor`: [B, K] The lengths of the beams.
     :param alpha: `float`: A hyperparameter. See Table 2 for a search on this
         parameter.
@@ -337,9 +340,8 @@ def gnmt_length_penalty(lengths, alpha=0.8):
         `torch.FloatTensor`: [B, K, 1] The penalties.
     """
     lengths = lengths.to(torch.float)
-    num = torch.pow((5 + lengths), alpha)
-    denom = math.pow(6, alpha)
-    return (num / denom).unsqueeze(-1)
+    penalty = torch.pow(((5 + lengths) / 6), alpha)
+    return penalty.unsqueeze(-1)
 
 
 def no_length_penalty(lengths):
