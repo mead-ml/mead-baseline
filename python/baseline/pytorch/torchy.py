@@ -501,9 +501,9 @@ class BahdanauAttention(BaseAttention):
         B, T, H = keys_bth.shape
         q = self.W_a(query_t.view(-1, self.hsz)).view(B, 1, H)
         u = self.E_a(keys_bth.contiguous().view(-1, self.hsz)).view(B, T, H)
-        z = F.tanh(q + u)
+        z = torch.tanh(q + u)
         a = self.v(z.view(-1, self.hsz)).view(B, T)
-        a.masked_fill(keys_mask == 0, -1e9)
+        a = a.masked_fill(keys_mask == 0, -1e9)
         a = F.softmax(a, dim=-1)
         return a
 
@@ -618,3 +618,19 @@ class EmbeddingsContainer(nn.Module):
 
     def update(self, modules):
         raise Exception('Not implemented')
+
+
+def unsort_batch(batch, perm_idx):
+    """Undo the sort on a batch of tensors done for packing the data in the RNN.
+
+    :param batch: `torch.Tensor`: The batch of data batch first `[B, ...]`
+    :param perm_idx: `torch.Tensor`: The permutation index returned from the torch.sort.
+
+    :returns: `torch.Tensor`: The batch in the original order.
+    """
+    # Add ones to the shape of the perm_idx until it can broadcast to the batch
+    perm_idx = perm_idx.to(batch.device)
+    diff = len(batch.shape) - len(perm_idx.shape)
+    extra_dims = [1] * diff
+    perm_idx = perm_idx.view([-1] + extra_dims)
+    return batch.scatter_(0, perm_idx.expand_as(batch), batch)

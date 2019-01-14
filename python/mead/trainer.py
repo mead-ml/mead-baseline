@@ -1,9 +1,9 @@
 import argparse
 from copy import deepcopy
 from itertools import chain
-from baseline.utils import read_config_stream
+from baseline.utils import read_config_stream, normalize_backend
 import mead
-from mead.utils import convert_path, parse_extra_args, normalize_backend
+from mead.utils import convert_path, parse_extra_args
 
 
 def main():

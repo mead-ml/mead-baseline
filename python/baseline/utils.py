@@ -1,6 +1,7 @@
 import six
 
 import os
+import re
 import sys
 import json
 import hashlib
@@ -46,6 +47,18 @@ def export(obj, all_list=None):
 
 
 exporter = export(__all__)
+
+
+@exporter
+def normalize_backend(name):
+    name = name.lower()
+    if name == 'tensorflow':
+        name = 'tf'
+    elif name == 'torch' or name == 'pyt':
+        name = 'pytorch'
+    elif name == 'dynet':
+        name = 'dy'
+    return name
 
 
 @exporter
@@ -533,7 +546,7 @@ def topk(k, probs):
 @exporter
 def beam_multinomial(k, probs):
     """Prune all elements in a large probability distribution below the top K.
-    
+
     Renormalize the distribution with only top K, and then sample n times out of that.
     """
 
@@ -986,7 +999,7 @@ def convert_seq2seq_golds(indices, lengths, rlut, subword_fix=lambda x: x):
     for idx, l in zip(indices, lengths):
         gold = idx[:l]
         gold_str = lookup_sentence(rlut, gold)
-        gold = subword_fix(gold_str.split())
+        gold = subword_fix(gold_str).split()
         golds.append([gold])
     return golds
 
@@ -1005,6 +1018,25 @@ def convert_seq2seq_preds(indices, rlut, subword_fix=lambda x: x):
     preds = []
     for idx in indices:
         pred_str = lookup_sentence(rlut, idx)
-        pred = subword_fix(pred_str.split())
+        pred = subword_fix(pred_str).split()
         preds.append(pred)
     return preds
+
+
+@exporter
+def undo_bpe(seq):
+    """Undo the BPE splits to make Bleu comparable.
+
+    :param seq: `str`: The string with encoded tokens in it.
+
+    :returns: `str`: The string with BPE splits collapsed.
+    """
+    # BPE token is @@ this removes it if it is at the end of a word or the end
+    # of the sequence.
+    return re.sub(r"@@( | ?$)", "", seq)
+
+
+@exporter
+def undo_sentence_piece(seq):
+    """Undo the sentence Piece splits to make Bleu comparable."""
+    return seq.replace("\u2581", "")

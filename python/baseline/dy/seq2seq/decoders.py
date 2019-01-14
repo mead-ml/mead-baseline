@@ -162,9 +162,20 @@ layer's hidden size == embedding weight dimensions")
             wll = self.prediction([output_i])[-1].npvalue()  # (V,) K
             V = wll.shape[0]
             if i > 0:
+                # expanded_history = np.expand_dims(scores, -1)
+                # done_mask = np.expand_dims((done == False).astype(np.uint8), -1)
+                # sll = np.multiply(wll.T, done_mask) + expanded_history
+
+                wll = wll.T
                 expanded_history = np.expand_dims(scores, -1)
                 done_mask = np.expand_dims((done == False).astype(np.uint8), -1)
-                sll = np.multiply(wll.T, done_mask) + expanded_history
+                done_mask_inv = (done_mask != 1).astype(np.uint8)
+                eos_mask = np.zeros((1, V)).astype(np.uint8)
+                mask = ((done_mask & eos_mask) != 1).astype(np.uint8)
+                masked_wll = np.multiply(done_mask, wll)
+                negged_wll = masked_wll + (done_mask_inv * -1e4)
+                removed_eos = np.multiply(mask, negged_wll)
+                sll = removed_eos + expanded_history
             else:
                 sll = wll.T
 
@@ -184,7 +195,7 @@ layer's hidden size == embedding weight dimensions")
                 beam_id = best_beams[j]
                 best_word = best_idx[j]
                 if done[j]:
-                    new_paths.append(paths[beam_id] + [Offsets.PAD])
+                    new_paths.append(paths[beam_id] + [Offsets.EOS])
                 else:
                     new_paths.append(paths[beam_id] + [best_word])
                 if best_word == Offsets.EOS:
@@ -201,6 +212,7 @@ layer's hidden size == embedding weight dimensions")
             paths = new_paths
             rnn_state = self.decoder_rnn.initial_state(new_hidden)
 
+        paths = np.stack([p[1:] for p in paths])
         return paths, scores
 
 

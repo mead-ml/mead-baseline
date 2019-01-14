@@ -9,12 +9,12 @@ from baseline.utils import (
     Offsets,
     get_env_gpus,
     show_examples,
+    normalize_backend,
     import_user_module,
 )
 from mead.downloader import EmbeddingDownloader, DataDownloader
 from mead.utils import (
     index_by_label,
-    normalize_backend,
     get_mead_settings,
     print_dataset_info,
     read_config_file_or_json,

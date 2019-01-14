@@ -1,10 +1,19 @@
+import copy
 import pytest
 import numpy as np
+from mock import MagicMock
 torch = pytest.importorskip('torch')
 from baseline.pytorch.torchy import sequence_mask
 from baseline.pytorch.transformer import subsequent_mask
 from baseline.pytorch.transformer import scaled_dot_product_attention as sdpa
 from baseline.pytorch.transformer import dot_product_attention as dpa
+
+
+
+@pytest.fixture(autouse=True)
+def no_grad():
+    with torch.no_grad():
+        yield
 
 
 @pytest.fixture

@@ -12,7 +12,9 @@ from baseline.utils import (
     is_sequence,
     revlut,
     load_vectorizers,
-    load_vocabs
+    load_vocabs,
+    lookup_sentence,
+    normalize_backend,
 )
 from baseline.model import load_model_for
 
@@ -60,7 +62,7 @@ class Service(object):
         vocabs = load_vocabs(directory)
         vectorizers = load_vectorizers(directory)
 
-        be = kwargs.get('backend', 'tf')
+        be = normalize_backend(kwargs.get('backend', 'tf'))
 
         remote = kwargs.get("remote", None)
         name = kwargs.get("name", None)
@@ -407,17 +409,15 @@ class EncoderDecoderService(Service):
 
         for k in self.src_vectorizers.keys():
             examples[k] = np.stack(examples[k])
+            lengths_key = '{}_lengths'.format(k)
+            if lengths_key in examples:
+                examples[lengths_key] = np.array(examples[lengths_key])
 
-        outcomes = self.model.predict(examples)
+        kwargs['beam'] = kwargs.get('beam', 5)
+        outcomes = self.model.predict(examples, **kwargs)
 
         results = []
-        ##B = outcomes.shape[0]
         for i in range(len(outcomes)):
             best = outcomes[i][0]
-            out = []
-            for j in range(len(best)):
-                word = self.tgt_idx_to_token.get(best[j], '<PAD>')
-                if word != '<PAD>' and word != '<EOS>':
-                    out += [word]
-            results += [out]
+            results.append(lookup_sentence(self.tgt_idx_to_token, best).split())
         return results
