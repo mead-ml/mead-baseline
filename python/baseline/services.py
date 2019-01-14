@@ -1,5 +1,8 @@
+import six
+
 import os
 import pickle
+from collections import defaultdict
 import numpy as np
 import baseline
 from baseline.utils import (
@@ -43,6 +46,57 @@ class Service(object):
     @classmethod
     def task_name(cls):
         raise Exception("Undefined task name")
+
+    def batch_input(self, tokens):
+        """Turn the input into a consistent format.
+
+        :return: List[List[str]]
+        """
+        mxlen = 0
+        mxwlen = 0
+        # If the input is List[str] wrap it in list to make a batch of size one.
+        token_seq = (tokens,) if isinstance(tokens[0], six.string_types) else tokens
+        # Get sentence and word lengths from the batch
+        for tokens in tokens_seq:
+            mxlen = max(mxlen, len(tokens))
+            for token in tokens:
+                mxwlen = max(mxwlen, len(token))
+        return tokens_seq, mxlen, mxwlen
+
+    def set_vectorizer_lens(self, mxlen, mwxlen):
+        """Set the max lengths on the vectorizers if unset.
+
+        :param mxlen: `int`: The max length of an example
+        :param mxwlen: `int`: The max length of a word in the batch
+        """
+        for k, vectorizer in self.vectorizers.items():
+            if hasattr(vectorizer, 'mxlen') and vectorizer.mxlen == -1:
+                vectorizer.mxlen = mxlen
+            if hasattr(vectorizer, 'mxwlen') and vectorizer.mxwlen == -1:
+                vectorizer.mxwlen = mxwlen
+
+    def vectorize(self, tokens_seq):
+        """Turn the input into that batch dict for prediction.
+
+        :param tokens_seq: `List[List[str]]`: The input text batch.
+
+        :returns: dict[str] -> np.ndarray: The vectorized batch.
+        """
+        examples = defaultdict(list)
+        for i, tokens in enumerate(tokens_seq):
+            for k, vectorizer in self.vectorizers.items():
+                vec, length = vectorizer.run(tokens, self.vocabs[k])
+                examples[k].append(vec)
+                if length is not None:
+                    lengths_key = '{}_lengths'.format(k)
+                    examples[lengths_key].append(length)
+
+        for k in self.vectorizers.keys():
+            examples[k] = np.stack(examples[k])
+            lengths_key = '{}_lengths'.format(k)
+            if lengths_key in examples:
+                examples[lengths_key] = np.stack(examples[lengths_key])
+        return examples
 
     @classmethod
     def load(cls, bundle, **kwargs):
@@ -123,49 +177,23 @@ class ClassifierService(Service):
         """Take tokens and apply the internal vocab and vectorizers.  The tokens should be either a batch of text
         single utterance of type ``list``
         """
-        mxlen = 0
-        mxwlen = 0
-        if type(tokens[0]) == str:
-            tokens_seq = (tokens,)
-        else:
-            tokens_seq = tokens
-
-        for tokens in tokens_seq:
-            mxlen = max(mxlen, len(tokens))
-            for token in tokens:
-                mxwlen = max(mxwlen, len(token))
-
-        examples = dict()
-        for k, vectorizer in self.vectorizers.items():
-            if hasattr(vectorizer, 'mxlen') and vectorizer.mxlen == -1:
-                vectorizer.mxlen = mxlen
-            if hasattr(vectorizer, 'mxwlen') and vectorizer.mxwlen == -1:
-                vectorizer.mxwlen = mxwlen
-            examples[k] = []
-
-        for i, tokens in enumerate(tokens_seq):
-            for k, vectorizer in self.vectorizers.items():
-                vec, length = vectorizer.run(tokens, self.vocabs[k])
-                examples[k].append(vec)
-                if length is not None:
-                    lengths_key = '{}_lengths'.format(k)
-                    if lengths_key not in examples:
-                        examples[lengths_key] = []
-                    examples[lengths_key].append(length)
-
-        for k in self.vectorizers.keys():
-            examples[k] = np.stack(examples[k])
+        token_seq, mxlen, mxwlen = self.batch_input(tokens)
+        self.set_vectorizer_lens(mxlen, mxwlen)
+        examples = self.vectorize(token_seq)
 
         outcomes_list = self.model.predict(examples)
-
         results = []
         for outcomes in outcomes_list:
-            results += [sorted(outcomes, key=lambda tup: tup[1], reverse=True)]
+            results += [list(map(lambda x: (x[0], x[1].item()), sorted(outcomes, key=lambda tup: tup[1], reverse=True)))]
         return results
 
 
 @exporter
 class TaggerService(Service):
+
+    def __init__(self, vocabs=None, vectorizers=None, model=None):
+        super(TaggerService, self).__init__(vocabs, vectorizers, model)
+        self.label_vocab = revlut(self.get_labels())
 
     @classmethod
     def task_name(cls):
@@ -174,6 +202,57 @@ class TaggerService(Service):
     @classmethod
     def signature_name(cls):
         return 'tag_text'
+
+    def batch_input(self, tokens):
+        """Convert the input into a consistent format.
+
+        :return: List[List[dict[str] -> str]]
+        """
+        mxlen = 0
+        mxwlen = 0
+        # Input is a list of strings. (assume strings are tokens)
+        if isinstance(tokens[0], six.string_types):
+            mxlen = len(tokens)
+            tokens_seq = []
+            for t in tokens:
+                mxwlen = max(mxwlen, len(t))
+                tokens_seq.append({'text': t})
+            tokens_seq = [tokens_seq]
+        else:
+            # Better be a sequence, but it could be pre-batched, [[],[]]
+            # But what kind of object is at the first one then?
+            if is_sequence(tokens[0]):
+                tokens_seq = []
+                # Then what we have is [['The', 'dog',...], ['I', 'cannot']]
+                # [[{'text': 'The', 'pos': 'DT'}, ...
+
+                # For each of the utterances, we need to make a dictionary
+                if isinstance(tokens[0][0], six.string_types):
+                    for utt in tokens:
+                        utt_dict_seq = []
+                        mxlen = max(mxlen, len(utt))
+                        for t in utt:
+                            mxwlen = max(mxwlen, len(t))
+                            utt_dict_seq += [dict({'text': t})]
+                        tokens_seq += [utt_dict_seq]
+                # Its already in dict form so we dont need to do anything
+                elif isinstance(tokens[0][0], dict):
+                    for utt in tokens:
+                        mxlen = max(mxlen, len(utt))
+                        for t in utt['text']:
+                            mxwlen = max(mxwlen, len(t))
+            # If its a dict, we just wrap it up
+            elif isinstance(tokens[0], dict):
+                mxlen = max(len(tokens))
+                for t in tokens:
+                    mxwlen = max(mxwlen, len(t))
+                tokens_seq = [tokens]
+            else:
+                raise Exception('Unknown input format')
+
+        if len(tokens_seq) == 0:
+            return []
+        return tokens_seq, mxlen, mxwlen
 
     def predict(self, tokens, **kwargs):
         """
@@ -188,77 +267,9 @@ class TaggerService(Service):
 
         """
         label_field = kwargs.get('label', 'label')
-
-        mxlen = 0
-        mxwlen = 0
-        if type(tokens[0]) == str:
-            mxlen = len(tokens)
-            tokens_seq = []
-            for t in tokens:
-                mxwlen = max(mxwlen, len(t))
-                tokens_seq += [dict({'text': t})]
-            tokens_seq = [tokens_seq]
-        else:
-            # Better be a sequence, but it could be pre-batched, [[],[]]
-            # But what kind of object is at the first one then?
-            if is_sequence(tokens[0]):
-                tokens_seq = []
-                # Then what we have is [['The', 'dog',...], ['I', 'cannot']]
-                # [[{'text': 'The', 'pos': 'DT'}, ...
-
-                # For each of the utterances, we need to make a dictionary
-                if type(tokens[0][0]) == str:
-
-                    for utt in tokens:
-                        utt_dict_seq = []
-                        mxlen = max(mxlen, len(utt))
-                        for t in utt:
-                            mxwlen = max(mxwlen, len(t))
-                            utt_dict_seq += [dict({'text': t})]
-                        tokens_seq += [utt_dict_seq]
-                # Its already in dict form so we dont need to do anything
-                elif type(tokens[0][0]) == dict:
-                    for utt in tokens:
-                        mxlen = max(mxlen, len(utt))
-                        for t in utt['text']:
-                            mxwlen = max(mxwlen, len(t))
-            # If its a dict, we just wrap it up
-            elif type(tokens[0]) == dict:
-                mxlen = max(len(tokens))
-                for t in tokens:
-                    mxwlen = max(mxwlen, len(t))
-                tokens_seq = [tokens]
-            else:
-                raise Exception('Unknown input format')
-
-        if len(tokens_seq) == 0:
-            return []
-
-        # This might be inefficient if the label space is large
-
-        label_vocab = revlut(self.get_labels())
-        examples = dict()
-        for k, vectorizer in self.vectorizers.items():
-            if hasattr(vectorizer, 'mxlen') and vectorizer.mxlen == -1:
-                vectorizer.mxlen = mxlen
-            if hasattr(vectorizer, 'mxwlen') and vectorizer.mxwlen == -1:
-                vectorizer.mxwlen = mxwlen
-            examples[k] = []
-
-        for i, tokens in enumerate(tokens_seq):
-            for k, vectorizer in self.vectorizers.items():
-                vec, length = vectorizer.run(tokens, self.vocabs[k])
-                examples[k] += [vec]
-                if length is not None:
-                    lengths_key = '{}_lengths'.format(k)
-                    if lengths_key not in examples:
-                        examples[lengths_key] = []
-                    examples[lengths_key] += [np.int32(length)]
-
-        for k in self.vectorizers.keys():
-            examples[k] = np.stack(examples[k])
-            lengths_key = '{}_lengths'.format(k)
-            examples[lengths_key] = np.stack(examples[lengths_key])
+        tokens_seq, mxlen, mxwlen = self.batch_input(tokens)
+        self.set_vectorizer_lens(mxlen, mxwlen)
+        examples = self.vectorize(tokens_seq)
 
         outcomes = self.model.predict(examples)
         outputs = []
@@ -267,7 +278,7 @@ class TaggerService(Service):
             for j, token in enumerate(tokens_seq[i]):
                 new_token = dict()
                 new_token.update(token)
-                new_token[label_field] = label_vocab[np.int32(outcome[j])]
+                new_token[label_field] = self.label_vocab[outcome[j].item()]
                 output += [new_token]
             outputs += [output]
         return outputs
@@ -374,37 +385,21 @@ class EncoderDecoderService(Service):
         kwargs['beam'] = kwargs.get('beam', 10)
         return super(EncoderDecoderService, cls).load(bundle, **kwargs)
 
-    def predict(self, tokens, K=1, **kwargs):
-
-        mxlen = 0
-        mxwlen = 0
-        if type(tokens[0]) == str:
-            tokens_seq = (tokens,)
-        else:
-            tokens_seq = tokens
-
-        for tokens in tokens_seq:
-            mxlen = max(mxlen, len(tokens))
-            for token in tokens:
-                mxwlen = max(mxwlen, len(token))
-
-        examples = dict()
-
+    def set_vectorizer_lens(self, mxlen, mwxlen):
         for k, vectorizer in self.src_vectorizers.items():
             if hasattr(vectorizer, 'mxlen') and vectorizer.mxlen == -1:
                 vectorizer.mxlen = mxlen
             if hasattr(vectorizer, 'mxwlen') and vectorizer.mxwlen == -1:
                 vectorizer.mxwlen = mxwlen
-            examples[k] = []
 
+    def vectorize(self, tokens_seq):
+        examples = defaultdict(list)
         for i, tokens in enumerate(tokens_seq):
             for k, vectorizer in self.src_vectorizers.items():
                 vec, length = vectorizer.run(tokens, self.src_vocabs[k])
                 examples[k] += [vec]
                 if length is not None:
                     lengths_key = '{}_lengths'.format(k)
-                    if lengths_key not in examples:
-                        examples[lengths_key] = []
                     examples[lengths_key] += [length]
 
         for k in self.src_vectorizers.keys():
@@ -412,6 +407,12 @@ class EncoderDecoderService(Service):
             lengths_key = '{}_lengths'.format(k)
             if lengths_key in examples:
                 examples[lengths_key] = np.array(examples[lengths_key])
+        return examples
+
+    def predict(self, tokens, **kwargs):
+        tokens_seq, mxlen, mxwlen = self.batch_input(tokens)
+        self.set_vectorizer_lens(mxlen, mxwlen)
+        examples = self.vectorize(tokens_seq)
 
         outcomes = self.model.predict(examples, **kwargs)
 
@@ -423,6 +424,7 @@ class EncoderDecoderService(Service):
             for n in range(min(K, N)):
                 n_best = outcomes[i][n]
                 out = []
+                # out = lookup_sentence(self.tgt_idx_to_token, n_best)
                 T = len(n_best)
                 for j in range(T):
                     word = self.tgt_idx_to_token.get(n_best[j], '<PAD>')
