@@ -12,7 +12,9 @@ from baseline.utils import (
     is_sequence,
     revlut,
     load_vectorizers,
-    load_vocabs
+    load_vocabs,
+    lookup_sentence,
+    normalize_backend,
 )
 from baseline.model import load_model_for
 
@@ -60,7 +62,7 @@ class Service(object):
         vocabs = load_vocabs(directory)
         vectorizers = load_vectorizers(directory)
 
-        be = kwargs.get('backend', 'tf')
+        be = normalize_backend(kwargs.get('backend', 'tf'))
 
         remote = kwargs.get("remote", None)
         name = kwargs.get("name", None)
@@ -407,6 +409,9 @@ class EncoderDecoderService(Service):
 
         for k in self.src_vectorizers.keys():
             examples[k] = np.stack(examples[k])
+            lengths_key = '{}_lengths'.format(k)
+            if lengths_key in examples:
+                examples[lengths_key] = np.array(examples[lengths_key])
 
         outcomes = self.model.predict(examples, **kwargs)
 
@@ -429,4 +434,5 @@ class EncoderDecoderService(Service):
                     n_best_result += [out]
             if K > 1:
                 results.append(n_best_result)
+
         return results
