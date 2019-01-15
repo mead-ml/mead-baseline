@@ -550,7 +550,7 @@ class LSTMModel(ClassifierModelBase):
                                                                                          sequence_length=self.lengths,
                                                                                          dtype=tf.float32)
             # The output of the BRNN function needs to be joined on the H axis
-            output_state = fw_final_state[-1].h + bw_final_state[-1].h
+            output_state = tf.concat([fw_final_state[-1].h, bw_final_state[-1].h], -1)
             out_hsz = hsz
 
         else:
