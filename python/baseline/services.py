@@ -55,7 +55,7 @@ class Service(object):
         mxlen = 0
         mxwlen = 0
         # If the input is List[str] wrap it in list to make a batch of size one.
-        token_seq = (tokens,) if isinstance(tokens[0], six.string_types) else tokens
+        tokens_seq = (tokens,) if isinstance(tokens[0], six.string_types) else tokens
         # Get sentence and word lengths from the batch
         for tokens in tokens_seq:
             mxlen = max(mxlen, len(tokens))
@@ -409,11 +409,12 @@ class EncoderDecoderService(Service):
                 examples[lengths_key] = np.array(examples[lengths_key])
         return examples
 
-    def predict(self, tokens, **kwargs):
+    def predict(self, tokens, K=1, **kwargs):
         tokens_seq, mxlen, mxwlen = self.batch_input(tokens)
         self.set_vectorizer_lens(mxlen, mxwlen)
         examples = self.vectorize(tokens_seq)
 
+        kwargs['beam'] = kwargs.get('beam', K)
         outcomes = self.model.predict(examples, **kwargs)
 
         results = []
@@ -423,18 +424,11 @@ class EncoderDecoderService(Service):
             n_best_result = []
             for n in range(min(K, N)):
                 n_best = outcomes[i][n]
-                out = []
-                # out = lookup_sentence(self.tgt_idx_to_token, n_best)
-                T = len(n_best)
-                for j in range(T):
-                    word = self.tgt_idx_to_token.get(n_best[j], '<PAD>')
-                    if word != '<PAD>' and word != '<EOS>':
-                        out += [word]
+                out = lookup_sentence(self.tgt_idx_to_token, n_best).split()
                 if K == 1:
                     results += [out]
                 else:
                     n_best_result += [out]
             if K > 1:
                 results.append(n_best_result)
-
         return results
