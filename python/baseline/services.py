@@ -374,7 +374,7 @@ class EncoderDecoderService(Service):
         kwargs['beam'] = kwargs.get('beam', 10)
         return super(EncoderDecoderService, cls).load(bundle, **kwargs)
 
-    def predict(self, tokens, **kwargs):
+    def predict(self, tokens, K=1, **kwargs):
 
         mxlen = 0
         mxwlen = 0
@@ -413,11 +413,26 @@ class EncoderDecoderService(Service):
             if lengths_key in examples:
                 examples[lengths_key] = np.array(examples[lengths_key])
 
-        kwargs['beam'] = kwargs.get('beam', 5)
         outcomes = self.model.predict(examples, **kwargs)
 
         results = []
-        for i in range(len(outcomes)):
-            best = outcomes[i][0]
-            results.append(lookup_sentence(self.tgt_idx_to_token, best).split())
+        B = len(outcomes)
+        for i in range(B):
+            N = len(outcomes[i])
+            n_best_result = []
+            for n in range(min(K, N)):
+                n_best = outcomes[i][n]
+                out = []
+                T = len(n_best)
+                for j in range(T):
+                    word = self.tgt_idx_to_token.get(n_best[j], '<PAD>')
+                    if word != '<PAD>' and word != '<EOS>':
+                        out += [word]
+                if K == 1:
+                    results += [out]
+                else:
+                    n_best_result += [out]
+            if K > 1:
+                results.append(n_best_result)
+
         return results
