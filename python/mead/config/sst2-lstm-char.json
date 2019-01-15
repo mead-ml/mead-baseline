@@ -1,0 +1,40 @@
+{
+  "task": "classify",
+  "batchsz": 50,
+  "features": [
+    {
+      "name": "chars",
+      "vectorizer": {
+        "type": "char1d"
+      },
+      "embeddings": {
+        "dsz": 32
+      }
+    }
+  ],
+  "preproc": {
+    "mxlen": 1000,
+    "clean": true
+  },
+  "backend": "tensorflow",
+  "dataset": "SST2",
+  "loader": {
+    "reader_type": "default"
+  },
+  "unif": 0.25,
+  "model": {
+    "model_type": "lstm",
+    "rnn_type": "lstm",
+    "hsz": 200,
+    "dropout": 0.5,
+    "lengths_key": "chars",
+    "finetune": true
+  },
+  "train": {
+    "epochs": 2,
+    "optim": "adadelta",
+    "eta": 1.0,
+    "model_base": "./models/sst2-lstm",
+    "early_stopping_metric": "acc"
+  }
+}
