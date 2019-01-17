@@ -63,7 +63,7 @@ class Service(object):
                 mxwlen = max(mxwlen, len(token))
         return tokens_seq, mxlen, mxwlen
 
-    def set_vectorizer_lens(self, mxlen, mwxlen):
+    def set_vectorizer_lens(self, mxlen, mxwlen):
         """Set the max lengths on the vectorizers if unset.
 
         :param mxlen: `int`: The max length of an example
@@ -385,7 +385,7 @@ class EncoderDecoderService(Service):
         kwargs['beam'] = kwargs.get('beam', 10)
         return super(EncoderDecoderService, cls).load(bundle, **kwargs)
 
-    def set_vectorizer_lens(self, mxlen, mwxlen):
+    def set_vectorizer_lens(self, mxlen, mxwlen):
         for k, vectorizer in self.src_vectorizers.items():
             if hasattr(vectorizer, 'mxlen') and vectorizer.mxlen == -1:
                 vectorizer.mxlen = mxlen
