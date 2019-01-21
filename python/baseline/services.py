@@ -153,7 +153,7 @@ class Service(object):
         inputs = assets.get('inputs', [])
 
         if backend == 'tf':
-            remote_models = import_user_module('baseline.tf.remote')
+            remote_models = import_user_module('baseline.remote')
             if remote.startswith('http'):
                 RemoteModel = remote_models.RemoteModelTensorFlowREST
             elif preproc:
@@ -182,15 +182,18 @@ class ClassifierService(Service):
         """Take tokens and apply the internal vocab and vectorizers.  The tokens should be either a batch of text
         single utterance of type ``list``
         """
-        token_seq, mxlen, mxwlen = self.batch_input(tokens)
-        self.set_vectorizer_lens(mxlen, mxwlen)
-        examples = self.vectorize(token_seq)
-
+        if not preproc:
+            token_seq, mxlen, mxwlen = self.batch_input(tokens)
+            self.set_vectorizer_lens(mxlen, mxwlen)
+            examples = self.vectorize(token_seq)
+        else:
+            examples = [" ".join(x) for x in tokens]
         outcomes_list = self.model.predict(examples)
+
 
         results = []
         for outcomes in outcomes_list:
-            results += [list(map(lambda x: (x[0], x[1].item()), sorted(outcomes, key=lambda tup: tup[1], reverse=True)))]
+            results += [list(map(lambda x: (x[0], x[1]), sorted(outcomes, key=lambda tup: tup[1], reverse=True)))]
         return results
 
 
