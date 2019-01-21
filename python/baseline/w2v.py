@@ -116,7 +116,7 @@ class PretrainedEmbeddingsModel(WordEmbeddingsModel):
         self.nullv = np.zeros(self.dsz, dtype=np.float32)
         special_tokens = [self.nullv]
         for i in range(1, len(Offsets.VALUES)):
-            special_tokens.append(np.random.uniform(-uw, uw, self.dsz))
+            special_tokens.append(np.random.uniform(-uw, uw, self.dsz).astype(np.float32))
         word_vectors = special_tokens + word_vectors
         # Add "well-known" values to the vocab
         for i, name in enumerate(Offsets.VALUES):
@@ -128,7 +128,7 @@ class PretrainedEmbeddingsModel(WordEmbeddingsModel):
                 known_vocab.pop(name, 0)
             unknown = {v: cnt for v, cnt in known_vocab.items() if cnt > 0}
             for v in unknown:
-                word_vectors.append(np.random.uniform(-uw, uw, self.dsz))
+                word_vectors.append(np.random.uniform(-uw, uw, self.dsz).astype(np.float32))
                 self.vocab[v] = idx
                 idx += 1
 
@@ -137,6 +137,7 @@ class PretrainedEmbeddingsModel(WordEmbeddingsModel):
             self.weights = norm_weights(self.weights)
 
         self.vsz = self.weights.shape[0]
+        assert self.weights.dtype == np.float32
 
     def _read_vectors(self, filename, idx, known_vocab, keep_unused, **kwargs):
         use_mmap = bool(kwargs.get('use_mmap', False))
@@ -281,13 +282,13 @@ class RandomInitVecModel(EmbeddingsModel):
             self.vocab = known_vocab
             self.vsz = len(self.vocab)
 
-        self.weights = np.random.uniform(-uw, uw, (self.vsz, self.dsz))
+        self.weights = np.random.uniform(-uw, uw, (self.vsz, self.dsz)).astype(np.float32)
 
         self.nullv = np.zeros(self.dsz, dtype=np.float32)
 
         self.weights[0] = self.nullv
         for i in range(1, len(Offsets.VALUES)):
-            self.weights[i] = np.random.uniform(-uw, uw, self.dsz)
+            self.weights[i] = np.random.uniform(-uw, uw, self.dsz).astype(np.float32)
 
     def get_vocab(self):
         return self.vocab
