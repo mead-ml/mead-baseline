@@ -139,4 +139,33 @@ class Token1DPreprocessorCreator(PreprocessorCreator):
         )
 
 
+class Token2DPreprocessorCreator(Token1DPreprocessorCreator):
 
+    def __init__(self, model_base_dir, pid, features, **kwargs):
+        super(Token1DPreprocessorCreator, self).__init__(model_base_dir, pid, features, **kwargs)
+        self.mxwlen = self.vectorizers['char'].mxlen
+
+    def create_char_vectors_from_post(self, raw_post):
+        char2index = self.indices['char']
+        unchanged_word_tokens = tf.string_split(tf.reshape(raw_post, [-1]))
+        culled_word_token_vals = tf.substr(unchanged_word_tokens.values, 0, self.mxwlen)
+        char_tokens = tf.string_split(culled_word_token_vals, delimiter='')
+        char_indices = char2index.lookup(char_tokens)
+        return self.reshape_indices(char_indices, [self.mxlen, self.mxwlen])
+
+    def preproc_char(self, post_mappings):
+        # Split the input string, assuming that whitespace is splitter
+        # The client should perform any required tokenization for us and join on ' '
+
+        raw_post = post_mappings[self.FIELD_NAME]
+        return {'char': self.create_char_vectors_from_post(raw_post)}
+
+    def create_preprocessed_input(self, tf_example):
+        """
+        Create a preprocessor chain inside of the tensorflow graph.
+        """
+        types = {'word': tf.int64, 'char': tf.int64}
+        return tf.map_fn(
+            (self.preproc_word, self.preproc_char), tf_example,
+            dtype=types, back_prop=False
+        )

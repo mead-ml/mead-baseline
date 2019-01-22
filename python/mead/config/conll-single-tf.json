@@ -2,6 +2,7 @@
     "task": "tagger",
     "batchsz": 10,
     "conll_output": "conll-iobes-results.conll",
+    "modules":["preproc-exporters"],
     "unif": 0.1,
     "preproc": {
     },
@@ -41,7 +42,7 @@
         "crf": 1
     },
     "train": {
-        "epochs": 100,
+        "epochs": 2,
         "optim": "sgd",
         "eta": 0.015,
         "mom": 0.9,
