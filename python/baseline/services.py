@@ -275,9 +275,16 @@ class TaggerService(Service):
         :param tokens: (``list``) A list of tokens
 
         """
+        preproc = kwargs.get('preproc', False)
+        if not preproc:
         label_field = kwargs.get('label', 'label')
         tokens_seq, mxlen, mxwlen = self.batch_input(tokens)
         self.set_vectorizer_lens(mxlen, mxwlen)
+        if not :
+            sys
+        else:
+            print("A")
+            sys
         examples = self.vectorize(tokens_seq)
 
         outcomes = self.model.predict(examples)

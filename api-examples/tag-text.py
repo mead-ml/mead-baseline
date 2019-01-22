@@ -24,7 +24,7 @@ else:
     texts = [args.text.split()]
 
 m = bl.TaggerService.load(args.model, backend=args.backend, remote=args.remote, name=args.name, preproc=args.preproc)
-for sen in m.predict(texts):
+for sen in m.predict(texts, preproc=args.preproc):
     for word_tag in sen:
         print("{} {}".format(word_tag['text'], word_tag['label']))
     print("\n")
