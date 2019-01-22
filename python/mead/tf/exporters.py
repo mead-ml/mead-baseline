@@ -214,6 +214,7 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
         start_np = np.full((1, 1, len(labels)), -1e4, dtype=np.float32)
         start_np[:, 0, Offsets.GO] = 0
         start = tf.constant(start_np)
+        start = tf.tile(start, [tf.shape(model.probs)[0], 1, 1])
         model.probs = tf.concat([start, model.probs], 1)
 
         ones = tf.fill(tf.shape(model.lengths), 1)
