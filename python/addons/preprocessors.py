@@ -120,7 +120,7 @@ class Token1DPreprocessorCreator(PreprocessorCreator):
         reshaped_words = tf.sparse_reshape(word_indices, shape=[-1])
         return self.reshape_indices(reshaped_words, [self.mxlen])
 
-    def preproc_word(self, post_mappings):
+    def preproc(self, post_mappings):
         # Split the input string, assuming that whitespace is splitter
         # The client should perform any required tokenization for us and join on ' '
 
@@ -134,7 +134,7 @@ class Token1DPreprocessorCreator(PreprocessorCreator):
         """
         types = {'word': tf.int64}
         return tf.map_fn(
-            self.preproc_word, tf_example,
+            self.preproc, tf_example,
             dtype=types, back_prop=False
         )
 
@@ -142,7 +142,7 @@ class Token1DPreprocessorCreator(PreprocessorCreator):
 class Token2DPreprocessorCreator(Token1DPreprocessorCreator):
 
     def __init__(self, model_base_dir, pid, features, **kwargs):
-        super(Token1DPreprocessorCreator, self).__init__(model_base_dir, pid, features, **kwargs)
+        super(Token2DPreprocessorCreator, self).__init__(model_base_dir, pid, features, **kwargs)
         self.mxwlen = self.vectorizers['char'].mxlen
 
     def create_char_vectors_from_post(self, raw_post):
@@ -153,12 +153,16 @@ class Token2DPreprocessorCreator(Token1DPreprocessorCreator):
         char_indices = char2index.lookup(char_tokens)
         return self.reshape_indices(char_indices, [self.mxlen, self.mxwlen])
 
-    def preproc_char(self, post_mappings):
+    def preproc(self, post_mappings):
         # Split the input string, assuming that whitespace is splitter
         # The client should perform any required tokenization for us and join on ' '
 
         raw_post = post_mappings[self.FIELD_NAME]
-        return {'char': self.create_char_vectors_from_post(raw_post)}
+        raw_post = self.reform_raw(raw_post)
+        return {
+            'word': self.create_char_vectors_from_post(raw_post),
+            'char': self.create_char_vectors_from_post(raw_post)
+        }
 
     def create_preprocessed_input(self, tf_example):
         """
@@ -166,6 +170,6 @@ class Token2DPreprocessorCreator(Token1DPreprocessorCreator):
         """
         types = {'word': tf.int64, 'char': tf.int64}
         return tf.map_fn(
-            (self.preproc_word, self.preproc_char), tf_example,
+            self.preproc, tf_example,
             dtype=types, back_prop=False
         )

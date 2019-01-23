@@ -182,15 +182,12 @@ class ClassifierService(Service):
         """Take tokens and apply the internal vocab and vectorizers.  The tokens should be either a batch of text
         single utterance of type ``list``
         """
-        if not preproc:
-            token_seq, mxlen, mxwlen = self.batch_input(tokens)
-            self.set_vectorizer_lens(mxlen, mxwlen)
-            examples = self.vectorize(token_seq)
-        else:
-            examples = [" ".join(x) for x in tokens]
+        token_seq, mxlen, mxwlen = self.batch_input(tokens)
+        self.set_vectorizer_lens(mxlen, mxwlen)
+        examples = self.vectorize(token_seq)
+        if preproc:
+            examples['tokens'] = [" ".join(x) for x in tokens]
         outcomes_list = self.model.predict(examples)
-
-
         results = []
         for outcomes in outcomes_list:
             results += [list(map(lambda x: (x[0], x[1]), sorted(outcomes, key=lambda tup: tup[1], reverse=True)))]
@@ -277,12 +274,11 @@ class TaggerService(Service):
         """
         preproc = kwargs.get('preproc', False)
         label_field = kwargs.get('label', 'label')
-        if not preproc:
-            tokens_seq, mxlen, mxwlen = self.batch_input(tokens)
-            self.set_vectorizer_lens(mxlen, mxwlen)
-            examples = self.vectorize(tokens_seq)
-        else:
-            examples = [" ".join(x) for x in tokens]
+        tokens_seq, mxlen, mxwlen = self.batch_input(tokens)
+        self.set_vectorizer_lens(mxlen, mxwlen)
+        examples = self.vectorize(tokens_seq)
+        if preproc:
+            examples['tokens'] = [" ".join(x) for x in tokens]
 
         outcomes = self.model.predict(examples)
         outputs = []

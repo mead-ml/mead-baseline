@@ -170,18 +170,18 @@ class RemoteModelTensorFlowGRPC(object):
         request = self.predictpb.PredictRequest()
         request.model_spec.name = self.name
         request.model_spec.signature_name = self.signature
-
         for feature in self.input_keys:
-            if isinstance(examples[feature], np.ndarray): 
-                shape = examples[feature].shape
+            if feature == 'tokens':
+                request.inputs['tokens'].CopyFrom(tf.contrib.util.make_tensor_proto(examples, shape=[len(examples), 1]))
             else:
-                shape = [1]
-
-            tensor_proto = tf.contrib.util.make_tensor_proto(examples[feature], shape=shape, dtype=tf.int32)
-            request.inputs[feature].CopyFrom(
-                tensor_proto
-            )
-
+                if isinstance(examples[feature], np.ndarray):
+                    shape = examples[feature].shape
+                else:
+                    shape = [1]
+                tensor_proto = tf.contrib.util.make_tensor_proto(examples[feature], shape=shape, dtype=tf.int32)
+                request.inputs[feature].CopyFrom(
+                    tensor_proto
+                )
         return request
 
     def deserialize_response(self, examples, predict_response):
@@ -233,19 +233,24 @@ class RemoteModelTensorFlowGRPC(object):
 
 
 class RemoteModelTensorFlowGRPCPreproc(RemoteModelTensorFlowGRPC):
-    def create_request(self, examples):
-        # TODO: Remove TF dependency client side
-        import tensorflow as tf
 
-        request = self.predictpb.PredictRequest()
-        request.model_spec.name = self.name
-        request.model_spec.signature_name = self.signature
-
-        request.inputs['tokens'].CopyFrom(
-            tf.contrib.util.make_tensor_proto(examples, shape=[len(examples), 1])
-        )
-
-        return request
+    # def create_request(self, examples):
+    #     # TODO: Remove TF dependency client side
+    #     import tensorflow as tf
+    #
+    #     request = self.predictpb.PredictRequest()
+    #     request.model_spec.name = self.name
+    #     request.model_spec.signature_name = self.signature
+    #
+    #     request.inputs['tokens'].CopyFrom(
+    #         tf.contrib.util.make_tensor_proto(examples, shape=[len(examples), 1])
+    #     )
+    #     print(self.input_keys)
+    #     print(examples['tokens'])
+    #     print(examples['word_lengths'])
+    #     sys
+    #
+    #     return request
 
     def predict(self, examples):
         """Run prediction over gRPC
