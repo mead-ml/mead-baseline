@@ -276,16 +276,13 @@ class TaggerService(Service):
 
         """
         preproc = kwargs.get('preproc', False)
-        if not preproc:
         label_field = kwargs.get('label', 'label')
-        tokens_seq, mxlen, mxwlen = self.batch_input(tokens)
-        self.set_vectorizer_lens(mxlen, mxwlen)
-        if not :
-            sys
+        if not preproc:
+            tokens_seq, mxlen, mxwlen = self.batch_input(tokens)
+            self.set_vectorizer_lens(mxlen, mxwlen)
+            examples = self.vectorize(tokens_seq)
         else:
-            print("A")
-            sys
-        examples = self.vectorize(tokens_seq)
+            examples = [" ".join(x) for x in tokens]
 
         outcomes = self.model.predict(examples)
         outputs = []
