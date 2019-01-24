@@ -176,10 +176,12 @@ class RemoteModelTensorFlowGRPC(object):
                 shape = examples[feature].shape
             else:
                 shape = [1]
+
             tensor_proto = tf.contrib.util.make_tensor_proto(examples[feature], shape=shape, dtype=tf.int32)
             request.inputs[feature].CopyFrom(
                 tensor_proto
             )
+
         return request
 
     def deserialize_response(self, examples, predict_response):

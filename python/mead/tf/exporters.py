@@ -137,8 +137,6 @@ class ClassifyTensorFlowExporter(TensorFlowExporter):
             Constructor = eval(class_name)
             embeddings[key] = Constructor(key, **embed_args)
 
-        print(model_params)
-
         # Instantiate a graph
         model = baseline.model.create_model_for(self.task.task_name(), embeddings, labels, **model_params)
 
@@ -163,7 +161,6 @@ class ClassifyTensorFlowExporter(TensorFlowExporter):
         predict_tensors = {}
 
         for k, v in model.embeddings.items():
-            print(k)
             try:
                 predict_tensors[k] = tf.saved_model.utils.build_tensor_info(v.x)
             except:
