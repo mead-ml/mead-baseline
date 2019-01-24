@@ -62,7 +62,7 @@ docker rm tfserving
 
 #remove prints coming from baseline
 sed -i -e 1,4d $TEST_LOAD 
-sed -i -e 1,3d $TEST_SERVE 
+sed -i -e 1,3d $TEST_SERVE
 sed -i -e 1,3d $TEST_SERVE_PREPROC
 
 DIFF=$(diff ${TEST_LOAD} ${TEST_SERVE})

@@ -1,7 +1,7 @@
 import json
 import tensorflow as tf
 import os
-
+from baseline.utils import Offsets
 
 class PreprocessorCreator(object):
     """
@@ -26,7 +26,7 @@ class PreprocessorCreator(object):
 
         tok2index = tf.contrib.lookup.index_table_from_tensor(
             tf.constant(vocab_list),
-            default_value=3, # This is since we have moved all <UNK>s to 3
+            default_value=Offsets.UNK,
             dtype=tf.string,
             name='%s2index' % feature_name
         )

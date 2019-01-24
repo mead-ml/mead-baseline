@@ -190,7 +190,7 @@ class ClassifierService(Service):
         outcomes_list = self.model.predict(examples)
         results = []
         for outcomes in outcomes_list:
-            results += [list(map(lambda x: (x[0], x[1]), sorted(outcomes, key=lambda tup: tup[1], reverse=True)))]
+            results += [list(map(lambda x: (x[0], x[1].item()), sorted(outcomes, key=lambda tup: tup[1], reverse=True)))]
         return results
 
 

@@ -225,10 +225,9 @@ class RemoteModelTensorFlowGRPC(object):
             classes = predict_response.outputs.get('classes').string_val
             result = []
             length = len(self.get_labels())
-            for i in range(num_examples):
-                d = [(c, s) for c, s in zip(classes[example_len*i:example_len*(i+1)][:length], scores[length*i:length*(i+1)][:length])]
+            for i in range(num_examples):   # wrap in numpy because the local models send that dtype out
+                d = [(c.decode('ascii'), np.float32(s)) for c, s in zip(classes[example_len*i:example_len*(i+1)][:length], scores[length*i:length*(i+1)][:length])]
                 result.append(d)
-            
             return result
 
 
