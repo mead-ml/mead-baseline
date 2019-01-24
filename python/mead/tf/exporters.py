@@ -353,10 +353,7 @@ def create_bundle(builder, output_path, basename, assets=None):
     builder.save()
 
     model_name = basename.split("/")[-1]
-    directory = os.path.join('./', *basename.split("/")[:-1])
-
-    save_to_bundle(output_path, directory, assets)
-
+    directory = os.path.join('/', *basename.split("/")[:-1])
     save_to_bundle(output_path, directory, assets)
 
 def save_to_bundle(output_path, directory, assets=None):
