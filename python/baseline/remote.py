@@ -170,6 +170,7 @@ class RemoteModelTensorFlowGRPC(object):
         request = self.predictpb.PredictRequest()
         request.model_spec.name = self.name
         request.model_spec.signature_name = self.signature
+
         for feature in self.input_keys:
             if isinstance(examples[feature], np.ndarray):
                 shape = examples[feature].shape

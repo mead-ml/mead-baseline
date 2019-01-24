@@ -100,7 +100,6 @@ class TensorFlowExporter(mead.exporters.Exporter):
         legacy_init_op = tf.group(tf.tables_initializer(), name='legacy_init_op')
         definition = dict({})
         definition[sig_name] = prediction_signature
-
         builder.add_meta_graph_and_variables(
             sess, [tf.saved_model.tag_constants.SERVING],
             signature_def_map=definition,
@@ -160,7 +159,7 @@ class ClassifyTensorFlowExporter(TensorFlowExporter):
 
     def _create_rpc_call(self, sess, basename):
         model, classes, values = self._create_model(sess, basename)
-        print(model.__dict__)
+
         predict_tensors = {}
 
         for k, v in model.embeddings.items():
@@ -169,7 +168,7 @@ class ClassifyTensorFlowExporter(TensorFlowExporter):
                 predict_tensors[k] = tf.saved_model.utils.build_tensor_info(v.x)
             except:
                 raise Exception('Unknown attribute in signature: {}'.format(v))
-        print(predict_tensors)
+
         sig_input = predict_tensors
         sig_output = SignatureOutput(classes, values)
         sig_name = 'predict_text'
@@ -239,6 +238,7 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
 
     def _create_rpc_call(self, sess, basename):
         model, classes, values = self._create_model(sess, basename)
+
         predict_tensors = {}
         predict_tensors[model.lengths_key] = tf.saved_model.utils.build_tensor_info(model.lengths)
 
@@ -247,6 +247,7 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
                 predict_tensors[k] = tf.saved_model.utils.build_tensor_info(v.x)
             except:
                 raise Exception('Unknown attribute in signature: {}'.format(v))
+
         sig_input = predict_tensors
         sig_output = SignatureOutput(classes, values)
         sig_name = 'tag_text'
@@ -288,7 +289,7 @@ class Seq2SeqTensorFlowExporter(TensorFlowExporter):
             embed_args = dict({'vsz': md['vsz'], 'dsz': md['dsz']})
             Constructor = eval(class_name)
             embeddings[key] = Constructor(key, **embed_args)
-        
+
         return embeddings
 
     def _create_model(self, sess, basename):
