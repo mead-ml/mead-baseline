@@ -105,16 +105,17 @@ class Token1DPreprocessorCreator(PreprocessorCreator):
         raw_post = tf.reduce_join(raw_tokens[:self.mxlen], separator=" ")
         return raw_post
 
-    def create_word_vectors_from_post(self, raw_post):
+    def create_word_vectors_from_post(self, raw_post, lowercase=True):
         # vocab has only lowercase words
         word2index = self.indices['word']
-        split_chars = tf.string_split(tf.reshape(raw_post, [-1]), delimiter="").values
-        upchar_inds = self.upchars_lut.lookup(split_chars)
-        lc_raw_post = tf.reduce_join(tf.map_fn(lambda x: tf.cond(x[0] > 25,
-                                                                 lambda: x[1],
-                                                                 lambda: self.lchars[x[0]]),
-                                               (upchar_inds, split_chars), dtype=tf.string))
-        word_tokens = tf.string_split(tf.reshape(lc_raw_post, [-1]))
+        if lowercase:
+            split_chars = tf.string_split(tf.reshape(raw_post, [-1]), delimiter="").values
+            upchar_inds = self.upchars_lut.lookup(split_chars)
+            raw_post = tf.reduce_join(tf.map_fn(lambda x: tf.cond(x[0] > 25,
+                                                                     lambda: x[1],
+                                                                     lambda: self.lchars[x[0]]),
+                                                   (upchar_inds, split_chars), dtype=tf.string))
+        word_tokens = tf.string_split(tf.reshape(raw_post, [-1]))
         word_indices = word2index.lookup(word_tokens)
         # Reshape them out to the proper length
         reshaped_words = tf.sparse_reshape(word_indices, shape=[-1])
