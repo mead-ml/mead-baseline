@@ -2,7 +2,6 @@
     "task": "tagger",
     "batchsz": 10,
     "conll_output": "conll-iobes-results.conll",
-    "modules":["preproc-exporters"],
     "unif": 0.1,
     "preproc": {
     },

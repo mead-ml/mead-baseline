@@ -155,9 +155,6 @@ class Token2DPreprocessorCreator(Token1DPreprocessorCreator):
         return self.reshape_indices(char_indices, [self.mxlen, self.mxwlen])
 
     def preproc(self, post_mappings):
-        # Split the input string, assuming that whitespace is splitter
-        # The client should perform any required tokenization for us and join on ' '
-
         raw_post = post_mappings[self.FIELD_NAME]
         raw_post = self.reform_raw(raw_post)
         return {

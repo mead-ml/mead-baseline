@@ -45,7 +45,7 @@ echo "exporting with preproc"
 MDIR=models-preproc/conll
 rm -rf $MDIR
 mkdir -p $MDIR
-mead-export --config $BASELINE_DIR/python/mead/config/conll-single-tf.json --model $TAGGER_MODEL --is_remote false --output_dir $MDIR
+mead-export --config $BASELINE_DIR/python/mead/config/conll-single-tf.json --model $TAGGER_MODEL --is_remote false --output_dir $MDIR --modules preproc-exporters --exporter_type preproc
 sleep $SLEEP
 
 echo "running tf serving"
@@ -55,7 +55,7 @@ docker run -p 8501:8501 -p 8500:8500 --name tfserving -v ${PWD}/models-preproc:/
 sleep $SLEEP
 
 echo "tagging with served model w preproc"
-python $BASELINE_DIR/api-examples/tag-text.py --model ./models-preproc/conll/1/ --text $TEST_FILE --remote localhost:8500 --name conll > $TEST_SERVE_PREPROC
+python $BASELINE_DIR/api-examples/tag-text.py --model ./models-preproc/conll/1/ --text $TEST_FILE --remote localhost:8500 --name conll --preproc true > $TEST_SERVE_PREPROC
 
 docker stop tfserving
 docker rm tfserving

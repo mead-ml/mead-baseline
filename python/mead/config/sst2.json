@@ -3,7 +3,6 @@
   "task": "classify",
   "basedir": "./sst2",
   "batchsz": 50,
-  "modules":["preproc-exporters"],
   "features": [
     {
       "name": "word",

@@ -41,12 +41,13 @@ sleep $SLEEP
 
 echo "classifying with served model w/o preproc"
 python $BASELINE_DIR/api-examples/classify-text.py --model ./models/sst2/1/ --text $TEST_FILE --remote localhost:8500 --name sst2 > $TEST_SERVE
+sleep $SLEEP
 
 echo "exporting with preproc"
 MDIR=models-preproc/sst2
 rm -rf $MDIR
 mkdir -p $MDIR
-mead-export --config $BASELINE_DIR/python/mead/config/sst2.json --model $CLASSIFY_MODEL --is_remote false --output_dir $MDIR
+mead-export --config $BASELINE_DIR/python/mead/config/sst2.json --model $CLASSIFY_MODEL --is_remote false --exporter_type preproc --modules preproc-exporters --output_dir $MDIR
 sleep $SLEEP
 
 echo "running tf serving"
@@ -56,7 +57,7 @@ docker run -p 8501:8501 -p 8500:8500 --name tfserving -v ${PWD}/models-preproc:/
 sleep $SLEEP
 
 echo "classifying with served model w preproc"
-python $BASELINE_DIR/api-examples/classify-text.py --model ./models-preproc/sst2/1/ --text $TEST_FILE --remote localhost:8500 --name sst2 > $TEST_SERVE_PREPROC
+python $BASELINE_DIR/api-examples/classify-text.py --model ./models-preproc/sst2/1/ --text $TEST_FILE --remote localhost:8500 --name sst2 --preproc true > $TEST_SERVE_PREPROC
 
 docker stop tfserving
 docker rm tfserving
