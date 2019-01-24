@@ -22,7 +22,7 @@ class ClassifyTensorFlowPreProcExporter(ClassifyTensorFlowExporter):
     def _create_rpc_call(self, sess, model_file):
         model_base_dir = os.path.split(model_file)[0]
         pid = model_file.split("-")[-1]
-        features = ["word"]
+        features = [x['name'] for x in self.task.config_params['features']]
         preprocessor = Token1DPreprocessorCreator(model_base_dir, pid, features)
         model_params = self.task.config_params["model"]
         tf_example, preprocessed = preprocessor.run()
@@ -46,7 +46,7 @@ class TaggerTensorFlowPreProcExporter(TaggerTensorFlowExporter):
     def _create_rpc_call(self, sess, model_file):
         model_base_dir = os.path.split(model_file)[0]
         pid = model_file.split("-")[-1]
-        features = ["word", "char"]
+        features = [x['name'] for x in self.task.config_params['features']]
         preprocessor = Token2DPreprocessorCreator(model_base_dir, pid, features)
         model_params = self.task.config_params["model"]
         tf_example, preprocessed = preprocessor.run()
