@@ -171,17 +171,14 @@ class RemoteModelTensorFlowGRPC(object):
         request.model_spec.name = self.name
         request.model_spec.signature_name = self.signature
         for feature in self.input_keys:
-            if feature == 'tokens':
-                request.inputs['tokens'].CopyFrom(tf.contrib.util.make_tensor_proto(examples, shape=[len(examples), 1]))
+            if isinstance(examples[feature], np.ndarray):
+                shape = examples[feature].shape
             else:
-                if isinstance(examples[feature], np.ndarray):
-                    shape = examples[feature].shape
-                else:
-                    shape = [1]
-                tensor_proto = tf.contrib.util.make_tensor_proto(examples[feature], shape=shape, dtype=tf.int32)
-                request.inputs[feature].CopyFrom(
-                    tensor_proto
-                )
+                shape = [1]
+            tensor_proto = tf.contrib.util.make_tensor_proto(examples[feature], shape=shape, dtype=tf.int32)
+            request.inputs[feature].CopyFrom(
+                tensor_proto
+            )
         return request
 
     def deserialize_response(self, examples, predict_response):
@@ -234,23 +231,25 @@ class RemoteModelTensorFlowGRPC(object):
 
 class RemoteModelTensorFlowGRPCPreproc(RemoteModelTensorFlowGRPC):
 
-    # def create_request(self, examples):
-    #     # TODO: Remove TF dependency client side
-    #     import tensorflow as tf
-    #
-    #     request = self.predictpb.PredictRequest()
-    #     request.model_spec.name = self.name
-    #     request.model_spec.signature_name = self.signature
-    #
-    #     request.inputs['tokens'].CopyFrom(
-    #         tf.contrib.util.make_tensor_proto(examples, shape=[len(examples), 1])
-    #     )
-    #     print(self.input_keys)
-    #     print(examples['tokens'])
-    #     print(examples['word_lengths'])
-    #     sys
-    #
-    #     return request
+    def create_request(self, examples):
+        # TODO: Remove TF dependency client side
+        import tensorflow as tf
+
+        request = self.predictpb.PredictRequest()
+        request.model_spec.name = self.name
+        request.model_spec.signature_name = self.signature
+        request.inputs['tokens'].CopyFrom(
+            tf.contrib.util.make_tensor_proto(examples['tokens'], shape=[len(examples['tokens']), 1])
+        )
+        for feature in self.input_keys:  # not really happy with this hack
+            if feature.endswith('lengths'):
+                shape = examples[feature].shape
+                tensor_proto = tf.contrib.util.make_tensor_proto(examples[feature], shape=shape, dtype=tf.int32)
+                request.inputs[feature].CopyFrom(
+                    tensor_proto
+                )
+                print(feature)
+        return request
 
     def predict(self, examples):
         """Run prediction over gRPC
@@ -279,6 +278,9 @@ class RemoteModelTensorFlowGRPCPreproc(RemoteModelTensorFlowGRPC):
         :params predict_response: a PredictResponse protobuf object,
                     as defined in tensorflow_serving proto files
         """
+        example_len = predict_response.outputs.get('classes').tensor_shape.dim[1].size
+        num_examples = predict_response.outputs.get('classes').tensor_shape.dim[0].size
+
         if self.signature == 'suggest_text':
             raise NotImplementedError
 
@@ -289,9 +291,8 @@ class RemoteModelTensorFlowGRPCPreproc(RemoteModelTensorFlowGRPC):
             scores = predict_response.outputs.get('scores').float_val
             classes = predict_response.outputs.get('classes').string_val
             result = []
-            num_ex = len(examples)
             length = len(self.get_labels())
-            for i in range(num_ex):
+            for i in range(num_examples):
                 d = [(c, s) for c, s in zip(classes[length*i:length*(i+1)], scores[length*i:length*(i+1)])]
                 result.append(d)
 

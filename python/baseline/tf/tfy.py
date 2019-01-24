@@ -592,7 +592,9 @@ def embed(x, vsz, dsz, initializer, finetune=True, scope="LUT"):
         e0 = tf.scatter_update(W, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, dsz]))
         with tf.control_dependencies([e0]):
             word_embeddings = tf.nn.embedding_lookup(W, x)
-
+    print("-------------")
+    print(x, ":", word_embeddings)
+    print("--------------")
     return word_embeddings
 
 

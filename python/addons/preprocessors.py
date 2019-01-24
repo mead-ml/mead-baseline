@@ -93,7 +93,7 @@ class Token1DPreprocessorCreator(PreprocessorCreator):
     def __init__(self, model_base_dir, pid, features, **kwargs):
         super(Token1DPreprocessorCreator, self).__init__(model_base_dir, pid, features, **kwargs)
         self.mxlen = self.vectorizers['word'].mxlen
-        self.FIELD_NAME = 'text/tokens'
+        self.FIELD_NAME = 'tokens'
 
     def reform_raw(self, raw):
         """
@@ -143,7 +143,7 @@ class Token2DPreprocessorCreator(Token1DPreprocessorCreator):
 
     def __init__(self, model_base_dir, pid, features, **kwargs):
         super(Token2DPreprocessorCreator, self).__init__(model_base_dir, pid, features, **kwargs)
-        self.mxwlen = self.vectorizers['char'].mxlen
+        self.mxwlen = self.vectorizers['char'].mxwlen
 
     def create_char_vectors_from_post(self, raw_post):
         char2index = self.indices['char']
@@ -160,7 +160,7 @@ class Token2DPreprocessorCreator(Token1DPreprocessorCreator):
         raw_post = post_mappings[self.FIELD_NAME]
         raw_post = self.reform_raw(raw_post)
         return {
-            'word': self.create_char_vectors_from_post(raw_post),
+            'word': self.create_word_vectors_from_post(raw_post),
             'char': self.create_char_vectors_from_post(raw_post)
         }
 
