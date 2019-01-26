@@ -46,7 +46,7 @@ class PreProcessorController(object):
         preprocessed_inputs = {}
         for feature in self.preprocessors:
             preprocessed_inputs[feature] = self.preprocessors[feature].preproc(tf_example)
-        return {feature: self.preprocessors[feature].run for feature in self.preprocessors}
+        return preprocessed_inputs
 
     def create_preprocessed_input(self, tf_example):
         """

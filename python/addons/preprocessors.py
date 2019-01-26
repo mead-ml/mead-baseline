@@ -118,7 +118,7 @@ class Token1DPreprocessor(TensorFlowPreprocessor):
     def preproc(self, post_mappings):
         # Split the input string, assuming that whitespace is splitter
         # The client should perform any required tokenization for us and join on ' '
-        raw_post = post_mappings[self.feature]
+        raw_post = post_mappings['tokens']
         raw_post = self.resize_sen(raw_post, self.mxlen)
         return self.create_word_vectors_from_post(raw_post)
 
@@ -142,6 +142,6 @@ class Char2DPreprocessor(TensorFlowPreprocessor):
         return self.reshape_indices(char_indices, [self.mxlen, self.mxwlen])
 
     def preproc(self, post_mappings):
-        raw_post = post_mappings[self.feature]
+        raw_post = post_mappings['tokens']
         raw_post = self.resize_sen(raw_post, self.mxlen)
         return self.create_char_vectors_from_post(raw_post)
