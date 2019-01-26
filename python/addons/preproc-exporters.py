@@ -77,13 +77,8 @@ class ClassifyTensorFlowPreProcExporter(ClassifyTensorFlowExporter):
         pc = PreProcessorController(model_base_dir, pid, self.task.config_params['features'])
         model_params = self.task.config_params['model']
         tf_example, preprocessed = pc.run()
-        #print(tf_example)
-        #print(preprocessed)
-        #sys
         for feature in preprocessed:
             model_params[feature] = preprocessed[feature]
-        #print(model_params)
-        #sys
         model, classes, values = self._create_model(sess, model_file)
         sig_input = {'tokens': tf.saved_model.utils.build_tensor_info(tf_example[pc.FIELD_NAME])}
         sig_output = SignatureOutput(classes, values)
@@ -91,7 +86,7 @@ class ClassifyTensorFlowPreProcExporter(ClassifyTensorFlowExporter):
         assets = create_assets(model_file, sig_input, sig_output, sig_name, model.lengths_key)
         return sig_input, sig_output, sig_name, assets
 
-
+"""
 @exporter
 @register_exporter(task='tagger', name='preproc')
 class TaggerTensorFlowPreProcExporter(TaggerTensorFlowExporter):
@@ -118,3 +113,4 @@ class TaggerTensorFlowPreProcExporter(TaggerTensorFlowExporter):
         sig_name = 'tag_text'
         assets = create_assets(model_file, sig_input, sig_output, sig_name, model.lengths_key)
         return sig_input, sig_output, sig_name, assets
+"""
