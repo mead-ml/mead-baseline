@@ -307,7 +307,7 @@ class LayerNorm(tf.keras.layers.Layer):
 # Mapped
 class LSTMEncoder(tf.keras.Model):
 
-    def __init__(self, hsz, nlayers, pdrop=0.0, variational=False, output_fn=None, requires_length=True, name=None, **kwargs):
+    def __init__(self, hsz, nlayers, pdrop=0.0, variational=False, output_fn=None, requires_length=True, name=None, dropout_in_single_layer=False, **kwargs):
         """Produce a stack of LSTMs with dropout performed on all but the last layer.
 
         :param hsz: (``int``) The number of hidden units per LSTM
@@ -322,7 +322,7 @@ class LSTMEncoder(tf.keras.Model):
         super(LSTMEncoder, self).__init__(name=name)
         self._requires_length = requires_length
 
-        if variational:
+        if variational or dropout_in_single_layer:
             self.rnn = tf.contrib.rnn.MultiRNNCell([lstm_cell_w_dropout(hsz, pdrop, variational=variational, training=TRAIN_FLAG()) for _ in
                      range(nlayers)],
                     state_is_tuple=True
@@ -341,6 +341,20 @@ class LSTMEncoder(tf.keras.Model):
     @property
     def requires_length(self):
         return self._requires_length
+
+
+class LSTMEncoderWithState(LSTMEncoder):
+    def __init__(self, hsz, nlayers, pdrop=0.0, variational=False, output_fn=None, name=None, dropout_in_single_layer=True, **kwargs):
+        super(LSTMEncoderWithState, self).__init__(hsz, nlayers, pdrop, variational, output_fn, False, name, dropout_in_single_layer, **kwargs)
+
+        #h = tf.reshape(tf.concat(rnnout, 1), [-1, self.hsz])
+        #self.final_state = state
+
+    def call(self, inputs, training=False):
+
+        inputs, hidden = inputs
+        rnnout, hidden = tf.nn.dynamic_rnn(self.rnn, inputs, initial_state=hidden, dtype=tf.float32)
+        return self.output_fn(rnnout, hidden)
 
 
 # Mapped
@@ -892,10 +906,10 @@ class CRF(tf.keras.layers.Layer):
         return -tf.reduce_mean(log_likelihood)
 
 
-class SequenceModel(tf.keras.Model):
+class TagSequenceModel(tf.keras.Model):
 
     def __init__(self, nc, embeddings, transducer, decoder=None, name=None):
-        super(SequenceModel, self).__init__(name=name)
+        super(TagSequenceModel, self).__init__(name=name)
         if isinstance(embeddings, dict):
             self.embed_model = EmbeddingsStack(embeddings)
         else:
@@ -903,7 +917,8 @@ class SequenceModel(tf.keras.Model):
             self.embed_model = embeddings
         self.transducer_model = transducer
         self.proj_layer = TimeDistributedProjection(nc)
-        self.decoder_model = decoder
+        decoder_model = CRF(nc) if decoder is None else decoder
+        self.decoder_model = decoder_model
 
     def transduce(self, inputs, training=None, mask=None):
         lengths = inputs.get('lengths')
@@ -920,15 +935,33 @@ class SequenceModel(tf.keras.Model):
         transduced = self.transduce(inputs, training, mask)
         return self.decode(transduced, inputs.get('lengths'))
 
-
-class TagSequenceModel(SequenceModel):
-
-    def __init__(self, nc, embeddings, transducer, decoder=None, name=None):
-        decoder_model = CRF(nc) if decoder is None else decoder
-        super(TagSequenceModel, self).__init__(nc, embeddings, transducer, decoder_model, name)
-
     def neg_log_loss(self, unary, tags, lengths):
         return self.decoder_model.neg_log_loss(unary, tags, lengths)
+
+
+class LanguageModel(tf.keras.Model):
+
+    def __init__(self, nc, embeddings, transducer, decoder=None, name=None):
+        super(LanguageModel, self).__init__(name=name)
+        if isinstance(embeddings, dict):
+            self.embed_model = EmbeddingsStack(embeddings)
+        else:
+            assert isinstance(embeddings, EmbeddingsStack)
+            self.embed_model = embeddings
+        self.transducer_model = transducer
+        self.proj_layer = TimeDistributedProjection(nc)
+        self.decoder_model = decoder
+
+    def call(self, inputs, training=None, mask=None):
+
+        h = inputs.get('h')
+
+        embedded = self.embed_model(inputs, training, mask)
+        transduced, hidden = self.transducer_model((embedded, h), training)
+        ##transduced, hidden = self.transducer_model(embedded, training)
+        transduced = self.proj_layer(transduced)
+        return transduced, hidden
+
 
 class EmbedPoolStackModel(tf.keras.Model):
 
