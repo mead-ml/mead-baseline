@@ -77,10 +77,13 @@ class ClassifyTensorFlowPreProcExporter(ClassifyTensorFlowExporter):
         pc = PreProcessorController(model_base_dir, pid, self.task.config_params['features'])
         model_params = self.task.config_params['model']
         tf_example, preprocessed = pc.run()
-        print(preprocessed)
-        sys
+        #print(tf_example)
+        #print(preprocessed)
+        #sys
         for feature in preprocessed:
             model_params[feature] = preprocessed[feature]
+        #print(model_params)
+        #sys
         model, classes, values = self._create_model(sess, model_file)
         sig_input = {'tokens': tf.saved_model.utils.build_tensor_info(tf_example[pc.FIELD_NAME])}
         sig_output = SignatureOutput(classes, values)
