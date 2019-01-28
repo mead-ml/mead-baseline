@@ -220,7 +220,7 @@ class PretrainedEmbeddingsModel(WordEmbeddingsModel):
         word_vectors = []
         with io.open(filename, "r", encoding="utf-8") as f:
             for line in f:
-                line = line.rstrip("\n")
+                line = line.rstrip("\n ")
                 values = line.split(" ")
                 word = values[0]
                 if word in self.vocab: continue
