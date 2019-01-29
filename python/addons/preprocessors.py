@@ -13,8 +13,8 @@ class TensorFlowPreprocessor(Preprocessor):
     a string instead of a vectorized input.
     """
 
-    def __init__(self, model_base_dir, pid, feature, vectorizer, index, vocab, **kwargs):
-        super(TensorFlowPreprocessor, self).__init__(model_base_dir, pid, feature, vectorizer, index, vocab, **kwargs)
+    def __init__(self, feature, vectorizer, index, vocab, **kwargs):
+        super(TensorFlowPreprocessor, self).__init__(feature, vectorizer, index, vocab, **kwargs)
         self.FIELD_NAME = kwargs.get('FIELD_NAME', 'tokens')
         self.upchars = tf.constant([chr(i) for i in range(65, 91)])
         self.lchars = tf.constant([chr(i) for i in range(97, 123)])
@@ -57,8 +57,8 @@ class TensorFlowPreprocessor(Preprocessor):
 @register_preprocessor(name='token1d')
 class Token1DPreprocessor(TensorFlowPreprocessor):
 
-    def __init__(self, model_base_dir, pid, feature, vectorizer, index, vocab, **kwargs):
-        super(Token1DPreprocessor, self).__init__(model_base_dir, pid, feature, vectorizer, index, vocab, **kwargs)
+    def __init__(self, feature, vectorizer, index, vocab, **kwargs):
+        super(Token1DPreprocessor, self).__init__(feature, vectorizer, index, vocab, **kwargs)
         self.mxlen = self.vectorizer.mxlen
 
     def create_word_vectors_from_post(self, raw_post, lowercase=True):
@@ -83,8 +83,8 @@ class Token1DPreprocessor(TensorFlowPreprocessor):
 @exporter
 @register_preprocessor(name='char2d')
 class Char2DPreprocessor(TensorFlowPreprocessor):
-    def __init__(self, model_base_dir, pid, feature, vectorizer, index, vocab, **kwargs):
-        super(Char2DPreprocessor, self).__init__(model_base_dir, pid, feature, vectorizer, index, vocab, **kwargs)
+    def __init__(self, feature, vectorizer, index, vocab, **kwargs):
+        super(Char2DPreprocessor, self).__init__(feature, vectorizer, index, vocab, **kwargs)
         self.mxlen = self.vectorizer.mxlen
         self.mxwlen = self.vectorizer.mxwlen
 
@@ -105,7 +105,15 @@ class Char2DPreprocessor(TensorFlowPreprocessor):
 
 
 @exporter
+@register_preprocessor(name='dict1d')
+class Dict1DPreprocessor(Token1DPreprocessor):
+    def __init__(self, feature, vectorizer, index, vocab, **kwargs):
+        super(Dict1DPreprocessor, self).__init__(feature, vectorizer, index, vocab, **kwargs)
+
+
+@exporter
 @register_preprocessor(name='dict2d')
 class Dict2DPreprocessor(Char2DPreprocessor):
-    def __init__(self, model_base_dir, pid, feature, vectorizer, index, vocab, **kwargs):
-        super(Dict2DPreprocessor, self).__init__(model_base_dir, pid, feature, vectorizer, index, vocab, **kwargs)
+    def __init__(self, feature, vectorizer, index, vocab, **kwargs):
+        super(Dict2DPreprocessor, self).__init__(feature, vectorizer, index, vocab, **kwargs)
+

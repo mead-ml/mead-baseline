@@ -23,9 +23,10 @@ class PreProcessorController(object):
         self.FIELD_NAME = 'tokens'
         for feature in feature_vectorizer_mapping:
             self.preprocessors[feature] = create_preprocessors(preprocessor_type=feature_vectorizer_mapping[feature],
-                                                               model_base_dir=model_base_dir, pid=pid, feature=feature,
+                                                               feature=feature,
                                                                vectorizer=saved_vectorizers[feature],
-                                                               index=indices[feature], vocab=vocabs[feature])
+                                                               index=indices[feature],
+                                                               vocab=vocabs[feature])
 
     @staticmethod
     def get_vectorizers(model_base_dir, pid):

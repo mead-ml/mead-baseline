@@ -14,9 +14,7 @@ class Preprocessor(object):
     a string instead of a vectorized input.
     """
 
-    def __init__(self, model_base_dir, pid, feature, vectorizer, index, vocab, **kwargs):
-        self.model_base_dir = model_base_dir
-        self.pid = pid
+    def __init__(self, feature, vectorizer, index, vocab, **kwargs):
         self.feature = feature
         self.vectorizer = vectorizer
         self.index = index
@@ -40,4 +38,6 @@ def register_preprocessor(cls, name=None):
 def create_preprocessors(**kwargs):
     preprocessor_type = kwargs['preprocessor_type']  # fail early
     Constructor = BASELINE_PREPROCESSORS.get(preprocessor_type)
+    if Constructor is None:
+        raise NotImplementedError('no preproc exporter found for type {}'.format(preprocessor_type))
     return Constructor(**kwargs)

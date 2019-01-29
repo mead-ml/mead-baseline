@@ -30,12 +30,13 @@ def main():
     task_name = config_params.get('task', 'classify') if args.task is None else args.task
 
     if task_name == 'seq2seq' and 'beam' not in config_params:
-        config_params['beam'] = args.beam
+         config_params['beam'] = args.beam
 
     config_params['modules'] = config_params.get('modules', []) + args.modules
 
     task = mead.Task.get_task_specific(task_name, args.logging, args.settings)
     task.read_config(config_params, args.datasets)
+
     exporter = create_exporter(task, args.exporter_type)
     exporter.run(args.model, args.output_dir, args.model_version, remote=args.is_remote)
 

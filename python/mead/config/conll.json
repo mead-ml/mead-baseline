@@ -36,7 +36,7 @@
   ],
   "preproc": {
   },
-  "backend": "pytorch",
+  "backend": "tensorflow",
   "dataset": "conll-iobes",
   "loader": {
     "reader_type": "default",
