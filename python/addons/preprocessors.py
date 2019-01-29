@@ -1,7 +1,5 @@
-import json
 import tensorflow as tf
-import os
-from baseline.utils import Offsets, export
+from baseline.utils import export
 from mead.preprocessors import Preprocessor, register_preprocessor
 
 __all__ = []
@@ -15,28 +13,20 @@ class TensorFlowPreprocessor(Preprocessor):
     a string instead of a vectorized input.
     """
 
-    def __init__(self, model_base_dir, pid, feature, vectorizer, **kwargs):
-        super(TensorFlowPreprocessor, self).__init__(model_base_dir, pid, feature, vectorizer, **kwargs)
-        self.index, self.vocab = self.create_vocab()
+    def __init__(self, model_base_dir, pid, feature, vectorizer, index, vocab, **kwargs):
+        super(TensorFlowPreprocessor, self).__init__(model_base_dir, pid, feature, vectorizer, index, vocab, **kwargs)
+        self.FIELD_NAME = kwargs.get('FIELD_NAME', 'tokens')
+        self.upchars = tf.constant([chr(i) for i in range(65, 91)])
+        self.lchars = tf.constant([chr(i) for i in range(97, 123)])
+        self.upchars_lut = tf.contrib.lookup.index_table_from_tensor(mapping=self.upchars, num_oov_buckets=1, default_value=-1)
 
-    def create_vocab(self):
-        """
-        :model_file the path-like object to the model and model name.
-        :vocab_suffixes the list of vocab types. e.g. 'word', 'char', 'ner'.
-        """
-        index, vocab = None, None
-        feature_vocab_file = os.path.join(self.model_base_dir, "vocabs-{}-{}.json".format(self.feature, self.pid))
-        if os.path.exists(feature_vocab_file):
-            index, vocab = self._read_vocab(feature_vocab_file, self.feature)
-        return index, vocab
-
-    # def create_vectorizers(self):
-    #     """
-    #     :model_file the path-like object to the model and model name.
-    #     :vocab_suffixes the list of vocab types. e.g. 'word', 'char', 'ner'.
-    #     """
-    #     import pickle
-    #     return pickle.load(open(os.path.join(self.model_base_dir, "vectorizers-{}.pkl".format(self.pid)), "rb"))
+    def lowercase(self, raw_post):
+        split_chars = tf.string_split(tf.reshape(raw_post, [-1]), delimiter="").values
+        upchar_inds = self.upchars_lut.lookup(split_chars)
+        return tf.reduce_join(tf.map_fn(lambda x: tf.cond(x[0] > 25,
+                                                          lambda: x[1],
+                                                          lambda: self.lchars[x[0]]),
+                                        (upchar_inds, split_chars), dtype=tf.string))
 
     def preproc(self, tf_example):
         """
@@ -44,48 +34,15 @@ class TensorFlowPreprocessor(Preprocessor):
         """
         pass
 
-    @staticmethod
-    def resize_sen(raw, mxlen):
+    def resize_sen(self, raw):
         """
         Splits and rejoins a string to ensure that tokens meet
         the required max len.
         """
         raw_tokens = tf.string_split(tf.reshape(raw, [-1])).values
-        # sentence length <= mxlen
-        raw_post = tf.reduce_join(raw_tokens[mxlen], separator=" ")
+        # sentence length > mxlen
+        raw_post = tf.reduce_join(raw_tokens[:self.mxlen], separator=" ")
         return raw_post
-
-    @staticmethod
-    def lowercase(raw_post):
-        upchars = tf.constant([chr(i) for i in range(65, 91)])
-        lchars = tf.constant([chr(i) for i in range(97, 123)])
-        upchars_lut = tf.contrib.lookup.index_table_from_tensor(mapping=upchars, num_oov_buckets=1, default_value=-1)
-
-        split_chars = tf.string_split(tf.reshape(raw_post, [-1]), delimiter="").values
-        upchar_inds = upchars_lut.lookup(split_chars)
-        return tf.reduce_join(tf.map_fn(lambda x: tf.cond(x[0] > 25,
-                                                          lambda: x[1],
-                                                          lambda: lchars[x[0]]),
-                                        (upchar_inds, split_chars), dtype=tf.string))
-
-    @staticmethod
-    def _read_vocab(vocab_file, feature_name):
-        with open(vocab_file, 'r') as f:
-            vocab = json.load(f)
-
-        # Make a vocab list
-        vocab_list = [''] * (len(vocab) + 1)
-
-        for v, i in vocab.items():
-            vocab_list[i] = v
-
-        tok2index = tf.contrib.lookup.index_table_from_tensor(
-            tf.constant(vocab_list),
-            default_value=Offsets.UNK,
-            dtype=tf.string,
-            name='%s2index' % feature_name
-        )
-        return tok2index, vocab
 
     @staticmethod
     def reshape_indices(indices, shape):
@@ -100,8 +57,8 @@ class TensorFlowPreprocessor(Preprocessor):
 @register_preprocessor(name='token1d')
 class Token1DPreprocessor(TensorFlowPreprocessor):
 
-    def __init__(self, model_base_dir, pid, feature, vectorizer, **kwargs):
-        super(Token1DPreprocessor, self).__init__(model_base_dir, pid, feature, vectorizer, **kwargs)
+    def __init__(self, model_base_dir, pid, feature, vectorizer, index, vocab, **kwargs):
+        super(Token1DPreprocessor, self).__init__(model_base_dir, pid, feature, vectorizer, index, vocab, **kwargs)
         self.mxlen = self.vectorizer.mxlen
 
     def create_word_vectors_from_post(self, raw_post, lowercase=True):
@@ -118,16 +75,16 @@ class Token1DPreprocessor(TensorFlowPreprocessor):
     def preproc(self, post_mappings):
         # Split the input string, assuming that whitespace is splitter
         # The client should perform any required tokenization for us and join on ' '
-        raw_post = post_mappings['tokens']
-        raw_post = self.resize_sen(raw_post, self.mxlen)
+        raw_post = post_mappings[self.FIELD_NAME]
+        raw_post = self.resize_sen(raw_post)
         return self.create_word_vectors_from_post(raw_post)
 
 
 @exporter
 @register_preprocessor(name='char2d')
 class Char2DPreprocessor(TensorFlowPreprocessor):
-    def __init__(self, model_base_dir, pid, feature, vectorizer, **kwargs):
-        super(Char2DPreprocessor, self).__init__(model_base_dir, pid, feature, vectorizer, **kwargs)
+    def __init__(self, model_base_dir, pid, feature, vectorizer, index, vocab, **kwargs):
+        super(Char2DPreprocessor, self).__init__(model_base_dir, pid, feature, vectorizer, index, vocab, **kwargs)
         self.mxlen = self.vectorizer.mxlen
         self.mxwlen = self.vectorizer.mxwlen
 
@@ -142,6 +99,13 @@ class Char2DPreprocessor(TensorFlowPreprocessor):
         return self.reshape_indices(char_indices, [self.mxlen, self.mxwlen])
 
     def preproc(self, post_mappings):
-        raw_post = post_mappings['tokens']
-        raw_post = self.resize_sen(raw_post, self.mxlen)
+        raw_post = post_mappings[self.FIELD_NAME]
+        raw_post = self.resize_sen(raw_post)
         return self.create_char_vectors_from_post(raw_post)
+
+
+@exporter
+@register_preprocessor(name='dict2d')
+class Dict2DPreprocessor(Char2DPreprocessor):
+    def __init__(self, model_base_dir, pid, feature, vectorizer, index, vocab, **kwargs):
+        super(Dict2DPreprocessor, self).__init__(model_base_dir, pid, feature, vectorizer, index, vocab, **kwargs)

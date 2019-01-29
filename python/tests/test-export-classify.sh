@@ -1,9 +1,10 @@
 BASELINE_DIR=${HOME}/dev/work/baseline
-CLASSIFY_MODEL=sst2-25195.zip
+CLASSIFY_MODEL=sst2-9494.zip
 TEST_FILE=stsa.binary.test
 TEST_LOAD=$TEST_FILE.load
 TEST_SERVE=$TEST_FILE.serve
 TEST_SERVE_PREPROC=$TEST_FILE.serve_preproc
+NUM_FEATURES=3
 SLEEP=5
 
 docker stop tfserving
@@ -18,7 +19,7 @@ echo "running test for classify"
 echo "------------------------"
 
 echo "downloading trained classifier model and test file"
-wget https://www.dropbox.com/s/orcrqkla4z0t5tk/sst2-25195.zip?dl=1 -O $CLASSIFY_MODEL
+wget https://www.dropbox.com/s/u1fbagrbi03kfvh/sst2-9494.zip?dl=1 -O $CLASSIFY_MODEL
 wget https://www.dropbox.com/s/zm6y79wczkaliat/stsa.binary.test?dl=1 -O $TEST_FILE
 
 echo "classifying by loading the model"
@@ -30,7 +31,7 @@ MDIR=models/sst2
 rm -rf $MDIR
 mkdir -p $MDIR
 echo $CLASSIFY_MODEL
-mead-export --config $BASELINE_DIR/python/mead/config/sst2.json --model $CLASSIFY_MODEL --is_remote false --output_dir $MDIR
+mead-export --config $BASELINE_DIR/python/mead/config/sst2-comb.json --model $CLASSIFY_MODEL --is_remote false --output_dir $MDIR
 sleep $SLEEP
 
 echo "running tf serving"
@@ -47,7 +48,7 @@ echo "exporting with preproc"
 MDIR=models-preproc/sst2
 rm -rf $MDIR
 mkdir -p $MDIR
-mead-export --config $BASELINE_DIR/python/mead/config/sst2.json --model $CLASSIFY_MODEL --is_remote false --exporter_type preproc --modules preproc-exporters --output_dir $MDIR
+mead-export --config $BASELINE_DIR/python/mead/config/sst2-comb.json --model $CLASSIFY_MODEL --is_remote false --exporter_type preproc --modules preproc-exporters preprocessors --output_dir $MDIR
 sleep $SLEEP
 
 echo "running tf serving"
@@ -63,9 +64,11 @@ docker stop tfserving
 docker rm tfserving
 
 #remove prints coming from baseline
-sed -i -e 1,4d $TEST_LOAD 
-sed -i -e 1,3d $TEST_SERVE 
-sed -i -e 1,3d $TEST_SERVE_PREPROC
+NUM_LINES_TO_REMOVE_LOAD=`expr "$NUM_FEATURES" + 2`
+NUM_LINES_TO_REMOVE_SERVE=`expr "$NUM_FEATURES" + 1`
+sed -i -e 1,${NUM_LINES_TO_REMOVE_LOAD}d $TEST_LOAD 
+sed -i -e 1,${NUM_LINES_TO_REMOVE_SERVE}d $TEST_SERVE 
+sed -i -e 1,${NUM_LINES_TO_REMOVE_SERVE}d $TEST_SERVE_PREPROC
 
 DIFF=$(diff ${TEST_LOAD} ${TEST_SERVE})
     if [ "$DIFF" != "" ]

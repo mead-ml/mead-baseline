@@ -14,11 +14,13 @@ class Preprocessor(object):
     a string instead of a vectorized input.
     """
 
-    def __init__(self, model_base_dir, pid, feature, vectorizer, **kwargs):
+    def __init__(self, model_base_dir, pid, feature, vectorizer, index, vocab, **kwargs):
         self.model_base_dir = model_base_dir
         self.pid = pid
         self.feature = feature
         self.vectorizer = vectorizer
+        self.index = index
+        self.vocab = vocab
 
     def preproc(self, tf_example):
         """
