@@ -278,7 +278,7 @@ class TaggerService(Service):
         self.set_vectorizer_lens(mxlen, mxwlen)
         examples = self.vectorize(tokens_seq)
         if preproc == 'server':
-            examples['tokens'] = [" ".join(x) for x in tokens]
+            examples['tokens'] = [" ".join([y['text'] for y in x]) for x in tokens_seq]
 
         outcomes = self.model.predict(examples)
         outputs = []
