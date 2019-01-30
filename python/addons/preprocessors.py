@@ -60,11 +60,12 @@ class Token1DPreprocessor(TensorFlowPreprocessor):
     def __init__(self, feature, vectorizer, index, vocab, **kwargs):
         super(Token1DPreprocessor, self).__init__(feature, vectorizer, index, vocab, **kwargs)
         self.mxlen = self.vectorizer.mxlen
+        self.do_lowercase = self.vectorizer.transform_fn.__name__ == "lowercase"
 
-    def create_word_vectors_from_post(self, raw_post, lowercase=True):
+    def create_word_vectors_from_post(self, raw_post):
         # vocab has only lowercase words
         word2index = self.index
-        if lowercase:
+        if self.do_lowercase:
             raw_post = self.lowercase(raw_post)
         word_tokens = tf.string_split(tf.reshape(raw_post, [-1]))
         word_indices = word2index.lookup(word_tokens)
@@ -87,10 +88,11 @@ class Char2DPreprocessor(TensorFlowPreprocessor):
         super(Char2DPreprocessor, self).__init__(feature, vectorizer, index, vocab, **kwargs)
         self.mxlen = self.vectorizer.mxlen
         self.mxwlen = self.vectorizer.mxwlen
+        self.do_lowercase = self.vectorizer.transform_fn.__name__ == "lowercase"
 
-    def create_char_vectors_from_post(self, raw_post, lowercase=False):
+    def create_char_vectors_from_post(self, raw_post):
         char2index = self.index
-        if lowercase:
+        if self.do_lowercase:
             raw_post = self.lowercase(raw_post)
         raw_post = tf.string_split(tf.reshape(raw_post, [-1]))
         culled_word_token_vals = tf.substr(raw_post.values, 0, self.mxwlen)
