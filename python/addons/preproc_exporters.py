@@ -115,7 +115,11 @@ class ClassifyTensorFlowPreProcExporter(ClassifyTensorFlowExporter):
         for feature in preprocessed:
             model_params[feature] = preprocessed[feature]
         model, classes, values = self._create_model(sess, model_file)
-        sig_input = {'tokens': tf.saved_model.utils.build_tensor_info(tf_example[pc.FIELD_NAME])}
+        sig_input = {
+            'tokens': tf.saved_model.utils.build_tensor_info(tf_example[pc.FIELD_NAME]),
+        }
+        if model.lengths is not None:
+            sig_input.update({model.lengths_key: tf.saved_model.utils.build_tensor_info(model.lengths)})
         sig_output = SignatureOutput(classes, values)
         sig_name = 'predict_text'
         assets = create_assets(model_file, sig_input, sig_output, sig_name, model.lengths_key)
@@ -141,7 +145,6 @@ class TaggerTensorFlowPreProcExporter(TaggerTensorFlowExporter):
         sig_input = {
             'tokens': tf.saved_model.utils.build_tensor_info(tf_example[pc.FIELD_NAME]),
              model.lengths_key: tf.saved_model.utils.build_tensor_info(model.lengths)
-
         }
         sig_output = SignatureOutput(classes, values)
         sig_name = 'tag_text'
