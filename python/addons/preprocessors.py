@@ -60,7 +60,10 @@ class Token1DPreprocessor(TensorFlowPreprocessor):
     def __init__(self, feature, vectorizer, index, vocab, **kwargs):
         super(Token1DPreprocessor, self).__init__(feature, vectorizer, index, vocab, **kwargs)
         self.mxlen = self.vectorizer.mxlen
-        self.do_lowercase = self.vectorizer.transform_fn.__name__ == "lowercase"
+        transform_fn = self.vectorizer.transform_fn.__name__
+        if transform_fn not in ["identity_trans_fn", "lowercase"]:
+            raise NotImplementedError("can not export arbitrary transform functions")
+        self.do_lowercase = transform_fn == "lowercase"
 
     def create_word_vectors_from_post(self, raw_post):
         # vocab has only lowercase words
@@ -88,7 +91,10 @@ class Char2DPreprocessor(TensorFlowPreprocessor):
         super(Char2DPreprocessor, self).__init__(feature, vectorizer, index, vocab, **kwargs)
         self.mxlen = self.vectorizer.mxlen
         self.mxwlen = self.vectorizer.mxwlen
-        self.do_lowercase = self.vectorizer.transform_fn.__name__ == "lowercase"
+        transform_fn = self.vectorizer.transform_fn.__name__
+        if transform_fn not in ["identity_trans_fn", "lowercase"]:
+            raise NotImplementedError("can not export arbitrary transform functions")
+        self.do_lowercase = transform_fn == "lowercase"
 
     def create_char_vectors_from_post(self, raw_post):
         char2index = self.index
