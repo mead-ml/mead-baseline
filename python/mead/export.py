@@ -35,7 +35,7 @@ def main():
     config_params['modules'] = config_params.get('modules', []) + args.modules
 
     task = mead.Task.get_task_specific(task_name, args.logging, args.settings)
-    task.read_config(config_params, args.datasets)
+    task.read_config(config_params, args.datasets, exporter_type=args.exporter_type)
 
     exporter = create_exporter(task, args.exporter_type)
     exporter.run(args.model, args.output_dir, args.model_version, remote=args.is_remote)

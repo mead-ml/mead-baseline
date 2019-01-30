@@ -54,7 +54,7 @@ sleep ${SLEEP}
 
 printf "${MSG_COLOR}exporting with preproc\n${END}"
 mkdir -p ${EXPORT_DIR_PREPROC}
-mead-export --config ${CONFIG_FILE} --model ${MODEL_FILE} --is_remote false --exporter_type preproc --modules preproc_exporters preprocessors --output_dir ${EXPORT_DIR_PREPROC}/${MODEL_NAME}
+mead-export --config ${CONFIG_FILE} --model ${MODEL_FILE} --is_remote false --exporter_type preproc --output_dir ${EXPORT_DIR_PREPROC}/${MODEL_NAME}
 sleep ${SLEEP}
 
 printf "${MSG_COLOR}running tf serving\n${END}"
