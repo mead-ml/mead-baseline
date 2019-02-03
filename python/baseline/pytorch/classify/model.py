@@ -1,9 +1,12 @@
+import logging
 from baseline.model import ClassifierModel, register_model
 from baseline.pytorch.torchy import *
 from baseline.utils import listify
 import torch.backends.cudnn as cudnn
 import os
 cudnn.benchmark = True
+
+logger = logging.getLogger('baseline')
 
 
 class ClassifierModelBase(nn.Module, ClassifierModel):
@@ -19,7 +22,7 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
         return model
 
     def save(self, outname):
-        print('saving %s' % outname)
+        logger.info('saving %s' % outname)
         torch.save(self, outname)
 
     @classmethod
@@ -35,7 +38,7 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
         pool_dim = model.init_pool(input_sz, **kwargs)
         stacked_dim = model.init_stacked(pool_dim, **kwargs)
         model.init_output(stacked_dim, len(labels))
-        print(model)
+        logger.info(model)
         return model
 
     def cuda(self, device=None):

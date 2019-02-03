@@ -1,10 +1,12 @@
 import io
+import logging
 import contextlib
 import numpy as np
 from baseline.utils import export, write_json, read_config_file, Offsets
 from baseline.mime_type import mime_type
 __all__ = []
 exporter = export(__all__)
+logger = logging.getLogger('baseline')
 
 
 def norm_weights(word_vectors):
@@ -105,7 +107,7 @@ class PretrainedEmbeddingsModel(WordEmbeddingsModel):
         super(PretrainedEmbeddingsModel, self).__init__()
 
         if (known_vocab is None or not known_vocab) and keep_unused is False:
-            print('Warning: known_vocab=None or is Empty, keep_unused=False. Setting keep_unused=True, all vocab will be preserved')
+            logger.warning('Warning: known_vocab=None or is Empty, keep_unused=False. Setting keep_unused=True, all vocab will be preserved')
             keep_unused = True
         uw = 0.0 if unif_weight is None else unif_weight
         self.vocab = {}

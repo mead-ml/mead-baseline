@@ -1,3 +1,4 @@
+import logging
 from baseline.tf.tfy import *
 from baseline.version import __version__
 from baseline.model import LanguageModel, register_model
@@ -6,6 +7,9 @@ from baseline.tf.transformer import transformer_encoder_stack, subsequent_mask
 from baseline.utils import read_json, write_json, ls_props
 from google.protobuf import text_format
 import copy
+
+
+logger = logging.getLogger('baseline')
 
 
 class DataParallelLanguageModel(LanguageModel):
@@ -44,7 +48,7 @@ class DataParallelLanguageModel(LanguageModel):
         # We need to remove these because we may be calling back to our caller, and we need
         # the condition of calling to be non-parallel
         gpus = kwargs.pop('gpus')
-        print('Num GPUs', gpus)
+        logger.info('Num GPUs %s', gpus)
 
         self.saver = None
         self.replicas = []

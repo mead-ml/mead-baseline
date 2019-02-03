@@ -5,6 +5,8 @@ from baseline.utils import listify, revlut, get_model_file, get_metric_cmp
 from baseline.train import Trainer, create_trainer, register_trainer, register_training_func
 from baseline.pytorch.optz import OptimizerManager
 
+logger = logging.getLogger('baseline')
+
 
 @register_trainer(task='lm', name='default')
 class LanguageModelTrainerPyTorch(Trainer):
@@ -128,10 +130,10 @@ def fit(model, ts, vs, es, **kwargs):
         early_stopping_metric = kwargs.get('early_stopping_metric', 'avg_loss')
         early_stopping_cmp, best_metric = get_metric_cmp(early_stopping_metric, kwargs.get('early_stopping_cmp'))
         patience = kwargs.get('patience', epochs)
-        print('Doing early stopping on [%s] with patience [%d]' % (early_stopping_metric, patience))
+        logger.info('Doing early stopping on [%s] with patience [%d]', early_stopping_metric, patience)
 
     reporting_fns = listify(kwargs.get('reporting', []))
-    print('reporting', reporting_fns)
+    logger.info('reporting %s', reporting_fns)
 
     after_train_fn = kwargs.get('after_train_fn', None)
     trainer = create_trainer(model, **kwargs)
@@ -149,19 +151,19 @@ def fit(model, ts, vs, es, **kwargs):
         elif early_stopping_cmp(test_metrics[early_stopping_metric], best_metric):
             last_improved = epoch
             best_metric = test_metrics[early_stopping_metric]
-            print('New best %.3f' % best_metric)
+            logger.info('New best %.3f', best_metric)
             model.save(model_file)
 
 
         elif (epoch - last_improved) > patience:
-            print('Stopping due to persistent failures to improve')
+            logger.info('Stopping due to persistent failures to improve')
             break
 
     if do_early_stopping is True:
-        print('Best performance on %s: %.3f at epoch %d' % (early_stopping_metric, best_metric, last_improved))
+        logger.info('Best performance on %s: %.3f at epoch %d', early_stopping_metric, best_metric, last_improved)
 
     if es is not None:
-        print('Reloading best checkpoint')
+        logger.info('Reloading best checkpoint')
         model = torch.load(model_file)
         trainer = create_trainer(model, **kwargs)
         trainer.test(es, reporting_fns, phase='Test')

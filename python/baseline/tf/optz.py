@@ -1,6 +1,10 @@
+import logging
 import tensorflow as tf
 from baseline.train import register_lr_scheduler, create_lr_scheduler, WarmupLearningRateScheduler
 import math
+
+
+logger = logging.getLogger('baseline')
 
 
 @register_lr_scheduler('default')
@@ -196,26 +200,37 @@ def optimizer(loss_fn, **kwargs):
     colocate_gradients_with_ops = bool(kwargs.get('colocate_gradients_with_ops', False))
     sgd_mom = float(kwargs.get('mom', 0.9))
     if optim == 'adadelta':
-        #print('adadelta', eta)
-        optz = lambda lr: tf.train.AdadeltaOptimizer(lr, 0.95, 1e-6)
+        rho = float(kwargs.get('rho', 0.95))
+        eps = float(kwargs.get('epsilon', 1e-6))
+        logger.info('adadelta(eta=%f, rho=%f, epsilon=%f)', eta, rho, eps)
+        optz = lambda lr: tf.train.AdadeltaOptimizer(lr, rho, eps)
     elif optim == 'adam':
-        #print('adam', eta)
-        optz = lambda lr: tf.train.AdamOptimizer(lr, kwargs.get('beta1', 0.9), kwargs.get('beta2', 0.999), kwargs.get('epsilon', 1e-8))
+        beta1 = float(kwargs.get('beta1', 0.9))
+        beta2 = float(kwargs.get('beta2', 0.999))
+        eps = float(kwargs.get('epsilon', 1e-8))
+        logger.info('adam(eta=%f beta1=%f, beta2=%f, eps=%f)', eta, beta1, beta2, eps)
+        optz = lambda lr: tf.train.AdamOptimizer(lr, beta1, beta2, eps)
     elif optim == 'adamw':
         wd = float(kwargs.get('weight_decay', 0))
-        optz = lambda lr: AdamWOptimizer(lr, wd, kwargs.get('beta1', 0.9), kwargs.get('beta2', 0.999), kwargs.get('epsilon', 1e-8))
+        beta1 = float(kwargs.get('beta1', 0.9))
+        beta2 = float(kwargs.get('beta2', 0.999))
+        eps = float(kwargs.get('epsilon', 1e-8))
+        logger.info('adamw(eta=%f beta1=%f, beta2=%f, eps=%f)', eta, beta1, beta2, eps)
+        optz = lambda lr: AdamWOptimizer(lr, wd, beta1, beta2, eps)
     elif optim == 'rmsprop':
-        #print('rmsprop', eta)
-        optz = lambda lr: tf.train.RMSPropOptimizer(lr, momentum=float(kwargs.get('mom', 0.0)))
+        # Get mom again with difference default
+        mom = float(kwargs.get('mom', 0.0))
+        logger.info('rmsprop(eta=%f, mom=%f)', eta, mom)
+        optz = lambda lr: tf.train.RMSPropOptimizer(lr, momentum=mom)
     elif sgd_mom > 0:
-        #print('sgd-mom', eta, sgd_mom)
+        logger.info('sgd-mom(eta=%f, mom=%f)', eta, sgd_mom)
         optz = lambda lr: tf.train.MomentumOptimizer(lr, sgd_mom)
     else:
-        #print('sgd')
+        logger.info('sgd(eta=%f)', eta)
         optz = lambda lr: tf.train.GradientDescentOptimizer(lr)
 
-    #print('clip', clip)
-    #print('decay', decay_fn)
+    logger.info('clip gradients at %s', clip)
+    logger.info('learning rate scheduler: %s', lr_scheduler)
     return global_step, tf.contrib.layers.optimize_loss(loss_fn, global_step, eta, optz,
                                                         colocate_gradients_with_ops=colocate_gradients_with_ops,
                                                         clip_gradients=clip, learning_rate_decay_fn=lr_scheduler,

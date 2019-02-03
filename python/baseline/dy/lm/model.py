@@ -1,6 +1,9 @@
+import logging
 from baseline.model import LanguageModel, register_model
 from baseline.dy.dynety import *
 from baseline.dy.transformer import TransformerEncoderStack, subsequent_mask
+
+logger = logging.getLogger('baseline')
 
 
 class LanguageModelBase(DynetModel, LanguageModel):
@@ -8,7 +11,7 @@ class LanguageModelBase(DynetModel, LanguageModel):
     @classmethod
     def create(cls, embeddings, **kwargs):
         model = cls(embeddings, **kwargs)
-        print(model)
+        logger.info(model)
         return model
 
     def __init__(self, embeddings, layers=1, hsz=650, dropout=None, **kwargs):

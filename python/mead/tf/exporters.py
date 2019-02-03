@@ -1,3 +1,4 @@
+import logging
 import baseline
 import os
 import shutil
@@ -16,6 +17,7 @@ from collections import namedtuple
 
 FIELD_NAME = 'text/tokens'
 ASSET_FILE_NAME = 'model.assets'
+logger = logging.getLogger('mead')
 
 __all__ = []
 exporter = export(__all__)
@@ -49,7 +51,7 @@ class TensorFlowExporter(mead.exporters.Exporter):
                 sig_input, sig_output, sig_name, assets = self._create_rpc_call(sess, basename)
                 # output_path = os.path.join(tf.compat.as_bytes(output_dir), tf.compat.as_bytes(str(model_version)))
                 output_path = os.path.join(output_dir, str(model_version))
-                print('Exporting Trained model to %s' % output_path)
+                logger.info('Exporting Trained model to %s' % output_path)
                 for_remote = kwargs.get('remote', True)
                 client_output = server_output = output_path
                 if for_remote:
@@ -59,7 +61,7 @@ class TensorFlowExporter(mead.exporters.Exporter):
                 try:
                     builder = self._create_saved_model_builder(sess, server_output, sig_input, sig_output, sig_name)
                     create_bundle(builder, client_output, basename, assets)
-                    print('Successfully exported model to %s' % output_dir)
+                    logger.info('Successfully exported model to %s' % output_dir)
                 except AssertionError as e:
                     # model already exists
                     raise e

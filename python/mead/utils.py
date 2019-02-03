@@ -1,26 +1,49 @@
 import os
 import json
+import logging
+import logging.config
 import hashlib
 import argparse
 from copy import deepcopy
 from collections import OrderedDict
-from baseline.utils import export, str2bool, read_config_file
+from baseline.utils import export, str2bool, read_config_file, get_logging_level
 
 __all__ = []
 exporter = export(__all__)
+logger = logging.getLogger('mead')
+
+
+@exporter
+def configure_logger(logger_config):
+    """Use the logger file (logging.json) to configure the log, but overwrite the filename to include the PID
+
+    There are reporting and timing loggers that are configured, the latter being used for speed testing.
+
+    :param logger_config: The logging configuration JSON or file containing JSON
+    :return: A dictionary config derived from the logger_file, with the reporting handler suffixed with PID
+    """
+
+    config = read_config_file_or_json(logger_config, 'logger')
+    config['handlers']['reporting_file_handler']['filename'] = 'reporting-{}.log'.format(os.getpid())
+    config['handlers']['timing_file_handler']['filename'] = 'timing-{}.log'.format(os.getpid())
+    level = os.getenv('LOG_LEVEL', 'INFO')
+    config['loggers']['baseline']['level'] = get_logging_level(os.getenv('BASELINE_LOG_LEVEL', level))
+    config['loggers']['mead']['level'] = get_logging_level(os.getenv('MEAD_LOG_LEVEL', level))
+    config['handlers']['reporting_console_handler']['level'] = get_logging_level(os.getenv('REPORTING_LOG_LEVEL', level))
+    logging.config.dictConfig(config)
 
 
 @exporter
 def print_dataset_info(dataset):
-    print("[train file]: {}".format(dataset['train_file']))
-    print("[valid file]: {}".format(dataset['valid_file']))
-    print("[test file]: {}".format(dataset['test_file']))
+    logger.info("[train file]: {}".format(dataset['train_file']))
+    logger.info("[valid file]: {}".format(dataset['valid_file']))
+    logger.info("[test file]: {}".format(dataset['test_file']))
     vocab_file = dataset.get('vocab_file')
     if vocab_file is not None:
-        print("[vocab file]: {}".format(vocab_file))
+        logger.info("[vocab file]: {}".format(vocab_file))
     label_file = dataset.get('label_file')
     if label_file is not None:
-        print("[label file]: {}".format(label_file))
+        logger.info("[label file]: {}".format(label_file))
 
 
 @exporter

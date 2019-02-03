@@ -1,3 +1,4 @@
+import logging
 from baseline.utils import listify, get_model_file
 from baseline.progress import create_progress_bar
 from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
@@ -5,6 +6,8 @@ from keras import metrics
 from keras import optimizers
 import numpy as np
 from baseline.confusion import ConfusionMatrix
+
+logger = logging.getLogger('baseline')
 
 
 @register_trainer(task='classify', name='default')
@@ -22,22 +25,22 @@ class ClassifyTrainerKeras(EpochReportingTrainer):
         eta = kwargs.get('eta', kwargs.get('lr', 0.01))
 
         if optim == 'adadelta':
-            print('adadelta', eta)
+            logger.info('adadelta %s', eta)
             optz = optimizers.Adadelta(eta, 0.95, 1e-6, clipnorm=clip)
         elif optim == 'adam':
-            print('adam', eta)
+            logger.info('adam %s', eta)
             optz = optimizers.Adam(eta, clipnorm=clip)
         elif optim == 'rmsprop':
-            print('rmsprop', eta)
+            logger.info('rmsprop %s', eta)
             optz = optimizers.RMSprop(eta, clipnorm=clip)
         elif optim == 'adagrad':
-            print('adagrad', eta)
+            logger.info('adagrad %s', eta)
             optz = optimizers.Adagrad(eta, clipnorm=clip)
         elif mom > 0:
-            print('sgd-mom', eta, mom)
+            logger.info('sgd-mom %s', eta, mom)
             optz = optimizers.SGD(eta, mom, clipnorm=clip)
         else:
-            print('sgd')
+            logger.info('sgd')
             optz = optimizers.SGD(eta, clipnorm=clip)
         return optz
 
@@ -98,22 +101,22 @@ def fit(model, ts, vs, es=None, **kwargs):
     :param ts: A training data set
     :param vs: A validation data set
     :param es: A test data set, can be None
-    :param kwargs: 
+    :param kwargs:
         See below
-    
+
     :Keyword Arguments:
         * *do_early_stopping* (``bool``) --
           Stop after evaluation data is no longer improving.  Defaults to True
-        
+
         * *epochs* (``int``) -- how many epochs.  Default to 20
         * *outfile* -- Model output file, defaults to classifier-model-keras
-        * *patience* (``int``) -- 
+        * *patience* (``int``) --
            How many epochs where evaluation is no longer improving before we give up
         * *reporting* --
            Callbacks which may be used on reporting updates
         * *optim* --
            What optimizer to use.  Defaults to `adam`
-    :return: 
+    :return:
     """
     trainer = create_trainer(model, **kwargs)
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
@@ -123,10 +126,10 @@ def fit(model, ts, vs, es=None, **kwargs):
     if do_early_stopping:
         early_stopping_metric = kwargs.get('early_stopping_metric', 'acc')
         patience = kwargs.get('patience', epochs)
-        print('Doing early stopping on [%s] with patience [%d]' % (early_stopping_metric, patience))
+        logger.info('Doing early stopping on [%s] with patience [%d]', early_stopping_metric, patience)
 
     reporting_fns = listify(kwargs.get('reporting', []))
-    print('reporting', reporting_fns)
+    logger.info('reporting %s', reporting_fns)
 
     max_metric = 0
     last_improved = 0
@@ -142,18 +145,18 @@ def fit(model, ts, vs, es=None, **kwargs):
         elif test_metrics[early_stopping_metric] > max_metric:
             last_improved = epoch
             max_metric = test_metrics[early_stopping_metric]
-            print('New max %.3f' % max_metric)
+            logger.info('New max %.3f', max_metric)
             model.save(model_file)
 
         elif (epoch - last_improved) > patience:
-            print('Stopping due to persistent failures to improve')
+            logger.info('Stopping due to persistent failures to improve')
             break
 
     if do_early_stopping is True:
-        print('Best performance on max_metric %.3f at epoch %d' % (max_metric, last_improved))
+        logger.info('Best performance on max_metric %.3f at epoch %d', max_metric, last_improved)
 
     if es is not None:
-        print('Reloading best checkpoint')
+        logger.info('Reloading best checkpoint')
         model = model.load(model_file)
         trainer = ClassifyTrainerKeras(model, **kwargs)
         trainer.test(es, reporting_fns, phase='Test')

@@ -8,6 +8,9 @@ from baseline.utils import listify, get_model_file, get_metric_cmp
 from baseline.train import Trainer, create_trainer, register_trainer, register_training_func
 
 
+logger = logging.getLogger('baseline')
+
+
 @register_trainer(task='lm', name='default')
 class LanguageModelTrainerTf(Trainer):
 
@@ -24,7 +27,7 @@ class LanguageModelTrainerTf(Trainer):
 
     def recover_last_checkpoint(self):
         latest = tf.train.latest_checkpoint("./tf-lm-%d" % os.getpid())
-        print("Reloading " + latest)
+        logger.info("Reloading %s", latest)
         self.model.saver.restore(self.model.sess, latest)
 
     @staticmethod
@@ -156,10 +159,10 @@ def fit(model, ts, vs, es=None, **kwargs):
         early_stopping_metric = kwargs.get('early_stopping_metric', 'avg_loss')
         early_stopping_cmp, best_metric = get_metric_cmp(early_stopping_metric, kwargs.get('early_stopping_cmp'))
         patience = kwargs.get('patience', epochs)
-        print('Doing early stopping on [%s] with patience [%d]' % (early_stopping_metric, patience))
+        logger.info('Doing early stopping on [%s] with patience [%d]', early_stopping_metric, patience)
 
     reporting_fns = listify(kwargs.get('reporting', []))
-    print('reporting', reporting_fns)
+    logger.info('reporting %s', reporting_fns)
 
     last_improved = 0
 
@@ -178,16 +181,16 @@ def fit(model, ts, vs, es=None, **kwargs):
         elif early_stopping_cmp(test_metrics[early_stopping_metric], best_metric):
             last_improved = epoch
             best_metric = test_metrics[early_stopping_metric]
-            print('New best %.3f' % best_metric)
+            logger.info('New best %.3f', best_metric)
             trainer.checkpoint()
             trainer.model.save(model_file)
 
         elif (epoch - last_improved) > patience:
-            print('Stopping due to persistent failures to improve')
+            logger.info('Stopping due to persistent failures to improve')
             break
 
     if do_early_stopping is True:
-        print('Best performance on %s: %.3f at epoch %d' % (early_stopping_metric, best_metric, last_improved))
+        logger.info('Best performance on %s: %.3f at epoch %d', early_stopping_metric, best_metric, last_improved)
     if es is not None:
         trainer.recover_last_checkpoint()
         trainer.test(es, reporting_fns, phase='Test')

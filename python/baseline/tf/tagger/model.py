@@ -1,5 +1,6 @@
 import os
 import json
+import logging
 from google.protobuf import text_format
 from tensorflow.python.platform import gfile
 from tensorflow.contrib.layers import fully_connected, xavier_initializer
@@ -11,6 +12,7 @@ from baseline.version import __version__
 from baseline.model import register_model
 from baseline.utils import listify, Offsets
 
+logger = logging.getLogger('baseline')
 
 class TaggerModelBase(TaggerModel):
 
@@ -148,11 +150,11 @@ class TaggerModelBase(TaggerModel):
         try:
             model.A = tf.get_default_graph().get_tensor_by_name('Loss/transitions:0')
             if not model.crf:
-                print('Warning: meta-data says no CRF but model contains transition matrix!')
+                logger.warning('Warning: meta-data says no CRF but model contains transition matrix!')
                 model.crf = True
         except:
             if model.crf is True:
-                print('Warning: meta-data says there is a CRF but not transition matrix found!')
+                logger.warning('Warning: meta-data says there is a CRF but not transition matrix found!')
             model.A = None
             model.crf = False
 
@@ -216,10 +218,10 @@ class TaggerModelBase(TaggerModel):
             mask = tf.sign(gold)
 
             if self.crf is True:
-                print('crf=True, creating SLL')
+                logger.info('crf=True, creating SLL')
                 all_loss = self._compute_sentence_level_loss()
             else:
-                print('crf=False, creating WLL')
+                logger.info('crf=False, creating WLL')
                 all_loss = self._compute_word_level_loss(mask)
 
         with tf.variable_scope(self.out_scope, auxiliary_name_scope=False) as s:

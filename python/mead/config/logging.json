@@ -21,6 +21,12 @@
             "formatter": "json",
             "encoding": "utf8"
         },
+        "reporting_console_handler": {
+            "class": "logging.StreamHandler",
+            "level": "INFO",
+            "stream": "ext://sys.stdout",
+            "formatter": "json"
+        },
         "info_file_handler": {
             "class": "logging.FileHandler",
             "level": "INFO",
@@ -43,10 +49,20 @@
         }
     },
     "loggers": {
+        "baseline": {
+            "level": "INFO",
+            "handlers": ["console", "info_file_handler", "error_file_handler"],
+            "propagate": false
+        },
+        "mead": {
+            "level": "INFO",
+            "handlers": ["console", "info_file_handler", "error_file_handler"],
+            "propagate": false
+        },
         "baseline.reporting": {
             "level": "INFO",
-            "handlers": ["reporting_file_handler"],
-            "propagate": "no"
+            "handlers": ["reporting_file_handler", "reporting_console_handler"],
+            "propagate": false
         },
         "baseline.timing": {
             "level": "DEBUG",

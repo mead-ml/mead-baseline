@@ -1,6 +1,6 @@
 import six
 import os
-import time
+import logging
 import tensorflow as tf
 from baseline.confusion import ConfusionMatrix
 from baseline.progress import create_progress_bar
@@ -9,6 +9,9 @@ from baseline.tf.tfy import _add_ema
 from baseline.tf.optz import optimizer
 from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
 from baseline.utils import verbose_output
+
+
+logger = logging.getLogger('baseline')
 
 
 @register_trainer(task='classify', name='default')
@@ -99,7 +102,7 @@ class ClassifyTrainerTf(EpochReportingTrainer):
 
     def recover_last_checkpoint(self):
         latest = tf.train.latest_checkpoint("./tf-classify-%d" % os.getpid())
-        print('Reloading ' + latest)
+        logger.info('Reloading %s', latest)
         self.model.saver.restore(self.model.sess, latest)
 
 
@@ -139,10 +142,10 @@ def fit(model, ts, vs, es=None, **kwargs):
         early_stopping_metric = kwargs.get('early_stopping_metric', 'acc')
         early_stopping_cmp, best_metric = get_metric_cmp(early_stopping_metric, kwargs.get('early_stopping_cmp'))
         patience = kwargs.get('patience', epochs)
-        print('Doing early stopping on [%s] with patience [%d]' % (early_stopping_metric, patience))
+        logger.info('Doing early stopping on [%s] with patience [%d]', early_stopping_metric, patience)
 
     reporting_fns = listify(kwargs.get('reporting', []))
-    print('reporting', reporting_fns)
+    logger.info('reporting %s', reporting_fns)
 
     trainer = create_trainer(model, **kwargs)
     tables = tf.tables_initializer()
@@ -164,18 +167,18 @@ def fit(model, ts, vs, es=None, **kwargs):
         elif early_stopping_cmp(test_metrics[early_stopping_metric], best_metric):
             last_improved = epoch
             best_metric = test_metrics[early_stopping_metric]
-            print('New best %.3f' % best_metric)
+            logger.info('New best %.3f', best_metric)
             trainer.checkpoint()
             trainer.model.save(model_file)
 
         elif (epoch - last_improved) > patience:
-            print('Stopping due to persistent failures to improve')
+            logger.info('Stopping due to persistent failures to improve')
             break
 
     if do_early_stopping is True:
-        print('Best performance on %s: %.3f at epoch %d' % (early_stopping_metric, best_metric, last_improved))
+        logger.info('Best performance on %s: %.3f at epoch %d', early_stopping_metric, best_metric, last_improved)
 
     if es is not None:
-        print('Reloading best checkpoint')
+        logger.info('Reloading best checkpoint')
         trainer.recover_last_checkpoint()
         trainer.test(es, reporting_fns, phase='Test', verbose=verbose)

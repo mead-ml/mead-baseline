@@ -1,7 +1,6 @@
 import os
 import json
 import logging
-import logging.config
 import numpy as np
 import baseline
 from baseline.utils import (
@@ -24,6 +23,7 @@ from mead.utils import (
 
 __all__ = []
 exporter = export(__all__)
+logger = logging.getLogger('mead')
 
 
 class Backend(object):
@@ -67,7 +67,7 @@ class Task(object):
         """
         pass
 
-    def __init__(self, logger_config, mead_settings_config=None):
+    def __init__(self, mead_settings_config=None):
         super(Task, self).__init__()
         self.config_params = None
         self.mead_settings_config = get_mead_settings(mead_settings_config)
@@ -76,8 +76,7 @@ class Task(object):
             self.mead_settings_config['datacache'] = self.data_download_cache
         else:
             self.data_download_cache = os.path.expanduser(self.mead_settings_config['datacache'])
-        print("using {} as data/embeddings cache".format(self.data_download_cache))
-        self._configure_logger(logger_config)
+        logger.info("using %s as data/embeddings cache", self.data_download_cache)
 
     @classmethod
     def task_name(cls):
@@ -110,29 +109,15 @@ class Task(object):
             vectorizer = baseline.create_vectorizer(**vectorizer_section)
             self.vectorizers[key] = vectorizer
 
-    def _configure_logger(self, logger_config):
-        """Use the logger file (logging.json) to configure the log, but overwrite the filename to include the PID
-
-        There are reporting and timing loggers that are configured, the latter being used for speed testing.
-
-        :param logger_config: The logging configuration JSON or file containing JSON
-        :return: A dictionary config derived from the logger_file, with the reporting handler suffixed with PID
-        """
-
-        config = read_config_file_or_json(logger_config, 'logger')
-        config['handlers']['reporting_file_handler']['filename'] = 'reporting-{}.log'.format(os.getpid())
-        config['handlers']['timing_file_handler']['filename'] = 'timing-{}.log'.format(os.getpid())
-        logging.config.dictConfig(config)
 
     @staticmethod
-    def get_task_specific(task, logging_config, mead_config):
+    def get_task_specific(task, mead_config):
         """Get the task from the task registry associated with the name
 
         :param task: The task name
-        :param logging_config: The configuration to read from
         :return:
         """
-        config = TASK_REGISTRY[task](logging_config, mead_config)
+        config = TASK_REGISTRY[task](mead_config)
         return config
 
     def read_config(self, config_params, datasets_index, **kwargs):
@@ -151,7 +136,7 @@ class Task(object):
         self.config_params = config_params
         basedir = self.get_basedir()
         if basedir is not None and not os.path.exists(basedir):
-            print('Creating: {}'.format(basedir))
+            logger.info('Creating: {}'.format(basedir))
             os.mkdir(basedir)
         self.config_params['train']['basedir'] = basedir
         # Read GPUS from env variables now so that the reader has access
@@ -331,8 +316,8 @@ class Task(object):
 @register_task
 class ClassifierTask(Task):
 
-    def __init__(self, logging_config, mead_settings_config, **kwargs):
-        super(ClassifierTask, self).__init__(logging_config, mead_settings_config, **kwargs)
+    def __init__(self, mead_settings_config, **kwargs):
+        super(ClassifierTask, self).__init__(mead_settings_config, **kwargs)
 
     @classmethod
     def task_name(cls):
@@ -372,7 +357,7 @@ class ClassifierTask(Task):
         super(ClassifierTask, self)._setup_task(**kwargs)
         if self.config_params.get('preproc', {}).get('clean', False) is True:
             self.config_params.get('preproc', {})['clean_fn'] = baseline.TSVSeqLabelReader.do_clean
-            print('Clean')
+            logger.info('Clean')
         else:
             self.config_params['preproc'] = {}
             self.config_params['preproc']['clean_fn'] = None
@@ -429,8 +414,8 @@ class ClassifierTask(Task):
 @register_task
 class TaggerTask(Task):
 
-    def __init__(self, logging_config, mead_settings_config, **kwargs):
-        super(TaggerTask, self).__init__(logging_config, mead_settings_config, **kwargs)
+    def __init__(self, mead_settings_config, **kwargs):
+        super(TaggerTask, self).__init__(mead_settings_config, **kwargs)
 
     @classmethod
     def task_name(cls):
@@ -546,8 +531,8 @@ class TaggerTask(Task):
 @register_task
 class EncoderDecoderTask(Task):
 
-    def __init__(self, logging_config, mead_settings_config, **kwargs):
-        super(EncoderDecoderTask, self).__init__(logging_config, mead_settings_config, **kwargs)
+    def __init__(self, mead_settings_config, **kwargs):
+        super(EncoderDecoderTask, self).__init__(mead_settings_config, **kwargs)
 
     @classmethod
     def task_name(cls):
@@ -653,7 +638,7 @@ class EncoderDecoderTask(Task):
         rlut1 = baseline.revlut(self.feat2src[self.primary_key])
         rlut2 = baseline.revlut(self.feat2tgt)
         if num_ex > 0:
-            print('Showing examples')
+            logger.info('Showing examples')
             preproc = self.config_params.get('preproc', {})
             show_ex_fn = preproc['show_ex']
             self.config_params['train']['after_train_fn'] = lambda model: show_ex_fn(model,
@@ -669,8 +654,8 @@ class EncoderDecoderTask(Task):
 @register_task
 class LanguageModelingTask(Task):
 
-    def __init__(self, logging_config, mead_settings_config, **kwargs):
-        super(LanguageModelingTask, self).__init__(logging_config, mead_settings_config, **kwargs)
+    def __init__(self, mead_settings_config, **kwargs):
+        super(LanguageModelingTask, self).__init__(mead_settings_config, **kwargs)
 
     @classmethod
     def task_name(cls):

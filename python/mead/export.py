@@ -1,6 +1,6 @@
 import argparse
 import mead
-from mead.utils import convert_path
+from mead.utils import convert_path, configure_logger
 from baseline.utils import unzip_model
 from baseline.utils import read_config_file
 from mead.exporters import create_exporter
@@ -24,6 +24,7 @@ def main():
 
 
     args = parser.parse_args()
+    configure_logger(args.logging)
 
     config_params = read_config_file(args.config)
 
@@ -34,7 +35,7 @@ def main():
 
     config_params['modules'] = config_params.get('modules', []) + args.modules
 
-    task = mead.Task.get_task_specific(task_name, args.logging, args.settings)
+    task = mead.Task.get_task_specific(task_name, args.settings)
     task.read_config(config_params, args.datasets, exporter_type=args.exporter_type)
 
     exporter = create_exporter(task, args.exporter_type)

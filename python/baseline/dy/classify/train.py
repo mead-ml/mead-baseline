@@ -1,5 +1,6 @@
 import six
 import time
+import logging
 import dynet as dy
 import numpy as np
 from baseline.utils import listify, get_model_file, get_metric_cmp
@@ -9,6 +10,8 @@ from baseline.train import EpochReportingTrainer, create_trainer, register_train
 from baseline.dy.dynety import *
 from baseline.dy.optz import *
 from baseline.utils import verbose_output
+
+logger = logging.getLogger('baseline')
 
 
 def _add_to_cm(cm, y, preds, axis=0):
@@ -144,10 +147,10 @@ def fit(model, ts, vs, es, epochs=20, do_early_stopping=True, early_stopping_met
     if do_early_stopping:
         patience = kwargs.get('patience', epochs)
         early_stopping_cmp, best_metric = get_metric_cmp(early_stopping_metric, kwargs.get('early_stopping_cmp'))
-        print('Doing early stopping on [{}] with patience [{}]'.format(early_stopping_metric, patience))
+        logger.info('Doing early stopping on [%s] with patience [%d]', early_stopping_metric, patience)
 
     reporting_fns = listify(kwargs.get('reporting', []))
-    print('reporting', reporting_fns)
+    logger.info('reporting %s', reporting_fns)
 
     trainer = create_trainer(model, **kwargs)
 
@@ -163,17 +166,16 @@ def fit(model, ts, vs, es, epochs=20, do_early_stopping=True, early_stopping_met
         elif early_stopping_cmp(test_metrics[early_stopping_metric], best_metric):
             last_improved = epoch
             best_metric = test_metrics[early_stopping_metric]
-            print('New best {:.3f}'.format(best_metric))
+            logger.info('New best %.3f', best_metric)
             model.save(model_file)
 
         elif (epoch - last_improved) > patience:
-            print('Stopping due to persistent failures to improve')
+            logger.info('Stopping due to persistent failures to improve')
             break
 
     if do_early_stopping is True:
-        print('Best performance on {}: {:.3f} at epoch {}'.format(early_stopping_metric, best_metric, last_improved))
-
+        logger.info('Best performance on %s: %.3f at epoch %d', early_stopping_metric, best_metric, last_improved)
     if es is not None:
-        print('Reloading best checkpoint')
+        logger.info('Reloading best checkpoint')
         model = model.load(model_file)
         trainer.test(es, reporting_fns, phase='Test', verbose=verbose)

@@ -97,7 +97,6 @@ class CharConvEmbeddings(nn.Module, PyTorchEmbeddings):
         self.gating_seq = nn.Sequential(OrderedDict(
             [('gate-{}'.format(i), GatingConnection(wchsz)) for i in range(num_gates)]
         ))
-        print(self)
 
     def get_dsz(self):
         return self.char_comp.outsz
