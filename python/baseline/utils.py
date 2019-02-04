@@ -64,11 +64,32 @@ def normalize_backend(name):
 
 @exporter
 def get_logging_level(level):
+    """Get the logging level as a logging module constant.
+
+    :param level: `str` The log level to get.
+
+    :returns: The log level, defaults to `INFO`
+    """
     return getattr(logging, level.upper(), logging.INFO)
 
 
 @exporter
 def get_console_logger(name, level=None, env_key='LOG_LEVEL'):
+    """A small default logging setup.
+
+    This is a default logging setup to print json formatted logging to
+    the console. This is used as a default for when baseline/mead is used
+    as an API. This can be overridden with the logging config.
+
+    The level defaults to `INFO` but can also be read from an env var
+    of you choice with a back off to `LOG_LEVEL`
+
+    :param name: `str` The logger to create.
+    :param level: `str` The level to look for.
+    :param env_key: `str` The env var to look in.
+
+    :returns: logging.Logger
+    """
     if level is None:
         level = os.getenv(env_key, os.getenv('LOG_LEVEL', 'INFO'))
     level = get_logging_level(level)
@@ -123,6 +144,7 @@ def suppress_output():
 
 
 class JSONFormatter(logging.Formatter):
+    """Format message as JSON if possible, log normally otherwise."""
     def format(self, record):
         try:
             if isinstance(record.msg, (list, dict)):
