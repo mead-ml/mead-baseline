@@ -13,7 +13,7 @@ try:
     from baseline.services import *
     from baseline.train import *
 
-    logger = get_console_logger('baseline')
+    logger = get_console_logger('baseline', env_key='BASELINE_LOG_LEVEL')
     report_logger = get_console_logger('baseline.reporting', env_key='BASELINE_LOG_LEVEL')
 except ImportError:
     pass
