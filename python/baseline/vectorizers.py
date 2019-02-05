@@ -75,7 +75,6 @@ class Token1DVectorizer(AbstractVectorizer):
         for tok in self.iterable(tokens):
             counter[tok] += 1
             seen += 1
-            counter['<EOW>'] += 1
         self.max_seen = max(self.max_seen, seen)
         return counter
 
