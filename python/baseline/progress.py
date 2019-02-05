@@ -1,11 +1,24 @@
 import re
 import sys
 import six
-from baseline.utils import export
+from baseline.utils import export, optional_params, register
 
 __all__ = []
 
 exporter = export(__all__)
+BASELINE_PROGRESS = {}
+
+
+@exporter
+@optional_params
+def register_progress(cls, name=None):
+    return register(cls, BASELINE_PROGRESS, name, 'progress')
+
+
+@exporter
+def create_progress_bar(steps, name='default', **kwargs):
+    return BASELINE_PROGRESS[name](steps, **kwargs)
+
 
 @exporter
 class Progress(object):
@@ -31,7 +44,18 @@ class Progress(object):
         """
         pass
 
+    def __call__(self, real_iter):
+        return self.__iter__(real_iter)
+
+    def __iter__(self, real_iter):
+        for x in real_iter:
+            yield x
+            self.update()
+        self.done()
+
+
 @exporter
+@register_progress('jupyter')
 class ProgressBarJupyter(Progress):
     """Simple Jupyter progress bar
 
@@ -57,6 +81,7 @@ class ProgressBarJupyter(Progress):
 # Modifed from here
 # http://stackoverflow.com/questions/3160699/python-progress-bar#3160819
 @exporter
+@register_progress('default')
 class ProgressBarTerminal(Progress):
     """Simple terminal-based progress bar
 
@@ -110,39 +135,3 @@ class ProgressBarTerminal(Progress):
         self.current = self.total
         self.update(step=0)
         print('')
-
-    def __call__(self, real_iter):
-        return self.__iter__(real_iter)
-
-    def __iter__(self, real_iter):
-        for x in real_iter:
-            yield x
-            self.update()
-        self.done()
-
-
-# This is retrofitted in, maybe there is a better way though
-g_Progress = ProgressBarTerminal
-
-
-@exporter
-def set_global_progress_bar(type):
-    """Sets the global factory for progress bars
-
-    :param type: A string (`terminal` and `jupyter` will provide different implementations, otherwise its null)
-    :return: The global
-    """
-    global g_Progress
-    if type == 'terminal':
-        g_Progress = ProgressBarTerminal
-    elif type == 'jupyter':
-        g_Progress = ProgressBarJupyter
-    else:
-        g_Progress = Progress
-    return g_Progress
-
-
-@exporter
-def create_progress_bar(steps):
-    global g_Progress
-    return g_Progress(steps)
