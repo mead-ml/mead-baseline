@@ -67,6 +67,16 @@ Our constrained decoder model can be run as follows:
 python trainer.py --config config/wnut-no-crf.json
 ```
 
+### Ontonotes 5.0
+
+Ontonotes 5.0 is a NER dataset that is larger than CONLL2003 and contains more entity types. Dataset was created with Ontonotes 5.0 using the data splits from the [CONLL2012 shared task](http://conll.cemantix.org/2012/data.html) version 4 for train/dev/test.
+
+Out default CRF model can be run with the following:
+
+```
+python trainer.py --config config/ontonotes.json
+```
+
 ### Model Performance
 
 We have done extensive testing on our tagger architecture.  Here are the results after runing each model 10 times for each configuration.  All NER models are trained with IOBES tags.  The ELMo configurations are done using our [ELMo Embeddings addon](../python/addons/embed_elmo.py).
@@ -79,6 +89,7 @@ We have done extensive testing on our tagger architecture.  Here are the results
 | [conll-elmo.json](../python/mead/config/conll-elmo.json)     | CONLL2003 | CNN-BLSTM-CRF        |     f1 | 92.26 | 0.157 | 92.00 | 92.48 |
 | [wnut.json](../python/mead/config/wnut.json)                 | WNUT17    | CNN-BLSTM-CRF        |     f1 | 40.33 | 1.13  | 38.38 | 41.90 |
 | [wnut-no-crf.json](../python/mead/config/wnut-no-crf.json)   | WNUT17    | CNN-BLSTM-constrain  |     f1 | 40.59 | 1.06  | 37.96 | 41.71 |
+| [ontonotes.json](../python/mead/config/ontonotes.json)       | ONTONOTES | CNN-BLSTM-CRF        |     f1 | 87.41 | 0.166 | 87.14 | 87.74 |
 
 ### Testing a trained model on your data
 
