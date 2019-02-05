@@ -247,15 +247,16 @@ class TaggerModelBase(TaggerModel):
         bestv = self.sess.run(self.best, feed_dict=feed_dict)
         return [pij[:sl] for pij, sl in zip(bestv, lengths)]
 
-    def embed(self):
+    def embed(self, **kwargs):
         """This method performs "embedding" of the inputs.  The base method here then concatenates along depth
         dimension to form word embeddings
 
         :return: A 3-d vector where the last dimension is the concatenated dimensions of all embeddings
         """
         all_embeddings_out = []
-        for embedding in self.embeddings.values():
-            embeddings_out = embedding.encode()
+        for k, embedding in self.embeddings.items():
+            x = kwargs.get(k, None)
+            embeddings_out = embedding.encode(x)
             all_embeddings_out.append(embeddings_out)
         word_embeddings = tf.concat(values=all_embeddings_out, axis=2)
         return tf.layers.dropout(word_embeddings, self.pdrop_value, training=TRAIN_FLAG())
@@ -287,7 +288,7 @@ class TaggerModelBase(TaggerModel):
         model.activation_type = kwargs.get('activation', 'tanh')
         model.constraint = kwargs.get('constraint')
 
-        embedseq = model.embed()
+        embedseq = model.embed(**kwargs)
         seed = np.random.randint(10e8)
         enc_out = model.encode(embedseq, **kwargs)
 

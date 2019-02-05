@@ -60,7 +60,7 @@ class Task(object):
     """Basic building block for a task of NLP problems, e.g. `tagger`, `classify`, etc.
     """
 
-    def _create_backend(self):
+    def _create_backend(self, **kwargs):
         """This method creates and returns a `Backend` object
 
         :return:
@@ -158,7 +158,7 @@ class Task(object):
         if self.config_params['model'].get('gpus', 1) == -1:
             self.config_params['model']['gpus'] = len(get_env_gpus())
         self.config_file = kwargs.get('config_file')
-        self._setup_task()
+        self._setup_task(**kwargs)
         self._load_user_modules()
         self._configure_reporting(config_params.get('reporting', {}), **kwargs)
         self.dataset = datasets_set[self.config_params['dataset']]
@@ -192,12 +192,12 @@ class Task(object):
         backoff = config['loader'].get('min_f', config.get('preproc', {}).get('min_f', -1))
         return {f['name']: f.get('min_f', backoff) for f in config['features']}
 
-    def _setup_task(self):
+    def _setup_task(self, **kwargs):
         """
         This method provides the task-specific setup
         :return:
         """
-        self.backend = self._create_backend()
+        self.backend = self._create_backend(**kwargs)
 
     def _load_dataset(self):
         """This hook is responsible for creating and initializing the ``DataFeed`` objects to be used for train, dev
@@ -338,7 +338,7 @@ class ClassifierTask(Task):
     def task_name(cls):
         return 'classify'
 
-    def _create_backend(self):
+    def _create_backend(self, **kwargs):
         backend = Backend(self.config_params.get('backend', 'tf'))
         if backend.name == 'dy':
             import _dynet
@@ -355,15 +355,21 @@ class ClassifierTask(Task):
             backend.params = {'pc': _dynet.ParameterCollection(), 'batched': batched}
         elif backend.name == 'tf':
             # FIXME this should be registered as well!
-            from mead.tf.exporters import ClassifyTensorFlowExporter
-            backend.exporter = ClassifyTensorFlowExporter
+            exporter_type = kwargs.get('exporter_type', 'default')
+            if exporter_type == 'default':
+                from mead.tf.exporters import ClassifyTensorFlowExporter
+                backend.exporter = ClassifyTensorFlowExporter
+            elif exporter_type == 'preproc':
+                from mead.tf.preproc_exporters import ClassifyTensorFlowPreProcExporter
+                import mead.tf.preprocessors
+                backend.exporter = ClassifyTensorFlowPreProcExporter
 
         backend.load(self.task_name())
 
         return backend
 
-    def _setup_task(self):
-        super(ClassifierTask, self)._setup_task()
+    def _setup_task(self, **kwargs):
+        super(ClassifierTask, self)._setup_task(**kwargs)
         if self.config_params['preproc'].get('clean', False) is True:
             self.config_params['preproc']['clean_fn'] = baseline.TSVSeqLabelReader.do_clean
             print('Clean')
@@ -417,7 +423,7 @@ class TaggerTask(Task):
     def task_name(cls):
         return 'tagger'
 
-    def _create_backend(self):
+    def _create_backend(self, **kwargs):
         backend = Backend(self.config_params.get('backend', 'tf'))
 
         if backend.name == 'pytorch':
@@ -438,8 +444,14 @@ class TaggerTask(Task):
         else:
             self.config_params['preproc']['trim'] = False
             # FIXME These should be registered instead
-            from mead.tf.exporters import TaggerTensorFlowExporter
-            backend.exporter = TaggerTensorFlowExporter
+            exporter_type = kwargs.get('exporter_type', 'default')
+            if exporter_type == 'default':
+                from mead.tf.exporters import TaggerTensorFlowExporter
+                backend.exporter = TaggerTensorFlowExporter
+            elif exporter_type == 'preproc':
+                from mead.tf.preproc_exporters import TaggerTensorFlowPreProcExporter
+                import mead.tf.preprocessors
+                backend.exporter = TaggerTensorFlowPreProcExporter
 
         backend.load(self.task_name())
 
@@ -512,7 +524,7 @@ class EncoderDecoderTask(Task):
     def task_name(cls):
         return 'seq2seq'
 
-    def _create_backend(self):
+    def _create_backend(self, **kwargs):
         backend = Backend(self.config_params.get('backend', 'tf'))
         self.config_params['preproc']['show_ex'] = show_examples
         if backend.name == 'pytorch':
@@ -640,7 +652,7 @@ class LanguageModelingTask(Task):
             reader_params['truncate'] = True
         return baseline.reader.create_reader(self.task_name(), self.vectorizers, self.config_params['preproc'].get('trim', False), **reader_params)
 
-    def _create_backend(self):
+    def _create_backend(self, **kwargs):
         backend = Backend(self.config_params.get('backend', 'tf'))
 
         if backend.name == 'pytorch':

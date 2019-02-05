@@ -29,7 +29,7 @@ class TensorFlowExporter(mead.exporters.Exporter):
     def __init__(self, task):
         super(TensorFlowExporter, self).__init__(task)
 
-    def _run(self, sess, basename):
+    def _run(self, sess, basename, **kwargs):
         pass
 
     def _restore_checkpoint(self, sess, basename):
@@ -107,7 +107,7 @@ class TensorFlowExporter(mead.exporters.Exporter):
 
         return builder
 
-    def _create_rpc_call(self, sess, basename):
+    def _create_rpc_call(self, sess, basename, **kwargs):
         pass
 
 
@@ -212,6 +212,7 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
         start_np = np.full((1, 1, len(labels)), -1e4, dtype=np.float32)
         start_np[:, 0, Offsets.GO] = 0
         start = tf.constant(start_np)
+        start = tf.tile(start, [tf.shape(model.probs)[0], 1, 1])
         model.probs = tf.concat([start, model.probs], 1)
 
         ones = tf.fill(tf.shape(model.lengths), 1)
@@ -353,7 +354,6 @@ def create_bundle(builder, output_path, basename, assets=None):
 
     model_name = basename.split("/")[-1]
     directory = os.path.join('/', *basename.split("/")[:-1])
-
     save_to_bundle(output_path, directory, assets)
 
 def save_to_bundle(output_path, directory, assets=None):

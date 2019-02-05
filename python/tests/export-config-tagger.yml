@@ -1,0 +1,21 @@
+TASK: tagger
+BASELINE_DIR: `git rev-parse --show-toplevel`
+DRIVER: ${BASELINE_DIR}/api-examples/tag-text.py
+ERROR_COLOR: \033[0;31m
+MSG_COLOR: \033[0;32m
+END: \033[0m
+EXPORT_DIR: ${PWD}/models
+EXPORT_DIR_PREPROC: ${PWD}/models-preproc
+MODEL_NAME: conll
+NUM_FEATURES: 3
+SLEEP: 5
+CLEAN_AFTER_TEST: true
+MODEL_FILE: tagger-24429.zip
+TEST_FILE: eng.testb.small
+CONFIG_FILE: conll-tf.json
+MODEL_FILE_LINK: https://www.dropbox.com/s/86xzsofbgk3dzyj/tagger-24429.zip?dl=1
+TEST_FILE_LINK: https://www.dropbox.com/s/pp3pcq5q5ko1df6/eng.testb.small?dl=1
+CONFIG_FILE_LINK: https://www.dropbox.com/s/97bi7qy15usmvb2/conll-tf.json?dl=0
+TEST_LOAD: ${TEST_FILE}.load
+TEST_SERVE: ${TEST_FILE}.serve
+TEST_SERVE_PREPROC: ${TEST_FILE}.serve_preproc

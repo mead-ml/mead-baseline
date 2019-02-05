@@ -172,7 +172,7 @@ class RemoteModelTensorFlowGRPC(object):
         request.model_spec.signature_name = self.signature
 
         for feature in self.input_keys:
-            if isinstance(examples[feature], np.ndarray): 
+            if isinstance(examples[feature], np.ndarray):
                 shape = examples[feature].shape
             else:
                 shape = [1]
@@ -198,6 +198,10 @@ class RemoteModelTensorFlowGRPC(object):
         :params predict_response: a PredictResponse protobuf object, 
                     as defined in tensorflow_serving proto files
         """
+
+        example_len = predict_response.outputs.get('classes').tensor_shape.dim[1].size
+        num_examples = predict_response.outputs.get('classes').tensor_shape.dim[0].size
+
         if self.signature == 'suggest_text':
             # s2s returns int values.
             classes = predict_response.outputs.get('classes').int_val
@@ -209,9 +213,10 @@ class RemoteModelTensorFlowGRPC(object):
             classes = predict_response.outputs.get('classes').int_val
             lengths = examples[self.lengths_key]
             result = []
-            for i in range(examples[self.lengths_key].shape[0]):
+            for i in range(num_examples):
                 length = lengths[i]
-                result.append([np.int32(x) for x in classes[length*i:length*(i+1)]])
+                tmp = [np.int32(x) for x in classes[example_len*i:example_len*(i+1)][:length]]
+                result.append(tmp)
             
             return result
             
@@ -219,10 +224,30 @@ class RemoteModelTensorFlowGRPC(object):
             scores = predict_response.outputs.get('scores').float_val
             classes = predict_response.outputs.get('classes').string_val
             result = []
-            num_ex = len(examples[self.lengths_key])
             length = len(self.get_labels())
-            for i in range(num_ex):
-                d = [(c, s) for c, s in zip(classes[length*i:length*(i+1)], scores[length*i:length*(i+1)])]
+            for i in range(num_examples):   # wrap in numpy because the local models send that dtype out
+                d = [(c.decode('ascii'), np.float32(s)) for c, s in zip(classes[example_len*i:example_len*(i+1)][:length], scores[length*i:length*(i+1)][:length])]
                 result.append(d)
-            
             return result
+
+
+class RemoteModelTensorFlowGRPCPreproc(RemoteModelTensorFlowGRPC):
+
+    def create_request(self, examples):
+        # TODO: Remove TF dependency client side
+        import tensorflow as tf
+
+        request = self.predictpb.PredictRequest()
+        request.model_spec.name = self.name
+        request.model_spec.signature_name = self.signature
+        request.inputs['tokens'].CopyFrom(
+            tf.contrib.util.make_tensor_proto(examples['tokens'], shape=[len(examples['tokens']), 1])
+        )
+        for feature in self.input_keys:  # not really happy with this hack
+            if feature.endswith('lengths'):
+                shape = examples[feature].shape
+                tensor_proto = tf.contrib.util.make_tensor_proto(examples[feature], shape=shape, dtype=tf.int32)
+                request.inputs[feature].CopyFrom(
+                    tensor_proto
+                )
+        return request

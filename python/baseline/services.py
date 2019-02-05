@@ -122,7 +122,7 @@ class Service(object):
         name = kwargs.get("name", None)
         if remote:
             beam = kwargs.get('beam', 10)
-            model = Service._create_remote_model(directory, be, remote, name, cls.signature_name(), beam)
+            model = Service._create_remote_model(directory, be, remote, name, cls.signature_name(), beam, preproc=kwargs.get('preproc', False))
             return cls(vocabs, vectorizers, model)
 
         # Currently nothing to do here
@@ -134,7 +134,7 @@ class Service(object):
         return cls(vocabs, vectorizers, model)
 
     @staticmethod
-    def _create_remote_model(directory, backend, remote, name, signature_name, beam):
+    def _create_remote_model(directory, backend, remote, name, signature_name, beam, preproc='client'):
         """Reads the necessary information from the remote bundle to instatiate
         a client for a remote model.
 
@@ -154,7 +154,12 @@ class Service(object):
 
         if backend == 'tf':
             remote_models = import_user_module('baseline.remote')
-            RemoteModel = remote_models.RemoteModelTensorFlowREST if remote.startswith('http') else remote_models.RemoteModelTensorFlowGRPC
+            if remote.startswith('http'):
+                RemoteModel = remote_models.RemoteModelTensorFlowREST
+            elif preproc == 'server':
+                RemoteModel = remote_models.RemoteModelTensorFlowGRPCPreproc
+            else:
+                RemoteModel = remote_models.RemoteModelTensorFlowGRPC
             model = RemoteModel(remote, name, signature_name, labels=labels, lengths_key=lengths_key, inputs=inputs, beam=beam)
         else:
             raise ValueError("only Tensorflow is currently supported for remote Services")
@@ -173,14 +178,15 @@ class ClassifierService(Service):
     def signature_name(cls):
         return 'predict_text'
 
-    def predict(self, tokens):
+    def predict(self, tokens, preproc='client'):
         """Take tokens and apply the internal vocab and vectorizers.  The tokens should be either a batch of text
         single utterance of type ``list``
         """
         token_seq, mxlen, mxwlen = self.batch_input(tokens)
         self.set_vectorizer_lens(mxlen, mxwlen)
         examples = self.vectorize(token_seq)
-
+        if preproc == 'server':
+            examples['tokens'] = [" ".join(x) for x in token_seq]
         outcomes_list = self.model.predict(examples)
         results = []
         for outcomes in outcomes_list:
@@ -266,10 +272,13 @@ class TaggerService(Service):
         :param tokens: (``list``) A list of tokens
 
         """
+        preproc = kwargs.get('preproc', 'client')
         label_field = kwargs.get('label', 'label')
         tokens_seq, mxlen, mxwlen = self.batch_input(tokens)
         self.set_vectorizer_lens(mxlen, mxwlen)
         examples = self.vectorize(tokens_seq)
+        if preproc == 'server':
+            examples['tokens'] = [" ".join([y['text'] for y in x]) for x in tokens_seq]
 
         outcomes = self.model.predict(examples)
         outputs = []
