@@ -118,7 +118,7 @@ class TensorFlowEmbeddings(tf.keras.layers.Layer):
         write_json(self.get_config(), target)
 
     def get_config(self):
-        config = super(LookupTableEmbeddings, self).get_config()
+        config = super(TensorFlowEmbeddings, self).get_config()
         config['dsz'] = self.get_dsz()
         config['vsz'] = self.get_vsz()
         return config

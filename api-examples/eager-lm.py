@@ -115,7 +115,7 @@ def predict_input_fn():
 
 transducer = LSTMEncoderWithState(200, 1, 0.5, output_fn=rnn_ident)
 #transducer = LSTMEncoder(200, 1, 0.5, output_fn=rnn_ident)
-model = LanguageModel(embeddings["word"].vsz, embeddings, transducer)
+model = LangSequenceModel(embeddings["word"].vsz, embeddings, transducer)
 
 train_loss_results = []
 train_accuracy_results = []

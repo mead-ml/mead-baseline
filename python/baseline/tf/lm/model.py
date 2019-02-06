@@ -194,7 +194,6 @@ class LanguageModelBase(LanguageModel):
 
             embeddings_layer = lm.embed(**kwargs)
             nc = embeddings[lm.tgt_key].vsz
-
             lstm_encoder_layer = lm.decode(inputs, **kwargs)
             lang_model = LangSequenceModel(nc, embeddings_layer, lstm_encoder_layer)
             lm.logits, lm.final_state = lang_model(inputs)
@@ -208,7 +207,6 @@ class LanguageModelBase(LanguageModel):
 
         :return: A 3-d vector where the last dimension is the concatenated dimensions of all embeddings
         """
-
         src_embeddings = {k: self.embeddings[k] for k in self.src_keys}
         embed_output = EmbeddingsStack(src_embeddings, self.pdrop_value)
         return embed_output
