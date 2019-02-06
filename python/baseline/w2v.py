@@ -145,11 +145,11 @@ class PretrainedEmbeddingsModel(WordEmbeddingsModel):
         is_glove_file = mime_type(filename) == 'text/plain'
         if use_mmap:
             if is_glove_file:
-                read_fn = self._read_glove_mmap
+                read_fn = self._read_text_mmap
             else:
                 read_fn = self._read_word2vec_mmap
         elif is_glove_file:
-            read_fn = self._read_glove_file
+            read_fn = self._read_text_file
 
         return read_fn(filename, idx, known_vocab, keep_unused)
 
@@ -216,13 +216,17 @@ class PretrainedEmbeddingsModel(WordEmbeddingsModel):
         # Only strip out normal space and \n not other spaces which are words.
         return s.strip(' \n')
 
-    def _read_glove_file(self, filename, idx, known_vocab, keep_unused):
+    def _read_text_file(self, filename, idx, known_vocab, keep_unused):
         word_vectors = []
+
         with io.open(filename, "r", encoding="utf-8") as f:
-            for line in f:
+            for i, line in enumerate(f):
                 line = line.rstrip("\n ")
                 values = line.split(" ")
                 word = values[0]
+                if i == 0 and len(values) == 2:
+                    print('VSZ: {}, DSZ: {}'.format(word, values[1]))
+                    continue
                 if word in self.vocab: continue
                 if keep_unused is False and word not in known_vocab or word in self.vocab:
                     continue
@@ -235,14 +239,17 @@ class PretrainedEmbeddingsModel(WordEmbeddingsModel):
         dsz = vec.shape[0]
         return word_vectors, dsz, known_vocab, idx
 
-    def _read_glove_mmap(self, filename, idx, known_vocab, keep_unused):
+    def _read_text_mmap(self, filename, idx, known_vocab, keep_unused):
         import mmap
         word_vectors = []
         with io.open(filename, "r", encoding="utf-8") as f:
             with contextlib.closing(mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)) as m:
-                for line in iter(m.readline, b''):
+                for i, line in enumerate(iter(m.readline, b'')):
                     line = line.rstrip(b"\n")
                     values = line.split(b" ")
+                    if len(values) == 2 and i == 0:
+                        print('VSZ: {}, DSZ: {}'.format(values[0], values[1]))
+                        continue
                     if len(values) == 0:
                         break
                     word = values[0].decode('utf-8')
