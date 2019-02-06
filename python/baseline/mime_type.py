@@ -3,7 +3,7 @@ from binascii import hexlify
 from functools import partial
 from baseline.utils import export
 import sys
-PY3 = sys.version_info[0] == 3
+from six import PY3
 
 __all__ = []
 exporter = export(__all__)

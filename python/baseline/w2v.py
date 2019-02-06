@@ -247,7 +247,7 @@ class PretrainedEmbeddingsModel(WordEmbeddingsModel):
                 for i, line in enumerate(iter(m.readline, b'')):
                     line = line.rstrip(b"\n")
                     values = line.split(b" ")
-                    if len(values) == 2 and i == 0:
+                    if i == 0 and len(values) == 2:
                         print('VSZ: {}, DSZ: {}'.format(values[0], values[1]))
                         continue
                     if len(values) == 0:
