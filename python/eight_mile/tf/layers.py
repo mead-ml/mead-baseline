@@ -303,6 +303,9 @@ class LSTMEncoderWithState(LSTMEncoder):
         #h = tf.reshape(tf.concat(rnnout, 1), [-1, self.hsz])
         #self.final_state = state
 
+    def zero_state(self, batchsz):
+        return self.rnn.zero_state(batchsz, tf.float32)
+
     def call(self, inputs, training=False):
 
         inputs, hidden = inputs
@@ -911,10 +914,10 @@ class TagSequenceModel(tf.keras.Model):
         return self.decoder_model.neg_log_loss(unary, tags, lengths)
 
 
-class LanguageModel(tf.keras.Model):
+class LangSequenceModel(tf.keras.Model):
 
     def __init__(self, nc, embeddings, transducer, decoder=None, name=None):
-        super(LanguageModel, self).__init__(name=name)
+        super(LangSequenceModel, self).__init__(name=name)
         if isinstance(embeddings, dict):
             self.embed_model = EmbeddingsStack(embeddings)
         else:

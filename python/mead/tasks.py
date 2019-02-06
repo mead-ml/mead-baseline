@@ -687,7 +687,7 @@ class LanguageModelingTask(Task):
         model = self.config_params['model']
         unif = self.config_params.get('unif', 0.1)
         model['unif'] = model.get('unif', unif)
-        model['batchsz'] = self.config_params['batchsz']
+        #model['batchsz'] = self.config_params['batchsz']
         model['tgt_key'] = self.config_params['loader'].get('tgt_key', self.primary_key)
         if self.backend.params is not None:
             for k, v in self.backend.params.items():
