@@ -4,6 +4,7 @@ torch = pytest.importorskip('torch')
 import torch.nn as nn
 from baseline.pytorch.torchy import pytorch_linear
 
+
 class TiedWeights(nn.Module):
     def __init__(self):
         super().__init__()
@@ -27,9 +28,32 @@ def test_weight_tying():
     for idx in range(100):
         inputs, targets = random_ints(10), random_floats(10)
 
-        if torch.cuda.is_available():
-            inputs = inputs.cuda()
-            targets = targets.cuda()
+        likelihood = model(inputs)
+
+        loss = loss_fn(likelihood, targets)
+
+        loss.backward()
+        optim.step()
+
+    assert torch.equal(model.tgt_embeddings.weight, model.preds.weight)
+
+
+def test_weight_tying_cuda():
+    if not torch.cuda.is_available():
+        pytest.skip("Cuda not available")
+
+    model = TiedWeights().cuda()
+    model.train()
+
+    loss_fn = nn.MSELoss()
+
+    optim = torch.optim.Adam([p for p in model.parameters() if p.requires_grad ])
+    steps = 0
+    epoch_loss, epoch_accuracy = 0, 0
+    for idx in range(100):
+        inputs, targets = random_ints(10), random_floats(10)
+        inputs = inputs.cuda()
+        targets = targets.cuda()
 
         likelihood = model(inputs)
 
@@ -39,6 +63,7 @@ def test_weight_tying():
         optim.step()
 
     assert torch.equal(model.tgt_embeddings.weight, model.preds.weight)
+
 
 def random_ints(size):
     return torch.tensor(np.random.randint(0, 100, size=size))

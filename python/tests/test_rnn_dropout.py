@@ -28,6 +28,7 @@ def test_static_dropout_lstm_cell():
     out_ten = sess.run(rnn_no_drop)
     assert len(out_ten[np.nonzero(out_ten)].squeeze()) > 20
 
+
 def test_static_dropout_rnn_cell():
     sess = tf.Session()
     x = np.random.randn(1, 10, 50).astype(np.float32)
