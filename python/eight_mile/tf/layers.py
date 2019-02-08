@@ -327,10 +327,11 @@ class LSTMEncoder(tf.keras.Model):
                      range(nlayers)],
                     state_is_tuple=True
                 )
-        self.rnn = tf.contrib.rnn.MultiRNNCell(
-            [lstm_cell_w_dropout(hsz, pdrop, training=TRAIN_FLAG()) if i < nlayers - 1 else lstm_cell(hsz) for i in range(nlayers)],
-                state_is_tuple=True
-        )
+        else:
+            self.rnn = tf.contrib.rnn.MultiRNNCell(
+                [lstm_cell_w_dropout(hsz, pdrop, training=TRAIN_FLAG()) if i < nlayers - 1 else lstm_cell(hsz) for i in range(nlayers)],
+                    state_is_tuple=True
+            )
         self.output_fn = rnn_ident if output_fn is None else output_fn
 
     def call(self, inputs, training=False):
@@ -341,6 +342,7 @@ class LSTMEncoder(tf.keras.Model):
     @property
     def requires_length(self):
         return self._requires_length
+
 
 
 class LSTMEncoderWithState(LSTMEncoder):
