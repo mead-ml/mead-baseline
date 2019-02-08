@@ -122,15 +122,9 @@ class LanguageModelBase(LanguageModel):
             embeddings_layer = lm.embed(**kwargs)
             nc = embeddings[lm.tgt_key].vsz
 
-            #lstm_encoder_layer = LSTMEncoderWithState(lm.hsz, kwargs.get('layers', 1), lm.pdrop_value)
-            #inputs["h"] = lm.initial_state = lstm_encoder_layer.zero_state(batchsz)
             lstm_encoder_layer = lm.decode(inputs, **kwargs)
             lang_model = LangSequenceModel(nc, embeddings_layer, lstm_encoder_layer)
-
             lm.logits, lm.final_state = lang_model(inputs)
-
-            #enc, h = lstm_encoder_obj((embeddings, lm.initial_state))
-            #lm.logits = lm.output(enc, embeddings[lm.tgt_key].vsz, **kwargs)
             lm.probs = tf.nn.softmax(lm.logits, name="softmax")
 
             return lm
