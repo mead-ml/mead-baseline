@@ -50,7 +50,7 @@ def test_masked_token_level_loss(shapes, logits, labels, lengths):
     gold = gold.npvalue() / np.sum(lengths)
 
     res = Seq2SeqTrainerDynet._loss(dy_logits, dy_labels, lengths)
-    np.testing.assert_allclose(res.npvalue(), gold, rtol=1e-6)
+    np.testing.assert_allclose(res.npvalue(), gold, rtol=1e-5)
 
 
 def test_token_level_loss(shapes, logits, labels, lengths):
