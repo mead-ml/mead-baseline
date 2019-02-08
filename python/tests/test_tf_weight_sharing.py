@@ -3,6 +3,14 @@ import numpy as np
 tf = pytest.importorskip('tensorflow')
 from baseline.tf.tfy import tie_weight
 
+
+@pytest.fixture(scope="module")
+def set_cpu():
+    os.environ['CUDA_VISIBLE_DEVICES'] = ""
+    yield
+    del os.environ['CUDA_VISIBLE_DEVICES']
+
+
 def test_sharing():
     input_ = tf.placeholder(tf.int32, shape=[None])
     weight = tf.get_variable("weight", shape=[100, 200], initializer=tf.random_normal_initializer())

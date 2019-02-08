@@ -137,7 +137,7 @@ def test_vocab_col_calls_read():
     col = np.random.randint(0, 5)
     with patch('baseline.reader._read_from_col') as read_patch:
         _ = _build_vocab_for_col(col, file_name, {})
-        read_patch.assert_called_once_with(col, file_name)
+        read_patch.assert_called_once_with(col, file_name, r'\t', r'\s')
 
 
 def test_vocab_col_uses_text():

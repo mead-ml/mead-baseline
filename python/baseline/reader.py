@@ -81,6 +81,8 @@ def _read_from_col(col, files, col_splitter=r'\t', word_splitter=r'\s'):
 
     :param col: `int`: The column to read from.
     :param files: List[str]: A list of files to read from.
+    :param col_splitter: `str`: The regex that splits a line into columns.
+    :param word_splitter: `str`: The regex that will split a column into words.
 
     :returns: List[str]: The text from the col of each file.
     """
@@ -107,6 +109,8 @@ def _build_vocab_for_col(col, files, vectorizers, text=None, col_splitter=r'\t',
     :param files: List[str]: A list of files to read from.
     :param vectorizers: dict[str] -> Vectorizer: The vectorizer to use to count the column
     :param text: List[str]: The text from the columns or None
+    :param col_splitter: `str`: The regex that splits a line into columns.
+    :param word_splitter: `str`: The regex that will split a column into words.
 
     :returns: dict[str] -> dict[str] -> int: The vocabs.
     """
