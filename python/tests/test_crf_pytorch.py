@@ -196,6 +196,14 @@ def test_score_sentence_batch_stable(generate_examples_and_batch):
     np.testing.assert_allclose(one_x_one.detach().numpy(), batched.detach().numpy())
 
 
+def test_score_sentence_shape(generate_batch):
+    unary, tags, lengths = generate_batch
+    h = unary.size(2)
+    crf = CRF(h)
+    score = crf.score_sentence(unary, tags, lengths, lengths.size(0))
+    assert score.shape == torch.Size([unary.size(1)])
+
+
 def test_neg_log_loss(generate_batch):
     unary, tags, lengths = generate_batch
     h = unary.size(2)
@@ -228,6 +236,14 @@ def test_neg_log_loss_batch_stable(generate_examples_and_batch):
     np.testing.assert_allclose(one_x_one.detach().numpy(), batched.detach().numpy())
 
 
+def test_neg_log_loss_shape(generate_batch):
+    unary, tags, lengths = generate_batch
+    h = unary.size(2)
+    crf = CRF(h)
+    nll = crf.neg_log_loss(unary, tags, lengths)
+    assert nll.shape == torch.Size([unary.size(1)])
+
+
 def test_forward(generate_batch):
     unary, _, lengths = generate_batch
     h = unary.size(2)
@@ -258,6 +274,14 @@ def test_forward_batch_stable(generate_examples_and_batch):
     np.testing.assert_allclose(one_x_one.detach().numpy(), batched.detach().numpy())
 
 
+def test_forward_shape(generate_batch):
+    unary, _, lengths = generate_batch
+    h = unary.size(2)
+    crf = CRF(h)
+    fwd = crf.forward(unary, lengths, lengths.size(0))
+    assert fwd.shape == torch.Size([unary.size(1)])
+
+
 def test_decode_batch_stable(generate_examples_and_batch):
     i1, _, l1, i2, _, l2, i, _, l = generate_examples_and_batch
     h = i1.size(2)
@@ -272,6 +296,15 @@ def test_decode_batch_stable(generate_examples_and_batch):
     np.testing.assert_allclose(one_x_one_s.detach().numpy(), batched_s.detach().numpy())
     for p1, p2 in zip(one_x_one_p, batched_p):
         np.testing.assert_allclose(p1.detach().numpy(), p2.detach().numpy())
+
+
+def test_decode_shape(generate_batch):
+    unary, _, lengths = generate_batch
+    h = unary.size(2)
+    crf = CRF(h)
+    paths, scores = crf.decode(unary, lengths)
+    assert scores.shape == torch.Size([unary.size(1)])
+    assert paths.shape == torch.Size([unary.size(0), unary.size(1)])
 
 
 def test_mask_is_applied():
@@ -386,6 +419,15 @@ def test_viterbi_norm(generate_batch):
 
     viterbi(unary, trans, lengths, Offsets.GO, Offsets.EOS, norm=norm_mock)
     assert norm_mock.called
+
+
+def test_decode_shape(generate_batch):
+    unary, _, lengths = generate_batch
+    h = unary.size(2)
+    trans = torch.rand(1, h, h)
+    paths, scores = viterbi(unary, trans, lengths, Offsets.GO, Offsets.EOS)
+    assert scores.shape == torch.Size([unary.size(1)])
+    assert paths.shape == torch.Size([unary.size(0), unary.size(1)])
 
 
 def test_vec_log_sum_exp():
