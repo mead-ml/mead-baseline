@@ -189,7 +189,7 @@ def viterbi(unary, trans, lengths, start_idx, end_idx, norm=lambda x, y: x):
             alphas = new_alphas
 
     # Add end tag
-    terminal_var = alphas.squeeze(1) + trans[:, end_idx]
+    terminal_var = alphas.squeeze(1) + trans[:, end_idx, :]
     path_score, best_tag_id = torch.max(terminal_var, 1)
 
     # Flip lengths

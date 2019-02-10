@@ -396,7 +396,7 @@ def test_viterbi_degenerates_to_argmax(generate_batch):
     h = scores.size(2)
     # Then transitions are all zeros then it just greedily selects the best
     # state at that given emission. This is the same as doing argmax.
-    trans = torch.zeros((h, h))
+    trans = torch.zeros((1, h, h))
     p, s = viterbi(scores, trans, l, Offsets.GO, Offsets.EOS)
     s_gold, p_gold = torch.max(scores, 2)
     # Mask out the argmax results from past the lengths
