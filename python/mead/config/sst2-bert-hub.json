@@ -4,7 +4,7 @@
   "basedir": "./sst2",
   "batchsz": 50,
   "modules": [
-    "bert"
+    "embed_bert"
   ],
   "features": [
     {
@@ -41,7 +41,7 @@
     "finetune": true
   },
   "train": {
-    "epochs": 20,
+    "epochs": 2,
     "optim": "adamw",
     "eta": 0.00025,
     "weight_decay": 1.0e-5,
