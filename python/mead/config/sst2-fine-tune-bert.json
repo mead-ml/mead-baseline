@@ -35,8 +35,8 @@
   "train": {
     "epochs": 20,
     "optim": "adamw",
-    "eta": 5e-5,
-    "weight_decay": 1.0e-8,
+    "eta": 0.00025,
+    "weight_decay": 1.0e-5,
     "early_stopping_metric": "acc",
     "verbose": {
       "console": true,
