@@ -969,3 +969,30 @@ class EmbedPoolStackModel(tf.keras.Model):
         stacked = self.stack_model(pooled) if self.stack_model is not None else pooled
         return self.output_layer(stacked)
 
+    def get_config(self):
+        #base_config = super(EmbedPoolStackModel, self).get_config()
+        return {} #base_config
+
+
+class FineTuneModel(tf.keras.Model):
+
+    def __init__(self, nc, embeddings, stack_model=None):
+        super(FineTuneModel, self).__init__()
+        if isinstance(embeddings, dict):
+            self.finetuned = EmbeddingsStack(embeddings)
+        else:
+            assert isinstance(embeddings, EmbeddingsStack)
+            self.finetuned = embeddings
+        self.stack_model = stack_model
+        self.output_layer = tf.keras.layers.Dense(nc)
+
+    def call(self, inputs, training=None, mask=None):
+        base_layers = self.finetuned(inputs)
+        stacked = self.stack_model(base_layers) if self.stack_model is not None else base_layers
+        return self.output_layer(stacked)
+
+
+    def get_config(self):
+        #base_config = super(FineTuneModel, self).get_config()
+        return {} # base_config
+

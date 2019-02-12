@@ -1,7 +1,3 @@
-import tensorflow as tf
-import numpy as np
-from google.protobuf import text_format
-from tensorflow.python.platform import gfile
 from baseline.utils import fill_y, listify, ls_props, read_json
 from baseline.model import ClassifierModel, register_model
 from baseline.tf.tfy import *
@@ -29,7 +25,7 @@ class ClassifierModelBase(ClassifierModel):
         super(ClassifierModelBase, self).__init__()
 
     def set_saver(self, saver):
-        pass
+        self.saver = saver
 
     def save_values(self, basename):
         """Save tensor files out
@@ -245,19 +241,20 @@ class ClassifierModelBase(ClassifierModel):
         else:
             model.lengths = None
 
-        nc = len(labels)
-        model.labels = labels
-        model.y = kwargs.get('y', tf.placeholder(tf.int32, [None, nc], name="y"))
-        embeddings_stack = model.embed(**kwargs)
-        pool = model.pool(embeddings_stack.dsz, **kwargs)
-        stacking = model.stacked(**kwargs)
-        model.layers = EmbedPoolStackModel(nc, embeddings_stack, pool, stacking)
 
+        model.labels = labels
+        nc = len(model.labels)
+        model.y = kwargs.get('y', tf.placeholder(tf.int32, [None, nc], name="y"))
+
+        model.create_layers(**kwargs)
         model.logits = tf.identity(model.layers(inputs), name="logits")
         model.best = tf.argmax(model.logits, 1, name="best")
         model.probs = tf.nn.softmax(model.logits, name="probs")
 
         return model
+
+    def create_layers(self, **kwargs):
+        pass
 
     def embed(self, **kwargs):
         """This method performs "embedding" of the inputs.  The base method here then concatenates along depth
@@ -266,6 +263,21 @@ class ClassifierModelBase(ClassifierModel):
         :return: A 3-d vector where the last dimension is the concatenated dimensions of all embeddings
         """
         return EmbeddingsStack(self.embeddings)
+
+
+class EmbedPoolStackClassifier(ClassifierModelBase):
+
+    def __init__(self):
+        super(EmbedPoolStackClassifier, self).__init__()
+
+    def create_layers(self, **kwargs):
+        embeddings_stack = self.embed(**kwargs)
+
+        nc = len(self.labels)
+        pool = self.pool(embeddings_stack.dsz, **kwargs)
+        stacking = self.stacked(**kwargs)
+        self.layers = EmbedPoolStackModel(nc, embeddings_stack, pool, stacking)
+
 
     def pool(self, dsz, **kwargs):
         """This method performs a transformation between a temporal signal and a fixed representation
@@ -298,7 +310,7 @@ class ClassifierModelBase(ClassifierModel):
 
 
 @register_model(task='classify', name='default')
-class ConvModel(ClassifierModelBase):
+class ConvModel(EmbedPoolStackClassifier):
     """Current default model for `baseline` classification.  Parallel convolutions of varying receptive field width
     
     """
@@ -330,7 +342,7 @@ class ConvModel(ClassifierModelBase):
 
 
 @register_model(task='classify', name='lstm')
-class LSTMModel(ClassifierModelBase):
+class LSTMModel(EmbedPoolStackClassifier):
     """A simple single-directional single-layer LSTM. No layer-stacking.
     
     """
@@ -376,7 +388,7 @@ class LSTMModel(ClassifierModelBase):
         return LSTMEncoder(hsz, nlayers, self.pdrop_value, vdrop, output_fn=rnn_hidden)
 
 
-class NBowBase(ClassifierModelBase):
+class NBowBase(EmbedPoolStackClassifier):
     """Neural Bag-of-Words Model base class.  Defines stacking of fully-connected layers, but leaves pooling to derived
     """
     def __init__(self):
@@ -434,8 +446,17 @@ class NBowMaxModel(NBowBase):
         return tf.keras.layers.GlobalMaxPooling1D()
 
 
+@register_model(task='classify', name='fine-tune')
+class FineTuneModelClassifier(ClassifierModelBase):
+
+    def create_layers(self, **kwargs):
+        embeddings_stack = self.embed(**kwargs)
+        nc = len(self.labels)
+        self.layers = FineTuneModel(nc, embeddings_stack)
+
+
 @register_model(task='classify', name='composite')
-class CompositePoolingModel(ClassifierModelBase):
+class CompositePoolingModel(EmbedPoolStackClassifier):
 
     """Fulfills pooling contract by aggregating pooling from a set of sub-models and concatenates each
     """

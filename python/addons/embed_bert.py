@@ -1378,10 +1378,9 @@ class BERTEmbeddings(TensorFlowEmbeddings):
         return tf.placeholder(tf.int32, [None, None], name=name)
 
     def __init__(self, name, **kwargs):
-        super(BERTEmbeddings, self).__init__()
+        super(BERTEmbeddings, self).__init__(name=name)
 
         self.dsz = kwargs.get('dsz')
-        self.name = name
         self.bert_config = BertConfig.from_json_file(kwargs.get('bert_config'))
         self.vocab = load_vocab(kwargs.get('vocab_file'))
         self.vsz = self.bert_config.vocab_size
@@ -1392,6 +1391,9 @@ class BERTEmbeddings(TensorFlowEmbeddings):
 
     def get_vocab(self):
         return self.vocab
+
+    def get_dsz(self):
+        return self.dsz
 
     @classmethod
     def load(cls, embeddings, **kwargs):
