@@ -11,7 +11,7 @@ FLOAT32 = 4
 GB2 = 1024 * 1024 * 1024 * 2
 logger = logging.getLogger('baseline')
 from baseline.tf.tfy import pool_chars, get_shape_as_list, stacked_lstm
-
+import six
 
 
 class TensorFlowEmbeddings(tf.keras.layers.Layer):

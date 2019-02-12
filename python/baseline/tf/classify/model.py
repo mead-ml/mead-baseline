@@ -52,7 +52,7 @@ class ClassifierModelBase(ClassifierModel):
         self._unserializable = []
 
     def set_saver(self, saver):
-        pass
+        self.saver = saver
 
     def save_values(self, basename):
         """Save tensor files out
@@ -265,14 +265,16 @@ class ClassifierModelBase(ClassifierModel):
         model.sess = kwargs.get('sess', create_session())
         model.labels = labels
 
-        nc = len(labels)
-        model.labels = labels
+        nc = len(model.labels)
         model.y = kwargs.get('y', tf.placeholder(tf.int32, [None, nc], name="y"))
         model.create_layers(**kwargs)
         model.logits = tf.identity(model.layers(inputs), name="logits")
         model.best = tf.argmax(model.logits, 1, name="best")
         model.probs = tf.nn.softmax(model.logits, name="probs")
         return model
+
+    def create_layers(self, **kwargs):
+        pass
 
     def embed(self, **kwargs):
         """This method performs "embedding" of the inputs.  The base method here then concatenates along depth

@@ -10,14 +10,14 @@
 	    "name": "bert",
 	    "vectorizer": {
 		"type": "wordpiece1d",
-		"vocab_file": "../../../bert/uncased_L-12_H-768_A-12/vocab.txt"
+		"vocab_file": "/home/dpressel/dev/work/bert/uncased_L-12_H-768_A-12/vocab.txt"
 	    },
 	    "embeddings": {
 		"type": "bert",
 		"dsz": 3072,
-		"vocab_file": "../../../bert/uncased_L-12_H-768_A-12/vocab.txt",
-		"bert_config": "../../../bert/uncased_L-12_H-768_A-12/bert_config.json",
-		"embed_file": "../../../bert/uncased_L-12_H-768_A-12/bert_model.ckpt",
+		"vocab_file": "/home/dpressel/dev/work/bert/uncased_L-12_H-768_A-12/vocab.txt",
+		"bert_config": "/home/dpressel/dev/work/bert/uncased_L-12_H-768_A-12/bert_config.json",
+		"embed_file": "/home/dpressel/dev/work/bert/uncased_L-12_H-768_A-12/bert_model.ckpt",
                 "operator": "concat",
                 "layers": [-1,-2, -3, -4]
 	    }
