@@ -1409,7 +1409,7 @@ class BERTEmbeddings(TensorFlowEmbeddings):
 
     def encode(self, x=None):
         if x is None:
-            x = BERTHubEmbeddings.create_placeholder(self.name)
+            x = BERTEmbeddings.create_placeholder(self.name)
         self.x = x
         input_mask = tf.not_equal(self.x, 0)
         input_mask = input_mask
@@ -1459,7 +1459,7 @@ class BERTHubModel(TensorFlowEmbeddings):
 
     def encode(self, x=None):
         if x is None:
-            x = BERTHubEmbeddings.create_placeholder(self.name)
+            x = BERTHubModel.create_placeholder(self.name)
         self.x = x
         input_mask = tf.cast(tf.not_equal(self.x, 0), tf.int32)
         input_mask = input_mask
