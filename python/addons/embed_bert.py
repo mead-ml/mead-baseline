@@ -1416,7 +1416,7 @@ class BERTEmbeddings(TensorFlowEmbeddings):
 
     def encode(self, x=None):
         if x is None:
-            x = BERTEmbeddings.create_placeholder(self.name)
+            x = BERTHubEmbeddings.create_placeholder(self.name)
         self.x = x
         input_mask = tf.not_equal(self.x, 0)
         input_mask = input_mask
@@ -1455,6 +1455,7 @@ class BERTHubModel(TensorFlowEmbeddings):
             self.vocab = kwargs['vocab']
         else:
             self.vocab = load_vocab(kwargs.get('vocab_file'))
+
         self.vsz = len(self.vocab)
         self.dsz = kwargs.get('dsz')
         self.trainable = kwargs.get('trainable', False)
@@ -1471,6 +1472,7 @@ class BERTHubModel(TensorFlowEmbeddings):
     def encode(self, x=None):
         if x is None:
             x = BERTHubModel.create_placeholder(self.name)
+
         self.x = x
         input_mask = tf.cast(tf.not_equal(self.x, 0), tf.int32)
         input_mask = input_mask
