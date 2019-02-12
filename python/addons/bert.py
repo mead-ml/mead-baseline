@@ -387,7 +387,7 @@ class BERTModel(TensorFlowEmbeddings):
         self.vocab = load_vocab(kwargs.get('vocab_file'))
         self.vsz = len(self.vocab)
         self.dsz = kwargs.get('dsz')
-        self.trainable = kwargs.get('trainable', True)
+        self.trainable = kwargs.get('trainable', False)
 
     def get_vocab(self):
         return self.vocab
@@ -412,7 +412,8 @@ class BERTModel(TensorFlowEmbeddings):
             input_mask=input_mask,
             segment_ids=input_type_ids)
         bert_outputs = bert_module(bert_inputs, signature="tokens", as_dict=True)
-        return self._output(bert_outputs)
+        output = self._output(bert_outputs)
+        return output # tf.Print(output, [tf.shape(output)])
 
 
     def save_md(self, target):
