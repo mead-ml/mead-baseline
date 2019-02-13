@@ -102,7 +102,6 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
         return tf.placeholder(tf.int32, [None, None], name=name)
 
     def __init__(self, name, **kwargs):
-        super(LookupTableEmbeddings, self).__init__(kwargs.get('finetune', True), name)
         """Create a lookup-table based embedding.
 
         :param name: The name of the feature/placeholder, and a key for the scope
@@ -116,13 +115,12 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
         * *scope* -- (``str``) An optional variable scope, by default it will be `{name}/LUT`
         * *unif* -- (``float``) (defaults to `0.1`) If the weights should be created, what is the random initialization range
         """
-        super(LookupTableEmbeddings, self).__init__()
+        super(LookupTableEmbeddings, self).__init__(kwargs.get('finetune', True), name)
 
         self.vsz = kwargs.get('vsz')
         self.dsz = kwargs.get('dsz')
         self.finetune = kwargs.get('finetune', True)
-        self._name = name
-        self.scope = kwargs.get('scope', '{}/LUT'.format(self._name))
+        self.scope = kwargs.get('scope', '{}/LUT'.format(self.name))
 
         self.weights = kwargs.get('weights')
 
@@ -148,7 +146,7 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
         """
         if self.weights is None:
             raise Exception('You must initialize `weights` in order to use this method')
-        return LookupTableEmbeddings(self._name,
+        return LookupTableEmbeddings(self.name,
                                      vsz=self.vsz,
                                      dsz=self.dsz,
                                      scope=self.scope,
@@ -162,7 +160,7 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
         :return: The sub-graph output
         """
         if x is None:
-            x = LookupTableEmbeddings.create_placeholder(self._name)
+            x = LookupTableEmbeddings.create_placeholder(self.name)
         self.x = x
 
         e0 = tf.scatter_update(self.W, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, self.dsz]))
@@ -188,8 +186,7 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
         return tf.placeholder(tf.int32, [None, None, None], name=name)
 
     def __init__(self, name, **kwargs):
-        super(CharConvEmbeddings, self).__init__()
-        self._name = name
+        super(CharConvEmbeddings, self).__init__(name=name)
         self.scope = kwargs.get('scope', '{}/CharLUT'.format(self.name))
         self.vsz = kwargs.get('vsz')
         self.dsz = kwargs.get('dsz')
@@ -222,7 +219,7 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
         """
         if self.weights is None:
             raise Exception('You must initialize `weights` in order to use this method')
-        return CharConvEmbeddings(name=self._name, vsz=self.vsz, dsz=self.dsz, scope=self.scope,
+        return CharConvEmbeddings(name=self.name, vsz=self.vsz, dsz=self.dsz, scope=self.scope,
                                   finetune=self.finetune, nfeat_factor=self.nfeat_factor,
                                   cfiltsz=self.cfiltsz, max_feat=self.max_feat, gating=self.gating,
                                   num_gates=self.num_gates, activation=self.activation, wsz=self.wsz,
@@ -234,7 +231,7 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
         self.x = x
 
         ech0 = tf.scatter_update(self.Wch, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, self.dsz]))
-        char_comp, self.wsz = pool_chars(x, self.Wch, ech0, self.dsz, self.nfeat_factor,
+        char_comp, self.wsz = pool_chars(self.x, self.Wch, ech0, self.dsz, self.nfeat_factor,
                                          self.cfiltsz, self.max_feat, self.gating,
                                          self.num_gates, self.activation, self.wsz)
         return char_comp
