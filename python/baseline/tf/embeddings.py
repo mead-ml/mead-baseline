@@ -3,17 +3,19 @@ import numpy as np
 import tensorflow as tf
 from baseline.utils import write_json, Offsets
 from baseline.embeddings import register_embeddings
-from baseline.tf.tfy import pool_chars, get_shape_as_list, stacked_lstm
-import six
+from baseline.tf.tfy import pool_chars, get_shape_as_list, stacked_lstm, embed
 
-class TensorFlowEmbeddings(tf.keras.layers.Layer):
+class TensorFlowEmbeddings(object):
     """This provides a base for TensorFlow embeddings sub-graphs
 
     """
     def __init__(self, trainable=True, name=None, dtype=tf.float32):
         """Constructor
         """
-        super(TensorFlowEmbeddings, self).__init__(trainable=trainable, name=name, dtype=dtype)
+        super(TensorFlowEmbeddings, self).__init__()
+        self.name = name
+        self.trainable = trainable
+        self.dtype = dtype
 
     def detached_ref(self):
         """This will detach any attached input and reference the same sub-graph otherwise
@@ -82,7 +84,8 @@ class TensorFlowEmbeddings(tf.keras.layers.Layer):
         write_json(self.get_config(), target)
 
     def get_config(self):
-        config = super(TensorFlowEmbeddings, self).get_config()
+        #config = super(TensorFlowEmbeddings, self).get_config()
+        config = {}
         config['dsz'] = self.get_dsz()
         config['vsz'] = self.get_vsz()
         return config
@@ -121,15 +124,16 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
         self._name = name
         self.scope = kwargs.get('scope', '{}/LUT'.format(self._name))
 
-        self._weights = kwargs.get('weights')
+        self.weights = kwargs.get('weights')
 
-        if self._weights is None:
+        if self.weights is None:
             unif = kwargs.get('unif', 0.1)
-            self._weights = np.random.uniform(-unif, unif, (self.vsz, self.dsz))
+            self.weights = np.random.uniform(-unif, unif, (self.vsz, self.dsz))
 
-        self.W = self.add_variable('{}/Weight'.format(self.scope),
-                                   shape=(self.vsz, self.dsz),
-                                   initializer=tf.constant_initializer(self._weights, dtype=tf.float32, verify_shape=True))
+        with tf.variable_scope(self.scope):
+            self.W = tf.get_variable("W",
+                                     initializer=tf.constant_initializer(self.weights, dtype=tf.float32, verify_shape=True),
+                                     shape=[self.vsz, self.dsz], trainable=self.finetune)
 
     def get_dsz(self):
         return self.dsz
@@ -149,7 +153,7 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
                                      dsz=self.dsz,
                                      scope=self.scope,
                                      finetune=self.finetune,
-                                     weights=self._weights)
+                                     weights=self.weights)
 
     def encode(self, x=None):
         """Build a simple Lookup Table and set as input `x` if it exists, or `self.x` otherwise.
@@ -160,6 +164,12 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
         if x is None:
             x = LookupTableEmbeddings.create_placeholder(self._name)
         self.x = x
+
+        e0 = tf.scatter_update(self.W, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, self.dsz]))
+        with tf.control_dependencies([e0]):
+            word_embeddings = tf.nn.embedding_lookup(self.W, x)
+
+        return word_embeddings
 
         e0 = tf.scatter_update(self.W, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, self.dsz]))
         with tf.control_dependencies([e0]):
@@ -303,14 +313,14 @@ class PositionalLookupTableEmbeddings(LookupTableEmbeddings):
 
         :return:
         """
-        if self._weights is None:
+        if self.weights is None:
             raise Exception('You must initialize `weights` in order to use this method')
         return PositionalLookupTableEmbeddings(self.name,
                                                vsz=self.vsz,
                                                dsz=self.dsz,
                                                finetune=self.finetune,
                                                scope=self.scope,
-                                               weights=self._weights,
+                                               weights=self.weights,
                                                max_timescale=self.max_timescale)
 
     def encode(self, x=None):
