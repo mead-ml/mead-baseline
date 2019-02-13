@@ -15,7 +15,8 @@
       "embeddings": {
         "type": "bert-pooled",
         "embed_file": "https://tfhub.dev/google/bert_uncased_L-12_H-768_A-12/1",
-        "dsz": 768
+        "dsz": 768,
+        "trainable": true
       }
     }
   ],
@@ -33,10 +34,10 @@
     "finetune": true
   },
   "train": {
-    "epochs": 20,
+    "epochs": 5,
     "optim": "adamw",
-    "eta": 0.00025,
-    "weight_decay": 1.0e-5,
+    "eta":  0.00001,
+    "weight_decay": 1.0e-8,
     "early_stopping_metric": "acc",
     "verbose": {
       "console": true,
