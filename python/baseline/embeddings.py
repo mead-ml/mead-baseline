@@ -68,7 +68,7 @@ def load_embeddings(name, **kwargs):
 
     elif hasattr(embeddings_cls, 'create'):
         unif = kwargs.pop('unif', 0.1)
-        known_vocab = kwargs.pop('known_vocab')
+        known_vocab = kwargs.pop('known_vocab', None)
         keep_unused = kwargs.pop('keep_unused', False)
         normalize = kwargs.pop('normalized', False)
         # if there is no filename, use random-init model
