@@ -103,8 +103,8 @@ class Task(object):
             if feature.get('primary', False) is True:
                 self.primary_key = key
             vectorizer_section = feature.get('vectorizer', {'type': 'token1d'})
-            vectorizer_section['mxlen'] = vectorizer_section.get('mxlen', self.config_params['preproc'].get('mxlen', -1))
-            vectorizer_section['mxwlen'] = vectorizer_section.get('mxwlen', self.config_params['preproc'].get('mxwlen', -1))
+            vectorizer_section['mxlen'] = vectorizer_section.get('mxlen', self.config_params.get('preproc', dict()).get('mxlen', -1))
+            vectorizer_section['mxwlen'] = vectorizer_section.get('mxwlen', self.config_params.get('preproc', dict()).get('mxwlen', -1))
             if 'transform' in vectorizer_section:
                 vectorizer_section['transform_fn'] = eval(vectorizer_section['transform'])
             vectorizer = baseline.create_vectorizer(**vectorizer_section)
@@ -181,7 +181,7 @@ class Task(object):
     def _create_task_specific_reader(self):
         self._create_vectorizers()
         reader_params = self.config_params['loader']
-        reader_params['clean_fn'] = reader_params.get('clean_fn', self.config_params['preproc'].get('clean_fn'))
+        reader_params['clean_fn'] = reader_params.get('clean_fn', self.config_params.get('preproc', dict()).get('clean_fn'))
         reader_params['mxlen'] = self.vectorizers[self.primary_key].mxlen
         if self.config_params['model'].get('gpus', 1) > 1:
             reader_params['truncate'] = True
@@ -189,7 +189,7 @@ class Task(object):
 
     @staticmethod
     def _get_min_f(config):
-        backoff = config['loader'].get('min_f', config.get('preproc', {}).get('min_f', -1))
+        backoff = config['loader'].get('min_f', config.get('preproc', dict()).get('min_f', -1))
         return {f['name']: f.get('min_f', backoff) for f in config['features']}
 
     def _setup_task(self, **kwargs):
@@ -370,10 +370,11 @@ class ClassifierTask(Task):
 
     def _setup_task(self, **kwargs):
         super(ClassifierTask, self)._setup_task(**kwargs)
-        if self.config_params['preproc'].get('clean', False) is True:
-            self.config_params['preproc']['clean_fn'] = baseline.TSVSeqLabelReader.do_clean
+        if self.config_params.get('preproc', dict()).get('clean', False) is True:
+            self.config_params.get('preproc', dict())['clean_fn'] = baseline.TSVSeqLabelReader.do_clean
             print('Clean')
         else:
+            self.config_params['preproc'] = dict()
             self.config_params['preproc']['clean_fn'] = None
 
     def initialize(self, embeddings):
@@ -425,7 +426,8 @@ class TaggerTask(Task):
 
     def _create_backend(self, **kwargs):
         backend = Backend(self.config_params.get('backend', 'tf'))
-
+        if 'preproc' not in self.config_params:
+            self.config_params['preproc'] = dict()
         if backend.name == 'pytorch':
             self.config_params['preproc']['trim'] = True
         elif backend.name == 'dy':
@@ -526,6 +528,8 @@ class EncoderDecoderTask(Task):
 
     def _create_backend(self, **kwargs):
         backend = Backend(self.config_params.get('backend', 'tf'))
+        if 'preproc' not in self.config_params:
+            self.config_params['preproc'] = dict()
         self.config_params['preproc']['show_ex'] = show_examples
         if backend.name == 'pytorch':
             self.config_params['preproc']['trim'] = True
@@ -619,7 +623,7 @@ class EncoderDecoderTask(Task):
         rlut2 = baseline.revlut(self.feat2tgt)
         if num_ex > 0:
             print('Showing examples')
-            preproc = self.config_params['preproc']
+            preproc = self.config_params.get('preproc', dict())
             show_ex_fn = preproc['show_ex']
             self.config_params['train']['after_train_fn'] = lambda model: show_ex_fn(model,
                                                                                      self.valid_data, rlut1, rlut2,
@@ -646,7 +650,7 @@ class LanguageModelingTask(Task):
 
         reader_params = self.config_params['loader']
         reader_params['nctx'] = reader_params.get('nctx', self.config_params.get('nctx', self.config_params.get('nbptt', 35)))
-        reader_params['clean_fn'] = reader_params.get('clean_fn', self.config_params['preproc'].get('clean_fn'))
+        reader_params['clean_fn'] = reader_params.get('clean_fn', self.config_params.get('preproc', {}).get('clean_fn'))
         reader_params['mxlen'] = self.vectorizers[self.primary_key].mxlen
         if self.config_params['model'].get('gpus', 1) > 1:
             reader_params['truncate'] = True
@@ -656,10 +660,10 @@ class LanguageModelingTask(Task):
         backend = Backend(self.config_params.get('backend', 'tf'))
 
         if backend.name == 'pytorch':
-            self.config_params['preproc']['trim'] = True
+            self.config_params.get('preproc', dict())['trim'] = True
 
         elif backend.name == 'dy':
-            self.config_params['preproc']['trim'] = True
+            self.config_params.get('preproc', dict())['trim'] = True
             import _dynet
             dy_params = _dynet.DynetParams()
             dy_params.from_args()
