@@ -1465,6 +1465,7 @@ class BERTHubModel(TensorFlowEmbeddings):
         input_mask = input_mask
         input_type_ids = tf.zeros_like(self.x)
         import tensorflow_hub as hub
+        print('TRAINABLE', self.trainable)
         bert_module = hub.Module(self.handle, trainable=self.trainable)
         bert_inputs = dict(
             input_ids=self.x,

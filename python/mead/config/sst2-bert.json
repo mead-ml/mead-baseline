@@ -40,7 +40,7 @@
 	"finetune": true
     },
     "train": {
-	"epochs": 20,
+	"epochs": 5,
 	"optim": "adamw",
 	"eta": 0.00025,
         "weight_decay": 1.0e-5,
