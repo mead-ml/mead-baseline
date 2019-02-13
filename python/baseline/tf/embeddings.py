@@ -193,7 +193,7 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
         self.scope = kwargs.get('scope', '{}/CharLUT'.format(self.name))
         self.vsz = kwargs.get('vsz')
         self.dsz = kwargs.get('dsz')
-        self._weights = kwargs.get('weights')
+        self.weights = kwargs.get('weights')
         self.finetune = kwargs.get('finetune', True)
         self.nfeat_factor = kwargs.get('nfeat_factor', None)
         self.cfiltsz = kwargs.get('cfiltsz', [3])
@@ -204,27 +204,29 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
         self.wsz = kwargs.get('wsz', 30)
 
         self.x = None
-        if self._weights is None:
-            unif = kwargs.get('unif', 0.1)
-            self._weights = np.random.uniform(-unif, unif, (self.vsz, self.dsz))
+        self.weights = kwargs.get('weights', None)
 
-        self.Wch = self.add_variable('{}/Wch'.format(self.scope),
-                                     initializer=tf.constant_initializer(self._weights, dtype=tf.float32,
-                                                                         verify_shape=True),
-                                     shape=[self.vsz, self.dsz], trainable=True)
+        if self.weights is None:
+            unif = kwargs.get('unif', 0.1)
+            self.weights = np.random.uniform(-unif, unif, (self.vsz, self.dsz))
+
+        with tf.variable_scope(self.scope):
+            self.Wch = tf.get_variable("Wch",
+                                  initializer=tf.constant_initializer(self.weights, dtype=tf.float32, verify_shape=True),
+                                  shape=[self.vsz, self.dsz], trainable=True)
 
     def detached_ref(self):
         """This will detach any attached input and reference the same sub-graph otherwise
 
         :return:
         """
-        if self._weights is None:
+        if self.weights is None:
             raise Exception('You must initialize `weights` in order to use this method')
         return CharConvEmbeddings(name=self._name, vsz=self.vsz, dsz=self.dsz, scope=self.scope,
                                   finetune=self.finetune, nfeat_factor=self.nfeat_factor,
                                   cfiltsz=self.cfiltsz, max_feat=self.max_feat, gating=self.gating,
                                   num_gates=self.num_gates, activation=self.activation, wsz=self.wsz,
-                                  weights=self._weights)
+                                  weights=self.weights)
 
     def encode(self, x=None):
         if x is None:
