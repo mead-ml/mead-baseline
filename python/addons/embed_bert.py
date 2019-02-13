@@ -1053,8 +1053,14 @@ def printable_text(text):
         raise ValueError("Not running on Python2 or Python 3?")
 
 
+BERT_VOCAB = None
+
+
 def load_vocab(vocab_file):
-    """Loads a vocabulary file into a dictionary."""
+    global BERT_VOCAB
+    if BERT_VOCAB is not None:
+        return BERT_VOCAB
+
     vocab = collections.OrderedDict()
     index = 0
     with tf.gfile.GFile(vocab_file, "r") as reader:
@@ -1065,8 +1071,8 @@ def load_vocab(vocab_file):
             token = token.strip()
             vocab[token] = index
             index += 1
+    BERT_VOCAB = vocab
     return vocab
-
 
 def convert_by_vocab(vocab, items):
     """Converts a sequence of [tokens|ids] using the vocab."""
@@ -1378,10 +1384,9 @@ class BERTEmbeddings(TensorFlowEmbeddings):
         return tf.placeholder(tf.int32, [None, None], name=name)
 
     def __init__(self, name, **kwargs):
-        super(BERTEmbeddings, self).__init__()
+        super(BERTEmbeddings, self).__init__(name=name)
 
         self.dsz = kwargs.get('dsz')
-        self.name = name
         self.bert_config = BertConfig.from_json_file(kwargs.get('bert_config'))
         self.vocab = load_vocab(kwargs.get('vocab_file'))
         self.vsz = self.bert_config.vocab_size
@@ -1392,6 +1397,9 @@ class BERTEmbeddings(TensorFlowEmbeddings):
 
     def get_vocab(self):
         return self.vocab
+
+    def get_dsz(self):
+        return self.dsz
 
     @classmethod
     def load(cls, embeddings, **kwargs):
@@ -1422,3 +1430,75 @@ class BERTEmbeddings(TensorFlowEmbeddings):
         return z
     def save_md(self, target):
         write_json({'vsz': self.vsz, 'dsz': self.dsz}, target)
+
+
+class BERTHubModel(TensorFlowEmbeddings):
+
+
+    @classmethod
+    def create_placeholder(cls, name):
+        # input_ids = tf.placeholder(tf.int32, shape=(None, FLAGS.max_seq_length), name='input_ids')
+        return tf.placeholder(tf.int32, [None, None], name=name)
+
+    def __init__(self, name, **kwargs):
+        super(BERTHubModel, self).__init__(name=name)
+        self.handle = kwargs.get('embed_file')
+        self.vocab = load_vocab(kwargs.get('vocab_file'))
+        self.vsz = len(self.vocab)
+        self.dsz = kwargs.get('dsz')
+        self.trainable = kwargs.get('trainable', False)
+
+    def get_vocab(self):
+        return self.vocab
+
+    @classmethod
+    def load(cls, embeddings, **kwargs):
+        c = cls("bert", **kwargs)
+        c.checkpoint = embeddings
+        return c
+
+    def encode(self, x=None):
+        if x is None:
+            x = BERTHubModel.create_placeholder(self.name)
+        self.x = x
+        input_mask = tf.cast(tf.not_equal(self.x, 0), tf.int32)
+        input_mask = input_mask
+        input_type_ids = tf.zeros_like(self.x)
+        import tensorflow_hub as hub
+        bert_module = hub.Module(self.handle, trainable=self.trainable)
+        bert_inputs = dict(
+            input_ids=self.x,
+            input_mask=input_mask,
+            segment_ids=input_type_ids)
+        bert_outputs = bert_module(bert_inputs, signature="tokens", as_dict=True)
+        output = self._output(bert_outputs)
+        return output # tf.Print(output, [tf.shape(output)])
+
+
+    def save_md(self, target):
+        write_json({'vsz': self.vsz, 'dsz': self.dsz}, target)
+
+    def get_dsz(self):
+        return self.dsz
+
+
+@register_embeddings(name='bert-embed')
+class BERTHubEmbeddings(BERTHubModel):
+
+    def __init__(self, name, **kwargs):
+        super(BERTHubEmbeddings, self).__init__(name, **kwargs)
+
+    def _output(self, bert_outputs):
+        return bert_outputs["sequence_output"]
+
+
+@register_embeddings(name='bert-pooled')
+class BERTHubPooling(BERTHubModel):
+
+
+    def __init__(self, name, **kwargs):
+        super(BERTHubPooling, self).__init__(name, **kwargs)
+
+    def _output(self, bert_outputs):
+        return bert_outputs["pooled_output"]
+

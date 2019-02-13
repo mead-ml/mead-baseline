@@ -3,17 +3,19 @@ import numpy as np
 import tensorflow as tf
 from baseline.utils import write_json, Offsets
 from baseline.embeddings import register_embeddings
-from baseline.tf.tfy import embed, pool_chars, get_shape_as_list, stacked_lstm
-
+from baseline.tf.tfy import pool_chars, get_shape_as_list, stacked_lstm, embed
 
 class TensorFlowEmbeddings(object):
     """This provides a base for TensorFlow embeddings sub-graphs
 
     """
-    def __init__(self):
+    def __init__(self, trainable=True, name=None, dtype=tf.float32):
         """Constructor
         """
-        pass
+        super(TensorFlowEmbeddings, self).__init__()
+        self.name = name
+        self.trainable = trainable
+        self.dtype = dtype
 
     def detached_ref(self):
         """This will detach any attached input and reference the same sub-graph otherwise
@@ -43,7 +45,7 @@ class TensorFlowEmbeddings(object):
         """
         pass
 
-    def __call__(self, x):
+    def call(self, x):
         return self.encode(x)
 
     def save_md(self):
@@ -73,6 +75,21 @@ class TensorFlowEmbeddings(object):
         """
         return cls(name, vsz=model.vsz, dsz=model.dsz, weights=model.weights, **kwargs)
 
+    def save_md(self, target):
+        """Save the metadata associated with this embedding as a JSON file
+
+        :param target: The name of the output file
+        :return:
+        """
+        write_json(self.get_config(), target)
+
+    def get_config(self):
+        #config = super(TensorFlowEmbeddings, self).get_config()
+        config = {}
+        config['dsz'] = self.get_dsz()
+        config['vsz'] = self.get_vsz()
+        return config
+
 
 @register_embeddings(name='default')
 class LookupTableEmbeddings(TensorFlowEmbeddings):
@@ -98,18 +115,23 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
         * *scope* -- (``str``) An optional variable scope, by default it will be `{name}/LUT`
         * *unif* -- (``float``) (defaults to `0.1`) If the weights should be created, what is the random initialization range
         """
-        super(LookupTableEmbeddings, self).__init__()
+        super(LookupTableEmbeddings, self).__init__(kwargs.get('finetune', True), name)
 
         self.vsz = kwargs.get('vsz')
         self.dsz = kwargs.get('dsz')
         self.finetune = kwargs.get('finetune', True)
-        self.name = name
         self.scope = kwargs.get('scope', '{}/LUT'.format(self.name))
+
         self.weights = kwargs.get('weights')
 
         if self.weights is None:
             unif = kwargs.get('unif', 0.1)
             self.weights = np.random.uniform(-unif, unif, (self.vsz, self.dsz))
+
+        with tf.variable_scope(self.scope):
+            self.W = tf.get_variable("W",
+                                     initializer=tf.constant_initializer(self.weights, dtype=tf.float32, verify_shape=True),
+                                     shape=[self.vsz, self.dsz], trainable=self.finetune)
 
     def get_dsz(self):
         return self.dsz
@@ -141,20 +163,17 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
             x = LookupTableEmbeddings.create_placeholder(self.name)
         self.x = x
 
-        return embed(x,
-                     self.vsz,
-                     self.dsz,
-                     tf.constant_initializer(self.weights, dtype=tf.float32, verify_shape=True),
-                     self.finetune,
-                     self.scope)
+        e0 = tf.scatter_update(self.W, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, self.dsz]))
+        with tf.control_dependencies([e0]):
+            word_embeddings = tf.nn.embedding_lookup(self.W, x)
 
-    def save_md(self, target):
-        """Save the metadata associated with this embedding as a JSON file
+        return word_embeddings
 
-        :param target: The name of the output file
-        :return:
-        """
-        write_json({'vsz': self.vsz, 'dsz': self.dsz}, target)
+        e0 = tf.scatter_update(self.W, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, self.dsz]))
+        with tf.control_dependencies([e0]):
+            word_embeddings = tf.nn.embedding_lookup(self.W, self.x)
+
+        return word_embeddings
 
 
 @register_embeddings(name='char-conv')
@@ -167,9 +186,7 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
         return tf.placeholder(tf.int32, [None, None, None], name=name)
 
     def __init__(self, name, **kwargs):
-        super(CharConvEmbeddings, self).__init__()
-
-        self.name = name
+        super(CharConvEmbeddings, self).__init__(name=name)
         self.scope = kwargs.get('scope', '{}/CharLUT'.format(self.name))
         self.vsz = kwargs.get('vsz')
         self.dsz = kwargs.get('dsz')
@@ -182,12 +199,18 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
         self.num_gates = kwargs.get('num_gates', 1)
         self.activation = kwargs.get('activation', 'tanh')
         self.wsz = kwargs.get('wsz', 30)
-        self.weights = kwargs.get('weights', None)
 
         self.x = None
+        self.weights = kwargs.get('weights', None)
+
         if self.weights is None:
             unif = kwargs.get('unif', 0.1)
             self.weights = np.random.uniform(-unif, unif, (self.vsz, self.dsz))
+
+        with tf.variable_scope(self.scope):
+            self.Wch = tf.get_variable("Wch",
+                                  initializer=tf.constant_initializer(self.weights, dtype=tf.float32, verify_shape=True),
+                                  shape=[self.vsz, self.dsz], trainable=True)
 
     def detached_ref(self):
         """This will detach any attached input and reference the same sub-graph otherwise
@@ -202,22 +225,16 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
                                   num_gates=self.num_gates, activation=self.activation, wsz=self.wsz,
                                   weights=self.weights)
 
-    def save_md(self, target):
-        write_json({'vsz': self.get_vsz(), 'dsz': self.get_dsz()}, target)
-
     def encode(self, x=None):
         if x is None:
             x = CharConvEmbeddings.create_placeholder(self.name)
         self.x = x
-        with tf.variable_scope(self.scope):
-            Wch = tf.get_variable("Wch",
-                                  initializer=tf.constant_initializer(self.weights, dtype=tf.float32, verify_shape=True),
-                                  shape=[self.vsz, self.dsz], trainable=True)
-            ech0 = tf.scatter_update(Wch, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, self.dsz]))
-            char_comp, self.wsz = pool_chars(x, Wch, ech0, self.dsz, self.nfeat_factor,
-                                  self.cfiltsz, self.max_feat, self.gating, 
-                                  self.num_gates, self.activation, self.wsz)
-            return char_comp
+
+        ech0 = tf.scatter_update(self.Wch, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, self.dsz]))
+        char_comp, self.wsz = pool_chars(self.x, self.Wch, ech0, self.dsz, self.nfeat_factor,
+                                         self.cfiltsz, self.max_feat, self.gating,
+                                         self.num_gates, self.activation, self.wsz)
+        return char_comp
 
     def get_vsz(self):
         return self.vsz
@@ -318,7 +335,6 @@ class PositionalLookupTableEmbeddings(LookupTableEmbeddings):
 
 @register_embeddings(name='char-lstm')
 class CharLSTMEmbeddings(TensorFlowEmbeddings):
-
     @classmethod
     def create_placeholder(cls, name):
         return tf.placeholder(tf.int32, [None, None, None], name=name)
@@ -384,5 +400,6 @@ class CharLSTMEmbeddings(TensorFlowEmbeddings):
     def get_vsz(self):
         return self.vsz
 
-    def save_md(self, target):
-        write_json({'vsz': self.vsz, 'dsz': self.dsz, 'lstmsz': self.lstmsz}, target)
+    def get_config(self):
+        config = super(CharLSTMEmbeddings, self).get_config()
+        config['lstmsz'] = self.lstmsz
