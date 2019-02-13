@@ -650,7 +650,7 @@ class LanguageModelingTask(Task):
 
         reader_params = self.config_params['loader']
         reader_params['nctx'] = reader_params.get('nctx', self.config_params.get('nctx', self.config_params.get('nbptt', 35)))
-        reader_params['clean_fn'] = reader_params.get('clean_fn', self.config_params.get('preproc', {}).get('clean_fn'))
+        reader_params['clean_fn'] = reader_params.get('clean_fn', self.config_params.get('preproc', dict()).get('clean_fn'))
         reader_params['mxlen'] = self.vectorizers[self.primary_key].mxlen
         if self.config_params['model'].get('gpus', 1) > 1:
             reader_params['truncate'] = True
