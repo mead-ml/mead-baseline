@@ -253,7 +253,7 @@ class TaggerService(Service):
                 for t in tokens:
                     mxwlen = max(mxwlen, len(t))
                 tokens_seq = [tokens]
-             else:
+            else:
                 raise Exception('Unknown input format')
 
         if len(tokens_seq) == 0:
