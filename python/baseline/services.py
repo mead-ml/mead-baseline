@@ -249,11 +249,11 @@ class TaggerService(Service):
                             mxwlen = max(mxwlen, len(t))
             # If its a dict, we just wrap it up
             elif isinstance(tokens[0], dict):
-                mxlen = max(len(tokens))
+                mxlen = len(tokens)
                 for t in tokens:
                     mxwlen = max(mxwlen, len(t))
                 tokens_seq = [tokens]
-            else:
+             else:
                 raise Exception('Unknown input format')
 
         if len(tokens_seq) == 0:
