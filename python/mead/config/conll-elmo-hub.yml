@@ -1,5 +1,5 @@
 version: 2
-modules: [embed_elmo]
+modules: [vec_text,embed_elmo]
 task: tagger
 batchsz: 10
 conll_output: conll-elmo-iobes.conll
@@ -26,13 +26,11 @@ features:
      type: char-conv
  - name: elmo
    vectorizer:
-     type: dict_elmo
+     type: dict_text
      fields: text
    embeddings: 
-     type: elmo-embed
+     type: elmo
      dsz: 1024
-     embed_file: "/home/dpressel/dev/work/elmo/elmo_2x4096_512_2048cnn_2xhighway_5.5B_weights.hdf5"
-
 backend: tensorflow
 dataset: conll-iobes
 
@@ -48,9 +46,6 @@ model:
     hsz: 256
     wsz: 30
     dropout: 0.5
-    #dropin:
-    #  word: 0.1
-    #  elmo: 0.1
     rnntype: blstm
     layers: 2
     constrain_decode: true
