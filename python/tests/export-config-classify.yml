@@ -10,10 +10,10 @@ MODEL_NAME: sst2
 NUM_FEATURES: 3
 SLEEP: 5
 CLEAN_AFTER_TEST: true
-MODEL_FILE: sst2-9494.zip
-TEST_FILE: stsa.binary.test
-CONFIG_FILE: sst2-comb.json
-MODEL_FILE_LINK: https://www.dropbox.com/s/u1fbagrbi03kfvh/sst2-9494.zip?dl=1
+MODEL_FILE: ${PWD}/sst2-15303.zip
+TEST_FILE: ${PWD}/stsa.binary.test
+CONFIG_FILE: ${PWD}/sst2-comb.json
+MODEL_FILE_LINK: https://www.dropbox.com/s/zfh9l36vm5hfxyk/sst2-15303.zip?dl=1
 TEST_FILE_LINK: https://www.dropbox.com/s/zm6y79wczkaliat/stsa.binary.test?dl=1
 CONFIG_FILE_LINK: https://www.dropbox.com/s/77m4xjpb6rpm2fx/sst2-comb.json?dl=1
 TEST_LOAD: ${TEST_FILE}.load

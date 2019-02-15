@@ -10,12 +10,12 @@ MODEL_NAME: conll
 NUM_FEATURES: 3
 SLEEP: 5
 CLEAN_AFTER_TEST: true
-MODEL_FILE: tagger-24429.zip
+MODEL_FILE: conll-6419.zip
 TEST_FILE: eng.testb.small
 CONFIG_FILE: conll-tf.json
-MODEL_FILE_LINK: https://www.dropbox.com/s/86xzsofbgk3dzyj/tagger-24429.zip?dl=1
+MODEL_FILE_LINK: https://www.dropbox.com/s/ftv4amoq7dzxnxo/conll-6419.zip?dl=1
 TEST_FILE_LINK: https://www.dropbox.com/s/pp3pcq5q5ko1df6/eng.testb.small?dl=1
-CONFIG_FILE_LINK: https://www.dropbox.com/s/97bi7qy15usmvb2/conll-tf.json?dl=0
+CONFIG_FILE_LINK: https://www.dropbox.com/s/97bi7qy15usmvb2/conll-tf.json?dl=1
 TEST_LOAD: ${TEST_FILE}.load
 TEST_SERVE: ${TEST_FILE}.serve
 TEST_SERVE_PREPROC: ${TEST_FILE}.serve_preproc

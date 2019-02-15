@@ -241,12 +241,14 @@ class TaggerService(Service):
                             mxwlen = max(mxwlen, len(t))
                             utt_dict_seq += [dict({'text': t})]
                         tokens_seq += [utt_dict_seq]
-                # Its already in dict form so we dont need to do anything
+                # Its already in List[List[dict]] form so just iterate to get mxlen and mxwlen
                 elif isinstance(tokens[0][0], dict):
-                    for utt in tokens:
-                        mxlen = max(mxlen, len(utt))
-                        for t in utt['text']:
-                            mxwlen = max(mxwlen, len(t))
+                    for utt_dict_seq in tokens:
+                        mxlen = max(mxlen, len(utt_dict_seq))
+                        for token_dict in utt_dict_seq:
+                            text = token_dict['text']
+                            mxwlen = max(mxwlen, len(text))
+                        tokens_seq += [utt_dict_seq]
             # If its a dict, we just wrap it up
             elif isinstance(tokens[0], dict):
                 mxlen = len(tokens)
