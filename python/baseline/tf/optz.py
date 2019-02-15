@@ -15,6 +15,9 @@ class ConstantSchedulerTensorFlow(object):
     def __call__(self, lr, global_step):
         return lr
 
+    def __str__(self):
+        return type(self).__name__ + "()"
+
 
 @register_lr_scheduler('warmup_linear')
 class WarmupLinearSchedulerTensorFlow(WarmupLearningRateScheduler):
@@ -24,6 +27,9 @@ class WarmupLinearSchedulerTensorFlow(WarmupLearningRateScheduler):
 
     def __call__(self, lr, global_step):
         return tf.minimum(1.0, tf.cast(global_step / self.warmup_steps, dtype=tf.float32)) * lr
+
+    def __str__(self):
+        return type(self).__name__ + "()"
 
 
 @register_lr_scheduler('clr')
@@ -40,6 +46,9 @@ class CyclicLRSchedulerTensorFlow(object):
         clr = lr + (self.max_lr - lr) * tf.maximum(0., 1. - x)
         return clr
 
+    def __str__(self):
+        return type(self).__name__ + "()"
+
 
 @register_lr_scheduler('sgdr')
 class SGDRSchedulerTensorFlow(object):
@@ -49,6 +58,9 @@ class SGDRSchedulerTensorFlow(object):
 
     def __call__(self, lr, global_step):
         return tf.train.cosine_decay_restarts(lr, global_step, first_decay_steps=self.first_decay_steps)
+
+    def __str__(self):
+        return type(self).__name__ + "()"
 
 
 @register_lr_scheduler('piecewise')
@@ -62,6 +74,9 @@ class PiecewiseDecaySchedulerTensorFlow(object):
     def __call__(self, lr, global_step):
         return tf.train.piecewise_constant(global_step, self.bounds, self.values)
 
+    def __str__(self):
+        return type(self).__name__ + "()"
+
 
 @register_lr_scheduler('zaremba')
 class ZarembaDecaySchedulerTensorFlow(PiecewiseDecaySchedulerTensorFlow):
@@ -70,8 +85,12 @@ class ZarembaDecaySchedulerTensorFlow(PiecewiseDecaySchedulerTensorFlow):
         lr = float(kwargs.get('lr', kwargs.get('eta', 1.0)))
         values = [lr/(float(decay_rate)**i) for i in range(len(bounds)+1)]
         super(ZarembaDecaySchedulerTensorFlow, self).__init__(bounds=bounds, values=values)
+
     def __call__(self, lr, global_step):
         return tf.train.piecewise_constant(global_step, self.bounds, self.values)
+
+    def __str__(self):
+        return type(self).__name__ + "()"
 
 
 @register_lr_scheduler('invtime')
@@ -85,6 +104,9 @@ class InverseTimeDecaySchedulerTensorFlow(object):
     def __call__(self, lr, global_step):
         return tf.train.inverse_time_decay(lr, global_step, self.decay_steps, self.decay_rate, staircase=self.staircase)
 
+    def __str__(self):
+        return type(self).__name__ + "()"
+
 
 @register_lr_scheduler('exponential')
 class ExponentialDecaySchedulerTensorFlow(object):
@@ -95,6 +117,9 @@ class ExponentialDecaySchedulerTensorFlow(object):
 
     def __call__(self, lr, global_step):
         return tf.train.exponential_decay(lr, global_step, self.decay_steps, self.decay_rate, staircase=self.staircase)
+
+    def __str__(self):
+        return type(self).__name__ + "()"
 
 
 @register_lr_scheduler('composite')
@@ -115,6 +140,9 @@ class CompositeLRSchedulerTensorFlow(object):
             global_step < self.warm.warmup_steps,
             call_warm, call_rest
         )
+
+    def __str__(self):
+        return "LRScheduler({}, {})".format(self.warm, self.rest)
 
 
 class AdamWOptimizer(tf.train.Optimizer):
@@ -230,7 +258,6 @@ def optimizer(loss_fn, **kwargs):
         optz = lambda lr: tf.train.GradientDescentOptimizer(lr)
 
     logger.info('clip gradients at %s', clip)
-    logger.info('learning rate scheduler: %s', lr_scheduler)
     return global_step, tf.contrib.layers.optimize_loss(loss_fn, global_step, eta, optz,
                                                         colocate_gradients_with_ops=colocate_gradients_with_ops,
                                                         clip_gradients=clip, learning_rate_decay_fn=lr_scheduler,
