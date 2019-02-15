@@ -1,10 +1,10 @@
 import os
 import tensorflow as tf
 import tensorflow_hub as hub
-from baseline.utils import write_json, read_json
+from baseline.utils import write_json, read_json, listify
 from baseline.embeddings import register_embeddings
 from baseline.tf.embeddings import TensorFlowEmbeddings
-from baseline.vectorizers import AbstractVectorizer, register_vectorizer
+from baseline.vectorizers import AbstractVectorizer, register_vectorizer, _token_iterator
 import numpy as np
 import tensorflow as tf
 import h5py
@@ -42,31 +42,33 @@ class Vocabulary(object):
         """
         self._id_to_word = []
         self._word_to_id = {}
-        self._unk = -1
-        self._bos = -1
-        self._eos = -1
 
-        idx = 0
-        # TODO(dpressel): We should not start at idx=0, we should map the low values to Offsets
+        self._bos = 0
+        self._eos = 1
+        self._unk = 2
+        self._id_to_word.append(START_TOKEN)
+        self._id_to_word.append(END_TOKEN)
+        self._id_to_word.append(UNK_TOKEN)
+        self._word_to_id[START_TOKEN] = self._bos
+        self._word_to_id[END_TOKEN] = self._eos
+        self._word_to_id[UNK_TOKEN] = self._unk
+        # VALUES = ["<PAD>", "<GO>", "<EOS>", "<UNK>"]
+
+        idx = self._unk + 1
+
+
+        # if they already exist in this vocab, remove to ensure that they are always placed at the low offsets
+        known_vocab.pop(START_TOKEN, None)
+        known_vocab.pop(END_TOKEN, None)
+        known_vocab.pop(UNK_TOKEN, None)
         for word_name, count in known_vocab.items():
 
-            if word_name == START_TOKEN:
-                self._bos = idx
-            elif word_name == END_TOKEN:
-                self._eos = idx
-            elif word_name == UNK_TOKEN:
-                self._unk = idx
             if word_name == '!!!MAXTERMID':
                 continue
 
             self._id_to_word.append(word_name)
             self._word_to_id[word_name] = idx
             idx += 1
-
-
-        self._id_to_word.append(START_TOKEN)
-        self._word_to_id[START_TOKEN] = idx
-        idx += 1
 
         # check to ensure file has special tokens
         #if validate_file:
@@ -833,14 +835,26 @@ class ELMoVectorizer(AbstractVectorizer):
 
         if self.vocab is None:
             self.vocab = UnicodeCharsVocabulary(vocab)
-
-        length = len(tokens) + 2
+        token_list = [t for t in self.iterable(tokens)]
+        length = len(token_list) + 2
         vec = np.zeros((self.mxlen+2, self.mxwlen), dtype=np.int32)
-        char_ids_without_mask = self.vocab.encode_chars(tokens, split=False)
+        char_ids_without_mask = self.vocab.encode_chars(token_list, split=False)
         # add one so that 0 is the mask value
         vec[:length, :] = char_ids_without_mask + 1
 
         return vec, length
+
+
+@register_vectorizer(name='dict_elmo')
+class DictELMoVectorizer(ELMoVectorizer):
+    def __init__(self, **kwargs):
+        super(DictELMoVectorizer, self).__init__(**kwargs)
+        self.fields = listify(kwargs.get('fields', 'text'))
+        self.delim = kwargs.get('token_delim', '@@')
+
+    def iterable(self, tokens):
+        return _token_iterator(self, tokens)
+
 
 
 def weight_layers(name, bilm_ops, l2_coef=None,
