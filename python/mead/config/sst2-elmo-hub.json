@@ -1,6 +1,5 @@
 {
-  "version": 2,
-  "modules": ["embed_elmo"],
+  "modules": ["vec_text", "embed_elmo"],
   "task": "classify",
   "basedir": "./sst2",
   "batchsz": 50,
@@ -9,7 +8,7 @@
       "name": "word",
       "vectorizer": {
         "type": "token1d",
-	"transform": "baseline.lowercase"
+        "transform": "baseline.lowercase"
       },
       "embeddings": {
         "label": "w2v-gn"
@@ -18,12 +17,10 @@
     {
       "name": "elmo",
       "vectorizer": {
-        "type": "elmo"
+        "type": "text"
       },
       "embeddings": {
-        "type": "elmo-embed",
-        "dsz": 256,
-        "embed_file": "/home/dpressel/dev/work/elmo/elmo_2x1024_128_2048cnn_1xhighway_weights.hdf5"
+        "type": "elmo", "dsz": 1024
       }
     }
   ],
