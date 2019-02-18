@@ -17,6 +17,7 @@ import collections
 
 __all__ = []
 
+MAGIC_VARS = ['sess', 'tgt', 'y', 'lengths']
 
 def optional_params(func):
     @wraps(func)

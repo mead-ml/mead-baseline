@@ -1,10 +1,9 @@
-from baseline.utils import fill_y, listify, ls_props, read_json
+from baseline.utils import fill_y, listify, ls_props, read_json, MAGIC_VARS
 from baseline.model import ClassifierModel, register_model
 from baseline.tf.tfy import *
 from baseline.tf.embeddings import *
 from baseline.version import __version__
 
-MAGIC_VARS = ['sess', 'tgt', 'y']
 
 class ClassifierModelBase(ClassifierModel):
     """Base for all baseline implementations of token-based classifiers
@@ -24,7 +23,7 @@ class ClassifierModelBase(ClassifierModel):
         """Base
         """
         super(ClassifierModelBase, self).__init__()
-        self._unserializable = ['lengths']
+        self._unserializable = []
 
     def set_saver(self, saver):
         self.saver = saver
