@@ -4,7 +4,7 @@ from baseline.model import LanguageModel, register_model
 from baseline.tf.embeddings import *
 from baseline.tf.tfy import new_placeholder_dict, TRAIN_FLAG, lstm_cell_w_dropout
 from baseline.tf.transformer import transformer_encoder_stack, subsequent_mask
-from baseline.utils import read_json, write_json, ls_props
+from baseline.utils import read_json, write_json, MAGIC_VARS
 from google.protobuf import text_format
 import copy
 import os
@@ -13,10 +13,47 @@ import os
 class LanguageModelBase(LanguageModel):
 
     def __init__(self):
+        super(LanguageModelBase, self).__init__()
         self.saver = None
         self.layers = None
         self.hsz = None
         self.probs = None
+        self._unserializable = []
+
+    def save_values(self, basename):
+        self.saver.save(self.sess, basename)
+
+    def save_md(self, basename):
+        """This method saves out a `.state` file containing meta-data from these classes and any info
+        registered by a user-defined derived class as a `property`. Also write the `graph` and `saver` and `labels`
+
+        :param basename:
+        :return:
+        """
+
+        write_json(self._state, basename + '.state')
+        for key, embedding in self.embeddings.items():
+            embedding.save_md(basename + '-{}-md.json'.format(key))
+        with open(basename + '.saver', 'w') as f:
+            f.write(str(self.saver.as_saver_def()))
+
+    def _record_state(self, **kwargs):
+        """
+        First, write out the embedding names, so we can recover those.  Then do a deepcopy on the model init params
+        so that it can be recreated later.  Anything that is a placeholder directly on this model needs to be removed
+
+        :param kwargs:
+        :return:
+        """
+        embeddings_info = {}
+        for k, v in self.embeddings.items():
+            embeddings_info[k] = v.__class__.__name__
+
+        self._state = {k: v for k, v in kwargs.items() if k not in self._unserializable + MAGIC_VARS + list(self.embeddings.keys())}
+        self._state.update({
+            "version": __version__,
+            "embeddings": embeddings_info
+        })
 
     def set_saver(self, saver):
         self.saver = saver
@@ -24,40 +61,9 @@ class LanguageModelBase(LanguageModel):
     def decode(self, inputs, **kwargs):
         pass
 
-    def save_values(self, basename):
-        self.saver.save(self.sess, basename)
-
     def save(self, basename):
         self.save_md(basename)
         self.save_values(basename)
-
-    def save_md(self, basename):
-
-        path = basename.split('/')
-        base = path[-1]
-        outdir = '/'.join(path[:-1])
-
-        embeddings_info = {}
-        for k, v in self.embeddings.items():
-            embeddings_info[k] = v.__class__.__name__
-        state = {
-            "version": __version__,
-            "embeddings": embeddings_info,
-            "hsz": self.hsz,
-            "layers": self.layers,
-            "tgt_key": self.tgt_key
-        }
-        for prop in ls_props(self):
-            state[prop] = getattr(self, prop)
-
-        write_json(state, basename + '.state')
-        for key, embedding in self.embeddings.items():
-            embedding.save_md('{}-{}-md.json'.format(basename, key))
-
-        write_json(state, basename + '.state')
-        tf.train.write_graph(self.sess.graph_def, outdir, base + '.graph', as_text=False)
-        with open(basename + '.saver', 'w') as f:
-            f.write(str(self.saver.as_saver_def()))
 
     def _create_loss(self, scope):
         with tf.variable_scope(scope):
@@ -99,7 +105,7 @@ class LanguageModelBase(LanguageModel):
         lm = cls()
         lm.id = kwargs.get('id', 0)
         lm.embeddings = embeddings
-
+        lm._record_state(**kwargs)
         inputs = {}
         lm.batchsz = 0
         for k, embedding in embeddings.items():
@@ -138,41 +144,38 @@ class LanguageModelBase(LanguageModel):
 
         return EmbeddingsStack(self.embeddings, self.pdrop_value)
 
-
     @classmethod
     def load(cls, basename, **kwargs):
-        state = read_json(basename + '.state')
-        if 'predict' in kwargs:
-            state['predict'] = kwargs['predict']
+        """Reload the model from a graph file and a checkpoint
 
-        if 'sampling' in kwargs:
-            state['sampling'] = kwargs['sampling']
+        The model that is loaded is independent of the pooling and stacking layers, making this class reusable
+        by sub-classes.
 
-        if 'sampling_temp' in kwargs:
-            state['sampling_temp'] = kwargs['sampling_temp']
+        :param basename: The base directory to load from
+        :param kwargs: See below
 
-        if 'beam' in kwargs:
-            state['beam'] = kwargs['beam']
+        :Keyword Arguments:
+        * *sess* -- An optional tensorflow session.  If not passed, a new session is
+            created
 
-        state['sess'] = kwargs.get('sess', tf.Session())
+        :return: A restored model
+        """
 
-        with open(basename + '.saver') as fsv:
-            saver_def = tf.train.SaverDef()
-            text_format.Merge(fsv.read(), saver_def)
+        _state = read_json(basename + '.state')
+        _state['sess'] = kwargs.pop('sess', tf.Session())
+        _state['model_type'] = kwargs.get('model_type', 'default')
+        embeddings = {}
+        embeddings_dict = _state.pop("embeddings")
 
-        embeddings = dict()
-        embeddings_dict = state.pop('embeddings')
         for key, class_name in embeddings_dict.items():
             md = read_json('{}-{}-md.json'.format(basename, key))
             embed_args = dict({'vsz': md['vsz'], 'dsz': md['dsz']})
             Constructor = eval(class_name)
             embeddings[key] = Constructor(key, **embed_args)
 
-        model = cls.create(embeddings, **state)
-        for prop in ls_props(model):
-            if prop in state:
-                setattr(model, prop, state[prop])
 
+        model = cls.create(embeddings, **_state)
+        model._state = _state
         do_init = kwargs.get('init', True)
         if do_init:
             init = tf.global_variables_initializer()
@@ -180,6 +183,7 @@ class LanguageModelBase(LanguageModel):
 
         model.saver = tf.train.Saver()
         model.saver.restore(model.sess, basename)
+
         return model
 
     def output(self, h, vsz, **kwargs):

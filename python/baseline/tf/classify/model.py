@@ -160,6 +160,9 @@ class ClassifierModelBase(ClassifierModel):
             init = tf.global_variables_initializer()
             model.sess.run(init)
 
+        model.saver = tf.train.Saver()
+        model.saver.restore(model.sess, basename)
+
         return model
 
     @property

@@ -130,6 +130,9 @@ class TaggerModelBase(TaggerModel):
             init = tf.global_variables_initializer()
             model.sess.run(init)
 
+        model.saver = tf.train.Saver()
+        model.saver.restore(model.sess, basename)
+
         return model
 
     def save_using(self, saver):
