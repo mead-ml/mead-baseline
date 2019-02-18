@@ -9,6 +9,7 @@ from baseline.tf.transformer import transformer_encoder_stack, subsequent_mask
 from baseline.utils import read_json, write_json, MAGIC_VARS
 
 
+
 class LanguageModelBase(LanguageModel):
     """Base for all baseline implementations of LMs
 
@@ -210,6 +211,7 @@ class LanguageModelBase(LanguageModel):
         src_embeddings = {k: self.embeddings[k] for k in self.src_keys}
         embed_output = EmbeddingsStack(src_embeddings, self.pdrop_value)
         return embed_output
+
 
     @classmethod
     def load(cls, basename, **kwargs):

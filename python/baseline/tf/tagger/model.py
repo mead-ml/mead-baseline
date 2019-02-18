@@ -212,7 +212,6 @@ class TaggerModelBase(TaggerModel):
             model.saver.restore(model.sess, basename)
             return model
 
-
     def save_using(self, saver):
         """Method to wire up the `tf.Saver`
         """
