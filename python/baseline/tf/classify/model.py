@@ -4,6 +4,7 @@ from baseline.tf.tfy import *
 from baseline.tf.embeddings import *
 from baseline.version import __version__
 
+MAGIC_VARS = ['sess', 'tgt', 'y']
 
 class ClassifierModelBase(ClassifierModel):
     """Base for all baseline implementations of token-based classifiers
@@ -23,6 +24,7 @@ class ClassifierModelBase(ClassifierModel):
         """Base
         """
         super(ClassifierModelBase, self).__init__()
+        self._unserializable = ['lengths']
 
     def set_saver(self, saver):
         self.saver = saver
@@ -33,7 +35,7 @@ class ClassifierModelBase(ClassifierModel):
         :param basename: Base name of model
         :return:
         """
-        tf.keras.models.save_model(self.layers, basename, include_optimizer=False)
+        self.saver.save(self.sess, basename)
 
     def save_md(self, basename):
         """This method saves out a `.state` file containing meta-data from these classes and any info
@@ -42,27 +44,11 @@ class ClassifierModelBase(ClassifierModel):
         :param basename:
         :return:
         """
-        path = basename.split('/')
-        base = path[-1]
-        outdir = '/'.join(path[:-1])
 
-        # For each embedding, save a record of the keys
-
-        embeddings_info = {}
-        for k, v in self.embeddings.items():
-            embeddings_info[k] = v.__class__.__name__
-        state = {
-            "version": __version__,
-            "embeddings": embeddings_info
-        }
-        for prop in ls_props(self):
-            state[prop] = getattr(self, prop)
-
-        write_json(state, basename + '.state')
+        write_json(self._state, basename + '.state')
         write_json(self.labels, basename + ".labels")
         for key, embedding in self.embeddings.items():
             embedding.save_md(basename + '-{}-md.json'.format(key))
-        tf.train.write_graph(self.sess.graph_def, outdir, base + '.graph', as_text=False)
         with open(basename + '.saver', 'w') as f:
             f.write(str(self.saver.as_saver_def()))
 
@@ -103,7 +89,7 @@ class ClassifierModelBase(ClassifierModel):
         :return: Each outcome as a ``list`` of tuples `(label, probability)`
         """
         feed_dict = self.make_input(batch_dict)
-        probs = self.impl(feed_dict)
+        probs = self.sess.run(self.probs, feed_dict)
         results = []
         batchsz = probs.shape[0]
         for b in range(batchsz):
@@ -154,36 +140,27 @@ class ClassifierModelBase(ClassifierModel):
         
         :return: A restored model
         """
-        sess = kwargs.get('session', kwargs.get('sess', tf.Session()))
-        model = cls()
 
-        checkpoint_name = kwargs.get('checkpoint_name', basename)
-        checkpoint_name = checkpoint_name or basename
-        model.layers = tf.keras.models.load_model(checkpoint_name)
-        state = read_json(basename + '.state')
+        _state = read_json(basename + '.state')
+        _state['sess'] = kwargs.pop('sess', tf.Session())
+        _state['model_type'] = kwargs.get('model_type', 'default')
+        embeddings = {}
+        embeddings_dict = _state.pop("embeddings")
 
-        for prop in ls_props(model):
-            if prop in state:
-                setattr(model, prop, state[prop])
-
-        model.embeddings = dict()
-        for key, class_name in state['embeddings'].items():
+        for key, class_name in embeddings_dict.items():
             md = read_json('{}-{}-md.json'.format(basename, key))
             embed_args = dict({'vsz': md['vsz'], 'dsz': md['dsz']})
-            embed_args[key] = tf.get_default_graph().get_tensor_by_name('{}:0'.format(key))
             Constructor = eval(class_name)
-            model.embeddings[key] = Constructor(key, **embed_args)
+            embeddings[key] = Constructor(key, **embed_args)
 
-        if model.lengths_key is not None:
-            model.lengths = tf.get_default_graph().get_tensor_by_name('lengths:0')
+        labels = read_json(basename + '.labels')
+        model = cls.create(embeddings, labels, **_state)
+        model._state = _state
+        do_init = kwargs.get('init', True)
+        if do_init:
+            init = tf.global_variables_initializer()
+            model.sess.run(init)
 
-        else:
-            model.lengths = None
-        model.probs = tf.get_default_graph().get_tensor_by_name('output/probs:0')
-
-
-        model.labels = read_json(basename + '.labels')
-        model.sess = sess
         return model
 
     @property
@@ -193,6 +170,25 @@ class ClassifierModelBase(ClassifierModel):
     @lengths_key.setter
     def lengths_key(self, value):
         self._lengths_key = value
+
+    def _record_state(self, **kwargs):
+        """
+        First, write out the embedding names, so we can recover those.  Then do a deepcopy on the model init params
+        so that it can be recreated later.  Anything that is a placeholder directly on this model needs to be removed
+
+        :param kwargs:
+        :return:
+        """
+        embeddings_info = {}
+        for k, v in self.embeddings.items():
+            embeddings_info[k] = v.__class__.__name__
+
+        self._state = {k: v for k, v in kwargs.items() if k not in self._unserializable + MAGIC_VARS + list(self.embeddings.keys())}
+        self._state.update({
+            "version": __version__,
+            "embeddings": embeddings_info
+        })
+
 
     @classmethod
     def create(cls, embeddings, labels, **kwargs):
@@ -226,8 +222,9 @@ class ClassifierModelBase(ClassifierModel):
         """
 
         model = cls()
-        model.embeddings = embeddings
 
+        model.embeddings = embeddings
+        model._record_state(**kwargs)
         inputs = {}
         for k, embedding in embeddings.items():
             x = kwargs.get(k, embedding.create_placeholder(name=k))

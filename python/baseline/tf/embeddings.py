@@ -4,6 +4,7 @@ import tensorflow as tf
 from baseline.utils import write_json, Offsets
 from baseline.embeddings import register_embeddings
 from baseline.tf.tfy import pool_chars, get_shape_as_list, stacked_lstm
+import copy
 import six
 
 class TensorFlowEmbeddings(tf.keras.layers.Layer):
@@ -71,7 +72,12 @@ class TensorFlowEmbeddings(tf.keras.layers.Layer):
         :param kwargs:
         :return:
         """
-        return cls(name, vsz=model.vsz, dsz=model.dsz, weights=model.weights, **kwargs)
+        obj = cls(name, vsz=model.vsz, dsz=model.dsz, weights=model.weights, **kwargs)
+        obj._record_state(**kwargs)
+        return obj
+
+    def _record_state(self, **kwargs):
+        self._state = copy.deepcopy(kwargs)
 
     def save_md(self, target):
         """Save the metadata associated with this embedding as a JSON file
