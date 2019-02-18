@@ -31,6 +31,7 @@ from baseline.tf.tfy import (
 
 logger = logging.getLogger('baseline')
 
+
 class ClassifierModelBase(ClassifierModel):
     """Base for all baseline implementations of token-based classifiers
 
@@ -60,7 +61,7 @@ class ClassifierModelBase(ClassifierModel):
         :param basename: Base name of model
         :return:
         """
-        tf.keras.models.save_model(self.layers, basename, include_optimizer=False)
+        self.saver.save(self.sess, basename)
 
     def save_md(self, basename):
         """This method saves out a `.state` file containing meta-data from these classes and any info
@@ -210,6 +211,25 @@ class ClassifierModelBase(ClassifierModel):
     @lengths_key.setter
     def lengths_key(self, value):
         self._lengths_key = value
+
+    def _record_state(self, **kwargs):
+        """
+        First, write out the embedding names, so we can recover those.  Then do a deepcopy on the model init params
+        so that it can be recreated later.  Anything that is a placeholder directly on this model needs to be removed
+
+        :param kwargs:
+        :return:
+        """
+        embeddings_info = {}
+        for k, v in self.embeddings.items():
+            embeddings_info[k] = v.__class__.__name__
+
+        self._state = {k: v for k, v in kwargs.items() if k not in self._unserializable + MAGIC_VARS + list(self.embeddings.keys())}
+        self._state.update({
+            "version": __version__,
+            "embeddings": embeddings_info
+        })
+
 
     @classmethod
     def create(cls, embeddings, labels, **kwargs):
