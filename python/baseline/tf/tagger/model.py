@@ -27,6 +27,10 @@ class TaggerModelBase(TaggerModel):
         self._dropin_value = None
         self.saver = None
 
+    def __init__(self):
+        super(TaggerModelBase, self).__init__()
+        self._unserializable = []
+
     @property
     def lengths_key(self):
         """Property for the name of the field that is used for lengths keying
@@ -85,6 +89,25 @@ class TaggerModelBase(TaggerModel):
         })
         if 'constraint' in kwargs:
             self._state['constraint'] = True
+
+
+    def _record_state(self, **kwargs):
+        """
+        First, write out the embedding names, so we can recover those.  Then do a deepcopy on the model init params
+        so that it can be recreated later.  Anything that is a placeholder directly on this model needs to be removed
+
+        :param kwargs:
+        :return:
+        """
+        embeddings_info = {}
+        for k, v in self.embeddings.items():
+            embeddings_info[k] = v.__class__.__name__
+
+        self._state = {k: v for k, v in kwargs.items() if k not in self._unserializable + MAGIC_VARS + list(self.embeddings.keys())}
+        self._state.update({
+            "version": __version__,
+            "embeddings": embeddings_info
+        })
 
 
     @property
@@ -189,6 +212,7 @@ class TaggerModelBase(TaggerModel):
             model.saver.restore(model.sess, basename)
             return model
 
+
     def save_using(self, saver):
         """Method to wire up the `tf.Saver`
         """
@@ -199,7 +223,6 @@ class TaggerModelBase(TaggerModel):
         :return: The loss function
         """
         return self.layers.neg_log_loss(self.probs, self.y, self.lengths)
-
 
     def get_labels(self):
         """Get the labels (names of each class)
@@ -269,7 +292,6 @@ class TaggerModelBase(TaggerModel):
         """
         model = cls()
         model.embeddings = embeddings
-
         model.lengths_key = kwargs.get('lengths_key')
         model.lengths = kwargs.get('lengths', tf.placeholder(tf.int32, [None], name="lengths"))
         model._unserializable.append(model.lengths_key)

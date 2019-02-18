@@ -26,6 +26,7 @@ logger = logging.getLogger('baseline')
 # These are inputs to models that shouldn't be saved out
 MAGIC_VARS = ['sess', 'tgt', 'y', 'lengths', 'gpus']
 
+MAGIC_VARS = ['sess', 'tgt', 'y', 'lengths']
 
 def optional_params(func):
     @wraps(func)
