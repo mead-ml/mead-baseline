@@ -72,6 +72,7 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
     def _record_state(self, **kwargs):
         self._state = {k: v for k, v in kwargs.items() if k not in self._unserializable + ['sess', 'tgt'] +
                        list(self.src_embeddings.keys())}
+
         src_embeddings_state = {}
         for k, v in self.src_embeddings.items():
             src_embeddings_state[k] = v.__class__.__name__  ##v._state
