@@ -30,7 +30,7 @@ function get_file {
 }
 
 function mead_export {
-    mead-export --config ${CONFIG_FILE} --settings ${EXPORT_SETTINGS_MEAD} --datasets ${EXPORT_SETTINGS_DATASETS} --task ${TASK} --exporter_type ${EXPORTER_TYPE} --model ${MODEL_FILE} --model_version ${MODEL_VERSION} --output_dir $1 --is_remote ${IS_REMOTE}
+    mead-export --config ${CONFIG_FILE} --settings ${EXPORT_SETTINGS_MEAD} --datasets ${EXPORT_SETTINGS_DATASETS} --task ${TASK} --exporter_type ${1} --model ${MODEL_FILE} --model_version ${MODEL_VERSION} --output_dir $2 --is_remote ${IS_REMOTE}
 }
 
 function check_diff {
@@ -53,13 +53,20 @@ function remove_files {
 function classify_text {
     if [ -z "$2" ]
     then
-        python ${DRIVER} --model $1 --text ${TEST_FILE} --backend tf -name ${MODEL_NAME} --preproc $3 > $4
+        python ${DRIVER} --model $1 --text ${TEST_FILE} --name ${MODEL_NAME} > $4
     else
-        printf "${MSG_COLOR} ${1} ${2} ${3} ${4}${END}"
-        python ${DRIVER} --model $1 --text ${TEST_FILE} --backend tf --remote ${2} --name ${MODEL_NAME} --preproc $3 > $4
+        python ${DRIVER} --model $1 --text ${TEST_FILE} --remote ${2} --name ${MODEL_NAME} --preproc $3 > $4
     fi
 }
 
+function tag_text {
+    if [ -z "$4" ]
+    then
+        python ${DRIVER} --model $1 --text ${TEST_FILE} --conll $2 --features $3 --name ${MODEL_NAME} > $6
+    else
+        python ${DRIVER} --model $1 --text ${TEST_FILE} --conll $2 --features $3 --remote ${4} --name ${MODEL_NAME} --preproc $5 > $6
+    fi
+}
 
 ## get the variables defined in the config into shell
 eval $(sed -e 's/:[^:\/\/]/="/g;s/$/"/g;s/ *=/=/g' $1)
@@ -84,38 +91,72 @@ get_file ${MODEL_FILE} ${MODEL_FILE_LINK}
 get_file ${TEST_FILE} ${TEST_FILE_LINK}
 get_file ${CONFIG_FILE} ${CONFIG_FILE_LINK}
 
-### load model and classify
-#printf "${MSG_COLOR}processing by loading the model\n${END}"
-#classify_text ${MODEL_FILE} "" client ${TEST_LOAD}  # remote end points are empty, preproc is client
-#sleep ${SLEEP}
+## load model and process data
+printf "${MSG_COLOR}processing by loading the model\n${END}"
+case ${TASK} in
+    classify)
+        classify_text ${MODEL_FILE} "" client ${TEST_LOAD} # remote end point is empty, preproc is client
+        ;;
+    tagger)
+        tag_text ${MODEL_FILE} ${CONLL} ${FEATURES} "" client ${TEST_LOAD}  # remote end point is empty, preproc is client
+        ;;
+    *)
+        printf "${ERROR_COLOR}Unsupported task\n${END}"
+        exit 1
+        ;;
+esac
+sleep ${SLEEP}
 
-## export with preproc=client and classify
-#printf "${MSG_COLOR}exporting model with preproc=client\n${END}"
-#mkdir -p ${EXPORT_DIR}
-#mead_export ${EXPORT_DIR}/${MODEL_NAME}
-#sleep ${SLEEP}
-#printf "${MSG_COLOR}running tf serving\n${END}"
-#docker_clear
-#docker_run ${EXPORT_DIR}:/models
-#sleep ${SLEEP}
-#printf "${MSG_COLOR}processing with served model, preproc=client\n${END}"
-#classify_text ${EXPORT_DIR}/${MODEL_NAME}/1/ ${REMOTE_HOST}:${REMOTE_PORT_GRPC} client ${TEST_SERVE} # valid remote end points, preproc is client.
-#sleep ${SLEEP}
-## remove first few lines and check if the outputs match
-#sed -i -e 1,${NUM_LINES_TO_REMOVE_LOAD}d ${TEST_LOAD}
-#sed -i -e 1,${NUM_LINES_TO_REMOVE_SERVE}d ${TEST_SERVE}
-#check_diff ${TEST_LOAD} ${TEST_SERVE}
+## export with preproc=client and process data
+printf "${MSG_COLOR}exporting model with preproc=client\n${END}"
+mkdir -p ${EXPORT_DIR}
+mead_export default ${EXPORT_DIR}/${MODEL_NAME}
+sleep ${SLEEP}
+printf "${MSG_COLOR}running tf serving\n${END}"
+docker_clear
+docker_run ${EXPORT_DIR}:/models
+sleep ${SLEEP}
+printf "${MSG_COLOR}processing with served model, preproc=client\n${END}"
+case ${TASK} in
+    classify)
+        classify_text ${EXPORT_DIR}/${MODEL_NAME}/1/ ${REMOTE_HOST}:${REMOTE_PORT_GRPC} client ${TEST_SERVE}# valid remote end points, preproc is client.
+        ;;
+    tagger)
+        tag_text ${EXPORT_DIR}/${MODEL_NAME}/1/ ${CONLL} ${FEATURES} ${REMOTE_HOST}:${REMOTE_PORT_GRPC} client ${TEST_SERVE}
+        ;;
+    *)
+        printf "${ERROR_COLOR}Unsupported task\n${END}"
+        exit 1
+        ;;
+esac
+sleep ${SLEEP}
+# remove first few lines and check if the outputs match
+sed -i -e 1,${NUM_LINES_TO_REMOVE_LOAD}d ${TEST_LOAD}
+sed -i -e 1,${NUM_LINES_TO_REMOVE_SERVE}d ${TEST_SERVE}
+check_diff ${TEST_LOAD} ${TEST_SERVE}
 
 ## export with preproc=server and classify
 printf "${MSG_COLOR}exporting model with preproc=server\n${END}"
 mkdir -p ${EXPORT_DIR_PREPROC}
-mead_export ${EXPORT_DIR_PREPROC}/${MODEL_NAME}
+mead_export preproc ${EXPORT_DIR_PREPROC}/${MODEL_NAME}
 sleep ${SLEEP}
 printf "${MSG_COLOR}running tf serving\n${END}"
 docker_clear
 docker_run ${EXPORT_DIR_PREPROC}:/models
 printf "${MSG_COLOR}processing with served model, preproc=server\n${END}"
-classify_text ${EXPORT_DIR_PREPROC}/${MODEL_NAME}/1/ ${REMOTE_HOST}:${REMOTE_PORT_GRPC} server ${TEST_SERVE_PREPROC} # valid remote end points, preproc is server.
+case ${TASK} in
+    classify)
+        classify_text ${EXPORT_DIR_PREPROC}/${MODEL_NAME}/1/ ${REMOTE_HOST}:${REMOTE_PORT_GRPC} server ${TEST_SERVE_PREPROC} # valid remote end points, preproc is server.
+        ;;
+    tagger)
+        tag_text ${EXPORT_DIR_PREPROC}/${MODEL_NAME}/1/ ${CONLL} ${FEATURES} ${REMOTE_HOST}:${REMOTE_PORT_GRPC} server ${TEST_SERVE_PREPROC}
+
+        ;;
+    *)
+        printf "${ERROR_COLOR}Unsupported task\n${END}"
+        exit 1
+        ;;
+esac
 docker_clear
 # remove first few lines and check if the outputs match
 sed -i -e 1,${NUM_LINES_TO_REMOVE_SERVE}d ${TEST_SERVE_PREPROC}
