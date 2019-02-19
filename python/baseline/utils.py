@@ -869,7 +869,11 @@ def f_score(overlap_count, gold_count, guess_count, f=1):
 @exporter
 def unzip_model(path):
     """If the path for a model file is a zip file, unzip it in /tmp and return the unzipped path"""
-    if path.endswith("zip"):
+    # Import inside function to avoid circular dep :(
+    # TODO: future solution move the export code a different file so mime_type can import from it
+    # rather then from here, this allows here to import mime_type
+    from baseline.mime_type import mime_type
+    if mime_type(path) == 'application/zip':
         with open(path, 'rb') as f:
             sha1 = hashlib.sha1(f.read()).hexdigest()
         temp_dir = os.path.join("/tmp/", sha1)
@@ -937,16 +941,19 @@ def load_vectorizers(directory):
 
 @exporter
 def unzip_files(zip_path):
-    with open(zip_path, 'rb') as f:
-        sha1 = hashlib.sha1(f.read()).hexdigest()
-        temp_dir = os.path.join("/tmp/", sha1)
-        if not os.path.exists(temp_dir):
-            logger.info("unzipping model")
-            with zipfile.ZipFile(zip_path, "r") as zip_ref:
-                zip_ref.extractall(temp_dir)
-        if len(os.listdir(temp_dir)) == 1:  # a directory was zipped v files
-            temp_dir = os.path.join(temp_dir, os.listdir(temp_dir)[0])
-    return temp_dir
+    from baseline.mime_type import mime_type
+    if mime_type(zip_path) == 'application/zip':
+        with open(zip_path, 'rb') as f:
+            sha1 = hashlib.sha1(f.read()).hexdigest()
+            temp_dir = os.path.join("/tmp/", sha1)
+            if not os.path.exists(temp_dir):
+                logger.info("unzipping model")
+                with zipfile.ZipFile(zip_path, "r") as zip_ref:
+                    zip_ref.extractall(temp_dir)
+            if len(os.listdir(temp_dir)) == 1:  # a directory was zipped v files
+                temp_dir = os.path.join(temp_dir, os.listdir(temp_dir)[0])
+        return temp_dir
+    return path
 
 
 @exporter
@@ -967,7 +974,7 @@ def zip_files(basedir):
     pid = str(os.getpid())
     tgt_zip_base = os.path.abspath(basedir)
     zip_name = os.path.basename(tgt_zip_base)
-    model_files = [x for x in os.listdir(basedir) if x.find(pid) >= 0 and os.path.isfile(os.path.join(basedir, x))]
+    model_files = [x for x in os.listdir(basedir) if pid in x and os.path.isfile(os.path.join(basedir, x))]
     with zipfile.ZipFile("{}-{}.zip".format(tgt_zip_base, pid), "w") as z:
         for f in model_files:
             abs_f = os.path.join(basedir, f)

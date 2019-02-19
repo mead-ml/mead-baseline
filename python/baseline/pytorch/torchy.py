@@ -415,7 +415,7 @@ class LSTMEncoder(nn.Module):
 
     def forward(self, tbc, lengths):
 
-        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths.tolist())
+        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths)
         output, hidden = self.rnn(packed)
         output, _ = torch.nn.utils.rnn.pad_packed_sequence(output)
         return output + tbc if self.residual else output

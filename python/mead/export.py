@@ -1,11 +1,14 @@
+import os
 import logging
 import argparse
-from baseline.utils import read_config_file, unzip_model
+from baseline.utils import unzip_files, read_config_file
 import mead
 from mead.exporters import create_exporter
 from mead.utils import convert_path, configure_logger, get_export_params
 
+
 logger = logging.getLogger('mead')
+
 
 def create_feature_exporter_field_map(feature_section, default_exporter_field='tokens'):
     feature_exporter_field_map = {}
@@ -28,7 +31,7 @@ def main():
     parser.add_argument('--exporter_type', help="exporter type (default 'default')", default=None)
     parser.add_argument('--return_labels', help='if true, the exported model returns actual labels else '
                                                 'the indices for labels vocab (default False)', default=None)
-    parser.add_argument('--model', help='model name', required=True, type=unzip_model)
+    parser.add_argument('--model', help='model name', required=True, type=unzip_files)
     parser.add_argument('--model_version', help='model_version', default=None)
     parser.add_argument('--output_dir', help="output dir (default './models')", default=None)
     parser.add_argument('--project', help='Name of project, used in path first', default=None)
@@ -48,6 +51,12 @@ def main():
         args.settings = {}
 
     task_name = config_params.get('task', 'classify') if args.task is None else args.task
+
+    # Remove multigpu references
+    os.environ['CUDA_VISIBLE_DEVICES'] = ""
+    os.environ['NV_GPU'] = ""
+    if 'gpus' in config_params.get('train', {}):
+        del config_params['train']['gpus']
 
     if task_name == 'seq2seq' and 'beam' not in config_params:
          config_params['beam'] = args.beam
