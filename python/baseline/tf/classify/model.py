@@ -620,6 +620,25 @@ class NBowMaxModel(NBowBase):
         return tf.reduce_max(word_embeddings, 1, keepdims=False)
 
 
+@register_model(task='classify', name='fine-tune')
+class FineTuneModel(ClassifierModelBase):
+
+    """Fine-tune based on pre-pooled representations"""
+    def __init__(self):
+        super(FineTuneModel, self).__init__()
+
+    def pool(self, word_embeddings, dsz, init, **kwargs):
+        """Pooling here does nothing, we assume its been pooled already
+
+        :param word_embeddings: The word embedding input
+        :param dsz: The word embedding depth
+        :param init: The tensorflow initializer
+        :param kwargs: None
+        :return: The average pooling representation
+        """
+        return tf.Print(word_embeddings, [tf.shape(word_embeddings)])
+
+
 @register_model(task='classify', name='composite')
 class CompositePoolingModel(ClassifierModelBase):
 
@@ -646,4 +665,13 @@ class CompositePoolingModel(ClassifierModelBase):
             pooling.append(SubClass.pool(self, word_embeddings, dsz, init, **kwargs))
         return tf.concat(pooling, -1)
 
+    def stacked(self, pooled, init, **kwargs):
+        """Force at least one hidden layer here
+
+        :param pooled:
+        :param init:
+        :param kwargs:
+        :return:
+        """
+        return pooled
 
