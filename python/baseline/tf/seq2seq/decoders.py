@@ -219,7 +219,7 @@ got {} hsz and {} dsz".format(self.hsz, self.tgt_embedding.get_dsz()))
         self.cell = multi_rnn_cell_w_dropout(self.hsz, pdrop, rnntype, layers, variational=vdrop, training=TRAIN_FLAG())
 
     def _get_tgt_weights(self):
-        Wo = tf.get_variable("Wo", initializer=tf.constant_initializer(self.tgt_embedding.weights,
+        Wo = tf.get_variable("Wo", initializer=tf.constant_initializer(self.tgt_embedding._weights,
                                                                        dtype=tf.float32,
                                                                        verify_shape=True),
                              shape=[self.tgt_embedding.vsz, self.tgt_embedding.dsz])
