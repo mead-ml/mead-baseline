@@ -122,7 +122,8 @@ class Service(object):
         name = kwargs.get("name", None)
         if remote:
             beam = kwargs.get('beam', 10)
-            model = Service._create_remote_model(directory, be, remote, name, cls.signature_name(), beam, preproc=kwargs.get('preproc', False))
+            model = Service._create_remote_model(directory, be, remote, name, cls.signature_name(), beam,
+                                                 preproc=kwargs.get('preproc', 'client'))
             return cls(vocabs, vectorizers, model)
 
         # Currently nothing to do here
