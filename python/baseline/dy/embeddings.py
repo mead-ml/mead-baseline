@@ -46,7 +46,11 @@ class LookupTableEmbeddings(DyNetEmbeddings):
         self.vsz = kwargs.get('vsz')
         self.dsz = kwargs.get('dsz')
         self.batched = kwargs.get('batched', False)
-        embedding_weight = np.reshape(kwargs['weights'], (self.vsz, 1, self.dsz))
+        weight = kwargs.get('weights')
+        if weight is None:
+            unif = kwargs.get('unif', 0.1)
+            weight = np.random.uniform(-unif, unif, (self.vsz, self.dsz))
+        embedding_weight = np.reshape(weight, (self.vsz, 1, self.dsz))
         self.lookup = dy.lookup_batch if self.batched else dy.lookup
         self.embeddings = self.pc.lookup_parameters_from_numpy(embedding_weight, name=name)
 
@@ -102,6 +106,38 @@ class PositionalLookupTableEmbeddings(DyNetEmbeddings):
         embedded = embedded * math.sqrt(self.dsz)
         ((seq_len, _), _) = embedded.dim()
         embedded = embedded + dy.inputTensor(self.pe[:seq_len])
+        embedded = dy.dropout(embedded, self.dropout) if train else embedded
+        return embedded
+
+
+@register_embeddings(name="learned-positional")
+class LearnedPositionalLookupTableEmbeddings(DyNetEmbeddings):
+    def __init__(self, name, **kwargs):
+        pc = kwargs['pc'].add_subcollection(name=kwargs.get('name', 'positional'))
+        super(LearnedPositionalLookupTableEmbeddings, self).__init__(pc)
+        self.vsz = int(kwargs.get('vsz'))
+        self.dsz = int(kwargs.get('dsz'))
+        self.dropout = float(kwargs.get('dropout', 0.1))
+        mxlen = int(kwargs.get('mxlen', 512))
+        kwargs['pc'] = self.pc
+        self.embeddings = LookupTableEmbeddings(name, **kwargs)
+        kwargs['vsz'] = mxlen
+        kwargs.pop('weights', None)
+        self.pos_embeddings = LookupTableEmbeddings('learned-positional', **kwargs)
+
+
+    def get_dsz(self):
+        return self.dsz
+
+    def get_vsz(self):
+        return self.vsz
+
+    def encode(self, x, train=False):
+        embedded = self.embeddings.encode(x)
+        ((seq_len, _), _) = embedded.dim()
+        seq_run = np.reshape(np.arange(seq_len), (seq_len, 1))
+        pos_embedded = self.pos_embeddings.encode(seq_run)
+        embedded = embedded + pos_embedded
         embedded = dy.dropout(embedded, self.dropout) if train else embedded
         return embedded
 
