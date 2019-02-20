@@ -202,6 +202,9 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
         self.gating = kwargs.get('gating', 'skip')
         self.num_gates = kwargs.get('num_gates', 1)
         self.activation = kwargs.get('activation', 'tanh')
+        print('i am here')
+        print(kwargs)
+        sys
         self.wsz = kwargs.get('wsz', 30)
 
         self.x = None

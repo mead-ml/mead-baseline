@@ -35,11 +35,11 @@ function mead_export {
 
 function check_diff {
     DIFF=$(diff ${1} ${2})
-        if [ "$DIFF" != "" ]
-        then
-            printf "${ERROR_COLOR}${1} does not match with ${2}, exporting failed. \n${END}"
-            exit 1
-        fi
+    if [ "$DIFF" != "" ]
+    then
+        printf "${ERROR_COLOR}${1} does not match with ${2}, exporting failed. \n${END}"
+        exit 1
+    fi
 }
 
 function remove_files {
@@ -70,7 +70,6 @@ function tag_text {
 
 ## get the variables defined in the config into shell
 eval $(sed -e 's/:[^:\/\/]/="/g;s/$/"/g;s/ *=/=/g' $1)
-printf "${MSG_COLOR} configuration read ${END}"
 ## check tf version
 tf_version_test
 docker_clear
@@ -98,7 +97,7 @@ case ${TASK} in
         classify_text ${MODEL_FILE} "" client ${TEST_LOAD} # remote end point is empty, preproc is client
         ;;
     tagger)
-        tag_text ${MODEL_FILE} ${CONLL} ${FEATURES} "" client ${TEST_LOAD}  # remote end point is empty, preproc is client
+        tag_text ${MODEL_FILE} ${CONLL} "${FEATURES}" "" client ${TEST_LOAD}  # remote end point is empty, preproc is client
         ;;
     *)
         printf "${ERROR_COLOR}Unsupported task\n${END}"
@@ -119,7 +118,7 @@ sleep ${SLEEP}
 printf "${MSG_COLOR}processing with served model, preproc=client\n${END}"
 case ${TASK} in
     classify)
-        classify_text ${EXPORT_DIR}/${MODEL_NAME}/1/ ${REMOTE_HOST}:${REMOTE_PORT_GRPC} client ${TEST_SERVE}# valid remote end points, preproc is client.
+        classify_text ${EXPORT_DIR}/${MODEL_NAME}/1/ ${REMOTE_HOST}:${REMOTE_PORT_GRPC} client ${TEST_SERVE} # valid remote end points, preproc is client.
         ;;
     tagger)
         tag_text ${EXPORT_DIR}/${MODEL_NAME}/1/ ${CONLL} ${FEATURES} ${REMOTE_HOST}:${REMOTE_PORT_GRPC} client ${TEST_SERVE}
@@ -167,7 +166,6 @@ printf "${MSG_COLOR}${TASK} export successful.\n${END}"
 if [ "$CLEAN_AFTER_TEST" == "true" ]
 then
     mead-clean
-    FILES_TO_REMOVE=( ${MODEL_FILE}, ${TEST_FILE}, ${CONFIG_FILE}, ${EXPORT_DIR}, ${EXPORT_DIR_PREPROC}, ${TEST_LOAD}, ${TEST_SERVE}, ${TEST_SERVE_PREPROC})
-    remove_files ${FILES_TO_REMOVE}
+    remove_files "${FILES_TO_REMOVE[@]}"
 fi
 exit 0
