@@ -247,6 +247,7 @@ class ClassifierModelBase(ClassifierModel):
         """
         y = batch_dict.get('y', None)
         feed_dict = new_placeholder_dict(train)
+
         for k in self.embeddings.keys():
             feed_dict["{}:0".format(k)] = batch_dict[k]
 
@@ -256,6 +257,7 @@ class ClassifierModelBase(ClassifierModel):
 
         if y is not None:
             feed_dict[self.y] = fill_y(len(self.labels), y)
+
         return feed_dict
 
     def get_labels(self):
@@ -368,7 +370,7 @@ class ClassifierModelBase(ClassifierModel):
         
         :return: A fully-initialized tensorflow classifier 
         """
-
+        TRAIN_FLAG()
         gpus = kwargs.get('gpus', 1)
         if gpus == -1:
             gpus = len(os.getenv('CUDA_VISIBLE_DEVICES', os.getenv('NV_GPU', '0')).split(','))
@@ -425,7 +427,7 @@ class ClassifierModelBase(ClassifierModel):
             x = kwargs.get(k, None)
             embeddings_out = embedding.encode(x)
             all_embeddings_out.append(embeddings_out)
-        word_embeddings = tf.concat(values=all_embeddings_out, axis=2)
+        word_embeddings = tf.concat(values=all_embeddings_out, axis=-1)
         return word_embeddings
 
     def pool(self, word_embeddings, dsz, init, **kwargs):
@@ -618,6 +620,25 @@ class NBowMaxModel(NBowBase):
         :return: The max pooling representation
         """
         return tf.reduce_max(word_embeddings, 1, keepdims=False)
+
+
+@register_model(task='classify', name='fine-tune')
+class FineTuneModel(ClassifierModelBase):
+
+    """Fine-tune based on pre-pooled representations"""
+    def __init__(self):
+        super(FineTuneModel, self).__init__()
+
+    def pool(self, word_embeddings, dsz, init, **kwargs):
+        """Pooling here does nothing, we assume its been pooled already
+
+        :param word_embeddings: The word embedding input
+        :param dsz: The word embedding depth
+        :param init: The tensorflow initializer
+        :param kwargs: None
+        :return: The average pooling representation
+        """
+        return word_embeddings #tf.Print(word_embeddings, [tf.shape(word_embeddings)])
 
 
 @register_model(task='classify', name='composite')
