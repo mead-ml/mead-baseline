@@ -149,6 +149,12 @@ def fit(model, ts, vs, es=None, **kwargs):
     model.sess.run(tables)
     model.sess.run(tf.global_variables_initializer())
     model.set_saver(tf.train.Saver())
+    checkpoint = kwargs.get('checkpoint')
+    if checkpoint is not None:
+        latest = tf.train.latest_checkpoint(checkpoint)
+        print('Reloading ' + latest)
+        model.saver.restore(model.sess, latest)
+
 
     last_improved = 0
 

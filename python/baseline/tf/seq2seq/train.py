@@ -153,6 +153,12 @@ def fit(model, ts, vs, es=None, **kwargs):
     saver = tf.train.Saver()
     trainer.prepare(saver)
 
+    checkpoint = kwargs.get('checkpoint')
+    if checkpoint is not None:
+        latest = tf.train.latest_checkpoint(checkpoint)
+        print('Reloading ' + latest)
+        model.saver.restore(model.sess, latest)
+
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
 
     best_metric = 0
