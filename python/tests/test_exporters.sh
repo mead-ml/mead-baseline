@@ -70,7 +70,7 @@ function tag_text {
 
 ## get the variables defined in the config into shell
 eval $(sed -e 's/:[^:\/\/]/="/g;s/$/"/g;s/ *=/=/g' $1)
-
+printf "${MSG_COLOR} configuration read ${END}"
 ## check tf version
 tf_version_test
 docker_clear

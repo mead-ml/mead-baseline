@@ -6,10 +6,10 @@ BASELINE_DIR: ${PWD}/../../
 SERVING_CONTAINER_NAME: tfserving
 TASK: tagger
 DRIVER: ${BASELINE_DIR}/api-examples/tag-text.py
-TEST_FILE: ${PWD}/eng.testb.small
+TEST_FILE: /home/schoudhury/dev/work/baseline/python/tests/test_data/eng.testb.small.conll
 TEST_FILE_LINK: https://www.dropbox.com/s/pp3pcq5q5ko1df6/eng.testb.small?dl=1
-CONLL: false
-FEATURES: []
+CONLL: true
+FEATURES: text
 MODEL_FILE: ${PWD}/conll-6419.zip
 MODEL_FILE_LINK: https://www.dropbox.com/s/ftv4amoq7dzxnxo/conll-6419.zip?dl=1
 CONFIG_FILE: ${PWD}/conll-tf.json
