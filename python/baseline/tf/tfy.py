@@ -70,7 +70,7 @@ def transition_mask(vocab, span_type, s_idx, e_idx, pad_idx=None):
 
 
 def dense_layer(output_layer_depth):
-    output_layer = tf.keras.layers.Dense(output_layer_depth, use_bias=False, dtype=tf.float32, name="dense")
+    output_layer = tf.layers.Dense(output_layer_depth, use_bias=False, dtype=tf.float32, name="dense")
     return output_layer
 
 
