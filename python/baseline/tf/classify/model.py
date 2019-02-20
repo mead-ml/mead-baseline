@@ -667,13 +667,4 @@ class CompositePoolingModel(ClassifierModelBase):
             pooling.append(SubClass.pool(self, word_embeddings, dsz, init, **kwargs))
         return tf.concat(pooling, -1)
 
-    def stacked(self, pooled, init, **kwargs):
-        """Force at least one hidden layer here
-
-        :param pooled:
-        :param init:
-        :param kwargs:
-        :return:
-        """
-        return pooled
 
