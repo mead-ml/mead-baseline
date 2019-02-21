@@ -78,7 +78,7 @@ class RemoteModelTensorFlowREST(object):
             for i in range(num_ex):
                 length_i = lengths[i]
                 classes_i = classes[i]
-                d = [classes_i[j] for j in range(length_i)]
+                d = [np.array(classes_i[j]) for j in range(length_i)]
                 result.append(d)
 
             return result
@@ -127,7 +127,7 @@ class RemoteModelTensorFlowGRPC(object):
         self.servicepb = import_user_module('tensorflow_serving.apis.prediction_service_pb2_grpc')
         self.metadatapb = import_user_module('tensorflow_serving.apis.get_model_metadata_pb2')
         self.grpc = import_user_module('grpc')
-        
+
         self.remote = remote
         self.name = name
         self.signature = signature
@@ -177,7 +177,12 @@ class RemoteModelTensorFlowGRPC(object):
             else:
                 shape = [1]
 
-            tensor_proto = tf.contrib.util.make_tensor_proto(examples[feature], shape=shape, dtype=tf.int32)
+            dtype = examples[feature].dtype.type
+            if issubclass(dtype, np.integer): dtype = tf.int32
+            elif issubclass(dtype, np.floating): dtype = tf.float32
+            else: dtype = tf.string
+
+            tensor_proto = tf.contrib.util.make_tensor_proto(examples[feature], shape=shape, dtype=dtype)
             request.inputs[feature].CopyFrom(
                 tensor_proto
             )
@@ -217,9 +222,9 @@ class RemoteModelTensorFlowGRPC(object):
                 length = lengths[i]
                 tmp = [np.int32(x) for x in classes[example_len*i:example_len*(i+1)][:length]]
                 result.append(tmp)
-            
+
             return result
-            
+
         if self.signature == 'predict_text':
             scores = predict_response.outputs.get('scores').float_val
             classes = predict_response.outputs.get('classes').string_val
