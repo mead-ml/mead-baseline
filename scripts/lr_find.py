@@ -12,6 +12,7 @@ import numpy as np
 
 
 @register_training_func('classify', name='lr-find')
+@register_training_func('tagger', name='lr-find')
 def fit(model, ts, vs, es, **kwargs):
     num_iters = kwargs.get('num_iters', 5)
     kwargs['warmup_steps'] = num_iters * len(ts)
