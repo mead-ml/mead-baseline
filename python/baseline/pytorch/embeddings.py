@@ -117,7 +117,6 @@ class PositionalCharConvEmbeddings(CharConvEmbeddings):
 
     def __init__(self, _=None, **kwargs):
         super(PositionalCharConvEmbeddings, self).__init__(_, **kwargs)
-
         self.dropout = nn.Dropout(kwargs.get('dropout', 0.1))
         # This could get us in trouble, if in doubt, pick something big
         mxlen = kwargs.get('mxlen', 1000)

@@ -5,7 +5,6 @@ import collections
 import unicodedata
 import six
 import numpy as np
-
 from baseline.utils import write_json
 from baseline.embeddings import register_embeddings
 from baseline.pytorch.embeddings import PyTorchEmbeddings
@@ -21,6 +20,7 @@ import re
 
 
 BERT_TOKENIZER = None
+
 
 
 @register_vectorizer(name='wordpiece1d')
@@ -83,6 +83,7 @@ class BERTBaseEmbeddings(PyTorchEmbeddings):
         self.vocab = BERT_TOKENIZER.vocab
         self.vsz = len(BERT_TOKENIZER.vocab)  # 30522 self.model.embeddings.word_embeddings.num_embeddings
 
+
     def get_vocab(self):
         return self.vocab
 
@@ -122,7 +123,6 @@ class BERTEmbeddings(BERTBaseEmbeddings):
             z = torch.mean(z, dim=-1, keepdim=True)
         return z
 
-
 @register_embeddings(name='bert-pooled')
 class BERTPooledEmbeddings(BERTBaseEmbeddings):
 
@@ -131,3 +131,4 @@ class BERTPooledEmbeddings(BERTBaseEmbeddings):
 
     def get_output(self, all_layers, pooled):
         return pooled
+
