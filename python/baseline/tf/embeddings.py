@@ -128,7 +128,7 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
             unif = kwargs.get('unif', 0.1)
             self.weights = np.random.uniform(-unif, unif, (self.vsz, self.dsz))
 
-        with tf.variable_scope(self.scope):
+        with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
             self.W = tf.get_variable("W",
                                      initializer=tf.constant_initializer(self.weights, dtype=tf.float32, verify_shape=True),
                                      shape=[self.vsz, self.dsz], trainable=self.finetune)
@@ -207,7 +207,7 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
             unif = kwargs.get('unif', 0.1)
             self.weights = np.random.uniform(-unif, unif, (self.vsz, self.dsz))
 
-        with tf.variable_scope(self.scope):
+        with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
             self.Wch = tf.get_variable("Wch",
                                   initializer=tf.constant_initializer(self.weights, dtype=tf.float32, verify_shape=True),
                                   shape=[self.vsz, self.dsz], trainable=True)
@@ -369,7 +369,7 @@ class CharLSTMEmbeddings(TensorFlowEmbeddings):
         if x is None:
             x = CharLSTMEmbeddings.create_placeholder(self.name)
         self.x = x
-        with tf.variable_scope(self.scope):
+        with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
             Wch = tf.get_variable(
                 "Wch",
                 initializer=tf.constant_initializer(self.weights, dtype=tf.float32, verify_shape=True),
