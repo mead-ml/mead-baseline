@@ -38,3 +38,4 @@ m = bl.ClassifierService.load(args.model, backend=args.backend, remote=args.remo
 for texts in batched:
     for text, output in zip(texts, m.predict(texts)):
         print("{}, {}".format(" ".join(text), output[0][0]))
+

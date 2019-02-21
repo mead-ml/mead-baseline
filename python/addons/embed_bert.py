@@ -1440,6 +1440,7 @@ class BERTEmbeddings(TensorFlowEmbeddings):
         write_json({'vsz': self.vsz, 'dsz': self.dsz}, target)
 
 
+
 class BERTHubModel(TensorFlowEmbeddings):
 
 
@@ -1449,7 +1450,7 @@ class BERTHubModel(TensorFlowEmbeddings):
         return tf.placeholder(tf.int32, [None, None], name=name)
 
     def __init__(self, name, **kwargs):
-        super(BERTHubModel, self).__init__(name=name)
+        super(BERTHubModel, self).__init__(name=name, **kwargs)
         self.handle = kwargs.get('embed_file')
         if 'vocab' in kwargs:
             self.vocab = kwargs['vocab']
@@ -1485,7 +1486,6 @@ class BERTHubModel(TensorFlowEmbeddings):
         bert_outputs = bert_module(bert_inputs, signature="tokens", as_dict=True)
         output = self._output(bert_outputs)
         return output # tf.Print(output, [tf.shape(output)])
-
 
     def save_md(self, target):
         write_json({

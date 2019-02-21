@@ -20,6 +20,8 @@ class TensorFlowEmbeddings(tf.keras.layers.Layer):
 
     """
     def __init__(self, trainable=True, name=None, dtype=tf.float32, **kwargs):
+        """Constructor
+        """
         super(TensorFlowEmbeddings, self).__init__(trainable=trainable, name=name, dtype=dtype)
         self._record_state(**kwargs)
 
@@ -122,6 +124,7 @@ class TensorFlowEmbeddings(tf.keras.layers.Layer):
         config = super(TensorFlowEmbeddings, self).get_config()
         config['dsz'] = self.get_dsz()
         config['vsz'] = self.get_vsz()
+        config.update(self._state)
         return config
 
 

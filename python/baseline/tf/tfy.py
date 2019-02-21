@@ -91,6 +91,19 @@ def dense_layer(output_layer_depth):
     return output_layer
 
 
+def reload_embeddings_from_state(embeddings_dict, basename):
+    embeddings = {}
+    for key, class_name in embeddings_dict.items():
+        embed_args = read_json('{}-{}-md.json'.format(basename, key))
+        module = embed_args.pop('module')
+        name = embed_args.pop('name', None)
+        assert name is None or name == key
+        mod = import_user_module(module)
+        Constructor = getattr(mod, class_name)
+        embeddings[key] = Constructor(key, **embed_args)
+    return embeddings
+
+
 def tie_weight(weight, tie_shape):
     """Higher order function to share weights between two layers.
 

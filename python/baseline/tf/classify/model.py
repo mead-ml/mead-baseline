@@ -180,6 +180,7 @@ class ClassifierModelBase(ClassifierModel):
 
         :return: A restored model
         """
+<<<<<<< HEAD
         _state = read_json("{}.state".format(basename))
         if __version__ != _state['version']:
             logger.warning("Loaded model is from baseline version %s, running version is %s", _state['version'], __version__)
@@ -203,6 +204,26 @@ class ClassifierModelBase(ClassifierModel):
             model.saver = tf.train.Saver()
             model.saver.restore(model.sess, basename)
             return model
+=======
+
+        _state = read_json(basename + '.state')
+        _state['sess'] = kwargs.pop('sess', tf.Session())
+        _state['model_type'] = kwargs.get('model_type', 'default')
+        embeddings_dict = _state.pop("embeddings")
+        embeddings = reload_embeddings_from_state(embeddings_dict, basename)
+        labels = read_json(basename + '.labels')
+        model = cls.create(embeddings, labels, **_state)
+        model._state = _state
+        do_init = kwargs.get('init', True)
+        if do_init:
+            init = tf.global_variables_initializer()
+            model.sess.run(init)
+
+        model.saver = tf.train.Saver()
+        model.saver.restore(model.sess, basename)
+
+        return model
+>>>>>>> update with restoring embeddings (classify)
 
     @property
     def lengths_key(self):
