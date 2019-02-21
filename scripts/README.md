@@ -2,6 +2,30 @@
 
 A collection of tools for working with baseline.
 
+## Learning Rate exploration
+
+#### `lr_find.py`
+
+This implements the learning rate finder from [Cyclical Learning Rates for Training Neural Networks (Smith, 2017)](https://arxiv.org/abs/1506.01186). This takes most of the parameters of `mead-train` and will generate a plot like those below. The idea is to choose a learning rate where the decrease in the loss is steepest. This works for classification and tagging in pytorch and tensorflow.
+
+| Kim ConvNet for SST2 | Our Tagger for CONLL2003 |
+|:-|:-|
+|![image](images/LR_Finder.png)|![image](images/tagger_find.png)|
+
+#### `lr_visualize.py`
+
+This takes the parameters that the various learning rate schedulers do and plot it over time to give you an idea of what your learning rate will look like.
+
+| Warmup and Exponential Decay | Cosine Decay |
+|:-|:-|
+|![image](images/ExampleLR.png)|![image](images/CosineLR.png)|
+
+This also saves the lr values to a cache so that they can be compared
+
+#### `lr_compare.py`
+
+This simply reads from the cache created by multiple runs of `lr_visualize.py` and plots them together for easy comparison.
+
 
 ### `bump.py`
 

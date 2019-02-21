@@ -27,13 +27,13 @@ def fit(model, ts, vs, es, **kwargs):
     diverge_threshold = kwargs.get('diverge_threshold', 5)
     stop = False
     i = 0
-    # be = kwargs.get('backend', 'tf')
-    # if be == 'tf':
-    #     import tensorflow as tf
-    #     tables = tf.tables_initializer()
-    #     model.sess.run(tables)
-    #     model.sess.run(tf.global_variables_initializer())
-    #     model.set_saver(tf.train.Saver())
+    be = kwargs.get('backend', 'tf')
+    if be == 'tf':
+        import tensorflow as tf
+        tables = tf.tables_initializer()
+        model.sess.run(tables)
+        model.sess.run(tf.global_variables_initializer())
+        model.set_saver(tf.train.Saver())
 
 
     for _ in range(num_iters):
@@ -53,7 +53,10 @@ def fit(model, ts, vs, es, **kwargs):
                 loss /= (1 - beta ** i)
 
             losses.append(loss)
-            lrs.append(trainer.optimizer.current_lr)
+            if be == 'tf':
+                lrs.append(model.sess.run("OptimizeLoss/lr:0"))
+            else:
+                lrs.append(trainer.optimizer.current_lr)
 
             if loss < best_loss:
                 best_loss = loss
