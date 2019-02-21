@@ -836,11 +836,11 @@ class ELMoVectorizer(AbstractVectorizer):
         if self.vocab is None:
             self.vocab = UnicodeCharsVocabulary(vocab)
         token_list = [t for t in self.iterable(tokens)]
-        length = len(token_list) + 2
-        vec = np.zeros((self.mxlen+2, self.mxwlen), dtype=np.int32)
+        length = min(len(token_list), self.mxlen) + 2
+        vec = np.zeros((self.mxlen + 2, self.mxwlen), dtype=np.int32)
         char_ids_without_mask = self.vocab.encode_chars(token_list, split=False)
         # add one so that 0 is the mask value
-        vec[:length, :] = char_ids_without_mask + 1
+        vec[:length, :] = char_ids_without_mask[:length, :] + 1
 
         return vec, length
 
