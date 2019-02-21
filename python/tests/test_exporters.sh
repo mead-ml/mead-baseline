@@ -1,13 +1,30 @@
 #!/usr/bin/env bash
 
+function msg_print {
+    printf "${MSG_COLOR}$1\n${END}"
+}
+
+function err_print {
+    printf "${ERROR_COLOR}$1\n${END}"
+}
+
 function tf_version_test {
     TF_VERSION_TEST=`python -c 'import tensorflow; from distutils.version import LooseVersion; import sys; i = "fail" if LooseVersion(tensorflow.__version__) < LooseVersion("1.12.0") else "pass"; print(i)'`
 
     if [ "$TF_VERSION_TEST" == "fail" ]
         then
-            printf "${ERROR_COLOR}models were trained with tf version 1.12, you have a lower version. please upgrade.\n${END}"
+            err_print "models were trained with tf version 1.12, you have a lower version. please upgrade."
             exit 1
     fi
+}
+
+function clean {
+    if [ "$CLEAN_AFTER_TEST" == "true" ]
+    then
+        mead-clean
+        remove_files "${FILES_TO_REMOVE[@]}"
+    fi
+    exit 0
 }
 
 function docker_clear {
@@ -22,9 +39,9 @@ function docker_run {
 function get_file {
      if [ -f $1 ];
          then
-         printf "${MSG_COLOR} $1 locally found, not downloading\n${END}"
+         msg_print " $1 locally found, not downloading"
      else
-         printf "${MSG_COLOR} $1 locally not found, downloading $2\n${END}"
+         msg_print " $1 locally not found, downloading $2"
          wget $2 -O $1
      fi
 }
@@ -37,7 +54,7 @@ function check_diff {
     DIFF=$(diff ${1} ${2})
     if [ "$DIFF" != "" ]
     then
-        printf "${ERROR_COLOR}${1} does not match with ${2}, exporting failed. \n${END}"
+        err_print "${1} does not match with ${2}, exporting failed. "
         exit 1
     fi
 }
@@ -68,6 +85,7 @@ function tag_text {
     fi
 }
 
+
 ## get the variables defined in the config into shell
 eval $(sed -e 's/:[^:\/\/]/="/g;s/$/"/g;s/ *=/=/g' $1)
 ## check tf version
@@ -82,8 +100,8 @@ remove_files "${FILES_TO_REMOVE[@]}"
 NUM_LINES_TO_REMOVE_LOAD=`expr "$NUM_FEATURES" + 3`
 NUM_LINES_TO_REMOVE_SERVE=`expr "$NUM_FEATURES" + 2`
 
-printf "${MSG_COLOR}running test for ${TASK}\n${END}"
-printf "${MSG_COLOR}------------------------\n${END}"
+msg_print "running test for ${TASK}"
+msg_print "------------------------"
 
 ## get the files
 get_file ${MODEL_FILE} ${MODEL_FILE_LINK}
@@ -91,7 +109,7 @@ get_file ${TEST_FILE} ${TEST_FILE_LINK}
 get_file ${CONFIG_FILE} ${CONFIG_FILE_LINK}
 
 ## load model and process data
-printf "${MSG_COLOR}processing by loading the model\n${END}"
+msg_print "processing by loading the model"
 case ${TASK} in
     classify)
         classify_text ${MODEL_FILE} "" client ${TEST_LOAD} # remote end point is empty, preproc is client
@@ -100,31 +118,31 @@ case ${TASK} in
         tag_text ${MODEL_FILE} ${CONLL} "${FEATURES}" "" client ${TEST_LOAD}  # remote end point is empty, preproc is client
         ;;
     *)
-        printf "${ERROR_COLOR}Unsupported task\n${END}"
+        err_print "Unsupported task"
         exit 1
         ;;
 esac
 sleep ${SLEEP}
 
 ## export with preproc=client and process data
-printf "${MSG_COLOR}exporting model with preproc=client\n${END}"
+msg_print "exporting model with preproc=client"
 mkdir -p ${EXPORT_DIR}
 mead_export default ${EXPORT_DIR}/${MODEL_NAME}
 sleep ${SLEEP}
-printf "${MSG_COLOR}running tf serving\n${END}"
+msg_print "running tf serving"
 docker_clear
 docker_run ${EXPORT_DIR}:/models
 sleep ${SLEEP}
-printf "${MSG_COLOR}processing with served model, preproc=client\n${END}"
+msg_print "processing with served model, preproc=client"
 case ${TASK} in
     classify)
         classify_text ${EXPORT_DIR}/${MODEL_NAME}/1/ ${REMOTE_HOST}:${REMOTE_PORT_GRPC} client ${TEST_SERVE} # valid remote end points, preproc is client.
         ;;
     tagger)
-        tag_text ${EXPORT_DIR}/${MODEL_NAME}/1/ ${CONLL} ${FEATURES} ${REMOTE_HOST}:${REMOTE_PORT_GRPC} client ${TEST_SERVE}
+        tag_text ${EXPORT_DIR}/${MODEL_NAME}/1/ ${CONLL} "${FEATURES}" ${REMOTE_HOST}:${REMOTE_PORT_GRPC} client ${TEST_SERVE}
         ;;
     *)
-        printf "${ERROR_COLOR}Unsupported task\n${END}"
+        err_print "Unsupported task"
         exit 1
         ;;
 esac
@@ -134,25 +152,36 @@ sed -i -e 1,${NUM_LINES_TO_REMOVE_LOAD}d ${TEST_LOAD}
 sed -i -e 1,${NUM_LINES_TO_REMOVE_SERVE}d ${TEST_SERVE}
 check_diff ${TEST_LOAD} ${TEST_SERVE}
 
-## export with preproc=server and classify
-printf "${MSG_COLOR}exporting model with preproc=server\n${END}"
+## if there are multiple features, eg: word, ner we don't support server side preprocessing for now. so, end here.
+## we check that by checking if the variable features has space.
+pattern=" |'"
+if [[ "$FEATURES" =~ $pattern ]]
+then
+    msg_print "you have multiple features in your input file, not running preproc=server tests"
+    docker_clear
+    clean
+    exit 0
+fi
+
+## export with preproc=server and process data
+msg_print "exporting model with preproc=server"
 mkdir -p ${EXPORT_DIR_PREPROC}
 mead_export preproc ${EXPORT_DIR_PREPROC}/${MODEL_NAME}
 sleep ${SLEEP}
-printf "${MSG_COLOR}running tf serving\n${END}"
+msg_print "running tf serving"
 docker_clear
 docker_run ${EXPORT_DIR_PREPROC}:/models
-printf "${MSG_COLOR}processing with served model, preproc=server\n${END}"
+msg_print "processing with served model, preproc=server"
 case ${TASK} in
     classify)
         classify_text ${EXPORT_DIR_PREPROC}/${MODEL_NAME}/1/ ${REMOTE_HOST}:${REMOTE_PORT_GRPC} server ${TEST_SERVE_PREPROC} # valid remote end points, preproc is server.
         ;;
     tagger)
-        tag_text ${EXPORT_DIR_PREPROC}/${MODEL_NAME}/1/ ${CONLL} ${FEATURES} ${REMOTE_HOST}:${REMOTE_PORT_GRPC} server ${TEST_SERVE_PREPROC}
+        tag_text ${EXPORT_DIR_PREPROC}/${MODEL_NAME}/1/ ${CONLL} "${FEATURES}" ${REMOTE_HOST}:${REMOTE_PORT_GRPC} server ${TEST_SERVE_PREPROC}
 
         ;;
     *)
-        printf "${ERROR_COLOR}Unsupported task\n${END}"
+        err_print "Unsupported task"
         exit 1
         ;;
 esac
@@ -160,12 +189,7 @@ docker_clear
 # remove first few lines and check if the outputs match
 sed -i -e 1,${NUM_LINES_TO_REMOVE_SERVE}d ${TEST_SERVE_PREPROC}
 check_diff ${TEST_SERVE} ${TEST_SERVE_PREPROC}
-printf "${MSG_COLOR}${TASK} export successful.\n${END}"
+msg_print "${TASK} export successful."
 
 ## if successful, clean the files
-if [ "$CLEAN_AFTER_TEST" == "true" ]
-then
-    mead-clean
-    remove_files "${FILES_TO_REMOVE[@]}"
-fi
-exit 0
+clean
