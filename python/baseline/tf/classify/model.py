@@ -143,15 +143,8 @@ class ClassifierModelBase(ClassifierModel):
         _state = read_json(basename + '.state')
         _state['sess'] = kwargs.pop('sess', tf.Session())
         _state['model_type'] = kwargs.get('model_type', 'default')
-        embeddings = {}
         embeddings_dict = _state.pop("embeddings")
-
-        for key, class_name in embeddings_dict.items():
-            md = read_json('{}-{}-md.json'.format(basename, key))
-            embed_args = dict({'vsz': md['vsz'], 'dsz': md['dsz']})
-            Constructor = eval(class_name)
-            embeddings[key] = Constructor(key, **embed_args)
-
+        embeddings = reload_embeddings_from_state(embeddings_dict, basename)
         labels = read_json(basename + '.labels')
         model = cls.create(embeddings, labels, **_state)
         model._state = _state

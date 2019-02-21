@@ -1,5 +1,5 @@
 import numpy as np
-from baseline.utils import transition_mask as transition_mask_np
+from baseline.utils import transition_mask as transition_mask_np, read_json, import_user_module
 from eight_mile.tf.layers import *
 
 def _add_ema(model, decay):
@@ -72,6 +72,19 @@ def transition_mask(vocab, span_type, s_idx, e_idx, pad_idx=None):
 def dense_layer(output_layer_depth):
     output_layer = tf.layers.Dense(output_layer_depth, use_bias=False, dtype=tf.float32, name="dense")
     return output_layer
+
+
+def reload_embeddings_from_state(embeddings_dict, basename):
+    embeddings = {}
+    for key, class_name in embeddings_dict.items():
+        embed_args = read_json('{}-{}-md.json'.format(basename, key))
+        module = embed_args.pop('module')
+        name = embed_args.pop('name', None)
+        assert name is None or name == key
+        mod = import_user_module(module)
+        Constructor = getattr(mod, class_name)
+        embeddings[key] = Constructor(key, **embed_args)
+    return embeddings
 
 
 def tie_weight(weight, tie_shape):

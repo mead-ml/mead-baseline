@@ -697,6 +697,24 @@ class BahdanauAttention(BaseAttention):
         return attended
 
 
+class FineTuneModel(nn.Module):
+
+    def __init__(self, nc, embeddings, stack_model=None):
+        super(FineTuneModel, self).__init__()
+        if isinstance(embeddings, dict):
+            self.finetuned = EmbeddingsStack(embeddings)
+        else:
+            self.finetuned = embeddings
+        self.stack_model = stack_model
+        output_dim = self.finetuned.get_dsz() if stack_model is None else stack_model.output_dim
+        self.output_layer = Dense(output_dim, nc, activation="log_softmax")
+
+    def forward(self, inputs):
+        base_layers = self.finetuned(inputs)
+        stacked = self.stack_model(base_layers) if self.stack_model is not None else base_layers
+        return self.output_layer(stacked)
+
+
 class EmbedPoolStackModel(nn.Module):
 
     def __init__(self, nc, embeddings, pool_model, stack_model=None):

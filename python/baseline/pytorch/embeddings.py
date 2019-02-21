@@ -19,7 +19,7 @@ from baseline.pytorch.torchy import (
 
 class PyTorchEmbeddings(object):
 
-    def __init__(self):
+    def __init__(self, name=None, **kwargs):
         super(PyTorchEmbeddings).__init__()
 
     def get_vsz(self):
@@ -39,8 +39,8 @@ class PyTorchEmbeddings(object):
 @register_embeddings(name='default')
 class LookupTableEmbeddings(nn.Module, PyTorchEmbeddings):
 
-    def __init__(self, _, **kwargs):
-        super(LookupTableEmbeddings, self).__init__()
+    def __init__(self, name=None, **kwargs):
+        super(LookupTableEmbeddings, self).__init__(name, **kwargs)
         self.vsz = kwargs.get('vsz')
         self.dsz = kwargs.get('dsz')
         self.finetune = kwargs.get('finetune', True)
@@ -63,8 +63,8 @@ class LookupTableEmbeddings(nn.Module, PyTorchEmbeddings):
 @register_embeddings(name='char-conv')
 class CharConvEmbeddings(nn.Module, PyTorchEmbeddings):
 
-    def __init__(self, name, **kwargs):
-        super(CharConvEmbeddings, self).__init__()
+    def __init__(self, name=None, **kwargs):
+        super(CharConvEmbeddings, self).__init__(name, **kwargs)
         self.vsz = kwargs.get('vsz')
         dsz = kwargs.get('dsz')
         self.finetune = kwargs.get('finetune', True)

@@ -7,14 +7,16 @@ from baseline.tf.tfy import pool_chars, get_shape_as_list, stacked_lstm
 import copy
 import six
 
+
 class TensorFlowEmbeddings(tf.keras.layers.Layer):
     """This provides a base for TensorFlow embeddings sub-graphs
 
     """
-    def __init__(self, trainable=True, name=None, dtype=tf.float32):
+    def __init__(self, trainable=True, name=None, dtype=tf.float32, **kwargs):
         """Constructor
         """
         super(TensorFlowEmbeddings, self).__init__(trainable=trainable, name=name, dtype=dtype)
+        self._record_state(**kwargs)
 
     def detached_ref(self):
         """This will detach any attached input and reference the same sub-graph otherwise
@@ -73,7 +75,7 @@ class TensorFlowEmbeddings(tf.keras.layers.Layer):
         :return:
         """
         obj = cls(name, vsz=model.vsz, dsz=model.dsz, weights=model.weights, **kwargs)
-        obj._record_state(**kwargs)
+
         return obj
 
     def _record_state(self, **kwargs):
@@ -91,6 +93,7 @@ class TensorFlowEmbeddings(tf.keras.layers.Layer):
         config = super(TensorFlowEmbeddings, self).get_config()
         config['dsz'] = self.get_dsz()
         config['vsz'] = self.get_vsz()
+        config.update(self._state)
         return config
 
 

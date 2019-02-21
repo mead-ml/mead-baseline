@@ -1,6 +1,6 @@
 {
   "task": "classify",
-  "basedir": "./sst2",
+  "basedir": "./sst2-bert",
   "batchsz": 50,
   "modules": [
     "embed_bert"
@@ -15,6 +15,7 @@
       "embeddings": {
         "type": "bert-pooled",
         "embed_file": "https://tfhub.dev/google/bert_uncased_L-12_H-768_A-12/1",
+        "vocab_file": "/home/dpressel/dev/work/bert/uncased_L-12_H-768_A-12/vocab.txt",
         "dsz": 768,
         "trainable": true
       }
@@ -34,7 +35,7 @@
     "finetune": true
   },
   "train": {
-    "epochs": 5,
+    "epochs": 1,
     "optim": "adamw",
     "eta":  0.00001,
     "weight_decay": 1.0e-8,
