@@ -79,15 +79,15 @@ function classify_text {
 function tag_text {
     if [ -z "$4" ]
     then
-        python ${DRIVER} --model $1 --text ${TEST_FILE} --conll $2 --features $3 --name ${MODEL_NAME} > $6
+        python ${DRIVER} --model $1 --text ${TEST_FILE} --conll $2 --features $3 --name ${MODEL_NAME} > $7
     else
-        python ${DRIVER} --model $1 --text ${TEST_FILE} --conll $2 --features $3 --remote ${4} --name ${MODEL_NAME} --preproc $5 > $6
+        python ${DRIVER} --model $1 --text ${TEST_FILE} --conll $2 --features $3 --remote ${4} --name ${MODEL_NAME} --preproc $5 --grpc_feature_map $6 > $7
     fi
 }
 
 
 ## get the variables defined in the config into shell
-eval $(sed -e 's/:[^:\/\/]/="/g;s/$/"/g;s/ *=/=/g' $1)
+eval $(sed -e 's/:[^:\/\/]/="/;s/$/"/g;s/ *=/=/g' $1)
 ## check tf version
 tf_version_test
 docker_clear
@@ -115,7 +115,7 @@ case ${TASK} in
         classify_text ${MODEL_FILE} "" client ${TEST_LOAD} # remote end point is empty, preproc is client
         ;;
     tagger)
-        tag_text ${MODEL_FILE} ${CONLL} "${FEATURES}" "" client ${TEST_LOAD}  # remote end point is empty, preproc is client
+        tag_text ${MODEL_FILE} ${CONLL} "${FEATURES}" "" client "{}" ${TEST_LOAD}  # remote end point is empty, preproc is client
         ;;
     *)
         err_print "Unsupported task"
@@ -139,7 +139,7 @@ case ${TASK} in
         classify_text ${EXPORT_DIR}/${MODEL_NAME}/1/ ${REMOTE_HOST}:${REMOTE_PORT_GRPC} client ${TEST_SERVE} # valid remote end points, preproc is client.
         ;;
     tagger)
-        tag_text ${EXPORT_DIR}/${MODEL_NAME}/1/ ${CONLL} "${FEATURES}" ${REMOTE_HOST}:${REMOTE_PORT_GRPC} client ${TEST_SERVE}
+        tag_text ${EXPORT_DIR}/${MODEL_NAME}/1/ ${CONLL} "${FEATURES}" ${REMOTE_HOST}:${REMOTE_PORT_GRPC} client "{}" ${TEST_SERVE}
         ;;
     *)
         err_print "Unsupported task"
@@ -147,21 +147,10 @@ case ${TASK} in
         ;;
 esac
 sleep ${SLEEP}
-# remove first few lines and check if the outputs match
+ remove first few lines and check if the outputs match
 sed -i -e 1,${NUM_LINES_TO_REMOVE_LOAD}d ${TEST_LOAD}
 sed -i -e 1,${NUM_LINES_TO_REMOVE_SERVE}d ${TEST_SERVE}
 check_diff ${TEST_LOAD} ${TEST_SERVE}
-
-## if there are multiple features, eg: word, ner we don't support server side preprocessing for now. so, end here.
-## we check that by checking if the variable features has space.
-pattern=" |'"
-if [[ "$FEATURES" =~ $pattern ]]
-then
-    msg_print "you have multiple features in your input file, not running preproc=server tests"
-    docker_clear
-    clean
-    exit 0
-fi
 
 ## export with preproc=server and process data
 msg_print "exporting model with preproc=server"
@@ -177,7 +166,7 @@ case ${TASK} in
         classify_text ${EXPORT_DIR_PREPROC}/${MODEL_NAME}/1/ ${REMOTE_HOST}:${REMOTE_PORT_GRPC} server ${TEST_SERVE_PREPROC} # valid remote end points, preproc is server.
         ;;
     tagger)
-        tag_text ${EXPORT_DIR_PREPROC}/${MODEL_NAME}/1/ ${CONLL} "${FEATURES}" ${REMOTE_HOST}:${REMOTE_PORT_GRPC} server ${TEST_SERVE_PREPROC}
+        tag_text ${EXPORT_DIR_PREPROC}/${MODEL_NAME}/1/ ${CONLL} "${FEATURES}" ${REMOTE_HOST}:${REMOTE_PORT_GRPC} server "${GRPC_FEATURE_MAP}" ${TEST_SERVE_PREPROC}
 
         ;;
     *)

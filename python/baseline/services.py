@@ -276,12 +276,18 @@ class TaggerService(Service):
 
         """
         preproc = kwargs.get('preproc', 'client')
+        exporter_field_feature_map = kwargs.get('exporter_field_feature_map', {'tokens': 'text'})
         label_field = kwargs.get('label', 'label')
         tokens_seq, mxlen, mxwlen = self.batch_input(tokens)
         self.set_vectorizer_lens(mxlen, mxwlen)
         examples = self.vectorize(tokens_seq)
         if preproc == 'server':
-            examples['tokens'] = [" ".join([y['text'] for y in x]) for x in tokens_seq]
+            unfeaturized_examples = {}
+            for exporter_field in exporter_field_feature_map:
+                unfeaturized_examples[exporter_field] = [" ".join([y[exporter_field_feature_map[exporter_field]]
+                                                                   for y in x]) for x in tokens_seq]
+            unfeaturized_examples['word_lengths'] = examples['word_lengths']  # LSTM requires lengths to be supplied
+            examples = unfeaturized_examples
 
         outcomes = self.model.predict(examples)
         outputs = []

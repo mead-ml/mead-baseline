@@ -32,8 +32,8 @@ SignatureOutput = namedtuple("SignatureOutput", ("classes", "scores"))
 @exporter
 class TensorFlowExporter(mead.exporters.Exporter):
 
-    def __init__(self, task):
-        super(TensorFlowExporter, self).__init__(task)
+    def __init__(self, task, **kwargs):
+        super(TensorFlowExporter, self).__init__(task, **kwargs)
 
     def _run(self, sess, basename, **kwargs):
         pass
@@ -112,8 +112,8 @@ class TensorFlowExporter(mead.exporters.Exporter):
 @register_exporter(task='classify', name='default')
 class ClassifyTensorFlowExporter(TensorFlowExporter):
 
-    def __init__(self, task):
-        super(ClassifyTensorFlowExporter, self).__init__(task)
+    def __init__(self, task, **kwargs):
+        super(ClassifyTensorFlowExporter, self).__init__(task, **kwargs)
 
     def _create_model(self, sess, basename, **kwargs):
         model = load_model(basename, sess=sess, **kwargs)
@@ -145,8 +145,8 @@ class ClassifyTensorFlowExporter(TensorFlowExporter):
 @register_exporter(task='tagger', name='default')
 class TaggerTensorFlowExporter(TensorFlowExporter):
 
-    def __init__(self, task):
-        super(TaggerTensorFlowExporter, self).__init__(task)
+    def __init__(self, task, **kwargs):
+        super(TaggerTensorFlowExporter, self).__init__(task, **kwargs)
 
     def _create_model(self, sess, basename, **kwargs):
         model = load_tagger_model(basename, sess=sess, **kwargs)
@@ -197,8 +197,8 @@ class Seq2SeqTensorFlowExporter(TensorFlowExporter):
     TARGET_STATE_EMBED_KEY = 'tgt_embedding'
     TARGET_EMBED_KEY = 'tgt'
 
-    def __init__(self, task):
-        super(Seq2SeqTensorFlowExporter, self).__init__(task)
+    def __init__(self, task, **kwargs):
+        super(Seq2SeqTensorFlowExporter, self).__init__(task, **kwargs)
 
     def _create_model(self, sess, basename, **kwargs):
         model = load_seq2seq_model(

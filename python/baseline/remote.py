@@ -245,14 +245,15 @@ class RemoteModelTensorFlowGRPCPreproc(RemoteModelTensorFlowGRPC):
         request = self.predictpb.PredictRequest()
         request.model_spec.name = self.name
         request.model_spec.signature_name = self.signature
-        request.inputs['tokens'].CopyFrom(
-            tf.contrib.util.make_tensor_proto(examples['tokens'], shape=[len(examples['tokens']), 1])
-        )
-        for feature in self.input_keys:  # not really happy with this hack
-            if feature.endswith('lengths'):
-                shape = examples[feature].shape
-                tensor_proto = tf.contrib.util.make_tensor_proto(examples[feature], shape=shape, dtype=tf.int32)
-                request.inputs[feature].CopyFrom(
+        for key in examples:
+            if key.endswith('lengths'):
+                shape = examples[key].shape
+                tensor_proto = tf.contrib.util.make_tensor_proto(examples[key], shape=shape, dtype=tf.int32)
+                request.inputs[key].CopyFrom(
                     tensor_proto
+                )
+            else:
+                request.inputs[key].CopyFrom(
+                    tf.contrib.util.make_tensor_proto(examples[key], shape=[len(examples[key]), 1])
                 )
         return request
