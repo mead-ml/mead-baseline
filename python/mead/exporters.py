@@ -39,5 +39,5 @@ def register_exporter(cls, task, name=None):
     return cls
 
 
-def create_exporter(task, name=None, feature_exporter_field_map={}):
-    return BASELINE_EXPORTERS[task.task_name()][name](task, feature_exporter_field_map=feature_exporter_field_map)
+def create_exporter(task, name=None, **kwargs):
+    return BASELINE_EXPORTERS[task.task_name()][name](task, **kwargs)

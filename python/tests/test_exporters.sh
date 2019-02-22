@@ -47,7 +47,7 @@ function get_file {
 }
 
 function mead_export {
-    mead-export --config ${CONFIG_FILE} --settings ${EXPORT_SETTINGS_MEAD} --datasets ${EXPORT_SETTINGS_DATASETS} --task ${TASK} --exporter_type ${1} --model ${MODEL_FILE} --model_version ${MODEL_VERSION} --output_dir $2 --is_remote ${IS_REMOTE}
+    mead-export --config ${CONFIG_FILE} --settings ${EXPORT_SETTINGS_MEAD} --datasets ${EXPORT_SETTINGS_DATASETS} --task ${TASK} --exporter_type ${1} --model ${MODEL_FILE} --model_version ${MODEL_VERSION} --output_dir $2 --is_remote ${IS_REMOTE} --return_labels ${3}
 }
 
 function check_diff {
@@ -127,7 +127,7 @@ sleep ${SLEEP}
 ## export with preproc=client and process data
 msg_print "exporting model with preproc=client"
 mkdir -p ${EXPORT_DIR}
-mead_export default ${EXPORT_DIR}/${MODEL_NAME}
+mead_export default ${EXPORT_DIR}/${MODEL_NAME} ${RETURN_LABELS}
 sleep ${SLEEP}
 msg_print "running tf serving"
 docker_clear
@@ -147,7 +147,7 @@ case ${TASK} in
         ;;
 esac
 sleep ${SLEEP}
- remove first few lines and check if the outputs match
+#remove first few lines and check if the outputs match
 sed -i -e 1,${NUM_LINES_TO_REMOVE_LOAD}d ${TEST_LOAD}
 sed -i -e 1,${NUM_LINES_TO_REMOVE_SERVE}d ${TEST_SERVE}
 check_diff ${TEST_LOAD} ${TEST_SERVE}
@@ -155,7 +155,7 @@ check_diff ${TEST_LOAD} ${TEST_SERVE}
 ## export with preproc=server and process data
 msg_print "exporting model with preproc=server"
 mkdir -p ${EXPORT_DIR_PREPROC}
-mead_export preproc ${EXPORT_DIR_PREPROC}/${MODEL_NAME}
+mead_export preproc ${EXPORT_DIR_PREPROC}/${MODEL_NAME} ${RETURN_LABELS}
 sleep ${SLEEP}
 msg_print "running tf serving"
 docker_clear
@@ -174,7 +174,7 @@ case ${TASK} in
         exit 1
         ;;
 esac
-docker_clear
+#docker_clear
 # remove first few lines and check if the outputs match
 sed -i -e 1,${NUM_LINES_TO_REMOVE_SERVE}d ${TEST_SERVE_PREPROC}
 check_diff ${TEST_SERVE} ${TEST_SERVE_PREPROC}

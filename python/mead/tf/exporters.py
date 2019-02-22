@@ -114,6 +114,7 @@ class ClassifyTensorFlowExporter(TensorFlowExporter):
 
     def __init__(self, task, **kwargs):
         super(ClassifyTensorFlowExporter, self).__init__(task, **kwargs)
+        self.return_labels = kwargs.get('return_labels', False)
 
     def _create_model(self, sess, basename, **kwargs):
         model = load_model(basename, sess=sess, **kwargs)
@@ -121,9 +122,15 @@ class ClassifyTensorFlowExporter(TensorFlowExporter):
         class_tensor = tf.constant(model.labels)
         table = tf.contrib.lookup.index_to_string_table_from_tensor(class_tensor)
         classes = table.lookup(tf.to_int64(indices))
-        return model, classes, values
 
-    def _create_rpc_call(self, sess, basename):
+        # Restore the checkpoint
+        self._restore_checkpoint(sess, basename)
+        if self.return_labels:
+            return model, classes, values
+        else:
+            return model, indices, values
+
+    def _create_rpc_call(self, sess, basename, **kwargs):
         model, classes, values = self._create_model(sess, basename)
 
         predict_tensors = {}
@@ -147,14 +154,22 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
 
     def __init__(self, task, **kwargs):
         super(TaggerTensorFlowExporter, self).__init__(task, **kwargs)
+        self.return_labels = kwargs.get('return_labels', False)  # keep default behavior
 
     def _create_model(self, sess, basename, **kwargs):
         model = load_tagger_model(basename, sess=sess, **kwargs)
         softmax_output = tf.nn.softmax(model.probs)
         values, indices = tf.nn.top_k(softmax_output, 1)
-        return model, model.best, values
+        class_tensor = tf.constant(list_of_labels)
+        table = tf.contrib.lookup.index_to_string_table_from_tensor(class_tensor)
+        classes = table.lookup(tf.to_int64(indices))
+        self._restore_checkpoint(sess, basename)
+        if self.return_labels:
+            return model, classes, values
+        else:
+            return model, indices, values
 
-    def _create_rpc_call(self, sess, basename):
+    def _create_rpc_call(self, sess, basename, **kwargs):
         model, classes, values = self._create_model(sess, basename)
 
         predict_tensors = {}

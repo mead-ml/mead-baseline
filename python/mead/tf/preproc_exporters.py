@@ -103,9 +103,9 @@ class PreProcessorController(object):
 @register_exporter(task='classify', name='preproc')
 class ClassifyTensorFlowPreProcExporter(ClassifyTensorFlowExporter):
 
-    def __init__(self, task, feature_exporter_field_map):
-        super(ClassifyTensorFlowPreProcExporter, self).__init__(task)
-        self.feature_exporter_field_map = feature_exporter_field_map
+    def __init__(self, task, **kwargs):
+        super(ClassifyTensorFlowPreProcExporter, self).__init__(task, **kwargs)
+        self.feature_exporter_field_map = kwargs.get('feature_exporter_field_map', {'tokens': 'text'})
 
     def _create_rpc_call(self, sess, model_file):
         model_base_dir = os.path.split(model_file)[0]
@@ -132,9 +132,9 @@ class ClassifyTensorFlowPreProcExporter(ClassifyTensorFlowExporter):
 @register_exporter(task='tagger', name='preproc')
 class TaggerTensorFlowPreProcExporter(TaggerTensorFlowExporter):
 
-    def __init__(self, task, feature_exporter_field_map):
-        super(TaggerTensorFlowPreProcExporter, self).__init__(task)
-        self.feature_exporter_field_map = feature_exporter_field_map
+    def __init__(self, task, **kwargs):
+        super(TaggerTensorFlowPreProcExporter, self).__init__(task, **kwargs)
+        self.feature_exporter_field_map = kwargs.get('feature_exporter_field_map', {'tokens': 'text'})
 
     def _create_rpc_call(self, sess, model_file):
         model_base_dir = os.path.split(model_file)[0]

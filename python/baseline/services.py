@@ -122,8 +122,7 @@ class Service(object):
         name = kwargs.get("name", None)
         if remote:
             beam = kwargs.get('beam', 10)
-            model = Service._create_remote_model(directory, be, remote, name, cls.signature_name(), beam,
-                                                 preproc=kwargs.get('preproc', 'client'))
+            model = Service._create_remote_model(directory, be, remote, name, cls.signature_name(), beam, preproc=kwargs.get('preproc', False))
             return cls(vocabs, vectorizers, model)
 
         # Currently nothing to do here
@@ -135,7 +134,7 @@ class Service(object):
         return cls(vocabs, vectorizers, model)
 
     @staticmethod
-    def _create_remote_model(directory, backend, remote, name, signature_name, beam, preproc='client'):
+    def _create_remote_model(directory, backend, remote, name, signature_name, beam, **kwargs):
         """Reads the necessary information from the remote bundle to instatiate
         a client for a remote model.
 
@@ -147,9 +146,11 @@ class Service(object):
 
         :returns a RemoteModel
         """
+        preproc = kwargs.get('preproc', 'client')
         assets = read_json(os.path.join(directory, 'model.assets'))
         model_name = assets['metadata']['exported_model']
-        labels = read_json(os.path.join(directory, model_name) + '.labels')
+        label_file = os.path.join(directory, model_name) + '.labels'
+        labels = read_json(label_file)
         lengths_key = assets.get('lengths_key', None)
         inputs = assets.get('inputs', [])
 
@@ -161,7 +162,8 @@ class Service(object):
                 RemoteModel = remote_models.RemoteModelTensorFlowGRPCPreproc
             else:
                 RemoteModel = remote_models.RemoteModelTensorFlowGRPC
-            model = RemoteModel(remote, name, signature_name, labels=labels, lengths_key=lengths_key, inputs=inputs, beam=beam)
+            model = RemoteModel(remote, name, signature_name, labels=labels, lengths_key=lengths_key, inputs=inputs,
+                                beam=beam)
         else:
             raise ValueError("only Tensorflow is currently supported for remote Services")
 
@@ -183,11 +185,13 @@ class ClassifierService(Service):
         """Take tokens and apply the internal vocab and vectorizers.  The tokens should be either a batch of text
         single utterance of type ``list``
         """
-        token_seq, mxlen, mxwlen = self.batch_input(tokens)
+        tokens_seq, mxlen, mxwlen = self.batch_input(tokens)
         self.set_vectorizer_lens(mxlen, mxwlen)
-        examples = self.vectorize(token_seq)
-        if preproc == 'server':
-            examples['tokens'] = [" ".join(x) for x in token_seq]
+        if preproc == "client":
+            examples = self.vectorize(tokens_seq)
+        elif preproc == 'server':
+            examples = {'tokens': [" ".join(x) for x in tokens_seq]}
+
         outcomes_list = self.model.predict(examples)
         results = []
         for outcomes in outcomes_list:
@@ -280,13 +284,15 @@ class TaggerService(Service):
         label_field = kwargs.get('label', 'label')
         tokens_seq, mxlen, mxwlen = self.batch_input(tokens)
         self.set_vectorizer_lens(mxlen, mxwlen)
+        # TODO: unlike classify, here we allow vectorizers even for preproc=server to get `word_lengths`.
+        # vectorizers should not be available when preproc=server.
         examples = self.vectorize(tokens_seq)
         if preproc == 'server':
             unfeaturized_examples = {}
             for exporter_field in exporter_field_feature_map:
                 unfeaturized_examples[exporter_field] = [" ".join([y[exporter_field_feature_map[exporter_field]]
                                                                    for y in x]) for x in tokens_seq]
-            unfeaturized_examples['word_lengths'] = examples['word_lengths']  # LSTM requires lengths to be supplied
+            unfeaturized_examples['word_lengths'] = examples['word_lengths']
             examples = unfeaturized_examples
 
         outcomes = self.model.predict(examples)
@@ -296,7 +302,7 @@ class TaggerService(Service):
             for j, token in enumerate(tokens_seq[i]):
                 new_token = dict()
                 new_token.update(token)
-                new_token[label_field] = self.label_vocab[outcome[j].item()]
+                new_token[label_field] = self.label_vocab[outcome[j].item()]  # this assumes the model returns vocab indices and scores
                 output += [new_token]
             outputs += [output]
         return outputs

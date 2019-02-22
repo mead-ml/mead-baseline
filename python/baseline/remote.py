@@ -227,6 +227,7 @@ class RemoteModelTensorFlowGRPC(object):
 
         if self.signature == 'predict_text':
             scores = predict_response.outputs.get('scores').float_val
+            # this assumes that the model was exported with return_label = True
             classes = predict_response.outputs.get('classes').string_val
             result = []
             length = len(self.get_labels())
