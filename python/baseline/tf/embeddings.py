@@ -128,10 +128,6 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
             unif = kwargs.get('unif', 0.1)
             self.weights = np.random.uniform(-unif, unif, (self.vsz, self.dsz))
 
-        with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
-            self.W = tf.get_variable("W",
-                                     initializer=tf.constant_initializer(self.weights, dtype=tf.float32, verify_shape=True),
-                                     shape=[self.vsz, self.dsz], trainable=self.finetune)
 
     def get_dsz(self):
         return self.dsz
@@ -163,15 +159,16 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
             x = LookupTableEmbeddings.create_placeholder(self.name)
         self.x = x
 
-        e0 = tf.scatter_update(self.W, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, self.dsz]))
-        with tf.control_dependencies([e0]):
-            word_embeddings = tf.nn.embedding_lookup(self.W, x)
 
-        return word_embeddings
+        with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
 
-        e0 = tf.scatter_update(self.W, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, self.dsz]))
-        with tf.control_dependencies([e0]):
-            word_embeddings = tf.nn.embedding_lookup(self.W, self.x)
+            W = tf.get_variable("W",
+                                initializer=tf.constant_initializer(self.weights, dtype=tf.float32, verify_shape=True),
+                                shape=[self.vsz, self.dsz], trainable=self.finetune)
+            e0 = tf.scatter_update(W, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, self.dsz]))
+
+            with tf.control_dependencies([e0]):
+                word_embeddings = tf.nn.embedding_lookup(W, x)
 
         return word_embeddings
 

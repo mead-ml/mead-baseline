@@ -1,4 +1,5 @@
 {
+
     "basedir": "dbpedia",
     "task": "classify",
     "batchsz": 1024,
@@ -35,10 +36,9 @@
 	"label": "glove-42B"
     },
     "train": {
-	"epochs": 80,
+	"epochs": 1,
 	"optim": "sgd",
 	"eta": 0.02,
-	"early_stopping_metric": "acc",
-        "verbose": true
+	"early_stopping_metric": "acc"
     }
 }
