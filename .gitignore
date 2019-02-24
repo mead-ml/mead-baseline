@@ -105,3 +105,9 @@ venv.bak/
 
 python/README.md
 python/MANIFEST.in
+
+scripts/.lrs
+baseline.iml
+.idea/*
+tags
+*.zip

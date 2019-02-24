@@ -9,7 +9,7 @@ class ConstantSchedulerTensorFlow(object):
         pass
 
     def __call__(self, lr, global_step):
-        return lr
+        return tf.identity(lr, name='lr')
 
 
 @register_lr_scheduler('warmup_linear')
@@ -19,7 +19,7 @@ class WarmupLinearSchedulerTensorFlow(WarmupLearningRateScheduler):
         super(WarmupLinearSchedulerTensorFlow, self).__init__(**kwargs)
 
     def __call__(self, lr, global_step):
-        return tf.minimum(1.0, tf.cast(global_step / self.warmup_steps, dtype=tf.float32)) * lr
+        return tf.identity(tf.minimum(1.0, tf.cast(global_step / self.warmup_steps, dtype=tf.float32)) * lr, name='lr')
 
 
 @register_lr_scheduler('clr')
@@ -34,7 +34,7 @@ class CyclicLRSchedulerTensorFlow(object):
         cycle = tf.floor(1.0 + gs_f / (2.0 * self.decay_steps))
         x = tf.abs(gs_f / self.decay_steps - 2.0 * cycle + 1.0)
         clr = lr + (self.max_lr - lr) * tf.maximum(0., 1. - x)
-        return clr
+        return tf.identity(clr, name='lr')
 
 
 @register_lr_scheduler('sgdr')
@@ -44,7 +44,7 @@ class SGDRSchedulerTensorFlow(object):
         self.first_decay_steps = first_decay_steps
 
     def __call__(self, lr, global_step):
-        return tf.train.cosine_decay_restarts(lr, global_step, first_decay_steps=self.first_decay_steps)
+        return tf.identity(tf.train.cosine_decay_restarts(lr, global_step, first_decay_steps=self.first_decay_steps), name='lr')
 
 
 @register_lr_scheduler('piecewise')
@@ -56,7 +56,7 @@ class PiecewiseDecaySchedulerTensorFlow(object):
         self.values = values
 
     def __call__(self, lr, global_step):
-        return tf.train.piecewise_constant(global_step, self.bounds, self.values)
+        return tf.identity(tf.train.piecewise_constant(global_step, self.bounds, self.values), name='lr')
 
 
 @register_lr_scheduler('zaremba')
@@ -67,7 +67,7 @@ class ZarembaDecaySchedulerTensorFlow(PiecewiseDecaySchedulerTensorFlow):
         values = [lr/(float(decay_rate)**i) for i in range(len(bounds)+1)]
         super(ZarembaDecaySchedulerTensorFlow, self).__init__(bounds=bounds, values=values)
     def __call__(self, lr, global_step):
-        return tf.train.piecewise_constant(global_step, self.bounds, self.values)
+        return tf.identity(tf.train.piecewise_constant(global_step, self.bounds, self.values), name='lr')
 
 
 @register_lr_scheduler('invtime')
@@ -79,7 +79,7 @@ class InverseTimeDecaySchedulerTensorFlow(object):
         self.staircase = staircase
 
     def __call__(self, lr, global_step):
-        return tf.train.inverse_time_decay(lr, global_step, self.decay_steps, self.decay_rate, staircase=self.staircase)
+        return tf.identity(tf.train.inverse_time_decay(lr, global_step, self.decay_steps, self.decay_rate, staircase=self.staircase), name='lr')
 
 
 @register_lr_scheduler('exponential')
@@ -90,7 +90,7 @@ class ExponentialDecaySchedulerTensorFlow(object):
         self.staircase = staircase
 
     def __call__(self, lr, global_step):
-        return tf.train.exponential_decay(lr, global_step, self.decay_steps, self.decay_rate, staircase=self.staircase)
+        return tf.identity(tf.train.exponential_decay(lr, global_step, self.decay_steps, self.decay_rate, staircase=self.staircase), name='lr')
 
 
 @register_lr_scheduler('composite')
@@ -103,14 +103,14 @@ class CompositeLRSchedulerTensorFlow(object):
         warm_tensor = self.warm(lr, global_step)
         def call_warm(): return warm_tensor
 
-        rest_step = tf.subtract(global_step, tf.constant(self.warm.warmup_steps))
+        rest_step = tf.subtract(global_step, tf.constant(self.warm.warmup_steps, dtype=global_step.dtype))
         rest_tensor = self.rest(lr, rest_step)
         def call_rest(): return rest_tensor
 
-        return tf.cond(
+        return tf.identity(tf.cond(
             global_step < self.warm.warmup_steps,
             call_warm, call_rest
-        )
+        ), name='lr')
 
 
 class AdamWOptimizer(tf.train.Optimizer):

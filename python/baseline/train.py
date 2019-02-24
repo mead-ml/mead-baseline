@@ -103,6 +103,7 @@ class CosineDecayScheduler(LearningRateScheduler):
 
     def __call__(self, global_step):
         global_step = min(global_step, self.decay_steps)
+        # global_step = global_step % self.decay_steps
         cosine_decay = 0.5 * (1 + np.cos(np.pi * global_step / self.decay_steps))
         decayed = (1 - self.alpha) * cosine_decay + self.alpha
         return self.lr * decayed
