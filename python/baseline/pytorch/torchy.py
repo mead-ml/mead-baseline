@@ -1,11 +1,12 @@
-import torch
+import math
+import copy
 import numpy as np
-from baseline.utils import lookup_sentence, get_version, Offsets
+import torch
 import torch.autograd
 import torch.nn as nn
 import torch.nn.functional as F
-import math
-import copy
+from baseline.utils import lookup_sentence, get_version, Offsets
+
 
 PYT_MAJOR_VERSION = get_version(torch)
 

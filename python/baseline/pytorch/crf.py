@@ -16,43 +16,37 @@ def transition_mask(vocab, span_type, s_idx, e_idx, pad_idx=None):
 
 class CRF(nn.Module):
 
-    def __init__(self, n_tags, idxs=(Offsets.GO, Offsets.EOS), batch_first=True, mask=None):
+    def __init__(self, n_tags, idxs=(Offsets.GO, Offsets.EOS), batch_first=False, constraint=None):
         """Initialize the object.
-        :param n_tags: int, The number of tags in your output (emission size)
-        :param idxs: Tuple(int. int), The index of the start and stop symbol
+        :param n_tags: int: The number of tags in your output (emission size)
+        :param idxs: Tuple(int. int): The index of the start and stop symbol
             in emissions.
-        :param batch_first: bool, if the input [B, T, ...] or [T, B, ...]
-        :param mask: torch.ByteTensor, Constraints on the transitions [1, N, N]
-
-        Note:
-            if idxs is none then the CRF adds these symbols to the emission
-            vectors and n_tags is assumed to be the number of output tags.
-            if idxs is not none then the first element is assumed to be the
-            start index and the second idx is assumed to be the end index. In
-            this case n_tags is assumed to include the start and end symbols.
+        :param batch_first: bool: if the input [B, T, ...] (true) or [T, B, ...] (false)
+        :param constraint: torch.ByteTensor: Constraints on the transitions [N, N]
+            invalid transitions should be set to `1`.
         """
         super(CRF, self).__init__()
 
         self.start_idx, self.end_idx = idxs
         self.n_tags = n_tags
-        if mask is not None:
-            self.register_buffer('mask', mask)
+        if constraint is not None:
+            self.register_buffer('constraint', constraint.unsqueeze(0))
         else:
-            self.mask = None
+            self.constraint = None
 
         self.transitions_p = nn.Parameter(torch.Tensor(1, self.n_tags, self.n_tags).zero_())
         self.batch_first = batch_first
 
     def extra_repr(self):
         str_ = "n_tags=%d, batch_first=%s" % (self.n_tags, self.batch_first)
-        if self.mask is not None:
-            str_ += ", masked=True"
+        if self.constraint is not None:
+            str_ += ", constrained=True"
         return str_
 
     @property
     def transitions(self):
-        if self.mask is not None:
-            return self.transitions_p.masked_fill(self.mask, -1e4)
+        if self.constraint is not None:
+            return self.transitions_p.masked_fill(self.constraint, -1e4)
         return self.transitions_p
 
     def neg_log_loss(self, unary, tags, lengths):
@@ -134,7 +128,6 @@ class CRF(nn.Module):
             new_alphas = vec_log_sum_exp(scores, 2).transpose(1, 2)
             # If we haven't reached your length zero out old alpha and take new one.
             # If we are past your length, zero out new_alpha and keep old one.
-
             if i >= min_length:
                 mask = (i < lengths).view(-1, 1, 1)
                 alphas = alphas.masked_fill(mask, 0) + new_alphas.masked_fill(mask == 0, 0)
@@ -143,7 +136,7 @@ class CRF(nn.Module):
 
         terminal_vars = alphas + trans[:, self.end_idx]
         alphas = vec_log_sum_exp(terminal_vars, 2)
-        return alphas.squeeze()
+        return alphas.view(batch_size)
 
     def decode(self, unary, lengths):
         """Do Viterbi decode on a batch.
@@ -160,7 +153,7 @@ class CRF(nn.Module):
         return viterbi(unary, trans, lengths, self.start_idx, self.end_idx)
 
 
-def viterbi(unary, trans, lengths, start_idx, end_idx, norm=False):
+def viterbi(unary, trans, lengths, start_idx, end_idx, norm=lambda x, y: x):
     """Do Viterbi decode on a batch.
 
     :param unary: torch.FloatTensor: [T, B, N]
@@ -168,9 +161,10 @@ def viterbi(unary, trans, lengths, start_idx, end_idx, norm=False):
     :param lengths: torch.LongTensor: [B]
     :param start_idx: int: The index of the go token
     :param end_idx: int: The index of the eos token
-    :param norm: bool: Should the initial state be normalized?
+    :param norm: Callable: This function should take the initial and a dim to
+        normalize along.
 
-    :return: List[torch.LongTensor]: [[T] .. B] that paths
+    :return: torch.LongTensor: [T, B] the padded paths
     :return: torch.FloatTensor: [B] the path scores
     """
     seq_len, batch_size, tag_size = unary.size()
@@ -180,7 +174,7 @@ def viterbi(unary, trans, lengths, start_idx, end_idx, norm=False):
     # Alphas: [B, 1, N]
     alphas = torch.Tensor(batch_size, 1, tag_size).fill_(-1e4).to(unary.device)
     alphas[:, 0, start_idx] = 0
-    alphas = F.log_softmax(alphas, dim=-1) if norm else alphas
+    alphas = norm(alphas, -1)
 
     for i, unary_t in enumerate(unary):
         next_tag_var = alphas + trans
@@ -195,25 +189,27 @@ def viterbi(unary, trans, lengths, start_idx, end_idx, norm=False):
             alphas = new_alphas
 
     # Add end tag
-    terminal_var = alphas.squeeze(1) + trans[:, end_idx]
+    terminal_var = alphas.squeeze(1) + trans[:, end_idx, :]
     path_score, best_tag_id = torch.max(terminal_var, 1)
 
-    best_path = [best_tag_id]
     # Flip lengths
     rev_len = seq_len - lengths - 1
+
+    best_path = [best_tag_id]
     for i, backpointer_t in enumerate(reversed(backpointers)):
         # Get new best tag candidate
         new_best_tag_id = backpointer_t.gather(1, best_tag_id.unsqueeze(1)).squeeze(1)
-        # We are going backwards now, if you passed your flipped length then you aren't in your real results yet
+        # We are going backwards now, if you haven't passed your flipped length
+        # then you aren't in your real results yet so we propagate best tag
+        # from the argmax on the terminal_var
         mask = (i > rev_len)
         best_tag_id = best_tag_id.masked_fill(mask, 0) + new_best_tag_id.masked_fill(mask == 0, 0)
         best_path.append(best_tag_id)
     _ = best_path.pop()
     best_path.reverse()
     best_path = torch.stack(best_path)
-    # Return list of paths
-    paths = []
-    best_path = best_path.transpose(0, 1)
-    for path, length in zip(best_path, lengths):
-        paths.append(path[:length])
-    return paths, path_score.squeeze(0)
+    # Mask out the extra tags (This might be pointless given that anything that
+    # will use this as a dense tensor downstream will mask it itself?)
+    seq_mask = sequence_mask(lengths).to(best_path.device).transpose(0, 1)
+    best_path = best_path.masked_fill(seq_mask == 0, 0)
+    return best_path, path_score

@@ -86,11 +86,11 @@ class TaggerModelBase(nn.Module, TaggerModel):
             ))
 
         if model.use_crf:
-            if constraint is not None: constraint = constraint.unsqueeze(0)
             model.crf = CRF(
                 len(labels),
-                (Offsets.GO, Offsets.EOS), batch_first=False,
-                mask=constraint
+                (Offsets.GO, Offsets.EOS),
+                batch_first=False,
+                constraint=constraint
             )
         else:
             if constraint is not None:
@@ -168,14 +168,14 @@ class TaggerModelBase(nn.Module, TaggerModel):
         else:
             if self.constraint is not None:
                 probv = F.log_softmax(probv, dim=-1)
-                preds, _ = viterbi(probv, self.constraint, lengths, Offsets.GO, Offsets.EOS, norm=True)
+                preds, _ = viterbi(probv, self.constraint, lengths, Offsets.GO, Offsets.EOS, norm=F.log_softmax)
             else:
-                probv = probv.transpose(0, 1)
-                preds = []
-                for pij, sl in zip(probv, lengths):
-                    _, unary = torch.max(pij[:sl], 1)
-                    preds.append(unary.data)
-        return preds
+                _, preds = torch.max(probv, 2)
+        pred_list = []
+        preds = preds.transpose(0, 1)
+        for pred, sl in zip(preds, lengths):
+            pred_list.append(pred[:sl])
+        return pred_list
 
     def compute_loss(self, inputs):
         lengths = inputs['lengths']

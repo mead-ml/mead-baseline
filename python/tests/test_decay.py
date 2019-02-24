@@ -145,7 +145,7 @@ def test_constant_lr():
 
 def test_inverse_time_values():
     eta = 1.0
-    steps = np.random.randint(100)
+    steps = np.random.randint(1, 100)
     ti = InverseTimeDecayScheduler(steps, 1.0, lr=eta)
     for i in range(1, 5):
         lr = ti(i * steps)
@@ -153,7 +153,7 @@ def test_inverse_time_values():
 
 
 def test_inverse_time_is_flat():
-    steps = np.random.randint(100)
+    steps = np.random.randint(1, 100)
     ti = InverseTimeDecayScheduler(steps, np.random.rand(), staircase=True, lr=np.random.rand())
     before = steps - np.random.randint(1, steps)
     after = steps + np.random.randint(1, steps)
