@@ -148,6 +148,11 @@ def fit(model, ts, vs, es=None, **kwargs):
     model.sess.run(init)
     saver = tf.train.Saver()
     model.set_saver(saver)
+    checkpoint = kwargs.get('checkpoint')
+    if checkpoint is not None:
+        latest = tf.train.latest_checkpoint(checkpoint)
+        print('Reloading ' + latest)
+        model.saver.restore(model.sess, latest)
 
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
 

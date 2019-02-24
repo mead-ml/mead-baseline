@@ -17,6 +17,7 @@ def main():
     parser.add_argument('--gpus', help='Number of GPUs (defaults to number available)', type=int, default=-1)
     parser.add_argument('--reporting', help='reporting hooks', nargs='+')
     parser.add_argument('--backend', help='The deep learning backend to use')
+    parser.add_argument('--checkpoint', help='Restart training from this checkpoint')
     args, reporting_args = parser.parse_known_args()
 
     config_params = read_config_stream(args.config)
@@ -45,7 +46,7 @@ def main():
     task = mead.Task.get_task_specific(task_name, args.logging, args.settings)
     task.read_config(config_params, args.datasets, reporting_args=reporting_args, config_file=deepcopy(config_params))
     task.initialize(args.embeddings)
-    task.train()
+    task.train(args.checkpoint)
 
 
 if __name__ == "__main__":

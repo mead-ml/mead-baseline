@@ -414,6 +414,7 @@ class ClassifierModelBase(ClassifierModel):
                 model.probs = tf.nn.softmax(model.logits, name="probs")
         model.sess = sess
         # writer = tf.summary.FileWriter('blah', sess.graph)
+
         return model
 
     def embed(self, **kwargs):

@@ -216,7 +216,7 @@ class Task(object):
         """
         pass
 
-    def train(self):
+    def train(self, checkpoint=None):
         """This method delegates to several sub-hooks in order to complete training.
 
         1. call `_load_dataset()` which initializes the `DataFeed` fields of this class
@@ -229,7 +229,10 @@ class Task(object):
         self._load_dataset()
         baseline.save_vectorizers(self.get_basedir(), self.vectorizers)
         model = self._create_model()
-        baseline.train.fit(model, self.train_data, self.valid_data, self.test_data, **self.config_params['train'])
+        train_params = self.config_params['train']
+        train_params['checkpoint'] = checkpoint
+
+        baseline.train.fit(model, self.train_data, self.valid_data, self.test_data, **train_params)
         baseline.zip_files(self.get_basedir())
         self._close_reporting_hooks()
 
@@ -531,12 +534,16 @@ class TaggerTask(Task):
             sort_key=None
         )
 
-    def train(self):
+    def train(self, checkpoint=None):
         self._load_dataset()
         baseline.save_vectorizers(self.get_basedir(), self.vectorizers)
         model = self._create_model()
         conll_output = self.config_params.get("conll_output", None)
-        baseline.train.fit(model, self.train_data, self.valid_data, self.test_data, conll_output=conll_output, txts=self.txts, **self.config_params['train'])
+        train_params = self.config_params['train']
+        train_params['checkpoint'] = checkpoint
+        baseline.train.fit(model, self.train_data, self.valid_data, self.test_data,
+                           conll_output=conll_output,
+                           txts=self.txts, **train_params)
         baseline.zip_files(self.get_basedir())
         self._close_reporting_hooks()
         return model
@@ -646,7 +653,7 @@ class EncoderDecoderTask(Task):
                 model[k] = v
         return baseline.model.create_seq2seq_model(self.src_embeddings, self.tgt_embeddings, **self.config_params['model'])
 
-    def train(self):
+    def train(self, checkpoint=None):
 
         num_ex = self.config_params['num_valid_to_show']
 
@@ -662,7 +669,7 @@ class EncoderDecoderTask(Task):
                                                                                      preproc['mxlen'], False, 0,
                                                                                      num_ex, reverse=False)
         self.config_params['train']['tgt_rlut'] = rlut2
-        super(EncoderDecoderTask, self).train()
+        super(EncoderDecoderTask, self).train(checkpoint)
 
 
 @exporter
@@ -756,7 +763,7 @@ class LanguageModelingTask(Task):
                 model[k] = v
         return baseline.model.create_lang_model(self.embeddings, **model)
 
-    def train(self):
+    def train(self, checkpoint=None):
         self._load_dataset()
         if self.config_params['train'].get('lr_scheduler_type', None) == 'zaremba':
             first_range = int(self.config_params['train']['start_decay_epoch'] * self.train_data.steps)
@@ -769,7 +776,9 @@ class LanguageModelingTask(Task):
             )
         baseline.save_vectorizers(self.get_basedir(), self.vectorizers)
         model = self._create_model()
-        baseline.train.fit(model, self.train_data, self.valid_data, self.test_data, **self.config_params['train'])
+        train_params = self.config_params['train']
+        train_params['checkpoint'] = checkpoint
+        baseline.train.fit(model, self.train_data, self.valid_data, self.test_data, **train_params)
         baseline.zip_files(self.get_basedir())
         self._close_reporting_hooks()
 
