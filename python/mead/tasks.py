@@ -20,7 +20,7 @@ from mead.utils import (
     read_config_file_or_json,
 )
 
-
+from baseline.train import calc_lr_params
 
 __all__ = []
 exporter = export(__all__)
@@ -208,7 +208,7 @@ class Task(object):
         """
         pass
 
-    def _create_model(self):
+    def _reorganize_params(self):
         """This hook create the model used for training, using the `model` section of the mead config.  The model is
         returned, not stored as a field of the class
 
@@ -226,12 +226,20 @@ class Task(object):
         5. call `_close_reporting_hooks()` which lets the reporting hooks know that the job is finished
         :return: Nothing
         """
-        self._load_dataset()
+        self._reorganize_params()
         baseline.save_vectorizers(self.get_basedir(), self.vectorizers)
-        model = self._create_model()
-        baseline.train.fit(model, self.train_data, self.valid_data, self.test_data, **self.config_params['train'])
+        self._load_dataset()
+
+        model_params = self.config_params['model']
+        model_params['features'] = self._get_features()
+        model_params['labels'] = self._get_labels()
+        model_params['task'] = self.task_name()
+
+        train_params = self.config_params['train']
+        model = baseline.train.fit(model_params, self.train_data, self.valid_data, self.test_data, **train_params)
         baseline.zip_files(self.get_basedir())
         self._close_reporting_hooks()
+        return model
 
     def _configure_reporting(self, reporting, **kwargs):
         """Configure all `reporting_hooks` specified in the mead settings or overridden at the command line
@@ -321,6 +329,12 @@ class Task(object):
 
         return embeddings_map, out_vocabs
 
+    def _get_features(self):
+        pass
+
+    def _get_labels(self):
+        pass
+
     def get_basedir(self):
         """Return the base directory if provided, or CWD
         """
@@ -384,7 +398,16 @@ class ClassifierTask(Task):
         self.embeddings, self.feat2index = self._create_embeddings(embeddings_set, vocab, self.config_params['features'])
         baseline.save_vocabs(self.get_basedir(), self.feat2index)
 
-    def _create_model(self):
+    def _get_features(self):
+        return self.embeddings
+
+    def _get_labels(self):
+        return self.labels
+
+    def _reorganize_params(self):
+        train_params = self.config_params['train']
+        train_params['batchsz'] = self.config_params['batchsz']
+        train_params['test_batchsz'] = self.config_params.get('test_batchsz', 1)
         unif = self.config_params.get('unif', 0.1)
         model = self.config_params['model']
         model['unif'] = model.get('unif', unif)
@@ -396,7 +419,7 @@ class ClassifierTask(Task):
         if self.backend.params is not None:
             for k, v in self.backend.params.items():
                 model[k] = v
-        return baseline.model.create_model(self.embeddings, self.labels, **model)
+        ##return baseline.model.create_model(self.embeddings, self.labels, **model)
 
     def _load_dataset(self):
         self.train_data = self.reader.load(self.dataset['train_file'], self.feat2index, self.config_params['batchsz'],
@@ -457,7 +480,10 @@ class TaggerTask(Task):
         self.embeddings, self.feat2index = self._create_embeddings(embeddings_set, vocabs, self.config_params['features'])
         baseline.save_vocabs(self.get_basedir(), self.feat2index)
 
-    def _create_model(self):
+    def _reorganize_params(self):
+        train_params = self.config_params['train']
+        train_params['batchsz'] = self.config_params['batchsz']
+        train_params['test_batchsz'] = self.config_params.get('test_batchsz', 1)
         labels = self.reader.label2index
         span_type = self.config_params['train'].get('span_type')
         constrain = bool(self.config_params['model'].get('constrain_decode', False))
@@ -480,7 +506,7 @@ class TaggerTask(Task):
         if self.backend.params is not None:
             for k, v in self.backend.params.items():
                 model[k] = v
-        return baseline.model.create_tagger_model(self.embeddings, labels, **self.config_params['model'])
+        #return baseline.model.create_tagger_model(self.embeddings, labels, **self.config_params['model'])
 
     def _load_dataset(self):
         # TODO: get rid of sort_key=self.primary_key in favor of something explicit?
@@ -490,12 +516,26 @@ class TaggerTask(Task):
         self.valid_data, _ = self.reader.load(self.dataset['valid_file'], self.feat2index, self.config_params['batchsz'], sort_key=None)
         self.test_data, self.txts = self.reader.load(self.dataset['test_file'], self.feat2index, self.config_params.get('test_batchsz', 1), shuffle=False, sort_key=None)
 
+    def _get_features(self):
+        return self.embeddings
+
+    def _get_labels(self):
+        return self.reader.label2index
+
     def train(self):
         self._load_dataset()
         baseline.save_vectorizers(self.get_basedir(), self.vectorizers)
-        model = self._create_model()
+        self._reorganize_params()
         conll_output = self.config_params.get("conll_output", None)
-        baseline.train.fit(model, self.train_data, self.valid_data, self.test_data, conll_output=conll_output, txts=self.txts, **self.config_params['train'])
+        model_params = self.config_params['model']
+        model_params['features'] = self._get_features()
+        model_params['labels'] = self._get_labels()
+        model_params['task'] = self.task_name()
+        train_params = self.config_params['train']
+        train_params['conll_output'] = conll_output
+        train_params['txts'] = self.txts
+
+        model = baseline.train.fit(model_params, self.train_data, self.valid_data, self.test_data, **train_params)
         baseline.zip_files(self.get_basedir())
         self._close_reporting_hooks()
         return model
@@ -584,7 +624,11 @@ class EncoderDecoderTask(Task):
                                           self.feat2tgt,
                                           self.config_params.get('test_batchsz', 1))
 
-    def _create_model(self):
+    def _reorganize_params(self):
+        train_params = self.config_params['train']
+        train_params['batchsz'] = self.config_params['batchsz']
+        train_params['test_batchsz'] = self.config_params.get('test_batchsz', 1)
+
         self.config_params['model']["unif"] = self.config_params["unif"]
         model = self.config_params['model']
         unif = self.config_params.get('unif', 0.1)
@@ -597,7 +641,14 @@ class EncoderDecoderTask(Task):
         if self.backend.params is not None:
             for k, v in self.backend.params.items():
                 model[k] = v
-        return baseline.model.create_seq2seq_model(self.src_embeddings, self.tgt_embeddings, **self.config_params['model'])
+        #return baseline.model.create_seq2seq_model(self.src_embeddings, self.tgt_embeddings, **self.config_params['model'])
+
+    def _get_features(self):
+        return self.src_embeddings
+
+    def _get_labels(self):
+        return self.tgt_embeddings
+
 
     def train(self):
 
@@ -615,7 +666,7 @@ class EncoderDecoderTask(Task):
                                                                                      preproc['mxlen'], False, 0,
                                                                                      num_ex, reverse=False)
         self.config_params['train']['tgt_rlut'] = rlut2
-        super(EncoderDecoderTask, self).train()
+        return super(EncoderDecoderTask, self).train()
 
 
 @exporter
@@ -682,8 +733,11 @@ class LanguageModelingTask(Task):
         self.valid_data = self.reader.load(self.dataset['valid_file'], self.feat2index, self.config_params['batchsz'], tgt_key=tgt_key)
         self.test_data = self.reader.load(self.dataset['test_file'], self.feat2index, 1, tgt_key=tgt_key)
 
-    def _create_model(self):
+    def _reorganize_params(self):
 
+        train_params = self.config_params['train']
+        train_params['batchsz'] = self.config_params['batchsz']
+        train_params['test_batchsz'] = self.config_params.get('test_batchsz', 1)
         model = self.config_params['model']
         unif = self.config_params.get('unif', 0.1)
         model['unif'] = model.get('unif', unif)
@@ -692,22 +746,27 @@ class LanguageModelingTask(Task):
         if self.backend.params is not None:
             for k, v in self.backend.params.items():
                 model[k] = v
-        return baseline.model.create_lang_model(self.embeddings, **model)
+        #return baseline.model.create_lang_model(self.embeddings, **model)
+
+    def _get_features(self):
+        return self.embeddings
+
+    def _get_labels(self):
+        return None
 
     def train(self):
+
+        self._reorganize_params()
         self._load_dataset()
-        if self.config_params['train'].get('lr_scheduler_type', None) == 'zaremba':
-            first_range = int(self.config_params['train']['start_decay_epoch'] * self.train_data.steps)
-            self.config_params['train']['bounds'] = [first_range] + list(
-                np.arange(
-                    self.config_params['train']['start_decay_epoch'] + 1,
-                    self.config_params['train']['epochs'] + 1,
-                    dtype=np.int32
-                ) * self.train_data.steps
-            )
+        # Dont do this here!  We need to move train_data elsewhere
+        calc_lr_params(self.config_params['train'], self.train_data.steps)
         baseline.save_vectorizers(self.get_basedir(), self.vectorizers)
-        model = self._create_model()
-        baseline.train.fit(model, self.train_data, self.valid_data, self.test_data, **self.config_params['train'])
+
+        model_params = self.config_params['model']
+        model_params['task'] = self.task_name()
+        model_params['features'] = self._get_features()
+        train_params = self.config_params['train']
+        baseline.train.fit(model_params, self.train_data, self.valid_data, self.test_data, **train_params)
         baseline.zip_files(self.get_basedir())
         self._close_reporting_hooks()
 

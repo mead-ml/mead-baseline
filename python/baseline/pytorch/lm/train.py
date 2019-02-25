@@ -4,21 +4,20 @@ from baseline.pytorch.torchy import *
 from baseline.utils import listify, revlut, get_model_file, get_metric_cmp
 from baseline.train import Trainer, create_trainer, register_trainer, register_training_func
 from baseline.pytorch.optz import OptimizerManager
-
+from baseline.model import create_model_for
 
 @register_trainer(task='lm', name='default')
 class LanguageModelTrainerPyTorch(Trainer):
 
     def __init__(self, model, **kwargs):
         super(LanguageModelTrainerPyTorch, self).__init__()
-        self.model = model
-        self.clip = float(kwargs.get('clip', 5))
-        self.gpu = not bool(kwargs.get('nogpu', False))
-        self.crit = model.create_loss()
+        if type(model) is dict:
+            model = create_model_for('lm', **model)
 
-        if self.gpu:
-            self.model = self.model.cuda()
-            self.crit.cuda()
+        self.optimizer = OptimizerManager(model, **kwargs)
+        self.crit = model.create_loss().cuda()
+        self.model = torch.nn.DataParallel(model).cuda()
+        self.clip = float(kwargs.get('clip', 5))
         self.nsteps = kwargs.get('nsteps', 500)
 
         self.optimizer = OptimizerManager(self.model, **kwargs)
@@ -43,6 +42,10 @@ class LanguageModelTrainerPyTorch(Trainer):
         metrics['perplexity'] = np.exp(metrics['avg_loss'])
         return metrics
 
+    def save(self, model_file):
+
+        self.model.module.save(model_file)
+
     def test(self, vs, reporting_fns, phase='Valid'):
         epoch = 0
         if phase == 'Valid':
@@ -55,10 +58,10 @@ class LanguageModelTrainerPyTorch(Trainer):
         metrics = {}
         batchsz, nctx = self._get_dims(vs[0])
 
-        hidden = self.model.init_hidden(batchsz)
+        hidden = self.model.module.init_hidden(batchsz)
 
         for batch_dict in vs:
-            inputs = self.model.make_input(batch_dict)
+            inputs = self.model.module.make_input(batch_dict)
             y = inputs.pop('y')
             output, hidden = self.model(inputs, hidden)
             toks = self._num_toks(batch_dict)
@@ -80,12 +83,12 @@ class LanguageModelTrainerPyTorch(Trainer):
         epoch_loss = 0
         epoch_toks = 0
         batchsz, nctx = self._get_dims(ts[0])
-        hidden = self.model.init_hidden(batchsz)
+        hidden = self.model.module.init_hidden(batchsz)
 
         for batch_dict in ts:
             if hidden is not None:
                 hidden = self.repackage_hidden(hidden)
-            inputs = self.model.make_input(batch_dict)
+            inputs = self.model.module.make_input(batch_dict)
             y = inputs.pop('y')
             self.optimizer.zero_grad()
             output, hidden = self.model(inputs, hidden)
@@ -150,8 +153,7 @@ def fit(model, ts, vs, es, **kwargs):
             last_improved = epoch
             best_metric = test_metrics[early_stopping_metric]
             print('New best %.3f' % best_metric)
-            model.save(model_file)
-
+            trainer.save(model_file)
 
         elif (epoch - last_improved) > patience:
             print('Stopping due to persistent failures to improve')

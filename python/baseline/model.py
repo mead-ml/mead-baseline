@@ -45,10 +45,13 @@ def register_model(cls, task, name=None):
 
 
 @exporter
-def create_model_for(activity, input_, output_, **kwargs):
+def create_model_for(activity, **kwargs):
     model_type = kwargs.get('model_type', 'default')
     creator_fn = BASELINE_MODELS[activity][model_type]
     #print('Calling model ', creator_fn)
+    input_ = kwargs.pop('features', None)
+    output_ = kwargs.pop('labels', None)
+
     if output_ is not None:
         return creator_fn(input_, output_, **kwargs)
     return creator_fn(input_, **kwargs)

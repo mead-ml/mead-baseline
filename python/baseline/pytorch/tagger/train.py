@@ -5,13 +5,17 @@ from baseline.train import EpochReportingTrainer, create_trainer, register_train
 from baseline.utils import listify, to_spans, f_score, revlut, get_model_file, write_sentence_conll, get_metric_cmp
 from baseline.pytorch.torchy import *
 from baseline.pytorch.optz import OptimizerManager
-from baseline.tf.tfy import TRAIN_FLAG
+from baseline.model import create_model_for
 
 @register_trainer(task='tagger', name='default')
 class TaggerTrainerPyTorch(EpochReportingTrainer):
 
     def __init__(self, model, **kwargs):
         super(TaggerTrainerPyTorch, self).__init__()
+
+        if type(model) is dict:
+            model = create_model_for('tagger', **model)
+
         self.gpu = not bool(kwargs.get('nogpu', False))
         # By default support IOB1/IOB2
         self.span_type = kwargs.get('span_type', 'iob')
@@ -137,7 +141,7 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
 
 
 @register_training_func('tagger')
-def fit(model, ts, vs, es, **kwargs):
+def fit(model_params, ts, vs, es, **kwargs):
 
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
     epochs = int(kwargs.get('epochs', 20))
@@ -158,19 +162,18 @@ def fit(model, ts, vs, es, **kwargs):
     #validation_improvement_fn = kwargs.get('validation_improvement', None)
 
     after_train_fn = kwargs.get('after_train_fn', None)
-    TRAIN_FLAG()
-    trainer = create_trainer(model, **kwargs)
+    trainer = create_trainer(model_params, **kwargs)
 
     last_improved = 0
     for epoch in range(epochs):
 
         trainer.train(ts, reporting_fns)
         if after_train_fn is not None:
-            after_train_fn(model)
+            after_train_fn(trainer.model)
         test_metrics = trainer.test(vs, reporting_fns, phase='Valid')
 
         if do_early_stopping is False:
-            model.save(model_file)
+            trainer.model.save(model_file)
 
         elif early_stopping_cmp(test_metrics[early_stopping_metric], best_metric):
             #if validation_improvement_fn is not None:
@@ -178,7 +181,7 @@ def fit(model, ts, vs, es, **kwargs):
             last_improved = epoch
             best_metric = test_metrics[early_stopping_metric]
             print('New best %.3f' % best_metric)
-            model.save(model_file)
+            trainer.model.save(model_file)
 
 
         elif (epoch - last_improved) > patience:

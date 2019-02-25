@@ -8,14 +8,17 @@ from baseline.train import Trainer, create_trainer, register_trainer, register_t
 from baseline.pytorch.optz import OptimizerManager
 from baseline.bleu import bleu
 from baseline.utils import convert_seq2seq_golds, convert_seq2seq_preds
-
+from baseline.model import create_model_for
 
 @register_trainer(task='seq2seq', name='default')
 class Seq2SeqTrainerPyTorch(Trainer):
 
     def __init__(self, model, **kwargs):
         super(Seq2SeqTrainerPyTorch, self).__init__()
-        self.gpu = bool(kwargs.get('gpu', True))
+
+        if type(model) is dict:
+            model = create_model_for('seq2seq', **model)
+
         self.clip = float(kwargs.get('clip', 5))
         self.model = model
         self.optimizer = OptimizerManager(self.model, **kwargs)
@@ -23,9 +26,8 @@ class Seq2SeqTrainerPyTorch(Trainer):
         self._predict = model.predict
         self.crit = model.create_loss()
         self.tgt_rlut = kwargs['tgt_rlut']
-        if self.gpu:
-            self.model = torch.nn.DataParallel(model).cuda()
-            self.crit.cuda()
+        self.model = torch.nn.DataParallel(model).cuda()
+        self.crit.cuda()
         self.nsteps = kwargs.get('nsteps', 500)
 
     @staticmethod
@@ -36,6 +38,9 @@ class Seq2SeqTrainerPyTorch(Trainer):
         metrics = super(Seq2SeqTrainerPyTorch, self).calc_metrics(agg, norm)
         metrics['perplexity'] = np.exp(metrics['avg_loss'])
         return metrics
+
+    def save(self, model_file):
+        self.model.module.save(model_file)
 
     def test(self, vs, reporting_fns, phase):
         if phase == 'Test':
@@ -136,7 +141,7 @@ class Seq2SeqTrainerPyTorch(Trainer):
 
 
 @register_training_func('seq2seq')
-def fit(model, ts, vs, es=None, **kwargs):
+def fit(model_params, ts, vs, es=None, **kwargs):
 
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
     epochs = int(kwargs.get('epochs', 20))
@@ -153,25 +158,25 @@ def fit(model, ts, vs, es=None, **kwargs):
     print('reporting', reporting_fns)
 
     after_train_fn = kwargs.get('after_train_fn', None)
-    trainer = create_trainer(model, **kwargs)
+    trainer = create_trainer(model_params, **kwargs)
 
     last_improved = 0
     for epoch in range(epochs):
         trainer.train(ts, reporting_fns)
 
         if after_train_fn is not None:
-            after_train_fn(model)
+            after_train_fn(trainer.model)
 
         test_metrics = trainer.test(vs, reporting_fns, phase='Valid')
 
         if do_early_stopping is False:
-            model.save(model_file)
+            trainer.save(model_file)
 
         elif early_stopping_cmp(test_metrics[early_stopping_metric], best_metric):
             last_improved = epoch
             best_metric = test_metrics[early_stopping_metric]
             print('New best %.3f' % best_metric)
-            model.save(model_file)
+            trainer.save(model_file)
 
         elif (epoch - last_improved) > patience:
             print('Stopping due to persistent failures to improve')

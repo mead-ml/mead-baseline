@@ -308,7 +308,7 @@ def register_training_func(func, task, name=None):
 
 
 @exporter
-def fit(model, ts, vs, es, **kwargs):
+def fit(model_params, ts, vs, es, **kwargs):
     """This method delegates to the registered fit function for each DL framework.  It is possible to provide a by-pass
     to our defined fit functions for each method (this is considered advanced usage).  In cases where the user wishes
     to provide their own fit hook, the need to decorate the bypass hook with @register_training_func(name='myname'),
@@ -325,12 +325,16 @@ def fit(model, ts, vs, es, **kwargs):
     :param kwargs:
     :return:
     """
+    if type(model_params) is dict:
+        task_name = model_params['task']
+    else:
+        task_name = model_params.task_name
     fit_func_name = kwargs.get('fit_func', 'default')
-    return BASELINE_FIT_FUNC[model.task_name][fit_func_name](model, ts, vs, es, **kwargs)
+    return BASELINE_FIT_FUNC[task_name][fit_func_name](model_params, ts, vs, es, **kwargs)
 
 
 @exporter
-def create_trainer(model, **kwargs):
+def create_trainer(model_params, **kwargs):
     """Create the default trainer, or a user-defined one if `trainer_type` is not `default`
 
     :param default_create_model_fn: The constructor for the default trainer (defined in each platform/task)
@@ -339,5 +343,23 @@ def create_trainer(model, **kwargs):
     :return:
     """
     trainer_type = kwargs.get('trainer_type', 'default')
-    Constructor = BASELINE_TRAINERS[model.task_name][trainer_type]
-    return Constructor(model, **kwargs)
+    if type(model_params) is dict:
+        task_name = model_params['task']
+    else:
+        task_name = model_params.task_name
+    Constructor = BASELINE_TRAINERS[task_name][trainer_type]
+    return Constructor(model_params, **kwargs)
+
+
+def calc_lr_params(train_params, num_steps):
+    # This belongs in the trainer!
+    if train_params.get('lr_scheduler_type', None) == 'zaremba':
+        first_range = int(train_params['start_decay_epoch'] * num_steps)
+        train_params['bounds'] = [first_range] + list(
+            np.arange(
+                train_params['start_decay_epoch'] + 1,
+                train_params['epochs'] + 1,
+                dtype=np.int32
+            ) * num_steps
+        )
+

@@ -15,22 +15,30 @@ from baseline.utils import (
 from baseline.train import Trainer, create_trainer, register_trainer, register_training_func
 from baseline.bleu import bleu
 from baseline.tf.tfy import SET_TRAIN_FLAG
+from baseline.model import create_model_for
 
 
 @register_trainer(task='seq2seq', name='default')
 class Seq2SeqTrainerTf(Trainer):
 
-    def __init__(self, model, **kwargs):
+    def __init__(self, model_params, **kwargs):
         super(Seq2SeqTrainerTf, self).__init__()
-        self.sess = model.sess
-        self.loss = model.create_loss()
-        self.test_loss = model.create_test_loss()
-        self.model = model
+        if type(model_params) is dict:
+            self.model = create_model_for('seq2seq', **model_params)
+        else:
+            self.model = model_params
+        self.sess = self.model.sess
+        self.loss = self.model.create_loss()
+        self.test_loss = self.model.create_test_loss()
         self.tgt_rlut = kwargs['tgt_rlut']
         self.base_dir = kwargs['basedir']
         self.global_step, self.train_op = optimizer(self.loss, colocate_gradients_with_ops=True, **kwargs)
         self.nsteps = kwargs.get('nsteps', 500)
         self.beam = kwargs.get('beam', 10)
+        init = tf.global_variables_initializer()
+        self.model.sess.run(init)
+        saver = tf.train.Saver()
+        self.prepare(saver)
 
     def checkpoint(self):
         self.model.saver.save(self.model.sess, "./tf-seq2seq-%d/seq2seq" % os.getpid(), global_step=self.global_step)
@@ -141,17 +149,13 @@ class Seq2SeqTrainerTf(Trainer):
 
 
 @register_training_func('seq2seq')
-def fit(model, ts, vs, es=None, **kwargs):
+def fit(model_params, ts, vs, es=None, **kwargs):
     epochs = int(kwargs['epochs']) if 'epochs' in kwargs else 5
     patience = int(kwargs['patience']) if 'patience' in kwargs else epochs
 
     model_file = get_model_file('seq2seq', 'tf', kwargs.get('basedir'))
     after_train_fn = kwargs['after_train_fn'] if 'after_train_fn' in kwargs else None
-    trainer = create_trainer(model, **kwargs)
-    init = tf.global_variables_initializer()
-    model.sess.run(init)
-    saver = tf.train.Saver()
-    trainer.prepare(saver)
+    trainer = create_trainer(model_params, **kwargs)
 
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
 
@@ -170,7 +174,7 @@ def fit(model, ts, vs, es=None, **kwargs):
     for epoch in range(epochs):
         trainer.train(ts, reporting_fns)
         if after_train_fn is not None:
-            after_train_fn(model)
+            after_train_fn(trainer.model)
         test_metrics = trainer.test(vs, reporting_fns, phase='Valid')
 
         if do_early_stopping is False:

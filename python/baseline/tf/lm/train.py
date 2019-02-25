@@ -6,18 +6,26 @@ import tensorflow as tf
 from baseline.tf.optz import optimizer
 from baseline.utils import listify, get_model_file, get_metric_cmp
 from baseline.train import Trainer, create_trainer, register_trainer, register_training_func
+from baseline.model import create_model_for
 
 
 @register_trainer(task='lm', name='default')
 class LanguageModelTrainerTf(Trainer):
 
-    def __init__(self, model, **kwargs):
+    def __init__(self, model_params, **kwargs):
         super(LanguageModelTrainerTf, self).__init__()
-        self.model = model
-        self.loss = model.create_loss()
-        self.test_loss = model.create_test_loss()
+        if type(model_params) is dict:
+            self.model = create_model_for('lm', **model_params)
+        else:
+            self.model = model_params
+        self.loss = self.model.create_loss()
+        self.test_loss = self.model.create_test_loss()
         self.global_step, self.train_op = optimizer(self.loss, **kwargs)
         self.nsteps = kwargs.get('nsteps', 500)
+        init = tf.global_variables_initializer()
+        self.model.sess.run(init)
+        saver = tf.train.Saver()
+        self.model.set_saver(saver)
 
     def checkpoint(self):
         self.model.saver.save(self.model.sess, "./tf-lm-%d/lm" % os.getpid(), global_step=self.global_step)
@@ -137,17 +145,14 @@ class LanguageModelTrainerTf(Trainer):
 
 
 @register_training_func('lm')
-def fit(model, ts, vs, es=None, **kwargs):
+def fit(model_params, ts, vs, es=None, **kwargs):
     epochs = int(kwargs['epochs']) if 'epochs' in kwargs else 5
     patience = int(kwargs['patience']) if 'patience' in kwargs else epochs
 
     model_file = get_model_file('lm', 'tf', kwargs.get('basedir'))
     after_train_fn = kwargs['after_train_fn'] if 'after_train_fn' in kwargs else None
-    trainer = create_trainer(model, **kwargs)
-    init = tf.global_variables_initializer()
-    model.sess.run(init)
-    saver = tf.train.Saver()
-    model.set_saver(saver)
+    trainer = create_trainer(model_params, **kwargs)
+
 
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
 
@@ -167,7 +172,7 @@ def fit(model, ts, vs, es=None, **kwargs):
 
         trainer.train(ts, reporting_fns)
         if after_train_fn is not None:
-            after_train_fn(model)
+            after_train_fn(trainer.model)
 
         test_metrics = trainer.test(vs, reporting_fns, phase='Valid')
 

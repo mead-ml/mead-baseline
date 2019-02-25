@@ -8,6 +8,8 @@ from baseline.progress import create_progress_bar
 from baseline.utils import to_spans, f_score, listify, revlut, get_model_file, write_sentence_conll, get_metric_cmp
 from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
 from baseline.tf.tfy import TRAIN_FLAG
+from baseline.model import create_model_for
+
 
 class TaggerEvaluatorTf(object):
 
@@ -96,15 +98,25 @@ class TaggerEvaluatorTf(object):
 @register_trainer(task='tagger', name='default')
 class TaggerTrainerTf(EpochReportingTrainer):
 
-    def __init__(self, model, **kwargs):
+    def __init__(self, model_params, **kwargs):
         super(TaggerTrainerTf, self).__init__()
-        self.loss = model.create_loss()
-        self.model = model
+        if type(model_params) is dict:
+            self.model = create_model_for('tagger', **model_params)
+        else:
+            self.model = model_params
+        self.loss = self.model.create_loss()
         span_type = kwargs.get('span_type', 'iob')
         verbose = kwargs.get('verbose', False)
-        self.evaluator = TaggerEvaluatorTf(model, span_type, verbose)
+        self.evaluator = TaggerEvaluatorTf(self.model, span_type, verbose)
         self.global_step, self.train_op = optimizer(self.loss, **kwargs)
         self.nsteps = kwargs.get('nsteps', six.MAXSIZE)
+        tables = tf.tables_initializer()
+        self.model.sess.run(tables)
+        init = tf.global_variables_initializer()
+        self.model.sess.run(init)
+        saver = tf.train.Saver()
+        self.model.save_using(saver)
+
 
     def checkpoint(self):
         self.model.saver.save(self.model.sess, "./tf-tagger-%d/tagger" % os.getpid(), global_step=self.global_step)
@@ -149,7 +161,7 @@ class TaggerTrainerTf(EpochReportingTrainer):
 
 
 @register_training_func('tagger')
-def fit(model, ts, vs, es, **kwargs):
+def fit(model_params, ts, vs, es, **kwargs):
     epochs = int(kwargs['epochs']) if 'epochs' in kwargs else 5
     patience = int(kwargs['patience']) if 'patience' in kwargs else epochs
     conll_output = kwargs.get('conll_output', None)
@@ -158,13 +170,10 @@ def fit(model, ts, vs, es, **kwargs):
     model_file = get_model_file('tagger', 'tf', kwargs.get('basedir'))
     after_train_fn = kwargs['after_train_fn'] if 'after_train_fn' in kwargs else None
     TRAIN_FLAG()
-    trainer = create_trainer(model, **kwargs)
-    tables = tf.tables_initializer()
-    model.sess.run(tables)
-    init = tf.global_variables_initializer()
-    model.sess.run(init)
-    saver = tf.train.Saver()
-    model.save_using(saver)
+
+
+    trainer = create_trainer(model_params, **kwargs)
+
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
     verbose = bool(kwargs.get('verbose', False))
 
@@ -183,20 +192,20 @@ def fit(model, ts, vs, es, **kwargs):
 
         trainer.train(ts, reporting_fns)
         if after_train_fn is not None:
-            after_train_fn(model)
+            after_train_fn(trainer.model)
 
         test_metrics = trainer.test(vs, reporting_fns, phase='Valid')
 
         if do_early_stopping is False:
             trainer.checkpoint()
-            model.save(model_file)
+            trainer.model.save(model_file)
 
         elif early_stopping_cmp(test_metrics[early_stopping_metric], best_metric):
             last_improved = epoch
             best_metric = test_metrics[early_stopping_metric]
             print('New best %.3f' % best_metric)
             trainer.checkpoint()
-            model.save(model_file)
+            trainer.save(model_file)
 
         elif (epoch - last_improved) > patience:
             print('Stopping due to persistent failures to improve')
@@ -208,7 +217,7 @@ def fit(model, ts, vs, es, **kwargs):
 
         trainer.recover_last_checkpoint()
         # What to do about overloading this??
-        evaluator = TaggerEvaluatorTf(model, span_type, verbose)
+        evaluator = TaggerEvaluatorTf(trainer.model, span_type, verbose)
         start = time.time()
         test_metrics = evaluator.test(es, conll_output=conll_output, txts=txts)
         duration = time.time() - start

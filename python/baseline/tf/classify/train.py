@@ -9,28 +9,39 @@ from baseline.tf.tfy import _add_ema, TRAIN_FLAG
 from baseline.tf.optz import optimizer
 from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
 from baseline.utils import verbose_output
+from baseline.model import create_model_for
 
 
 @register_trainer(task='classify', name='default')
 class ClassifyTrainerTf(EpochReportingTrainer):
 
-    def __init__(self, model, **kwargs):
+    def __init__(self, model_params, **kwargs):
         super(ClassifyTrainerTf, self).__init__()
-        self.sess = model.sess
-        self.loss = model.create_loss()
-        self.test_loss = model.create_test_loss()
-        self.model = model
+
+        if type(model_params) is dict:
+            self.model = create_model_for('classify', **model_params)
+        else:
+            self.model = model_params
+
+        self.sess = self.model.sess
+        self.loss = self.model.create_loss()
+        self.test_loss = self.model.create_test_loss()
         self.global_step, train_op = optimizer(self.loss, colocate_gradients_with_ops=True, **kwargs)
         self.nsteps = kwargs.get('nsteps', six.MAXSIZE)
         decay = kwargs.get('ema_decay', None)
         if decay is not None:
             self.ema = True
-            ema_op, self.ema_load, self.ema_restore = _add_ema(model, float(decay))
+            ema_op, self.ema_load, self.ema_restore = _add_ema(self.model, float(decay))
             with tf.control_dependencies([ema_op]):
                 self.train_op = tf.identity(train_op)
         else:
             self.ema = False
             self.train_op = train_op
+
+        tables = tf.tables_initializer()
+        self.model.sess.run(tables)
+        self.model.sess.run(tf.global_variables_initializer())
+        self.model.set_saver(tf.train.Saver())
 
     @staticmethod
     def _get_batchsz(batch_dict):
@@ -104,7 +115,7 @@ class ClassifyTrainerTf(EpochReportingTrainer):
 
 
 @register_training_func('classify')
-def fit(model, ts, vs, es=None, **kwargs):
+def fit(model_params, ts, vs, es=None, **kwargs):
     """
     Train a classifier using TensorFlow
 
@@ -145,11 +156,8 @@ def fit(model, ts, vs, es=None, **kwargs):
     print('reporting', reporting_fns)
 
     TRAIN_FLAG()
-    trainer = create_trainer(model, **kwargs)
-    tables = tf.tables_initializer()
-    model.sess.run(tables)
-    model.sess.run(tf.global_variables_initializer())
-    model.set_saver(tf.train.Saver())
+    trainer = create_trainer(model_params, **kwargs)
+
 
     last_improved = 0
 
