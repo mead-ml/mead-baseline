@@ -422,11 +422,14 @@ class ClassifierTask(Task):
         ##return baseline.model.create_model(self.embeddings, self.labels, **model)
 
     def _load_dataset(self):
-        self.train_data = self.reader.load(self.dataset['train_file'], self.feat2index, self.config_params['batchsz'],
+        batchsz = self.config_params['train']['batchsz']
+        test_batchsz = self.config_params['train']['test_batchsz']
+
+        self.train_data = self.reader.load(self.dataset['train_file'], self.feat2index, batchsz,
                                            shuffle=True,
                                            sort_key=self.config_params['loader'].get('sort_key'))
-        self.valid_data = self.reader.load(self.dataset['valid_file'], self.feat2index, self.config_params['batchsz'])
-        self.test_data = self.reader.load(self.dataset['test_file'], self.feat2index, self.config_params.get('test_batchsz', 1))
+        self.valid_data = self.reader.load(self.dataset['valid_file'], self.feat2index, batchsz)
+        self.test_data = self.reader.load(self.dataset['test_file'], self.feat2index, test_batchsz)
 
 
 @exporter
@@ -509,12 +512,14 @@ class TaggerTask(Task):
         #return baseline.model.create_tagger_model(self.embeddings, labels, **self.config_params['model'])
 
     def _load_dataset(self):
+        batchsz = self.config_params['train']['batchsz']
+        test_batchsz = self.config_params['train']['test_batchsz']
         # TODO: get rid of sort_key=self.primary_key in favor of something explicit?
-        self.train_data, _ = self.reader.load(self.dataset['train_file'], self.feat2index, self.config_params['batchsz'],
+        self.train_data, _ = self.reader.load(self.dataset['train_file'], self.feat2index, batchsz,
                                               shuffle=True,
                                               sort_key='{}_lengths'.format(self.primary_key))
-        self.valid_data, _ = self.reader.load(self.dataset['valid_file'], self.feat2index, self.config_params['batchsz'], sort_key=None)
-        self.test_data, self.txts = self.reader.load(self.dataset['test_file'], self.feat2index, self.config_params.get('test_batchsz', 1), shuffle=False, sort_key=None)
+        self.valid_data, _ = self.reader.load(self.dataset['valid_file'], self.feat2index, batchsz, sort_key=None)
+        self.test_data, self.txts = self.reader.load(self.dataset['test_file'], self.feat2index, test_batchsz, shuffle=False, sort_key=None)
 
     def _get_features(self):
         return self.embeddings
@@ -608,21 +613,23 @@ class EncoderDecoderTask(Task):
         self.feat2tgt = self.feat2tgt['tgt']
 
     def _load_dataset(self):
+        batchsz = self.config_params['train']['batchsz']
+        test_batchsz = self.config_params['train']['test_batchsz']
         self.train_data = self.reader.load(self.dataset['train_file'],
                                            self.feat2src, self.feat2tgt,
-                                           self.config_params['batchsz'],
+                                           batchsz,
                                            shuffle=True,
                                            sort_key='{}_lengths'.format(self.primary_key))
 
         self.valid_data = self.reader.load(self.dataset['valid_file'],
                                            self.feat2src,
                                            self.feat2tgt,
-                                           self.config_params['batchsz'],
+                                           batchsz,
                                            shuffle=True)
         self.test_data = self.reader.load(self.dataset['test_file'],
                                           self.feat2src,
                                           self.feat2tgt,
-                                          self.config_params.get('test_batchsz', 1))
+                                          test_batchsz)
 
     def _reorganize_params(self):
         train_params = self.config_params['train']
@@ -728,10 +735,12 @@ class LanguageModelingTask(Task):
         baseline.save_vocabs(self.get_basedir(), self.feat2index)
 
     def _load_dataset(self):
+        batchsz = self.config_params['train']['batchsz']
+        test_batchsz = self.config_params['train']['test_batchsz']
         tgt_key = self.config_params['loader'].get('tgt_key', self.primary_key)
-        self.train_data = self.reader.load(self.dataset['train_file'], self.feat2index, self.config_params['batchsz'], tgt_key=tgt_key)
-        self.valid_data = self.reader.load(self.dataset['valid_file'], self.feat2index, self.config_params['batchsz'], tgt_key=tgt_key)
-        self.test_data = self.reader.load(self.dataset['test_file'], self.feat2index, 1, tgt_key=tgt_key)
+        self.train_data = self.reader.load(self.dataset['train_file'], self.feat2index, batchsz, tgt_key=tgt_key)
+        self.valid_data = self.reader.load(self.dataset['valid_file'], self.feat2index, batchsz, tgt_key=tgt_key)
+        self.test_data = self.reader.load(self.dataset['test_file'], self.feat2index, test_batchsz, tgt_key=tgt_key)
 
     def _reorganize_params(self):
 
