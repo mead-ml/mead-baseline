@@ -10,7 +10,6 @@ from baseline.model import create_model_for
 
 logger = logging.getLogger('baseline')
 
-
 @register_trainer(task='tagger', name='default')
 class TaggerTrainerPyTorch(EpochReportingTrainer):
 
@@ -172,7 +171,6 @@ def fit(model_params, ts, vs, es, **kwargs):
 
     after_train_fn = kwargs.get('after_train_fn', None)
     trainer = create_trainer(model_params, **kwargs)
-
 
     last_improved = 0
     for epoch in range(epochs):

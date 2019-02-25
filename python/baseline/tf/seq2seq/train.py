@@ -301,7 +301,6 @@ def fit(model_params, ts, vs, es=None, **kwargs):
     """
     epochs = int(kwargs.get('epochs', 5))
     patience = int(kwargs.get('patience', epochs))
-
     model_file = get_model_file('seq2seq', 'tf', kwargs.get('basedir'))
 
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
@@ -386,9 +385,7 @@ def fit_datasets(model_params, ts, vs, es=None, **kwargs):
 
     epochs = int(kwargs.get('epochs', 5))
     patience = int(kwargs.get('patience', epochs))
-
     model_file = get_model_file('seq2seq', 'tf', kwargs.get('basedir'))
-
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
 
     best_metric = 0

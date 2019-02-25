@@ -323,7 +323,6 @@ def fit(model_params, ts, vs, es=None, **kwargs):
     model_file = get_model_file('lm', 'tf', kwargs.get('basedir'))
     after_train_fn = kwargs['after_train_fn'] if 'after_train_fn' in kwargs else None
     trainer = create_trainer(model_params, **kwargs)
-
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
 
     best_metric = 1000

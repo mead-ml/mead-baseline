@@ -12,7 +12,6 @@ from baseline.model import create_model_for
 
 logger = logging.getLogger('baseline')
 
-
 @register_trainer(task='seq2seq', name='default')
 class Seq2SeqTrainerPyTorch(Trainer):
 

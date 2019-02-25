@@ -220,6 +220,7 @@ class TaggerTrainerTf(EpochReportingTrainer):
         saver = tf.train.Saver()
         self.model.save_using(saver)
 
+
     def checkpoint(self):
         """This method saves a checkpoint
 

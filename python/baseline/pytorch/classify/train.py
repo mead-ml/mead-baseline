@@ -14,7 +14,6 @@ from baseline.model import create_model_for
 
 logger = logging.getLogger('baseline')
 
-
 def _add_to_cm(cm, y, pred):
     _, best = pred.max(1)
     yt = y.cpu().int()
@@ -26,6 +25,9 @@ def _add_to_cm(cm, y, pred):
 class ClassifyTrainerPyTorch(EpochReportingTrainer):
 
     def __init__(self, model, **kwargs):
+
+        if type(model) is dict:
+            model = create_model_for('classify', **model)
         super(ClassifyTrainerPyTorch, self).__init__()
         if type(model) is dict:
             model = create_model_for('classify', **model)

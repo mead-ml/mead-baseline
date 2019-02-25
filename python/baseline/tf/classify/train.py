@@ -85,7 +85,6 @@ def model_creator(model_params):
     return model_fn
 
 
-
 @register_trainer(task='classify', name='default')
 class ClassifyTrainerTf(EpochReportingTrainer):
     """A Trainer to use if not using tf Estimators
@@ -363,6 +362,7 @@ def create_eval_input_fn(es, test_batchsz=1, **kwargs):
 
 @register_training_func('classify')
 def fit_datasets(model_params, ts, vs, es=None, **kwargs):
+
     """
     Train a classifier using TensorFlow with `tf.dataset`.  This
     is the default behavior for training.

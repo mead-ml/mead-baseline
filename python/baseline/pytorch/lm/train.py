@@ -7,7 +7,6 @@ from baseline.pytorch.optz import OptimizerManager
 from baseline.model import create_model_for
 logger = logging.getLogger('baseline')
 
-
 @register_trainer(task='lm', name='default')
 class LanguageModelTrainerPyTorch(Trainer):
 
@@ -66,7 +65,6 @@ class LanguageModelTrainerPyTorch(Trainer):
         total_loss = 0
         total_toks = 0
         batchsz, nctx = self._get_dims(vs[0])
-
         hidden = self._get_pytorch_model().init_hidden(batchsz)
 
         for batch_dict in vs:
@@ -163,7 +161,6 @@ def fit(model, ts, vs, es, **kwargs):
             best_metric = test_metrics[early_stopping_metric]
             logger.info('New best %.3f', best_metric)
             trainer.save(model_file)
-
 
         elif (epoch - last_improved) > patience:
             logger.info('Stopping due to persistent failures to improve')
