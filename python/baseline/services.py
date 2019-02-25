@@ -47,27 +47,19 @@ class Service(object):
     def task_name(cls):
         raise Exception("Undefined task name")
 
-    def batch_input(self, tokens, **kwargs):
+    def batch_input(self, tokens):
         """Turn the input into a consistent format.
         :param tokens
-        :param kwargs: provide mxlen, mxwlen from vectorizers if the model was trained with them. truncate
-        token streams when longer than these values.
         :return: List[List[str]]
         """
         mxlen = 0
         mxwlen = 0
-        vmxlen = kwargs.get('vmxlen', -1)
-        vmxwlen = kwargs.get('vmxwlen', -1)
         # If the input is List[str] wrap it in list to make a batch of size one.
         tokens_seq = (tokens,) if isinstance(tokens[0], six.string_types) else tokens
         # Get sentence and word lengths from the batch
         for tokens in tokens_seq:
-            if vmxlen != -1:
-                tokens = tokens[:vmxlen]
             mxlen = max(mxlen, len(tokens))
             for token in tokens:
-                if vmxwlen != -1:
-                    token = token[:vmxwlen]
                 mxwlen = max(mxwlen, len(token))
         return tokens_seq, mxlen, mxwlen
 
@@ -78,22 +70,10 @@ class Service(object):
         :param mxwlen: `int`: The max length of a word in the batch
         """
         for k, vectorizer in self.vectorizers.items():
-            if hasattr(vectorizer, 'mxlen') and vectorizer.mxlen == -1:
-                vectorizer.mxlen = mxlen
-            if hasattr(vectorizer, 'mxwlen') and vectorizer.mxwlen == -1:
-                vectorizer.mxwlen = mxwlen
-
-    def get_vectorizer_lens(self):
-        """get the max lengths from the vectorizers. assumes different vectorizers do not have different mxlens.
-        """
-        mxlen = -1
-        mxwlen = -1
-        for k, vectorizer in self.vectorizers.items():
             if hasattr(vectorizer, 'mxlen'):
-                mxlen = vectorizer.mxlen
+                vectorizer.mxlen = mxlen
             if hasattr(vectorizer, 'mxwlen'):
-                mxwlen = vectorizer.mxwlen
-        return mxlen, mxwlen
+                vectorizer.mxwlen = mxwlen
 
     def vectorize(self, tokens_seq):
         """Turn the input into that batch dict for prediction.
@@ -206,8 +186,7 @@ class ClassifierService(Service):
         """Take tokens and apply the internal vocab and vectorizers.  The tokens should be either a batch of text
         single utterance of type ``list``
         """
-        vmxlen, vmxwlen = self.get_vectorizer_lens()
-        tokens_seq, mxlen, mxwlen = self.batch_input(tokens, vmxlen=vmxlen, vmxwlen=vmxwlen)
+        tokens_seq, mxlen, mxwlen = self.batch_input(tokens)
         self.set_vectorizer_lens(mxlen, mxwlen)
         if preproc == "client":
             examples = self.vectorize(tokens_seq)
@@ -245,24 +224,18 @@ class TaggerService(Service):
     def signature_name(cls):
         return 'tag_text'
 
-    def batch_input(self, tokens, **kwargs):
+    def batch_input(self, tokens):
         """Convert the input into a consistent format.
 
         :return: List[List[dict[str] -> str]]
         """
         mxlen = 0
         mxwlen = 0
-        vmxlen = kwargs.get('vmxlen', -1)
-        vmxwlen = kwargs.get('vmxwlen', -1)
         # Input is a list of strings. (assume strings are tokens)
         if isinstance(tokens[0], six.string_types):
-            if vmxlen != -1:
-                tokens = tokens[:vmxlen]
             mxlen = len(tokens)
             tokens_seq = []
             for t in tokens:
-                if vmxwlen != -1:
-                    t = t[:vmxwlen]
                 mxwlen = max(mxwlen, len(t))
                 tokens_seq.append({'text': t})
             tokens_seq = [tokens_seq]
@@ -278,36 +251,24 @@ class TaggerService(Service):
                 if isinstance(tokens[0][0], six.string_types):
                     for utt in tokens:
                         utt_dict_seq = []
-                        if vmxlen != -1:
-                            utt = utt[:vmxlen]
                         mxlen = max(mxlen, len(utt))
                         for t in utt:
-                            if vmxwlen != -1:
-                                utt = utt[:vmxwlen]
                             mxwlen = max(mxwlen, len(t))
                             utt_dict_seq += [dict({'text': t})]
                         tokens_seq += [utt_dict_seq]
                 # Its already in List[List[dict]] form so just iterate to get mxlen and mxwlen
                 elif isinstance(tokens[0][0], dict):
                     for utt_dict_seq in tokens:
-                        if vmxlen != -1:
-                            utt_dict_seq = utt_dict_seq[:vmxlen]
                         mxlen = max(mxlen, len(utt_dict_seq))
                         for token_dict in utt_dict_seq:
                             text = token_dict['text']
-                            if vmxwlen != -1:
-                                text = text[:vmxlen]
                             mxwlen = max(mxwlen, len(text))
                         tokens_seq += [utt_dict_seq]
             # If its a dict, we just wrap it up
             elif isinstance(tokens[0], dict):
-                if vmxlen != -1:
-                    tokens = tokens[:vmxlen]
                 mxlen = len(tokens)
                 for t in tokens:
                     text = t['text']
-                    if vmxwlen != -1:
-                        text = text[:vmxwlen]
                     mxwlen = max(mxwlen, len(text))
                 tokens_seq = [tokens]
             else:
@@ -334,8 +295,7 @@ class TaggerService(Service):
         if not exporter_field_feature_map:
             exporter_field_feature_map = {'tokens': 'text'}
         label_field = kwargs.get('label', 'label')
-        vmxlen, vmxwlen = self.get_vectorizer_lens()
-        tokens_seq, mxlen, mxwlen = self.batch_input(tokens, vmxlen=vmxlen, vmxwlen=vmxwlen)
+        tokens_seq, mxlen, mxwlen = self.batch_input(tokens)
         self.set_vectorizer_lens(mxlen, mxwlen)
         # TODO: unlike classify, here we allow vectorizers even for preproc=server to get `word_lengths`.
         # vectorizers should not be available when preproc=server.
@@ -499,7 +459,6 @@ class EncoderDecoderService(Service):
         return examples
 
     def predict(self, tokens, K=1, **kwargs):
-        #TODO: use vmxlen, vmxwlen here as well? not sure
         tokens_seq, mxlen, mxwlen = self.batch_input(tokens)
         self.set_vectorizer_lens(mxlen, mxwlen)
         examples = self.vectorize(tokens_seq)

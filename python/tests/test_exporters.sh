@@ -117,7 +117,7 @@ case ${TASK} in
         classify_text ${MODEL_FILE} "" client ${TEST_LOAD} # remote end point is empty, preproc is client
         ;;
     tagger)
-        tag_text ${MODEL_FILE} ${CONLL} "${FEATURES}" "" client "{}" ${TEST_LOAD}  # remote end point is empty, preproc is client
+        tag_text ${MODEL_FILE} ${CONLL} "${FEATURES}" "" client "" ${TEST_LOAD}  # remote end point is empty, preproc is client
         ;;
     *)
         err_print "Unsupported task"
@@ -141,7 +141,7 @@ case ${TASK} in
         classify_text ${EXPORT_DIR}/${MODEL_NAME}/1/ ${REMOTE_HOST}:${REMOTE_PORT_GRPC} client ${TEST_SERVE} # valid remote end points, preproc is client.
         ;;
     tagger)
-        tag_text ${EXPORT_DIR}/${MODEL_NAME}/1/ ${CONLL} "${FEATURES}" ${REMOTE_HOST}:${REMOTE_PORT_GRPC} client "{}" ${TEST_SERVE}
+        tag_text ${EXPORT_DIR}/${MODEL_NAME}/1/ ${CONLL} "${FEATURES}" ${REMOTE_HOST}:${REMOTE_PORT_GRPC} client "" ${TEST_SERVE}
         ;;
     *)
         err_print "Unsupported task"
@@ -173,7 +173,7 @@ case ${TASK} in
         ;;
     *)
         err_print "Unsupported task"
-        exit 1
+        exit ;;;;g
         ;;
 esac
 docker_clear
