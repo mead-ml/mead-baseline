@@ -170,8 +170,7 @@ class Service(object):
         preproc = kwargs.get('preproc', 'client')
         assets = read_json(os.path.join(directory, 'model.assets'))
         model_name = assets['metadata']['exported_model']
-        label_file = os.path.join(directory, model_name) + '.labels'
-        labels = read_json(label_file)
+        labels = read_json(os.path.join(directory, model_name) + '.labels')
         lengths_key = assets.get('lengths_key', None)
         inputs = assets.get('inputs', [])
         return_labels = bool(assets['metadata']['return_labels'])
