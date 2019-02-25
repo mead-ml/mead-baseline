@@ -454,6 +454,7 @@ class ClassifierTask(Task):
                 tbsz,
             )
 
+
 @exporter
 @register_task
 class TaggerTask(Task):
@@ -538,6 +539,8 @@ class TaggerTask(Task):
         #return baseline.model.create_tagger_model(self.embeddings, labels, **self.config_params['model'])
 
     def _load_dataset(self):
+        batchsz = self.config_params['train']['batchsz']
+        test_batchsz = self.config_params['train']['test_batchsz']
         # TODO: get rid of sort_key=self.primary_key in favor of something explicit?
         bsz, vbsz, tbsz = Task._get_batchsz(self.config_params)
         self.train_data, _ = self.reader.load(
@@ -671,7 +674,6 @@ class EncoderDecoderTask(Task):
                 tbsz,
             )
 
-
     def _reorganize_params(self):
         train_params = self.config_params['train']
         train_params['batchsz'] = self.config_params['batchsz']
@@ -803,6 +805,7 @@ class LanguageModelingTask(Task):
                 1,
                 tgt_key=tgt_key
             )
+
 
     def _reorganize_params(self):
 
