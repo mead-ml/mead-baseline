@@ -109,7 +109,7 @@ class RemoteModelTensorFlowREST(object):
 
 class RemoteModelTensorFlowGRPC(object):
 
-    def __init__(self, remote, name, signature, labels=None, beam=None, lengths_key=None, inputs=[]):
+    def __init__(self, remote, name, signature, labels=None, beam=None, lengths_key=None, inputs=[], return_labels=False):
         """A remote model that lives on TF serving with gRPC transport
 
         When using this type of model, there is an external dependency on the `grpc` package, as well as the
@@ -122,6 +122,8 @@ class RemoteModelTensorFlowGRPC(object):
         :param beam: The beam width (defaults to None)
         :param lengths_key: Which key is used for the length of the input vector (defaults to None)
         :param inputs: The inputs (defaults to empty list)
+        :param return_labels: Whether the remote model returns class indices or the class labels directly. This depends
+        on the `return_labels` parameter in exporters
         """
         self.predictpb = import_user_module('tensorflow_serving.apis.predict_pb2')
         self.servicepb = import_user_module('tensorflow_serving.apis.prediction_service_pb2_grpc')
@@ -138,6 +140,7 @@ class RemoteModelTensorFlowGRPC(object):
         self.input_keys = set(inputs)
         self.beam = beam
         self.labels = labels
+        self.return_labels = return_labels
 
     def get_labels(self):
         """Return the model's labels
@@ -215,24 +218,35 @@ class RemoteModelTensorFlowGRPC(object):
             return [results]
 
         if self.signature == 'tag_text':
-            classes = predict_response.outputs.get('classes').int_val
+            if self.return_labels:
+                classes = predict_response.outputs.get('classes').string_val
+            else:
+                classes = predict_response.outputs.get('classes').int_val
             lengths = examples[self.lengths_key]
             result = []
             for i in range(num_examples):
                 length = lengths[i]
-                tmp = [np.int32(x) for x in classes[example_len*i:example_len*(i+1)][:length]]
+                if self.return_labels:
+                    tmp = [x.decode('ascii') for x in classes[example_len*i:example_len*(i+1)][:length]]
+                else:
+                    tmp = [np.int32(x) for x in classes[example_len*i:example_len*(i+1)][:length]]
                 result.append(tmp)
 
             return result
 
         if self.signature == 'predict_text':
             scores = predict_response.outputs.get('scores').float_val
-            # this assumes that the model was exported with return_label = True
-            classes = predict_response.outputs.get('classes').string_val
+            if self.return_labels:
+                classes = predict_response.outputs.get('classes').string_val
+            else:
+                classes = predict_response.outputs.get('classes').int_val
             result = []
             length = len(self.get_labels())
             for i in range(num_examples):   # wrap in numpy because the local models send that dtype out
-                d = [(c.decode('ascii'), np.float32(s)) for c, s in zip(classes[example_len*i:example_len*(i+1)][:length], scores[length*i:length*(i+1)][:length])]
+                if self.return_labels:
+                    d = [(c.decode('ascii'), np.float32(s)) for c, s in zip(classes[example_len*i:example_len*(i+1)][:length], scores[length*i:length*(i+1)][:length])]
+                else:
+                    d = [(np.int32(c), np.float32(s)) for c, s in zip(classes[example_len*i:example_len*(i+1)][:length], scores[length*i:length*(i+1)][:length])]
                 result.append(d)
             return result
 

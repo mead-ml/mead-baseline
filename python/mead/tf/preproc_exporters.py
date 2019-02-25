@@ -106,8 +106,9 @@ class ClassifyTensorFlowPreProcExporter(ClassifyTensorFlowExporter):
     def __init__(self, task, **kwargs):
         super(ClassifyTensorFlowPreProcExporter, self).__init__(task, **kwargs)
         self.feature_exporter_field_map = kwargs.get('feature_exporter_field_map', {'tokens': 'text'})
+        self.return_labels = kwargs.get('return_labels', False)
 
-    def _create_rpc_call(self, sess, model_file):
+    def _create_rpc_call(self, sess, model_file, **kwargs):
         model_base_dir = os.path.split(model_file)[0]
         pid = model_file.split("-")[-1]
         pc = PreProcessorController(model_base_dir, pid, self.task.config_params['features'],
@@ -124,7 +125,8 @@ class ClassifyTensorFlowPreProcExporter(ClassifyTensorFlowExporter):
             sig_input.update({model.lengths_key: tf.saved_model.utils.build_tensor_info(model.lengths)})
         sig_output = SignatureOutput(classes, values)
         sig_name = 'predict_text'
-        assets = create_assets(model_file, sig_input, sig_output, sig_name, model.lengths_key)
+        assets = create_assets(model_file, sig_input, sig_output, sig_name, model.lengths_key,
+                               return_labels=self.return_labels)
         return sig_input, sig_output, sig_name, assets
 
 
@@ -135,8 +137,9 @@ class TaggerTensorFlowPreProcExporter(TaggerTensorFlowExporter):
     def __init__(self, task, **kwargs):
         super(TaggerTensorFlowPreProcExporter, self).__init__(task, **kwargs)
         self.feature_exporter_field_map = kwargs.get('feature_exporter_field_map', {'tokens': 'text'})
+        self.return_labels = kwargs.get('return_labels', False)
 
-    def _create_rpc_call(self, sess, model_file):
+    def _create_rpc_call(self, sess, model_file, **kwargs):
         model_base_dir = os.path.split(model_file)[0]
         pid = model_file.split("-")[-1]
         pc = PreProcessorController(model_base_dir, pid, self.task.config_params['features'],
@@ -152,5 +155,6 @@ class TaggerTensorFlowPreProcExporter(TaggerTensorFlowExporter):
         sig_input.update({model.lengths_key: tf.saved_model.utils.build_tensor_info(model.lengths)})
         sig_output = SignatureOutput(classes, values)
         sig_name = 'tag_text'
-        assets = create_assets(model_file, sig_input, sig_output, sig_name, model.lengths_key)
+        assets = create_assets(model_file, sig_input, sig_output, sig_name, model.lengths_key,
+                               return_labels=self.return_labels)
         return sig_input, sig_output, sig_name, assets

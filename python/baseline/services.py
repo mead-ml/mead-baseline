@@ -142,7 +142,8 @@ class Service(object):
         name = kwargs.get("name", None)
         if remote:
             beam = kwargs.get('beam', 10)
-            model = Service._create_remote_model(directory, be, remote, name, cls.signature_name(), beam, preproc=kwargs.get('preproc', False))
+            model = Service._create_remote_model(directory, be, remote, name, cls.signature_name(), beam,
+                                                 preproc=kwargs.get('preproc', False))
             return cls(vocabs, vectorizers, model)
 
         # Currently nothing to do here
@@ -173,6 +174,7 @@ class Service(object):
         labels = read_json(label_file)
         lengths_key = assets.get('lengths_key', None)
         inputs = assets.get('inputs', [])
+        return_labels = bool(assets['metadata']['return_labels'])
 
         if backend == 'tf':
             remote_models = import_user_module('baseline.remote')
@@ -183,7 +185,7 @@ class Service(object):
             else:
                 RemoteModel = remote_models.RemoteModelTensorFlowGRPC
             model = RemoteModel(remote, name, signature_name, labels=labels, lengths_key=lengths_key, inputs=inputs,
-                                beam=beam)
+                                beam=beam, return_labels=return_labels)
         else:
             raise ValueError("only Tensorflow is currently supported for remote Services")
 
@@ -214,9 +216,19 @@ class ClassifierService(Service):
             examples = {'tokens': [" ".join(x) for x in tokens_seq]}
 
         outcomes_list = self.model.predict(examples)
+        if hasattr(self.model, 'return_labels'):  # only in remote models
+            return_labels = self.model.return_labels
+        else:
+            return_labels = True  # keeping the default classifier behavior
+        if not return_labels:
+            label_vocab = {index: label for index, label in enumerate(self.get_labels())}
         results = []
         for outcomes in outcomes_list:
-            results += [list(map(lambda x: (x[0], x[1].item()), sorted(outcomes, key=lambda tup: tup[1], reverse=True)))]
+            if return_labels:
+                results += [list(map(lambda x: (x[0], x[1].item()), sorted(outcomes, key=lambda tup: tup[1], reverse=True)))]
+            else:
+                results += [list(map(lambda x: (label_vocab[x[0].item()], x[1].item()),
+                                     sorted(outcomes, key=lambda tup: tup[1], reverse=True)))]
         return results
 
 
@@ -319,7 +331,9 @@ class TaggerService(Service):
 
         """
         preproc = kwargs.get('preproc', 'client')
-        exporter_field_feature_map = kwargs.get('exporter_field_feature_map', {'tokens': 'text'})
+        exporter_field_feature_map = kwargs.get('exporter_field_feature_map', {})  # if empty dict argument was passed
+        if not exporter_field_feature_map:
+            exporter_field_feature_map = {'tokens': 'text'}
         label_field = kwargs.get('label', 'label')
         vmxlen, vmxwlen = self.get_vectorizer_lens()
         tokens_seq, mxlen, mxwlen = self.batch_input(tokens, vmxlen=vmxlen, vmxwlen=vmxwlen)
@@ -338,13 +352,23 @@ class TaggerService(Service):
         outcomes = self.model.predict(examples)
 
         outputs = []
-        label_vocab = revlut(self.get_labels())
+        if hasattr(self.model, 'return_labels'):
+            return_labels = self.model.return_labels
+        else:
+            return_labels = False  # keeping the default tagger behavior
+
+        if not return_labels:
+            label_vocab = revlut(self.get_labels())
+
         for i, outcome in enumerate(outcomes):
             output = []
             for j, token in enumerate(tokens_seq[i]):
                 new_token = dict()
                 new_token.update(token)
-                new_token[label_field] = label_vocab[outcome[j].item()]  # this assumes the model returns vocab indices and scores
+                if return_labels:
+                    new_token[label_field] = outcome[j]
+                else:
+                    new_token[label_field] = label_vocab[outcome[j].item()]
                 output += [new_token]
             outputs += [output]
         return outputs

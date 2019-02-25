@@ -6,9 +6,9 @@ BASELINE_DIR: ${PWD}/../../
 SERVING_CONTAINER_NAME: tfserving
 TASK: tagger
 DRIVER: ${BASELINE_DIR}/api-examples/tag-text.py
-TEST_FILE: /home/schoudhury/dev/work/baseline/python/tests/test_data/eng.testb.small.conll
+TEST_FILE: eng.testb.small
 TEST_FILE_LINK: https://www.dropbox.com/s/pp3pcq5q5ko1df6/eng.testb.small?dl=1
-CONLL: true
+CONLL: false
 FEATURES: text
 MODEL_FILE: ${PWD}/conll-6419.zip
 MODEL_FILE_LINK: https://www.dropbox.com/s/ftv4amoq7dzxnxo/conll-6419.zip?dl=1
@@ -21,6 +21,7 @@ EXPORT_SETTINGS_MEAD: ${BASELINE_DIR}/python/mead/config/mead-settings.json
 EXPORT_SETTINGS_DATASETS: ${BASELINE_DIR}/python/mead/config/datasets.json
 MODEL_VERSION: 1
 IS_REMOTE: false
+RETURN_LABELS: false
 REMOTE_HOST: localhost
 REMOTE_PORT_GRPC: 8500
 REMOTE_PORT_HTTP: 8501

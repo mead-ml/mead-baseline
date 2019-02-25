@@ -28,8 +28,7 @@ function clean {
 }
 
 function docker_clear {
-    docker stop ${SERVING_CONTAINER_NAME} > /dev/null 2>&1
-    docker rm ${SERVING_CONTAINER_NAME} > /dev/null 2>&1
+    docker rm -f ${SERVING_CONTAINER_NAME} > /dev/null 2>&1
 }
 
 function docker_run {
@@ -80,6 +79,9 @@ function tag_text {
     if [ -z "$4" ]
     then
         python ${DRIVER} --model $1 --text ${TEST_FILE} --conll $2 --features $3 --name ${MODEL_NAME} > $7
+    elif [ -z "$6" ]
+    then
+        python ${DRIVER} --model $1 --text ${TEST_FILE} --conll $2 --features $3 --remote ${4} --name ${MODEL_NAME} --preproc $5 > $7
     else
         python ${DRIVER} --model $1 --text ${TEST_FILE} --conll $2 --features $3 --remote ${4} --name ${MODEL_NAME} --preproc $5 --grpc_feature_map $6 > $7
     fi
@@ -174,8 +176,8 @@ case ${TASK} in
         exit 1
         ;;
 esac
-#docker_clear
-# remove first few lines and check if the outputs match
+docker_clear
+## remove first few lines and check if the outputs match
 sed -i -e 1,${NUM_LINES_TO_REMOVE_SERVE}d ${TEST_SERVE_PREPROC}
 check_diff ${TEST_SERVE} ${TEST_SERVE_PREPROC}
 msg_print "${TASK} export successful."
