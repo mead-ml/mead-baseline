@@ -54,12 +54,17 @@ class Service(object):
         """
         mxlen = 0
         mxwlen = 0
+        vmxlen, vmxwlen = self.get_vectorizer_lens()
         # If the input is List[str] wrap it in list to make a batch of size one.
         tokens_seq = (tokens,) if isinstance(tokens[0], six.string_types) else tokens
         # Get sentence and word lengths from the batch
         for tokens in tokens_seq:
+            if vmxlen != -1:
+                tokens = tokens[:mxlen]
             mxlen = max(mxlen, len(tokens))
             for token in tokens:
+                if vmxwlen != -1:
+                    token = token[:vmxwlen]
                 mxwlen = max(mxwlen, len(token))
         return tokens_seq, mxlen, mxwlen
 
@@ -70,10 +75,22 @@ class Service(object):
         :param mxwlen: `int`: The max length of a word in the batch
         """
         for k, vectorizer in self.vectorizers.items():
-            if hasattr(vectorizer, 'mxlen'):
+            if hasattr(vectorizer, 'mxlen') and vectorizer.mxlen == -1:
                 vectorizer.mxlen = mxlen
-            if hasattr(vectorizer, 'mxwlen'):
+            if hasattr(vectorizer, 'mxwlen') and vectorizer.mxwlen == -1:
                 vectorizer.mxwlen = mxwlen
+
+    def get_vectorizer_lens(self):
+        """get the max len from the vectorizers if defined
+        """
+        mxlen = -1
+        mxwlen = -1
+        for k, vectorizer in self.vectorizers.items():
+            if hasattr(vectorizer, 'mxlen'):
+                mxlen = vectorizer.mxlen
+            if hasattr(vectorizer, 'mxlen'):
+                mxwlen = vectorizer.mxwlen
+        return mxlen, mxwlen
 
     def vectorize(self, tokens_seq):
         """Turn the input into that batch dict for prediction.
@@ -231,12 +248,17 @@ class TaggerService(Service):
         """
         mxlen = 0
         mxwlen = 0
+        vmxlen, vmxwlen = self.get_vectorizer_lens()
         # Input is a list of strings. (assume strings are tokens)
         if isinstance(tokens[0], six.string_types):
+            if vmxlen != -1:
+                tokens = tokens[:vmxlen]
             mxlen = len(tokens)
             tokens_seq = []
             for t in tokens:
                 mxwlen = max(mxwlen, len(t))
+                if vmxwlen != -1:
+                    t = t[:vmxwlen]
                 tokens_seq.append({'text': t})
             tokens_seq = [tokens_seq]
         else:
@@ -251,17 +273,25 @@ class TaggerService(Service):
                 if isinstance(tokens[0][0], six.string_types):
                     for utt in tokens:
                         utt_dict_seq = []
+                        if vmxlen != -1:
+                            utt = utt[:vmxlen]
                         mxlen = max(mxlen, len(utt))
                         for t in utt:
+                            if vmxwlen != -1:
+                                utt = utt[:vmxwlen]
                             mxwlen = max(mxwlen, len(t))
                             utt_dict_seq += [dict({'text': t})]
                         tokens_seq += [utt_dict_seq]
                 # Its already in List[List[dict]] form so just iterate to get mxlen and mxwlen
                 elif isinstance(tokens[0][0], dict):
                     for utt_dict_seq in tokens:
+                        if vmxlen != -1:
+                            utt_dict_seq = utt_dict_seq[:vmxlen]
                         mxlen = max(mxlen, len(utt_dict_seq))
                         for token_dict in utt_dict_seq:
                             text = token_dict['text']
+                            if vmxwlen != -1:
+                                text = text[:vmxwlen]
                             mxwlen = max(mxwlen, len(text))
                         tokens_seq += [utt_dict_seq]
             # If its a dict, we just wrap it up
@@ -269,6 +299,8 @@ class TaggerService(Service):
                 mxlen = len(tokens)
                 for t in tokens:
                     text = t['text']
+                    if vmxwlen != -1:
+                        text = text[:vmxwlen]
                     mxwlen = max(mxwlen, len(text))
                 tokens_seq = [tokens]
             else:
