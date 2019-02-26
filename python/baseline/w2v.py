@@ -162,6 +162,7 @@ class PretrainedEmbeddingsModel(WordEmbeddingsModel):
             for i in range(vsz):
                 word = self._readtospc(f)
                 raw = f.read(width)
+                if word in self.vocab: continue
                 if keep_unused is False and word not in known_vocab:
                     continue
                 if known_vocab and word in known_vocab:
@@ -193,6 +194,7 @@ class PretrainedEmbeddingsModel(WordEmbeddingsModel):
                 current = header_end + 1
                 for i in range(vsz):
                     word, vec, current = self._read_word2vec_line_mmap(m, width, current)
+                    if word in self.vocab: continue
                     if keep_unused is False and word not in known_vocab:
                         continue
                     if known_vocab and word in known_vocab:
