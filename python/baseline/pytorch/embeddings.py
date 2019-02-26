@@ -16,10 +16,10 @@ from baseline.pytorch.torchy import (
 )
 
 
-class PyTorchEmbeddings(object):
+class PyTorchEmbeddings(nn.Module):
 
-    def __init__(self):
-        super(PyTorchEmbeddings).__init__()
+    def __init__(self, _=None, **kwargs):
+        super(PyTorchEmbeddings, self).__init__()
 
     def get_vsz(self):
         pass
@@ -36,10 +36,10 @@ class PyTorchEmbeddings(object):
 
 
 @register_embeddings(name='default')
-class LookupTableEmbeddings(nn.Module, PyTorchEmbeddings):
+class LookupTableEmbeddings(PyTorchEmbeddings):
 
     def __init__(self, _, **kwargs):
-        super(LookupTableEmbeddings, self).__init__()
+        super(LookupTableEmbeddings, self).__init__(_, **kwargs)
         self.vsz = kwargs.get('vsz')
         self.dsz = kwargs.get('dsz')
         self.finetune = kwargs.get('finetune', True)
@@ -60,10 +60,10 @@ class LookupTableEmbeddings(nn.Module, PyTorchEmbeddings):
 
 
 @register_embeddings(name='char-conv')
-class CharConvEmbeddings(nn.Module, PyTorchEmbeddings):
+class CharConvEmbeddings(PyTorchEmbeddings):
 
     def __init__(self, _, **kwargs):
-        super(CharConvEmbeddings, self).__init__()
+        super(CharConvEmbeddings, self).__init__(_, **kwargs)
 
         if self.weights is None:
             unif = kwargs.get('unif', 0.1)
@@ -121,10 +121,10 @@ class CharConvEmbeddings(nn.Module, PyTorchEmbeddings):
 
 
 @register_embeddings(name='positional')
-class PositionalLookupTableEmbeddings(nn.Module, PyTorchEmbeddings):
+class PositionalLookupTableEmbeddings(PyTorchEmbeddings):
 
     def __init__(self, _, **kwargs):
-        super(PositionalLookupTableEmbeddings, self).__init__()
+        super(PositionalLookupTableEmbeddings, self).__init__(_, **kwargs)
         self.vsz = kwargs.get('vsz')
         self.dsz = kwargs.get('dsz')
         self.dropout = nn.Dropout(kwargs.get('dropout', 0.1))
@@ -167,9 +167,9 @@ class PositionalLookupTableEmbeddings(nn.Module, PyTorchEmbeddings):
 
 
 @register_embeddings(name='char-lstm')
-class CharLSTMEmbeddings(nn.Module, PyTorchEmbeddings):
+class CharLSTMEmbeddings(PyTorchEmbeddings):
     def __init__(self, name, **kwargs):
-        super(CharLSTMEmbeddings, self).__init__()
+        super(CharLSTMEmbeddings, self).__init__(name, **kwargs)
         self.vsz = kwargs.get('vsz')
         self.dsz = kwargs.get('dsz')
         self.finetune = kwargs.get('finetune', True)
@@ -185,7 +185,6 @@ class CharLSTMEmbeddings(nn.Module, PyTorchEmbeddings):
         unif = kwargs.get('unif', 0)
         weight_init = kwargs.get('weight_init', 'uniform')
         self.char_comp = BiRNNWrapper(pytorch_lstm(self.dsz, self.lstmsz, rnn_type, layers, pdrop, unif=unif, initializer=weight_init, batch_first=False), layers)
-
 
     def forward(self, xch):
         B, T, W = xch.shape
