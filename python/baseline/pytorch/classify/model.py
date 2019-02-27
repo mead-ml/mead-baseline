@@ -282,16 +282,14 @@ class FineTuneModel(ClassifierModelBase):
     def __init__(self):
         super(FineTuneModel, self).__init__()
 
-    def pool(self, word_embeddings, dsz, init, **kwargs):
+    def pool(self, embeddings, lengths):
         """Pooling here does nothing, we assume its been pooled already
 
-        :param word_embeddings: The word embedding input
-        :param dsz: The word embedding depth
-        :param init: The tensorflow initializer
-        :param kwargs: None
+        :param embeddings: The word embedding input
+        :param lengths: The embeddings temporal length
         :return: The average pooling representation
         """
-        return word_embeddings
+        return embeddings
 
     def init_pool(self, dsz, **kwargs):
         return dsz
