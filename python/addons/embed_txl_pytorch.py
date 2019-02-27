@@ -9,10 +9,8 @@ from baseline.utils import write_json
 from baseline.embeddings import register_embeddings
 from baseline.pytorch.embeddings import PyTorchEmbeddings
 from baseline.vectorizers import register_vectorizer, AbstractVectorizer
-from pytorch_pretrained_bert.tokenization import BertTokenizer
 from pytorch_pretrained_bert import TransfoXLTokenizer, TransfoXLModel
 from pytorch_pretrained_bert.file_utils import PYTORCH_PRETRAINED_BERT_CACHE
-from pytorch_pretrained_bert.modeling import BertModel
 from baseline.pytorch.torchy import *
 import copy
 import json
@@ -86,6 +84,7 @@ class TXLEmbeddings(PyTorchEmbeddings):
         return c
 
     def forward(self, x):
-        last_hidden_layer, _ = self.model(x)
-        last_hidden_layer = last_hidden_layer.detach()
+        with torch.no_grad():
+            last_hidden_layer, _ = self.model(x)
+            last_hidden_layer = last_hidden_layer.detach()
         return last_hidden_layer

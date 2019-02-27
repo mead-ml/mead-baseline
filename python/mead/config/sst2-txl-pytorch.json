@@ -13,7 +13,7 @@
 	},
 	"embeddings": {
 	    "type": "txl",
-	    "dsz": 3072,
+	    "dsz": 1024,
 	    "embed_file": "transfo-xl-wt103"
 	}
     }],
