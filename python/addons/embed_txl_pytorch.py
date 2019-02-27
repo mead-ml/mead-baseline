@@ -10,6 +10,7 @@ from baseline.embeddings import register_embeddings
 from baseline.pytorch.embeddings import PyTorchEmbeddings
 from baseline.vectorizers import register_vectorizer, AbstractVectorizer
 from pytorch_pretrained_bert.tokenization import BertTokenizer
+from pytorch_pretrained_bert import TransfoXLTokenizer, TransfoXLModel
 from pytorch_pretrained_bert.file_utils import PYTORCH_PRETRAINED_BERT_CACHE
 from pytorch_pretrained_bert.modeling import BertModel
 from baseline.pytorch.torchy import *
@@ -18,21 +19,20 @@ import json
 import math
 import re
 
+TXL_TOKENIZER = None
 
-BERT_TOKENIZER = None
 
-
-@register_vectorizer(name='wordpiece1d')
-class WordPieceVectorizer1D(AbstractVectorizer):
+@register_vectorizer(name='txl1d')
+class TXLTokenizer1D(AbstractVectorizer):
 
     def __init__(self, **kwargs):
-        super(WordPieceVectorizer1D, self).__init__(kwargs.get('transform_fn'))
-        global BERT_TOKENIZER
+        super(TXLTokenizer1D, self).__init__(kwargs.get('transform_fn'))
+        global TXL_TOKENIZER
         self.max_seen = 128
         handle = kwargs.get('embed_file')
-        if BERT_TOKENIZER is None:
-            BERT_TOKENIZER = BertTokenizer.from_pretrained(handle)
-        self.tokenizer = BERT_TOKENIZER
+        if TXL_TOKENIZER is None:
+            TXL_TOKENIZER = TransfoXLTokenizer.from_pretrained(handle)
+        self.tokenizer = TXL_TOKENIZER
         self.mxlen = kwargs.get('mxlen', -1)
 
     def iterable(self, tokens):
@@ -44,7 +44,7 @@ class WordPieceVectorizer1D(AbstractVectorizer):
         for atom in self.iterable(tokens):
             value = vocab.get(atom)
             if value is None:
-                value = vocab['[UNK]']
+                value = vocab['<unk>']
             yield value
 
     def run(self, tokens, vocab):
@@ -60,20 +60,18 @@ class WordPieceVectorizer1D(AbstractVectorizer):
         return vec1d, valid_length
 
 
-@register_embeddings(name='bert')
-class BERTEmbeddings(PyTorchEmbeddings):
+@register_embeddings(name='txl')
+class TXLEmbeddings(PyTorchEmbeddings):
 
     def __init__(self, name, **kwargs):
-        super(BERTEmbeddings, self).__init__(name=name, **kwargs)
-        global BERT_TOKENIZER
+        super(TXLEmbeddings, self).__init__(name=name, **kwargs)
+        global TXL_TOKENIZER
         self.dsz = kwargs.get('dsz')
-        if BERT_TOKENIZER is None:
-            BERT_TOKENIZER = BertTokenizer.from_pretrained(kwargs.get('embed_file'))
-        self.model = BertModel.from_pretrained(kwargs.get('embed_file'))
-        self.vocab = BERT_TOKENIZER.vocab
-        self.vsz = len(BERT_TOKENIZER.vocab)  # 30522 self.model.embeddings.word_embeddings.num_embeddings
-        self.layer_indices = kwargs.get('layers', [-1, -2, -3, -4])
-        self.operator = kwargs.get('operator', 'concat')
+        if TXL_TOKENIZER is None:
+            TXL_TOKENIZER = TransfoXLTokenizer.from_pretrained(kwargs.get('embed_file'))
+        self.model = TransfoXLModel.from_pretrained(kwargs.get('embed_file'))
+        self.vocab = TXL_TOKENIZER.sym2idx
+        self.vsz = len(TXL_TOKENIZER.sym2idx)
 
     def get_vocab(self):
         return self.vocab
@@ -83,17 +81,11 @@ class BERTEmbeddings(PyTorchEmbeddings):
 
     @classmethod
     def load(cls, embeddings, **kwargs):
-        c = cls("bert", **kwargs)
+        c = cls("txl", **kwargs)
         c.checkpoint = embeddings
         return c
 
     def forward(self, x):
-
-        input_mask = torch.zeros(x.shape, device=x.device, dtype=torch.long).masked_fill(x != 0, 1)
-        input_type_ids = torch.zeros(x.shape, device=x.device, dtype=torch.long)
-        all_layers, _ = self.model(x, token_type_ids=input_type_ids, attention_mask=input_mask)
-        layers = [all_layers[layer_index].detach() for layer_index in self.layer_indices]
-        z = torch.cat(layers, dim=-1)
-        if self.operator != 'concat':
-            z = torch.mean(z, dim=-1, keepdim=True)
-        return z
+        last_hidden_layer, _ = self.model(x)
+        last_hidden_layer = last_hidden_layer.detach()
+        return last_hidden_layer
