@@ -60,11 +60,10 @@ class WordPieceVectorizer1D(AbstractVectorizer):
         return vec1d, valid_length
 
 
-@register_embeddings(name='bert')
-class BERTEmbeddings(PyTorchEmbeddings):
+class BERTBaseEmbeddings(PyTorchEmbeddings):
 
     def __init__(self, name, **kwargs):
-        super(BERTEmbeddings, self).__init__(name=name, **kwargs)
+        super(BERTBaseEmbeddings, self).__init__(name=name, **kwargs)
         global BERT_TOKENIZER
         self.dsz = kwargs.get('dsz')
         if BERT_TOKENIZER is None:
@@ -91,9 +90,33 @@ class BERTEmbeddings(PyTorchEmbeddings):
 
         input_mask = torch.zeros(x.shape, device=x.device, dtype=torch.long).masked_fill(x != 0, 1)
         input_type_ids = torch.zeros(x.shape, device=x.device, dtype=torch.long)
-        all_layers, _ = self.model(x, token_type_ids=input_type_ids, attention_mask=input_mask)
+        all_layers, pooled = self.model(x, token_type_ids=input_type_ids, attention_mask=input_mask)
+        z = self.get_output(all_layers, pooled)
+        return z
+
+    def get_output(self, all_layers, pooled):
+        pass
+
+
+@register_embeddings(name='bert')
+class BERTEmbeddings(BERTBaseEmbeddings):
+
+    def __init__(self, name, **kwargs):
+        super(BERTEmbeddings, self).__init__(name=name, **kwargs)
+
+    def get_output(self, all_layers, pooled):
         layers = [all_layers[layer_index].detach() for layer_index in self.layer_indices]
         z = torch.cat(layers, dim=-1)
         if self.operator != 'concat':
             z = torch.mean(z, dim=-1, keepdim=True)
         return z
+
+
+@register_embeddings(name='bert-pooled')
+class BERTPooledEmbeddings(BERTBaseEmbeddings):
+
+    def __init__(self, name, **kwargs):
+        super(BERTPooledEmbeddings, self).__init__(name=name, **kwargs)
+
+    def get_output(self, all_layers, pooled):
+        return pooled

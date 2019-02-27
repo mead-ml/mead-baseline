@@ -274,3 +274,24 @@ class CompositePoolingModel(ClassifierModelBase):
             inputs[k] = value[perm_idx]
         return inputs
 
+
+@register_model(task='classify', name='fine-tune')
+class FineTuneModel(ClassifierModelBase):
+
+    """Fine-tune based on pre-pooled representations"""
+    def __init__(self):
+        super(FineTuneModel, self).__init__()
+
+    def pool(self, word_embeddings, dsz, init, **kwargs):
+        """Pooling here does nothing, we assume its been pooled already
+
+        :param word_embeddings: The word embedding input
+        :param dsz: The word embedding depth
+        :param init: The tensorflow initializer
+        :param kwargs: None
+        :return: The average pooling representation
+        """
+        return word_embeddings
+
+    def init_pool(self, dsz, **kwargs):
+        return dsz
