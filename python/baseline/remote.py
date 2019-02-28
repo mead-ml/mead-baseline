@@ -142,6 +142,9 @@ class RemoteModelTensorFlowGRPC(object):
         self.labels = labels
         self.return_labels = return_labels
 
+    def decode_output(self, x):
+        return x.decode('ascii') if self.return_labels else np.int32(x)
+
     def get_labels(self):
         """Return the model's labels
 
@@ -226,10 +229,7 @@ class RemoteModelTensorFlowGRPC(object):
             result = []
             for i in range(num_examples):
                 length = lengths[i]
-                if self.return_labels:
-                    tmp = [x.decode('ascii') for x in classes[example_len*i:example_len*(i+1)][:length]]
-                else:
-                    tmp = [np.int32(x) for x in classes[example_len*i:example_len*(i+1)][:length]]
+                tmp = [self.decode_output(x) for x in classes[example_len*i:example_len*(i+1)][:length]]
                 result.append(tmp)
 
             return result
@@ -243,10 +243,7 @@ class RemoteModelTensorFlowGRPC(object):
             result = []
             length = len(self.get_labels())
             for i in range(num_examples):   # wrap in numpy because the local models send that dtype out
-                if self.return_labels:
-                    d = [(c.decode('ascii'), np.float32(s)) for c, s in zip(classes[example_len*i:example_len*(i+1)][:length], scores[length*i:length*(i+1)][:length])]
-                else:
-                    d = [(np.int32(c), np.float32(s)) for c, s in zip(classes[example_len*i:example_len*(i+1)][:length], scores[length*i:length*(i+1)][:length])]
+                d = [(self.decode_output(c), np.float32(s)) for c, s in zip(classes[example_len*i:example_len*(i+1)][:length], scores[length*i:length*(i+1)][:length])]
                 result.append(d)
             return result
 

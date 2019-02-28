@@ -114,7 +114,7 @@ class ClassifyTensorFlowExporter(TensorFlowExporter):
 
     def __init__(self, task, **kwargs):
         super(ClassifyTensorFlowExporter, self).__init__(task, **kwargs)
-        self.return_labels = kwargs.get('return_labels', False)
+        self.return_labels = kwargs.get('return_labels', True)
 
     def _create_model(self, sess, basename, **kwargs):
         model = load_model(basename, sess=sess, **kwargs)

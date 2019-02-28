@@ -49,7 +49,7 @@ class Service(object):
 
     def batch_input(self, tokens):
         """Turn the input into a consistent format.
-        :param tokens
+        :param tokens: tokens in format List[str] or List[List[str]]
         :return: List[List[str]]
         """
         mxlen = 0
@@ -141,7 +141,7 @@ class Service(object):
         if remote:
             beam = kwargs.get('beam', 10)
             model = Service._create_remote_model(directory, be, remote, name, cls.signature_name(), beam,
-                                                 preproc=kwargs.get('preproc', False))
+                                                 preproc=kwargs.get('preproc', 'client'))
             return cls(vocabs, vectorizers, model)
 
         # Currently nothing to do here
@@ -191,6 +191,14 @@ class Service(object):
 
 @exporter
 class ClassifierService(Service):
+    def __init__(self, vocabs=None, vectorizers=None, model=None):
+        super(ClassifierService, self).__init__(vocabs, vectorizers, model)
+        if hasattr(self.model, 'return_labels'):
+            self.return_labels = self.model.return_labels
+        else:
+            self.return_labels = True  # keeping the default classifier behavior
+        if not self.return_labels:
+            self.label_vocab = {index: label for index, label in enumerate(self.get_labels())}
 
     @classmethod
     def task_name(cls):
@@ -212,18 +220,12 @@ class ClassifierService(Service):
             examples = {'tokens': [" ".join(x) for x in tokens_seq]}
 
         outcomes_list = self.model.predict(examples)
-        if hasattr(self.model, 'return_labels'):  # only in remote models
-            return_labels = self.model.return_labels
-        else:
-            return_labels = True  # keeping the default classifier behavior
-        if not return_labels:
-            label_vocab = {index: label for index, label in enumerate(self.get_labels())}
         results = []
         for outcomes in outcomes_list:
-            if return_labels:
+            if self.return_labels:
                 results += [list(map(lambda x: (x[0], x[1].item()), sorted(outcomes, key=lambda tup: tup[1], reverse=True)))]
             else:
-                results += [list(map(lambda x: (label_vocab[x[0].item()], x[1].item()),
+                results += [list(map(lambda x: (self.label_vocab[x[0].item()], x[1].item()),
                                      sorted(outcomes, key=lambda tup: tup[1], reverse=True)))]
         return results
 
@@ -233,6 +235,12 @@ class TaggerService(Service):
 
     def __init__(self, vocabs=None, vectorizers=None, model=None):
         super(TaggerService, self).__init__(vocabs, vectorizers, model)
+        if hasattr(self.model, 'return_labels'):
+            self.return_labels = self.model.return_labels
+        else:
+            self.return_labels = False  # keeping the default tagger behavior
+        if not self.return_labels:
+            self.label_vocab = revlut(self.get_labels())
 
     @classmethod
     def task_name(cls):
@@ -342,28 +350,21 @@ class TaggerService(Service):
             for exporter_field in exporter_field_feature_map:
                 unfeaturized_examples[exporter_field] = [" ".join([y[exporter_field_feature_map[exporter_field]]
                                                                    for y in x]) for x in tokens_seq]
-            unfeaturized_examples['word_lengths'] = examples['word_lengths']
+            unfeaturized_examples[self.model.lengths_key] = examples[self.model.lengths_key]  # remote model
             examples = unfeaturized_examples
 
         outcomes = self.model.predict(examples)
 
         outputs = []
-        if hasattr(self.model, 'return_labels'):
-            return_labels = self.model.return_labels
-        else:
-            return_labels = False  # keeping the default tagger behavior
-
-        if not return_labels:
-            label_vocab = revlut(self.get_labels())
         for i, outcome in enumerate(outcomes):
             output = []
             for j, token in enumerate(tokens_seq[i]):
                 new_token = dict()
                 new_token.update(token)
-                if return_labels:
+                if self.return_labels:
                     new_token[label_field] = outcome[j]
                 else:
-                    new_token[label_field] = label_vocab[outcome[j].item()]
+                    new_token[label_field] = self.label_vocab[outcome[j].item()]
                 output += [new_token]
             outputs += [output]
         return outputs

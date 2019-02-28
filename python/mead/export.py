@@ -49,10 +49,10 @@ def main():
     task = mead.Task.get_task_specific(task_name, args.settings)
     task.read_config(config_params, args.datasets, exporter_type=args.exporter_type)
     feature_exporter_field_map = create_feature_exporter_field_map(config_params['features'])
-    # TODO: we should write out return_labels to model.assets and GRPC deserializers should take that info
     exporter = create_exporter(task, args.exporter_type, return_labels=args.return_labels,
                                feature_exporter_field_map=feature_exporter_field_map)
     exporter.run(args.model, args.output_dir, args.model_version, remote=args.is_remote)
+
 
 if __name__ == "__main__":
     main()
