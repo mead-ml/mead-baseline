@@ -65,7 +65,6 @@ else:
     texts = [args.text.split()]
 
 m = bl.TaggerService.load(args.model, backend=args.backend, remote=args.remote, name=args.name, preproc=args.preproc)
-print(create_grpc_feature_map(args.grpc_feature_map))
 for sen in m.predict(texts, preproc=args.preproc,
                      exporter_field_feature_map=create_grpc_feature_map(args.grpc_feature_map)):
     for word_tag in sen:

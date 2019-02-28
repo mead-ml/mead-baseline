@@ -98,10 +98,6 @@ docker_clear
 FILES_TO_REMOVE=(${TEST_LOAD} ${TEST_SERVE} ${TEST_SERVE_PREPROC} ${EXPORT_DIR} ${EXPORT_DIR_PREPROC})
 remove_files "${FILES_TO_REMOVE[@]}"
 
-## how many lines coming from baseline prints need to be removed?
-NUM_LINES_TO_REMOVE_LOAD=`expr "$NUM_FEATURES" + 3`
-NUM_LINES_TO_REMOVE_SERVE=`expr "$NUM_FEATURES" + 2`
-
 msg_print "running test for ${TASK}"
 msg_print "------------------------"
 
@@ -173,8 +169,9 @@ case ${TASK} in
         ;;
     *)
         err_print "Unsupported task"
-        exit ;;;;g
+        exit 1
         ;;
+
 esac
 docker_clear
 ## remove first few lines and check if the outputs match

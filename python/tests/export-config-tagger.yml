@@ -1,10 +1,11 @@
 ERROR_COLOR: \033[0;31m
 MSG_COLOR: \033[0;32m
 END: \033[0m
-NUM_FEATURES: 3
 BASELINE_DIR: ${PWD}/../../
 SERVING_CONTAINER_NAME: tfserving
 TASK: tagger
+NUM_LINES_TO_REMOVE_LOAD: 5
+NUM_LINES_TO_REMOVE_SERVE: 4
 DRIVER: ${BASELINE_DIR}/api-examples/tag-text.py
 TEST_FILE: eng.testb.small
 TEST_FILE_LINK: https://www.dropbox.com/s/pp3pcq5q5ko1df6/eng.testb.small?dl=1

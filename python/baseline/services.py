@@ -88,7 +88,7 @@ class Service(object):
         for k, vectorizer in self.vectorizers.items():
             if hasattr(vectorizer, 'mxlen'):
                 mxlen = vectorizer.mxlen
-            if hasattr(vectorizer, 'mxlen'):
+            if hasattr(vectorizer, 'mxwlen'):
                 mxwlen = vectorizer.mxwlen
         return mxlen, mxwlen
 
