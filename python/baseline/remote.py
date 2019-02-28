@@ -252,6 +252,9 @@ class RemoteModelTensorFlowGRPC(object):
 
 
 class RemoteModelTensorFlowGRPCPreproc(RemoteModelTensorFlowGRPC):
+    def __init__(self, remote, name, signature, labels=None, beam=None, lengths_key=None, inputs=[], return_labels=False):
+        super(RemoteModelTensorFlowGRPCPreproc, self).__init__(remote, name, signature, labels,
+                                                               beam, lengths_key, inputs, return_labels)
 
     def create_request(self, examples):
         # TODO: Remove TF dependency client side

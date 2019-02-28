@@ -60,12 +60,12 @@ class Service(object):
         # Get sentence and word lengths from the batch
         for tokens in tokens_seq:
             if vmxlen != -1:
-                tokens = tokens[:mxlen]
+                tokens = tokens[:vmxlen]
             mxlen = max(mxlen, len(tokens))
-            for token in tokens:
+            for index in range(len(tokens)):
                 if vmxwlen != -1:
-                    token = token[:vmxwlen]
-                mxwlen = max(mxwlen, len(token))
+                    tokens[index] = tokens[index][:vmxwlen]
+                mxwlen = max(mxwlen, len(tokens[index]))
         return tokens_seq, mxlen, mxwlen
 
     def set_vectorizer_lens(self, mxlen, mxwlen):
@@ -85,11 +85,12 @@ class Service(object):
         """
         mxlen = -1
         mxwlen = -1
-        for k, vectorizer in self.vectorizers.items():
-            if hasattr(vectorizer, 'mxlen'):
-                mxlen = vectorizer.mxlen
-            if hasattr(vectorizer, 'mxwlen'):
-                mxwlen = vectorizer.mxwlen
+        if self.vectorizers is not None:
+            for k, vectorizer in self.vectorizers.items():
+                if hasattr(vectorizer, 'mxlen'):
+                    mxlen = vectorizer.mxlen
+                if hasattr(vectorizer, 'mxwlen'):
+                    mxwlen = vectorizer.mxwlen
         return mxlen, mxwlen
 
     def vectorize(self, tokens_seq):
@@ -278,7 +279,7 @@ class TaggerService(Service):
                         mxlen = max(mxlen, len(utt))
                         for t in utt:
                             if vmxwlen != -1:
-                                utt = utt[:vmxwlen]
+                                t = t[:vmxwlen]
                             mxwlen = max(mxwlen, len(t))
                             utt_dict_seq += [dict({'text': t})]
                         tokens_seq += [utt_dict_seq]
@@ -292,15 +293,19 @@ class TaggerService(Service):
                             text = token_dict['text']
                             if vmxwlen != -1:
                                 text = text[:vmxwlen]
+                                token_dict['text'] = text
                             mxwlen = max(mxwlen, len(text))
                         tokens_seq += [utt_dict_seq]
             # If its a dict, we just wrap it up
             elif isinstance(tokens[0], dict):
+                if vmxlen != -1:
+                    tokens = tokens[:vmxlen]
                 mxlen = len(tokens)
                 for t in tokens:
                     text = t['text']
                     if vmxwlen != -1:
                         text = text[:vmxwlen]
+                        t['text'] = text
                     mxwlen = max(mxwlen, len(text))
                 tokens_seq = [tokens]
             else:
@@ -350,7 +355,6 @@ class TaggerService(Service):
 
         if not return_labels:
             label_vocab = revlut(self.get_labels())
-
         for i, outcome in enumerate(outcomes):
             output = []
             for j, token in enumerate(tokens_seq[i]):
