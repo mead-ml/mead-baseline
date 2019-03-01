@@ -1,10 +1,11 @@
 import logging
+from itertools import chain
 from baseline.tf.tfy import *
 from baseline.version import __version__
 from baseline.model import LanguageModel, register_model
 from baseline.tf.embeddings import *
 from baseline.tf.transformer import transformer_encoder_stack, subsequent_mask
-from baseline.utils import read_json, write_json, ls_props
+from baseline.utils import read_json, write_json, ls_props, MAGIC_VARS
 from google.protobuf import text_format
 import copy
 
@@ -149,6 +150,7 @@ class LanguageModelBase(LanguageModel):
         self.layers = None
         self.hsz = None
         self.probs = None
+        self._unserializable = []
 
     def set_saver(self, saver):
         self.saver = saver
@@ -164,32 +166,23 @@ class LanguageModelBase(LanguageModel):
         self.save_values(basename)
 
     def save_md(self, basename):
+        write_json(self._state, '{}.state'.format(basename))
+        for key, embedding in self.embeddings.items():
+            embedding.save_md('{}-{}-md.json'.format(basename, key))
+        with open('{}.saver'.format(basename), 'w') as f:
+            f.write(str(self.saver.as_saver_def()))
 
-        path = basename.split('/')
-        base = path[-1]
-        outdir = '/'.join(path[:-1])
-
+    def _record_state(self, **kwargs):
         embeddings_info = {}
         for k, v in self.embeddings.items():
             embeddings_info[k] = v.__class__.__name__
-        state = {
-            "version": __version__,
-            "embeddings": embeddings_info,
-            "hsz": self.hsz,
-            "layers": self.layers,
-            "tgt_key": self.tgt_key
-        }
-        for prop in ls_props(self):
-            state[prop] = getattr(self, prop)
 
-        write_json(state, basename + '.state')
-        for key, embedding in self.embeddings.items():
-            embedding.save_md('{}-{}-md.json'.format(basename, key))
-
-        write_json(state, basename + '.state')
-        tf.train.write_graph(self.sess.graph_def, outdir, base + '.graph', as_text=False)
-        with open(basename + '.saver', 'w') as f:
-            f.write(str(self.saver.as_saver_def()))
+        blacklist = set(chain(self._unserializable, MAGIC_VARS, self.embeddings.keys()))
+        self._state = {k: v for k, v in kwargs.items() if k not in blacklist}
+        self._state.update({
+            'version': __version__,
+            'embeddings': embeddings_info,
+        })
 
     def _create_loss(self, scope):
         with tf.variable_scope(scope):
@@ -237,6 +230,7 @@ class LanguageModelBase(LanguageModel):
         lm = cls()
         lm.id = kwargs.get('id', 0)
         lm.embeddings = embeddings
+        lm._record_state(**kwargs)
         lm.y = kwargs.get('y', tf.placeholder(tf.int32, [None, None], name="y"))
         lm.sess = kwargs.get('sess', tf.Session())
         lm.pdrop_value = kwargs.get('pdrop', 0.5)
@@ -273,43 +267,24 @@ class LanguageModelBase(LanguageModel):
 
     @classmethod
     def load(cls, basename, **kwargs):
-        state = read_json(basename + '.state')
+        _state = read_json('{}.state'.format(basename))
+        if __version__ != _state['version']:
+            logger.warning("Loaded model is from baseline version %s, running version is %s", _state['version'], __version__)
         if 'predict' in kwargs:
-            state['predict'] = kwargs['predict']
-
+            _state['predict'] = kwargs['predict']
         if 'sampling' in kwargs:
-            state['sampling'] = kwargs['sampling']
-
+            _state['sampling'] = kwargs['sampling']
         if 'sampling_temp' in kwargs:
-            state['sampling_temp'] = kwargs['sampling_temp']
-
+            _state['sampling_temp'] = kwargs['sampling_temp']
         if 'beam' in kwargs:
-            state['beam'] = kwargs['beam']
+            _state['beam'] = kwargs['beam']
+        _state['sess'] = kwargs.get('sess', tf.Session())
 
-        state['sess'] = kwargs.get('sess', tf.Session())
-
-        with open(basename + '.saver') as fsv:
-            saver_def = tf.train.SaverDef()
-            text_format.Merge(fsv.read(), saver_def)
-
-        embeddings = dict()
-        embeddings_dict = state.pop('embeddings')
-        for key, class_name in embeddings_dict.items():
-            md = read_json('{}-{}-md.json'.format(basename, key))
-            embed_args = dict({'vsz': md['vsz'], 'dsz': md['dsz']})
-            Constructor = eval(class_name)
-            embeddings[key] = Constructor(key, **embed_args)
-
-        model = cls.create(embeddings, **state)
-        for prop in ls_props(model):
-            if prop in state:
-                setattr(model, prop, state[prop])
-
-        do_init = kwargs.get('init', True)
-        if do_init:
-            init = tf.global_variables_initializer()
-            model.sess.run(init)
-
+        embeddings_info = _state.pop('embeddings')
+        embeddings = reload_embeddings(embeddings_info, basename)
+        model = cls.create(embeddings, **_state)
+        if kwargs.get('init', True):
+            model.sess.run(tf.global_variables_initializer())
         model.saver = tf.train.Saver()
         model.saver.restore(model.sess, basename)
         return model

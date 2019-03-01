@@ -94,6 +94,7 @@ class TensorFlowEmbeddings(object):
         config['dsz'] = self.get_dsz()
         config['vsz'] = self.get_vsz()
         config['module'] = self.__class__.__module__
+        config['class'] = self.__class__.__name__
         config.update(self._state)
         return config
 
