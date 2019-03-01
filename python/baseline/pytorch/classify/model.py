@@ -274,3 +274,22 @@ class CompositePoolingModel(ClassifierModelBase):
             inputs[k] = value[perm_idx]
         return inputs
 
+
+@register_model(task='classify', name='fine-tune')
+class FineTuneModel(ClassifierModelBase):
+
+    """Fine-tune based on pre-pooled representations"""
+    def __init__(self):
+        super(FineTuneModel, self).__init__()
+
+    def pool(self, embeddings, lengths):
+        """Pooling here does nothing, we assume its been pooled already
+
+        :param embeddings: The word embedding input
+        :param lengths: The embeddings temporal length
+        :return: The average pooling representation
+        """
+        return embeddings
+
+    def init_pool(self, dsz, **kwargs):
+        return dsz

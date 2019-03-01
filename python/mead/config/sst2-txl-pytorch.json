@@ -1,0 +1,46 @@
+{
+    "task": "classify",
+    "basedir": "./sst2",
+	"backend": "pytorch",
+    "batchsz": 50,
+    "modules": ["embed_txl_pytorch"],
+    "features": 
+    [{
+	"name": "txl",
+	"vectorizer": {
+	    "type": "txl1d",
+	    "embed_file": "transfo-xl-wt103"
+	},
+	"embeddings": {
+	    "type": "txl",
+	    "dsz": 1024,
+	    "embed_file": "transfo-xl-wt103"
+	}
+    }],
+    "preproc": {
+	"mxlen": 100
+    },
+    "dataset": "SST2",
+    "loader": {
+	"reader_type": "default"
+    },
+    "unif": 0.25,
+    "model": {
+	"model_type": "default",
+	"filtsz": [3,4,5],
+	"cmotsz": 100,
+	"dropout": 0.5,
+	"finetune": true
+    },
+    "train": {
+	"epochs": 5,
+	"optim": "adamw",
+	"eta": 0.00025,
+	"weight_decay": 1.0e-5,
+	"early_stopping_metric": "acc",
+	"verbose": {
+	    "console": true,
+	    "file": "sst2-cm.csv"
+	}
+    }
+}
