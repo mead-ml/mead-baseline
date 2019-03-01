@@ -1,4 +1,5 @@
 import math
+import copy
 import numpy as np
 import tensorflow as tf
 from baseline.utils import write_json, Offsets
@@ -9,13 +10,14 @@ class TensorFlowEmbeddings(object):
     """This provides a base for TensorFlow embeddings sub-graphs
 
     """
-    def __init__(self, trainable=True, name=None, dtype=tf.float32):
+    def __init__(self, trainable=True, name=None, dtype=tf.float32, **kwargs):
         """Constructor
         """
         super(TensorFlowEmbeddings, self).__init__()
         self.name = name
         self.trainable = trainable
         self.dtype = dtype
+        self._record_state(**kwargs)
 
     def detached_ref(self):
         """This will detach any attached input and reference the same sub-graph otherwise
@@ -75,6 +77,9 @@ class TensorFlowEmbeddings(object):
         """
         return cls(name, vsz=model.vsz, dsz=model.dsz, weights=model.weights, **kwargs)
 
+    def _record_state(self, **kwargs):
+        self._state = copy.deepcopy(kwargs)
+
     def save_md(self, target):
         """Save the metadata associated with this embedding as a JSON file
 
@@ -88,6 +93,8 @@ class TensorFlowEmbeddings(object):
         config = {}
         config['dsz'] = self.get_dsz()
         config['vsz'] = self.get_vsz()
+        config['module'] = self.__class__.__module__
+        config.update(self._state)
         return config
 
 

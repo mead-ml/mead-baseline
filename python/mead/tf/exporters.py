@@ -13,6 +13,7 @@ from baseline.utils import (export,
                             ls_props, 
                             Offsets, 
                             write_json)
+from baseline.model import load_tagger_model
 from collections import namedtuple
 
 FIELD_NAME = 'text/tokens'
@@ -183,57 +184,10 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
         super(TaggerTensorFlowExporter, self).__init__(task)
 
     def _create_model(self, sess, basename):
-        labels = read_json(basename + '.labels')
-        model_params = self.task.config_params["model"]
-        model_params["sess"] = sess
-
-        state = read_json(basename + '.state')
-        if state.get('constrain_decode', False):
-            constraint = transition_mask(labels, self.task.config_params['train']['span_type'], Offsets.GO, Offsets.EOS, Offsets.PAD)
-            model_params['constraint'] = constraint
-
-        # Re-create the embeddings sub-graph
-        embeddings = dict()
-        for key, class_name in state['embeddings'].items():
-            md = read_json('{}-{}-md.json'.format(basename, key))
-            embed_args = dict({'vsz': md['vsz'], 'dsz': md['dsz']})
-            Constructor = eval(class_name)
-            embeddings[key] = Constructor(key, **embed_args)
-
-        model = baseline.model.create_model_for(self.task.task_name(), embeddings, labels, **model_params)
-
-        for prop in ls_props(model):
-            if prop in state:
-                setattr(model, prop, state[prop])
-
-        model.create_loss()
-
+        model = load_tagger_model(basename, sess=sess)
         softmax_output = tf.nn.softmax(model.probs)
         values, indices = tf.nn.top_k(softmax_output, 1)
-
-        start_np = np.full((1, 1, len(labels)), -1e4, dtype=np.float32)
-        start_np[:, 0, Offsets.GO] = 0
-        start = tf.constant(start_np)
-        start = tf.tile(start, [tf.shape(model.probs)[0], 1, 1])
-        model.probs = tf.concat([start, model.probs], 1)
-
-        ones = tf.fill(tf.shape(model.lengths), 1)
-        lengths = tf.add(model.lengths, ones)
-
-        if model.crf is True:
-            indices, _ = tf.contrib.crf.crf_decode(model.probs, model.A, lengths)
-            indices = indices[:, 1:]
-
-        list_of_labels = [''] * len(labels)
-        for label, idval in labels.items():
-            list_of_labels[idval] = label
-
-        class_tensor = tf.constant(list_of_labels)
-        table = tf.contrib.lookup.index_to_string_table_from_tensor(class_tensor)
-        classes = table.lookup(tf.to_int64(indices))
-        self._restore_checkpoint(sess, basename)
-
-        return model, indices, values
+        return model, model.best, values
 
     def _create_rpc_call(self, sess, basename):
         model, classes, values = self._create_model(sess, basename)

@@ -1,12 +1,13 @@
 import os
 import json
 import logging
+from itertools import chain
 from google.protobuf import text_format
 from tensorflow.python.platform import gfile
 from tensorflow.contrib.layers import fully_connected, xavier_initializer
 from baseline.model import TaggerModel, create_tagger_model, load_tagger_model
 from baseline.tf.tfy import *
-from baseline.utils import ls_props, read_json, write_json
+from baseline.utils import ls_props, read_json, write_json, MAGIC_VARS
 from baseline.tf.embeddings import *
 from baseline.version import __version__
 from baseline.model import register_model
@@ -28,33 +29,40 @@ class TaggerModelBase(TaggerModel):
         self.saver.save(self.sess, basename)
 
     def save_md(self, basename):
+        """
+        This method saves out a `.state` file containing meta-data from these classes and any info
+        registered by a user-defined derived class as a `property`. Also write the `graph` and `saver` and `labels`
 
-        path = basename.split('/')
-        base = path[-1]
-        outdir = '/'.join(path[:-1])
+        :param basename:
+        :return:
+        """
+        write_json(self._state, basename + '.state')
+        write_json(self.labels, basename + '.labels')
+        for key, embedding in self.embeddings.items():
+            embedding.save_md('{}-{}-md.json'.format(basename, key))
+        with open("{}.saver".format(basename), 'w') as f:
+            f.write(str(self.saver.as_saver_def()))
 
-        # For each embedding, save a record of the keys
+    def _record_state(self, **kwargs):
+        """
+        First, write out the embedding names, so we can recover those.  Then do a deepcopy on the model init params
+        so that it can be recreated later.  Anything that is a placeholder directly on this model needs to be removed
 
+        :param kwargs:
+        :return:
+        """
         embeddings_info = {}
         for k, v in self.embeddings.items():
             embeddings_info[k] = v.__class__.__name__
-        state = {
-            'version': __version__,
-            'embeddings': embeddings_info,
-            'crf': self.crf,
-            'proj': self.proj,
-            'constrain_decode': True if self.constraint is not None else False
-        }
-        for prop in ls_props(self):
-            state[prop] = getattr(self, prop)
 
-        write_json(state, basename + '.state')
-        write_json(self.labels, basename + ".labels")
-        for key, embedding in self.embeddings.items():
-            embedding.save_md(basename + '-{}-md.json'.format(key))
-        tf.train.write_graph(self.sess.graph_def, outdir, base + '.graph', as_text=False)
-        with open(basename + '.saver', 'w') as f:
-            f.write(str(self.saver.as_saver_def()))
+        blacklist = set(chain(self._unserializable, MAGIC_VARS, self.embeddings.keys()))
+        self._state = {k: v for k, v in kwargs.items() if k not in blacklist}
+        self._state.update({
+            "version": __version__,
+            "embeddings": embeddings_info,
+        })
+        if 'constraint' in kwargs:
+            self._state['constraint'] = True
 
     @property
     def dropin_value(self):
@@ -93,7 +101,6 @@ class TaggerModelBase(TaggerModel):
     @classmethod
     def load(cls, basename, **kwargs):
         """Reload the model from a graph file and a checkpoint
-
         The model that is loaded is independent of the pooling and stacking layers, making this class reusable
         by sub-classes.
 
@@ -101,67 +108,27 @@ class TaggerModelBase(TaggerModel):
         :param kwargs: See below
 
         :Keyword Arguments:
-        * *session* -- An optional tensorflow session.  If not passed, a new session is
+        * *sess* -- An optional tensorflow session.  If not passed, a new session is
             created
 
         :return: A restored model
         """
-        sess = kwargs.get('session', kwargs.get('sess', tf.Session()))
-        model = cls()
-        with open(basename + '.saver') as fsv:
-            saver_def = tf.train.SaverDef()
-            text_format.Merge(fsv.read(), saver_def)
-
-        checkpoint_name = kwargs.get('checkpoint_name', basename)
-        checkpoint_name = checkpoint_name or basename
-
-        state = read_json(basename + '.state')
-        for prop in ls_props(model):
-            if prop in state:
-                setattr(model, prop, state[prop])
-
-        with gfile.FastGFile(basename + '.graph', 'rb') as f:
-            gd = tf.GraphDef()
-            gd.ParseFromString(f.read())
-            sess.graph.as_default()
-            tf.import_graph_def(gd, name='')
-            try:
-                sess.run(saver_def.restore_op_name, {saver_def.filename_tensor_name: checkpoint_name})
-            except:
-                # Backwards compat
-                sess.run(saver_def.restore_op_name, {saver_def.filename_tensor_name: checkpoint_name + ".model"})
-
-        model.embeddings = dict()
-        for key, class_name in state['embeddings'].items():
-            md = read_json('{}-{}-md.json'.format(basename, key))
-            embed_args = dict({'vsz': md['vsz'], 'dsz': md['dsz']})
-            embed_args[key] = tf.get_default_graph().get_tensor_by_name('{}:0'.format(key))
-            Constructor = eval(class_name)
-            model.embeddings[key] = Constructor(key, **embed_args)
-
-        model.crf = bool(state.get('crf', False))
-        model.proj = bool(state.get('proj', False))
-        model.lengths = tf.get_default_graph().get_tensor_by_name('lengths:0')
-
-        model.y = tf.get_default_graph().get_tensor_by_name('y:0')
-        model.probs = tf.get_default_graph().get_tensor_by_name('output/probs:0')
-        model.best = tf.get_default_graph().get_tensor_by_name('output/best:0')
-
-        try:
-            model.A = tf.get_default_graph().get_tensor_by_name('Loss/transitions:0')
-            if not model.crf:
-                logger.warning('Warning: meta-data says no CRF but model contains transition matrix!')
-                model.crf = True
-        except:
-            if model.crf is True:
-                logger.warning('Warning: meta-data says there is a CRF but not transition matrix found!')
-            model.A = None
-            model.crf = False
-
-        model.labels = read_json(basename + '.labels')
-        model.sess = sess
-        model.saver = tf.train.Saver(saver_def=saver_def)
-        return model
+        _state = read_json("{}.state".format(basename))
+        _state['sess'] = kwargs.pop('sess', tf.Session())
+        _state['model_type'] = kwargs.get('model_type', 'default')
+        embeddings_info = _state.pop("embeddings")
+        embeddings = reload_embeddings(embeddings_info, basename)
+        labels = read_json("{}.labels".format(basename))
+        if _state.get('constraint') is not None:
+            # Dummy constraint values that will be filled in by the check pointing
+            _state['constraint'] = [tf.zeros((len(labels), len(labels))) for _ in range(2)]
+        model = cls.create(embeddings, labels, **_state)
+        model._state = _state
+        model.create_loss()
+        if kwargs.get('init', True):
+            model.sess.run(tf.global_variables_initializer())
+        model.saver = tf.train.Saver()
+        model.saver.restore(model.sess, basename)
 
     def save_using(self, saver):
         self.saver = saver
@@ -194,6 +161,7 @@ class TaggerModelBase(TaggerModel):
             ll, self.A = tf.contrib.crf.crf_log_likelihood(self.probs, self.y, self.lengths, self.A)
         else:
             ll, self.A = tf.contrib.crf.crf_log_likelihood(self.probs, self.y, self.lengths)
+
         return tf.reduce_mean(-ll)
 
     def _create_sentence_level_decode(self, trans, norm=False):
@@ -234,11 +202,11 @@ class TaggerModelBase(TaggerModel):
                         self._create_sentence_level_decode(self.constraint, norm=True)
                     else:
                         self._create_word_level_decode()
-
         return all_loss
 
     def __init__(self):
         super(TaggerModelBase, self).__init__()
+        self._unserializable = ['constraint']
 
     def get_labels(self):
         return self.labels
@@ -271,6 +239,7 @@ class TaggerModelBase(TaggerModel):
 
         model = cls()
         model.embeddings = embeddings
+        model._record_state(**kwargs)
         model.lengths_key = kwargs.get('lengths_key')
         model.lengths = kwargs.get('lengths', tf.placeholder(tf.int32, [None], name="lengths"))
         model.labels = labels
@@ -289,6 +258,14 @@ class TaggerModelBase(TaggerModel):
         model.feed_input = bool(kwargs.get('feed_input', False))
         model.activation_type = kwargs.get('activation', 'tanh')
         model.constraint = kwargs.get('constraint')
+        # Wrap the constraint in a non-trainable variable so that it is saved
+        # into the checkpoint. This means we won't need to recreate the actual
+        # values of it when we reload the model
+        if model.constraint is not None:
+            constraint = []
+            for i, c in enumerate(model.constraint):
+                constraint.append(tf.get_variable("constraint_{}".format(i), initializer=c, trainable=False))
+            model.constraint = constraint
 
         embedseq = model.embed(**kwargs)
         seed = np.random.randint(10e8)

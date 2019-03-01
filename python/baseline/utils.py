@@ -18,6 +18,7 @@ import collections
 
 __all__ = []
 logger = logging.getLogger('baseline')
+MAGIC_VARS = ['sess', 'tgt', 'y', 'lengths']  # These are inputs to models that shouldn't be saved out
 
 
 def optional_params(func):

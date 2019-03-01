@@ -10,6 +10,8 @@ parser.add_argument('--remote', help='(optional) remote endpoint', type=str) # l
 parser.add_argument('--name', help='(optional) signature name', type=str)
 parser.add_argument('--preproc', help='(optional) where to perform preprocessing', choices={'client', 'server'}, default='client')
 
+bl.import_user_module("vec_text")
+
 args = parser.parse_known_args()[0]
 
 if os.path.exists(args.text) and os.path.isfile(args.text):
