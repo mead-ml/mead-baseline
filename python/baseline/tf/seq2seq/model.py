@@ -221,6 +221,9 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
 
         src_embeddings_info = _state.pop('src_embeddings')
         src_embeddings = reload_embeddings(src_embeddings_info, basename)
+        for k in src_embeddings_info:
+            if k in kwargs:
+                _state[k] = kwargs[k]
         tgt_embedding_info = _state.pop('tgt_embedding')
         tgt_embedding = reload_embeddings(tgt_embedding_info, basename)['tgt']
 

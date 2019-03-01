@@ -1,8 +1,10 @@
 import os
+import baseline
 from mead.exporters import register_exporter
 from mead.preprocessors import create_preprocessors
 from baseline.tf.embeddings import *
-from baseline.utils import export
+from baseline.tf.tfy import *
+from baseline.utils import export, read_json, ls_props
 from collections import namedtuple
 from mead.tf.exporters import ClassifyTensorFlowExporter, TaggerTensorFlowExporter, create_assets
 import json
@@ -110,11 +112,11 @@ class ClassifyTensorFlowPreProcExporter(ClassifyTensorFlowExporter):
         model_base_dir = os.path.split(model_file)[0]
         pid = model_file.split("-")[-1]
         pc = PreProcessorController(model_base_dir, pid, self.task.config_params['features'])
-        model_params = self.task.config_params['model']
         tf_example, preprocessed = pc.run()
+        embedding_inputs = {}
         for feature in preprocessed:
-            model_params[feature] = preprocessed[feature]
-        model, classes, values = self._create_model(sess, model_file)
+            embedding_inputs[feature] = preprocessed[feature]
+        model, classes, values = self._create_model(sess, model_file, embedding_inputs)
         sig_input = {
             'tokens': tf.saved_model.utils.build_tensor_info(tf_example[pc.FIELD_NAME]),
         }
@@ -137,11 +139,11 @@ class TaggerTensorFlowPreProcExporter(TaggerTensorFlowExporter):
         model_base_dir = os.path.split(model_file)[0]
         pid = model_file.split("-")[-1]
         pc = PreProcessorController(model_base_dir, pid, self.task.config_params['features'])
-        model_params = self.task.config_params['model']
         tf_example, preprocessed = pc.run()
+        embedding_inputs = {}
         for feature in preprocessed:
-            model_params[feature] = preprocessed[feature]
-        model, classes, values = self._create_model(sess, model_file)
+            embedding_inputs[feature] = preprocessed[feature]
+        model, classes, values = self._create_model(sess, model_file, embedding_inputs)
         sig_input = {
             'tokens': tf.saved_model.utils.build_tensor_info(tf_example[pc.FIELD_NAME]),
              model.lengths_key: tf.saved_model.utils.build_tensor_info(model.lengths)

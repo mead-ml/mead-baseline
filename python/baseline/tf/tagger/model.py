@@ -120,6 +120,9 @@ class TaggerModelBase(TaggerModel):
         _state['sess'] = kwargs.pop('sess', tf.Session())
         embeddings_info = _state.pop("embeddings")
         embeddings = reload_embeddings(embeddings_info, basename)
+        for k in embeddings_info:
+            if k in kwargs:
+                _state[k] = kwargs[k]
         labels = read_json("{}.labels".format(basename))
         if _state.get('constraint') is not None:
             # Dummy constraint values that will be filled in by the check pointing

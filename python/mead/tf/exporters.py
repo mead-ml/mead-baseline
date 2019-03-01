@@ -115,8 +115,9 @@ class ClassifyTensorFlowExporter(TensorFlowExporter):
     def __init__(self, task):
         super(ClassifyTensorFlowExporter, self).__init__(task)
 
-    def _create_model(self, sess, basename):
-        model = load_model(basename, sess=sess)
+    def _create_model(self, sess, basename, embeddings_inputs):
+        embeddings_inputs = {} if embeddings_inputs is None else embeddings_inputs
+        model = load_model(basename, sess=sess, **embeddings_inputs)
         values, indices = tf.nn.top_k(model.probs, len(model.labels))
         class_tensor = tf.constant(model.labels)
         table = tf.contrib.lookup.index_to_string_table_from_tensor(class_tensor)
@@ -148,8 +149,9 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
     def __init__(self, task):
         super(TaggerTensorFlowExporter, self).__init__(task)
 
-    def _create_model(self, sess, basename):
-        model = load_tagger_model(basename, sess=sess)
+    def _create_model(self, sess, basename, embeddings_inputs=None):
+        embeddings_inputs = {} if embeddings_inputs is None else embeddings_inputs
+        model = load_tagger_model(basename, sess=sess, **embeddings_inputs)
         softmax_output = tf.nn.softmax(model.probs)
         values, indices = tf.nn.top_k(softmax_output, 1)
         return model, model.best, values
@@ -200,21 +202,13 @@ class Seq2SeqTensorFlowExporter(TensorFlowExporter):
     def __init__(self, task):
         super(Seq2SeqTensorFlowExporter, self).__init__(task)
 
-    def init_embeddings(self, embeddings_map, basename):
-        embeddings = dict()
-        for key, class_name in embeddings_map:
-            md = read_json('{}-{}-md.json'.format(basename, key))
-            embed_args = dict({'vsz': md['vsz'], 'dsz': md['dsz']})
-            Constructor = eval(class_name)
-            embeddings[key] = Constructor(key, **embed_args)
-
-        return embeddings
-
-    def _create_model(self, sess, basename):
+    def _create_model(self, sess, basename, embeddings_inputs=None):
+        embeddings_inputs = {} if embeddings_inputs is None else embeddings_inputs
         model = load_seq2seq_model(
             basename,
             sess=sess, predict=True,
-            beam=self.task.config_params.get('beam', 30)
+            beam=self.task.config_params.get('beam', 30),
+            **embeddings_inputs,
         )
         return model, model.decoder.best, None
 

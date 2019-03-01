@@ -282,6 +282,9 @@ class LanguageModelBase(LanguageModel):
 
         embeddings_info = _state.pop('embeddings')
         embeddings = reload_embeddings(embeddings_info, basename)
+        for k in embeddings_info:
+            if k in kwargs:
+                _state[k] = kwargs[k]
         model = cls.create(embeddings, **_state)
         if kwargs.get('init', True):
             model.sess.run(tf.global_variables_initializer())

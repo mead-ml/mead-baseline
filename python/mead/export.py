@@ -22,7 +22,6 @@ def main():
     parser.add_argument('--is_remote', help='if True, separate items for remote server and client. If False bundle everything together',
                         default=True, type=str2bool)
 
-
     args = parser.parse_args()
     configure_logger(args.logging)
 

@@ -298,6 +298,9 @@ class ClassifierModelBase(ClassifierModel):
         _state['sess'] = kwargs.pop('sess', tf.Session())
         embeddings_info = _state.pop('embeddings')
         embeddings = reload_embeddings(embeddings_info, basename)
+        for k in embeddings_info:
+            if k in kwargs:
+                _state[k] = kwargs[k]
         labels = read_json("{}.labels".format(basename))
         model = cls.create(embeddings, labels, **_state)
         model._state = _state
