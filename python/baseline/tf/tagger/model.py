@@ -15,6 +15,7 @@ from baseline.utils import listify, Offsets
 
 logger = logging.getLogger('baseline')
 
+
 class TaggerModelBase(TaggerModel):
 
     @property
@@ -36,11 +37,11 @@ class TaggerModelBase(TaggerModel):
         :param basename:
         :return:
         """
-        write_json(self._state, basename + '.state')
-        write_json(self.labels, basename + '.labels')
+        write_json(self._state, '{}.state'.format(basename))
+        write_json(self.labels, '{}.labels'.format(basename))
         for key, embedding in self.embeddings.items():
             embedding.save_md('{}-{}-md.json'.format(basename, key))
-        with open("{}.saver".format(basename), 'w') as f:
+        with open('{}.saver'.format(basename), 'w') as f:
             f.write(str(self.saver.as_saver_def()))
 
     def _record_state(self, **kwargs):
@@ -58,8 +59,8 @@ class TaggerModelBase(TaggerModel):
         blacklist = set(chain(self._unserializable, MAGIC_VARS, self.embeddings.keys()))
         self._state = {k: v for k, v in kwargs.items() if k not in blacklist}
         self._state.update({
-            "version": __version__,
-            "embeddings": embeddings_info,
+            'version': __version__,
+            'embeddings': embeddings_info,
         })
         if 'constraint' in kwargs:
             self._state['constraint'] = True
@@ -114,8 +115,9 @@ class TaggerModelBase(TaggerModel):
         :return: A restored model
         """
         _state = read_json("{}.state".format(basename))
+        if __version__ != _state['version']:
+            logger.warning("Loaded model is from baseline version %s, running version is %s", _state['version'], __version__)
         _state['sess'] = kwargs.pop('sess', tf.Session())
-        _state['model_type'] = kwargs.get('model_type', 'default')
         embeddings_info = _state.pop("embeddings")
         embeddings = reload_embeddings(embeddings_info, basename)
         labels = read_json("{}.labels".format(basename))

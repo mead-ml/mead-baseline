@@ -1,30 +1,33 @@
-import logging
-import baseline
 import os
 import shutil
+import logging
 import datetime
+from collections import namedtuple
 from tensorflow.python.framework.errors_impl import NotFoundError
-import mead.exporters
-from mead.exporters import register_exporter
+import baseline
 from baseline.tf.embeddings import *
 from baseline.tf.tfy import transition_mask
-from baseline.utils import (export, 
-                            read_json, 
-                            ls_props, 
-                            Offsets, 
-                            write_json)
-from baseline.model import load_tagger_model
-from collections import namedtuple
+from baseline.utils import (
+    export,
+    Offsets,
+    ls_props,
+    read_json,
+    write_json,
+)
+from baseline.model import load_tagger_model, load_model
+import mead.exporters
+from mead.exporters import register_exporter
 
-FIELD_NAME = 'text/tokens'
-ASSET_FILE_NAME = 'model.assets'
-logger = logging.getLogger('mead')
 
 __all__ = []
 exporter = export(__all__)
 
 
+FIELD_NAME = 'text/tokens'
+ASSET_FILE_NAME = 'model.assets'
+logger = logging.getLogger('mead')
 SignatureOutput = namedtuple("SignatureOutput", ("classes", "scores"))
+
 
 @exporter
 class TensorFlowExporter(mead.exporters.Exporter):
@@ -122,40 +125,11 @@ class ClassifyTensorFlowExporter(TensorFlowExporter):
         super(ClassifyTensorFlowExporter, self).__init__(task)
 
     def _create_model(self, sess, basename):
-        # Read the labels
-        labels = read_json(basename + '.labels')
-
-        # Get the parameters from MEAD
-        model_params = self.task.config_params["model"]
-        model_params["sess"] = sess
-
-        # Read the state file
-        state = read_json(basename + '.state')
-
-        # Re-create the embeddings sub-graph
-        embeddings = dict()
-        for key, class_name in state['embeddings'].items():
-            md = read_json('{}-{}-md.json'.format(basename, key))
-            embed_args = dict({'vsz': md['vsz'], 'dsz': md['dsz']})
-            Constructor = eval(class_name)
-            embeddings[key] = Constructor(key, **embed_args)
-
-        # Instantiate a graph
-        model = baseline.model.create_model_for(self.task.task_name(), embeddings, labels, **model_params)
-
-        # Set the properties of the model from the state file
-        for prop in ls_props(model):
-            if prop in state:
-                setattr(model, prop, state[prop])
-
-        # Append to the graph for class output
-        values, indices = tf.nn.top_k(model.probs, len(labels))
+        model = load_model(basename, sess=sess)
+        values, indices = tf.nn.top_k(model.probs, len(model.labels))
         class_tensor = tf.constant(model.labels)
         table = tf.contrib.lookup.index_to_string_table_from_tensor(class_tensor)
         classes = table.lookup(tf.to_int64(indices))
-
-        # Restore the checkpoint
-        self._restore_checkpoint(sess, basename)
         return model, classes, values
 
     def _create_rpc_call(self, sess, basename):
