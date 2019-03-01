@@ -4,6 +4,7 @@ import os
 import re
 import sys
 import json
+import pickle
 import hashlib
 import logging
 import zipfile
@@ -18,7 +19,8 @@ import collections
 
 __all__ = []
 logger = logging.getLogger('baseline')
-MAGIC_VARS = ['sess', 'tgt', 'y', 'lengths']  # These are inputs to models that shouldn't be saved out
+# These are inputs to models that shouldn't be saved out
+MAGIC_VARS = ['sess', 'tgt', 'y', 'lengths']
 
 
 def optional_params(func):
@@ -869,9 +871,14 @@ def unzip_model(path):
 @exporter
 def save_vectorizers(basedir, vectorizers, name='vectorizers'):
     import pickle
-    save_md_file = '{}/{}-{}.pkl'.format(basedir, name, os.getpid())
+    save_md_file = os.path.join(basedir, '{}-{}.pkl'.format(name, os.getpid()))
     with open(save_md_file, 'wb') as f:
         pickle.dump(vectorizers, f)
+    # Save out the vectorizer module names so we can automatically import them
+    # when reloading without going all the way to a pure json save
+    vectorizer_modules = [v.__class__.__module__ for v in vectorizers.values()]
+    module_file = os.path.join(basedir, '{}-{}.json'.format(name, os.getpid()))
+    write_json(vectorizer_modules, module_file)
 
 
 @exporter
@@ -900,9 +907,15 @@ def load_vocabs(directory):
 
 @exporter
 def load_vectorizers(directory):
-    import pickle
-    vectorizers_fname = find_files_with_prefix(directory, 'vectorizers')[0]
-    with open(vectorizers_fname, "rb") as f:
+    vectorizers_fname = find_files_with_prefix(directory, 'vectorizers')
+    # Find the module list for the vectorizer so we can import them without
+    # needing to bother the user with providing them
+    vectorizers_modules = [x for x in vectorizers_fname if 'json' in x][0]
+    modules = read_json(vectorizers_modules)
+    for module in modules:
+        import_user_module(module)
+    vectorizers_pickle = [x for x in vectorizers_fname if 'pkl' in x][0]
+    with open(vectorizers_pickle, "rb") as f:
         vectorizers = pickle.load(f)
     return vectorizers
 
