@@ -14,7 +14,7 @@ from baseline.utils import (
     read_json,
     write_json,
 )
-from baseline.model import load_tagger_model, load_model
+from baseline.model import load_tagger_model, load_model, load_seq2seq_model
 import mead.exporters
 from mead.exporters import register_exporter
 
@@ -37,15 +37,6 @@ class TensorFlowExporter(mead.exporters.Exporter):
 
     def _run(self, sess, basename, **kwargs):
         pass
-
-    def _restore_checkpoint(self, sess, basename):
-        saver = tf.train.Saver()
-        sess.run(tf.tables_initializer())
-        sess.run(tf.global_variables_initializer())
-        try:
-            saver.restore(sess, basename)
-        except NotFoundError:
-            saver.restore(sess, basename + ".model")
 
     def run(self, basename, output_dir, model_version, **kwargs):
 
@@ -220,44 +211,18 @@ class Seq2SeqTensorFlowExporter(TensorFlowExporter):
         return embeddings
 
     def _create_model(self, sess, basename):
-        model_params = self.task.config_params["model"]
-        model_params["sess"] = sess
-        model_params['predict'] = True
-        model_params['beam'] = self.task.config_params.get('beam', 30)
-
-        state = read_json(basename + '.state')
-        if not state:
-            raise RuntimeError("state file not found or is empty")
-
-        model_params["src_lengths_key"] = state["src_lengths_key"]
-        self.length_key = state["src_lengths_key"]
-
-        # Re-create the embeddings sub-graph
-        embeddings = self.init_embeddings(state[self.SOURCE_STATE_EMBED_KEY].items(), basename)
-
-        # create the taget embeddings. there's only one.
-        target_embeddings = self.init_embeddings([
-            (self.TARGET_EMBED_KEY, state[self.TARGET_STATE_EMBED_KEY])
-        ], basename)
-        target_embeddings = target_embeddings[self.TARGET_EMBED_KEY]
-
-        model = baseline.model.create_model_for(self.task.task_name(), embeddings, target_embeddings, **model_params)
-
-        for prop in ls_props(model):
-            if prop in state:
-                setattr(model, prop, state[prop])
-
-        # classes = model.tgt_embedding.lookup(tf.cast(model.best, dtype=tf.int64))
-        classes = model.decoder.best
-        self._restore_checkpoint(sess, basename)
-
-        return model, classes, None
+        model = load_seq2seq_model(
+            basename,
+            sess=sess, predict=True,
+            beam=self.task.config_params.get('beam', 30)
+        )
+        return model, model.decoder.best, None
 
     def _create_rpc_call(self, sess, basename):
         model, classes, values = self._create_model(sess, basename)
 
         predict_tensors = {}
-        predict_tensors[self.length_key] = tf.saved_model.utils.build_tensor_info(model.src_len)
+        predict_tensors[model.src_lengths_key] = tf.saved_model.utils.build_tensor_info(model.src_len)
 
         for k, v in model.src_embeddings.items():
             try:
@@ -268,7 +233,7 @@ class Seq2SeqTensorFlowExporter(TensorFlowExporter):
         sig_input = predict_tensors
         sig_output = SignatureOutput(classes, values)
         sig_name = 'suggest_text'
-        assets = create_assets(basename, sig_input, sig_output, sig_name, self.length_key, beam=model.decoder.beam_width)
+        assets = create_assets(basename, sig_input, sig_output, sig_name, model.src_lengths_key, beam=model.decoder.beam_width)
 
         return sig_input, sig_output, sig_name, assets
 
