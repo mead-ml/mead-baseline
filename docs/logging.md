@@ -1,6 +1,6 @@
 # Baseline and Logging
 
-Baseline, MEAD, and hpctl all use logging extensively. hpctl uses it to collect scores from spawned jobs while baseline and mead use it to give the user information as well (more importantly) to report scores.
+Baseline, MEAD, and hpctl all use logging extensively. hpctl uses it to collect scores from spawned jobs while baseline and mead use it to give the user information as well as to (more importantly) report scores.
 
 Default configuration can be found in [logging.json](../python/mead/config/logging.json).
 
