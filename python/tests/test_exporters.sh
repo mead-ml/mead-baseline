@@ -32,7 +32,7 @@ function docker_clear {
 }
 
 function docker_run {
-    docker run -p ${REMOTE_PORT_HTTP}:${REMOTE_PORT_HTTP} -p ${REMOTE_PORT_GRPC}:${REMOTE_PORT_GRPC} --name ${SERVING_CONTAINER_NAME} -v $1 -e MODEL_NAME=${MODEL_NAME} -t tensorflow/serving &
+    docker run -p ${REMOTE_PORT_HTTP}:${REMOTE_PORT_HTTP} -p ${REMOTE_PORT}:${REMOTE_PORT} --name ${SERVING_CONTAINER_NAME} -v $1 -e MODEL_NAME=${MODEL_NAME} -t tensorflow/serving &
 }
 
 function get_file {
@@ -54,6 +54,7 @@ function check_diff {
     if [ "$DIFF" != "" ]
     then
         err_print "${1} does not match with ${2}, exporting failed. "
+        docker_clear
         exit 1
     fi
 }
@@ -74,6 +75,7 @@ function classify_text {
         python ${DRIVER} --model $1 --text ${TEST_FILE} --remote ${2} --name ${MODEL_NAME} --preproc $3 > $4
     fi
 }
+
 
 function tag_text {
     if [ -z "$4" ]
@@ -134,10 +136,10 @@ sleep ${SLEEP}
 msg_print "processing with served model, preproc=client"
 case ${TASK} in
     classify)
-        classify_text ${EXPORT_DIR}/${MODEL_NAME}/1/ ${REMOTE_HOST}:${REMOTE_PORT_GRPC} client ${TEST_SERVE} # valid remote end points, preproc is client.
+        classify_text ${EXPORT_DIR}/${MODEL_NAME}/1/ ${REMOTE_HOST}:${REMOTE_PORT} client ${TEST_SERVE} # valid remote end points, preproc is client.
         ;;
     tagger)
-        tag_text ${EXPORT_DIR}/${MODEL_NAME}/1/ ${CONLL} "${FEATURES}" ${REMOTE_HOST}:${REMOTE_PORT_GRPC} client "" ${TEST_SERVE}
+        tag_text ${EXPORT_DIR}/${MODEL_NAME}/1/ ${CONLL} "${FEATURES}" ${REMOTE_HOST}:${REMOTE_PORT} client "" ${TEST_SERVE}
         ;;
     *)
         err_print "Unsupported task"
@@ -150,6 +152,12 @@ sed -i -e 1,${NUM_LINES_TO_REMOVE_LOAD}d ${TEST_LOAD}
 sed -i -e 1,${NUM_LINES_TO_REMOVE_SERVE}d ${TEST_SERVE}
 check_diff ${TEST_LOAD} ${TEST_SERVE}
 
+### exit if testing over REST
+if [[ "${REMOTE_HOST}" != "http" ]]
+    msg_print "${TASK} export successful."
+    exit 0
+
+
 ## export with preproc=server and process data
 msg_print "exporting model with preproc=server"
 mkdir -p ${EXPORT_DIR_PREPROC}
@@ -161,10 +169,10 @@ docker_run ${EXPORT_DIR_PREPROC}:/models
 msg_print "processing with served model, preproc=server"
 case ${TASK} in
     classify)
-        classify_text ${EXPORT_DIR_PREPROC}/${MODEL_NAME}/1/ ${REMOTE_HOST}:${REMOTE_PORT_GRPC} server ${TEST_SERVE_PREPROC} # valid remote end points, preproc is server.
+        classify_text ${EXPORT_DIR_PREPROC}/${MODEL_NAME}/1/ ${REMOTE_HOST}:${REMOTE_PORT} server ${TEST_SERVE_PREPROC} # valid remote end points, preproc is server.
         ;;
     tagger)
-        tag_text ${EXPORT_DIR_PREPROC}/${MODEL_NAME}/1/ ${CONLL} "${FEATURES}" ${REMOTE_HOST}:${REMOTE_PORT_GRPC} server "${GRPC_FEATURE_MAP}" ${TEST_SERVE_PREPROC}
+        tag_text ${EXPORT_DIR_PREPROC}/${MODEL_NAME}/1/ ${CONLL} "${FEATURES}" ${REMOTE_HOST}:${REMOTE_PORT} server "${GRPC_FEATURE_MAP}" ${TEST_SERVE_PREPROC}
 
         ;;
     *)
