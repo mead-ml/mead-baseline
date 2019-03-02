@@ -32,7 +32,7 @@ function docker_clear {
 }
 
 function docker_run {
-    docker run -p ${REMOTE_PORT_HTTP}:${REMOTE_PORT_HTTP} -p ${REMOTE_PORT}:${REMOTE_PORT} --name ${SERVING_CONTAINER_NAME} -v $1 -e MODEL_NAME=${MODEL_NAME} -t tensorflow/serving &
+    docker run -p ${REMOTE_PORT}:${REMOTE_PORT} --name ${SERVING_CONTAINER_NAME} -v $1 -e MODEL_NAME=${MODEL_NAME} -t tensorflow/serving &
 }
 
 function get_file {
@@ -153,10 +153,11 @@ sed -i -e 1,${NUM_LINES_TO_REMOVE_SERVE}d ${TEST_SERVE}
 check_diff ${TEST_LOAD} ${TEST_SERVE}
 
 ### exit if testing over REST
-if [[ "${REMOTE_HOST}" != "http" ]]
+if [[ "${REMOTE_HOST}" == http* ]]
+then
     msg_print "${TASK} export successful."
     exit 0
-
+fi
 
 ## export with preproc=server and process data
 msg_print "exporting model with preproc=server"

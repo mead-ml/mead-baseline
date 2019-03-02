@@ -4,7 +4,8 @@ from baseline.utils import import_user_module
 
 class RemoteModelTensorFlowREST(object):
 
-    def __init__(self, remote, name, signature, labels=None, beam=None, lengths_key=None, inputs=[], version=None):
+    def __init__(self, remote, name, signature, labels=None, beam=None, lengths_key=None, inputs=[], version=None,
+                 return_labels=False):
         """A remote model that lives on TF serving with REST transport
 
         This type of model currently depends on the `requests` module as a dependency for HTTP
@@ -17,6 +18,8 @@ class RemoteModelTensorFlowREST(object):
         :param lengths_key: Which key is used for the length of the input vector (defaults to None)
         :param inputs: The inputs (defaults to empty list)
         :param version: The model version (defaults to None)
+        :param return_labels: Whether the remote model returns class indices or the class labels directly. This depends
+        on the `return_labels` parameter in exporters
         """
         self.remote = remote
         self.name = name
@@ -26,6 +29,7 @@ class RemoteModelTensorFlowREST(object):
         self.beam = beam
         self.labels = labels
         self.version = version
+        self.return_labels = return_labels
 
     def get_labels(self):
         """Return the model's labels
@@ -34,7 +38,7 @@ class RemoteModelTensorFlowREST(object):
         """
         return self.labels
 
-    def predict(self, examples, **kwargs):
+    def predict(self, examples):
         """Run prediction over HTTP/REST.
 
         :param examples: The input examples
@@ -78,7 +82,10 @@ class RemoteModelTensorFlowREST(object):
             for i in range(num_ex):
                 length_i = lengths[i]
                 classes_i = classes[i]
-                d = [np.array(classes_i[j]) for j in range(length_i)]
+                if self.return_labels:
+                    d = [np.array(classes_i[j]) for j in range(length_i)]
+                else:
+                    d = [np.array(np.int32(classes_i[j])) for j in range(length_i)]
                 result.append(d)
 
             return result
@@ -91,7 +98,10 @@ class RemoteModelTensorFlowREST(object):
             for i in range(num_ex):
                 score_i = scores[i]
                 classes_i = classes[i]
-                d = [(c, np.float32(s)) for c, s in zip(classes_i, score_i)]
+                if self.return_labels:
+                    d = [(c, np.float32(s)) for c, s in zip(classes_i, score_i)]
+                else:
+                    d = [(np.int32(c), np.float32(s)) for c, s in zip(classes_i, score_i)]
                 result.append(d)
             return result
 
@@ -152,7 +162,7 @@ class RemoteModelTensorFlowGRPC(object):
         """
         return self.labels
 
-    def predict(self, examples, **kwargs):
+    def predict(self, examples):
         """Run prediction over gRPC
 
         :param examples: The input examples
