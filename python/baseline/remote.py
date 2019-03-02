@@ -74,11 +74,12 @@ class RemoteModelTensorFlowREST(object):
             tensor = tensor.transpose(1, 2, 0)
             return tensor
 
+        num_ex = len(predict_response['classes'])
+
         if self.signature == 'tag_text':
             classes = predict_response['classes']
             lengths = examples[self.lengths_key]
             result = []
-            num_ex = examples[self.lengths_key].shape[0]
             for i in range(num_ex):
                 length_i = lengths[i]
                 classes_i = classes[i]
@@ -91,7 +92,6 @@ class RemoteModelTensorFlowREST(object):
             return result
 
         if self.signature == 'predict_text':
-            num_ex = len(examples[self.lengths_key])
             scores = predict_response['scores']
             classes = predict_response['classes']
             result = []

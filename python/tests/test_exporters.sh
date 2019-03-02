@@ -85,7 +85,7 @@ function tag_text {
     then
         python ${DRIVER} --model $1 --text ${TEST_FILE} --conll $2 --features $3 --remote ${4} --name ${MODEL_NAME} --preproc $5 > $7
     else
-        python ${DRIVER} --model $1 --text ${TEST_FILE} --conll $2 --features $3 --remote ${4} --name ${MODEL_NAME} --preproc $5 --grpc_feature_map $6 > $7
+        python ${DRIVER} --model $1 --text ${TEST_FILE} --conll $2 --features $3 --remote ${4} --name ${MODEL_NAME} --preproc $5 --exporter_field_feature_map $6 > $7
     fi
 }
 
@@ -147,17 +147,10 @@ case ${TASK} in
         ;;
 esac
 sleep ${SLEEP}
-#remove first few lines and check if the outputs match
+## remove first few lines and check if the outputs match
 sed -i -e 1,${NUM_LINES_TO_REMOVE_LOAD}d ${TEST_LOAD}
 sed -i -e 1,${NUM_LINES_TO_REMOVE_SERVE}d ${TEST_SERVE}
 check_diff ${TEST_LOAD} ${TEST_SERVE}
-
-### exit if testing over REST
-if [[ "${REMOTE_HOST}" == http* ]]
-then
-    msg_print "${TASK} export successful."
-    exit 0
-fi
 
 ## export with preproc=server and process data
 msg_print "exporting model with preproc=server"
@@ -173,7 +166,7 @@ case ${TASK} in
         classify_text ${EXPORT_DIR_PREPROC}/${MODEL_NAME}/1/ ${REMOTE_HOST}:${REMOTE_PORT} server ${TEST_SERVE_PREPROC} # valid remote end points, preproc is server.
         ;;
     tagger)
-        tag_text ${EXPORT_DIR_PREPROC}/${MODEL_NAME}/1/ ${CONLL} "${FEATURES}" ${REMOTE_HOST}:${REMOTE_PORT} server "${GRPC_FEATURE_MAP}" ${TEST_SERVE_PREPROC}
+        tag_text ${EXPORT_DIR_PREPROC}/${MODEL_NAME}/1/ ${CONLL} "${FEATURES}" ${REMOTE_HOST}:${REMOTE_PORT} server "${EXPORTER_FIELD_FEATURE_MAP}" ${TEST_SERVE_PREPROC}
 
         ;;
     *)
