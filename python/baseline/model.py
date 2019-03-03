@@ -1,13 +1,12 @@
 import logging
 import numpy as np
 from baseline.utils import (
-    export, optional_params, listify, register
+    export, optional_params, listify, register, import_user_module, read_json
 )
 
 __all__ = []
 exporter = export(__all__)
 logger = logging.getLogger('baseline')
-
 
 BASELINE_MODELS = {}
 BASELINE_LOADERS = {}
@@ -96,22 +95,22 @@ def register_arc_policy(cls, name=None):
 
 @exporter
 def create_seq2seq_decoder(tgt_embeddings, **kwargs):
-    type = kwargs.get('decoder_type', 'default')
-    Constructor = BASELINE_SEQ2SEQ_DECODERS.get(type)
+    decoder_type = kwargs.get('decoder_type', 'default')
+    Constructor = BASELINE_SEQ2SEQ_DECODERS.get(decoder_type)
     return Constructor(tgt_embeddings, **kwargs)
 
 
 @exporter
 def create_seq2seq_encoder(**kwargs):
-    type = kwargs.get('encoder_type', 'default')
-    Constructor = BASELINE_SEQ2SEQ_ENCODERS.get(type)
+    encoder_type = kwargs.get('encoder_type', 'default')
+    Constructor = BASELINE_SEQ2SEQ_ENCODERS.get(encoder_type)
     return Constructor(**kwargs)
 
 
 @exporter
 def create_seq2seq_arc_policy(**kwargs):
-    type = kwargs.get('arc_policy_type', 'default')
-    Constructor = BASELINE_SEQ2SEQ_ARC_POLICY.get(type)
+    arc_type = kwargs.get('arc_policy_type', 'default')
+    Constructor = BASELINE_SEQ2SEQ_ARC_POLICY.get(arc_type)
     return Constructor()
 
 
@@ -127,7 +126,17 @@ def create_lang_model(embeddings, **kwargs):
 
 @exporter
 def load_model_for(activity, filename, **kwargs):
-    model_type = kwargs.get('model_type', 'default')
+    # Sniff state to see if we need to import things
+    state = read_json('{}.state'.format(filename))
+    # There won't be a module for pytorch (there is no state file to load).
+    if 'module' in state:
+        import_user_module(state['module'])
+    # Allow user to override model type (for back compat with old api), backoff
+    # to the model type in the state file or to default.
+    # TODO: Currently in pytorch all models are always reloaded with the load
+    # classmethod with a default model class. This is fine given how simple pyt
+    # loading is but it could cause problems if a model has a custom load
+    model_type = kwargs.get('model_type', state.get('model_type', 'default'))
     creator_fn = BASELINE_LOADERS[activity][model_type]
     logger.info('Calling model %s', creator_fn)
     return creator_fn(filename, **kwargs)
@@ -160,7 +169,7 @@ def load_lang_model(filename, **kwargs):
 @exporter
 class ClassifierModel(object):
     """Text classifier
-    
+
     Provide an interface to DNN classifiers that use word lookup tables.
     """
     task_name = 'classify'
@@ -170,7 +179,7 @@ class ClassifierModel(object):
 
     def save(self, basename):
         """Save this model out
-             
+
         :param basename: Name of the model, not including suffixes
         :return: None
         """
@@ -179,7 +188,7 @@ class ClassifierModel(object):
     @classmethod
     def load(cls, basename, **kwargs):
         """Load the model from a basename, including directory
-        
+
         :param basename: Name of the model, not including suffixes
         :param kwargs: Anything that is useful to optimize experience for a specific framework
         :return: A newly created model
@@ -189,7 +198,7 @@ class ClassifierModel(object):
     def predict(self, batch_dict):
         """Classify a batch of text with whatever features the model can use from the batch_dict.
         The indices correspond to get_vocab().get('word', 0)
-        
+
         :param batch_dict: This normally contains `x`, a `BxT` tensor of indices.  Some classifiers and readers may
         provide other features
 
@@ -199,11 +208,12 @@ class ClassifierModel(object):
 
     # deprecated: use predict
     def classify(self, batch_dict):
+        logger.warning('`classify` is deprecated, use `predict` instead.')
         return self.predict(batch_dict)
 
     def get_labels(self):
         """Return a list of labels, where the offset within the list is the location in a confusion matrix, etc.
-        
+
         :return: A list of the labels for the decision
         """
         pass
@@ -212,7 +222,7 @@ class ClassifierModel(object):
 @exporter
 class TaggerModel(object):
     """Structured prediction classifier, AKA a tagger
-    
+
     This class takes a temporal signal, represented as words over time, and characters of words
     and generates an output label for each time.  This type of model is used for POS tagging or any
     type of chunking (e.g. NER, POS chunks, slot-filling)
@@ -283,4 +293,5 @@ class EncoderDecoderModel(object):
 
     # deprecated: use predict
     def run(self, source_dict, **kwargs):
+        logger.warning('`run` is deprecated, use `predict` instead.')
         return self.predict(source_dict, **kwargs)

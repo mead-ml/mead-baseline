@@ -199,6 +199,8 @@ class ClassifierModelBase(ClassifierModel):
         self._state = {k: v for k, v in kwargs.items() if k not in blacklist}
         self._state.update({
             'version': __version__,
+            'module': self.__class__.__module__,
+            'class': self.__class__.__name__,
             'embeddings': embeddings_info,
         })
 
@@ -298,9 +300,14 @@ class ClassifierModelBase(ClassifierModel):
         _state['sess'] = kwargs.pop('sess', tf.Session())
         embeddings_info = _state.pop('embeddings')
         embeddings = reload_embeddings(embeddings_info, basename)
+        # If there is a kwarg that is the same name as an embedding object that
+        # is taken to be the input of that layer. This allows for passing in
+        # subgraphs like from a tf.split (for data parallel) or preprocessing
+        # graphs that convert text to indices
         for k in embeddings_info:
             if k in kwargs:
                 _state[k] = kwargs[k]
+        # TODO: convert labels into just another vocab and pass number of labels to models.
         labels = read_json("{}.labels".format(basename))
         model = cls.create(embeddings, labels, **_state)
         model._state = _state

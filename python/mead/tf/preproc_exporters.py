@@ -113,10 +113,11 @@ class ClassifyTensorFlowPreProcExporter(ClassifyTensorFlowExporter):
         pid = model_file.split("-")[-1]
         pc = PreProcessorController(model_base_dir, pid, self.task.config_params['features'])
         tf_example, preprocessed = pc.run()
+        # Create a dict of embedding names to sub-graph outputs to wire in as embedding inputs
         embedding_inputs = {}
         for feature in preprocessed:
             embedding_inputs[feature] = preprocessed[feature]
-        model, classes, values = self._create_model(sess, model_file, embedding_inputs)
+        model, classes, values = self._create_model(sess, model_file, **embedding_inputs)
         sig_input = {
             'tokens': tf.saved_model.utils.build_tensor_info(tf_example[pc.FIELD_NAME]),
         }
@@ -140,10 +141,11 @@ class TaggerTensorFlowPreProcExporter(TaggerTensorFlowExporter):
         pid = model_file.split("-")[-1]
         pc = PreProcessorController(model_base_dir, pid, self.task.config_params['features'])
         tf_example, preprocessed = pc.run()
+        # Create a dict of embedding names to sub-graph outputs to wire in as embedding inputs
         embedding_inputs = {}
         for feature in preprocessed:
             embedding_inputs[feature] = preprocessed[feature]
-        model, classes, values = self._create_model(sess, model_file, embedding_inputs)
+        model, classes, values = self._create_model(sess, model_file, **embedding_inputs)
         sig_input = {
             'tokens': tf.saved_model.utils.build_tensor_info(tf_example[pc.FIELD_NAME]),
              model.lengths_key: tf.saved_model.utils.build_tensor_info(model.lengths)

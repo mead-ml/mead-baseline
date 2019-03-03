@@ -20,7 +20,7 @@ import collections
 __all__ = []
 logger = logging.getLogger('baseline')
 # These are inputs to models that shouldn't be saved out
-MAGIC_VARS = ['sess', 'tgt', 'y', 'lengths']
+MAGIC_VARS = ['sess', 'tgt', 'y', 'lengths', 'gpus']
 
 
 def optional_params(func):

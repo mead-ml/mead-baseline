@@ -266,6 +266,8 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
         self._state = {k: v for k, v in kwargs.items() if k not in blacklist}
         self._state.update({
             'version': __version__,
+            'module': self.__class__.__module__,
+            'class': self.__class__.__name__,
             'src_embeddings': src_embeddings_info,
             'tgt_embedding': {'tgt': self.tgt_embedding.__class__.__name__}
         })
