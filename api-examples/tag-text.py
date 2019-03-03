@@ -14,7 +14,7 @@ parser.add_argument('--backend', help='backend', default='tf')
 parser.add_argument('--remote', help='(optional) remote endpoint', type=str) # localhost:8500
 parser.add_argument('--name', help='(optional) signature name', type=str)
 parser.add_argument('--preproc', help='(optional) where to perform preprocessing', choices={'client', 'server'}, default='client')
-parser.add_argument('--exporter_field_feature_map', help='mapping between features and the fields in the grpc/ REST '
+parser.add_argument('--export_mapping', help='mapping between features and the fields in the grpc/ REST '
                                                          'request, eg: token:word ner:ner. This should match with the '
                                                          '`exporter_field` definition in the mead config',
                     default=[], nargs='+')
@@ -66,7 +66,7 @@ else:
 
 m = bl.TaggerService.load(args.model, backend=args.backend, remote=args.remote, name=args.name, preproc=args.preproc)
 for sen in m.predict(texts, preproc=args.preproc,
-                     exporter_field_feature_map=create_exporter_field_feature_map(args.exporter_field_feature_map)):
+                     exporter_field_feature_map=create_exporter_field_feature_map(args.export_mapping)):
     for word_tag in sen:
         print("{} {}".format(word_tag['text'], word_tag['label']))
     print("\n")
