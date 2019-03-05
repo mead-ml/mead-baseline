@@ -254,8 +254,6 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
         for key, embedding in self.src_embeddings.items():
             embedding.save_md('{}-{}-md.json'.format(basename, key))
         self.tgt_embedding.save_md('{}-{}-md.json'.format(basename, 'tgt'))
-        with open('{}.saver'.format(basename), 'w') as f:
-            f.write(str(self.saver.as_saver_def()))
 
     def _record_state(self, **kwargs):
         src_embeddings_info = {}

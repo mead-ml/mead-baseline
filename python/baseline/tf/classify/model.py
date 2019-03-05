@@ -187,8 +187,6 @@ class ClassifierModelBase(ClassifierModel):
         write_json(self.labels, '{}.labels'.format(basename))
         for key, embedding in self.embeddings.items():
             embedding.save_md('{}-{}-md.json'.format(basename, key))
-        with open('{}.saver'.format(basename), 'w') as f:
-            f.write(str(self.saver.as_saver_def()))
 
     def _record_state(self, **kwargs):
         embeddings_info = {}
