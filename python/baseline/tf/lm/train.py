@@ -27,7 +27,7 @@ class LanguageModelTrainerTf(Trainer):
 
     def recover_last_checkpoint(self):
         latest = tf.train.latest_checkpoint("./tf-lm-%d" % os.getpid())
-        logger.info("Reloading %s", latest)
+        logger.info("Reloading %s" % latest)
         self.model.saver.restore(self.model.sess, latest)
 
     @staticmethod
