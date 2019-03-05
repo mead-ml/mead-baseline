@@ -5,7 +5,7 @@
     "basedir": "iwslt15-en-vi-s2s",
     "unif": 0.25,
     "features": [
-	{ 
+	{
 	    "name": "src",
 	    "vectorizer": { "type": "token1d"},
 	    "embeddings": { "dsz": 512 }
@@ -21,13 +21,13 @@
     },
     "backend": "tensorflow",
     "dataset": "iwslt15-en-vi",
-    "loader": {
-        "reader_type": "default",
-	"pair_suffix": ["en", "vi"]
+    "reader": {
+        "type": "default",
+        "pair_suffix": ["en", "vi"]
     },
 
     "model": {
-        "model_type": "attn",
+        "type": "attn",
         "rnntype": "blstm",
         "hsz": 512,
         "dropout": 0.5,
@@ -37,7 +37,7 @@
         "epochs": 32,
         "optim": "adam",
         "eta": 0.001,
-	"do_early_stopping": true,
+        "do_early_stopping": true,
         "clip": 1.0
     }
 }

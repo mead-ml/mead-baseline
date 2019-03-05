@@ -34,19 +34,17 @@
       "embeddings": { "dsz": 30, "wsz": 30, "type": "char-conv" }
     }
   ],
-  "preproc": {
-  },
   "backend": "pytorch",
   "dataset": "conll-iobes",
-  "loader": {
-    "reader_type": "default",
+  "reader": {
+    "type": "default",
     "named_fields": {
       "0": "text",
       "-1": "y"
     }
   },
   "model": {
-    "model_type": "default",
+    "type": "default",
     "cfiltsz": [
       3
     ],
@@ -59,7 +57,7 @@
     "crf": 1
   },
   "train": {
-    "epochs": 100,
+    "epochs": 1,
     "optim": "sgd",
     "eta": 0.015,
     "mom": 0.9,
