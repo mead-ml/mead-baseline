@@ -9,8 +9,7 @@ parser.add_argument('--backend', help='backend', default='tf')
 parser.add_argument('--remote', help='(optional) remote endpoint', type=str) # localhost:8500
 parser.add_argument('--name', help='(optional) signature name', type=str)
 parser.add_argument('--preproc', help='(optional) where to perform preprocessing', choices={'client', 'server'}, default='client')
-
-args = parser.parse_known_args()[0]
+args = parser.parse_args()
 
 if os.path.exists(args.text) and os.path.isfile(args.text):
     texts = []

@@ -1,4 +1,5 @@
 import math
+import copy
 import numpy as np
 import tensorflow as tf
 from baseline.utils import write_json, Offsets
@@ -9,13 +10,14 @@ class TensorFlowEmbeddings(object):
     """This provides a base for TensorFlow embeddings sub-graphs
 
     """
-    def __init__(self, trainable=True, name=None, dtype=tf.float32):
+    def __init__(self, trainable=True, name=None, dtype=tf.float32, **kwargs):
         """Constructor
         """
         super(TensorFlowEmbeddings, self).__init__()
         self.name = name
         self.trainable = trainable
         self.dtype = dtype
+        self._record_state(**kwargs)
 
     def detached_ref(self):
         """This will detach any attached input and reference the same sub-graph otherwise
@@ -75,6 +77,10 @@ class TensorFlowEmbeddings(object):
         """
         return cls(name, vsz=model.vsz, dsz=model.dsz, weights=model.weights, **kwargs)
 
+    def _record_state(self, **kwargs):
+        w = kwargs.pop('weights', None)
+        self._state = copy.deepcopy(kwargs)
+
     def save_md(self, target):
         """Save the metadata associated with this embedding as a JSON file
 
@@ -86,8 +92,9 @@ class TensorFlowEmbeddings(object):
     def get_config(self):
         #config = super(TensorFlowEmbeddings, self).get_config()
         config = {}
-        config['dsz'] = self.get_dsz()
-        config['vsz'] = self.get_vsz()
+        config['module'] = self.__class__.__module__
+        config['class'] = self.__class__.__name__
+        config.update(self._state)
         return config
 
 
@@ -115,7 +122,7 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
         * *scope* -- (``str``) An optional variable scope, by default it will be `{name}/LUT`
         * *unif* -- (``float``) (defaults to `0.1`) If the weights should be created, what is the random initialization range
         """
-        super(LookupTableEmbeddings, self).__init__(kwargs.get('finetune', True), name)
+        super(LookupTableEmbeddings, self).__init__(kwargs.get('finetune', True), name, **kwargs)
 
         self.vsz = kwargs.get('vsz')
         self.dsz = kwargs.get('dsz')
@@ -183,7 +190,7 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
         return tf.placeholder(tf.int32, [None, None, None], name=name)
 
     def __init__(self, name, **kwargs):
-        super(CharConvEmbeddings, self).__init__(name=name)
+        super(CharConvEmbeddings, self).__init__(name=name, **kwargs)
         self.scope = kwargs.get('scope', '{}/CharLUT'.format(self.name))
         self.vsz = kwargs.get('vsz')
         self.dsz = kwargs.get('dsz')
@@ -379,7 +386,7 @@ class CharLSTMEmbeddings(TensorFlowEmbeddings):
         return tf.placeholder(tf.int32, [None, None, None], name=name)
 
     def __init__(self, name, **kwargs):
-        super(CharLSTMEmbeddings, self).__init__()
+        super(CharLSTMEmbeddings, self).__init__(name=name, **kwargs)
         self.name = name
         self.scope = kwargs.get('scope', '{}/CharLUT'.format(self.name))
         self.vsz = kwargs.get('vsz')
@@ -438,7 +445,3 @@ class CharLSTMEmbeddings(TensorFlowEmbeddings):
 
     def get_vsz(self):
         return self.vsz
-
-    def get_config(self):
-        config = super(CharLSTMEmbeddings, self).get_config()
-        config['lstmsz'] = self.lstmsz

@@ -1,15 +1,17 @@
 import logging
+from itertools import chain
 from baseline.tf.seq2seq.encoders import *
 from baseline.tf.seq2seq.decoders import *
 from google.protobuf import text_format
 from baseline.tf.tfy import *
 from baseline.model import EncoderDecoderModel, register_model, create_seq2seq_decoder, create_seq2seq_encoder, create_seq2seq_arc_policy
-from baseline.utils import ls_props, read_json
+from baseline.utils import ls_props, read_json, MAGIC_VARS
 from baseline.tf.embeddings import *
 from baseline.version import __version__
 import copy
 
 logger = logging.getLogger('baseline')
+
 
 def _temporal_cross_entropy_loss(logits, labels, label_lengths, mx_seq_length):
     """Do cross-entropy loss accounting for sequence lengths
@@ -204,45 +206,31 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
     def __init__(self):
         super(EncoderDecoderModelBase, self).__init__()
         self.saver = None
+        self._unserializable = ['tgt']
 
     @classmethod
     def load(cls, basename, **kwargs):
-        state = read_json(basename + '.state')
+        _state = read_json('{}.state'.format(basename))
+        if __version__ != _state['version']:
+            logger.warning("Loaded model is from baseline version %s, running version is %s", _state['version'], __version__)
         if 'predict' in kwargs:
-            state['predict'] = kwargs['predict']
-
+            _state['predict'] = kwargs['predict']
         if 'beam' in kwargs:
-            state['beam'] = kwargs['beam']
+            _state['beam'] = kwargs['beam']
+        _state['sess'] = kwargs.get('sess', tf.Session())
 
-        state['sess'] = kwargs.get('sess', tf.Session())
-        state['model_type'] = kwargs.get('model_type', 'default')
+        src_embeddings_info = _state.pop('src_embeddings')
+        src_embeddings = reload_embeddings(src_embeddings_info, basename)
+        for k in src_embeddings_info:
+            if k in kwargs:
+                _state[k] = kwargs[k]
+        tgt_embedding_info = _state.pop('tgt_embedding')
+        tgt_embedding = reload_embeddings(tgt_embedding_info, basename)['tgt']
 
-        with open(basename + '.saver') as fsv:
-            saver_def = tf.train.SaverDef()
-            text_format.Merge(fsv.read(), saver_def)
-
-        src_embeddings = dict()
-        src_embeddings_dict = state.pop('src_embeddings')
-        for key, class_name in src_embeddings_dict.items():
-            md = read_json('{}-{}-md.json'.format(basename, key))
-            embed_args = dict({'vsz': md['vsz'], 'dsz': md['dsz']})
-            Constructor = eval(class_name)
-            src_embeddings[key] = Constructor(key, **embed_args)
-
-        tgt_class_name = state.pop('tgt_embedding')
-        md = read_json('{}-tgt-md.json'.format(basename))
-        embed_args = dict({'vsz': md['vsz'], 'dsz': md['dsz']})
-        Constructor = eval(tgt_class_name)
-        tgt_embedding = Constructor('tgt', **embed_args)
-        model = cls.create(src_embeddings, tgt_embedding, **state)
-        for prop in ls_props(model):
-            if prop in state:
-                setattr(model, prop, state[prop])
-        do_init = kwargs.get('init', True)
-        if do_init:
-            init = tf.global_variables_initializer()
-            model.sess.run(init)
-
+        model = cls.create(src_embeddings, tgt_embedding, **_state)
+        model._state = _state
+        if kwargs.get('init', True):
+            model.sess.run(tf.global_variables_initializer())
         model.saver = tf.train.Saver()
         model.saver.restore(model.sess, basename)
         return model
@@ -261,6 +249,26 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
         word_embeddings = tf.concat(values=all_embeddings_src, axis=-1)
         return word_embeddings
 
+    def save_md(self, basename):
+        write_json(self._state, '{}.state'.format(basename))
+        for key, embedding in self.src_embeddings.items():
+            embedding.save_md('{}-{}-md.json'.format(basename, key))
+        self.tgt_embedding.save_md('{}-{}-md.json'.format(basename, 'tgt'))
+
+    def _record_state(self, **kwargs):
+        src_embeddings_info = {}
+        for k, v in self.src_embeddings.items():
+            src_embeddings_info[k] = v.__class__.__name__
+
+        blacklist = set(chain(self._unserializable, MAGIC_VARS, self.src_embeddings.keys()))
+        self._state = {k: v for k, v in kwargs.items() if k not in blacklist}
+        self._state.update({
+            'version': __version__,
+            'module': self.__class__.__module__,
+            'class': self.__class__.__name__,
+            'src_embeddings': src_embeddings_info,
+            'tgt_embedding': {'tgt': self.tgt_embedding.__class__.__name__}
+        })
 
     @classmethod
     def create(cls, src_embeddings, tgt_embedding, **kwargs):
@@ -273,6 +281,7 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
         model = cls()
         model.src_embeddings = src_embeddings
         model.tgt_embedding = tgt_embedding
+        model._record_state(**kwargs)
         model.src_len = kwargs.pop('src_len', tf.placeholder(tf.int32, [None], name="src_len"))
         model.tgt_len = kwargs.pop('tgt_len', tf.placeholder(tf.int32, [None], name="tgt_len"))
         model.mx_tgt_len = kwargs.pop('mx_tgt_len', tf.placeholder(tf.int32, name="mx_tgt_len"))
@@ -326,30 +335,6 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
         for prop in ls_props(obj):
             state[prop] = getattr(obj, prop)
 
-    def save_md(self, basename):
-
-        path = basename.split('/')
-        src_embeddings_info = {}
-        for k, v in self.src_embeddings.items():
-            src_embeddings_info[k] = v.__class__.__name__
-        state = {
-            "version": __version__,
-            "src_embeddings": src_embeddings_info,
-            "tgt_embedding": self.tgt_embedding.__class__.__name__,
-            "hsz": self.hsz,
-            "layers": self.layers
-        }
-        self._write_props_to_state(self, state)
-        self._write_props_to_state(self.encoder, state)
-        self._write_props_to_state(self.decoder, state)
-
-        write_json(state, basename + '.state')
-        for key, embedding in self.src_embeddings.items():
-            embedding.save_md('{}-{}-md.json'.format(basename, key))
-
-        self.tgt_embedding.save_md('{}-tgt-md.json'.format(basename))
-        with open(basename + '.saver', 'w') as f:
-            f.write(str(self.saver.as_saver_def()))
 
     def save(self, model_base):
         self.save_md(model_base)

@@ -2,7 +2,7 @@ import os
 import numpy as np
 import tensorflow as tf
 from tensorflow.python.layers import core as layers_core
-from baseline.utils import lookup_sentence, beam_multinomial, Offsets
+from baseline.utils import lookup_sentence, beam_multinomial, Offsets, read_json, import_user_module
 from baseline.utils import transition_mask as transition_mask_np
 import math
 
@@ -30,6 +30,19 @@ def new_placeholder_dict(train):
     if train:
         return {BASELINE_TF_TRAIN_FLAG: 1}
     return {}
+
+
+def reload_embeddings(embeddings_dict, basename):
+    embeddings = {}
+    for key, cls in embeddings_dict.items():
+        embed_args = read_json('{}-{}-md.json'.format(basename, key))
+        module = embed_args.pop('module')
+        name = embed_args.pop('name', None)
+        assert name is None or name == key
+        mod = import_user_module(module)
+        Constructor = getattr(mod, cls)
+        embeddings[key] = Constructor(key, **embed_args)
+    return embeddings
 
 
 def _add_ema(model, decay):

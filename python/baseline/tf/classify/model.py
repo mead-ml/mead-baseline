@@ -1,19 +1,28 @@
-import logging
-import tensorflow as tf
-import numpy as np
-from google.protobuf import text_format
-from tensorflow.python.platform import gfile
-from baseline.utils import fill_y, listify, write_json, ls_props, read_json
-from baseline.model import ClassifierModel, register_model
-from baseline.tf.tfy import (stacked_lstm,
-                             parallel_conv,
-                             TRAIN_FLAG,
-                             new_placeholder_dict)
-from baseline.tf.embeddings import *
-from baseline.version import __version__
-from tensorflow.contrib.layers import fully_connected
 import os
 import copy
+import logging
+from itertools import chain
+import numpy as np
+import tensorflow as tf
+from tensorflow.contrib.layers import fully_connected
+from baseline.tf.embeddings import *
+from baseline.version import __version__
+from baseline.utils import (
+    fill_y,
+    listify,
+    ls_props,
+    read_json,
+    write_json,
+    MAGIC_VARS,
+)
+from baseline.model import ClassifierModel, register_model
+from baseline.tf.tfy import (
+    TRAIN_FLAG,
+    stacked_lstm,
+    parallel_conv,
+    reload_embeddings,
+    new_placeholder_dict,
+)
 
 
 logger = logging.getLogger('baseline')
@@ -83,7 +92,7 @@ class ClassifyParallelModel(ClassifierModel):
         losses = []
         self.labels = labels
 
-        sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False)) 
+        sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False))
         with tf.device(tf.DeviceSpec(device_type="CPU")):
             # This change is required since we attach our .x onto the object in v1
             self.inference = create_fn(embeddings, labels, sess=sess, **kwargs)
@@ -138,22 +147,23 @@ class ClassifyParallelModel(ClassifierModel):
 
 class ClassifierModelBase(ClassifierModel):
     """Base for all baseline implementations of token-based classifiers
-    
+
     This class provides a loose skeleton around which the baseline models
     are built.  This essentially consists of dividing up the network into a logical separation between "embedding",
     or composition of lookup tables to build a vector representation of a temporal input, "pooling",
     or the conversion of temporal data to a fixed representation, and "stacking" layers, which are (optional)
     fully-connected layers below, followed by a projection to output space and a softmax
-    
+
     For instance, the baseline convolutional and LSTM models implement pooling as CMOT, and LSTM last time
     respectively, whereas, neural bag-of-words (NBoW) do simple max or mean pooling followed by multiple fully-
     connected layers.
-    
+
     """
     def __init__(self):
         """Base
         """
         super(ClassifierModelBase, self).__init__()
+        self._unserializable = []
 
     def set_saver(self, saver):
         self.saver = saver
@@ -173,29 +183,24 @@ class ClassifierModelBase(ClassifierModel):
         :param basename:
         :return:
         """
-        path = basename.split('/')
-        base = path[-1]
-        outdir = '/'.join(path[:-1])
+        write_json(self._state, '{}.state'.format(basename))
+        write_json(self.labels, '{}.labels'.format(basename))
+        for key, embedding in self.embeddings.items():
+            embedding.save_md('{}-{}-md.json'.format(basename, key))
 
-        # For each embedding, save a record of the keys
-
+    def _record_state(self, **kwargs):
         embeddings_info = {}
         for k, v in self.embeddings.items():
             embeddings_info[k] = v.__class__.__name__
-        state = {
-            "version": __version__,
-            "embeddings": embeddings_info
-        }
-        for prop in ls_props(self):
-            state[prop] = getattr(self, prop)
 
-        write_json(state, basename + '.state')
-        write_json(self.labels, basename + ".labels")
-        for key, embedding in self.embeddings.items():
-            embedding.save_md(basename + '-{}-md.json'.format(key))
-        tf.train.write_graph(self.sess.graph_def, outdir, base + '.graph', as_text=False)
-        with open(basename + '.saver', 'w') as f:
-            f.write(str(self.saver.as_saver_def()))
+        blacklist = set(chain(self._unserializable, MAGIC_VARS, self.embeddings.keys()))
+        self._state = {k: v for k, v in kwargs.items() if k not in blacklist}
+        self._state.update({
+            'version': __version__,
+            'module': self.__class__.__module__,
+            'class': self.__class__.__name__,
+            'embeddings': embeddings_info,
+        })
 
     def save(self, basename, **kwargs):
         """Save meta-data and actual data for a model
@@ -216,8 +221,8 @@ class ClassifierModelBase(ClassifierModel):
     def create_loss(self):
         """The loss function is currently provided here, although this is not a great place for it
         as it provides a coupling between the model and its loss function.  Just here for convenience at the moment.
-        
-        :return: 
+
+        :return:
         """
         with tf.name_scope("loss"):
             loss = tf.nn.softmax_cross_entropy_with_logits(logits=self.logits, labels=tf.cast(self.y, "float"))
@@ -229,7 +234,7 @@ class ClassifierModelBase(ClassifierModel):
         It runs the `x` tensor in (`BxT`), and turns dropout off, running the network all the way to a softmax
         output. You can use this method directly if you have vector input, or you can use the `ClassifierService`
         which can convert directly from text durign its `transform`.  That method calls this one underneath.
-        
+
         :param batch_dict: (``dict``) Contains any inputs to embeddings for this model
         :return: Each outcome as a ``list`` of tuples `(label, probability)`
         """
@@ -266,7 +271,7 @@ class ClassifierModelBase(ClassifierModel):
 
     def get_labels(self):
         """Get the string labels back
-        
+
         :return: labels
         """
         return self.labels
@@ -274,66 +279,40 @@ class ClassifierModelBase(ClassifierModel):
     @classmethod
     def load(cls, basename, **kwargs):
         """Reload the model from a graph file and a checkpoint
-        
+
         The model that is loaded is independent of the pooling and stacking layers, making this class reusable
         by sub-classes.
-        
+
         :param basename: The base directory to load from
         :param kwargs: See below
-        
+
         :Keyword Arguments:
         * *sess* -- An optional tensorflow session.  If not passed, a new session is
             created
-        
+
         :return: A restored model
         """
-        sess = kwargs.get('session', kwargs.get('sess', tf.Session()))
-        model = cls()
-        with open(basename + '.saver') as fsv:
-            saver_def = tf.train.SaverDef()
-            text_format.Merge(fsv.read(), saver_def)
-
-        checkpoint_name = kwargs.get('checkpoint_name', basename)
-        checkpoint_name = checkpoint_name or basename
-
-        state = read_json(basename + '.state')
-
-        for prop in ls_props(model):
-            if prop in state:
-                setattr(model, prop, state[prop])
-
-        with gfile.FastGFile(basename + '.graph', 'rb') as f:
-            gd = tf.GraphDef()
-            gd.ParseFromString(f.read())
-            sess.graph.as_default()
-            tf.import_graph_def(gd, name='')
-            try:
-                sess.run(saver_def.restore_op_name, {saver_def.filename_tensor_name: checkpoint_name})
-            except:
-                # Backwards compat
-                sess.run(saver_def.restore_op_name, {saver_def.filename_tensor_name: checkpoint_name + ".model"})
-
-        model.embeddings = dict()
-        for key, class_name in state['embeddings'].items():
-            md = read_json('{}-{}-md.json'.format(basename, key))
-            embed_args = dict({'vsz': md['vsz'], 'dsz': md['dsz']})
-            embed_args[key] = tf.get_default_graph().get_tensor_by_name('{}:0'.format(key))
-            Constructor = eval(class_name)
-            model.embeddings[key] = Constructor(key, **embed_args)
-
-        if model.lengths_key is not None:
-            model.lengths = tf.get_default_graph().get_tensor_by_name('lengths:0')
-
-        else:
-            model.lengths = None
-        model.probs = tf.get_default_graph().get_tensor_by_name('output/probs:0')
-
-
-        model.best = tf.get_default_graph().get_tensor_by_name('output/best:0')
-        model.logits = tf.get_default_graph().get_tensor_by_name('output/logits:0')
-
-        model.labels = read_json(basename + '.labels')
-        model.sess = sess
+        _state = read_json("{}.state".format(basename))
+        if __version__ != _state['version']:
+            logger.warning("Loaded model is from baseline version %s, running version is %s", _state['version'], __version__)
+        _state['sess'] = kwargs.pop('sess', tf.Session())
+        embeddings_info = _state.pop('embeddings')
+        embeddings = reload_embeddings(embeddings_info, basename)
+        # If there is a kwarg that is the same name as an embedding object that
+        # is taken to be the input of that layer. This allows for passing in
+        # subgraphs like from a tf.split (for data parallel) or preprocessing
+        # graphs that convert text to indices
+        for k in embeddings_info:
+            if k in kwargs:
+                _state[k] = kwargs[k]
+        # TODO: convert labels into just another vocab and pass number of labels to models.
+        labels = read_json("{}.labels".format(basename))
+        model = cls.create(embeddings, labels, **_state)
+        model._state = _state
+        if kwargs.get('init', True):
+            model.sess.run(tf.global_variables_initializer())
+        model.saver = tf.train.Saver()
+        model.saver.restore(model.sess, basename)
         return model
 
     @property
@@ -347,16 +326,16 @@ class ClassifierModelBase(ClassifierModel):
     @classmethod
     def create(cls, embeddings, labels, **kwargs):
         """The main method for creating all :class:`WordBasedModel` types.
-        
+
         This method instantiates a model with pooling and optional stacking layers.
         Many of the arguments provided are reused by each implementation, but some sub-classes need more
         information in order to properly initialize.  For this reason, the full list of keyword args are passed
         to the :method:`pool` and :method:`stacked` methods.
-        
+
         :param embeddings: This is a dictionary of embeddings, mapped to their numerical indices in the lookup table
         :param labels: This is a list of the `str` labels
         :param kwargs: There are sub-graph specific Keyword Args allowed for e.g. embeddings. See below for known args:
-        
+
         :Keyword Arguments:
         * *gpus* -- (``int``) How many GPUs to split training across.  If called this function delegates to
             another class `ClassifyParallelModel` which creates a parent graph and splits its inputs across each
@@ -371,8 +350,8 @@ class ClassifierModelBase(ClassifierModel):
         * *dropout* -- This indicates how much dropout should be applied to the model when training.
         * *filtsz* -- This is actually a top-level param due to an unfortunate coupling between the pooling layer
             and the input, which, for convolution, requires input padding.
-        
-        :return: A fully-initialized tensorflow classifier 
+
+        :return: A fully-initialized tensorflow classifier
         """
         TRAIN_FLAG()
         gpus = kwargs.get('gpus', 1)
@@ -385,6 +364,7 @@ class ClassifierModelBase(ClassifierModel):
 
         model = cls()
         model.embeddings = embeddings
+        model._record_state(**kwargs)
         model.lengths_key = kwargs.get('lengths_key')
         if model.lengths_key is not None:
             model.lengths = kwargs.get('lengths', tf.placeholder(tf.int32, [None], name="lengths"))
@@ -437,7 +417,7 @@ class ClassifierModelBase(ClassifierModel):
 
     def pool(self, word_embeddings, dsz, init, **kwargs):
         """This method performs a transformation between a temporal signal and a fixed representation
-        
+
         :param word_embeddings: The output of the embedded lookup, which is the starting point for this operation
         :param dsz: The depth of the embeddings
         :param init: The tensorflow initializer to use for these methods
@@ -473,29 +453,28 @@ class ClassifierModelBase(ClassifierModel):
 @register_model(task='classify', name='default')
 class ConvModel(ClassifierModelBase):
     """Current default model for `baseline` classification.  Parallel convolutions of varying receptive field width
-    
+
     """
 
     def __init__(self):
-        """Constructor 
+        """Constructor
         """
         super(ConvModel, self).__init__()
 
     def pool(self, word_embeddings, dsz, init, **kwargs):
         """Do parallel convolutional filtering with varied receptive field widths, followed by max-over-time pooling
-        
+
         :param word_embeddings: The word embeddings, which are inputs here
         :param dsz: The depth of the word embeddings
         :param init: The tensorflow initializer
         :param kwargs: See below
-        
+
         :Keyword Arguments:
         * *cmotsz* -- (``int``) The number of convolutional feature maps for each filter
             These are MOT-filtered, leaving this # of units per parallel filter
         * *filtsz* -- (``list``) This is a list of filter widths to use
-        
-        
-        :return: 
+
+        :return:
         """
         cmotsz = kwargs['cmotsz']
         filtsz = kwargs['filtsz']
@@ -510,7 +489,7 @@ class ConvModel(ClassifierModelBase):
 @register_model(task='classify', name='lstm')
 class LSTMModel(ClassifierModelBase):
     """A simple single-directional single-layer LSTM. No layer-stacking.
-    
+
     """
 
     def __init__(self):
@@ -527,18 +506,18 @@ class LSTMModel(ClassifierModelBase):
 
     def pool(self, word_embeddings, dsz, init, **kwargs):
         """LSTM with dropout yielding a final-state as output
-        
+
         :param word_embeddings: The input word embeddings
         :param dsz: The input word embedding depth
         :param init: The tensorflow initializer to use (currently ignored)
         :param kwargs: See below
-        
+
         :Keyword Arguments:
         * *rnnsz* -- (``int``) The number of hidden units (defaults to `hsz`)
         * *hsz* -- (``int``) backoff for `rnnsz`, typically a result of stacking params.  This keeps things simple so
           its easy to do things like residual connections between LSTM and post-LSTM stacking layers
-        
-        :return: 
+
+        :return:
         """
         hsz = kwargs.get('rnnsz', kwargs.get('hsz', 100))
         vdrop = bool(kwargs.get('variational_dropout', False))
@@ -597,7 +576,7 @@ class NBowModel(NBowBase):
 
     def pool(self, word_embeddings, dsz, init, **kwargs):
         """Do average pooling on input embeddings, yielding a `dsz` output layer
-        
+
         :param word_embeddings: The word embedding input
         :param dsz: The word embedding depth
         :param init: The tensorflow initializer
@@ -617,7 +596,7 @@ class NBowMaxModel(NBowBase):
 
     def pool(self, word_embeddings, dsz, init, **kwargs):
         """Do max pooling on input embeddings, yielding a `dsz` output layer
-        
+
         :param word_embeddings: The word embedding input
         :param dsz: The word embedding depth
         :param init: The tensorflow initializer

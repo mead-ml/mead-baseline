@@ -475,6 +475,8 @@ class TaggerTask(Task):
         labels = self.reader.label2index
         span_type = self.config_params['train'].get('span_type')
         constrain = bool(self.config_params['model'].get('constrain_decode', False))
+        if span_type is None and constrain:
+            logger.warning("Constrained Decoding was set but no span type could be found so no Constraints will be applied.")
         self.config_params['model']['span_type'] = span_type
         if span_type is not None and constrain:
             self.config_params['model']['constraint'] = self.backend.transition_mask(

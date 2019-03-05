@@ -34,7 +34,7 @@ class RemoteModelTensorFlowREST(object):
         """
         return self.labels
 
-    def predict(self, examples):
+    def predict(self, examples, **kwargs):
         """Run prediction over HTTP/REST.
 
         :param examples: The input examples
@@ -91,7 +91,7 @@ class RemoteModelTensorFlowREST(object):
             for i in range(num_ex):
                 score_i = scores[i]
                 classes_i = classes[i]
-                d = [(c, s) for c, s in zip(classes_i, score_i)]
+                d = [(c, np.float32(s)) for c, s in zip(classes_i, score_i)]
                 result.append(d)
             return result
 
@@ -146,7 +146,7 @@ class RemoteModelTensorFlowGRPC(object):
         """
         return self.labels
 
-    def predict(self, examples):
+    def predict(self, examples, **kwargs):
         """Run prediction over gRPC
 
         :param examples: The input examples

@@ -1,29 +1,33 @@
-import logging
-import baseline
 import os
 import shutil
+import logging
 import datetime
+from collections import namedtuple
 from tensorflow.python.framework.errors_impl import NotFoundError
-import mead.exporters
-from mead.exporters import register_exporter
+import baseline
 from baseline.tf.embeddings import *
 from baseline.tf.tfy import transition_mask
-from baseline.utils import (export, 
-                            read_json, 
-                            ls_props, 
-                            Offsets, 
-                            write_json)
-from collections import namedtuple
+from baseline.utils import (
+    export,
+    Offsets,
+    ls_props,
+    read_json,
+    write_json,
+)
+from baseline.model import load_tagger_model, load_model, load_seq2seq_model
+import mead.exporters
+from mead.exporters import register_exporter
 
-FIELD_NAME = 'text/tokens'
-ASSET_FILE_NAME = 'model.assets'
-logger = logging.getLogger('mead')
 
 __all__ = []
 exporter = export(__all__)
 
 
+FIELD_NAME = 'text/tokens'
+ASSET_FILE_NAME = 'model.assets'
+logger = logging.getLogger('mead')
 SignatureOutput = namedtuple("SignatureOutput", ("classes", "scores"))
+
 
 @exporter
 class TensorFlowExporter(mead.exporters.Exporter):
@@ -33,15 +37,6 @@ class TensorFlowExporter(mead.exporters.Exporter):
 
     def _run(self, sess, basename, **kwargs):
         pass
-
-    def _restore_checkpoint(self, sess, basename):
-        saver = tf.train.Saver()
-        sess.run(tf.tables_initializer())
-        sess.run(tf.global_variables_initializer())
-        try:
-            saver.restore(sess, basename)
-        except NotFoundError:
-            saver.restore(sess, basename + ".model")
 
     def run(self, basename, output_dir, model_version, **kwargs):
 
@@ -120,41 +115,12 @@ class ClassifyTensorFlowExporter(TensorFlowExporter):
     def __init__(self, task):
         super(ClassifyTensorFlowExporter, self).__init__(task)
 
-    def _create_model(self, sess, basename):
-        # Read the labels
-        labels = read_json(basename + '.labels')
-
-        # Get the parameters from MEAD
-        model_params = self.task.config_params["model"]
-        model_params["sess"] = sess
-
-        # Read the state file
-        state = read_json(basename + '.state')
-
-        # Re-create the embeddings sub-graph
-        embeddings = dict()
-        for key, class_name in state['embeddings'].items():
-            md = read_json('{}-{}-md.json'.format(basename, key))
-            embed_args = dict({'vsz': md['vsz'], 'dsz': md['dsz']})
-            Constructor = eval(class_name)
-            embeddings[key] = Constructor(key, **embed_args)
-
-        # Instantiate a graph
-        model = baseline.model.create_model_for(self.task.task_name(), embeddings, labels, **model_params)
-
-        # Set the properties of the model from the state file
-        for prop in ls_props(model):
-            if prop in state:
-                setattr(model, prop, state[prop])
-
-        # Append to the graph for class output
-        values, indices = tf.nn.top_k(model.probs, len(labels))
+    def _create_model(self, sess, basename, **kwargs):
+        model = load_model(basename, sess=sess, **kwargs)
+        values, indices = tf.nn.top_k(model.probs, len(model.labels))
         class_tensor = tf.constant(model.labels)
         table = tf.contrib.lookup.index_to_string_table_from_tensor(class_tensor)
         classes = table.lookup(tf.to_int64(indices))
-
-        # Restore the checkpoint
-        self._restore_checkpoint(sess, basename)
         return model, classes, values
 
     def _create_rpc_call(self, sess, basename):
@@ -182,58 +148,11 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
     def __init__(self, task):
         super(TaggerTensorFlowExporter, self).__init__(task)
 
-    def _create_model(self, sess, basename):
-        labels = read_json(basename + '.labels')
-        model_params = self.task.config_params["model"]
-        model_params["sess"] = sess
-
-        state = read_json(basename + '.state')
-        if state.get('constrain_decode', False):
-            constraint = transition_mask(labels, self.task.config_params['train']['span_type'], Offsets.GO, Offsets.EOS, Offsets.PAD)
-            model_params['constraint'] = constraint
-
-        # Re-create the embeddings sub-graph
-        embeddings = dict()
-        for key, class_name in state['embeddings'].items():
-            md = read_json('{}-{}-md.json'.format(basename, key))
-            embed_args = dict({'vsz': md['vsz'], 'dsz': md['dsz']})
-            Constructor = eval(class_name)
-            embeddings[key] = Constructor(key, **embed_args)
-
-        model = baseline.model.create_model_for(self.task.task_name(), embeddings, labels, **model_params)
-
-        for prop in ls_props(model):
-            if prop in state:
-                setattr(model, prop, state[prop])
-
-        model.create_loss()
-
+    def _create_model(self, sess, basename, **kwargs):
+        model = load_tagger_model(basename, sess=sess, **kwargs)
         softmax_output = tf.nn.softmax(model.probs)
         values, indices = tf.nn.top_k(softmax_output, 1)
-
-        start_np = np.full((1, 1, len(labels)), -1e4, dtype=np.float32)
-        start_np[:, 0, Offsets.GO] = 0
-        start = tf.constant(start_np)
-        start = tf.tile(start, [tf.shape(model.probs)[0], 1, 1])
-        model.probs = tf.concat([start, model.probs], 1)
-
-        ones = tf.fill(tf.shape(model.lengths), 1)
-        lengths = tf.add(model.lengths, ones)
-
-        if model.crf is True:
-            indices, _ = tf.contrib.crf.crf_decode(model.probs, model.A, lengths)
-            indices = indices[:, 1:]
-
-        list_of_labels = [''] * len(labels)
-        for label, idval in labels.items():
-            list_of_labels[idval] = label
-
-        class_tensor = tf.constant(list_of_labels)
-        table = tf.contrib.lookup.index_to_string_table_from_tensor(class_tensor)
-        classes = table.lookup(tf.to_int64(indices))
-        self._restore_checkpoint(sess, basename)
-
-        return model, indices, values
+        return model, model.best, values
 
     def _create_rpc_call(self, sess, basename):
         model, classes, values = self._create_model(sess, basename)
@@ -281,55 +200,20 @@ class Seq2SeqTensorFlowExporter(TensorFlowExporter):
     def __init__(self, task):
         super(Seq2SeqTensorFlowExporter, self).__init__(task)
 
-    def init_embeddings(self, embeddings_map, basename):
-        embeddings = dict()
-        for key, class_name in embeddings_map:
-            md = read_json('{}-{}-md.json'.format(basename, key))
-            embed_args = dict({'vsz': md['vsz'], 'dsz': md['dsz']})
-            Constructor = eval(class_name)
-            embeddings[key] = Constructor(key, **embed_args)
-
-        return embeddings
-
-    def _create_model(self, sess, basename):
-        model_params = self.task.config_params["model"]
-        model_params["sess"] = sess
-        model_params['predict'] = True
-        model_params['beam'] = self.task.config_params.get('beam', 30)
-
-        state = read_json(basename + '.state')
-        if not state:
-            raise RuntimeError("state file not found or is empty")
-
-        model_params["src_lengths_key"] = state["src_lengths_key"]
-        self.length_key = state["src_lengths_key"]
-
-        # Re-create the embeddings sub-graph
-        embeddings = self.init_embeddings(state[self.SOURCE_STATE_EMBED_KEY].items(), basename)
-
-        # create the taget embeddings. there's only one.
-        target_embeddings = self.init_embeddings([
-            (self.TARGET_EMBED_KEY, state[self.TARGET_STATE_EMBED_KEY])
-        ], basename)
-        target_embeddings = target_embeddings[self.TARGET_EMBED_KEY]
-
-        model = baseline.model.create_model_for(self.task.task_name(), embeddings, target_embeddings, **model_params)
-
-        for prop in ls_props(model):
-            if prop in state:
-                setattr(model, prop, state[prop])
-
-        # classes = model.tgt_embedding.lookup(tf.cast(model.best, dtype=tf.int64))
-        classes = model.decoder.best
-        self._restore_checkpoint(sess, basename)
-
-        return model, classes, None
+    def _create_model(self, sess, basename, **kwargs):
+        model = load_seq2seq_model(
+            basename,
+            sess=sess, predict=True,
+            beam=self.task.config_params.get('beam', 30),
+            **kwargs
+        )
+        return model, model.decoder.best, None
 
     def _create_rpc_call(self, sess, basename):
         model, classes, values = self._create_model(sess, basename)
 
         predict_tensors = {}
-        predict_tensors[self.length_key] = tf.saved_model.utils.build_tensor_info(model.src_len)
+        predict_tensors[model.src_lengths_key] = tf.saved_model.utils.build_tensor_info(model.src_len)
 
         for k, v in model.src_embeddings.items():
             try:
@@ -340,7 +224,7 @@ class Seq2SeqTensorFlowExporter(TensorFlowExporter):
         sig_input = predict_tensors
         sig_output = SignatureOutput(classes, values)
         sig_name = 'suggest_text'
-        assets = create_assets(basename, sig_input, sig_output, sig_name, self.length_key, beam=model.decoder.beam_width)
+        assets = create_assets(basename, sig_input, sig_output, sig_name, model.src_lengths_key, beam=model.decoder.beam_width)
 
         return sig_input, sig_output, sig_name, assets
 
@@ -372,7 +256,7 @@ def save_to_bundle(output_path, directory, assets=None):
            filename.endswith(".labels") or \
            filename.startswith('vectorizers'):
             shutil.copy(os.path.join(directory, filename), os.path.join(output_path, filename))
-    
+
     if assets:
         asset_file = os.path.join(output_path, ASSET_FILE_NAME)
         write_json(assets, asset_file)

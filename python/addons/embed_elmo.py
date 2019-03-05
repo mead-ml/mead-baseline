@@ -1057,6 +1057,3 @@ class ELMoHubEmbeddings(TensorFlowEmbeddings):
         return ELMoHubEmbeddings(
             self.name, dsz=self.dsz, vsz=self.vsz, finetune=self.finetune, cache_dir=self.cache_dir
         )
-
-    def save_md(self, target):
-        write_json({'vsz': self.vsz, 'dsz': self.dsz}, target)
