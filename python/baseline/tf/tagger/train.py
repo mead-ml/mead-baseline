@@ -115,7 +115,7 @@ class TaggerTrainerTf(EpochReportingTrainer):
 
     def recover_last_checkpoint(self):
         latest = tf.train.latest_checkpoint("./tf-tagger-%d" % os.getpid())
-        logger.info("Reloading %s" % latest)
+        logger.info("Reloading %s", latest)
         self.model.saver.restore(self.model.sess, latest)
 
     @staticmethod
