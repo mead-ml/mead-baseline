@@ -1,3 +1,4 @@
+import logging
 import dynet as dy
 from baseline.model import (
     TaggerModel,
@@ -6,6 +7,8 @@ from baseline.model import (
 import numpy as np
 from baseline.dy.dynety import CRF, Linear, DynetModel, rnn_forward, ConvEncoderStack, viterbi
 from baseline.utils import Offsets
+
+logger = logging.getLogger('baseline')
 
 
 class TaggerModelBase(DynetModel, TaggerModel):
@@ -138,7 +141,7 @@ class TaggerModelBase(DynetModel, TaggerModel):
     @classmethod
     def create(cls, embeddings_set, labels, **kwargs):
         model = cls(embeddings_set, labels, **kwargs)
-        print(model)
+        logger.info(model)
         return model
 
     def save(self, file_name):

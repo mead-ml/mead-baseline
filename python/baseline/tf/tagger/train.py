@@ -1,12 +1,16 @@
 import six
 import os
 import time
+import logging
 import numpy as np
 import tensorflow as tf
 from baseline.tf.optz import optimizer
 from baseline.progress import create_progress_bar
 from baseline.utils import to_spans, f_score, listify, revlut, get_model_file, write_sentence_conll, get_metric_cmp
 from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
+
+
+logger = logging.getLogger('baseline')
 
 
 class TaggerEvaluatorTf(object):
@@ -16,7 +20,7 @@ class TaggerEvaluatorTf(object):
         self.idx2label = revlut(model.labels)
         self.span_type = span_type
         if verbose:
-            print('Setting span type {}'.format(self.span_type))
+            logger.info('Setting span type %s', self.span_type)
         self.verbose = verbose
 
     def process_batch(self, batch_dict, handle=None, txts=None):
@@ -111,7 +115,7 @@ class TaggerTrainerTf(EpochReportingTrainer):
 
     def recover_last_checkpoint(self):
         latest = tf.train.latest_checkpoint("./tf-tagger-%d" % os.getpid())
-        print("Reloading " + latest)
+        logger.info("Reloading ", latest)
         self.model.saver.restore(self.model.sess, latest)
 
     @staticmethod
@@ -178,10 +182,10 @@ def fit(model, ts, vs, es, **kwargs):
         early_stopping_metric = kwargs.get('early_stopping_metric', 'acc')
         early_stopping_cmp, best_metric = get_metric_cmp(early_stopping_metric, kwargs.get('early_stopping_cmp'))
         patience = kwargs.get('patience', epochs)
-        print('Doing early stopping on [%s] with patience [%d]' % (early_stopping_metric, patience))
+        logger.info('Doing early stopping on [%s] with patience [%d]', early_stopping_metric, patience)
 
     reporting_fns = listify(kwargs.get('reporting', []))
-    print('reporting', reporting_fns)
+    logger.info('reporting %s', reporting_fns)
 
     last_improved = 0
     for epoch in range(epochs):
@@ -199,16 +203,16 @@ def fit(model, ts, vs, es, **kwargs):
         elif early_stopping_cmp(test_metrics[early_stopping_metric], best_metric):
             last_improved = epoch
             best_metric = test_metrics[early_stopping_metric]
-            print('New best %.3f' % best_metric)
+            logger.info('New best %.3f', best_metric)
             trainer.checkpoint()
             model.save(model_file)
 
         elif (epoch - last_improved) > patience:
-            print('Stopping due to persistent failures to improve')
+            logger.info('Stopping due to persistent failures to improve')
             break
 
     if do_early_stopping is True:
-        print('Best performance on %s: %.3f at epoch %d' % (early_stopping_metric, best_metric, last_improved))
+        logger.info('Best performance on %s: %.3f at epoch %d', early_stopping_metric, best_metric, last_improved)
     if es is not None:
 
         trainer.recover_last_checkpoint()

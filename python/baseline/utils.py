@@ -17,6 +17,7 @@ import addons
 import collections
 
 __all__ = []
+logger = logging.getLogger('baseline')
 
 
 def optional_params(func):
@@ -62,6 +63,48 @@ def normalize_backend(name):
 
 
 @exporter
+def get_logging_level(level):
+    """Get the logging level as a logging module constant.
+
+    :param level: `str` The log level to get.
+
+    :returns: The log level, defaults to `INFO`
+    """
+    return getattr(logging, level.upper(), logging.INFO)
+
+
+@exporter
+def get_console_logger(name, level=None, env_key='LOG_LEVEL'):
+    """A small default logging setup.
+
+    This is a default logging setup to print json formatted logging to
+    the console. This is used as a default for when baseline/mead is used
+    as an API. This can be overridden with the logging config.
+
+    The level defaults to `INFO` but can also be read from an env var
+    of you choice with a back off to `LOG_LEVEL`
+
+    :param name: `str` The logger to create.
+    :param level: `str` The level to look for.
+    :param env_key: `str` The env var to look in.
+
+    :returns: logging.Logger
+    """
+    if level is None:
+        level = os.getenv(env_key, os.getenv('LOG_LEVEL', 'INFO'))
+    level = get_logging_level(level)
+    logger = logging.getLogger(name)
+    logger.setLevel(level)
+    ch = logging.StreamHandler()
+    ch.setLevel(level)
+    formatter = JSONFormatter()
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+    logger.propagate = False
+    return logger
+
+
+@exporter
 class Offsets:
     """Support pre 3.4"""
     PAD, GO, EOS, UNK, OFFSET = range(0, 5)
@@ -101,6 +144,7 @@ def suppress_output():
 
 
 class JSONFormatter(logging.Formatter):
+    """Format message as JSON if possible, log normally otherwise."""
     def format(self, record):
         try:
             if isinstance(record.msg, (list, dict)):
@@ -445,7 +489,7 @@ def read_config_stream(config_stream):
         return read_config_file(config_stream)
     config = config_stream
     if config_stream.startswith("$"):
-        print('Reading config from {}'.format(config_stream))
+        logger.info('Reading config from {}'.format(config_stream))
         config = os.getenv(config_stream[1:])
     return json.loads(config)
 
@@ -460,7 +504,7 @@ def write_sentence_conll(handle, sentence, gold, txt, idx2label):
             handle.write('%s %s %s\n' % (word['text'], idx2label[truth], idx2label[guess]))
         handle.write('\n')
     except:
-        print('ERROR: Failed to write lines... closing file')
+        logger.error('ERROR: Failed to write lines... closing file')
         handle.close()
 
 
@@ -508,7 +552,7 @@ def get_model_file(task, platform, basedir=None):
         name = '%s-%d.pyt' % (base, rid)
     else:
         name = '%s-%s-%d' % (base, platform, rid)
-    print('model file [%s]' % name)
+    logger.info('model file [%s]' % name)
     return name
 
 
@@ -688,14 +732,14 @@ def to_spans(sequence, lut, span_type, verbose=False):
                 else:
                     chunks.append('@'.join(current))
                     if iobtype == 2 and verbose:
-                        print('Warning, type=IOB2, unexpected format ([%s] follows other tag type [%s] @ %d)' % (label, current[0], i))
+                        logger.warning('Warning, type=IOB2, unexpected format ([%s] follows other tag type [%s] @ %d)' % (label, current[0], i))
 
                     current = [base, '%d' % i]
 
             else:
                 current = [label.replace('I-', ''), '%d' % i]
                 if iobtype == 2 and verbose:
-                    print('Warning, unexpected format (I before B @ %d) %s' % (i, label))
+                    logger.warning('Warning, unexpected format (I before B @ %d) %s' % (i, label))
         else:
             if current is not None:
                 chunks.append('@'.join(current))
@@ -746,12 +790,12 @@ def to_spans_iobes(sequence, lut, verbose=False):
                 else:
                     chunks.append('@'.join(current))
                     if verbose:
-                        print('Warning: I without matching previous B/I @ %d' % i)
+                        logger.warning('Warning: I without matching previous B/I @ %d' % i)
                     current = [base, '%d' % i]
 
             else:
                 if verbose:
-                    print('Warning: I without a previous chunk @ %d' % i)
+                    logger.warning('Warning: I without a previous chunk @ %d' % i)
                 current = [label.replace('I-', ''), '%d' % i]
 
         # We are at the end of a chunk, so flush current
@@ -767,7 +811,7 @@ def to_spans_iobes(sequence, lut, verbose=False):
                 else:
                     chunks.append('@'.join(current))
                     if verbose:
-                        print('Warning: E doesnt agree with previous B/I type!')
+                        logger.warning('Warning: E doesnt agree with previous B/I type!')
                     current = [base, '%d' % i]
                     chunks.append('@'.join(current))
                     current = None
@@ -776,7 +820,7 @@ def to_spans_iobes(sequence, lut, verbose=False):
             else:
                 current = [label.replace('E-', ''), '%d' % i]
                 if verbose:
-                    print('Warning, E without previous chunk! @ %d' % i)
+                    logger.warning('Warning, E without previous chunk! @ %d' % i)
                 chunks.append('@'.join(current))
                 current = None
         # Outside
@@ -812,7 +856,7 @@ def unzip_model(path):
             sha1 = hashlib.sha1(f.read()).hexdigest()
         temp_dir = os.path.join("/tmp/", sha1)
         if not os.path.exists(temp_dir):
-            print("unzipping model")
+            logger.info("unzipping model")
             with zipfile.ZipFile(path, "r") as zip_ref:
                 zip_ref.extractall(temp_dir)
         if len(os.listdir(temp_dir)) == 1:  # a directory was zipped v files
@@ -846,7 +890,7 @@ def load_vocabs(directory):
     vocab_fnames = find_files_with_prefix(directory, 'vocabs')
     vocabs = {}
     for f in vocab_fnames:
-        print(f)
+        logger.info(f)
         k = f.split('-')[-2]
         vocab = read_json(f)
         vocabs[k] = vocab
@@ -868,7 +912,7 @@ def unzip_files(zip_path):
         sha1 = hashlib.sha1(f.read()).hexdigest()
         temp_dir = os.path.join("/tmp/", sha1)
         if not os.path.exists(temp_dir):
-            print("unzipping model")
+            logger.info("unzipping model")
             with zipfile.ZipFile(zip_path, "r") as zip_ref:
                 zip_ref.extractall(temp_dir)
         if len(os.listdir(temp_dir)) == 1:  # a directory was zipped v files
@@ -879,7 +923,7 @@ def unzip_files(zip_path):
 @exporter
 def find_model_basename(directory):
     path = os.path.join(directory, [x for x in os.listdir(directory) if 'model' in x and '-md' not in x][0])
-    print(path)
+    logger.info(path)
     path = path.split('.')[:-1]
     return '.'.join(path)
 
@@ -905,7 +949,7 @@ def zip_files(basedir):
 @exporter
 def zip_model(path):
     """zips the model files"""
-    print("zipping model files")
+    logger.info("zipping model files")
     model_files = [x for x in os.listdir(".") if path[2:] in x]
     z = zipfile.ZipFile("{}.zip".format(path), "w")
     for f in model_files:
@@ -921,7 +965,7 @@ def verbose_output(verbose, confusion_matrix):
     do_print = bool(verbose.get("console", False))
     outfile = verbose.get("file", None)
     if do_print:
-        print(confusion_matrix)
+        logger.info(confusion_matrix)
     if outfile is not None:
         confusion_matrix.save(outfile)
 
@@ -972,15 +1016,15 @@ def show_examples(model, es, rlut1, rlut2, vocab, mxlen, sample, prob_clip, max_
         for k, v in batch_dict.items():
             example[k] = v[i, np.newaxis]
 
-        print('========================================================================')
+        logger.info('========================================================================')
         sent = lookup_sentence(rlut1, example[src_field].squeeze(), reverse=reverse)
-        print('[OP] %s' % sent)
+        logger.info('[OP] %s' % sent)
         sent = lookup_sentence(rlut2, example['tgt'].squeeze())
-        print('[Actual] %s' % sent)
+        logger.info('[Actual] %s' % sent)
         dst_i = model.predict(example)[0][0]
         sent = lookup_sentence(rlut2, dst_i)
-        print('Guess: %s' % sent)
-        print('------------------------------------------------------------------------')
+        logger.info('Guess: %s' % sent)
+        logger.info('------------------------------------------------------------------------')
 
 
 @exporter

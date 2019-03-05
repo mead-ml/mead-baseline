@@ -1,3 +1,4 @@
+import logging
 from baseline.tf.seq2seq.encoders import *
 from baseline.tf.seq2seq.decoders import *
 from google.protobuf import text_format
@@ -8,6 +9,7 @@ from baseline.tf.embeddings import *
 from baseline.version import __version__
 import copy
 
+logger = logging.getLogger('baseline')
 
 def _temporal_cross_entropy_loss(logits, labels, label_lengths, mx_seq_length):
     """Do cross-entropy loss accounting for sequence lengths
@@ -83,7 +85,7 @@ class DataParallelEncoderDecoderModel(EncoderDecoderModel):
         # If the gpu ID is set to -1, use CUDA_VISIBLE_DEVICES to figure it out
         if gpus == -1:
             gpus = len(os.getenv('CUDA_VISIBLE_DEVICES', os.getenv('NV_GPU', '0')).split(','))
-        print('Num GPUs', gpus)
+        logger.info('Num GPUs %s', gpus)
 
         self.saver = None
         self.replicas = []

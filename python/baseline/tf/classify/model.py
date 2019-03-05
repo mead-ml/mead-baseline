@@ -1,3 +1,4 @@
+import logging
 import tensorflow as tf
 import numpy as np
 from google.protobuf import text_format
@@ -13,6 +14,9 @@ from baseline.version import __version__
 from tensorflow.contrib.layers import fully_connected
 import os
 import copy
+
+
+logger = logging.getLogger('baseline')
 
 
 class ClassifyParallelModel(ClassifierModel):
@@ -50,7 +54,7 @@ class ClassifyParallelModel(ClassifierModel):
         # We need to remove these because we may be calling back to our caller, and we need
         # the condition of calling to be non-parallel
         gpus = kwargs.pop('gpus')
-        print('Num GPUs', gpus)
+        logger.info('Num GPUs %s', gpus)
         self.labels = labels
         nc = len(labels)
 

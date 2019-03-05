@@ -1,10 +1,12 @@
+import os
+import logging
 from baseline.pytorch.torchy import *
 from baseline.pytorch.transformer import *
 from baseline.model import EncoderDecoderModel, register_model, create_seq2seq_encoder, create_seq2seq_decoder
 from baseline.pytorch.seq2seq.encoders import *
 from baseline.pytorch.seq2seq.decoders import *
 
-import os
+logger = logging.getLogger('baseline')
 
 
 class EncoderDecoderModelBase(nn.Module, EncoderDecoderModel):
@@ -87,7 +89,7 @@ class EncoderDecoderModelBase(nn.Module, EncoderDecoderModel):
     @classmethod
     def create(cls, src_embeddings, tgt_embedding, **kwargs):
         model = cls(src_embeddings, tgt_embedding, **kwargs)
-        print(model)
+        logger.info(model)
         return model
 
     def drop_inputs(self, key, x):

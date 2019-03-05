@@ -1,3 +1,4 @@
+import logging
 import dynet as dy
 from baseline.train import (
     register_lr_scheduler,
@@ -12,6 +13,8 @@ from baseline.train import (
     ExponentialDecayScheduler,
     CompositeLRScheduler,
 )
+
+logger = logging.getLogger('baseline')
 
 
 @register_lr_scheduler(name='default')
@@ -106,7 +109,7 @@ class OptimizerManager(object):
             if mom == 0 or mom is None:
                 self.optimizer = dy.SimpleSGDTrainer(model.pc, learning_rate=self.current_lr)
             else:
-                print('Using mom {:.3f}'.format(mom))
+                logging.info('Using mom %f', mom)
                 self.optimizer = dy.MomentumSGDTrainer(model.pc, learning_rate=self.current_lr, mom=mom)
         if clip is not None:
             self.optimizer.set_clip_threshold(clip)

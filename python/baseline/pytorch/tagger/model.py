@@ -1,3 +1,4 @@
+import logging
 from baseline.pytorch.torchy import *
 from baseline.pytorch.crf import *
 from baseline.utils import Offsets
@@ -5,6 +6,8 @@ from baseline.model import TaggerModel
 from baseline.model import register_model
 import torch.autograd
 import os
+
+logger = logging.getLogger('baseline')
 
 
 class TaggerModelBase(nn.Module, TaggerModel):
@@ -99,7 +102,7 @@ class TaggerModelBase(nn.Module, TaggerModel):
             else:
                 model.constraint = None
             model.crit = SequenceCriterion(LossFn=nn.CrossEntropyLoss, avg='batch')
-        print(model)
+        logger.info(model)
         return model
 
     def drop_inputs(self, key, x):
@@ -217,7 +220,7 @@ class RNNTaggerModel(TaggerModelBase):
         layers = int(kwargs.get('layers', 1))
         pdrop = float(kwargs.get('dropout', 0.5))
         rnntype = kwargs.get('rnntype', 'blstm')
-        print('RNN [%s]' % rnntype)
+        logger.info('RNN [%s]' % rnntype)
         unif = kwargs.get('unif', 0)
         hsz = int(kwargs['hsz'])
         weight_init = kwargs.get('weight_init', 'uniform')

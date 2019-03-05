@@ -1,9 +1,12 @@
+import logging
 import dynet as dy
 from baseline.model import (
     ClassifierModel, register_model
 )
 from baseline.utils import listify
 from baseline.dy.dynety import *
+
+logger = logging.getLogger('baseline')
 
 
 class ClassifierModelBase(DynetModel, ClassifierModel):
@@ -113,7 +116,7 @@ class ClassifierModelBase(DynetModel, ClassifierModel):
     @classmethod
     def create(cls, embeddings_set, labels, **kwargs):
         model = cls(embeddings_set, labels, **kwargs)
-        print(model)
+        logger.info(model)
         return model
 
     def save(self, file_name):

@@ -5,6 +5,7 @@ from baseline.utils import export, optional_params, register
 
 __all__ = []
 exporter = export(__all__)
+logger = logging.getLogger('baseline')
 
 BASELINE_REPORTING = {}
 
@@ -77,7 +78,7 @@ class ConsoleReporting(EpochReportingHook):
 class StepLoggingReporting(StepReportingHook):
     def __init__(self, **kwargs):
         super(StepLoggingReporting, self).__init__(**kwargs)
-        self.log = logging.getLogger()
+        self.log = logging.getLogger('baseline')
 
     def _step(self, metrics, tick, phase, tick_type=None, **kwargs):
         """Write results to Python's `logging` module under `root`
@@ -156,7 +157,7 @@ class VisdomReporting(ReportingHook):
         super(VisdomReporting, self).__init__(**kwargs)
         import visdom
         name = kwargs.get('name', 'main')
-        print('Creating g_vis instance with env {}'.format(name))
+        logger.info('Creating g_vis instance with env {}'.format(name))
         self._vis = visdom.Visdom(env=name, use_incoming_socket=False)
         self._vis_win = {}
 
@@ -173,7 +174,7 @@ class VisdomReporting(ReportingHook):
         for metric in metrics.keys():
             chart_id = '({} - {}) {}'.format(phase, tick_type, metric)
             if chart_id not in self._vis_win:
-                print('Creating visualization for %s' % chart_id)
+                logger.info('Creating visualization for %s' % chart_id)
                 self._vis_win[chart_id] = self._vis.line(
                     X=np.array([0]),
                     Y=np.array([metrics[metric]]),

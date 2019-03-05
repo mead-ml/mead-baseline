@@ -1,6 +1,10 @@
+import logging
 import tensorflow as tf
 from baseline.train import register_lr_scheduler, create_lr_scheduler, WarmupLearningRateScheduler
 import math
+
+
+logger = logging.getLogger('baseline')
 
 
 @register_lr_scheduler('default')
@@ -11,6 +15,9 @@ class ConstantSchedulerTensorFlow(object):
     def __call__(self, lr, global_step):
         return tf.identity(lr, name='lr')
 
+    def __str__(self):
+        return type(self).__name__ + "()"
+
 
 @register_lr_scheduler('warmup_linear')
 class WarmupLinearSchedulerTensorFlow(WarmupLearningRateScheduler):
@@ -20,6 +27,9 @@ class WarmupLinearSchedulerTensorFlow(WarmupLearningRateScheduler):
 
     def __call__(self, lr, global_step):
         return tf.identity(tf.minimum(1.0, tf.cast(global_step / self.warmup_steps, dtype=tf.float32)) * lr, name='lr')
+
+    def __str__(self):
+        return type(self).__name__ + "()"
 
 
 @register_lr_scheduler('clr')
@@ -36,6 +46,9 @@ class CyclicLRSchedulerTensorFlow(object):
         clr = lr + (self.max_lr - lr) * tf.maximum(0., 1. - x)
         return tf.identity(clr, name='lr')
 
+    def __str__(self):
+        return type(self).__name__ + "()"
+
 
 @register_lr_scheduler('sgdr')
 class SGDRSchedulerTensorFlow(object):
@@ -45,6 +58,9 @@ class SGDRSchedulerTensorFlow(object):
 
     def __call__(self, lr, global_step):
         return tf.identity(tf.train.cosine_decay_restarts(lr, global_step, first_decay_steps=self.first_decay_steps), name='lr')
+
+    def __str__(self):
+        return type(self).__name__ + "()"
 
 
 @register_lr_scheduler('piecewise')
@@ -58,6 +74,9 @@ class PiecewiseDecaySchedulerTensorFlow(object):
     def __call__(self, lr, global_step):
         return tf.identity(tf.train.piecewise_constant(global_step, self.bounds, self.values), name='lr')
 
+    def __str__(self):
+        return type(self).__name__ + "()"
+
 
 @register_lr_scheduler('zaremba')
 class ZarembaDecaySchedulerTensorFlow(PiecewiseDecaySchedulerTensorFlow):
@@ -66,8 +85,12 @@ class ZarembaDecaySchedulerTensorFlow(PiecewiseDecaySchedulerTensorFlow):
         lr = float(kwargs.get('lr', kwargs.get('eta', 1.0)))
         values = [lr/(float(decay_rate)**i) for i in range(len(bounds)+1)]
         super(ZarembaDecaySchedulerTensorFlow, self).__init__(bounds=bounds, values=values)
+
     def __call__(self, lr, global_step):
         return tf.identity(tf.train.piecewise_constant(global_step, self.bounds, self.values), name='lr')
+
+    def __str__(self):
+        return type(self).__name__ + "()"
 
 
 @register_lr_scheduler('invtime')
@@ -81,6 +104,9 @@ class InverseTimeDecaySchedulerTensorFlow(object):
     def __call__(self, lr, global_step):
         return tf.identity(tf.train.inverse_time_decay(lr, global_step, self.decay_steps, self.decay_rate, staircase=self.staircase), name='lr')
 
+    def __str__(self):
+        return type(self).__name__ + "()"
+
 
 @register_lr_scheduler('exponential')
 class ExponentialDecaySchedulerTensorFlow(object):
@@ -91,6 +117,9 @@ class ExponentialDecaySchedulerTensorFlow(object):
 
     def __call__(self, lr, global_step):
         return tf.identity(tf.train.exponential_decay(lr, global_step, self.decay_steps, self.decay_rate, staircase=self.staircase), name='lr')
+
+    def __str__(self):
+        return type(self).__name__ + "()"
 
 
 @register_lr_scheduler('composite')
@@ -111,6 +140,9 @@ class CompositeLRSchedulerTensorFlow(object):
             global_step < self.warm.warmup_steps,
             call_warm, call_rest
         ), name='lr')
+
+    def __str__(self):
+        return "LRScheduler({}, {})".format(self.warm, self.rest)
 
 
 class AdamWOptimizer(tf.train.Optimizer):
@@ -196,26 +228,36 @@ def optimizer(loss_fn, **kwargs):
     colocate_gradients_with_ops = bool(kwargs.get('colocate_gradients_with_ops', False))
     sgd_mom = float(kwargs.get('mom', 0.9))
     if optim == 'adadelta':
-        #print('adadelta', eta)
-        optz = lambda lr: tf.train.AdadeltaOptimizer(lr, 0.95, 1e-6)
+        rho = float(kwargs.get('rho', 0.95))
+        eps = float(kwargs.get('epsilon', 1e-6))
+        logger.info('adadelta(eta=%f, rho=%f, epsilon=%f)', eta, rho, eps)
+        optz = lambda lr: tf.train.AdadeltaOptimizer(lr, rho, eps)
     elif optim == 'adam':
-        #print('adam', eta)
-        optz = lambda lr: tf.train.AdamOptimizer(lr, kwargs.get('beta1', 0.9), kwargs.get('beta2', 0.999), kwargs.get('epsilon', 1e-8))
+        beta1 = float(kwargs.get('beta1', 0.9))
+        beta2 = float(kwargs.get('beta2', 0.999))
+        eps = float(kwargs.get('epsilon', 1e-8))
+        logger.info('adam(eta=%f beta1=%f, beta2=%f, eps=%f)', eta, beta1, beta2, eps)
+        optz = lambda lr: tf.train.AdamOptimizer(lr, beta1, beta2, eps)
     elif optim == 'adamw':
         wd = float(kwargs.get('weight_decay', 0))
-        optz = lambda lr: AdamWOptimizer(lr, wd, kwargs.get('beta1', 0.9), kwargs.get('beta2', 0.999), kwargs.get('epsilon', 1e-8))
+        beta1 = float(kwargs.get('beta1', 0.9))
+        beta2 = float(kwargs.get('beta2', 0.999))
+        eps = float(kwargs.get('epsilon', 1e-8))
+        logger.info('adamw(eta=%f beta1=%f, beta2=%f, eps=%f)', eta, beta1, beta2, eps)
+        optz = lambda lr: AdamWOptimizer(lr, wd, beta1, beta2, eps)
     elif optim == 'rmsprop':
-        #print('rmsprop', eta)
-        optz = lambda lr: tf.train.RMSPropOptimizer(lr, momentum=float(kwargs.get('mom', 0.0)))
+        # Get mom again with difference default
+        mom = float(kwargs.get('mom', 0.0))
+        logger.info('rmsprop(eta=%f, mom=%f)', eta, mom)
+        optz = lambda lr: tf.train.RMSPropOptimizer(lr, momentum=mom)
     elif sgd_mom > 0:
-        #print('sgd-mom', eta, sgd_mom)
+        logger.info('sgd-mom(eta=%f, mom=%f)', eta, sgd_mom)
         optz = lambda lr: tf.train.MomentumOptimizer(lr, sgd_mom)
     else:
-        #print('sgd')
+        logger.info('sgd(eta=%f)', eta)
         optz = lambda lr: tf.train.GradientDescentOptimizer(lr)
 
-    #print('clip', clip)
-    #print('decay', decay_fn)
+    logger.info('clip gradients at %s', clip)
     return global_step, tf.contrib.layers.optimize_loss(loss_fn, global_step, eta, optz,
                                                         colocate_gradients_with_ops=colocate_gradients_with_ops,
                                                         clip_gradients=clip, learning_rate_decay_fn=lr_scheduler,

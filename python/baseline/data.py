@@ -1,10 +1,12 @@
 import random
+import logging
 import numpy as np
 import math
 from baseline.utils import export
 
 __all__ = []
 exporter = export(__all__)
+logger = logging.getLogger('baseline')
 
 
 @exporter
@@ -296,7 +298,7 @@ class SeqWordCharDataFeed(DataFeed):
             vec = examples[k].reshape(-1)[:trunc]
             self.examples[k] = vec.reshape((batchsz, rest * width))
 
-            print('Truncating {} from {} to {}'.format(k, num_examples, trunc))
+            logger.info('Truncating %s from %d to %d', k, num_examples, trunc)
             self.examples[k].flatten()
             self.examples[dim_key] = shp
         self.nctx = nctx

@@ -7,6 +7,8 @@ from baseline.train import Trainer, create_trainer, register_trainer, register_t
 from baseline.dy.optz import OptimizerManager
 from baseline.dy.dynety import *
 
+logger = logging.getLogger('baseline')
+
 
 @register_trainer(task='lm', name='default')
 class LanguageModelTrainerDynet(Trainer):
@@ -117,10 +119,10 @@ def fit(model, ts, vs, es=None, epochs=5, do_early_stopping=True, early_stopping
     best_metric = 10000
     if do_early_stopping:
         early_stopping_cmp, best_metric = get_metric_cmp(early_stopping_metric, kwargs.get('early_stopping_cmp'))
-        print("Doing early stopping on [{}] with patience [{}]".format(early_stopping_metric, patience))
+        logger.info("Doing early stopping on [%s] with patience [%d]", early_stopping_metric, patience)
 
     reporting_fns = listify(kwargs.get('reporting', []))
-    print('reporting', reporting_fns)
+    logger.info('reporting %s', reporting_fns)
 
     last_improved = 0
 
@@ -137,17 +139,17 @@ def fit(model, ts, vs, es=None, epochs=5, do_early_stopping=True, early_stopping
         elif early_stopping_cmp(test_metrics[early_stopping_metric], best_metric):
             last_improved = epoch
             best_metric = test_metrics[early_stopping_metric]
-            print("New best {:.3f}".format(best_metric))
+            logger.info("New best %.3f", best_metric)
             model.save(model_file)
 
         elif (epoch - last_improved) > patience:
-            print("Stopping due to persistent failures to improve")
+            logger.info("Stopping due to persistent failures to improve")
             break
 
     if do_early_stopping is True:
-        print('Best performance on {}: {:.3f} at epoch {}'.format(early_stopping_metric, best_metric, last_improved))
+        logger.info('Best performance on %s: %.3f at epoch %d', early_stopping_metric, best_metric, last_improved)
 
     if es is not None:
-        print('Reloading best checkpoint')
+        logger.info('Reloading best checkpoint')
         model = model.load(model_file)
         trainer.test(es, reporting_fns, phase='Test')

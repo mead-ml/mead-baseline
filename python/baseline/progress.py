@@ -134,4 +134,4 @@ class ProgressBarTerminal(Progress):
         """
         self.current = self.total
         self.update(step=0)
-        print('')
+        self.print_('')

@@ -1,11 +1,14 @@
 import six
 import time
+import logging
 import dynet as dy
 import numpy as np
 from baseline.dy.optz import *
 from baseline.progress import create_progress_bar
 from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
 from baseline.utils import listify, get_model_file, revlut, to_spans, f_score, write_sentence_conll, get_metric_cmp
+
+logger = logging.getLogger('baseline')
 
 
 @register_trainer(task='tagger', name='default')
@@ -184,10 +187,10 @@ def fit(model, ts, vs, es, **kwargs):
         early_stopping_metric = kwargs.get('early_stopping_metric', 'acc')
         early_stopping_cmp, best_metric = get_metric_cmp(early_stopping_metric, kwargs.get('early_stopping_metric'))
         patience = kwargs.get('patience', epochs)
-        print('Doing early stopping on [%s] with patience [%d]' % (early_stopping_metric, patience))
+        logger.info('Doing early stopping on [%s] with patience [%d]', early_stopping_metric, patience)
 
     reporting_fns = listify(kwargs.get('reporting', []))
-    print('reporting', reporting_fns)
+    logger.info('reporting %s', reporting_fns)
 
     #validation_improvement_fn = kwargs.get('validation_improvement', None)
 
@@ -208,19 +211,19 @@ def fit(model, ts, vs, es, **kwargs):
         elif early_stopping_cmp(test_metrics[early_stopping_metric], best_metric):
             last_improved = epoch
             best_metric = test_metrics[early_stopping_metric]
-            print('New max %.3f' % best_metric)
+            logger.info('New max %.3f', best_metric)
             model.save(model_file)
 
 
         elif (epoch - last_improved) > patience:
-            print('Stopping due to persistent failures to improve')
+            logger.info('Stopping due to persistent failures to improve')
             break
 
     if do_early_stopping is True:
-        print('Best performance on %s: %.3f at epoch %d' % (early_stopping_metric, best_metric, last_improved))
+        logger.info('Best performance on %s: %.3f at epoch %d', early_stopping_metric, best_metric, last_improved)
 
     if es is not None:
-        print('Reloading best checkpoint')
+        logger.info('Reloading best checkpoint')
         model = model.load(model_file)
         trainer = create_trainer(model, **kwargs)
         trainer.test(es, reporting_fns, conll_output=conll_output, txts=txts, phase='Test')

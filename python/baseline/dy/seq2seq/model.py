@@ -1,3 +1,4 @@
+import logging
 import numpy as np
 from baseline.model import (
     EncoderDecoderModel,
@@ -9,6 +10,8 @@ from baseline.model import (
 from baseline.dy.dynety import *
 from baseline.dy.embeddings import *
 from baseline.version import __version__
+
+logger = logging.getLogger('baseline')
 
 
 class EncoderDecoderModelBase(DynetModel, EncoderDecoderModel):
@@ -24,7 +27,7 @@ class EncoderDecoderModelBase(DynetModel, EncoderDecoderModel):
     @classmethod
     def create(cls, src_embeddings, tgt_embedding, **kwargs):
         model = cls(src_embeddings, tgt_embedding, **kwargs)
-        print(model)
+        logger.info(model)
         return model
 
     @classmethod
