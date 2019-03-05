@@ -121,23 +121,14 @@ class CharConvEmbeddings(PyTorchEmbeddings):
 
 
 @register_embeddings(name='positional')
-class PositionalLookupTableEmbeddings(PyTorchEmbeddings):
+class PositionalLookupTableEmbeddings(LookupTableEmbeddings):
 
     def __init__(self, _, **kwargs):
         super(PositionalLookupTableEmbeddings, self).__init__(_, **kwargs)
-        self.vsz = kwargs.get('vsz')
-        self.dsz = kwargs.get('dsz')
         self.dropout = nn.Dropout(kwargs.get('dropout', 0.1))
-        self.finetune = kwargs.get('finetune', True)
         # This could get us in trouble, if in doubt, pick something big
         mxlen = kwargs.get('mxlen', 1000)
         max_timescale = kwargs.get('max_timescale', 1.0e4)
-
-        weights = kwargs.get('weights')
-        if weights is None:
-            self.embeddings = nn.Embedding(self.vsz, self.dsz, padding_idx=0)
-        else:
-            self.embeddings = pytorch_embedding(weights, self.finetune)
 
         log_timescale_increment = math.log(max_timescale) / self.dsz
         inv_timescales = torch.exp(torch.arange(0, self.dsz, 2).float() * -log_timescale_increment)
@@ -161,9 +152,27 @@ class PositionalLookupTableEmbeddings(PyTorchEmbeddings):
         :param x: The temporal signal in, to which the positional embeddings are applied
         :return: Embedded output
         """
-        x = self.embeddings(x) * math.sqrt(self.dsz)
+        x = super(PositionalLookupTableEmbeddings, self).forward(x) * math.sqrt(self.dsz)
         x = x + self.pe[:, :x.size(1)]
         return self.dropout(x)
+
+
+@register_embeddings(name='learned-positional')
+class LearnedPositionalLookupTableEmbeddings(LookupTableEmbeddings):
+    def __init__(self, _, **kwargs):
+        super(LearnedPositionalLookupTableEmbeddings, self).__init__(_, **kwargs)
+        self.mxlen = int(kwargs.get('mxlen', 512))
+        self.pos_embeddings = nn.Embedding(self.mxlen, self.dsz, padding_idx=0)
+        self.dropout = nn.Dropout(kwargs.get('dropout', 0.1))
+
+    def forward(self, x):
+        T = x.size(1)
+        x = super(LearnedPositionalLookupTableEmbeddings, self).forward(x)
+        pos = self.pos_embeddings(torch.arange(T, dtype=torch.long, device=x.device)).unsqueeze(0)
+        return self.dropout(x + pos)
+
+    def extra_repr(self):
+        return 'mxlen=%d' % self.mxlen
 
 
 @register_embeddings(name='char-lstm')

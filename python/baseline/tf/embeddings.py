@@ -330,6 +330,48 @@ class PositionalLookupTableEmbeddings(LookupTableEmbeddings):
         return cls(name, vsz=model.vsz, dsz=model.dsz, weights=model.weights, **kwargs)
 
 
+@register_embeddings(name='learned-positional')
+class LearnedPositionalLookupTableEmbeddings(LookupTableEmbeddings):
+    def __init__(self, name, **kwargs):
+        super(LearnedPositionalLookupTableEmbeddings, self).__init__(name, **kwargs)
+        self.mxlen = int(kwargs.get('mxlen', 512))
+        self.pos_weights = kwargs.get('pos_weights')
+        if self.pos_weights is None:
+            unif = float(kwargs.get('unif', 0.1))
+            self.pos_weights = np.random.uniform(-unif, unif, (self.mxlen, self.dsz))
+        with tf.variable_scope(self.scope):
+            self.pos = tf.get_variable("pos",
+                                  initializer=tf.constant_initializer(self.pos_weights, dtype=tf.float32, verify_shape=True),
+                                  shape=[self.mxlen, self.dsz], trainable=True)
+
+    def encode(self, x=None):
+        x = super(LearnedPositionalLookupTableEmbeddings, self).encode(x)
+        l = tf.shape(x)[1]
+        e0 = tf.scatter_update(self.pos, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, self.dsz]))
+        with tf.control_dependencies([e0]):
+            pos_embeddings = tf.nn.embedding_lookup(self.pos, tf.range(l, dtype=tf.int32))
+
+        return x + tf.expand_dims(pos_embeddings, 0)
+
+    def detached_ref(self):
+        """This will detach any attached input and reference the same sub-graph otherwise
+
+        :return:
+        """
+        if self.weights is None:
+            raise Exception('You must initialize `weights` in order to use this method')
+        return LearnedPositionalLookupTableEmbeddings(self.name,
+                                                      vsz=self.vsz,
+                                                      dsz=self.dsz,
+                                                      finetune=self.finetune,
+                                                      scope=self.scope,
+                                                      weights=self.weights,
+                                                      pos_weights=self.pos_weights,
+                                                      mxlen=self.mxlen)
+
+
+
+
 @register_embeddings(name='char-lstm')
 class CharLSTMEmbeddings(TensorFlowEmbeddings):
     @classmethod
