@@ -9,8 +9,8 @@ NUM_LINES_TO_REMOVE_SERVE: 4
 DRIVER: ${BASELINE_DIR}/api-examples/classify-text.py
 TEST_FILE: ${PWD}/stsa.binary.test
 TEST_FILE_LINK: https://www.dropbox.com/s/zm6y79wczkaliat/stsa.binary.test?dl=1
-MODEL_FILE: ${PWD}/sst2-15303.zip
-MODEL_FILE_LINK: https://www.dropbox.com/s/zfh9l36vm5hfxyk/sst2-15303.zip?dl=1
+MODEL_FILE: ${PWD}/sst2-6475.zip
+MODEL_FILE_LINK: https://www.dropbox.com/s/pmeips3phwhmqbv/sst2-6475.zip?dl=1
 CONFIG_FILE: ${PWD}/sst2-comb.json
 CONFIG_FILE_LINK: https://www.dropbox.com/s/77m4xjpb6rpm2fx/sst2-comb.json?dl=1
 MODEL_NAME: sst2
