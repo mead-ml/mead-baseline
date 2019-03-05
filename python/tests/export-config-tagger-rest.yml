@@ -5,8 +5,8 @@ BASELINE_DIR: ${PWD}/../../
 SERVING_CONTAINER_NAME: tfserving
 TASK: tagger
 FEATURES: text
-NUM_LINES_TO_REMOVE_LOAD: 5
-NUM_LINES_TO_REMOVE_SERVE: 4
+NUM_LINES_TO_REMOVE_LOAD: 0
+NUM_LINES_TO_REMOVE_SERVE: 0
 DRIVER: ${BASELINE_DIR}/api-examples/tag-text.py
 TEST_FILE: eng.testb.small
 TEST_FILE_LINK: https://www.dropbox.com/s/pp3pcq5q5ko1df6/eng.testb.small?dl=1

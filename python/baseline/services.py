@@ -217,7 +217,13 @@ class ClassifierService(Service):
         if preproc == "client":
             examples = self.vectorize(tokens_seq)
         elif preproc == 'server':
-            examples = {'tokens': [" ".join(x) for x in tokens_seq]}
+            # TODO: here we allow vectorizers even for preproc=server to get `word_lengths`.
+            # vectorizers should not be available when preproc=server.
+            featurized_examples = self.vectorize(tokens_seq)
+            examples = {
+                        'tokens': [" ".join(x) for x in tokens_seq],
+                        self.model.lengths_key: featurized_examples[self.model.lengths_key]
+            }
 
         outcomes_list = self.model.predict(examples)
         results = []
@@ -342,7 +348,7 @@ class TaggerService(Service):
         label_field = kwargs.get('label', 'label')
         tokens_seq, mxlen, mxwlen = self.batch_input(tokens)
         self.set_vectorizer_lens(mxlen, mxwlen)
-        # TODO: unlike classify, here we allow vectorizers even for preproc=server to get `word_lengths`.
+        # TODO: here we allow vectorizers even for preproc=server to get `word_lengths`.
         # vectorizers should not be available when preproc=server.
         examples = self.vectorize(tokens_seq)
         if preproc == 'server':

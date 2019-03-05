@@ -113,7 +113,6 @@ class ClassifyTensorFlowPreProcExporter(ClassifyTensorFlowExporter):
         pid = model_file.split("-")[-1]
         pc = PreProcessorController(model_base_dir, pid, self.task.config_params['features'],
                                     self.feature_exporter_field_map)
-        model_params = self.task.config_params['model']
         tf_example, preprocessed = pc.run()
         # Create a dict of embedding names to sub-graph outputs to wire in as embedding inputs
         embedding_inputs = {}
@@ -144,7 +143,6 @@ class TaggerTensorFlowPreProcExporter(TaggerTensorFlowExporter):
         pid = model_file.split("-")[-1]
         pc = PreProcessorController(model_base_dir, pid, self.task.config_params['features'],
                                     self.feature_exporter_field_map)
-        model_params = self.task.config_params['model']
         tf_example, preprocessed = pc.run()
         # Create a dict of embedding names to sub-graph outputs to wire in as embedding inputs
         embedding_inputs = {}

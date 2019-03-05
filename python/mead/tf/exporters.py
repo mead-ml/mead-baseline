@@ -119,13 +119,11 @@ class ClassifyTensorFlowExporter(TensorFlowExporter):
     def _create_model(self, sess, basename, **kwargs):
         model = load_model(basename, sess=sess, **kwargs)
         values, indices = tf.nn.top_k(model.probs, len(model.labels))
-        class_tensor = tf.constant(model.labels)
-        table = tf.contrib.lookup.index_to_string_table_from_tensor(class_tensor)
-        classes = table.lookup(tf.to_int64(indices))
-
         # Restore the checkpoint
-        self._restore_checkpoint(sess, basename)
         if self.return_labels:
+            class_tensor = tf.constant(model.labels)
+            table = tf.contrib.lookup.index_to_string_table_from_tensor(class_tensor)
+            classes = table.lookup(tf.to_int64(indices))
             return model, classes, values
         else:
             return model, indices, values
@@ -161,12 +159,16 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
     def _create_model(self, sess, basename, **kwargs):
         model = load_tagger_model(basename, sess=sess, **kwargs)
         softmax_output = tf.nn.softmax(model.probs)
-        values, indices = tf.nn.top_k(softmax_output, 1)
-        class_tensor = tf.constant(list_of_labels)
-        table = tf.contrib.lookup.index_to_string_table_from_tensor(class_tensor)
-        classes = table.lookup(tf.to_int64(indices))
-        self._restore_checkpoint(sess, basename)
+        values, _ = tf.nn.top_k(softmax_output, 1)
+        indices = model.best
         if self.return_labels:
+            labels = read_json(basename + '.labels')
+            list_of_labels = [''] * len(labels)
+            for label, idval in labels.items():
+                list_of_labels[idval] = label
+            class_tensor = tf.constant(list_of_labels)
+            table = tf.contrib.lookup.index_to_string_table_from_tensor(class_tensor)
+            classes = table.lookup(tf.to_int64(indices))
             return model, classes, values
         else:
             return model, indices, values
@@ -281,7 +283,8 @@ def save_to_bundle(output_path, directory, assets=None):
         asset_file = os.path.join(output_path, ASSET_FILE_NAME)
         write_json(assets, asset_file)
 
-def create_assets(basename, sig_input, sig_output, sig_name, lengths_key=None, beam=None):
+
+def create_assets(basename, sig_input, sig_output, sig_name, lengths_key=None, beam=None, return_labels=False):
     """Save required variables for running an exported model from baseline's services.
 
     :basename the base model name. e.g. /path/to/tagger-26075

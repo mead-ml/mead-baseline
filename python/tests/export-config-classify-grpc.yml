@@ -4,8 +4,8 @@ END: \033[0m
 BASELINE_DIR: ${PWD}/../../
 SERVING_CONTAINER_NAME: tfserving
 TASK: classify
-NUM_LINES_TO_REMOVE_LOAD: 5
-NUM_LINES_TO_REMOVE_SERVE: 4
+NUM_LINES_TO_REMOVE_LOAD: 0
+NUM_LINES_TO_REMOVE_SERVE: 0
 DRIVER: ${BASELINE_DIR}/api-examples/classify-text.py
 TEST_FILE: ${PWD}/stsa.binary.test
 TEST_FILE_LINK: https://www.dropbox.com/s/zm6y79wczkaliat/stsa.binary.test?dl=1
@@ -20,7 +20,7 @@ EXPORT_SETTINGS_MEAD: ${BASELINE_DIR}/python/mead/config/mead-settings.json
 EXPORT_SETTINGS_DATASETS: ${BASELINE_DIR}/python/mead/config/datasets.json
 MODEL_VERSION: 1
 IS_REMOTE: false
-RETURN_LABELS: false
+RETURN_LABELS: true
 REMOTE_HOST: localhost
 REMOTE_PORT: 8500
 SLEEP: 5
