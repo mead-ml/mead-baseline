@@ -11,8 +11,8 @@ DRIVER: ${BASELINE_DIR}/api-examples/tag-text.py
 TEST_FILE: eng.testb.small
 TEST_FILE_LINK: https://www.dropbox.com/s/pp3pcq5q5ko1df6/eng.testb.small?dl=1
 CONLL: false
-MODEL_FILE: ${PWD}/conll-elmo-7126.zip
-MODEL_FILE_LINK: https://www.dropbox.com/s/argici0055pjkoa/conll-elmo-7126.zip?dl=1
+MODEL_FILE: ${PWD}/conll-elmo-16691.zip
+MODEL_FILE_LINK: https://www.dropbox.com/s/03euyv9bhlfv85c/conll-elmo-16691.zip?dl=1
 CONFIG_FILE: ${PWD}/conll-elmo-hub.yml
 CONFIG_FILE_LINK: https://www.dropbox.com/s/epldxo4m1s39q8w/conll-elmo-hub.yml?dl=1
 MODEL_NAME: conll

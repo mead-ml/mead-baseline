@@ -11,8 +11,8 @@ TEST_FILE: eng.testb.small
 TEST_FILE_LINK: https://www.dropbox.com/s/pp3pcq5q5ko1df6/eng.testb.small?dl=1
 CONLL: false
 FEATURES: text
-MODEL_FILE: ${PWD}/conll-6419.zip
-MODEL_FILE_LINK: https://www.dropbox.com/s/ftv4amoq7dzxnxo/conll-6419.zip?dl=1
+MODEL_FILE: ${PWD}/conll-11083.zip
+MODEL_FILE_LINK: https://www.dropbox.com/s/ftv4amoq7dzxnxo/conll-11083.zip?dl=1
 CONFIG_FILE: ${PWD}/conll-tf.json
 CONFIG_FILE_LINK: https://www.dropbox.com/s/97bi7qy15usmvb2/conll-tf.json?dl=1
 MODEL_NAME: conll
