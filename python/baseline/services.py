@@ -342,9 +342,9 @@ class TaggerService(Service):
 
         """
         preproc = kwargs.get('preproc', 'client')
-        exporter_field_feature_map = kwargs.get('exporter_field_feature_map', {})  # if empty dict argument was passed
-        if not exporter_field_feature_map:
-            exporter_field_feature_map = {'tokens': 'text'}
+        export_mapping = kwargs.get('export_mapping', {})  # if empty dict argument was passed
+        if not export_mapping:
+            export_mapping = {'tokens': 'text'}
         label_field = kwargs.get('label', 'label')
         tokens_seq, mxlen, mxwlen = self.batch_input(tokens)
         self.set_vectorizer_lens(mxlen, mxwlen)
@@ -353,8 +353,8 @@ class TaggerService(Service):
         examples = self.vectorize(tokens_seq)
         if preproc == 'server':
             unfeaturized_examples = {}
-            for exporter_field in exporter_field_feature_map:
-                unfeaturized_examples[exporter_field] = [" ".join([y[exporter_field_feature_map[exporter_field]]
+            for exporter_field in export_mapping:
+                unfeaturized_examples[exporter_field] = [" ".join([y[export_mapping[exporter_field]]
                                                                    for y in x]) for x in tokens_seq]
             unfeaturized_examples[self.model.lengths_key] = examples[self.model.lengths_key]  # remote model
             examples = unfeaturized_examples

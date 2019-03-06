@@ -18,10 +18,10 @@ parser.add_argument('--export_mapping', help='mapping between features and the f
                                                          'request, eg: token:word ner:ner. This should match with the '
                                                          '`exporter_field` definition in the mead config',
                     default=[], nargs='+')
-args = parser.parse_known_args()[0]
+args = parser.parse_args()
 
 
-def create_exporter_field_feature_map(feature_map_strings):
+def create_export_mapping(feature_map_strings):
     feature_map_strings = [x.strip() for x in feature_map_strings if x.strip()]
     if not feature_map_strings:
         return {}
@@ -66,7 +66,7 @@ else:
 
 m = bl.TaggerService.load(args.model, backend=args.backend, remote=args.remote, name=args.name, preproc=args.preproc)
 for sen in m.predict(texts, preproc=args.preproc,
-                     exporter_field_feature_map=create_exporter_field_feature_map(args.export_mapping)):
+                     export_mapping=create_export_mapping(args.export_mapping)):
     for word_tag in sen:
         print("{} {}".format(word_tag['text'], word_tag['label']))
     print("\n")
