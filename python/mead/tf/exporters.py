@@ -32,8 +32,8 @@ SignatureOutput = namedtuple("SignatureOutput", ("classes", "scores"))
 @exporter
 class TensorFlowExporter(mead.exporters.Exporter):
 
-    def __init__(self, task):
-        super(TensorFlowExporter, self).__init__(task)
+    def __init__(self, task, **kwargs):
+        super(TensorFlowExporter, self).__init__(task, **kwargs)
 
     def _run(self, sess, basename, **kwargs):
         pass
@@ -112,18 +112,23 @@ class TensorFlowExporter(mead.exporters.Exporter):
 @register_exporter(task='classify', name='default')
 class ClassifyTensorFlowExporter(TensorFlowExporter):
 
-    def __init__(self, task):
-        super(ClassifyTensorFlowExporter, self).__init__(task)
+    def __init__(self, task, **kwargs):
+        super(ClassifyTensorFlowExporter, self).__init__(task, **kwargs)
+        self.return_labels = kwargs.get('return_labels', True)
 
     def _create_model(self, sess, basename, **kwargs):
         model = load_model(basename, sess=sess, **kwargs)
         values, indices = tf.nn.top_k(model.probs, len(model.labels))
-        class_tensor = tf.constant(model.labels)
-        table = tf.contrib.lookup.index_to_string_table_from_tensor(class_tensor)
-        classes = table.lookup(tf.to_int64(indices))
-        return model, classes, values
+        # Restore the checkpoint
+        if self.return_labels:
+            class_tensor = tf.constant(model.labels)
+            table = tf.contrib.lookup.index_to_string_table_from_tensor(class_tensor)
+            classes = table.lookup(tf.to_int64(indices))
+            return model, classes, values
+        else:
+            return model, indices, values
 
-    def _create_rpc_call(self, sess, basename):
+    def _create_rpc_call(self, sess, basename, **kwargs):
         model, classes, values = self._create_model(sess, basename)
 
         predict_tensors = {}
@@ -137,7 +142,9 @@ class ClassifyTensorFlowExporter(TensorFlowExporter):
         sig_input = predict_tensors
         sig_output = SignatureOutput(classes, values)
         sig_name = 'predict_text'
-        assets = create_assets(basename, sig_input, sig_output, sig_name, model.lengths_key)
+
+        assets = create_assets(basename, sig_input, sig_output, sig_name, model.lengths_key,
+                               return_labels=self.return_labels)
         return sig_input, sig_output, sig_name, assets
 
 
@@ -145,16 +152,28 @@ class ClassifyTensorFlowExporter(TensorFlowExporter):
 @register_exporter(task='tagger', name='default')
 class TaggerTensorFlowExporter(TensorFlowExporter):
 
-    def __init__(self, task):
-        super(TaggerTensorFlowExporter, self).__init__(task)
+    def __init__(self, task, **kwargs):
+        super(TaggerTensorFlowExporter, self).__init__(task, **kwargs)
+        self.return_labels = kwargs.get('return_labels', False)  # keep default behavior
 
     def _create_model(self, sess, basename, **kwargs):
         model = load_tagger_model(basename, sess=sess, **kwargs)
         softmax_output = tf.nn.softmax(model.probs)
-        values, indices = tf.nn.top_k(softmax_output, 1)
-        return model, model.best, values
+        values, _ = tf.nn.top_k(softmax_output, 1)
+        indices = model.best
+        if self.return_labels:
+            labels = read_json(basename + '.labels')
+            list_of_labels = [''] * len(labels)
+            for label, idval in labels.items():
+                list_of_labels[idval] = label
+            class_tensor = tf.constant(list_of_labels)
+            table = tf.contrib.lookup.index_to_string_table_from_tensor(class_tensor)
+            classes = table.lookup(tf.to_int64(indices))
+            return model, classes, values
+        else:
+            return model, indices, values
 
-    def _create_rpc_call(self, sess, basename):
+    def _create_rpc_call(self, sess, basename, **kwargs):
         model, classes, values = self._create_model(sess, basename)
 
         predict_tensors = {}
@@ -169,7 +188,8 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
         sig_input = predict_tensors
         sig_output = SignatureOutput(classes, values)
         sig_name = 'tag_text'
-        assets = create_assets(basename, sig_input, sig_output, sig_name, model.lengths_key)
+        assets = create_assets(basename, sig_input, sig_output, sig_name, model.lengths_key,
+                               return_labels=self.return_labels)
         return sig_input, sig_output, sig_name, assets
 
 
@@ -197,8 +217,9 @@ class Seq2SeqTensorFlowExporter(TensorFlowExporter):
     TARGET_STATE_EMBED_KEY = 'tgt_embedding'
     TARGET_EMBED_KEY = 'tgt'
 
-    def __init__(self, task):
-        super(Seq2SeqTensorFlowExporter, self).__init__(task)
+    def __init__(self, task, **kwargs):
+        super(Seq2SeqTensorFlowExporter, self).__init__(task, **kwargs)
+        self.return_labels = kwargs.get('return_labels', False)
 
     def _create_model(self, sess, basename, **kwargs):
         model = load_seq2seq_model(
@@ -224,7 +245,8 @@ class Seq2SeqTensorFlowExporter(TensorFlowExporter):
         sig_input = predict_tensors
         sig_output = SignatureOutput(classes, values)
         sig_name = 'suggest_text'
-        assets = create_assets(basename, sig_input, sig_output, sig_name, model.src_lengths_key, beam=model.decoder.beam_width)
+        assets = create_assets(basename, sig_input, sig_output, sig_name, model.src_lengths_key, beam=model.decoder.beam_width,
+                              return_labels=self.return_labels)
 
         return sig_input, sig_output, sig_name, assets
 
@@ -261,7 +283,8 @@ def save_to_bundle(output_path, directory, assets=None):
         asset_file = os.path.join(output_path, ASSET_FILE_NAME)
         write_json(assets, asset_file)
 
-def create_assets(basename, sig_input, sig_output, sig_name, lengths_key=None, beam=None):
+
+def create_assets(basename, sig_input, sig_output, sig_name, lengths_key=None, beam=None, return_labels=False):
     """Save required variables for running an exported model from baseline's services.
 
     :basename the base model name. e.g. /path/to/tagger-26075
@@ -277,11 +300,12 @@ def create_assets(basename, sig_input, sig_output, sig_name, lengths_key=None, b
     outputs =  sig_output._fields
     model_name = basename.split("/")[-1]
     directory = basename.split("/")[:-1]
-
-    metadata = create_metadata(inputs, outputs, sig_name, model_name, lengths_key, beam=beam)
+    metadata = create_metadata(inputs, outputs, sig_name, model_name, lengths_key, beam=beam,
+                               return_labels=return_labels)
     return metadata
 
-def create_metadata(inputs, outputs, sig_name, model_name, lengths_key=None, beam=None):
+
+def create_metadata(inputs, outputs, sig_name, model_name, lengths_key=None, beam=None, return_labels=False):
     meta = {
         'inputs': inputs,
         'outputs': outputs,
@@ -289,6 +313,7 @@ def create_metadata(inputs, outputs, sig_name, model_name, lengths_key=None, bea
         'metadata': {
             'exported_model': model_name,
             'exported_time': str(datetime.datetime.utcnow()),
+            'return_labels': return_labels
         }
     }
 

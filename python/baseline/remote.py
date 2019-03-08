@@ -4,7 +4,8 @@ from baseline.utils import import_user_module
 
 class RemoteModelTensorFlowREST(object):
 
-    def __init__(self, remote, name, signature, labels=None, beam=None, lengths_key=None, inputs=[], version=None):
+    def __init__(self, remote, name, signature, labels=None, beam=None, lengths_key=None, inputs=[], version=None,
+                 return_labels=False):
         """A remote model that lives on TF serving with REST transport
 
         This type of model currently depends on the `requests` module as a dependency for HTTP
@@ -17,6 +18,8 @@ class RemoteModelTensorFlowREST(object):
         :param lengths_key: Which key is used for the length of the input vector (defaults to None)
         :param inputs: The inputs (defaults to empty list)
         :param version: The model version (defaults to None)
+        :param return_labels: Whether the remote model returns class indices or the class labels directly. This depends
+        on the `return_labels` parameter in exporters
         """
         self.remote = remote
         self.name = name
@@ -26,6 +29,7 @@ class RemoteModelTensorFlowREST(object):
         self.beam = beam
         self.labels = labels
         self.version = version
+        self.return_labels = return_labels
 
     def get_labels(self):
         """Return the model's labels
@@ -34,7 +38,7 @@ class RemoteModelTensorFlowREST(object):
         """
         return self.labels
 
-    def predict(self, examples, **kwargs):
+    def predict(self, examples):
         """Run prediction over HTTP/REST.
 
         :param examples: The input examples
@@ -70,28 +74,34 @@ class RemoteModelTensorFlowREST(object):
             tensor = tensor.transpose(1, 2, 0)
             return tensor
 
+        num_ex = len(predict_response['classes'])
+
         if self.signature == 'tag_text':
             classes = predict_response['classes']
             lengths = examples[self.lengths_key]
             result = []
-            num_ex = examples[self.lengths_key].shape[0]
             for i in range(num_ex):
                 length_i = lengths[i]
                 classes_i = classes[i]
-                d = [np.array(classes_i[j]) for j in range(length_i)]
+                if self.return_labels:
+                    d = [np.array(classes_i[j]) for j in range(length_i)]
+                else:
+                    d = [np.array(np.int32(classes_i[j])) for j in range(length_i)]
                 result.append(d)
 
             return result
 
         if self.signature == 'predict_text':
-            num_ex = len(examples[self.lengths_key])
             scores = predict_response['scores']
             classes = predict_response['classes']
             result = []
             for i in range(num_ex):
                 score_i = scores[i]
                 classes_i = classes[i]
-                d = [(c, np.float32(s)) for c, s in zip(classes_i, score_i)]
+                if self.return_labels:
+                    d = [(c, np.float32(s)) for c, s in zip(classes_i, score_i)]
+                else:
+                    d = [(np.int32(c), np.float32(s)) for c, s in zip(classes_i, score_i)]
                 result.append(d)
             return result
 
@@ -109,7 +119,7 @@ class RemoteModelTensorFlowREST(object):
 
 class RemoteModelTensorFlowGRPC(object):
 
-    def __init__(self, remote, name, signature, labels=None, beam=None, lengths_key=None, inputs=[]):
+    def __init__(self, remote, name, signature, labels=None, beam=None, lengths_key=None, inputs=[], return_labels=False):
         """A remote model that lives on TF serving with gRPC transport
 
         When using this type of model, there is an external dependency on the `grpc` package, as well as the
@@ -122,6 +132,8 @@ class RemoteModelTensorFlowGRPC(object):
         :param beam: The beam width (defaults to None)
         :param lengths_key: Which key is used for the length of the input vector (defaults to None)
         :param inputs: The inputs (defaults to empty list)
+        :param return_labels: Whether the remote model returns class indices or the class labels directly. This depends
+        on the `return_labels` parameter in exporters
         """
         self.predictpb = import_user_module('tensorflow_serving.apis.predict_pb2')
         self.servicepb = import_user_module('tensorflow_serving.apis.prediction_service_pb2_grpc')
@@ -138,6 +150,10 @@ class RemoteModelTensorFlowGRPC(object):
         self.input_keys = set(inputs)
         self.beam = beam
         self.labels = labels
+        self.return_labels = return_labels
+
+    def decode_output(self, x):
+        return x.decode('ascii') if self.return_labels else np.int32(x)
 
     def get_labels(self):
         """Return the model's labels
@@ -146,7 +162,7 @@ class RemoteModelTensorFlowGRPC(object):
         """
         return self.labels
 
-    def predict(self, examples, **kwargs):
+    def predict(self, examples):
         """Run prediction over gRPC
 
         :param examples: The input examples
@@ -215,28 +231,37 @@ class RemoteModelTensorFlowGRPC(object):
             return [results]
 
         if self.signature == 'tag_text':
-            classes = predict_response.outputs.get('classes').int_val
+            if self.return_labels:
+                classes = predict_response.outputs.get('classes').string_val
+            else:
+                classes = predict_response.outputs.get('classes').int_val
             lengths = examples[self.lengths_key]
             result = []
             for i in range(num_examples):
                 length = lengths[i]
-                tmp = [np.int32(x) for x in classes[example_len*i:example_len*(i+1)][:length]]
+                tmp = [self.decode_output(x) for x in classes[example_len*i:example_len*(i+1)][:length]]
                 result.append(tmp)
 
             return result
 
         if self.signature == 'predict_text':
             scores = predict_response.outputs.get('scores').float_val
-            classes = predict_response.outputs.get('classes').string_val
+            if self.return_labels:
+                classes = predict_response.outputs.get('classes').string_val
+            else:
+                classes = predict_response.outputs.get('classes').int_val
             result = []
             length = len(self.get_labels())
             for i in range(num_examples):   # wrap in numpy because the local models send that dtype out
-                d = [(c.decode('ascii'), np.float32(s)) for c, s in zip(classes[example_len*i:example_len*(i+1)][:length], scores[length*i:length*(i+1)][:length])]
+                d = [(self.decode_output(c), np.float32(s)) for c, s in zip(classes[example_len*i:example_len*(i+1)][:length], scores[length*i:length*(i+1)][:length])]
                 result.append(d)
             return result
 
 
 class RemoteModelTensorFlowGRPCPreproc(RemoteModelTensorFlowGRPC):
+    def __init__(self, remote, name, signature, labels=None, beam=None, lengths_key=None, inputs=[], return_labels=False):
+        super(RemoteModelTensorFlowGRPCPreproc, self).__init__(remote, name, signature, labels,
+                                                               beam, lengths_key, inputs, return_labels)
 
     def create_request(self, examples):
         # TODO: Remove TF dependency client side
@@ -245,14 +270,15 @@ class RemoteModelTensorFlowGRPCPreproc(RemoteModelTensorFlowGRPC):
         request = self.predictpb.PredictRequest()
         request.model_spec.name = self.name
         request.model_spec.signature_name = self.signature
-        request.inputs['tokens'].CopyFrom(
-            tf.contrib.util.make_tensor_proto(examples['tokens'], shape=[len(examples['tokens']), 1])
-        )
-        for feature in self.input_keys:  # not really happy with this hack
-            if feature.endswith('lengths'):
-                shape = examples[feature].shape
-                tensor_proto = tf.contrib.util.make_tensor_proto(examples[feature], shape=shape, dtype=tf.int32)
-                request.inputs[feature].CopyFrom(
+        for key in examples:
+            if key.endswith('lengths'):
+                shape = examples[key].shape
+                tensor_proto = tf.contrib.util.make_tensor_proto(examples[key], shape=shape, dtype=tf.int32)
+                request.inputs[key].CopyFrom(
                     tensor_proto
+                )
+            else:
+                request.inputs[key].CopyFrom(
+                    tf.contrib.util.make_tensor_proto(examples[key], shape=[len(examples[key]), 1])
                 )
         return request

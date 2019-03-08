@@ -7,7 +7,7 @@ exporter = export(__all__)
 @exporter
 class Exporter(object):
 
-    def __init__(self, task):
+    def __init__(self, task, **kwargs):
         super(Exporter, self).__init__()
         self.task = task
 
@@ -39,5 +39,5 @@ def register_exporter(cls, task, name=None):
     return cls
 
 
-def create_exporter(task, name=None):
-    return BASELINE_EXPORTERS[task.task_name()][name](task)
+def create_exporter(task, name=None, **kwargs):
+    return BASELINE_EXPORTERS[task.task_name()][name](task, **kwargs)

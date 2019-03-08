@@ -49,18 +49,23 @@ class Service(object):
 
     def batch_input(self, tokens):
         """Turn the input into a consistent format.
-
+        :param tokens: tokens in format List[str] or List[List[str]]
         :return: List[List[str]]
         """
         mxlen = 0
         mxwlen = 0
+        vmxlen, vmxwlen = self.get_vectorizer_lens()
         # If the input is List[str] wrap it in list to make a batch of size one.
         tokens_seq = (tokens,) if isinstance(tokens[0], six.string_types) else tokens
         # Get sentence and word lengths from the batch
         for tokens in tokens_seq:
+            if vmxlen != -1:
+                tokens = tokens[:vmxlen]
             mxlen = max(mxlen, len(tokens))
-            for token in tokens:
-                mxwlen = max(mxwlen, len(token))
+            for index in range(len(tokens)):
+                if vmxwlen != -1:
+                    tokens[index] = tokens[index][:vmxwlen]
+                mxwlen = max(mxwlen, len(tokens[index]))
         return tokens_seq, mxlen, mxwlen
 
     def set_vectorizer_lens(self, mxlen, mxwlen):
@@ -74,6 +79,19 @@ class Service(object):
                 vectorizer.mxlen = mxlen
             if hasattr(vectorizer, 'mxwlen') and vectorizer.mxwlen == -1:
                 vectorizer.mxwlen = mxwlen
+
+    def get_vectorizer_lens(self):
+        """get the max len from the vectorizers if defined
+        """
+        mxlen = -1
+        mxwlen = -1
+        if self.vectorizers is not None:
+            for k, vectorizer in self.vectorizers.items():
+                if hasattr(vectorizer, 'mxlen'):
+                    mxlen = vectorizer.mxlen
+                if hasattr(vectorizer, 'mxwlen'):
+                    mxwlen = vectorizer.mxwlen
+        return mxlen, mxwlen
 
     def vectorize(self, tokens_seq):
         """Turn the input into that batch dict for prediction.
@@ -122,7 +140,8 @@ class Service(object):
         name = kwargs.get("name", None)
         if remote:
             beam = kwargs.get('beam', 10)
-            model = Service._create_remote_model(directory, be, remote, name, cls.signature_name(), beam, preproc=kwargs.get('preproc', False))
+            model = Service._create_remote_model(directory, be, remote, name, cls.signature_name(), beam,
+                                                 preproc=kwargs.get('preproc', 'client'))
             return cls(vocabs, vectorizers, model)
 
         # Currently nothing to do here
@@ -134,7 +153,7 @@ class Service(object):
         return cls(vocabs, vectorizers, model)
 
     @staticmethod
-    def _create_remote_model(directory, backend, remote, name, signature_name, beam, preproc='client'):
+    def _create_remote_model(directory, backend, remote, name, signature_name, beam, **kwargs):
         """Reads the necessary information from the remote bundle to instatiate
         a client for a remote model.
 
@@ -146,11 +165,13 @@ class Service(object):
 
         :returns a RemoteModel
         """
+        preproc = kwargs.get('preproc', 'client')
         assets = read_json(os.path.join(directory, 'model.assets'))
         model_name = assets['metadata']['exported_model']
         labels = read_json(os.path.join(directory, model_name) + '.labels')
         lengths_key = assets.get('lengths_key', None)
         inputs = assets.get('inputs', [])
+        return_labels = bool(assets['metadata']['return_labels'])
 
         if backend == 'tf':
             remote_models = import_user_module('baseline.remote')
@@ -160,7 +181,8 @@ class Service(object):
                 RemoteModel = remote_models.RemoteModelTensorFlowGRPCPreproc
             else:
                 RemoteModel = remote_models.RemoteModelTensorFlowGRPC
-            model = RemoteModel(remote, name, signature_name, labels=labels, lengths_key=lengths_key, inputs=inputs, beam=beam)
+            model = RemoteModel(remote, name, signature_name, labels=labels, lengths_key=lengths_key, inputs=inputs,
+                                beam=beam, return_labels=return_labels)
         else:
             raise ValueError("only Tensorflow is currently supported for remote Services")
 
@@ -169,6 +191,14 @@ class Service(object):
 
 @exporter
 class ClassifierService(Service):
+    def __init__(self, vocabs=None, vectorizers=None, model=None):
+        super(ClassifierService, self).__init__(vocabs, vectorizers, model)
+        if hasattr(self.model, 'return_labels'):
+            self.return_labels = self.model.return_labels
+        else:
+            self.return_labels = True  # keeping the default classifier behavior
+        if not self.return_labels:
+            self.label_vocab = {index: label for index, label in enumerate(self.get_labels())}
 
     @classmethod
     def task_name(cls):
@@ -182,15 +212,27 @@ class ClassifierService(Service):
         """Take tokens and apply the internal vocab and vectorizers.  The tokens should be either a batch of text
         single utterance of type ``list``
         """
-        token_seq, mxlen, mxwlen = self.batch_input(tokens)
+        tokens_seq, mxlen, mxwlen = self.batch_input(tokens)
         self.set_vectorizer_lens(mxlen, mxwlen)
-        examples = self.vectorize(token_seq)
-        if preproc == 'server':
-            examples['tokens'] = [" ".join(x) for x in token_seq]
+        if preproc == "client":
+            examples = self.vectorize(tokens_seq)
+        elif preproc == 'server':
+            # TODO: here we allow vectorizers even for preproc=server to get `word_lengths`.
+            # vectorizers should not be available when preproc=server.
+            featurized_examples = self.vectorize(tokens_seq)
+            examples = {
+                        'tokens': [" ".join(x) for x in tokens_seq],
+                        self.model.lengths_key: featurized_examples[self.model.lengths_key]
+            }
+
         outcomes_list = self.model.predict(examples)
         results = []
         for outcomes in outcomes_list:
-            results += [list(map(lambda x: (x[0], x[1].item()), sorted(outcomes, key=lambda tup: tup[1], reverse=True)))]
+            if self.return_labels:
+                results += [list(map(lambda x: (x[0], x[1].item()), sorted(outcomes, key=lambda tup: tup[1], reverse=True)))]
+            else:
+                results += [list(map(lambda x: (self.label_vocab[x[0].item()], x[1].item()),
+                                     sorted(outcomes, key=lambda tup: tup[1], reverse=True)))]
         return results
 
 
@@ -199,7 +241,12 @@ class TaggerService(Service):
 
     def __init__(self, vocabs=None, vectorizers=None, model=None):
         super(TaggerService, self).__init__(vocabs, vectorizers, model)
-        self.label_vocab = revlut(self.get_labels())
+        if hasattr(self.model, 'return_labels'):
+            self.return_labels = self.model.return_labels
+        else:
+            self.return_labels = False  # keeping the default tagger behavior
+        if not self.return_labels:
+            self.label_vocab = revlut(self.get_labels())
 
     @classmethod
     def task_name(cls):
@@ -216,12 +263,17 @@ class TaggerService(Service):
         """
         mxlen = 0
         mxwlen = 0
+        vmxlen, vmxwlen = self.get_vectorizer_lens()
         # Input is a list of strings. (assume strings are tokens)
         if isinstance(tokens[0], six.string_types):
+            if vmxlen != -1:
+                tokens = tokens[:vmxlen]
             mxlen = len(tokens)
             tokens_seq = []
             for t in tokens:
                 mxwlen = max(mxwlen, len(t))
+                if vmxwlen != -1:
+                    t = t[:vmxwlen]
                 tokens_seq.append({'text': t})
             tokens_seq = [tokens_seq]
         else:
@@ -236,22 +288,39 @@ class TaggerService(Service):
                 if isinstance(tokens[0][0], six.string_types):
                     for utt in tokens:
                         utt_dict_seq = []
+                        if vmxlen != -1:
+                            utt = utt[:vmxlen]
                         mxlen = max(mxlen, len(utt))
                         for t in utt:
+                            if vmxwlen != -1:
+                                t = t[:vmxwlen]
                             mxwlen = max(mxwlen, len(t))
                             utt_dict_seq += [dict({'text': t})]
                         tokens_seq += [utt_dict_seq]
-                # Its already in dict form so we dont need to do anything
+                # Its already in List[List[dict]] form so just iterate to get mxlen and mxwlen
                 elif isinstance(tokens[0][0], dict):
-                    for utt in tokens:
-                        mxlen = max(mxlen, len(utt))
-                        for t in utt['text']:
-                            mxwlen = max(mxwlen, len(t))
+                    for utt_dict_seq in tokens:
+                        if vmxlen != -1:
+                            utt_dict_seq = utt_dict_seq[:vmxlen]
+                        mxlen = max(mxlen, len(utt_dict_seq))
+                        for token_dict in utt_dict_seq:
+                            text = token_dict['text']
+                            if vmxwlen != -1:
+                                text = text[:vmxwlen]
+                                token_dict['text'] = text
+                            mxwlen = max(mxwlen, len(text))
+                        tokens_seq += [utt_dict_seq]
             # If its a dict, we just wrap it up
             elif isinstance(tokens[0], dict):
+                if vmxlen != -1:
+                    tokens = tokens[:vmxlen]
                 mxlen = len(tokens)
                 for t in tokens:
-                    mxwlen = max(mxwlen, len(t))
+                    text = t['text']
+                    if vmxwlen != -1:
+                        text = text[:vmxwlen]
+                        t['text'] = text
+                    mxwlen = max(mxwlen, len(text))
                 tokens_seq = [tokens]
             else:
                 raise Exception('Unknown input format')
@@ -273,21 +342,35 @@ class TaggerService(Service):
 
         """
         preproc = kwargs.get('preproc', 'client')
+        export_mapping = kwargs.get('export_mapping', {})  # if empty dict argument was passed
+        if not export_mapping:
+            export_mapping = {'tokens': 'text'}
         label_field = kwargs.get('label', 'label')
         tokens_seq, mxlen, mxwlen = self.batch_input(tokens)
         self.set_vectorizer_lens(mxlen, mxwlen)
+        # TODO: here we allow vectorizers even for preproc=server to get `word_lengths`.
+        # vectorizers should not be available when preproc=server.
         examples = self.vectorize(tokens_seq)
         if preproc == 'server':
-            examples['tokens'] = [" ".join([y['text'] for y in x]) for x in tokens_seq]
+            unfeaturized_examples = {}
+            for exporter_field in export_mapping:
+                unfeaturized_examples[exporter_field] = [" ".join([y[export_mapping[exporter_field]]
+                                                                   for y in x]) for x in tokens_seq]
+            unfeaturized_examples[self.model.lengths_key] = examples[self.model.lengths_key]  # remote model
+            examples = unfeaturized_examples
 
         outcomes = self.model.predict(examples)
+
         outputs = []
         for i, outcome in enumerate(outcomes):
             output = []
             for j, token in enumerate(tokens_seq[i]):
                 new_token = dict()
                 new_token.update(token)
-                new_token[label_field] = self.label_vocab[outcome[j].item()]
+                if self.return_labels:
+                    new_token[label_field] = outcome[j]
+                else:
+                    new_token[label_field] = self.label_vocab[outcome[j].item()]
                 output += [new_token]
             outputs += [output]
         return outputs
