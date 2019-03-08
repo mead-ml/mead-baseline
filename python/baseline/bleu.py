@@ -170,12 +170,22 @@ def geometric_mean(precision):
 def brevity_penalty(pred_len, gold_len):
     """Calculate the brevity penalty.
 
+    Note:
+        multi-bleu.pl crashes when the hypothesis corpus is completely empty.
+        We don't want training to crash so we set the penalty to `0` because as
+        the reference corpus grows arbitrary large ((gold / pred) approach
+        infinity and the limit of e^(1 - x) as x -> infinity is 0.
+
+        We also return a np.nan for the length ratio for a visual cue that the
+        lengths were weird in the cli.
+
     :param pred_len: `int` The length of the model prediction corpus
     :param gold_len: `int` The length of the gold corpus
 
     :returns: (`float`, `float`): The brevity penalty and the ratio of predicted
         length to gold length.
     """
+    if pred_len == 0: return 0, np.nan
     ratio = pred_len / float(gold_len)
     # If ratio is <= 1.0 then pred_len <= gold_len so penalty applies.
     # Penalty is defined as e^(1 - (gold / pred)). (1 / (p / g)) = (g / p)
