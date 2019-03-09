@@ -560,10 +560,11 @@ class TSVSeqLabelReader(SeqLabelReader):
             sort_key += '_lengths'
 
         examples = []
-
+        texts = []
         with codecs.open(filename, encoding='utf-8', mode='r') as f:
             for il, line in enumerate(f):
                 label, text = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn)
+                texts.append(text)
                 if len(text) == 0:
                     continue
                 y = self.label2index[label]
@@ -578,7 +579,8 @@ class TSVSeqLabelReader(SeqLabelReader):
         return baseline.data.ExampleDataFeed(baseline.data.DictExamples(examples,
                                                                         do_shuffle=shuffle,
                                                                         sort_key=sort_key),
-                                             batchsz=batchsz, shuffle=shuffle, trim=self.trim, truncate=self.truncate)
+                                             batchsz=batchsz, shuffle=shuffle, trim=self.trim, truncate=self.truncate)\
+            , texts
 
 
 @exporter

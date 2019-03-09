@@ -404,19 +404,19 @@ class ClassifierTask(Task):
         read = self.config_params['reader'] if 'reader' in self.config_params else self.config_params['loader']
         sort_key = read.get('sort_key')
         bsz, vbsz, tbsz = Task._get_batchsz(self.config_params)
-        self.train_data = self.reader.load(
+        self.train_data, _ = self.reader.load(
             self.dataset['train_file'],
             self.feat2index,
             bsz,
             shuffle=True,
             sort_key=sort_key,
         )
-        self.valid_data = self.reader.load(
+        self.valid_data, _ = self.reader.load(
             self.dataset['valid_file'],
             self.feat2index,
             vbsz,
         )
-        self.test_data = self.reader.load(
+        self.test_data, _ = self.reader.load(
             self.dataset['test_file'],
             self.feat2index,
             tbsz,

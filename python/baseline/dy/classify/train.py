@@ -53,12 +53,16 @@ class ClassifyTrainerDynet(EpochReportingTrainer):
     def _get_batchsz(batch_dict):
         return len(batch_dict['y'])
 
-    def _step(self, loader, update, log, reporting_fns, verbose=None):
+    def _step(self, loader, update, log, reporting_fns, verbose=None, output=None, txts=None):
         steps = len(loader)
         pg = create_progress_bar(steps)
         cm = ConfusionMatrix(self.labels)
         epoch_loss = 0
         epoch_div = 0
+        handle = None
+        line_number = 0
+        if output is not None and txts is not None:
+            handle = open(output, "w")
 
         for batch_dict in pg(loader):
             dy.renew_cg()
@@ -69,6 +73,10 @@ class ClassifyTrainerDynet(EpochReportingTrainer):
             loss = dy.mean_batches(losses)
             batchsz = self._get_batchsz(batch_dict)
             lossv = loss.npvalue().item() * batchsz
+            if handle is not None:
+                for p in preds:
+                    handle.write('{},{}\n'.format(" ".join(txts[line_number]), p))
+                    line_number += 1
             epoch_loss += lossv
             epoch_div += batchsz
             _add_to_cm(cm, ys, preds.npvalue())
@@ -78,11 +86,14 @@ class ClassifyTrainerDynet(EpochReportingTrainer):
         metrics = cm.get_all_metrics()
         metrics['avg_loss'] = epoch_loss / float(epoch_div)
         verbose_output(verbose, cm)
+        if handle is not None:
+            handle.close()
         return metrics
 
     def _test(self, loader, **kwargs):
         self.model.train = False
-        return self._step(loader, lambda x: None, self._dummy_log, [], kwargs.get("verbose", None))
+        return self._step(loader, lambda x: None, self._dummy_log, [], kwargs.get('verbose'), kwargs.get('output'),
+                          kwargs.get('txts'))
 
     def _train(self, loader, **kwargs):
         self.model.train = True

@@ -46,12 +46,22 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
         pg = create_progress_bar(steps)
         cm = ConfusionMatrix(self.labels)
         verbose = kwargs.get("verbose", None)
+        output = kwargs.get('output')
+        txts = kwargs.get('txts')
+        handle = None
+        line_number = 0
+        if output is not None and txts is not None:
+            handle = open(output, "w")
 
         for batch_dict in pg(loader):
             example = self._make_input(batch_dict)
             y = example.pop('y')
             pred = self.model(example)
             loss = self.crit(pred, y)
+            if handle is not None:
+                for p in pred:
+                    handle.write('{},{}\n'.format(" ".join(txts[line_number]), p))
+                    line_number += 1
             batchsz = self._get_batchsz(batch_dict)
             total_loss += loss.item() * batchsz
             total_norm += batchsz
@@ -60,6 +70,8 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
         metrics = cm.get_all_metrics()
         metrics['avg_loss'] = total_loss / float(total_norm)
         verbose_output(verbose, cm)
+        if handle is not None:
+            handle.close()
 
         return metrics
 
