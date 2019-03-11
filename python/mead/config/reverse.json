@@ -18,7 +18,7 @@
 	}
     ],
     "preproc": {
-        "mxlen": 50
+        "mxlen": 10
     },
     "backend": "pytorch",
     "dataset": "reverse",
