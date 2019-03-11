@@ -998,7 +998,7 @@ def get_metric_cmp(metric, user_cmp=None, less_than_metrics=LESS_THAN_METRICS):
         return _try_user_cmp(user_cmp)
     if metric in less_than_metrics:
         return lt, six.MAXSIZE
-    return gt, 0
+    return gt, -six.MAXSIZE - 1
 
 
 def _try_user_cmp(user_cmp):
@@ -1008,8 +1008,8 @@ def _try_user_cmp(user_cmp):
     if user_cmp in {"le", "lte", "<="}:
         return le, six.MAXSIZE
     if user_cmp in {"ge", "gte", ">="}:
-        return ge, 0
-    return gt, 0
+        return ge, -six.MAXSIZE - 1
+    return gt, -six.MAXSIZE - 1
 
 
 @exporter
