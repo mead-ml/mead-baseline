@@ -8,7 +8,7 @@ from itertools import chain
 from collections import Counter
 import numpy as np
 import baseline.data
-from baseline.vectorizers import Dict1DVectorizer, GOVectorizer
+from baseline.vectorizers import Dict1DVectorizer, GOVectorizer, Token1DVectorizer
 from baseline.utils import import_user_module, revlut, export, optional_params, Offsets, listify
 
 __all__ = []
@@ -331,8 +331,8 @@ class SeqPredictReader(object):
 @register_reader(task='tagger', name='default')
 class CONLLSeqReader(SeqPredictReader):
 
-    def __init__(self, vectorizers, trim=False, truncate=False, **kwargs):
-        super(CONLLSeqReader, self).__init__(vectorizers, trim, truncate, **kwargs)
+    def __init__(self, vectorizers, trim=False, truncate=False, mxlen=-1, **kwargs):
+        super(CONLLSeqReader, self).__init__(vectorizers, trim, truncate, mxlen, **kwargs)
         self.named_fields = kwargs.get('named_fields', {})
 
     def read_examples(self, tsfile):
@@ -362,6 +362,67 @@ class CONLLSeqReader(SeqPredictReader):
         return examples
 
 
+def _norm_ext(ext):
+    return ext if ext.startswith('.') else '.' + ext
+
+
+@exporter
+@register_reader(task='tagger', name='parallel')
+class ParallelSeqReader(SeqPredictReader):
+    def __init__(self, vectorizers, trim=False, truncate=False, mxlen=-1, **kwargs):
+        super(ParallelSeqReader, self).__init__(vectorizers, trim, truncate, mxlen, **kwargs)
+        self.data = _norm_ext(kwargs.get('data_suffix', 'in'))
+        self.tag = _norm_ext(kwargs.get('pair_suffix', 'out'))
+        self.label_vectorizer = Token1DVectorizer(mxlen=mxlen)
+
+    def build_vocab(self, files, **kwargs):
+        vocabs = {k: Counter() for k in self.vectorizers.keys()}
+        labels = Counter()
+
+        for file_name in files:
+            if file_name is None:
+                continue
+            examples = self.read_examples(file_name + self.data)
+            tags = self.read_examples(file_name + self.tag)
+            for example, tag in zip(examples, tags):
+                labels.update(self.label_vectorizer.count(tag))
+                for k, vectorizer in self.vectorizers.items():
+                    vocab_example = vectorizer.count(example)
+                    vocabs[k].update(vocab_example)
+
+        vocabs = _filter_vocab(vocabs, kwargs.get('min_f', {}))
+        base_offset = len(self.label2index)
+        for i, k in enumerate(labels.keys()):
+            self.label2index[k] = i + base_offset
+        return vocabs
+
+    def read_examples(self, file_name):
+        with codecs.open(file_name, encoding='utf-8', mode='r') as f:
+            return [l.strip().split() for l in f]
+
+    def load(self, filename, vocabs, batchsz, shuffle=False, sort_key=None):
+
+        ts = []
+        texts = self.read_examples(filename + self.data)
+        tag_texts = self.read_examples(filename + self.tag)
+
+        if sort_key is not None and not sort_key.endswith('_lengths'):
+            sort_key += '_lengths'
+
+        for i, (example_tokens, tag_tokens) in enumerate(zip(texts, tag_texts)):
+            example = {}
+            for k, vectorizer in self.vectorizers.items():
+                example[k], lengths = vectorizer.run(example_tokens, vocabs[k])
+                if lengths is not None:
+                    example['{}_lengths'.format(k)] = lengths
+            example['y'], lengths = self.label_vectorizer.run(tag_tokens, self.label2index)
+            example['y_lengths'] = lengths
+            example['ids'] = i
+            ts.append(example)
+        examples = baseline.data.DictExamples(ts, do_shuffle=shuffle, sort_key=sort_key)
+        return baseline.data.ExampleDataFeed(examples, batchsz=batchsz, shuffle=shuffle, trim=self.trim, truncate=self.truncate), texts
+
+
 @exporter
 class SeqLabelReader(object):
 
@@ -373,6 +434,16 @@ class SeqLabelReader(object):
 
     def load(self, filename, index, batchsz, **kwargs):
         pass
+
+
+def _get_dir(files):
+    if isinstance(files, six.string_types):
+        if os.path.isdir(files):
+            base = files
+            files = filter(os.path.isfile, [os.path.join(base, x) for x in os.listdir(base)])
+        else:
+            files = [files]
+    return files
 
 
 @exporter

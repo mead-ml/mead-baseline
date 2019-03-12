@@ -127,5 +127,13 @@
     "download": "https://www.dropbox.com/s/ytrp62hoif802nt/seq2seq_reverse.tar.gz?dl=1",
     "sha1": "b6c97f628fd47f2f31b7df5a40a7555a0c7b2585",
     "label": "reverse"
+  },
+  {
+    "train_file": "train",
+    "valid_file": "dev",
+    "test_file": "test",
+    "download": "https://www.dropbox.com/s/lsrdntgu30ftg5l/snips.tar.gz?dl=1",
+    "sha1": "c3dd1bff7ad965303065549a05a7f420fc6f3279",
+    "label": "snips"
   }
 ]

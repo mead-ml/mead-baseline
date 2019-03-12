@@ -7,6 +7,7 @@ import shutil
 import requests
 import os
 import re
+from collections import defaultdict
 from baseline.mime_type import mime_type
 from baseline.utils import export, read_json, write_json
 
@@ -122,6 +123,10 @@ def update_cache(key, data_download_cache):
     write_json(dcache, os.path.join(data_download_cache, DATA_CACHE_CONF))
 
 
+def _verify_file(file_loc):
+    # dropbox doesn't give 404 in case the file does not exist, produces an HTML. The actual files are never HTMLs.
+    return os.path.exists(file_loc) and os.path.isfile(file_loc) and not mime_type(file_loc) == "text/html"
+
 @exporter
 def is_file_correct(file_loc, data_dcache=None, key=None):
     """check if the file location mentioned in the json file is correct, i.e.,
@@ -134,15 +139,23 @@ def is_file_correct(file_loc, data_dcache=None, key=None):
     data_dcache -- data download cache location (default None, for local system file paths)
     key -- URL for download (default None, for local system file paths)
     """
-
-    if os.path.exists(file_loc) and os.path.isfile(file_loc) and not mime_type(file_loc) == "text/html":
-        # dropbox doesn't give 404 in case the file does not exist, produces an HTML. The actual files are never HTMLs.
+    if _verify_file(file_loc):
         return True
-    else:
-        delete_old_copy(file_loc)
-        if key is not None:  # cache file validation
-            update_cache(key, data_dcache)
-        return False
+    # Some files are prefixes (the datasset.json has `train` and the data has `train.fr` and `train.en`)
+    dir_name = os.path.dirname(file_loc)
+    if os.path.exists(dir_name):
+        possible_files = defaultdict(list)
+        # Get all files that have file_loc as a prefix
+        for f in os.listdir(dir_name):
+            possible_files[os.path.join(dir_name, os.path.splitext(f)[0])].append(os.path.join(dir_name, f))
+        # Check all suffixed files are valid
+        if file_loc in possible_files:
+            if all(_verify_file(f) for f in possible_files[file_loc]):
+                return True
+    delete_old_copy(file_loc)
+    if key is not None:  # cache file validation
+        update_cache(key, data_dcache)
+    return False
 
 
 @exporter
