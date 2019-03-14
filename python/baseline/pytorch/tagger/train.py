@@ -5,6 +5,7 @@ from baseline.train import EpochReportingTrainer, create_trainer, register_train
 from baseline.utils import listify, to_spans, f_score, revlut, get_model_file, write_sentence_conll, get_metric_cmp
 from baseline.pytorch.torchy import *
 from baseline.pytorch.optz import OptimizerManager
+from baseline.utils import span_f1, per_entity_f1, conlleval_output
 
 logger = logging.getLogger('baseline')
 
@@ -19,8 +20,7 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
         self.span_type = kwargs.get('span_type', 'iob')
         self.verbose = kwargs.get('verbose', False)
 
-        if self.verbose:
-            logger.info('Setting span type %s', self.span_type)
+        logger.info('Setting span type %s', self.span_type)
         self.model = model
         self.idx2label = revlut(self.model.labels)
         self.clip = float(kwargs.get('clip', 5))
@@ -35,47 +35,42 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
 
     def process_output(self, guess, truth, sentence_lengths, ids, handle=None, txts=None):
 
+        # For acc
         correct_labels = 0
         total_labels = 0
         truth_n = truth.cpu().numpy()
-        # For fscore
-        gold_count = 0
-        guess_count = 0
-        overlap_count = 0
+        # For f1
+        gold_chunks = []
+        pred_chunks = []
 
         # For each sentence
         for b in range(len(guess)):
-
             sentence = guess[b].cpu().numpy()
-
             sentence_length = sentence_lengths[b]
+
             gold = truth_n[b, :sentence_length]
             correct_labels += np.sum(np.equal(sentence, gold))
             total_labels += sentence_length
-            gold_chunks = to_spans(gold, self.idx2label, self.span_type, self.verbose)
-            gold_count += len(gold_chunks)
-            guess_chunks = to_spans(sentence, self.idx2label, self.span_type, self.verbose)
-            guess_count += len(guess_chunks)
-
-            overlap_chunks = gold_chunks & guess_chunks
-            overlap_count += len(overlap_chunks)
+            gold_chunks.append(set(to_spans(gold, self.idx2label, self.span_type, self.verbose)))
+            pred_chunks.append(set(to_spans(sentence, self.idx2label, self.span_type, self.verbose)))
 
             # Should we write a file out?  If so, we have to have txts
-            if handle is not None:
-                id = ids[b]
-                txt = txts[id]
+            if handle is not None and txts is not None:
+                txt_id = ids[b]
+                txt = txts[txt_id]
                 write_sentence_conll(handle, sentence, gold, txt, self.idx2label)
 
-        return correct_labels, total_labels, overlap_count, gold_count, guess_count
+        return correct_labels, total_labels, gold_chunks, pred_chunks
 
     def _test(self, ts, **kwargs):
 
         self.model.eval()
-        total_correct = 0
         total_sum = 0
-        total_gold_count = 0
-        total_guess_count = 0
-        total_overlap_count = 0
+        total_correct = 0
+
+        gold_spans = []
+        pred_spans = []
+
         metrics = {}
         steps = len(ts)
         conll_output = kwargs.get('conll_output', None)
@@ -91,17 +86,21 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
             lengths = inputs['lengths']
             ids = inputs['ids']
             pred = self.model(inputs)
-            correct, count, overlaps, golds, guesses = self.process_output(pred, y.data, lengths, ids, handle, txts)
+            correct, count, golds, guesses = self.process_output(pred, y.data, lengths, ids, handle, txts)
             total_correct += correct
             total_sum += count
-            total_gold_count += golds
-            total_guess_count += guesses
-            total_overlap_count += overlaps
+            gold_spans.extend(golds)
+            pred_spans.extend(guesses)
 
         total_acc = total_correct / float(total_sum)
-        # Only show the fscore if requested
-        metrics['f1'] = f_score(total_overlap_count, total_gold_count, total_guess_count)
         metrics['acc'] = total_acc
+        metrics['f1'] = span_f1(gold_spans, pred_spans)
+        if self.verbose:
+            # TODO: Add programmatic access to these metrics?
+            conll_metrics = per_entity_f1(gold_spans, pred_spans)
+            conll_metrics['acc'] = total_acc * 100
+            conll_metrics['tokens'] = total_sum.item()
+            logger.info(conlleval_output(conll_metrics))
         return metrics
 
     def _train(self, ts, **kwargs):

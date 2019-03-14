@@ -13,6 +13,7 @@ import zipfile
 import platform
 import importlib
 from itertools import chain
+from collections import Counter
 from operator import lt, le, gt, ge
 from contextlib import contextmanager
 from functools import partial, update_wrapper, wraps
@@ -637,8 +638,8 @@ def beam_multinomial(k, probs):
 
 @exporter
 def fill_y(nc, yidx):
-    """Convert a `B` sparse array to a dense one, to expand labels 
-    
+    """Convert a `B` sparse array to a dense one, to expand labels
+
     :param nc: (``int``) The number of labels
     :param yidx: The sparse array of the labels
     :return: A dense array
@@ -1065,150 +1066,315 @@ def convert_iobes_conll_to_bio(ifile, ofile, fields=[-1], delim=" "):
     convert_conll_file(ifile, ofile, convert_iobes_to_bio, fields, delim)
 
 
-
 @exporter
-def to_spans(sequence, lut, span_type, verbose=False):
-    """Turn a sequence of IOB chunks into single tokens."""
+def to_spans(sequence, lut, span_type, verbose=False, delim="@"):
+    """Turn a sequence into a list of chunks.
 
+    :param sequence: `List[int]` The tag sequence.
+    :param lut: `Dict[int] -> str` A mapping for integers to tag names.
+    :param span_type: `str` The tagging scheme.
+    :param verbose: `bool` Should we output warning on illegal transitions.
+    :param delim: `str` The symbol the separates output chunks from their indices.
+
+    :returns: `List[str]` The list of entities in the order they appear. The
+        entities are in the form {chunk_type}{delim}{index}{delim}{index}...
+        for example LOC@3@4@5 means a Location chunk was at indices 3, 4, and 5
+        in the original sequence.
+    """
+    sequence = [lut[y] for y in sequence]
+    return to_chunks(sequence, span_type, verbose, delim)
+
+
+def to_chunks(sequence, span_type, verbose=False, delim="@"):
+    """Turn a sequence of tags into a list of chunks.
+
+    :param sequence: `List[str]` The tag sequence.
+    :param span_type: `str` The tagging scheme.
+    :param verbose: `bool` Should we output warning on illegal transitions.
+    :param delim: `str` The symbol the separates output chunks from their indices.
+
+    :returns: `List[str]` The list of entities in the order they appear. The
+        entities are in the form {chunk_type}{delim}{index}{delim}{index}...
+        for example LOC@3@4@5 means a Location chunk was at indices 3, 4, and 5
+        in the original sequence.
+    """
     if span_type == 'iobes':
-        return to_spans_iobes(sequence, lut, verbose)
+        return to_chunks_iobes(sequence, verbose, delim)
 
     strict_iob2 = (span_type == 'iob2') or (span_type == 'bio')
     iobtype = 2 if strict_iob2 else 1
     chunks = []
     current = None
-
-    for i, y in enumerate(sequence):
-        label = lut[y]
-
-        #if label.startswith('B-'):
+    for i, label in enumerate(sequence):
         if not label.startswith('I-') and not label == 'O':
             if current is not None:
-                chunks.append('@'.join(current))
+                chunks.append(delim.join(current))
             current = [label.replace('B-', ''), '%d' % i ]
-
         elif label.startswith('I-'):
-
             if current is not None:
                 base = label.replace('I-', '')
                 if base == current[0]:
                     current.append('%d' % i)
                 else:
-                    chunks.append('@'.join(current))
+                    chunks.append(delim.join(current))
                     if iobtype == 2 and verbose:
-                        logger.warning('Warning, type=IOB2, unexpected format ([%s] follows other tag type [%s] @ %d)' % (label, current[0], i))
+                        logger.warning('Warning: type=IOB2, unexpected format ([%s] follows other tag type [%s] @ %d)' % (label, current[0], i))
 
                     current = [base, '%d' % i]
-
             else:
                 current = [label.replace('I-', ''), '%d' % i]
                 if iobtype == 2 and verbose:
-                    logger.warning('Warning, unexpected format (I before B @ %d) %s' % (i, label))
+                    logger.warning('Warning: unexpected format (I before B @ %d) %s' % (i, label))
         else:
             if current is not None:
-                chunks.append('@'.join(current))
+                chunks.append(delim.join(current))
             current = None
-
     if current is not None:
-        chunks.append('@'.join(current))
+        chunks.append(delim.join(current))
+    return chunks
 
-    return set(chunks)
 
+def to_chunks_iobes(sequence, verbose=False, delim="@"):
+    """Turn a sequence of IOBES tags into a list of chunks.
 
-def to_spans_iobes(sequence, lut, verbose=False):
+    :param sequence: `List[str]` The tag sequence.
+    :param verbose: `bool` Should we output warning on illegal transitions.
+    :param delim: `str` The symbol the separates output chunks from their indices.
+
+    :returns: `List[str]` The list of entities in the order they appear. The
+        entities are in the form {chunk_type}{delim}{index}{delim}{index}...
+        for example LOC@3@4@5 means a Location chunk was at indices 3, 4, and 5
+        in the original sequence.
+    """
     chunks = []
     current = None
-
-    for i, y in enumerate(sequence):
-        label = lut[y]
-
+    for i, label in enumerate(sequence):
         # This indicates a multi-word chunk start
         if label.startswith('B-'):
-
             # Flush existing chunk
             if current is not None:
-                chunks.append('@'.join(current))
+                chunks.append(delim.join(current))
             # Create a new chunk
             current = [label.replace('B-', ''), '%d' % i]
-
+            if verbose:
+                # Look ahead to make sure this `B-Y` shouldn't be a `S-Y`
+                if i < len(sequence) - 1 and label[2:] != sequence[i + 1][2:]:
+                    logger.warning('Warning: Single B token chunk @ %d', i)
         # This indicates a single word chunk
         elif label.startswith('S-'):
-
             # Flush existing chunk, and since this is self-contained, we will clear current
             if current is not None:
-                chunks.append('@'.join(current))
+                chunks.append(delim.join(current))
                 current = None
-
             base = label.replace('S-', '')
             # Write this right into the chunks since self-contained
-            chunks.append('@'.join([base, '%d' % i]))
-
+            chunks.append(delim.join([base, '%d' % i]))
         # Indicates we are inside of a chunk already
         elif label.startswith('I-'):
-
             # This should always be the case!
             if current is not None:
                 base = label.replace('I-', '')
                 if base == current[0]:
                     current.append('%d' % i)
                 else:
-                    chunks.append('@'.join(current))
+                    chunks.append(delim.join(current))
                     if verbose:
                         logger.warning('Warning: I without matching previous B/I @ %d' % i)
                     current = [base, '%d' % i]
-
             else:
                 if verbose:
                     logger.warning('Warning: I without a previous chunk @ %d' % i)
                 current = [label.replace('I-', ''), '%d' % i]
-
         # We are at the end of a chunk, so flush current
         elif label.startswith('E-'):
-
             # Flush current chunk
             if current is not None:
                 base = label.replace('E-', '')
                 if base == current[0]:
                     current.append('%d' % i)
-                    chunks.append('@'.join(current))
+                    chunks.append(delim.join(current))
                     current = None
                 else:
-                    chunks.append('@'.join(current))
+                    chunks.append(delim.join(current))
                     if verbose:
-                        logger.warning('Warning: E doesnt agree with previous B/I type!')
+                        logger.warning("Warning: E doesn't agree with previous B/I type!")
                     current = [base, '%d' % i]
-                    chunks.append('@'.join(current))
+                    chunks.append(delim.join(current))
                     current = None
-
             # This should never happen
             else:
                 current = [label.replace('E-', ''), '%d' % i]
                 if verbose:
-                    logger.warning('Warning, E without previous chunk! @ %d' % i)
-                chunks.append('@'.join(current))
+                    logger.warning('Warning: E without previous chunk! @ %d' % i)
+                chunks.append(delim.join(current))
                 current = None
         # Outside
         else:
             if current is not None:
-                chunks.append('@'.join(current))
+                chunks.append(delim.join(current))
             current = None
-
     # If something is left, flush
     if current is not None:
-        chunks.append('@'.join(current))
+        chunks.append(delim.join(current))
+    return chunks
 
-    return set(chunks)
+
+@exporter
+def span_f1(golds, preds):
+    """Calculate Span level F1 score.
+
+    :param golds: `List[set[str]]` The list of the set of gold chunks.
+    :param preds: `List[set[str]]` The list of the set of predicted chunks.
+
+    :returns: `float` The f1 score.
+    """
+    overlap = sum(len(g & p) for g, p in zip(golds, preds))
+    gold_total = sum(len(g) for g in golds)
+    pred_total = sum(len(p) for p in preds)
+    return f_score(overlap, gold_total, pred_total)
+
+
+@exporter
+def per_entity_f1(golds, preds, delim="@"):
+    """Calculate Span level F1 with break downs per entity type.
+
+    :param golds: `List[set[str]]` The list of the set of gold chunks.
+    :param preds: `List[set[str]]` The list of the set of predicted chunks.
+    :param delim: `str` The symbol that separates an entity from its indices.
+
+    :returns: `dict` The metrics at a global level and fine grained entity
+        level performance.
+
+    Note:
+        This function returns most of the metrics needed for the
+        `conlleval_output`. `acc` and `tokens` (the token level accuracy
+        and the number of tokens respectively) need to be added.
+    """
+    metrics = {}
+    overlap = Counter()
+    gold_total = Counter()
+    pred_total = Counter()
+    types = set()
+    for g, p in zip(golds, preds):
+        overlaps = g & p
+        overlap['total'] += len(overlaps)
+        gold_total['total'] += len(g)
+        pred_total['total'] += len(p)
+        for o in overlaps:
+            ent = o.split(delim)[0]
+            overlap[ent] += 1
+            types.add(ent)
+        for o in g:
+            ent = o.split(delim)[0]
+            gold_total[ent] += 1
+            types.add(ent)
+        for o in p:
+            ent = o.split(delim)[0]
+            pred_total[ent] += 1
+            types.add(ent)
+    metrics['overlap'] = overlap['total']
+    metrics['gold_total'] = gold_total['total']
+    metrics['pred_total'] = pred_total['total']
+    metrics['precision'] = precision(overlap['total'], pred_total['total']) * 100
+    metrics['recall'] = recall(overlap['total'], gold_total['total']) * 100
+    metrics['f1'] = f_score(overlap['total'], gold_total['total'], pred_total['total']) * 100
+    metrics['types'] = []
+    for t in sorted(types):
+        metrics['types'].append({
+            'ent': t,
+            'precision': precision(overlap[t], pred_total[t]) * 100,
+            'recall': recall(overlap[t], gold_total[t]) * 100,
+            'f1': f_score(overlap[t], gold_total[t], pred_total[t]) * 100,
+            'count': pred_total[t]
+        })
+    return metrics
+
+
+@exporter
+def conlleval_output(results):
+    """Create conlleval formated output.
+
+    :param results: `dict` The metrics. results should have the following keys.
+        tokens: `int` The total number of tokens processed.
+        acc: `float` The token level accuracy.
+        gold_total: `int` The total number of gold entities.
+        pred_total: `int` The total number of predicted entities.
+        overlap: `int` The number of exact match entites.
+        precision: `float` The precision of all entities.
+        recall: `float` The recall of all entities.
+        f1: `float` The f1 score of all entities.
+        types: `List[dict]` A list of metrics for each entity type. Keys should include:
+            ent: `str` The name of the entity.
+            precision: `float` The precision of this entity type.
+            recall: `float` The recall of this this entity type.
+            f1: `float` The f1 score of this entity type.
+            count: `int` The number of predicted entities of this type.
+
+    :returns: `str` The formatted string ready for printing.
+
+    Note:
+        Both the metrics in the results dict and acc are expected to already be
+        multiplied by 100. The result won't look correct and a lot of the
+        metric will be cut off if they are not.
+
+        Metrics per type are output in the order they appear in the list.
+        conlleval.pl outputs the types in sorted order. To match this the list
+        in `results['types'] should be sorted.
+    """
+    s = "processed {tokens} tokens with {gold_total} phrases; found: {pred_total} phrases; correct: {overlap}.\n" \
+            "accuracy: {acc:>6.2f}%; precision: {precision:>6.2f}%; recall: {recall:>6.2f}%; FB1: {f1:>6.2f}\n"
+    t = []
+    for type_metric in results['types']:
+        t.append("{ent:>17}: precision: {precision:>6.2f}%; recall: {recall:>6.2f}%; FB1: {f1:>6.2f}  {count}".format(**type_metric))
+    s = s + "\n".join(t)
+    s = s.format(**results)
+    return s
+
+
+@exporter
+def precision(overlap_count, guess_count):
+    """Compute the precision in a zero safe way.
+
+    :param overlap_count: `int` The number of true positives.
+    :param guess_count: `int` The number of predicted positives (tp + fp)
+
+    :returns: `float` The precision.
+    """
+    if guess_count == 0: return 0.0
+    return overlap_count / float(guess_count)
+
+
+@exporter
+def recall(overlap_count, gold_count):
+    """Compute the recall in a zero safe way.
+
+    :param overlap_count: `int` The number of true positives.
+    :param gold_count: `int` The number of gold positives (tp + fn)
+
+    :returns: `float` The recall.
+    """
+    if gold_count == 0: return 0.0
+    return overlap_count / float(gold_count)
 
 
 @exporter
 def f_score(overlap_count, gold_count, guess_count, f=1):
+    """Compute the f1 score.
+
+    :param overlap_count: `int` The number of true positives.
+    :param gold_count: `int` The number of gold positives (tp + fn)
+    :param guess_count: `int` The number of predicted positives (tp + fp)
+    :param f: `int` The beta term to weight precision vs recall.
+
+    :returns: `float` The f score
+    """
     beta_sq = f*f
     if guess_count == 0: return 0.0
-    precision = overlap_count / float(guess_count)
-    recall = overlap_count / float(gold_count)
-    if precision == 0.0 or recall == 0.0:
+    p = precision(overlap_count, guess_count)
+    r = recall(overlap_count, gold_count)
+    if p == 0.0 or r == 0.0:
         return 0.0
-    f = (1. + beta_sq) * (precision * recall) / (beta_sq * precision + recall)
+    f = (1. + beta_sq) * (p * r) / (beta_sq * p + r)
     return f
 
 

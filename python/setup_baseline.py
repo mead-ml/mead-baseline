@@ -79,7 +79,8 @@ def main():
                 'mead-train = mead.trainer:main',
                 'mead-export = mead.export:main',
                 'mead-clean = mead.clean:main',
-                'bleu = baseline.bleu:main'
+                'bleu = baseline.bleu:main',
+                'conlleval = baseline.conlleval:main',
             ]
         },
         classifiers={

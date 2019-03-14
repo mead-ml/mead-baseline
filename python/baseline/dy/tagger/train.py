@@ -6,7 +6,7 @@ import numpy as np
 from baseline.dy.optz import *
 from baseline.progress import create_progress_bar
 from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
-from baseline.utils import listify, get_model_file, revlut, to_spans, f_score, write_sentence_conll, get_metric_cmp
+from baseline.utils import listify, get_model_file, revlut, to_spans, f_score, write_sentence_conll, get_metric_cmp, span_f1, per_entity_f1, conlleval_output
 
 logger = logging.getLogger('baseline')
 
@@ -19,6 +19,7 @@ class TaggerTrainerDyNet(EpochReportingTrainer):
         super(TaggerTrainerDyNet, self).__init__()
 
         self.span_type = kwargs.get('span_type', 'iob')
+        logger.info('Setting span type %s', self.span_type)
         self.gpu = not bool(kwargs.get('nogpu', False))
         self.model = model
         self.idx2label = revlut(self.model.labels)
@@ -26,6 +27,7 @@ class TaggerTrainerDyNet(EpochReportingTrainer):
         self.labels = model.labels
         self.optimizer = OptimizerManager(model, **kwargs)
         self.nsteps = kwargs.get('nsteps', six.MAXSIZE)
+        self.verbose = kwargs.get('verbose', False)
 
     # Guess is a list over time
     def process_output(self, guess, truth, sentence_lengths, ids, handle=None, txts=None):
@@ -34,9 +36,8 @@ class TaggerTrainerDyNet(EpochReportingTrainer):
         total_labels = 0
         truth_n = truth
         # For fscore
-        gold_count = 0
-        guess_count = 0
-        overlap_count = 0
+        gold_chunks = []
+        pred_chunks = []
         # For each sentence
         for b in range(len(guess)):
 
@@ -46,21 +47,15 @@ class TaggerTrainerDyNet(EpochReportingTrainer):
             sentence = sentence[:sentence_length]
             correct_labels += np.sum(np.equal(sentence, gold))
             total_labels += sentence_length
-            gold_chunks = to_spans(gold, self.idx2label, self.span_type)
-            gold_count += len(gold_chunks)
-            guess_chunks = to_spans(sentence, self.idx2label, self.span_type)
-            guess_count += len(guess_chunks)
-
-            overlap_chunks = gold_chunks & guess_chunks
-            overlap_count += len(overlap_chunks)
-
+            gold_chunks.append(set(to_spans(gold, self.idx2label, self.span_type)))
+            pred_chunks.append(set(to_spans(sentence, self.idx2label, self.span_type)))
             # Should we write a file out?  If so, we have to have txts
             if handle is not None:
                 id = ids[b]
                 txt = txts[id]
                 write_sentence_conll(handle, sentence, gold, txt, self.idx2label)
 
-        return correct_labels, total_labels, overlap_count, gold_count, guess_count
+        return correct_labels, total_labels, gold_chunks, pred_chunks
 
 
     def _test(self, ts, **kwargs):
@@ -68,9 +63,10 @@ class TaggerTrainerDyNet(EpochReportingTrainer):
         self.model.train = False
         total_correct = 0
         total_sum = 0
-        total_gold_count = 0
-        total_guess_count = 0
-        total_overlap_count = 0
+
+        gold_spans = []
+        pred_spans = []
+
         metrics = {}
         steps = len(ts)
         conll_output = kwargs.get('conll_output', None)
@@ -85,17 +81,21 @@ class TaggerTrainerDyNet(EpochReportingTrainer):
             ids = batch_dict['ids']
             y = batch_dict['y']
             pred = self.model.predict(batch_dict)
-            correct, count, overlaps, golds, guesses = self.process_output(pred, y, lengths, ids, handle, txts)
+            correct, count, golds, guesses = self.process_output(pred, y, lengths, ids, handle, txts)
             total_correct += correct
             total_sum += count
-            total_gold_count += golds
-            total_guess_count += guesses
-            total_overlap_count += overlaps
+            gold_spans.extend(golds)
+            pred_spans.extend(guesses)
 
         total_acc = total_correct / float(total_sum)
-        # Only show the fscore if requested
-        metrics['f1'] = f_score(total_overlap_count, total_gold_count, total_guess_count)
         metrics['acc'] = total_acc
+        # Only show the fscore if requested
+        metrics['f1'] = span_f1(gold_spans, pred_spans)
+        if self.verbose:
+            conll_metrics = per_entity_f1(gold_spans, pred_spans)
+            conll_metrics['acc'] = total_acc * 100
+            conll_metrics['tokens'] = total_sum
+            logger.info(conlleval_output(conll_metrics))
         return metrics
 
     @staticmethod
