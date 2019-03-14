@@ -358,7 +358,8 @@ class CONLLSeqReader(SeqPredictReader):
                 else:
                     examples.append(tokens)
                     tokens = []
-
+            if len(tokens) > 0:
+                examples.append(tokens)
         return examples
 
 
