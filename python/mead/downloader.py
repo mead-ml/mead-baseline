@@ -1,3 +1,5 @@
+import os
+import re
 import gzip
 import logging
 import tarfile
@@ -5,9 +7,6 @@ import zipfile
 import hashlib
 import shutil
 import requests
-import os
-import re
-from collections import defaultdict
 from baseline.mime_type import mime_type
 from baseline.utils import export, read_json, write_json
 
