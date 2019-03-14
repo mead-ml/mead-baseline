@@ -581,7 +581,7 @@ class EncoderDecoderTask(Task):
     def initialize(self, embeddings):
         embeddings = read_config_file_or_json(embeddings, 'embeddings')
         embeddings_set = index_by_label(embeddings)
-        self.dataset = DataDownloader(self.dataset, self.data_download_cache, True).download()
+        self.dataset = DataDownloader(self.dataset, self.data_download_cache).download()
         print_dataset_info(self.dataset)
         vocab1, vocab2 = self.reader.build_vocabs(
             [self.dataset['train_file'], self.dataset['valid_file'], self.dataset['test_file']],

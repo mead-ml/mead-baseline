@@ -77,12 +77,20 @@ Out default CRF model can be run with the following:
 python trainer.py --config config/ontonotes.json
 ```
 
+### SNIPS NLU slot filling
+
+SNIPS NLU is data created by SNIPS for benchmarking chatbots systems. It includes intent detection and slot filling, This is the slot filling model and can be trained with the following:
+
+```
+python trainer.py --config config/snips.json
+```
+
 ### Model Performance
 
 We have done extensive testing on our tagger architecture.  Here are the results after runing each model 10 times for each configuration.  All NER models are trained with IOBES tags.  The ELMo configurations are done using our [ELMo Embeddings addon](../python/addons/embed_elmo.py).
 
-| config                                                       | dataset   | model                | metric | mean  |  std  | min   | max   |
-| ------------------------------------------------------------ | --------- | -------------------- |------- | ------| ----- | ----- | ----- |
+| Config                                                       | Dataset   | Model                | Metric | Mean  |  Std  | Min   | Max   |
+|:-------------------------------------------------------------|:----------|:---------------------|-------:|------:|------:|------:|------:|
 | [twpos.json](../python/mead/config/twpos.json)               | twpos-v03 | CNN-BLSTM-CRF        |    acc | 90.75 | 0.140 | 90.53 | 91.02 |
 | [conll.json](../python/mead/config/conll.json)               | CONLL2003 | CNN-BLSTM-CRF        |     f1 | 91.47 | 0.247 | 91.15 | 92.00 |
 | [conll-no-crf.json](../python/mead/config/conll-no-crf.json) | CONLL2003 | CNN-BLSTM-constrain  |     f1 | 91.44 | 0.232 | 91.17 | 91.90 |
@@ -90,6 +98,7 @@ We have done extensive testing on our tagger architecture.  Here are the results
 | [wnut.json](../python/mead/config/wnut.json)                 | WNUT17    | CNN-BLSTM-CRF        |     f1 | 40.33 | 1.13  | 38.38 | 41.90 |
 | [wnut-no-crf.json](../python/mead/config/wnut-no-crf.json)   | WNUT17    | CNN-BLSTM-constrain  |     f1 | 40.59 | 1.06  | 37.96 | 41.71 |
 | [ontonotes.json](../python/mead/config/ontonotes.json)       | ONTONOTES | CNN-BLSTM-CRF        |     f1 | 87.41 | 0.166 | 87.14 | 87.74 |
+| [snips.json](../python/mead/config/snips.json)               | SNIPS     | CNN-BLSTM-CRF        |     f1 | 95.55 | 0.394 | 94.85 | 96.07 |
 
 ### Testing a trained model on your data
 
