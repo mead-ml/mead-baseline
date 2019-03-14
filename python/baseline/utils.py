@@ -146,17 +146,6 @@ def suppress_output():
         yield
 
 
-class JSONFormatter(logging.Formatter):
-    """Format message as JSON if possible, log normally otherwise."""
-    def format(self, record):
-        try:
-            if isinstance(record.msg, (list, dict)):
-                return json.dumps(record.msg)
-        except TypeError:
-            pass
-        return super(JSONFormatter, self).format(record)
-
-
 @exporter
 class Colors(object):
     GREEN = '\033[32;1m'
@@ -172,6 +161,28 @@ def color(msg, color):
     if platform.system() == 'Windows':
         return msg
     return u"{}{}{}".format(color, msg, Colors.RESTORE)
+
+
+class ColoredFormatter(logging.Formatter):
+    COLORS = {
+        'WARNING': Colors.YELLOW,
+    }
+
+    def format(self, record):
+        if record.levelname in self.COLORS:
+            return color(super(ColoredFormatter, self).format(record), self.COLORS[record.levelname])
+        return super(ColoredFormatter, self).format(record)
+
+
+class JSONFormatter(ColoredFormatter):
+    """Format message as JSON if possible, log normally otherwise."""
+    def format(self, record):
+        try:
+            if isinstance(record.msg, (list, dict)):
+                return json.dumps(record.msg)
+        except TypeError:
+            pass
+        return super(JSONFormatter, self).format(record)
 
 
 @exporter
