@@ -341,7 +341,7 @@ class CONLLSeqReader(SeqPredictReader):
         examples = []
 
         with codecs.open(tsfile, encoding='utf-8', mode='r') as f:
-            for line in f:
+            for i, line in enumerate(f):
                 states = re.split("\s", line.strip())
 
                 token = dict()
@@ -356,6 +356,8 @@ class CONLLSeqReader(SeqPredictReader):
                     tokens.append(token)
 
                 else:
+                    if len(tokens) == 0:
+                        raise Exception("Unexpected empty line ({}) in {}".format(i, tsfile))
                     examples.append(tokens)
                     tokens = []
             if len(tokens) > 0:
