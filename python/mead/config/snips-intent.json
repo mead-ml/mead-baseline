@@ -17,8 +17,7 @@
     }
   ],
   "preproc": {
-    "rev": false,
-    "clean": true
+    "rev": false
   },
   "backend": "tensorflow",
   "dataset": "snips",

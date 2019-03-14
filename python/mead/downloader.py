@@ -143,15 +143,11 @@ def is_file_correct(file_loc, data_dcache=None, key=None):
         return True
     # Some files are prefixes (the datasset.json has `train` and the data has `train.fr` and `train.en`)
     dir_name = os.path.dirname(file_loc)
+    # When we are using this for checking embeddings file_loc is a url so we need this check.
     if os.path.exists(dir_name):
-        possible_files = defaultdict(list)
-        # Get all files that have file_loc as a prefix
-        for f in os.listdir(dir_name):
-            possible_files[os.path.join(dir_name, os.path.splitext(f)[0])].append(os.path.join(dir_name, f))
-        # Check all suffixed files are valid
-        if file_loc in possible_files:
-            if all(_verify_file(f) for f in possible_files[file_loc]):
-                return True
+        files = [os.path.join(dir_name, f) for f in os.listdir(dir_name) if os.path.join(dir_name, f).startswith(file_loc)]
+        if files and all(_verify_file(f) for f in files):
+            return True
     delete_old_copy(file_loc)
     if key is not None:  # cache file validation
         update_cache(key, data_dcache)
