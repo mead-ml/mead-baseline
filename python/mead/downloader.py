@@ -1,3 +1,5 @@
+from six.moves.urllib.request import urlretrieve
+
 import os
 import re
 import gzip
@@ -6,8 +8,8 @@ import tarfile
 import zipfile
 import hashlib
 import shutil
-import requests
 from baseline.mime_type import mime_type
+from baseline.progress import create_progress_bar
 from baseline.utils import export, read_json, write_json
 
 __all__ = []
@@ -74,28 +76,18 @@ def extractor(filepath, cache_dir, extractor_func):
 
 @exporter
 def web_downloader(url):
-    from baseline.progress import create_progress_bar
-    r = requests.get(url, stream=True)
-    if r.status_code != 200:
-        raise RuntimeError("The file can not be downloaded")
+    # Use a class to simulate the nonlocal keyword in 2.7
+    class Context: pg = None
+    def _report_hook(count, block_size, total_size):
+        if Context.pg is None:
+            length = int((total_size + block_size - 1) / float(block_size)) if total_size != -1 else 1
+            Context.pg = create_progress_bar(length)
+        Context.pg.update()
+
     path_to_save = "/tmp/data.dload-{}".format(os.getpid())
     try:
-        logger.info("downloading {}".format(url))
-        with open(path_to_save, 'wb') as f:
-            total_length = r.headers.get('content-length', None)
-            if total_length is not None:
-                total_length = int(total_length)
-                chunk_size = 8*1024  # experimented with a couple, this seemed fastest.
-                pg = create_progress_bar(total_length/chunk_size)
-                for chunk in r.iter_content(chunk_size=chunk_size):
-                    if chunk:
-                        f.write(chunk)
-                        pg.update()
-                        f.flush()
-                pg.done()
-            else:
-                raise RuntimeWarning("Total length can not be calculated, aborting download")
-
+        path_to_save, _ = urlretrieve(url, path_to_save, reporthook=_report_hook)
+        Context.pg.done()
     except:  # this is too broad but there are too many exceptions to handle separately
         raise RuntimeError("failed to download data from [url]: {} [to]: {}".format(url, path_to_save))
     return path_to_save

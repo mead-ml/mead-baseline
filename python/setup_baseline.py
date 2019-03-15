@@ -68,7 +68,6 @@ def main():
         install_requires=[
             'numpy',
             'six',
-            'requests',
         ],
         extras_require={
             'test': ['pytest', 'mock', 'contextdecorator', 'pytest-forked'],
