@@ -1,5 +1,7 @@
 import numpy as np
+import json
 from baseline.utils import import_user_module
+from six.moves.http_client import HTTPConnection
 
 
 class RemoteModelTensorFlowREST(object):
@@ -22,6 +24,8 @@ class RemoteModelTensorFlowREST(object):
         on the `return_labels` parameter in exporters
         """
         self.remote = remote
+        if len(self.remote.split(':')) != 3:
+            raise ValueError("remote has to have the form <host_name>:<port>")
         self.name = name
         self.signature = signature
         self.lengths_key = lengths_key
@@ -44,17 +48,21 @@ class RemoteModelTensorFlowREST(object):
         :param examples: The input examples
         :return: The outcomes
         """
-        import requests
 
         valid_example = all(k in examples for k in self.input_keys)
         if not valid_example:
             raise ValueError("should have keys: " + ",".join(self.input_keys))
 
         v_str = '/versions/{}'.format(self.version) if self.version is not None else ''
-        url = '{}/v1/models/{}{}:predict'.format(self.remote, self.name, v_str)
+        path = '/v1/models/{}{}:predict'.format(self.name, v_str)
         request = self.create_request(examples)
-        outcomes_list = requests.post(url, json=request)
-        outcomes_list = outcomes_list.json()
+        headers = {'Content-type': 'application/json' }
+        
+        _, hostname, port = self.remote.split(':')
+        conn = HTTPConnection(hostname.replace('//', ''), port)
+        conn.request('POST', path, json.dumps(request), headers)
+        response = conn.getresponse().read()
+        outcomes_list = json.loads(response)
         if "error" in outcomes_list:
             raise ValueError("remote server returns error: {0}".format(outcomes_list["error"]))
         outcomes_list = outcomes_list["outputs"]
