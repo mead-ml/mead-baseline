@@ -58,7 +58,8 @@ def run_job(
 
     write_json(config_params, 'config.json')
     logs = create_logs(label, mead_logs, hpctl_logs)
-    task = mead.Task.get_task_specific(task_name, logs, settings)
+    mead.utils.configure_logger(logs)
+    task = mead.Task.get_task_specific(task_name, settings)
     task.read_config(config_params, datasets, config_file=deepcopy(config_params))
     task.initialize(embeddings)
     task.train()

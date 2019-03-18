@@ -5,6 +5,9 @@ from mead.utils import convert_path
 from hpctl.utils import hpctl_path
 from hpctl.core import search, find, list_names, serve, launch, verify
 
+import warnings
+warnings.simplefilter("ignore")
+
 
 def add_common_args(p):
     p.add_argument(

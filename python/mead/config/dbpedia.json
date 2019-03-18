@@ -36,7 +36,7 @@
 	"label": "glove-42B"
     },
     "train": {
-	"epochs": 1,
+	"epochs": 80,
 	"optim": "sgd",
 	"eta": 0.02,
 	"early_stopping_metric": "acc"

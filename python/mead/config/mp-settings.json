@@ -2,14 +2,14 @@
     "datacache": "~/.bl-data",
     "reporting_hooks":{
         "xpctl": {
-            "cred": "~/xpctlcred.json.remote",
+            "cred": "~/xpctlcred.json",
             "module": "reporting_xpctl"
         }
     },
     "hpctl": {
         "backend": {
             "type": "mp",
-            "real_gpus": [0]
+            "real_gpus": [0, 1, 2, 3, 4]
         },
         "logging": {
             "host": "localhost",
@@ -18,8 +18,9 @@
         "frontend": {
             "type": "console",
             "train": "avg_loss",
-            "dev": "f1",
-            "test": "f1"
-        }
+            "dev": "acc",
+            "test": "acc"
+        },
+        "root": "/data/hpctl/dbpedia"
     }
 }
