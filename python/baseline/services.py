@@ -152,16 +152,7 @@ class Service(object):
 
         import_user_module('baseline.{}.embeddings'.format(be))
         import_user_module('baseline.{}.{}'.format(be, cls.task_name()))
-        if not remote and kwargs.get('device', 'gpu') == 'cpu' and be == 'tf':
-            logging.info("Loading TensorFlow graph locally on CPU")
-            import tensorflow as tf
-            g = tf.Graph()
-            with g.as_default():
-                sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True, device_count={'CPU': 1, 'GPU': 0}))
-                kwargs['sess'] = sess
-                model = load_model_for(cls.task_name(), model_basename, **kwargs)
-        else:
-            model = load_model_for(cls.task_name(), model_basename, **kwargs)
+        model = load_model_for(cls.task_name(), model_basename, **kwargs)
         return cls(vocabs, vectorizers, model)
 
     @staticmethod

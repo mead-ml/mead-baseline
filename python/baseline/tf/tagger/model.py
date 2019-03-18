@@ -100,6 +100,7 @@ class TaggerModelBase(TaggerModel):
         self.save_values(basename)
 
     @classmethod
+    @tf_device_wrapper
     def load(cls, basename, **kwargs):
         """Reload the model from a graph file and a checkpoint
         The model that is loaded is independent of the pooling and stacking layers, making this class reusable
@@ -119,22 +120,24 @@ class TaggerModelBase(TaggerModel):
             logger.warning("Loaded model is from baseline version %s, running version is %s", _state['version'], __version__)
         _state['sess'] = kwargs.pop('sess', tf.Session())
         embeddings_info = _state.pop("embeddings")
-        embeddings = reload_embeddings(embeddings_info, basename)
-        for k in embeddings_info:
-            if k in kwargs:
-                _state[k] = kwargs[k]
-        labels = read_json("{}.labels".format(basename))
-        if _state.get('constraint') is not None:
-            # Dummy constraint values that will be filled in by the check pointing
-            _state['constraint'] = [tf.zeros((len(labels), len(labels))) for _ in range(2)]
-        model = cls.create(embeddings, labels, **_state)
-        model._state = _state
-        model.create_loss()
-        if kwargs.get('init', True):
-            model.sess.run(tf.global_variables_initializer())
-        model.saver = tf.train.Saver()
-        model.saver.restore(model.sess, basename)
-        return model
+
+        with _state['sess'].graph.as_default():
+            embeddings = reload_embeddings(embeddings_info, basename)
+            for k in embeddings_info:
+                if k in kwargs:
+                    _state[k] = kwargs[k]
+            labels = read_json("{}.labels".format(basename))
+            if _state.get('constraint') is not None:
+                # Dummy constraint values that will be filled in by the check pointing
+                _state['constraint'] = [tf.zeros((len(labels), len(labels))) for _ in range(2)]
+            model = cls.create(embeddings, labels, **_state)
+            model._state = _state
+            model.create_loss()
+            if kwargs.get('init', True):
+                model.sess.run(tf.global_variables_initializer())
+            model.saver = tf.train.Saver()
+            model.saver.restore(model.sess, basename)
+            return model
 
     def save_using(self, saver):
         self.saver = saver
@@ -247,14 +250,17 @@ class TaggerModelBase(TaggerModel):
         model.embeddings = embeddings
         model._record_state(**kwargs)
         model.lengths_key = kwargs.get('lengths_key')
-        model.lengths = kwargs.get('lengths', tf.placeholder(tf.int32, [None], name="lengths"))
+
         model.labels = labels
         nc = len(labels)
-        model.y = kwargs.get('y', tf.placeholder(tf.int32, [None, None], name="y"))
+
         # This only exists to make exporting easier
         model.pdrop_value = kwargs.get('dropout', 0.5)
         model.dropin_value = kwargs.get('dropin', {})
         model.sess = kwargs.get('sess', tf.Session())
+
+        model.lengths = kwargs.get('lengths', tf.placeholder(tf.int32, [None], name="lengths"))
+        model.y = kwargs.get('y', tf.placeholder(tf.int32, [None, None], name="y"))
         model.pdrop_in = kwargs.get('dropin', 0.0)
         model.labels = labels
         model.crf = bool(kwargs.get('crf', False))

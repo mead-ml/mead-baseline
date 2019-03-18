@@ -209,6 +209,7 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
         self._unserializable = ['tgt']
 
     @classmethod
+    @tf_device_wrapper
     def load(cls, basename, **kwargs):
         _state = read_json('{}.state'.format(basename))
         if __version__ != _state['version']:

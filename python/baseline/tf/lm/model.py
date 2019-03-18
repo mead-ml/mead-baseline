@@ -266,6 +266,7 @@ class LanguageModelBase(LanguageModel):
         return tf.layers.dropout(word_embeddings, rate=self.pdrop_value, training=TRAIN_FLAG())
 
     @classmethod
+    @tf_device_wrapper
     def load(cls, basename, **kwargs):
         _state = read_json('{}.state'.format(basename))
         if __version__ != _state['version']:
