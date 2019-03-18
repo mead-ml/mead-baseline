@@ -89,4 +89,18 @@ Once you have an exported model and the docker image pulled, you can load it in 
 ```
 docker run -it --name tf_classify -p 9000:9000 -v ./models:/models/ epigramai/model-server:light --port=9000 --model_name=tf_classify --model_base_path=/models/
 
-```  
+```
+
+
+## Paths
+
+A few commandline arguments to `mead-export` can be used to control what the output paths look like.
+
+The first is `--output_dir` This controls the root of the exported model. The argument `--project` creates a subdirectory for the model and `--name` can be used to create a second one. `--is_remote` is used to split the export into a `client` and `server` trees. Here are a few examples. When neither a `--project` nor as `--name` are given then a directory with the same name is the basename of the `--output_dir` is created. `--model_version` is the last directory.
+
+ * `mead-export ... --output_dir path/to/models --is_remote true --model_version 3` -> `path/to/models/client/models/3` and `path/to/models/server/models/3`
+ * `mead-export ... --output_dir path/to/models --is_remote false --model_version 19` -> `path/to/models/19`
+ * `mead-export ... --output_dir path/to/models --project proj --model_version 2` -> `path/to/models/client/proj/2` and `path/to/models/server/proj/2`
+ * `mead-export ... --output_dir path/to/models --project example --name bob --model_version 1 --is_remote false` -> `path/to/models/example/bob/1`
+
+`--model_version` can be set to `None` and it will search in the export dir and use a model number one larger than the largest one currently in there.
