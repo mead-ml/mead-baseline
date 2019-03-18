@@ -37,12 +37,10 @@ def tf_device_wrapper(func):
     def with_device(*args, **kwargs):
         device = kwargs.get('device', 'default')
         if device == 'cpu' and 'sess' not in kwargs:
-            print('WRAPPING')
             g = tf.Graph()
             sess = tf.Session(graph=g, config=tf.ConfigProto(allow_soft_placement=True, device_count={'CPU': 1, 'GPU': 0}))
             kwargs['sess'] = sess
             return func(*args, **kwargs)
-        print('NOT WRAPPING')
         return func(*args, **kwargs)
     return with_device
 
