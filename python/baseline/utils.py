@@ -673,7 +673,7 @@ def convert_iob_to_bio(ifile, ofile):
 
 
 @exporter
-def convert_bio_to_iobes(ifile, ofile):
+def convert_bio_to_iobes(ifile, ofile, fields=[-1]):
 
     with open(ifile, 'r') as reader, open(ofile, 'w') as writer:
         lines = [line.strip() for line in reader]
@@ -683,37 +683,38 @@ def convert_bio_to_iobes(ifile, ofile):
             if len(tokens) == 0:
                 writer.write('\n')
                 continue
+            for field in fields:
+                label = tokens[field]
 
-            label = tokens[-1]
+                if i + 1 != len(lines):
+                    next_tokens = lines[i+1].split()
+                    if len(next_tokens) > 1:
+                         next_tag = next_tokens[-1]
+                    else:
+                        next_tag = None
 
-            if i + 1 != len(lines):
-                next_tokens = lines[i+1].split()
-                if len(next_tokens) > 1:
-                     next_tag = next_tokens[-1]
-                else:
-                    next_tag = None
-
-            # Nothing to do for label == 'O'
-            if label == 'O':
-                updated_label = label
-
-            # It could be S
-            elif label[0] == 'B':
-                if next_tag and next_tag[0] == 'I' and next_tag[2:] == label[2:]:
+                # Nothing to do for label == 'O'
+                if label == 'O':
                     updated_label = label
-                else:
-                    updated_label = label.replace('B-', 'S-')
 
-            elif label[0] == 'I':
-                if next_tag and next_tag[0] == 'I':
-                    updated_label = label
-                else:
-                    updated_label = label.replace('I-', 'E-')
-            else:
-                raise Exception('Invalid IOBES format!')
+                # It could be S
+                elif label[0] == 'B':
+                    if next_tag and next_tag[0] == 'I' and next_tag[2:] == label[2:]:
+                        updated_label = label
+                    else:
+                        updated_label = label.replace('B-', 'S-')
 
-            writer.write(' '.join(tokens[:-1]) + ' ' + updated_label + '\n')
-            prev = tokens[-1]
+                elif label[0] == 'I':
+                    if next_tag and next_tag[0] == 'I':
+                        updated_label = label
+                    else:
+                        updated_label = label.replace('I-', 'E-')
+                else:
+                    raise Exception('Invalid IOBES format!')
+                tokens[field] = updated_label
+
+            writer.write(' '.join(tokens)+'\n')
+
 
 
 @exporter

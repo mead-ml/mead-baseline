@@ -9,6 +9,7 @@ parser.add_argument('--train_file', help='Training file relative name', default=
 parser.add_argument('--valid_file', help='Validation file relative name', default='eng.testa')
 parser.add_argument('--test_file', help='Test file relative name', default='eng.testb')
 parser.add_argument('--suffix', help='Suffix to append', default='.iobes')
+parser.add_argument('--fields', help='fields to convert to iobes', default=[-1], nargs='+', required=False)
 
 args = parser.parse_args()
 
