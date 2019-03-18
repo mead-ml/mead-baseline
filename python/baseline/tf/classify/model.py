@@ -22,6 +22,7 @@ from baseline.tf.tfy import (
     parallel_conv,
     reload_embeddings,
     new_placeholder_dict,
+    tf_device_wrapper
 )
 
 
@@ -277,6 +278,7 @@ class ClassifierModelBase(ClassifierModel):
         return self.labels
 
     @classmethod
+    @tf_device_wrapper
     def load(cls, basename, **kwargs):
         """Reload the model from a graph file and a checkpoint
 
@@ -296,24 +298,25 @@ class ClassifierModelBase(ClassifierModel):
         if __version__ != _state['version']:
             logger.warning("Loaded model is from baseline version %s, running version is %s", _state['version'], __version__)
         _state['sess'] = kwargs.pop('sess', tf.Session())
-        embeddings_info = _state.pop('embeddings')
-        embeddings = reload_embeddings(embeddings_info, basename)
-        # If there is a kwarg that is the same name as an embedding object that
-        # is taken to be the input of that layer. This allows for passing in
-        # subgraphs like from a tf.split (for data parallel) or preprocessing
-        # graphs that convert text to indices
-        for k in embeddings_info:
-            if k in kwargs:
-                _state[k] = kwargs[k]
-        # TODO: convert labels into just another vocab and pass number of labels to models.
-        labels = read_json("{}.labels".format(basename))
-        model = cls.create(embeddings, labels, **_state)
-        model._state = _state
-        if kwargs.get('init', True):
-            model.sess.run(tf.global_variables_initializer())
-        model.saver = tf.train.Saver()
-        model.saver.restore(model.sess, basename)
-        return model
+        with _state['sess'].graph.as_default():
+            embeddings_info = _state.pop('embeddings')
+            embeddings = reload_embeddings(embeddings_info, basename)
+            # If there is a kwarg that is the same name as an embedding object that
+            # is taken to be the input of that layer. This allows for passing in
+            # subgraphs like from a tf.split (for data parallel) or preprocessing
+            # graphs that convert text to indices
+            for k in embeddings_info:
+                if k in kwargs:
+                    _state[k] = kwargs[k]
+            # TODO: convert labels into just another vocab and pass number of labels to models.
+            labels = read_json("{}.labels".format(basename))
+            model = cls.create(embeddings, labels, **_state)
+            model._state = _state
+            if kwargs.get('init', True):
+                model.sess.run(tf.global_variables_initializer())
+            model.saver = tf.train.Saver()
+            model.saver.restore(model.sess, basename)
+            return model
 
     @property
     def lengths_key(self):

@@ -5,7 +5,7 @@ from tensorflow.python.layers import core as layers_core
 from baseline.utils import lookup_sentence, beam_multinomial, Offsets, read_json, import_user_module
 from baseline.utils import transition_mask as transition_mask_np
 import math
-
+from functools import wraps
 BASELINE_TF_TRAIN_FLAG = None
 
 
@@ -31,6 +31,18 @@ def new_placeholder_dict(train):
         return {BASELINE_TF_TRAIN_FLAG: 1}
     return {}
 
+
+def tf_device_wrapper(func):
+    @wraps(func)
+    def with_device(*args, **kwargs):
+        device = kwargs.get('device', 'default')
+        if device == 'cpu' and 'sess' not in kwargs:
+            g = tf.Graph()
+            sess = tf.Session(graph=g, config=tf.ConfigProto(allow_soft_placement=True, device_count={'CPU': 1, 'GPU': 0}))
+            kwargs['sess'] = sess
+            return func(*args, **kwargs)
+        return func(*args, **kwargs)
+    return with_device
 
 def reload_embeddings(embeddings_dict, basename):
     embeddings = {}

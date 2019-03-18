@@ -5,6 +5,7 @@ import pickle
 from collections import defaultdict
 import numpy as np
 import baseline
+import logging
 from baseline.utils import (
     export,
     unzip_files,
@@ -20,6 +21,7 @@ from baseline.utils import (
     normalize_backend,
 )
 from baseline.model import load_model_for
+logger = logging.getLogger('baseline')
 
 
 __all__ = []
@@ -139,6 +141,7 @@ class Service(object):
         remote = kwargs.get("remote", None)
         name = kwargs.get("name", None)
         if remote:
+            logging.debug("loading remote model")
             beam = kwargs.get('beam', 10)
             model = Service._create_remote_model(directory, be, remote, name, cls.signature_name(), beam,
                                                  preproc=kwargs.get('preproc', 'client'))
