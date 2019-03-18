@@ -5,6 +5,7 @@ import pickle
 from collections import defaultdict
 import numpy as np
 import baseline
+import logging
 from baseline.utils import (
     export,
     unzip_files,
@@ -20,6 +21,7 @@ from baseline.utils import (
     normalize_backend,
 )
 from baseline.model import load_model_for
+logger = logging.getLogger('baseline')
 
 
 __all__ = []
@@ -139,6 +141,7 @@ class Service(object):
         remote = kwargs.get("remote", None)
         name = kwargs.get("name", None)
         if remote:
+            logging.debug("loading remote model")
             beam = kwargs.get('beam', 10)
             model = Service._create_remote_model(directory, be, remote, name, cls.signature_name(), beam,
                                                  preproc=kwargs.get('preproc', 'client'))
@@ -149,7 +152,16 @@ class Service(object):
 
         import_user_module('baseline.{}.embeddings'.format(be))
         import_user_module('baseline.{}.{}'.format(be, cls.task_name()))
-        model = load_model_for(cls.task_name(), model_basename, **kwargs)
+        if not remote and kwargs.get('device', 'gpu') == 'cpu' and be == 'tf':
+            logging.info("Loading TensorFlow graph locally on CPU")
+            import tensorflow as tf
+            g = tf.Graph()
+            with g.as_default():
+                sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True, device_count={'CPU': 1, 'GPU': 0}))
+                kwargs['sess'] = sess
+                model = load_model_for(cls.task_name(), model_basename, **kwargs)
+        else:
+            model = load_model_for(cls.task_name(), model_basename, **kwargs)
         return cls(vocabs, vectorizers, model)
 
     @staticmethod

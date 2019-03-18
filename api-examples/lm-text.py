@@ -4,6 +4,7 @@ import os
 parser = argparse.ArgumentParser(description='Classify text with a model')
 parser.add_argument('--model', help='A classifier model', required=True, type=str)
 parser.add_argument('--text', help='raw value', type=str)
+parser.add_argument('--device', help='device', default='default')
 
 
 args = parser.parse_known_args()[0]
@@ -20,5 +21,5 @@ else:
 
 print(texts)
 
-m = bl.LanguageModelService.load(args.model)
+m = bl.LanguageModelService.load(args.model, device=args.device)
 print(m.predict(texts))
