@@ -29,8 +29,10 @@ def main():
     parser.add_argument('--return_labels', help='if true, the exported model returns actual labels else '
                                                 'the indices for labels vocab', default=False, type=str2bool)
     parser.add_argument('--model', help='model name', required=True, type=unzip_model)
-    parser.add_argument('--model_version', help='model_version', default=1)
+    parser.add_argument('--model_version', help='model_version', default=None)
     parser.add_argument('--output_dir', help='output dir', default='./models')
+    parser.add_argument('--project', help='Name of project, used in path first', default=None)
+    parser.add_argument('--name', help='Name of the model, used second in the path', default=None)
     parser.add_argument('--beam', help='beam_width', default=30, type=int)
     parser.add_argument('--is_remote', help='if True, separate items for remote server and client. If False bundle everything together', default=True, type=str2bool)
 
@@ -51,7 +53,7 @@ def main():
     feature_exporter_field_map = create_feature_exporter_field_map(config_params['features'])
     exporter = create_exporter(task, args.exporter_type, return_labels=args.return_labels,
                                feature_exporter_field_map=feature_exporter_field_map)
-    exporter.run(args.model, args.output_dir, args.model_version, remote=args.is_remote)
+    exporter.run(args.model, args.output_dir, args.project, args.name, args.model_version, remote=args.is_remote)
 
 
 if __name__ == "__main__":

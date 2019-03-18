@@ -5,6 +5,7 @@ import logging.config
 import hashlib
 import argparse
 from copy import deepcopy
+from itertools import chain
 from collections import OrderedDict
 from baseline.utils import export, str2bool, read_config_file, get_logging_level
 
@@ -205,3 +206,83 @@ def hash_config(config):
     sorted_config = order_json(stripped_config)
     json_bytes = json.dumps(sorted_config).encode('utf-8')
     return hashlib.sha1(json_bytes).hexdigest()
+
+
+def _listdir(model_dir):
+    try:
+        return os.listdir(model_dir)
+    except OSError:
+        return []
+
+
+@exporter
+def find_model_version(model_dir):
+    """Find the next usable model version when exporting.
+
+    :param model_dir: `str` The directory we are exporting to.
+
+    :returns: `str` The model version.
+    """
+    return str(max(chain([0], map(int, filter(lambda x: x.isdigit(), _listdir(model_dir))))) + 1)
+
+
+@exporter
+def get_output_paths(
+        output_dir,
+        project=None, name=None,
+        version=None,
+        remote=False,
+        make_server=True
+):
+    """Create the output paths for export.
+
+    Old behavior:
+    if remote == True:
+        f"{output_dir}/client/{basename(output_dir)}/{version}"
+        f"{output_dir}/server/{basename(output_dir)}/{version}"
+    else:
+        f"{output_dir}/{version}"
+
+    New Behavior:
+    if remote == True:
+        f"{output_dir}/client/{project}/{name}/{version}"
+        f"{output_dir}/server/{project}/{name}/{version}"
+    else:
+        f"{output_dir}/{project}/{name}/{version}"
+
+    If either project or name is None then they are skipped in the path.
+
+    If you want to create output that looks the same as the old versions
+    then set both project and name to None. This will skip them if remote is
+    false or it will add the basename of output_dir to the path if remote.
+
+    :param output_dir: `str` The base of these paths.
+    :param project: `str` The first subdir in the created path.
+    :param name: `str` The second subdir in the created path.
+    :param version: `str` The model version.
+    :param remote: `bool` Should we create separate client and server bundles?
+    :param maker_server: `bool` When false don't actually make the directory that the
+        server part will go in. This is because TF really wants to make it itself.
+
+    :returns: `Tuple[str, str]` The client and server output dirs.
+    """
+    # In this case we use the basename to simulate the old behavior.
+    if remote and project is None and name is None:
+        project = os.path.basename(output_dir)
+    project = project if project is not None else ''
+    name = name if name is not None else ''
+    client = 'client' if remote else ''
+    server = 'server' if remote else ''
+    server_path = [output_dir, server, project, name]
+    client_path = [output_dir, client, project, name]
+    # Sniff the dir and see what version we should use
+    version = find_model_version(os.path.join(*server_path)) if version is None else version
+    server_path.append(version)
+    client_path.append(version)
+    server_path = os.path.join(*server_path)
+    client_path = os.path.join(*client_path)
+    if remote:
+        os.makedirs(client_path)
+    if make_server:
+        os.makedirs(server_path)
+    return client_path, server_path
