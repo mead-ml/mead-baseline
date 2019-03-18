@@ -9,7 +9,7 @@
     "hpctl": {
         "backend": {
             "type": "mp",
-            "real_gpus": [0, 1, 2, 3, 4]
+            "real_gpus": [0]
         },
         "logging": {
             "host": "localhost",
@@ -21,6 +21,6 @@
             "dev": "acc",
             "test": "acc"
         },
-        "root": "/data/hpctl/dbpedia"
+        "root": "/data/hpctl"
     }
 }
