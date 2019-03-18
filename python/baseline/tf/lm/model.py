@@ -281,17 +281,19 @@ class LanguageModelBase(LanguageModel):
             _state['beam'] = kwargs['beam']
         _state['sess'] = kwargs.get('sess', tf.Session())
 
-        embeddings_info = _state.pop('embeddings')
-        embeddings = reload_embeddings(embeddings_info, basename)
-        for k in embeddings_info:
-            if k in kwargs:
-                _state[k] = kwargs[k]
-        model = cls.create(embeddings, **_state)
-        if kwargs.get('init', True):
-            model.sess.run(tf.global_variables_initializer())
-        model.saver = tf.train.Saver()
-        model.saver.restore(model.sess, basename)
-        return model
+        with _state['sess'].graph.as_default():
+
+            embeddings_info = _state.pop('embeddings')
+            embeddings = reload_embeddings(embeddings_info, basename)
+            for k in embeddings_info:
+                if k in kwargs:
+                    _state[k] = kwargs[k]
+            model = cls.create(embeddings, **_state)
+            if kwargs.get('init', True):
+                model.sess.run(tf.global_variables_initializer())
+            model.saver = tf.train.Saver()
+            model.saver.restore(model.sess, basename)
+            return model
 
     def output(self, h, vsz, **kwargs):
         # Do weight sharing if we can

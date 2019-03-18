@@ -220,21 +220,23 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
             _state['beam'] = kwargs['beam']
         _state['sess'] = kwargs.get('sess', tf.Session())
 
-        src_embeddings_info = _state.pop('src_embeddings')
-        src_embeddings = reload_embeddings(src_embeddings_info, basename)
-        for k in src_embeddings_info:
-            if k in kwargs:
-                _state[k] = kwargs[k]
-        tgt_embedding_info = _state.pop('tgt_embedding')
-        tgt_embedding = reload_embeddings(tgt_embedding_info, basename)['tgt']
+        with _state['sess'].graph.as_default():
 
-        model = cls.create(src_embeddings, tgt_embedding, **_state)
-        model._state = _state
-        if kwargs.get('init', True):
-            model.sess.run(tf.global_variables_initializer())
-        model.saver = tf.train.Saver()
-        model.saver.restore(model.sess, basename)
-        return model
+            src_embeddings_info = _state.pop('src_embeddings')
+            src_embeddings = reload_embeddings(src_embeddings_info, basename)
+            for k in src_embeddings_info:
+                if k in kwargs:
+                    _state[k] = kwargs[k]
+            tgt_embedding_info = _state.pop('tgt_embedding')
+            tgt_embedding = reload_embeddings(tgt_embedding_info, basename)['tgt']
+
+            model = cls.create(src_embeddings, tgt_embedding, **_state)
+            model._state = _state
+            if kwargs.get('init', True):
+                model.sess.run(tf.global_variables_initializer())
+            model.saver = tf.train.Saver()
+            model.saver.restore(model.sess, basename)
+            return model
 
     def embed(self, **kwargs):
         """This method performs "embedding" of the inputs.  The base method here then concatenates along depth
