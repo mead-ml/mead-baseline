@@ -47,7 +47,7 @@ def register_model(cls, task, name=None):
 
 @exporter
 def create_model_for(activity, input_, output_, **kwargs):
-    model_type = kwargs.get('model_type', 'default')
+    model_type = kwargs.get('type', kwargs.get('model_type', 'default'))
     creator_fn = BASELINE_MODELS[activity][model_type]
     logger.info('Calling model %s', creator_fn)
     if output_ is not None:
@@ -136,7 +136,7 @@ def load_model_for(activity, filename, **kwargs):
     # TODO: Currently in pytorch all models are always reloaded with the load
     # classmethod with a default model class. This is fine given how simple pyt
     # loading is but it could cause problems if a model has a custom load
-    model_type = kwargs.get('model_type', state.get('model_type', 'default'))
+    model_type = kwargs.get('type', kwargs.get('model_type', state.get('type', state.get('model_type', 'default'))))
     creator_fn = BASELINE_LOADERS[activity][model_type]
     logger.info('Calling model %s', creator_fn)
     return creator_fn(filename, **kwargs)

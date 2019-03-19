@@ -41,7 +41,7 @@ def register_reader(cls, task, name=None):
 
 @exporter
 def create_reader(task, vectorizers, trim, **kwargs):
-    name = kwargs.get('reader_type', 'default')
+    name = kwargs.get('type', kwargs.get('reader_type', 'default'))
     Constructor = BASELINE_READERS[task][name]
     return Constructor(vectorizers, trim, **kwargs)
 

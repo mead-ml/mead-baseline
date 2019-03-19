@@ -21,12 +21,12 @@
   },
   "backend": "tensorflow",
   "dataset": "SST2",
-  "loader": {
-    "reader_type": "default"
+  "reader": {
+    "type": "default"
   },
   "unif": 0.25,
   "model": {
-    "model_type": "default",
+    "type": "default",
     "filtsz": [
       3,
       4,
