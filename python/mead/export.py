@@ -39,6 +39,12 @@ def main():
 
     config_params = read_config_file(args.config)
 
+    try:
+        args.settings = read_config_stream(args.settings)
+    except:
+        logger.warning('Warning: no mead-settings file was found at [{}]'.format(args.settings))
+        args.settings = {}
+
     task_name = config_params.get('task', 'classify') if args.task is None else args.task
 
     if task_name == 'seq2seq' and 'beam' not in config_params:
