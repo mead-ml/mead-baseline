@@ -127,7 +127,7 @@ class RemoteModelTensorFlowREST(object):
 
 class RemoteModelTensorFlowGRPC(object):
 
-    def __init__(self, remote, name, signature, labels=None, beam=None, lengths_key=None, inputs=[], return_labels=False):
+    def __init__(self, remote, name, signature, labels=None, beam=None, lengths_key=None, inputs=[], version=1, return_labels=False):
         """A remote model that lives on TF serving with gRPC transport
 
         When using this type of model, there is an external dependency on the `grpc` package, as well as the
@@ -140,6 +140,7 @@ class RemoteModelTensorFlowGRPC(object):
         :param beam: The beam width (defaults to None)
         :param lengths_key: Which key is used for the length of the input vector (defaults to None)
         :param inputs: The inputs (defaults to empty list)
+        :param version: The model version (defaults to 1)
         :param return_labels: Whether the remote model returns class indices or the class labels directly. This depends
         on the `return_labels` parameter in exporters
         """
@@ -159,6 +160,8 @@ class RemoteModelTensorFlowGRPC(object):
         self.beam = beam
         self.labels = labels
         self.return_labels = return_labels
+
+        self.version = version
 
     def decode_output(self, x):
         return x.decode('ascii') if self.return_labels else np.int32(x)
@@ -194,6 +197,7 @@ class RemoteModelTensorFlowGRPC(object):
         request = self.predictpb.PredictRequest()
         request.model_spec.name = self.name
         request.model_spec.signature_name = self.signature
+        request.model_spec.version.value = self.version
 
         for feature in self.input_keys:
             if isinstance(examples[feature], np.ndarray):
@@ -278,6 +282,8 @@ class RemoteModelTensorFlowGRPCPreproc(RemoteModelTensorFlowGRPC):
         request = self.predictpb.PredictRequest()
         request.model_spec.name = self.name
         request.model_spec.signature_name = self.signature
+        request.model_spec.version.value = self.version
+
         for key in examples:
             if key.endswith('lengths'):
                 shape = examples[key].shape
