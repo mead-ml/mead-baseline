@@ -17,6 +17,7 @@ from baseline.utils import (
 from baseline.model import load_tagger_model, load_model, load_seq2seq_model
 import mead.exporters
 from mead.exporters import register_exporter
+from mead.utils import get_output_paths
 
 
 __all__ = []
@@ -38,21 +39,20 @@ class TensorFlowExporter(mead.exporters.Exporter):
     def _run(self, sess, basename, **kwargs):
         pass
 
-    def run(self, basename, output_dir, model_version, **kwargs):
+    def run(self, basename, output_dir, project=None, name=None, model_version=None, **kwargs):
 
         with tf.Graph().as_default():
             config_proto = tf.ConfigProto(allow_soft_placement=True)
             with tf.Session(config=config_proto) as sess:
                 sig_input, sig_output, sig_name, assets = self._create_rpc_call(sess, basename)
-                # output_path = os.path.join(tf.compat.as_bytes(output_dir), tf.compat.as_bytes(str(model_version)))
-                output_path = os.path.join(output_dir, str(model_version))
-                logger.info('Exporting Trained model to %s' % output_path)
-                for_remote = kwargs.get('remote', True)
-                client_output = server_output = output_path
-                if for_remote:
-                    client_output = os.path.join(output_dir, 'client/', os.path.basename(output_dir), str(model_version))
-                    server_output = os.path.join(output_dir, 'server/', os.path.basename(output_dir), str(model_version))
-                    os.makedirs(client_output)
+                client_output, server_output = get_output_paths(
+                    output_dir,
+                    project, name,
+                    model_version,
+                    kwargs.get('remote', True), make_server=False
+                )
+                logger.info('Saving vectorizers and vocabs to %s', client_output)
+                logger.info('Saving serialized model to %s' % server_output)
                 try:
                     builder = self._create_saved_model_builder(sess, server_output, sig_input, sig_output, sig_name)
                     create_bundle(builder, client_output, basename, assets)
