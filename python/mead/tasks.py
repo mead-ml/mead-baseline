@@ -316,6 +316,15 @@ class Task(object):
         """
         return self.config_params.get('basedir', './{}'.format(self.task_name()))
 
+    @staticmethod
+    def _get_batchsz(config):
+        train = config['train']
+        # Use this if statement to short circuit the last lookup so 'batchsz' isn't required in the config
+        bsz = train['batchsz'] if 'batchsz' in train else config['batchsz']
+        vbsz = train.get('valid_batchsz', config.get('valid_batchsz', bsz))
+        tbsz = train.get('test_batchsz', config.get('test_batchsz', 1))
+        return bsz, vbsz, tbsz
+
 
 @exporter
 @register_task
@@ -396,22 +405,23 @@ class ClassifierTask(Task):
         return baseline.model.create_model(self.embeddings, self.labels, **model)
 
     def _load_dataset(self):
+        bsz, vbsz, tbsz = Task._get_batchsz(self.config_params)
         self.train_data = self.reader.load(
             self.dataset['train_file'],
             self.feat2index,
-            self.config_params['batchsz'],
+            bsz,
             shuffle=True,
             sort_key=self.config_params.get('reader', self.config_params.get('loader', {})).get('sort_key')
         )
         self.valid_data = self.reader.load(
             self.dataset['valid_file'],
             self.feat2index,
-            self.config_params.get('valid_batchsz', self.config_params['batchsz'])
+            vbsz,
         )
         self.test_data = self.reader.load(
             self.dataset['test_file'],
             self.feat2index,
-            self.config_params.get('test_batchsz', 1)
+            tbsz,
         )
 
 
@@ -502,23 +512,24 @@ class TaggerTask(Task):
 
     def _load_dataset(self):
         # TODO: get rid of sort_key=self.primary_key in favor of something explicit?
+        bsz, vbsz, tbsz = Task._get_batchsz(self.config_params)
         self.train_data, _ = self.reader.load(
             self.dataset['train_file'],
             self.feat2index,
-            self.config_params['batchsz'],
+            bsz,
             shuffle=True,
             sort_key='{}_lengths'.format(self.primary_key)
         )
         self.valid_data, _ = self.reader.load(
             self.dataset['valid_file'],
             self.feat2index,
-            self.config_params.get('valid_batchsz', self.config_params['batchsz']),
+            vbsz,
             sort_key=None
         )
         self.test_data, self.txts = self.reader.load(
             self.dataset['test_file'],
             self.feat2index,
-            self.config_params.get('test_batchsz', 1),
+            tbsz,
             shuffle=False,
             sort_key=None
         )
@@ -607,10 +618,11 @@ class EncoderDecoderTask(Task):
         self.feat2tgt = self.feat2tgt['tgt']
 
     def _load_dataset(self):
+        bsz, vbsz, tbsz = Task._get_batchsz(self.config_params)
         self.train_data = self.reader.load(
             self.dataset['train_file'],
             self.feat2src, self.feat2tgt,
-            self.config_params['batchsz'],
+            bsz,
             shuffle=True,
             sort_key='{}_lengths'.format(self.primary_key)
         )
@@ -618,13 +630,13 @@ class EncoderDecoderTask(Task):
         self.valid_data = self.reader.load(
             self.dataset['valid_file'],
             self.feat2src, self.feat2tgt,
-            self.config_params.get('valid_batchsz', self.config_params['batchsz']),
+            vbsz,
             shuffle=True
         )
         self.test_data = self.reader.load(
             self.dataset['test_file'],
             self.feat2src, self.feat2tgt,
-            self.config_params.get('test_batchsz', 1)
+            tbsz,
         )
 
     def _create_model(self):
@@ -723,16 +735,17 @@ class LanguageModelingTask(Task):
 
     def _load_dataset(self):
         tgt_key = self.config_params.get('reader', self.config_params.get('loader', {})).get('tgt_key', self.primary_key)
+        bsz, vbsz, tbsz = Task._get_batchsz(self.config_params)
         self.train_data = self.reader.load(
             self.dataset['train_file'],
             self.feat2index,
-            self.config_params['batchsz'],
+            bsz,
             tgt_key=tgt_key
         )
         self.valid_data = self.reader.load(
             self.dataset['valid_file'],
             self.feat2index,
-            self.config_params.get('valid_batchsz', self.config_params['batchsz']),
+            vbsz,
             tgt_key=tgt_key
         )
         self.test_data = self.reader.load(

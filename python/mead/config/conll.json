@@ -1,6 +1,5 @@
 {
   "task": "tagger",
-  "batchsz": 10,
   "conll_output": "conllresults.conll",
   "unif": 0.1,
   "features": [
@@ -57,7 +56,8 @@
     "crf": 1
   },
   "train": {
-    "epochs": 1,
+    "batchsz": 10,
+    "epochs": 100,
     "optim": "sgd",
     "eta": 0.015,
     "mom": 0.9,
