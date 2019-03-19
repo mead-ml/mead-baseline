@@ -66,6 +66,7 @@ class TensorFlowExporter(mead.exporters.Exporter):
                     # export process broke.
                     # TODO(MB): we should remove the directory, if one has been saved already.
                     raise e
+        return client_output, server_output
 
     def _create_saved_model_builder(self, sess, output_path, sig_input, sig_output, sig_name):
         """
