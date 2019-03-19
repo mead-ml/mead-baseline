@@ -165,7 +165,7 @@ class Task(object):
 
     def _create_task_specific_reader(self):
         self._create_vectorizers()
-        reader_params = self.config_params.get('reader', self.config_params.get('loader', {}))
+        reader_params = self.config_params['reader'] if 'reader' in self.config_params else self.config_params['loader']
         reader_params['clean_fn'] = reader_params.get('clean_fn', self.config_params.get('preproc', {}).get('clean_fn'))
         if reader_params['clean_fn'] is not None and self.config_params['dataset'] != 'SST2':
             logger.warning('Warning: A reader preprocessing function (%s) is active, it is recommended that all data preprocessing is done outside of baseline to insure data at inference time matches data at training time.', reader_params['clean_fn'])
@@ -176,7 +176,8 @@ class Task(object):
 
     @staticmethod
     def _get_min_f(config):
-        backoff = config.get('reader', config.get('loader', {})).get('min_f', config.get('preproc', {}).get('min_f', -1))
+        read = config['reader'] if 'reader' in config else config['loader']
+        backoff = read.get('min_f', config.get('preproc', {}).get('min_f', -1))
         return {f['name']: f.get('min_f', backoff) for f in config['features']}
 
     def _setup_task(self, **kwargs):
@@ -405,13 +406,15 @@ class ClassifierTask(Task):
         return baseline.model.create_model(self.embeddings, self.labels, **model)
 
     def _load_dataset(self):
+        read = self.config_params['reader'] if 'reader' in self.config_params else self.config_params['loader']
+        sort_key = read.get('sort_key')
         bsz, vbsz, tbsz = Task._get_batchsz(self.config_params)
         self.train_data = self.reader.load(
             self.dataset['train_file'],
             self.feat2index,
             bsz,
             shuffle=True,
-            sort_key=self.config_params.get('reader', self.config_params.get('loader', {})).get('sort_key')
+            sort_key=sort_key,
         )
         self.valid_data = self.reader.load(
             self.dataset['valid_file'],
@@ -687,7 +690,7 @@ class LanguageModelingTask(Task):
     def _create_task_specific_reader(self):
         self._create_vectorizers()
 
-        reader_params = self.config_params.get('reader', self.config_params.get('loader', {}))
+        reader_params = self.config_params['reader'] if reader in self.config_params else self.config_params['loader']
         reader_params['nctx'] = reader_params.get('nctx', self.config_params.get('nctx', self.config_params.get('nbptt', 35)))
         reader_params['clean_fn'] = reader_params.get('clean_fn', self.config_params.get('preproc', {}).get('clean_fn'))
         if reader_params['clean_fn'] is not None and self.config_params['dataset'] != 'SST2':
@@ -734,7 +737,8 @@ class LanguageModelingTask(Task):
         baseline.save_vocabs(self.get_basedir(), self.feat2index)
 
     def _load_dataset(self):
-        tgt_key = self.config_params.get('reader', self.config_params.get('loader', {})).get('tgt_key', self.primary_key)
+        read = self.config_params['reader'] if 'reader' in self.config_params else self.config_params['loader']
+        tgt_key = read.get('tgt_key', self.primary_key)
         bsz, vbsz, tbsz = Task._get_batchsz(self.config_params)
         self.train_data = self.reader.load(
             self.dataset['train_file'],
