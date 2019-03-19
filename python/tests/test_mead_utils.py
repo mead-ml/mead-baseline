@@ -293,6 +293,12 @@ def test_get_export_config():
     assert r == str2bool(config['is_remote'])
 
 
+def test_get_export_type_in_config():
+    config = {'type': rand_str()}
+    _, _, _, _, e, _, _ = get_export_params(config)
+    assert e == config['type']
+
+
 def test_get_export_output_expanded():
     output_dir = "~/example"
     gold_output_dir = os.path.expanduser(output_dir)

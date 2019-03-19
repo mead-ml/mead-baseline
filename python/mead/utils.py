@@ -317,7 +317,7 @@ def get_export_params(
     output_dir = output_dir if output_dir is not None else config.get('output_dir', './models')
     output_dir = os.path.expanduser(output_dir)
     model_version = model_version if model_version is not None else config.get('model_version')
-    exporter_type = exporter_type if exporter_type is not None else config.get('exporter_type', 'default')
+    exporter_type = exporter_type if exporter_type is not None else config.get('type', config.get('exporter_type', 'default'))
     return_labels = return_labels if return_labels is not None else config.get('return_labels', False)
     return_labels = str2bool(return_labels)
     is_remote = is_remote if is_remote is not None else config.get('is_remote', True)
