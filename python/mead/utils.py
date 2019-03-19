@@ -293,21 +293,29 @@ def get_export_params(
         config,
         output_dir=None,
         project=None, name=None,
-        model_version=None
+        model_version=None,
+        exporter_type=None,
+        return_labels=None,
 ):
     """Combine export parameters from the config file and cli arguments.
 
     :param config: `dict` The export block of the config.
-    :param output_dir: `str` The base of export paths.
+    :param output_dir: `str` The base of export paths. (defaults to './models')
     :param project: `str` The name of the project this model is for.
     :param name: `str` The name of this model (often the use case for it, `ner`, `intent` etc).
     :param model_version: `str` The version of this model.
+    :param exporter_type: `str` The name of the exporter to use (defaults to 'default')
+    :param return_labels: `str` Should labels be returned? (defaults to False)
 
-    :returns: `Tuple[str, str, str, str]` The output_dir, project, name, and model_version
+    :returns: `Tuple[str, str, str, str, str, bool]`
+        The output_dir, project, name, model_version, exporter_type, and return_labels
     """
     project = project if project is not None else config.get('project')
     name = name if name is not None else config.get('name')
     output_dir = output_dir if output_dir is not None else config.get('output_dir', './models')
     output_dir = os.path.expanduser(output_dir)
     model_version = model_version if model_version is not None else config.get('model_version')
-    return output_dir, project, name, model_version
+    exporter_type = exporter_type if exporter_type is not None else config.get('exporter_type', 'default')
+    return_labels = return_labels if return_labels is not None else config.get('return_labels', 'false')
+    return_labels = str2bool(return_labels)
+    return output_dir, project, name, model_version, exporter_type, return_labels

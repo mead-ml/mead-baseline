@@ -25,9 +25,9 @@ def main():
     parser.add_argument('--datasets', help='json library of dataset labels', default='config/datasets.json', type=convert_path)
     parser.add_argument('--logging', help='json file for logging', default='config/logging.json', type=convert_path)
     parser.add_argument('--task', help='task to run', choices=['classify', 'tagger', 'seq2seq', 'lm'])
-    parser.add_argument('--exporter_type', help='exporter type', default='default')
+    parser.add_argument('--exporter_type', help='exporter type', default=None)
     parser.add_argument('--return_labels', help='if true, the exported model returns actual labels else '
-                                                'the indices for labels vocab', default=False, type=str2bool)
+                                                'the indices for labels vocab', default=None)
     parser.add_argument('--model', help='model name', required=True, type=unzip_model)
     parser.add_argument('--model_version', help='model_version', default=None)
     parser.add_argument('--output_dir', help='output dir', default=None)
@@ -49,13 +49,19 @@ def main():
     config_params['modules'] = config_params.get('modules', []) + args.modules
 
     task = mead.Task.get_task_specific(task_name, args.settings)
-    task.read_config(config_params, args.datasets, exporter_type=args.exporter_type)
-    feature_exporter_field_map = create_feature_exporter_field_map(config_params['features'])
-    exporter = create_exporter(task, args.exporter_type, return_labels=args.return_labels,
-                               feature_exporter_field_map=feature_exporter_field_map)
-    output_dir, project, name, model_version = get_export_params(
-        config_params.get('export', {}), args.output_dir, args.project, args.name, args.model_version
+
+    output_dir, project, name, model_version, exporter_type, return_labels = get_export_params(
+        config_params.get('export', {}),
+        args.output_dir,
+        args.project, args.name,
+        args.model_version,
+        args.exporter_type,
+        args.return_labels,
     )
+    task.read_config(config_params, args.datasets, exporter_type=exporter_type)
+    feature_exporter_field_map = create_feature_exporter_field_map(config_params['features'])
+    exporter = create_exporter(task, exporter_type, return_labels=return_labels,
+                               feature_exporter_field_map=feature_exporter_field_map)
     exporter.run(args.model, output_dir, project, name, model_version, remote=args.is_remote)
 
 

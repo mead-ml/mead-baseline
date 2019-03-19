@@ -5,6 +5,7 @@ from itertools import chain
 from collections import namedtuple
 from mock import patch, call
 import pytest
+from baseline.utils import str2bool
 from mead.utils import (
     convert_path,
     get_output_paths,
@@ -235,25 +236,33 @@ def test_get_export_input_override():
     name = rand_str()
     output_dir = os.path.join(rand_str(), rand_str())
     model_version = str(random.randint(1, 5))
+    exporter_type = rand_str()
+    return_labels = random.choice([True, False])
     config = {
         'project': rand_str(),
         'name': rand_str(),
         'output_dir': os.path.join(rand_str(), rand_str()),
-        'model_version': str(random.randint(1, 5))
+        'model_version': str(random.randint(1, 5)),
+        'exporter_type': rand_str(),
+        'return_labels': not return_labels,
     }
-    o, p, n, v = get_export_params(config, output_dir, project, name, model_version)
+    o, p, n, v, e, l = get_export_params(config, output_dir, project, name, model_version, exporter_type, return_labels)
     assert o == output_dir
     assert p == project
     assert n == name
     assert v == model_version
+    assert e == exporter_type
+    assert l == return_labels
 
 
 def test_get_export_defaults():
-    o, p, n, v = get_export_params({})
+    o, p, n, v, e, l = get_export_params({})
     assert o == './models'
     assert p is None
     assert n is None
     assert v is None
+    assert e == 'default'
+    assert l is False
 
 
 def test_get_export_config():
@@ -261,19 +270,30 @@ def test_get_export_config():
         'project': rand_str(),
         'name': rand_str(),
         'output_dir': os.path.join(rand_str(), rand_str()),
-        'model_version': str(random.randint(1, 5))
+        'model_version': str(random.randint(1, 5)),
+        'exporter_type': rand_str(),
+        'return_labels': random.choice(['true', 'false'])
     }
-    o, p, n, v = get_export_params(config)
+    o, p, n, v, e, l = get_export_params(config)
     assert o == config['output_dir']
     assert p == config['project']
     assert n == config['name']
     assert v == config['model_version']
+    assert e == config['exporter_type']
+    assert l == str2bool(config['return_labels'])
 
 
 def test_get_export_output_expanded():
     output_dir = "~/example"
     gold_output_dir = os.path.expanduser(output_dir)
-    o, _, _, _ = get_export_params({}, output_dir)
+    o, _, _, _, _, _ = get_export_params({}, output_dir)
+
+
+def test_get_export_str2bool_called():
+    return_labels = random.choice(['true', 'false'])
+    with patch('mead.utils.str2bool') as b_patch:
+        _ = get_export_params({}, return_labels=return_labels)
+        b_patch.assert_called_once_with(return_labels)
 
 
 def choice(in_, config, key):
@@ -296,17 +316,32 @@ def test_get_export_params():
             'project': c.proj,
             'name': c.name,
             'model_version': c.version,
+            'exporter_type': rand_str(),
+            'return_labels': random.choice(['true', 'false'])
         }
         in_output, gold_output = choice(in_.dir, config, 'output_dir')
         gold_output = './models' if gold_output is None else gold_output
         in_project, gold_project = choice(in_.proj, config, 'project')
         in_name, gold_name = choice(in_.name, config, 'name')
         in_version, gold_version = choice(in_.version, config, 'model_version')
-        o, p, n, v = get_export_params(config, in_output, in_project, in_name, in_version)
+        in_export, gold_export = choice(rand_str(), config, 'exporter_type')
+        gold_export = gold_export if gold_export is not None else 'default'
+        in_labels, gold_labels = choice(random.choice(['true', 'false']), config, 'return_labels')
+        gold_labels = str2bool(gold_labels) if gold_labels is not None else False
+        o, p, n, v, e, l = get_export_params(
+            config,
+            in_output,
+            in_project, in_name,
+            in_version,
+            in_export,
+            in_labels
+        )
         assert o == gold_output
         assert p == gold_project
         assert n == gold_name
         assert v == gold_version
+        assert e == gold_export
+        assert l == gold_labels
 
     for _ in range(100):
         test()
