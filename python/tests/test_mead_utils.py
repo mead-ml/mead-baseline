@@ -303,6 +303,7 @@ def test_get_export_output_expanded():
     output_dir = "~/example"
     gold_output_dir = os.path.expanduser(output_dir)
     o, _, _, _, _, _, _ = get_export_params({}, output_dir)
+    assert o == gold_output_dir
 
 
 def test_get_export_str2bool_called():
