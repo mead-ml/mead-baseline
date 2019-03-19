@@ -111,6 +111,10 @@ names = namedtuple("d", "dir base proj name version")
 
 @pytest.fixture
 def d():
+    return make_data()
+
+
+def make_data():
     data = []
     data.append(os.path.join(*[rand_str() for _ in range(random.randint(1, 4))]))
     data.append(os.path.basename(data[-1]))
@@ -316,8 +320,8 @@ def choice(in_, config, key):
 
 def test_get_export_params():
     def test():
-        in_ = d()
-        c = d()
+        in_ = make_data()
+        c = make_data()
         config = {
             'output_dir': c.dir,
             'project': c.proj,
