@@ -127,7 +127,7 @@ class RemoteModelTensorFlowREST(object):
 
 class RemoteModelTensorFlowGRPC(object):
 
-    def __init__(self, remote, name, signature, labels=None, beam=None, lengths_key=None, inputs=[], version=1, return_labels=False):
+    def __init__(self, remote, name, signature, labels=None, beam=None, lengths_key=None, inputs=[], version=None, return_labels=False):
         """A remote model that lives on TF serving with gRPC transport
 
         When using this type of model, there is an external dependency on the `grpc` package, as well as the
@@ -197,7 +197,8 @@ class RemoteModelTensorFlowGRPC(object):
         request = self.predictpb.PredictRequest()
         request.model_spec.name = self.name
         request.model_spec.signature_name = self.signature
-        request.model_spec.version.value = self.version
+        if self.version is not None:
+            request.model_spec.version.value = self.version
 
         for feature in self.input_keys:
             if isinstance(examples[feature], np.ndarray):
@@ -282,7 +283,8 @@ class RemoteModelTensorFlowGRPCPreproc(RemoteModelTensorFlowGRPC):
         request = self.predictpb.PredictRequest()
         request.model_spec.name = self.name
         request.model_spec.signature_name = self.signature
-        request.model_spec.version.value = self.version
+        if self.version is not None:
+            request.model_spec.version.value = self.version
 
         for key in examples:
             if key.endswith('lengths'):
