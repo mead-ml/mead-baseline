@@ -1,10 +1,10 @@
 import argparse
 import mead
-from mead.utils import convert_path, configure_logger
 from baseline.utils import unzip_model
 from baseline.utils import read_config_file
-from mead.exporters import create_exporter
 from baseline.utils import str2bool
+from mead.exporters import create_exporter
+from mead.utils import convert_path, configure_logger, get_export_params
 
 
 def create_feature_exporter_field_map(feature_section, default_exporter_field='tokens'):
@@ -30,7 +30,7 @@ def main():
                                                 'the indices for labels vocab', default=False, type=str2bool)
     parser.add_argument('--model', help='model name', required=True, type=unzip_model)
     parser.add_argument('--model_version', help='model_version', default=None)
-    parser.add_argument('--output_dir', help='output dir', default='./models')
+    parser.add_argument('--output_dir', help='output dir', default=None)
     parser.add_argument('--project', help='Name of project, used in path first', default=None)
     parser.add_argument('--name', help='Name of the model, used second in the path', default=None)
     parser.add_argument('--beam', help='beam_width', default=30, type=int)
@@ -53,7 +53,10 @@ def main():
     feature_exporter_field_map = create_feature_exporter_field_map(config_params['features'])
     exporter = create_exporter(task, args.exporter_type, return_labels=args.return_labels,
                                feature_exporter_field_map=feature_exporter_field_map)
-    exporter.run(args.model, args.output_dir, args.project, args.name, args.model_version, remote=args.is_remote)
+    output_dir, project, name, model_version = get_export_params(
+        config_params.get('export', {}), args.output_dir, args.project, args.name, args.model_version
+    )
+    exporter.run(args.model, output_dir, project, name, model_version, remote=args.is_remote)
 
 
 if __name__ == "__main__":

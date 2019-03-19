@@ -5,7 +5,12 @@ from itertools import chain
 from collections import namedtuple
 from mock import patch, call
 import pytest
-from mead.utils import convert_path, find_model_version, get_output_paths
+from mead.utils import (
+    convert_path,
+    get_output_paths,
+    get_export_params,
+    find_model_version,
+)
 
 
 CHARS = list(chain(string.ascii_letters, string.digits))
@@ -223,3 +228,85 @@ def test_get_output_paths_no_make_server_remote(d, m_patch):
     gc = os.path.join(d.dir, "client", d.proj, d.name, d.version)
     _, _ = get_output_paths(d.dir, d.proj, d.name, d.version, True, False)
     m_patch.assert_called_once_with(gc)
+
+
+def test_get_export_input_override():
+    project = rand_str()
+    name = rand_str()
+    output_dir = os.path.join(rand_str(), rand_str())
+    model_version = str(random.randint(1, 5))
+    config = {
+        'project': rand_str(),
+        'name': rand_str(),
+        'output_dir': os.path.join(rand_str(), rand_str()),
+        'model_version': str(random.randint(1, 5))
+    }
+    o, p, n, v = get_export_params(config, output_dir, project, name, model_version)
+    assert o == output_dir
+    assert p == project
+    assert n == name
+    assert v == model_version
+
+
+def test_get_export_defaults():
+    o, p, n, v = get_export_params({})
+    assert o == './models'
+    assert p is None
+    assert n is None
+    assert v is None
+
+
+def test_get_export_config():
+    config = {
+        'project': rand_str(),
+        'name': rand_str(),
+        'output_dir': os.path.join(rand_str(), rand_str()),
+        'model_version': str(random.randint(1, 5))
+    }
+    o, p, n, v = get_export_params(config)
+    assert o == config['output_dir']
+    assert p == config['project']
+    assert n == config['name']
+    assert v == config['model_version']
+
+
+def test_get_export_output_expanded():
+    output_dir = "~/example"
+    gold_output_dir = os.path.expanduser(output_dir)
+    o, _, _, _ = get_export_params({}, output_dir)
+
+
+def choice(in_, config, key):
+    c = random.randint(1, 3)
+    if c == 1:
+        return in_, in_
+    elif c == 2:
+        return None, config[key]
+    else:
+        del config[key]
+        return None, None
+
+
+def test_get_export_params():
+    def test():
+        in_ = d()
+        c = d()
+        config = {
+            'output_dir': c.dir,
+            'project': c.proj,
+            'name': c.name,
+            'model_version': c.version,
+        }
+        in_output, gold_output = choice(in_.dir, config, 'output_dir')
+        gold_output = './models' if gold_output is None else gold_output
+        in_project, gold_project = choice(in_.proj, config, 'project')
+        in_name, gold_name = choice(in_.name, config, 'name')
+        in_version, gold_version = choice(in_.version, config, 'model_version')
+        o, p, n, v = get_export_params(config, in_output, in_project, in_name, in_version)
+        assert o == gold_output
+        assert p == gold_project
+        assert n == gold_name
+        assert v == gold_version
+
+    for _ in range(100):
+        test()

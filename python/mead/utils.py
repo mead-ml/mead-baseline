@@ -286,3 +286,28 @@ def get_output_paths(
     if make_server:
         os.makedirs(server_path)
     return client_path, server_path
+
+
+@exporter
+def get_export_params(
+        config,
+        output_dir=None,
+        project=None, name=None,
+        model_version=None
+):
+    """Combine export parameters from the config file and cli arguments.
+
+    :param config: `dict` The export block of the config.
+    :param output_dir: `str` The base of export paths.
+    :param project: `str` The name of the project this model is for.
+    :param name: `str` The name of this model (often the use case for it, `ner`, `intent` etc).
+    :param model_version: `str` The version of this model.
+
+    :returns: `Tuple[str, str, str, str]` The output_dir, project, name, and model_version
+    """
+    project = project if project is not None else config.get('project')
+    name = name if name is not None else config.get('name')
+    output_dir = output_dir if output_dir is not None else config.get('output_dir', './models')
+    output_dir = os.path.expanduser(output_dir)
+    model_version = model_version if model_version is not None else config.get('model_version')
+    return output_dir, project, name, model_version
