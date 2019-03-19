@@ -2,7 +2,7 @@
     "datacache": "~/.bl-data",
     "reporting_hooks":{
         "xpctl": {
-            "cred": "~/xpctlcred.json.remote",
+            "cred": "~/xpctlcred.json",
             "module": "reporting_xpctl"
         }
     },
@@ -18,8 +18,9 @@
         "frontend": {
             "type": "console",
             "train": "avg_loss",
-            "dev": "f1",
-            "test": "f1"
-        }
+            "dev": "acc",
+            "test": "acc"
+        },
+        "root": "/data/hpctl"
     }
 }
