@@ -5,7 +5,13 @@ from itertools import chain
 from collections import namedtuple
 from mock import patch, call
 import pytest
-from mead.utils import convert_path, find_model_version, get_output_paths
+from baseline.utils import str2bool
+from mead.utils import (
+    convert_path,
+    get_output_paths,
+    get_export_params,
+    find_model_version,
+)
 
 
 CHARS = list(chain(string.ascii_letters, string.digits))
@@ -105,6 +111,10 @@ names = namedtuple("d", "dir base proj name version")
 
 @pytest.fixture
 def d():
+    return make_data()
+
+
+def make_data():
     data = []
     data.append(os.path.join(*[rand_str() for _ in range(random.randint(1, 4))]))
     data.append(os.path.basename(data[-1]))
@@ -223,3 +233,138 @@ def test_get_output_paths_no_make_server_remote(d, m_patch):
     gc = os.path.join(d.dir, "client", d.proj, d.name, d.version)
     _, _ = get_output_paths(d.dir, d.proj, d.name, d.version, True, False)
     m_patch.assert_called_once_with(gc)
+
+
+def test_get_export_input_override():
+    project = rand_str()
+    name = rand_str()
+    output_dir = os.path.join(rand_str(), rand_str())
+    model_version = str(random.randint(1, 5))
+    exporter_type = rand_str()
+    return_labels = random.choice([True, False])
+    is_remote = random.choice([True, False])
+    config = {
+        'project': rand_str(),
+        'name': rand_str(),
+        'output_dir': os.path.join(rand_str(), rand_str()),
+        'model_version': str(random.randint(1, 5)),
+        'exporter_type': rand_str(),
+        'return_labels': not return_labels,
+        'is_remote': not is_remote,
+    }
+    o, p, n, v, e, l, r = get_export_params(config, output_dir, project, name, model_version, exporter_type, return_labels, is_remote)
+    assert o == output_dir
+    assert p == project
+    assert n == name
+    assert v == model_version
+    assert e == exporter_type
+    assert l == return_labels
+    assert r == is_remote
+
+
+def test_get_export_defaults():
+    o, p, n, v, e, l, r = get_export_params({})
+    assert o == './models'
+    assert p is None
+    assert n is None
+    assert v is None
+    assert e == 'default'
+    assert l is False
+    assert r is True
+
+
+def test_get_export_config():
+    config = {
+        'project': rand_str(),
+        'name': rand_str(),
+        'output_dir': os.path.join(rand_str(), rand_str()),
+        'model_version': str(random.randint(1, 5)),
+        'exporter_type': rand_str(),
+        'return_labels': random.choice(['true', 'false']),
+        'is_remote': random.choice(['true', 'false']),
+    }
+    o, p, n, v, e, l, r = get_export_params(config)
+    assert o == config['output_dir']
+    assert p == config['project']
+    assert n == config['name']
+    assert v == config['model_version']
+    assert e == config['exporter_type']
+    assert l == str2bool(config['return_labels'])
+    assert r == str2bool(config['is_remote'])
+
+
+def test_get_export_type_in_config():
+    config = {'type': rand_str()}
+    _, _, _, _, e, _, _ = get_export_params(config)
+    assert e == config['type']
+
+
+def test_get_export_output_expanded():
+    output_dir = "~/example"
+    gold_output_dir = os.path.expanduser(output_dir)
+    o, _, _, _, _, _, _ = get_export_params({}, output_dir)
+    assert o == gold_output_dir
+
+
+def test_get_export_str2bool_called():
+    return_labels = random.choice(['true', 'false'])
+    is_remote = random.choice(['true', 'false'])
+    with patch('mead.utils.str2bool') as b_patch:
+        _ = get_export_params({}, return_labels=return_labels, is_remote=is_remote)
+        assert b_patch.call_args_list == [call(return_labels), call(is_remote)]
+
+
+def choice(in_, config, key):
+    c = random.randint(1, 3)
+    if c == 1:
+        return in_, in_
+    elif c == 2:
+        return None, config[key]
+    else:
+        del config[key]
+        return None, None
+
+
+def test_get_export_params():
+    def test():
+        in_ = make_data()
+        c = make_data()
+        config = {
+            'output_dir': c.dir,
+            'project': c.proj,
+            'name': c.name,
+            'model_version': c.version,
+            'exporter_type': rand_str(),
+            'return_labels': random.choice(['true', 'false']),
+            'is_remote': random.choice(['true', 'false']),
+        }
+        in_output, gold_output = choice(in_.dir, config, 'output_dir')
+        gold_output = './models' if gold_output is None else gold_output
+        in_project, gold_project = choice(in_.proj, config, 'project')
+        in_name, gold_name = choice(in_.name, config, 'name')
+        in_version, gold_version = choice(in_.version, config, 'model_version')
+        in_export, gold_export = choice(rand_str(), config, 'exporter_type')
+        gold_export = gold_export if gold_export is not None else 'default'
+        in_labels, gold_labels = choice(random.choice(['true', 'false']), config, 'return_labels')
+        gold_labels = str2bool(gold_labels) if gold_labels is not None else False
+        in_remote, gold_remote = choice(random.choice(['true', 'false']), config, 'is_remote')
+        gold_remote = str2bool(gold_remote) if gold_remote is not None else True
+        o, p, n, v, e, l, r = get_export_params(
+            config,
+            in_output,
+            in_project, in_name,
+            in_version,
+            in_export,
+            in_labels,
+            in_remote,
+        )
+        assert o == gold_output
+        assert p == gold_project
+        assert n == gold_name
+        assert v == gold_version
+        assert e == gold_export
+        assert l == gold_labels
+        assert r == gold_remote
+
+    for _ in range(100):
+        test()
