@@ -113,7 +113,7 @@ int main(int argc, char** argv) {
                         std::string c(1, args[j][k]);
                         auto idx = vocabs[order[i]].find(c);
                         if (idx != vocabs[order[i]].end()) {
-                            feature.push_back((long)vocabs[order[i]][c]);
+                            feature.push_back(vocabs[order[i]][c]);
                         } else {
                             feature.push_back(UNK);
                         }
