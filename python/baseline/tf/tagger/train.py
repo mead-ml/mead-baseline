@@ -224,4 +224,4 @@ def fit(model, ts, vs, es, **kwargs):
         for reporting in reporting_fns:
             reporting(test_metrics, 0, 'Test')
         trainer.log.debug({'phase': 'Test', 'time': duration})
-
+    return test_metrics
