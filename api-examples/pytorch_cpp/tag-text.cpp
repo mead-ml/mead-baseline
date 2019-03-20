@@ -8,9 +8,10 @@ using json = nlohmann::json;
 #include <string>
 #include <algorithm>
 #include <glob.h>
+#include <stdlib.h>
 
-#define UNK 3
-#define PAD 0
+const long UNK = 3;
+const long PAD = 0;
 
 
 void lower_case(const std::string& word, std::string& dst) {
@@ -45,7 +46,7 @@ void find_label_file(const std::string& bundle, std::string& dst) {
 int main(int argc, char** argv) {
     if (argc < 3) {
         std::cerr << "usage: tag-text export_bundle tokens...\n";
-        return -1;
+        exit(1);
     }
 
     std::string bundle(argv[1]);
@@ -97,7 +98,7 @@ int main(int argc, char** argv) {
         std::vector<long> feature;
         std::string feat = order[i];
         // Create character based features
-        if (feat.compare("char") == 0) {
+        if (feat == "char") {
             for (int j = 0; j < args_sz; j++) {
                 int curr_sz = args[j].size();
                 if (mxwlen < curr_sz) {
@@ -114,10 +115,10 @@ int main(int argc, char** argv) {
                         if (idx != vocabs[order[i]].end()) {
                             feature.push_back((long)vocabs[order[i]][c]);
                         } else {
-                            feature.push_back((long)UNK);
+                            feature.push_back(UNK);
                         }
                     } else {
-                        feature.push_back((long)PAD);
+                        feature.push_back(PAD);
                     }
                 }
             }
@@ -133,17 +134,17 @@ int main(int argc, char** argv) {
                 if (idx != vocabs[order[i]].end()) {
                     feature.push_back((long)vocabs[order[i]][lc]);
                 } else {
-                    feature.push_back((long) UNK);
+                    feature.push_back(UNK);
                 }
             }
-            torch::Tensor f = torch::tensor(feature, torch::dtype(torch::kInt64));
+            auto f = torch::tensor(feature, torch::dtype(torch::kInt64));
             f = f.unsqueeze(0);
             features.push_back(f);
         }
     }
     input.push_back(torch::jit::Tuple::create(features));
 
-    torch::Tensor lengths = torch::full({1}, (int)args_sz, torch::dtype(torch::kInt64));
+    auto lengths = torch::full({1}, (int)args_sz, torch::dtype(torch::kInt64));
     input.push_back(lengths);
 
     std::cout << "Tagging." << std::endl;

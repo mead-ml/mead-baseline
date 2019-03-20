@@ -1,5 +1,7 @@
 # Simple example C++ programs to run exported pytorch models.
 
+Currently this example code used glob which is POSIX only.
+
 ## Build
 
  * Run `./install.sh`
