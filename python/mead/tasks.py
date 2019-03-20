@@ -642,8 +642,8 @@ class EncoderDecoderTask(Task):
 
         num_ex = self.config_params['num_valid_to_show']
 
-        rlut1 = baseline.revlut(self.feat2src[self.primary_key])
-        rlut2 = baseline.revlut(self.feat2tgt)
+        rlut1 = revlut(self.feat2src[self.primary_key])
+        rlut2 = revlut(self.feat2tgt)
         if num_ex > 0:
             logger.info('Showing examples')
             preproc = self.config_params.get('preproc', {})
