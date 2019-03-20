@@ -57,7 +57,7 @@ int main(int argc, char** argv) {
 
     std::cout << "Reading vocabularies." << std::endl;
     std::unordered_map<std::string, json> vocabs;
-    for (int i = 0; i < order.size(); i++) {
+    for (int i = 0, sz = order.size(); i < sz; i++) {
         std::string file_name;
         find_vocab_file(bundle, order[i], file_name);
         std::ifstream file(file_name);
@@ -71,20 +71,22 @@ int main(int argc, char** argv) {
 
     std::cout << "Building Features.\n";
     int mxwlen = 0;
-    for (int i = 0; i < order.size(); i++) {
+    int args_sz = args.size();
+    for (int i = 0, sz = order.size(); i < sz; i++) {
         std::vector<long> feature;
         std::string feat = order[i];
         // Create character based features
         if (feat.compare("char") == 0) {
-            for (int j = 0; j < args.size(); j++) {
+            for (int j = 0; j < args_sz; j++) {
                 if (mxwlen < args[j].size()) {
                     mxwlen = args[j].size();
                 }
             }
-            for (int j = 0; j < args.size(); j++) {
+            for (int j = 0; j < args_sz; j++) {
                 // Build it as a single long vector and reshape the tensor
+                int curr_sz = args[j].size();
                 for (int k = 0; k < mxwlen; k++) {
-                    if (k < args[j].size()) {
+                    if (k < curr_sz) {
                         std::string c(1, args[j][k]);
                         auto idx = vocabs[order[i]].find(c);
                         if (idx != vocabs[order[i]].end()) {
@@ -102,7 +104,7 @@ int main(int argc, char** argv) {
             features.push_back(f);
         } else {
             // build out the token1d features
-            for (int j = 0; j < args.size(); j++) {
+            for (int j = 0; j < args_sz; j++) {
                 std::string lc;
                 lower_case(args[j], lc);
                 auto idx = vocabs[order[i]].find(lc);

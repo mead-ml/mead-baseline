@@ -119,10 +119,13 @@ class PytorchExporter(Exporter):
         self.wrapper = None
 
 
-    def run(self, basename, output_dir, model_version, **kwargs):
+    def run(self, basename, output_dir, project=None, name=None, model_version=None, **kwargs):
         logger.warning("Pytorch exporting is experimental and is not guaranteed to work for plugin models.")
         client_output, server_output = get_output_paths(
-            output_dir, model_version, kwargs.get('remote', True)
+            output_dir,
+            project, name,
+            model_version,
+            kwargs.get('remote', True),
         )
         logger.info("Saving vectorizers and vocabs to %s", client_output)
         logger.info("Saving serialized model to %s", server_output)

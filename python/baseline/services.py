@@ -193,7 +193,7 @@ class Service(object):
             inputs=inputs,
             beam=beam,
             return_labels=return_labels,
-            inputs=inputs,
+            version=version,
         )
         return model
 

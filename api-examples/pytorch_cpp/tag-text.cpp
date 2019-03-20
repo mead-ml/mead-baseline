@@ -33,6 +33,15 @@ void find_vocab_file(const std::string& bundle, const std::string& vocab, std::s
 }
 
 
+void find_label_file(const std::string& bundle, std::string& dst) {
+    glob_t glob_result;
+    std::stringstream file_name;
+    file_name << bundle << "*.labels";
+    glob(file_name.str().c_str(), GLOB_TILDE, NULL, &glob_result);
+    dst = glob_result.gl_pathv[0];
+}
+
+
 int main(int argc, char** argv) {
     if (argc < 3) {
         std::cerr << "usage: tag-text export_bundle tokens...\n";
@@ -57,7 +66,7 @@ int main(int argc, char** argv) {
 
     std::cout << "Reading vocabularies." << std::endl;
     std::unordered_map<std::string, json> vocabs;
-    for (int i = 0; i < order.size(); i++) {
+    for (int i = 0, sz = order.size(); i < sz; i++) {
         std::string file_name;
         find_vocab_file(bundle, order[i], file_name);
         std::ifstream file(file_name);
@@ -68,30 +77,38 @@ int main(int argc, char** argv) {
 
     std::cout << "Reading label vocab." << std::endl;
     std::string file_name;
-    find_vocab_file(bundle, "labels", file_name);
+    find_label_file(bundle, file_name);
     std::ifstream label_file(file_name);
-    json label_vocab;
-    label_file >> label_vocab;
+    json label_to_idx;
+    label_file >> label_to_idx;
+    // Create a revlut
+    std::unordered_map<int, std::string> label_vocab;
+    for (json::iterator it = label_to_idx.begin(), end = label_to_idx.end(); it != end; ++it) {
+        label_vocab.insert(std::pair<int, std::string>(it.value(), it.key()));
+    }
 
     std::vector<torch::jit::IValue> input;
     std::vector<torch::jit::IValue> features;
 
     std::cout << "Building Features.\n";
     int mxwlen = 0;
-    for (int i = 0; i < order.size(); i++) {
+    int args_sz = args.size();
+    for (int i = 0, sz = order.size(); i < sz; i++) {
         std::vector<long> feature;
         std::string feat = order[i];
         // Create character based features
         if (feat.compare("char") == 0) {
-            for (int j = 0; j < args.size(); j++) {
-                if (mxwlen < args[j].size()) {
-                    mxwlen = args[j].size();
+            for (int j = 0; j < args_sz; j++) {
+                int curr_sz = args[j].size();
+                if (mxwlen < curr_sz) {
+                    mxwlen = curr_sz;
                 }
             }
-            for (int j = 0; j < args.size(); j++) {
+            for (int j = 0; j < args_sz; j++) {
                 // Build it as a single long vector and reshape the tensor
+                int curr_sz = args[j].size();
                 for (int k = 0; k < mxwlen; k++) {
-                    if (k < args[j].size()) {
+                    if (k < curr_sz) {
                         std::string c(1, args[j][k]);
                         auto idx = vocabs[order[i]].find(c);
                         if (idx != vocabs[order[i]].end()) {
@@ -109,7 +126,7 @@ int main(int argc, char** argv) {
             features.push_back(f);
         } else {
             // build out the token1d features
-            for (int j = 0; j < args.size(); j++) {
+            for (int j = 0; j < args_sz; j++) {
                 std::string lc;
                 lower_case(args[j], lc);
                 auto idx = vocabs[order[i]].find(lc);
@@ -126,7 +143,7 @@ int main(int argc, char** argv) {
     }
     input.push_back(torch::jit::Tuple::create(features));
 
-    torch::Tensor lengths = torch::full({1}, (int)args.size(), torch::dtype(torch::kInt64));
+    torch::Tensor lengths = torch::full({1}, (int)args_sz, torch::dtype(torch::kInt64));
     input.push_back(lengths);
 
     std::cout << "Tagging." << std::endl;
@@ -135,8 +152,8 @@ int main(int argc, char** argv) {
     std::vector<long> outputs(output.data<long>(), output.data<long>() + output.numel());
 
     std::cout << "Outputs:\n";
-    for (int i = 0; i < args.size(); i++) {
+    for (int i = 0; i < args_sz; i++) {
         std::string space(mxwlen - args[i].size() + 2, ' ');
-        std::cout << args[i] << space << (std::string)label_vocab[std::to_string(outputs[i])] << "\n";
+        std::cout << args[i] << space << label_vocab[outputs[i]] << "\n";
     }
 }
