@@ -144,7 +144,8 @@ class Service(object):
             logging.debug("loading remote model")
             beam = kwargs.get('beam', 10)
             model = Service._create_remote_model(directory, be, remote, name, cls.signature_name(), beam,
-                                                 preproc=kwargs.get('preproc', 'client'))
+                                                 preproc=kwargs.get('preproc', 'client'),
+                                                 version=kwargs.get('version'))
             return cls(vocabs, vectorizers, model)
 
         # Currently nothing to do here
@@ -175,6 +176,7 @@ class Service(object):
         lengths_key = assets.get('lengths_key', None)
         inputs = assets.get('inputs', [])
         return_labels = bool(assets['metadata']['return_labels'])
+        version = kwargs.get('version')
 
         if backend == 'tf':
             remote_models = import_user_module('baseline.remote')
@@ -185,7 +187,7 @@ class Service(object):
             else:
                 RemoteModel = remote_models.RemoteModelTensorFlowGRPC
             model = RemoteModel(remote, name, signature_name, labels=labels, lengths_key=lengths_key, inputs=inputs,
-                                beam=beam, return_labels=return_labels)
+                                beam=beam, version=version, return_labels=return_labels)
         else:
             raise ValueError("only Tensorflow is currently supported for remote Services")
 
