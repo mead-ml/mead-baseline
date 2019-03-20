@@ -55,6 +55,7 @@ exporter = export(__all__)
 
 @exporter
 def normalize_backend(name):
+    allowed_backends = {'tf', 'pytorch', 'dy', 'keras'}
     name = name.lower()
     if name == 'tensorflow':
         name = 'tf'
@@ -62,6 +63,8 @@ def normalize_backend(name):
         name = 'pytorch'
     elif name == 'dynet':
         name = 'dy'
+    if name not in allowed_backends:
+        raise ValueError("Supported backends are %s, got %s" % (allowed_backends, name))
     return name
 
 
