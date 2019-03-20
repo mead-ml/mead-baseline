@@ -140,7 +140,7 @@ class RemoteModelTensorFlowGRPC(object):
         :param beam: The beam width (defaults to None)
         :param lengths_key: Which key is used for the length of the input vector (defaults to None)
         :param inputs: The inputs (defaults to empty list)
-        :param version: The model version (defaults to 1)
+        :param version: The model version (defaults to None)
         :param return_labels: Whether the remote model returns class indices or the class labels directly. This depends
         on the `return_labels` parameter in exporters
         """

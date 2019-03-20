@@ -145,7 +145,7 @@ class Service(object):
             beam = kwargs.get('beam', 10)
             model = Service._create_remote_model(directory, be, remote, name, cls.signature_name(), beam,
                                                  preproc=kwargs.get('preproc', 'client'),
-                                                 version=kwargs.get('version', None))
+                                                 version=kwargs.get('version'))
             return cls(vocabs, vectorizers, model)
 
         # Currently nothing to do here
@@ -176,7 +176,7 @@ class Service(object):
         lengths_key = assets.get('lengths_key', None)
         inputs = assets.get('inputs', [])
         return_labels = bool(assets['metadata']['return_labels'])
-        version = kwargs.get('version', None)
+        version = kwargs.get('version')
 
         if backend == 'tf':
             remote_models = import_user_module('baseline.remote')
