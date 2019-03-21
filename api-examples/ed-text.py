@@ -35,7 +35,7 @@ else:
     batch = [args.text.split()]
     batches.append(batch)
 
-m = bl.EncoderDecoderService.load(args.model, backend=args.backend,
+m = bl.EncoderDecoderService.load(args.model, backend=args.backend, beam=args.beam,
                                   remote=args.remote, name=args.name, device=args.device)
 
 f = open(args.target, 'w') if args.target is not None else None
