@@ -42,7 +42,7 @@ class RemoteModelTensorFlowREST(object):
         """
         return self.labels
 
-    def predict(self, examples):
+    def predict(self, examples, **kwargs):
         """Run prediction over HTTP/REST.
 
         :param examples: The input examples
@@ -173,7 +173,7 @@ class RemoteModelTensorFlowGRPC(object):
         """
         return self.labels
 
-    def predict(self, examples):
+    def predict(self, examples, **kwargs):
         """Run prediction over gRPC
 
         :param examples: The input examples
