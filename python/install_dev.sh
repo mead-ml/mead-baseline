@@ -25,7 +25,14 @@ if [ $? != 0 ]; then
     exit 1
 fi
 
-pip install -e .[test,sql,mongo]
+if [ $package = "baseline" ]; then
+    pip install -e .[test,yaml]
+fi
+
+if [ $package = "xpctl" ]; then
+    pip install -e .[test,sql,mongo]
+fi
+
 if [ $? != 0 ]; then
     echo "$package failed to install."
     exit 1
