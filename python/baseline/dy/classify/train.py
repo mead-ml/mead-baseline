@@ -178,4 +178,5 @@ def fit(model, ts, vs, es, epochs=20, do_early_stopping=True, early_stopping_met
     if es is not None:
         logger.info('Reloading best checkpoint')
         model = model.load(model_file)
-        trainer.test(es, reporting_fns, phase='Test', verbose=verbose)
+        test_metrics = trainer.test(es, reporting_fns, phase='Test', verbose=verbose)
+    return test_metrics

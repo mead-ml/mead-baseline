@@ -220,9 +220,10 @@ class Task(object):
         train_params = self.config_params['train']
         train_params['checkpoint'] = checkpoint
 
-        baseline.train.fit(model, self.train_data, self.valid_data, self.test_data, **train_params)
+        metrics = baseline.train.fit(model, self.train_data, self.valid_data, self.test_data, **train_params)
         baseline.zip_files(self.get_basedir())
         self._close_reporting_hooks()
+        return model, metrics
 
     def _configure_reporting(self, reporting, **kwargs):
         """Configure all `reporting_hooks` specified in the mead settings or overridden at the command line
@@ -544,12 +545,12 @@ class TaggerTask(Task):
         conll_output = self.config_params.get("conll_output", None)
         train_params = self.config_params['train']
         train_params['checkpoint'] = checkpoint
-        baseline.train.fit(model, self.train_data, self.valid_data, self.test_data,
+        metrics = baseline.train.fit(model, self.train_data, self.valid_data, self.test_data,
                            conll_output=conll_output,
                            txts=self.txts, **train_params)
         baseline.zip_files(self.get_basedir())
         self._close_reporting_hooks()
-        return model
+        return model, metrics
 
 
 @exporter
@@ -673,7 +674,7 @@ class EncoderDecoderTask(Task):
                                                                                      preproc['mxlen'], False, 0,
                                                                                      num_ex, reverse=False)
         self.config_params['train']['tgt_rlut'] = rlut2
-        super(EncoderDecoderTask, self).train(checkpoint)
+        return super(EncoderDecoderTask, self).train(checkpoint)
 
 
 @exporter
@@ -786,9 +787,10 @@ class LanguageModelingTask(Task):
         model = self._create_model()
         train_params = self.config_params['train']
         train_params['checkpoint'] = checkpoint
-        baseline.train.fit(model, self.train_data, self.valid_data, self.test_data, **train_params)
+        metrics = baseline.train.fit(model, self.train_data, self.valid_data, self.test_data, **train_params)
         baseline.zip_files(self.get_basedir())
         self._close_reporting_hooks()
+        return model, metrics
 
     @staticmethod
     def _num_steps_per_epoch(num_examples, nctx, batchsz):

@@ -201,4 +201,5 @@ def fit(model, ts, vs, es=None, **kwargs):
         logger.info('Best performance on %s: %.3f at epoch %d', early_stopping_metric, best_metric, last_improved)
     if es is not None:
         trainer.recover_last_checkpoint()
-        trainer.test(es, reporting_fns, phase='Test')
+        test_metrics = trainer.test(es, reporting_fns, phase='Test')
+    return test_metrics

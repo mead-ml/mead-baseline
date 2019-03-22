@@ -191,4 +191,5 @@ def fit(model, ts, vs, es, **kwargs):
         logger.info('Reloading best checkpoint')
         model = torch.load(model_file)
         trainer = create_trainer(model, **kwargs)
-        trainer.test(es, reporting_fns, conll_output=conll_output, txts=txts, phase='Test')
+        test_metrics = trainer.test(es, reporting_fns, conll_output=conll_output, txts=txts, phase='Test')
+    return test_metrics
