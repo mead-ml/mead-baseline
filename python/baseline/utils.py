@@ -478,7 +478,7 @@ def read_yaml(filepath, default_value=None, strict=False):
         return default_value if default_value is not None else {}
     with open(filepath) as f:
         import yaml
-        return yaml.load(f)
+        return yaml.load(f, Loader=yaml.FullLoader)
 
 
 @exporter
@@ -488,7 +488,7 @@ def read_config_file(config_file):
     :param config_file: (``str``) A path to a config file which should be a JSON file, or YAML if pyyaml is installed
     :return: (``dict``) An object
     """
-    if config_file.endswith('.yml'):
+    if config_file.endswith('.yml') or config_file.endswith('.yaml'):
         return read_yaml(config_file, strict=True)
     return read_json(config_file, strict=True)
 
