@@ -978,13 +978,14 @@ class ELMoEmbeddings(TensorFlowEmbeddings):
         return tf.placeholder('int32', shape=(None, None, ELMO_MXWLEN), name=name)
 
     def __init__(self, name, embed_file=None, known_vocab=None, **kwargs):
-        super(ELMoEmbeddings, self).__init__(name=name)
+        super(ELMoEmbeddings, self).__init__(name=name, **kwargs)
 
         # options file
         self.weight_file = embed_file
         self.dsz = kwargs['dsz']
         elmo_config = embed_file.replace('weights.hdf5', 'options.json')
         self.model = BidirectionalLanguageModel(elmo_config, self.weight_file)
+        self.known_vocab = known_vocab
         self.vocab = UnicodeCharsVocabulary(known_vocab)
         elmo_config = read_json(elmo_config)
         assert self.dsz == 2*int(elmo_config['lstm']['projection_dim'])
@@ -1015,11 +1016,11 @@ class ELMoEmbeddings(TensorFlowEmbeddings):
         #return tf.Print(elmo_weighting, [tf.shape(elmo_weighting)])
         return elmo_weighting
 
-    def save_md(self, target):
-        write_json({'vsz': self.vsz, 'dsz': self.dsz}, target)
-
-
-
+    def get_config(self):
+        config = super(ELMoEmbeddings, self).get_config()
+        config['embed_file'] = self.weight_file
+        config['known_vocab'] = self.known_vocab
+        return config
 
 @register_embeddings(name='elmo')
 class ELMoHubEmbeddings(TensorFlowEmbeddings):
@@ -1029,7 +1030,7 @@ class ELMoHubEmbeddings(TensorFlowEmbeddings):
         return tf.placeholder(tf.string, [None, None], name=name)
 
     def __init__(self, name, **kwargs):
-        super(ELMoHubEmbeddings, self).__init__()
+        super(ELMoHubEmbeddings, self).__init__(**kwargs)
         self.vsz = None
         self.dsz = kwargs.get('dsz')
         self.finetune = kwargs.get('finetune', True)
