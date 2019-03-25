@@ -478,7 +478,7 @@ def read_yaml(filepath, default_value=None, strict=False):
         return default_value if default_value is not None else {}
     with open(filepath) as f:
         import yaml
-        return yaml.load(f, Loader=yaml.FullLoader)
+        return yaml.load(f)
 
 
 @exporter
