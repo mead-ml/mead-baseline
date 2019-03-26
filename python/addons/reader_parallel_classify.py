@@ -28,8 +28,8 @@ class ParallelSeqLabelReader(SeqLabelReader):
             self.clean_fn = lambda x: x
         self.trim = trim
         self.truncate = truncate
-        self.data = _norm_ext(kwargs.get('data_suffix', 'in'))
-        self.labels = _norm_ext(kwargs.get('label_suffix', 'labels'))
+        self.data = _norm_ext(kwargs.get('data_suffix', kwargs.get('data', 'in')))
+        self.labels = _norm_ext(kwargs.get('label_suffix', kwargs.get('labels', 'labels')))
 
 
     SPLIT_ON = '[\t\s]+'
@@ -53,13 +53,11 @@ class ParallelSeqLabelReader(SeqLabelReader):
         return l.strip()
 
     @staticmethod
-    def label_and_sentence(line, clean_fn):
-        label_text = re.split(ParallelSeqLabelReader.SPLIT_ON, line)
-        label = label_text[0]
-        text = label_text[1:]
+    def get_sentence(line, clean_fn):
+        text = re.split(ParallelSeqLabelReader.SPLIT_ON, line)
         text = ' '.join(list(filter(lambda s: len(s) != 0, [clean_fn(w) for w in text])))
         text = list(filter(lambda s: len(s) != 0, re.split('\s+', text)))
-        return label, text
+        return text
 
     def build_vocab(self, files, **kwargs):
         label_idx = len(self.label2index)
@@ -70,8 +68,9 @@ class ParallelSeqLabelReader(SeqLabelReader):
             with codecs.open(file_name + self.data, encoding='utf-8', mode='r') as data_file:
                 with codecs.open(file_name + self.labels, encoding='utf-8', mode='r') as label_file:
                     for d, l in zip(data_file, label_file):
-                        line = "{}\t{}".format(l, d)
-                        label, text = ParallelSeqLabelReader.label_and_sentence(line, self.clean_fn)
+                        if d.strip() == "": continue
+                        label = l.rstrip()
+                        text = ParallelSeqLabelReader.get_sentence(d, self.clean_fn)
                         if len(text) == 0: continue
 
                         for k, vectorizer in self.vectorizers.items():
@@ -97,8 +96,9 @@ class ParallelSeqLabelReader(SeqLabelReader):
         with codecs.open(filename + self.data, encoding='utf-8', mode='r') as data_f:
             with codecs.open(filename + self.labels, encoding='utf-8', mode='r') as label_f:
                 for d, l in zip(data_f, label_f):
-                    line = '{}\t{}'.format(l, d)
-                    label, text = ParallelSeqLabelReader.label_and_sentence(line, self.clean_fn)
+                    if d.strip() == "": continue
+                    label = l.rstrip()
+                    text = ParallelSeqLabelReader.get_sentence(d, self.clean_fn)
                     if len(text) == 0:
                         continue
                     y = self.label2index[label]
