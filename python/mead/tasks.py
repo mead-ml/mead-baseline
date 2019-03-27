@@ -137,7 +137,7 @@ class Task(object):
         basedir = self.get_basedir()
         if basedir is not None and not os.path.exists(basedir):
             logger.info('Creating: {}'.format(basedir))
-            os.mkdir(basedir)
+            os.makedirs(basedir)
         self.config_params['train']['basedir'] = basedir
         # Read GPUS from env variables now so that the reader has access
         if self.config_params['model'].get('gpus', 1) == -1:

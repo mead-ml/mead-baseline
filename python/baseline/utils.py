@@ -966,13 +966,13 @@ def find_files_with_prefix(directory, prefix):
 def zip_files(basedir):
     pid = str(os.getpid())
     tgt_zip_base = os.path.abspath(basedir)
+    zip_name = os.path.basename(tgt_zip_base)
     model_files = [x for x in os.listdir(basedir) if x.find(pid) >= 0 and os.path.isfile(os.path.join(basedir, x))]
-    z = zipfile.ZipFile("{}-{}.zip".format(tgt_zip_base, pid), "w")
-    for f in model_files:
-        f = os.path.join(basedir, f)
-        z.write(f)
-        os.remove(f)
-    z.close()
+    with zipfile.ZipFile("{}-{}.zip".format(tgt_zip_base, pid), "w") as z:
+        for f in model_files:
+            abs_f = os.path.join(basedir, f)
+            z.write(abs_f, os.path.join(zip_name, f))
+            os.remove(abs_f)
 
 
 @exporter
