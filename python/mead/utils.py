@@ -8,6 +8,7 @@ from copy import deepcopy
 from itertools import chain
 from collections import OrderedDict
 from baseline.utils import export, str2bool, read_config_file, get_logging_level
+from dateutil.parser import parse as parse_date
 
 __all__ = []
 exporter = export(__all__)
@@ -55,6 +56,29 @@ def read_config_file_or_json(config, name=''):
     if os.path.exists(config):
         return read_config_file(config)
     raise Exception('Expected {} config file or a JSON object.'.format(name))
+
+
+@exporter
+def get_dataset_from_key(dataset_key, datasets_set):
+
+    # This is the previous behavior
+    if dataset_key in datasets_set:
+        return datasets_set[dataset_key]
+
+    last_date = parse_date('1900')
+    last_k = None
+    for k, v in datasets_set.items():
+
+        if dataset_key in k:
+            dt = parse_date(k.split(':')[-1])
+            if dt > last_date:
+                last_date = dt
+                last_k = k
+
+    if last_k is None:
+        raise Exception("No dataset could be found with key {}".format(dataset_key))
+
+    return datasets_set[last_k]
 
 
 @exporter
