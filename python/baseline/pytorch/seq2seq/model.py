@@ -66,8 +66,6 @@ class EncoderDecoderModelBase(nn.Module, EncoderDecoderModel):
         :return:
         """
         torch.save(self, model_file)
-        basename, _ = os.path.splitext(outname)
-        write_json(self.labels, basename + ".labels")
 
     def create_loss(self):
         """Create a loss function.
