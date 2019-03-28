@@ -20,6 +20,7 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
         if not os.path.exists(filename):
             filename += '.pyt'
         model = torch.load(filename, map_location=device)
+        model.gpu = False if device == 'cpu' else model.gpu
         return model
 
     def save(self, outname):

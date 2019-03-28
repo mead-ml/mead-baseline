@@ -8,7 +8,7 @@ parser.add_argument('--text', help='raw value', type=str)
 parser.add_argument('--backend', help='backend', default='tf')
 parser.add_argument('--remote', help='(optional) remote endpoint', type=str) # localhost:8500
 parser.add_argument('--name', help='(optional) service name', type=str)
-parser.add_argument('--device', help='device', default='default')
+parser.add_argument('--device', help='device')
 parser.add_argument('--preproc', help='(optional) where to perform preprocessing', choices={'client', 'server'}, default='client')
 args = parser.parse_args()
 
