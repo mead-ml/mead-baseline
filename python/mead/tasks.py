@@ -485,7 +485,6 @@ class TaggerTask(Task):
 
     def _reorganize_params(self):
         train_params = self.config_params['train']
-        train_params['batchsz'] = self.config_params['batchsz']
         train_params['test_batchsz'] = self.config_params.get('test_batchsz', 1)
         labels = self.reader.label2index
         span_type = self.config_params['train'].get('span_type')
@@ -513,7 +512,7 @@ class TaggerTask(Task):
 
     def _load_dataset(self):
         batchsz = self.config_params['train']['batchsz']
-        test_batchsz = self.config_params['train']['test_batchsz']
+        test_batchsz = self.config_params['train'].get('test_batchsz', 1)
         # TODO: get rid of sort_key=self.primary_key in favor of something explicit?
         self.train_data, _ = self.reader.load(self.dataset['train_file'], self.feat2index, batchsz,
                                               shuffle=True,
@@ -614,7 +613,7 @@ class EncoderDecoderTask(Task):
 
     def _load_dataset(self):
         batchsz = self.config_params['train']['batchsz']
-        test_batchsz = self.config_params['train']['test_batchsz']
+        test_batchsz = self.config_params['train'].get('test_batchsz', 1)
         self.train_data = self.reader.load(self.dataset['train_file'],
                                            self.feat2src, self.feat2tgt,
                                            batchsz,

@@ -1,6 +1,5 @@
 {
     "task": "tagger",
-    "batchsz": 20,
     "basedir": "./twpos",
     "conll_output": "twposresults.conll",
     "charsz": 16,
@@ -59,6 +58,7 @@
         "crf": true	
     },
     "train": {
+        "batchsz": 20,
         "epochs": 40,
         "optim": "sgd",
         "eta": 0.01,

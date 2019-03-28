@@ -205,7 +205,7 @@ def fit(model_params, ts, vs, es, **kwargs):
             best_metric = test_metrics[early_stopping_metric]
             print('New best %.3f' % best_metric)
             trainer.checkpoint()
-            trainer.save(model_file)
+            trainer.model.save(model_file)
 
         elif (epoch - last_improved) > patience:
             print('Stopping due to persistent failures to improve')
