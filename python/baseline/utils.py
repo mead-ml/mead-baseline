@@ -953,7 +953,7 @@ def unzip_files(zip_path):
             if len(os.listdir(temp_dir)) == 1:  # a directory was zipped v files
                 temp_dir = os.path.join(temp_dir, os.listdir(temp_dir)[0])
         return temp_dir
-    return path
+    return zip_path
 
 
 @exporter
