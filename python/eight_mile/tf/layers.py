@@ -334,7 +334,7 @@ class LSTMEncoder(tf.keras.Model):
             )
         self.output_fn = rnn_ident if output_fn is None else output_fn
 
-    def call(self, inputs, training=False):
+    def call(self, inputs):
         inputs, lengths = tensor_and_lengths(inputs)
         rnnout, hidden = tf.nn.dynamic_rnn(self.rnn, inputs, sequence_length=lengths, dtype=tf.float32)
         return self.output_fn(rnnout, hidden)
@@ -342,7 +342,6 @@ class LSTMEncoder(tf.keras.Model):
     @property
     def requires_length(self):
         return self._requires_length
-
 
 
 class LSTMEncoderWithState(LSTMEncoder):
@@ -355,7 +354,7 @@ class LSTMEncoderWithState(LSTMEncoder):
     def zero_state(self, batchsz):
         return self.rnn.zero_state(batchsz, tf.float32)
 
-    def call(self, inputs, training=False):
+    def call(self, inputs):
 
         inputs, hidden = inputs
         rnnout, hidden = tf.nn.dynamic_rnn(self.rnn, inputs, initial_state=hidden, dtype=tf.float32)
@@ -424,7 +423,7 @@ class EmbeddingsStack(tf.keras.Model):
         self.dropout = tf.keras.layers.Dropout(dropout_rate)
         self._requires_length = requires_length
 
-    def call(self, inputs, training=False, mask=None):
+    def call(self, inputs):
         """This method performs "embedding" of the inputs.  The base method here then concatenates along depth
         dimension to form word embeddings
 
@@ -436,7 +435,7 @@ class EmbeddingsStack(tf.keras.Model):
             embeddings_out = embedding(x)
             all_embeddings_out.append(embeddings_out)
         word_embeddings = tf.concat(values=all_embeddings_out, axis=-1)
-        return self.dropout(word_embeddings)
+        return self.dropout(word_embeddings, TRAIN_FLAG())
 
     @property
     def dsz(self):
@@ -466,7 +465,7 @@ class DenseStack(tf.keras.Model):
         self.layer_stack = [tf.keras.layers.Dense(hsz, kernel_initializer=init, activation=activation) for hsz in hszs]
         self.dropout = tf.keras.layers.Dropout(pdrop_value)
 
-    def call(self, inputs, training=False, mask=None):
+    def call(self, inputs):
         """Stack 1 or more hidden layers, optionally (forming an MLP)
 
         :param inputs: The fixed representation of the model
@@ -482,7 +481,7 @@ class DenseStack(tf.keras.Model):
         x = inputs
         for layer in self.layer_stack:
             x = layer(x)
-            x = self.dropout(x, training)
+            x = self.dropout(x, TRAIN_FLAG())
         return x
 
     @property
@@ -648,9 +647,9 @@ class MultiHeadedAttention(tf.keras.Model):
         self.w_O = TimeDistributedProjection(d_model)
         self.attn_fn = scaled_dot_product_attention if scale else dot_product_attention
         self.attn = None
-        self.dropout = tf.keras.layers.Dropout(dropout)
+        self.dropout = dropout
 
-    def call(self, qkv, training=False, mask=None):
+    def call(self, qkv, mask=None):
         query, key, value = qkv
 
         # (B, H, T, D)
@@ -674,15 +673,15 @@ class TransformerEncoder(tf.keras.Model):
         self.ln2 = LayerNorm(name='ln_2')
         self.feed_forward = FFN(d_model, pdrop, activation, d_ff, name='ffn')
 
-    def call(self, inputs, training=False, mask=None):
+    def call(self, inputs, mask=None):
         x = inputs
 
         x = self.ln1(x)
-        x = x + self.dropout(self.self_attn((x, x, x), training, mask), training)
+        x = x + self.dropout(self.self_attn((x, x, x), mask=mask), TRAIN_FLAG())
 
         x = self.ln2(x)
 
-        x = x + self.dropout(self.feed_forward(x, training, mask), training)
+        x = x + self.dropout(self.feed_forward(x), TRAIN_FLAG())
         return x
 
 
@@ -710,13 +709,13 @@ class TransformerDecoder(tf.keras.Model):
             src_mask, tgt_mask = mask
 
         x = self.ln1(x)
-        x = x + self.dropout(self.self_attn((x, x, x), training, tgt_mask))
+        x = x + self.dropout(self.self_attn((x, x, x), training, tgt_mask), TRAIN_FLAG())
 
         x = self.ln2(x)
-        x = x + self.dropout(self.src_attn((x, memory, memory), src_mask))
+        x = x + self.dropout(self.src_attn((x, memory, memory), src_mask), TRAIN_FLAG())
 
         x = self.ln3(x)
-        x = x + self.dropout(self.feed_forward(x, training, mask))
+        x = x + self.dropout(self.feed_forward(x), TRAIN_FLAG())
         return x
 
 
@@ -778,8 +777,8 @@ class FFN(tf.keras.Model):
         self.dropout = tf.keras.layers.Dropout(pdrop)
         self.act = tf.keras.layers.Activation(activation)
 
-    def call(self, inputs, training=False, mask=None):
-        return self.squeeze(self.dropout(self.act(self.expansion(inputs)), training))
+    def call(self, inputs):
+        return self.squeeze(self.dropout(self.act(self.expansion(inputs)), TRAIN_FLAG()))
 
 
 class TaggerGreedyDecoder(tf.keras.layers.Layer):
@@ -865,7 +864,7 @@ class CRF(tf.keras.layers.Layer):
         """
         return tf.contrib.crf.crf_sequence_score(unary, tags, lengths, self.transitions)
 
-    def call(self, inputs, training=False, mask=None):
+    def call(self, inputs, training=False):
 
         unary, lengths = inputs
         if training:
@@ -925,19 +924,19 @@ class TagSequenceModel(tf.keras.Model):
         decoder_model = CRF(nc) if decoder is None else decoder
         self.decoder_model = decoder_model
 
-    def transduce(self, inputs, training=None, mask=None):
+    def transduce(self, inputs):
         lengths = inputs.get('lengths')
 
-        embedded = self.embed_model(inputs, training, mask)
+        embedded = self.embed_model(inputs)
         embedded = (embedded, lengths)
-        transduced = self.proj_layer(self.transducer_model(embedded, training))
+        transduced = self.proj_layer(self.transducer_model(embedded))
         return transduced
 
     def decode(self, transduced, lengths):
         return self.decoder_model((transduced, lengths))
 
-    def call(self, inputs, training=None, mask=None):
-        transduced = self.transduce(inputs, training, mask)
+    def call(self, inputs, training=None):
+        transduced = self.transduce(inputs)
         return self.decode(transduced, inputs.get('lengths'))
 
     def neg_log_loss(self, unary, tags, lengths):
@@ -957,12 +956,12 @@ class LangSequenceModel(tf.keras.Model):
         self.proj_layer = TimeDistributedProjection(nc)
         self.decoder_model = decoder
 
-    def call(self, inputs, training=None, mask=None):
+    def call(self, inputs):
 
         h = inputs.get('h')
 
-        embedded = self.embed_model(inputs, training, mask)
-        transduced, hidden = self.transducer_model((embedded, h), training)
+        embedded = self.embed_model(inputs)
+        transduced, hidden = self.transducer_model((embedded, h))
         ##transduced, hidden = self.transducer_model(embedded, training)
         transduced = self.proj_layer(transduced)
         return transduced, hidden
@@ -985,7 +984,7 @@ class EmbedPoolStackModel(tf.keras.Model):
         self.pool_model = pool_model
         self.stack_model = stack_model
 
-    def call(self, inputs, training=None, mask=None):
+    def call(self, inputs):
         lengths = inputs.get('lengths')
 
         embedded = self.embed_model(inputs)
