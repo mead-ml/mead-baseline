@@ -4,20 +4,15 @@ import argparse
 from baseline.utils import unzip_files, read_config_file
 import mead
 from mead.exporters import create_exporter
-from mead.utils import convert_path, configure_logger, get_export_params
+from mead.utils import (
+    convert_path,
+    configure_logger,
+    get_export_params,
+    create_feature_exporter_field_map,
+)
 
 
 logger = logging.getLogger('mead')
-
-
-def create_feature_exporter_field_map(feature_section, default_exporter_field='tokens'):
-    feature_exporter_field_map = {}
-    for feature_desc in feature_section:
-        if feature_desc.get('exporter_field') is None:
-            feature_exporter_field_map[feature_desc['name']] = default_exporter_field
-        else:
-            feature_exporter_field_map[feature_desc['name']] = feature_desc['exporter_field']
-    return feature_exporter_field_map
 
 
 def main():

@@ -49,6 +49,9 @@ class Service(object):
     def task_name(cls):
         raise Exception("Undefined task name")
 
+    def predict(self, tokens, **kwargs):
+        pass
+
     def batch_input(self, tokens):
         """Turn the input into a consistent format.
         :param tokens: tokens in format List[str] or List[List[str]]
@@ -152,7 +155,10 @@ class Service(object):
         # labels = read_json(os.path.join(directory, model_basename) + '.labels')
 
         import_user_module('baseline.{}.embeddings'.format(be))
-        import_user_module('baseline.{}.{}'.format(be, cls.task_name()))
+        try:
+            import_user_module('baseline.{}.{}'.format(be, cls.task_name()))
+        except:
+            pass
         model = load_model_for(cls.task_name(), model_basename, **kwargs)
         return cls(vocabs, vectorizers, model)
 
@@ -230,7 +236,7 @@ class ClassifierService(Service):
             # vectorizers should not be available when preproc=server.
             featurized_examples = self.vectorize(tokens_seq)
             examples = {
-                        'tokens': [" ".join(x) for x in tokens_seq],
+                        'tokens': np.array([" ".join(x) for x in tokens_seq]),
                         self.model.lengths_key: featurized_examples[self.model.lengths_key]
             }
 
@@ -243,6 +249,32 @@ class ClassifierService(Service):
                 results += [list(map(lambda x: (self.label_vocab[x[0].item()], x[1].item()),
                                      sorted(outcomes, key=lambda tup: tup[1], reverse=True)))]
         return results
+
+@exporter
+class EmbeddingsService(Service):
+    @classmethod
+    def task_name(cls):
+        return 'servable_embeddings'
+
+    @classmethod
+    def signature_name(cls):
+        return 'embed_text'
+
+    def predict(self, tokens, preproc='client'):
+        tokens_seq, mxlen, mxwlen = self.batch_input(tokens)
+        self.set_vectorizer_lens(mxlen, mxwlen)
+        if preproc == 'client':
+            examples = self.vectorize(tokens_seq)
+        else:
+            examples = {
+                'tokens': np.array([" ".join(x) for x in tokens_seq]),
+            }
+        return self.model.predict(examples)
+
+    @classmethod
+    def load(cls, bundle, **kwargs):
+        import_user_module('create_servable_embeddings')
+        return super(EmbeddingsService, cls).load(bundle, **kwargs)
 
 
 @exporter
@@ -363,8 +395,8 @@ class TaggerService(Service):
         if preproc == 'server':
             unfeaturized_examples = {}
             for exporter_field in export_mapping:
-                unfeaturized_examples[exporter_field] = [" ".join([y[export_mapping[exporter_field]]
-                                                                   for y in x]) for x in tokens_seq]
+                unfeaturized_examples[exporter_field] = np.array([" ".join([y[export_mapping[exporter_field]]
+                                                                   for y in x]) for x in tokens_seq])
             unfeaturized_examples[self.model.lengths_key] = examples[self.model.lengths_key]  # remote model
             examples = unfeaturized_examples
 

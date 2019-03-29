@@ -145,7 +145,6 @@ class RemoteModelREST(RemoteModel):
         verify_example(examples, self.input_keys)
 
         request = self.create_request(examples)
-
         conn = HTTPConnection(self.hostname, self.port)
         conn.request('POST', self.path, json.dumps(request), self.headers)
         response = conn.getresponse().read()
@@ -197,6 +196,10 @@ class RemoteModelREST(RemoteModel):
                 else:
                     d = [(np.int32(c), np.float32(s)) for c, s in zip(classes_i, score_i)]
                 result.append(d)
+
+        if self.signature == 'embed_text':
+            result = np.array(predict_response['scores'])
+
         return result
 
 
@@ -334,3 +337,8 @@ class RemoteModelGRPC(RemoteModel):
                 d = [(self.decode_output(c), np.float32(s)) for c, s in zip(classes[example_len*i:example_len*(i+1)][:length], scores[length*i:length*(i+1)][:length])]
                 result.append(d)
             return result
+
+        if self.signature == 'embed_text':
+            scores = predict_response.outputs.get('scores')
+            shape = [dim.size for dim in scores.tensor_shape.dim]
+            return np.reshape(np.array(scores.float_val), shape)

@@ -6,6 +6,7 @@ from baseline.utils import write_json, Offsets
 from baseline.embeddings import register_embeddings
 from baseline.tf.tfy import pool_chars, get_shape_as_list, stacked_lstm, embed
 
+
 class TensorFlowEmbeddings(object):
     """This provides a base for TensorFlow embeddings sub-graphs
 
@@ -56,6 +57,10 @@ class TensorFlowEmbeddings(object):
         :return:
         """
         pass
+
+    def get_feed_dict(self):
+        """Return a feed dict that is needed to initialize this embeddings."""
+        return {}
 
     @classmethod
     def create_placeholder(cls, name):
@@ -135,7 +140,6 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
             unif = kwargs.get('unif', 0.1)
             self.weights = np.random.uniform(-unif, unif, (self.vsz, self.dsz))
 
-
     def get_dsz(self):
         return self.dsz
 
@@ -178,6 +182,56 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
                 word_embeddings = tf.nn.embedding_lookup(W, x)
 
         return word_embeddings
+
+
+@register_embeddings(name='large-lut')
+class LargeLookupTableEmbeddings(LookupTableEmbeddings):
+    """Provide "classic" Lookup-Table based word embeddings
+
+    """
+
+    def encode(self, x=None):
+        """Create a really large embedding matrix in tensorflow.
+
+        Tensorflow has a limit on the size that a op can be (2GB). When we have very
+        large embedding lookuptables (for example when we don't prune the vocab) we
+        hit this limit and can't have the embeddings in the graph. This is due to a
+        limit in the size that a thing can be in a protocol buffer (how tensorflow
+        serializes the graph).
+
+        Here we get around it with a placeholder. The place holder will be in the
+        graph and it will know it needs to have a size of [vsz, dsz] but it doesn't
+        have the actual values so it can be serialized into a protocol buffer since
+        it is small.
+
+        We then have a variable that is initialized with the value of the
+        placeholder. This is filled in with value during the `sess.run` of
+        `tf.global_variables_initialzier` with a feed_dict. Values are then saved
+        into the checkpoint and can be reloaded from there.
+
+        ```
+        sess.run(tf.global_variables_initializer(), {e.W_place: e.weights})
+        ```
+        """
+        if x is None:
+            x = LookupTableEmbeddings.create_placeholder(self.name)
+        self.x = x
+
+        with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
+
+            self.W_place = tf.placeholder(tf.float32, shape=(self.vsz, self.dsz))
+            W = tf.get_variable("W", initializer=self.W_place)
+
+            e0 = tf.scatter_update(W, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, self.dsz]))
+
+            with tf.control_dependencies([e0]):
+                word_embeddings = tf.nn.embedding_lookup(W, x)
+
+        return word_embeddings
+
+    def get_feed_dict(self):
+        """Feed dict mapping the numpy weights to the placeholder."""
+        return {self.W_place: self.weights}
 
 
 @register_embeddings(name='char-conv')

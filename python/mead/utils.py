@@ -399,3 +399,13 @@ def save_to_bundle(output_path, directory, assets=None):
     if assets:
         asset_file = os.path.join(output_path, 'model.assets')
         write_json(assets, asset_file)
+
+
+def create_feature_exporter_field_map(feature_section, default_exporter_field='tokens'):
+    feature_exporter_field_map = {}
+    for feature_desc in feature_section:
+        if feature_desc.get('exporter_field') is None:
+            feature_exporter_field_map[feature_desc['name']] = default_exporter_field
+        else:
+            feature_exporter_field_map[feature_desc['name']] = feature_desc['exporter_field']
+    return feature_exporter_field_map

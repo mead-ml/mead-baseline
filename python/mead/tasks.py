@@ -40,12 +40,13 @@ class Backend(object):
         self.name = normalize_backend(name)
         self.params = params
 
-    def load(self, task_name):
+    def load(self, task_name=None):
         base_pkg_name = 'baseline.{}'.format(self.name)
         mod = import_user_module(base_pkg_name)
         import_user_module('{}.embeddings'.format(base_pkg_name))
         import_user_module('mead.{}.exporters'.format(self.name))
-        import_user_module('{}.{}'.format(base_pkg_name, task_name))
+        if task_name is not None:
+            import_user_module('{}.{}'.format(base_pkg_name, task_name))
         self.transition_mask = mod.transition_mask
 
 
@@ -100,6 +101,8 @@ class Task(object):
         self.primary_key = features[0]['name']
         for feature in self.config_params['features']:
             key = feature['name']
+            if '-' in key:
+                raise ValueError('Feature names cannot contain "-". Found feature named "{}"'.format(key))
             if feature.get('primary', False) is True:
                 self.primary_key = key
             vectorizer_section = feature.get('vectorizer', {'type': 'token1d'})
@@ -137,7 +140,7 @@ class Task(object):
         self.config_params = config_params
         basedir = self.get_basedir()
         if basedir is not None and not os.path.exists(basedir):
-            logger.info('Creating: {}'.format(basedir))
+            logger.info('Creating: %s', basedir)
             os.makedirs(basedir)
         self.config_params['train']['basedir'] = basedir
         # Read GPUS from env variables now so that the reader has access
@@ -671,7 +674,7 @@ class LanguageModelingTask(Task):
     def _create_task_specific_reader(self):
         self._create_vectorizers()
 
-        reader_params = self.config_params['reader'] if reader in self.config_params else self.config_params['loader']
+        reader_params = self.config_params['reader'] if 'reader' in self.config_params else self.config_params['loader']
         reader_params['nctx'] = reader_params.get('nctx', self.config_params.get('nctx', self.config_params.get('nbptt', 35)))
         reader_params['clean_fn'] = reader_params.get('clean_fn', self.config_params.get('preproc', {}).get('clean_fn'))
         if reader_params['clean_fn'] is not None and self.config_params['dataset'] != 'SST2':

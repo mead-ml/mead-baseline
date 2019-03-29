@@ -28,20 +28,20 @@ class TensorFlowPreprocessor(Preprocessor):
                                                           lambda: self.lchars[x[0]]),
                                         (upchar_inds, split_chars), dtype=tf.string))
 
-    def preproc(self, tf_example):
+    def preproc(self, tf_example, mxlen):
         """
         Create a preprocessor chain inside of the tensorflow graph.
         """
         pass
 
-    def resize_sen(self, raw):
+    def resize_sen(self, raw, mxlen):
         """
         Splits and rejoins a string to ensure that tokens meet
         the required max len.
         """
         raw_tokens = tf.string_split(tf.reshape(raw, [-1])).values
         # sentence length > mxlen
-        raw_post = tf.reduce_join(raw_tokens[:self.mxlen], separator=" ")
+        raw_post = tf.reduce_join(raw_tokens[:mxlen], separator=" ")
         return raw_post
 
     @staticmethod
@@ -49,7 +49,6 @@ class TensorFlowPreprocessor(Preprocessor):
         reshaped = tf.sparse_reset_shape(indices, new_shape=shape)
         # Now convert to a dense representation
         x = tf.sparse_tensor_to_dense(reshaped)
-        x = tf.contrib.framework.with_shape(shape, x)
         return x
 
 
@@ -59,13 +58,15 @@ class Token1DPreprocessor(TensorFlowPreprocessor):
 
     def __init__(self, feature, vectorizer, index, vocab, **kwargs):
         super(Token1DPreprocessor, self).__init__(feature, vectorizer, index, vocab, **kwargs)
-        self.mxlen = self.vectorizer.mxlen
+        self.hard_mxlen = self.vectorizer.mxlen
+        # 10000 is just a large max, six.MAXSIZE was causing issues
+        self.hard_mxlen = self.hard_mxlen if self.hard_mxlen != -1 else 10000
         transform_fn = self.vectorizer.transform_fn.__name__
         if transform_fn not in ["identity_trans_fn", "lowercase"]:
             raise NotImplementedError("can not export arbitrary transform functions")
         self.do_lowercase = transform_fn == "lowercase"
 
-    def create_word_vectors_from_post(self, raw_post):
+    def create_word_vectors_from_post(self, raw_post, mxlen):
         # vocab has only lowercase words
         word2index = self.index
         if self.do_lowercase:
@@ -74,14 +75,15 @@ class Token1DPreprocessor(TensorFlowPreprocessor):
         word_indices = word2index.lookup(word_tokens)
         # Reshape them out to the proper length
         reshaped_words = tf.sparse_reshape(word_indices, shape=[-1])
-        return self.reshape_indices(reshaped_words, [self.mxlen])
+        return self.reshape_indices(reshaped_words, [mxlen])
 
-    def preproc(self, post_mappings):
+    def preproc(self, post_mappings, mxlen):
         # Split the input string, assuming that whitespace is splitter
         # The client should perform any required tokenization for us and join on ' '
+        mxlen = tf.minimum(mxlen, self.hard_mxlen)
         raw_post = post_mappings[self.FIELD_NAME]
-        raw_post = self.resize_sen(raw_post)
-        return self.create_word_vectors_from_post(raw_post)
+        raw_post = self.resize_sen(raw_post, mxlen)
+        return self.create_word_vectors_from_post(raw_post, mxlen)
 
 
 @exporter
@@ -89,14 +91,16 @@ class Token1DPreprocessor(TensorFlowPreprocessor):
 class Char2DPreprocessor(TensorFlowPreprocessor):
     def __init__(self, feature, vectorizer, index, vocab, **kwargs):
         super(Char2DPreprocessor, self).__init__(feature, vectorizer, index, vocab, **kwargs)
-        self.mxlen = self.vectorizer.mxlen
+        self.hard_mxlen = self.vectorizer.mxlen
+        # 10000 is just a large max, six.MAXSIZE was causing issues
+        self.hard_mxlen = self.hard_mxlen if self.hard_mxlen != -1 else 10000
         self.mxwlen = self.vectorizer.mxwlen
         transform_fn = self.vectorizer.transform_fn.__name__
         if transform_fn not in ["identity_trans_fn", "lowercase"]:
             raise NotImplementedError("can not export arbitrary transform functions")
         self.do_lowercase = transform_fn == "lowercase"
 
-    def create_char_vectors_from_post(self, raw_post):
+    def create_char_vectors_from_post(self, raw_post, mxlen):
         char2index = self.index
         if self.do_lowercase:
             raw_post = self.lowercase(raw_post)
@@ -104,12 +108,13 @@ class Char2DPreprocessor(TensorFlowPreprocessor):
         culled_word_token_vals = tf.substr(raw_post.values, 0, self.mxwlen)
         char_tokens = tf.string_split(culled_word_token_vals, delimiter='')
         char_indices = char2index.lookup(char_tokens)
-        return self.reshape_indices(char_indices, [self.mxlen, self.mxwlen])
+        return self.reshape_indices(char_indices, [mxlen, self.mxwlen])
 
-    def preproc(self, post_mappings):
+    def preproc(self, post_mappings, mxlen):
+        mxlen = tf.minimum(mxlen, self.hard_mxlen)
         raw_post = post_mappings[self.FIELD_NAME]
-        raw_post = self.resize_sen(raw_post)
-        return self.create_char_vectors_from_post(raw_post)
+        raw_post = self.resize_sen(raw_post, mxlen)
+        return self.create_char_vectors_from_post(raw_post, mxlen)
 
 
 @exporter
@@ -124,4 +129,3 @@ class Dict1DPreprocessor(Token1DPreprocessor):
 class Dict2DPreprocessor(Char2DPreprocessor):
     def __init__(self, feature, vectorizer, index, vocab, **kwargs):
         super(Dict2DPreprocessor, self).__init__(feature, vectorizer, index, vocab, **kwargs)
-
