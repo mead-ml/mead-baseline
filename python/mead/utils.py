@@ -8,7 +8,7 @@ from copy import deepcopy
 from itertools import chain
 from collections import OrderedDict
 from baseline.utils import export, str2bool, read_config_file, get_logging_level
-from dateutil.parser import parse as parse_date
+from datetime import datetime
 
 __all__ = []
 exporter = export(__all__)
@@ -57,6 +57,16 @@ def read_config_file_or_json(config, name=''):
         return read_config_file(config)
     raise Exception('Expected {} config file or a JSON object.'.format(name))
 
+
+def parse_date(s):
+    KNOWN_FMTS = ['%Y%m%d', '%Y-%m-%d', '%Y/%m/%d', '%Y', '%Y%m', '%Y-%m', '%Y/%m']
+    for fmt in KNOWN_FMTS:
+        try:
+            dt = datetime.strptime(s, fmt)
+            return dt
+        except:
+            continue
+    raise Exception("Couldn't parse datestamp {}".format(s))
 
 @exporter
 def get_dataset_from_key(dataset_key, datasets_set):
