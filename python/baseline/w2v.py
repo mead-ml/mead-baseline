@@ -180,7 +180,7 @@ class PretrainedEmbeddingsModel(WordEmbeddingsModel):
         current = start+1
         while m[current:current+1] != b' ':
             current += 1
-        vocab = m[start:current].decode('utf-8')
+        vocab = m[start:current].decode('utf-8').strip(' \n')
         raw = m[current+1:current+width+1]
         value = np.fromstring(raw, dtype=np.float32)
         return vocab, value, current+width + 1
@@ -256,7 +256,7 @@ class PretrainedEmbeddingsModel(WordEmbeddingsModel):
                         continue
                     if len(values) == 0:
                         break
-                    word = values[0].decode('utf-8')
+                    word = values[0].decode('utf-8').strip(' \n')
                     if word in self.vocab: continue
                     if keep_unused is False and word not in known_vocab:
                         continue
