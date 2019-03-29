@@ -11,6 +11,7 @@ from mead.utils import (
     get_output_paths,
     get_export_params,
     find_model_version,
+    get_dataset_from_key
 )
 
 
@@ -20,7 +21,8 @@ CHARS = list(chain(string.ascii_letters, string.digits))
 @pytest.fixture
 def file_name():
     file_ = "test_file"
-    with open(file_, "w"): pass
+    with open(file_, "w"):
+        pass
     yield file_
     os.remove(file_)
 
@@ -368,3 +370,23 @@ def test_get_export_params():
 
     for _ in range(100):
         test()
+
+
+def test_dataset_formats():
+    keys = {'1': 1,
+            '1:1978': 7,
+            '2:1996': 2,
+            '2:20190327': 3,
+            '2:2019-03-28': 42
+    }
+
+    # Test exact match first
+    assert get_dataset_from_key('1', keys) == 1
+    # Test where not exact that we get last date
+    assert get_dataset_from_key('2', keys) == 42
+    # Test where we do not get last date that we get an exception
+    try:
+        j = get_dataset_from_key('3', keys)
+        assert j is None
+    except:
+        pass
