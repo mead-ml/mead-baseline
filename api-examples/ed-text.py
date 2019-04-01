@@ -11,9 +11,9 @@ parser.add_argument('--name', help='(optional) signature name', type=str)
 parser.add_argument('--target', help='A file to write decoded output (or print to screen)')
 parser.add_argument('--tsv', help='print tab separated', type=bl.str2bool, default=False)
 parser.add_argument('--batchsz', help='Size of a batch to pass at once', default=32, type=int)
-parser.add_argument('--device', help='device', default='default')
+parser.add_argument('--device', help='device')
 parser.add_argument('--alpha', type=float, help='If set use in the gnmt length penalty.')
-parser.add_argument('--beam', type=int, default=5, help='The size of beam to use.')
+parser.add_argument('--beam', type=int, default=30, help='The size of beam to use.')
 
 args = parser.parse_known_args()[0]
 

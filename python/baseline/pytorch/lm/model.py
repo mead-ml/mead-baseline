@@ -1,3 +1,4 @@
+from baseline.utils import write_json
 from baseline.pytorch.torchy import *
 from baseline.pytorch.transformer import TransformerEncoderStack, subsequent_mask
 from baseline.model import LanguageModel, register_model
@@ -11,15 +12,19 @@ class LanguageModelBase(nn.Module, LanguageModel):
 
     def save(self, outname):
         torch.save(self, outname)
+        basename, _ = os.path.splitext(outname)
+        write_json(self.labels, basename + ".labels")
 
     def create_loss(self):
         return SequenceCriterion(LossFn=nn.CrossEntropyLoss)
 
     @classmethod
     def load(cls, filename, **kwargs):
+        device = kwargs.get('device')
         if not os.path.exists(filename):
             filename += '.pyt'
-        model = torch.load(filename)
+        model = torch.load(filename, map_location=device)
+        model.gpu = False if device == 'cpu' else model.gpu
         return model
 
     def init_hidden(self, batchsz):

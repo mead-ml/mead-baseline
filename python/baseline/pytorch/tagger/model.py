@@ -1,7 +1,7 @@
 import logging
 from baseline.pytorch.torchy import *
 from baseline.pytorch.crf import *
-from baseline.utils import Offsets
+from baseline.utils import Offsets, write_json
 from baseline.model import TaggerModel
 from baseline.model import register_model
 import torch.autograd
@@ -14,6 +14,8 @@ class TaggerModelBase(nn.Module, TaggerModel):
 
     def save(self, outname):
         torch.save(self, outname)
+        basename, _ = os.path.splitext(outname)
+        write_json(self.labels, basename + ".labels")
 
     def to_gpu(self):
         self.gpu = True
@@ -24,9 +26,11 @@ class TaggerModelBase(nn.Module, TaggerModel):
 
     @staticmethod
     def load(filename, **kwargs):
+        device = kwargs.get('device')
         if not os.path.exists(filename):
             filename += '.pyt'
-        model = torch.load(filename)
+        model = torch.load(filename, map_location=device)
+        model.gpu = False if device == 'cpu' else model.gpu
         return model
 
     def __init__(self):

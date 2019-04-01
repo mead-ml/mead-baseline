@@ -111,3 +111,8 @@ baseline.iml
 .idea/*
 tags
 *.zip
+
+api-examples/pytorch_cpp/json.hpp
+api-examples/pytorch_cpp/libtorch*
+api-examples/pytorch_cpp/tag-text
+api-examples/pytorch_cpp/classify-text

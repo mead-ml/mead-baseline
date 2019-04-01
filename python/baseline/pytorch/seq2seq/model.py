@@ -1,5 +1,6 @@
 import os
 import logging
+from baseline.utils import write_json
 from baseline.pytorch.torchy import *
 from baseline.pytorch.transformer import *
 from baseline.model import EncoderDecoderModel, register_model, create_seq2seq_encoder, create_seq2seq_decoder
@@ -81,9 +82,11 @@ class EncoderDecoderModelBase(nn.Module, EncoderDecoderModel):
         :param kwargs:
         :return:
         """
+        device = kwargs.get('device')
         if not os.path.exists(filename):
             filename += '.pyt'
-        model = torch.load(filename)
+        model = torch.load(filename, map_location=device)
+        model.gpu = False if device == 'cpu' else model.gpu
         return model
 
     @classmethod

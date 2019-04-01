@@ -5,6 +5,7 @@ import numpy as np
 import baseline
 from baseline.utils import (
     export,
+    revlut,
     Offsets,
     get_env_gpus,
     show_examples,
@@ -28,8 +29,7 @@ logger = logging.getLogger('mead')
 
 
 class Backend(object):
-    """Simple object to represent a deep-learning framework backend
-    """
+    """Simple object to represent a deep-learning framework backend"""
     def __init__(self, name=None, params=None, exporter=None):
         """Initialize the backend, optional with constructor args
 
@@ -39,12 +39,12 @@ class Backend(object):
         """
         self.name = normalize_backend(name)
         self.params = params
-        self.exporter = exporter
 
     def load(self, task_name):
         base_pkg_name = 'baseline.{}'.format(self.name)
         mod = import_user_module(base_pkg_name)
         import_user_module('{}.embeddings'.format(base_pkg_name))
+        import_user_module('mead.{}.exporters'.format(self.name))
         import_user_module('{}.{}'.format(base_pkg_name, task_name))
         self.transition_mask = mod.transition_mask
 
@@ -355,16 +355,6 @@ class ClassifierTask(Task):
                 batched = True
             dy_params.init()
             backend.params = {'pc': _dynet.ParameterCollection(), 'batched': batched}
-        elif backend.name == 'tf':
-            # FIXME this should be registered as well!
-            exporter_type = kwargs.get('exporter_type', 'default')
-            if exporter_type == 'default':
-                from mead.tf.exporters import ClassifyTensorFlowExporter
-                backend.exporter = ClassifyTensorFlowExporter
-            elif exporter_type == 'preproc':
-                from mead.tf.preproc_exporters import ClassifyTensorFlowPreProcExporter
-                import mead.tf.preprocessors
-                backend.exporter = ClassifyTensorFlowPreProcExporter
 
         backend.load(self.task_name())
 
@@ -462,15 +452,6 @@ class TaggerTask(Task):
             self.config_params['preproc']['trim'] = True
         else:
             self.config_params['preproc']['trim'] = False
-            # FIXME These should be registered instead
-            exporter_type = kwargs.get('exporter_type', 'default')
-            if exporter_type == 'default':
-                from mead.tf.exporters import TaggerTensorFlowExporter
-                backend.exporter = TaggerTensorFlowExporter
-            elif exporter_type == 'preproc':
-                from mead.tf.preproc_exporters import TaggerTensorFlowPreProcExporter
-                import mead.tf.preprocessors
-                backend.exporter = TaggerTensorFlowPreProcExporter
 
         backend.load(self.task_name())
 
@@ -588,8 +569,6 @@ class EncoderDecoderTask(Task):
             self.config_params['preproc']['trim'] = True
         else:
             self.config_params['preproc']['trim'] = True
-            from mead.tf.exporters import Seq2SeqTensorFlowExporter
-            backend.exporter = Seq2SeqTensorFlowExporter
         backend.load(self.task_name())
 
         return backend
@@ -663,8 +642,8 @@ class EncoderDecoderTask(Task):
 
         num_ex = self.config_params['num_valid_to_show']
 
-        rlut1 = baseline.revlut(self.feat2src[self.primary_key])
-        rlut2 = baseline.revlut(self.feat2tgt)
+        rlut1 = revlut(self.feat2src[self.primary_key])
+        rlut2 = revlut(self.feat2tgt)
         if num_ex > 0:
             logger.info('Showing examples')
             preproc = self.config_params.get('preproc', {})

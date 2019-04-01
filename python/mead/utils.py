@@ -1,14 +1,15 @@
 import os
 import json
+import shutil
 import logging
 import logging.config
 import hashlib
+from datetime import datetime
 import argparse
 from copy import deepcopy
 from itertools import chain
 from collections import OrderedDict
-from baseline.utils import export, str2bool, read_config_file, get_logging_level
-from datetime import datetime
+from baseline.utils import export, str2bool, read_config_file, write_json, get_logging_level
 
 __all__ = []
 exporter = export(__all__)
@@ -357,3 +358,44 @@ def get_export_params(
     is_remote = is_remote if is_remote is not None else config.get('is_remote', True)
     is_remote = str2bool(is_remote)
     return output_dir, project, name, model_version, exporter_type, return_labels, is_remote
+
+
+def create_metadata(inputs, outputs, sig_name, model_name, lengths_key=None, beam=None, return_labels=False):
+    meta = {
+        'inputs': inputs,
+        'outputs': outputs,
+        'signature_name': sig_name,
+        'metadata': {
+            'exported_model': str(model_name),
+            'exported_time': str(datetime.utcnow()),
+            'return_labels': return_labels
+        }
+    }
+
+    if lengths_key:
+        meta['lengths_key'] = lengths_key
+
+    if beam:
+        meta['beam'] = beam
+
+    return meta
+
+
+def save_to_bundle(output_path, directory, assets=None):
+    """Save files to the exported bundle.
+
+    :vocabs
+    :vectorizers
+    :labels
+    :assets
+    :output_path  the bundle output_path. vocabs, vectorizers know how to save themselves.
+    """
+    for filename in os.listdir(directory):
+        if filename.startswith('vocabs') or \
+           filename.endswith(".labels") or \
+           filename.startswith('vectorizers'):
+            shutil.copy(os.path.join(directory, filename), os.path.join(output_path, filename))
+
+    if assets:
+        asset_file = os.path.join(output_path, 'model.assets')
+        write_json(assets, asset_file)

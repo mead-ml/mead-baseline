@@ -15,9 +15,8 @@ from baseline.utils import (
     write_json,
 )
 from baseline.model import load_tagger_model, load_model, load_seq2seq_model
-import mead.exporters
-from mead.exporters import register_exporter
-from mead.utils import get_output_paths
+from mead.exporters import Exporter, register_exporter
+from mead.utils import save_to_bundle, create_metadata, get_output_paths
 
 
 __all__ = []
@@ -30,8 +29,12 @@ logger = logging.getLogger('mead')
 SignatureOutput = namedtuple("SignatureOutput", ("classes", "scores"))
 
 
+def get_tf_index_from_unzipped(dir_path):
+    return os.path.join(dir_path, [x[:-6] for x in os.listdir(dir_path) if 'index' in x][0])
+
+
 @exporter
-class TensorFlowExporter(mead.exporters.Exporter):
+class TensorFlowExporter(Exporter):
 
     def __init__(self, task, **kwargs):
         super(TensorFlowExporter, self).__init__(task, **kwargs)
@@ -40,6 +43,7 @@ class TensorFlowExporter(mead.exporters.Exporter):
         pass
 
     def run(self, basename, output_dir, project=None, name=None, model_version=None, **kwargs):
+        basename = get_tf_index_from_unzipped(basename)
 
         with tf.Graph().as_default():
             config_proto = tf.ConfigProto(allow_soft_placement=True)
@@ -265,25 +269,6 @@ def create_bundle(builder, output_path, basename, assets=None):
     directory = os.path.join('/', *basename.split("/")[:-1])
     save_to_bundle(output_path, directory, assets)
 
-def save_to_bundle(output_path, directory, assets=None):
-    """Save files to the exported bundle.
-
-    :vocabs
-    :vectorizers
-    :labels
-    :assets
-    :output_path  the bundle output_path. vocabs, vectorizers know how to save themselves.
-    """
-    for filename in os.listdir(directory):
-        if filename.startswith('vocabs') or \
-           filename.endswith(".labels") or \
-           filename.startswith('vectorizers'):
-            shutil.copy(os.path.join(directory, filename), os.path.join(output_path, filename))
-
-    if assets:
-        asset_file = os.path.join(output_path, ASSET_FILE_NAME)
-        write_json(assets, asset_file)
-
 
 def create_assets(basename, sig_input, sig_output, sig_name, lengths_key=None, beam=None, return_labels=False):
     """Save required variables for running an exported model from baseline's services.
@@ -304,25 +289,3 @@ def create_assets(basename, sig_input, sig_output, sig_name, lengths_key=None, b
     metadata = create_metadata(inputs, outputs, sig_name, model_name, lengths_key, beam=beam,
                                return_labels=return_labels)
     return metadata
-
-
-def create_metadata(inputs, outputs, sig_name, model_name, lengths_key=None, beam=None, return_labels=False):
-    meta = {
-        'inputs': inputs,
-        'outputs': outputs,
-        'signature_name': sig_name,
-        'metadata': {
-            'exported_model': model_name,
-            'exported_time': str(datetime.datetime.utcnow()),
-            'return_labels': return_labels
-        }
-    }
-
-    if lengths_key:
-        meta['lengths_key'] = lengths_key
-
-    if beam:
-        meta['beam'] = beam
-
-    return meta
-

@@ -142,7 +142,7 @@ class Service(object):
         name = kwargs.get("name", None)
         if remote:
             logging.debug("loading remote model")
-            beam = kwargs.get('beam', 10)
+            beam = kwargs.get('beam', 30)
             model = Service._create_remote_model(directory, be, remote, name, cls.signature_name(), beam,
                                                  preproc=kwargs.get('preproc', 'client'),
                                                  version=kwargs.get('version'))
@@ -169,6 +169,7 @@ class Service(object):
 
         :returns a RemoteModel
         """
+        from baseline.remote import create_remote
         preproc = kwargs.get('preproc', 'client')
         assets = read_json(os.path.join(directory, 'model.assets'))
         model_name = assets['metadata']['exported_model']
@@ -178,19 +179,22 @@ class Service(object):
         return_labels = bool(assets['metadata']['return_labels'])
         version = kwargs.get('version')
 
-        if backend == 'tf':
-            remote_models = import_user_module('baseline.remote')
-            if remote.startswith('http'):
-                RemoteModel = remote_models.RemoteModelTensorFlowREST
-            elif preproc == 'server':
-                RemoteModel = remote_models.RemoteModelTensorFlowGRPCPreproc
-            else:
-                RemoteModel = remote_models.RemoteModelTensorFlowGRPC
-            model = RemoteModel(remote, name, signature_name, labels=labels, lengths_key=lengths_key, inputs=inputs,
-                                beam=beam, version=version, return_labels=return_labels)
-        else:
-            raise ValueError("only Tensorflow is currently supported for remote Services")
-
+        if backend not in {'tf', 'pytorch'}:
+            raise ValueError("only Tensorflow and Pytorch are currently supported for remote Services")
+        import_user_module('baseline.{}.remote'.format(backend))
+        exp_type = 'http' if remote.startswith('http') else 'grpc'
+        exp_type = '{}-preproc'.format(exp_type) if preproc == 'server' else exp_type
+        model = create_remote(
+            exp_type,
+            remote=remote, name=name,
+            signature=signature_name,
+            labels=labels,
+            lengths_key=lengths_key,
+            inputs=inputs,
+            beam=beam,
+            return_labels=return_labels,
+            version=version,
+        )
         return model
 
 
@@ -479,7 +483,7 @@ class EncoderDecoderService(Service):
     @classmethod
     def load(cls, bundle, **kwargs):
         kwargs['predict'] = kwargs.get('predict', True)
-        kwargs['beam'] = kwargs.get('beam', 10)
+        kwargs['beam'] = kwargs.get('beam', 30)
         return super(EncoderDecoderService, cls).load(bundle, **kwargs)
 
     def set_vectorizer_lens(self, mxlen, mxwlen):

@@ -1,7 +1,7 @@
 import logging
 from baseline.model import ClassifierModel, register_model
 from baseline.pytorch.torchy import *
-from baseline.utils import listify
+from baseline.utils import listify, write_json
 import torch.backends.cudnn as cudnn
 import os
 cudnn.benchmark = True
@@ -16,14 +16,18 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
 
     @classmethod
     def load(cls, filename, **kwargs):
+        device = kwargs.get('device')
         if not os.path.exists(filename):
             filename += '.pyt'
-        model = torch.load(filename)
+        model = torch.load(filename, map_location=device)
+        model.gpu = False if device == 'cpu' else model.gpu
         return model
 
     def save(self, outname):
         logger.info('saving %s' % outname)
         torch.save(self, outname)
+        basename, _ = os.path.splitext(outname)
+        write_json(self.labels, basename + ".labels")
 
     @classmethod
     def create(cls, embeddings, labels, **kwargs):
