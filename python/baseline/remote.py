@@ -238,10 +238,11 @@ class RemoteModelTensorFlowGRPC(object):
 
         if self.signature == 'suggest_text':
             # s2s returns int values.
-            classes = predict_response.outputs.get('classes').int_val
-            results = [classes[x:x+self.beam] for x in range(0, len(classes), self.beam)]
-            results = list(zip(*results)) #transpose
-            return [results]
+            classes = predict_response.outputs.get('classes')
+            shape = [dim.size for dim in classes.tensor_shape.dim]
+            results = np.reshape(np.array(classes.int_val), shape)
+            results = results.transpose(1, 2, 0)
+            return results
 
         if self.signature == 'tag_text':
             if self.return_labels:
