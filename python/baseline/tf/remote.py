@@ -25,9 +25,6 @@ class RemoteModelGRPCTensorFlow(RemoteModelGRPC): pass
 class RemoteModelGRPCTensorFlowPreproc(RemoteModelGRPCTensorFlow):
 
     def create_request(self, examples):
-        # TODO: Remove TF dependency client side
-        import tensorflow as tf
-
         request = self.predictpb.PredictRequest()
         request.model_spec.name = self.name
         request.model_spec.signature_name = self.signature
@@ -36,14 +33,19 @@ class RemoteModelGRPCTensorFlowPreproc(RemoteModelGRPCTensorFlow):
 
         for key in examples:
             if key.endswith('lengths'):
-                shape = examples[key].shape
-                tensor_proto = tf.contrib.util.make_tensor_proto(examples[key], shape=shape, dtype=tf.int32)
+                # assumed to be a np.array
+                tensor_proto = self._make_proto(examples[key])
                 request.inputs[key].CopyFrom(
                     tensor_proto
                 )
             else:
+                # Can be a np.array or a list
                 request.inputs[key].CopyFrom(
-                    tf.contrib.util.make_tensor_proto(examples[key], shape=[len(examples[key]), 1])
+                    self._make_proto(
+                        examples[key],
+                        dtype=type(examples[key][0]),
+                        shape=[len(examples[key]), 1]
+                    )
                 )
         return request
 

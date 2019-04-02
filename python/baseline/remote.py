@@ -1,3 +1,4 @@
+import six
 from six.moves.http_client import HTTPConnection
 from six.moves.urllib.parse import urlparse
 
@@ -228,7 +229,11 @@ class RemoteModelGRPC(RemoteModel):
         )
         self.predictpb = import_user_module('tensorflow_serving.apis.predict_pb2')
         self.servicepb = import_user_module('tensorflow_serving.apis.prediction_service_pb2_grpc')
-        self.metadatapb = import_user_module('tensorflow_serving.apis.get_model_metadata_pb2')
+
+        self.tensor = import_user_module('tensorflow.core.framework.tensor_pb2')
+        self.tensor_shape = import_user_module('tensorflow.core.framework.tensor_shape_pb2')
+        self.types = import_user_module('tensorflow.core.framework.types_pb2')
+
         self.grpc = import_user_module('grpc')
         self.channel = self.grpc.insecure_channel(remote)
 
@@ -257,10 +262,44 @@ class RemoteModelGRPC(RemoteModel):
 
         return outcomes_list
 
-    def create_request(self, examples):
-        # TODO: Remove TF dependency client side
-        import tensorflow as tf
+    def _make_proto(self, tensor, shape=None, dtype=None):
+        shape = tensor.shape if shape is None else shape
+        dtype = tensor.dtype.type if dtype is None else dtype
+        dims = [self.tensor_shape.TensorShapeProto.Dim(size=dim) for dim in shape]
+        shape = self.tensor_shape.TensorShapeProto(dim=dims)
 
+        if isinstance(tensor, np.ndarray):
+            tensor = tensor.ravel().tolist()
+
+        if issubclass(dtype, np.integer):
+            return self._make_int_proto(tensor, shape)
+        if issubclass(dtype, np.floating):
+            return self._make_float_proto(tensor, shape)
+        return self._make_str_proto(tensor, shape)
+
+    def _make_int_proto(self, data, shape):
+        return self.tensor.TensorProto(
+            dtype=self.types.DT_INT32,
+            tensor_shape=shape,
+            int_val=data
+        )
+
+    def _make_float_proto(self, data, shape):
+        return self.tensor.TensorProto(
+            dtype=self.types.DT_FLOAT,
+            tensor_shape=shape,
+            float_val=data
+        )
+
+    def _make_str_proto(self, data, shape):
+        data = data if six.PY2 else list(map(lambda x: x.encode('utf-8'), data))
+        return self.tensor.TensorProto(
+            dtype=self.types.DT_STRING,
+            tensor_shape=shape,
+            string_val=data
+        )
+
+    def create_request(self, examples):
         request = self.predictpb.PredictRequest()
         request.model_spec.name = self.name
         request.model_spec.signature_name = self.signature
@@ -268,21 +307,11 @@ class RemoteModelGRPC(RemoteModel):
             request.model_spec.version.value = self.version
 
         for feature in self.input_keys:
-            if isinstance(examples[feature], np.ndarray):
-                shape = examples[feature].shape
-            else:
-                shape = [1]
-
-            dtype = examples[feature].dtype.type
-            if issubclass(dtype, np.integer): dtype = tf.int32
-            elif issubclass(dtype, np.floating): dtype = tf.float32
-            else: dtype = tf.string
-
-            tensor_proto = tf.contrib.util.make_tensor_proto(examples[feature], shape=shape, dtype=dtype)
+            tensor = np.array(examples[feature])
+            tensor_proto = self._make_proto(tensor)
             request.inputs[feature].CopyFrom(
                 tensor_proto
             )
-
         return request
 
     def deserialize_response(self, examples, predict_response):
