@@ -29,7 +29,7 @@ class MongoRepo(ExperimentRepo):
         else:
             client = pymongo.MongoClient(host, port)
         if client is None:
-            s = "can not connect to mongo at host: [{}], port [{}], username: [{}], password: [{}]".format(host,
+            s = "cannot connect to mongo at host: [{}], port [{}], username: [{}], password: [{}]".format(host,
                                                                                                            port,
                                                                                                            user,
                                                                                                            passw)
@@ -37,7 +37,7 @@ class MongoRepo(ExperimentRepo):
         try:
             dbnames = client.database_names()
         except pymongo.errors.ServerSelectionTimeoutError:
-            raise Exception("can not get database from mongo at host: {}, port {}, connection timed out".format(host,
+            raise Exception("cannot get database from mongo at host: {}, port {}, connection timed out".format(host,
                                                                                                                 port))
 
         if "reporting_db" not in dbnames:
