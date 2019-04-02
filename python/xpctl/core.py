@@ -85,7 +85,7 @@ class ExperimentRepo(object):
         """
         if dbtype == 'mongo':
             from xpctl.mongo import MongoRepo
-            return MongoRepo(dbhost, dbport, user, passwd)
+            return MongoRepo(dbhost, int(dbport), user, passwd)
         else:
             from xpctl.sql import SQLRepo
             return SQLRepo(type=dbtype, host=dbhost, port=dbport, user=user, passwd=passwd)
