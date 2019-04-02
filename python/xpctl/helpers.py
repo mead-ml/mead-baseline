@@ -40,7 +40,8 @@ def df_get_results(result_frame, dataset, num_exps, num_exps_per_config, metric,
             rframe = rframe.sort_values(by='date', ascending=False).head(int(num_exps_per_config))
             df = df.append(rframe)
         result_frame = df
-    result_frame = result_frame.drop(columns=["id"])
+
+    result_frame = result_frame.drop(["id"], axis=1)
     result_frame = result_frame.groupby("sha1").agg([len, np.mean, np.std, np.min, np.max])\
         .rename(columns={'len': 'num_exps', 'amean': 'mean', 'amin': 'min', 'amax': 'max'})
     metrics = listify(metric)
