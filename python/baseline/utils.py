@@ -504,11 +504,14 @@ def read_config_stream(config_stream):
     if isinstance(config_stream, (dict, list)) or config_stream is None:
         return config_stream
     if os.path.exists(config_stream) and os.path.isfile(config_stream):
+        logger.info("Reading config file '{}'".format(config_stream))
         return read_config_file(config_stream)
     config = config_stream
     if config_stream.startswith("$"):
-        logger.info('Reading config from {}'.format(config_stream))
+        logger.info("Reading config from '{}'".format(config_stream))
         config = os.getenv(config_stream[1:])
+    else:
+        logger.info("No file found '{}...', loading as string".format(config_stream[:12]))
     return json.loads(config)
 
 
