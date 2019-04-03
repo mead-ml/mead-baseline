@@ -173,7 +173,7 @@ class MongoRepo(ExperimentRepo):
             if "id" in kwargs and kwargs["id"]:
                 query.update({"_id": ObjectId(kwargs["id"])})
                 return query
-            if "label" in kwargs:
+            if "label" in kwargs and kwargs["label"]:
                 query.update({"label": kwargs["label"]})
             if "username" in kwargs and kwargs["username"]:
                 query.update({"username": {"$in": list(kwargs["username"])}})
