@@ -148,7 +148,8 @@ def fit(model, ts, vs, es=None, **kwargs):
     after_train_fn = kwargs['after_train_fn'] if 'after_train_fn' in kwargs else None
     trainer = create_trainer(model, **kwargs)
     init = tf.global_variables_initializer()
-    model.sess.run(init)
+    feed_dict = {k: v for e in model.embeddings.values() for k, v in e.get_feed_dict().items()}
+    model.sess.run(init, feed_dict)
     saver = tf.train.Saver()
     model.set_saver(saver)
     checkpoint = kwargs.get('checkpoint')

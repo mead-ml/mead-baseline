@@ -150,7 +150,8 @@ def fit(model, ts, vs, es=None, **kwargs):
     trainer = create_trainer(model, **kwargs)
     tables = tf.tables_initializer()
     model.sess.run(tables)
-    model.sess.run(tf.global_variables_initializer())
+    feed_dict = {k: v for e in model.embeddings.values() for k, v in e.get_feed_dict().items()}
+    model.sess.run(tf.global_variables_initializer(), feed_dict)
     model.set_saver(tf.train.Saver())
     checkpoint = kwargs.get('checkpoint')
     if checkpoint is not None:

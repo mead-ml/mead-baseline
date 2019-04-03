@@ -164,8 +164,9 @@ def fit(model, ts, vs, es, **kwargs):
     trainer = create_trainer(model, **kwargs)
     tables = tf.tables_initializer()
     model.sess.run(tables)
+    feed_dict = {k: v for e in model.embeddings.values() for k, v in e.get_feed_dict().items()}
     init = tf.global_variables_initializer()
-    model.sess.run(init)
+    model.sess.run(init, feed_dict)
     saver = tf.train.Saver()
     model.save_using(saver)
     checkpoint = kwargs.get('checkpoint')

@@ -7,6 +7,10 @@ from baseline.embeddings import register_embeddings
 from baseline.tf.tfy import pool_chars, get_shape_as_list, stacked_lstm, embed
 
 
+FLOAT32 = 4
+GB2 = 1024 * 1024 * 1024 * 2
+
+
 class TensorFlowEmbeddings(object):
     """This provides a base for TensorFlow embeddings sub-graphs
 
@@ -80,6 +84,10 @@ class TensorFlowEmbeddings(object):
         :param kwargs:
         :return:
         """
+        # If we think we are going to hit the 2GB limit swap out the LUT
+        # embeddings to use the placeholder trick to get around it.
+        if cls is LookupTableEmbeddings and model.vsz * model.dsz * FLOAT32 > GB2:
+            cls = LargeLookupTableEmbeddings
         return cls(name, vsz=model.vsz, dsz=model.dsz, weights=model.weights, **kwargs)
 
     def _record_state(self, **kwargs):
