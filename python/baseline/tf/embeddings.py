@@ -1,5 +1,6 @@
 import math
 import copy
+import logging
 import numpy as np
 import tensorflow as tf
 from baseline.utils import write_json, Offsets
@@ -9,6 +10,7 @@ from baseline.tf.tfy import pool_chars, get_shape_as_list, stacked_lstm, embed
 
 FLOAT32 = 4
 GB2 = 1024 * 1024 * 1024 * 2
+logger = logging.getLogger('baseline')
 
 
 class TensorFlowEmbeddings(object):
@@ -88,6 +90,7 @@ class TensorFlowEmbeddings(object):
         # embeddings to use the placeholder trick to get around it.
         if cls is LookupTableEmbeddings and model.vsz * model.dsz * FLOAT32 > GB2:
             cls = LargeLookupTableEmbeddings
+            logger.warning("Embedding %s seems to be larger than 2GB", name)
         return cls(name, vsz=model.vsz, dsz=model.dsz, weights=model.weights, **kwargs)
 
     def _record_state(self, **kwargs):
