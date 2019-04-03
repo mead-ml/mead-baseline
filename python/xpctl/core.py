@@ -99,7 +99,7 @@ class ExperimentRepo(object):
         """
         pass
 
-    def get_results(self, task, dataset, event_type, num_exps, num_exps_per_config, metric, sort, id):
+    def get_results(self, task, dataset, event_type, num_exps, num_exps_per_config, metric, sort, id, label):
         """Get results from the database
 
         :param task: (``str``) The taskname
