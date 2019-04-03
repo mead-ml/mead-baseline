@@ -146,10 +146,11 @@ def getmodelloc(task, id):
 @click.option('--sort', help="specify one metric to sort the results")
 @click.option('--output', help='output file')
 @click.option('--nconfig', help='number of experiments to aggregate', type=int)
+@click.option('--id', help='filter by specific experiment')
 @click.option('--n', help='number of rows to show', type=int)
 @click.argument('task')
 @click.argument('dataset')
-def results(metric, event_type, sort, output, nconfig, n, task, dataset):
+def results(metric, event_type, sort, output, nconfig, n, task, dataset, id):
     """
     Provides a statistical summary of the results for a problem . A problem is defined by a (task, dataset) tuple. For each config used in the task, shows the average, min, max and std dev and number of experiments done using config. Optionally: a. --metrics: choose metric(s) to show. results ll be sorted on the first metric. b. --sort output all metrics but sort on one. c. --n: limit number of experiments. d. event_type: show results for train/dev/valid datasets. e. output: put the results in an output file.
     """
@@ -159,7 +160,7 @@ def results(metric, event_type, sort, output, nconfig, n, task, dataset):
     event_type = EVENT_TYPES[event_type]
     num_exps = n
     num_exps_per_config = nconfig
-    results = RepoManager.get().get_results(task, dataset, event_type, num_exps, num_exps_per_config, metric, sort)
+    results = RepoManager.get().get_results(task, dataset, event_type, num_exps, num_exps_per_config, metric, sort, id)
     if results is None:
         click.echo("can't produce summary for the requested task {}".format(task))
         return

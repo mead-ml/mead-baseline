@@ -170,6 +170,9 @@ class MongoRepo(ExperimentRepo):
         if not kwargs:
             return query
         else:
+            if "id" in kwargs and kwargs["id"]:
+                query.update({"_id": ObjectId(kwargs["id"])})
+                return query
             if "username" in kwargs and kwargs["username"]:
                 query.update({"username": {"$in": list(kwargs["username"])}})
             if "dataset" in kwargs:
@@ -192,10 +195,10 @@ class MongoRepo(ExperimentRepo):
         result_frame = self._generate_data_frame(coll, metrics=metrics, query=query, projection=projection, event_type=event_type)
         return df_experimental_details(result_frame, sha1, users, sort, metric, n)
 
-    def get_results(self, task, dataset, event_type,  num_exps=None, num_exps_per_config=None, metric=None, sort=None):
+    def get_results(self, task, dataset, event_type,  num_exps=None, num_exps_per_config=None, metric=None, sort=None, id=None):
         metrics = listify(metric)
         coll = self.db[task]
-        query = self._update_query({}, dataset=dataset)
+        query = self._update_query({}, dataset=dataset, id=id)
         projection = self._update_projection(event_type=event_type)
         result_frame = self._generate_data_frame(coll, metrics=metrics, query=query, projection=projection, event_type=event_type)
         if not result_frame.empty:

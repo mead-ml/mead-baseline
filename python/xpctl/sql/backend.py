@@ -215,14 +215,17 @@ class SQLRepo(ExperimentRepo):
         else:
             return [x for x in allmetrics if x.label in metrics]
 
-    def get_results(self, task, dataset, event_type, num_exps=None, num_exps_per_config=None, metric=None, sort=None):
+    def get_results(self, task, dataset, event_type, num_exps=None, num_exps_per_config=None, metric=None, sort=None, id=None):
         session = self.Session()
         results = []
         metrics = listify(metric)
         metrics_to_add = [metrics[0]] if len(metrics) == 1 else []
         phase = self.event2phase(event_type)
-        hits = session.query(Experiment).filter(Experiment.dataset == dataset). \
-            filter(Experiment.task == task)
+        if id is not None:
+            hits = session.query(Experiment).get(id)
+        else:
+            hits = session.query(Experiment).filter(Experiment.dataset == dataset). \
+                filter(Experiment.task == task)
         for exp in hits:
             for event in exp.events:
                 if event.phase == phase:
