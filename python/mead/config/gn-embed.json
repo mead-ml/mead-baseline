@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "task": "servable_embeddings",
+  "basedir": "./embeddings",
+  "features":[
+    {
+      "name": "gn",
+      "vectorizer": {
+        "type": "token1d"
+      },
+      "embeddings": {
+        "label": "w2v-gn"
+      }
+    }
+  ],
+  "backend": "tensorflow",
+  "unif": 0.25
+}

@@ -1,12 +1,12 @@
 import os
+import json
 import baseline
 from mead.exporters import register_exporter
 from mead.preprocessors import create_preprocessors
 from baseline.tf.embeddings import *
-from baseline.utils import export
+from baseline.utils import export, read_json
 from collections import namedtuple
 from mead.tf.exporters import ClassifyTensorFlowExporter, TaggerTensorFlowExporter, create_assets
-import json
 
 __all__ = []
 exporter = export(__all__)
@@ -14,8 +14,33 @@ exporter = export(__all__)
 SignatureOutput = namedtuple("SignatureOutput", ("classes", "scores"))
 
 
+def get_string_size(tensor):
+    """Get the number of tokens in a string sperated by space."""
+    split = tf.string_split(tf.reshape(tensor, [-1]))
+    return tf.shape(split)[1]
+
+
+def get_mxlen(tensors):
+    """Find the longest string in a batch."""
+    sizes = tf.map_fn(
+        get_string_size, tensors,
+        dtype=tf.int32,
+        back_prop=False
+    )
+    return tf.reduce_max(sizes)
+
+
+def peek_lengths_key(model_file, field_map):
+    """Check if there is lengths key to use when finding the length. (defaults to tokens)"""
+    peek_state = read_json(model_file + ".state")
+    lengths = peek_state.get('lengths_key', 'tokens')
+    lengths = lengths.replace('_lengths', '')
+    return field_map.get(lengths, lengths)
+
+
 class PreProcessorController(object):
-    def __init__(self, model_base_dir, pid, features, feature_exporter_field_map):
+    def __init__(self, model_base_dir, pid, features, feature_exporter_field_map, length_field='tokens'):
+        self.length_field = length_field
         saved_vectorizers = self.get_vectorizers(model_base_dir, pid)
         feature_names = [feature['name'] for feature in features]
         feature_vectorizer_mapping = {feature['name']: feature['vectorizer']['type'] for feature in features}
@@ -48,13 +73,15 @@ class PreProcessorController(object):
     def preproc(self, tf_example):
         preprocessed_inputs = {}
         for feature in self.preprocessors:
-            preprocessed_inputs[feature] = self.preprocessors[feature].preproc(tf_example)
+            preprocessed_inputs[feature] = self.preprocessors[feature].preproc(tf_example, self.mxlen)
         return preprocessed_inputs
 
     def create_preprocessed_input(self, tf_example):
         """
         Create a preprocessor chain inside of the tensorflow graph.
         """
+        self.mxlen = get_mxlen(tf_example[self.length_field])
+
         types = {f: tf.int64 for f in self.preprocessors}
         return tf.map_fn(
             self.preproc, tf_example,
@@ -111,8 +138,11 @@ class ClassifyTensorFlowPreProcExporter(ClassifyTensorFlowExporter):
     def _create_rpc_call(self, sess, model_file, **kwargs):
         model_base_dir = os.path.split(model_file)[0]
         pid = model_file.split("-")[-1]
+
+        lengths = peek_lengths_key(model_file, self.feature_exporter_field_map)
+
         pc = PreProcessorController(model_base_dir, pid, self.task.config_params['features'],
-                                    self.feature_exporter_field_map)
+                                    self.feature_exporter_field_map, lengths)
         tf_example, preprocessed = pc.run()
         # Create a dict of embedding names to sub-graph outputs to wire in as embedding inputs
         embedding_inputs = {}
@@ -141,8 +171,9 @@ class TaggerTensorFlowPreProcExporter(TaggerTensorFlowExporter):
     def _create_rpc_call(self, sess, model_file, **kwargs):
         model_base_dir = os.path.split(model_file)[0]
         pid = model_file.split("-")[-1]
+        lengths = peek_lengths_key(model_file, self.feature_exporter_field_map)
         pc = PreProcessorController(model_base_dir, pid, self.task.config_params['features'],
-                                    self.feature_exporter_field_map)
+                                    self.feature_exporter_field_map, lengths)
         tf_example, preprocessed = pc.run()
         # Create a dict of embedding names to sub-graph outputs to wire in as embedding inputs
         embedding_inputs = {}

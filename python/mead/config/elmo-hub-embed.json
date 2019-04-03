@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "task": "servable_embeddings",
+  "modules": ["vec_text", "embed_elmo"],
+  "basedir": "./embeddings",
+  "features":[
+    {
+      "name": "elmo",
+      "vectorizer": {
+        "type": "text"
+      },
+      "embeddings": {
+        "type": "elmo", "dsz": 1024
+      }
+    }
+  ],
+  "backend": "tensorflow",
+  "unif": 0.25
+}

@@ -143,10 +143,6 @@ def load_model_for(activity, filename, **kwargs):
 
 
 @exporter
-def load_embeddings(filename, **kwargs):
-    return load_model_for('embeddings', filename, **kwargs)
-
-@exporter
 def load_model(filename, **kwargs):
     return load_model_for('classify', filename, **kwargs)
 

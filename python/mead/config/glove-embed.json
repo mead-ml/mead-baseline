@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "task": "servable_embeddings",
+  "basedir": "./embeddings",
+  "features":[
+    {
+      "name": "glove_6B_100",
+      "vectorizer": {
+        "type": "token1d"
+      },
+      "embeddings": {
+        "label": "glove-6B-100"
+      }
+    }
+  ],
+  "backend": "tensorflow",
+  "unif": 0.25
+}
