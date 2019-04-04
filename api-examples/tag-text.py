@@ -67,8 +67,7 @@ else:
 
 m = bl.TaggerService.load(args.model, backend=args.backend, remote=args.remote,
                           name=args.name, preproc=args.preproc, device=args.device)
-for sen in m.predict(texts, preproc=args.preproc,
-                     export_mapping=create_export_mapping(args.export_mapping)):
+for sen in m.predict(texts, export_mapping=create_export_mapping(args.export_mapping)):
     for word_tag in sen:
         print("{} {}".format(word_tag['text'], word_tag['label']))
     print("\n")

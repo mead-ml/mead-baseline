@@ -30,6 +30,6 @@ m = bl.EmbeddingsService.load(
     preproc=args.preproc, device=args.device,
 )
 
-embedded = m.predict(texts, preproc=args.preproc)
+embedded = m.predict(texts)
 
 np.save(out, embedded)

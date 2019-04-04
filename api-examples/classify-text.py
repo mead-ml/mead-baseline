@@ -25,5 +25,5 @@ else:
 m = bl.ClassifierService.load(args.model, backend=args.backend, remote=args.remote,
                               name=args.name, preproc=args.preproc,
                               device=args.device)
-for text, output in zip(texts, m.predict(texts, preproc=args.preproc)):
+for text, output in zip(texts, m.predict(texts)):
     print("{}, {}".format(" ".join(text), output[0][0]))
