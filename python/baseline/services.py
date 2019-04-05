@@ -30,10 +30,11 @@ exporter = export(__all__)
 
 class Service(object):
 
-    def __init__(self, vocabs=None, vectorizers=None, model=None):
+    def __init__(self, vocabs=None, vectorizers=None, model=None, preproc='client'):
         self.vectorizers = vectorizers
         self.model = model
         self.vocabs = vocabs
+        self.preproc = preproc
 
     def get_vocab(self, vocab_type='word'):
         return self.vocabs.get(vocab_type)
@@ -140,16 +141,18 @@ class Service(object):
         vectorizers = load_vectorizers(directory)
 
         be = normalize_backend(kwargs.get('backend', 'tf'))
+        preproc = kwargs.get('preproc', 'client')
 
         remote = kwargs.get("remote", None)
         name = kwargs.get("name", None)
         if remote:
             logging.debug("loading remote model")
             beam = kwargs.get('beam', 30)
-            model = Service._create_remote_model(directory, be, remote, name, cls.signature_name(), beam,
-                                                 preproc=kwargs.get('preproc', 'client'),
-                                                 version=kwargs.get('version'))
-            return cls(vocabs, vectorizers, model)
+            model = Service._create_remote_model(
+                directory, be, remote, name, cls.signature_name(), beam,
+                preproc=preproc, version=kwargs.get('version')
+            )
+            return cls(vocabs, vectorizers, model, preproc)
 
         # Currently nothing to do here
         # labels = read_json(os.path.join(directory, model_basename) + '.labels')
@@ -160,7 +163,7 @@ class Service(object):
         except:
             pass
         model = load_model_for(cls.task_name(), model_basename, **kwargs)
-        return cls(vocabs, vectorizers, model)
+        return cls(vocabs, vectorizers, model, preproc)
 
     @staticmethod
     def _create_remote_model(directory, backend, remote, name, signature_name, beam, **kwargs):
@@ -206,8 +209,8 @@ class Service(object):
 
 @exporter
 class ClassifierService(Service):
-    def __init__(self, vocabs=None, vectorizers=None, model=None):
-        super(ClassifierService, self).__init__(vocabs, vectorizers, model)
+    def __init__(self, vocabs=None, vectorizers=None, model=None, preproc='client'):
+        super(ClassifierService, self).__init__(vocabs, vectorizers, model, preproc)
         if hasattr(self.model, 'return_labels'):
             self.return_labels = self.model.return_labels
         else:
@@ -223,15 +226,17 @@ class ClassifierService(Service):
     def signature_name(cls):
         return 'predict_text'
 
-    def predict(self, tokens, preproc='client'):
+    def predict(self, tokens, preproc=None):
         """Take tokens and apply the internal vocab and vectorizers.  The tokens should be either a batch of text
         single utterance of type ``list``
         """
+        if preproc is not None:
+            logger.warning("Warning: Passing `preproc` to `ClassifierService.predict` is deprecated.")
         tokens_seq, mxlen, mxwlen = self.batch_input(tokens)
         self.set_vectorizer_lens(mxlen, mxwlen)
-        if preproc == "client":
+        if self.preproc == "client":
             examples = self.vectorize(tokens_seq)
-        elif preproc == 'server':
+        elif self.preproc == 'server':
             # TODO: here we allow vectorizers even for preproc=server to get `word_lengths`.
             # vectorizers should not be available when preproc=server.
             featurized_examples = self.vectorize(tokens_seq)
@@ -260,10 +265,12 @@ class EmbeddingsService(Service):
     def signature_name(cls):
         return 'embed_text'
 
-    def predict(self, tokens, preproc='client'):
+    def predict(self, tokens, preproc=None):
+        if preproc is not None:
+            logger.warning("Warning: Passing `preproc` to `EmbeddingsService.predict` is deprecated.")
         tokens_seq, mxlen, mxwlen = self.batch_input(tokens)
         self.set_vectorizer_lens(mxlen, mxwlen)
-        if preproc == 'client':
+        if self.preproc == 'client':
             examples = self.vectorize(tokens_seq)
         else:
             examples = {
@@ -280,8 +287,8 @@ class EmbeddingsService(Service):
 @exporter
 class TaggerService(Service):
 
-    def __init__(self, vocabs=None, vectorizers=None, model=None):
-        super(TaggerService, self).__init__(vocabs, vectorizers, model)
+    def __init__(self, vocabs=None, vectorizers=None, model=None, preproc='client'):
+        super(TaggerService, self).__init__(vocabs, vectorizers, model, preproc)
         if hasattr(self.model, 'return_labels'):
             self.return_labels = self.model.return_labels
         else:
@@ -382,7 +389,9 @@ class TaggerService(Service):
         :param tokens: (``list``) A list of tokens
 
         """
-        preproc = kwargs.get('preproc', 'client')
+        preproc = kwargs.get('preproc', None)
+        if preproc is not None:
+            logger.warning("Warning: Passing `preproc` to `TaggerService.predict` is deprecated.")
         export_mapping = kwargs.get('export_mapping', {})  # if empty dict argument was passed
         if not export_mapping:
             export_mapping = {'tokens': 'text'}
@@ -392,7 +401,7 @@ class TaggerService(Service):
         # TODO: here we allow vectorizers even for preproc=server to get `word_lengths`.
         # vectorizers should not be available when preproc=server.
         examples = self.vectorize(tokens_seq)
-        if preproc == 'server':
+        if self.preproc == 'server':
             unfeaturized_examples = {}
             for exporter_field in export_mapping:
                 unfeaturized_examples[exporter_field] = np.array([" ".join([y[export_mapping[exporter_field]]
@@ -487,8 +496,8 @@ class EncoderDecoderService(Service):
     def signature_name(cls):
         return 'suggest_text'
 
-    def __init__(self, vocabs=None, vectorizers=None, model=None):
-        super(EncoderDecoderService, self).__init__(None, None, model)
+    def __init__(self, vocabs=None, vectorizers=None, model=None, preproc='client'):
+        super(EncoderDecoderService, self).__init__(None, None, model, preproc)
         self.src_vocabs = {}
         self.tgt_vocab = None
         for k, vocab in vocabs.items():
