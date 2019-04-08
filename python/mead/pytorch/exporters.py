@@ -118,7 +118,6 @@ class PytorchExporter(Exporter):
         super(PytorchExporter, self).__init__(task, **kwargs)
         self.wrapper = None
 
-
     def run(self, basename, output_dir, project=None, name=None, model_version=None, **kwargs):
         logger.warning("Pytorch exporting is experimental and is not guaranteed to work for plugin models.")
         client_output, server_output = get_output_paths(
@@ -132,7 +131,12 @@ class PytorchExporter(Exporter):
         model, vectorizers, model_name = self.load_model(basename)
         order = monkey_patch_embeddings(model)
         data, lengths = create_fake_data(VECTORIZER_SHAPE_MAP, vectorizers, order)
-        meta = create_metadata(order, ['output'], self.sig_name, model_name, model.lengths_key)
+        meta = create_metadata(
+            order, ['output'],
+            self.sig_name,
+            model_name, model.lengths_key,
+            exporter_type=self.preproc_type()
+        )
 
         exportable = self.wrapper(model)
         logger.info("Tracing Model.")

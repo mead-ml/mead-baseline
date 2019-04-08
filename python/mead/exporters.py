@@ -11,6 +11,10 @@ class Exporter(object):
         super(Exporter, self).__init__()
         self.task = task
 
+    @classmethod
+    def preproc_type(cls):
+        return 'client'
+
     def run(self, model_file, output_dir, project=None, name=None, model_version=None, **kwargs):
         pass
 

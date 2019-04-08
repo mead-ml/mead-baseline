@@ -148,8 +148,13 @@ class ClassifyTensorFlowExporter(TensorFlowExporter):
         sig_output = SignatureOutput(classes, values)
         sig_name = 'predict_text'
 
-        assets = create_assets(basename, sig_input, sig_output, sig_name, model.lengths_key,
-                               return_labels=self.return_labels)
+        assets = create_assets(
+            basename,
+            sig_input, sig_output, sig_name,
+            model.lengths_key,
+            return_labels=self.return_labels,
+            preproc=self.preproc_type()
+        )
         return sig_input, sig_output, sig_name, assets
 
 
@@ -193,8 +198,13 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
         sig_input = predict_tensors
         sig_output = SignatureOutput(classes, values)
         sig_name = 'tag_text'
-        assets = create_assets(basename, sig_input, sig_output, sig_name, model.lengths_key,
-                               return_labels=self.return_labels)
+        assets = create_assets(
+            basename,
+            sig_input, sig_output, sig_name,
+            model.lengths_key,
+            return_labels=self.return_labels,
+            preproc=self.preproc_type()
+        )
         return sig_input, sig_output, sig_name, assets
 
 
@@ -250,8 +260,14 @@ class Seq2SeqTensorFlowExporter(TensorFlowExporter):
         sig_input = predict_tensors
         sig_output = SignatureOutput(classes, values)
         sig_name = 'suggest_text'
-        assets = create_assets(basename, sig_input, sig_output, sig_name, model.src_lengths_key, beam=model.decoder.beam_width,
-                              return_labels=self.return_labels)
+        assets = create_assets(
+            basename,
+            sig_input, sig_output, sig_name,
+            model.src_lengths_key,
+            beam=model.decoder.beam_width,
+            return_labels=self.return_labels,
+            preproc=self.preproc_type(),
+        )
 
         return sig_input, sig_output, sig_name, assets
 
@@ -270,7 +286,7 @@ def create_bundle(builder, output_path, basename, assets=None):
     save_to_bundle(output_path, directory, assets)
 
 
-def create_assets(basename, sig_input, sig_output, sig_name, lengths_key=None, beam=None, return_labels=False):
+def create_assets(basename, sig_input, sig_output, sig_name, lengths_key=None, beam=None, return_labels=False, preproc='client'):
     """Save required variables for running an exported model from baseline's services.
 
     :basename the base model name. e.g. /path/to/tagger-26075
@@ -287,5 +303,5 @@ def create_assets(basename, sig_input, sig_output, sig_name, lengths_key=None, b
     model_name = basename.split("/")[-1]
     directory = basename.split("/")[:-1]
     metadata = create_metadata(inputs, outputs, sig_name, model_name, lengths_key, beam=beam,
-                               return_labels=return_labels)
+                               return_labels=return_labels, preproc=preproc)
     return metadata

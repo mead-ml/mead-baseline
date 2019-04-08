@@ -130,6 +130,10 @@ class PreProcessorController(object):
 @register_exporter(task='classify', name='preproc')
 class ClassifyTensorFlowPreProcExporter(ClassifyTensorFlowExporter):
 
+    @classmethod
+    def preproc_type(cls):
+        return 'server'
+
     def __init__(self, task, **kwargs):
         super(ClassifyTensorFlowPreProcExporter, self).__init__(task, **kwargs)
         self.feature_exporter_field_map = kwargs.get('feature_exporter_field_map', {'tokens': 'text'})
@@ -154,14 +158,23 @@ class ClassifyTensorFlowPreProcExporter(ClassifyTensorFlowExporter):
             sig_input.update({model.lengths_key: tf.saved_model.utils.build_tensor_info(model.lengths)})
         sig_output = SignatureOutput(classes, values)
         sig_name = 'predict_text'
-        assets = create_assets(model_file, sig_input, sig_output, sig_name, model.lengths_key,
-                               return_labels=self.return_labels)
+        assets = create_assets(
+            model_file,
+            sig_input, sig_output, sig_name,
+            model.lengths_key,
+            return_labels=self.return_labels,
+            preproc=self.preproc_type(),
+        )
         return sig_input, sig_output, sig_name, assets
 
 
 @exporter
 @register_exporter(task='tagger', name='preproc')
 class TaggerTensorFlowPreProcExporter(TaggerTensorFlowExporter):
+
+    @classmethod
+    def preproc_type(cls):
+        return 'server'
 
     def __init__(self, task, **kwargs):
         super(TaggerTensorFlowPreProcExporter, self).__init__(task, **kwargs)
@@ -184,6 +197,11 @@ class TaggerTensorFlowPreProcExporter(TaggerTensorFlowExporter):
         sig_input.update({model.lengths_key: tf.saved_model.utils.build_tensor_info(model.lengths)})
         sig_output = SignatureOutput(classes, values)
         sig_name = 'tag_text'
-        assets = create_assets(model_file, sig_input, sig_output, sig_name, model.lengths_key,
-                               return_labels=self.return_labels)
+        assets = create_assets(
+            model_file,
+            sig_input, sig_output, sig_name,
+            model.lengths_key,
+            return_labels=self.return_labels,
+            preproc=self.preproc_type(),
+        )
         return sig_input, sig_output, sig_name, assets
