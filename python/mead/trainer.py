@@ -18,6 +18,7 @@ def main():
     parser.add_argument('--logging', help='json file for logging', default='config/logging.json', type=convert_path)
     parser.add_argument('--task', help='task to run', choices=['classify', 'tagger', 'seq2seq', 'lm'])
     parser.add_argument('--gpus', help='Number of GPUs (defaults to number available)', type=int, default=-1)
+    parser.add_argument('--basedir', help='Override the base directory where models are stored', type=str)
     parser.add_argument('--reporting', help='reporting hooks', nargs='+')
     parser.add_argument('--backend', help='The deep learning backend to use')
     parser.add_argument('--checkpoint', help='Restart training from this checkpoint')
@@ -37,6 +38,9 @@ def main():
 
     if args.gpus is not None:
         config_params['model']['gpus'] = args.gpus
+
+    if args.basedir is not None:
+        config_params['basedir'] = args.basedir
 
     if args.backend is not None:
         config_params['backend'] = normalize_backend(args.backend)
