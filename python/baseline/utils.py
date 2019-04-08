@@ -875,6 +875,8 @@ def unzip_model(path):
     # Import inside function to avoid circular dep :(
     # TODO: future solution move the export code a different file so mime_type can import from it
     # rather then from here, this allows here to import mime_type
+    if os.path.isdir(path):
+        return path
     from baseline.mime_type import mime_type
     if mime_type(path) == 'application/zip':
         with open(path, 'rb') as f:
@@ -944,6 +946,8 @@ def load_vectorizers(directory):
 
 @exporter
 def unzip_files(zip_path):
+    if os.path.isdir(zip_path):
+        return zip_path
     from baseline.mime_type import mime_type
     if mime_type(zip_path) == 'application/zip':
         with open(zip_path, 'rb') as f:
