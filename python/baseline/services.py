@@ -141,16 +141,16 @@ class Service(object):
         vectorizers = load_vectorizers(directory)
 
         be = normalize_backend(kwargs.get('backend', 'tf'))
-        preproc = kwargs.get('preproc', 'client')
 
         remote = kwargs.get("remote", None)
         name = kwargs.get("name", None)
         if remote:
             logging.debug("loading remote model")
             beam = kwargs.get('beam', 30)
-            model = Service._create_remote_model(
+            model, preproc = Service._create_remote_model(
                 directory, be, remote, name, cls.signature_name(), beam,
-                preproc=preproc, version=kwargs.get('version')
+                preproc=kwargs.get('preproc', 'client'),
+                version=kwargs.get('version')
             )
             return cls(vocabs, vectorizers, model, preproc)
 
@@ -163,7 +163,7 @@ class Service(object):
         except:
             pass
         model = load_model_for(cls.task_name(), model_basename, **kwargs)
-        return cls(vocabs, vectorizers, model, preproc)
+        return cls(vocabs, vectorizers, model, 'client')
 
     @staticmethod
     def _create_remote_model(directory, backend, remote, name, signature_name, beam, **kwargs):
@@ -179,9 +179,9 @@ class Service(object):
         :returns a RemoteModel
         """
         from baseline.remote import create_remote
-        preproc = kwargs.get('preproc', 'client')
         assets = read_json(os.path.join(directory, 'model.assets'))
         model_name = assets['metadata']['exported_model']
+        preproc = assets['metadata'].get('preproc', kwargs.get('preproc', 'client'))
         labels = read_json(os.path.join(directory, model_name) + '.labels')
         lengths_key = assets.get('lengths_key', None)
         inputs = assets.get('inputs', [])
@@ -204,7 +204,7 @@ class Service(object):
             return_labels=return_labels,
             version=version,
         )
-        return model
+        return model, preproc
 
 
 @exporter
