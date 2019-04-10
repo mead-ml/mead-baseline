@@ -360,7 +360,7 @@ def get_export_params(
     return output_dir, project, name, model_version, exporter_type, return_labels, is_remote
 
 
-def create_metadata(inputs, outputs, sig_name, model_name, lengths_key=None, beam=None, return_labels=False):
+def create_metadata(inputs, outputs, sig_name, model_name, lengths_key=None, beam=None, return_labels=False, preproc='client'):
     meta = {
         'inputs': inputs,
         'outputs': outputs,
@@ -368,13 +368,12 @@ def create_metadata(inputs, outputs, sig_name, model_name, lengths_key=None, bea
         'metadata': {
             'exported_model': str(model_name),
             'exported_time': str(datetime.utcnow()),
-            'return_labels': return_labels
+            'return_labels': return_labels,
+            'preproc': preproc,
         }
     }
-
     if lengths_key:
         meta['lengths_key'] = lengths_key
-
     if beam:
         meta['beam'] = beam
 
