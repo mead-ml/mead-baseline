@@ -71,10 +71,6 @@ class ServableEmbeddingsTask(Task):
         embeddings_set = index_by_label(embeddings)
         self.config_params['keep_unused'] = True
         features = self.config_params['features']
-        # Patch luts into large luts
-        for feat in features:
-            if feat['embeddings'].get('type', 'default') == 'default':
-                feat['embeddings']['type'] = 'large-lut'
         self.embeddings, self.feat2index = self._create_embeddings(
             embeddings_set, defaultdict(dict), self.config_params['features']
         )
