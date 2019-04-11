@@ -2,6 +2,7 @@
   "version": 2,
   "task": "classify",
   "basedir": "./sst2",
+  "output": "sst2.csv",
   "batchsz": 50,
   "features": [
     {
