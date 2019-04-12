@@ -552,7 +552,9 @@ def import_user_module(module_name):
     :param model_name: (``str``) - the name of the module
     :return:
     """
-    sys.path.append(os.path.dirname(os.path.realpath(addons.__file__)))
+    addon_path = os.path.dirname(os.path.realpath(addons.__file__))
+    if addon_path not in sys.path:
+        sys.path.append(addon_path)
     mod = importlib.import_module(module_name)
     return mod
 
