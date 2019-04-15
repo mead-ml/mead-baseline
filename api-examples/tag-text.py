@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import baseline as bl
 import argparse
 import os
@@ -56,12 +58,13 @@ if os.path.exists(args.text) and os.path.isfile(args.text):
                 else:
                     texts.append(sentence)
                     sentence = []
+            if sentence:
+                texts.append(sentence)
     else:
         with open(args.text, 'r') as f:
             for line in f:
                 text = line.strip().split()
                 texts += [text]
-
 else:
     texts = [args.text.split()]
 
@@ -70,4 +73,4 @@ m = bl.TaggerService.load(args.model, backend=args.backend, remote=args.remote,
 for sen in m.predict(texts, export_mapping=create_export_mapping(args.export_mapping)):
     for word_tag in sen:
         print("{} {}".format(word_tag['text'], word_tag['label']))
-    print("\n")
+    print()
