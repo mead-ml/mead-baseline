@@ -56,12 +56,13 @@ if os.path.exists(args.text) and os.path.isfile(args.text):
                 else:
                     texts.append(sentence)
                     sentence = []
+            if sentence:
+                texts.append(sentence)
     else:
         with open(args.text, 'r') as f:
             for line in f:
                 text = line.strip().split()
                 texts += [text]
-
 else:
     texts = [args.text.split()]
 
