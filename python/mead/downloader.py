@@ -116,7 +116,14 @@ def update_cache(key, data_download_cache):
 
 def _verify_file(file_loc):
     # dropbox doesn't give 404 in case the file does not exist, produces an HTML. The actual files are never HTMLs.
-    return os.path.exists(file_loc) and os.path.isfile(file_loc) and not mime_type(file_loc) == "text/html"
+    if not os.path.exists(file_loc):
+        return False
+
+    if os.path.isfile(file_loc) and mime_type(file_loc) == "text/html":
+        return False
+
+    return True
+
 
 @exporter
 def is_file_correct(file_loc, data_dcache=None, key=None):
