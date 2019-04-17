@@ -1,0 +1,28 @@
+# begin doc
+# This is a comment
+a 1 2
+b 3 4
+c 5 6
+
+# This is the second sentence
+# This is an extra comment
+d 7 8
+e 9 10
+
+# end doc
+# begin doc
+g 11 12
+h 13 14
+i 15 16
+j 17 18
+
+# 2 2
+k 19 20
+
+# begin doc
+l 21 22
+m 23 24
+n 25 26
+
+o 27 28
+p 29 30

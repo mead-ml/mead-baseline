@@ -1,15 +1,18 @@
 import six
 
 import os
+import io
 import re
 import sys
 import json
 import pickle
+import inspect
 import hashlib
 import logging
 import zipfile
 import platform
 import importlib
+from itertools import chain
 from operator import lt, le, gt, ge
 from contextlib import contextmanager
 from functools import partial, update_wrapper, wraps
@@ -647,82 +650,420 @@ def fill_y(nc, yidx):
 
 
 @exporter
-def convert_iob_to_bio(ifile, ofile):
-    """Convert from IOB to BIO (IOB2)
+@optional_params
+def str_file(func, **kwargs):
+    """A decorator to automatically open arguments that are files.
 
-    This code is copied from Xuezhe Ma (though I added comments)
-    https://github.com/XuezheMax/NeuroNLP2/issues/9
+    If there are kwargs then they are name=mode. When the function is
+    called if the argument name is a string then the file is opened with
+    mode.
 
-    :param ifile: Original IOB format CONLL file
-    :param ofile: BIO/IOB2 format
+    If there are no kwargs then it is assumed the first argument is a
+    file that should be opened as 'r'
     """
-    with open(ifile, 'r') as reader, open(ofile, 'w') as writer:
-        prev = 'O'
-        for line in reader:
-            line = line.strip()
-            if len(line) == 0:
-                prev = 'O'
-                writer.write('\n')
-                continue
+    possible_files = kwargs
+    # We need to have the generator check out here so that the inner function is
+    # either a generator (has a yield) or not. If we were to try to have this if
+    # inside of the open_files then we would always return a generator.
+    if inspect.isgeneratorfunction(func):
+        @six.wraps(func)
+        def open_files(*args, **kwargs):
+            # If no arg names are given then assume the first arg is a file
+            # you want to read from.
+            if not possible_files:
+                if isinstance(args[0], six.string_types):
+                    with io.open(args[0], mode='r', encoding='utf-8') as f:
+                        # Call the function with the file instead we need to
+                        # yield from it until it is done other wise the file
+                        # will be closed after the first yield.
+                        for x in func(f, *args[1:], **kwargs):
+                            yield x
+                else:
+                    for x in func(*args, **kwargs):
+                        yield x
+            else:
+                # Otherwise we have multiple files we want to open
+                to_close = []
+                # Get a dict representation of what it will look like if we
+                # call func with *args and **kwargs
+                arg = inspect.getcallargs(func, *args, **kwargs)
+                try:
+                    for f, mode in possible_files.items():
+                        if isinstance(arg[f], six.string_types):
+                            # Replace strings with the opened files
+                            arg[f] = io.open(arg[f], mode=mode, encoding='utf-8')
+                            to_close.append(f)
+                    # Call the function with the files instead
+                    for x in func(**arg):
+                        yield x
+                finally:
+                    # Make sure to close the files
+                    for f in to_close:
+                        arg[f].close()
+    else:
+        @six.wraps(func)
+        def open_files(*args, **kwargs):
+            # If no arg names are given then assume the first arg is a file
+            # you want to read from.
+            if not possible_files:
+                if isinstance(args[0], six.string_types):
+                    with io.open(args[0], mode='r', encoding='utf-8') as f:
+                        # Call the function with the file instead
+                        return func(f, *args[1:], **kwargs)
+                else:
+                    return func(*args, **kwargs)
+            else:
+                # Otherwise we have multiple files we want to open
+                to_close = []
+                # Get a dict representation of what it will look like if we
+                # call func with *args and **kwargs
+                arg = inspect.getcallargs(func, *args, **kwargs)
+                try:
+                    for f, mode in possible_files.items():
+                        if isinstance(arg[f], six.string_types):
+                            # Replace strings with the opened files
+                            arg[f] = io.open(arg[f], mode=mode, encoding='utf-8')
+                            to_close.append(f)
+                    # Call the function with the files instead
+                    return func(**arg)
+                finally:
+                    # Make sure to close the files
+                    for f in to_close:
+                        arg[f].close()
 
-            tokens = line.split()
-            # print tokens
-            label = tokens[-1]
-            # If this label is B or I and not equal to the previous
-            if label != 'O' and label != prev:
-                # If the last was O, it has to be a B
-                if prev == 'O':
-                    label = 'B-' + label[2:]
-                # Otherwise if the tags are different, it also has to be a B
-                elif label[2:] != prev[2:]:
-                    label = 'B-' + label[2:]
-
-            writer.write(' '.join(tokens[:-1]) + ' ' + label + '\n')
-            prev = tokens[-1]
+    return open_files
 
 
 @exporter
-def convert_bio_to_iobes(ifile, ofile):
+def normalize_indices(xs, length):
+    """Normalize negative indices into positive.
 
-    with open(ifile, 'r') as reader, open(ofile, 'w') as writer:
-        lines = [line.strip() for line in reader]
-        for i, line in enumerate(lines):
+    :param xs: `List[int]` The indices.
+    :param length: `int` The length of the thing to be indexed
 
-            tokens = line.split()
-            if len(tokens) == 0:
-                writer.write('\n')
-                continue
+    :returns: `List[int]` The indices converted to positive only.
+    """
+    return list(map(lambda x: length + x if x < 0 else x, xs))
 
-            label = tokens[-1]
 
-            if i + 1 != len(lines):
-                next_tokens = lines[i+1].split()
-                if len(next_tokens) > 1:
-                     next_tag = next_tokens[-1]
-                else:
-                    next_tag = None
+@exporter
+def convert_iob_to_bio(seq):
+    """Convert a sequence of IOB tags to BIO tags.
 
-            # Nothing to do for label == 'O'
-            if label == 'O':
-                updated_label = label
+    The difference between IOB and BIO (also called IOB2) is that in IOB
+    the B- prefix is only used to separate two chunks of the same type
+    while in BIO the B- prefix is used to start every chunk.
 
-            # It could be S
-            elif label[0] == 'B':
-                if next_tag and next_tag[0] == 'I' and next_tag[2:] == label[2:]:
-                    updated_label = label
-                else:
-                    updated_label = label.replace('B-', 'S-')
+    :param seq: `List[str]` The list of IOB tags.
 
-            elif label[0] == 'I':
-                if next_tag and next_tag[0] == 'I':
-                    updated_label = label
-                else:
-                    updated_label = label.replace('I-', 'E-')
+    :returns: `List[str] The list of BIO tags.
+    """
+    new = []
+    prev = 'O'
+    for token in seq:
+        # Only I- needs to be changed
+        if token.startswith('I-'):
+            # If last was O or last was a different type force B
+            if prev == 'O' or token[2:] != prev[2:]:
+                token = 'B-' + token[2:]
+        new.append(token)
+        prev = token
+    return new
+
+
+@exporter
+def convert_bio_to_iobes(seq):
+    """Convert a sequence of BIO tags to IOBES tags.
+
+    The difference between BIO and IOBES tags is that in IOBES the end
+    of a multi-token entity is marked with the E- prefix while in BIO
+    it would end with an I- prefix.
+
+    The other difference is that a single token entity in BIO is a
+    just a B- whereas in IOBES it uses the special S- prefix.
+
+    :param seq: `List[str]` The list of BIO tags.
+
+    :returns: `List[str]` The list of IOBES tags.
+    """
+    new = []
+    # Get tag bigrams with a fake O at the end so that the final real
+    # token is processed correctly (Final I turned to E, etc.)
+    for c, n in zip(seq, chain(seq[1:], ['O'])):
+        if c.startswith('B-'):
+            # If the next token is an I of the same class this is a
+            # multi token span and should stay as B
+            if n == c.replace('B-', 'I-'):
+                new.append(c)
+            # If the next token is anything else this is a single token
+            # span and should become a S
             else:
-                raise Exception('Invalid IOBES format!')
+                new.append(c.replace('B-', 'S-'))
+        elif c.startswith('I-'):
+            # If the next token is also an I of this type then we are
+            # in the middle of a span and should stay I
+            if n == c:
+                new.append(c)
+            # If next is anything else we are the end and thus E
+            else:
+                new.append(c.replace('I-', 'E-'))
+        # Pass O through
+        else:
+            new.append(c)
+    return new
 
-            writer.write(' '.join(tokens[:-1]) + ' ' + updated_label + '\n')
-            prev = tokens[-1]
+
+@exporter
+def convert_iobes_to_bio(seq):
+    """Convert a sequence of IOBES tags to BIO tags
+
+    :param seq: `List[str]` The list of IOBES tags.
+
+    :returns: `List[str]` The list of BIO tags.
+    """
+    # Use re over `.replace` to make sure it only acts on the beginning of the token.
+    return list(map(lambda x: re.sub(r'^S-', 'B-', re.sub(r'^E-', 'I-', x)), seq))
+
+
+@exporter
+def convert_iob_to_iobes(seq):
+    """Convert a sequence of IOB tags to IOBES tags.
+
+    :param seq: `List[str]` The list of IOB tags.
+
+    :returns: `List[str]` The list of IOBES tags.
+    """
+    return convert_bio_to_iobes(convert_iob_to_bio(seq))
+
+
+@str_file
+def _sniff_conll_file(f, delim=" "):
+    """Figure out how many columns are in a conll file.
+
+    :param file_name: `str` The name of the file.
+    :param delim: `str` The token between columns in the file.
+
+    :returns: `int` The number of columns in the file.
+    """
+    start = f.tell()
+    for line in f:
+        line = line.rstrip("\n")
+        if line.startswith("#"): continue
+        parts = line.split(delim)
+        if len(parts) > 1:
+            f.seek(start)
+            return len(parts)
+
+
+@str_file
+def read_conll(f, doc_pattern=None, delim=" ", metadata=False):
+    """Read from a conll file.
+
+    :param f: `str` The file to read from.
+    :param doc_pattern: `str` A pattern that matches the line that signals the
+        beginning of a new document in the conll file. When None just the
+        conll sentences are returned.
+    :param delim: `str` The token between columns in the file
+    :param metadata: `bool` Should meta data (lines starting with `#` before a
+        sentence) be returned with our sentences.
+
+    :returns: `Generator` The sentences or documents from the file.
+    """
+    if doc_pattern is not None:
+        read = read_conll_docs_md if metadata else read_conll_docs
+        for x in read(f, doc_pattern, delim=delim):
+            yield x
+    else:
+        read = read_conll_sentences_md if metadata else read_conll_sentences
+        for x in read(f, delim=delim):
+            yield x
+
+
+@str_file
+def read_conll_sentences(f, delim=" "):
+    """Read sentences from a conll file.
+
+    :param f: `str` The file to read from.
+    :param delim: `str` The token between columns in the file.
+
+    :returns: `Generator[List[List[str]]]` A list of rows representing a sentence.
+    """
+    sentence = []
+    for line in f:
+        line = line.rstrip()
+        if line.startswith('#'): continue
+        if len(line) == 0:
+            if sentence:
+                yield sentence
+            sentence = []
+            continue
+        sentence.append(line.split(delim))
+    if sentence:
+        yield sentence
+
+
+@str_file
+def read_conll_sentences_md(f, delim=" "):
+    """Read sentences from a conll file.
+
+    :param f: `str` The file to read from.
+    :param delim: `str` The token between columns in the file.
+
+    Note:
+        If there are document annotations in the conll file then they will show
+        up in the meta data for what would be the first sentence of that doc
+
+    :returns: `Generator[Tuple[List[List[str]], List[List[str]]]`
+        The first element is the list or rows, the second is a list of comment
+        lines that preceded that sentence in the file.
+    """
+    sentence, meta = [], []
+    for line in f:
+        line = line.rstrip()
+        if line.startswith('#'):
+            meta.append(line)
+            continue
+        if len(line) == 0:
+            if sentence:
+                yield sentence, meta
+            sentence, meta = [], []
+            continue
+        sentence.append(line.split(delim))
+    if sentence:
+        yield sentence, meta
+
+
+@str_file
+def read_conll_docs(f, doc_pattern="# begin doc", delim=" "):
+    """Read sentences from a conll file.
+
+    :param f: `str` The file to read from.
+    :param doc_pattern: `str` The beginning of lines that represent new documents
+    :param delim: `str` The token between columns in the file.
+
+    :returns: `Generator[List[List[List[str]]]]`
+        A document which is a list of sentences.
+    """
+    doc, sentence = [], []
+    for line in f:
+        line = line.rstrip()
+        if line.startswith('#'):
+            if line.startswith(doc_pattern):
+                if doc:
+                    if sentence:
+                        doc.append(sentence)
+                    yield doc
+                    doc, sentence = [], []
+            continue
+        if len(line) == 0:
+            if sentence:
+                doc.append(sentence)
+                sentence = []
+            continue
+        sentence.append(line.split(delim))
+    if doc:
+        if sentence:
+            doc.append(sentence)
+        yield doc
+
+
+@str_file
+def read_conll_docs_md(f, doc_pattern="# begin doc", delim=" "):
+    """Read sentences from a conll file.
+
+    :param f: `str` The file to read from.
+    :param doc_pattern: `str` The beginning of lines that represent new documents
+    :param delim: `str` The token between columns in the file.
+
+    :returns: `Generator[Tuple[List[List[List[str]]], List[str]  List[List[str]]]`
+        The first element is a document, the second is a list of comments
+        lines that preceded the document break (includes the document line)
+        since the last sentence. The last is a list of comments for each
+        list in the document.
+    """
+    doc_meta = []
+    doc, sentence, sent_meta, meta = [], [], [], []
+    for line in f:
+        line = line.rstrip()
+        if line.startswith('#'):
+            meta.append(line)
+            if line.startswith(doc_pattern):
+                new_doc_meta = meta
+                meta = []
+                if doc:
+                    if sentence:
+                        doc.append(sentence)
+                        sentence = []
+                    yield doc, doc_meta, sent_meta
+                    doc, sentence, sent_meta, meta = [], [], [], []
+                doc_meta = new_doc_meta
+            continue
+        if len(line) == 0:
+            if sentence:
+                doc.append(sentence)
+                sent_meta.append(meta)
+                sentence, meta = [], []
+            continue
+        sentence.append(line.split(delim))
+    if doc:
+        if sentence:
+            doc.append(sentence)
+            sent_meta.append(meta)
+            meta = []
+        yield doc, doc_meta, sent_meta
+
+
+@str_file(ifile='r', ofile='w')
+def convert_conll_file(ifile, ofile, convert, fields=[-1], delim=" "):
+    """Convert the tagging scheme in a conll file.
+
+    This function assumes the that columns that one wishes to convert are
+    the right model columns.
+
+    :param ifile: `str` The input file name.
+    :param ofile: `str` The output file name.
+    :param convert: `Callable(List[str]) -> List[str]` The function that
+        transforms a sequence in one tag scheme to another scheme.
+    :param fields: `List[int]` The columns to convert.
+    :param delim: `str` The symbol that separates the columns.
+    """
+    conll_length = _sniff_conll_file(ifile, delim)
+    fields = set(normalize_indices(fields, conll_length))
+    for lines, md in read_conll_sentences_md(ifile, delim=delim):
+        lines = zip(*(convert(l) if i in fields else l for i, l in enumerate(zip(*lines))))
+        # Write out meta data
+        ofile.write('\n'.join(md) + '\n')
+        # Write out the lines
+        ofile.write('\n'.join(delim.join(l).rstrip() for l in lines) + '\n\n')
+
+
+@exporter
+@str_file(ifile='r', ofile='w')
+def convert_iob_conll_to_bio(ifile, ofile, fields=[-1], delim=" "):
+    """Convert a conll file from iob to bio."""
+    convert_conll_file(ifile, ofile, convert_iob_to_bio, fields, delim)
+
+
+@exporter
+@str_file(ifile='r', ofile='w')
+def convert_iob_conll_to_iobes(ifile, ofile, fields=[-1], delim=" "):
+    """Convert a conll file from iob to iobes."""
+    convert_conll_file(ifile, ofile, convert_iob_to_iobes, fields, delim)
+
+
+@exporter
+@str_file(ifile='r', ofile='w')
+def convert_bio_conll_to_iobes(ifile, ofile, fields=[-1], delim=" "):
+    """Convert a conll file from bio to iobes."""
+    convert_conll_file(ifile, ofile, convert_bio_to_iobes, fields, delim)
+
+
+@exporter
+@str_file(ifile='r', ofile='w')
+def convert_iobes_conll_to_bio(ifile, ofile, fields=[-1], delim=" "):
+    """Convert a conll file from iobes to bio. Useful for formatting output to use `conlleval.pl`."""
+    convert_conll_file(ifile, ofile, convert_iobes_to_bio, fields, delim)
+
 
 
 @exporter
