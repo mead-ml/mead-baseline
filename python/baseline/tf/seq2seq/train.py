@@ -152,7 +152,7 @@ def fit(model, ts, vs, es=None, **kwargs):
     after_train_fn = kwargs['after_train_fn'] if 'after_train_fn' in kwargs else None
     trainer = create_trainer(model, **kwargs)
     feed_dict = {k: v for e in model.src_embeddings.values() for k, v in e.get_feed_dict().items()}
-    feed_dict.update(model.tgt_embeddings.get_feed_dict())
+    feed_dict.update(model.tgt_embedding.get_feed_dict())
     init = tf.global_variables_initializer()
     model.sess.run(init, feed_dict)
     saver = tf.train.Saver()
