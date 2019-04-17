@@ -3,7 +3,7 @@ from __future__ import print_function
 import baseline as bl
 import argparse
 import os
-from baseline.utils import str2bool
+from baseline.utils import str2bool, read_conll
 
 
 parser = argparse.ArgumentParser(description='Tag text with a model')
@@ -45,21 +45,11 @@ if os.path.exists(args.text) and os.path.isfile(args.text):
     texts = []
     if args.conll:
         feature_indices = feature_index_mapping(args.features)
-        sentence = []
-        with open(args.text, 'r') as f:
-            for line in f:
-                if line.strip():
-                    text = line.strip().split()
-                    if feature_indices:
-                        text = {feature: text[feature_indices[feature]] for feature in feature_indices}
-                    else:
-                        text = text[0]
-                    sentence.append(text)
-                else:
-                    texts.append(sentence)
-                    sentence = []
-            if sentence:
-                texts.append(sentence)
+        for sentence in read_conll(args.text):
+            if feature_indices:
+                texts.append([{k: line[v] for k, v in feature_indices.items()} for line in sentence])
+            else:
+                texts.append([line[0] for line in sentence])
     else:
         with open(args.text, 'r') as f:
             for line in f:
