@@ -152,6 +152,8 @@ class ClassifyTrainerAutobatch(ClassifyTrainerDynet):
 def fit(model, ts, vs, es, epochs=20, do_early_stopping=True, early_stopping_metric='acc', **kwargs):
     autobatchsz = kwargs.get('autobatchsz', 1)
     verbose = kwargs.get('verbose', {'print': kwargs.get('verbose_print', False), 'file': kwargs.get('verbose_file', None)})
+    output = kwargs.get('output')
+    txts = kwargs.get('txts')
     model_file = get_model_file('classify', 'dynet', kwargs.get('basedir'))
 
     best_metric = 0
@@ -189,5 +191,5 @@ def fit(model, ts, vs, es, epochs=20, do_early_stopping=True, early_stopping_met
     if es is not None:
         logger.info('Reloading best checkpoint')
         model = model.load(model_file)
-        test_metrics = trainer.test(es, reporting_fns, phase='Test', verbose=verbose)
+        test_metrics = trainer.test(es, reporting_fns, phase='Test', verbose=verbose, output=output, txts=txts)
     return test_metrics

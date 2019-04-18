@@ -216,18 +216,9 @@ class Task(object):
         3. call `baseline.train.fit()` which executes the training procedure and  yields a saved model
         4. call `baseline.zip_files()` which zips all files in the `basedir` with the same `PID` as this process
         5. call `_close_reporting_hooks()` which lets the reporting hooks know that the job is finished
-        :return: Nothing
+        :return: model, metrics
         """
-        self._load_dataset()
-        baseline.save_vectorizers(self.get_basedir(), self.vectorizers)
-        model = self._create_model()
-        train_params = self.config_params['train']
-        train_params['checkpoint'] = checkpoint
-
-        metrics = baseline.train.fit(model, self.train_data, self.valid_data, self.test_data, **train_params)
-        baseline.zip_files(self.get_basedir())
-        self._close_reporting_hooks()
-        return model, metrics
+        pass
 
     def _configure_reporting(self, reporting, **kwargs):
         """Configure all `reporting_hooks` specified in the mead settings or overridden at the command line
@@ -416,11 +407,25 @@ class ClassifierTask(Task):
             self.feat2index,
             vbsz,
         )
-        self.test_data, _ = self.reader.load(
+        self.test_data, self.txts = self.reader.load(
             self.dataset['test_file'],
             self.feat2index,
             tbsz,
         )
+
+    def train(self, checkpoint=None):
+        self._load_dataset()
+        baseline.save_vectorizers(self.get_basedir(), self.vectorizers)
+        model = self._create_model()
+        train_params = self.config_params['train']
+        train_params['checkpoint'] = checkpoint
+        output = self.config_params.get('output')
+        metrics = baseline.train.fit(model, self.train_data, self.valid_data, self.test_data,
+                                     output=output, txts=self.txts, **train_params)
+        baseline.zip_files(self.get_basedir())
+        self._close_reporting_hooks()
+        return model, metrics
+
 
 
 @exporter

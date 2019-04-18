@@ -141,6 +141,8 @@ def fit(model, ts, vs, es, **kwargs):
     """
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
     verbose = kwargs.get('verbose', {'console': kwargs.get('verbose_console', False), 'file': kwargs.get('verbose_file', None)})
+    output = kwargs.get('output')
+    txts = kwargs.get('txts')
     epochs = int(kwargs.get('epochs', 20))
     model_file = get_model_file('classify', 'pytorch', kwargs.get('basedir'))
 
@@ -183,5 +185,5 @@ def fit(model, ts, vs, es, **kwargs):
         logger.info('Reloading best checkpoint')
         model = torch.load(model_file)
         trainer = create_trainer(model, **kwargs)
-        test_metrics = trainer.test(es, reporting_fns, phase='Test', verbose=verbose)
+        test_metrics = trainer.test(es, reporting_fns, phase='Test', verbose=verbose, output=output, txts=txts)
     return test_metrics

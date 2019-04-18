@@ -200,5 +200,5 @@ def fit(model, ts, vs, es=None, **kwargs):
     if es is not None:
         logger.info('Reloading best checkpoint')
         trainer.recover_last_checkpoint()
-        test_metrics = trainer.test(es, reporting_fns, phase='Test', verbose=verbose, txts=txts)
+        test_metrics = trainer.test(es, reporting_fns, phase='Test', verbose=verbose, output=output, txts=txts)
     return test_metrics
