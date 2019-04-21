@@ -41,7 +41,7 @@ class TransferLastHiddenPolicy(ArcPolicy):
 @register_arc_policy(name='no_arc')
 class NoArcPolicy(ArcPolicy):
     def __init__(self):
-        super(NoArchPolicy, self).__init__()
+        super(NoArcPolicy, self).__init__()
 
     def get_state(self, encoder_outputs):
         final_state = encoder_outputs.hidden
