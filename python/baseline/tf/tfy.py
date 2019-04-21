@@ -356,58 +356,57 @@ def multi_rnn_cell_w_dropout(hsz, pdrop, rnntype, num_layers, variational=False,
 
 
 # # This function should never be used for decoding.  It exists only so that the training model can greedily decode
-# def show_examples_tf(model, es, rlut1, rlut2, vocab, mxlen, sample, prob_clip, max_examples, reverse):
-#     si = np.random.randint(0, len(es))
+def show_examples_tf(model, es, rlut1, rlut2, vocab, mxlen, sample, prob_clip, max_examples, reverse):
+    si = np.random.randint(0, len(es))
 
-#     batch_dict = es[si]
-#     i = 0
-#     src_lengths_key = model.src_lengths_key
-#     src_key = src_lengths_key.split('_')[0]
+    batch_dict = es[si]
+    i = 0
+    src_lengths_key = model.src_lengths_key
+    src_key = src_lengths_key.split('_')[0]
+    while True:
 
-#     while True:
+        example = {}
+        for k in batch_dict.keys():
+            if i >= len(batch_dict[k]):
+                return
+            example[k] = batch_dict[k][i]
+        print('========================================================================')
 
-#         example = {}
-#         for k in batch_dict.keys():
-#             if i >= len(batch_dict[k]):
-#                 return
-#             example[k] = batch_dict[k][i]
-#         print('========================================================================')
+        src_i = example[src_key]
+        src_len_i = example[src_lengths_key]
+        tgt_i = example['tgt']
 
-#         src_i = example[src_key]
-#         src_len_i = example[src_lengths_key]
-#         tgt_i = example['tgt']
+        sent = lookup_sentence(rlut1, src_i, reverse=reverse)
+        print('[OP] %s' % sent)
+        sent = lookup_sentence(rlut2, tgt_i)
+        print('[Actual] %s' % sent)
+        tgt_i = np.zeros((1, mxlen))
+        example['tgt'] = tgt_i
+        src_i = src_i[np.newaxis, :]
+        example[src_key] = src_i
+        example[src_lengths_key] = np.array([src_len_i])
+        next_value = Offsets.GO
+        for j in range(mxlen):
+            tgt_i[0, j] = next_value
+            tgt_len_i = np.array([j+1])
+            example['tgt_lengths'] = tgt_len_i
+            output = model.step(example).squeeze()[j]
+            if sample is False:
+                next_value = np.argmax(output)
+            else:
+                # This is going to zero out low prob. events so they are not
+                # sampled from
+                next_value = beam_multinomial(prob_clip, output)
 
-#         sent = lookup_sentence(rlut1, src_i, reverse=reverse)
-#         print('[OP] %s' % sent)
-#         sent = lookup_sentence(rlut2, tgt_i)
-#         print('[Actual] %s' % sent)
-#         tgt_i = np.zeros((1, mxlen))
-#         example['tgt'] = tgt_i
-#         src_i = src_i[np.newaxis, :]
-#         example[src_key] = src_i
-#         example[src_lengths_key] = np.array([src_len_i])
-#         next_value = Offsets.GO
-#         for j in range(mxlen):
-#             tgt_i[0, j] = next_value
-#             tgt_len_i = np.array([j+1])
-#             example['tgt_lengths'] = tgt_len_i
-#             output = model.step(example).squeeze()[j]
-#             if sample is False:
-#                 next_value = np.argmax(output)
-#             else:
-#                 # This is going to zero out low prob. events so they are not
-#                 # sampled from
-#                 next_value = beam_multinomial(prob_clip, output)
+            if next_value == Offsets.EOS:
+                break
 
-#             if next_value == Offsets.EOS:
-#                 break
-
-#         sent = lookup_sentence(rlut2, tgt_i.squeeze())
-#         print('Guess: %s' % sent)
-#         print('------------------------------------------------------------------------')
-#         i += 1
-#         if i == max_examples:
-#             return
+        sent = lookup_sentence(rlut2, tgt_i.squeeze())
+        print('Guess: %s' % sent)
+        print('------------------------------------------------------------------------')
+        i += 1
+        if i == max_examples:
+            return
 
 
 def skip_conns(inputs, wsz_all, n, activation_fn=tf.nn.relu):
