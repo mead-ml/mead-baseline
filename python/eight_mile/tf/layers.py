@@ -399,7 +399,7 @@ class BiLSTMEncoder(tf.keras.Model):
         self.output_fn = rnn_ident if output_fn is None else output_fn
         print(self.output_fn)
 
-    def call(self, inputs, training=False):
+    def call(self, inputs):
         inputs, lengths = tensor_and_lengths(inputs)
         rnnout, hidden = tf.nn.bidirectional_dynamic_rnn(self.fwd_rnn, self.bwd_rnn, inputs, sequence_length=lengths, dtype=tf.float32)
         rnnout = tf.concat(axis=2, values=rnnout)

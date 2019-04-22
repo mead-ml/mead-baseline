@@ -29,6 +29,7 @@ def reload_embeddings(embeddings_dict, basename):
         embeddings[key] = Constructor(key, **embed_args)
     return embeddings
 
+
 def _add_ema(model, decay):
     """Create ops needed to track EMA when training.
 
