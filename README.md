@@ -27,10 +27,10 @@ focus on model development, delegating the repetitive tasks to the library.
   task. An end-user can easily implement a new model and delegate the rest to
   the library.
 
-- [**mead**](docs/mead.md): A library built on  for fast Modeling,
-  Experimentation And Development. It contains driver programs to run
-  experiments from JSON configuration files to completely control the reader,
-  trainer, model, and hyper-parameters.
+- [**mead**](docs/mead.md): A library built for fast modeling, experimentation
+  and development. It contains driver programs to run experiments from JSON
+  configuration files to completely control the reader, trainer, model, and
+  hyper-parameters.
 
 - [**xpctl**](docs/xpctl.md): A command-line interface to track experimental
   results and provide access to a global leaderboard. After running an
@@ -61,10 +61,14 @@ public contributions.
 
 ## Installation
 
-Baseline can be installed as a python package with the command `./install_dev.sh baseline`.
+Baseline can be installed as a Python package:
 
-Currently xpctl depends on baseline but baseline is not on pypi so you need to
-install baseline before you install xpctl with `./install_dev.sh xpctl`.
+    ./install_dev.sh baseline
+
+Currently, xpctl depends on baseline but baseline is not available on PyPI so
+you need to install baseline before you install xpctl:
+
+    ./install_dev.sh xpctl
 
 ## A Note About Versions
 
