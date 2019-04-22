@@ -346,10 +346,12 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
     def predict(self, batch_dict, **kwargs):
         feed_dict = self.make_input(batch_dict)
         vec = self.sess.run(self.decoder.best, feed_dict=feed_dict)
-        # (B x K x T)
-        if len(vec.shape) == 3:
-            return vec.transpose(1, 2, 0)
-        return np.expand_dims(vec, axis=1)
+        # Vec is either [T, B] or [T, B, K]
+        if len(vec.shape) == 2:
+            # Add a fake K
+            vec = np.expand_dims(vec, axis=2)
+        # convert to (B x K x T)
+        return vec.transpose(1, 2, 0)
 
     def step(self, batch_dict):
         """

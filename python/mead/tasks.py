@@ -3,7 +3,6 @@ import json
 import logging
 import numpy as np
 import baseline
-from baseline.tf.tfy import show_examples_tf
 from baseline.utils import (
     export,
     revlut,
@@ -557,8 +556,6 @@ class EncoderDecoderTask(Task):
         self.config_params['preproc']['show_ex'] = show_examples
         if backend.name == 'pytorch':
             self.config_params['preproc']['trim'] = True
-        elif backend.name == 'tf':
-            self.config_params['preproc']['show_ex'] = show_examples_tf
         elif backend.name == 'dy':
             import _dynet
             dy_params = _dynet.DynetParams()

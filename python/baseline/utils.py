@@ -1386,6 +1386,7 @@ def _try_user_cmp(user_cmp):
 
 @exporter
 def show_examples(model, es, rlut1, rlut2, vocab, mxlen, sample, prob_clip, max_examples, reverse):
+    """Expects model.predict to return [B, K, T]."""
     si = np.random.randint(0, len(es))
 
     batch_dict = es[si]

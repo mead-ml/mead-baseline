@@ -56,6 +56,7 @@ class TransformerDecoder(DecoderBase):
                 activation_type='relu',
                 d_ff=None,
                 **kwargs):
+        """self.best is [T, B]"""
         mxlen = kwargs.get('mxlen', 100)
         src_enc = encoder_outputs.output
         B = get_shape_as_list(src_enc)[0]
@@ -111,7 +112,7 @@ class TransformerDecoder(DecoderBase):
 
         ])
         self.preds = tf.no_op()
-        best = decoded_ids
+        best = tf.transpose(decoded_ids)
         self.output(best, do_probs=False)
 
     def decode(self, encoder_outputs,
@@ -124,6 +125,7 @@ class TransformerDecoder(DecoderBase):
                scale=True,
                activation_type='relu',
                d_ff=None, **kwargs):
+        """self.best is [T, B]"""
         src_enc = encoder_outputs.output
         if hasattr(encoder_outputs, 'src_mask'):
             src_mask = encoder_outputs.src_mask
@@ -234,6 +236,7 @@ got {} hsz and {} dsz".format(self.hsz, self.tgt_embedding.get_dsz()))
         return Wo
 
     def predict(self, encoder_outputs, src_len, pdrop, **kwargs):
+        """self.best is [T, B, K]"""
 
         beam_width = kwargs.get('beam', 1)
         mxlen = kwargs.get('mxlen', 100)
@@ -270,6 +273,7 @@ got {} hsz and {} dsz".format(self.hsz, self.tgt_embedding.get_dsz()))
             self.output(best)
 
     def decode(self, encoder_outputs, src_len, tgt_len, pdrop, **kwargs):
+        """self.best is [T, B]"""
         self.tgt_embedding.x = kwargs.get('tgt', self.tgt_embedding.create_placeholder('tgt'))
         mxlen = kwargs.get('mxlen', 100)
 
