@@ -1,6 +1,7 @@
 import six
 import os
 import time
+from baseline.utils import fill_y
 import tensorflow as tf
 from baseline.confusion import ConfusionMatrix
 from baseline.progress import create_progress_bar
@@ -10,6 +11,10 @@ from baseline.tf.optz import optimizer
 from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
 from baseline.utils import verbose_output
 from baseline.model import create_model_for
+import numpy as np
+
+NUM_PREFETCH = 2
+SHUF_BUF_SZ = 5000
 
 
 @register_trainer(task='classify', name='default')
@@ -114,6 +119,22 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         self.model.saver.restore(self.model.sess, latest)
 
 
+def to_tensors(model_params, ts):
+
+    keys = ts[0].keys()
+
+    d = dict((k, []) for k in keys)## if k != 'y')
+    for sample in ts:
+        # How do I know NC?
+        sample['y'] = fill_y(2, sample['y'])
+        for k in d.keys():
+            # add each sample
+            for s in sample[k]:
+                d[k].append(s)
+    d = dict((k, np.stack(v)) for k, v in d.items())
+    return d
+
+
 @register_training_func('classify')
 def fit(model_params, ts, vs, es=None, **kwargs):
     """
@@ -143,6 +164,36 @@ def fit(model_params, ts, vs, es=None, **kwargs):
     verbose = kwargs.get('verbose', {'console': kwargs.get('verbose_console', False), 'file': kwargs.get('verbose_file', None)})
     epochs = int(kwargs.get('epochs', 20))
     model_file = get_model_file('classify', 'tf', kwargs.get('basedir'))
+
+    batchsz = kwargs['batchsz']
+    ## First, make tf.datasets for ts, vs and es
+    d = to_tensors(model_params, ts)
+    train_dataset = tf.data.Dataset.from_tensor_slices(d)
+    train_dataset = train_dataset.shuffle(buffer_size=SHUF_BUF_SZ)
+    # https://github.com/tensorflow/tensorflow/blob/master/tensorflow/contrib/distribute/README.md
+    # effective_batch_sz = args.batchsz*args.gpus
+    train_dataset = train_dataset.batch(batchsz // kwargs.get('gpus', 1))
+    train_dataset = train_dataset.repeat(epochs)
+    train_dataset = train_dataset.prefetch(NUM_PREFETCH)
+    #train_dataset.apply(tf.contrib.data.prefetch_to_device('/gpu:0'))
+
+    valid_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(model_params, vs))
+    valid_dataset = valid_dataset.batch(batchsz // kwargs.get('gpus', 1))
+    #valid_dataset = valid_dataset.map(lambda *args: (dict((k, v) for k, v in zip(keys, args[:-1])), args[-1]))
+    valid_dataset = valid_dataset.repeat(epochs)
+    valid_dataset = valid_dataset.prefetch(NUM_PREFETCH)
+    #valid_dataset.apply(tf.contrib.data.prefetch_to_device('/gpu:0'))
+
+    iter = tf.data.Iterator.from_structure(train_dataset.output_types,
+                                           train_dataset.output_shapes)
+
+    features = iter.get_next()
+    model_params.update(features)
+    #model_params.update({'y': y})
+    # create the initialisation operations
+    train_init_op = iter.make_initializer(train_dataset)
+    valid_init_op = iter.make_initializer(valid_dataset)
+
     ema = True if kwargs.get('ema_decay') is not None else False
 
     best_metric = 0
