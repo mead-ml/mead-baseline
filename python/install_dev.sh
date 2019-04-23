@@ -26,11 +26,11 @@ if [ $? != 0 ]; then
 fi
 
 if [ $package = "baseline" ]; then
-    pip install -e .[test,yaml]
+    python3 -m pip install -e .[test,yaml]
 fi
 
 if [ $package = "xpctl" ]; then
-    pip install -e .[test,sql,mongo]
+    python3 -m pip install -e .[test,sql,mongo]
 fi
 
 if [ $? != 0 ]; then
