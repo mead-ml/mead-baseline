@@ -63,8 +63,8 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         steps = len(loader)
         pg = create_progress_bar(steps)
         for batch_dict in pg(loader):
-            feed_dict = self.model.make_input(batch_dict, True)
-            _, step, lossv = self.sess.run([self.train_op, self.global_step, self.loss], feed_dict=feed_dict)
+            _, step, lossv = self.sess.run([self.train_op, self.global_step, self.loss])
+
             batchsz = self._get_batchsz(batch_dict)
             report_lossv = lossv * batchsz
             epoch_loss += report_lossv
@@ -88,6 +88,8 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         if self.ema:
             self.sess.run(self.ema_load)
 
+        use_dataset = kwargs.get('dataset', True)
+
         cm = ConfusionMatrix(self.model.labels)
         steps = len(loader)
         total_loss = 0
@@ -95,11 +97,16 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         verbose = kwargs.get("verbose", None)
 
         pg = create_progress_bar(steps)
-        for batch_dict in pg(loader):
+        for i, batch_dict in enumerate(pg(loader)):
             y = batch_dict['y']
-            feed_dict = self.model.make_input(batch_dict)
-            guess, lossv = self.sess.run([self.model.best, self.test_loss], feed_dict=feed_dict)
+            if use_dataset:
+                guess, lossv = self.sess.run([self.model.best, self.test_loss])
+            else:
+                feed_dict = self.model.make_input(batch_dict, True)
+                guess, lossv = self.sess.run([self.model.best, self.test_loss], feed_dict=feed_dict)
+
             batchsz = self._get_batchsz(batch_dict)
+            assert len(guess) == batchsz
             total_loss += lossv * batchsz
             total_norm += batchsz
             cm.add_batch(y, guess)
@@ -120,18 +127,17 @@ class ClassifyTrainerTf(EpochReportingTrainer):
 
 
 def to_tensors(model_params, ts):
-
     keys = ts[0].keys()
-
-    d = dict((k, []) for k in keys)## if k != 'y')
+    nc = len(model_params['labels'])
+    d = dict((k, []) for k in keys)
     for sample in ts:
-        # How do I know NC?
-        sample['y'] = fill_y(2, sample['y'])
+        sample['y'] = fill_y(nc, sample['y'])
         for k in d.keys():
             # add each sample
             for s in sample[k]:
                 d[k].append(s)
     d = dict((k, np.stack(v)) for k, v in d.items())
+    print(d['y'].shape)
     return d
 
 
@@ -167,29 +173,26 @@ def fit(model_params, ts, vs, es=None, **kwargs):
 
     batchsz = kwargs['batchsz']
     ## First, make tf.datasets for ts, vs and es
-    d = to_tensors(model_params, ts)
-    train_dataset = tf.data.Dataset.from_tensor_slices(d)
-    train_dataset = train_dataset.shuffle(buffer_size=SHUF_BUF_SZ)
     # https://github.com/tensorflow/tensorflow/blob/master/tensorflow/contrib/distribute/README.md
     # effective_batch_sz = args.batchsz*args.gpus
-    train_dataset = train_dataset.batch(batchsz // kwargs.get('gpus', 1))
-    train_dataset = train_dataset.repeat(epochs)
+
+    train_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(model_params, ts))
+    train_dataset = train_dataset.shuffle(buffer_size=SHUF_BUF_SZ)
+    train_dataset = train_dataset.batch(batchsz // kwargs.get('gpus', 1), drop_remainder=False)
+    train_dataset = train_dataset.repeat(epochs + 1)
     train_dataset = train_dataset.prefetch(NUM_PREFETCH)
-    #train_dataset.apply(tf.contrib.data.prefetch_to_device('/gpu:0'))
 
     valid_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(model_params, vs))
-    valid_dataset = valid_dataset.batch(batchsz // kwargs.get('gpus', 1))
-    #valid_dataset = valid_dataset.map(lambda *args: (dict((k, v) for k, v in zip(keys, args[:-1])), args[-1]))
-    valid_dataset = valid_dataset.repeat(epochs)
+    valid_dataset = valid_dataset.batch(batchsz // kwargs.get('gpus', 1), drop_remainder=False)
+    valid_dataset = valid_dataset.repeat(epochs + 1)
     valid_dataset = valid_dataset.prefetch(NUM_PREFETCH)
-    #valid_dataset.apply(tf.contrib.data.prefetch_to_device('/gpu:0'))
 
     iter = tf.data.Iterator.from_structure(train_dataset.output_types,
                                            train_dataset.output_shapes)
 
     features = iter.get_next()
+    # Add features to the model params
     model_params.update(features)
-    #model_params.update({'y': y})
     # create the initialisation operations
     train_init_op = iter.make_initializer(train_dataset)
     valid_init_op = iter.make_initializer(valid_dataset)
@@ -213,8 +216,9 @@ def fit(model_params, ts, vs, es=None, **kwargs):
     last_improved = 0
 
     for epoch in range(epochs):
-
+        trainer.sess.run(train_init_op)
         trainer.train(ts, reporting_fns)
+        trainer.sess.run(valid_init_op)
         test_metrics = trainer.test(vs, reporting_fns, phase='Valid')
 
         if do_early_stopping is False:
@@ -237,5 +241,5 @@ def fit(model_params, ts, vs, es=None, **kwargs):
 
     if es is not None:
         print('Reloading best checkpoint')
-        trainer.recover_last_checkpoint()
-        trainer.test(es, reporting_fns, phase='Test', verbose=verbose)
+        trainer.model = trainer.model.load(model_file)
+        trainer.test(es, reporting_fns, phase='Test', verbose=verbose, dataset=False)

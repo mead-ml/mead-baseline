@@ -43,7 +43,6 @@ class ClassifierModelBase(ClassifierModel):
         :param basename:
         :return:
         """
-
         write_json(self._state, basename + '.state')
         write_json(self.labels, basename + ".labels")
         for key, embedding in self.embeddings.items():
@@ -219,6 +218,13 @@ class ClassifierModelBase(ClassifierModel):
         model = cls()
 
         model.embeddings = embeddings
+        model.lengths_key = kwargs.get('lengths_key')
+        if model.lengths_key is not None:
+            model._unserializable.append(model.lengths_key)
+            model.lengths = kwargs.get('lengths', tf.placeholder(tf.int32, [None], name="lengths"))
+        else:
+            model.lengths = None
+
         model._record_state(**kwargs)
         inputs = {}
         for k, embedding in embeddings.items():
@@ -227,13 +233,6 @@ class ClassifierModelBase(ClassifierModel):
 
         model.pdrop_value = kwargs.get('dropout', 0.5)
         model.sess = kwargs.get('sess', tf.Session())
-        model.lengths_key = kwargs.get('lengths_key')
-        if model.lengths_key is not None:
-            model.lengths = kwargs.get('lengths', tf.placeholder(tf.int32, [None], name="lengths"))
-        else:
-            model.lengths = None
-
-
         model.labels = labels
         nc = len(model.labels)
         model.y = kwargs.get('y', tf.placeholder(tf.int32, [None, nc], name="y"))
