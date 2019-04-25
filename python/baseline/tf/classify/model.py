@@ -216,8 +216,9 @@ class ClassifierModelBase(ClassifierModel):
         """
 
         model = cls()
-
-        model.embeddings = embeddings
+        model.embeddings = {}
+        for k, embedding in embeddings.items():
+            model.embeddings[k] = embedding.detached_ref()
         model.lengths_key = kwargs.get('lengths_key')
         if model.lengths_key is not None:
             model._unserializable.append(model.lengths_key)
@@ -227,7 +228,7 @@ class ClassifierModelBase(ClassifierModel):
 
         model._record_state(**kwargs)
         inputs = {}
-        for k, embedding in embeddings.items():
+        for k, embedding in model.embeddings.items():
             x = kwargs.get(k, embedding.create_placeholder(name=k))
             inputs[k] = x
 
