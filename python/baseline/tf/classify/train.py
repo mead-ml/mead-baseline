@@ -1,7 +1,7 @@
 import six
 import os
 import time
-from baseline.utils import fill_y, get_env_gpus
+from baseline.utils import fill_y
 import tensorflow as tf
 from baseline.confusion import ConfusionMatrix
 from baseline.progress import create_progress_bar
@@ -21,12 +21,11 @@ SHUF_BUF_SZ = 5000
 def model_creator(model_params):
 
     def model_fn(features, labels, mode, params):
-        print(labels)
         model_params.update(features)
         model_params['sess'] = None
         if labels is not None:
-            model_params.update({'y': labels})
-        #    model_params['y'] = tf.one_hot(tf.reshape(labels, [-1, 1]), len(params['labels']))
+           #model_params.update({'y': labels})
+           model_params['y'] = tf.one_hot(tf.reshape(labels, [-1, 1]), len(params['labels']))
 
         if mode == tf.estimator.ModeKeys.PREDICT:
             SET_TRAIN_FLAG(False)
@@ -43,15 +42,10 @@ def model_creator(model_params):
             SET_TRAIN_FLAG(False)
             model = create_model_for('classify', **model_params)
             loss = model.create_loss()
-            predictions = {
-                'classes': model.best,
-                'probabilities': model.probs,
-                'logits': model.logits,
-            }
             eval_metric_ops = {
                 'accuracy': tf.metrics.accuracy(
-                    labels=labels, predictions=model.probs)}
-            return tf.estimator.EstimatorSpec(mode=mode, predictions=predictions, loss=loss, eval_metric_ops=eval_metric_ops)
+                    labels=labels, predictions=model.best)}
+            return tf.estimator.EstimatorSpec(mode=mode, predictions=model.logits, loss=loss, eval_metric_ops=eval_metric_ops)
 
         SET_TRAIN_FLAG(True)
         model = create_model_for('classify', **model_params)
@@ -190,7 +184,7 @@ def to_tensors(model_params, ts):  # "TRAIN_FLAG"
     nc = len(model_params['labels'])
     d = dict((k, []) for k in keys)
     for sample in ts:
-        sample['y'] = fill_y(nc, sample['y'])
+        #sample['y'] = fill_y(nc, sample['y'])
         for k in d.keys():
             # add each sample
             for s in sample[k]:
@@ -216,11 +210,9 @@ def fit_estimator(model_params, ts, vs, es=None, epochs=20, gpus=1, **kwargs):
     }
 
     checkpoint_dir = '{}-{}'.format("./tf-classify", os.getpid())
-    if gpus > 1:
-        config = tf.estimator.RunConfig(model_dir=checkpoint_dir,
-                                        train_distribute=tf.contrib.distribute.MirroredStrategy(num_gpus=gpus))
-    else:
-        config = tf.estimator.RunConfig(model_dir=checkpoint_dir)
+    config = tf.estimator.RunConfig(model_dir=checkpoint_dir,
+                                    train_distribute=tf.contrib.distribute.MirroredStrategy(num_gpus=gpus))
+    # config = tf.estimator.RunConfig(model_dir=checkpoint_dir)
 
     estimator = tf.estimator.Estimator(model_fn=model_fn, config=config, params=params)
 
@@ -231,10 +223,12 @@ def fit_estimator(model_params, ts, vs, es=None, epochs=20, gpus=1, **kwargs):
         estimator.train(input_fn=train_input_fn, steps=len(ts))
         eval_results = estimator.evaluate(input_fn=valid_input_fn, steps=len(vs))
         print(eval_results)
+
+    y_test = [sample['y'] for sample in es]
     predictions = np.array([p['classes'] for p in estimator.predict(input_fn=predict_input_fn)])
 
     cm = ConfusionMatrix(labels)
-    for truth, guess in zip(es['y'], predictions):
+    for truth, guess in zip(y_test, predictions):
         cm.add(truth, guess)
 
     print(cm.get_all_metrics())
@@ -269,7 +263,6 @@ def create_eval_input_fn(model_params, es, test_batchsz=1, gpus=1, epochs=1, **k
     def predict_input_fn():
         test_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(model_params, es))
         test_dataset = test_dataset.batch(test_batchsz // gpus, drop_remainder=False)
-        test_dataset = test_dataset.repeat(epochs)
         test_dataset = test_dataset.prefetch(NUM_PREFETCH)
         _ = test_dataset.make_one_shot_iterator()
         return test_dataset

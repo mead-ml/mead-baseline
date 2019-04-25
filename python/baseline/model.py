@@ -59,12 +59,12 @@ def create_model_for(activity, **kwargs):
 
 @exporter
 def create_model(embeddings, labels, **kwargs):
-    return create_model_for('classify', embeddings, labels, **kwargs)
+    return create_model_for('classify', features=embeddings, labels=labels, **kwargs)
 
 
 @exporter
 def create_tagger_model(embeddings, labels, **kwargs):
-    return create_model_for('tagger', embeddings, labels, **kwargs)
+    return create_model_for('tagger', features=embeddings, labels=labels, **kwargs)
 
 
 
