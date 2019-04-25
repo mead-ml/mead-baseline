@@ -1358,7 +1358,7 @@ def verbose_output(verbose, confusion_matrix):
 
 @exporter
 def get_env_gpus():
-    return os.getenv('CUDA_VISIBLE_DEVICES', os.getenv('NV_GPU', '0')).split(',')
+    return os.getenv('CUDA_VISIBLE_DEVICES', os.getenv('NVIDIA_VISIBLE_DEVICES', os.getenv('NV_GPU', '0'))).split(',')
 
 
 LESS_THAN_METRICS = {"avg_loss", "loss", "perplexity", "ppl"}
