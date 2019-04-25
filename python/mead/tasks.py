@@ -144,7 +144,7 @@ class Task(object):
             os.makedirs(basedir)
         self.config_params['train']['basedir'] = basedir
         # Read GPUS from env variables now so that the reader has access
-        if self.config_params['model'].get('gpus', 1) == -1:
+        if self.config_params['model'].get('gpus', -1) == -1:
             self.config_params['model']['gpus'] = len(get_env_gpus())
         self.config_file = kwargs.get('config_file')
         self._setup_task(**kwargs)
