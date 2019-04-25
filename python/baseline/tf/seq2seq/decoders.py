@@ -270,7 +270,7 @@ got {} hsz and {} dsz".format(self.hsz, self.tgt_embedding.get_dsz()))
             self.final_decoder_state = final_decoder_state
             self.preds = tf.no_op()
             best = final_outputs.predicted_ids
-            self.output(best)
+            self.output(best, do_probs=False)
 
     def decode(self, encoder_outputs, src_len, tgt_len, pdrop, **kwargs):
         """self.best is [T, B]"""
