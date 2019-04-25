@@ -155,8 +155,8 @@ class Task(object):
             os.mkdir(basedir)
         self.config_params['train']['basedir'] = basedir
         # Read GPUS from env variables now so that the reader has access
-        if self.config_params['model'].get('gpus', 1) == -1:
-            self.config_params['model']['gpus'] = len(get_env_gpus())
+        if self.config_params['train'].get('gpus', -1) == -1:
+            self.config_params['train']['gpus'] = len(get_env_gpus())
         self.config_file = kwargs.get('config_file')
         self._setup_task()
         self._load_user_modules()
@@ -183,7 +183,7 @@ class Task(object):
         reader_params = self.config_params['loader']
         reader_params['clean_fn'] = reader_params.get('clean_fn', self.config_params['preproc'].get('clean_fn'))
         reader_params['mxlen'] = self.vectorizers[self.primary_key].mxlen
-        if self.config_params['model'].get('gpus', 1) > 1:
+        if self.config_params['train'].get('gpus', 1) > 1:
             reader_params['truncate'] = True
         return baseline.reader.create_reader(self.task_name(), self.vectorizers, self.config_params['preproc'].get('trim', False), **reader_params)
 
@@ -693,7 +693,7 @@ class LanguageModelingTask(Task):
         reader_params['nctx'] = reader_params.get('nctx', self.config_params.get('nctx', self.config_params.get('nbptt', 35)))
         reader_params['clean_fn'] = reader_params.get('clean_fn', self.config_params['preproc'].get('clean_fn'))
         reader_params['mxlen'] = self.vectorizers[self.primary_key].mxlen
-        if self.config_params['model'].get('gpus', 1) > 1:
+        if self.config_params['train'].get('gpus', 1) > 1:
             reader_params['truncate'] = True
         return baseline.reader.create_reader(self.task_name(), self.vectorizers, self.config_params['preproc'].get('trim', False), **reader_params)
 
