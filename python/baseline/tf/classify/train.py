@@ -1,7 +1,16 @@
+"""Train a classifier with TensorFlow
+
+This module supports 3 different ways of training a model
+
+1. feed_dict
+2. datasets
+3. datasets + estimators
+
+"""
 import six
 import os
 import time
-from baseline.utils import fill_y
+import logging
 import tensorflow as tf
 from baseline.confusion import ConfusionMatrix
 from baseline.progress import create_progress_bar
@@ -11,20 +20,33 @@ from baseline.tf.optz import optimizer
 from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
 from baseline.utils import verbose_output
 from baseline.model import create_model_for
-import copy
 import numpy as np
 
+# Number of batches to prefetch if using tf.datasets
 NUM_PREFETCH = 2
+# The shuffle buffer
 SHUF_BUF_SZ = 5000
 
+log = logging.getLogger('baseline.timing')
 
 def model_creator(model_params):
+    """Create a model function which itself, if called yields a new model
 
+    :param model_params: The parameters from MEAD for a model
+    :return: A model function
+    """
     def model_fn(features, labels, mode, params):
+        """This function is used by estimators to create a model
+
+        :param features: (`dict`) A dictionary of feature names mapped to tensors (iterators)
+        :param labels: (`int`) These are the raw labels from file
+        :param mode: (`str`): A TF mode including ModeKeys.PREDICT|TRAIN|EVAL
+        :param params: A set of user-defined hyper-parameters passed by the estimator
+        :return: A new model
+        """
         model_params.update(features)
         model_params['sess'] = None
         if labels is not None:
-           #model_params.update({'y': labels})
            model_params['y'] = tf.one_hot(tf.reshape(labels, [-1, 1]), len(params['labels']))
 
         if mode == tf.estimator.ModeKeys.PREDICT:
@@ -64,8 +86,32 @@ def model_creator(model_params):
 
 @register_trainer(task='classify', name='default')
 class ClassifyTrainerTf(EpochReportingTrainer):
+    """A Trainer to use if not using tf Estimators
 
+    The trainer can run in 2 modes: `dataset` and `feed_dict`.  When the former, the graph is assumed to
+    be connected by features attached to the input so the `feed_dict` will only be used to pass dropout information.
+
+    When the latter, we will use the baseline DataFeed to read the object into the `feed_dict`
+    """
     def __init__(self, model_params, **kwargs):
+        """Create a Trainer, and give it the parameters needed to instantiate the model
+
+        :param model_params: The model parameters
+        :param kwargs: See below
+
+        :Keyword Arguments:
+
+          * *nsteps* (`int`) -- If we should report every n-steps, this should be passed
+          * *ema_decay* (`float`) -- If we are doing an exponential moving average, what decay to us4e
+          * *clip* (`int`) -- If we are doing gradient clipping, what value to use
+          * *optim* (`str`) -- The name of the optimizer we are using
+          * *lr* (`float`) -- The learning rate we are using
+          * *mom* (`float`) -- If we are using SGD, what value to use for momentum
+          * *beta1* (`float`) -- Adam-specific hyper-param, defaults to `0.9`
+          * *beta2* (`float`) -- Adam-specific hyper-param, defaults to `0.999`
+          * *epsilon* (`float`) -- Adam-specific hyper-param, defaults to `1e-8
+
+        """
         super(ClassifyTrainerTf, self).__init__()
 
         if type(model_params) is dict:
@@ -98,7 +144,21 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         return len(batch_dict['y'])
 
     def _train(self, loader, **kwargs):
+        """Train an epoch of data using either the input loader or using `tf.dataset`
 
+        In non-`tf.dataset` mode, we cycle the loader data feed, and pull a batch and feed it to the feed dict
+        When we use `tf.dataset`s under the hood, this function simply uses the loader to know how many steps
+        to train.  We do use a `feed_dict` for passing the `TRAIN_FLAG` in either case
+
+        :param loader: A data feed
+        :param kwargs: See below
+
+        :Keyword Arguments:
+         * *dataset* (`bool`) Set to `True` if using `tf.dataset`s, defaults to `True`
+         * *reporting_fns* (`list`) A list of reporting hooks to use
+
+        :return: Metrics
+        """
         if self.ema:
             self.sess.run(self.ema_restore)
 
@@ -135,7 +195,22 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         return metrics
 
     def _test(self, loader, **kwargs):
+        """Test an epoch of data using either the input loader or using `tf.dataset`
 
+        In non-`tf.dataset` mode, we cycle the loader data feed, and pull a batch and feed it to the feed dict
+        When we use `tf.dataset`s under the hood, this function simply uses the loader to know how many steps
+        to train.
+
+        :param loader: A data feed
+        :param kwargs: See below
+
+        :Keyword Arguments:
+          * *dataset* (`bool`) Set to `True` if using `tf.dataset`s, defaults to `True`
+          * *reporting_fns* (`list`) A list of reporting hooks to use
+          * *verbose* (`dict`) A dictionary containing `console` boolean and `file` name if on
+
+        :return: Metrics
+        """
         if self.ema:
             self.sess.run(self.ema_load)
 
@@ -169,75 +244,59 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         return metrics
 
     def checkpoint(self):
+        """This method saves a checkpoint
+
+        :return: None
+        """
         checkpoint_dir = '{}-{}'.format("./tf-classify", os.getpid())
         self.model.saver.save(self.sess, os.path.join(checkpoint_dir, 'classify'), global_step=self.global_step)
 
     def recover_last_checkpoint(self):
+        """Recover the last saved checkpoint
+
+        :return: None
+        """
         checkpoint_dir = '{}-{}'.format("./tf-classify", os.getpid())
         latest = tf.train.latest_checkpoint(checkpoint_dir)
         print('Reloading ' + latest)
         self.model.saver.restore(self.model.sess, latest)
 
 
-def to_tensors(model_params, ts):  # "TRAIN_FLAG"
+def to_tensors(ts):
+    """Convert a data feed into a tuple of `features` (`dict`) and `y` values
+
+    This method is required to produce `tf.dataset`s from the input data feed
+
+    :param ts: The data feed to convert
+    :return: A `tuple` of `features` and `y` (labels)
+    """
     keys = ts[0].keys()
-    nc = len(model_params['labels'])
-    d = dict((k, []) for k in keys)
+    features = dict((k, []) for k in keys)
     for sample in ts:
-        #sample['y'] = fill_y(nc, sample['y'])
-        for k in d.keys():
+        for k in features.keys():
             # add each sample
             for s in sample[k]:
-                d[k].append(s)
+                features[k].append(s)
 
-    d = dict((k, np.stack(v)) for k, v in d.items())
-    y = d.pop('y')
-    return d, y
-
-
-@register_training_func('classify')
-def fit_estimator(model_params, ts, vs, es=None, epochs=20, gpus=1, **kwargs):
-    model_fn = model_creator(model_params)
-    labels = model_params['labels']
-    params = {
-        'labels': labels,
-        'optim': kwargs['optim'],
-        'lr': kwargs.get('lr', kwargs.get('eta')),
-        'epochs': epochs,
-        'gpus': gpus,
-        'batchsz': kwargs['batchsz'],
-        'test_batchsz': kwargs.get('test_batchsz', kwargs.get('batchsz'))
-    }
-
-    checkpoint_dir = '{}-{}'.format("./tf-classify", os.getpid())
-    config = tf.estimator.RunConfig(model_dir=checkpoint_dir,
-                                    train_distribute=tf.contrib.distribute.MirroredStrategy(num_gpus=gpus))
-    # config = tf.estimator.RunConfig(model_dir=checkpoint_dir)
-
-    estimator = tf.estimator.Estimator(model_fn=model_fn, config=config, params=params)
-
-    train_input_fn = create_train_input_fn(model_params, ts, **params)
-    valid_input_fn = create_valid_input_fn(model_params, vs, **params)
-    predict_input_fn = create_eval_input_fn(model_params, es, **params)
-    for i in range(epochs):
-        estimator.train(input_fn=train_input_fn, steps=len(ts))
-        eval_results = estimator.evaluate(input_fn=valid_input_fn, steps=len(vs))
-        print(eval_results)
-
-    y_test = [sample['y'] for sample in es]
-    predictions = np.array([p['classes'] for p in estimator.predict(input_fn=predict_input_fn)])
-
-    cm = ConfusionMatrix(labels)
-    for truth, guess in zip(y_test, predictions):
-        cm.add(truth, guess)
-
-    print(cm.get_all_metrics())
+    features = dict((k, np.stack(v)) for k, v in features.items())
+    y = features.pop('y')
+    return features, y
 
 
-def create_train_input_fn(model_params, ts, batchsz=1, gpus=1, epochs=1, **kwargs):
+def create_train_input_fn(ts, batchsz=1, gpus=1, epochs=1, **kwargs):
+    """Creator function for an estimator to get a train dataset
 
+    We use a closure to encapsulate the outer parameters
+
+    :param ts: The data feed
+    :param batchsz: The batchsz to use
+    :param gpus: The number of GPUs to use
+    :param epochs: The number of epochs to train
+    :param kwargs: Keyword args
+    :return: Return an input function that is suitable for an estimator
+    """
     def train_input_fn():
-        train_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(model_params, ts))
+        train_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(ts))
         train_dataset = train_dataset.shuffle(buffer_size=SHUF_BUF_SZ)
         train_dataset = train_dataset.batch(batchsz // gpus, drop_remainder=False)
         train_dataset = train_dataset.repeat(epochs)
@@ -247,9 +306,20 @@ def create_train_input_fn(model_params, ts, batchsz=1, gpus=1, epochs=1, **kwarg
     return train_input_fn
 
 
-def create_valid_input_fn(model_params, vs, batchsz=1, gpus=1, epochs=1, **kwargs):
+def create_valid_input_fn(vs, batchsz=1, gpus=1, epochs=1, **kwargs):
+    """Creator function for an estimator to get a valid dataset
+
+    We use a closure to encapsulate the outer parameters
+
+    :param vs: The data feed
+    :param batchsz: The batchsz to use
+    :param gpus: The number of GPUs to use
+    :param epochs: The number of epochs to train
+    :param kwargs: Keyword args
+    :return: Return an input function that is suitable for an estimator
+    """
     def eval_input_fn():
-        valid_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(model_params, vs))
+        valid_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(vs))
         valid_dataset = valid_dataset.batch(batchsz // gpus, drop_remainder=False)
         valid_dataset = valid_dataset.repeat(epochs)
         valid_dataset = valid_dataset.prefetch(NUM_PREFETCH)
@@ -259,9 +329,20 @@ def create_valid_input_fn(model_params, vs, batchsz=1, gpus=1, epochs=1, **kwarg
     return eval_input_fn
 
 
-def create_eval_input_fn(model_params, es, test_batchsz=1, gpus=1, epochs=1, **kwargs):
+def create_eval_input_fn(es, test_batchsz=1, gpus=1, epochs=1, **kwargs):
+    """Creator function for an estimator to get a test dataset
+
+    We use a closure to encapsulate the outer parameters
+
+    :param es: The data feed
+    :param batchsz: The batchsz to use
+    :param gpus: The number of GPUs to use
+    :param epochs: The number of epochs to train
+    :param kwargs: Keyword args
+    :return: Return an input function that is suitable for an estimator
+    """
     def predict_input_fn():
-        test_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(model_params, es))
+        test_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(es))
         test_dataset = test_dataset.batch(test_batchsz // gpus, drop_remainder=False)
         test_dataset = test_dataset.prefetch(NUM_PREFETCH)
         _ = test_dataset.make_one_shot_iterator()
@@ -270,10 +351,12 @@ def create_eval_input_fn(model_params, es, test_batchsz=1, gpus=1, epochs=1, **k
     return predict_input_fn
 
 
-@register_training_func('classify-datasets')
+@register_training_func('classify')
 def fit_datasets(model_params, ts, vs, es=None, **kwargs):
     """
-    Train a classifier using TensorFlow
+    Train a classifier using TensorFlow with `tf.dataset`.  This
+    is the default behavior for training.  To change this, you need to pass a different
+    `fit_func` to MEAD as it defaults to `fit_func: classify`
 
     :param model: The model to train
     :param ts: A training data set
@@ -285,15 +368,24 @@ def fit_datasets(model_params, ts, vs, es=None, **kwargs):
     :Keyword Arguments:
         * *do_early_stopping* (``bool``) --
           Stop after evaluation data is no longer improving.  Defaults to True
-
+        * *verbose* (`dict`) A dictionary containing `console` boolean and `file` name if on
         * *epochs* (``int``) -- how many epochs.  Default to 20
         * *outfile* -- Model output file, defaults to classifier-model.pyth
         * *patience* --
            How many epochs where evaluation is no longer improving before we give up
         * *reporting* --
            Callbacks which may be used on reporting updates
-        * Additional arguments are supported, see :func:`baseline.tf.optimize` for full list
-    :return:
+        * *nsteps* (`int`) -- If we should report every n-steps, this should be passed
+        * *ema_decay* (`float`) -- If we are doing an exponential moving average, what decay to us4e
+        * *clip* (`int`) -- If we are doing gradient clipping, what value to use
+        * *optim* (`str`) -- The name of the optimizer we are using
+        * *lr* (`float`) -- The learning rate we are using
+        * *mom* (`float`) -- If we are using SGD, what value to use for momentum
+        * *beta1* (`float`) -- Adam-specific hyper-param, defaults to `0.9`
+        * *beta2* (`float`) -- Adam-specific hyper-param, defaults to `0.999`
+        * *epsilon* (`float`) -- Adam-specific hyper-param, defaults to `1e-8
+
+    :return: None
     """
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
     verbose = kwargs.get('verbose', {'console': kwargs.get('verbose_console', False), 'file': kwargs.get('verbose_file', None)})
@@ -305,18 +397,18 @@ def fit_datasets(model_params, ts, vs, es=None, **kwargs):
     # https://github.com/tensorflow/tensorflow/blob/master/tensorflow/contrib/distribute/README.md
     # effective_batch_sz = args.batchsz*args.gpus
     test_batchsz = kwargs.get('test_batchsz', batchsz)
-    train_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(model_params, ts))
+    train_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(ts))
     train_dataset = train_dataset.shuffle(buffer_size=SHUF_BUF_SZ)
     train_dataset = train_dataset.batch(batchsz // kwargs.get('gpus', 1), drop_remainder=False)
     train_dataset = train_dataset.repeat(epochs + 1)
     train_dataset = train_dataset.prefetch(NUM_PREFETCH)
 
-    valid_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(model_params, vs))
+    valid_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(vs))
     valid_dataset = valid_dataset.batch(batchsz // kwargs.get('gpus', 1), drop_remainder=False)
     valid_dataset = valid_dataset.repeat(epochs + 1)
     valid_dataset = valid_dataset.prefetch(NUM_PREFETCH)
 
-    test_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(model_params, es))
+    test_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(es))
     test_dataset = test_dataset.batch(test_batchsz // kwargs.get('gpus', 1), drop_remainder=False)
     test_dataset = test_dataset.repeat(epochs + 1)
     test_dataset = test_dataset.prefetch(NUM_PREFETCH)
@@ -327,7 +419,7 @@ def fit_datasets(model_params, ts, vs, es=None, **kwargs):
     features, y = iter.get_next()
     # Add features to the model params
     model_params.update(features)
-    model_params.update({'y': y})
+    model_params['y'] = tf.one_hot(tf.reshape(y, [-1, 1]), len(model_params['labels']))
     # create the initialisation operations
     train_init_op = iter.make_initializer(train_dataset)
     valid_init_op = iter.make_initializer(valid_dataset)
@@ -381,27 +473,41 @@ def fit_datasets(model_params, ts, vs, es=None, **kwargs):
         trainer.test(es, reporting_fns, phase='Test', verbose=verbose)
 
 
-@register_training_func('classify-classic')
+@register_training_func('classify', 'feed_dict')
 def fit(model_params, ts, vs, es=None, **kwargs):
     """
-    Train a classifier using TensorFlow
+    Train a classifier using TensorFlow with a `feed_dict`.  This
+    is the previous default behavior for training.  To use this, you need to pass
+    `fit_func: feed_dict` in your MEAD config
+
     :param model: The model to train
     :param ts: A training data set
     :param vs: A validation data set
     :param es: A test data set, can be None
     :param kwargs:
         See below
+
     :Keyword Arguments:
         * *do_early_stopping* (``bool``) --
           Stop after evaluation data is no longer improving.  Defaults to True
+        * *verbose* (`dict`) A dictionary containing `console` boolean and `file` name if on
         * *epochs* (``int``) -- how many epochs.  Default to 20
         * *outfile* -- Model output file, defaults to classifier-model.pyth
         * *patience* --
            How many epochs where evaluation is no longer improving before we give up
         * *reporting* --
            Callbacks which may be used on reporting updates
-        * Additional arguments are supported, see :func:`baseline.tf.optimize` for full list
-    :return:
+        * *nsteps* (`int`) -- If we should report every n-steps, this should be passed
+        * *ema_decay* (`float`) -- If we are doing an exponential moving average, what decay to us4e
+        * *clip* (`int`) -- If we are doing gradient clipping, what value to use
+        * *optim* (`str`) -- The name of the optimizer we are using
+        * *lr* (`float`) -- The learning rate we are using
+        * *mom* (`float`) -- If we are using SGD, what value to use for momentum
+        * *beta1* (`float`) -- Adam-specific hyper-param, defaults to `0.9`
+        * *beta2* (`float`) -- Adam-specific hyper-param, defaults to `0.999`
+        * *epsilon* (`float`) -- Adam-specific hyper-param, defaults to `1e-8
+
+    :return: None
     """
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
     verbose = kwargs.get('verbose', {'console': kwargs.get('verbose_console', False), 'file': kwargs.get('verbose_file', None)})
@@ -451,3 +557,111 @@ def fit(model_params, ts, vs, es=None, **kwargs):
         print('Reloading best checkpoint')
         trainer.recover_last_checkpoint()
         trainer.test(es, reporting_fns, phase='Test', verbose=verbose, dataset=False)
+
+
+def _report(step, metrics, start, phase, tt, reporting_fns, steps=1):
+    """Make a report (both metric and timing).
+
+    :param step: `int` The step number of this report (epoch or nstep number).
+    :param metrics: `dict` The metrics to report.
+    :param start: `int` The starting time of this segment.
+    :param phase: `str` The phase type. {'Train', 'Valid', 'Test'}
+    :param tt: `str` The tick type. {'STEP', 'EPOCH'}
+    :param reporting_fns: `List[Callable]` The list of reporting functions to call.
+    :param steps: `int` The number of steps in this segment, used to normalize the time.
+    """
+    elapsed = time.time() - start
+    for reporting in reporting_fns:
+        reporting(metrics, step, phase, tt)
+    log.debug({
+        'tick_type': tt, 'tick': step, 'phase': phase,
+        'time': elapsed / float(steps),
+        'step/sec': steps / float(elapsed)
+    })
+
+
+@register_training_func('classify', 'estimator')
+def fit_estimator(model_params, ts, vs, es=None, epochs=20, gpus=1, **kwargs):
+    """Train the model with an `tf.estimator`
+
+    To use this, you pass `fit_func: estimator` in your MEAD config
+
+    This flavor of training utilizes both `tf.dataset`s and `tf.estimator`s to train.
+    It is the preferred method for distributed training.
+
+    FIXME: currently this method doesnt support early stopping
+
+
+    :param model: The model to train
+    :param ts: A training data set
+    :param vs: A validation data set
+    :param es: A test data set, can be None
+    :param kwargs:
+        See below
+
+    :Keyword Arguments:
+        * *do_early_stopping* (``bool``) --
+          Stop after evaluation data is no longer improving.  Defaults to True
+        * *verbose* (`dict`) A dictionary containing `console` boolean and `file` name if on
+        * *epochs* (``int``) -- how many epochs.  Default to 20
+        * *outfile* -- Model output file, defaults to classifier-model.pyth
+        * *patience* --
+           How many epochs where evaluation is no longer improving before we give up
+        * *reporting* --
+           Callbacks which may be used on reporting updates
+        * *nsteps* (`int`) -- If we should report every n-steps, this should be passed
+        * *ema_decay* (`float`) -- If we are doing an exponential moving average, what decay to us4e
+        * *clip* (`int`) -- If we are doing gradient clipping, what value to use
+        * *optim* (`str`) -- The name of the optimizer we are using
+        * *lr* (`float`) -- The learning rate we are using
+        * *mom* (`float`) -- If we are using SGD, what value to use for momentum
+        * *beta1* (`float`) -- Adam-specific hyper-param, defaults to `0.9`
+        * *beta2* (`float`) -- Adam-specific hyper-param, defaults to `0.999`
+        * *epsilon* (`float`) -- Adam-specific hyper-param, defaults to `1e-8
+
+    :return: None
+    """
+    model_fn = model_creator(model_params)
+    labels = model_params['labels']
+    params = {
+        'labels': labels,
+        'optim': kwargs['optim'],
+        'lr': kwargs.get('lr', kwargs.get('eta')),
+        'epochs': epochs,
+        'gpus': gpus,
+        'batchsz': kwargs['batchsz'],
+        'test_batchsz': kwargs.get('test_batchsz', kwargs.get('batchsz'))
+    }
+
+    checkpoint_dir = '{}-{}'.format("./tf-classify", os.getpid())
+    config = tf.estimator.RunConfig(model_dir=checkpoint_dir,
+                                    train_distribute=tf.contrib.distribute.MirroredStrategy(num_gpus=gpus))
+    # config = tf.estimator.RunConfig(model_dir=checkpoint_dir)
+
+    estimator = tf.estimator.Estimator(model_fn=model_fn, config=config, params=params)
+
+    train_input_fn = create_train_input_fn(ts, **params)
+    valid_input_fn = create_valid_input_fn(vs, **params)
+    predict_input_fn = create_eval_input_fn(es, **params)
+    for i in range(epochs):
+        estimator.train(input_fn=train_input_fn, steps=len(ts))
+        eval_results = estimator.evaluate(input_fn=valid_input_fn, steps=len(vs))
+        print(eval_results)
+
+    y_test = [sample['y'] for sample in es]
+    start = time.time()
+    predictions = np.array([p['classes'] for p in estimator.predict(input_fn=predict_input_fn)])
+
+    cm = ConfusionMatrix(labels)
+    for truth, guess in zip(y_test, predictions):
+        cm.add(truth, guess)
+
+    metrics = cm.get_all_metrics()
+
+    reporting_fns = listify(kwargs.get('reporting', []))
+    _report(0, metrics, start, 'Test', "EPOCH", reporting_fns)
+
+    verbose = kwargs.get('verbose')
+    verbose_output(verbose, cm)
+
+    return metrics

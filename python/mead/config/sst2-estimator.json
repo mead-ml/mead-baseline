@@ -1,0 +1,52 @@
+{
+  "version": 2,
+  "task": "classify",
+  "basedir": "./sst2",
+  "batchsz": 50,
+  "features": [
+    {
+      "name": "word",
+      "vectorizer": {
+        "type": "token1d",
+	"transform": "baseline.lowercase"
+      },
+      "embeddings": {
+        "label": "w2v-gn"
+      }
+    }
+  ],
+  "preproc": {
+    "mxlen": 100,
+    "rev": false,
+    "clean": true
+  },
+  "backend": "tensorflow",
+  "dataset": "SST2",
+  "loader": {
+    "reader_type": "default"
+  },
+  "unif": 0.25,
+  "model": {
+    "model_type": "default",
+    "filtsz": [
+      3,
+      4,
+      5
+    ],
+    "cmotsz": 100,
+    "dropout": 0.5,
+    "finetune": true
+  },
+  "train": {
+    "fit_func": "estimator",
+    "epochs": 2,
+    "optim": "adam",
+    "eta": 0.001,
+    "model_zip": true,
+    "early_stopping_metric": "acc",
+    "verbose": {
+      "console": true,
+      "file": "sst2-cm.csv"
+    }
+  }
+}
