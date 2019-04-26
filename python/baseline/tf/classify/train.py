@@ -320,7 +320,7 @@ def create_valid_input_fn(vs, batchsz=1, gpus=1, epochs=1, **kwargs):
     """
     def eval_input_fn():
         valid_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(vs))
-        valid_dataset = valid_dataset.batch(batchsz // gpus, drop_remainder=False)
+        valid_dataset = valid_dataset.batch(batchsz, drop_remainder=False)
         valid_dataset = valid_dataset.repeat(epochs)
         valid_dataset = valid_dataset.prefetch(NUM_PREFETCH)
         _ = valid_dataset.make_one_shot_iterator()
@@ -343,7 +343,7 @@ def create_eval_input_fn(es, test_batchsz=1, gpus=1, epochs=1, **kwargs):
     """
     def predict_input_fn():
         test_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(es))
-        test_dataset = test_dataset.batch(test_batchsz // gpus, drop_remainder=False)
+        test_dataset = test_dataset.batch(test_batchsz, drop_remainder=False)
         test_dataset = test_dataset.prefetch(NUM_PREFETCH)
         _ = test_dataset.make_one_shot_iterator()
         return test_dataset
@@ -634,10 +634,10 @@ def fit_estimator(model_params, ts, vs, es=None, epochs=20, gpus=1, **kwargs):
     }
 
     checkpoint_dir = '{}-{}'.format("./tf-classify", os.getpid())
+    # We are only distributing the train function for now
+    # https://stackoverflow.com/questions/52097928/does-tf-estimator-estimator-evaluate-always-run-on-one-gpu
     config = tf.estimator.RunConfig(model_dir=checkpoint_dir,
                                     train_distribute=tf.contrib.distribute.MirroredStrategy(num_gpus=gpus))
-    # config = tf.estimator.RunConfig(model_dir=checkpoint_dir)
-
     estimator = tf.estimator.Estimator(model_fn=model_fn, config=config, params=params)
 
     train_input_fn = create_train_input_fn(ts, **params)
