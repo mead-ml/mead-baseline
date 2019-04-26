@@ -1,4 +1,4 @@
-ARG TF_VERSION=1.7.0
+ARG TF_VERSION=1.12.0
 
 FROM python:3.6
 FROM tensorflow/tensorflow:${TF_VERSION}-gpu-py3
