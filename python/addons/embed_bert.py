@@ -1443,7 +1443,8 @@ class BERTHubModel(TensorFlowEmbeddings):
     def __init__(self, name, **kwargs):
         super(BERTHubModel, self).__init__(name=name)
         self.handle = kwargs.get('embed_file')
-        self.vocab = load_vocab(kwargs.get('vocab_file'))
+        self.vocab_file = kwargs.get('vocab_file')
+        self.vocab = load_vocab(self.vocab_file)
         self.vsz = len(self.vocab)
         self.dsz = kwargs.get('dsz')
         self.trainable = kwargs.get('trainable', False)
@@ -1476,7 +1477,14 @@ class BERTHubModel(TensorFlowEmbeddings):
 
 
     def save_md(self, target):
-        write_json({'vsz': self.vsz, 'dsz': self.dsz}, target)
+        write_json({
+            'vsz': self.vsz,
+            'dsz': self.dsz,
+            'module': self.__class__.__module__,
+            'embed_file': self.handle,
+            'vocab_file': self.vocab_file
+            },
+            target)
 
     def get_dsz(self):
         return self.dsz
