@@ -29,6 +29,7 @@ SHUF_BUF_SZ = 5000
 
 log = logging.getLogger('baseline.timing')
 
+
 def model_creator(model_params):
     """Create a model function which itself, if called yields a new model
 
@@ -283,7 +284,7 @@ def to_tensors(ts):
     return features, y
 
 
-def create_train_input_fn(ts, batchsz=1, gpus=1, epochs=1, **kwargs):
+def create_train_input_fn(ts, batchsz=1, gpus=1, **kwargs):
     """Creator function for an estimator to get a train dataset
 
     We use a closure to encapsulate the outer parameters
@@ -291,12 +292,15 @@ def create_train_input_fn(ts, batchsz=1, gpus=1, epochs=1, **kwargs):
     :param ts: The data feed
     :param batchsz: The batchsz to use
     :param gpus: The number of GPUs to use
-    :param epochs: The number of epochs to train
     :param kwargs: Keyword args
     :return: Return an input function that is suitable for an estimator
     """
+    # Precompute this
+    tensors = to_tensors(ts)
+
     def train_input_fn():
-        train_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(ts))
+        epochs = None
+        train_dataset = tf.data.Dataset.from_tensor_slices(tensors)
         train_dataset = train_dataset.shuffle(buffer_size=SHUF_BUF_SZ)
         train_dataset = train_dataset.batch(batchsz // gpus, drop_remainder=False)
         train_dataset = train_dataset.repeat(epochs)
@@ -306,7 +310,7 @@ def create_train_input_fn(ts, batchsz=1, gpus=1, epochs=1, **kwargs):
     return train_input_fn
 
 
-def create_valid_input_fn(vs, batchsz=1, gpus=1, epochs=1, **kwargs):
+def create_valid_input_fn(vs, batchsz=1, **kwargs):
     """Creator function for an estimator to get a valid dataset
 
     We use a closure to encapsulate the outer parameters
@@ -318,10 +322,12 @@ def create_valid_input_fn(vs, batchsz=1, gpus=1, epochs=1, **kwargs):
     :param kwargs: Keyword args
     :return: Return an input function that is suitable for an estimator
     """
+    # Precompute this
+    tensors = to_tensors(vs)
+
     def eval_input_fn():
-        valid_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(vs))
+        valid_dataset = tf.data.Dataset.from_tensor_slices(tensors)
         valid_dataset = valid_dataset.batch(batchsz, drop_remainder=False)
-        valid_dataset = valid_dataset.repeat(epochs)
         valid_dataset = valid_dataset.prefetch(NUM_PREFETCH)
         _ = valid_dataset.make_one_shot_iterator()
         return valid_dataset
@@ -329,7 +335,7 @@ def create_valid_input_fn(vs, batchsz=1, gpus=1, epochs=1, **kwargs):
     return eval_input_fn
 
 
-def create_eval_input_fn(es, test_batchsz=1, gpus=1, epochs=1, **kwargs):
+def create_eval_input_fn(es, test_batchsz=1, **kwargs):
     """Creator function for an estimator to get a test dataset
 
     We use a closure to encapsulate the outer parameters
@@ -341,8 +347,11 @@ def create_eval_input_fn(es, test_batchsz=1, gpus=1, epochs=1, **kwargs):
     :param kwargs: Keyword args
     :return: Return an input function that is suitable for an estimator
     """
+    # Precompute this
+    tensors = to_tensors(es)
+
     def predict_input_fn():
-        test_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(es))
+        test_dataset = tf.data.Dataset.from_tensor_slices(tensors)
         test_dataset = test_dataset.batch(test_batchsz, drop_remainder=False)
         test_dataset = test_dataset.prefetch(NUM_PREFETCH)
         _ = test_dataset.make_one_shot_iterator()
@@ -399,17 +408,17 @@ def fit_datasets(model_params, ts, vs, es=None, **kwargs):
     test_batchsz = kwargs.get('test_batchsz', batchsz)
     train_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(ts))
     train_dataset = train_dataset.shuffle(buffer_size=SHUF_BUF_SZ)
-    train_dataset = train_dataset.batch(batchsz // kwargs.get('gpus', 1), drop_remainder=False)
+    train_dataset = train_dataset.batch(batchsz, drop_remainder=False)
     train_dataset = train_dataset.repeat(epochs + 1)
     train_dataset = train_dataset.prefetch(NUM_PREFETCH)
 
     valid_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(vs))
-    valid_dataset = valid_dataset.batch(batchsz // kwargs.get('gpus', 1), drop_remainder=False)
+    valid_dataset = valid_dataset.batch(batchsz, drop_remainder=False)
     valid_dataset = valid_dataset.repeat(epochs + 1)
     valid_dataset = valid_dataset.prefetch(NUM_PREFETCH)
 
     test_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(es))
-    test_dataset = test_dataset.batch(test_batchsz // kwargs.get('gpus', 1), drop_remainder=False)
+    test_dataset = test_dataset.batch(test_batchsz, drop_remainder=False)
     test_dataset = test_dataset.repeat(epochs + 1)
     test_dataset = test_dataset.prefetch(NUM_PREFETCH)
 
@@ -643,10 +652,12 @@ def fit_estimator(model_params, ts, vs, es=None, epochs=20, gpus=1, **kwargs):
     train_input_fn = create_train_input_fn(ts, **params)
     valid_input_fn = create_valid_input_fn(vs, **params)
     predict_input_fn = create_eval_input_fn(es, **params)
-    for i in range(epochs):
-        estimator.train(input_fn=train_input_fn, steps=len(ts))
-        eval_results = estimator.evaluate(input_fn=valid_input_fn, steps=len(vs))
-        print(eval_results)
+
+    # This is going to be None because train_and_evaluate controls the max steps so repeat doesnt matter
+    train_spec = tf.estimator.TrainSpec(input_fn=train_input_fn, max_steps=epochs * len(ts))
+    # This is going to be None because the evaluation will run for 1 pass over the data that way
+    eval_spec = tf.estimator.EvalSpec(input_fn=valid_input_fn, steps=None)
+    tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
 
     y_test = [sample['y'] for sample in es]
     start = time.time()
