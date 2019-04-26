@@ -30,7 +30,7 @@
 	      "finetune": true
     },
     "train": {
-        "fit_func": "estimator"
+        "fit_func": "estimator",
 	      "epochs": 80,
 	      "optim": "sgd",
 	      "eta": 0.02,
