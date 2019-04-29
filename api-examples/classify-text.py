@@ -11,7 +11,7 @@ parser.add_argument('--remote', help='(optional) remote endpoint', type=str) # l
 parser.add_argument('--name', help='(optional) service name', type=str)
 parser.add_argument('--device', help='device')
 parser.add_argument('--preproc', help='(optional) where to perform preprocessing', choices={'client', 'server'}, default='client')
-parser.add_argument('--batch_sz', help='batch data', default=100, type=int)
+parser.add_argument('--batchsz', help='batch data', default=100, type=int)
 args = parser.parse_args()
 
 if os.path.exists(args.text) and os.path.isfile(args.text):
@@ -23,7 +23,7 @@ if os.path.exists(args.text) and os.path.isfile(args.text):
 
 else:
     texts = [args.text.split()]
-batched = [texts[i:i + args.batch_sz] for i in range(0, len(texts), args.batch_sz)]
+batched = [texts[i:i + args.batchsz] for i in range(0, len(texts), args.batchsz)]
 
 m = bl.ClassifierService.load(args.model, backend=args.backend, remote=args.remote,
                               name=args.name, preproc=args.preproc,
