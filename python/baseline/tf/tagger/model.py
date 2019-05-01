@@ -1,3 +1,6 @@
+"""Provides tagger models for TensorFlow
+
+"""
 from baseline.model import TaggerModel
 from baseline.tf.tfy import *
 from baseline.utils import ls_props, read_json, write_json, MAGIC_VARS
@@ -9,30 +12,52 @@ from baseline.utils import listify, Offsets
 
 
 class TaggerModelBase(TaggerModel):
+    """Tagger model base class for TensorFlow
+
+    This class provides the implementation of the TaggerModel for TensorFlow
+    """
 
     def __init__(self):
+        """Create a tagger, nothing marked as unserializable
+        """
         super(TaggerModelBase, self).__init__()
         self._unserializable = []
+        self._lengths_key = None
+        self._dropin_value = None
+        self.saver = None
 
     @property
     def lengths_key(self):
+        """Property for the name of the field that is used for lengths keying
+
+        :return: (`str`) The name of the field
+        """
         return self._lengths_key
 
     @lengths_key.setter
     def lengths_key(self, value):
+        """Set the lengths key
+
+        :param value: (`str`) The value to set the lengths key to
+        :return: None
+        """
         self._lengths_key = value
 
     def save_values(self, basename):
+        """Save the raw session tensors
+
+        :param basename: The name of the model prefix
+        :return: None
+        """
         self.saver.save(self.sess, basename)
 
     def save_md(self, basename):
         """This method saves out a `.state` file containing meta-data from these classes and any info
         registered by a user-defined derived class as a `property`. Also write the `graph` and `saver` and `labels`
 
-        :param basename:
-        :return:
+        :param basename: The name of the model prefix
+        :return: None
         """
-
         write_json(self._state, basename + '.state')
         write_json(self.labels, basename + ".labels")
         for key, embedding in self.embeddings.items():
@@ -58,16 +83,35 @@ class TaggerModelBase(TaggerModel):
             "embeddings": embeddings_info
         })
 
-
     @property
     def dropin_value(self):
+        """Dropout on the input as a `Dict[str, float]`, one per embedding (keyed off the feature name)
+
+        :return: `Dict[str, float]` containing this information
+        """
         return self._dropin_value
 
     @dropin_value.setter
     def dropin_value(self, dict_value):
+        """Set dictionary for dropout on the input values
+
+        :param dict_value: `Dict[str, float]` containing this information
+        :return: None
+        """
         self._dropin_value = dict_value
 
     def drop_inputs(self, key, x, do_dropout):
+        """Do dropout on inputs, using the dropout value (or none if not set)
+
+        This works by applying a dropout mask with the probability given by a
+        value within the `dropin_value: Dict[str, float]`, keyed off the text name
+        of the feature
+
+        :param key: The feature name
+        :param x: The tensor to drop inputs for
+        :param do_dropout: A `bool` specifying if dropout is turned on
+        :return: The dropped out tensor
+        """
         v = self.dropin_value.get(key, 0)
         if do_dropout and v > 0.0:
             drop_indices = np.where((np.random.random(x.shape) < v) & (x != Offsets.PAD))
@@ -75,12 +119,23 @@ class TaggerModelBase(TaggerModel):
         return x
 
     def make_input(self, batch_dict, train=False):
+        """Map a batch to a `feed_dict`.  Only used when `tf.dataset` is not being used
+
+        When running a graph with placeholder inputs, this method provides an abstraction,
+        converting the dictionary in the batch to what the model expects to fill its placeholders
+        for a single batch.
+
+        When `tf.dataset`s are in use, the features are connected directly to the graph,
+        so there is no point in this method.
+
+        :param batch_dict: A `Dict[str, tensor]` containing inputs to placeholders needed to run
+        :param train: (`bool`) Is training on?
+        :return:
+        """
         feed_dict = new_placeholder_dict(train)
         for k in self.embeddings.keys():
             feed_dict["{}:0".format(k)] = self.drop_inputs(k, batch_dict[k], train)
         y = batch_dict.get('y', None)
-
-        #feed_dict = {v.x: self.drop_inputs(k, batch_dict[k], do_dropout) for k, v in self.embeddings.items()}
 
         # Allow us to track a length, which is needed for BLSTMs
         feed_dict[self.lengths] = batch_dict[self.lengths_key]
@@ -90,6 +145,11 @@ class TaggerModelBase(TaggerModel):
         return feed_dict
 
     def save(self, basename):
+        """Save a model, using the parameter as a prefix
+
+        :param basename: The prefix for the model including the directories and the base of the name to use
+        :return: None
+        """
         self.save_md(basename)
         self.save_values(basename)
 
@@ -136,27 +196,62 @@ class TaggerModelBase(TaggerModel):
         return model
 
     def save_using(self, saver):
+        """Method to wire up the `tf.Saver`
+
+        :param saver: The `tf.Saver`
+        :return: None
+        """
         self.saver = saver
 
     def create_loss(self):
+        """Create the loss function and return it
+
+        :return: The loss function
+        """
         return self.layers.neg_log_loss(self.probs, self.y, self.lengths)
 
     def get_labels(self):
+        """Get the labels (names of each class)
+
+        :return: (`List[str]`) The labels
+        """
         return self.labels
 
     def predict(self, batch_dict):
+        """Take in a batch of data, and predict the tags
+
+        :param batch_dict: A `Dict[str, tensor]` that is to be predicted
+        :return: A batch-sized list of predictions
+        """
         feed_dict = self.make_input(batch_dict)
         lengths = batch_dict[self.lengths_key]
         bestv = self.sess.run(self.best, feed_dict=feed_dict)
         return [pij[:sl] for pij, sl in zip(bestv, lengths)]
 
     def embed(self, **kwargs):
+        """Provide a layer object representing the `embed` phase of the model
+
+        :param kwargs:
+        :return: A layer representing the embeddings
+        """
         return EmbeddingsStack(self.embeddings, self.pdrop_value)
 
     def encode(self, **kwargs):
+        """Provide a layer object that represents the `encode` phase of the model
+
+        :param kwargs:
+        :return: The encoder
+        """
         pass
 
     def decode(self, **kwargs):
+        """Provide a layer object that represents the `decode` phase of the model
+
+        This will typically produce a CRF layer, or a greedy decoder
+
+        :param kwargs:
+        :return: Some decoder for the model
+        """
         self.crf = bool(kwargs.get('crf', False))
         self.crf_mask = bool(kwargs.get('crf_mask', False))
         self.constraint = kwargs.get('constraint')
@@ -166,12 +261,35 @@ class TaggerModelBase(TaggerModel):
 
     @classmethod
     def create(cls, embeddings, labels, **kwargs):
+        """Create the model
 
+        :param embeddings: A `dict` of input embeddings
+        :param labels: The output labels for sequence tagging
+        :param kwargs: See below
+
+        :Keyword Arguments:
+
+        * *lengths_key* (`str`) -- What is the name of the key that is used to get the full temporal length
+        * *dropout* (`float`) -- The probability of dropout
+        * *dropin* (`Dict[str, float]`) -- For each feature, how much input to dropout
+        * *sess* -- An optional `tf.Session`, if not provided, this will be created
+        * *span_type* -- (`str`) The type of input span
+        * *username* -- (`str`) A username, defaults to the name of the user on this machine
+        * *label* -- (`str`) An optional, human-readable label name.  Defaults to sha1 of this configuration
+        * *variational_dropout* -- (`bool`) Should we do variational dropout
+        * *rnntype* -- (`str`) -- The type of RNN (if this is an RNN), defaults to 'blstm'
+        * *layers* -- (`int`) -- The number of layers to apply on the encoder
+        * *hsz* -- (`int`) -- The number of hidden units for the encoder
+
+        :return:
+        """
         model = cls()
         model.embeddings = embeddings
-        model._record_state(**kwargs)
+
         model.lengths_key = kwargs.get('lengths_key')
         model.lengths = kwargs.get('lengths', tf.placeholder(tf.int32, [None], name="lengths"))
+        model._unserializable.append(model.lengths_key)
+        model._record_state(**kwargs)
         model.labels = labels
         nc = len(labels)
         model.y = kwargs.get('y', tf.placeholder(tf.int32, [None, None], name="y"))
@@ -218,14 +336,8 @@ class RNNTaggerModel(TaggerModelBase):
         nlayers = kwargs.get('layers', 1)
         hsz = int(kwargs['hsz'])
 
-        if rnntype == 'blstm':
-            Encoder = BiLSTMEncoder
-        else:
-            Encoder = LSTMEncoder
+        Encoder = BiLSTMEncoder if rnntype == 'blstm' else LSTMEncoder
         return Encoder(hsz, nlayers, self.pdrop_value, self.vdrop, rnn_signal)
-            #((embedseq, lengths),
-            #                                                                      training=TRAIN_FLAG())
-        #return lstm_encoder(embedseq, self.lengths, hsz, self.pdrop_value, self.vdrop, rnntype, nlayers)
 
 
 @register_model(task='tagger', name='cnn')
@@ -242,5 +354,5 @@ class CNNTaggerModel(TaggerModelBase):
             filts = 5
 
         # motsz, filtsz, activation='relu', name=None, **kwargs):
-        cnnout = ParallelConvEncoder(self.layers.embed_model.dsz, hsz, listify(filts))
+        cnnout = ConvEncoderStack(hsz, filts, self.pdrop_value, nlayers)
         return cnnout

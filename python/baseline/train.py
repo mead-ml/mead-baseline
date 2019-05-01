@@ -230,10 +230,10 @@ class EpochReportingTrainer(Trainer):
     def __init__(self):
         super(EpochReportingTrainer, self).__init__()
 
-    def train(self, ts, reporting_fns):
+    def train(self, ts, reporting_fns, **kwargs):
         start_time = time.time()
         self.nstep_start = start_time
-        metrics = self._train(ts, reporting_fns=reporting_fns)
+        metrics = self._train(ts, reporting_fns=reporting_fns, **kwargs)
         self.train_epochs += 1
         self.report(
             self.train_epochs, metrics, start_time,

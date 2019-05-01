@@ -364,10 +364,9 @@ def create_eval_input_fn(es, test_batchsz=1, **kwargs):
 def fit_datasets(model_params, ts, vs, es=None, **kwargs):
     """
     Train a classifier using TensorFlow with `tf.dataset`.  This
-    is the default behavior for training.  To change this, you need to pass a different
-    `fit_func` to MEAD as it defaults to `fit_func: classify`
+    is the default behavior for training.
 
-    :param model: The model to train
+    :param model_params: The model (or parameters to create the model) to train
     :param ts: A training data set
     :param vs: A validation data set
     :param es: A test data set, can be None
@@ -489,7 +488,7 @@ def fit(model_params, ts, vs, es=None, **kwargs):
     is the previous default behavior for training.  To use this, you need to pass
     `fit_func: feed_dict` in your MEAD config
 
-    :param model: The model to train
+    :param model_params: The model (or parameters to create the model) to train
     :param ts: A training data set
     :param vs: A validation data set
     :param es: A test data set, can be None
@@ -598,10 +597,9 @@ def fit_estimator(model_params, ts, vs, es=None, epochs=20, gpus=1, **kwargs):
     This flavor of training utilizes both `tf.dataset`s and `tf.estimator`s to train.
     It is the preferred method for distributed training.
 
-    FIXME: currently this method doesnt support early stopping
+    FIXME: currently this method doesnt support early stopping.
 
-
-    :param model: The model to train
+    :param model_params: The model (or parameters to create the model) to train
     :param ts: A training data set
     :param vs: A validation data set
     :param es: A test data set, can be None
