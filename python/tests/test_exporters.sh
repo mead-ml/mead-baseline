@@ -11,7 +11,7 @@ function err_print {
 function tf_version_test {
     TF_VERSION_TEST=`python -c 'import tensorflow; from distutils.version import LooseVersion; import sys; i = "fail" if LooseVersion(tensorflow.__version__) < LooseVersion("1.12.0") else "pass"; print(i)'`
 
-    if [ "$TF_VERSION_TEST" == "fail" ]
+    if [[ "$TF_VERSION_TEST" == "fail" ]]
         then
             err_print "models were trained with tf version 1.12, you have a lower version. please upgrade."
             exit 1
@@ -19,7 +19,7 @@ function tf_version_test {
 }
 
 function clean {
-    if [ "$CLEAN_AFTER_TEST" == "true" ]
+    if [[ "$CLEAN_AFTER_TEST" == "true" ]]
     then
         mead-clean
         remove_files "${FILES_TO_REMOVE[@]}"
@@ -36,8 +36,8 @@ function docker_run {
 }
 
 function get_file {
-     if [ -f $1 ];
-         then
+     if [[ -f "$1" ]];
+     then
          msg_print " $1 locally found, not downloading"
      else
          msg_print " $1 locally not found, downloading $2"
@@ -49,11 +49,20 @@ function mead_export {
     mead-export --config ${CONFIG_FILE} --settings ${EXPORT_SETTINGS_MEAD} --datasets ${EXPORT_SETTINGS_DATASETS} --task ${TASK} --exporter_type ${1} --model ${MODEL_FILE} --model_version ${MODEL_VERSION} --output_dir $2 --is_remote ${IS_REMOTE} --return_labels ${3}
 }
 
-function check_diff {
-    DIFF=$(diff ${1} ${2})
-    if [ "$DIFF" != "" ]
+function file_empty_or_does_not_exist {
+    if [[ ! -s "$1" ]]
     then
-        err_print "${1} does not match with ${2}, exporting failed. "
+        err_print "${1} is either not created or empty, test failed. "
+        docker_clear
+        exit 1
+    fi
+}
+
+function check_diff {
+    DIFF=$(diff "${1}" "${2}")
+    if [[ "$DIFF" != "" ]]
+    then
+        err_print "${1} does not match with ${2}, test failed. "
         docker_clear
         exit 1
     fi
@@ -63,12 +72,12 @@ function remove_files {
     arr=("$@")
     for file in "${arr[@]}"
         do
-            [ -e "${file}" ] && rm -rf "${file}"
+            [[ -e "${file}" ]] && rm -rf "${file}"
         done
 }
 
 function classify_text {
-    if [ -z "$2" ]
+    if [[ -z "$2" ]]
     then
         python ${DRIVER} --model $1 --text ${TEST_FILE} --name ${MODEL_NAME} > $4
     else
@@ -78,16 +87,17 @@ function classify_text {
 
 
 function tag_text {
-    if [ -z "$4" ]
+    if [[ -z "$4" ]]
     then
         python ${DRIVER} --model $1 --text ${TEST_FILE} --conll $2 --features $3 --name ${MODEL_NAME} > $7
-    elif [ -z "$6" ]
+    elif [[ -z "$6" ]]
     then
         python ${DRIVER} --model $1 --text ${TEST_FILE} --conll $2 --features $3 --remote ${4} --name ${MODEL_NAME} --preproc $5 > $7
     else
         python ${DRIVER} --model $1 --text ${TEST_FILE} --conll $2 --features $3 --remote ${4} --name ${MODEL_NAME} --preproc $5 --export_mapping $6 > $7
     fi
 }
+
 
 
 ## get the variables defined in the config into shell
@@ -113,9 +123,11 @@ msg_print "processing by loading the model"
 case ${TASK} in
     classify)
         classify_text ${MODEL_FILE} "" client ${TEST_LOAD} # remote end point is empty, preproc is client
+        file_empty_or_does_not_exist ${TEST_LOAD}
         ;;
     tagger)
         tag_text ${MODEL_FILE} ${CONLL} "${FEATURES}" "" client "" ${TEST_LOAD}  # remote end point is empty, preproc is client
+        file_empty_or_does_not_exist ${TEST_LOAD}
         ;;
     *)
         err_print "Unsupported task"
@@ -137,9 +149,11 @@ msg_print "processing with served model, preproc=client"
 case ${TASK} in
     classify)
         classify_text ${EXPORT_DIR}/${MODEL_NAME}/1/ ${REMOTE_HOST}:${REMOTE_PORT} client ${TEST_SERVE} # valid remote end points, preproc is client.
+        file_empty_or_does_not_exist ${TEST_SERVE}
         ;;
     tagger)
         tag_text ${EXPORT_DIR}/${MODEL_NAME}/1/ ${CONLL} "${FEATURES}" ${REMOTE_HOST}:${REMOTE_PORT} client "" ${TEST_SERVE}
+        file_empty_or_does_not_exist ${TEST_SERVE}
         ;;
     *)
         err_print "Unsupported task"
@@ -152,6 +166,14 @@ sed -i -e 1,${NUM_LINES_TO_REMOVE_LOAD}d ${TEST_LOAD}
 sed -i -e 1,${NUM_LINES_TO_REMOVE_SERVE}d ${TEST_SERVE}
 check_diff ${TEST_LOAD} ${TEST_SERVE}
 
+if [[ -z "${EXPORT_DIR_PREPROC}" ]]
+   then
+       # do not bother with preproc=server tests
+       docker_clear
+       msg_print "${TASK} export successful."
+       ## if successful, hence clean the files
+       clean
+fi
 ## export with preproc=server and process data
 msg_print "exporting model with preproc=server"
 mkdir -p ${EXPORT_DIR_PREPROC}
@@ -164,10 +186,11 @@ msg_print "processing with served model, preproc=server"
 case ${TASK} in
     classify)
         classify_text ${EXPORT_DIR_PREPROC}/${MODEL_NAME}/1/ ${REMOTE_HOST}:${REMOTE_PORT} server ${TEST_SERVE_PREPROC} # valid remote end points, preproc is server.
+        file_empty_or_does_not_exist ${TEST_SERVE_PREPROC}
         ;;
     tagger)
         tag_text ${EXPORT_DIR_PREPROC}/${MODEL_NAME}/1/ ${CONLL} "${FEATURES}" ${REMOTE_HOST}:${REMOTE_PORT} server "${EXPORTER_FIELD_FEATURE_MAP}" ${TEST_SERVE_PREPROC}
-
+        file_empty_or_does_not_exist ${TEST_SERVE_PREPROC}
         ;;
     *)
         err_print "Unsupported task"
