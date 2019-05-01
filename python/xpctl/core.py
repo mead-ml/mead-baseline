@@ -6,6 +6,13 @@ from baseline.utils import export, unzip_model
 __all__ = []
 exporter = export(__all__)
 
+EVENT_TYPES = {
+    "train": "train_events", "Train": "train_events",
+    "test": "test_events", "Test": "test_events",
+    "valid": "valid_events", "Valid": "valid_events",
+    "dev": "valid_events", "Dev": "valid_events"
+}
+
 
 @exporter
 def store_model(checkpoint_base, config_sha1, checkpoint_store, print_fn=print):

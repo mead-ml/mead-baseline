@@ -8,15 +8,10 @@ import click
 from xpctl.core import ExperimentRepo
 from xpctl.helpers import *
 from baseline.utils import read_json, read_config_file
+from xpctl.core import EVENT_TYPES
+
 pd.set_option('display.expand_frame_repr', False)
 pd.set_option("display.max_rows", None)
-
-EVENT_TYPES = {
-    "train": "train_events", "Train": "train_events",
-    "test": "test_events", "Test": "test_events",
-    "valid": "valid_events", "Valid": "valid_events",
-    "dev": "valid_events", "Dev": "valid_events"
-}
 
 
 class RepoManager(object):

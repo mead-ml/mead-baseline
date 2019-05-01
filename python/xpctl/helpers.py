@@ -3,6 +3,7 @@ import pandas as pd
 from collections import OrderedDict
 import numpy as np
 from baseline.utils import listify
+from xpctl.data import Result, ResultSet
 
 __all__ = ["log2json"]
 
@@ -86,3 +87,11 @@ def get_experiment_label(config_obj, task, **kwargs):
         model_type = config_obj.get('model_type', 'default')
         backend = config_obj.get('backend', 'tensorflow')
         return "{}-{}-{}".format(task, backend, model_type)
+
+
+def aggregate_results(resultset, groupby_key):
+    grouped_result = resultset.groupby(groupby_key)
+    aggregate_fns = {'min': np.min, 'max': np.max, 'avg': np.mean, 'std': np.std}
+    return grouped_result.reduce(aggregate_fns=aggregate_fns)
+
+

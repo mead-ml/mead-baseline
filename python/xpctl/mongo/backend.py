@@ -9,9 +9,11 @@ import getpass
 from baseline.utils import export, listify
 from mead.utils import hash_config
 from xpctl.core import ExperimentRepo, store_model
+from xpctl.data import Result, ResultSet
 from bson.objectid import ObjectId
 from baseline.version import __version__
-from xpctl.helpers import df_get_results, df_experimental_details, get_experiment_label
+from xpctl.helpers import df_get_results, df_experimental_details, get_experiment_label, aggregate_results
+from copy import deepcopy
 
 __all__ = []
 exporter = export(__all__)
@@ -20,25 +22,25 @@ exporter = export(__all__)
 @exporter
 class MongoRepo(ExperimentRepo):
 
-    def __init__(self, host, port, user, passw):
+    def __init__(self, dbhost, dbport, user, passwd):
         super(MongoRepo, self).__init__()
-        self.dbhost = host
-        if user and passw:
-            uri = "mongodb://{}:{}@{}:{}/test".format(user, passw, host, port)
+        self.dbhost = dbhost
+        if user and passwd:
+            uri = "mongodb://{}:{}@{}:{}/test".format(user, passwd, dbhost, dbport)
             client = pymongo.MongoClient(uri)
         else:
-            client = pymongo.MongoClient(host, port)
+            client = pymongo.MongoClient(dbhost, dbport)
         if client is None:
-            s = "cannot connect to mongo at host: [{}], port [{}], username: [{}], password: [{}]".format(host,
-                                                                                                           port,
-                                                                                                           user,
-                                                                                                           passw)
+            s = "cannot connect to mongo at host: [{}], port [{}], username: [{}], password: [{}]".format(dbhost,
+                                                                                                          dbport,
+                                                                                                          user,
+                                                                                                          passwd)
             raise Exception(s)
         try:
             dbnames = client.database_names()
         except pymongo.errors.ServerSelectionTimeoutError:
-            raise Exception("cannot get database from mongo at host: {}, port {}, connection timed out".format(host,
-                                                                                                                port))
+            raise Exception("cannot get database from mongo at host: {}, port {}, connection timed out".format(dbhost,
+                                                                                                               dbport))
 
         if "reporting_db" not in dbnames:
             raise Exception("no database for results found")
@@ -133,10 +135,11 @@ class MongoRepo(ExperimentRepo):
         print_fn("record {} deleted successfully from database {}".format(id, task))
         return True
 
-    def _get_metrics(self, xs, event_type):
+    @staticmethod
+    def _get_metrics_mongo(xs, event_type):
         keys = []
         for x in xs:
-            if x[event_type]:
+            if event_type in x:
                 for k in x[event_type][0].keys():
                     keys.append(k)
         keys = set(keys)
@@ -147,23 +150,33 @@ class MongoRepo(ExperimentRepo):
         if 'phase' in keys:
             keys.remove("phase")
         return keys
-
-    def _generate_data_frame(self, coll, metrics, query, projection, event_type):
-        all_results = list(coll.find(query, projection))
-        if not all_results:
-            return pd.DataFrame()
-        results = []
-        ms = list(set(metrics)) if len(metrics) > 0 else list(self._get_metrics(all_results, event_type))
+        
+    def mongo_to_resultset(self, all_results, event_type, metrics):
+        data = []
+        metrics = list(set(metrics)) if len(metrics) > 0 else list(self._get_metrics_mongo(all_results, event_type))
         for result in all_results:  # different experiments
-            for index in range(len(result[event_type])):  # train_event epoch 0,
+            _id = result['_id']
+            username = result['username']
+            label = result['label']
+            dataset = result['config']['dataset']
+            date = result['date']
+            sha1 = result['sha1']
+            for index in range(len(result.get(event_type, []))):  # train_event epoch 0,
                 # train_event epoch 1 etc, for event_type = test_event, there is only one event
-                data = []
-                for metric in ms:
-                    data.append(result[event_type][index][metric])
-                results.append(
-                    [result['_id'], result['username'], result['label'], result['config']['dataset'], result.get('sha1'),
-                     result['date']] + data)
-        return pd.DataFrame(results, columns=['id', 'username', 'label', 'dataset', 'sha1', 'date'] + ms)
+                for metric in metrics:
+                    data.append(Result(
+                        metric=metric,
+                        value=result[event_type][index][metric],
+                        _id=_id,
+                        username=username,
+                        label=label,
+                        dataset=dataset,
+                        date=date,
+                        sha1=sha1,
+                        event_type=event_type
+                    ))
+    
+        return ResultSet(data=data)
 
     def _update_query(self, q, **kwargs):
         query = q
@@ -194,7 +207,7 @@ class MongoRepo(ExperimentRepo):
         users = listify(user)
         query = self._update_query({}, username=users, sha1=sha1)
         projection = self._update_projection(event_type=event_type)
-        result_frame = self._generate_data_frame(coll, metrics=metrics, query=query, projection=projection, event_type=event_type)
+        result_frame = self._generate_results(coll, metrics=metrics, query=query, projection=projection, event_type=event_type)
         return df_experimental_details(result_frame, sha1, users, sort, metric, n)
 
     def get_results(self, task, dataset, event_type,  num_exps=None,
@@ -203,9 +216,13 @@ class MongoRepo(ExperimentRepo):
         coll = self.db[task]
         query = self._update_query({}, dataset=dataset, id=id, label=label)
         projection = self._update_projection(event_type=event_type)
-        result_frame = self._generate_data_frame(coll, metrics=metrics, query=query, projection=projection, event_type=event_type)
-        if not result_frame.empty:
-            return df_get_results(result_frame, dataset, num_exps, num_exps_per_config, metric, sort)
+        all_results = list(coll.find(query, projection))
+        if not all_results:
+            return None
+        resultset = self.mongo_to_resultset(all_results, event_type=event_type, metrics=metrics)
+        if resultset is not None:
+            agg_result = aggregate_results(resultset, 'sha1')
+            return agg_result
         return None
 
     def config2dict(self, task, sha1):
