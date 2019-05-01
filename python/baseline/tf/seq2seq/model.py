@@ -1,12 +1,10 @@
 from baseline.tf.seq2seq.encoders import *
 from baseline.tf.seq2seq.decoders import *
-from google.protobuf import text_format
 from baseline.tf.tfy import *
 from baseline.model import EncoderDecoderModel, register_model, create_seq2seq_decoder, create_seq2seq_encoder, create_seq2seq_arc_policy
 from baseline.utils import ls_props, read_json
 from baseline.tf.embeddings import *
 from baseline.version import __version__
-import copy
 
 
 def _temporal_cross_entropy_loss(logits, labels, label_lengths, mx_seq_length):
@@ -47,14 +45,20 @@ def _temporal_cross_entropy_loss(logits, labels, label_lengths, mx_seq_length):
 class EncoderDecoderModelBase(EncoderDecoderModel):
 
     def create_loss(self):
-        with tf.variable_scope('loss{}'.format(self.id)):
+        with tf.variable_scope('loss'):
             # We do not want to count <GO> in our assessment, we do want to count <EOS>
-            return _temporal_cross_entropy_loss(self.decoder.preds[:-1, :, :], self.tgt_embedding.x[:, 1:], self.tgt_len - 1, self.mx_tgt_len - 1)
+            return _temporal_cross_entropy_loss(self.decoder.preds[:-1, :, :],
+                                                self.tgt_embedding.x[:, 1:],
+                                                self.tgt_len - 1,
+                                                self.mx_tgt_len - 1)
 
     def create_test_loss(self):
         with tf.variable_scope('test_loss'):
             # We do not want to count <GO> in our assessment, we do want to count <EOS>
-            return _temporal_cross_entropy_loss(self.decoder.preds[:-1, :, :], self.tgt_embedding.x[:, 1:], self.tgt_len - 1, self.mx_tgt_len - 1)
+            return _temporal_cross_entropy_loss(self.decoder.preds[:-1, :, :],
+                                                self.tgt_embedding.x[:, 1:],
+                                                self.tgt_len - 1,
+                                                self.mx_tgt_len - 1)
 
     def __init__(self):
         super(EncoderDecoderModelBase, self).__init__()
@@ -62,7 +66,8 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
         self._unserializable = ['src_len', 'tgt_len', 'mx_tgt_len']
 
     def _record_state(self, **kwargs):
-        self._state = {k: v for k, v in kwargs.items() if k not in self._unserializable + ['sess', 'tgt'] + list(self.src_embeddings.keys())}
+        self._state = {k: v for k, v in kwargs.items() if k not in self._unserializable + ['sess', 'tgt'] +
+                       list(self.src_embeddings.keys())}
         src_embeddings_state = {}
         for k, v in self.src_embeddings.items():
             src_embeddings_state[k] = v.__class__.__name__  ##v._state
@@ -123,19 +128,18 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
         word_embeddings = tf.concat(values=all_embeddings_src, axis=-1)
         return word_embeddings
 
-
     @classmethod
     def create(cls, src_embeddings, tgt_embedding, **kwargs):
 
         model = cls()
         model.src_embeddings = src_embeddings
         model.tgt_embedding = tgt_embedding
-        model._record_state(**kwargs)
         model.src_len = kwargs.pop('src_len', tf.placeholder(tf.int32, [None], name="src_len"))
         model.tgt_len = kwargs.pop('tgt_len', tf.placeholder(tf.int32, [None], name="tgt_len"))
         model.mx_tgt_len = kwargs.pop('mx_tgt_len', tf.placeholder(tf.int32, name="mx_tgt_len"))
         model.src_lengths_key = kwargs.get('src_lengths_key')
-        model.id = kwargs.get('id', 0)
+        model._record_state(**kwargs)
+
         model.sess = kwargs.get('sess', tf.Session())
         model.pdrop_value = kwargs.get('dropout', 0.5)
         model.dropin_value = kwargs.get('dropin', {})

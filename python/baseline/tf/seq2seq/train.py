@@ -41,10 +41,20 @@ class Seq2SeqTrainerTf(Trainer):
         self.prepare(saver)
 
     def checkpoint(self):
-        self.model.saver.save(self.model.sess, "./tf-seq2seq-%d/seq2seq" % os.getpid(), global_step=self.global_step)
+        """This method saves a checkpoint
+
+        :return: None
+        """
+        checkpoint_dir = '{}-{}'.format("./tf-seq2seq", os.getpid())
+        self.model.saver.save(self.sess, os.path.join(checkpoint_dir, 'seq2seq'), global_step=self.global_step)
 
     def recover_last_checkpoint(self):
-        latest = os.path.join(self.base_dir, 'seq2seq-model-tf-%d' % os.getpid())
+        """Recover the last saved checkpoint
+
+        :return: None
+        """
+        checkpoint_dir = '{}-{}'.format("./tf-seq2seq", os.getpid())
+        latest = tf.train.latest_checkpoint(checkpoint_dir)
         print('Reloading ' + latest)
         g = tf.Graph()
         with g.as_default():
