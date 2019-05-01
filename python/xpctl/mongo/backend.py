@@ -178,7 +178,8 @@ class MongoRepo(ExperimentRepo):
     
         return ResultSet(data=data)
 
-    def _update_query(self, q, **kwargs):
+    @staticmethod
+    def _update_query(q, **kwargs):
         query = q
         if not kwargs:
             return query
@@ -196,7 +197,8 @@ class MongoRepo(ExperimentRepo):
                 query.update({"sha1": kwargs["sha1"]})
             return query
 
-    def _update_projection(self, event_type):
+    @staticmethod
+    def _update_projection(event_type):
         projection = {"_id": 1, "sha1": 1, "label": 1, "username": 1, "config.dataset": 1, "date": 1}
         projection.update({event_type: 1})
         return projection
@@ -211,7 +213,7 @@ class MongoRepo(ExperimentRepo):
         return df_experimental_details(result_frame, sha1, users, sort, metric, n)
 
     def get_results(self, task, dataset, event_type,  num_exps=None,
-                    num_exps_per_config=None, metric=None, sort=None, id=None, label=None):
+                    num_exps_per_config=None, metric=None, sort=None, id=None, label=None, reduction_dim='sha1'):
         metrics = listify(metric)
         coll = self.db[task]
         query = self._update_query({}, dataset=dataset, id=id, label=label)
@@ -221,7 +223,7 @@ class MongoRepo(ExperimentRepo):
             return None
         resultset = self.mongo_to_resultset(all_results, event_type=event_type, metrics=metrics)
         if resultset is not None:
-            agg_result = aggregate_results(resultset, 'sha1')
+            agg_result = aggregate_results(resultset, reduction_dim)
             return agg_result
         return None
 

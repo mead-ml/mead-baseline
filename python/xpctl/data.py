@@ -36,35 +36,8 @@ class AggregateResult(object):
     def get_prop(self, field):
         return self.__dict__[field]
 
+
 # TODO: add property annotations
-class AggregateResultSet(object):
-    """ a list of result objects"""
-    def __init__(self, data):
-        super(AggregateResultSet, self).__init__()
-        self.data = data if data else []
-        self.length = len(self.data)
-    
-    def add_data(self, data_point):
-        """
-        add a aggregateresult data point
-        :param data_point:
-        :return:
-        """
-        self.data.append(data_point)
-        self.length += 1
-    
-    # TODO: add property annotations
-    def __getitem__(self, i):
-        return self.data[i]
-    
-    def __iter__(self):
-        for i in range(self.length):
-            yield self.data[i]
-    
-    def __len__(self):
-        return self.length
-
-
 class ResultSet(object):
     """ a list of result objects"""
     def __init__(self, data):
@@ -133,3 +106,32 @@ class ResultSetGroup(object):
                 agr = deepcopy(AggregateResult(metric=metric, values=values, **d))
                 aggregate_resultset.add_data(agr)
         return aggregate_resultset
+
+
+class AggregateResultSet(object):
+    """ a list of aggregate result objects"""
+    def __init__(self, data):
+        super(AggregateResultSet, self).__init__()
+        self.data = data if data else []
+        self.length = len(self.data)
+    
+    def add_data(self, data_point):
+        """
+        add a aggregateresult data point
+        :param data_point:
+        :return:
+        """
+        self.data.append(data_point)
+        self.length += 1
+    
+    # TODO: add property annotations
+    def __getitem__(self, i):
+        return self.data[i]
+    
+    def __iter__(self):
+        for i in range(self.length):
+            yield self.data[i]
+    
+    def __len__(self):
+        return self.length
+
