@@ -13,7 +13,7 @@ class MongoResult(object):
         self.dataset = dataset
         self.date = date
         self.sha1 = sha1
-        self.event_type = event_type,
+        self.event_type = event_type
         self.epoch = epoch
     
     def get_prop(self, field):
@@ -59,6 +59,7 @@ class MongoResultSet(object):
         return data_groups
     
     def experiments(self):
+        print(len(self.data))
         grouped_results = self.groupby('_id')
         experiments = []
         for _id, resultset in grouped_results.items():
@@ -72,7 +73,7 @@ class MongoResultSet(object):
             exp = Experiment(train_results=[], dev_results=[], test_results=[], _id=_id, username=username,
                              label=label, dataset=dataset, date=date, sha1=sha1)
             for _result in resultset:
-                exp.add_result(result=result(metric=_result.metric, value=_result.value, epoch=0),
+                exp.add_result(result=result(metric=_result.metric, value=_result.value, epoch=_result.epoch),
                                event_type=_result.event_type)
             experiments.append(exp)
         return ExperimentSet(data=experiments)

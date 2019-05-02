@@ -8,7 +8,7 @@ import json
 import getpass
 from baseline.utils import export, listify
 from mead.utils import hash_config
-from xpctl.core import ExperimentRepo, store_model
+from xpctl.core import ExperimentRepo, store_model, EVENT_TYPES
 from xpctl.dto import MongoResult, MongoResultSet
 from bson.objectid import ObjectId
 from baseline.version import __version__
@@ -136,12 +136,13 @@ class MongoRepo(ExperimentRepo):
         return True
 
     @staticmethod
-    def _get_metrics_mongo(xs, event_type):
+    def _get_metrics_mongo(xs, event_types):
         keys = []
         for x in xs:
-            if event_type in x:
-                for k in x[event_type][0].keys():
-                    keys.append(k)
+            for event_type in event_types:
+                if event_type in x:
+                    for k in x[event_type][0].keys():
+                        keys.append(k)
         keys = set(keys)
         if 'tick_type' in keys:
             keys.remove("tick_type")
@@ -153,7 +154,8 @@ class MongoRepo(ExperimentRepo):
         
     def mongo_to_resultset(self, all_results, event_type, metrics):
         data = []
-        metrics = list(set(metrics)) if len(metrics) > 0 else list(self._get_metrics_mongo(all_results, event_type))
+        event_types = [event_type] if event_type else list(set(EVENT_TYPES.values()))
+        metrics = list(set(metrics)) if len(metrics) > 0 else list(self._get_metrics_mongo(all_results, event_types))
         for result in all_results:  # different experiments
             _id = result['_id']
             username = result['username']
@@ -161,23 +163,23 @@ class MongoRepo(ExperimentRepo):
             dataset = result['config']['dataset']
             date = result['date']
             sha1 = result['sha1']
-            for index in range(len(result.get(event_type, []))):  # train_event epoch 0,
-                # train_event epoch 1 etc, for event_type = test_event, there is only one event
-                for metric in metrics:
-                    data.append(MongoResult(
-                        metric=metric,
-                        value=result[event_type][index][metric],
-                        _id=_id,
-                        username=username,
-                        label=label,
-                        dataset=dataset,
-                        date=date,
-                        sha1=sha1,
-                        event_type=event_type,
-                        epoch=result[event_type][index]['tick']
-                    ))
-    
-        return MongoResultSet(data=data).experiments()
+            for event_type in event_types:
+                for index in range(len(result.get(event_type, []))):  # train_event epoch 0,
+                    for metric in metrics:
+                        data.append(MongoResult(
+                            metric=metric,
+                            value=result[event_type][index][metric],
+                            _id=_id,
+                            username=username,
+                            label=label,
+                            dataset=dataset,
+                            date=date,
+                            sha1=sha1,
+                            event_type=event_type,
+                            epoch=result[event_type][index]['tick']
+                        ))
+        rs = MongoResultSet(data=data)
+        return rs.experiments()
 
     @staticmethod
     def _update_query(q, **kwargs):
