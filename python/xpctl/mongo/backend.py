@@ -9,7 +9,7 @@ import getpass
 from baseline.utils import export, listify
 from mead.utils import hash_config
 from xpctl.core import ExperimentRepo, store_model
-from xpctl.data import Result, ResultSet
+from xpctl.dto import MongoResult, MongoResultSet
 from bson.objectid import ObjectId
 from baseline.version import __version__
 from xpctl.helpers import df_get_results, df_experimental_details, get_experiment_label, aggregate_results
@@ -164,7 +164,7 @@ class MongoRepo(ExperimentRepo):
             for index in range(len(result.get(event_type, []))):  # train_event epoch 0,
                 # train_event epoch 1 etc, for event_type = test_event, there is only one event
                 for metric in metrics:
-                    data.append(Result(
+                    data.append(MongoResult(
                         metric=metric,
                         value=result[event_type][index][metric],
                         _id=_id,
@@ -173,10 +173,11 @@ class MongoRepo(ExperimentRepo):
                         dataset=dataset,
                         date=date,
                         sha1=sha1,
-                        event_type=event_type
+                        event_type=event_type,
+                        epoch=result[event_type][index]['tick']
                     ))
     
-        return ResultSet(data=data)
+        return MongoResultSet(data=data).experiments()
 
     @staticmethod
     def _update_query(q, **kwargs):
@@ -212,8 +213,8 @@ class MongoRepo(ExperimentRepo):
         result_frame = self._generate_results(coll, metrics=metrics, query=query, projection=projection, event_type=event_type)
         return df_experimental_details(result_frame, sha1, users, sort, metric, n)
 
-    def get_results(self, task, dataset, event_type,  num_exps=None,
-                    num_exps_per_config=None, metric=None, sort=None, id=None, label=None, reduction_dim='sha1'):
+    def get_results(self, task, dataset, event_type, num_exps=None,
+                    num_exps_per_reduction=None, metric=None, sort=None, id=None, label=None, reduction_dim='sha1'):
         metrics = listify(metric)
         coll = self.db[task]
         query = self._update_query({}, dataset=dataset, id=id, label=label)
@@ -223,7 +224,7 @@ class MongoRepo(ExperimentRepo):
             return None
         resultset = self.mongo_to_resultset(all_results, event_type=event_type, metrics=metrics)
         if resultset is not None:
-            agg_result = aggregate_results(resultset, reduction_dim)
+            agg_result = aggregate_results(resultset, reduction_dim, num_exps_per_reduction, num_exps)
             return agg_result
         return None
 
