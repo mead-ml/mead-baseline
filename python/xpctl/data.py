@@ -1,29 +1,41 @@
 from copy import deepcopy
-from collections import namedtuple
 
-result = namedtuple('result', ['metric', 'value', 'epoch'], verbose=True)
-aggregate_result = namedtuple('aggregate_result', ['metric', 'values'], verbose=True)
 TRAIN_EVENT = 'train_events'
 DEV_EVENT = 'valid_events'
 TEST_EVENT = 'test_events'
 
 
+class Result(object):
+    def __init__(self, metric, value, epoch):
+        super(Result, self).__init__()
+        self.metric = metric
+        self.value = value
+        self.epoch = epoch
+        
+        
+class AggregateResult(object):
+    def __init__(self, metric, values):
+        super(AggregateResult, self).__init__()
+        self.metric = metric
+        self.values = values
+
+
 class Experiment(object):
     """ an experiment"""
-    def __init__(self, train_results, dev_results, test_results, _id, username, hostname, config, date, label, dataset,
+    def __init__(self, train_results, dev_results, test_results, _id, username, hostname, config, exp_date, label, dataset,
                  sha1, version):
         super(Experiment, self).__init__()
         self.train_results = train_results
         self.dev_results = dev_results
         self.test_results = test_results
-        self._id = _id
+        self.eid = _id
         self.username = username
         self.hostname = hostname
         self.config = config
-        self.date = date
+        self.exp_date = exp_date
         self.label = label
         self.dataset = dataset
-        self.date = date
+        self.exp_date = exp_date
         self.sha1 = sha1
         self.version = version
     
@@ -129,7 +141,7 @@ class ExperimentGroup(object):
                 for fn_name, fn in aggregate_fns.items():
                     agg_value = fn(data[prop_value][metric])
                     values[fn_name] = agg_value
-                agr.add_result(deepcopy(aggregate_result(metric=metric, values=values)), event_type=event_type)
+                agr.add_result(deepcopy(AggregateResult(metric=metric, values=values)), event_type=event_type)
             aggregate_resultset.add_data(agr)
         return aggregate_resultset
     
@@ -148,11 +160,11 @@ class ExperimentAggregate(object):
         self.train_results = train_results
         self.dev_results = dev_results
         self.test_results = test_results
-        self._id = kwargs.get('_id')
+        self.eid = kwargs.get('eid')
         self.username = kwargs.get('username')
         self.label = kwargs.get('label')
         self.dataset = kwargs.get('dataset')
-        self.date = kwargs.get('date')
+        self.exp_date = kwargs.get('exp_date')
         self.sha1 = kwargs.get('sha1')
     
     def get_prop(self, field):

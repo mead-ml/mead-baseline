@@ -1,6 +1,6 @@
 from __future__ import print_function
 import os
-import pandas as pd
+#import pandas as pd
 import pymongo
 import datetime
 import socket
@@ -11,7 +11,7 @@ from xpctl.backend.core import ExperimentRepo, store_model, EVENT_TYPES
 from xpctl.backend.mongo.dto import MongoResult, MongoResultSet, MongoError
 from bson.objectid import ObjectId
 from baseline.version import __version__
-from xpctl.helpers import df_experimental_details, get_experiment_label, aggregate_results
+import numpy as np
 
 __all__ = []
 exporter = export(__all__)
@@ -134,13 +134,10 @@ class MongoRepo(ExperimentRepo):
         return True
 
     @staticmethod
-    def _get_metrics_mongo(xs, event_types):
+    def _get_metrics_mongo(xs):
         keys = []
         for x in xs:
-            for event_type in event_types:
-                if event_type in x:
-                    for k in x[event_type][0].keys():
-                        keys.append(k)
+            keys += x.keys()
         keys = set(keys)
         if 'tick_type' in keys:
             keys.remove("tick_type")
@@ -153,7 +150,7 @@ class MongoRepo(ExperimentRepo):
     def mongo_to_experiment_set(self, task, all_results, event_type, metrics):
         data = []
         event_types = [event_type] if event_type else list(set(EVENT_TYPES.values()))
-        metrics = list(set(metrics)) if len(metrics) > 0 else list(self._get_metrics_mongo(all_results, event_types))
+        metrics_from_user = set(metrics)
         for result in all_results:  # different experiments
             task = task
             _id = result['_id']
@@ -166,11 +163,23 @@ class MongoRepo(ExperimentRepo):
             config = result['config']
             version = result.get('version', '0.5.0')  # backward compatibility
             for event_type in event_types:
-                for index in range(len(result.get(event_type, []))):  # train_event epoch 0,
+                if not result.get(event_type, []):
+                    continue
+                metrics_from_db = self._get_metrics_mongo(result[event_type])
+                if not metrics_from_user:
+                    metrics = list(metrics_from_db)
+                elif metrics_from_user - metrics_from_db:
+                    metrics = list(metrics_from_user.intersection(metrics_from_db))
+                    print('Metrics {} are not recorded in the database'.format(','.join(
+                        list(metrics_from_user - metrics_from_db))))
+                else:
+                    metrics = list(metrics_from_user)
+                # for train_events we can have different metrics than test_events
+                for record in result[event_type]:  # train_event epoch 0,
                     for metric in metrics:
                         data.append(MongoResult(
                             metric=metric,
-                            value=result[event_type][index][metric],
+                            value=record[metric],
                             task=task,
                             _id=str(_id),
                             username=username,
@@ -181,7 +190,7 @@ class MongoRepo(ExperimentRepo):
                             date=date,
                             sha1=sha1,
                             event_type=event_type,
-                            epoch=result[event_type][index]['tick'],
+                            epoch=record['tick'],
                             version=version
                         ))
         rs = MongoResultSet(data=data)
@@ -230,18 +239,24 @@ class MongoRepo(ExperimentRepo):
         experiments = self.mongo_to_experiment_set(task, all_results, event_type=None, metrics=[])
         return experiments[0]
 
-    def get_results(self, task, dataset, event_type=None, num_exps=None,
-                    num_exps_per_reduction=None, metric=None, sort=None, id=None, label=None, reduction_dim='sha1'):
+    @staticmethod
+    def aggregate_results(resultset, groupby_key, num_exps_per_reduction):
+        grouped_result = resultset.groupby(groupby_key)
+        aggregate_fns = {'min': np.min, 'max': np.max, 'avg': np.mean, 'std': np.std}
+        return grouped_result.reduce(aggregate_fns=aggregate_fns)
+
+    def get_results(self, task, dataset, metric, sort, nconfig, event_type='test_events', reduction_dim='sha1'):
         metrics = listify(metric)
         coll = self.db[task]
-        query = self._update_query({}, dataset=dataset, id=id, label=label)
-        projection = self._update_projection(event_type=event_type)
-        all_results = list(coll.find(query, projection))
+        query = self._update_query({}, dataset=dataset)
+        all_results = list(coll.find(query))
         if not all_results:
-            return MongoError(code=404, msg='something')
-        resultset = self.mongo_to_experiment_set(all_results, event_type=event_type, metrics=metrics)
+            return MongoError(code=404, msg='no information available for dataset: [{}] in task datasbase [{}]'
+                              .format(task, dataset))
+        resultset = self.mongo_to_experiment_set(task, all_results, event_type=event_type, metrics=metrics)
+        
         if resultset is not None:
-            agg_result = aggregate_results(resultset, reduction_dim, num_exps_per_reduction, num_exps)
+            agg_result = self.aggregate_results(resultset, reduction_dim, nconfig)
             return agg_result
         return None
 

@@ -16,13 +16,13 @@ class Experiment(Model):
     Do not edit the class manually.
     """
 
-    def __init__(self, task: str=None, id: str=None, sha1: str=None, config: str=None, dataset: str=None, username: str=None, hostname: str=None, _date: date=None, label: str=None, version: str=None, train_events: List[Result]=None, dev_events: List[Result]=None, test_events: List[Result]=None):  # noqa: E501
+    def __init__(self, task: str=None, eid: str=None, sha1: str=None, config: str=None, dataset: str=None, username: str=None, hostname: str=None, exp_date: date=None, label: str=None, version: str=None, train_results: List[Result]=None, dev_results: List[Result]=None, test_results: List[Result]=None):  # noqa: E501
         """Experiment - a model defined in Swagger
 
         :param task: The task of this Experiment.  # noqa: E501
         :type task: str
-        :param id: The id of this Experiment.  # noqa: E501
-        :type id: str
+        :param eid: The eid of this Experiment.  # noqa: E501
+        :type eid: str
         :param sha1: The sha1 of this Experiment.  # noqa: E501
         :type sha1: str
         :param config: The config of this Experiment.  # noqa: E501
@@ -33,64 +33,64 @@ class Experiment(Model):
         :type username: str
         :param hostname: The hostname of this Experiment.  # noqa: E501
         :type hostname: str
-        :param _date: The _date of this Experiment.  # noqa: E501
-        :type _date: date
+        :param exp_date: The exp_date of this Experiment.  # noqa: E501
+        :type exp_date: date
         :param label: The label of this Experiment.  # noqa: E501
         :type label: str
         :param version: The version of this Experiment.  # noqa: E501
         :type version: str
-        :param train_events: The train_events of this Experiment.  # noqa: E501
-        :type train_events: List[Result]
-        :param dev_events: The dev_events of this Experiment.  # noqa: E501
-        :type dev_events: List[Result]
-        :param test_events: The test_events of this Experiment.  # noqa: E501
-        :type test_events: List[Result]
+        :param train_results: The train_results of this Experiment.  # noqa: E501
+        :type train_results: List[Result]
+        :param dev_results: The dev_results of this Experiment.  # noqa: E501
+        :type dev_results: List[Result]
+        :param test_results: The test_results of this Experiment.  # noqa: E501
+        :type test_results: List[Result]
         """
         self.swagger_types = {
             'task': str,
-            'id': str,
+            'eid': str,
             'sha1': str,
             'config': str,
             'dataset': str,
             'username': str,
             'hostname': str,
-            '_date': date,
+            'exp_date': date,
             'label': str,
             'version': str,
-            'train_events': List[Result],
-            'dev_events': List[Result],
-            'test_events': List[Result]
+            'train_results': List[Result],
+            'dev_results': List[Result],
+            'test_results': List[Result]
         }
 
         self.attribute_map = {
             'task': 'task',
-            'id': 'id',
+            'eid': 'eid',
             'sha1': 'sha1',
             'config': 'config',
             'dataset': 'dataset',
             'username': 'username',
             'hostname': 'hostname',
-            '_date': 'date',
+            'exp_date': 'exp_date',
             'label': 'label',
             'version': 'version',
-            'train_events': 'train_events',
-            'dev_events': 'dev_events',
-            'test_events': 'test_events'
+            'train_results': 'train_results',
+            'dev_results': 'dev_results',
+            'test_results': 'test_results'
         }
 
         self._task = task
-        self._id = id
+        self._eid = eid
         self._sha1 = sha1
         self._config = config
         self._dataset = dataset
         self._username = username
         self._hostname = hostname
-        self.__date = _date
+        self._exp_date = exp_date
         self._label = label
         self._version = version
-        self._train_events = train_events
-        self._dev_events = dev_events
-        self._test_events = test_events
+        self._train_results = train_results
+        self._dev_results = dev_results
+        self._test_results = test_results
 
     @classmethod
     def from_dict(cls, dikt) -> 'Experiment':
@@ -125,25 +125,25 @@ class Experiment(Model):
         self._task = task
 
     @property
-    def id(self) -> str:
-        """Gets the id of this Experiment.
+    def eid(self) -> str:
+        """Gets the eid of this Experiment.
 
 
-        :return: The id of this Experiment.
+        :return: The eid of this Experiment.
         :rtype: str
         """
-        return self._id
+        return self._eid
 
-    @id.setter
-    def id(self, id: str):
-        """Sets the id of this Experiment.
+    @eid.setter
+    def eid(self, eid: str):
+        """Sets the eid of this Experiment.
 
 
-        :param id: The id of this Experiment.
-        :type id: str
+        :param eid: The eid of this Experiment.
+        :type eid: str
         """
 
-        self._id = id
+        self._eid = eid
 
     @property
     def sha1(self) -> str:
@@ -251,25 +251,25 @@ class Experiment(Model):
         self._hostname = hostname
 
     @property
-    def _date(self) -> date:
-        """Gets the _date of this Experiment.
+    def exp_date(self) -> date:
+        """Gets the exp_date of this Experiment.
 
 
-        :return: The _date of this Experiment.
+        :return: The exp_date of this Experiment.
         :rtype: date
         """
-        return self.__date
+        return self._exp_date
 
-    @_date.setter
-    def _date(self, _date: date):
-        """Sets the _date of this Experiment.
+    @exp_date.setter
+    def exp_date(self, exp_date: date):
+        """Sets the exp_date of this Experiment.
 
 
-        :param _date: The _date of this Experiment.
-        :type _date: date
+        :param exp_date: The exp_date of this Experiment.
+        :type exp_date: date
         """
 
-        self.__date = _date
+        self._exp_date = exp_date
 
     @property
     def label(self) -> str:
@@ -314,64 +314,64 @@ class Experiment(Model):
         self._version = version
 
     @property
-    def train_events(self) -> List[Result]:
-        """Gets the train_events of this Experiment.
+    def train_results(self) -> List[Result]:
+        """Gets the train_results of this Experiment.
 
 
-        :return: The train_events of this Experiment.
+        :return: The train_results of this Experiment.
         :rtype: List[Result]
         """
-        return self._train_events
+        return self._train_results
 
-    @train_events.setter
-    def train_events(self, train_events: List[Result]):
-        """Sets the train_events of this Experiment.
+    @train_results.setter
+    def train_results(self, train_results: List[Result]):
+        """Sets the train_results of this Experiment.
 
 
-        :param train_events: The train_events of this Experiment.
-        :type train_events: List[Result]
+        :param train_results: The train_results of this Experiment.
+        :type train_results: List[Result]
         """
 
-        self._train_events = train_events
+        self._train_results = train_results
 
     @property
-    def dev_events(self) -> List[Result]:
-        """Gets the dev_events of this Experiment.
+    def dev_results(self) -> List[Result]:
+        """Gets the dev_results of this Experiment.
 
 
-        :return: The dev_events of this Experiment.
+        :return: The dev_results of this Experiment.
         :rtype: List[Result]
         """
-        return self._dev_events
+        return self._dev_results
 
-    @dev_events.setter
-    def dev_events(self, dev_events: List[Result]):
-        """Sets the dev_events of this Experiment.
+    @dev_results.setter
+    def dev_results(self, dev_results: List[Result]):
+        """Sets the dev_results of this Experiment.
 
 
-        :param dev_events: The dev_events of this Experiment.
-        :type dev_events: List[Result]
+        :param dev_results: The dev_results of this Experiment.
+        :type dev_results: List[Result]
         """
 
-        self._dev_events = dev_events
+        self._dev_results = dev_results
 
     @property
-    def test_events(self) -> List[Result]:
-        """Gets the test_events of this Experiment.
+    def test_results(self) -> List[Result]:
+        """Gets the test_results of this Experiment.
 
 
-        :return: The test_events of this Experiment.
+        :return: The test_results of this Experiment.
         :rtype: List[Result]
         """
-        return self._test_events
+        return self._test_results
 
-    @test_events.setter
-    def test_events(self, test_events: List[Result]):
-        """Sets the test_events of this Experiment.
+    @test_results.setter
+    def test_results(self, test_results: List[Result]):
+        """Sets the test_results of this Experiment.
 
 
-        :param test_events: The test_events of this Experiment.
-        :type test_events: List[Result]
+        :param test_results: The test_results of this Experiment.
+        :type test_results: List[Result]
         """
 
-        self._test_events = test_events
+        self._test_results = test_results

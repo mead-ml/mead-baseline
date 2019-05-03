@@ -1,8 +1,6 @@
----
 swagger: "2.0"
 info:
-  description: "This is a sample xpctl  server.  You can find out more about xpctl\
-    \ at [baseline](https://github.com/dpressel/baseline/blob/master/docs/xpctl.md)."
+  description: "This is a sample xpctl  server.  You can find out more about xpctl at [baseline](https://github.com/dpressel/baseline/blob/master/docs/xpctl.md)."
   version: "1.0.0"
   title: "xpctl"
   termsOfService: "http://swagger.io/terms/"
@@ -49,6 +47,7 @@ paths:
           schema:
             $ref: "#/definitions/Error"
       x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
+      
   /findbylabel:
     get:
       tags:
@@ -79,7 +78,7 @@ paths:
         default:
           description: "unexpected error"
           schema:
-            $ref: "#/definitions/Error"
+            $ref: "#/definitions/Error" 
       x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
   /results:
     get:
@@ -103,29 +102,25 @@ paths:
         type: "string"
       - name: "metric"
         in: "query"
-        description: "metric"
-        required: false
         type: "string"
+        description: "metric"
       - name: "sort"
         in: "query"
-        description: "metric to sort results on"
-        required: false
         type: "string"
+        description: "metric to sort results on"
       - name: "nconfig"
         in: "query"
-        description: "number of experiments to aggregate"
-        required: false
         type: "integer"
+        description: "number of experiments to aggregate"
       - name: "event_type"
         in: "query"
-        description: "train/dev/test"
-        required: false
         type: "string"
+        description: "train/dev/test"
       responses:
         200:
           description: "successful operation"
           schema:
-            type: "array"
+            type: array
             items:
               $ref: "#/definitions/ExperimentAggregate"
         400:
@@ -170,7 +165,7 @@ paths:
           description: "unexpected error"
           schema:
             $ref: "#/definitions/Error"
-      x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
+      x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"      
     post:
       tags:
       - "xpctl"
@@ -226,17 +221,18 @@ paths:
         required: true
         type: "string"
       responses:
-        200:
-          description: "success"
         400:
           description: "Invalid ID supplied"
         404:
           description: "experiment not found"
+        200:
+          description: "success"
         default:
           description: "unexpected error"
           schema:
             $ref: "#/definitions/Error"
-      x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
+      x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"  
+
 securityDefinitions:
   xpctl_auth:
     type: "oauth2"
@@ -249,13 +245,15 @@ securityDefinitions:
     type: "apiKey"
     name: "api_key"
     in: "header"
+
 definitions:
+
   Result:
     type: "object"
     required:
-    - "epoch"
     - "metric"
     - "value"
+    - "epoch"
     properties:
       metric:
         type: "string"
@@ -268,10 +266,7 @@ definitions:
         type: "integer"
         format: "int32"
         example: 1
-    example:
-      metric: "f1"
-      epoch: 1
-      value: 0.365897
+        
   AggregateResult:
     type: "object"
     required:
@@ -283,14 +278,9 @@ definitions:
         example: "f1"
       values:
         type: "array"
-        items:
+        items: 
           type: "object"
-          properties: {}
-    example:
-      metric: "f1"
-      values:
-      - "{}"
-      - "{}"
+          
   Experiment:
     type: "object"
     properties:
@@ -317,11 +307,11 @@ definitions:
         example: "somehost"
       exp_date:
         type: "string"
-        format: "date"
         example: "2019-05-02T23:29:46.578675"
+        format: "date"
       label:
         type: "string"
-        example: "label"
+        example: "label"  
       version:
         type: "string"
         example: "1.4.1"
@@ -337,38 +327,7 @@ definitions:
         type: "array"
         items:
           $ref: "#/definitions/Result"
-    example:
-      eid: "5b074775b5536c4bc124d95f"
-      label: "label"
-      version: "1.4.1"
-      sha1: "8ab6ab6ee8fdf14b111223e2edf48750c30c7e51"
-      hostname: "somehost"
-      task: "classify"
-      dev_results:
-      - metric: "f1"
-        epoch: 1
-        value: 0.365897
-      - metric: "f1"
-        epoch: 1
-        value: 0.365897
-      exp_date: "2019-05-02T23:29:46.578675"
-      train_results:
-      - metric: "f1"
-        epoch: 1
-        value: 0.365897
-      - metric: "f1"
-        epoch: 1
-        value: 0.365897
-      config: "{dataset: sst2}"
-      dataset: "SST2"
-      test_results:
-      - metric: "f1"
-        epoch: 1
-        value: 0.365897
-      - metric: "f1"
-        epoch: 1
-        value: 0.365897
-      username: "someone"
+  
   ExperimentAggregate:
     type: "object"
     properties:
@@ -395,11 +354,11 @@ definitions:
         example: "somehost"
       exp_date:
         type: "string"
-        format: "date"
         example: "2019-05-02T23:29:46.578675"
+        format: "date"
       label:
         type: "string"
-        example: "label"
+        example: "label"  
       version:
         type: "string"
         example: "1.4.1"
@@ -415,44 +374,7 @@ definitions:
         type: "array"
         items:
           $ref: "#/definitions/AggregateResult"
-    example:
-      eid: "5b074775b5536c4bc124d95f"
-      label: "label"
-      version: "1.4.1"
-      sha1: "8ab6ab6ee8fdf14b111223e2edf48750c30c7e51"
-      hostname: "somehost"
-      task: "classify"
-      dev_results:
-      - metric: "f1"
-        values:
-        - "{}"
-        - "{}"
-      - metric: "f1"
-        values:
-        - "{}"
-        - "{}"
-      exp_date: "2019-05-02T23:29:46.578675"
-      train_results:
-      - metric: "f1"
-        values:
-        - "{}"
-        - "{}"
-      - metric: "f1"
-        values:
-        - "{}"
-        - "{}"
-      config: "{dataset: sst2}"
-      dataset: "SST2"
-      test_results:
-      - metric: "f1"
-        values:
-        - "{}"
-        - "{}"
-      - metric: "f1"
-        values:
-        - "{}"
-        - "{}"
-      username: "someone"
+          
   Error:
     required:
     - "code"
@@ -463,6 +385,8 @@ definitions:
         format: "int32"
       message:
         type: "string"
+  
+
 externalDocs:
   description: "Find out more about Swagger"
   url: "http://swagger.io"

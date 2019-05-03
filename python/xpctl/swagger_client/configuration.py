@@ -40,7 +40,7 @@ class Configuration(object):
             return
 
         # Default Base url
-        self.host = "https://petstore.swagger.io/v2"
+        self.host = "https://dev.nulll.io/v2"
         # Temp file folder for downloading files
         self.temp_folder_path = None
 

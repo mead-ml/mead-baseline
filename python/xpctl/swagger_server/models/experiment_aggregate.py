@@ -16,76 +16,81 @@ class ExperimentAggregate(Model):
     Do not edit the class manually.
     """
 
-    def __init__(self, task: str=None, id: str=None, sha1: str=None, config: str=None, username: str=None, hostname: str=None, _date: date=None, label: str=None, version: str=None, train_events: List[AggregateResult]=None, dev_events: List[AggregateResult]=None, test_events: List[AggregateResult]=None):  # noqa: E501
+    def __init__(self, task: str=None, eid: str=None, sha1: str=None, config: str=None, dataset: str=None, username: str=None, hostname: str=None, exp_date: date=None, label: str=None, version: str=None, train_results: List[AggregateResult]=None, dev_results: List[AggregateResult]=None, test_results: List[AggregateResult]=None):  # noqa: E501
         """ExperimentAggregate - a model defined in Swagger
 
         :param task: The task of this ExperimentAggregate.  # noqa: E501
         :type task: str
-        :param id: The id of this ExperimentAggregate.  # noqa: E501
-        :type id: str
+        :param eid: The eid of this ExperimentAggregate.  # noqa: E501
+        :type eid: str
         :param sha1: The sha1 of this ExperimentAggregate.  # noqa: E501
         :type sha1: str
         :param config: The config of this ExperimentAggregate.  # noqa: E501
         :type config: str
+        :param dataset: The dataset of this ExperimentAggregate.  # noqa: E501
+        :type dataset: str
         :param username: The username of this ExperimentAggregate.  # noqa: E501
         :type username: str
         :param hostname: The hostname of this ExperimentAggregate.  # noqa: E501
         :type hostname: str
-        :param _date: The _date of this ExperimentAggregate.  # noqa: E501
-        :type _date: date
+        :param exp_date: The exp_date of this ExperimentAggregate.  # noqa: E501
+        :type exp_date: date
         :param label: The label of this ExperimentAggregate.  # noqa: E501
         :type label: str
         :param version: The version of this ExperimentAggregate.  # noqa: E501
         :type version: str
-        :param train_events: The train_events of this ExperimentAggregate.  # noqa: E501
-        :type train_events: List[AggregateResult]
-        :param dev_events: The dev_events of this ExperimentAggregate.  # noqa: E501
-        :type dev_events: List[AggregateResult]
-        :param test_events: The test_events of this ExperimentAggregate.  # noqa: E501
-        :type test_events: List[AggregateResult]
+        :param train_results: The train_results of this ExperimentAggregate.  # noqa: E501
+        :type train_results: List[AggregateResult]
+        :param dev_results: The dev_results of this ExperimentAggregate.  # noqa: E501
+        :type dev_results: List[AggregateResult]
+        :param test_results: The test_results of this ExperimentAggregate.  # noqa: E501
+        :type test_results: List[AggregateResult]
         """
         self.swagger_types = {
             'task': str,
-            'id': str,
+            'eid': str,
             'sha1': str,
             'config': str,
+            'dataset': str,
             'username': str,
             'hostname': str,
-            '_date': date,
+            'exp_date': date,
             'label': str,
             'version': str,
-            'train_events': List[AggregateResult],
-            'dev_events': List[AggregateResult],
-            'test_events': List[AggregateResult]
+            'train_results': List[AggregateResult],
+            'dev_results': List[AggregateResult],
+            'test_results': List[AggregateResult]
         }
 
         self.attribute_map = {
             'task': 'task',
-            'id': 'id',
+            'eid': 'eid',
             'sha1': 'sha1',
             'config': 'config',
+            'dataset': 'dataset',
             'username': 'username',
             'hostname': 'hostname',
-            '_date': 'date',
+            'exp_date': 'exp_date',
             'label': 'label',
             'version': 'version',
-            'train_events': 'train_events',
-            'dev_events': 'dev_events',
-            'test_events': 'test_events'
+            'train_results': 'train_results',
+            'dev_results': 'dev_results',
+            'test_results': 'test_results'
         }
 
         self._task = task
-        self._id = id
+        self._eid = eid
         self._sha1 = sha1
         self._config = config
+        self._dataset = dataset
         self._username = username
         self._hostname = hostname
-        self.__date = _date
+        self._exp_date = exp_date
         self._label = label
         self._version = version
-        self._train_events = train_events
-        self._dev_events = dev_events
-        self._test_events = test_events
+        self._train_results = train_results
+        self._dev_results = dev_results
+        self._test_results = test_results
 
     @classmethod
     def from_dict(cls, dikt) -> 'ExperimentAggregate':
@@ -120,25 +125,25 @@ class ExperimentAggregate(Model):
         self._task = task
 
     @property
-    def id(self) -> str:
-        """Gets the id of this ExperimentAggregate.
+    def eid(self) -> str:
+        """Gets the eid of this ExperimentAggregate.
 
 
-        :return: The id of this ExperimentAggregate.
+        :return: The eid of this ExperimentAggregate.
         :rtype: str
         """
-        return self._id
+        return self._eid
 
-    @id.setter
-    def id(self, id: str):
-        """Sets the id of this ExperimentAggregate.
+    @eid.setter
+    def eid(self, eid: str):
+        """Sets the eid of this ExperimentAggregate.
 
 
-        :param id: The id of this ExperimentAggregate.
-        :type id: str
+        :param eid: The eid of this ExperimentAggregate.
+        :type eid: str
         """
 
-        self._id = id
+        self._eid = eid
 
     @property
     def sha1(self) -> str:
@@ -183,6 +188,27 @@ class ExperimentAggregate(Model):
         self._config = config
 
     @property
+    def dataset(self) -> str:
+        """Gets the dataset of this ExperimentAggregate.
+
+
+        :return: The dataset of this ExperimentAggregate.
+        :rtype: str
+        """
+        return self._dataset
+
+    @dataset.setter
+    def dataset(self, dataset: str):
+        """Sets the dataset of this ExperimentAggregate.
+
+
+        :param dataset: The dataset of this ExperimentAggregate.
+        :type dataset: str
+        """
+
+        self._dataset = dataset
+
+    @property
     def username(self) -> str:
         """Gets the username of this ExperimentAggregate.
 
@@ -225,25 +251,25 @@ class ExperimentAggregate(Model):
         self._hostname = hostname
 
     @property
-    def _date(self) -> date:
-        """Gets the _date of this ExperimentAggregate.
+    def exp_date(self) -> date:
+        """Gets the exp_date of this ExperimentAggregate.
 
 
-        :return: The _date of this ExperimentAggregate.
+        :return: The exp_date of this ExperimentAggregate.
         :rtype: date
         """
-        return self.__date
+        return self._exp_date
 
-    @_date.setter
-    def _date(self, _date: date):
-        """Sets the _date of this ExperimentAggregate.
+    @exp_date.setter
+    def exp_date(self, exp_date: date):
+        """Sets the exp_date of this ExperimentAggregate.
 
 
-        :param _date: The _date of this ExperimentAggregate.
-        :type _date: date
+        :param exp_date: The exp_date of this ExperimentAggregate.
+        :type exp_date: date
         """
 
-        self.__date = _date
+        self._exp_date = exp_date
 
     @property
     def label(self) -> str:
@@ -288,64 +314,64 @@ class ExperimentAggregate(Model):
         self._version = version
 
     @property
-    def train_events(self) -> List[AggregateResult]:
-        """Gets the train_events of this ExperimentAggregate.
+    def train_results(self) -> List[AggregateResult]:
+        """Gets the train_results of this ExperimentAggregate.
 
 
-        :return: The train_events of this ExperimentAggregate.
+        :return: The train_results of this ExperimentAggregate.
         :rtype: List[AggregateResult]
         """
-        return self._train_events
+        return self._train_results
 
-    @train_events.setter
-    def train_events(self, train_events: List[AggregateResult]):
-        """Sets the train_events of this ExperimentAggregate.
+    @train_results.setter
+    def train_results(self, train_results: List[AggregateResult]):
+        """Sets the train_results of this ExperimentAggregate.
 
 
-        :param train_events: The train_events of this ExperimentAggregate.
-        :type train_events: List[AggregateResult]
+        :param train_results: The train_results of this ExperimentAggregate.
+        :type train_results: List[AggregateResult]
         """
 
-        self._train_events = train_events
+        self._train_results = train_results
 
     @property
-    def dev_events(self) -> List[AggregateResult]:
-        """Gets the dev_events of this ExperimentAggregate.
+    def dev_results(self) -> List[AggregateResult]:
+        """Gets the dev_results of this ExperimentAggregate.
 
 
-        :return: The dev_events of this ExperimentAggregate.
+        :return: The dev_results of this ExperimentAggregate.
         :rtype: List[AggregateResult]
         """
-        return self._dev_events
+        return self._dev_results
 
-    @dev_events.setter
-    def dev_events(self, dev_events: List[AggregateResult]):
-        """Sets the dev_events of this ExperimentAggregate.
+    @dev_results.setter
+    def dev_results(self, dev_results: List[AggregateResult]):
+        """Sets the dev_results of this ExperimentAggregate.
 
 
-        :param dev_events: The dev_events of this ExperimentAggregate.
-        :type dev_events: List[AggregateResult]
+        :param dev_results: The dev_results of this ExperimentAggregate.
+        :type dev_results: List[AggregateResult]
         """
 
-        self._dev_events = dev_events
+        self._dev_results = dev_results
 
     @property
-    def test_events(self) -> List[AggregateResult]:
-        """Gets the test_events of this ExperimentAggregate.
+    def test_results(self) -> List[AggregateResult]:
+        """Gets the test_results of this ExperimentAggregate.
 
 
-        :return: The test_events of this ExperimentAggregate.
+        :return: The test_results of this ExperimentAggregate.
         :rtype: List[AggregateResult]
         """
-        return self._test_events
+        return self._test_results
 
-    @test_events.setter
-    def test_events(self, test_events: List[AggregateResult]):
-        """Sets the test_events of this ExperimentAggregate.
+    @test_results.setter
+    def test_results(self, test_results: List[AggregateResult]):
+        """Sets the test_results of this ExperimentAggregate.
 
 
-        :param test_events: The test_events of this ExperimentAggregate.
-        :type test_events: List[AggregateResult]
+        :param test_results: The test_results of this ExperimentAggregate.
+        :type test_results: List[AggregateResult]
         """
 
-        self._test_events = test_events
+        self._test_results = test_results

@@ -7,6 +7,7 @@ from six import BytesIO
 
 from swagger_server.models.error import Error  # noqa: E501
 from swagger_server.models.experiment import Experiment  # noqa: E501
+from swagger_server.models.experiment_aggregate import ExperimentAggregate  # noqa: E501
 from swagger_server.test import BaseTestCase
 
 
@@ -19,7 +20,7 @@ class TestXpctlController(BaseTestCase):
         Find experiment by id
         """
         response = self.client.open(
-            '/v2/{task}/{_id}'.format(task='task_example', _id='_id_example'),
+            '/v2/{task}/{eid}'.format(task='task_example', eid='eid_example'),
             method='GET')
         self.assert200(response,
                        'Response body is : ' + response.data.decode('utf-8'))
@@ -42,9 +43,16 @@ class TestXpctlController(BaseTestCase):
 
         Find results by dataset and task
         """
+        query_string = [('task', 'task_example'),
+                        ('dataset', 'dataset_example'),
+                        ('metric', 'metric_example'),
+                        ('sort', 'sort_example'),
+                        ('nconfig', 56),
+                        ('event_type', 'event_type_example')]
         response = self.client.open(
-            '/v2/result/{task}/{dataset}'.format(task='task_example', dataset='dataset_example'),
-            method='GET')
+            '/v2/results',
+            method='GET',
+            query_string=query_string)
         self.assert200(response,
                        'Response body is : ' + response.data.decode('utf-8'))
 
@@ -68,7 +76,7 @@ class TestXpctlController(BaseTestCase):
         Deletes an experiment
         """
         response = self.client.open(
-            '/v2/{task}/{_id}'.format(task='task_example', _id='_id_example'),
+            '/v2/{task}/{eid}'.format(task='task_example', eid='eid_example'),
             method='DELETE')
         self.assert200(response,
                        'Response body is : ' + response.data.decode('utf-8'))
@@ -80,7 +88,7 @@ class TestXpctlController(BaseTestCase):
         """
         data = dict(label='label_example')
         response = self.client.open(
-            '/v2/{task}/{_id}'.format(task='task_example', _id='_id_example'),
+            '/v2/{task}/{eid}'.format(task='task_example', eid='eid_example'),
             method='POST',
             data=data,
             content_type='application/x-www-form-urlencoded')

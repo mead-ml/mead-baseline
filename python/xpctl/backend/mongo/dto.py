@@ -1,4 +1,4 @@
-from xpctl.swagger_server.models import Experiment, Result, Error
+from xpctl.data import Experiment, ExperimentSet, ExperimentGroup, ExperimentAggregateSet, Result, AggregateResult
 TRAIN_EVENT = 'train_events'
 DEV_EVENT = 'valid_events'
 TEST_EVENT = 'test_events'
@@ -71,8 +71,7 @@ class MongoResultSet(object):
         experiments = []
         for _id, resultset in grouped_results.items():
             first_result = resultset[0]
-            task = first_result.task
-            _id = first_result._id
+            _id = str(first_result._id)
             username = first_result.username
             hostname = first_result.hostname
             label = first_result.label
@@ -81,37 +80,28 @@ class MongoResultSet(object):
             sha1 = first_result.sha1
             config = first_result.config
             version = first_result.version
-            train_events = []
-            dev_events = []
-            test_events = []
-            for _result in resultset:
-                r = Result(metric=_result.metric, value=_result.value, epoch=_result.epoch)
-                if _result.event_type == TRAIN_EVENT:
-                    train_events.append(r)
-                elif _result.event_type == DEV_EVENT:
-                    dev_events.append(r)
-                elif _result.event_type == TEST_EVENT:
-                    test_events.append(r)
-                else:
-                    raise ValueError('No handler for event type {}'.format(_result.event_type))
-            exp = Experiment(task=task,
-                             id=_id,
+            exp = Experiment(
+                             _id=_id,
                              sha1=sha1,
                              config=config,
                              dataset=dataset,
                              username=username,
                              hostname=hostname,
-                             _date=date,
+                             exp_date=date,
                              label=label,
                              version=version,
-                             train_events=train_events,
-                             dev_events=dev_events,
-                             test_events=test_events)
+                             train_results=[],
+                             dev_results=[],
+                             test_results=[])
+            for _result in resultset:
+                r = Result(metric=_result.metric, value=_result.value, epoch=_result.epoch)
+                exp.add_result(r, _result.event_type)
             experiments.append(exp)
-        return experiments
+        return ExperimentSet(experiments)
 
 
-class MongoError(Error):
+class MongoError(object):
     def __init__(self, code, msg):
-        super(MongoError, self).__init__(code, msg)
-
+        super(MongoError, self).__init__()
+        self.code = code
+        self.msg = msg
