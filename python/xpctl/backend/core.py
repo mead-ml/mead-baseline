@@ -91,10 +91,10 @@ class ExperimentRepo(object):
         :return: A MongoDB-backed repository
         """
         if dbtype == 'mongo':
-            from xpctl.mongo import MongoRepo
+            from xpctl.backend.mongo.backend import MongoRepo
             return MongoRepo(dbhost, int(dbport), user, passwd)
         else:
-            from xpctl.sql import SQLRepo
+            from xpctl.backend.sql.backend import SQLRepo
             return SQLRepo(type=dbtype, host=dbhost, port=dbport, user=user, passwd=passwd)
 
     def get_model_location(self, id, task):

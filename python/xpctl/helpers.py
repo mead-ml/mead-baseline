@@ -91,6 +91,7 @@ def get_experiment_label(config_obj, task, **kwargs):
 
 def aggregate_results(resultset, groupby_key, num_exps_per_reduction, num_exps):
     grouped_result = resultset.groupby(groupby_key)
+    
     aggregate_fns = {'min': np.min, 'max': np.max, 'avg': np.mean, 'std': np.std}
     
     return grouped_result.reduce(aggregate_fns=aggregate_fns)

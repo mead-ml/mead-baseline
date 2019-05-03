@@ -1,5 +1,5 @@
 try:
-    from xpctl.core import *
+    from xpctl.backend.core import *
 except ImportError:
     pass
 

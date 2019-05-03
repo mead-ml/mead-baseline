@@ -5,10 +5,10 @@ import pandas as pd
 import getpass
 from click_shell import shell
 import click
-from xpctl.core import ExperimentRepo
+from xpctl.backend.core import ExperimentRepo
 from xpctl.helpers import *
 from baseline.utils import read_json, read_config_file
-from xpctl.core import EVENT_TYPES
+from xpctl.backend.core import EVENT_TYPES
 
 pd.set_option('display.expand_frame_repr', False)
 pd.set_option("display.max_rows", None)

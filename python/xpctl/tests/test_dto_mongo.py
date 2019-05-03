@@ -1,7 +1,7 @@
 import pytest
 import json
 import os
-from xpctl.mongo.backend import MongoRepo
+from xpctl.backend.mongo import MongoRepo
 import pickle
 
 
@@ -15,7 +15,7 @@ def test_dto_mongo(setup):
     creds = setup
     input_ = json.load(open('data/mongosample3.json'))
     m = MongoRepo(**creds)
-    rs = m.mongo_to_resultset(input_, event_type=None, metrics=[])
+    rs = m.mongo_to_experiment_set(input_, event_type=None, metrics=[])
     rs_stored = pickle.load(open('data/mongosample3.resultset.pickle', 'rb'))
     assert len(rs) == len(rs_stored)
     matched = 0

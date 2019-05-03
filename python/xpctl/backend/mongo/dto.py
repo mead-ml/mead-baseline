@@ -1,20 +1,28 @@
-from xpctl.data import Experiment, result, ExperimentSet
+from xpctl.swagger_server.models import Experiment, Result, Error
+TRAIN_EVENT = 'train_events'
+DEV_EVENT = 'valid_events'
+TEST_EVENT = 'test_events'
 
 
 class MongoResult(object):
     """ a result data point"""
-    def __init__(self, metric, value, _id, username, label, dataset, date, sha1, event_type, epoch):
+    def __init__(self, metric, value, task, _id, username, hostname, label, config, dataset, date, sha1, event_type, epoch,
+                 version):
         super(MongoResult, self).__init__()
         self.metric = metric
         self.value = value
+        self.task = task
         self._id = _id
         self.username = username
+        self.hostname = hostname
         self.label = label
         self.dataset = dataset
         self.date = date
         self.sha1 = sha1
         self.event_type = event_type
+        self.config = config
         self.epoch = epoch
+        self.version = version
     
     def get_prop(self, field):
         return self.__dict__[field]
@@ -59,23 +67,51 @@ class MongoResultSet(object):
         return data_groups
     
     def experiments(self):
-        print(len(self.data))
         grouped_results = self.groupby('_id')
         experiments = []
         for _id, resultset in grouped_results.items():
             first_result = resultset[0]
-            _id = _id
+            task = first_result.task
+            _id = first_result._id
             username = first_result.username
+            hostname = first_result.hostname
             label = first_result.label
             dataset = first_result.dataset
             date = first_result.date
             sha1 = first_result.sha1
-            exp = Experiment(train_results=[], dev_results=[], test_results=[], _id=_id, username=username,
-                             label=label, dataset=dataset, date=date, sha1=sha1)
+            config = first_result.config
+            version = first_result.version
+            train_events = []
+            dev_events = []
+            test_events = []
             for _result in resultset:
-                exp.add_result(result=result(metric=_result.metric, value=_result.value, epoch=_result.epoch),
-                               event_type=_result.event_type)
+                r = Result(metric=_result.metric, value=_result.value, epoch=_result.epoch)
+                if _result.event_type == TRAIN_EVENT:
+                    train_events.append(r)
+                elif _result.event_type == DEV_EVENT:
+                    dev_events.append(r)
+                elif _result.event_type == TEST_EVENT:
+                    test_events.append(r)
+                else:
+                    raise ValueError('No handler for event type {}'.format(_result.event_type))
+            exp = Experiment(task=task,
+                             id=_id,
+                             sha1=sha1,
+                             config=config,
+                             dataset=dataset,
+                             username=username,
+                             hostname=hostname,
+                             _date=date,
+                             label=label,
+                             version=version,
+                             train_events=train_events,
+                             dev_events=dev_events,
+                             test_events=test_events)
             experiments.append(exp)
-        return ExperimentSet(data=experiments)
+        return experiments
 
+
+class MongoError(Error):
+    def __init__(self, code, msg):
+        super(MongoError, self).__init__(code, msg)
 

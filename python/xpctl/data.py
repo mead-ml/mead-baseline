@@ -10,17 +10,22 @@ TEST_EVENT = 'test_events'
 
 class Experiment(object):
     """ an experiment"""
-    def __init__(self, train_results, dev_results, test_results, _id, username, label, dataset, date, sha1):
+    def __init__(self, train_results, dev_results, test_results, _id, username, hostname, config, date, label, dataset,
+                 sha1, version):
         super(Experiment, self).__init__()
-        self.train_results = set(train_results)
-        self.dev_results = set(dev_results)
-        self.test_results = set(test_results)
+        self.train_results = train_results
+        self.dev_results = dev_results
+        self.test_results = test_results
         self._id = _id
         self.username = username
+        self.hostname = hostname
+        self.config = config
+        self.date = date
         self.label = label
         self.dataset = dataset
         self.date = date
         self.sha1 = sha1
+        self.version = version
     
     def get_prop(self, field):
         if field not in self.__dict__:
@@ -29,11 +34,11 @@ class Experiment(object):
     
     def add_result(self, result, event_type):
         if event_type == TRAIN_EVENT:
-            self.train_results.add(result)
+            self.train_results.append(result)
         elif event_type == DEV_EVENT:
-            self.dev_results.add(result)
+            self.dev_results.append(result)
         elif event_type == TEST_EVENT:
-            self.test_results.add(result)
+            self.test_results.append(result)
         else:
             raise NotImplementedError('no handler for event type: [{}]'.format(event_type))
 
@@ -107,7 +112,6 @@ class ExperimentGroup(object):
         data = {}
         f_map = {TRAIN_EVENT: 'train_results', DEV_EVENT: 'dev_results', TEST_EVENT: 'test_results'}
         for prop_value, experiments in self.grouped_experiments.items():
-            # one resultset has n result(s),
             data[prop_value] = {}
             for experiment in experiments:
                 results = experiment.get_prop(f_map[event_type])
@@ -120,7 +124,7 @@ class ExperimentGroup(object):
         for prop_value in data:
             values = {}
             d = {self.grouping_key: prop_value}
-            agr = deepcopy(ExpermentAggregate(**d))
+            agr = deepcopy(ExperimentAggregate(**d))
             for metric in data[prop_value]:
                 for fn_name, fn in aggregate_fns.items():
                     agg_value = fn(data[prop_value][metric])
@@ -137,10 +141,10 @@ class ExperimentGroup(object):
             self.grouped_experiments.pop(key)
 
 
-class ExpermentAggregate(object):
+class ExperimentAggregate(object):
     """ a result data point"""
     def __init__(self, train_results=[], dev_results=[], test_results=[], **kwargs):
-        super(ExpermentAggregate, self).__init__()
+        super(ExperimentAggregate, self).__init__()
         self.train_results = train_results
         self.dev_results = dev_results
         self.test_results = test_results

@@ -4,16 +4,14 @@ import pandas as pd
 import pymongo
 import datetime
 import socket
-import json
 import getpass
 from baseline.utils import export, listify
 from mead.utils import hash_config
-from xpctl.core import ExperimentRepo, store_model, EVENT_TYPES
-from xpctl.dto import MongoResult, MongoResultSet
+from xpctl.backend.core import ExperimentRepo, store_model, EVENT_TYPES
+from xpctl.backend.mongo.dto import MongoResult, MongoResultSet, MongoError
 from bson.objectid import ObjectId
 from baseline.version import __version__
-from xpctl.helpers import df_get_results, df_experimental_details, get_experiment_label, aggregate_results
-from copy import deepcopy
+from xpctl.helpers import df_experimental_details, get_experiment_label, aggregate_results
 
 __all__ = []
 exporter = export(__all__)
@@ -152,31 +150,39 @@ class MongoRepo(ExperimentRepo):
             keys.remove("phase")
         return keys
         
-    def mongo_to_resultset(self, all_results, event_type, metrics):
+    def mongo_to_experiment_set(self, task, all_results, event_type, metrics):
         data = []
         event_types = [event_type] if event_type else list(set(EVENT_TYPES.values()))
         metrics = list(set(metrics)) if len(metrics) > 0 else list(self._get_metrics_mongo(all_results, event_types))
         for result in all_results:  # different experiments
+            task = task
             _id = result['_id']
             username = result['username']
+            hostname = result['hostname']
             label = result['label']
             dataset = result['config']['dataset']
             date = result['date']
             sha1 = result['sha1']
+            config = result['config']
+            version = result.get('version', '0.5.0')  # backward compatibility
             for event_type in event_types:
                 for index in range(len(result.get(event_type, []))):  # train_event epoch 0,
                     for metric in metrics:
                         data.append(MongoResult(
                             metric=metric,
                             value=result[event_type][index][metric],
-                            _id=_id,
+                            task=task,
+                            _id=str(_id),
                             username=username,
+                            hostname=hostname,
                             label=label,
+                            config=config,
                             dataset=dataset,
                             date=date,
                             sha1=sha1,
                             event_type=event_type,
-                            epoch=result[event_type][index]['tick']
+                            epoch=result[event_type][index]['tick'],
+                            version=version
                         ))
         rs = MongoResultSet(data=data)
         return rs.experiments()
@@ -215,7 +221,16 @@ class MongoRepo(ExperimentRepo):
         result_frame = self._generate_results(coll, metrics=metrics, query=query, projection=projection, event_type=event_type)
         return df_experimental_details(result_frame, sha1, users, sort, metric, n)
 
-    def get_results(self, task, dataset, event_type, num_exps=None,
+    def single_experiment(self, task, _id):
+        coll = self.db[task]
+        query = {'_id': ObjectId(_id)}
+        all_results = list(coll.find(query))
+        if not all_results:
+            return MongoError(code=404, msg='no experiment with id [{}] for task [{}]'.format(_id, task))
+        experiments = self.mongo_to_experiment_set(task, all_results, event_type=None, metrics=[])
+        return experiments[0]
+
+    def get_results(self, task, dataset, event_type=None, num_exps=None,
                     num_exps_per_reduction=None, metric=None, sort=None, id=None, label=None, reduction_dim='sha1'):
         metrics = listify(metric)
         coll = self.db[task]
@@ -223,8 +238,8 @@ class MongoRepo(ExperimentRepo):
         projection = self._update_projection(event_type=event_type)
         all_results = list(coll.find(query, projection))
         if not all_results:
-            return None
-        resultset = self.mongo_to_resultset(all_results, event_type=event_type, metrics=metrics)
+            return MongoError(code=404, msg='something')
+        resultset = self.mongo_to_experiment_set(all_results, event_type=event_type, metrics=metrics)
         if resultset is not None:
             agg_result = aggregate_results(resultset, reduction_dim, num_exps_per_reduction, num_exps)
             return agg_result
