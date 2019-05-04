@@ -325,43 +325,43 @@ definitions:
       version:
         type: "string"
         example: "1.4.1"
-      train_results:
+      train_events:
         type: "array"
         items:
           $ref: "#/definitions/Result"
-      dev_results:
+      dev_events:
         type: "array"
         items:
           $ref: "#/definitions/Result"
-      test_results:
+      test_events:
         type: "array"
         items:
           $ref: "#/definitions/Result"
     example:
       eid: "5b074775b5536c4bc124d95f"
+      train_events:
+      - metric: "f1"
+        epoch: 1
+        value: 0.365897
+      - metric: "f1"
+        epoch: 1
+        value: 0.365897
       label: "label"
       version: "1.4.1"
       sha1: "8ab6ab6ee8fdf14b111223e2edf48750c30c7e51"
+      dev_events:
+      - metric: "f1"
+        epoch: 1
+        value: 0.365897
+      - metric: "f1"
+        epoch: 1
+        value: 0.365897
       hostname: "somehost"
       task: "classify"
-      dev_results:
-      - metric: "f1"
-        epoch: 1
-        value: 0.365897
-      - metric: "f1"
-        epoch: 1
-        value: 0.365897
       exp_date: "2019-05-02T23:29:46.578675"
-      train_results:
-      - metric: "f1"
-        epoch: 1
-        value: 0.365897
-      - metric: "f1"
-        epoch: 1
-        value: 0.365897
       config: "{dataset: sst2}"
       dataset: "SST2"
-      test_results:
+      test_events:
       - metric: "f1"
         epoch: 1
         value: 0.365897
@@ -403,47 +403,52 @@ definitions:
       version:
         type: "string"
         example: "1.4.1"
-      train_results:
+      num_exps:
+        type: "integer"
+        format: "int32"
+        example: 1
+      train_events:
         type: "array"
         items:
           $ref: "#/definitions/AggregateResult"
-      dev_results:
+      dev_events:
         type: "array"
         items:
           $ref: "#/definitions/AggregateResult"
-      test_results:
+      test_events:
         type: "array"
         items:
           $ref: "#/definitions/AggregateResult"
     example:
       eid: "5b074775b5536c4bc124d95f"
+      train_events:
+      - metric: "f1"
+        values:
+        - "{}"
+        - "{}"
+      - metric: "f1"
+        values:
+        - "{}"
+        - "{}"
+      num_exps: 1
       label: "label"
       version: "1.4.1"
       sha1: "8ab6ab6ee8fdf14b111223e2edf48750c30c7e51"
+      dev_events:
+      - metric: "f1"
+        values:
+        - "{}"
+        - "{}"
+      - metric: "f1"
+        values:
+        - "{}"
+        - "{}"
       hostname: "somehost"
       task: "classify"
-      dev_results:
-      - metric: "f1"
-        values:
-        - "{}"
-        - "{}"
-      - metric: "f1"
-        values:
-        - "{}"
-        - "{}"
       exp_date: "2019-05-02T23:29:46.578675"
-      train_results:
-      - metric: "f1"
-        values:
-        - "{}"
-        - "{}"
-      - metric: "f1"
-        values:
-        - "{}"
-        - "{}"
       config: "{dataset: sst2}"
       dataset: "SST2"
-      test_results:
+      test_events:
       - metric: "f1"
         values:
         - "{}"

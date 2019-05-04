@@ -90,9 +90,9 @@ class MongoResultSet(object):
                              exp_date=date,
                              label=label,
                              version=version,
-                             train_results=[],
-                             dev_results=[],
-                             test_results=[])
+                             train_events=[],
+                             dev_events=[],
+                             test_events=[])
             for _result in resultset:
                 r = Result(metric=_result.metric, value=_result.value, epoch=_result.epoch)
                 exp.add_result(r, _result.event_type)

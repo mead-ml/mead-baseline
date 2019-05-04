@@ -11,6 +11,11 @@ class Result(object):
         self.metric = metric
         self.value = value
         self.epoch = epoch
+
+    def get_prop(self, field):
+        if field not in self.__dict__:
+            raise ValueError('{} does not have a property {}'.format(self.__class__, field))
+        return self.__dict__[field]
         
         
 class AggregateResult(object):
@@ -19,15 +24,20 @@ class AggregateResult(object):
         self.metric = metric
         self.values = values
 
+    def get_prop(self, field):
+        if field not in self.__dict__:
+            raise ValueError('{} does not have a property {}'.format(self.__class__, field))
+        return self.__dict__[field]
+
 
 class Experiment(object):
     """ an experiment"""
-    def __init__(self, train_results, dev_results, test_results, _id, username, hostname, config, exp_date, label, dataset,
+    def __init__(self, train_events, dev_events, test_events, _id, username, hostname, config, exp_date, label, dataset,
                  sha1, version):
         super(Experiment, self).__init__()
-        self.train_results = train_results
-        self.dev_results = dev_results
-        self.test_results = test_results
+        self.train_events = train_events if train_events is not None else []
+        self.dev_events = dev_events if dev_events is not None else []
+        self.test_events = test_events if test_events is not None else []
         self.eid = _id
         self.username = username
         self.hostname = hostname
@@ -46,11 +56,11 @@ class Experiment(object):
     
     def add_result(self, result, event_type):
         if event_type == TRAIN_EVENT:
-            self.train_results.append(result)
+            self.train_events.append(result)
         elif event_type == DEV_EVENT:
-            self.dev_results.append(result)
+            self.dev_events.append(result)
         elif event_type == TEST_EVENT:
-            self.test_results.append(result)
+            self.test_events.append(result)
         else:
             raise NotImplementedError('no handler for event type: [{}]'.format(event_type))
 
@@ -91,14 +101,28 @@ class ExperimentSet(object):
             else:
                 data_groups[field].add_data(datum)
         return ExperimentGroup(data_groups, key)
+    
+    def sort(self, key, reverse=True):
+        """
+        you can only sort when event_type is test, because there is only one data point
+        :param key: metric to sort on
+        :param reverse: reverse=True always except when key is avg_loss
+        :return:
+        """
+        test_results = [(index, x.get_prop[TEST_EVENT][0]) for index, x in enumerate(self.data)]
+        test_results.sort(key=lambda x: x[1].get_prop(key), reverse=reverse)
+        final_results = []
+        for index, _ in test_results:
+            final_results.append(self.data[index])
+        return ExperimentSet(data=final_results)
 
 
 class ExperimentGroup(object):
     """ a group of resultset objects"""
-    def __init__(self, grouped_experiments, grouping_key):
+    def __init__(self, grouped_experiments, reduction_dim):
         super(ExperimentGroup, self).__init__()
         self.grouped_experiments = grouped_experiments
-        self.grouping_key = grouping_key
+        self.reduction_dim = reduction_dim
     
     def items(self):
         return self.grouped_experiments.items()
@@ -122,24 +146,37 @@ class ExperimentGroup(object):
     def reduce(self, aggregate_fns, event_type=TEST_EVENT):
         """ aggregate results across a result group"""
         data = {}
-        f_map = {TRAIN_EVENT: 'train_results', DEV_EVENT: 'dev_results', TEST_EVENT: 'test_results'}
-        for prop_value, experiments in self.grouped_experiments.items():
-            data[prop_value] = {}
+        for reduction_dim_value, experiments in self.grouped_experiments.items():
+            data[reduction_dim_value] = {}
             for experiment in experiments:
-                results = experiment.get_prop(f_map[event_type])
-                for result in results:
-                    if result.metric not in data[prop_value]:
-                        data[prop_value][result.metric] = [result.value]
+                events = experiment.get_prop(event_type)
+                for event in events:
+                    if event.metric not in data[reduction_dim_value]:
+                        data[reduction_dim_value][event.metric] = [event.value]
                     else:
-                        data[prop_value][result.metric].append(result.value)
+                        data[reduction_dim_value][event.metric].append(event.value)
+        # for each reduction dim value, (say when sha1 = x), all data[x][metric] lists should have the same length.
+        num_experiments = {}
+        for reduction_dim_value in data:
+            lengths = []
+            for metric in data[reduction_dim_value]:
+                lengths.append(len(data[reduction_dim_value][metric]))
+            try:
+                assert len(set(lengths)) == 1
+            except AssertionError:
+                raise AssertionError('when reducing experiments over {}, for {}={}, the number of results are not the '
+                                     'same over all metrics'.format(self.reduction_dim, self.reduction_dim,
+                                                                    reduction_dim_value))
+            num_experiments[reduction_dim_value] = lengths[0]
+            
         aggregate_resultset = ExperimentAggregateSet(data=[])
-        for prop_value in data:
+        for reduction_dim_value in data:
             values = {}
-            d = {self.grouping_key: prop_value}
+            d = {self.reduction_dim: reduction_dim_value, 'num_exps': num_experiments[reduction_dim_value]}
             agr = deepcopy(ExperimentAggregate(**d))
-            for metric in data[prop_value]:
+            for metric in data[reduction_dim_value]:
                 for fn_name, fn in aggregate_fns.items():
-                    agg_value = fn(data[prop_value][metric])
+                    agg_value = fn(data[reduction_dim_value][metric])
                     values[fn_name] = agg_value
                 agr.add_result(deepcopy(AggregateResult(metric=metric, values=values)), event_type=event_type)
             aggregate_resultset.add_data(agr)
@@ -155,11 +192,12 @@ class ExperimentGroup(object):
 
 class ExperimentAggregate(object):
     """ a result data point"""
-    def __init__(self, train_results=[], dev_results=[], test_results=[], **kwargs):
+    def __init__(self, train_events=[], dev_events=[], test_events=[], **kwargs):
         super(ExperimentAggregate, self).__init__()
-        self.train_results = train_results
-        self.dev_results = dev_results
-        self.test_results = test_results
+        self.train_events = train_events if train_events is not None else []
+        self.dev_events = dev_events if dev_events is not None else []
+        self.test_events = test_events if test_events is not None else []
+        self.num_exps = kwargs.get('num_exps')
         self.eid = kwargs.get('eid')
         self.username = kwargs.get('username')
         self.label = kwargs.get('label')
@@ -170,16 +208,16 @@ class ExperimentAggregate(object):
     def get_prop(self, field):
         return self.__dict__[field]
 
-    def add_result(self, result, event_type):
+    def add_result(self, aggregate_result, event_type):
         if event_type == TRAIN_EVENT:
-            self.train_results.append(result)
+            self.train_events.append(aggregate_result)
         elif event_type == DEV_EVENT:
-            self.dev_results.append(result)
+            self.dev_events.append(aggregate_result)
         elif event_type == TEST_EVENT:
-            self.test_results.append(result)
+            self.test_events.append(aggregate_result)
         else:
             raise NotImplementedError('no handler for event type: [{}]'.format(event_type))
-
+    
 
 class ExperimentAggregateSet(object):
     """ a list of aggregate result objects"""

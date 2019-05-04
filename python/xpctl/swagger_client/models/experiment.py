@@ -43,9 +43,9 @@ class Experiment(object):
         'exp_date': 'date',
         'label': 'str',
         'version': 'str',
-        'train_results': 'list[Result]',
-        'dev_results': 'list[Result]',
-        'test_results': 'list[Result]'
+        'train_events': 'list[Result]',
+        'dev_events': 'list[Result]',
+        'test_events': 'list[Result]'
     }
 
     attribute_map = {
@@ -59,12 +59,12 @@ class Experiment(object):
         'exp_date': 'exp_date',
         'label': 'label',
         'version': 'version',
-        'train_results': 'train_results',
-        'dev_results': 'dev_results',
-        'test_results': 'test_results'
+        'train_events': 'train_events',
+        'dev_events': 'dev_events',
+        'test_events': 'test_events'
     }
 
-    def __init__(self, task=None, eid=None, sha1=None, config=None, dataset=None, username=None, hostname=None, exp_date=None, label=None, version=None, train_results=None, dev_results=None, test_results=None):  # noqa: E501
+    def __init__(self, task=None, eid=None, sha1=None, config=None, dataset=None, username=None, hostname=None, exp_date=None, label=None, version=None, train_events=None, dev_events=None, test_events=None):  # noqa: E501
         """Experiment - a model defined in Swagger"""  # noqa: E501
 
         self._task = None
@@ -77,9 +77,9 @@ class Experiment(object):
         self._exp_date = None
         self._label = None
         self._version = None
-        self._train_results = None
-        self._dev_results = None
-        self._test_results = None
+        self._train_events = None
+        self._dev_events = None
+        self._test_events = None
         self.discriminator = None
 
         if task is not None:
@@ -102,12 +102,12 @@ class Experiment(object):
             self.label = label
         if version is not None:
             self.version = version
-        if train_results is not None:
-            self.train_results = train_results
-        if dev_results is not None:
-            self.dev_results = dev_results
-        if test_results is not None:
-            self.test_results = test_results
+        if train_events is not None:
+            self.train_events = train_events
+        if dev_events is not None:
+            self.dev_events = dev_events
+        if test_events is not None:
+            self.test_events = test_events
 
     @property
     def task(self):
@@ -320,67 +320,67 @@ class Experiment(object):
         self._version = version
 
     @property
-    def train_results(self):
-        """Gets the train_results of this Experiment.  # noqa: E501
+    def train_events(self):
+        """Gets the train_events of this Experiment.  # noqa: E501
 
 
-        :return: The train_results of this Experiment.  # noqa: E501
+        :return: The train_events of this Experiment.  # noqa: E501
         :rtype: list[Result]
         """
-        return self._train_results
+        return self._train_events
 
-    @train_results.setter
-    def train_results(self, train_results):
-        """Sets the train_results of this Experiment.
+    @train_events.setter
+    def train_events(self, train_events):
+        """Sets the train_events of this Experiment.
 
 
-        :param train_results: The train_results of this Experiment.  # noqa: E501
+        :param train_events: The train_events of this Experiment.  # noqa: E501
         :type: list[Result]
         """
 
-        self._train_results = train_results
+        self._train_events = train_events
 
     @property
-    def dev_results(self):
-        """Gets the dev_results of this Experiment.  # noqa: E501
+    def dev_events(self):
+        """Gets the dev_events of this Experiment.  # noqa: E501
 
 
-        :return: The dev_results of this Experiment.  # noqa: E501
+        :return: The dev_events of this Experiment.  # noqa: E501
         :rtype: list[Result]
         """
-        return self._dev_results
+        return self._dev_events
 
-    @dev_results.setter
-    def dev_results(self, dev_results):
-        """Sets the dev_results of this Experiment.
+    @dev_events.setter
+    def dev_events(self, dev_events):
+        """Sets the dev_events of this Experiment.
 
 
-        :param dev_results: The dev_results of this Experiment.  # noqa: E501
+        :param dev_events: The dev_events of this Experiment.  # noqa: E501
         :type: list[Result]
         """
 
-        self._dev_results = dev_results
+        self._dev_events = dev_events
 
     @property
-    def test_results(self):
-        """Gets the test_results of this Experiment.  # noqa: E501
+    def test_events(self):
+        """Gets the test_events of this Experiment.  # noqa: E501
 
 
-        :return: The test_results of this Experiment.  # noqa: E501
+        :return: The test_events of this Experiment.  # noqa: E501
         :rtype: list[Result]
         """
-        return self._test_results
+        return self._test_events
 
-    @test_results.setter
-    def test_results(self, test_results):
-        """Sets the test_results of this Experiment.
+    @test_events.setter
+    def test_events(self, test_events):
+        """Sets the test_events of this Experiment.
 
 
-        :param test_results: The test_results of this Experiment.  # noqa: E501
+        :param test_events: The test_events of this Experiment.  # noqa: E501
         :type: list[Result]
         """
 
-        self._test_results = test_results
+        self._test_events = test_events
 
     def to_dict(self):
         """Returns the model properties as a dict"""

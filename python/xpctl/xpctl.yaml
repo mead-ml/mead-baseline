@@ -315,15 +315,15 @@ definitions:
       version:
         type: "string"
         example: "1.4.1"
-      train_results:
+      train_events:
         type: "array"
         items:
           $ref: "#/definitions/Result"
-      dev_results:
+      dev_events:
         type: "array"
         items:
           $ref: "#/definitions/Result"
-      test_results:
+      test_events:
         type: "array"
         items:
           $ref: "#/definitions/Result"
@@ -362,15 +362,19 @@ definitions:
       version:
         type: "string"
         example: "1.4.1"
-      train_results:
+      num_exps:
+        type: "integer"
+        format: "int32"
+        example: 1
+      train_events:
         type: "array"
         items:
           $ref: "#/definitions/AggregateResult"
-      dev_results:
+      dev_events:
         type: "array"
         items:
           $ref: "#/definitions/AggregateResult"
-      test_results:
+      test_events:
         type: "array"
         items:
           $ref: "#/definitions/AggregateResult"

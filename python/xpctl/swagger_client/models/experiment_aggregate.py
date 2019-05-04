@@ -43,9 +43,10 @@ class ExperimentAggregate(object):
         'exp_date': 'date',
         'label': 'str',
         'version': 'str',
-        'train_results': 'list[AggregateResult]',
-        'dev_results': 'list[AggregateResult]',
-        'test_results': 'list[AggregateResult]'
+        'num_exps': 'int',
+        'train_events': 'list[AggregateResult]',
+        'dev_events': 'list[AggregateResult]',
+        'test_events': 'list[AggregateResult]'
     }
 
     attribute_map = {
@@ -59,12 +60,13 @@ class ExperimentAggregate(object):
         'exp_date': 'exp_date',
         'label': 'label',
         'version': 'version',
-        'train_results': 'train_results',
-        'dev_results': 'dev_results',
-        'test_results': 'test_results'
+        'num_exps': 'num_exps',
+        'train_events': 'train_events',
+        'dev_events': 'dev_events',
+        'test_events': 'test_events'
     }
 
-    def __init__(self, task=None, eid=None, sha1=None, config=None, dataset=None, username=None, hostname=None, exp_date=None, label=None, version=None, train_results=None, dev_results=None, test_results=None):  # noqa: E501
+    def __init__(self, task=None, eid=None, sha1=None, config=None, dataset=None, username=None, hostname=None, exp_date=None, label=None, version=None, num_exps=None, train_events=None, dev_events=None, test_events=None):  # noqa: E501
         """ExperimentAggregate - a model defined in Swagger"""  # noqa: E501
 
         self._task = None
@@ -77,9 +79,10 @@ class ExperimentAggregate(object):
         self._exp_date = None
         self._label = None
         self._version = None
-        self._train_results = None
-        self._dev_results = None
-        self._test_results = None
+        self._num_exps = None
+        self._train_events = None
+        self._dev_events = None
+        self._test_events = None
         self.discriminator = None
 
         if task is not None:
@@ -102,12 +105,14 @@ class ExperimentAggregate(object):
             self.label = label
         if version is not None:
             self.version = version
-        if train_results is not None:
-            self.train_results = train_results
-        if dev_results is not None:
-            self.dev_results = dev_results
-        if test_results is not None:
-            self.test_results = test_results
+        if num_exps is not None:
+            self.num_exps = num_exps
+        if train_events is not None:
+            self.train_events = train_events
+        if dev_events is not None:
+            self.dev_events = dev_events
+        if test_events is not None:
+            self.test_events = test_events
 
     @property
     def task(self):
@@ -320,67 +325,88 @@ class ExperimentAggregate(object):
         self._version = version
 
     @property
-    def train_results(self):
-        """Gets the train_results of this ExperimentAggregate.  # noqa: E501
+    def num_exps(self):
+        """Gets the num_exps of this ExperimentAggregate.  # noqa: E501
 
 
-        :return: The train_results of this ExperimentAggregate.  # noqa: E501
-        :rtype: list[AggregateResult]
+        :return: The num_exps of this ExperimentAggregate.  # noqa: E501
+        :rtype: int
         """
-        return self._train_results
+        return self._num_exps
 
-    @train_results.setter
-    def train_results(self, train_results):
-        """Sets the train_results of this ExperimentAggregate.
+    @num_exps.setter
+    def num_exps(self, num_exps):
+        """Sets the num_exps of this ExperimentAggregate.
 
 
-        :param train_results: The train_results of this ExperimentAggregate.  # noqa: E501
-        :type: list[AggregateResult]
+        :param num_exps: The num_exps of this ExperimentAggregate.  # noqa: E501
+        :type: int
         """
 
-        self._train_results = train_results
+        self._num_exps = num_exps
 
     @property
-    def dev_results(self):
-        """Gets the dev_results of this ExperimentAggregate.  # noqa: E501
+    def train_events(self):
+        """Gets the train_events of this ExperimentAggregate.  # noqa: E501
 
 
-        :return: The dev_results of this ExperimentAggregate.  # noqa: E501
+        :return: The train_events of this ExperimentAggregate.  # noqa: E501
         :rtype: list[AggregateResult]
         """
-        return self._dev_results
+        return self._train_events
 
-    @dev_results.setter
-    def dev_results(self, dev_results):
-        """Sets the dev_results of this ExperimentAggregate.
+    @train_events.setter
+    def train_events(self, train_events):
+        """Sets the train_events of this ExperimentAggregate.
 
 
-        :param dev_results: The dev_results of this ExperimentAggregate.  # noqa: E501
+        :param train_events: The train_events of this ExperimentAggregate.  # noqa: E501
         :type: list[AggregateResult]
         """
 
-        self._dev_results = dev_results
+        self._train_events = train_events
 
     @property
-    def test_results(self):
-        """Gets the test_results of this ExperimentAggregate.  # noqa: E501
+    def dev_events(self):
+        """Gets the dev_events of this ExperimentAggregate.  # noqa: E501
 
 
-        :return: The test_results of this ExperimentAggregate.  # noqa: E501
+        :return: The dev_events of this ExperimentAggregate.  # noqa: E501
         :rtype: list[AggregateResult]
         """
-        return self._test_results
+        return self._dev_events
 
-    @test_results.setter
-    def test_results(self, test_results):
-        """Sets the test_results of this ExperimentAggregate.
+    @dev_events.setter
+    def dev_events(self, dev_events):
+        """Sets the dev_events of this ExperimentAggregate.
 
 
-        :param test_results: The test_results of this ExperimentAggregate.  # noqa: E501
+        :param dev_events: The dev_events of this ExperimentAggregate.  # noqa: E501
         :type: list[AggregateResult]
         """
 
-        self._test_results = test_results
+        self._dev_events = dev_events
+
+    @property
+    def test_events(self):
+        """Gets the test_events of this ExperimentAggregate.  # noqa: E501
+
+
+        :return: The test_events of this ExperimentAggregate.  # noqa: E501
+        :rtype: list[AggregateResult]
+        """
+        return self._test_events
+
+    @test_events.setter
+    def test_events(self, test_events):
+        """Sets the test_events of this ExperimentAggregate.
+
+
+        :param test_events: The test_events of this ExperimentAggregate.  # noqa: E501
+        :type: list[AggregateResult]
+        """
+
+        self._test_events = test_events
 
     def to_dict(self):
         """Returns the model properties as a dict"""
