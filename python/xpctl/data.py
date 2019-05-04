@@ -149,12 +149,12 @@ class ExperimentGroup(object):
         for reduction_dim_value, experiments in self.grouped_experiments.items():
             data[reduction_dim_value] = {}
             for experiment in experiments:
-                events = experiment.get_prop(event_type)
-                for event in events:
-                    if event.metric not in data[reduction_dim_value]:
-                        data[reduction_dim_value][event.metric] = [event.value]
+                results = experiment.get_prop(event_type)
+                for result in results:
+                    if result.metric not in data[reduction_dim_value]:
+                        data[reduction_dim_value][result.metric] = [result.value]
                     else:
-                        data[reduction_dim_value][event.metric].append(event.value)
+                        data[reduction_dim_value][result.metric].append(result.value)
         # for each reduction dim value, (say when sha1 = x), all data[x][metric] lists should have the same length.
         num_experiments = {}
         for reduction_dim_value in data:
@@ -165,8 +165,8 @@ class ExperimentGroup(object):
                 assert len(set(lengths)) == 1
             except AssertionError:
                 raise AssertionError('when reducing experiments over {}, for {}={}, the number of results are not the '
-                                     'same over all metrics'.format(self.reduction_dim, self.reduction_dim,
-                                                                    reduction_dim_value))
+                                    'same over all metrics'.format(self.reduction_dim, self.reduction_dim,
+                                                                   reduction_dim_value))
             num_experiments[reduction_dim_value] = lengths[0]
             
         aggregate_resultset = ExperimentAggregateSet(data=[])

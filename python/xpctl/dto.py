@@ -17,6 +17,8 @@ def dto_experiment_details(exp, task):
 
 
 def dto_get_results(agg_exps, task):
+    if type(agg_exps) == MongoError:
+        return Error(code=agg_exps.code, message=agg_exps.message)
     results = []
     for agg_exp in agg_exps:
         if type(agg_exp) == MongoError:

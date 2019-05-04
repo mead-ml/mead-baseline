@@ -43,14 +43,15 @@ class TestXpctlController(BaseTestCase):
 
         Find results by dataset and task
         """
-        query_string = [('task', 'task_example'),
-                        ('dataset', 'dataset_example'),
+        query_string = [('prop', 'prop_example'),
+                        ('value', 'value_example'),
+                        ('reduction_dim', 'reduction_dim_example'),
                         ('metric', 'metric_example'),
                         ('sort', 'sort_example'),
                         ('nconfig', 56),
                         ('event_type', 'event_type_example')]
         response = self.client.open(
-            '/v2/results',
+            '/v2/results/{task}'.format(task='task_example'),
             method='GET',
             query_string=query_string)
         self.assert200(response,

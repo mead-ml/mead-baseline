@@ -208,7 +208,10 @@ class MongoRepo(ExperimentRepo):
             if "label" in kwargs and kwargs["label"]:
                 query.update({"label": kwargs["label"]})
             if "username" in kwargs and kwargs["username"]:
-                query.update({"username": {"$in": list(kwargs["username"])}})
+                if type(kwargs["username"]) == list:
+                    query.update({"username": {"$in": kwargs["username"]}})
+                else:
+                    query.update({"username": kwargs["username"]})
             if "dataset" in kwargs:
                 query.update({"config.dataset": kwargs["dataset"]})
             if "sha1" in kwargs:
@@ -235,28 +238,32 @@ class MongoRepo(ExperimentRepo):
         query = {'_id': ObjectId(_id)}
         all_results = list(coll.find(query))
         if not all_results:
-            return MongoError(code=404, msg='no experiment with id [{}] for task [{}]'.format(_id, task))
+            return MongoError(code=404, message='no experiment with id [{}] for task [{}]'.format(_id, task))
         experiments = self.mongo_to_experiment_set(task, all_results, event_type=None, metrics=[])
         return experiments[0]
 
     @staticmethod
-    def aggregate_results(resultset, groupby_key, num_exps_per_reduction):
+    def aggregate_results(resultset, groupby_key, event_type, num_exps_per_reduction):
         grouped_result = resultset.groupby(groupby_key)
         aggregate_fns = {'min': np.min, 'max': np.max, 'avg': np.mean, 'std': np.std}
-        return grouped_result.reduce(aggregate_fns=aggregate_fns)
+        return grouped_result.reduce(aggregate_fns=aggregate_fns, event_type=event_type)
 
-    def get_results(self, task, dataset, metric, sort, nconfig, event_type='test_events', reduction_dim='sha1'):
+    def get_results(self, task, prop, value, metric, sort, nconfig, event_type, reduction_dim):
         metrics = listify(metric)
+        event_type = event_type if event_type is not None else 'test_events'
+        reduction_dim = reduction_dim if reduction_dim is not None else 'sha1'
         coll = self.db[task]
-        query = self._update_query({}, dataset=dataset)
+        d = {prop: value}
+        query = self._update_query({}, **d)
+        print(query)
         all_results = list(coll.find(query))
         if not all_results:
-            return MongoError(code=404, msg='no information available for dataset: [{}] in task datasbase [{}]'
-                              .format(task, dataset))
+            return MongoError(code=404, message='no information available for [{}]: [{}] in task datasbase [{}]'
+                              .format(prop, value, task))
         resultset = self.mongo_to_experiment_set(task, all_results, event_type=event_type, metrics=metrics)
         
         if resultset is not None:
-            agg_result = self.aggregate_results(resultset, reduction_dim, nconfig)
+            agg_result = self.aggregate_results(resultset, reduction_dim, event_type, nconfig)
             return agg_result
         return None
 

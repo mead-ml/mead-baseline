@@ -80,7 +80,7 @@ paths:
           schema:
             $ref: "#/definitions/Error" 
       x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
-  /results:
+  /results/{task}:
     get:
       tags:
       - "xpctl"
@@ -91,15 +91,24 @@ paths:
       - "application/json"
       parameters:
       - name: "task"
-        in: "query"
+        in: "path"
         description: "task name"
         required: true
         type: "string"
-      - name: "dataset"
+      - name: "prop"
         in: "query"
-        description: "dataset name"
+        description: "property of an experiment dataset, username, label etc"
         required: true
         type: "string"
+      - name: "value"
+        in: "query"
+        description: "value of the property. eg: prop=username&value=dpressel"
+        type: "string"
+        required: true
+      - name: "reduction_dim"
+        in: "query"
+        type: "string"
+        description: "which dimension to reduce on, default=sha1"
       - name: "metric"
         in: "query"
         type: "string"

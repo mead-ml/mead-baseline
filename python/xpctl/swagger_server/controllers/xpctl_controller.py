@@ -38,15 +38,19 @@ def find_by_label(label):  # noqa: E501
     return 'do some magic!'
 
 
-def get_results(task, dataset, metric=None, sort=None, nconfig=None, event_type=None):  # noqa: E501
+def get_results(task, prop, value, reduction_dim=None, metric=None, sort=None, nconfig=None, event_type=None):  # noqa: E501
     """Find results by dataset and task
 
     Returns a single experiment # noqa: E501
 
     :param task: task name
     :type task: str
-    :param dataset: dataset name
-    :type dataset: str
+    :param prop: property of an experiment dataset, username, label etc
+    :type prop: str
+    :param value: value of the property. eg: prop&#x3D;username&amp;value&#x3D;dpressel
+    :type value: str
+    :param reduction_dim: which dimension to reduce on, default&#x3D;sha1
+    :type reduction_dim: str
     :param metric: metric
     :type metric: str
     :param sort: metric to sort results on
@@ -59,7 +63,8 @@ def get_results(task, dataset, metric=None, sort=None, nconfig=None, event_type=
     :rtype: List[ExperimentAggregate]
     """
     backend = flask.globals.current_app.backend
-    return dto_get_results(backend.get_results(task, dataset, metric, sort, nconfig, event_type), task)
+    return dto_get_results(backend.get_results(task, prop, value, metric, sort, nconfig, event_type, reduction_dim),
+                           task)
 
 
 def put_result(experiment):  # noqa: E501

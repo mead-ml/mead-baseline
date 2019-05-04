@@ -101,7 +101,7 @@ class MongoResultSet(object):
 
 
 class MongoError(object):
-    def __init__(self, code, msg):
+    def __init__(self, code, message):
         super(MongoError, self).__init__()
         self.code = code
-        self.msg = msg
+        self.message = message
