@@ -44,7 +44,7 @@ class Experiment(object):
         'label': 'str',
         'version': 'str',
         'train_events': 'list[Result]',
-        'dev_events': 'list[Result]',
+        'valid_events': 'list[Result]',
         'test_events': 'list[Result]'
     }
 
@@ -60,11 +60,11 @@ class Experiment(object):
         'label': 'label',
         'version': 'version',
         'train_events': 'train_events',
-        'dev_events': 'dev_events',
+        'valid_events': 'valid_events',
         'test_events': 'test_events'
     }
 
-    def __init__(self, task=None, eid=None, sha1=None, config=None, dataset=None, username=None, hostname=None, exp_date=None, label=None, version=None, train_events=None, dev_events=None, test_events=None):  # noqa: E501
+    def __init__(self, task=None, eid=None, sha1=None, config=None, dataset=None, username=None, hostname=None, exp_date=None, label=None, version=None, train_events=None, valid_events=None, test_events=None):  # noqa: E501
         """Experiment - a model defined in Swagger"""  # noqa: E501
 
         self._task = None
@@ -78,7 +78,7 @@ class Experiment(object):
         self._label = None
         self._version = None
         self._train_events = None
-        self._dev_events = None
+        self._valid_events = None
         self._test_events = None
         self.discriminator = None
 
@@ -104,8 +104,8 @@ class Experiment(object):
             self.version = version
         if train_events is not None:
             self.train_events = train_events
-        if dev_events is not None:
-            self.dev_events = dev_events
+        if valid_events is not None:
+            self.valid_events = valid_events
         if test_events is not None:
             self.test_events = test_events
 
@@ -341,25 +341,25 @@ class Experiment(object):
         self._train_events = train_events
 
     @property
-    def dev_events(self):
-        """Gets the dev_events of this Experiment.  # noqa: E501
+    def valid_events(self):
+        """Gets the valid_events of this Experiment.  # noqa: E501
 
 
-        :return: The dev_events of this Experiment.  # noqa: E501
+        :return: The valid_events of this Experiment.  # noqa: E501
         :rtype: list[Result]
         """
-        return self._dev_events
+        return self._valid_events
 
-    @dev_events.setter
-    def dev_events(self, dev_events):
-        """Sets the dev_events of this Experiment.
+    @valid_events.setter
+    def valid_events(self, valid_events):
+        """Sets the valid_events of this Experiment.
 
 
-        :param dev_events: The dev_events of this Experiment.  # noqa: E501
+        :param valid_events: The valid_events of this Experiment.  # noqa: E501
         :type: list[Result]
         """
 
-        self._dev_events = dev_events
+        self._valid_events = valid_events
 
     @property
     def test_events(self):

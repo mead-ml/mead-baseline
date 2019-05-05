@@ -16,7 +16,7 @@ class ExperimentAggregate(Model):
     Do not edit the class manually.
     """
 
-    def __init__(self, task: str=None, eid: str=None, sha1: str=None, config: str=None, dataset: str=None, username: str=None, hostname: str=None, exp_date: date=None, label: str=None, version: str=None, num_exps: int=None, train_events: List[AggregateResult]=None, dev_events: List[AggregateResult]=None, test_events: List[AggregateResult]=None):  # noqa: E501
+    def __init__(self, task: str=None, eid: str=None, sha1: str=None, config: str=None, dataset: str=None, username: str=None, hostname: str=None, exp_date: date=None, label: str=None, version: str=None, num_exps: int=None, train_events: List[AggregateResult]=None, valid_events: List[AggregateResult]=None, test_events: List[AggregateResult]=None):  # noqa: E501
         """ExperimentAggregate - a model defined in Swagger
 
         :param task: The task of this ExperimentAggregate.  # noqa: E501
@@ -43,8 +43,8 @@ class ExperimentAggregate(Model):
         :type num_exps: int
         :param train_events: The train_events of this ExperimentAggregate.  # noqa: E501
         :type train_events: List[AggregateResult]
-        :param dev_events: The dev_events of this ExperimentAggregate.  # noqa: E501
-        :type dev_events: List[AggregateResult]
+        :param valid_events: The valid_events of this ExperimentAggregate.  # noqa: E501
+        :type valid_events: List[AggregateResult]
         :param test_events: The test_events of this ExperimentAggregate.  # noqa: E501
         :type test_events: List[AggregateResult]
         """
@@ -61,7 +61,7 @@ class ExperimentAggregate(Model):
             'version': str,
             'num_exps': int,
             'train_events': List[AggregateResult],
-            'dev_events': List[AggregateResult],
+            'valid_events': List[AggregateResult],
             'test_events': List[AggregateResult]
         }
 
@@ -78,7 +78,7 @@ class ExperimentAggregate(Model):
             'version': 'version',
             'num_exps': 'num_exps',
             'train_events': 'train_events',
-            'dev_events': 'dev_events',
+            'valid_events': 'valid_events',
             'test_events': 'test_events'
         }
 
@@ -94,7 +94,7 @@ class ExperimentAggregate(Model):
         self._version = version
         self._num_exps = num_exps
         self._train_events = train_events
-        self._dev_events = dev_events
+        self._valid_events = valid_events
         self._test_events = test_events
 
     @classmethod
@@ -361,25 +361,25 @@ class ExperimentAggregate(Model):
         self._train_events = train_events
 
     @property
-    def dev_events(self) -> List[AggregateResult]:
-        """Gets the dev_events of this ExperimentAggregate.
+    def valid_events(self) -> List[AggregateResult]:
+        """Gets the valid_events of this ExperimentAggregate.
 
 
-        :return: The dev_events of this ExperimentAggregate.
+        :return: The valid_events of this ExperimentAggregate.
         :rtype: List[AggregateResult]
         """
-        return self._dev_events
+        return self._valid_events
 
-    @dev_events.setter
-    def dev_events(self, dev_events: List[AggregateResult]):
-        """Sets the dev_events of this ExperimentAggregate.
+    @valid_events.setter
+    def valid_events(self, valid_events: List[AggregateResult]):
+        """Sets the valid_events of this ExperimentAggregate.
 
 
-        :param dev_events: The dev_events of this ExperimentAggregate.
-        :type dev_events: List[AggregateResult]
+        :param valid_events: The valid_events of this ExperimentAggregate.
+        :type valid_events: List[AggregateResult]
         """
 
-        self._dev_events = dev_events
+        self._valid_events = valid_events
 
     @property
     def test_events(self) -> List[AggregateResult]:

@@ -25,23 +25,27 @@ class TestXpctlController(BaseTestCase):
         self.assert200(response,
                        'Response body is : ' + response.data.decode('utf-8'))
 
-    def test_find_by_label(self):
-        """Test case for find_by_label
+    def test_get_results_by_dataset(self):
+        """Test case for get_results_by_dataset
 
-        Finds experiment by label
+        Find results by dataset and task
         """
-        query_string = [('label', 'label_example')]
+        query_string = [('reduction_dim', 'reduction_dim_example'),
+                        ('metric', 'metric_example'),
+                        ('sort', 'sort_example'),
+                        ('nconfig', 56),
+                        ('event_type', 'event_type_example')]
         response = self.client.open(
-            '/v2/findbylabel',
+            '/v2/results/{task}/{dataset}'.format(task='task_example', dataset='dataset_example'),
             method='GET',
             query_string=query_string)
         self.assert200(response,
                        'Response body is : ' + response.data.decode('utf-8'))
 
-    def test_get_results(self):
-        """Test case for get_results
+    def test_get_results_by_prop(self):
+        """Test case for get_results_by_prop
 
-        Find results by dataset and task
+        Find results by property and value
         """
         query_string = [('prop', 'prop_example'),
                         ('value', 'value_example'),
@@ -52,6 +56,40 @@ class TestXpctlController(BaseTestCase):
                         ('event_type', 'event_type_example')]
         response = self.client.open(
             '/v2/results/{task}'.format(task='task_example'),
+            method='GET',
+            query_string=query_string)
+        self.assert200(response,
+                       'Response body is : ' + response.data.decode('utf-8'))
+
+    def test_list_experiments_by_prop(self):
+        """Test case for list_experiments_by_prop
+
+        list all experiments for this property (sha1/ username) and value (1cd21df91770b4dbed64a683558b062e3dee61f0/ dpressel)
+        """
+        query_string = [('prop', 'prop_example'),
+                        ('value', 'value_example'),
+                        ('user', 'user_example'),
+                        ('metric', 'metric_example'),
+                        ('sort', 'sort_example'),
+                        ('event_type', 'event_type_example')]
+        response = self.client.open(
+            '/v2/details/{task}'.format(task='task_example'),
+            method='GET',
+            query_string=query_string)
+        self.assert200(response,
+                       'Response body is : ' + response.data.decode('utf-8'))
+
+    def test_list_experiments_by_sha1(self):
+        """Test case for list_experiments_by_sha1
+
+        list all experiments for this sha1
+        """
+        query_string = [('user', 'user_example'),
+                        ('metric', 'metric_example'),
+                        ('sort', 'sort_example'),
+                        ('event_type', 'event_type_example')]
+        response = self.client.open(
+            '/v2/details/{task}/{sha1}'.format(task='task_example', sha1='sha1_example'),
             method='GET',
             query_string=query_string)
         self.assert200(response,

@@ -71,6 +71,7 @@ class MongoResultSet(object):
         experiments = []
         for _id, resultset in grouped_results.items():
             first_result = resultset[0]
+            task = first_result.task
             _id = str(first_result._id)
             username = first_result.username
             hostname = first_result.hostname
@@ -81,6 +82,7 @@ class MongoResultSet(object):
             config = first_result.config
             version = first_result.version
             exp = Experiment(
+                             task=task,
                              _id=_id,
                              sha1=sha1,
                              config=config,
@@ -91,7 +93,7 @@ class MongoResultSet(object):
                              label=label,
                              version=version,
                              train_events=[],
-                             dev_events=[],
+                             valid_events=[],
                              test_events=[])
             for _result in resultset:
                 r = Result(metric=_result.metric, value=_result.value, epoch=_result.epoch)
@@ -100,8 +102,9 @@ class MongoResultSet(object):
         return ExperimentSet(experiments)
 
 
-class MongoError(object):
-    def __init__(self, code, message):
+class MongoError(Exception):
+    def __init__(self, message, code=550):
         super(MongoError, self).__init__()
-        self.code = code
         self.message = message
+        self.code = code
+

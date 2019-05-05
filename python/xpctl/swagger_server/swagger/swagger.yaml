@@ -49,24 +49,106 @@ paths:
           schema:
             $ref: "#/definitions/Error"
       x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
-  /findbylabel:
+  /details/{task}:
     get:
       tags:
       - "xpctl"
-      summary: "Finds experiment by label"
-      description: "Multiple label values can be provided with comma separated strings"
-      operationId: "find_by_label"
+      summary: "list all experiments for this property (sha1/ username) and value\
+        \ (1cd21df91770b4dbed64a683558b062e3dee61f0/ dpressel)"
+      description: "list all experiments for this property and value"
+      operationId: "list_experiments_by_prop"
       produces:
       - "application/json"
       parameters:
-      - name: "label"
-        in: "query"
-        description: "label values that need to be considered for filter"
+      - name: "task"
+        in: "path"
+        description: "task name"
         required: true
+        type: "string"
+      - name: "prop"
+        in: "query"
+        description: "property: username, dataset"
+        required: true
+        type: "string"
+      - name: "value"
+        in: "query"
+        description: "value: dpressel, SST2"
+        required: true
+        type: "string"
+      - name: "user"
+        in: "query"
+        required: false
         type: "array"
         items:
           type: "string"
-        collectionFormat: "multi"
+      - name: "metric"
+        in: "query"
+        required: false
+        type: "array"
+        items:
+          type: "string"
+      - name: "sort"
+        in: "query"
+        required: false
+        type: "string"
+      - name: "event_type"
+        in: "query"
+        required: false
+        type: "string"
+      responses:
+        200:
+          description: "successful operation"
+          schema:
+            type: "array"
+            items:
+              $ref: "#/definitions/Experiment"
+        400:
+          description: "Invalid status value"
+        default:
+          description: "unexpected error"
+          schema:
+            $ref: "#/definitions/Error"
+      x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
+  /details/{task}/{sha1}:
+    get:
+      tags:
+      - "xpctl"
+      summary: "list all experiments for this sha1"
+      description: "list all experiments for this sha1"
+      operationId: "list_experiments_by_sha1"
+      produces:
+      - "application/json"
+      parameters:
+      - name: "task"
+        in: "path"
+        description: "task name"
+        required: true
+        type: "string"
+      - name: "sha1"
+        in: "path"
+        description: "sha1"
+        required: true
+        type: "string"
+      - name: "user"
+        in: "query"
+        required: false
+        type: "array"
+        items:
+          type: "string"
+      - name: "metric"
+        in: "query"
+        required: false
+        type: "array"
+        items:
+          type: "string"
+      - name: "sort"
+        in: "query"
+        required: false
+        type: "string"
+      - name: "event_type"
+        in: "query"
+        required: false
+        type: "string"
       responses:
         200:
           description: "successful operation"
@@ -85,9 +167,9 @@ paths:
     get:
       tags:
       - "xpctl"
-      summary: "Find results by dataset and task"
-      description: "Returns a single experiment"
-      operationId: "get_results"
+      summary: "Find results by property and value"
+      description: "Find results by property and value"
+      operationId: "get_results_by_prop"
       produces:
       - "application/json"
       parameters:
@@ -115,7 +197,72 @@ paths:
         in: "query"
         description: "metric"
         required: false
+        type: "array"
+        items:
+          type: "string"
+      - name: "sort"
+        in: "query"
+        description: "metric to sort results on"
+        required: false
         type: "string"
+      - name: "nconfig"
+        in: "query"
+        description: "number of experiments to aggregate"
+        required: false
+        type: "integer"
+      - name: "event_type"
+        in: "query"
+        description: "train/dev/test"
+        required: false
+        type: "string"
+      responses:
+        200:
+          description: "successful operation"
+          schema:
+            type: "array"
+            items:
+              $ref: "#/definitions/ExperimentAggregate"
+        400:
+          description: "Invalid dataset"
+        404:
+          description: "Experiment not found"
+        default:
+          description: "unexpected error"
+          schema:
+            $ref: "#/definitions/Error"
+      x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
+  /results/{task}/{dataset}:
+    get:
+      tags:
+      - "xpctl"
+      summary: "Find results by dataset and task"
+      description: "Returns a single experiment"
+      operationId: "get_results_by_dataset"
+      produces:
+      - "application/json"
+      parameters:
+      - name: "task"
+        in: "path"
+        description: "task name"
+        required: true
+        type: "string"
+      - name: "dataset"
+        in: "path"
+        description: "dataset name"
+        required: true
+        type: "string"
+      - name: "reduction_dim"
+        in: "query"
+        description: "which dimension to reduce on, default=sha1"
+        required: false
+        type: "string"
+      - name: "metric"
+        in: "query"
+        description: "metric"
+        required: false
+        type: "array"
+        items:
+          type: "string"
       - name: "sort"
         in: "query"
         description: "metric to sort results on"
@@ -339,7 +486,7 @@ definitions:
         type: "array"
         items:
           $ref: "#/definitions/Result"
-      dev_events:
+      valid_events:
         type: "array"
         items:
           $ref: "#/definitions/Result"
@@ -359,15 +506,15 @@ definitions:
       label: "label"
       version: "1.4.1"
       sha1: "8ab6ab6ee8fdf14b111223e2edf48750c30c7e51"
-      dev_events:
-      - metric: "f1"
-        epoch: 1
-        value: 0.365897
-      - metric: "f1"
-        epoch: 1
-        value: 0.365897
       hostname: "somehost"
       task: "classify"
+      valid_events:
+      - metric: "f1"
+        epoch: 1
+        value: 0.365897
+      - metric: "f1"
+        epoch: 1
+        value: 0.365897
       exp_date: "2019-05-02T23:29:46.578675"
       config: "{dataset: sst2}"
       dataset: "SST2"
@@ -421,7 +568,7 @@ definitions:
         type: "array"
         items:
           $ref: "#/definitions/AggregateResult"
-      dev_events:
+      valid_events:
         type: "array"
         items:
           $ref: "#/definitions/AggregateResult"
@@ -444,17 +591,17 @@ definitions:
       label: "label"
       version: "1.4.1"
       sha1: "8ab6ab6ee8fdf14b111223e2edf48750c30c7e51"
-      dev_events:
-      - metric: "f1"
-        values:
-        - "{}"
-        - "{}"
-      - metric: "f1"
-        values:
-        - "{}"
-        - "{}"
       hostname: "somehost"
       task: "classify"
+      valid_events:
+      - metric: "f1"
+        values:
+        - "{}"
+        - "{}"
+      - metric: "f1"
+        values:
+        - "{}"
+        - "{}"
       exp_date: "2019-05-02T23:29:46.578675"
       config: "{dataset: sst2}"
       dataset: "SST2"

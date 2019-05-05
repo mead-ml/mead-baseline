@@ -32,11 +32,12 @@ class AggregateResult(object):
 
 class Experiment(object):
     """ an experiment"""
-    def __init__(self, train_events, dev_events, test_events, _id, username, hostname, config, exp_date, label, dataset,
+    def __init__(self, train_events, valid_events, test_events, task, _id, username, hostname, config, exp_date, label, dataset,
                  sha1, version):
         super(Experiment, self).__init__()
+        self.task = task
         self.train_events = train_events if train_events is not None else []
-        self.dev_events = dev_events if dev_events is not None else []
+        self.valid_events = valid_events if valid_events is not None else []
         self.test_events = test_events if test_events is not None else []
         self.eid = _id
         self.username = username
@@ -58,7 +59,7 @@ class Experiment(object):
         if event_type == TRAIN_EVENT:
             self.train_events.append(result)
         elif event_type == DEV_EVENT:
-            self.dev_events.append(result)
+            self.valid_events.append(result)
         elif event_type == TEST_EVENT:
             self.test_events.append(result)
         else:
@@ -94,13 +95,18 @@ class ExperimentSet(object):
     def groupby(self, key):
         """ group the data points by key"""
         data_groups = {}
+        if len(self.data) == 0:
+            raise RuntimeError('Trying to group empty experiment set')
+        task = self.data[0].get_prop('task')
         for datum in self.data:
+            if datum.get_prop('task') != task:
+                raise RuntimeError('Should not be grouping two experiments from different tasks')
             field = datum.get_prop(key)
             if field not in data_groups:
                 data_groups[field] = ExperimentSet([datum])
             else:
                 data_groups[field].add_data(datum)
-        return ExperimentGroup(data_groups, key)
+        return ExperimentGroup(data_groups, key, task)
     
     def sort(self, key, reverse=True):
         """
@@ -109,8 +115,11 @@ class ExperimentSet(object):
         :param reverse: reverse=True always except when key is avg_loss
         :return:
         """
-        test_results = [(index, x.get_prop[TEST_EVENT][0]) for index, x in enumerate(self.data)]
-        test_results.sort(key=lambda x: x[1].get_prop(key), reverse=reverse)
+        if key is None:
+            return self
+        test_results = [(index, [y for y in x.get_prop(TEST_EVENT) if y.metric == key][0]) for index, x in
+                        enumerate(self.data)]
+        test_results.sort(key=lambda x: x[1].value, reverse=reverse)
         final_results = []
         for index, _ in test_results:
             final_results.append(self.data[index])
@@ -119,10 +128,11 @@ class ExperimentSet(object):
 
 class ExperimentGroup(object):
     """ a group of resultset objects"""
-    def __init__(self, grouped_experiments, reduction_dim):
+    def __init__(self, grouped_experiments, reduction_dim, task):
         super(ExperimentGroup, self).__init__()
         self.grouped_experiments = grouped_experiments
         self.reduction_dim = reduction_dim
+        self.task = task
     
     def items(self):
         return self.grouped_experiments.items()
@@ -146,7 +156,9 @@ class ExperimentGroup(object):
     def reduce(self, aggregate_fns, event_type=TEST_EVENT):
         """ aggregate results across a result group"""
         data = {}
+        num_experiments = {}
         for reduction_dim_value, experiments in self.grouped_experiments.items():
+            num_experiments[reduction_dim_value] = len(experiments)
             data[reduction_dim_value] = {}
             for experiment in experiments:
                 results = experiment.get_prop(event_type)
@@ -156,7 +168,6 @@ class ExperimentGroup(object):
                     else:
                         data[reduction_dim_value][result.metric].append(result.value)
         # for each reduction dim value, (say when sha1 = x), all data[x][metric] lists should have the same length.
-        num_experiments = {}
         for reduction_dim_value in data:
             lengths = []
             for metric in data[reduction_dim_value]:
@@ -165,15 +176,14 @@ class ExperimentGroup(object):
                 assert len(set(lengths)) == 1
             except AssertionError:
                 raise AssertionError('when reducing experiments over {}, for {}={}, the number of results are not the '
-                                    'same over all metrics'.format(self.reduction_dim, self.reduction_dim,
-                                                                   reduction_dim_value))
-            num_experiments[reduction_dim_value] = lengths[0]
+                                     'same over all metrics'.format(self.reduction_dim, self.reduction_dim,
+                                                                    reduction_dim_value))
             
         aggregate_resultset = ExperimentAggregateSet(data=[])
         for reduction_dim_value in data:
             values = {}
             d = {self.reduction_dim: reduction_dim_value, 'num_exps': num_experiments[reduction_dim_value]}
-            agr = deepcopy(ExperimentAggregate(**d))
+            agr = deepcopy(ExperimentAggregate(task=self.task, **d))
             for metric in data[reduction_dim_value]:
                 for fn_name, fn in aggregate_fns.items():
                     agg_value = fn(data[reduction_dim_value][metric])
@@ -182,21 +192,15 @@ class ExperimentGroup(object):
             aggregate_resultset.add_data(agr)
         return aggregate_resultset
     
-    def trim(self, num_elements):
-        """for each group in the resultsets, trim to num_elements"""
-        keys = self.keys()
-        to_pop = list(keys)[num_elements:]
-        for key in to_pop:
-            self.grouped_experiments.pop(key)
-
 
 class ExperimentAggregate(object):
     """ a result data point"""
-    def __init__(self, train_events=[], dev_events=[], test_events=[], **kwargs):
+    def __init__(self, task, train_events=[], valid_events=[], test_events=[], **kwargs):
         super(ExperimentAggregate, self).__init__()
         self.train_events = train_events if train_events is not None else []
-        self.dev_events = dev_events if dev_events is not None else []
+        self.valid_events = valid_events if valid_events is not None else []
         self.test_events = test_events if test_events is not None else []
+        self.task = task
         self.num_exps = kwargs.get('num_exps')
         self.eid = kwargs.get('eid')
         self.username = kwargs.get('username')
@@ -212,7 +216,7 @@ class ExperimentAggregate(object):
         if event_type == TRAIN_EVENT:
             self.train_events.append(aggregate_result)
         elif event_type == DEV_EVENT:
-            self.dev_events.append(aggregate_result)
+            self.valid_events.append(aggregate_result)
         elif event_type == TEST_EVENT:
             self.test_events.append(aggregate_result)
         else:

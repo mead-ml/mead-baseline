@@ -15,6 +15,7 @@ import numpy as np
 
 __all__ = []
 exporter = export(__all__)
+METRICS_SORT_ASCENDING = ['avg_loss']
 
 
 @exporter
@@ -169,9 +170,8 @@ class MongoRepo(ExperimentRepo):
                 if not metrics_from_user:
                     metrics = list(metrics_from_db)
                 elif metrics_from_user - metrics_from_db:
-                    metrics = list(metrics_from_user.intersection(metrics_from_db))
-                    print('Metrics {} are not recorded in the database'.format(','.join(
-                        list(metrics_from_user - metrics_from_db))))
+                    return MongoError(message='Metrics [{}] not found in the [{}] database'.format(','.join(
+                        list(metrics_from_user - metrics_from_db)), task))
                 else:
                     metrics = list(metrics_from_user)
                 # for train_events we can have different metrics than test_events
@@ -193,6 +193,8 @@ class MongoRepo(ExperimentRepo):
                             epoch=record['tick'],
                             version=version
                         ))
+        if not data:
+            return MongoError(message='No results from the query')
         rs = MongoResultSet(data=data)
         return rs.experiments()
 
@@ -224,48 +226,66 @@ class MongoRepo(ExperimentRepo):
         projection.update({event_type: 1})
         return projection
 
-    def experiment_details(self, user, metric, sort, task, event_type, sha1, n):
-        metrics = listify(metric)
-        coll = self.db[task]
-        users = listify(user)
-        query = self._update_query({}, username=users, sha1=sha1)
-        projection = self._update_projection(event_type=event_type)
-        result_frame = self._generate_results(coll, metrics=metrics, query=query, projection=projection, event_type=event_type)
-        return df_experimental_details(result_frame, sha1, users, sort, metric, n)
+    def list_results(self, task, prop, value, user, metric, sort, event_type):
+        event_type = event_type if event_type is not None else 'test_events'
 
-    def single_experiment(self, task, _id):
+        metrics = listify(metric)
+        users = listify(user)
+        d = {'username': users, prop: value}
+
+        coll = self.db[task]
+        query = self._update_query({}, **d)
+        all_results = list(coll.find(query))
+
+        if not all_results:
+            return MongoError(message='no information available for [{}]: [{}] in task database [{}]'
+                              .format(prop, value, task))
+        experiments = self.mongo_to_experiment_set(task, all_results, event_type=event_type, metrics=metrics)
+        if type(experiments) == MongoError:
+            return experiments
+        if sort is None:
+            return experiments
+        else:
+            if event_type == 'test_events':
+                if sort in METRICS_SORT_ASCENDING:
+                    return experiments.sort(sort, reverse=False)
+                else:
+                    return experiments.sort(sort)
+            else:
+                return MongoError(message='experiments can only be sorted when event_type=test_results')
+
+    def experiment_details(self, task, _id):
         coll = self.db[task]
         query = {'_id': ObjectId(_id)}
         all_results = list(coll.find(query))
         if not all_results:
-            return MongoError(code=404, message='no experiment with id [{}] for task [{}]'.format(_id, task))
+            return MongoError(message='no experiment with id [{}] for task [{}]'.format(_id, task))
         experiments = self.mongo_to_experiment_set(task, all_results, event_type=None, metrics=[])
+        if type(experiments) == MongoError:
+            return experiments
         return experiments[0]
 
     @staticmethod
-    def aggregate_results(resultset, groupby_key, event_type, num_exps_per_reduction):
-        grouped_result = resultset.groupby(groupby_key)
+    def aggregate_results(resultset, reduction_dim, event_type, num_exps_per_reduction):
+        grouped_result = resultset.groupby(reduction_dim)
         aggregate_fns = {'min': np.min, 'max': np.max, 'avg': np.mean, 'std': np.std}
         return grouped_result.reduce(aggregate_fns=aggregate_fns, event_type=event_type)
 
-    def get_results(self, task, prop, value, metric, sort, nconfig, event_type, reduction_dim):
+    def get_results(self, task, prop, value, reduction_dim, metric, sort, nconfig, event_type):
         metrics = listify(metric)
         event_type = event_type if event_type is not None else 'test_events'
         reduction_dim = reduction_dim if reduction_dim is not None else 'sha1'
         coll = self.db[task]
         d = {prop: value}
         query = self._update_query({}, **d)
-        print(query)
         all_results = list(coll.find(query))
         if not all_results:
-            return MongoError(code=404, message='no information available for [{}]: [{}] in task datasbase [{}]'
+            return MongoError(message='no information available for [{}]: [{}] in task database [{}]'
                               .format(prop, value, task))
         resultset = self.mongo_to_experiment_set(task, all_results, event_type=event_type, metrics=metrics)
-        
-        if resultset is not None:
-            agg_result = self.aggregate_results(resultset, reduction_dim, event_type, nconfig)
-            return agg_result
-        return None
+        if type(resultset) is not MongoError:
+            return self.aggregate_results(resultset, reduction_dim, event_type, nconfig, )
+        return resultset
 
     def config2dict(self, task, sha1):
         coll = self.db[task]

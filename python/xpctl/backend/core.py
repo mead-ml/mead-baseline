@@ -195,7 +195,7 @@ class ExperimentRepo(object):
         """
         pass
 
-    def experiment_details(self, user, metric, sort, task, event_type, sha1, n):
+    def list_results(self, user, metric, sort, task, event_type, sha1, n):
         """Get results from the database
 
         :param user: (``str``) The username

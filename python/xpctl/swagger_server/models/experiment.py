@@ -16,7 +16,7 @@ class Experiment(Model):
     Do not edit the class manually.
     """
 
-    def __init__(self, task: str=None, eid: str=None, sha1: str=None, config: str=None, dataset: str=None, username: str=None, hostname: str=None, exp_date: date=None, label: str=None, version: str=None, train_events: List[Result]=None, dev_events: List[Result]=None, test_events: List[Result]=None):  # noqa: E501
+    def __init__(self, task: str=None, eid: str=None, sha1: str=None, config: str=None, dataset: str=None, username: str=None, hostname: str=None, exp_date: date=None, label: str=None, version: str=None, train_events: List[Result]=None, valid_events: List[Result]=None, test_events: List[Result]=None):  # noqa: E501
         """Experiment - a model defined in Swagger
 
         :param task: The task of this Experiment.  # noqa: E501
@@ -41,8 +41,8 @@ class Experiment(Model):
         :type version: str
         :param train_events: The train_events of this Experiment.  # noqa: E501
         :type train_events: List[Result]
-        :param dev_events: The dev_events of this Experiment.  # noqa: E501
-        :type dev_events: List[Result]
+        :param valid_events: The valid_events of this Experiment.  # noqa: E501
+        :type valid_events: List[Result]
         :param test_events: The test_events of this Experiment.  # noqa: E501
         :type test_events: List[Result]
         """
@@ -58,7 +58,7 @@ class Experiment(Model):
             'label': str,
             'version': str,
             'train_events': List[Result],
-            'dev_events': List[Result],
+            'valid_events': List[Result],
             'test_events': List[Result]
         }
 
@@ -74,7 +74,7 @@ class Experiment(Model):
             'label': 'label',
             'version': 'version',
             'train_events': 'train_events',
-            'dev_events': 'dev_events',
+            'valid_events': 'valid_events',
             'test_events': 'test_events'
         }
 
@@ -89,7 +89,7 @@ class Experiment(Model):
         self._label = label
         self._version = version
         self._train_events = train_events
-        self._dev_events = dev_events
+        self._valid_events = valid_events
         self._test_events = test_events
 
     @classmethod
@@ -335,25 +335,25 @@ class Experiment(Model):
         self._train_events = train_events
 
     @property
-    def dev_events(self) -> List[Result]:
-        """Gets the dev_events of this Experiment.
+    def valid_events(self) -> List[Result]:
+        """Gets the valid_events of this Experiment.
 
 
-        :return: The dev_events of this Experiment.
+        :return: The valid_events of this Experiment.
         :rtype: List[Result]
         """
-        return self._dev_events
+        return self._valid_events
 
-    @dev_events.setter
-    def dev_events(self, dev_events: List[Result]):
-        """Sets the dev_events of this Experiment.
+    @valid_events.setter
+    def valid_events(self, valid_events: List[Result]):
+        """Sets the valid_events of this Experiment.
 
 
-        :param dev_events: The dev_events of this Experiment.
-        :type dev_events: List[Result]
+        :param valid_events: The valid_events of this Experiment.
+        :type valid_events: List[Result]
         """
 
-        self._dev_events = dev_events
+        self._valid_events = valid_events
 
     @property
     def test_events(self) -> List[Result]:

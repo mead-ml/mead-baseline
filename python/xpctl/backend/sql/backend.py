@@ -245,7 +245,7 @@ class SQLRepo(ExperimentRepo):
             return df_get_results(result_frame, dataset, num_exps, num_exps_per_config, metric, sort)
         return None
 
-    def experiment_details(self, user, metric, sort, task, event_type, sha1, n):
+    def list_results(self, user, metric, sort, task, event_type, sha1, n):
         session = self.Session()
         results = []
         metrics = listify(metric)

@@ -45,7 +45,7 @@ class ExperimentAggregate(object):
         'version': 'str',
         'num_exps': 'int',
         'train_events': 'list[AggregateResult]',
-        'dev_events': 'list[AggregateResult]',
+        'valid_events': 'list[AggregateResult]',
         'test_events': 'list[AggregateResult]'
     }
 
@@ -62,11 +62,11 @@ class ExperimentAggregate(object):
         'version': 'version',
         'num_exps': 'num_exps',
         'train_events': 'train_events',
-        'dev_events': 'dev_events',
+        'valid_events': 'valid_events',
         'test_events': 'test_events'
     }
 
-    def __init__(self, task=None, eid=None, sha1=None, config=None, dataset=None, username=None, hostname=None, exp_date=None, label=None, version=None, num_exps=None, train_events=None, dev_events=None, test_events=None):  # noqa: E501
+    def __init__(self, task=None, eid=None, sha1=None, config=None, dataset=None, username=None, hostname=None, exp_date=None, label=None, version=None, num_exps=None, train_events=None, valid_events=None, test_events=None):  # noqa: E501
         """ExperimentAggregate - a model defined in Swagger"""  # noqa: E501
 
         self._task = None
@@ -81,7 +81,7 @@ class ExperimentAggregate(object):
         self._version = None
         self._num_exps = None
         self._train_events = None
-        self._dev_events = None
+        self._valid_events = None
         self._test_events = None
         self.discriminator = None
 
@@ -109,8 +109,8 @@ class ExperimentAggregate(object):
             self.num_exps = num_exps
         if train_events is not None:
             self.train_events = train_events
-        if dev_events is not None:
-            self.dev_events = dev_events
+        if valid_events is not None:
+            self.valid_events = valid_events
         if test_events is not None:
             self.test_events = test_events
 
@@ -367,25 +367,25 @@ class ExperimentAggregate(object):
         self._train_events = train_events
 
     @property
-    def dev_events(self):
-        """Gets the dev_events of this ExperimentAggregate.  # noqa: E501
+    def valid_events(self):
+        """Gets the valid_events of this ExperimentAggregate.  # noqa: E501
 
 
-        :return: The dev_events of this ExperimentAggregate.  # noqa: E501
+        :return: The valid_events of this ExperimentAggregate.  # noqa: E501
         :rtype: list[AggregateResult]
         """
-        return self._dev_events
+        return self._valid_events
 
-    @dev_events.setter
-    def dev_events(self, dev_events):
-        """Sets the dev_events of this ExperimentAggregate.
+    @valid_events.setter
+    def valid_events(self, valid_events):
+        """Sets the valid_events of this ExperimentAggregate.
 
 
-        :param dev_events: The dev_events of this ExperimentAggregate.  # noqa: E501
+        :param valid_events: The valid_events of this ExperimentAggregate.  # noqa: E501
         :type: list[AggregateResult]
         """
 
-        self._dev_events = dev_events
+        self._valid_events = valid_events
 
     @property
     def test_events(self):

@@ -211,7 +211,7 @@ def details(user, metric, sort, event_type, task, sha1, n, output):
         click.echo("we do not have results for the event type: {}".format(event_type))
         return
 
-    result_frame = RepoManager.get().experiment_details(user, metric, sort, task, event_type, sha1, n)
+    result_frame = RepoManager.get().list_results(user, metric, sort, task, event_type, sha1, n)
     if result_frame is not None:
         click.echo(result_frame)
     else:
