@@ -2,12 +2,16 @@ import json
 import pandas as pd
 from collections import OrderedDict
 import numpy as np
-from baseline.utils import listify
+from baseline.utils import listify, export
 #from xpctl.dto import MongoResultSet, MongoResult
 
-__all__ = ["log2json"]
+__all__ = []
+exporter = export(__all__)
+
+METRICS_SORT_ASCENDING = ['avg_loss', 'perplexity']
 
 
+@exporter
 def log2json(log_file):
     s = []
     with open(log_file) as f:

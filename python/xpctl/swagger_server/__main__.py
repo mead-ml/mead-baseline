@@ -23,7 +23,7 @@ def main():
     parser = argparse.ArgumentParser(description='NLU unit')
     parser.add_argument('--ll', help='Log level', type=str, default='INFO')
     parser.add_argument('--backend', help='back end', type=str, default='mongo')
-    parser.add_argument('--cred', help='credential for backend', default=os.path.expanduser('~/xpctlcred.json'))
+    parser.add_argument('--cred', help='credential for backend', default=os.path.expanduser('~/xpctlcred-localhost.json'))
     parser.add_argument('--port', help='port', default='5310')
     args = parser.parse_args()
     
@@ -31,6 +31,7 @@ def main():
     
     app = connexion.App(__name__, specification_dir='./swagger/')
     d = read_config_file(args.cred)
+    d.update({'dbtype': args.backend})
     app.app.backend = ExperimentRepo().create_repo(**d)
     app.app.json_encoder = encoder.JSONEncoder
     app.add_api('swagger.yaml', arguments={'title': 'xpctl'})

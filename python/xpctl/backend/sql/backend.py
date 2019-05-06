@@ -8,7 +8,7 @@ import getpass
 from baseline.utils import export, listify
 from mead.utils import hash_config
 from baseline.version import __version__
-from xpctl.helpers import df_get_results, df_experimental_details
+from backend.helpers import df_get_results, df_experimental_details
 
 __all__ = []
 exporter = export(__all__)
@@ -18,7 +18,7 @@ Base = declarative_base()
 import sqlalchemy as sql
 import sqlalchemy.orm as orm
 from xpctl.backend.core import ExperimentRepo, store_model
-from xpctl.helpers import get_experiment_label
+from backend.helpers import get_experiment_label
 
 EVENT_TYPES = {
     "train": "train_events", "Train": "train_events",

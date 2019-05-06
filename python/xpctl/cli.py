@@ -6,7 +6,7 @@ import getpass
 from click_shell import shell
 import click
 from xpctl.backend.core import ExperimentRepo
-from xpctl.helpers import *
+from backend.helpers import *
 from baseline.utils import read_json, read_config_file
 from xpctl.backend.core import EVENT_TYPES
 

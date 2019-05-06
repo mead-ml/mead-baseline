@@ -1,20 +1,24 @@
 from __future__ import print_function
 import os
+import shutil
 import pymongo
 import datetime
 import socket
 import getpass
-from baseline.utils import export, listify
-from mead.utils import hash_config
+from baseline.utils import export, listify, read_config_file, write_config_file, unzip_files
+from mead.utils import hash_config, configure_logger
 from xpctl.backend.core import ExperimentRepo, store_model, EVENT_TYPES
 from xpctl.backend.mongo.dto import MongoResult, MongoResultSet, MongoError, MongoTaskDatasetSummary, MongoTaskDatasetSummarySet
+from xpctl.backend.helpers import log2json, get_experiment_label, METRICS_SORT_ASCENDING
 from bson.objectid import ObjectId
 from baseline.version import __version__
 import numpy as np
+import json
+import logging
+
 
 __all__ = []
 exporter = export(__all__)
-METRICS_SORT_ASCENDING = ['avg_loss']
 
 
 @exporter
@@ -22,6 +26,7 @@ class MongoRepo(ExperimentRepo):
 
     def __init__(self, dbhost, dbport, user, passwd):
         super(MongoRepo, self).__init__()
+        self.logger = logging.getLogger('xpctl-mongo')
         self.dbhost = dbhost
         if user and passwd:
             uri = "mongodb://{}:{}@{}:{}/test".format(user, passwd, dbhost, dbport)
@@ -35,29 +40,40 @@ class MongoRepo(ExperimentRepo):
                                                                                                           passwd)
             raise Exception(s)
         try:
-            dbnames = client.database_names()
+            dbnames = client.list_database_names()
         except pymongo.errors.ServerSelectionTimeoutError:
             raise Exception("cannot get database from mongo at host: {}, port {}, connection timed out".format(dbhost,
                                                                                                                dbport))
 
         if "reporting_db" not in dbnames:
-            raise Exception("no database for results found")
+            self.logger.warning("Warning: database reporting_db does not exist, do not query before inserting results")
         self.db = client.reporting_db
 
+    @staticmethod
+    def get_checkpoint(checkpoint_base, checkpoint_store, config_sha1, hostname):
+        if checkpoint_base:
+            model_loc = store_model(checkpoint_base, config_sha1, checkpoint_store)
+            if model_loc is not None:
+                return "{}:{}".format(hostname, os.path.abspath(model_loc))
+            else:
+                raise RuntimeError("model could not be stored, see previous errors")
+
     def put_result(self, task, config_obj, events_obj, **kwargs):
-        now = datetime.datetime.utcnow().isoformat()
+        now = kwargs.get('date', datetime.datetime.utcnow().isoformat())
         train_events = list(filter(lambda x: x['phase'] == 'Train', events_obj))
         valid_events = list(filter(lambda x: x['phase'] == 'Valid', events_obj))
         test_events = list(filter(lambda x: x['phase'] == 'Test', events_obj))
 
         checkpoint_base = kwargs.get('checkpoint_base', None)
         checkpoint_store = kwargs.get('checkpoint_store', None)
-        print_fn = kwargs.get('print_fn', print)
+        print_fn = kwargs.get('print_fn', self.logger.warning)
         hostname = kwargs.get('hostname', socket.gethostname())
         username = kwargs.get('username', getpass.getuser())
         config_sha1 = hash_config(config_obj)
         label = get_experiment_label(config_obj, task, **kwargs)
-
+        checkpoint = kwargs.get('checkpoint', self.get_checkpoint(checkpoint_base, checkpoint_store, config_sha1,
+                                                                  hostname))
+        version = kwargs.get('version', __version__)
         post = {
             "config": config_obj,
             "train_events": train_events,
@@ -68,16 +84,10 @@ class MongoRepo(ExperimentRepo):
             "date": now,
             "label": label,
             "sha1": config_sha1,
-            "version": __version__
+            "version": version,
+            "checkpoint": checkpoint
         }
-
-        if checkpoint_base:
-            model_loc = store_model(checkpoint_base, config_sha1, checkpoint_store)
-            if model_loc is not None:
-                post.update({"checkpoint": "{}:{}".format(hostname, os.path.abspath(model_loc))})
-            else:
-                print_fn("model could not be stored, see previous errors")
-
+        
         if task in self.db.collection_names():
             print_fn("updating results for existing task [{}] in host [{}]".format(task, self.dbhost))
         else:
@@ -204,7 +214,10 @@ class MongoRepo(ExperimentRepo):
             return query
         else:
             if "id" in kwargs and kwargs["id"]:
-                query.update({"_id": ObjectId(kwargs["id"])})
+                if type(kwargs["id"]) == list:
+                    query.update({"_id": {"$in": [ObjectId(x) for x in kwargs["id"]]}})
+                else:
+                    query.update({"_id": ObjectId(kwargs["id"])})
                 return query
             if "label" in kwargs and kwargs["label"]:
                 query.update({"label": kwargs["label"]})
@@ -320,9 +333,9 @@ class MongoRepo(ExperimentRepo):
             p = self._update_projection(event_type)
             results = list(coll.find(q, p))
             experiment_set = self.mongo_to_experiment_set(task, results, event_type, metrics=[])
-            if type(experiment_set) == MongoError: # TODO: log instead
-                print('Error getting summary for task [{}], dataset [{}], stacktrace [{}]'.format(task, dataset,
-                                                                                                  experiment_set.message))
+            if type(experiment_set) == MongoError:
+                self.logger.error('Error getting summary for task [{}], dataset [{}], stacktrace [{}]'
+                                  .format(task, dataset, experiment_set.message))
                 continue
             store.append(MongoTaskDatasetSummary(task=task, dataset=dataset,
                                                  experiment_set=self.mongo_to_experiment_set(task, results, event_type,
@@ -335,20 +348,65 @@ class MongoRepo(ExperimentRepo):
             tasks.remove("system.indexes")
         return [self.task_summary(task) for task in tasks]
         
+    def dump(self, zip='xpctl-mongodump-{}'.format(datetime.datetime.now().isoformat()), task_eids={}):
+        """ dump reporting log and config for later consumption"""
+        events = ['train_events', 'valid_events', 'test_events']
+        tasks = self.get_task_names() if not task_eids.keys() else list(task_eids.keys())
+        if "system.indexes" in tasks:
+            tasks.remove("system.indexes")
 
-    # def leaderboard_summary(self, event_type, task=None, print_fn=print):
-    #     if task:
-    #         print_fn("Task: [{}]".format(task))
-    #         print_fn("-" * 93)
-    #         print_fn(self.get_info(task, event_type))
-    #     else:
-    #         tasks = self.db.collection_names()
-    #         if "system.indexes" in tasks:
-    #             tasks.remove("system.indexes")
-    #         print_fn("There are {} tasks: {}".format(len(tasks), tasks))
-    #         for task in tasks:
-    #             print_fn("-" * 93)
-    #             print_fn("Task: [{}]".format(task))
-    #             print_fn("-" * 93)
-    #             print_fn(self.get_info(task, event_type))
-
+        base_dir = '/tmp/xpctldump'
+        if os.path.exists(base_dir):
+            shutil.rmtree(base_dir)
+            
+        os.makedirs(base_dir, exist_ok=True)
+        
+        for task in tasks:
+            coll = self.db[task]
+            query = self._update_query({}, id=listify(task_eids.get(task, [])))
+            all_results = list(coll.find(query))
+            for result in all_results:
+                _id = str(result['_id'])
+                result.pop('_id')
+                _dir = os.path.join(base_dir, task, _id)
+                os.makedirs(_dir, exist_ok=True)
+                config = result['config']
+                result.pop('config')
+                write_config_file(config, os.path.join(_dir, '{}-config.yml'.format(_id)))
+                with open(os.path.join(_dir, '{}-reporting.log'.format(_id)), 'w') as f:
+                    for event in events:
+                        for item in result.get(event, []):
+                            f.write(json.dumps(item)+'\n')
+                        result.pop(event)
+                write_config_file(result, os.path.join(_dir, '{}-meta.yml'.format(_id)))
+                
+        return shutil.make_archive(base_name=zip, format='zip', root_dir='/tmp', base_dir='xpctldump')
+    
+    def restore(self, dump):
+        """ if dump is in zip format, will unzip it. expects the following dir structure in the unzipped file:
+        <root>
+         - <task>
+           - <id>-reporting.log
+           - <id>.yml
+        """
+        dump_dir = unzip_files(dump)
+        for task in os.listdir(dump_dir):
+            task_dir = os.path.join(dump_dir, task)
+            for exp in os.listdir(task_dir):
+                exp_dir = os.path.join(task_dir, exp)
+                meta = [os.path.join(exp_dir, x) for x in os.listdir(exp_dir) if x.endswith('meta.yml')]
+                reporting = [os.path.join(exp_dir, x) for x in os.listdir(exp_dir) if x.endswith('reporting.log')]
+                config = [os.path.join(exp_dir, x) for x in os.listdir(exp_dir) if x.endswith('config.yml')]
+                try:
+                    assert len(config) == 1
+                    assert len(reporting) == 1
+                    assert len(meta) == 1
+                    config = read_config_file(config[0])
+                    meta = read_config_file(meta[0])
+                    reporting = log2json(reporting[0])
+                except AssertionError:
+                    raise RuntimeError('There should be exactly one meta file, one config file and one reporting log '
+                                       'in {}'.format(exp_dir))
+                self.put_result(task, config_obj=config, events_obj=reporting, **meta)
+        if dump_dir != dump:
+            shutil.rmtree(dump_dir)

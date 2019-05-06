@@ -19,6 +19,7 @@ from functools import partial, update_wrapper, wraps
 import numpy as np
 import addons
 import collections
+import yaml
 
 __all__ = []
 logger = logging.getLogger('baseline')
@@ -497,6 +498,19 @@ def read_config_file(config_file):
 
 
 @exporter
+def write_config_file(content, filepath):
+    """Read a config file. This method optionally supports YAML, if the dependency was already installed.  O.W. JSON plz
+    :param data
+    :param filepath: (``str``) A path to a config file which should be a JSON file, or YAML if pyyaml is installed
+    :param filetype
+    :return: (``dict``) An object
+    """
+    if filepath.endswith('.yml') or filepath.endswith('.yaml'):
+        return write_yaml(content, filepath)
+    return write_json(content, filepath)
+
+
+@exporter
 def read_config_stream(config_stream):
     """Read a config stream.  This may be a path to a YAML or JSON file, or it may be a str containing JSON or the name
     of an env variable, or even a JSON object directly
@@ -536,6 +550,12 @@ def write_sentence_conll(handle, sentence, gold, txt, idx2label):
 def write_json(content, filepath):
     with open(filepath, "w") as f:
         json.dump(content, f, indent=True)
+
+
+@exporter
+def write_yaml(content, filepath):
+    with open(filepath, "w") as f:
+        yaml.dump(content, f, default_flow_style=False)
 
 
 @exporter
@@ -1297,7 +1317,7 @@ def unzip_files(zip_path):
             sha1 = hashlib.sha1(f.read()).hexdigest()
             temp_dir = os.path.join("/tmp/", sha1)
             if not os.path.exists(temp_dir):
-                logger.info("unzipping model")
+                logger.info("unzipping zip file")
                 with zipfile.ZipFile(zip_path, "r") as zip_ref:
                     zip_ref.extractall(temp_dir)
             if len(os.listdir(temp_dir)) == 1:  # a directory was zipped v files
