@@ -360,6 +360,38 @@ paths:
           schema:
             $ref: "#/definitions/Error"
       x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
+  /getmodelloc/{task}/{eid}:
+    get:
+      tags:
+      - "xpctl"
+      summary: "get model loc for experiment"
+      description: "get model loc for experiment"
+      operationId: "get_model_location"
+      produces:
+      - "application/json"
+      parameters:
+      - name: "task"
+        in: "path"
+        description: "task"
+        required: true
+        type: "string"
+      - name: "eid"
+        in: "path"
+        description: "experiment id"
+        required: true
+        type: "string"
+      responses:
+        200:
+          description: "successful operation"
+        400:
+          description: "Invalid ID supplied"
+        404:
+          description: "Experiment not found"
+        default:
+          description: "unexpected error"
+          schema:
+            $ref: "#/definitions/Error"
+      x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
   /summary/:
     get:
       tags:

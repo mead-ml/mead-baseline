@@ -1,6 +1,5 @@
 from __future__ import print_function
 import os
-#import pandas as pd
 import pymongo
 import datetime
 import socket
@@ -290,23 +289,23 @@ class MongoRepo(ExperimentRepo):
 
     def config2json(self, task, sha1):
         coll = self.db[task]
-        j = coll.find_one({"sha1": sha1}, {"config": 1})["config"]
+        j = coll.find_one({"sha1": sha1}, {"config": 1})
         if not j:
             return MongoError('no config [{}] in [{}] database'.format(sha1, task))
         else:
-            return j
+            return j["config"]
 
     def get_task_names(self):
         return self.db.collection_names()
 
-    def get_model_location(self, id, task):
+    def get_model_location(self, task, eid):
         coll = self.db[task]
-        query = {'_id': ObjectId(id)}
+        query = {'_id': ObjectId(eid)}
         projection = {'checkpoint': 1}
-        results = [x.get('checkpoint', None) for x in list(coll.find(query, projection))]
-        results = [x for x in results if x]
+        results = [x.get('checkpoint') for x in list(coll.find(query, projection))]
+        results = [x for x in results if x is not None]
         if not results:
-            return None
+            return MongoError(message='no model location for experiment id [{}] in [{}] database'.format(eid, task))
         return results[0]
 
     def task_summary(self, task):
@@ -321,7 +320,7 @@ class MongoRepo(ExperimentRepo):
             p = self._update_projection(event_type)
             results = list(coll.find(q, p))
             experiment_set = self.mongo_to_experiment_set(task, results, event_type, metrics=[])
-            if type(experiment_set) == MongoError: #TODO: log instead
+            if type(experiment_set) == MongoError: # TODO: log instead
                 print('Error getting summary for task [{}], dataset [{}], stacktrace [{}]'.format(task, dataset,
                                                                                                   experiment_set.message))
                 continue
@@ -337,19 +336,19 @@ class MongoRepo(ExperimentRepo):
         return [self.task_summary(task) for task in tasks]
         
 
-    def leaderboard_summary(self, event_type, task=None, print_fn=print):
-        if task:
-            print_fn("Task: [{}]".format(task))
-            print_fn("-" * 93)
-            print_fn(self.get_info(task, event_type))
-        else:
-            tasks = self.db.collection_names()
-            if "system.indexes" in tasks:
-                tasks.remove("system.indexes")
-            print_fn("There are {} tasks: {}".format(len(tasks), tasks))
-            for task in tasks:
-                print_fn("-" * 93)
-                print_fn("Task: [{}]".format(task))
-                print_fn("-" * 93)
-                print_fn(self.get_info(task, event_type))
+    # def leaderboard_summary(self, event_type, task=None, print_fn=print):
+    #     if task:
+    #         print_fn("Task: [{}]".format(task))
+    #         print_fn("-" * 93)
+    #         print_fn(self.get_info(task, event_type))
+    #     else:
+    #         tasks = self.db.collection_names()
+    #         if "system.indexes" in tasks:
+    #             tasks.remove("system.indexes")
+    #         print_fn("There are {} tasks: {}".format(len(tasks), tasks))
+    #         for task in tasks:
+    #             print_fn("-" * 93)
+    #             print_fn("Task: [{}]".format(task))
+    #             print_fn("-" * 93)
+    #             print_fn(self.get_info(task, event_type))
 

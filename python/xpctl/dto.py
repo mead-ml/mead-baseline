@@ -53,8 +53,24 @@ def dto_list_results(exps):
 
 
 def dto_task_summary(task_summary):
+    if type(task_summary) == MongoError:
+        return Error(code=task_summary.code, message=task_summary.message)
     return TaskSummary(**task_summary.__dict__)
 
 
 def dto_summary(task_summaries):
+    if type(task_summaries) == MongoError:
+        return Error(code=task_summaries.code, message=task_summaries.message)
     return [TaskSummary(**task_summary.__dict__) for task_summary in task_summaries]
+
+
+def dto_config2json(config):
+    if type(config) == MongoError:
+        return Error(code=config.code, message=config.message)
+    return config
+
+
+def dto_get_model_location(location):
+    if type(location) == MongoError:
+        return Error(code=location.code, message=location.message)
+    return location

@@ -18,7 +18,7 @@ def config2json(task, sha1):  # noqa: E501
     :rtype: Experiment
     """
     backend = flask.globals.current_app.backend
-    return backend.config2json(task, sha1)
+    return dto_config2json(backend.config2json(task, sha1))
 
 
 def experiment_details(task, eid):  # noqa: E501
@@ -35,6 +35,21 @@ def experiment_details(task, eid):  # noqa: E501
     """
     backend = flask.globals.current_app.backend
     return dto_experiment_details(backend.get_experiment_details(task, eid))
+
+
+def get_model_location(task, eid):  # noqa: E501
+    """get model loc for experiment
+
+    get model loc for experiment # noqa: E501
+
+    :param task: task
+    :type task: str
+    :param eid: experiment_id
+    :type eid: sha1
+    :rtype: None
+    """
+    backend = flask.globals.current_app.backend
+    return dto_get_model_location(backend.get_model_location(task, eid))
 
 
 def get_results_by_dataset(task, dataset, reduction_dim=None, metric=None, sort=None, numexp_reduction_dim=None, event_type=None):  # noqa: E501
@@ -104,20 +119,19 @@ def list_experiments_by_prop(task, prop, value, user=None, metric=None, sort=Non
     :type prop: str
     :param value: value: dpressel, SST2
     :type value: str
-    :param user: 
+    :param user:
     :type user: List[str]
-    :param metric: 
+    :param metric:
     :type metric: List[str]
-    :param sort: 
+    :param sort:
     :type sort: str
-    :param event_type: 
+    :param event_type:
     :type event_type: str
 
     :rtype: List[Experiment]
     """
     backend = flask.globals.current_app.backend
     return dto_list_results(backend.list_results(task, prop, value, user, metric, sort, event_type))
-
 
 
 def list_experiments_by_sha1(task, sha1, user=None, metric=None, sort=None, event_type=None):  # noqa: E501
@@ -129,20 +143,19 @@ def list_experiments_by_sha1(task, sha1, user=None, metric=None, sort=None, even
     :type task: str
     :param sha1: sha1
     :type sha1: str
-    :param user: 
+    :param user:
     :type user: List[str]
-    :param metric: 
+    :param metric:
     :type metric: List[str]
-    :param sort: 
+    :param sort:
     :type sort: str
-    :param event_type: 
+    :param event_type:
     :type event_type: str
 
     :rtype: List[Experiment]
     """
     backend = flask.globals.current_app.backend
     return dto_list_results(backend.list_results(task, 'sha1', sha1, user, metric, sort, event_type))
-
 
 
 def put_result(experiment):  # noqa: E501

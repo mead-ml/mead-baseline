@@ -37,6 +37,17 @@ class TestXpctlController(BaseTestCase):
         self.assert200(response,
                        'Response body is : ' + response.data.decode('utf-8'))
 
+    def test_get_model_location(self):
+        """Test case for get_model_location
+
+        get model loc for experiment
+        """
+        response = self.client.open(
+            '/v2/getmodelloc/{task}/{eid}'.format(task='task_example', eid='eid_example'),
+            method='GET')
+        self.assert200(response,
+                       'Response body is : ' + response.data.decode('utf-8'))
+
     def test_get_results_by_dataset(self):
         """Test case for get_results_by_dataset
 
