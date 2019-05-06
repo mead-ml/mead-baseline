@@ -205,9 +205,9 @@ paths:
         description: "metric to sort results on"
         required: false
         type: "string"
-      - name: "nconfig"
+      - name: "numexp_reduction_dim"
         in: "query"
-        description: "number of experiments to aggregate"
+        description: "max number of experiments in an aggregate group"
         required: false
         type: "integer"
       - name: "event_type"
@@ -268,9 +268,9 @@ paths:
         description: "metric to sort results on"
         required: false
         type: "string"
-      - name: "nconfig"
+      - name: "numexp_reduction_dim"
         in: "query"
-        description: "number of experiments to aggregate"
+        description: "max number of experiments in an aggregate group"
         required: false
         type: "integer"
       - name: "event_type"
@@ -317,6 +317,38 @@ paths:
       responses:
         200:
           description: "successful operation"
+        400:
+          description: "Invalid ID supplied"
+        404:
+          description: "Experiment not found"
+        default:
+          description: "unexpected error"
+          schema:
+            $ref: "#/definitions/Error"
+      x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
+  /config2json/{task}/{sha1}:
+    get:
+      tags:
+      - "xpctl"
+      summary: "get config for sha1"
+      description: "config for sha1"
+      operationId: "config2json"
+      produces:
+      - "application/json"
+      parameters:
+      - name: "task"
+        in: "path"
+        description: "task"
+        required: true
+        type: "string"
+      - name: "sha1"
+        in: "path"
+        description: "sha1"
+        required: true
+        type: "string"
+      responses:
+        200:
+          description: "successful operation"
           schema:
             $ref: "#/definitions/Experiment"
         400:
@@ -328,67 +360,56 @@ paths:
           schema:
             $ref: "#/definitions/Error"
       x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
-    post:
+  /summary/:
+    get:
       tags:
       - "xpctl"
-      summary: "Updates an experiment in the database with form data"
-      description: ""
-      operationId: "update_label"
-      consumes:
-      - "application/x-www-form-urlencoded"
+      summary: "get summary for task"
+      description: "summary for task"
+      operationId: "summary"
       produces:
       - "application/json"
-      parameters:
-      - name: "task"
-        in: "path"
-        description: "task name"
-        required: true
-        type: "string"
-      - name: "eid"
-        in: "path"
-        description: "ID of experiment that needs to be updated"
-        required: true
-        type: "string"
-        format: "int64"
-      - name: "label"
-        in: "formData"
-        description: "Updated label of the experiment"
-        required: false
-        type: "string"
+      parameters: []
       responses:
         200:
-          description: "success"
+          description: "successful operation"
+          schema:
+            type: "array"
+            items:
+              $ref: "#/definitions/TaskSummary"
+        400:
+          description: "Invalid ID supplied"
+        404:
+          description: "Experiment not found"
         default:
           description: "unexpected error"
           schema:
             $ref: "#/definitions/Error"
       x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
-    delete:
+  /summary/{task}/:
+    get:
       tags:
       - "xpctl"
-      summary: "Deletes an experiment"
-      description: ""
-      operationId: "remove_experiment"
+      summary: "get summary for task"
+      description: "summary for task"
+      operationId: "task_summary"
       produces:
       - "application/json"
       parameters:
       - name: "task"
         in: "path"
-        description: "task name"
-        required: true
-        type: "string"
-      - name: "eid"
-        in: "path"
-        description: "experiment id to delete"
+        description: "task"
         required: true
         type: "string"
       responses:
         200:
-          description: "success"
+          description: "successful operation"
+          schema:
+            $ref: "#/definitions/TaskSummary"
         400:
           description: "Invalid ID supplied"
         404:
-          description: "experiment not found"
+          description: "Experiment not found"
         default:
           description: "unexpected error"
           schema:
@@ -615,7 +636,22 @@ definitions:
         - "{}"
         - "{}"
       username: "someone"
+  TaskSummary:
+    type: "object"
+    required:
+    - "summary"
+    - "task"
+    properties:
+      task:
+        type: "string"
+      summary:
+        type: "object"
+        properties: {}
+    example:
+      summary: "{}"
+      task: "task"
   Error:
+    type: "object"
     required:
     - "code"
     - "message"

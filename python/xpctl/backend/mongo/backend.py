@@ -8,7 +8,7 @@ import getpass
 from baseline.utils import export, listify
 from mead.utils import hash_config
 from xpctl.backend.core import ExperimentRepo, store_model, EVENT_TYPES
-from xpctl.backend.mongo.dto import MongoResult, MongoResultSet, MongoError
+from xpctl.backend.mongo.dto import MongoResult, MongoResultSet, MongoError, MongoTaskDatasetSummary, MongoTaskDatasetSummarySet
 from bson.objectid import ObjectId
 from baseline.version import __version__
 import numpy as np
@@ -155,9 +155,9 @@ class MongoRepo(ExperimentRepo):
         for result in all_results:  # different experiments
             task = task
             _id = result['_id']
-            username = result['username']
-            hostname = result['hostname']
-            label = result['label']
+            username = result.get('username', 'root')
+            hostname = result.get('hostname', 'localhost')
+            label = result.get('label', 'default_label')
             dataset = result['config']['dataset']
             date = result['date']
             sha1 = result['sha1']
@@ -254,7 +254,7 @@ class MongoRepo(ExperimentRepo):
             else:
                 return MongoError(message='experiments can only be sorted when event_type=test_results')
 
-    def experiment_details(self, task, _id):
+    def get_experiment_details(self, task, _id):
         coll = self.db[task]
         query = {'_id': ObjectId(_id)}
         all_results = list(coll.find(query))
@@ -267,11 +267,12 @@ class MongoRepo(ExperimentRepo):
 
     @staticmethod
     def aggregate_results(resultset, reduction_dim, event_type, num_exps_per_reduction):
+        # TODO: implement a trim method for ExperimentGroup
         grouped_result = resultset.groupby(reduction_dim)
         aggregate_fns = {'min': np.min, 'max': np.max, 'avg': np.mean, 'std': np.std}
         return grouped_result.reduce(aggregate_fns=aggregate_fns, event_type=event_type)
 
-    def get_results(self, task, prop, value, reduction_dim, metric, sort, nconfig, event_type):
+    def get_results(self, task, prop, value, reduction_dim, metric, sort, numexp_reduction_dim, event_type):
         metrics = listify(metric)
         event_type = event_type if event_type is not None else 'test_events'
         reduction_dim = reduction_dim if reduction_dim is not None else 'sha1'
@@ -284,14 +285,14 @@ class MongoRepo(ExperimentRepo):
                               .format(prop, value, task))
         resultset = self.mongo_to_experiment_set(task, all_results, event_type=event_type, metrics=metrics)
         if type(resultset) is not MongoError:
-            return self.aggregate_results(resultset, reduction_dim, event_type, nconfig, )
+            return self.aggregate_results(resultset, reduction_dim, event_type, numexp_reduction_dim)
         return resultset
 
-    def config2dict(self, task, sha1):
+    def config2json(self, task, sha1):
         coll = self.db[task]
         j = coll.find_one({"sha1": sha1}, {"config": 1})["config"]
         if not j:
-            return None
+            return MongoError('no config [{}] in [{}] database'.format(sha1, task))
         else:
             return j
 
@@ -308,7 +309,8 @@ class MongoRepo(ExperimentRepo):
             return None
         return results[0]
 
-    def get_info(self, task, event_type):
+    def task_summary(self, task):
+        event_type = 'test_events'
         coll = self.db[task]
         q = {}
         p = {'config.dataset': 1}
@@ -318,12 +320,22 @@ class MongoRepo(ExperimentRepo):
             q = self._update_query({}, dataset=dataset)
             p = self._update_projection(event_type)
             results = list(coll.find(q, p))
-            for result in results:  # different experiments
-                store.append([result['username'], result['config']['dataset'], task])
-
-        df = pd.DataFrame(store, columns=['user', 'dataset', 'task'])
-        return df.groupby(['user', 'dataset']).agg([len]) \
-            .rename(columns={"len": 'num_exps'})
+            experiment_set = self.mongo_to_experiment_set(task, results, event_type, metrics=[])
+            if type(experiment_set) == MongoError: #TODO: log instead
+                print('Error getting summary for task [{}], dataset [{}], stacktrace [{}]'.format(task, dataset,
+                                                                                                  experiment_set.message))
+                continue
+            store.append(MongoTaskDatasetSummary(task=task, dataset=dataset,
+                                                 experiment_set=self.mongo_to_experiment_set(task, results, event_type,
+                                                                                             metrics=[])))
+        return MongoTaskDatasetSummarySet(task=task, data=store).groupby()
+    
+    def summary(self):
+        tasks = self.get_task_names()
+        if "system.indexes" in tasks:
+            tasks.remove("system.indexes")
+        return [self.task_summary(task) for task in tasks]
+        
 
     def leaderboard_summary(self, event_type, task=None, print_fn=print):
         if task:

@@ -1,9 +1,24 @@
 import connexion
-import six
 
 from swagger_server.models.experiment import Experiment  # noqa: E501
 import flask
 from xpctl.dto import *
+
+
+def config2json(task, sha1):  # noqa: E501
+    """get config for sha1
+
+    config for sha1 # noqa: E501
+
+    :param task: task
+    :type task: str
+    :param sha1: sha1
+    :type sha1: str
+
+    :rtype: Experiment
+    """
+    backend = flask.globals.current_app.backend
+    return backend.config2json(task, sha1)
 
 
 def experiment_details(task, eid):  # noqa: E501
@@ -16,13 +31,13 @@ def experiment_details(task, eid):  # noqa: E501
     :param eid: ID of experiment to return
     :type eid: str
 
-    :rtype: Experiment
+    :rtype: None
     """
     backend = flask.globals.current_app.backend
     return dto_experiment_details(backend.get_experiment_details(task, eid))
 
 
-def get_results_by_dataset(task, dataset, reduction_dim=None, metric=None, sort=None, nconfig=None, event_type=None):  # noqa: E501
+def get_results_by_dataset(task, dataset, reduction_dim=None, metric=None, sort=None, numexp_reduction_dim=None, event_type=None):  # noqa: E501
     """Find results by dataset and task
 
     Returns a single experiment # noqa: E501
@@ -37,19 +52,19 @@ def get_results_by_dataset(task, dataset, reduction_dim=None, metric=None, sort=
     :type metric: List[str]
     :param sort: metric to sort results on
     :type sort: str
-    :param nconfig: number of experiments to aggregate
-    :type nconfig: int
+    :param numexp_reduction_dim: max number of experiments in an aggregate group
+    :type numexp_reduction_dim: int
     :param event_type: train/dev/test
     :type event_type: str
 
     :rtype: List[ExperimentAggregate]
     """
     backend = flask.globals.current_app.backend
-    return dto_get_results(backend.get_results(task, 'dataset', dataset, reduction_dim, metric, sort, nconfig,
-                                               event_type))
+    return dto_get_results(backend.get_results(task, 'dataset', dataset, reduction_dim, metric, sort,
+                                               numexp_reduction_dim, event_type))
 
 
-def get_results_by_prop(task, prop, value, reduction_dim=None, metric=None, sort=None, nconfig=None, event_type=None):  # noqa: E501
+def get_results_by_prop(task, prop, value, reduction_dim=None, metric=None, sort=None, numexp_reduction_dim=None, event_type=None):  # noqa: E501
     """Find results by property and value
 
     Find results by property and value # noqa: E501
@@ -66,15 +81,16 @@ def get_results_by_prop(task, prop, value, reduction_dim=None, metric=None, sort
     :type metric: List[str]
     :param sort: metric to sort results on
     :type sort: str
-    :param nconfig: number of experiments to aggregate
-    :type nconfig: int
+    :param numexp_reduction_dim: max number of experiments in an aggregate group
+    :type numexp_reduction_dim: int
     :param event_type: train/dev/test
     :type event_type: str
 
     :rtype: List[ExperimentAggregate]
     """
     backend = flask.globals.current_app.backend
-    return dto_get_results(backend.get_results(task, prop, value, reduction_dim, metric, sort, nconfig, event_type))
+    return dto_get_results(backend.get_results(task, prop, value, reduction_dim, metric, sort,
+                                               numexp_reduction_dim, event_type))
 
 
 def list_experiments_by_prop(task, prop, value, user=None, metric=None, sort=None, event_type=None):  # noqa: E501
@@ -103,6 +119,7 @@ def list_experiments_by_prop(task, prop, value, user=None, metric=None, sort=Non
     return dto_list_results(backend.list_results(task, prop, value, user, metric, sort, event_type))
 
 
+
 def list_experiments_by_sha1(task, sha1, user=None, metric=None, sort=None, event_type=None):  # noqa: E501
     """list all experiments for this sha1
 
@@ -127,6 +144,7 @@ def list_experiments_by_sha1(task, sha1, user=None, metric=None, sort=None, even
     return dto_list_results(backend.list_results(task, 'sha1', sha1, user, metric, sort, event_type))
 
 
+
 def put_result(experiment):  # noqa: E501
     """Add a new experiment in database
 
@@ -142,33 +160,27 @@ def put_result(experiment):  # noqa: E501
     return 'do some magic!'
 
 
-def remove_experiment(task, eid):  # noqa: E501
-    """Deletes an experiment
+def summary():  # noqa: E501
+    """get summary for all tasks
 
-     # noqa: E501
+    summary for task # noqa: E501
 
-    :param task: task name
-    :type task: str
-    :param eid: experiment id to delete
-    :type eid: str
 
-    :rtype: None
+    :rtype: List[TaskSummary]
     """
-    return 'do some magic!'
+    backend = flask.globals.current_app.backend
+    return dto_summary(backend.summary())
 
 
-def update_label(task, eid, label=None):  # noqa: E501
-    """Updates an experiment in the database with form data
+def task_summary(task):  # noqa: E501
+    """get summary for task
 
-     # noqa: E501
+    summary for task # noqa: E501
 
-    :param task: task name
+    :param task: task
     :type task: str
-    :param eid: ID of experiment that needs to be updated
-    :type eid: str
-    :param label: Updated label of the experiment
-    :type label: str
 
-    :rtype: None
+    :rtype: TaskSummary
     """
-    return 'do some magic!'
+    backend = flask.globals.current_app.backend
+    return dto_task_summary(backend.task_summary(task))

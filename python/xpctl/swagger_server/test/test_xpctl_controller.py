@@ -8,11 +8,23 @@ from six import BytesIO
 from swagger_server.models.error import Error  # noqa: E501
 from swagger_server.models.experiment import Experiment  # noqa: E501
 from swagger_server.models.experiment_aggregate import ExperimentAggregate  # noqa: E501
+from swagger_server.models.task_summary import TaskSummary  # noqa: E501
 from swagger_server.test import BaseTestCase
 
 
 class TestXpctlController(BaseTestCase):
     """XpctlController integration test stubs"""
+
+    def test_config2json(self):
+        """Test case for config2json
+
+        get config for sha1
+        """
+        response = self.client.open(
+            '/v2/config2json/{task}/{sha1}'.format(task='task_example', sha1='sha1_example'),
+            method='GET')
+        self.assert200(response,
+                       'Response body is : ' + response.data.decode('utf-8'))
 
     def test_experiment_details(self):
         """Test case for experiment_details
@@ -33,7 +45,7 @@ class TestXpctlController(BaseTestCase):
         query_string = [('reduction_dim', 'reduction_dim_example'),
                         ('metric', 'metric_example'),
                         ('sort', 'sort_example'),
-                        ('nconfig', 56),
+                        ('numexp_reduction_dim', 56),
                         ('event_type', 'event_type_example')]
         response = self.client.open(
             '/v2/results/{task}/{dataset}'.format(task='task_example', dataset='dataset_example'),
@@ -52,7 +64,7 @@ class TestXpctlController(BaseTestCase):
                         ('reduction_dim', 'reduction_dim_example'),
                         ('metric', 'metric_example'),
                         ('sort', 'sort_example'),
-                        ('nconfig', 56),
+                        ('numexp_reduction_dim', 56),
                         ('event_type', 'event_type_example')]
         response = self.client.open(
             '/v2/results/{task}'.format(task='task_example'),
@@ -109,28 +121,25 @@ class TestXpctlController(BaseTestCase):
         self.assert200(response,
                        'Response body is : ' + response.data.decode('utf-8'))
 
-    def test_remove_experiment(self):
-        """Test case for remove_experiment
+    def test_summary(self):
+        """Test case for summary
 
-        Deletes an experiment
+        get summary for task
         """
         response = self.client.open(
-            '/v2/{task}/{eid}'.format(task='task_example', eid='eid_example'),
-            method='DELETE')
+            '/v2/summary/',
+            method='GET')
         self.assert200(response,
                        'Response body is : ' + response.data.decode('utf-8'))
 
-    def test_update_label(self):
-        """Test case for update_label
+    def test_task_summary(self):
+        """Test case for task_summary
 
-        Updates an experiment in the database with form data
+        get summary for task
         """
-        data = dict(label='label_example')
         response = self.client.open(
-            '/v2/{task}/{eid}'.format(task='task_example', eid='eid_example'),
-            method='POST',
-            data=data,
-            content_type='application/x-www-form-urlencoded')
+            '/v2/summary/{task}/'.format(task='task_example'),
+            method='GET')
         self.assert200(response,
                        'Response body is : ' + response.data.decode('utf-8'))
 

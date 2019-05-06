@@ -1,4 +1,5 @@
-from swagger_server.models import Experiment, ExperimentAggregate, Result, Error, AggregateResult
+from swagger_server.models import Experiment, ExperimentAggregate, Result, Error, AggregateResult, TaskSummary
+from xpctl.data import TaskSummary as TTaskSummary
 from xpctl.backend.mongo.dto import MongoError
 
 
@@ -49,3 +50,11 @@ def dto_list_results(exps):
         d.update({'test_events': test_events})
         results.append(Experiment(**d))
     return results
+
+
+def dto_task_summary(task_summary):
+    return TaskSummary(**task_summary.__dict__)
+
+
+def dto_summary(task_summaries):
+    return [TaskSummary(**task_summary.__dict__) for task_summary in task_summaries]

@@ -1,4 +1,5 @@
 from copy import deepcopy
+import numpy as np
 
 TRAIN_EVENT = 'train_events'
 DEV_EVENT = 'valid_events'
@@ -249,3 +250,40 @@ class ExperimentAggregateSet(object):
     
     def __len__(self):
         return self.length
+
+
+class TaskDatasetSummary(object):
+    """ How many users experimented with this dataset in the given task?"""
+    def __init__(self, task, dataset, experiment_set):
+        super(TaskDatasetSummary, self).__init__()
+        self.task = task
+        self.dataset = dataset
+        exp_groups = experiment_set.groupby('username')
+        self.user_num_exps = {username: len(exp_group)for username, exp_group in exp_groups}
+
+
+class TaskDatasetSummarySet(object):
+    """ a list of TaskDatasetSummary objects."""
+    def __init__(self, task, data):
+        self.task = task
+        self.data = data
+    
+    def groupby(self):
+        """ group the TaskDatasetSummary objects. """
+        d = {}
+        for tdsummary in self.data:
+            dataset = tdsummary.dataset
+            d[dataset] = []
+            for username in tdsummary.user_num_exps:
+                d[dataset].append((username, tdsummary.user_num_exps[username]))
+                
+        return TaskSummary(self.task, d)
+ 
+ 
+class TaskSummary(object):
+    def __init__(self, task, summary):
+        self.task = task
+        self.summary = summary
+
+
+        

@@ -1,4 +1,4 @@
-from xpctl.data import Experiment, ExperimentSet, ExperimentGroup, ExperimentAggregateSet, Result, AggregateResult
+from xpctl.data import Experiment, ExperimentSet, TaskDatasetSummary, TaskDatasetSummarySet, Result
 TRAIN_EVENT = 'train_events'
 DEV_EVENT = 'valid_events'
 TEST_EVENT = 'test_events'
@@ -101,6 +101,16 @@ class MongoResultSet(object):
             experiments.append(exp)
         return ExperimentSet(experiments)
 
+
+class MongoTaskDatasetSummary(TaskDatasetSummary):
+    def __init__(self, task, dataset, experiment_set):
+        super(MongoTaskDatasetSummary, self).__init__(task, dataset, experiment_set)
+
+
+class MongoTaskDatasetSummarySet(TaskDatasetSummarySet):
+    def __init__(self, task, data):
+        super(MongoTaskDatasetSummarySet, self).__init__(task, data)
+    
 
 class MongoError(Exception):
     def __init__(self, message, code=550):

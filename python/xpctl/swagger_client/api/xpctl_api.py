@@ -33,19 +33,122 @@ class XpctlApi(object):
             api_client = ApiClient()
         self.api_client = api_client
 
+    def config2json(self, task, sha1, **kwargs):  # noqa: E501
+        """get config for sha1  # noqa: E501
+
+        config for sha1  # noqa: E501
+        This method makes a synchronous HTTP request by default. To make an
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.config2json(task, sha1, async_req=True)
+        >>> result = thread.get()
+
+        :param async_req bool
+        :param str task: task (required)
+        :param str sha1: sha1 (required)
+        :return: Experiment
+                 If the method is called asynchronously,
+                 returns the request thread.
+        """
+        kwargs['_return_http_data_only'] = True
+        if kwargs.get('async_req'):
+            return self.config2json_with_http_info(task, sha1, **kwargs)  # noqa: E501
+        else:
+            (data) = self.config2json_with_http_info(task, sha1, **kwargs)  # noqa: E501
+            return data
+
+    def config2json_with_http_info(self, task, sha1, **kwargs):  # noqa: E501
+        """get config for sha1  # noqa: E501
+
+        config for sha1  # noqa: E501
+        This method makes a synchronous HTTP request by default. To make an
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.config2json_with_http_info(task, sha1, async_req=True)
+        >>> result = thread.get()
+
+        :param async_req bool
+        :param str task: task (required)
+        :param str sha1: sha1 (required)
+        :return: Experiment
+                 If the method is called asynchronously,
+                 returns the request thread.
+        """
+
+        all_params = ['task', 'sha1']  # noqa: E501
+        all_params.append('async_req')
+        all_params.append('_return_http_data_only')
+        all_params.append('_preload_content')
+        all_params.append('_request_timeout')
+
+        params = locals()
+        for key, val in six.iteritems(params['kwargs']):
+            if key not in all_params:
+                raise TypeError(
+                    "Got an unexpected keyword argument '%s'"
+                    " to method config2json" % key
+                )
+            params[key] = val
+        del params['kwargs']
+        # verify the required parameter 'task' is set
+        if ('task' not in params or
+                params['task'] is None):
+            raise ValueError("Missing the required parameter `task` when calling `config2json`")  # noqa: E501
+        # verify the required parameter 'sha1' is set
+        if ('sha1' not in params or
+                params['sha1'] is None):
+            raise ValueError("Missing the required parameter `sha1` when calling `config2json`")  # noqa: E501
+
+        collection_formats = {}
+
+        path_params = {}
+        if 'task' in params:
+            path_params['task'] = params['task']  # noqa: E501
+        if 'sha1' in params:
+            path_params['sha1'] = params['sha1']  # noqa: E501
+
+        query_params = []
+
+        header_params = {}
+
+        form_params = []
+        local_var_files = {}
+
+        body_params = None
+        # HTTP header `Accept`
+        header_params['Accept'] = self.api_client.select_header_accept(
+            ['application/json'])  # noqa: E501
+
+        # Authentication setting
+        auth_settings = []  # noqa: E501
+
+        return self.api_client.call_api(
+            '/config2json/{task}/{sha1}', 'GET',
+            path_params,
+            query_params,
+            header_params,
+            body=body_params,
+            post_params=form_params,
+            files=local_var_files,
+            response_type='Experiment',  # noqa: E501
+            auth_settings=auth_settings,
+            async_req=params.get('async_req'),
+            _return_http_data_only=params.get('_return_http_data_only'),
+            _preload_content=params.get('_preload_content', True),
+            _request_timeout=params.get('_request_timeout'),
+            collection_formats=collection_formats)
+
     def experiment_details(self, task, eid, **kwargs):  # noqa: E501
         """Find experiment by id  # noqa: E501
 
         Returns a single experiment  # noqa: E501
         This method makes a synchronous HTTP request by default. To make an
         asynchronous HTTP request, please pass async_req=True
-        >>> thread = api.experiment_details(task, eid, async_req=True)
+        >>> thread = api.get_experiment_details(task, eid, async_req=True)
         >>> result = thread.get()
 
         :param async_req bool
         :param str task: task name (required)
         :param str eid: ID of experiment to return (required)
-        :return: Experiment
+        :return: None
                  If the method is called asynchronously,
                  returns the request thread.
         """
@@ -68,7 +171,7 @@ class XpctlApi(object):
         :param async_req bool
         :param str task: task name (required)
         :param str eid: ID of experiment to return (required)
-        :return: Experiment
+        :return: None
                  If the method is called asynchronously,
                  returns the request thread.
         """
@@ -128,7 +231,7 @@ class XpctlApi(object):
             body=body_params,
             post_params=form_params,
             files=local_var_files,
-            response_type='Experiment',  # noqa: E501
+            response_type=None,  # noqa: E501
             auth_settings=auth_settings,
             async_req=params.get('async_req'),
             _return_http_data_only=params.get('_return_http_data_only'),
@@ -151,7 +254,7 @@ class XpctlApi(object):
         :param str reduction_dim: which dimension to reduce on, default=sha1
         :param list[str] metric: metric
         :param str sort: metric to sort results on
-        :param int nconfig: number of experiments to aggregate
+        :param int numexp_reduction_dim: max number of experiments in an aggregate group
         :param str event_type: train/dev/test
         :return: list[ExperimentAggregate]
                  If the method is called asynchronously,
@@ -179,14 +282,14 @@ class XpctlApi(object):
         :param str reduction_dim: which dimension to reduce on, default=sha1
         :param list[str] metric: metric
         :param str sort: metric to sort results on
-        :param int nconfig: number of experiments to aggregate
+        :param int numexp_reduction_dim: max number of experiments in an aggregate group
         :param str event_type: train/dev/test
         :return: list[ExperimentAggregate]
                  If the method is called asynchronously,
                  returns the request thread.
         """
 
-        all_params = ['task', 'dataset', 'reduction_dim', 'metric', 'sort', 'nconfig', 'event_type']  # noqa: E501
+        all_params = ['task', 'dataset', 'reduction_dim', 'metric', 'sort', 'numexp_reduction_dim', 'event_type']  # noqa: E501
         all_params.append('async_req')
         all_params.append('_return_http_data_only')
         all_params.append('_preload_content')
@@ -226,8 +329,8 @@ class XpctlApi(object):
             collection_formats['metric'] = 'csv'  # noqa: E501
         if 'sort' in params:
             query_params.append(('sort', params['sort']))  # noqa: E501
-        if 'nconfig' in params:
-            query_params.append(('nconfig', params['nconfig']))  # noqa: E501
+        if 'numexp_reduction_dim' in params:
+            query_params.append(('numexp_reduction_dim', params['numexp_reduction_dim']))  # noqa: E501
         if 'event_type' in params:
             query_params.append(('event_type', params['event_type']))  # noqa: E501
 
@@ -276,7 +379,7 @@ class XpctlApi(object):
         :param str reduction_dim: which dimension to reduce on, default=sha1
         :param list[str] metric: metric
         :param str sort: metric to sort results on
-        :param int nconfig: number of experiments to aggregate
+        :param int numexp_reduction_dim: max number of experiments in an aggregate group
         :param str event_type: train/dev/test
         :return: list[ExperimentAggregate]
                  If the method is called asynchronously,
@@ -305,14 +408,14 @@ class XpctlApi(object):
         :param str reduction_dim: which dimension to reduce on, default=sha1
         :param list[str] metric: metric
         :param str sort: metric to sort results on
-        :param int nconfig: number of experiments to aggregate
+        :param int numexp_reduction_dim: max number of experiments in an aggregate group
         :param str event_type: train/dev/test
         :return: list[ExperimentAggregate]
                  If the method is called asynchronously,
                  returns the request thread.
         """
 
-        all_params = ['task', 'prop', 'value', 'reduction_dim', 'metric', 'sort', 'nconfig', 'event_type']  # noqa: E501
+        all_params = ['task', 'prop', 'value', 'reduction_dim', 'metric', 'sort', 'numexp_reduction_dim', 'event_type']  # noqa: E501
         all_params.append('async_req')
         all_params.append('_return_http_data_only')
         all_params.append('_preload_content')
@@ -358,8 +461,8 @@ class XpctlApi(object):
             collection_formats['metric'] = 'csv'  # noqa: E501
         if 'sort' in params:
             query_params.append(('sort', params['sort']))  # noqa: E501
-        if 'nconfig' in params:
-            query_params.append(('nconfig', params['nconfig']))  # noqa: E501
+        if 'numexp_reduction_dim' in params:
+            query_params.append(('numexp_reduction_dim', params['numexp_reduction_dim']))  # noqa: E501
         if 'event_type' in params:
             query_params.append(('event_type', params['event_type']))  # noqa: E501
 
@@ -741,47 +844,43 @@ class XpctlApi(object):
             _request_timeout=params.get('_request_timeout'),
             collection_formats=collection_formats)
 
-    def remove_experiment(self, task, eid, **kwargs):  # noqa: E501
-        """Deletes an experiment  # noqa: E501
+    def summary(self, **kwargs):  # noqa: E501
+        """get summary for task  # noqa: E501
 
-          # noqa: E501
+        summary for task  # noqa: E501
         This method makes a synchronous HTTP request by default. To make an
         asynchronous HTTP request, please pass async_req=True
-        >>> thread = api.remove_experiment(task, eid, async_req=True)
+        >>> thread = api.summary(async_req=True)
         >>> result = thread.get()
 
         :param async_req bool
-        :param str task: task name (required)
-        :param str eid: experiment id to delete (required)
-        :return: None
+        :return: list[TaskSummary]
                  If the method is called asynchronously,
                  returns the request thread.
         """
         kwargs['_return_http_data_only'] = True
         if kwargs.get('async_req'):
-            return self.remove_experiment_with_http_info(task, eid, **kwargs)  # noqa: E501
+            return self.summary_with_http_info(**kwargs)  # noqa: E501
         else:
-            (data) = self.remove_experiment_with_http_info(task, eid, **kwargs)  # noqa: E501
+            (data) = self.summary_with_http_info(**kwargs)  # noqa: E501
             return data
 
-    def remove_experiment_with_http_info(self, task, eid, **kwargs):  # noqa: E501
-        """Deletes an experiment  # noqa: E501
+    def summary_with_http_info(self, **kwargs):  # noqa: E501
+        """get summary for task  # noqa: E501
 
-          # noqa: E501
+        summary for task  # noqa: E501
         This method makes a synchronous HTTP request by default. To make an
         asynchronous HTTP request, please pass async_req=True
-        >>> thread = api.remove_experiment_with_http_info(task, eid, async_req=True)
+        >>> thread = api.summary_with_http_info(async_req=True)
         >>> result = thread.get()
 
         :param async_req bool
-        :param str task: task name (required)
-        :param str eid: experiment id to delete (required)
-        :return: None
+        :return: list[TaskSummary]
                  If the method is called asynchronously,
                  returns the request thread.
         """
 
-        all_params = ['task', 'eid']  # noqa: E501
+        all_params = []  # noqa: E501
         all_params.append('async_req')
         all_params.append('_return_http_data_only')
         all_params.append('_preload_content')
@@ -792,26 +891,14 @@ class XpctlApi(object):
             if key not in all_params:
                 raise TypeError(
                     "Got an unexpected keyword argument '%s'"
-                    " to method remove_experiment" % key
+                    " to method summary" % key
                 )
             params[key] = val
         del params['kwargs']
-        # verify the required parameter 'task' is set
-        if ('task' not in params or
-                params['task'] is None):
-            raise ValueError("Missing the required parameter `task` when calling `remove_experiment`")  # noqa: E501
-        # verify the required parameter 'eid' is set
-        if ('eid' not in params or
-                params['eid'] is None):
-            raise ValueError("Missing the required parameter `eid` when calling `remove_experiment`")  # noqa: E501
 
         collection_formats = {}
 
         path_params = {}
-        if 'task' in params:
-            path_params['task'] = params['task']  # noqa: E501
-        if 'eid' in params:
-            path_params['eid'] = params['eid']  # noqa: E501
 
         query_params = []
 
@@ -829,14 +916,14 @@ class XpctlApi(object):
         auth_settings = []  # noqa: E501
 
         return self.api_client.call_api(
-            '/{task}/{eid}', 'DELETE',
+            '/summary/', 'GET',
             path_params,
             query_params,
             header_params,
             body=body_params,
             post_params=form_params,
             files=local_var_files,
-            response_type=None,  # noqa: E501
+            response_type='list[TaskSummary]',  # noqa: E501
             auth_settings=auth_settings,
             async_req=params.get('async_req'),
             _return_http_data_only=params.get('_return_http_data_only'),
@@ -844,49 +931,45 @@ class XpctlApi(object):
             _request_timeout=params.get('_request_timeout'),
             collection_formats=collection_formats)
 
-    def update_label(self, task, eid, **kwargs):  # noqa: E501
-        """Updates an experiment in the database with form data  # noqa: E501
+    def task_summary(self, task, **kwargs):  # noqa: E501
+        """get summary for task  # noqa: E501
 
-          # noqa: E501
+        summary for task  # noqa: E501
         This method makes a synchronous HTTP request by default. To make an
         asynchronous HTTP request, please pass async_req=True
-        >>> thread = api.update_label(task, eid, async_req=True)
+        >>> thread = api.task_summary(task, async_req=True)
         >>> result = thread.get()
 
         :param async_req bool
-        :param str task: task name (required)
-        :param str eid: ID of experiment that needs to be updated (required)
-        :param str label: Updated label of the experiment
-        :return: None
+        :param str task: task (required)
+        :return: TaskSummary
                  If the method is called asynchronously,
                  returns the request thread.
         """
         kwargs['_return_http_data_only'] = True
         if kwargs.get('async_req'):
-            return self.update_label_with_http_info(task, eid, **kwargs)  # noqa: E501
+            return self.task_summary_with_http_info(task, **kwargs)  # noqa: E501
         else:
-            (data) = self.update_label_with_http_info(task, eid, **kwargs)  # noqa: E501
+            (data) = self.task_summary_with_http_info(task, **kwargs)  # noqa: E501
             return data
 
-    def update_label_with_http_info(self, task, eid, **kwargs):  # noqa: E501
-        """Updates an experiment in the database with form data  # noqa: E501
+    def task_summary_with_http_info(self, task, **kwargs):  # noqa: E501
+        """get summary for task  # noqa: E501
 
-          # noqa: E501
+        summary for task  # noqa: E501
         This method makes a synchronous HTTP request by default. To make an
         asynchronous HTTP request, please pass async_req=True
-        >>> thread = api.update_label_with_http_info(task, eid, async_req=True)
+        >>> thread = api.task_summary_with_http_info(task, async_req=True)
         >>> result = thread.get()
 
         :param async_req bool
-        :param str task: task name (required)
-        :param str eid: ID of experiment that needs to be updated (required)
-        :param str label: Updated label of the experiment
-        :return: None
+        :param str task: task (required)
+        :return: TaskSummary
                  If the method is called asynchronously,
                  returns the request thread.
         """
 
-        all_params = ['task', 'eid', 'label']  # noqa: E501
+        all_params = ['task']  # noqa: E501
         all_params.append('async_req')
         all_params.append('_return_http_data_only')
         all_params.append('_preload_content')
@@ -897,26 +980,20 @@ class XpctlApi(object):
             if key not in all_params:
                 raise TypeError(
                     "Got an unexpected keyword argument '%s'"
-                    " to method update_label" % key
+                    " to method task_summary" % key
                 )
             params[key] = val
         del params['kwargs']
         # verify the required parameter 'task' is set
         if ('task' not in params or
                 params['task'] is None):
-            raise ValueError("Missing the required parameter `task` when calling `update_label`")  # noqa: E501
-        # verify the required parameter 'eid' is set
-        if ('eid' not in params or
-                params['eid'] is None):
-            raise ValueError("Missing the required parameter `eid` when calling `update_label`")  # noqa: E501
+            raise ValueError("Missing the required parameter `task` when calling `task_summary`")  # noqa: E501
 
         collection_formats = {}
 
         path_params = {}
         if 'task' in params:
             path_params['task'] = params['task']  # noqa: E501
-        if 'eid' in params:
-            path_params['eid'] = params['eid']  # noqa: E501
 
         query_params = []
 
@@ -924,30 +1001,24 @@ class XpctlApi(object):
 
         form_params = []
         local_var_files = {}
-        if 'label' in params:
-            form_params.append(('label', params['label']))  # noqa: E501
 
         body_params = None
         # HTTP header `Accept`
         header_params['Accept'] = self.api_client.select_header_accept(
             ['application/json'])  # noqa: E501
 
-        # HTTP header `Content-Type`
-        header_params['Content-Type'] = self.api_client.select_header_content_type(  # noqa: E501
-            ['application/x-www-form-urlencoded'])  # noqa: E501
-
         # Authentication setting
         auth_settings = []  # noqa: E501
 
         return self.api_client.call_api(
-            '/{task}/{eid}', 'POST',
+            '/summary/{task}/', 'GET',
             path_params,
             query_params,
             header_params,
             body=body_params,
             post_params=form_params,
             files=local_var_files,
-            response_type=None,  # noqa: E501
+            response_type='TaskSummary',  # noqa: E501
             auth_settings=auth_settings,
             async_req=params.get('async_req'),
             _return_http_data_only=params.get('_return_http_data_only'),
