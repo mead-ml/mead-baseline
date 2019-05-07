@@ -74,42 +74,43 @@ def experiment(task, id, event_type, output, metric, sort, output_fields):
     try:
         result = ServerManager.api.experiment_details(task, id, event_type=event_type, metric=metric)
         if output is None:
-            print(experiment_to_data_frame(result, {k: i for i, k in enumerate(output_fields)}, sort))
+            click.echo(experiment_to_df(result, {k: i for i, k in enumerate(output_fields)}, sort))
         else:
-            experiment_to_data_frame(result, {k: i for i, k in enumerate(output_fields)}, sort).to_csv(output)
+            experiment_to_df(result, {k: i for i, k in enumerate(output_fields)}, sort).to_csv(output)
     except ApiException as e:
         print(json.loads(e.body)['detail'])
-#@cli.command()
-#@click.option('--metric', multiple=True, help="list of metrics (prec, recall, f1, accuracy),[multiple]: --metric f1 "
-#                                               "--metric acc")
-# @click.option('--event_type', default='test', help="train/ dev/ test")
-# @click.option('--sort', help="specify one metric to sort the results")
-# @click.option('--output', help='output file')
-# @click.option('--nconfig', help='number of experiments to aggregate', type=int)
-# @click.option('--id', help='filter by specific experiment')
-# @click.option('--label', help='filter by label')
-# @click.option('--n', help='number of rows to show', type=int)
-# @click.argument('task')
-# @click.argument('dataset')
-# def results(metric, event_type, sort, output, nconfig, n, task, dataset, id, label):
-#     """
-#     Provides a statistical summary of the results for a problem . A problem is defined by a (task, dataset) tuple. For each config used in the task, shows the average, min, max and std dev and number of experiments done using config. Optionally: a. --metrics: choose metric(s) to show. results ll be sorted on the first metric. b. --sort output all metrics but sort on one. c. --n: limit number of experiments. d. event_type: show results for train/dev/valid datasets. e. output: put the results in an output file.
-#     """
-#     if not ServerManager.get().has_task(task):
-#         click.echo("no results for the specified task {}, use another task".format(task))
-#         return
-#     event_type = EVENT_TYPES[event_type]
-#     num_exps = n
-#     num_exps_per_config = nconfig
-#     results = ServerManager.get().get_results(task, dataset, event_type,
-#                                               num_exps, num_exps_per_config,
-#                                               metric, sort, id, label)
-#     if results is None:
-#         click.echo("can't produce summary for the requested task {}".format(task))
-#         return
-#     click.echo(results)
-#     if output is not None:
-#         results.to_csv(os.path.expanduser(output), index=True, index_label="config-sha1")
+
+
+@cli.command()
+@click.option('--metric', multiple=True, help="list of metrics (prec, recall, f1, accuracy),[multiple]: --metric f1 "
+                                              "--metric acc")
+@click.option('--sort', help="specify one metric to sort the results")
+@click.option('--nconfig', help='number of experiments to aggregate', type=int, default=1)
+@click.option('--event_type', default='test', help="train/ dev/ test")
+@click.option('--n', help='number of rows to show', type=int, default=-1)
+@click.option('--output', help='output file')
+@click.option('--output_fields', multiple=True, help="which field(s) you want to see in output",
+              default=['username', 'sha1'])
+@click.argument('task')
+@click.argument('dataset')
+def results(task, dataset, metric, sort, nconfig, event_type, n, output, output_fields):
+    event_type = EVENT_TYPES[event_type]
+    reduction_dim = 'sha1'
+    ServerManager.get()
+    try:
+        result = ServerManager.api.get_results_by_dataset(task, dataset, reduction_dim=reduction_dim,
+                                                          metric=metric, sort=sort, numexp_reduction_dim=nconfig,
+                                                          event_type=event_type)
+        result_df = click.echo(experiment_aggregate_list_to_df(result, {k: i for i, k in enumerate(output_fields)}))
+        if n != -1:
+            result_df = result_df.head(n)
+        if output is None:
+            click.echo(result_df)
+        else:
+            result_df.to_csv(output)
+    except ApiException as e:
+        print(json.loads(e.body)['detail'])
+
 #
 #
 #

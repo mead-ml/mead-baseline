@@ -591,6 +591,11 @@ definitions:
         type: "array"
         items: 
           type: "object"
+          properties:
+            aggregate_fn:
+             type: "string"
+            score:
+             type: "string"
           
   Experiment:
     type: "object"
