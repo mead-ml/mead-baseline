@@ -551,10 +551,7 @@ def model_creator(model_params):
             SET_TRAIN_FLAG(False)
             model = create_model_for('seq2seq', **model_params)
             loss = model.create_loss()
-            eval_metric_ops = {
-                'accuracy': tf.metrics.accuracy(
-                    labels=labels, predictions=model.decoder.best)}
-            return tf.estimator.EstimatorSpec(mode=mode, predictions=model.logits, loss=loss, eval_metric_ops=eval_metric_ops)
+            return tf.estimator.EstimatorSpec(mode=mode, predictions=model.decoder.best, loss=loss)
 
         SET_TRAIN_FLAG(True)
         model = create_model_for('seq2seq', **model_params)
