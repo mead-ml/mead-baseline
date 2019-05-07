@@ -31,9 +31,12 @@ class TestXpctlController(BaseTestCase):
 
         Find experiment by id
         """
+        query_string = [('event_type', 'event_type_example'),
+                        ('metric', 'metric_example')]
         response = self.client.open(
             '/v2/{task}/{eid}'.format(task='task_example', eid='eid_example'),
-            method='GET')
+            method='GET',
+            query_string=query_string)
         self.assert200(response,
                        'Response body is : ' + response.data.decode('utf-8'))
 

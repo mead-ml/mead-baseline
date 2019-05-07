@@ -1,10 +1,11 @@
 from swagger_server.models import Experiment, ExperimentAggregate, Result, Response, AggregateResult, TaskSummary
 import xpctl.data
+from flask import abort
 
 
 def dto_experiment_details(exp):
     if type(exp) == xpctl.data.Error:
-        return Response(**exp.__dict__)
+        return abort(500, exp.message)
     train_events = [Result(**r.__dict__) for r in exp.train_events]
     valid_events = [Result(**r.__dict__) for r in exp.valid_events]
     test_events = [Result(**r.__dict__) for r in exp.test_events]

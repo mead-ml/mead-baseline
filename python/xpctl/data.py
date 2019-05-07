@@ -1,5 +1,4 @@
 from copy import deepcopy
-from requests.exceptions import HTTPError
 
 TRAIN_EVENT = 'train_events'
 DEV_EVENT = 'valid_events'

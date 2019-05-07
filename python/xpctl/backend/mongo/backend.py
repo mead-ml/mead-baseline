@@ -1,4 +1,3 @@
-from __future__ import print_function
 import os
 import shutil
 import pymongo
@@ -157,10 +156,10 @@ class MongoRepo(ExperimentRepo):
             keys.remove("phase")
         return keys
         
-    def mongo_to_experiment_set(self, task, all_results, event_type, metrics):
+    def _mongo_to_experiment_set(self, task, all_results, event_type, metrics):
         data = []
         event_types = [event_type] if event_type else list(set(EVENT_TYPES.values()))
-        metrics_from_user = set(metrics)
+        metrics_from_user = set([x for x in metrics if x.strip()])
         for result in all_results:  # different experiments
             task = task
             _id = result['_id']
@@ -179,8 +178,8 @@ class MongoRepo(ExperimentRepo):
                 if not metrics_from_user:
                     metrics = list(metrics_from_db)
                 elif metrics_from_user - metrics_from_db:
-                    return Error(message='Metrics [{}] not found in the [{}] database'.format(','.join(
-                        list(metrics_from_user - metrics_from_db)), task))
+                    return Error(message='Metrics [{}] not found for experiment [{}] in [{}] database'.format(','.join(
+                        list(metrics_from_user - metrics_from_db)), _id, task))
                 else:
                     metrics = list(metrics_from_user)
                 # for train_events we can have different metrics than test_events
@@ -254,7 +253,7 @@ class MongoRepo(ExperimentRepo):
         if not all_results:
             return Error(message='no information available for [{}]: [{}] in task database [{}]'
                          .format(prop, value, task))
-        experiments = self.mongo_to_experiment_set(task, all_results, event_type=event_type, metrics=metrics)
+        experiments = self._mongo_to_experiment_set(task, all_results, event_type=event_type, metrics=metrics)
         if type(experiments) == Error:
             return experiments
         if sort is None:
@@ -268,15 +267,18 @@ class MongoRepo(ExperimentRepo):
             else:
                 return Error(message='experiments can only be sorted when event_type=test_results')
 
-    def get_experiment_details(self, task, _id):
+    def get_experiment_details(self, task, eid, event_type, metric):
+        metrics = listify(metric)
+        event_type = event_type if event_type is not None else 'test_events'
+
         coll = self.db[task]
-        query = {'_id': ObjectId(_id)}
+        query = {'_id': ObjectId(eid)}
         all_results = list(coll.find(query))
         if not all_results:
-            return Error(message='no experiment with id [{}] for task [{}]'.format(_id, task))
-        experiments = self.mongo_to_experiment_set(task, all_results, event_type=None, metrics=[])
+            return Error(message='no experiment with id [{}] for task [{}]'.format(eid, task))
+        experiments = self._mongo_to_experiment_set(task, all_results, event_type=event_type, metrics=metrics)
         if type(experiments) == Error:
-            return experiments
+            return Error(experiments.message)
         return experiments[0]
 
     @staticmethod
@@ -297,7 +299,7 @@ class MongoRepo(ExperimentRepo):
         if not all_results:
             return Error(message='no information available for [{}]: [{}] in task database [{}]'
                          .format(prop, value, task))
-        resultset = self.mongo_to_experiment_set(task, all_results, event_type=event_type, metrics=metrics)
+        resultset = self._mongo_to_experiment_set(task, all_results, event_type=event_type, metrics=metrics)
         if type(resultset) is not Error:
             return self.aggregate_results(resultset, reduction_dim, event_type, numexp_reduction_dim)
         return resultset
@@ -334,7 +336,7 @@ class MongoRepo(ExperimentRepo):
             q = self._update_query({}, dataset=dataset)
             p = self._update_projection(event_type)
             results = list(coll.find(q, p))
-            experiment_set = self.mongo_to_experiment_set(task, results, event_type, metrics=[])
+            experiment_set = self._mongo_to_experiment_set(task, results, event_type, metrics=[])
             if type(experiment_set) == Error:
                 self.logger.error('Error getting summary for task [{}], dataset [{}], stacktrace [{}]'
                                   .format(task, dataset, experiment_set.message))

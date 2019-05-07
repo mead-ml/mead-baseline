@@ -148,6 +148,8 @@ class XpctlApi(object):
         :param async_req bool
         :param str task: task name (required)
         :param str eid: ID of experiment to return (required)
+        :param str event_type: 
+        :param list[str] metric: 
         :return: Experiment
                  If the method is called asynchronously,
                  returns the request thread.
@@ -171,12 +173,14 @@ class XpctlApi(object):
         :param async_req bool
         :param str task: task name (required)
         :param str eid: ID of experiment to return (required)
+        :param str event_type: 
+        :param list[str] metric: 
         :return: Experiment
                  If the method is called asynchronously,
                  returns the request thread.
         """
 
-        all_params = ['task', 'eid']  # noqa: E501
+        all_params = ['task', 'eid', 'event_type', 'metric']  # noqa: E501
         all_params.append('async_req')
         all_params.append('_return_http_data_only')
         all_params.append('_preload_content')
@@ -209,6 +213,11 @@ class XpctlApi(object):
             path_params['eid'] = params['eid']  # noqa: E501
 
         query_params = []
+        if 'event_type' in params:
+            query_params.append(('event_type', params['event_type']))  # noqa: E501
+        if 'metric' in params:
+            query_params.append(('metric', params['metric']))  # noqa: E501
+            collection_formats['metric'] = 'csv'  # noqa: E501
 
         header_params = {}
 

@@ -21,7 +21,7 @@ def config2json(task, sha1):  # noqa: E501
     return dto_config2json(backend.config2json(task, sha1))
 
 
-def experiment_details(task, eid):  # noqa: E501
+def experiment_details(task, eid, event_type=None, metric=None):  # noqa: E501
     """Find experiment by id
 
     Returns a single experiment # noqa: E501
@@ -30,11 +30,15 @@ def experiment_details(task, eid):  # noqa: E501
     :type task: str
     :param eid: ID of experiment to return
     :type eid: str
+    :param event_type: 
+    :type event_type: str
+    :param metric: 
+    :type metric: List[str]
 
     :rtype: Experiment
     """
     backend = flask.globals.current_app.backend
-    return dto_experiment_details(backend.get_experiment_details(task, eid))
+    return dto_experiment_details(backend.get_experiment_details(task, eid, event_type, metric))
 
 
 def get_model_location(task, eid):  # noqa: E501

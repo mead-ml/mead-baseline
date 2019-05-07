@@ -107,7 +107,7 @@ class MongoResultSet(object):
         return ExperimentSet(experiments)
 
 
-def unpack_event_data(results: List[Result]):
+def pack_events(results: List[Result]):
     d = {}
     for result in results:
         if result.tick not in d:
@@ -119,11 +119,11 @@ def unpack_event_data(results: List[Result]):
     
 def unpack_experiment(exp):
     d = exp.__dict__
-    train_events = unpack_event_data(exp.train_events)
+    train_events = pack_events(exp.train_events)
     d.pop('train_events')
-    valid_events = unpack_event_data(exp.valid_events)
+    valid_events = pack_events(exp.valid_events)
     d.pop('valid_events')
-    test_events = unpack_event_data(exp.test_events)
+    test_events = pack_events(exp.test_events)
     d.pop('test_events')
     config = exp.config
     d.pop('config')

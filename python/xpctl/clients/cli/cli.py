@@ -3,10 +3,13 @@ import pandas as pd
 #import getpass
 from click_shell import shell
 import click
+import json
 #from baseline.utils import read_json, read_config_file
-from xpctl.swagger_client import Configuration
-from xpctl.swagger_client.api import XpctlApi
-from xpctl.swagger_client import ApiClient
+from swagger_client import Configuration
+from swagger_client.api import XpctlApi
+from swagger_client import ApiClient
+from swagger_client.rest import ApiException
+from xpctl.clients.cli.dto import *
 
 pd.set_option('display.expand_frame_repr', False)
 pd.set_option("display.max_rows", None)
@@ -54,6 +57,28 @@ def getmodelloc(task, id):
     click.echo('[{}] {}'.format(result.response_type, result.message))
 
 
+@cli.command()
+@click.option('--event_type', default='test', help="train/ dev/ test")
+@click.option('--output', help='output file (csv)', default=None)
+@click.option('--metric', multiple=True, help="list of metrics (prec, recall, f1, accuracy),[multiple]: "
+                                              "--metric f1 --metric acc", default=None)
+@click.option('--sort', help="specify one metric to sort the results", default=None)
+@click.option('--output_fields', multiple=True, help="which field(s) you want to see in output",
+              default=['username', 'sha1'])
+@click.argument('task')
+@click.argument('id')
+def experiment(task, id, event_type, output, metric, sort, output_fields):
+    """Get the details for an experiment"""
+    event_type = EVENT_TYPES[event_type]
+    ServerManager.get()
+    try:
+        result = ServerManager.api.experiment_details(task, id, event_type=event_type, metric=metric)
+        if output is None:
+            print(experiment_to_data_frame(result, {k: i for i, k in enumerate(output_fields)}, sort))
+        else:
+            experiment_to_data_frame(result, {k: i for i, k in enumerate(output_fields)}, sort).to_csv(output)
+    except ApiException as e:
+        print(json.loads(e.body)['detail'])
 #@cli.command()
 #@click.option('--metric', multiple=True, help="list of metrics (prec, recall, f1, accuracy),[multiple]: --metric f1 "
 #                                               "--metric acc")
