@@ -47,7 +47,8 @@ def update_datasets(datasets_config, config_params, train, valid, test):
             del updated_record['sha1']
         if 'download' in updated_record:
             if not train or not valid:
-                raise Exception('Cannot override download dataset without providing file locations for train and valid')
+                raise Exception('Cannot override downloadable dataset without providing file '
+                                'locations for both training and validation')
             if not test and 'test_file' in updated_record:
                 del updated_record['test_file']
             del updated_record['download']
@@ -60,7 +61,8 @@ def update_datasets(datasets_config, config_params, train, valid, test):
         updated_record['valid_file'] = valid
     if test:
         updated_record['test_file'] = test
-    print(updated_record)
+
+    logging.warning(updated_record)
     config_params['dataset'] = new_dataset_label
     logging.info("The dataset key for this override is {}".format(new_dataset_label))
     datasets_config.append(updated_record)
@@ -95,7 +97,8 @@ def main():
 
     args.datasets = read_config_stream(args.datasets)
     if args.mod_train_file or args.mod_valid_file or args.mod_test_file:
-        logging.info("Adding a record to dataset based on user override")
+        logging.warning('Warning: overriding the training/valid/test data with user-specified files'
+                        ' different from what was specified in the dataset index.  Creating a new key for this entry')
         update_datasets(args.datasets, config_params, args.mod_train_file, args.mod_valid_file, args.mod_test_file)
 
     args.embeddings = read_config_stream(args.embeddings)
