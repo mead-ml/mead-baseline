@@ -576,7 +576,7 @@ class EncoderDecoderTask(Task):
             backend.params = {'pc': _dynet.ParameterCollection(), 'batched': batched}
             self.config_params['preproc']['trim'] = True
         else:
-            self.config_params['preproc']['trim'] = True
+            self.config_params['preproc']['trim'] = False  # TODO: For datasets on ONLY
             from mead.tf.exporters import Seq2SeqTensorFlowExporter
             backend.exporter = Seq2SeqTensorFlowExporter
         backend.load(self.task_name())

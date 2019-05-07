@@ -144,7 +144,7 @@ class ClassifyTrainerTf(EpochReportingTrainer):
     def _get_batchsz(batch_dict):
         return len(batch_dict['y'])
 
-    def _train(self, loader, **kwargs):
+    def _train(self, loader, dataset=True, **kwargs):
         """Train an epoch of data using either the input loader or using `tf.dataset`
 
         In non-`tf.dataset` mode, we cycle the loader data feed, and pull a batch and feed it to the feed dict
@@ -163,14 +163,13 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         if self.ema:
             self.sess.run(self.ema_restore)
 
-        use_dataset = kwargs.get('dataset', True)
         reporting_fns = kwargs.get('reporting_fns', [])
         epoch_loss = 0
         epoch_div = 0
         steps = len(loader)
         pg = create_progress_bar(steps)
         for batch_dict in pg(loader):
-            if use_dataset:
+            if dataset:
                 _, step, lossv = self.sess.run([self.train_op, self.global_step, self.loss],
                                                feed_dict={TRAIN_FLAG(): 1})
             else:

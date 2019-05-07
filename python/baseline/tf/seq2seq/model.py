@@ -132,8 +132,10 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
     def create(cls, src_embeddings, tgt_embedding, **kwargs):
 
         model = cls()
-        model.src_embeddings = src_embeddings
-        model.tgt_embedding = tgt_embedding
+        model.src_embeddings = {}
+        for k, src_embedding in src_embeddings.items():
+            model.src_embeddings[k] = src_embedding.detached_ref()
+        model.tgt_embedding = tgt_embedding.detached_ref()
         model.src_len = kwargs.pop('src_len', tf.placeholder(tf.int32, [None], name="src_len"))
         model.tgt_len = kwargs.pop('tgt_len', tf.placeholder(tf.int32, [None], name="tgt_len"))
         model.mx_tgt_len = kwargs.pop('mx_tgt_len', tf.placeholder(tf.int32, name="mx_tgt_len"))
@@ -146,12 +148,11 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
         model.layers = kwargs.get('layers', 1)
         model.hsz = kwargs['hsz']
 
-        with tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE):
-            embed_in = model.embed(**kwargs)
-            encoder_output = model.encode(embed_in, **kwargs)
-            model.decode(encoder_output, **kwargs)
-            # writer = tf.summary.FileWriter('blah', model.sess.graph)
-            return model
+        embed_in = model.embed(**kwargs)
+        encoder_output = model.encode(embed_in, **kwargs)
+        model.decode(encoder_output, **kwargs)
+        # writer = tf.summary.FileWriter('blah', model.sess.graph)
+        return model
 
     def set_saver(self, saver):
         self.saver = saver

@@ -186,7 +186,7 @@ class ClassifierModelBase(ClassifierModel):
 
     @classmethod
     def create(cls, embeddings, labels, **kwargs):
-        """The main method for creating all :class:`WordBasedModel` types.
+        """The main method for creating all :class:`ClassifierModelBase` types.
         
         This method instantiates a model with pooling and optional stacking layers.
         Many of the arguments provided are reused by each implementation, but some sub-classes need more
