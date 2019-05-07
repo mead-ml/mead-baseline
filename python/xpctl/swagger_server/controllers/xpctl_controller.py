@@ -31,7 +31,7 @@ def experiment_details(task, eid):  # noqa: E501
     :param eid: ID of experiment to return
     :type eid: str
 
-    :rtype: None
+    :rtype: Experiment
     """
     backend = flask.globals.current_app.backend
     return dto_experiment_details(backend.get_experiment_details(task, eid))
@@ -47,7 +47,7 @@ def get_model_location(task, eid):  # noqa: E501
     :param eid: experiment id
     :type eid: str
 
-    :rtype: None
+    :rtype: Response
     """
     backend = flask.globals.current_app.backend
     return dto_get_model_location(backend.get_model_location(task, eid))
@@ -173,13 +173,13 @@ def put_result(task, experiment, user=None, label=None):  # noqa: E501
     :param label: 
     :type label: str
 
-    :rtype: Success
+    :rtype: Response
     """
     if connexion.request.is_json:
         experiment = Experiment.from_dict(connexion.request.get_json())  # noqa: E501
     backend = flask.globals.current_app.backend
     d = {'user': user, 'label': label}
-    return dto_put_requests(backend.put_result(task, config_obj, log_obj, **d))
+    return dto_put_requests(backend.put_experiment(task, dto_to_experiment(experiment)))
 
 
 def remove_experiment(task, eid):  # noqa: E501
@@ -192,14 +192,14 @@ def remove_experiment(task, eid):  # noqa: E501
     :param eid: 
     :type eid: str
 
-    :rtype: Success
+    :rtype: Response
     """
     backend = flask.globals.current_app.backend
     return dto_put_requests(backend.remove_experiment(task, eid))
 
 
 def summary():  # noqa: E501
-    """get summary for all tasks
+    """get summary for task
 
     summary for task # noqa: E501
 
@@ -236,7 +236,7 @@ def update_label(task, eid, label):  # noqa: E501
     :param label: 
     :type label: str
 
-    :rtype: Success
+    :rtype: Response
     """
     backend = flask.globals.current_app.backend
     return dto_put_requests(backend.update_label(task, eid, label))

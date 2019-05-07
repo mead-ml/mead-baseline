@@ -16,9 +16,8 @@ from __future__ import absolute_import
 
 # import models into model package
 from swagger_client.models.aggregate_result import AggregateResult
-from swagger_client.models.error import Error
 from swagger_client.models.experiment import Experiment
 from swagger_client.models.experiment_aggregate import ExperimentAggregate
+from swagger_client.models.response import Response
 from swagger_client.models.result import Result
-from swagger_client.models.success import Success
 from swagger_client.models.task_summary import TaskSummary

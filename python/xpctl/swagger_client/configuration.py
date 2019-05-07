@@ -32,7 +32,7 @@ class Configuration(object):
 
     _default = None
 
-    def __init__(self):
+    def __init__(self, host):
         """Constructor"""
         if self._default:
             for key in self._default.__dict__.keys():
@@ -40,7 +40,7 @@ class Configuration(object):
             return
 
         # Default Base url
-        self.host = "https://dev.nulll.io/v2"
+        self.host = host
         # Temp file folder for downloading files
         self.temp_folder_path = None
 

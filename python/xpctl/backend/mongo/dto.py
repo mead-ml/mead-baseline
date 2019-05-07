@@ -1,4 +1,6 @@
-from xpctl.data import Experiment, ExperimentSet, TaskDatasetSummary, TaskDatasetSummarySet, Result
+from xpctl.data import Experiment, ExperimentSet, Result
+from collections import namedtuple
+from typing import List
 TRAIN_EVENT = 'train_events'
 DEV_EVENT = 'valid_events'
 TEST_EVENT = 'test_events'
@@ -6,8 +8,8 @@ TEST_EVENT = 'test_events'
 
 class MongoResult(object):
     """ a result data point"""
-    def __init__(self, metric, value, task, _id, username, hostname, label, config, dataset, date, sha1, event_type, epoch,
-                 version):
+    def __init__(self, metric, value, task, _id, username, hostname, label, config, dataset, date, sha1, event_type,
+                 tick_type, tick, phase, version):
         super(MongoResult, self).__init__()
         self.metric = metric
         self.value = value
@@ -21,7 +23,9 @@ class MongoResult(object):
         self.sha1 = sha1
         self.event_type = event_type
         self.config = config
-        self.epoch = epoch
+        self.tick_type = tick_type
+        self.tick = tick
+        self.phase = phase
         self.version = version
     
     def get_prop(self, field):
@@ -96,31 +100,35 @@ class MongoResultSet(object):
                              valid_events=[],
                              test_events=[])
             for _result in resultset:
-                r = Result(metric=_result.metric, value=_result.value, epoch=_result.epoch)
+                r = Result(metric=_result.metric, value=_result.value, tick_type=_result.tick_type, tick=_result.tick,
+                           phase=_result.phase)
                 exp.add_result(r, _result.event_type)
             experiments.append(exp)
         return ExperimentSet(experiments)
 
 
-class MongoTaskDatasetSummary(TaskDatasetSummary):
-    def __init__(self, task, dataset, experiment_set):
-        super(MongoTaskDatasetSummary, self).__init__(task, dataset, experiment_set)
-
-
-class MongoTaskDatasetSummarySet(TaskDatasetSummarySet):
-    def __init__(self, task, data):
-        super(MongoTaskDatasetSummarySet, self).__init__(task, data)
+def unpack_event_data(results: List[Result]):
+    d = {}
+    for result in results:
+        if result.tick not in d:
+            d[result.tick] = {result.metric: result.value, "tick_type": result.tick_type, "phase": result.phase}
+        else:
+            d[result.tick].update({result.metric: result.value})
+    return list(d.values())
     
-
-class MongoError(object):
-    def __init__(self, message, code=550):
-        super(MongoError, self).__init__()
-        self.message = message
-        self.code = code
-
-
-class MongoSuccess(object):
-    def __init__(self, message, code=250):
-        super(MongoSuccess, self).__init__()
-        self.message = message
-        self.code = code
+    
+def unpack_experiment(exp):
+    d = exp.__dict__
+    train_events = unpack_event_data(exp.train_events)
+    d.pop('train_events')
+    valid_events = unpack_event_data(exp.valid_events)
+    d.pop('valid_events')
+    test_events = unpack_event_data(exp.test_events)
+    d.pop('test_events')
+    config = exp.config
+    d.pop('config')
+    task = d.task
+    d.pop('task')
+    unpacked_mongo_result = namedtuple('unpacked_mongo_result', ['task', 'config_obj', 'events_obj', 'extra_args'])
+    return unpacked_mongo_result(task=task, config_obj=config, events_obj=train_events+valid_events+test_events,
+                                 extra_args=d)

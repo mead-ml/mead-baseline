@@ -5,10 +5,9 @@ from __future__ import absolute_import
 from flask import json
 from six import BytesIO
 
-from swagger_server.models.error import Error  # noqa: E501
 from swagger_server.models.experiment import Experiment  # noqa: E501
 from swagger_server.models.experiment_aggregate import ExperimentAggregate  # noqa: E501
-from swagger_server.models.success import Success  # noqa: E501
+from swagger_server.models.response import Response  # noqa: E501
 from swagger_server.models.task_summary import TaskSummary  # noqa: E501
 from swagger_server.test import BaseTestCase
 

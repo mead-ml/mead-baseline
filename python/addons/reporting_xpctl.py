@@ -48,13 +48,13 @@ class XPCtlReporting(EpochReportingHook):
            backends = {'default': 'tf', 'tensorflow': 'tf', 'pytorch': 'pyt'}
            self.checkpoint_base = self._search_checkpoint_base(self.task, backends[self.backend])
 
-        self.repo.put_result(self.task, self.exp_config, self.log,
-                            checkpoint_base=self.checkpoint_base,
-                            checkpoint_store=self.checkpoint_store,
-                            print_fn=self.print_fn,
-                            hostname=self.hostname,
-                            username=self.username,
-                            label=self.label)
+        self.repo._put_result(self.task, self.exp_config, self.log,
+                              checkpoint_base=self.checkpoint_base,
+                              checkpoint_store=self.checkpoint_store,
+                              print_fn=self.print_fn,
+                              hostname=self.hostname,
+                              username=self.username,
+                              label=self.label)
 
     @staticmethod
     def _search_checkpoint_base(task, backend):

@@ -33,26 +33,34 @@ class Result(object):
     swagger_types = {
         'metric': 'str',
         'value': 'float',
-        'epoch': 'int'
+        'tick_type': 'str',
+        'tick': 'int',
+        'phase': 'str'
     }
 
     attribute_map = {
         'metric': 'metric',
         'value': 'value',
-        'epoch': 'epoch'
+        'tick_type': 'tick_type',
+        'tick': 'tick',
+        'phase': 'phase'
     }
 
-    def __init__(self, metric=None, value=None, epoch=None):  # noqa: E501
+    def __init__(self, metric=None, value=None, tick_type=None, tick=None, phase=None):  # noqa: E501
         """Result - a model defined in Swagger"""  # noqa: E501
 
         self._metric = None
         self._value = None
-        self._epoch = None
+        self._tick_type = None
+        self._tick = None
+        self._phase = None
         self.discriminator = None
 
         self.metric = metric
         self.value = value
-        self.epoch = epoch
+        self.tick_type = tick_type
+        self.tick = tick
+        self.phase = phase
 
     @property
     def metric(self):
@@ -101,27 +109,73 @@ class Result(object):
         self._value = value
 
     @property
-    def epoch(self):
-        """Gets the epoch of this Result.  # noqa: E501
+    def tick_type(self):
+        """Gets the tick_type of this Result.  # noqa: E501
 
 
-        :return: The epoch of this Result.  # noqa: E501
+        :return: The tick_type of this Result.  # noqa: E501
+        :rtype: str
+        """
+        return self._tick_type
+
+    @tick_type.setter
+    def tick_type(self, tick_type):
+        """Sets the tick_type of this Result.
+
+
+        :param tick_type: The tick_type of this Result.  # noqa: E501
+        :type: str
+        """
+        if tick_type is None:
+            raise ValueError("Invalid value for `tick_type`, must not be `None`")  # noqa: E501
+
+        self._tick_type = tick_type
+
+    @property
+    def tick(self):
+        """Gets the tick of this Result.  # noqa: E501
+
+
+        :return: The tick of this Result.  # noqa: E501
         :rtype: int
         """
-        return self._epoch
+        return self._tick
 
-    @epoch.setter
-    def epoch(self, epoch):
-        """Sets the epoch of this Result.
+    @tick.setter
+    def tick(self, tick):
+        """Sets the tick of this Result.
 
 
-        :param epoch: The epoch of this Result.  # noqa: E501
+        :param tick: The tick of this Result.  # noqa: E501
         :type: int
         """
-        if epoch is None:
-            raise ValueError("Invalid value for `epoch`, must not be `None`")  # noqa: E501
+        if tick is None:
+            raise ValueError("Invalid value for `tick`, must not be `None`")  # noqa: E501
 
-        self._epoch = epoch
+        self._tick = tick
+
+    @property
+    def phase(self):
+        """Gets the phase of this Result.  # noqa: E501
+
+
+        :return: The phase of this Result.  # noqa: E501
+        :rtype: str
+        """
+        return self._phase
+
+    @phase.setter
+    def phase(self, phase):
+        """Sets the phase of this Result.
+
+
+        :param phase: The phase of this Result.  # noqa: E501
+        :type: str
+        """
+        if phase is None:
+            raise ValueError("Invalid value for `phase`, must not be `None`")  # noqa: E501
+
+        self._phase = phase
 
     def to_dict(self):
         """Returns the model properties as a dict"""

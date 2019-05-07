@@ -1,5 +1,5 @@
 from copy import deepcopy
-import numpy as np
+from requests.exceptions import HTTPError
 
 TRAIN_EVENT = 'train_events'
 DEV_EVENT = 'valid_events'
@@ -7,11 +7,13 @@ TEST_EVENT = 'test_events'
 
 
 class Result(object):
-    def __init__(self, metric, value, epoch):
+    def __init__(self, metric, value, tick_type, tick, phase):
         super(Result, self).__init__()
         self.metric = metric
         self.value = value
-        self.epoch = epoch
+        self.tick_type = tick_type
+        self.tick = tick
+        self.phase = phase
 
     def get_prop(self, field):
         if field not in self.__dict__:
@@ -286,4 +288,26 @@ class TaskSummary(object):
         self.summary = summary
 
 
-        
+class Response(object):
+    def __init__(self, message, response_type, code=550):
+        super(Response, self).__init__()
+        self.message = message
+        self.response_type = response_type
+        self.code = code
+
+
+class Error(Response):
+    def __init__(self, message, response_type="error", code=550):
+        super(Error, self).__init__(message, response_type, code)
+        self.message = message
+        self.response_type = response_type
+        self.code = code
+
+
+class Success(Response):
+    def __init__(self, message, response_type="success", code=250):
+        super(Success, self).__init__(message, response_type, code)
+        self.message = message
+        self.response_type = response_type
+        self.code = code
+

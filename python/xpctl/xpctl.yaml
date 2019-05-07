@@ -57,11 +57,11 @@ paths:
         200:
           description: "success"
           schema:
-            $ref: "#/definitions/Success"
+            $ref: "#/definitions/Response"
         default:
           description: "unexpected error"
           schema:
-            $ref: "#/definitions/Error"
+            $ref: "#/definitions/Response"
       x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
 
   /updatelabel/{task}/{eid}/:
@@ -95,11 +95,11 @@ paths:
         200:
           description: "success"
           schema:
-            $ref: "#/definitions/Success"
+            $ref: "#/definitions/Response"
         default:
           description: "unexpected error"
           schema:
-            $ref: "#/definitions/Error"
+            $ref: "#/definitions/Response"
       x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
 
   /delete/{task}/{eid}:
@@ -128,11 +128,11 @@ paths:
         200:
           description: "success"
           schema:
-            $ref: "#/definitions/Success"
+            $ref: "#/definitions/Response"
         default:
           description: "unexpected error"
           schema:
-            $ref: "#/definitions/Error"
+            $ref: "#/definitions/Response"
       x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
 
   /details/{task}:
@@ -188,7 +188,7 @@ paths:
           default:
             description: "unexpected error"
             schema:
-              $ref: "#/definitions/Error"
+              $ref: "#/definitions/Response"
         x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
 
   /details/{task}/{sha1}:
@@ -239,7 +239,7 @@ paths:
         default:
           description: "unexpected error"
           schema:
-            $ref: "#/definitions/Error" 
+            $ref: "#/definitions/Response"
       x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
 
   /results/{task}:
@@ -303,7 +303,7 @@ paths:
         default:
           description: "unexpected error"
           schema:
-            $ref: "#/definitions/Error"
+            $ref: "#/definitions/Response"
       x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
 
   /results/{task}/{dataset}:
@@ -362,7 +362,7 @@ paths:
           default:
             description: "unexpected error"
             schema:
-              $ref: "#/definitions/Error"
+              $ref: "#/definitions/Response"
         x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
 
   /{task}/{eid}:
@@ -388,7 +388,8 @@ paths:
       responses:
         200:
           description: "successful operation"
-          schema: "object"
+          schema:
+            $ref: "#/definitions/Experiment"
         400:
           description: "Invalid ID supplied"
         404:
@@ -396,7 +397,7 @@ paths:
         default:
           description: "unexpected error"
           schema:
-            $ref: "#/definitions/Error"
+            $ref: "#/definitions/Response"
       x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"      
 
   /config2json/{task}/{sha1}:
@@ -431,7 +432,7 @@ paths:
           default:
             description: "unexpected error"
             schema:
-              $ref: "#/definitions/Error"
+              $ref: "#/definitions/Response"
         x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
 
   /getmodelloc/{task}/{eid}:
@@ -457,7 +458,8 @@ paths:
           responses:
             200:
               description: "successful operation"
-              schema: "string"
+              schema:
+                $ref: "#/definitions/Response"
             400:
               description: "Invalid ID supplied"
             404:
@@ -465,7 +467,7 @@ paths:
             default:
               description: "unexpected error"
               schema:
-                $ref: "#/definitions/Error"
+                $ref: "#/definitions/Response"
           x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
 
   /summary/:
@@ -491,7 +493,7 @@ paths:
             default:
               description: "unexpected error"
               schema:
-                $ref: "#/definitions/Error"
+                $ref: "#/definitions/Response"
           x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
 
   /summary/{task}/:
@@ -521,7 +523,7 @@ paths:
               default:
                 description: "unexpected error"
                 schema:
-                  $ref: "#/definitions/Error"
+                  $ref: "#/definitions/Response"
             x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
 
 securityDefinitions:
@@ -544,7 +546,9 @@ definitions:
     required:
     - "metric"
     - "value"
-    - "epoch"
+    - "tick_type"
+    - "tick"
+    - "phase"
     properties:
       metric:
         type: "string"
@@ -553,10 +557,14 @@ definitions:
         type: "number"
         format: "float32"
         example: 0.365897
-      epoch:
+      tick_type:
+        type: "string"
+      tick:
         type: "integer"
         format: "int32"
         example: 1
+      phase:
+        type: "string"
         
   AggregateResult:
     type: "object"
@@ -681,29 +689,22 @@ definitions:
       summary:
         type: "object"
 
-  Error:
+  Response:
     type: "object"
     required:
     - "code"
     - "message"
+    - "response_type"
     properties:
       code:
         type: "integer"
         format: "int32"
       message:
         type: "string"
+      response_type:
+        type: "string"
+        enum: ["success", "error"]
 
-  Success:
-      type: "object"
-      required:
-      - "code"
-      - "message"
-      properties:
-        code:
-          type: "integer"
-          format: "int32"
-        message:
-          type: "string"
 
 externalDocs:
   description: "Find out more about Swagger"

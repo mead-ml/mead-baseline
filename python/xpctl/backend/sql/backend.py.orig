@@ -101,7 +101,7 @@ class SQLRepo(ExperimentRepo):
             uri = '{}://{}@{}/{}'.format(dbtype, user, host, dbname)
         self._connect(uri)
 
-    def put_result(self, task, config_obj, events_obj, **kwargs):
+    def _put_result(self, task, config_obj, events_obj, **kwargs):
         session = self.Session()
         print_fn = kwargs.get('print_fn', print)
         now = datetime.datetime.utcnow().isoformat()

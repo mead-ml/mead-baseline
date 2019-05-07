@@ -8,8 +8,8 @@ import getpass
 from baseline.utils import export, listify, read_config_file, write_config_file, unzip_files
 from mead.utils import hash_config, configure_logger
 from xpctl.backend.core import ExperimentRepo, store_model, EVENT_TYPES
-from xpctl.backend.mongo.dto import MongoResult, MongoResultSet, MongoSuccess, MongoError, \
-    MongoTaskDatasetSummary, MongoTaskDatasetSummarySet
+from xpctl.backend.mongo.dto import MongoResult, MongoResultSet, unpack_experiment
+from xpctl.data import Experiment, TaskDatasetSummary, TaskDatasetSummarySet, Success, Error
 from xpctl.backend.helpers import log2json, get_experiment_label, METRICS_SORT_ASCENDING
 from bson.objectid import ObjectId
 from baseline.version import __version__
@@ -59,7 +59,12 @@ class MongoRepo(ExperimentRepo):
             else:
                 raise RuntimeError("model could not be stored, see previous errors")
 
-    def put_result(self, task, config_obj, events_obj, **kwargs):
+    def put_result(self, exp):
+        unpacked = unpack_experiment(exp)
+        return self._put_result(task=unpacked.task, config_obj=unpacked.config_obj, events_obj=unpacked.events_obj,
+                                **unpacked.extra_args)
+        
+    def _put_result(self, task, config_obj, events_obj, **kwargs):
         now = kwargs.get('date', datetime.datetime.utcnow().isoformat())
         train_events = list(filter(lambda x: x['phase'] == 'Train', events_obj))
         valid_events = list(filter(lambda x: x['phase'] == 'Valid', events_obj))
@@ -91,9 +96,9 @@ class MongoRepo(ExperimentRepo):
         try:
             coll = self.db[task]
             result = coll.insert_one(post)
-            return MongoSuccess(message='experiment successfully inserted: {}'.format(result.inserted_id))
+            return Success(message='experiment successfully inserted: {}'.format(result.inserted_id))
         except pymongo.errors.PyMongoError as e:
-            return MongoError(message='experiment could not be inserted: {}'.format(e.message))
+            return Error(message='experiment could not be inserted: {}'.format(e.message))
 
     def put_model(self, eid, task, checkpoint_base, checkpoint_store, print_fn=print):
         coll = self.db[task]
@@ -114,29 +119,29 @@ class MongoRepo(ExperimentRepo):
             coll = self.db[task]
             r = coll.find_one({'_id': ObjectId(eid)}, {'label': 1})
             if r is None:
-                return MongoError(message='label update failed: {} not found in {} database'.format(eid, task))
+                return Error(message='label update failed: {} not found in {} database'.format(eid, task))
             prev_label = r["label"]
             coll.update({'_id': ObjectId(eid)}, {'$set': {'label': new_label}}, upsert=False)
             changed_label = coll.find_one({'_id': ObjectId(eid)}, {'label': 1})["label"]
-            return MongoSuccess(message='for experiment {} label was changed from {} to {}'
-                                .format(eid, prev_label, changed_label))
+            return Success(message='for experiment [{}] label was changed from [{}] to [{}]'
+                           .format(eid, prev_label, changed_label))
         except pymongo.errors.PyMongoError as e:
-            return MongoError(message='label update failed: {}'.format(e.message))
+            return Error(message='label update failed: {}'.format(e.message))
         
     def remove_experiment(self, task, eid):
         try:
             coll = self.db[task]
             prev = coll.find_one({'_id': ObjectId(eid)}, {'label': 1})
             if prev is None:
-                return MongoError(message='delete operation failed: {} not found in {} database'.format(eid, task))
+                return Error(message='delete operation failed: {} not found in {} database'.format(eid, task))
             model_loc = self.get_model_location(task, eid)
-            if type(model_loc) != MongoError and os.path.exists(model_loc):
+            if type(model_loc) != Error and os.path.exists(model_loc):
                     os.remove(model_loc)
             coll.remove({'_id': ObjectId(eid)})
             assert coll.find_one({'_id': ObjectId(eid)}) is None
-            return MongoSuccess("record {} deleted successfully from database {}".format(eid, task))
+            return Success("record {} deleted successfully from database {}".format(eid, task))
         except pymongo.errors.PyMongoError as e:
-            return MongoError(message='experiment could not be removed: {}'.format(e.message))
+            return Error(message='experiment could not be removed: {}'.format(e.message))
 
     @staticmethod
     def _get_metrics_mongo(xs):
@@ -174,7 +179,7 @@ class MongoRepo(ExperimentRepo):
                 if not metrics_from_user:
                     metrics = list(metrics_from_db)
                 elif metrics_from_user - metrics_from_db:
-                    return MongoError(message='Metrics [{}] not found in the [{}] database'.format(','.join(
+                    return Error(message='Metrics [{}] not found in the [{}] database'.format(','.join(
                         list(metrics_from_user - metrics_from_db)), task))
                 else:
                     metrics = list(metrics_from_user)
@@ -194,11 +199,13 @@ class MongoRepo(ExperimentRepo):
                             date=date,
                             sha1=sha1,
                             event_type=event_type,
-                            epoch=record['tick'],
+                            tick_type=record['tick_type'],
+                            tick=record['tick'],
+                            phase=record['phase'],
                             version=version
                         ))
         if not data:
-            return MongoError(message='No results from the query')
+            return Error(message='No results from the query')
         rs = MongoResultSet(data=data)
         return rs.experiments()
 
@@ -245,10 +252,10 @@ class MongoRepo(ExperimentRepo):
         all_results = list(coll.find(query))
 
         if not all_results:
-            return MongoError(message='no information available for [{}]: [{}] in task database [{}]'
-                                .format(prop, value, task))
+            return Error(message='no information available for [{}]: [{}] in task database [{}]'
+                         .format(prop, value, task))
         experiments = self.mongo_to_experiment_set(task, all_results, event_type=event_type, metrics=metrics)
-        if type(experiments) == MongoError:
+        if type(experiments) == Error:
             return experiments
         if sort is None:
             return experiments
@@ -259,16 +266,16 @@ class MongoRepo(ExperimentRepo):
                 else:
                     return experiments.sort(sort)
             else:
-                return MongoError(message='experiments can only be sorted when event_type=test_results')
+                return Error(message='experiments can only be sorted when event_type=test_results')
 
     def get_experiment_details(self, task, _id):
         coll = self.db[task]
         query = {'_id': ObjectId(_id)}
         all_results = list(coll.find(query))
         if not all_results:
-            return MongoError(message='no experiment with id [{}] for task [{}]'.format(_id, task))
+            return Error(message='no experiment with id [{}] for task [{}]'.format(_id, task))
         experiments = self.mongo_to_experiment_set(task, all_results, event_type=None, metrics=[])
-        if type(experiments) == MongoError:
+        if type(experiments) == Error:
             return experiments
         return experiments[0]
 
@@ -288,10 +295,10 @@ class MongoRepo(ExperimentRepo):
         query = self._update_query({}, **d)
         all_results = list(coll.find(query))
         if not all_results:
-            return MongoError(message='no information available for [{}]: [{}] in task database [{}]'
-                                .format(prop, value, task))
+            return Error(message='no information available for [{}]: [{}] in task database [{}]'
+                         .format(prop, value, task))
         resultset = self.mongo_to_experiment_set(task, all_results, event_type=event_type, metrics=metrics)
-        if type(resultset) is not MongoError:
+        if type(resultset) is not Error:
             return self.aggregate_results(resultset, reduction_dim, event_type, numexp_reduction_dim)
         return resultset
 
@@ -299,7 +306,7 @@ class MongoRepo(ExperimentRepo):
         coll = self.db[task]
         j = coll.find_one({"sha1": sha1}, {"config": 1})
         if not j:
-            return MongoError('no config [{}] in [{}] database'.format(sha1, task))
+            return Error('no config [{}] in [{}] database'.format(sha1, task))
         else:
             return j["config"]
 
@@ -313,7 +320,7 @@ class MongoRepo(ExperimentRepo):
         results = [x.get('checkpoint') for x in list(coll.find(query, projection))]
         results = [x for x in results if x is not None]
         if not results:
-            return MongoError(message='no model location for experiment id [{}] in [{}] database'.format(eid, task))
+            return Error(message='no model location for experiment id [{}] in [{}] database'.format(eid, task))
         return results[0]
 
     def task_summary(self, task):
@@ -328,14 +335,12 @@ class MongoRepo(ExperimentRepo):
             p = self._update_projection(event_type)
             results = list(coll.find(q, p))
             experiment_set = self.mongo_to_experiment_set(task, results, event_type, metrics=[])
-            if type(experiment_set) == MongoError:
+            if type(experiment_set) == Error:
                 self.logger.error('Error getting summary for task [{}], dataset [{}], stacktrace [{}]'
                                   .format(task, dataset, experiment_set.message))
                 continue
-            store.append(MongoTaskDatasetSummary(task=task, dataset=dataset,
-                                                 experiment_set=self.mongo_to_experiment_set(task, results, event_type,
-                                                                                             metrics=[])))
-        return MongoTaskDatasetSummarySet(task=task, data=store).groupby()
+            store.append(TaskDatasetSummary(task=task, dataset=dataset, experiment_set=experiment_set))
+        return TaskDatasetSummarySet(task=task, data=store).groupby()
     
     def summary(self):
         tasks = self.get_task_names()
@@ -402,6 +407,6 @@ class MongoRepo(ExperimentRepo):
                 except AssertionError:
                     raise RuntimeError('There should be exactly one meta file, one config file and one reporting log '
                                        'in {}'.format(exp_dir))
-                self.put_result(task, config_obj=config, events_obj=reporting, **meta)
+                self._put_result(task, config_obj=config, events_obj=reporting, **meta)
         if dump_dir != dump:
             shutil.rmtree(dump_dir)

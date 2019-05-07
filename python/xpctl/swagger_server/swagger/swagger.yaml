@@ -59,11 +59,11 @@ paths:
         200:
           description: "success"
           schema:
-            $ref: "#/definitions/Success"
+            $ref: "#/definitions/Response"
         default:
           description: "unexpected error"
           schema:
-            $ref: "#/definitions/Error"
+            $ref: "#/definitions/Response"
       x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
   /updatelabel/{task}/{eid}/:
     get:
@@ -96,11 +96,11 @@ paths:
         200:
           description: "success"
           schema:
-            $ref: "#/definitions/Success"
+            $ref: "#/definitions/Response"
         default:
           description: "unexpected error"
           schema:
-            $ref: "#/definitions/Error"
+            $ref: "#/definitions/Response"
       x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
   /delete/{task}/{eid}:
     get:
@@ -128,11 +128,11 @@ paths:
         200:
           description: "success"
           schema:
-            $ref: "#/definitions/Success"
+            $ref: "#/definitions/Response"
         default:
           description: "unexpected error"
           schema:
-            $ref: "#/definitions/Error"
+            $ref: "#/definitions/Response"
       x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
   /details/{task}:
     get:
@@ -192,7 +192,7 @@ paths:
         default:
           description: "unexpected error"
           schema:
-            $ref: "#/definitions/Error"
+            $ref: "#/definitions/Response"
       x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
   /details/{task}/{sha1}:
     get:
@@ -246,7 +246,7 @@ paths:
         default:
           description: "unexpected error"
           schema:
-            $ref: "#/definitions/Error"
+            $ref: "#/definitions/Response"
       x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
   /results/{task}:
     get:
@@ -314,7 +314,7 @@ paths:
         default:
           description: "unexpected error"
           schema:
-            $ref: "#/definitions/Error"
+            $ref: "#/definitions/Response"
       x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
   /results/{task}/{dataset}:
     get:
@@ -377,7 +377,7 @@ paths:
         default:
           description: "unexpected error"
           schema:
-            $ref: "#/definitions/Error"
+            $ref: "#/definitions/Response"
       x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
   /{task}/{eid}:
     get:
@@ -402,6 +402,8 @@ paths:
       responses:
         200:
           description: "successful operation"
+          schema:
+            $ref: "#/definitions/Experiment"
         400:
           description: "Invalid ID supplied"
         404:
@@ -409,7 +411,7 @@ paths:
         default:
           description: "unexpected error"
           schema:
-            $ref: "#/definitions/Error"
+            $ref: "#/definitions/Response"
       x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
   /config2json/{task}/{sha1}:
     get:
@@ -443,7 +445,7 @@ paths:
         default:
           description: "unexpected error"
           schema:
-            $ref: "#/definitions/Error"
+            $ref: "#/definitions/Response"
       x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
   /getmodelloc/{task}/{eid}:
     get:
@@ -468,6 +470,8 @@ paths:
       responses:
         200:
           description: "successful operation"
+          schema:
+            $ref: "#/definitions/Response"
         400:
           description: "Invalid ID supplied"
         404:
@@ -475,7 +479,7 @@ paths:
         default:
           description: "unexpected error"
           schema:
-            $ref: "#/definitions/Error"
+            $ref: "#/definitions/Response"
       x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
   /summary/:
     get:
@@ -501,7 +505,7 @@ paths:
         default:
           description: "unexpected error"
           schema:
-            $ref: "#/definitions/Error"
+            $ref: "#/definitions/Response"
       x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
   /summary/{task}/:
     get:
@@ -530,7 +534,7 @@ paths:
         default:
           description: "unexpected error"
           schema:
-            $ref: "#/definitions/Error"
+            $ref: "#/definitions/Response"
       x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
 securityDefinitions:
   xpctl_auth:
@@ -548,8 +552,10 @@ definitions:
   Result:
     type: "object"
     required:
-    - "epoch"
     - "metric"
+    - "phase"
+    - "tick"
+    - "tick_type"
     - "value"
     properties:
       metric:
@@ -559,13 +565,19 @@ definitions:
         type: "number"
         format: "float32"
         example: 0.365897
-      epoch:
+      tick_type:
+        type: "string"
+      tick:
         type: "integer"
         format: "int32"
         example: 1
+      phase:
+        type: "string"
     example:
+      phase: "phase"
+      tick_type: "tick_type"
       metric: "f1"
-      epoch: 1
+      tick: 1
       value: 0.365897
   AggregateResult:
     type: "object"
@@ -635,11 +647,15 @@ definitions:
     example:
       eid: "5b074775b5536c4bc124d95f"
       train_events:
-      - metric: "f1"
-        epoch: 1
+      - phase: "phase"
+        tick_type: "tick_type"
+        metric: "f1"
+        tick: 1
         value: 0.365897
-      - metric: "f1"
-        epoch: 1
+      - phase: "phase"
+        tick_type: "tick_type"
+        metric: "f1"
+        tick: 1
         value: 0.365897
       label: "label"
       version: "1.4.1"
@@ -647,21 +663,29 @@ definitions:
       hostname: "somehost"
       task: "classify"
       valid_events:
-      - metric: "f1"
-        epoch: 1
+      - phase: "phase"
+        tick_type: "tick_type"
+        metric: "f1"
+        tick: 1
         value: 0.365897
-      - metric: "f1"
-        epoch: 1
+      - phase: "phase"
+        tick_type: "tick_type"
+        metric: "f1"
+        tick: 1
         value: 0.365897
       exp_date: "2019-05-02T23:29:46.578675"
       config: "{dataset: sst2}"
       dataset: "SST2"
       test_events:
-      - metric: "f1"
-        epoch: 1
+      - phase: "phase"
+        tick_type: "tick_type"
+        metric: "f1"
+        tick: 1
         value: 0.365897
-      - metric: "f1"
-        epoch: 1
+      - phase: "phase"
+        tick_type: "tick_type"
+        metric: "f1"
+        tick: 1
         value: 0.365897
       username: "someone"
   ExperimentAggregate:
@@ -767,30 +791,26 @@ definitions:
     example:
       summary: "{}"
       task: "task"
-  Error:
+  Response:
     type: "object"
     required:
     - "code"
     - "message"
+    - "response_type"
     properties:
       code:
         type: "integer"
         format: "int32"
       message:
         type: "string"
-  Success:
-    type: "object"
-    required:
-    - "code"
-    - "message"
-    properties:
-      code:
-        type: "integer"
-        format: "int32"
-      message:
+      response_type:
         type: "string"
+        enum:
+        - "success"
+        - "error"
     example:
       code: 0
+      response_type: "success"
       message: "message"
 externalDocs:
   description: "Find out more about Swagger"
