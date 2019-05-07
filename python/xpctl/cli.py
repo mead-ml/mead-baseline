@@ -227,7 +227,7 @@ def details(user, metric, sort, event_type, task, sha1, n, output):
 @click.argument('label')
 def updatelabel(id, label, task):
     """Update the _label_ for an experiment (identified by its id) for a task"""
-    prev_label, new_label = RepoManager.get().rename_label(id, task, label)
+    prev_label, new_label = RepoManager.get().update_label(id, task, label)
     click.echo("[previous label for the experiment]: {} ".format(prev_label))
     click.echo("[updated label for the experiment]: {} ".format(new_label))
 
@@ -247,7 +247,7 @@ def delete(id, task):
         "from {} database. We will also delete the model file if it exists.".format(prev, task))
 
     if click.confirm('Do you want to continue?'):
-        if RepoManager.get().rm(id, task, click.echo) is True:
+        if RepoManager.get().remove_experiment(id, task, click.echo) is True:
             click.echo("record {} deleted successfully from database {}".format(id, task))
             return
     click.echo("no record deleted")

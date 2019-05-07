@@ -44,8 +44,9 @@ def get_model_location(task, eid):  # noqa: E501
 
     :param task: task
     :type task: str
-    :param eid: experiment_id
-    :type eid: sha1
+    :param eid: experiment id
+    :type eid: str
+
     :rtype: None
     """
     backend = flask.globals.current_app.backend
@@ -109,9 +110,9 @@ def get_results_by_prop(task, prop, value, reduction_dim=None, metric=None, sort
 
 
 def list_experiments_by_prop(task, prop, value, user=None, metric=None, sort=None, event_type=None):  # noqa: E501
-    """list all experiments for this property (sha1/ username) and value (1cd21df91770b4dbed64a683558b062e3dee61f0/ dpressel)
+    """list all experiments for this property and value
 
-    list all experiments for this property and value # noqa: E501
+    list all experiments for this property (sha1/ username) and value (1cd21df91770b4dbed64a683558b062e3dee61f0/ dpressel) # noqa: E501
 
     :param task: task name
     :type task: str
@@ -119,13 +120,13 @@ def list_experiments_by_prop(task, prop, value, user=None, metric=None, sort=Non
     :type prop: str
     :param value: value: dpressel, SST2
     :type value: str
-    :param user:
+    :param user: 
     :type user: List[str]
-    :param metric:
+    :param metric: 
     :type metric: List[str]
-    :param sort:
+    :param sort: 
     :type sort: str
-    :param event_type:
+    :param event_type: 
     :type event_type: str
 
     :rtype: List[Experiment]
@@ -143,13 +144,13 @@ def list_experiments_by_sha1(task, sha1, user=None, metric=None, sort=None, even
     :type task: str
     :param sha1: sha1
     :type sha1: str
-    :param user:
+    :param user: 
     :type user: List[str]
-    :param metric:
+    :param metric: 
     :type metric: List[str]
-    :param sort:
+    :param sort: 
     :type sort: str
-    :param event_type:
+    :param event_type: 
     :type event_type: str
 
     :rtype: List[Experiment]
@@ -158,19 +159,43 @@ def list_experiments_by_sha1(task, sha1, user=None, metric=None, sort=None, even
     return dto_list_results(backend.list_results(task, 'sha1', sha1, user, metric, sort, event_type))
 
 
-def put_result(experiment):  # noqa: E501
+def put_result(task, experiment, user=None, label=None):  # noqa: E501
     """Add a new experiment in database
 
      # noqa: E501
 
-    :param experiment: new mead experiment
+    :param task: 
+    :type task: str
+    :param experiment: 
     :type experiment: dict | bytes
+    :param user: 
+    :type user: str
+    :param label: 
+    :type label: str
 
-    :rtype: None
+    :rtype: Success
     """
     if connexion.request.is_json:
         experiment = Experiment.from_dict(connexion.request.get_json())  # noqa: E501
-    return 'do some magic!'
+    backend = flask.globals.current_app.backend
+    d = {'user': user, 'label': label}
+    return dto_put_requests(backend.put_result(task, config_obj, log_obj, **d))
+
+
+def remove_experiment(task, eid):  # noqa: E501
+    """delete an experiment from the database
+
+     # noqa: E501
+
+    :param task: 
+    :type task: str
+    :param eid: 
+    :type eid: str
+
+    :rtype: Success
+    """
+    backend = flask.globals.current_app.backend
+    return dto_put_requests(backend.remove_experiment(task, eid))
 
 
 def summary():  # noqa: E501
@@ -197,3 +222,21 @@ def task_summary(task):  # noqa: E501
     """
     backend = flask.globals.current_app.backend
     return dto_task_summary(backend.task_summary(task))
+
+
+def update_label(task, eid, label):  # noqa: E501
+    """update label for an experiment
+
+     # noqa: E501
+
+    :param task: 
+    :type task: str
+    :param eid: 
+    :type eid: str
+    :param label: 
+    :type label: str
+
+    :rtype: Success
+    """
+    backend = flask.globals.current_app.backend
+    return dto_put_requests(backend.update_label(task, eid, label))

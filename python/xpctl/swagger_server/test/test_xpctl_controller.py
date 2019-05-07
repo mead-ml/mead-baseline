@@ -8,6 +8,7 @@ from six import BytesIO
 from swagger_server.models.error import Error  # noqa: E501
 from swagger_server.models.experiment import Experiment  # noqa: E501
 from swagger_server.models.experiment_aggregate import ExperimentAggregate  # noqa: E501
+from swagger_server.models.success import Success  # noqa: E501
 from swagger_server.models.task_summary import TaskSummary  # noqa: E501
 from swagger_server.test import BaseTestCase
 
@@ -87,7 +88,7 @@ class TestXpctlController(BaseTestCase):
     def test_list_experiments_by_prop(self):
         """Test case for list_experiments_by_prop
 
-        list all experiments for this property (sha1/ username) and value (1cd21df91770b4dbed64a683558b062e3dee61f0/ dpressel)
+        list all experiments for this property and value
         """
         query_string = [('prop', 'prop_example'),
                         ('value', 'value_example'),
@@ -124,10 +125,25 @@ class TestXpctlController(BaseTestCase):
         Add a new experiment in database
         """
         experiment = Experiment()
+        query_string = [('user', 'user_example'),
+                        ('label', 'label_example')]
         response = self.client.open(
-            '/v2/putresult',
+            '/v2/put/{task}'.format(task='task_example'),
             method='POST',
             data=json.dumps(experiment),
+            content_type='application/json',
+            query_string=query_string)
+        self.assert200(response,
+                       'Response body is : ' + response.data.decode('utf-8'))
+
+    def test_remove_experiment(self):
+        """Test case for remove_experiment
+
+        delete an experiment from the database
+        """
+        response = self.client.open(
+            '/v2/delete/{task}/{eid}'.format(task='task_example', eid='eid_example'),
+            method='GET',
             content_type='application/json')
         self.assert200(response,
                        'Response body is : ' + response.data.decode('utf-8'))
@@ -151,6 +167,20 @@ class TestXpctlController(BaseTestCase):
         response = self.client.open(
             '/v2/summary/{task}/'.format(task='task_example'),
             method='GET')
+        self.assert200(response,
+                       'Response body is : ' + response.data.decode('utf-8'))
+
+    def test_update_label(self):
+        """Test case for update_label
+
+        update label for an experiment
+        """
+        query_string = [('label', 'label_example')]
+        response = self.client.open(
+            '/v2/updatelabel/{task}/{eid}/'.format(task='task_example', eid='eid_example'),
+            method='GET',
+            content_type='application/json',
+            query_string=query_string)
         self.assert200(response,
                        'Response body is : ' + response.data.decode('utf-8'))
 

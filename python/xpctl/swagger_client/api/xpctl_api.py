@@ -599,9 +599,9 @@ class XpctlApi(object):
             collection_formats=collection_formats)
 
     def list_experiments_by_prop(self, task, prop, value, **kwargs):  # noqa: E501
-        """list all experiments for this property (sha1/ username) and value (1cd21df91770b4dbed64a683558b062e3dee61f0/ dpressel)  # noqa: E501
+        """list all experiments for this property and value  # noqa: E501
 
-        list all experiments for this property and value  # noqa: E501
+        list all experiments for this property (sha1/ username) and value (1cd21df91770b4dbed64a683558b062e3dee61f0/ dpressel)  # noqa: E501
         This method makes a synchronous HTTP request by default. To make an
         asynchronous HTTP request, please pass async_req=True
         >>> thread = api.list_experiments_by_prop(task, prop, value, async_req=True)
@@ -627,9 +627,9 @@ class XpctlApi(object):
             return data
 
     def list_experiments_by_prop_with_http_info(self, task, prop, value, **kwargs):  # noqa: E501
-        """list all experiments for this property (sha1/ username) and value (1cd21df91770b4dbed64a683558b062e3dee61f0/ dpressel)  # noqa: E501
+        """list all experiments for this property and value  # noqa: E501
 
-        list all experiments for this property and value  # noqa: E501
+        list all experiments for this property (sha1/ username) and value (1cd21df91770b4dbed64a683558b062e3dee61f0/ dpressel)  # noqa: E501
         This method makes a synchronous HTTP request by default. To make an
         asynchronous HTTP request, please pass async_req=True
         >>> thread = api.list_experiments_by_prop_with_http_info(task, prop, value, async_req=True)
@@ -848,45 +848,51 @@ class XpctlApi(object):
             _request_timeout=params.get('_request_timeout'),
             collection_formats=collection_formats)
 
-    def put_result(self, experiment, **kwargs):  # noqa: E501
+    def put_result(self, task, experiment, **kwargs):  # noqa: E501
         """Add a new experiment in database  # noqa: E501
 
           # noqa: E501
         This method makes a synchronous HTTP request by default. To make an
         asynchronous HTTP request, please pass async_req=True
-        >>> thread = api.put_result(experiment, async_req=True)
+        >>> thread = api.put_result(task, experiment, async_req=True)
         >>> result = thread.get()
 
         :param async_req bool
-        :param Experiment experiment: new mead experiment (required)
-        :return: None
+        :param str task:  (required)
+        :param Experiment experiment: (required)
+        :param str user: 
+        :param str label: 
+        :return: Success
                  If the method is called asynchronously,
                  returns the request thread.
         """
         kwargs['_return_http_data_only'] = True
         if kwargs.get('async_req'):
-            return self.put_result_with_http_info(experiment, **kwargs)  # noqa: E501
+            return self.put_result_with_http_info(task, experiment, **kwargs)  # noqa: E501
         else:
-            (data) = self.put_result_with_http_info(experiment, **kwargs)  # noqa: E501
+            (data) = self.put_result_with_http_info(task, experiment, **kwargs)  # noqa: E501
             return data
 
-    def put_result_with_http_info(self, experiment, **kwargs):  # noqa: E501
+    def put_result_with_http_info(self, task, experiment, **kwargs):  # noqa: E501
         """Add a new experiment in database  # noqa: E501
 
           # noqa: E501
         This method makes a synchronous HTTP request by default. To make an
         asynchronous HTTP request, please pass async_req=True
-        >>> thread = api.put_result_with_http_info(experiment, async_req=True)
+        >>> thread = api.put_result_with_http_info(task, experiment, async_req=True)
         >>> result = thread.get()
 
         :param async_req bool
-        :param Experiment experiment: new mead experiment (required)
-        :return: None
+        :param str task:  (required)
+        :param Experiment experiment: (required)
+        :param str user: 
+        :param str label: 
+        :return: Success
                  If the method is called asynchronously,
                  returns the request thread.
         """
 
-        all_params = ['experiment']  # noqa: E501
+        all_params = ['task', 'experiment', 'user', 'label']  # noqa: E501
         all_params.append('async_req')
         all_params.append('_return_http_data_only')
         all_params.append('_preload_content')
@@ -901,6 +907,10 @@ class XpctlApi(object):
                 )
             params[key] = val
         del params['kwargs']
+        # verify the required parameter 'task' is set
+        if ('task' not in params or
+                params['task'] is None):
+            raise ValueError("Missing the required parameter `task` when calling `put_result`")  # noqa: E501
         # verify the required parameter 'experiment' is set
         if ('experiment' not in params or
                 params['experiment'] is None):
@@ -909,8 +919,14 @@ class XpctlApi(object):
         collection_formats = {}
 
         path_params = {}
+        if 'task' in params:
+            path_params['task'] = params['task']  # noqa: E501
 
         query_params = []
+        if 'user' in params:
+            query_params.append(('user', params['user']))  # noqa: E501
+        if 'label' in params:
+            query_params.append(('label', params['label']))  # noqa: E501
 
         header_params = {}
 
@@ -932,14 +948,121 @@ class XpctlApi(object):
         auth_settings = []  # noqa: E501
 
         return self.api_client.call_api(
-            '/putresult', 'POST',
+            '/put/{task}', 'POST',
             path_params,
             query_params,
             header_params,
             body=body_params,
             post_params=form_params,
             files=local_var_files,
-            response_type=None,  # noqa: E501
+            response_type='Success',  # noqa: E501
+            auth_settings=auth_settings,
+            async_req=params.get('async_req'),
+            _return_http_data_only=params.get('_return_http_data_only'),
+            _preload_content=params.get('_preload_content', True),
+            _request_timeout=params.get('_request_timeout'),
+            collection_formats=collection_formats)
+
+    def remove_experiment(self, task, eid, **kwargs):  # noqa: E501
+        """delete an experiment from the database  # noqa: E501
+
+          # noqa: E501
+        This method makes a synchronous HTTP request by default. To make an
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.remove_experiment(task, eid, async_req=True)
+        >>> result = thread.get()
+
+        :param async_req bool
+        :param str task:  (required)
+        :param str eid:  (required)
+        :return: Success
+                 If the method is called asynchronously,
+                 returns the request thread.
+        """
+        kwargs['_return_http_data_only'] = True
+        if kwargs.get('async_req'):
+            return self.remove_experiment_with_http_info(task, eid, **kwargs)  # noqa: E501
+        else:
+            (data) = self.remove_experiment_with_http_info(task, eid, **kwargs)  # noqa: E501
+            return data
+
+    def remove_experiment_with_http_info(self, task, eid, **kwargs):  # noqa: E501
+        """delete an experiment from the database  # noqa: E501
+
+          # noqa: E501
+        This method makes a synchronous HTTP request by default. To make an
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.remove_experiment_with_http_info(task, eid, async_req=True)
+        >>> result = thread.get()
+
+        :param async_req bool
+        :param str task:  (required)
+        :param str eid:  (required)
+        :return: Success
+                 If the method is called asynchronously,
+                 returns the request thread.
+        """
+
+        all_params = ['task', 'eid']  # noqa: E501
+        all_params.append('async_req')
+        all_params.append('_return_http_data_only')
+        all_params.append('_preload_content')
+        all_params.append('_request_timeout')
+
+        params = locals()
+        for key, val in six.iteritems(params['kwargs']):
+            if key not in all_params:
+                raise TypeError(
+                    "Got an unexpected keyword argument '%s'"
+                    " to method remove_experiment" % key
+                )
+            params[key] = val
+        del params['kwargs']
+        # verify the required parameter 'task' is set
+        if ('task' not in params or
+                params['task'] is None):
+            raise ValueError("Missing the required parameter `task` when calling `remove_experiment`")  # noqa: E501
+        # verify the required parameter 'eid' is set
+        if ('eid' not in params or
+                params['eid'] is None):
+            raise ValueError("Missing the required parameter `eid` when calling `remove_experiment`")  # noqa: E501
+
+        collection_formats = {}
+
+        path_params = {}
+        if 'task' in params:
+            path_params['task'] = params['task']  # noqa: E501
+        if 'eid' in params:
+            path_params['eid'] = params['eid']  # noqa: E501
+
+        query_params = []
+
+        header_params = {}
+
+        form_params = []
+        local_var_files = {}
+
+        body_params = None
+        # HTTP header `Accept`
+        header_params['Accept'] = self.api_client.select_header_accept(
+            ['application/json'])  # noqa: E501
+
+        # HTTP header `Content-Type`
+        header_params['Content-Type'] = self.api_client.select_header_content_type(  # noqa: E501
+            ['application/json'])  # noqa: E501
+
+        # Authentication setting
+        auth_settings = []  # noqa: E501
+
+        return self.api_client.call_api(
+            '/delete/{task}/{eid}', 'GET',
+            path_params,
+            query_params,
+            header_params,
+            body=body_params,
+            post_params=form_params,
+            files=local_var_files,
+            response_type='Success',  # noqa: E501
             auth_settings=auth_settings,
             async_req=params.get('async_req'),
             _return_http_data_only=params.get('_return_http_data_only'),
@@ -1122,6 +1245,121 @@ class XpctlApi(object):
             post_params=form_params,
             files=local_var_files,
             response_type='TaskSummary',  # noqa: E501
+            auth_settings=auth_settings,
+            async_req=params.get('async_req'),
+            _return_http_data_only=params.get('_return_http_data_only'),
+            _preload_content=params.get('_preload_content', True),
+            _request_timeout=params.get('_request_timeout'),
+            collection_formats=collection_formats)
+
+    def update_label(self, task, eid, label, **kwargs):  # noqa: E501
+        """update label for an experiment  # noqa: E501
+
+          # noqa: E501
+        This method makes a synchronous HTTP request by default. To make an
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.update_label(task, eid, label, async_req=True)
+        >>> result = thread.get()
+
+        :param async_req bool
+        :param str task:  (required)
+        :param str eid:  (required)
+        :param str label:  (required)
+        :return: Success
+                 If the method is called asynchronously,
+                 returns the request thread.
+        """
+        kwargs['_return_http_data_only'] = True
+        if kwargs.get('async_req'):
+            return self.update_label_with_http_info(task, eid, label, **kwargs)  # noqa: E501
+        else:
+            (data) = self.update_label_with_http_info(task, eid, label, **kwargs)  # noqa: E501
+            return data
+
+    def update_label_with_http_info(self, task, eid, label, **kwargs):  # noqa: E501
+        """update label for an experiment  # noqa: E501
+
+          # noqa: E501
+        This method makes a synchronous HTTP request by default. To make an
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.update_label_with_http_info(task, eid, label, async_req=True)
+        >>> result = thread.get()
+
+        :param async_req bool
+        :param str task:  (required)
+        :param str eid:  (required)
+        :param str label:  (required)
+        :return: Success
+                 If the method is called asynchronously,
+                 returns the request thread.
+        """
+
+        all_params = ['task', 'eid', 'label']  # noqa: E501
+        all_params.append('async_req')
+        all_params.append('_return_http_data_only')
+        all_params.append('_preload_content')
+        all_params.append('_request_timeout')
+
+        params = locals()
+        for key, val in six.iteritems(params['kwargs']):
+            if key not in all_params:
+                raise TypeError(
+                    "Got an unexpected keyword argument '%s'"
+                    " to method update_label" % key
+                )
+            params[key] = val
+        del params['kwargs']
+        # verify the required parameter 'task' is set
+        if ('task' not in params or
+                params['task'] is None):
+            raise ValueError("Missing the required parameter `task` when calling `update_label`")  # noqa: E501
+        # verify the required parameter 'eid' is set
+        if ('eid' not in params or
+                params['eid'] is None):
+            raise ValueError("Missing the required parameter `eid` when calling `update_label`")  # noqa: E501
+        # verify the required parameter 'label' is set
+        if ('label' not in params or
+                params['label'] is None):
+            raise ValueError("Missing the required parameter `label` when calling `update_label`")  # noqa: E501
+
+        collection_formats = {}
+
+        path_params = {}
+        if 'task' in params:
+            path_params['task'] = params['task']  # noqa: E501
+        if 'eid' in params:
+            path_params['eid'] = params['eid']  # noqa: E501
+
+        query_params = []
+        if 'label' in params:
+            query_params.append(('label', params['label']))  # noqa: E501
+
+        header_params = {}
+
+        form_params = []
+        local_var_files = {}
+
+        body_params = None
+        # HTTP header `Accept`
+        header_params['Accept'] = self.api_client.select_header_accept(
+            ['application/json'])  # noqa: E501
+
+        # HTTP header `Content-Type`
+        header_params['Content-Type'] = self.api_client.select_header_content_type(  # noqa: E501
+            ['application/json'])  # noqa: E501
+
+        # Authentication setting
+        auth_settings = []  # noqa: E501
+
+        return self.api_client.call_api(
+            '/updatelabel/{task}/{eid}/', 'GET',
+            path_params,
+            query_params,
+            header_params,
+            body=body_params,
+            post_params=form_params,
+            files=local_var_files,
+            response_type='Success',  # noqa: E501
             auth_settings=auth_settings,
             async_req=params.get('async_req'),
             _return_http_data_only=params.get('_return_http_data_only'),

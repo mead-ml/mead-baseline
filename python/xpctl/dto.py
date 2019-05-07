@@ -1,6 +1,5 @@
-from swagger_server.models import Experiment, ExperimentAggregate, Result, Error, AggregateResult, TaskSummary
-from xpctl.data import TaskSummary as TTaskSummary
-from xpctl.backend.mongo.dto import MongoError
+from swagger_server.models import Experiment, ExperimentAggregate, Result, Error, Success, AggregateResult, TaskSummary
+from xpctl.backend.mongo.dto import MongoError, MongoSuccess
 
 
 def dto_experiment_details(exp):
@@ -74,3 +73,10 @@ def dto_get_model_location(location):
     if type(location) == MongoError:
         return Error(code=location.code, message=location.message)
     return location
+
+
+def dto_put_requests(result):
+    if type(result) == MongoError:
+        return Error(**result.__dict__)
+    else:
+        return Success(**result.__dict__)

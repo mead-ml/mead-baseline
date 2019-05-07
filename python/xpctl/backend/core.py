@@ -141,7 +141,7 @@ class ExperimentRepo(object):
         """
         pass
 
-    def rename_label(self, id, task, new_label):
+    def update_label(self, id, task, new_label):
         """Rename the user-defined label for the task identified by this id
 
         :param id: The identifier for this record
@@ -151,7 +151,7 @@ class ExperimentRepo(object):
         """
         raise NotImplemented("Base ExperimentRepo events are immutable")
 
-    def rm(self, id, task, print_fn=print):
+    def remove_experiment(self, id, task, print_fn=print):
         """Remove a record specified by this id
 
         :param id: The identifier for this record

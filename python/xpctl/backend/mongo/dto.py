@@ -112,9 +112,15 @@ class MongoTaskDatasetSummarySet(TaskDatasetSummarySet):
         super(MongoTaskDatasetSummarySet, self).__init__(task, data)
     
 
-class MongoError(Exception):
+class MongoError(object):
     def __init__(self, message, code=550):
         super(MongoError, self).__init__()
         self.message = message
         self.code = code
 
+
+class MongoSuccess(object):
+    def __init__(self, message, code=250):
+        super(MongoSuccess, self).__init__()
+        self.message = message
+        self.code = code

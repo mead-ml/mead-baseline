@@ -8,7 +8,8 @@ import getpass
 from baseline.utils import export, listify, read_config_file, write_config_file, unzip_files
 from mead.utils import hash_config, configure_logger
 from xpctl.backend.core import ExperimentRepo, store_model, EVENT_TYPES
-from xpctl.backend.mongo.dto import MongoResult, MongoResultSet, MongoError, MongoTaskDatasetSummary, MongoTaskDatasetSummarySet
+from xpctl.backend.mongo.dto import MongoResult, MongoResultSet, MongoSuccess, MongoError, \
+    MongoTaskDatasetSummary, MongoTaskDatasetSummarySet
 from xpctl.backend.helpers import log2json, get_experiment_label, METRICS_SORT_ASCENDING
 from bson.objectid import ObjectId
 from baseline.version import __version__
@@ -66,7 +67,6 @@ class MongoRepo(ExperimentRepo):
 
         checkpoint_base = kwargs.get('checkpoint_base', None)
         checkpoint_store = kwargs.get('checkpoint_store', None)
-        print_fn = kwargs.get('print_fn', self.logger.warning)
         hostname = kwargs.get('hostname', socket.gethostname())
         username = kwargs.get('username', getpass.getuser())
         config_sha1 = hash_config(config_obj)
@@ -88,22 +88,16 @@ class MongoRepo(ExperimentRepo):
             "checkpoint": checkpoint
         }
         
-        if task in self.db.collection_names():
-            print_fn("updating results for existing task [{}] in host [{}]".format(task, self.dbhost))
-        else:
-            print_fn("creating new task [{}] in host [{}]".format(task, self.dbhost))
+        try:
+            coll = self.db[task]
+            result = coll.insert_one(post)
+            return MongoSuccess(message='experiment successfully inserted: {}'.format(result.inserted_id))
+        except pymongo.errors.PyMongoError as e:
+            return MongoError(message='experiment could not be inserted: {}'.format(e.message))
+
+    def put_model(self, eid, task, checkpoint_base, checkpoint_store, print_fn=print):
         coll = self.db[task]
-        result = coll.insert_one(post)
-
-        print_fn("results updated, the new results are stored with the record id: {}".format(result.inserted_id))
-        return result.inserted_id
-
-    def has_task(self, task):
-        return task in self.get_task_names()
-
-    def put_model(self, id, task, checkpoint_base, checkpoint_store, print_fn=print):
-        coll = self.db[task]
-        query = {'_id': ObjectId(id)}
+        query = {'_id': ObjectId(eid)}
         projection = {'sha1': 1}
         results = list(coll.find(query, projection))
         if not results:
@@ -112,36 +106,37 @@ class MongoRepo(ExperimentRepo):
         sha1 = results[0]['sha1']
         model_loc = store_model(checkpoint_base, sha1, checkpoint_store, print_fn)
         if model_loc is not None:
-            coll.update_one({'_id': ObjectId(id)}, {'$set': {'checkpoint': model_loc}}, upsert=False)
+            coll.update_one({'_id': ObjectId(eid)}, {'$set': {'checkpoint': model_loc}}, upsert=False)
         return model_loc
 
-    def get_label(self, id, task):
-        coll = self.db[task]
-        label = coll.find_one({'_id': ObjectId(id)}, {'label': 1})["label"]
-        return label
-
-    def rename_label(self, id, task, new_label):
-        coll = self.db[task]
-        prev_label = coll.find_one({'_id': ObjectId(id)}, {'label': 1})["label"]
-        coll.update({'_id': ObjectId(id)}, {'$set': {'label': new_label}}, upsert=False)
-        changed_label = coll.find_one({'_id': ObjectId(id)}, {'label': 1})["label"]
-        return prev_label, changed_label
-
-    def rm(self, id, task, print_fn=print):
-        coll = self.db[task]
-        prev = coll.find_one({'_id': ObjectId(id)}, {'label': 1})
-        if prev is None:
-            return False
-
-        model_loc = self.get_model_location(id, task)
-        if model_loc is not None and os.path.exists(model_loc):
-                os.remove(model_loc)
-        else:
-            print_fn("No model stored for this record. Only purging the database.")
-        coll.remove({'_id': ObjectId(id)})
-        assert coll.find_one({'_id': ObjectId(id)}) is None
-        print_fn("record {} deleted successfully from database {}".format(id, task))
-        return True
+    def update_label(self, task, eid, new_label):
+        try:
+            coll = self.db[task]
+            r = coll.find_one({'_id': ObjectId(eid)}, {'label': 1})
+            if r is None:
+                return MongoError(message='label update failed: {} not found in {} database'.format(eid, task))
+            prev_label = r["label"]
+            coll.update({'_id': ObjectId(eid)}, {'$set': {'label': new_label}}, upsert=False)
+            changed_label = coll.find_one({'_id': ObjectId(eid)}, {'label': 1})["label"]
+            return MongoSuccess(message='for experiment {} label was changed from {} to {}'
+                                .format(eid, prev_label, changed_label))
+        except pymongo.errors.PyMongoError as e:
+            return MongoError(message='label update failed: {}'.format(e.message))
+        
+    def remove_experiment(self, task, eid):
+        try:
+            coll = self.db[task]
+            prev = coll.find_one({'_id': ObjectId(eid)}, {'label': 1})
+            if prev is None:
+                return MongoError(message='delete operation failed: {} not found in {} database'.format(eid, task))
+            model_loc = self.get_model_location(task, eid)
+            if type(model_loc) != MongoError and os.path.exists(model_loc):
+                    os.remove(model_loc)
+            coll.remove({'_id': ObjectId(eid)})
+            assert coll.find_one({'_id': ObjectId(eid)}) is None
+            return MongoSuccess("record {} deleted successfully from database {}".format(eid, task))
+        except pymongo.errors.PyMongoError as e:
+            return MongoError(message='experiment could not be removed: {}'.format(e.message))
 
     @staticmethod
     def _get_metrics_mongo(xs):
@@ -251,7 +246,7 @@ class MongoRepo(ExperimentRepo):
 
         if not all_results:
             return MongoError(message='no information available for [{}]: [{}] in task database [{}]'
-                              .format(prop, value, task))
+                                .format(prop, value, task))
         experiments = self.mongo_to_experiment_set(task, all_results, event_type=event_type, metrics=metrics)
         if type(experiments) == MongoError:
             return experiments
@@ -294,7 +289,7 @@ class MongoRepo(ExperimentRepo):
         all_results = list(coll.find(query))
         if not all_results:
             return MongoError(message='no information available for [{}]: [{}] in task database [{}]'
-                              .format(prop, value, task))
+                                .format(prop, value, task))
         resultset = self.mongo_to_experiment_set(task, all_results, event_type=event_type, metrics=metrics)
         if type(resultset) is not MongoError:
             return self.aggregate_results(resultset, reduction_dim, event_type, numexp_reduction_dim)

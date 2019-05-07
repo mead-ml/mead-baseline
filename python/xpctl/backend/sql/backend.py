@@ -182,7 +182,7 @@ class SQLRepo(ExperimentRepo):
             return None
         return exp.label
 
-    def rename_label(self, id, task, new_label):
+    def update_label(self, id, task, new_label):
         session = self.Session()
         exp = session.query(Experiment).get(id)
         old_label = exp.label
@@ -190,7 +190,7 @@ class SQLRepo(ExperimentRepo):
         session.commit()
         return old_label, new_label
 
-    def rm(self, id, task, print_fn=print):
+    def remove_experiment(self, id, task, print_fn=print):
         session = self.Session()
         exp = session.query(Experiment).get(id)
         exp.delete(synchronize_session=False)

@@ -21,7 +21,7 @@ schemes:
 - "https"
 - "http"
 paths:
-  /putresult:
+  /put/{task}:
     post:
       tags:
       - "xpctl"
@@ -33,27 +33,114 @@ paths:
       produces:
       - "application/json"
       parameters:
-      - in: "body"
-        name: "experiment"
-        description: "new mead experiment"
+      - name: "task"
+        in: "path"
+        type: "string"
+        description: ""
         required: true
+      - name: "experiment"
+        in: "body"
         schema:
           $ref: "#/definitions/Experiment"
+        required: True
+      - name: "user"
+        in: "query"
+        type: "string"
+        description: ""
+        required: false
+      - name: "label"
+        in: "query"
+        type: "string"
+        description: ""
+        required: false
       responses:
         200:
           description: "success"
+          schema:
+            $ref: "#/definitions/Success"
         default:
           description: "unexpected error"
           schema:
             $ref: "#/definitions/Error"
       x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
-      
+
+  /updatelabel/{task}/{eid}/:
+    get:
+      tags:
+      - "xpctl"
+      summary: "update label for an experiment"
+      description: ""
+      operationId: "update_label"
+      consumes:
+      - "application/json"
+      produces:
+      - "application/json"
+      parameters:
+      - name: "task"
+        in: "path"
+        type: "string"
+        description: ""
+        required: true
+      - name: "eid"
+        in: "path"
+        type: "string"
+        description: ""
+        required: true
+      - name: "label"
+        in: "query"
+        type: "string"
+        description: ""
+        required: true
+      responses:
+        200:
+          description: "success"
+          schema:
+            $ref: "#/definitions/Success"
+        default:
+          description: "unexpected error"
+          schema:
+            $ref: "#/definitions/Error"
+      x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
+
+  /delete/{task}/{eid}:
+    get:
+      tags:
+      - "xpctl"
+      summary: "delete an experiment from the database"
+      description: ""
+      operationId: "remove_experiment"
+      consumes:
+      - "application/json"
+      produces:
+      - "application/json"
+      parameters:
+      - name: "task"
+        in: "path"
+        type: "string"
+        description: ""
+        required: true
+      - name: "eid"
+        in: "path"
+        type: "string"
+        description: ""
+        required: true
+      responses:
+        200:
+          description: "success"
+          schema:
+            $ref: "#/definitions/Success"
+        default:
+          description: "unexpected error"
+          schema:
+            $ref: "#/definitions/Error"
+      x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
+
   /details/{task}:
       get:
         tags:
         - "xpctl"
-        summary: "list all experiments for this property (sha1/ username) and value (1cd21df91770b4dbed64a683558b062e3dee61f0/ dpressel)"
-        description: "list all experiments for this property and value"
+        summary: "list all experiments for this property and value"
+        description: "list all experiments for this property (sha1/ username) and value (1cd21df91770b4dbed64a683558b062e3dee61f0/ dpressel)"
         operationId: "list_experiments_by_prop"
         produces:
         - "application/json"
@@ -605,7 +692,18 @@ definitions:
         format: "int32"
       message:
         type: "string"
-  
+
+  Success:
+      type: "object"
+      required:
+      - "code"
+      - "message"
+      properties:
+        code:
+          type: "integer"
+          format: "int32"
+        message:
+          type: "string"
 
 externalDocs:
   description: "Find out more about Swagger"
