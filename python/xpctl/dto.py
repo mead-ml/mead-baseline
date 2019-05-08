@@ -42,7 +42,7 @@ def dto_get_results(agg_exps):
 
 def dto_list_results(exps):
     if type(exps) == xpctl.data.Error:
-        return Response(**exps.__dict__)
+        return abort(500, exps.message)
     results = []
     for exp in exps:
         if type(exp) == xpctl.data.Error:
@@ -60,13 +60,13 @@ def dto_list_results(exps):
 
 def dto_task_summary(task_summary):
     if type(task_summary) == xpctl.data.Error:
-        return Response(**task_summary.__dict__)
+        return abort(500, task_summary.message)
     return TaskSummary(**task_summary.__dict__)
 
 
 def dto_summary(task_summaries):
     if type(task_summaries) == xpctl.data.Error:
-        return Response(**task_summaries.__dict__)
+        return abort(500, task_summaries.message)
     return [TaskSummary(**task_summary.__dict__) for task_summary in task_summaries]
 
 

@@ -38,8 +38,8 @@ def insert_in_df(prop_name_loc, df, exp):
         df.insert(location, column=prop_name, value=[get_prop_value(exp, prop_name)]*len(df))
         
         
-def experiment_to_df(exp: Experiment, prop_name_loc={}, sort=None, event_type='test_events'):
-    prop_name_loc = {'sha1': 0, 'id': 1, 'user':  2} if not prop_name_loc else prop_name_loc
+def experiment_to_df(exp: Experiment, prop_name_loc={}, event_type='test_events', sort=None):
+    prop_name_loc = {'sha1': 0, 'id': 1, 'username':  2} if not prop_name_loc else prop_name_loc
     if event_type == 'train_events' and exp.train_events:
         result_df = pack_result(exp.train_events)
         insert_in_df(prop_name_loc, result_df, exp)
@@ -79,4 +79,12 @@ def experiment_aggregate_list_to_df(exp_aggs: List[ExperimentAggregate], event_t
     prop_name_loc = {'sha1': 0, 'num_exps': 1}
     for exp_agg in exp_aggs:
         result_df = result_df.append(experiment_aggregate_to_df(exp_agg, prop_name_loc, event_type))
+    return result_df
+
+
+def experiment_list_to_df(exps: List[Experiment], prop_name_loc={}, event_type='test_events'):
+    result_df = pd.DataFrame()
+    prop_name_loc = {'sha1': 0, 'id': 1, 'username':  2} if not prop_name_loc else prop_name_loc
+    for exp in exps:
+        result_df = result_df.append(experiment_to_df(exp, prop_name_loc, event_type, sort=None))
     return result_df

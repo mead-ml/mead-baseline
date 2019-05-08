@@ -73,10 +73,12 @@ def experiment(task, id, event_type, output, metric, sort, output_fields):
     ServerManager.get()
     try:
         result = ServerManager.api.experiment_details(task, id, event_type=event_type, metric=metric)
+        prop_name_loc = {k: i for i, k in enumerate(output_fields)}
+        result_df = experiment_to_df(exp=result, prop_name_loc=prop_name_loc, event_type=event_type, sort=sort)
         if output is None:
-            click.echo(experiment_to_df(result, {k: i for i, k in enumerate(output_fields)}, sort, event_type))
+            click.echo(result_df)
         else:
-            experiment_to_df(result, {k: i for i, k in enumerate(output_fields)}, sort, event_type).to_csv(output)
+            result_df.to_csv(output)
     except ApiException as e:
         print(json.loads(e.body)['detail'])
 
@@ -99,7 +101,7 @@ def results(task, dataset, metric, sort, nconfig, event_type, n, output):
         result = ServerManager.api.get_results_by_dataset(task, dataset, reduction_dim=reduction_dim,
                                                           metric=metric, sort=sort, numexp_reduction_dim=nconfig,
                                                           event_type=event_type)
-        result_df = experiment_aggregate_list_to_df(result, event_type)
+        result_df = experiment_aggregate_list_to_df(exp_aggs=result, event_type=event_type)
         if n != -1:
             result_df = result_df.head(n)
         if output is None:
@@ -114,32 +116,34 @@ def results(task, dataset, metric, sort, nconfig, event_type, n, output):
 @click.option('--user', multiple=True, help="list of users (testuser, root), [multiple]: --user a --user b")
 @click.option('--metric', multiple=True, help="list of metrics (prec, recall, f1, accuracy),[multiple]: --metric f1 "
                                               "--metric acc")
-@click.option('--sort', help="specify one metric to sort the results")
+@click.option('--sort', help="specify one metric to sort the results", default=None)
 @click.option('--event_type', default='test', help="specify one metric to sort the results")
 @click.option('--n', help='number of experiments', type=int)
 @click.option('--output', help='output file (csv)')
+@click.option('--output_fields', multiple=True, help="which field(s) you want to see in output",
+              default=['username', 'eid'])
 @click.argument('task')
 @click.argument('sha1')
-def details(user, metric, sort, event_type, task, sha1, n, output):
+def details(task, sha1, user, metric, sort, event_type, n, output, output_fields):
     """
     Shows the results for all experiments for a particular config (sha1). Optionally filter out by user(s), metric(s), or sort by one metric. Shows the results on the test data by default, provide event_type (train/valid/test) to see for other datasets.
     """
-    if not ServerManager.get().has_task(task):
-        click.echo("no results for the specified task {}, use another task".format(task))
-        return
-
-    event_type = EVENT_TYPES.get(event_type, None)
-    if event_type is None:
-        click.echo("we do not have results for the event type: {}".format(event_type))
-        return
-
-    result_frame = ServerManager.get().experiment_details(user, metric, sort, task, event_type, sha1, n)
-    if result_frame is not None:
-        click.echo(result_frame)
-    else:
-        click.echo("no result found for this query")
-    if output is not None:
-        result_frame.to_csv(os.path.expanduser(output), index=False)
+    event_type = EVENT_TYPES[event_type]
+    ServerManager.get()
+    try:
+        result = ServerManager.api.list_experiments_by_sha1(task, sha1, user=user, metric=metric, sort=sort,
+                                                            event_type=event_type)
+        
+        prop_name_loc = {k: i for i, k in enumerate(output_fields)}
+        result_df = experiment_list_to_df(exps=result, prop_name_loc=prop_name_loc, event_type=event_type)
+        if n != -1:
+            result_df = result_df.head(n)
+        if output is None:
+            click.echo(result_df)
+        else:
+            result_df.to_csv(output)
+    except ApiException as e:
+        print(json.loads(e.body)['detail'])
 
 #
 #
