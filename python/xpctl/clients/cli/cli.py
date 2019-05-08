@@ -32,9 +32,11 @@ class ServerManager(object):
             ServerManager.api = XpctlApi(api_client)
             
         if ServerManager.api is not None:
-            click.echo("connection with xpctl server successful with [host]: {}".format(ServerManager.host))
+            click.echo(click.style(
+                "connection with xpctl server successful with [host]: {}".format(ServerManager.host), fg='green'
+            ))
             return ServerManager.api
-        click.echo("server connection unsuccessful, aborting")
+        click.echo(click.style("server connection unsuccessful, aborting", fg='red'))
         sys.exit(1)
 
 
@@ -46,12 +48,15 @@ def cli(host):
 
 @cli.command()
 @click.argument('task')
-@click.argument('id')
-def getmodelloc(task, id):
+@click.argument('eid')
+def getmodelloc(task, eid):
     """Get the model location for a particular task and record id"""
     ServerManager.get()
-    result = ServerManager.api.get_model_location(task, id)
-    click.echo('[{}] {}'.format(result.response_type, result.message))
+    result = ServerManager.api.get_model_location(task, eid)
+    if result.response_type == 'success':
+        click.echo(click.style(result.message, fg='green'))
+    else:
+        click.echo(click.style(result.message, fg='red'))
 
 
 @cli.command()
@@ -63,13 +68,13 @@ def getmodelloc(task, id):
 @click.option('--output_fields', multiple=True, help="which field(s) you want to see in output",
               default=['username', 'sha1'])
 @click.argument('task')
-@click.argument('id')
-def experiment(task, id, event_type, output, metric, sort, output_fields):
+@click.argument('eid')
+def experiment(task, eid, event_type, output, metric, sort, output_fields):
     """Get the details for an experiment"""
     event_type = EVENT_TYPES[event_type]
     ServerManager.get()
     try:
-        result = ServerManager.api.experiment_details(task, id, event_type=event_type, metric=metric)
+        result = ServerManager.api.experiment_details(task, eid, event_type=event_type, metric=metric)
         prop_name_loc = {k: i for i, k in enumerate(output_fields)}
         result_df = experiment_to_df(exp=result, prop_name_loc=prop_name_loc, event_type=event_type, sort=sort)
         if output is None:
@@ -77,7 +82,7 @@ def experiment(task, id, event_type, output, metric, sort, output_fields):
         else:
             result_df.to_csv(output)
     except ApiException as e:
-        print(json.loads(e.body)['detail'])
+        click.echo(click.style(json.loads(e.body)['detail'], fg='red'))
 
 
 @cli.command()
@@ -106,7 +111,7 @@ def results(task, dataset, metric, sort, nconfig, event_type, n, output):
         else:
             result_df.to_csv(output)
     except ApiException as e:
-        print(json.loads(e.body)['detail'])
+        click.echo(click.style(json.loads(e.body)['detail'], fg='red'))
 
 
 @cli.command()
@@ -128,8 +133,8 @@ def details(task, sha1, user, metric, sort, event_type, n, output, output_fields
     event_type = EVENT_TYPES[event_type]
     ServerManager.get()
     try:
-        result = ServerManager.api.list_experiments_by_sha1(task, sha1, user=user, metric=metric, sort=sort,
-                                                            event_type=event_type)
+        result = ServerManager.api.list_experiments_by_sha1(task, sha1, user=user, metric=metric,
+                                                            sort=sort, event_type=event_type)
         
         prop_name_loc = {k: i for i, k in enumerate(output_fields)}
         result_df = experiment_list_to_df(exps=result, prop_name_loc=prop_name_loc, event_type=event_type)
@@ -140,13 +145,13 @@ def details(task, sha1, user, metric, sort, event_type, n, output, output_fields
         else:
             result_df.to_csv(output)
     except ApiException as e:
-        print(json.loads(e.body)['detail'])
+        click.echo(click.style(json.loads(e.body)['detail'], fg='red'))
 
 
 @cli.command()
-@click.argument("task")
-@click.argument("sha1")
-@click.argument("filename")
+@click.argument('task')
+@click.argument('sha1')
+@click.argument('filename')
 def config2json(task, sha1, filename):
     """Exports the config file for an experiment as a json file."""
     ServerManager.get()
@@ -154,7 +159,7 @@ def config2json(task, sha1, filename):
         result = ServerManager.api.config2json(task, sha1)
         write_config_file(result, filename)
     except ApiException as e:
-        print(json.loads(e.body)['detail'])
+        click.echo(click.style(json.loads(e.body)['detail'], fg='red'))
 
 
 @cli.command()
@@ -175,42 +180,37 @@ def lbsummary(task):
             result = task_summaries_to_df(ServerManager.api.summary())
         click.echo(result)
     except ApiException as e:
-        print(json.loads(e.body)['detail'])
-
+        click.echo(click.style(json.loads(e.body)['detail'], fg='red'))
 
 
 @cli.command()
 @click.argument('task')
-@click.argument('id')
+@click.argument('eid')
 @click.argument('label')
-def updatelabel(task, label, id):
+def updatelabel(task, label, eid):
     """Update the _label_ for an experiment (identified by its id) for a task"""
     ServerManager.get()
-    result = ServerManager.api.update_label(task, id, label)
-    click.echo('[{}] {}'.format(result.response_type, result.message))
-#
-#
-# @cli.command()
-# @click.argument('task')
-# @click.argument('id')
-# def delete(id, task):
-#     '''
-#     Deletes a record from the database and the associated model file from model-checkpoints if it exists.
-#     '''
-#     prev = ServerManager.get().get_label(id, task)
-#     if prev is None:
-#         click.echo("The record {} doesn't exist in the database".format(id))
-#         return
-#     click.echo("You are going to delete the record {} " +
-#                "from {} database. We will also delete the model file if it exists.".format(prev, task))
-#
-#     if click.confirm('Do you want to continue?'):
-#         if ServerManager.get().rm(id, task, click.echo) is True:
-#             click.echo("record {} deleted successfully from database {}".format(id, task))
-#             return
-#     click.echo("no record deleted")
-#
-#
+    result = ServerManager.api.update_label(task, eid, label)
+    if result.response_type == 'success':
+        click.echo(click.style(result.message, fg='green'))
+    else:
+        click.echo(click.style(result.message, fg='red'))
+
+
+@cli.command()
+@click.argument('task')
+@click.argument('eid')
+def delete(task, eid):
+    """Deletes a record from the database and the associated model file from model-checkpoints if it exists."""
+    ServerManager.get()
+    result = ServerManager.api.remove_experiment(task, eid)
+    if result.response_type == 'success':
+        click.echo(click.style(result.message, fg='green'))
+    else:
+        click.echo(click.style(result.message, fg='red'))
+
+
+
 # # Put results in database
 # @cli.command()
 # @click.option("--user", help="username", default=getpass.getuser())

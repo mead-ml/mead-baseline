@@ -132,13 +132,13 @@ class MongoRepo(ExperimentRepo):
             coll = self.db[task]
             prev = coll.find_one({'_id': ObjectId(eid)}, {'label': 1})
             if prev is None:
-                return Error(message='delete operation failed: {} not found in {} database'.format(eid, task))
+                return Error(message='delete operation failed: experiment [{}] not found in [{}] database'.format(eid, task))
             model_loc = self.get_model_location(task, eid)
             if type(model_loc) != Error and os.path.exists(model_loc):
                     os.remove(model_loc)
             coll.remove({'_id': ObjectId(eid)})
             assert coll.find_one({'_id': ObjectId(eid)}) is None
-            return Success("record {} deleted successfully from database {}".format(eid, task))
+            return Success("record [{}] deleted successfully from database [{}]".format(eid, task))
         except pymongo.errors.PyMongoError as e:
             return Error(message='experiment could not be removed: {}'.format(e.message))
 
@@ -242,8 +242,8 @@ class MongoRepo(ExperimentRepo):
     def list_results(self, task, prop, value, user, metric, sort, event_type):
         event_type = event_type if event_type is not None else 'test_events'
 
-        metrics = listify(metric)
-        users = listify(user)
+        metrics = [x for x in listify(metric) if x.strip()]
+        users = [x for x in listify(user) if x.strip()]
         d = {'username': users, prop: value}
 
         coll = self.db[task]
@@ -256,7 +256,7 @@ class MongoRepo(ExperimentRepo):
         experiments = self._mongo_to_experiment_set(task, all_results, event_type=event_type, metrics=metrics)
         if type(experiments) == Error:
             return experiments
-        if sort is None:
+        if sort is None or (type(sort) == str and sort == 'None'):
             return experiments
         else:
             if event_type == 'test_events':
@@ -268,7 +268,7 @@ class MongoRepo(ExperimentRepo):
                 return Error(message='experiments can only be sorted when event_type=test_results')
 
     def get_experiment_details(self, task, eid, event_type, metric):
-        metrics = listify(metric)
+        metrics = [x for x in listify(metric) if x.strip()]
         event_type = event_type if event_type is not None else 'test_events'
 
         coll = self.db[task]
@@ -289,7 +289,7 @@ class MongoRepo(ExperimentRepo):
         return grouped_result.reduce(aggregate_fns=aggregate_fns, event_type=event_type)
 
     def get_results(self, task, prop, value, reduction_dim, metric, sort, numexp_reduction_dim, event_type):
-        metrics = listify(metric)
+        metrics = [x for x in listify(metric)]
         event_type = event_type if event_type is not None else 'test_events'
         reduction_dim = reduction_dim if reduction_dim is not None else 'sha1'
         coll = self.db[task]

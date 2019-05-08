@@ -1,7 +1,8 @@
 import pandas as pd
 from swagger_client.models import Experiment, ExperimentAggregate, Result, AggregateResult, TaskSummary
 from typing import List
-from baseline.utils import write_config_file
+from baseline.utils import write_config_file, listify
+
 
 def pack_result(results: List[Result]):
     """ List of results to event data"""
