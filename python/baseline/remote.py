@@ -132,7 +132,8 @@ class RemoteModelREST(RemoteModel):
             raise ValueError("remote has to have the form <host_name>:<port>")
         self.hostname, self.port = url.netloc.split(":")
         v_str = '/versions/{}'.format(self.version) if self.version is not None else ''
-        self.path = '/v1/models/{}{}:predict'.format(self.name, v_str)
+        path = url.path if url.path.endswith("/") else "{}/".format(url.path)
+        self.path = '{}v1/models/{}{}:predict'.format(path, self.name, v_str)
         self.headers = {'Content-type': 'application/json'}
 
     def predict(self, examples, **kwargs):
