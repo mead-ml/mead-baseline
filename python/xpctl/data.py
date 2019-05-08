@@ -34,14 +34,14 @@ class AggregateResult(object):
 
 class Experiment(object):
     """ an experiment"""
-    def __init__(self, train_events, valid_events, test_events, task, _id, username, hostname, config, exp_date, label, dataset,
-                 sha1, version):
+    def __init__(self, train_events, valid_events, test_events, task, eid, username, hostname, config, exp_date, label,
+                 dataset, sha1, version):
         super(Experiment, self).__init__()
         self.task = task
         self.train_events = train_events if train_events is not None else []
         self.valid_events = valid_events if valid_events is not None else []
         self.test_events = test_events if test_events is not None else []
-        self.eid = _id
+        self.eid = eid
         self.username = username
         self.hostname = hostname
         self.config = config

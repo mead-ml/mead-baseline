@@ -58,9 +58,9 @@ class MongoRepo(ExperimentRepo):
             else:
                 raise RuntimeError("model could not be stored, see previous errors")
 
-    def put_result(self, exp):
+    def put_result(self, task, exp):
         unpacked = unpack_experiment(exp)
-        return self._put_result(task=unpacked.task, config_obj=unpacked.config_obj, events_obj=unpacked.events_obj,
+        return self._put_result(task=task, config_obj=unpacked.config_obj, events_obj=unpacked.events_obj,
                                 **unpacked.extra_args)
         
     def _put_result(self, task, config_obj, events_obj, **kwargs):

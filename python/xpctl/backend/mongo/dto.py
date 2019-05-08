@@ -1,6 +1,7 @@
 from xpctl.data import Experiment, ExperimentSet, Result
 from collections import namedtuple
 from typing import List
+import json
 TRAIN_EVENT = 'train_events'
 DEV_EVENT = 'valid_events'
 TEST_EVENT = 'test_events'
@@ -87,7 +88,7 @@ class MongoResultSet(object):
             version = first_result.version
             exp = Experiment(
                              task=task,
-                             _id=_id,
+                             eid=_id,
                              sha1=sha1,
                              config=config,
                              dataset=dataset,
@@ -111,7 +112,11 @@ def pack_events(results: List[Result]):
     d = {}
     for result in results:
         if result.tick not in d:
-            d[result.tick] = {result.metric: result.value, "tick_type": result.tick_type, "phase": result.phase}
+            d[result.tick] = {result.metric: result.value,
+                              'tick_type': result.tick_type,
+                              'phase': result.phase,
+                              'tick': result.tick
+                              }
         else:
             d[result.tick].update({result.metric: result.value})
     return list(d.values())
@@ -127,8 +132,8 @@ def unpack_experiment(exp):
     d.pop('test_events')
     config = exp.config
     d.pop('config')
-    task = d.task
+    task = exp.task
     d.pop('task')
     unpacked_mongo_result = namedtuple('unpacked_mongo_result', ['task', 'config_obj', 'events_obj', 'extra_args'])
-    return unpacked_mongo_result(task=task, config_obj=config, events_obj=train_events+valid_events+test_events,
+    return unpacked_mongo_result(task=task, config_obj=json.loads(config), events_obj=train_events+valid_events+test_events,
                                  extra_args=d)

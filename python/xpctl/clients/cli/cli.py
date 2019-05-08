@@ -1,7 +1,10 @@
 import sys
+import json
+import os
+
+import getpass
 from click_shell import shell
 import click
-import json
 from swagger_client import Configuration
 from swagger_client.api import XpctlApi
 from swagger_client import ApiClient
@@ -41,7 +44,7 @@ class ServerManager(object):
 
 
 @shell(prompt="xpctl > ", intro="Starting xpctl...")
-@click.option('--host', help="server host", default="localhost:5310/v2")
+@click.option('--host', help="server host", default='localhost:5310/v2')
 def cli(host):
     ServerManager.host = host
 
@@ -210,37 +213,32 @@ def delete(task, eid):
         click.echo(click.style(result.message, fg='red'))
 
 
-
-# # Put results in database
-# @cli.command()
-# @click.option("--user", help="username", default=getpass.getuser())
-# @click.option("--cbase", help="path to the base structure for the model checkpoint files:"
-#                               "such as ../tagger/tagger-model-tf-11967 or /home/ds/tagger/tagger-model-tf-11967")
-# @click.option("--cstore", default="/data/model-checkpoints", help="location of the model checkpoint store")
-# @click.option("--label", default=None, help="label for the experiment")
-# @click.argument('task')
-# @click.argument('config')
-# @click.argument('log')
-# def putresult(user, cbase, cstore, label, task, config, log):
-#     '''
-#     Puts the results in a database. provide task name, config file, the reporting log file. optionally can put the model files in a persistent storage.
-#     '''
-#     logf = log.format(task)
-#     if not os.path.exists(logf):
-#         click.echo("the log file at {} doesn't exist, provide a valid location".format(logf))
-#         return
-#     if not os.path.exists(config):
-#         click.echo("the config file at {} doesn't exist, provide a valid location".format(config))
-#         return
-#
-#     config_file = config
-#     config_mem = read_config_file(config_file)
-#     events_mem = log2json(logf)
-#
-#     ServerManager.get().put_result(task, config_mem, events_mem,
-#                                    username=user, label=label, print_fn=click.echo,
-#                                    checkpoint_base=cbase, checkpoint_store=cstore)
-#
+@cli.command()
+@click.option("--user", help="username", default=getpass.getuser())
+@click.option("--cbase", help="path to the base structure for the model checkpoint files:"
+                              "such as ../tagger/tagger-model-tf-11967 or /home/ds/tagger/tagger-model-tf-11967")
+@click.option("--cstore", default="/data/model-checkpoints", help="location of the model checkpoint store")
+@click.option("--label", default=None, help="label for the experiment")
+@click.argument('task')
+@click.argument('config')
+@click.argument('log')
+def putresult(task, config, log, user, label, cbase, cstore):
+    """Puts the results in a database. provide task name, config file, the reporting log file.
+    optionally can put the model files in a persistent storage. """
+    
+    logf = log.format(task)
+    if not os.path.exists(logf):
+        click.echo(click.style("the log file at {} doesn't exist, provide a valid location".format(logf), fg='red'))
+        return
+    if not os.path.exists(config):
+        click.echo(click.style("the config file at {} doesn't exist, provide a valid location".format(config), fg='red'))
+        return
+    ServerManager.get()
+    result = ServerManager.api.put_result(task, to_experiment(task, config, log, user, label))
+    if result.response_type == 'success':
+        click.echo(click.style(result.message, fg='green'))
+    else:
+        click.echo(click.style(result.message, fg='red'))
 #
 # @cli.command()
 # @click.option("--cstore", default="/data/model-checkpoints", help="location of the model checkpoint store")

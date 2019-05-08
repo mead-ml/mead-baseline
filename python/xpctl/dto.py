@@ -86,12 +86,32 @@ def dto_put_requests(result):
     return Response(**result.__dict__)
 
 
+def convert_to_data_result(result: Result):
+    return xpctl.data.Result(
+        metric=result.metric,
+        value=result.value,
+        tick_type=result.tick_type,
+        tick=result.tick,
+        phase=result.phase
+    )
+    
+    
 def dto_to_experiment(exp):
-    train_events = [xpctl.data.Result(**r.__dict__) for r in exp.train_events]
-    valid_events = [xpctl.data.Result(**r.__dict__) for r in exp.valid_events]
-    test_events = [xpctl.data.Result(**r.__dict__) for r in exp.test_events]
-    d = exp.__dict__
-    d.update({'train_events': train_events})
-    d.update({'valid_events': valid_events})
-    d.update({'test_events': test_events})
-    return xpctl.data.Experiment(**d)
+    train_events = [convert_to_data_result(r) for r in exp.train_events]
+    valid_events = [convert_to_data_result(r) for r in exp.valid_events]
+    test_events = [convert_to_data_result(r) for r in exp.test_events]
+    return xpctl.data.Experiment(
+        task=exp.task,
+        eid=exp.eid,
+        username=exp.username,
+        hostname=exp.hostname,
+        config=exp.config,
+        exp_date=exp.exp_date,
+        label=exp.label,
+        dataset=exp.dataset,
+        sha1=exp.sha1,
+        version=exp.version,
+        train_events=train_events,
+        valid_events=valid_events,
+        test_events=test_events
+    )

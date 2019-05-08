@@ -182,8 +182,7 @@ def put_result(task, experiment, user=None, label=None):  # noqa: E501
     if connexion.request.is_json:
         experiment = Experiment.from_dict(connexion.request.get_json())  # noqa: E501
     backend = flask.globals.current_app.backend
-    d = {'user': user, 'label': label}
-    return dto_put_requests(backend.put_experiment(task, dto_to_experiment(experiment)))
+    return dto_put_requests(backend.put_result(task, dto_to_experiment(experiment)))
 
 
 def remove_experiment(task, eid):  # noqa: E501

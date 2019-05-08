@@ -1,8 +1,8 @@
 import pandas as pd
 from swagger_client.models import Experiment, ExperimentAggregate, Result, AggregateResult, TaskSummary
 from typing import List
-from baseline.utils import write_config_file, listify
-
+from baseline.utils import write_config_file, read_config_file
+import json
 
 def pack_result(results: List[Result]):
     """ List of results to event data"""
@@ -117,3 +117,54 @@ def task_summaries_to_df(tasksummaries: List[TaskSummary]):
                 all_results.append([task, user, dataset, num_exps])
     return pd.DataFrame(all_results, columns=['task', 'user', 'dataset', 'num_exps']).groupby(['task', 'user', 'dataset'])\
         .agg([identity]).rename(columns={'identity': ''})
+
+
+def read_logs(file_name):
+    logs = []
+    with open(file_name) as f:
+        for line in f:
+            logs.append(json.loads(line))
+    return logs
+
+
+def convert_to_result(event):
+    results = []
+    non_metrics = ['tick_type', 'tick', 'phase']
+    metrics = event.keys() - non_metrics
+    for metric in metrics:
+        results.append(Result(
+             metric=metric,
+             value=event[metric],
+             tick_type=event['tick_type'],
+             tick=event['tick'],
+             phase=event['phase']
+            )
+        )
+    return results
+    
+
+def flatten(_list):
+    return [item for sublist in _list for item in sublist]
+
+
+def to_experiment(task, configf, logf, user, label):
+    events_obj = read_logs(logf)
+    train_events = flatten(
+        [convert_to_result(event) for event in list(filter(lambda x: x['phase'] == 'Train', events_obj))]
+    )
+    valid_events = flatten(
+        [convert_to_result(event) for event in list(filter(lambda x: x['phase'] == 'Valid', events_obj))]
+    )
+    test_events = flatten(
+        [convert_to_result(event) for event in list(filter(lambda x: x['phase'] == 'Test', events_obj))]
+    )
+    config = json.dumps(read_config_file(configf))
+    return Experiment(
+        task=task,
+        username=user,
+        label=label,
+        train_events=train_events,
+        valid_events=valid_events,
+        test_events=test_events,
+        config=config
+    )
