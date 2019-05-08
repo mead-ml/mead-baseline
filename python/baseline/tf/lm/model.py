@@ -1,3 +1,5 @@
+"""Language model baselines in TensorFlow
+"""
 from baseline.tf.tfy import *
 from baseline.version import __version__
 from baseline.model import LanguageModel, register_model
@@ -5,14 +7,20 @@ from baseline.tf.embeddings import *
 from baseline.tf.tfy import new_placeholder_dict, TRAIN_FLAG, lstm_cell_w_dropout
 from baseline.tf.transformer import transformer_encoder_stack, subsequent_mask
 from baseline.utils import read_json, write_json, MAGIC_VARS
-from google.protobuf import text_format
-import copy
-import os
 
 
 class LanguageModelBase(LanguageModel):
+    """Base for all baseline implementations of LMs
 
+    This class provides a loose skeleton around which the baseline models
+    are built.  This essentially consists of dividing up the network into a logical separation between "embedding",
+    or composition of lookup tables to build a vector representation of a temporal input, "decoding",
+    or the conversion of temporal data to a decoded representation, and "output" --
+    a projection to output space and a softmax
+    """
     def __init__(self):
+        """Construct a base LM
+        """
         super(LanguageModelBase, self).__init__()
         self.saver = None
         self.layers = None
@@ -21,6 +29,11 @@ class LanguageModelBase(LanguageModel):
         self._unserializable = []
 
     def save_values(self, basename):
+        """Save tensor values to a checkpoint
+
+        :param basename: The prefix name of the checkpoint
+        :return:
+        """
         self.saver.save(self.sess, basename)
 
     def save_md(self, basename):
@@ -56,12 +69,28 @@ class LanguageModelBase(LanguageModel):
         })
 
     def set_saver(self, saver):
+        """Connect a `tf.Saver` to the model
+
+        :param saver: A saver
+        :return: None
+        """
         self.saver = saver
 
     def decode(self, inputs, **kwargs):
+        """Base method for decoding
+
+        :param inputs: The outputs of the embeddings
+        :param kwargs:
+        :return:
+        """
         pass
 
     def save(self, basename):
+        """Save the model
+
+        :param basename: The model prefix
+        :return:
+        """
         self.save_md(basename)
         self.save_values(basename)
 
@@ -76,13 +105,26 @@ class LanguageModelBase(LanguageModel):
             return loss
 
     def create_loss(self):
-        return self._create_loss(scope='loss{}'.format(self.id))
+        """Create training loss operator
+
+        :return: loss
+        """
+        return self._create_loss(scope='loss')
 
     def create_test_loss(self):
+        """Create test loss operator
+
+        :return: loss
+        """
         return self._create_loss(scope='test_loss')
 
     def make_input(self, batch_dict, train=False):
+        """When we are running with `DataFeed`s, need to transform to `feed_dict`s
 
+        :param batch_dict: The batch for a step
+        :param train: (`bool`) Are we training (or evaluating)?
+        :return: A `feed_dict`
+        """
         feed_dict = new_placeholder_dict(train)
 
         for key in self.embeddings.keys():
@@ -96,15 +138,43 @@ class LanguageModelBase(LanguageModel):
         return feed_dict
 
     def predict(self, batch_dict):
+        """Do prediction from a `batch_dict`
+
+        :param batch_dict: A step of data
+        :return: The softmax output for this step
+        """
         feed_dict = self.make_input(batch_dict)
         step_softmax = self.sess.run(self.probs, feed_dict)
         return step_softmax
 
     @classmethod
     def create(cls, embeddings, **kwargs):
+        """Create the language model
+
+        :param embeddings: A set of embeddings used
+        :param kwargs: see below
+
+        :Keyword Arguments:
+
+        * *tgt_key* (`str`) -- Which vocabulary is the destination vocabulary
+          (for example, you might have character inputs, or character + word inputs.  The outputs need to be specified)
+        * *sess* (`tf.Session`) -- Optionally, pass in a session (or one will be created)
+        * *pdrop* (`float`) -- The dropout probability
+        * *y* -- Optional target.  If this is not passed in, a placeholder gets created
+        * *hsz* (`int`) -- Number of hidden units per layers
+        * *unif* (`float`) -- set the weights initializer to small random uniform values
+
+        :return: The created model
+        """
         lm = cls()
-        lm.id = kwargs.get('id', 0)
         lm.embeddings = embeddings
+        for k, embedding in embeddings.items():
+            lm.embeddings[k] = embedding.detached_ref()
+        lm.tgt_key = kwargs.get('tgt_key')
+        if lm.tgt_key is None:
+            raise Exception('Need a `tgt_key` to know which source vocabulary should be used for destination ')
+
+        lm._unserializable.append(lm.tgt_key)
         lm._record_state(**kwargs)
         inputs = {}
         lm.batchsz = 0
@@ -117,9 +187,7 @@ class LanguageModelBase(LanguageModel):
         lm.sess = kwargs.get('sess', tf.Session())
         lm.pdrop_value = kwargs.get('pdrop', 0.5)
         lm.hsz = kwargs['hsz']
-        lm.tgt_key = kwargs.get('tgt_key')
-        if lm.tgt_key is None:
-            raise Exception('Need a `tgt_key` to know which source vocabulary should be used for destination ')
+
         unif = kwargs.get('unif', 0.05)
         weight_initializer = tf.random_uniform_initializer(-unif, unif)
 
@@ -173,7 +241,6 @@ class LanguageModelBase(LanguageModel):
             Constructor = eval(class_name)
             embeddings[key] = Constructor(key, **embed_args)
 
-
         model = cls.create(embeddings, **_state)
         model._state = _state
         do_init = kwargs.get('init', True)
@@ -186,28 +253,59 @@ class LanguageModelBase(LanguageModel):
 
         return model
 
-    def output(self, h, vsz, **kwargs):
+    def output(self, hidden, vsz, **kwargs):
+        """Project to the output space
+
+        :param hidden: (`tensor`) upstream layer
+        :param vsz: (`int`) The vocab size
+        :param kwargs: See below
+
+        :Keyword Arguments:
+        * *tie_weights* -- If weight tying is on, we are saying we want to use the (transposed) weights
+                     declared for tgt embeddings.  Note that this nomenclature mostly makes sense if we are using
+                     the tgt embeddings also as source embeddings.
+                     If we are not, then having a `self.embeddings[self.tgt_key]` doesnt even make sense
+
+        :return: Output
+        """
         # Do weight sharing if we can
         do_weight_tying = bool(kwargs.get('tie_weights', False))
         vocab_b = tf.get_variable("vocab_b", [vsz],  initializer=tf.zeros_initializer(), dtype=tf.float32)
         if do_weight_tying and self.hsz == self.embeddings[self.tgt_key].get_dsz():
             with tf.variable_scope(self.embeddings[self.tgt_key].scope, reuse=True):
                 W = tf.get_variable("W")
-            return tf.matmul(h, W, transpose_b=True, name="logits") + vocab_b
+            return tf.matmul(hidden, W, transpose_b=True, name="logits") + vocab_b
         else:
             vocab_w = tf.get_variable(
                 "vocab_w", [self.hsz, vsz], dtype=tf.float32)
-            return tf.nn.xw_plus_b(h, vocab_w, vocab_b, name="logits")
+            return tf.nn.xw_plus_b(hidden, vocab_w, vocab_b, name="logits")
 
 
 @register_model(task='lm', name='default')
 class RNNLanguageModel(LanguageModelBase):
+    """RNN-based Language Model built on base class
+    """
     def __init__(self):
+        """Construct an RNNLM
+        """
         super(RNNLanguageModel, self).__init__()
         self.rnntype = 'lstm'
+        self.initial_state = None
 
-    def decode(self, inputs, batchsz=1, rnntype='lstm', variational_dropout=False, **kwargs):
-        lstm_encoder_layer = LSTMEncoderWithState(self.hsz, kwargs.get('layers', 1), self.pdrop_value)
+    def decode(self, inputs, batchsz=1, rnntype='lstm', layers=1, variational_dropout=False, **kwargs):
+        """LSTM-based method for decoding
+
+        :param inputs: The outputs of the embeddings
+        :param batchsz: (`int`) The batch size
+        :param rnntype: (`str`) What type of RNN (defaults to `lstm`)
+        :param layers: (`int`) Defaults to 1
+        :param variational_dropout: (`bool`) Using variational dropout?
+        :param kwargs: See above
+
+
+        :return: The layer
+        """
+        lstm_encoder_layer = LSTMEncoderWithState(self.hsz, layers, self.pdrop_value)
         self.initial_state = lstm_encoder_layer.zero_state(self.batchsz)
         inputs["h"] = self.initial_state
         return lstm_encoder_layer
