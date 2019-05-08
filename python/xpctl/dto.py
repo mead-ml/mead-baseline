@@ -1,4 +1,5 @@
-from swagger_server.models import Experiment, ExperimentAggregate, Result, Response, AggregateResult, TaskSummary
+from swagger_server.models import Experiment, ExperimentAggregate, Result, Response, AggregateResult, TaskSummary, \
+    AggregateResultValues
 import xpctl.data
 from flask import abort
 
@@ -18,14 +19,19 @@ def dto_experiment_details(exp):
 
 def dto_get_results(agg_exps):
     if type(agg_exps) == xpctl.data.Error:
-        return Response(**agg_exps.__dict__)
+        return abort(500, agg_exps.message)
     results = []
     for agg_exp in agg_exps:
-        if type(agg_exp) == xpctl.data.Error:
-            return Response(**agg_exp.__dict__)
-        train_events = [AggregateResult(**r.__dict__) for r in agg_exp.train_events]
-        valid_events = [AggregateResult(**r.__dict__) for r in agg_exp.valid_events]
-        test_events = [AggregateResult(**r.__dict__) for r in agg_exp.test_events]
+        train_events = [AggregateResult(metric=r.metric,
+                                        values=[AggregateResultValues(k, v) for k, v in r.values.items()])
+                        for r in agg_exp.train_events]
+        valid_events = [AggregateResult(metric=r.metric,
+                                        values=[AggregateResultValues(k, v) for k, v in r.values.items()])
+                        for r in agg_exp.valid_events]
+        test_events = [AggregateResult(metric=r.metric,
+                                       values=[AggregateResultValues(k, v) for k, v in r.values.items()])
+                       for r in agg_exp.test_events]
+
         d = agg_exp.__dict__
         d.update({'train_events': train_events})
         d.update({'valid_events': valid_events})

@@ -595,7 +595,8 @@ definitions:
             aggregate_fn:
              type: "string"
             score:
-             type: "string"
+             type: "number"
+             format: "float32"
           
   Experiment:
     type: "object"

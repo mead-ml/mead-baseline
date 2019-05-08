@@ -23,6 +23,7 @@ from swagger_client.api_client import ApiClient
 from swagger_client.configuration import Configuration
 # import models into sdk package
 from swagger_client.models.aggregate_result import AggregateResult
+from swagger_client.models.aggregate_result_values import AggregateResultValues
 from swagger_client.models.experiment import Experiment
 from swagger_client.models.experiment_aggregate import ExperimentAggregate
 from swagger_client.models.response import Response

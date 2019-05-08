@@ -6,6 +6,7 @@ from datetime import date, datetime  # noqa: F401
 from typing import List, Dict  # noqa: F401
 
 from swagger_server.models.base_model_ import Model
+from swagger_server.models.aggregate_result_values import AggregateResultValues  # noqa: F401,E501
 from swagger_server import util
 
 
@@ -15,17 +16,17 @@ class AggregateResult(Model):
     Do not edit the class manually.
     """
 
-    def __init__(self, metric: str=None, values: List[object]=None):  # noqa: E501
+    def __init__(self, metric: str=None, values: List[AggregateResultValues]=None):  # noqa: E501
         """AggregateResult - a model defined in Swagger
 
         :param metric: The metric of this AggregateResult.  # noqa: E501
         :type metric: str
         :param values: The values of this AggregateResult.  # noqa: E501
-        :type values: List[object]
+        :type values: List[AggregateResultValues]
         """
         self.swagger_types = {
             'metric': str,
-            'values': List[object]
+            'values': List[AggregateResultValues]
         }
 
         self.attribute_map = {
@@ -71,22 +72,22 @@ class AggregateResult(Model):
         self._metric = metric
 
     @property
-    def values(self) -> List[object]:
+    def values(self) -> List[AggregateResultValues]:
         """Gets the values of this AggregateResult.
 
 
         :return: The values of this AggregateResult.
-        :rtype: List[object]
+        :rtype: List[AggregateResultValues]
         """
         return self._values
 
     @values.setter
-    def values(self, values: List[object]):
+    def values(self, values: List[AggregateResultValues]):
         """Sets the values of this AggregateResult.
 
 
         :param values: The values of this AggregateResult.
-        :type values: List[object]
+        :type values: List[AggregateResultValues]
         """
         if values is None:
             raise ValueError("Invalid value for `values`, must not be `None`")  # noqa: E501

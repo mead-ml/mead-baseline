@@ -603,13 +603,14 @@ definitions:
       values:
         type: "array"
         items:
-          type: "object"
-          properties: {}
+          $ref: "#/definitions/AggregateResult_values"
     example:
       metric: "f1"
       values:
-      - "{}"
-      - "{}"
+      - score: 0.80082819046101150206595775671303272247314453125
+        aggregate_fn: "aggregate_fn"
+      - score: 0.80082819046101150206595775671303272247314453125
+        aggregate_fn: "aggregate_fn"
   Experiment:
     type: "object"
     properties:
@@ -755,12 +756,16 @@ definitions:
       train_events:
       - metric: "f1"
         values:
-        - "{}"
-        - "{}"
+        - score: 0.80082819046101150206595775671303272247314453125
+          aggregate_fn: "aggregate_fn"
+        - score: 0.80082819046101150206595775671303272247314453125
+          aggregate_fn: "aggregate_fn"
       - metric: "f1"
         values:
-        - "{}"
-        - "{}"
+        - score: 0.80082819046101150206595775671303272247314453125
+          aggregate_fn: "aggregate_fn"
+        - score: 0.80082819046101150206595775671303272247314453125
+          aggregate_fn: "aggregate_fn"
       num_exps: 1
       label: "label"
       version: "1.4.1"
@@ -770,24 +775,32 @@ definitions:
       valid_events:
       - metric: "f1"
         values:
-        - "{}"
-        - "{}"
+        - score: 0.80082819046101150206595775671303272247314453125
+          aggregate_fn: "aggregate_fn"
+        - score: 0.80082819046101150206595775671303272247314453125
+          aggregate_fn: "aggregate_fn"
       - metric: "f1"
         values:
-        - "{}"
-        - "{}"
+        - score: 0.80082819046101150206595775671303272247314453125
+          aggregate_fn: "aggregate_fn"
+        - score: 0.80082819046101150206595775671303272247314453125
+          aggregate_fn: "aggregate_fn"
       exp_date: "2019-05-02T23:29:46.578675"
       config: "{dataset: sst2}"
       dataset: "SST2"
       test_events:
       - metric: "f1"
         values:
-        - "{}"
-        - "{}"
+        - score: 0.80082819046101150206595775671303272247314453125
+          aggregate_fn: "aggregate_fn"
+        - score: 0.80082819046101150206595775671303272247314453125
+          aggregate_fn: "aggregate_fn"
       - metric: "f1"
         values:
-        - "{}"
-        - "{}"
+        - score: 0.80082819046101150206595775671303272247314453125
+          aggregate_fn: "aggregate_fn"
+        - score: 0.80082819046101150206595775671303272247314453125
+          aggregate_fn: "aggregate_fn"
       username: "someone"
   TaskSummary:
     type: "object"
@@ -824,6 +837,16 @@ definitions:
       code: 0
       response_type: "success"
       message: "message"
+  AggregateResult_values:
+    properties:
+      aggregate_fn:
+        type: "string"
+      score:
+        type: "number"
+        format: "float32"
+    example:
+      score: 0.80082819046101150206595775671303272247314453125
+      aggregate_fn: "aggregate_fn"
 externalDocs:
   description: "Find out more about Swagger"
   url: "http://swagger.io"
