@@ -45,7 +45,7 @@ class XpctlApi(object):
         :param async_req bool
         :param str task: task (required)
         :param str sha1: sha1 (required)
-        :return: Experiment
+        :return: object
                  If the method is called asynchronously,
                  returns the request thread.
         """
@@ -68,7 +68,7 @@ class XpctlApi(object):
         :param async_req bool
         :param str task: task (required)
         :param str sha1: sha1 (required)
-        :return: Experiment
+        :return: object
                  If the method is called asynchronously,
                  returns the request thread.
         """
@@ -128,7 +128,7 @@ class XpctlApi(object):
             body=body_params,
             post_params=form_params,
             files=local_var_files,
-            response_type='Experiment',  # noqa: E501
+            response_type='object',  # noqa: E501
             auth_settings=auth_settings,
             async_req=params.get('async_req'),
             _return_http_data_only=params.get('_return_http_data_only'),

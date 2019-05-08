@@ -65,14 +65,16 @@ def dto_task_summary(task_summary):
 
 
 def dto_summary(task_summaries):
-    if type(task_summaries) == xpctl.data.Error:
-        return abort(500, task_summaries.message)
-    return [TaskSummary(**task_summary.__dict__) for task_summary in task_summaries]
+    _task_summaries = []
+    for task_summary in task_summaries:
+        if type(task_summary) != xpctl.data.Error:  # should we abort if we cant get summary for a task in the database?
+            _task_summaries.append(TaskSummary(**task_summary.__dict__))
+    return _task_summaries
 
 
 def dto_config2json(config):
     if type(config) == xpctl.data.Error:
-        return Response(config.__dict__)
+        return abort(500, config.message)
     return config
 
 

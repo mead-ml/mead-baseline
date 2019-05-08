@@ -1,10 +1,7 @@
 import sys
-import pandas as pd
-#import getpass
 from click_shell import shell
 import click
 import json
-#from baseline.utils import read_json, read_config_file
 from swagger_client import Configuration
 from swagger_client.api import XpctlApi
 from swagger_client import ApiClient
@@ -145,62 +142,42 @@ def details(task, sha1, user, metric, sort, event_type, n, output, output_fields
     except ApiException as e:
         print(json.loads(e.body)['detail'])
 
-#
-#
-# # summarize results
-# @cli.command()
-# @click.option('--task')
-# def lbsummary(task):
-#     """
-#     Provides a summary of the leaderboard. Options: taskname. If you provide
-#     a taskname, it will show all users and datasets for that task.
-#     This is helpful because we often forget what datasets were
-#     used for a task, which are the necessary parameters for the commands
-#     `results` and `best` and `tasksummary`. Shows the summary for all available tasks if no option is specified.
-#     """
-#
-#     if task is not None:
-#         if not ServerManager.get().has_task(task):
-#             click.echo("no results for the specified task {}, use another task".format(task))
-#             return
-#
-#     return ServerManager.get().leaderboard_summary(event_type=EVENT_TYPES["test"], task=task, print_fn=click.echo)
-#
-#
-# @cli.command()
-# @click.option('--user', multiple=True, help="list of users (testuser, root), [multiple]: --user a --user b")
-# @click.option('--metric', multiple=True, help="list of metrics (prec, recall, f1, accuracy),[multiple]: --metric f1 "
-#                                               "--metric acc")
-# @click.option('--sort', help="specify one metric to sort the results")
-# @click.option('--event_type', default='test', help="specify one metric to sort the results")
-# @click.option('--n', help='number of experiments', type=int)
-# @click.option('--output', help='output file (csv)')
-# @click.argument('task')
-# @click.argument('sha1')
-# def details(user, metric, sort, event_type, task, sha1, n, output):
-#     """
-#     Shows the results for all experiments for a particular config (sha1). Optionally filter out by user(s), metric(s), or sort by one metric. Shows the results on the test data by default, provide event_type (train/valid/test) to see for other datasets.
-#     """
-#     if not ServerManager.get().has_task(task):
-#         click.echo("no results for the specified task {}, use another task".format(task))
-#         return
-#
-#     event_type = EVENT_TYPES.get(event_type, None)
-#     if event_type is None:
-#         click.echo("we do not have results for the event type: {}".format(event_type))
-#         return
-#
-#     result_frame = ServerManager.get().experiment_details(user, metric, sort, task, event_type, sha1, n)
-#     if result_frame is not None:
-#         click.echo(result_frame)
-#     else:
-#         click.echo("no result found for this query")
-#     if output is not None:
-#         result_frame.to_csv(os.path.expanduser(output), index=False)
-#
-#
 
-# # Edit database
+@cli.command()
+@click.argument("task")
+@click.argument("sha1")
+@click.argument("filename")
+def config2json(task, sha1, filename):
+    """Exports the config file for an experiment as a json file."""
+    ServerManager.get()
+    try:
+        result = ServerManager.api.config2json(task, sha1)
+        write_config_file(result, filename)
+    except ApiException as e:
+        print(json.loads(e.body)['detail'])
+
+
+@cli.command()
+@click.option('--task')
+def lbsummary(task):
+    """
+    Provides a summary of the leaderboard. Options: taskname. If you provide
+    a taskname, it will show all users and datasets for that task.
+    This is helpful because we often forget what datasets were
+    used for a task, which are the necessary parameters for the commands
+    `results` and `best` and `tasksummary`. Shows the summary for all available tasks if no option is specified.
+    """
+    ServerManager.get()
+    try:
+        if task is not None:
+            result = task_summary_to_df(ServerManager.api.task_summary(task))
+        else:
+            result = task_summaries_to_df(ServerManager.api.summary())
+        click.echo(result)
+    except ApiException as e:
+        print(json.loads(e.body)['detail'])
+
+
 
 @cli.command()
 @click.argument('task')
@@ -282,24 +259,6 @@ def updatelabel(task, label, id):
 #     click.echo("model could not be stored, see previous errors")
 #
 #
-# @cli.command()
-# @click.argument("task")
-# @click.argument("sha1")
-# @click.argument("filename")
-# def config2json(task, sha1, filename):
-#     '''
-#     Exports the config file for an experiment as a json file.
-#     '''
-#     if not ServerManager.get().has_task(task):
-#         click.echo("no results for the specified task {}, use another task".format(task))
-#         return
-#
-#     j = ServerManager.get().config2dict(task, sha1)
-#     if j is None:
-#         click.echo("can not find config sha1: {}".format(sha1))
-#         return
-#     with open(os.path.expanduser(filename), "w") as f:
-#         json.dump(j, f, indent=True)
 
 if __name__ == "__main__":
     cli()

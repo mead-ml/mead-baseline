@@ -1,7 +1,7 @@
 import pandas as pd
-from swagger_client.models import Experiment, ExperimentAggregate, Result, AggregateResult
+from swagger_client.models import Experiment, ExperimentAggregate, Result, AggregateResult, TaskSummary
 from typing import List
-
+from baseline.utils import write_config_file
 
 def pack_result(results: List[Result]):
     """ List of results to event data"""
@@ -88,3 +88,31 @@ def experiment_list_to_df(exps: List[Experiment], prop_name_loc={}, event_type='
     for exp in exps:
         result_df = result_df.append(experiment_to_df(exp, prop_name_loc, event_type, sort=None))
     return result_df
+
+
+def write_to_config_file(config_obj, filename):
+    write_config_file(config_obj, filename)
+
+
+def task_summary_to_df(tasksummary: TaskSummary):
+    def identity(x): return x
+    summary = tasksummary.summary
+    all_results = []
+    for dataset in summary:
+        for user, num_exps in summary[dataset]:
+            all_results.append([user, dataset, num_exps])
+    return pd.DataFrame(all_results, columns=['user', 'dataset', 'num_exps']).groupby(['user', 'dataset'])\
+        .agg([identity]).rename(columns={'identity': ''})
+
+
+def task_summaries_to_df(tasksummaries: List[TaskSummary]):
+    def identity(x): return x
+    all_results = []
+    for tasksummary in tasksummaries:
+        task = tasksummary.task
+        summary = tasksummary.summary
+        for dataset in summary:
+            for user, num_exps in summary[dataset]:
+                all_results.append([task, user, dataset, num_exps])
+    return pd.DataFrame(all_results, columns=['task', 'user', 'dataset', 'num_exps']).groupby(['task', 'user', 'dataset'])\
+        .agg([identity]).rename(columns={'identity': ''})

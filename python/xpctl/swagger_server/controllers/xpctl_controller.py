@@ -15,7 +15,7 @@ def config2json(task, sha1):  # noqa: E501
     :param sha1: sha1
     :type sha1: str
 
-    :rtype: Experiment
+    :rtype: object
     """
     backend = flask.globals.current_app.backend
     return dto_config2json(backend.config2json(task, sha1))

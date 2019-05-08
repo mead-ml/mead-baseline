@@ -242,12 +242,9 @@ class MongoRepo(ExperimentRepo):
     def list_results(self, task, prop, value, user, metric, sort, event_type):
         event_type = event_type if event_type is not None else 'test_events'
 
-        metrics = [x for x in listify(metric) if x.strip()]
-        users = [x for x in listify(user) if x.strip()]
-        if users:
-            d = {'username': users, prop: value}
-        else:
-            d = {prop: value}
+        metrics = listify(metric)
+        users = listify(user)
+        d = {'username': users, prop: value}
 
         coll = self.db[task]
         query = self._update_query({}, **d)
@@ -257,10 +254,9 @@ class MongoRepo(ExperimentRepo):
             return Error(message='no information available for [{}]: [{}] in task database [{}]'
                          .format(prop, value, task))
         experiments = self._mongo_to_experiment_set(task, all_results, event_type=event_type, metrics=metrics)
-        print('here', sort, type(sort))
         if type(experiments) == Error:
             return experiments
-        if sort is None or (type(sort) == str and sort == 'None'):
+        if sort is None:
             return experiments
         else:
             if event_type == 'test_events':
@@ -272,7 +268,7 @@ class MongoRepo(ExperimentRepo):
                 return Error(message='experiments can only be sorted when event_type=test_results')
 
     def get_experiment_details(self, task, eid, event_type, metric):
-        metrics = [x for x in listify(metric) if x.strip()]
+        metrics = listify(metric)
         event_type = event_type if event_type is not None else 'test_events'
 
         coll = self.db[task]
@@ -293,7 +289,7 @@ class MongoRepo(ExperimentRepo):
         return grouped_result.reduce(aggregate_fns=aggregate_fns, event_type=event_type)
 
     def get_results(self, task, prop, value, reduction_dim, metric, sort, numexp_reduction_dim, event_type):
-        metrics = [x for x in listify(metric) if x.strip()]
+        metrics = listify(metric)
         event_type = event_type if event_type is not None else 'test_events'
         reduction_dim = reduction_dim if reduction_dim is not None else 'sha1'
         coll = self.db[task]
@@ -346,6 +342,8 @@ class MongoRepo(ExperimentRepo):
                                   .format(task, dataset, experiment_set.message))
                 continue
             store.append(TaskDatasetSummary(task=task, dataset=dataset, experiment_set=experiment_set))
+        if not store:
+            return Error('could not get summary for task: [{}]'.format(task))
         return TaskDatasetSummarySet(task=task, data=store).groupby()
     
     def summary(self):
