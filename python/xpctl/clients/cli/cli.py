@@ -11,7 +11,6 @@ from xpctl.clients.cli.dto import *
 from xpctl.clients.cli.helpers import *
 from mead.utils import hash_config
 from baseline.utils import read_config_file
-import ast
 
 EVENT_TYPES = {
     "train": "train_events", "Train": "train_events",
