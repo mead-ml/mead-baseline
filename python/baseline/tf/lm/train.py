@@ -8,12 +8,68 @@ from baseline.tf.tfy import TRAIN_FLAG, SET_TRAIN_FLAG
 from baseline.utils import listify, get_model_file, get_metric_cmp
 from baseline.train import Trainer, create_trainer, register_trainer, register_training_func
 from baseline.model import create_model_for
-
+from collections import OrderedDict
 
 # Number of batches to prefetch if using tf.datasets
 NUM_PREFETCH = 2
 # The shuffle buffer
 SHUF_BUF_SZ = 5000
+
+_EVENT_FILE_GLOB_PATTERN = 'events.out.tfevents.*'
+
+
+def _summaries(eval_dir):
+    """Yields `tensorflow.Event` protos from event files in the eval dir.
+    Args:
+      eval_dir: Directory containing summary files with eval metrics.
+    Yields:
+      `tensorflow.Event` object read from the event files.
+    """
+    if tf.gfile.Exists(eval_dir):
+        for event_file in tf.gfile.Glob(os.path.join(eval_dir, _EVENT_FILE_GLOB_PATTERN)):
+            for event in tf.train.summary_iterator(event_file):
+                yield event
+
+
+def read_eval_metrics(eval_dir):
+    """Helper to read eval metrics from eval summary files.
+    Args:
+      eval_dir: Directory containing summary files with eval metrics.
+    Returns:
+      A `dict` with global steps mapping to `dict` of metric names and values.
+    """
+    eval_metrics_dict = {}
+    for event in _summaries(eval_dir):
+        if not event.HasField('summary'):
+            continue
+        metrics = {}
+        for value in event.summary.value:
+            if value.HasField('simple_value'):
+                metrics[value.tag] = value.simple_value
+        if metrics:
+            eval_metrics_dict[event.step] = metrics
+    return OrderedDict(sorted(eval_metrics_dict.items(), key=lambda t: t[0]))
+
+
+class EvalMetricsHook(tf.train.SessionRunHook):
+    def __init__(self, eval_dir, phase):
+        super(EvalMetricsHook, self).__init__()
+
+        self.phase = phase
+        self.eval_dir = eval_dir
+        self.record = {}
+
+    def after_run(self, run_context, run_values):
+        metrics = read_eval_metrics(self.eval_dir)
+        if metrics:
+            for k, v in metrics.items():
+                if k not in self.record:
+                    print({'STEP': k, 'loss': v['loss'], 'perplexity': np.exp(v['loss']), 'phase': self.phase})
+                    print({'STEP': k, 'loss': v['loss'], 'perplexity': np.exp(v['loss']), 'phase': self.phase})
+                    self.record[k] = v
+
+        #    perplexity = np.exp(loss)
+        #    print({"loss": loss, "perplexity": perplexity})
 
 
 def to_tensors(ts):
@@ -607,15 +663,19 @@ def fit_estimator(model_params, ts, vs, es=None, epochs=20, gpus=1, **kwargs):
     # We are only distributing the train function for now
     # https://stackoverflow.com/questions/52097928/does-tf-estimator-estimator-evaluate-always-run-on-one-gpu
     config = tf.estimator.RunConfig(model_dir=checkpoint_dir,
-                                    train_distribute=tf.contrib.distribute.MirroredStrategy(num_gpus=gpus))
+                                    train_distribute=tf.contrib.distribute.MirroredStrategy(num_gpus=gpus),
+                                    log_step_count_steps=500)
     estimator = tf.estimator.Estimator(model_fn=model_fn, config=config, params=params)
     train_input_fn = create_train_input_fn(ts, **params)
     valid_input_fn = create_valid_input_fn(vs, **params)
     eval_input_fn = create_eval_input_fn(es, **params)
 
+    #valid_metrics = EvalMetricsHook(estimator.eval_dir(), 'Valid')
+    
     # This is going to be None because train_and_evaluate controls the max steps so repeat doesnt matter
     train_spec = tf.estimator.TrainSpec(input_fn=train_input_fn, max_steps=epochs * len(ts))
     # This is going to be None because the evaluation will run for 1 pass over the data that way
     eval_spec = tf.estimator.EvalSpec(input_fn=valid_input_fn, steps=None)
     tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
-    estimator.evaluate(input_fn=eval_input_fn)
+    test_metrics = EvalMetricsHook(estimator.eval_dir(), 'Test')
+    estimator.evaluate(input_fn=eval_input_fn, hooks=[test_metrics])
