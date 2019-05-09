@@ -118,24 +118,11 @@ class ExperimentRepo(object):
         """
         raise NotImplemented("Base ExperimentRepo tasks are immutable")
 
-    def _put_result(self, task, config_obj, events_obj, **kwargs):
-        """Put the result to the experiment repository
+    def put_result(self, task, experiment):
+        """Put tan experiment in the database
 
         :param task: (``str``) The task name
-        :param config_obj: (``dict``) A dictionary containing the job configuration
-        :param events_obj: (``dict``) A dictionary containing the events that transpired during training
-        :param kwargs: See below
-
-        label = kwargs.get("label", id)
-
-        :Keyword Arguments:
-        * *checkpoint_base* (``str``) -- If we are putting the model simultaneously, required basename for model
-        * *checkpoint_store* (``str``) -- If we are putting the model simultaneously, required destination
-        * *print_fn* -- A print callback which takes a ``str`` argument
-        * *hostname* -- (``str``) A hostname, defaults to name of the local machine
-        * *username* -- (``str``) A username, defaults to the name of the user on this machine
-        * *label* -- (``str``) An optional, human-readable label name.  Defaults to sha1 of this configuration
-
+        :param experiment: xpctl.backend.data.Experiment
         :return: Union[xpctl.backend.data.Success, xpctl.backend.data.Error]
         """
         pass
@@ -152,3 +139,25 @@ class ExperimentRepo(object):
         :return: List[xpctl.backend.data.Experiment]
         """
         pass
+
+    def dump(self, zipfile, task_eids):
+        """
+        dump the whole database. creates a zipfile when unzips into the following directory structure
+        <xpctldump>
+         - <task>
+           - <id>
+             - <id>-reporting.log
+             - <id>-config.yml
+             - <id>-meta.yml (any meta info such as label, username etc.)
+        
+        :param zipfile: zip file location for the dump. defaults to xpctldump-datetimestamp.zip
+        :param task_eids: a dictionary of the form {'task': [eid1, eid2]}, if you want to dump specific files.
+        :return: the path to the dumped file
+        """
+    
+    def restore(self, dump):
+        """
+        restore a database from the dump. be careful: the experiment ids will change.
+        :param dump: dump file location
+        :return:
+        """

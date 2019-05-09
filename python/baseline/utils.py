@@ -499,11 +499,10 @@ def read_config_file(config_file):
 
 @exporter
 def write_config_file(content, filepath):
-    """Read a config file. This method optionally supports YAML, if the dependency was already installed.  O.W. JSON plz
-    :param data
-    :param filepath: (``str``) A path to a config file which should be a JSON file, or YAML if pyyaml is installed
-    :param filetype
-    :return: (``dict``) An object
+    """Write a config file. This method optionally supports YAML, if the dependency was already installed.  O.W. JSON plz
+    :param content: config object
+    :param filepath: (``str``) A path to a file which should be a JSON file, or YAML if pyyaml is installed
+    :return:
     """
     if filepath.endswith('.yml') or filepath.endswith('.yaml'):
         return write_yaml(content, filepath)
