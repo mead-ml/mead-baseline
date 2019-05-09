@@ -264,6 +264,24 @@ class ExperimentAggregateSet(object):
     def __len__(self):
         return self.length
 
+    def sort(self, metric, aggregate_fn='avg', reverse=True):
+        """
+        you can only sort when event_type is test, because there is only one data point
+        :param metric: metric to sort on
+        :param aggregate_fn: this is an aggregate result, you have values for for different aggregate_fns. choose one
+        :param reverse: reverse=True always except when key is avg_loss, perplexity
+        :return:
+        """
+        if metric is None:
+            return self
+        test_results = [(index, [y for y in x.get_prop(TEST_EVENT) if y.metric == metric][0]) for index, x in
+                        enumerate(self.data)]
+        test_results.sort(key=lambda x: x[1].values[aggregate_fn], reverse=reverse)
+        final_results = []
+        for index, _ in test_results:
+            final_results.append(self.data[index])
+        return ExperimentSet(data=final_results)
+
 
 @exporter
 class TaskDatasetSummary(object):

@@ -11,9 +11,7 @@ from xpctl.clients.cli.dto import *
 from xpctl.clients.cli.helpers import *
 from mead.utils import hash_config
 from baseline.utils import read_config_file
-
-pd.set_option('display.expand_frame_repr', False)
-pd.set_option("display.max_rows", None)
+import ast
 
 EVENT_TYPES = {
     "train": "train_events", "Train": "train_events",
@@ -96,10 +94,12 @@ def experiment(task, eid, event_type, output, metric, sort, output_fields):
 @click.option('--nconfig', help='number of experiments to aggregate', type=int, default=1)
 @click.option('--event_type', default='test', help="train/ dev/ test")
 @click.option('--n', help='number of rows to show', type=int, default=-1)
-@click.option('--output', help='output file')
+@click.option('--output', help='output file (csv)', default=None)
+@click.option('--aggregate_fn', help='aggregate functions', multiple=True,
+              type=click.Choice(['min', 'max', 'avg', 'std']), default=['avg', 'std'])
 @click.argument('task')
 @click.argument('dataset')
-def results(task, dataset, metric, sort, nconfig, event_type, n, output):
+def results(task, dataset, metric, sort, nconfig, event_type, n, output, aggregate_fn):
     event_type = EVENT_TYPES[event_type]
     reduction_dim = 'sha1'
     ServerManager.get()
@@ -107,7 +107,7 @@ def results(task, dataset, metric, sort, nconfig, event_type, n, output):
         result = ServerManager.api.get_results_by_dataset(task, dataset, reduction_dim=reduction_dim,
                                                           metric=metric, sort=sort, numexp_reduction_dim=nconfig,
                                                           event_type=event_type)
-        result_df = experiment_aggregate_list_to_df(exp_aggs=result, event_type=event_type)
+        result_df = experiment_aggregate_list_to_df(exp_aggs=result, event_type=event_type, aggregate_fns=aggregate_fn)
         if n != -1:
             result_df = result_df.head(n)
         if output is None:
@@ -132,7 +132,9 @@ def results(task, dataset, metric, sort, nconfig, event_type, n, output):
 @click.argument('sha1')
 def details(task, sha1, user, metric, sort, event_type, n, output, output_fields):
     """
-    Shows the results for all experiments for a particular config (sha1). Optionally filter out by user(s), metric(s), or sort by one metric. Shows the results on the test data by default, provide event_type (train/valid/test) to see for other datasets.
+    Shows the results for all experiments for a particular config (sha1). Optionally filter out by user(s), metric(s),
+    or sort by one metric. Shows the results on the test data by default, provide event_type (train/valid/test)
+    to see for other events.
     """
     event_type = EVENT_TYPES[event_type]
     ServerManager.get()
@@ -237,11 +239,17 @@ def putresult(task, config, log, user, label, cbase, cstore):
     ServerManager.get()
     result = ServerManager.api.put_result(task, to_experiment(task, config, log, user, label))
     if result.response_type == 'success':
+        eid = result.message.split(':')[-1].strip()
         click.echo(click.style(result.message, fg='green'))
         result = store_model(checkpoint_base=cbase, config_sha1=hash_config(read_config_file(config)),
                              checkpoint_store=cstore, print_fn=click.echo)
         if result is not None:
             click.echo(click.style('model stored at {}'.format(result), fg='green'))
+            update_result = ServerManager.api.update_property(task, eid, prop='checkpoint', value=result)
+            if update_result.response_type == 'success':
+                click.echo(click.style(update_result.message, fg='green'))
+            else:
+                click.echo(click.style(update_result.message, fg='red'))
         else:
             click.echo(click.style('failed to store model'.format(result), fg='red'))
     else:
@@ -263,8 +271,10 @@ def putmodel(task, eid, cbase, cstore):
     metric = []
     try:
         result = ServerManager.api.experiment_details(task, eid, event_type=event_type, metric=metric)
-        config_obj = result.config
-        click.echo(hash_config(json.loads(config_obj)))
+        config_obj = read_config_stream(result.config)
+        if config_obj is None:
+            click.echo('can not process the config for experiment {} in {} database'.format(task, eid))
+            sys.exit(1)
         result = store_model(checkpoint_base=cbase, config_sha1=hash_config(config_obj),
                              checkpoint_store=cstore, print_fn=click.echo)
         if result is not None:
@@ -279,8 +289,6 @@ def putmodel(task, eid, cbase, cstore):
 
     except ApiException as e:
         click.echo(click.style(json.loads(e.body)['detail'], fg='red'))
-
-
 
 
 if __name__ == "__main__":

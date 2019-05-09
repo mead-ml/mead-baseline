@@ -1,6 +1,8 @@
 import os
 import shutil
 from baseline.utils import unzip_model
+import json
+import ast
 
 
 def store_model(checkpoint_base, config_sha1, checkpoint_store, print_fn=print):
@@ -35,3 +37,13 @@ def store_model(checkpoint_base, config_sha1, checkpoint_store, print_fn=print):
     shutil.rmtree(model_loc)
     print_fn("model files zipped and written")
     return model_loc + ".zip"
+
+
+def read_config_stream(config):
+    try:
+        return json.loads(config)
+    except json.decoder.JSONDecodeError:
+        try:
+            return ast.literal_eval(config)
+        except ValueError:
+            return None

@@ -10,7 +10,7 @@ from xpctl.swagger_server.models import Experiment as ServerExperiment
 from xpctl.swagger_server.models import Result as ServerResult
 from xpctl.swagger_server.models import ExperimentAggregate, Response, AggregateResult, TaskSummary, \
     AggregateResultValues
-from xpctl.backends.data import Experiment, Error, Result
+from xpctl.backends.data import Experiment, Error, Result, Success
 from xpctl.backends.helpers import json2log
 from xpctl.backends.data import EVENT_TYPES
 

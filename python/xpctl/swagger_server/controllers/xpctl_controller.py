@@ -244,7 +244,7 @@ def update_label(task, eid, label):  # noqa: E501
     :rtype: Response
     """
     backend = flask.globals.current_app.backend
-    return serialize_post_requests(backend.update_label(task, eid, label))
+    return serialize_post_requests(backend.update_prop(task, eid, prop='label', value=label))
    
 
 def update_property(task, eid, prop, value):  # noqa: E501

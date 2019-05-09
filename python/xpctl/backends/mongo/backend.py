@@ -4,10 +4,9 @@ import pymongo
 import datetime
 import socket
 import getpass
-from baseline.utils import export, listify, read_config_file, write_config_file, unzip_files
+from baseline.utils import export, listify, unzip_files
 from mead.utils import hash_config
 from xpctl.backends.core import ExperimentRepo
-from xpctl.backends.helpers import store_model
 from xpctl.backends.mongo.dto import mongo_to_experiment_set
 from xpctl.backends.dto import experiment_to_put_result_consumable, aggregate_results, write_experiment
 from backends.data import TaskDatasetSummary, TaskDatasetSummarySet, Success, Error
@@ -102,7 +101,7 @@ class MongoRepo(ExperimentRepo):
         results = [x for x in results if x is not None]
         if not results:
             return Error(message='no model location for experiment id [{}] in [{}] database'.format(eid, task))
-        return results[0]
+        return Success(results[0])
 
     def update_prop(self, task, eid, prop, value):
         try:
@@ -124,8 +123,9 @@ class MongoRepo(ExperimentRepo):
             prev = coll.find_one({'_id': ObjectId(eid)})
             if prev is None:
                 return Error(message='delete operation failed: experiment [{}] not found in [{}] database'.format(eid, task))
-            model_loc = self.get_model_location(task, eid)
-            if model_loc is not None and type(model_loc) is not Error and os.path.exists(model_loc):
+            model_loc_response = self.get_model_location(task, eid)
+            model_loc = model_loc_response.message
+            if model_loc is not None and type(model_loc_response) is not Error and os.path.exists(model_loc):
                 try:
                     os.remove(model_loc)
                 except IOError:
@@ -165,10 +165,20 @@ class MongoRepo(ExperimentRepo):
             return Error(message='no information available for [{}]: [{}] in task database [{}]'
                          .format(prop, value, task))
         resultset = mongo_to_experiment_set(task, all_results, event_type=event_type, metrics=metrics)
-        if type(resultset) is not Error:
-            return aggregate_results(resultset, reduction_dim, event_type, numexp_reduction_dim)
-        return resultset
-
+        if type(resultset) is Error:
+            return resultset
+        experiment_aggregate_set = aggregate_results(resultset, reduction_dim, event_type, numexp_reduction_dim)
+        if sort is None or (type(sort) == str and sort == 'None'):
+            return experiment_aggregate_set
+        else:
+            if event_type == 'test_events':
+                if sort in METRICS_SORT_ASCENDING:
+                    return experiment_aggregate_set.sort(sort, reverse=False)
+                else:
+                    return experiment_aggregate_set.sort(sort)
+            else:
+                return Error(message='experiments can only be sorted when event_type=test_events')
+        
     @staticmethod
     def _update_query(q, **kwargs):
         query = q
@@ -227,7 +237,7 @@ class MongoRepo(ExperimentRepo):
                 else:
                     return experiments.sort(sort)
             else:
-                return Error(message='experiments can only be sorted when event_type=test_results')
+                return Error(message='experiments can only be sorted when event_type=test_events')
 
     def config2json(self, task, sha1):
         coll = self.db[task]

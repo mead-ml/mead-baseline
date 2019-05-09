@@ -4,6 +4,9 @@ from typing import List
 from baseline.utils import write_config_file, read_config_file
 import json
 
+pd.set_option('display.expand_frame_repr', False)
+pd.set_option("display.max_rows", None)
+
 
 def pack_result(results: List[Result]):
     """ List of results to event data"""
@@ -14,13 +17,15 @@ def pack_result(results: List[Result]):
     return pd.DataFrame(d)
 
 
-def pack_aggregate_result(results: List[AggregateResult]):
+def pack_aggregate_result(results: List[AggregateResult], aggregate_fns):
     metrics = [r.metric for r in results]
     metrics = set(metrics)
     d = {metric: {} for metric in metrics}
     for result in results:
         for value in result.values:
             aggregate_fn = value.aggregate_fn
+            if aggregate_fn not in aggregate_fns:
+                continue
             score = value.score
             if aggregate_fn in d[result.metric]:
                 d[result.metric][aggregate_fn].append(score)
@@ -56,18 +61,19 @@ def experiment_to_df(exp: Experiment, prop_name_loc={}, event_type='test_events'
     return result_df
 
 
-def experiment_aggregate_to_df(exp_agg: ExperimentAggregate, prop_name_loc, event_type='test_events'):
+def experiment_aggregate_to_df(exp_agg: ExperimentAggregate, prop_name_loc, event_type='test_events',
+                               aggregate_fns=['min', 'max', 'avg', 'std']):
     event_dfs = []
     if event_type == 'train_events':
-        train_df = pack_aggregate_result(exp_agg.train_events)
+        train_df = pack_aggregate_result(exp_agg.train_events, aggregate_fns)
         insert_in_df(prop_name_loc, train_df, exp_agg)
         event_dfs.append(train_df)
     if event_type == 'valid_events':
-        valid_df = pack_aggregate_result(exp_agg.valid_events)
+        valid_df = pack_aggregate_result(exp_agg.valid_events, aggregate_fns)
         insert_in_df(prop_name_loc, valid_df, exp_agg)
         event_dfs.append(valid_df)
     if event_type == 'test_events':
-        test_df = pack_aggregate_result(exp_agg.test_events)
+        test_df = pack_aggregate_result(exp_agg.test_events, aggregate_fns)
         insert_in_df(prop_name_loc, test_df, exp_agg)
         event_dfs.append(test_df)
     result_df = pd.DataFrame()
@@ -76,11 +82,12 @@ def experiment_aggregate_to_df(exp_agg: ExperimentAggregate, prop_name_loc, even
     return result_df
 
 
-def experiment_aggregate_list_to_df(exp_aggs: List[ExperimentAggregate], event_type='test_events'):
+def experiment_aggregate_list_to_df(exp_aggs: List[ExperimentAggregate], event_type='test_events',
+                                    aggregate_fns=['min', 'max', 'avg', 'std']):
     result_df = pd.DataFrame()
     prop_name_loc = {'sha1': 0, 'num_exps': 1}
     for exp_agg in exp_aggs:
-        result_df = result_df.append(experiment_aggregate_to_df(exp_agg, prop_name_loc, event_type))
+        result_df = result_df.append(experiment_aggregate_to_df(exp_agg, prop_name_loc, event_type, aggregate_fns))
     return result_df
 
 
