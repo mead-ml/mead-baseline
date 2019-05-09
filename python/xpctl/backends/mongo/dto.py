@@ -1,4 +1,4 @@
-from backend.data import Experiment, ExperimentSet, Result, Error
+from backends.data import Experiment, ExperimentSet, Result, Error
 TRAIN_EVENT = 'train_events'
 VALID_EVENT = 'valid_events'
 TEST_EVENT = 'test_events'
@@ -70,7 +70,7 @@ class MongoResultSet(object):
         return data_groups
     
     def experiments(self):
-        grouped_results = self.groupby('_id')
+        grouped_results = self.groupby('eid')
         experiments = []
         for eid, resultset in grouped_results.items():
             first_result = resultset[0]

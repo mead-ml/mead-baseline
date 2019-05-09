@@ -7,10 +7,10 @@ import getpass
 from baseline.utils import export, listify
 from mead.utils import hash_config
 from baseline.version import __version__
-from xpctl.backend.helpers import log2json, get_experiment_label, METRICS_SORT_ASCENDING, get_checkpoint, store_model
-from xpctl.backend.dto import unpack_experiment
-from xpctl.backend.data import Error, Success, TaskDatasetSummary, TaskDatasetSummarySet
-from xpctl.backend.sql.dto import sql_result_to_data_experiment, aggregate_sql_results, get_data_experiment_set
+from xpctl.backends.helpers import log2json, get_experiment_label, METRICS_SORT_ASCENDING, get_checkpoint, store_model
+from xpctl.backends.dto import experiment_to_put_result_consumable, write_experiment
+from xpctl.backends.data import Error, Success, TaskDatasetSummary, TaskDatasetSummarySet
+from xpctl.backends.sql.dto import sql_result_to_data_experiment, aggregate_sql_results, get_data_experiment_set
 from baseline.utils import unzip_files, read_config_file
 import shutil
 
@@ -21,7 +21,7 @@ from sqlalchemy.ext.declarative import declarative_base
 Base = declarative_base()
 import sqlalchemy as sql
 import sqlalchemy.orm as orm
-from xpctl.backend.core import ExperimentRepo
+from xpctl.backends.core import ExperimentRepo
 
 EVENT_TYPES = {
     "train": "train_events", "Train": "train_events",
@@ -99,7 +99,7 @@ class SQLRepo(ExperimentRepo):
         self._connect(uri)
 
     def put_result(self, task, exp):
-        unpacked = unpack_experiment(exp)
+        unpacked = experiment_to_put_result_consumable(exp)
         return self._put_result(task=task, config_obj=unpacked.config_obj, events_obj=unpacked.events_obj,
                                 **unpacked.extra_args)
     
@@ -215,7 +215,7 @@ class SQLRepo(ExperimentRepo):
     
     def get_results(self, task, prop, value, reduction_dim, metric, sort, numexp_reduction_dim, event_type):
         session = self.Session()
-        metrics = [x for x in listify(metric)]
+        metrics = [x for x in listify(metric) if x.strip()]
         event_type = event_type if event_type is not None else 'test_events'
         reduction_dim = reduction_dim if reduction_dim is not None else 'sha1'
         hits = session.query(SqlExperiment).filter(getattr(SqlExperiment, prop) == value)\
@@ -223,10 +223,14 @@ class SQLRepo(ExperimentRepo):
         if hits is None:
             return Error(message='no information available for [{}]: [{}] in task database [{}]'
                          .format(prop, value, task))
-        sql_experiments = []
+        data_experiments = []
         for exp in hits:
-            sql_experiments.append(sql_result_to_data_experiment(exp, event_type, metrics))
-        return aggregate_sql_results(sql_experiments, reduction_dim, event_type, numexp_reduction_dim)
+            data_experiment = sql_result_to_data_experiment(exp, event_type, metrics)
+            if type(data_experiment) is Error:
+                return data_experiment
+            else:
+                data_experiments.append(data_experiment)
+        return aggregate_sql_results(data_experiments, reduction_dim, event_type, numexp_reduction_dim)
  
     def list_results(self, task, prop, value, user, metric, sort, event_type):
         session = self.Session()
@@ -288,28 +292,36 @@ class SQLRepo(ExperimentRepo):
             tasks.remove("system.indexes")
         return [self.task_summary(task) for task in tasks]
        
-    def leaderboard_summary(self, task=None, event_type=None, print_fn=print):
-        if task:
-            print_fn("Task: [{}]".format(task))
-            print_fn("-" * 93)
-            print_fn(self.get_info(task, event_type))
-        else:
-            tasks = self.get_task_names()
-            if "system.indexes" in tasks:
-                tasks.remove("system.indexes")
-            print_fn("There are {} tasks: {}".format(len(tasks), tasks))
-            for task in tasks:
-                print_fn("-" * 93)
-                print_fn("Task: [{}]".format(task))
-                print_fn("-" * 93)
-                print_fn(self.get_info(task, event_type))
+    def dump(self, zipfile='xpctl-sqldump-{}'.format(datetime.datetime.now().isoformat()), task_eids={}):
+        """ dump reporting log and config for later consumption. you"""
+        tasks = self.get_task_names() if not task_eids.keys() else list(task_eids.keys())
+        session = self.Session()
+        
+        base_dir = '/tmp/xpctldump'
+        if os.path.exists(base_dir):
+            shutil.rmtree(base_dir)
+
+        os.makedirs(base_dir, exist_ok=True)
+        for task in tasks:
+            _dir = os.path.join(base_dir, task)
+            os.makedirs(_dir)
+            sql_exps = session.query(SqlExperiment).filter(SqlExperiment.task == task)
+            for sql_exp in sql_exps:
+                exp = sql_result_to_data_experiment(sql_exp, event_type=[], metrics_from_user=[])
+                if type(exp) is Error:
+                    print(exp.message)
+                else:
+                    write_experiment(exp, _dir)
+        return shutil.make_archive(base_name=zipfile, format='zip', root_dir='/tmp', base_dir='xpctldump')
 
     def restore(self, dump):
         """ if dump is in zip format, will unzip it. expects the following dir structure in the unzipped file:
         <root>
          - <task>
-           - <id>-reporting.log
-           - <id>.yml
+           - <id>
+             - <id>-reporting.log
+             - <id>-config.yml
+             - <id>-meta.yml (any meta info such as label, username etc.)
         """
         dump_dir = unzip_files(dump)
         for task in os.listdir(dump_dir):

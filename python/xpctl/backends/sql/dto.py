@@ -1,4 +1,10 @@
-from xpctl.backend.data import Experiment, Result, ExperimentSet, Error, aggregate_results
+from xpctl.backends.data import Experiment, Result, ExperimentSet, Error
+from xpctl.backends.dto import aggregate_results
+
+TRAIN_EVENT = 'train_events'
+VALID_EVENT = 'valid_events'
+TEST_EVENT = 'test_events'
+EVENT_TYPES = [TRAIN_EVENT, VALID_EVENT, TEST_EVENT]
 
 
 def event2phase(event_type):
@@ -39,17 +45,7 @@ def create_results(event, metrics):
     return results
 
     
-def sql_result_to_data_experiment(exp, event_type, metrics):
-    phase = event2phase(event_type)
-    if type(phase) is Error:
-        return phase
-    phase_events = [event for event in exp.events if event.phase == phase]
-    if len(phase_events) == 0:
-        return Error('experiment id {} has 0 {}'.format(exp.eid, event_type))
-    metrics = get_filtered_metrics(get_sql_metrics(phase_events[0]), set(metrics))
-    if type(metrics) is Error:
-        return metrics
-    results = flatten([create_results(event, metrics) for event in phase_events])
+def sql_result_to_data_experiment(exp, event_type, metrics_from_user):
     _exp = Experiment(
         task=exp.task,
         eid=exp.eid,
@@ -65,8 +61,20 @@ def sql_result_to_data_experiment(exp, event_type, metrics):
         valid_events=[],
         test_events=[]
     )
-    for r in results:
-        _exp.add_result(r, event_type)
+    event_types = [event_type] if event_type else EVENT_TYPES
+    for event_type in event_types:
+        phase = event2phase(event_type)
+        if type(phase) is Error:
+            return phase
+        phase_events = [event for event in exp.events if event.phase == phase]
+        if len(phase_events) == 0:
+            return Error('experiment id {} has 0 {}'.format(exp.eid, event_type))
+        metrics = get_filtered_metrics(get_sql_metrics(phase_events[0]), set(metrics_from_user))
+        if type(metrics) is Error:
+            return metrics
+        results = flatten([create_results(event, metrics) for event in phase_events])
+        for r in results:
+            _exp.add_result(r, event_type)
     return _exp
 
 

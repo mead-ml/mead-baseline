@@ -25,14 +25,6 @@ class ExperimentRepo(object):
         """
         pass
 
-    def has_task(self, task):
-        """Does this task exist in the repository
-
-        :param task: (``str``) Task name
-        :return: (``bool``) `True` if it exist, `False` if it does not
-        """
-        pass
-
     def config2dict(self, task, sha1):
         """Convert a configuration stored in the repository to a string
 
@@ -46,81 +38,83 @@ class ExperimentRepo(object):
     def create_repo(dbhost, dbport, user, passwd, dbtype='mongo'):
         """Create a MongoDB-backed repository
 
-        :param type: (``str``) The database type
-        :param host: (``str``) The host name
-        :param port: (``str``) The port
+        :param dbtype: (``str``) The database type
+        :param dbhost: (``str``) The host name
+        :param dbport: (``str``) The port
         :param user: (``str``) The user
-        :param passw: (``str``)The password
-        :return: A MongoDB-backed repository
+        :param passwd: (``str``)The password
+        :return: A MongoDB/Sql-backed repository
         """
         if dbtype == 'mongo':
-            from xpctl.backend.mongo.backend import MongoRepo
+            from xpctl.backends.mongo.backend import MongoRepo
             return MongoRepo(dbhost, int(dbport), user, passwd)
         else:
-            from xpctl.backend.sql.backend import SQLRepo
+            from xpctl.backends.sql.backend import SQLRepo
             return SQLRepo(type=dbtype, host=dbhost, port=dbport, user=user, passwd=passwd)
 
-    def get_model_location(self, id, task):
-        """Get the physical location of the model specified by this id
+    def get_model_location(self, task, eid):
+        """Get the physical location of the model specified by this experiment id
 
-        :param id: The identifier of the run
         :param task: (``str``) The task name
+        :param eid: The identifier of the experiment
         :return: (``str``) The model location
         """
         pass
 
-    def get_results(self, task, dataset, metric, sort, num_exps_per_config, event_type, reduction_dim):
+    def get_experiment_details(self, task, eid, event_type, metric):
+        """Get detailed description for an experiment
+        :param task: (``str``) The task name
+        :param eid: The identifier of the experiment
+        :param event_type: (List[``str``]) event types to listen for
+        :param metric: (List[``str``]) The metric(s) to use
+        :return: xpctl.backend.data.Experiment object
+        """
+        pass
+        
+    def get_results(self, task, prop, value, reduction_dim, metric, sort, numexp_reduction_dim, event_type):
         """Get results from the database
-
         :param task: (``str``) The taskname
-        :param dataset: (``str``) The dataset
-        :param event_type: (``str``) event types to listen for
-        :param num_exps_per_config: (``str``) number of results to show per config
-        :param event_type: (``str``) event types to listen for
-        :param metric: (``str``) The metric to use
+        :param prop: (``str``) Filter the experiments by a property(eg: 'dataset')
+        :param value: (``str``) The value for the property (eg: 'SST2')
+        :param reduction_dim: (``str``) The property on which the results will be reduced
+        :param metric: (``str``) The metric(s) to use
         :param sort: (``str``) The field to sort on
-        :param reduction_dim:
-        :return: A result DataFrame
+        :param numexp_reduction_dim: (``str``) number of results to show per group
+        :param event_type: (``str``) event types to listen for
+        :return: List[xpctl.backend.data.ExperimentAggregate]
         """
         pass
 
-    def get_info(self, task, event_types):
-        """Show datasets that are available for this task, what metrics and which username and hostnames
-
+    def task_summary(self, task):
+        """Summary for a task: What datasets were used? How many times each dataset was used?
         :param task: (``str``) Task name
-        :param event_types: (``list``) A list of ``str`` of event types
+        :return xpctl.backend.data.TaskSummary
         """
         pass
 
-    def leaderboard_summary(self, task=None, event_type=None, print_fn=print):
-        pass
-
-    def get_label(self, id, task):
-        """Get the label for the record with this id
-
-        :param id: The identifier for this record
-        :param task: (``str``) The task name
-        :return: (``str``) Return the user-defined label for this task
+    def summary(self):
+        """
+        Summary for all tasks in the database
+        :return: List[xpctl.backend.data.TaskSummary]
         """
         pass
 
-    def update_label(self, id, task, new_label):
-        """Rename the user-defined label for the task identified by this id
-
-        :param id: The identifier for this record
-        :param task: (``str``) The task name
-        :param new_label: (``str``) The new label
-        :return: (``tuple``) A tuple of the old name and then the new name
+    def update_prop(self, task, eid, prop, value):
+        """
+        Update a property(label, username etc) for an experiment
+        :param task: (``str``) task name
+        :param eid: The identifier for this record
+        :param prop: (``str``) property to change
+        :param value: (``str``) the value of the property
+        :return: Union[xpctl.backend.data.Success, xpctl.backend.data.Error]
         """
         raise NotImplemented("Base ExperimentRepo events are immutable")
 
-    def remove_experiment(self, id, task, print_fn=print):
+    def remove_experiment(self, task, eid):
         """Remove a record specified by this id
-
-        :param id: The identifier for this record
         :param task: (``str``) The task name for this record
-        :param print_fn: A print callback which takes a ``str`` argument
-        :return: (``bool``) True if something was removed
+        :param eid: The identifier for this record
+        :return: Union[xpctl.backend.data.Success, xpctl.backend.data.Error]
         """
         raise NotImplemented("Base ExperimentRepo tasks are immutable")
 
@@ -154,20 +148,19 @@ class ExperimentRepo(object):
         * *username* -- (``str``) A username, defaults to the name of the user on this machine
         * *label* -- (``str``) An optional, human-readable label name.  Defaults to sha1 of this configuration
 
-        :return: The identifier assigned by the database
+        :return: Union[xpctl.backend.data.Success, xpctl.backend.data.Error]
         """
         pass
 
-    def list_results(self, user, metric, sort, task, event_type, sha1, n):
+    def list_results(self, task, prop, value, user, metric, sort, event_type):
         """Get results from the database
-
-        :param user: (``str``) The username
-        :param metric: (``str``) The metric to use
+        :param task: (``str``) The taskname
+        :param prop: (``str``) List the experiments by a property(eg: 'dataset')
+        :param value: (``str``) The value for the property (eg: 'SST2')
+        :param user: List[``str``)] filter by users
+        :param metric: (``str``) The metric(s) to use
         :param sort: (``str``) The field to sort on
-        :param task: (``str``) The task
         :param event_type: (``str``) event types to listen for
-        :param sha1: (``str``) sha1 of the config for the experiment
-        :param n: (``int``) number of results to show.
-        :return: A result DataFrame
+        :return: List[xpctl.backend.data.Experiment]
         """
         pass

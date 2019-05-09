@@ -1,7 +1,7 @@
 import pytest
 import json
 import os
-from xpctl.backend.mongo import MongoRepo
+from xpctl.backends.mongo import MongoRepo
 import pickle
 
 

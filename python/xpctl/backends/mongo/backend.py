@@ -6,16 +6,14 @@ import socket
 import getpass
 from baseline.utils import export, listify, read_config_file, write_config_file, unzip_files
 from mead.utils import hash_config
-from xpctl.backend.core import ExperimentRepo
-from xpctl.backend.helpers import store_model
-from xpctl.backend.mongo.dto import mongo_to_experiment_set
-from xpctl.backend.dto import unpack_experiment
-from backend.data import TaskDatasetSummary, TaskDatasetSummarySet, Success, Error, aggregate_results
-from xpctl.backend.helpers import log2json, get_experiment_label, METRICS_SORT_ASCENDING, get_checkpoint
+from xpctl.backends.core import ExperimentRepo
+from xpctl.backends.helpers import store_model
+from xpctl.backends.mongo.dto import mongo_to_experiment_set
+from xpctl.backends.dto import experiment_to_put_result_consumable, aggregate_results, write_experiment
+from backends.data import TaskDatasetSummary, TaskDatasetSummarySet, Success, Error
+from xpctl.backends.helpers import log2json, get_experiment_label, METRICS_SORT_ASCENDING, get_checkpoint
 from bson.objectid import ObjectId
 from baseline.version import __version__
-import numpy as np
-import json
 import logging
 
 
@@ -52,7 +50,7 @@ class MongoRepo(ExperimentRepo):
         self.db = client.reporting_db
 
     def put_result(self, task, exp):
-        unpacked = unpack_experiment(exp)
+        unpacked = experiment_to_put_result_consumable(exp)
         return self._put_result(task=task, config_obj=unpacked.config_obj, events_obj=unpacked.events_obj,
                                 **unpacked.extra_args)
         
@@ -283,39 +281,28 @@ class MongoRepo(ExperimentRepo):
             tasks.remove("system.indexes")
         return [self.task_summary(task) for task in tasks]
         
-    def dump(self, zip='xpctl-mongodump-{}'.format(datetime.datetime.now().isoformat()), task_eids={}):
+    def dump(self, zipfile='xpctldump-{}'.format(datetime.datetime.now().isoformat()), task_eids={}):
         """ dump reporting log and config for later consumption"""
-        events = ['train_events', 'valid_events', 'test_events']
         tasks = self.get_task_names() if not task_eids.keys() else list(task_eids.keys())
         if "system.indexes" in tasks:
             tasks.remove("system.indexes")
-
+    
         base_dir = '/tmp/xpctldump'
         if os.path.exists(base_dir):
             shutil.rmtree(base_dir)
-            
+    
         os.makedirs(base_dir, exist_ok=True)
-        
+    
         for task in tasks:
             coll = self.db[task]
             query = self._update_query({}, id=listify(task_eids.get(task, [])))
             all_results = list(coll.find(query))
-            for result in all_results:
-                _id = str(result['_id'])
-                result.pop('_id')
-                _dir = os.path.join(base_dir, task, _id)
-                os.makedirs(_dir, exist_ok=True)
-                config = result['config']
-                result.pop('config')
-                write_config_file(config, os.path.join(_dir, '{}-config.yml'.format(_id)))
-                with open(os.path.join(_dir, '{}-reporting.log'.format(_id)), 'w') as f:
-                    for event in events:
-                        for item in result.get(event, []):
-                            f.write(json.dumps(item)+'\n')
-                        result.pop(event)
-                write_config_file(result, os.path.join(_dir, '{}-meta.yml'.format(_id)))
-                
-        return shutil.make_archive(base_name=zip, format='zip', root_dir='/tmp', base_dir='xpctldump')
+            experiments = mongo_to_experiment_set(task, all_results, event_type=[], metrics=[]).data
+            _dir = os.path.join(base_dir, task)
+            os.makedirs(_dir)
+            for exp in experiments:
+                write_experiment(exp, _dir)
+        return shutil.make_archive(base_name=zipfile, format='zip', root_dir='/tmp', base_dir='xpctldump')
     
     def restore(self, dump):
         """ if dump is in zip format, will unzip it. expects the following dir structure in the unzipped file:

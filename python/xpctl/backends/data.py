@@ -1,11 +1,16 @@
 from copy import deepcopy
-import numpy as np
+from baseline.utils import export
+
+__all__ = []
+exporter = export(__all__)
 
 TRAIN_EVENT = 'train_events'
-DEV_EVENT = 'valid_events'
+VALID_EVENT = 'valid_events'
 TEST_EVENT = 'test_events'
+EVENT_TYPES = [TRAIN_EVENT, VALID_EVENT, TEST_EVENT]
 
 
+@exporter
 class Result(object):
     def __init__(self, metric, value, tick_type, tick, phase):
         super(Result, self).__init__()
@@ -20,7 +25,8 @@ class Result(object):
             raise ValueError('{} does not have a property {}'.format(self.__class__, field))
         return self.__dict__[field]
         
-        
+
+@exporter
 class AggregateResult(object):
     def __init__(self, metric, values):
         super(AggregateResult, self).__init__()
@@ -33,6 +39,7 @@ class AggregateResult(object):
         return self.__dict__[field]
 
 
+@exporter
 class Experiment(object):
     """ an experiment"""
     def __init__(self, train_events, valid_events, test_events, task, eid, username, hostname, config, exp_date, label,
@@ -61,7 +68,7 @@ class Experiment(object):
     def add_result(self, result, event_type):
         if event_type == TRAIN_EVENT:
             self.train_events.append(result)
-        elif event_type == DEV_EVENT:
+        elif event_type == VALID_EVENT:
             self.valid_events.append(result)
         elif event_type == TEST_EVENT:
             self.test_events.append(result)
@@ -69,6 +76,7 @@ class Experiment(object):
             raise NotImplementedError('no handler for event type: [{}]'.format(event_type))
 
 
+@exporter
 class ExperimentSet(object):
     """ a list of experiment objects"""
     def __init__(self, data):
@@ -129,6 +137,7 @@ class ExperimentSet(object):
         return ExperimentSet(data=final_results)
 
 
+@exporter
 class ExperimentGroup(object):
     """ a group of resultset objects"""
     def __init__(self, grouped_experiments, reduction_dim, task):
@@ -196,6 +205,7 @@ class ExperimentGroup(object):
         return aggregate_resultset
     
 
+@exporter
 class ExperimentAggregate(object):
     """ a result data point"""
     def __init__(self, task, train_events=[], valid_events=[], test_events=[], **kwargs):
@@ -218,7 +228,7 @@ class ExperimentAggregate(object):
     def add_result(self, aggregate_result, event_type):
         if event_type == TRAIN_EVENT:
             self.train_events.append(aggregate_result)
-        elif event_type == DEV_EVENT:
+        elif event_type == VALID_EVENT:
             self.valid_events.append(aggregate_result)
         elif event_type == TEST_EVENT:
             self.test_events.append(aggregate_result)
@@ -226,6 +236,7 @@ class ExperimentAggregate(object):
             raise NotImplementedError('no handler for event type: [{}]'.format(event_type))
     
 
+@exporter
 class ExperimentAggregateSet(object):
     """ a list of aggregate result objects"""
     def __init__(self, data):
@@ -254,6 +265,7 @@ class ExperimentAggregateSet(object):
         return self.length
 
 
+@exporter
 class TaskDatasetSummary(object):
     """ How many users experimented with this dataset in the given task?"""
     def __init__(self, task, dataset, experiment_set, user_num_exps=None):
@@ -267,6 +279,7 @@ class TaskDatasetSummary(object):
             self.user_num_exps = {username: len(exp_group)for username, exp_group in exp_groups}
 
 
+@exporter
 class TaskDatasetSummarySet(object):
     """ a list of TaskDatasetSummary objects."""
     def __init__(self, task, data):
@@ -284,13 +297,15 @@ class TaskDatasetSummarySet(object):
                 
         return TaskSummary(self.task, d)
  
- 
+
+@exporter
 class TaskSummary(object):
     def __init__(self, task, summary):
         self.task = task
         self.summary = summary
 
 
+@exporter
 class Response(object):
     def __init__(self, message, response_type, code=550):
         super(Response, self).__init__()
@@ -299,6 +314,7 @@ class Response(object):
         self.code = code
 
 
+@exporter
 class Error(Response):
     def __init__(self, message, response_type="error", code=550):
         super(Error, self).__init__(message, response_type, code)
@@ -307,16 +323,10 @@ class Error(Response):
         self.code = code
 
 
+@exporter
 class Success(Response):
     def __init__(self, message, response_type="success", code=250):
         super(Success, self).__init__(message, response_type, code)
         self.message = message
         self.response_type = response_type
         self.code = code
-
-
-def aggregate_results(resultset, reduction_dim, event_type, num_exps_per_reduction):
-    # TODO: implement a trim method for ExperimentGroup
-    grouped_result = resultset.groupby(reduction_dim)
-    aggregate_fns = {'min': np.min, 'max': np.max, 'avg': np.mean, 'std': np.std}
-    return grouped_result.reduce(aggregate_fns=aggregate_fns, event_type=event_type)

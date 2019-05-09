@@ -2,7 +2,9 @@ import connexion
 
 from swagger_server.models.experiment import Experiment  # noqa: E501
 import flask
-from backend.dto import *
+from xpctl.backends.dto import serialize_config2json, serialize_experiment_details, serialize_get_model_location, \
+    serialize_get_results, serialize_list_results, serialize_post_requests, deserialize_experiment, serialize_summary, \
+    serialize_task_summary
 
 
 def config2json(task, sha1):  # noqa: E501
@@ -18,7 +20,7 @@ def config2json(task, sha1):  # noqa: E501
     :rtype: object
     """
     backend = flask.globals.current_app.backend
-    return dto_config2json(backend.config2json(task, sha1))
+    return serialize_config2json(backend.config2json(task, sha1))
 
 
 def experiment_details(task, eid, event_type=None, metric=None):  # noqa: E501
@@ -38,7 +40,7 @@ def experiment_details(task, eid, event_type=None, metric=None):  # noqa: E501
     :rtype: Experiment
     """
     backend = flask.globals.current_app.backend
-    return dto_experiment_details(backend.get_experiment_details(task, eid, event_type, metric))
+    return serialize_experiment_details(backend.get_experiment_details(task, eid, event_type, metric))
 
 
 def get_model_location(task, eid):  # noqa: E501
@@ -54,7 +56,7 @@ def get_model_location(task, eid):  # noqa: E501
     :rtype: Response
     """
     backend = flask.globals.current_app.backend
-    return dto_get_model_location(backend.get_model_location(task, eid))
+    return serialize_get_model_location(backend.get_model_location(task, eid))
 
 
 def get_results_by_dataset(task, dataset, reduction_dim=None, metric=None, sort=None, numexp_reduction_dim=None, event_type=None):  # noqa: E501
@@ -80,8 +82,8 @@ def get_results_by_dataset(task, dataset, reduction_dim=None, metric=None, sort=
     :rtype: List[ExperimentAggregate]
     """
     backend = flask.globals.current_app.backend
-    return dto_get_results(backend.get_results(task, 'dataset', dataset, reduction_dim, metric, sort,
-                                               numexp_reduction_dim, event_type))
+    return serialize_get_results(backend.get_results(task, 'dataset', dataset, reduction_dim, metric, sort,
+                                                     numexp_reduction_dim, event_type))
 
 
 def get_results_by_prop(task, prop, value, reduction_dim=None, metric=None, sort=None, numexp_reduction_dim=None, event_type=None):  # noqa: E501
@@ -109,8 +111,8 @@ def get_results_by_prop(task, prop, value, reduction_dim=None, metric=None, sort
     :rtype: List[ExperimentAggregate]
     """
     backend = flask.globals.current_app.backend
-    return dto_get_results(backend.get_results(task, prop, value, reduction_dim, metric, sort,
-                                               numexp_reduction_dim, event_type))
+    return serialize_get_results(backend.get_results(task, prop, value, reduction_dim, metric, sort,
+                                                     numexp_reduction_dim, event_type))
 
 
 def list_experiments_by_prop(task, prop, value, user=None, metric=None, sort=None, event_type=None):  # noqa: E501
@@ -136,7 +138,7 @@ def list_experiments_by_prop(task, prop, value, user=None, metric=None, sort=Non
     :rtype: List[Experiment]
     """
     backend = flask.globals.current_app.backend
-    return dto_list_results(backend.list_results(task, prop, value, user, metric, sort, event_type))
+    return serialize_list_results(backend.list_results(task, prop, value, user, metric, sort, event_type))
 
 
 def list_experiments_by_sha1(task, sha1, user=None, metric=None, sort=None, event_type=None):  # noqa: E501
@@ -160,7 +162,7 @@ def list_experiments_by_sha1(task, sha1, user=None, metric=None, sort=None, even
     :rtype: List[Experiment]
     """
     backend = flask.globals.current_app.backend
-    return dto_list_results(backend.list_results(task, 'sha1', sha1, user, metric, sort, event_type))
+    return serialize_list_results(backend.list_results(task, 'sha1', sha1, user, metric, sort, event_type))
 
 
 def put_result(task, experiment, user=None, label=None):  # noqa: E501
@@ -182,7 +184,7 @@ def put_result(task, experiment, user=None, label=None):  # noqa: E501
     if connexion.request.is_json:
         experiment = Experiment.from_dict(connexion.request.get_json())  # noqa: E501
     backend = flask.globals.current_app.backend
-    return dto_put_requests(backend.put_result(task, dto_to_experiment(experiment)))
+    return serialize_post_requests(backend.put_result(task, deserialize_experiment(experiment)))
 
 
 def remove_experiment(task, eid):  # noqa: E501
@@ -198,7 +200,7 @@ def remove_experiment(task, eid):  # noqa: E501
     :rtype: Response
     """
     backend = flask.globals.current_app.backend
-    return dto_put_requests(backend.remove_experiment(task, eid))
+    return serialize_post_requests(backend.remove_experiment(task, eid))
 
 
 def summary():  # noqa: E501
@@ -210,7 +212,7 @@ def summary():  # noqa: E501
     :rtype: List[TaskSummary]
     """
     backend = flask.globals.current_app.backend
-    return dto_summary(backend.summary())
+    return serialize_summary(backend.summary())
 
 
 def task_summary(task):  # noqa: E501
@@ -224,7 +226,7 @@ def task_summary(task):  # noqa: E501
     :rtype: TaskSummary
     """
     backend = flask.globals.current_app.backend
-    return dto_task_summary(backend.task_summary(task))
+    return serialize_task_summary(backend.task_summary(task))
 
 
 def update_label(task, eid, label):  # noqa: E501
@@ -242,7 +244,7 @@ def update_label(task, eid, label):  # noqa: E501
     :rtype: Response
     """
     backend = flask.globals.current_app.backend
-    return dto_put_requests(backend.update_prop(task, eid, prop='label', value=label))
+    return serialize_post_requests(backend.update_label(task, eid, label))
    
 
 def update_property(task, eid, prop, value):  # noqa: E501
@@ -262,5 +264,4 @@ def update_property(task, eid, prop, value):  # noqa: E501
     :rtype: Response
     """
     backend = flask.globals.current_app.backend
-    return dto_put_requests(backend.update_prop(task, eid, prop, value))
-
+    return serialize_post_requests(backend.update_prop(task, eid, prop, value))

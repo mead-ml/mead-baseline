@@ -4,7 +4,7 @@ import connexion
 import logging
 import argparse
 import os
-from xpctl.backend.core import ExperimentRepo
+from xpctl.backends.core import ExperimentRepo
 from baseline.utils import read_config_file
 
 from swagger_server import encoder
@@ -22,8 +22,8 @@ def get_logging_level(ll: str) -> int:
 def main():
     parser = argparse.ArgumentParser(description='NLU unit')
     parser.add_argument('--ll', help='Log level', type=str, default='INFO')
-    parser.add_argument('--backend', help='back end', type=str, default='postgresql')
-    parser.add_argument('--cred', help='credential for backend', default=os.path.expanduser('~/xpctlcred-pg.json'))
+    parser.add_argument('--backend', help='backend', type=str, default='mongo')
+    parser.add_argument('--cred', help='credential for backend', default=os.path.expanduser('~/xpctlcred-mongo-local.json'))
     parser.add_argument('--port', help='port', default='5310')
     args = parser.parse_args()
     

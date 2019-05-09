@@ -4,6 +4,7 @@ from typing import List
 from baseline.utils import write_config_file, read_config_file
 import json
 
+
 def pack_result(results: List[Result]):
     """ List of results to event data"""
     metrics = set([r.metric for r in results])

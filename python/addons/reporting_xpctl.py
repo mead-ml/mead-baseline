@@ -5,7 +5,7 @@ import getpass
 import socket
 from baseline.reporting import EpochReportingHook
 from mead.utils import read_config_file_or_json
-from xpctl.backend.core import ExperimentRepo
+from xpctl.backends.core import ExperimentRepo
 from baseline.reporting import register_reporting
 
 @register_reporting(name='xpctl')
