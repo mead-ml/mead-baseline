@@ -22,8 +22,8 @@ def get_logging_level(ll: str) -> int:
 def main():
     parser = argparse.ArgumentParser(description='NLU unit')
     parser.add_argument('--ll', help='Log level', type=str, default='INFO')
-    parser.add_argument('--backend', help='back end', type=str, default='mongo')
-    parser.add_argument('--cred', help='credential for backend', default=os.path.expanduser('~/xpctlcred-localhost.json'))
+    parser.add_argument('--backend', help='back end', type=str, default='postgresql')
+    parser.add_argument('--cred', help='credential for backend', default=os.path.expanduser('~/xpctlcred-pg.json'))
     parser.add_argument('--port', help='port', default='5310')
     args = parser.parse_args()
     

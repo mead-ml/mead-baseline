@@ -1,21 +1,19 @@
-from xpctl.data import Experiment, ExperimentSet, Result
-from collections import namedtuple
-from typing import List
-import json
+from backend.data import Experiment, ExperimentSet, Result, Error
 TRAIN_EVENT = 'train_events'
-DEV_EVENT = 'valid_events'
+VALID_EVENT = 'valid_events'
 TEST_EVENT = 'test_events'
+EVENT_TYPES = [TRAIN_EVENT, VALID_EVENT, TEST_EVENT]
 
 
 class MongoResult(object):
     """ a result data point"""
-    def __init__(self, metric, value, task, _id, username, hostname, label, config, dataset, date, sha1, event_type,
+    def __init__(self, metric, value, task, eid, username, hostname, label, config, dataset, date, sha1, event_type,
                  tick_type, tick, phase, version):
         super(MongoResult, self).__init__()
         self.metric = metric
         self.value = value
         self.task = task
-        self._id = _id
+        self.eid = eid
         self.username = username
         self.hostname = hostname
         self.label = label
@@ -74,10 +72,10 @@ class MongoResultSet(object):
     def experiments(self):
         grouped_results = self.groupby('_id')
         experiments = []
-        for _id, resultset in grouped_results.items():
+        for eid, resultset in grouped_results.items():
             first_result = resultset[0]
             task = first_result.task
-            _id = str(first_result._id)
+            eid = str(first_result.eid)
             username = first_result.username
             hostname = first_result.hostname
             label = first_result.label
@@ -88,7 +86,7 @@ class MongoResultSet(object):
             version = first_result.version
             exp = Experiment(
                              task=task,
-                             eid=_id,
+                             eid=eid,
                              sha1=sha1,
                              config=config,
                              dataset=dataset,
@@ -108,32 +106,68 @@ class MongoResultSet(object):
         return ExperimentSet(experiments)
 
 
-def pack_events(results: List[Result]):
-    d = {}
-    for result in results:
-        if result.tick not in d:
-            d[result.tick] = {result.metric: result.value,
-                              'tick_type': result.tick_type,
-                              'phase': result.phase,
-                              'tick': result.tick
-                              }
-        else:
-            d[result.tick].update({result.metric: result.value})
-    return list(d.values())
-    
-    
-def unpack_experiment(exp):
-    d = exp.__dict__
-    train_events = pack_events(exp.train_events)
-    d.pop('train_events')
-    valid_events = pack_events(exp.valid_events)
-    d.pop('valid_events')
-    test_events = pack_events(exp.test_events)
-    d.pop('test_events')
-    config = exp.config
-    d.pop('config')
-    task = exp.task
-    d.pop('task')
-    unpacked_mongo_result = namedtuple('unpacked_mongo_result', ['task', 'config_obj', 'events_obj', 'extra_args'])
-    return unpacked_mongo_result(task=task, config_obj=json.loads(config), events_obj=train_events+valid_events+test_events,
-                                 extra_args=d)
+def get_metrics_mongo(xs):
+    keys = []
+    for x in xs:
+        keys += x.keys()
+    keys = set(keys)
+    if 'tick_type' in keys:
+        keys.remove("tick_type")
+    if 'tick' in keys:
+        keys.remove("tick")
+    if 'phase' in keys:
+        keys.remove("phase")
+    return keys
+
+
+def mongo_to_experiment_set(task, all_results, event_type, metrics):
+    data = []
+    event_types = [event_type] if event_type else EVENT_TYPES
+    metrics_from_user = set([x for x in metrics if x.strip()])
+    for result in all_results:  # different experiments
+        task = task
+        _id = result['_id']
+        username = result.get('username', 'root')
+        hostname = result.get('hostname', 'localhost')
+        label = result.get('label', 'default_label')
+        dataset = result['config']['dataset']
+        date = result['date']
+        sha1 = result['sha1']
+        config = result['config']
+        version = result.get('version', '0.5.0')  # backward compatibility
+        for event_type in event_types:
+            if not result.get(event_type, []):
+                continue
+            metrics_from_db = get_metrics_mongo(result[event_type])
+            if not metrics_from_user:
+                metrics = list(metrics_from_db)
+            elif metrics_from_user - metrics_from_db:
+                return Error(message='Metrics [{}] not found for experiment [{}] in [{}] database'.format(','.join(
+                    list(metrics_from_user - metrics_from_db)), _id, task))
+            else:
+                metrics = list(metrics_from_user)
+            # for train_events we can have different metrics than test_events
+            for record in result[event_type]:  # train_event epoch 0,
+                for metric in metrics:
+                    data.append(MongoResult(
+                        metric=metric,
+                        value=record[metric],
+                        task=task,
+                        eid=str(_id),
+                        username=username,
+                        hostname=hostname,
+                        label=label,
+                        config=config,
+                        dataset=dataset,
+                        date=date,
+                        sha1=sha1,
+                        event_type=event_type,
+                        tick_type=record['tick_type'],
+                        tick=record['tick'],
+                        phase=record['phase'],
+                        version=version
+                    ))
+    if not data:
+        return Error(message='No results from the query')
+    rs = MongoResultSet(data=data)
+    return rs.experiments()

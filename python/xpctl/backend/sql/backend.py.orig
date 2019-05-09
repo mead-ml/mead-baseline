@@ -212,7 +212,7 @@ class SQLRepo(ExperimentRepo):
         raise Exception('Unknown event type {}'.event_type)
 
     @staticmethod
-    def _get_filtered_metrics(allmetrics, metrics):
+    def get_filtered_metrics(allmetrics, metrics):
         if not metrics:
             return allmetrics
         else:
@@ -230,7 +230,7 @@ class SQLRepo(ExperimentRepo):
             for event in exp.events:
                 if event.phase == phase:
                     result = [exp.id, exp.username, exp.label, exp.dataset, exp.sha1, exp.date]
-                    for m in self._get_filtered_metrics(event.metrics, metrics):
+                    for m in self.get_filtered_metrics(event.metrics, metrics):
                         result += [m.value]
                         if m.label not in metrics_to_add:
                             metrics_to_add += [m.label]
@@ -254,7 +254,7 @@ class SQLRepo(ExperimentRepo):
             for event in exp.events:
                 if event.phase == phase:
                     result = [exp.id, exp.username, exp.label, exp.dataset, exp.sha1, exp.date]
-                    for m in self._get_filtered_metrics(event.metrics, metrics):
+                    for m in self.get_filtered_metrics(event.metrics, metrics):
                         result += [m.value]
                         if m.label not in metrics_to_add:
                             metrics_to_add += [m.label]

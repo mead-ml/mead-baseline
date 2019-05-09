@@ -2,7 +2,7 @@ import connexion
 
 from swagger_server.models.experiment import Experiment  # noqa: E501
 import flask
-from xpctl.dto import *
+from backend.dto import *
 
 
 def config2json(task, sha1):  # noqa: E501
@@ -242,4 +242,25 @@ def update_label(task, eid, label):  # noqa: E501
     :rtype: Response
     """
     backend = flask.globals.current_app.backend
-    return dto_put_requests(backend.update_label(task, eid, label))
+    return dto_put_requests(backend.update_prop(task, eid, prop='label', value=label))
+   
+
+def update_property(task, eid, prop, value):  # noqa: E501
+    """update property for an experiment
+
+     # noqa: E501
+
+    :param task: 
+    :type task: str
+    :param eid: 
+    :type eid: str
+    :param prop: 
+    :type prop: str
+    :param value: 
+    :type value: str
+
+    :rtype: Response
+    """
+    backend = flask.globals.current_app.backend
+    return dto_put_requests(backend.update_prop(task, eid, prop, value))
+

@@ -1,4 +1,5 @@
 from copy import deepcopy
+import numpy as np
 
 TRAIN_EVENT = 'train_events'
 DEV_EVENT = 'valid_events'
@@ -310,3 +311,9 @@ class Success(Response):
         self.response_type = response_type
         self.code = code
 
+
+def aggregate_results(resultset, reduction_dim, event_type, num_exps_per_reduction):
+    # TODO: implement a trim method for ExperimentGroup
+    grouped_result = resultset.groupby(reduction_dim)
+    aggregate_fns = {'min': np.min, 'max': np.max, 'avg': np.mean, 'std': np.std}
+    return grouped_result.reduce(aggregate_fns=aggregate_fns, event_type=event_type)

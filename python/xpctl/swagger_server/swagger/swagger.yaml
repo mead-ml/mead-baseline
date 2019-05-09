@@ -65,6 +65,48 @@ paths:
           schema:
             $ref: "#/definitions/Response"
       x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
+  /update/{task}/{eid}/:
+    get:
+      tags:
+      - "xpctl"
+      summary: "update property for an experiment"
+      description: ""
+      operationId: "update_property"
+      consumes:
+      - "application/json"
+      produces:
+      - "application/json"
+      parameters:
+      - name: "task"
+        in: "path"
+        description: ""
+        required: true
+        type: "string"
+      - name: "eid"
+        in: "path"
+        description: ""
+        required: true
+        type: "string"
+      - name: "prop"
+        in: "query"
+        description: ""
+        required: true
+        type: "string"
+      - name: "value"
+        in: "query"
+        description: ""
+        required: true
+        type: "string"
+      responses:
+        200:
+          description: "success"
+          schema:
+            $ref: "#/definitions/Response"
+        default:
+          description: "unexpected error"
+          schema:
+            $ref: "#/definitions/Response"
+      x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
   /updatelabel/{task}/{eid}/:
     get:
       tags:
