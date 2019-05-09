@@ -265,20 +265,19 @@ class SQLRepo(ExperimentRepo):
 
     def task_summary(self, task):
         session = self.Session()
-        event_type = 'test_events'
         datasets = [x[0] for x in session.query(SqlExperiment.dataset).distinct()]
+        users = [x[0] for x in session.query(SqlExperiment.username).distinct()]
         store = []
         for dataset in datasets:
-            data_experiments = []
-            for exp in session.query(SqlExperiment).filter(SqlExperiment.task == task).filter(SqlExperiment.dataset == dataset):
-                data_exp = sql_result_to_data_experiment(exp, event_type, metrics=[])
-                if type(data_exp) is Error:
-                    return data_exp
-                else:
-                    data_experiments.append(data_exp)
-            if data_experiments:
-                store.append(TaskDatasetSummary(task=task, dataset=dataset,
-                                                experiment_set=get_data_experiment_set(data_experiments)))
+            user_num_exps = {}
+            for user in users:
+                result = len([x.username for x in session.query(SqlExperiment)
+                             .filter(SqlExperiment.task == task)
+                             .filter(SqlExperiment.dataset == dataset)
+                             .filter(SqlExperiment.username == user).distinct()])
+                if result != 0:
+                    user_num_exps[user] = result
+            store.append(TaskDatasetSummary(task=task, dataset=dataset, experiment_set=None, user_num_exps=user_num_exps))
         if not store:
             return Error('could not get summary for task: [{}]'.format(task))
         return TaskDatasetSummarySet(task=task, data=store).groupby()

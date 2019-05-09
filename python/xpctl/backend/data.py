@@ -256,12 +256,15 @@ class ExperimentAggregateSet(object):
 
 class TaskDatasetSummary(object):
     """ How many users experimented with this dataset in the given task?"""
-    def __init__(self, task, dataset, experiment_set):
+    def __init__(self, task, dataset, experiment_set, user_num_exps=None):
         super(TaskDatasetSummary, self).__init__()
         self.task = task
         self.dataset = dataset
-        exp_groups = experiment_set.groupby('username')
-        self.user_num_exps = {username: len(exp_group)for username, exp_group in exp_groups}
+        if user_num_exps is not None:
+            self.user_num_exps = user_num_exps
+        else:
+            exp_groups = experiment_set.groupby('username')
+            self.user_num_exps = {username: len(exp_group)for username, exp_group in exp_groups}
 
 
 class TaskDatasetSummarySet(object):
