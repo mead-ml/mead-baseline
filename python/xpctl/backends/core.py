@@ -118,19 +118,7 @@ class ExperimentRepo(object):
         """
         raise NotImplemented("Base ExperimentRepo tasks are immutable")
 
-    def put_model(self, id, task, checkpoint_base, checkpoint_store, print_fn=print):
-        """Put the model for the record identified by id to the the checkpoint store
-
-        :param id:  The identifier
-        :param task: (``str``) The task name
-        :param checkpoint_base: (``str``) The basename of the model
-        :param checkpoint_store: (``str``) A path to the checkpoint store
-        :param print_fn: A print callback which takes a ``str`` argument
-        :return: The model location
-        """
-        pass
-
-    def put_result(self, task, config_obj, events_obj, **kwargs):
+    def _put_result(self, task, config_obj, events_obj, **kwargs):
         """Put the result to the experiment repository
 
         :param task: (``str``) The task name

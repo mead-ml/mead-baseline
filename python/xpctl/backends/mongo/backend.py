@@ -94,20 +94,6 @@ class MongoRepo(ExperimentRepo):
         except pymongo.errors.PyMongoError as e:
             return Error(message='experiment could not be inserted: {}'.format(e.message))
 
-    def put_model(self, eid, task, checkpoint_base, checkpoint_store, print_fn=print):
-        coll = self.db[task]
-        query = {'_id': ObjectId(eid)}
-        projection = {'sha1': 1}
-        results = list(coll.find(query, projection))
-        if not results:
-            print_fn("no sha1 for the given id found, returning.")
-            return None
-        sha1 = results[0]['sha1']
-        model_loc = store_model(checkpoint_base, sha1, checkpoint_store, print_fn)
-        if model_loc is not None:
-            coll.update_one({'_id': ObjectId(eid)}, {'$set': {'checkpoint': model_loc}}, upsert=False)
-        return model_loc
-
     def get_model_location(self, task, eid):
         coll = self.db[task]
         query = {'_id': ObjectId(eid)}

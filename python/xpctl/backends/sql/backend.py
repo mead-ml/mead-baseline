@@ -7,7 +7,7 @@ import getpass
 from baseline.utils import export, listify
 from mead.utils import hash_config
 from baseline.version import __version__
-from xpctl.backends.helpers import log2json, get_experiment_label, METRICS_SORT_ASCENDING, get_checkpoint, store_model
+from xpctl.backends.helpers import log2json, get_experiment_label, METRICS_SORT_ASCENDING, get_checkpoint
 from xpctl.backends.dto import experiment_to_put_result_consumable, write_experiment
 from xpctl.backends.data import Error, Success, TaskDatasetSummary, TaskDatasetSummarySet
 from xpctl.backends.sql.dto import sql_result_to_data_experiment, aggregate_sql_results, get_data_experiment_set
@@ -149,27 +149,14 @@ class SQLRepo(ExperimentRepo):
         except sql.exc.SQLAlchemyError as e:
             return Error(message=str(e))
         
-    def put_model(self, id, task, checkpoint_base, checkpoint_store, print_fn=print):
-        session = self.Session()
-        exp = session.query(SqlExperiment).get(id)
-        if exp is None:
-            print_fn("no sha1 for the given id found, returning.")
-            return None
-        sha1 = exp.sha1
-        model_loc = store_model(checkpoint_base, sha1, checkpoint_store, print_fn)
-        if model_loc is not None:
-            exp.checkpoint = model_loc
-            session.commit()
-        return model_loc
-
     def get_model_location(self, task, eid):
         session = self.Session()
-        exp = session.query(SqlExperiment).get(eid)
-        if exp is None:
+        exp = session.query(SqlExperiment).filter(SqlExperiment.task == task).filter(SqlExperiment.eid == eid)
+        if exp is None or exp.scalar() is None:
             return Error(message='no model location for experiment id [{}] in [{}] database'.format(eid, task))
         return exp.checkpoint
 
-    def update_prop(self, task, eid, prop, value):
+    def update_prop(self, task, eid, prop, value):  # TODO: not using task
         try:
             session = self.Session()
             # there must be a better way of getting a column value through a column name
@@ -182,7 +169,7 @@ class SQLRepo(ExperimentRepo):
         except sql.exc.SQLAlchemyError as e:
             return Error(message=str(e))
 
-    def remove_experiment(self, task, eid):
+    def remove_experiment(self, task, eid):  # TODO: not using task
         try:
             session = self.Session()
             exp = session.query(SqlExperiment).get(eid)
@@ -208,10 +195,10 @@ class SQLRepo(ExperimentRepo):
         metrics = [x for x in listify(metric) if x.strip()]
         event_type = event_type if event_type is not None else 'test_events'
         session = self.Session()
-        exp = session.query(SqlExperiment).get(eid)
-        if exp is None:
+        exp = session.query(SqlExperiment).filter(SqlExperiment.task == task).filter(SqlExperiment.eid == eid)
+        if exp is None or exp.scalar() is None:
             return Error(message='no experiment with id [{}] for task [{}]'.format(eid, task))
-        return sql_result_to_data_experiment(exp, event_type, metrics)
+        return sql_result_to_data_experiment(exp.one(), event_type, metrics)
     
     def get_results(self, task, prop, value, reduction_dim, metric, sort, numexp_reduction_dim, event_type):
         session = self.Session()
