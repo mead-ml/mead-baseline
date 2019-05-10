@@ -8,7 +8,7 @@ from baseline.utils import export, listify
 from mead.utils import hash_config
 from baseline.version import __version__
 from xpctl.backends.backend import log2json, get_experiment_label, METRICS_SORT_ASCENDING, safe_get, \
-    experiment_to_put_result_consumable, write_experiment, aggregate_results
+    client_experiment_to_put_result_consumable, write_experiment, aggregate_results
 from xpctl.backends.backend import Error, Success, TaskDatasetSummary, TaskDatasetSummarySet, Experiment, Result, \
     ExperimentSet, EVENT_TYPES
 from baseline.utils import unzip_files, read_config_file
@@ -92,7 +92,7 @@ class SQLRepo(ExperimentRepo):
         self._connect(uri)
 
     def put_result(self, task, exp):
-        unpacked = experiment_to_put_result_consumable(exp)
+        unpacked = client_experiment_to_put_result_consumable(exp)
         return self._put_result(task=task, config_obj=unpacked.config_obj, events_obj=unpacked.events_obj,
                                 **unpacked.extra_args)
     

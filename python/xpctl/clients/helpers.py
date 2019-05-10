@@ -1,9 +1,6 @@
-import os
-import shutil
 import pandas as pd
-from swagger_client.models import Experiment, ExperimentAggregate, Result, AggregateResult, TaskSummary
 from typing import List
-from baseline.utils import write_config_file, read_config_file, unzip_model
+from baseline.utils import write_config_file
 import json
 import ast
 
@@ -11,7 +8,7 @@ pd.set_option('display.expand_frame_repr', False)
 pd.set_option("display.max_rows", None)
 
 
-def pack_result(results: List[Result]):
+def pack_result(results):
     """ List of results to event data"""
     metrics = set([r.metric for r in results])
     d = {metric: [] for metric in metrics}
@@ -20,7 +17,7 @@ def pack_result(results: List[Result]):
     return pd.DataFrame(d)
 
 
-def pack_aggregate_result(results: List[AggregateResult], aggregate_fns):
+def pack_aggregate_result(results, aggregate_fns):
     metrics = [r.metric for r in results]
     metrics = set(metrics)
     d = {metric: {} for metric in metrics}
@@ -48,7 +45,7 @@ def insert_in_df(prop_name_loc, df, exp):
         df.insert(location, column=prop_name, value=[get_prop_value(exp, prop_name)]*len(df))
         
         
-def experiment_to_df(exp: Experiment, prop_name_loc={}, event_type='test_events', sort=None):
+def experiment_to_df(exp, prop_name_loc={}, event_type='test_events', sort=None):
     prop_name_loc = {'sha1': 0, 'id': 1, 'username':  2} if not prop_name_loc else prop_name_loc
     if event_type == 'train_events' and exp.train_events:
         result_df = pack_result(exp.train_events)
@@ -64,7 +61,7 @@ def experiment_to_df(exp: Experiment, prop_name_loc={}, event_type='test_events'
     return result_df
 
 
-def experiment_aggregate_to_df(exp_agg: ExperimentAggregate, prop_name_loc, event_type='test_events',
+def experiment_aggregate_to_df(exp_agg, prop_name_loc, event_type='test_events',
                                aggregate_fns=['min', 'max', 'avg', 'std']):
     event_dfs = []
     if event_type == 'train_events':
@@ -85,7 +82,7 @@ def experiment_aggregate_to_df(exp_agg: ExperimentAggregate, prop_name_loc, even
     return result_df
 
 
-def experiment_aggregate_list_to_df(exp_aggs: List[ExperimentAggregate], event_type='test_events',
+def experiment_aggregate_list_to_df(exp_aggs, event_type='test_events',
                                     aggregate_fns=['min', 'max', 'avg', 'std']):
     result_df = pd.DataFrame()
     prop_name_loc = {'sha1': 0, 'num_exps': 1}
@@ -94,7 +91,7 @@ def experiment_aggregate_list_to_df(exp_aggs: List[ExperimentAggregate], event_t
     return result_df
 
 
-def experiment_list_to_df(exps: List[Experiment], prop_name_loc={}, event_type='test_events'):
+def experiment_list_to_df(exps, prop_name_loc={}, event_type='test_events'):
     result_df = pd.DataFrame()
     prop_name_loc = {'sha1': 0, 'id': 1, 'username':  2} if not prop_name_loc else prop_name_loc
     for exp in exps:
@@ -106,7 +103,7 @@ def write_to_config_file(config_obj, filename):
     write_config_file(config_obj, filename)
 
 
-def task_summary_to_df(tasksummary: TaskSummary):
+def task_summary_to_df(tasksummary):
     def identity(x): return x
     summary = tasksummary.summary
     all_results = []
@@ -117,7 +114,7 @@ def task_summary_to_df(tasksummary: TaskSummary):
         .agg([identity]).rename(columns={'identity': ''})
 
 
-def task_summaries_to_df(tasksummaries: List[TaskSummary]):
+def task_summaries_to_df(tasksummaries):
     def identity(x): return x
     all_results = []
     for tasksummary in tasksummaries:
@@ -128,91 +125,6 @@ def task_summaries_to_df(tasksummaries: List[TaskSummary]):
                 all_results.append([task, user, dataset, num_exps])
     return pd.DataFrame(all_results, columns=['task', 'user', 'dataset', 'num_exps']).groupby(['task', 'user', 'dataset'])\
         .agg([identity]).rename(columns={'identity': ''})
-
-
-def read_logs(file_name):
-    logs = []
-    with open(file_name) as f:
-        for line in f:
-            logs.append(json.loads(line))
-    return logs
-
-
-def convert_to_result(event):
-    results = []
-    non_metrics = ['tick_type', 'tick', 'phase']
-    metrics = event.keys() - non_metrics
-    for metric in metrics:
-        results.append(Result(
-             metric=metric,
-             value=event[metric],
-             tick_type=event['tick_type'],
-             tick=event['tick'],
-             phase=event['phase']
-            )
-        )
-    return results
-    
-
-def flatten(_list):
-    return [item for sublist in _list for item in sublist]
-
-
-def to_experiment(task, configf, logf, user, label):
-    events_obj = read_logs(logf)
-    train_events = flatten(
-        [convert_to_result(event) for event in list(filter(lambda x: x['phase'] == 'Train', events_obj))]
-    )
-    valid_events = flatten(
-        [convert_to_result(event) for event in list(filter(lambda x: x['phase'] == 'Valid', events_obj))]
-    )
-    test_events = flatten(
-        [convert_to_result(event) for event in list(filter(lambda x: x['phase'] == 'Test', events_obj))]
-    )
-    config = json.dumps(read_config_file(configf))
-    return Experiment(
-        task=task,
-        username=user,
-        label=label,
-        train_events=train_events,
-        valid_events=valid_events,
-        test_events=test_events,
-        config=config
-    )
-
-
-def store_model(checkpoint_base, config_sha1, checkpoint_store, print_fn=print):
-    checkpoint_base = unzip_model(checkpoint_base)
-    mdir, mbase = os.path.split(checkpoint_base)
-    mdir = mdir if mdir else "."
-    if not os.path.exists(mdir):
-        print_fn("no directory found for the model location: [{}], aborting command".format(mdir))
-        return None
-    
-    mfiles = ["{}/{}".format(mdir, x) for x in os.listdir(mdir) if x.startswith(mbase + "-") or
-              x.startswith(mbase + ".")]
-    if not mfiles:
-        print_fn("no model files found with base [{}] at location [{}], aborting command".format(mbase, mdir))
-        return None
-    model_loc_base = "{}/{}".format(checkpoint_store, config_sha1)
-    if not os.path.exists(model_loc_base):
-        os.makedirs(model_loc_base)
-    dirs = [int(x[:-4]) for x in os.listdir(model_loc_base) if x.endswith(".zip") and x[:-4].isdigit()]
-    # we expect dirs in numbers.
-    new_dir = "1" if not dirs else str(max(dirs) + 1)
-    model_loc = "{}/{}".format(model_loc_base, new_dir)
-    os.makedirs(model_loc)
-    for mfile in mfiles:
-        shutil.copy(mfile, model_loc)
-        print_fn("writing model file: [{}] to store: [{}]".format(mfile, model_loc))
-    print_fn("zipping model files")
-    shutil.make_archive(base_name=model_loc,
-                        format='zip',
-                        root_dir=model_loc_base,
-                        base_dir=new_dir)
-    shutil.rmtree(model_loc)
-    print_fn("model files zipped and written")
-    return model_loc + ".zip"
 
 
 def read_config_stream(config):

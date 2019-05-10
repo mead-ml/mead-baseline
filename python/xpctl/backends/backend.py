@@ -508,28 +508,6 @@ def deserialize_result(result):
 
 
 @exporter
-def deserialize_experiment(exp):
-    train_events = [deserialize_result(r) for r in exp.train_events]
-    valid_events = [deserialize_result(r) for r in exp.valid_events]
-    test_events = [deserialize_result(r) for r in exp.test_events]
-    return Experiment(
-        task=exp.task,
-        eid=exp.eid,
-        username=exp.username,
-        hostname=exp.hostname,
-        config=exp.config,
-        exp_date=exp.exp_date,
-        label=exp.label,
-        dataset=exp.dataset,
-        sha1=exp.sha1,
-        version=exp.version,
-        train_events=train_events,
-        valid_events=valid_events,
-        test_events=test_events
-    )
-
-
-@exporter
 def pack_results_in_events(results):
     d = {}
     for result in results:
@@ -545,18 +523,13 @@ def pack_results_in_events(results):
 
 
 @exporter
-def experiment_to_put_result_consumable(exp):
+def client_experiment_to_put_result_consumable(exp):
     d = exp.__dict__
     train_events = pack_results_in_events(exp.train_events)
-    d.pop('train_events')
     valid_events = pack_results_in_events(exp.valid_events)
-    d.pop('valid_events')
     test_events = pack_results_in_events(exp.test_events)
-    d.pop('test_events')
     config = exp.config
-    d.pop('config')
     task = exp.task
-    d.pop('task')
     put_result_consumable = namedtuple('put_result_consumable', ['task', 'config_obj', 'events_obj', 'extra_args'])
     return put_result_consumable(task=task, config_obj=json.loads(config),
                                  events_obj=train_events+valid_events+test_events,

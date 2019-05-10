@@ -3,7 +3,7 @@ import connexion
 from swagger_server.models.experiment import Experiment  # noqa: E501
 import flask
 from xpctl.backends.backend import serialize_config2json, serialize_experiment_details, serialize_get_model_location, \
-    serialize_get_results, serialize_list_results, serialize_post_requests, deserialize_experiment, serialize_summary, \
+    serialize_get_results, serialize_list_results, serialize_post_requests, serialize_summary, \
     serialize_task_summary
 
 
@@ -184,7 +184,7 @@ def put_result(task, experiment, user=None, label=None):  # noqa: E501
     if connexion.request.is_json:
         experiment = Experiment.from_dict(connexion.request.get_json())  # noqa: E501
     backend = flask.globals.current_app.backend
-    return serialize_post_requests(backend.put_result(task, deserialize_experiment(experiment)))
+    return serialize_post_requests(backend.put_result(task, experiment))
 
 
 def remove_experiment(task, eid):  # noqa: E501

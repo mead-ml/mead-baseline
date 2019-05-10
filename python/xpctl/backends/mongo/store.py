@@ -9,7 +9,7 @@ from mead.utils import hash_config
 from xpctl.backends.core import ExperimentRepo
 from backends.backend import TaskDatasetSummary, TaskDatasetSummarySet, Success, Error, Experiment, ExperimentSet, Result, \
     EVENT_TYPES, log2json, get_experiment_label, METRICS_SORT_ASCENDING, safe_get, \
-    experiment_to_put_result_consumable, aggregate_results, write_experiment
+    client_experiment_to_put_result_consumable, aggregate_results, write_experiment
 from bson.objectid import ObjectId
 from baseline.version import __version__
 import logging
@@ -48,7 +48,7 @@ class MongoRepo(ExperimentRepo):
         self.db = client.reporting_db
 
     def put_result(self, task, exp):
-        unpacked = experiment_to_put_result_consumable(exp)
+        unpacked = client_experiment_to_put_result_consumable(exp)
         return self._put_result(task=task, config_obj=unpacked.config_obj, events_obj=unpacked.events_obj,
                                 **unpacked.extra_args)
         
