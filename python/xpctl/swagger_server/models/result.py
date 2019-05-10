@@ -15,7 +15,7 @@ class Result(Model):
     Do not edit the class manually.
     """
 
-    def __init__(self, metric: str=None, value: float=None, tick_type: str=None, tick: int=None, phase: str=None):  # noqa: E501
+    def __init__(self, metric=None, value=None, tick_type=None, tick=None, phase=None):  # noqa: E501
         """Result - a model defined in Swagger
 
         :param metric: The metric of this Result.  # noqa: E501
@@ -52,7 +52,7 @@ class Result(Model):
         self._phase = phase
 
     @classmethod
-    def from_dict(cls, dikt) -> 'Result':
+    def from_dict(cls, dikt):
         """Returns the dict as a model
 
         :param dikt: A dict.
@@ -63,7 +63,7 @@ class Result(Model):
         return util.deserialize_model(dikt, cls)
 
     @property
-    def metric(self) -> str:
+    def metric(self):
         """Gets the metric of this Result.
 
 
@@ -73,7 +73,7 @@ class Result(Model):
         return self._metric
 
     @metric.setter
-    def metric(self, metric: str):
+    def metric(self, metric):
         """Sets the metric of this Result.
 
 
@@ -86,7 +86,7 @@ class Result(Model):
         self._metric = metric
 
     @property
-    def value(self) -> float:
+    def value(self):
         """Gets the value of this Result.
 
 
@@ -96,7 +96,7 @@ class Result(Model):
         return self._value
 
     @value.setter
-    def value(self, value: float):
+    def value(self, value):
         """Sets the value of this Result.
 
 
@@ -109,7 +109,7 @@ class Result(Model):
         self._value = value
 
     @property
-    def tick_type(self) -> str:
+    def tick_type(self):
         """Gets the tick_type of this Result.
 
 
@@ -119,7 +119,7 @@ class Result(Model):
         return self._tick_type
 
     @tick_type.setter
-    def tick_type(self, tick_type: str):
+    def tick_type(self, tick_type):
         """Sets the tick_type of this Result.
 
 
@@ -132,7 +132,7 @@ class Result(Model):
         self._tick_type = tick_type
 
     @property
-    def tick(self) -> int:
+    def tick(self):
         """Gets the tick of this Result.
 
 
@@ -142,7 +142,7 @@ class Result(Model):
         return self._tick
 
     @tick.setter
-    def tick(self, tick: int):
+    def tick(self, tick):
         """Sets the tick of this Result.
 
 
@@ -155,7 +155,7 @@ class Result(Model):
         self._tick = tick
 
     @property
-    def phase(self) -> str:
+    def phase(self):
         """Gets the phase of this Result.
 
 
@@ -165,7 +165,7 @@ class Result(Model):
         return self._phase
 
     @phase.setter
-    def phase(self, phase: str):
+    def phase(self, phase):
         """Sets the phase of this Result.
 
 

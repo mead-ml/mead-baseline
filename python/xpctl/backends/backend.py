@@ -145,7 +145,7 @@ class ExperimentSet(object):
         :param reverse: reverse=True always except when key is avg_loss
         :return:
         """
-        if key is None:
+        if key is None or key == 'None':
             return self
         test_results = [(index, [y for y in x.get_prop(TEST_EVENT) if y.metric == key][0]) for index, x in
                         enumerate(self.data)]

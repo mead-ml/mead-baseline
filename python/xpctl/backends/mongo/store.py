@@ -164,7 +164,7 @@ class MongoRepo(ExperimentRepo):
         if type(resultset) is Error:
             return resultset
         experiment_aggregate_set = aggregate_results(resultset, reduction_dim, event_type, numexp_reduction_dim)
-        if sort is None or (type(sort) == str and sort == 'None'):
+        if sort is None or sort == 'None':
             return experiment_aggregate_set
         else:
             if event_type == 'test_events':
@@ -224,7 +224,7 @@ class MongoRepo(ExperimentRepo):
         experiments = mongo_to_experiment_set(task, all_results, event_type=event_type, metrics=metrics)
         if type(experiments) == Error:
             return experiments
-        if sort is None or (type(sort) == str and sort == 'None'):
+        if sort is None or sort == 'None':
             return experiments
         else:
             if event_type == 'test_events':

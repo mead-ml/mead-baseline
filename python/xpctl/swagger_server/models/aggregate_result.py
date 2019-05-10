@@ -16,7 +16,7 @@ class AggregateResult(Model):
     Do not edit the class manually.
     """
 
-    def __init__(self, metric: str=None, values: List[AggregateResultValues]=None):  # noqa: E501
+    def __init__(self, metric=None, values=None):  # noqa: E501
         """AggregateResult - a model defined in Swagger
 
         :param metric: The metric of this AggregateResult.  # noqa: E501
@@ -38,7 +38,7 @@ class AggregateResult(Model):
         self._values = values
 
     @classmethod
-    def from_dict(cls, dikt) -> 'AggregateResult':
+    def from_dict(cls, dikt):
         """Returns the dict as a model
 
         :param dikt: A dict.
@@ -49,7 +49,7 @@ class AggregateResult(Model):
         return util.deserialize_model(dikt, cls)
 
     @property
-    def metric(self) -> str:
+    def metric(self):
         """Gets the metric of this AggregateResult.
 
 
@@ -59,7 +59,7 @@ class AggregateResult(Model):
         return self._metric
 
     @metric.setter
-    def metric(self, metric: str):
+    def metric(self, metric):
         """Sets the metric of this AggregateResult.
 
 
@@ -72,7 +72,7 @@ class AggregateResult(Model):
         self._metric = metric
 
     @property
-    def values(self) -> List[AggregateResultValues]:
+    def values(self):
         """Gets the values of this AggregateResult.
 
 
@@ -82,7 +82,7 @@ class AggregateResult(Model):
         return self._values
 
     @values.setter
-    def values(self, values: List[AggregateResultValues]):
+    def values(self, values):
         """Sets the values of this AggregateResult.
 
 

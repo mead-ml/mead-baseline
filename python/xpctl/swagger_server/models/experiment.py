@@ -16,7 +16,7 @@ class Experiment(Model):
     Do not edit the class manually.
     """
 
-    def __init__(self, task: str=None, eid: str=None, sha1: str=None, config: str=None, dataset: str=None, username: str=None, hostname: str=None, exp_date: date=None, label: str=None, version: str=None, train_events: List[Result]=None, valid_events: List[Result]=None, test_events: List[Result]=None):  # noqa: E501
+    def __init__(self, task=None, eid=None, sha1=None, config=None, dataset=None, username=None, hostname=None, exp_date=None, label=None, version=None, train_events=None, valid_events=None, test_events=None):  # noqa: E501
         """Experiment - a model defined in Swagger
 
         :param task: The task of this Experiment.  # noqa: E501
@@ -93,7 +93,7 @@ class Experiment(Model):
         self._test_events = test_events
 
     @classmethod
-    def from_dict(cls, dikt) -> 'Experiment':
+    def from_dict(cls, dikt):
         """Returns the dict as a model
 
         :param dikt: A dict.
@@ -104,7 +104,7 @@ class Experiment(Model):
         return util.deserialize_model(dikt, cls)
 
     @property
-    def task(self) -> str:
+    def task(self):
         """Gets the task of this Experiment.
 
 
@@ -114,7 +114,7 @@ class Experiment(Model):
         return self._task
 
     @task.setter
-    def task(self, task: str):
+    def task(self, task):
         """Sets the task of this Experiment.
 
 
@@ -125,7 +125,7 @@ class Experiment(Model):
         self._task = task
 
     @property
-    def eid(self) -> str:
+    def eid(self):
         """Gets the eid of this Experiment.
 
 
@@ -135,7 +135,7 @@ class Experiment(Model):
         return self._eid
 
     @eid.setter
-    def eid(self, eid: str):
+    def eid(self, eid):
         """Sets the eid of this Experiment.
 
 
@@ -146,7 +146,7 @@ class Experiment(Model):
         self._eid = eid
 
     @property
-    def sha1(self) -> str:
+    def sha1(self):
         """Gets the sha1 of this Experiment.
 
 
@@ -156,7 +156,7 @@ class Experiment(Model):
         return self._sha1
 
     @sha1.setter
-    def sha1(self, sha1: str):
+    def sha1(self, sha1):
         """Sets the sha1 of this Experiment.
 
 
@@ -167,7 +167,7 @@ class Experiment(Model):
         self._sha1 = sha1
 
     @property
-    def config(self) -> str:
+    def config(self):
         """Gets the config of this Experiment.
 
 
@@ -177,7 +177,7 @@ class Experiment(Model):
         return self._config
 
     @config.setter
-    def config(self, config: str):
+    def config(self, config):
         """Sets the config of this Experiment.
 
 
@@ -188,7 +188,7 @@ class Experiment(Model):
         self._config = config
 
     @property
-    def dataset(self) -> str:
+    def dataset(self):
         """Gets the dataset of this Experiment.
 
 
@@ -198,7 +198,7 @@ class Experiment(Model):
         return self._dataset
 
     @dataset.setter
-    def dataset(self, dataset: str):
+    def dataset(self, dataset):
         """Sets the dataset of this Experiment.
 
 
@@ -209,7 +209,7 @@ class Experiment(Model):
         self._dataset = dataset
 
     @property
-    def username(self) -> str:
+    def username(self):
         """Gets the username of this Experiment.
 
 
@@ -219,7 +219,7 @@ class Experiment(Model):
         return self._username
 
     @username.setter
-    def username(self, username: str):
+    def username(self, username):
         """Sets the username of this Experiment.
 
 
@@ -230,7 +230,7 @@ class Experiment(Model):
         self._username = username
 
     @property
-    def hostname(self) -> str:
+    def hostname(self):
         """Gets the hostname of this Experiment.
 
 
@@ -240,7 +240,7 @@ class Experiment(Model):
         return self._hostname
 
     @hostname.setter
-    def hostname(self, hostname: str):
+    def hostname(self, hostname):
         """Sets the hostname of this Experiment.
 
 
@@ -251,7 +251,7 @@ class Experiment(Model):
         self._hostname = hostname
 
     @property
-    def exp_date(self) -> date:
+    def exp_date(self):
         """Gets the exp_date of this Experiment.
 
 
@@ -261,7 +261,7 @@ class Experiment(Model):
         return self._exp_date
 
     @exp_date.setter
-    def exp_date(self, exp_date: date):
+    def exp_date(self, exp_date):
         """Sets the exp_date of this Experiment.
 
 
@@ -272,7 +272,7 @@ class Experiment(Model):
         self._exp_date = exp_date
 
     @property
-    def label(self) -> str:
+    def label(self):
         """Gets the label of this Experiment.
 
 
@@ -282,7 +282,7 @@ class Experiment(Model):
         return self._label
 
     @label.setter
-    def label(self, label: str):
+    def label(self, label):
         """Sets the label of this Experiment.
 
 
@@ -293,7 +293,7 @@ class Experiment(Model):
         self._label = label
 
     @property
-    def version(self) -> str:
+    def version(self):
         """Gets the version of this Experiment.
 
 
@@ -303,7 +303,7 @@ class Experiment(Model):
         return self._version
 
     @version.setter
-    def version(self, version: str):
+    def version(self, version):
         """Sets the version of this Experiment.
 
 
@@ -314,7 +314,7 @@ class Experiment(Model):
         self._version = version
 
     @property
-    def train_events(self) -> List[Result]:
+    def train_events(self):
         """Gets the train_events of this Experiment.
 
 
@@ -324,7 +324,7 @@ class Experiment(Model):
         return self._train_events
 
     @train_events.setter
-    def train_events(self, train_events: List[Result]):
+    def train_events(self, train_events):
         """Sets the train_events of this Experiment.
 
 
@@ -335,7 +335,7 @@ class Experiment(Model):
         self._train_events = train_events
 
     @property
-    def valid_events(self) -> List[Result]:
+    def valid_events(self):
         """Gets the valid_events of this Experiment.
 
 
@@ -345,7 +345,7 @@ class Experiment(Model):
         return self._valid_events
 
     @valid_events.setter
-    def valid_events(self, valid_events: List[Result]):
+    def valid_events(self, valid_events):
         """Sets the valid_events of this Experiment.
 
 
@@ -356,7 +356,7 @@ class Experiment(Model):
         self._valid_events = valid_events
 
     @property
-    def test_events(self) -> List[Result]:
+    def test_events(self):
         """Gets the test_events of this Experiment.
 
 
@@ -366,7 +366,7 @@ class Experiment(Model):
         return self._test_events
 
     @test_events.setter
-    def test_events(self, test_events: List[Result]):
+    def test_events(self, test_events):
         """Sets the test_events of this Experiment.
 
 

@@ -212,7 +212,7 @@ class SQLRepo(ExperimentRepo):
                 data_experiments.append(data_experiment)
         experiment_aggregate_set = self.aggregate_sql_results(data_experiments, reduction_dim, event_type,
                                                               numexp_reduction_dim)
-        if sort is None or (type(sort) == str and sort == 'None'):
+        if sort is None or sort == 'None':
             return experiment_aggregate_set
         else:
             if event_type == 'test_events':
@@ -237,7 +237,7 @@ class SQLRepo(ExperimentRepo):
         for exp in hits:
             sql_experiments.append(self.sql_result_to_data_experiment(exp, event_type, metrics))
         experiment_set = self.get_data_experiment_set(sql_experiments)
-        if sort is None or (type(sort) == str and sort == 'None'):
+        if sort is None or sort == 'None':
             return experiment_set
         else:
             if event_type == 'test_events':
