@@ -55,6 +55,7 @@ def main():
             'pandas',
             'xlsxwriter',
             'jsondiff',
+            'connexion'
         ],
         entry_points={
             'console_scripts': [

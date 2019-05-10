@@ -1,5 +1,4 @@
 import pandas as pd
-from typing import List
 from baseline.utils import write_config_file
 import json
 import ast
