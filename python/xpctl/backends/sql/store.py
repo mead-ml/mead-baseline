@@ -7,7 +7,7 @@ import getpass
 from baseline.utils import export, listify
 from mead.utils import hash_config
 from baseline.version import __version__
-from xpctl.backends.backend import log2json, get_experiment_label, METRICS_SORT_ASCENDING, get_checkpoint, safe_get, \
+from xpctl.backends.backend import log2json, get_experiment_label, METRICS_SORT_ASCENDING, safe_get, \
     experiment_to_put_result_consumable, write_experiment, aggregate_results
 from xpctl.backends.backend import Error, Success, TaskDatasetSummary, TaskDatasetSummarySet, Experiment, Result, \
     ExperimentSet, EVENT_TYPES
@@ -104,10 +104,7 @@ class SQLRepo(ExperimentRepo):
         username = safe_get(kwargs, 'username', getpass.getuser())
         config_sha1 = safe_get(kwargs, 'sha1', hash_config(config_obj))
         label = safe_get(kwargs, 'label', get_experiment_label(config_obj, task, **kwargs))
-        checkpoint_base = kwargs.get('checkpoint_base')
-        checkpoint_store = kwargs.get('checkpoint_store')
-        checkpoint = safe_get(kwargs, 'checkpoint', get_checkpoint(checkpoint_base, checkpoint_store, config_sha1,
-                                                             hostname))
+        checkpoint = kwargs.get('checkpoint')
         version = kwargs.get('version', __version__)
 
         events = []
@@ -138,7 +135,7 @@ class SQLRepo(ExperimentRepo):
         try:
             session.add(experiment)
             session.commit()
-            return Success(message='experiment successfully inserted: {}'.format(experiment.eid))
+            return Success(message=experiment.eid)
         except sql.exc.SQLAlchemyError as e:
             return Error(message=str(e))
         

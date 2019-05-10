@@ -1,5 +1,7 @@
 import sys
 import getpass
+import json
+import os
 
 from click_shell import shell
 import click
@@ -7,10 +9,10 @@ from swagger_client import Configuration
 from swagger_client.api import XpctlApi
 from swagger_client import ApiClient
 from swagger_client.rest import ApiException
-from xpctl.clients.cli.dto import *
-from xpctl.clients.cli.helpers import *
+from clients.helpers import experiment_to_df, experiment_aggregate_list_to_df, experiment_list_to_df, task_summary_to_df, \
+    task_summaries_to_df, to_experiment, store_model, read_config_stream
 from mead.utils import hash_config
-from baseline.utils import read_config_file
+from baseline.utils import read_config_file, write_config_file
 
 EVENT_TYPES = {
     "train": "train_events", "Train": "train_events",
@@ -238,8 +240,8 @@ def putresult(task, config, log, user, label, cbase, cstore):
     ServerManager.get()
     result = ServerManager.api.put_result(task, to_experiment(task, config, log, user, label))
     if result.response_type == 'success':
-        eid = result.message.split(':')[-1].strip()
-        click.echo(click.style(result.message, fg='green'))
+        eid = result.message
+        click.echo(click.style('results stored with experiment: {}'.format(result.message), fg='green'))
         result = store_model(checkpoint_base=cbase, config_sha1=hash_config(read_config_file(config)),
                              checkpoint_store=cstore, print_fn=click.echo)
         if result is not None:

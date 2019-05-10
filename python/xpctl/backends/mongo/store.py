@@ -8,7 +8,7 @@ from baseline.utils import export, listify, unzip_files, read_config_file
 from mead.utils import hash_config
 from xpctl.backends.core import ExperimentRepo
 from backends.backend import TaskDatasetSummary, TaskDatasetSummarySet, Success, Error, Experiment, ExperimentSet, Result, \
-    EVENT_TYPES, log2json, get_experiment_label, METRICS_SORT_ASCENDING, get_checkpoint, safe_get, \
+    EVENT_TYPES, log2json, get_experiment_label, METRICS_SORT_ASCENDING, safe_get, \
     experiment_to_put_result_consumable, aggregate_results, write_experiment
 from bson.objectid import ObjectId
 from baseline.version import __version__
@@ -58,10 +58,7 @@ class MongoRepo(ExperimentRepo):
         username = safe_get(kwargs, 'username', getpass.getuser())
         config_sha1 = safe_get(kwargs, 'sha1', hash_config(config_obj))
         label = safe_get(kwargs, 'label', get_experiment_label(config_obj, task, **kwargs))
-        checkpoint_base = kwargs.get('checkpoint_base')
-        checkpoint_store = kwargs.get('checkpoint_store')
-        checkpoint = safe_get(kwargs, 'checkpoint', get_checkpoint(checkpoint_base, checkpoint_store, config_sha1,
-                                                              hostname))
+        checkpoint = kwargs.get('checkpoint')
         version = kwargs.get('version', __version__)
 
         train_events = list(filter(lambda x: x['phase'] == 'Train', events_obj))
@@ -88,7 +85,7 @@ class MongoRepo(ExperimentRepo):
         try:
             coll = self.db[task]
             result = coll.insert_one(post)
-            return Success(message='experiment successfully inserted: {}'.format(result.inserted_id))
+            return Success(message=str(result.inserted_id))
         except pymongo.errors.PyMongoError as e:
             return Error(message='experiment could not be inserted: {}'.format(e.message))
 
