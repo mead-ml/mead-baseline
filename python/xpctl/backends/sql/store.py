@@ -7,10 +7,10 @@ import getpass
 from baseline.utils import export, listify
 from mead.utils import hash_config
 from baseline.version import __version__
-from xpctl.backends.helpers import log2json, get_experiment_label, METRICS_SORT_ASCENDING, get_checkpoint
-from xpctl.backends.dto import experiment_to_put_result_consumable, write_experiment
-from xpctl.backends.data import Error, Success, TaskDatasetSummary, TaskDatasetSummarySet
-from xpctl.backends.sql.dto import sql_result_to_data_experiment, aggregate_sql_results, get_data_experiment_set
+from xpctl.backends.backend import log2json, get_experiment_label, METRICS_SORT_ASCENDING, get_checkpoint, safe_get, \
+    experiment_to_put_result_consumable, write_experiment, aggregate_results
+from xpctl.backends.backend import Error, Success, TaskDatasetSummary, TaskDatasetSummarySet, Experiment, Result, \
+    ExperimentSet, EVENT_TYPES
 from baseline.utils import unzip_files, read_config_file
 import shutil
 
@@ -22,13 +22,6 @@ Base = declarative_base()
 import sqlalchemy as sql
 import sqlalchemy.orm as orm
 from xpctl.backends.core import ExperimentRepo
-
-EVENT_TYPES = {
-    "train": "train_events", "Train": "train_events",
-    "test": "test_events", "Test": "test_events",
-    "valid": "valid_events", "Valid": "valid_events",
-    "dev": "valid_events", "Dev": "valid_events"
-}
 
 
 @exporter
@@ -106,14 +99,14 @@ class SQLRepo(ExperimentRepo):
     def _put_result(self, task, config_obj, events_obj, **kwargs):
         session = self.Session()
         
-        now = kwargs.get('date', datetime.datetime.utcnow().isoformat())
-        hostname = kwargs.get('hostname', socket.gethostname())
-        username = kwargs.get('username', getpass.getuser())
-        config_sha1 = kwargs.get('sha1', hash_config(config_obj))
-        label = kwargs.get('label', get_experiment_label(config_obj, task, **kwargs))
+        now = safe_get(kwargs, 'date', datetime.datetime.utcnow().isoformat())
+        hostname = safe_get(kwargs, 'hostname', socket.gethostname())
+        username = safe_get(kwargs, 'username', getpass.getuser())
+        config_sha1 = safe_get(kwargs, 'sha1', hash_config(config_obj))
+        label = safe_get(kwargs, 'label', get_experiment_label(config_obj, task, **kwargs))
         checkpoint_base = kwargs.get('checkpoint_base')
         checkpoint_store = kwargs.get('checkpoint_store')
-        checkpoint = kwargs.get('checkpoint', get_checkpoint(checkpoint_base, checkpoint_store, config_sha1,
+        checkpoint = safe_get(kwargs, 'checkpoint', get_checkpoint(checkpoint_base, checkpoint_store, config_sha1,
                                                              hostname))
         version = kwargs.get('version', __version__)
 
@@ -201,7 +194,7 @@ class SQLRepo(ExperimentRepo):
         exp = session.query(SqlExperiment).filter(SqlExperiment.task == task).filter(SqlExperiment.eid == eid)
         if exp is None or exp.scalar() is None:
             return Error(message='no experiment with id [{}] for task [{}]'.format(eid, task))
-        return sql_result_to_data_experiment(exp.one(), event_type, metrics)
+        return self.sql_result_to_data_experiment(exp.one(), event_type, metrics)
     
     def get_results(self, task, prop, value, reduction_dim, metric, sort, numexp_reduction_dim, event_type):
         session = self.Session()
@@ -215,13 +208,13 @@ class SQLRepo(ExperimentRepo):
                          .format(prop, value, task))
         data_experiments = []
         for exp in hits:
-            data_experiment = sql_result_to_data_experiment(exp, event_type, metrics)
+            data_experiment = self.sql_result_to_data_experiment(exp, event_type, metrics)
             if type(data_experiment) is Error:
                 return data_experiment
             else:
                 data_experiments.append(data_experiment)
-        experiment_aggregate_set = aggregate_sql_results(data_experiments, reduction_dim, event_type,
-                                                         numexp_reduction_dim)
+        experiment_aggregate_set = self.aggregate_sql_results(data_experiments, reduction_dim, event_type,
+                                                              numexp_reduction_dim)
         if sort is None or (type(sort) == str and sort == 'None'):
             return experiment_aggregate_set
         else:
@@ -245,8 +238,8 @@ class SQLRepo(ExperimentRepo):
         if hits is None or not hits.first():
             return Error('No results in {} database for {} = {}'.format(task, prop, value))
         for exp in hits:
-            sql_experiments.append(sql_result_to_data_experiment(exp, event_type, metrics))
-        experiment_set = get_data_experiment_set(sql_experiments)
+            sql_experiments.append(self.sql_result_to_data_experiment(exp, event_type, metrics))
+        experiment_set = self.get_data_experiment_set(sql_experiments)
         if sort is None or (type(sort) == str and sort == 'None'):
             return experiment_set
         else:
@@ -310,7 +303,7 @@ class SQLRepo(ExperimentRepo):
             os.makedirs(_dir)
             sql_exps = session.query(SqlExperiment).filter(SqlExperiment.task == task)
             for sql_exp in sql_exps:
-                exp = sql_result_to_data_experiment(sql_exp, event_type=[], metrics_from_user=[])
+                exp = self.sql_result_to_data_experiment(sql_exp, event_type=[], metrics_from_user=[])
                 if type(exp) is Error:
                     print(exp.message)
                 else:
@@ -347,3 +340,82 @@ class SQLRepo(ExperimentRepo):
                 self._put_result(task, config_obj=config, events_obj=reporting, **meta)
         if dump_dir != dump:
             shutil.rmtree(dump_dir)
+
+    def aggregate_sql_results(self, data_experiments, reduction_dim, event_type, numexp_reduction_dim):
+        experiment_set = self.get_data_experiment_set(data_experiments)
+        return aggregate_results(experiment_set, reduction_dim, event_type, numexp_reduction_dim)
+
+    def sql_result_to_data_experiment(self, exp, event_type, metrics_from_user):
+        _exp = Experiment(
+            task=exp.task,
+            eid=exp.eid,
+            username=exp.username,
+            hostname=exp.hostname,
+            config=exp.config,
+            exp_date=exp.date,
+            label=exp.label,
+            dataset=exp.dataset,
+            sha1=exp.sha1,
+            version=exp.version,
+            train_events=[],
+            valid_events=[],
+            test_events=[]
+        )
+        event_types = [event_type] if event_type else EVENT_TYPES
+        for event_type in event_types:
+            phase = self.event2phase(event_type)
+            if type(phase) is Error:
+                return phase
+            phase_events = [event for event in exp.events if event.phase == phase]
+            if len(phase_events) == 0:
+                return Error('experiment id {} has 0 {}'.format(exp.eid, event_type))
+            metrics = self.get_filtered_metrics(self.get_sql_metrics(phase_events[0]), set(metrics_from_user))
+            if type(metrics) is Error:
+                return metrics
+            results = self.flatten([self.create_results(event, metrics) for event in phase_events])
+            for r in results:
+                _exp.add_result(r, event_type)
+        return _exp
+
+    @staticmethod
+    def event2phase(event_type):
+        if event_type == 'train_events':
+            return 'Train'
+        if event_type == 'valid_events':
+            return 'Valid'
+        if event_type == 'test_events':
+            return 'Test'
+        Error(message='Unknown event type {}'.format(event_type))
+    
+    @staticmethod
+    def get_filtered_metrics(metrics_from_db, metrics_from_user):
+        if not metrics_from_user:
+            metrics = list(metrics_from_db)
+        elif metrics_from_user - metrics_from_db:
+            return Error(message='Metrics [{}] not found'.format(','.join(list(metrics_from_user - metrics_from_db))))
+        else:
+            metrics = list(metrics_from_user)
+        return metrics
+    
+    @staticmethod
+    def get_sql_metrics(event):
+        return set([r.metric for r in event.results])
+    
+    @staticmethod
+    def flatten(_list):
+        return [item for sublist in _list for item in sublist]
+    
+    @staticmethod
+    def create_results(event, metrics):
+        results = []
+        for r in event.results:
+            if r.metric in metrics:
+                results.append(
+                    Result(metric=r.metric, value=r.value, tick_type=event.tick_type, tick=event.tick, phase=event.phase)
+                )
+        return results
+
+    @staticmethod
+    def get_data_experiment_set(data_experiments):
+        return ExperimentSet(data_experiments)
+

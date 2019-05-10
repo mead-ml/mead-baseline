@@ -19,7 +19,6 @@ from functools import partial, update_wrapper, wraps
 import numpy as np
 import addons
 import collections
-import yaml
 
 __all__ = []
 logger = logging.getLogger('baseline')
@@ -546,18 +545,6 @@ def write_sentence_conll(handle, sentence, gold, txt, idx2label):
 
 
 @exporter
-def write_json(content, filepath):
-    with open(filepath, "w") as f:
-        json.dump(content, f, indent=True)
-
-
-@exporter
-def write_yaml(content, filepath):
-    with open(filepath, "w") as f:
-        yaml.dump(content, f, default_flow_style=False)
-
-
-@exporter
 def ls_props(thing):
     """List all of the properties on some object
 
@@ -853,6 +840,19 @@ def convert_iob_to_iobes(seq):
     :returns: `List[str]` The list of IOBES tags.
     """
     return convert_bio_to_iobes(convert_iob_to_bio(seq))
+
+
+@exporter
+@str_file(filepath="w")
+def write_json(content, filepath):
+    json.dump(content, filepath, indent=True)
+
+
+@exporter
+@str_file(filepath="w")
+def write_yaml(content, filepath):
+    import yaml
+    yaml.dump(content, filepath, default_flow_style=False)
 
 
 @str_file

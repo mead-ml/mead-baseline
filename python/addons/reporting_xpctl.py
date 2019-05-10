@@ -8,6 +8,7 @@ from mead.utils import read_config_file_or_json
 from xpctl.backends.core import ExperimentRepo
 from baseline.reporting import register_reporting
 
+
 @register_reporting(name='xpctl')
 class XPCtlReporting(EpochReportingHook):
     def __init__(self, **kwargs):
@@ -17,7 +18,6 @@ class XPCtlReporting(EpochReportingHook):
         self.label = kwargs.get('label', None)
         self.exp_config = read_config_file_or_json(kwargs['config_file'])
         self.task = kwargs['task']
-        self.print_fn = print
         self.username = kwargs.get('user', getpass.getuser())
         self.hostname = kwargs.get('host', socket.gethostname())
         self.checkpoint_base = None
@@ -44,9 +44,9 @@ class XPCtlReporting(EpochReportingHook):
     def done(self):
         """Write the log to the xpctl database"""
         if self.save_model:
-           self.backend = self.exp_config.get('backend', 'default')
-           backends = {'default': 'tf', 'tensorflow': 'tf', 'pytorch': 'pyt'}
-           self.checkpoint_base = self._search_checkpoint_base(self.task, backends[self.backend])
+            self.backend = self.exp_config.get('backend', 'default')
+            backends = {'default': 'tf', 'tensorflow': 'tf', 'pytorch': 'pyt'}
+            self.checkpoint_base = self._search_checkpoint_base(self.task, backends[self.backend])
 
         self.repo._put_result(self.task, self.exp_config, self.log,
                               checkpoint_base=self.checkpoint_base,
