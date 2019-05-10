@@ -40,7 +40,8 @@ def configure_logger(logger_config):
 def print_dataset_info(dataset):
     logger.info("[train file]: {}".format(dataset['train_file']))
     logger.info("[valid file]: {}".format(dataset['valid_file']))
-    logger.info("[test file]: {}".format(dataset['test_file']))
+    if 'test_file' in dataset:
+        logger.info("[test file]: {}".format(dataset['test_file']))
     vocab_file = dataset.get('vocab_file')
     if vocab_file is not None:
         logger.info("[vocab file]: {}".format(vocab_file))

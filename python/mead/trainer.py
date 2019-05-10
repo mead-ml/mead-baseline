@@ -1,3 +1,4 @@
+import os
 import logging
 import argparse
 from copy import deepcopy
@@ -9,11 +10,71 @@ from mead.utils import convert_path, parse_extra_args, configure_logger
 logger = logging.getLogger('mead')
 
 
+def update_datasets(datasets_config, config_params, train, valid, test):
+    """Take an existing datasets index file and update to include a record with train/valid/test overrides
+
+    If the label provided in the dataset is found in the dataset index, it will use that as a template and
+    individually override the provided `train`, `valid` and `test` params to update that record.
+
+    If the label does not exist, it creates a dummy record and augments that record with the provided `train`,
+    `valid`, and optionally, the `test`
+
+    :param datasets_config: The datasets config to update
+    :param config_params: The mead config
+    :param train: (`str`) An override train set or `None`. If `dataset` key doesnt exist, cannot be `None`
+    :param valid: (`str`) An override valid set or `None` If `dataset` key doesnt exist, cannot be `None`
+    :param test: (`str`) An override test set or None
+    :return: None
+    """
+
+    for file_name in [train, valid, test]:
+        if not os.path.exists(train):
+            raise Exception('No such file exists for override: {}'.format(file_name))
+
+    original_dataset_label = config_params['dataset']
+
+    original_record = [entry for entry in datasets_config if entry['label'] == original_dataset_label]
+    if not original_record:
+        if not train or not valid:
+            raise Exception('No template label provided, so you must provide at least train and valid params!')
+        updated_record = {'label': original_record, 'train_file': None, 'valid_file': None, 'test_file': None}
+    else:
+        if len(original_record) != 1:
+            logger.warning('Warning: multiple templates found for dataset override, using first!')
+        updated_record = deepcopy(original_record[0])
+        if 'sha1' in updated_record:
+            logging.info('Ignoring SHA1 due to user override')
+            del updated_record['sha1']
+        if 'download' in updated_record:
+            if not train or not valid:
+                raise Exception('Cannot override downloadable dataset without providing file '
+                                'locations for both training and validation')
+            if not test and 'test_file' in updated_record:
+                del updated_record['test_file']
+            del updated_record['download']
+    new_dataset_label = '{}.{}'.format(original_dataset_label, os.getpid())
+    updated_record['label'] = new_dataset_label
+
+    if train:
+        updated_record['train_file'] = train
+    if valid:
+        updated_record['valid_file'] = valid
+    if test:
+        updated_record['test_file'] = test
+
+    logging.warning(updated_record)
+    config_params['dataset'] = new_dataset_label
+    logging.info("The dataset key for this override is {}".format(new_dataset_label))
+    datasets_config.append(updated_record)
+
 def main():
     parser = argparse.ArgumentParser(description='Train a text classifier')
     parser.add_argument('--config', help='JSON Configuration for an experiment', type=convert_path, default="$MEAD_CONFIG")
     parser.add_argument('--settings', help='JSON Configuration for mead', default='config/mead-settings.json', type=convert_path)
     parser.add_argument('--datasets', help='json library of dataset labels', default='config/datasets.json', type=convert_path)
+    parser.add_argument('--mod_train_file', help='override the training set')
+    parser.add_argument('--mod_valid_file', help='override the validation set')
+    parser.add_argument('--mod_test_file', help='override the test set')
     parser.add_argument('--embeddings', help='json library of embeddings', default='config/embeddings.json', type=convert_path)
     parser.add_argument('--logging', help='json file for logging', default='config/logging.json', type=convert_path)
     parser.add_argument('--task', help='task to run', choices=['classify', 'tagger', 'seq2seq', 'lm'])
@@ -33,7 +94,13 @@ def main():
     except:
         logger.warning('Warning: no mead-settings file was found at [{}]'.format(args.settings))
         args.settings = {}
+
     args.datasets = read_config_stream(args.datasets)
+    if args.mod_train_file or args.mod_valid_file or args.mod_test_file:
+        logging.warning('Warning: overriding the training/valid/test data with user-specified files'
+                        ' different from what was specified in the dataset index.  Creating a new key for this entry')
+        update_datasets(args.datasets, config_params, args.mod_train_file, args.mod_valid_file, args.mod_test_file)
+
     args.embeddings = read_config_stream(args.embeddings)
 
     if args.gpus is not None:

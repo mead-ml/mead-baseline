@@ -259,7 +259,7 @@ class DataDownloader(Downloader):
         else:  # we have download links to every file or they exist
             if not self.enc_dec:
                     return {k: SingleFileDownloader(self.dataset_desc[k], self.data_download_cache).download()
-                        for k in self.dataset_desc if k.endswith("_file")}
+                        for k in self.dataset_desc if k.endswith("_file") and self.dataset_desc[k]}
             else:
                 return {k: self.dataset_desc[k] for k in self.dataset_desc if k.endswith("_file")}
                 # these files can not be downloaded because there's a post processing on them.
