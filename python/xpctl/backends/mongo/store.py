@@ -80,7 +80,6 @@ class MongoRepo(ExperimentRepo):
             "version": version,
             "checkpoint": checkpoint
         }
-        
         if 'eid' in kwargs:
             post.update({'_id': ObjectId(kwargs['eid'])})
             
@@ -188,18 +187,21 @@ class MongoRepo(ExperimentRepo):
                     query.update({"_id": {"$in": [ObjectId(x) for x in kwargs["id"]]}})
                 else:
                     query.update({"_id": ObjectId(kwargs["id"])})
-                return query
-            if "label" in kwargs and kwargs["label"]:
-                query.update({"label": kwargs["label"]})
-            if "username" in kwargs and kwargs["username"]:
-                if type(kwargs["username"]) == list:
-                    query.update({"username": {"$in": kwargs["username"]}})
+                kwargs.pop("id")
+            if "eid" in kwargs and kwargs["eid"]:
+                if type(kwargs["eid"]) == list:
+                    query.update({"_id": {"$in": [ObjectId(x) for x in kwargs["eid"]]}})
                 else:
-                    query.update({"username": kwargs["username"]})
+                    query.update({"_id": ObjectId(kwargs["eid"])})
+                kwargs.pop("eid")
             if "dataset" in kwargs:
                 query.update({"$or": [{"config.dataset": kwargs["dataset"]}, {"dataset": kwargs["dataset"]}]})
-            if "sha1" in kwargs:
-                query.update({"sha1": kwargs["sha1"]})
+                kwargs.pop("dataset")
+            for key, value in kwargs.items():
+                if type(value) == list:
+                    query.update({key: {"$in": value}})
+                else:
+                    query.update({key: value})
             return query
 
     @staticmethod
@@ -210,16 +212,17 @@ class MongoRepo(ExperimentRepo):
 
     def list_results(self, task, prop, value, user, metric, sort, event_type):
         event_type = event_type if event_type is not None else 'test_events'
-
         metrics = [x for x in listify(metric) if x.strip()]
         users = [x for x in listify(user) if x.strip()]
-        d = {prop: value}
+        if prop is None or prop == 'None':
+            d = {}
+        else:
+            d = {prop: value}
         if users:
             d.update({'username': users})
         coll = self.db[task]
         query = self._update_query({}, **d)
         all_results = list(coll.find(query))
-
         if not all_results:
             return BackendError(message='no information available for [{}]: [{}] in task database [{}]'
                                 .format(prop, value, task))
@@ -242,7 +245,6 @@ class MongoRepo(ExperimentRepo):
         coll = self.db[task]
         query = self._update_query({}, **d)
         all_results = list(coll.find(query))
-
         if not all_results:
             return BackendError(message='no information available for [{}]: [{}] in task database [{}]'
                                 .format(prop, value, task))

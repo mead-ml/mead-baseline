@@ -17,6 +17,6 @@ java -jar ${JAR} generate \
 mv client/swagger_client .
 rm -rf client
 cp swagger_static/__main__.py swagger_server/__main__.py
-cp swagger_static/xpctl_controller.py swagger_server/controllers/xpctl_controller.py
+#cp swagger_static/xpctl_controller.py swagger_server/controllers/xpctl_controller.py
 cp swagger_static/configuration.py swagger_client/
 

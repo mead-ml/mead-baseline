@@ -40,7 +40,7 @@ class Experiment(object):
         'dataset': 'str',
         'username': 'str',
         'hostname': 'str',
-        'exp_date': 'date',
+        'exp_date': 'str',
         'label': 'str',
         'version': 'str',
         'train_events': 'list[Result]',
@@ -262,7 +262,7 @@ class Experiment(object):
 
 
         :return: The exp_date of this Experiment.  # noqa: E501
-        :rtype: date
+        :rtype: str
         """
         return self._exp_date
 
@@ -272,7 +272,7 @@ class Experiment(object):
 
 
         :param exp_date: The exp_date of this Experiment.  # noqa: E501
-        :type: date
+        :type: str
         """
 
         self._exp_date = exp_date

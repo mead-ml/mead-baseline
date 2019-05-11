@@ -107,44 +107,6 @@ paths:
             $ref: "#/definitions/Response"
       x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
 
-  /updatelabel/{task}/{eid}/:
-    get:
-      tags:
-      - "xpctl"
-      summary: "update label for an experiment"
-      description: ""
-      operationId: "update_label"
-      consumes:
-      - "application/json"
-      produces:
-      - "application/json"
-      parameters:
-      - name: "task"
-        in: "path"
-        type: "string"
-        description: ""
-        required: true
-      - name: "eid"
-        in: "path"
-        type: "string"
-        description: ""
-        required: true
-      - name: "label"
-        in: "query"
-        type: "string"
-        description: ""
-        required: true
-      responses:
-        200:
-          description: "success"
-          schema:
-            $ref: "#/definitions/Response"
-        default:
-          description: "unexpected error"
-          schema:
-            $ref: "#/definitions/Response"
-      x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
-
   /delete/{task}/{eid}:
     get:
       tags:
@@ -178,47 +140,7 @@ paths:
             $ref: "#/definitions/Response"
       x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
 
-  /find/{task}/:
-    get:
-      tags:
-      - "xpctl"
-      summary: "delete an experiment from the database"
-      description: ""
-      operationId: "find_by_prop"
-      consumes:
-      - "application/json"
-      produces:
-      - "application/json"
-      parameters:
-      - name: "task"
-        in: "path"
-        type: "string"
-        description: ""
-        required: true
-      - name: "prop"
-        in: "query"
-        type: "string"
-        description: ""
-        required: true
-      - name: "value"
-        in: "query"
-        type: "string"
-        description: ""
-        required: true
-      responses:
-        200:
-          description: "success"
-          schema:
-            type: array
-            items:
-              $ref: "#/definitions/Experiment"
-        default:
-          description: "unexpected error"
-          schema:
-            $ref: "#/definitions/Response"
-      x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
-
-  /details/{task}:
+  /find/{task}:
       get:
         tags:
         - "xpctl"
@@ -237,12 +159,10 @@ paths:
           in: "query"
           description: "property: username, dataset"
           type: "string"
-          required: true
         - name: "value"
           in: "query"
           description: "value: dpressel, SST2"
           type: "string"
-          required: true
         - name: "user"
           in: "query"
           type: "array"
@@ -273,57 +193,6 @@ paths:
             schema:
               $ref: "#/definitions/Response"
         x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
-
-  /details/{task}/{sha1}:
-    get:
-      tags:
-      - "xpctl"
-      summary: "list all experiments for this sha1"
-      description: "list all experiments for this sha1"
-      operationId: "list_experiments_by_sha1"
-      produces:
-      - "application/json"
-      parameters:
-      - name: "task"
-        in: "path"
-        description: "task name"
-        required: true
-        type: "string"
-      - name: "sha1"
-        in: "path"
-        description: "sha1"
-        type: "string"
-        required: true
-      - name: "user"
-        in: "query"
-        type: "array"
-        items:
-          type: "string"
-      - name: "metric"
-        in: "query"
-        type: "array"
-        items:
-          type: "string"
-      - name: "sort"
-        in: "query"
-        type: "string"
-      - name: "event_type"
-        in: "query"
-        type: "string"
-      responses:
-        200:
-          description: "successful operation"
-          schema:
-            type: "array"
-            items:
-              $ref: "#/definitions/Experiment"
-        400:
-          description: "Invalid status value"
-        default:
-          description: "unexpected error"
-          schema:
-            $ref: "#/definitions/Response"
-      x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
 
   /results/{task}:
     get:
@@ -388,65 +257,6 @@ paths:
           schema:
             $ref: "#/definitions/Response"
       x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
-
-  /results/{task}/{dataset}:
-      get:
-        tags:
-        - "xpctl"
-        summary: "Find results by dataset and task"
-        description: "Returns a single experiment"
-        operationId: "get_results_by_dataset"
-        produces:
-        - "application/json"
-        parameters:
-        - name: "task"
-          in: "path"
-          description: "task name"
-          required: true
-          type: "string"
-        - name: "dataset"
-          in: "path"
-          description: "dataset name"
-          required: true
-          type: "string"
-        - name: "reduction_dim"
-          in: "query"
-          type: "string"
-          description: "which dimension to reduce on, default=sha1"
-        - name: "metric"
-          in: "query"
-          type: "array"
-          items:
-            type: "string"
-          description: "metric"
-        - name: "sort"
-          in: "query"
-          type: "string"
-          description: "metric to sort results on"
-        - name: "numexp_reduction_dim"
-          in: "query"
-          type: "integer"
-          description: "max number of experiments in an aggregate group"
-        - name: "event_type"
-          in: "query"
-          type: "string"
-          description: "train/dev/test"
-        responses:
-          200:
-            description: "successful operation"
-            schema:
-              type: array
-              items:
-                $ref: "#/definitions/ExperimentAggregate"
-          400:
-            description: "Invalid dataset"
-          404:
-            description: "Experiment not found"
-          default:
-            description: "unexpected error"
-            schema:
-              $ref: "#/definitions/Response"
-        x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
 
   /{task}/{eid}:
     get:
@@ -708,7 +518,6 @@ definitions:
       exp_date:
         type: "string"
         example: "2019-05-02T23:29:46.578675"
-        format: "date"
       label:
         type: "string"
         example: "label"  

@@ -230,8 +230,11 @@ class SQLRepo(ExperimentRepo):
         sql_experiments = []
         metrics = [x for x in listify(metric) if x.strip()]
         users = [x for x in listify(user) if x.strip()]
-        hits = session.query(SqlExperiment).filter(getattr(SqlExperiment, prop) == value). \
-            filter(SqlExperiment.task == task)
+        if prop is None or prop == 'None':
+            hits = session.query(SqlExperiment).filter(SqlExperiment.task == task)
+        else:
+            hits = session.query(SqlExperiment).filter(getattr(SqlExperiment, prop) == value). \
+                   filter(SqlExperiment.task == task)
         if users:
             hits = hits.filter(SqlExperiment.username.in_(users)).all()
         if hits is None or not hits.first():

@@ -34,7 +34,7 @@ class Experiment(Model):
         :param hostname: The hostname of this Experiment.  # noqa: E501
         :type hostname: str
         :param exp_date: The exp_date of this Experiment.  # noqa: E501
-        :type exp_date: date
+        :type exp_date: str
         :param label: The label of this Experiment.  # noqa: E501
         :type label: str
         :param version: The version of this Experiment.  # noqa: E501
@@ -54,7 +54,7 @@ class Experiment(Model):
             'dataset': str,
             'username': str,
             'hostname': str,
-            'exp_date': date,
+            'exp_date': str,
             'label': str,
             'version': str,
             'train_events': List[Result],
@@ -256,7 +256,7 @@ class Experiment(Model):
 
 
         :return: The exp_date of this Experiment.
-        :rtype: date
+        :rtype: str
         """
         return self._exp_date
 
@@ -266,7 +266,7 @@ class Experiment(Model):
 
 
         :param exp_date: The exp_date of this Experiment.
-        :type exp_date: date
+        :type exp_date: str
         """
 
         self._exp_date = exp_date

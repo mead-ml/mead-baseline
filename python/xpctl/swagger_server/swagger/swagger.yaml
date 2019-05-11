@@ -107,43 +107,6 @@ paths:
           schema:
             $ref: "#/definitions/Response"
       x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
-  /updatelabel/{task}/{eid}/:
-    get:
-      tags:
-      - "xpctl"
-      summary: "update label for an experiment"
-      description: ""
-      operationId: "update_label"
-      consumes:
-      - "application/json"
-      produces:
-      - "application/json"
-      parameters:
-      - name: "task"
-        in: "path"
-        description: ""
-        required: true
-        type: "string"
-      - name: "eid"
-        in: "path"
-        description: ""
-        required: true
-        type: "string"
-      - name: "label"
-        in: "query"
-        description: ""
-        required: true
-        type: "string"
-      responses:
-        200:
-          description: "success"
-          schema:
-            $ref: "#/definitions/Response"
-        default:
-          description: "unexpected error"
-          schema:
-            $ref: "#/definitions/Response"
-      x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
   /delete/{task}/{eid}:
     get:
       tags:
@@ -176,46 +139,7 @@ paths:
           schema:
             $ref: "#/definitions/Response"
       x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
-  /find/{task}/:
-    get:
-      tags:
-      - "xpctl"
-      summary: "delete an experiment from the database"
-      description: ""
-      operationId: "find_by_prop"
-      consumes:
-      - "application/json"
-      produces:
-      - "application/json"
-      parameters:
-      - name: "task"
-        in: "path"
-        description: ""
-        required: true
-        type: "string"
-      - name: "prop"
-        in: "query"
-        description: ""
-        required: true
-        type: "string"
-      - name: "value"
-        in: "query"
-        description: ""
-        required: true
-        type: "string"
-      responses:
-        200:
-          description: "success"
-          schema:
-            type: "array"
-            items:
-              $ref: "#/definitions/Experiment"
-        default:
-          description: "unexpected error"
-          schema:
-            $ref: "#/definitions/Response"
-      x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
-  /details/{task}:
+  /find/{task}:
     get:
       tags:
       - "xpctl"
@@ -234,66 +158,12 @@ paths:
       - name: "prop"
         in: "query"
         description: "property: username, dataset"
-        required: true
+        required: false
         type: "string"
       - name: "value"
         in: "query"
         description: "value: dpressel, SST2"
-        required: true
-        type: "string"
-      - name: "user"
-        in: "query"
         required: false
-        type: "array"
-        items:
-          type: "string"
-      - name: "metric"
-        in: "query"
-        required: false
-        type: "array"
-        items:
-          type: "string"
-      - name: "sort"
-        in: "query"
-        required: false
-        type: "string"
-      - name: "event_type"
-        in: "query"
-        required: false
-        type: "string"
-      responses:
-        200:
-          description: "successful operation"
-          schema:
-            type: "array"
-            items:
-              $ref: "#/definitions/Experiment"
-        400:
-          description: "Invalid status value"
-        default:
-          description: "unexpected error"
-          schema:
-            $ref: "#/definitions/Response"
-      x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
-  /details/{task}/{sha1}:
-    get:
-      tags:
-      - "xpctl"
-      summary: "list all experiments for this sha1"
-      description: "list all experiments for this sha1"
-      operationId: "list_experiments_by_sha1"
-      produces:
-      - "application/json"
-      parameters:
-      - name: "task"
-        in: "path"
-        description: "task name"
-        required: true
-        type: "string"
-      - name: "sha1"
-        in: "path"
-        description: "sha1"
-        required: true
         type: "string"
       - name: "user"
         in: "query"
@@ -352,69 +222,6 @@ paths:
       - name: "value"
         in: "query"
         description: "value of the property. eg: prop=username&value=dpressel"
-        required: true
-        type: "string"
-      - name: "reduction_dim"
-        in: "query"
-        description: "which dimension to reduce on, default=sha1"
-        required: false
-        type: "string"
-      - name: "metric"
-        in: "query"
-        description: "metric"
-        required: false
-        type: "array"
-        items:
-          type: "string"
-      - name: "sort"
-        in: "query"
-        description: "metric to sort results on"
-        required: false
-        type: "string"
-      - name: "numexp_reduction_dim"
-        in: "query"
-        description: "max number of experiments in an aggregate group"
-        required: false
-        type: "integer"
-      - name: "event_type"
-        in: "query"
-        description: "train/dev/test"
-        required: false
-        type: "string"
-      responses:
-        200:
-          description: "successful operation"
-          schema:
-            type: "array"
-            items:
-              $ref: "#/definitions/ExperimentAggregate"
-        400:
-          description: "Invalid dataset"
-        404:
-          description: "Experiment not found"
-        default:
-          description: "unexpected error"
-          schema:
-            $ref: "#/definitions/Response"
-      x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
-  /results/{task}/{dataset}:
-    get:
-      tags:
-      - "xpctl"
-      summary: "Find results by dataset and task"
-      description: "Returns a single experiment"
-      operationId: "get_results_by_dataset"
-      produces:
-      - "application/json"
-      parameters:
-      - name: "task"
-        in: "path"
-        description: "task name"
-        required: true
-        type: "string"
-      - name: "dataset"
-        in: "path"
-        description: "dataset name"
         required: true
         type: "string"
       - name: "reduction_dim"
@@ -718,7 +525,6 @@ definitions:
         example: "somehost"
       exp_date:
         type: "string"
-        format: "date"
         example: "2019-05-02T23:29:46.578675"
       label:
         type: "string"

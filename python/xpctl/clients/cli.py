@@ -106,9 +106,9 @@ def results(task, dataset, metric, sort, nconfig, event_type, n, output, aggrega
     reduction_dim = 'sha1'
     ServerManager.get()
     try:
-        result = ServerManager.api.get_results_by_dataset(task, dataset, reduction_dim=reduction_dim,
-                                                          metric=metric, sort=sort, numexp_reduction_dim=nconfig,
-                                                          event_type=event_type)
+        result = ServerManager.api.get_results_by_prop(task, prop='dataset', value=dataset, reduction_dim=reduction_dim,
+                                                       metric=metric, sort=sort, numexp_reduction_dim=nconfig,
+                                                       event_type=event_type)
         result_df = experiment_aggregate_list_to_df(exp_aggs=result, event_type=event_type, aggregate_fns=aggregate_fn)
         if n != -1:
             result_df = result_df.head(n)
@@ -141,7 +141,7 @@ def details(task, sha1, user, metric, sort, event_type, n, output, output_fields
     event_type = EVENT_TYPES[event_type]
     ServerManager.get()
     try:
-        result = ServerManager.api.list_experiments_by_sha1(task, sha1, user=user, metric=metric,
+        result = ServerManager.api.list_experiments_by_prop(task, prop='sha1', value=sha1, user=user, metric=metric,
                                                             sort=sort, event_type=event_type)
         
         prop_name_loc = {k: i for i, k in enumerate(output_fields)}
@@ -198,7 +198,7 @@ def lbsummary(task):
 def updatelabel(task, label, eid):
     """Update the _label_ for an experiment (identified by its id) for a task"""
     ServerManager.get()
-    result = ServerManager.api.update_label(task, eid, label)
+    result = ServerManager.api.update_property(task, eid, prop='label', value=label)
     if result.response_type == 'success':
         click.echo(click.style(result.message, fg='green'))
     else:
