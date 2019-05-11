@@ -72,7 +72,7 @@ docker build \
 --build-arg dbport=${DB_PORT} \
 --build-arg port=${PORT} \
 -t ${CON_BUILD}-${BACK_END} \
--f Dockerfile \
+-f Dockerfile.xpctl \
 ../
 
 docker run -e LANG=C.UTF-8 --rm --name=${CON_BUILD} --network=host -it ${CON_BUILD}-${BACK_END}
