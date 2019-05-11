@@ -202,7 +202,7 @@ def put_result(task, experiment, user=None, label=None):  # noqa: E501
     if connexion.request.is_json:
         experiment = Experiment.from_dict(connexion.request.get_json())  # noqa: E501
     backend = flask.globals.current_app.backend
-    return serialize_response(backend.put_result(task, deserialize_experiment(experiment)))
+    return serialize_response(backend.put_result(task, experiment))
 
 
 def remove_experiment(task, eid):  # noqa: E501
