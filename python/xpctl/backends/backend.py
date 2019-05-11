@@ -562,16 +562,23 @@ def pack_results_in_events(results):
 
 @exporter
 def client_experiment_to_put_result_consumable(exp):
-    d = exp.__dict__
     train_events = pack_results_in_events(exp.train_events)
     valid_events = pack_results_in_events(exp.valid_events)
     test_events = pack_results_in_events(exp.test_events)
     config = exp.config
     task = exp.task
+    extra_args = {
+        'sha1': exp.sha1,
+        'dataset': exp.dataset,
+        'username': exp.username,
+        'hostname': exp.hostname,
+        'exp_date': exp.exp_date,
+        'label': exp.label
+    }
     put_result_consumable = namedtuple('put_result_consumable', ['task', 'config_obj', 'events_obj', 'extra_args'])
     return put_result_consumable(task=task, config_obj=json.loads(config),
                                  events_obj=train_events+valid_events+test_events,
-                                 extra_args=d)
+                                 extra_args=extra_args)
 
 
 @exporter

@@ -105,7 +105,9 @@ class SQLRepo(ExperimentRepo):
         config_sha1 = safe_get(kwargs, 'sha1', hash_config(config_obj))
         label = safe_get(kwargs, 'label', get_experiment_label(config_obj, task, **kwargs))
         checkpoint = kwargs.get('checkpoint')
-        version = kwargs.get('version', __version__)
+        version = safe_get(kwargs,  'version', __version__)
+        dataset = safe_get(kwargs, 'dataset', config_obj['dataset'])
+        date = safe_get(kwargs, 'exp_date', now)
 
         events = []
         for event in events_obj:
@@ -122,11 +124,11 @@ class SQLRepo(ExperimentRepo):
             checkpoint=checkpoint,
             sha1=config_sha1,
             task=task,
-            dataset=config_obj['dataset'],
+            dataset=dataset,
             config=json.dumps(config_obj),
             hostname=hostname,
             username=username,
-            date=now,
+            date=date,
             version=version,
             status='CREATED',
             last_modified=now,

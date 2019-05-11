@@ -59,20 +59,22 @@ class MongoRepo(ExperimentRepo):
         config_sha1 = safe_get(kwargs, 'sha1', hash_config(config_obj))
         label = safe_get(kwargs, 'label', get_experiment_label(config_obj, task, **kwargs))
         checkpoint = kwargs.get('checkpoint')
-        version = kwargs.get('version', __version__)
-
+        version = safe_get(kwargs, 'version', __version__)
+        dataset = safe_get(kwargs, 'dataset', config_obj.get('dataset'))
+        date = safe_get(kwargs, 'exp_date', now)
         train_events = list(filter(lambda x: x['phase'] == 'Train', events_obj))
         valid_events = list(filter(lambda x: x['phase'] == 'Valid', events_obj))
         test_events = list(filter(lambda x: x['phase'] == 'Test', events_obj))
 
         post = {
+            "dataset": dataset,
             "config": config_obj,
             "train_events": train_events,
             "valid_events": valid_events,
             "test_events": test_events,
             "username": username,
             "hostname": hostname,
-            "date": now,
+            "date": date,
             "label": label,
             "sha1": config_sha1,
             "version": version,
@@ -195,7 +197,7 @@ class MongoRepo(ExperimentRepo):
                 else:
                     query.update({"username": kwargs["username"]})
             if "dataset" in kwargs:
-                query.update({"config.dataset": kwargs["dataset"]})
+                query.update({"$or": [{"config.dataset": kwargs["dataset"]}, {"dataset": kwargs["dataset"]}]})
             if "sha1" in kwargs:
                 query.update({"sha1": kwargs["sha1"]})
             return query
@@ -240,7 +242,7 @@ class MongoRepo(ExperimentRepo):
         coll = self.db[task]
         query = self._update_query({}, **d)
         all_results = list(coll.find(query))
-    
+
         if not all_results:
             return BackendError(message='no information available for [{}]: [{}] in task database [{}]'
                                 .format(prop, value, task))
@@ -462,7 +464,7 @@ def mongo_to_experiment_set(task, all_results, event_type, metrics):
         username = result.get('username', 'root')
         hostname = result.get('hostname', 'localhost')
         label = result.get('label', 'default_label')
-        dataset = result['config']['dataset']
+        dataset = result.get('dataset', result['config'].get('dataset'))
         date = result['date']
         sha1 = result['sha1']
         config = result['config']
