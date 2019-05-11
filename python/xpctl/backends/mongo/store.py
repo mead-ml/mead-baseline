@@ -138,8 +138,8 @@ class MongoRepo(ExperimentRepo):
 
     def get_experiment_details(self, task, eid, event_type, metric):
         metrics = [x for x in listify(metric) if x.strip()]
-        event_type = event_type if event_type is not None else 'test_events'
-
+        if event_type is None or event_type == 'None':
+            event_type = 'test_events'
         coll = self.db[task]
         query = {'_id': ObjectId(eid)}
         all_results = list(coll.find(query))
@@ -152,7 +152,8 @@ class MongoRepo(ExperimentRepo):
 
     def get_results(self, task, prop, value, reduction_dim, metric, sort, numexp_reduction_dim, event_type):
         metrics = [x for x in listify(metric)]
-        event_type = event_type if event_type is not None else 'test_events'
+        if event_type is None or event_type == 'None':
+            event_type = 'test_events'
         reduction_dim = reduction_dim if reduction_dim is not None else 'sha1'
         coll = self.db[task]
         d = {prop: value}
@@ -211,7 +212,8 @@ class MongoRepo(ExperimentRepo):
         return projection
 
     def list_results(self, task, prop, value, user, metric, sort, event_type):
-        event_type = event_type if event_type is not None else 'test_events'
+        if event_type is None or event_type == 'None':
+            event_type = 'test_events'
         metrics = [x for x in listify(metric) if x.strip()]
         users = [x for x in listify(user) if x.strip()]
         if prop is None or prop == 'None':

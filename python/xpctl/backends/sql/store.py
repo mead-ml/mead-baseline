@@ -69,7 +69,7 @@ class SqlExperiment(Base):
 class SQLRepo(ExperimentRepo):
 
     def _connect(self, uri):
-        self.engine = sql.create_engine(uri, echo=False, paramstyle='format')
+        self.engine = sql.create_engine(uri, echo=False, paramstyle='format', pool_size=100)
         Base.metadata.create_all(self.engine)
         self.Session = orm.sessionmaker(bind=self.engine)
 
@@ -106,7 +106,7 @@ class SQLRepo(ExperimentRepo):
         label = safe_get(kwargs, 'label', get_experiment_label(config_obj, task, **kwargs))
         checkpoint = kwargs.get('checkpoint')
         version = safe_get(kwargs,  'version', __version__)
-        dataset = safe_get(kwargs, 'dataset', config_obj['dataset'])
+        dataset = safe_get(kwargs, 'dataset', config_obj.get('dataset'))
         date = safe_get(kwargs, 'exp_date', now)
 
         events = []
@@ -188,7 +188,8 @@ class SQLRepo(ExperimentRepo):
 
     def get_experiment_details(self, task, eid, event_type, metric):
         metrics = [x for x in listify(metric) if x.strip()]
-        event_type = event_type if event_type is not None else 'test_events'
+        if event_type is None or event_type == 'None':
+            event_type = 'test_events'
         session = self.Session()
         exp = session.query(SqlExperiment).filter(SqlExperiment.task == task).filter(SqlExperiment.eid == eid)
         if exp is None or exp.scalar() is None:
@@ -198,7 +199,8 @@ class SQLRepo(ExperimentRepo):
     def get_results(self, task, prop, value, reduction_dim, metric, sort, numexp_reduction_dim, event_type):
         session = self.Session()
         metrics = [x for x in listify(metric) if x.strip()]
-        event_type = event_type if event_type is not None else 'test_events'
+        if event_type is None or event_type == 'None':
+            event_type = 'test_events'
         reduction_dim = reduction_dim if reduction_dim is not None else 'sha1'
         hits = session.query(SqlExperiment).filter(getattr(SqlExperiment, prop) == value)\
             .filter(SqlExperiment.task == task)
@@ -227,7 +229,9 @@ class SQLRepo(ExperimentRepo):
          
     def list_results(self, task, prop, value, user, metric, sort, event_type):
         session = self.Session()
-        sql_experiments = []
+        data_experiments = []
+        if event_type is None or event_type == 'None':
+            event_type = 'test_events'
         metrics = [x for x in listify(metric) if x.strip()]
         users = [x for x in listify(user) if x.strip()]
         if prop is None or prop == 'None':
@@ -236,12 +240,16 @@ class SQLRepo(ExperimentRepo):
             hits = session.query(SqlExperiment).filter(getattr(SqlExperiment, prop) == value). \
                    filter(SqlExperiment.task == task)
         if users:
-            hits = hits.filter(SqlExperiment.username.in_(users)).all()
-        if hits is None or not hits.first():
+            hits = hits.filter(SqlExperiment.username.in_(users))
+        if hits.first() is None:
             return BackendError('No results in {} database for {} = {}'.format(task, prop, value))
         for exp in hits:
-            sql_experiments.append(self.sql_result_to_data_experiment(exp, event_type, metrics))
-        experiment_set = self.get_data_experiment_set(sql_experiments)
+            data_experiment = self.sql_result_to_data_experiment(exp, event_type, metrics)
+            if type(data_experiment) is BackendError:
+                return data_experiment
+            else:
+                data_experiments.append(data_experiment)
+        experiment_set = self.get_data_experiment_set(data_experiments)
         if sort is None or sort == 'None':
             return experiment_set
         else:
@@ -251,7 +259,7 @@ class SQLRepo(ExperimentRepo):
                 else:
                     return experiment_set.sort(sort)
             else:
-                return BackendError(message='experiments can only be sorted when event_type=test_results')
+                return BackendError(message='experiments can only be sorted when event_type=test_events')
 
     def find_experiments(self, task, prop, value):
         session = self.Session()
@@ -381,7 +389,7 @@ class SQLRepo(ExperimentRepo):
                 return phase
             phase_events = [event for event in exp.events if event.phase == phase]
             if len(phase_events) == 0:
-                return BackendError('experiment id {} has 0 {}'.format(exp.eid, event_type))
+                continue
             metrics = self.get_filtered_metrics(self.get_sql_metrics(phase_events[0]), set(metrics_from_user))
             if type(metrics) is BackendError:
                 return metrics

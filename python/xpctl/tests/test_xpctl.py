@@ -40,9 +40,8 @@ def setup():
     api_client = ApiClient(config)
     global API
     API = XpctlApi(api_client)
-    yield
-    
-    
+
+
 def _put_one_exp(exp):
     result = API.put_result(TASK, exp)
     if result.response_type == 'error':
@@ -51,7 +50,7 @@ def _put_one_exp(exp):
         global EIDS
         EIDS.append(result.message)
         return result.message
-        
+
 
 @clean_db
 def test_put_result_blank(setup):
@@ -110,7 +109,7 @@ def test_experiment_details(setup):
     exp = result[0]
     assert exp.dataset == 'test_dataset'
     assert exp.label == label
-    assert exp.exp_date == date
+    assert (exp.exp_date == date) or (exp.exp_date[:-1] == date)  # sql inserts Z at the end
     assert exp.sha1 == hash_config(json.loads('{"test": "test"}'))
     assert exp.username == username
     assert exp.hostname == hostname
@@ -133,7 +132,7 @@ def _find_by_prop_unique(prop, expected_value):
         return len(result) == 1
     except ApiException:
         return False
-        
+
 
 @clean_db
 def test_update_property(setup):
@@ -204,12 +203,12 @@ def test_list_experiments_by_prop(setup):
                     )
                     experiments.append(exp_detail(eid=result, sha1=hash_config(json.loads(config)), dataset=dataset,
                                                   label=label, username=username))
-    
+
     # find by a property and group by different reduction dims
     for prop, values in {'dataset': datasets, 'label': labels, 'username': users}.items():
         for value in values:
             assert _test_list_experiments_by_prop(prop=prop, value=value, experiments=experiments)
-    
+
     # test the `users` filter work
     prop = 'dataset'
     value = 'd1'
@@ -241,7 +240,7 @@ def test_list_experiments_by_prop(setup):
     # unique dataset, sort by f1
     _max = experiments[-1]
     assert results[0].eid == _max.eid
-    
+
 
 def _test_reduction_dim(prop, value, reduction_dim, experiments):
     """
@@ -261,8 +260,8 @@ def _test_reduction_dim(prop, value, reduction_dim, experiments):
             expected[item] += 1
     results = {getattr(r, reduction_dim): r.num_exps for r in results}
     return expected == results
-    
-    
+
+
 @clean_db
 def test_get_results_by_prop(setup):
     """
@@ -293,7 +292,7 @@ def test_get_results_by_prop(setup):
                 )
                 experiments.append(exp_detail(eid=result, sha1=hash_config(json.loads(config)), dataset=dataset,
                                               label=label))
-    
+
     # find by a property and group by different reduction dims
     for prop, values in {'dataset': datasets, 'label': labels}.items():
         for value in values:
