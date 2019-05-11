@@ -99,6 +99,16 @@ class ExperimentRepo(object):
         """
         pass
 
+    def find_experiments(self, task, prop, value):
+        """
+        find experiments by a property, eg: dataset
+        :param task: (``str``) task name
+        :param prop: (``str``) a property of an experiment, eg: dataset, label
+        :param value: (``str``) value for the property
+        :return: List[xpctl.backend.data.Experiment]
+        """
+        pass
+    
     def update_prop(self, task, eid, prop, value):
         """
         Update a property(label, username etc) for an experiment
@@ -142,7 +152,7 @@ class ExperimentRepo(object):
 
     def dump(self, zipfile, task_eids):
         """
-        dump the whole database. creates a zipfile when unzips into the following directory structure
+        dump the whole database. creates a zipfile which unzips into the following directory structure
         <xpctldump>
          - <task>
            - <id>
