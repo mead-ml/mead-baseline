@@ -40,6 +40,21 @@ class TestXpctlController(BaseTestCase):
         self.assert200(response,
                        'Response body is : ' + response.data.decode('utf-8'))
 
+    def test_find_by_prop(self):
+        """Test case for find_by_prop
+
+        delete an experiment from the database
+        """
+        query_string = [('prop', 'prop_example'),
+                        ('value', 'value_example')]
+        response = self.client.open(
+            '/v2/find/{task}/'.format(task='task_example'),
+            method='GET',
+            content_type='application/json',
+            query_string=query_string)
+        self.assert200(response,
+                       'Response body is : ' + response.data.decode('utf-8'))
+
     def test_get_model_location(self):
         """Test case for get_model_location
 

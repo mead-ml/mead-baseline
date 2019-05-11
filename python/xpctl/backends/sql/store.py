@@ -9,7 +9,7 @@ from mead.utils import hash_config
 from baseline.version import __version__
 from xpctl.backends.backend import log2json, get_experiment_label, METRICS_SORT_ASCENDING, safe_get, \
     client_experiment_to_put_result_consumable, write_experiment, aggregate_results
-from xpctl.backends.backend import Error, Success, TaskDatasetSummary, TaskDatasetSummarySet, Experiment, Result, \
+from xpctl.backends.backend import BackendError, BackendSuccess, TaskDatasetSummary, TaskDatasetSummarySet, Experiment, Result, \
     ExperimentSet, EVENT_TYPES
 from baseline.utils import unzip_files, read_config_file
 import shutil
@@ -135,54 +135,54 @@ class SQLRepo(ExperimentRepo):
         try:
             session.add(experiment)
             session.commit()
-            return Success(message=experiment.eid)
+            return BackendSuccess(message=experiment.eid)
         except sql.exc.SQLAlchemyError as e:
-            return Error(message=str(e))
+            return BackendError(message=str(e))
         
     def get_model_location(self, task, eid):
         session = self.Session()
         exp = session.query(SqlExperiment).get(eid)
-        return Success(exp.checkpoint)
+        return BackendSuccess(exp.checkpoint)
 
     def update_prop(self, task, eid, prop, value):
         try:
             session = self.Session()
             exp = session.query(SqlExperiment).filter(SqlExperiment.task == task).filter(SqlExperiment.eid == eid)
             if exp is None or exp.scalar() is None:
-                return Error(message='no experiment with id [{}] for task [{}]'.format(eid, task))
+                return BackendError(message='no experiment with id [{}] for task [{}]'.format(eid, task))
             # there must be a better way of getting a column value through a column name
             prev_value = getattr(session.query(SqlExperiment).get(eid), prop)
             session.query(SqlExperiment).filter(SqlExperiment.eid == eid).update({prop: value})
             session.commit()
             changed_value = getattr(session.query(SqlExperiment).get(eid), prop)
-            return Success(message='for experiment [{}] property [{}] was changed from [{}] to [{}].'
-                           .format(eid, prop, prev_value, changed_value))
+            return BackendSuccess(message='for experiment [{}] property [{}] was changed from [{}] to [{}].'
+                                  .format(eid, prop, prev_value, changed_value))
         except sql.exc.SQLAlchemyError as e:
-            return Error(message=str(e))
+            return BackendError(message=str(e))
 
     def remove_experiment(self, task, eid):
         try:
             session = self.Session()
             exp = session.query(SqlExperiment).filter(SqlExperiment.task == task).filter(SqlExperiment.eid == eid)
             if exp is None or exp.scalar() is None:
-                return Error(message='no experiment with id [{}] for task [{}]'.format(eid, task))
+                return BackendError(message='no experiment with id [{}] for task [{}]'.format(eid, task))
             model_loc_response = self.get_model_location(task, eid)
             model_loc = model_loc_response.message
-            if model_loc is not None and type(model_loc_response) is not Error and os.path.exists(model_loc):
+            if model_loc is not None and type(model_loc_response) is not BackendError and os.path.exists(model_loc):
                 try:
                     os.remove(model_loc)
                 except IOError:
-                    return Error(message='model {} exists on host but could not be removed'.format(model_loc))
+                    return BackendError(message='model {} exists on host but could not be removed'.format(model_loc))
             exp = session.query(SqlExperiment).get(eid)
             session.delete(exp)
             session.commit()
             try:
                 assert session.query(SqlExperiment).get(eid) is None
-                return Success("record [{}] deleted successfully from database [{}]".format(eid, task))
+                return BackendSuccess("record [{}] deleted successfully from database [{}]".format(eid, task))
             except AssertionError:
-                return Error('delete failed: could not delete experiment {} from {} database'.format(eid, task))
+                return BackendError('delete failed: could not delete experiment {} from {} database'.format(eid, task))
         except sql.exc.SQLAlchemyError as e:
-            return Error(message=str(e))
+            return BackendError(message=str(e))
 
     def get_experiment_details(self, task, eid, event_type, metric):
         metrics = [x for x in listify(metric) if x.strip()]
@@ -190,7 +190,7 @@ class SQLRepo(ExperimentRepo):
         session = self.Session()
         exp = session.query(SqlExperiment).filter(SqlExperiment.task == task).filter(SqlExperiment.eid == eid)
         if exp is None or exp.scalar() is None:
-            return Error(message='no experiment with id [{}] for task [{}]'.format(eid, task))
+            return BackendError(message='no experiment with id [{}] for task [{}]'.format(eid, task))
         return self.sql_result_to_data_experiment(exp.one(), event_type, metrics)
     
     def get_results(self, task, prop, value, reduction_dim, metric, sort, numexp_reduction_dim, event_type):
@@ -201,12 +201,12 @@ class SQLRepo(ExperimentRepo):
         hits = session.query(SqlExperiment).filter(getattr(SqlExperiment, prop) == value)\
             .filter(SqlExperiment.task == task)
         if hits is None or not hits.first():
-            return Error(message='no information available for [{}]: [{}] in task database [{}]'
-                         .format(prop, value, task))
+            return BackendError(message='no information available for [{}]: [{}] in task database [{}]'
+                                .format(prop, value, task))
         data_experiments = []
         for exp in hits:
             data_experiment = self.sql_result_to_data_experiment(exp, event_type, metrics)
-            if type(data_experiment) is Error:
+            if type(data_experiment) is BackendError:
                 return data_experiment
             else:
                 data_experiments.append(data_experiment)
@@ -221,7 +221,7 @@ class SQLRepo(ExperimentRepo):
                 else:
                     return experiment_aggregate_set.sort(sort)
             else:
-                return Error(message='experiments can only be sorted when event_type=test_events')
+                return BackendError(message='experiments can only be sorted when event_type=test_events')
          
     def list_results(self, task, prop, value, user, metric, sort, event_type):
         session = self.Session()
@@ -233,7 +233,7 @@ class SQLRepo(ExperimentRepo):
         if users:
             hits = hits.filter(SqlExperiment.username.in_(users)).all()
         if hits is None or not hits.first():
-            return Error('No results in {} database for {} = {}'.format(task, prop, value))
+            return BackendError('No results in {} database for {} = {}'.format(task, prop, value))
         for exp in hits:
             sql_experiments.append(self.sql_result_to_data_experiment(exp, event_type, metrics))
         experiment_set = self.get_data_experiment_set(sql_experiments)
@@ -246,15 +246,26 @@ class SQLRepo(ExperimentRepo):
                 else:
                     return experiment_set.sort(sort)
             else:
-                return Error(message='experiments can only be sorted when event_type=test_results')
-            
+                return BackendError(message='experiments can only be sorted when event_type=test_results')
+
+    def find_experiments(self, task, prop, value):
+        session = self.Session()
+        sql_experiments = []
+        hits = session.query(SqlExperiment).filter(getattr(SqlExperiment, prop) == value). \
+            filter(SqlExperiment.task == task)
+        if hits is None or not hits.first():
+            return BackendError('No results in {} database for {} = {}'.format(task, prop, value))
+        for exp in hits:
+            sql_experiments.append(self.sql_result_to_data_experiment(exp, event_type='test_events', metrics_from_user=[]))
+        return self.get_data_experiment_set(sql_experiments)
+        
     def config2json(self, task, sha1):
         try:
             session = self.Session()
             config = session.query(SqlExperiment).filter(SqlExperiment.sha1 == sha1).one().config
             return json.loads(config)
         except sql.exc.SQLAlchemyError as e:
-            return Error(message=str(e))
+            return BackendError(message=str(e))
 
     def get_task_names(self):
         session = self.Session()
@@ -276,7 +287,7 @@ class SQLRepo(ExperimentRepo):
                     user_num_exps[user] = result
             store.append(TaskDatasetSummary(task=task, dataset=dataset, experiment_set=None, user_num_exps=user_num_exps))
         if not store:
-            return Error('could not get summary for task: [{}]'.format(task))
+            return BackendError('could not get summary for task: [{}]'.format(task))
         return TaskDatasetSummarySet(task=task, data=store).groupby()
 
     def summary(self):
@@ -301,7 +312,7 @@ class SQLRepo(ExperimentRepo):
             sql_exps = session.query(SqlExperiment).filter(SqlExperiment.task == task)
             for sql_exp in sql_exps:
                 exp = self.sql_result_to_data_experiment(sql_exp, event_type=[], metrics_from_user=[])
-                if type(exp) is Error:
+                if type(exp) is BackendError:
                     print(exp.message)
                 else:
                     write_experiment(exp, _dir)
@@ -361,13 +372,13 @@ class SQLRepo(ExperimentRepo):
         event_types = [event_type] if event_type else EVENT_TYPES
         for event_type in event_types:
             phase = self.event2phase(event_type)
-            if type(phase) is Error:
+            if type(phase) is BackendError:
                 return phase
             phase_events = [event for event in exp.events if event.phase == phase]
             if len(phase_events) == 0:
-                return Error('experiment id {} has 0 {}'.format(exp.eid, event_type))
+                return BackendError('experiment id {} has 0 {}'.format(exp.eid, event_type))
             metrics = self.get_filtered_metrics(self.get_sql_metrics(phase_events[0]), set(metrics_from_user))
-            if type(metrics) is Error:
+            if type(metrics) is BackendError:
                 return metrics
             results = self.flatten([self.create_results(event, metrics) for event in phase_events])
             for r in results:
@@ -382,14 +393,14 @@ class SQLRepo(ExperimentRepo):
             return 'Valid'
         if event_type == 'test_events':
             return 'Test'
-        Error(message='Unknown event type {}'.format(event_type))
+        BackendError(message='Unknown event type {}'.format(event_type))
     
     @staticmethod
     def get_filtered_metrics(metrics_from_db, metrics_from_user):
         if not metrics_from_user:
             metrics = list(metrics_from_db)
         elif metrics_from_user - metrics_from_db:
-            return Error(message='Metrics [{}] not found'.format(','.join(list(metrics_from_user - metrics_from_db))))
+            return BackendError(message='Metrics [{}] not found'.format(','.join(list(metrics_from_user - metrics_from_db))))
         else:
             metrics = list(metrics_from_user)
         return metrics

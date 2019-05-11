@@ -7,7 +7,7 @@ import getpass
 from baseline.utils import export, listify, unzip_files, read_config_file
 from mead.utils import hash_config
 from xpctl.backends.core import ExperimentRepo
-from backends.backend import TaskDatasetSummary, TaskDatasetSummarySet, Success, Error, Experiment, ExperimentSet, Result, \
+from backends.backend import TaskDatasetSummary, TaskDatasetSummarySet, BackendSuccess, BackendError, Experiment, ExperimentSet, Result, \
     EVENT_TYPES, log2json, get_experiment_label, METRICS_SORT_ASCENDING, safe_get, \
     client_experiment_to_put_result_consumable, aggregate_results, write_experiment
 from bson.objectid import ObjectId
@@ -85,9 +85,9 @@ class MongoRepo(ExperimentRepo):
         try:
             coll = self.db[task]
             result = coll.insert_one(post)
-            return Success(message=str(result.inserted_id))
+            return BackendSuccess(message=str(result.inserted_id))
         except pymongo.errors.PyMongoError as e:
-            return Error(message='experiment could not be inserted: {}'.format(e.message))
+            return BackendError(message='experiment could not be inserted: {}'.format(e.message))
 
     def get_model_location(self, task, eid):
         coll = self.db[task]
@@ -96,44 +96,44 @@ class MongoRepo(ExperimentRepo):
         results = [x.get('checkpoint') for x in list(coll.find(query, projection))]
         results = [x for x in results if x is not None]
         if not results:
-            return Error(message='no model location for experiment id [{}] in [{}] database'.format(eid, task))
-        return Success(results[0])
+            return BackendError(message='no model location for experiment id [{}] in [{}] database'.format(eid, task))
+        return BackendSuccess(results[0])
 
     def update_prop(self, task, eid, prop, value):
         try:
             coll = self.db[task]
             r = coll.find_one({'_id': ObjectId(eid)}, {prop: 1})
             if r is None:
-                return Error(message='property {} for experiment {} not found in {} database'.format(prop, eid, task))
+                return BackendError(message='property {} for experiment {} not found in {} database'.format(prop, eid, task))
             prev_value = r[prop]
             coll.update({'_id': ObjectId(eid)}, {'$set': {prop: value}}, upsert=False)
             changed_value = coll.find_one({'_id': ObjectId(eid)}, {prop: 1})[prop]
-            return Success(message='for experiment [{}] property [{}] was changed from [{}] to [{}]'
-                           .format(eid, prop, prev_value, changed_value))
+            return BackendSuccess(message='for experiment [{}] property [{}] was changed from [{}] to [{}]'
+                                  .format(eid, prop, prev_value, changed_value))
         except pymongo.errors.PyMongoError as e:
-            return Error(message='property update failed: {}'.format(e.message))
+            return BackendError(message='property update failed: {}'.format(e.message))
 
     def remove_experiment(self, task, eid):
         try:
             coll = self.db[task]
             prev = coll.find_one({'_id': ObjectId(eid)})
             if prev is None:
-                return Error(message='delete operation failed: experiment [{}] not found in [{}] database'.format(eid, task))
+                return BackendError(message='delete operation failed: experiment [{}] not found in [{}] database'.format(eid, task))
             model_loc_response = self.get_model_location(task, eid)
             model_loc = model_loc_response.message
-            if model_loc is not None and type(model_loc_response) is not Error and os.path.exists(model_loc):
+            if model_loc is not None and type(model_loc_response) is not BackendError and os.path.exists(model_loc):
                 try:
                     os.remove(model_loc)
                 except IOError:
-                    return Error(message='model {} exists on host but could not be removed'.format(model_loc))
+                    return BackendError(message='model {} exists on host but could not be removed'.format(model_loc))
             coll.remove({'_id': ObjectId(eid)})
             try:
                 assert coll.find_one({'_id': ObjectId(eid)}) is None
-                return Success("record [{}] deleted successfully from database [{}]".format(eid, task))
+                return BackendSuccess("record [{}] deleted successfully from database [{}]".format(eid, task))
             except AssertionError:
-                return Error('delete failed: could not delete experiment {} from {} database'.format(eid, task))
+                return BackendError('delete failed: could not delete experiment {} from {} database'.format(eid, task))
         except pymongo.errors.PyMongoError as e:
-            return Error(message='experiment could not be removed: {}'.format(e.message))
+            return BackendError(message='experiment could not be removed: {}'.format(e.message))
 
     def get_experiment_details(self, task, eid, event_type, metric):
         metrics = [x for x in listify(metric) if x.strip()]
@@ -143,10 +143,10 @@ class MongoRepo(ExperimentRepo):
         query = {'_id': ObjectId(eid)}
         all_results = list(coll.find(query))
         if not all_results:
-            return Error(message='no experiment with id [{}] for task [{}]'.format(eid, task))
+            return BackendError(message='no experiment with id [{}] for task [{}]'.format(eid, task))
         experiments = mongo_to_experiment_set(task, all_results, event_type=event_type, metrics=metrics)
-        if type(experiments) == Error:
-            return Error(experiments.message)
+        if type(experiments) == BackendError:
+            return BackendError(experiments.message)
         return experiments[0]
 
     def get_results(self, task, prop, value, reduction_dim, metric, sort, numexp_reduction_dim, event_type):
@@ -158,10 +158,10 @@ class MongoRepo(ExperimentRepo):
         query = self._update_query({}, **d)
         all_results = list(coll.find(query))
         if not all_results:
-            return Error(message='no information available for [{}]: [{}] in task database [{}]'
-                         .format(prop, value, task))
+            return BackendError(message='no information available for [{}]: [{}] in task database [{}]'
+                                .format(prop, value, task))
         resultset = mongo_to_experiment_set(task, all_results, event_type=event_type, metrics=metrics)
-        if type(resultset) is Error:
+        if type(resultset) is BackendError:
             return resultset
         experiment_aggregate_set = aggregate_results(resultset, reduction_dim, event_type, numexp_reduction_dim)
         if sort is None or sort == 'None':
@@ -173,7 +173,7 @@ class MongoRepo(ExperimentRepo):
                 else:
                     return experiment_aggregate_set.sort(sort)
             else:
-                return Error(message='experiments can only be sorted when event_type=test_events')
+                return BackendError(message='experiments can only be sorted when event_type=test_events')
         
     @staticmethod
     def _update_query(q, **kwargs):
@@ -219,10 +219,10 @@ class MongoRepo(ExperimentRepo):
         all_results = list(coll.find(query))
 
         if not all_results:
-            return Error(message='no information available for [{}]: [{}] in task database [{}]'
-                         .format(prop, value, task))
+            return BackendError(message='no information available for [{}]: [{}] in task database [{}]'
+                                .format(prop, value, task))
         experiments = mongo_to_experiment_set(task, all_results, event_type=event_type, metrics=metrics)
-        if type(experiments) == Error:
+        if type(experiments) == BackendError:
             return experiments
         if sort is None or sort == 'None':
             return experiments
@@ -233,13 +233,24 @@ class MongoRepo(ExperimentRepo):
                 else:
                     return experiments.sort(sort)
             else:
-                return Error(message='experiments can only be sorted when event_type=test_events')
+                return BackendError(message='experiments can only be sorted when event_type=test_events')
+
+    def find_experiments(self, task, prop, value):
+        d = {prop: value}
+        coll = self.db[task]
+        query = self._update_query({}, **d)
+        all_results = list(coll.find(query))
+    
+        if not all_results:
+            return BackendError(message='no information available for [{}]: [{}] in task database [{}]'
+                                .format(prop, value, task))
+        return mongo_to_experiment_set(task, all_results, event_type='test_events', metrics=[])
 
     def config2json(self, task, sha1):
         coll = self.db[task]
         j = coll.find_one({"sha1": sha1}, {"config": 1})
         if not j:
-            return Error('no config [{}] in [{}] database'.format(sha1, task))
+            return BackendError('no config [{}] in [{}] database'.format(sha1, task))
         else:
             return j["config"]
 
@@ -258,13 +269,13 @@ class MongoRepo(ExperimentRepo):
             p = self._update_projection(event_type)
             results = list(coll.find(q, p))
             experiment_set = mongo_to_experiment_set(task, results, event_type, metrics=[])
-            if type(experiment_set) == Error:
+            if type(experiment_set) == BackendError:
                 self.logger.error('Error getting summary for task [{}], dataset [{}], stacktrace [{}]'
                                   .format(task, dataset, experiment_set.message))
                 continue
             store.append(TaskDatasetSummary(task=task, dataset=dataset, experiment_set=experiment_set))
         if not store:
-            return Error('could not get summary for task: [{}]'.format(task))
+            return BackendError('could not get summary for task: [{}]'.format(task))
         return TaskDatasetSummarySet(task=task, data=store).groupby()
     
     def summary(self):
@@ -463,7 +474,7 @@ def mongo_to_experiment_set(task, all_results, event_type, metrics):
             if not metrics_from_user:
                 metrics = list(metrics_from_db)
             elif metrics_from_user - metrics_from_db:
-                return Error(message='Metrics [{}] not found for experiment [{}] in [{}] database'.format(','.join(
+                return BackendError(message='Metrics [{}] not found for experiment [{}] in [{}] database'.format(','.join(
                     list(metrics_from_user - metrics_from_db)), _id, task))
             else:
                 metrics = list(metrics_from_user)
@@ -489,6 +500,6 @@ def mongo_to_experiment_set(task, all_results, event_type, metrics):
                         version=version
                     ))
     if not data:
-        return Error(message='No results from the query')
+        return BackendError(message='No results from the query')
     rs = MongoResultSet(data=data)
     return rs.experiments()

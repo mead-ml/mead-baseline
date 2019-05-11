@@ -178,6 +178,46 @@ paths:
             $ref: "#/definitions/Response"
       x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
 
+  /find/{task}/:
+    get:
+      tags:
+      - "xpctl"
+      summary: "delete an experiment from the database"
+      description: ""
+      operationId: "find_by_prop"
+      consumes:
+      - "application/json"
+      produces:
+      - "application/json"
+      parameters:
+      - name: "task"
+        in: "path"
+        type: "string"
+        description: ""
+        required: true
+      - name: "prop"
+        in: "query"
+        type: "string"
+        description: ""
+        required: true
+      - name: "value"
+        in: "query"
+        type: "string"
+        description: ""
+        required: true
+      responses:
+        200:
+          description: "success"
+          schema:
+            type: array
+            items:
+              $ref: "#/definitions/Experiment"
+        default:
+          description: "unexpected error"
+          schema:
+            $ref: "#/definitions/Response"
+      x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
+
   /details/{task}:
       get:
         tags:

@@ -6,7 +6,7 @@ import os
 import numpy as np
 from flask import abort
 
-from baseline.utils import export, write_config_file, unzip_model
+from baseline.utils import export, write_config_file
 
 from xpctl.swagger_server.models import Experiment as ServerExperiment
 from xpctl.swagger_server.models import Result as ServerResult
@@ -343,27 +343,27 @@ class TaskSummary(object):
 
 
 @exporter
-class Response(object):
+class BackendResponse(object):
     def __init__(self, message, response_type, code=550):
-        super(Response, self).__init__()
+        super(BackendResponse, self).__init__()
         self.message = message
         self.response_type = response_type
         self.code = code
 
 
 @exporter
-class Error(Response):
+class BackendError(BackendResponse):
     def __init__(self, message, response_type="error", code=550):
-        super(Error, self).__init__(message, response_type, code)
+        super(BackendError, self).__init__(message, response_type, code)
         self.message = message
         self.response_type = response_type
         self.code = code
 
 
 @exporter
-class Success(Response):
+class BackendSuccess(BackendResponse):
     def __init__(self, message, response_type="success", code=250):
-        super(Success, self).__init__(message, response_type, code)
+        super(BackendSuccess, self).__init__(message, response_type, code)
         self.message = message
         self.response_type = response_type
         self.code = code
@@ -407,8 +407,26 @@ def safe_get(_object, key, alt):
 
 
 @exporter
-def serialize_experiment_details(exp):
-    if type(exp) == Error:
+def is_error(_object):
+    """
+    poor man's type checking, apparently you can not do `type(_object) == BackendError` when you move that class in the
+    same file
+    :param _object:
+    :return:
+    """
+    if hasattr(_object, 'response_type'):
+        return True
+    return False
+
+
+@exporter
+def serialize_experiment(exp):
+    """
+    serialize an Experiment object for consumption by swagger client
+    :param exp: backends.backend.Experiment
+    :return:
+    """
+    if is_error(exp):
         return abort(500, exp.message)
     train_events = [ServerResult(**r.__dict__) for r in exp.train_events]
     valid_events = [ServerResult(**r.__dict__) for r in exp.valid_events]
@@ -421,8 +439,13 @@ def serialize_experiment_details(exp):
 
 
 @exporter
-def serialize_get_results(agg_exps):
-    if type(agg_exps) == Error:
+def serialize_experiment_aggregate(agg_exps):
+    """
+    serialize an ExperimentAggregate object for consumption by swagger client
+    :param agg_exps: backends.backend.ExperimentAggregate
+    :return:
+    """
+    if is_error(agg_exps):
         return abort(500, agg_exps.message)
     results = []
     for agg_exp in agg_exps:
@@ -445,13 +468,18 @@ def serialize_get_results(agg_exps):
 
 
 @exporter
-def serialize_list_results(exps):
-    if type(exps) == Error:
+def serialize_experiment_list(exps):
+    """
+    serialize a list of Experiment objects for consumption by swagger client
+    :param exps:
+    :return:
+    """
+    if is_error(exps):
         return abort(500, exps.message)
     results = []
     for exp in exps:
-        if type(exp) == Error:
-            return Response(**exp.__dict__)
+        if type(exp) == BackendError:
+            return BackendResponse(**exp.__dict__)
         train_events = [ServerResult(**r.__dict__) for r in exp.train_events]
         valid_events = [ServerResult(**r.__dict__) for r in exp.valid_events]
         test_events = [ServerResult(**r.__dict__) for r in exp.test_events]
@@ -465,34 +493,44 @@ def serialize_list_results(exps):
 
 @exporter
 def serialize_task_summary(task_summary):
-    if type(task_summary) == Error:
+    """
+    serialize a TaskSummary object for consumption by swagger client
+    :param task_summary:
+    :return:
+    """
+    if is_error(task_summary):
         return abort(500, task_summary.message)
     return ServerTaskSummary(**task_summary.__dict__)
 
 
 @exporter
-def serialize_summary(task_summaries):
+def serialize_task_summary_list(task_summaries):
     _task_summaries = []
     for task_summary in task_summaries:
-        if type(task_summary) != Error:  # should we abort if we cant get summary for a task in the database?
+        if not is_error(task_summary):  # should we abort if we cant get summary for a task in the database?
             _task_summaries.append(ServerTaskSummary(**task_summary.__dict__))
     return _task_summaries
 
 
 @exporter
-def serialize_config2json(config):
-    if type(config) == Error:
+def serialize_dict(config):
+    """
+    Serializes a dict, exists only to handle the error case
+    :param config:
+    :return:
+    """
+    if is_error(config):
         return abort(500, config.message)
     return config
 
 
 @exporter
-def serialize_get_model_location(location):
-    return ServerResponse(**location.__dict__)
-
-
-@exporter
-def serialize_post_requests(result):
+def serialize_response(result):
+    """
+    serializes a Response object for swagger client consumption
+    :param result:
+    :return:
+    """
     return ServerResponse(**result.__dict__)
 
 
