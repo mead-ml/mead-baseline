@@ -1,0 +1,32 @@
+FROM python:3.6.4-jessie
+
+WORKDIR /usr/xpctl
+
+ARG backend="mongo"
+ARG user
+ARG passwd
+ARG dbhost="localhost"
+ARG dbport="27107"
+ARG port="5310"
+
+# copy everything else
+COPY python/xpctl /usr/xpctl/
+COPY python/baseline /usr/baseline
+COPY python/mead /usr/mead
+COPY python/addons /usr/addons
+
+COPY python/xpctl/server-requirements.${backend}.txt /usr/xpctl/server-requirements.txt
+
+
+RUN pip install -r server-requirements.txt
+
+
+ENV PYTHONPATH /usr/
+#ENV APP_NAME=xpctlserver
+ENV LC_ALL=C.UTF-8
+ENV LANG=C.UTF-8
+
+EXPOSE ${port}
+
+
+ENTRYPOINT ["python", "-m", "swagger_server", "--backend", "${backend}", "--user", "${user}", "--passwd", "${passwd}", "--dbhost", "${dbhost}", "--dbport", "${dbport}","--port", "${port}"]
