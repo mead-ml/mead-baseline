@@ -20,7 +20,7 @@ case $key in
     shift # past value
     ;;
     --pass|--dbpass)
-    DB_PASSWORD="$2"
+    DB_PASS="$2"
     shift # past argument
     shift # past value
     ;;
@@ -46,7 +46,7 @@ case $key in
     ;;
     -h|--help)
     HELP="$2"
-    #usage
+    usage
     shift # past argument
     ;;
     *)    # unknown option
@@ -60,19 +60,15 @@ set -- "${POSITIONAL[@]}" # restore positional parameters
 DB_HOST=${DB_HOST:-localhost}
 DB_PORT=${DB_PORT:-27017}
 BACK_END=${BACK_END:-mongo}
-PORT=${PORT:5310}
+PORT=${PORT:-5310}
 
 CON_BUILD=xpctlserver
 docker build \
 --network=host \
 --build-arg backend=${BACK_END} \
---build-arg user=${DB_USER} \
---build-arg passwd=${DB_PASSWORD} \
---build-arg dbhost=${DB_HOST} \
---build-arg dbport=${DB_PORT} \
---build-arg port=${PORT} \
 -t ${CON_BUILD}-${BACK_END} \
 -f Dockerfile.xpctl \
 ../
 
-docker run -e LANG=C.UTF-8 --rm --name=${CON_BUILD} --network=host -it ${CON_BUILD}-${BACK_END}
+docker run -e LANG=C.UTF-8 --rm --name=${CON_BUILD} --network=host -it ${CON_BUILD}-${BACK_END} --backend ${BACK_END} \
+--user ${DB_USER} --passwd ${DB_PASS} --dbhost ${DB_HOST} --dbport ${DB_PORT} --port ${PORT}
