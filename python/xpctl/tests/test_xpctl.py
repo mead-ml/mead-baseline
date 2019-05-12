@@ -13,7 +13,6 @@ import string
 from functools import wraps
 
 TASK = 'test_xpctl'
-EIDS = []
 HOST = 'localhost:5310/v2'
 API = None
 
@@ -47,8 +46,6 @@ def _put_one_exp(exp):
     if result.response_type == 'error':
         raise RuntimeError(result.message)
     else:
-        global EIDS
-        EIDS.append(result.message)
         return result.message
 
 
