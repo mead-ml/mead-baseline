@@ -45,9 +45,13 @@ class ServerManager(object):
 
 
 @shell(prompt="xpctl > ", intro="Starting xpctl...")
-@click.option('--host', help="server host", default='localhost:5310/v2')
-def cli(host):
-    ServerManager.host = host
+@click.option('--host', help="server host", default=None)
+@click.option('--config', help="xpctl config", default='~/xpctlcred.json')
+def cli(host, config):
+    if host is not None:
+        ServerManager.host = host
+    else:
+        ServerManager.host = read_config_file(os.path.expanduser(config))['host']
 
 
 @cli.command()
