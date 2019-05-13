@@ -1,10 +1,10 @@
 import json
 import pytest
-from swagger_client import Configuration
-from swagger_client.api import XpctlApi
-from swagger_client import ApiClient
-from swagger_client.models import Experiment, Result
-from swagger_client.rest import ApiException
+from xpctl.client import Configuration
+from xpctl.client.api import XpctlApi
+from xpctl.client import ApiClient
+from xpctl.client.models import Experiment, Result
+from xpctl.client.rest import ApiException
 from mead.utils import hash_config
 from collections import namedtuple
 import datetime

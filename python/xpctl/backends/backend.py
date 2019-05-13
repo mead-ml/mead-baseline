@@ -8,13 +8,13 @@ from flask import abort
 
 from baseline.utils import export, write_config_file
 
-from xpctl.swagger_server.models import Experiment as ServerExperiment
-from xpctl.swagger_server.models import Result as ServerResult
-from xpctl.swagger_server.models import ExperimentAggregate as ServerExperimentAggregate
-from xpctl.swagger_server.models import Response as ServerResponse
-from xpctl.swagger_server.models import TaskSummary as ServerTaskSummary
-from xpctl.swagger_server.models import AggregateResult as ServerAggregateResult
-from xpctl.swagger_server.models import AggregateResultValues
+from xpctl.server.models import Experiment as ServerExperiment
+from xpctl.server.models import Result as ServerResult
+from xpctl.server.models import ExperimentAggregate as ServerExperimentAggregate
+from xpctl.server.models import Response as ServerResponse
+from xpctl.server.models import TaskSummary as ServerTaskSummary
+from xpctl.server.models import AggregateResult as ServerAggregateResult
+from xpctl.server.models import AggregateResultValues
 
 
 __all__ = []

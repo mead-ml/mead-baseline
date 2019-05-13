@@ -24,4 +24,4 @@ ENV LANG=C.UTF-8
 EXPOSE ${port}
 
 
-ENTRYPOINT ["python", "-m", "swagger_server"]
+ENTRYPOINT ["python", "-m", "server"]

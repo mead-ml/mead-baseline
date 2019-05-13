@@ -7,10 +7,10 @@ import json
 from baseline.reporting import EpochReportingHook
 from mead.utils import read_config_file_or_json
 from baseline.reporting import register_reporting
-from xpctl.swagger_client import Configuration
-from xpctl.swagger_client.api import XpctlApi
-from xpctl.swagger_client import ApiClient
-from xpctl.swagger_client.rest import ApiException
+from xpctl.client import Configuration
+from xpctl.client.api import XpctlApi
+from xpctl.client import ApiClient
+from xpctl.client.rest import ApiException
 from xpctl.helpers import to_swagger_experiment, store_model
 from mead.utils import hash_config
 

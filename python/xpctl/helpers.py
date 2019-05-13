@@ -2,7 +2,7 @@ import os
 import shutil
 from baseline.utils import unzip_model, read_config_file
 import json
-from xpctl.swagger_client.models import Result, Experiment
+from xpctl.client.models import Result, Experiment
 
 
 def read_logs(file_name):

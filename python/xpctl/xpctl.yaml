@@ -62,7 +62,7 @@ paths:
           description: "unexpected error"
           schema:
             $ref: "#/definitions/Response"
-      x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
+      x-swagger-router-controller: "server.controllers.xpctl_controller"
 
   /update/{task}/{eid}/:
     get:
@@ -105,7 +105,7 @@ paths:
           description: "unexpected error"
           schema:
             $ref: "#/definitions/Response"
-      x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
+      x-swagger-router-controller: "server.controllers.xpctl_controller"
 
   /delete/{task}/{eid}:
     get:
@@ -138,7 +138,7 @@ paths:
           description: "unexpected error"
           schema:
             $ref: "#/definitions/Response"
-      x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
+      x-swagger-router-controller: "server.controllers.xpctl_controller"
 
   /find/{task}:
       get:
@@ -192,7 +192,7 @@ paths:
             description: "unexpected error"
             schema:
               $ref: "#/definitions/Response"
-        x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
+        x-swagger-router-controller: "server.controllers.xpctl_controller"
 
   /results/{task}:
     get:
@@ -256,7 +256,7 @@ paths:
           description: "unexpected error"
           schema:
             $ref: "#/definitions/Response"
-      x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
+      x-swagger-router-controller: "server.controllers.xpctl_controller"
 
   /{task}/{eid}:
     get:
@@ -303,7 +303,7 @@ paths:
           description: "Server threw an error"
           schema:
             $ref: "#/definitions/Response"
-      x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
+      x-swagger-router-controller: "server.controllers.xpctl_controller"
 
   /config2json/{task}/{sha1}:
       get:
@@ -338,7 +338,7 @@ paths:
             description: "unexpected error"
             schema:
               $ref: "#/definitions/Response"
-        x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
+        x-swagger-router-controller: "server.controllers.xpctl_controller"
 
   /getmodelloc/{task}/{eid}:
         get:
@@ -373,7 +373,7 @@ paths:
               description: "unexpected error"
               schema:
                 $ref: "#/definitions/Response"
-          x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
+          x-swagger-router-controller: "server.controllers.xpctl_controller"
 
   /summary/:
         get:
@@ -399,7 +399,7 @@ paths:
               description: "unexpected error"
               schema:
                 $ref: "#/definitions/Response"
-          x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
+          x-swagger-router-controller: "server.controllers.xpctl_controller"
 
   /summary/{task}/:
           get:
@@ -429,7 +429,7 @@ paths:
                 description: "unexpected error"
                 schema:
                   $ref: "#/definitions/Response"
-            x-swagger-router-controller: "swagger_server.controllers.xpctl_controller"
+            x-swagger-router-controller: "server.controllers.xpctl_controller"
 
 securityDefinitions:
   xpctl_auth:
