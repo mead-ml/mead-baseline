@@ -59,7 +59,7 @@ def main():
         ],
         entry_points={
             'console_scripts': [
-                'xpctl = xpctl.clients.cli:cli'
+                'xpctl = xpctl.cli:cli'
             ],
         },
         extras_require={

@@ -9,7 +9,7 @@ from xpctl.client import Configuration
 from xpctl.client.api import XpctlApi
 from xpctl.client import ApiClient
 from xpctl.client.rest import ApiException
-from xpctl.clients.helpers import experiment_to_df, experiment_aggregate_list_to_df, experiment_list_to_df, \
+from xpctl.clihelpers import experiment_to_df, experiment_aggregate_list_to_df, experiment_list_to_df, \
     task_summary_to_df, task_summaries_to_df, read_config_stream
 from xpctl.helpers import to_swagger_experiment, store_model
 from mead.utils import hash_config

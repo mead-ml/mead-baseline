@@ -1,8 +1,7 @@
 try:
     from xpctl.backends.core import *
-    from xpctl.clients import *
     from xpctl.client import *
-    from xpctl.server import *
+    from xpctl.helpers import *
 except ImportError:
     pass
 
