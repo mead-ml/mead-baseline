@@ -164,6 +164,7 @@ class ExperimentRepo(object):
         :param task_eids: a dictionary of the form {'task': [eid1, eid2]}, if you want to dump specific files.
         :return: the path to the dumped file
         """
+        pass
     
     def restore(self, dump):
         """
@@ -171,3 +172,4 @@ class ExperimentRepo(object):
         :param dump: dump file location
         :return:
         """
+        pass
