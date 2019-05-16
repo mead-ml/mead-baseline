@@ -11,6 +11,7 @@ from baseline.utils import (
     show_examples,
     normalize_backend,
     import_user_module,
+    listify
 )
 from mead.downloader import EmbeddingDownloader, DataDownloader
 from mead.utils import (
@@ -770,7 +771,10 @@ class LanguageModelingTask(Task):
         unif = self.config_params.get('unif', 0.1)
         model['unif'] = model.get('unif', unif)
         model['batchsz'] = self.config_params['batchsz']
-        model['tgt_key'] = self.config_params.get('reader', self.config_params.get('loader', {})).get('tgt_key', self.primary_key)
+        model['tgt_key'] = self.config_params.get('reader',
+                                                  self.config_params.get('loader', {})).get('tgt_key', self.primary_key)
+        model['src_keys'] = listify(self.config_params.get('reader', self.config_params.get('loader', {})).get('src_keys', self.embeddings.keys()))
+
         if self.backend.params is not None:
             for k, v in self.backend.params.items():
                 model[k] = v

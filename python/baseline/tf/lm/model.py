@@ -185,12 +185,18 @@ class LanguageModelBase(LanguageModel):
         })
 
     def _create_loss(self, scope):
+
         with tf.variable_scope(scope):
             vsz = self.embeddings[self.tgt_key].vsz
             targets = tf.reshape(self.y, [-1])
-            bt_x_v = tf.nn.log_softmax(tf.reshape(self.logits, [-1, vsz]), axis=-1)
+            outputs = tf.reshape(self.logits, [-1, vsz])
+            bt_x_v = tf.nn.log_softmax(outputs, axis=-1)
             one_hots = tf.one_hot(targets, vsz)
             example_loss = -tf.reduce_sum(one_hots * bt_x_v, axis=-1)
+            #example_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
+            #    logits=outputs,
+            #    labels=targets
+            #)
             loss = tf.reduce_mean(example_loss)
             return loss
 
@@ -204,8 +210,7 @@ class LanguageModelBase(LanguageModel):
 
         feed_dict = new_placeholder_dict(train)
 
-        for key in self.embeddings.keys():
-
+        for key in self.src_keys:
             feed_dict["{}:0".format(key)] = batch_dict[key]
 
         y = batch_dict.get('y')
@@ -235,6 +240,7 @@ class LanguageModelBase(LanguageModel):
         lm.sess = kwargs.get('sess', tf.Session())
         lm.pdrop_value = kwargs.get('pdrop', 0.5)
         lm.hsz = kwargs['hsz']
+        lm.src_keys = kwargs.get('src_keys', embeddings.keys())
         lm.tgt_key = kwargs.get('tgt_key')
         if lm.tgt_key is None:
             raise Exception('Need a `tgt_key` to know which source vocabulary should be used for destination ')
@@ -258,12 +264,17 @@ class LanguageModelBase(LanguageModel):
         :return: A 3-d vector where the last dimension is the concatenated dimensions of all embeddings
         """
         all_embeddings_src = []
-        for k, embedding in self.embeddings.items():
+        for k in self.src_keys:
+            embedding = self.embeddings[k]
             x = kwargs.get(k, None)
             embeddings_out = embedding.encode(x)
             all_embeddings_src.append(embeddings_out)
         word_embeddings = tf.concat(values=all_embeddings_src, axis=-1)
-        return tf.layers.dropout(word_embeddings, rate=self.pdrop_value, training=TRAIN_FLAG())
+        embed_output = tf.layers.dropout(word_embeddings, rate=self.pdrop_value, training=TRAIN_FLAG())
+        projsz = kwargs.get('projsz')
+        if projsz:
+            embed_output = tf.layers.dense(embed_output, projsz)
+        return embed_output
 
     @classmethod
     @tf_device_wrapper
@@ -326,7 +337,10 @@ class RNNLanguageModel(LanguageModelBase):
     def decode(self, inputs, rnntype='lstm', variational_dropout=False, **kwargs):
 
         def cell():
-            return lstm_cell_w_dropout(self.hsz, self.pdrop_value, variational=self.vdrop, training=TRAIN_FLAG())
+            skip_conn = bool(kwargs.get('skip_conn', False))
+            projsz = kwargs.get('projsz')
+            return lstm_cell_w_dropout(self.hsz, self.pdrop_value, variational=self.vdrop, training=TRAIN_FLAG(),
+                                       skip_conn=skip_conn, projsz=projsz)
 
         self.rnntype = rnntype
         self.vdrop = variational_dropout

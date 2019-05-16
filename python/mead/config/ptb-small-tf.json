@@ -25,7 +25,9 @@
     }],
     "model": {
         "model_type": "default",
-	"tie_weights": "true",
+	    "tie_weights": "true",
+        "skip_conn": true,
+        "projsz": 300,
         "hsz": 300,
         "dropout": 0.5,
         "layers": 2
