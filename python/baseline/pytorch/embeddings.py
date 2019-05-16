@@ -3,7 +3,7 @@ from collections import OrderedDict
 import numpy as np
 import torch
 import torch.nn as nn
-from baseline.utils import Offsets
+from baseline.utils import Offsets, is_sequence
 from baseline.embeddings import register_embeddings
 from baseline.pytorch.torchy import (
     pytorch_embedding,
@@ -85,7 +85,12 @@ class CharConvEmbeddings(PyTorchEmbeddings):
         else:
             self.embeddings = pytorch_embedding(weights)
         char_filtsz = kwargs.get('cfiltsz', [3])
-        char_hsz = kwargs.get('wsz', 30)
+        if is_sequence(char_filtsz[0]):
+            char_hsz = [pair[1] for pair in char_filtsz]
+            char_filtsz = [pair[0] for pair in char_filtsz]
+        else:
+            char_hsz = kwargs.get('wsz', 30)
+
         activation_type = kwargs.get('activation', 'tanh')
         pdrop = kwargs.get('pdrop', 0.5)
         self.char_comp = ParallelConv(self.dsz, char_hsz, char_filtsz, activation_type, pdrop)
