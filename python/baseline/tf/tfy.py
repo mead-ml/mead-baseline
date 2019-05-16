@@ -218,7 +218,6 @@ def lstm_cell(hsz, forget_bias=1.0, **kwargs):
         num_proj = None
     cell = tf.contrib.rnn.LSTMCell(hsz, forget_bias=forget_bias, state_is_tuple=True, num_proj=num_proj)
     skip_conn = bool(kwargs.get('skip_conn', False))
-    print(skip_conn)
     return tf.nn.rnn_cell.ResidualWrapper(cell) if skip_conn else cell
 
 
@@ -237,7 +236,6 @@ def lstm_cell_w_dropout(hsz, pdrop, forget_bias=1.0, variational=False, training
     num_proj = kwargs.get('projsz')
     cell = tf.contrib.rnn.LSTMCell(hsz, forget_bias=forget_bias, state_is_tuple=True, num_proj=num_proj)
     skip_conn = bool(kwargs.get('skip_conn', False))
-    print(skip_conn)
     cell = tf.nn.rnn_cell.ResidualWrapper(cell) if skip_conn else cell
     output = tf.contrib.rnn.DropoutWrapper(cell,
                                            output_keep_prob=output_keep_prob,
