@@ -7,6 +7,7 @@ from mock import patch, call
 import pytest
 from baseline.utils import str2bool
 from mead.utils import (
+    KEYS,
     convert_path,
     get_output_paths,
     get_export_params,
@@ -371,6 +372,12 @@ def test_get_export_params():
     for _ in range(100):
         test()
 
+
+def test_ensure_keys_are_tuples():
+    for key in KEYS:
+        assert isinstance(key, tuple)
+        for k in key:
+            assert isinstance(k, str)
 
 def test_dataset_formats():
     keys = {'1': 1,

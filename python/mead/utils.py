@@ -200,8 +200,8 @@ KEYS = {
     ('train', 'model_base'),
     ('train', 'model_zip'),
     ('train', 'nsteps'),
-    ('test_batchsz'),
-    ('basedir'),
+    ('test_batchsz',),
+    ('basedir',),
 }
 
 
