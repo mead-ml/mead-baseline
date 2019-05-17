@@ -149,8 +149,10 @@ class Task(object):
         self.config_file = kwargs.get('config_file')
         self._setup_task(**kwargs)
         self._load_user_modules()
-        self._configure_reporting(config_params.get('reporting', {}), **kwargs)
         self.dataset = get_dataset_from_key(self.config_params['dataset'], datasets_set)
+        # replace dataset in config file by the latest dataset label, this will be used by some reporting hooks
+        self.config_file['dataset'] = self.dataset['label']
+        self._configure_reporting(config_params.get('reporting', {}), **kwargs)
         self.reader = self._create_task_specific_reader()
 
     def _load_user_modules(self):
