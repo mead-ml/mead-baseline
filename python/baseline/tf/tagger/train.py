@@ -8,6 +8,7 @@ from baseline.tf.optz import optimizer
 from baseline.progress import create_progress_bar
 from baseline.utils import to_spans, f_score, listify, revlut, get_model_file, write_sentence_conll, get_metric_cmp
 from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
+from baseline.utils import span_f1, per_entity_f1, conlleval_output
 
 
 logger = logging.getLogger('baseline')
@@ -19,8 +20,7 @@ class TaggerEvaluatorTf(object):
         self.model = model
         self.idx2label = revlut(model.labels)
         self.span_type = span_type
-        if verbose:
-            logger.info('Setting span type %s', self.span_type)
+        logger.info('Setting span type %s', self.span_type)
         self.verbose = verbose
 
     def process_batch(self, batch_dict, handle=None, txts=None):
@@ -33,9 +33,8 @@ class TaggerEvaluatorTf(object):
         total_labels = 0
 
         # For fscore
-        gold_count = 0
-        guess_count = 0
-        overlap_count = 0
+        gold_chunks = []
+        pred_chunks = []
 
         # For each sentence
         for b in range(len(guess)):
@@ -47,14 +46,8 @@ class TaggerEvaluatorTf(object):
             correct_labels += np.sum(np.equal(sentence, gold))
             total_labels += length
 
-            gold_chunks = to_spans(gold, self.idx2label, self.span_type, self.verbose)
-            gold_count += len(gold_chunks)
-
-            guess_chunks = to_spans(sentence, self.idx2label, self.span_type, self.verbose)
-            guess_count += len(guess_chunks)
-
-            overlap_chunks = gold_chunks & guess_chunks
-            overlap_count += len(overlap_chunks)
+            gold_chunks.append(set(to_spans(gold, self.idx2label, self.span_type, self.verbose)))
+            pred_chunks.append(set(to_spans(sentence, self.idx2label, self.span_type, self.verbose)))
 
             # Should we write a file out?  If so, we have to have txts
             if handle is not None:
@@ -62,12 +55,13 @@ class TaggerEvaluatorTf(object):
                 txt = txts[id]
                 write_sentence_conll(handle, sentence, gold, txt, self.idx2label)
 
-        return correct_labels, total_labels, overlap_count, gold_count, guess_count
+        return correct_labels, total_labels, gold_chunks, pred_chunks
 
     def test(self, ts, conll_output=None, txts=None):
 
         total_correct = total_sum = 0
-        total_gold_count = total_guess_count = total_overlap_count = 0
+        gold_spans = []
+        pred_spans = []
 
         steps = len(ts)
         pg = create_progress_bar(steps)
@@ -79,17 +73,21 @@ class TaggerEvaluatorTf(object):
 
         try:
             for batch_dict in pg(ts):
-                correct, count, overlaps, golds, guesses = self.process_batch(batch_dict, handle, txts)
+                correct, count, golds, guesses = self.process_batch(batch_dict, handle, txts)
                 total_correct += correct
                 total_sum += count
-                total_gold_count += golds
-                total_guess_count += guesses
-                total_overlap_count += overlaps
+                gold_spans.extend(golds)
+                pred_spans.extend(guesses)
 
             total_acc = total_correct / float(total_sum)
             # Only show the fscore if requested
-            metrics['f1'] = f_score(total_overlap_count, total_gold_count, total_guess_count)
+            metrics['f1'] = span_f1(gold_spans, pred_spans)
             metrics['acc'] = total_acc
+            if self.verbose:
+                conll_metrics = per_entity_f1(gold_spans, pred_spans)
+                conll_metrics['acc'] = total_acc * 100
+                conll_metrics['tokens'] = total_sum
+                logger.info(conlleval_output(conll_metrics))
         finally:
             if handle is not None:
                 handle.close()
