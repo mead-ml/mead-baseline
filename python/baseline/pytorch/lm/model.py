@@ -94,6 +94,7 @@ class LanguageModelBase(nn.Module, LanguageModel):
         lm.dsz = lm.init_embed(embeddings, **kwargs)
         lm.init_decode(**kwargs)
         lm.init_output(embeddings[lm.tgt_key].get_vsz(), **kwargs)
+
         return lm
 
     def forward(self, input, hidden):

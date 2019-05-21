@@ -234,13 +234,13 @@ class LanguageModelBase(LanguageModel):
             return DataParallelLanguageModel(cls.create, embeddings, **kwargs)
         lm = cls()
         lm.id = kwargs.get('id', 0)
-        lm.embeddings = embeddings
+        lm.embeddings = {k: embedding.detached_ref() for k, embedding in embeddings.items()}
         lm._record_state(**kwargs)
         lm.y = kwargs.get('y', tf.placeholder(tf.int32, [None, None], name="y"))
         lm.sess = kwargs.get('sess', tf.Session())
         lm.pdrop_value = kwargs.get('pdrop', 0.5)
         lm.hsz = kwargs['hsz']
-        lm.src_keys = kwargs.get('src_keys', embeddings.keys())
+        lm.src_keys = kwargs.get('src_keys', lm.embeddings.keys())
         lm.tgt_key = kwargs.get('tgt_key')
         if lm.tgt_key is None:
             raise Exception('Need a `tgt_key` to know which source vocabulary should be used for destination ')
@@ -252,7 +252,7 @@ class LanguageModelBase(LanguageModel):
             inputs = lm.embed(**kwargs)
             lm.layers = kwargs.get('layers', 1)
             h = lm.decode(inputs, **kwargs)
-            lm.logits = lm.output(h, embeddings[lm.tgt_key].vsz, **kwargs)
+            lm.logits = lm.output(h, lm.embeddings[lm.tgt_key].vsz, **kwargs)
             lm.probs = tf.nn.softmax(lm.logits, name="softmax")
 
             return lm
