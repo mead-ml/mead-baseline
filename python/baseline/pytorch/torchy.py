@@ -210,6 +210,7 @@ def pytorch_linear(in_sz, out_sz, unif=0, initializer=None):
     l.bias.data.zero_()
     return l
 
+
 def tie_weight(to_layer, from_layer):
     """Assigns a weight object to the layer weights.
 

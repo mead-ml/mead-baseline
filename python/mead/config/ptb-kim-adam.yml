@@ -1,0 +1,66 @@
+basedir: ptb-med
+task: lm
+backend: tensorflow
+dataset: ptb
+batchsz: 20
+unif: 0.05
+nbptt: 35
+preproc: 
+    mxwlen: 50
+features:
+ - name: x
+   vectorizer:
+      type: token1d
+   embeddings:
+      dsz: 512
+
+ - name: xch
+   vectorizer:
+      type: char2d
+      mxwlen: 50
+   embeddings:
+##      wsz: 512
+      dsz: 16
+      type: "char-conv"
+      wsz: 128
+      #cfiltsz: [1,2,3,4,5,6,7]
+      #max_feat: 200
+      #nfeat_factor: 50
+      cfiltsz: [[1, 32],
+                [2, 32],
+                [3, 64],
+                [4, 128],
+                [5, 256],
+                [6, 512],
+                [7, 1024]]
+      gating: highway
+      num_gates: 2
+      cmotsz: 30
+
+ - name: x
+   vectorizer: 
+      type: token1d
+      fields: text
+   embeddings: 
+      dsz: 512
+
+
+loader: 
+   reader_type: default
+   tgt_key: x
+   src_keys: xch
+model: 
+   model_type: default
+   hsz: 512
+   skip_conn: 1
+   projsz: 512
+   layers: 1
+   pdrop: 0.5
+
+train: 
+   epochs: 25
+   optim: adam
+   eta: 0.001
+   nsteps: 100
+#   do_early_stopping: true
+   clip: 1.0 

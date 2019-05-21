@@ -13,7 +13,6 @@ class LanguageModelBase(nn.Module, LanguageModel):
     def save(self, outname):
         torch.save(self, outname)
         basename, _ = os.path.splitext(outname)
-        write_json(self.labels, basename + ".labels")
 
     def create_loss(self):
         return SequenceCriterion(LossFn=nn.CrossEntropyLoss)
@@ -32,7 +31,7 @@ class LanguageModelBase(nn.Module, LanguageModel):
 
     def make_input(self, batch_dict):
         example_dict = dict({})
-        for key in self.embeddings.keys():
+        for key in self.src_keys:
             example_dict[key] = torch.from_numpy(batch_dict[key])
             if self.gpu:
                 example_dict[key] = example_dict[key].cuda()
@@ -47,10 +46,14 @@ class LanguageModelBase(nn.Module, LanguageModel):
 
     def embed(self, input):
         all_embeddings = []
-        for k, embedding in self.embeddings.items():
+        for k in self.src_keys:
+            embedding = self.embeddings[k]
             all_embeddings.append(embedding.encode(input[k]))
-        embedded = torch.cat(all_embeddings, 2)
-        return self.embed_dropout(embedded)
+        embedded = torch.cat(all_embeddings, -1)
+        embedded_dropout = self.embed_dropout(embedded)
+        if self.embeddings_proj:
+            embedded_dropout = self.embeddings_proj(embedded_dropout)
+        return embedded_dropout
 
     def init_embed(self, embeddings, **kwargs):
         pdrop = float(kwargs.get('dropout', 0.5))
@@ -58,8 +61,15 @@ class LanguageModelBase(nn.Module, LanguageModel):
         self.embeddings = EmbeddingsContainer()
         input_sz = 0
         for k, embedding in embeddings.items():
+
             self.embeddings[k] = embedding
-            input_sz += embedding.get_dsz()
+            if k in self.src_keys:
+                input_sz += embedding.get_dsz()
+        projsz = kwargs.get('projsz')
+        if projsz:
+            self.embeddings_proj = pytorch_linear(input_sz, projsz)
+            print('Applying a transform from {} to {}'.format(input_sz, projsz))
+            return projsz
         return input_sz
 
     def init_decode(self, vsz, **kwargs):
@@ -78,6 +88,8 @@ class LanguageModelBase(nn.Module, LanguageModel):
         lm.tgt_key = kwargs.get('tgt_key')
         if lm.tgt_key is None:
             raise Exception('Need a `tgt_key` to know which source vocabulary should be used for destination ')
+
+        lm.src_keys = kwargs.get('src_keys', embeddings.keys())
 
         lm.dsz = lm.init_embed(embeddings, **kwargs)
         lm.init_decode(**kwargs)

@@ -6,6 +6,7 @@ from baseline.utils import lookup_sentence, beam_multinomial, Offsets, read_json
 from baseline.utils import transition_mask as transition_mask_np
 import math
 from functools import wraps
+from baseline.utils import is_sequence
 BASELINE_TF_TRAIN_FLAG = None
 
 
@@ -205,17 +206,22 @@ def tie_weight(weight, tie_shape):
     return tie_getter
 
 
-def lstm_cell(hsz, forget_bias=1.0):
+def lstm_cell(hsz, forget_bias=1.0, **kwargs):
     """Produce a single cell with no dropout
 
     :param hsz: (``int``) The number of hidden units per LSTM
     :param forget_bias: (``int``) Defaults to 1
     :return: a cell
     """
-    return tf.contrib.rnn.LSTMCell(hsz, forget_bias=forget_bias, state_is_tuple=True)
+    num_proj = kwargs.get('projsz')
+    if num_proj and num_proj == hsz:
+        num_proj = None
+    cell = tf.contrib.rnn.LSTMCell(hsz, forget_bias=forget_bias, state_is_tuple=True, num_proj=num_proj)
+    skip_conn = bool(kwargs.get('skip_conn', False))
+    return tf.nn.rnn_cell.ResidualWrapper(cell) if skip_conn else cell
 
 
-def lstm_cell_w_dropout(hsz, pdrop, forget_bias=1.0, variational=False, training=False):
+def lstm_cell_w_dropout(hsz, pdrop, forget_bias=1.0, variational=False, training=False, **kwargs):
     """Produce a single cell with dropout
 
     :param hsz: (``int``) The number of hidden units per LSTM
@@ -227,7 +233,10 @@ def lstm_cell_w_dropout(hsz, pdrop, forget_bias=1.0, variational=False, training
     """
     output_keep_prob = tf.contrib.framework.smart_cond(training, lambda: 1.0 - pdrop, lambda: 1.0)
     state_keep_prob = tf.contrib.framework.smart_cond(training, lambda: 1.0 - pdrop if variational else 1.0, lambda: 1.0)
-    cell = tf.contrib.rnn.LSTMCell(hsz, forget_bias=forget_bias, state_is_tuple=True)
+    num_proj = kwargs.get('projsz')
+    cell = tf.contrib.rnn.LSTMCell(hsz, forget_bias=forget_bias, state_is_tuple=True, num_proj=num_proj)
+    skip_conn = bool(kwargs.get('skip_conn', False))
+    cell = tf.nn.rnn_cell.ResidualWrapper(cell) if skip_conn else cell
     output = tf.contrib.rnn.DropoutWrapper(cell,
                                            output_keep_prob=output_keep_prob,
                                            state_keep_prob=state_keep_prob,
@@ -236,7 +245,7 @@ def lstm_cell_w_dropout(hsz, pdrop, forget_bias=1.0, variational=False, training
     return output
 
 
-def stacked_lstm(hsz, pdrop, nlayers, variational=False, training=False):
+def stacked_lstm(hsz, pdrop, nlayers, variational=False, training=False, **kwargs):
     """Produce a stack of LSTMs with dropout performed on all but the last layer.
 
     :param hsz: (``int``) The number of hidden units per LSTM
@@ -248,11 +257,17 @@ def stacked_lstm(hsz, pdrop, nlayers, variational=False, training=False):
     """
     if variational:
         return tf.contrib.rnn.MultiRNNCell(
-            [lstm_cell_w_dropout(hsz, pdrop, variational=variational, training=training) for _ in range(nlayers)],
+            [lstm_cell_w_dropout(hsz, pdrop, variational=variational, training=training, **kwargs) for _ in range(nlayers)],
             state_is_tuple=True
         )
+    skip_conn = bool(kwargs.get('skip_conn', False))
+
     return tf.contrib.rnn.MultiRNNCell(
-        [lstm_cell_w_dropout(hsz, pdrop, training=training) if i < nlayers - 1 else lstm_cell(hsz) for i in range(nlayers)],
+        [lstm_cell_w_dropout(hsz,
+                             pdrop,
+                             training=training,
+                             skip_conn=False) if i < nlayers - 1 else lstm_cell(hsz,
+                                                                                skip_conn=skip_conn) for i in range(nlayers)],
         state_is_tuple=True
     )
 
@@ -565,7 +580,7 @@ def pool_chars(x_char, Wch, ce0, char_dsz, nfeat_factor=None,
     :param kwargs:
 
     :Keyword Arguments:
-    * *cfiltsz* -- (``list``) A list of filters
+    * *cfiltsz* -- (``list``) A list of filters sizes, or a list of tuples of (filter size, num filts)
     * *nfeat_factor* -- (``int``) A factor to be multiplied to filter size to decide number of hidden units
     * *max_feat* -- (``int``) The maximum number of hidden units per filter
     * *gating* -- (``str``) `skip` or `highway` supported, yielding residual conn or highway, respectively
@@ -574,11 +589,16 @@ def pool_chars(x_char, Wch, ce0, char_dsz, nfeat_factor=None,
     :return: The character compositional embedding and the number of hidden units as a tuple
 
     """
-    filtsz = cfiltsz
-    if nfeat_factor:
+    if is_sequence(cfiltsz[0]):
+        filtsz = [filter_and_size[0] for filter_and_size in cfiltsz]
+        nfeats = [filter_and_size[1] for filter_and_size in cfiltsz]
+
+    elif nfeat_factor:
         max_feat = max_feat
+        filtsz = cfiltsz
         nfeats = [min(nfeat_factor * fsz, max_feat) for fsz in filtsz]
     else:
+        filtsz = cfiltsz
         nfeats = wsz
     mxlen = tf.shape(x_char)[1]
 
