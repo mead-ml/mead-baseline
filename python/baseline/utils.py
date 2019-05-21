@@ -1032,7 +1032,8 @@ def convert_conll_file(ifile, ofile, convert, fields=[-1], delim=" "):
     for lines, md in read_conll_sentences_md(ifile, delim=delim):
         lines = zip(*(convert(l) if i in fields else l for i, l in enumerate(zip(*lines))))
         # Write out meta data
-        ofile.write('\n'.join(md) + '\n')
+        if md:
+            ofile.write('\n'.join(md) + '\n')
         # Write out the lines
         ofile.write('\n'.join(delim.join(l).rstrip() for l in lines) + '\n\n')
 
