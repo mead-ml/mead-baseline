@@ -849,7 +849,8 @@ def _sniff_conll_file(f, delim=" "):
     start = f.tell()
     for line in f:
         line = line.rstrip("\n")
-        if line.startswith("#"): continue
+        if line.startswith("#"):
+            continue
         parts = line.split(delim)
         if len(parts) > 1:
             f.seek(start)

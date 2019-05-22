@@ -10,6 +10,8 @@ import logging
 log = logging.getLogger('baseline.timing')
 NUM_PREFETCH = 2
 SHUF_BUF_SZ = 5000
+
+
 def get_logging_level(ll):
     ll = ll.lower()
     if ll == 'debug':

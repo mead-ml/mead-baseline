@@ -276,10 +276,11 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
             unif = kwargs.get('unif', 0.1)
             self.weights = np.random.uniform(-unif, unif, (self.vsz, self.dsz))
 
-        with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
-            self.Wch = tf.get_variable("Wch",
-                                  initializer=tf.constant_initializer(self.weights, dtype=tf.float32, verify_shape=True),
-                                  shape=[self.vsz, self.dsz], trainable=True)
+        with tf.device("/cpu:0"):
+            with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
+                self.Wch = tf.get_variable("Wch",
+                                           initializer=tf.constant_initializer(self.weights, dtype=tf.float32, verify_shape=True),
+                                           shape=[self.vsz, self.dsz], trainable=True)
 
     def detached_ref(self):
         """This will detach any attached input and reference the same sub-graph otherwise
