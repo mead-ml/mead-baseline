@@ -412,6 +412,8 @@ class ParallelSeqReader(SeqPredictReader):
         if sort_key is not None and not sort_key.endswith('_lengths'):
             sort_key += '_lengths'
 
+        raw_texts = []
+
         for i, (example_tokens, tag_tokens) in enumerate(zip(texts, tag_texts)):
             example = {}
             for k, vectorizer in self.vectorizers.items():
@@ -422,8 +424,9 @@ class ParallelSeqReader(SeqPredictReader):
             example['y_lengths'] = lengths
             example['ids'] = i
             ts.append(example)
+            raw_texts.append([{'text': t, 'y': l} for t, l in zip(example_tokens, tag_tokens)])
         examples = baseline.data.DictExamples(ts, do_shuffle=shuffle, sort_key=sort_key)
-        return baseline.data.ExampleDataFeed(examples, batchsz=batchsz, shuffle=shuffle, trim=self.trim, truncate=self.truncate), texts
+        return baseline.data.ExampleDataFeed(examples, batchsz=batchsz, shuffle=shuffle, trim=self.trim, truncate=self.truncate), raw_texts
 
 
 @exporter
