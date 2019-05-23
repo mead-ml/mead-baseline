@@ -692,7 +692,7 @@ def str_file(func, **kwargs):
                     for f, mode in possible_files.items():
                         if isinstance(arg[f], six.string_types):
                             # Replace strings with the opened files
-                            arg[f] = io.open(arg[f], mode=mode, encoding='utf-8')
+                            arg[f] = io.open(arg[f], mode=mode, encoding=None if 'b' in mode else 'utf-8')
                             to_close.append(f)
                     # Call the function with the files instead
                     for x in func(**arg):
@@ -723,7 +723,7 @@ def str_file(func, **kwargs):
                     for f, mode in possible_files.items():
                         if isinstance(arg[f], six.string_types):
                             # Replace strings with the opened files
-                            arg[f] = io.open(arg[f], mode=mode, encoding='utf-8')
+                            arg[f] = io.open(arg[f], mode=mode, encoding=None if 'b' in mode else 'utf-8')
                             to_close.append(f)
                     # Call the function with the files instead
                     return func(**arg)
