@@ -55,7 +55,9 @@ class AbstractVectorizer(Vectorizer):
         for atom in self.iterable(tokens):
             value = vocab.get(atom)
             if value is None:
-                value = vocab['<UNK>']
+                value = vocab.get('<UNK>', -1)
+                if value == -1:
+                    break
             yield value
 
 
@@ -84,6 +86,7 @@ class Token1DVectorizer(AbstractVectorizer):
             self.mxlen = self.max_seen
 
         vec1d = np.zeros(self.mxlen, dtype=int)
+        i = 0
         for i, atom in enumerate(self._next_element(tokens, vocab)):
             if i == self.mxlen:
                 i -= 1
@@ -131,7 +134,10 @@ def _token_iterator(vectorizer, tokens):
     for tok in tokens:
         token = []
         for field in vectorizer.fields:
-            token += [vectorizer.transform_fn(tok[field])]
+            if isinstance(tok, dict):
+                token += [vectorizer.transform_fn(tok[field])]
+            else:
+                token += [vectorizer.transform_fn(tok)]
         yield vectorizer.delim.join(token)
 
 

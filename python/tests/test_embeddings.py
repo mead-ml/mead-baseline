@@ -71,6 +71,16 @@ def test_random_vector_range():
     assert np.min(wv.weights) >= -gold_weight
     assert np.max(wv.weights) <= gold_weight
 
+def test_round_trip():
+    gold_weight = 0.4
+    input_model = RandomInitVecModel(
+        300, {k: 1 for k in list(string.ascii_letters)},
+        unif_weight=gold_weight
+    )
+    write_word2vec_file('test.bin', input_model.vocab, input_model.weights)
+    output_model = PretrainedEmbeddingsModel('test.bin', keep_unused=True)
+    assert output_model.vsz == input_model.vsz
+    assert np.allclose(input_model.weights[4:, :], output_model.weights[4:, :])
 
 # def test_valid_lookup():
 #     wv = random_model()(keep_unused=True)

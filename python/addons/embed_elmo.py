@@ -248,8 +248,11 @@ class BidirectionalLanguageModel(object):
             otherwise use token ids
         max_batch_size: the maximum allowable batch size
         """
-        with open(options_file, 'r') as fin:
-            options = json.load(fin)
+        if isinstance(options_file, dict):
+            options = options_file
+        else:
+            with open(options_file, 'r') as fin:
+                options = json.load(fin)
 
         if not use_character_inputs:
             if embedding_weight_file is None:
@@ -982,12 +985,13 @@ class ELMoEmbeddings(TensorFlowEmbeddings):
 
         # options file
         self.weight_file = embed_file
-        self.dsz = kwargs['dsz']
         elmo_config = embed_file.replace('weights.hdf5', 'options.json')
+        elmo_config = read_json(elmo_config)
+        self.dsz = kwargs.get('dsz', 2*int(elmo_config['lstm']['projection_dim']))
         self.model = BidirectionalLanguageModel(elmo_config, self.weight_file)
         self.known_vocab = known_vocab
         self.vocab = UnicodeCharsVocabulary(known_vocab)
-        elmo_config = read_json(elmo_config)
+
         assert self.dsz == 2*int(elmo_config['lstm']['projection_dim'])
 
     @property

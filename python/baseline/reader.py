@@ -282,9 +282,22 @@ class SeqPredictReader(object):
         self.label_vectorizer = Dict1DVectorizer(fields='y', mxlen=mxlen)
 
     def build_vocab(self, files, **kwargs):
+        pre_vocabs = None
+        pre_labels = None
         vocabs = {k: Counter() for k in self.vectorizers.keys()}
 
+        vocab_file = kwargs.get('vocab_file')
+        label_file = kwargs.get('label_file')
+        if vocab_file:
+            _vocab_allowed(self.vectorizers)
+            pre_vocabs = _build_vocab_for_col(0, listify(vocab_file), self.vectorizers)
+        if label_file:
+            pre_labels = Counter(chain(*_read_from_col(0, listify(label_file))))
+            self.label2index = {l: i for i, l in enumerate(pre_labels)}
+
         labels = Counter()
+
+        #if not pre_vocabs:
         for file in files:
             if file is None:
                 continue
@@ -296,10 +309,15 @@ class SeqPredictReader(object):
                     vocab_example = vectorizer.count(example)
                     vocabs[k].update(vocab_example)
 
+        if pre_labels and not pre_vocabs:
+            return vocabs
+
         vocabs = _filter_vocab(vocabs, kwargs.get('min_f', {}))
         base_offset = len(self.label2index)
         for i, k in enumerate(labels.keys()):
             self.label2index[k] = i + base_offset
+        if pre_vocabs:
+            vocabs = pre_vocabs
         return vocabs
 
     def read_examples(self):

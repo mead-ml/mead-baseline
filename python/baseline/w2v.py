@@ -16,6 +16,22 @@ def norm_weights(word_vectors):
 
 
 @exporter
+def write_word2vec_file(filename, vocab, word_vectors):
+    special_values = set(Offsets.VALUES)
+    with io.open(filename, "wb") as f:
+        vsz = len([w for w in vocab if w not in special_values])
+        dsz = word_vectors[0].shape[0]
+        f.write(bytes('{} {}\n'.format(vsz, dsz), encoding='utf-8'))
+        # assert len(word_vectors) == len(vocab)
+        for word, vector in zip(vocab, word_vectors):
+            if word in special_values:
+                continue
+            vec_str = vector.tobytes()
+            f.write(bytes('{} '.format(word), encoding='utf-8') + vec_str)# + bytes('\n', encoding='utf-8'))
+            #f.write(vec_str)
+            #f.write(bytes('\n', encoding='utf-8'))
+
+@exporter
 class EmbeddingsModel(object):
     def __init__(self):
         super(EmbeddingsModel, self).__init__()

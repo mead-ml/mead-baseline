@@ -477,7 +477,9 @@ class TaggerTask(Task):
         if 'test_file' in self.dataset:
             vocab_sources.append(self.dataset['test_file'])
 
-        vocabs = self.reader.build_vocab(vocab_sources, min_f=Task._get_min_f(self.config_params))
+        vocabs = self.reader.build_vocab(vocab_sources, min_f=Task._get_min_f(self.config_params),
+                                         vocab_file
+                                         =self.dataset.get('vocab_file'))
         self.embeddings, self.feat2index = self._create_embeddings(embeddings_set, vocabs, self.config_params['features'])
         baseline.save_vocabs(self.get_basedir(), self.feat2index)
 
