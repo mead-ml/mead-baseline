@@ -6,11 +6,6 @@
     "dsz": 200
   },
   {
-    "label": "elmo-256",
-    "file": "/data/embeddings/elmo-256.bin",
-    "dsz": 256
-  },
-  {
     "label": "w2v-twitter-30M",
     "file": "https://www.dropbox.com/s/ihs4or6z5bq33tb/oct-s140clean-uber.cbow-bin?dl=1",
     "sha1": "2f9e2d27dbb4544f7c77bb7e4da65c2afe01a2a2",

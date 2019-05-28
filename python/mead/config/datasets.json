@@ -74,14 +74,6 @@
     "label": "conll-iobes"
   },
   {
-    "train_file": "eng.train.iobes",
-    "valid_file": "eng.testa.iobes",
-    "test_file": "eng.testb.iobes",
-    "download": "https://www.dropbox.com/s/mpi905nphvz63tl/conll-iobes.tar.gz?dl=1",
-    "vocab_file": "/data/vocab.txt",
-    "label": "conll-iobes-vocab"
-  },
-  {
     "train_file": "ontonotes.train.iobes",
     "valid_file": "ontonotes.dev.iobes",
     "test_file": "ontonotes.test.iobes",
@@ -104,14 +96,6 @@
     "test_file": "wnut17test.conll.iobes",
     "download": "https://www.dropbox.com/s/ue7zfvzhfhpdksz/wnut17-iobes.tar.gz?dl=1",
     "label": "wnut-iobes"
-  },
-  {
-    "train_file": "wnut17train.conll.iobes",
-    "valid_file": "wnut17dev.conll.iobes",
-    "test_file": "wnut17test.conll.iobes",
-    "download": "https://www.dropbox.com/s/ue7zfvzhfhpdksz/wnut17-iobes.tar.gz?dl=1",
-    "vocab_file": "/data/vocab.txt",
-    "label": "wnut-iobes-vocab"
   },
   {
     "train_file": "atis-2.train.conll",
