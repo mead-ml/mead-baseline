@@ -838,7 +838,7 @@ def convert_iob_to_iobes(seq):
 
 
 @str_file
-def _sniff_conll_file(f, delim=" "):
+def _sniff_conll_file(f, delim=None):
     """Figure out how many columns are in a conll file.
 
     :param file_name: `str` The name of the file.
@@ -858,7 +858,7 @@ def _sniff_conll_file(f, delim=" "):
 
 
 @str_file
-def read_conll(f, doc_pattern=None, delim=" ", metadata=False):
+def read_conll(f, doc_pattern=None, delim=None, metadata=False):
     """Read from a conll file.
 
     :param f: `str` The file to read from.
@@ -882,7 +882,7 @@ def read_conll(f, doc_pattern=None, delim=" ", metadata=False):
 
 
 @str_file
-def read_conll_sentences(f, delim=" "):
+def read_conll_sentences(f, delim=None):
     """Read sentences from a conll file.
 
     :param f: `str` The file to read from.
@@ -905,7 +905,7 @@ def read_conll_sentences(f, delim=" "):
 
 
 @str_file
-def read_conll_sentences_md(f, delim=" "):
+def read_conll_sentences_md(f, delim=None):
     """Read sentences from a conll file.
 
     :param f: `str` The file to read from.
@@ -936,7 +936,7 @@ def read_conll_sentences_md(f, delim=" "):
 
 
 @str_file
-def read_conll_docs(f, doc_pattern="# begin doc", delim=" "):
+def read_conll_docs(f, doc_pattern="# begin doc", delim=None):
     """Read sentences from a conll file.
 
     :param f: `str` The file to read from.
@@ -970,7 +970,7 @@ def read_conll_docs(f, doc_pattern="# begin doc", delim=" "):
 
 
 @str_file
-def read_conll_docs_md(f, doc_pattern="# begin doc", delim=" "):
+def read_conll_docs_md(f, doc_pattern="# begin doc", delim=None):
     """Read sentences from a conll file.
 
     :param f: `str` The file to read from.
@@ -1016,7 +1016,7 @@ def read_conll_docs_md(f, doc_pattern="# begin doc", delim=" "):
 
 
 @str_file(ifile='r', ofile='w')
-def convert_conll_file(ifile, ofile, convert, fields=[-1], delim=" "):
+def convert_conll_file(ifile, ofile, convert, fields=[-1], delim=None):
     """Convert the tagging scheme in a conll file.
 
     This function assumes the that columns that one wishes to convert are
@@ -1042,28 +1042,28 @@ def convert_conll_file(ifile, ofile, convert, fields=[-1], delim=" "):
 
 @exporter
 @str_file(ifile='r', ofile='w')
-def convert_iob_conll_to_bio(ifile, ofile, fields=[-1], delim=" "):
+def convert_iob_conll_to_bio(ifile, ofile, fields=[-1], delim=None):
     """Convert a conll file from iob to bio."""
     convert_conll_file(ifile, ofile, convert_iob_to_bio, fields, delim)
 
 
 @exporter
 @str_file(ifile='r', ofile='w')
-def convert_iob_conll_to_iobes(ifile, ofile, fields=[-1], delim=" "):
+def convert_iob_conll_to_iobes(ifile, ofile, fields=[-1], delim=None):
     """Convert a conll file from iob to iobes."""
     convert_conll_file(ifile, ofile, convert_iob_to_iobes, fields, delim)
 
 
 @exporter
 @str_file(ifile='r', ofile='w')
-def convert_bio_conll_to_iobes(ifile, ofile, fields=[-1], delim=" "):
+def convert_bio_conll_to_iobes(ifile, ofile, fields=[-1], delim=None):
     """Convert a conll file from bio to iobes."""
     convert_conll_file(ifile, ofile, convert_bio_to_iobes, fields, delim)
 
 
 @exporter
 @str_file(ifile='r', ofile='w')
-def convert_iobes_conll_to_bio(ifile, ofile, fields=[-1], delim=" "):
+def convert_iobes_conll_to_bio(ifile, ofile, fields=[-1], delim=None):
     """Convert a conll file from iobes to bio. Useful for formatting output to use `conlleval.pl`."""
     convert_conll_file(ifile, ofile, convert_iobes_to_bio, fields, delim)
 
