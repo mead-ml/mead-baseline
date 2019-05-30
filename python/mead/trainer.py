@@ -72,6 +72,7 @@ def main():
     parser.add_argument('--config', help='JSON Configuration for an experiment', type=convert_path, default="$MEAD_CONFIG")
     parser.add_argument('--settings', help='JSON Configuration for mead', default='config/mead-settings.json', type=convert_path)
     parser.add_argument('--datasets', help='json library of dataset labels', default='config/datasets.json', type=convert_path)
+    parser.add_argument('--modules', help='modules to load', default=[], nargs='+', required=False)
     parser.add_argument('--mod_train_file', help='override the training set')
     parser.add_argument('--mod_valid_file', help='override the validation set')
     parser.add_argument('--mod_test_file', help='override the test set')
@@ -111,6 +112,8 @@ def main():
 
     if args.backend is not None:
         config_params['backend'] = normalize_backend(args.backend)
+
+    config_params['modules'] = list(set(chain(config_params.get('modules', []), args.modules)))
 
     cmd_hooks = args.reporting if args.reporting is not None else []
     config_hooks = config_params.get('reporting') if config_params.get('reporting') is not None else []
