@@ -14,7 +14,7 @@ from baseline.utils import (
 )
 from baseline.train import Trainer, create_trainer, register_trainer, register_training_func
 from baseline.bleu import bleu
-from baseline.tf.tfy import SET_TRAIN_FLAG
+from baseline.tf.tfy import SET_TRAIN_FLAG, create_session
 
 
 logger = logging.getLogger('baseline')
@@ -44,7 +44,7 @@ class Seq2SeqTrainerTf(Trainer):
         g = tf.Graph()
         with g.as_default():
             SET_TRAIN_FLAG(None)
-            sess = tf.Session()
+            sess = create_session()
             self.model = self.model.load(latest, predict=True, beam=self.beam, session=sess)
 
     def prepare(self, saver):

@@ -24,6 +24,7 @@ from baseline.tf.tfy import (
     tf_device_wrapper,
     reload_embeddings,
     new_placeholder_dict,
+    create_session
 )
 import mead
 from mead.tasks import Task, register_task, Backend
@@ -119,7 +120,7 @@ class ServableTensorFlowEmbeddingsModel(ServableEmbeddingsModel):
 
     @classmethod
     def create(cls, embeddings, **kwargs):
-        sess = kwargs.get('sess', tf.Session())
+        sess = kwargs.get('sess', create_session())
         model = cls()
         model.embeddings = embeddings
         model._record_state(**kwargs)
@@ -153,7 +154,7 @@ class ServableTensorFlowEmbeddingsModel(ServableEmbeddingsModel):
         _state = read_json("{}.state".format(basename))
         if __version__ != _state['version']:
             bl_logger.warning("Loaded model is from baseline version %s, running version is %s", _state['version'], __version__)
-        _state['sess'] = kwargs.pop('sess', tf.Session())
+        _state['sess'] = kwargs.pop('sess', create_session())
         with _state['sess'].graph.as_default():
             embeddings_info = _state.pop('embeddings')
             embeddings = reload_embeddings(embeddings_info, basename)

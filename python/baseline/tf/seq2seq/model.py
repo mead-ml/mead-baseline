@@ -218,7 +218,7 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
             _state['predict'] = kwargs['predict']
         if 'beam' in kwargs:
             _state['beam'] = kwargs['beam']
-        _state['sess'] = kwargs.get('sess', tf.Session())
+        _state['sess'] = kwargs.get('sess', create_session())
 
         with _state['sess'].graph.as_default():
 
@@ -290,7 +290,7 @@ class EncoderDecoderModelBase(EncoderDecoderModel):
         model.mx_tgt_len = kwargs.pop('mx_tgt_len', tf.placeholder(tf.int32, name="mx_tgt_len"))
         model.src_lengths_key = kwargs.get('src_lengths_key')
         model.id = kwargs.get('id', 0)
-        model.sess = kwargs.get('sess', tf.Session())
+        model.sess = kwargs.get('sess', create_session())
         model.pdrop_value = kwargs.get('dropout', 0.5)
         model.dropin_value = kwargs.get('dropin', {})
         model.layers = kwargs.get('layers', 1)

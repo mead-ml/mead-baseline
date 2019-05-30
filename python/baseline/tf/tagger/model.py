@@ -118,7 +118,7 @@ class TaggerModelBase(TaggerModel):
         _state = read_json("{}.state".format(basename))
         if __version__ != _state['version']:
             logger.warning("Loaded model is from baseline version %s, running version is %s", _state['version'], __version__)
-        _state['sess'] = kwargs.pop('sess', tf.Session())
+        _state['sess'] = kwargs.pop('sess', create_session())
         embeddings_info = _state.pop("embeddings")
 
         with _state['sess'].graph.as_default():
@@ -257,7 +257,7 @@ class TaggerModelBase(TaggerModel):
         # This only exists to make exporting easier
         model.pdrop_value = kwargs.get('dropout', 0.5)
         model.dropin_value = kwargs.get('dropin', {})
-        model.sess = kwargs.get('sess', tf.Session())
+        model.sess = kwargs.get('sess', create_session())
 
         model.lengths = kwargs.get('lengths', tf.placeholder(tf.int32, [None], name="lengths"))
         model.y = kwargs.get('y', tf.placeholder(tf.int32, [None, None], name="y"))
