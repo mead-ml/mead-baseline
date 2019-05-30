@@ -27,6 +27,7 @@ DTYPE_INT = 'int64'
 START_TOKEN = '<GO>'  # <S>
 END_TOKEN = '<EOS>'  # </S>
 UNK_TOKEN = '<UNK>'  # <UNK>
+SPECIAL_CHARS = set([START_TOKEN, END_TOKEN, UNK_TOKEN])
 ELMO_MXWLEN = 50
 
 class Vocabulary(object):
@@ -58,12 +59,13 @@ class Vocabulary(object):
 
 
         # if they already exist in this vocab, remove to ensure that they are always placed at the low offsets
-        known_vocab.pop(START_TOKEN, None)
-        known_vocab.pop(END_TOKEN, None)
-        known_vocab.pop(UNK_TOKEN, None)
+        #known_vocab.pop(START_TOKEN, None)
+        #known_vocab.pop(END_TOKEN, None)
+        #known_vocab.pop(UNK_TOKEN, None)
+
         for word_name, count in known_vocab.items():
 
-            if word_name == '!!!MAXTERMID':
+            if word_name == '!!!MAXTERMID' or word_name in SPECIAL_CHARS:
                 continue
 
             self._id_to_word.append(word_name)
@@ -830,7 +832,6 @@ class ELMoVectorizer(AbstractVectorizer):
         self.max_seen = max(self.max_seen, seen)
         return counter
 
-
     def run(self, tokens, vocab):
 
         if self.mxlen < 0:
@@ -857,7 +858,6 @@ class DictELMoVectorizer(ELMoVectorizer):
 
     def iterable(self, tokens):
         return _token_iterator(self, tokens)
-
 
 
 def weight_layers(name, bilm_ops, l2_coef=None,

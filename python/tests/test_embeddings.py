@@ -79,8 +79,11 @@ def test_round_trip():
     )
     write_word2vec_file('test.bin', input_model.vocab, input_model.weights)
     output_model = PretrainedEmbeddingsModel('test.bin', keep_unused=True)
+    # This is a bit weird...
     assert output_model.vsz == input_model.vsz
-    assert np.allclose(input_model.weights[4:, :], output_model.weights[4:, :])
+    for word in input_model.vocab:
+        if word not in Offsets.VALUES:
+            assert np.allclose(input_model[word], output_model[word])
 
 # def test_valid_lookup():
 #     wv = random_model()(keep_unused=True)

@@ -1,6 +1,8 @@
 import io
 import logging
+import collections
 import contextlib
+import copy
 import numpy as np
 from baseline.utils import export, write_json, read_config_file, Offsets
 from baseline.mime_type import mime_type
@@ -17,19 +19,49 @@ def norm_weights(word_vectors):
 
 @exporter
 def write_word2vec_file(filename, vocab, word_vectors):
-    special_values = set(Offsets.VALUES)
+    """Write out a binary word2vec file
+
+    This function allows either a list of vocabulary of the same size
+    as the vectors, in which case it does a simple write, or a vocabulary
+    dict which may contain "magic" Offset values that baseline uses.  If
+    those are populated offsets in the dict, they will occupy the low indices
+    (first values), so to prune them, remove them from the vocab and shift the
+    indices down
+
+    :param filename: (`str`) The filename
+    :param vocab: (`Dict[str, int]` or `List[str]`) A list of vocabulary
+    :param word_vectors: The word vectors to write for each vocab
+    :return: None
+    """
+
+    offset = 0
+    # Check for case where we have a dict and possibly magic values to prune
+    if isinstance(vocab, collections.Mapping):
+        vocab_copy = copy.deepcopy(vocab)
+
+        for v in Offsets.VALUES:
+            if v in vocab_copy:
+                del vocab_copy[v]
+                offset += 1
+        vocab_list = [0] * len(vocab_copy)
+        for word, idx in vocab_copy.items():
+            vocab_list[idx - offset] = word
+    # Otherwise its just a list dont do anything weird
+    else:
+        vocab_list = vocab
+
+    # Writing the file is pretty simple, just need the vocab size and depth
+    # Then write each line
     with io.open(filename, "wb") as f:
-        vsz = len([w for w in vocab if w not in special_values])
+        word_vectors_offset = word_vectors[offset:]
+        vsz = len(vocab_list)
         dsz = word_vectors[0].shape[0]
         f.write(bytes('{} {}\n'.format(vsz, dsz), encoding='utf-8'))
-        # assert len(word_vectors) == len(vocab)
-        for word, vector in zip(vocab, word_vectors):
-            if word in special_values:
-                continue
+        assert len(vocab_list) == len(word_vectors_offset)
+        for word, vector in zip(vocab_list, word_vectors_offset):
             vec_str = vector.tobytes()
-            f.write(bytes('{} '.format(word), encoding='utf-8') + vec_str)# + bytes('\n', encoding='utf-8'))
-            #f.write(vec_str)
-            #f.write(bytes('\n', encoding='utf-8'))
+            f.write(bytes('{} '.format(word), encoding='utf-8') + vec_str)
+
 
 @exporter
 class EmbeddingsModel(object):
@@ -47,6 +79,7 @@ class EmbeddingsModel(object):
 
     def save_md(self, target):
         pass
+
 
 @exporter
 def pool_vec(embeddings, tokens, operation=np.mean):
@@ -180,7 +213,8 @@ class PretrainedEmbeddingsModel(WordEmbeddingsModel):
             for i in range(vsz):
                 word = self._readtospc(f)
                 raw = f.read(width)
-                if word in self.vocab: continue
+                if word in self.vocab:
+                    continue
                 if keep_unused is False and word not in known_vocab:
                     continue
                 if known_vocab and word in known_vocab:
@@ -212,7 +246,8 @@ class PretrainedEmbeddingsModel(WordEmbeddingsModel):
                 current = header_end + 1
                 for i in range(vsz):
                     word, vec, current = self._read_word2vec_line_mmap(m, width, current)
-                    if word in self.vocab: continue
+                    if word in self.vocab:
+                        continue
                     if keep_unused is False and word not in known_vocab:
                         continue
                     if known_vocab and word in known_vocab:
@@ -273,7 +308,8 @@ class PretrainedEmbeddingsModel(WordEmbeddingsModel):
                     if len(values) == 0:
                         break
                     word = values[0].decode('utf-8').strip(' \n')
-                    if word in self.vocab: continue
+                    if word in self.vocab:
+                        continue
                     if keep_unused is False and word not in known_vocab:
                         continue
                     if known_vocab and word in known_vocab:
@@ -316,6 +352,16 @@ class RandomInitVecModel(EmbeddingsModel):
         self.weights[0] = self.nullv
         for i in range(1, len(Offsets.VALUES)):
             self.weights[i] = np.random.uniform(-uw, uw, self.dsz).astype(np.float32)
+
+    def __getitem__(self, word):
+        return self.lookup(word, nullifabsent=False)
+
+    def lookup(self, word, nullifabsent=True):
+        if word in self.vocab:
+            return self.weights[self.vocab[word]]
+        if nullifabsent:
+            return None
+        return self.nullv
 
     def get_vocab(self):
         return self.vocab

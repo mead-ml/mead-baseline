@@ -103,7 +103,6 @@ class Token1DVectorizer(AbstractVectorizer):
         return self.mxlen,
 
 
-
 @exporter
 class GOVectorizer(Vectorizer):
 
@@ -289,8 +288,70 @@ class Char1DVectorizer(AbstractCharVectorizer):
         return self.mxlen,
 
 
+@register_vectorizer(name='ngram')
+class TextNGramVectorizer(Token1DVectorizer):
+    def __init__(self, filtsz=3, joiner='@@', transform_fn=None, pad='<PAD>', **kwargs):
+        super(TextNGramVectorizer, self).__init__(**kwargs)
+        self.filtsz = filtsz
+        self.pad = pad
+        self.joiner = joiner
+        self.transform_fn = identity_trans_fn if transform_fn is None else transform_fn
+
+    def iterable(self, tokens):
+        nt = len(tokens)
+        valid_range = nt - self.filtsz + 1
+        for i in range(valid_range):
+            chunk = tokens[i:i+self.filtsz]
+            yield self.joiner.join(chunk)
+
+    def get_padding(self):
+        return [self.pad] * (self.filtsz // 2)
+
+    def run(self, tokens, vocab):
+        if self.mxlen < 0:
+            self.mxlen = self.max_seen
+        zp = self.get_padding()
+        vec2d = np.zeros(self.mxlen, dtype=int)
+        padded_tokens = zp + tokens + zp
+        for i, atom in enumerate(self._next_element(padded_tokens, vocab)):
+            if i == self.mxlen:
+                break
+            vec2d[i] = atom
+
+        lengths = min(self.mxlen, len(tokens))
+        if self.time_reverse:
+            vec2d = vec2d[::-1]
+            return vec2d, None
+        return vec2d, lengths
+
+
+@register_vectorizer(name='dict-ngram')
+class DictTextNGramVectorizer(TextNGramVectorizer):
+    def __init__(self, **kwargs):
+        super(DictTextNGramVectorizer, self).__init__(**kwargs)
+        self.fields = listify(kwargs.get('fields', 'text'))
+        if len(self.fields) > 1:
+            raise Exception("Multifield N-grams arent supported right now")
+        self.delim = kwargs.get('token_delim', '@@')
+
+    def get_padding(self):
+        return [{self.fields[0]: self.pad}] * (self.filtsz // 2)
+
+    def iterable(self, tokens):
+        nt = len(tokens)
+        if isinstance(tokens[0], collections.Mapping):
+            token_list = [self.transform_fn(tok[self.fields[0]]) for tok in tokens]
+        else:
+            token_list = [self.transform_fn(tok) for tok in tokens]
+
+        for i in range(nt - self.filtsz + 1):
+            chunk = token_list[i:i+self.filtsz]
+            yield self.joiner.join(chunk)
+
+
 @exporter
 def create_vectorizer(**kwargs):
     vec_type = kwargs.get('vectorizer_type', kwargs.get('type', 'token1d'))
     Constructor = BASELINE_VECTORIZERS.get(vec_type)
     return Constructor(**kwargs)
+
