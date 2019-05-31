@@ -307,20 +307,6 @@ class TextNGramVectorizer(Token1DVectorizer):
     def get_padding(self):
         return [self.pad] * (self.filtsz // 2)
 
-    """
-    def count(self, tokens):
-        seen = 0
-        counter = collections.Counter()
-        zp = ['<UNK>'] * (self.filtsz // 2)
-        padded_tokens = zp + tokens + zp
-
-        for tok in self.iterable(padded_tokens):
-            counter[tok] += 1
-            seen += 1
-        self.max_seen = max(self.max_seen, seen)
-        return counter
-    """
-
     def run(self, tokens, vocab):
         if self.mxlen < 0:
             self.mxlen = self.max_seen
