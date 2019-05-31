@@ -246,10 +246,8 @@ class Task(object):
                         reporting[report_type][report_arg] = report_val
         reporting_hooks = list(reporting.keys())
         for settings in reporting.values():
-            try:
-                import_user_module(settings.get('module', ''))
-            except (ImportError, ValueError):
-                pass
+            for module in listify(settings.get('module', settings.get('modules', []))):
+                import_user_module(module)
 
         self.reporting = baseline.create_reporting(reporting_hooks,
                                                    reporting,
