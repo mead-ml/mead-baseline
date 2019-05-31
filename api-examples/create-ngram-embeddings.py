@@ -91,11 +91,11 @@ parser.add_argument('--input_embed', help='Input embedding model. This will typi
 parser.add_argument('--type', default='default', choices=['elmo', 'default'])
 parser.add_argument('--files', required=True, nargs='+')
 parser.add_argument('--output_embed', default='elmo.bin', help='Output embedding model in word2vec binary format')
-parser.add_argument('--lower', type=baseline.str2bool, default=True)
-parser.add_argument('--vocab_file')
+parser.add_argument('--lower', type=baseline.str2bool, default=False)
+parser.add_argument('--vocab_file', required=False, help='Vocab file (required only for BERT)')
 parser.add_argument('--max_length', type=int, default=100)
 parser.add_argument('--ngrams', type=int, default=3)
-parser.add_argument('--op', type=str, default='center')
+parser.add_argument('--op', type=str, default='mean')
 args = parser.parse_args()
 
 
@@ -104,14 +104,16 @@ uni_vec = get_unigram_vectorizer(args.type, args.vocab_file, args.ngrams)
 words = Counter()
 conll = CONLLSeqReader(None)
 
+
 # This tabulates all of the ngrams
 for file in args.files:
     print('Adding vocab from {}'.format(file))
     examples = conll.read_examples(file)
 
+    transform_fn = lambda z: z.lower() if args.lower else z
     for sentence in examples:
         pad = ['<UNK>'] * (args.ngrams//2)
-        words.update(ngrams(pad + [x['0'].lower() for x in sentence] + pad, filtsz=args.ngrams))
+        words.update(ngrams(pad + [transform_fn(x['0']) for x in sentence] + pad, filtsz=args.ngrams))
 
 # print them too
 print(words.most_common(25))
