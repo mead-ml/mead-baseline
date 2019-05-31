@@ -1017,7 +1017,6 @@ class ELMoEmbeddings(TensorFlowEmbeddings):
         context_embeddings_op = self.model(self.x)
         elmo_context_input = weight_layers('input', context_embeddings_op, l2_coef=0.0)
         elmo_weighting = elmo_context_input['weighted_op']
-        #return tf.Print(elmo_weighting, [tf.shape(elmo_weighting)])
         return elmo_weighting
 
     def get_config(self):
@@ -1025,6 +1024,7 @@ class ELMoEmbeddings(TensorFlowEmbeddings):
         config['embed_file'] = self.weight_file
         config['known_vocab'] = self.known_vocab
         return config
+
 
 @register_embeddings(name='elmo')
 class ELMoHubEmbeddings(TensorFlowEmbeddings):

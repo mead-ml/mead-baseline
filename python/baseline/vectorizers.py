@@ -307,6 +307,20 @@ class TextNGramVectorizer(Token1DVectorizer):
     def get_padding(self):
         return [self.pad] * (self.filtsz // 2)
 
+    """
+    def count(self, tokens):
+        seen = 0
+        counter = collections.Counter()
+        zp = ['<UNK>'] * (self.filtsz // 2)
+        padded_tokens = zp + tokens + zp
+
+        for tok in self.iterable(padded_tokens):
+            counter[tok] += 1
+            seen += 1
+        self.max_seen = max(self.max_seen, seen)
+        return counter
+    """
+
     def run(self, tokens, vocab):
         if self.mxlen < 0:
             self.mxlen = self.max_seen
@@ -337,12 +351,17 @@ class DictTextNGramVectorizer(TextNGramVectorizer):
     def get_padding(self):
         return [{self.fields[0]: self.pad}] * (self.filtsz // 2)
 
+    def _tx(self, tok):
+        if tok == '<PAD>' or tok == '<UNK>':
+            return tok
+        return self.transform_fn(tok)
+
     def iterable(self, tokens):
         nt = len(tokens)
         if isinstance(tokens[0], collections.Mapping):
-            token_list = [self.transform_fn(tok[self.fields[0]]) for tok in tokens]
+            token_list = [self._tx(tok[self.fields[0]]) for tok in tokens]
         else:
-            token_list = [self.transform_fn(tok) for tok in tokens]
+            token_list = [self._tx(tok) for tok in tokens]
 
         for i in range(nt - self.filtsz + 1):
             chunk = token_list[i:i+self.filtsz]
