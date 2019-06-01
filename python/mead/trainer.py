@@ -1,7 +1,6 @@
 import os
 import logging
 import argparse
-from copy import deepcopy
 from itertools import chain
 from baseline.utils import read_config_stream, normalize_backend
 import mead
@@ -123,7 +122,7 @@ def main():
     task_name = config_params.get('task', 'classify') if args.task is None else args.task
     logger.info('Task: [{}]'.format(task_name))
     task = mead.Task.get_task_specific(task_name, args.settings)
-    task.read_config(config_params, args.datasets, reporting_args=reporting_args, config_file=deepcopy(config_params))
+    task.read_config(config_params, args.datasets, reporting_args=reporting_args)
     task.initialize(args.embeddings)
     task.train(args.checkpoint)
 
