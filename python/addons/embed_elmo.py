@@ -1058,3 +1058,26 @@ class ELMoHubEmbeddings(TensorFlowEmbeddings):
         return ELMoHubEmbeddings(
             self.name, dsz=self.dsz, vsz=self.vsz, finetune=self.finetune, cache_dir=self.cache_dir
         )
+
+
+@register_embeddings(name='elmo-pooled')
+class ELMoPooledEmbeddings(ELMoEmbeddings):
+
+    @classmethod
+    def create_placeholder(cls, name):
+        return tf.placeholder(tf.string, [None, None], name=name)
+
+    def __init__(self, name, **kwargs):
+        super(ELMoPooledEmbeddings, self).__init__(name, **kwargs)
+        operator = kwargs.get('pooling', 'mean')
+        if operator == 'max':
+            self.pool_op = tf.reduce_max
+        elif operator == 'sum':
+            self.pool_op = tf.reduce_sum
+        else:
+            self.pool_op = tf.reduce_mean
+
+    def encode(self, x=None):
+        embeddings = super(ELMoPooledEmbeddings, self).encode(x)
+        return self.pool_op(embeddings, axis=1, keepdims=False, name='elmo_pooling')
+

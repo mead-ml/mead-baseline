@@ -1505,7 +1505,6 @@ class BERTHubEmbeddings(BERTHubModel):
 @register_embeddings(name='bert-pooled')
 class BERTHubPooling(BERTHubModel):
 
-
     def __init__(self, name, **kwargs):
         super(BERTHubPooling, self).__init__(name, **kwargs)
 
