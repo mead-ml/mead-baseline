@@ -93,7 +93,8 @@ def _read_from_col(col, files, col_splitter=r'\t', word_splitter=r'\s'):
         with codecs.open(file_name, encoding='utf-8', mode='r') as f:
             for line in f:
                 line = line.rstrip('\n')
-                if line == "": continue
+                if line == "":
+                    continue
                 cols = re.split(col_splitter, line)
                 text.append(re.split(word_splitter, cols[col]))
     return text

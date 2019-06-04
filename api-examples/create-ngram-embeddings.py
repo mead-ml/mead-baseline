@@ -24,12 +24,13 @@ import embed_bert
 from baseline.tf.embeddings import *
 from baseline.embeddings import *
 from baseline.vectorizers import create_vectorizer, TextNGramVectorizer
-from baseline.reader import CONLLSeqReader
+from baseline.reader import CONLLSeqReader, TSVSeqLabelReader
 from baseline.w2v import write_word2vec_file
 from baseline.utils import ngrams
 import tensorflow as tf
 import numpy as np
-import io
+import codecs
+import re
 from collections import Counter
 BATCHSZ = 32
 
@@ -95,26 +96,73 @@ parser.add_argument('--lower', type=baseline.str2bool, default=False)
 parser.add_argument('--vocab_file', required=False, help='Vocab file (required only for BERT)')
 parser.add_argument('--max_length', type=int, default=100)
 parser.add_argument('--ngrams', type=int, default=3)
+parser.add_argument('--reader', default='conll', help='Supports CONLL or TSV')
+parser.add_argument('--column', default='0', help='Default column to read features from')
 parser.add_argument('--op', type=str, default='mean')
 args = parser.parse_args()
 
 
 # Create our vectorizer according to CL
 uni_vec = get_unigram_vectorizer(args.type, args.vocab_file, args.ngrams)
-words = Counter()
-conll = CONLLSeqReader(None)
+
+def read_tsv_features(files, column, filtsz, lower):
+    """Read features from CONLL file, yield a Counter of words
+
+    :param files: Which files to read to form the vocab
+    :param column: What column to read from (defaults to '0')
+    :param filtsz: An integer value for the ngram length, e.g. 3 for trigram
+    :param lower: Use lower case
+    :return: A Counter of words
+    """
+
+    words = Counter()
+    text_column = int(column)
+
+    transform_fn = lambda z: z.lower() if lower else z
+
+    for file_name in files:
+        if file_name is None:
+            continue
+        with codecs.open(file_name, encoding='utf-8', mode='r') as f:
+            for il, line in enumerate(f):
+                columns = line.split('\t')
+                text = columns[text_column]
+                sentence = text.split()
+                if len(text) == 0:
+                    print('Warning, invalid text at {}'.format(il))
+                    continue
+                pad = ['<UNK>'] * (filtsz//2)
+                words.update(ngrams(pad + [transform_fn(x) for x in sentence] + pad, filtsz=filtsz))
+    return words
 
 
-# This tabulates all of the ngrams
-for file in args.files:
-    print('Adding vocab from {}'.format(file))
-    examples = conll.read_examples(file)
+def read_conll_features(files, column, filtsz, lower):
+    """Read features from CONLL file, yield a Counter of words
 
-    transform_fn = lambda z: z.lower() if args.lower else z
-    for sentence in examples:
-        pad = ['<UNK>'] * (args.ngrams//2)
-        words.update(ngrams(pad + [transform_fn(x['0']) for x in sentence] + pad, filtsz=args.ngrams))
+    :param files: Which files to read to form the vocab
+    :param column: What column to read from (defaults to '0')
+    :param filtsz: An integer value for the ngram length, e.g. 3 for trigram
+    :param lower: Use lower-case
+    :return: A Counter of words
+    """
+    words = Counter()
+    conll = CONLLSeqReader(None)
 
+    text_column = str(column)
+    # This tabulates all of the ngrams
+    for file in files:
+        print('Adding vocab from {}'.format(file))
+
+        examples = conll.read_examples(file)
+
+        transform_fn = lambda z: z.lower() if lower else z
+        for sentence in examples:
+            pad = ['<UNK>'] * (filtsz//2)
+            words.update(ngrams(pad + [transform_fn(x[text_column]) for x in sentence] + pad, filtsz=filtsz))
+    return words
+
+reader_fn = read_conll_features if args.reader == 'conll' else read_tsv_features
+words = reader_fn(args.files, args.column, args.ngrams, args.lower)
 # print them too
 print(words.most_common(25))
 
