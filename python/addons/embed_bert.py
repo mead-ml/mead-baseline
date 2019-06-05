@@ -1428,6 +1428,7 @@ class BERTEmbeddings(TensorFlowEmbeddings):
             z = tf.reduce_mean(tf.add_n(layers), axis=-1, keepdims=True)
         z = tf.stop_gradient(z)
         return z
+
     def save_md(self, target):
         write_json({'vsz': self.vsz, 'dsz': self.dsz}, target)
 
