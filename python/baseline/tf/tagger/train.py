@@ -169,13 +169,19 @@ def fit(model, ts, vs, es, **kwargs):
     model.save_using(saver)
     checkpoint = kwargs.get('checkpoint')
     if checkpoint is not None:
+        transfer_layers = bool(kwargs.get('transfer', False))
         latest = tf.train.latest_checkpoint(checkpoint)
-        try:
-            model.saver.restore(model.sess, latest)
-        except:
-            # Fine-tune the model
+        if transfer_layers:
+            logger.info("Restoring lower layers for fine-tuning")
             reload_lower_layers(model.sess, latest)
-
+        else:
+            try:
+                logger.info("Restoring previous model")
+                model.saver.restore(model.sess, latest)
+            except Exception as e:
+                # Fine-tune the model
+                logger.error("The checkpoint to restore doesnt match the model")
+                raise e
 
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
     verbose = bool(kwargs.get('verbose', False))
