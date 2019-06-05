@@ -1077,7 +1077,7 @@ class ELMoPooledEmbeddings(ELMoEmbeddings):
 
     def __init__(self, name, **kwargs):
         super(ELMoPooledEmbeddings, self).__init__(name, **kwargs)
-        operator = kwargs.get('pooling', 'conv')
+        operator = kwargs.get('pooling', 'mean')
         if operator == 'max':
             self.pool_op = tf.reduce_max
         elif operator == 'sum':
