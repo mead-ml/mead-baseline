@@ -1084,6 +1084,7 @@ class ELMoPooledEmbeddings(ELMoEmbeddings):
             self.pool_op = tf.reduce_sum
         elif operator == 'conv':
             self.pool_op = self._create_conv_pooling(self.dsz, kwargs.get('cmotsz', 100), kwargs.get('filtsz', [3, 4, 5]))
+
         else:
             self.pool_op = tf.reduce_mean
 
