@@ -1,6 +1,7 @@
 import os
 import logging
 import argparse
+import copy
 from itertools import chain
 from baseline.utils import read_config_stream, normalize_backend
 import mead
@@ -40,7 +41,7 @@ def update_datasets(datasets_config, config_params, train, valid, test):
     else:
         if len(original_record) != 1:
             logger.warning('Warning: multiple templates found for dataset override, using first!')
-        updated_record = deepcopy(original_record[0])
+        updated_record = copy.deepcopy(original_record[0])
         if 'sha1' in updated_record:
             logging.info('Ignoring SHA1 due to user override')
             del updated_record['sha1']
