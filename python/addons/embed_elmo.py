@@ -27,6 +27,7 @@ DTYPE_INT = 'int64'
 START_TOKEN = '<GO>'  # <S>
 END_TOKEN = '<EOS>'  # </S>
 UNK_TOKEN = '<UNK>'  # <UNK>
+SPECIAL_CHARS = set([START_TOKEN, END_TOKEN, UNK_TOKEN])
 ELMO_MXWLEN = 50
 
 class Vocabulary(object):
@@ -58,12 +59,13 @@ class Vocabulary(object):
 
 
         # if they already exist in this vocab, remove to ensure that they are always placed at the low offsets
-        known_vocab.pop(START_TOKEN, None)
-        known_vocab.pop(END_TOKEN, None)
-        known_vocab.pop(UNK_TOKEN, None)
+        #known_vocab.pop(START_TOKEN, None)
+        #known_vocab.pop(END_TOKEN, None)
+        #known_vocab.pop(UNK_TOKEN, None)
+
         for word_name, count in known_vocab.items():
 
-            if word_name == '!!!MAXTERMID':
+            if word_name == '!!!MAXTERMID' or word_name in SPECIAL_CHARS:
                 continue
 
             self._id_to_word.append(word_name)
@@ -248,8 +250,11 @@ class BidirectionalLanguageModel(object):
             otherwise use token ids
         max_batch_size: the maximum allowable batch size
         """
-        with open(options_file, 'r') as fin:
-            options = json.load(fin)
+        if isinstance(options_file, dict):
+            options = options_file
+        else:
+            with open(options_file, 'r') as fin:
+                options = json.load(fin)
 
         if not use_character_inputs:
             if embedding_weight_file is None:
@@ -827,7 +832,6 @@ class ELMoVectorizer(AbstractVectorizer):
         self.max_seen = max(self.max_seen, seen)
         return counter
 
-
     def run(self, tokens, vocab):
 
         if self.mxlen < 0:
@@ -854,7 +858,6 @@ class DictELMoVectorizer(ELMoVectorizer):
 
     def iterable(self, tokens):
         return _token_iterator(self, tokens)
-
 
 
 def weight_layers(name, bilm_ops, l2_coef=None,
@@ -982,12 +985,13 @@ class ELMoEmbeddings(TensorFlowEmbeddings):
 
         # options file
         self.weight_file = embed_file
-        self.dsz = kwargs['dsz']
         elmo_config = embed_file.replace('weights.hdf5', 'options.json')
+        elmo_config = read_json(elmo_config)
+        self.dsz = kwargs.get('dsz', 2*int(elmo_config['lstm']['projection_dim']))
         self.model = BidirectionalLanguageModel(elmo_config, self.weight_file)
         self.known_vocab = known_vocab
         self.vocab = UnicodeCharsVocabulary(known_vocab)
-        elmo_config = read_json(elmo_config)
+
         assert self.dsz == 2*int(elmo_config['lstm']['projection_dim'])
 
     @property
@@ -1013,7 +1017,6 @@ class ELMoEmbeddings(TensorFlowEmbeddings):
         context_embeddings_op = self.model(self.x)
         elmo_context_input = weight_layers('input', context_embeddings_op, l2_coef=0.0)
         elmo_weighting = elmo_context_input['weighted_op']
-        #return tf.Print(elmo_weighting, [tf.shape(elmo_weighting)])
         return elmo_weighting
 
     def get_config(self):
@@ -1021,6 +1024,7 @@ class ELMoEmbeddings(TensorFlowEmbeddings):
         config['embed_file'] = self.weight_file
         config['known_vocab'] = self.known_vocab
         return config
+
 
 @register_embeddings(name='elmo')
 class ELMoHubEmbeddings(TensorFlowEmbeddings):

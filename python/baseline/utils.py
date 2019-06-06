@@ -1667,3 +1667,20 @@ def undo_bpe(seq):
 def undo_sentence_piece(seq):
     """Undo the sentence Piece splits to make Bleu comparable."""
     return seq.replace("\u2581", "")
+
+
+@exporter
+def ngrams(sentence, filtsz=3, joiner='@@'):
+    """Generate ngrams over a sentence
+
+    :param sentence: (`List[str]`) Some tokens
+    :param filtsz: The ngram width
+    :param joiner: A string to join ngrams
+    :return: (`List[str]`) A list of ngrams
+    """
+    chunks = []
+    nt = len(sentence)
+    for i in range(nt - filtsz + 1):
+        chunk = sentence[i:i+filtsz]
+        chunks += [joiner.join(chunk)]
+    return chunks

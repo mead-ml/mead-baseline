@@ -9,7 +9,7 @@ from baseline.progress import create_progress_bar
 from baseline.utils import to_spans, f_score, listify, revlut, get_model_file, write_sentence_conll, get_metric_cmp
 from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
 from baseline.utils import span_f1, per_entity_f1, conlleval_output
-
+from baseline.tf.tfy import reload_lower_layers
 
 logger = logging.getLogger('baseline')
 
@@ -169,9 +169,19 @@ def fit(model, ts, vs, es, **kwargs):
     model.save_using(saver)
     checkpoint = kwargs.get('checkpoint')
     if checkpoint is not None:
+        transfer_layers = bool(kwargs.get('transfer', False))
         latest = tf.train.latest_checkpoint(checkpoint)
-        print('Reloading ' + latest)
-        model.saver.restore(model.sess, latest)
+        if transfer_layers:
+            logger.info("Restoring lower layers for fine-tuning")
+            reload_lower_layers(model.sess, latest)
+        else:
+            try:
+                logger.info("Restoring previous model")
+                model.saver.restore(model.sess, latest)
+            except Exception as e:
+                # Fine-tune the model
+                logger.error("The checkpoint to restore doesnt match the model")
+                raise e
 
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
     verbose = bool(kwargs.get('verbose', False))

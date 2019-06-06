@@ -138,7 +138,7 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
         * *scope* -- (``str``) An optional variable scope, by default it will be `{name}/LUT`
         * *unif* -- (``float``) (defaults to `0.1`) If the weights should be created, what is the random initialization range
         """
-        super(LookupTableEmbeddings, self).__init__(kwargs.get('finetune', True), name, **kwargs)
+        super(LookupTableEmbeddings, self).__init__(name=name, **kwargs)
 
         self.vsz = kwargs.get('vsz')
         self.dsz = kwargs.get('dsz')
