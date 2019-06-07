@@ -41,7 +41,7 @@ def read_doc(f_name, new_name=None, fix_fn=fix_links):
     if new_name is None:
         new_name = f_name
     path = os.path.dirname(os.path.realpath(__file__))
-    doc_loc = os.path.normpath(os.path.join(path, '..', f_name))
+    doc_loc = os.path.normpath(os.path.join(path, '../..', f_name))
     new_loc = os.path.join(path, new_name)
     if os.path.isfile(doc_loc):
         shutil.copyfile(doc_loc, new_loc)
