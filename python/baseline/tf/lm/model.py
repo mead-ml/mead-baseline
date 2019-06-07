@@ -237,7 +237,7 @@ class LanguageModelBase(LanguageModel):
         lm.embeddings = {k: embedding.detached_ref() for k, embedding in embeddings.items()}
         lm._record_state(**kwargs)
         lm.y = kwargs.get('y', tf.placeholder(tf.int32, [None, None], name="y"))
-        lm.sess = kwargs.get('sess', tf.Session())
+        lm.sess = kwargs.get('sess', create_session())
         lm.pdrop_value = kwargs.get('pdrop', 0.5)
         lm.hsz = kwargs['hsz']
         lm.src_keys = kwargs.get('src_keys', lm.embeddings.keys())
@@ -290,7 +290,7 @@ class LanguageModelBase(LanguageModel):
             _state['sampling_temp'] = kwargs['sampling_temp']
         if 'beam' in kwargs:
             _state['beam'] = kwargs['beam']
-        _state['sess'] = kwargs.get('sess', tf.Session())
+        _state['sess'] = kwargs.get('sess', create_session())
 
         with _state['sess'].graph.as_default():
 

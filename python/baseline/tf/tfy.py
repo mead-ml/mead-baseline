@@ -370,6 +370,22 @@ def multi_rnn_cell_w_dropout(hsz, pdrop, rnntype, num_layers, variational=False,
     )
 
 
+def create_session():
+    """This function protects against TF allocating all the memory
+
+    Some combination of cuDNN 7.6 with CUDA 10 on TF 1.13 with RTX cards
+    allocate additional memory which isnt available since TF by default
+    hogs it all.
+
+    This also provides an abstraction that can be extended later to offer
+    more config params that raw `tf.Session()` calls dont
+
+    :return: A `tf.Session`
+    """
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True
+    return tf.Session(config=config)
+
 def reload_lower_layers(sess, checkpoint):
     """
     Get the intersection of all non-output layers and declared vars in this graph and restore them
@@ -388,7 +404,7 @@ def reload_lower_layers(sess, checkpoint):
     saver = tf.train.Saver(g)
     saver.restore(sess, latest)
 
-
+    
 # # This function should never be used for decoding.  It exists only so that the training model can greedily decode
 def show_examples_tf(model, es, rlut1, rlut2, vocab, mxlen, sample, prob_clip, max_examples, reverse):
     si = np.random.randint(0, len(es))
