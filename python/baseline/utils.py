@@ -433,7 +433,7 @@ def is_sequence(x):
     import collections
     if isinstance(x, six.string_types):
         return False
-    return isinstance(x, collections.Sequence)
+    return isinstance(x, (collections.Sequence, collections.MappingView))
 
 
 @exporter
@@ -1352,12 +1352,13 @@ def conlleval_output(results):
         in `results['types'] should be sorted.
     """
     s = "processed {tokens} tokens with {gold_total} phrases; found: {pred_total} phrases; correct: {overlap}.\n" \
-            "accuracy: {acc:>6.2f}%; precision: {precision:>6.2f}%; recall: {recall:>6.2f}%; FB1: {f1:>6.2f}\n"
+            "accuracy: {acc:>{length}.2f}%; precision: {precision:>6.2f}%; recall: {recall:>6.2f}%; FB1: {f1:>6.2f}\n"
     t = []
+    longest_ent = max(len(max(results['types'], key=lambda x: len(x['ent']))['ent']), 17)
     for type_metric in results['types']:
-        t.append("{ent:>17}: precision: {precision:>6.2f}%; recall: {recall:>6.2f}%; FB1: {f1:>6.2f}  {count}".format(**type_metric))
+        t.append("{ent:>{longest_ent}}: precision: {precision:>6.2f}%; recall: {recall:>6.2f}%; FB1: {f1:>6.2f}  {count}".format(longest_ent=longest_ent, **type_metric))
     s = s + "\n".join(t)
-    s = s.format(**results)
+    s = s.format(length=longest_ent - 11, **results)
     return s
 
 

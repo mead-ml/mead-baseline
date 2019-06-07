@@ -394,7 +394,7 @@ class ParallelSeqReader(SeqPredictReader):
     def __init__(self, vectorizers, trim=False, truncate=False, mxlen=-1, **kwargs):
         super(ParallelSeqReader, self).__init__(vectorizers, trim, truncate, mxlen, **kwargs)
         self.data = _norm_ext(kwargs.get('data_suffix', 'in'))
-        self.tag = _norm_ext(kwargs.get('pair_suffix', 'out'))
+        self.tag = _norm_ext(kwargs.get('label_suffix', 'out'))
         self.label_vectorizer = Token1DVectorizer(mxlen=mxlen)
 
     def build_vocab(self, files, **kwargs):

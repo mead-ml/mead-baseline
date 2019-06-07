@@ -39,9 +39,9 @@ class Seq2SeqTrainerPyTorch(Trainer):
         metrics['perplexity'] = np.exp(metrics['avg_loss'])
         return metrics
 
-    def test(self, vs, reporting_fns, phase):
+    def test(self, vs, reporting_fns, phase, **kwargs):
         if phase == 'Test':
-            return self._evaluate(vs, reporting_fns)
+            return self._evaluate(vs, reporting_fns, **kwargs)
 
         self.model.eval()
         total_loss = total_toks = 0
@@ -74,7 +74,7 @@ class Seq2SeqTrainerPyTorch(Trainer):
         return metrics
 
 
-    def _evaluate(self, es, reporting_fns):
+    def _evaluate(self, es, reporting_fns, **kwargs):
         self.model.eval()
         pg = create_progress_bar(len(es))
         preds = []
@@ -83,7 +83,7 @@ class Seq2SeqTrainerPyTorch(Trainer):
         for batch_dict in pg(es):
             tgt = batch_dict['tgt']
             tgt_lens = batch_dict['tgt_lengths']
-            pred = [p[0] for p in self._predict(batch_dict)]
+            pred = [p[0] for p in self._predict(batch_dict, **kwargs)]
             preds.extend(convert_seq2seq_preds(pred, self.tgt_rlut))
             golds.extend(convert_seq2seq_golds(tgt, tgt_lens, self.tgt_rlut))
         metrics = {'bleu': bleu(preds, golds)[0]}

@@ -39,7 +39,7 @@ class LanguageModelBase(nn.Module, LanguageModel):
         y = batch_dict.get('y')
         if y is not None:
             y = torch.from_numpy(y)
-            if self.gpu is not None:
+            if self.gpu:
                 y = y.cuda()
             example_dict['y'] = y
         return example_dict

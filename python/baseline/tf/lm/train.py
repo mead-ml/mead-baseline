@@ -19,7 +19,11 @@ class LanguageModelTrainerTf(Trainer):
         self.model = model
         self.loss = model.create_loss()
         self.test_loss = model.create_test_loss()
-        self.global_step, self.train_op = optimizer(self.loss, **kwargs)
+        if kwargs.get('baseline_eval_mode', False):
+            # When reloaded a model creating the training op will break things.
+            self.train_op = tf.no_op()
+        else:
+            self.global_step, self.train_op = optimizer(self.loss, **kwargs)
         self.nsteps = kwargs.get('nsteps', 500)
 
     def checkpoint(self):
@@ -95,7 +99,7 @@ class LanguageModelTrainerTf(Trainer):
         metrics['perplexity'] = np.exp(metrics['avg_loss'])
         return metrics
 
-    def test(self, ts, reporting_fns, phase):
+    def test(self, ts, reporting_fns, phase, **kwargs):
         total_loss = 0.0
         total_toks = 0
         epochs = 0

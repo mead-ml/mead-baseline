@@ -30,6 +30,22 @@ exporter = export(__all__)
 logger = logging.getLogger('mead')
 
 
+def merge_reporting_with_settings(reporting, settings):
+    default_reporting = settings.get('reporting_hooks', {})
+    # Add default reporting information to the reporting settings.
+    for report_type in default_reporting:
+        if report_type in reporting:
+            for report_arg, report_val in default_reporting[report_type].items():
+                if report_arg not in reporting[report_type]:
+                    reporting[report_type][report_arg] = report_val
+    reporting_hooks = list(reporting.keys())
+    for settings in reporting.values():
+        for module in listify(settings.get('module', settings.get('modules', []))):
+            import_user_module(module)
+    return reporting_hooks, reporting
+
+
+
 class Backend(object):
     """Simple object to represent a deep-learning framework backend"""
     def __init__(self, name=None, params=None, exporter=None):
@@ -776,7 +792,7 @@ class LanguageModelingTask(Task):
         model['batchsz'] = self.config_params['batchsz']
         model['tgt_key'] = self.config_params.get('reader',
                                                   self.config_params.get('loader', {})).get('tgt_key', self.primary_key)
-        model['src_keys'] = listify(self.config_params.get('reader', self.config_params.get('loader', {})).get('src_keys', self.embeddings.keys()))
+        model['src_keys'] = listify(self.config_params.get('reader', self.config_params.get('loader', {})).get('src_keys', list(self.embeddings.keys())))
 
         if self.backend.params is not None:
             for k, v in self.backend.params.items():

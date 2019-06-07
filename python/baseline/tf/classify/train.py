@@ -23,7 +23,11 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         self.loss = model.create_loss()
         self.test_loss = model.create_test_loss()
         self.model = model
-        self.global_step, train_op = optimizer(self.loss, colocate_gradients_with_ops=True, **kwargs)
+        if kwargs.get('baseline_eval_mode', False):
+            # When using a reloaded model creating the training op will break things.
+            train_op = tf.no_op()
+        else:
+            self.global_step, train_op = optimizer(self.loss, colocate_gradients_with_ops=True, **kwargs)
         self.nsteps = kwargs.get('nsteps', six.MAXSIZE)
         decay = kwargs.get('ema_decay', None)
         if decay is not None:
