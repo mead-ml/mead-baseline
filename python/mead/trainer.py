@@ -1,7 +1,7 @@
 import os
 import logging
 import argparse
-from copy import deepcopy
+import copy
 from itertools import chain
 from baseline.utils import read_config_stream, normalize_backend
 import mead
@@ -41,7 +41,7 @@ def update_datasets(datasets_config, config_params, train, valid, test):
     else:
         if len(original_record) != 1:
             logger.warning('Warning: multiple templates found for dataset override, using first!')
-        updated_record = deepcopy(original_record[0])
+        updated_record = copy.deepcopy(original_record[0])
         if 'sha1' in updated_record:
             logging.info('Ignoring SHA1 due to user override')
             del updated_record['sha1']
@@ -72,6 +72,7 @@ def main():
     parser.add_argument('--config', help='JSON Configuration for an experiment', type=convert_path, default="$MEAD_CONFIG")
     parser.add_argument('--settings', help='JSON Configuration for mead', default='config/mead-settings.json', type=convert_path)
     parser.add_argument('--datasets', help='json library of dataset labels', default='config/datasets.json', type=convert_path)
+    parser.add_argument('--modules', help='modules to load', default=[], nargs='+', required=False)
     parser.add_argument('--mod_train_file', help='override the training set')
     parser.add_argument('--mod_valid_file', help='override the validation set')
     parser.add_argument('--mod_test_file', help='override the test set')
@@ -112,6 +113,8 @@ def main():
     if args.backend is not None:
         config_params['backend'] = normalize_backend(args.backend)
 
+    config_params['modules'] = list(set(chain(config_params.get('modules', []), args.modules)))
+
     cmd_hooks = args.reporting if args.reporting is not None else []
     config_hooks = config_params.get('reporting') if config_params.get('reporting') is not None else []
     reporting = parse_extra_args(set(chain(cmd_hooks, config_hooks)), reporting_args)
@@ -120,7 +123,7 @@ def main():
     task_name = config_params.get('task', 'classify') if args.task is None else args.task
     logger.info('Task: [{}]'.format(task_name))
     task = mead.Task.get_task_specific(task_name, args.settings)
-    task.read_config(config_params, args.datasets, reporting_args=reporting_args, config_file=deepcopy(config_params))
+    task.read_config(config_params, args.datasets, reporting_args=reporting_args)
     task.initialize(args.embeddings)
     task.train(args.checkpoint)
 

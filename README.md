@@ -13,7 +13,7 @@ focus on model development, delegating the repetitive tasks to the library.
 
 ## Components
 
-- [**baseline-core**](docs/baseline.md): An object-oriented Python library for
+- [**baseline**](docs/baseline.md): An object-oriented Python library for
   rapid development of deep learning algorithms. The library provides extensible
   base classes for common components in a deep learning architecture (data
   loading, model development, training, evaluation, and export) in TensorFlow,
@@ -27,10 +27,10 @@ focus on model development, delegating the repetitive tasks to the library.
   task. An end-user can easily implement a new model and delegate the rest to
   the library.
 
-- [**mead**](docs/mead.md): A library built for fast modeling, experimentation
-  and development. It contains driver programs to run experiments from JSON
+- [**mead**](docs/mead.md): Software for fast modeling, experimentation
+  and development built on top of [baseline](docs/baseline.md) core modules. It contains driver programs to run experiments from JSON or YAML
   configuration files to completely control the reader, trainer, model, and
-  hyper-parameters.
+  hyper-parameters. 
 
 - [**xpctl**](docs/xpctl.md): A command-line interface to track experimental
   results and provide access to a global leaderboard. After running an
@@ -75,7 +75,7 @@ you need to install baseline before you install xpctl:
 Deep Learning Frameworks are evolving quickly, and changes are not always
 backwards compatible. We recommend recent versions of each framework. Baseline
 is known to work on most versions of TensorFlow, and is currently being run on
-versions between 1.5 and 1.12. PyTorch requires a version that is at least 0.4.
+versions between 1.5 and 1.13. The PyTorch backend requires at least version 1.0.
 
 ## Citing
 

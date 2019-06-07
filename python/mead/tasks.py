@@ -3,6 +3,7 @@ import json
 import logging
 import numpy as np
 import baseline
+from copy import deepcopy
 from baseline.utils import (
     export,
     revlut,
@@ -139,6 +140,7 @@ class Task(object):
         datasets_index = read_config_file_or_json(datasets_index, 'datasets')
         datasets_set = index_by_label(datasets_index)
         self.config_params = config_params
+        config_file = deepcopy(config_params)
         basedir = self.get_basedir()
         if basedir is not None and not os.path.exists(basedir):
             logger.info('Creating: %s', basedir)
@@ -147,11 +149,12 @@ class Task(object):
         # Read GPUS from env variables now so that the reader has access
         if self.config_params['model'].get('gpus', -1) == -1:
             self.config_params['model']['gpus'] = len(get_env_gpus())
-        self.config_file = kwargs.get('config_file')
         self._setup_task(**kwargs)
         self._load_user_modules()
-        self._configure_reporting(config_params.get('reporting', {}), **kwargs)
         self.dataset = get_dataset_from_key(self.config_params['dataset'], datasets_set)
+        # replace dataset in config file by the latest dataset label, this will be used by some reporting hooks
+        config_file['dataset'] = self.dataset['label']
+        self._configure_reporting(config_params.get('reporting', {}), config_file=config_file, **kwargs)
         self.reader = self._create_task_specific_reader()
 
     def _load_user_modules(self):
@@ -230,7 +233,7 @@ class Task(object):
         self._close_reporting_hooks()
         return model, metrics
 
-    def _configure_reporting(self, reporting, **kwargs):
+    def _configure_reporting(self, reporting, config_file, **kwargs):
         """Configure all `reporting_hooks` specified in the mead settings or overridden at the command line
 
         :param reporting:
@@ -246,14 +249,12 @@ class Task(object):
                         reporting[report_type][report_arg] = report_val
         reporting_hooks = list(reporting.keys())
         for settings in reporting.values():
-            try:
-                import_user_module(settings.get('module', ''))
-            except (ImportError, ValueError):
-                pass
+            for module in listify(settings.get('module', settings.get('modules', []))):
+                import_user_module(module)
 
         self.reporting = baseline.create_reporting(reporting_hooks,
                                                    reporting,
-                                                   {'config_file': self.config_file, 'task': self.__class__.task_name(), 'base_dir': self.get_basedir()})
+                                                   {'config_file': config_file, 'task': self.__class__.task_name(), 'base_dir': self.get_basedir()})
 
         self.config_params['train']['reporting'] = [x.step for x in self.reporting]
         logging.basicConfig(level=logging.DEBUG)
@@ -477,7 +478,9 @@ class TaggerTask(Task):
         if 'test_file' in self.dataset:
             vocab_sources.append(self.dataset['test_file'])
 
-        vocabs = self.reader.build_vocab(vocab_sources, min_f=Task._get_min_f(self.config_params))
+        vocabs = self.reader.build_vocab(vocab_sources, min_f=Task._get_min_f(self.config_params),
+                                         vocab_file
+                                         =self.dataset.get('vocab_file'))
         self.embeddings, self.feat2index = self._create_embeddings(embeddings_set, vocabs, self.config_params['features'])
         baseline.save_vocabs(self.get_basedir(), self.feat2index)
 

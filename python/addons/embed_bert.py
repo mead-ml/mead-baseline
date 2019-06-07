@@ -1428,6 +1428,7 @@ class BERTEmbeddings(TensorFlowEmbeddings):
             z = tf.reduce_mean(tf.add_n(layers), axis=-1, keepdims=True)
         z = tf.stop_gradient(z)
         return z
+
     def save_md(self, target):
         write_json({'vsz': self.vsz, 'dsz': self.dsz}, target)
 
@@ -1504,7 +1505,6 @@ class BERTHubEmbeddings(BERTHubModel):
 
 @register_embeddings(name='bert-pooled')
 class BERTHubPooling(BERTHubModel):
-
 
     def __init__(self, name, **kwargs):
         super(BERTHubPooling, self).__init__(name, **kwargs)

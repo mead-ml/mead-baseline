@@ -386,6 +386,25 @@ def create_session():
     config.gpu_options.allow_growth = True
     return tf.Session(config=config)
 
+def reload_lower_layers(sess, checkpoint):
+    """
+    Get the intersection of all non-output layers and declared vars in this graph and restore them
+
+    :param sess: (`tf.Session`) A tensorflow session to restore from
+    :param checkpoint: (`str`) checkpoint to read from
+    :return: None
+    """
+    latest = tf.train.latest_checkpoint(checkpoint)
+    print('Reloading ' + latest)
+    model_vars = set([t[0] for t in tf.train.list_variables(latest)])
+    g = tf.get_collection_ref(tf.GraphKeys.GLOBAL_VARIABLES)
+    g = [v for v in g if not v.op.name.startswith('OptimizeLoss')]
+    g = [v for v in g if not v.op.name.startswith('output/')]
+    g = [v for v in g if v.op.name in model_vars]
+    saver = tf.train.Saver(g)
+    saver.restore(sess, latest)
+
+    
 # # This function should never be used for decoding.  It exists only so that the training model can greedily decode
 def show_examples_tf(model, es, rlut1, rlut2, vocab, mxlen, sample, prob_clip, max_examples, reverse):
     si = np.random.randint(0, len(es))

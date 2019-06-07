@@ -106,6 +106,14 @@
     "label": "atis"
   },
   {
+    "train_file": "atis-2.train.iobes",
+    "valid_file": "atis-2.dev.iobes",
+    "test_file": "atis.test.iobes",
+    "download": "https://www.dropbox.com/s/4xfyr676svx2i5j/atis.tar.gz?dl=1",
+    "sha1": "670af66ca326e915a2f887105bea439bfb00693c",
+    "label": "atis-iobes"
+  },
+  {
     "vocab_file": "vocab.en_vi",
     "train_file": "train",
     "valid_file": "tst2012",

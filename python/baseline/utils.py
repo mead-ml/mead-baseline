@@ -549,6 +549,32 @@ def ls_props(thing):
     return [x for x in dir(thing) if isinstance(getattr(type(thing), x, None), property)]
 
 
+def _idempotent_append(element, data):
+    """Append to a list if that element is not already in the list.
+
+    :param element: The element to add to the list.
+    :param data: `List` the list to add to.
+    :returns: `List` the list with the element in it.
+    """
+    if element not in data:
+        data.append(element)
+    return data
+
+
+def _parse_module_as_path(module_name):
+    """Convert a path to a file to a format that it can be imported.
+
+    :param module_name: The module as a path.
+    :returns: `Tuple[str, str]` the module name (without a file ext) and the
+        absolute path of the dir the file lives in (or '' if the module_name
+        is just a filename).
+    """
+    module_dir, module_name = os.path.split(module_name)
+    module_dir = os.path.realpath(os.path.expanduser(module_dir)) if module_dir else module_dir
+    module_name, _ = os.path.splitext(module_name)
+    return module_name, module_dir
+
+
 @exporter
 def import_user_module(module_name):
     """Load a module that is in the python path
@@ -557,8 +583,10 @@ def import_user_module(module_name):
     :return:
     """
     addon_path = os.path.dirname(os.path.realpath(addons.__file__))
-    if addon_path not in sys.path:
-        sys.path.append(addon_path)
+    _idempotent_append(addon_path, sys.path)
+    if module_name.endswith(".py"):
+        module_name, module_dir = _parse_module_as_path(module_name)
+        _idempotent_append(module_dir, sys.path)
     mod = importlib.import_module(module_name)
     return mod
 
@@ -1639,3 +1667,20 @@ def undo_bpe(seq):
 def undo_sentence_piece(seq):
     """Undo the sentence Piece splits to make Bleu comparable."""
     return seq.replace("\u2581", "")
+
+
+@exporter
+def ngrams(sentence, filtsz=3, joiner='@@'):
+    """Generate ngrams over a sentence
+
+    :param sentence: (`List[str]`) Some tokens
+    :param filtsz: The ngram width
+    :param joiner: A string to join ngrams
+    :return: (`List[str]`) A list of ngrams
+    """
+    chunks = []
+    nt = len(sentence)
+    for i in range(nt - filtsz + 1):
+        chunk = sentence[i:i+filtsz]
+        chunks += [joiner.join(chunk)]
+    return chunks

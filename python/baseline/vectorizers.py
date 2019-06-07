@@ -55,7 +55,9 @@ class AbstractVectorizer(Vectorizer):
         for atom in self.iterable(tokens):
             value = vocab.get(atom)
             if value is None:
-                value = vocab['<UNK>']
+                value = vocab.get('<UNK>', -1)
+                if value == -1:
+                    break
             yield value
 
 
@@ -84,6 +86,7 @@ class Token1DVectorizer(AbstractVectorizer):
             self.mxlen = self.max_seen
 
         vec1d = np.zeros(self.mxlen, dtype=int)
+        i = 0
         for i, atom in enumerate(self._next_element(tokens, vocab)):
             if i == self.mxlen:
                 i -= 1
@@ -98,7 +101,6 @@ class Token1DVectorizer(AbstractVectorizer):
 
     def get_dims(self):
         return self.mxlen,
-
 
 
 @exporter
@@ -131,7 +133,10 @@ def _token_iterator(vectorizer, tokens):
     for tok in tokens:
         token = []
         for field in vectorizer.fields:
-            token += [vectorizer.transform_fn(tok[field])]
+            if isinstance(tok, dict):
+                token += [vectorizer.transform_fn(tok[field])]
+            else:
+                token += [vectorizer.transform_fn(tok)]
         yield vectorizer.delim.join(token)
 
 
@@ -283,8 +288,75 @@ class Char1DVectorizer(AbstractCharVectorizer):
         return self.mxlen,
 
 
+@register_vectorizer(name='ngram')
+class TextNGramVectorizer(Token1DVectorizer):
+    def __init__(self, filtsz=3, joiner='@@', transform_fn=None, pad='<PAD>', **kwargs):
+        super(TextNGramVectorizer, self).__init__(**kwargs)
+        self.filtsz = filtsz
+        self.pad = pad
+        self.joiner = joiner
+        self.transform_fn = identity_trans_fn if transform_fn is None else transform_fn
+
+    def iterable(self, tokens):
+        nt = len(tokens)
+        valid_range = nt - self.filtsz + 1
+        for i in range(valid_range):
+            chunk = tokens[i:i+self.filtsz]
+            yield self.joiner.join(chunk)
+
+    def get_padding(self):
+        return [self.pad] * (self.filtsz // 2)
+
+    def run(self, tokens, vocab):
+        if self.mxlen < 0:
+            self.mxlen = self.max_seen
+        zp = self.get_padding()
+        vec2d = np.zeros(self.mxlen, dtype=int)
+        padded_tokens = zp + tokens + zp
+        for i, atom in enumerate(self._next_element(padded_tokens, vocab)):
+            if i == self.mxlen:
+                break
+            vec2d[i] = atom
+
+        lengths = min(self.mxlen, len(tokens))
+        if self.time_reverse:
+            vec2d = vec2d[::-1]
+            return vec2d, None
+        return vec2d, lengths
+
+
+@register_vectorizer(name='dict-ngram')
+class DictTextNGramVectorizer(TextNGramVectorizer):
+    def __init__(self, **kwargs):
+        super(DictTextNGramVectorizer, self).__init__(**kwargs)
+        self.fields = listify(kwargs.get('fields', 'text'))
+        if len(self.fields) > 1:
+            raise Exception("Multifield N-grams arent supported right now")
+        self.delim = kwargs.get('token_delim', '@@')
+
+    def get_padding(self):
+        return [{self.fields[0]: self.pad}] * (self.filtsz // 2)
+
+    def _tx(self, tok):
+        if tok == '<PAD>' or tok == '<UNK>':
+            return tok
+        return self.transform_fn(tok)
+
+    def iterable(self, tokens):
+        nt = len(tokens)
+        if isinstance(tokens[0], collections.Mapping):
+            token_list = [self._tx(tok[self.fields[0]]) for tok in tokens]
+        else:
+            token_list = [self._tx(tok) for tok in tokens]
+
+        for i in range(nt - self.filtsz + 1):
+            chunk = token_list[i:i+self.filtsz]
+            yield self.joiner.join(chunk)
+
+
 @exporter
 def create_vectorizer(**kwargs):
     vec_type = kwargs.get('vectorizer_type', kwargs.get('type', 'token1d'))
     Constructor = BASELINE_VECTORIZERS.get(vec_type)
     return Constructor(**kwargs)
+

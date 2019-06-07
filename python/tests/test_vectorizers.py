@@ -2,7 +2,7 @@ import string
 import pytest
 import numpy as np
 from baseline.utils import Offsets
-from baseline.vectorizers import Char2DVectorizer, Char1DVectorizer
+from baseline.vectorizers import Char1DVectorizer, Char2DVectorizer, TextNGramVectorizer, DictTextNGramVectorizer
 
 
 @pytest.fixture
@@ -99,3 +99,29 @@ def test_char_1d_no_eow(vocab):
     res, _ = vect.run(input_, vocab)
     assert res[0] == vocab['a']
     assert res[1] == Offsets.PAD
+
+
+def test_text_ngrams():
+    tokens = ["The", "brown", "dog", "walked", "past", "the", "white", "spotted", "one", "."]
+
+    n = 3
+    l = 4
+
+    v = TextNGramVectorizer(filtsz=n)
+    v.mxlen = l
+    cnt = v.count(['<PAD>'] + tokens + ['<PAD>'])
+    vocab = {}
+    for i, word in enumerate(cnt.keys()):
+        vocab[word] = i
+
+    a, length = v.run(tokens, vocab)
+    assert np.allclose(a, np.arange(0, 4))
+    assert length == l
+
+    tokens = [{"text": t} for t in tokens]
+
+    v = DictTextNGramVectorizer(filtsz=n)
+    v.mxlen = 100
+
+    a, length = v.run(tokens, vocab)
+    assert np.allclose(a[:length], np.arange(0, len(tokens)))
