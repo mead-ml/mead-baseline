@@ -368,7 +368,7 @@ def fit(model_params, ts, vs, es=None, **kwargs):
         trainer.test(es, reporting_fns, phase='Test')
 
 
-@register_training_func('lm', 'dataset')
+@register_training_func('lm')
 def fit_datasets(model_params, ts, vs, es=None, **kwargs):
     """
     Train an language model using TensorFlow with `tf.dataset`.  This
@@ -609,7 +609,7 @@ def model_creator(model_params):
     return model_fn
 
 
-@register_training_func('lm') #, 'estimator')
+@register_training_func('lm', 'estimator')
 def fit_estimator(model_params, ts, vs, es=None, epochs=20, gpus=1, **kwargs):
     """Train the model with an `tf.estimator`
 
