@@ -30,7 +30,7 @@ class TaggerModelBase(nn.Module, TaggerModel):
         pass
 
     def init_embed(self, **kwargs):
-        return WithDropout(EmbeddingsStack(self.embeddings), self.pdrop)
+        return EmbeddingsStack(self.embeddings, self.pdrop)
 
     def init_encoder(self, input_sz, **kwargs):
         pass

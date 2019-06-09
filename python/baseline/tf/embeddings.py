@@ -1,9 +1,9 @@
 import math
 import numpy as np
 import tensorflow as tf
-from baseline.utils import write_json, Offsets
+from baseline.utils import write_json, Offsets, is_sequence
 from baseline.embeddings import register_embeddings
-from baseline.tf.tfy import pool_chars, get_shape_as_list, stacked_lstm
+from baseline.tf.tfy import pool_chars, get_shape_as_list, stacked_lstm, skip_conns, highway_conns, get_activation, char_word_conv_embeddings
 import copy
 import six
 
@@ -91,8 +91,8 @@ class TensorFlowEmbeddings(tf.keras.layers.Layer):
 
     def get_config(self):
         config = super(TensorFlowEmbeddings, self).get_config()
-        config['dsz'] = self.get_dsz()
-        config['vsz'] = self.get_vsz()
+        config['dsz'] = int(self.get_dsz())
+        config['vsz'] = int(self.get_vsz())
         config.update(self._state)
         return config
 
@@ -186,6 +186,23 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
     def create_placeholder(cls, name):
         return tf.placeholder(tf.int32, [None, None, None], name=name)
 
+    def _get_filtsz(self):
+        # If this is a list, then its a tuple of (filtsz, nfeats)
+        if is_sequence(self.cfiltsz[0]):
+            filtsz = [filter_and_size[0] for filter_and_size in self.cfiltsz]
+            nfeats = [filter_and_size[1] for filter_and_size in self.cfiltsz]
+
+        # If we get a nfeat factor, we multiply that by each filter, and thresh at max_feat
+        elif self.nfeat_factor:
+            max_feat = self.max_feat
+            filtsz = self.cfiltsz
+            nfeats = [min(self.nfeat_factor * fsz, max_feat) for fsz in filtsz]
+        # Otherwise its just a scalar
+        else:
+            nfeats = self.wsz
+            filtsz = self.cfiltsz
+        return filtsz, nfeats
+
     def __init__(self, name, **kwargs):
         super(CharConvEmbeddings, self).__init__()
         self._name = name
@@ -201,16 +218,26 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
         self.num_gates = kwargs.get('num_gates', 1)
         self.activation = kwargs.get('activation', 'tanh')
         self.wsz = kwargs.get('wsz', 30)
-
+        self.projsz = kwargs.get('projsz')
         self.x = None
+
         if self._weights is None:
             unif = kwargs.get('unif', 0.1)
             self._weights = np.random.uniform(-unif, unif, (self.vsz, self.dsz))
 
-        self.Wch = self.add_variable('{}/Wch'.format(self.scope),
-                                     initializer=tf.constant_initializer(self._weights, dtype=tf.float32,
-                                                                         verify_shape=True),
-                                     shape=[self.vsz, self.dsz], trainable=True)
+        with tf.device("/cpu:0"):
+            self.Wch = self.add_variable('{}/Wch'.format(self.scope),
+                                         initializer=tf.constant_initializer(self._weights, dtype=tf.float32,
+                                                                             verify_shape=True),
+                                         shape=[self.vsz, self.dsz], trainable=True)
+        # These are the actual final filter sizes and num features
+        self.filtsz, self.nfeats = self._get_filtsz()
+        self.outsz = np.sum(self.nfeats)
+
+        if self.projsz:
+            self.Wp = self.add_variable('{}/Wp'.format(self.scope), shape=[self.outsz, self.projsz], trainable=True)
+            self.bp = self.add_variable('{}/bp'.format(self.scope), shape=[self.projsz], trainable=True, initializer=tf.constant_initializer(0.0))
+            self.outsz = self.projsz
 
     def detached_ref(self):
         """This will detach any attached input and reference the same sub-graph otherwise
@@ -223,7 +250,8 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
                                   finetune=self.finetune, nfeat_factor=self.nfeat_factor,
                                   cfiltsz=self.cfiltsz, max_feat=self.max_feat, gating=self.gating,
                                   num_gates=self.num_gates, activation=self.activation, wsz=self.wsz,
-                                  weights=self._weights)
+                                  weights=self._weights,
+                                  projsz=self.projsz)
 
     def encode(self, x=None):
         if x is None:
@@ -231,17 +259,39 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
         self.x = x
 
         ech0 = tf.scatter_update(self.Wch, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, self.dsz]))
-        char_comp, self.wsz = pool_chars(x, self.Wch, ech0, self.dsz, self.nfeat_factor,
-                                         self.cfiltsz, self.max_feat, self.gating,
-                                         self.num_gates, self.activation, self.wsz)
-        return char_comp
+
+        mxlen = tf.shape(self.x)[1]
+
+        gating_fn = highway_conns if self.gating.startswith('highway') else skip_conns
+
+        with tf.variable_scope("Chars2Word"):
+            with tf.control_dependencies([ech0]):
+                mxwlen = tf.shape(self.x)[-1]
+                char_bt_x_w = tf.reshape(self.x, [-1, mxwlen])
+                cembed = tf.nn.embedding_lookup(self.Wch, char_bt_x_w, name="embeddings")
+                cmot, num_filts = char_word_conv_embeddings(cembed, self.filtsz, self.dsz, self.nfeats,
+                                                            activation_fn=get_activation(self.activation),
+                                                            gating=gating_fn,
+                                                            num_gates=self.num_gates)
+
+
+        #return word_char, num_filts
+
+
+        #char_comp, self.outsz = pool_chars(x, self.Wch, ech0, self.dsz, self.nfeat_factor,
+        #                                   self.cfiltsz, self.max_feat, self.gating,
+        #                                   self.num_gates, self.activation, self.wsz)
+        if self.projsz:
+           cmot = tf.matmul(cmot, self.Wp) + self.bp
+        word_char = tf.reshape(cmot, [-1, mxlen, self.outsz])
+        return word_char
 
     def get_vsz(self):
         return self.vsz
 
     # Warning this function is only initialized AFTER encode
     def get_dsz(self):
-        return self.wsz
+        return self.outsz
 
 
 def get_timing_signal_1d(length,
@@ -385,7 +435,7 @@ class CharLSTMEmbeddings(TensorFlowEmbeddings):
             flat_chars = tf.reshape(x, [-1, W])
             word_lengths = tf.reduce_sum(tf.cast(tf.equal(flat_chars, Offsets.PAD), tf.int32), axis=1)
             with tf.control_dependencies([ech0]):
-                embed_chars =  tf.nn.embedding_lookup(Wch, flat_chars)
+                embed_chars = tf.nn.embedding_lookup(Wch, flat_chars)
 
             fwd_lstm = stacked_lstm(self.lstmsz // 2, self.pdrop, self.layers)
             bwd_lstm = stacked_lstm(self.lstmsz // 2, self.pdrop, self.layers)

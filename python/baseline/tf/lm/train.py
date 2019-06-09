@@ -340,11 +340,11 @@ def fit(model_params, ts, vs, es=None, **kwargs):
 
     for epoch in range(epochs):
 
-        trainer.train(ts, reporting_fns)
+        trainer.train(ts, reporting_fns, dataset=False)
         if after_train_fn is not None:
             after_train_fn(trainer.model)
 
-        test_metrics = trainer.test(vs, reporting_fns, phase='Valid')
+        test_metrics = trainer.test(vs, reporting_fns, phase='Valid', dataset=False)
 
         if do_early_stopping is False:
             trainer.checkpoint()
@@ -365,7 +365,7 @@ def fit(model_params, ts, vs, es=None, **kwargs):
         print('Best performance on %s: %.3f at epoch %d' % (early_stopping_metric, best_metric, last_improved))
     if es is not None:
         trainer.recover_last_checkpoint()
-        trainer.test(es, reporting_fns, phase='Test')
+        trainer.test(es, reporting_fns, phase='Test', dataset=False)
 
 
 @register_training_func('lm')

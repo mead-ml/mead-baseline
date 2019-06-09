@@ -190,19 +190,22 @@ def rnn_bi_hidden(output, output_state):
     return output_state
 
 
-def lstm_cell(hsz, forget_bias=1.0):
+def lstm_cell(hsz, forget_bias=1.0, **kwargs):
     """Produce a single cell with no dropout
-
     :param hsz: (``int``) The number of hidden units per LSTM
     :param forget_bias: (``int``) Defaults to 1
     :return: a cell
     """
-    return tf.contrib.rnn.LSTMCell(hsz, forget_bias=forget_bias, state_is_tuple=True)
+    num_proj = kwargs.get('projsz')
+    if num_proj and num_proj == hsz:
+        num_proj = None
+    cell = tf.contrib.rnn.LSTMCell(hsz, forget_bias=forget_bias, state_is_tuple=True, num_proj=num_proj)
+    skip_conn = bool(kwargs.get('skip_conn', False))
+    return tf.nn.rnn_cell.ResidualWrapper(cell) if skip_conn else cell
 
 
-def lstm_cell_w_dropout(hsz, pdrop, forget_bias=1.0, variational=False, training=False):
+def lstm_cell_w_dropout(hsz, pdrop, forget_bias=1.0, variational=False, training=False, **kwargs):
     """Produce a single cell with dropout
-
     :param hsz: (``int``) The number of hidden units per LSTM
     :param pdrop: (``int``) The probability of keeping a unit value during dropout
     :param forget_bias: (``int``) Defaults to 1
@@ -212,14 +215,16 @@ def lstm_cell_w_dropout(hsz, pdrop, forget_bias=1.0, variational=False, training
     """
     output_keep_prob = tf.contrib.framework.smart_cond(training, lambda: 1.0 - pdrop, lambda: 1.0)
     state_keep_prob = tf.contrib.framework.smart_cond(training, lambda: 1.0 - pdrop if variational else 1.0, lambda: 1.0)
-    cell = tf.contrib.rnn.LSTMCell(hsz, forget_bias=forget_bias, state_is_tuple=True)
+    num_proj = kwargs.get('projsz')
+    cell = tf.contrib.rnn.LSTMCell(hsz, forget_bias=forget_bias, state_is_tuple=True, num_proj=num_proj)
+    skip_conn = bool(kwargs.get('skip_conn', False))
+    cell = tf.nn.rnn_cell.ResidualWrapper(cell) if skip_conn else cell
     output = tf.contrib.rnn.DropoutWrapper(cell,
                                            output_keep_prob=output_keep_prob,
                                            state_keep_prob=state_keep_prob,
                                            variational_recurrent=variational,
                                            dtype=tf.float32)
     return output
-
 
 def rnn_cell(hsz, rnntype, st=None):
     """Produce a single RNN cell
@@ -260,7 +265,8 @@ class LayerNorm(tf.keras.layers.Layer):
 # Mapped
 class LSTMEncoder(tf.keras.Model):
 
-    def __init__(self, hsz, nlayers, pdrop=0.0, variational=False, output_fn=None, requires_length=True, name=None, dropout_in_single_layer=False, **kwargs):
+    def __init__(self, hsz, nlayers, pdrop=0.0, variational=False, output_fn=None, requires_length=True, name=None,
+                 dropout_in_single_layer=False, skip_conn=False, projsz=None, **kwargs):
         """Produce a stack of LSTMs with dropout performed on all but the last layer.
 
         :param hsz: (``int``) The number of hidden units per LSTM
@@ -276,13 +282,18 @@ class LSTMEncoder(tf.keras.Model):
         self._requires_length = requires_length
 
         if variational or dropout_in_single_layer:
-            self.rnn = tf.contrib.rnn.MultiRNNCell([lstm_cell_w_dropout(hsz, pdrop, variational=variational, training=TRAIN_FLAG()) for _ in
+            self.rnn = tf.contrib.rnn.MultiRNNCell([lstm_cell_w_dropout(hsz, pdrop,
+                                                                        variational=variational,
+                                                                        training=TRAIN_FLAG(),
+                                                                        skip_conn=skip_conn,
+                                                                        projsz=projsz) for _ in
                      range(nlayers)],
                     state_is_tuple=True
                 )
         else:
             self.rnn = tf.contrib.rnn.MultiRNNCell(
-                [lstm_cell_w_dropout(hsz, pdrop, training=TRAIN_FLAG()) if i < nlayers - 1 else lstm_cell(hsz) for i in range(nlayers)],
+                [lstm_cell_w_dropout(hsz, pdrop, training=TRAIN_FLAG(),
+                                     skip_conn=skip_conn, projsz=projsz) if i < nlayers - 1 else lstm_cell(hsz, skip_conn=skip_conn, projsz=projsz) for i in range(nlayers)],
                     state_is_tuple=True
             )
         self.output_fn = rnn_ident if output_fn is None else output_fn
@@ -317,7 +328,7 @@ class LSTMEncoderWithState(LSTMEncoder):
 # Mapped
 class BiLSTMEncoder(tf.keras.Model):
 
-    def __init__(self, hsz, nlayers, pdrop=0.0, variational=False, output_fn=None, requires_length=True, name=None, **kwargs):
+    def __init__(self, hsz, nlayers, pdrop=0.0, variational=False, output_fn=None, requires_length=True, name=None,  skip_conn=False, projsz=None, **kwargs):
         """Produce a stack of LSTMs with dropout performed on all but the last layer.
 
         :param hsz: (``int``) The number of hidden units per LSTM
@@ -330,22 +341,22 @@ class BiLSTMEncoder(tf.keras.Model):
         super(BiLSTMEncoder, self).__init__(name=name)
         self._requires_length = requires_length
         if variational:
-            self.fwd_rnn = tf.contrib.rnn.MultiRNNCell([lstm_cell_w_dropout(hsz, pdrop, variational=variational, training=TRAIN_FLAG()) for _ in
+            self.fwd_rnn = tf.contrib.rnn.MultiRNNCell([lstm_cell_w_dropout(hsz, pdrop, variational=variational, training=TRAIN_FLAG(), skip_conn=skip_conn, projsz=projsz) for _ in
                      range(nlayers)],
                     state_is_tuple=True
                 )
             self.bwd_rnn = tf.contrib.rnn.MultiRNNCell(
-                [lstm_cell_w_dropout(hsz, pdrop, variational=variational, training=TRAIN_FLAG()) for _ in
+                [lstm_cell_w_dropout(hsz, pdrop, variational=variational, training=TRAIN_FLAG(), skip_conn=skip_conn, projsz=projsz) for _ in
                  range(nlayers)],
                 state_is_tuple=True
                 )
         else:
             self.fwd_rnn = tf.contrib.rnn.MultiRNNCell(
-                [lstm_cell_w_dropout(hsz, pdrop, training=TRAIN_FLAG()) if i < nlayers - 1 else lstm_cell(hsz) for i in range(nlayers)],
+                [lstm_cell_w_dropout(hsz, pdrop, training=TRAIN_FLAG(), skip_conn=skip_conn, projsz=projsz) if i < nlayers - 1 else lstm_cell(hsz, skip_conn=skip_conn, projsz=projsz) for i in range(nlayers)],
                     state_is_tuple=True
             )
             self.bwd_rnn = tf.contrib.rnn.MultiRNNCell(
-                [lstm_cell_w_dropout(hsz, pdrop, training=TRAIN_FLAG()) if i < nlayers - 1 else lstm_cell(hsz) for i in
+                [lstm_cell_w_dropout(hsz, pdrop, training=TRAIN_FLAG(), skip_conn=skip_conn, projsz=projsz) if i < nlayers - 1 else lstm_cell(hsz) for i in
                  range(nlayers)],
                 state_is_tuple=True
             )
@@ -925,7 +936,8 @@ class LangSequenceModel(tf.keras.Model):
             assert isinstance(embeddings, EmbeddingsStack)
             self.embed_model = embeddings
         self.transducer_model = transducer
-        self.proj_layer = TimeDistributedProjection(nc)
+
+        self.output_layer = TimeDistributedProjection(nc)
         self.decoder_model = decoder
 
     def call(self, inputs):
@@ -935,7 +947,7 @@ class LangSequenceModel(tf.keras.Model):
         embedded = self.embed_model(inputs)
         transduced, hidden = self.transducer_model((embedded, h))
         ##transduced, hidden = self.transducer_model(embedded, training)
-        transduced = self.proj_layer(transduced)
+        transduced = self.output_layer(transduced)
         return transduced, hidden
 
 

@@ -1,5 +1,5 @@
 import numpy as np
-from baseline.utils import transition_mask as transition_mask_np, read_json, import_user_module
+from baseline.utils import transition_mask as transition_mask_np, read_json, import_user_module, is_sequence
 from eight_mile.tf.layers import *
 
 
@@ -163,7 +163,7 @@ def pool_chars(x_char, Wch, ce0, char_dsz, nfeat_factor=None,
     :param kwargs:
 
     :Keyword Arguments:
-    * *cfiltsz* -- (``list``) A list of filters
+    * *cfiltsz* -- (``list``) A list of filters sizes, or a list of tuples of (filter size, num filts)
     * *nfeat_factor* -- (``int``) A factor to be multiplied to filter size to decide number of hidden units
     * *max_feat* -- (``int``) The maximum number of hidden units per filter
     * *gating* -- (``str``) `skip` or `highway` supported, yielding residual conn or highway, respectively
@@ -172,12 +172,18 @@ def pool_chars(x_char, Wch, ce0, char_dsz, nfeat_factor=None,
     :return: The character compositional embedding and the number of hidden units as a tuple
 
     """
-    filtsz = cfiltsz
-    if nfeat_factor:
+    if is_sequence(cfiltsz[0]):
+        filtsz = [filter_and_size[0] for filter_and_size in cfiltsz]
+        nfeats = [filter_and_size[1] for filter_and_size in cfiltsz]
+
+    elif nfeat_factor:
         max_feat = max_feat
+        filtsz = cfiltsz
         nfeats = [min(nfeat_factor * fsz, max_feat) for fsz in filtsz]
     else:
         nfeats = wsz
+        filtsz = cfiltsz
+
     mxlen = tf.shape(x_char)[1]
 
     gating_fn = highway_conns if gating.startswith('highway') else skip_conns

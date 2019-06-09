@@ -65,6 +65,7 @@ class ZarembaDecaySchedulerTensorFlow(PiecewiseDecaySchedulerTensorFlow):
         lr = float(kwargs.get('lr', kwargs.get('eta', 1.0)))
         values = [lr/(float(decay_rate)**i) for i in range(len(bounds)+1)]
         super(ZarembaDecaySchedulerTensorFlow, self).__init__(bounds=bounds, values=values)
+
     def __call__(self, lr, global_step):
         return tf.train.piecewise_constant(global_step, self.bounds, self.values)
 
@@ -100,11 +101,15 @@ class CompositeLRSchedulerTensorFlow(object):
 
     def __call__(self, lr, global_step):
         warm_tensor = self.warm(lr, global_step)
-        def call_warm(): return warm_tensor
+
+        def call_warm():
+            return warm_tensor
 
         rest_step = tf.subtract(global_step, tf.constant(self.warm.warmup_steps))
         rest_tensor = self.rest(lr, rest_step)
-        def call_rest(): return rest_tensor
+
+        def call_rest():
+            return rest_tensor
 
         return tf.cond(
             global_step < self.warm.warmup_steps,

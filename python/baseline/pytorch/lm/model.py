@@ -27,7 +27,7 @@ class LanguageModelBase(nn.Module, LanguageModel):
 
     def make_input(self, batch_dict):
         example_dict = dict({})
-        for key in self.embeddings.keys():
+        for key in self.src_keys:
             example_dict[key] = torch.from_numpy(batch_dict[key])
             if self.gpu:
                 example_dict[key] = example_dict[key].cuda()
@@ -42,7 +42,7 @@ class LanguageModelBase(nn.Module, LanguageModel):
 
     def embed(self, input):
         all_embeddings = []
-        for k, embedding in self.embeddings.items():
+        for k, embedding in self.src_keys:
             all_embeddings.append(embedding.encode(input[k]))
         embedded = torch.cat(all_embeddings, 2)
         return self.embed_dropout(embedded)
@@ -54,7 +54,8 @@ class LanguageModelBase(nn.Module, LanguageModel):
         input_sz = 0
         for k, embedding in embeddings.items():
             self.embeddings[k] = embedding
-            input_sz += embedding.get_dsz()
+            if k in self.src_keys:
+                input_sz += embedding.get_dsz()
         return input_sz
 
     def init_decode(self, vsz, **kwargs):
@@ -73,6 +74,8 @@ class LanguageModelBase(nn.Module, LanguageModel):
         lm.tgt_key = kwargs.get('tgt_key')
         if lm.tgt_key is None:
             raise Exception('Need a `tgt_key` to know which source vocabulary should be used for destination ')
+
+        lm.src_keys = kwargs.get('src_keys', embeddings.keys())
 
         lm.dsz = lm.init_embed(embeddings, **kwargs)
         lm.init_decode(**kwargs)

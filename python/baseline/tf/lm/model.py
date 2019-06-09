@@ -127,7 +127,7 @@ class LanguageModelBase(LanguageModel):
         """
         feed_dict = new_placeholder_dict(train)
 
-        for key in self.embeddings.keys():
+        for key in self.src_keys:
 
             feed_dict["{}:0".format(key)] = batch_dict[key]
 
@@ -167,9 +167,8 @@ class LanguageModelBase(LanguageModel):
         :return: The created model
         """
         lm = cls()
-        lm.embeddings = embeddings
-        for k, embedding in embeddings.items():
-            lm.embeddings[k] = embedding.detached_ref()
+        lm.embeddings = {k: embedding.detached_ref() for k, embedding in embeddings.items()}
+        lm.src_keys = kwargs.get('src_keys', embeddings.keys())
         lm.tgt_key = kwargs.get('tgt_key')
         if lm.tgt_key is None:
             raise Exception('Need a `tgt_key` to know which source vocabulary should be used for destination ')
@@ -185,8 +184,8 @@ class LanguageModelBase(LanguageModel):
 
         lm.y = kwargs.get('y', tf.placeholder(tf.int32, [None, None], name="y"))
         lm.sess = kwargs.get('sess', tf.Session())
-        lm.pdrop_value = kwargs.get('pdrop', 0.5)
-        lm.hsz = kwargs['hsz']
+        lm.pdrop_value = kwargs.pop('pdrop', 0.5)
+        lm.hsz = kwargs.pop('hsz', None)
 
         unif = kwargs.get('unif', 0.05)
         weight_initializer = tf.random_uniform_initializer(-unif, unif)
@@ -210,7 +209,9 @@ class LanguageModelBase(LanguageModel):
         :return: A 3-d vector where the last dimension is the concatenated dimensions of all embeddings
         """
 
-        return EmbeddingsStack(self.embeddings, self.pdrop_value)
+        src_embeddings = {k: self.embeddings[k] for k in self.src_keys}
+        embed_output = EmbeddingsStack(src_embeddings, self.pdrop_value)
+        return embed_output
 
     @classmethod
     def load(cls, basename, **kwargs):
@@ -305,7 +306,7 @@ class RNNLanguageModel(LanguageModelBase):
 
         :return: The layer
         """
-        lstm_encoder_layer = LSTMEncoderWithState(self.hsz, layers, self.pdrop_value)
+        lstm_encoder_layer = LSTMEncoderWithState(self.hsz, layers, self.pdrop_value, **kwargs)
         self.initial_state = lstm_encoder_layer.zero_state(self.batchsz)
         inputs["h"] = self.initial_state
         return lstm_encoder_layer

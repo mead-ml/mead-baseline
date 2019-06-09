@@ -264,12 +264,10 @@ class SeqWordCharDataFeed(DataFeed):
 
     def __init__(self, examples, nctx, batchsz, tgt_key=None):
         """Constructor
-
         :param examples: word tensor
-        :param xch: character tensor
         :param nctx: Number of steps of BPTT
         :param batchsz: Batch size
-        :param maxw: The maximum word length
+        :param tgt_key: Which field to treat as the target key (this will share an embedding vocab with the source)
         """
         super(SeqWordCharDataFeed, self).__init__()
         self.examples = dict()
@@ -290,13 +288,14 @@ class SeqWordCharDataFeed(DataFeed):
             dim_key = '{}_dims'.format(k)
             shp = examples[dim_key]
             if len(shp) == 2:
-                width = nctx * shp[1]
+                width = shp[1]
             else:
                 width = 1
             trunc = batchsz * rest * width
-            self.examples[k] = examples[k][:trunc].reshape((batchsz, rest * width))
+            vec = examples[k].reshape(-1)[:trunc]
+            self.examples[k] = vec.reshape((batchsz, rest * width))
 
-            print('Truncating {} from {} to {}'.format(k, num_examples, trunc))
+            print('Truncating %s from %d to %d' %(k, num_examples, trunc))
             self.examples[k].flatten()
             self.examples[dim_key] = shp
         self.nctx = nctx
