@@ -367,7 +367,7 @@ class LSTMModel(EmbedPoolStackClassifier):
         :return: 
         """
         hsz = kwargs.get('rnnsz', kwargs.get('hsz', 100))
-        vdrop = bool(kwargs.get('variational_dropout', False))
+        vdrop = bool(kwargs.get('variational', False))
         if type(hsz) is list:
             hsz = hsz[0]
 

@@ -112,7 +112,7 @@ class RNNLanguageModel(LanguageModelBase):
 
     def init_decode(self, **kwargs):
         pdrop = float(kwargs.get('dropout', 0.5))
-        vdrop = bool(kwargs.get('variational_dropout', False))
+        vdrop = bool(kwargs.get('variational', False))
         if vdrop:
             self.rnn_dropout = VariationalDropout(pdrop)
         else:

@@ -28,7 +28,7 @@
         "model_type": "default",
         "hsz": 650,
         "layers": 2,
-        "vdrop": false,
+        "variational": false,
         "tie_weights": true,
         "pdrop": 0.5
     },

@@ -168,7 +168,7 @@ class LanguageModelBase(LanguageModel):
         """
         lm = cls()
         lm.embeddings = {k: embedding.detached_ref() for k, embedding in embeddings.items()}
-        lm.src_keys = kwargs.get('src_keys', embeddings.keys())
+        lm.src_keys = kwargs.get('src_keys', lm.embeddings.keys())
         lm.tgt_key = kwargs.get('tgt_key')
         if lm.tgt_key is None:
             raise Exception('Need a `tgt_key` to know which source vocabulary should be used for destination ')
@@ -293,14 +293,14 @@ class RNNLanguageModel(LanguageModelBase):
         self.rnntype = 'lstm'
         self.initial_state = None
 
-    def decode(self, inputs, batchsz=1, rnntype='lstm', layers=1, variational_dropout=False, **kwargs):
+    def decode(self, inputs, batchsz=1, rnntype='lstm', layers=1, **kwargs):
         """LSTM-based method for decoding
 
         :param inputs: The outputs of the embeddings
         :param batchsz: (`int`) The batch size
         :param rnntype: (`str`) What type of RNN (defaults to `lstm`)
         :param layers: (`int`) Defaults to 1
-        :param variational_dropout: (`bool`) Using variational dropout?
+        :param variational: (`bool`) Using variational dropout?
         :param kwargs: See above
 
 

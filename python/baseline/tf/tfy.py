@@ -231,13 +231,13 @@ def layer_norm(input, name, axis=[-1]):
     return LayerNorm(name=name, axis=axis)(input)
 
 
-def lstm_encoder(embedseq, lengths, hsz, pdrop_value=0.5, variational_dropout=False, rnntype='blstm', layers=1):
+def lstm_encoder(embedseq, lengths, hsz, pdrop_value=0.5, variational=False, rnntype='blstm', layers=1):
 
     if rnntype == 'blstm':
         Encoder = BiLSTMEncoder
     else:
         Encoder = LSTMEncoder
-    return Encoder(hsz, pdrop_value, layers, variational_dropout, rnn_signal)((embedseq, lengths), training=TRAIN_FLAG())
+    return Encoder(hsz, pdrop_value, layers, variational, rnn_signal)((embedseq, lengths), training=TRAIN_FLAG())
 
 
 def rnn_cell_w_dropout(hsz, pdrop, rnntype, st=None, variational=False, training=False):

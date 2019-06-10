@@ -276,7 +276,7 @@ class TaggerModelBase(TaggerModel):
         * *span_type* -- (`str`) The type of input span
         * *username* -- (`str`) A username, defaults to the name of the user on this machine
         * *label* -- (`str`) An optional, human-readable label name.  Defaults to sha1 of this configuration
-        * *variational_dropout* -- (`bool`) Should we do variational dropout
+        * *variational* -- (`bool`) Should we do variational dropout
         * *rnntype* -- (`str`) -- The type of RNN (if this is an RNN), defaults to 'blstm'
         * *layers* -- (`int`) -- The number of layers to apply on the encoder
         * *hsz* -- (`int`) -- The number of hidden units for the encoder
@@ -331,7 +331,7 @@ class RNNTaggerModel(TaggerModelBase):
         super(RNNTaggerModel, self).__init__()
 
     def encode(self, **kwargs):
-        self.vdrop = kwargs.get('variational_dropout', False)
+        self.vdrop = kwargs.get('variational', False)
         rnntype = kwargs.get('rnntype', 'blstm')
         nlayers = kwargs.get('layers', 1)
         hsz = int(kwargs['hsz'])

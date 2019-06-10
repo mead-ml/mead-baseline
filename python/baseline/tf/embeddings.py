@@ -3,7 +3,7 @@ import numpy as np
 import tensorflow as tf
 from baseline.utils import write_json, Offsets, is_sequence
 from baseline.embeddings import register_embeddings
-from baseline.tf.tfy import pool_chars, get_shape_as_list, stacked_lstm, skip_conns, highway_conns, get_activation, char_word_conv_embeddings
+from baseline.tf.tfy import pool_chars, get_shape_as_list, stacked_lstm, skip_conns, highway_conns, get_activation, char_word_conv_embeddings, TRAIN_FLAG
 import copy
 import six
 
@@ -128,6 +128,7 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
         self.dsz = kwargs.get('dsz')
         self.finetune = kwargs.get('finetune', True)
         self._name = name
+        self.dropin = kwargs.get('dropin', 0.0)
         self.scope = kwargs.get('scope', '{}/LUT'.format(self._name))
 
         self._weights = kwargs.get('weights')
@@ -139,6 +140,9 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
         self.W = self.add_variable('{}/Weight'.format(self.scope),
                                    shape=(self.vsz, self.dsz),
                                    initializer=tf.constant_initializer(self._weights, dtype=tf.float32, verify_shape=True))
+
+
+
 
     def get_dsz(self):
         return self.dsz
@@ -157,6 +161,7 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
                                      vsz=self.vsz,
                                      dsz=self.dsz,
                                      scope=self.scope,
+                                     dropin=self.dropin,
                                      finetune=self.finetune,
                                      weights=self._weights)
 
@@ -172,7 +177,9 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
 
         e0 = tf.scatter_update(self.W, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, self.dsz]))
         with tf.control_dependencies([e0]):
-            word_embeddings = tf.nn.embedding_lookup(self.W, self.x)
+            # The ablation table (4) in https://arxiv.org/pdf/1708.02182.pdf shows this has a massive impact
+            embedding_w_dropout = tf.layers.dropout(self.W, self.dropin, noise_shape=(self.vsz, 1),  training=TRAIN_FLAG())
+            word_embeddings = tf.nn.embedding_lookup(embedding_w_dropout, self.x)
 
         return word_embeddings
 
@@ -219,6 +226,7 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
         self.activation = kwargs.get('activation', 'tanh')
         self.wsz = kwargs.get('wsz', 30)
         self.projsz = kwargs.get('projsz')
+        self.dropin = kwargs.get('dropin', 0.0)
         self.x = None
 
         if self._weights is None:
@@ -251,6 +259,7 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
                                   cfiltsz=self.cfiltsz, max_feat=self.max_feat, gating=self.gating,
                                   num_gates=self.num_gates, activation=self.activation, wsz=self.wsz,
                                   weights=self._weights,
+                                  dropin=self.dropin,
                                   projsz=self.projsz)
 
     def encode(self, x=None):
@@ -268,7 +277,9 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
             with tf.control_dependencies([ech0]):
                 mxwlen = tf.shape(self.x)[-1]
                 char_bt_x_w = tf.reshape(self.x, [-1, mxwlen])
-                cembed = tf.nn.embedding_lookup(self.Wch, char_bt_x_w, name="embeddings")
+                # The ablation table (4) in https://arxiv.org/pdf/1708.02182.pdf shows this has a massive impact
+                embedding_w_dropout = tf.layers.dropout(self.Wch, self.dropin, noise_shape=(self.vsz, 1), training=TRAIN_FLAG())
+                cembed = tf.nn.embedding_lookup(embedding_w_dropout, char_bt_x_w, name="embeddings")
                 cmot, num_filts = char_word_conv_embeddings(cembed, self.filtsz, self.dsz, self.nfeats,
                                                             activation_fn=get_activation(self.activation),
                                                             gating=gating_fn,

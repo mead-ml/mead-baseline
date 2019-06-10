@@ -754,7 +754,10 @@ class LanguageModelingTask(Task):
 
         model['tgt_key'] = self.config_params.get('reader',
                                                   self.config_params.get('loader', {})).get('tgt_key', self.primary_key)
-        model['src_keys'] = listify(self.config_params.get('reader', self.config_params.get('loader', {})).get('src_keys', self.embeddings.keys()))
+        model['src_keys'] = listify(self.config_params.get('reader',
+                                                           self.config_params.get('loader',
+                                                                                  {})).get('src_keys',
+                                                                                           list(self.embeddings.keys())))
 
         if self.backend.params is not None:
             for k, v in self.backend.params.items():
