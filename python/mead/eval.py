@@ -16,7 +16,7 @@ SERVICES = {
     'classify': ClassifierService,
     'tagger': TaggerService,
     'seq2seq': EncoderDecoderService,
-    'lm': LanguageModelService,
+    'lm': LanguageModelService
 }
 
 
@@ -79,12 +79,12 @@ def get_trainer(model, trainer, verbose, backend, **kwargs):
                 type=trainer,
                 verbose=verbose,
                 baseline_eval_mode=True,
-                **kwargs,
                 basedir='',
+                **kwargs
             )
     else:
         trainer = create_trainer(
-            model.model, type=trainer, verbose=verbose, baseline_eval_mode=True, **kwargs, basedir=''
+            model.model, type=trainer, verbose=verbose, baseline_eval_mode=True, basedir='', **kwargs
         )
     return trainer
 
@@ -158,7 +158,7 @@ def main():
         type=args.reader,
         named_fields=named_fields,
         pair_suffix=args.pair_suffix,
-        **reader_options,
+        **reader_options
     )
     reader = patch_reader(args.task, model, reader)
 
@@ -172,9 +172,9 @@ def main():
         args.trainer,
         verbose_options,
         backend.name,
-        **trainer_options,
         gpu=args.device != 'cpu',
         nogpu=args.device == 'cpu',
+        **trainer_options
     )
 
     metrics = trainer.test(data, reporting_fns=reporting_fns, phase='Test', verbose=verbose_options, **model_options)
