@@ -23,7 +23,7 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         self.loss = model.create_loss()
         self.test_loss = model.create_test_loss()
         self.model = model
-        if kwargs.get('baseline_eval_mode', False):
+        if kwargs.get('eval_mode', False):
             # When using a reloaded model creating the training op will break things.
             train_op = tf.no_op()
         else:

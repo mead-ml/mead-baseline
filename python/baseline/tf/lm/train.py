@@ -19,7 +19,7 @@ class LanguageModelTrainerTf(Trainer):
         self.model = model
         self.loss = model.create_loss()
         self.test_loss = model.create_test_loss()
-        if kwargs.get('baseline_eval_mode', False):
+        if kwargs.get('eval_mode', False):
             # When reloaded a model creating the training op will break things.
             self.train_op = tf.no_op()
         else:

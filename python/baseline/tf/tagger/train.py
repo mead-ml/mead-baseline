@@ -100,7 +100,7 @@ class TaggerTrainerTf(EpochReportingTrainer):
 
     def __init__(self, model, **kwargs):
         super(TaggerTrainerTf, self).__init__()
-        if kwargs.get('baseline_eval_mode', False):
+        if kwargs.get('eval_mode', False):
             # The loss is already in the graph so don't make it again.
             self.loss = tf.no_op()
         else:
@@ -109,7 +109,7 @@ class TaggerTrainerTf(EpochReportingTrainer):
         span_type = kwargs.get('span_type', 'iob')
         verbose = kwargs.get('verbose', False)
         self.evaluator = TaggerEvaluatorTf(model, span_type, verbose)
-        if kwargs.get('baseline_eval_mode', False):
+        if kwargs.get('eval_mode', False):
             # When reloaded a model creating the training op will break things.
             self.train_op = tf.no_op()
         else:

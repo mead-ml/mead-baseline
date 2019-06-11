@@ -26,7 +26,7 @@ class Seq2SeqTrainerTf(Trainer):
     def __init__(self, model, **kwargs):
         super(Seq2SeqTrainerTf, self).__init__()
         self.sess = model.sess
-        if kwargs.get('baseline_eval_mode', False):
+        if kwargs.get('eval_mode', False):
             # When reloading a model things like `decoder.preds` used in the loss are not present.
             # Trying to create the loss would break things.
             self.loss = tf.no_op()
@@ -38,7 +38,7 @@ class Seq2SeqTrainerTf(Trainer):
         self.model = model
         self.tgt_rlut = kwargs['tgt_rlut']
         self.base_dir = kwargs['basedir']
-        if kwargs.get('baseline_eval_mode', False):
+        if kwargs.get('eval_mode', False):
             # When reloaded a model creating the training op will break things.
             self.train_op = tf.no_op()
         else:
