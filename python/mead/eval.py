@@ -137,14 +137,14 @@ def main():
         logger.warning('Warning: no mead-settings file was found at [{}]'.format(args.settings))
         args.settings = {}
 
-    reporting = parse_extra_args(args.reporting if args.reporting is not None else [], extra_args)
-    reporting_hooks, reporting = merge_reporting_with_settings(reporting, args.settings)
-    reporting_fns = [x.step for x in create_reporting(reporting_hooks, reporting, {'task': args.task})]
-
     backend = Backend(args.backend)
     backend.load(args.task)
     for module in args.modules:
         import_user_module(module)
+
+    reporting = parse_extra_args(args.reporting if args.reporting is not None else [], extra_args)
+    reporting_hooks, reporting = merge_reporting_with_settings(reporting, args.settings)
+    reporting_fns = [x.step for x in create_reporting(reporting_hooks, reporting, {'task': args.task})]
 
     service = get_service(args.task)
     model = service.load(args.model, backend=args.backend, remote=args.remote, device=args.device, **model_options)
