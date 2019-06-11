@@ -60,8 +60,8 @@ def load_data(task, reader, model, dataset, batchsz):
         data = reader.load(dataset, model.vocabs, batchsz, tgt_key=model.model.tgt_key)
     else:
         data = reader.load(dataset, model.vocabs, batchsz)
-    if isinstance(data, tuple):
-        data = data[0]
+    if not isinstance(data, tuple):
+        data = (data, )
     return data
 
 
@@ -103,6 +103,7 @@ def main():
     parser.add_argument('--trim', default=True, type=str2bool)
     parser.add_argument('--batchsz', default=50)
     parser.add_argument('--trainer', default='default')
+    parser.add_argument('--output', default=None)
     parser.add_argument('--remote')
     parser.add_argument(
         '--features',
@@ -162,7 +163,7 @@ def main():
     )
     reader = patch_reader(args.task, model, reader)
 
-    data = load_data(args.task, reader, model, args.dataset, args.batchsz)
+    data, txts = load_data(args.task, reader, model, args.dataset, args.batchsz)
 
     if args.task == 'seq2seq':
         trainer_options['tgt_rlut'] = {v: k for k, v in model.tgt_vocab.items()}
@@ -176,9 +177,14 @@ def main():
         nogpu=args.device == 'cpu',
         **trainer_options
     )
-
-    metrics = trainer.test(data, reporting_fns=reporting_fns, phase='Test', verbose=verbose_options, **model_options)
-
+    if args.task == 'classify':
+        _ = trainer.test(data, reporting_fns=reporting_fns, phase='Test', verbose=verbose_options,
+                         output=args.output, txts=txts, **model_options)
+    elif args.task == 'tagger':
+        _ = trainer.test(data, reporting_fns=reporting_fns, phase='Test', verbose=verbose_options,
+                         conll_output=args.output, txts=txts, **model_options)
+    else:
+        _ = trainer.test(data, reporting_fns=reporting_fns, phase='Test', verbose=verbose_options, **model_options)
 
 if __name__ == "__main__":
     main()

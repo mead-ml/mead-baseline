@@ -53,12 +53,16 @@ class ClassifyTrainerDynet(EpochReportingTrainer):
     def _get_batchsz(batch_dict):
         return len(batch_dict['y'])
 
-    def _step(self, loader, update, log, reporting_fns, verbose=None):
+    def _step(self, loader, update, log, reporting_fns, verbose=None, output=None, txts=None):
         steps = len(loader)
         pg = create_progress_bar(steps)
         cm = ConfusionMatrix(self.labels)
         epoch_loss = 0
         epoch_div = 0
+        handle = None
+        line_number = 0
+        if output is not None and txts is not None:
+            handle = open(output, "w")
 
         for batch_dict in pg(loader):
             dy.renew_cg()
@@ -69,6 +73,10 @@ class ClassifyTrainerDynet(EpochReportingTrainer):
             loss = dy.mean_batches(losses)
             batchsz = self._get_batchsz(batch_dict)
             lossv = loss.npvalue().item() * batchsz
+            if handle is not None:
+                for p, y in zip(preds, ys):
+                    handle.write('{},{},{}\n'.format(" ".join(txts[line_number]), p, y))
+                    line_number += 1
             epoch_loss += lossv
             epoch_div += batchsz
             _add_to_cm(cm, ys, preds.npvalue())
@@ -78,11 +86,14 @@ class ClassifyTrainerDynet(EpochReportingTrainer):
         metrics = cm.get_all_metrics()
         metrics['avg_loss'] = epoch_loss / float(epoch_div)
         verbose_output(verbose, cm)
+        if handle is not None:
+            handle.close()
         return metrics
 
     def _test(self, loader, **kwargs):
         self.model.train = False
-        return self._step(loader, lambda x: None, self._dummy_log, [], kwargs.get("verbose", None))
+        return self._step(loader, lambda x: None, self._dummy_log, [], kwargs.get("verbose", None), kwargs.get('output'),
+                          kwargs.get('txts'))
 
     def _train(self, loader, **kwargs):
         self.model.train = True
@@ -95,7 +106,7 @@ class ClassifyTrainerAutobatch(ClassifyTrainerDynet):
         self.autobatchsz = autobatchsz
         super(ClassifyTrainerAutobatch, self).__init__(model, **kwargs)
 
-    def _step(self, loader, update, log, reporting_fns, verbose=None):
+    def _step(self, loader, update, log, reporting_fns, verbose=None, output=None, txts=None):
         steps = len(loader)
         pg = create_progress_bar(steps)
         cm = ConfusionMatrix(self.labels)
@@ -142,7 +153,8 @@ def fit(model, ts, vs, es, epochs=20, do_early_stopping=True, early_stopping_met
     autobatchsz = kwargs.get('autobatchsz', 1)
     verbose = kwargs.get('verbose', {'print': kwargs.get('verbose_print', False), 'file': kwargs.get('verbose_file', None)})
     model_file = get_model_file('classify', 'dynet', kwargs.get('basedir'))
-
+    output = kwargs.get('output')
+    txts = kwargs.get('txts')
     best_metric = 0
     if do_early_stopping:
         patience = kwargs.get('patience', epochs)
@@ -178,5 +190,5 @@ def fit(model, ts, vs, es, epochs=20, do_early_stopping=True, early_stopping_met
     if es is not None:
         logger.info('Reloading best checkpoint')
         model = model.load(model_file)
-        test_metrics = trainer.test(es, reporting_fns, phase='Test', verbose=verbose)
+        test_metrics = trainer.test(es, reporting_fns, phase='Test', verbose=verbose, output=output, txts=txts)
     return test_metrics

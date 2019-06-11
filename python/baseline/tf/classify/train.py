@@ -84,6 +84,12 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         total_loss = 0
         total_norm = 0
         verbose = kwargs.get("verbose", None)
+        output = kwargs.get('output')
+        txts = kwargs.get('txts')
+        handle = None
+        line_number = 0
+        if output is not None and txts is not None:
+            handle = open(output, "w")
 
         pg = create_progress_bar(steps)
         for batch_dict in pg(loader):
@@ -91,6 +97,10 @@ class ClassifyTrainerTf(EpochReportingTrainer):
             feed_dict = self.model.make_input(batch_dict)
             guess, lossv = self.sess.run([self.model.best, self.test_loss], feed_dict=feed_dict)
             batchsz = self._get_batchsz(batch_dict)
+            if handle is not None:
+                for predicted, gold in zip(guess, y):
+                    handle.write('{},{},{}\n'.format(" ".join(txts[line_number]), predicted, gold))
+                    line_number += 1
             total_loss += lossv * batchsz
             total_norm += batchsz
             cm.add_batch(y, guess)
@@ -99,6 +109,8 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         metrics['avg_loss'] = total_loss / float(total_norm)
         verbose_output(verbose, cm)
 
+        if handle is not None:
+            handle.close()
         return metrics
 
     def checkpoint(self):
@@ -140,6 +152,9 @@ def fit(model, ts, vs, es=None, **kwargs):
     epochs = int(kwargs.get('epochs', 20))
     model_file = get_model_file('classify', 'tf', kwargs.get('basedir'))
     ema = True if kwargs.get('ema_decay') is not None else False
+
+    output = kwargs.get('output')
+    txts = kwargs.get('txts')
 
     best_metric = 0
     if do_early_stopping:
@@ -192,5 +207,5 @@ def fit(model, ts, vs, es=None, **kwargs):
     if es is not None:
         logger.info('Reloading best checkpoint')
         trainer.recover_last_checkpoint()
-        test_metrics = trainer.test(es, reporting_fns, phase='Test', verbose=verbose)
+        test_metrics = trainer.test(es, reporting_fns, phase='Test', verbose=verbose, output=output, txts=txts)
     return test_metrics
