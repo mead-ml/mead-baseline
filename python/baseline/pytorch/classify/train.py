@@ -60,7 +60,7 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
             loss = self.crit(pred, ys)
             if handle is not None:
                 for p, y in zip(pred, ys):
-                    handle.write('{},{},{}\n'.format(" ".join(txts[line_number]), p, y))
+                    handle.write('{}\t{}\t{}\n'.format(" ".join(txts[line_number]), p, y))
                     line_number += 1
             batchsz = self._get_batchsz(batch_dict)
             total_loss += loss.item() * batchsz
