@@ -75,7 +75,7 @@ class ClassifyTrainerDynet(EpochReportingTrainer):
             lossv = loss.npvalue().item() * batchsz
             if handle is not None:
                 for p, y in zip(preds, ys):
-                    handle.write('{}\t{}\t{}\n'.format(" ".join(txts[line_number]), p, y))
+                    handle.write('{}\t{}\t{}\n'.format(" ".join(txts[line_number]), self.model.labels[p], self.model.labels[y]))
                     line_number += 1
             epoch_loss += lossv
             epoch_div += batchsz

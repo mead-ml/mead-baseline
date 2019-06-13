@@ -99,7 +99,7 @@ class ClassifyTrainerTf(EpochReportingTrainer):
             batchsz = self._get_batchsz(batch_dict)
             if handle is not None:
                 for predicted, gold in zip(guess, y):
-                    handle.write('{}\t{}\t{}\n'.format(" ".join(txts[line_number]), predicted, gold))
+                    handle.write('{}\t{}\t{}\n'.format(" ".join(txts[line_number]), self.model.labels[predicted], self.model.labels[gold]))
                     line_number += 1
             total_loss += lossv * batchsz
             total_norm += batchsz
