@@ -70,6 +70,8 @@ class LanguageModelBase(nn.Module, LanguageModel):
             self.embeddings_proj = pytorch_linear(input_sz, projsz)
             print('Applying a transform from {} to {}'.format(input_sz, projsz))
             return projsz
+        else:
+            self.embeddings_proj = None
         return input_sz
 
     def init_decode(self, vsz, **kwargs):
