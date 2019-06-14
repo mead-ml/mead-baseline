@@ -108,8 +108,6 @@ class GOVectorizer(Vectorizer):
 
     def __init__(self, vectorizer):
         self.vectorizer = vectorizer
-        if self.vectorizer.mxlen != -1:
-            self.vectorizer.mxlen -= 2
 
     def iterable(self, tokens):
         raise Exception("Not implemented")

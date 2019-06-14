@@ -6,7 +6,7 @@
     "nbptt": 60,
     "preproc": {
     },
-    "backend": "tensorflow",
+    "backend": "pytorch",
     "dataset": "ptb",
     "loader": {
         "reader_type": "default",
@@ -19,15 +19,15 @@
                 "type": "token1d",
                 "fields": "text"
             },
-            "embeddings": {"label": "w2v-gn", "type": "positional"}
+            "embeddings": {"dsz":  300, "type": "positional"}
         }
 
     ],
     "model": {
-        "model_type": "default",
-        "hsz": 640,
+        "model_type": "transformer",
+        "hsz": 300,
         "layers": 2,
-        "pdrop": 0.5
+        "pdrop": 0.65
     },
     "train": {
         "epochs": 40,
