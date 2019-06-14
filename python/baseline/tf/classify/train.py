@@ -150,7 +150,8 @@ def fit(model, ts, vs, es=None, **kwargs):
     trainer = create_trainer(model, **kwargs)
     tables = tf.tables_initializer()
     model.sess.run(tables)
-    feed_dict = {k: v for e in model.embeddings.values() for k, v in e.get_feed_dict().items()}
+    m = model.replicas[0] if hasattr(model, 'replicas') else model
+    feed_dict = {k: v for e in m.embeddings.values() for k, v in e.get_feed_dict().items()}
     model.sess.run(tf.global_variables_initializer(), feed_dict)
     model.set_saver(tf.train.Saver())
     checkpoint = kwargs.get('checkpoint')
