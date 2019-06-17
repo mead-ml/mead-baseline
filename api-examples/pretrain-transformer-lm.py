@@ -330,12 +330,12 @@ def load_embed_and_vocab(token_type, reader, dataset, dataset_key, d_model):
 def train():
     parser = ArgumentParser()
     parser.add_argument("--basedir", type=str)
-    parser.add_argument("--dataset_key", type=str, default='wikitext-103', help="key from DATASETS global")
+    parser.add_argument("--dataset_key", type=str, default='wikitext-2-raw', help="key from DATASETS global")
     parser.add_argument("--dataset_cache", type=str, default='~/.bl-data', help="Path or url of the dataset cache")
     parser.add_argument("--d_model", type=int, default=410, help="Model dimension (and embedding dsz)")
     parser.add_argument("--d_ff", type=int, default=2100, help="FFN dimension")
     parser.add_argument("--num_heads", type=int, default=10, help="Number of heads")
-    parser.add_argument("--num_layers", type=int, default=1, help="Number of layers")
+    parser.add_argument("--num_layers", type=int, default=8, help="Number of layers")
     parser.add_argument("--nctx", type=int, default=256, help="Max input length")
     parser.add_argument("--batch_size", type=int, default=8, help="Batch Size")
     parser.add_argument("--tokens", choices=["words", "chars", "subwords"], default="subwords", help="What tokens to use")
@@ -345,7 +345,7 @@ def train():
     parser.add_argument("--weight_decay", type=float, default=0.0, help="Weight decay")
     parser.add_argument("--epochs", type=int, default=20, help="Num training epochs")
     parser.add_argument("--warmup_steps", type=int, default=1000, help="Num warmup steps")
-    parser.add_argument("--eval_every", type=int, default=-1, help="Evaluate every X steps (-1 => end of epoch)")
+    parser.add_argument("--eval_every", type=int, default=500, help="Evaluate every X steps (-1 => end of epoch)")
 
     parser.add_argument("--device", type=str,
                         default="cuda" if torch.cuda.is_available() else "cpu",
