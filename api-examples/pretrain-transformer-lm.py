@@ -6,6 +6,7 @@ from torch.nn.parallel import DistributedDataParallel
 from torch.optim import Adam
 from torch.utils.data import DataLoader, TensorDataset
 from baseline.pytorch.lm import TransformerLanguageModel
+from baseline.utils import str2bool
 import baseline.embeddings
 from baseline.pytorch.embeddings import *
 from baseline.vectorizers import Char2DVectorizer, Token1DVectorizer, AbstractVectorizer
@@ -111,7 +112,7 @@ class WordPieceVectorizer1D(AbstractVectorizer):
         from pytorch_pretrained_bert import BertTokenizer
         self.max_seen = 128
         handle = kwargs.get('embed_file')
-        self.tokenizer = BertTokenizer.from_pretrained(handle)
+        self.tokenizer = BertTokenizer.from_pretrained(handle, do_lower_case=False)
         self.mxlen = kwargs.get('mxlen', -1)
 
     def count(self, tokens):
@@ -219,10 +220,9 @@ class TensorWordDatasetReader(TensorDatasetReaderBase):
         :return:
         """
         if self.use_wordpiece:
-            # TODO: remove this clause
             super(TensorWordDatasetReader, self).build_vocab(files)
             return {'x': self.vectorizers['x'].tokenizer.vocab}
-        return super(self, TensorWordDatasetReader).build_vocab(files)
+        return super(TensorWordDatasetReader, self).build_vocab(files)
 
     def load(self, filename, vocabs):
         features = self.load_features(filename, vocabs)
@@ -262,15 +262,15 @@ def average_distributed_scalar(scalar, args):
     return scalar_t.item()
 
 
-def load_data(token_type, reader, dataset, file_key, vocabs):
-    cached_train_file = '{}-{}.cache'.format(dataset[file_key], token_type)
-    if os.path.exists(cached_train_file):
-        logger.info("Reloading %s from cached file [%s]", file_key, cached_train_file)
-        loaded = torch.load(cached_train_file)
+def load_data(token_type, reader, dataset, file_key, vocabs, caching):
+    cached_file = '{}-{}.cache'.format(dataset[file_key], token_type)
+    if caching and os.path.exists(cached_file):
+        logger.info("Reloading %s from cached file [%s]", file_key, cached_file)
+        loaded = torch.load(cached_file)
     else:
-        loaded = reader.load(dataset['train_file'], vocabs)
-        logger.info("Caching %s to [%s]", file_key, cached_train_file)
-        torch.save(loaded, cached_train_file)
+        loaded = reader.load(dataset[file_key], vocabs)
+        logger.info("Caching %s to [%s]", file_key, cached_file)
+        torch.save(loaded, cached_file)
     return loaded
 
 
@@ -287,9 +287,9 @@ def create_reader(token_type, nctx, chars_per_word):
     return reader
 
 
-def load_embed_and_vocab(token_type, reader, dataset, dataset_key, d_model):
+def load_embed_and_vocab(token_type, reader, dataset, dataset_key, d_model, caching):
     preproc_cache = 'preproc-{}-{}.cache'.format(dataset_key, token_type)
-    if os.path.exists(preproc_cache):
+    if caching and os.path.exists(preproc_cache):
         logger.info("Loading cached preprocessing info [%s]", preproc_cache)
         preproc_data = torch.load(preproc_cache)
 
@@ -332,6 +332,7 @@ def train():
     parser.add_argument("--basedir", type=str)
     parser.add_argument("--dataset_key", type=str, default='wikitext-2', help="key from DATASETS global")
     parser.add_argument("--dataset_cache", type=str, default='~/.bl-data', help="Path or url of the dataset cache")
+    parser.add_argument("--cache_features", type=str2bool, default=True)
     parser.add_argument("--d_model", type=int, default=410, help="Model dimension (and embedding dsz)")
     parser.add_argument("--d_ff", type=int, default=2100, help="FFN dimension")
     parser.add_argument("--num_heads", type=int, default=10, help="Number of heads")
@@ -345,7 +346,7 @@ def train():
     parser.add_argument("--weight_decay", type=float, default=0.0, help="Weight decay")
     parser.add_argument("--epochs", type=int, default=20, help="Num training epochs")
     parser.add_argument("--warmup_steps", type=int, default=1000, help="Num warmup steps")
-    parser.add_argument("--eval_every", type=int, default=500, help="Evaluate every X steps (-1 => end of epoch)")
+    parser.add_argument("--eval_every", type=int, default=-1, help="Evaluate every X steps (-1 => end of epoch)")
 
     parser.add_argument("--device", type=str,
                         default="cuda" if torch.cuda.is_available() else "cpu",
@@ -377,16 +378,16 @@ def train():
     dataset = DataDownloader(DATASETS[args.dataset_key], args.dataset_cache).download()
     reader = create_reader(args.tokens, args.nctx, args.chars_per_word)
 
-    preproc_data = load_embed_and_vocab(args.tokens, reader, dataset, args.dataset_key, args.d_model)
+    preproc_data = load_embed_and_vocab(args.tokens, reader, dataset, args.dataset_key, args.d_model, args.cache_features)
     vocabs = preproc_data['vocabs']
     embeddings = preproc_data['embeddings']
     valid_num_words = preproc_data['valid_num_words']
     tgt_key = preproc_data['tgt_key']
-
     logger.info("Loaded embeddings")
 
-    train_set = load_data(args.tokens, reader, dataset, 'train_file', vocabs)
-    valid_set = load_data(args.tokens, reader, dataset, 'valid_file', vocabs)
+    train_set = load_data(args.tokens, reader, dataset, 'train_file', vocabs, args.cache_features)
+    valid_set = load_data(args.tokens, reader, dataset, 'valid_file', vocabs, args.cache_features)
+    logger.info("SUBWORD %s, VALID_WORDS %s", valid_set.tensors[-1].numel(), valid_num_words)
 
     train_sampler = torch.utils.data.distributed.DistributedSampler(train_set) if args.distributed else None
     train_loader = DataLoader(train_set, sampler=train_sampler, batch_size=args.batch_size, shuffle=(not args.distributed))
@@ -468,7 +469,7 @@ def train():
     if args.tokens == 'subwords':
         # If we compute subwords, need to renormalize for num words
         metrics["average_subword_ppl"] = MetricsLambda(math.exp, metrics["average_nll"])
-        metrics["average_word_ppl"] = MetricsLambda(lambda x: math.exp(x * valid_set.tensors[0].numel() / valid_num_words),
+        metrics["average_word_ppl"] = MetricsLambda(lambda x: math.exp(x * valid_set.tensors[-1].numel() / valid_num_words),
                                                     metrics["average_nll"])
     else:
         metrics["average_word_ppl"] = MetricsLambda(math.exp, metrics["average_nll"])
