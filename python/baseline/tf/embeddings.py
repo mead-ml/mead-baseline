@@ -323,7 +323,7 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
         """
         if self.weights is None:
             raise Exception('You must initialize `weights` in order to use this method')
-        return CharConvEmbeddings(name=self._name, vsz=self.vsz, dsz=self.dsz, scope=self.scope,
+        return CharConvEmbeddings(name=self.name, vsz=self.vsz, dsz=self.dsz, scope=self.scope,
                                   finetune=self.finetune, nfeat_factor=self.nfeat_factor,
                                   cfiltsz=self.cfiltsz, max_feat=self.max_feat, gating=self.gating,
                                   num_gates=self.num_gates, activation=self.activation, wsz=self.wsz,
