@@ -5,6 +5,7 @@ import collections
 import unicodedata
 import six
 import numpy as np
+
 from baseline.utils import write_json
 from baseline.embeddings import register_embeddings
 from baseline.pytorch.embeddings import PyTorchEmbeddings
@@ -59,6 +60,8 @@ class WordPieceVectorizer1D(AbstractVectorizer):
         valid_length = i + 1
         return vec1d, valid_length
 
+    def get_dims(self):
+        return self.mxlen,
 
 class BERTBaseEmbeddings(PyTorchEmbeddings):
 

@@ -1,8 +1,8 @@
 task: lm
 basedir: ptb-transformer-chars
-batchsz: 20
+batchsz: 10
 unif: 0.1
-nbptt: 60
+nbptt: 120
 preproc: {}
 backend: pytorch
 dataset: ptb
@@ -38,8 +38,8 @@ model:
 
 train: 
    epochs: 40
-   optim: adamw
-   weight_decay: 1.0e-8
+   optim: adam
+   #weight_decay: 1.0e-8
    eta: 4.0e-4
    do_early_stopping: true
    clip: 0.5 

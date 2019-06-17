@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 import numpy as np
-from baseline.pytorch.torchy import pytorch_linear, pytorch_activation, LayerNorm
+from baseline.pytorch.torchy import pytorch_linear, pytorch_activation
 from baseline.pytorch.torchy import pytorch_clone_module, sequence_mask
 from collections import namedtuple
 
@@ -159,15 +159,23 @@ class TransformerEncoder(nn.Module):
     def __init__(self, num_heads, d_model, pdrop, scale=True, activation_type='relu', d_ff=None):
         super(TransformerEncoder, self).__init__()
         self.d_model = d_model
+
         self.self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale=scale)
         self.ffn = FFN(d_model, pdrop, d_ff=d_ff, activation_type=activation_type)
-        self.ln1 = LayerNorm(d_model)
-        self.ln2 = LayerNorm(d_model)
+        self.ln1 = nn.LayerNorm(d_model, eps=1e-12)
+        self.ln2 = nn.LayerNorm(d_model, eps=1e-12)
         self.dropout = nn.Dropout(pdrop)
 
     def forward(self, x, mask=None):
+        """
+        :param x:
+        :param mask:
+        :return:
+        """
+        # Builtin Attention mask
         x = self.ln1(x)
-        x = x + self.dropout(self.self_attn(x, x, x, mask))
+        x = self.self_attn(x, x, x, mask)
+        x = x + self.dropout(x)
 
         x = self.ln2(x)
         x = x + self.dropout(self.ffn(x))
@@ -181,9 +189,9 @@ class TransformerDecoder(nn.Module):
         self.self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale=scale)
         self.src_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale=scale)
         self.feed_forward = FFN(d_model, pdrop, d_ff=d_ff, activation_type=activation_type)
-        self.ln1 = LayerNorm(d_model)
-        self.ln2 = LayerNorm(d_model)
-        self.ln3 = LayerNorm(d_model)
+        self.ln1 = nn.LayerNorm(d_model, eps=1e-12)
+        self.ln2 = nn.LayerNorm(d_model, eps=1e-12)
+        self.ln3 = nn.LayerNorm(d_model, eps=1e-12)
         self.dropout = nn.Dropout(pdrop)
 
     def forward(self, x, memory, src_mask, tgt_mask):
@@ -204,7 +212,7 @@ class TransformerEncoderStack(nn.Module):
         super(TransformerEncoderStack, self).__init__()
         single_layer = TransformerEncoder(num_heads, d_model, pdrop, scale, activation_type, d_ff)
         self.layers = pytorch_clone_module(single_layer, layers)
-        self.norm = LayerNorm(single_layer.d_model)
+        self.norm = nn.LayerNorm(single_layer.d_model, eps=1e-12)
 
     def forward(self, x, mask):
         for layer in self.layers:
@@ -217,7 +225,7 @@ class TransformerDecoderStack(nn.Module):
         super(TransformerDecoderStack, self).__init__()
         single_layer = TransformerDecoder(num_heads, d_model, pdrop, scale, activation_type, d_ff)
         self.layers = pytorch_clone_module(single_layer, layers)
-        self.norm = LayerNorm(single_layer.d_model)
+        self.norm = nn.LayerNorm(single_layer.d_model, eps=1e-12)
 
     def forward(self, x, memory, src_mask, tgt_mask):
         for layer in self.layers:

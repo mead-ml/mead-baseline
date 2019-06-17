@@ -92,6 +92,7 @@ class CharConvEmbeddings(PyTorchEmbeddings):
         projsz = kwargs.get('projsz')
         if projsz is not None:
             gates.append(('proj', pytorch_linear(self.char_comp.outsz, projsz)))
+            self.char_comp.outsz = projsz
         self.gating_seq = nn.Sequential(OrderedDict(gates))
 
     def get_dsz(self):
@@ -126,10 +127,12 @@ class PositionalCharConvEmbeddings(CharConvEmbeddings):
         mxlen = kwargs.get('mxlen', 1000)
         max_timescale = kwargs.get('max_timescale', 1.0e4)
 
-        log_timescale_increment = math.log(max_timescale) / self.dsz
-        inv_timescales = torch.exp(torch.arange(0, self.dsz, 2).float() * -log_timescale_increment)
+        word_dsz = self.get_dsz()
 
-        pe = torch.zeros(mxlen, self.dsz)
+        log_timescale_increment = math.log(max_timescale) / word_dsz
+        inv_timescales = torch.exp(torch.arange(0, word_dsz, 2).float() * -log_timescale_increment)
+
+        pe = torch.zeros(mxlen, word_dsz)
         position = torch.arange(0, mxlen).float().unsqueeze(1)
         pe[:, 0::2] = torch.sin(position * inv_timescales)
         pe[:, 1::2] = torch.cos(position * inv_timescales)
@@ -148,7 +151,7 @@ class PositionalCharConvEmbeddings(CharConvEmbeddings):
         :param x: The temporal signal in, to which the positional embeddings are applied
         :return: Embedded output
         """
-        xch = super(PositionalCharConvEmbeddings, self).forward(xch) * math.sqrt(self.dsz)
+        xch = super(PositionalCharConvEmbeddings, self).forward(xch) * math.sqrt(self.get_dsz())
         xch = xch + self.pe[:, :xch.size(1)]
         return self.dropout(xch)
 

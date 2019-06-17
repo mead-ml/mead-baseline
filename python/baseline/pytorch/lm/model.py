@@ -153,12 +153,14 @@ class TransformerLanguageModel(LanguageModelBase):
         pdrop = float(kwargs.get('dropout', 0.5))
         layers = kwargs.get('layers', 1)
         d_model = int(kwargs.get('d_model', kwargs.get('hsz')))
+        d_ff = int(kwargs.get('d_ff'))
         num_heads = kwargs.get('num_heads', 4)
-        self.proj_to_dsz = pytorch_linear(self.dsz, d_model)
-        self.transformer = TransformerEncoderStack(num_heads, d_model=d_model, pdrop=pdrop, scale=True, layers=layers)
+        assert self.dsz == d_model
+        ##self.proj_to_dsz = pytorch_linear(self.dsz, d_model)
+        self.transformer = TransformerEncoderStack(num_heads, d_model=d_model, pdrop=pdrop, scale=True, layers=layers, d_ff=d_ff)
 
     def decode(self, bth, hidden):
-        bth = self.proj_to_dsz(bth)
+        #bth = self.proj_to_dsz(bth)
         T = bth.shape[1]
         mask = subsequent_mask(T).type_as(bth)
         return self.transformer(bth, mask), None
