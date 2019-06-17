@@ -330,7 +330,7 @@ def load_embed_and_vocab(token_type, reader, dataset, dataset_key, d_model):
 def train():
     parser = ArgumentParser()
     parser.add_argument("--basedir", type=str)
-    parser.add_argument("--dataset_key", type=str, default='wikitext-2-raw', help="key from DATASETS global")
+    parser.add_argument("--dataset_key", type=str, default='wikitext-2', help="key from DATASETS global")
     parser.add_argument("--dataset_cache", type=str, default='~/.bl-data', help="Path or url of the dataset cache")
     parser.add_argument("--d_model", type=int, default=410, help="Model dimension (and embedding dsz)")
     parser.add_argument("--d_ff", type=int, default=2100, help="FFN dimension")

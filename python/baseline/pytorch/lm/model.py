@@ -143,6 +143,9 @@ class RNNLanguageModel(LanguageModelBase):
         return output, hidden
 
 
+def _identity(x):
+    return x
+
 @register_model(task='lm', name='transformer')
 class TransformerLanguageModel(LanguageModelBase):
 
@@ -155,12 +158,11 @@ class TransformerLanguageModel(LanguageModelBase):
         d_model = int(kwargs.get('d_model', kwargs.get('hsz')))
         d_ff = int(kwargs.get('d_ff'))
         num_heads = kwargs.get('num_heads', 4)
-        assert self.dsz == d_model
-        ##self.proj_to_dsz = pytorch_linear(self.dsz, d_model)
+        self.proj_to_dsz = pytorch_linear(self.dsz, d_model) if self.dsz != d_model else _identity
         self.transformer = TransformerEncoderStack(num_heads, d_model=d_model, pdrop=pdrop, scale=True, layers=layers, d_ff=d_ff)
 
     def decode(self, bth, hidden):
-        #bth = self.proj_to_dsz(bth)
+        bth = self.proj_to_dsz(bth)
         T = bth.shape[1]
         mask = subsequent_mask(T).type_as(bth)
         return self.transformer(bth, mask), None
