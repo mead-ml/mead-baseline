@@ -127,12 +127,12 @@ class WordPieceVectorizer1D(AbstractVectorizer):
     def iterable(self, tokens):
         for tok in tokens:
             if tok == '<unk>':
-                tok == '[UNK]'
-            if tok == '\n':
-                tok = '[SEP]'
-
-            for subtok in self.tokenizer.tokenize(tok):
-                yield subtok
+                yield '[UNK]'
+            elif tok == '<EOS>':
+                yield '[SEP]'
+            else:
+                for subtok in self.tokenizer.tokenize(tok):
+                    yield subtok
 
     def _next_element(self, tokens, vocab):
         for atom in self.iterable(tokens):
@@ -188,7 +188,7 @@ class TensorDatasetReaderBase(object):
         with codecs.open(filename, encoding='utf-8', mode='r') as f:
             sentences = []
             for line in f:
-                sentences += line.split() + ['<EOS>']
+                sentences += line.strip().split() + ['<EOS>']
             for k, vectorizer in self.vectorizers.items():
                 vec, valid_lengths = vectorizer.run(sentences, vocabs[k])
                 features[k] = vec[:valid_lengths]
