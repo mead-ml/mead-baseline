@@ -20,7 +20,7 @@ def main():
     parser.add_argument('--config', help='JSON Configuration for an experiment', required=True, type=convert_path)
     parser.add_argument('--settings', help='JSON Configuration for mead', required=False, default='config/mead-settings.json', type=convert_path)
     parser.add_argument('--modules', help='modules to load', default=[], nargs='+', required=False)
-    parser.add_argument('--datasets', help='json library of dataset labels', default='config/datasets.json', type=convert_path)
+    parser.add_argument('--datasets', help='json library of dataset labels')
     parser.add_argument('--logging', help='json file for logging', default='config/logging.json', type=convert_path)
     parser.add_argument('--task', help='task to run', choices=['classify', 'tagger', 'seq2seq', 'lm'])
     parser.add_argument('--exporter_type', help="exporter type (default 'default')", default=None)
@@ -69,7 +69,11 @@ def main():
         args.return_labels,
         args.is_remote,
     )
-    task.read_config(config_params, args.datasets, exporter_type=exporter_type)
+    # Here we reuse code in `.read_config` which needs a dataset index (when used with mead-train)
+    # but when used with mead-export it is not needed. This is a dummy dataset index that will work
+    # It means we don't need to pass it in, but `--datasets` is left as a cli arg for back compat for now
+    datasets = [{'label': config_params['dataset']}]
+    task.read_config(config_params, datasets, exporter_type=exporter_type)
     feature_exporter_field_map = create_feature_exporter_field_map(config_params['features'])
     exporter = create_exporter(task, exporter_type, return_labels=return_labels,
                                feature_exporter_field_map=feature_exporter_field_map)
