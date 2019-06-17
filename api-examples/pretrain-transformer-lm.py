@@ -262,10 +262,75 @@ def average_distributed_scalar(scalar, args):
     return scalar_t.item()
 
 
+def load_data(token_type, reader, dataset, file_key, vocabs):
+    cached_train_file = '{}-{}.cache'.format(dataset[file_key], token_type)
+    if os.path.exists(cached_train_file):
+        logger.info("Reloading %s from cached file [%s]", file_key, cached_train_file)
+        loaded = torch.load(cached_train_file)
+    else:
+        loaded = reader.load(dataset['train_file'], vocabs)
+        logger.info("Caching %s to [%s]", file_key, cached_train_file)
+        torch.save(loaded, cached_train_file)
+    return loaded
+
+
+def create_reader(token_type, nctx, chars_per_word):
+    if token_type == "chars":
+        logger.info("Using character input")
+        reader = TensorCharDatasetReader(nctx, chars_per_word)
+    elif token_type == "words":
+        logger.info("Using word input")
+        reader = TensorWordDatasetReader(nctx, False)
+    else:
+        logger.info("Using subword (wordpiece) input")
+        reader = TensorWordDatasetReader(nctx, True)
+    return reader
+
+
+def load_embed_and_vocab(token_type, reader, dataset, dataset_key, d_model):
+    preproc_cache = 'preproc-{}-{}.cache'.format(dataset_key, token_type)
+    if os.path.exists(preproc_cache):
+        logger.info("Loading cached preprocessing info [%s]", preproc_cache)
+        preproc_data = torch.load(preproc_cache)
+
+    else:
+        vocab_sources = [dataset['train_file'], dataset['valid_file']]
+        vocabs = reader.build_vocab(vocab_sources)
+        valid_num_words = reader.num_words[dataset['valid_file']]
+        logger.info("Read vocabulary")
+        embeddings = {}
+
+        # If we are not using chars, then use 'x' for both input and output
+        tgt_key = 'x'
+        if token_type == 'chars':
+            # Write JSON file here and skip this step the second time
+            x_embedding = baseline.embeddings.load_embeddings('x', known_vocab=vocabs['x'], **X_CHAR_EMBEDDINGS)
+            vocabs['x'] = x_embedding['vocab']
+
+            y_embedding = baseline.embeddings.load_embeddings('y', dsz=1, known_vocab=vocabs['y'])
+            vocabs['y'] = y_embedding['vocab']
+
+            embeddings['x'] = x_embedding['embeddings']
+            embeddings['y'] = y_embedding['embeddings']
+            tgt_key = 'y'
+        else:
+            x_embedding = baseline.embeddings.load_embeddings('x',
+                                                              dsz=d_model,
+                                                              known_vocab=vocabs['x'],
+                                                              embed_type='positional')
+            vocabs['x'] = x_embedding['vocab']
+            embeddings['x'] = x_embedding['embeddings']
+
+        preproc_data = {'vocabs': vocabs, 'embeddings': embeddings, 'valid_num_words': valid_num_words, 'tgt_key': tgt_key}
+        logger.info("Saving preprocessing info [%s]", preproc_cache)
+        torch.save(preproc_data, preproc_cache)
+    return preproc_data
+
+
 def train():
     parser = ArgumentParser()
     parser.add_argument("--basedir", type=str)
-    parser.add_argument("--dataset_key", type=str, default='wikitext-2', help="key from DATASETS global")
+    parser.add_argument("--dataset_key", type=str, default='wikitext-103', help="key from DATASETS global")
     parser.add_argument("--dataset_cache", type=str, default='~/.bl-data', help="Path or url of the dataset cache")
     parser.add_argument("--d_model", type=int, default=410, help="Model dimension (and embedding dsz)")
     parser.add_argument("--d_ff", type=int, default=2100, help="FFN dimension")
@@ -310,70 +375,26 @@ def train():
         torch.distributed.init_process_group(backend='nccl', init_method='env://')
 
     dataset = DataDownloader(DATASETS[args.dataset_key], args.dataset_cache).download()
+    reader = create_reader(args.tokens, args.nctx, args.chars_per_word)
 
-    if args.tokens == "chars":
-        logger.info("Using character input")
-        reader = TensorCharDatasetReader(args.nctx, args.chars_per_word)
-    elif args.tokens == "words":
-        logger.info("Using word input")
-        reader = TensorWordDatasetReader(args.nctx, False)
-    else:
-        logger.info("Using subword (wordpiece) input")
-        reader = TensorWordDatasetReader(args.nctx, True)
-
-    vocab_sources = [dataset['train_file'], dataset['valid_file']]
-    vocabs = reader.build_vocab(vocab_sources)
-    valid_num_words = reader.num_words[dataset['valid_file']]
-    logger.info("Read vocabulary")
-    embeddings = {}
-
-    # If we are not using chars, then use 'x' for both input and output
-    tgt_key = 'x'
-    if args.tokens == 'chars':
-        # Write JSON file here and skip this step the second time
-        x_embedding = baseline.embeddings.load_embeddings('x', known_vocab=vocabs['x'], **X_CHAR_EMBEDDINGS)
-        vocabs['x'] = x_embedding['vocab']
-
-        y_embedding = baseline.embeddings.load_embeddings('y', dsz=1, known_vocab=vocabs['y'])
-        vocabs['y'] = y_embedding['vocab']
-
-        embeddings['x'] = x_embedding['embeddings']
-        embeddings['y'] = y_embedding['embeddings']
-        tgt_key = 'y'
-    else:
-        x_embedding = baseline.embeddings.load_embeddings('x',
-                                                          dsz=args.d_model,
-                                                          known_vocab=vocabs['x'],
-                                                          embed_type='positional')
-        vocabs['x'] = x_embedding['vocab']
-        embeddings['x'] = x_embedding['embeddings']
+    preproc_data = load_embed_and_vocab(args.tokens, reader, dataset, args.dataset_key, args.d_model)
+    vocabs = preproc_data['vocabs']
+    embeddings = preproc_data['embeddings']
+    valid_num_words = preproc_data['valid_num_words']
+    tgt_key = preproc_data['tgt_key']
 
     logger.info("Loaded embeddings")
 
-    cached_train_file = '{}-{}.cache'.format(dataset['train_file'], args.tokens)
-    if os.path.exists(cached_train_file):
-        logger.info("Reloading train set from cached file [%s]", cached_train_file)
-        train_set = torch.load(cached_train_file)
-    else:
-        train_set = reader.load(dataset['train_file'], vocabs)
-        logger.info("Caching train set to [%s]", cached_train_file)
-        torch.save(train_set, cached_train_file)
-
-    cached_valid_file = '{}-{}.cache'.format(dataset['valid_file'], args.tokens)
-    if os.path.exists(cached_valid_file):
-        logger.info("Reloading valid set from cached file [%s]", cached_train_file)
-        valid_set = torch.load(cached_valid_file)
-    else:
-        valid_set = reader.load(dataset['valid_file'], vocabs)
-        logger.info("Caching valid set to [%s]", cached_valid_file)
-        torch.save(valid_set, cached_valid_file)
-
-    logger.info("Loaded datasets")
+    train_set = load_data(args.tokens, reader, dataset, 'train_file', vocabs)
+    valid_set = load_data(args.tokens, reader, dataset, 'valid_file', vocabs)
 
     train_sampler = torch.utils.data.distributed.DistributedSampler(train_set) if args.distributed else None
-    valid_sampler = torch.utils.data.distributed.DistributedSampler(valid_set) if args.distributed else None
     train_loader = DataLoader(train_set, sampler=train_sampler, batch_size=args.batch_size, shuffle=(not args.distributed))
+
+    valid_sampler = torch.utils.data.distributed.DistributedSampler(valid_set) if args.distributed else None
     valid_loader = DataLoader(valid_set, sampler=valid_sampler, batch_size=args.batch_size, shuffle=False)
+
+    logger.info("Loaded datasets")
 
     model = TransformerLanguageModel.create(embeddings,
                                             hsz=args.d_model,
