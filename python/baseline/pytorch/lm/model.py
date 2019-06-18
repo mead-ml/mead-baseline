@@ -163,7 +163,7 @@ class TransformerLanguageModel(LanguageModelBase):
         layers = kwargs.get('layers', 1)
         self.weight_std = kwargs.get('weight_std', 0.02)
         d_model = int(kwargs.get('d_model', kwargs.get('hsz')))
-        d_ff = int(kwargs.get('d_ff'))
+        d_ff = int(kwargs.get('d_ff', 4 * d_model))
         num_heads = kwargs.get('num_heads', 4)
         self.proj_to_dsz = pytorch_linear(self.dsz, d_model) if self.dsz != d_model else _identity
         self.transformer = TransformerEncoderStack(num_heads, d_model=d_model, pdrop=pdrop, scale=True, layers=layers, d_ff=d_ff)
