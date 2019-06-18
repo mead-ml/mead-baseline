@@ -156,10 +156,8 @@ def fit(model, ts, vs, es=None, **kwargs):
     model.set_saver(tf.train.Saver())
     checkpoint = kwargs.get('checkpoint')
     if checkpoint is not None:
-        latest = tf.train.latest_checkpoint(checkpoint)
-        print('Reloading ' + latest)
-        model.saver.restore(model.sess, latest)
-
+        checkpoint = unzip_model(checkpoint)
+        model.saver.restore(model.sess, checkpoint)
 
     last_improved = 0
 
