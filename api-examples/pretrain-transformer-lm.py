@@ -331,7 +331,8 @@ def train():
     parser = ArgumentParser()
     parser.add_argument("--basedir", type=str)
     parser.add_argument("--dataset_key", type=str, default='wikitext-2', help="key from DATASETS global")
-    parser.add_argument("--dataset_cache", type=str, default='~/.bl-data', help="Path or url of the dataset cache")
+    parser.add_argument("--dataset_cache", type=str, default=os.path.expanduser('~/.bl-data'),
+                        help="Path or url of the dataset cache")
     parser.add_argument("--cache_features", type=str2bool, default=True)
     parser.add_argument("--d_model", type=int, default=410, help="Model dimension (and embedding dsz)")
     parser.add_argument("--d_ff", type=int, default=2100, help="FFN dimension")
@@ -339,7 +340,8 @@ def train():
     parser.add_argument("--num_layers", type=int, default=8, help="Number of layers")
     parser.add_argument("--nctx", type=int, default=256, help="Max input length")
     parser.add_argument("--batch_size", type=int, default=8, help="Batch Size")
-    parser.add_argument("--tokens", choices=["words", "chars", "subwords"], default="subwords", help="What tokens to use")
+    parser.add_argument("--tokens", choices=["words", "chars", "subwords"], default="subwords",
+                        help="What tokens to use")
     parser.add_argument("--dropout", type=float, default=0.1, help="Dropout")
     parser.add_argument("--lr", type=float, default=4.0e-4, help="Learning rate")
     parser.add_argument("--clip", type=float, default=0.25, help="Clipping gradient norm")
@@ -367,6 +369,7 @@ def train():
     if args.basedir is None:
         args.basedir = 'transformer-{}-{}-{}'.format(args.dataset_key, args.tokens, os.getpid())
     logging.basicConfig(level=logging.INFO if args.local_rank in [-1, 0] else logging.WARN)
+    logger.info("Cache directory [%s]", args.dataset_cache)
     logger.warning("Local rank (%d)", args.local_rank)
 
     args.distributed = (args.local_rank != -1)
