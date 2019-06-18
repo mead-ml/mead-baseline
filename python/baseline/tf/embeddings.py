@@ -5,7 +5,14 @@ import numpy as np
 import tensorflow as tf
 from baseline.utils import write_json, Offsets
 from baseline.embeddings import register_embeddings
-from baseline.tf.tfy import pool_chars, get_shape_as_list, stacked_lstm, embed
+from baseline.tf.tfy import (char_word_conv_embeddings,
+                             get_shape_as_list,
+                             stacked_lstm,
+                             highway_conns,
+                             skip_conns,
+                             tf_activation,
+                             TRAIN_FLAG)
+from baseline.utils import is_sequence
 
 
 FLOAT32 = 4
@@ -144,7 +151,7 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
         self.dsz = kwargs.get('dsz')
         self.finetune = kwargs.get('finetune', True)
         self.scope = kwargs.get('scope', '{}/LUT'.format(self.name))
-
+        self.dropin = kwargs.get('dropin', 0.0)
         self.weights = kwargs.get('weights')
 
         if self.weights is None:
@@ -168,6 +175,7 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
                                      vsz=self.vsz,
                                      dsz=self.dsz,
                                      scope=self.scope,
+                                     dropin=self.dropin,
                                      finetune=self.finetune,
                                      weights=self.weights)
 
@@ -180,8 +188,6 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
         if x is None:
             x = LookupTableEmbeddings.create_placeholder(self.name)
         self.x = x
-
-
         with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
 
             W = tf.get_variable("W",
@@ -190,7 +196,8 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
             e0 = tf.scatter_update(W, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, self.dsz]))
 
             with tf.control_dependencies([e0]):
-                word_embeddings = tf.nn.embedding_lookup(W, x)
+                embedding_w_dropout = tf.layers.dropout(W, self.dropin, noise_shape=(self.vsz, 1),  training=TRAIN_FLAG())
+                word_embeddings = tf.nn.embedding_lookup(embedding_w_dropout, self.x)
 
         return word_embeddings
 
@@ -236,7 +243,8 @@ class LargeLookupTableEmbeddings(LookupTableEmbeddings):
             e0 = tf.scatter_update(W, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, self.dsz]))
 
             with tf.control_dependencies([e0]):
-                word_embeddings = tf.nn.embedding_lookup(W, x)
+                embedding_w_dropout = tf.layers.dropout(W, self.dropin, noise_shape=(self.vsz, 1),  training=TRAIN_FLAG())
+                word_embeddings = tf.nn.embedding_lookup(embedding_w_dropout, self.x)
 
         return word_embeddings
 
@@ -254,6 +262,23 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
     def create_placeholder(cls, name):
         return tf.placeholder(tf.int32, [None, None, None], name=name)
 
+    def _get_filtsz(self):
+        # If this is a list, then its a tuple of (filtsz, nfeats)
+        if is_sequence(self.cfiltsz[0]):
+            filtsz = [filter_and_size[0] for filter_and_size in self.cfiltsz]
+            nfeats = [filter_and_size[1] for filter_and_size in self.cfiltsz]
+
+        # If we get a nfeat factor, we multiply that by each filter, and thresh at max_feat
+        elif self.nfeat_factor:
+            max_feat = self.max_feat
+            filtsz = self.cfiltsz
+            nfeats = [min(self.nfeat_factor * fsz, max_feat) for fsz in filtsz]
+        # Otherwise its just a scalar
+        else:
+            nfeats = self.wsz
+            filtsz = self.cfiltsz
+        return filtsz, nfeats
+
     def __init__(self, name, **kwargs):
         super(CharConvEmbeddings, self).__init__(name=name, **kwargs)
         self.scope = kwargs.get('scope', '{}/CharLUT'.format(self.name))
@@ -268,9 +293,9 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
         self.num_gates = kwargs.get('num_gates', 1)
         self.activation = kwargs.get('activation', 'tanh')
         self.wsz = kwargs.get('wsz', 30)
-
+        self.projsz = kwargs.get('projsz')
+        self.dropin = kwargs.get('dropin', 0.0)
         self.x = None
-        self.weights = kwargs.get('weights', None)
 
         if self.weights is None:
             unif = kwargs.get('unif', 0.1)
@@ -278,9 +303,18 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
 
         with tf.device("/cpu:0"):
             with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
-                self.Wch = tf.get_variable("Wch",
-                                           initializer=tf.constant_initializer(self.weights, dtype=tf.float32, verify_shape=True),
+                self.Wch = tf.get_variable('{}/Wch'.format(self.scope),
+                                           initializer=tf.constant_initializer(self.weights, dtype=tf.float32,
+                                                                               verify_shape=True),
                                            shape=[self.vsz, self.dsz], trainable=True)
+        # These are the actual final filter sizes and num features
+        self.filtsz, self.nfeats = self._get_filtsz()
+        self.outsz = np.sum(self.nfeats)
+
+        if self.projsz:
+            self.Wp = tf.get_variable('{}/Wp'.format(self.scope), shape=[self.outsz, self.projsz], trainable=True)
+            self.bp = tf.get_variable('{}/bp'.format(self.scope), shape=[self.projsz], trainable=True, initializer=tf.constant_initializer(0.0))
+            self.outsz = self.projsz
 
     def detached_ref(self):
         """This will detach any attached input and reference the same sub-graph otherwise
@@ -293,7 +327,9 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
                                   finetune=self.finetune, nfeat_factor=self.nfeat_factor,
                                   cfiltsz=self.cfiltsz, max_feat=self.max_feat, gating=self.gating,
                                   num_gates=self.num_gates, activation=self.activation, wsz=self.wsz,
-                                  weights=self.weights)
+                                  weights=self.weights,
+                                  dropin=self.dropin,
+                                  projsz=self.projsz)
 
     def encode(self, x=None):
         if x is None:
@@ -301,13 +337,34 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
         self.x = x
 
         ech0 = tf.scatter_update(self.Wch, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, self.dsz]))
-        char_comp, self.wsz = pool_chars(self.x, self.Wch, ech0, self.dsz, self.nfeat_factor,
-                                         self.cfiltsz, self.max_feat, self.gating,
-                                         self.num_gates, self.activation, self.wsz)
-        return char_comp
+
+        mxlen = tf.shape(self.x)[1]
+
+        gating_fn = highway_conns if self.gating.startswith('highway') else skip_conns
+
+        with tf.variable_scope("Chars2Word"):
+            with tf.control_dependencies([ech0]):
+                mxwlen = tf.shape(self.x)[-1]
+                char_bt_x_w = tf.reshape(self.x, [-1, mxwlen])
+                # The ablation table (4) in https://arxiv.org/pdf/1708.02182.pdf shows this has a massive impact
+                embedding_w_dropout = tf.layers.dropout(self.Wch, self.dropin, noise_shape=(self.vsz, 1), training=TRAIN_FLAG())
+                cembed = tf.nn.embedding_lookup(embedding_w_dropout, char_bt_x_w, name="embeddings")
+                cmot, num_filts = char_word_conv_embeddings(cembed, self.filtsz, self.dsz, self.nfeats,
+                                                            activation_fn=tf_activation(self.activation),
+                                                            gating=gating_fn,
+                                                            num_gates=self.num_gates)
+
+        if self.projsz:
+            cmot = tf.matmul(cmot, self.Wp) + self.bp
+        word_char = tf.reshape(cmot, [-1, mxlen, self.outsz])
+        return word_char
 
     def get_vsz(self):
         return self.vsz
+
+    # Warning this function is only initialized AFTER encode
+    def get_dsz(self):
+        return self.outsz
 
     # Warning this function is only initialized AFTER encode
     def get_dsz(self):
@@ -355,6 +412,46 @@ def get_timing_signal_1d(length,
     signal = tf.pad(signal, [[0, 0], [0, tf.mod(channels, 2)]])
     signal = tf.reshape(signal, [1, length, channels])
     return signal
+
+
+@register_embeddings(name='positional-char-conv')
+class PositionalCharConvEmbeddings(CharConvEmbeddings):
+    """dos Santos embeddings extended to parallel filters (AKA Kim character-aware neural language model inputs)
+
+    """
+    @classmethod
+    def create_placeholder(cls, name):
+        return tf.placeholder(tf.int32, [None, None, None], name=name)
+
+    def __init__(self, name, **kwargs):
+        super(PositionalCharConvEmbeddings, self).__init__(name=name, **kwargs)
+        self.max_timescale = kwargs.get('max_timescale', 1.0e4)
+
+    def detached_ref(self):
+        """This will detach any attached input and reference the same sub-graph otherwise
+
+        :return:
+        """
+        if self.weights is None:
+            raise Exception('You must initialize `weights` in order to use this method')
+        return PositionalCharConvEmbeddings(name=self.name, vsz=self.vsz, dsz=self.dsz, scope=self.scope,
+                                  finetune=self.finetune, nfeat_factor=self.nfeat_factor,
+                                  cfiltsz=self.cfiltsz, max_feat=self.max_feat, gating=self.gating,
+                                  num_gates=self.num_gates, activation=self.activation, wsz=self.wsz,
+                                  weights=self.weights)
+
+    def encode(self, x=None):
+        x = super(PositionalCharConvEmbeddings, self).encode(x) * math.sqrt(self.dsz)
+        B, T, C = get_shape_as_list(x)
+        signal = get_timing_signal_1d(T, C, min_timescale=1.0, max_timescale=self.max_timescale, start_index=0)
+        return x + signal
+
+    def get_vsz(self):
+        return self.vsz
+
+    # Warning this function is only initialized AFTER encode
+    def get_dsz(self):
+        return self.wsz
 
 
 @register_embeddings(name='positional')
@@ -419,10 +516,10 @@ class LearnedPositionalLookupTableEmbeddings(LookupTableEmbeddings):
 
     def encode(self, x=None):
         x = super(LearnedPositionalLookupTableEmbeddings, self).encode(x)
-        l = tf.shape(x)[1]
+        T = tf.shape(x)[1]
         e0 = tf.scatter_update(self.pos, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, self.dsz]))
         with tf.control_dependencies([e0]):
-            pos_embeddings = tf.nn.embedding_lookup(self.pos, tf.range(l, dtype=tf.int32))
+            pos_embeddings = tf.nn.embedding_lookup(self.pos, tf.range(T, dtype=tf.int32))
 
         return x + tf.expand_dims(pos_embeddings, 0)
 
@@ -441,6 +538,71 @@ class LearnedPositionalLookupTableEmbeddings(LookupTableEmbeddings):
                                                       weights=self.weights,
                                                       pos_weights=self.pos_weights,
                                                       mxlen=self.mxlen)
+
+
+@register_embeddings(name='learned-positional-char-conv')
+class LearnedPositionalCharConvEmbeddings(CharConvEmbeddings):
+    """dos Santos embeddings extended to parallel filters (AKA Kim character-aware neural language model inputs)
+
+    """
+    @classmethod
+    def create_placeholder(cls, name):
+        return tf.placeholder(tf.int32, [None, None, None], name=name)
+
+    def __init__(self, name, **kwargs):
+        super(LearnedPositionalCharConvEmbeddings, self).__init__(name, **kwargs)
+        self.mxlen = int(kwargs.get('mxlen', 512))
+        self.pos_weights = kwargs.get('pos_weights')
+        if self.pos_weights is None:
+            unif = float(kwargs.get('unif', 0.1))
+            self.pos_weights = np.random.uniform(-unif, unif, (self.mxlen, self.dsz))
+        with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
+            self.pos = tf.get_variable("pos",
+                                       initializer=tf.constant_initializer(self.pos_weights, dtype=tf.float32, verify_shape=True),
+                                       shape=[self.mxlen, self.dsz], trainable=True)
+
+    def detached_ref(self):
+        """This will detach any attached input and reference the same sub-graph otherwise
+
+        :return:
+        """
+        if self.weights is None:
+            raise Exception('You must initialize `weights` in order to use this method')
+        return LearnedPositionalCharConvEmbeddings(name=self.name,
+                                                   vsz=self.vsz,
+                                                   dsz=self.dsz,
+                                                   scope=self.scope,
+                                                   finetune=self.finetune,
+                                                   nfeat_factor=self.nfeat_factor,
+                                                   cfiltsz=self.cfiltsz,
+                                                   max_feat=self.max_feat,
+                                                   gating=self.gating,
+                                                   num_gates=self.num_gates,
+                                                   activation=self.activation,
+                                                   wsz=self.wsz,
+                                                   weights=self.weights,
+                                                   pos_weights=self.pos_weights,
+                                                   mxlen=self.mxlen)
+
+    def encode(self, x=None):
+        x = super(LearnedPositionalCharConvEmbeddings, self).encode(x)
+        T = tf.shape(x)[1]
+        e0 = tf.scatter_update(self.pos, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, self.dsz]))
+        with tf.control_dependencies([e0]):
+            pos_embeddings = tf.nn.embedding_lookup(self.pos, tf.range(T, dtype=tf.int32))
+
+        return x + tf.expand_dims(pos_embeddings, 0)
+
+    def _record_state(self, **kwargs):
+        _ = kwargs.pop('pos_weights', None)
+        super(LearnedPositionalCharConvEmbeddings, self)._record_state(**kwargs)
+
+    def get_vsz(self):
+        return self.vsz
+
+    # Warning this function is only initialized AFTER encode
+    def get_dsz(self):
+        return self.wsz
 
 
 

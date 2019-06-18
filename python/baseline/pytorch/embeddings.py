@@ -62,18 +62,6 @@ class LookupTableEmbeddings(PyTorchEmbeddings):
 @register_embeddings(name='char-conv')
 class CharConvEmbeddings(PyTorchEmbeddings):
 
-    def __init__(self, _, **kwargs):
-        super(CharConvEmbeddings, self).__init__(_, **kwargs)
-
-        if self.weights is None:
-            unif = kwargs.get('unif', 0.1)
-            self.weights = np.random.uniform(-unif, unif, (self.vsz, self.dsz))
-        self.params = kwargs
-        self.wsz = None
-        if self.weights is None:
-            unif = kwargs.get('unif', 0.1)
-            self.weights = np.random.uniform(-unif, unif, (self.vsz, self.dsz))
-
     def __init__(self, name, **kwargs):
         super(CharConvEmbeddings, self).__init__()
         self.vsz = kwargs.get('vsz')
@@ -99,9 +87,13 @@ class CharConvEmbeddings(PyTorchEmbeddings):
         gating = kwargs.get('gating', 'skip')
         GatingConnection = SkipConnection if gating == 'skip' else Highway
         num_gates = kwargs.get('num_gates', 1)
-        self.gating_seq = nn.Sequential(OrderedDict(
-            [('gate-{}'.format(i), GatingConnection(wchsz)) for i in range(num_gates)]
-        ))
+
+        gates = [('gate-{}'.format(i), GatingConnection(wchsz)) for i in range(num_gates)]
+        projsz = kwargs.get('projsz')
+        if projsz is not None:
+            gates.append(('proj', pytorch_linear(self.char_comp.outsz, projsz)))
+            self.char_comp.outsz = projsz
+        self.gating_seq = nn.Sequential(OrderedDict(gates))
 
     def get_dsz(self):
         return self.char_comp.outsz
@@ -122,6 +114,46 @@ class CharConvEmbeddings(PyTorchEmbeddings):
         mots = self.char_comp(char_vecs)
         gated = self.gating_seq(mots)
         return gated.view(_0, _1, self.char_comp.outsz)
+
+
+@register_embeddings(name='positional-char-conv')
+class PositionalCharConvEmbeddings(CharConvEmbeddings):
+
+    def __init__(self, _, **kwargs):
+        super(PositionalCharConvEmbeddings, self).__init__(_, **kwargs)
+
+        self.dropout = nn.Dropout(kwargs.get('dropout', 0.1))
+        # This could get us in trouble, if in doubt, pick something big
+        mxlen = kwargs.get('mxlen', 1000)
+        max_timescale = kwargs.get('max_timescale', 1.0e4)
+
+        word_dsz = self.get_dsz()
+
+        log_timescale_increment = math.log(max_timescale) / word_dsz
+        inv_timescales = torch.exp(torch.arange(0, word_dsz, 2).float() * -log_timescale_increment)
+
+        pe = torch.zeros(mxlen, word_dsz)
+        position = torch.arange(0, mxlen).float().unsqueeze(1)
+        pe[:, 0::2] = torch.sin(position * inv_timescales)
+        pe[:, 1::2] = torch.cos(position * inv_timescales)
+        pe = pe.unsqueeze(0)
+        self.register_buffer('pe', pe)
+
+    def get_dsz(self):
+        return self.char_comp.outsz
+
+    def get_vsz(self):
+        return self.vsz
+
+    def forward(self, xch):
+        """Add a positional encoding to the embedding, followed by dropout
+
+        :param x: The temporal signal in, to which the positional embeddings are applied
+        :return: Embedded output
+        """
+        xch = super(PositionalCharConvEmbeddings, self).forward(xch) * math.sqrt(self.get_dsz())
+        xch = xch + self.pe[:, :xch.size(1)]
+        return self.dropout(xch)
 
 
 @register_embeddings(name='positional')

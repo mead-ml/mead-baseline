@@ -15,7 +15,7 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
 
     def __init__(self, model, **kwargs):
         super(TaggerTrainerPyTorch, self).__init__()
-        self.gpu = not bool(kwargs.get('nogpu', False))
+        self.gpus = int(kwargs.get('gpus', 1))
         # By default support IOB1/IOB2
         self.span_type = kwargs.get('span_type', 'iob')
         self.verbose = kwargs.get('verbose', False)
@@ -25,8 +25,14 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
         self.idx2label = revlut(self.model.labels)
         self.clip = float(kwargs.get('clip', 5))
         self.optimizer = OptimizerManager(self.model, **kwargs)
-        if self.gpu:
+        if self.gpus > 1:
+            logger.info("Trainer for PyTorch tagger currently doesnt support multiple GPUs.  Setting to 1")
+            self.gpus = 1
+        if self.gpus > 0:
             self.model = model.to_gpu()
+        else:
+            logger.warning("Requested training on CPU.  This will be slow.")
+
         self.nsteps = kwargs.get('nsteps', six.MAXSIZE)
 
     @staticmethod

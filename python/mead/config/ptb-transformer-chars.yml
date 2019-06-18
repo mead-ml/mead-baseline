@@ -1,0 +1,46 @@
+task: lm
+basedir: ptb-transformer-chars
+batchsz: 10
+unif: 0.1
+nbptt: 120
+preproc: {}
+backend: pytorch
+dataset: ptb
+
+loader: 
+   reader_type: default
+   src_keys: [word_chars]
+   tgt_key: word
+
+features:
+ - name: word
+   vectorizer:
+      type: token1d
+      fields: text
+   embeddings:
+      dsz: 300
+      type: default
+ - name: word_chars
+   vectorizer:
+      type: char2d
+      fields: text
+   embeddings:
+      dsz:  300
+      wsz: 300
+      #type: learned-positional-char-conv
+      type: positional-char-conv
+
+model: 
+   model_type: transformer
+   hsz: 300
+   layers: 2
+   pdrop: 0.65
+
+train: 
+   epochs: 40
+   optim: adam
+   #weight_decay: 1.0e-8
+   eta: 4.0e-4
+   do_early_stopping: true
+   clip: 0.5 
+

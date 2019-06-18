@@ -2,13 +2,14 @@ import six
 import logging
 import torch
 import torch.autograd
+import os
+
 from baseline.utils import verbose_output
 from baseline.confusion import ConfusionMatrix
 from baseline.progress import create_progress_bar
 from baseline.utils import listify, get_model_file, get_metric_cmp
 from baseline.pytorch.optz import OptimizerManager
 from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
-
 logger = logging.getLogger('baseline')
 
 
@@ -26,13 +27,28 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
         super(ClassifyTrainerPyTorch, self).__init__()
         self.clip = float(kwargs.get('clip', 5))
         self.labels = model.labels
+        self.gpus = int(kwargs.get('gpus', 1))
+        if self.gpus == -1:
+            self.gpus = len(os.getenv('CUDA_VISIBLE_DEVICES', os.getenv('NV_GPU', '0')).split(','))
+
         self.optimizer = OptimizerManager(model, **kwargs)
-        self.crit = model.create_loss().cuda()
-        self.model = torch.nn.DataParallel(model).cuda()
+        self.model = model
+        if self.gpus > 0:
+            self.crit = model.create_loss().cuda()
+            if self.gpus > 1:
+                self.model = torch.nn.DataParallel(model).cuda()
+            else:
+                self.model.cuda()
+        else:
+            logger.warning("Requested training on CPU.  This will be slow.")
+            self.crit = model.create_loss()
+            self.model = model
         self.nsteps = kwargs.get('nsteps', six.MAXSIZE)
 
     def _make_input(self, batch_dict):
-        return self.model.module.make_input(batch_dict)
+        if self.gpus > 1:
+            return self.model.module.make_input(batch_dict)
+        return self.model.make_input(batch_dict)
 
     @staticmethod
     def _get_batchsz(batch_dict):

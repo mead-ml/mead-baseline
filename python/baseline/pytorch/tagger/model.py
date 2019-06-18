@@ -35,6 +35,7 @@ class TaggerModelBase(nn.Module, TaggerModel):
 
     def __init__(self):
         super(TaggerModelBase, self).__init__()
+        self.gpu = False
 
     def init_embed(self, embeddings, **kwargs):
         self.embeddings = EmbeddingsContainer()
@@ -143,14 +144,14 @@ class TaggerModelBase(nn.Module, TaggerModel):
         y = batch_dict.get('y')
         if y is not None:
             y = torch.from_numpy(y)[perm_idx]
-            if self.gpu is not None:
+            if self.gpu:
                 y = y.cuda()
             example_dict['y'] = y
 
         ids = batch_dict.get('ids')
         if ids is not None:
             ids = torch.from_numpy(ids)[perm_idx]
-            if self.gpu is not None:
+            if self.gpu:
                 ids = ids.cuda()
             example_dict['ids'] = ids
         return example_dict

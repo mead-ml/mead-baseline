@@ -13,6 +13,7 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
 
     def __init__(self):
         super(ClassifierModelBase, self).__init__()
+        self.gpu = False
 
     @classmethod
     def load(cls, filename, **kwargs):
@@ -36,7 +37,6 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
         model.pdrop = kwargs.get('pdrop', 0.5)
         model.lengths_key = kwargs.get('lengths_key')
         input_sz = model.init_embed(embeddings)
-        model.gpu = not bool(kwargs.get('nogpu', False))
         model.labels = labels
         model.log_softmax = nn.LogSoftmax(dim=1)
         pool_dim = model.init_pool(input_sz, **kwargs)
@@ -47,6 +47,8 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
 
     def cuda(self, device=None):
         super(ClassifierModelBase, self).cuda(device=device)
+        self.gpu = True
+
         for emb in self.embeddings.values():
             emb.cuda(device)
 
@@ -74,7 +76,7 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
         y = batch_dict.get('y')
         if y is not None:
             y = torch.from_numpy(y)
-            if self.gpu is not None:
+            if self.gpu:
                 y = y.cuda()
             example_dict['y'] = y
 

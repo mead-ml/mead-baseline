@@ -359,32 +359,6 @@ class SkipConnection(ResidualBlock):
         )
 
 
-class LayerNorm(nn.Module):
-    """
-    Applies Layer Normalization over a mini-batch of inputs as described in
-    the paper `Layer Normalization`_ .
-
-    .. math::
-        y = \frac{x - \mathrm{E}[x]}{ \sqrt{\mathrm{Var}[x]} + \epsilon} * \gamma + \beta
-
-    This is provided in pytorch's master, and can be replaced in the near future.
-    For the time, being, this code is adapted from:
-    http://nlp.seas.harvard.edu/2018/04/03/attention.html
-    https://github.com/pytorch/pytorch/pull/2019
-    """
-    def __init__(self, num_features, eps=1e-6):
-        super(LayerNorm, self).__init__()
-        self.a = nn.Parameter(torch.ones(num_features))
-        self.b = nn.Parameter(torch.zeros(num_features))
-        self.eps = eps
-
-    def forward(self, x):
-        mean = x.mean(-1, keepdim=True)
-        std = ((x - mean).pow(2).sum(-1, keepdim=True).div(x.size(-1) - 1) + self.eps).sqrt()
-        d = (std + self.eps) + self.b
-        return self.a * (x - mean) / d
-
-
 def pytorch_lstm(insz, hsz, rnntype, nlayers, dropout, unif=0, batch_first=False, initializer=None):
     if nlayers == 1:
         dropout = 0.0

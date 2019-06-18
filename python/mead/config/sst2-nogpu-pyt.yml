@@ -1,0 +1,34 @@
+batchsz: 50
+basedir: sst2-pyt
+preproc: 
+  mxlen: 100
+  rev: false
+  clean: true
+backend: pytorch
+dataset: SST2
+loader: 
+  reader_type: default
+unif: 0.25
+model: 
+  model_type: default
+  filtsz: [3,4,5]
+  cmotsz: 100
+  dropout: 0.5
+
+features:
+  - name: word
+    vectorizer:
+      type: token1d
+      transform: baseline.lowercase
+    embeddings:
+      label: w2v-gn
+train:
+  gpus: 0
+  epochs: 2
+  optim: adadelta
+  eta: 1.0
+  early_stopping_metric: acc
+  verbose:
+    console: True
+    file: sst2-cm.csv 
+
