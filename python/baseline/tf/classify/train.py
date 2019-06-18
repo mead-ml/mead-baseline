@@ -8,7 +8,7 @@ from baseline.utils import listify, get_model_file, get_metric_cmp
 from baseline.tf.tfy import _add_ema
 from baseline.tf.optz import optimizer
 from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
-from baseline.utils import verbose_output
+from baseline.utils import verbose_output, unzip_model
 
 
 logger = logging.getLogger('baseline')
