@@ -4,8 +4,7 @@ import torch.nn.functional as F
 import math
 import numpy as np
 from baseline.pytorch.torchy import pytorch_linear, pytorch_activation
-from baseline.pytorch.torchy import pytorch_clone_module, sequence_mask
-from collections import namedtuple
+from baseline.pytorch.torchy import pytorch_clone_module
 
 
 def subsequent_mask(size):

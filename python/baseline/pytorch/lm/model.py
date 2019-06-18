@@ -152,14 +152,22 @@ class TransformerLanguageModel(LanguageModelBase):
     def __init__(self):
         super(TransformerLanguageModel, self).__init__()
 
+    def init_layer_weights(self, module):
+        if isinstance(module, (nn.Linear, nn.Embedding, nn.LayerNorm)):
+            module.weight.data.normal_(mean=0.0, std=self.weight_std)
+        if isinstance(module, (nn.Linear, nn.LayerNorm)) and module.bias is not None:
+            module.bias.data.zero_()
+
     def init_decode(self, **kwargs):
         pdrop = float(kwargs.get('dropout', 0.5))
         layers = kwargs.get('layers', 1)
+        self.weight_std = kwargs.get('weight_std', 0.02)
         d_model = int(kwargs.get('d_model', kwargs.get('hsz')))
         d_ff = int(kwargs.get('d_ff'))
         num_heads = kwargs.get('num_heads', 4)
         self.proj_to_dsz = pytorch_linear(self.dsz, d_model) if self.dsz != d_model else _identity
         self.transformer = TransformerEncoderStack(num_heads, d_model=d_model, pdrop=pdrop, scale=True, layers=layers, d_ff=d_ff)
+        self.apply(self.init_layer_weights)
 
     def decode(self, bth, hidden):
         bth = self.proj_to_dsz(bth)
