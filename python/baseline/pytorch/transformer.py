@@ -120,48 +120,15 @@ class MultiHeadedAttention(nn.Module):
         return self.w_O(x)
 
 
-class FFN(nn.Module):
-    """
-    FFN from https://arxiv.org/abs/1706.03762 via http://nlp.seas.harvard.edu/2018/04/03/attention.html
-
-    The `FFN` layer is block in the Transformer that follows multi-headed self-attention.  It consists
-    of an expansion from `d_model` to `d_ff` (with sub-sequent relu and dropout), followed by a squeeze
-    layer that pushes it back to `d_model`.  In the `tensor2tensor` codebase, this is implemented as convolution of
-    size 1 over the temporal sequence, which is equivalent, but in PyTorch, we dont need to do anything explicitly,
-    thanks to https://github.com/pytorch/pytorch/pull/1935!
-
-    """
-    def __init__(self, d_model, pdrop, activation_type='relu', d_ff=None):
-        """Constructor, takes in model size (which is the external currency of each block) and the feed-forward size
-
-        :param d_model: The model size.  This is the size passed through each block
-        :param d_ff: The feed-forward internal size, which is typical 4x larger, used internally
-        :param pdrop: The probability of dropping output
-        """
-        super(FFN, self).__init__()
-        if d_ff is None:
-            d_ff = 4 * d_model
-        self.expansion = pytorch_linear(d_model, d_ff)
-        self.squeeze = pytorch_linear(d_ff, d_model)
-        self.dropout = nn.Dropout(pdrop)
-        self.act = pytorch_activation(activation_type)
-
-    def forward(self, x):
-        """Expand to `d_ff` then activation, followed by a squeeze operation back down to `d_model`
-
-        :param x: The output of the previous attention module
-        :return: An output the same size as the input, but transformed
-        """
-        return self.squeeze(self.dropout(self.act(self.expansion(x))))
-
-
 class TransformerEncoder(nn.Module):
     def __init__(self, num_heads, d_model, pdrop, scale=True, activation_type='relu', d_ff=None):
         super(TransformerEncoder, self).__init__()
         self.d_model = d_model
 
         self.self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale=scale)
-        self.ffn = FFN(d_model, pdrop, d_ff=d_ff, activation_type=activation_type)
+        self.ffn = nn.Sequential(pytorch_linear(d_model, d_ff),
+                                 pytorch_activation(activation_type),
+                                 pytorch_linear(d_ff, d_model))
         self.ln1 = nn.LayerNorm(d_model, eps=1e-12)
         self.ln2 = nn.LayerNorm(d_model, eps=1e-12)
         self.dropout = nn.Dropout(pdrop)
@@ -174,8 +141,8 @@ class TransformerEncoder(nn.Module):
         """
         # Builtin Attention mask
         x = self.ln1(x)
-        x = self.self_attn(x, x, x, mask)
-        x = x + self.dropout(x)
+        h = self.self_attn(x, x, x, mask)
+        x = x + self.dropout(h)
 
         x = self.ln2(x)
         x = x + self.dropout(self.ffn(x))
@@ -188,7 +155,10 @@ class TransformerDecoder(nn.Module):
         self.d_model = d_model
         self.self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale=scale)
         self.src_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale=scale)
-        self.feed_forward = FFN(d_model, pdrop, d_ff=d_ff, activation_type=activation_type)
+        self.ffn = nn.Sequential(pytorch_linear(d_model, d_ff),
+                                 pytorch_activation(activation_type),
+                                 pytorch_linear(d_ff, d_model))
+
         self.ln1 = nn.LayerNorm(d_model, eps=1e-12)
         self.ln2 = nn.LayerNorm(d_model, eps=1e-12)
         self.ln3 = nn.LayerNorm(d_model, eps=1e-12)
@@ -203,7 +173,7 @@ class TransformerDecoder(nn.Module):
         x = x + self.dropout(self.src_attn(x, memory, memory, src_mask))
 
         x = self.ln3(x)
-        x = x + self.dropout(self.feed_forward(x))
+        x = x + self.dropout(self.ffn(x))
         return x
 
 
@@ -212,12 +182,11 @@ class TransformerEncoderStack(nn.Module):
         super(TransformerEncoderStack, self).__init__()
         single_layer = TransformerEncoder(num_heads, d_model, pdrop, scale, activation_type, d_ff)
         self.layers = pytorch_clone_module(single_layer, layers)
-        self.norm = nn.LayerNorm(single_layer.d_model, eps=1e-12)
 
     def forward(self, x, mask):
         for layer in self.layers:
             x = layer(x, mask)
-        return self.norm(x)
+        return x
 
 
 class TransformerDecoderStack(nn.Module):
@@ -225,9 +194,8 @@ class TransformerDecoderStack(nn.Module):
         super(TransformerDecoderStack, self).__init__()
         single_layer = TransformerDecoder(num_heads, d_model, pdrop, scale, activation_type, d_ff)
         self.layers = pytorch_clone_module(single_layer, layers)
-        self.norm = nn.LayerNorm(single_layer.d_model, eps=1e-12)
 
     def forward(self, x, memory, src_mask, tgt_mask):
         for layer in self.layers:
             x = layer(x, memory, src_mask, tgt_mask)
-        return self.norm(x)
+        return x

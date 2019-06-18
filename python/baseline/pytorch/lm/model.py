@@ -1,6 +1,6 @@
 from baseline.utils import write_json
 from baseline.pytorch.torchy import *
-from baseline.pytorch.transformer import TransformerEncoderStack, subsequent_mask
+from baseline.pytorch.transformer import TransformerEncoderStack, subsequent_mask, MultiHeadedAttention
 from baseline.model import LanguageModel, register_model
 import torch.autograd
 import os
@@ -96,7 +96,6 @@ class LanguageModelBase(nn.Module, LanguageModel):
         lm.dsz = lm.init_embed(embeddings, **kwargs)
         lm.init_decode(**kwargs)
         lm.init_output(embeddings[lm.tgt_key].get_vsz(), **kwargs)
-
         return lm
 
     def forward(self, input, hidden):
@@ -145,6 +144,7 @@ class RNNLanguageModel(LanguageModelBase):
 
 def _identity(x):
     return x
+
 
 @register_model(task='lm', name='transformer')
 class TransformerLanguageModel(LanguageModelBase):

@@ -341,7 +341,7 @@ def train():
     parser.add_argument("--batch_size", type=int, default=8, help="Batch Size")
     parser.add_argument("--tokens", choices=["words", "chars", "subwords"], default="subwords", help="What tokens to use")
     parser.add_argument("--dropout", type=float, default=0.1, help="Dropout")
-    parser.add_argument("--lr", type=float, default=2.5e-4, help="Learning rate")
+    parser.add_argument("--lr", type=float, default=4.4e-4, help="Learning rate")
     parser.add_argument("--clip", type=float, default=0.25, help="Clipping gradient norm")
     parser.add_argument("--weight_decay", type=float, default=0.0, help="Weight decay")
     parser.add_argument("--epochs", type=int, default=20, help="Num training epochs")
