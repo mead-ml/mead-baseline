@@ -387,7 +387,7 @@ def train():
 
     train_set = load_data(args.tokens, reader, dataset, 'train_file', vocabs, args.cache_features)
     valid_set = load_data(args.tokens, reader, dataset, 'valid_file', vocabs, args.cache_features)
-    logger.info("SUBWORD %s, VALID_WORDS %s", valid_set.tensors[-1].numel(), valid_num_words)
+    logger.info("valid. tokens [%s], valid. words [%s]", valid_set.tensors[-1].numel(), valid_num_words)
 
     train_sampler = torch.utils.data.distributed.DistributedSampler(train_set) if args.distributed else None
     train_loader = DataLoader(train_set, sampler=train_sampler, batch_size=args.batch_size, shuffle=(not args.distributed))
@@ -400,7 +400,7 @@ def train():
     model = TransformerLanguageModel.create(embeddings,
                                             hsz=args.d_model,
                                             d_ff=args.d_ff,
-                                            #tie_weights=(args.tokens != 'chars'),
+                                            tie_weights=(args.tokens != 'chars'),
                                             dropout=args.dropout,
                                             gpu=False,
                                             num_heads=args.num_heads,
