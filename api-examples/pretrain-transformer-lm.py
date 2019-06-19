@@ -353,10 +353,14 @@ def train():
     parser.add_argument("--device", type=str,
                         default="cuda" if torch.cuda.is_available() else "cpu",
                         help="Device (cuda or cpu)")
+    parser.add_argument("--distributed",
+                        type=str2bool,
+                        default=False,
+                        help="Are we doing distributed training?")
     parser.add_argument("--local_rank",
                         type=int,
                         default=-1,
-                        help="Local rank for distributed training (-1: not distributed)")
+                        help="Local rank for distributed training (-1 means use the environment variables to find)")
     parser.add_argument("--chars_per_word",
                         type=int,
                         default=40,
@@ -372,8 +376,13 @@ def train():
     logger.info("Cache directory [%s]", args.dataset_cache)
     logger.warning("Local rank (%d)", args.local_rank)
 
-    args.distributed = (args.local_rank != -1)
+    args.distributed = args.distributed or int(os.environ.get("WORLD_SIZE", 1)) > 1
+
     if args.distributed:
+        if args.local_rank == -1:
+            # https://github.com/kubeflow/pytorch-operator/issues/128
+            # https://github.com/pytorch/examples/blob/master/imagenet/main.py
+            args.local_rank = int(os.environ['RANK'])
         torch.cuda.set_device(args.local_rank)
         args.device = torch.device("cuda", args.local_rank)
         torch.distributed.init_process_group(backend='nccl', init_method='env://')
