@@ -91,7 +91,7 @@ class Service(object):
         """
         mxlen = -1
         mxwlen = -1
-        if self.vectorizers is not None:
+        if self.preproc == 'server' and self.vectorizers is not None:
             for k, vectorizer in self.vectorizers.items():
                 if hasattr(vectorizer, 'mxlen'):
                     mxlen = vectorizer.mxlen
