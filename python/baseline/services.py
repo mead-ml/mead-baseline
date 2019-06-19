@@ -81,17 +81,23 @@ class Service(object):
         :param mxwlen: `int`: The max length of a word in the batch
         """
         for k, vectorizer in self.vectorizers.items():
-            if hasattr(vectorizer, 'mxlen') and vectorizer.mxlen == -1:
-                vectorizer.mxlen = mxlen
-            if hasattr(vectorizer, 'mxwlen') and vectorizer.mxwlen == -1:
-                vectorizer.mxwlen = mxwlen
+            if hasattr(vectorizer, 'mxlen'):
+                if self.preproc == 'client':
+                    vectorizer.mxlen = mxlen
+                elif self.preproc == 'server' and vectorizer.mxlen == -1:  # keep the original behavior
+                    vectorizer.mxlen = mxlen
+            if hasattr(vectorizer, 'mxwlen'):
+                if self.preproc == 'client':
+                    vectorizer.mxwlen = mxwlen
+                elif self.preproc == 'server' and vectorizer.mxwlen == -1:  # keep the original behavior
+                    vectorizer.mxwlen = mxwlen
 
     def get_vectorizer_lens(self):
         """get the max len from the vectorizers if defined
         """
         mxlen = -1
         mxwlen = -1
-        if self.vectorizers is not None:
+        if self.preproc == 'server' and self.vectorizers is not None:
             for k, vectorizer in self.vectorizers.items():
                 if hasattr(vectorizer, 'mxlen'):
                     mxlen = vectorizer.mxlen
