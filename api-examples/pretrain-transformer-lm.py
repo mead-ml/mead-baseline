@@ -374,7 +374,6 @@ def train():
         args.basedir = 'transformer-{}-{}-{}'.format(args.dataset_key, args.tokens, os.getpid())
     logging.basicConfig(level=logging.INFO if args.local_rank in [-1, 0] else logging.WARN)
     logger.info("Cache directory [%s]", args.dataset_cache)
-    logger.warning("Local rank (%d)", args.local_rank)
 
     args.distributed = args.distributed or int(os.environ.get("WORLD_SIZE", 1)) > 1
 
@@ -382,7 +381,9 @@ def train():
         if args.local_rank == -1:
             # https://github.com/kubeflow/pytorch-operator/issues/128
             # https://github.com/pytorch/examples/blob/master/imagenet/main.py
+            logger.info("Setting local rank to RANK env variable")
             args.local_rank = int(os.environ['RANK'])
+        logger.warning("Local rank (%d)", args.local_rank)
         torch.cuda.set_device(args.local_rank)
         args.device = torch.device("cuda", args.local_rank)
         torch.distributed.init_process_group(backend='nccl', init_method='env://')
