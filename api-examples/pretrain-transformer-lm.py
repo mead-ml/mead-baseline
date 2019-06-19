@@ -6,7 +6,7 @@ from torch.nn.parallel import DistributedDataParallel
 from torch.optim import Adam
 from torch.utils.data import DataLoader, TensorDataset
 from baseline.pytorch.lm import TransformerLanguageModel
-from baseline.utils import str2bool
+from baseline.utils import str2bool, write_json
 import baseline.embeddings
 from baseline.pytorch.embeddings import *
 from baseline.vectorizers import Char2DVectorizer, Token1DVectorizer, AbstractVectorizer
@@ -287,8 +287,12 @@ def create_reader(token_type, nctx, chars_per_word):
     return reader
 
 
+def get_embed_and_vocab_cache(dataset_key, token_type):
+    return 'preproc-{}-{}.cache'.format(dataset_key, token_type)
+
+
 def load_embed_and_vocab(token_type, reader, dataset, dataset_key, d_model, caching):
-    preproc_cache = 'preproc-{}-{}.cache'.format(dataset_key, token_type)
+    preproc_cache = get_embed_and_vocab_cache(dataset_key, token_type)
     if caching and os.path.exists(preproc_cache):
         logger.info("Loading cached preprocessing info [%s]", preproc_cache)
         preproc_data = torch.load(preproc_cache)
@@ -392,7 +396,11 @@ def train():
     reader = create_reader(args.tokens, args.nctx, args.chars_per_word)
 
     preproc_data = load_embed_and_vocab(args.tokens, reader, dataset, args.dataset_key, args.d_model, args.cache_features)
+
     vocabs = preproc_data['vocabs']
+    os.makedirs(args.basedir, exist_ok=True)
+    # We want to make sure to save our input vocab into the basedir for reuse later
+    write_json(vocabs['x'], os.path.join(args.basedir, 'vocabs.json'))
     embeddings = preproc_data['embeddings']
     valid_num_words = preproc_data['valid_num_words']
     tgt_key = preproc_data['tgt_key']
@@ -498,7 +506,7 @@ def train():
                                                                                                      np.exp(trainer.state.output))))
         evaluator.add_event_handler(Events.COMPLETED,
                                     lambda _: print("Validation: %s" % pformat(evaluator.state.metrics)))
-        checkpoint_handler = ModelCheckpoint(args.basedir, 'checkpoint', save_interval=1, n_saved=3, create_dir=True)
+        checkpoint_handler = ModelCheckpoint(args.basedir, 'checkpoint', save_interval=1, n_saved=3, create_dir=False)
         trainer.add_event_handler(Events.EPOCH_COMPLETED, checkpoint_handler, {'mymodel': getattr(model, 'module', model)})
     trainer.run(train_loader, max_epochs=args.epochs)
 
