@@ -238,7 +238,15 @@ class Task(object):
         5. call `_close_reporting_hooks()` which lets the reporting hooks know that the job is finished
         :return: models, metrics
         """
-        pass
+        self._load_dataset()
+        baseline.save_vectorizers(self.get_basedir(), self.vectorizers)
+        model = self._create_model()
+        train_params = self.config_params['train']
+        train_params['checkpoint'] = checkpoint
+        metrics = baseline.train.fit(model, self.train_data, self.valid_data, self.test_data, **train_params)
+        baseline.zip_files(self.get_basedir())
+        self._close_reporting_hooks()
+        return model, metrics
 
     def _configure_reporting(self, reporting, config_file, **kwargs):
         """Configure all `reporting_hooks` specified in the mead settings or overridden at the command line
@@ -417,39 +425,25 @@ class ClassifierTask(Task):
         read = self.config_params['reader'] if 'reader' in self.config_params else self.config_params['loader']
         sort_key = read.get('sort_key')
         bsz, vbsz, tbsz = Task._get_batchsz(self.config_params)
-        self.train_data, _ = self.reader.load(
+        self.train_data = self.reader.load(
             self.dataset['train_file'],
             self.feat2index,
             bsz,
             shuffle=True,
             sort_key=sort_key,
         )
-        self.valid_data, _ = self.reader.load(
+        self.valid_data = self.reader.load(
             self.dataset['valid_file'],
             self.feat2index,
             vbsz,
         )
         self.test_data = None
         if 'test_file' in self.dataset:
-            self.test_data, self.txts = self.reader.load(
+            self.test_data = self.reader.load(
                 self.dataset['test_file'],
                 self.feat2index,
                 tbsz,
             )
-
-    def train(self, checkpoint=None):
-        self._load_dataset()
-        baseline.save_vectorizers(self.get_basedir(), self.vectorizers)
-        model = self._create_model()
-        train_params = self.config_params['train']
-        train_params['checkpoint'] = checkpoint
-        output = self.config_params.get('output')
-        metrics = baseline.train.fit(model, self.train_data, self.valid_data, self.test_data,
-                                     output=output, txts=self.txts, **train_params)
-        baseline.zip_files(self.get_basedir())
-        self._close_reporting_hooks()
-        return model, metrics
-        
 
 @exporter
 @register_task

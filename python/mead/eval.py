@@ -58,6 +58,11 @@ def load_data(task, reader, model, dataset, batchsz):
         data = reader.load(dataset, model.src_vocabs, model.tgt_vocab, batchsz)
     elif task == 'lm':
         data = reader.load(dataset, model.vocabs, batchsz, tgt_key=model.model.tgt_key)
+    elif task == 'classify':
+        if hasattr(reader, 'load_text'):
+            data = reader.load_text(dataset, model.vocabs, batchsz)
+        else:
+            data = reader.load(dataset, model.vocabs, batchsz)
     else:
         data = reader.load(dataset, model.vocabs, batchsz)
     if not isinstance(data, tuple):
