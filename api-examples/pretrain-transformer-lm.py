@@ -287,12 +287,13 @@ def create_reader(token_type, nctx, chars_per_word):
     return reader
 
 
-def get_embed_and_vocab_cache(dataset_key, token_type):
-    return 'preproc-{}-{}.cache'.format(dataset_key, token_type)
+def get_embed_and_vocab_cache(base_path, dataset_key, token_type):
+    return os.path.join(base_path, 'preproc-{}-{}.cache'.format(dataset_key, token_type))
 
 
 def load_embed_and_vocab(token_type, reader, dataset, dataset_key, d_model, caching):
-    preproc_cache = get_embed_and_vocab_cache(dataset_key, token_type)
+    base_path = os.path.dirname(dataset['train_file'])
+    preproc_cache = get_embed_and_vocab_cache(base_path, dataset_key, token_type)
     if caching and os.path.exists(preproc_cache):
         logger.info("Loading cached preprocessing info [%s]", preproc_cache)
         preproc_data = torch.load(preproc_cache)
