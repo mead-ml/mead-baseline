@@ -335,6 +335,8 @@ def train():
     parser = ArgumentParser()
     parser.add_argument("--basedir", type=str)
     parser.add_argument("--dataset_key", type=str, default='wikitext-2', help="key from DATASETS global")
+    parser.add_argument("--train_file", type=str, help='Optional file path to use for train file')
+    parser.add_argument("--valid_file", type=str, help='Optional file path to use for valid file')
     parser.add_argument("--dataset_cache", type=str, default=os.path.expanduser('~/.bl-data'),
                         help="Path or url of the dataset cache")
     parser.add_argument("--cache_features", type=str2bool, default=True)
@@ -374,6 +376,15 @@ def train():
                         default=1,
                         help="Create effective batch size by accumulating grads without updates")
     args = parser.parse_args()
+
+    if args.train_file and not args.valid_file:
+        logger.error("If you provide a train_file, you must provide a valid_file")
+        return
+
+    if not args.train_file and args.valid_file:
+        logger.error("If you provide a valid_file, you must also provide a train_file")
+        return
+
     if args.basedir is None:
         args.basedir = 'transformer-{}-{}-{}'.format(args.dataset_key, args.tokens, os.getpid())
     logging.basicConfig(level=logging.INFO if args.local_rank in [-1, 0] else logging.WARN)
@@ -392,7 +403,10 @@ def train():
         args.device = torch.device("cuda", args.local_rank)
         torch.distributed.init_process_group(backend='nccl', init_method='env://')
 
-    dataset = DataDownloader(DATASETS[args.dataset_key], args.dataset_cache).download()
+    if args.train_file:
+        dataset = {'train_file': args.train_file, 'valid_file': args.valid_file}
+    else:
+        dataset = DataDownloader(DATASETS[args.dataset_key], args.dataset_cache).download()
     reader = create_reader(args.tokens, args.nctx, args.chars_per_word)
 
     preproc_data = load_embed_and_vocab(args.tokens, reader, dataset, args.dataset_key, args.d_model, args.cache_features)
