@@ -53,6 +53,7 @@ class WordPieceVectorizer1D(AbstractVectorizer):
             else:
                 for subtok in self.tokenizer.tokenize(tok):
                     yield subtok
+        yield '[CLS]'
 
     def _next_element(self, tokens, vocab):
         for atom in self.iterable(tokens):
@@ -87,10 +88,11 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
     def __init__(self, name, **kwargs):
         super(TransformerLMEmbeddings, self).__init__(name)
         self.vocab = read_json(kwargs.get('vocab_file'))
+        self.cls_index = self.vocab['[CLS]']
         self.vsz = len(self.vocab)
         layers = int(kwargs.get('layers', 8))
         num_heads = int(kwargs.get('num_heads', 10))
-        pdrop = kwargs.get('dropout', 0.0)
+        pdrop = kwargs.get('dropout', 0.1)
         self.d_model = int(kwargs.get('dsz', kwargs.get('d_model', 410)))
         d_ff = int(kwargs.get('d_ff', 2100))
         x_embedding = PositionalLookupTableEmbeddings('pos', vsz=self.vsz, dsz=self.d_model)
@@ -99,18 +101,13 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
 
     def embed(self, input):
         embedded = self.embeddings['x'](input)
-        #all_embeddings = []
-        #for k in self.embeddings.keys():
-        #    embedding = self.embeddings[k]
-        #    all_embeddings.append(embedding.encode(input[k]))
-        #embedded = torch.cat(all_embeddings, -1)
         embedded_dropout = self.embed_dropout(embedded)
         if self.embeddings_proj:
             embedded_dropout = self.embeddings_proj(embedded_dropout)
         return embedded_dropout
 
     def init_embed(self, embeddings, **kwargs):
-        pdrop = float(kwargs.get('dropout', 0.5))
+        pdrop = float(kwargs.get('dropout', 0.1))
         self.embed_dropout = nn.Dropout(pdrop)
         self.embeddings = EmbeddingsContainer()
         input_sz = 0
@@ -131,10 +128,10 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
     def forward(self, x):
         input_mask = torch.zeros(x.shape, device=x.device, dtype=torch.long).masked_fill(x != 0, 1).unsqueeze(1).unsqueeze(1)
         embedding = self.embed(x)
-        z = self.get_output(self.transformer(embedding, mask=input_mask))
+        z = self.get_output(x, self.transformer(embedding, mask=input_mask))
         return z
 
-    def get_output(self, z):
+    def get_output(self, inputs, z):
         return z.detach()
 
     def get_vocab(self):
@@ -153,11 +150,11 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
         return c
 
 
-def _mean_pool(embeddings):
+def _mean_pool(_, embeddings):
     return torch.mean(embeddings, 1, False)
 
 
-def _max_pool(embeddings):
+def _max_pool(_, embeddings):
     return torch.max(embeddings, 1, False)[0]
 
 
@@ -166,9 +163,19 @@ class TransformerLMPooledEmbeddings(TransformerLMEmbeddings):
 
     def __init__(self, name, **kwargs):
         super(TransformerLMPooledEmbeddings, self).__init__(name=name, **kwargs)
-        pooling = kwargs.get('pooling', 'mean')
 
-        self.pooling_op = _max_pool if pooling == 'max' else _mean_pool
+        pooling = kwargs.get('pooling', 'cls')
+        if pooling == 'max':
+            self.pooling_op = _max_pool
+        elif pooling == 'mean':
+            self.pooling_op = _mean_pool
+        else:
+            self.pooling_op = self._cls_pool
 
-    def get_output(self, z):
-        return self.pooling_op(z)
+    def _cls_pool(self, inputs, tensor):
+        pooled = tensor[inputs == self.cls_index]
+        print((inputs == self.cls_index).nonzero())
+        return pooled
+
+    def get_output(self, inputs, z):
+        return self.pooling_op(inputs, z)
