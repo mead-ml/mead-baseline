@@ -174,7 +174,6 @@ class TransformerLMPooledEmbeddings(TransformerLMEmbeddings):
 
     def _cls_pool(self, inputs, tensor):
         pooled = tensor[inputs == self.cls_index]
-        print((inputs == self.cls_index).nonzero())
         return pooled
 
     def get_output(self, inputs, z):
