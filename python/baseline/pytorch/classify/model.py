@@ -93,7 +93,7 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
         all_embeddings = []
         for k, embedding in self.embeddings.items():
             all_embeddings.append(embedding.encode(input[k]))
-        return torch.cat(all_embeddings, 2)
+        return torch.cat(all_embeddings, -1)
 
     def predict(self, batch_dict):
         examples = self.make_input(batch_dict)
