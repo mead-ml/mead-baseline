@@ -45,7 +45,7 @@ class LanguageModelTrainerPyTorch(Trainer):
         metrics['perplexity'] = np.exp(metrics['avg_loss'])
         return metrics
 
-    def test(self, vs, reporting_fns, phase='Valid'):
+    def test(self, vs, reporting_fns, phase='Valid', **kwargs):
         epoch = 0
         if phase == 'Valid':
             self.valid_epochs += 1

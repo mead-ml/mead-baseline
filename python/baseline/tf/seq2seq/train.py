@@ -26,12 +26,23 @@ class Seq2SeqTrainerTf(Trainer):
     def __init__(self, model, **kwargs):
         super(Seq2SeqTrainerTf, self).__init__()
         self.sess = model.sess
-        self.loss = model.create_loss()
-        self.test_loss = model.create_test_loss()
+        if kwargs.get('eval_mode', False):
+            # When reloading a model things like `decoder.preds` used in the loss are not present.
+            # Trying to create the loss would break things.
+            self.loss = tf.no_op()
+            self.test_loss = tf.no_op()
+        else:
+             self.loss = model.create_loss()
+             self.test_loss = model.create_test_loss()
+
         self.model = model
         self.tgt_rlut = kwargs['tgt_rlut']
         self.base_dir = kwargs['basedir']
-        self.global_step, self.train_op = optimizer(self.loss, colocate_gradients_with_ops=True, **kwargs)
+        if kwargs.get('eval_mode', False):
+            # When reloaded a model creating the training op will break things.
+            self.train_op = tf.no_op()
+        else:
+            self.global_step, self.train_op = optimizer(self.loss, colocate_gradients_with_ops=True, **kwargs)
         self.nsteps = kwargs.get('nsteps', 500)
         self.beam = kwargs.get('beam', 10)
 
@@ -110,7 +121,7 @@ class Seq2SeqTrainerTf(Trainer):
         )
         return metrics
 
-    def test(self, vs, reporting_fns, phase='Valid'):
+    def test(self, vs, reporting_fns, phase='Valid', **kwargs):
         if phase == 'Test':
             return self._evaluate(vs, reporting_fns)
         self.valid_epochs += 1

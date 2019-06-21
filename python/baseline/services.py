@@ -152,7 +152,7 @@ class Service(object):
         name = kwargs.get("name", None)
         if remote:
             logging.debug("loading remote model")
-            beam = kwargs.get('beam', 30)
+            beam = int(kwargs.get('beam', 30))
             model, preproc = Service._create_remote_model(
                 directory, be, remote, name, cls.signature_name(), beam,
                 preproc=kwargs.get('preproc', 'client'),
@@ -530,7 +530,7 @@ class EncoderDecoderService(Service):
     @classmethod
     def load(cls, bundle, **kwargs):
         kwargs['predict'] = kwargs.get('predict', True)
-        kwargs['beam'] = kwargs.get('beam', 30)
+        kwargs['beam'] = int(kwargs.get('beam', 30))
         return super(EncoderDecoderService, cls).load(bundle, **kwargs)
 
     def set_vectorizer_lens(self, mxlen, mxwlen):
@@ -562,7 +562,7 @@ class EncoderDecoderService(Service):
         self.set_vectorizer_lens(mxlen, mxwlen)
         examples = self.vectorize(tokens_seq)
 
-        kwargs['beam'] = kwargs.get('beam', K)
+        kwargs['beam'] = int(kwargs.get('beam', K))
         outcomes = self.model.predict(examples, **kwargs)
 
         results = []

@@ -394,7 +394,7 @@ class ParallelSeqReader(SeqPredictReader):
     def __init__(self, vectorizers, trim=False, truncate=False, mxlen=-1, **kwargs):
         super(ParallelSeqReader, self).__init__(vectorizers, trim, truncate, mxlen, **kwargs)
         self.data = _norm_ext(kwargs.get('data_suffix', 'in'))
-        self.tag = _norm_ext(kwargs.get('pair_suffix', 'out'))
+        self.tag = _norm_ext(kwargs.get('label_suffix', 'out'))
         self.label_vectorizer = Token1DVectorizer(mxlen=mxlen)
 
     def build_vocab(self, files, **kwargs):
@@ -574,7 +574,7 @@ class TSVSeqLabelReader(SeqLabelReader):
             labels[index] = label
         return labels
 
-    def load(self, filename, vocabs, batchsz, **kwargs):
+    def load_text(self, filename, vocabs, batchsz, **kwargs):
 
         shuffle = kwargs.get('shuffle', False)
         sort_key = kwargs.get('sort_key', None)
@@ -582,7 +582,36 @@ class TSVSeqLabelReader(SeqLabelReader):
             sort_key += '_lengths'
 
         examples = []
+        texts = []
+        with codecs.open(filename, encoding='utf-8', mode='r') as f:
+            for il, line in enumerate(f):
+                label, text = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn)
+                texts.append(text)
+                if len(text) == 0:
+                    continue
+                y = self.label2index[label]
+                example_dict = dict()
+                for k, vectorizer in self.vectorizers.items():
+                    example_dict[k], lengths = vectorizer.run(text, vocabs[k])
+                    if lengths is not None:
+                        example_dict['{}_lengths'.format(k)] = lengths
 
+                example_dict['y'] = y
+                examples.append(example_dict)
+        return baseline.data.ExampleDataFeed(baseline.data.DictExamples(examples,
+                                                                        do_shuffle=shuffle,
+                                                                        sort_key=sort_key),
+                                             batchsz=batchsz, shuffle=shuffle, trim=self.trim, truncate=self.truncate), texts
+
+    def load(self, filename, vocabs, batchsz, **kwargs):
+    
+        shuffle = kwargs.get('shuffle', False)
+        sort_key = kwargs.get('sort_key', None)
+        if sort_key is not None and not sort_key.endswith('_lengths'):
+            sort_key += '_lengths'
+    
+        examples = []
+    
         with codecs.open(filename, encoding='utf-8', mode='r') as f:
             for il, line in enumerate(f):
                 label, text = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn)
@@ -594,7 +623,7 @@ class TSVSeqLabelReader(SeqLabelReader):
                     example_dict[k], lengths = vectorizer.run(text, vocabs[k])
                     if lengths is not None:
                         example_dict['{}_lengths'.format(k)] = lengths
-
+            
                 example_dict['y'] = y
                 examples.append(example_dict)
         return baseline.data.ExampleDataFeed(baseline.data.DictExamples(examples,

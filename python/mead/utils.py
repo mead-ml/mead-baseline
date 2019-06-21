@@ -123,9 +123,12 @@ def _infer_type_or_str(x):
         return str2bool(x)
     except:
         try:
-            return float(x)
+            return int(x)
         except ValueError:
-            return x
+            try:
+                return float(x)
+            except ValueError:
+                return x
 
 
 @exporter

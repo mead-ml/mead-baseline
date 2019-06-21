@@ -57,7 +57,7 @@ class TaggerEvaluatorTf(object):
 
         return correct_labels, total_labels, gold_chunks, pred_chunks
 
-    def test(self, ts, conll_output=None, txts=None):
+    def test(self, ts, conll_output=None, txts=None, **kwargs):
 
         total_correct = total_sum = 0
         gold_spans = []
@@ -100,12 +100,20 @@ class TaggerTrainerTf(EpochReportingTrainer):
 
     def __init__(self, model, **kwargs):
         super(TaggerTrainerTf, self).__init__()
-        self.loss = model.create_loss()
+        if kwargs.get('eval_mode', False):
+            # The loss is already in the graph so don't make it again.
+            self.loss = tf.no_op()
+        else:
+            self.loss = model.create_loss()
         self.model = model
         span_type = kwargs.get('span_type', 'iob')
         verbose = kwargs.get('verbose', False)
         self.evaluator = TaggerEvaluatorTf(model, span_type, verbose)
-        self.global_step, self.train_op = optimizer(self.loss, **kwargs)
+        if kwargs.get('eval_mode', False):
+            # When reloaded a model creating the training op will break things.
+            self.train_op = tf.no_op()
+        else:
+            self.global_step, self.train_op = optimizer(self.loss, **kwargs)
         self.nsteps = kwargs.get('nsteps', six.MAXSIZE)
 
     def checkpoint(self):
@@ -146,8 +154,8 @@ class TaggerTrainerTf(EpochReportingTrainer):
         metrics = self.calc_metrics(epoch_loss, epoch_norm)
         return metrics
 
-    def _test(self, ts):
-        return self.evaluator.test(ts)
+    def _test(self, ts, **kwargs):
+        return self.evaluator.test(ts, **kwargs)
 
 
 @register_training_func('tagger')

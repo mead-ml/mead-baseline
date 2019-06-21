@@ -62,20 +62,32 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
         pg = create_progress_bar(steps)
         cm = ConfusionMatrix(self.labels)
         verbose = kwargs.get("verbose", None)
-
+        output = kwargs.get('output')
+        txts = kwargs.get('txts')
+        handle = None
+        line_number = 0
+        if output is not None and txts is not None:
+            handle = open(output, "w")
+        
         for batch_dict in pg(loader):
             example = self._make_input(batch_dict)
-            y = example.pop('y')
+            ys = example.pop('y')
             pred = self.model(example)
-            loss = self.crit(pred, y)
+            loss = self.crit(pred, ys)
+            if handle is not None:
+                for p, y in zip(pred, ys):
+                    handle.write('{}\t{}\t{}\n'.format(" ".join(txts[line_number]), self.model.labels[p], self.model.labels[y]))
+                    line_number += 1
             batchsz = self._get_batchsz(batch_dict)
             total_loss += loss.item() * batchsz
             total_norm += batchsz
-            _add_to_cm(cm, y, pred)
+            _add_to_cm(cm, ys, pred)
 
         metrics = cm.get_all_metrics()
         metrics['avg_loss'] = total_loss / float(total_norm)
         verbose_output(verbose, cm)
+        if handle is not None:
+            handle.close()
 
         return metrics
 
@@ -147,7 +159,9 @@ def fit(model, ts, vs, es, **kwargs):
     verbose = kwargs.get('verbose', {'console': kwargs.get('verbose_console', False), 'file': kwargs.get('verbose_file', None)})
     epochs = int(kwargs.get('epochs', 20))
     model_file = get_model_file('classify', 'pytorch', kwargs.get('basedir'))
-
+    output = kwargs.get('output')
+    txts = kwargs.get('txts')
+    
     best_metric = 0
     if do_early_stopping:
         early_stopping_metric = kwargs.get('early_stopping_metric', 'acc')
@@ -187,5 +201,5 @@ def fit(model, ts, vs, es, **kwargs):
         logger.info('Reloading best checkpoint')
         model = torch.load(model_file)
         trainer = create_trainer(model, **kwargs)
-        test_metrics = trainer.test(es, reporting_fns, phase='Test', verbose=verbose)
+        test_metrics = trainer.test(es, reporting_fns, phase='Test', verbose=verbose, output=output, txts=txts)
     return test_metrics

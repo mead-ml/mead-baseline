@@ -30,6 +30,22 @@ exporter = export(__all__)
 logger = logging.getLogger('mead')
 
 
+def merge_reporting_with_settings(reporting, settings):
+    default_reporting = settings.get('reporting_hooks', {})
+    # Add default reporting information to the reporting settings.
+    for report_type in default_reporting:
+        if report_type in reporting:
+            for report_arg, report_val in default_reporting[report_type].items():
+                if report_arg not in reporting[report_type]:
+                    reporting[report_type][report_arg] = report_val
+    reporting_hooks = list(reporting.keys())
+    for settings in reporting.values():
+        for module in listify(settings.get('module', settings.get('modules', []))):
+            import_user_module(module)
+    return reporting_hooks, reporting
+
+
+
 class Backend(object):
     """Simple object to represent a deep-learning framework backend"""
     def __init__(self, name=None, params=None, exporter=None):
@@ -220,14 +236,13 @@ class Task(object):
         3. call `baseline.train.fit()` which executes the training procedure and  yields a saved model
         4. call `baseline.zip_files()` which zips all files in the `basedir` with the same `PID` as this process
         5. call `_close_reporting_hooks()` which lets the reporting hooks know that the job is finished
-        :return: Nothing
+        :return: models, metrics
         """
         self._load_dataset()
         baseline.save_vectorizers(self.get_basedir(), self.vectorizers)
         model = self._create_model()
         train_params = self.config_params['train']
         train_params['checkpoint'] = checkpoint
-
         metrics = baseline.train.fit(model, self.train_data, self.valid_data, self.test_data, **train_params)
         baseline.zip_files(self.get_basedir())
         self._close_reporting_hooks()
@@ -429,7 +444,6 @@ class ClassifierTask(Task):
                 self.feat2index,
                 tbsz,
             )
-
 
 @exporter
 @register_task
@@ -777,7 +791,6 @@ class LanguageModelingTask(Task):
         model['tgt_key'] = self.config_params.get('reader',
                                                   self.config_params.get('loader', {})).get('tgt_key', self.primary_key)
         model['src_keys'] = listify(self.config_params.get('reader', list(self.config_params.get('loader', {}).get('src_keys', self.embeddings.keys()))))
-
         if self.backend.params is not None:
             for k, v in self.backend.params.items():
                 model[k] = v
