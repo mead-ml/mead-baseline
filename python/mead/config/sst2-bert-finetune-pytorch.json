@@ -1,23 +1,25 @@
 {
   "task": "classify",
   "basedir": "./sst2",
-  "batchsz": 50,
-  "modules": ["embed_bert_pytorch"],
-  "features":
-  [{
-    "name": "bert",
-    "vectorizer": {
-      "type": "wordpiece1d",
-      "embed_file": "bert-base-uncased"
-    },
-    "embeddings": {
-      "type": "bert",
-      "dsz": 3072,
-      "embed_file": "bert-base-uncased",
-      "operator": "concat",
-      "layers": [-1,-2, -3, -4]
+  "batchsz": 10,
+  "modules": [
+    "embed_bert_pytorch"
+  ],
+  "features": [
+    {
+      "name": "bert",
+      "vectorizer": {
+        "type": "wordpiece1d",
+        "embed_file": "bert-base-uncased"
+      },
+      "embeddings": {
+        "type": "bert-pooled",
+        "embed_file": "bert-base-uncased",
+        "dsz": 768,
+        "trainable": true
+      }
     }
-  }],
+  ],
   "preproc": {
     "mxlen": 100
   },
