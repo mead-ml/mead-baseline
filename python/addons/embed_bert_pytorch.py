@@ -63,6 +63,7 @@ class WordPieceVectorizer1D(AbstractVectorizer):
     def get_dims(self):
         return self.mxlen,
 
+
 class BERTBaseEmbeddings(PyTorchEmbeddings):
 
     def __init__(self, name, **kwargs):
@@ -74,8 +75,6 @@ class BERTBaseEmbeddings(PyTorchEmbeddings):
         self.model = BertModel.from_pretrained(kwargs.get('embed_file'))
         self.vocab = BERT_TOKENIZER.vocab
         self.vsz = len(BERT_TOKENIZER.vocab)  # 30522 self.model.embeddings.word_embeddings.num_embeddings
-        self.layer_indices = kwargs.get('layers', [-1, -2, -3, -4])
-        self.operator = kwargs.get('operator', 'concat')
 
     def get_vocab(self):
         return self.vocab
@@ -106,6 +105,8 @@ class BERTEmbeddings(BERTBaseEmbeddings):
 
     def __init__(self, name, **kwargs):
         super(BERTEmbeddings, self).__init__(name=name, **kwargs)
+        self.layer_indices = kwargs.get('layers', [-1, -2, -3, -4])
+        self.operator = kwargs.get('operator', 'concat')
 
     def get_output(self, all_layers, pooled):
         layers = [all_layers[layer_index].detach() for layer_index in self.layer_indices]
