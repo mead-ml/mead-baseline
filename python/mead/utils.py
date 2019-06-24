@@ -17,7 +17,7 @@ logger = logging.getLogger('mead')
 
 
 @exporter
-def configure_logger(logger_config):
+def configure_logger(logger_config, basedir=None):
     """Use the logger file (logging.json) to configure the log, but overwrite the filename to include the PID
 
     There are reporting and timing loggers that are configured, the latter being used for speed testing.
@@ -29,10 +29,24 @@ def configure_logger(logger_config):
     config = read_config_file_or_json(logger_config, 'logger')
     config['handlers']['reporting_file_handler']['filename'] = 'reporting-{}.log'.format(os.getpid())
     config['handlers']['timing_file_handler']['filename'] = 'timing-{}.log'.format(os.getpid())
+    if basedir is not None:
+        # Create a copy of the file handler so we can keep the log in cwd for back compat
+        config['handlers']['reporting_basedir_handler'] = deepcopy(config['handlers']['reporting_file_handler'])
+        # Update the file to be in the basedir of the model
+        config['handlers']['reporting_basedir_handler']['filename'] = os.path.join(basedir, config['handlers']['reporting_basedir_handler']['filename'])
+        config['handlers']['reporting_basedir_handler']['class'] = 'baseline.utils.MakeFileHandler'
+        # Add this handler to the logger
+        config['loggers']['baseline.reporting']['handlers'].append('reporting_basedir_handler')
+        # Same as above
+        config['handlers']['timing_basedir_handler'] = deepcopy(config['handlers']['timing_file_handler'])
+        config['handlers']['timing_basedir_handler']['filename'] = os.path.join(basedir, config['handlers']['timing_basedir_handler']['filename'])
+        config['handlers']['timing_basedir_handler']['class'] = 'baseline.utils.MakeFileHandler'
+        config['loggers']['baseline.timing']['handlers'].append('timing_basedir_handler')
     level = os.getenv('LOG_LEVEL', 'INFO')
     config['loggers']['baseline']['level'] = get_logging_level(os.getenv('BASELINE_LOG_LEVEL', level))
     config['loggers']['mead']['level'] = get_logging_level(os.getenv('MEAD_LOG_LEVEL', level))
     config['handlers']['reporting_console_handler']['level'] = get_logging_level(os.getenv('REPORTING_LOG_LEVEL', level))
+    config['handlers']['timing_console_handler']['level'] = get_logging_level(os.getenv('TIMING_LOG_LEVEL', level))
     logging.config.dictConfig(config)
 
 

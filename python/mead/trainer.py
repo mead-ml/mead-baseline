@@ -43,7 +43,7 @@ def update_datasets(datasets_config, config_params, train, valid, test):
             logger.warning('Warning: multiple templates found for dataset override, using first!')
         updated_record = copy.deepcopy(original_record[0])
         if 'sha1' in updated_record:
-            logging.info('Ignoring SHA1 due to user override')
+            logger.info('Ignoring SHA1 due to user override')
             del updated_record['sha1']
         if 'download' in updated_record:
             if not train or not valid:
@@ -62,9 +62,9 @@ def update_datasets(datasets_config, config_params, train, valid, test):
     if test:
         updated_record['test_file'] = test
 
-    logging.warning(updated_record)
+    logger.warning(updated_record)
     config_params['dataset'] = new_dataset_label
-    logging.info("The dataset key for this override is {}".format(new_dataset_label))
+    logger.info("The dataset key for this override is {}".format(new_dataset_label))
     datasets_config.append(updated_record)
 
 def main():
@@ -86,10 +86,16 @@ def main():
     parser.add_argument('--checkpoint', help='Restart training from this checkpoint')
     args, reporting_args = parser.parse_known_args()
 
-    args.logging = read_config_stream(args.logging)
-    configure_logger(args.logging)
-
     config_params = read_config_stream(args.config)
+
+    if args.basedir is not None:
+        config_params['basedir'] = args.basedir
+
+    task_name = config_params.get('task', 'classify') if args.task is None else args.task
+
+    args.logging = read_config_stream(args.logging)
+    configure_logger(args.logging, config_params.get('basedir', './{}'.format(task_name)))
+
     try:
         args.settings = read_config_stream(args.settings)
     except:
@@ -107,9 +113,6 @@ def main():
     if args.gpus is not None:
         config_params['model']['gpus'] = args.gpus
 
-    if args.basedir is not None:
-        config_params['basedir'] = args.basedir
-
     if args.backend is not None:
         config_params['backend'] = normalize_backend(args.backend)
 
@@ -120,7 +123,6 @@ def main():
     reporting = parse_extra_args(set(chain(cmd_hooks, config_hooks)), reporting_args)
     config_params['reporting'] = reporting
 
-    task_name = config_params.get('task', 'classify') if args.task is None else args.task
     logger.info('Task: [{}]'.format(task_name))
     task = mead.Task.get_task_specific(task_name, args.settings)
     task.read_config(config_params, args.datasets, reporting_args=reporting_args)

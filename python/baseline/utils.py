@@ -173,6 +173,7 @@ def color(msg, color):
 class ColoredFormatter(logging.Formatter):
     COLORS = {
         'WARNING': Colors.YELLOW,
+        'ERROR': Colors.RED
     }
 
     def format(self, record):
@@ -190,6 +191,15 @@ class JSONFormatter(ColoredFormatter):
         except TypeError:
             pass
         return super(JSONFormatter, self).format(record)
+
+
+class MakeFileHandler(logging.FileHandler):
+    """A File logger that will create intermediate dirs if need be."""
+    def __init__(self, filename, mode='a', encoding=None, delay=0):
+        log_dir = os.path.dirname(filename)
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+        super(MakeFileHandler, self).__init__(filename, mode, encoding, delay)
 
 
 @exporter

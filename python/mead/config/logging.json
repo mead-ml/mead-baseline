@@ -46,6 +46,12 @@
             "filename": "timing.log",
             "formatter": "json",
             "encoding": "utf-8"
+        },
+        "timing_console_handler": {
+            "class": "logging.StreamHandler",
+            "level": "INFO",
+            "stream": "ext://sys.stdout",
+            "formatter": "json"
         }
     },
     "loggers": {
@@ -66,7 +72,7 @@
         },
         "baseline.timing": {
             "level": "DEBUG",
-            "handlers": ["timing_file_handler"],
+            "handlers": ["timing_file_handler", "timing_console_handler"],
             "propagate": false
         }
     }
