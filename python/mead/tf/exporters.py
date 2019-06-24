@@ -137,6 +137,7 @@ class ClassifyTensorFlowExporter(TensorFlowExporter):
         model, classes, values = self._create_model(sess, basename)
 
         predict_tensors = {}
+        predict_tensors[model.lengths_key] = tf.saved_model.utils.build_tensor_info(model.lengths)
 
         for k, v in model.embeddings.items():
             try:
