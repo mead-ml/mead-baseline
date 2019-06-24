@@ -223,8 +223,8 @@ class NBowModel(NBowBase):
     def __init__(self):
         super(NBowModel, self).__init__()
 
-    def pool(self, embeddings):
-        return torch.mean(embeddings, 1, False)
+    def pool(self, embeddings, lengths):
+        return torch.sum(embeddings, 1, False) / torch.unsqueeze(lengths, -1).to(embeddings.dtype)
 
 
 @register_model(task='classify', name='nbowmax')

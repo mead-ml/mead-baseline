@@ -587,7 +587,7 @@ class NBowModel(NBowBase):
         :param kwargs: None
         :return: The average pooling representation
         """
-        return tf.reduce_mean(word_embeddings, 1, keepdims=False)
+        return tf.divide(tf.reduce_sum(word_embeddings, 1, keepdims=False), tf.cast(tf.expand_dims(self.lengths, -1), tf.float32))
 
 
 @register_model(task='classify', name='nbowmax')
