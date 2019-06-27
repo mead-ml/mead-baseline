@@ -1250,9 +1250,16 @@ class WordPieceVectorizer1D(AbstractVectorizer):
         self.mxlen = kwargs.get('mxlen', -1)
 
     def iterable(self, tokens):
+        yield '[CLS]'
         for tok in tokens:
-            for subtok in self.wordpiece_tok.tokenize(tok):
-                yield subtok
+            if tok == '<unk>':
+                yield '[UNK]'
+            elif tok == '<EOS>':
+                yield '[SEP]'
+            else:
+                for subtok in self.wordpiece_tok.tokenize(tok):
+                    yield subtok
+        yield '[SEP]'
 
     def _next_element(self, tokens, vocab):
         for atom in self.iterable(tokens):
