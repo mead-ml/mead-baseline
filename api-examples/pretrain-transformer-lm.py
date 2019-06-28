@@ -505,39 +505,40 @@ def train():
         metrics['train_average_loss'] = train_token_loss
         metrics['train_ppl'] = train_token_ppl
         model_base = os.path.join(args.basedir, 'checkpoint')
+        agg_valid_loss = 0.0
+        model.eval()
+        for batch in valid_loader:
+            with torch.no_grad():
+                x, y = batch
+                inputs = {'x': x.to(args.device)}
+                labels = y.to(args.device).transpose(0, 1).contiguous()
+                logits = model(inputs, None)[0].transpose(0, 1).contiguous()
+                shift_logits = logits[:-1]
+                shift_labels = labels[1:]
+                loss = loss_function(shift_logits, shift_labels)
+                agg_valid_loss += loss.item()
+
+        valid_token_loss = agg_valid_loss / valid_steps_per_epoch
+        valid_token_ppl = math.exp(valid_token_loss)
+
+        elapsed = (time.time() - start)/60
+        metrics['valid_elapsed_min'] = elapsed
+
+        metrics['average_valid_loss'] = valid_token_loss
+        if args.tokens == 'subwords':
+            metrics['valid_token_ppl'] = valid_token_ppl
+            metrics['average_valid_word_ppl'] = math.exp(valid_token_loss * valid_set.tensors[-1].numel() / valid_num_words)
+        else:
+            metrics['average_valid_word_ppl'] = valid_token_ppl
+        logger.info(metrics)
+
         if args.local_rank < 1:
-            agg_valid_loss = 0.0
-            model.eval()
-            for batch in valid_loader:
-                with torch.no_grad():
-                    x, y = batch
-                    inputs = {'x': x.to(args.device)}
-                    labels = y.to(args.device).transpose(0, 1).contiguous()
-                    logits = model(inputs, None)[0].transpose(0, 1).contiguous()
-                    shift_logits = logits[:-1]
-                    shift_labels = labels[1:]
-                    loss = loss_function(shift_logits, shift_labels)
-                    agg_valid_loss += loss.item()
 
             # Should probably do this more often
             checkpoint_name = checkpoint_for(model_base, epoch+1)
             logger.info("Creating checkpoint: %s", checkpoint_name)
             torch.save(model.state_dict(), checkpoint_name)
             rm_old_checkpoints(model_base, epoch+1)
-
-            valid_token_loss = agg_valid_loss / valid_steps_per_epoch
-            valid_token_ppl = math.exp(valid_token_loss)
-
-            elapsed = (time.time() - start)/60
-            metrics['valid_elapsed_min'] = elapsed
-
-            metrics['average_valid_loss'] = valid_token_loss
-            if args.tokens == 'subwords':
-                metrics['valid_token_ppl'] = valid_token_ppl
-                metrics['average_valid_word_ppl'] = math.exp(valid_token_loss * valid_set.tensors[-1].numel() / valid_num_words)
-            else:
-                metrics['average_valid_word_ppl'] = valid_token_ppl
-            logger.info(metrics)
 
 
 if __name__ == "__main__":
