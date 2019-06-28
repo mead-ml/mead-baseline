@@ -462,6 +462,7 @@ def train():
     logger.info("Loaded model and loss")
 
     steps_per_epoch = len(train_loader)
+    update_on = steps_per_epoch // 10
     cosine_decay = CosineDecaySchedulerPyTorch(len(train_loader) * args.epochs, lr=args.lr)
     linear_warmup = WarmupLinearSchedulerPyTorch(args.warmup_steps, lr=args.lr)
     lr_sched = CompositeLRScheduler(linear_warmup, cosine_decay, lr=args.lr)
@@ -507,7 +508,7 @@ def train():
             torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip)
             optimizer.step()
             optimizer.zero_grad()
-            if (i + 1) % 100 == 0:
+            if (i + 1) % update_on == 0:
                 logging.info(avg_loss)
 
         # How much time elapsed in minutes
