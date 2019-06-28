@@ -73,8 +73,10 @@ class ExponentialDecaySchedulerPyTorch(ExponentialDecayScheduler):
     def __init__(self, *args, **kwargs):
         super(ExponentialDecaySchedulerPyTorch, self).__init__(*args, **kwargs)
 
+
 @register_lr_scheduler(name='composite')
-class CompositeLRSchedulerPyTorch(CompositeLRScheduler): pass
+class CompositeLRSchedulerPyTorch(CompositeLRScheduler):
+    pass
 
 
 class AdamW(torch.optim.Optimizer):
@@ -150,9 +152,12 @@ class OptimizerManager(object):
 
     def __init__(self, model, global_step=0, **kwargs):
         self.global_step = global_step
-        if 'lr_scheduler_type' not in kwargs:
-            kwargs['lr_scheduler_type'] = 'default'
-        self.lr_function = create_lr_scheduler(**kwargs)
+        if 'lr_function' in kwargs:
+            self.lr_function = kwargs['lr_function']
+        else:
+            if 'lr_scheduler_type' not in kwargs:
+                kwargs['lr_scheduler_type'] = 'default'
+            self.lr_function = create_lr_scheduler(**kwargs)
         self._init_optimizer(model, **kwargs)
 
     @property

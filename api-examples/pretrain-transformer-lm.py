@@ -1,29 +1,25 @@
 import logging
+import time
 import os
 from argparse import ArgumentParser
-from pprint import pformat
 from torch.nn.parallel import DistributedDataParallel
-from torch.optim import Adam
 from torch.utils.data import DataLoader, TensorDataset
 from baseline.pytorch.lm import TransformerLanguageModel
 from baseline.utils import str2bool, write_json
 import baseline.embeddings
 from baseline.pytorch.embeddings import *
+from baseline.pytorch.optz import *
 from baseline.vectorizers import Char2DVectorizer, Token1DVectorizer, AbstractVectorizer
 from mead.downloader import DataDownloader
-from ignite.contrib.handlers import CosineAnnealingScheduler, create_lr_scheduler_with_warmup
-from ignite.engine import Engine, Events
-from ignite.metrics import Loss, MetricsLambda
-from ignite.metrics import RunningAverage
-from ignite.handlers import ModelCheckpoint
+
 import codecs
 from collections import Counter
 
 logger = logging.getLogger(__file__)
 
-"""Pre-train a Transformer model in PyTorch with Ignite
+"""Pre-train a Transformer model in PyTorch
 
-This file uses Baseline to train a Transformer with PyTorch and Ignite on multiple GPUs.
+This file uses Baseline to train a Transformer with PyTorch on multiple GPUs.
 It is inspired by: https://github.com/huggingface/naacl_transfer_learning_tutorial/blob/master/pretraining_train.py
 This pretraining module has multiple configurations that allow it to support
 
@@ -34,7 +30,7 @@ This pretraining module has multiple configurations that allow it to support
   * pretraining on several datasets including PTB, Wikitext 2 (including raw) and Wikitext 103 (including raw).
 
 If you use subwords for tokens, this code requires bert_pretrained_pytorch.  Otherwise, it depends only on six, numpy,
-pytorch, baseline and ignite.
+pytorch, and baseline.
 
 Because we are trying to pretrain a language model so we can do better on downstream tasks, it probably makes more
 sense to train on a full word model, not a model where rare words have already been replaced.
@@ -254,10 +250,10 @@ class TensorCharDatasetReader(TensorDatasetReaderBase):
         return TensorDataset(x_tensor, y_tensor)
 
 
-def average_distributed_scalar(scalar, args):
-    if args.local_rank == -1:
+def average_distributed_scalar(scalar, local_rank, device):
+    if local_rank == -1:
         return scalar
-    scalar_t = torch.tensor(scalar, dtype=torch.float, device=args.device) / torch.distributed.get_world_size()
+    scalar_t = torch.tensor(scalar, dtype=torch.float, device=device) / torch.distributed.get_world_size()
     torch.distributed.all_reduce(scalar_t, op=torch.distributed.ReduceOp.SUM)
     return scalar_t.item()
 
@@ -332,6 +328,18 @@ def load_embed_and_vocab(token_type, reader, dataset, dataset_key, d_model, cach
     return preproc_data
 
 
+def checkpoint_for(model_base, epoch):
+    return '{}-{}.pth'.format(model_base, epoch+1)
+
+
+def rm_old_checkpoints(base_path, current_epoch, last_n=3):
+    for i in range(0, current_epoch-last_n):
+        checkpoint_i = checkpoint_for(base_path, i)
+        if os.path.exists(checkpoint_i):
+            logger.info("Removing: %s", checkpoint_i)
+            os.remove(checkpoint_i)
+
+
 def train():
     parser = ArgumentParser()
     parser.add_argument("--basedir", type=str)
@@ -354,9 +362,8 @@ def train():
     parser.add_argument("--clip", type=float, default=0.25, help="Clipping gradient norm")
     parser.add_argument("--weight_decay", type=float, default=0.0, help="Weight decay")
     parser.add_argument("--epochs", type=int, default=20, help="Num training epochs")
+    parser.add_argument("--restart_from", type=str, help="Option allows you to restart from a previous checkpoint")
     parser.add_argument("--warmup_steps", type=int, default=1000, help="Num warmup steps")
-    parser.add_argument("--eval_every", type=int, default=-1, help="Evaluate every X steps (-1 => end of epoch)")
-
     parser.add_argument("--device", type=str,
                         default="cuda" if torch.cuda.is_available() else "cpu",
                         help="Device (cuda or cpu)")
@@ -372,10 +379,7 @@ def train():
                         type=int,
                         default=40,
                         help="How many max characters per word")
-    parser.add_argument("--accum_grad_steps",
-                        type=int,
-                        default=1,
-                        help="Create effective batch size by accumulating grads without updates")
+
     args = parser.parse_args()
 
     if args.train_file and not args.valid_file:
@@ -448,7 +452,21 @@ def train():
 
     logger.info("Loaded model and loss")
 
-    optimizer = Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    steps_per_epoch = len(train_loader)
+    valid_steps_per_epoch = len(valid_loader)
+    cosine_decay = CosineDecaySchedulerPyTorch(len(train_loader) * args.epochs, lr=args.lr)
+    linear_warmup = WarmupLinearSchedulerPyTorch(args.warmup_steps, lr=args.lr)
+    lr_sched = CompositeLRScheduler(linear_warmup, cosine_decay, lr=args.lr)
+
+    global_step = 0
+    start_epoch = 0
+    if args.restart_from:
+        model.load_state_dict(torch.load(args.restart_from))
+        start_epoch = int(args.restart_from.split("-")[-1].split(".")[0]) - 1
+        global_step = (start_epoch+1) * steps_per_epoch
+        logger.info("Restarting from a previous checkpoint %s.\n\tStarting at global_step=%d, epoch=%d",
+                    args.restart_from, global_step, start_epoch+1)
+    optimizer = OptimizerManager(model, global_step, optim='adam', lr=args.lr, lr_function=lr_sched, weight_decay=args.weight_decay)
     logger.info("Model has %s parameters", sum(p.numel() for p in model.parameters() if p.requires_grad))
 
     # Prepare model for distributed training if needed
@@ -456,75 +474,83 @@ def train():
         model = DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)
         logger.info("Model located on %d", args.local_rank)
 
-    def update(engine, batch):
-        model.train()
-        x, y = batch
-        inputs = {'x': x.to(args.device)}
-        labels = y.to(args.device).transpose(0, 1).contiguous()
-        logits = model(inputs, None)[0].transpose(0, 1).contiguous()
-        shift_logits = logits[:-1]
-        shift_labels = labels[1:]
-        loss = train_loss(shift_logits, shift_labels)
-        loss = loss / args.accum_grad_steps
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip)
-        if engine.state.iteration % args.accum_grad_steps == 0:
-            optimizer.step()
-            optimizer.zero_grad()
-        return loss.item()
-    trainer = Engine(update)
+    # This is the training loop
+    for epoch in range(start_epoch, args.epochs):
+        agg_loss = 0.0
+        metrics = {}
+        optimizer.zero_grad()
 
-    def inference(_, batch):
-        model.eval()
-        with torch.no_grad():
+        if args.distributed:
+            train_sampler.set_epoch(epoch)
+            valid_sampler.set_epoch(epoch)
+
+        start = time.time()
+        model.train()
+        for i, batch in enumerate(train_loader):
             x, y = batch
             inputs = {'x': x.to(args.device)}
             labels = y.to(args.device).transpose(0, 1).contiguous()
             logits = model(inputs, None)[0].transpose(0, 1).contiguous()
             shift_logits = logits[:-1]
             shift_labels = labels[1:]
-            return shift_logits.view(-1, logits.size(-1)), shift_labels.view(-1)
-    evaluator = Engine(inference)
+            loss = train_loss(shift_logits, shift_labels)
+            loss.backward()
+            agg_loss += loss.item()
 
-    # Attach evaluation to trainer: we evaluate at the end of each epoch and every 'eval_every' iterations if needed
-    trainer.add_event_handler(Events.EPOCH_COMPLETED, lambda _: evaluator.run(valid_loader))
-    if args.eval_every > 0:
-        trainer.add_event_handler(Events.ITERATION_COMPLETED,
-                                  lambda engine: evaluator.run(valid_loader) if engine.state.iteration % args.eval_every == 0 else None)
-    if args.distributed:
-        trainer.add_event_handler(Events.EPOCH_STARTED, lambda engine: train_sampler.set_epoch(engine.state.epoch))
-        evaluator.add_event_handler(Events.EPOCH_STARTED, lambda engine: valid_sampler.set_epoch(engine.state.epoch))
+            torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip)
+            optimizer.step()
+            optimizer.zero_grad()
+            if (i + 1) % 100 == 0:
+                logging.info('Running average %.2f', agg_loss/(i+1))
 
-    cos_scheduler = CosineAnnealingScheduler(optimizer, 'lr', args.lr, 0.0, len(train_loader) * args.epochs)
-    scheduler = create_lr_scheduler_with_warmup(cos_scheduler, 0.0, args.lr, args.warmup_steps)
-    trainer.add_event_handler(Events.ITERATION_STARTED, scheduler)
+        # How much time elapsed in minutes
+        elapsed = (time.time() - start)/60
+        train_token_loss = agg_loss / steps_per_epoch
+        # This is the average training token-level loss across all machines
+        train_token_loss = average_distributed_scalar(train_token_loss, args.local_rank, args.device)
+        # This is the token-level training perplexity
+        train_token_ppl = math.exp(train_token_loss)
+        metrics['train_elapsed_min'] = elapsed
+        metrics['train_average_loss'] = train_token_loss
+        metrics['train_ppl'] = train_token_ppl
+        model_base = os.path.join(args.basedir, 'checkpoint')
+        if args.local_rank < 1:
+            valid_loss = model.create_loss()
+            valid_loss.to(args.device)
+            agg_valid_loss = 0.0
+            model.eval()
+            for batch in valid_loader:
+                with torch.no_grad():
+                    x, y = batch
+                    inputs = {'x': x.to(args.device)}
+                    labels = y.to(args.device).transpose(0, 1).contiguous()
+                    logits = model(inputs, None)[0].transpose(0, 1).contiguous()
+                    shift_logits = logits[:-1]
+                    shift_labels = labels[1:]
+                    loss = valid_loss(shift_logits, shift_labels)
+                    agg_valid_loss += loss.item()
 
-    metrics = {"nll": Loss(torch.nn.CrossEntropyLoss(ignore_index=-1))}
-    metrics.update({"average_nll": MetricsLambda(average_distributed_scalar, metrics["nll"], args)})
+            # Should probably do this more often
+            checkpoint_name = checkpoint_for(model_base, epoch+1)
+            logger.info("Creating checkpoint: %s", checkpoint_name)
+            torch.save(model.state_dict(), checkpoint_name)
+            rm_old_checkpoints(model_base, epoch+1)
 
-    if args.tokens == 'subwords':
-        # If we compute subwords, need to renormalize for num words
-        metrics["average_subword_ppl"] = MetricsLambda(math.exp, metrics["average_nll"])
-        metrics["average_word_ppl"] = MetricsLambda(lambda x: math.exp(x * valid_set.tensors[-1].numel() / valid_num_words),
-                                                    metrics["average_nll"])
-    else:
-        metrics["average_word_ppl"] = MetricsLambda(math.exp, metrics["average_nll"])
+            valid_token_loss = agg_valid_loss / valid_steps_per_epoch
+            valid_token_ppl = math.exp(valid_token_loss)
 
-    for name, metric in metrics.items():
-        metric.attach(evaluator, name)
+            elapsed = (time.time() - start)/60
+            metrics['valid_elapsed_min'] = elapsed
 
-    if args.local_rank < 1:
-        RunningAverage(output_transform=lambda x: x).attach(trainer, "valid_loss")
-        trainer.add_event_handler(Events.EPOCH_COMPLETED,
-                                  lambda _: print("Epoch[{}] Training Loss: {:.2f}, Perplexity {:.2f}".format(trainer.state.epoch,
-                                                                                                     trainer.state.output,
-                                                                                                     np.exp(trainer.state.output))))
-        evaluator.add_event_handler(Events.COMPLETED,
-                                    lambda _: print("Validation: %s" % pformat(evaluator.state.metrics)))
-        checkpoint_handler = ModelCheckpoint(args.basedir, 'checkpoint', save_interval=1, n_saved=3, create_dir=False)
-        trainer.add_event_handler(Events.EPOCH_COMPLETED, checkpoint_handler, {'mymodel': getattr(model, 'module', model)})
-    trainer.run(train_loader, max_epochs=args.epochs)
+            metrics['average_valid_loss'] = valid_token_loss
+            if args.tokens == 'subwords':
+                metrics['valid_token_ppl'] = valid_token_ppl
+                metrics['average_valid_word_ppl'] = math.exp(valid_token_loss * valid_set.tensors[-1].numel() / valid_num_words)
+            else:
+                metrics['average_valid_word_ppl'] = valid_token_ppl
+            logger.info(metrics)
 
 
 if __name__ == "__main__":
     train()
+
