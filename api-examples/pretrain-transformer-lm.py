@@ -521,7 +521,7 @@ def train():
         metrics['train_ppl'] = train_token_ppl
         model_base = os.path.join(args.basedir, 'checkpoint')
         avg_valid_loss = Average('average_valid_loss')
-        start = 0
+        start = time.time()
         model.eval()
         for batch in valid_loader:
             with torch.no_grad():
