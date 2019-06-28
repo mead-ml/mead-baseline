@@ -443,10 +443,7 @@ def train():
 
     train_sampler = torch.utils.data.distributed.DistributedSampler(train_set) if args.distributed else None
     train_loader = DataLoader(train_set, sampler=train_sampler, batch_size=args.batch_size, shuffle=(not args.distributed))
-
-    valid_sampler = torch.utils.data.distributed.DistributedSampler(valid_set) if args.distributed else None
-    valid_loader = DataLoader(valid_set, sampler=valid_sampler, batch_size=args.batch_size, shuffle=False)
-
+    valid_loader = DataLoader(valid_set, batch_size=args.batch_size, shuffle=False)
     logger.info("Loaded datasets")
 
     model = TransformerLanguageModel.create(embeddings,
@@ -465,7 +462,6 @@ def train():
     logger.info("Loaded model and loss")
 
     steps_per_epoch = len(train_loader)
-    valid_steps_per_epoch = len(valid_loader)
     cosine_decay = CosineDecaySchedulerPyTorch(len(train_loader) * args.epochs, lr=args.lr)
     linear_warmup = WarmupLinearSchedulerPyTorch(args.warmup_steps, lr=args.lr)
     lr_sched = CompositeLRScheduler(linear_warmup, cosine_decay, lr=args.lr)
@@ -494,7 +490,6 @@ def train():
 
         if args.distributed:
             train_sampler.set_epoch(epoch)
-            valid_sampler.set_epoch(epoch)
 
         start = time.time()
         model.train()
@@ -526,6 +521,7 @@ def train():
         metrics['train_ppl'] = train_token_ppl
         model_base = os.path.join(args.basedir, 'checkpoint')
         avg_valid_loss = Average('average_valid_loss')
+        start = 0
         model.eval()
         for batch in valid_loader:
             with torch.no_grad():
