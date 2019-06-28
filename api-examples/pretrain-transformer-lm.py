@@ -332,6 +332,26 @@ def rm_old_checkpoints(base_path, current_epoch, last_n=3):
             os.remove(checkpoint_i)
 
 
+class Average(object):
+    def __init__(self, name, fmt=':f'):
+        self.name = name
+        self.fmt = fmt
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
+    def update(self, val, n=1):
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count
+
+    def __str__(self):
+        fmtstr = '{name} {val' + self.fmt + '} ({avg' + self.fmt + '})'
+        return fmtstr.format(**self.__dict__)
+
+
 def train():
     parser = ArgumentParser()
     parser.add_argument("--basedir", type=str)
@@ -468,7 +488,7 @@ def train():
 
     # This is the training loop
     for epoch in range(start_epoch, args.epochs):
-        agg_loss = 0.0
+        avg_loss = Average('average_train_loss')
         metrics = {}
         optimizer.zero_grad()
 
@@ -487,25 +507,25 @@ def train():
             shift_labels = labels[1:]
             loss = loss_function(shift_logits, shift_labels)
             loss.backward()
-            agg_loss += loss.item()
+            avg_loss.update(loss.item())
 
             torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip)
             optimizer.step()
             optimizer.zero_grad()
             if (i + 1) % 100 == 0:
-                logging.info('Running average %.2f', agg_loss/(i+1))
+                logging.info(avg_loss)
 
         # How much time elapsed in minutes
         elapsed = (time.time() - start)/60
-        train_token_loss = agg_loss / steps_per_epoch
+        train_token_loss = avg_loss.avg
         # This is the average training token-level loss across all machines
         # This is the token-level training perplexity
         train_token_ppl = math.exp(train_token_loss)
         metrics['train_elapsed_min'] = elapsed
-        metrics['train_average_loss'] = train_token_loss
+        metrics['average_train_loss'] = train_token_loss
         metrics['train_ppl'] = train_token_ppl
         model_base = os.path.join(args.basedir, 'checkpoint')
-        agg_valid_loss = 0.0
+        avg_valid_loss = Average('average_valid_loss')
         model.eval()
         for batch in valid_loader:
             with torch.no_grad():
@@ -516,9 +536,9 @@ def train():
                 shift_logits = logits[:-1]
                 shift_labels = labels[1:]
                 loss = loss_function(shift_logits, shift_labels)
-                agg_valid_loss += loss.item()
+                avg_valid_loss.update(loss.item())
 
-        valid_token_loss = agg_valid_loss / valid_steps_per_epoch
+        valid_token_loss = avg_valid_loss.avg
         valid_token_ppl = math.exp(valid_token_loss)
 
         elapsed = (time.time() - start)/60
