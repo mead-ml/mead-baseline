@@ -250,14 +250,6 @@ class TensorCharDatasetReader(TensorDatasetReaderBase):
         return TensorDataset(x_tensor, y_tensor)
 
 
-def average_distributed_scalar(scalar, local_rank, device):
-    if local_rank == -1:
-        return scalar
-    scalar_t = torch.tensor(scalar, dtype=torch.float, device=device) / torch.distributed.get_world_size()
-    torch.distributed.all_reduce(scalar_t, op=torch.distributed.ReduceOp.SUM)
-    return scalar_t.item()
-
-
 def load_data(token_type, reader, dataset, file_key, vocabs, caching):
     cached_file = '{}-{}.cache'.format(dataset[file_key], token_type)
     if caching and os.path.exists(cached_file):
@@ -507,7 +499,6 @@ def train():
         elapsed = (time.time() - start)/60
         train_token_loss = agg_loss / steps_per_epoch
         # This is the average training token-level loss across all machines
-        train_token_loss = average_distributed_scalar(train_token_loss, args.local_rank, args.device)
         # This is the token-level training perplexity
         train_token_ppl = math.exp(train_token_loss)
         metrics['train_elapsed_min'] = elapsed
