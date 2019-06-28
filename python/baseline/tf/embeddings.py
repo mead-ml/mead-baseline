@@ -303,7 +303,7 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
 
         with tf.device("/cpu:0"):
             with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
-                self.Wch = tf.get_variable('{}/Wch'.format(self.scope),
+                self.Wch = tf.get_variable('Wch',
                                            initializer=tf.constant_initializer(self.weights, dtype=tf.float32,
                                                                                verify_shape=True),
                                            shape=[self.vsz, self.dsz], trainable=True)
@@ -312,8 +312,9 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
         self.outsz = np.sum(self.nfeats)
 
         if self.projsz:
-            self.Wp = tf.get_variable('{}/Wp'.format(self.scope), shape=[self.outsz, self.projsz], trainable=True)
-            self.bp = tf.get_variable('{}/bp'.format(self.scope), shape=[self.projsz], trainable=True, initializer=tf.constant_initializer(0.0))
+            with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
+                self.Wp = tf.get_variable('Wp', shape=[self.outsz, self.projsz], trainable=True)
+                self.bp = tf.get_variable('bp', shape=[self.projsz], trainable=True, initializer=tf.constant_initializer(0.0))
             self.outsz = self.projsz
 
     def detached_ref(self):
