@@ -439,8 +439,8 @@ def train():
                                             layers=args.num_layers,
                                             src_keys=['x'], tgt_key=tgt_key)
     model.to(args.device)
-    train_loss = model.create_loss()
-    train_loss.to(args.device)
+    loss_function = model.create_loss()
+    loss_function.to(args.device)
 
     logger.info("Loaded model and loss")
 
@@ -485,7 +485,7 @@ def train():
             logits = model(inputs, None)[0].transpose(0, 1).contiguous()
             shift_logits = logits[:-1]
             shift_labels = labels[1:]
-            loss = train_loss(shift_logits, shift_labels)
+            loss = loss_function(shift_logits, shift_labels)
             loss.backward()
             agg_loss += loss.item()
 
@@ -506,8 +506,6 @@ def train():
         metrics['train_ppl'] = train_token_ppl
         model_base = os.path.join(args.basedir, 'checkpoint')
         if args.local_rank < 1:
-            valid_loss = model.create_loss()
-            valid_loss.to(args.device)
             agg_valid_loss = 0.0
             model.eval()
             for batch in valid_loader:
@@ -518,7 +516,7 @@ def train():
                     logits = model(inputs, None)[0].transpose(0, 1).contiguous()
                     shift_logits = logits[:-1]
                     shift_labels = labels[1:]
-                    loss = valid_loss(shift_logits, shift_labels)
+                    loss = loss_function(shift_logits, shift_labels)
                     agg_valid_loss += loss.item()
 
             # Should probably do this more often
