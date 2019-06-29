@@ -55,8 +55,8 @@ class WarmupLinearScheduler(WarmupLearningRateScheduler):
 
     def __call__(self, global_step):
         lr_factor = min(1.0, global_step / float(self.warmup_steps))
-        return self.lr * lr_factor
-
+        new_lr = self.lr * lr_factor
+        return new_lr
 
 @exporter
 class CyclicLRScheduler(LearningRateScheduler):
