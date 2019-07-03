@@ -83,13 +83,13 @@ def get_trainer(model, trainer, verbose, backend, **kwargs):
                 model.model,
                 type=trainer,
                 verbose=verbose,
-                baseline_eval_mode=True,
+                eval_mode=True,
                 basedir='',
                 **kwargs
             )
     else:
         trainer = create_trainer(
-            model.model, type=trainer, verbose=verbose, baseline_eval_mode=True, basedir='', **kwargs
+            model.model, type=trainer, verbose=verbose, eval_mode=True, basedir='', **kwargs
         )
     return trainer
 
