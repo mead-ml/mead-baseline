@@ -73,7 +73,7 @@ class TransformerDecoder(DecoderBase):
             T = get_shape_as_list(tgt_embed)[1]
             tgt_mask = subsequent_mask(T)
             scope = 'TransformerDecoder'
-            h = transformer_decoder_stack(src_enc, tgt_embed, src_mask, tgt_mask, num_heads, pdrop, scale, layers, activation_type, scope, d_ff)
+            h = transformer_decoder_stack(tgt_embed, src_enc, src_mask, tgt_mask, num_heads, pdrop, scale, layers, activation_type, scope, d_ff)
 
             vsz = self.tgt_embedding.vsz
             do_weight_tying = bool(kwargs.get('tie_weights', True))  # False
@@ -136,7 +136,7 @@ class TransformerDecoder(DecoderBase):
         T = get_shape_as_list(tgt_embed)[1]
         tgt_mask = subsequent_mask(T)
         scope = 'TransformerDecoder'
-        h = transformer_decoder_stack(src_enc, tgt_embed, src_mask, tgt_mask, num_heads, pdrop, scale, layers, activation_type, scope, d_ff)
+        h = transformer_decoder_stack(tgt_embed, src_enc, src_mask, tgt_mask, num_heads, pdrop, scale, layers, activation_type, scope, d_ff)
 
         vsz = self.tgt_embedding.vsz
         do_weight_tying = bool(kwargs.get('tie_weights', True))  # False
