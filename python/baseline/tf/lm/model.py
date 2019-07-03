@@ -358,8 +358,16 @@ class TransformerLanguageModel(LanguageModelBase):
     def __init__(self):
         super(TransformerLanguageModel, self).__init__()
 
+    def _skip_layer(self, x, out):
+        return x + out
+
     def decode(self, x, num_heads=4, layers=1, scale=True, activation_type='relu', scope='TransformerEncoder', d_ff=None, **kwargs):
         T = get_shape_as_list(x)[1]
         mask = subsequent_mask(T)
-        x = transformer_encoder_stack(x, mask, num_heads, self.pdrop_value, scale, layers, activation_type)
+        use_resconn = bool(kwargs.get('skip', False))
+        combiner = self._skip_layer if use_resconn else None
+
+        if d_ff is None:
+            d_ff = num_heads * self.hsz
+        x = transformer_encoder_stack(x, mask, num_heads, self.pdrop_value, scale, layers, activation_type, d_ff=d_ff, combiner=combiner)
         return tf.reshape(x, [-1, self.hsz])

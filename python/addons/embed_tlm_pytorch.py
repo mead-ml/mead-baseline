@@ -31,7 +31,7 @@ class WordPieceVectorizer1D(AbstractVectorizer):
         super(WordPieceVectorizer1D, self).__init__(kwargs.get('transform_fn'))
         from pytorch_pretrained_bert import BertTokenizer
         self.max_seen = 128
-        handle = kwargs.get('embed_file')
+        handle = kwargs.get('embed_file', 'bert-base-cased')
         self.tokenizer = BertTokenizer.from_pretrained(handle, do_lower_case=False)
         self.mxlen = kwargs.get('mxlen', -1)
 

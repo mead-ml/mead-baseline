@@ -49,11 +49,9 @@ def multi_headed_attention(q, k, v, scope, d_model, num_heads, pdrop, scale=Fals
         return a
 
 
-def ffn(x, scope, pdrop, d_ff=None, activation_type='relu'):
+def ffn(x, scope, pdrop, d_ff, activation_type='relu'):
     with tf.variable_scope(scope):
         d_model = get_shape_as_list(x)[-1]
-        if d_ff is None:
-            d_ff = 4 * d_model
         act = tf_activation(activation_type)
         expansion = act(time_distributed_projection(x, name='ffn_ff', filters=d_ff))
         dropped = tf.layers.dropout(expansion, pdrop, training=TRAIN_FLAG())
@@ -66,7 +64,7 @@ def transformer_encoder(x, src_mask, scope, num_heads, pdrop, scale=True, activa
     with tf.variable_scope(scope):
         d_model = get_shape_as_list(x)[-1]
         if d_ff is None:
-            d_ff = 4*d_model
+            d_ff = num_heads * d_model
         x = layer_norm(x, 'ln_1')
         q, k, v = self_attention_qkv(x, d_model)
         a = multi_headed_attention(q, k, v, 'attn', d_model, num_heads, pdrop, scale=scale, mask=src_mask)
@@ -81,7 +79,7 @@ def transformer_decoder(src, tgt, src_mask, tgt_mask, scope, num_heads, pdrop, s
     with tf.variable_scope(scope):
         d_model = get_shape_as_list(tgt)[-1]
         if d_ff is None:
-            d_ff = 4*d_model
+            d_ff = num_heads * d_model
 
         tgt = layer_norm(tgt, 'ln_1')
 
@@ -100,18 +98,24 @@ def transformer_decoder(src, tgt, src_mask, tgt_mask, scope, num_heads, pdrop, s
         h = tgt + tf.layers.dropout(m, pdrop, training=TRAIN_FLAG())
         return h
 
+def _ident(x, out):
+    return x + out
 
-def transformer_encoder_stack(x, src_mask, num_heads, pdrop, scale=True, layers=1, activation_type='relu', scope='TransformerEncoder', d_ff=None):
+def transformer_encoder_stack(x, src_mask, num_heads, pdrop, scale=True, layers=1, activation_type='relu', scope='TransformerEncoder', d_ff=None, combiner=None):
+    combine_fn = combiner if combiner is not None else _ident
     with tf.variable_scope(scope):
         for i in range(layers):
-            x = transformer_encoder(x, src_mask, 'encoder-{}'.format(i), num_heads, pdrop, scale, activation_type, d_ff)
+            out = transformer_encoder(x, src_mask, 'encoder-{}'.format(i), num_heads, pdrop, scale, activation_type, d_ff)
+            x = combine_fn(x, out)
     return layer_norm(x, 'ln_out')
 
 
-def transformer_decoder_stack(src, tgt, src_mask, tgt_mask, num_heads, pdrop, scale=True, layers=1, activation_type='relu', scope='TransformerEncoder', d_ff=None):
+def transformer_decoder_stack(x, tgt, src_mask, tgt_mask, num_heads, pdrop, scale=True, layers=1, activation_type='relu', scope='TransformerEncoder', d_ff=None, combiner=None):
+    combine_fn = combiner if combiner is not None else _ident
     with tf.variable_scope(scope):
         for i in range(layers):
-            x = transformer_decoder(src, tgt, src_mask, tgt_mask, 'decoder-{}'.format(i), num_heads, pdrop, scale, activation_type, d_ff)
+            out = transformer_decoder(x, tgt, src_mask, tgt_mask, 'decoder-{}'.format(i), num_heads, pdrop, scale, activation_type, d_ff)
+            x = combine_fn(x, out)
     return layer_norm(x, 'ln_out')
 
 

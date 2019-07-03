@@ -123,7 +123,7 @@ class TransformerEncoder(nn.Module):
     def __init__(self, num_heads, d_model, pdrop, scale=True, activation_type='relu', d_ff=None):
         super(TransformerEncoder, self).__init__()
         self.d_model = d_model
-        self.d_ff = d_ff if d_ff is not None else 4 * d_model
+        self.d_ff = d_ff if d_ff is not None else num_heads * d_model
         self.self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale=scale)
         self.ffn = nn.Sequential(pytorch_linear(self.d_model, self.d_ff),
                                  pytorch_activation(activation_type),
@@ -152,7 +152,7 @@ class TransformerDecoder(nn.Module):
     def __init__(self, num_heads, d_model, pdrop, scale=True, activation_type='relu', d_ff=None):
         super(TransformerDecoder, self).__init__()
         self.d_model = d_model
-        self.d_ff = d_ff if d_ff is not None else 4 * d_model
+        self.d_ff = d_ff if d_ff is not None else num_heads * d_model
         self.self_attn = MultiHeadedAttention(num_heads, self.d_model, pdrop, scale=scale)
         self.src_attn = MultiHeadedAttention(num_heads, self.d_model, pdrop, scale=scale)
         self.ffn = nn.Sequential(pytorch_linear(self.d_model, self.d_ff),
@@ -178,24 +178,35 @@ class TransformerDecoder(nn.Module):
 
 
 class TransformerEncoderStack(nn.Module):
-    def __init__(self, num_heads, d_model, pdrop, scale=True, layers=1, activation_type='relu', d_ff=None):
+    def __init__(self, num_heads, d_model, pdrop, scale=True, layers=1, activation_type='relu', d_ff=None, combiner=None):
         super(TransformerEncoderStack, self).__init__()
+        self.d_model = d_model
         single_layer = TransformerEncoder(num_heads, d_model, pdrop, scale, activation_type, d_ff)
         self.layers = pytorch_clone_module(single_layer, layers)
+        self.combiner = self.identity if combiner is None else combiner
+
+    def identity(self, _, out):
+        return out
 
     def forward(self, x, mask):
         for layer in self.layers:
-            x = layer(x, mask)
+            out = layer(x, mask)
+            x = self.combiner(x, out)
         return x
 
 
 class TransformerDecoderStack(nn.Module):
-    def __init__(self, num_heads, d_model, pdrop, scale=True, layers=1, activation_type='relu', d_ff=None):
+    def __init__(self, num_heads, d_model, pdrop, scale=True, layers=1, activation_type='relu', d_ff=None, combiner=None):
         super(TransformerDecoderStack, self).__init__()
         single_layer = TransformerDecoder(num_heads, d_model, pdrop, scale, activation_type, d_ff)
         self.layers = pytorch_clone_module(single_layer, layers)
+        self.combiner = self.identity if combiner is None else combiner
+
+    def identity(self, _, out):
+        return out
 
     def forward(self, x, memory, src_mask, tgt_mask):
         for layer in self.layers:
-            x = layer(x, memory, src_mask, tgt_mask)
+            out = layer(x, memory, src_mask, tgt_mask)
+            x = self.combiner(x, out)
         return x

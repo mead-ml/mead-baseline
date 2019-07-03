@@ -376,6 +376,7 @@ def train():
     parser.add_argument("--epochs", type=int, default=20, help="Num training epochs")
     parser.add_argument("--restart_from", type=str, help="Option allows you to restart from a previous checkpoint")
     parser.add_argument("--warmup_steps", type=int, default=1000, help="Num warmup steps")
+    parser.add_argument("--num_workers", type=int, default=4, help="Num workers for loading")
     parser.add_argument("--device", type=str,
                         default="cuda" if torch.cuda.is_available() else "cpu",
                         help="Device (cuda or cpu)")
@@ -442,8 +443,8 @@ def train():
     logger.info("valid. tokens [%s], valid. words [%s]", valid_set.tensors[-1].numel(), valid_num_words)
 
     train_sampler = torch.utils.data.distributed.DistributedSampler(train_set) if args.distributed else None
-    train_loader = DataLoader(train_set, sampler=train_sampler, batch_size=args.batch_size, shuffle=(not args.distributed))
-    valid_loader = DataLoader(valid_set, batch_size=args.batch_size, shuffle=False)
+    train_loader = DataLoader(train_set, num_workers=args.num_workers, sampler=train_sampler, batch_size=args.batch_size, shuffle=(not args.distributed))
+    valid_loader = DataLoader(valid_set, num_workers=args.num_workers, batch_size=args.batch_size, shuffle=False)
     logger.info("Loaded datasets")
 
     model = TransformerLanguageModel.create(embeddings,

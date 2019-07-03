@@ -158,15 +158,21 @@ class TransformerLanguageModel(LanguageModelBase):
         if isinstance(module, (nn.Linear, nn.LayerNorm)) and module.bias is not None:
             module.bias.data.zero_()
 
+    def skip_conn(self, x, out):
+        return x + out
+
     def init_decode(self, **kwargs):
         pdrop = float(kwargs.get('dropout', 0.5))
         layers = kwargs.get('layers', 1)
         self.weight_std = kwargs.get('weight_std', 0.02)
         d_model = int(kwargs.get('d_model', kwargs.get('hsz')))
-        d_ff = int(kwargs.get('d_ff', 4 * d_model))
         num_heads = kwargs.get('num_heads', 4)
+        d_ff = int(kwargs.get('d_ff', num_heads * d_model))
+        use_resconn = bool(kwargs.get('skip', False))
+        combiner = self.skip_conn if use_resconn else None
         self.proj_to_dsz = pytorch_linear(self.dsz, d_model) if self.dsz != d_model else _identity
-        self.transformer = TransformerEncoderStack(num_heads, d_model=d_model, pdrop=pdrop, scale=True, layers=layers, d_ff=d_ff)
+        self.transformer = TransformerEncoderStack(num_heads, d_model=d_model, pdrop=pdrop,
+                                                   scale=True, layers=layers, d_ff=d_ff, combiner=combiner)
         self.apply(self.init_layer_weights)
 
     def decode(self, bth, hidden):
