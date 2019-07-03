@@ -123,7 +123,7 @@ class TransformerEncoder(nn.Module):
     def __init__(self, num_heads, d_model, pdrop, scale=True, activation_type='relu', d_ff=None):
         super(TransformerEncoder, self).__init__()
         self.d_model = d_model
-        self.d_ff = d_ff if d_ff is not None else num_heads * d_model
+        self.d_ff = d_ff if d_ff is not None else 4 * d_model
         self.self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale=scale)
         self.ffn = nn.Sequential(pytorch_linear(self.d_model, self.d_ff),
                                  pytorch_activation(activation_type),
@@ -152,7 +152,7 @@ class TransformerDecoder(nn.Module):
     def __init__(self, num_heads, d_model, pdrop, scale=True, activation_type='relu', d_ff=None):
         super(TransformerDecoder, self).__init__()
         self.d_model = d_model
-        self.d_ff = d_ff if d_ff is not None else num_heads * d_model
+        self.d_ff = d_ff if d_ff is not None else 4 * d_model
         self.self_attn = MultiHeadedAttention(num_heads, self.d_model, pdrop, scale=scale)
         self.src_attn = MultiHeadedAttention(num_heads, self.d_model, pdrop, scale=scale)
         self.ffn = nn.Sequential(pytorch_linear(self.d_model, self.d_ff),

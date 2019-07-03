@@ -21,9 +21,6 @@ def combine_heads(x):
 
 def self_attention_qkv(x, d_model, scope='self_attn'):
     return low_order_projection_qkv(x, x, x, d_model, scope=scope)
-    ###c = time_distributed_projection(x, name='qkv_conv', filters=d_model*3)
-    ### Split into 3 pieces along 2nd axis
-    ###q, k, v = tf.split(c, 3, 2)
     return q, k, v
 
 
@@ -32,13 +29,11 @@ def low_order_projection_qkv(q_in, k_in, v_in, d_model, scope='low_order_proj'):
         q = time_distributed_projection(q_in, name='q_conv', filters=d_model)
         k = time_distributed_projection(k_in, name='k_conv', filters=d_model)
         v = time_distributed_projection(v_in, name='v_conv', filters=d_model)
-        ###kv = time_distributed_projection(x, name='kv_conv', filters=d_model*2)
-    ###k, v = tf.split(kv, 2, 2)
+
     return q, k, v
 
 
 def multi_headed_attention(q, k, v, scope, d_model, num_heads, pdrop, scale=False, mask=None):
-    print(d_model, num_heads)
     assert d_model % num_heads == 0
     with tf.variable_scope(scope):
         q = split_heads(q, num_heads)
@@ -65,7 +60,7 @@ def transformer_encoder(x, src_mask, scope, num_heads, pdrop, scale=True, activa
     with tf.variable_scope(scope):
         d_model = get_shape_as_list(x)[-1]
         if d_ff is None:
-            d_ff = num_heads * d_model
+            d_ff = 4 * d_model
         x = layer_norm(x, 'ln_1')
         q, k, v = self_attention_qkv(x, d_model)
         a = multi_headed_attention(q, k, v, 'attn', d_model, num_heads, pdrop, scale=scale, mask=src_mask)
@@ -80,7 +75,7 @@ def transformer_decoder(tgt, src, src_mask, tgt_mask, scope, num_heads, pdrop, s
     with tf.variable_scope(scope):
         d_model = get_shape_as_list(tgt)[-1]
         if d_ff is None:
-            d_ff = num_heads * d_model
+            d_ff = 4 * d_model
 
         tgt = layer_norm(tgt, 'ln_1')
 
