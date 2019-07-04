@@ -8,7 +8,7 @@ from baseline.utils import listify, get_model_file, get_metric_cmp
 from baseline.tf.tfy import _add_ema
 from baseline.tf.optz import optimizer
 from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
-from baseline.utils import verbose_output
+from baseline.utils import verbose_output, unzip_model
 
 
 logger = logging.getLogger('baseline')
@@ -175,10 +175,8 @@ def fit(model, ts, vs, es=None, **kwargs):
     model.set_saver(tf.train.Saver())
     checkpoint = kwargs.get('checkpoint')
     if checkpoint is not None:
-        latest = tf.train.latest_checkpoint(checkpoint)
-        print('Reloading ' + latest)
-        model.saver.restore(model.sess, latest)
-
+        checkpoint = unzip_model(checkpoint)
+        model.saver.restore(model.sess, checkpoint)
 
     last_improved = 0
 
