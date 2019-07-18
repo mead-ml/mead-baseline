@@ -176,7 +176,6 @@ class ClassifyTrainerTf(EpochReportingTrainer):
                 feed_dict = self.model.make_input(batch_dict, True)
                 _, step, lossv = self.sess.run([self.train_op, self.global_step, self.loss], feed_dict=feed_dict)
 
-
             batchsz = self._get_batchsz(batch_dict)
             report_lossv = lossv * batchsz
             epoch_loss += report_lossv
@@ -362,7 +361,6 @@ def create_eval_input_fn(es, test_batchsz=1, **kwargs):
 
 @register_training_func('classify')
 def fit_datasets(model_params, ts, vs, es=None, **kwargs):
-
     """
     Train a classifier using TensorFlow with `tf.dataset`.  This
     is the default behavior for training.

@@ -9,7 +9,6 @@ from baseline.tf.transformer import transformer_encoder_stack, subsequent_mask
 from baseline.utils import read_json, write_json, MAGIC_VARS
 
 
-
 class LanguageModelBase(LanguageModel):
     """Base for all baseline implementations of LMs
 
@@ -212,7 +211,6 @@ class LanguageModelBase(LanguageModel):
         embed_output = EmbeddingsStack(src_embeddings, self.pdrop_value)
         return embed_output
 
-
     @classmethod
     def load(cls, basename, **kwargs):
         """Reload the model from a graph file and a checkpoint
@@ -303,10 +301,10 @@ class RNNLanguageModel(LanguageModelBase):
         :param variational: (`bool`) Using variational dropout?
         :param kwargs: See above
 
-
         :return: The layer
         """
         lstm_encoder_layer = LSTMEncoderWithState(self.hsz, layers, self.pdrop_value, **kwargs)
         self.initial_state = lstm_encoder_layer.zero_state(self.batchsz)
         inputs["h"] = self.initial_state
         return lstm_encoder_layer
+

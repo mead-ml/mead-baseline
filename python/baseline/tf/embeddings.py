@@ -122,8 +122,8 @@ class TensorFlowEmbeddings(tf.keras.layers.Layer):
 
     def get_config(self):
         config = super(TensorFlowEmbeddings, self).get_config()
-        config['dsz'] = self.get_dsz()
-        config['vsz'] = self.get_vsz()
+        config['dsz'] = int(self.get_dsz())
+        config['vsz'] = int(self.get_vsz())
         config.update(self._state)
         return config
 
@@ -159,6 +159,7 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
         self.dsz = kwargs.get('dsz')
         self.finetune = kwargs.get('finetune', True)
         self._name = name
+        self.dropin = kwargs.get('dropin', 0.0)
         self.scope = kwargs.get('scope', '{}/LUT'.format(self._name))
         self.dropin = kwargs.get('dropin', 0.0)
         self._weights = kwargs.get('weights')
@@ -170,6 +171,9 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
         self.W = self.add_variable('{}/Weight'.format(self.scope),
                                    shape=(self.vsz, self.dsz),
                                    initializer=tf.constant_initializer(self._weights, dtype=tf.float32, verify_shape=True))
+
+
+
 
     def get_dsz(self):
         return self.dsz
@@ -307,14 +311,24 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
         self.projsz = kwargs.get('projsz')
         self.dropin = kwargs.get('dropin', 0.0)
         self.x = None
+
         if self._weights is None:
             unif = kwargs.get('unif', 0.1)
             self._weights = np.random.uniform(-unif, unif, (self.vsz, self.dsz))
 
-        self.Wch = self.add_variable('{}/Wch'.format(self.scope),
-                                     initializer=tf.constant_initializer(self._weights, dtype=tf.float32,
-                                                                         verify_shape=True),
-                                     shape=[self.vsz, self.dsz], trainable=True)
+        with tf.device("/cpu:0"):
+            self.Wch = self.add_variable('{}/Wch'.format(self.scope),
+                                         initializer=tf.constant_initializer(self._weights, dtype=tf.float32,
+                                                                             verify_shape=True),
+                                         shape=[self.vsz, self.dsz], trainable=True)
+        # These are the actual final filter sizes and num features
+        self.filtsz, self.nfeats = self._get_filtsz()
+        self.outsz = np.sum(self.nfeats)
+
+        if self.projsz:
+            self.Wp = self.add_variable('{}/Wp'.format(self.scope), shape=[self.outsz, self.projsz], trainable=True)
+            self.bp = self.add_variable('{}/bp'.format(self.scope), shape=[self.projsz], trainable=True, initializer=tf.constant_initializer(0.0))
+            self.outsz = self.projsz
 
     def detached_ref(self):
         """This will detach any attached input and reference the same sub-graph otherwise
@@ -331,16 +345,41 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
                                   projsz=self.projsz,
                                   weights=self._weights)
 
+
     def encode(self, x=None):
         if x is None:
             x = CharConvEmbeddings.create_placeholder(self.name)
         self.x = x
 
         ech0 = tf.scatter_update(self.Wch, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, self.dsz]))
-        char_comp, self.wsz = pool_chars(x, self.Wch, ech0, self.dsz, self.nfeat_factor,
-                                         self.cfiltsz, self.max_feat, self.gating,
-                                         self.num_gates, self.activation, self.wsz)
-        return char_comp
+
+        mxlen = tf.shape(self.x)[1]
+
+        gating_fn = highway_conns if self.gating.startswith('highway') else skip_conns
+
+        with tf.variable_scope("Chars2Word"):
+            with tf.control_dependencies([ech0]):
+                mxwlen = tf.shape(self.x)[-1]
+                char_bt_x_w = tf.reshape(self.x, [-1, mxwlen])
+                # The ablation table (4) in https://arxiv.org/pdf/1708.02182.pdf shows this has a massive impact
+                embedding_w_dropout = tf.layers.dropout(self.Wch, self.dropin, noise_shape=(self.vsz, 1), training=TRAIN_FLAG())
+                cembed = tf.nn.embedding_lookup(embedding_w_dropout, char_bt_x_w, name="embeddings")
+                cmot, num_filts = char_word_conv_embeddings(cembed, self.filtsz, self.dsz, self.nfeats,
+                                                            activation_fn=get_activation(self.activation),
+                                                            gating=gating_fn,
+                                                            num_gates=self.num_gates)
+
+
+        #return word_char, num_filts
+
+
+        #char_comp, self.outsz = pool_chars(x, self.Wch, ech0, self.dsz, self.nfeat_factor,
+        #                                   self.cfiltsz, self.max_feat, self.gating,
+        #                                   self.num_gates, self.activation, self.wsz)
+        if self.projsz:
+           cmot = tf.matmul(cmot, self.Wp) + self.bp
+        word_char = tf.reshape(cmot, [-1, mxlen, self.outsz])
+        return word_char
 
     def get_vsz(self):
         return self.vsz
@@ -349,9 +388,6 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
     def get_dsz(self):
         return self.outsz
 
-    # Warning this function is only initialized AFTER encode
-    def get_dsz(self):
-        return self.wsz
 
 
 def get_timing_signal_1d(length,
@@ -645,7 +681,7 @@ class CharLSTMEmbeddings(TensorFlowEmbeddings):
             flat_chars = tf.reshape(x, [-1, W])
             word_lengths = tf.reduce_sum(tf.cast(tf.equal(flat_chars, Offsets.PAD), tf.int32), axis=1)
             with tf.control_dependencies([ech0]):
-                embed_chars =  tf.nn.embedding_lookup(Wch, flat_chars)
+                embed_chars = tf.nn.embedding_lookup(Wch, flat_chars)
 
             fwd_lstm = stacked_lstm(self.lstmsz // 2, self.pdrop, self.layers)
             bwd_lstm = stacked_lstm(self.lstmsz // 2, self.pdrop, self.layers)

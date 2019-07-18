@@ -266,7 +266,6 @@ class SeqWordCharDataFeed(DataFeed):
 
     def __init__(self, examples, nctx, batchsz, tgt_key=None):
         """Constructor
-
         :param examples: word tensor
         :param nctx: Number of steps of BPTT
         :param batchsz: Batch size

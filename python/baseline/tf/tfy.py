@@ -337,6 +337,8 @@ def pool_chars(x_char, Wch, ce0, char_dsz, nfeat_factor=None,
     else:
         filtsz = cfiltsz
         nfeats = wsz
+        filtsz = cfiltsz
+
     mxlen = tf.shape(x_char)[1]
 
     gating_fn = highway_conns if gating.startswith('highway') else skip_conns
@@ -356,3 +358,4 @@ def pool_chars(x_char, Wch, ce0, char_dsz, nfeat_factor=None,
 
 def stacked_dense(inputs, init, hszs=[], pdrop_value=0.5):
     return DenseStack(hszs, pdrop_value=pdrop_value, init=init)(inputs)
+

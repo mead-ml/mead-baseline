@@ -11,6 +11,7 @@ from baseline.version import __version__
 logger = logging.getLogger('baseline')
 
 
+
 def _temporal_cross_entropy_loss(logits, labels, label_lengths, mx_seq_length):
     """Do cross-entropy loss accounting for sequence lengths
 

@@ -12,7 +12,7 @@ from baseline.utils import (
     show_examples,
     normalize_backend,
     import_user_module,
-    listify
+    listify,
 )
 from mead.downloader import EmbeddingDownloader, DataDownloader
 from mead.utils import (
@@ -194,7 +194,7 @@ class Task(object):
         if reader_params['clean_fn'] is not None and self.config_params['dataset'] != 'SST2':
             logger.warning('Warning: A reader preprocessing function (%s) is active, it is recommended that all data preprocessing is done outside of baseline to insure data at inference time matches data at training time.', reader_params['clean_fn'])
         reader_params['mxlen'] = self.vectorizers[self.primary_key].mxlen
-        if self.config_params['model'].get('gpus', 1) > 1:
+        if self.config_params['train'].get('gpus', 1) > 1:
             reader_params['truncate'] = True
         return baseline.reader.create_reader(self.task_name(), self.vectorizers, self.config_params['preproc'].get('trim', False), **reader_params)
 
@@ -614,7 +614,10 @@ class EncoderDecoderTask(Task):
             backend.params = {'pc': _dynet.ParameterCollection(), 'batched': batched}
             self.config_params['preproc']['trim'] = True
         else:
-            self.config_params['preproc']['trim'] = True
+
+            self.config_params['preproc']['trim'] = False  # TODO: For datasets on ONLY
+            from mead.tf.exporters import Seq2SeqTensorFlowExporter
+            backend.exporter = Seq2SeqTensorFlowExporter
         backend.load(self.task_name())
 
         return backend
@@ -738,7 +741,7 @@ class LanguageModelingTask(Task):
         if reader_params['clean_fn'] is not None and self.config_params['dataset'] != 'SST2':
             logger.warning('Warning: A reader preprocessing function (%s) is active, it is recommended that all data preprocessing is done outside of baseline to insure data at inference time matches data at training time.', reader_params['clean_fn'])
         reader_params['mxlen'] = self.vectorizers[self.primary_key].mxlen
-        if self.config_params['model'].get('gpus', 1) > 1:
+        if self.config_params['train'].get('gpus', 1) > 1:
             reader_params['truncate'] = True
         return baseline.reader.create_reader(self.task_name(), self.vectorizers, self.config_params['preproc'].get('trim', False), **reader_params)
 

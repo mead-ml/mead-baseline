@@ -26,7 +26,6 @@ NUM_PREFETCH = 2
 SHUF_BUF_SZ = 5000
 
 
-
 def to_tensors(ts, lengths_key):
     """Convert a data feed into a tuple of `features` (`dict`) and `y` values
 
@@ -115,7 +114,6 @@ class TaggerEvaluatorTf(object):
         """Method that evaluates on some data.  There are 2 modes this can run in, `feed_dict` and `dataset`
 
         In `feed_dict` mode, the model cycles the test data batch-wise and feeds each batch in with a `feed_dict`.
-
         In `dataset` mode, the data is still passed in to this method, but it is not passed in a `feed_dict` and is
         mostly superfluous since the features are grafted right onto the graph.  However, we do use it for supplying
         the ground truth, ids and text, so it is essential that the caller does not shuffle the data
@@ -219,7 +217,6 @@ class TaggerTrainerTf(EpochReportingTrainer):
         self.model.sess.run(init)
         saver = tf.train.Saver()
         self.model.save_using(saver)
-
 
     def checkpoint(self):
         """This method saves a checkpoint
@@ -349,6 +346,7 @@ def fit_datasets(model_params, ts, vs, es=None, **kwargs):
     span_type = kwargs.get('span_type', 'iob')
     txts = kwargs.get('txts', None)
     model_file = get_model_file('tagger', 'tf', kwargs.get('basedir'))
+
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
     verbose = kwargs.get('verbose', {'console': kwargs.get('verbose_console', False), 'file': kwargs.get('verbose_file', None)})
     epochs = int(kwargs.get('epochs', 20))
@@ -441,6 +439,89 @@ def fit_datasets(model_params, ts, vs, es=None, **kwargs):
             reporting(test_metrics, 0, 'Test')
         trainer.log.debug({'phase': 'Test', 'time': duration})
 
+    last_improved = 0
+
+    for epoch in range(epochs):
+        trainer.sess.run(train_init_op)
+        trainer.train(ts, reporting_fns)
+        trainer.sess.run(valid_init_op)
+        test_metrics = trainer.test(vs, reporting_fns, phase='Valid')
+
+        if do_early_stopping is False:
+            trainer.checkpoint()
+            trainer.model.save(model_file)
+
+        elif early_stopping_cmp(test_metrics[early_stopping_metric], best_metric):
+            last_improved = epoch
+            best_metric = test_metrics[early_stopping_metric]
+            print('New best %.3f' % best_metric)
+            trainer.checkpoint()
+            trainer.model.save(model_file)
+
+        elif (epoch - last_improved) > patience:
+            print('Stopping due to persistent failures to improve')
+            break
+
+    if do_early_stopping is True:
+        print('Best performance on %s: %.3f at epoch %d' % (early_stopping_metric, best_metric, last_improved))
+
+    if es is not None:
+        print('Reloading best checkpoint')
+        trainer.recover_last_checkpoint()
+        trainer.sess.run(test_init_op)
+        # What to do about overloading this??
+        evaluator = TaggerEvaluatorTf(trainer.model, span_type, verbose)
+        start = time.time()
+        test_metrics = evaluator.test(es, conll_output=conll_output, txts=txts)
+        duration = time.time() - start
+        for reporting in reporting_fns:
+            reporting(test_metrics, 0, 'Test')
+        trainer.log.debug({'phase': 'Test', 'time': duration})
+
+
+@register_training_func('tagger', 'feed_dict')
+def fit(model_params, ts, vs, es, **kwargs):
+    """
+    Train a classifier using TensorFlow with a `feed_dict`.  This
+    is the previous default behavior for training.  To use this, you need to pass
+    `fit_func: feed_dict` in your MEAD config
+
+    :param model_params: The model to train
+    :param ts: A training data set
+    :param vs: A validation data set
+    :param es: A test data set, can be None
+    :param kwargs:
+        See below
+
+    :Keyword Arguments:
+        * *do_early_stopping* (``bool``) --
+          Stop after evaluation data is no longer improving.  Defaults to True
+        * *verbose* (`dict`) A dictionary containing `console` boolean and `file` name if on
+        * *epochs* (``int``) -- how many epochs.  Default to 20
+        * *outfile* -- Model output file, defaults to classifier-model.pyth
+        * *patience* --
+           How many epochs where evaluation is no longer improving before we give up
+        * *reporting* --
+           Callbacks which may be used on reporting updates
+        * *nsteps* (`int`) -- If we should report every n-steps, this should be passed
+        * *ema_decay* (`float`) -- If we are doing an exponential moving average, what decay to us4e
+        * *clip* (`int`) -- If we are doing gradient clipping, what value to use
+        * *optim* (`str`) -- The name of the optimizer we are using
+        * *lr* (`float`) -- The learning rate we are using
+        * *mom* (`float`) -- If we are using SGD, what value to use for momentum
+        * *beta1* (`float`) -- Adam-specific hyper-param, defaults to `0.9`
+        * *beta2* (`float`) -- Adam-specific hyper-param, defaults to `0.999`
+        * *epsilon* (`float`) -- Adam-specific hyper-param, defaults to `1e-8
+
+    :return: None
+    """
+    epochs = int(kwargs.get('epochs', 5))
+    patience = int(kwargs.get('patience', epochs))
+    conll_output = kwargs.get('conll_output', None)
+    span_type = kwargs.get('span_type', 'iob')
+    txts = kwargs.get('txts', None)
+    model_file = get_model_file('tagger', 'tf', kwargs.get('basedir'))
+    TRAIN_FLAG()
 
 @register_training_func('tagger', 'feed_dict')
 def fit(model_params, ts, vs, es, **kwargs):

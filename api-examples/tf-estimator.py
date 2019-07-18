@@ -211,11 +211,6 @@ def model_fn(features, labels, mode, params):
         bl.tf.SET_TRAIN_FLAG(False)
         model = bl.model.create_model_for('classify', features=embeddings, labels=params['labels'], word=features['word'], y=y, sess=None, **model_params)
         loss = model.create_loss()
-        predictions = {
-            'classes': model.best,
-            'probabilities': model.probs,
-            'logits': model.logits,
-        }
         eval_metric_ops = {
             'accuracy': tf.metrics.accuracy(
                 labels=labels, predictions=model.best)}

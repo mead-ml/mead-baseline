@@ -323,6 +323,7 @@ def fit(model_params, ts, vs, es=None, **kwargs):
     model_file = get_model_file('lm', 'tf', kwargs.get('basedir'))
     after_train_fn = kwargs['after_train_fn'] if 'after_train_fn' in kwargs else None
     trainer = create_trainer(model_params, **kwargs)
+
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
 
     best_metric = 1000
@@ -670,7 +671,6 @@ def fit_estimator(model_params, ts, vs, es=None, epochs=20, gpus=1, **kwargs):
     eval_input_fn = create_eval_input_fn(es, **params)
 
     #valid_metrics = EvalMetricsHook(estimator.eval_dir(), 'Valid')
-
     # This is going to be None because train_and_evaluate controls the max steps so repeat doesnt matter
     train_spec = tf.estimator.TrainSpec(input_fn=train_input_fn, max_steps=epochs * len(ts))
     # This is going to be None because the evaluation will run for 1 pass over the data that way
