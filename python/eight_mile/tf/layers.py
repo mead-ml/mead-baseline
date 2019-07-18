@@ -550,7 +550,7 @@ class TimeDistributedProjection(tf.keras.layers.Layer):
         return False
 
 
-def scaled_dot_product_attention(query, key, value, pdrop=0.0, mask=None, training=False):
+def scaled_dot_product_attention(query, key, value, pdrop=0.0, mask=None):
     w = tf.matmul(query, key, transpose_b=True)
 
     w *= tf.rsqrt(tf.to_float(tf.shape(query)[2]))
@@ -559,18 +559,18 @@ def scaled_dot_product_attention(query, key, value, pdrop=0.0, mask=None, traini
         w = w * mask + -1e9 * (1 - mask)
 
     weights = tf.nn.softmax(w, name="attention_weights")
-    weights = tf.layers.dropout(weights, pdrop, training=training)
+    weights = tf.layers.dropout(weights, pdrop, training=TRAIN_FLAG())
     return tf.matmul(weights, value), weights
 
 
-def dot_product_attention(query, key, value, pdrop=0.0, mask=None, training=False):
+def dot_product_attention(query, key, value, pdrop=0.0, mask=None):
     w = tf.matmul(query, key, transpose_b=True)
 
     if mask is not None:
         w = w * mask + -1e9 * (1 - mask)
 
     weights = tf.nn.softmax(w, name="attention_weights")
-    weights = tf.layers.dropout(weights, pdrop, training=training)
+    weights = tf.layers.dropout(weights, pdrop, training=TRAIN_FLAG())
     return tf.matmul(weights, value), weights
 
 
@@ -649,7 +649,7 @@ class TransformerEncoder(tf.keras.Model):
     def __init__(self, d_model, num_heads, pdrop, scale=True, activation='relu', d_ff=None, name=None):
         super(TransformerEncoder, self).__init__(name=name)
         if d_ff is None:
-            d_ff = 4*d_model
+            d_ff = 4 * d_model
         self.ln1 = LayerNorm(name='ln_1')
         self.self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale)
         self.dropout = tf.keras.layers.Dropout(pdrop)
@@ -659,10 +659,10 @@ class TransformerEncoder(tf.keras.Model):
     def call(self, inputs, mask=None):
         x = inputs
 
-        x = self.ln1(x)
+        x = self.ln1(x, mask=mask)
         x = x + self.dropout(self.self_attn((x, x, x), mask=mask), TRAIN_FLAG())
 
-        x = self.ln2(x)
+        x = self.ln2(x, mask=mask)
 
         x = x + self.dropout(self.feed_forward(x), TRAIN_FLAG())
         return x
@@ -673,7 +673,7 @@ class TransformerDecoder(tf.keras.Model):
     def __init__(self, d_model, num_heads, pdrop, scale=True, activation='relu', d_ff=None, name=None):
         super(TransformerEncoder, self).__init__(name=name)
         if d_ff is None:
-            d_ff = 4*d_model
+            d_ff = 4 * d_model
 
         self.self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale)
         self.src_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale)
@@ -683,7 +683,7 @@ class TransformerDecoder(tf.keras.Model):
         self.ln3 = LayerNorm(name='ln_3')
         self.feed_forward = FFN(d_model, pdrop, activation, d_ff, name='ffn')
 
-    def call(self, inputs, training=False, mask=None):
+    def call(self, inputs, mask=None):
         memory, x = inputs
         x = self.ln1(x)
         src_mask = None
@@ -692,7 +692,7 @@ class TransformerDecoder(tf.keras.Model):
             src_mask, tgt_mask = mask
 
         x = self.ln1(x)
-        x = x + self.dropout(self.self_attn((x, x, x), training, tgt_mask), TRAIN_FLAG())
+        x = x + self.dropout(self.self_attn((x, x, x), tgt_mask), TRAIN_FLAG())
 
         x = self.ln2(x)
         x = x + self.dropout(self.src_attn((x, memory, memory), src_mask), TRAIN_FLAG())
@@ -711,10 +711,10 @@ class TransformerEncoderStack(tf.keras.Model):
         for i in range(layers):
             self.encoders.append(TransformerEncoder(d_model, num_heads, pdrop, scale, activation, d_ff))
 
-    def call(self, inputs, training=False, mask=None):
+    def call(self, inputs, mask=None):
         x = inputs
         for layer in self.encoders:
-            x = layer(x, training, mask)
+            x = layer(x, mask=mask)
         return self.ln(x)
 
 
@@ -726,11 +726,10 @@ class TransformerDecoderStack(tf.keras.Model):
         for i in range(layers):
             self.decoders.append(TransformerDecoder(d_model, num_heads, pdrop, scale, activation, d_ff, name))
 
-
-    def call(self, inputs, training=False, mask=None):
+    def call(self, inputs, mask=None):
         x = inputs
         for layer in self.decoders:
-            x = layer(x, training, mask)
+            x = layer(x, mask=mask)
         return self.ln(x)
 
 

@@ -310,3 +310,4 @@ class RNNLanguageModel(LanguageModelBase):
         self.initial_state = lstm_encoder_layer.zero_state(self.batchsz)
         inputs["h"] = self.initial_state
         return lstm_encoder_layer
+
