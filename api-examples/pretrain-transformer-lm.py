@@ -554,7 +554,7 @@ def train():
             # Should probably do this more often
             checkpoint_name = checkpoint_for(model_base, epoch+1)
             logger.info("Creating checkpoint: %s", checkpoint_name)
-            torch.save(model.state_dict(), checkpoint_name)
+            torch.save(model.module.state_dict(), checkpoint_name)
             rm_old_checkpoints(model_base, epoch+1)
 
 
