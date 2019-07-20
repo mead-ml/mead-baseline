@@ -29,8 +29,9 @@ This pretraining module has multiple configurations that allow it to support
     - ELMo (Kim et al 2015) char method
   * pretraining on several datasets including PTB, Wikitext 2 (including raw) and Wikitext 103 (including raw).
 
-If you use subwords for tokens, this code requires bert_pretrained_pytorch.  Otherwise, it depends only on six, numpy,
-pytorch, and baseline.
+If you use `tokens=bpe`, it requires fastBPE.
+If you use `tokens=wordpiece` it requires bert_pretrained_pytorch.  
+Otherwise, it depends only on six, numpy, pytorch, and baseline.
 
 Because we are trying to pretrain a language model so we can do better on downstream tasks, it probably makes more
 sense to train on a full word model, not a model where rare words have already been replaced.
@@ -92,10 +93,81 @@ X_CHAR_EMBEDDINGS = {
 BERT_TOKENIZER = None
 
 
+class BPEVectorizer1D(AbstractVectorizer):
+    """Define a Baseline Vectorizer for BPE using fastBPE (https://github.com/glample/fastBPE)
+
+    If you use tokens=bpe, this vectorizer is used, and so then there is a
+    dependency on fastBPE
+
+    To use BPE, we assume that a Dictionary of codes and vocab was already created
+
+    """
+    def __init__(self, **kwargs):
+        """Loads a BPE tokenizer"""
+        super(BPEVectorizer1D, self).__init__(kwargs.get('transform_fn'))
+        from fastBPE import fastBPE
+        self.max_seen = 128
+        self.model_file = kwargs.get('model_file')
+        self.vocab_file = kwargs.get('vocab_file')
+        self.tokenizer = fastBPE(self.model_file, self.vocab_file)
+        self.mxlen = kwargs.get('mxlen', -1)
+        self.vocab = {k: i for i, k in enumerate(self.read_vocab(self.vocab_file))}
+
+    def read_vocab(self, s):
+        vocab = [] + Offsets.VALUES
+        with open(s, "r") as f:
+            for line in f.readlines():
+                token = line.split()[0].strip()
+                vocab.append(token)
+        return vocab
+
+    def count(self, tokens):
+        seen = 0
+        counter = Counter()
+        for tok in self.iterable(tokens):
+            counter[tok] += 1
+            seen += 1
+        self.max_seen = max(self.max_seen, seen)
+        return counter
+
+    def iterable(self, tokens):
+        for t in tokens:
+            if t in Offsets.VALUES:
+                yield t
+            if t == '<unk>':
+                yield Offsets.UNK
+            if t == '<eos>':
+                yield Offsets.EOS
+            else:
+                subwords = self.tokenizer.apply([t])[0].split()
+                for x in subwords:
+                    yield x
+
+    def _next_element(self, tokens, vocab):
+        for atom in self.iterable(tokens):
+            value = vocab.get(atom, 0)  # This shouldnt actually happen
+            yield value
+
+    def run(self, tokens, vocab):
+        if self.mxlen < 0:
+            self.mxlen = self.max_seen
+        vec1d = np.zeros(self.mxlen, dtype=np.long)
+        for i, atom in enumerate(self._next_element(tokens, vocab)):
+            if i == self.mxlen:
+                i -= 1
+                break
+            vec1d[i] = atom
+        valid_length = i + 1
+        return vec1d, valid_length
+
+    def get_dims(self):
+        return self.mxlen,
+
+
 class WordPieceVectorizer1D(AbstractVectorizer):
     """Define a Baseline Vectorizer that can do WordPiece with BERT tokenizer
 
-    If you use tokens=subword, this vectorizer is used, and so then there is
+    If you use tokens=wordpiece, this vectorizer is used, and so then there is
     a dependency on bert_pretrained_pytorch
     """
 
@@ -110,6 +182,10 @@ class WordPieceVectorizer1D(AbstractVectorizer):
         handle = kwargs.get('embed_file')
         self.tokenizer = BertTokenizer.from_pretrained(handle, do_lower_case=False)
         self.mxlen = kwargs.get('mxlen', -1)
+
+    @property
+    def vocab(self):
+        return self.tokenizer.vocab
 
     def count(self, tokens):
         seen = 0
@@ -197,14 +273,18 @@ class TensorDatasetReaderBase(object):
 class TensorWordDatasetReader(TensorDatasetReaderBase):
     """Read each word, and produce a tensor of x and y that are identical
     """
-    def __init__(self, nctx, use_wordpiece=False):
+    def __init__(self, nctx, use_subword=None, model_file=None, vocab_file=None):
         """Create a reader with a context window that reads words
 
         :param nctx: The context window length
+        :param use_subword: If this is not none, it should be either 'bpe' or 'wordpiece'
         """
-        self.use_wordpiece = use_wordpiece
-        if use_wordpiece:
-            vectorizer = WordPieceVectorizer1D(embed_file='bert-base-cased')
+        self.use_subword = use_subword
+
+        if self.use_subword == 'bpe':
+            vectorizer = BPEVectorizer1D(model_file=model_file, vocab_file=vocab_file)
+        elif self.use_subword == 'wordpiece':
+            vectorizer = WordPieceVectorizer1D(embed_file=model_file) #'bert-base-cased')
         else:
             vectorizer = Token1DVectorizer(transform_fn=baseline.lowercase)
         super(TensorWordDatasetReader, self).__init__(nctx, {'x': vectorizer})
@@ -215,9 +295,9 @@ class TensorWordDatasetReader(TensorDatasetReaderBase):
         :param files:
         :return:
         """
-        if self.use_wordpiece:
+        if self.use_subword is not None:
             super(TensorWordDatasetReader, self).build_vocab(files)
-            return {'x': self.vectorizers['x'].tokenizer.vocab}
+            return {'x': self.vectorizers['x'].vocab}
         return super(TensorWordDatasetReader, self).build_vocab(files)
 
     def load(self, filename, vocabs):
@@ -262,16 +342,16 @@ def load_data(token_type, reader, dataset, file_key, vocabs, caching):
     return loaded
 
 
-def create_reader(token_type, nctx, chars_per_word):
+def create_reader(token_type, nctx, chars_per_word, subword_model_file, subword_vocab_file):
     if token_type == "chars":
         logger.info("Using character input")
         reader = TensorCharDatasetReader(nctx, chars_per_word)
     elif token_type == "words":
         logger.info("Using word input")
-        reader = TensorWordDatasetReader(nctx, False)
+        reader = TensorWordDatasetReader(nctx)
     else:
         logger.info("Using subword (wordpiece) input")
-        reader = TensorWordDatasetReader(nctx, True)
+        reader = TensorWordDatasetReader(nctx, token_type, subword_model_file, subword_vocab_file)
     return reader
 
 
@@ -364,11 +444,13 @@ def train():
     parser.add_argument("--d_model", type=int, default=410, help="Model dimension (and embedding dsz)")
     parser.add_argument("--d_ff", type=int, default=2100, help="FFN dimension")
     parser.add_argument("--num_heads", type=int, default=10, help="Number of heads")
-    parser.add_argument("--num_layers", type=int, default=8, help="Number of layers")
+    parser.add_argument("--num_layers", type=int, default=16, help="Number of layers")
     parser.add_argument("--nctx", type=int, default=256, help="Max input length")
     parser.add_argument("--batch_size", type=int, default=8, help="Batch Size")
-    parser.add_argument("--tokens", choices=["words", "chars", "subwords"], default="subwords",
+    parser.add_argument("--tokens", choices=["words", "chars", "bpe", "wordpiece"], default="wordpiece",
                         help="What tokens to use")
+    parser.add_argument("--subword_model_file", type=str, help="If using subwords, pass this", default='bert-base-cased')
+    parser.add_argument("--subword_vocab_file", type=str, help="If using subwords with separate vocab file, pass here")
     parser.add_argument("--dropout", type=float, default=0.1, help="Dropout")
     parser.add_argument("--lr", type=float, default=4.0e-4, help="Learning rate")
     parser.add_argument("--clip", type=float, default=0.25, help="Clipping gradient norm")
@@ -424,7 +506,7 @@ def train():
         dataset = {'train_file': args.train_file, 'valid_file': args.valid_file}
     else:
         dataset = DataDownloader(DATASETS[args.dataset_key], args.dataset_cache).download()
-    reader = create_reader(args.tokens, args.nctx, args.chars_per_word)
+    reader = create_reader(args.tokens, args.nctx, args.chars_per_word, args.subword_model_file, args.subword_vocab_file)
 
     preproc_data = load_embed_and_vocab(args.tokens, reader, dataset, args.dataset_key, args.d_model, args.cache_features)
 
@@ -476,7 +558,7 @@ def train():
         logger.info("Restarting from a previous checkpoint %s.\n\tStarting at global_step=%d, epoch=%d",
                     args.restart_from, global_step, start_epoch+1)
     optimizer = OptimizerManager(model, global_step, optim='adam', lr=args.lr, lr_function=lr_sched, weight_decay=args.weight_decay)
-    logger.info("Model has %s parameters", sum(p.numel() for p in model.parameters() if p.requires_grad))
+    logger.info("Model has {:,} parameters".format(sum(p.numel() for p in model.parameters() if p.requires_grad)))
 
     # Prepare model for distributed training if needed
     if args.distributed:
@@ -542,7 +624,7 @@ def train():
         metrics['valid_elapsed_min'] = elapsed
 
         metrics['average_valid_loss'] = valid_token_loss
-        if args.tokens == 'subwords':
+        if args.tokens in ['bpe', 'wordpiece']:
             metrics['valid_token_ppl'] = valid_token_ppl
             metrics['average_valid_word_ppl'] = math.exp(valid_token_loss * valid_set.tensors[-1].numel() / valid_num_words)
         else:

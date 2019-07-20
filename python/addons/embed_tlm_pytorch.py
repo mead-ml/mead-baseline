@@ -90,7 +90,7 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
         self.vocab = read_json(kwargs.get('vocab_file'))
         self.cls_index = self.vocab['[CLS]']
         self.vsz = len(self.vocab)
-        layers = int(kwargs.get('layers', 18))
+        layers = int(kwargs.get('layers', 16))
         num_heads = int(kwargs.get('num_heads', 10))
         pdrop = kwargs.get('dropout', 0.1)
         self.d_model = int(kwargs.get('dsz', kwargs.get('d_model', 410)))
