@@ -350,7 +350,7 @@ def create_reader(token_type, nctx, chars_per_word, subword_model_file, subword_
         logger.info("Using word input")
         reader = TensorWordDatasetReader(nctx)
     else:
-        logger.info("Using subword (wordpiece) input")
+        logger.info("Using subword ({}) input".format(token_type))
         reader = TensorWordDatasetReader(nctx, token_type, subword_model_file, subword_vocab_file)
     return reader
 
