@@ -2,8 +2,8 @@ from __future__ import print_function
 import baseline as bl
 import argparse
 import os
-parser = argparse.ArgumentParser(description='Classify text with a model')
-parser.add_argument('--model', help='A classifier model', required=True, type=str)
+parser = argparse.ArgumentParser(description='Encoder-Decoder execution')
+parser.add_argument('--model', help='An encoder-decoder model', required=True, type=str)
 parser.add_argument('--text', help='raw value or a file', type=str)
 parser.add_argument('--backend', help='backend', default='tf')
 parser.add_argument('--remote', help='(optional) remote endpoint', type=str) # localhost:8500
