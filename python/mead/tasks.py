@@ -255,17 +255,11 @@ class Task(object):
         :param kwargs:
         :return:
         """
-        default_reporting = self.mead_settings_config.get('reporting_hooks', {})
-        # Add default reporting information to the reporting settings.
-        for report_type in default_reporting:
-            if report_type in reporting:
-                for report_arg, report_val in default_reporting[report_type].items():
-                    if report_arg not in reporting[report_type]:
-                        reporting[report_type][report_arg] = report_val
-        reporting_hooks = list(reporting.keys())
-        for settings in reporting.values():
-            for module in listify(settings.get('module', settings.get('modules', []))):
-                import_user_module(module)
+        # If there is an nstep request in config or we are doing seq2seq/lm log steps to console
+        if 'nsteps' in self.config_params['train'] or self.__class__.task_name() in {'seq2seq', 'lm'}:
+            reporting['step_logging'] = reporting.get('step_logging', {})
+
+        reporting_hooks, reporting = merge_reporting_with_settings(reporting, self.mead_settings_config)
 
         self.reporting = baseline.create_reporting(reporting_hooks,
                                                    reporting,

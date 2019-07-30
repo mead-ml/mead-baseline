@@ -197,8 +197,6 @@ class VisdomReporting(ReportingHook):
 @exporter
 def create_reporting(reporting_hooks, hook_settings, proc_info):
     reporting = [LoggingReporting()]
-    if proc_info['task'] in {'seq2seq', 'lm'}:
-        reporting.append(StepLoggingReporting())
 
     for name in reporting_hooks:
         ReportingClass = BASELINE_REPORTING[name]
