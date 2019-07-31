@@ -661,7 +661,7 @@ def train():
                     shift_logits = logits[:-1]
                     shift_labels = labels[1:]
                     loss = loss_function(shift_logits, shift_labels)
-                avg_loss.update(loss.item())
+                avg_valid_loss.update(loss.item())
 
         valid_token_loss = avg_valid_loss.avg
         valid_token_ppl = math.exp(valid_token_loss)
