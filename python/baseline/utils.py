@@ -478,7 +478,7 @@ def read_json(filepath, default_value=None, strict=False):
 
 @exporter
 def read_yaml(filepath, default_value=None, strict=False):
-    """Read a JSON file in.  If no file is found and default value is set, return that instead.  Otherwise error
+    """Read a YAML file in.  If no file is found and default value is set, return that instead.  Otherwise error
 
     :param filepath: str, A file to load
     :param default_value: If the file doesn't exist, return return this. Defaults to an empty dict.
