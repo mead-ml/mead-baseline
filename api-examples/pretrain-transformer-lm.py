@@ -517,6 +517,7 @@ def train():
     vocabs = preproc_data['vocabs']
     if args.mlm:
         mask_from = vocabs['x']
+        vocab_size = len(mask_from)
         mask_value = mask_from.get("[MASK]", mask_from.get("<MASK>", -1))
         if mask_value == -1:
             logger.error("We could not find a suitable masking token in the vocab")
@@ -600,7 +601,7 @@ def train():
                 inputs[indices_replaced] = mask_value
                 # Replace 10% of them with random words, rest preserved for auto-encoding
                 indices_random = torch.bernoulli(torch.full(labels.shape, 0.5)).byte() & masked_indices & ~indices_replaced
-                random_words = torch.randint(args.d_model, labels.shape, dtype=torch.long, device=args.device)
+                random_words = torch.randint(vocab_size, labels.shape, dtype=torch.long, device=args.device)
                 inputs[indices_random] = random_words[indices_random]
 
             labels = labels.transpose(0, 1).contiguous()
@@ -649,7 +650,7 @@ def train():
                     inputs[indices_replaced] = mask_value
                     # Replace 10% of them with random work
                     indices_random = torch.bernoulli(torch.full(labels.shape, 0.5)).byte() & masked_indices & ~indices_replaced
-                    random_words = torch.randint(args.d_model, labels.shape, dtype=torch.long, device=args.device)
+                    random_words = torch.randint(vocab_size, labels.shape, dtype=torch.long, device=args.device)
                     inputs[indices_random] = random_words[indices_random]
 
                 labels = labels.transpose(0, 1).contiguous()
