@@ -12,6 +12,12 @@ PYT_MAJOR_VERSION = get_version(torch)
 
 
 def sequence_mask(lengths, max_len=-1):
+    """Produce a sequence mask BxT
+
+    :param lengths: The lengths for each temporal vector
+    :param max_len: The maximum length.  If less than 0, determine from batch max vec len
+    :return: A mask of 1s if valid, 0s o.w.
+    """
     lens = lengths.cpu()
     if max_len < 0:
         max_len = torch.max(lens).item()
@@ -221,6 +227,7 @@ def tie_weight(to_layer, from_layer):
     """
     to_layer.weight = from_layer.weight
 
+
 def pytorch_clone_module(module_, N):
     return nn.ModuleList([copy.deepcopy(module_) for _ in range(N)])
 
@@ -399,20 +406,38 @@ class LSTMEncoder(nn.Module):
 class BaseAttention(nn.Module):
 
     def __init__(self, hsz):
+        """Construct a base attention model
+
+        :param hsz: (`int`) The number of hidden units
+        """
         super(BaseAttention, self).__init__()
         self.hsz = hsz
         self.W_c = nn.Linear(2 * self.hsz, hsz, bias=False)
 
     def forward(self, query_t, keys_bth, values_bth, keys_mask=None):
+        """Take a query at time t, keys and values and produce an output
+
+        :param query_t: (BxH) The query at time t
+        :param keys_bth: (BxTxH) The keys
+        :param values_bth: (BxTxH) The values
+        :param keys_mask: (BxT) Mask of 1s where input is valid, 0 o.w.
+        :return: Outputs of attention at the current timestep
+        """
         # Output(t) = B x H x 1
         # Keys = B x T x H
-        # a = B x T x 1
+        # a = B x T
         a = self._attention(query_t, keys_bth, keys_mask)
         attended = self._update(a, query_t, values_bth)
-
         return attended
 
     def _attention(self, query_t, keys_bth, keys_mask):
+        """Perform attention between query and keys
+
+        :param query_t: (BxH) The query at time t
+        :param keys_bth: (BxTxH) The keys
+        :param keys_mask:  (BxT) The mask
+        :return: (BxT) attended output at time t
+        """
         pass
 
     def _update(self, a, query_t, values_bth):
@@ -421,7 +446,6 @@ class BaseAttention(nn.Module):
         # (B x 1 x T) (B x T x H) = (B x 1 x H)
         a = a.view(a.size(0), 1, a.size(1))
         c_t = torch.bmm(a, values_bth).squeeze(1)
-
         attended = torch.cat([c_t, query_t], -1)
         attended = F.tanh(self.W_c(attended))
         return attended
@@ -433,8 +457,12 @@ class LuongDotProductAttention(BaseAttention):
         super(LuongDotProductAttention, self).__init__(hsz)
 
     def _attention(self, query_t, keys_bth, keys_mask):
+        # First, unsqueeze so we have BxHx1
+        # A BMM yields BxTx1
         a = torch.bmm(keys_bth, query_t.unsqueeze(2))
+        # Now squeeze A down to BxT and apply the mask
         a = a.squeeze(2).masked_fill(keys_mask == 0, -1e9)
+        # Do a softmax over time
         a = F.softmax(a, dim=-1)
         return a
 
@@ -445,6 +473,7 @@ class ScaledDotProductAttention(BaseAttention):
         super(ScaledDotProductAttention, self).__init__(hsz)
 
     def _attention(self, query_t, keys_bth, keys_mask):
+        # This is almost identical to Luong but we scale after the BMM
         a = torch.bmm(keys_bth, query_t.unsqueeze(2)) / math.sqrt(self.hsz)
         a = a.squeeze(2).masked_fill(keys_mask == 0, -1e9)
         a = F.softmax(a, dim=-1)
@@ -458,6 +487,7 @@ class LuongGeneralAttention(BaseAttention):
         self.W_a = nn.Linear(self.hsz, self.hsz, bias=False)
 
     def _attention(self, query_t, keys_bth, keys_mask):
+        # This is almost like LuongDotProductAttention but we have an additional projection to apply to the input
         a = torch.bmm(keys_bth, self.W_a(query_t).unsqueeze(2))
         a = a.squeeze(2).masked_fill(keys_mask == 0, -1e9)
         a = F.softmax(a, dim=-1)
@@ -475,9 +505,13 @@ class BahdanauAttention(BaseAttention):
 
     def _attention(self, query_t, keys_bth, keys_mask):
         B, T, H = keys_bth.shape
+        # Start with a projection, and get a Bx1xH output of query vector
         q = self.W_a(query_t.view(-1, self.hsz)).view(B, 1, H)
+        # Project the keys as well, and view as BxTxH
         u = self.E_a(keys_bth.contiguous().view(-1, self.hsz)).view(B, T, H)
+        # Add together, with a broadcast and get apply non-linearity
         z = torch.tanh(q + u)
+        # Reshape as (BxT)xH and apply linear transformation to get back weighting
         a = self.v(z.view(-1, self.hsz)).view(B, T)
         a = a.masked_fill(keys_mask == 0, -1e9)
         a = F.softmax(a, dim=-1)
