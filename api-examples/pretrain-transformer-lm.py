@@ -284,7 +284,7 @@ class TensorWordDatasetReader(TensorDatasetReaderBase):
         if self.use_subword == 'bpe':
             vectorizer = BPEVectorizer1D(model_file=model_file, vocab_file=vocab_file)
         elif self.use_subword == 'wordpiece':
-            vectorizer = WordPieceVectorizer1D(embed_file=model_file) #'bert-base-cased')
+            vectorizer = WordPieceVectorizer1D(embed_file=model_file)
         else:
             vectorizer = Token1DVectorizer(transform_fn=baseline.lowercase)
         super(TensorWordDatasetReader, self).__init__(nctx, {'x': vectorizer})
@@ -458,6 +458,7 @@ def train():
     parser.add_argument("--epochs", type=int, default=20, help="Num training epochs")
     parser.add_argument("--restart_from", type=str, help="Option allows you to restart from a previous checkpoint")
     parser.add_argument("--warmup_steps", type=int, default=1000, help="Num warmup steps")
+    parser.add_argument("--mlm", type=str2bool, default=False, help="Use Masked Language Model (MLM) objective")
     parser.add_argument("--device", type=str,
                         default="cuda" if torch.cuda.is_available() else "cpu",
                         help="Device (cuda or cpu)")
@@ -483,6 +484,9 @@ def train():
     if not args.train_file and args.valid_file:
         logger.error("If you provide a valid_file, you must also provide a train_file")
         return
+
+    if args.tokens == "chars" and args.mlm:
+        logger.error("Character composition cannot currently be used with the MLM objective")
 
     if args.basedir is None:
         args.basedir = 'transformer-{}-{}-{}'.format(args.dataset_key, args.tokens, os.getpid())
@@ -511,6 +515,13 @@ def train():
     preproc_data = load_embed_and_vocab(args.tokens, reader, dataset, args.dataset_key, args.d_model, args.cache_features)
 
     vocabs = preproc_data['vocabs']
+    if args.mlm:
+        mask_from = vocabs['x']
+        vocab_size = len(mask_from)
+        mask_value = mask_from.get("[MASK]", mask_from.get("<MASK>", -1))
+        if mask_value == -1:
+            logger.error("We could not find a suitable masking token in the vocab")
+            return
     os.makedirs(args.basedir, exist_ok=True)
     # We want to make sure to save our input vocab into the basedir for reuse later
     write_json(vocabs['x'], os.path.join(args.basedir, 'vocabs.json'))
@@ -579,11 +590,28 @@ def train():
         for i, batch in enumerate(train_loader):
             x, y = batch
             inputs = {'x': x.to(args.device)}
-            labels = y.to(args.device).transpose(0, 1).contiguous()
+            labels = y.to(args.device)
+            if args.mlm:
+                # Replace 15% of tokens
+                masked_indices = torch.bernoulli(torch.full(labels.shape, 0.15)).byte()
+                # Anything not masked is 0 so no loss
+                labels[~masked_indices] = 0
+                # Of the masked items, mask 80% of them with [MASK]
+                indices_replaced = torch.bernoulli(torch.full(labels.shape, 0.8)).byte() & masked_indices
+                inputs[indices_replaced] = mask_value
+                # Replace 10% of them with random words, rest preserved for auto-encoding
+                indices_random = torch.bernoulli(torch.full(labels.shape, 0.5)).byte() & masked_indices & ~indices_replaced
+                random_words = torch.randint(vocab_size, labels.shape, dtype=torch.long, device=args.device)
+                inputs[indices_random] = random_words[indices_random]
+
+            labels = labels.transpose(0, 1).contiguous()
             logits = model(inputs, None)[0].transpose(0, 1).contiguous()
-            shift_logits = logits[:-1]
-            shift_labels = labels[1:]
-            loss = loss_function(shift_logits, shift_labels)
+            if args.mlm:
+                loss = loss_function(logits, labels)
+            else:
+                shift_logits = logits[:-1]
+                shift_labels = labels[1:]
+                loss = loss_function(shift_logits, shift_labels)
             loss.backward()
             avg_loss.update(loss.item())
 
@@ -610,11 +638,29 @@ def train():
             with torch.no_grad():
                 x, y = batch
                 inputs = {'x': x.to(args.device)}
-                labels = y.to(args.device).transpose(0, 1).contiguous()
+                labels = y.to(args.device)
+
+                if args.mlm:
+                    # Replace 15% of tokens
+                    masked_indices = torch.bernoulli(torch.full(labels.shape, 0.15)).byte()
+                    # Anything not masked is 0 so no loss
+                    labels[~masked_indices] = 0
+                    # Of the masked items, mask 80% of them with [MASK]
+                    indices_replaced = torch.bernoulli(torch.full(labels.shape, 0.8)).byte() & masked_indices
+                    inputs[indices_replaced] = mask_value
+                    # Replace 10% of them with random work
+                    indices_random = torch.bernoulli(torch.full(labels.shape, 0.5)).byte() & masked_indices & ~indices_replaced
+                    random_words = torch.randint(vocab_size, labels.shape, dtype=torch.long, device=args.device)
+                    inputs[indices_random] = random_words[indices_random]
+
+                labels = labels.transpose(0, 1).contiguous()
                 logits = model(inputs, None)[0].transpose(0, 1).contiguous()
-                shift_logits = logits[:-1]
-                shift_labels = labels[1:]
-                loss = loss_function(shift_logits, shift_labels)
+                if args.mlm:
+                    loss = loss_function(logits, labels)
+                else:
+                    shift_logits = logits[:-1]
+                    shift_labels = labels[1:]
+                    loss = loss_function(shift_logits, shift_labels)
                 avg_valid_loss.update(loss.item())
 
         valid_token_loss = avg_valid_loss.avg
