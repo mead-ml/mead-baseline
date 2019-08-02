@@ -492,6 +492,9 @@ def read_yaml(filepath, default_value=None, strict=False):
         return default_value if default_value is not None else {}
     with open(filepath) as f:
         import yaml
+        from distutils.version import LooseVersion
+        if LooseVersion(yaml.__version__) >= LooseVersion("5.1"):
+            return yaml.load(f, Loader=yaml.FullLoader)
         return yaml.load(f)
 
 
