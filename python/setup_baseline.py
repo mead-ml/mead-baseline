@@ -50,7 +50,7 @@ def read_doc(f_name, new_name=None, fix_fn=fix_links):
 
 def main():
     setup(
-        name='deep_{}'.format(About.NAME),
+        name='mead-{}'.format(About.NAME),
         version=About.VERSION,
         description='Strong Deep-Learning Baseline algorithms for NLP',
         long_description=read_doc(About.DOC_NAME, new_name='README.md'),
@@ -60,7 +60,7 @@ def main():
         license='Apache 2.0',
         url=About.URL,
         download_url=About.DOWNLOAD_URL,
-        packages=find_packages(exclude=['tests', 'xpctl*']),
+        packages=find_packages(exclude=['tests', 'xpctl*', 'hpctl*']),
         package_data={
             'mead': get_configs('mead/config'),
         },
