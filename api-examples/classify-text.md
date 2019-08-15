@@ -1,0 +1,10 @@
+Here is some descriptions of the arguments that classify text takes. (by Brian)
+- `--model` the path to either the .zip file created by training (you can also point it at the dir created by unzipping the zip) or to the client bundle created by exporting This is the same as the `*_model` in raven-nlu
+- `--text` The text you want to classify, It should be quoted. If this is a path to a file then the contents of the file will be used. (Assumes pre-tokenized and each line has one example)
+- `--backend` What was the model trained with? tf or pytorch
+- `--remote` If the model is being served (we serve via tensorflow serving) what is the url for that remote server? normally `localhost:8500` This is the same as the `*_remote` field in the raven-nlu configs
+- `--name` Because server can serve multiple models this name tells use which to hit. This is the same as the `*_name` in raven-nlu
+- `--device` In the case you are loading a model from the .zip file should the model be loaded and ran on cpu or gpu (if you are using pytorch you need to say cuda to make it run on gpu)
+- `--preproc` We have some models (for example in engage) where preprocessing (converting text into ints, vectorization, etc) is done in the tf graph and therefore run in the server, in this case the model just send text to the server and is used with `--preproc server`. The more common use case is to have client side preprocessing this is how all raven models work and is used with `--preproc client`.
+- `--batchsz` how many examples to send in a batch. This is mostly relevant for when `--text` is a file. Batching lets you do model inference on multiple things at a time, resulting in less requests and faster finish times.
+One thing to note is the lack of a `--version` cli flag that matches what we have in the `*_version` config in raven-nlu, so you can only hit the latest model if you are using a model is serving
