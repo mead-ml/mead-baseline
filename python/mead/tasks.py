@@ -380,7 +380,7 @@ class ClassifierTask(Task):
             self.config_params.get('preproc', {})['clean_fn'] = baseline.TSVSeqLabelReader.do_clean
             logger.info('Clean')
         else:
-            self.config_params['preproc'] = {}
+            self.config_params.setdefault('preproc', {})
             self.config_params['preproc']['clean_fn'] = None
 
     def initialize(self, embeddings):
