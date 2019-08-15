@@ -3,14 +3,17 @@ import argparse
 import os
 
 parser = argparse.ArgumentParser(description='Classify text with a model')
-parser.add_argument('--model', help='A classifier model', required=True, type=str)
-parser.add_argument('--text', help='raw value', type=str)
-parser.add_argument('--backend', help='backend', default='tf')
-parser.add_argument('--remote', help='(optional) remote endpoint', type=str) # localhost:8500
-parser.add_argument('--name', help='(optional) service name', type=str)
+parser.add_argument('--model', help='The path to either the .zip file created by training or to the client bundle '
+                                    'created by exporting', required=True, type=str)
+parser.add_argument('--text', help='The text to classify as a string, or a path to a file with each line as an example',
+                    type=str)
+parser.add_argument('--backend', help='backend', choices={'tf', 'pytorch'}, default='tf')
+parser.add_argument('--remote', help='(optional) remote endpoint, normally localhost:8500', type=str) # localhost:8500
+parser.add_argument('--name', help='(optional) service name as the server may serves multiple models', type=str)
 parser.add_argument('--device', help='device')
-parser.add_argument('--preproc', help='(optional) where to perform preprocessing', choices={'client', 'server'}, default='client')
-parser.add_argument('--batchsz', help='batch data', default=100, type=int)
+parser.add_argument('--preproc', help='(optional) where to perform preprocessing', choices={'client', 'server'},
+                    default='client')
+parser.add_argument('--batchsz', help='batch size when --text is a file', default=100, type=int)
 args = parser.parse_args()
 
 if os.path.exists(args.text) and os.path.isfile(args.text):
