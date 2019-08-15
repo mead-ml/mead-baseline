@@ -1,5 +1,5 @@
-Here is some descriptions of the arguments that classify text takes. (by Brian)
-- `--model` the path to either the .zip file created by training (you can also point it at the dir created by unzipping the zip) or to the client bundle created by exporting This is the same as the `*_model` in raven-nlu
+Here are some descriptions of the arguments that classify text takes. (by Brian)
+- `--model` the path to either the .zip file created by training (you can also point it at the dir created by unzipping the zip) or to the client bundle created by exporting This is the same as the `*_model` in raven-nlu. (Wenshuo: it needs to be specified up to version, such as `/data/nest/models/client/pj/intent/4/`)
 - `--text` The text you want to classify, It should be quoted. If this is a path to a file then the contents of the file will be used. (Assumes pre-tokenized and each line has one example)
 - `--backend` What was the model trained with? tf or pytorch
 - `--remote` If the model is being served (we serve via tensorflow serving) what is the url for that remote server? normally `localhost:8500` This is the same as the `*_remote` field in the raven-nlu configs
