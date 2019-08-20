@@ -18,9 +18,19 @@ COPY docs /baseline/docs
 
 RUN echo "alias python=python3" >> ~/.bashrc
 
-RUN  cd /baseline/python/ && bash ./install_dev.sh baseline no_test && bash ./install_dev.sh xpctl no_test
+RUN  cd /baseline/python/ && bash ./install_dev.sh baseline no_test
 
-RUN cd /baseline/python/hpctl && pip install -e .[docker]
+ADD https://github.com/mead-ml/xpctl/archive/master.tar.gz ./xpctl-master.tar.gz
+RUN tar xzf xpctl-master.tar.gz && \
+    cd ./xpctl-master/ && \
+    pip install -e .
+
+ADD https://github.com/mead-ml/hpctl/archive/master.tar.gz ./hpctl-master.tar.gz
+RUN tar xzf hpctl-master.tar.gz && \
+    cd ./hpctl-master/ && \
+    pip install -e .
+
+
 
 VOLUME ["/data/embeddings", "/data/model-store", "/data/datasets", "/data/model-checkpoints"]
 

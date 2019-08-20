@@ -38,6 +38,9 @@ focus on model development, delegating the repetitive tasks to the library.
   Several commands are provided to show the best experimental results under
   various constraints.
 
+- [**hpctl**](docs/hpctl.md): A library for sampling configurations and training
+  models to help find good hyper parameters.
+
 ## Workflow
 
 The workflow for developing a deep learning model using baseline is as follows:
