@@ -397,3 +397,24 @@ def test_dataset_formats():
         assert j is None
     except:
         pass
+
+
+def test_dataset_hard_match():
+    """Test that we only match datasets that are exact match % date, ignore ones that have extra before or after."""
+    keys = {
+        'prefix:postfix:20190101': 'bad',
+        'prefix:20190103': 'gold',
+        'prefix:postfix:20190402': 'bad',
+        'pre-prefix:prefix:20190801': 'bad'
+    }
+    assert get_dataset_from_key('prefix', keys) == 'gold'
+
+
+def test_dataset_handle_no_date():
+    """Test that we can handle a dataset we are looking at that doesn't have a date on it."""
+    keys = {
+        'prefix:20190405': 'bad',
+        'prefix:not-a-date': 'bad',
+        'prefix:20190506': 'gold'
+    }
+    assert get_dataset_from_key('prefix', keys) == 'gold'
