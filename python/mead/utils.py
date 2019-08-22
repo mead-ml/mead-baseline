@@ -96,8 +96,13 @@ def get_dataset_from_key(dataset_key, datasets_set):
     for k, v in datasets_set.items():
 
         if dataset_key in k:
-            dt = parse_date(k.split(':')[-1])
-            if dt > last_date:
+            try:
+                parts = k.split(':')
+                dt = parse_date(parts[-1])
+                dataset_name = ":".join(parts[:-1])
+            except Exception:
+                continue
+            if dt > last_date and dataset_name == dataset_key:
                 last_date = dt
                 last_k = k
 
