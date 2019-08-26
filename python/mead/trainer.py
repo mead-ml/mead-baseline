@@ -102,17 +102,21 @@ def main():
         logger.warning('Warning: no mead-settings file was found at [{}]'.format(args.settings))
         args.settings = {}
 
+    args.datasets = args.settings.get('datasets', args.datasets)
     args.datasets = read_config_stream(args.datasets)
     if args.mod_train_file or args.mod_valid_file or args.mod_test_file:
         logging.warning('Warning: overriding the training/valid/test data with user-specified files'
                         ' different from what was specified in the dataset index.  Creating a new key for this entry')
         update_datasets(args.datasets, config_params, args.mod_train_file, args.mod_valid_file, args.mod_test_file)
 
+    args.embeddings = args.settings.get('embeddings', args.embeddings)
     args.embeddings = read_config_stream(args.embeddings)
 
     if args.gpus is not None:
         config_params['model']['gpus'] = args.gpus
 
+    if args.backend is None and 'backend' in args.settings:
+        args.backend = args.settings['backend']
     if args.backend is not None:
         config_params['backend'] = normalize_backend(args.backend)
 
