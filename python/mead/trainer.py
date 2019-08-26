@@ -71,6 +71,7 @@ def update_datasets(datasets_config, config_params, train, valid, test):
     logger.info("The dataset key for this override is {}".format(new_dataset_label))
     datasets_config.append(updated_record)
 
+
 def main():
     parser = argparse.ArgumentParser(description='Train a text classifier')
     parser.add_argument('--config', help='configuration for an experiment', type=convert_path, default="$MEAD_CONFIG")
@@ -106,14 +107,14 @@ def main():
         logger.warning('Warning: no mead-settings file was found at [{}]'.format(args.settings))
         args.settings = {}
 
-    args.datasets = args.datasets if args.datasets else args.settings.get('datasets', DEFAULT_DATASETS_LOC)
+    args.datasets = args.datasets if args.datasets else args.settings.get('datasets', convert_path(DEFAULT_DATASETS_LOC))
     args.datasets = read_config_stream(args.datasets)
     if args.mod_train_file or args.mod_valid_file or args.mod_test_file:
         logging.warning('Warning: overriding the training/valid/test data with user-specified files'
                         ' different from what was specified in the dataset index.  Creating a new key for this entry')
         update_datasets(args.datasets, config_params, args.mod_train_file, args.mod_valid_file, args.mod_test_file)
 
-    args.embeddings = args.embeddings if args.embeddings else args.settings.get('embeddings', DEFAULT_EMBEDDINGS_LOC)
+    args.embeddings = args.embeddings if args.embeddings else args.settings.get('embeddings', convert_path(DEFAULT_EMBEDDINGS_LOC))
     args.embeddings = read_config_stream(args.embeddings)
 
     if args.gpus is not None:
