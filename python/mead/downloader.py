@@ -10,7 +10,7 @@ import hashlib
 import shutil
 from baseline.mime_type import mime_type
 from baseline.progress import create_progress_bar
-from baseline.utils import export, read_json, write_json
+from baseline.utils import export, read_json, write_json, validate_url
 
 __all__ = []
 exporter = export(__all__)
@@ -77,7 +77,9 @@ def extractor(filepath, cache_dir, extractor_func):
 @exporter
 def web_downloader(url):
     # Use a class to simulate the nonlocal keyword in 2.7
-    class Context: pg = None
+    class Context:
+        pg = None
+
     def _report_hook(count, block_size, total_size):
         if Context.pg is None:
             length = int((total_size + block_size - 1) / float(block_size)) if total_size != -1 else 1
@@ -88,21 +90,9 @@ def web_downloader(url):
     try:
         path_to_save, _ = urlretrieve(url, path_to_save, reporthook=_report_hook)
         Context.pg.done()
-    except:  # this is too broad but there are too many exceptions to handle separately
+    except Exception:  # this is too broad but there are too many exceptions to handle separately
         raise RuntimeError("failed to download data from [url]: {} [to]: {}".format(url, path_to_save))
     return path_to_save
-
-
-@exporter
-def validate_url(url):
-    regex = re.compile(
-        r'^(?:http|ftp)s?://'  # http:// or https://
-        r'(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+(?:[A-Z]{2,6}\.?|[A-Z0-9-]{2,}\.?)|'  # domain...
-        r'localhost|'  # localhost...
-        r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})'  # ...or ip
-        r'(?::\d+)?'  # optional port
-        r'(?:/?|[/?]\S+)$', re.IGNORECASE)
-    return re.match(regex, url) is not None
 
 
 @exporter
