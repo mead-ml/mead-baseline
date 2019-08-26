@@ -1,7 +1,7 @@
 import os
 import logging
 import argparse
-from baseline.utils import unzip_files, read_config_file
+from baseline.utils import unzip_files, read_config_stream
 import mead
 from mead.exporters import create_exporter
 from mead.utils import (
@@ -12,16 +12,17 @@ from mead.utils import (
 )
 
 
+DEFAULT_SETTINGS_LOC = 'config/mead-settings.json'
+DEFAULT_LOGGING_LOC = 'config/logging.json'
 logger = logging.getLogger('mead')
 
 
 def main():
     parser = argparse.ArgumentParser(description='Export a model')
-    parser.add_argument('--config', help='JSON Configuration for an experiment', required=True, type=convert_path)
-    parser.add_argument('--settings', help='JSON Configuration for mead', required=False, default='config/mead-settings.json', type=convert_path)
+    parser.add_argument('--config', help='configuration for an experiment', required=True, type=convert_path)
+    parser.add_argument('--settings', help='configuration for mead', required=False, default=DEFAULT_SETTINGS_LOC, type=convert_path)
     parser.add_argument('--modules', help='modules to load', default=[], nargs='+', required=False)
-    parser.add_argument('--datasets', help='json library of dataset labels')
-    parser.add_argument('--logging', help='json file for logging', default='config/logging.json', type=convert_path)
+    parser.add_argument('--logging', help='json file for logging', default=DEFAULT_LOGGING_LOC, type=convert_path)
     parser.add_argument('--task', help='task to run', choices=['classify', 'tagger', 'seq2seq', 'lm'])
     parser.add_argument('--exporter_type', help="exporter type (default 'default')", default=None)
     parser.add_argument('--return_labels', help='if true, the exported model returns actual labels else '
@@ -37,11 +38,11 @@ def main():
     args = parser.parse_args()
     configure_logger(args.logging)
 
-    config_params = read_config_file(args.config)
+    config_params = read_config_stream(args.config)
 
     try:
         args.settings = read_config_stream(args.settings)
-    except:
+    except Exception:
         logger.warning('Warning: no mead-settings file was found at [{}]'.format(args.settings))
         args.settings = {}
 
@@ -71,7 +72,7 @@ def main():
     )
     # Here we reuse code in `.read_config` which needs a dataset index (when used with mead-train)
     # but when used with mead-export it is not needed. This is a dummy dataset index that will work
-    # It means we don't need to pass it in, but `--datasets` is left as a cli arg for back compat for now
+    # It means we don't need to pass it in
     datasets = [{'label': config_params['dataset']}]
     task.read_config(config_params, datasets, exporter_type=exporter_type)
     feature_exporter_field_map = create_feature_exporter_field_map(config_params['features'])

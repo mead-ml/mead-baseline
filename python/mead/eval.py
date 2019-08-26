@@ -11,6 +11,8 @@ from mead.utils import configure_logger, convert_path, parse_extra_args
 from mead.tasks import merge_reporting_with_settings, Backend
 
 
+DEFAULT_SETTINGS_LOC = 'config/mead-settings.json'
+DEFAULT_LOGGING_LOC = 'config/logging.json'
 logger = logging.getLogger('mead')
 SERVICES = {
     'classify': ClassifierService,
@@ -98,10 +100,10 @@ def main():
     parser = argparse.ArgumentParser(description='Evaluate on a dataset')
     parser.add_argument('--model', required=True)
     parser.add_argument('--dataset', required=True)
-    parser.add_argument('--settings', default='config/mead-settings.json', type=convert_path)
+    parser.add_argument('--settings', default=DEFAULT_SETTINGS_LOC, type=convert_path)
     parser.add_argument('--modules', nargs="+", default=[])
     parser.add_argument('--reporting', nargs="+")
-    parser.add_argument('--logging', default='config/logging.json', type=convert_path)
+    parser.add_argument('--logging', default=DEFAULT_LOGGING_LOC, type=convert_path)
     parser.add_argument('--task', default='classify', choices={'classify', 'tagger', 'seq2seq', 'lm'})
     parser.add_argument('--backend', default='tf')
     parser.add_argument('--reader', default='default')
