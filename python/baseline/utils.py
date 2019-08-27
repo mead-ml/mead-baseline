@@ -1,5 +1,5 @@
 import six
-
+from six.moves.urllib.request import urlretrieve
 import os
 import io
 import re
@@ -511,6 +511,18 @@ def read_config_file(config_file):
 
 
 @exporter
+def validate_url(url):
+    regex = re.compile(
+        r'^(?:http|ftp)s?://'  # http:// or https://
+        r'(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+(?:[A-Z]{2,6}\.?|[A-Z0-9-]{2,}\.?)|'  # domain...
+        r'localhost|'  # localhost...
+        r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})'  # ...or ip
+        r'(?::\d+)?'  # optional port
+        r'(?:/?|[/?]\S+)$', re.IGNORECASE)
+    return re.match(regex, url) is not None
+
+
+@exporter
 def read_config_stream(config_stream):
     """Read a config stream.  This may be a path to a YAML or JSON file, or it may be a str containing JSON or the name
     of an env variable, or even a JSON object directly
@@ -528,7 +540,11 @@ def read_config_stream(config_stream):
         logger.info("Reading config from '{}'".format(config_stream))
         config = os.getenv(config_stream[1:])
     else:
-        logger.info("No file found '{}...', loading as string".format(config_stream[:12]))
+        if validate_url(config_stream):
+            path_to_save, _ = urlretrieve(config_stream)
+            return read_config_stream(path_to_save)
+        else:
+            logger.info("No file found '{}...', loading as string".format(config_stream[:12]))
     return json.loads(config)
 
 

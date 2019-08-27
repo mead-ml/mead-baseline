@@ -7,6 +7,10 @@ from baseline.utils import read_config_stream, normalize_backend
 import mead
 from mead.utils import convert_path, parse_extra_args, configure_logger
 
+DEFAULT_SETTINGS_LOC = 'config/mead-settings.json'
+DEFAULT_DATASETS_LOC = 'config/datasets.json'
+DEFAULT_LOGGING_LOC = 'config/logging.json'
+DEFAULT_EMBEDDINGS_LOC = 'config/embeddings.json'
 logger = logging.getLogger('mead')
 
 
@@ -67,17 +71,18 @@ def update_datasets(datasets_config, config_params, train, valid, test):
     logger.info("The dataset key for this override is {}".format(new_dataset_label))
     datasets_config.append(updated_record)
 
+
 def main():
     parser = argparse.ArgumentParser(description='Train a text classifier')
-    parser.add_argument('--config', help='JSON Configuration for an experiment', type=convert_path, default="$MEAD_CONFIG")
-    parser.add_argument('--settings', help='JSON Configuration for mead', default='config/mead-settings.json', type=convert_path)
-    parser.add_argument('--datasets', help='json library of dataset labels', default='config/datasets.json', type=convert_path)
+    parser.add_argument('--config', help='configuration for an experiment', type=convert_path, default="$MEAD_CONFIG")
+    parser.add_argument('--settings', help='configuration for mead', default=DEFAULT_SETTINGS_LOC, type=convert_path)
+    parser.add_argument('--datasets', help='index of dataset labels', type=convert_path)
     parser.add_argument('--modules', help='modules to load', default=[], nargs='+', required=False)
     parser.add_argument('--mod_train_file', help='override the training set')
     parser.add_argument('--mod_valid_file', help='override the validation set')
     parser.add_argument('--mod_test_file', help='override the test set')
-    parser.add_argument('--embeddings', help='json library of embeddings', default='config/embeddings.json', type=convert_path)
-    parser.add_argument('--logging', help='json file for logging', default='config/logging.json', type=convert_path)
+    parser.add_argument('--embeddings', help='index of embeddings', type=convert_path)
+    parser.add_argument('--logging', help='config file for logging', default=DEFAULT_LOGGING_LOC, type=convert_path)
     parser.add_argument('--task', help='task to run', choices=['classify', 'tagger', 'seq2seq', 'lm'])
     parser.add_argument('--gpus', help='Number of GPUs (defaults to number available)', type=int, default=-1)
     parser.add_argument('--basedir', help='Override the base directory where models are stored', type=str)
@@ -102,17 +107,21 @@ def main():
         logger.warning('Warning: no mead-settings file was found at [{}]'.format(args.settings))
         args.settings = {}
 
+    args.datasets = args.datasets if args.datasets else args.settings.get('datasets', convert_path(DEFAULT_DATASETS_LOC))
     args.datasets = read_config_stream(args.datasets)
     if args.mod_train_file or args.mod_valid_file or args.mod_test_file:
         logging.warning('Warning: overriding the training/valid/test data with user-specified files'
                         ' different from what was specified in the dataset index.  Creating a new key for this entry')
         update_datasets(args.datasets, config_params, args.mod_train_file, args.mod_valid_file, args.mod_test_file)
 
+    args.embeddings = args.embeddings if args.embeddings else args.settings.get('embeddings', convert_path(DEFAULT_EMBEDDINGS_LOC))
     args.embeddings = read_config_stream(args.embeddings)
 
     if args.gpus is not None:
         config_params['model']['gpus'] = args.gpus
 
+    if args.backend is None and 'backend' in args.settings:
+        args.backend = args.settings['backend']
     if args.backend is not None:
         config_params['backend'] = normalize_backend(args.backend)
 
