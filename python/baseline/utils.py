@@ -1714,3 +1714,31 @@ def ngrams(sentence, filtsz=3, joiner='@@'):
         chunk = sentence[i:i+filtsz]
         chunks += [joiner.join(chunk)]
     return chunks
+
+
+@str_file
+def read_sst2(f):
+    """Read from an sst2 formatted file.
+
+    :param f: `Union[str, IO]` The file to read from.
+    :return: `Tuple[List[str], List[List[str]]]` The labels and text
+    """
+    labels, texts = [], []
+    for line in f:
+        line = line.rstrip()
+        if line:
+            label, text = line.split(maxsplit=1)
+            labels.append(label)
+            texts.append(text.split())
+    return labels, texts
+
+
+@str_file(w='w')
+def write_sst2(w, labels, texts):
+    """Write out an sst2 formatted file.
+
+    :param w: `Union[str, IO]` The file to write the results in
+    :param labels: `List[str]` The labels for the examples
+    :param texts: `List[List[str]]` The text examples
+    """
+    w.write("\n".join(" ".join(chain((l,), t)) for l, t in zip(labels, texts)))
