@@ -4,7 +4,7 @@ import random
 import string
 import pytest
 import numpy as np
-from baseline.utils import read_sst2, write_sst2
+from baseline.utils import read_label_first_data, write_label_first_data
 
 
 def random_str(len_=None, min_=5, max_=21):
@@ -20,15 +20,15 @@ def generate_data():
     return labels, texts
 
 
-def test_sst2_round_trip():
+def test_label_first_data_round_trip():
     data = StringIO()
     labels, texts = generate_data()
-    write_sst2(data, labels, texts)
+    write_label_first_data(data, labels, texts)
     data.seek(0)
-    l, ts = read_sst2(data)
+    l, ts = read_label_first_data(data)
 
 
-def test_sst2_read_tabs():
+def test_label_first_data_read_tabs():
     data = StringIO()
     data.write("""
 1\tdata
@@ -38,12 +38,12 @@ def test_sst2_read_tabs():
     gold_labels = list('123')
     gold_texts = [['data'] * i for i in range(1, 4)]
     data.seek(0)
-    l, t = read_sst2(data)
+    l, t = read_label_first_data(data)
     assert l == gold_labels
     assert t == gold_texts
 
 
-def test_sst2_read_space_at_end():
+def test_label_first_data_read_space_at_end():
     data = StringIO()
     # Note: The end of the first line in this example has a space after it
     # This is needed for this test
@@ -55,12 +55,12 @@ def test_sst2_read_space_at_end():
     gold_labels = list('123')
     gold_texts = [['data'] * i for i in range(1, 4)]
     data.seek(0)
-    l, t = read_sst2(data)
+    l, t = read_label_first_data(data)
     assert l == gold_labels
     assert t == gold_texts
 
 
-def test_sst2_read_empty_row():
+def test_label_first_data_read_empty_row():
     data = StringIO()
     data.write("""
 1\tdata
@@ -70,12 +70,12 @@ def test_sst2_read_empty_row():
     gold_labels = list('12')
     gold_texts = [['data'] * i for i in range(1, 3)]
     data.seek(0)
-    l, t = read_sst2(data)
+    l, t = read_label_first_data(data)
     assert l == gold_labels
     assert t == gold_texts
 
 
-def test_sst2_read_empty_example():
+def test_label_first_data_read_empty_example():
     data = StringIO()
     data.write("""
 1\tdata data
@@ -84,10 +84,10 @@ def test_sst2_read_empty_example():
     """.lstrip())
     data.seek(0)
     with pytest.raises(ValueError):
-        l, t = read_sst2(data)
+        l, t = read_label_first_data(data)
 
 
-def test_sst2_read_single_token():
+def test_label_first_data_read_single_token():
     data = StringIO()
     data.write("""
 1 1
@@ -95,12 +95,12 @@ def test_sst2_read_single_token():
 3 3
     """.lstrip())
     data.seek(0)
-    l, t = read_sst2(data)
+    l, t = read_label_first_data(data)
     assert l == list('123')
     assert t == [[item] for item in '123']
 
 
-def test_write_sst2():
+def test_write_label_first_data():
     gold = """
 1 data
 2 data data
@@ -111,6 +111,6 @@ def test_write_sst2():
     labels = list('12354')
     texts = [['data'] * int(l) for l in labels]
     data = StringIO()
-    write_sst2(data, labels, texts)
+    write_label_first_data(data, labels, texts)
     data.seek(0)
     assert data.read() == gold
