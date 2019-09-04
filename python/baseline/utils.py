@@ -1717,8 +1717,8 @@ def ngrams(sentence, filtsz=3, joiner='@@'):
 
 
 @str_file
-def read_sst2(f):
-    """Read from an sst2 formatted file.
+def read_label_first_data(f):
+    """Read data from a file where the first token in the label and each line is a single example.
 
     :param f: `Union[str, IO]` The file to read from.
     :return: `Tuple[List[str], List[List[str]]]` The labels and text
@@ -1734,8 +1734,8 @@ def read_sst2(f):
 
 
 @str_file(w='w')
-def write_sst2(w, labels, texts):
-    """Write out an sst2 formatted file.
+def write_label_first_data(w, labels, texts):
+    """Read data to a file where the first token in the label and each line is a single example.
 
     :param w: `Union[str, IO]` The file to write the results in
     :param labels: `List[str]` The labels for the examples
