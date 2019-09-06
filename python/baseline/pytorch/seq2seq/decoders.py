@@ -18,6 +18,15 @@ from baseline.pytorch.torchy import (
     LuongGeneralAttention,
 )
 
+try:
+    # Pytorch introduced a boolean tensor in 1.2 and now all of our masks (created via <)
+    # are torch.bool, This caused problems because the eos_mask we use a uint8. Here we
+    # try to get the bool type, if pytorch 1.2 is installed this works otherwise we get
+    # the uint8 type. This type is used for the creation of the eos_mask
+    MASK_TYPE = torch.bool
+except AttributeError:
+    MASK_TYPE = torch.uint8
+
 __all__ = []
 exporter = export(__all__)
 
@@ -445,7 +454,7 @@ def beam_search(
                 done_mask = (lengths != 0).unsqueeze(-1)  # [B, K, 1]
                 # Can creating this mask be moved out of the loop? It never changes but we don't have V
                 # This mask selects the EOS token
-                eos_mask = torch.zeros((1, 1, V), dtype=torch.uint8, device=device)
+                eos_mask = torch.zeros((1, 1, V), dtype=MASK_TYPE, device=device)
                 eos_mask[:, :, Offsets.EOS] = 1
                 # This mask selects the EOS token of only the beams that are done.
                 mask = done_mask & eos_mask
