@@ -9,7 +9,7 @@ import argparse
 from copy import deepcopy
 from itertools import chain
 from collections import OrderedDict
-from baseline.utils import export, str2bool, read_config_file, write_json, get_logging_level
+from baseline.utils import export, str2bool, read_config_file, write_json, get_logging_level, validate_url
 
 __all__ = []
 exporter = export(__all__)
@@ -128,9 +128,7 @@ def index_by_label(object_list):
 @exporter
 def convert_path(path, loc=None):
     """If the provided path doesn't exist search for it relative to loc (or this file)."""
-    if os.path.isfile(path):
-        return path
-    if path.startswith("$"):
+    if os.path.isfile(path) or path.startswith("$") or validate_url(path):
         return path
     if loc is None:
         loc = os.path.dirname(os.path.realpath(__file__))
