@@ -58,8 +58,6 @@ class Service(object):
         :param tokens: tokens in format List[str] or List[List[str]]
         :return: List[List[str]]
         """
-        mxlen = 0
-        mxwlen = 0
         vmxlen, vmxwlen = self.get_vectorizer_lens()
         # If the input is List[str] wrap it in list to make a batch of size one.
         tokens_seq = (tokens,) if isinstance(tokens[0], six.string_types) else tokens
@@ -67,30 +65,10 @@ class Service(object):
         for tokens in tokens_seq:
             if vmxlen != -1:
                 tokens = tokens[:vmxlen]
-            mxlen = max(mxlen, len(tokens))
             for index in range(len(tokens)):
                 if vmxwlen != -1:
                     tokens[index] = tokens[index][:vmxwlen]
-                mxwlen = max(mxwlen, len(tokens[index]))
-        return tokens_seq, mxlen, mxwlen
-
-    def set_vectorizer_lens(self, mxlen, mxwlen):
-        """Set the max lengths on the vectorizers if unset.
-
-        :param mxlen: `int`: The max length of an example
-        :param mxwlen: `int`: The max length of a word in the batch
-        """
-        for k, vectorizer in self.vectorizers.items():
-            if hasattr(vectorizer, 'mxlen'):
-                if self.preproc == 'client':
-                    vectorizer.mxlen = mxlen
-                elif self.preproc == 'server' and vectorizer.mxlen == -1:  # keep the original behavior
-                    vectorizer.mxlen = mxlen
-            if hasattr(vectorizer, 'mxwlen'):
-                if self.preproc == 'client':
-                    vectorizer.mxwlen = mxwlen
-                elif self.preproc == 'server' and vectorizer.mxwlen == -1:  # keep the original behavior
-                    vectorizer.mxwlen = mxwlen
+        return tokens_seq
 
     def get_vectorizer_lens(self):
         """get the max len from the vectorizers if defined
@@ -238,8 +216,11 @@ class ClassifierService(Service):
         """
         if preproc is not None:
             logger.warning("Warning: Passing `preproc` to `ClassifierService.predict` is deprecated.")
-        tokens_seq, mxlen, mxwlen = self.batch_input(tokens)
-        self.set_vectorizer_lens(mxlen, mxwlen)
+        tokens_seq = self.batch_input(tokens)
+        for _, vectorizer in self.vectorizers.items():
+            vectorizer.reset()
+            for tokens in tokens_seq:
+                _ = vectorizer.count(tokens)
         if self.preproc == "client":
             examples = self.vectorize(tokens_seq)
         elif self.preproc == 'server':
@@ -274,8 +255,11 @@ class EmbeddingsService(Service):
     def predict(self, tokens, preproc=None):
         if preproc is not None:
             logger.warning("Warning: Passing `preproc` to `EmbeddingsService.predict` is deprecated.")
-        tokens_seq, mxlen, mxwlen = self.batch_input(tokens)
-        self.set_vectorizer_lens(mxlen, mxwlen)
+        tokens_seq = self.batch_input(tokens)
+        for _, vectorizer in self.vectorizers.items():
+            vectorizer.reset()
+            for tokens in tokens_seq:
+                _ = vectorizer.count(tokens)
         if self.preproc == 'client':
             examples = self.vectorize(tokens_seq)
         else:
@@ -315,17 +299,13 @@ class TaggerService(Service):
 
         :return: List[List[dict[str] -> str]]
         """
-        mxlen = 0
-        mxwlen = 0
         vmxlen, vmxwlen = self.get_vectorizer_lens()
         # Input is a list of strings. (assume strings are tokens)
         if isinstance(tokens[0], six.string_types):
             if vmxlen != -1:
                 tokens = tokens[:vmxlen]
-            mxlen = len(tokens)
             tokens_seq = []
             for t in tokens:
-                mxwlen = max(mxwlen, len(t))
                 if vmxwlen != -1:
                     t = t[:vmxwlen]
                 tokens_seq.append({'text': t})
@@ -344,11 +324,9 @@ class TaggerService(Service):
                         utt_dict_seq = []
                         if vmxlen != -1:
                             utt = utt[:vmxlen]
-                        mxlen = max(mxlen, len(utt))
                         for t in utt:
                             if vmxwlen != -1:
                                 t = t[:vmxwlen]
-                            mxwlen = max(mxwlen, len(t))
                             utt_dict_seq += [dict({'text': t})]
                         tokens_seq += [utt_dict_seq]
                 # Its already in List[List[dict]] form so just iterate to get mxlen and mxwlen
@@ -356,32 +334,28 @@ class TaggerService(Service):
                     for utt_dict_seq in tokens:
                         if vmxlen != -1:
                             utt_dict_seq = utt_dict_seq[:vmxlen]
-                        mxlen = max(mxlen, len(utt_dict_seq))
                         for token_dict in utt_dict_seq:
                             text = token_dict['text']
                             if vmxwlen != -1:
                                 text = text[:vmxwlen]
                                 token_dict['text'] = text
-                            mxwlen = max(mxwlen, len(text))
                         tokens_seq += [utt_dict_seq]
             # If its a dict, we just wrap it up
             elif isinstance(tokens[0], dict):
                 if vmxlen != -1:
                     tokens = tokens[:vmxlen]
-                mxlen = len(tokens)
                 for t in tokens:
                     text = t['text']
                     if vmxwlen != -1:
                         text = text[:vmxwlen]
                         t['text'] = text
-                    mxwlen = max(mxwlen, len(text))
                 tokens_seq = [tokens]
             else:
                 raise Exception('Unknown input format')
 
         if len(tokens_seq) == 0:
             return []
-        return tokens_seq, mxlen, mxwlen
+        return tokens_seq
 
     def predict(self, tokens, **kwargs):
         """
@@ -402,8 +376,11 @@ class TaggerService(Service):
         if not export_mapping:
             export_mapping = {'tokens': 'text'}
         label_field = kwargs.get('label', 'label')
-        tokens_seq, mxlen, mxwlen = self.batch_input(tokens)
-        self.set_vectorizer_lens(mxlen, mxwlen)
+        tokens_seq = self.batch_input(tokens)
+        for _, vectorizer in self.vectorizers.items():
+            vectorizer.reset()
+            for tokens in tokens_seq:
+                _ = vectorizer.count(tokens)
         # TODO: here we allow vectorizers even for preproc=server to get `word_lengths`.
         # vectorizers should not be available when preproc=server.
         examples = self.vectorize(tokens_seq)
@@ -533,13 +510,6 @@ class EncoderDecoderService(Service):
         kwargs['beam'] = int(kwargs.get('beam', 30))
         return super(EncoderDecoderService, cls).load(bundle, **kwargs)
 
-    def set_vectorizer_lens(self, mxlen, mxwlen):
-        for k, vectorizer in self.src_vectorizers.items():
-            if hasattr(vectorizer, 'mxlen') and vectorizer.mxlen == -1:
-                vectorizer.mxlen = mxlen
-            if hasattr(vectorizer, 'mxwlen') and vectorizer.mxwlen == -1:
-                vectorizer.mxwlen = mxwlen
-
     def vectorize(self, tokens_seq):
         examples = defaultdict(list)
         for i, tokens in enumerate(tokens_seq):
@@ -558,8 +528,11 @@ class EncoderDecoderService(Service):
         return examples
 
     def predict(self, tokens, K=1, **kwargs):
-        tokens_seq, mxlen, mxwlen = self.batch_input(tokens)
-        self.set_vectorizer_lens(mxlen, mxwlen)
+        tokens_seq = self.batch_input(tokens)
+        for _, vectorizer in self.src_vectorizers.items():
+            vectorizer.reset()
+            for tokens in tokens_seq:
+                _ = vectorizer.count(tokens)
         examples = self.vectorize(tokens_seq)
 
         kwargs['beam'] = int(kwargs.get('beam', K))
