@@ -58,30 +58,9 @@ class Service(object):
         :param tokens: tokens in format List[str] or List[List[str]]
         :return: List[List[str]]
         """
-        vmxlen, vmxwlen = self.get_vectorizer_lens()
         # If the input is List[str] wrap it in list to make a batch of size one.
         tokens_seq = (tokens,) if isinstance(tokens[0], six.string_types) else tokens
-        # Get sentence and word lengths from the batch
-        for tokens in tokens_seq:
-            if vmxlen != -1:
-                tokens = tokens[:vmxlen]
-            for index in range(len(tokens)):
-                if vmxwlen != -1:
-                    tokens[index] = tokens[index][:vmxwlen]
         return tokens_seq
-
-    def get_vectorizer_lens(self):
-        """get the max len from the vectorizers if defined
-        """
-        mxlen = -1
-        mxwlen = -1
-        if self.preproc == 'server' and self.vectorizers is not None:
-            for k, vectorizer in self.vectorizers.items():
-                if hasattr(vectorizer, 'mxlen'):
-                    mxlen = vectorizer.mxlen
-                if hasattr(vectorizer, 'mxwlen'):
-                    mxwlen = vectorizer.mxwlen
-        return mxlen, mxwlen
 
     def vectorize(self, tokens_seq):
         """Turn the input into that batch dict for prediction.
@@ -299,15 +278,10 @@ class TaggerService(Service):
 
         :return: List[List[dict[str] -> str]]
         """
-        vmxlen, vmxwlen = self.get_vectorizer_lens()
         # Input is a list of strings. (assume strings are tokens)
         if isinstance(tokens[0], six.string_types):
-            if vmxlen != -1:
-                tokens = tokens[:vmxlen]
             tokens_seq = []
             for t in tokens:
-                if vmxwlen != -1:
-                    t = t[:vmxwlen]
                 tokens_seq.append({'text': t})
             tokens_seq = [tokens_seq]
         else:
@@ -322,33 +296,14 @@ class TaggerService(Service):
                 if isinstance(tokens[0][0], six.string_types):
                     for utt in tokens:
                         utt_dict_seq = []
-                        if vmxlen != -1:
-                            utt = utt[:vmxlen]
                         for t in utt:
-                            if vmxwlen != -1:
-                                t = t[:vmxwlen]
                             utt_dict_seq += [dict({'text': t})]
                         tokens_seq += [utt_dict_seq]
-                # Its already in List[List[dict]] form so just iterate to get mxlen and mxwlen
+                # Its already in List[List[dict]] form, do nothing
                 elif isinstance(tokens[0][0], dict):
-                    for utt_dict_seq in tokens:
-                        if vmxlen != -1:
-                            utt_dict_seq = utt_dict_seq[:vmxlen]
-                        for token_dict in utt_dict_seq:
-                            text = token_dict['text']
-                            if vmxwlen != -1:
-                                text = text[:vmxwlen]
-                                token_dict['text'] = text
-                        tokens_seq += [utt_dict_seq]
+                    tokens_seq = tokens
             # If its a dict, we just wrap it up
             elif isinstance(tokens[0], dict):
-                if vmxlen != -1:
-                    tokens = tokens[:vmxlen]
-                for t in tokens:
-                    text = t['text']
-                    if vmxwlen != -1:
-                        text = text[:vmxwlen]
-                        t['text'] = text
                 tokens_seq = [tokens]
             else:
                 raise Exception('Unknown input format')
