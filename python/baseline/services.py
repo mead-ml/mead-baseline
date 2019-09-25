@@ -386,8 +386,6 @@ class LanguageModelService(Service):
         mxwlen = kwargs.get('mxwlen', 40)
 
         for k, vectorizer in self.vectorizers.items():
-            if hasattr(vectorizer, 'mxlen') and vectorizer.mxlen == -1:
-                vectorizer.mxlen = mxlen
             if hasattr(vectorizer, 'mxwlen') and vectorizer.mxwlen == -1:
                 vectorizer.mxwlen = mxwlen
 
@@ -397,7 +395,8 @@ class LanguageModelService(Service):
         for i in range(mxlen):
 
             for k, vectorizer in self.vectorizers.items():
-                vectorizer.mxlen = len(token_buffer)
+                vectorizer.reset()
+                _ = vectorizer.count(token_buffer)
                 vec, length = vectorizer.run(token_buffer, self.vocabs[k])
                 if k in examples:
                     examples[k] = np.append(examples[k], vec)
