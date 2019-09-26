@@ -433,45 +433,6 @@ def fit_datasets(model_params, ts, vs, es=None, **kwargs):
             reporting(test_metrics, 0, 'Test')
         trainer.log.debug({'phase': 'Test', 'time': duration})
 
-    last_improved = 0
-
-    for epoch in range(epochs):
-        trainer.sess.run(train_init_op)
-        trainer.train(ts, reporting_fns)
-        trainer.sess.run(valid_init_op)
-        test_metrics = trainer.test(vs, reporting_fns, phase='Valid')
-
-        if do_early_stopping is False:
-            trainer.checkpoint()
-            trainer.model.save(model_file)
-
-        elif early_stopping_cmp(test_metrics[early_stopping_metric], best_metric):
-            last_improved = epoch
-            best_metric = test_metrics[early_stopping_metric]
-            print('New best %.3f' % best_metric)
-            trainer.checkpoint()
-            trainer.model.save(model_file)
-
-        elif (epoch - last_improved) > patience:
-            print('Stopping due to persistent failures to improve')
-            break
-
-    if do_early_stopping is True:
-        print('Best performance on %s: %.3f at epoch %d' % (early_stopping_metric, best_metric, last_improved))
-
-    if es is not None:
-        print('Reloading best checkpoint')
-        trainer.recover_last_checkpoint()
-        trainer.sess.run(test_init_op)
-        # What to do about overloading this??
-        evaluator = TaggerEvaluatorTf(trainer.model, span_type, verbose)
-        start = time.time()
-        test_metrics = evaluator.test(es, conll_output=conll_output, txts=txts)
-        duration = time.time() - start
-        for reporting in reporting_fns:
-            reporting(test_metrics, 0, 'Test')
-        trainer.log.debug({'phase': 'Test', 'time': duration})
-
 
 @register_training_func('tagger', 'feed_dict')
 def fit(model_params, ts, vs, es, **kwargs):
