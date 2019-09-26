@@ -105,6 +105,8 @@ class TensorFlowEmbeddings(tf.keras.layers.Layer):
     def get_config(self):
         #config = super(TensorFlowEmbeddings, self).get_config()
         config = {}
+        config['dsz'] = int(self.get_dsz())
+        config['vsz'] = int(self.get_vsz())
         config['module'] = self.__class__.__module__
         config['class'] = self.__class__.__name__
         config.update(self._state)
@@ -118,12 +120,6 @@ class TensorFlowEmbeddings(tf.keras.layers.Layer):
         """
         write_json(self.get_config(), target)
 
-    def get_config(self):
-        config = super(TensorFlowEmbeddings, self).get_config()
-        config['dsz'] = int(self.get_dsz())
-        config['vsz'] = int(self.get_vsz())
-        config.update(self._state)
-        return config
 
 
 @register_embeddings(name='default')
