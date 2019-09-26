@@ -78,28 +78,35 @@ class TaggerEvaluatorTf(object):
             print('Setting span type {}'.format(self.span_type))
         self.verbose = verbose
 
-    def _process_batch(self, guess, sentence_lengths, ids, truth, handle=None, txts=None):
+    def process_batch(self, batch_dict, handle, txts, dataset=True):
+        if dataset:
+            guess = self.sess.run(self.model.best)
+        else:
+            feed_dict = self.model.make_input(batch_dict)
+            guess = self.sess.run(self.model.best, feed_dict=feed_dict)
 
+        sentence_lengths = batch_dict[self.model.lengths_key]
+
+        ids = batch_dict['ids']
+        truth = batch_dict['y']
         correct_labels = 0
         total_labels = 0
 
         # For fscore
-        gold_count = 0
-        guess_count = 0
-        overlap_count = 0
+        gold_chunks = []
+        pred_chunks = []
 
         # For each sentence
         for b in range(len(guess)):
             length = sentence_lengths[b]
-            assert(length == len(guess[b]))
-            sentence = guess[b]
+            sentence = guess[b][:length]
             # truth[b] is padded, cutting at :length gives us back true length
             gold = truth[b][:length]
             correct_labels += np.sum(np.equal(sentence, gold))
             total_labels += length
 
-            gold_chunks = set(to_spans(gold, self.idx2label, self.span_type, self.verbose))
-            pred_chunks = set(to_spans(sentence, self.idx2label, self.span_type, self.verbose))
+            gold_chunks.append(set(to_spans(gold, self.idx2label, self.span_type, self.verbose)))
+            pred_chunks.append(set(to_spans(sentence, self.idx2label, self.span_type, self.verbose)))
 
             # Should we write a file out?  If so, we have to have txts
             if handle is not None:
@@ -107,16 +114,7 @@ class TaggerEvaluatorTf(object):
                 txt = txts[id]
                 write_sentence_conll(handle, sentence, gold, txt, self.idx2label)
 
-            overlap_chunks = gold_chunks & pred_chunks
-            overlap_count += len(overlap_chunks)
-
-            # Should we write a file out?  If so, we have to have txts
-            if handle is not None:
-                id = ids[b]
-                txt = txts[id]
-                write_sentence_conll(handle, sentence, gold, txt, self.idx2label)
-
-        return correct_labels, total_labels, overlap_count, gold_count, guess_count
+        return correct_labels, total_labels, gold_chunks, pred_chunks
 
     def test(self, ts, conll_output=None, txts=None, dataset=True):
         """Method that evaluates on some data.  There are 2 modes this can run in, `feed_dict` and `dataset`
@@ -132,7 +130,9 @@ class TaggerEvaluatorTf(object):
         :return: The metrics
         """
         total_correct = total_sum = 0
-        total_gold_count = total_guess_count = total_overlap_count = 0
+        gold_spans = []
+        pred_spans = []
+
         steps = len(ts)
         pg = create_progress_bar(steps)
         metrics = {}
@@ -143,35 +143,21 @@ class TaggerEvaluatorTf(object):
 
         try:
             for batch_dict in pg(ts):
-                if dataset:
-                    bestv = self.sess.run(self.model.best)
-                else:
-                    feed_dict = self.model.make_input(batch_dict)
-                    bestv = self.sess.run(self.model.best, feed_dict=feed_dict)
-
-                lengths = batch_dict[self.model.lengths_key]
-                guess = [pij[:sl] for pij, sl in zip(bestv, lengths)]
-                sentence_lengths = batch_dict[self.model.lengths_key]
-                ids = batch_dict['ids']
-                truth = batch_dict['y']
-                assert len(batch_dict['y']) == len(guess)
-                correct, count, overlaps, golds, guesses = self._process_batch(guess,
-                                                                               sentence_lengths,
-                                                                               ids,
-                                                                               truth,
-                                                                               handle,
-                                                                               txts)
-
+                correct, count, golds, guesses = self.process_batch(batch_dict, handle, txts, dataset)
                 total_correct += correct
                 total_sum += count
-                total_gold_count += golds
-                total_guess_count += guesses
-                total_overlap_count += overlaps
+                gold_spans.extend(golds)
+                pred_spans.extend(guesses)
 
             total_acc = total_correct / float(total_sum)
             # Only show the fscore if requested
-            metrics['f1'] = f_score(total_overlap_count, total_gold_count, total_guess_count)
+            metrics['f1'] = span_f1(gold_spans, pred_spans)
             metrics['acc'] = total_acc
+            if self.verbose:
+                conll_metrics = per_entity_f1(gold_spans, pred_spans)
+                conll_metrics['acc'] = total_acc * 100
+                conll_metrics['tokens'] = total_sum
+                logger.info(conlleval_output(conll_metrics))
         finally:
             if handle is not None:
                 handle.close()
