@@ -247,10 +247,9 @@ class Task(object):
         model_params['task'] = self.task_name()
         train_params = self.config_params['train']
         train_params['checkpoint'] = checkpoint
-        model = baseline.train.fit(model_params, self.train_data, self.valid_data, self.test_data, **train_params)
+        baseline.train.fit(model_params, self.train_data, self.valid_data, self.test_data, **train_params)
         baseline.zip_files(self.get_basedir())
         self._close_reporting_hooks()
-        return model
 
     def _configure_reporting(self, reporting, config_file, **kwargs):
         """Configure all `reporting_hooks` specified in the mead settings or overridden at the command line
@@ -570,6 +569,12 @@ class TaggerTask(Task):
                 sort_key=None
             )
 
+    def _get_features(self):
+        return self.embeddings
+
+    def _get_labels(self):
+        return self.reader.label2index
+
     def train(self, checkpoint=None):
         self._load_dataset()
         baseline.save_vectorizers(self.get_basedir(), self.vectorizers)
@@ -584,10 +589,10 @@ class TaggerTask(Task):
         train_params['conll_output'] = conll_output
         train_params['txts'] = self.txts
 
-        model = baseline.train.fit(model_params, self.train_data, self.valid_data, self.test_data, **train_params)
+        baseline.train.fit(model_params, self.train_data, self.valid_data, self.test_data, **train_params)
         baseline.zip_files(self.get_basedir())
         self._close_reporting_hooks()
-        return model #, metrics
+
 
 
 @exporter
@@ -833,7 +838,6 @@ class LanguageModelingTask(Task):
         if self.backend.params is not None:
             for k, v in self.backend.params.items():
                 model[k] = v
-        #return baseline.model.create_lang_model(self.embeddings, **model)
 
     def _get_features(self):
         return self.embeddings

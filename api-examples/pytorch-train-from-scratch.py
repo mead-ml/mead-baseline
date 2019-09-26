@@ -1,3 +1,4 @@
+import argparse
 import baseline
 from baseline.pytorch.optz import OptimizerManager
 import baseline.pytorch.embeddings
@@ -17,16 +18,28 @@ def get_logging_level(ll):
         return logging.INFO
     return logging.WARNING
 
+parser = argparse.ArgumentParser(description='Train a Layers model with PyTorch API')
+parser.add_argument('--model_type', help='What type of model to build', type=str, default='default')
+parser.add_argument('--poolsz', help='How many hidden units for pooling', type=int, default=100)
+parser.add_argument('--stacksz', help='How many hidden units for stacking', type=int, nargs='+')
+parser.add_argument('--name', help='(optional) signature name', type=str)
+parser.add_argument('--epochs', help='Number of epochs to train', type=int, default=2)
+parser.add_argument('--batchsz', help='Batch size', type=int, default=50)
+parser.add_argument('--filts', help='Parallel convolution filter widths (if default model)', type=int, default=[3, 4, 5], nargs='+')
+parser.add_argument('--mxlen', help='Maximum post length (number of words) during training', type=int, default=100)
+parser.add_argument('--train', help='Training file', default='../data/stsa.binary.phrases.train')
+parser.add_argument('--valid', help='Validation file', default='../data/stsa.binary.dev')
+parser.add_argument('--test', help='Testing file', default='../data/stsa.binary.test')
+parser.add_argument('--embeddings', help='Pretrained embeddings file', default='/data/embeddings/GoogleNews-vectors-negative300.bin')
+parser.add_argument('--ll', help='Log level', type=str, default='info')
+parser.add_argument('--lr', help='Learning rate', type=float, default=0.001)
+args = parser.parse_known_args()[0]
 
-W2V_MODEL = '/home/dpressel/.bl-data/281bc75825fa6474e95a1de715f49a3b4e153822'
-TS = '/home/dpressel/dev/work/baseline/data/stsa.binary.phrases.train'
-VS = '/home/dpressel/dev/work/baseline/data/stsa.binary.dev'
-ES = '/home/dpressel/dev/work/baseline/data/stsa.binary.test'
 
 feature_desc = {
     'word': {
         'vectorizer': baseline.Token1DVectorizer(mxlen=100, transform_fn=baseline.lowercase),
-        'embed': {'file': W2V_MODEL, 'type': 'default', 'unif': 0.25}
+        'embed': {'file': args.embeddings, 'type': 'default', 'unif': 0.25}
     }
 }
 # Create a reader that is using our vectorizers to parse a TSV file
@@ -36,9 +49,9 @@ feature_desc = {
 vectorizers = {k: v['vectorizer'] for k, v in feature_desc.items()}
 reader = baseline.TSVSeqLabelReader(vectorizers, clean_fn=baseline.TSVSeqLabelReader.do_clean)
 
-train_file = TS
-valid_file = VS
-test_file = ES
+train_file = args.train
+valid_file = args.valid
+test_file = args.test
 
 # This builds a set of counters
 vocabs, labels = reader.build_vocab([train_file,
@@ -59,17 +72,17 @@ for k, v in feature_desc.items():
     vocabs[k] = embeddings_for_k['vocab']
 
 
-train = reader.load(train_file, vocabs=vocabs, batchsz=20)
-valid = reader.load(valid_file, vocabs=vocabs, batchsz=20)
-test = reader.load(test_file, vocabs=vocabs, batchsz=20)
+train = reader.load(train_file, vocabs=vocabs, batchsz=args.batchsz)
+valid = reader.load(valid_file, vocabs=vocabs, batchsz=args.batchsz)
+test = reader.load(test_file, vocabs=vocabs, batchsz=args.batchsz)
 
-model = L.EmbedPoolStackModel(2, embeddings, L.ParallelConv(300, 100, [3, 4, 5]), L.Highway(300)).cuda()
+stacksz = len(args.filts) * args.poolsz
+model = L.EmbedPoolStackModel(2, embeddings, L.ParallelConv(300, args.poolsz, args.filts), L.Highway(stacksz)).cuda()
 
 train_loss_results = []
 train_accuracy_results = []
 
-#optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-optimizer = OptimizerManager(model, optim="adam", lr=0.001)
+optimizer = OptimizerManager(model, optim="adam", lr=args.lr)
 
 
 def loss(model, x, y):
