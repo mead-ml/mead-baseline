@@ -3,16 +3,15 @@ import shutil
 import logging
 import datetime
 from collections import namedtuple
-from tensorflow.python.framework.errors_impl import NotFoundError
 import baseline
 from baseline.tf.embeddings import *
-from baseline.tf.tfy import transition_mask
 from baseline.utils import (
     export,
     Offsets,
     ls_props,
     read_json,
     write_json,
+    transition_mask
 )
 from baseline.model import load_tagger_model, load_model, load_seq2seq_model
 from mead.exporters import Exporter, register_exporter

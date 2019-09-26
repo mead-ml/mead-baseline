@@ -87,6 +87,15 @@ def _add_ema(model, decay):
     return ema_op, load, restore_vars
 
 
+def transition_mask(vocab, span_type, s_idx, e_idx, pad_idx=None):
+    """Create a CRF Mask.
+    Returns a mask with invalid moves as 0 and valid moves as 1.
+    """
+    mask = transition_mask_np(vocab, span_type, s_idx, e_idx, pad_idx).T
+    inv_mask = (mask == 0).astype(np.float32)
+    return tf.constant(mask), tf.constant(inv_mask)
+
+
 def dense_layer(output_layer_depth):
     output_layer = tf.layers.Dense(output_layer_depth, use_bias=False, dtype=tf.float32, name="dense")
     return output_layer

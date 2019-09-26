@@ -82,49 +82,36 @@ def get_activation(name='relu'):
     return tf.nn.relu
 
 
-class ParallelConvEncoder(tf.keras.layers.Layer):
-    DUMMY_AXIS = 1
-    TIME_AXIS = 2
-    FEATURE_AXIS = 3
-
-    def __init__(self, dsz, motsz, filtsz, activation_name='relu', name=None, **kwargs):
-
-        super(ParallelConv, self).__init__(name=name)
-        self.Ws = []
-        self.bs = []
-        self.activation = get_activation(activation_name)
-
-        if not isinstance(motsz, list):
-            motsz = [motsz] * len(filtsz)
-
-        for fsz, cmotsz in zip(filtsz, motsz):
-            kernel_shape = [1, int(fsz), int(dsz), int(cmotsz)]
-            self.Ws.append(self.add_variable('cmot-{}/W'.format(fsz), shape=kernel_shape))
-            self.bs.append(self.add_variable('cmot-{}/b'.format(fsz), shape=[cmotsz], initializer=tf.constant_initializer(0.0)))
-
-        self.output_dim = sum(motsz)
+# Mapped
+class ConvEncoder(tf.keras.Model):
+    def __init__(self, outsz, filtsz, pdrop, activation='relu'):
+        super(ConvEncoder, self).__init__()
+        self.output_dim = outsz
+        self.conv = tf.keras.layers.Conv1D(filters=outsz, kernel_size=filtsz, padding='same')
+        self.act = get_activation(activation)
+        self.dropout = tf.keras.layers.Dropout(pdrop)
 
     def call(self, inputs):
+        conv_out = self.act(self.conv(inputs))
+        return self.dropout(conv_out, TRAIN_FLAG())
 
-        parallels = []
-        expanded = tf.expand_dims(inputs, ParallelConv.DUMMY_AXIS)
-        for W, b in zip(self.Ws, self.bs):
-            conv = tf.nn.conv2d(
-                expanded, W,
-                strides=[1, 1, 1, 1],
-                padding="SAME", name="CONV"
-            )
-            parallels.activation(tf.nn.bias_add(conv, b), 'activation')
-            parallels.append(get_activation)
-        combine = tf.reshape(tf.concat(values=parallels, axis=ParallelConv.FEATURE_AXIS), [-1, self.output_dim])
-        return combine
 
-    def compute_output_shape(self, input_shape):
-        return input_shape[:-1] + [self.output_dim]
+# Mapped
+class ConvEncoderStack(tf.keras.Model):
 
-    @property
-    def requires_length(self):
-        return False
+    def __init__(self, outsz, filtsz, pdrop, layers=1, activation='relu'):
+        super(ConvEncoderStack, self).__init__()
+
+        first_layer = ConvEncoder(outsz, filtsz, pdrop, activation)
+        self.layers.append(first_layer)
+        for i in range(layers-1):
+            subsequent_layer = ResidualBlock(ConvEncoder(outsz, filtsz, pdrop, activation))
+            self.layers.append(subsequent_layer)
+
+    def call(self, inputs):
+        for layer in self.layers:
+            x = layer(x)
+        return x
 
 
 # Mapped
@@ -254,40 +241,6 @@ def rnn_cell(hsz, rnntype, st=None):
     return cell
 
 
-class StackedParallelConvEncoder(tf.keras.Model):
-
-    def __init__(self, dsz, hsz, pdrop, layers, filts=[5], activation_name='relu', name=None, **kwargs):
-        """Produce a stack of parallel or single convolution layers with residual connections and dropout between each
-
-        :param hsz: (``int``) The number of hidden units per filter
-        :param pdrop: (``float``) The probability of dropout
-        :param layers: (``int``) The number of layers of parallel convolutions to stack
-        :param filts: (``list``) A list of parallel filter widths to apply
-        :param activation_name: (``str``) A name for activation
-        :param name: A string name to scope this operation
-        """
-        super(StackedParallelConvEncoder, self).__init__(name=name)
-        filts = listify(filts)
-        self.layer_1 = tf.keras.Sequential([ParallelConvEncoder(dsz, hsz, filts, activation_name), tf.keras.layers.Dropout(pdrop)])
-
-        self.subsequent = []
-        for i in range(layers):
-            new_block = tf.keras.Sequential([ParallelConvEncoder(hsz, hsz, filts, activation_name), tf.keras.layers.Dropout(pdrop)])
-            self.subsequent.append(ResidualBlock(new_block))
-
-    def call(self, inputs, training=False):
-        """
-
-        :param inputs: The input
-        :param training:
-        :return: a stacked CNN
-        """
-        x = self.layer_1(inputs, training)
-        for layer in self.subsequent:
-            x = layer(x)
-        return layer
-
-
 # Mapped
 class LayerNorm(tf.keras.layers.Layer):
     def __init__(self, epsilon=1e-6, axis=-1, name=None, **kwargs):
@@ -334,14 +287,14 @@ class LSTMEncoder(tf.keras.Model):
                                                                         training=TRAIN_FLAG(),
                                                                         skip_conn=skip_conn,
                                                                         projsz=projsz) for _ in
-                     range(nlayers)],
-                    state_is_tuple=True
-                )
+                                                    range(nlayers)],
+                                                   state_is_tuple=True
+                                                   )
         else:
             self.rnn = tf.contrib.rnn.MultiRNNCell(
                 [lstm_cell_w_dropout(hsz, pdrop, training=TRAIN_FLAG(),
                                      skip_conn=skip_conn, projsz=projsz) if i < nlayers - 1 else lstm_cell(hsz, skip_conn=skip_conn, projsz=projsz) for i in range(nlayers)],
-                    state_is_tuple=True
+                state_is_tuple=True
             )
         self.output_fn = rnn_ident if output_fn is None else output_fn
 
@@ -389,18 +342,18 @@ class BiLSTMEncoder(tf.keras.Model):
         self._requires_length = requires_length
         if variational:
             self.fwd_rnn = tf.contrib.rnn.MultiRNNCell([lstm_cell_w_dropout(hsz, pdrop, variational=variational, training=TRAIN_FLAG(), skip_conn=skip_conn, projsz=projsz) for _ in
-                     range(nlayers)],
-                    state_is_tuple=True
-                )
+                                                        range(nlayers)],
+                                                       state_is_tuple=True
+                                                       )
             self.bwd_rnn = tf.contrib.rnn.MultiRNNCell(
                 [lstm_cell_w_dropout(hsz, pdrop, variational=variational, training=TRAIN_FLAG(), skip_conn=skip_conn, projsz=projsz) for _ in
                  range(nlayers)],
                 state_is_tuple=True
-                )
+            )
         else:
             self.fwd_rnn = tf.contrib.rnn.MultiRNNCell(
                 [lstm_cell_w_dropout(hsz, pdrop, training=TRAIN_FLAG(), skip_conn=skip_conn, projsz=projsz) if i < nlayers - 1 else lstm_cell(hsz, skip_conn=skip_conn, projsz=projsz) for i in range(nlayers)],
-                    state_is_tuple=True
+                state_is_tuple=True
             )
             self.bwd_rnn = tf.contrib.rnn.MultiRNNCell(
                 [lstm_cell_w_dropout(hsz, pdrop, training=TRAIN_FLAG(), skip_conn=skip_conn, projsz=projsz) if i < nlayers - 1 else lstm_cell(hsz) for i in
@@ -459,6 +412,10 @@ class EmbeddingsStack(tf.keras.Model):
     def requires_length(self):
         return self.requires_length
 
+    @property
+    def output_dim(self):
+        return self.dsz
+
 
 class DenseStack(tf.keras.Model):
 
@@ -498,6 +455,21 @@ class DenseStack(tf.keras.Model):
     @property
     def requires_length(self):
         return False
+
+
+class WithDropout(tf.keras.Model):
+
+    def __init__(self, layer, pdrop=0.5):
+        super(WithDropout, self).__init__()
+        self.layer = layer
+        self.dropout = tf.keras.layers.Dropout(pdrop)
+
+    def call(self, inputs):
+        return self.dropout(self.layer(inputs), TRAIN_FLAG())
+
+    @property
+    def output_dim(self):
+        return self.layer.output_dim
 
 
 class Highway(tf.keras.Model):
@@ -1032,4 +1004,3 @@ class FineTuneModel(tf.keras.Model):
     def get_config(self):
         #base_config = super(FineTuneModel, self).get_config()
         return {} # base_config
-

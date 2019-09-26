@@ -5,14 +5,12 @@ import numpy as np
 import tensorflow as tf
 from baseline.utils import write_json, Offsets, is_sequence
 from baseline.embeddings import register_embeddings
+from baseline.tf.tfy import skip_conns, highway_conns, get_activation, char_word_conv_embeddings, TRAIN_FLAG
 import six
 
 FLOAT32 = 4
 GB2 = 1024 * 1024 * 1024 * 2
 logger = logging.getLogger('baseline')
-from baseline.tf.tfy import pool_chars, get_shape_as_list, stacked_lstm
-import copy
-import six
 
 
 class TensorFlowEmbeddings(tf.keras.layers.Layer):
@@ -90,7 +88,7 @@ class TensorFlowEmbeddings(tf.keras.layers.Layer):
         if cls is LookupTableEmbeddings and model.vsz * model.dsz * FLOAT32 > GB2:
             cls = LargeLookupTableEmbeddings
             logger.warning("Embedding %s seems to be larger than 2GB", name)
-        return cls(name, vsz=model.vsz, dsz=model.dsz, weights=model._weights, **kwargs)
+        return cls(name, vsz=model.vsz, dsz=model.dsz, weights=model.weights, **kwargs)
 
     def _record_state(self, **kwargs):
         w = kwargs.pop('weights', None)

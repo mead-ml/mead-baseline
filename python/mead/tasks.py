@@ -230,23 +230,27 @@ class Task(object):
 
     def train(self, checkpoint=None):
         """This method delegates to several sub-hooks in order to complete training.
-
         1. call `_load_dataset()` which initializes the `DataFeed` fields of this class
         2. call `baseline.save_vectorizers()` which write out the bound `vectorizers` fields to a file in the `basedir`
         3. call `baseline.train.fit()` which executes the training procedure and  yields a saved model
         4. call `baseline.zip_files()` which zips all files in the `basedir` with the same `PID` as this process
         5. call `_close_reporting_hooks()` which lets the reporting hooks know that the job is finished
-        :return: models, metrics
+        :return: Nothing
         """
         self._reorganize_params()
         baseline.save_vectorizers(self.get_basedir(), self.vectorizers)
-        model = self._create_model()
+        self._load_dataset()
+
+        model_params = self.config_params['model']
+        model_params['features'] = self._get_features()
+        model_params['labels'] = self._get_labels()
+        model_params['task'] = self.task_name()
         train_params = self.config_params['train']
         train_params['checkpoint'] = checkpoint
-        metrics = baseline.train.fit(model, self.train_data, self.valid_data, self.test_data, **train_params)
+        model = baseline.train.fit(model_params, self.train_data, self.valid_data, self.test_data, **train_params)
         baseline.zip_files(self.get_basedir())
         self._close_reporting_hooks()
-        return model, metrics
+        return model
 
     def _configure_reporting(self, reporting, config_file, **kwargs):
         """Configure all `reporting_hooks` specified in the mead settings or overridden at the command line
@@ -571,14 +575,19 @@ class TaggerTask(Task):
         baseline.save_vectorizers(self.get_basedir(), self.vectorizers)
         self._reorganize_params()
         conll_output = self.config_params.get("conll_output", None)
+        model_params = self.config_params['model']
+        model_params['features'] = self._get_features()
+        model_params['labels'] = self._get_labels()
+        model_params['task'] = self.task_name()
         train_params = self.config_params['train']
         train_params['checkpoint'] = checkpoint
-        metrics = baseline.train.fit(model, self.train_data, self.valid_data, self.test_data,
-                           conll_output=conll_output,
-                           txts=self.txts, **train_params)
+        train_params['conll_output'] = conll_output
+        train_params['txts'] = self.txts
+
+        model = baseline.train.fit(model_params, self.train_data, self.valid_data, self.test_data, **train_params)
         baseline.zip_files(self.get_basedir())
         self._close_reporting_hooks()
-        return model, metrics
+        return model #, metrics
 
 
 @exporter
@@ -700,7 +709,6 @@ class EncoderDecoderTask(Task):
 
     def _get_labels(self):
         return self.tgt_embeddings
-
 
     def train(self, checkpoint=None):
 
@@ -834,17 +842,21 @@ class LanguageModelingTask(Task):
         return None
 
     def train(self, checkpoint=None):
+
+        self._reorganize_params()
         self._load_dataset()
         # Dont do this here!  We need to move train_data elsewhere
         calc_lr_params(self.config_params['train'], self.train_data.steps)
         baseline.save_vectorizers(self.get_basedir(), self.vectorizers)
-        model = self._create_model()
+
+        model_params = self.config_params['model']
+        model_params['task'] = self.task_name()
+        model_params['features'] = self._get_features()
         train_params = self.config_params['train']
         train_params['checkpoint'] = checkpoint
-        metrics = baseline.train.fit(model, self.train_data, self.valid_data, self.test_data, **train_params)
+        baseline.train.fit(model_params, self.train_data, self.valid_data, self.test_data, **train_params)
         baseline.zip_files(self.get_basedir())
         self._close_reporting_hooks()
-        return model, metrics
 
     @staticmethod
     def _num_steps_per_epoch(num_examples, nctx, batchsz):

@@ -62,7 +62,7 @@ def script_viterbi(unary, trans, start_idx, end_idx):
 
 
 if __name__ == '__main__':
-    from baseline.pytorch.crf import CRF, transition_mask
+    from eight_mile.pytorch.layers import CRF, transition_mask
     vocab = ["<GO>", "<EOS>", "B-X", "I-X", "E-X", "S-X", "O", "B-Y", "I-Y", "E-Y", "S-Y"]
     vocab = {k: i for i, k in enumerate(vocab)}
     mask = transition_mask(vocab, "IOBES", 0, 1)
