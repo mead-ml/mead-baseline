@@ -102,7 +102,30 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
     def get_labels(self):
         return self.labels
 
+    def init_embed(self, **kwargs):
+        """Produce the embeddings operation that will be used in the model
+
+        :param kwargs:
+        :return: An embeddings operation
+        """
+        return EmbeddingsStack(self.embeddings)
+
+    def init_pool(self, dsz, **kwargs):
+        """Produce a pooling operation that will be used in the model
+
+        :param dsz: The input dimension size
+        :param kwargs:
+        :return: A pooling operation
+        """
+        pass
+
     def init_stacked(self, input_dim, **kwargs):
+        """Produce a stacking operation that will be used in the model
+
+        :param input_dim: The input dimension size
+        :param kwargs:
+        :return: A stacking operation (or None)
+        """
         hszs = listify(kwargs.get('hsz', []))
         if len(hszs) == 0:
             return None
