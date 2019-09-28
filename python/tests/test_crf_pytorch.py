@@ -138,9 +138,8 @@ def generate_examples_and_batch():
     """A good test for these systems are do they produce the same results for a
     batch of data as when you feed the example in one by one.
 
-    This function generates to single examples and then batches them together.
+    This function generates two single examples and then batches them together.
     """
-    B = np.random.randint(5, 11)
     T = np.random.randint(15, 21)
     H = np.random.randint(22, 41)
     diff = np.random.randint(1, T // 2)
@@ -166,10 +165,10 @@ def generate_examples_and_batch():
 def test_score_sentence(generate_batch):
     unary, tags, lengths = generate_batch
     h = unary.size(2)
-    crf = CRF(h)
+    crf = CRF(h, batch_first=False)
     trans = torch.rand(h, h)
     crf.transitions_p.data = trans.unsqueeze(0)
-    sentence_score = crf.score_sentence(unary, tags, lengths, unary.size(1))
+    sentence_score = crf.score_sentence(unary, tags, lengths)
 
     new_trans = build_trans(trans)
     unary = unary.transpose(0, 1)
@@ -186,70 +185,62 @@ def test_score_sentence(generate_batch):
 def test_score_sentence_batch_stable(generate_examples_and_batch):
     i1, t1, l1, i2, t2, l2, i, t, l = generate_examples_and_batch
     h = i1.size(2)
-    crf = CRF(h)
+    crf = CRF(h, batch_first=False)
     crf.transitions_p.data = torch.rand(1, h, h)
-    score1 = crf.score_sentence(i1, t1, l1, l1.size(0))
-    score2 = crf.score_sentence(i2, t2, l2, l2.size(0))
+    score1 = crf.score_sentence(i1, t1, l1)
+    score2 = crf.score_sentence(i2, t2, l2)
     one_x_one = torch.cat([score1, score2], dim=0)
-    batched = crf.score_sentence(i, t, l, l.size(0))
+    batched = crf.score_sentence(i, t, l)
     np.testing.assert_allclose(one_x_one.detach().numpy(), batched.detach().numpy())
 
 
 def test_score_sentence_shape(generate_batch):
     unary, tags, lengths = generate_batch
     h = unary.size(2)
-    crf = CRF(h)
-    score = crf.score_sentence(unary, tags, lengths, lengths.size(0))
+    crf = CRF(h, batch_first=False)
+    score = crf.score_sentence(unary, tags, lengths)
     assert score.shape == torch.Size([unary.size(1)])
 
 
-def test_neg_log_loss(generate_batch):
-    unary, tags, lengths = generate_batch
-    h = unary.size(2)
-    crf = CRF(h)
-    trans = torch.rand(h, h)
-    crf.transitions_p.data = trans.unsqueeze(0)
-    nll = crf.neg_log_loss(unary, tags, lengths)
+#def test_neg_log_loss(generate_batch):
+#    unary, tags, lengths = generate_batch
+#    h = unary.size(2)
+#    crf = CRF(h, batch_first=False)
+#    trans = torch.rand(h, h)
+#    crf.transitions_p.data = trans.unsqueeze(0)
+#    nll = crf.neg_log_loss(unary, tags, lengths)
 
-    new_trans = build_trans(trans)
-    unary = unary.transpose(0, 1)
-    tags = tags.transpose(0, 1)
-    scores = []
-    for u, t, l in zip(unary, tags, lengths):
-        emiss = build_emission(u[:l])
-        golds = t[:l].tolist()
-        scores.append(explicit_nll(emiss, new_trans, golds, Offsets.GO, Offsets.EOS))
-    gold_scores = np.array(scores)
-    np.testing.assert_allclose(nll.detach().numpy(), gold_scores, rtol=1e-6)
-
-
-def test_neg_log_loss_batch_stable(generate_examples_and_batch):
-    i1, t1, l1, i2, t2, l2, i, t, l = generate_examples_and_batch
-    h = i1.size(2)
-    crf = CRF(h)
-    crf.transitions_p.data = torch.rand(1, h, h)
-    nll1 = crf.neg_log_loss(i1, t1, l1)
-    nll2 = crf.neg_log_loss(i2, t2, l2)
-    one_x_one = torch.cat([nll1, nll2], dim=0)
-    batched = crf.neg_log_loss(i, t, l)
-    np.testing.assert_allclose(one_x_one.detach().numpy(), batched.detach().numpy())
+#    new_trans = build_trans(trans)
+#    unary = unary.transpose(0, 1)
+#    tags = tags.transpose(0, 1)
+#    scores = []
+#    for u, t, l in zip(unary, tags, lengths):
+#        emiss = build_emission(u[:l])
+#        golds = t[:l].tolist()
+#        scores.append(explicit_nll(emiss, new_trans, golds, Offsets.GO, Offsets.EOS))
+#    gold_scores = np.array(scores)
+#    np.testing.assert_allclose(nll.detach().numpy(), gold_scores, rtol=1e-6)
 
 
-def test_neg_log_loss_shape(generate_batch):
-    unary, tags, lengths = generate_batch
-    h = unary.size(2)
-    crf = CRF(h)
-    nll = crf.neg_log_loss(unary, tags, lengths)
-    assert nll.shape == torch.Size([unary.size(1)])
+#def test_neg_log_loss_batch_stable(generate_examples_and_batch):
+#    i1, t1, l1, i2, t2, l2, i, t, l = generate_examples_and_batch
+#    h = i1.size(2)
+#    crf = CRF(h, batch_first=False)
+#    crf.transitions_p.data = torch.rand(1, h, h)
+#    nll1 = crf.neg_log_loss(i1, t1, l1)
+#    nll2 = crf.neg_log_loss(i2, t2, l2)
+#    one_x_one = torch.cat([nll1, nll2], dim=0)
+#    batched = crf.neg_log_loss(i, t, l)
+#    np.testing.assert_allclose(one_x_one.detach().numpy(), batched.detach().numpy())
 
 
 def test_forward(generate_batch):
     unary, _, lengths = generate_batch
     h = unary.size(2)
-    crf = CRF(h)
+    crf = CRF(h, batch_first=False)
     trans = torch.rand(h, h)
     crf.transitions_p.data = trans.unsqueeze(0)
-    forward = crf.forward(unary, lengths, unary.size(1))
+    forward = crf.forward((unary, lengths))
 
     new_trans = build_trans(trans)
     unary = unary.transpose(0, 1)
@@ -264,27 +255,27 @@ def test_forward(generate_batch):
 def test_forward_batch_stable(generate_examples_and_batch):
     i1, _, l1, i2, _, l2, i, _, l = generate_examples_and_batch
     h = i1.size(2)
-    crf = CRF(h)
+    crf = CRF(h, batch_first=False)
     crf.transitions_p.data = torch.rand(1, h, h)
-    fw1 = crf.forward(i1, l1, l1.size(0))
-    fw2 = crf.forward(i2, l2, l2.size(0))
+    fw1 = crf.forward((i1, l1))
+    fw2 = crf.forward((i2, l2))
     one_x_one = torch.cat([fw1, fw2], dim=0)
-    batched = crf.forward(i, l, l.size(0))
+    batched = crf.forward((i, l))
     np.testing.assert_allclose(one_x_one.detach().numpy(), batched.detach().numpy())
 
 
 def test_forward_shape(generate_batch):
     unary, _, lengths = generate_batch
     h = unary.size(2)
-    crf = CRF(h)
-    fwd = crf.forward(unary, lengths, lengths.size(0))
+    crf = CRF(h, batch_first=False)
+    fwd = crf.forward((unary, lengths))
     assert fwd.shape == torch.Size([unary.size(1)])
 
 
 def test_decode_batch_stable(generate_examples_and_batch):
     i1, _, l1, i2, _, l2, i, _, l = generate_examples_and_batch
     h = i1.size(2)
-    crf = CRF(h)
+    crf = CRF(h, batch_first=False)
     crf.transitions_p.data = torch.rand(1, h, h)
     p1, s1 = crf.decode(i1, l1)
     p2, s2 = crf.decode(i2, l2)
@@ -300,7 +291,7 @@ def test_decode_batch_stable(generate_examples_and_batch):
 def test_decode_shape(generate_batch):
     unary, _, lengths = generate_batch
     h = unary.size(2)
-    crf = CRF(h)
+    crf = CRF(h, batch_first=False)
     paths, scores = crf.decode(unary, lengths)
     assert scores.shape == torch.Size([unary.size(1)])
     assert paths.shape == torch.Size([unary.size(0), unary.size(1)])
@@ -326,7 +317,7 @@ def test_mask_not_applied():
 def test_mask_flips():
     h = np.random.randint(22, 41)
     mask = (np.random.rand(h, h) < 0.5).astype(np.uint8)
-    with patch('baseline.pytorch.crf.transition_mask_np') as mask_mock:
+    with patch('eight_mile.pytorch.layers.transition_mask_np') as mask_mock:
         mask_mock.return_value = mask
         pyt_mask = transition_mask(None, None, None, None, None)
     mask2 = pyt_mask.numpy()
@@ -339,7 +330,7 @@ def test_mask_same_after_update(generate_batch):
     unary, tags, lengths = generate_batch
     h = unary.size(2)
     constraint = torch.rand(h, h) < 0.5
-    crf = CRF(h, constraint=constraint)
+    crf = CRF(h, constraint=constraint, batch_first=False)
     opt = SGD(crf.parameters(), lr=10)
     m1 = crf.constraint.numpy()
     t1 = crf.transitions_p.detach().clone().numpy()

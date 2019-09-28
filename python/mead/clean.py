@@ -4,7 +4,7 @@ import shutil
 import glob
 from itertools import chain
 
-frameworks = ['tf', 'pytorch', 'dynet', 'dy']
+frameworks = ['tf', 'pytorch']
 frameworks = '({})'.format("|".join(frameworks))
 
 tasks = ['classify', 'tagger', 'lm', 'seq2seq']

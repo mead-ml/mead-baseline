@@ -21,8 +21,8 @@ from xpctl.helpers import order_json
 Version = namedtuple('Version', 'major minor patch')
 simple_version_regex = re.compile('^(\d+)\.(\d+)\.(\d+)')
 
-FRAMEWORKS = ['tensorflow', 'pytorch', 'dynet', 'keras']
-FULL_FRAMEWORKS = ['tensorflow', 'pytorch', 'dynet']
+FRAMEWORKS = ['tensorflow', 'pytorch']
+FULL_FRAMEWORKS = ['tensorflow', 'pytorch']
 TASKS = ['classify', 'tagger', 'seq2seq', 'lm']
 PHASES = ['Train', 'Valid', 'Test']
 
@@ -186,12 +186,6 @@ def get_framework_version(framework):
     elif framework == "pytorch":
         import torch
         version = torch.__version__
-    elif framework == "dynet":
-        import dynet
-        version = dynet.__version__
-    elif framework == "keras":
-        import keras
-        version = keras.__version__
     return version_str_to_tuple(version)
 
 
@@ -279,10 +273,6 @@ def edit_tagger_config(config, frameworks=FULL_FRAMEWORKS, no_crf=False):
     for fw in frameworks:
         c = deepcopy(config)
         c['backend'] = fw
-        if fw == 'dynet':
-            # Dynet tagger only uses autobatching
-            c['train']['autobatchsz'] = c['batchsz']
-            c['batchsz'] = 1
         configs.append(c)
     if not no_crf:
         new_configs = []

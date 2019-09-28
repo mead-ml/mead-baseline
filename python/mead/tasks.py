@@ -51,7 +51,7 @@ class Backend(object):
     def __init__(self, name=None, params=None, exporter=None):
         """Initialize the backend, optional with constructor args
 
-        :param name: (``str``) Name of the framework: currently one of (`tensorflow`, `pytorch`, `dynet`, `keras`)
+        :param name: (``str``) Name of the framework: currently one of (`tensorflow`, `pytorch`)
         :param params: (``dict``) A dictionary of framework-specific user-data to pass through keyword args to each sub-module
         :param exporter: A framework-specific exporter to facilitate exporting to runtime deployment
         """
@@ -365,20 +365,6 @@ class ClassifierTask(Task):
 
     def _create_backend(self, **kwargs):
         backend = Backend(self.config_params.get('backend', 'tf'))
-        if backend.name == 'dy':
-            import _dynet
-            dy_params = _dynet.DynetParams()
-            dy_params.from_args()
-            dy_params.set_requested_gpus(1)
-            if 'autobatchsz' in self.config_params['train']:
-                self.config_params['train']['trainer_type'] = 'autobatch'
-                dy_params.set_autobatch(True)
-                batched = False
-            else:
-                batched = True
-            dy_params.init()
-            backend.params = {'pc': _dynet.ParameterCollection(), 'batched': batched}
-
         backend.load(self.task_name())
 
         return backend
@@ -474,19 +460,6 @@ class TaggerTask(Task):
         if 'preproc' not in self.config_params:
             self.config_params['preproc'] = {}
         if backend.name == 'pytorch':
-            self.config_params['preproc']['trim'] = True
-        elif backend.name == 'dy':
-            import _dynet
-            dy_params = _dynet.DynetParams()
-            dy_params.from_args()
-            dy_params.set_requested_gpus(1)
-            if 'autobatchsz' in self.config_params['train']:
-                dy_params.set_autobatch(True)
-            else:
-                raise Exception('Tagger currently only supports autobatching.'
-                                'Change "batchsz" to 1 and under "train", set "autobatchsz" to your desired batchsz')
-            dy_params.init()
-            backend.params = {'pc': _dynet.ParameterCollection(), 'batched': False}
             self.config_params['preproc']['trim'] = True
         else:
             self.config_params['preproc']['trim'] = False
@@ -612,20 +585,6 @@ class EncoderDecoderTask(Task):
             self.config_params['preproc'] = {}
         self.config_params['preproc']['show_ex'] = show_examples
         if backend.name == 'pytorch':
-            self.config_params['preproc']['trim'] = True
-        elif backend.name == 'dy':
-            import _dynet
-            dy_params = _dynet.DynetParams()
-            dy_params.from_args()
-            dy_params.set_requested_gpus(1)
-            if 'autobatchsz' in self.config_params['train']:
-                self.config_params['train']['trainer_type'] = 'autobatch'
-                dy_params.set_autobatch(True)
-                batched = False
-            else:
-                batched = True
-            dy_params.init()
-            backend.params = {'pc': _dynet.ParameterCollection(), 'batched': batched}
             self.config_params['preproc']['trim'] = True
         else:
 
@@ -763,20 +722,6 @@ class LanguageModelingTask(Task):
 
         if backend.name == 'pytorch':
             self.config_params.get('preproc', {})['trim'] = True
-
-        elif backend.name == 'dy':
-            self.config_params.get('preproc', {})['trim'] = True
-            import _dynet
-            dy_params = _dynet.DynetParams()
-            dy_params.from_args()
-            dy_params.set_requested_gpus(1)
-            if 'autobatchsz' in self.config_params['train']:
-                dy_params.set_autobatch(True)
-                batched = False
-            else:
-                batched = True
-            dy_params.init()
-            backend.params = {'pc': _dynet.ParameterCollection(), 'batched': batched}
 
         backend.load(self.task_name())
         return backend
