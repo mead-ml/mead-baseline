@@ -1249,19 +1249,6 @@ class WordPieceVectorizer1D(AbstractVectorizer):
         self.wordpiece_tok = WordpieceTokenizer(load_vocab(kwargs.get('vocab_file')))
         self.mxlen = kwargs.get('mxlen', -1)
 
-    def count(self, tokens):
-        seen = 0
-        counter = collections.Counter()
-        for tok in self.iterable(tokens):
-            counter[tok] += 1
-            seen += 1
-        self.max_seen = max(self.max_seen, seen)
-        return counter
-
-    def reset(self):
-        self.mxlen = -1
-        self.max_seen = 0
-
     def iterable(self, tokens):
         yield '[CLS]'
         for tok in tokens:
@@ -1292,6 +1279,9 @@ class WordPieceVectorizer1D(AbstractVectorizer):
             vec1d[i] = atom
         valid_length = i + 1
         return vec1d, valid_length
+
+    def get_dims(self):
+        return self.mxlen,
 
 class WordpieceTokenizer(object):
     """Runs WordPiece tokenziation."""

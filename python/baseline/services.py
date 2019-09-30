@@ -59,18 +59,30 @@ class Service(object):
         :return: List[List[str]]
         """
         # If the input is List[str] wrap it in list to make a batch of size one.
-        tokens_seq = (tokens,) if isinstance(tokens[0], six.string_types) else tokens
-        return tokens_seq
+        tokens_batch = (tokens,) if isinstance(tokens[0], six.string_types) else tokens
+        return tokens_batch
 
-    def vectorize(self, tokens_seq):
+    def prepare_vectorizers(self, tokens):
+        """Batch the input tokens, and call reset and count method on each vectorizers to set up their mxlen.
+        This method is mainly for reducing repeated code blocks.
+        :param tokens: input tokens in format List[str] or List[List[str]]
+        """
+        tokens_batch = self.batch_input(tokens)
+        for _, vectorizer in self.vectorizers.items():
+            vectorizer.reset()
+            for tokens in tokens_batch:
+                _ = vectorizer.count(tokens)
+        return tokens_batch
+
+    def vectorize(self, tokens_batch):
         """Turn the input into that batch dict for prediction.
 
-        :param tokens_seq: `List[List[str]]`: The input text batch.
+        :param tokens_batch: `List[List[str]]`: The input text batch.
 
         :returns: dict[str] -> np.ndarray: The vectorized batch.
         """
         examples = defaultdict(list)
-        for i, tokens in enumerate(tokens_seq):
+        for i, tokens in enumerate(tokens_batch):
             for k, vectorizer in self.vectorizers.items():
                 vec, length = vectorizer.run(tokens, self.vocabs[k])
                 examples[k].append(vec)
@@ -195,19 +207,15 @@ class ClassifierService(Service):
         """
         if preproc is not None:
             logger.warning("Warning: Passing `preproc` to `ClassifierService.predict` is deprecated.")
-        tokens_seq = self.batch_input(tokens)
-        for _, vectorizer in self.vectorizers.items():
-            vectorizer.reset()
-            for tokens in tokens_seq:
-                _ = vectorizer.count(tokens)
+        tokens_batch = self.prepare_vectorizers(tokens)
         if self.preproc == "client":
-            examples = self.vectorize(tokens_seq)
+            examples = self.vectorize(tokens_batch)
         elif self.preproc == 'server':
             # TODO: here we allow vectorizers even for preproc=server to get `word_lengths`.
             # vectorizers should not be available when preproc=server.
-            featurized_examples = self.vectorize(tokens_seq)
+            featurized_examples = self.vectorize(tokens_batch)
             examples = {
-                        'tokens': np.array([" ".join(x) for x in tokens_seq]),
+                        'tokens': np.array([" ".join(x) for x in tokens_batch]),
                         self.model.lengths_key: featurized_examples[self.model.lengths_key]
             }
 
@@ -234,16 +242,12 @@ class EmbeddingsService(Service):
     def predict(self, tokens, preproc=None):
         if preproc is not None:
             logger.warning("Warning: Passing `preproc` to `EmbeddingsService.predict` is deprecated.")
-        tokens_seq = self.batch_input(tokens)
-        for _, vectorizer in self.vectorizers.items():
-            vectorizer.reset()
-            for tokens in tokens_seq:
-                _ = vectorizer.count(tokens)
+        tokens_batch = self.prepare_vectorizers(tokens)
         if self.preproc == 'client':
-            examples = self.vectorize(tokens_seq)
+            examples = self.vectorize(tokens_batch)
         else:
             examples = {
-                'tokens': np.array([" ".join(x) for x in tokens_seq]),
+                'tokens': np.array([" ".join(x) for x in tokens_batch]),
             }
         return self.model.predict(examples)
 
@@ -280,15 +284,15 @@ class TaggerService(Service):
         """
         # Input is a list of strings. (assume strings are tokens)
         if isinstance(tokens[0], six.string_types):
-            tokens_seq = []
+            tokens_batch = []
             for t in tokens:
-                tokens_seq.append({'text': t})
-            tokens_seq = [tokens_seq]
+                tokens_batch.append({'text': t})
+            tokens_batch = [tokens_batch]
         else:
             # Better be a sequence, but it could be pre-batched, [[],[]]
             # But what kind of object is at the first one then?
             if is_sequence(tokens[0]):
-                tokens_seq = []
+                tokens_batch = []
                 # Then what we have is [['The', 'dog',...], ['I', 'cannot']]
                 # [[{'text': 'The', 'pos': 'DT'}, ...
 
@@ -298,19 +302,19 @@ class TaggerService(Service):
                         utt_dict_seq = []
                         for t in utt:
                             utt_dict_seq += [dict({'text': t})]
-                        tokens_seq += [utt_dict_seq]
+                        tokens_batch += [utt_dict_seq]
                 # Its already in List[List[dict]] form, do nothing
                 elif isinstance(tokens[0][0], dict):
-                    tokens_seq = tokens
+                    tokens_batch = tokens
             # If its a dict, we just wrap it up
             elif isinstance(tokens[0], dict):
-                tokens_seq = [tokens]
+                tokens_batch = [tokens]
             else:
                 raise Exception('Unknown input format')
 
-        if len(tokens_seq) == 0:
+        if len(tokens_batch) == 0:
             return []
-        return tokens_seq
+        return tokens_batch
 
     def predict(self, tokens, **kwargs):
         """
@@ -331,19 +335,15 @@ class TaggerService(Service):
         if not export_mapping:
             export_mapping = {'tokens': 'text'}
         label_field = kwargs.get('label', 'label')
-        tokens_seq = self.batch_input(tokens)
-        for _, vectorizer in self.vectorizers.items():
-            vectorizer.reset()
-            for tokens in tokens_seq:
-                _ = vectorizer.count(tokens)
+        tokens_batch = self.prepare_vectorizers(tokens)
         # TODO: here we allow vectorizers even for preproc=server to get `word_lengths`.
         # vectorizers should not be available when preproc=server.
-        examples = self.vectorize(tokens_seq)
+        examples = self.vectorize(tokens_batch)
         if self.preproc == 'server':
             unfeaturized_examples = {}
             for exporter_field in export_mapping:
                 unfeaturized_examples[exporter_field] = np.array([" ".join([y[export_mapping[exporter_field]]
-                                                                   for y in x]) for x in tokens_seq])
+                                                                   for y in x]) for x in tokens_batch])
             unfeaturized_examples[self.model.lengths_key] = examples[self.model.lengths_key]  # remote model
             examples = unfeaturized_examples
 
@@ -352,7 +352,7 @@ class TaggerService(Service):
         outputs = []
         for i, outcome in enumerate(outcomes):
             output = []
-            for j, token in enumerate(tokens_seq[i]):
+            for j, token in enumerate(tokens_batch[i]):
                 new_token = dict()
                 new_token.update(token)
                 if self.return_labels:
@@ -390,7 +390,7 @@ class LanguageModelService(Service):
                 vectorizer.mxwlen = mxwlen
 
         token_buffer = tokens
-        tokens_seq = tokens
+        tokens_batch = tokens
         examples = dict()
         for i in range(mxlen):
 
@@ -417,9 +417,9 @@ class LanguageModelService(Service):
             if token_str == '<EOS>':
                 break
             if token_str != '<PAD>':
-                tokens_seq += [token_str]
+                tokens_batch += [token_str]
             token_buffer = [token_str]
-        return tokens_seq
+        return tokens_batch
 
 
 @exporter
@@ -464,9 +464,9 @@ class EncoderDecoderService(Service):
         kwargs['beam'] = int(kwargs.get('beam', 30))
         return super(EncoderDecoderService, cls).load(bundle, **kwargs)
 
-    def vectorize(self, tokens_seq):
+    def vectorize(self, tokens_batch):
         examples = defaultdict(list)
-        for i, tokens in enumerate(tokens_seq):
+        for i, tokens in enumerate(tokens_batch):
             for k, vectorizer in self.src_vectorizers.items():
                 vec, length = vectorizer.run(tokens, self.src_vocabs[k])
                 examples[k] += [vec]
@@ -482,12 +482,12 @@ class EncoderDecoderService(Service):
         return examples
 
     def predict(self, tokens, K=1, **kwargs):
-        tokens_seq = self.batch_input(tokens)
+        tokens_batch = self.batch_input(tokens)
         for _, vectorizer in self.src_vectorizers.items():
             vectorizer.reset()
-            for tokens in tokens_seq:
+            for tokens in tokens_batch:
                 _ = vectorizer.count(tokens)
-        examples = self.vectorize(tokens_seq)
+        examples = self.vectorize(tokens_batch)
 
         kwargs['beam'] = int(kwargs.get('beam', K))
         outcomes = self.model.predict(examples, **kwargs)

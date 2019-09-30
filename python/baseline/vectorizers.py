@@ -60,17 +60,6 @@ class AbstractVectorizer(Vectorizer):
                     break
             yield value
 
-
-@exporter
-@register_vectorizer(name='token1d')
-class Token1DVectorizer(AbstractVectorizer):
-
-    def __init__(self, **kwargs):
-        super(Token1DVectorizer, self).__init__(kwargs.get('transform_fn'))
-        self.time_reverse = kwargs.get('rev', False)
-        self.mxlen = kwargs.get('mxlen', -1)
-        self.max_seen = 0
-
     def count(self, tokens):
         seen = 0
         counter = collections.Counter()
@@ -82,6 +71,17 @@ class Token1DVectorizer(AbstractVectorizer):
 
     def reset(self):
         self.mxlen = -1
+        self.max_seen = 0
+
+
+@exporter
+@register_vectorizer(name='token1d')
+class Token1DVectorizer(AbstractVectorizer):
+
+    def __init__(self, **kwargs):
+        super(Token1DVectorizer, self).__init__(kwargs.get('transform_fn'))
+        self.time_reverse = kwargs.get('rev', False)
+        self.mxlen = kwargs.get('mxlen', -1)
         self.max_seen = 0
 
     def run(self, tokens, vocab):

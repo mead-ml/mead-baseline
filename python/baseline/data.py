@@ -278,12 +278,14 @@ class SeqWordCharDataFeed(DataFeed):
         self.tgt_key = 'x' if tgt_key is None else tgt_key
         num_examples = examples['{}_dims'.format(tgt_key)][0]
         rest = num_examples // batchsz
-        self.steps = rest // nctx
+
         # if num_examples is divisible by batchsz * nctx (equivalent to rest is divisible by nctx), we
         # have a problem. reduce rest in that case.
 
         if rest % nctx == 0:
             rest = rest-1
+
+        self.steps = rest // nctx
 
         for k in examples.keys():
             if k.endswith('_dims'):
