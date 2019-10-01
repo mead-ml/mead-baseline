@@ -62,8 +62,8 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
             if isinstance(sentence, torch.Tensor):
                 sentence = sentence.cpu().numpy()
             sentence_length = sentence_lengths[b]
-
             gold = truth_n[b, :sentence_length]
+            sentence = sentence[:sentence_length]
             correct_labels += np.sum(np.equal(sentence, gold))
             total_labels += sentence_length
             gold_chunks.append(set(to_spans(gold, self.idx2label, self.span_type, self.verbose)))
