@@ -54,14 +54,14 @@ class TaggerModelBase(nn.Module, TaggerModel):
         transducer_model = model.init_encoder(embed_model.output_dim, **kwargs)
 
         use_crf = bool(kwargs.get('crf', False))
-        constraint = kwargs.get('constraint')
-        if constraint is not None:
-            constraint = constraint.unsqueeze(0)
+        constraint_mask = kwargs.get('constraint_mask')
+        if constraint_mask is not None:
+            constraint_mask = constraint_mask.unsqueeze(0)
 
         if use_crf:
-            decoder_model = CRF(len(labels), constraint_mask=constraint, batch_first=False)
+            decoder_model = CRF(len(labels), constraint_mask=constraint_mask, batch_first=False)
         else:
-            decoder_model = TaggerGreedyDecoder(len(labels), constraint_mask=constraint)
+            decoder_model = TaggerGreedyDecoder(len(labels), constraint_mask=constraint_mask)
 
         model.layers = TagSequenceModel(len(labels), embed_model, transducer_model, decoder_model)
         logger.info(model.layers)

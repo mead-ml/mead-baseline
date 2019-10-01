@@ -79,14 +79,14 @@ class ExportingTagger(nn.Module):
                 self.tagger.crf.end_idx
             )
         else:
-            if tagger.constraint is None:
+            if tagger.constraint_mask is None:
                 # This just calls torch.max, this is normally done in code for the tagger but we
                 # wrap in a class here so that we can have a consistent forward.
                 self.decoder = InferenceGreedyDecoder()
             else:
                 logger.debug("Found constraints for decoding, replacing with torch script decoder.")
                 self.decoder = InferenceCRF(
-                    self.tagger.constraint.squeeze(0),
+                    self.tagger.constraint_mask.squeeze(0),
                     Offsets.GO,
                     Offsets.EOS
                 )

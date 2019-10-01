@@ -95,8 +95,8 @@ class TaggerModelBase(TaggerModel):
             'class': self.__class__.__name__,
             'embeddings': embeddings_info,
         })
-        if 'constraint' in kwargs:
-            self._state['constraint'] = True
+        if 'constraint_mask' in kwargs:
+            self._state['constraint_mask'] = True
 
 
     def _record_state(self, **kwargs):
@@ -213,9 +213,9 @@ class TaggerModelBase(TaggerModel):
                 if k in kwargs:
                     _state[k] = kwargs[k]
             labels = read_json("{}.labels".format(basename))
-            if _state.get('constraint') is not None:
+            if _state.get('constraint_mask') is not None:
                 # Dummy constraint values that will be filled in by the check pointing
-                _state['constraint'] = [tf.zeros((len(labels), len(labels))) for _ in range(2)]
+                _state['constraint_mask'] = [tf.zeros((len(labels), len(labels))) for _ in range(2)]
             model = cls.create(embeddings, labels, **_state)
             model._state = _state
             model.create_loss()
@@ -283,10 +283,10 @@ class TaggerModelBase(TaggerModel):
         """
         self.crf = bool(kwargs.get('crf', False))
         self.crf_mask = bool(kwargs.get('crf_mask', False))
-        self.constraint = kwargs.get('constraint')
+        self.constraint_mask = kwargs.get('constraint_mask')
         if self.crf:
-            return CRF(len(self.labels), self.constraint)
-        return TaggerGreedyDecoder(len(self.labels), self.constraint)
+            return CRF(len(self.labels), self.constraint_mask)
+        return TaggerGreedyDecoder(len(self.labels), self.constraint_mask)
 
     @classmethod
     def create(cls, embeddings, labels, **kwargs):

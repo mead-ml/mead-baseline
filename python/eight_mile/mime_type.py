@@ -1,7 +1,7 @@
 import re
 from binascii import hexlify
 from functools import partial
-from baseline.utils import export
+from eight_mile.utils import export
 import sys
 from six import PY3
 

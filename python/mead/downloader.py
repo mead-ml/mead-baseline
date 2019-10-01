@@ -8,7 +8,7 @@ import tarfile
 import zipfile
 import hashlib
 import shutil
-from baseline.mime_type import mime_type
+from eight_mile.mime_type import mime_type
 from baseline.progress import create_progress_bar
 from baseline.utils import export, read_json, write_json
 

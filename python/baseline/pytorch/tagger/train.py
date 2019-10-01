@@ -10,6 +10,7 @@ from baseline.model import create_model_for
 
 logger = logging.getLogger('baseline')
 
+
 @register_trainer(task='tagger', name='default')
 class TaggerTrainerPyTorch(EpochReportingTrainer):
 
