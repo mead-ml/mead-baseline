@@ -2,17 +2,21 @@ import os
 import json
 import logging
 import numpy as np
+import eight_mile
 import baseline
 from copy import deepcopy
-from baseline.utils import (
+from baseline.reporting import create_reporting
+from eight_mile.utils import (
     export,
     revlut,
     Offsets,
     get_env_gpus,
-    show_examples,
-    normalize_backend,
     import_user_module,
     listify,
+)
+from baseline.utils import (
+    show_examples,
+    normalize_backend,
 )
 from mead.downloader import EmbeddingDownloader, DataDownloader
 from mead.utils import (
@@ -61,7 +65,7 @@ class Backend(object):
     def load(self, task_name=None):
         base_pkg_name = 'baseline.{}'.format(self.name)
         mod = import_user_module(base_pkg_name)
-        import_user_module('{}.embeddings'.format(base_pkg_name))
+        import_user_module('eight_mile.{}.embeddings'.format(self.name))
         import_user_module('mead.{}.exporters'.format(self.name))
         if task_name is not None:
             import_user_module('{}.{}'.format(base_pkg_name, task_name))
@@ -264,9 +268,9 @@ class Task(object):
 
         reporting_hooks, reporting = merge_reporting_with_settings(reporting, self.mead_settings_config)
 
-        self.reporting = baseline.create_reporting(reporting_hooks,
-                                                   reporting,
-                                                   {'config_file': config_file, 'task': self.__class__.task_name(), 'base_dir': self.get_basedir()})
+        self.reporting = create_reporting(reporting_hooks,
+                                          reporting,
+                                          {'config_file': config_file, 'task': self.__class__.task_name(), 'base_dir': self.get_basedir()})
 
         self.config_params['train']['reporting'] = [x.step for x in self.reporting]
         logging.basicConfig(level=logging.DEBUG)
@@ -319,13 +323,13 @@ class Task(object):
                 embed_sha1 = embeddings_set[embed_label].get('sha1', None)
                 embed_file = EmbeddingDownloader(embed_file, embed_dsz, embed_sha1, self.data_download_cache).download()
 
-                embedding_bundle = baseline.embeddings.load_embeddings(name, embed_file=embed_file, known_vocab=vocabs[name], embed_type=embed_type, **embeddings_section)
+                embedding_bundle = eight_mile.embeddings.load_embeddings(name, embed_file=embed_file, known_vocab=vocabs[name], embed_type=embed_type, **embeddings_section)
 
                 embeddings_map[name] = embedding_bundle['embeddings']
                 out_vocabs[name] = embedding_bundle['vocab']
             else:
                 dsz = embeddings_section.pop('dsz')
-                embedding_bundle = baseline.embeddings.load_embeddings(name, dsz=dsz, known_vocab=vocabs[name], embed_type=embed_type, **embeddings_section)
+                embedding_bundle = eight_mile.embeddings.load_embeddings(name, dsz=dsz, known_vocab=vocabs[name], embed_type=embed_type, **embeddings_section)
                 embeddings_map[name] = embedding_bundle['embeddings']
                 out_vocabs[name] = embedding_bundle['vocab']
 
@@ -494,7 +498,7 @@ class TaggerTask(Task):
             logger.warning("Constrained Decoding was set but no span type could be found so no Constraints will be applied.")
         self.config_params['model']['span_type'] = span_type
         if span_type is not None and constrain:
-            self.config_params['model']['constraint'] = self.backend.transition_mask(
+            self.config_params['model']['constraint_mask'] = self.backend.transition_mask(
                 labels, span_type, Offsets.GO, Offsets.EOS, Offsets.PAD
             )
 

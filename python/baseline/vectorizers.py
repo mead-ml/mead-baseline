@@ -1,5 +1,5 @@
 import numpy as np
-from baseline.utils import export, optional_params, listify, register, Offsets
+from eight_mile.utils import export, optional_params, listify, register, Offsets
 import collections
 
 

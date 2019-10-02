@@ -4,7 +4,7 @@ import random
 from itertools import chain
 import pytest
 from mock import patch
-from baseline.utils import get_env_gpus, _idempotent_append, _parse_module_as_path
+from eight_mile.utils import get_env_gpus, idempotent_append, parse_module_as_path
 
 
 @pytest.fixture
@@ -57,7 +57,7 @@ def test_idempotent_add_missing():
     data.discard(element)
     data = list(data)
     assert element not in data
-    _idempotent_append(element, data)
+    idempotent_append(element, data)
     assert element in data
     assert data[-1] == element
 
@@ -73,7 +73,7 @@ def test_idempotent_add_there():
     assert element in data
     element_idx = data.index(element)
     data_len = len(data)
-    _idempotent_append(element, data)
+    idempotent_append(element, data)
     assert element in data
     assert data.index(element) == element_idx
     assert data[-1] != element
@@ -90,7 +90,7 @@ def test_idempotent_add_last():
     assert element in data
     element_idx = data.index(element)
     data_len = len(data)
-    _idempotent_append(element, data)
+    idempotent_append(element, data)
     assert element in data
     assert data.index(element) == element_idx
     assert data[-1] == element
@@ -110,7 +110,7 @@ def test_parse_module_as_path_file():
     file_base = rand_str()
     file_ext = rand_str()
     file_name = "{}.{}".format(file_base, file_ext)
-    n, d = _parse_module_as_path(file_name)
+    n, d = parse_module_as_path(file_name)
     assert n == file_base
     assert d == ''
 
@@ -127,7 +127,7 @@ def test_parse_module_as_path_relative():
         with patch('baseline.utils.os.path.expanduser') as user_patch:
             real_patch.return_value = gold_path
             user_patch.return_value = path
-            n, d = _parse_module_as_path(module_name)
+            n, d = parse_module_as_path(module_name)
             real_patch.assert_called_once_with(path)
     assert n == file_base
     assert d == gold_path
@@ -145,7 +145,7 @@ def test_parse_module_as_path_absolute():
         with patch('baseline.utils.os.path.expanduser') as user_patch:
             real_patch.return_value = path
             user_patch.return_value = path
-            n, d = _parse_module_as_path(module_name)
+            n, d = parse_module_as_path(module_name)
             real_patch.assert_called_once_with(path)
     assert n == file_base
     assert d == path

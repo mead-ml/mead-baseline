@@ -3,9 +3,10 @@ import time
 import logging
 import numpy as np
 import tensorflow as tf
-from baseline.tf.optz import optimizer
+from eight_mile.tf.optz import optimizer
 from baseline.tf.tfy import TRAIN_FLAG, SET_TRAIN_FLAG
-from baseline.utils import listify, get_model_file, get_metric_cmp
+from eight_mile.utils import listify
+from baseline.utils import get_model_file, get_metric_cmp
 from baseline.train import Trainer, create_trainer, register_trainer, register_training_func
 from baseline.model import create_model_for
 from collections import OrderedDict

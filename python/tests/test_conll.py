@@ -2,7 +2,7 @@ import os
 import random
 from io import StringIO
 from baseline.utils import (
-    _sniff_conll_file,
+    sniff_conll_file,
     read_conll_docs,
     read_conll_docs_md,
     read_conll_sentences,
@@ -113,7 +113,7 @@ def test_sniff_conll():
     gold = random.randint(2, 12)
     files.write(" ".join(["a"] * gold) + "\n")
     files.seek(0)
-    res = _sniff_conll_file(files)
+    res = sniff_conll_file(files)
     assert res == gold
 
 
@@ -127,7 +127,7 @@ def test_sniff_reset():
         files.write('#\n')
     files.write("a a\n")
     files.seek(start)
-    _ = _sniff_conll_file(files)
+    _ = sniff_conll_file(files)
     res = files.readline().rstrip()
     assert res == gold
 

@@ -1,6 +1,6 @@
 import random
 from mock import patch
-from baseline.utils import (
+from eight_mile.utils import (
     to_chunks,
     to_chunks_iobes,
     convert_iob_to_bio,
@@ -173,7 +173,7 @@ def test_to_chunks_calls_iobes():
     seq = [random.randint(0, 5) for _ in range(random.randint(1, 6))]
     verbose = random.choice([True, False])
     delim = random.choice(['@', '#', '%'])
-    with patch('baseline.utils.to_chunks_iobes') as iobes_patch:
+    with patch('eight_mile.utils.to_chunks_iobes') as iobes_patch:
         to_chunks(seq, 'iobes', verbose, delim)
     iobes_patch.assert_called_once_with(seq, verbose, delim)
 

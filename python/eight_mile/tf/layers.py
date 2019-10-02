@@ -1,6 +1,6 @@
 import tensorflow as tf
 import numpy as np
-from baseline.utils import listify, Offsets
+from baseline.utils import listify, Offsets, wraps
 import math
 BASELINE_TF_TRAIN_FLAG = None
 
@@ -1000,7 +1000,110 @@ class FineTuneModel(tf.keras.Model):
         stacked = self.stack_model(base_layers) if self.stack_model is not None else base_layers
         return self.output_layer(stacked)
 
-
     def get_config(self):
         #base_config = super(FineTuneModel, self).get_config()
         return {} # base_config
+
+
+def highway_conns(inputs, wsz_all, n):
+    """Produce one or more highway connection layers
+
+    :param inputs: The sub-graph input
+    :param wsz_all: The number of units
+    :param n: How many layers of gating
+    :return: graph output
+    """
+    x = inputs
+    for i in range(n):
+        x = Highway(wsz_all)(x)
+    return x
+
+
+def skip_conns(inputs, wsz_all, n, activation_fn='relu'):
+    x = inputs
+    for i in range(n):
+        x = SkipConnection(wsz_all, activation_fn)(x)
+    return x
+
+
+def layer_norm(input, name, axis=[-1]):
+    return LayerNorm(name=name, axis=axis)(input)
+
+
+def parallel_conv(input_, filtsz, dsz, motsz, activation_fn='relu'):
+    return ParallelConv(dsz, motsz, filtsz, activation_fn)(input_)
+
+
+def time_distributed_projection(x, name, filters):
+    return TimeDistributedProjection(filters, name)(x)
+
+
+def char_word_conv_embeddings(char_vec, filtsz, char_dsz, nfeats, activation_fn=tf.nn.tanh, gating=skip_conns, num_gates=1):
+    """This wrapper takes in a character vector as input and performs parallel convolutions on it, followed by a
+    pooling operation and optional residual or highway connections
+
+    :param char_vec: The vector input
+    :param filtsz: A list or scalar containing filter sizes for each parallel filter
+    :param char_dsz: The character dimension size
+    :param nfeats: A list or scalar of the number of pooling units for each filter operation
+    :param activation_fn: A function for activation (`tf.nn.tanh` etc)
+    :param gating: A gating function to apply to the output
+    :param num_gates: The number of gates to apply
+    :return: The embedding output, the full number of units
+    """
+    if isinstance(nfeats, (list, tuple)):
+        wsz_all = np.sum(nfeats)
+    else:
+        wsz_all = len(filtsz) * nfeats
+    combine = parallel_conv(char_vec, filtsz, char_dsz, nfeats, activation_fn)
+    joined = gating(combine, wsz_all, num_gates)
+    return joined, wsz_all
+
+def create_session():
+    """This function protects against TF allocating all the memory
+
+    Some combination of cuDNN 7.6 with CUDA 10 on TF 1.13 with RTX cards
+    allocate additional memory which isnt available since TF by default
+    hogs it all.
+
+
+    This also provides an abstraction that can be extended later to offer
+    more config params that raw `tf.Session()` calls dont
+
+    :return: A `tf.Session`
+    """
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True
+    return tf.Session(config=config)
+
+
+def reload_lower_layers(sess, checkpoint):
+    """
+    Get the intersection of all non-output layers and declared vars in this graph and restore them
+
+    :param sess: (`tf.Session`) A tensorflow session to restore from
+    :param checkpoint: (`str`) checkpoint to read from
+    :return: None
+    """
+    latest = tf.train.latest_checkpoint(checkpoint)
+    print('Reloading ' + latest)
+    model_vars = set([t[0] for t in tf.train.list_variables(latest)])
+    g = tf.get_collection_ref(tf.GraphKeys.GLOBAL_VARIABLES)
+    g = [v for v in g if not v.op.name.startswith('OptimizeLoss')]
+    g = [v for v in g if not v.op.name.startswith('output/')]
+    g = [v for v in g if v.op.name in model_vars]
+    saver = tf.train.Saver(g)
+    saver.restore(sess, latest)
+
+
+def tf_device_wrapper(func):
+    @wraps(func)
+    def with_device(*args, **kwargs):
+        device = kwargs.get('device', 'default')
+        if device == 'cpu' and 'sess' not in kwargs:
+            g = tf.Graph()
+            sess = tf.Session(graph=g, config=tf.ConfigProto(allow_soft_placement=True, device_count={'CPU': 1, 'GPU': 0}))
+            kwargs['sess'] = sess
+            return func(*args, **kwargs)
+        return func(*args, **kwargs)
+    return with_device

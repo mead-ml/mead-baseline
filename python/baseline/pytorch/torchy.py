@@ -105,14 +105,6 @@ def pytorch_rnn_cell(insz, hsz, rnntype, nlayers, dropout):
     return rnn
 
 
-def pytorch_embedding(weights, finetune=True):
-    lut = nn.Embedding(weights.shape[0], weights.shape[1], padding_idx=0)
-    del lut.weight
-    lut.weight = nn.Parameter(torch.FloatTensor(weights),
-                              requires_grad=finetune)
-    return lut
-
-
 def pytorch_conv1d(in_channels, out_channels, fsz, unif=0, padding=0, initializer=None):
     c = nn.Conv1d(in_channels, out_channels, fsz, padding=padding)
     if unif > 0:

@@ -1,10 +1,12 @@
 
-from baseline.utils import listify
+from eight_mile.utils import listify
 import baseline
 import eight_mile.tf.layers as L
 
-from baseline.tf.embeddings import LookupTableEmbeddings
-from baseline.w2v import PretrainedEmbeddingsModel, RandomInitVecModel
+import eight_mile.embeddings
+from eight_mile.tf.embeddings import LookupTableEmbeddings
+from  eight_mile.w2v import PretrainedEmbeddingsModel, RandomInitVecModel
+from eight_mile.tf.optz import EagerOptimizer
 import tensorflow as tf
 import logging
 import numpy as np
@@ -78,7 +80,7 @@ labels = reader.label2index
 embeddings = dict()
 for k, v in feature_desc.items():
     embed_config = v['embed']
-    embeddings_for_k = baseline.load_embeddings(k, known_vocab=vocabs[k], **embed_config)
+    embeddings_for_k = eight_mile.embeddings.load_embeddings(k, known_vocab=vocabs[k], **embed_config)
     embeddings[k] = embeddings_for_k['embeddings']
     # Reset the vocab to the embeddings one
     vocabs[k] = embeddings_for_k['vocab']
@@ -126,22 +128,14 @@ model = L.TagSequenceModel(len(labels), embeddings, transducer)
 train_loss_results = []
 train_accuracy_results = []
 
-optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.01)
-
-global_step = tf.Variable(0)
-
-
 
 def loss(model, x, y):
   unary = model.transduce(x)
   return model.decoder_model.neg_log_loss(unary, y, x['lengths'])
 
 
+optim = EagerOptimizer(loss, tf.train.GradientDescentOptimizer(learning_rate=0.01))
 
-def grad(model, inputs, targets):
-  with tf.GradientTape() as tape:
-    loss_value = loss(model, inputs, targets)
-  return loss_value, tape.gradient(loss_value, model.trainable_variables)
 
 import time
 num_epochs = 20
@@ -154,9 +148,7 @@ for epoch in range(num_epochs):
     start = time.time()
     for x, y in train_input_fn():
         # Optimize the model
-        loss_value, grads = grad(model, x, y)
-        optimizer.apply_gradients(zip(grads, model.variables),
-                                  global_step)
+        loss_value = optim.update(model, x, y)
 
         loss_acc += loss_value
         step += 1

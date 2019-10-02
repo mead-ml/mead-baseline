@@ -1,7 +1,9 @@
 import argparse
+import eight_mile.embeddings
+from eight_mile.confusion import ConfusionMatrix
 import baseline
-from baseline.pytorch.optz import OptimizerManager
-import baseline.pytorch.embeddings
+from eight_mile.pytorch.optz import OptimizerManager, EagerOptimizer
+import eight_mile.pytorch.embeddings
 import eight_mile.pytorch.layers as L
 import torch.nn.functional as F
 import logging
@@ -63,7 +65,7 @@ vocabs, labels = reader.build_vocab([train_file,
 embeddings = dict()
 for k, v in feature_desc.items():
     embed_config = v['embed']
-    embeddings_for_k = baseline.load_embeddings('word', embed_file=embed_config['file'], known_vocab=vocabs[k],
+    embeddings_for_k = eight_mile.embeddings.load_embeddings('word', embed_file=embed_config['file'], known_vocab=vocabs[k],
                                                 embed_type=embed_config.get('type', 'default'),
                                                 unif=embed_config.get('unif', 0.), use_mmap=True)
 
@@ -82,7 +84,6 @@ model = L.EmbedPoolStackModel(2, embeddings, L.ParallelConv(300, args.poolsz, ar
 train_loss_results = []
 train_accuracy_results = []
 
-optimizer = OptimizerManager(model, optim="adam", lr=args.lr)
 
 
 def loss(model, x, y):
@@ -112,6 +113,8 @@ def make_pair(batch_dict, train=False):
     return example_dict, y
 
 
+optimizer = EagerOptimizer(loss, OptimizerManager(model, optim="adam", lr=args.lr))
+
 for epoch in range(num_epochs):
 
     # Training loop - using batches of 32
@@ -124,12 +127,8 @@ for epoch in range(num_epochs):
     batchsz = 20
     for b in train:
         x, y = make_pair(b, True)
-        optimizer.zero_grad()
-        l = loss(model, x, y)
-        l.backward()
-        optimizer.step()
-
-        loss_acc += float(l)
+        loss_value = optimizer.update(model, x, y)
+        loss_acc += loss_value
         step += 1
 
     print('training time {}'.format(time.time() - start))
@@ -137,7 +136,7 @@ for epoch in range(num_epochs):
     mean_loss = loss_acc / step
     print('Training Loss {}'.format(mean_loss))
 
-    cm = baseline.ConfusionMatrix(['0', '1'])
+    cm = ConfusionMatrix(['0', '1'])
     with torch.no_grad():
         for b in valid:
             x, y = make_pair(b)
@@ -148,7 +147,7 @@ for epoch in range(num_epochs):
     print(cm.get_all_metrics())
 
 print('FINAL')
-cm = baseline.ConfusionMatrix(['0', '1'])
+cm = ConfusionMatrix(['0', '1'])
 with torch.no_grad():
     for b in test:
         x, y = make_pair(b)

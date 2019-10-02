@@ -1,12 +1,15 @@
 import baseline
-import baseline.tf.embeddings
+from eight_mile.confusion import ConfusionMatrix
+import eight_mile.tf.embeddings
 import eight_mile.tf.layers as L
+from eight_mile.tf.optz import EagerOptimizer
 import tensorflow as tf
 import logging
 import numpy as np
 import time
 
 tf.enable_eager_execution()
+#tf.config.gpu.set_per_process_memory_growth(True)
 
 NUM_PREFETCH = 2
 SHUF_BUF_SZ = 5000
@@ -71,9 +74,9 @@ vocabs, labels = reader.build_vocab([train_file,
 embeddings = dict()
 for k, v in feature_desc.items():
     embed_config = v['embed']
-    embeddings_for_k = baseline.load_embeddings('word', embed_file=embed_config['file'], known_vocab=vocabs[k],
-                                                embed_type=embed_config.get('type', 'default'),
-                                                unif=embed_config.get('unif', 0.), use_mmap=True)
+    embeddings_for_k = eight_mile.embeddings.load_embeddings('word', embed_file=embed_config['file'], known_vocab=vocabs[k],
+                                                             embed_type=embed_config.get('type', 'default'),
+                                                             unif=embed_config.get('unif', 0.), use_mmap=True)
 
     embeddings[k] = embeddings_for_k['embeddings']
     # Reset the vocab to the embeddings one
@@ -121,24 +124,17 @@ model = L.EmbedPoolStackModel(2, embeddings, L.ParallelConv(300, 100, [3, 4, 5])
 train_loss_results = []
 train_accuracy_results = []
 
-optimizer = tf.train.AdamOptimizer(learning_rate=0.001)
-
-global_step = tf.Variable(0)
-
 
 def loss(model, x, y):
   y_ = model(x)
   return tf.losses.sparse_softmax_cross_entropy(labels=y, logits=y_)
 
 
-def grad(model, inputs, targets):
-  with tf.GradientTape() as tape:
-    loss_value = loss(model, inputs, targets)
-  return loss_value, tape.gradient(loss_value, model.trainable_variables)
+optimizer = EagerOptimizer(loss, tf.train.AdamOptimizer(learning_rate=0.001))
+
 
 num_epochs = 2
 for epoch in range(num_epochs):
-
 
     # Training loop - using batches of 32
     loss_acc = 0.
@@ -146,10 +142,7 @@ for epoch in range(num_epochs):
     start = time.time()
     for x, y in train_input_fn():
         # Optimize the model
-        loss_value, grads = grad(model, x, y)
-        optimizer.apply_gradients(zip(grads, model.variables),
-                                  global_step)
-
+        loss_value = optimizer.update(model, x, y)
         loss_acc += loss_value
         step += 1
     print('training time {}'.format(time.time() - start))
@@ -158,7 +151,7 @@ for epoch in range(num_epochs):
     mean_loss = loss_acc / step
     print('Training Loss {}'.format(mean_loss))
 
-    cm = baseline.ConfusionMatrix(['0', '1'])
+    cm = ConfusionMatrix(['0', '1'])
     for x, y in eval_input_fn():
         # Optimize the model
 
@@ -171,7 +164,7 @@ for epoch in range(num_epochs):
     print(cm.get_all_metrics())
 
 print('FINAL')
-cm = baseline.ConfusionMatrix(['0', '1'])
+cm = ConfusionMatrix(['0', '1'])
 for x, y in predict_input_fn():
     # Optimize the model
 

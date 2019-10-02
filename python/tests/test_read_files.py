@@ -2,7 +2,7 @@ import os
 import json
 import mock
 import pytest
-from baseline.utils import read_config_file, read_json, read_yaml, read_config_stream
+from eight_mile.utils import read_config_file, read_json, read_yaml, read_config_stream
 from mead.utils import read_config_file_or_json, get_mead_settings
 
 

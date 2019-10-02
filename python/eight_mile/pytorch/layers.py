@@ -3,8 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import copy
 import math
-from baseline.utils import listify, Offsets
-from baseline.utils import transition_mask as transition_mask_np
+from eight_mile.utils import listify, Offsets
+from eight_mile.utils import transition_mask as transition_mask_np
 import torch.autograd
 
 
@@ -837,14 +837,15 @@ class TaggerGreedyDecoder(nn.Module):
         self.num_tags = num_tags
 
         if constraint_mask is not None:
-            self.constraint = F.log_softmax(torch.zeros(constraint_mask.shape).masked_fill(constraint_mask, -1e4), dim=0)
-            self.register_buffer('constraint', self.constraint.unsqueeze(0))
+            self.constraint_mask = F.log_softmax(torch.zeros(constraint_mask.shape).masked_fill(constraint_mask, -1e4), dim=0)
+            self.register_buffer('constraint_mask', self.constraint_mask.unsqueeze(0))
         self.to_batch_first = ident if batch_first else tbh2bht
         self.to_time_first = bth2tbh if batch_first else ident
+        self.batch_first = batch_first
 
     @property
     def transitions(self):
-        return self.constraint
+        return self.constraint_mask
 
     def neg_log_loss(self, inputs, tags, lengths):
         # Cross entropy loss
@@ -857,22 +858,28 @@ class TaggerGreedyDecoder(nn.Module):
     def call(self, inputs):
 
         unaries, lengths = inputs
-        if self.constraint is not None:
+        # If there is a constraint mask do a masked viterbi
+        if self.constraint_mask is not None:
             probv = self.to_time_first(unaries)
             probv = F.log_softmax(probv, dim=-1)
-            preds, _ = viterbi(probv, self.constraint, lengths, Offsets.GO, Offsets.EOS, norm=F.log_softmax)
+            preds, _ = viterbi(probv, self.constraint_mask, lengths, Offsets.GO, Offsets.EOS, norm=F.log_softmax)
+            if self.batch_first:
+                return preds.transpose(0, 1)
         else:
             probv = self.to_batch_first(unaries)
             preds = []
             for pij, sl in zip(probv, lengths):
                 _, unary = torch.max(pij[:sl], 1)
                 preds.append(unary.data)
+            preds = torch.stack(preds).to(unaries.device)
+            if not self.batch_first:
+                return preds.transpose(0, 1)
         return preds
 
 
 class CRF(nn.Module):
 
-    def __init__(self, num_tags, constraint=None, batch_first=True, idxs=(Offsets.GO, Offsets.EOS)):
+    def __init__(self, num_tags, constraint_mask=None, batch_first=True, idxs=(Offsets.GO, Offsets.EOS)):
         """Initialize the object.
         :param num_tags: int, The number of tags in your output (emission size)
         :param constraint: torch.ByteTensor, Constraints on the transitions [1, N, N]
@@ -890,24 +897,24 @@ class CRF(nn.Module):
         super(CRF, self).__init__()
         self.start_idx, self.end_idx = idxs
         self.num_tags = num_tags
-        if constraint is not None:
-            self.register_buffer('constraint', constraint)
+        if constraint_mask is not None:
+            self.register_buffer('constraint_mask', constraint_mask)
         else:
-            self.constraint = None
+            self.constraint_mask = None
 
         self.transitions_p = nn.Parameter(torch.Tensor(1, self.num_tags, self.num_tags).zero_())
         self.batch_first = batch_first
 
     def extra_repr(self):
         str_ = "n_tags=%d, batch_first=%s" % (self.num_tags, self.batch_first)
-        if self.constraint is not None:
+        if self.constraint_mask is not None:
             str_ += ", constrained=True"
         return str_
 
     @property
     def transitions(self):
-        if self.constraint is not None:
-            return self.transitions_p.masked_fill(self.constraint, -1e4)
+        if self.constraint_mask is not None:
+            return self.transitions_p.masked_fill(self.constraint_mask, -1e4)
         return self.transitions_p
 
     def neg_log_loss(self, unary, tags, lengths):
@@ -924,7 +931,7 @@ class CRF(nn.Module):
             unary = unary.transpose(0, 1)
             tags = tags.transpose(0, 1)
         _, batch_size, _ = unary.size()
-        fwd_score = self._forward_alg(unary, lengths)  # TODO: shouldnt this call __call__?
+        fwd_score = self._forward_alg(unary, lengths)
         gold_score = self.score_sentence(unary, tags, lengths)
 
         loss = fwd_score - gold_score
@@ -1023,13 +1030,16 @@ class CRF(nn.Module):
         :param unary: torch.FloatTensor: [T, B, N] or [B, T, N]
         :param lengths: torch.LongTensor: [B]
 
-        :return: List[torch.LongTensor]: [B] the paths
+        :return: torch.LongTensor: [B] the paths
         :return: torch.FloatTensor: [B] the path score
         """
         if self.batch_first:
             unary = unary.transpose(0, 1)
         trans = self.transitions  # [1, N, N]
-        return viterbi(unary, trans, lengths, self.start_idx, self.end_idx)
+        path, score = viterbi(unary, trans, lengths, self.start_idx, self.end_idx)
+        if self.batch_first:
+            path = path.transpose(0, 1)
+        return path, score
 
 
 class SequenceModel(nn.Module):
@@ -1063,8 +1073,21 @@ class SequenceModel(nn.Module):
 class TagSequenceModel(SequenceModel):
 
     def __init__(self, nc, embeddings, transducer, decoder=None):
-        decoder_model = CRF(nc) if decoder is None else decoder
+        decoder_model = CRF(nc, batch_first=False) if decoder is None else decoder
         super(TagSequenceModel, self).__init__(nc, embeddings, transducer, decoder_model)
 
     def neg_log_loss(self, unary, tags, lengths):
         return self.decoder_model.neg_log_loss(unary, tags, lengths)
+
+    def forward(self, inputs):
+        time_first = super().forward(inputs)
+        return time_first.transpose(0, 1)
+
+
+def pytorch_embedding(weights, finetune=True):
+    lut = nn.Embedding(weights.shape[0], weights.shape[1], padding_idx=0)
+    del lut.weight
+    lut.weight = nn.Parameter(torch.FloatTensor(weights),
+                              requires_grad=finetune)
+    return lut
+

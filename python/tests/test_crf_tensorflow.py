@@ -56,7 +56,7 @@ def model(label_vocab, embeds, mask):
     from baseline.tf import tagger
     model = create_tagger_model(
         embeds, label_vocab,
-        crf=True, constraint=mask,
+        crf=True, constraint_mask=mask,
         hsz=HSZ, cfiltsz=[3], wsz=WSZ,
         layers=2, rnntype="blstm"
     )

@@ -302,7 +302,7 @@ def test_mask_is_applied():
     loc = np.random.randint(h)
     constraint = torch.zeros(h, h, dtype=torch.uint8)
     constraint[Offsets.GO, loc] = 1
-    crf = CRF(h, constraint=constraint)
+    crf = CRF(h, constraint_mask=constraint)
     t = crf.transitions.detach().numpy()
     assert t[0, Offsets.GO, loc] == -1e4
 
@@ -330,15 +330,15 @@ def test_mask_same_after_update(generate_batch):
     unary, tags, lengths = generate_batch
     h = unary.size(2)
     constraint = torch.rand(h, h) < 0.5
-    crf = CRF(h, constraint=constraint, batch_first=False)
+    crf = CRF(h, constraint_mask=constraint, batch_first=False)
     opt = SGD(crf.parameters(), lr=10)
-    m1 = crf.constraint.numpy()
+    m1 = crf.constraint_mask.numpy()
     t1 = crf.transitions_p.detach().clone().numpy()
     l = crf.neg_log_loss(unary, tags, lengths)
     l = torch.mean(l)
     l.backward()
     opt.step()
-    m2 = crf.constraint.numpy()
+    m2 = crf.constraint_mask.numpy()
     t2 = crf.transitions_p.detach().numpy()
     np.testing.assert_allclose(m1, m2)
     with pytest.raises(AssertionError):

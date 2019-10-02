@@ -14,13 +14,14 @@ import time
 import numpy as np
 import tensorflow as tf
 import logging
-from baseline.tf.optz import optimizer
-from baseline.progress import create_progress_bar
-from baseline.utils import to_spans, f_score, listify, revlut, get_model_file, write_sentence_conll, get_metric_cmp
+from eight_mile.tf.optz import optimizer
+from eight_mile.progress import create_progress_bar
+from eight_mile.utils import to_spans, listify, revlut, span_f1, per_entity_f1, conlleval_output, write_sentence_conll
+
 from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
 from baseline.tf.tfy import TRAIN_FLAG
 from baseline.model import create_model_for
-from baseline.utils import span_f1, per_entity_f1, conlleval_output
+from baseline.utils import get_model_file, get_metric_cmp
 from baseline.tf.tfy import reload_lower_layers
 
 # Number of batches to prefetch if using tf.datasets

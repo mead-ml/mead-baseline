@@ -2,17 +2,19 @@ import os
 import time
 import numpy as np
 import tensorflow as tf
-from baseline.tf.optz import optimizer
-from baseline.progress import create_progress_bar
+from eight_mile.tf.optz import optimizer
+from eight_mile.progress import create_progress_bar
+from eight_mile.utils import listify
+from eight_mile.bleu import bleu
+
 from baseline.utils import (
-    listify,
     get_model_file,
     get_metric_cmp,
     convert_seq2seq_golds,
     convert_seq2seq_preds,
 )
+
 from baseline.train import Trainer, create_trainer, register_trainer, register_training_func
-from baseline.bleu import bleu
 from baseline.tf.tfy import TRAIN_FLAG, SET_TRAIN_FLAG
 
 from baseline.model import create_model_for
