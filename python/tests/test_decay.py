@@ -191,6 +191,6 @@ def test_composite_calls_rest():
 
 def test_composite_error():
     pytest.importorskip('torch')
-    from baseline.pytorch.optz import CompositeLRSchedulerPyTorch
+    from eight_mile.pytorch.optz import CompositeLRSchedulerPyTorch
     with pytest.raises(AssertionError):
         _ = create_lr_scheduler(**{"lr_scheduler_type": ["exponential", "zaremba"]})

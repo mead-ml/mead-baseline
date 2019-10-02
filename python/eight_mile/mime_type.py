@@ -2,7 +2,6 @@ import re
 from binascii import hexlify
 from functools import partial
 from eight_mile.utils import export
-import sys
 from six import PY3
 
 __all__ = []

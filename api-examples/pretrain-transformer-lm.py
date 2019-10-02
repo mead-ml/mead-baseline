@@ -4,11 +4,13 @@ import os
 from argparse import ArgumentParser
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader, TensorDataset
+
+from eight_mile.utils import str2bool, write_json
+import eight_mile.embeddings
+from eight_mile.pytorch.embeddings import *
+from eight_mile.optz import *
+
 from baseline.pytorch.lm import TransformerLanguageModel
-from baseline.utils import str2bool, write_json
-import baseline.embeddings
-from baseline.pytorch.embeddings import *
-from baseline.pytorch.optz import *
 from baseline.vectorizers import Char2DVectorizer, Token1DVectorizer, AbstractVectorizer
 from mead.downloader import DataDownloader
 

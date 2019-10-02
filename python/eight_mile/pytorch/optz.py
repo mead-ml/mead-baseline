@@ -2,7 +2,7 @@ import math
 import logging
 import torch
 import torch.autograd
-from baseline.train import (
+from eight_mile.optz import (
     register_lr_scheduler,
     create_lr_scheduler,
     ConstantScheduler,
@@ -16,7 +16,7 @@ from baseline.train import (
     CompositeLRScheduler,
 )
 
-logger = logging.getLogger('baseline')
+logger = logging.getLogger('mead.layers')
 
 
 @register_lr_scheduler(name='default')
@@ -246,4 +246,18 @@ class OptimizerManager(object):
         for p in self.optimizer.param_groups:
             p['lr'] = lr
         return lr
+
+
+class EagerOptimizer(object):
+
+    def __init__(self, loss, optimizer):
+        self.loss = loss
+        self.optimizer = optimizer
+
+    def update(self, model, x, y):
+        self.optimizer.zero_grad()
+        l = self.loss(model, x, y)
+        l.backward()
+        self.optimizer.step()
+        return float(l)
 

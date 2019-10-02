@@ -1,8 +1,8 @@
 import logging
 import tensorflow as tf
-from baseline.train import register_lr_scheduler, create_lr_scheduler, WarmupLearningRateScheduler
+from eight_mile.optz import register_lr_scheduler, create_lr_scheduler, WarmupLearningRateScheduler
 
-logger = logging.getLogger('baseline')
+logger = logging.getLogger('mead.layers')
 
 
 @register_lr_scheduler('default')
@@ -220,7 +220,6 @@ class AdamWOptimizer(tf.train.Optimizer):
 
 def optimizer(loss_fn, **kwargs):
 
-    #global_step = tf.Variable(0, trainable=False)
     global_step = tf.train.get_or_create_global_step()
     clip = kwargs.get('clip', None)
     optim = kwargs.get('optim', 'sgd')
@@ -264,4 +263,19 @@ def optimizer(loss_fn, **kwargs):
                                                         colocate_gradients_with_ops=colocate_gradients_with_ops,
                                                         clip_gradients=clip, learning_rate_decay_fn=lr_scheduler,
                                                         increment_global_step=True)
+
+
+class EagerOptimizer(object):
+
+    def __init__(self, loss, optimizer):
+        self.loss = loss
+        self.global_step = tf.Variable(0)
+        self.optimizer = optimizer
+
+    def update(self, model, x, y):
+        with tf.GradientTape() as tape:
+            loss_value = self.loss(model, x, y)
+        grads = tape.gradient(loss_value, model.trainable_variables)
+        self.optimizer.apply_gradients(zip(grads, model.variables), self.global_step)
+        return loss_value
 

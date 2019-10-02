@@ -2,6 +2,7 @@ import baseline
 from eight_mile.confusion import ConfusionMatrix
 import eight_mile.tf.embeddings
 import eight_mile.tf.layers as L
+from eight_mile.tf.optz import EagerOptimizer
 import tensorflow as tf
 import logging
 import numpy as np
@@ -127,21 +128,6 @@ train_accuracy_results = []
 def loss(model, x, y):
   y_ = model(x)
   return tf.losses.sparse_softmax_cross_entropy(labels=y, logits=y_)
-
-
-class EagerOptimizer(object):
-
-    def __init__(self, loss, optimizer):
-        self.loss = loss
-        self.global_step = tf.Variable(0)
-        self.optimizer = optimizer
-
-    def update(self, model, x, y):
-        with tf.GradientTape() as tape:
-            loss_value = self.loss(model, x, y)
-        grads = tape.gradient(loss_value, model.trainable_variables)
-        self.optimizer.apply_gradients(zip(grads, model.variables), self.global_step)
-        return loss_value
 
 
 optimizer = EagerOptimizer(loss, tf.train.AdamOptimizer(learning_rate=0.001))

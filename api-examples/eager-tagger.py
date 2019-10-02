@@ -6,6 +6,7 @@ import eight_mile.tf.layers as L
 import eight_mile.embeddings
 from eight_mile.tf.embeddings import LookupTableEmbeddings
 from  eight_mile.w2v import PretrainedEmbeddingsModel, RandomInitVecModel
+from eight_mile.tf.optz import EagerOptimizer
 import tensorflow as tf
 import logging
 import numpy as np
@@ -126,21 +127,6 @@ model = L.TagSequenceModel(len(labels), embeddings, transducer)
 
 train_loss_results = []
 train_accuracy_results = []
-
-
-class EagerOptimizer(object):
-
-    def __init__(self, loss, optimizer):
-        self.loss = loss
-        self.global_step = tf.Variable(0)
-        self.optimizer = optimizer
-
-    def update(self, model, x, y):
-        with tf.GradientTape() as tape:
-            loss_value = self.loss(model, x, y)
-        grads = tape.gradient(loss_value, model.trainable_variables)
-        self.optimizer.apply_gradients(zip(grads, model.variables), self.global_step)
-        return loss_value
 
 
 def loss(model, x, y):

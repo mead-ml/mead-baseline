@@ -2,7 +2,7 @@ import argparse
 import eight_mile.embeddings
 from eight_mile.confusion import ConfusionMatrix
 import baseline
-from baseline.pytorch.optz import OptimizerManager
+from eight_mile.pytorch.optz import OptimizerManager, EagerOptimizer
 import eight_mile.pytorch.embeddings
 import eight_mile.pytorch.layers as L
 import torch.nn.functional as F
@@ -111,19 +111,6 @@ def make_pair(batch_dict, train=False):
     if train:
         y = torch.from_numpy(y).cuda()
     return example_dict, y
-
-class EagerOptimizer(object):
-
-    def __init__(self, loss, optimizer):
-        self.loss = loss
-        self.optimizer = optimizer
-
-    def update(self, model, x, y):
-        self.optimizer.zero_grad()
-        l = self.loss(model, x, y)
-        l.backward()
-        self.optimizer.step()
-        return float(l)
 
 
 optimizer = EagerOptimizer(loss, OptimizerManager(model, optim="adam", lr=args.lr))

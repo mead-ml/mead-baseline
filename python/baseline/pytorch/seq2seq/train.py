@@ -2,15 +2,16 @@ import time
 import logging
 import torch
 import numpy as np
-from baseline.progress import create_progress_bar
-from baseline.utils import listify, get_model_file, get_metric_cmp
+from eight_mile.progress import create_progress_bar
+from eight_mile.utils import listify
+from baseline.utils import get_model_file, get_metric_cmp, convert_seq2seq_golds, convert_seq2seq_preds
 from baseline.train import Trainer, create_trainer, register_trainer, register_training_func
-from baseline.pytorch.optz import OptimizerManager
-from baseline.bleu import bleu
-from baseline.utils import convert_seq2seq_golds, convert_seq2seq_preds
+from eight_mile.pytorch.optz import OptimizerManager
+from eight_mile.bleu import bleu
 from baseline.model import create_model_for
 
 logger = logging.getLogger('baseline')
+
 
 @register_trainer(task='seq2seq', name='default')
 class Seq2SeqTrainerPyTorch(Trainer):

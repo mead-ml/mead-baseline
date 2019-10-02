@@ -1,10 +1,11 @@
-from baseline.train import create_trainer, register_trainer, register_training_func, Trainer
-from baseline.embeddings import register_embeddings
-from baseline.reporting import register_reporting, ReportingHook
-from baseline.tf.embeddings import TensorFlowEmbeddings
-from baseline.tf.optz import optimizer
+from eight_mile.embeddings import register_embeddings
+from eight_mile.tf.embeddings import TensorFlowEmbeddings
+from eight_mile.tf.optz import optimizer
 from baseline.confusion import ConfusionMatrix
-from baseline.utils import listify, get_model_file, write_json, color, Colors
+
+from baseline.reporting import register_reporting, ReportingHook
+from baseline.train import create_trainer, register_trainer, register_training_func, Trainer
+from baseline.utils import get_metric_cmp, get_model_file, color, Colors
 from baseline.tf.tfy import embed
 import tensorflow as tf
 import os
@@ -104,7 +105,7 @@ def train(model, ts, vs, es=None, **kwargs):
            How many epochs where evaluation is no longer improving before we give up
         * *reporting* --
            Callbacks which may be used on reporting updates
-        * Additional arguments are supported, see :func:`baseline.tf.optimize` for full list
+        * Additional arguments are supported, see :func:`eight_mile.tf.optimize` for full list
     :return:
     """
     n = int(kwargs.get('test_epochs', 5))

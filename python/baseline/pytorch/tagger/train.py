@@ -1,11 +1,12 @@
 import six
 import logging
-from baseline.progress import create_progress_bar
+from eight_mile.progress import create_progress_bar
 from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
-from baseline.utils import listify, to_spans, f_score, revlut, get_model_file, write_sentence_conll, get_metric_cmp
+from eight_mile.utils import listify, to_spans, f_score, revlut, write_sentence_conll
+from baseline.utils import get_model_file, get_metric_cmp
 from baseline.pytorch.torchy import *
-from baseline.pytorch.optz import OptimizerManager
-from baseline.utils import span_f1, per_entity_f1, conlleval_output
+from eight_mile.pytorch.optz import OptimizerManager
+from eight_mile.utils import span_f1, per_entity_f1, conlleval_output
 from baseline.model import create_model_for
 
 logger = logging.getLogger('baseline')
