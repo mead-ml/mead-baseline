@@ -3,10 +3,11 @@ import logging
 import argparse
 import copy
 from itertools import chain
-from baseline.utils import read_config_stream, normalize_backend
+from eight_mile.utils import read_config_stream, import_user_module
+from baseline.utils import normalize_backend
 import mead
 from mead.utils import convert_path, parse_extra_args, configure_logger
-
+from mead.tasks import get_task_registry
 logger = logging.getLogger('mead')
 
 
@@ -71,6 +72,7 @@ def main():
     parser = argparse.ArgumentParser(description='Train a text classifier')
     parser.add_argument('--config', help='JSON Configuration for an experiment', type=convert_path, default="$MEAD_CONFIG")
     parser.add_argument('--settings', help='JSON Configuration for mead', default='config/mead-settings.json', type=convert_path)
+    parser.add_argument('--task_modules', help='tasks to load', default=[], nargs='+', required=False)
     parser.add_argument('--datasets', help='json library of dataset labels', default='config/datasets.json', type=convert_path)
     parser.add_argument('--modules', help='modules to load', default=[], nargs='+', required=False)
     parser.add_argument('--mod_train_file', help='override the training set')
@@ -90,6 +92,9 @@ def main():
 
     if args.basedir is not None:
         config_params['basedir'] = args.basedir
+
+    for task in args.task_modules:
+        import_user_module(task)
 
     task_name = config_params.get('task', 'classify') if args.task is None else args.task
 
@@ -124,11 +129,13 @@ def main():
     config_params['reporting'] = reporting
 
     logger.info('Task: [{}]'.format(task_name))
+    #print(get_task_registry())
+
     task = mead.Task.get_task_specific(task_name, args.settings)
+
     task.read_config(config_params, args.datasets, reporting_args=reporting_args)
     task.initialize(args.embeddings)
     task.train(args.checkpoint)
-
 
 if __name__ == "__main__":
     main()

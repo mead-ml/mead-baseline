@@ -78,6 +78,9 @@ def register_task(cls):
     TASK_REGISTRY[cls.task_name()] = cls
     return cls
 
+@exporter
+def get_task_registry():
+    return TASK_REGISTRY
 
 @exporter
 class Task(object):
