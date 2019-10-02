@@ -117,7 +117,7 @@ class TaggerModelBase(nn.Module, TaggerModel):
             return x
 
         mask_pad = x != Offsets.PAD
-        mask_drop = x.new(x.size(0), x.size(1)).bernoulli_(v).byte()
+        mask_drop = x.new(x.size(0), x.size(1)).bernoulli_(v).to(mask_pad.dtype)
         x.masked_fill_(mask_pad & mask_drop, Offsets.UNK)
         return x
 
