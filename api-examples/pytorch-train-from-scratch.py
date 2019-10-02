@@ -1,7 +1,8 @@
 import argparse
+import eight_mile.embeddings
 import baseline
 from baseline.pytorch.optz import OptimizerManager
-import baseline.pytorch.embeddings
+import eight_mile.pytorch.embeddings
 import eight_mile.pytorch.layers as L
 import torch.nn.functional as F
 import logging
@@ -63,7 +64,7 @@ vocabs, labels = reader.build_vocab([train_file,
 embeddings = dict()
 for k, v in feature_desc.items():
     embed_config = v['embed']
-    embeddings_for_k = baseline.load_embeddings('word', embed_file=embed_config['file'], known_vocab=vocabs[k],
+    embeddings_for_k = eight_mile.embeddings.load_embeddings('word', embed_file=embed_config['file'], known_vocab=vocabs[k],
                                                 embed_type=embed_config.get('type', 'default'),
                                                 unif=embed_config.get('unif', 0.), use_mmap=True)
 
@@ -82,7 +83,6 @@ model = L.EmbedPoolStackModel(2, embeddings, L.ParallelConv(300, args.poolsz, ar
 train_loss_results = []
 train_accuracy_results = []
 
-optimizer = OptimizerManager(model, optim="adam", lr=args.lr)
 
 
 def loss(model, x, y):
@@ -111,6 +111,21 @@ def make_pair(batch_dict, train=False):
         y = torch.from_numpy(y).cuda()
     return example_dict, y
 
+class EagerOptimizer(object):
+
+    def __init__(self, loss, optimizer):
+        self.loss = loss
+        self.optimizer = optimizer
+
+    def update(self, model, x, y):
+        self.optimizer.zero_grad()
+        l = self.loss(model, x, y)
+        l.backward()
+        self.optimizer.step()
+        return float(l)
+
+
+optimizer = EagerOptimizer(loss, OptimizerManager(model, optim="adam", lr=args.lr))
 
 for epoch in range(num_epochs):
 
@@ -124,12 +139,8 @@ for epoch in range(num_epochs):
     batchsz = 20
     for b in train:
         x, y = make_pair(b, True)
-        optimizer.zero_grad()
-        l = loss(model, x, y)
-        l.backward()
-        optimizer.step()
-
-        loss_acc += float(l)
+        loss_value = optimizer.update(model, x, y)
+        loss_acc += loss_value
         step += 1
 
     print('training time {}'.format(time.time() - start))
