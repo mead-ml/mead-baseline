@@ -1,5 +1,6 @@
 import argparse
 import eight_mile.embeddings
+from eight_mile.confusion import ConfusionMatrix
 import baseline
 from baseline.pytorch.optz import OptimizerManager
 import eight_mile.pytorch.embeddings
@@ -148,7 +149,7 @@ for epoch in range(num_epochs):
     mean_loss = loss_acc / step
     print('Training Loss {}'.format(mean_loss))
 
-    cm = baseline.ConfusionMatrix(['0', '1'])
+    cm = ConfusionMatrix(['0', '1'])
     with torch.no_grad():
         for b in valid:
             x, y = make_pair(b)
@@ -159,7 +160,7 @@ for epoch in range(num_epochs):
     print(cm.get_all_metrics())
 
 print('FINAL')
-cm = baseline.ConfusionMatrix(['0', '1'])
+cm = ConfusionMatrix(['0', '1'])
 with torch.no_grad():
     for b in test:
         x, y = make_pair(b)

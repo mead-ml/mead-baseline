@@ -1,4 +1,5 @@
 import baseline
+from eight_mile.confusion import ConfusionMatrix
 import eight_mile.tf.embeddings
 import eight_mile.tf.layers as L
 import tensorflow as tf
@@ -164,7 +165,7 @@ for epoch in range(num_epochs):
     mean_loss = loss_acc / step
     print('Training Loss {}'.format(mean_loss))
 
-    cm = baseline.ConfusionMatrix(['0', '1'])
+    cm = ConfusionMatrix(['0', '1'])
     for x, y in eval_input_fn():
         # Optimize the model
 
@@ -177,7 +178,7 @@ for epoch in range(num_epochs):
     print(cm.get_all_metrics())
 
 print('FINAL')
-cm = baseline.ConfusionMatrix(['0', '1'])
+cm = ConfusionMatrix(['0', '1'])
 for x, y in predict_input_fn():
     # Optimize the model
 
