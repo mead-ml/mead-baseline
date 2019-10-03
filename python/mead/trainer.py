@@ -89,7 +89,6 @@ def main():
     args, overrides = parser.parse_known_args()
     config_params = read_config_stream(args.config)
     config_params = parse_and_merge_overrides(config_params, overrides, pre='x')
-    print(config_params)
     if args.basedir is not None:
         config_params['basedir'] = args.basedir
 
