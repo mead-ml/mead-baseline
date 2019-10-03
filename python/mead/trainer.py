@@ -96,7 +96,6 @@ def main():
         import_user_module(task)
 
     task_name = config_params.get('task', 'classify') if args.task is None else args.task
-    print(config_params)
     args.logging = read_config_stream(args.logging)
     configure_logger(args.logging, config_params.get('basedir', './{}'.format(task_name)))
 
