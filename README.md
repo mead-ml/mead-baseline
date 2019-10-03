@@ -1,6 +1,6 @@
 # Baseline
 
-*Version* [1.x](docs/v1.md)
+*Version 2.x*
 
 Baseline is a library for reproducible deep learning research and fast model
 development for NLP. The library provides easily extensible abstractions and
