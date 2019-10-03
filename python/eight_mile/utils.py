@@ -49,7 +49,6 @@ def export(obj, all_list=None):
 
 #exporter = export(__all__)
 
-
 #@exporter
 class Offsets:
     """Support pre 3.4"""
@@ -77,6 +76,27 @@ def sequence_mask(lengths, max_len=-1):
     row = np.arange(0, max_len).reshape(1, -1)
     col = np.reshape(lengths, (-1, 1))
     return (row < col).astype(np.uint8)
+
+
+def calc_nfeats(filtsz, nfeat_factor=None, max_feat=None, nfeats=None):
+    """Calculate the output sizes to use for parllel conv on character embeddings.
+
+    :param filtsz: `Union[List[List[int, int]], List[int]]` The filter sizes to use in parallel
+    :param nfeat_factor: `int` How to scale the feat size as you grow the filters
+    :param max_feat: `int` The cap on the feature size
+    :param nfeats: `int` A fall back constant feature size
+    """
+    # If this is a list, then its a tuple of (filtsz, nfeats)
+    if is_sequence(filtsz[0]):
+        filtsz, nfeats = zip(*filtsz)
+    # If we get a nfeat factor, we multiply that by each filter, and thresh at max_feat
+    elif nfeat_factor is not None:
+        assert max_feat is not None, 'If using `nfeat_factor`, `max_feat` must not be None'
+        nfeats = [min(nfeat_factor * fsz, max_feat) for fsz in filtsz]
+    # Otherwise its just a scalar
+    else:
+        assert nfeats is not None, 'When providing only `filtsz` and not `nfeat_factor` `nfeats` must be specified'
+    return filtsz, nfeats
 
 
 #@exporter

@@ -162,20 +162,3 @@ def long_tensor_alloc(dims, dtype=None):
     if type(dims) == int or len(dims) == 1:
         return torch.LongTensor(dims)
     return torch.LongTensor(*dims)
-
-def unsort_batch(batch, perm_idx):
-    """Undo the sort on a batch of tensors done for packing the data in the RNN.
-
-    :param batch: `torch.Tensor`: The batch of data batch first `[B, ...]`
-    :param perm_idx: `torch.Tensor`: The permutation index returned from the torch.sort.
-
-    :returns: `torch.Tensor`: The batch in the original order.
-    """
-    # Add ones to the shape of the perm_idx until it can broadcast to the batch
-    perm_idx = perm_idx.to(batch.device)
-    diff = len(batch.shape) - len(perm_idx.shape)
-    extra_dims = [1] * diff
-    perm_idx = perm_idx.view([-1] + extra_dims)
-    return batch.scatter_(0, perm_idx.expand_as(batch), batch)
-
-

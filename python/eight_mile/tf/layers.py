@@ -442,7 +442,8 @@ class LSTMEncoder1(tf.keras.layers.Layer):
 
     def call(self, inputs):
         inputs, lengths = tensor_and_lengths(inputs)
-        rnnout, hidden = tf.nn.dynamic_rnn(self.rnn, inputs, sequence_length=lengths, dtype=tf.float32)
+        with tf.variable_scope(self._name):
+            rnnout, hidden = tf.nn.dynamic_rnn(self.rnn, inputs, sequence_length=lengths, dtype=tf.float32)
         state = (hidden[-1].h, hidden[-1].c)
         return self.output_fn(rnnout, state)
 
@@ -583,9 +584,8 @@ class BiLSTMEncoder2(tf.keras.layers.Layer):
             outputs = rnn(inputs, mask=mask)
             inputs = outputs
 
-        rnnout, h1, c1, h2, c2 = outputs
-        # TODO: This is not right!
-        return self.output_fn(rnnout, (h1, c1))
+        rnnout, h_fwd, c_fwd, h_bwd, c_bwd = outputs
+        return self.output_fn(rnnout, ((h_fwd, c_fwd), (h_bwd, c_bwd)))
 
     @property
     def requires_length(self):
@@ -605,7 +605,7 @@ class BiLSTMEncoderHidden2(BiLSTMEncoder2):
         super().__init__(insz, hsz, nlayers, pdrop, variational, requires_length, name, dropout_in_single_layer, skip_conn, projsz, **kwargs)
 
     def output_fn(self, rnnout, state):
-        return state[0][0] + state[1][0]
+        return tf.concat([state[0][0], state[1][0]], axis=-1)
 
 
 class BiLSTMEncoderHiddenContext2(BiLSTMEncoder2):
@@ -613,7 +613,8 @@ class BiLSTMEncoderHiddenContext2(BiLSTMEncoder2):
         super().__init__(insz, hsz, nlayers, pdrop, variational, requires_length, name, dropout_in_single_layer, skip_conn, projsz, **kwargs)
 
     def output_fn(self, rnnout, state):
-        return state
+        return tuple(tf.concat([state[0][i], state[1][i]], axis=-1) for i in range(2))
+
 
 # Mapped
 class BiLSTMEncoder1(tf.keras.layers.Layer):
@@ -621,7 +622,7 @@ class BiLSTMEncoder1(tf.keras.layers.Layer):
     def __init__(self, insz, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None,  skip_conn=False, projsz=None, **kwargs):
         """Produce a stack of LSTMs with dropout performed on all but the last layer.
 
-        :param hsz: (``int``) The number of hidden units per LSTM
+        :param hsz: (``int``) The number of hidden units per biLSTM (`hsz//2` used for each dir)
         :param nlayers: (``int``) The number of layers of LSTMs to stack
         :param pdrop: (``int``) The probability of dropping a unit value during dropout
         :param variational (``bool``) variational recurrence is on
@@ -630,6 +631,7 @@ class BiLSTMEncoder1(tf.keras.layers.Layer):
         """
         super().__init__(name=name)
         self._requires_length = requires_length
+        hsz = hsz // 2
         if variational:
             self.fwd_rnn = tf.contrib.rnn.MultiRNNCell([lstm_cell_w_dropout(hsz, pdrop, variational=variational, training=TRAIN_FLAG(), skip_conn=skip_conn, projsz=projsz) for _ in
                                                         range(nlayers)],
@@ -648,7 +650,7 @@ class BiLSTMEncoder1(tf.keras.layers.Layer):
             self.bwd_rnn = tf.contrib.rnn.MultiRNNCell(
                 [lstm_cell_w_dropout(hsz, pdrop, training=TRAIN_FLAG(), skip_conn=skip_conn, projsz=projsz) if i < nlayers - 1 else lstm_cell(hsz) for i in
                  range(nlayers)],
-                state_is_tuple=True
+                state_is_tuple=True,
             )
 
     def output_fn(self, rnnout, state):
@@ -698,7 +700,7 @@ class BiLSTMEncoderHidden1(BiLSTMEncoder1):
         super().__init__(insz, hsz, nlayers, pdrop, variational, requires_length, name, skip_conn, projsz, **kwargs)
 
     def output_fn(self, rnnout, state):
-        return state[0][0] + state[1][0]
+        return tf.concat([state[0][0], state[1][0]], axis=-1)
 
 
 class BiLSTMEncoderHiddenContext1(BiLSTMEncoder1):
