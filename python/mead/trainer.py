@@ -6,8 +6,7 @@ from itertools import chain
 from eight_mile.utils import read_config_stream, import_user_module
 from baseline.utils import normalize_backend
 import mead
-from mead.utils import convert_path, parse_extra_args, configure_logger
-from mead.tasks import get_task_registry
+from mead.utils import convert_path, parse_extra_args, configure_logger, parse_and_merge_overrides
 logger = logging.getLogger('mead')
 
 
@@ -86,10 +85,11 @@ def main():
     parser.add_argument('--reporting', help='reporting hooks', nargs='+')
     parser.add_argument('--backend', help='The deep learning backend to use')
     parser.add_argument('--checkpoint', help='Restart training from this checkpoint')
-    args, reporting_args = parser.parse_known_args()
 
+    args, overrides = parser.parse_known_args()
     config_params = read_config_stream(args.config)
-
+    config_params = parse_and_merge_overrides(config_params, overrides, pre='x')
+    print(config_params)
     if args.basedir is not None:
         config_params['basedir'] = args.basedir
 
@@ -97,7 +97,7 @@ def main():
         import_user_module(task)
 
     task_name = config_params.get('task', 'classify') if args.task is None else args.task
-
+    print(config_params)
     args.logging = read_config_stream(args.logging)
     configure_logger(args.logging, config_params.get('basedir', './{}'.format(task_name)))
 
@@ -125,7 +125,7 @@ def main():
 
     cmd_hooks = args.reporting if args.reporting is not None else []
     config_hooks = config_params.get('reporting') if config_params.get('reporting') is not None else []
-    reporting = parse_extra_args(set(chain(cmd_hooks, config_hooks)), reporting_args)
+    reporting = parse_extra_args(set(chain(cmd_hooks, config_hooks)), overrides)
     config_params['reporting'] = reporting
 
     logger.info('Task: [{}]'.format(task_name))
@@ -133,7 +133,7 @@ def main():
 
     task = mead.Task.get_task_specific(task_name, args.settings)
 
-    task.read_config(config_params, args.datasets, reporting_args=reporting_args)
+    task.read_config(config_params, args.datasets, reporting_args=overrides)
     task.initialize(args.embeddings)
     task.train(args.checkpoint)
 

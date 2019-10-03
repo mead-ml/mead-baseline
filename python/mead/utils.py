@@ -8,7 +8,7 @@ from datetime import datetime
 import argparse
 from copy import deepcopy
 from itertools import chain
-from collections import OrderedDict
+from collections import OrderedDict, MutableMapping
 from baseline.utils import export, str2bool, read_config_file, write_json, get_logging_level
 
 __all__ = []
@@ -83,6 +83,109 @@ def parse_date(s):
         except:
             continue
     raise Exception("Couldn't parse datestamp {}".format(s))
+
+
+@exporter
+def flatten(dictionary, sep='.'):
+    """Flatten a nested dict.
+
+    :param dictionary: the dictionary to flatten.
+    :param sep: The separator between old nested keys.
+    :returns: The flattened dict.
+    """
+
+    def _flatten(dictionary, sep, prev):
+        """This is the recursive function that actually does the work of flattening..
+
+        :param dictionary: the dictionary to flatten.
+        :param sep: The separator between old nested keys.
+        :param prev: A recurrent state param that tracks key above you.
+        :returns: The flattened dict.
+        """
+        flat = {}
+        prev = [] if prev is None else prev
+        for k, v in dictionary.items():
+            if isinstance(v, MutableMapping):
+                flat.update(_flatten(v, sep=sep, prev=list(chain(prev, [k]))))
+            else:
+                flat[sep.join(chain(prev, [k]))] = v
+        return flat
+
+    return _flatten(dictionary, sep, [])
+
+
+@exporter
+def unflatten(dictionary, sep: str = "."):
+    """Turn a flattened dict into a nested dict.
+
+    :param dictionary: The dict to unflatten.
+    :param sep: This character represents a nesting level in a flattened key
+    :returns: The nested dict
+    """
+    nested = {}
+    for k, v in dictionary.items():
+        keys = k.split(sep)
+        it = nested
+        for key in keys[:-1]:
+            # If key is in `it` we get the value otherwise we get a new dict.
+            # .setdefault will also set the new dict to the value of `it[key]`.
+            # assigning to `it` will move us a step deeper into the nested dict.
+            it = it.setdefault(key, {})
+        it[keys[-1]] = v
+    return nested
+
+
+def _infer_numeric_or_str(value: str):
+    """Convert value to an int, float or leave it as a string.
+
+    :param value: The cli value to parse
+    :returns: The value converted to int or float if possible
+    """
+    for func in (int, float):
+        try:
+            return func(value)
+        except ValueError:
+            continue
+    return value
+
+
+@exporter
+def parse_overrides(overrides, pre):
+    """Find override parameters in the cli args.
+
+    Note:
+        If you use the same cli flag multiple time the values will be
+        aggregated into a list. For example
+        `--x:a 1 --x:a 2 --x:a 3` will give back `{'a': [1, 2, 3]}`
+
+    :param overrides: The cli flags and values.
+    :param pre: only look at keys that start with `--{pre}:`
+    :returns: The key value pairs from the command line args.
+    """
+    pre = f'--{pre}:'
+    parser = argparse.ArgumentParser()
+    for key in set(filter(lambda x: pre in x, overrides)):
+        # Append action collect each value into a list allowing us to override a
+        # yaml list by repeating the key.
+        parser.add_argument(key, action='append', type=_infer_numeric_or_str)
+    args = parser.parse_known_args(overrides)[0]
+    return {k.split(":")[1]: v[0] if len(v) == 1 else v for k, v in vars(args).items()}
+
+
+@exporter
+def parse_and_merge_overrides(base, overrides, pre):
+    """Parse extra cli args and use them to override the original config.
+
+    :param base: The base config that will be overridden
+    :param overrides: The cli args holding override values
+    :param pre: The key used to find cli flags.
+    :returns: The base config overridden with values from overrides.
+    """
+    overrides = parse_overrides(overrides, pre)
+    base = flatten(base)
+    base.update(overrides)
+    return unflatten(base)
+
 
 @exporter
 def get_dataset_from_key(dataset_key, datasets_set):
