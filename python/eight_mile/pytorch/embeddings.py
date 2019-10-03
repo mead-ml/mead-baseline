@@ -3,8 +3,7 @@ from collections import OrderedDict
 import numpy as np
 import torch
 import torch.nn as nn
-from eight_mile.utils import Offsets, is_sequence
-from eight_mile.embeddings import register_embeddings
+from eight_mile.utils import Offsets, is_sequence, calc_nfeats
 from eight_mile.pytorch.layers import (
     pytorch_embedding,
     ParallelConv,
@@ -12,14 +11,16 @@ from eight_mile.pytorch.layers import (
     SkipConnection,
     Highway,
     BiLSTMEncoderHidden,
-    WithDropout
+    WithDropout,
+    unsort_batch,
+    pytorch_linear,
 )
 
 
 class PyTorchEmbeddings(nn.Module):
 
-    def __init__(self, _=None, **kwargs):
-        super(PyTorchEmbeddings, self).__init__()
+    def __init__(self, **kwargs):
+        super().__init__()
 
     def get_vsz(self):
         pass
@@ -27,19 +28,18 @@ class PyTorchEmbeddings(nn.Module):
     def get_dsz(self):
         pass
 
+    @property
+    def output_dim(self):
+        return self.get_dsz()
+
     def encode(self, x):
         return self(x)
 
-    @classmethod
-    def create(cls, model, name, **kwargs):
-        return cls(name, vsz=model.vsz, dsz=model.dsz, weights=model.weights, **kwargs)
 
-
-@register_embeddings(name='default')
 class LookupTableEmbeddings(PyTorchEmbeddings):
 
-    def __init__(self, _=None, **kwargs):
-        super(LookupTableEmbeddings, self).__init__(_, **kwargs)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self.vsz = kwargs.get('vsz')
         self.dsz = kwargs.get('dsz')
         self.finetune = kwargs.get('finetune', True)
@@ -48,50 +48,53 @@ class LookupTableEmbeddings(PyTorchEmbeddings):
             self.embeddings = nn.Embedding(self.vsz, self.dsz, padding_idx=0)
         else:
             self.embeddings = pytorch_embedding(weights, self.finetune)
-
-    def get_dsz(self):
-        return self.dsz
+            # This makes sure that if you init with a weight and not vsz it will still be available
+            self.vsz, self.dsz = weights.shape
 
     def get_vsz(self):
         return self.vsz
 
+    def get_dsz(self):
+        return self.dsz
+
     def forward(self, x):
         return self.embeddings(x)
 
+    def extra_repr(self):
+        return f"finetune=False" if not self.finetune else ""
 
-@register_embeddings(name='char-conv')
+
 class CharConvEmbeddings(PyTorchEmbeddings):
 
-    def __init__(self, _=None, **kwargs):
-        super(CharConvEmbeddings, self).__init__(_, **kwargs)
-        self.vsz = kwargs.get('vsz')
-        dsz = kwargs.get('dsz')
-        self.finetune = kwargs.get('finetune', True)
-        weights = kwargs.get('weights')
-        if weights is None:
-            self.embeddings = nn.Embedding(self.vsz, dsz, padding_idx=0)
-        else:
-            self.embeddings = pytorch_embedding(weights)
-        char_filtsz = kwargs.get('cfiltsz', [3])
-        if is_sequence(char_filtsz[0]):
-            wsz_single = [pair[1] for pair in char_filtsz]
-            char_filtsz = [pair[0] for pair in char_filtsz]
-        else:
-            wsz_single = kwargs.get('wsz', 30)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
-        activation_type = kwargs.get('activation', 'tanh')
-        pdrop = kwargs.get('pdrop', 0.5)
-        self.char_comp = WithDropout(ParallelConv(dsz, wsz_single, char_filtsz, activation_type), pdrop)
-        gating = kwargs.get('gating', 'skip')
-        GatingConnection = SkipConnection if gating == 'skip' else Highway
-        num_gates = kwargs.get('num_gates', 1)
+        self.nfeat_factor = kwargs.get('nfeat_factor')
+        self.cfiltsz = kwargs.get('cfiltsz', kwargs.get('filtsz', [3]))
+        self.max_feat = kwargs.get('max_feat', 30)
+        self.gating = kwargs.get('gating', 'skip')
+        self.num_gates = kwargs.get('num_gates', 1)
+        self.activation = kwargs.get('activation', 'tanh')
+        self.wsz = kwargs.get('wsz', 30)
+        self.projsz = kwargs.get('projsz')
+        self.pdrop = kwargs.get('pdrop', 0.5)
+        self.filtsz, self.nfeats = calc_nfeats(self.cfiltsz, self.nfeat_factor, self.max_feat, self.wsz)
+        self.conv_outsz = np.sum(self.nfeats)
+        self.outsz = self.conv_outsz
+        if self.projsz is not None:
+            self.outsz = self.projsz
+            self.proj = pytorch_linear(self.conv_outsz, self.outsz)
+
+        self.embeddings = LookupTableEmbeddings(**kwargs)
+        self.char_comp = WithDropout(ParallelConv(self.embeddings.output_dim, self.nfeats, self.filtsz, self.activation), self.pdrop)
+
+        GatingConnection = SkipConnection if self.gating == 'skip' else Highway
         self.gating_seq = nn.Sequential(OrderedDict(
-            [('gate-{}'.format(i), GatingConnection(self.char_comp.output_dim)) for i in range(num_gates)]
+            [('gate-{}'.format(i), GatingConnection(self.char_comp.output_dim)) for i in range(self.num_gates)]
         ))
-        print(self)
 
     def get_dsz(self):
-        return self.char_comp.output_dim
+        return self.outsz
 
     def get_vsz(self):
         return self.vsz
@@ -108,17 +111,80 @@ class CharConvEmbeddings(PyTorchEmbeddings):
         #        pytorch_activation(self.activation_type)
         mots = self.char_comp(char_vecs)
         gated = self.gating_seq(mots)
+        if self.projsz:
+            gated = self.proj(gated)
         return gated.view(_0, _1, self.get_dsz())
 
 
-@register_embeddings(name='positional-char-conv')
-class PositionalCharConvEmbeddings(CharConvEmbeddings):
+class CharLSTMEmbeddings(PyTorchEmbeddings):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.embed = LookupTableEmbeddings(**kwargs)
+        self.lstmsz = kwargs.get('lstmsz', 50)
+        layers = kwargs.get('layers', 1)
+        pdrop = kwargs.get('pdrop', 0.5)
+        unif = kwargs.get('unif', 0)
+        weight_init = kwargs.get('weight_init', 'uniform')
+        self.char_comp = BiLSTMEncoderHidden(self.embed.output_dim, self.lstmsz, layers, pdrop, unif=unif, initializer=weight_init)
 
-    def __init__(self, _=None, **kwargs):
-        super(PositionalCharConvEmbeddings, self).__init__(_, **kwargs)
-        self.dropout = nn.Dropout(kwargs.get('dropout', 0.1))
+    def forward(self, xch):
+        B, T, W = xch.shape
+        flat_chars = xch.view(-1, W)
+        char_embeds = self.embed(flat_chars)
+
+        # Calculate the lengths of each word
+        lengths = torch.sum(flat_chars != Offsets.PAD, dim=1)
+
+        # Sort the input to appease the cuDNN gods
+        sorted_word_lengths, perm_idx = lengths.sort(0, descending=True)
+        sorted_feats = char_embeds[perm_idx].transpose(0, 1).contiguous()
+
+        # cuDNN throws an error if there is an input with a length of 0, this happens when the "word"
+        # is actually a "<PAD>" so there are no characters to run the LSTM over. Here we just say
+        # that the lengths is 1. This will make cudnn happy and we will just get junk in that spot
+        patched_lengths = sorted_word_lengths.masked_fill(sorted_word_lengths == 0, 1)
+
+        # Run the LSTM
+        hidden = self.char_comp((sorted_feats, patched_lengths))
+
+        # Create a mask that is true when the sorted length is 0 (where the word was a pad) so that
+        # we can mask out the junk that the lstm created because we needed a length of 1
+        hidden = hidden.masked_fill((sorted_word_lengths == 0).unsqueeze(-1), 0)
+
+        # Undo the sort so that the representations of the words are in the correct part of the sentence.
+        results = unsort_batch(hidden, perm_idx)
+
+        return results.reshape((B, T, -1))
+
+
+    def get_dsz(self):
+        return self.lstmsz
+
+    def get_vsz(self):
+        return self.embed.get_vsz()
+
+
+class PositionalMixin(nn.Module):
+    """A Mixin that provides functionality to generate positional embeddings to be added to the normal embeddings.
+
+    Note, mixins need to be before the base case when used, i.e.
+        `Embedding(Mixin, BaseEmbed)` NOT `Embedding(BaseEmbed, Mixin)`
+    """
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def positional(self, length):
+        pass
+
+    def extra_repr(self):
+        return f'mxlen={self.mxlen}'
+
+
+class SinusoidalPositionalMixin(PositionalMixin):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         # This could get us in trouble, if in doubt, pick something big
-        mxlen = kwargs.get('mxlen', 1000)
+        self.mxlen = kwargs.get('mxlen', 1000)
         max_timescale = kwargs.get('max_timescale', 1.0e4)
 
         word_dsz = self.get_dsz()
@@ -126,55 +192,35 @@ class PositionalCharConvEmbeddings(CharConvEmbeddings):
         log_timescale_increment = math.log(max_timescale) / word_dsz
         inv_timescales = torch.exp(torch.arange(0, word_dsz, 2).float() * -log_timescale_increment)
 
-        pe = torch.zeros(mxlen, word_dsz)
-        position = torch.arange(0, mxlen).float().unsqueeze(1)
+        pe = torch.zeros(self.mxlen, word_dsz)
+        position = torch.arange(0, self.mxlen).float().unsqueeze(1)
         pe[:, 0::2] = torch.sin(position * inv_timescales)
         pe[:, 1::2] = torch.cos(position * inv_timescales)
         pe = pe.unsqueeze(0)
         self.register_buffer('pe', pe)
 
-    def get_dsz(self):
-        return self.char_comp.outsz
-
-    def get_vsz(self):
-        return self.vsz
-
-    def forward(self, xch):
-        """Add a positional encoding to the embedding, followed by dropout
-
-        :param x: The temporal signal in, to which the positional embeddings are applied
-        :return: Embedded output
-        """
-        xch = super(PositionalCharConvEmbeddings, self).forward(xch) * math.sqrt(self.get_dsz())
-        xch = xch + self.pe[:, :xch.size(1)]
-        return self.dropout(xch)
+    def positional(self, length):
+        return self.pe[:, :length]
 
 
-@register_embeddings(name='positional')
-class PositionalLookupTableEmbeddings(LookupTableEmbeddings):
+class LearnedPositionalMixin(PositionalMixin):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.mxlen = int(kwargs.get('mxlen', 512))
+        self.pos_embeddings = nn.Embedding(self.mxlen, self.get_dsz(), padding_idx=0)
 
-    def __init__(self, _=None, **kwargs):
-        super(PositionalLookupTableEmbeddings, self).__init__(_, **kwargs)
+    def positional(self, length):
+        return self.pos_embeddings(
+            torch.arange(length, dtype=torch.long, device=self.pos_embeddings.weight.device)
+        ).unsqueeze(0)
+
+
+class PositionalLookupTableEmbeddings(SinusoidalPositionalMixin, LookupTableEmbeddings):
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self.dropout = nn.Dropout(kwargs.get('dropout', 0.1))
-        # This could get us in trouble, if in doubt, pick something big
-        mxlen = kwargs.get('mxlen', 1000)
-        max_timescale = kwargs.get('max_timescale', 1.0e4)
-
-        log_timescale_increment = math.log(max_timescale) / self.dsz
-        inv_timescales = torch.exp(torch.arange(0, self.dsz, 2).float() * -log_timescale_increment)
-
-        pe = torch.zeros(mxlen, self.dsz)
-        position = torch.arange(0, mxlen).float().unsqueeze(1)
-        pe[:, 0::2] = torch.sin(position * inv_timescales)
-        pe[:, 1::2] = torch.cos(position * inv_timescales)
-        pe = pe.unsqueeze(0)
-        self.register_buffer('pe', pe)
-
-    def get_dsz(self):
-        return self.dsz
-
-    def get_vsz(self):
-        return self.vsz
+        self.scale = math.sqrt(self.get_dsz())
 
     def forward(self, x):
         """Add a positional encoding to the embedding, followed by dropout
@@ -182,65 +228,76 @@ class PositionalLookupTableEmbeddings(LookupTableEmbeddings):
         :param x: The temporal signal in, to which the positional embeddings are applied
         :return: Embedded output
         """
-        x = super(PositionalLookupTableEmbeddings, self).forward(x) * math.sqrt(self.dsz)
-        x = x + self.pe[:, :x.size(1)]
+        x = super().forward(x) * self.scale
+        x = x + self.positional(x.size(1))
         return self.dropout(x)
 
 
-@register_embeddings(name='learned-positional')
-class LearnedPositionalLookupTableEmbeddings(LookupTableEmbeddings):
-    def __init__(self, _=None, **kwargs):
-        super(LearnedPositionalLookupTableEmbeddings, self).__init__(_, **kwargs)
-        self.mxlen = int(kwargs.get('mxlen', 512))
-        self.pos_embeddings = nn.Embedding(self.mxlen, self.dsz, padding_idx=0)
+class LearnedPositionalLookupTableEmbeddings(LearnedPositionalMixin, LookupTableEmbeddings):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self.dropout = nn.Dropout(kwargs.get('dropout', 0.1))
 
     def forward(self, x):
         T = x.size(1)
-        x = super(LearnedPositionalLookupTableEmbeddings, self).forward(x)
-        pos = self.pos_embeddings(torch.arange(T, dtype=torch.long, device=x.device)).unsqueeze(0)
+        x = super().forward(x)
+        pos = self.positional(T)
         return self.dropout(x + pos)
 
-    def extra_repr(self):
-        return 'mxlen=%d' % self.mxlen
 
+class PositionalCharConvEmbeddings(SinusoidalPositionalMixin, CharConvEmbeddings):
 
-@register_embeddings(name='char-lstm')
-class CharLSTMEmbeddings(PyTorchEmbeddings):
-    def __init__(self, _=None, **kwargs):
-        super(CharLSTMEmbeddings, self).__init__(_, **kwargs)
-        self.vsz = kwargs.get('vsz')
-        dsz = kwargs.get('dsz')
-        self.finetune = kwargs.get('finetune', True)
-        weights = kwargs.get('weights')
-        if weights is None:
-            self.embeddings = nn.Embedding(self.vsz, dsz, padding_idx=Offsets.PAD)
-        else:
-            self.embeddings = pytorch_embedding(weights)
-        self.lstmsz = kwargs.get('lstmsz', 50)
-        layers = kwargs.get('layers', 1)
-        pdrop = kwargs.get('pdrop', 0.5)
-        unif = kwargs.get('unif', 0)
-        weight_init = kwargs.get('weight_init', 'uniform')
-        self.char_comp = BiLSTMEncoderHidden(dsz, self.lstmsz, layers, pdrop, unif=unif, initializer=weight_init)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.dropout = nn.Dropout(kwargs.get('dropout', 0.1))
+        self.scale = math.sqrt(self.get_dsz())
 
     def forward(self, xch):
-        B, T, W = xch.shape
-        flat_chars = xch.view(-1, W)
-        char_embeds = self.embeddings(flat_chars)
+        """Add a positional encoding to the embedding, followed by dropout
 
-        # Lengths
-        lengths = torch.sum(flat_chars != Offsets.PAD, dim=1)
-        sorted_word_lengths, perm_idx = lengths.sort(0, descending=True)
-        # Hotfix for no char spaces.
-        sorted_word_lengths.masked_fill_(sorted_word_lengths == 0, 1)
-        sorted_feats = char_embeds[perm_idx].transpose(0, 1).contiguous()
-        hidden = self.char_comp((sorted_feats, sorted_word_lengths))
-        results = hidden.scatter_(0, perm_idx.unsqueeze(-1).expand_as(hidden), hidden)
-        return results.reshape((B, T, -1))
+        :param xch: The temporal signal in, to which the positional embeddings are applied
+        :return: Embedded output
+        """
+        xch = super().forward(xch) * self.scale
+        xch = xch + self.positional(xch.size(1))
+        return self.dropout(xch)
 
-    def get_dsz(self):
-        return self.lstmsz
 
-    def get_vsz(self):
-        return self.vsz
+class LearnedPositionalCharConvEmbeddings(LearnedPositionalMixin, CharConvEmbeddings):
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.dropout = nn.Dropout(kwargs.get('dropout', 0.1))
+
+    def forward(self, xch):
+        """Add a positional encoding to the embedding, followed by dropout
+
+        :param xch: The temporal signal in, to which the positional embeddings are applied
+        :return: Embedded output
+        """
+        xch = super().forward(xch)
+        xch = xch + self.positional(xch.size(1))
+        return self.dropout(xch)
+
+
+class PositionalCharLSTMEmbeddings(SinusoidalPositionalMixin, CharLSTMEmbeddings):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.dropout = nn.Dropout(kwargs.get('dropout', 0.1))
+        self.scale = math.sqrt(self.get_dsz())
+
+    def forward(self, xch):
+        xch = super().forward(xch) * self.scale
+        xch = xch + self.positional(xch.size(1))
+        return self.dropout(xch)
+
+
+class LearnedPositionalCharLSTMEmbeddings(LearnedPositionalMixin, CharLSTMEmbeddings):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.dropout = nn.Dropout(kwargs.get('dropout', 0.1))
+
+    def forward(self, xch):
+        xch = super().forward(xch)
+        xch = xch + self.positional(xch.size(1))
+        return self.dropout(xch)

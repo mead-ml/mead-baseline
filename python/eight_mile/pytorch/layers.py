@@ -53,6 +53,22 @@ def vec_log_sum_exp(vec, dim):
     return max_scores + torch.log(torch.sum(torch.exp(vec - max_scores_broadcast), dim, keepdim=True))
 
 
+def unsort_batch(batch, perm_idx):
+    """Undo the sort on a batch of tensors done for packing the data in the RNN.
+
+    :param batch: `torch.Tensor`: The batch of data batch first `[B, ...]`
+    :param perm_idx: `torch.Tensor`: The permutation index returned from the torch.sort.
+
+    :returns: `torch.Tensor`: The batch in the original order.
+    """
+    # Add ones to the shape of the perm_idx until it can broadcast to the batch
+    perm_idx = perm_idx.to(batch.device)
+    diff = len(batch.shape) - len(perm_idx.shape)
+    extra_dims = [1] * diff
+    perm_idx = perm_idx.view([-1] + extra_dims)
+    return batch.scatter_(0, perm_idx.expand_as(batch), batch)
+
+
 # Mapped
 def tensor_and_lengths(inputs):
     if isinstance(inputs, (list, tuple)):
@@ -215,12 +231,10 @@ def _cat_dir(h):
 
 
 def concat_state_dirs(state):
-    """Convert the bidirectional out of an RNN so the forward and backward values are a single vector.
-    """
+    """Convert the bidirectional out of an RNN so the forward and backward values are a single vector."""
     if isinstance(state, tuple):
         return tuple(_cat_dir(h) for h in state)
     return _cat_dir(state)
-
 
 
 # Mapped
@@ -265,6 +279,7 @@ def ident(t):
 
 def tbh2bht(t):
     return t.permute(1, 2, 0).contiguous()
+
 
 def tbh2bth(t):
     return t.transpose(0, 1).contiguous()

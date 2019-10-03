@@ -1,97 +1,222 @@
+import logging
+from eight_mile.embeddings import register_embeddings
 from eight_mile.tf.embeddings import *
 import tensorflow as tf
 
 
-def stacked_lstm(hsz, pdrop, nlayers, variational=False, training=False):
-    """Produce a stack of LSTMs with dropout performed on all but the last layer.
+logger = logging.getLogger('baseline')
 
-    :param hsz: (``int``) The number of hidden units per LSTM
-    :param pdrop: (``int``) The probability of dropping a unit value during dropout
-    :param nlayers: (``int``) The number of layers of LSTMs to stack
-    :param variational (``bool``) variational recurrence is on
-    :param training (``bool``) Are we training? (defaults to ``False``)
-    :return: a stacked cell
+
+class TensorFlowEmbeddingsBaselineModel(tf.keras.Model):
+    """This provides a base for TensorFlow embeddings sub-graphs that includes the placeholders
+
     """
-    if variational:
-        return tf.contrib.rnn.MultiRNNCell(
-            [lstm_cell_w_dropout(hsz, pdrop, variational=variational, training=training) for _ in range(nlayers)],
-            state_is_tuple=True
-        )
-    return tf.contrib.rnn.MultiRNNCell(
-        [lstm_cell_w_dropout(hsz, pdrop, training=training) if i < nlayers - 1 else lstm_cell(hsz) for i in range(nlayers)],
-        state_is_tuple=True
-    )
+    def __init__(self, name=None, **kwargs):
+        """Constructor
+        """
+        super().__init__()
+        self._record_state(**kwargs)
+        self._name = name
+        self.embedding_layer = None
+
+    def detached_ref(self):
+        """This will detach any attached input and reference the same sub-graph otherwise
+
+        :return:
+        """
+        if getattr(self.embedding_layer, '_weights', None) is not None:
+            return type(self)(self._name, weights=self.embedding_layer._weights, **self._state)
+        if hasattr(self.embedding_layer, 'embed') and getattr(self.embedding_layer.embed, '_weights') is not None:
+            return type(self)(self._name, weights=self.embedding_layer.embed._weights, **self._state)
+        raise Exception('You must initialize `weights` in order to use this method')
+
+    def get_dsz(self):
+        """Get the number of output dimension of this operation
+
+        :return:
+        """
+        return self.embedding_layer.get_dsz()
+
+    @property
+    def output_dim(self):
+        return self.embedding_layer.output_dim
+
+    def get_vsz(self):
+        """Get the number of words (including <PAD>) in the vocabulary
+
+        :return:
+        """
+        return self.embedding_layer.get_vsz()
+
+    def encode(self, x):
+        """This instantiates the sub-graph for this object and returns the output node
+
+        :return:
+        """
+        if x is None:
+            x = self.create_placeholder(self._name)
+        return self.embedding_layer(x)
+
+    def call(self, x):
+        return self.encode(x)
+
+    def get_feed_dict(self):
+        """Return a feed dict that is needed to initialize this embeddings."""
+        return self.embedding_layer.get_feed_dict()
+
+    @classmethod
+    def create_placeholder(cls, name):
+        """Create a placeholder with name `name`
+
+        :param name: (``str``) The name of the placeholder
+        :return: The placeholder
+        """
+        pass
+
+    @classmethod
+    def create(cls, model, name, **kwargs):
+        """Instantiate this sub-graph from the generalized representation from `baseline.w2v`
+
+        :param name: The name of the embeddings
+        :param model: The `baseline.w2v` model
+        :param kwargs:
+        :return:
+        """
+        # If we think we are going to hit the 2GB limit swap out the LUT
+        # embeddings to use the placeholder trick to get around it.
+        # if cls is LookupTableEmbeddingsModel and model.vsz * model.dsz * FLOAT32 > GB2:
+        #     cls = LargeLookupTableEmbeddingsModel
+        #     logger.warning("Embedding %s seems to be larger than 2GB", name)
+        return cls(name, vsz=model.vsz, dsz=model.dsz, weights=model.weights, **kwargs)
+
+    def _record_state(self, **kwargs):
+        w = kwargs.pop('weights', None)
+        self._state = copy.deepcopy(kwargs)
+
+    def save_md(self, target):
+        """Save the metadata associated with this embedding as a JSON file
+
+        :param target: The name of the output file
+        :return:
+        """
+        write_json(self.get_config(), target)
+
+    def get_config(self):
+        #config = super(TensorFlowEmbeddings, self).get_config()
+        config = {}
+        config['dsz'] = int(self.get_dsz())
+        config['vsz'] = int(self.get_vsz())
+        config['module'] = self.__class__.__module__
+        config['class'] = self.__class__.__name__
+        config.update(self._state)
+        return config
 
 
+@register_embeddings(name='default')
+class LookupTableEmbeddingsModel(TensorFlowEmbeddingsBaselineModel):
+    def __init__(self, name=None, **kwargs):
+        super().__init__(name, **kwargs)
+        self.embedding_layer = LookupTableEmbeddings(name=self._name, **kwargs)
 
-@register_embeddings(name='char-lstm')
-class CharLSTMEmbeddings(TensorFlowEmbeddings):
+    @classmethod
+    def create_placeholder(cls, name):
+        return tf.placeholder(tf.int32, [None, None], name=name)
+
+
+@register_embeddings(name='char-conv')
+class CharConvEmbeddingsModel(TensorFlowEmbeddingsBaselineModel):
+    def __init__(self, name=None, **kwargs):
+        super().__init__(name, **kwargs)
+        self.embedding_layer = CharConvEmbeddings(name=self._name, **kwargs)
+
     @classmethod
     def create_placeholder(cls, name):
         return tf.placeholder(tf.int32, [None, None, None], name=name)
 
-    def __init__(self, name, **kwargs):
-        super(CharLSTMEmbeddings, self).__init__(name=name, **kwargs)
-        self._name = name
-        self.scope = kwargs.get('scope', '{}/CharLUT'.format(self._name))
-        self.vsz = kwargs.get('vsz')
-        self.dsz = kwargs.get('dsz')
-        self.finetune = kwargs.get('finetune', True)
-        self._weights = kwargs.get('weights')
-        self.lstmsz = kwargs.get('lstmsz', 50)
-        self.layers = kwargs.get('layers', 1)
-        self.pdrop = kwargs.get('pdrop', 0.5)
-        self.rnn_type = kwargs.get('rnn_type', 'blstm')
-        self.x = None
-        if self._weights is None:
-            unif = kwargs.get('unif', 0.1)
-            self._weights = np.random.uniform(-unif, unif, (self.vsz, self.dsz))
 
-    def detached_ref(self):
-        if self._weights is None:
-            raise Exception('You must initialize `weights` in order to use this method.')
-        return CharLSTMEmbeddings(
-            name=self._name, vsz=self.vsz, dsz=self.dsz, scope=self.scope,
-            finetune=self.finetune, lstmsz=self.lstmsz, layers=self.layers,
-            dprop=self.pdrop, rnn_type=self.rnn_type, weights=self._weights,
-        )
+@register_embeddings(name='char-lstm')
+class CharLSTMEmbeddingsModel(TensorFlowEmbeddingsBaselineModel):
+    def __init__(self, name=None, **kwargs):
+        super().__init__(name, **kwargs)
+        self.embedding_layer = CharLSTMEmbeddings(name=self._name, **kwargs)
 
-    def encode(self, x=None):
-        if x is None:
-            x = CharLSTMEmbeddings.create_placeholder(self._name)
+    @classmethod
+    def create_placeholder(cls, name):
+        return tf.placeholder(tf.int32, [None, None, None], name=name)
 
-        self.x = x
-        with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
-            Wch = tf.get_variable(
-                "Wch",
-                initializer=tf.constant_initializer(self._weights, dtype=tf.float32, verify_shape=True),
-                shape=[self.vsz, self.dsz],
-                trainable=True
-            )
-            ech0 = tf.scatter_update(Wch, tf.constant(Offsets.PAD, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, self.dsz]))
 
-            shape = tf.shape(x)
-            B = shape[0]
-            T = shape[1]
-            W = shape[2]
-            flat_chars = tf.reshape(x, [-1, W])
-            word_lengths = tf.reduce_sum(tf.cast(tf.not_equal(flat_chars, Offsets.PAD), tf.int32), axis=1)
-            with tf.control_dependencies([ech0]):
-                embed_chars = tf.nn.embedding_lookup(Wch, flat_chars)
+@register_embeddings(name='positional')
+class PositionalLookupTableEmbeddingsModel(TensorFlowEmbeddingsBaselineModel):
+    def __init__(self, name=None, **kwargs):
+        super().__init__(name, **kwargs)
+        self.embedding_layer = PositionalLookupTableEmbeddings(name=self._name, **kwargs)
 
-            fwd_lstm = stacked_lstm(self.lstmsz // 2, self.pdrop, self.layers)
-            bwd_lstm = stacked_lstm(self.lstmsz // 2, self.pdrop, self.layers)
-            _, rnn_state = tf.nn.bidirectional_dynamic_rnn(fwd_lstm, bwd_lstm, embed_chars, sequence_length=word_lengths, dtype=tf.float32)
+    @classmethod
+    def create_placeholder(cls, name):
+        return tf.placeholder(tf.int32, [None, None], name=name)
 
-            result = tf.concat([rnn_state[0][-1].h, rnn_state[1][-1].h], axis=1)
-            return tf.reshape(result, [B, T, self.lstmsz])
 
-    def get_dsz(self):
-        return self.lstmsz
+@register_embeddings(name='learned-positional')
+class LearnedPositionalLookupTableEmbeddingsModel(TensorFlowEmbeddingsBaselineModel):
+    def __init__(self, name=None, **kwargs):
+        super().__init__(name, **kwargs)
+        self.embedding_layer = LearnedPositionalLookupTableEmbeddings(name=self._name, **kwargs)
 
-    def get_vsz(self):
-        return self.vsz
+    @classmethod
+    def create_placeholder(cls, name):
+        return tf.placeholder(tf.int32, [None, None], name=name)
 
-    def get_config(self):
-        config = super(CharLSTMEmbeddings, self).get_config()
-        config['lstmsz'] = self.lstmsz
+
+@register_embeddings(name='positional-char-conv')
+class PositionalCharConvEmbeddingsModel(TensorFlowEmbeddingsBaselineModel):
+    def __init__(self, name=None, **kwargs):
+        super().__init__(name, **kwargs)
+        self.embedding_layer = PositionalCharConvEmbeddings(name=self._name, **kwargs)
+
+    @classmethod
+    def create_placeholder(cls, name):
+        return tf.placeholder(tf.int32, [None, None, None], name=name)
+
+
+@register_embeddings(name='learned-positional-char-conv')
+class PositionalCharConvEmbeddingsModel(TensorFlowEmbeddingsBaselineModel):
+    def __init__(self, name=None, **kwargs):
+        super().__init__(name, **kwargs)
+        self.embedding_layer = LearnedPositionalCharConvEmbeddings(name=self._name, **kwargs)
+
+    @classmethod
+    def create_placeholder(cls, name):
+        return tf.placeholder(tf.int32, [None, None, None], name=name)
+
+
+@register_embeddings(name='positional-char-lstm')
+class PositionalCharLSTMEmbeddingsModel(TensorFlowEmbeddingsBaselineModel):
+    def __init__(self, name=None, **kwargs):
+        super().__init__(name, **kwargs)
+        self.embedding_layer = PositionalCharLSTMEmbeddings(name=self._name, **kwargs)
+
+    @classmethod
+    def create_placeholder(cls, name):
+        return tf.placeholder(tf.int32, [None, None, None], name=name)
+
+
+@register_embeddings(name='learned-positional-char-lstm')
+class LearnedPositionalCharLSTMEmbeddingsModel(TensorFlowEmbeddingsBaselineModel):
+    def __init__(self, name=None, **kwargs):
+        super().__init__(name, **kwargs)
+        self.embedding_layer = LearnedPositionalCharLSTMEmbeddings(name=self._name, **kwargs)
+
+    @classmethod
+    def create_placeholder(cls, name):
+        return tf.placeholder(tf.int32, [None, None, None], name=name)
+
+
+# @register_embeddings(name="large-lut")
+# class LargeLookupTableEmbeddingsModel(TensorFlowEmbeddingsBaselineModel):
+#     def __init__(self, name=None, **kwargs):
+#         super().__init__(name, **kwargs)
+#         self.embedding_layer = LargeLookupTableEmbeddings(name=self._name, **kwargs)
+
+#     @classmethod
+#     def create_placeholder(cls, name):
+#         return tf.placeholder(tf.int32, [None, None], name=name)
