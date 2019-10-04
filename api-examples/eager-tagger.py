@@ -7,6 +7,7 @@ import eight_mile.embeddings
 from eight_mile.tf.embeddings import LookupTableEmbeddings
 from eight_mile.w2v import PretrainedEmbeddingsModel, RandomInitVecModel
 from eight_mile.tf.optz import EagerOptimizer
+from baseline.tf.tfy import SET_TRAIN_FLAG
 import tensorflow as tf
 import logging
 import numpy as np
@@ -16,11 +17,11 @@ TF_VERSION = get_version(tf)
 if TF_VERSION < 2:
     from tensorflow import count_nonzero
     tf.enable_eager_execution()
-    AdamOptimizer = tf.train.AdamOptimizer
+    Optimizer = tf.train.GradientDescentOptimizer
 
 else:
     from tensorflow.compat.v1 import count_nonzero
-    AdamOptimizer = tf.optimizers.Adam
+    Optimizer = tf.optimizers.SGD
 
 NUM_PREFETCH = 2
 SHUF_BUF_SZ = 5000
@@ -102,6 +103,7 @@ X_test, Xch_test, y_test = to_tensors(reader.load(test_file, vocabs=vocabs, batc
 
 
 def train_input_fn():
+    SET_TRAIN_FLAG(True)
     dataset = tf.data.Dataset.from_tensor_slices((X_train, Xch_train, y_train))
     dataset = dataset.shuffle(buffer_size=SHUF_BUF_SZ)
     # https://github.com/tensorflow/tensorflow/blob/master/tensorflow/contrib/distribute/README.md
@@ -111,24 +113,26 @@ def train_input_fn():
     dataset = dataset.map(lambda x, xch, y: ({'word': x, 'char': xch, 'lengths': count_nonzero(x, axis=1)}, y))
     dataset = dataset.repeat(1)
     dataset = dataset.prefetch(NUM_PREFETCH)
-    _ = dataset.make_one_shot_iterator()
+    #_ = dataset.make_one_shot_iterator()
     return dataset
 
 
 def eval_input_fn():
+    SET_TRAIN_FLAG(False)
     dataset = tf.data.Dataset.from_tensor_slices((X_valid, Xch_valid, y_valid))
     dataset = dataset.batch(20)
     dataset = dataset.map(lambda x, xch, y: ({'word': x, 'char': xch, 'lengths': count_nonzero(x, axis=1)}, y))
     #dataset = dataset.map(lambda x, y: (x, y))
-    _ = dataset.make_one_shot_iterator()
+    #_ = dataset.make_one_shot_iterator()
     return dataset
 
 
 def predict_input_fn():
+    SET_TRAIN_FLAG(False)
     dataset = tf.data.Dataset.from_tensor_slices((X_test, y_test))
     dataset = dataset.batch(1)
     dataset = dataset.map(lambda x, xch, y: ({'word': x, 'char': xch, 'lengths': count_nonzero(x, axis=1)}, y))
-    _ = dataset.make_one_shot_iterator()
+    #_ = dataset.make_one_shot_iterator()
     return dataset
 
 
@@ -144,7 +148,7 @@ def loss(model, x, y):
   return model.decoder_model.neg_log_loss(unary, y, x['lengths'])
 
 
-optim = EagerOptimizer(loss, tf.train.GradientDescentOptimizer(learning_rate=0.01))
+optim = EagerOptimizer(loss, Optimizer(learning_rate=0.01))
 
 
 import time

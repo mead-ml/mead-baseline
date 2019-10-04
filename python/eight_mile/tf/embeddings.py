@@ -245,8 +245,8 @@ class LargeLookupTableEmbeddings(LookupTableEmbeddings):
             e0 = tf.compat.v1.scatter_update(W, tf.compat.v1.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, self.dsz]))
 
             with tf.control_dependencies([e0]):
-                embedding_w_dropout = tf_dropout(W, self.dropin, noise_shape=(self.vsz, 1),  training=TRAIN_FLAG())
-                word_embeddings = tf.nn.embedding_lookup(embedding_w_dropout, self.x)
+                #embedding_w_dropout = tf_dropout(W, self.dropin, noise_shape=(self.vsz, 1),  training=TRAIN_FLAG())
+                word_embeddings = tf.nn.embedding_lookup(W, self.x)
 
         return word_embeddings
 
@@ -350,8 +350,8 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
                 mxwlen = tf.shape(self.x)[-1]
                 char_bt_x_w = tf.reshape(self.x, [-1, mxwlen])
                 # The ablation table (4) in https://arxiv.org/pdf/1708.02182.pdf shows this has a massive impact
-                embedding_w_dropout = tf_dropout(self.Wch, self.dropin, noise_shape=(self.vsz, 1), training=TRAIN_FLAG())
-                cembed = tf.nn.embedding_lookup(embedding_w_dropout, char_bt_x_w, name="embeddings")
+                #embedding_w_dropout = tf_dropout(self.Wch, self.dropin, noise_shape=(self.vsz, 1), training=TRAIN_FLAG())
+                cembed = tf.nn.embedding_lookup(self.Wch, char_bt_x_w, name="embeddings")
                 cmot, num_filts = char_word_conv_embeddings(cembed, self.filtsz, self.dsz, self.nfeats,
                                                             activation_fn=get_activation(self.activation),
                                                             gating=gating_fn,

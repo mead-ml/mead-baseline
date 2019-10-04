@@ -4,12 +4,6 @@ from baseline.utils import listify, Offsets, wraps, get_version
 import math
 BASELINE_TF_TRAIN_FLAG = None
 
-if get_version(tf) < 2:
-    tf_dropout = tf.layers.dropout
-else:
-    tf_dropout = tf.keras.layers.Dropout
-
-
 def SET_TRAIN_FLAG(X):
     global BASELINE_TF_TRAIN_FLAG
     BASELINE_TF_TRAIN_FLAG = X
@@ -209,10 +203,12 @@ def rnn_ident(output, hidden):
 def rnn_signal(output, hidden):
     return output
 
+
 # Mapped
 def rnn_hidden(output, output_state):
     output_state = output_state[-1].h
     return output_state
+
 
 # Mapped
 def rnn_bi_hidden(output, output_state):
@@ -294,8 +290,7 @@ class LayerNorm(tf.keras.layers.Layer):
         return x
 
 
-# Mapped
-class LSTMEncoder(tf.keras.Model):
+class LSTMEncoder2(tf.keras.Model):
 
     def __init__(self, hsz, nlayers, pdrop=0.0, variational=False, output_fn=None, requires_length=True, name=None,
                  dropout_in_single_layer=False, skip_conn=False, projsz=None, **kwargs):
@@ -310,7 +305,54 @@ class LSTMEncoder(tf.keras.Model):
         :param name: (``str``) Optional, defaults to `None`
         :return: a stacked cell
         """
-        super(LSTMEncoder, self).__init__(name=name)
+        super(LSTMEncoder2, self).__init__(name=name)
+        self._requires_length = requires_length
+        self.rnns = []#tf.keras.layers.Sequential()
+        for _ in range(nlayers-1):
+            self.rnns.append(tf.keras.layers.LSTM(hsz,
+                                                  return_sequences=True,
+                                                  recurrent_dropout=pdrop if variational else 0.0,
+                                                  dropout=pdrop if not variational else 0.0))
+        if nlayers == 1 and not dropout_in_single_layer and not variational:
+            pdrop = 0.0
+        self.rnns.append(tf.keras.layers.LSTM(hsz,
+                                              return_sequences=True,
+                                              return_state=True,
+                                              recurrent_dropout=pdrop if variational else 0.0,
+                                              dropout=pdrop if not variational else 0.0))
+
+        self.output_fn = rnn_ident if output_fn is None else output_fn
+
+    def call(self, inputs):
+        inputs, lengths = tensor_and_lengths(inputs)
+        mask = tf.sequence_mask(lengths)
+        for rnn in self.rnns:
+            outputs = rnn(inputs, mask=mask)
+            inputs = outputs
+        rnnout, h, c = outputs
+        return self.output_fn(rnnout, (h, c))
+
+    @property
+    def requires_length(self):
+        return self._requires_length
+
+
+class LSTMEncoder1(tf.keras.Model):
+
+    def __init__(self, hsz, nlayers, pdrop=0.0, variational=False, output_fn=None, requires_length=True, name=None,
+                 dropout_in_single_layer=False, skip_conn=False, projsz=None, **kwargs):
+        """Produce a stack of LSTMs with dropout performed on all but the last layer.
+
+        :param hsz: (``int``) The number of hidden units per LSTM
+        :param nlayers: (``int``) The number of layers of LSTMs to stack
+        :param pdrop: (``int``) The probability of dropping a unit value during dropout
+        :param variational: (``bool``) variational recurrence is on
+        :param output_fn: A function that filters output to decide what to return
+        :param requires_length: (``bool``) Does the input require an input length (defaults to ``True``)
+        :param name: (``str``) Optional, defaults to `None`
+        :return: a stacked cell
+        """
+        super(LSTMEncoder1, self).__init__(name=name)
         self._requires_length = requires_length
 
         if variational or dropout_in_single_layer:
@@ -340,7 +382,9 @@ class LSTMEncoder(tf.keras.Model):
         return self._requires_length
 
 
-class LSTMEncoderWithState(LSTMEncoder):
+class LSTMEncoderWithState(LSTMEncoder1):
+    def __init__(self, hsz, nlayers, pdrop=0.0, variational=False, output_fn=None, name=None, dropout_in_single_layer=True, **kwargs):
+        super(LSTMEncoderWithState, self).__init__(hsz, nlayers, pdrop, variational, output_fn, False, name, dropout_in_single_layer, **kwargs)
 
     def __init__(self, hsz, nlayers, pdrop=0.0, variational=False, output_fn=None, name=None, dropout_in_single_layer=True, **kwargs):
         super(LSTMEncoderWithState, self).__init__(hsz=hsz,
@@ -362,8 +406,64 @@ class LSTMEncoderWithState(LSTMEncoder):
         return self.output_fn(rnnout, hidden)
 
 
+
+
 # Mapped
-class BiLSTMEncoder(tf.keras.Model):
+class BiLSTMEncoder2(tf.keras.Model):
+
+
+    def __init__(self, hsz, nlayers, pdrop=0.0, variational=False, output_fn=None, requires_length=True, name=None,
+dropout_in_single_layer=False, skip_conn=False, projsz=None, **kwargs):
+        super(BiLSTMEncoder2, self).__init__(name=name)
+
+        """Produce a stack of LSTMs with dropout performed on all but the last layer.
+
+        :param hsz: (``int``) The number of hidden units per LSTM
+        :param nlayers: (``int``) The number of layers of LSTMs to stack
+        :param pdrop: (``int``) The probability of dropping a unit value during dropout
+        :param variational: (``bool``) variational recurrence is on
+        :param output_fn: A function that filters output to decide what to return
+        :param requires_length: (``bool``) Does the input require an input length (defaults to ``True``)
+        :param name: (``str``) Optional, defaults to `None`
+        :return: a stacked cell
+        """
+        super(BiLSTMEncoder2, self).__init__(name=name)
+        self._requires_length = requires_length
+        self.rnns = []
+        for _ in range(nlayers-1):
+            rnn = tf.keras.layers.LSTM(hsz//2,
+                                       return_sequences=True,
+                                       recurrent_dropout=pdrop if variational else 0.0,
+                                       dropout=pdrop if not variational else 0.0)
+            self.rnns.append(tf.keras.layers.Bidirectional(rnn))
+        if nlayers == 1 and not dropout_in_single_layer and not variational:
+            pdrop = 0.0
+        rnn = tf.keras.layers.LSTM(hsz//2,
+                                   return_sequences=True,
+                                   return_state=True,
+                                   recurrent_dropout=pdrop if variational else 0.0,
+                                   dropout=pdrop if not variational else 0.0)
+
+        self.rnns.append(tf.keras.layers.Bidirectional(rnn, merge_mode='concat'))
+        self.output_fn = rnn_ident if output_fn is None else output_fn
+
+    def call(self, inputs):
+        inputs, lengths = tensor_and_lengths(inputs)
+        mask = tf.sequence_mask(lengths)
+        for rnn in self.rnns:
+            outputs = rnn(inputs, mask=mask)
+            inputs = outputs
+        rnnout, h1, c1, h2, c2 = outputs
+        # TODO: This is not right!
+        return self.output_fn(rnnout, (h1, c1))
+
+    @property
+    def requires_length(self):
+        return self._requires_length
+
+
+# Mapped
+class BiLSTMEncoder1(tf.keras.Model):
 
     def __init__(self, hsz, nlayers, pdrop=0.0, variational=False, output_fn=None, requires_length=True, name=None,  skip_conn=False, projsz=None, **kwargs):
         """Produce a stack of LSTMs with dropout performed on all but the last layer.
@@ -375,7 +475,7 @@ class BiLSTMEncoder(tf.keras.Model):
         :param training (``bool``) Are we training? (defaults to ``False``)
         :return: a stacked cell
         """
-        super(BiLSTMEncoder, self).__init__(name=name)
+        super(BiLSTMEncoder1, self).__init__(name=name)
         self._requires_length = requires_length
         if variational:
             self.fwd_rnn = tf.contrib.rnn.MultiRNNCell([lstm_cell_w_dropout(hsz, pdrop, variational=variational, training=TRAIN_FLAG(), skip_conn=skip_conn, projsz=projsz) for _ in
@@ -409,6 +509,20 @@ class BiLSTMEncoder(tf.keras.Model):
     @property
     def requires_length(self):
         return self._requires_length
+
+
+
+
+
+if get_version(tf) < 2:
+    LSTMEncoder = LSTMEncoder1
+    BiLSTMEncoder = BiLSTMEncoder1
+    from tf.contrib.crf import crf_decode, crf_sequence_score, crf_log_norm
+else:
+    LSTMEncoder = LSTMEncoder2
+    BiLSTMEncoder = BiLSTMEncoder2
+    from tensorflow_addons.text.crf import crf_decode, crf_sequence_score, crf_log_norm
+
 
 
 class EmbeddingsStack(tf.keras.Model):
@@ -840,7 +954,7 @@ class TaggerGreedyDecoder(tf.keras.layers.Layer):
             gos = tf.constant(np_gos)
             start = tf.tile(gos, [bsz, 1, 1])
             probv = tf.concat([start, unary], axis=1)
-            viterbi, _ = tf.contrib.crf.crf_decode(probv, self.transitions, lengths + 1)
+            viterbi, _ = crf_decode(probv, self.transitions, lengths + 1)
             return tf.identity(viterbi[:, 1:], name="best")
         else:
             return tf.argmax(self.probs, 2, name="best")
@@ -881,13 +995,13 @@ class CRF(tf.keras.layers.Layer):
 
         :return: torch.FloatTensor: [B]
         """
-        return tf.contrib.crf.crf_sequence_score(unary, tags, lengths, self.transitions)
+        return crf_sequence_score(unary, tf.cast(tags, tf.int32), tf.cast(lengths, tf.int32), self.transitions)
 
     def call(self, inputs, training=False):
 
         unary, lengths = inputs
         if training:
-            return tf.contrib.crf.crf_log_norm(unary, lengths, self.transitions)
+            return crf_log_norm(unary, lengths, self.transitions)
         else:
             return self.decode(unary, lengths)
 
@@ -911,7 +1025,7 @@ class CRF(tf.keras.layers.Layer):
 
         probv = tf.concat([start, unary], axis=1)
 
-        viterbi, _ = tf.contrib.crf.crf_decode(probv, self.transitions, lengths + 1)
+        viterbi, _ = crf_decode(probv, self.transitions, lengths + 1)
         return tf.identity(viterbi[:, 1:], name="best")
 
     def neg_log_loss(self, unary, tags, lengths):
@@ -923,7 +1037,7 @@ class CRF(tf.keras.layers.Layer):
 
         :return: torch.FloatTensor: [B]
         """
-        fwd_score = self((unary, lengths), training=True)
+        fwd_score = self((unary, tf.cast(lengths, tf.int32)), training=True)
         gold_score = self.score_sentence(unary, tags, lengths)
         log_likelihood = gold_score - fwd_score
         return -tf.reduce_mean(log_likelihood)
