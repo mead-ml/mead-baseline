@@ -136,7 +136,7 @@ def predict_input_fn():
     return dataset
 
 
-transducer = L.BiLSTMEncoder(200, 1, 0.5, output_fn=L.rnn_signal)
+transducer = L.BiLSTMEncoder(200, 2, 0.5, output_fn=L.rnn_signal)
 model = L.TagSequenceModel(len(labels), embeddings, transducer)
 
 train_loss_results = []
@@ -166,8 +166,8 @@ for epoch in range(num_epochs):
 
         loss_acc += loss_value
         step += 1
-    print('training time {}'.format(time.time() - start))
 
+    print('training time {}'.format(time.time() - start))
     mean_loss = loss_acc / step
     print('Training Loss {}'.format(mean_loss))
 

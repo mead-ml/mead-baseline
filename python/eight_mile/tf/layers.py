@@ -205,17 +205,23 @@ def rnn_signal(output, hidden):
 
 
 # Mapped
-def rnn_hidden(output, output_state):
+def rnn_hidden1(output, output_state):
     output_state = output_state[-1].h
     return output_state
 
+def rnn_hidden2(output, output_state):
+    return output_state[0]
 
 # Mapped
-def rnn_bi_hidden(output, output_state):
+def rnn_bi_hidden1(output, output_state):
     fw_final_state, bw_final_state = output_state
     output_state = fw_final_state[-1].h + bw_final_state[-1].h
     return output_state
 
+def rnn_bi_hidden2(output, output_state):
+    fw_final_state, bw_final_state = output_state
+    output_state = fw_final_state[0] + bw_final_state[0]
+    return output_state
 
 def lstm_cell(hsz, forget_bias=1.0, **kwargs):
     """Produce a single cell with no dropout
@@ -411,7 +417,6 @@ class LSTMEncoderWithState(LSTMEncoder1):
 # Mapped
 class BiLSTMEncoder2(tf.keras.Model):
 
-
     def __init__(self, hsz, nlayers, pdrop=0.0, variational=False, output_fn=None, requires_length=True, name=None,
 dropout_in_single_layer=False, skip_conn=False, projsz=None, **kwargs):
         super(BiLSTMEncoder2, self).__init__(name=name)
@@ -453,9 +458,9 @@ dropout_in_single_layer=False, skip_conn=False, projsz=None, **kwargs):
         for rnn in self.rnns:
             outputs = rnn(inputs, mask=mask)
             inputs = outputs
-        rnnout, h1, c1, h2, c2 = outputs
-        # TODO: This is not right!
-        return self.output_fn(rnnout, (h1, c1))
+        rnnout, fwd_h, fwd_c, bwd_h, bwd_c = outputs
+
+        return self.output_fn(rnnout, ((fwd_h, fwd_c), (bwd_h, bwd_c)))
 
     @property
     def requires_length(self):
@@ -511,18 +516,18 @@ class BiLSTMEncoder1(tf.keras.Model):
         return self._requires_length
 
 
-
-
-
 if get_version(tf) < 2:
     LSTMEncoder = LSTMEncoder1
     BiLSTMEncoder = BiLSTMEncoder1
     from tf.contrib.crf import crf_decode, crf_sequence_score, crf_log_norm
+    rnn_bi_hidden = rnn_bi_hidden1
+    rnn_hidden = rnn_hidden1
 else:
     LSTMEncoder = LSTMEncoder2
     BiLSTMEncoder = BiLSTMEncoder2
     from tensorflow_addons.text.crf import crf_decode, crf_sequence_score, crf_log_norm
-
+    rnn_bi_hidden = rnn_bi_hidden2
+    rnn_hidden = rnn_hidden2
 
 
 class EmbeddingsStack(tf.keras.Model):
