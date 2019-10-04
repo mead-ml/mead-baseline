@@ -1,8 +1,13 @@
 import tensorflow as tf
 import numpy as np
-from baseline.utils import listify, Offsets, wraps
+from baseline.utils import listify, Offsets, wraps, get_version
 import math
 BASELINE_TF_TRAIN_FLAG = None
+
+if get_version(tf) < 2:
+    tf_dropout = tf.layers.dropout
+else:
+    tf_dropout = tf.keras.layers.Dropout
 
 
 def SET_TRAIN_FLAG(X):
@@ -591,7 +596,7 @@ def scaled_dot_product_attention(query, key, value, pdrop=0.0, mask=None):
         w = w * mask + -1e9 * (1 - mask)
 
     weights = tf.nn.softmax(w, name="attention_weights")
-    weights = tf.layers.dropout(weights, pdrop, training=TRAIN_FLAG())
+    weights = tf_dropout(weights, pdrop, training=TRAIN_FLAG())
     return tf.matmul(weights, value), weights
 
 
@@ -602,7 +607,7 @@ def dot_product_attention(query, key, value, pdrop=0.0, mask=None):
         w = w * mask + -1e9 * (1 - mask)
 
     weights = tf.nn.softmax(w, name="attention_weights")
-    weights = tf.layers.dropout(weights, pdrop, training=TRAIN_FLAG())
+    weights = tf_dropout(weights, pdrop, training=TRAIN_FLAG())
     return tf.matmul(weights, value), weights
 
 

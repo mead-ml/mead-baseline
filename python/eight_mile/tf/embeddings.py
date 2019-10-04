@@ -158,12 +158,9 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
             unif = kwargs.get('unif', 0.1)
             self._weights = np.random.uniform(-unif, unif, (self.vsz, self.dsz))
 
-        self.W = self.add_variable('{}/Weight'.format(self.scope),
-                                   shape=(self.vsz, self.dsz),
-                                   initializer=tf.constant_initializer(self._weights, dtype=tf.float32, verify_shape=True))
-
-
-
+        self.W = self.add_weight('{}/Weight'.format(self.scope),
+                                 shape=(self.vsz, self.dsz),
+                                 initializer=tf.compat.v1.constant_initializer(self._weights, dtype=tf.float32, verify_shape=True))
 
     def get_dsz(self):
         return self.dsz
@@ -195,16 +192,16 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
         if x is None:
             x = LookupTableEmbeddings.create_placeholder(self._name)
         self.x = x
-        with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
+        with tf.compat.v1.variable_scope(self.scope, reuse=tf.compat.v1.AUTO_REUSE):
 
-            e0 = tf.scatter_update(self.W, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, self.dsz]))
-        with tf.control_dependencies([e0]):
-            # The ablation table (4) in https://arxiv.org/pdf/1708.02182.pdf shows this has a massive impact
-            embedding_w_dropout = tf.layers.dropout(self.W, self.dropin, noise_shape=(self.vsz, 1),  training=TRAIN_FLAG())
-            word_embeddings = tf.nn.embedding_lookup(embedding_w_dropout, self.x)
-
+            e0 = tf.compat.v1.scatter_update(self.W, tf.compat.v1.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, self.dsz]))
         #with tf.control_dependencies([e0]):
-        #    word_embeddings = tf.nn.embedding_lookup(self.W, self.x)
+        #    # The ablation table (4) in https://arxiv.org/pdf/1708.02182.pdf shows this has a massive impact
+        #    embedding_w_dropout = tf_dropout(self.W, self.dropin, noise_shape=(self.vsz, 1),  training=TRAIN_FLAG())
+        #    word_embeddings = tf.nn.embedding_lookup(embedding_w_dropout, self.x)
+
+        with tf.control_dependencies([e0]):
+            word_embeddings = tf.nn.embedding_lookup(self.W, self.x)
         return word_embeddings
 
 
@@ -241,14 +238,14 @@ class LargeLookupTableEmbeddings(LookupTableEmbeddings):
             x = LookupTableEmbeddings.create_placeholder(self._name)
         self.x = x
 
-        with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
+        with tf.compat.v1.variable_scope(self.scope, reuse=tf.compat.v1.AUTO_REUSE):
             self.W_place = tf.placeholder(tf.float32, shape=(self.vsz, self.dsz))
             W = tf.get_variable("W", initializer=self.W_place)
 
-            e0 = tf.scatter_update(W, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, self.dsz]))
+            e0 = tf.compat.v1.scatter_update(W, tf.compat.v1.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, self.dsz]))
 
             with tf.control_dependencies([e0]):
-                embedding_w_dropout = tf.layers.dropout(W, self.dropin, noise_shape=(self.vsz, 1),  training=TRAIN_FLAG())
+                embedding_w_dropout = tf_dropout(W, self.dropin, noise_shape=(self.vsz, 1),  training=TRAIN_FLAG())
                 word_embeddings = tf.nn.embedding_lookup(embedding_w_dropout, self.x)
 
         return word_embeddings
@@ -308,8 +305,8 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
             self._weights = np.random.uniform(-unif, unif, (self.vsz, self.dsz))
 
         with tf.device("/cpu:0"):
-            self.Wch = self.add_variable('{}/Wch'.format(self.scope),
-                                         initializer=tf.constant_initializer(self._weights, dtype=tf.float32,
+            self.Wch = self.add_weight('{}/Wch'.format(self.scope),
+                                         initializer=tf.compat.v1.constant_initializer(self._weights, dtype=tf.float32,
                                                                              verify_shape=True),
                                          shape=[self.vsz, self.dsz], trainable=True)
         # These are the actual final filter sizes and num features
@@ -317,8 +314,8 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
         self.outsz = np.sum(self.nfeats)
 
         if self.projsz:
-            self.Wp = self.add_variable('{}/Wp'.format(self.scope), shape=[self.outsz, self.projsz], trainable=True)
-            self.bp = self.add_variable('{}/bp'.format(self.scope), shape=[self.projsz], trainable=True, initializer=tf.constant_initializer(0.0))
+            self.Wp = self.add_weight('{}/Wp'.format(self.scope), shape=[self.outsz, self.projsz], trainable=True)
+            self.bp = self.add_weight('{}/bp'.format(self.scope), shape=[self.projsz], trainable=True, initializer=tf.compat.v1.constant_initializer(0.0))
             self.outsz = self.projsz
 
     def detached_ref(self):
@@ -342,18 +339,18 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
             x = CharConvEmbeddings.create_placeholder(self.name)
         self.x = x
 
-        ech0 = tf.scatter_update(self.Wch, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, self.dsz]))
+        ech0 = tf.compat.v1.scatter_update(self.Wch, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, self.dsz]))
 
         mxlen = tf.shape(self.x)[1]
 
         gating_fn = highway_conns if self.gating.startswith('highway') else skip_conns
 
-        with tf.variable_scope("Chars2Word"):
+        with tf.compat.v1.variable_scope("Chars2Word"):
             with tf.control_dependencies([ech0]):
                 mxwlen = tf.shape(self.x)[-1]
                 char_bt_x_w = tf.reshape(self.x, [-1, mxwlen])
                 # The ablation table (4) in https://arxiv.org/pdf/1708.02182.pdf shows this has a massive impact
-                embedding_w_dropout = tf.layers.dropout(self.Wch, self.dropin, noise_shape=(self.vsz, 1), training=TRAIN_FLAG())
+                embedding_w_dropout = tf_dropout(self.Wch, self.dropin, noise_shape=(self.vsz, 1), training=TRAIN_FLAG())
                 cembed = tf.nn.embedding_lookup(embedding_w_dropout, char_bt_x_w, name="embeddings")
                 cmot, num_filts = char_word_conv_embeddings(cembed, self.filtsz, self.dsz, self.nfeats,
                                                             activation_fn=get_activation(self.activation),
@@ -513,7 +510,7 @@ class LearnedPositionalLookupTableEmbeddings(LookupTableEmbeddings):
         if self.pos_weights is None:
             unif = float(kwargs.get('unif', 0.1))
             self.pos_weights = np.random.uniform(-unif, unif, (self.mxlen, self.dsz))
-        with tf.variable_scope(self.scope):
+        with tf.compat.v1.variable_scope(self.scope):
             self.pos = tf.get_variable("pos",
                                        initializer=tf.constant_initializer(self.pos_weights, dtype=tf.float32, verify_shape=True),
                                        shape=[self.mxlen, self.dsz], trainable=True)
@@ -521,7 +518,7 @@ class LearnedPositionalLookupTableEmbeddings(LookupTableEmbeddings):
     def encode(self, x=None):
         x = super(LearnedPositionalLookupTableEmbeddings, self).encode(x)
         T = tf.shape(x)[1]
-        e0 = tf.scatter_update(self.pos, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, self.dsz]))
+        e0 = tf.compat.v1.scatter_update(self.pos, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, self.dsz]))
         with tf.control_dependencies([e0]):
             pos_embeddings = tf.nn.embedding_lookup(self.pos, tf.range(T, dtype=tf.int32))
 
@@ -560,7 +557,7 @@ class LearnedPositionalCharConvEmbeddings(CharConvEmbeddings):
         if self.pos_weights is None:
             unif = float(kwargs.get('unif', 0.1))
             self.pos_weights = np.random.uniform(-unif, unif, (self.mxlen, self.dsz))
-        with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
+        with tf.compat.v1.variable_scope(self.scope, reuse=tf.compat.v1.AUTO_REUSE):
             self.pos = tf.get_variable("pos",
                                        initializer=tf.constant_initializer(self.pos_weights, dtype=tf.float32, verify_shape=True),
                                        shape=[self.mxlen, self.dsz], trainable=True)
@@ -591,7 +588,7 @@ class LearnedPositionalCharConvEmbeddings(CharConvEmbeddings):
     def encode(self, x=None):
         x = super(LearnedPositionalCharConvEmbeddings, self).encode(x)
         T = tf.shape(x)[1]
-        e0 = tf.scatter_update(self.pos, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, self.dsz]))
+        e0 = tf.compat.v1.scatter_update(self.pos, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, self.dsz]))
         with tf.control_dependencies([e0]):
             pos_embeddings = tf.nn.embedding_lookup(self.pos, tf.range(T, dtype=tf.int32))
 

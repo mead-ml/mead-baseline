@@ -2,15 +2,25 @@
 from eight_mile.utils import listify
 import baseline
 import eight_mile.tf.layers as L
-
+from eight_mile.utils import get_version
 import eight_mile.embeddings
 from eight_mile.tf.embeddings import LookupTableEmbeddings
-from  eight_mile.w2v import PretrainedEmbeddingsModel, RandomInitVecModel
+from eight_mile.w2v import PretrainedEmbeddingsModel, RandomInitVecModel
 from eight_mile.tf.optz import EagerOptimizer
 import tensorflow as tf
 import logging
 import numpy as np
-tf.enable_eager_execution()
+
+
+TF_VERSION = get_version(tf)
+if TF_VERSION < 2:
+    from tensorflow import count_nonzero
+    tf.enable_eager_execution()
+    AdamOptimizer = tf.train.AdamOptimizer
+
+else:
+    from tensorflow.compat.v1 import count_nonzero
+    AdamOptimizer = tf.optimizers.Adam
 
 NUM_PREFETCH = 2
 SHUF_BUF_SZ = 5000
@@ -98,7 +108,7 @@ def train_input_fn():
     # effective_batch_sz = args.batchsz*args.gpus
     dataset = dataset.batch(20)
     #dataset = dataset.map(lambda x, y: (x, y))
-    dataset = dataset.map(lambda x, xch, y: ({'word': x, 'char': xch, 'lengths': tf.count_nonzero(x, axis=1)}, y))
+    dataset = dataset.map(lambda x, xch, y: ({'word': x, 'char': xch, 'lengths': count_nonzero(x, axis=1)}, y))
     dataset = dataset.repeat(1)
     dataset = dataset.prefetch(NUM_PREFETCH)
     _ = dataset.make_one_shot_iterator()
@@ -108,7 +118,7 @@ def train_input_fn():
 def eval_input_fn():
     dataset = tf.data.Dataset.from_tensor_slices((X_valid, Xch_valid, y_valid))
     dataset = dataset.batch(20)
-    dataset = dataset.map(lambda x, xch, y: ({'word': x, 'char': xch, 'lengths': tf.count_nonzero(x, axis=1)}, y))
+    dataset = dataset.map(lambda x, xch, y: ({'word': x, 'char': xch, 'lengths': count_nonzero(x, axis=1)}, y))
     #dataset = dataset.map(lambda x, y: (x, y))
     _ = dataset.make_one_shot_iterator()
     return dataset
@@ -117,7 +127,7 @@ def eval_input_fn():
 def predict_input_fn():
     dataset = tf.data.Dataset.from_tensor_slices((X_test, y_test))
     dataset = dataset.batch(1)
-    dataset = dataset.map(lambda x, xch, y: ({'word': x, 'char': xch, 'lengths': tf.count_nonzero(x, axis=1)}, y))
+    dataset = dataset.map(lambda x, xch, y: ({'word': x, 'char': xch, 'lengths': count_nonzero(x, axis=1)}, y))
     _ = dataset.make_one_shot_iterator()
     return dataset
 

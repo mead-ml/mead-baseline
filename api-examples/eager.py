@@ -1,14 +1,27 @@
 import baseline
+from eight_mile.utils import get_version
 from eight_mile.confusion import ConfusionMatrix
 import eight_mile.tf.embeddings
 import eight_mile.tf.layers as L
+from eight_mile.tf.layers import TRAIN_FLAG, SET_TRAIN_FLAG
 from eight_mile.tf.optz import EagerOptimizer
 import tensorflow as tf
 import logging
 import numpy as np
 import time
 
-tf.enable_eager_execution()
+
+
+TF_VERSION = get_version(tf)
+if TF_VERSION < 2:
+    from tensorflow import count_nonzero
+    tf.enable_eager_execution()
+    AdamOptimizer = tf.train.AdamOptimizer
+
+else:
+    from tensorflow.compat.v1 import count_nonzero
+    AdamOptimizer = tf.optimizers.Adam
+
 #tf.config.gpu.set_per_process_memory_growth(True)
 
 NUM_PREFETCH = 2
@@ -89,33 +102,36 @@ X_test, y_test = to_tensors(reader.load(test_file, vocabs=vocabs, batchsz=1))
 
 
 def train_input_fn():
+    SET_TRAIN_FLAG(True)
     dataset = tf.data.Dataset.from_tensor_slices((X_train, y_train))
     dataset = dataset.shuffle(buffer_size=SHUF_BUF_SZ)
     # https://github.com/tensorflow/tensorflow/blob/master/tensorflow/contrib/distribute/README.md
     # effective_batch_sz = args.batchsz*args.gpus
     dataset = dataset.batch(50)
     #dataset = dataset.map(lambda x, y: (x, y))
-    dataset = dataset.map(lambda x, y: ({'word': x, 'lengths': tf.count_nonzero(x, axis=1)}, y))
+    dataset = dataset.map(lambda x, y: ({'word': x, 'lengths': count_nonzero(x, axis=1)}, y))
     dataset = dataset.repeat(1)
     dataset = dataset.prefetch(NUM_PREFETCH)
-    _ = dataset.make_one_shot_iterator()
+    #_ = dataset.make_one_shot_iterator()
     return dataset
 
 
 def eval_input_fn():
+    SET_TRAIN_FLAG(False)
     dataset = tf.data.Dataset.from_tensor_slices((X_valid, y_valid))
     dataset = dataset.batch(50)
-    dataset = dataset.map(lambda x, y: ({'word': x, 'lengths': tf.count_nonzero(x, axis=1)}, y))
+    dataset = dataset.map(lambda x, y: ({'word': x, 'lengths': count_nonzero(x, axis=1)}, y))
     #dataset = dataset.map(lambda x, y: (x, y))
-    _ = dataset.make_one_shot_iterator()
+    #_ = dataset.make_one_shot_iterator()
+
     return dataset
 
 
 def predict_input_fn():
     dataset = tf.data.Dataset.from_tensor_slices((X_test, y_test))
     dataset = dataset.batch(1)
-    dataset = dataset.map(lambda x, y: ({'word': x, 'lengths': tf.count_nonzero(x, axis=1)}, y))
-    _ = dataset.make_one_shot_iterator()
+    dataset = dataset.map(lambda x, y: ({'word': x, 'lengths': count_nonzero(x, axis=1)}, y))
+    #_ = dataset.make_one_shot_iterator()
     return dataset
 
 
@@ -127,10 +143,11 @@ train_accuracy_results = []
 
 def loss(model, x, y):
   y_ = model(x)
-  return tf.losses.sparse_softmax_cross_entropy(labels=y, logits=y_)
+  return tf.compat.v1.losses.sparse_softmax_cross_entropy(labels=y, logits=y_)
 
 
-optimizer = EagerOptimizer(loss, tf.train.AdamOptimizer(learning_rate=0.001))
+# 2.0 function
+optimizer = EagerOptimizer(loss, AdamOptimizer(learning_rate=0.001))
 
 
 num_epochs = 2

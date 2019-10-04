@@ -132,7 +132,7 @@ class CompositeLRSchedulerTensorFlow(object):
         def call_warm():
             return warm_tensor
 
-        rest_step = tf.subtract(global_step, tf.constant(self.warm.warmup_steps, dtype=global_step.dtype))
+        rest_step = tf.subtract(global_step, tf.compat.v1.constant(self.warm.warmup_steps, dtype=global_step.dtype))
         rest_tensor = self.rest(lr, rest_step)
 
         def call_rest():
@@ -147,7 +147,7 @@ class CompositeLRSchedulerTensorFlow(object):
         return "LRScheduler({}, {})".format(self.warm, self.rest)
 
 
-class AdamWOptimizer(tf.train.Optimizer):
+class AdamWOptimizer(tf.compat.v1.train.Optimizer):
     """A basic Adam optimizer that includes "correct" L2 weight decay.
 
     Modified from: https://github.com/google-research/bert/blob/master/optimization.py
