@@ -209,9 +209,6 @@ def rnn_hidden1(output, output_state):
     output_state = output_state[-1].h
     return output_state
 
-def rnn_hidden2(output, output_state):
-    return output_state[0]
-
 # Mapped
 def rnn_bi_hidden1(output, output_state):
     fw_final_state, bw_final_state = output_state
@@ -389,8 +386,6 @@ class LSTMEncoder1(tf.keras.Model):
 
 
 class LSTMEncoderWithState(LSTMEncoder1):
-    def __init__(self, hsz, nlayers, pdrop=0.0, variational=False, output_fn=None, name=None, dropout_in_single_layer=True, **kwargs):
-        super(LSTMEncoderWithState, self).__init__(hsz, nlayers, pdrop, variational, output_fn, False, name, dropout_in_single_layer, **kwargs)
 
     def __init__(self, hsz, nlayers, pdrop=0.0, variational=False, output_fn=None, name=None, dropout_in_single_layer=True, **kwargs):
         super(LSTMEncoderWithState, self).__init__(hsz=hsz,
@@ -458,9 +453,10 @@ dropout_in_single_layer=False, skip_conn=False, projsz=None, **kwargs):
         for rnn in self.rnns:
             outputs = rnn(inputs, mask=mask)
             inputs = outputs
-        rnnout, fwd_h, fwd_c, bwd_h, bwd_c = outputs
 
-        return self.output_fn(rnnout, ((fwd_h, fwd_c), (bwd_h, bwd_c)))
+        rnnout, h1, c1, h2, c2 = outputs
+        # TODO: This is not right!
+        return self.output_fn(rnnout, (h1, c1))
 
     @property
     def requires_length(self):
@@ -520,14 +516,11 @@ if get_version(tf) < 2:
     LSTMEncoder = LSTMEncoder1
     BiLSTMEncoder = BiLSTMEncoder1
     from tf.contrib.crf import crf_decode, crf_sequence_score, crf_log_norm
-    rnn_bi_hidden = rnn_bi_hidden1
-    rnn_hidden = rnn_hidden1
+
 else:
     LSTMEncoder = LSTMEncoder2
     BiLSTMEncoder = BiLSTMEncoder2
     from tensorflow_addons.text.crf import crf_decode, crf_sequence_score, crf_log_norm
-    rnn_bi_hidden = rnn_bi_hidden2
-    rnn_hidden = rnn_hidden2
 
 
 class EmbeddingsStack(tf.keras.Model):

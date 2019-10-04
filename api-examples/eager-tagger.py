@@ -23,7 +23,6 @@ else:
     from tensorflow.compat.v1 import count_nonzero
     Optimizer = tf.optimizers.SGD
 
-
 NUM_PREFETCH = 2
 SHUF_BUF_SZ = 5000
 def get_logging_level(ll):
