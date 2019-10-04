@@ -23,6 +23,7 @@ else:
     from tensorflow.compat.v1 import count_nonzero
     Optimizer = tf.optimizers.SGD
 
+
 NUM_PREFETCH = 2
 SHUF_BUF_SZ = 5000
 def get_logging_level(ll):
@@ -132,11 +133,10 @@ def predict_input_fn():
     dataset = tf.data.Dataset.from_tensor_slices((X_test, y_test))
     dataset = dataset.batch(1)
     dataset = dataset.map(lambda x, xch, y: ({'word': x, 'char': xch, 'lengths': count_nonzero(x, axis=1)}, y))
-    #_ = dataset.make_one_shot_iterator()
     return dataset
 
 
-transducer = L.BiLSTMEncoder(200, 2, 0.5, output_fn=L.rnn_signal)
+transducer = L.BiLSTMEncoder(None, 200, 2, 0.5, output_fn=L.rnn_signal)
 model = L.TagSequenceModel(len(labels), embeddings, transducer)
 
 train_loss_results = []

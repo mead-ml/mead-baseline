@@ -248,6 +248,7 @@ class LargeLookupTableEmbeddings(LookupTableEmbeddings):
                 #embedding_w_dropout = tf_dropout(W, self.dropin, noise_shape=(self.vsz, 1),  training=TRAIN_FLAG())
                 word_embeddings = tf.nn.embedding_lookup(W, self.x)
 
+
         return word_embeddings
 
     def get_feed_dict(self):
