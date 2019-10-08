@@ -1,9 +1,11 @@
-
-from baseline.utils import listify, revlut
 import baseline
-from baseline.tf.tfy import *
-from baseline.tf.embeddings import LookupTableEmbeddings
-from baseline.w2v import PretrainedEmbeddingsModel, RandomInitVecModel
+import eight_mile.tf.embeddings
+import eight_mile.tf.layers as L
+from eight_mile.tf.layers import TRAIN_FLAG, SET_TRAIN_FLAG
+from eight_mile.tf.optz import EagerOptimizer
+from eight_mile.utils import listify, revlut
+from eight_mile.tf.embeddings import LookupTableEmbeddings
+from eight_mile.w2v import PretrainedEmbeddingsModel, RandomInitVecModel
 import tensorflow as tf
 import logging
 import numpy as np
@@ -73,7 +75,7 @@ vocabs = reader.build_vocab([train_file,
 embeddings = dict()
 for k, v in feature_desc.items():
     embed_config = v['embed']
-    embeddings_for_k = baseline.load_embeddings(k, known_vocab=vocabs[k], **embed_config)
+    embeddings_for_k = eight_mile.embeddings.load_embeddings(k, known_vocab=vocabs[k], **embed_config)
     embeddings[k] = embeddings_for_k['embeddings']
     # Reset the vocab to the embeddings one
     vocabs[k] = embeddings_for_k['vocab']
@@ -113,9 +115,9 @@ def predict_input_fn():
     _ = dataset.make_one_shot_iterator()
     return dataset
 
-transducer = LSTMEncoderWithState(200, 1, 0.5, output_fn=rnn_ident)
+transducer = L.LSTMEncoderWithState(200, 1, 0.5, output_fn=L.rnn_ident)
 #transducer = LSTMEncoder(200, 1, 0.5, output_fn=rnn_ident)
-model = LangSequenceModel(embeddings["word"].vsz, embeddings, transducer)
+model = L.LangSequenceModel(embeddings["word"].vsz, embeddings, transducer)
 
 train_loss_results = []
 train_accuracy_results = []
