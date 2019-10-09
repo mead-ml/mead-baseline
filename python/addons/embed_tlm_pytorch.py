@@ -69,6 +69,7 @@ class WordPieceVectorizer1D(AbstractVectorizer):
         for i, atom in enumerate(self._next_element(tokens, vocab)):
             if i == self.mxlen:
                 i -= 1
+                vec1d[i] = vocab.get('[CLS]')
                 break
             vec1d[i] = atom
         valid_length = i + 1
@@ -90,7 +91,7 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
         self.vocab = read_json(kwargs.get('vocab_file'))
         self.cls_index = self.vocab['[CLS]']
         self.vsz = len(self.vocab)
-        layers = int(kwargs.get('layers', 16))
+        layers = int(kwargs.get('layers', 18))
         num_heads = int(kwargs.get('num_heads', 10))
         pdrop = kwargs.get('dropout', 0.1)
         self.d_model = int(kwargs.get('dsz', kwargs.get('d_model', 410)))
@@ -128,8 +129,8 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
     def forward(self, x):
         input_mask = torch.zeros(x.shape, device=x.device, dtype=torch.long).masked_fill(x != 0, 1).unsqueeze(1).unsqueeze(1)
         embedding = self.embed(x)
-        z = self.get_output(x, self.transformer(embedding, mask=input_mask))
-        return z
+        transformer_output = self.transformer(embedding, mask=input_mask)
+        return self.get_output(x, transformer_output)
 
     def get_output(self, inputs, z):
         return z.detach()
