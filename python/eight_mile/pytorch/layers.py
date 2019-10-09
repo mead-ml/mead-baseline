@@ -120,7 +120,8 @@ def get_activation(name="relu"):
 def _cat_dir(h):
     return torch.cat([h[0:h.size(0):2], h[1:h.size(0):2]], dim=-1)
 
-
+# In PyTorch, the return of an LSTM (and input), are output, (h_n, c_n)
+# and each of those is of shape (num_layers * num_directions * batchsz * hsz)
 def rnn_ident(output, hidden):
     return output, hidden
 

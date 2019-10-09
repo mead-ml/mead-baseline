@@ -170,9 +170,35 @@ class ParallelConv(tf.keras.layers.Layer):
     def requires_length(self):
         return False
 
+
+# In TensorFlow 1.0, the return of a multi-LSTM cell (and input) depends on the value of state_is_tuple, which
+# is normally True.  Assuming that to be the case, the returned states are n-tuples where n = len(cells)
+# cells = ( LSTMStateTuple(c1, h1), LSTMStateTuple(c2, h2), ...)
+# and each of those is of shape (num_layers * num_directions * batchsz * hsz)
+# bidirectional_dynamic_rnn simply produces two states back out
+
+# In TensorFlow 2.0 (Keras), the return of an LSTM depends on the input and the options are fairly flexible
+
+# LSTM: The outputs depend on inputs `return_sequences` and `return_state`
+# The `return_sequences` means that a temporal vector is returned of the outputs
+# If `return_state` is set to True, then the return values will be
+
+
+# Bidirectional: bidirectional output depends on the `merge_mode` which can be `sum`, `mul`, `concat`, `ave` and None
+# If None, the outputs will not be combined, instead they are returned as a list
+
+# Because there isnt really any multi-layer wrapper
+
 # Mapped
 def rnn_ident(output, hidden):
+    """Returns back the output sequence of an RNN and the hidden state
+
+    :param output: A temporal vector of output
+    :param hidden:
+    :return:
+    """
     return output, hidden
+
 
 # Mapped
 def rnn_signal(output, hidden):
@@ -225,6 +251,7 @@ def lstm_cell_w_dropout(hsz, pdrop, forget_bias=1.0, variational=False, training
                                            variational_recurrent=variational,
                                            dtype=tf.float32)
     return output
+
 
 def rnn_cell(hsz, rnntype, st=None):
     """Produce a single RNN cell
@@ -309,11 +336,16 @@ class LSTMEncoder(tf.keras.Model):
 
 
 class LSTMEncoderWithState(LSTMEncoder):
-    def __init__(self, hsz, nlayers, pdrop=0.0, variational=False, output_fn=None, name=None, dropout_in_single_layer=True, **kwargs):
-        super(LSTMEncoderWithState, self).__init__(hsz, nlayers, pdrop, variational, output_fn, False, name, dropout_in_single_layer, **kwargs)
 
-        #h = tf.reshape(tf.concat(rnnout, 1), [-1, self.hsz])
-        #self.final_state = state
+    def __init__(self, hsz, nlayers, pdrop=0.0, variational=False, output_fn=None, name=None, dropout_in_single_layer=True, **kwargs):
+        super(LSTMEncoderWithState, self).__init__(hsz=hsz,
+                                                    nlayers=nlayers,
+                                                    pdrop=pdrop,
+                                                    variational=variational,
+                                                    output_fn=output_fn,
+                                                    length_required=False,
+                                                    name=name,
+                                                    dropout_in_single_layer=dropout_in_single_layer, **kwargs)
 
     def zero_state(self, batchsz):
         return self.rnn.zero_state(batchsz, tf.float32)
