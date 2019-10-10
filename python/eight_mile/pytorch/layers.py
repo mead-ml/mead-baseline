@@ -120,40 +120,7 @@ def get_activation(name="relu"):
 def _cat_dir(h):
     return torch.cat([h[0:h.size(0):2], h[1:h.size(0):2]], dim=-1)
 
-# In PyTorch, the return of an LSTM (and input), are output, (h_n, c_n)
-# and each of those is of shape (num_layers * num_directions * batchsz * hsz)
-def rnn_ident(output, hidden):
-    return output, hidden
 
-
-def rnn_signal(output, _):
-    return output
-
-def rnn_hidden(_, output_state):
-    return output_state
-
-def rnn_bi_hidden(output, output_state):
-    if isinstance(output_state, tuple):
-        output_state = tuple(_cat_dir(h) for h in output_state)
-    else:
-        output_state = _cat_dir(output_state)
-    return output, output_state
-
-#def pytorch_rnn(insz, hsz, rnntype, nlayers, dropout):
-#    if nlayers == 1:
-#        dropout = 0.0
-#
-#    if rnntype == 'gru':
-#        rnn = torch.nn.GRU(insz, hsz, nlayers, dropout=dropout)
-#    elif rnntype == 'blstm':
-#        rnn = torch.nn.LSTM(insz, hsz//2, nlayers, dropout=dropout, bidirectional=True)
-#        rnn = BiRNNWrapper(rnn, nlayers)
-#    elif rnntype == 'bgru':
-#        rnn = torch.nn.GRU(insz, hsz//2, nlayers, dropout=dropout, bidirectional=True)
-#        rnn = BiRNNWrapper(rnn, nlayers)
-#    else:
-#        rnn = torch.nn.LSTM(insz, hsz, nlayers, dropout=dropout)
-#    return rnn
 
 # Mapped
 class ConvEncoder(nn.Module):
@@ -366,10 +333,11 @@ def pytorch_lstm(insz, hsz, rnntype, nlayers, dropout, unif=0, batch_first=False
     return rnn
 
 
-# Mapped
+# Obnoxious, now that TF has a deferred mode, the insz isnt required but it is for this one.  Should we make it
+# the same for TF?
 class LSTMEncoder(nn.Module):
 
-    def __init__(self, insz, hsz, nlayers, pdrop=0.0, output_fn=None, requires_length=True, batch_first=False, unif=0, initializer=None, **kwargs):
+    def __init__(self, insz, hsz, nlayers, pdrop=0.0, requires_length=True, batch_first=False, unif=0, initializer=None, **kwargs):
         """Produce a stack of biLSTMs with dropout performed on all but the last layer.
 
         :param insz: (``int``) The size of the input
@@ -381,7 +349,7 @@ class LSTMEncoder(nn.Module):
         :param batch_first: (``bool``) Should we do batch first input or time-first input?
         :return: a stacked cell
         """
-        super(LSTMEncoder, self).__init__()
+        super().__init__()
         self._requires_length = requires_length
         if nlayers == 1:
             pdrop = 0.0
@@ -398,7 +366,6 @@ class LSTMEncoder(nn.Module):
         else:
             nn.init.xavier_uniform_(self.rnn.weight_hh_l0)
             nn.init.xavier_uniform_(self.rnn.weight_ih_l0)
-        self.output_fn = rnn_ident if output_fn is None else output_fn
         self.output_dim = hsz
 
     def forward(self, inputs):
@@ -412,18 +379,37 @@ class LSTMEncoder(nn.Module):
     def requires_length(self):
         return self._requires_length
 
+    def output_fn(self, output, state):
+        return output, state
 
-# Mapped
+
+class LSTMEncoderSequence(LSTMEncoder):
+
+    def __init__(self, insz, hsz, nlayers, pdrop=0.0, requires_length=True, batch_first=False, unif=0, initializer=None, **kwargs):
+        super().__init__(insz, hsz, nlayers, pdrop, requires_length, batch_first, unif, initializer, **kwargs)
+
+    def output_fn(self, output, state):
+        return output
+
+
+class LSTMEncoderHidden(LSTMEncoder):
+
+    def __init__(self, insz, hsz, nlayers, pdrop=0.0, requires_length=True, batch_first=False, unif=0, initializer=None, **kwargs):
+        super().__init__(insz, hsz, nlayers, pdrop, requires_length, batch_first, unif, initializer, **kwargs)
+
+    def output_fn(self, output, state):
+        return state
+
+
 class BiLSTMEncoder(nn.Module):
 
-    def __init__(self, insz, hsz, nlayers, pdrop=0.0, output_fn=None, requires_length=True, batch_first=False, unif=0, initializer=None, **kwargs):
+    def __init__(self, insz, hsz, nlayers, pdrop=0.0, requires_length=True, batch_first=False, unif=0, initializer=None, **kwargs):
         """Produce a stack of LSTMs with dropout performed on all but the last layer.
 
         :param insz: (``int``) The size of the input
         :param hsz: (``int``) The number of hidden units per biLSTM (`hsz//2` used for each dir)
         :param nlayers: (``int``) The number of layers of LSTMs to stack
         :param dropout: (``int``) The probability of dropping a unit value during dropout
-        :param output_fn: function to determine what is returned from the encoder
         :param requires_length: (``bool``) Does this encoder require an input length in its inputs (defaults to ``True``)
         :param batch_first: (``bool``) Should we do batch first input or time-first input?
         :return: a stacked cell
@@ -445,7 +431,6 @@ class BiLSTMEncoder(nn.Module):
         else:
             nn.init.xavier_uniform_(self.rnn.weight_hh_l0)
             nn.init.xavier_uniform_(self.rnn.weight_ih_l0)
-        self.output_fn = rnn_ident if output_fn is None else output_fn
         self.output_dim = hsz
 
     def forward(self, inputs):
@@ -455,10 +440,39 @@ class BiLSTMEncoder(nn.Module):
         output, _ = torch.nn.utils.rnn.pad_packed_sequence(output)
         return self.output_fn(output, hidden)
 
+    def output_fn(self, output, state):
+        if isinstance(state, tuple):
+            state = tuple(_cat_dir(h) for h in state)
+        else:
+            state = _cat_dir(state)
+        return output, state
+
     @property
     def requires_length(self):
         return self._requires_length
 
+
+
+class BiLSTMEncoderSequence(BiLSTMEncoder):
+
+    def __init__(self, insz, hsz, nlayers, pdrop=0.0, requires_length=True, batch_first=False, unif=0, initializer=None, **kwargs):
+        super().__init__(insz, hsz, nlayers, pdrop, requires_length, batch_first, unif, initializer, **kwargs)
+
+    def output_fn(self, output, state):
+        return output
+
+
+class BiLSTMEncoderHidden(BiLSTMEncoder):
+
+    def __init__(self, insz, hsz, nlayers, pdrop=0.0, requires_length=True, batch_first=False, unif=0, initializer=None, **kwargs):
+        super().__init__(insz, hsz, nlayers, pdrop, requires_length, batch_first, unif, initializer, **kwargs)
+
+    def output_fn(self, output, state):
+        if isinstance(state, tuple):
+            state = tuple(_cat_dir(h) for h in state)
+        else:
+            state = _cat_dir(state)
+        return state
 
 class EmbeddingsContainer(nn.Module):
     def __init__(self):

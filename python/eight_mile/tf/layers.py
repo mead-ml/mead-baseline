@@ -369,6 +369,25 @@ class LSTMEncoderHidden2(LSTMEncoder2):
         :param state: The hidden state
         :return: The last hidden state `(h, c)`
         """
+        return state[0]
+
+
+
+class LSTMEncoderHiddenContext2(LSTMEncoder2):
+
+    def __init__(self, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None,
+                 dropout_in_single_layer=False, skip_conn=False, projsz=None, **kwargs):
+        super().__init__(hsz=hsz, nlayers=nlayers, pdrop=pdrop, variational=variational,
+                         requires_length=requires_length, name=name, dropout_in_single_layer=dropout_in_single_layer,
+                         skip_conn=skip_conn, projsz=projsz, **kwargs)
+
+    def output_fn(self, output, state):
+        """Return last hidden state `(h, c)`
+
+        :param output: The sequence
+        :param state: The hidden state
+        :return: The last hidden state `(h, c)`
+        """
         return state
 
 
@@ -445,6 +464,24 @@ class LSTMEncoderSequence1(LSTMEncoder1):
 
 
 class LSTMEncoderHidden1(LSTMEncoder1):
+
+    def __init__(self, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None,
+                 dropout_in_single_layer=False, skip_conn=False, projsz=None, **kwargs):
+        super().__init__(hsz=hsz, nlayers=nlayers, pdrop=pdrop, variational=variational,
+                         requires_length=requires_length, name=name, dropout_in_single_layer=dropout_in_single_layer,
+                         skip_conn=skip_conn, projsz=projsz, **kwargs)
+
+    def output_fn(self, output, state):
+        """Return last hidden state `(h, c)`
+
+        :param output: The sequence
+        :param hidden: The hidden state
+        :return: The last hidden state `(h, c)`
+        """
+        return state[0]
+
+
+class LSTMEncoderHiddenContext1(LSTMEncoder1):
 
     def __init__(self, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None,
                  dropout_in_single_layer=False, skip_conn=False, projsz=None, **kwargs):
@@ -551,7 +588,17 @@ class BiLSTMEncoderHidden2(BiLSTMEncoder2):
         super().__init__(hsz, nlayers, pdrop, variational, requires_length, name, dropout_in_single_layer, skip_conn, projsz, **kwargs)
 
     def output_fn(self, rnnout, state):
+        return state[0][0] + state[1][0]
+
+
+class BiLSTMEncoderHiddenContext2(BiLSTMEncoder2):
+    def __init__(self, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None, dropout_in_single_layer=False, skip_conn=False, projsz=None, **kwargs):
+        super().__init__(hsz, nlayers, pdrop, variational, requires_length, name, dropout_in_single_layer, skip_conn, projsz, **kwargs)
+
+    def output_fn(self, rnnout, state):
         return state
+
+
 
 
 # Mapped
@@ -637,25 +684,46 @@ class BiLSTMEncoderHidden1(BiLSTMEncoder1):
         super().__init__(hsz, nlayers, pdrop, variational, requires_length, name, skip_conn, projsz, **kwargs)
 
     def output_fn(self, rnnout, state):
-        return state
+        return state[0][0] + state[1][0]
 
+
+class BiLSTMEncoderHiddenContext1(BiLSTMEncoder1):
+
+    def __init__(self, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None,  skip_conn=False, projsz=None, **kwargs):
+        """Produce a stack of LSTMs with dropout performed on all but the last layer.
+
+        :param hsz: (``int``) The number of hidden units per LSTM
+        :param nlayers: (``int``) The number of layers of LSTMs to stack
+        :param pdrop: (``int``) The probability of dropping a unit value during dropout
+        :param variational (``bool``) variational recurrence is on
+        :param training (``bool``) Are we training? (defaults to ``False``)
+        :return: a stacked cell
+        """
+        super().__init__(hsz, nlayers, pdrop, variational, requires_length, name, skip_conn, projsz, **kwargs)
+
+    def output_fn(self, rnnout, state):
+        return state
 
 if get_version(tf) < 2:
     LSTMEncoder = LSTMEncoder1
     LSTMEncoderSequence = LSTMEncoderSequence1
     LSTMEncoderHidden = LSTMEncoderHidden1
+    LSTMEncoderHiddenContext = LSTMEncoderHiddenContext1
     BiLSTMEncoder = BiLSTMEncoder1
     BiLSTMEncoderSequence = BiLSTMEncoderSequence1
     BiLSTMEncoderHidden = BiLSTMEncoderHidden1
+    BiLSTMEncoderHiddenContext = BiLSTMEncoderHiddenContext1
     from tf.contrib.crf import crf_decode, crf_sequence_score, crf_log_norm
 
 else:
     LSTMEncoder = LSTMEncoder2
     LSTMEncoderSequence = LSTMEncoderSequence2
     LSTMEncoderHidden = LSTMEncoderHidden2
+    LSTMEncoderHiddenContext = LSTMEncoderHiddenContext2
     BiLSTMEncoder = BiLSTMEncoder2
     BiLSTMEncoderSequence = BiLSTMEncoderSequence2
     BiLSTMEncoderHidden = BiLSTMEncoderHidden2
+    BiLSTMEncoderHiddenContext = BiLSTMEncoderHiddenContext2
     from tensorflow_addons.text.crf import crf_decode, crf_sequence_score, crf_log_norm
 
 
