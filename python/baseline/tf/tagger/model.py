@@ -87,7 +87,12 @@ class TaggerModelBase(TaggerModel):
         for k, v in self.embeddings.items():
             embeddings_info[k] = v.__class__.__name__
 
-        blacklist = set(chain(self._unserializable, MAGIC_VARS, self.embeddings.keys()))
+        blacklist = set(chain(
+            self._unserializable,
+            MAGIC_VARS,
+            self.embeddings.keys(),
+            (f"{k}_lengths" for k in self.embeddings.keys())
+        ))
         self._state = {k: v for k, v in kwargs.items() if k not in blacklist}
         self._state.update({
             'version': __version__,
@@ -98,24 +103,6 @@ class TaggerModelBase(TaggerModel):
         if 'constraint_mask' in kwargs:
             self._state['constraint_mask'] = True
 
-
-    def _record_state(self, **kwargs):
-        """
-        First, write out the embedding names, so we can recover those.  Then do a deepcopy on the model init params
-        so that it can be recreated later.  Anything that is a placeholder directly on this model needs to be removed
-
-        :param kwargs:
-        :return:
-        """
-        embeddings_info = {}
-        for k, v in self.embeddings.items():
-            embeddings_info[k] = v.__class__.__name__
-
-        self._state = {k: v for k, v in kwargs.items() if k not in self._unserializable + MAGIC_VARS + list(self.embeddings.keys())}
-        self._state.update({
-            "version": __version__,
-            "embeddings": embeddings_info
-        })
 
     @property
     def dropin_value(self):
