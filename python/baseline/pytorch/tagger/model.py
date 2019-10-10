@@ -110,6 +110,12 @@ class TaggerModelBase(nn.Module, TaggerModel):
                 y = y.cuda()
             example_dict['y'] = y
 
+        # Add y_lengths to the dict so it gets sorted correctly
+        y_lengths = batch_dict.get('y_lengths')
+        if y_lengths is not None:
+            y_lengths = torch.from_numpy(y_lengths)[perm_idx]
+            example_dict['y_lengths'] = y_lengths
+
         ids = batch_dict.get('ids')
         if ids is not None:
             ids = torch.from_numpy(ids)[perm_idx]

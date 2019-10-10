@@ -326,6 +326,8 @@ class Task(object):
         out_vocabs = {}
         for feature in features:
             embeddings_section = feature['embeddings']
+            if embeddings_section is None:
+                continue
             name = feature['name']
             embed_label = embeddings_section.get('label', None)
             embed_type = embeddings_section.get('type', 'default')

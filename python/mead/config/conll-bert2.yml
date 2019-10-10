@@ -1,0 +1,47 @@
+version: 2
+modules: [embed_bert_pytorch]
+task: tagger
+conll_output: conll-bert-iobes.conll
+unif: 0.1
+
+preproc:
+    mxlen: -1
+    mxwlen: -1
+features:
+ - name: bert
+   vectorizer:
+     type: dict-wordpiece1d-with-heads
+     embed_file: bert-base-uncased
+   embeddings:
+     type: bert
+     dsz: 768
+     finetune: true
+     operator: 'mean'
+     layers:
+         - -1
+     embed_file: bert-base-uncased
+
+
+backend: pytorch
+dataset: conll-iobes
+
+loader:
+    reader_type: bert
+    named_fields:
+       "0": text
+       "-1": y
+
+model:
+    model_type: bert2
+    dropout: 0.1
+    reduction: "token"
+
+train:
+    epochs: 10
+    optim: adam
+    eta: 1.0e-5
+    patience: 5
+    early_stopping_metric: f1
+    clip: 5.0
+    batchsz: 32
+    span_type: iobes

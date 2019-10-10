@@ -81,7 +81,7 @@ class Service(object):
         examples = defaultdict(list)
         for i, tokens in enumerate(tokens_batch):
             for k, vectorizer in self.vectorizers.items():
-                vec, length = vectorizer.run(tokens, self.vocabs[k])
+                vec, length = vectorizer.run(tokens, self.vocabs.get(k))
                 examples[k].append(vec)
                 if length is not None:
                     lengths_key = '{}_lengths'.format(k)
@@ -304,7 +304,7 @@ class TaggerService(Service):
                         tokens_batch += [utt_dict_seq]
                 # Its already in List[List[dict]] form, do nothing
                 elif isinstance(tokens[0][0], dict):
-                    tokens_batch = [tokens]
+                    tokens_batch = tokens
             # If its a dict, we just wrap it up
             elif isinstance(tokens[0], dict):
                 tokens_batch = [tokens]
@@ -386,18 +386,17 @@ class LanguageModelService(Service):
         mxwlen = kwargs.get('mxwlen', 40)
 
         for k, vectorizer in self.vectorizers.items():
-            if hasattr(vectorizer, 'mxlen') and vectorizer.mxlen == -1:
-                vectorizer.mxlen = mxlen
             if hasattr(vectorizer, 'mxwlen') and vectorizer.mxwlen == -1:
                 vectorizer.mxwlen = mxwlen
 
         token_buffer = tokens
-        tokens_seq = tokens
+        tokens_batch = tokens
         examples = dict()
         for i in range(mxlen):
 
             for k, vectorizer in self.vectorizers.items():
-                vectorizer.mxlen = len(token_buffer)
+                vectorizer.reset()
+                _ = vectorizer.count(token_buffer)
                 vec, length = vectorizer.run(token_buffer, self.vocabs[k])
                 if k in examples:
                     examples[k] = np.append(examples[k], vec)
@@ -417,9 +416,9 @@ class LanguageModelService(Service):
             if token_str == '<EOS>':
                 break
             if token_str != '<PAD>':
-                tokens_seq += [token_str]
+                tokens_batch += [token_str]
             token_buffer = [token_str]
-        return tokens_seq
+        return tokens_batch
 
 
 @exporter
@@ -466,7 +465,7 @@ class EncoderDecoderService(Service):
 
     def vectorize(self, tokens_batch):
         examples = defaultdict(list)
-        for i, tokens in enumerate(tokens_seq):
+        for i, tokens in enumerate(tokens_batch):
             for k, vectorizer in self.src_vectorizers.items():
                 vec, length = vectorizer.run(tokens, self.src_vocabs[k])
                 examples[k] += [vec]
@@ -487,6 +486,7 @@ class EncoderDecoderService(Service):
             vectorizer.reset()
             for tokens in tokens_batch:
                 _ = vectorizer.count(tokens)
+
         examples = self.vectorize(tokens_batch)
 
         kwargs['beam'] = int(kwargs.get('beam', K))

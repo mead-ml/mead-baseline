@@ -335,7 +335,7 @@ class SeqPredictReader(object):
         for i, example_tokens in enumerate(texts):
             example = {}
             for k, vectorizer in self.vectorizers.items():
-                example[k], lengths = vectorizer.run(example_tokens, vocabs[k])
+                example[k], lengths = vectorizer.run(example_tokens, vocabs.get(k))
                 if lengths is not None:
                     example['{}_lengths'.format(k)] = lengths
             example['y'], lengths = self.label_vectorizer.run(example_tokens, self.label2index)

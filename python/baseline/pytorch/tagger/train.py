@@ -99,7 +99,10 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
 
             inputs = self.model.make_input(batch_dict)
             y = inputs.pop('y')
-            lengths = inputs['lengths']
+            # It is possible with new wordpiece based tokens that the lengths of the data
+            # Is longer than the length of the labels so we will use the label lengths to
+            # cut the data for eval
+            lengths = inputs.get('y_lengths', inputs['lengths'])
             ids = inputs['ids']
             with torch.no_grad():
                 pred = self.model(inputs)

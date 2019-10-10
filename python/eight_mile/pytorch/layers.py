@@ -988,6 +988,40 @@ def viterbi(unary, trans, lengths, start_idx, end_idx, norm = lambda x, y: x):
     return best_path, path_score
 
 
+class SequenceCriterion(nn.Module):
+
+    def __init__(self, LossFn=nn.NLLLoss, avg='token'):
+        super(SequenceCriterion, self).__init__()
+        self.avg = avg
+        if avg == 'token':
+            self.crit = LossFn(ignore_index=Offsets.PAD, reduction='mean')
+            self._norm = self._no_norm
+        else:
+            self.crit = LossFn(ignore_index=Offsets.PAD, size_average=False)
+            self._norm = self._batch_norm
+
+    def _batch_norm(self, loss, inputs):
+        return loss / inputs.size()[0]
+
+    def _no_norm(self, loss, inputs):
+        return loss
+
+    def forward(self, inputs, targets):
+        """Evaluate some loss over a sequence.
+
+        :param inputs: torch.FloatTensor, [B, .., C] The scores from the model. Batch First
+        :param targets: torch.LongTensor, The labels.
+
+        :returns: torch.FloatTensor, The loss.
+        """
+        total_sz = targets.nelement()
+        loss = self.crit(inputs.view(total_sz, -1), targets.view(total_sz))
+        return self._norm(loss, inputs)
+
+    def extra_repr(self):
+        return f"reduction={self.avg}"
+
+
 class TaggerGreedyDecoder(nn.Module):
 
     def __init__(self, num_tags, constraint_mask=None, batch_first=True, reduction='batch'):
