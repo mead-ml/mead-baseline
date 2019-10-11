@@ -38,6 +38,14 @@ def get_logging_level(ll):
     return logging.WARNING
 
 
+def to_device(m):
+    return m
+
+
+def to_host(o):
+    return o
+
+
 parser = argparse.ArgumentParser(description='Train a Layers model with TensorFlow API')
 parser.add_argument('--model_type', help='What type of model to build', type=str, default='default')
 parser.add_argument('--poolsz', help='How many hidden units for pooling', type=int, default=100)
@@ -55,15 +63,6 @@ parser.add_argument('--ll', help='Log level', type=str, default='info')
 parser.add_argument('--lr', help='Learning rate', type=float, default=0.001)
 
 args = parser.parse_known_args()[0]
-
-
-def to_tensors(ts):
-    X = []
-    y = []
-    for sample in ts:
-        X.append(sample['word'].squeeze())
-        y.append(sample['y'].squeeze())
-    return np.stack(X), np.stack(y)
 
 feature_desc = {
     'word': {
@@ -99,53 +98,46 @@ for k, v in feature_desc.items():
     vocabs[k] = embeddings_for_k['vocab']
 
 
-X_train, y_train = to_tensors(reader.load(train_file, vocabs=vocabs, batchsz=1))
-X_valid, y_valid = to_tensors(reader.load(valid_file, vocabs=vocabs, batchsz=1))
-X_test, y_test = to_tensors(reader.load(test_file, vocabs=vocabs, batchsz=1))
+class Data:
+
+    def __init__(self, ts, batchsz):
+        self.x, self.y = self._to_tensors(ts)
+        self.batchsz = batchsz
+
+    def _to_tensors(self, ts):
+        x = []
+        y = []
+        for sample in ts:
+            x.append(sample['word'].squeeze())
+            y.append(sample['y'].squeeze())
+        return np.stack(x), np.stack(y)
+
+    def get_input(self, training=False):
+        SET_TRAIN_FLAG(training)
+        dataset = tf.data.Dataset.from_tensor_slices((self.x, self.y))
+        dataset = dataset.shuffle(buffer_size=SHUF_BUF_SZ)
+        dataset = dataset.batch(50)
+        dataset = dataset.map(lambda x, y: ({'word': x, 'lengths': count_nonzero(x, axis=1)}, y))
+        dataset = dataset.prefetch(NUM_PREFETCH)
+        return dataset
 
 
-def train_input_fn():
-    SET_TRAIN_FLAG(True)
-    dataset = tf.data.Dataset.from_tensor_slices((X_train, y_train))
-    dataset = dataset.shuffle(buffer_size=SHUF_BUF_SZ)
-    # https://github.com/tensorflow/tensorflow/blob/master/tensorflow/contrib/distribute/README.md
-    # effective_batch_sz = args.batchsz*args.gpus
-    dataset = dataset.batch(50)
-    #dataset = dataset.map(lambda x, y: (x, y))
-    dataset = dataset.map(lambda x, y: ({'word': x, 'lengths': count_nonzero(x, axis=1)}, y))
-    dataset = dataset.repeat(1)
-    dataset = dataset.prefetch(NUM_PREFETCH)
-    #_ = dataset.make_one_shot_iterator()
-    return dataset
-
-
-def valid_input_fn():
-    SET_TRAIN_FLAG(False)
-    dataset = tf.data.Dataset.from_tensor_slices((X_valid, y_valid))
-    dataset = dataset.batch(50)
-    dataset = dataset.map(lambda x, y: ({'word': x, 'lengths': count_nonzero(x, axis=1)}, y))
-    #dataset = dataset.map(lambda x, y: (x, y))
-    #_ = dataset.make_one_shot_iterator()
-
-    return dataset
-
-
-def test_input_fn():
-    dataset = tf.data.Dataset.from_tensor_slices((X_test, y_test))
-    dataset = dataset.batch(1)
-    dataset = dataset.map(lambda x, y: ({'word': x, 'lengths': count_nonzero(x, axis=1)}, y))
-    #_ = dataset.make_one_shot_iterator()
-    return dataset
-
+train_set = Data(reader.load(train_file, vocabs=vocabs, batchsz=1), args.batchsz)
+valid_set = Data(reader.load(valid_file, vocabs=vocabs, batchsz=1), args.batchsz)
+test_set = Data(reader.load(test_file, vocabs=vocabs, batchsz=1), args.batchsz)
 
 stacksz = len(args.filts) * args.poolsz
 num_epochs = 2
 
-model = L.EmbedPoolStackModel(2, embeddings, L.ParallelConv(300, args.poolsz, args.filts), L.Highway(stacksz))
+model = to_device(
+    L.EmbedPoolStackModel(2, embeddings, L.ParallelConv(300, args.poolsz, args.filts), L.Highway(stacksz))
+)
+
 
 def loss(model, x, y):
   y_ = model(x)
   return tf.compat.v1.losses.sparse_softmax_cross_entropy(labels=y, logits=y_)
+
 
 optimizer = EagerOptimizer(loss, Adam(0.001))
 
@@ -153,7 +145,7 @@ for epoch in range(num_epochs):
     loss_acc = 0.
     step = 0
     start = time.time()
-    for x, y in train_input_fn():
+    for x, y in train_set.get_input(training=True):
         loss_value = optimizer.update(model, x, y)
         loss_acc += loss_value
         step += 1
@@ -161,16 +153,16 @@ for epoch in range(num_epochs):
     mean_loss = loss_acc / step
     print('Training Loss {}'.format(mean_loss))
     cm = ConfusionMatrix(['0', '1'])
-    for x, y in valid_input_fn():
-        y_ = np.argmax(model(x), axis=1)
+    for x, y in valid_set.get_input():
+        y_ = np.argmax(to_device(model(x)), axis=1)
         cm.add_batch(y, y_)
     print(cm)
     print(cm.get_all_metrics())
 
 print('FINAL')
 cm = ConfusionMatrix(['0', '1'])
-for x, y in test_input_fn():
-    y_ = tf.argmax(model(x), axis=1, output_type=tf.int32)
+for x, y in test_set.get_input():
+    y_ = tf.argmax(to_device(model(x)), axis=1, output_type=tf.int32)
     cm.add_batch(y, y_)
 
 print(cm)

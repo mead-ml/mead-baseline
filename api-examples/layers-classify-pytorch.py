@@ -22,6 +22,15 @@ def get_logging_level(ll):
         return logging.INFO
     return logging.WARNING
 
+
+def to_device(m):
+    return m.cuda()
+
+
+def to_host(o):
+    return o.cpu().float().numpy()
+
+
 parser = argparse.ArgumentParser(description='Train a Layers model with PyTorch API')
 parser.add_argument('--model_type', help='What type of model to build', type=str, default='default')
 parser.add_argument('--poolsz', help='How many hidden units for pooling', type=int, default=100)
@@ -66,15 +75,24 @@ class DictionaryDatasetWrapper(Dataset):
         return len(self.tensor_dataset)
 
 
-def to_tensors(ts):
-    x = []
-    x_lengths = []
-    y = []
-    for sample in ts:
-        x.append(sample['word'].squeeze())
-        x_lengths.append(sample['word_lengths'].squeeze())
-        y.append(sample['y'].squeeze())
-    return DictionaryDatasetWrapper(torch.tensor(np.stack(x), dtype=torch.long), torch.tensor(np.stack(x_lengths), dtype=torch.long), torch.tensor(np.stack(y), dtype=torch.long))
+class Data:
+
+    def __init__(self, ts, batchsz):
+        self.ds = self._to_tensors(ts)
+        self.batchsz = batchsz
+
+    def _to_tensors(self, ts):
+        x = []
+        x_lengths = []
+        y = []
+        for sample in ts:
+            x.append(sample['word'].squeeze())
+            x_lengths.append(sample['word_lengths'].squeeze())
+            y.append(sample['y'].squeeze())
+        return DictionaryDatasetWrapper(torch.tensor(np.stack(x), dtype=torch.long), torch.tensor(np.stack(x_lengths), dtype=torch.long), torch.tensor(np.stack(y), dtype=torch.long))
+
+    def get_input(self, training=False):
+        return DataLoader(self.ds, batch_size=self.batchsz, shuffle=training)
 
 
 vectorizers = {k: v['vectorizer'] for k, v in feature_desc.items()}
@@ -104,32 +122,23 @@ for k, v in feature_desc.items():
     vocabs[k] = embeddings_for_k['vocab']
 
 
-train_set = to_tensors(reader.load(train_file, vocabs=vocabs, batchsz=1))
-valid_set = to_tensors(reader.load(valid_file, vocabs=vocabs, batchsz=1))
-test_set = to_tensors(reader.load(test_file, vocabs=vocabs, batchsz=1))
-
-
-def train_input_fn():
-    return DataLoader(train_set, batch_size=args.batchsz, shuffle=True)
-
-def valid_input_fn():
-    return DataLoader(valid_set, batch_size=args.batchsz, shuffle=False)
-
-def test_input_fn():
-    return DataLoader(test_set, batch_size=1, shuffle=False)
-
-def as_np(cuda_ten):
-    return cuda_ten.cpu().float().numpy()
+train_set = Data(reader.load(train_file, vocabs=vocabs, batchsz=1), args.batchsz)
+valid_set = Data(reader.load(valid_file, vocabs=vocabs, batchsz=1), args.batchsz)
+test_set = Data(reader.load(test_file, vocabs=vocabs, batchsz=1), args.batchsz)
 
 stacksz = len(args.filts) * args.poolsz
 num_epochs = 2
 
-model = L.EmbedPoolStackModel(2, embeddings, L.ParallelConv(300, args.poolsz, args.filts), L.Highway(stacksz)).cuda()
+model = to_device(
+    L.EmbedPoolStackModel(2, embeddings, L.ParallelConv(300, args.poolsz, args.filts), L.Highway(stacksz))
+)
+
 
 def loss(model, x, y):
     y_ = model(x)
     l = F.nll_loss(y_, y)
     return l
+
 
 optimizer = EagerOptimizer(loss, Adam(model.parameters(), 0.001))
 
@@ -137,7 +146,7 @@ for epoch in range(num_epochs):
     loss_acc = 0.
     step = 0
     start = time.time()
-    for x, y in train_input_fn():
+    for x, y in train_set.get_input(training=True):
         loss_value = optimizer.update(model, x, y)
         loss_acc += loss_value
         step += 1
@@ -145,9 +154,9 @@ for epoch in range(num_epochs):
     mean_loss = loss_acc / step
     print('Training Loss {}'.format(mean_loss))
     cm = ConfusionMatrix(['0', '1'])
-    for x, y in valid_input_fn():
+    for x, y in valid_set.get_input():
         with torch.no_grad():
-            y_ = np.argmax(as_np(model(x)), axis=1)
+            y_ = np.argmax(to_host(model(x)), axis=1)
             cm.add_batch(y, y_)
     print(cm)
     print(cm.get_all_metrics())
@@ -155,8 +164,8 @@ for epoch in range(num_epochs):
 print('FINAL')
 cm = ConfusionMatrix(['0', '1'])
 with torch.no_grad():
-    for x, y in test_input_fn():
-        y_ = np.argmax(as_np(model(x)), axis=1)
+    for x, y in test_set.get_input():
+        y_ = np.argmax(to_host(model(x)), axis=1)
         cm.add_batch(y, y_)
 
 print(cm)
