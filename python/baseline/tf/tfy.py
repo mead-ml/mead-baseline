@@ -191,5 +191,5 @@ def multi_rnn_cell_w_dropout(hsz, pdrop, rnntype, num_layers, variational=False,
 
 
 def stacked_dense(inputs, init, hszs=[], pdrop_value=0.5):
-    return DenseStack(hszs, pdrop_value=pdrop_value, init=init)(inputs)
+    return DenseStack(None, hszs, pdrop_value=pdrop_value, init=init)(inputs)
 

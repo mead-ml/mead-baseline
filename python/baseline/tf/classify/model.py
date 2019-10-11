@@ -332,7 +332,7 @@ class EmbedPoolStackClassifier(ClassifierModelBase):
         hszs = listify(kwargs.get('hsz', []))
         if len(hszs) == 0:
             return None
-        return DenseStack(hszs, pdrop_value=self.pdrop_value)
+        return DenseStack(None, hszs, pdrop_value=self.pdrop_value)
 
 
 @register_model(task='classify', name='default')
@@ -405,8 +405,8 @@ class LSTMModel(EmbedPoolStackClassifier):
         nlayers = int(kwargs.get('layers', 1))
 
         if rnntype == 'blstm':
-            return BiLSTMEncoder(hsz, nlayers, self.pdrop_value, vdrop, output_fn=rnn_bi_hidden)
-        return LSTMEncoder(hsz, nlayers, self.pdrop_value, vdrop, output_fn=rnn_hidden)
+            return BiLSTMEncoder(None, hsz, nlayers, self.pdrop_value, vdrop, output_fn=rnn_bi_hidden)
+        return LSTMEncoder(None, hsz, nlayers, self.pdrop_value, vdrop, output_fn=rnn_hidden)
 
 
 class NBowBase(EmbedPoolStackClassifier):

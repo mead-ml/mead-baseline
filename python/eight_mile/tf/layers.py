@@ -4,6 +4,7 @@ from baseline.utils import listify, Offsets, wraps, get_version
 import math
 BASELINE_TF_TRAIN_FLAG = None
 
+
 def SET_TRAIN_FLAG(X):
     global BASELINE_TF_TRAIN_FLAG
     BASELINE_TF_TRAIN_FLAG = X
@@ -83,8 +84,8 @@ def get_activation(name='relu'):
 
 # Mapped
 class ConvEncoder(tf.keras.Model):
-    def __init__(self, outsz, filtsz, pdrop, activation='relu'):
-        super(ConvEncoder, self).__init__()
+    def __init__(self, insz, outsz, filtsz, pdrop, activation='relu'):
+        super().__init__()
         self.output_dim = outsz
         self.conv = tf.keras.layers.Conv1D(filters=outsz, kernel_size=filtsz, padding='same')
         self.act = get_activation(activation)
@@ -98,13 +99,13 @@ class ConvEncoder(tf.keras.Model):
 # Mapped
 class ConvEncoderStack(tf.keras.Model):
 
-    def __init__(self, outsz, filtsz, pdrop, layers=1, activation='relu'):
-        super(ConvEncoderStack, self).__init__()
+    def __init__(self, insz, outsz, filtsz, pdrop, layers=1, activation='relu'):
+        super().__init__()
 
-        first_layer = ConvEncoder(outsz, filtsz, pdrop, activation)
+        first_layer = ConvEncoder(insz, outsz, filtsz, pdrop, activation)
         self.layers.append(first_layer)
         for i in range(layers-1):
-            subsequent_layer = ResidualBlock(ConvEncoder(outsz, filtsz, pdrop, activation))
+            subsequent_layer = ResidualBlock(ConvEncoder(insz, outsz, filtsz, pdrop, activation))
             self.layers.append(subsequent_layer)
 
     def call(self, inputs):
@@ -127,7 +128,7 @@ class ParallelConv(tf.keras.layers.Layer):
         :param motsz: The number of conv filters to use (can be an int or a list to allow for various sized filters)
         :param activation: (``str``) The name of the activation function to use (`default='relu`)
         """
-        super(ParallelConv, self).__init__(name=name)
+        super().__init__(name=name)
         self.Ws = []
         self.bs = []
         self.activation = get_activation(activation)
@@ -168,45 +169,6 @@ class ParallelConv(tf.keras.layers.Layer):
     @property
     def requires_length(self):
         return False
-
-
-# In TensorFlow 1.0, the return of a multi-LSTM cell (and input) depends on the value of state_is_tuple, which
-# is normally True.  Assuming that to be the case, the returned states are n-tuples where n = len(cells)
-# cells = ( LSTMStateTuple(c1, h1), LSTMStateTuple(c2, h2), ...)
-
-# PyTorch
-# each of those is of shape (num_layers * num_directions * batchsz * hsz)
-# bidirectional_dynamic_rnn simply produces two states back out
-
-# In TensorFlow 2.0 (Keras), the return of an LSTM depends on the input and the options are fairly flexible
-
-# LSTM: The outputs depend on inputs `return_sequences` and `return_state`
-# The `return_sequences` means that a temporal vector is returned of the outputs
-# If `return_state` is set to True, then the return values will be (state_h, state_c)
-# If both are turned on, we get output, state_h, state_c for the last layer
-# Under most circumstances, we have no interest in previous hidden states being returned
-
-# Bidirectional: bidirectional output depends on the `merge_mode` which can be `sum`, `mul`, `concat`, `ave` and None
-# If None, the outputs will not be combined, instead they are returned as a list
-
-# Because there isnt really any multi-layer wrapper
-
-# Mapped
-
-
-# Mapped
-#def rnn_hidden1(output, output_state):
-#    output_state = output_state[-1].h
-#    return output_state
-
-#def rnn_hidden2(output, output_state):
-#    return output_state[0]
-
-# Mapped
-#def rnn_bi_hidden1(output, output_state):
-#    fw_final_state, bw_final_state = output_state
-#    output_state = fw_final_state[-1].h + bw_final_state[-1].h
-#    return output_state
 
 
 def lstm_cell(hsz, forget_bias=1.0, **kwargs):
@@ -284,7 +246,7 @@ class LayerNorm(tf.keras.layers.Layer):
 
 class LSTMEncoder2(tf.keras.Model):
 
-    def __init__(self, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None,
+    def __init__(self, insz, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None,
                  dropout_in_single_layer=False, skip_conn=False, projsz=None, **kwargs):
         """Produce a stack of LSTMs with dropout performed on all but the last layer.
 
@@ -338,9 +300,9 @@ class LSTMEncoder2(tf.keras.Model):
 
 class LSTMEncoderSequence2(LSTMEncoder2):
 
-    def __init__(self, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None,
+    def __init__(self, insz, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None,
                  dropout_in_single_layer=False, skip_conn=False, projsz=None, **kwargs):
-        super().__init__(hsz=hsz, nlayers=nlayers, pdrop=pdrop, variational=variational,
+        super().__init__(insz=insz, hsz=hsz, nlayers=nlayers, pdrop=pdrop, variational=variational,
                          requires_length=requires_length, name=name, dropout_in_single_layer=dropout_in_single_layer,
                          skip_conn=skip_conn, projsz=projsz, **kwargs)
 
@@ -356,9 +318,9 @@ class LSTMEncoderSequence2(LSTMEncoder2):
 
 class LSTMEncoderHidden2(LSTMEncoder2):
 
-    def __init__(self, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None,
+    def __init__(self, insz, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None,
                  dropout_in_single_layer=False, skip_conn=False, projsz=None, **kwargs):
-        super().__init__(hsz=hsz, nlayers=nlayers, pdrop=pdrop, variational=variational,
+        super().__init__(insz=insz, hsz=hsz, nlayers=nlayers, pdrop=pdrop, variational=variational,
                          requires_length=requires_length, name=name, dropout_in_single_layer=dropout_in_single_layer,
                          skip_conn=skip_conn, projsz=projsz, **kwargs)
 
@@ -375,9 +337,9 @@ class LSTMEncoderHidden2(LSTMEncoder2):
 
 class LSTMEncoderHiddenContext2(LSTMEncoder2):
 
-    def __init__(self, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None,
+    def __init__(self, insz, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None,
                  dropout_in_single_layer=False, skip_conn=False, projsz=None, **kwargs):
-        super().__init__(hsz=hsz, nlayers=nlayers, pdrop=pdrop, variational=variational,
+        super().__init__(insz=insz, hsz=hsz, nlayers=nlayers, pdrop=pdrop, variational=variational,
                          requires_length=requires_length, name=name, dropout_in_single_layer=dropout_in_single_layer,
                          skip_conn=skip_conn, projsz=projsz, **kwargs)
 
@@ -393,7 +355,7 @@ class LSTMEncoderHiddenContext2(LSTMEncoder2):
 
 class LSTMEncoder1(tf.keras.Model):
 
-    def __init__(self, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None,
+    def __init__(self, insz, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None,
                  dropout_in_single_layer=False, skip_conn=False, projsz=None, **kwargs):
         """Produce a stack of LSTMs with dropout performed on all but the last layer.
 
@@ -406,7 +368,7 @@ class LSTMEncoder1(tf.keras.Model):
         :param name: (``str``) Optional, defaults to `None`
         :return: a stacked cell
         """
-        super(LSTMEncoder1, self).__init__(name=name)
+        super().__init__(name=name)
         self._requires_length = requires_length
 
         if variational or dropout_in_single_layer:
@@ -447,9 +409,9 @@ class LSTMEncoder1(tf.keras.Model):
 
 class LSTMEncoderSequence1(LSTMEncoder1):
 
-    def __init__(self, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None,
+    def __init__(self, insz, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None,
                  dropout_in_single_layer=False, skip_conn=False, projsz=None, **kwargs):
-        super().__init__(hsz=hsz, nlayers=nlayers, pdrop=pdrop, variational=variational,
+        super().__init__(insz=insz, hsz=hsz, nlayers=nlayers, pdrop=pdrop, variational=variational,
                          requires_length=requires_length, name=name, dropout_in_single_layer=dropout_in_single_layer,
                          skip_conn=skip_conn, projsz=projsz, **kwargs)
 
@@ -465,9 +427,9 @@ class LSTMEncoderSequence1(LSTMEncoder1):
 
 class LSTMEncoderHidden1(LSTMEncoder1):
 
-    def __init__(self, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None,
+    def __init__(self, insz, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None,
                  dropout_in_single_layer=False, skip_conn=False, projsz=None, **kwargs):
-        super().__init__(hsz=hsz, nlayers=nlayers, pdrop=pdrop, variational=variational,
+        super().__init__(insz=insz, hsz=hsz, nlayers=nlayers, pdrop=pdrop, variational=variational,
                          requires_length=requires_length, name=name, dropout_in_single_layer=dropout_in_single_layer,
                          skip_conn=skip_conn, projsz=projsz, **kwargs)
 
@@ -483,9 +445,9 @@ class LSTMEncoderHidden1(LSTMEncoder1):
 
 class LSTMEncoderHiddenContext1(LSTMEncoder1):
 
-    def __init__(self, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None,
+    def __init__(self, insz, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None,
                  dropout_in_single_layer=False, skip_conn=False, projsz=None, **kwargs):
-        super().__init__(hsz=hsz, nlayers=nlayers, pdrop=pdrop, variational=variational,
+        super().__init__(insz=insz, hsz=hsz, nlayers=nlayers, pdrop=pdrop, variational=variational,
                          requires_length=requires_length, name=name, dropout_in_single_layer=dropout_in_single_layer,
                          skip_conn=skip_conn, projsz=projsz, **kwargs)
 
@@ -501,8 +463,9 @@ class LSTMEncoderHiddenContext1(LSTMEncoder1):
 
 class LSTMEncoderWithState1(LSTMEncoder1):
 
-    def __init__(self, hsz, nlayers, pdrop=0.0, variational=False, name=None, dropout_in_single_layer=True, **kwargs):
-        super().__init__(hsz=hsz,
+    def __init__(self, insz, hsz, nlayers, pdrop=0.0, variational=False, name=None, dropout_in_single_layer=True, **kwargs):
+        super().__init__(insz=insz,
+                         hsz=hsz,
                          nlayers=nlayers,
                          pdrop=pdrop,
                          variational=variational,
@@ -523,7 +486,7 @@ class LSTMEncoderWithState1(LSTMEncoder1):
 # Mapped
 class BiLSTMEncoder2(tf.keras.Model):
 
-    def __init__(self, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None, dropout_in_single_layer=False, skip_conn=False, projsz=None, **kwargs):
+    def __init__(self, insz, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None, dropout_in_single_layer=False, skip_conn=False, projsz=None, **kwargs):
         super().__init__(name=name)
 
         """Produce a stack of LSTMs with dropout performed on all but the last layer.
@@ -576,35 +539,32 @@ class BiLSTMEncoder2(tf.keras.Model):
 
 
 class BiLSTMEncoderSequence2(BiLSTMEncoder2):
-    def __init__(self, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None, dropout_in_single_layer=False, skip_conn=False, projsz=None, **kwargs):
-        super().__init__(hsz, nlayers, pdrop, variational, requires_length, name, dropout_in_single_layer, skip_conn, projsz, **kwargs)
+    def __init__(self, insz, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None, dropout_in_single_layer=False, skip_conn=False, projsz=None, **kwargs):
+        super().__init__(insz, hsz, nlayers, pdrop, variational, requires_length, name, dropout_in_single_layer, skip_conn, projsz, **kwargs)
 
     def output_fn(self, rnnout, state):
         return rnnout
 
 
 class BiLSTMEncoderHidden2(BiLSTMEncoder2):
-    def __init__(self, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None, dropout_in_single_layer=False, skip_conn=False, projsz=None, **kwargs):
-        super().__init__(hsz, nlayers, pdrop, variational, requires_length, name, dropout_in_single_layer, skip_conn, projsz, **kwargs)
+    def __init__(self, insz, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None, dropout_in_single_layer=False, skip_conn=False, projsz=None, **kwargs):
+        super().__init__(insz, hsz, nlayers, pdrop, variational, requires_length, name, dropout_in_single_layer, skip_conn, projsz, **kwargs)
 
     def output_fn(self, rnnout, state):
         return state[0][0] + state[1][0]
 
 
 class BiLSTMEncoderHiddenContext2(BiLSTMEncoder2):
-    def __init__(self, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None, dropout_in_single_layer=False, skip_conn=False, projsz=None, **kwargs):
-        super().__init__(hsz, nlayers, pdrop, variational, requires_length, name, dropout_in_single_layer, skip_conn, projsz, **kwargs)
+    def __init__(self, insz, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None, dropout_in_single_layer=False, skip_conn=False, projsz=None, **kwargs):
+        super().__init__(insz, hsz, nlayers, pdrop, variational, requires_length, name, dropout_in_single_layer, skip_conn, projsz, **kwargs)
 
     def output_fn(self, rnnout, state):
         return state
 
-
-
-
 # Mapped
 class BiLSTMEncoder1(tf.keras.Model):
 
-    def __init__(self, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None,  skip_conn=False, projsz=None, **kwargs):
+    def __init__(self, insz, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None,  skip_conn=False, projsz=None, **kwargs):
         """Produce a stack of LSTMs with dropout performed on all but the last layer.
 
         :param hsz: (``int``) The number of hidden units per LSTM
@@ -653,7 +613,7 @@ class BiLSTMEncoder1(tf.keras.Model):
 
 class BiLSTMEncoderSequence1(BiLSTMEncoder1):
 
-    def __init__(self, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None,  skip_conn=False, projsz=None, **kwargs):
+    def __init__(self, insz, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None,  skip_conn=False, projsz=None, **kwargs):
         """Produce a stack of LSTMs with dropout performed on all but the last layer.
 
         :param hsz: (``int``) The number of hidden units per LSTM
@@ -663,7 +623,7 @@ class BiLSTMEncoderSequence1(BiLSTMEncoder1):
         :param training (``bool``) Are we training? (defaults to ``False``)
         :return: a stacked cell
         """
-        super().__init__(hsz, nlayers, pdrop, variational, requires_length, name, skip_conn, projsz, **kwargs)
+        super().__init__(insz, hsz, nlayers, pdrop, variational, requires_length, name, skip_conn, projsz, **kwargs)
 
     def output_fn(self, rnnout, state):
         return rnnout
@@ -671,7 +631,7 @@ class BiLSTMEncoderSequence1(BiLSTMEncoder1):
 
 class BiLSTMEncoderHidden1(BiLSTMEncoder1):
 
-    def __init__(self, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None,  skip_conn=False, projsz=None, **kwargs):
+    def __init__(self, insz, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None,  skip_conn=False, projsz=None, **kwargs):
         """Produce a stack of LSTMs with dropout performed on all but the last layer.
 
         :param hsz: (``int``) The number of hidden units per LSTM
@@ -681,7 +641,7 @@ class BiLSTMEncoderHidden1(BiLSTMEncoder1):
         :param training (``bool``) Are we training? (defaults to ``False``)
         :return: a stacked cell
         """
-        super().__init__(hsz, nlayers, pdrop, variational, requires_length, name, skip_conn, projsz, **kwargs)
+        super().__init__(insz, hsz, nlayers, pdrop, variational, requires_length, name, skip_conn, projsz, **kwargs)
 
     def output_fn(self, rnnout, state):
         return state[0][0] + state[1][0]
@@ -689,7 +649,7 @@ class BiLSTMEncoderHidden1(BiLSTMEncoder1):
 
 class BiLSTMEncoderHiddenContext1(BiLSTMEncoder1):
 
-    def __init__(self, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None,  skip_conn=False, projsz=None, **kwargs):
+    def __init__(self, insz, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None,  skip_conn=False, projsz=None, **kwargs):
         """Produce a stack of LSTMs with dropout performed on all but the last layer.
 
         :param hsz: (``int``) The number of hidden units per LSTM
@@ -699,7 +659,7 @@ class BiLSTMEncoderHiddenContext1(BiLSTMEncoder1):
         :param training (``bool``) Are we training? (defaults to ``False``)
         :return: a stacked cell
         """
-        super().__init__(hsz, nlayers, pdrop, variational, requires_length, name, skip_conn, projsz, **kwargs)
+        super().__init__(insz, hsz, nlayers, pdrop, variational, requires_length, name, skip_conn, projsz, **kwargs)
 
     def output_fn(self, rnnout, state):
         return state
@@ -772,7 +732,7 @@ class EmbeddingsStack(tf.keras.Model):
 
 class DenseStack(tf.keras.Model):
 
-    def __init__(self, hsz, activation='relu', pdrop_value=0.5, init=None, name=None, **kwargs):
+    def __init__(self, insz, hsz, activation='relu', pdrop_value=0.5, init=None, name=None, **kwargs):
         """Stack 1 or more hidden layers, optionally (forming an MLP)
 
         :param hsz: (``int``) The number of hidden units
@@ -781,7 +741,7 @@ class DenseStack(tf.keras.Model):
         :param init: The tensorflow initializer
 
         """
-        super(DenseStack, self).__init__(name=name)
+        super().__init__(name=name)
         hszs = listify(hsz)
         self.layer_stack = [tf.keras.layers.Dense(hsz, kernel_initializer=init, activation=activation) for hsz in hszs]
         self.dropout = tf.keras.layers.Dropout(pdrop_value)

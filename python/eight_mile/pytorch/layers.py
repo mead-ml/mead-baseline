@@ -414,7 +414,7 @@ class BiLSTMEncoder(nn.Module):
         :param batch_first: (``bool``) Should we do batch first input or time-first input?
         :return: a stacked cell
         """
-        super(BiLSTMEncoder, self).__init__()
+        super().__init__()
         self._requires_length = requires_length
         if nlayers == 1:
             pdrop = 0.0
@@ -576,13 +576,14 @@ class DenseStack(nn.Module):
     def __init__(self, insz, hsz, activation='relu', pdrop_value=0.5, init=None, **kwargs):
         """Stack 1 or more hidden layers, optionally (forming an MLP)
 
+        :param insz: (``int``) The number of input units
         :param hsz: (``int``) The number of hidden units
         :param activation:  (``str``) The name of the activation function to use
         :param pdrop_value: (``float``) The dropout probability
         :param init: The tensorflow initializer
 
         """
-        super(DenseStack, self).__init__()
+        super().__init__()
         hszs = listify(hsz)
         self.output_dim = hsz[-1]
         self.layer_stack = nn.Sequential()

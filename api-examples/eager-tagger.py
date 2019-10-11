@@ -135,7 +135,7 @@ def predict_input_fn():
     return dataset
 
 
-transducer = L.BiLSTMEncoder(None, 200, 2, 0.5, output_fn=L.rnn_signal)
+transducer = L.BiLSTMEncoderSequence(None, 200, 2, 0.5)
 model = L.TagSequenceModel(len(labels), embeddings, transducer)
 
 train_loss_results = []
