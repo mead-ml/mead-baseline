@@ -6,6 +6,7 @@ from eight_mile.pytorch.optz import OptimizerManager, EagerOptimizer
 import eight_mile.pytorch.embeddings
 import eight_mile.pytorch.layers as L
 import torch.nn.functional as F
+from torch.optim import Adam
 from torch.utils.data import Dataset, DataLoader, TensorDataset
 import logging
 import numpy as np
@@ -103,24 +104,17 @@ for k, v in feature_desc.items():
     vocabs[k] = embeddings_for_k['vocab']
 
 
-#train = reader.load(train_file, vocabs=vocabs, batchsz=args.batchsz)
-#valid = reader.load(valid_file, vocabs=vocabs, batchsz=args.batchsz)
-#test = reader.load(test_file, vocabs=vocabs, batchsz=args.batchsz)
-
-
 train_set = to_tensors(reader.load(train_file, vocabs=vocabs, batchsz=1))
 valid_set = to_tensors(reader.load(valid_file, vocabs=vocabs, batchsz=1))
 test_set = to_tensors(reader.load(test_file, vocabs=vocabs, batchsz=1))
 
-
-
-
 stacksz = len(args.filts) * args.poolsz
+num_epochs = 2
+
+def as_np(cuda_ten):
+    return cuda_ten.cpu().float().numpy()
+
 model = L.EmbedPoolStackModel(2, embeddings, L.ParallelConv(300, args.poolsz, args.filts), L.Highway(stacksz)).cuda()
-
-train_loss_results = []
-train_accuracy_results = []
-
 
 
 def loss(model, x, y):
@@ -128,68 +122,41 @@ def loss(model, x, y):
     l = F.nll_loss(y_, y)
     return l
 
+optimizer = EagerOptimizer(loss, Adam(model.parameters(), 0.001))##OptimizerManager(model, optim="adam", lr=args.lr))
 
-num_epochs = 2
+def train_input_fn():
+    return DataLoader(train_set, batch_size=args.batchsz, shuffle=True)
 
-def as_np(cuda_ten):
-    return cuda_ten.cpu().float().numpy()
+def valid_input_fn():
+    return DataLoader(valid_set, batch_size=args.batchsz, shuffle=False)
 
-def make_pair(batch_dict, train=False):
-
-    example_dict = dict({})
-    for key in feature_desc.keys():
-        example_dict[key] = torch.from_numpy(batch_dict[key]).cuda()
-
-    # Allow us to track a length, which is needed for BLSTMs
-    if 'word_lengths' in batch_dict:
-        example_dict['lengths'] = torch.from_numpy(batch_dict['word_lengths']).cuda()
-
-    y = batch_dict.pop('y')
-    if train:
-        y = torch.from_numpy(y).cuda()
-    return example_dict, y
-
-
-optimizer = EagerOptimizer(loss, OptimizerManager(model, optim="adam", lr=args.lr))
-
-train_loader = DataLoader(train_set, batch_size=args.batchsz, shuffle=True)
-valid_loader = DataLoader(valid_set, batch_size=args.batchsz, shuffle=False)
-test_loader = DataLoader(test_set, batch_size=1, shuffle=False)
+def test_input_fn():
+    return DataLoader(test_set, batch_size=1, shuffle=False)
 
 
 for epoch in range(num_epochs):
-
-    # Training loop - using batches of 32
     loss_acc = 0.
-    epoch_loss = 0.
-    epoch_div = 0.
-
     step = 0
     start = time.time()
-    batchsz = 20
-    for x, y in train_loader:
+    for x, y in train_input_fn():
         loss_value = optimizer.update(model, x, y)
         loss_acc += loss_value
         step += 1
-
     print('training time {}'.format(time.time() - start))
-
     mean_loss = loss_acc / step
     print('Training Loss {}'.format(mean_loss))
-
     cm = ConfusionMatrix(['0', '1'])
-    with torch.no_grad():
-        for x, y in valid_loader:
+    for x, y in valid_input_fn():
+        with torch.no_grad():
             y_ = np.argmax(as_np(model(x)), axis=1)
             cm.add_batch(y, y_)
-
     print(cm)
     print(cm.get_all_metrics())
 
 print('FINAL')
 cm = ConfusionMatrix(['0', '1'])
 with torch.no_grad():
-    for x, y in test_loader:
+    for x, y in test_input_fn():
         y_ = np.argmax(as_np(model(x)), axis=1)
 
         cm.add_batch(y, y_)
