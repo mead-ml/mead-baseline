@@ -103,9 +103,6 @@ X_train, y_train = to_tensors(reader.load(train_file, vocabs=vocabs, batchsz=1))
 X_valid, y_valid = to_tensors(reader.load(valid_file, vocabs=vocabs, batchsz=1))
 X_test, y_test = to_tensors(reader.load(test_file, vocabs=vocabs, batchsz=1))
 
-stacksz = len(args.filts) * args.poolsz
-num_epochs = 2
-
 
 def train_input_fn():
     SET_TRAIN_FLAG(True)
@@ -141,19 +138,16 @@ def test_input_fn():
     return dataset
 
 
+stacksz = len(args.filts) * args.poolsz
+num_epochs = 2
+
 model = L.EmbedPoolStackModel(2, embeddings, L.ParallelConv(300, args.poolsz, args.filts), L.Highway(stacksz))
-#model = L.EmbedPoolStackModel(2, embeddings, L.LSTMEncoderHidden(100, 1), L.Highway(100))
 
 def loss(model, x, y):
   y_ = model(x)
   return tf.compat.v1.losses.sparse_softmax_cross_entropy(labels=y, logits=y_)
 
-
-# 2.0 function
 optimizer = EagerOptimizer(loss, Adam(0.001))
-
-num_epochs = 2
-
 
 for epoch in range(num_epochs):
     loss_acc = 0.
@@ -176,10 +170,6 @@ for epoch in range(num_epochs):
 print('FINAL')
 cm = ConfusionMatrix(['0', '1'])
 for x, y in test_input_fn():
-    # Optimize the model
-
-    # Track progress
-    # compare predicted label to actual label
     y_ = tf.argmax(model(x), axis=1, output_type=tf.int32)
     cm.add_batch(y, y_)
 

@@ -108,21 +108,6 @@ train_set = to_tensors(reader.load(train_file, vocabs=vocabs, batchsz=1))
 valid_set = to_tensors(reader.load(valid_file, vocabs=vocabs, batchsz=1))
 test_set = to_tensors(reader.load(test_file, vocabs=vocabs, batchsz=1))
 
-stacksz = len(args.filts) * args.poolsz
-num_epochs = 2
-
-def as_np(cuda_ten):
-    return cuda_ten.cpu().float().numpy()
-
-model = L.EmbedPoolStackModel(2, embeddings, L.ParallelConv(300, args.poolsz, args.filts), L.Highway(stacksz)).cuda()
-
-
-def loss(model, x, y):
-    y_ = model(x)
-    l = F.nll_loss(y_, y)
-    return l
-
-optimizer = EagerOptimizer(loss, Adam(model.parameters(), 0.001))##OptimizerManager(model, optim="adam", lr=args.lr))
 
 def train_input_fn():
     return DataLoader(train_set, batch_size=args.batchsz, shuffle=True)
@@ -133,6 +118,20 @@ def valid_input_fn():
 def test_input_fn():
     return DataLoader(test_set, batch_size=1, shuffle=False)
 
+def as_np(cuda_ten):
+    return cuda_ten.cpu().float().numpy()
+
+stacksz = len(args.filts) * args.poolsz
+num_epochs = 2
+
+model = L.EmbedPoolStackModel(2, embeddings, L.ParallelConv(300, args.poolsz, args.filts), L.Highway(stacksz)).cuda()
+
+def loss(model, x, y):
+    y_ = model(x)
+    l = F.nll_loss(y_, y)
+    return l
+
+optimizer = EagerOptimizer(loss, Adam(model.parameters(), 0.001))##OptimizerManager(model, optim="adam", lr=args.lr))
 
 for epoch in range(num_epochs):
     loss_acc = 0.
@@ -158,7 +157,6 @@ cm = ConfusionMatrix(['0', '1'])
 with torch.no_grad():
     for x, y in test_input_fn():
         y_ = np.argmax(as_np(model(x)), axis=1)
-
         cm.add_batch(y, y_)
 
 print(cm)
