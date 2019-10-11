@@ -6,6 +6,7 @@ from eight_mile.pytorch.optz import OptimizerManager, EagerOptimizer
 import eight_mile.pytorch.embeddings
 import eight_mile.pytorch.layers as L
 import torch.nn.functional as F
+from torch.utils.data import Dataset, DataLoader, TensorDataset
 import logging
 import numpy as np
 import time
@@ -35,6 +36,9 @@ parser.add_argument('--test', help='Testing file', default='../data/stsa.binary.
 parser.add_argument('--embeddings', help='Pretrained embeddings file', default='/data/embeddings/GoogleNews-vectors-negative300.bin')
 parser.add_argument('--ll', help='Log level', type=str, default='info')
 parser.add_argument('--lr', help='Learning rate', type=float, default=0.001)
+parser.add_argument("--device", type=str,
+                    default="cuda" if torch.cuda.is_available() else "cpu",
+                    help="Device (cuda or cpu)")
 args = parser.parse_known_args()[0]
 
 
@@ -48,12 +52,37 @@ feature_desc = {
 # with rows like:
 # <label>\t<sentence>\n
 
+class DictionaryDatasetWrapper(Dataset):
+    def __init__(self, x, x_lengths, y):
+        self.tensor_dataset = TensorDataset(x, x_lengths, y)
+
+    def __getitem__(self, index):
+        # stuff
+        x, x_length, y = self.tensor_dataset[index]
+        return {'word': x.to(args.device), "lengths": x_length.to(args.device)}, y.to(args.device)
+
+    def __len__(self):
+        return len(self.tensor_dataset)
+
+
+def to_tensors(ts):
+    x = []
+    x_lengths = []
+    y = []
+    for sample in ts:
+        x.append(sample['word'].squeeze())
+        x_lengths.append(sample['word_lengths'].squeeze())
+        y.append(sample['y'].squeeze())
+    return DictionaryDatasetWrapper(torch.tensor(np.stack(x), dtype=torch.long), torch.tensor(np.stack(x_lengths), dtype=torch.long), torch.tensor(np.stack(y), dtype=torch.long))
+
+
 vectorizers = {k: v['vectorizer'] for k, v in feature_desc.items()}
 reader = baseline.TSVSeqLabelReader(vectorizers, clean_fn=baseline.TSVSeqLabelReader.do_clean)
 
 train_file = args.train
 valid_file = args.valid
 test_file = args.test
+
 
 # This builds a set of counters
 vocabs, labels = reader.build_vocab([train_file,
@@ -74,9 +103,17 @@ for k, v in feature_desc.items():
     vocabs[k] = embeddings_for_k['vocab']
 
 
-train = reader.load(train_file, vocabs=vocabs, batchsz=args.batchsz)
-valid = reader.load(valid_file, vocabs=vocabs, batchsz=args.batchsz)
-test = reader.load(test_file, vocabs=vocabs, batchsz=args.batchsz)
+#train = reader.load(train_file, vocabs=vocabs, batchsz=args.batchsz)
+#valid = reader.load(valid_file, vocabs=vocabs, batchsz=args.batchsz)
+#test = reader.load(test_file, vocabs=vocabs, batchsz=args.batchsz)
+
+
+train_set = to_tensors(reader.load(train_file, vocabs=vocabs, batchsz=1))
+valid_set = to_tensors(reader.load(valid_file, vocabs=vocabs, batchsz=1))
+test_set = to_tensors(reader.load(test_file, vocabs=vocabs, batchsz=1))
+
+
+
 
 stacksz = len(args.filts) * args.poolsz
 model = L.EmbedPoolStackModel(2, embeddings, L.ParallelConv(300, args.poolsz, args.filts), L.Highway(stacksz)).cuda()
@@ -115,6 +152,11 @@ def make_pair(batch_dict, train=False):
 
 optimizer = EagerOptimizer(loss, OptimizerManager(model, optim="adam", lr=args.lr))
 
+train_loader = DataLoader(train_set, batch_size=args.batchsz, shuffle=True)
+valid_loader = DataLoader(valid_set, batch_size=args.batchsz, shuffle=False)
+test_loader = DataLoader(test_set, batch_size=1, shuffle=False)
+
+
 for epoch in range(num_epochs):
 
     # Training loop - using batches of 32
@@ -125,8 +167,7 @@ for epoch in range(num_epochs):
     step = 0
     start = time.time()
     batchsz = 20
-    for b in train:
-        x, y = make_pair(b, True)
+    for x, y in train_loader:
         loss_value = optimizer.update(model, x, y)
         loss_acc += loss_value
         step += 1
@@ -138,8 +179,7 @@ for epoch in range(num_epochs):
 
     cm = ConfusionMatrix(['0', '1'])
     with torch.no_grad():
-        for b in valid:
-            x, y = make_pair(b)
+        for x, y in valid_loader:
             y_ = np.argmax(as_np(model(x)), axis=1)
             cm.add_batch(y, y_)
 
@@ -149,8 +189,7 @@ for epoch in range(num_epochs):
 print('FINAL')
 cm = ConfusionMatrix(['0', '1'])
 with torch.no_grad():
-    for b in test:
-        x, y = make_pair(b)
+    for x, y in test_loader:
         y_ = np.argmax(as_np(model(x)), axis=1)
 
         cm.add_batch(y, y_)
