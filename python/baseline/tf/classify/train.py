@@ -265,7 +265,7 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         self.model.saver.restore(self.model.sess, latest)
 
 
-def to_tensors(ts):
+def to_tensors(ts, lengths_key):
     """Convert a data feed into a tuple of `features` (`dict`) and `y` values
 
     This method is required to produce `tf.dataset`s from the input data feed
@@ -282,6 +282,8 @@ def to_tensors(ts):
                 features[k].append(s)
 
     features = dict((k, np.stack(v)) for k, v in features.items())
+    features['lengths'] = features[lengths_key]
+    del features[lengths_key]
     y = features.pop('y')
     return features, y
 
@@ -298,7 +300,8 @@ def create_train_input_fn(ts, batchsz=1, gpus=1, **kwargs):
     :return: Return an input function that is suitable for an estimator
     """
     # Precompute this
-    tensors = to_tensors(ts)
+    lengths_key = kwargs.get('lengths_key')
+    tensors = to_tensors(ts, lengths_key)
 
     def train_input_fn():
         epochs = None
@@ -325,7 +328,8 @@ def create_valid_input_fn(vs, batchsz=1, **kwargs):
     :return: Return an input function that is suitable for an estimator
     """
     # Precompute this
-    tensors = to_tensors(vs)
+    lengths_key = kwargs.get('lengths_key')
+    tensors = to_tensors(vs, lengths_key)
 
     def eval_input_fn():
         valid_dataset = tf.data.Dataset.from_tensor_slices(tensors)
@@ -350,7 +354,8 @@ def create_eval_input_fn(es, test_batchsz=1, **kwargs):
     :return: Return an input function that is suitable for an estimator
     """
     # Precompute this
-    tensors = to_tensors(es)
+    lengths_key = kwargs.get('lengths_key')
+    tensors = to_tensors(es, lengths_key)
 
     def predict_input_fn():
         test_dataset = tf.data.Dataset.from_tensor_slices(tensors)
@@ -403,22 +408,24 @@ def fit_datasets(model_params, ts, vs, es=None, **kwargs):
     model_file = get_model_file('classify', 'tf', kwargs.get('basedir'))
 
     batchsz = kwargs['batchsz']
+    lengths_key = model_params.get('lengths_key')
+
     ## First, make tf.datasets for ts, vs and es
     # https://github.com/tensorflow/tensorflow/blob/master/tensorflow/contrib/distribute/README.md
     # effective_batch_sz = args.batchsz*args.gpus
     test_batchsz = kwargs.get('test_batchsz', batchsz)
-    train_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(ts))
+    train_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(ts, lengths_key))
     train_dataset = train_dataset.shuffle(buffer_size=SHUF_BUF_SZ)
     train_dataset = train_dataset.batch(batchsz, drop_remainder=False)
     train_dataset = train_dataset.repeat(epochs + 1)
     train_dataset = train_dataset.prefetch(NUM_PREFETCH)
 
-    valid_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(vs))
+    valid_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(vs, lengths_key))
     valid_dataset = valid_dataset.batch(batchsz, drop_remainder=False)
     valid_dataset = valid_dataset.repeat(epochs + 1)
     valid_dataset = valid_dataset.prefetch(NUM_PREFETCH)
 
-    test_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(es))
+    test_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(es, lengths_key))
     test_dataset = test_dataset.batch(test_batchsz, drop_remainder=False)
     test_dataset = test_dataset.repeat(epochs + 1)
     test_dataset = test_dataset.prefetch(NUM_PREFETCH)
@@ -631,6 +638,8 @@ def fit_estimator(model_params, ts, vs, es=None, epochs=20, gpus=1, **kwargs):
     """
     model_fn = model_creator(model_params)
     labels = model_params['labels']
+    lengths_key = model_params.get('lengths_key')
+
     params = {
         'labels': labels,
         'optim': kwargs['optim'],
@@ -638,6 +647,7 @@ def fit_estimator(model_params, ts, vs, es=None, epochs=20, gpus=1, **kwargs):
         'epochs': epochs,
         'gpus': gpus,
         'batchsz': kwargs['batchsz'],
+        'lengths_key': lengths_key,
         'test_batchsz': kwargs.get('test_batchsz', kwargs.get('batchsz'))
     }
 
