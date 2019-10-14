@@ -139,8 +139,8 @@ class ParallelConv(tf.keras.layers.Layer):
 
         for fsz, cmotsz in zip(filtsz, motsz):
             kernel_shape = [1, int(fsz), int(insz), int(cmotsz)]
-            self.Ws.append(self.add_variable('cmot-{}/W'.format(fsz), shape=kernel_shape))
-            self.bs.append(self.add_variable('cmot-{}/b'.format(fsz), shape=[cmotsz], initializer=tf.constant_initializer(0.0)))
+            self.Ws.append(self.add_weight('cmot-{}/W'.format(fsz), shape=kernel_shape))
+            self.bs.append(self.add_weight('cmot-{}/b'.format(fsz), shape=[cmotsz], initializer=tf.constant_initializer(0.0)))
 
         self.output_dim = sum(motsz)
 
@@ -232,8 +232,8 @@ class LayerNorm(tf.keras.layers.Layer):
 
     def build(self, input_shape):
         n_state = input_shape[-1]
-        self.gv = self.add_variable("g", [n_state], initializer=tf.constant_initializer(1))
-        self.bv = self.add_variable("b", [n_state], initializer=tf.constant_initializer(0))
+        self.gv = self.add_weight("g", [n_state], initializer=tf.constant_initializer(1))
+        self.bv = self.add_weight("b", [n_state], initializer=tf.constant_initializer(0))
         super().build(input_shape)
 
     def call(self, x, mask=None):
@@ -839,8 +839,8 @@ class TimeDistributedProjection(tf.keras.layers.Layer):
     def build(self, input_shape):
 
         nx = int(input_shape[-1])
-        self.W = self.add_variable("W", [nx, self.output_dim])
-        self.b = self.add_variable("b", [self.output_dim], initializer=tf.constant_initializer(0.0))
+        self.W = self.add_weight("W", [nx, self.output_dim])
+        self.b = self.add_weight("b", [self.output_dim], initializer=tf.constant_initializer(0.0))
         super(TimeDistributedProjection, self).build(input_shape)
 
     def call(self, inputs):
@@ -1086,7 +1086,7 @@ class TaggerGreedyDecoder(tf.keras.layers.Layer):
             _, inv_mask = constraint_mask
             self.inv_mask = inv_mask * tf.constant(-1e4)
 
-        self.A = self.add_variable("transitions_raw", shape=(num_tags, num_tags), dtype=tf.float32, init='zeros', trainable=False)
+        self.A = self.add_weight("transitions_raw", shape=(num_tags, num_tags), dtype=tf.float32, init='zeros', trainable=False)
 
     @property
     def transitions(self):
@@ -1132,7 +1132,7 @@ class CRF(tf.keras.layers.Layer):
         """
         super(CRF, self).__init__(name=name)
 
-        self.A = self.add_variable("transitions_raw", shape=(num_tags, num_tags), dtype=tf.float32)
+        self.A = self.add_weight("transitions_raw", shape=(num_tags, num_tags), dtype=tf.float32)
         self.num_tags = num_tags
         self.mask = None
         self.inv_mask = None
