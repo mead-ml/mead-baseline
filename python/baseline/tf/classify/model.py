@@ -255,17 +255,19 @@ class ClassifierModelBase(ClassifierModel):
             model.embeddings[k] = embedding.detached_ref()
 
         model.lengths_key = kwargs.get('lengths_key')
+        inputs = {}
         if model.lengths_key is not None:
             model._unserializable.append(model.lengths_key)
             model.lengths = kwargs.get('lengths', tf.placeholder(tf.int32, [None], name="lengths"))
+            inputs['lengths'] = model.lengths
         else:
             model.lengths = None
 
         model._record_state(**kwargs)
-        inputs = {}
         for k, embedding in model.embeddings.items():
             x = kwargs.get(k, embedding.create_placeholder(name=k))
             inputs[k] = x
+
 
         model.pdrop_value = kwargs.get('dropout', 0.5)
         model.sess = kwargs.get('sess', create_session())
