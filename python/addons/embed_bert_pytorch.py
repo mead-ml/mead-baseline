@@ -98,121 +98,9 @@ class DictWordPieceVectoizer1D(WordPieceVectorizer1D):
         return super().iterable(_token_iterator(self, tokens))
 
 
-def mask_to_index(mask):
-    """Convert a 1d mask to a 1d list of indices of the 1's. the result is the same shape as the mask."""
-    idx = mask.nonzero()[0]
-    return np.concatenate((idx, np.zeros((len(mask) - len(idx),), dtype=mask.dtype)))
-
-
-@register_vectorizer(name='wordpiece1d-with-heads')
-class WordPieceVectorizer1DWithHeads(WordPieceVectorizer1D):
-    """This vectorizer produces the tokens and the index of the heads at the same time.
-
-    This outputs a matrix of size [2, T] where [0, T] is the tokens and [1, T] is the mask
-    """
-
-    def iterable(self, tokens):
-        yield '[CLS]', 0
-        for tok in tokens:
-            if tok == '<unk>':
-                yield '[UNK]', 1
-            elif tok == '<EOS>':
-                yield '[SEP]', 0
-            else:
-                for i, subtok in enumerate(self.tokenizer.tokenize(tok)):
-                    if i == 0:
-                        yield subtok, 1
-                    else:
-                        yield subtok, 0
-        yield '[SEP]', 0
-
-    def _next_element(self, tokens, vocab):
-        for atom, head in self.iterable(tokens):
-            value = vocab.get(atom, vocab['[UNK]'])
-            yield value, head
-
-    def run(self, tokens, vocab):
-        self.mxlen = self.max_seen if self.mxlen < 0 else self.mxlen
-        vec1d = np.zeros(self.mxlen, dtype=np.long)
-        heads = np.zeros(self.mxlen, dtype=np.long)
-        for i, (atom, head) in enumerate(self._next_element(tokens, vocab)):
-            if i == self.mxlen:
-                i -= 1
-                break
-            vec1d[i] = atom
-            heads[i] = head
-        heads = mask_to_index(heads)
-        valid_length = i + 1
-        return np.stack((vec1d, heads)), valid_length
-
-
-@register_vectorizer(name="dict-wordpiece1d-with-heads")
-class DictWordPieceVectoizer1DWithHeads(WordPieceVectorizer1DWithHeads):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.fields = listify(kwargs.get('fields', 'text'))
-        self.delim = kwargs.get('token_delim', '~~')
-
-    def iterable(self, tokens):
-        return super().iterable(_token_iterator(self, tokens))
-
-
-@register_vectorizer(name='wordpiece1d-with-heads-dict')
-class WordPieceVectorizer1DWithHeadsDict(WordPieceVectorizer1D):
-    """This vectorizer produces the tokens and the index of the heads at the same time.
-
-    In this one the results are output as a dict
-    """
-
-    def iterable(self, tokens):
-        yield '[CLS]', 0
-        for tok in tokens:
-            if tok == '<unk>':
-                yield '[UNK]', 1
-            elif tok == '<EOS>':
-                yield '[SEP]', 0
-            else:
-                for i, subtok in enumerate(self.tokenizer.tokenize(tok)):
-                    if i == 0:
-                        yield subtok, 1
-                    else:
-                        yield subtok, 0
-        yield '[SEP]', 0
-
-    def _next_element(self, tokens, vocab):
-        for atom, head in self.iterable(tokens):
-            value = vocab.get(atom, vocab['[UNK]'])
-            yield value, head
-
-    def run(self, tokens, vocab):
-        self.mxlen = self.max_seen if self.mxlen < 0 else self.mxlen
-        vec1d = np.zeros(self.mxlen, dtype=np.long)
-        heads = np.zeros(self.mxlen, dtype=np.long)
-        for i, (atom, head) in enumerate(self._next_element(tokens, vocab)):
-            if i == self.mxlen:
-                i -= 1
-                break
-            vec1d[i] = atom
-            heads[i] = head
-        heads = mask_to_index(heads)
-        valid_length = i + 1
-        return {'tokens': vec1d, 'heads': heads}, valid_length
-
-
-@register_vectorizer(name="dict-wordpiece1d-with-heads-dict")
-class DictWordPieceVectoizer1DWithHeadsDict(WordPieceVectorizer1DWithHeadsDict):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.fields = listify(kwargs.get('fields', 'text'))
-        self.delim = kwargs.get('token_delim', '~~')
-
-    def iterable(self, tokens):
-        return super().iterable(_token_iterator(self, tokens))
-
-
-@register_vectorizer(name='heads-wordpiece1d')
-class HeadedWordPieceVectorizer1D(WordPieceVectorizer1D):
-    """Output a list of indices that are the heads of the subword tokens."""
+@register_vectorizer(name='starts-wordpiece1d')
+class StartsWordPieceVectorizer1D(WordPieceVectorizer1D):
+    """Output a list of indices that are the starts of the subword tokens."""
 
     def iterable(self, tokens):
         j = 1  # Don't point at [CLS]
@@ -226,7 +114,7 @@ class HeadedWordPieceVectorizer1D(WordPieceVectorizer1D):
             else:
                 for i, subtok in enumerate(self.tokenizer.tokenize(tok)):
                     if i == 0:
-                        yield j  # Head
+                        yield j  # Start
                     else:
                         j += 1
             j += 1
@@ -277,7 +165,24 @@ class DictHeadedWordPieceVectorizer1D(HeadedWordPieceVectorizer1D):
 
 
 class LabelHeadedWordPieceVectorizer1D(DictHeadedWordPieceVectorizer1D):
-    """Convert labels so just the heads have labels, other labels are PAD"""
+    """Convert labels so just the starts have labels, other labels are PAD
+
+    For example
+
+    I         O
+    go        O
+    to        O
+    supercuts S-ORG
+
+    Gets converted to
+
+    I         O
+    go        O
+    to        O
+    super     S-ORG
+    ##cut     <PAD>
+    ##s       <PAD>
+    """
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.fields = listify(kwargs.get('fields', ['text', 'y']))
@@ -346,6 +251,7 @@ class BERTBaseEmbeddings(PyTorchEmbeddings):
         super(BERTBaseEmbeddings, self).__init__(name=name, **kwargs)
         global BERT_TOKENIZER
         self.dsz = kwargs.get('dsz')
+        self.cache_dir = kwargs.get('cache_dir')
         if BERT_TOKENIZER is None:
             BERT_TOKENIZER = BertTokenizer.from_pretrained(kwargs.get('embed_file'))
         self.model = BertModel.from_pretrained(kwargs.get('embed_file'))
@@ -521,115 +427,3 @@ class BertTaggerModel(TaggerModelBase):
         longest = torch.max(lengths)
         unaries = unaries[:, :longest, ...]
         return self.layers.decode(unaries, lengths)
-
-
-@register_model(task='tagger', name='bert2')
-class BertTaggerVectWithHeads(BertTaggerModel):
-    """This is a version of the tagger where the token values and heads are computed together and separated in the make_intput
-    """
-
-    def make_input(self, batch_dict):
-
-        example_dict = dict({})
-        lengths = torch.from_numpy(batch_dict[self.lengths_key])
-        lengths, perm_idx = lengths.sort(0, descending=True)
-
-        if self.gpu:
-            lengths = lengths.cuda()
-        example_dict['lengths'] = lengths
-        # The vectorizer outputs a [2, T] tensor which is stacked into [B, 2, T].
-        # The first index in the 2 dim is the tokens and the second is the heads
-        for key in self.embeddings.keys():
-            batch_dict[f'{key}_heads'] = batch_dict[key][:, 1, ...]
-            batch_dict[key] = batch_dict[key][:, 0, ...]
-            example_dict[key] = self.input_tensor(key, batch_dict, perm_idx)
-
-        # This assumes all heads are aligned
-        heads = [k for k in batch_dict.keys() if k.endswith('_heads')][0]
-        example_dict['heads'] = torch.from_numpy(batch_dict[heads])[perm_idx]
-        if self.gpu:
-            example_dict['heads'] = example_dict['heads'].cuda()
-
-
-        y = batch_dict.get('y')
-        if y is not None:
-            y = torch.from_numpy(y)[perm_idx]
-            if self.gpu:
-                y = y.cuda()
-            # We generated the tags with gaps so non-heads have a value of Offsets.PAD
-            # Here we select only the tags for heads. This results in a tag seq so the
-            # beginning of the list is the tags for the heads and the pad tags are moved
-            # to the back. This lets use use the normal evaluation code
-            y = select_heads(y.unsqueeze(-1), example_dict['heads']).squeeze(-1)
-            example_dict['y'] = y
-
-        # Add y_lengths to the dict so it gets sorted correctly
-        y_lengths = batch_dict.get('y_lengths')
-        if y_lengths is not None:
-            y_lengths = torch.from_numpy(y_lengths)[perm_idx]
-            example_dict['y_lengths'] = y_lengths
-
-        ids = batch_dict.get('ids')
-        if ids is not None:
-            ids = torch.from_numpy(ids)[perm_idx]
-            if self.gpu:
-                ids = ids.cuda()
-            example_dict['ids'] = ids
-
-        return example_dict
-
-
-@register_model(task='tagger', name='bert-dict')
-class BertTaggerVectWithHeadsDict(BertTaggerModel):
-    """This is a version of the tagger where the token values and heads are computed together and separated in the make_intput this was a first attempt and ended up bing slow af
-    """
-
-    def make_input(self, batch_dict):
-
-        example_dict = dict({})
-        lengths = torch.from_numpy(batch_dict[self.lengths_key])
-        lengths, perm_idx = lengths.sort(0, descending=True)
-
-        if self.gpu:
-            lengths = lengths.cuda()
-        example_dict['lengths'] = lengths
-        # The batcher auto stacks the datafeed for each key, because we have a dict
-        # as the value it gets stacked into a array of objects. Here we separate them
-        for key in self.embeddings.keys():
-            if batch_dict[key].dtype == np.dtype('O'):
-                batch_dict[f'{key}_heads'] = np.stack([x['heads'] for x in batch_dict[key]])
-                batch_dict[key] = np.stack([x['tokens'] for x in batch_dict[key]])
-            example_dict[key] = self.input_tensor(key, batch_dict, perm_idx)
-
-        # This assumes all heads are aligned
-        heads = [k for k in batch_dict.keys() if k.endswith('_heads')][0]
-        example_dict['heads'] = torch.from_numpy(batch_dict[heads])[perm_idx]
-        if self.gpu:
-            example_dict['heads'] = example_dict['heads'].cuda()
-
-        y = batch_dict.get('y')
-        if y is not None:
-            y = torch.from_numpy(y)[perm_idx]
-            if self.gpu:
-                y = y.cuda()
-            # We generated the tags with gaps so non-heads have a value of Offsets.PAD
-            # Here we select only the tags for heads. This results in a tag seq so the
-            # beginning of the list is the tags for the heads and the pad tags are moved
-            # to the back. This lets use use the normal evaluation code
-            y = select_heads(y.unsqueeze(-1), example_dict['heads']).squeeze(-1)
-            example_dict['y'] = y
-
-        # Add y_lengths to the dict so it gets sorted correctly
-        y_lengths = batch_dict.get('y_lengths')
-        if y_lengths is not None:
-            y_lengths = torch.from_numpy(y_lengths)[perm_idx]
-            example_dict['y_lengths'] = y_lengths
-
-        ids = batch_dict.get('ids')
-        if ids is not None:
-            ids = torch.from_numpy(ids)[perm_idx]
-            if self.gpu:
-                ids = ids.cuda()
-            example_dict['ids'] = ids
-
-        return example_dict

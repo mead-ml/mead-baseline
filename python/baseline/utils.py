@@ -14,6 +14,7 @@ import numpy as np
 import collections
 #from eight_mile.utils import export, optional_params
 from eight_mile.utils import *
+from eight_mile.utils import read_config_file
 from functools import partial, update_wrapper, wraps
 
 __all__ = []
