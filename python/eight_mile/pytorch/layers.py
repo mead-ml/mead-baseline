@@ -87,6 +87,39 @@ class VariationalDropout(nn.Module):
         return mask * input
 
 
+class SequenceLoss(nn.Module):
+
+    def __init__(self, LossFn=nn.NLLLoss, avg='token'):
+        """A class that applies a Loss function to sequence via the folding trick."""
+        super().__init__()
+        self.avg = avg
+        if avg == 'token':
+            self.crit = LossFn(ignore_index=Offsets.PAD, reduction='mean')
+            self._norm = self._no_norm
+        else:
+            self.crit = LossFn(ignore_index=Offsets.PAD, reduction='sum')
+            self._norm = self._batch_norm
+
+    def _batch_norm(self, loss, inputs):
+        return loss / inputs.size()[0]
+
+    def _no_norm(self, loss, inputs):
+        return loss
+
+    def forward(self, inputs, targets):
+        """Evaluate some loss over a sequence.
+        :param inputs: torch.FloatTensor, [B, .., C] The scores from the model. Batch First
+        :param targets: torch.LongTensor, The labels.
+        :returns: torch.FloatTensor, The loss.
+        """
+        total_sz = targets.nelement()
+        loss = self.crit(inputs.view(total_sz, -1), targets.view(total_sz))
+        return self._norm(loss, inputs)
+
+    def extra_repr(self):
+        return f"reduction={self.avg}"
+
+
 class Identity(nn.Module):
     def __init__(self):
         super(Identity, self).__init__()
@@ -198,7 +231,7 @@ def ident(t):
 def tbh2bht(t):
     return t.permute(1, 2, 0).contiguous()
 
-def tbh2bht(t):
+def tbh2bth(t):
     return t.transpose(0, 1).contiguous()
 
 
@@ -833,49 +866,59 @@ def viterbi(unary, trans, lengths, start_idx, end_idx, norm = lambda x, y: x):
 
 class TaggerGreedyDecoder(nn.Module):
 
-    def __init__(self, num_tags, constraint_mask=None, batch_first=True):
+    def __init__(self, num_tags, constraint_mask=None, batch_first=True, reduction='batch'):
+        """A Greedy decoder and loss module for taggers.
+
+        :param num_tags: `int` The number of output classes
+        :param constraint_mask: `Tensor[1, N, N]` A mask with valid transitions as 1 and invalid as 0
+        :param batch_first: `bool` Should the batch dimensions be first?
+        :param reduction: `str` Should the loss be calculated at the token level or batch level
+        """
         super(TaggerGreedyDecoder, self).__init__()
         self.num_tags = num_tags
 
         if constraint_mask is not None:
-            self.constraint_mask = F.log_softmax(torch.zeros(constraint_mask.shape).masked_fill(constraint_mask, -1e4), dim=0)
-            self.register_buffer('constraint_mask', self.constraint_mask.unsqueeze(0))
-        self.to_batch_first = ident if batch_first else tbh2bht
+            constraint_mask = F.log_softmax(torch.zeros(constraint_mask.shape).masked_fill(constraint_mask, -1e4), dim=1)
+            self.register_buffer('constraint_mask', constraint_mask)
+        else:
+            self.constraint_mask = None
+        self.to_batch_first = ident if batch_first else tbh2bth
         self.to_time_first = bth2tbh if batch_first else ident
         self.batch_first = batch_first
+        self.loss = SequenceLoss(LossFn=nn.CrossEntropyLoss, avg=reduction)
 
     @property
     def transitions(self):
         return self.constraint_mask
 
     def neg_log_loss(self, inputs, tags, lengths):
-        # Cross entropy loss
         unaries = self.to_batch_first(inputs)
-        loss = F.cross_entropy(unaries, tags, size_average=False, ignore_index=Offsets.PAD)
-        batch_size = inputs.size()[0]
-        loss /= batch_size
-        return loss
+        tags = self.to_batch_first(tags)
+        return self.loss(unaries, tags)
 
-    def call(self, inputs):
-
-        unaries, lengths = inputs
+    def forward(self, inputs):
+        unaries, lengths = tensor_and_lengths(inputs)
         # If there is a constraint mask do a masked viterbi
         if self.constraint_mask is not None:
             probv = self.to_time_first(unaries)
             probv = F.log_softmax(probv, dim=-1)
             preds, _ = viterbi(probv, self.constraint_mask, lengths, Offsets.GO, Offsets.EOS, norm=F.log_softmax)
             if self.batch_first:
-                return preds.transpose(0, 1)
+                return tbh2bth(preds)
         else:
-            probv = self.to_batch_first(unaries)
-            preds = []
-            for pij, sl in zip(probv, lengths):
-                _, unary = torch.max(pij[:sl], 1)
-                preds.append(unary.data)
-            preds = torch.stack(preds).to(unaries.device)
-            if not self.batch_first:
-                return preds.transpose(0, 1)
+            # Decoding doesn't care about batch/time first
+            _, preds = torch.max(unaries, -1)
+            mask = sequence_mask(lengths).to(preds.device)
+            # The mask gets generated as batch first
+            mask = mask if self.batch_first else mask.transpose(0, 1)
+            preds = preds.masked_fill(mask == 0, 0)
         return preds
+
+    def extra_repr(self):
+        str_ = f"n_tags={self.num_tags}, batch_first={self.batch_first}"
+        if self.constraint_mask is not None:
+            str_ += ", constrained=True"
+        return str_
 
 
 class CRF(nn.Module):

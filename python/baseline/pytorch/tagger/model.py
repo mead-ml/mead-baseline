@@ -61,7 +61,12 @@ class TaggerModelBase(nn.Module, TaggerModel):
         if use_crf:
             decoder_model = CRF(len(labels), constraint_mask=constraint_mask, batch_first=False)
         else:
-            decoder_model = TaggerGreedyDecoder(len(labels), constraint_mask=constraint_mask)
+            decoder_model = TaggerGreedyDecoder(
+                len(labels),
+                constraint_mask=constraint_mask,
+                batch_first=False,
+                reduction=kwargs.get('reduction', 'batch')
+            )
 
         model.layers = TagSequenceModel(len(labels), embed_model, transducer_model, decoder_model)
         logger.info(model.layers)
@@ -74,7 +79,7 @@ class TaggerModelBase(nn.Module, TaggerModel):
             return x
 
         mask_pad = x != Offsets.PAD
-        mask_drop = x.new(x.size(0), x.size(1)).bernoulli_(v).byte()
+        mask_drop = x.new(x.size(0), x.size(1)).bernoulli_(v).to(mask_pad.dtype)
         x.masked_fill_(mask_pad & mask_drop, Offsets.UNK)
         return x
 
