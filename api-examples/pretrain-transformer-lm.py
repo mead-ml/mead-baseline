@@ -202,6 +202,10 @@ class WordPieceVectorizer1D(AbstractVectorizer):
                 yield '[UNK]'
             elif tok == '<EOS>':
                 yield '[SEP]'
+            elif tok == '<BOQ>':
+                yield '[BOQ]'
+            elif tok == '<EOQ>':
+                yield '[EOQ]'
             else:
                 for subtok in self.tokenizer.tokenize(tok):
                     yield subtok
