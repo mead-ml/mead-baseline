@@ -115,8 +115,7 @@ def predict_input_fn():
     _ = dataset.make_one_shot_iterator()
     return dataset
 
-transducer = L.LSTMEncoderWithState(200, 1, 0.5, output_fn=L.rnn_ident)
-#transducer = LSTMEncoder(200, 1, 0.5, output_fn=rnn_ident)
+transducer = L.LSTMEncoderWithState(None, 200, 1, 0.5)
 model = L.LangSequenceModel(embeddings["word"].vsz, embeddings, transducer)
 
 train_loss_results = []

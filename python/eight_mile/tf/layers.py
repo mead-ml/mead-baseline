@@ -480,7 +480,7 @@ class LSTMEncoderWithState1(LSTMEncoder1):
 
         inputs, hidden = inputs
         rnnout, hidden = tf.nn.dynamic_rnn(self.rnn, inputs, initial_state=hidden, dtype=tf.float32)
-        return rnnout, (hidden[-1].h, hidden[-1].c)
+        return rnnout, hidden  # (hidden[-1].h, hidden[-1].c)
 
 
 # Mapped
@@ -667,6 +667,7 @@ class BiLSTMEncoderHiddenContext1(BiLSTMEncoder1):
 if get_version(tf) < 2:
     LSTMEncoder = LSTMEncoder1
     LSTMEncoderSequence = LSTMEncoderSequence1
+    LSTMEncoderWithState = LSTMEncoderWithState1
     LSTMEncoderHidden = LSTMEncoderHidden1
     LSTMEncoderHiddenContext = LSTMEncoderHiddenContext1
     BiLSTMEncoder = BiLSTMEncoder1
