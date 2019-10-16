@@ -327,6 +327,6 @@ class EagerOptimizer(object):
         with tf.GradientTape() as tape:
             loss_value = self.loss(model, x, y)
         grads = tape.gradient(loss_value, model.trainable_variables)
-        self.optimizer.apply_gradients(zip(grads, model.variables), self.global_step)
+        self.optimizer.apply_gradients(zip(grads, model.trainable_variables), self.global_step)
         return loss_value
 
