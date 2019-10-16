@@ -112,16 +112,30 @@ class BERTBaseEmbeddings(PyTorchEmbeddings):
 class BERTEmbeddings(BERTBaseEmbeddings):
 
     def __init__(self, name, **kwargs):
+        """BERT sequence embeddings, used for a feature-ful representation of finetuning sequence tasks.
+
+        If operator == 'concat' result is [B, T, #Layers * H] other size the layers are meaned and the shape is [B, T, H]
+        """
         super(BERTEmbeddings, self).__init__(name=name, **kwargs)
         self.layer_indices = kwargs.get('layers', [-1, -2, -3, -4])
         self.operator = kwargs.get('operator', 'concat')
+        self.finetune = kwargs.get('finetune', False)
 
     def get_output(self, all_layers, pooled):
-        layers = [all_layers[layer_index].detach() for layer_index in self.layer_indices]
-        z = torch.cat(layers, dim=-1)
+        if self.finetune:
+            layers = [all_layers[layer_index] for layer_index in self.layer_indices]
+        else:
+            layers = [all_layers[layer_index].detach() for layer_index in self.layer_indices]
         if self.operator != 'concat':
-            z = torch.mean(z, dim=-1, keepdim=True)
+            z = torch.cat([l.unsqueeze(-1) for l in layers])
+            z = torch.mead(z, dim=-1)
+        else:
+            z = torch.cat(layers, dim=-1)
         return z
+
+    def extra_repr(self):
+        return f"finetune={self.finetune}, combination={self.operator}, layers={self.layer_indices}"
+
 
 @register_embeddings(name='bert-pooled')
 class BERTPooledEmbeddings(BERTBaseEmbeddings):
