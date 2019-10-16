@@ -303,7 +303,7 @@ class RNNLanguageModel(LanguageModelBase):
 
         :return: The layer
         """
-        lstm_encoder_layer = LSTMEncoderWithState(self.hsz, layers, self.pdrop_value, **kwargs)
+        lstm_encoder_layer = LSTMEncoderWithState(None, self.hsz, layers, self.pdrop_value, **kwargs)
         self.initial_state = lstm_encoder_layer.zero_state(self.batchsz)
         inputs["h"] = self.initial_state
         return lstm_encoder_layer
