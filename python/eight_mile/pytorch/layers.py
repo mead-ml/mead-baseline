@@ -121,11 +121,60 @@ class SequenceLoss(nn.Module):
 
 
 class Identity(nn.Module):
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
         super(Identity, self).__init__()
 
     def forward(self, inputs):
         return inputs
+
+
+class MeanPool1D(nn.Module):
+    def __init__(self, outsz, batch_first=True):
+        super().__init__()
+        self.batch_first = batch_first
+        self.reduction_dim = 1 if self.batch_first else 0
+        self.output_dim = outsz
+
+    def forward(self, inputs):
+        tensor, lengths = tensor_and_lengths(inputs)
+        # Regardless of whether the input is `[B, T, H]` or `[T, B, H]` the shape after
+        # the sum is `[B, H]` so the lengths (of shape `[B]`) should be unsqueezed to
+        # `[B, 1]` in order to broadcast
+        return torch.sum(tensor, self.reduction_dim, keepdim=False) / torch.unsqueeze(lengths, -1).to(tensor.dtype).to(tensor.device)
+
+    @property
+    def requires_length(self):
+        return True
+
+    def extra_repr(self):
+        return f"batch_first={self.batch_first}"
+
+
+class MaxPool1D(nn.Module):
+    def __init__(self, outsz, batch_first=True):
+        super().__init__()
+        self.batch_first = batch_first
+        self.reduction_dim = 1 if self.batch_first else 0
+        self.output_dim = outsz
+
+    def forward(self, inputs):
+        tensor, lengths = tensor_and_lengths(inputs)
+        if lengths is not None:
+            # If tensor = `[B, T, H]`
+            #    mask = `[B, T, 1]`
+            # If tensor = `[T, B, H]`
+            #    mask = `[T, B, 1]`
+            # So it will mask all the values in H past the right length
+            mask = sequence_mask(lengths).to(tensor.device)
+            mask = mask if self.batch_first else bth2tbh(mask)
+            # Fill masked with very negative so it never gets selected
+            tensor = tensor.masked_fill(mask.unsqueeze(-1) == 0, -1e4)
+        dmax, _ = torch.max(tensor, self.reduction_dim, keepdim=False)
+        return dmax
+
+    def extra_repr(self):
+        return f"batch_first={self.batch_first}"
+
 
 # Mapped
 def get_activation(name="relu"):
@@ -151,7 +200,25 @@ def get_activation(name="relu"):
 
 
 def _cat_dir(h):
+    """Concat forward and backword state vectors.
+
+    The shape of the hidden is `[#layers * #dirs, B, H]`. The docs say you can
+    separate directions with `h.view(#l, #dirs, B, H)` with the forward dir being
+    index 0 and backwards dir being 1.
+
+    This means that before separating with the view the forward dir are the even
+    indices in the first dim while the backwards dirs are the odd ones. Here we select
+    the even and odd values and concatenate them
+    """
     return torch.cat([h[0:h.size(0):2], h[1:h.size(0):2]], dim=-1)
+
+
+def concat_state_dirs(state):
+    """Convert the bidirectional out of an RNN so the forward and backward values are a single vector.
+    """
+    if isinstance(state, tuple):
+        return tuple(_cat_dir(h) for h in state)
+    return _cat_dir(state)
 
 
 
@@ -204,6 +271,7 @@ def tbh2bth(t):
 
 def bth2tbh(t):
     return t.transpose(0, 1).contiguous()
+
 
 # Mapped
 class ParallelConv(nn.Module):
@@ -384,6 +452,8 @@ class LSTMEncoder(nn.Module):
         """
         super().__init__()
         self._requires_length = requires_length
+        self.batch_first = batch_first
+        self.nlayers = nlayers
         if nlayers == 1:
             pdrop = 0.0
         self.rnn = torch.nn.LSTM(insz, hsz, nlayers, dropout=pdrop, bidirectional=False, batch_first=batch_first)
@@ -403,9 +473,9 @@ class LSTMEncoder(nn.Module):
 
     def forward(self, inputs):
         tbc, lengths = tensor_and_lengths(inputs)
-        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths.tolist())
+        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths.tolist(), batch_first=self.batch_first)
         output, hidden = self.rnn(packed)
-        output, _ = torch.nn.utils.rnn.pad_packed_sequence(output)
+        output, _ = torch.nn.utils.rnn.pad_packed_sequence(output, batch_first=self.batch_first)
         return self.output_fn(output, hidden)
 
     @property
@@ -413,25 +483,34 @@ class LSTMEncoder(nn.Module):
         return self._requires_length
 
     def output_fn(self, output, state):
-        return output, state
+        return output, self.extract_top_state(state)
+
+    def extract_top_state(self, state):
+        # Select the topmost state with -1 and the only direction is forward (select with 0)
+        return tuple(s.view(self.nlayers, 1, -1, self.output_dim)[-1, 0] for s in state)
 
 
 class LSTMEncoderSequence(LSTMEncoder):
-
-    def __init__(self, insz, hsz, nlayers, pdrop=0.0, requires_length=True, batch_first=False, unif=0, initializer=None, **kwargs):
-        super().__init__(insz, hsz, nlayers, pdrop, requires_length, batch_first, unif, initializer, **kwargs)
 
     def output_fn(self, output, state):
         return output
 
 
-class LSTMEncoderHidden(LSTMEncoder):
-
-    def __init__(self, insz, hsz, nlayers, pdrop=0.0, requires_length=True, batch_first=False, unif=0, initializer=None, **kwargs):
-        super().__init__(insz, hsz, nlayers, pdrop, requires_length, batch_first, unif, initializer, **kwargs)
+class LSTMEncoderWithState(LSTMEncoder):
 
     def output_fn(self, output, state):
-        return state
+        return output, state
+
+
+class LSTMEncoderHidden(LSTMEncoder):
+
+    def output_fn(self, output, state):
+        return self.extract_top_state(state)[0]
+
+
+class LSTMEncoderHiddenContext(LSTMEncoder):
+    def output_fn(self, output, state):
+        return self.extract_top_state(state)
 
 
 class BiLSTMEncoder(nn.Module):
@@ -449,6 +528,8 @@ class BiLSTMEncoder(nn.Module):
         """
         super().__init__()
         self._requires_length = requires_length
+        self.batch_first = batch_first
+        self.nlayers = nlayers
         if nlayers == 1:
             pdrop = 0.0
         self.rnn = torch.nn.LSTM(insz, hsz//2, nlayers, dropout=pdrop, bidirectional=True, batch_first=batch_first)
@@ -468,17 +549,17 @@ class BiLSTMEncoder(nn.Module):
 
     def forward(self, inputs):
         tbc, lengths = tensor_and_lengths(inputs)
-        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths.tolist())
+        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths.tolist(), batch_first=self.batch_first)
         output, hidden = self.rnn(packed)
-        output, _ = torch.nn.utils.rnn.pad_packed_sequence(output)
+        output, _ = torch.nn.utils.rnn.pad_packed_sequence(output, batch_first=self.batch_first)
         return self.output_fn(output, hidden)
 
+    def extract_top_state(self, state):
+        # Select the topmost state with -1 and the only direction is forward (select with 0)
+        return tuple(s.view(self.nlayers, 1, -1, self.output_dim)[-1, 0] for s in state)
+
     def output_fn(self, output, state):
-        if isinstance(state, tuple):
-            state = tuple(_cat_dir(h) for h in state)
-        else:
-            state = _cat_dir(state)
-        return output, state
+        return output, self.extract_top_state(concat_state_dirs(state))
 
     @property
     def requires_length(self):
@@ -488,24 +569,22 @@ class BiLSTMEncoder(nn.Module):
 
 class BiLSTMEncoderSequence(BiLSTMEncoder):
 
-    def __init__(self, insz, hsz, nlayers, pdrop=0.0, requires_length=True, batch_first=False, unif=0, initializer=None, **kwargs):
-        super().__init__(insz, hsz, nlayers, pdrop, requires_length, batch_first, unif, initializer, **kwargs)
-
     def output_fn(self, output, state):
         return output
 
 
 class BiLSTMEncoderHidden(BiLSTMEncoder):
 
-    def __init__(self, insz, hsz, nlayers, pdrop=0.0, requires_length=True, batch_first=False, unif=0, initializer=None, **kwargs):
-        super().__init__(insz, hsz, nlayers, pdrop, requires_length, batch_first, unif, initializer, **kwargs)
+    def output_fn(self, output, state):
+        return self.extract_top_state(concat_state_dirs(state))[0]
+
+
+class BiLSTMEncoderHiddenContext(BiLSTMEncoder):
 
     def output_fn(self, output, state):
-        if isinstance(state, tuple):
-            state = tuple(_cat_dir(h) for h in state)
-        else:
-            state = _cat_dir(state)
-        return state
+        return self.extract_top_state(concat_state_dirs(state))
+
+
 
 class EmbeddingsContainer(nn.Module):
     def __init__(self):
@@ -619,11 +698,12 @@ class DenseStack(nn.Module):
         super().__init__()
         hszs = listify(hsz)
         self.output_dim = hsz[-1]
-        self.layer_stack = nn.Sequential()
         current = insz
-        for i, hsz in hszs:
-            self.layer_stack.append(WithDropout(Dense(current, hsz, activation=activation), pdrop_value))
+        layer_stack = []
+        for hsz in hszs:
+            layer_stack.append(WithDropout(Dense(current, hsz, activation=activation), pdrop_value))
             current = hsz
+        self.layer_stack = nn.Sequential(*layer_stack)
 
     def forward(self, inputs):
         """Stack 1 or more hidden layers, optionally (forming an MLP)
@@ -755,13 +835,38 @@ class FineTuneModel(nn.Module):
         else:
             self.finetuned = embeddings
         self.stack_model = stack_model
-        output_dim = self.finetuned.get_dsz() if stack_model is None else stack_model.output_dim
+        output_dim = self.finetuned.output_dim if stack_model is None else stack_model.output_dim
         self.output_layer = Dense(output_dim, nc, activation="log_softmax")
 
     def forward(self, inputs):
         base_layers = self.finetuned(inputs)
         stacked = self.stack_model(base_layers) if self.stack_model is not None else base_layers
         return self.output_layer(stacked)
+
+
+class CompositePooler(nn.Module):
+    def __init__(self, models):
+        """
+        Note, this currently requires that each submodel is an eight_mile model with an `output_dim` attr
+        """
+        super().__init__()
+        self.models = nn.ModuleList(models)
+        self.output_dim = sum(m.output_dim for m in self.models)
+        self._requires_length = any(getattr(m, 'requires_length', False) for m in self.models)
+
+    def forward(self, inputs):
+        inputs, lengths = tensor_and_lengths(inputs)
+        pooled = []
+        for sub_model in self.models:
+            if getattr(sub_model, 'requires_length', False):
+                pooled.append(sub_model((inputs, lengths)))
+            else:
+                pooled.append(sub_model(inputs))
+        return torch.cat(pooled, -1)
+
+    @property
+    def requires_length(self):
+        return self._requires_length
 
 
 class EmbedPoolStackModel(nn.Module):

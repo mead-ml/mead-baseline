@@ -435,6 +435,7 @@ class NBowBase(EmbedPoolStackClassifier):
         :param kwargs:
         :return:
         """
+        kwargs.setdefault('hsz', [100])
         return super(NBowBase, self).stacked(**kwargs)
 
 
