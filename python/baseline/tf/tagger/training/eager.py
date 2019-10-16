@@ -1,47 +1,120 @@
 import six
 import os
 import time
-import logging
-import tensorflow as tf
-
-from eight_mile.confusion import ConfusionMatrix
-from eight_mile.progress import create_progress_bar
-from eight_mile.utils import listify, get_version
-from eight_mile.tf.optz import EagerOptimizer
-from baseline.utils import get_model_file, get_metric_cmp
-from baseline.tf.tfy import SET_TRAIN_FLAG
-from baseline.tf.classify.training.utils import to_tensors
-from baseline.train import EpochReportingTrainer, register_trainer, register_training_func
-from baseline.utils import verbose_output
-from baseline.model import create_model_for
 import numpy as np
+import tensorflow as tf
+import logging
+from eight_mile.progress import create_progress_bar
+from eight_mile.utils import listify, revlut, to_spans, write_sentence_conll, per_entity_f1, span_f1, conlleval_output
+from eight_mile.tf.layers import TRAIN_FLAG, SET_TRAIN_FLAG, reload_lower_layers
+from eight_mile.tf.optz import EagerOptimizer
+from baseline.model import create_model_for
+from baseline.train import register_training_func, EpochReportingTrainer
+from baseline.utils import get_model_file, get_metric_cmp
+from baseline.tf.tagger.training.utils import to_tensors
 
 # Number of batches to prefetch if using tf.datasets
 NUM_PREFETCH = 2
 # The shuffle buffer
 SHUF_BUF_SZ = 5000
 
-log = logging.getLogger('baseline.timing')
-
-TF_VERSION = get_version(tf)
-if TF_VERSION < 2:
-    from tensorflow import count_nonzero
-    tf.enable_eager_execution()
-    Adam = tf.train.AdamOptimizer
-
-else:
-    from tensorflow.compat.v1 import count_nonzero
-    Adam = tf.optimizers.Adam
+logger = logging.getLogger('baseline')
 
 
 def loss(model, x, y):
-    y_ = model(x)
-    return tf.compat.v1.losses.sparse_softmax_cross_entropy(labels=y, logits=y_)
+    unary = model.transduce(x)
+    return model.decoder_model.neg_log_loss(unary, y, x['lengths'])
 
 
-@register_trainer(task='classify')
-class ClassifyTrainerEagerTf(EpochReportingTrainer):
-    """A Trainer to use if using TF2.0
+class TaggerEvaluatorEagerTf:
+    """Performs evaluation on tagger output
+    """
+    def __init__(self, model, span_type, verbose):
+        """Construct from an existing model
+
+        :param model: A model
+        :param span_type: (`str`) The span type
+        :param verbose: (`bool`) Be verbose?
+        """
+        self.model = model
+        self.idx2label = revlut(model.labels)
+        self.span_type = span_type
+        if verbose:
+            print('Setting span type {}'.format(self.span_type))
+        self.verbose = verbose
+
+    def process_batch(self, batch, truth):
+        guess = self.model(batch)
+        sentence_lengths = batch['lengths']
+
+        correct_labels = 0
+        total_labels = 0
+
+        # For fscore
+        gold_chunks = []
+        pred_chunks = []
+
+        # For each sentence
+        for b in range(len(guess)):
+            length = sentence_lengths[b]
+            sentence = guess[b][:length].numpy()
+            # truth[b] is padded, cutting at :length gives us back true length
+            gold = truth[b][:length].numpy()
+            correct_labels += np.sum(np.equal(sentence, gold))
+            total_labels += length
+
+            gold_chunks.append(set(to_spans(gold, self.idx2label, self.span_type, self.verbose)))
+            pred_chunks.append(set(to_spans(sentence, self.idx2label, self.span_type, self.verbose)))
+
+        return correct_labels, total_labels, gold_chunks, pred_chunks
+
+    def test(self, ts, steps=0, **kwargs):
+        """Method that evaluates on some data.  There are 2 modes this can run in, `feed_dict` and `dataset`
+
+        In `feed_dict` mode, the model cycles the test data batch-wise and feeds each batch in with a `feed_dict`.
+        In `dataset` mode, the data is still passed in to this method, but it is not passed in a `feed_dict` and is
+        mostly superfluous since the features are grafted right onto the graph.  However, we do use it for supplying
+        the ground truth, ids and text, so it is essential that the caller does not shuffle the data
+        :param ts: The test set
+        :param conll_output: (`str`) An optional file output
+        :param txts: A list of text data associated with the encoded batch
+        :param dataset: (`bool`) Is this using `tf.dataset`s
+        :return: The metrics
+        """
+        total_correct = total_sum = 0
+        gold_spans = []
+        pred_spans = []
+
+        pg = create_progress_bar(steps)
+        metrics = {}
+        for features, y in pg(ts):
+            correct, count, golds, guesses = self.process_batch(features, y)
+            total_correct += correct
+            total_sum += count
+            gold_spans.extend(golds)
+            pred_spans.extend(guesses)
+
+        total_acc = total_correct / float(total_sum)
+        # Only show the fscore if requested
+        metrics['f1'] = span_f1(gold_spans, pred_spans)
+        metrics['acc'] = total_acc
+        if self.verbose:
+            conll_metrics = per_entity_f1(gold_spans, pred_spans)
+            conll_metrics['acc'] = total_acc * 100
+            conll_metrics['tokens'] = total_sum
+            logger.info(conlleval_output(conll_metrics))
+
+
+        return metrics
+
+
+class TaggerTrainerEagerTf(EpochReportingTrainer):
+    """A Trainer to use if not using tf Estimators
+
+    The trainer can run in 2 modes: `dataset` and `feed_dict`.  When the former, the graph is assumed to
+    be connected by features attached to the input so the `feed_dict` will only be used to pass dropout information.
+
+    When the latter, we will use the baseline DataFeed to read the object into the `feed_dict`
     """
     def __init__(self, model_params, **kwargs):
         """Create a Trainer, and give it the parameters needed to instantiate the model
@@ -63,30 +136,48 @@ class ClassifyTrainerEagerTf(EpochReportingTrainer):
 
         """
         super().__init__()
-
         if type(model_params) is dict:
-            self.model = create_model_for('classify', **model_params)
+            self.model = create_model_for('tagger', **model_params)
         else:
             self.model = model_params
-
+        span_type = kwargs.get('span_type', 'iob')
+        verbose = kwargs.get('verbose', False)
+        self.evaluator = TaggerEvaluatorEagerTf(self.model, span_type, verbose)
         self.optimizer = EagerOptimizer(loss, **kwargs)
         self.nsteps = kwargs.get('nsteps', six.MAXSIZE)
         self._checkpoint = tf.train.Checkpoint(optimizer=self.optimizer.optimizer, model=self.model)
-        checkpoint_dir = '{}-{}'.format("./tf-classify", os.getpid())
+        checkpoint_dir = '{}-{}'.format("./tf-tagger", os.getpid())
 
         self.checkpoint_manager = tf.train.CheckpointManager(self._checkpoint,
                                                              directory=checkpoint_dir,
                                                              max_to_keep=5)
-        #self.model.set_saver(tf.train.Saver())
 
-    def _train(self, loader, steps=0, **kwargs):
+    def checkpoint(self):
+        """This method saves a checkpoint
+
+        :return: None
+        """
+        self.checkpoint_manager.save()
+
+    def recover_last_checkpoint(self):
+        """Recover the last saved checkpoint
+
+        :return: None
+        """
+        print(self._checkpoint.restore(self.checkpoint_manager.latest_checkpoint))
+
+    @staticmethod
+    def _get_batchsz(batch_dict):
+        return batch_dict['y'].shape[0]
+
+    def _train(self, ts, steps=0, **kwargs):
         """Train an epoch of data using either the input loader or using `tf.dataset`
 
         In non-`tf.dataset` mode, we cycle the loader data feed, and pull a batch and feed it to the feed dict
         When we use `tf.dataset`s under the hood, this function simply uses the loader to know how many steps
         to train.  We do use a `feed_dict` for passing the `TRAIN_FLAG` in either case
 
-        :param loader: A data feed
+        :param ts: A data feed
         :param kwargs: See below
 
         :Keyword Arguments:
@@ -95,23 +186,21 @@ class ClassifyTrainerEagerTf(EpochReportingTrainer):
 
         :return: Metrics
         """
-
         reporting_fns = kwargs.get('reporting_fns', [])
+        step = 0
         epoch_loss = 0
         epoch_div = 0
-        step = 0
         pg = create_progress_bar(steps)
-        SET_TRAIN_FLAG(True)
+        for features, y in pg(ts):
 
-        for features, y in pg(loader):
-            lossv = self.optimizer.update(self.model, features, y)
-            batchsz = y.shape[0]
-            report_lossv = lossv * batchsz
-            epoch_loss += report_lossv
-            epoch_div += batchsz
-            self.nstep_agg += report_lossv
-            self.nstep_div += batchsz
+            lossv = self.optimizer.update(self.model._layers, features, y)
             step += 1
+            batchsz = y.shape[0]
+            report_loss = lossv * batchsz
+            epoch_loss += report_loss
+            epoch_div += batchsz
+            self.nstep_agg += report_loss
+            self.nstep_div += batchsz
             if (step + 1) % self.nsteps == 0:
                 metrics = self.calc_metrics(self.nstep_agg, self.nstep_div)
                 self.report(
@@ -123,7 +212,7 @@ class ClassifyTrainerEagerTf(EpochReportingTrainer):
         metrics = self.calc_metrics(epoch_loss, epoch_div)
         return metrics
 
-    def _test(self, loader, steps=0, **kwargs):
+    def _test(self, ts, steps=0, **kwargs):
         """Test an epoch of data using either the input loader or using `tf.dataset`
 
         In non-`tf.dataset` mode, we cycle the loader data feed, and pull a batch and feed it to the feed dict
@@ -140,52 +229,13 @@ class ClassifyTrainerEagerTf(EpochReportingTrainer):
 
         :return: Metrics
         """
-
-        cm = ConfusionMatrix(self.model.labels)
-        total_loss = 0
-        total_norm = 0
-        verbose = kwargs.get("verbose", None)
-
-        pg = create_progress_bar(steps)
-
-        SET_TRAIN_FLAG(False)
-        for features, y in pg(loader):
-            logits = self.model(features)
-            y_ = tf.argmax(logits, axis=1, output_type=tf.int32)
-            cm.add_batch(y, y_)
-            lossv = tf.compat.v1.losses.sparse_softmax_cross_entropy(labels=y, logits=logits)
-            batchsz = y.shape[0]
-            assert len(y_) == batchsz
-            total_loss += lossv * batchsz
-            total_norm += batchsz
-            cm.add_batch(y, y_)
-
-        metrics = cm.get_all_metrics()
-        metrics['avg_loss'] = total_loss / float(total_norm)
-        verbose_output(verbose, cm)
-
-        return metrics
-
-    def checkpoint(self):
-        """This method saves a checkpoint
-
-        :return: None
-        """
-        self.checkpoint_manager.save()
-
-    def recover_last_checkpoint(self):
-        """Recover the last saved checkpoint
-
-        :return: None
-        """
-        print(self._checkpoint.restore(self.checkpoint_manager.latest_checkpoint))
+        return self.evaluator.test(ts, steps, **kwargs)
 
 
-@register_training_func('classify', name='default')
+@register_training_func('tagger')
 def fit_eager(model_params, ts, vs, es=None, **kwargs):
-
     """
-    Train a classifier using TensorFlow with `tf.dataset`.  This
+    Train a tagger using TensorFlow with `tf.dataset`.  This
     is the default behavior for training.
 
     :param model_params: The model (or parameters to create the model) to train
@@ -217,15 +267,19 @@ def fit_eager(model_params, ts, vs, es=None, **kwargs):
 
     :return: None
     """
+    conll_output = kwargs.get('conll_output', None)
+    span_type = kwargs.get('span_type', 'iob')
+    txts = kwargs.get('txts', None)
+    model_file = get_model_file('tagger', 'tf', kwargs.get('basedir'))
+
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
     verbose = kwargs.get('verbose', {'console': kwargs.get('verbose_console', False), 'file': kwargs.get('verbose_file', None)})
     epochs = int(kwargs.get('epochs', 20))
-    model_file = get_model_file('classify', 'tf', kwargs.get('basedir'))
 
     batchsz = kwargs['batchsz']
+    test_batchsz = kwargs.get('test_batchsz', batchsz)
     lengths_key = model_params.get('lengths_key')
 
-    test_batchsz = kwargs.get('test_batchsz', batchsz)
     train_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(ts, lengths_key))
     train_dataset = train_dataset.shuffle(buffer_size=SHUF_BUF_SZ)
     train_dataset = train_dataset.batch(batchsz, drop_remainder=False)
@@ -248,12 +302,14 @@ def fit_eager(model_params, ts, vs, es=None, **kwargs):
 
     reporting_fns = listify(kwargs.get('reporting', []))
     print('reporting', reporting_fns)
-    SET_TRAIN_FLAG(True)
-    trainer = ClassifyTrainerEagerTf(model_params, **kwargs)
+
+    trainer = TaggerTrainerEagerTf(model_params, **kwargs)
+
     last_improved = 0
 
-    for epoch in range(epochs):
+    SET_TRAIN_FLAG(True)
 
+    for epoch in range(epochs):
         trainer.train(train_dataset, reporting_fns, steps=len(ts))
         test_metrics = trainer.test(valid_dataset, reporting_fns, phase='Valid', steps=len(vs))
 
@@ -278,4 +334,10 @@ def fit_eager(model_params, ts, vs, es=None, **kwargs):
     if es is not None:
         print('Reloading best checkpoint')
         trainer.recover_last_checkpoint()
-        trainer.test(test_dataset, reporting_fns, phase='Test', verbose=verbose, steps=len(es))
+        evaluator = TaggerEvaluatorEagerTf(trainer.model, span_type, verbose)
+        start = time.time()
+        test_metrics = evaluator.test(test_dataset, conll_output=conll_output, txts=txts, steps=len(es))
+        duration = time.time() - start
+        for reporting in reporting_fns:
+            reporting(test_metrics, 0, 'Test')
+        trainer.log.debug({'phase': 'Test', 'time': duration})

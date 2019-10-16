@@ -602,9 +602,9 @@ class BiLSTMEncoder1(tf.keras.Model):
 
     def call(self, inputs):
         inputs, lengths = tensor_and_lengths(inputs)
-        rnnout, fwd_state, backward_state = tf.nn.bidirectional_dynamic_rnn(self.fwd_rnn, self.bwd_rnn, inputs, sequence_length=lengths, dtype=tf.float32)
+        rnnout, (fwd_state, backward_state) = tf.nn.bidirectional_dynamic_rnn(self.fwd_rnn, self.bwd_rnn, inputs, sequence_length=lengths, dtype=tf.float32)
         rnnout = tf.concat(axis=2, values=rnnout)
-        return self.output_fn(rnnout, (fwd_state[-1].h, fwd_state[-1].c), (backward_state[-1].h, backward_state[-1].c))
+        return self.output_fn(rnnout, ((fwd_state[-1].h, fwd_state[-1].c), (backward_state[-1].h, backward_state[-1].c)))
 
     @property
     def requires_length(self):

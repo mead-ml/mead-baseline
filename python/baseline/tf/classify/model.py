@@ -26,7 +26,6 @@ from baseline.tf.tfy import (
 )
 
 
-
 logger = logging.getLogger('baseline')
 
 

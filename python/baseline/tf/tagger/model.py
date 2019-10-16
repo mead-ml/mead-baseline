@@ -13,20 +13,10 @@ from baseline.utils import listify, Offsets
 logger = logging.getLogger('baseline')
 
 
-class TaggerModelBase(TaggerModel):
+class TaggerModelBase(tf.keras.Model, TaggerModel):
     """Tagger model base class for TensorFlow
     This class provides the implementation of the TaggerModel for TensorFlow
     """
-
-    def __init__(self):
-        """Create a tagger, nothing marked as unserializable
-        """
-        super(TaggerModelBase, self).__init__()
-        self._unserializable = []
-        self._lengths_key = None
-        self._dropin_value = None
-        self.saver = None
-
 
     def __init__(self):
         """Create a tagger, nothing marked as unserializable
@@ -60,7 +50,8 @@ class TaggerModelBase(TaggerModel):
         :param basename: The name of the model prefix
         :return: None
         """
-        self.saver.save(self.sess, basename)
+        if get_version(tf) < 2:
+            self.saver.save(self.sess, basename)
 
     def save_md(self, basename):
         """
@@ -163,6 +154,17 @@ class TaggerModelBase(TaggerModel):
             feed_dict[self.y] = y
         return feed_dict
 
+    def __call__(self, *args, **kwargs):
+        return self._layers(*args, **kwargs)
+
+    @property
+    def trainable_variables(self):
+        return self._layers.trainable_variables
+
+    @property
+    def variables(self):
+        return self._layers.variables
+
     def save(self, basename):
         """Save a model, using the parameter as a prefix
 
@@ -225,7 +227,7 @@ class TaggerModelBase(TaggerModel):
 
         :return: The loss function
         """
-        return self.layers.neg_log_loss(self.probs, self.y, self.lengths)
+        return self._layers.neg_log_loss(self.probs, self.y, self.lengths)
 
     def get_labels(self):
         """Get the labels (names of each class)
@@ -301,36 +303,38 @@ class TaggerModelBase(TaggerModel):
         model.embeddings = embeddings
 
         model.lengths_key = kwargs.get('lengths_key')
-        model.lengths = kwargs.get('lengths', tf.placeholder(tf.int32, [None], name="lengths"))
-        model._unserializable.append(model.lengths_key)
-        model._record_state(**kwargs)
 
+        if get_version(tf) < 2:
+
+            inputs = {'lengths': model.lengths}
+            for k, embedding in embeddings.items():
+                x = kwargs.get(k, embedding.create_placeholder(name=k))
+                inputs[k] = x
+            model._unserializable.append(model.lengths_key)
+            model.lengths = kwargs.get('lengths', tf.compat.v1.placeholder(tf.int32, [None], name="lengths"))
+            inputs['lengths'] = model.lengths
+            model.y = kwargs.get('y', tf.placeholder(tf.int32, [None, None], name="y"))
+            model.sess = kwargs.get('sess', create_session())
+
+        model._record_state(**kwargs)
         model.labels = labels
         nc = len(labels)
 
         # This only exists to make exporting easier
         model.pdrop_value = kwargs.get('dropout', 0.5)
         model.dropin_value = kwargs.get('dropin', {})
-        model.sess = kwargs.get('sess', create_session())
 
-        model.lengths = kwargs.get('lengths', tf.placeholder(tf.int32, [None], name="lengths"))
-        model.y = kwargs.get('y', tf.placeholder(tf.int32, [None, None], name="y"))
-        model.pdrop_in = kwargs.get('dropin', 0.0)
         model.labels = labels
         model.span_type = kwargs.get('span_type')
-
-        inputs = {'lengths': model.lengths}
-        for k, embedding in embeddings.items():
-            x = kwargs.get(k, embedding.create_placeholder(name=k))
-            inputs[k] = x
 
         embed_model = model.embed(**kwargs)
         transduce_model = model.encode(**kwargs)
         decode_model = model.decode(**kwargs)
 
-        model.layers = TagSequenceModel(nc, embed_model, transduce_model, decode_model)
-        model.probs = model.layers.transduce(inputs)
-        model.best = model.layers.decode(model.probs, model.lengths)
+        model._layers = TagSequenceModel(nc, embed_model, transduce_model, decode_model)
+        if get_version(tf) < 2:
+            model.probs = model._layers.transduce(inputs)
+            model.best = model._layers.decode(model.probs, model.lengths)
         return model
 
 
@@ -346,23 +350,23 @@ class RNNTaggerModel(TaggerModelBase):
         self._vdrop = value
 
     def __init__(self):
-        super(RNNTaggerModel, self).__init__()
+        super().__init__()
 
     def encode(self, **kwargs):
         self.vdrop = kwargs.get('variational', False)
         rnntype = kwargs.get('rnntype', 'blstm')
-        nlayers = kwargs.get('layers', 1)
+        nlayers = int(kwargs.get('layers', 1))
         hsz = int(kwargs['hsz'])
 
-        Encoder = BiLSTMEncoder if rnntype == 'blstm' else LSTMEncoder
-        return Encoder(hsz, nlayers, self.pdrop_value, self.vdrop, rnn_signal)
+        Encoder = BiLSTMEncoderSequence if rnntype == 'blstm' else LSTMEncoderSequence
+        return Encoder(None, hsz, nlayers, self.pdrop_value, self.vdrop)
 
 
 @register_model(task='tagger', name='cnn')
 class CNNTaggerModel(TaggerModelBase):
 
     def __init__(self):
-        super(CNNTaggerModel, self).__init__()
+        super().__init__()
 
     def encode(self, **kwargs):
         nlayers = kwargs.get('layers', 1)
@@ -371,5 +375,5 @@ class CNNTaggerModel(TaggerModelBase):
         if filts is None:
             filts = 5
 
-        cnnout = ConvEncoderStack(hsz, filts, self.pdrop_value, nlayers)
+        cnnout = ConvEncoderStack(None, hsz, filts, self.pdrop_value, nlayers)
         return cnnout
