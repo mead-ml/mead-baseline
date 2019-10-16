@@ -673,7 +673,7 @@ if get_version(tf) < 2:
     BiLSTMEncoderSequence = BiLSTMEncoderSequence1
     BiLSTMEncoderHidden = BiLSTMEncoderHidden1
     BiLSTMEncoderHiddenContext = BiLSTMEncoderHiddenContext1
-    from tf.contrib.crf import crf_decode, crf_sequence_score, crf_log_norm
+    from tensorflow.contrib.crf import crf_decode, crf_sequence_score, crf_log_norm
 
 else:
     LSTMEncoder = LSTMEncoder2
@@ -1266,7 +1266,7 @@ class LangSequenceModel(tf.keras.Model):
 class EmbedPoolStackModel(tf.keras.Model):
 
     def __init__(self, nc, embeddings, pool_model, stack_model=None):
-        super(EmbedPoolStackModel, self).__init__()
+        super().__init__()
         if isinstance(embeddings, dict):
             self.embed_model = EmbeddingsStack(embeddings)
         else:

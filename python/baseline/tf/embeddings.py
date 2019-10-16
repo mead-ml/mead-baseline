@@ -1,6 +1,28 @@
 from eight_mile.tf.embeddings import *
 import tensorflow as tf
-from baseline.tf.tfy import stacked_lstm
+
+
+def stacked_lstm(hsz, pdrop, nlayers, variational=False, training=False):
+    """Produce a stack of LSTMs with dropout performed on all but the last layer.
+
+    :param hsz: (``int``) The number of hidden units per LSTM
+    :param pdrop: (``int``) The probability of dropping a unit value during dropout
+    :param nlayers: (``int``) The number of layers of LSTMs to stack
+    :param variational (``bool``) variational recurrence is on
+    :param training (``bool``) Are we training? (defaults to ``False``)
+    :return: a stacked cell
+    """
+    if variational:
+        return tf.contrib.rnn.MultiRNNCell(
+            [lstm_cell_w_dropout(hsz, pdrop, variational=variational, training=training) for _ in range(nlayers)],
+            state_is_tuple=True
+        )
+    return tf.contrib.rnn.MultiRNNCell(
+        [lstm_cell_w_dropout(hsz, pdrop, training=training) if i < nlayers - 1 else lstm_cell(hsz) for i in range(nlayers)],
+        state_is_tuple=True
+    )
+
+
 
 @register_embeddings(name='char-lstm')
 class CharLSTMEmbeddings(TensorFlowEmbeddings):
