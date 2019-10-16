@@ -1,6 +1,8 @@
 import os
 import json
 import logging
+from typing import List
+from collections import Counter
 import numpy as np
 import eight_mile
 import baseline
@@ -82,6 +84,19 @@ def register_task(cls):
 def get_task_registry():
     return TASK_REGISTRY
 
+
+def assert_unique_feature_names(names: List[str]) -> None:
+    """Check if all the feature names are unique.
+
+    :param names: The feature names
+    :raises ValueError: If there are duplicated names
+    """
+    counts = Counter(names)
+    dups = [n for n, c in counts.items() if c > 1]
+    if dups:
+        raise ValueError(f"Features names must be unique, found duplicates {dups}")
+
+
 @exporter
 class Task(object):
     """Basic building block for a task of NLP problems, e.g. `tagger`, `classify`, etc.
@@ -123,6 +138,7 @@ class Task(object):
         self.vectorizers = {}
 
         features = self.config_params['features']
+        assert_unique_feature_names([f['name'] for f in features])
         self.primary_key = features[0]['name']
         for feature in self.config_params['features']:
             key = feature['name']
