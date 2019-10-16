@@ -140,7 +140,7 @@ def loss(model, x, y):
     return l
 
 
-optimizer = EagerOptimizer(loss, Adam(model.parameters(), 0.001))
+optimizer = EagerOptimizer(loss, optim="adam", lr=0.001) ##Adam(model.parameters(), 0.001))
 
 for epoch in range(num_epochs):
     loss_acc = 0.

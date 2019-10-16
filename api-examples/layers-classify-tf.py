@@ -139,6 +139,10 @@ def loss(model, x, y):
   return tf.compat.v1.losses.sparse_softmax_cross_entropy(labels=y, logits=y_)
 
 
+# This works with TF 2.0 and PyTorch:
+#optimizer = EagerOptimizer(loss, optim="adam", lr=0.001)
+
+# This works on all 3
 optimizer = EagerOptimizer(loss, Adam(0.001))
 
 for epoch in range(num_epochs):
