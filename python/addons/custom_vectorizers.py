@@ -1,7 +1,6 @@
 import numpy as np
 from collections import Counter
 from baseline.utils import Offsets
-# from embed_bert import WordpieceTokenizer, WordPieceVectorizer1D
 from baseline.vectorizers import register_vectorizer, AbstractVectorizer
 
 
@@ -70,6 +69,27 @@ class WordPieceVectorizer1D(AbstractVectorizer):
         return self.mxlen,
 
 
+class SavableFastBPE(object):
+    """Wrapper to define how to pickle fastBPE tokenizer"""
+    def __init__(self, codes_path, vocab_path):
+        from fastBPE import fastBPE
+        self.codes = open(codes_path, 'rb').read()
+        self.vocab = open(vocab_path, 'rb').read()
+        self.bpe = fastBPE(codes_path, vocab_path)
+
+    def __getstate__(self):
+        return {'codes': self.codes, 'vocab': self.vocab}
+
+    def __setstate__(self, state):
+        with tempfile.NamedTemporaryFile() as codes, tempfile.NamedTemporaryFile() as vocab:
+            codes.write(state['codes'])
+            vocab.write(state['vocab'])
+            self.bpe = fastBPE(codes.name, vocab.name)
+
+    def apply(self, sentences):
+        return self.bpe.apply(sentences)
+
+
 @register_vectorizer(name='bpe1d')
 class BPEVectorizer1D(AbstractVectorizer):
     """Define a Baseline Vectorizer for BPE using fastBPE (https://github.com/glample/fastBPE)
@@ -82,11 +102,10 @@ class BPEVectorizer1D(AbstractVectorizer):
     def __init__(self, **kwargs):
         """Loads a BPE tokenizer"""
         super(BPEVectorizer1D, self).__init__(kwargs.get('transform_fn'))
-        from fastBPE import fastBPE
         self.max_seen = 128
         self.model_file = kwargs.get('model_file')
         self.vocab_file = kwargs.get('vocab_file')
-        self.tokenizer = fastBPE(self.model_file, self.vocab_file)
+        self.tokenizer = SavableFastBPE(self.model_file, self.vocab_file)
         self.mxlen = kwargs.get('mxlen', -1)
         self.vocab = {k: i for i, k in enumerate(self.read_vocab(self.vocab_file))}
 
