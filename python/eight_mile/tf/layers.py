@@ -298,6 +298,51 @@ class LSTMEncoder2(tf.keras.Model):
         return self._requires_length
 
 
+class LSTMEncoderWithState2(tf.keras.Model):
+
+    def __init__(self, insz, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None,
+                 dropout_in_single_layer=False, skip_conn=False, projsz=None, **kwargs):
+        super().__init__(name=name)
+        self._requires_length = requires_length
+        self.hsz = hsz
+        self.rnns = []
+        for _ in range(nlayers-1):
+            self.rnns.append(tf.keras.layers.LSTM(hsz,
+                                                  return_sequences=True,
+                                                  recurrent_dropout=pdrop if variational else 0.0,
+                                                  dropout=pdrop if not variational else 0.0))
+        if nlayers == 1 and not dropout_in_single_layer and not variational:
+            pdrop = 0.0
+        self.rnns.append(tf.keras.layers.LSTM(hsz,
+                                              return_sequences=True,
+                                              return_state=True,
+                                              recurrent_dropout=pdrop if variational else 0.0,
+                                              dropout=pdrop if not variational else 0.0))
+
+    def call(self, inputs):
+        inputs, hidden_state_input = inputs
+
+        hidden_outputs = []
+        initial_state = None
+        for i, rnn in enumerate(self.rnns):
+            if hidden_state_input is not None:
+                hidden_state = hidden_state_input[i]
+                initial_state = (hidden_state[0], hidden_state[1])
+            outputs, h, c = rnn(inputs, initial_state=initial_state)
+            hidden_outputs.append((h, c))
+            inputs = outputs
+        return outputs, hidden_outputs
+
+    def zero_state(self, batchsz):
+        num_rnns = len(self.rnns)
+        zstate = []
+        for i, _ in enumerate(self.rnns):
+            zstate.append((np.zeros((batchsz, num_rnns), dtype=np.float32),
+                           np.zeros((batchsz, num_rnns), dtype=np.float32)))
+
+        return zstate
+
+
 class LSTMEncoderSequence2(LSTMEncoder2):
 
     def __init__(self, insz, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None,
@@ -679,6 +724,7 @@ if get_version(tf) < 2:
 else:
     LSTMEncoder = LSTMEncoder2
     LSTMEncoderSequence = LSTMEncoderSequence2
+    LSTMEncoderWithState = LSTMEncoderWithState2
     LSTMEncoderHidden = LSTMEncoderHidden2
     LSTMEncoderHiddenContext = LSTMEncoderHiddenContext2
     BiLSTMEncoder = BiLSTMEncoder2

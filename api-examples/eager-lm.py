@@ -1,6 +1,7 @@
 import baseline
 import eight_mile.tf.embeddings
 import eight_mile.tf.layers as L
+from eight_mile.utils import get_version
 from eight_mile.tf.layers import TRAIN_FLAG, SET_TRAIN_FLAG
 from eight_mile.tf.optz import EagerOptimizer
 from eight_mile.utils import listify, revlut
@@ -9,8 +10,13 @@ from eight_mile.w2v import PretrainedEmbeddingsModel, RandomInitVecModel
 import tensorflow as tf
 import logging
 import numpy as np
-tf.enable_eager_execution()
 
+if get_version(tf) < 2:
+    tf.enable_eager_execution()
+    SGD = tf.train.GradientDescentOptimizer
+
+else:
+    SGD = tf.optimizers.SGD
 NUM_PREFETCH = 2
 SHUF_BUF_SZ = 5000
 
@@ -95,7 +101,6 @@ def train_input_fn():
     dataset = dataset.map(lambda x, y: ({'word': x}, y))
     dataset = dataset.repeat(1)
     dataset = dataset.prefetch(NUM_PREFETCH)
-    _ = dataset.make_one_shot_iterator()
     return dataset
 
 
@@ -104,7 +109,6 @@ def eval_input_fn():
     dataset = dataset.batch(20, True)
     dataset = dataset.map(lambda x, y: ({'word': x}, y))
     #dataset = dataset.map(lambda x, y: (x, y))
-    _ = dataset.make_one_shot_iterator()
     return dataset
 
 
@@ -112,7 +116,6 @@ def predict_input_fn():
     dataset = tf.data.Dataset.from_tensor_slices((X_test, y_test))
     dataset = dataset.batch(1)
     dataset = dataset.map(lambda x, y: ({'word': x}, y))
-    _ = dataset.make_one_shot_iterator()
     return dataset
 
 transducer = L.LSTMEncoderWithState(None, 200, 1, 0.5)
@@ -121,7 +124,7 @@ model = L.LangSequenceModel(embeddings["word"].vsz, embeddings, transducer)
 train_loss_results = []
 train_accuracy_results = []
 
-optimizer = tf.train.GradientDescentOptimizer(learning_rate=1)
+optimizer = SGD(learning_rate=1)
 
 global_step = tf.Variable(0)
 
