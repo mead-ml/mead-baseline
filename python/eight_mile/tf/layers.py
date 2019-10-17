@@ -300,10 +300,10 @@ class LSTMEncoder2(tf.keras.Model):
 
 class LSTMEncoderWithState2(tf.keras.Model):
 
-    def __init__(self, insz, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None,
+    def __init__(self, insz, hsz, nlayers, pdrop=0.0, variational=False, name=None,
                  dropout_in_single_layer=False, skip_conn=False, projsz=None, **kwargs):
         super().__init__(name=name)
-        self._requires_length = requires_length
+        self._requires_length = False
         self.hsz = hsz
         self.rnns = []
         for _ in range(nlayers-1):
@@ -514,7 +514,7 @@ class LSTMEncoderWithState1(LSTMEncoder1):
                          nlayers=nlayers,
                          pdrop=pdrop,
                          variational=variational,
-                         length_required=False,
+                         requires_length=False,
                          name=name,
                          dropout_in_single_layer=dropout_in_single_layer, **kwargs)
 
