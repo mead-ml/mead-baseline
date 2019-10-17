@@ -1253,6 +1253,37 @@ class CRF(tf.keras.layers.Layer):
         return -tf.reduce_mean(log_likelihood)
 
 
+class MeanPool1D(tf.keras.layers.Layer):
+    def __init__(self, dsz, trainable=False, name=None, dtype=tf.float32, batch_first=True, *args, **kwargs):
+        """This is a layers the calculates the mean pooling in a length awareway.
+
+           This was originally a wrapper around tf.keras.layers.GlobalAveragePooling1D()
+           but that had problems because the mask didn't work then the dimension we
+           are pooling over was variable length.
+
+           looking here https://github.com/tensorflow/tensorflow/blob/1cf0898dd4331baf93fe77205550f2c2e6c90ee5/tensorflow/python/keras/layers/pooling.py#L639
+
+           We can see that the input shape is being gotten as a list where for the
+           value of `input_shape[step_axis]` is `None` instead of getting the shape
+           via `tf.shape`. This means that when they do the reshape the
+           broadcast_shape is `[-1, None, 1]` which causes an error.
+        """
+        super().__init__(trainable, name, dtype)
+        self.output_dim = dsz
+        self.reduction_dim = 1 if batch_first else 0
+
+    def call(self, inputs):
+        tensor, lengths = tensor_and_lengths(inputs)
+        # Regardless of whether the input is batch first or time first the result of the
+        # sum is `[B, H]` so the lengths (which is `[B]`) should always be expanded with
+        # `-1` to `[B, -1]` so that is broadcasts.
+        return tf.reduce_sum(tensor, self.reduction_dim) / tf.cast(tf.expand_dims(lengths, -1), tf.float32)
+
+    @property
+    def requires_length(self):
+        return True
+
+
 class TagSequenceModel(tf.keras.Model):
 
     def __init__(self, nc, embeddings, transducer, decoder=None, name=None):

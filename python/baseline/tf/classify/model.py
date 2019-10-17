@@ -454,7 +454,7 @@ class NBowModel(NBowBase):
         :param kwargs: None
         :return: The average pooling representation
         """
-        return tf.keras.layers.GlobalAveragePooling1D()
+        return MeanPool1D(dsz)
 
 
 @register_model(task='classify', name='nbowmax')
