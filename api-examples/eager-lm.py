@@ -200,6 +200,8 @@ for epoch in range(num_epochs):
     step = 0
     start = time.time()
     h = None
+    SET_TRAIN_FLAG(True)
+
     for x, y in train_input_fn():
         # Optimize the model
         loss_value, h, grads = grad(model, h, x, y)
@@ -216,6 +218,8 @@ for epoch in range(num_epochs):
 
     step = 0
     loss_accum = 0
+    SET_TRAIN_FLAG(False)
+
     for x, y in eval_input_fn():
         # Optimize the model
 
