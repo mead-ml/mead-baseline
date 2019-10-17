@@ -1063,7 +1063,7 @@ def load_vocab(vocab_file):
 
     vocab = collections.OrderedDict()
     index = 0
-    with tf.gfile.GFile(vocab_file, "r") as reader:
+    with tf.compat.v1.gfile.GFile(vocab_file, "r") as reader:
         while True:
             token = convert_to_unicode(reader.readline())
             if not token:

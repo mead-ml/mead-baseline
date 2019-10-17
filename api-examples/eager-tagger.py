@@ -1,4 +1,5 @@
 
+import os
 from eight_mile.utils import listify
 import baseline
 import eight_mile.tf.layers as L
@@ -55,11 +56,11 @@ def to_tensors(ts):
     return np.stack(X), np.stack(Xch), np.stack(y)
 
 
-VSM_MODEL = '/home/dpressel/.bl-data/dce69c404025a8312c323197347695e81fd529fc/glove.twitter.27B.200d.txt'
+VSM_MODEL = os.path.expanduser('~/.bl-data/dce69c404025a8312c323197347695e81fd529fc/glove.twitter.27B.200d.txt')
 
-TS = '/home/dpressel/dev/work/baseline/data/oct27.train'
-VS = '/home/dpressel/dev/work/baseline/data/oct27.dev'
-ES = '/home/dpressel/dev/work/baseline/data/oct27.test'
+TS = os.path.expanduser('~/dev/work/baseline/data/oct27.train')
+VS = os.path.expanduser('~/dev/work/baseline/data/oct27.dev')
+ES = os.path.expanduser('~/dev/work/baseline/data/oct27.test')
 
 
 feature_desc = {

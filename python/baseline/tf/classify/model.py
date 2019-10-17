@@ -467,7 +467,7 @@ class NBowMaxModel(NBowBase):
     def __init__(self):
         super(NBowMaxModel, self).__init__()
 
-    def pool(self, word_embeddings, dsz, init, **kwargs):
+    def pool(self, dsz, **kwargs):
         """Do max pooling on input embeddings, yielding a `dsz` output layer
 
         :param word_embeddings: The word embedding input
@@ -513,9 +513,7 @@ class CompositePoolingModel(EmbedPoolStackClassifier):
         :return: A pooled composite output
         """
         SubModels = [eval(model) for model in kwargs.get('sub')]
-        pooling = []
+        models = []
         for SubClass in SubModels:
-            pooling.append(SubClass.pool(self, dsz, **kwargs))
-        return tf.concat(pooling, -1)
-
-
+            models.append(SubClass.pool(self, dsz, **kwargs))
+        return CompositeModel(models)
