@@ -124,10 +124,6 @@ model = L.LangSequenceModel(embeddings["word"].vsz, embeddings, transducer)
 train_loss_results = []
 train_accuracy_results = []
 
-optimizer = SGD(learning_rate=1)
-
-global_step = tf.Variable(0)
-
 
 def loss(model, h, x, y):
 
@@ -143,10 +139,10 @@ def loss(model, h, x, y):
     return loss, h
 
 
-def grad(model, h, inputs, targets):
-  with tf.GradientTape() as tape:
-      loss_value, h = loss(model, h, inputs, targets)
-  return loss_value, h, tape.gradient(loss_value, model.trainable_variables)
+#def grad(model, h, inputs, targets):
+#  with tf.GradientTape() as tape:
+#      loss_value, h = loss(model, h, inputs, targets)
+#  return loss_value, h, tape.gradient(loss_value, model.trainable_variables)
 
 """
 def generate_text(model, start_string):
@@ -193,6 +189,11 @@ def generate_text(model, start_string):
 """
 import time
 num_epochs = 2
+
+
+optimizer = EagerOptimizer(loss, SGD(1))
+
+
 for epoch in range(num_epochs):
 
 
@@ -204,10 +205,7 @@ for epoch in range(num_epochs):
 
     for x, y in train_input_fn():
         # Optimize the model
-        loss_value, h, grads = grad(model, h, x, y)
-        optimizer.apply_gradients(zip(grads, model.variables),
-                                  global_step)
-
+        loss_value, h = optimizer.update_with_hidden(model, h, x, y)
         loss_accum += loss_value
         step += 1
     print('training time {}'.format(time.time() - start))

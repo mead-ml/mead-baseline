@@ -330,3 +330,10 @@ class EagerOptimizer(object):
         self.optimizer.apply_gradients(zip(grads, model.trainable_variables), self.global_step)
         return loss_value
 
+    def update_with_hidden(self, model, h, x, y):
+        with tf.GradientTape() as tape:
+            loss_value, h = self.loss(model, h, x, y)
+        grads = tape.gradient(loss_value, model.trainable_variables)
+        self.optimizer.apply_gradients(zip(grads, model.trainable_variables), self.global_step)
+        return loss_value, h
+

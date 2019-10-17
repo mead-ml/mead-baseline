@@ -77,7 +77,6 @@ class ClassifyTrainerEagerTf(EpochReportingTrainer):
         self.checkpoint_manager = tf.train.CheckpointManager(self._checkpoint,
                                                              directory=checkpoint_dir,
                                                              max_to_keep=5)
-        #self.model.set_saver(tf.train.Saver())
 
     def _train(self, loader, steps=0, **kwargs):
         """Train an epoch of data using either the input loader or using `tf.dataset`

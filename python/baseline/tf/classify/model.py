@@ -245,8 +245,6 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
 
         :return: A fully-initialized tensorflow classifier
         """
-        TRAIN_FLAG()
-
         model = cls()
         model.embeddings = {}
         for k, embedding in embeddings.items():

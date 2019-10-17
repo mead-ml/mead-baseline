@@ -9,7 +9,7 @@ from baseline.tf.transformer import transformer_encoder_stack, subsequent_mask
 from baseline.utils import read_json, write_json, MAGIC_VARS
 
 
-class LanguageModelBase(LanguageModel):
+class LanguageModelBase(tf.keras.Model, LanguageModel):
     """Base for all baseline implementations of LMs
 
     This class provides a loose skeleton around which the baseline models
@@ -23,7 +23,6 @@ class LanguageModelBase(LanguageModel):
         """
         super(LanguageModelBase, self).__init__()
         self.saver = None
-        self.layers = None
         self.hsz = None
         self.probs = None
         self._unserializable = []
@@ -34,7 +33,8 @@ class LanguageModelBase(LanguageModel):
         :param basename: The prefix name of the checkpoint
         :return:
         """
-        self.saver.save(self.sess, basename)
+        if get_version(tf) < 2:
+            self.saver.save(self.sess, basename)
 
     def save_md(self, basename):
         """This method saves out a `.state` file containing meta-data from these classes and any info
@@ -47,8 +47,6 @@ class LanguageModelBase(LanguageModel):
         write_json(self._state, basename + '.state')
         for key, embedding in self.embeddings.items():
             embedding.save_md(basename + '-{}-md.json'.format(key))
-        with open(basename + '.saver', 'w') as f:
-            f.write(str(self.saver.as_saver_def()))
 
     def _record_state(self, **kwargs):
         """
@@ -147,6 +145,17 @@ class LanguageModelBase(LanguageModel):
         step_softmax = self.sess.run(self.probs, feed_dict)
         return step_softmax
 
+    def __call__(self, *args, **kwargs):
+        return self._layers(*args, **kwargs)
+
+    @property
+    def trainable_variables(self):
+        return self._layers.trainable_variables
+
+    @property
+    def variables(self):
+        return self._layers.variables
+
     @classmethod
     def create(cls, embeddings, **kwargs):
         """Create the language model
@@ -177,29 +186,34 @@ class LanguageModelBase(LanguageModel):
         lm._record_state(**kwargs)
         inputs = {}
         lm.batchsz = 0
-        for k, embedding in embeddings.items():
-            x = kwargs.get(k, embedding.create_placeholder(name=k))
-            lm.batchsz = tf.shape(x)[0]
-            inputs[k] = x
 
-        lm.y = kwargs.get('y', tf.placeholder(tf.int32, [None, None], name="y"))
-        lm.sess = kwargs.get('sess', tf.Session())
+        if get_version(tf) < 2:
+
+            for k, embedding in embeddings.items():
+                x = kwargs.get(k, embedding.create_placeholder(name=k))
+                lm.batchsz = tf.shape(x)[0]
+                inputs[k] = x
+
+            lm.y = kwargs.get('y', tf.placeholder(tf.int32, [None, None], name="y"))
+            lm.sess = kwargs.get('sess', tf.Session())
         lm.pdrop_value = kwargs.pop('pdrop', 0.5)
         lm.hsz = kwargs.pop('hsz', None)
 
-        unif = kwargs.get('unif', 0.05)
-        weight_initializer = tf.random_uniform_initializer(-unif, unif)
+        #unif = kwargs.get('unif', 0.05)
+        ##weight_initializer = tf.random_uniform_initializer(-unif, unif)
 
-        with tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE, initializer=weight_initializer):
+        ##with tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE, initializer=weight_initializer):
 
-            embeddings_layer = lm.embed(**kwargs)
-            nc = embeddings[lm.tgt_key].vsz
-            lstm_encoder_layer = lm.decode(inputs, **kwargs)
-            lang_model = LangSequenceModel(nc, embeddings_layer, lstm_encoder_layer)
-            lm.logits, lm.final_state = lang_model(inputs)
+        embeddings_layer = lm.embed(**kwargs)
+        nc = embeddings[lm.tgt_key].vsz
+        lstm_encoder_layer = lm.decode(inputs, **kwargs)
+        lm._layers = LangSequenceModel(nc, embeddings_layer, lstm_encoder_layer)
+
+        if get_version(tf) < 2:
+            lm.logits, lm.final_state = lm._layers(inputs)
             lm.probs = tf.nn.softmax(lm.logits, name="softmax")
 
-            return lm
+        return lm
 
     def embed(self, **kwargs):
         """This method performs "embedding" of the inputs.  The base method here then concatenates along depth
@@ -287,7 +301,7 @@ class RNNLanguageModel(LanguageModelBase):
     def __init__(self):
         """Construct an RNNLM
         """
-        super(RNNLanguageModel, self).__init__()
+        super().__init__()
         self.rnntype = 'lstm'
         self.initial_state = None
 

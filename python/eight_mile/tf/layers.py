@@ -309,6 +309,7 @@ class LSTMEncoderWithState2(tf.keras.Model):
         for _ in range(nlayers-1):
             self.rnns.append(tf.keras.layers.LSTM(hsz,
                                                   return_sequences=True,
+                                                  return_state=True,
                                                   recurrent_dropout=pdrop if variational else 0.0,
                                                   dropout=pdrop if not variational else 0.0))
         if nlayers == 1 and not dropout_in_single_layer and not variational:
