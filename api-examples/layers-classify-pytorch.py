@@ -6,7 +6,6 @@ from eight_mile.pytorch.optz import OptimizerManager, EagerOptimizer
 import eight_mile.pytorch.embeddings
 import eight_mile.pytorch.layers as L
 import torch.nn.functional as F
-from torch.optim import Adam
 from torch.utils.data import Dataset, DataLoader, TensorDataset
 import logging
 import numpy as np

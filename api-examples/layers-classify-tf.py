@@ -153,6 +153,7 @@ for epoch in range(num_epochs):
         loss_value = optimizer.update(model, x, y)
         loss_acc += loss_value
         step += 1
+    
     print('training time {}'.format(time.time() - start))
     mean_loss = loss_acc / step
     print('Training Loss {}'.format(mean_loss))

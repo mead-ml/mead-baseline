@@ -155,6 +155,7 @@ class LanguageModelTrainerEagerTf(Trainer):
         )
         return metrics
 
+
 @register_training_func('lm')
 def fit_eager(model_params, ts, vs, es=None, **kwargs):
     """
