@@ -2,6 +2,7 @@ import logging
 import time
 import os
 from argparse import ArgumentParser
+import tempfile
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader, TensorDataset
 from baseline.pytorch.lm import TransformerLanguageModel
@@ -93,6 +94,26 @@ X_CHAR_EMBEDDINGS = {
 BERT_TOKENIZER = None
 
 
+class SavableFastBPE(object):
+    def __init__(self, codes_path, vocab_path):
+        from fastBPE import fastBPE
+        self.codes = open(codes_path, 'rb').read()
+        self.vocab = open(vocab_path, 'rb').read()
+        self.bpe = fastBPE(codes_path, vocab_path)
+
+    def __getstate__(self):
+        return {'codes': self.codes, 'vocab': self.vocab}
+
+    def __setstate__(self, state):
+        with tempfile.NamedTemporaryFile() as codes, tempfile.NamedTemporaryFile() as vocab:
+            codes.write(state['codes'])
+            vocab.write(state['vocab'])
+            self.bpe = fastBPE(codes.name, vocab.name)
+
+    def apply(self, sentences):
+        return self.bpe.apply(sentences)
+
+
 class BPEVectorizer1D(AbstractVectorizer):
     """Define a Baseline Vectorizer for BPE using fastBPE (https://github.com/glample/fastBPE)
 
@@ -105,11 +126,10 @@ class BPEVectorizer1D(AbstractVectorizer):
     def __init__(self, **kwargs):
         """Loads a BPE tokenizer"""
         super(BPEVectorizer1D, self).__init__(kwargs.get('transform_fn'))
-        from fastBPE import fastBPE
         self.max_seen = 128
         self.model_file = kwargs.get('model_file')
         self.vocab_file = kwargs.get('vocab_file')
-        self.tokenizer = fastBPE(self.model_file, self.vocab_file)
+        self.tokenizer = SavableFastBPE(self.model_file, self.vocab_file)
         self.mxlen = kwargs.get('mxlen', -1)
         self.vocab = {k: i for i, k in enumerate(self.read_vocab(self.vocab_file))}
 
@@ -369,11 +389,17 @@ def load_embed_and_vocab(token_type, reader, dataset, dataset_key, d_model, cach
     if caching and os.path.exists(preproc_cache):
         logger.info("Loading cached preprocessing info [%s]", preproc_cache)
         preproc_data = torch.load(preproc_cache)
+        vectorizers_mxlen = preproc_data['vectorizers_mxlen']
+        for k, vectorizer in reader.vectorizers.items():
+            vectorizer.max_seen = vectorizers_mxlen[k]
 
     else:
         vocab_sources = [dataset['train_file'], dataset['valid_file']]
         vocabs = reader.build_vocab(vocab_sources)
         valid_num_words = reader.num_words[dataset['valid_file']]
+        vectorizers_maxlen = {}
+        for k, vectorizer in reader.vectorizers.items():
+            vectorizers_maxlen[k] = vectorizer.max_seen
         logger.info("Read vocabulary")
         embeddings = {}
 
@@ -398,7 +424,8 @@ def load_embed_and_vocab(token_type, reader, dataset, dataset_key, d_model, cach
             vocabs['x'] = x_embedding['vocab']
             embeddings['x'] = x_embedding['embeddings']
 
-        preproc_data = {'vocabs': vocabs, 'embeddings': embeddings, 'valid_num_words': valid_num_words, 'tgt_key': tgt_key}
+        preproc_data = {'vocabs': vocabs, 'embeddings': embeddings, 'valid_num_words': valid_num_words,
+                        'tgt_key': tgt_key, 'vectorizers_mxlen': vectorizers_maxlen}
         logger.info("Saving preprocessing info [%s]", preproc_cache)
         torch.save(preproc_data, preproc_cache)
     return preproc_data
