@@ -1365,6 +1365,28 @@ class FineTuneModel(tf.keras.Model):
         return {} # base_config
 
 
+class CompositeModel(tf.keras.Model):
+    def __init__(self, models):
+        super().__init__()
+        self.models = models
+        self._requires_length = any(getattr(m, 'requires_length', False) for m in self.models)
+        # self.output_dim = sum(m.output_dim for m in self.models)
+
+    def call(self, inputs, training=None, mask=None):
+        inputs, lengths = tensor_and_lengths(inputs)
+        pooled = []
+        for m in self.models:
+            if getattr(m, 'requires_length', False):
+                pooled.append(m((inputs, lengths)))
+            else:
+                pooled.append(m(inputs))
+        return tf.concat(pooled, -1)
+
+    @property
+    def requires_length(self):
+        return self._requires_length
+
+
 def highway_conns(inputs, wsz_all, n):
     """Produce one or more highway connection layers
 

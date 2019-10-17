@@ -104,7 +104,7 @@ class ClassifyTrainerEagerTf(EpochReportingTrainer):
         SET_TRAIN_FLAG(True)
 
         for features, y in pg(loader):
-            lossv = self.optimizer.update(self.model, features, y)
+            lossv = self.optimizer.update(self.model, features, y).numpy()
             batchsz = y.shape[0]
             report_lossv = lossv * batchsz
             epoch_loss += report_lossv
@@ -153,7 +153,7 @@ class ClassifyTrainerEagerTf(EpochReportingTrainer):
             logits = self.model(features)
             y_ = tf.argmax(logits, axis=1, output_type=tf.int32)
             cm.add_batch(y, y_)
-            lossv = tf.compat.v1.losses.sparse_softmax_cross_entropy(labels=y, logits=logits)
+            lossv = tf.compat.v1.losses.sparse_softmax_cross_entropy(labels=y, logits=logits).numpy()
             batchsz = y.shape[0]
             assert len(y_) == batchsz
             total_loss += lossv * batchsz
