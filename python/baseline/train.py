@@ -11,10 +11,9 @@ exporter = export(__all__)
 
 
 @exporter
-class Trainer(object):
+class Trainer:
 
     def __init__(self):
-        super(Trainer, self).__init__()
         self.train_epochs = 0
         self.valid_epochs = 0
         self.nsteps = None
@@ -63,7 +62,7 @@ class Trainer(object):
 class EpochReportingTrainer(Trainer):
 
     def __init__(self):
-        super(EpochReportingTrainer, self).__init__()
+        super().__init__()
 
     def train(self, ts, reporting_fns, **kwargs):
         start_time = time.time()

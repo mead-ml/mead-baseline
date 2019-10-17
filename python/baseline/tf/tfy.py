@@ -117,36 +117,6 @@ def tie_weight(weight, tie_shape):
     return tie_getter
 
 
-def stacked_lstm(hsz, pdrop, nlayers, variational=False, training=False):
-    """Produce a stack of LSTMs with dropout performed on all but the last layer.
-
-    :param hsz: (``int``) The number of hidden units per LSTM
-    :param pdrop: (``int``) The probability of dropping a unit value during dropout
-    :param nlayers: (``int``) The number of layers of LSTMs to stack
-    :param variational (``bool``) variational recurrence is on
-    :param training (``bool``) Are we training? (defaults to ``False``)
-    :return: a stacked cell
-    """
-    if variational:
-        return tf.contrib.rnn.MultiRNNCell(
-            [lstm_cell_w_dropout(hsz, pdrop, variational=variational, training=training) for _ in range(nlayers)],
-            state_is_tuple=True
-        )
-    return tf.contrib.rnn.MultiRNNCell(
-        [lstm_cell_w_dropout(hsz, pdrop, training=training) if i < nlayers - 1 else lstm_cell(hsz) for i in range(nlayers)],
-        state_is_tuple=True
-    )
-
-
-def lstm_encoder(embedseq, lengths, hsz, pdrop_value=0.5, variational=False, rnntype='blstm', layers=1):
-
-    if rnntype == 'blstm':
-        Encoder = BiLSTMEncoder
-    else:
-        Encoder = LSTMEncoder
-    return Encoder(hsz, pdrop_value, layers, variational, rnn_signal)((embedseq, lengths), training=TRAIN_FLAG())
-
-
 def rnn_cell_w_dropout(hsz, pdrop, rnntype, st=None, variational=False, training=False):
 
     """Produce a single RNN cell with dropout
@@ -191,5 +161,5 @@ def multi_rnn_cell_w_dropout(hsz, pdrop, rnntype, num_layers, variational=False,
 
 
 def stacked_dense(inputs, init, hszs=[], pdrop_value=0.5):
-    return DenseStack(hszs, pdrop_value=pdrop_value, init=init)(inputs)
+    return DenseStack(None, hszs, pdrop_value=pdrop_value, init=init)(inputs)
 

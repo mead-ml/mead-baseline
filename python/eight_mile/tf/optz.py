@@ -132,7 +132,7 @@ class CompositeLRSchedulerTensorFlow(object):
         def call_warm():
             return warm_tensor
 
-        rest_step = tf.subtract(global_step, tf.constant(self.warm.warmup_steps, dtype=global_step.dtype))
+        rest_step = tf.subtract(global_step, tf.compat.v1.constant(self.warm.warmup_steps, dtype=global_step.dtype))
         rest_tensor = self.rest(lr, rest_step)
 
         def call_rest():
@@ -147,7 +147,7 @@ class CompositeLRSchedulerTensorFlow(object):
         return "LRScheduler({}, {})".format(self.warm, self.rest)
 
 
-class AdamWOptimizer(tf.train.Optimizer):
+class AdamWOptimizer(tf.compat.v1.train.Optimizer):
     """A basic Adam optimizer that includes "correct" L2 weight decay.
 
     Modified from: https://github.com/google-research/bert/blob/master/optimization.py
@@ -264,18 +264,76 @@ def optimizer(loss_fn, **kwargs):
                                                         clip_gradients=clip, learning_rate_decay_fn=lr_scheduler,
                                                         increment_global_step=True)
 
-
+# Warning, sparse update ops dont work on GPU
+# In TF 2 this leads to errors, particularly with SGD w/ Momentum and Adadelta
+# https://github.com/tensorflow/tensorflow/issues/31291
 class EagerOptimizer(object):
 
-    def __init__(self, loss, optimizer):
+    def __init__(self, loss, optimizer=None, **kwargs):
         self.loss = loss
         self.global_step = tf.Variable(0)
-        self.optimizer = optimizer
+        # TODO: Add back!
+        #lr_scheduler = create_lr_scheduler(**kwargs)
+        #decay_fn = None
+        # Right now this option is pointless since sparse updates dont work on GPU.  We just turn it off
+        sgd_mom = float(kwargs.get('mom', 0.9))
+        clip = kwargs.get('clip', None)
+        if optimizer:
+            self.optimizer = optimizer
+        else:
+            optim = kwargs.get('optim', 'sgd')
+            lr = kwargs.get('lr', kwargs.get('eta', 0.01))
+
+            if optim == 'adadelta':
+                rho = float(kwargs.get('rho', 0.95))
+                eps = float(kwargs.get('epsilon', 1e-6))
+                logger.info('adadelta(eta=%f, rho=%f, epsilon=%f)', lr, rho, eps)
+                #self.optimizer = tf.optimizers.Adadelta(lr, rho, eps)
+                lr = min(lr, 0.001)
+                logger.warning("In eager mode on GPU, TF errors if using an optimizer with sparse updates.  "
+                               "This should be fixed 11/2019.  For now, changing to adam(eta=%f)", lr)
+                self.optimizer = tf.optimizers.Adam(lr, 0.9, 0.999, 1e-8)
+            elif optim == 'adam':
+                beta1 = float(kwargs.get('beta1', 0.9))
+                beta2 = float(kwargs.get('beta2', 0.999))
+                eps = float(kwargs.get('epsilon', 1e-8))
+                logger.info('adam(eta=%f beta1=%f, beta2=%f, eps=%f)', lr, beta1, beta2, eps)
+                self.optimizer = tf.optimizers.Adam(lr, beta1, beta2, eps)
+            #elif optim == 'adamw':
+            #    wd = float(kwargs.get('weight_decay', 0))
+            #    beta1 = float(kwargs.get('beta1', 0.9))
+            #    beta2 = float(kwargs.get('beta2', 0.999))
+            #    eps = float(kwargs.get('epsilon', 1e-8))
+            #    logger.info('adamw(eta=%f beta1=%f, beta2=%f, eps=%f)', lr, beta1, beta2, eps)
+            #    self.optimizer = lambda lr: AdamWOptimizer(lr, wd, beta1, beta2, eps)
+            elif optim == 'rmsprop':
+                # Get mom again with difference default
+                mom = float(kwargs.get('mom', 0.0))
+                logger.info('rmsprop(eta=%f, mom=%f)', lr, mom)
+                self.optimizer = tf.optimizers.RMSprop(lr, momentum=mom)
+            elif sgd_mom > 0:
+                logger.info('sgd-mom(eta=%f, mom=%f)', lr, sgd_mom)
+                logger.warning("In eager mode on GPU, TF errors if using an optimizer with sparse updates.  "
+                               "This should be fixed 11/2019.  For now, turning off momentum")
+                sgd_mom = 0.0
+                self.optimizer = tf.optimizers.SGD(lr, sgd_mom)
+            else:
+                logger.info('sgd(eta=%f)', lr)
+                self.optimizer = tf.optimizers.SGD(lr)
+
+        logger.info('clip gradients at %s', clip)
 
     def update(self, model, x, y):
         with tf.GradientTape() as tape:
             loss_value = self.loss(model, x, y)
         grads = tape.gradient(loss_value, model.trainable_variables)
-        self.optimizer.apply_gradients(zip(grads, model.variables), self.global_step)
+        self.optimizer.apply_gradients(zip(grads, model.trainable_variables), self.global_step)
         return loss_value
+
+    def update_with_hidden(self, model, h, x, y):
+        with tf.GradientTape() as tape:
+            loss_value, h = self.loss(model, h, x, y)
+        grads = tape.gradient(loss_value, model.trainable_variables)
+        self.optimizer.apply_gradients(zip(grads, model.trainable_variables), self.global_step)
+        return loss_value, h
 

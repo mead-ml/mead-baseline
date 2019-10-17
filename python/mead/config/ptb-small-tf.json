@@ -31,7 +31,7 @@
         "layers": 2
     },
     "train": {
-      "fit_func": "feed_dict",
+      "fit_func": "default",
         "epochs": 13,
         "optim": "sgd",
         "eta": 20.0,

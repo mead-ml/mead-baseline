@@ -250,14 +250,30 @@ class OptimizerManager(object):
 
 class EagerOptimizer(object):
 
-    def __init__(self, loss, optimizer):
+    def __init__(self, loss, optimizer=None, **kwargs):
         self.loss = loss
-        self.optimizer = optimizer
+        if optimizer:
+            self.optimizer = optimizer
+        else:
+            self.optimizer_args = kwargs
+            self.optimizer = None
 
     def update(self, model, x, y):
+        if not self.optimizer:
+            self.optimizer = OptimizerManager(model, **self.optimizer_args)
         self.optimizer.zero_grad()
         l = self.loss(model, x, y)
         l.backward()
         self.optimizer.step()
         return float(l)
+
+    def update_with_hidden(self, model, h, x, y):
+        if not self.optimizer:
+            self.optimizer = OptimizerManager(model, **self.optimizer_args)
+        self.optimizer.zero_grad()
+        l, h = self.loss(model, h, x, y)
+        l.backward()
+        self.optimizer.step()
+        return float(l), h
+
 

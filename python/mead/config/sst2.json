@@ -37,6 +37,7 @@
     "finetune": true
   },
   "train": {
+    "fit_func": "default",
     "epochs": 2,
     "optim": "adadelta",
     "eta": 1.0,

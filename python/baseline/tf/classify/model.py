@@ -19,8 +19,6 @@ from baseline.utils import (
 from baseline.model import ClassifierModel, register_model
 from baseline.tf.tfy import (
     TRAIN_FLAG,
-    stacked_lstm,
-    parallel_conv,
     reload_embeddings,
     new_placeholder_dict,
     tf_device_wrapper,
@@ -28,11 +26,10 @@ from baseline.tf.tfy import (
 )
 
 
-
 logger = logging.getLogger('baseline')
 
 
-class ClassifierModelBase(ClassifierModel):
+class ClassifierModelBase(tf.keras.Model, ClassifierModel):
     """Base for all baseline implementations of token-based classifiers
 
     This class provides a loose skeleton around which the baseline models
@@ -49,7 +46,7 @@ class ClassifierModelBase(ClassifierModel):
     def __init__(self):
         """Base
         """
-        super(ClassifierModelBase, self).__init__()
+        super().__init__()
         self._unserializable = []
 
     def set_saver(self, saver):
@@ -61,7 +58,8 @@ class ClassifierModelBase(ClassifierModel):
         :param basename: Base name of model
         :return:
         """
-        self.saver.save(self.sess, basename)
+        if get_version(tf) < 2:
+            self.saver.save(self.sess, basename)
 
     def save_md(self, basename):
         """This method saves out a `.state` file containing meta-data from these classes and any info
@@ -247,39 +245,54 @@ class ClassifierModelBase(ClassifierModel):
 
         :return: A fully-initialized tensorflow classifier
         """
-        TRAIN_FLAG()
-
         model = cls()
         model.embeddings = {}
         for k, embedding in embeddings.items():
             model.embeddings[k] = embedding.detached_ref()
 
         model.lengths_key = kwargs.get('lengths_key')
-        inputs = {}
-        if model.lengths_key is not None:
-            model._unserializable.append(model.lengths_key)
-            model.lengths = kwargs.get('lengths', tf.placeholder(tf.int32, [None], name="lengths"))
-            inputs['lengths'] = model.lengths
-        else:
-            model.lengths = None
+
+        if get_version(tf) < 2:
+
+            inputs = {}
+            if model.lengths_key is not None:
+                model._unserializable.append(model.lengths_key)
+                model.lengths = kwargs.get('lengths', tf.compat.v1.placeholder(tf.int32, [None], name="lengths"))
+                inputs['lengths'] = model.lengths
+            else:
+                model.lengths = None
 
         model._record_state(**kwargs)
-        for k, embedding in model.embeddings.items():
-            x = kwargs.get(k, embedding.create_placeholder(name=k))
-            inputs[k] = x
 
+        nc = len(labels)
+        if get_version(tf) < 2:
+            model.y = kwargs.get('y', tf.compat.v1.placeholder(tf.int32, [None, nc], name="y"))
+            for k, embedding in model.embeddings.items():
+                x = kwargs.get(k, embedding.create_placeholder(name=k))
+                inputs[k] = x
+
+            model.sess = kwargs.get('sess', create_session())
 
         model.pdrop_value = kwargs.get('dropout', 0.5)
-        model.sess = kwargs.get('sess', create_session())
         model.labels = labels
-
-        nc = len(model.labels)
-        model.y = kwargs.get('y', tf.placeholder(tf.int32, [None, nc], name="y"))
         model.create_layers(**kwargs)
-        model.logits = tf.identity(model.layers(inputs), name="logits")
-        model.best = tf.argmax(model.logits, 1, name="best")
-        model.probs = tf.nn.softmax(model.logits, name="probs")
+
+        if get_version(tf) < 2:
+            model.logits = tf.identity(model(inputs), name="logits")
+            model.best = tf.argmax(model.logits, 1, name="best")
+            model.probs = tf.nn.softmax(model.logits, name="probs")
         return model
+
+    def __call__(self, *args, **kwargs):
+        return self._layers(*args, **kwargs)
+
+    @property
+    def trainable_variables(self):
+        return self._layers.trainable_variables
+
+    @property
+    def variables(self):
+        return self._layers.variables
 
     def create_layers(self, **kwargs):
         pass
@@ -304,7 +317,7 @@ class EmbedPoolStackClassifier(ClassifierModelBase):
         nc = len(self.labels)
         pool = self.pool(embeddings_stack.dsz, **kwargs)
         stacking = self.stacked(**kwargs)
-        self.layers = EmbedPoolStackModel(nc, embeddings_stack, pool, stacking)
+        self._layers = EmbedPoolStackModel(nc, embeddings_stack, pool, stacking)
 
 
     def pool(self, dsz, **kwargs):
@@ -332,7 +345,7 @@ class EmbedPoolStackClassifier(ClassifierModelBase):
         hszs = listify(kwargs.get('hsz', []))
         if len(hszs) == 0:
             return None
-        return DenseStack(hszs, pdrop_value=self.pdrop_value)
+        return DenseStack(None, hszs, pdrop_value=self.pdrop_value)
 
 
 @register_model(task='classify', name='default')
@@ -405,8 +418,8 @@ class LSTMModel(EmbedPoolStackClassifier):
         nlayers = int(kwargs.get('layers', 1))
 
         if rnntype == 'blstm':
-            return BiLSTMEncoder(hsz, nlayers, self.pdrop_value, vdrop, output_fn=rnn_bi_hidden)
-        return LSTMEncoder(hsz, nlayers, self.pdrop_value, vdrop, output_fn=rnn_hidden)
+            return BiLSTMEncoderHidden(None, hsz, nlayers, self.pdrop_value, vdrop)
+        return LSTMEncoderHidden(None, hsz, nlayers, self.pdrop_value, vdrop)
 
 
 class NBowBase(EmbedPoolStackClassifier):
@@ -441,7 +454,7 @@ class NBowModel(NBowBase):
         :param kwargs: None
         :return: The average pooling representation
         """
-        return tf.keras.layers.GlobalAveragePooling1D()
+        return MeanPool1D(dsz)
 
 
 @register_model(task='classify', name='nbowmax')
@@ -452,7 +465,7 @@ class NBowMaxModel(NBowBase):
     def __init__(self):
         super(NBowMaxModel, self).__init__()
 
-    def pool(self, word_embeddings, dsz, init, **kwargs):
+    def pool(self, dsz, **kwargs):
         """Do max pooling on input embeddings, yielding a `dsz` output layer
 
         :param word_embeddings: The word embedding input
@@ -498,9 +511,7 @@ class CompositePoolingModel(EmbedPoolStackClassifier):
         :return: A pooled composite output
         """
         SubModels = [eval(model) for model in kwargs.get('sub')]
-        pooling = []
+        models = []
         for SubClass in SubModels:
-            pooling.append(SubClass.pool(self, dsz, **kwargs))
-        return tf.concat(pooling, -1)
-
-
+            models.append(SubClass.pool(self, dsz, **kwargs))
+        return CompositeModel(models)

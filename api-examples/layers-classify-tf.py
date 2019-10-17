@@ -1,15 +1,32 @@
 import argparse
-import eight_mile.embeddings
-from eight_mile.confusion import ConfusionMatrix
 import baseline
-from eight_mile.pytorch.optz import OptimizerManager, EagerOptimizer
-import eight_mile.pytorch.embeddings
-import eight_mile.pytorch.layers as L
-import torch.nn.functional as F
+from eight_mile.utils import get_version
+from eight_mile.confusion import ConfusionMatrix
+import eight_mile.tf.embeddings
+import eight_mile.tf.layers as L
+from eight_mile.tf.layers import TRAIN_FLAG, SET_TRAIN_FLAG
+from eight_mile.tf.optz import EagerOptimizer
+import tensorflow as tf
 import logging
 import numpy as np
 import time
-import torch
+
+
+
+TF_VERSION = get_version(tf)
+if TF_VERSION < 2:
+    from tensorflow import count_nonzero
+    tf.enable_eager_execution()
+    Adam = tf.train.AdamOptimizer
+
+else:
+    from tensorflow.compat.v1 import count_nonzero
+    Adam = tf.optimizers.Adam
+
+#tf.config.gpu.set_per_process_memory_growth(True)
+
+NUM_PREFETCH = 2
+SHUF_BUF_SZ = 5000
 
 
 def get_logging_level(ll):
@@ -20,7 +37,16 @@ def get_logging_level(ll):
         return logging.INFO
     return logging.WARNING
 
-parser = argparse.ArgumentParser(description='Train a Layers model with PyTorch API')
+
+def to_device(m):
+    return m
+
+
+def to_host(o):
+    return o
+
+
+parser = argparse.ArgumentParser(description='Train a Layers model with TensorFlow API')
 parser.add_argument('--model_type', help='What type of model to build', type=str, default='default')
 parser.add_argument('--poolsz', help='How many hidden units for pooling', type=int, default=100)
 parser.add_argument('--stacksz', help='How many hidden units for stacking', type=int, nargs='+')
@@ -35,8 +61,8 @@ parser.add_argument('--test', help='Testing file', default='../data/stsa.binary.
 parser.add_argument('--embeddings', help='Pretrained embeddings file', default='/data/embeddings/GoogleNews-vectors-negative300.bin')
 parser.add_argument('--ll', help='Log level', type=str, default='info')
 parser.add_argument('--lr', help='Learning rate', type=float, default=0.001)
-args = parser.parse_known_args()[0]
 
+args = parser.parse_known_args()[0]
 
 feature_desc = {
     'word': {
@@ -44,9 +70,6 @@ feature_desc = {
         'embed': {'file': args.embeddings, 'type': 'default', 'unif': 0.25}
     }
 }
-# Create a reader that is using our vectorizers to parse a TSV file
-# with rows like:
-# <label>\t<sentence>\n
 
 vectorizers = {k: v['vectorizer'] for k, v in feature_desc.items()}
 reader = baseline.TSVSeqLabelReader(vectorizers, clean_fn=baseline.TSVSeqLabelReader.do_clean)
@@ -54,6 +77,7 @@ reader = baseline.TSVSeqLabelReader(vectorizers, clean_fn=baseline.TSVSeqLabelRe
 train_file = args.train
 valid_file = args.valid
 test_file = args.test
+
 
 # This builds a set of counters
 vocabs, labels = reader.build_vocab([train_file,
@@ -66,94 +90,85 @@ embeddings = dict()
 for k, v in feature_desc.items():
     embed_config = v['embed']
     embeddings_for_k = eight_mile.embeddings.load_embeddings('word', embed_file=embed_config['file'], known_vocab=vocabs[k],
-                                                embed_type=embed_config.get('type', 'default'),
-                                                unif=embed_config.get('unif', 0.), use_mmap=True)
+                                                             embed_type=embed_config.get('type', 'default'),
+                                                             unif=embed_config.get('unif', 0.), use_mmap=True)
 
     embeddings[k] = embeddings_for_k['embeddings']
     # Reset the vocab to the embeddings one
     vocabs[k] = embeddings_for_k['vocab']
 
 
-train = reader.load(train_file, vocabs=vocabs, batchsz=args.batchsz)
-valid = reader.load(valid_file, vocabs=vocabs, batchsz=args.batchsz)
-test = reader.load(test_file, vocabs=vocabs, batchsz=args.batchsz)
+class Data:
+
+    def __init__(self, ts, batchsz):
+        self.x, self.y = self._to_tensors(ts)
+        self.batchsz = batchsz
+
+    def _to_tensors(self, ts):
+        x = []
+        y = []
+        for sample in ts:
+            x.append(sample['word'].squeeze())
+            y.append(sample['y'].squeeze())
+        return np.stack(x), np.stack(y)
+
+    def get_input(self, training=False):
+        SET_TRAIN_FLAG(training)
+        dataset = tf.data.Dataset.from_tensor_slices((self.x, self.y))
+        dataset = dataset.shuffle(buffer_size=SHUF_BUF_SZ)
+        dataset = dataset.batch(50)
+        dataset = dataset.map(lambda x, y: ({'word': x, 'lengths': count_nonzero(x, axis=1)}, y))
+        dataset = dataset.prefetch(NUM_PREFETCH)
+        return dataset
+
+
+train_set = Data(reader.load(train_file, vocabs=vocabs, batchsz=1), args.batchsz)
+valid_set = Data(reader.load(valid_file, vocabs=vocabs, batchsz=1), args.batchsz)
+test_set = Data(reader.load(test_file, vocabs=vocabs, batchsz=1), args.batchsz)
 
 stacksz = len(args.filts) * args.poolsz
-model = L.EmbedPoolStackModel(2, embeddings, L.ParallelConv(300, args.poolsz, args.filts), L.Highway(stacksz)).cuda()
+num_epochs = 2
 
-train_loss_results = []
-train_accuracy_results = []
-
+model = to_device(
+    L.EmbedPoolStackModel(2, embeddings, L.ParallelConv(300, args.poolsz, args.filts), L.Highway(stacksz))
+)
 
 
 def loss(model, x, y):
-    y_ = model(x)
-    l = F.nll_loss(y_, y)
-    return l
+  y_ = model(x)
+  return tf.compat.v1.losses.sparse_softmax_cross_entropy(labels=y, logits=y_)
 
 
-num_epochs = 2
+# This works with TF 2.0 and PyTorch:
+#optimizer = EagerOptimizer(loss, optim="adam", lr=0.001)
 
-def as_np(cuda_ten):
-    return cuda_ten.cpu().float().numpy()
-
-def make_pair(batch_dict, train=False):
-
-    example_dict = dict({})
-    for key in feature_desc.keys():
-        example_dict[key] = torch.from_numpy(batch_dict[key]).cuda()
-
-    # Allow us to track a length, which is needed for BLSTMs
-    if 'word_lengths' in batch_dict:
-        example_dict['lengths'] = torch.from_numpy(batch_dict['word_lengths']).cuda()
-
-    y = batch_dict.pop('y')
-    if train:
-        y = torch.from_numpy(y).cuda()
-    return example_dict, y
-
-
-optimizer = EagerOptimizer(loss, OptimizerManager(model, optim="adam", lr=args.lr))
+# This works on all 3
+optimizer = EagerOptimizer(loss, Adam(0.001))
 
 for epoch in range(num_epochs):
-
-    # Training loop - using batches of 32
     loss_acc = 0.
-    epoch_loss = 0.
-    epoch_div = 0.
-
     step = 0
     start = time.time()
-    batchsz = 20
-    for b in train:
-        x, y = make_pair(b, True)
+    for x, y in train_set.get_input(training=True):
         loss_value = optimizer.update(model, x, y)
         loss_acc += loss_value
         step += 1
-
+    
     print('training time {}'.format(time.time() - start))
-
     mean_loss = loss_acc / step
     print('Training Loss {}'.format(mean_loss))
-
     cm = ConfusionMatrix(['0', '1'])
-    with torch.no_grad():
-        for b in valid:
-            x, y = make_pair(b)
-            y_ = np.argmax(as_np(model(x)), axis=1)
-            cm.add_batch(y, y_)
-
+    for x, y in valid_set.get_input():
+        y_ = np.argmax(to_device(model(x)), axis=1)
+        cm.add_batch(y, y_)
     print(cm)
     print(cm.get_all_metrics())
 
 print('FINAL')
 cm = ConfusionMatrix(['0', '1'])
-with torch.no_grad():
-    for b in test:
-        x, y = make_pair(b)
-        y_ = np.argmax(as_np(model(x)), axis=1)
-
-        cm.add_batch(y, y_)
+for x, y in test_set.get_input():
+    y_ = tf.argmax(to_device(model(x)), axis=1, output_type=tf.int32)
+    cm.add_batch(y, y_)
 
 print(cm)
 print(cm.get_all_metrics())

@@ -1,6 +1,7 @@
 import baseline
 import eight_mile.tf.embeddings
 import eight_mile.tf.layers as L
+from eight_mile.utils import get_version
 from eight_mile.tf.layers import TRAIN_FLAG, SET_TRAIN_FLAG
 from eight_mile.tf.optz import EagerOptimizer
 from eight_mile.utils import listify, revlut
@@ -9,8 +10,13 @@ from eight_mile.w2v import PretrainedEmbeddingsModel, RandomInitVecModel
 import tensorflow as tf
 import logging
 import numpy as np
-tf.enable_eager_execution()
 
+if get_version(tf) < 2:
+    tf.enable_eager_execution()
+    SGD = tf.train.GradientDescentOptimizer
+
+else:
+    SGD = tf.optimizers.SGD
 NUM_PREFETCH = 2
 SHUF_BUF_SZ = 5000
 
@@ -95,7 +101,6 @@ def train_input_fn():
     dataset = dataset.map(lambda x, y: ({'word': x}, y))
     dataset = dataset.repeat(1)
     dataset = dataset.prefetch(NUM_PREFETCH)
-    _ = dataset.make_one_shot_iterator()
     return dataset
 
 
@@ -104,7 +109,6 @@ def eval_input_fn():
     dataset = dataset.batch(20, True)
     dataset = dataset.map(lambda x, y: ({'word': x}, y))
     #dataset = dataset.map(lambda x, y: (x, y))
-    _ = dataset.make_one_shot_iterator()
     return dataset
 
 
@@ -112,19 +116,13 @@ def predict_input_fn():
     dataset = tf.data.Dataset.from_tensor_slices((X_test, y_test))
     dataset = dataset.batch(1)
     dataset = dataset.map(lambda x, y: ({'word': x}, y))
-    _ = dataset.make_one_shot_iterator()
     return dataset
 
-transducer = L.LSTMEncoderWithState(200, 1, 0.5, output_fn=L.rnn_ident)
-#transducer = LSTMEncoder(200, 1, 0.5, output_fn=rnn_ident)
+transducer = L.LSTMEncoderWithState(None, 200, 1, 0.5)
 model = L.LangSequenceModel(embeddings["word"].vsz, embeddings, transducer)
 
 train_loss_results = []
 train_accuracy_results = []
-
-optimizer = tf.train.GradientDescentOptimizer(learning_rate=1)
-
-global_step = tf.Variable(0)
 
 
 def loss(model, h, x, y):
@@ -141,10 +139,10 @@ def loss(model, h, x, y):
     return loss, h
 
 
-def grad(model, h, inputs, targets):
-  with tf.GradientTape() as tape:
-      loss_value, h = loss(model, h, inputs, targets)
-  return loss_value, h, tape.gradient(loss_value, model.trainable_variables)
+#def grad(model, h, inputs, targets):
+#  with tf.GradientTape() as tape:
+#      loss_value, h = loss(model, h, inputs, targets)
+#  return loss_value, h, tape.gradient(loss_value, model.trainable_variables)
 
 """
 def generate_text(model, start_string):
@@ -191,6 +189,11 @@ def generate_text(model, start_string):
 """
 import time
 num_epochs = 2
+
+
+optimizer = EagerOptimizer(loss, SGD(1))
+
+
 for epoch in range(num_epochs):
 
 
@@ -198,12 +201,11 @@ for epoch in range(num_epochs):
     step = 0
     start = time.time()
     h = None
+    SET_TRAIN_FLAG(True)
+
     for x, y in train_input_fn():
         # Optimize the model
-        loss_value, h, grads = grad(model, h, x, y)
-        optimizer.apply_gradients(zip(grads, model.variables),
-                                  global_step)
-
+        loss_value, h = optimizer.update_with_hidden(model, h, x, y)
         loss_accum += loss_value
         step += 1
     print('training time {}'.format(time.time() - start))
@@ -214,6 +216,8 @@ for epoch in range(num_epochs):
 
     step = 0
     loss_accum = 0
+    SET_TRAIN_FLAG(False)
+
     for x, y in eval_input_fn():
         # Optimize the model
 

@@ -2,7 +2,7 @@ import os
 import pytest
 import numpy as np
 tf = pytest.importorskip('tensorflow')
-from baseline.tf.tfy import rnn_cell_w_dropout, lstm_cell_w_dropout, stacked_lstm
+from baseline.tf.tfy import rnn_cell_w_dropout, lstm_cell_w_dropout
 
 
 @pytest.fixture(scope="module")

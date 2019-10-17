@@ -11,7 +11,6 @@ from eight_mile.pytorch.layers import (
     Dense,
     SkipConnection,
     Highway,
-    rnn_bi_hidden,
     BiLSTMEncoder,
     WithDropout
 )
@@ -223,7 +222,7 @@ class CharLSTMEmbeddings(PyTorchEmbeddings):
         pdrop = kwargs.get('pdrop', 0.5)
         unif = kwargs.get('unif', 0)
         weight_init = kwargs.get('weight_init', 'uniform')
-        self.char_comp = BiLSTMEncoder(dsz, self.lstmsz, layers, pdrop, unif=unif, initializer=weight_init, output_fn=rnn_bi_hidden)
+        self.char_comp = BiLSTMEncoderHidden(dsz, self.lstmsz, layers, pdrop, unif=unif, initializer=weight_init)
 
     def forward(self, xch):
         B, T, W = xch.shape
