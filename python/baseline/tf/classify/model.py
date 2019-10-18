@@ -60,6 +60,8 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
         """
         if get_version(tf) < 2:
             self.saver.save(self.sess, basename)
+        else:
+            self.save_weights(f"{basename}.wgt")
 
     def save_md(self, basename):
         """This method saves out a `.state` file containing meta-data from these classes and any info
@@ -119,7 +121,8 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
             all_loss = tf.reduce_mean(loss)
         return all_loss
 
-    def predict(self, batch_dict):
+    def predict_batch(self, batch_dict):
+
         """This method provides a basic routine to run "inference" or predict outputs based on data.
         It runs the `x` tensor in (`BxT`), and turns dropout off, running the network all the way to a softmax
         output. You can use this method directly if you have vector input, or you can use the `ClassifierService`
@@ -128,12 +131,32 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
         :param batch_dict: (``dict``) Contains any inputs to embeddings for this model
         :return: Each outcome as a ``list`` of tuples `(label, probability)`
         """
-        feed_dict = self.make_input(batch_dict)
-        probs = self.sess.run(self.probs, feed_dict)
+
+        batch_dict = self.make_input(batch_dict)
+        if get_version(tf) < 2:
+            probs = self.sess.run(self.probs, batch_dict)
+        else:
+            probs = tf.nn.softmax(self(batch_dict))
+        return probs
+
+    def predict(self, batch_dict, raw=False):
+
+        """This method provides a basic routine to run "inference" or predict outputs based on data.
+        It runs the `x` tensor in (`BxT`), and turns dropout off, running the network all the way to a softmax
+        output. You can use this method directly if you have vector input, or you can use the `ClassifierService`
+        which can convert directly from text durign its `transform`.  That method calls this one underneath.
+
+        :param batch_dict: (``dict``) Contains any inputs to embeddings for this model
+        :return: Each outcome as a ``list`` of tuples `(label, probability)`
+        """
+
+        probs = self.predict_batch(batch_dict)
+        if raw:
+            return probs
         results = []
         batchsz = probs.shape[0]
         for b in range(batchsz):
-            outcomes = [(self.labels[id_i], prob_i) for id_i, prob_i in enumerate(probs[b])]
+            outcomes = [(self.labels[id_i], prob_i.numpy()) for id_i, prob_i in enumerate(probs[b])]
             results.append(outcomes)
         return results
 
@@ -145,19 +168,30 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
         :return:
         """
         y = batch_dict.get('y', None)
-        feed_dict = new_placeholder_dict(train)
+        if get_version(tf) < 2:
+            batch_for_model = new_placeholder_dict(train)
 
-        for k in self.embeddings.keys():
-            feed_dict["{}:0".format(k)] = batch_dict[k]
+            for k in self.embeddings.keys():
+                batch_for_model["{}:0".format(k)] = batch_dict[k]
 
-        # Allow us to track a length, which is needed for BLSTMs
-        if self.lengths_key is not None:
-            feed_dict[self.lengths] = batch_dict[self.lengths_key]
+            # Allow us to track a length, which is needed for BLSTMs
+            if self.lengths_key is not None:
+                batch_for_model[self.lengths] = batch_dict[self.lengths_key]
 
-        if y is not None:
-            feed_dict[self.y] = fill_y(len(self.labels), y)
+            if y is not None:
+                batch_for_model[self.y] = fill_y(len(self.labels), y)
 
-        return feed_dict
+        else:
+            SET_TRAIN_FLAG(train)
+            batch_for_model = {}
+            for k in self.embeddings.keys():
+                batch_for_model[k] = batch_dict[k]
+
+            # Allow us to track a length, which is needed for BLSTMs
+            if self.lengths_key is not None:
+                batch_for_model["lengths"] = batch_dict[self.lengths_key]
+
+        return batch_for_model
 
     def get_labels(self):
         """Get the string labels back
@@ -186,8 +220,27 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
         _state = read_json("{}.state".format(basename))
         if __version__ != _state['version']:
             logger.warning("Loaded model is from baseline version %s, running version is %s", _state['version'], __version__)
-        _state['sess'] = kwargs.pop('sess', create_session())
-        with _state['sess'].graph.as_default():
+
+        if get_version(tf) < 2:
+            _state['sess'] = kwargs.pop('sess', create_session())
+            with _state['sess'].graph.as_default():
+                embeddings_info = _state.pop('embeddings')
+                embeddings = reload_embeddings(embeddings_info, basename)
+                # If there is a kwarg that is the same name as an embedding object that
+                # is taken to be the input of that layer. This allows for passing in
+                # subgraphs like from a tf.split (for data parallel) or preprocessing
+                # graphs that convert text to indices
+                for k in embeddings_info:
+                    if k in kwargs:
+                        _state[k] = kwargs[k]
+            labels = read_json("{}.labels".format(basename))
+            model = cls.create(embeddings, labels, **_state)
+            model._state = _state
+            if kwargs.get('init', True):
+                model.sess.run(tf.global_variables_initializer())
+            model.saver = tf.train.Saver()
+            model.saver.restore(model.sess, basename)
+        else:
             embeddings_info = _state.pop('embeddings')
             embeddings = reload_embeddings(embeddings_info, basename)
             # If there is a kwarg that is the same name as an embedding object that
@@ -197,15 +250,12 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
             for k in embeddings_info:
                 if k in kwargs:
                     _state[k] = kwargs[k]
-            # TODO: convert labels into just another vocab and pass number of labels to models.
+                # TODO: convert labels into just another vocab and pass number of labels to models.
             labels = read_json("{}.labels".format(basename))
             model = cls.create(embeddings, labels, **_state)
             model._state = _state
-            if kwargs.get('init', True):
-                model.sess.run(tf.global_variables_initializer())
-            model.saver = tf.train.Saver()
-            model.saver.restore(model.sess, basename)
-            return model
+            model.load_weights(f"{basename}.wgt")
+        return model
 
     @property
     def lengths_key(self):
@@ -283,16 +333,16 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
             model.probs = tf.nn.softmax(model.logits, name="probs")
         return model
 
-    def __call__(self, *args, **kwargs):
-        return self._layers(*args, **kwargs)
+    def call(self, *args, **kwargs):
+        return self.impl(*args, **kwargs)
 
     @property
     def trainable_variables(self):
-        return self._layers.trainable_variables
+        return self.impl.trainable_variables
 
     @property
     def variables(self):
-        return self._layers.variables
+        return self.impl.variables
 
     def create_layers(self, **kwargs):
         pass
@@ -317,7 +367,7 @@ class EmbedPoolStackClassifier(ClassifierModelBase):
         nc = len(self.labels)
         pool = self.pool(embeddings_stack.dsz, **kwargs)
         stacking = self.stacked(**kwargs)
-        self._layers = EmbedPoolStackModel(nc, embeddings_stack, pool, stacking)
+        self.impl = EmbedPoolStackModel(nc, embeddings_stack, pool, stacking)
 
 
     def pool(self, dsz, **kwargs):
@@ -384,7 +434,7 @@ class LSTMModel(EmbedPoolStackClassifier):
     """
 
     def __init__(self):
-        super(LSTMModel, self).__init__()
+        super().__init__()
         self._vdrop = None
 
     @property
@@ -488,7 +538,7 @@ class FineTuneModelClassifier(ClassifierModelBase):
     def create_layers(self, **kwargs):
         embeddings_stack = self.embed(**kwargs)
         nc = len(self.labels)
-        self.layers = FineTuneModel(nc, embeddings_stack)
+        self.impl = FineTuneModel(nc, embeddings_stack)
 
 
 @register_model(task='classify', name='composite')

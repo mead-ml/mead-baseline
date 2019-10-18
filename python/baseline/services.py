@@ -23,7 +23,6 @@ from baseline.utils import (
 from baseline.model import load_model_for
 logger = logging.getLogger('baseline')
 
-
 __all__ = []
 exporter = export(__all__)
 
@@ -199,7 +198,7 @@ class ClassifierService(Service):
     def signature_name(cls):
         return 'predict_text'
 
-    def predict(self, tokens, preproc=None):
+    def predict(self, tokens, preproc=None, raw=False):
         """Take tokens and apply the internal vocab and vectorizers.  The tokens should be either a batch of text
         single utterance of type ``list``
         """

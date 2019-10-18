@@ -145,16 +145,16 @@ class LanguageModelBase(tf.keras.Model, LanguageModel):
         step_softmax = self.sess.run(self.probs, feed_dict)
         return step_softmax
 
-    def __call__(self, *args, **kwargs):
-        return self._layers(*args, **kwargs)
+    def call(self, *args, **kwargs):
+        return self._layers[0](*args, **kwargs)
 
     @property
     def trainable_variables(self):
-        return self._layers.trainable_variables
+        return self._layers[0].trainable_variables
 
     @property
     def variables(self):
-        return self._layers.variables
+        return self._layers[0].variables
 
     @classmethod
     def create(cls, embeddings, **kwargs):
@@ -198,19 +198,13 @@ class LanguageModelBase(tf.keras.Model, LanguageModel):
             lm.sess = kwargs.get('sess', tf.Session())
         lm.pdrop_value = kwargs.pop('pdrop', 0.5)
         lm.hsz = kwargs.pop('hsz', None)
-
-        #unif = kwargs.get('unif', 0.05)
-        ##weight_initializer = tf.random_uniform_initializer(-unif, unif)
-
-        ##with tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE, initializer=weight_initializer):
-
         embeddings_layer = lm.embed(**kwargs)
         nc = embeddings[lm.tgt_key].vsz
         lstm_encoder_layer = lm.decode(inputs, **kwargs)
-        lm._layers = LangSequenceModel(nc, embeddings_layer, lstm_encoder_layer)
+        lm._layers.append(LangSequenceModel(nc, embeddings_layer, lstm_encoder_layer))
 
         if get_version(tf) < 2:
-            lm.logits, lm.final_state = lm._layers(inputs)
+            lm.logits, lm.final_state = lm(inputs)
             lm.probs = tf.nn.softmax(lm.logits, name="softmax")
 
         return lm
