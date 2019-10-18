@@ -83,7 +83,7 @@ def get_activation(name='relu'):
 
 
 # Mapped
-class ConvEncoder(tf.keras.Model):
+class ConvEncoder(tf.keras.layers.Layer):
     def __init__(self, insz, outsz, filtsz, pdrop, activation='relu'):
         super().__init__()
         self.output_dim = outsz
@@ -97,7 +97,7 @@ class ConvEncoder(tf.keras.Model):
 
 
 # Mapped
-class ConvEncoderStack(tf.keras.Model):
+class ConvEncoderStack(tf.keras.layers.Layer):
 
     def __init__(self, insz, outsz, filtsz, pdrop, layers=1, activation='relu'):
         super().__init__()
@@ -244,7 +244,7 @@ class LayerNorm(tf.keras.layers.Layer):
         return x
 
 
-class LSTMEncoder2(tf.keras.Model):
+class LSTMEncoder2(tf.keras.layers.Layer):
 
     def __init__(self, insz, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None,
                  dropout_in_single_layer=False, skip_conn=False, projsz=None, **kwargs):
@@ -298,7 +298,7 @@ class LSTMEncoder2(tf.keras.Model):
         return self._requires_length
 
 
-class LSTMEncoderWithState2(tf.keras.Model):
+class LSTMEncoderWithState2(tf.keras.layers.Layer):
 
     def __init__(self, insz, hsz, nlayers, pdrop=0.0, variational=False, name=None,
                  dropout_in_single_layer=False, skip_conn=False, projsz=None, **kwargs):
@@ -399,7 +399,7 @@ class LSTMEncoderHiddenContext2(LSTMEncoder2):
         return state
 
 
-class LSTMEncoder1(tf.keras.Model):
+class LSTMEncoder1(tf.keras.layers.Layer):
 
     def __init__(self, insz, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None,
                  dropout_in_single_layer=False, skip_conn=False, projsz=None, **kwargs):
@@ -530,7 +530,7 @@ class LSTMEncoderWithState1(LSTMEncoder1):
 
 
 # Mapped
-class BiLSTMEncoder2(tf.keras.Model):
+class BiLSTMEncoder2(tf.keras.layers.Layer):
 
     def __init__(self, insz, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None, dropout_in_single_layer=False, skip_conn=False, projsz=None, **kwargs):
         super().__init__(name=name)
@@ -608,7 +608,7 @@ class BiLSTMEncoderHiddenContext2(BiLSTMEncoder2):
         return state
 
 # Mapped
-class BiLSTMEncoder1(tf.keras.Model):
+class BiLSTMEncoder1(tf.keras.layers.Layer):
 
     def __init__(self, insz, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None,  skip_conn=False, projsz=None, **kwargs):
         """Produce a stack of LSTMs with dropout performed on all but the last layer.
@@ -735,7 +735,7 @@ else:
     from tensorflow_addons.text.crf import crf_decode, crf_sequence_score, crf_log_norm
 
 
-class EmbeddingsStack(tf.keras.Model):
+class EmbeddingsStack(tf.keras.layers.Layer):
 
     def __init__(self, embeddings_dict, dropout_rate=0.0, requires_length=False, name=None, **kwargs):
         """Takes in a dictionary where the keys are the input tensor names, and the values are the embeddings
@@ -778,7 +778,7 @@ class EmbeddingsStack(tf.keras.Model):
         return self.dsz
 
 
-class DenseStack(tf.keras.Model):
+class DenseStack(tf.keras.layers.Layer):
 
     def __init__(self, insz, hsz, activation='relu', pdrop_value=0.5, init=None, name=None, **kwargs):
         """Stack 1 or more hidden layers, optionally (forming an MLP)
@@ -818,7 +818,7 @@ class DenseStack(tf.keras.Model):
         return False
 
 
-class WithDropout(tf.keras.Model):
+class WithDropout(tf.keras.layers.Layer):
 
     def __init__(self, layer, pdrop=0.5):
         super(WithDropout, self).__init__()
@@ -833,7 +833,7 @@ class WithDropout(tf.keras.Model):
         return self.layer.output_dim
 
 
-class Highway(tf.keras.Model):
+class Highway(tf.keras.layers.Layer):
 
     def __init__(self, input_size, name=None, **kwargs):
         super(Highway, self).__init__(name=name)
@@ -851,7 +851,7 @@ class Highway(tf.keras.Model):
         return False
 
 
-class ResidualBlock(tf.keras.Model):
+class ResidualBlock(tf.keras.layers.Layer):
 
     def __init__(self, layer=None, name=None, **kwargs):
         super(ResidualBlock, self).__init__(name=name)
@@ -952,7 +952,7 @@ def combine_heads(x):
     return new_x
 
 
-class MultiHeadedAttention(tf.keras.Model):
+class MultiHeadedAttention(tf.keras.layers.Layer):
     """
     Multi-headed attention from https://arxiv.org/abs/1706.03762 via http://nlp.seas.harvard.edu/2018/04/03/attention.html
 
@@ -1005,7 +1005,7 @@ class MultiHeadedAttention(tf.keras.Model):
         return self.w_O(x)
 
 
-class TransformerEncoder(tf.keras.Model):
+class TransformerEncoder(tf.keras.layers.Layer):
 
     def __init__(self, d_model, num_heads, pdrop, scale=True, activation='relu', d_ff=None, name=None):
         super(TransformerEncoder, self).__init__(name=name)
@@ -1029,7 +1029,7 @@ class TransformerEncoder(tf.keras.Model):
         return x
 
 
-class TransformerDecoder(tf.keras.Model):
+class TransformerDecoder(tf.keras.layers.Layer):
 
     def __init__(self, d_model, num_heads, pdrop, scale=True, activation='relu', d_ff=None, name=None):
         super(TransformerEncoder, self).__init__(name=name)
@@ -1063,7 +1063,7 @@ class TransformerDecoder(tf.keras.Model):
         return x
 
 
-class TransformerEncoderStack(tf.keras.Model):
+class TransformerEncoderStack(tf.keras.layers.Layer):
 
     def __init__(self, d_model, num_heads, pdrop, scale=True, layers=1, activation='relu', d_ff=None, name=None, **kwargs):
         super(TransformerEncoderStack, self).__init__(name=name)
@@ -1079,7 +1079,7 @@ class TransformerEncoderStack(tf.keras.Model):
         return self.ln(x)
 
 
-class TransformerDecoderStack(tf.keras.Model):
+class TransformerDecoderStack(tf.keras.layers.Layer):
     def __init__(self, d_model, num_heads, pdrop, scale=True, layers=1, activation='relu', d_ff=None, name=None, **kwargs):
         super(TransformerDecoderStack, self).__init__()
         self.decoders = []
@@ -1094,7 +1094,7 @@ class TransformerDecoderStack(tf.keras.Model):
         return self.ln(x)
 
 
-class FFN(tf.keras.Model):
+class FFN(tf.keras.layers.Layer):
     """
     FFN from https://arxiv.org/abs/1706.03762 via http://nlp.seas.harvard.edu/2018/04/03/attention.html
 
