@@ -81,6 +81,8 @@ class SavableFastBPE(object):
         return {'codes': self.codes, 'vocab': self.vocab}
 
     def __setstate__(self, state):
+        from fastBPE import fastBPE
+        import tempfile
         with tempfile.NamedTemporaryFile() as codes, tempfile.NamedTemporaryFile() as vocab:
             codes.write(state['codes'])
             vocab.write(state['vocab'])
