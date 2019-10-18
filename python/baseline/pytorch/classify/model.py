@@ -2,6 +2,7 @@ import logging
 from baseline.model import ClassifierModel, register_model
 from baseline.pytorch.torchy import *
 from baseline.utils import listify, write_json
+from eight_mile.pytorch.layers import *
 import torch.backends.cudnn as cudnn
 import os
 cudnn.benchmark = True
@@ -49,9 +50,6 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
     def cuda(self, device=None):
         super(ClassifierModelBase, self).cuda(device=device)
         self.gpu = True
-
-        #for emb in self.embeddings.values():
-        #    emb.cuda(device)
 
     def create_loss(self):
         return nn.NLLLoss()
@@ -135,9 +133,6 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
 @register_model(task='classify', name='default')
 class ConvModel(ClassifierModelBase):
 
-    def __init__(self):
-        super(ConvModel, self).__init__()
-
     def init_pool(self, dsz, **kwargs):
         filtsz = kwargs['filtsz']
         cmotsz = kwargs['cmotsz']
@@ -148,9 +143,6 @@ class ConvModel(ClassifierModelBase):
 @register_model(task='classify', name='lstm')
 class LSTMModel(ClassifierModelBase):
 
-    def __init__(self):
-        super(LSTMModel, self).__init__()
-
     def init_pool(self, dsz, **kwargs):
         unif = kwargs.get('unif')
         hsz = kwargs.get('rnnsz', kwargs.get('hsz', 100))
@@ -158,16 +150,9 @@ class LSTMModel(ClassifierModelBase):
             hsz = hsz[0]
         weight_init = kwargs.get('weight_init', 'uniform')
         rnntype = kwargs.get('rnn_type', kwargs.get('rnntype', 'lstm'))
-        self.lstm = pytorch_lstm(dsz, hsz, rnntype, 1, self.pdrop, unif, batch_first=False, initializer=weight_init)
-        return hsz
-
-    def pool(self, embeddings, lengths):
-
-        embeddings = embeddings.transpose(0, 1)
-        packed = torch.nn.utils.rnn.pack_padded_sequence(embeddings, lengths.tolist())
-        output, hidden = self.lstm(packed)
-        hidden = hidden[0].view(hidden[0].shape[1:])
-        return hidden
+        if rnntype == 'blstm':
+            return BiLSTMEncoderHidden(dsz, hsz, 1, self.pdrop, unif=unif, batch_first=True, initializer=weight_init)
+        return LSTMEncoderHidden(dsz, hsz, 1, self.pdrop, unif=unif, batch_first=True, initializer=weight_init)
 
     def make_input(self, batch_dict):
         inputs = super(LSTMModel, self).make_input(batch_dict)
@@ -178,71 +163,43 @@ class LSTMModel(ClassifierModelBase):
         return inputs
 
 
-class NBowBase(ClassifierModelBase):
-
-    def __init__(self):
-        super(NBowBase, self).__init__()
-
-    def init_pool(self, dsz, **kwargs):
-        return dsz
+class NBowModelBase(ClassifierModelBase):
+    """This base classes forces at least one stacked layer for NBow models"""
 
     def init_stacked(self, input_dim, **kwargs):
-        kwargs['hsz'] = kwargs.get('hsz', [100])
-        return super(NBowBase, self).init_stacked(input_dim, **kwargs)
+        """Produce a stacking operation that will be used in the model
+
+
+        :param input_dim: The input dimension size
+        :param kwargs:
+        :return: A stacking operation (or None)
+        """
+        kwargs.setdefault('hsz', [100])
+        return super().init_stacked(input_dim, **kwargs)
 
 
 @register_model(task='classify', name='nbow')
-class NBowModel(NBowBase):
+class NBowModel(NBowModelBase):
 
-    def __init__(self):
-        super(NBowModel, self).__init__()
-
-    def pool(self, embeddings, lengths):
-        return torch.sum(embeddings, 1, False) / torch.unsqueeze(lengths, -1).to(embeddings.dtype)
+    def init_pool(self, dsz, **kwargs):
+        return MeanPool1D(dsz)
 
 
 @register_model(task='classify', name='nbowmax')
-class NBowMaxModel(NBowBase):
-    def __init__(self):
-        super(NBowMaxModel, self).__init__()
+class NBowMaxModel(NBowModelBase):
 
-    def pool(self, embeddings, lengths):
-        dmax, _ = torch.max(embeddings, 1, False)
-        return dmax
+    def init_pool(self, dsz, **kwargs):
+        return MaxPool1D(dsz)
 
 
 @register_model(task='classify', name='composite')
 class CompositePoolingModel(ClassifierModelBase):
-    """Fulfills pooling contract by aggregating pooling from a set of sub-models and concatenates each
-    """
-    def __init__(self):
-        """
-        Construct a composite pooling model
-        """
-        super(CompositePoolingModel, self).__init__()
-        self.SubModels = None
+    """Fulfills pooling contract by aggregating pooling from a set of sub-models and concatenates each"""
 
     def init_pool(self, dsz, **kwargs):
-        self.SubModels = [eval(model) for model in kwargs.get('sub')]
-        pool_sz = 0
-        for SubClass in self.SubModels:
-            pool_sz += SubClass.init_pool(self, dsz, **kwargs)
-        return pool_sz
-
-    def pool(self, embeddings, lengths):
-        """Cycle each sub-model and call its pool method, then concatenate along final dimension
-
-        :param word_embeddings: The input graph
-        :param dsz: The number of input units
-        :param init: The initializer operation
-        :param kwargs:
-        :return: A pooled composite output
-        """
-
-        pooling = []
-        for SubClass in self.SubModels:
-            pooling.append(SubClass.pool(self, embeddings, lengths))
-        return torch.cat(pooling, -1)
+        SubModels = [eval(model) for model in kwargs.get('sub')]
+        sub_models = [SM.init_pool(self, dsz, **kwargs) for SM in SubModels]
+        return CompositePooler(sub_models)
 
     def make_input(self, batch_dict):
         """Because the sub-model could contain an LSTM, make sure to sort lengths descending
@@ -259,20 +216,20 @@ class CompositePoolingModel(ClassifierModelBase):
 
 
 @register_model(task='classify', name='fine-tune')
-class FineTuneModel(ClassifierModelBase):
-
+class FineTuneBaselineModel(ClassifierModelBase):
     """Fine-tune based on pre-pooled representations"""
-    def __init__(self):
-        super(FineTuneModel, self).__init__()
 
-    def pool(self, embeddings, lengths):
-        """Pooling here does nothing, we assume its been pooled already
+    @classmethod
+    def create(cls, embeddings, labels, **kwargs):
 
-        :param embeddings: The word embedding input
-        :param lengths: The embeddings temporal length
-        :return: The average pooling representation
-        """
-        return embeddings
-
-    def init_pool(self, dsz, **kwargs):
-        return dsz
+        model = cls()
+        model.pdrop = kwargs.get('pdrop', 0.5)
+        model.lengths_key = kwargs.get('lengths_key')
+        model.embeddings = embeddings
+        embed_model = model.init_embed(**kwargs)
+        model.gpu = not bool(kwargs.get('nogpu', False))
+        model.labels = labels
+        stack_model = model.init_stacked(embed_model.output_dim, **kwargs)
+        model.layers = FineTuneModel(len(labels), embeddings, stack_model)
+        logger.info(model)
+        return model
