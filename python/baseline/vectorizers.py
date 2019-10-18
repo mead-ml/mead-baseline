@@ -25,6 +25,10 @@ class Vectorizer(object):
     def iterable(self, tokens):
         pass
 
+    def reset(self):
+        pass
+
+
 BASELINE_VECTORIZERS = {}
 
 
@@ -79,6 +83,10 @@ class Token1DVectorizer(AbstractVectorizer):
             seen += 1
         self.max_seen = max(self.max_seen, seen)
         return counter
+
+    def reset(self):
+        self.mxlen = -1
+        self.max_seen = -1
 
     def run(self, tokens, vocab):
 
@@ -189,6 +197,12 @@ class Char2DVectorizer(AbstractCharVectorizer):
         self.max_seen_tok = max(self.max_seen_tok, seen_tok)
         return counter
 
+    def reset(self):
+        self.mxlen = -1
+        self.mxwlen = -1
+        self.max_seen_tok = 0
+        self.max_seen_char = 0
+
     def run(self, tokens, vocab):
 
         if self.mxlen < 0:
@@ -265,6 +279,10 @@ class Char1DVectorizer(AbstractCharVectorizer):
 
         self.max_seen_tok = max(self.max_seen_tok, seen_tok)
         return counter
+
+    def reset(self):
+        self.mxlen = -1
+        self.max_seen_tok = 0
 
     def run(self, tokens, vocab):
 
