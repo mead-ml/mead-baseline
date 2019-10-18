@@ -62,17 +62,15 @@ class Service(object):
         tokens_batch = (tokens,) if isinstance(tokens[0], six.string_types) else tokens
         return tokens_batch
 
-    def prepare_vectorizers(self, tokens):
+    def prepare_vectorizers(self, tokens_batch):
         """Batch the input tokens, and call reset and count method on each vectorizers to set up their mxlen.
         This method is mainly for reducing repeated code blocks.
-        :param tokens: input tokens in format List[str] or List[List[str]]
+        :param tokens_batch: batched tokens in the form of List[List[str]]
         """
-        tokens_batch = self.batch_input(tokens)
         for _, vectorizer in self.vectorizers.items():
             vectorizer.reset()
             for tokens in tokens_batch:
                 _ = vectorizer.count(tokens)
-        return tokens_batch
 
     def vectorize(self, tokens_batch):
         """Turn the input into that batch dict for prediction.
@@ -207,7 +205,8 @@ class ClassifierService(Service):
         """
         if preproc is not None:
             logger.warning("Warning: Passing `preproc` to `ClassifierService.predict` is deprecated.")
-        tokens_batch = self.prepare_vectorizers(tokens)
+        tokens_batch = self.batch_input(tokens)
+        self.prepare_vectorizers(tokens_batch)
         if self.preproc == "client":
             examples = self.vectorize(tokens_batch)
         elif self.preproc == 'server':
@@ -242,7 +241,8 @@ class EmbeddingsService(Service):
     def predict(self, tokens, preproc=None):
         if preproc is not None:
             logger.warning("Warning: Passing `preproc` to `EmbeddingsService.predict` is deprecated.")
-        tokens_batch = self.prepare_vectorizers(tokens)
+        tokens_batch = self.batch_input(tokens)
+        self.prepare_vectorizers(tokens_batch)
         if self.preproc == 'client':
             examples = self.vectorize(tokens_batch)
         else:
@@ -335,7 +335,8 @@ class TaggerService(Service):
         if not export_mapping:
             export_mapping = {'tokens': 'text'}
         label_field = kwargs.get('label', 'label')
-        tokens_batch = self.prepare_vectorizers(tokens)
+        tokens_batch = self.batch_input(tokens)
+        self.prepare_vectorizers(tokens_batch)
         # TODO: here we allow vectorizers even for preproc=server to get `word_lengths`.
         # vectorizers should not be available when preproc=server.
         examples = self.vectorize(tokens_batch)
