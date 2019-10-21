@@ -132,29 +132,35 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
         return x
 
     def make_input(self, batch_dict, train=False):
-        """Map a batch to a `feed_dict`.  Only used when `tf.dataset` is not being used
+        """Transform a `batch_dict` into a TensorFlow `feed_dict`
 
-        When running a graph with placeholder inputs, this method provides an abstraction,
-        converting the dictionary in the batch to what the model expects to fill its placeholders
-        for a single batch.
-        When `tf.dataset`s are in use, the features are connected directly to the graph,
-        so there is no point in this method.
-
-        :param batch_dict: A `Dict[str, tensor]` containing inputs to placeholders needed to run
-        :param train: (`bool`) Is training on?
+        :param batch_dict: (``dict``) A dictionary containing all inputs to the embeddings for this model
+        :param train: (``bool``) Are we training.  Defaults to False
         :return:
         """
-        feed_dict = new_placeholder_dict(train)
-        for k in self.embeddings.keys():
-            feed_dict["{}:0".format(k)] = self.drop_inputs(k, batch_dict[k], train)
         y = batch_dict.get('y', None)
+        if get_version(tf) < 2:
+            batch_for_model = new_placeholder_dict(train)
 
-        # Allow us to track a length, which is needed for BLSTMs
-        feed_dict[self.lengths] = batch_dict[self.lengths_key]
+            for k in self.embeddings.keys():
+                batch_for_model["{}:0".format(k)] = self.drop_inputs(k, batch_dict[k], train)
 
-        if y is not None:
-            feed_dict[self.y] = y
-        return feed_dict
+            # Allow us to track a length, which is needed for BLSTMs
+            batch_for_model[self.lengths] = batch_dict[self.lengths_key]
+
+            if y is not None:
+                batch_for_model[self.y] = y
+        else:
+            SET_TRAIN_FLAG(train)
+            batch_for_model = {}
+            for k in self.embeddings.keys():
+                batch_for_model[k] = self.drop_inputs(k, batch_dict[k], train)
+
+            # Allow us to track a length, which is needed for BLSTMs
+            if self.lengths_key is not None:
+                batch_for_model["lengths"] = batch_dict[self.lengths_key]
+
+        return batch_for_model
 
     def call(self, *args, **kwargs):
         return self.impl(*args, **kwargs)
@@ -193,8 +199,9 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
         :return: A restored model
         """
         _state = read_json("{}.state".format(basename))
-        if __version__ != _state['version']:
-            logger.warning("Loaded model is from baseline version %s, running version is %s", _state['version'], __version__)
+        # FIXME: Somehow not writing this anymore
+        #if __version__ != _state['version']:
+        #    logger.warning("Loaded model is from baseline version %s, running version is %s", _state['version'], __version__)
         if get_version(tf) < 2:
 
             _state['sess'] = kwargs.pop('sess', create_session())
@@ -231,6 +238,7 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
             model = cls.create(embeddings, labels, **_state)
             model._state = _state
             model.load_weights(f"{basename}.wgt")
+        return model
 
     def save_using(self, saver):
         """Method to wire up the `tf.Saver`
@@ -260,10 +268,16 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
         :param batch_dict: A `Dict[str, tensor]` that is to be predicted
         :return: A batch-sized list of predictions
         """
-        feed_dict = self.make_input(batch_dict)
         lengths = batch_dict[self.lengths_key]
-        bestv = self.sess.run(self.best, feed_dict=feed_dict)
-        return [pij[:sl] for pij, sl in zip(bestv, lengths)]
+        batch_dict = self.make_input(batch_dict)
+        if get_version(tf) < 2:
+            bestv = self.sess.run(self.best, feed_dict=batch_dict)
+            return [pij[:sl] for pij, sl in zip(bestv, lengths)]
+        else:
+            bestv = self(batch_dict)
+            return [pij[:sl].numpy() for pij, sl in zip(bestv, lengths)]
+
+
 
     def embed(self, **kwargs):
         """This method performs "embedding" of the inputs.  The base method here then concatenates along depth
