@@ -145,15 +145,15 @@ class LanguageModelBase(tf.keras.Model, LanguageModel):
         return step_softmax
 
     def call(self, *args, **kwargs):
-        return self._layers[0](*args, **kwargs)
+        return self.impl(*args, **kwargs)
 
     @property
     def trainable_variables(self):
-        return self._layers[0].trainable_variables
+        return self.impl.trainable_variables
 
     @property
     def variables(self):
-        return self._layers[0].variables
+        return self.impl.variables
 
     @classmethod
     def create(cls, embeddings, **kwargs):
@@ -200,7 +200,7 @@ class LanguageModelBase(tf.keras.Model, LanguageModel):
         embeddings_layer = lm.embed(**kwargs)
         nc = embeddings[lm.tgt_key].vsz
         lstm_encoder_layer = lm.decode(inputs, **kwargs)
-        lm._layers.append(LangSequenceModel(nc, embeddings_layer, lstm_encoder_layer))
+        lm.impl = LangSequenceModel(nc, embeddings_layer, lstm_encoder_layer)
 
         if get_version(tf) < 2:
             lm.logits, lm.final_state = lm(inputs)

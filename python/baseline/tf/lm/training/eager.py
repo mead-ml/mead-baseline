@@ -14,7 +14,7 @@ from baseline.tf.lm.training.utils import to_tensors, SHUF_BUF_SZ, NUM_PREFETCH
 def loss(model, h, x, y):
 
     x["h"] = h
-    logits, h = model._layers(x)
+    logits, h = model(x)
     vsz = model.embeddings[model.tgt_key].vsz
     targets = tf.reshape(y, [-1])
     bt_x_v = tf.nn.log_softmax(tf.reshape(logits, [-1, vsz]), axis=-1)
