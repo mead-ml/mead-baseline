@@ -23,7 +23,6 @@ from baseline.utils import (
 from baseline.model import load_model_for
 logger = logging.getLogger('baseline')
 
-
 __all__ = []
 exporter = export(__all__)
 
@@ -199,7 +198,7 @@ class ClassifierService(Service):
     def signature_name(cls):
         return 'predict_text'
 
-    def predict(self, tokens, preproc=None):
+    def predict(self, tokens, preproc=None, raw=False):
         """Take tokens and apply the internal vocab and vectorizers.  The tokens should be either a batch of text
         single utterance of type ``list``
         """
@@ -254,14 +253,14 @@ class EmbeddingsService(Service):
     @classmethod
     def load(cls, bundle, **kwargs):
         import_user_module('create_servable_embeddings')
-        return super(EmbeddingsService, cls).load(bundle, **kwargs)
+        return super().load(bundle, **kwargs)
 
 
 @exporter
 class TaggerService(Service):
 
     def __init__(self, vocabs=None, vectorizers=None, model=None, preproc='client'):
-        super(TaggerService, self).__init__(vocabs, vectorizers, model, preproc)
+        super().__init__(vocabs, vectorizers, model, preproc)
         if hasattr(self.model, 'return_labels'):
             self.return_labels = self.model.return_labels
         else:
@@ -314,7 +313,7 @@ class TaggerService(Service):
 
         if len(tokens_batch) == 0:
             return []
-        return tokens_batch, mxlen, mxwlen
+        return tokens_batch
 
     def predict(self, tokens, **kwargs):
         """
@@ -373,13 +372,13 @@ class LanguageModelService(Service):
         return "lm"
 
     def __init__(self, *args, **kwargs):
-        super(LanguageModelService, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.idx_to_token = revlut(self.vocabs[self.model.tgt_key])
 
     @classmethod
     def load(cls, bundle, **kwargs):
         kwargs['batchsz'] = 1
-        return super(LanguageModelService, cls).load(bundle, **kwargs)
+        return super().load(bundle, **kwargs)
 
     # Do a greedy decode for now, everything else will be super slow
     def predict(self, tokens, **kwargs):
@@ -463,11 +462,11 @@ class EncoderDecoderService(Service):
     def load(cls, bundle, **kwargs):
         kwargs['predict'] = kwargs.get('predict', True)
         kwargs['beam'] = int(kwargs.get('beam', 30))
-        return super(EncoderDecoderService, cls).load(bundle, **kwargs)
+        return super().load(bundle, **kwargs)
 
     def vectorize(self, tokens_seq):
         examples = defaultdict(list)
-        for i, tokens in enumerate(tokens_batch):
+        for i, tokens in enumerate(tokens_seq):
             for k, vectorizer in self.src_vectorizers.items():
                 vec, length = vectorizer.run(tokens, self.src_vocabs[k])
                 examples[k] += [vec]
@@ -485,7 +484,7 @@ class EncoderDecoderService(Service):
     def predict(self, tokens, K=1, **kwargs):
         tokens_batch = self.batch_input(tokens)
         for vectorizer in self.src_vectorizers.values():
-            vectorzier.reset()
+            vectorizer.reset()
             for tokens in tokens_batch:
                 _ = vectorizer.count(tokens)
         examples = self.vectorize(tokens_batch)
