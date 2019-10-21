@@ -1404,10 +1404,11 @@ class TransformerEncoderStack(nn.Module):
 
     def __init__(self, num_heads, d_model, pdrop, scale=True, layers=1, activation='relu', d_ff=None, **kwargs):
         super().__init__()
-        self.encoders = []
+        encoders = []
         self.ln = nn.LayerNorm(epsilon=1e-6)
         for i in range(layers):
             self.encoders.append(TransformerEncoder(d_model, num_heads, pdrop, scale, activation, d_ff))
+        self.encoders = nn.ModuleList(encoders)
 
     def forward(self, inputs):
         x = inputs
@@ -1419,10 +1420,11 @@ class TransformerEncoderStack(nn.Module):
 class TransformerDecoderStack(nn.Module):
     def __init__(self, num_heads, d_model, pdrop, scale=True, layers=1, activation_type='relu', d_ff=None):
         super().__init__()
-        self.decoders = []
+        decoders = []
         self.ln = nn.LayerNorm(epsilon=1e-6)
         for i in range(layers):
-            self.decoders.append(TransformerDecoder(d_model, num_heads, pdrop, scale, activation_type, d_ff))
+            decoders.append(TransformerDecoder(d_model, num_heads, pdrop, scale, activation_type, d_ff))
+        self.decoders = nn.ModuleList(decoders)
 
     def call(self, inputs):
         x = inputs

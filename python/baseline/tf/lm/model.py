@@ -5,7 +5,6 @@ from baseline.version import __version__
 from baseline.model import LanguageModel, register_model
 from baseline.tf.embeddings import *
 from baseline.tf.tfy import new_placeholder_dict, TRAIN_FLAG, lstm_cell_w_dropout
-from baseline.tf.transformer import transformer_encoder_stack, subsequent_mask
 from baseline.utils import read_json, write_json, MAGIC_VARS
 
 

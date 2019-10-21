@@ -8,7 +8,7 @@ import os
 
 class LanguageModelBase(nn.Module, LanguageModel):
     def __init__(self):
-        super(LanguageModelBase, self).__init__()
+        super().__init__()
 
     def save(self, outname):
         torch.save(self, outname)
