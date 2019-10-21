@@ -338,7 +338,7 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
 
         if get_version(tf) < 2:
 
-            inputs = {'lengths': model.lengths}
+            inputs = {}
             for k, embedding in embeddings.items():
                 x = kwargs.get(k, embedding.create_placeholder(name=k))
                 inputs[k] = x
