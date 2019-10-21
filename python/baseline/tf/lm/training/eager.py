@@ -11,8 +11,7 @@ from baseline.train import register_training_func, Trainer
 from baseline.tf.lm.training.utils import to_tensors, SHUF_BUF_SZ, NUM_PREFETCH
 
 
-def loss(model, h, x, y):
-
+def loss_with_state(model, h, x, y):
     x["h"] = h
     logits, h = model(x)
     vsz = model.embeddings[model.tgt_key].vsz
@@ -23,6 +22,16 @@ def loss(model, h, x, y):
     loss = tf.reduce_mean(example_loss)
     return loss, h
 
+
+def loss_without_state(model, x, y):
+    logits = model(x)
+    vsz = model.embeddings[model.tgt_key].vsz
+    targets = tf.reshape(y, [-1])
+    bt_x_v = tf.nn.log_softmax(tf.reshape(logits, [-1, vsz]), axis=-1)
+    one_hots = tf.one_hot(targets, vsz)
+    example_loss = -tf.reduce_sum(one_hots * bt_x_v, axis=-1)
+    loss = tf.reduce_mean(example_loss)
+    return loss
 
 class LanguageModelTrainerEagerTf(Trainer):
     """A Trainer to use if not using tf Estimators
@@ -40,7 +49,8 @@ class LanguageModelTrainerEagerTf(Trainer):
         else:
             self.model = model_params
 
-        self.optimizer = EagerOptimizer(loss, **kwargs)
+        loss_fn = loss_with_state if self.model.requires_state else loss_without_state
+        self.optimizer = EagerOptimizer(loss_fn, **kwargs)
         self.nsteps = kwargs.get('nsteps', 500)
         self._checkpoint = tf.train.Checkpoint(optimizer=self.optimizer.optimizer, model=self.model)
         checkpoint_dir = '{}-{}'.format("./tf-lm", os.getpid())
@@ -88,7 +98,10 @@ class LanguageModelTrainerEagerTf(Trainer):
         for features, y in ts:
 
             # Optimize the model
-            loss_value, h = self.optimizer.update_with_hidden(self.model, h, features, y)
+            if self.model.requires_state:
+                loss_value, h = self.optimizer.update_with_hidden(self.model, h, features, y)
+            else:
+                loss_value = self.optimizer.update(self.model, features, y)
             toks = self._num_toks(y)
             report_loss = loss_value * toks
             epoch_loss += report_loss
@@ -143,7 +156,10 @@ class LanguageModelTrainerEagerTf(Trainer):
         start = time.time()
         h = None
         for features, y in vs:
-            loss_value, h = loss(self.model, h, features, y)
+            if self.model.requires_state:
+                loss_value, h = loss_with_state(self.model, h, features, y)
+            else:
+                loss_value = loss_without_state(self.model, features, y)
             toks = self._num_toks(y)
             total_loss += loss_value * toks
             total_toks += toks

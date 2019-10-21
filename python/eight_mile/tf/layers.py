@@ -298,6 +298,7 @@ class LSTMEncoderWithState2(tf.keras.layers.Layer):
                                               return_state=True,
                                               recurrent_dropout=pdrop if variational else 0.0,
                                               dropout=pdrop if not variational else 0.0))
+        self.requires_state = True
 
     def call(self, inputs):
         inputs, hidden_state_input = inputs
@@ -497,6 +498,7 @@ class LSTMEncoderWithState1(LSTMEncoder1):
                          requires_length=False,
                          name=name,
                          dropout_in_single_layer=dropout_in_single_layer, **kwargs)
+        self.requires_state = True
 
     def zero_state(self, batchsz):
         return self.rnn.zero_state(batchsz, tf.float32)
@@ -1302,11 +1304,19 @@ class LangSequenceModel(tf.keras.Model):
             assert isinstance(embeddings, EmbeddingsStack)
             self.embed_model = embeddings
         self.transducer_model = transducer
-
+        if hasattr(transducer, 'requires_state') and transducer.requires_state:
+            self._call = self._call_with_state
+            self.requires_state = True
+        else:
+            self._call = self._call_without_state
+            self.requires_state = False
         self.output_layer = TimeDistributedProjection(nc)
         self.decoder_model = decoder
 
     def call(self, inputs):
+        return self._call(inputs)
+
+    def _call_with_state(self, inputs):
 
         h = inputs.get('h')
 
@@ -1314,6 +1324,11 @@ class LangSequenceModel(tf.keras.Model):
         transduced, hidden = self.transducer_model((embedded, h))
         transduced = self.output_layer(transduced)
         return transduced, hidden
+
+    def _call_without_state(self, inputs):
+        embedded = self.embed_model(inputs)
+        transduced = self.transducer_model((embedded))
+        return transduced, None
 
 
 class EmbedPoolStackModel(tf.keras.Model):
@@ -1357,7 +1372,7 @@ class FineTuneModel(tf.keras.Model):
         self.stack_model = stack_model
         self.output_layer = tf.keras.layers.Dense(nc)
 
-    def call(self, inputs, training=None, mask=None):
+    def call(self, inputs):
         base_layers = self.finetuned(inputs)
         stacked = self.stack_model(base_layers) if self.stack_model is not None else base_layers
         return self.output_layer(stacked)

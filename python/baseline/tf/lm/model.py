@@ -20,7 +20,7 @@ class LanguageModelBase(tf.keras.Model, LanguageModel):
     def __init__(self):
         """Construct a base LM
         """
-        super(LanguageModelBase, self).__init__()
+        super().__init__()
         self.saver = None
         self.hsz = None
         self.probs = None
@@ -122,17 +122,25 @@ class LanguageModelBase(tf.keras.Model, LanguageModel):
         :param train: (`bool`) Are we training (or evaluating)?
         :return: A `feed_dict`
         """
-        feed_dict = new_placeholder_dict(train)
+        if get_version(tf) < 2:
+            batch_dict_for_model = new_placeholder_dict(train)
 
-        for key in self.src_keys:
+            for key in self.src_keys:
 
-            feed_dict["{}:0".format(key)] = batch_dict[key]
+                batch_dict_for_model["{}:0".format(key)] = batch_dict[key]
 
-        y = batch_dict.get('y')
-        if y is not None:
-            feed_dict[self.y] = batch_dict['y']
+            y = batch_dict.get('y')
+            if y is not None:
+                batch_dict_for_model[self.y] = batch_dict['y']
 
-        return feed_dict
+        else:
+            SET_TRAIN_FLAG(train)
+
+            batch_dict_for_model = {}
+            for key in self.src_keys:
+                batch_dict_for_model[key] = batch_dict[key]
+
+        return batch_dict_for_model
 
     def predict(self, batch_dict):
         """Do prediction from a `batch_dict`
@@ -140,8 +148,12 @@ class LanguageModelBase(tf.keras.Model, LanguageModel):
         :param batch_dict: A step of data
         :return: The softmax output for this step
         """
-        feed_dict = self.make_input(batch_dict)
-        step_softmax = self.sess.run(self.probs, feed_dict)
+        batch_dict = self.make_input(batch_dict)
+        if get_version(tf) < 2:
+            step_softmax = self.sess.run(self.probs, batch_dict)
+        else:
+            step_softmax = tf.nn.softmax(self.impl(batch_dict))
+
         return step_softmax
 
     def call(self, *args, **kwargs):
@@ -199,8 +211,8 @@ class LanguageModelBase(tf.keras.Model, LanguageModel):
         lm.hsz = kwargs.pop('hsz', None)
         embeddings_layer = lm.embed(**kwargs)
         nc = embeddings[lm.tgt_key].vsz
-        lstm_encoder_layer = lm.decode(inputs, **kwargs)
-        lm.impl = LangSequenceModel(nc, embeddings_layer, lstm_encoder_layer)
+        encoder_layer = lm.decode(inputs, **kwargs)
+        lm.impl = LangSequenceModel(nc, embeddings_layer, encoder_layer)
 
         if get_version(tf) < 2:
             lm.logits, lm.final_state = lm(inputs)
@@ -234,30 +246,51 @@ class LanguageModelBase(tf.keras.Model, LanguageModel):
 
         :return: A restored model
         """
+        if get_version(tf) < 2:
+            _state = read_json(basename + '.state')
+            _state['sess'] = kwargs.pop('sess', tf.Session())
+            _state['model_type'] = kwargs.get('model_type', 'default')
+            embeddings = {}
+            embeddings_dict = _state.pop("embeddings")
 
-        _state = read_json(basename + '.state')
-        _state['sess'] = kwargs.pop('sess', tf.Session())
-        _state['model_type'] = kwargs.get('model_type', 'default')
-        embeddings = {}
-        embeddings_dict = _state.pop("embeddings")
+            for key, class_name in embeddings_dict.items():
+                md = read_json('{}-{}-md.json'.format(basename, key))
+                embed_args = dict({'vsz': md['vsz'], 'dsz': md['dsz']})
+                Constructor = eval(class_name)
+                embeddings[key] = Constructor(key, **embed_args)
 
-        for key, class_name in embeddings_dict.items():
-            md = read_json('{}-{}-md.json'.format(basename, key))
-            embed_args = dict({'vsz': md['vsz'], 'dsz': md['dsz']})
-            Constructor = eval(class_name)
-            embeddings[key] = Constructor(key, **embed_args)
+            model = cls.create(embeddings, **_state)
+            model._state = _state
 
-        model = cls.create(embeddings, **_state)
-        model._state = _state
-        do_init = kwargs.get('init', True)
-        if do_init:
-            init = tf.global_variables_initializer()
-            model.sess.run(init)
+            do_init = kwargs.get('init', True)
+            if do_init:
+                init = tf.global_variables_initializer()
+                model.sess.run(init)
 
-        model.saver = tf.train.Saver()
-        model.saver.restore(model.sess, basename)
+            model.saver = tf.train.Saver()
+            model.saver.restore(model.sess, basename)
+        else:
+            _state = read_json(basename + '.state')
+            _state['model_type'] = kwargs.get('model_type', 'default')
+            embeddings = {}
+            embeddings_dict = _state.pop("embeddings")
+
+            for key, class_name in embeddings_dict.items():
+                md = read_json('{}-{}-md.json'.format(basename, key))
+                embed_args = dict({'vsz': md['vsz'], 'dsz': md['dsz']})
+                Constructor = eval(class_name)
+                embeddings[key] = Constructor(key, **embed_args)
+
+            model = cls.create(embeddings, **_state)
+            model._state = _state
+            model.load_weights(f"{basename}.wgt")
 
         return model
+
+    @property
+    def requires_state(self):
+        return hasattr(self.impl, 'requires_state') and self.impl.requires_state
+
 
     def output(self, hidden, vsz, **kwargs):
         """Project to the output space
@@ -314,4 +347,31 @@ class RNNLanguageModel(LanguageModelBase):
         self.initial_state = lstm_encoder_layer.zero_state(self.batchsz)
         inputs["h"] = self.initial_state
         return lstm_encoder_layer
+
+
+@register_model(task='lm', name='transformer')
+class TransformerLanguageModel(LanguageModelBase):
+    """Transformer-based Language Model built on base class
+    """
+    def __init__(self):
+        """Construct an TLM
+        """
+        super().__init__()
+
+    def decode(self, inputs, batchsz=1, num_heads=8, layers=1, **kwargs):
+        """LSTM-based method for decoding
+
+        :param inputs: The outputs of the embeddings
+        :param batchsz: (`int`) The batch size
+        :param rnntype: (`str`) What type of RNN (defaults to `lstm`)
+        :param layers: (`int`) Defaults to 1
+        :param variational: (`bool`) Using variational dropout?
+        :param kwargs: See above
+
+        :return: The layer
+        """
+
+        encoder_layer = TransformerEncoderStack(num_heads, self.hsz, self.pdrop_value, layers=layers, **kwargs)
+        return encoder_layer
+
 
