@@ -26,6 +26,9 @@ MAGIC_VARS = ['sess', 'tgt', 'y', 'lengths']
 exporter = export(__all__)
 
 
+exporter(str2bool)
+
+
 @exporter
 def normalize_backend(name):
     allowed_backends = {'tf', 'pytorch'}

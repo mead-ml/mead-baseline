@@ -464,7 +464,7 @@ class EncoderDecoderService(Service):
         kwargs['beam'] = int(kwargs.get('beam', 30))
         return super().load(bundle, **kwargs)
 
-    def vectorize(self, tokens_seq):
+    def vectorize(self, tokens_batch):
         examples = defaultdict(list)
         for i, tokens in enumerate(tokens_seq):
             for k, vectorizer in self.src_vectorizers.items():

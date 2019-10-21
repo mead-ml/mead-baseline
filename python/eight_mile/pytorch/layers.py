@@ -566,6 +566,10 @@ class BiLSTMEncoder(nn.Module):
         return self._requires_length
 
 
+class BiLSTMEncoderWithState(BiLSTMEncoder):
+    def output_fn(self, output, state):
+        return output, concat_state_dirs(state)
+
 
 class BiLSTMEncoderSequence(BiLSTMEncoder):
 
@@ -754,7 +758,7 @@ class BaseAttention(nn.Module):
         c_t = torch.bmm(a, values_bth).squeeze(1)
 
         attended = torch.cat([c_t, query_t], -1)
-        attended = F.tanh(self.W_c(attended))
+        attended = torch.tanh(self.W_c(attended))
         return attended
 
 
@@ -808,7 +812,7 @@ class BahdanauAttention(BaseAttention):
         B, T, H = keys_bth.shape
         q = self.W_a(query_t.view(-1, self.hsz)).view(B, 1, H)
         u = self.E_a(keys_bth.contiguous().view(-1, self.hsz)).view(B, T, H)
-        z = F.tanh(q + u)
+        z = torch.tanh(q + u)
         a = self.v(z.view(-1, self.hsz)).view(B, T)
         a.masked_fill(keys_mask == 0, -1e9)
         a = F.softmax(a, dim=-1)
