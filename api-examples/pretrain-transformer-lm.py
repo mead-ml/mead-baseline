@@ -502,8 +502,22 @@ def train():
             logger.info("Setting local rank to RANK env variable")
             args.local_rank = int(os.environ['RANK'])
         logger.warning("Local rank (%d)", args.local_rank)
-        torch.cuda.set_device(args.local_rank)
-        args.device = torch.device("cuda", args.local_rank)
+        # In an env like k8s with kubeflow each worker will only see a single gpu
+        # with an id of 0. If the gpu count is 1 then we are probably in an env like
+        # that so we should just use the first (and only) gpu avaiable
+        if torch.cuda.device_count() == 1:
+            torch.cuda.set_device(0)
+            args.device = torch.device("cuda", 0)
+        # This program assumes multiprocess/multi-device on a single node. Each
+        # process gets a rank (via cli or ENV variable) and uses that rank to select
+        # which gpu to use. This only makes sense on a single node, if you had 4
+        # processes on 2 nodes where each node has 2 GPUs then the ranks would be
+        # 0, 1, 2, 3 but the gpus numbers would be node 0: 0, 1 and node 1: 0, 1
+        # and this assignment to gpu 3 would fail. On a single node with 4 processes
+        # and 4 gpus the rank and gpu ids will align and this will work
+        else:
+            torch.cuda.set_device(args.local_rank)
+            args.device = torch.device("cuda", args.local_rank)
         torch.distributed.init_process_group(backend='nccl', init_method='env://')
 
     if args.train_file:
@@ -573,8 +587,13 @@ def train():
 
     # Prepare model for distributed training if needed
     if args.distributed:
-        model = DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)
-        logger.info("Model located on %d", args.local_rank)
+        # This program assume pure data parallelism, each model is on a single gpu
+        # If we wanted to support model and data parallelism we would need to update
+        # the selection of gpus based on rank, it would need to select multiple ids
+        # based on rank, here we select only a single gpu and use it for input and
+        # output.
+        model = DistributedDataParallel(model, device_ids=[args.device], output_device=args.device)
+        logger.info("Model located on %d", args.device)
 
     # This is the training loop
     for epoch in range(start_epoch, args.epochs):
