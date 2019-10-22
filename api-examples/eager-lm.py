@@ -99,7 +99,6 @@ def train_input_fn():
     # effective_batch_sz = args.batchsz*args.gpus
     dataset = dataset.batch(20, True)
     dataset = dataset.map(lambda x, y: ({'word': x}, y))
-    dataset = dataset.repeat(1)
     dataset = dataset.prefetch(NUM_PREFETCH)
     return dataset
 
@@ -118,7 +117,7 @@ def predict_input_fn():
     dataset = dataset.map(lambda x, y: ({'word': x}, y))
     return dataset
 
-transducer = L.LSTMEncoderWithState(None, 200, 1, 0.5)
+transducer = L.LSTMEncoderWithState(None, 200, 2, 0.5)
 model = L.LangSequenceModel(embeddings["word"].vsz, embeddings, transducer)
 
 train_loss_results = []

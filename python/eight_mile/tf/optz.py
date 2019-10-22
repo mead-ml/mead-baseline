@@ -263,6 +263,15 @@ def optimizer(loss_fn, **kwargs):
                                                         colocate_gradients_with_ops=colocate_gradients_with_ops,
                                                         clip_gradients=clip, learning_rate_decay_fn=lr_scheduler,
                                                         increment_global_step=True)
+# https://www.tensorflow.org/guide/eager
+@tf.custom_gradient
+def clip_gradient_by_norm(x, norm):
+    y = tf.identity(x)
+
+    def grad_fn(dresult):
+        return [tf.clip_by_norm(dresult, norm), None]
+
+    return y, grad_fn
 
 # Warning, sparse update ops dont work on GPU
 # In TF 2 this leads to errors, particularly with SGD w/ Momentum and Adadelta
@@ -277,7 +286,8 @@ class EagerOptimizer(object):
         #decay_fn = None
         # Right now this option is pointless since sparse updates dont work on GPU.  We just turn it off
         sgd_mom = float(kwargs.get('mom', 0.9))
-        clip = kwargs.get('clip', None)
+        self.clip = kwargs.get('clip', None)
+
         if optimizer:
             self.optimizer = optimizer
         else:
@@ -321,11 +331,12 @@ class EagerOptimizer(object):
                 logger.info('sgd(eta=%f)', lr)
                 self.optimizer = tf.optimizers.SGD(lr)
 
-        logger.info('clip gradients at %s', clip)
+        logger.info('clip gradients at %s', self.clip)
 
     def update(self, model, x, y):
         with tf.GradientTape() as tape:
             loss_value = self.loss(model, x, y)
+            loss_value = clip_gradient_by_norm(loss_value, self.clip)
         grads = tape.gradient(loss_value, model.trainable_variables)
         self.optimizer.apply_gradients(zip(grads, model.trainable_variables), self.global_step)
         return loss_value
@@ -333,6 +344,8 @@ class EagerOptimizer(object):
     def update_with_hidden(self, model, h, x, y):
         with tf.GradientTape() as tape:
             loss_value, h = self.loss(model, h, x, y)
+            loss_value = clip_gradient_by_norm(loss_value, self.clip)
+
         grads = tape.gradient(loss_value, model.trainable_variables)
         self.optimizer.apply_gradients(zip(grads, model.trainable_variables), self.global_step)
         return loss_value, h
