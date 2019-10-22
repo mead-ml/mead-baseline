@@ -286,7 +286,7 @@ class EagerOptimizer(object):
         #decay_fn = None
         # Right now this option is pointless since sparse updates dont work on GPU.  We just turn it off
         sgd_mom = float(kwargs.get('mom', 0.9))
-        self.clip = kwargs.get('clip', None)
+        self.clip = kwargs.get('clip', 100)
 
         if optimizer:
             self.optimizer = optimizer
