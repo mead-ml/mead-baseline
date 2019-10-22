@@ -154,10 +154,10 @@ class BPEVectorizer1D(AbstractVectorizer):
         for t in tokens:
             if t in Offsets.VALUES:
                 yield t
-            if t == '<unk>':
-                yield Offsets.UNK
-            if t == '<eos>':
-                yield Offsets.EOS
+            elif t == '<unk>':
+                yield Offsets.VALUES[Offsets.UNK]
+            elif t == '<eos>':
+                yield Offsets.VALUES[Offsets.EOS]
             else:
                 subwords = self.tokenizer.apply([t])[0].split()
                 for x in subwords:
