@@ -390,37 +390,37 @@ class LanguageModelService(Service):
             if hasattr(vectorizer, 'mxwlen') and vectorizer.mxwlen == -1:
                 vectorizer.mxwlen = mxwlen
 
-        token_buffer = tokens
-        tokens_batch = tokens
+        tokens_buffer = self.batch_input(tokens)
+        batch_size = len(tokens_buffer)
+        tokens_out = tokens_buffer
         examples = dict()
         for i in range(mxlen):
+            self.prepare_vectorizers(tokens_buffer)
+            examples_buffer = self.vectorize(tokens_buffer)
 
-            for k, vectorizer in self.vectorizers.items():
-                vectorizer.reset()
-                _ = vectorizer.count(token_buffer)
-                vec, length = vectorizer.run(token_buffer, self.vocabs[k])
+            for k in self.vectorizers.keys():
                 if k in examples:
-                    examples[k] = np.append(examples[k], vec)
+                    examples[k] = np.concatenate([examples[k], examples_buffer[k]], axis=1)
+                    examples[f'{k}_lengths'] += examples_buffer[f'{k}_lengths']
                 else:
-                    examples[k] = vec
+                    examples[k] = examples_buffer[k]
+                    examples[f'{k}_lengths'] = examples_buffer[f'{k}_lengths']
 
-                if length is not None:
-                    lengths_key = '{}_lengths'.format(k)
-                    if lengths_key in examples:
-                        examples[lengths_key] += length
-                    else:
-                        examples[lengths_key] = np.array(length)
-            batch_dict = {k: v.reshape((1,) + v.shape) for k, v in examples.items()}
-            softmax_tokens = self.model.predict(batch_dict)
-            next_token = np.argmax(softmax_tokens, axis=-1)[-1]
+            softmax_tokens = self.model.predict(examples)
+            vocab_size = softmax_tokens.shape[-1]
+            softmax_tokens = softmax_tokens.reshape((batch_size, -1, vocab_size))
+            tgt_length = examples[f'{self.model.tgt_key}_lengths']
+            next_token_mat = np.argmax(softmax_tokens, axis=-1)
+            next_token_ids = next_token_mat[range(batch_size), tgt_length-1]
 
-            token_str = self.idx_to_token.get(next_token, '<PAD>')
-            if token_str == '<EOS>':
-                break
-            if token_str != '<PAD>':
-                tokens_batch += [token_str]
-            token_buffer = [token_str]
-        return tokens_batch
+            next_tokens = []
+            for next_token_id in next_token_ids:
+                next_tokens.append(self.idx_to_token.get(next_token_id, '<PAD>'))
+
+            tokens_buffer = [[t] for t in next_tokens]
+            for next_token, token_out in zip(next_tokens, tokens_out):
+                token_out.append(next_token)
+        return tokens_out
 
 
 @exporter

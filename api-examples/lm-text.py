@@ -6,6 +6,7 @@ parser = argparse.ArgumentParser(description='Generate subsequent text by repeat
 parser.add_argument('--model', help='A language model', required=True, type=str)
 parser.add_argument('--text', help='raw value, a string', type=str)
 parser.add_argument('--device', help='device')
+parser.add_argument('--mxlen', type=int, help='how many tokens will be generated', default=10)
 
 
 args = parser.parse_known_args()[0]
@@ -15,7 +16,7 @@ if os.path.exists(args.text) and os.path.isfile(args.text):
     with open(args.text, 'r') as f:
         for line in f:
             text = line.strip().split()
-            texts += text  # consider the whole file as a long sequence input
+            texts += [text]
 
 else:
     texts = args.text.split()
@@ -23,4 +24,4 @@ else:
 print(texts)
 
 m = bl.LanguageModelService.load(args.model, device=args.device)
-print(m.predict(texts))
+print(m.predict(texts, mxlen=args.mxlen))

@@ -1,5 +1,6 @@
 import numpy as np
 from collections import Counter
+import tempfile
 from baseline.utils import Offsets
 from baseline.vectorizers import register_vectorizer, AbstractVectorizer
 
@@ -82,7 +83,6 @@ class SavableFastBPE(object):
 
     def __setstate__(self, state):
         from fastBPE import fastBPE
-        import tempfile
         with tempfile.NamedTemporaryFile() as codes, tempfile.NamedTemporaryFile() as vocab:
             codes.write(state['codes'])
             vocab.write(state['vocab'])
@@ -132,10 +132,10 @@ class BPEVectorizer1D(AbstractVectorizer):
         for t in tokens:
             if t in Offsets.VALUES:
                 yield t
-            if t == '<unk>':
-                yield Offsets.UNK
-            if t == '<eos>':
-                yield Offsets.EOS
+            elif t == '<unk>':
+                yield Offsets.VALUES[Offsets.UNK]
+            elif t == '<eos>':
+                yield Offsets.VALUES[Offsets.EOS]
             else:
                 subwords = self.tokenizer.apply([t])[0].split()
                 for x in subwords:
