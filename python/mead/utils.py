@@ -47,6 +47,7 @@ def configure_logger(logger_config, basedir=None):
     config['loggers']['mead']['level'] = get_logging_level(os.getenv('MEAD_LOG_LEVEL', level))
     config['handlers']['reporting_console_handler']['level'] = get_logging_level(os.getenv('REPORTING_LOG_LEVEL', level))
     config['handlers']['timing_console_handler']['level'] = get_logging_level(os.getenv('TIMING_LOG_LEVEL', level))
+
     logging.config.dictConfig(config)
 
 

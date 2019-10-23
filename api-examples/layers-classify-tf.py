@@ -4,30 +4,13 @@ from eight_mile.utils import get_version
 from eight_mile.confusion import ConfusionMatrix
 import eight_mile.tf.embeddings
 import eight_mile.tf.layers as L
-from eight_mile.tf.layers import TRAIN_FLAG, SET_TRAIN_FLAG
+from eight_mile.tf.layers import SET_TRAIN_FLAG, set_tf_log_level
 from eight_mile.tf.optz import EagerOptimizer
 import tensorflow as tf
 import logging
 import numpy as np
 import time
-
-
-
-TF_VERSION = get_version(tf)
-if TF_VERSION < 2:
-    from tensorflow import count_nonzero
-    tf.enable_eager_execution()
-    Adam = tf.train.AdamOptimizer
-
-else:
-    from tensorflow.compat.v1 import count_nonzero
-    Adam = tf.optimizers.Adam
-
-#tf.config.gpu.set_per_process_memory_growth(True)
-
-NUM_PREFETCH = 2
-SHUF_BUF_SZ = 5000
-
+import os
 
 def get_logging_level(ll):
     ll = ll.lower()
@@ -36,6 +19,22 @@ def get_logging_level(ll):
     if ll == 'info':
         return logging.INFO
     return logging.WARNING
+
+
+TF_VERSION = get_version(tf)
+if TF_VERSION < 2:
+    from tensorflow import count_nonzero
+    tf.enable_eager_execution()
+    Adam = tf.train.AdamOptimizer
+else:
+    from tensorflow.compat.v1 import count_nonzero
+    Adam = tf.optimizers.Adam
+
+
+#tf.config.gpu.set_per_process_memory_growth(True)
+
+NUM_PREFETCH = 2
+SHUF_BUF_SZ = 5000
 
 
 def to_device(m):
@@ -61,8 +60,13 @@ parser.add_argument('--test', help='Testing file', default='../data/stsa.binary.
 parser.add_argument('--embeddings', help='Pretrained embeddings file', default='/data/embeddings/GoogleNews-vectors-negative300.bin')
 parser.add_argument('--ll', help='Log level', type=str, default='info')
 parser.add_argument('--lr', help='Learning rate', type=float, default=0.001)
+parser.add_argument('--tf_ll', help='TensorFlow Log level', type=str, default='warn')
 
 args = parser.parse_known_args()[0]
+
+
+logging.basicConfig(level=get_logging_level(args.ll))
+set_tf_log_level(args.tf_ll)
 
 feature_desc = {
     'word': {

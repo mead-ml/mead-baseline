@@ -1,12 +1,11 @@
 
 import os
+import argparse
 from eight_mile.utils import listify
 import baseline
 import eight_mile.tf.layers as L
 from eight_mile.utils import get_version
 import eight_mile.embeddings
-from eight_mile.tf.embeddings import LookupTableEmbeddings
-from eight_mile.w2v import PretrainedEmbeddingsModel, RandomInitVecModel
 from eight_mile.tf.optz import EagerOptimizer
 from baseline.tf.tfy import SET_TRAIN_FLAG
 import tensorflow as tf
@@ -18,11 +17,11 @@ TF_VERSION = get_version(tf)
 if TF_VERSION < 2:
     from tensorflow import count_nonzero
     tf.enable_eager_execution()
-    Optimizer = tf.train.GradientDescentOptimizer
+    Optimizer = tf.train.AdamOptimizer
 
 else:
     from tensorflow.compat.v1 import count_nonzero
-    Optimizer = tf.optimizers.SGD
+    Optimizer = tf.optimizers.Adam
 
 
 NUM_PREFETCH = 2
@@ -36,15 +35,6 @@ def get_logging_level(ll):
     return logging.WARNING
 
 
-def get_tf_logging_level(ll):
-    ll = ll.lower()
-    if ll == 'debug':
-        return tf.logging.DEBUG
-    if ll == 'info':
-        return logging.INFO
-    return tf.logging.WARN
-
-
 def to_tensors(ts):
     X = []
     Xch = []
@@ -56,30 +46,42 @@ def to_tensors(ts):
     return np.stack(X), np.stack(Xch), np.stack(y)
 
 
-VSM_MODEL = os.path.expanduser('~/.bl-data/dce69c404025a8312c323197347695e81fd529fc/glove.twitter.27B.200d.txt')
-
-TS = os.path.expanduser('~/dev/work/baseline/data/oct27.train')
-VS = os.path.expanduser('~/dev/work/baseline/data/oct27.dev')
-ES = os.path.expanduser('~/dev/work/baseline/data/oct27.test')
 
 
+parser = argparse.ArgumentParser(description='Train a Layers model with TensorFlow API')
+parser.add_argument('--model_type', help='What type of model to build', type=str, default='default')
+parser.add_argument('--hsz', help='How many hidden units for pooling', type=int, default=200)
+parser.add_argument('--layers', help='How many hidden units for stacking', type=int, default=2)
+parser.add_argument('--epochs', help='Number of epochs to train', type=int, default=20)
+parser.add_argument('--batchsz', help='Batch size', type=int, default=20)
+parser.add_argument('--mxlen', help='Maximum post length (number of words) during training', type=int, default=100)
+parser.add_argument('--train', help='Training file', default='../data/oct27.train')
+parser.add_argument('--valid', help='Validation file', default='../data/oct27.dev')
+parser.add_argument('--test', help='Testing file', default='../data/oct27.test')
+parser.add_argument('--embeddings', help='Pretrained embeddings file', default='/data/embeddings/glove.twitter.27B.200d.txt')
+parser.add_argument('--ll', help='Log level', type=str, default='info')
+parser.add_argument('--lr', help='Learning rate', type=float, default=0.001)
+parser.add_argument('--tf_ll', help='TensorFlow Log level', type=str, default='warn')
+
+args = parser.parse_known_args()[0]
+
+L.set_tf_log_level(args.tf_ll)
 feature_desc = {
     'word': {
         'vectorizer': baseline.Dict1DVectorizer(mxlen=-1, transform_fn=baseline.lowercase),
-        'embed': {'embed_file': VSM_MODEL, 'embed_type': 'default', 'unif': 0.25}
+        'embed': {'embed_file': args.embeddings, 'embed_type': 'default', 'unif': 0.25}
     },
     'char': {
         'vectorizer': baseline.Dict2DVectorizer(mxlen=-1, mxwlen=40),
         'embed': {'dsz': 30, 'embed_type': 'char-conv', 'wsz': 30}
     }
 }
-
 vectorizers = {k: v['vectorizer'] for k, v in feature_desc.items()}
 reader = baseline.CONLLSeqReader(vectorizers, named_fields={"0": "text", "-1": "y"})
 
-train_file = TS
-valid_file = VS
-test_file = ES
+train_file = args.train
+valid_file = args.valid
+test_file = args.test
 
 # This builds a set of counters
 vocabs = reader.build_vocab([train_file,
@@ -108,24 +110,17 @@ def train_input_fn():
     SET_TRAIN_FLAG(True)
     dataset = tf.data.Dataset.from_tensor_slices((X_train, Xch_train, y_train))
     dataset = dataset.shuffle(buffer_size=SHUF_BUF_SZ)
-    # https://github.com/tensorflow/tensorflow/blob/master/tensorflow/contrib/distribute/README.md
-    # effective_batch_sz = args.batchsz*args.gpus
-    dataset = dataset.batch(20)
-    #dataset = dataset.map(lambda x, y: (x, y))
+    dataset = dataset.batch(args.batchsz)
     dataset = dataset.map(lambda x, xch, y: ({'word': x, 'char': xch, 'lengths': count_nonzero(x, axis=1)}, y))
-    dataset = dataset.repeat(1)
     dataset = dataset.prefetch(NUM_PREFETCH)
-    #_ = dataset.make_one_shot_iterator()
     return dataset
 
 
 def eval_input_fn():
     SET_TRAIN_FLAG(False)
     dataset = tf.data.Dataset.from_tensor_slices((X_valid, Xch_valid, y_valid))
-    dataset = dataset.batch(20)
+    dataset = dataset.batch(args.batchsz)
     dataset = dataset.map(lambda x, xch, y: ({'word': x, 'char': xch, 'lengths': count_nonzero(x, axis=1)}, y))
-    #dataset = dataset.map(lambda x, y: (x, y))
-    #_ = dataset.make_one_shot_iterator()
     return dataset
 
 
@@ -137,7 +132,7 @@ def predict_input_fn():
     return dataset
 
 
-transducer = L.BiLSTMEncoderSequence(None, 200, 2, 0.5)
+transducer = L.BiLSTMEncoderSequence(None, args.hsz, args.layers, 0.5)
 model = L.TagSequenceModel(len(labels), embeddings, transducer)
 
 train_loss_results = []
@@ -149,11 +144,11 @@ def loss(model, x, y):
   return model.decoder_model.neg_log_loss(unary, y, x['lengths'])
 
 
-optim = EagerOptimizer(loss, Optimizer(learning_rate=0.01))
+optim = EagerOptimizer(loss, Optimizer(learning_rate=args.lr))
 
 
 import time
-num_epochs = 20
+num_epochs = args.epochs
 for epoch in range(num_epochs):
 
 

@@ -57,7 +57,7 @@ parser.add_argument('--valid',
                     help='Validation file',
                     default='./heldout-monolingual.tokenized.shuffled/news.en.heldout*')
 parser.add_argument('--ll', help='Log level', type=str, default='info')
-parser.add_argument('--tf_ll', help='TensorFlow Log level', type=str, default='info')
+parser.add_argument('--tf_ll', help='TensorFlow Log level', type=str, default='warn')
 parser.add_argument('--lr', help='Learning rate', type=float, default=0.001)
 parser.add_argument('--optim', help='Optimizer (sgd, adam) (default is adam)', type=str, default='adam')
 parser.add_argument('--gpus', help='Number of GPUs to use', default=1, type=int)
