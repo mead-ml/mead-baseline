@@ -299,13 +299,14 @@ class EagerOptimizer(object):
                 eps = float(kwargs.get('epsilon', 1e-8))
                 logger.info('adam(eta=%f beta1=%f, beta2=%f, eps=%f)', lr, beta1, beta2, eps)
                 self.optimizer = tf.optimizers.Adam(lr, beta1, beta2, eps)
-            #elif optim == 'adamw':
-            #    wd = float(kwargs.get('weight_decay', 0))
-            #    beta1 = float(kwargs.get('beta1', 0.9))
-            #    beta2 = float(kwargs.get('beta2', 0.999))
-            #    eps = float(kwargs.get('epsilon', 1e-8))
-            #    logger.info('adamw(eta=%f beta1=%f, beta2=%f, eps=%f)', lr, beta1, beta2, eps)
-            #    self.optimizer = lambda lr: AdamWOptimizer(lr, wd, beta1, beta2, eps)
+            elif optim == 'adamw':
+                import tensorflow_addons as tfa
+                wd = float(kwargs.get('weight_decay', 0))
+                beta1 = float(kwargs.get('beta1', 0.9))
+                beta2 = float(kwargs.get('beta2', 0.999))
+                eps = float(kwargs.get('epsilon', 1e-8))
+                logger.info('adamw(eta=%f beta1=%f, beta2=%f, eps=%f)', lr, beta1, beta2, eps)
+                self.optimizer = tfa.optimizers.AdamW(lr, wd, beta1, beta2, eps)
             elif optim == 'rmsprop':
                 # Get mom again with difference default
                 mom = float(kwargs.get('mom', 0.0))
