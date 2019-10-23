@@ -271,7 +271,7 @@ class SeqWordCharDataFeed(DataFeed):
         :param batchsz: Batch size
         :param tgt_key: Which field to treat as the target key (this will share an embedding vocab with the source)
         """
-        super(SeqWordCharDataFeed, self).__init__()
+        super().__init__()
         self.examples = dict()
         # This identifies which vector to use for targets
         self.tgt_key = 'x' if tgt_key is None else tgt_key

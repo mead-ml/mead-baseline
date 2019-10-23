@@ -1,31 +1,25 @@
-import math
+from eight_mile.tf.layers import rnn_cell
+from baseline.tf.tfy import *
+from baseline.utils import ls_props, read_json, Offsets, export
+from baseline.model import register_decoder, register_arc_policy, create_seq2seq_arc_policy
+from baseline.tf.embeddings import *
+from baseline.tf.seq2seq.encoders.v2 import TransformerEncoderOutput
+from baseline.tf.transformer import subsequent_mask
 from functools import partial
-import torch
-import torch.nn.functional as F
-import numpy as np
-from torch.autograd import Variable
-from baseline.utils import Offsets, export
-from eight_mile.pytorch.layers import repeat_batch, gnmt_length_penalty, BeamSearchBase, rnn_cell
-from baseline.pytorch.transformer import subsequent_mask, TransformerDecoderStack
-from baseline.model import register_arc_policy, register_decoder, create_seq2seq_arc_policy
-from baseline.pytorch.seq2seq.encoders import TransformerEncoderOutput
-from baseline.pytorch.torchy import (
-    tie_weight,
-    pytorch_linear,
-    LuongDotProductAttention,
-    BahdanauAttention,
-    ScaledDotProductAttention,
-    LuongGeneralAttention,
-)
+
 
 __all__ = []
 exporter = export(__all__)
 
 
-class ArcPolicy(torch.nn.Module):
+class ArcPolicy(tf.keras.layers.Layer):
 
     def __init__(self):
         super().__init__()
+
+    def call(self, inputs):
+        encoder_outputs, hsz, beam_width = inputs
+        return self.forward(encoder_outputs, hsz, beam_width)
 
     def forward(self, encoder_outputs, hsz, beam_width=1):
         pass
@@ -43,16 +37,14 @@ class AbstractArcPolicy(ArcPolicy):
         h_i = self.get_state(encoder_output)
         context = encoder_output.output
         if beam_width > 1:
-            with torch.no_grad():
-                context = repeat_batch(context, beam_width)
-                if type(h_i) is tuple:
-                    h_i = repeat_batch(h_i[0], beam_width, dim=1), repeat_batch(h_i[1], beam_width, dim=1)
-                else:
-                    h_i = repeat_batch(h_i, beam_width, dim=1)
+            context = repeat_batch(context, beam_width)
+            # What does the multi-RNN look like in old TF again?
+            if type(h_i) is tuple:
+                h_i = repeat_batch(h_i[0], beam_width, dim=1), repeat_batch(h_i[1], beam_width, dim=1)
+            else:
+                h_i = repeat_batch(h_i, beam_width, dim=1)
         batch_size = context.shape[0]
-        h_size = (batch_size, hsz)
-        with torch.no_grad():
-            init_zeros = context.data.new(*h_size).zero_()
+        init_zeros = tf.zeros((batch_size, hsz), dtype=context.dtype)
         return h_i, init_zeros, context
 
 
@@ -72,16 +64,23 @@ class NoArcPolicy(AbstractArcPolicy):
     def __init__(self):
         super().__init__()
 
+    def _zero_state(self, final_encoder_state):
+        num_rnns = len(final_encoder_state)
+        batchsz = get_shape_as_list(final_encoder_state)[0]
+        zstate = []
+        for i, _ in enumerate(self.rnns):
+            zstate.append((np.zeros((batchsz, num_rnns), dtype=np.float32),
+                           np.zeros((batchsz, num_rnns), dtype=np.float32)))
+
+        return zstate
+
     def get_state(self, encoder_outputs):
         final_encoder_state = encoder_outputs.hidden
-        if isinstance(final_encoder_state, tuple):
-            s1, s2 = final_encoder_state
-            return s1 * 0, s2 * 0
-        return final_encoder_state * 0
+        return self._zero_state(final_encoder_state)
 
 
 @register_decoder(name='vanilla')
-class RNNDecoder(torch.nn.Module):
+class RNNDecoder(tf.keras.layers.Layer):
 
     def __init__(self, tgt_embeddings, **kwargs):
         """Construct an RNN decoder.  It provides the input size, the rest is up to the impl.
@@ -107,13 +106,13 @@ class RNNDecoder(torch.nn.Module):
             self.input_i = self._basic_input
         pdrop = kwargs.get('dropout', 0.5)
         self.decoder_rnn = rnn_cell(dsz, self.hsz, rnntype, layers, pdrop)
-        self.dropout = torch.nn.Dropout(pdrop)
+        self.dropout = tf.keras.layers.Dropout(pdrop)
         self.init_attn(**kwargs)
 
         do_weight_tying = bool(kwargs.get('tie_weights', False))
         is_valid_tying = self.hsz == self.tgt_embeddings.get_dsz()
 
-        self.preds = torch.nn.Linear(self.hsz, self.tgt_embeddings.get_vsz())
+        self.preds = tf.keras.layers.Dense(self.tgt_embeddings.get_vsz())
         if do_weight_tying:
             if is_valid_tying:
                 tie_weight(self.preds, self.tgt_embeddings.embeddings)
@@ -145,22 +144,24 @@ layer's hidden size == embedding weight dimensions")
         :param output_i: This is the last H state
         :return: an input that is a concatenation of previous state and destination embedding
         """
-        embed_i = embed_i.squeeze(0)
-        return torch.cat([embed_i, attn_output_i], 1)
+        return tf.concat([embed_i, attn_output_i], 1)
 
-    def forward(self, encoder_outputs, dst):
+    def call(self, encoder_outputs, dst):
         src_mask = encoder_outputs.src_mask
-        h_i, output_i, context_bth = self.arc_policy(encoder_outputs, self.hsz)
-        output_tbh, _ = self.decode_rnn(context_bth, h_i, output_i, dst.transpose(0, 1), src_mask)
-        pred = self.output(output_tbh)
-        return pred.transpose(0, 1).contiguous()
+        # TODO where to get beam size?
+        h_i, output_i, context_bth = self.arc_policy((encoder_outputs, self.hsz, 1))
+        output_bth, _ = self.decode_rnn(context_bth, h_i, output_i, dst, src_mask)
+        pred = self.output(output_bth)
+        return pred
 
     def decode_rnn(self, context_bth, h_i, output_i, dst_bth, src_mask):
         embed_out_bth = self.tgt_embeddings(dst_bth)
 
         outputs = []
 
-        for i, embed_i in enumerate(embed_out_bth.split(1)):
+        num_steps = get_shape_as_list(embed_out_bth)[1]
+        for i in range(num_steps):
+            embed_i = embed_out_bth[:, i, :]
             # Input feeding would use previous attentional output in addition to destination embeddings
             embed_i = self.input_i(embed_i, output_i)
             output_i, h_i = self.decoder_rnn(embed_i, h_i)
@@ -169,7 +170,7 @@ layer's hidden size == embedding weight dimensions")
             # Attentional outputs
             outputs.append(output_i)
 
-        outputs_tbh = torch.stack(outputs)
+        outputs_tbh = tf.stack(outputs, axis=1)
         return outputs_tbh, h_i
 
     def attn(self, output_t, context, src_mask=None):
@@ -179,9 +180,8 @@ layer's hidden size == embedding weight dimensions")
         pass
 
     def output(self, x):
-        pred = F.log_softmax(self.preds(x.view(x.size(0)*x.size(1), -1)), dim=-1)
-        pred = pred.view(x.size(0), x.size(1), -1)
-        return pred
+        #pred = tf.nn.log_softmax(self.preds(x), dim=-1)
+        return self.preds(x)
 
     class BeamSearch(BeamSearchBase):
 
@@ -192,30 +192,33 @@ layer's hidden size == embedding weight dimensions")
         def init(self, encoder_outputs):
             """Tile batches for encoder inputs and the likes."""
             src_mask = repeat_batch(encoder_outputs.src_mask, self.K)
-            h_i, dec_out, context = self.parent.arc_policy(encoder_outputs, self.parent.hsz, self.K)
+            h_i, dec_out, context = self.parent.arc_policy((encoder_outputs, self.parent.hsz, self.K))
             return h_i, dec_out, context, src_mask
 
         def step(self, paths, extra):
             """Calculate the probs of the next output and update state."""
             h_i, dec_out, context, src_mask = extra
-            last = paths[:, :, -1].view(1, -1)
+            # Our RNN decoder is now batch-first, so we need to expand the time dimension
+            last = tf.reshape(paths[:, :, -1], (-1, 1))
             dec_out, h_i = self.parent.decode_rnn(context, h_i, dec_out, last, src_mask)
             probs = self.parent.output(dec_out)
-            dec_out = dec_out.squeeze(0)
-            return probs, (h_i, dec_out, context, src_mask)
+            log_probs = tf.nn.log_softmax(probs, axis=-1)
+            # Collapse over time
+            dec_out = tf.squeeze(dec_out, 1)
+            return log_probs, (h_i, dec_out, context, src_mask)
 
         def update(self, beams, extra):
             """Select the correct hidden states and outputs to used based on the best performing beams."""
             h_i, dec_out, context, src_mask = extra
-            h_i = tuple(hc[:, beams, :] for hc in h_i)
-            dec_out = dec_out[beams, :]
+            h_i = tuple(tf.gather(hc, beams, axis=1) for hc in h_i)
+            dec_out = tf.gather(dec_out, beams)
             return h_i, dec_out, context, src_mask
 
     def beam_search(self, encoder_outputs, **kwargs):
         alpha = kwargs.get('alpha')
         if alpha is not None:
             kwargs['length_penalty'] = partial(gnmt_length_penalty, alpha=alpha)
-        return RNNDecoder.BeamSearch(parent=self, **kwargs)(encoder_outputs)
+        return RNNDecoder.BeamSearch(self, **kwargs)(encoder_outputs)
 
 
 @register_decoder(name='default')
@@ -236,11 +239,11 @@ class RNNDecoderWithAttn(RNNDecoder):
             self.attn_module = LuongGeneralAttention(self.hsz)
 
     def attn(self, output_t, context, src_mask=None):
-        return self.attn_module(output_t, context, context, src_mask)
+        return self.attn_module((output_t, context, context, src_mask))
 
 
 @register_decoder(name='transformer')
-class TransformerDecoderWrapper(torch.nn.Module):
+class TransformerDecoderWrapper(tf.keras.layers.Layer):
 
     def __init__(self, tgt_embeddings, dropout=0.5, layers=1, hsz=None, num_heads=4, scale=True, **kwargs):
         super().__init__()
@@ -254,16 +257,10 @@ class TransformerDecoderWrapper(torch.nn.Module):
         self.proj_to_dsz = self._identity
         self.proj_to_hsz = self._identity
         if hsz != dsz:
-            self.proj_to_hsz = pytorch_linear(dsz, hsz)
-            self.proj_to_dsz = pytorch_linear(hsz, dsz)
-            del self.proj_to_dsz.weight
-            self.proj_to_dsz.weight = torch.nn.Parameter(self.proj_to_hsz.weight.transpose(0, 1), requires_grad=True)
+            self.proj_to_hsz = tf.keras.layers.Dense(hsz)
+            self.proj_to_dsz = tf.keras.layers.Dense(dsz)
 
-        self.preds = pytorch_linear(dsz, self.tgt_embeddings.get_vsz())
-
-        do_weight_tying = bool(kwargs.get('tie_weights', False))
-        if do_weight_tying:
-            self.preds.weight = self.tgt_embeddings.weight.transpose(0, 1)
+        self.preds = tf.keras.layers.Dense(self.tgt_embeddings.get_vsz())
 
     def _identity(self, x):
         return x
@@ -272,24 +269,21 @@ class TransformerDecoderWrapper(torch.nn.Module):
         embed_out_bth = self.tgt_embeddings(dst)
         embed_out_bth = self.proj_to_hsz(embed_out_bth)
         context_bth = encoder_output.output
-        T = embed_out_bth.shape[1]
-        dst_mask = subsequent_mask(T).type_as(embed_out_bth)
-        src_mask = encoder_output.src_mask.unsqueeze(1).unsqueeze(1)
-        output = self.transformer_decoder((embed_out_bth, context_bth, src_mask, dst_mask))
+        T = get_shape_as_list(embed_out_bth)[1]
+        dst_mask = tf.cast(subsequent_mask(T), embed_out_bth.dtype)
+        src_mask = tf.expand_dims(tf.expand_dims(encoder_output.src_mask, 1))
+        output = self.transformer_decoder(embed_out_bth, context_bth, src_mask, dst_mask)
         output = self.proj_to_dsz(output)
         prob = self.output(output)
         return prob
 
     def output(self, x):
-        pred = F.log_softmax(self.preds(x.view(x.size(0)*x.size(1), -1)), dim=-1)
-        pred = pred.view(x.size(0), x.size(1), -1)
-        return pred
+        #pred = F.log_softmax(self.preds(x.view(x.size(0)*x.size(1), -1)), dim=-1)
+        #pred = pred.view(x.size(0), x.size(1), -1)
+        #return pred
+        return self.preds(x)
 
     class BeamSearch(BeamSearchBase):
-
-        def __init__(self, parent, **kwargs):
-            super().__init__(**kwargs)
-            self.parent = parent
 
         def init(self, encoder_outputs):
             """Tile for the batch of the encoder inputs."""
@@ -303,11 +297,12 @@ class TransformerDecoderWrapper(torch.nn.Module):
             """Calculate the probs for the last item based on the full path."""
             B, K, T = paths.size()
             assert K == self.K
-            return self.parent(extra, paths.view(B * K, T))[:, -1], extra
+            return self(extra, paths.view(B * K, T))[:, -1], extra
 
         def update(self, beams, extra):
             """There is no state for the transformer so just pass it."""
             return extra
 
     def beam_search(self, encoder_outputs, **kwargs):
-        return TransformerDecoderWrapper.BeamSearch(parent=self, **kwargs)(encoder_outputs)
+        return TransformerDecoderWrapper.BeamSearch(**kwargs)(encoder_outputs)
+

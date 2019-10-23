@@ -9,6 +9,9 @@ __all__ = []
 exporter = export(__all__)
 
 
+
+RNNEncoderOutput = namedtuple("RNNEncoderOutput", ("output", "hidden"))
+
 @exporter
 class EncoderBase(object):
 
@@ -17,9 +20,6 @@ class EncoderBase(object):
 
     def encode(self, embed_in, src_len, pdrop, **kwargs):
         pass
-
-
-RNNEncoderOutput = namedtuple("RNNEncoderOutput", ("output", "hidden"))
 
 
 @register_encoder(name='default')

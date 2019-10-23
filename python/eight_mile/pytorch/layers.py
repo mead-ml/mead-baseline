@@ -366,6 +366,61 @@ def pytorch_linear(in_sz, out_sz, unif=0, initializer=None):
     return l
 
 
+class StackedLSTMCell(nn.Module):
+    def __init__(self, num_layers, input_size, rnn_size, dropout):
+        super().__init__()
+        self.dropout = nn.Dropout(dropout)
+        self.num_layers = num_layers
+        self.layers = nn.ModuleList()
+
+        for i in range(num_layers):
+            self.layers.append(nn.LSTMCell(input_size=input_size, hidden_size=rnn_size, bias=False))
+            input_size = rnn_size
+
+    def forward(self, input, hidden):
+        h_0, c_0 = hidden
+        hs, cs = [], []
+        for i, layer in enumerate(self.layers):
+            h_i, c_i = layer(input, (h_0[i], c_0[i]))
+            input = h_i
+            if i != self.num_layers - 1:
+                input = self.dropout(input)
+            hs.append(h_i)
+            cs.append(c_i)
+
+        hs = torch.stack(hs)
+        cs = torch.stack(cs)
+
+        return input, (hs, cs)
+
+
+class StackedGRUCell(nn.Module):
+    def __init__(self, num_layers, input_size, rnn_size, dropout):
+        super().__init__()
+        self.dropout = nn.Dropout(dropout)
+        self.num_layers = num_layers
+        self.layers = nn.ModuleList()
+
+        for i in range(num_layers):
+            self.layers.append(nn.GRUCell(input_size=input_size, hidden_size=rnn_size))
+            input_size = rnn_size
+
+    def forward(self, input, hidden):
+        h_0 = hidden
+        hs = []
+        for i, layer in enumerate(self.layers):
+            h_i = layer(input, (h_0[i]))
+            input = h_i
+            if i != self.num_layers:
+                input = self.dropout(input)
+            hs.append(h_i)
+
+        hs = torch.stack(hs)
+
+        return input, hs
+
+
+
 class Dense(nn.Module):
 
     def __init__(self, insz, outsz, activation=None, unif=0, initializer=None):
@@ -399,6 +454,14 @@ class SkipConnection(ResidualBlock):
         self.layer = Dense(input_size, input_size, activation=activation)
         self.output_dim = input_size
 
+
+def rnn_cell(insz, hsz, rnntype, nlayers, dropout):
+
+    if rnntype == 'gru':
+        rnn = StackedGRUCell(nlayers, insz, hsz, dropout)
+    else:
+        rnn = StackedLSTMCell(nlayers, insz, hsz, dropout)
+    return rnn
 
 def pytorch_lstm(insz, hsz, rnntype, nlayers, dropout, unif=0, batch_first=False, initializer=None):
     if nlayers == 1:
@@ -484,7 +547,57 @@ class LSTMEncoderSequence(LSTMEncoder):
         return output
 
 
-class LSTMEncoderWithState(LSTMEncoder):
+class LSTMEncoderWithState(nn.Module):
+
+
+    def __init__(self, insz, hsz, nlayers, pdrop=0.0, batch_first=False, unif=0, initializer=None, **kwargs):
+        """Produce a stack of biLSTMs with dropout performed on all but the last layer.
+
+        :param insz: (``int``) The size of the input
+        :param hsz: (``int``) The number of hidden units per LSTM
+        :param nlayers: (``int``) The number of layers of LSTMs to stack
+        :param pdrop: (``float``) The probability of dropping a unit value during dropout
+        :param output_fn: function to determine what is returned from the encoder
+        :param requires_length: (``bool``) Does this encoder require an input length in its inputs (defaults to ``True``)
+        :param batch_first: (``bool``) Should we do batch first input or time-first input?
+        :return: a stacked cell
+        """
+        super().__init__()
+        self._requires_length = False
+        self.batch_first = batch_first
+        self.nlayers = nlayers
+        if nlayers == 1:
+            pdrop = 0.0
+        self.rnn = torch.nn.LSTM(insz, hsz, nlayers, dropout=pdrop, bidirectional=False, batch_first=batch_first)
+        if initializer == "ortho":
+            nn.init.orthogonal(self.rnn.weight_hh_l0)
+            nn.init.orthogonal(self.rnn.weight_ih_l0)
+        elif initializer == "he" or initializer == "kaiming":
+            nn.init.kaiming_uniform(self.rnn.weight_hh_l0)
+            nn.init.kaiming_uniform(self.rnn.weight_ih_l0)
+        elif unif > 0:
+            for weight in self.rnn.parameters():
+                weight.data.uniform_(-unif, unif)
+        else:
+            nn.init.xavier_uniform_(self.rnn.weight_hh_l0)
+            nn.init.xavier_uniform_(self.rnn.weight_ih_l0)
+        self.output_dim = hsz
+
+    @property
+    def requires_state(self):
+        return True
+
+    def forward(self, inputs):
+        inputs, hidden = inputs
+        output, hidden = self.rnn(inputs, hidden)
+        return output, hidden  ##concat_state_dirs(hidden)
+
+    @property
+    def requires_length(self):
+        return self._requires_length
+
+
+class LSTMEncoderAll(LSTMEncoder):
 
     def output_fn(self, output, state):
         return output, state
@@ -554,7 +667,7 @@ class BiLSTMEncoder(nn.Module):
         return self._requires_length
 
 
-class BiLSTMEncoderWithState(BiLSTMEncoder):
+class BiLSTMEncoderAll(BiLSTMEncoder):
     def output_fn(self, output, state):
         return output, concat_state_dirs(state)
 
@@ -756,7 +869,7 @@ class LuongDotProductAttention(BaseAttention):
         super().__init__(hsz)
 
     def _attention(self, query_t, keys_bth, keys_mask):
-        a = torch.bmm(keys_bth, query_t.unsqueeze(2))
+        a = keys_bth @ query_t.unsqueeze(2)
         a = a.squeeze(2).masked_fill(keys_mask == 0, -1e9)
         a = F.softmax(a, dim=-1)
         return a
@@ -768,7 +881,7 @@ class ScaledDotProductAttention(BaseAttention):
         super().__init__(hsz)
 
     def _attention(self, query_t, keys_bth, keys_mask):
-        a = torch.bmm(keys_bth, query_t.unsqueeze(2)) / math.sqrt(self.hsz)
+        a = (keys_bth @ query_t.unsqueeze(2)) / math.sqrt(self.hsz)
         a = a.squeeze(2).masked_fill(keys_mask == 0, -1e9)
         a = F.softmax(a, dim=-1)
         return a
@@ -781,7 +894,7 @@ class LuongGeneralAttention(BaseAttention):
         self.W_a = nn.Linear(self.hsz, self.hsz, bias=False)
 
     def _attention(self, query_t, keys_bth, keys_mask):
-        a = torch.bmm(keys_bth, self.W_a(query_t).unsqueeze(2))
+        a = keys_bth @ self.W_a(query_t).unsqueeze(2)
         a = a.squeeze(2).masked_fill(keys_mask == 0, -1e9)
         a = F.softmax(a, dim=-1)
         return a
@@ -799,7 +912,7 @@ class BahdanauAttention(BaseAttention):
     def _attention(self, query_t, keys_bth, keys_mask):
         B, T, H = keys_bth.shape
         q = self.W_a(query_t.view(-1, self.hsz)).view(B, 1, H)
-        u = self.E_a(keys_bth.contiguous().view(-1, self.hsz)).view(B, T, H)
+        u = self.E_a(keys_bth).view(B, T, H)
         z = torch.tanh(q + u)
         a = self.v(z.view(-1, self.hsz)).view(B, T)
         a.masked_fill(keys_mask == 0, -1e9)
@@ -811,7 +924,7 @@ class BahdanauAttention(BaseAttention):
         # Want to apply over context, scaled by a
         # (B x 1 x T) (B x T x H) = (B x 1 x H) -> (B x H)
         a = a.view(a.size(0), 1, a.size(1))
-        c_t = torch.bmm(a, values_bth).squeeze(1)
+        c_t = (a @ values_bth).squeeze(1)
         # (B x 2H)
         attended = torch.cat([c_t, query_t], -1)
         attended = self.W_c(attended)
@@ -1240,6 +1353,44 @@ class TagSequenceModel(SequenceModel):
         return time_first.transpose(0, 1)
 
 
+class LangSequenceModel(nn.Module):
+
+    def __init__(self, nc, embeddings, transducer, decoder=None, name=None):
+        super().__init__()
+        if isinstance(embeddings, dict):
+            self.embed_model = EmbeddingsStack(embeddings)
+        else:
+            assert isinstance(embeddings, EmbeddingsStack)
+            self.embed_model = embeddings
+        self.transducer_model = transducer
+        if hasattr(transducer, 'requires_state') and transducer.requires_state:
+            self._call = self._call_with_state
+            self.requires_state = True
+        else:
+            self._call = self._call_without_state
+            self.requires_state = False
+        self.output_layer = nn.Linear(self.transducer_model.output_dim, nc)
+        self.decoder_model = decoder
+
+    def forward(self, inputs):
+        return self._call(inputs)
+
+    def _call_with_state(self, inputs):
+
+        h = inputs.get('h')
+
+        embedded = self.embed_model(inputs)
+        transduced, hidden = self.transducer_model((embedded, h))
+        transduced = self.output_layer(transduced)
+        return transduced, hidden
+
+    def _call_without_state(self, inputs):
+        embedded = self.embed_model(inputs)
+        transduced = self.transducer_model((embedded))
+        transduced = self.output_layer(transduced)
+        return transduced, None
+
+
 def pytorch_embedding(weights, finetune=True):
     lut = nn.Embedding(weights.shape[0], weights.shape[1], padding_idx=0)
     del lut.weight
@@ -1408,10 +1559,10 @@ class TransformerDecoder(nn.Module):
 
         x, memory, src_mask, tgt_mask = inputs
         x = self.ln1(x)
-        x = x + self.dropout(self.self_attn(x, x, x, tgt_mask))
+        x = x + self.dropout(self.self_attn((x, x, x, tgt_mask)))
 
         x = self.ln2(x)
-        x = x + self.dropout(self.src_attn(x, memory, memory, src_mask))
+        x = x + self.dropout(self.src_attn((x, memory, memory, src_mask)))
 
         x = self.ln3(x)
         x = x + self.dropout(self.ffn(x))
@@ -1428,9 +1579,9 @@ class TransformerEncoderStack(nn.Module):
             self.encoders.append(TransformerEncoder(num_heads, d_model, pdrop, scale, activation, d_ff))
 
     def forward(self, inputs):
-        x = inputs
+        x, mask = inputs
         for layer in self.encoders:
-            x = layer(x)
+            x = layer((x, mask))
         return self.ln(x)
 
 
@@ -1442,10 +1593,234 @@ class TransformerDecoderStack(nn.Module):
         for i in range(layers):
             self.decoders.append(TransformerDecoder(num_heads, d_model, pdrop, scale, activation_type, d_ff))
 
-    def call(self, inputs):
-        x = inputs
+    def forward(self, inputs):
+        x, memory, src_mask, tgt_mask = inputs
         for layer in self.decoders:
-            x = layer(x)
+            x = layer((x, memory, src_mask, tgt_mask))
         return self.ln(x)
 
 
+def update_lengths(lengths, eoses, idx):
+    """Update the length of a generated tensor based on the first EOS found.
+
+    This is useful for a decoding situation where tokens after an EOS
+    can be something other than EOS. This also makes sure that a second
+    generated EOS doesn't affect the lengths.
+
+    :param lengths: `torch.LongTensor`: The lengths where zero means an
+        unfinished sequence.
+    :param eoses:  `torch.ByteTensor`: A mask that has 1 for sequences that
+        generated an EOS.
+    :param idx: `int`: What value to fill the finished lengths with (normally
+        the current decoding timestep).
+
+    :returns: `torch.Tensor`: The updated lengths tensor (same shape and type).
+    """
+    # If a length is 0 it has never had a length set so it is eligible to have
+    # this EOS be the length.
+    updatable_lengths = (lengths == 0)
+    # If this length can be updated AND this token is an eos
+    lengths_mask = updatable_lengths & eoses
+    return lengths.masked_fill(lengths_mask, idx)
+
+
+def gnmt_length_penalty(lengths, alpha=0.8):
+    """Calculate a length penalty from https://arxiv.org/pdf/1609.08144.pdf
+
+    The paper states the penalty as (5 + |Y|)^a / (5 + 1)^a. This is implemented
+    as ((5 + |Y|) / 6)^a for a (very) tiny performance boost
+
+    :param lengths: `torch.LongTensor`: [B, K] The lengths of the beams.
+    :param alpha: `float`: A hyperparameter. See Table 2 for a search on this
+        parameter.
+
+    :returns:
+        `torch.FloatTensor`: [B, K, 1] The penalties.
+    """
+    lengths = lengths.to(torch.float)
+    penalty = torch.pow(((5 + lengths) / 6), alpha)
+    return penalty.unsqueeze(-1)
+
+
+def no_length_penalty(lengths):
+    """A dummy function that returns a no penalty (1)."""
+    return torch.ones_like(lengths).to(torch.float).unsqueeze(-1)
+
+
+def repeat_batch(t, K, dim=0):
+    """Repeat a tensor while keeping the concept of a batch.
+
+    :param t: `torch.Tensor`: The tensor to repeat.
+    :param K: `int`: The number of times to repeat the tensor.
+    :param dim: `int`: The dimension to repeat in. This should be the
+        batch dimension.
+
+    :returns: `torch.Tensor`: The repeated tensor. The new shape will be
+        batch size * K at dim, the rest of the shapes will be the same.
+
+    Example::
+
+        >>> a = torch.arange(10).view(2, -1)
+        >>> a
+	tensor([[0, 1, 2, 3, 4],
+		[5, 6, 7, 8, 9]])
+	>>> a.repeat(2, 1)
+	tensor([[0, 1, 2, 3, 4],
+		[5, 6, 7, 8, 9],
+		[0, 1, 2, 3, 4],
+		[5, 6, 7, 8, 9]])
+	>>> repeat_batch(a, 2)
+	tensor([[0, 1, 2, 3, 4],
+		[0, 1, 2, 3, 4],
+		[5, 6, 7, 8, 9],
+		[5, 6, 7, 8, 9]])
+    """
+    shape = t.shape
+    tiling = [1] * (len(shape) + 1)
+    tiling[dim + 1] = K
+    tiled = t.unsqueeze(dim + 1).repeat(tiling)
+    old_bsz = shape[dim]
+    new_bsz = old_bsz * K
+    new_shape = list(shape[:dim]) + [new_bsz] + list(shape[dim+1:])
+    return tiled.view(new_shape)
+
+
+class BeamSearchBase:
+
+    def __init__(self, beam=1, length_penalty=None, **kwargs):
+        self.length_penalty = length_penalty if length_penalty else no_length_penalty
+        self.K = beam
+
+    def init(self, encoder_outputs):
+        pass
+
+    def step(self, paths, extra):
+        pass
+
+    def update(self, beams, extra):
+        pass
+
+    def __call__(self, encoder_outputs, **kwargs):
+        """Perform batched Beam Search.
+
+        Note:
+            The paths and lengths generated do not include the <GO> token.
+
+        :param encoder_outputs: `namedtuple` The outputs of the encoder class.
+        :param init: `Callable(ecnoder_outputs: encoder_outputs, K: int)` -> Any: A
+            callable that is called once at the start of the search to initialize
+            things. This returns a blob that is passed to other callables.
+        :param step: `Callable(paths: torch.LongTensor, extra) -> (probs: torch.FloatTensor, extra):
+            A callable that is does a single decoding step. It returns the log
+            probabilities over the vocabulary in the last dimension. It also returns
+            any state the decoding process needs.
+        :param update: `Callable(beams: torch.LongTensor, extra) -> extra:
+            A callable that is called to edit the decoding state based on the selected
+            best beams.
+        :param length_penalty: `Callable(lengths: torch.LongTensor) -> torch.floatTensor
+            A callable that generates a penalty based on the lengths. Lengths is
+            [B, K] and the returned penalty should be [B, K, 1] (or [B, K, V] to
+            have token based penalties?)
+
+        :Keyword Arguments:
+        * *beam* -- `int`: The number of beams to use.
+        * *mxlen* -- `int`: The max number of steps to run the search for.
+
+        :returns:
+            tuple(preds: torch.LongTensor, lengths: torch.LongTensor, scores: torch.FloatTensor)
+            preds: The predicted values: [B, K, max(lengths)]
+            lengths: The length of each prediction [B, K]
+            scores: The score of each path [B, K]
+        """
+        mxlen = kwargs.get('mxlen', 100)
+        bsz = encoder_outputs.output.shape[0]
+        device = encoder_outputs.output.device
+        with torch.no_grad():
+            extra = self.init(encoder_outputs)
+            paths = torch.full((bsz, self.K, 1), Offsets.GO, dtype=torch.long, device=device)
+            # This tracks the log prob of each beam. This is distinct from score which
+            # is based on the log prob and penalties.
+            log_probs = torch.zeros((bsz, self.K), dtype=torch.float, device=device)
+            # Tracks the lengths of the beams, unfinished beams have lengths of zero.
+            lengths = torch.zeros((bsz, self.K), dtype=torch.long, device=device)
+
+            for i in range(mxlen - 1):
+                probs, extra = self.step(paths, extra)
+                V = probs.shape[-1]
+                probs = probs.view((bsz, self.K, V))  # [B, K, V]
+                if i > 0:
+                    # This mask is for all beams that are done.
+                    done_mask = (lengths != 0).unsqueeze(-1)  # [B, K, 1]
+                    # Can creating this mask be moved out of the loop? It never changes but we don't have V
+                    # This mask selects the EOS token
+                    eos_mask = torch.zeros((1, 1, V), dtype=done_mask.dtype, device=device)
+                    eos_mask[:, :, Offsets.EOS] = 1
+                    # This mask selects the EOS token of only the beams that are done.
+                    mask = done_mask & eos_mask
+                    # Put all probability mass on the EOS token for finished beams.
+                    # Otherwise as the other beams get longer they will all give
+                    # up and eventually select this beam and all outputs become
+                    # the same.
+                    probs = probs.masked_fill(done_mask, -np.inf)
+                    probs = probs.masked_fill(mask, 0)
+                    probs = log_probs.unsqueeze(-1) + probs  # [B, K, V]
+                    # Calculate the score of the beam based on the current length.
+                    path_scores = probs / self.length_penalty(lengths.masked_fill(lengths == 0, i+1))
+                else:
+                    # On the first step we only look at probabilities for the first beam.
+                    # If we don't then the probs will be the same for each beam
+                    # This means the same token will be selected for each beam
+                    # And we won't get any diversity.
+                    # Using only the first beam ensures K different starting points.
+                    path_scores = probs[:, 0, :]
+
+                flat_scores = path_scores.view(bsz, -1)  # [B, K * V]
+                best_scores, best_idx = flat_scores.topk(self.K, 1)
+                # Get the log_probs of the best scoring beams
+                log_probs = probs.view(bsz, -1).gather(1, best_idx).view(bsz, self.K)
+
+                best_beams = best_idx / V  # Get which beam it came from
+                best_idx = best_idx % V  # Get the index of the word regardless of which beam it is.
+
+                # Best Beam index is relative within the batch (only [0, K)).
+                # This makes the index global (e.g. best beams for the second
+                # batch example is in [K, 2*K)).
+                offsets = torch.arange(bsz, dtype=torch.long, device=device) * self.K
+                offset_beams = best_beams + offsets.unsqueeze(-1)
+                flat_beams = offset_beams.view(bsz * self.K)
+                # Select the paths to extend based on the best beams
+                flat_paths = paths.view(bsz * self.K, -1)
+                new_paths = flat_paths[flat_beams, :].view(bsz, self.K, -1)
+                # Add the selected outputs to the paths
+                paths = torch.cat([new_paths, best_idx.unsqueeze(-1)], dim=2)
+
+                # Select the lengths to keep tracking based on the valid beams left.
+                lengths = lengths.view(-1)[flat_beams].view((bsz, self.K))
+
+                extra = self.update(flat_beams, extra)
+
+                # Updated lengths based on if we hit EOS
+                last = paths[:, :, -1]
+                eoses = (last == Offsets.EOS)
+                lengths = update_lengths(lengths, eoses, i + 1)
+                if (lengths != 0).all():
+                    break
+            else:
+                # This runs if the loop didn't break meaning one beam hit the max len
+                # Add an EOS to anything that hasn't hit the end. This makes the scores real.
+                probs, extra = self.step(paths, extra)
+
+                V = probs.size(-1)
+                probs = probs.view((bsz, self.K, V))
+                probs = probs[:, :, Offsets.EOS]  # Select the score of EOS
+                # If any of the beams are done mask out the score of this EOS (they already had an EOS)
+                probs = probs.masked_fill((lengths != 0), 0)
+                log_probs = log_probs + probs
+                end_tokens = torch.full((bsz, self.K, 1), Offsets.EOS, device=device, dtype=paths.dtype)
+                paths = torch.cat([paths, end_tokens], dim=2)
+                lengths = update_lengths(lengths, torch.ones_like(lengths) == 1, mxlen)
+                best_scores = log_probs / self.length_penalty(lengths).squeeze(-1)
+
+        # Slice off the Offsets.GO token
+        paths = paths[:, :, 1:]
+        return paths, lengths, best_scores

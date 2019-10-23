@@ -70,6 +70,17 @@ def register(cls, registry, name=None, error=''):
     return cls
 
 
+# @exporter
+def get_logging_level(level):
+    """Get the logging level as a logging module constant.
+
+    :param level: `str` The log level to get.
+
+    :returns: The log level, defaults to `INFO`
+    """
+    return getattr(logging, level.upper(), logging.INFO)
+
+
 #@exporter
 def sequence_mask(lengths, max_len=-1):
     if max_len < 0:

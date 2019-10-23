@@ -13,7 +13,7 @@ logger = logging.getLogger('baseline')
 class EncoderDecoderModelBase(nn.Module, EncoderDecoderModel):
 
     def __init__(self, src_embeddings, tgt_embedding, **kwargs):
-        super(EncoderDecoderModelBase, self).__init__()
+        super().__init__()
         self.beam_sz = kwargs.get('beam', 1)
         self.gpu = kwargs.get('gpu', True)
         src_dsz = self.init_embed(src_embeddings, tgt_embedding)
@@ -190,4 +190,4 @@ class Seq2SeqModel(EncoderDecoderModelBase):
         :param tgt_embedding: (``PyTorchEmbeddings``) A single PyTorchEmbeddings object
         :param kwargs:
         """
-        super(Seq2SeqModel, self).__init__(src_embeddings, tgt_embedding, **kwargs)
+        super().__init__(src_embeddings, tgt_embedding, **kwargs)
