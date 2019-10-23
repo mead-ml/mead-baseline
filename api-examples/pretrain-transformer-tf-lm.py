@@ -10,6 +10,7 @@ from eight_mile.tf.embeddings import *
 from eight_mile.optz import CompositeLRScheduler, WarmupLinearScheduler, CosineDecayScheduler
 from eight_mile.tf.optz import *
 from baseline.tf.lm import TransformerLanguageModel
+from eight_mile.tf.layers import set_tf_log_level
 from baseline.vectorizers import Token1DVectorizer, AbstractVectorizer
 from mead.downloader import DataDownloader
 
@@ -17,6 +18,7 @@ import codecs
 from collections import Counter
 
 logger = logging.getLogger(__file__)
+logging.basicConfig(level=logging.DEBUG)
 
 NUM_PREFETCH = 2
 SHUF_BUF_SZ = 5000
@@ -338,8 +340,9 @@ def train():
                         type=int,
                         default=40,
                         help="How many max characters per word")
-
+    parser.add_argument('--tf_ll', help='TensorFlow Log level', type=str, default='warn')
     args = parser.parse_args()
+    set_tf_log_level(args.tf_ll)
 
     if args.train_file and not args.valid_file:
         logger.error("If you provide a train_file, you must provide a valid_file")
@@ -351,7 +354,8 @@ def train():
 
     if args.basedir is None:
         args.basedir = 'transformer-{}-{}-{}'.format(args.dataset_key, args.tokens, os.getpid())
-    logging.basicConfig(level=logging.INFO if args.local_rank in [-1, 0] else logging.WARN)
+    #logging.basicConfig(level=logging.INFO if args.local_rank in [-1, 0] else logging.WARN)
+
     logger.info("Cache directory [%s]", args.dataset_cache)
 
     # TODO:
@@ -440,9 +444,10 @@ def train():
         SET_TRAIN_FLAG(True)
         for i, batch in enumerate(train_set):
             x, y = batch
-            optimizer.update(model, {'x': x}, y)
+            loss_value = optimizer.update(model, {'x': x}, y)
+            avg_loss.update(loss_value.numpy())
             if (i + 1) % update_on == 0:
-                logging.info(avg_loss)
+                print(avg_loss)
 
         # How much time elapsed in minutes
         elapsed = (time.time() - start)/60
@@ -458,8 +463,8 @@ def train():
         SET_TRAIN_FLAG(False)
         for batch in valid_set:
             x, y = batch
-            loss = lm_loss(model, {'x': x}, y)
-            avg_valid_loss.update(loss.numpy())
+            loss_value = lm_loss(model, {'x': x}, y)
+            avg_valid_loss.update(loss_value.numpy())
 
         valid_token_loss = avg_valid_loss.avg
         valid_token_ppl = math.exp(valid_token_loss)
@@ -473,7 +478,7 @@ def train():
             metrics['average_valid_word_ppl'] = math.exp(valid_token_loss * valid_set.tensors[-1].numel() / valid_num_words)
         else:
             metrics['average_valid_word_ppl'] = valid_token_ppl
-        logger.info(metrics)
+        print(metrics)
 
         if args.local_rank < 1:
             # Should probably do this more often
