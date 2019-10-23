@@ -2,7 +2,7 @@ import baseline
 import argparse
 import eight_mile.tf.embeddings
 import eight_mile.tf.layers as L
-from eight_mile.utils import get_version, revlut
+from eight_mile.utils import get_version, revlut, get_logging_level
 from eight_mile.tf.layers import SET_TRAIN_FLAG, set_tf_log_level
 from eight_mile.tf.optz import EagerOptimizer
 import tensorflow as tf
@@ -20,15 +20,6 @@ NUM_PREFETCH = 2
 SHUF_BUF_SZ = 5000
 
 
-def get_logging_level(ll):
-    ll = ll.lower()
-    if ll == 'debug':
-        return logging.DEBUG
-    if ll == 'info':
-        return logging.INFO
-    return logging.WARNING
-
-
 def get_tf_logging_level(ll):
     ll = ll.lower()
     if ll == 'debug':
@@ -36,6 +27,12 @@ def get_tf_logging_level(ll):
     if ll == 'info':
         return logging.INFO
     return tf.logging.WARN
+
+
+class Data:
+
+    def __init__(self, ts, batchsz):
+        self.x, self.y = Data._to_tensors(ts)
 
 
 def to_tensors(ts):
@@ -132,19 +129,10 @@ def predict_input_fn():
 transducer = L.LSTMEncoderWithState(None, args.hsz, args.layers, 0.5)
 model = L.LangSequenceModel(embeddings["word"].vsz, embeddings, transducer)
 
-train_loss_results = []
-train_accuracy_results = []
 
-
-def generate_text(model, start_string, temperature=1.0):
-    num_generate = 20
-
-    # Converting our start string to numbers (vectorizing)
-    input_eval, _ = vectorizers["word"].run(start_string.split(), vocabs["word"])
+def generate_text(model, start_string, temperature=1.0, num_generate=20):
+    input_eval = np.array([vocabs["word"].get(s) for s in start_string.split()], dtype=np.int32).reshape(1, -1)
     rlut = revlut(vocabs["word"])
-    # Add batch dim
-    input_eval = tf.expand_dims(input_eval, 0)
-
     # Empty string to store our results
     text_generated = [start_string]
 
@@ -156,7 +144,7 @@ def generate_text(model, start_string, temperature=1.0):
         predictions = tf.squeeze(predictions, 0)
 
         # using a multinomial distribution to predict the word returned by the model
-        predicted_id = tf.multinomial(predictions, num_samples=1)[-1, 0].numpy()
+        predicted_id = tf.random.categorical(predictions, num_samples=1)[-1, 0].numpy()
         # We pass the predicted word as the next input to the model
         # along with the previous hidden state
         input_eval = tf.expand_dims([predicted_id], 0)
@@ -167,7 +155,6 @@ def generate_text(model, start_string, temperature=1.0):
 
 
 def loss(model, h, x, y):
-
     x["h"] = h
     logits, h = model(x)
     vsz = embeddings["word"].vsz
@@ -178,7 +165,6 @@ def loss(model, h, x, y):
     loss = tf.reduce_mean(example_loss)
     return loss, h
 
-#SET_TRAIN_FLAG(False)
 optimizer = EagerOptimizer(loss, SGD(args.lr))
 for epoch in range(args.epochs):
 
@@ -188,8 +174,6 @@ for epoch in range(args.epochs):
     start = time.time()
     h = None
 
-    #text = generate_text(model, args.start_word, args.temperature)
-    #print(' '.join(text))
 
     SET_TRAIN_FLAG(True)
 
@@ -209,8 +193,6 @@ for epoch in range(args.epochs):
     SET_TRAIN_FLAG(False)
 
     for x, y in eval_input_fn():
-        # Optimize the model
-
         # Track progress
         # compare predicted label to actual label
         loss_value, h = loss(model, h, x, y)
@@ -222,3 +204,5 @@ for epoch in range(args.epochs):
 
     text = generate_text(model, args.start_word, args.temperature)
     print(' '.join(text))
+
+for x, y in test_input_fn():

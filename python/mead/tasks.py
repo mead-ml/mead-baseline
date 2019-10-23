@@ -714,7 +714,7 @@ class EncoderDecoderTask(Task):
                                                                                      preproc['mxlen'], False, 0,
                                                                                      num_ex, reverse=False)
         self.config_params['train']['tgt_rlut'] = rlut2
-        return super(EncoderDecoderTask, self).train(checkpoint)
+        return super().train(checkpoint)
 
 
 @exporter
@@ -722,7 +722,7 @@ class EncoderDecoderTask(Task):
 class LanguageModelingTask(Task):
 
     def __init__(self, mead_settings_config, **kwargs):
-        super(LanguageModelingTask, self).__init__(mead_settings_config, **kwargs)
+        super().__init__(mead_settings_config, **kwargs)
 
     @classmethod
     def task_name(cls):

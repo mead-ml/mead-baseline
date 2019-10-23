@@ -273,7 +273,7 @@ class EncoderDecoderModel(object):
         pass
 
     def __init__(self, *args, **kwargs):
-        super(EncoderDecoderModel, self).__init__()
+        super().__init__()
 
     @staticmethod
     def load(basename, **kwargs):

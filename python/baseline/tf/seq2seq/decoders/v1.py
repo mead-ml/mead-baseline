@@ -1,5 +1,4 @@
 from baseline.tf.tfy import *
-import tensorflow.contrib.seq2seq as tfcontrib_seq2seq
 from baseline.utils import ls_props, read_json, Offsets, export
 from baseline.model import register_decoder, register_arc_policy, create_seq2seq_arc_policy
 from baseline.tf.embeddings import *
@@ -9,6 +8,10 @@ from baseline.tf.transformer import transformer_decoder_stack, subsequent_mask
 __all__ = []
 exporter = export(__all__)
 
+
+
+
+import tensorflow.contrib.seq2seq as tfcontrib_seq2seq
 
 @exporter
 class DecoderBase(object):
@@ -169,7 +172,7 @@ class ArcPolicy(object):
 class NoArcPolicy(ArcPolicy):
 
     def __init__(self):
-        super(NoArcPolicy, self).__init__()
+        super().__init__()
 
     def connect(self, encoder_outputs, decoder, batch_sz):
         initial_state = decoder.cell.zero_state(batch_sz*decoder.beam_width, tf.float32)
@@ -179,7 +182,7 @@ class NoArcPolicy(ArcPolicy):
 class AbstractArcPolicy(ArcPolicy):
 
     def __init__(self):
-        super(AbstractArcPolicy, self).__init__()
+        super().__init__()
 
     def get_state(self, encoder_outputs):
         pass
@@ -201,7 +204,7 @@ class AbstractArcPolicy(ArcPolicy):
 class TransferLastHiddenPolicy(AbstractArcPolicy):
 
     def __init__(self):
-        super(TransferLastHiddenPolicy, self).__init__()
+        super().__init__()
 
     def get_state(self, encoder_outputs):
         return encoder_outputs.hidden

@@ -43,17 +43,6 @@ def normalize_backend(name):
 
 
 @exporter
-def get_logging_level(level):
-    """Get the logging level as a logging module constant.
-
-    :param level: `str` The log level to get.
-
-    :returns: The log level, defaults to `INFO`
-    """
-    return getattr(logging, level.upper(), logging.INFO)
-
-
-@exporter
 def get_console_logger(name, level=None, env_key='LOG_LEVEL'):
     """A small default logging setup.
 

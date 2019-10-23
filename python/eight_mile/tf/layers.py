@@ -1,6 +1,6 @@
 import tensorflow as tf
 import numpy as np
-from baseline.utils import listify, Offsets, wraps, get_version
+from eight_mile.utils import listify, Offsets, wraps, get_version
 import math
 BASELINE_TF_TRAIN_FLAG = None
 
@@ -74,6 +74,17 @@ def swish(x):
     return x*tf.nn.sigmoid(x)
 
 
+def masked_fill(t, mask, value):
+    return t * (1 - tf.cast(mask, t.dtype)) + value * tf.cast(mask, t.dtype)
+
+#https://stackoverflow.com/questions/41897212/how-to-sort-a-multi-dimensional-tensor-using-the-returned-indices-of-tf-nn-top-k
+def gather_k(a, b, best_idx, k):
+    shape_a = get_shape_as_list(a)
+    auxiliary_indices = tf.meshgrid(*[tf.range(d) for d in (tf.unstack(shape_a[:(a.get_shape().ndims - 1)]) + [k])], indexing='ij')
+
+    sorted_b = tf.gather_nd(b, tf.stack(auxiliary_indices[:-1] + [best_idx], axis=-1))
+    return sorted_b
+
 def get_shape_as_list(x):
     """
     This function makes sure we get a number whenever possible, and otherwise, gives us back
@@ -84,9 +95,31 @@ def get_shape_as_list(x):
     Borrowed from Alec Radford:
     https://github.com/openai/finetune-transformer-lm/blob/master/utils.py#L38
     """
-    ps = x.get_shape().as_list()
+    try:
+        ps = x.get_shape().as_list()
+    except:
+        ps = x.shape
     ts = tf.shape(x)
     return [ts[i] if ps[i] is None else ps[i] for i in range(len(ps))]
+
+
+def bth2bht(t):
+    return tf.transpose(t, [0, 2, 1])
+
+
+def ident(t):
+    return t
+
+
+def tbh2bht(t):
+    return tf.tranpose(t, [0, 2, 1])
+
+def tbh2bth(t):
+    return tf.transpose(t, [1, 0, 2])
+
+
+def bth2tbh(t):
+    return t.transpose(t, [1, 0, 2])
 
 
 # Mapped
@@ -235,20 +268,6 @@ def lstm_cell_w_dropout(hsz, pdrop, forget_bias=1.0, variational=False, training
     return output
 
 
-def rnn_cell(hsz, rnntype, st=None):
-    """Produce a single RNN cell
-
-    :param hsz: (``int``) The number of hidden units per LSTM
-    :param rnntype: (``str``): `lstm` or `gru`
-    :param st: (``bool``) state is tuple? defaults to `None`
-    :return: a cell
-    """
-    if st is not None:
-        cell = tf.contrib.rnn.LSTMCell(hsz, state_is_tuple=st) if rnntype.endswith('lstm') else tf.contrib.rnn.GRUCell(hsz)
-    else:
-        cell = tf.contrib.rnn.LSTMCell(hsz) if rnntype.endswith('lstm') else tf.contrib.rnn.GRUCell(hsz)
-    return cell
-
 
 class LSTMEncoder2(tf.keras.layers.Layer):
 
@@ -328,6 +347,13 @@ class LSTMEncoderWithState2(tf.keras.layers.Layer):
         self.requires_state = True
 
     def call(self, inputs):
+        """The format of the output here is
+
+        `output: B, T, H`
+        `hidden: List[(h, c), (h, c), ...]`
+        :param inputs:
+        :return:
+        """
         inputs, hidden_state_input = inputs
 
         hidden_outputs = []
@@ -537,6 +563,130 @@ class LSTMEncoderWithState1(LSTMEncoder1):
         rnnout, hidden = tf.nn.dynamic_rnn(self.rnn, inputs, initial_state=hidden, dtype=tf.float32)
         return rnnout, hidden  # (hidden[-1].h, hidden[-1].c)
 
+
+
+class LSTMEncoderAll(tf.keras.layers.Layer):
+
+    def __init__(self, insz, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None, dropout_in_single_layer=False, skip_conn=False, projsz=None, **kwargs):
+        super().__init__(name=name)
+
+        """Produce a stack of LSTMs with dropout performed on all but the last layer.
+
+        :param hsz: (``int``) The number of hidden units per LSTM
+        :param nlayers: (``int``) The number of layers of LSTMs to stack
+        :param pdrop: (``int``) The probability of dropping a unit value during dropout
+        :param variational: (``bool``) variational recurrence is on
+        :param requires_length: (``bool``) Does the input require an input length (defaults to ``True``)
+        :param name: (``str``) Optional, defaults to `None`
+        :return: a stacked cell
+        """
+        super().__init__(name=name)
+        self._requires_length = requires_length
+        self.rnns = []
+        for _ in range(nlayers-1):
+            rnn = tf.keras.layers.LSTM(hsz,
+                                       return_sequences=True,
+                                       return_state=True,
+                                       recurrent_dropout=pdrop if variational else 0.0,
+                                       dropout=pdrop if not variational else 0.0)
+            self.rnns.append(rnn)
+        if nlayers == 1 and not dropout_in_single_layer and not variational:
+            pdrop = 0.0
+        rnn = tf.keras.layers.LSTM(hsz//2,
+                                   return_sequences=True,
+                                   return_state=True,
+                                   recurrent_dropout=pdrop if variational else 0.0,
+                                   dropout=pdrop if not variational else 0.0)
+
+        # This concat mode only works on the sequences, we still are getting 4 objects back for the state
+        self.rnns.append(rnn)
+
+    def output_fn(self, rnnout, state):
+        return rnnout, state
+
+    def call(self, inputs):
+        inputs, lengths = tensor_and_lengths(inputs)
+        mask = tf.sequence_mask(lengths)
+        # (num_layers * num_directions, batch, hidden_size):
+        ## TODO: how to combine this?
+        hs = []
+        cs = []
+        for rnn in self.rnns:
+            outputs, h, c = rnn(inputs, mask=mask)
+            hs.append(h)
+            cs.append(c)
+            inputs = outputs
+
+        h = tf.stack(hs)
+        c = tf.stack(cs)
+        return self.output_fn(outputs, (h, c))
+
+    @property
+    def requires_length(self):
+        return self._requires_length
+
+
+class BiLSTMEncoderAll(tf.keras.layers.Layer):
+
+    def __init__(self, insz, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None, dropout_in_single_layer=False, skip_conn=False, projsz=None, **kwargs):
+        super().__init__(name=name)
+
+        """Produce a stack of LSTMs with dropout performed on all but the last layer.
+
+        :param hsz: (``int``) The number of hidden units per LSTM
+        :param nlayers: (``int``) The number of layers of LSTMs to stack
+        :param pdrop: (``int``) The probability of dropping a unit value during dropout
+        :param variational: (``bool``) variational recurrence is on
+        :param requires_length: (``bool``) Does the input require an input length (defaults to ``True``)
+        :param name: (``str``) Optional, defaults to `None`
+        :return: a stacked cell
+        """
+        super().__init__(name=name)
+        self._requires_length = requires_length
+        self.rnns = []
+        for _ in range(nlayers-1):
+            rnn = tf.keras.layers.LSTM(hsz//2,
+                                       return_sequences=True,
+                                       return_state=True,
+                                       recurrent_dropout=pdrop if variational else 0.0,
+                                       dropout=pdrop if not variational else 0.0)
+            self.rnns.append(tf.keras.layers.Bidirectional(rnn))
+        if nlayers == 1 and not dropout_in_single_layer and not variational:
+            pdrop = 0.0
+        rnn = tf.keras.layers.LSTM(hsz//2,
+                                   return_sequences=True,
+                                   return_state=True,
+                                   recurrent_dropout=pdrop if variational else 0.0,
+                                   dropout=pdrop if not variational else 0.0)
+
+        # This concat mode only works on the sequences, we still are getting 4 objects back for the state
+        self.rnns.append(tf.keras.layers.Bidirectional(rnn, merge_mode='concat'))
+
+    def output_fn(self, rnnout, state):
+        return rnnout, state
+
+    def call(self, inputs):
+        inputs, lengths = tensor_and_lengths(inputs)
+        mask = tf.sequence_mask(lengths)
+        # (num_layers * num_directions, batch, hidden_size):
+        hs = []
+        cs = []
+        for rnn in self.rnns:
+            outputs, h1, c1, h2, c2 = rnn(inputs, mask=mask)
+            h = tf.stack([h1, h2])
+            c = tf.stack([c1, c2])
+            hs.append(h)
+            cs.append(c)
+            inputs = outputs
+
+        _, B, H = get_shape_as_list(h)
+        h = tf.reshape(tf.stack(hs), [-1, B, H*2])
+        c = tf.reshape(tf.stack(cs), [-1, B, H*2])
+        return self.output_fn(outputs, (h, c))
+
+    @property
+    def requires_length(self):
+        return self._requires_length
 
 # Mapped
 class BiLSTMEncoder2(tf.keras.layers.Layer):
@@ -776,10 +926,13 @@ class EmbeddingsStack(tf.keras.layers.Layer):
         :param embeddings_dict: (``dict``) dictionary of each feature embedding
         """
 
-        super(EmbeddingsStack, self).__init__(name=name)
+        super().__init__(name=name)
         self.embeddings = embeddings_dict
         self.dropout = tf.keras.layers.Dropout(dropout_rate)
         self._requires_length = requires_length
+
+    def items(self):
+        return self.embeddings.items()
 
     def call(self, inputs):
         """This method performs "embedding" of the inputs.  The base method here then concatenates along depth
@@ -942,8 +1095,6 @@ class TimeDistributedProjection(tf.keras.layers.Layer):
     @property
     def requires_length(self):
         return False
-
-
 
 def split_heads(x, num_heads):
     shp = get_shape_as_list(x)
@@ -1546,3 +1697,442 @@ def tf_device_wrapper(func):
             return func(*args, **kwargs)
         return func(*args, **kwargs)
     return with_device
+
+
+class BaseAttention(tf.keras.layers.Layer):
+
+    def __init__(self, hsz):
+        super().__init__()
+        self.hsz = hsz
+        self.W_c = tf.keras.layers.Dense(hsz, use_bias=False)
+
+    def call(self, qkvm):
+        query_t, keys_bth, values_bth, keys_mask = qkvm
+        # Output(t) = B x H x 1
+        # Keys = B x T x H
+        # a = B x T x 1
+        a = self._attention(query_t, keys_bth, keys_mask)
+        attended = self._update(a, query_t, values_bth)
+
+        return attended
+
+    def _attention(self, query_t, keys_bth, keys_mask):
+        pass
+
+    def _update(self, a, query_t, values_bth):
+        # a = B x T
+        # Want to apply over context, scaled by a
+        # (B x 1 x T) (B x T x H) = (B x 1 x H)
+        B, H = get_shape_as_list(a)
+        a = tf.reshape(a, [B, 1, H])
+        c_t = tf.squeeze(a @ values_bth, 1)
+
+        attended = tf.concat([c_t, query_t], -1)
+        attended = tf.nn.tanh(self.W_c(attended))
+        return attended
+
+
+class LuongDotProductAttention(BaseAttention):
+
+    def __init__(self, hsz):
+        super().__init__(hsz)
+
+    def _attention(self, query_t, keys_bth, keys_mask):
+        a = keys_bth @ tf.expand_dims(query_t, 2)
+        a = tf.squeeze(a, -1)
+        if keys_mask is not None:
+            masked_fill(a, keys_mask == 0, -1e9)
+        a = tf.nn.softmax(a, axis=-1)
+        return a
+
+
+class ScaledDotProductAttention(BaseAttention):
+
+    def __init__(self, hsz):
+        super().__init__(hsz)
+
+    def _attention(self, query_t, keys_bth, keys_mask):
+        a = keys_bth @ tf.expand_dims(query_t, 2)
+        a = a / math.sqrt(self.hsz)
+        a = tf.squeeze(a, -1)
+        if keys_mask is not None:
+            masked_fill(a, keys_mask == 0, -1e9)
+        a = tf.nn.softmax(a, axis=-1)
+        return a
+
+
+class LuongGeneralAttention(BaseAttention):
+
+    def __init__(self, hsz):
+        super().__init__(hsz)
+        self.W_a = tf.keras.layers.Dense(self.hsz, use_bias=False)
+
+    def _attention(self, query_t, keys_bth, keys_mask):
+        a = keys_bth @ tf.expand_dims(self.W_a(query_t), 2)
+        a = tf.squeeze(a, -1)
+        if keys_mask is not None:
+            masked_fill(a, keys_mask == 0, -1e9)
+        a = tf.nn.softmax(a, axis=-1)
+        return a
+
+
+class BahdanauAttention(BaseAttention):
+
+    def __init__(self, hsz):
+        super().__init__(hsz)
+        self.hsz = hsz
+        self.W_a = tf.keras.layers.Dense(self.hsz, use_bias=False)
+        self.E_a = tf.keras.layers.Dense(self.hsz, use_bias=False)
+        self.v = tf.keras.layers.Dense(1, use_bias=False)
+
+    def _attention(self, query_t, keys_bth, keys_mask):
+        B, T, H = get_shape_as_list(keys_bth)
+        q = tf.reshape(self.W_a(query_t), [B, 1, H])
+        u = self.E_a(keys_bth)
+
+        z = tf.nn.tanh(q + u)
+        a = tf.squeeze(self.v(z), -1)
+
+        if keys_mask is not None:
+            masked_fill(a, keys_mask == 0, -1e9)
+        a = tf.nn.softmax(a, axis=-1)
+        return a
+
+    def _update(self, a, query_t, values_bth):
+        # a = B x T
+        # Want to apply over context, scaled by a
+        # (B x 1 x T) (B x T x H) = (B x 1 x H) -> (B x H)
+        # context_vector shape after sum == (batch_size, hidden_size)
+
+        B, T_k = get_shape_as_list(a)
+        a = tf.reshape(a, [B, 1, T_k])
+        c_t = tf.squeeze(a @ values_bth, 1)
+        attended = tf.concat([c_t, query_t], -1)
+        attended = self.W_c(attended)
+        return attended
+
+
+
+def gnmt_length_penalty(lengths, alpha=0.8):
+    """Calculate a length penalty from https://arxiv.org/pdf/1609.08144.pdf
+
+    The paper states the penalty as (5 + |Y|)^a / (5 + 1)^a. This is implemented
+    as ((5 + |Y|) / 6)^a for a (very) tiny performance boost
+
+    :param lengths: `np.array`: [B, K] The lengths of the beams.
+    :param alpha: `float`: A hyperparameter. See Table 2 for a search on this
+        parameter.
+
+    :returns:
+        `torch.FloatTensor`: [B, K, 1] The penalties.
+    """
+    penalty = tf.constant(np.power(((5.0 + lengths) / 6.0), alpha))
+    return tf.expand_dims(penalty, -1)
+
+
+def no_length_penalty(lengths):
+    """A dummy function that returns a no penalty (1)."""
+    return tf.expand_dims(np.ones_like(lengths), -1)
+
+
+def repeat_batch(t, K, dim=0):
+    """Repeat a tensor while keeping the concept of a batch.
+
+    :param t: `torch.Tensor`: The tensor to repeat.
+    :param K: `int`: The number of times to repeat the tensor.
+    :param dim: `int`: The dimension to repeat in. This should be the
+        batch dimension.
+
+    :returns: `torch.Tensor`: The repeated tensor. The new shape will be
+        batch size * K at dim, the rest of the shapes will be the same.
+
+    Example::
+
+        >>> a = tf.constant(np.arange(10).view(2, -1))
+        >>> a
+	tensor([[0, 1, 2, 3, 4],
+		[5, 6, 7, 8, 9]])
+	>>> repeat_batch(a, 2)
+	tensor([[0, 1, 2, 3, 4],
+		[0, 1, 2, 3, 4],
+		[5, 6, 7, 8, 9],
+		[5, 6, 7, 8, 9]])
+    """
+    shape = get_shape_as_list(t)
+    tiling = [1] * (len(shape) + 1)
+    tiling[dim + 1] = K
+    tiled = tf.tile(tf.expand_dims(t, dim + 1), tiling)
+    old_bsz = shape[dim]
+    new_bsz = old_bsz * K
+    new_shape = list(shape[:dim]) + [new_bsz] + list(shape[dim+1:])
+    return tf.reshape(tiled, new_shape)
+
+
+def update_lengths(lengths, eoses, idx):
+    """Update the length of a generated tensor based on the first EOS found.
+
+    This is useful for a decoding situation where tokens after an EOS
+    can be something other than EOS. This also makes sure that a second
+    generated EOS doesn't affect the lengths.
+
+    :param lengths: `torch.LongTensor`: The lengths where zero means an
+        unfinished sequence.
+    :param eoses:  `torch.ByteTensor`: A mask that has 1 for sequences that
+        generated an EOS.
+    :param idx: `int`: What value to fill the finished lengths with (normally
+        the current decoding timestep).
+
+    :returns: `torch.Tensor`: The updated lengths tensor (same shape and type).
+    """
+    # If a length is 0 it has never had a length set so it is eligible to have
+    # this EOS be the length.
+    updatable_lengths = (lengths == 0)
+    # If this length can be updated AND this token is an eos
+    lengths_mask = updatable_lengths & eoses
+    return masked_fill(lengths, lengths_mask, idx)
+
+
+class BeamSearchBase:
+
+    def __init__(self, beam=1, length_penalty=None, **kwargs):
+        self.length_penalty = length_penalty if length_penalty else no_length_penalty
+        self.K = beam
+
+    def init(self, encoder_outputs):
+        pass
+
+    def step(self, paths, extra):
+        pass
+
+    def update(self, beams, extra):
+        pass
+
+    def __call__(self, encoder_outputs, **kwargs):
+        """Perform batched Beam Search.
+
+        Note:
+            The paths and lengths generated do not include the <GO> token.
+
+        :param encoder_outputs: `namedtuple` The outputs of the encoder class.
+        :param init: `Callable(ecnoder_outputs: encoder_outputs, K: int)` -> Any: A
+            callable that is called once at the start of the search to initialize
+            things. This returns a blob that is passed to other callables.
+        :param step: `Callable(paths: torch.LongTensor, extra) -> (probs: torch.FloatTensor, extra):
+            A callable that is does a single decoding step. It returns the log
+            probabilities over the vocabulary in the last dimension. It also returns
+            any state the decoding process needs.
+        :param update: `Callable(beams: torch.LongTensor, extra) -> extra:
+            A callable that is called to edit the decoding state based on the selected
+            best beams.
+        :param length_penalty: `Callable(lengths: torch.LongTensor) -> torch.floatTensor
+            A callable that generates a penalty based on the lengths. Lengths is
+            [B, K] and the returned penalty should be [B, K, 1] (or [B, K, V] to
+            have token based penalties?)
+
+        :Keyword Arguments:
+        * *beam* -- `int`: The number of beams to use.
+        * *mxlen* -- `int`: The max number of steps to run the search for.
+
+        :returns:
+            tuple(preds: torch.LongTensor, lengths: torch.LongTensor, scores: torch.FloatTensor)
+            preds: The predicted values: [B, K, max(lengths)]
+            lengths: The length of each prediction [B, K]
+            scores: The score of each path [B, K]
+        """
+        mxlen = kwargs.get('mxlen', 100)
+        bsz = get_shape_as_list(encoder_outputs.output)[0]
+        extra = self.init(encoder_outputs)
+        paths = np.full((bsz, self.K, 1), Offsets.GO)
+        # This tracks the log prob of each beam. This is distinct from score which
+        # is based on the log prob and penalties.
+        log_probs = np.zeros((bsz, self.K))
+        # Tracks the lengths of the beams, unfinished beams have a lengths of zero.
+        lengths = np.zeros((bsz, self.K), np.int32)
+
+        for i in range(mxlen - 1):
+            probs, extra = self.step(paths, extra)
+            V = get_shape_as_list(probs)[-1]
+            probs = tf.reshape(probs, (bsz, self.K, V))  # [B, K, V]
+            if i > 0:
+                # This mask is for all beams that are done.
+                done_mask = (lengths != 0)  # [B, K, 1]
+                done_mask = tf.expand_dims(done_mask, -1)
+                # Can creating this mask be moved out of the loop? It never changes but we don't have V
+                # This mask selects the EOS token
+                eos_mask = np.zeros((1, 1, V))
+                eos_mask[:, :, Offsets.EOS] = 1
+                # This mask selects the EOS token of only the beams that are done.
+                mask = done_mask & eos_mask
+                # Put all probability mass on the EOS token for finished beams.
+                # Otherwise as the other beams get longer they will all give
+                # up and eventually select this beam and all outputs become
+                # the same.
+                probs = masked_fill(probs, done_mask, -1e8)
+                probs = masked_fill(probs, mask, 0)
+                probs = tf.expand_dims(log_probs, -1) + probs  # [B, K, V]
+                # Calculate the score of the beam based on the current length.
+                valid_lengths = masked_fill(lengths, lengths == 0, i+1)
+                path_scores = probs / tf.cast(self.length_penalty(valid_lengths), tf.float32)
+            else:
+                # On the first step we only look at probabilities for the first beam.
+                # If we don't then the probs will be the same for each beam
+                # This means the same token will be selected for each beam
+                # And we won't get any diversity.
+                # Using only the first beam ensures K different starting points.
+                path_scores = probs[:, 0, :]
+
+            flat_scores = tf.reshape(path_scores, (bsz, -1))  # [B, K * V]
+            best_scores, best_idx = tf.math.top_k(flat_scores, self.K)
+            # Get the log_probs of the best scoring beams
+            probs = tf.reshape(probs, (bsz, -1))
+            log_probs = gather_k(flat_scores, probs, best_idx, self.K)
+            log_probs = tf.reshape(log_probs, (bsz, self.K))
+
+            best_beams = best_idx // V  # Get which beam it came from
+            best_idx = best_idx % V  # Get the index of the word regardless of which beam it is.
+
+            # Best Beam index is relative within the batch (only [0, K)).
+            # This makes the index global (e.g. best beams for the second
+            # batch example is in [K, 2*K)).
+            offsets = np.arange(bsz) * self.K
+            offset_beams = tf.cast(best_beams, tf.int64) + tf.expand_dims(offsets, -1)
+            flat_beams = tf.reshape(offset_beams, [bsz * self.K])
+            # Select the paths to extend based on the best beams
+            flat_paths = tf.reshape(paths, [bsz * self.K, -1])
+            new_paths = tf.gather(flat_paths, flat_beams)
+            new_paths = tf.reshape(new_paths, [bsz, self.K, -1])
+            # Add the selected outputs to the paths
+            paths = tf.concat([new_paths, tf.expand_dims(tf.cast(best_idx, tf.int64), -1)], axis=2)
+
+            # Select the lengths to keep tracking based on the valid beams left.
+            ##
+            flat_lengths = tf.reshape(lengths, [-1])
+            lengths = tf.gather(flat_lengths, flat_beams)
+            lengths = tf.reshape(lengths, (bsz, self.K))
+            extra = self.update(flat_beams, extra)
+
+            # Updated lengths based on if we hit EOS
+            last = paths[:, :, -1]
+            eoses = (last == Offsets.EOS)
+            ##
+            lengths = update_lengths(lengths, eoses, i + 1)
+            if tf.reduce_sum(tf.cast(lengths != 0, np.int32)) == self.K:
+                break
+        else:
+            # This runs if the loop didn't break meaning one beam hit the max len
+            # Add an EOS to anything that hasn't hit the end. This makes the scores real.
+            probs, extra = self.step(paths, extra)
+
+            V = get_shape_as_list(probs)[-1]
+            probs = tf.reshape(probs, (bsz, self.K, V))
+            probs = probs[:, :, Offsets.EOS]  # Select the score of EOS
+            # If any of the beams are done mask out the score of this EOS (they already had an EOS)
+            probs = masked_fill(probs, (lengths != 0), 0)
+            log_probs = log_probs + probs
+            end_tokens = np.full((bsz, self.K, 1), Offsets.EOS)
+            paths = tf.concat([paths, end_tokens], axis=2)
+            lengths = update_lengths(lengths, np.ones_like(lengths) == 1, mxlen)
+            best_scores = log_probs / tf.cast(tf.squeeze(self.length_penalty(lengths), -1), tf.float32)
+
+        # Slice off the Offsets.GO token
+        paths = paths[:, :, 1:]
+        return paths, lengths, best_scores
+
+
+
+class StackedLSTMCell(tf.keras.layers.AbstractRNNCell):
+    def __init__(self, num_layers, input_size, rnn_size, dropout):
+        super().__init__()
+        self.rnn_size = rnn_size
+        self.dropout = tf.keras.layers.Dropout(dropout)
+        self.num_layers = num_layers
+        self.layers = []
+
+        for i in range(num_layers):
+            self.layers.append(tf.keras.layers.LSTMCell(rnn_size, use_bias=False))
+
+    @property
+    def state_size(self):
+        """size(s) of state(s) used by this cell.
+
+        It can be represented by an Integer, a TensorShape or a tuple of Integers
+        or TensorShapes.
+        """
+        raise NotImplementedError('Abstract method')
+
+    @property
+    def output_size(self):
+        """Integer or TensorShape: size of outputs produced by this cell."""
+        return self.rnn_size
+
+    def call(self, input, hidden):
+        h_0, c_0 = hidden
+        hs, cs = [], []
+        for i, layer in enumerate(self.layers):
+            input, (h_i, c_i) = layer(input, (h_0[i], c_0[i]))
+            if i != self.num_layers - 1:
+                input = self.dropout(input)
+            hs.append(h_i)
+            cs.append(c_i)
+
+        hs = tf.stack(hs)
+        cs = tf.stack(cs)
+
+        return input, (hs, cs)
+
+
+class StackedGRUCell(tf.keras.layers.AbstractRNNCell):
+
+    def __init__(self, num_layers, input_size, rnn_size, dropout):
+        super().__init__()
+        self.dropout = tf.keras.layers.Dropout(dropout)
+        self.rnn_size = rnn_size
+        self.num_layers = num_layers
+        self.layers = []
+
+        for i in range(num_layers):
+            self.layers.append(tf.keras.layers.GRUCell(rnn_size))
+
+    def call(self, input, hidden):
+        h_0 = hidden
+        hs = []
+        for i, layer in enumerate(self.layers):
+            input, h_i = layer(input, h_0)
+            if i != self.num_layers:
+                input = self.dropout(input)
+            hs.append(h_i)
+
+        hs = tf.stack(hs)
+
+        return input, hs
+
+    @property
+    def output_size(self):
+        """Integer or TensorShape: size of outputs produced by this cell."""
+        return self.rnn_size
+
+
+if get_version(tf) < 2:
+    def rnn_cell(hsz, rnntype, st=None):
+        """Produce a single RNN cell
+
+        :param hsz: (``int``) The number of hidden units per LSTM
+        :param rnntype: (``str``): `lstm` or `gru`
+        :param st: (``bool``) state is tuple? defaults to `None`
+        :return: a cell
+        """
+        if st is not None:
+            cell = tf.contrib.rnn.LSTMCell(hsz, state_is_tuple=st) if rnntype.endswith('lstm') else tf.contrib.rnn.GRUCell(hsz)
+        else:
+            cell = tf.contrib.rnn.LSTMCell(hsz) if rnntype.endswith('lstm') else tf.contrib.rnn.GRUCell(hsz)
+        return cell
+
+else:
+
+    def rnn_cell(insz, hsz, rnntype, nlayers=1, dropout=0.5):
+
+        if rnntype == 'gru':
+            rnn = StackedGRUCell(nlayers, insz, hsz, dropout)
+        else:
+            rnn = StackedLSTMCell(nlayers, insz, hsz, dropout)
+        return rnn

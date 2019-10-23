@@ -27,13 +27,15 @@ class LanguageModelBase(tf.keras.Model, LanguageModel):
         self._unserializable = []
 
     def save_values(self, basename):
-        """Save tensor values to a checkpoint
+        """Save tensor files out
 
-        :param basename: The prefix name of the checkpoint
+        :param basename: Base name of model
         :return:
         """
         if get_version(tf) < 2:
             self.saver.save(self.sess, basename)
+        else:
+            self.save_weights(f"{basename}.wgt")
 
     def save_md(self, basename):
         """This method saves out a `.state` file containing meta-data from these classes and any info

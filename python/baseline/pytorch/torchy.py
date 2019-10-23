@@ -42,60 +42,6 @@ class SequenceCriterion(nn.Module):
         return self._norm(loss, inputs)
 
 
-class StackedLSTMCell(nn.Module):
-    def __init__(self, num_layers, input_size, rnn_size, dropout):
-        super(StackedLSTMCell, self).__init__()
-        self.dropout = nn.Dropout(dropout)
-        self.num_layers = num_layers
-        self.layers = nn.ModuleList()
-
-        for i in range(num_layers):
-            self.layers.append(nn.LSTMCell(input_size=input_size, hidden_size=rnn_size, bias=False))
-            input_size = rnn_size
-
-    def forward(self, input, hidden):
-        h_0, c_0 = hidden
-        hs, cs = [], []
-        for i, layer in enumerate(self.layers):
-            h_i, c_i = layer(input, (h_0[i], c_0[i]))
-            input = h_i
-            if i != self.num_layers - 1:
-                input = self.dropout(input)
-            hs.append(h_i)
-            cs.append(c_i)
-
-        hs = torch.stack(hs)
-        cs = torch.stack(cs)
-
-        return input, (hs, cs)
-
-
-class StackedGRUCell(nn.Module):
-    def __init__(self, num_layers, input_size, rnn_size, dropout):
-        super(StackedGRUCell, self).__init__()
-        self.dropout = nn.Dropout(dropout)
-        self.num_layers = num_layers
-        self.layers = nn.ModuleList()
-
-        for i in range(num_layers):
-            self.layers.append(nn.GRUCell(input_size=input_size, hidden_size=rnn_size))
-            input_size = rnn_size
-
-    def forward(self, input, hidden):
-        h_0 = hidden
-        hs = []
-        for i, layer in enumerate(self.layers):
-            h_i = layer(input, (h_0[i]))
-            input = h_i
-            if i != self.num_layers:
-                input = self.dropout(input)
-            hs.append(h_i)
-
-        hs = torch.stack(hs)
-
-        return input, hs
-
-
 def pytorch_rnn_cell(insz, hsz, rnntype, nlayers, dropout):
 
     if rnntype == 'gru':
