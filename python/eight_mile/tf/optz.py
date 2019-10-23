@@ -306,7 +306,11 @@ class EagerOptimizer(object):
                 beta2 = float(kwargs.get('beta2', 0.999))
                 eps = float(kwargs.get('epsilon', 1e-8))
                 logger.info('adamw(eta=%f beta1=%f, beta2=%f, eps=%f)', lr, beta1, beta2, eps)
-                self.optimizer = tfa.optimizers.AdamW(lr, wd, beta1, beta2, eps)
+                self.optimizer = tfa.optimizers.AdamW(weight_decay=wd,
+                                                      learning_rate=lr,
+                                                      beta_1=beta1,
+                                                      beta_2=beta2,
+                                                      epsilon=eps)
             elif optim == 'rmsprop':
                 # Get mom again with difference default
                 mom = float(kwargs.get('mom', 0.0))
