@@ -1297,7 +1297,7 @@ class MultiHeadedAttention(nn.Module):
     And for self-attention in the decoder, K, Q and V all come from the decoder, but here it is masked to prevent using
     future values
     """
-    def __init__(self, h, d_model, dropout=0.1, scale=False):
+    def __init__(self, num_heads, d_model, dropout=0.1, scale=False):
         """Constructor for multi-headed attention
 
         :param h: The number of heads
@@ -1306,9 +1306,9 @@ class MultiHeadedAttention(nn.Module):
         :param attn_fn: A function to apply attention, defaults to SDP
         """
         super().__init__()
-        assert d_model % h == 0
-        self.d_k = d_model // h
-        self.h = h
+        assert d_model % num_heads == 0
+        self.d_k = d_model // num_heads
+        self.h = num_heads
         self.w_Q = Dense(d_model, d_model)
         self.w_K = Dense(d_model, d_model)
         self.w_V = Dense(d_model, d_model)
@@ -1362,7 +1362,7 @@ class TransformerEncoder(nn.Module):
         x, mask = inputs
 
         x = self.ln1(x)
-        h = self.self_attn(x, x, x, mask)
+        h = self.self_attn((x, x, x, mask))
         x = x + self.dropout(h)
 
         x = self.ln2(x)
@@ -1404,11 +1404,10 @@ class TransformerEncoderStack(nn.Module):
 
     def __init__(self, num_heads, d_model, pdrop, scale=True, layers=1, activation='relu', d_ff=None, **kwargs):
         super().__init__()
-        encoders = []
-        self.ln = nn.LayerNorm(epsilon=1e-6)
+        self.encoders = nn.ModuleList()
+        self.ln = nn.LayerNorm(d_model, eps=1e-6)
         for i in range(layers):
-            self.encoders.append(TransformerEncoder(d_model, num_heads, pdrop, scale, activation, d_ff))
-        self.encoders = nn.ModuleList(encoders)
+            self.encoders.append(TransformerEncoder(num_heads, d_model, pdrop, scale, activation, d_ff))
 
     def forward(self, inputs):
         x = inputs
@@ -1420,11 +1419,10 @@ class TransformerEncoderStack(nn.Module):
 class TransformerDecoderStack(nn.Module):
     def __init__(self, num_heads, d_model, pdrop, scale=True, layers=1, activation_type='relu', d_ff=None):
         super().__init__()
-        decoders = []
-        self.ln = nn.LayerNorm(epsilon=1e-6)
+        self.decoders = nn.ModuleList()
+        self.ln = nn.LayerNorm(d_model, eps=1e-6)
         for i in range(layers):
-            decoders.append(TransformerDecoder(d_model, num_heads, pdrop, scale, activation_type, d_ff))
-        self.decoders = nn.ModuleList(decoders)
+            self.decoders.append(TransformerDecoder(num_heads, d_model, pdrop, scale, activation_type, d_ff))
 
     def call(self, inputs):
         x = inputs

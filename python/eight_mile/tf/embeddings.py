@@ -401,16 +401,16 @@ def get_timing_signal_1d(length,
     Returns:
       a Tensor of timing signals [1, length, channels]
     """
-    position = tf.to_float(tf.range(length) + start_index)
+    position = tf.cast(tf.range(length) + start_index, tf.float32)
     num_timescales = channels // 2
     log_timescale_increment = (
             math.log(float(max_timescale) / float(min_timescale)) /
-            tf.maximum(tf.to_float(num_timescales) - 1, 1))
+            tf.maximum(tf.cast(num_timescales, tf.float32) - 1, 1))
     inv_timescales = min_timescale * tf.exp(
-        tf.to_float(tf.range(num_timescales)) * -log_timescale_increment)
+        tf.cast(tf.range(num_timescales), tf.float32) * -log_timescale_increment)
     scaled_time = tf.expand_dims(position, 1) * tf.expand_dims(inv_timescales, 0)
     signal = tf.concat([tf.sin(scaled_time), tf.cos(scaled_time)], axis=1)
-    signal = tf.pad(signal, [[0, 0], [0, tf.mod(channels, 2)]])
+    signal = tf.pad(signal, [[0, 0], [0, channels % 2]])
     signal = tf.reshape(signal, [1, length, channels])
     return signal
 
@@ -499,7 +499,7 @@ class PositionalLookupTableEmbeddings(LookupTableEmbeddings):
 
     @classmethod
     def create(cls, model, name, **kwargs):
-        return cls(name, vsz=model.vsz, dsz=model.dsz, weights=model._weights, **kwargs)
+        return cls(name, vsz=model.vsz, dsz=model.dsz, weights=model.weights, **kwargs)
 
 
 @register_embeddings(name='learned-positional')

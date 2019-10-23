@@ -922,7 +922,7 @@ class TimeDistributedProjection(tf.keras.layers.Layer):
 def scaled_dot_product_attention(query, key, value, mask=None, pdrop=0.0):
     w = tf.matmul(query, key, transpose_b=True)
 
-    w *= tf.rsqrt(tf.to_float(tf.shape(query)[2]))
+    w *= tf.rsqrt(tf.cast(tf.shape(query)[2], tf.float32))
 
     if mask is not None:
         w = w * mask + -1e9 * (1 - mask)
@@ -981,7 +981,7 @@ class MultiHeadedAttention(tf.keras.layers.Layer):
     And for self-attention in the decoder, K, Q and V all come from the decoder, but here it is masked to prevent using
     future values
     """
-    def __init__(self, h, d_model, dropout=0.1, scale=False):
+    def __init__(self, num_heads, d_model, dropout=0.1, scale=False):
         """Constructor for multi-headed attention
 
         :param h: The number of heads
@@ -990,9 +990,9 @@ class MultiHeadedAttention(tf.keras.layers.Layer):
         :param attn_fn: A function to apply attention, defaults to SDP
         """
         super().__init__()
-        assert d_model % h == 0
-        self.d_k = d_model // h
-        self.h = h
+        assert d_model % num_heads == 0
+        self.d_k = d_model // num_heads
+        self.h = num_heads
         self.w_Q = tf.keras.layers.Dense(units=d_model)
         self.w_K = tf.keras.layers.Dense(units=d_model)
         self.w_V = tf.keras.layers.Dense(units=d_model)
@@ -1069,12 +1069,12 @@ class TransformerDecoder(tf.keras.layers.Layer):
 
 class TransformerEncoderStack(tf.keras.layers.Layer):
 
-    def __init__(self, num_heads, d_model, pdrop, scale=True, layers=1, activation_type='relu', d_ff=None, name=None):
+    def __init__(self, num_heads, d_model, pdrop, scale=True, layers=1, activation_type='relu', d_ff=None, name=None, **kwargs):
         super().__init__(name=name)
         self.encoders = []
         self.ln = tf.keras.layers.LayerNormalization(epsilon=1e-6)
         for i in range(layers):
-            self.encoders.append(TransformerEncoder(d_model, num_heads, pdrop, scale, activation_type, d_ff))
+            self.encoders.append(TransformerEncoder(num_heads, d_model, pdrop, scale, activation_type, d_ff))
 
     def call(self, inputs):
         x = inputs
@@ -1089,7 +1089,7 @@ class TransformerDecoderStack(tf.keras.layers.Layer):
         self.decoders = []
         self.ln = tf.keras.layers.LayerNormalization(epsilon=1e-6)
         for i in range(layers):
-            self.decoders.append(TransformerDecoder(d_model, num_heads, pdrop, scale, activation, d_ff))
+            self.decoders.append(TransformerDecoder(num_heads, d_model, pdrop, scale, activation, d_ff))
 
     def call(self, inputs):
         x = inputs
@@ -1355,6 +1355,7 @@ class LangSequenceModel(tf.keras.Model):
     def _call_without_state(self, inputs):
         embedded = self.embed_model(inputs)
         transduced = self.transducer_model((embedded))
+        transduced = self.output_layer(transduced)
         return transduced, None
 
 

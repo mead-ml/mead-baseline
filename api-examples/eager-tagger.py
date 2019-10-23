@@ -6,8 +6,6 @@ import baseline
 import eight_mile.tf.layers as L
 from eight_mile.utils import get_version
 import eight_mile.embeddings
-from eight_mile.tf.embeddings import LookupTableEmbeddings
-from eight_mile.w2v import PretrainedEmbeddingsModel, RandomInitVecModel
 from eight_mile.tf.optz import EagerOptimizer
 from baseline.tf.tfy import SET_TRAIN_FLAG
 import tensorflow as tf
