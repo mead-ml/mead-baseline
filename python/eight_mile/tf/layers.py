@@ -5,6 +5,33 @@ import math
 BASELINE_TF_TRAIN_FLAG = None
 
 
+def set_tf_log_level(ll):
+    #0     | DEBUG            | [Default] Print all messages
+    #1     | INFO             | Filter out INFO messages
+    #2     | WARNING          | Filter out INFO & WARNING messages
+    #3     | ERROR            | Filter out all messages
+    import os
+    TF_VERSION = get_version(tf)
+    if TF_VERSION < 2:
+        import tensorflow.logging as tf_logging
+    else:
+        from absl import logging as tf_logging
+    tf_ll = tf_logging.WARN
+    tf_cpp_ll = 1
+    ll = ll.lower()
+    if ll == 'debug':
+        tf_ll = tf_logging.DEBUG
+        tf_cpp_ll = 0
+    if ll == 'info':
+        tf_cpp_ll = 0
+        tf_ll = tf_logging.INFO
+    if ll == 'error':
+        tf_ll = tf_logging.ERROR
+        tf_cpp_ll = 2
+    tf_logging.set_verbosity(tf_ll)
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = f'{tf_cpp_ll}'
+
+
 def SET_TRAIN_FLAG(X):
     global BASELINE_TF_TRAIN_FLAG
     BASELINE_TF_TRAIN_FLAG = X
