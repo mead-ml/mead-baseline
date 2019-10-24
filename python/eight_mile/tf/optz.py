@@ -444,19 +444,17 @@ class EagerOptimizer(object):
     def update(self, model, x, y):
         with tf.GradientTape() as tape:
             loss_value = self.loss(model, x, y)
-            loss_value = clip_gradient_by_norm(loss_value, self.clip)
         grads = tape.gradient(loss_value, model.trainable_variables)
-        # This call updates the global_step
+        grads = [tf.clip_by_norm(g, self.clip) for g in grads]
         self.optimizer.apply_gradients(zip(grads, model.trainable_variables), self.global_step)
         return loss_value
 
     def update_with_hidden(self, model, h, x, y):
         with tf.GradientTape() as tape:
             loss_value, h = self.loss(model, h, x, y)
-            loss_value = clip_gradient_by_norm(loss_value, self.clip)
 
         grads = tape.gradient(loss_value, model.trainable_variables)
-        # This call updates the global_step
+        grads = [tf.clip_by_norm(g, self.clip) for g in grads]
         self.optimizer.apply_gradients(zip(grads, model.trainable_variables), self.global_step)
         return loss_value, h
 
