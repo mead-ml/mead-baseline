@@ -445,7 +445,7 @@ class EagerOptimizer(object):
         with tf.GradientTape() as tape:
             loss_value = self.loss(model, x, y)
         grads = tape.gradient(loss_value, model.trainable_variables)
-        grads = [tf.clip_by_norm(g, self.clip) for g in grads]
+        grads, _ = tf.clip_by_global_norm(grads, self.clip)
         self.optimizer.apply_gradients(zip(grads, model.trainable_variables), self.global_step)
         return loss_value
 
@@ -454,7 +454,7 @@ class EagerOptimizer(object):
             loss_value, h = self.loss(model, h, x, y)
 
         grads = tape.gradient(loss_value, model.trainable_variables)
-        grads = [tf.clip_by_norm(g, self.clip) for g in grads]
+        grads, _ = tf.clip_by_global_norm(grads, self.clip)
         self.optimizer.apply_gradients(zip(grads, model.trainable_variables), self.global_step)
         return loss_value, h
 
