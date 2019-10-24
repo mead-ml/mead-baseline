@@ -942,29 +942,6 @@ class TimeDistributedProjection(tf.keras.layers.Layer):
         return False
 
 
-def scaled_dot_product_attention(query, key, value, mask=None, pdrop=0.0):
-    w = tf.matmul(query, key, transpose_b=True)
-
-    w *= tf.rsqrt(tf.cast(tf.shape(query)[2], tf.float32))
-
-    if mask is not None:
-        w = w * mask + -1e9 * (1 - mask)
-
-    weights = tf.nn.softmax(w, name="attention_weights")
-    ##weights = tf_dropout(weights, pdrop, training=TRAIN_FLAG())
-    return tf.matmul(weights, value), weights
-
-
-def dot_product_attention(query, key, value, mask=None, pdrop=0.0):
-    w = tf.matmul(query, key, transpose_b=True)
-
-    if mask is not None:
-        w = w * mask + -1e9 * (1 - mask)
-
-    weights = tf.nn.softmax(w, name="attention_weights")
-    ##weights = tf_dropout(weights, pdrop, training=TRAIN_FLAG())
-    return tf.matmul(weights, value), weights
-
 
 def split_heads(x, num_heads):
     shp = get_shape_as_list(x)
@@ -1020,9 +997,31 @@ class MultiHeadedAttention(tf.keras.layers.Layer):
         self.w_K = tf.keras.layers.Dense(units=d_model)
         self.w_V = tf.keras.layers.Dense(units=d_model)
         self.w_O = tf.keras.layers.Dense(units=d_model)
-        self.attn_fn = scaled_dot_product_attention if scale else dot_product_attention
+        self.attn_fn = self._scaled_dot_product_attention if scale else self._dot_product_attention
         self.attn = None
-        self.dropout = dropout
+        self.dropout = tf.keras.layers.Dropout(dropout)
+
+    def _scaled_dot_product_attention(self, query, key, value, mask=None):
+        w = tf.matmul(query, key, transpose_b=True)
+
+        w *= tf.rsqrt(tf.cast(tf.shape(query)[2], tf.float32))
+
+        if mask is not None:
+            w = w * mask + -1e9 * (1 - mask)
+
+        weights = tf.nn.softmax(w, name="attention_weights")
+        weights = self.dropout(weights, training=TRAIN_FLAG())
+        return tf.matmul(weights, value), weights
+
+    def _dot_product_attention(self, query, key, value, mask=None):
+        w = tf.matmul(query, key, transpose_b=True)
+
+        if mask is not None:
+            w = w * mask + -1e9 * (1 - mask)
+
+        weights = tf.nn.softmax(w, name="attention_weights")
+        weights = self.dropout(weights, training=TRAIN_FLAG())
+        return tf.matmul(weights, value), weights
 
     def call(self, qkvm):
         query, key, value, mask = qkvm

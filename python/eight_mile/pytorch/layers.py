@@ -1245,42 +1245,6 @@ def subsequent_mask(size):
     return torch.from_numpy(sub_mask)
 
 
-def scaled_dot_product_attention(query, key, value, mask=None, dropout=None):
-    """Scaled dot product attention, as defined in https://arxiv.org/abs/1706.03762
-
-    We apply the query to the keys to recieve our weights via softmax, which are then applied
-    for each value, but in a series of efficient matrix operations.  In the case of self-attention,
-    the key, query and values are all low order projections of the same input.
-
-    :param query: a query for alignment. Can come from self in case of self-attn or decoder in case of E/D
-    :param key: a set of keys from encoder or self
-    :param value: a set of values from encoder or self
-    :param mask: masking (for destination) to prevent seeing what we shouldnt
-    :param dropout: apply dropout operator post-attention (this is not a float)
-    :return: A tensor that is (BxHxTxT)
-
-    """
-    # (., H, T, T) = (., H, T, D) x (., H, D, T)
-    d_k = query.size(-1)
-    scores = torch.matmul(query, key.transpose(-2, -1)) / math.sqrt(d_k)
-    if mask is not None:
-        scores = scores.masked_fill(mask == 0, -1e9)
-    weights = F.softmax(scores, dim=-1)
-    if dropout is not None:
-        weights = dropout(weights)
-    return torch.matmul(weights, value), weights
-
-
-def dot_product_attention(query, key, value, mask=None, dropout=None):
-    scores = torch.matmul(query, key.transpose(-2, -1))
-    if mask is not None:
-        scores = scores.masked_fill(mask == 0, -1e9)
-    p_attn = F.softmax(scores, dim=-1)
-    if dropout is not None:
-        p_attn = dropout(p_attn)
-    return torch.matmul(p_attn, value), p_attn
-
-
 class MultiHeadedAttention(nn.Module):
     """
     Multi-headed attention from https://arxiv.org/abs/1706.03762 via http://nlp.seas.harvard.edu/2018/04/03/attention.html
@@ -1318,9 +1282,43 @@ class MultiHeadedAttention(nn.Module):
         self.w_K = Dense(d_model, d_model)
         self.w_V = Dense(d_model, d_model)
         self.w_O = Dense(d_model, d_model)
-        self.attn_fn = scaled_dot_product_attention if scale else dot_product_attention
+        self.attn_fn = self._scaled_dot_product_attention if scale else self._dot_product_attention
         self.attn = None
         self.dropout = nn.Dropout(dropout)
+
+    def _scaled_dot_product_attention(self, query, key, value, mask=None, dropout=None):
+        """Scaled dot product attention, as defined in https://arxiv.org/abs/1706.03762
+
+        We apply the query to the keys to recieve our weights via softmax, which are then applied
+        for each value, but in a series of efficient matrix operations.  In the case of self-attention,
+        the key, query and values are all low order projections of the same input.
+
+        :param query: a query for alignment. Can come from self in case of self-attn or decoder in case of E/D
+        :param key: a set of keys from encoder or self
+        :param value: a set of values from encoder or self
+        :param mask: masking (for destination) to prevent seeing what we shouldnt
+        :param dropout: apply dropout operator post-attention (this is not a float)
+        :return: A tensor that is (BxHxTxT)
+
+        """
+        # (., H, T, T) = (., H, T, D) x (., H, D, T)
+        d_k = query.size(-1)
+        scores = torch.matmul(query, key.transpose(-2, -1)) / math.sqrt(d_k)
+        if mask is not None:
+            scores = scores.masked_fill(mask == 0, -1e9)
+        weights = F.softmax(scores, dim=-1)
+        if dropout is not None:
+            weights = dropout(weights)
+        return torch.matmul(weights, value), weights
+
+    def _dot_product_attention(self, query, key, value, mask=None, dropout=None):
+        scores = torch.matmul(query, key.transpose(-2, -1))
+        if mask is not None:
+            scores = scores.masked_fill(mask == 0, -1e9)
+        p_attn = F.softmax(scores, dim=-1)
+        if dropout is not None:
+            p_attn = dropout(p_attn)
+        return torch.matmul(p_attn, value), p_attn
 
     def forward(self, qkvm):
         """Low-order projections of query, key and value into multiple heads, then attention application and dropout
