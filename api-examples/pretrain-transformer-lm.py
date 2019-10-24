@@ -134,7 +134,7 @@ class BPEVectorizer1D(AbstractVectorizer):
         self.vocab = {k: i for i, k in enumerate(self.read_vocab(self.vocab_file))}
 
     def read_vocab(self, s):
-        vocab = [] + Offsets.VALUES
+        vocab = [] + Offsets.VALUES + ['[CLS]']
         with open(s, "r") as f:
             for line in f.readlines():
                 token = line.split()[0].strip()
@@ -165,7 +165,9 @@ class BPEVectorizer1D(AbstractVectorizer):
 
     def _next_element(self, tokens, vocab):
         for atom in self.iterable(tokens):
-            value = vocab.get(atom, 0)  # This shouldnt actually happen
+            value = vocab.get(atom)
+            if value is None:
+                value = vocab[Offsets.VALUES[Offsets.UNK]]  # This shouldnt actually happen
             yield value
 
     def run(self, tokens, vocab):
@@ -200,7 +202,13 @@ class WordPieceVectorizer1D(AbstractVectorizer):
         from pytorch_pretrained_bert import BertTokenizer
         self.max_seen = 128
         handle = kwargs.get('embed_file')
-        self.tokenizer = BertTokenizer.from_pretrained(handle, do_lower_case=False)
+        custom_vocab = kwargs.get('vocab_file')
+        if custom_vocab is None:
+            self.tokenizer = BertTokenizer.from_pretrained(handle, do_lower_case=False)
+        else:
+            special_tokens = kwargs.get('special_tokens')
+            never_split = ('[UNK]', '[SEP]', '[PAD]', '[CLS]', '[MASK]') + special_tokens
+            self.tokenizer = BertTokenizer(custom_vocab, do_basic_tokenize=True, never_split=never_split)
         self.mxlen = kwargs.get('mxlen', -1)
 
     @property
@@ -222,10 +230,6 @@ class WordPieceVectorizer1D(AbstractVectorizer):
                 yield '[UNK]'
             elif tok == '<EOS>':
                 yield '[SEP]'
-            elif tok == '<BOQ>':
-                yield '[BOQ]'
-            elif tok == '<EOQ>':
-                yield '[EOQ]'
             else:
                 for subtok in self.tokenizer.tokenize(tok):
                     yield subtok
@@ -297,7 +301,7 @@ class TensorDatasetReaderBase(object):
 class TensorWordDatasetReader(TensorDatasetReaderBase):
     """Read each word, and produce a tensor of x and y that are identical
     """
-    def __init__(self, nctx, use_subword=None, model_file=None, vocab_file=None):
+    def __init__(self, nctx, use_subword=None, model_file=None, vocab_file=None, special_tokens=None):
         """Create a reader with a context window that reads words
 
         :param nctx: The context window length
@@ -308,7 +312,8 @@ class TensorWordDatasetReader(TensorDatasetReaderBase):
         if self.use_subword == 'bpe':
             vectorizer = BPEVectorizer1D(model_file=model_file, vocab_file=vocab_file)
         elif self.use_subword == 'wordpiece':
-            vectorizer = WordPieceVectorizer1D(embed_file=model_file)
+            vectorizer = WordPieceVectorizer1D(embed_file=model_file, vocab_file=vocab_file,
+                                               special_tokens=special_tokens)
         else:
             vectorizer = Token1DVectorizer(transform_fn=baseline.lowercase)
         super(TensorWordDatasetReader, self).__init__(nctx, {'x': vectorizer})
@@ -366,7 +371,7 @@ def load_data(token_type, reader, dataset, file_key, vocabs, caching):
     return loaded
 
 
-def create_reader(token_type, nctx, chars_per_word, subword_model_file, subword_vocab_file):
+def create_reader(token_type, nctx, chars_per_word, subword_model_file, subword_vocab_file, subword_special_tokens):
     if token_type == "chars":
         logger.info("Using character input")
         reader = TensorCharDatasetReader(nctx, chars_per_word)
@@ -375,7 +380,8 @@ def create_reader(token_type, nctx, chars_per_word, subword_model_file, subword_
         reader = TensorWordDatasetReader(nctx)
     else:
         logger.info("Using subword ({}) input".format(token_type))
-        reader = TensorWordDatasetReader(nctx, token_type, subword_model_file, subword_vocab_file)
+        reader = TensorWordDatasetReader(nctx, token_type, subword_model_file, subword_vocab_file,
+                                         subword_special_tokens)
     return reader
 
 
@@ -480,8 +486,9 @@ def train():
     parser.add_argument("--batch_size", type=int, default=8, help="Batch Size")
     parser.add_argument("--tokens", choices=["words", "chars", "bpe", "wordpiece"], default="wordpiece",
                         help="What tokens to use")
-    parser.add_argument("--subword_model_file", type=str, help="If using subwords, pass this", default='bert-base-cased')
+    parser.add_argument("--subword_model_file", type=str, help="If using subwords, pass this", default='bert-base-uncased')
     parser.add_argument("--subword_vocab_file", type=str, help="If using subwords with separate vocab file, pass here")
+    parser.add_argument("--subword_special_tokens", type=str, nargs='*')
     parser.add_argument("--dropout", type=float, default=0.1, help="Dropout")
     parser.add_argument("--lr", type=float, default=4.0e-4, help="Learning rate")
     parser.add_argument("--clip", type=float, default=0.25, help="Clipping gradient norm")
@@ -555,7 +562,12 @@ def train():
         dataset = {'train_file': args.train_file, 'valid_file': args.valid_file}
     else:
         dataset = DataDownloader(DATASETS[args.dataset_key], args.dataset_cache).download()
-    reader = create_reader(args.tokens, args.nctx, args.chars_per_word, args.subword_model_file, args.subword_vocab_file)
+    if args.subword_special_tokens is None:
+        special_tokens = ()
+    else:
+        special_tokens = tuple(args.subword_special_tokens)
+    reader = create_reader(args.tokens, args.nctx, args.chars_per_word, args.subword_model_file,
+                           args.subword_vocab_file, special_tokens)
 
     preproc_data = load_embed_and_vocab(args.tokens, reader, dataset, args.dataset_key, args.d_model, args.cache_features)
 
