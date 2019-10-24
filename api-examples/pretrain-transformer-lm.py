@@ -165,7 +165,9 @@ class BPEVectorizer1D(AbstractVectorizer):
 
     def _next_element(self, tokens, vocab):
         for atom in self.iterable(tokens):
-            value = vocab.get(atom, 0)  # This shouldnt actually happen
+            value = vocab.get(atom)
+            if value is None:
+                value = vocab[Offsets.VALUES[Offsets.UNK]]  # This shouldnt actually happen
             yield value
 
     def run(self, tokens, vocab):
