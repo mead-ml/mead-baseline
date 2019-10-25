@@ -19,7 +19,7 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
         super(TaggerTrainerPyTorch, self).__init__()
         if type(model) is dict:
             model = create_model_for('tagger', **model)
-
+        self.grad_accum = int(kwargs.get('grad_accum', 1))
         self.gpus = int(kwargs.get('gpus', 1))
         # By default support IOB1/IOB2
         self.span_type = kwargs.get('span_type', 'iob')
@@ -127,13 +127,18 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
         epoch_norm = 0
         steps = len(ts)
         pg = create_progress_bar(steps)
-        for batch_dict in pg(ts):
+        self.optimizer.zero_grad()
+
+        for i, batch_dict in enumerate(pg(ts)):
             inputs = self.model.make_input(batch_dict)
-            self.optimizer.zero_grad()
             loss = self.model.compute_loss(inputs)
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.clip)
-            self.optimizer.step()
+
+            if (i+1) % self.grad_accum == 0 or (i+1) == steps:
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.clip)
+                self.optimizer.step()
+                self.optimizer.zero_grad()
+
             bsz = self._get_batchsz(batch_dict)
             report_loss = loss.item() * bsz
             epoch_loss += report_loss
