@@ -747,8 +747,31 @@ if get_version(tf) < 2:
     BiLSTMEncoderSequence = BiLSTMEncoderSequence1
     BiLSTMEncoderHidden = BiLSTMEncoderHidden1
     BiLSTMEncoderHiddenContext = BiLSTMEncoderHiddenContext1
-    from tensorflow.contrib.crf import crf_decode, crf_sequence_score, crf_log_norm
+    from tensorflow.contrib.crf import crf_decode, crf_log_norm, crf_unary_score, crf_binary_score
+    def crf_sequence_score(inputs, tag_indices, sequence_lengths, transition_params):
+        """Computes the unnormalized score for a tag sequence.
 
+        This is a patched version of the contrib
+        where we dont do any length 1 sequence optimizations.  This was causing a very odd error
+        where the true branch of smart_cond was being executed despite the predicate evaluating to 0.
+        This probably makes it even slower than usual :(
+
+        Args:
+          inputs: A [batch_size, max_seq_len, num_tags] tensor of unary potentials
+              to use as input to the CRF layer.
+          tag_indices: A [batch_size, max_seq_len] matrix of tag indices for which we
+              compute the unnormalized score.
+          sequence_lengths: A [batch_size] vector of true sequence lengths.
+          transition_params: A [num_tags, num_tags] transition matrix.
+        Returns:
+          sequence_scores: A [batch_size] vector of unnormalized sequence scores.
+        """
+
+        # Compute the scores of the given tag sequence.
+        unary_scores = crf_unary_score(tag_indices, sequence_lengths, inputs)
+        binary_scores = crf_binary_score(tag_indices, sequence_lengths, transition_params)
+        sequence_scores = unary_scores + binary_scores
+        return sequence_scores
 else:
     LSTMEncoder = LSTMEncoder2
     LSTMEncoderSequence = LSTMEncoderSequence2
@@ -1224,14 +1247,14 @@ class CRF(tf.keras.layers.Layer):
     def score_sentence(self, unary, tags, lengths):
         """Score a batch of sentences.
 
-        :param unary: torch.FloatTensor: [T, B, N]
-        :param tags: torch.LongTensor: [T, B]
+        :param unary: torch.FloatTensor: [B, T, N]
+        :param tags: torch.LongTensor: [B, T]
         :param lengths: torch.LongTensor: [B]
-        :param batzh_size: int: B
-        :param min_length: torch.LongTensor: []
 
         :return: torch.FloatTensor: [B]
         """
+        #unary = tf.Print(unary, [tf.shape(unary)])
+        #tags = tf.Print(tags, [tf.shape(tags)])
         return crf_sequence_score(unary, tf.cast(tags, tf.int32), tf.cast(lengths, tf.int32), self.transitions)
 
     def call(self, inputs, training=False):
