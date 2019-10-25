@@ -11,7 +11,7 @@ from eight_mile.pytorch.layers import (
     Dense,
     SkipConnection,
     Highway,
-    BiLSTMEncoder,
+    BiLSTMEncoderHidden,
     WithDropout
 )
 
@@ -235,12 +235,9 @@ class CharLSTMEmbeddings(PyTorchEmbeddings):
         # Hotfix for no char spaces.
         sorted_word_lengths.masked_fill_(sorted_word_lengths == 0, 1)
         sorted_feats = char_embeds[perm_idx].transpose(0, 1).contiguous()
-
-        packed = torch.nn.utils.rnn.pack_padded_sequence(sorted_feats, sorted_word_lengths.tolist())
-        hidden = self.char_comp(packed)
-        hidden = tuple(h[-1, :, :] for h in hidden)
-        results = tuple(h.scatter_(0, perm_idx.unsqueeze(-1).expand_as(h), h) for h in hidden)
-        return results[0].reshape((B, T, -1))
+        hidden = self.char_comp((sorted_feats, sorted_word_lengths))
+        results = hidden.scatter_(0, perm_idx.unsqueeze(-1).expand_as(hidden), hidden)
+        return results.reshape((B, T, -1))
 
     def get_dsz(self):
         return self.lstmsz
