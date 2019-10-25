@@ -6,9 +6,10 @@ from eight_mile.utils import calc_nfeats
 
 def test_use_nfeats():
     filtsz = [random.randint(1, 10) for _ in range(random.randint(2, 6))]
-    gold_nfeat = random.randint(1, 100)
-    _, nfeat = calc_nfeats(filtsz, None, None, nfeats=gold_nfeat)
-    assert nfeat == gold_nfeat
+    input_nfeat = random.randint(1, 100)
+    gold_nfeats = [input_nfeat] * len(filtsz)
+    _, nfeat = calc_nfeats(filtsz, None, None, nfeats=input_nfeat)
+    assert nfeat == gold_nfeats
 
 
 def test_use_nfeats_filtsz_unchanged():
@@ -22,6 +23,13 @@ def test_use_nfeats_none():
     filtsz = [random.randint(1, 10) for _ in range(random.randint(2, 6))]
     with pytest.raises(AssertionError):
         calc_nfeats(filtsz)
+
+
+def test_use_nfeats_list():
+    filtsz = [random.randint(1, 10) for _ in range(random.randint(2, 6))]
+    nfeats = [random.randint(1, 10) for _ in range(len(filtsz))]
+    with pytest.raises(AssertionError):
+        _, nfeat = calc_nfeats(filtsz, None, None, nfeats=nfeats)
 
 
 def test_extract_tuple():

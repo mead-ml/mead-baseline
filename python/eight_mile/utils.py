@@ -8,6 +8,7 @@ import sys
 import json
 import importlib
 import inspect
+from typing import List, Tuple, Union, Optional
 from functools import partial, update_wrapper, wraps
 import logging
 import numpy as np
@@ -78,13 +79,30 @@ def sequence_mask(lengths, max_len=-1):
     return (row < col).astype(np.uint8)
 
 
-def calc_nfeats(filtsz, nfeat_factor=None, max_feat=None, nfeats=None):
-    """Calculate the output sizes to use for parllel conv on character embeddings.
+def calc_nfeats(
+    filtsz: Union[List[Tuple[int, int]], List[int]],
+    nfeat_factor: Optional[int] = None,
+    max_feat: Optional[int] = None,
+    nfeats: Optional[int] = None
+) -> Tuple[List[int], List[int]]:
+    """Calculate the output sizes to use for multiple parallel convolutions.
 
-    :param filtsz: `Union[List[List[int, int]], List[int]]` The filter sizes to use in parallel
-    :param nfeat_factor: `int` How to scale the feat size as you grow the filters
-    :param max_feat: `int` The cap on the feature size
-    :param nfeats: `int` A fall back constant feature size
+    If filtsz is a List of Lists of ints then we assume that each element represents
+        a filter size, feature size pair. This is the format used by ELMo
+    If filtsz is a List of ints we assume each element represents a filter size
+    If nfeat_factor and max_feat are set we calculate the nfeat size based on the
+        nfeat_factor and the filter size capped by max_feat. This is the method used
+        in Kim et. al. 2015 (https://arxiv.org/abs/1508.06615)
+    Otherwise nfeats must be set and we assume this is output size to use for all of
+        the parallel convs and return the feature size expanded to list the same length
+        as filtsz
+
+    :param filtsz: The filter sizes to use in parallel
+    :param nfeat_factor: How to scale the feat size as you grow the filters
+    :param max_feat: The cap on the feature size
+    :param nfeats: A fall back constant feature size
+    :returns: Associated arrays where the first one is the filter sizes and the second
+        one has the corresponding number of feats as the output
     """
     # If this is a list, then its a tuple of (filtsz, nfeats)
     if is_sequence(filtsz[0]):
@@ -96,6 +114,8 @@ def calc_nfeats(filtsz, nfeat_factor=None, max_feat=None, nfeats=None):
     # Otherwise its just a scalar
     else:
         assert nfeats is not None, 'When providing only `filtsz` and not `nfeat_factor` `nfeats` must be specified'
+        assert isinstance(nfeats, int), 'If you want to use custom nfeat sizes do `filtsz = zip(filtsz, nfeats)` then call this function'
+        nfeats = [nfeats] * len(filtsz)
     return filtsz, nfeats
 
 
