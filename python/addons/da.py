@@ -1,10 +1,10 @@
 from baseline.reader import SeqPredictReader, register_reader
 from baseline.utils import Offsets, listify
-from eight_mile.pytorch.embeddings import register_embeddings, LookupTableEmbeddings
+#from eight_mile.pytorch.embeddings import register_embeddings, LookupTableEmbeddings
 from glob import iglob
 import os
 import pandas as pd
-import torch
+#import torch
 from baseline.vectorizers import register_vectorizer, AbstractVectorizer, _token_iterator
 import collections
 from nltk import word_tokenize
@@ -139,22 +139,3 @@ class DASeqReader(SeqPredictReader):
             dlgs.append(turns)
         return dlgs
 
-
-@register_embeddings(name='pool-over-time')
-class PooledLookupTableEmbeddings(LookupTableEmbeddings):
-
-    def __init__(self, _=None, **kwargs):
-        super().__init__(_, **kwargs)
-        self.vsz = kwargs.get('vsz')
-        self.dsz = kwargs.get('dsz')
-
-    def get_dsz(self):
-        return self.dsz
-
-    def get_vsz(self):
-        return self.vsz
-
-    def forward(self, x):
-        emb = self.embeddings(x)
-        dmax, _ = torch.max(emb, -2, keepdim=False)
-        return dmax

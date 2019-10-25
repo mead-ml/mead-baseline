@@ -36,8 +36,8 @@
   "train": {
     "batchsz": 1,
     "epochs": 40,
-    "optim": "adam",
-    "eta": 0.0008,
+    "optim": "adadelta",
+    "eta": 1.0,
     "grad_accum": 10,
     "patience": 20,
     "early_stopping_metric": "f1",
