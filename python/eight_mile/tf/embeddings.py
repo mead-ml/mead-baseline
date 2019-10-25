@@ -278,7 +278,7 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
             nfeats = [min(self.nfeat_factor * fsz, max_feat) for fsz in filtsz]
         # Otherwise its just a scalar
         else:
-            nfeats = self.wsz
+            nfeats = [self.wsz] * len(self.cfiltsz)
             filtsz = self.cfiltsz
         return filtsz, nfeats
 
