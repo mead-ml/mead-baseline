@@ -189,7 +189,7 @@ def calc_lr_params(train_params, num_steps):
     # This belongs in the trainer!
     if train_params.get('lr_scheduler_type', None) == 'zaremba':
         first_range = int(train_params['start_decay_epoch'] * num_steps)
-        train_params['bounds'] = [first_range] + list(
+        train_params['boundaries'] = [first_range] + list(
             np.arange(
                 train_params['start_decay_epoch'] + 1,
                 train_params['epochs'] + 1,

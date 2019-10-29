@@ -68,6 +68,7 @@ class Backend(object):
         base_pkg_name = 'baseline.{}'.format(self.name)
         mod = import_user_module(base_pkg_name)
         import_user_module('eight_mile.{}.embeddings'.format(self.name))
+        import_user_module('eight_mile.{}.optz'.format(self.name))
         import_user_module('mead.{}.exporters'.format(self.name))
         if task_name is not None:
             import_user_module('{}.{}'.format(base_pkg_name, task_name))

@@ -23,7 +23,7 @@ class LearningRateScheduler(object):
 @exporter
 class WarmupLearningRateScheduler(LearningRateScheduler):
     def __init__(self, warmup_steps=16000, **kwargs):
-        super(WarmupLearningRateScheduler, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self._warmup_steps = warmup_steps
 
     @property
@@ -35,7 +35,7 @@ class WarmupLearningRateScheduler(LearningRateScheduler):
 class ConstantScheduler(LearningRateScheduler):
 
     def __init__(self, **kwargs):
-        super(ConstantScheduler, self).__init__(**kwargs)
+        super().__init__(**kwargs)
 
     def __call__(self, global_step):
         return self.lr
@@ -53,7 +53,7 @@ class WarmupLinearScheduler(WarmupLearningRateScheduler):
 class CyclicLRScheduler(LearningRateScheduler):
 
     def __init__(self, max_lr=1e-2, decay_steps=1000, **kwargs):
-        super(CyclicLRScheduler, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.max_lr = max_lr
         self.decay_steps = decay_steps
 
@@ -67,35 +67,35 @@ class CyclicLRScheduler(LearningRateScheduler):
 @exporter
 class PiecewiseDecayScheduler(LearningRateScheduler):
 
-    def __init__(self, bounds, values, **kwargs):
-        super(PiecewiseDecayScheduler, self).__init__(**kwargs)
-        self.bounds = bounds
+    def __init__(self, boundaries, values, **kwargs):
+        super().__init__(**kwargs)
+        self.boundaries = boundaries
         self.values = values
 
     def __call__(self, global_step):
-        pos = np.searchsorted(self.bounds, global_step)
+        pos = np.searchsorted(self.boundaries, global_step)
         return self.values[pos]
 
 
 @exporter
 class ZarembaDecayScheduler(PiecewiseDecayScheduler):
 
-    def __init__(self, bounds=None, decay_rate=None, **kwargs):
+    def __init__(self, boundaries=None, decay_rate=None, **kwargs):
         lr = kwargs.get('lr', kwargs.get('eta', 1.0))
 
-        if bounds is None or decay_rate is None:
-            bounds = []
+        if boundaries is None or decay_rate is None:
+            boundaries = []
             values = [lr]
         else:
-            values = [lr / (decay_rate ** i) for i in range(len(bounds) + 1)]
-        super(ZarembaDecayScheduler, self).__init__(bounds, values, **kwargs)
+            values = [lr / (decay_rate ** i) for i in range(len(boundaries) + 1)]
+        super().__init__(boundaries, values, **kwargs)
 
 
 @exporter
 class CosineDecayScheduler(LearningRateScheduler):
 
     def __init__(self, decay_steps=1000, alpha=0.0, **kwargs):
-        super(CosineDecayScheduler, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.decay_steps = decay_steps
         self.alpha = alpha
 
@@ -110,7 +110,7 @@ class CosineDecayScheduler(LearningRateScheduler):
 class InverseTimeDecayScheduler(LearningRateScheduler):
 
     def __init__(self, decay_steps=16000, decay_rate=0.05, staircase=False, **kwargs):
-        super(InverseTimeDecayScheduler, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.decay_steps = decay_steps
         self.decay_rate = decay_rate
         self.wrap_fn = math.floor if staircase else LearningRateScheduler._identity
@@ -124,7 +124,7 @@ class InverseTimeDecayScheduler(LearningRateScheduler):
 class ExponentialDecayScheduler(LearningRateScheduler):
 
     def __init__(self, decay_steps=16000, decay_rate=0.5, staircase=False, **kwargs):
-        super(ExponentialDecayScheduler, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.decay_steps = decay_steps
         self.decay_rate = decay_rate
         self.wrap_fn = math.floor if staircase else LearningRateScheduler._identity
@@ -136,7 +136,7 @@ class ExponentialDecayScheduler(LearningRateScheduler):
 @exporter
 class CompositeLRScheduler(LearningRateScheduler):
     def __init__(self, warm=None, rest=None, **kwargs):
-        super(CompositeLRScheduler, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.warm = warm
         self.rest = rest
 

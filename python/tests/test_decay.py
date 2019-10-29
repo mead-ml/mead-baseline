@@ -3,7 +3,7 @@ import pytest
 import numpy as np
 from mock import patch, MagicMock
 import baseline
-from baseline.train import (
+from eight_mile.optz import (
     create_lr_scheduler,
     CosineDecayScheduler,
     CyclicLRScheduler,
