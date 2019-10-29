@@ -93,10 +93,10 @@ def get_steps(type_, args, double_warm=False):
         # If we are just warm up double it to show its fine
         return args['warmup_steps'] * 2 if double_warm else args['warmup_steps']
     # PiecewiseDecay, Zaremba
-    if args['bounds'] is not None:
+    if args['boundaries'] is not None:
         # If we are bound based how bounds plus some extra
-        gap = np.max(np.diff(args['bounds']))
-        return args['bounds'][-1] + gap
+        gap = np.max(np.diff(args['boundaries']))
+        return args['boundaries'][-1] + gap
     if type_ == 'CyclicLRScheduler':
         # Cyclic, show some cycles
         return args['decay_steps'] * args['cycles']
@@ -149,7 +149,7 @@ def main():
         type=int, default=DEFAULTS['decay_steps'],
         help="The number of steps to take before a decay. Used in {}.".format(", ".join(ARGS['decay_steps']))
     )
-    parser.add_argument("--bounds", nargs="+", default=DEFAULTS['bounds'])
+    parser.add_argument("--boundaries", nargs="+", default=DEFAULTS['boundaries'])
     parser.add_argument("--values", nargs="+", default=DEFAULTS['values'])
     parser.add_argument(
         "--decay_rate",
@@ -206,9 +206,9 @@ def main():
         args['warm'] = WARMUP[args['warm']](**args)
         args['rest'] = REST[args['rest']](**args)
 
-    if args['bounds'] is not None:
+    if args['boundaries'] is not None:
         if args['values'] is not None:
-            if len(args['bounds']) != len(args['values']):
+            if len(args['boundaries']) != len(args['values']):
                 raise RuntimeError("Bounds and Value list must be aligned")
 
     lr = OPTIONS[args['type']](**args)

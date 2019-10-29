@@ -2,8 +2,10 @@ import os
 import json
 import pytest
 import numpy as np
+from eight_mile.utils import get_version
 tf = pytest.importorskip('tensorflow')
-from baseline.train import (
+pytestmark = pytest.mark.skipif(get_version(tf) < 2, reason='TF1.X')
+from eight_mile.optz import (
     create_lr_scheduler,
     ConstantScheduler,
     WarmupLinearScheduler,
@@ -63,14 +65,14 @@ ZAREMBA_DECAY_RATE = 1.2
 ZAREMBA_DECAY_VALUES = [INIT_LR/(ZAREMBA_DECAY_RATE**i) for i in range(len(BOUNDS)+1)]
 PW_ZAREMBA_LR_CONFIG = {
     "lr_scheduler_type": "piecewise",
-    "bounds": BOUNDS,
+    "boundaries": BOUNDS,
     "values": ZAREMBA_DECAY_VALUES,
     "lr": INIT_LR
 }
 
 ZAREMBA_LR_CONFIG = {
     "lr_scheduler_type": "zaremba",
-    "bounds": BOUNDS,
+    "boundaries": BOUNDS,
     "decay_rate": ZAREMBA_DECAY_RATE,
     "lr": INIT_LR
 }
@@ -82,24 +84,16 @@ SGDR_LR_CONFIG = {
 
 
 def test_zaremba():
-    from baseline.tf import optz
-    tf.reset_default_graph()
-    sess = tf.Session()
-
+    from eight_mile.tf import optz
     lr_sched = create_lr_scheduler(**ZAREMBA_LR_CONFIG)
     bl_zaremba = ZarembaDecayScheduler(**ZAREMBA_LR_CONFIG)
-    lr_var = tf.placeholder(tf.float32, shape=(), name='lr')
-    step_var = tf.placeholder(tf.int32, shape=(), name='step')
-
-    gph = lr_sched(lr_var, step_var)
-    sess.run(tf.global_variables_initializer())
 
     lrs = []
     lrs_bl = []
     expect_lrs = []
     current_lr = INIT_LR
     for step in range(NUM_STEPS):
-        lr = sess.run(gph, feed_dict={lr_var: INIT_LR, step_var: step})
+        lr = lr_sched(step)
         lr_bl = bl_zaremba(step)
         lrs += [lr]
         lrs_bl += [lr_bl]
@@ -112,24 +106,16 @@ def test_zaremba():
 
 
 def test_piecewise():
-    from baseline.tf import optz
-    tf.reset_default_graph()
-    sess = tf.Session()
-
+    from eight_mile.tf import optz
     lr_sched = create_lr_scheduler(**PW_ZAREMBA_LR_CONFIG)
     bl_piecewise = PiecewiseDecayScheduler(**PW_ZAREMBA_LR_CONFIG)
-    lr_var = tf.placeholder(tf.float32, shape=(), name='lr')
-    step_var = tf.placeholder(tf.int32, shape=(), name='step')
-
-    gph = lr_sched(lr_var, step_var)
-    sess.run(tf.global_variables_initializer())
 
     lrs = []
     lrs_bl = []
     expect_lrs = []
     current_lr = INIT_LR
     for step in range(NUM_STEPS):
-        lr = sess.run(gph, feed_dict={lr_var: INIT_LR, step_var: step})
+        lr = lr_sched(step)
         lrs += [lr]
         lr_bl = bl_piecewise(step)
         lrs_bl += [lr_bl]
@@ -142,24 +128,15 @@ def test_piecewise():
 
 
 def test_invtime():
-    from baseline.tf import optz
-    tf.reset_default_graph()
-    sess = tf.Session()
-
+    from eight_mile.tf import optz
     lr_sched = create_lr_scheduler(**INVTIME_LR_CONFIG)
     bl_invtime = InverseTimeDecayScheduler(**INVTIME_LR_CONFIG)
     decay_rate = INVTIME_LR_CONFIG['decay_rate']
 
-    lr_var = tf.placeholder(tf.float32, shape=(), name='lr')
-    step_var = tf.placeholder(tf.int32, shape=(), name='step')
-
-    gph = lr_sched(lr_var, step_var)
-    sess.run(tf.global_variables_initializer())
-
     lrs = []
     lrs_bl = []
     for step in range(NUM_STEPS):
-        lr = sess.run(gph, feed_dict={lr_var: INIT_LR, step_var: step})
+        lr = lr_sched(step)
         lrs += [lr]
         lr_bl = bl_invtime(step)
         lrs_bl += [lr_bl]
@@ -169,24 +146,16 @@ def test_invtime():
 
 
 def test_exp():
-    from baseline.tf import optz
-    tf.reset_default_graph()
-    sess = tf.Session()
+    from eight_mile.tf import optz
 
     lr_sched = create_lr_scheduler(**EXP_LR_CONFIG)
     bl_exp = ExponentialDecayScheduler(**EXP_LR_CONFIG)
     decay_rate = EXP_LR_CONFIG['decay_rate']
 
-    lr_var = tf.placeholder(tf.float32, shape=(), name='lr')
-    step_var = tf.placeholder(tf.int32, shape=(), name='step')
-
-    gph = lr_sched(lr_var, step_var)
-    sess.run(tf.global_variables_initializer())
-
     lrs = []
     lrs_bl = []
     for step in range(NUM_STEPS):
-        lr = sess.run(gph, feed_dict={lr_var: INIT_LR, step_var: step})
+        lr = lr_sched(step)
         lrs += [lr]
         lr_bl = bl_exp(step)
         lrs_bl += [lr_bl]
@@ -196,22 +165,13 @@ def test_exp():
 
 
 def test_linear_warmup():
-    from baseline.tf import optz
-    tf.reset_default_graph()
-    sess = tf.Session()
-
+    from eight_mile.tf import optz
     lr_sched = create_lr_scheduler(**LINEAR_WARMUP_LR_CONFIG)
     warmup_steps = LINEAR_WARMUP_LR_CONFIG['warmup_steps']
 
-    lr_var = tf.placeholder(tf.float32, shape=(), name='lr')
-    step_var = tf.placeholder(tf.int32, shape=(), name='step')
-
-    gph = lr_sched(lr_var, step_var)
-    sess.run(tf.global_variables_initializer())
-
     lrs = []
     for step in range(NUM_STEPS):
-        lr = sess.run(gph, feed_dict={lr_var: INIT_LR, step_var: step})
+        lr = lr_sched(step)
         lrs += [lr]
 
     expected_lrs = [INIT_LR*min(1.0, step / warmup_steps) for step in range(NUM_STEPS)]
@@ -219,22 +179,14 @@ def test_linear_warmup():
 
 
 def test_composite_warmup():
-    from baseline.tf import optz
-    tf.reset_default_graph()
+    from eight_mile.tf import optz
     warmup_steps = COMPOSITE_LR_CONFIG['warmup_steps']
     decay_rate = EXP_LR_CONFIG['decay_rate']
-    with tf.Session() as sess:
-        lr_sched = create_lr_scheduler(**COMPOSITE_LR_CONFIG)
-        lr_var = tf.placeholder(tf.float32, name='lr')
-        step_var = tf.placeholder(tf.int32, name='step')
+    lr_sched = create_lr_scheduler(**COMPOSITE_LR_CONFIG)
+    lrs = [lr_sched(step) for step in range(NUM_STEPS)]
 
-        out = lr_sched(lr_var, step_var)
-        sess.run(tf.global_variables_initializer())
-
-        lrs = [sess.run(out, {lr_var: INIT_LR, step_var: step}) for step in range(NUM_STEPS)]
-
-        warmup_expected = [INIT_LR * min(1.0, step / warmup_steps) for step in range(NUM_STEPS)]
-        exp_expected = [(INIT_LR * decay_rate ** (t/100.)) for t in range(NUM_STEPS)]
+    warmup_expected = [INIT_LR * min(1.0, step / warmup_steps) for step in range(NUM_STEPS)]
+    exp_expected = [(INIT_LR * decay_rate ** (t/100.)) for t in range(NUM_STEPS)]
 
     for step in range(NUM_STEPS):
         if step < warmup_steps:
@@ -245,41 +197,26 @@ def test_composite_warmup():
 
 
 def test_constant():
-    from baseline.tf import optz
-    tf.reset_default_graph()
-    sess = tf.Session()
-
+    from eight_mile.tf import optz
     lr_sched = create_lr_scheduler(lr=INIT_LR, lr_scheduler_type='default')
     bl_const = ConstantScheduler(lr=INIT_LR)
 
-    lr_var = tf.placeholder(tf.float32, shape=(), name='lr')
-    step_var = tf.placeholder(tf.int32, shape=(), name='step')
-
-    gph = lr_sched(lr_var, step_var)
-    sess.run(tf.global_variables_initializer())
-
     for step in range(NUM_STEPS):
-        lr = sess.run(gph, feed_dict={lr_var: INIT_LR, step_var: step})
+        lr = lr_sched(step)
         assert np.isclose(INIT_LR, lr)
         assert np.isclose(INIT_LR, bl_const(step))
 
 
 def test_cyclic():
-    from baseline.tf import optz
-    tf.reset_default_graph()
-    sess = tf.Session()
+    from eight_mile.tf import optz
+    tf.compat.v1.reset_default_graph()
+    sess = tf.compat.v1.Session()
 
     lr_sched = create_lr_scheduler(**CYCLIC_LR_CONFIG)
     bl_const = CyclicLRScheduler(**CYCLIC_LR_CONFIG)
 
-    lr_var = tf.placeholder(tf.float32, shape=(), name='lr')
-    step_var = tf.placeholder(tf.int32, shape=(), name='step')
-
-    gph = lr_sched(lr_var, step_var)
-    sess.run(tf.global_variables_initializer())
-
     for step in range(NUM_STEPS):
-        lr = sess.run(gph, feed_dict={lr_var: INIT_LR, step_var: step})
+        lr = lr_sched(step)
         lr_bl = bl_const(step)
         assert np.isclose(lr, lr_bl)
 

@@ -7,7 +7,7 @@ import tensorflow as tf
 from eight_mile.confusion import ConfusionMatrix
 from eight_mile.progress import create_progress_bar
 from eight_mile.utils import listify, get_version
-from eight_mile.tf.optz import EagerOptimizer
+from eight_mile.tf.optz import *
 from baseline.utils import get_model_file, get_metric_cmp
 from baseline.tf.tfy import SET_TRAIN_FLAG
 from baseline.tf.classify.training.utils import to_tensors
@@ -25,13 +25,8 @@ log = logging.getLogger('baseline.timing')
 
 TF_VERSION = get_version(tf)
 if TF_VERSION < 2:
-    from tensorflow import count_nonzero
     tf.enable_eager_execution()
-    Adam = tf.train.AdamOptimizer
 
-else:
-    from tensorflow.compat.v1 import count_nonzero
-    Adam = tf.optimizers.Adam
 
 
 def loss(model, x, y):

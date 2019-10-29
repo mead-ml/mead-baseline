@@ -4,7 +4,7 @@ from collections import Counter
 import pytest
 from mock import patch, call
 import numpy as np
-from baseline.bleu import (
+from eight_mile.bleu import (
     n_grams,
     count_n_grams,
     find_closest,
