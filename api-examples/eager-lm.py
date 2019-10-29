@@ -2,12 +2,13 @@ import baseline
 import argparse
 import eight_mile.tf.embeddings
 import eight_mile.tf.layers as L
-from eight_mile.utils import get_version
+from eight_mile.utils import get_version, revlut
 from eight_mile.tf.layers import SET_TRAIN_FLAG, set_tf_log_level
 from eight_mile.tf.optz import EagerOptimizer
 import tensorflow as tf
 import logging
 import numpy as np
+import time
 
 if get_version(tf) < 2:
     tf.enable_eager_execution()
@@ -61,7 +62,8 @@ parser.add_argument('--test', help='Testing file', default='../data/ptb/test.txt
 parser.add_argument('--embeddings', help='Pretrained embeddings file', default='/data/embeddings/GoogleNews-vectors-negative300.bin')
 parser.add_argument('--ll', help='Log level', type=str, default='info')
 parser.add_argument('--lr', help='Learning rate', type=float, default=1.0)
-
+parser.add_argument('--temperature', help='Sample temperature during generation', default=1.0)
+parser.add_argument('--start_word', help='Sample start word', default='the')
 
 args = parser.parse_known_args()[0]
 
@@ -134,6 +136,36 @@ train_loss_results = []
 train_accuracy_results = []
 
 
+def generate_text(model, start_string, temperature=1.0):
+    num_generate = 20
+
+    # Converting our start string to numbers (vectorizing)
+    input_eval, _ = vectorizers["word"].run(start_string.split(), vocabs["word"])
+    rlut = revlut(vocabs["word"])
+    # Add batch dim
+    input_eval = tf.expand_dims(input_eval, 0)
+
+    # Empty string to store our results
+    text_generated = [start_string]
+
+    h = None
+    for i in range(num_generate):
+        predictions, h = model({"word": input_eval, "h": h})
+        # remove the batch dimension
+        predictions = tf.nn.softmax(predictions / temperature, axis=-1)
+        predictions = tf.squeeze(predictions, 0)
+
+        # using a multinomial distribution to predict the word returned by the model
+        predicted_id = tf.multinomial(predictions, num_samples=1)[-1, 0].numpy()
+        # We pass the predicted word as the next input to the model
+        # along with the previous hidden state
+        input_eval = tf.expand_dims([predicted_id], 0)
+
+        text_generated.append(rlut[predicted_id])
+
+    return text_generated
+
+
 def loss(model, h, x, y):
 
     x["h"] = h
@@ -146,63 +178,19 @@ def loss(model, h, x, y):
     loss = tf.reduce_mean(example_loss)
     return loss, h
 
-"""
-def generate_text(model, start_string):
-    # Evaluation step (generating text using the learned model)
-
-    # Number of characters to generate
-    num_generate = 1000
-
-    # You can change the start string to experiment
-    start_string = 'ROMEO'
-
-    # Converting our start string to numbers (vectorizing)
-    input_eval = vectorizers["word"].run(start_string.split())
-    rlut = revlut(embeddings["word"].vocab)
-
-    input_eval = tf.expand_dims(input_eval, 0)
-
-    # Empty string to store our results
-    text_generated = []
-
-    # Low temperatures results in more predictable text.
-    # Higher temperatures results in more surprising text.
-    # Experiment to find the best setting.
-    temperature = 1.0
-
-    # Here batch size == 1
-    model.reset_states()
-    for i in range(num_generate):
-        predictions = model(input_eval)
-        # remove the batch dimension
-        predictions = tf.squeeze(predictions, 0)
-
-        # using a multinomial distribution to predict the word returned by the model
-        predictions = predictions / temperature
-        predicted_id = tf.multinomial(predictions, num_samples=1)[-1, 0].numpy()
-
-        # We pass the predicted word as the next input to the model
-        # along with the previous hidden state
-        input_eval = tf.expand_dims([predicted_id], 0)
-
-        text_generated.append(rlut[predicted_id])
-
-    return (start_string + ''.join(text_generated))
-"""
-import time
-num_epochs = 2
-
-
+#SET_TRAIN_FLAG(False)
 optimizer = EagerOptimizer(loss, SGD(args.lr))
-
-
-for epoch in range(num_epochs):
+for epoch in range(args.epochs):
 
 
     loss_accum = 0.
     step = 0
     start = time.time()
     h = None
+
+    #text = generate_text(model, args.start_word, args.temperature)
+    #print(' '.join(text))
+
     SET_TRAIN_FLAG(True)
 
     for x, y in train_input_fn():
@@ -232,4 +220,5 @@ for epoch in range(num_epochs):
     mean_loss = loss_accum / step
     print('Valid Loss {}, Perplexity {}'.format(mean_loss, np.exp(mean_loss)))
 
-
+    text = generate_text(model, args.start_word, args.temperature)
+    print(' '.join(text))
