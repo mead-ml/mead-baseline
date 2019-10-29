@@ -1,42 +1,31 @@
 import logging
+import pickle
 import time
 import os
 from argparse import ArgumentParser
 import baseline
-from torch.nn.parallel import DistributedDataParallel
-from torch.utils.data import DataLoader, TensorDataset
 from eight_mile.utils import str2bool, write_json
 import eight_mile.embeddings
-from eight_mile.pytorch.embeddings import *
-from eight_mile.optz import *
-from eight_mile.pytorch.optz import *
-from baseline.pytorch.lm import TransformerLanguageModel
-from baseline.vectorizers import Char2DVectorizer, Token1DVectorizer, AbstractVectorizer
+from eight_mile.tf.embeddings import *
+from eight_mile.optz import CompositeLRScheduler, WarmupLinearScheduler, CosineDecayScheduler
+from eight_mile.tf.optz import *
+from baseline.tf.lm import TransformerLanguageModel
+from eight_mile.tf.layers import set_tf_log_level
+from baseline.vectorizers import Token1DVectorizer, AbstractVectorizer
 from mead.downloader import DataDownloader
 
 import codecs
 from collections import Counter
 
 logger = logging.getLogger(__file__)
+logging.basicConfig(level=logging.DEBUG)
 
-"""Pre-train a Transformer model in PyTorch
+NUM_PREFETCH = 2
+SHUF_BUF_SZ = 5000
+"""Pre-train a Transformer model in TensorFlow eager
 
-This file uses Baseline to train a Transformer with PyTorch on multiple GPUs.
+This file uses Baseline to train a Transformer with TensorFlow on multiple GPUs.
 It is inspired by: https://github.com/huggingface/naacl_transfer_learning_tutorial/blob/master/pretraining_train.py
-This pretraining module has multiple configurations that allow it to support
-
-  * 3 types of pre-training tokenization
-    - word
-    - subword (based on BERT tokenizer)
-    - ELMo (Kim et al 2015) char method
-  * pretraining on several datasets including PTB, Wikitext 2 (including raw) and Wikitext 103 (including raw).
-
-If you use `tokens=bpe`, it requires fastBPE.
-If you use `tokens=wordpiece` it requires bert_pretrained_pytorch.  
-Otherwise, it depends only on six, numpy, pytorch, and baseline.
-
-Because we are trying to pretrain a language model so we can do better on downstream tasks, it probably makes more
-sense to train on a full word model, not a model where rare words have already been replaced.
 
 """
 DATASETS = {
@@ -72,28 +61,6 @@ DATASETS = {
         "download": "https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-103-raw-v1.zip"
     }
 }
-
-X_CHAR_EMBEDDINGS = {
-    "dsz": 16,
-    "wsz": 128,
-    "embed_type": "positional-char-conv",
-    "keep_unused": True,
-    "cfiltsz": [
-        [1, 32],
-        [2, 32],
-        [3, 64],
-        [4, 128],
-        [5, 256],
-        [6, 512],
-        [7, 1024]
-    ],
-    "gating": "highway",
-    "num_gates": 2,
-    "projsz": 512
-}
-
-BERT_TOKENIZER = None
-
 
 class BPEVectorizer1D(AbstractVectorizer):
     """Define a Baseline Vectorizer for BPE using fastBPE (https://github.com/glample/fastBPE)
@@ -166,71 +133,6 @@ class BPEVectorizer1D(AbstractVectorizer):
         return self.mxlen,
 
 
-class WordPieceVectorizer1D(AbstractVectorizer):
-    """Define a Baseline Vectorizer that can do WordPiece with BERT tokenizer
-
-    If you use tokens=wordpiece, this vectorizer is used, and so then there is
-    a dependency on bert_pretrained_pytorch
-    """
-
-    def __init__(self, **kwargs):
-        """Loads a BertTokenizer using bert_pretrained_pytorch
-
-        :param kwargs:
-        """
-        super().__init__(kwargs.get('transform_fn'))
-        from pytorch_pretrained_bert import BertTokenizer
-        self.max_seen = 128
-        handle = kwargs.get('embed_file')
-        self.tokenizer = BertTokenizer.from_pretrained(handle, do_lower_case=False)
-        self.mxlen = kwargs.get('mxlen', -1)
-
-    @property
-    def vocab(self):
-        return self.tokenizer.vocab
-
-    def count(self, tokens):
-        seen = 0
-        counter = Counter()
-        for tok in self.iterable(tokens):
-            counter[tok] += 1
-            seen += 1
-        self.max_seen = max(self.max_seen, seen)
-        return counter
-
-    def iterable(self, tokens):
-        for tok in tokens:
-            if tok == '<unk>':
-                yield '[UNK]'
-            elif tok == '<EOS>':
-                yield '[SEP]'
-            else:
-                for subtok in self.tokenizer.tokenize(tok):
-                    yield subtok
-
-    def _next_element(self, tokens, vocab):
-        for atom in self.iterable(tokens):
-            value = vocab.get(atom)
-            if value is None:
-                value = vocab['[UNK]']
-            yield value
-
-    def run(self, tokens, vocab):
-        if self.mxlen < 0:
-            self.mxlen = self.max_seen
-        vec1d = np.zeros(self.mxlen, dtype=np.long)
-        for i, atom in enumerate(self._next_element(tokens, vocab)):
-            if i == self.mxlen:
-                i -= 1
-                break
-            vec1d[i] = atom
-        valid_length = i + 1
-        return vec1d, valid_length
-
-    def get_dims(self):
-        return self.mxlen,
-
-
 class TensorDatasetReaderBase(object):
     """Provide a base-class to do operations that are independent of token representation
     """
@@ -285,8 +187,6 @@ class TensorWordDatasetReader(TensorDatasetReaderBase):
 
         if self.use_subword == 'bpe':
             vectorizer = BPEVectorizer1D(model_file=model_file, vocab_file=vocab_file)
-        elif self.use_subword == 'wordpiece':
-            vectorizer = WordPieceVectorizer1D(embed_file=model_file)
         else:
             vectorizer = Token1DVectorizer(transform_fn=baseline.lowercase)
         super().__init__(nctx, {'x': vectorizer})
@@ -302,53 +202,42 @@ class TensorWordDatasetReader(TensorDatasetReaderBase):
             return {'x': self.vectorizers['x'].vocab}
         return super(TensorWordDatasetReader, self).build_vocab(files)
 
-    def load(self, filename, vocabs):
+    def load(self, filename, vocabs, batch_size):
         features = self.load_features(filename, vocabs)
-        x_tensor = torch.tensor(features['x'], dtype=torch.long)
-        num_sequences_word = (x_tensor.size(0) // self.nctx) * self.nctx
-        x_tensor = x_tensor.narrow(0, 0, num_sequences_word).view(-1, self.nctx)
-        return TensorDataset(x_tensor, x_tensor)
+        x_tensor = features['x']
+        num_sequences_word = (np.prod(x_tensor.shape) // self.nctx) * self.nctx
+        x_tensor = x_tensor[:num_sequences_word].reshape(-1, self.nctx)
+        dataset = tf.data.Dataset.from_tensor_slices((x_tensor, x_tensor))
+        dataset = dataset.shuffle(buffer_size=SHUF_BUF_SZ)
+        dataset = dataset.batch(batch_size, True)
+        dataset = dataset.map(lambda x, y: (x, y))
+        dataset = dataset.prefetch(NUM_PREFETCH)
+        return dataset
 
+def save_cache(cached_file, thing, protocol='pickle'):
+    with open(cached_file, 'wb') as f:
+        pickle.dump(thing, f)
 
-class TensorCharDatasetReader(TensorDatasetReaderBase):
-    """TensorCharDatasetReader reads in a vocab and then a dataset and returns as a `dict` of `string` to `ndarray`
-    """
-    def __init__(self, nctx, chars_per_word):
-        y_vectorizer = Token1DVectorizer(transform_fn=baseline.lowercase)
-        x_vectorizer = Char2DVectorizer(mxwlen=chars_per_word)
-        super(TensorCharDatasetReader, self).__init__(nctx, {'x': x_vectorizer, 'y': y_vectorizer})
-        self.chars_per_word = chars_per_word
+def load_cache(cached_file):
+    with open(cached_file, 'rb') as f:
+        loaded = pickle.load(cached_file)
+        return loaded
 
-    def load(self, filename, vocabs):
-        features = self.load_features(filename, vocabs)
-        y_tensor = torch.tensor(features['y'], dtype=torch.long)
-        num_sequences_word = (y_tensor.size(0) // self.nctx) * self.nctx
-        y_tensor = y_tensor.narrow(0, 0, num_sequences_word).view(-1, self.nctx)
-
-        x_dataset = torch.tensor(features['x'], dtype=torch.long)
-        x_tensor = torch.tensor(x_dataset, dtype=torch.long)
-        x_tensor = x_tensor.narrow(0, 0, num_sequences_word)
-        x_tensor = x_tensor.view(-1, self.nctx, self.chars_per_word)
-        return TensorDataset(x_tensor, y_tensor)
-
-
-def load_data(token_type, reader, dataset, file_key, vocabs, caching):
-    cached_file = '{}-{}.cache'.format(dataset[file_key], token_type)
+def load_data(token_type, reader, dataset, file_key, vocabs, batch_size, caching):
+    cached_file = '{}-{}.tf-cache'.format(dataset[file_key], token_type)
     if caching and os.path.exists(cached_file):
         logger.info("Reloading %s from cached file [%s]", file_key, cached_file)
-        loaded = torch.load(cached_file)
+        loaded = load_cache(cached_file)
+
     else:
-        loaded = reader.load(dataset[file_key], vocabs)
+        loaded = reader.load(dataset[file_key], vocabs, batch_size)
         logger.info("Caching %s to [%s]", file_key, cached_file)
-        torch.save(loaded, cached_file)
+        #save_cache(cached_file, loaded)
     return loaded
 
 
-def create_reader(token_type, nctx, chars_per_word, subword_model_file, subword_vocab_file):
-    if token_type == "chars":
-        logger.info("Using character input")
-        reader = TensorCharDatasetReader(nctx, chars_per_word)
-    elif token_type == "words":
+def create_reader(token_type, nctx, subword_model_file, subword_vocab_file):
+    if token_type == "words":
         logger.info("Using word input")
         reader = TensorWordDatasetReader(nctx)
     else:
@@ -358,7 +247,7 @@ def create_reader(token_type, nctx, chars_per_word, subword_model_file, subword_
 
 
 def get_embed_and_vocab_cache(base_path, dataset_key, token_type):
-    return os.path.join(base_path, 'preproc-{}-{}.cache'.format(dataset_key, token_type))
+    return os.path.join(base_path, 'preproc-{}-{}.tf-cache'.format(dataset_key, token_type))
 
 
 def load_embed_and_vocab(token_type, reader, dataset, dataset_key, d_model, caching):
@@ -366,52 +255,30 @@ def load_embed_and_vocab(token_type, reader, dataset, dataset_key, d_model, cach
     preproc_cache = get_embed_and_vocab_cache(base_path, dataset_key, token_type)
     if caching and os.path.exists(preproc_cache):
         logger.info("Loading cached preprocessing info [%s]", preproc_cache)
-        preproc_data = torch.load(preproc_cache)
+        preproc_data = load_cache(preproc_cache)
 
     else:
         vocab_sources = [dataset['train_file'], dataset['valid_file']]
         vocabs = reader.build_vocab(vocab_sources)
         valid_num_words = reader.num_words[dataset['valid_file']]
+        train_num_words = reader.num_words[dataset['train_file']]
         logger.info("Read vocabulary")
         embeddings = {}
 
         # If we are not using chars, then use 'x' for both input and output
         tgt_key = 'x'
-        if token_type == 'chars':
-            # Write JSON file here and skip this step the second time
-            x_embedding = eight_mile.embeddings.load_embeddings('x', known_vocab=vocabs['x'], **X_CHAR_EMBEDDINGS)
-            vocabs['x'] = x_embedding['vocab']
+        x_embedding = eight_mile.embeddings.load_embeddings('x',
+                                                            dsz=d_model,
+                                                            known_vocab=vocabs['x'],
+                                                            embed_type='positional')
+        vocabs['x'] = x_embedding['vocab']
+        embeddings['x'] = x_embedding['embeddings']
 
-            y_embedding = eight_mile.embeddings.load_embeddings('y', dsz=1, known_vocab=vocabs['y'])
-            vocabs['y'] = y_embedding['vocab']
-
-            embeddings['x'] = x_embedding['embeddings']
-            embeddings['y'] = y_embedding['embeddings']
-            tgt_key = 'y'
-        else:
-            x_embedding = eight_mile.embeddings.load_embeddings('x',
-                                                                dsz=d_model,
-                                                                known_vocab=vocabs['x'],
-                                                                embed_type='positional')
-            vocabs['x'] = x_embedding['vocab']
-            embeddings['x'] = x_embedding['embeddings']
-
-        preproc_data = {'vocabs': vocabs, 'embeddings': embeddings, 'valid_num_words': valid_num_words, 'tgt_key': tgt_key}
+        preproc_data = {'vocabs': vocabs, 'embeddings': embeddings, 'train_num_words': train_num_words, 'valid_num_words': valid_num_words, 'tgt_key': tgt_key}
         logger.info("Saving preprocessing info [%s]", preproc_cache)
-        torch.save(preproc_data, preproc_cache)
+        ##save_cache(preproc_cache, preproc_data)
+
     return preproc_data
-
-
-def checkpoint_for(model_base, epoch):
-    return '{}-{}.pth'.format(model_base, epoch+1)
-
-
-def rm_old_checkpoints(base_path, current_epoch, last_n=3):
-    for i in range(0, current_epoch-last_n):
-        checkpoint_i = checkpoint_for(base_path, i)
-        if os.path.exists(checkpoint_i):
-            logger.info("Removing: %s", checkpoint_i)
-            os.remove(checkpoint_i)
 
 
 class Average(object):
@@ -458,12 +325,9 @@ def train():
     parser.add_argument("--clip", type=float, default=0.25, help="Clipping gradient norm")
     parser.add_argument("--weight_decay", type=float, default=0.0, help="Weight decay")
     parser.add_argument("--epochs", type=int, default=20, help="Num training epochs")
-    parser.add_argument("--restart_from", type=str, help="Option allows you to restart from a previous checkpoint")
+    #parser.add_argument("--restart_from", type=str, help="Option allows you to restart from a previous checkpoint")
     parser.add_argument("--warmup_steps", type=int, default=1000, help="Num warmup steps")
     parser.add_argument("--mlm", type=str2bool, default=False, help="Use Masked Language Model (MLM) objective")
-    parser.add_argument("--device", type=str,
-                        default="cuda" if torch.cuda.is_available() else "cpu",
-                        help="Device (cuda or cpu)")
     parser.add_argument("--distributed",
                         type=str2bool,
                         default=False,
@@ -476,8 +340,9 @@ def train():
                         type=int,
                         default=40,
                         help="How many max characters per word")
-
+    parser.add_argument('--tf_ll', help='TensorFlow Log level', type=str, default='warn')
     args = parser.parse_args()
+    set_tf_log_level(args.tf_ll)
 
     if args.train_file and not args.valid_file:
         logger.error("If you provide a train_file, you must provide a valid_file")
@@ -487,141 +352,102 @@ def train():
         logger.error("If you provide a valid_file, you must also provide a train_file")
         return
 
-    if args.tokens == "chars" and args.mlm:
-        logger.error("Character composition cannot currently be used with the MLM objective")
-
     if args.basedir is None:
         args.basedir = 'transformer-{}-{}-{}'.format(args.dataset_key, args.tokens, os.getpid())
-    logging.basicConfig(level=logging.INFO if args.local_rank in [-1, 0] else logging.WARN)
+    #logging.basicConfig(level=logging.INFO if args.local_rank in [-1, 0] else logging.WARN)
+
     logger.info("Cache directory [%s]", args.dataset_cache)
 
-    args.distributed = args.distributed or int(os.environ.get("WORLD_SIZE", 1)) > 1
+    # TODO:
+    #args.distributed = args.distributed or int(os.environ.get("WORLD_SIZE", 1)) > 1
 
-    if args.distributed:
-        if args.local_rank == -1:
-            # https://github.com/kubeflow/pytorch-operator/issues/128
-            # https://github.com/pytorch/examples/blob/master/imagenet/main.py
-            logger.info("Setting local rank to RANK env variable")
-            args.local_rank = int(os.environ['RANK'])
-        logger.warning("Local rank (%d)", args.local_rank)
-        torch.cuda.set_device(args.local_rank)
-        args.device = torch.device("cuda", args.local_rank)
-        torch.distributed.init_process_group(backend='nccl', init_method='env://')
+    #if args.distributed:
+    #    if args.local_rank == -1:
+    #        # https://github.com/kubeflow/pytorch-operator/issues/128
+    #        # https://github.com/pytorch/examples/blob/master/imagenet/main.py
+    #        logger.info("Setting local rank to RANK env variable")
+    #        args.local_rank = int(os.environ['RANK'])
+    #    logger.warning("Local rank (%d)", args.local_rank)
+    #    torch.cuda.set_device(args.local_rank)
+    #    args.device = torch.device("cuda", args.local_rank)
+    #    torch.distributed.init_process_group(backend='nccl', init_method='env://')
 
     if args.train_file:
         dataset = {'train_file': args.train_file, 'valid_file': args.valid_file}
     else:
         dataset = DataDownloader(DATASETS[args.dataset_key], args.dataset_cache).download()
-    reader = create_reader(args.tokens, args.nctx, args.chars_per_word, args.subword_model_file, args.subword_vocab_file)
+    reader = create_reader(args.tokens, args.nctx, args.subword_model_file, args.subword_vocab_file)
 
     preproc_data = load_embed_and_vocab(args.tokens, reader, dataset, args.dataset_key, args.d_model, args.cache_features)
 
     vocabs = preproc_data['vocabs']
-    if args.mlm:
-        mask_from = vocabs['x']
-        vocab_size = len(mask_from)
-        mask_value = mask_from.get("[MASK]", mask_from.get("<MASK>", -1))
-        if mask_value == -1:
-            logger.error("We could not find a suitable masking token in the vocab")
-            return
+    vocab_size = len(vocabs['x'])
     os.makedirs(args.basedir, exist_ok=True)
     # We want to make sure to save our input vocab into the basedir for reuse later
     write_json(vocabs['x'], os.path.join(args.basedir, 'vocabs.json'))
     embeddings = preproc_data['embeddings']
+    ## Approx
+    steps_per_epoch = preproc_data['train_num_words'] // args.nctx // args.batch_size
     valid_num_words = preproc_data['valid_num_words']
     tgt_key = preproc_data['tgt_key']
     logger.info("Loaded embeddings")
 
-    train_set = load_data(args.tokens, reader, dataset, 'train_file', vocabs, args.cache_features)
-    valid_set = load_data(args.tokens, reader, dataset, 'valid_file', vocabs, args.cache_features)
-    logger.info("valid. tokens [%s], valid. words [%s]", valid_set.tensors[-1].numel(), valid_num_words)
-
-    train_sampler = torch.utils.data.distributed.DistributedSampler(train_set) if args.distributed else None
-    train_loader = DataLoader(train_set, sampler=train_sampler, batch_size=args.batch_size, shuffle=(not args.distributed))
-    valid_loader = DataLoader(valid_set, batch_size=args.batch_size, shuffle=False)
+    train_set = load_data(args.tokens, reader, dataset, 'train_file', vocabs, args.batch_size, args.cache_features)
+    valid_set = load_data(args.tokens, reader, dataset, 'valid_file', vocabs, args.batch_size, args.cache_features)
+    logger.info("valid. words [%s]", valid_num_words)
     logger.info("Loaded datasets")
 
     model = TransformerLanguageModel.create(embeddings,
                                             hsz=args.d_model,
                                             d_ff=args.d_ff,
-                                            tie_weights=(args.tokens != 'chars'),
+                                            tie_weights=False,
                                             dropout=args.dropout,
                                             gpu=False,
                                             num_heads=args.num_heads,
                                             layers=args.num_layers,
                                             src_keys=['x'], tgt_key=tgt_key)
-    model.to(args.device)
-    loss_function = model.create_loss()
-    loss_function.to(args.device)
+    def loss_function(logits, y):
+        vsz = vocab_size
+        targets = tf.reshape(y, [-1])
+        bt_x_v = tf.nn.log_softmax(tf.reshape(logits, [-1, vsz]), axis=-1)
+        one_hots = tf.one_hot(targets, vsz)
+        example_loss = -tf.reduce_sum(one_hots * bt_x_v, axis=-1)
+        loss = tf.reduce_mean(example_loss)
+        return loss
+
+    def lm_loss(model, x, y):
+        labels = tf.transpose(y, perm=[1, 0])
+        output = model(x)[0]
+        logits = tf.transpose(output, perm=[1, 0, 2])
+        shift_logits = logits[:-1]
+        shift_labels = labels[1:]
+        return loss_function(shift_logits, shift_labels)
+
 
     logger.info("Loaded model and loss")
 
-    steps_per_epoch = len(train_loader)
     update_on = steps_per_epoch // 10
-    cosine_decay = CosineDecaySchedulerPyTorch(len(train_loader) * args.epochs, lr=args.lr)
-    linear_warmup = WarmupLinearSchedulerPyTorch(args.warmup_steps, lr=args.lr)
-    lr_sched = CompositeLRScheduler(linear_warmup, cosine_decay, lr=args.lr)
-
-    global_step = 0
     start_epoch = 0
-    if args.restart_from:
-        model.load_state_dict(torch.load(args.restart_from))
-        start_epoch = int(args.restart_from.split("-")[-1].split(".")[0]) - 1
-        global_step = (start_epoch+1) * steps_per_epoch
-        logger.info("Restarting from a previous checkpoint %s.\n\tStarting at global_step=%d, epoch=%d",
-                    args.restart_from, global_step, start_epoch+1)
-    optimizer = OptimizerManager(model, global_step, optim='adam', lr=args.lr, lr_function=lr_sched, weight_decay=args.weight_decay)
-    logger.info("Model has {:,} parameters".format(sum(p.numel() for p in model.parameters() if p.requires_grad)))
-
-    # Prepare model for distributed training if needed
-    if args.distributed:
-        model = DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)
-        logger.info("Model located on %d", args.local_rank)
-
+    optimizer = EagerOptimizer(lm_loss, tf.optimizers.Adam(lr=args.lr))
+    _checkpoint = tf.train.Checkpoint(optimizer=optimizer.optimizer, model=model)
+    model_base = os.path.join(args.basedir, 'checkpoint')
+    checkpoint_dir = '{}-{}'.format(model_base, os.getpid())
+    checkpoint_manager = tf.train.CheckpointManager(_checkpoint,
+                                                    directory=checkpoint_dir,
+                                                    max_to_keep=5)
     # This is the training loop
     for epoch in range(start_epoch, args.epochs):
         avg_loss = Average('average_train_loss')
         metrics = {}
-        optimizer.zero_grad()
-
-        if args.distributed:
-            train_sampler.set_epoch(epoch)
 
         start = time.time()
-        model.train()
-        for i, batch in enumerate(train_loader):
+        SET_TRAIN_FLAG(True)
+        for i, batch in enumerate(train_set):
             x, y = batch
-            inputs = {'x': x.to(args.device)}
-            labels = y.to(args.device)
-            if args.mlm:
-                # Replace 15% of tokens
-                masked_indices = torch.bernoulli(torch.full(labels.shape, 0.15)).byte()
-                # Anything not masked is 0 so no loss
-                labels[~masked_indices] = 0
-                # Of the masked items, mask 80% of them with [MASK]
-                indices_replaced = torch.bernoulli(torch.full(labels.shape, 0.8)).byte() & masked_indices
-                inputs[indices_replaced] = mask_value
-                # Replace 10% of them with random words, rest preserved for auto-encoding
-                indices_random = torch.bernoulli(torch.full(labels.shape, 0.5)).byte() & masked_indices & ~indices_replaced
-                random_words = torch.randint(vocab_size, labels.shape, dtype=torch.long, device=args.device)
-                inputs[indices_random] = random_words[indices_random]
-
-            labels = labels.transpose(0, 1).contiguous()
-            logits = model(inputs, None)[0].transpose(0, 1).contiguous()
-            if args.mlm:
-                loss = loss_function(logits, labels)
-            else:
-                shift_logits = logits[:-1]
-                shift_labels = labels[1:]
-                loss = loss_function(shift_logits, shift_labels)
-            loss.backward()
-            avg_loss.update(loss.item())
-
-            torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip)
-            optimizer.step()
-            optimizer.zero_grad()
+            loss_value = optimizer.update(model, {'x': x}, y)
+            avg_loss.update(loss_value.numpy())
             if (i + 1) % update_on == 0:
-                logging.info(avg_loss)
+                print(avg_loss)
 
         # How much time elapsed in minutes
         elapsed = (time.time() - start)/60
@@ -632,38 +458,13 @@ def train():
         metrics['train_elapsed_min'] = elapsed
         metrics['average_train_loss'] = train_token_loss
         metrics['train_ppl'] = train_token_ppl
-        model_base = os.path.join(args.basedir, 'checkpoint')
         avg_valid_loss = Average('average_valid_loss')
         start = time.time()
-        model.eval()
-        for batch in valid_loader:
-            with torch.no_grad():
-                x, y = batch
-                inputs = {'x': x.to(args.device)}
-                labels = y.to(args.device)
-
-                if args.mlm:
-                    # Replace 15% of tokens
-                    masked_indices = torch.bernoulli(torch.full(labels.shape, 0.15)).byte()
-                    # Anything not masked is 0 so no loss
-                    labels[~masked_indices] = 0
-                    # Of the masked items, mask 80% of them with [MASK]
-                    indices_replaced = torch.bernoulli(torch.full(labels.shape, 0.8)).byte() & masked_indices
-                    inputs[indices_replaced] = mask_value
-                    # Replace 10% of them with random work
-                    indices_random = torch.bernoulli(torch.full(labels.shape, 0.5)).byte() & masked_indices & ~indices_replaced
-                    random_words = torch.randint(vocab_size, labels.shape, dtype=torch.long, device=args.device)
-                    inputs[indices_random] = random_words[indices_random]
-
-                labels = labels.transpose(0, 1).contiguous()
-                logits = model(inputs, None)[0].transpose(0, 1).contiguous()
-                if args.mlm:
-                    loss = loss_function(logits, labels)
-                else:
-                    shift_logits = logits[:-1]
-                    shift_labels = labels[1:]
-                    loss = loss_function(shift_logits, shift_labels)
-                avg_valid_loss.update(loss.item())
+        SET_TRAIN_FLAG(False)
+        for batch in valid_set:
+            x, y = batch
+            loss_value = lm_loss(model, {'x': x}, y)
+            avg_valid_loss.update(loss_value.numpy())
 
         valid_token_loss = avg_valid_loss.avg
         valid_token_ppl = math.exp(valid_token_loss)
@@ -677,19 +478,11 @@ def train():
             metrics['average_valid_word_ppl'] = math.exp(valid_token_loss * valid_set.tensors[-1].numel() / valid_num_words)
         else:
             metrics['average_valid_word_ppl'] = valid_token_ppl
-        logger.info(metrics)
+        print(metrics)
 
         if args.local_rank < 1:
-
             # Should probably do this more often
-            checkpoint_name = checkpoint_for(model_base, epoch+1)
-            logger.info("Creating checkpoint: %s", checkpoint_name)
-            if args.distributed:
-                torch.save(model.module.state_dict(), checkpoint_name)
-            else:
-                torch.save(model.state_dict(), checkpoint_name)
-
-            rm_old_checkpoints(model_base, epoch+1)
+            checkpoint_manager.save()
 
 
 if __name__ == "__main__":

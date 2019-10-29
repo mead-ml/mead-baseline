@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import copy
 import math
+import numpy as np
 from eight_mile.utils import listify, Offsets
 from eight_mile.utils import transition_mask as transition_mask_np
 import torch.autograd
@@ -71,7 +72,7 @@ class VariationalDropout(nn.Module):
 
         :param p: float, the percentage to drop
         """
-        super(VariationalDropout, self).__init__()
+        super().__init__()
         self.p = p
 
     def extra_repr(self):
@@ -122,7 +123,7 @@ class SequenceLoss(nn.Module):
 
 class Identity(nn.Module):
     def __init__(self, *args, **kwargs):
-        super(Identity, self).__init__()
+        super().__init__()
 
     def forward(self, inputs):
         return inputs
@@ -225,7 +226,7 @@ def concat_state_dirs(state):
 # Mapped
 class ConvEncoder(nn.Module):
     def __init__(self, insz, outsz, filtsz, pdrop, activation='relu'):
-        super(ConvEncoder, self).__init__()
+        super().__init__()
         self.output_dim = outsz
         pad = filtsz//2
         self.conv = nn.Conv1d(insz, outsz, filtsz, padding=pad)
@@ -241,7 +242,7 @@ class ConvEncoder(nn.Module):
 class ConvEncoderStack(nn.Module):
 
     def __init__(self, insz, outsz, filtsz, pdrop, layers=1, activation='relu'):
-        super(ConvEncoderStack, self).__init__()
+        super().__init__()
 
         first_layer = ConvEncoder(insz, outsz, filtsz, pdrop, activation)
         subsequent_layer = ResidualBlock(ConvEncoder(outsz, outsz, filtsz, pdrop, activation))
@@ -277,7 +278,7 @@ def bth2tbh(t):
 class ParallelConv(nn.Module):
 
     def __init__(self, insz, outsz, filtsz, activation='relu', input_fmt="bth"):
-        super(ParallelConv, self).__init__()
+        super().__init__()
         convs = []
         outsz_filts = outsz
         input_fmt = input_fmt.lower()
@@ -323,7 +324,7 @@ class ParallelConv(nn.Module):
 class Highway(nn.Module):
 
     def __init__(self, input_size, **kwargs):
-        super(Highway, self).__init__()
+        super().__init__()
         self.proj = nn.Linear(input_size, input_size)
         self.transform = nn.Linear(input_size, input_size)
         self.transform.bias.data.fill_(-2.0)
@@ -353,7 +354,7 @@ def pytorch_linear(in_sz, out_sz, unif=0, initializer=None):
 class Dense(nn.Module):
 
     def __init__(self, insz, outsz, activation=None, unif=0, initializer=None):
-        super(Dense, self).__init__()
+        super().__init__()
         self.layer = pytorch_linear(insz, outsz, unif, initializer)
         self.activation = get_activation(activation)
         self.output_dim = outsz
@@ -366,7 +367,7 @@ class Dense(nn.Module):
 class ResidualBlock(nn.Module):
 
     def __init__(self, layer=None, **kwargs):
-        super(ResidualBlock, self).__init__()
+        super().__init__()
         self.layer = layer
         if self.layer is not None and hasattr(layer, 'output_dim'):
             self.output_dim = layer.output_dim
@@ -379,37 +380,9 @@ class ResidualBlock(nn.Module):
 class SkipConnection(ResidualBlock):
 
     def __init__(self, input_size, activation='relu'):
-        super(SkipConnection, self).__init__(None)
+        super().__init__(None)
         self.layer = Dense(input_size, input_size, activation=activation)
         self.output_dim = input_size
-
-
-# Mapped
-class LayerNorm(nn.Module):
-    """
-    Applies Layer Normalization over a mini-batch of inputs as described in
-    the paper `Layer Normalization`_ .
-
-    .. math::
-        y = \frac{x - \mathrm{E}[x]}{ \sqrt{\mathrm{Var}[x]} + \epsilon} * \gamma + \beta
-
-    This is provided in pytorch's master, and can be replaced in the near future.
-    For the time, being, this code is adapted from:
-    http://nlp.seas.harvard.edu/2018/04/03/attention.html
-    https://github.com/pytorch/pytorch/pull/2019
-    """
-    def __init__(self, num_features, eps=1e-6):
-        super(LayerNorm, self).__init__()
-        self.a = nn.Parameter(torch.ones(num_features))
-        self.b = nn.Parameter(torch.zeros(num_features))
-        self.eps = eps
-        self.output_dim = num_features
-
-    def forward(self, x):
-        mean = x.mean(-1, keepdim=True)
-        std = ((x - mean).pow(2).sum(-1, keepdim=True).div(x.size(-1) - 1) + self.eps).sqrt()
-        d = (std + self.eps) + self.b
-        return self.a * (x - mean) / d
 
 
 def pytorch_lstm(insz, hsz, rnntype, nlayers, dropout, unif=0, batch_first=False, initializer=None):
@@ -589,10 +562,9 @@ class BiLSTMEncoderHiddenContext(BiLSTMEncoder):
         return self.extract_top_state(concat_state_dirs(state))
 
 
-
 class EmbeddingsContainer(nn.Module):
     def __init__(self):
-        super(EmbeddingsContainer, self).__init__()
+        super().__init__()
 
     def __getitem__(self, key):
         return self._modules[key]
@@ -641,7 +613,7 @@ class EmbeddingsStack(nn.Module):
         :param embeddings_dict: (``dict``) dictionary of each feature embedding
         """
 
-        super(EmbeddingsStack, self).__init__()
+        super().__init__()
 
         self.embeddings = EmbeddingsContainer()
         #input_sz = 0
@@ -653,7 +625,7 @@ class EmbeddingsStack(nn.Module):
         self._requires_length = requires_length
 
     def cuda(self, device=None):
-        super(EmbeddingsStack, self).cuda(device=device)
+        super().cuda(device=device)
         for emb in self.embeddings.values():
             emb.cuda(device)
 
@@ -731,10 +703,11 @@ class DenseStack(nn.Module):
     def requires_length(self):
         return False
 
+
 class BaseAttention(nn.Module):
 
     def __init__(self, hsz):
-        super(BaseAttention, self).__init__()
+        super().__init__()
         self.hsz = hsz
         self.W_c = nn.Linear(2 * self.hsz, hsz, bias=False)
 
@@ -765,7 +738,7 @@ class BaseAttention(nn.Module):
 class LuongDotProductAttention(BaseAttention):
 
     def __init__(self, hsz):
-        super(LuongDotProductAttention, self).__init__(hsz)
+        super().__init__(hsz)
 
     def _attention(self, query_t, keys_bth, keys_mask):
         a = torch.bmm(keys_bth, query_t.unsqueeze(2))
@@ -777,7 +750,7 @@ class LuongDotProductAttention(BaseAttention):
 class ScaledDotProductAttention(BaseAttention):
 
     def __init__(self, hsz):
-        super(ScaledDotProductAttention, self).__init__(hsz)
+        super().__init__(hsz)
 
     def _attention(self, query_t, keys_bth, keys_mask):
         a = torch.bmm(keys_bth, query_t.unsqueeze(2)) / math.sqrt(self.hsz)
@@ -789,7 +762,7 @@ class ScaledDotProductAttention(BaseAttention):
 class LuongGeneralAttention(BaseAttention):
 
     def __init__(self, hsz):
-        super(LuongGeneralAttention, self).__init__(hsz)
+        super().__init__(hsz)
         self.W_a = nn.Linear(self.hsz, self.hsz, bias=False)
 
     def _attention(self, query_t, keys_bth, keys_mask):
@@ -802,7 +775,7 @@ class LuongGeneralAttention(BaseAttention):
 class BahdanauAttention(BaseAttention):
 
     def __init__(self, hsz):
-        super(BahdanauAttention, self).__init__(hsz)
+        super().__init__(hsz)
         self.hsz = hsz
         self.W_a = nn.Linear(self.hsz, self.hsz, bias=False)
         self.E_a = nn.Linear(self.hsz, self.hsz, bias=False)
@@ -833,7 +806,7 @@ class BahdanauAttention(BaseAttention):
 class FineTuneModel(nn.Module):
 
     def __init__(self, nc, embeddings, stack_model=None):
-        super(FineTuneModel, self).__init__()
+        super().__init__()
         if isinstance(embeddings, dict):
             self.finetuned = EmbeddingsStack(embeddings)
         else:
@@ -848,7 +821,7 @@ class FineTuneModel(nn.Module):
         return self.output_layer(stacked)
 
 
-class CompositePooler(nn.Module):
+class CompositePooling(nn.Module):
     def __init__(self, models):
         """
         Note, this currently requires that each submodel is an eight_mile model with an `output_dim` attr
@@ -876,7 +849,7 @@ class CompositePooler(nn.Module):
 class EmbedPoolStackModel(nn.Module):
 
     def __init__(self, nc, embeddings, pool_model, stack_model=None):
-        super(EmbedPoolStackModel, self).__init__()
+        super().__init__()
         if isinstance(embeddings, dict):
             self.embed_model = EmbeddingsStack(embeddings)
         else:
@@ -910,7 +883,7 @@ class EmbedPoolStackModel(nn.Module):
 class WithDropout(nn.Module):
 
     def __init__(self, layer, pdrop=0.5):
-        super(WithDropout, self).__init__()
+        super().__init__()
         self.layer = layer
         self.dropout = nn.Dropout(pdrop)
 
@@ -998,7 +971,7 @@ class TaggerGreedyDecoder(nn.Module):
         :param batch_first: `bool` Should the batch dimensions be first?
         :param reduction: `str` Should the loss be calculated at the token level or batch level
         """
-        super(TaggerGreedyDecoder, self).__init__()
+        super().__init__()
         self.num_tags = num_tags
 
         if constraint_mask is not None:
@@ -1062,7 +1035,7 @@ class CRF(nn.Module):
             start index and the second idx is assumed to be the end index. In
             this case n_tags is assumed to include the start and end symbols.
         """
-        super(CRF, self).__init__()
+        super().__init__()
         self.start_idx, self.end_idx = idxs
         self.num_tags = num_tags
         if constraint_mask is not None:
@@ -1213,7 +1186,7 @@ class CRF(nn.Module):
 class SequenceModel(nn.Module):
 
     def __init__(self, nc, embeddings, transducer, decoder=None):
-        super(SequenceModel, self).__init__()
+        super().__init__()
         if isinstance(embeddings, dict):
             self.embed_model = EmbeddingsStack(embeddings)
         else:
@@ -1242,7 +1215,7 @@ class TagSequenceModel(SequenceModel):
 
     def __init__(self, nc, embeddings, transducer, decoder=None):
         decoder_model = CRF(nc, batch_first=False) if decoder is None else decoder
-        super(TagSequenceModel, self).__init__(nc, embeddings, transducer, decoder_model)
+        super().__init__(nc, embeddings, transducer, decoder_model)
 
     def neg_log_loss(self, unary, tags, lengths):
         return self.decoder_model.neg_log_loss(unary, tags, lengths)
@@ -1258,4 +1231,206 @@ def pytorch_embedding(weights, finetune=True):
     lut.weight = nn.Parameter(torch.FloatTensor(weights),
                               requires_grad=finetune)
     return lut
+
+
+def subsequent_mask(size):
+    """
+    Creates a lower triangular mask to mask future
+
+    :param size: Temporal length
+    :return: A tensor of type `uint8` that is 1s along diagonals and below, zero  o.w
+    """
+    attn_shape = (1, 1, size, size)
+    sub_mask = np.tril(np.ones(attn_shape)).astype('uint8')
+    return torch.from_numpy(sub_mask)
+
+
+class MultiHeadedAttention(nn.Module):
+    """
+    Multi-headed attention from https://arxiv.org/abs/1706.03762 via http://nlp.seas.harvard.edu/2018/04/03/attention.html
+
+    Multi-headed attention provides multiple looks of low-order projections K, Q and V using an attention function
+    (specifically `scaled_dot_product_attention` in the paper.  This allows multiple relationships to be illuminated
+    via attention on different positional and representational information from each head.
+
+    The number of heads `h` times the low-order projection dim `d_k` is equal to `d_model` (which is asserted upfront).
+    This means that each weight matrix can be simply represented as a linear transformation from `d_model` to `d_model`,
+    and partitioned into heads after the fact.
+
+    Finally, an output projection is applied which brings the output space back to `d_model`, in preparation for the
+    sub-sequent `FFN` sub-layer.
+
+    There are 3 uses of multi-head attention in the Transformer.
+    For encoder-decoder layers, the queries come from the previous decoder layer, and the memory keys come from
+    the encoder.  For encoder layers, the K, Q and V all come from the output of the previous layer of the encoder.
+    And for self-attention in the decoder, K, Q and V all come from the decoder, but here it is masked to prevent using
+    future values
+    """
+    def __init__(self, num_heads, d_model, dropout=0.1, scale=False):
+        """Constructor for multi-headed attention
+
+        :param h: The number of heads
+        :param d_model: The model hidden size
+        :param dropout (``float``): The amount of dropout to use
+        :param attn_fn: A function to apply attention, defaults to SDP
+        """
+        super().__init__()
+        assert d_model % num_heads == 0
+        self.d_k = d_model // num_heads
+        self.h = num_heads
+        self.w_Q = Dense(d_model, d_model)
+        self.w_K = Dense(d_model, d_model)
+        self.w_V = Dense(d_model, d_model)
+        self.w_O = Dense(d_model, d_model)
+        self.attn_fn = self._scaled_dot_product_attention if scale else self._dot_product_attention
+        self.attn = None
+        self.dropout = nn.Dropout(dropout)
+
+    def _scaled_dot_product_attention(self, query, key, value, mask=None, dropout=None):
+        """Scaled dot product attention, as defined in https://arxiv.org/abs/1706.03762
+
+        We apply the query to the keys to recieve our weights via softmax, which are then applied
+        for each value, but in a series of efficient matrix operations.  In the case of self-attention,
+        the key, query and values are all low order projections of the same input.
+
+        :param query: a query for alignment. Can come from self in case of self-attn or decoder in case of E/D
+        :param key: a set of keys from encoder or self
+        :param value: a set of values from encoder or self
+        :param mask: masking (for destination) to prevent seeing what we shouldnt
+        :param dropout: apply dropout operator post-attention (this is not a float)
+        :return: A tensor that is (BxHxTxT)
+
+        """
+        # (., H, T, T) = (., H, T, D) x (., H, D, T)
+        d_k = query.size(-1)
+        scores = torch.matmul(query, key.transpose(-2, -1)) / math.sqrt(d_k)
+        if mask is not None:
+            scores = scores.masked_fill(mask == 0, -1e9)
+        weights = F.softmax(scores, dim=-1)
+        if dropout is not None:
+            weights = dropout(weights)
+        return torch.matmul(weights, value), weights
+
+    def _dot_product_attention(self, query, key, value, mask=None, dropout=None):
+        scores = torch.matmul(query, key.transpose(-2, -1))
+        if mask is not None:
+            scores = scores.masked_fill(mask == 0, -1e9)
+        p_attn = F.softmax(scores, dim=-1)
+        if dropout is not None:
+            p_attn = dropout(p_attn)
+        return torch.matmul(p_attn, value), p_attn
+
+    def forward(self, qkvm):
+        """Low-order projections of query, key and value into multiple heads, then attention application and dropout
+
+        :param query: a query for alignment. Can come from self in case of self-attn or decoder in case of E/D
+        :param key: a set of keys from encoder or self
+        :param value: a set of values from encoder or self
+        :param mask: masking (for destination) to prevent seeing what we shouldnt
+        :return: Multi-head attention output, result of attention application to sequence (B, T, d_model)
+        """
+        query, key, value, mask = qkvm
+        batchsz = query.size(0)
+
+        # (B, H, T, D)
+        query = self.w_Q(query).view(batchsz, -1, self.h, self.d_k).transpose(1, 2)
+        key = self.w_K(key).view(batchsz, -1, self.h, self.d_k).transpose(1, 2)
+        value = self.w_V(value).view(batchsz, -1, self.h, self.d_k).transpose(1, 2)
+
+        x, self.attn = self.attn_fn(query, key, value, mask=mask, dropout=self.dropout)
+
+        x = x.transpose(1, 2).contiguous() \
+            .view(batchsz, -1, self.h * self.d_k)
+        return self.w_O(x)
+
+
+class TransformerEncoder(nn.Module):
+    def __init__(self, num_heads, d_model, pdrop, scale=True, activation_type='relu', d_ff=None):
+        super().__init__()
+        self.d_model = d_model
+        self.d_ff = d_ff if d_ff is not None else 4 * d_model
+        self.self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale=scale)
+        self.ffn = nn.Sequential(Dense(self.d_model, self.d_ff),
+                                 get_activation(activation_type),
+                                 Dense(self.d_ff, self.d_model))
+        self.ln1 = nn.LayerNorm(self.d_model, eps=1e-6)
+        self.ln2 = nn.LayerNorm(self.d_model, eps=1e-6)
+        self.dropout = nn.Dropout(pdrop)
+
+    def forward(self, inputs):
+        """
+        :param inputs: `(x, mask)`
+        :return: The output tensor
+        """
+        x, mask = inputs
+
+        x = self.ln1(x)
+        h = self.self_attn((x, x, x, mask))
+        x = x + self.dropout(h)
+
+        x = self.ln2(x)
+        x = x + self.dropout(self.ffn(x))
+        return x
+
+
+class TransformerDecoder(nn.Module):
+    def __init__(self, num_heads, d_model, pdrop, scale=True, activation_type='relu', d_ff=None):
+        super().__init__()
+        self.d_model = d_model
+        self.d_ff = d_ff if d_ff is not None else 4 * d_model
+        self.self_attn = MultiHeadedAttention(num_heads, self.d_model, pdrop, scale=scale)
+        self.src_attn = MultiHeadedAttention(num_heads, self.d_model, pdrop, scale=scale)
+        self.ffn = nn.Sequential(Dense(self.d_model, self.d_ff),
+                                 get_activation(activation_type),
+                                 Dense(self.d_ff, self.d_model))
+
+        self.ln1 = nn.LayerNorm(self.d_model, eps=1e-6)
+        self.ln2 = nn.LayerNorm(self.d_model, eps=1e-6)
+        self.ln3 = nn.LayerNorm(self.d_model, eps=1e-6)
+        self.dropout = nn.Dropout(pdrop)
+
+    def forward(self, inputs):
+
+        x, memory, src_mask, tgt_mask = inputs
+        x = self.ln1(x)
+        x = x + self.dropout(self.self_attn(x, x, x, tgt_mask))
+
+        x = self.ln2(x)
+        x = x + self.dropout(self.src_attn(x, memory, memory, src_mask))
+
+        x = self.ln3(x)
+        x = x + self.dropout(self.ffn(x))
+        return x
+
+
+class TransformerEncoderStack(nn.Module):
+
+    def __init__(self, num_heads, d_model, pdrop, scale=True, layers=1, activation='relu', d_ff=None, **kwargs):
+        super().__init__()
+        self.encoders = nn.ModuleList()
+        self.ln = nn.LayerNorm(d_model, eps=1e-6)
+        for i in range(layers):
+            self.encoders.append(TransformerEncoder(num_heads, d_model, pdrop, scale, activation, d_ff))
+
+    def forward(self, inputs):
+        x = inputs
+        for layer in self.encoders:
+            x = layer(x)
+        return self.ln(x)
+
+
+class TransformerDecoderStack(nn.Module):
+    def __init__(self, num_heads, d_model, pdrop, scale=True, layers=1, activation_type='relu', d_ff=None):
+        super().__init__()
+        self.decoders = nn.ModuleList()
+        self.ln = nn.LayerNorm(d_model, eps=1e-6)
+        for i in range(layers):
+            self.decoders.append(TransformerDecoder(num_heads, d_model, pdrop, scale, activation_type, d_ff))
+
+    def call(self, inputs):
+        x = inputs
+        for layer in self.decoders:
+            x = layer(x)
+        return self.ln(x)
+
 

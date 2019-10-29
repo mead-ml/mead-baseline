@@ -8,7 +8,7 @@ import os
 
 class LanguageModelBase(nn.Module, LanguageModel):
     def __init__(self):
-        super(LanguageModelBase, self).__init__()
+        super().__init__()
 
     def save(self, outname):
         torch.save(self, outname)
@@ -151,7 +151,7 @@ def _identity(x):
 class TransformerLanguageModel(LanguageModelBase):
 
     def __init__(self):
-        super(TransformerLanguageModel, self).__init__()
+        super().__init__()
 
     def init_layer_weights(self, module):
         if isinstance(module, (nn.Linear, nn.Embedding, nn.LayerNorm)):
@@ -174,4 +174,4 @@ class TransformerLanguageModel(LanguageModelBase):
         bth = self.proj_to_dsz(bth)
         T = bth.shape[1]
         mask = subsequent_mask(T).type_as(bth)
-        return self.transformer(bth, mask), None
+        return self.transformer((bth, mask)), None

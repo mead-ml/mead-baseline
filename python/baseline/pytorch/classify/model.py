@@ -199,7 +199,7 @@ class CompositePoolingModel(ClassifierModelBase):
     def init_pool(self, dsz, **kwargs):
         SubModels = [eval(model) for model in kwargs.get('sub')]
         sub_models = [SM.init_pool(self, dsz, **kwargs) for SM in SubModels]
-        return CompositePooler(sub_models)
+        return CompositePooling(sub_models)
 
     def make_input(self, batch_dict):
         """Because the sub-model could contain an LSTM, make sure to sort lengths descending

@@ -38,7 +38,7 @@ def _temporal_cross_entropy_loss(logits, labels, label_lengths, mx_seq_length):
             logits=logits, labels=labels)
 
         # BxT loss mask
-        loss_mask = tf.to_float(tf.sequence_mask(tf.to_int32(label_lengths), timesteps))
+        loss_mask = tf.cast(tf.sequence_mask(tf.cast(label_lengths, tf.int32), timesteps), tf.float32)
         # TxB losses * TxB loss_mask
         losses = losses * tf.transpose(loss_mask, [1, 0])
 

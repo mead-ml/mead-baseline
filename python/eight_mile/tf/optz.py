@@ -150,12 +150,13 @@ if get_version(tf) < 2:
 else:
 
     @register_lr_scheduler('default')
-    class ConstantSchedulerTensorFlow2:
-        def __init__(self, initial_learning_rate=None, **kwargs):
-            self.initial_learning_rate = initial_learning_rate if initial_learning_rate else kwargs.get('lr', kwargs.get('eta'))
+    class ConstantSchedulerTensorFlow2(LearningRateScheduler, tf.keras.optimizers.schedules.LearningRateSchedule):
+
+        def __init__(self, **kwargs):
+            super().__init__(**kwargs)
 
         def __call__(self, global_step):
-            return self.initial_learning_rate
+            return self.lr
 
         def __str__(self):
             return type(self).__name__ + "()"
@@ -163,7 +164,7 @@ else:
 
     @exporter
     @register_lr_scheduler('warmup_linear')
-    class WarmupLinearSchedulerTensorFlow2(WarmupLearningRateScheduler):
+    class WarmupLinearSchedulerTensorFlow2(WarmupLearningRateScheduler, tf.keras.optimizers.schedules.LearningRateSchedule):
 
         def __init__(self, **kwargs):
             lr = float(kwargs.get('lr', kwargs.get('eta', 1.0)))
@@ -178,7 +179,7 @@ else:
 
 
     @register_lr_scheduler('clr')
-    class CyclicLRSchedulerTensorFlow2(LearningRateScheduler):
+    class CyclicLRSchedulerTensorFlow2(LearningRateScheduler, tf.keras.optimizers.schedules.LearningRateSchedule):
         def __init__(self, max_lr=1e-2, decay_steps=1000, **kwargs):
             lr = float(kwargs.get('lr', kwargs.get('eta', 1.0)))
             kwargs['lr'] = lr
@@ -197,9 +198,8 @@ else:
             return type(self).__name__ + "()"
 
     @register_lr_scheduler('sgdr')
-    class SGDRSchedulerTensorFlow2(LearningRateScheduler):
+    class SGDRSchedulerTensorFlow2(LearningRateScheduler, tf.keras.optimizers.schedules.LearningRateSchedule):
         def __init__(self, first_decay_steps=1000, **kwargs):
-            lr = float(kwargs.get('lr', kwargs.get('eta', 1.0)))
             super().__init__(**kwargs)
             self.first_decay_steps = first_decay_steps
 
@@ -220,7 +220,7 @@ else:
 
 
     @register_lr_scheduler('composite')
-    class CompositeLRSchedulerTensorFlow2(CompositeLRScheduler):
+    class CompositeLRSchedulerTensorFlow2(CompositeLRScheduler, tf.keras.optimizers.schedules.LearningRateSchedule):
         pass
 
     @register_lr_scheduler('piecewise')
@@ -361,6 +361,15 @@ def optimizer(loss_fn, **kwargs):
                                                         colocate_gradients_with_ops=colocate_gradients_with_ops,
                                                         clip_gradients=clip, learning_rate_decay_fn=lr_scheduler,
                                                         increment_global_step=True)
+# https://www.tensorflow.org/guide/eager
+@tf.custom_gradient
+def clip_gradient_by_norm(x, norm):
+    y = tf.identity(x)
+
+    def grad_fn(dresult):
+        return [tf.clip_by_norm(dresult, norm), None]
+
+    return y, grad_fn
 
 # Warning, sparse update ops dont work on GPU
 # In TF 2 this leads to errors, particularly with SGD w/ Momentum and Adadelta
@@ -380,7 +389,8 @@ class EagerOptimizer(object):
         #decay_fn = None
         # Right now this option is pointless since sparse updates dont work on GPU.  We just turn it off
         sgd_mom = float(kwargs.get('mom', 0.9))
-        clip = kwargs.get('clip', None)
+        self.clip = kwargs.get('clip', 100)
+
         if optimizer:
             self.optimizer = optimizer
         else:
@@ -429,21 +439,22 @@ class EagerOptimizer(object):
                 logger.info('sgd(eta=%f)', lr)
                 self.optimizer = tf.optimizers.SGD(lr_function)
 
-        logger.info('clip gradients at %s', clip)
+        logger.info('clip gradients at %s', self.clip)
 
     def update(self, model, x, y):
         with tf.GradientTape() as tape:
             loss_value = self.loss(model, x, y)
         grads = tape.gradient(loss_value, model.trainable_variables)
-        # This call updates the global_step
+        grads, _ = tf.clip_by_global_norm(grads, self.clip)
         self.optimizer.apply_gradients(zip(grads, model.trainable_variables), self.global_step)
         return loss_value
 
     def update_with_hidden(self, model, h, x, y):
         with tf.GradientTape() as tape:
             loss_value, h = self.loss(model, h, x, y)
+
         grads = tape.gradient(loss_value, model.trainable_variables)
-        # This call updates the global_step
+        grads, _ = tf.clip_by_global_norm(grads, self.clip)
         self.optimizer.apply_gradients(zip(grads, model.trainable_variables), self.global_step)
         return loss_value, h
 
