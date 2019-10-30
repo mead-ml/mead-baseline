@@ -62,7 +62,7 @@ def test_corpora_lengths():
     gold_gold = np.sum(gold_lens)
     preds = [[''] * p for p in pred_lens]
     golds = [[[''] * g] for g in gold_lens]
-    with patch('baseline.bleu.find_closest') as find_patch:
+    with patch('eight_mile.bleu.find_closest') as find_patch:
         find_patch.side_effect = gold_lens
         pred_guess, gold_guess = corpora_lengths(preds, golds)
     assert pred_guess == gold_pred
@@ -88,7 +88,7 @@ def test_max_gold_counts():
         counters.append(counter)
     random.shuffle(counters)
     # Have the reduce work on all of these counters.
-    with patch('baseline.bleu.count_n_grams') as count_mock:
+    with patch('eight_mile.bleu.count_n_grams') as count_mock:
         count_mock.side_effect = counters
         res = max_gold_n_gram_counts([''] * len(gold), None)
     assert res == gold
@@ -98,7 +98,7 @@ def test_max_gold_counts_calls():
     input_ = [chr(i + 97) * l for i, l in enumerate(np.random.randint(10, 20, size=np.random.randint(5, 10)))]
     n = np.random.randint(2, 6)
     golds = [call(i, n) for i in input_]
-    with patch('baseline.bleu.count_n_grams') as count_mock:
+    with patch('eight_mile.bleu.count_n_grams') as count_mock:
         _ = max_gold_n_gram_counts(input_, n)
     assert count_mock.call_args_list == golds
 
@@ -223,8 +223,8 @@ def test_read_references_group_references():
     input1 = [' '.join([random_str() for _ in range(np.random.randint(1, 100))]) for _ in range(np.random.randint(25, 40))]
     input2 = [' '.join([random_str() for _ in range(np.random.randint(1, 100))]) for _ in range(len(input1))]
     gold = [(input1[i], input2[i]) for i in range(len(input1))]
-    with patch('baseline.bleu._read_lines') as read_patch:
-        with patch('baseline.bleu.open'):
+    with patch('eight_mile.bleu._read_lines') as read_patch:
+        with patch('eight_mile.bleu.open'):
             read_patch.side_effect = (input1, input2)
             res = _read_references(['', ''], False)
             assert res == gold
