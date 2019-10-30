@@ -1,6 +1,7 @@
 import os
 import json
 import pytest
+pytest.skip("There is now a crf object we should be testing on instead of the tagger", allow_module_level=True)
 import numpy as np
 tf = pytest.importorskip('tensorflow')
 from baseline.model import create_tagger_model, load_tagger_model

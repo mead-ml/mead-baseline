@@ -78,7 +78,7 @@ def test_read_yaml_strict():
 
 def test_read_config_json_dispatch():
     file_name = 'example.json'
-    with mock.patch('baseline.utils.read_json') as read_patch:
+    with mock.patch('eight_mile.utils.read_json') as read_patch:
         read_config_file(file_name)
     read_patch.assert_called_once_with(file_name, strict=True)
 
@@ -86,7 +86,7 @@ def test_read_config_json_dispatch():
 def test_read_config_ymal_dispatch():
     pytest.importorskip('yaml')
     file_name = 'example.yml'
-    with mock.patch('baseline.utils.read_yaml') as read_patch:
+    with mock.patch('eight_mile.utils.read_yaml') as read_patch:
         read_config_file(file_name)
     read_patch.assert_called_once_with(file_name, strict=True)
 
@@ -116,7 +116,7 @@ def test_read_config_file_or_json_missing_file():
 
 def test_read_config_stream_file():
     file_name = os.path.join(data_loc, 'test_json.json')
-    with mock.patch('baseline.utils.read_config_file') as read_patch:
+    with mock.patch('eight_mile.utils.read_config_file') as read_patch:
         read_config_stream(file_name)
     read_patch.assert_called_once_with(file_name)
 

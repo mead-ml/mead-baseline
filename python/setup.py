@@ -68,13 +68,12 @@ def main():
         install_requires=[
             'numpy',
             'six',
-            'requests',
-            'pyyaml'
         ],
         extras_require={
             'test': ['pytest', 'mock', 'contextdecorator', 'pytest-forked'],
             'report': ['visdom', 'tensorboardX'],
             'yaml': ['pyyaml'],
+            'tf2': ['tensorflow_addons'],
         },
         entry_points={
             'console_scripts': [

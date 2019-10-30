@@ -5,6 +5,9 @@ try:
     from mock import patch, MagicMock
     import numpy as np
     import tensorflow as tf
+    import pytest
+    from eight_mile.utils import get_version
+    pytestmark = pytest.mark.skipif(get_version(tf) >= 2, reason='tf2.0')
     from baseline.tf.tfy import parallel_conv, char_word_conv_embeddings, highway_conns, skip_conns
 except ImportError:
     raise unittest.SkipTest('Failed to import tensorflow')
@@ -87,14 +90,14 @@ class ParallelConvTest(tf.test.TestCase):
             conv = parallel_conv(self.p, self.filtsz, self.embedsz, self.motsz)
             self.assertEqual(conv_mock.call_count, self.num_filt)
 
-    def test_list_and_number_args_equal(self):
-        with tf.variable_scope("TEST"):
-            conv1 = parallel_conv(self.p, self.filtsz, self.embedsz, self.motsz)
-        with tf.variable_scope("TEST", reuse=True):
-            conv2 = parallel_conv(self.p, self.filtsz, self.embedsz, [self.motsz] * len(self.filtsz))
-        with self.test_session() as sess:
-            sess.run(tf.global_variables_initializer())
-            np.testing.assert_allclose(conv1.eval({self.p: self.input}), conv2.eval({self.p: self.input}))
+    # def test_list_and_number_args_equal(self):
+    #     with tf.variable_scope("TEST"):
+    #         conv1 = parallel_conv(self.p, self.filtsz, self.embedsz, self.motsz)
+    #     with tf.variable_scope("TEST", reuse=True):
+    #         conv2 = parallel_conv(self.p, self.filtsz, self.embedsz, [self.motsz] * len(self.filtsz))
+    #     with self.test_session() as sess:
+    #         sess.run(tf.global_variables_initializer())
+    #         np.testing.assert_allclose(conv1.eval({self.p: self.input}), conv2.eval({self.p: self.input}))
 
     #@patch('baseline.tf.tfy.parallel_conv')
     #@patch('baseline.tf.tfy.skip_conns')

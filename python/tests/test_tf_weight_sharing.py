@@ -2,6 +2,9 @@ import os
 import pytest
 import numpy as np
 tf = pytest.importorskip('tensorflow')
+from eight_mile.utils import get_version
+pytestmark = pytest.mark.skipif(get_version(tf) >= 2, reason='tf2.0')
+
 from baseline.tf.tfy import tie_weight
 
 
