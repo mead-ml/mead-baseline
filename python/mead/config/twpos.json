@@ -65,6 +65,7 @@
         "mom": 0.9,
         "patience": 20,
         "early_stopping_metric": "acc",
+        "span_type": "token",
         "clip": 5.0
     }
 }
