@@ -488,7 +488,10 @@ def train():
                         help="What tokens to use")
     parser.add_argument("--subword_model_file", type=str, help="If using subwords, pass this", default='bert-base-uncased')
     parser.add_argument("--subword_vocab_file", type=str, help="If using subwords with separate vocab file, pass here")
-    parser.add_argument("--subword_special_tokens", type=str, nargs='*')
+    parser.add_argument("--subword_special_tokens", type=str, nargs='*',
+                        help="When using wordpiece vectorizer, this list provide special tokens to the never_split "
+                             "argument of BertTokenizer. These special tokens should also be in the customized vocab "
+                             "file so that they have their indices.")
     parser.add_argument("--dropout", type=float, default=0.1, help="Dropout")
     parser.add_argument("--lr", type=float, default=4.0e-4, help="Learning rate")
     parser.add_argument("--clip", type=float, default=0.25, help="Clipping gradient norm")
@@ -636,7 +639,7 @@ def train():
         # based on rank, here we select only a single gpu and use it for input and
         # output.
         model = DistributedDataParallel(model, device_ids=[args.device], output_device=args.device)
-        logger.info("Model located on %d", args.device)
+        logger.info("Model located on %s", args.device)
 
     # This is the training loop
     for epoch in range(start_epoch, args.epochs):
