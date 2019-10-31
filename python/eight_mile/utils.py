@@ -216,13 +216,7 @@ def iobes_mask(vocab, start, end, pad=None):
             else:
                 if from_.startswith("B-"):
                     # Can't move from B to B, S, O, End, or Pad
-                    if (
-                            to.startswith("B-") or
-                            to.startswith("S-") or
-                            to.startswith("O") or
-                            to is end or
-                            to is pad
-                    ):
+                    if to.startswith(("B-", "S-", "O")) or to is end or to is pad:
                         mask[vocab[to], vocab[from_]] = small
                     # Can only move to matching I or E
                     elif to.startswith("I-") or to.startswith("E-"):
@@ -232,13 +226,7 @@ def iobes_mask(vocab, start, end, pad=None):
                             mask[vocab[to], vocab[from_]] = small
                 elif from_.startswith("I-"):
                     # Can't move from I to B, S, O, End or Pad
-                    if (
-                            to.startswith("B-") or
-                            to.startswith("S-") or
-                            to.startswith("O") or
-                            to is end or
-                            to is pad
-                    ):
+                    if to.startswith(("B-", "S-", "O")) or to is end or to is pad:
                         mask[vocab[to], vocab[from_]] = small
                     # Can only move to matching I or E
                     elif to.startswith("I-") or to.startswith("E-"):
@@ -246,12 +234,7 @@ def iobes_mask(vocab, start, end, pad=None):
                         to_type = to.split("-")[1]
                         if from_type != to_type:
                             mask[vocab[to], vocab[from_]] = small
-                elif (
-                        from_.startswith("E-") or
-                        from_.startswith("I-") or
-                        from_.startswith("S-") or
-                        from_.startswith("O")
-                ):
+                elif from_.startswith(("E-", "I-", "S-", "O")):
                     # Can't move from E to I or E
                     # Can't move from I to I or E
                     # Can't move from S to I or E
@@ -912,8 +895,15 @@ def to_chunks(sequence, span_type, verbose=False, delim="@"):
         for example LOC@3@4@5 means a Location chunk was at indices 3, 4, and 5
         in the original sequence.
     """
+    span_type = span_type.lower()
     if span_type == 'iobes':
         return to_chunks_iobes(sequence, verbose, delim)
+    if span_type == 'token':
+        # For token level tasks we force each token to be it's own span
+        # Normally it is fine to pass token level annotations through the iob
+        # span code to produce spans of size 1 but if your data has a label of `O`
+        # like twpos does then you will lose tokens and mess up the calculations
+        return [f"{s}@{i}" for i, s in enumerate(sequence)]
 
     strict_iob2 = (span_type == 'iob2') or (span_type == 'bio')
     iobtype = 2 if strict_iob2 else 1
@@ -932,13 +922,13 @@ def to_chunks(sequence, span_type, verbose=False, delim="@"):
                 else:
                     chunks.append(delim.join(current))
                     if iobtype == 2 and verbose:
-                        logger.warning('Warning: type=IOB2, unexpected format ([%s] follows other tag type [%s] @ %d)' % (label, current[0], i))
+                        logger.warning("Warning: I doesn't agree with previous B/I @ %d" % i)
 
                     current = [base, '%d' % i]
             else:
                 current = [label.replace('I-', ''), '%d' % i]
                 if iobtype == 2 and verbose:
-                    logger.warning('Warning: unexpected format (I before B @ %d) %s' % (i, label))
+                    logger.warning('Warning: I without previous chunk @ %d' % i)
         else:
             if current is not None:
                 chunks.append(delim.join(current))
@@ -973,8 +963,14 @@ def to_chunks_iobes(sequence, verbose=False, delim="@"):
             current = [label.replace('B-', ''), '%d' % i]
             if verbose:
                 # Look ahead to make sure this `B-Y` shouldn't be a `S-Y`
-                if i < len(sequence) - 1 and label[2:] != sequence[i + 1][2:]:
-                    logger.warning('Warning: Single B token chunk @ %d', i)
+                # We only check for `B`, `S` and `O` because a mismatched `I` or `E`
+                # will already warn looking backwards
+                if i < len(sequence) - 1:
+                    nxt = sequence[i + 1]
+                    if nxt == "O" or nxt.startswith(("B", "S")):
+                        logger.warning('Warning: Single B token chunk @ %d', i)
+                elif i == len(sequence) - 1:
+                    logger.warning('Warning: B as final token')
         # This indicates a single word chunk
         elif label.startswith('S-'):
             # Flush existing chunk, and since this is self-contained, we will clear current
@@ -992,14 +988,17 @@ def to_chunks_iobes(sequence, verbose=False, delim="@"):
                 if base == current[0]:
                     current.append('%d' % i)
                 else:
+                    # Doesn't match previous entity, flush the old one and start a new one
                     chunks.append(delim.join(current))
                     if verbose:
-                        logger.warning('Warning: I without matching previous B/I @ %d' % i)
+                        logger.warning("Warning: I doesn't agree with previous B/I @ %d" % i)
                     current = [base, '%d' % i]
             else:
                 if verbose:
-                    logger.warning('Warning: I without a previous chunk @ %d' % i)
+                    logger.warning('Warning: I without previous chunk @ %d' % i)
                 current = [label.replace('I-', ''), '%d' % i]
+            if verbose and i == len(sequence) - 1:
+                logger.warning('Warning: I as final token')
         # We are at the end of a chunk, so flush current
         elif label.startswith('E-'):
             # Flush current chunk
@@ -1012,7 +1011,7 @@ def to_chunks_iobes(sequence, verbose=False, delim="@"):
                 else:
                     chunks.append(delim.join(current))
                     if verbose:
-                        logger.warning("Warning: E doesn't agree with previous B/I type!")
+                        logger.warning("Warning: E doesn't agree with previous B/I @ %d", i)
                     current = [base, '%d' % i]
                     chunks.append(delim.join(current))
                     current = None
@@ -1020,7 +1019,7 @@ def to_chunks_iobes(sequence, verbose=False, delim="@"):
             else:
                 current = [label.replace('E-', ''), '%d' % i]
                 if verbose:
-                    logger.warning('Warning: E without previous chunk! @ %d' % i)
+                    logger.warning('Warning: E without previous chunk @ %d' % i)
                 chunks.append(delim.join(current))
                 current = None
         # Outside
