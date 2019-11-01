@@ -44,21 +44,33 @@ Slight differences between this and multi-ble.pl:
 """
 import sys
 import argparse
-from typing import List, Tuple, Union, Iterable, TextIO, Counter as CounterType
 from operator import or_
 from itertools import chain
 from functools import reduce
 from collections import Counter
+from typing import List, Tuple, Union, Iterable, TextIO, Counter as CounterType, NamedTuple
 import numpy as np
+
 
 Hypothesis = List[str]
 # This is [B, T] where B is the number of hypotheses and T is the number of words in that hypothesis.
 HypothesisCorpus = List[Hypothesis]
+
 Reference = List[str]
 References = List[Reference]
 # This is [B, R, T] where B is the number of references, R is the number of gold references we have
 # for a particular example, and T is the number of words in that reference.
 ReferenceCorpus = List[References]
+
+
+class Bleu(NamedTuple):
+    """A collection of the information returned from the bleu calculation"""
+    bleu: float
+    precision: np.ndarray
+    brevity_penalty: float
+    length_ratio: float
+    pred_length: int
+    gold_length: int
 
 
 def n_grams(tokens: List[str], n: Union[int, Tuple[int]]) -> Iterable[Tuple[str]]:
@@ -227,7 +239,7 @@ def brevity_penalty(pred_len: int, gold_len: int) -> Tuple[float, float]:
     return bp, ratio
 
 
-def bleu(preds: HypothesisCorpus, golds: ReferenceCorpus, n: int = 4) -> Tuple[float, np.ndarray, float, float, int, int]:
+def bleu(preds: HypothesisCorpus, golds: ReferenceCorpus, n: int = 4) -> Bleu:
     """Calculate BLEU score
 
     This implementation is designed to match the output of `multi-bleu,pl` from
@@ -259,7 +271,7 @@ def bleu(preds: HypothesisCorpus, golds: ReferenceCorpus, n: int = 4) -> Tuple[f
     geo_mean = geometric_mean(precision)
     bp, len_ratio = brevity_penalty(pred_len, gold_len)
     b = geo_mean * bp * 100
-    return (b, precision * 100, bp, len_ratio, pred_len, gold_len)
+    return Bleu(b, precision * 100, bp, len_ratio, pred_len, gold_len)
 
 
 def _read_references(reference_files: List[str], lc: bool) -> ReferenceCorpus:
@@ -307,10 +319,10 @@ def main():
     golds: ReferenceCorpus = _read_references(args.reference, args.lc)
     preds: HypothesisCorpus = _read_lines(sys.stdin, args.lc)
 
-    b, precision, bp, len_ratio, pred_len, gold_len = bleu(preds, golds, args.n)
-    precision_str = "/".join(["{:.1f}"] * len(precision)).format(*precision)
+    b = bleu(preds, golds, args.n)
+    precision_str = "/".join(["{:.1f}"] * len(b.precision)).format(*b.precision)
 
-    print(f"BLEU = {b:.2f}, {precision_str} (BP={bp:.3f}, ratio={len_ratio:.3f}, hyp_len={pred_len}, ref_len={gold_len})")
+    print(f"BLEU = {b.bleu:.2f}, {precision_str} (BP={b.brevity_penalty:.3f}, ratio={b.length_ratio:.3f}, hyp_len={b.pred_length}, ref_len={b.gold_length})")
 
 
 if __name__ == "__main__":
