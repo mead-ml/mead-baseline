@@ -466,7 +466,7 @@ class EncoderDecoderService(Service):
 
     def vectorize(self, tokens_batch):
         examples = defaultdict(list)
-        for i, tokens in enumerate(tokens_seq):
+        for i, tokens in enumerate(tokens_batch):
             for k, vectorizer in self.src_vectorizers.items():
                 vec, length = vectorizer.run(tokens, self.src_vocabs[k])
                 examples[k] += [vec]
