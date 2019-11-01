@@ -125,7 +125,7 @@ class DASeqReader(SeqPredictReader):
             if not os.path.isfile(f):
                 continue
 
-            dlg = pd.read_csv(f, sep='|', header=None)
+            dlg = pd.read_csv(f, sep='|', header=None, dtype=str, na_filter=False)
 
             da_idx = dlg.columns[self.da_idx] if self.da_idx < 0 else self.da_idx
             utt_idx = dlg.columns[self.utt_idx] if self.utt_idx < 0 else self.utt_idx
