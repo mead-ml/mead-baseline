@@ -1,11 +1,13 @@
 import re
+from typing import Pattern
 from binascii import hexlify
 from functools import partial
 from eight_mile.utils import export
-from six import PY3
+
 
 __all__ = []
 exporter = export(__all__)
+
 
 class MN(object):
     GZIP = b'1f8b'
@@ -13,23 +15,23 @@ class MN(object):
     TAR_START = 257
     ZIP = b'504b0304'
 
-def check_mn(b, mn=None, start=0):
+
+def check_mn(b: bytes, mn: bytes = None, start: int = 0) -> bool:
     if hexlify(b[start:start+20])[:len(mn)] == mn:
         return True
     return False
 
-# A function that takes an integer in the 8-bit range and returns
-# a single-character byte object in py3 / a single-character string
-# in py2.
-#
-int2byte = (lambda x: bytes((x,))) if PY3 else chr
 
-_text_characters = (
-        b''.join(int2byte(i) for i in range(32, 127)) +
-        b'\n\r\t\f\b')
+def int2byte(x: int) -> bytes:
+    """Takes an int in the 8-bit range and returns a single-character byte"""
+    return bytes((x,))
+
+
+_text_characters: bytes = (b''.join(int2byte(i) for i in range(32, 127)) + b'\n\r\t\f\b')
+
 
 # Borrowed from: https://eli.thegreenplace.net/2011/10/19/perls-guess-if-file-is-text-or-binary-implemented-in-python
-def is_text_file(block):
+def is_text_file(block: bytes):
     """ Uses heuristics to guess whether the given file is text or binary,
         by reading a single block of bytes from the file.
         If more than 30% of the chars in the block are non-text, or there
@@ -52,18 +54,21 @@ check_gzip = partial(check_mn, mn=MN.GZIP)
 check_tar = partial(check_mn, mn=MN.TAR, start=MN.TAR_START)
 check_zip = partial(check_mn, mn=MN.ZIP)
 
+
 class RE(object):
     HTML = re.compile(b"(<!doctype html>|<html.*?>)")
     BIN = re.compile(b"\d+? \d+?$", re.MULTILINE)
 
-def check_re(b, regex=None):
+
+def check_re(b: bytes, regex: Pattern = None) -> bool:
     return True if regex.match(b) else False
+
 
 check_html = partial(check_re, regex=RE.HTML)
 
 
 @exporter
-def mime_type(file_name):
+def mime_type(file_name: str) -> str:
     b = open(file_name, 'rb').read(1024)
     if check_gzip(b):
         return "application/gzip"
