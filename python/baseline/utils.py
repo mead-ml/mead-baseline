@@ -1020,7 +1020,7 @@ def read_conll_docs(f, doc_pattern="# begin doc", delim=None):
                 sentence = []
             continue
         sentence.append(line.split(delim))
-    if doc:
+    if doc or sentence:
         if sentence:
             doc.append(sentence)
         yield doc
@@ -1064,7 +1064,7 @@ def read_conll_docs_md(f, doc_pattern="# begin doc", delim=None):
                 sentence, meta = [], []
             continue
         sentence.append(line.split(delim))
-    if doc:
+    if doc or sentence:
         if sentence:
             doc.append(sentence)
             sent_meta.append(meta)
