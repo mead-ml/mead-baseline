@@ -7,7 +7,7 @@ import tensorflow as tf
 logger = logging.getLogger('baseline')
 
 
-class TensorFlowEmbeddingsBaselineModel(tf.keras.Model):
+class TensorFlowEmbeddingsModel(tf.keras.Model):
     """This provides a base for TensorFlow embeddings sub-graphs that includes the placeholders
 
     """
@@ -113,7 +113,7 @@ class TensorFlowEmbeddingsBaselineModel(tf.keras.Model):
 
 
 @register_embeddings(name='default')
-class LookupTableEmbeddingsModel(TensorFlowEmbeddingsBaselineModel):
+class LookupTableEmbeddingsModel(TensorFlowEmbeddingsModel):
     def __init__(self, name=None, **kwargs):
         super().__init__(name, **kwargs)
         self.embedding_layer = LookupTableEmbeddings(name=self._name, **kwargs)
@@ -124,7 +124,7 @@ class LookupTableEmbeddingsModel(TensorFlowEmbeddingsBaselineModel):
 
 
 @register_embeddings(name='char-conv')
-class CharConvEmbeddingsModel(TensorFlowEmbeddingsBaselineModel):
+class CharConvEmbeddingsModel(TensorFlowEmbeddingsModel):
     def __init__(self, name=None, **kwargs):
         super().__init__(name, **kwargs)
         self.embedding_layer = CharConvEmbeddings(name=self._name, **kwargs)
@@ -135,7 +135,7 @@ class CharConvEmbeddingsModel(TensorFlowEmbeddingsBaselineModel):
 
 
 @register_embeddings(name='char-lstm')
-class CharLSTMEmbeddingsModel(TensorFlowEmbeddingsBaselineModel):
+class CharLSTMEmbeddingsModel(TensorFlowEmbeddingsModel):
     def __init__(self, name=None, **kwargs):
         super().__init__(name, **kwargs)
         self.embedding_layer = CharLSTMEmbeddings(name=self._name, **kwargs)
@@ -146,7 +146,7 @@ class CharLSTMEmbeddingsModel(TensorFlowEmbeddingsBaselineModel):
 
 
 @register_embeddings(name='positional')
-class PositionalLookupTableEmbeddingsModel(TensorFlowEmbeddingsBaselineModel):
+class PositionalLookupTableEmbeddingsModel(TensorFlowEmbeddingsModel):
     def __init__(self, name=None, **kwargs):
         super().__init__(name, **kwargs)
         self.embedding_layer = PositionalLookupTableEmbeddings(name=self._name, **kwargs)
@@ -157,7 +157,7 @@ class PositionalLookupTableEmbeddingsModel(TensorFlowEmbeddingsBaselineModel):
 
 
 @register_embeddings(name='learned-positional')
-class LearnedPositionalLookupTableEmbeddingsModel(TensorFlowEmbeddingsBaselineModel):
+class LearnedPositionalLookupTableEmbeddingsModel(TensorFlowEmbeddingsModel):
     def __init__(self, name=None, **kwargs):
         super().__init__(name, **kwargs)
         self.embedding_layer = LearnedPositionalLookupTableEmbeddings(name=self._name, **kwargs)
@@ -168,7 +168,7 @@ class LearnedPositionalLookupTableEmbeddingsModel(TensorFlowEmbeddingsBaselineMo
 
 
 @register_embeddings(name='positional-char-conv')
-class PositionalCharConvEmbeddingsModel(TensorFlowEmbeddingsBaselineModel):
+class PositionalCharConvEmbeddingsModel(TensorFlowEmbeddingsModel):
     def __init__(self, name=None, **kwargs):
         super().__init__(name, **kwargs)
         self.embedding_layer = PositionalCharConvEmbeddings(name=self._name, **kwargs)
@@ -179,7 +179,7 @@ class PositionalCharConvEmbeddingsModel(TensorFlowEmbeddingsBaselineModel):
 
 
 @register_embeddings(name='learned-positional-char-conv')
-class PositionalCharConvEmbeddingsModel(TensorFlowEmbeddingsBaselineModel):
+class PositionalCharConvEmbeddingsModel(TensorFlowEmbeddingsModel):
     def __init__(self, name=None, **kwargs):
         super().__init__(name, **kwargs)
         self.embedding_layer = LearnedPositionalCharConvEmbeddings(name=self._name, **kwargs)
@@ -190,7 +190,7 @@ class PositionalCharConvEmbeddingsModel(TensorFlowEmbeddingsBaselineModel):
 
 
 @register_embeddings(name='positional-char-lstm')
-class PositionalCharLSTMEmbeddingsModel(TensorFlowEmbeddingsBaselineModel):
+class PositionalCharLSTMEmbeddingsModel(TensorFlowEmbeddingsModel):
     def __init__(self, name=None, **kwargs):
         super().__init__(name, **kwargs)
         self.embedding_layer = PositionalCharLSTMEmbeddings(name=self._name, **kwargs)
@@ -201,7 +201,7 @@ class PositionalCharLSTMEmbeddingsModel(TensorFlowEmbeddingsBaselineModel):
 
 
 @register_embeddings(name='learned-positional-char-lstm')
-class LearnedPositionalCharLSTMEmbeddingsModel(TensorFlowEmbeddingsBaselineModel):
+class LearnedPositionalCharLSTMEmbeddingsModel(TensorFlowEmbeddingsModel):
     def __init__(self, name=None, **kwargs):
         super().__init__(name, **kwargs)
         self.embedding_layer = LearnedPositionalCharLSTMEmbeddings(name=self._name, **kwargs)
@@ -212,7 +212,7 @@ class LearnedPositionalCharLSTMEmbeddingsModel(TensorFlowEmbeddingsBaselineModel
 
 
 # @register_embeddings(name="large-lut")
-# class LargeLookupTableEmbeddingsModel(TensorFlowEmbeddingsBaselineModel):
+# class LargeLookupTableEmbeddingsModel(TensorFlowEmbeddingsModel):
 #     def __init__(self, name=None, **kwargs):
 #         super().__init__(name, **kwargs)
 #         self.embedding_layer = LargeLookupTableEmbeddings(name=self._name, **kwargs)

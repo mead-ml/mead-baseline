@@ -3,17 +3,14 @@ from eight_mile.utils import Offsets
 from eight_mile.embeddings import register_embeddings
 from eight_mile.tf.layers import MeanPool1D
 from eight_mile.tf.embeddings import LookupTableEmbeddings
+from baseline.tf.embeddings import TensorFlowEmbeddingsModel
 
 
-@register_embeddings(name='cbow')
 class CBoWEmbeddings(LookupTableEmbeddings):
 
-    @classmethod
-    def create_placeholder(cls, name):
-        return tf.placeholder(tf.int32, [None, None, None], name=name)
-
-    def __init__(self, name, **kwargs):
-        super().__init__(name, **kwargs)
+    def __init__(self, trainable=True, name=None, dtype=tf.float32, **kwargs):
+        trainable = kwargs.get('finetune', trainable)
+        super().__init__(trainable=trainable, name=name, dtype=dtype, **kwargs)
         """Create a lookup-table based embedding.
 
         :param name: The name of the feature/placeholder, and a key for the scope
@@ -28,27 +25,6 @@ class CBoWEmbeddings(LookupTableEmbeddings):
         * *unif* -- (``float``) (defaults to `0.1`) If the weights should be created, what is the random initialization range
         """
         self.pooler = lambda x, y: tf.reduce_sum(x, axis=1)
-
-    def get_dsz(self):
-        return self.dsz
-
-    def get_vsz(self):
-        return self.vsz
-
-    def detached_ref(self):
-        """This will detach any attached input and reference the same sub-graph otherwise
-
-        :return:
-        """
-        if self._weights is None:
-            raise Exception('You must initialize `weights` in order to use this method')
-        return CBoWEmbeddings(self._name,
-                              vsz=self.vsz,
-                              dsz=self.dsz,
-                              scope=self.scope,
-                              dropin=self.dropin,
-                              finetune=self.finetune,
-                              weights=self._weights)
 
     def encode(self, x=None):
         """Build a simple Lookup Table and set as input `x` if it exists, or `self.x` otherwise.
@@ -74,14 +50,13 @@ class CBoWEmbeddings(LookupTableEmbeddings):
         return tf.reshape(pooled, [B, T, self.dsz])
 
 
-@register_embeddings(name='max-pool')
 class MaxBoWEmbeddings(CBoWEmbeddings):
-    def __init__(self, name, **kwargs):
-        super().__init__(name, **kwargs)
+    def __init__(self, trainable=True, name=None, dtype=tf.float32, **kwargs):
+        trainable = kwargs.get('finetune', trainable)
+        super().__init__(trainable=trainable, name=name, dtype=dtype, **kwargs)
         self.pooler = lambda x, y: tf.reduce_max(x, axis=1)
 
 
-@register_embeddings(name='mean-pool')
 class MeanBoWEmbeddings(CBoWEmbeddings):
     def __init__(self, name, **kwargs):
         super().__init__(name, **kwargs)
@@ -93,3 +68,37 @@ class MeanBoWEmbeddings(CBoWEmbeddings):
             return tf.multiply(res, tf.expand_dims(tf.cast(tf.not_equal(y, 0), tf.float32), -1))
 
         self.pooler = pool
+
+
+@register_embeddings(name='cbow')
+class CBoWEmbeddingsModel(TensorFlowEmbeddingsModel):
+    def __init__(self, name=None, **kwargs):
+        super().__init__(name, **kwargs)
+        self.embedding_layer = CBoWEmbeddings(name=self._name, **kwargs)
+
+    @classmethod
+    def create_placeholder(cls, name):
+        return tf.placeholder(tf.int32, [None, None, None], name=name)
+
+
+@register_embeddings(name='max-pool')
+class MaxBoWEmbeddingsModel(TensorFlowEmbeddingsModel):
+    def __init__(self, name=None, **kwargs):
+        super().__init__(name, **kwargs)
+        self.embedding_layer = MaxBoWEmbeddings(name=self._name, **kwargs)
+
+    @classmethod
+    def create_placeholder(cls, name):
+        return tf.placeholder(tf.int32, [None, None, None], name=name)
+
+
+@register_embeddings(name='mean-pool')
+class MeanBoWEmbeddingsModel(TensorFlowEmbeddingsModel):
+    def __init__(self, name=None, **kwargs):
+        super().__init__(name, **kwargs)
+        self.embedding_layer = MeanBoWEmbeddings(name=self._name, **kwargs)
+
+    @classmethod
+    def create_placeholder(cls, name):
+        return tf.placeholder(tf.int32, [None, None, None], name=name)
+>>>>>>> chore: update addon
