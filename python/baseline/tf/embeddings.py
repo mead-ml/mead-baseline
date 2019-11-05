@@ -75,7 +75,7 @@ class CharLSTMEmbeddings(TensorFlowEmbeddings):
             T = shape[1]
             W = shape[2]
             flat_chars = tf.reshape(x, [-1, W])
-            word_lengths = tf.reduce_sum(tf.cast(tf.equal(flat_chars, Offsets.PAD), tf.int32), axis=1)
+            word_lengths = tf.reduce_sum(tf.cast(tf.not_equal(flat_chars, Offsets.PAD), tf.int32), axis=1)
             with tf.control_dependencies([ech0]):
                 embed_chars = tf.nn.embedding_lookup(Wch, flat_chars)
 
