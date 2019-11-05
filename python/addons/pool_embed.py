@@ -1,6 +1,7 @@
 import tensorflow as tf
 from eight_mile.utils import Offsets
 from eight_mile.embeddings import register_embeddings
+from eight_mile.tf.layers import MeanPool1D
 from eight_mile.tf.embeddings import LookupTableEmbeddings
 
 
@@ -66,7 +67,7 @@ class CBoWEmbeddings(LookupTableEmbeddings):
         flat = tf.reshape(x, [-1, W])
         emb = super().encode(flat)
 
-        lengths = tf.reduce_sum(tf.cast(tf.equal(flat, Offsets.PAD), tf.int32), axis=1)
+        lengths = tf.reduce_sum(tf.cast(tf.not_equal(flat, Offsets.PAD), tf.int32), axis=1)
 
         pooled = self.pooler(emb, lengths)
 
@@ -84,4 +85,11 @@ class MaxBoWEmbeddings(CBoWEmbeddings):
 class MeanBoWEmbeddings(CBoWEmbeddings):
     def __init__(self, name, **kwargs):
         super().__init__(name, **kwargs)
-        self.pooler = lambda x, y: tf.reduce_sum(x, axis=1) / tf.cast(tf.expand_dims(y, -1), tf.float32)
+        self.pooling = MeanPool1D(None)
+
+        def pool(x, y):
+            y_ = tf.math.maximum(y, 1)
+            res = self.pooling((x, y_))
+            return tf.multiply(res, tf.expand_dims(tf.cast(tf.not_equal(y, 0), tf.float32), -1))
+
+        self.pooler = pool
