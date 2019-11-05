@@ -212,7 +212,7 @@ class CharLSTMEmbeddings(TensorFlowEmbeddings):
         embed_chars = self.embed(flat_chars)
 
         # Calculate the lengths of each word
-        word_lengths = tf.reduce_sum(tf.cast(tf.equal(flat_chars, Offsets.PAD), tf.int32), axis=1)
+        word_lengths = tf.reduce_sum(tf.cast(tf.not_equal(flat_chars, Offsets.PAD), tf.int32), axis=1)
 
         # cuDNN throws an error if there is an input with a length of 0, this happens when the "word"
         # is actually a "<PAD>" so there are no characters to run the LSTM over. Here we just say
