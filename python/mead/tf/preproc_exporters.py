@@ -158,7 +158,7 @@ class ClassifyTensorFlowPreProcExporter(ClassifyTensorFlowExporter):
         embedding_inputs = {}
         for feature in preprocessed:
             embedding_inputs[feature] = preprocessed[feature]
-        model, classes, values = self._create_model(sess, model_file, lengths=lengths **embedding_inputs)
+        model, classes, values = self._create_model(sess, model_file, lengths=lengths, **embedding_inputs)
         sig_input = {x: tf.saved_model.utils.build_tensor_info(tf_example[x]) for x in pc.FIELD_NAMES}
         sig_output = SignatureOutput(classes, values)
         sig_name = 'predict_text'
