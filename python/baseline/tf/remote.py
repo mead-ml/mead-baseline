@@ -36,15 +36,10 @@ class RemoteModelGRPCTensorFlowPreproc(RemoteModelGRPCTensorFlow):
 
         for key in examples:
             if key.endswith('lengths'):
-                shape = examples[key].shape
-                tensor_proto = tf.contrib.util.make_tensor_proto(examples[key], shape=shape, dtype=tf.int32)
-                request.inputs[key].CopyFrom(
-                    tensor_proto
-                )
-            else:
-                request.inputs[key].CopyFrom(
-                    tf.contrib.util.make_tensor_proto(examples[key], shape=[len(examples[key]), 1])
-                )
+                continue
+            request.inputs[key].CopyFrom(
+                tf.contrib.util.make_tensor_proto(examples[key], shape=[len(examples[key]), 1])
+            )
         return request
 
 

@@ -29,6 +29,11 @@ def get_mxlen(tensors):
     )
     return tf.reduce_max(sizes)
 
+def get_lengths(tensors):
+    return tf.map_fn(
+        get_string_size, tensors, dtype=tf.int32, back_prop=False
+    )
+
 
 def peek_lengths_key(model_file, field_map):
     """Check if there is lengths key to use when finding the length. (defaults to tokens)"""
@@ -123,7 +128,8 @@ class PreProcessorController(object):
     def run(self):
         tf_example = self._create_example()
         preprocessed = self.create_preprocessed_input(tf_example)
-        return tf_example, preprocessed
+        lengths = get_lengths(tf_example[self.length_field])
+        return tf_example, preprocessed, lengths
 
 
 @exporter
@@ -147,15 +153,13 @@ class ClassifyTensorFlowPreProcExporter(ClassifyTensorFlowExporter):
 
         pc = PreProcessorController(model_base_dir, pid, self.task.config_params['features'],
                                     self.feature_exporter_field_map, lengths)
-        tf_example, preprocessed = pc.run()
+        tf_example, preprocessed, lengths = pc.run()
         # Create a dict of embedding names to sub-graph outputs to wire in as embedding inputs
         embedding_inputs = {}
         for feature in preprocessed:
             embedding_inputs[feature] = preprocessed[feature]
-        model, classes, values = self._create_model(sess, model_file, **embedding_inputs)
+        model, classes, values = self._create_model(sess, model_file, lengths=lengths **embedding_inputs)
         sig_input = {x: tf.saved_model.utils.build_tensor_info(tf_example[x]) for x in pc.FIELD_NAMES}
-        if model.lengths is not None:
-            sig_input.update({model.lengths_key: tf.saved_model.utils.build_tensor_info(model.lengths)})
         sig_output = SignatureOutput(classes, values)
         sig_name = 'predict_text'
         assets = create_assets(
@@ -187,14 +191,13 @@ class TaggerTensorFlowPreProcExporter(TaggerTensorFlowExporter):
         lengths = peek_lengths_key(model_file, self.feature_exporter_field_map)
         pc = PreProcessorController(model_base_dir, pid, self.task.config_params['features'],
                                     self.feature_exporter_field_map, lengths)
-        tf_example, preprocessed = pc.run()
+        tf_example, preprocessed, lengths = pc.run()
         # Create a dict of embedding names to sub-graph outputs to wire in as embedding inputs
         embedding_inputs = {}
         for feature in preprocessed:
             embedding_inputs[feature] = preprocessed[feature]
-        model, classes, values = self._create_model(sess, model_file, **embedding_inputs)
+        model, classes, values = self._create_model(sess, model_file, lengths=lengths, **embedding_inputs)
         sig_input = {x: tf.saved_model.utils.build_tensor_info(tf_example[x]) for x in pc.FIELD_NAMES}
-        sig_input.update({model.lengths_key: tf.saved_model.utils.build_tensor_info(model.lengths)})
         sig_output = SignatureOutput(classes, values)
         sig_name = 'tag_text'
         assets = create_assets(

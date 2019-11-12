@@ -310,6 +310,8 @@ class ClassifierModelBase(ClassifierModel):
                 if k in kwargs:
                     _state[k] = kwargs[k]
             # TODO: convert labels into just another vocab and pass number of labels to models.
+            if 'lengths' in kwargs:
+                _state['lengths'] = kwargs['lengths']
             labels = read_json("{}.labels".format(basename))
             model = cls.create(embeddings, labels, **_state)
             model._state = _state
