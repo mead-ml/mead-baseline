@@ -46,7 +46,7 @@ function get_file {
 }
 
 function mead_export {
-    mead-export --config ${CONFIG_FILE} --settings ${EXPORT_SETTINGS_MEAD} --datasets ${EXPORT_SETTINGS_DATASETS} --task ${TASK} --exporter_type ${1} --model ${MODEL_FILE} --model_version ${MODEL_VERSION} --output_dir $2 --is_remote ${IS_REMOTE} --return_labels ${3}
+    mead-export --config ${CONFIG_FILE} --settings ${EXPORT_SETTINGS_MEAD} --task ${TASK} --exporter_type ${1} --model ${MODEL_FILE} --model_version ${MODEL_VERSION} --output_dir $2 --is_remote ${IS_REMOTE} --return_labels ${3}
 }
 
 function file_empty_or_does_not_exist {

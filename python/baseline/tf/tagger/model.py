@@ -130,6 +130,8 @@ class TaggerModelBase(TaggerModel):
             if _state.get('constraint') is not None:
                 # Dummy constraint values that will be filled in by the check pointing
                 _state['constraint'] = [tf.zeros((len(labels), len(labels))) for _ in range(2)]
+            if 'lengths' in kwargs:
+                _state['lengths'] = kwargs['lengths']
             model = cls.create(embeddings, labels, **_state)
             model._state = _state
             model.create_loss()
