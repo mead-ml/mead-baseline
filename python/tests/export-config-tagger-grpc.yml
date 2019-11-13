@@ -11,15 +11,14 @@ TEST_FILE: eng.testb.small
 TEST_FILE_LINK: https://www.dropbox.com/s/pp3pcq5q5ko1df6/eng.testb.small?dl=1
 CONLL: false
 FEATURES: text
-MODEL_FILE: ${PWD}/conll-11083.zip
-MODEL_FILE_LINK: https://www.dropbox.com/s/ftv4amoq7dzxnxo/conll-11083.zip?dl=1
+MODEL_FILE: ${PWD}/conll-19231.zip
+MODEL_FILE_LINK: https://www.dropbox.com/s/agft8f1gbyt1w76/conll-19231.zip?dl=1
 CONFIG_FILE: ${PWD}/conll-tf.json
 CONFIG_FILE_LINK: https://www.dropbox.com/s/97bi7qy15usmvb2/conll-tf.json?dl=1
 MODEL_NAME: conll
 EXPORT_DIR: ${PWD}/models
 EXPORT_DIR_PREPROC: ${PWD}/models-preproc
 EXPORT_SETTINGS_MEAD: ${BASELINE_DIR}/python/mead/config/mead-settings.json
-EXPORT_SETTINGS_DATASETS: ${BASELINE_DIR}/python/mead/config/datasets.json
 MODEL_VERSION: 1
 IS_REMOTE: false
 RETURN_LABELS: true
