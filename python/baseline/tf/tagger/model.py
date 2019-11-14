@@ -271,13 +271,9 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
         lengths = batch_dict[self.lengths_key]
         batch_dict = self.make_input(batch_dict)
         if get_version(tf) < 2:
-            bestv = self.sess.run(self.best, feed_dict=batch_dict)
-            return [pij[:sl] for pij, sl in zip(bestv, lengths)]
+            return self.sess.run(self.best, feed_dict=batch_dict)
         else:
-            bestv = self(batch_dict)
-            return [pij[:sl].numpy() for pij, sl in zip(bestv, lengths)]
-
-
+            return self(batch_dict).numpy()
 
     def embed(self, **kwargs):
         """This method performs "embedding" of the inputs.  The base method here then concatenates along depth
