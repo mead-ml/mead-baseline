@@ -1014,9 +1014,9 @@ class TaggerGreedyDecoder(nn.Module):
         if self.constraint_mask is not None:
             probv = self.to_time_first(unaries)
             probv = F.log_softmax(probv, dim=-1)
-            preds, _ = viterbi(probv, self.constraint_mask, lengths, Offsets.GO, Offsets.EOS, norm=F.log_softmax)
+            preds, scores = viterbi(probv, self.constraint_mask, lengths, Offsets.GO, Offsets.EOS, norm=F.log_softmax)
             if self.batch_first:
-                return tbh2bth(preds)
+                return tbh2bth(preds), scores
         else:
             # Decoding doesn't care about batch/time first
             _, preds = torch.max(unaries, -1)
@@ -1024,7 +1024,7 @@ class TaggerGreedyDecoder(nn.Module):
             # The mask gets generated as batch first
             mask = mask if self.batch_first else mask.transpose(0, 1)
             preds = preds.masked_fill(mask == 0, 0)
-        return preds
+        return preds, None
 
     def extra_repr(self):
         str_ = f"n_tags={self.num_tags}, batch_first={self.batch_first}"
@@ -1178,7 +1178,7 @@ class CRF(nn.Module):
             return self._forward_alg(unary, lengths)
 
         with torch.no_grad():
-            return self.decode(unary, lengths)[0]
+            return self.decode(unary, lengths)
 
     def decode(self, unary, lengths):
         """Do Viterbi decode on a batch.
@@ -1231,12 +1231,13 @@ class TagSequenceModel(SequenceModel):
     def __init__(self, nc, embeddings, transducer, decoder=None):
         decoder_model = CRF(nc, batch_first=False) if decoder is None else decoder
         super().__init__(nc, embeddings, transducer, decoder_model)
+        self.path_scores = None
 
     def neg_log_loss(self, unary, tags, lengths):
         return self.decoder_model.neg_log_loss(unary, tags, lengths)
 
     def forward(self, inputs):
-        time_first = super().forward(inputs)
+        time_first, self.path_scores = super().forward(inputs)
         return time_first.transpose(0, 1)
 
 

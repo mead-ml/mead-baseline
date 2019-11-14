@@ -1192,10 +1192,10 @@ class TaggerGreedyDecoder(tf.keras.layers.Layer):
             gos = tf.constant(np_gos)
             start = tf.tile(gos, [bsz, 1, 1])
             probv = tf.concat([start, unary], axis=1)
-            viterbi, _ = crf_decode(probv, self.transitions, lengths + 1)
-            return tf.identity(viterbi[:, 1:], name="best")
+            viterbi, path_scores = crf_decode(probv, self.transitions, lengths + 1)
+            return tf.identity(viterbi[:, 1:], name="best"), path_scores
         else:
-            return tf.argmax(self.probs, 2, name="best")
+            return tf.argmax(self.probs, 2, name="best"), None
 
 
 class CRF(tf.keras.layers.Layer):
@@ -1231,8 +1231,6 @@ class CRF(tf.keras.layers.Layer):
 
         :return: torch.FloatTensor: [B]
         """
-        #unary = tf.Print(unary, [tf.shape(unary)])
-        #tags = tf.Print(tags, [tf.shape(tags)])
         return crf_sequence_score(unary, tf.cast(tags, tf.int32), tf.cast(lengths, tf.int32), self.transitions)
 
     def call(self, inputs, training=False):
@@ -1263,8 +1261,8 @@ class CRF(tf.keras.layers.Layer):
 
         probv = tf.concat([start, unary], axis=1)
 
-        viterbi, _ = crf_decode(probv, self.transitions, lengths + 1)
-        return tf.identity(viterbi[:, 1:], name="best")
+        viterbi, path_scores = crf_decode(probv, self.transitions, lengths + 1)
+        return tf.identity(viterbi[:, 1:], name="best"), path_scores
 
     def neg_log_loss(self, unary, tags, lengths):
         """Neg Log Loss with a Batched CRF.
@@ -1321,6 +1319,7 @@ class TagSequenceModel(tf.keras.Model):
         else:
             assert isinstance(embeddings, EmbeddingsStack)
             self.embed_model = embeddings
+        self.path_scores = None
         self.transducer_model = transducer
         self.proj_layer = TimeDistributedProjection(nc)
         decoder_model = CRF(nc) if decoder is None else decoder
@@ -1335,7 +1334,8 @@ class TagSequenceModel(tf.keras.Model):
         return transduced
 
     def decode(self, transduced, lengths):
-        return self.decoder_model((transduced, lengths))
+        path, self.path_scores = self.decoder_model((transduced, lengths))
+        return path
 
     def call(self, inputs, training=None):
         transduced = self.transduce(inputs)

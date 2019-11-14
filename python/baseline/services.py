@@ -52,6 +52,13 @@ class Service(object):
     def predict(self, tokens, **kwargs):
         pass
 
+    def format_output(self, predicted, **kwargs):
+        """Turn the results of self.model.predict into our output format
+
+        :param predicted: The results from self.model.predict
+        :returns: Formatted output, different for each task
+        """
+
     def batch_input(self, tokens):
         """Turn the input into a consistent format.
         :param tokens: tokens in format List[str] or List[List[str]]
@@ -218,8 +225,11 @@ class ClassifierService(Service):
             }
 
         outcomes_list = self.model.predict(examples)
+        return self.format_output(outcomes_list)
+
+    def format_output(self, predicted):
         results = []
-        for outcomes in outcomes_list:
+        for outcomes in predicted:
             if self.return_labels:
                 results += [list(map(lambda x: (x[0], x[1].item()), sorted(outcomes, key=lambda tup: tup[1], reverse=True)))]
             else:
@@ -248,7 +258,10 @@ class EmbeddingsService(Service):
             examples = {
                 'tokens': np.array([" ".join(x) for x in tokens_batch]),
             }
-        return self.model.predict(examples)
+        return self.format_output(self.model.predict(examples))
+
+    def format_output(self, predicted):
+        return predicted
 
     @classmethod
     def load(cls, bundle, **kwargs):
@@ -348,9 +361,12 @@ class TaggerService(Service):
             examples = unfeaturized_examples
 
         outcomes = self.model.predict(examples)
+        return self.format_output(outcomes, tokens_batch=tokens_batch, label_field=label_field)
 
+    def format_output(self, predicted, tokens_batch=None, label_field='label', **kwargs):
+        assert tokens_batch is not None
         outputs = []
-        for i, outcome in enumerate(outcomes):
+        for i, outcome in enumerate(predicted):
             output = []
             for j, token in enumerate(tokens_batch[i]):
                 new_token = dict()
@@ -491,14 +507,16 @@ class EncoderDecoderService(Service):
 
         kwargs['beam'] = int(kwargs.get('beam', K))
         outcomes = self.model.predict(examples, **kwargs)
+        return self.format_output(outcomes, K=K)
 
+    def format_output(self, predicted, K=1, **kwargs):
         results = []
-        B = len(outcomes)
+        B = len(predicted)
         for i in range(B):
-            N = len(outcomes[i])
+            N = len(predicted[i])
             n_best_result = []
             for n in range(min(K, N)):
-                n_best = outcomes[i][n]
+                n_best = predicted[i][n]
                 out = lookup_sentence(self.tgt_idx_to_token, n_best).split()
                 if K == 1:
                     results += [out]
