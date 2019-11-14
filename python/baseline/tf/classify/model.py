@@ -136,7 +136,7 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
         if get_version(tf) < 2:
             probs = self.sess.run(self.probs, batch_dict)
         else:
-            probs = tf.nn.softmax(self(batch_dict))
+            probs = tf.nn.softmax(self(batch_dict)).numpy()
         return probs
 
     def predict(self, batch_dict, raw=False):
@@ -156,7 +156,7 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
         results = []
         batchsz = probs.shape[0]
         for b in range(batchsz):
-            outcomes = [(self.labels[id_i], prob_i.numpy()) for id_i, prob_i in enumerate(probs[b])]
+            outcomes = [(self.labels[id_i], prob_i) for id_i, prob_i in enumerate(probs[b])]
             results.append(outcomes)
         return results
 
