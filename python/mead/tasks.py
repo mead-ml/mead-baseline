@@ -732,7 +732,7 @@ class LanguageModelingTask(Task):
         self._create_vectorizers()
 
         reader_params = self.config_params['reader'] if 'reader' in self.config_params else self.config_params['loader']
-        reader_params['nctx'] = reader_params.get('nctx', self.config_params.get('nctx', self.config_params.get('nbptt', 35)))
+        reader_params['nctx'] = reader_params.get('nctx', reader_params.get('nbptt', self.config_params.get('nctx', self.config_params.get('nbptt', 35))))
         reader_params['clean_fn'] = reader_params.get('clean_fn', self.config_params.get('preproc', {}).get('clean_fn'))
         if reader_params['clean_fn'] is not None and self.config_params['dataset'] != 'SST2':
             logger.warning('Warning: A reader preprocessing function (%s) is active, it is recommended that all data preprocessing is done outside of baseline to insure data at inference time matches data at training time.', reader_params['clean_fn'])
@@ -794,12 +794,12 @@ class LanguageModelingTask(Task):
     def _reorganize_params(self):
 
         train_params = self.config_params['train']
-        train_params['batchsz'] = self.config_params['batchsz']
+        train_params['batchsz'] = train_params['batchsz'] if 'batchsz' in train_params else self.config_params['batchsz']
         train_params['test_batchsz'] = self.config_params.get('test_batchsz', 1)
         model = self.config_params['model']
         unif = self.config_params.get('unif', 0.1)
         model['unif'] = model.get('unif', unif)
-        model['batchsz'] = self.config_params['batchsz']
+        model['batchsz'] = train_params['batchsz']
         model['tgt_key'] = self.config_params.get('reader',
                                                   self.config_params.get('loader', {})).get('tgt_key', self.primary_key)
         model['src_keys'] = listify(self.config_params.get('reader', list(self.config_params.get('loader', {}).get('src_keys', self.embeddings.keys()))))

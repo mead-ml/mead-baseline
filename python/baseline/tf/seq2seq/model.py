@@ -22,10 +22,17 @@ def _temporal_cross_entropy_loss(logits, labels, label_lengths, mx_seq_length):
     """
 
     # The labels actual length is 100, and starts with <GO>
+    # labels = tf.Print(labels, [tf.shape(labels)], message="Label Shape: ")
+    # logits = tf.Print(logits, [tf.shape(logits)], message="Logits Shape: ")
     labels = tf.transpose(labels, perm=[1, 0])
+    # labels = tf.Print(labels, [tf.shape(labels)], message="Label.T Shape: ")
     # TxB loss mask
-    labels = labels[0:mx_seq_length, :]
+    labels = labels[:mx_seq_length, :]
+    # labels = tf.Print(labels, [tf.shape(labels)], message="Label cut Shape: ")
+    logits = logits[:mx_seq_length]
+    # logits = tf.Print(logits, [tf.shape(logits)], message="logits cut Shape: ")
     logit_length = tf.to_int32(tf.shape(logits)[0])
+    # logit_length = tf.Print(logit_length, [logit_length], message='Length of logits')
     timesteps = tf.to_int32(tf.shape(labels)[0])
     # The labels no longer include <GO> so go is not useful.  This means that if the length was 100 before, the length
     # of labels is now 99 (and that is the max allowed)
@@ -68,20 +75,6 @@ if get_version(tf) < 2:
             super().__init__()
             self.saver = None
             self._unserializable = ['src_len', 'tgt_len', 'mx_tgt_len']
-
-        def _record_state(self, **kwargs):
-            self._state = {k: v for k, v in kwargs.items() if k not in self._unserializable + ['sess', 'tgt'] +
-                           list(self.src_embeddings.keys())}
-
-            src_embeddings_state = {}
-            for k, v in self.src_embeddings.items():
-                src_embeddings_state[k] = v.__class__.__name__  ##v._state
-
-            self._state.update({
-                "version": __version__,
-                "src_embeddings": src_embeddings_state,
-                "tgt_embedding": self.tgt_embedding.__class__.__name__  #self.tgt_embedding._state
-            })
 
         @classmethod
         @tf_device_wrapper
@@ -172,7 +165,6 @@ if get_version(tf) < 2:
             embed_in = model.embed(**kwargs)
             encoder_output = model.encode(embed_in, **kwargs)
             model.decode(encoder_output, **kwargs)
-            # writer = tf.summary.FileWriter('blah', model.sess.graph)
             return model
 
         def set_saver(self, saver):
@@ -342,6 +334,7 @@ else:
             return self.decoder(encoder_outputs, dst)
 
         def save_md(self, basename):
+            import pdb; pdb.set_trace()
             state = {k: v for k, v in self._state.items()}
 
             write_json(state, '{}.state'.format(basename))
@@ -379,6 +372,7 @@ else:
         @classmethod
         @tf_device_wrapper
         def load(cls, basename, **kwargs):
+            import pdb; pdb.set_trace()
             _state = read_json('{}.state'.format(basename))
             if __version__ != _state['version']:
                 logger.warning("Loaded model is from baseline version %s, running version is %s", _state['version'], __version__)

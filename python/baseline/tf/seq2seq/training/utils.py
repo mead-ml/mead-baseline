@@ -2,6 +2,7 @@ import os
 import time
 import numpy as np
 import tensorflow as tf
+from eight_mile.tf.layers import create_session
 from eight_mile.tf.optz import optimizer
 from eight_mile.progress import create_progress_bar
 from eight_mile.bleu import bleu
@@ -117,6 +118,15 @@ class Seq2SeqTrainerTf(Trainer):
 
         :return: None
         """
+        latest = os.path.join(self.base_dir, 'seq2seq-model-tf-%d' % os.getpid())
+        # logger.info('Reloading %s', latest)
+        g = tf.Graph()
+        with g.as_default():
+            SET_TRAIN_FLAG(None)
+            sess = create_session()
+            self.model = self.model.load(latest, predict=True, beam=self.beam, session=sess)
+            self.model.set_saver(tf.train.Saver())
+
         checkpoint_dir = '{}-{}'.format("./tf-seq2seq", os.getpid())
         latest = tf.train.latest_checkpoint(checkpoint_dir)
         self.model.saver.restore(self.model.sess, latest)

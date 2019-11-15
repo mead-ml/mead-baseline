@@ -1183,13 +1183,13 @@ class MultiHeadedAttention(tf.keras.layers.Layer):
         query = split_heads(self.w_Q(query), self.h)
         key = split_heads(self.w_K(key), self.h)
         value = split_heads(self.w_V(value), self.h)
-        x, self.attn = self.attn_fn(query, key, value, mask=mask, pdrop=self.dropout)
+        x, self.attn = self.attn_fn(query, key, value, mask=mask)
         x = combine_heads(x)
         return self.w_O(x)
 
 
 class TransformerEncoder(tf.keras.layers.Layer):
-    def __init__(self, num_heads, d_model, pdrop, scale=True, activation_type='relu', d_ff=None, name=None):
+    def __init__(self, d_model, num_heads, pdrop, scale=True, activation_type='relu', d_ff=None, name=None):
         super().__init__(name=name)
         self.d_model = d_model
         self.d_ff = d_ff if d_ff is not None else 4 * d_model
@@ -1199,7 +1199,7 @@ class TransformerEncoder(tf.keras.layers.Layer):
         self.ln2 = tf.keras.layers.LayerNormalization(epsilon=1e-6)
         self.dropout = tf.keras.layers.Dropout(pdrop)
 
-    def forward(self, inputs):
+    def call(self, inputs):
         """
         :param inputs: `(x, mask)`
         :return: The output tensor
@@ -1207,7 +1207,7 @@ class TransformerEncoder(tf.keras.layers.Layer):
         x, mask = inputs
 
         x = self.ln1(x)
-        h = self.self_attn(x, x, x, mask)
+        h = self.self_attn((x, x, x, mask))
         x = x + self.dropout(h, TRAIN_FLAG())
 
         x = self.ln2(x)
@@ -1217,7 +1217,7 @@ class TransformerEncoder(tf.keras.layers.Layer):
 
 class TransformerDecoder(tf.keras.layers.Layer):
 
-    def __init__(self, num_heads, d_model, pdrop, scale=True, activation_type='relu', d_ff=None, name=None):
+    def __init__(self, d_model, num_heads, pdrop, scale=True, activation_type='relu', d_ff=None, name=None):
         super().__init__(name=name)
         self.d_model = d_model
         self.d_ff = d_ff if d_ff is not None else 4 * d_model
@@ -1230,12 +1230,12 @@ class TransformerDecoder(tf.keras.layers.Layer):
         self.dropout = tf.keras.layers.Dropout(pdrop)
 
     def call(self, inputs):
-        memory, x, src_mask, tgt_mask = inputs
+        x, memory, src_mask, tgt_mask = inputs
         x = self.ln1(x)
-        x = x + self.dropout(self.self_attn((x, x, x), tgt_mask), TRAIN_FLAG())
+        x = x + self.dropout(self.self_attn((x, x, x, tgt_mask)), TRAIN_FLAG())
 
         x = self.ln2(x)
-        x = x + self.dropout(self.src_attn((x, memory, memory), src_mask), TRAIN_FLAG())
+        x = x + self.dropout(self.src_attn((x, memory, memory, src_mask)), TRAIN_FLAG())
 
         x = self.ln3(x)
         x = x + self.dropout(self.ffn(x), TRAIN_FLAG())
@@ -1244,17 +1244,17 @@ class TransformerDecoder(tf.keras.layers.Layer):
 
 class TransformerEncoderStack(tf.keras.layers.Layer):
 
-    def __init__(self, num_heads, d_model, pdrop, scale=True, layers=1, activation_type='relu', d_ff=None, name=None, **kwargs):
+    def __init__(self, d_model, num_heads, pdrop, scale=True, layers=1, activation_type='relu', d_ff=None, name=None, **kwargs):
         super().__init__(name=name)
         self.encoders = []
         self.ln = tf.keras.layers.LayerNormalization(epsilon=1e-6)
         for i in range(layers):
-            self.encoders.append(TransformerEncoder(num_heads, d_model, pdrop, scale, activation_type, d_ff))
+            self.encoders.append(TransformerEncoder(d_model, num_heads, pdrop, scale, activation_type, d_ff))
 
     def call(self, inputs):
-        x = inputs
+        x, mask = inputs
         for layer in self.encoders:
-            x = layer(x)
+            x = layer((x, mask))
         return self.ln(x)
 
 
@@ -1264,12 +1264,12 @@ class TransformerDecoderStack(tf.keras.layers.Layer):
         self.decoders = []
         self.ln = tf.keras.layers.LayerNormalization(epsilon=1e-6)
         for i in range(layers):
-            self.decoders.append(TransformerDecoder(num_heads, d_model, pdrop, scale, activation, d_ff))
+            self.decoders.append(TransformerDecoder(d_model, num_heads, pdrop, scale, activation, d_ff))
 
     def call(self, inputs):
-        x = inputs
+        x, memory, src_mask, tgt_mask = inputs
         for layer in self.decoders:
-            x = layer(x)
+            x = layer((x, memory, src_mask, tgt_mask))
         return self.ln(x)
 
 

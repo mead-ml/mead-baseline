@@ -37,6 +37,9 @@ class TensorFlowEmbeddingsModel(tf.keras.Model):
         """
         return self.embedding_layer.get_dsz()
 
+    def get_weights(self):
+        return self.embedding_layer.get_weights()
+
     @property
     def output_dim(self):
         return self.embedding_layer.output_dim
@@ -55,6 +58,7 @@ class TensorFlowEmbeddingsModel(tf.keras.Model):
         """
         if x is None:
             x = self.create_placeholder(self._name)
+        self.x = x
         return self.embedding_layer(x)
 
     def call(self, x):
