@@ -1134,7 +1134,7 @@ class MultiHeadedAttention(tf.keras.layers.Layer):
     And for self-attention in the decoder, K, Q and V all come from the decoder, but here it is masked to prevent using
     future values
     """
-    def __init__(self, num_heads, d_model, dropout=0.1, scale=False):
+    def __init__(self, num_heads, d_model, dropout=0.1, scale=False, name=None):
         """Constructor for multi-headed attention
 
         :param h: The number of heads
@@ -1142,7 +1142,7 @@ class MultiHeadedAttention(tf.keras.layers.Layer):
         :param dropout (``float``): The amount of dropout to use
         :param attn_fn: A function to apply attention, defaults to SDP
         """
-        super().__init__()
+        super().__init__(name=name)
         assert d_model % num_heads == 0
         self.d_k = d_model // num_heads
         self.h = num_heads
@@ -1221,8 +1221,8 @@ class TransformerDecoder(tf.keras.layers.Layer):
         super().__init__(name=name)
         self.d_model = d_model
         self.d_ff = d_ff if d_ff is not None else 4 * d_model
-        self.self_attn = MultiHeadedAttention(num_heads, self.d_model, pdrop, scale=scale)
-        self.src_attn = MultiHeadedAttention(num_heads, self.d_model, pdrop, scale=scale)
+        self.self_attn = MultiHeadedAttention(num_heads, self.d_model, pdrop, scale=scale, name="self_attention")
+        self.src_attn = MultiHeadedAttention(num_heads, self.d_model, pdrop, scale=scale, name="src_attention")
         self.ffn = FFN(d_model, pdrop, activation_type, d_ff, name='ffn')
         self.ln1 = tf.keras.layers.LayerNormalization(epsilon=1e-6)
         self.ln2 = tf.keras.layers.LayerNormalization(epsilon=1e-6)

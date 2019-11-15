@@ -125,11 +125,6 @@ class Seq2SeqTrainerTf(Trainer):
             SET_TRAIN_FLAG(None)
             sess = create_session()
             self.model = self.model.load(latest, predict=True, beam=self.beam, session=sess)
-            self.model.set_saver(tf.train.Saver())
-
-        checkpoint_dir = '{}-{}'.format("./tf-seq2seq", os.getpid())
-        latest = tf.train.latest_checkpoint(checkpoint_dir)
-        self.model.saver.restore(self.model.sess, latest)
 
     def _num_toks(self, lens):
         return np.sum(lens)
