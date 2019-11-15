@@ -78,12 +78,13 @@ class TransformerDecoder(DecoderBase):
             scope = 'TransformerDecoder'
             h = transformer_decoder_stack(tgt_embed, src_enc, src_mask, tgt_mask, num_heads, pdrop, scale, layers, activation_type, scope, d_ff)
 
-            vsz = self.tgt_embedding.vsz
+            vsz = self.tgt_embedding.get_vsz()
             do_weight_tying = bool(kwargs.get('tie_weights', True))  # False
+            do_weight_tying = False
             hsz = get_shape_as_list(h)[-1]
             h = tf.reshape(h, [-1, hsz])
             if do_weight_tying and hsz == self.tgt_embedding.get_dsz():
-                with tf.variable_scope(self.tgt_embedding.scope, reuse=True):
+                with tf.variable_scope(self.tgt_embedding.embedding_layer.scope, reuse=True):
                     W = tf.get_variable("W")
                     outputs = tf.matmul(h, W, transpose_b=True, name="logits")
             else:
@@ -141,12 +142,13 @@ class TransformerDecoder(DecoderBase):
         scope = 'TransformerDecoder'
         h = transformer_decoder_stack(tgt_embed, src_enc, src_mask, tgt_mask, num_heads, pdrop, scale, layers, activation_type, scope, d_ff)
 
-        vsz = self.tgt_embedding.vsz
+        vsz = self.tgt_embedding.get_vsz()
         do_weight_tying = bool(kwargs.get('tie_weights', True))  # False
+        do_weight_tying = False
         hsz = get_shape_as_list(h)[-1]
         if do_weight_tying and hsz == self.tgt_embedding.get_dsz():
             h = tf.reshape(h, [-1, hsz])
-            with tf.variable_scope(self.tgt_embedding.scope, reuse=True):
+            with tf.variable_scope(self.tgt_embedding.embedding_layer.scope, reuse=True):
                 W = tf.get_variable("W")
                 outputs = tf.matmul(h, W, transpose_b=True, name="logits")
         else:
@@ -232,10 +234,10 @@ got {} hsz and {} dsz".format(self.hsz, self.tgt_embedding.get_dsz()))
         self.cell = multi_rnn_cell_w_dropout(self.hsz, pdrop, rnntype, layers, variational=vdrop, training=TRAIN_FLAG())
 
     def _get_tgt_weights(self):
-        Wo = tf.get_variable("Wo", initializer=tf.constant_initializer(self.tgt_embedding._weights,
+        Wo = tf.get_variable("Wo", initializer=tf.constant_initializer(self.tgt_embedding.embedding_layer._weights,
                                                                        dtype=tf.float32,
                                                                        verify_shape=True),
-                             shape=[self.tgt_embedding.vsz, self.tgt_embedding.dsz])
+                             shape=[self.tgt_embedding.get_vsz(), self.tgt_embedding.get_dsz()])
         return Wo
 
     def predict(self, encoder_outputs, src_len, pdrop, **kwargs):
@@ -248,10 +250,12 @@ got {} hsz and {} dsz".format(self.hsz, self.tgt_embedding.get_dsz()))
         # In an ideal world, TF would just let us using tgt_embedding.encode as a function pointer
         # This works fine for training, but then at decode time its not quite in the right place scope-wise
         # So instead, for now, we never call .encode() and instead we create our own operator
+        # This is a huge hack where we are getting and wrapping the weight from the tgt embedding
+        # which never actually gets used inside the embeddings object to create a tensor
         Wo = self._get_tgt_weights()
         batch_sz = tf.shape(encoder_outputs.output)[0]
         with tf.variable_scope("dec", reuse=tf.AUTO_REUSE):
-            proj = dense_layer(self.tgt_embedding.vsz)
+            proj = dense_layer(self.tgt_embedding.get_vsz())
             self._create_cell(encoder_outputs.output, src_len, pdrop, **kwargs)
             initial_state = self.arc_policy.connect(encoder_outputs, self, batch_sz)
             # Define a beam-search decoder
@@ -285,14 +289,16 @@ got {} hsz and {} dsz".format(self.hsz, self.tgt_embedding.get_dsz()))
         # In an ideal world, TF would just let us using tgt_embedding.encode as a function pointer
         # This works fine for training, but then at decode time its not quite in the right place scope-wise
         # So instead, for now, we never call .encode() and instead we create our own operator
+        # This is a huge hack where we are getting and wrapping the weight from the tgt embedding
+        # which never actually gets used inside the embeddings object to create a tensor
         Wo = self._get_tgt_weights()
         with tf.variable_scope("dec", reuse=tf.AUTO_REUSE):
             tie_shape = [Wo.get_shape()[-1], Wo.get_shape()[0]]
             if self.do_weight_tying:
                 with tf.variable_scope("Share", custom_getter=tie_weight(Wo, tie_shape)):
-                    proj = tf.layers.Dense(self.tgt_embedding.vsz, use_bias=False)
+                    proj = tf.layers.Dense(self.tgt_embedding.get_vsz(), use_bias=False)
             else:
-                proj = tf.layers.Dense(self.tgt_embedding.vsz, use_bias=False)
+                proj = tf.layers.Dense(self.tgt_embedding.get_vsz(), use_bias=False)
 
             self._create_cell(encoder_outputs.output, src_len, pdrop, **kwargs)
             batch_sz = tf.shape(encoder_outputs.output)[0]

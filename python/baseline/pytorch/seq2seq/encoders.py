@@ -27,11 +27,7 @@ class RNNEncoder(torch.nn.Module):
         self.src_mask_fn = _make_src_mask if create_src_mask is True else lambda x, y: None
 
     def forward(self, btc, lengths):
-        # Do all our RNN stuff as TBC
-        #tbc = bth2tbh(btc)
-        #output, hidden = self.rnn((tbc, lengths))
         output, hidden = self.rnn((btc, lengths))
-        #output = tbh2bth(output)
         return RNNEncoderOutput(output=output + btc if self.residual else output,
                                 hidden=hidden,
                                 src_mask=self.src_mask_fn(output, lengths))

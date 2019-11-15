@@ -1,5 +1,6 @@
 """Language model baselines in TensorFlow
 """
+from itertools import chain
 from baseline.tf.tfy import *
 from baseline.version import __version__
 from baseline.model import LanguageModel, register_model
@@ -61,10 +62,13 @@ class LanguageModelBase(tf.keras.Model, LanguageModel):
         for k, v in self.embeddings.items():
             embeddings_info[k] = v.__class__.__name__
 
-        self._state = {k: v for k, v in kwargs.items() if k not in self._unserializable + MAGIC_VARS + list(self.embeddings.keys())}
+        blacklist = set(chain(self._unserializable, MAGIC_VARS, self.embeddings.keys()))
+        self._state = {k: v for k, v in kwargs.items() if k not in blacklist}
         self._state.update({
-            "version": __version__,
-            "embeddings": embeddings_info
+            'version': __version__,
+            'module': self.__class__.__module__,
+            'class': self.__class__.__name__,
+            'embeddings': embeddings_info,
         })
 
     def set_saver(self, saver):
@@ -128,7 +132,6 @@ class LanguageModelBase(tf.keras.Model, LanguageModel):
             batch_dict_for_model = new_placeholder_dict(train)
 
             for key in self.src_keys:
-
                 batch_dict_for_model["{}:0".format(key)] = batch_dict[key]
 
             y = batch_dict.get('y')
@@ -193,7 +196,7 @@ class LanguageModelBase(tf.keras.Model, LanguageModel):
         lm.src_keys = kwargs.get('src_keys', lm.embeddings.keys())
         lm.tgt_key = kwargs.get('tgt_key')
         if lm.tgt_key is None:
-            raise Exception('Need a `tgt_key` to know which source vocabulary should be used for destination ')
+            raise Exception('Need a `tgt_key` to know which source vocabulary should be used for destination')
 
         lm._unserializable.append(lm.tgt_key)
         lm._record_state(**kwargs)
@@ -212,7 +215,7 @@ class LanguageModelBase(tf.keras.Model, LanguageModel):
         lm.pdrop_value = kwargs.pop('pdrop', 0.5)
         lm.hsz = kwargs.pop('hsz', None)
         embeddings_layer = lm.embed(**kwargs)
-        nc = embeddings[lm.tgt_key].vsz
+        nc = embeddings[lm.tgt_key].get_vsz()
         encoder_layer = lm.decode(inputs, **kwargs)
         lm.impl = LangSequenceModel(nc, embeddings_layer, encoder_layer)
 
@@ -292,7 +295,6 @@ class LanguageModelBase(tf.keras.Model, LanguageModel):
     @property
     def requires_state(self):
         return hasattr(self.impl, 'requires_state') and self.impl.requires_state
-
 
     def output(self, hidden, vsz, **kwargs):
         """Project to the output space

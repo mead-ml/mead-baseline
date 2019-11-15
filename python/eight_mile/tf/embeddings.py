@@ -23,6 +23,7 @@ class TensorFlowEmbeddings(tf.keras.layers.Layer):
         # code to find this. For now just don't pass in out kwargs
         super().__init__(trainable, name, dtype)
         self._name = name
+        self.W = None
 
     def get_dsz(self):
         """Get the number of output dimension of this operation
@@ -37,6 +38,9 @@ class TensorFlowEmbeddings(tf.keras.layers.Layer):
         :return:
         """
         pass
+
+    def get_weights(self):
+        raise NotImplementedError
 
     def encode(self, x):
         """This defines the computation of the sub-graph for this object and returns the output node
@@ -125,6 +129,9 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
 
     def get_dsz(self):
         return self.dsz
+
+    def get_weights(self):
+        return self.W
 
 
 class CharConvEmbeddings(TensorFlowEmbeddings):

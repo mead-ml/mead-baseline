@@ -113,7 +113,7 @@ class RNNDecoder(torch.nn.Module):
         do_weight_tying = bool(kwargs.get('tie_weights', False))
         is_valid_tying = self.hsz == self.tgt_embeddings.get_dsz()
 
-        self.preds = torch.nn.Linear(self.hsz, self.tgt_embeddings.get_vsz())
+        self.preds = pytorch_linear(self.hsz, self.tgt_embeddings.get_vsz())
         if do_weight_tying:
             if is_valid_tying:
                 tie_weight(self.preds, self.tgt_embeddings.embeddings)
