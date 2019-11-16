@@ -43,7 +43,7 @@ def TRAIN_FLAG():
     if BASELINE_TF_TRAIN_FLAG is not None:
         return BASELINE_TF_TRAIN_FLAG
 
-    BASELINE_TF_TRAIN_FLAG = tf.placeholder_with_default(False, shape=(), name="TRAIN_FLAG")
+    BASELINE_TF_TRAIN_FLAG = tf.compat.v1.placeholder_with_default(False, shape=(), name="TRAIN_FLAG")
     return BASELINE_TF_TRAIN_FLAG
 
 

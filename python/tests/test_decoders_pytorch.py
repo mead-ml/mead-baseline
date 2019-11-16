@@ -8,12 +8,11 @@ from collections import namedtuple
 import string
 torch = pytest.importorskip('torch')
 from eight_mile.utils import Offsets
-from eight_mile.pytorch.embeddings import LookupTableEmbeddings
-from baseline.pytorch.seq2seq.decoders import RNNDecoder, RNNDecoderWithAttn
 
 
 def test_rnn_decode_shapes():
-    from collections import namedtuple
+    from baseline.pytorch.embeddings import LookupTableEmbeddingsModel
+    from baseline.pytorch.seq2seq.decoders import RNNDecoder
     # Always pick the right path
     encoder = namedtuple("EncoderOutput", "output src_mask")
     batchsz = 2
@@ -33,7 +32,7 @@ def test_rnn_decode_shapes():
                       torch.from_numpy(np.random.randn(layers, batchsz, hsz)).float())
     encoder.output = encoder.output
     encoder.src_mask = torch.zeros(batchsz, temporal).byte()
-    tgt_embed = LookupTableEmbeddings.create(wv, 'output')
+    tgt_embed = LookupTableEmbeddingsModel.create(wv, 'output')
     decoder = RNNDecoder(tgt_embed, hsz=hsz)
     decode_start = torch.full((batchsz, temporal_output), Offsets.GO, dtype=torch.long)
     output = decoder(encoder, decode_start)
@@ -44,7 +43,8 @@ def test_rnn_decode_shapes():
 
 
 def test_rnn_attn_decode_shapes():
-    from collections import namedtuple
+    from baseline.pytorch.embeddings import LookupTableEmbeddingsModel
+    from baseline.pytorch.seq2seq.decoders import RNNDecoderWithAttn
     # Always pick the right path
     encoder = namedtuple("EncoderOutput", "output src_mask")
     batchsz = 2
@@ -66,7 +66,7 @@ def test_rnn_attn_decode_shapes():
     encoder.output = encoder.output
     encoder.src_mask = torch.zeros(batchsz, temporal).byte()
 
-    tgt_embed = LookupTableEmbeddings.create(wv, 'output')
+    tgt_embed = LookupTableEmbeddingsModel.create(wv, 'output')
     decoder = RNNDecoderWithAttn(tgt_embed, hsz=hsz)
     decode_start = torch.full((batchsz, temporal_output), Offsets.GO, dtype=torch.long)
     output = decoder(encoder, decode_start)
