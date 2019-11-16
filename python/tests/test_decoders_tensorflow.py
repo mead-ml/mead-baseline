@@ -3,17 +3,18 @@ import math
 import json
 import pytest
 import numpy as np
+from eight_mile.utils import get_version
 from eight_mile.w2v import RandomInitVecModel
 from collections import namedtuple
 import string
 tf = pytest.importorskip('tensorflow')
+pytestmark = pytest.mark.skipif(get_version(tf) < 2, reason='TF1.X')
 from eight_mile.utils import Offsets
-from eight_mile.tf.embeddings import LookupTableEmbeddings
-from baseline.tf.seq2seq.decoders.v2 import RNNDecoder, RNNDecoderWithAttn
 
 
 def test_rnn_decode_shapes():
-    from collections import namedtuple
+    from baseline.tf.embeddings import LookupTableEmbeddingsModel
+    from baseline.tf.seq2seq.decoders.v2 import RNNDecoder
     # Always pick the right path
     encoder = namedtuple("EncoderOutput", "output src_mask")
     batchsz = 2
@@ -31,7 +32,7 @@ def test_rnn_decode_shapes():
     encoder.hidden = (tf.cast(np.random.randn(layers, batchsz, hsz), dtype=tf.float32),
                       tf.cast(np.random.randn(layers, batchsz, hsz), dtype=tf.float32))
     encoder.src_mask = np.zeros((batchsz, temporal), dtype=np.uint8)
-    tgt_embed = LookupTableEmbeddings.create(wv, 'output')
+    tgt_embed = LookupTableEmbeddingsModel.create(wv, 'output')
     decoder = RNNDecoder(tgt_embed, hsz=hsz)
     decode_start = np.full((batchsz, temporal_output), Offsets.GO, dtype=np.int64)
     output = decoder(encoder, decode_start)
@@ -41,8 +42,9 @@ def test_rnn_decode_shapes():
 
 
 
-def test_rnn_decode_shapes():
-    from collections import namedtuple
+def test_rnn_attn_decode_shapes():
+    from baseline.tf.embeddings import LookupTableEmbeddingsModel
+    from baseline.tf.seq2seq.decoders.v2 import RNNDecoderWithAttn
     # Always pick the right path
     encoder = namedtuple("EncoderOutput", "output src_mask")
     batchsz = 2
@@ -60,12 +62,10 @@ def test_rnn_decode_shapes():
     encoder.hidden = (tf.cast(np.random.randn(layers, batchsz, hsz), dtype=tf.float32),
                       tf.cast(np.random.randn(layers, batchsz, hsz), dtype=tf.float32))
     encoder.src_mask = np.zeros((batchsz, temporal), dtype=np.uint8)
-    tgt_embed = LookupTableEmbeddings.create(wv, 'output')
+    tgt_embed = LookupTableEmbeddingsModel.create(wv, 'output')
     decoder = RNNDecoderWithAttn(tgt_embed, hsz=hsz, attn_type='sdpx')
     decode_start = np.full((batchsz, temporal_output), Offsets.GO, dtype=np.int64)
     output = decoder(encoder, decode_start)
     assert output.shape[0] == batchsz
     assert output.shape[1] == temporal_output
     assert output.shape[2] == wv.get_vsz()
-
-

@@ -1,6 +1,5 @@
 import os
-import math
-import json
+from collections import namedtuple
 import pytest
 import numpy as np
 from mock import patch, MagicMock
@@ -13,7 +12,43 @@ B = 1
 V = 3  # It has to be at least 3 for Offsets.EOS
 K = 2
 
-PATH_1 = [[0.7, 0.2, 0.1], [0.4, 0.3, 0.3], [0.6, 0.3, 0.1], [0.1, 0.1, 0.9]]
+
+"""
+Originally the probs in path one for index 1 were `[0.4, 0.3, 0.3]`
+
+This lead to a mis-match between the tensorflow and pytorch results.
+As you can see below when there are multiple values that are the same
+in tf then `tf.math.top_k` will select the first one of that value.
+When there are duplicates pytorch `.topk` will select the last one.
+
+From the tensorflow docs:
+    `If two elements are equal, the lower-index element appears first.`
+
+Pytorch docs don't explain what they do.
+
+This resulted in pytorch yielding the paths
+
+`[0, 2, 2, 2]` and `[0, 0, 0, 2]` which we wrong based on our gold
+which was assuming a select the first approach.
+
+(Pdb) flat_scores
+<tf.Tensor: id=161, shape=(1, 6), dtype=float32, numpy=
+array([[-1.2729657, -1.5606477, -1.5606477, -2.5257287, -2.8134108,
+        -2.8134108]], dtype=float32)>
+(Pdb) n
+> /home/blester/dev/work/baseline/python/eight_mile/tf/layers.py(1988)__call__()
+-> probs = tf.reshape(probs, (bsz, -1))
+(Pdb) best_idx
+<tf.Tensor: id=164, shape=(1, 2), dtype=int32, numpy=array([[0, 1]], dtype=int32)>
+
+(Pdb) flat_scores
+tensor([[-1.2730, -1.5606, -1.5606, -2.5257, -2.8134, -2.8134]])
+(Pdb) best_idx
+tensor([[0, 2]])
+"""
+
+
+PATH_1 = [[0.7, 0.2, 0.1], [0.4, 0.35, 0.25], [0.6, 0.3, 0.1], [0.1, 0.1, 0.9]]
 BEST_1_1ST = [0, 0, 0, 2]
 BEST_1_2ND = [0, 1, 0, 2]
 
@@ -33,11 +68,11 @@ class MockBeamSearch(BeamSearchBase):
         """Tile batches for encoder inputs and the likes."""
 
     def step(self, paths, _):
-
         probs = np.array(self.path_dist[self.i], dtype=np.float32)
         self.i += 1
         probs = probs.reshape((B, V))
-        single = torch.from_numpy(probs).log()
+        single = np.log(probs)
+        single = torch.from_numpy(single)
         return repeat_batch(single, self.K), None
 
     def update(self, beams, _):
@@ -45,7 +80,6 @@ class MockBeamSearch(BeamSearchBase):
         return None
 
 def test_beam_easy():
-    from collections import namedtuple
     # Always pick the right path
     encoder = namedtuple("EncoderOutput", "output src_mask")
     probs = np.zeros((B, V), dtype=np.float32)
@@ -61,7 +95,6 @@ def test_beam_easy():
 
 
 def test_beam_lengths():
-    from collections import namedtuple
     # Always pick the right path
     encoder = namedtuple("EncoderOutput", "output src_mask")
     probs = np.zeros((B, V), dtype=np.float32)
