@@ -71,7 +71,12 @@ class TransformerDecoder(DecoderBase):
             src_mask = tf.sequence_mask(src_len, T, dtype=tf.float32)
 
         scope = 'TransformerDecoder'
+        # In predict mode the placeholder for the tgt embedding isn't created so the weights in the tgt embedding object
+        # is called `tgt/LUT/weights` because there isn't a placeholder called `tgt`. In decode where that placeholder
+        # exists the weights are called `tgt_1/LUT/weights`
+        tf.no_op(name=self.tgt_embedding.name)
         dsz = self.tgt_embedding.get_dsz()
+        # If you don't create the Transformer before the while loop variables are prefixes with `while` and not found in the checkpoint
         self.decoder = TransformerDecoderStack(dsz, num_heads, pdrop, scale, layers, activation_type, d_ff, name=scope)
 
         vsz = self.tgt_embedding.get_vsz()
@@ -113,6 +118,7 @@ class TransformerDecoder(DecoderBase):
 
         hit_eos = tf.fill([B], False)
         decoded_ids = Offsets.GO * tf.ones([B, 1], dtype=tf.int64)
+        # Call the inner loop once so that the tgt weights aren't prefixed with `while`
         i, hit_eos, decoded_ids = inner_loop(tf.constant(0), hit_eos, decoded_ids)
 
         _, _, decoded_ids = tf.while_loop(is_not_finished, inner_loop, [i, hit_eos, decoded_ids],
@@ -143,7 +149,6 @@ class TransformerDecoder(DecoderBase):
         else:
             T = get_shape_as_list(src_enc)[1]
             src_mask = tf.sequence_mask(src_len, T, dtype=tf.float32)
-        import pdb; pdb.set_trace()
         tgt_embed = self.tgt_embedding.encode(kwargs.get('tgt'))
         T = get_shape_as_list(tgt_embed)[1]
         tgt_mask = subsequent_mask(T)
