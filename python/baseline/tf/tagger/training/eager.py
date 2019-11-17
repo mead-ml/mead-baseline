@@ -193,7 +193,7 @@ class TaggerTrainerEagerTf(EpochReportingTrainer):
         pg = create_progress_bar(steps)
         for features, y in pg(ts):
 
-            lossv = self.optimizer.update(self.model.impl, features, y)
+            lossv = self.optimizer.update(self.model.impl, features, y).numpy()
             step += 1
             batchsz = y.shape[0]
             report_loss = lossv * batchsz

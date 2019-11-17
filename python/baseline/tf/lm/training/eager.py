@@ -102,6 +102,7 @@ class LanguageModelTrainerEagerTf(Trainer):
                 loss_value, h = self.optimizer.update_with_hidden(self.model, h, features, y)
             else:
                 loss_value = self.optimizer.update(self.model, features, y)
+            loss_value = loss_value.numpy()
             toks = self._num_toks(y)
             report_loss = loss_value * toks
             epoch_loss += report_loss
@@ -160,6 +161,7 @@ class LanguageModelTrainerEagerTf(Trainer):
                 loss_value, h = loss_with_state(self.model, h, features, y)
             else:
                 loss_value = loss_without_state(self.model, features, y)
+            loss_value = loss_Value.numpy()
             toks = self._num_toks(y)
             total_loss += loss_value * toks
             total_toks += toks

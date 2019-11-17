@@ -1157,7 +1157,7 @@ class MultiHeadedAttention(tf.keras.layers.Layer):
     def _scaled_dot_product_attention(self, query, key, value, mask=None):
         w = tf.matmul(query, key, transpose_b=True)
 
-        w *= tf.rsqrt(tf.cast(tf.shape(query)[2], tf.float32))
+        w *= tf.math.rsqrt(tf.cast(tf.shape(query)[2], tf.float32))
 
         if mask is not None:
             w = w * mask + -1e9 * (1 - mask)
@@ -1812,6 +1812,11 @@ class BahdanauAttention(BaseAttention):
         return attended
 
 
+def subsequent_mask(size):
+    b = tf.compat.v1.matrix_band_part(tf.ones([size, size]), -1, 0)
+    m = tf.reshape(b, [1, 1, size, size])
+    return m
+
 
 def gnmt_length_penalty(lengths, alpha=0.8):
     """Calculate a length penalty from https://arxiv.org/pdf/1609.08144.pdf
@@ -1942,12 +1947,12 @@ class BeamSearchBase:
         mxlen = kwargs.get('mxlen', 100)
         bsz = get_shape_as_list(encoder_outputs.output)[0]
         extra = self.init(encoder_outputs)
-        paths = np.full((bsz, self.K, 1), Offsets.GO)
+        paths = tf.fill((bsz, self.K, 1), Offsets.GO)
         # This tracks the log prob of each beam. This is distinct from score which
         # is based on the log prob and penalties.
-        log_probs = np.zeros((bsz, self.K))
+        log_probs = tf.zeros((bsz, self.K))
         # Tracks the lengths of the beams, unfinished beams have a lengths of zero.
-        lengths = np.zeros((bsz, self.K), np.int32)
+        lengths = tf.zeros((bsz, self.K), np.int32)
 
         for i in range(mxlen - 1):
             probs, extra = self.step(paths, extra)
@@ -1959,8 +1964,8 @@ class BeamSearchBase:
                 done_mask = tf.expand_dims(done_mask, -1)
                 # Can creating this mask be moved out of the loop? It never changes but we don't have V
                 # This mask selects the EOS token
-                eos_mask = np.zeros((1, 1, V))
-                eos_mask[:, :, Offsets.EOS] = 1
+                eos_mask = tf.cast(tf.zeros((1, 1, V)) + tf.reshape(tf.cast(tf.range(V) == Offsets.EOS, tf.float32), (1, 1, V)), done_mask.dtype)
+                # eos_mask[:, :, Offsets.EOS] = 1
                 # This mask selects the EOS token of only the beams that are done.
                 mask = done_mask & eos_mask
                 # Put all probability mass on the EOS token for finished beams.
@@ -1994,15 +1999,15 @@ class BeamSearchBase:
             # Best Beam index is relative within the batch (only [0, K)).
             # This makes the index global (e.g. best beams for the second
             # batch example is in [K, 2*K)).
-            offsets = np.arange(bsz) * self.K
-            offset_beams = tf.cast(best_beams, tf.int64) + tf.expand_dims(offsets, -1)
+            offsets = tf.range(bsz) * self.K
+            offset_beams = best_beams + tf.expand_dims(offsets, -1)
             flat_beams = tf.reshape(offset_beams, [bsz * self.K])
             # Select the paths to extend based on the best beams
             flat_paths = tf.reshape(paths, [bsz * self.K, -1])
             new_paths = tf.gather(flat_paths, flat_beams)
             new_paths = tf.reshape(new_paths, [bsz, self.K, -1])
             # Add the selected outputs to the paths
-            paths = tf.concat([new_paths, tf.expand_dims(tf.cast(best_idx, tf.int64), -1)], axis=2)
+            paths = tf.concat([new_paths, tf.expand_dims(best_idx, -1)], axis=2)
 
             # Select the lengths to keep tracking based on the valid beams left.
             ##

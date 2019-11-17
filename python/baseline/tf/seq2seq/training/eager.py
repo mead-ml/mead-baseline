@@ -14,17 +14,15 @@ from baseline.tf.seq2seq.training.utils import to_tensors, SHUF_BUF_SZ, NUM_PREF
 
 
 def loss(model, features, labels):
-    import pdb; pdb.set_trace()
     # Claims its T, B, H
     logits = tf.transpose(model(features), [1, 0, 2])
-    logits = logits[:-1, :, :]
     # So ok, then transpose this too
     labels = tf.transpose(labels, [1, 0])
     # TxB loss mask
     label_lengths = features['tgt_len']
     mx_seq_len = tf.reduce_max(label_lengths)-1
-    labels = labels[1:mx_seq_len+1, :]
-    logits = logits[0:mx_seq_len, :, :]
+    labels = labels[1:mx_seq_len + 1, :]
+    logits = logits[:mx_seq_len, :, :]
     losses = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=labels)
     loss_mask = tf.cast(tf.sequence_mask(label_lengths-1), dtype=tf.float32)
     losses = losses * tf.transpose(loss_mask, [1, 0])
@@ -104,7 +102,7 @@ class Seq2SeqTrainerEagerTf(Trainer):
 
             # Optimize the model
             features['dst'] = y[:, :-1]
-            loss_value = self.optimizer.update(self.model, features, y)
+            loss_value = self.optimizer.update(self.model, features, y).numpy()
             toks = self._num_toks(features['tgt_len'])
             report_loss = loss_value * toks
             epoch_loss += report_loss
@@ -134,7 +132,7 @@ class Seq2SeqTrainerEagerTf(Trainer):
         return metrics
 
 
-    def _evaluate(self, es, reporting_fns):
+    def _evaluate(self, es, reporting_fns, **kwargs):
         """Run the model with beam search and report Bleu.
 
         :param es: `tf.dataset` of input
@@ -147,8 +145,8 @@ class Seq2SeqTrainerEagerTf(Trainer):
         for features, tgt in es:
             features['dst'] = tgt[:, :-1]
             tgt_lens = features.pop('tgt_len')
-            preds = self.model.predict(features, beam=1)
-            preds.extend(convert_seq2seq_preds(preds[:, 0, :], self.tgt_rlut))
+            top_preds = self.model.predict(features, **kwargs)
+            preds.extend(convert_seq2seq_preds(top_preds[:, 0, :], self.tgt_rlut))
             golds.extend(convert_seq2seq_golds(tgt, tgt_lens, self.tgt_rlut))
         metrics = {'bleu': bleu(preds, golds)[0]}
         self.report(
@@ -156,7 +154,7 @@ class Seq2SeqTrainerEagerTf(Trainer):
         )
         return metrics
 
-    def test(self, vs, reporting_fns, phase='Valid', dataset=True):
+    def test(self, vs, reporting_fns, phase='Valid', dataset=True, **kwargs):
         """Run an epoch of testing over the dataset
 
         If we are using a `tf.dataset`-based `fit_func`, we will just
@@ -173,7 +171,7 @@ class Seq2SeqTrainerEagerTf(Trainer):
         """
         SET_TRAIN_FLAG(False)
         if phase == 'Test':
-            return self._evaluate(vs, reporting_fns)
+            return self._evaluate(vs, reporting_fns, **kwargs)
 
         self.valid_epochs += 1
 
@@ -186,7 +184,7 @@ class Seq2SeqTrainerEagerTf(Trainer):
         for features, tgt in vs:
             features['dst'] = tgt[:, :-1]
             top_preds = self.model.predict(features, beam=1)
-            loss_value = loss(self.model, features, tgt)
+            loss_value = loss(self.model, features, tgt).numpy()
             toks = self._num_toks(features['tgt_len'])
             total_loss += loss_value * toks
             total_toks += toks

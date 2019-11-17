@@ -153,7 +153,7 @@ def test_inverse_time_values():
 
 
 def test_inverse_time_is_flat():
-    steps = np.random.randint(1, 100)
+    steps = np.random.randint(2, 100)
     ti = InverseTimeDecayScheduler(steps, np.random.rand(), staircase=True, lr=np.random.rand())
     before = steps - np.random.randint(1, steps)
     after = steps + np.random.randint(1, steps)
