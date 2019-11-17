@@ -252,7 +252,7 @@ class TransformerDecoderWrapper(tf.keras.layers.Layer):
         if hsz is None:
             hsz = dsz
 
-        self.transformer_decoder = TransformerDecoderStack(num_heads, d_model=hsz, pdrop=dropout, scale=scale, layers=layers)
+        self.transformer_decoder = TransformerDecoderStack(d_model=hsz, num_heads=num_heads, pdrop=dropout, scale=scale, layers=layers)
 
         self.proj_to_dsz = self._identity
         self.proj_to_hsz = self._identity
@@ -265,25 +265,27 @@ class TransformerDecoderWrapper(tf.keras.layers.Layer):
     def _identity(self, x):
         return x
 
-    def forward(self, encoder_output, dst):
+    def call(self, encoder_output, dst):
         embed_out_bth = self.tgt_embeddings(dst)
         embed_out_bth = self.proj_to_hsz(embed_out_bth)
         context_bth = encoder_output.output
         T = get_shape_as_list(embed_out_bth)[1]
         dst_mask = tf.cast(subsequent_mask(T), embed_out_bth.dtype)
-        src_mask = tf.expand_dims(tf.expand_dims(encoder_output.src_mask, 1))
-        output = self.transformer_decoder(embed_out_bth, context_bth, src_mask, dst_mask)
+        # src_mask = tf.expand_dims(tf.expand_dims(encoder_output.src_mask, 1), 1)
+        src_mask = encoder_output.src_mask
+        output = self.transformer_decoder((embed_out_bth, context_bth, src_mask, dst_mask))
         output = self.proj_to_dsz(output)
         prob = self.output(output)
         return prob
 
     def output(self, x):
-        #pred = F.log_softmax(self.preds(x.view(x.size(0)*x.size(1), -1)), dim=-1)
-        #pred = pred.view(x.size(0), x.size(1), -1)
-        #return pred
         return self.preds(x)
 
     class BeamSearch(BeamSearchBase):
+
+        def __init__(self, parent, **kwargs):
+            super().__init__(**kwargs)
+            self.parent = parent
 
         def init(self, encoder_outputs):
             """Tile for the batch of the encoder inputs."""
@@ -295,14 +297,17 @@ class TransformerDecoderWrapper(tf.keras.layers.Layer):
 
         def step(self, paths, extra):
             """Calculate the probs for the last item based on the full path."""
-            B, K, T = paths.size()
+            B, K, T = paths.shape
             assert K == self.K
-            return self(extra, paths.view(B * K, T))[:, -1], extra
+            return self.parent(extra, tf.reshape(paths, (B * K, T)))[:, -1], extra
 
         def update(self, beams, extra):
             """There is no state for the transformer so just pass it."""
             return extra
 
     def beam_search(self, encoder_outputs, **kwargs):
-        return TransformerDecoderWrapper.BeamSearch(**kwargs)(encoder_outputs)
+        alpha = kwargs.get('alpha')
+        if alpha is not None:
+            kwargs['length_penalty'] = partial(gnmt_length_penalty, alpha=alpha)
+        return TransformerDecoderWrapper.BeamSearch(self, **kwargs)(encoder_outputs)
 

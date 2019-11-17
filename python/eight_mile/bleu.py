@@ -1,4 +1,4 @@
-"""Multi-bleu in python matching Moses http://www.statmt.org/moses/?n=Moses.SupportTools#ntoc5
+r"""Multi-bleu in python matching Moses http://www.statmt.org/moses/?n=Moses.SupportTools#ntoc5
 
 Reference files and prediction files must be sentence aligned. To use multiple
 references use multiple reference files (all sentence aligned)

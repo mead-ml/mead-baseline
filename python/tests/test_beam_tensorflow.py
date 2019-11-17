@@ -65,12 +65,11 @@ class MockBeamSearch(BeamSearchBase):
         """Tile batches for encoder inputs and the likes."""
 
     def step(self, paths, _):
-        print(paths)
         probs = np.array(self.path_dist[self.i], dtype=np.float32)
         self.i += 1
         probs = probs.reshape((B, V))
         single = np.log(probs)
-        print(single)
+        single = tf.convert_to_tensor(single)
         return repeat_batch(single, self.K), None
 
     def update(self, beams, _):

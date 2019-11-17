@@ -337,7 +337,6 @@ else:
             return self.decoder(encoder_outputs, dst)
 
         def save_md(self, basename):
-            import pdb; pdb.set_trace()
             state = {k: v for k, v in self._state.items()}
 
             write_json(state, '{}.state'.format(basename))
