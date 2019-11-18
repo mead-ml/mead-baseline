@@ -99,7 +99,6 @@ if get_version(tf) < 2:
                 tgt_embedding = reload_embeddings(tgt_embedding_info, basename)['tgt']
 
                 model = cls.create(src_embeddings, tgt_embedding, reload=True, **_state)
-                writer = tf.summary.FileWriter('seq2seq-reload', model.sess.graph)
                 model._state = _state
                 if kwargs.get('init', True):
                     model.sess.run(tf.global_variables_initializer())
@@ -166,8 +165,6 @@ if get_version(tf) < 2:
             embed_in = model.embed(**kwargs)
             encoder_output = model.encode(embed_in, **kwargs)
             model.decode(encoder_output, **kwargs)
-            if not kwargs.get('reload', False):
-                _ = tf.summary.FileWriter("seq2seq-create", model.sess.graph)
             return model
 
         def set_saver(self, saver):

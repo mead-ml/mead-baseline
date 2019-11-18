@@ -111,15 +111,13 @@ class RNNDecoder(torch.nn.Module):
         self.init_attn(**kwargs)
 
         do_weight_tying = bool(kwargs.get('tie_weights', False))
-        is_valid_tying = self.hsz == self.tgt_embeddings.get_dsz()
 
         self.preds = pytorch_linear(self.hsz, self.tgt_embeddings.get_vsz())
         if do_weight_tying:
+            if self.hsz != self.tgt_embedding.get_dsz():
+                raise ValueError("weight tying requires hsz == embedding dsz, got {} hsz and {} dsz".format(self.hsz, self.tgt_embedding.get_dsz()))
             if is_valid_tying:
                 tie_weight(self.preds, self.tgt_embeddings.embeddings)
-            else:
-                raise ValueError("weight tying only valid when prediction projection \
-layer's hidden size == embedding weight dimensions")
 
     @staticmethod
     def _basic_input(dst_embed_i, _):
@@ -262,6 +260,8 @@ class TransformerDecoderWrapper(torch.nn.Module):
         self.preds = pytorch_linear(dsz, self.tgt_embeddings.get_vsz())
 
         do_weight_tying = bool(kwargs.get('tie_weights', False))
+        if self.hsz != self.tgt_embedding.get_dsz():
+            raise ValueError("weight tying requires hsz == embedding dsz, got {} hsz and {} dsz".format(self.hsz, self.tgt_embedding.get_dsz()))
         if do_weight_tying:
             self.preds.weight = self.tgt_embeddings.weight.transpose(0, 1)
 

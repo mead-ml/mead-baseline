@@ -110,15 +110,13 @@ class RNNDecoder(tf.keras.layers.Layer):
         self.init_attn(**kwargs)
 
         do_weight_tying = bool(kwargs.get('tie_weights', False))
-        is_valid_tying = self.hsz == self.tgt_embeddings.get_dsz()
 
-        self.preds = tf.keras.layers.Dense(self.tgt_embeddings.get_vsz())
         if do_weight_tying:
-            if is_valid_tying:
-                tie_weight(self.preds, self.tgt_embeddings.embeddings)
-            else:
-                raise ValueError("weight tying only valid when prediction projection \
-layer's hidden size == embedding weight dimensions")
+            if self.hsz != self.tgt_embeddings.get_dsz()
+                raise ValueError("weight tying requires hsz == embedding dsz, got {} hsz and {} dsz".format(self.hsz, self.tgt_embedding.get_dsz()))
+            self.preds = WeightTieDense(self.tgt_embeddings)
+        else:
+            self.preds = tf.keras.layers.Dense(self.tgt_embeddings.get_vsz())
 
     @staticmethod
     def _basic_input(dst_embed_i, _):
