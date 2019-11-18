@@ -197,9 +197,8 @@ if get_version(tf) < 2:
                 self.decoder((encoder_output, tgt, self.src_len, self.tgt_len), **kwargs)
 
         def encode(self, embed_in, **kwargs):
-            with tf.variable_scope('encode'):
-                self.encoder = self.create_encoder(**kwargs)
-                return self.encoder.encode(embed_in, self.src_len, self.pdrop_value, **kwargs)
+            self.encoder = self.create_encoder(pdrop=self.pdrop_value, **kwargs)
+            return self.encoder((embed_in, self.src_len), **kwargs)
 
         def save(self, model_base):
             self.save_md(model_base)
