@@ -29,7 +29,7 @@
     "model": {
         "encoder_type": "transformer",
         "decoder_type": "transformer",
-        "hsz": 256,
+        "hsz": 128,
         "dropout": 0.1,
         "layers": 4
     },

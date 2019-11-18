@@ -505,6 +505,17 @@ class LSTMEncoderSequence1(LSTMEncoder1):
         return output
 
 
+class LSTMEncoderAll1(LSTMEncoder1):
+    def call(self, inputs):
+        inputs, lengths = tensor_and_lengths(inputs)
+        with tf.variable_scope(self._name):
+            rnnout, hidden = tf.nn.dynamic_rnn(self.rnn, inputs, sequence_length=lengths, dtype=tf.float32)
+        return self.output_fn(rnnout, hidden)
+
+    def output_fn(self, output, state):
+        return output, state
+
+
 class LSTMEncoderHidden1(LSTMEncoder1):
 
     def __init__(self, insz, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None,
@@ -565,7 +576,7 @@ class LSTMEncoderWithState1(LSTMEncoder1):
 
 
 
-class LSTMEncoderAll(tf.keras.layers.Layer):
+class LSTMEncoderAll2(tf.keras.layers.Layer):
 
     def __init__(self, insz, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None, dropout_in_single_layer=False, skip_conn=False, projsz=None, **kwargs):
         super().__init__(name=name)
@@ -626,7 +637,7 @@ class LSTMEncoderAll(tf.keras.layers.Layer):
         return self._requires_length
 
 
-class BiLSTMEncoderAll(tf.keras.layers.Layer):
+class BiLSTMEncoderAll2(tf.keras.layers.Layer):
 
     def __init__(self, insz, hsz, nlayers, pdrop=0.0, variational=False, requires_length=True, name=None, dropout_in_single_layer=False, skip_conn=False, projsz=None, **kwargs):
         super().__init__(name=name)
@@ -781,6 +792,7 @@ class BiLSTMEncoder1(tf.keras.layers.Layer):
         """
         super().__init__(name=name)
         self._requires_length = requires_length
+        self.layers = nlayers
         hsz = hsz // 2
         if variational:
             self.fwd_rnn = tf.contrib.rnn.MultiRNNCell([lstm_cell_w_dropout(hsz, pdrop, variational=variational, training=TRAIN_FLAG(), skip_conn=skip_conn, projsz=projsz) for _ in
@@ -815,6 +827,24 @@ class BiLSTMEncoder1(tf.keras.layers.Layer):
     @property
     def requires_length(self):
         return self._requires_length
+
+
+class BiLSTMEncoder1(tf.keras.layers.Layer):
+
+    def call(self, inputs):
+        inputs, lengths = tensor_and_lengths(inputs)
+        rnnout, (fwd_state, backward_state) = tf.nn.bidirectional_dynamic_rnn(self.fwd_rnn, self.bwd_rnn, inputs, sequence_length=lengths, dtype=tf.float32)
+        rnnout = tf.concat(axis=2, values=rnnout)
+        encoder_state = []
+        for i in range(self.layers):
+            h = tf.concat([fw_state[i].h, bw_state[i].h], -1)
+            c = tf.concat([fw_state[i].c, bw_state[i].c], -1)
+            encoder_state.append(tf.contrib.rnn.LSTMStateTuple(h=h, c=c))
+        encoder_state = tuple(encoder_state)
+        return self.output_fn(rnnout, encoder_state)
+
+    def output_fn(self, out, state):
+        return out, state
 
 
 class BiLSTMEncoderSequence1(BiLSTMEncoder1):
@@ -876,10 +906,12 @@ if get_version(tf) < 2:
     LSTMEncoderWithState = LSTMEncoderWithState1
     LSTMEncoderHidden = LSTMEncoderHidden1
     LSTMEncoderHiddenContext = LSTMEncoderHiddenContext1
+    LSTMEncoderAll = LSTMEncoderAll1
     BiLSTMEncoder = BiLSTMEncoder1
     BiLSTMEncoderSequence = BiLSTMEncoderSequence1
     BiLSTMEncoderHidden = BiLSTMEncoderHidden1
     BiLSTMEncoderHiddenContext = BiLSTMEncoderHiddenContext1
+    BiLSTMEncoderAll = None #BiLSTMEncoderAll1
     from tensorflow.contrib.crf import crf_decode, crf_log_norm, crf_unary_score, crf_binary_score
     def crf_sequence_score(inputs, tag_indices, sequence_lengths, transition_params):
         """Computes the unnormalized score for a tag sequence.

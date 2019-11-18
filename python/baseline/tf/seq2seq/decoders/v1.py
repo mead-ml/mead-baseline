@@ -32,17 +32,17 @@ class DecoderBase(tf.keras.layers.Layer):
             else:
                 self.probs = tf.map_fn(lambda x: tf.nn.softmax(x, name='probs'), self.preds)
 
-    def predict(self, encoder_outputs, pdrop, **kwargs):
+    def predict(self, inputs, **kwargs):
         pass
 
-    def decode(self, encoder_outputs, src_len, tgt_len, pdrop, **kwargs):
+    def decode(self, inputs, **kwargs):
         pass
 
 
 @register_decoder(name='transformer')
 class TransformerDecoder(DecoderBase):
 
-    def __init__(self, tgt_embedding, pdrop=0.1, layers=1, name='TransformerDecoder', num_heads=4, scale=True, activation_type='relu', d_ff=None, **kwargs):
+    def __init__(self, tgt_embedding, pdrop=0.1, layers=1, name='decode', num_heads=4, scale=True, activation_type='relu', d_ff=None, scope='TransformerDecoder', **kwargs):
         super().__init__(tgt_embedding, name=name, **kwargs)
         # In predict mode the placeholder for the tgt embedding isn't created so the weights in the tgt embedding object
         # is called `tgt/LUT/weights` because there isn't a placeholder called `tgt`. In decode where that placeholder
@@ -50,7 +50,7 @@ class TransformerDecoder(DecoderBase):
         if kwargs.get('predict', False):
             tf.no_op(name=f"{name}/{self.tgt_embedding.name}")
         dsz = self.tgt_embedding.get_dsz()
-        self.decoder = TransformerDecoderStack(dsz, num_heads, pdrop, scale, layers, activation_type, d_ff, name=name)
+        self.decoder = TransformerDecoderStack(dsz, num_heads, pdrop, scale, layers, activation_type, d_ff, name=scope)
         self.do_weight_tying = bool(kwargs.get('tie_weights', True))
         if self.do_weight_tying:
             self.proj = WeightTieDense(self.tgt_embedding)
@@ -198,8 +198,8 @@ class TransferLastHiddenPolicy(AbstractArcPolicy):
 @register_decoder(name='vanilla')
 class RNNDecoder(DecoderBase):
 
-    def __init__(self, tgt_embedding, **kwargs):
-        super(RNNDecoder, self).__init__(tgt_embedding, **kwargs)
+    def __init__(self, tgt_embedding, name='encoder', scope='RNNDecoder' **kwargs):
+        super().__init__(tgt_embedding, **kwargs)
         self.hsz = kwargs['hsz']
         self.arc_policy = create_seq2seq_arc_policy(**kwargs)
         self.final_decoder_state = None
