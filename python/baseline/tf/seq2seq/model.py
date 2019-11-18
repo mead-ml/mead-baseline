@@ -188,12 +188,13 @@ if get_version(tf) < 2:
             return create_seq2seq_decoder(self.tgt_embedding, **kwargs)
 
         def decode(self, encoder_output, **kwargs):
-            self.decoder = self.create_decoder(**kwargs)
+            self.decoder = self.create_decoder(pdrop=self.pdrop_value, **kwargs)
             predict = kwargs.get('predict', False)
             if predict:
-                self.decoder.predict(encoder_output, self.src_len, self.pdrop_value, **kwargs)
+                self.decoder((encoder_output, self.src_len), **kwargs)
             else:
-                self.decoder.decode(encoder_output, self.src_len, self.tgt_len, self.pdrop_value, **kwargs)
+                tgt = kwargs.get('tgt')
+                self.decoder((encoder_output, tgt, self.src_len, self.tgt_len), **kwargs)
 
         def encode(self, embed_in, **kwargs):
             with tf.variable_scope('encode'):
@@ -243,7 +244,6 @@ if get_version(tf) < 2:
             return x
 
         def make_input(self, batch_dict, train=False):
-
             feed_dict = new_placeholder_dict(train)
 
             for key in self.src_embeddings.keys():
@@ -254,7 +254,7 @@ if get_version(tf) < 2:
 
             tgt = batch_dict.get('tgt')
             if tgt is not None:
-                feed_dict["tgt:0"] = batch_dict['tgt']
+                feed_dict[self.tgt_embedding.x] = batch_dict['tgt']
                 feed_dict[self.tgt_len] = batch_dict['tgt_lengths']
                 feed_dict[self.mx_tgt_len] = np.max(batch_dict['tgt_lengths'])
 
