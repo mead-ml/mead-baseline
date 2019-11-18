@@ -14,9 +14,10 @@ exporter = export(__all__)
 import tensorflow.contrib.seq2seq as tfcontrib_seq2seq
 
 @exporter
-class DecoderBase(object):
+class DecoderBase(tf.keras.layers.Layer):
 
-    def __init__(self, tgt_embedding, **kwargs):
+    def __init__(self, tgt_embedding, name='decoder', **kwargs):
+        super().__init__(name=name)
         self.tgt_embedding = tgt_embedding
         self.beam_width = kwargs.get('beam', 1)
         self.best = None
@@ -41,26 +42,29 @@ class DecoderBase(object):
 @register_decoder(name='transformer')
 class TransformerDecoder(DecoderBase):
 
-    def __init__(self, tgt_embedding, **kwargs):
-        super(TransformerDecoder, self).__init__(tgt_embedding, **kwargs)
+    def __init__(self, tgt_embedding, pdrop=0.1, layers=1, name='TransformerDecoder', num_heads=4, scale=True, activation_type='relu', d_ff=None, **kwargs):
+        super().__init__(tgt_embedding, name=name, **kwargs)
+        # In predict mode the placeholder for the tgt embedding isn't created so the weights in the tgt embedding object
+        # is called `tgt/LUT/weights` because there isn't a placeholder called `tgt`. In decode where that placeholder
+        # exists the weights are called `tgt_1/LUT/weights`
+        if kwargs.get('predict', False):
+            tf.no_op(name=f"{name}/{self.tgt_embedding.name}")
+        dsz = self.tgt_embedding.get_dsz()
+        self.decoder = TransformerDecoderStack(dsz, num_heads, pdrop, scale, layers, activation_type, d_ff, name=name)
+        self.do_weight_tying = bool(kwargs.get('tie_weights', True))
+        if self.do_weight_tying:
+            self.proj = WeightTieDense(self.tgt_embedding)
+        else:
+            self.proj = tf.keras.layers.Dense(vsz, use_bias=False)
+        self.mxlen = kwargs.get('mxlen', 100)
 
     @property
     def decoder_type(self):
         return 'transformer'
 
-    def predict(self,
-                encoder_outputs,
-                src_len,
-                pdrop,
-                layers=1,
-                scope='TransformerDecoder',
-                num_heads=4,
-                scale=True,
-                activation_type='relu',
-                d_ff=None,
-                **kwargs):
+    def predict(self, inputs, **kwargs):
         """self.best is [T, B]"""
-        mxlen = kwargs.get('mxlen', 100)
+        encoder_outputs, src_len = inputs
         src_enc = encoder_outputs.output
         B = get_shape_as_list(src_enc)[0]
 
@@ -70,40 +74,17 @@ class TransformerDecoder(DecoderBase):
             T = get_shape_as_list(src_enc)[1]
             src_mask = tf.sequence_mask(src_len, T, dtype=tf.float32)
 
-        scope = 'TransformerDecoder'
-        # In predict mode the placeholder for the tgt embedding isn't created so the weights in the tgt embedding object
-        # is called `tgt/LUT/weights` because there isn't a placeholder called `tgt`. In decode where that placeholder
-        # exists the weights are called `tgt_1/LUT/weights`
-        tf.no_op(name=self.tgt_embedding.name)
-        dsz = self.tgt_embedding.get_dsz()
-        # If you don't create the Transformer before the while loop variables are prefixes with `while` and not found in the checkpoint
-        self.decoder = TransformerDecoderStack(dsz, num_heads, pdrop, scale, layers, activation_type, d_ff, name=scope)
-
-        vsz = self.tgt_embedding.get_vsz()
-        self.do_weight_tying = bool(kwargs.get('tie_weights', True))  # False
-        self.do_weight_tying = False
-        if self.do_weight_tying and hsz == self.tgt_embedding.get_dsz():
-            with tf.variable_scope(self.tgt_embedding.embedding_layer.scope, reuse=True):
-                self.W = tf.get_variable("W")
-        else:
-            self.vocab_w = tf.get_variable("vocab_w", [dsz, vsz], dtype=tf.float32)
-            self.vocab_b = tf.get_variable("vocab_b", [vsz], dtype=tf.float32)
-
         def inner_loop(i, hit_eos, decoded_ids):
 
             tgt_embed = self.tgt_embedding.encode(decoded_ids)
             T = get_shape_as_list(tgt_embed)[1]
             tgt_mask = subsequent_mask(T)
             h = self.decoder((tgt_embed, src_enc, src_mask, tgt_mask))
-            hsz = get_shape_as_list(h)[-1]
-            h = tf.reshape(h, [-1, hsz])
+            # hsz = get_shape_as_list(h)[-1]
+            # h = tf.reshape(h, [-1, hsz])
+            outputs = self.proj(h)
 
-            if self.do_weight_tying:
-                outputs = tf.matmul(h, self.W, transpose_b=True, name="logits")
-            else:
-                outputs = tf.nn.xw_plus_b(h, self.vocab_w, self.vocab_b, name="logits")
-
-            preds = tf.reshape(outputs, [B, T, vsz])
+            preds = tf.reshape(outputs, [B, T, -1])
             next_id = tf.argmax(preds, axis=-1)[:, -1]
             hit_eos |= tf.equal(next_id, Offsets.EOS)
             next_id = tf.reshape(next_id, [B, 1])
@@ -112,7 +93,7 @@ class TransformerDecoder(DecoderBase):
             return i + 1, hit_eos, decoded_ids
 
         def is_not_finished(i, hit_eos, *_):
-            finished = i >= mxlen
+            finished = i >= self.mxlen
             finished |= tf.reduce_all(hit_eos)
             return tf.logical_not(finished)
 
@@ -131,47 +112,36 @@ class TransformerDecoder(DecoderBase):
         self.preds = tf.no_op()
         best = tf.transpose(decoded_ids)
         self.output(best, do_probs=False)
+        return self.best
 
-    def decode(self, encoder_outputs,
-               src_len,
-               tgt_len,
-               pdrop,
-               layers=1,
-               scope='TransformerDecoder',
-               num_heads=4,
-               scale=True,
-               activation_type='relu',
-               d_ff=None, **kwargs):
-        """self.best is [T, B]"""
+    def call(self, inputs, **kwargs):
+        if kwargs.get('predict', False):
+            return self.predict(inputs)
+        return self.decode(inputs)
+
+    def decode(self, inputs):
+        encoder_outputs, tgt, src_len, tgt_len = inputs
         src_enc = encoder_outputs.output
+
+        tgt_embed = self.tgt_embedding.encode(tgt)
+        shape = get_shape_as_list(tgt_embed)
+        B = shape[0]
+        T = shape[1]
+
         if hasattr(encoder_outputs, 'src_mask'):
             src_mask = encoder_outputs.src_mask
         else:
-            T = get_shape_as_list(src_enc)[1]
             src_mask = tf.sequence_mask(src_len, T, dtype=tf.float32)
-        tgt_embed = self.tgt_embedding.encode(kwargs.get('tgt'))
-        T = get_shape_as_list(tgt_embed)[1]
-        tgt_mask = subsequent_mask(T)
-        scope = 'TransformerDecoder'
-        h = transformer_decoder_stack(tgt_embed, src_enc, src_mask, tgt_mask, num_heads, pdrop, scale, layers, activation_type, scope, d_ff)
 
-        vsz = self.tgt_embedding.get_vsz()
-        do_weight_tying = bool(kwargs.get('tie_weights', True))  # False
-        do_weight_tying = False
-        hsz = get_shape_as_list(h)[-1]
-        if do_weight_tying and hsz == self.tgt_embedding.get_dsz():
-            h = tf.reshape(h, [-1, hsz])
-            with tf.variable_scope(self.tgt_embedding.embedding_layer.scope, reuse=True):
-                W = tf.get_variable("W")
-                outputs = tf.matmul(h, W, transpose_b=True, name="logits")
-        else:
-            h = tf.reshape(h, [-1, hsz])
-            vocab_w = tf.get_variable("vocab_w", [hsz, vsz], dtype=tf.float32)
-            vocab_b = tf.get_variable("vocab_b", [vsz], dtype=tf.float32)
-            outputs = tf.nn.xw_plus_b(h, vocab_w, vocab_b, name="logits")
-        self.preds = tf.transpose(tf.reshape(outputs, [-1, T, vsz]), [1, 0, 2])
+        tgt_mask = subsequent_mask(T)
+        h = self.decoder((tgt_embed, src_enc, src_mask, tgt_mask))
+        outputs = self.proj(h)
+
+        self.preds = tf.transpose(tf.reshape(outputs, [B, T, -1]), [1, 0, 2])
         best = tf.argmax(self.preds, -1)
         self.output(best)
+        return self.best
+
 
 @exporter
 class ArcPolicy(object):

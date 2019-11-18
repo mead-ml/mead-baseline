@@ -965,6 +965,33 @@ class EmbeddingsStack(tf.keras.layers.Layer):
         return self.dsz
 
 
+class WeightTieDense(tf.keras.layers.Layer):
+    def __init__(self, tied, name="weight-tied"):
+        super().__init__(name=name)
+        self.tied = tied
+
+    def build(self, input_shape):
+        emb = getattr(self.tied, 'embedding_layer', None)
+        if emb is not None:
+            self.W = getattr(emb, 'W')
+            super().build(input_shape)
+            return
+        W = getattr(self.tied, 'W', None)
+        if W is not None:
+            self.W = w
+            super().build(input_shape)
+            return
+        self.W = getattr(self.tied, 'kernel')
+        super().build()
+
+    def call(self, inputs):
+        shape = tf.shape(inputs)
+        inputs = tf.reshape(inputs, [-1, shape[-1]])
+        outs = tf.matmul(inputs, self.W, transpose_b=True)
+        new_shape = tf.concat([shape[:-1], tf.constant([-1])], axis=0)
+        return tf.reshape(outs, new_shape)
+
+
 class DenseStack(tf.keras.layers.Layer):
 
     def __init__(self, insz, hsz, activation='relu', pdrop_value=0.5, init=None, name=None, **kwargs):
