@@ -468,7 +468,7 @@ class LSTMEncoder1(tf.keras.layers.Layer):
 
     def call(self, inputs):
         inputs, lengths = tensor_and_lengths(inputs)
-        with tf.variable_scope(self._name):
+        with tf.name_scope(self.name), tf.variable_scope(self.name):
             rnnout, hidden = tf.nn.dynamic_rnn(self.rnn, inputs, sequence_length=lengths, dtype=tf.float32)
         state = (hidden[-1].h, hidden[-1].c)
         return self.output_fn(rnnout, state)
@@ -808,7 +808,8 @@ class BiLSTMEncoder1(tf.keras.layers.Layer):
 
     def call(self, inputs):
         inputs, lengths = tensor_and_lengths(inputs)
-        rnnout, (fwd_state, backward_state) = tf.nn.bidirectional_dynamic_rnn(self.fwd_rnn, self.bwd_rnn, inputs, sequence_length=lengths, dtype=tf.float32)
+        with tf.name_scope(self.name), tf.variable_scope(self.name):
+            rnnout, (fwd_state, backward_state) = tf.nn.bidirectional_dynamic_rnn(self.fwd_rnn, self.bwd_rnn, inputs, sequence_length=lengths, dtype=tf.float32)
         rnnout = tf.concat(axis=2, values=rnnout)
         return self.output_fn(rnnout, ((fwd_state[-1].h, fwd_state[-1].c), (backward_state[-1].h, backward_state[-1].c)))
 
