@@ -23,6 +23,7 @@ class DecoderBase(tf.keras.layers.Layer):
         self.best = None
         self.probs = None
         self.preds = None
+        self.mxlen = kwargs.get('mxlen', 100)
 
     def output(self, best, do_probs=True):
         with tf.variable_scope("Output"):
@@ -31,6 +32,11 @@ class DecoderBase(tf.keras.layers.Layer):
                 self.probs = tf.no_op(name='probs')
             else:
                 self.probs = tf.map_fn(lambda x: tf.nn.softmax(x, name='probs'), self.preds)
+
+    def call(self, inputs, **kwargs):
+        if kwargs.get('predict', False):
+            return self.predict(inputs)
+        return self.decode(inputs)
 
     def predict(self, inputs, **kwargs):
         pass
@@ -53,10 +59,12 @@ class TransformerDecoder(DecoderBase):
         self.decoder = TransformerDecoderStack(dsz, num_heads, pdrop, scale, layers, activation_type, d_ff, name=scope)
         self.do_weight_tying = bool(kwargs.get('tie_weights', True))
         if self.do_weight_tying:
+            if self.hsz != self.tgt_embedding.get_dsz():
+                raise ValueError("weight tying requires hsz == embedding dsz, got {} hsz and {} dsz".format(self.hsz, self.tgt_embedding.get_dsz()))
+        if self.do_weight_tying:
             self.proj = WeightTieDense(self.tgt_embedding)
         else:
             self.proj = tf.keras.layers.Dense(vsz, use_bias=False)
-        self.mxlen = kwargs.get('mxlen', 100)
 
     @property
     def decoder_type(self):
@@ -113,11 +121,6 @@ class TransformerDecoder(DecoderBase):
         best = tf.transpose(decoded_ids)
         self.output(best, do_probs=False)
         return self.best
-
-    def call(self, inputs, **kwargs):
-        if kwargs.get('predict', False):
-            return self.predict(inputs)
-        return self.decode(inputs)
 
     def decode(self, inputs):
         encoder_outputs, tgt, src_len, tgt_len = inputs
@@ -198,9 +201,13 @@ class TransferLastHiddenPolicy(AbstractArcPolicy):
 @register_decoder(name='vanilla')
 class RNNDecoder(DecoderBase):
 
-    def __init__(self, tgt_embedding, name='encoder', scope='RNNDecoder' **kwargs):
+    def __init__(self, tgt_embedding, hsz, pdrop, rnntype='lstm', layers=1, vdrop=False, name='encoder', scope='RNNDecoder', **kwargs):
         super().__init__(tgt_embedding, **kwargs)
-        self.hsz = kwargs['hsz']
+        self.hsz = hsz
+        self.pdrop = pdrop
+        self.rnntype = rnntype
+        self.layers = layers
+        self.vdrop = vdrop
         self.arc_policy = create_seq2seq_arc_policy(**kwargs)
         self.final_decoder_state = None
         self.do_weight_tying = bool(kwargs.get('tie_weights', False))
@@ -213,8 +220,8 @@ got {} hsz and {} dsz".format(self.hsz, self.tgt_embedding.get_dsz()))
     def decoder_type(self):
         return 'vanilla'
 
-    def _create_cell(self, rnn_enc_tensor, src_len, pdrop, rnntype='lstm', layers=1, vdrop=False, **kwargs):
-        self.cell = multi_rnn_cell_w_dropout(self.hsz, pdrop, rnntype, layers, variational=vdrop, training=TRAIN_FLAG())
+    def _create_cell(self, rnn_enc_tensor, src_len, hsz, pdrop, rnntype='lstm', layers=1, vdrop=False, **kwargs):
+        return multi_rnn_cell_w_dropout(hsz, pdrop, rnntype, layers, variational=vdrop, training=TRAIN_FLAG())
 
     def _get_tgt_weights(self):
         Wo = tf.get_variable("Wo", initializer=tf.constant_initializer(self.tgt_embedding.embedding_layer._weights,
@@ -223,11 +230,10 @@ got {} hsz and {} dsz".format(self.hsz, self.tgt_embedding.get_dsz()))
                              shape=[self.tgt_embedding.get_vsz(), self.tgt_embedding.get_dsz()])
         return Wo
 
-    def predict(self, encoder_outputs, src_len, pdrop, **kwargs):
+    def predict(self, inputs, **kwargs):
         """self.best is [T, B, K]"""
+        encoder_outputs, src_len = inputs
 
-        beam_width = kwargs.get('beam', 1)
-        mxlen = kwargs.get('mxlen', 100)
         # dynamic_decode creates a scope "decoder" and it pushes operations underneath.
         # which makes it really hard to get the same objects between train and test
         # In an ideal world, TF would just let us using tgt_embedding.encode as a function pointer
@@ -238,34 +244,40 @@ got {} hsz and {} dsz".format(self.hsz, self.tgt_embedding.get_dsz()))
         Wo = self._get_tgt_weights()
         batch_sz = tf.shape(encoder_outputs.output)[0]
         with tf.variable_scope("dec", reuse=tf.AUTO_REUSE):
+            # We just create a normal dense layer, the checkpoint will populate it with the right value
             proj = dense_layer(self.tgt_embedding.get_vsz())
-            self._create_cell(encoder_outputs.output, src_len, pdrop, **kwargs)
+            self.cell = self._create_cell(encoder_outputs.output, src_len, self.hsz, self.pdrop, self.rnntype, self.layers, self.vdrop, **kwargs)
             initial_state = self.arc_policy.connect(encoder_outputs, self, batch_sz)
             # Define a beam-search decoder
-            decoder = tf.contrib.seq2seq.BeamSearchDecoder(cell=self.cell,
-                                                           embedding=Wo,
-                                                           start_tokens=tf.fill([batch_sz], Offsets.GO),
-                                                           end_token=Offsets.EOS,
-                                                           initial_state=initial_state,
-                                                           beam_width=beam_width,
-                                                           output_layer=proj,
-                                                           length_penalty_weight=0.0)
+            decoder = tf.contrib.seq2seq.BeamSearchDecoder(
+                cell=self.cell,
+                embedding=Wo,
+                start_tokens=tf.fill([batch_sz], Offsets.GO),
+                end_token=Offsets.EOS,
+                initial_state=initial_state,
+                beam_width=self.beam_width,
+                output_layer=proj,
+                length_penalty_weight=0.0
+            )
 
             # This creates a "decoder" scope
-            final_outputs, final_decoder_state, _ = tf.contrib.seq2seq.dynamic_decode(decoder,
-                                                                                      impute_finished=False,
-                                                                                      swap_memory=True,
-                                                                                      output_time_major=True,
-                                                                                      maximum_iterations=mxlen)
+            final_outputs, final_decoder_state, _ = tf.contrib.seq2seq.dynamic_decode(
+                decoder,
+                impute_finished=False,
+                swap_memory=True,
+                output_time_major=True,
+                maximum_iterations=self.mxlen
+            )
             self.final_decoder_state = final_decoder_state
             self.preds = tf.no_op()
             best = final_outputs.predicted_ids
             self.output(best, do_probs=False)
+            return self.best
 
-    def decode(self, encoder_outputs, src_len, tgt_len, pdrop, **kwargs):
+    def decode(self, inputs, **kwargs):
         """self.best is [T, B]"""
-        self.tgt_embedding.x = kwargs.get('tgt', self.tgt_embedding.create_placeholder('tgt'))
-        mxlen = kwargs.get('mxlen', 100)
+        encoder_outputs, tgt, src_len, tgt_len = inputs
+        self.tgt_embedding.x = tgt if tgt is not None else self.tgt_embedding.create_placeholder(self.tgt_embedding.name)
 
         # dynamic_decode creates a scope "decoder" and it pushes operations underneath.
         # which makes it really hard to get the same objects between train and test
@@ -277,46 +289,66 @@ got {} hsz and {} dsz".format(self.hsz, self.tgt_embedding.get_dsz()))
         Wo = self._get_tgt_weights()
         with tf.variable_scope("dec", reuse=tf.AUTO_REUSE):
             tie_shape = [Wo.get_shape()[-1], Wo.get_shape()[0]]
+            self.cell = self._create_cell(encoder_outputs.output, src_len, self.hsz, self.pdrop, self.rnntype, self.layers, self.vdrop, **kwargs)
             if self.do_weight_tying:
                 with tf.variable_scope("Share", custom_getter=tie_weight(Wo, tie_shape)):
                     proj = tf.layers.Dense(self.tgt_embedding.get_vsz(), use_bias=False)
             else:
                 proj = tf.layers.Dense(self.tgt_embedding.get_vsz(), use_bias=False)
 
-            self._create_cell(encoder_outputs.output, src_len, pdrop, **kwargs)
             batch_sz = tf.shape(encoder_outputs.output)[0]
             initial_state = self.arc_policy.connect(encoder_outputs, self, batch_sz)
 
             # Two paths depending on training or evaluating (during training)
             # Normal expected inference path is BeamDecoder using .predict()
-            training_helper = tf.contrib.seq2seq.TrainingHelper(inputs=tf.nn.embedding_lookup(Wo, self.tgt_embedding.x), sequence_length=tgt_len)
-            greedy_helper = tf.contrib.seq2seq.GreedyEmbeddingHelper(Wo, tf.fill([batch_sz], Offsets.GO), Offsets.EOS)
-            decoder = tf.contrib.seq2seq.BasicDecoder(cell=self.cell, helper=training_helper,
-                                                      initial_state=initial_state, output_layer=proj)
-            training_outputs, self.final_decoder_state, _ = tf.contrib.seq2seq.dynamic_decode(decoder,
-                                                                                              impute_finished=True,
-                                                                                              swap_memory=True,
-                                                                                              output_time_major=True)
+            training_helper = tf.contrib.seq2seq.TrainingHelper(
+                inputs=tf.nn.embedding_lookup(Wo, self.tgt_embedding.x),
+                sequence_length=tgt_len
+            )
+            training_decoder = tf.contrib.seq2seq.BasicDecoder(
+                cell=self.cell,
+                helper=training_helper,
+                initial_state=initial_state,
+                output_layer=proj
+            )
+            training_outputs, self.final_decoder_state, _ = tf.contrib.seq2seq.dynamic_decode(
+                training_decoder,
+                impute_finished=True,
+                swap_memory=True,
+                output_time_major=True
+            )
 
             self.preds = training_outputs.rnn_output
 
-            greedy_decoder = tf.contrib.seq2seq.BasicDecoder(cell=self.cell,
-                                                             helper=greedy_helper,
-                                                             initial_state=initial_state, output_layer=proj)
-            greedy_outputs, _, _ = tf.contrib.seq2seq.dynamic_decode(greedy_decoder,
-                                                                     impute_finished=True,
-                                                                     swap_memory=True,
-                                                                     output_time_major=True,
-                                                                     maximum_iterations=mxlen)
+            # This is used to do greedy decoding during evaluation on the dev set
+            greedy_helper = tf.contrib.seq2seq.GreedyEmbeddingHelper(
+                Wo,
+                tf.fill([batch_sz], Offsets.GO),
+                Offsets.EOS
+            )
+            greedy_decoder = tf.contrib.seq2seq.BasicDecoder(
+                cell=self.cell,
+                helper=greedy_helper,
+                initial_state=initial_state,
+                output_layer=proj
+            )
+            greedy_outputs, _, _ = tf.contrib.seq2seq.dynamic_decode(
+                greedy_decoder,
+                impute_finished=True,
+                swap_memory=True,
+                output_time_major=True,
+                maximum_iterations=self.mxlen
+            )
             best = greedy_outputs.sample_id
             self.output(best)
+            return self.best
 
 
 @register_decoder(name='default')
 class RNNDecoderWithAttn(RNNDecoder):
     def __init__(self, tgt_embedding, **kwargs):
-        super(RNNDecoderWithAttn, self).__init__(tgt_embedding, **kwargs)
         self.attn_type = kwargs.get('attn_type', 'bahdanau').lower()
+        super().__init__(tgt_embedding, **kwargs)
 
     @property
     def decoder_type(self):
@@ -330,12 +362,12 @@ class RNNDecoderWithAttn(RNNDecoder):
     def attn_type(self, type):
         self._attn_type = type
 
-    def _create_cell(self, rnn_enc_tensor, src_len, pdrop, rnntype='lstm', layers=1, vdrop=False, **kwargs):
-        cell = multi_rnn_cell_w_dropout(self.hsz, pdrop, rnntype, layers, variational=vdrop, training=TRAIN_FLAG())
+    def _create_cell(self, rnn_enc_tensor, src_len, hsz, pdrop, rnntype='lstm', layers=1, vdrop=False, **kwargs):
+        cell = multi_rnn_cell_w_dropout(hsz, pdrop, rnntype, layers, variational=vdrop, training=TRAIN_FLAG())
         if self.beam_width > 1:
             # Expand the encoded tensor for all beam entries
             rnn_enc_tensor = tf.contrib.seq2seq.tile_batch(rnn_enc_tensor, multiplier=self.beam_width)
             src_len = tf.contrib.seq2seq.tile_batch(src_len, multiplier=self.beam_width)
         GlobalAttention = tfcontrib_seq2seq.LuongAttention if self.attn_type == 'luong' else tfcontrib_seq2seq.BahdanauAttention
-        attn_mech = GlobalAttention(self.hsz, rnn_enc_tensor, src_len)
-        self.cell = tf.contrib.seq2seq.AttentionWrapper(cell, attn_mech, self.hsz, name='dyn_attn_cell')
+        attn_mech = GlobalAttention(hsz, rnn_enc_tensor, src_len)
+        return tf.contrib.seq2seq.AttentionWrapper(cell, attn_mech, self.hsz, name='dyn_attn_cell')

@@ -829,16 +829,16 @@ class BiLSTMEncoder1(tf.keras.layers.Layer):
         return self._requires_length
 
 
-class BiLSTMEncoder1(tf.keras.layers.Layer):
+class BiLSTMEncoderAll1(BiLSTMEncoder1):
 
     def call(self, inputs):
         inputs, lengths = tensor_and_lengths(inputs)
-        rnnout, (fwd_state, backward_state) = tf.nn.bidirectional_dynamic_rnn(self.fwd_rnn, self.bwd_rnn, inputs, sequence_length=lengths, dtype=tf.float32)
+        rnnout, (fwd_state, bwd_state) = tf.nn.bidirectional_dynamic_rnn(self.fwd_rnn, self.bwd_rnn, inputs, sequence_length=lengths, dtype=tf.float32)
         rnnout = tf.concat(axis=2, values=rnnout)
         encoder_state = []
         for i in range(self.layers):
-            h = tf.concat([fw_state[i].h, bw_state[i].h], -1)
-            c = tf.concat([fw_state[i].c, bw_state[i].c], -1)
+            h = tf.concat([fwd_state[i].h, bwd_state[i].h], -1)
+            c = tf.concat([fwd_state[i].c, bwd_state[i].c], -1)
             encoder_state.append(tf.contrib.rnn.LSTMStateTuple(h=h, c=c))
         encoder_state = tuple(encoder_state)
         return self.output_fn(rnnout, encoder_state)
@@ -911,7 +911,7 @@ if get_version(tf) < 2:
     BiLSTMEncoderSequence = BiLSTMEncoderSequence1
     BiLSTMEncoderHidden = BiLSTMEncoderHidden1
     BiLSTMEncoderHiddenContext = BiLSTMEncoderHiddenContext1
-    BiLSTMEncoderAll = None #BiLSTMEncoderAll1
+    BiLSTMEncoderAll = BiLSTMEncoderAll1
     from tensorflow.contrib.crf import crf_decode, crf_log_norm, crf_unary_score, crf_binary_score
     def crf_sequence_score(inputs, tag_indices, sequence_lengths, transition_params):
         """Computes the unnormalized score for a tag sequence.
