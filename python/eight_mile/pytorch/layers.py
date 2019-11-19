@@ -351,8 +351,8 @@ class Highway(nn.Module):
         gated = (proj_gate * proj_result) + ((1 - proj_gate) * input)
         return gated
 
-def pytorch_linear(in_sz, out_sz, unif=0, initializer=None):
-    l = nn.Linear(in_sz, out_sz)
+def pytorch_linear(in_sz, out_sz, unif=0, initializer=None, bias=True):
+    l = nn.Linear(in_sz, out_sz, bias=bias)
     if unif > 0:
         l.weight.data.uniform_(-unif, unif)
     elif initializer == "ortho":
@@ -361,8 +361,8 @@ def pytorch_linear(in_sz, out_sz, unif=0, initializer=None):
         nn.init.kaiming_uniform(l.weight)
     else:
         nn.init.xavier_uniform_(l.weight)
-
-    l.bias.data.zero_()
+    if bias:
+        l.bias.data.zero_()
     return l
 
 
@@ -856,7 +856,7 @@ class DenseStack(nn.Module):
         return False
 
 
-class BaseAttention(nn.Module):
+class VectorSequenceAttention(nn.Module):
 
     def __init__(self, hsz):
         super().__init__()
@@ -887,7 +887,7 @@ class BaseAttention(nn.Module):
         return attended
 
 
-class LuongDotProductAttention(BaseAttention):
+class LuongDotProductAttention(VectorSequenceAttention):
 
     def __init__(self, hsz):
         super().__init__(hsz)
@@ -899,7 +899,7 @@ class LuongDotProductAttention(BaseAttention):
         return a
 
 
-class ScaledDotProductAttention(BaseAttention):
+class ScaledDotProductAttention(VectorSequenceAttention):
 
     def __init__(self, hsz):
         super().__init__(hsz)
@@ -911,7 +911,7 @@ class ScaledDotProductAttention(BaseAttention):
         return a
 
 
-class LuongGeneralAttention(BaseAttention):
+class LuongGeneralAttention(VectorSequenceAttention):
 
     def __init__(self, hsz):
         super().__init__(hsz)
@@ -924,7 +924,7 @@ class LuongGeneralAttention(BaseAttention):
         return a
 
 
-class BahdanauAttention(BaseAttention):
+class BahdanauAttention(VectorSequenceAttention):
 
     def __init__(self, hsz):
         super().__init__(hsz)
@@ -1436,6 +1436,88 @@ def subsequent_mask(size):
     return torch.from_numpy(sub_mask)
 
 
+class SequenceSequenceAttention(nn.Module):
+    def __init__(self, hsz=None, pdrop=0.1, **kwargs):
+        super().__init__()
+        self.hsz = hsz
+        self.dropout = nn.Dropout(pdrop)
+        self.attn = None
+
+    def forward(self, qkvm):
+        query, key, value, mask = qkvm
+        a = self._attention(query, key, mask)
+        self.attn = a
+        a = self.dropout(a)
+        return self._update(a, value)
+
+    def _attention(self, queries, keys, mask=None):
+        pass
+
+    def _update(self, a, value):
+        """Attention weights are applied for each value, but in a series of efficient matrix operations.
+
+        In the case of self-attention, the key and query (used to create the attention weights)
+        and values are all low order projections of the same input.
+
+        :param a: The attention weights [B, H, T, T]
+        :param values: The values [B, H, T, D]
+        :returns: A tensor of shape [B, H, T, D]
+        """
+        return torch.matmul(a, value)
+
+
+class SeqScaledDotProductAttention(SequenceSequenceAttention):
+    def __init__(self, pdrop=0.1, **kwargs):
+        super().__init__(pdrop=pdrop, **kwargs)
+
+    def _attention(self, query, key, mask=None):
+        """Scaled dot product attention, as defined in https://arxiv.org/abs/1706.03762
+
+        We apply the query to the keys to receive our weights via softmax in a series of efficient
+        matrix operations. In the case of self-attntion the key and query are all low order
+        projections of the same input.
+
+        :param query: a query for alignment. Can come from self in case of self-attn or decoder in case of E/D
+        :param key: a set of keys from encoder or self
+        :param mask: masking (for destination) to prevent seeing what we shouldnt
+        :return: A tensor that is (BxHxTxT)
+        """
+        # (., H, T, T) = (., H, T, D) x (., H, D, T)
+        d_k = query.size(-1)
+        scores = torch.matmul(query, key.transpose(-2, -1)) / math.sqrt(d_k)
+        if mask is not None:
+            scores = scores.masked_fill(mask == 0, -1e9)
+        return F.softmax(scores, dim=-1)
+
+
+class SeqDotProductAttention(SequenceSequenceAttention):
+    def __init__(self, pdrop=0.1, **kwargs):
+        super().__init__(pdrop=pdrop, **kwargs)
+
+    def _attention(self, query, key, mask=None):
+        scores = torch.matmul(query, key.transpose(-2, -1))
+        if mask is not None:
+            scores = scores.masked_fill(mask == 0, -1e9)
+        return F.softmax(scores, dim=-1)
+
+
+class SeqBahdanauAttention(SequenceSequenceAttention):
+    def __init__(self, hsz, pdrop=0.1, **kwargs):
+        super().__init__(hsz, pdrop=0.1, **kwargs)
+        self.V = pytorch_linear(self.hsz, 1, bias=False)
+
+    def _attention(self, query, key, mask=None):
+        # [B, H, T, 1, D] + [B, H, 1, T, D] = [B, H, T, T, D]
+        additive = query.unsqueeze(-2) + key.unsqueeze(-3)
+        non_linear = torch.tanh(additive)
+        # [B, H, T, T, D] @ [D, 1] = [B, H, T, T, 1]
+        scores = self.V(non_linear)
+        # [B, H, T, T]
+        scores = scores.squeeze(-1)
+        return F.softmax(scores, dim=-1)
+
+
+
 class MultiHeadedAttention(nn.Module):
     """
     Multi-headed attention from https://arxiv.org/abs/1706.03762 via http://nlp.seas.harvard.edu/2018/04/03/attention.html
@@ -1473,43 +1555,12 @@ class MultiHeadedAttention(nn.Module):
         self.w_K = Dense(d_model, d_model)
         self.w_V = Dense(d_model, d_model)
         self.w_O = Dense(d_model, d_model)
-        self.attn_fn = self._scaled_dot_product_attention if scale else self._dot_product_attention
+        if scale:
+            self.attn_fn = SeqScaledDotProductAttention(dropout)
+        else:
+            self.attn_fn = SeqDotProductAttention(dropout)
         self.attn = None
-        self.dropout = nn.Dropout(dropout)
 
-    def _scaled_dot_product_attention(self, query, key, value, mask=None, dropout=None):
-        """Scaled dot product attention, as defined in https://arxiv.org/abs/1706.03762
-
-        We apply the query to the keys to recieve our weights via softmax, which are then applied
-        for each value, but in a series of efficient matrix operations.  In the case of self-attention,
-        the key, query and values are all low order projections of the same input.
-
-        :param query: a query for alignment. Can come from self in case of self-attn or decoder in case of E/D
-        :param key: a set of keys from encoder or self
-        :param value: a set of values from encoder or self
-        :param mask: masking (for destination) to prevent seeing what we shouldnt
-        :param dropout: apply dropout operator post-attention (this is not a float)
-        :return: A tensor that is (BxHxTxT)
-
-        """
-        # (., H, T, T) = (., H, T, D) x (., H, D, T)
-        d_k = query.size(-1)
-        scores = torch.matmul(query, key.transpose(-2, -1)) / math.sqrt(d_k)
-        if mask is not None:
-            scores = scores.masked_fill(mask == 0, -1e9)
-        weights = F.softmax(scores, dim=-1)
-        if dropout is not None:
-            weights = dropout(weights)
-        return torch.matmul(weights, value), weights
-
-    def _dot_product_attention(self, query, key, value, mask=None, dropout=None):
-        scores = torch.matmul(query, key.transpose(-2, -1))
-        if mask is not None:
-            scores = scores.masked_fill(mask == 0, -1e9)
-        p_attn = F.softmax(scores, dim=-1)
-        if dropout is not None:
-            p_attn = dropout(p_attn)
-        return torch.matmul(p_attn, value), p_attn
 
     def forward(self, qkvm):
         """Low-order projections of query, key and value into multiple heads, then attention application and dropout
@@ -1528,7 +1579,8 @@ class MultiHeadedAttention(nn.Module):
         key = self.w_K(key).view(batchsz, -1, self.h, self.d_k).transpose(1, 2)
         value = self.w_V(value).view(batchsz, -1, self.h, self.d_k).transpose(1, 2)
 
-        x, self.attn = self.attn_fn(query, key, value, mask=mask, dropout=self.dropout)
+        x = self.attn_fn(query, key, value, mask=mask)
+        self.attn = self.attn_fn.attn
 
         x = x.transpose(1, 2).contiguous() \
             .view(batchsz, -1, self.h * self.d_k)

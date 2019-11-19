@@ -1,13 +1,13 @@
 import copy
 import pytest
-pytest.skip("Transformer tests broken because the attention calculations are inside MHA for now", allow_module_level=True)
 import numpy as np
 from mock import MagicMock
 torch = pytest.importorskip('torch')
 from baseline.pytorch.torchy import sequence_mask
 from baseline.pytorch.transformer import subsequent_mask
-from baseline.pytorch.transformer import scaled_dot_product_attention as sdpa
-from baseline.pytorch.transformer import dot_product_attention as dpa
+from eight_mile.pytorch.layers import SeqScaledDotProductAttention, SeqDotProductAttention
+# from baseline.pytorch.transformer import scaled_dot_product_attention as sdpa
+# from baseline.pytorch.transformer import dot_product_attention as dpa
 
 
 
@@ -27,10 +27,12 @@ def qkv():
 
 
 def test_sdpa_values(qkv):
+    sdpa = SeqScaledDotProductAttention(0.0)
     attn_values(sdpa, qkv)
 
 
 def test_dpa_values(qkv):
+    dpa = SeqDotProductAttention(0.0)
     attn_values(dpa, qkv)
 
 
@@ -38,7 +40,7 @@ def attn_values(attn, qkv):
     q, k, v = qkv
     B, H, T, _ = q.shape
     q = q.zero_()
-    res, _ = attn(q, k, v)
+    res = attn((q, k, v, None))
     res = res.numpy()
     gold = v.numpy()
     for b in range(B):
@@ -48,10 +50,12 @@ def attn_values(attn, qkv):
 
 
 def test_sdpa_values_seq_mask(qkv):
+    sdpa = SeqScaledDotProductAttention(0.0)
     attn_values_seq_mask(sdpa, qkv)
 
 
 def test_dpa_values_seq_mask(qkv):
+    dpa = SeqDotProductAttention(0.0)
     attn_values_seq_mask(dpa, qkv)
 
 
@@ -61,7 +65,7 @@ def attn_values_seq_mask(attn, qkv):
     q = q.zero_()
     lens = torch.from_numpy(np.random.randint(1, T, size=B))
     mask = sequence_mask(lens, T).unsqueeze(1).unsqueeze(1)
-    res, _ = attn(q, k, v, mask=mask)
+    res = attn((q, k, v, mask))
     res = res.numpy()
     gold = v.numpy()
     for b in range(B):
@@ -71,11 +75,13 @@ def attn_values_seq_mask(attn, qkv):
 
 
 def test_sdpa_values_sub_mask(qkv):
+    sdpa = SeqScaledDotProductAttention(0.0)
     attn_values_sub_mask(sdpa, qkv)
 
 
 def test_dpa_values_sub_mask(qkv):
-    attn_values_sub_mask(sdpa, qkv)
+    dpa = SeqDotProductAttention(0.0)
+    attn_values_sub_mask(dpa, qkv)
 
 
 def attn_values_sub_mask(attn, qkv):
@@ -83,7 +89,7 @@ def attn_values_sub_mask(attn, qkv):
     B, H, T, _ = q.shape
     q = q.zero_()
     mask = subsequent_mask(T)
-    res, _ = attn(q, k, v, mask=mask)
+    res = attn((q, k, v, mask))
     res = res.numpy()
     gold = v.numpy()
     for b in range(B):

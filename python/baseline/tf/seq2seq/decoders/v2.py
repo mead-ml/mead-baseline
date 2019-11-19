@@ -248,6 +248,7 @@ class TransformerDecoderWrapper(tf.keras.layers.Layer):
         dsz = self.tgt_embeddings.get_dsz()
         if hsz is None:
             hsz = dsz
+        self.hsz = hsz
 
         self.transformer_decoder = TransformerDecoderStack(d_model=hsz, num_heads=num_heads, pdrop=dropout, scale=scale, layers=layers)
 

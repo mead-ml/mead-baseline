@@ -1175,6 +1175,64 @@ def combine_heads(x):
     return new_x
 
 
+class SequenceSequenceAttention(tf.keras.layers.Layer):
+    def __init__(self, hsz=None, pdrop=0.1, name=None):
+        super().__init__(name=name)
+        self.hsz = hsz
+        self.dropout = tf.keras.layers.Dropout(pdrop)
+        print(self.dropout)
+        self.attn = None
+
+    def call(self, qkvm):
+        query, key, value, mask = qkvm
+        a = self._attention(query, key, mask)
+        self.attn = a
+        a = self.dropout(a, training=TRAIN_FLAG())
+        return self._update(a, value)
+
+    def _attention(self, queries, keys, mask=None):
+        pass
+
+    def _update(self, a, value):
+        """Attention weights are applied for each value, but in a series of efficient matrix operations.
+
+        In the case of self-attention, the key and query (used to create the attention weights)
+        and values are all low order projections of the same input.
+
+        :param a: The attention weights [B, H, T, T]
+        :param values: The values [B, H, T, D]
+        :returns: A tensor of shape [B, H, T, D]
+        """
+        return tf.matmul(a, value)
+
+
+class SeqScaledDotProductAttention(SequenceSequenceAttention):
+    def __init__(self, pdrop=0.1, name="scaled_dot_product_attention", **kwargs):
+        super().__init__(pdrop, name=name, **kwargs)
+
+    def _attention(self, query, key, mask=None):
+        scores = tf.matmul(query, key, transpose_b=True)
+        scores *= tf.math.rsqrt(tf.cast(tf.shape(query)[2], tf.float32))
+
+        if mask is not None:
+            scores = masked_fill(scores, mask == 0, -1e9)
+
+        return tf.nn.softmax(scores, name="attention_weights")
+
+
+class SeqDotProductAttention(SequenceSequenceAttention):
+    def __init__(self, pdrop=0.1, name="dot_product_attention", **kwargs):
+        super().__init__(pdrop, name=name, **kwargs)
+
+    def _attention(self, query, key, mask=None):
+        scores = tf.matmul(query, key, transpose_b=True)
+
+        if mask is not None:
+            scores = masked_fill(scores, mask == 0, -1e9)
+
+        return tf.nn.softmax(scores, name="attention_weights")
+
+
 class MultiHeadedAttention(tf.keras.layers.Layer):
     """
     Multi-headed attention from https://arxiv.org/abs/1706.03762 via http://nlp.seas.harvard.edu/2018/04/03/attention.html
@@ -1212,31 +1270,11 @@ class MultiHeadedAttention(tf.keras.layers.Layer):
         self.w_K = tf.keras.layers.Dense(units=d_model)
         self.w_V = tf.keras.layers.Dense(units=d_model)
         self.w_O = tf.keras.layers.Dense(units=d_model)
-        self.attn_fn = self._scaled_dot_product_attention if scale else self._dot_product_attention
+        if scale:
+            self.attn_fn = SeqScaledDotProductAttention(dropout)
+        else:
+            self.attn_fn = SeqDotProductAttention(dropout)
         self.attn = None
-        self.dropout = tf.keras.layers.Dropout(dropout)
-
-    def _scaled_dot_product_attention(self, query, key, value, mask=None):
-        w = tf.matmul(query, key, transpose_b=True)
-
-        w *= tf.math.rsqrt(tf.cast(tf.shape(query)[2], tf.float32))
-
-        if mask is not None:
-            w = w * mask + -1e9 * (1 - mask)
-
-        weights = tf.nn.softmax(w, name="attention_weights")
-        weights = self.dropout(weights, training=TRAIN_FLAG())
-        return tf.matmul(weights, value), weights
-
-    def _dot_product_attention(self, query, key, value, mask=None):
-        w = tf.matmul(query, key, transpose_b=True)
-
-        if mask is not None:
-            w = w * mask + -1e9 * (1 - mask)
-
-        weights = tf.nn.softmax(w, name="attention_weights")
-        weights = self.dropout(weights, training=TRAIN_FLAG())
-        return tf.matmul(weights, value), weights
 
     def call(self, qkvm):
         query, key, value, mask = qkvm
@@ -1245,7 +1283,8 @@ class MultiHeadedAttention(tf.keras.layers.Layer):
         query = split_heads(self.w_Q(query), self.h)
         key = split_heads(self.w_K(key), self.h)
         value = split_heads(self.w_V(value), self.h)
-        x, self.attn = self.attn_fn(query, key, value, mask=mask)
+        x = self.attn_fn((query, key, value, mask))
+        self.attn = self.attn_fn.attn
         x = combine_heads(x)
         return self.w_O(x)
 
@@ -1761,7 +1800,7 @@ def tf_device_wrapper(func):
     return with_device
 
 
-class BaseAttention(tf.keras.layers.Layer):
+class VectorSequenceAttention(tf.keras.layers.Layer):
 
     def __init__(self, hsz):
         super().__init__()
@@ -1794,7 +1833,7 @@ class BaseAttention(tf.keras.layers.Layer):
         return attended
 
 
-class LuongDotProductAttention(BaseAttention):
+class LuongDotProductAttention(VectorSequenceAttention):
 
     def __init__(self, hsz):
         super().__init__(hsz)
@@ -1808,7 +1847,7 @@ class LuongDotProductAttention(BaseAttention):
         return a
 
 
-class ScaledDotProductAttention(BaseAttention):
+class ScaledDotProductAttention(VectorSequenceAttention):
 
     def __init__(self, hsz):
         super().__init__(hsz)
@@ -1823,7 +1862,7 @@ class ScaledDotProductAttention(BaseAttention):
         return a
 
 
-class LuongGeneralAttention(BaseAttention):
+class LuongGeneralAttention(VectorSequenceAttention):
 
     def __init__(self, hsz):
         super().__init__(hsz)
@@ -1838,7 +1877,7 @@ class LuongGeneralAttention(BaseAttention):
         return a
 
 
-class BahdanauAttention(BaseAttention):
+class BahdanauAttention(VectorSequenceAttention):
 
     def __init__(self, hsz):
         super().__init__(hsz)
