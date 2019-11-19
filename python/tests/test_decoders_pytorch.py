@@ -33,7 +33,7 @@ def test_rnn_decode_shapes():
     encoder.output = encoder.output
     encoder.src_mask = torch.zeros(batchsz, temporal).byte()
     tgt_embed = LookupTableEmbeddingsModel.create(wv, 'output')
-    decoder = RNNDecoder(tgt_embed, hsz=hsz)
+    decoder = RNNDecoder(tgt_embed, hsz=hsz, tie_weights=False)
     decode_start = torch.full((batchsz, temporal_output), Offsets.GO, dtype=torch.long)
     output = decoder(encoder, decode_start)
     assert output.shape[0] == batchsz
@@ -67,7 +67,7 @@ def test_rnn_attn_decode_shapes():
     encoder.src_mask = torch.zeros(batchsz, temporal).byte()
 
     tgt_embed = LookupTableEmbeddingsModel.create(wv, 'output')
-    decoder = RNNDecoderWithAttn(tgt_embed, hsz=hsz)
+    decoder = RNNDecoderWithAttn(tgt_embed, hsz=hsz, tie_weights=False)
     decode_start = torch.full((batchsz, temporal_output), Offsets.GO, dtype=torch.long)
     output = decoder(encoder, decode_start)
     assert output.shape[0] == batchsz

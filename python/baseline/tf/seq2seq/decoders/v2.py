@@ -109,7 +109,7 @@ class RNNDecoder(tf.keras.layers.Layer):
         self.dropout = tf.keras.layers.Dropout(pdrop)
         self.init_attn(**kwargs)
 
-        do_weight_tying = bool(kwargs.get('tie_weights', False))
+        do_weight_tying = bool(kwargs.get('tie_weights', True))
 
         if do_weight_tying:
             if self.hsz != self.tgt_embeddings.get_dsz():
@@ -257,7 +257,7 @@ class TransformerDecoderWrapper(tf.keras.layers.Layer):
             self.proj_to_hsz = tf.keras.layers.Dense(hsz)
             self.proj_to_dsz = tf.keras.layers.Dense(dsz)
 
-        do_weight_tying = bool(kwargs.get('tie_weights', False))
+        do_weight_tying = bool(kwargs.get('tie_weights', True))
 
         if do_weight_tying:
             if self.hsz != self.tgt_embeddings.get_dsz():
