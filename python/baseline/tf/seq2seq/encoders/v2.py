@@ -4,6 +4,7 @@ from baseline.tf.transformer import transformer_encoder_stack
 from baseline.utils import export, MAGIC_VARS
 from baseline.model import register_encoder
 from collections import namedtuple
+from eight_mile.tf.layers import *
 
 RNNEncoderOutput = namedtuple("RNNEncoderOutput", ("output", "hidden", "src_mask"))
 
@@ -17,7 +18,7 @@ def _make_src_mask(output, lengths):
 @register_encoder(name='default')
 class RNNEncoder(tf.keras.layers.Layer):
 
-    def __init__(self, dsz=None, hsz=None, rnntype='blstm', layers=1, pdrop=0.5, residual=False, create_src_mask=True, name='encoder', scope="RNNEncoder" **kwargs):
+    def __init__(self, dsz=None, hsz=None, rnntype='blstm', layers=1, pdrop=0.5, residual=False, create_src_mask=True, name='encoder', scope="RNNEncoder", **kwargs):
         super().__init__(name=name)
         self.residual = residual
         hidden = hsz if hsz is not None else dsz
@@ -39,7 +40,7 @@ TransformerEncoderOutput = namedtuple("TransformerEncoderOutput", ("output", "sr
 @register_encoder(name='transformer')
 class TransformerEncoderWrapper(tf.keras.layers.Layer):
 
-    def __init__(self, dsz, hsz=None, num_heads=4, layers=1, dropout=0.5, name='encoder', scope='TransformerEncoder' **kwargs):
+    def __init__(self, dsz, hsz=None, num_heads=4, layers=1, dropout=0.5, name='encoder', scope='TransformerEncoder', **kwargs):
         super().__init__(name=name)
         if hsz is None:
             hsz = dsz
