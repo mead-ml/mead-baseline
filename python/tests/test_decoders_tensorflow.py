@@ -33,7 +33,7 @@ def test_rnn_decode_shapes():
                       tf.cast(np.random.randn(layers, batchsz, hsz), dtype=tf.float32))
     encoder.src_mask = np.zeros((batchsz, temporal), dtype=np.uint8)
     tgt_embed = LookupTableEmbeddingsModel.create(wv, 'output')
-    decoder = RNNDecoder(tgt_embed, hsz=hsz)
+    decoder = RNNDecoder(tgt_embed, hsz=hsz, tie_weights=False)
     decode_start = np.full((batchsz, temporal_output), Offsets.GO, dtype=np.int64)
     output = decoder(encoder, decode_start)
     assert output.shape[0] == batchsz
@@ -63,7 +63,7 @@ def test_rnn_attn_decode_shapes():
                       tf.cast(np.random.randn(layers, batchsz, hsz), dtype=tf.float32))
     encoder.src_mask = np.zeros((batchsz, temporal), dtype=np.uint8)
     tgt_embed = LookupTableEmbeddingsModel.create(wv, 'output')
-    decoder = RNNDecoderWithAttn(tgt_embed, hsz=hsz, attn_type='sdpx')
+    decoder = RNNDecoderWithAttn(tgt_embed, hsz=hsz, attn_type='sdpx', tie_weights=False)
     decode_start = np.full((batchsz, temporal_output), Offsets.GO, dtype=np.int64)
     output = decoder(encoder, decode_start)
     assert output.shape[0] == batchsz
