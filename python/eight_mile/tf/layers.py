@@ -943,10 +943,12 @@ else:
     LSTMEncoderWithState = LSTMEncoderWithState2
     LSTMEncoderHidden = LSTMEncoderHidden2
     LSTMEncoderHiddenContext = LSTMEncoderHiddenContext2
+    LSTMEncoderAll = LSTMEncoderAll2
     BiLSTMEncoder = BiLSTMEncoder2
     BiLSTMEncoderSequence = BiLSTMEncoderSequence2
     BiLSTMEncoderHidden = BiLSTMEncoderHidden2
     BiLSTMEncoderHiddenContext = BiLSTMEncoderHiddenContext2
+    BiLSTMEncoderAll = BiLSTMEncoderAll2
     from tensorflow_addons.text.crf import crf_decode, crf_sequence_score, crf_log_norm
 
 

@@ -112,7 +112,7 @@ class RNNDecoder(tf.keras.layers.Layer):
         do_weight_tying = bool(kwargs.get('tie_weights', False))
 
         if do_weight_tying:
-            if self.hsz != self.tgt_embeddings.get_dsz()
+            if self.hsz != self.tgt_embeddings.get_dsz():
                 raise ValueError("weight tying requires hsz == embedding dsz, got {} hsz and {} dsz".format(self.hsz, self.tgt_embedding.get_dsz()))
             self.preds = WeightTieDense(self.tgt_embeddings)
         else:
@@ -178,7 +178,6 @@ class RNNDecoder(tf.keras.layers.Layer):
         pass
 
     def output(self, x):
-        #pred = tf.nn.log_softmax(self.preds(x), dim=-1)
         return self.preds(x)
 
     class BeamSearch(BeamSearchBase):
@@ -258,7 +257,14 @@ class TransformerDecoderWrapper(tf.keras.layers.Layer):
             self.proj_to_hsz = tf.keras.layers.Dense(hsz)
             self.proj_to_dsz = tf.keras.layers.Dense(dsz)
 
-        self.preds = tf.keras.layers.Dense(self.tgt_embeddings.get_vsz())
+        do_weight_tying = bool(kwargs.get('tie_weights', False))
+
+        if do_weight_tying:
+            if self.hsz != self.tgt_embeddings.get_dsz():
+                raise ValueError("weight tying requires hsz == embedding dsz, got {} hsz and {} dsz".format(self.hsz, self.tgt_embedding.get_dsz()))
+            self.preds = WeightTieDense(self.tgt_embeddings)
+        else:
+            self.preds = tf.keras.layers.Dense(self.tgt_embeddings.get_vsz())
 
     def _identity(self, x):
         return x
@@ -269,7 +275,6 @@ class TransformerDecoderWrapper(tf.keras.layers.Layer):
         context_bth = encoder_output.output
         T = get_shape_as_list(embed_out_bth)[1]
         dst_mask = tf.cast(subsequent_mask(T), embed_out_bth.dtype)
-        # src_mask = tf.expand_dims(tf.expand_dims(encoder_output.src_mask, 1), 1)
         src_mask = encoder_output.src_mask
         output = self.transformer_decoder((embed_out_bth, context_bth, src_mask, dst_mask))
         output = self.proj_to_dsz(output)
