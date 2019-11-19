@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import numpy as np
 from torch.autograd import Variable
 from baseline.utils import Offsets, export
-from eight_mile.pytorch.layers import repeat_batch, gnmt_length_penalty, BeamSearchBase, rnn_cell
+from eight_mile.pytorch.layers import repeat_batch, gnmt_length_penalty, BeamSearchBase, rnn_cell, WeightTieDense
 from baseline.pytorch.transformer import subsequent_mask, TransformerDecoderStack
 from baseline.model import register_arc_policy, register_decoder, create_seq2seq_arc_policy
 from baseline.pytorch.seq2seq.encoders import TransformerEncoderOutput
@@ -110,14 +110,14 @@ class RNNDecoder(torch.nn.Module):
         self.dropout = torch.nn.Dropout(pdrop)
         self.init_attn(**kwargs)
 
-        do_weight_tying = bool(kwargs.get('tie_weights', False))
+        do_weight_tying = bool(kwargs.get('tie_weights', True))
 
-        self.preds = pytorch_linear(self.hsz, self.tgt_embeddings.get_vsz())
         if do_weight_tying:
-            if self.hsz != self.tgt_embedding.get_dsz():
-                raise ValueError("weight tying requires hsz == embedding dsz, got {} hsz and {} dsz".format(self.hsz, self.tgt_embedding.get_dsz()))
-            if is_valid_tying:
-                tie_weight(self.preds, self.tgt_embeddings.embeddings)
+            if self.hsz != self.tgt_embeddings.get_dsz():
+                raise ValueError("weight tying requires hsz == embedding dsz, got {} hsz and {} dsz".format(self.hsz, self.tgt_embeddings.get_dsz()))
+            self.preds = WeightTieDense(self.tgt_embeddings)
+        else:
+            self.preds = pytorch_linear(self.hsz, self.tgt_embeddings.get_vsz())
 
     @staticmethod
     def _basic_input(dst_embed_i, _):
@@ -257,13 +257,13 @@ class TransformerDecoderWrapper(torch.nn.Module):
             del self.proj_to_dsz.weight
             self.proj_to_dsz.weight = torch.nn.Parameter(self.proj_to_hsz.weight.transpose(0, 1), requires_grad=True)
 
-        self.preds = pytorch_linear(dsz, self.tgt_embeddings.get_vsz())
-
-        do_weight_tying = bool(kwargs.get('tie_weights', False))
-        if self.hsz != self.tgt_embedding.get_dsz():
-            raise ValueError("weight tying requires hsz == embedding dsz, got {} hsz and {} dsz".format(self.hsz, self.tgt_embedding.get_dsz()))
+        do_weight_tying = bool(kwargs.get('tie_weights', True))
         if do_weight_tying:
-            self.preds.weight = self.tgt_embeddings.weight.transpose(0, 1)
+            if hsz != self.tgt_embeddings.get_dsz():
+                raise ValueError("weight tying requires hsz == embedding dsz, got {} hsz and {} dsz".format(self.hsz, self.tgt_embeddings.get_dsz()))
+            self.preds = WeightTieDense(self.tgt_embeddings)
+        else:
+            self.preds = pytorch_linear(dsz, self.tgt_embeddings.get_vsz())
 
     def _identity(self, x):
         return x

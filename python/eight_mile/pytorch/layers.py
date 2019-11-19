@@ -433,6 +433,30 @@ class Dense(nn.Module):
         return self.activation(self.layer(input))
 
 
+class WeightTieDense(nn.Module):
+    def __init__(self, tie):
+        super().__init__()
+        self.tie = tie
+        self.weight, self.transform = self._get_weight(tie)
+        self.register_parameter('bias', None)
+
+    def _get_weight(self, tie):
+        emb = getattr(tie, 'embeddings', None)
+        if emb is not None:
+            return getattr(emb, 'weight'), self._identity
+        return getattr(tie, 'weight'), self._transpose
+
+    def _identity(self, x):
+        return x
+
+    def _transpose(self, x):
+        return x.transpose(0, 1).contiguous()
+
+    def forward(self, input):
+        return F.linear(input, self.transform(self.weight), self.bias)
+
+
+
 # Mapped
 class ResidualBlock(nn.Module):
 
