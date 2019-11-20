@@ -1266,10 +1266,10 @@ class MultiHeadedAttention(tf.keras.layers.Layer):
         assert d_model % num_heads == 0
         self.d_k = d_model // num_heads
         self.h = num_heads
-        self.w_Q = tf.keras.layers.Dense(units=d_model)
-        self.w_K = tf.keras.layers.Dense(units=d_model)
-        self.w_V = tf.keras.layers.Dense(units=d_model)
-        self.w_O = tf.keras.layers.Dense(units=d_model)
+        self.w_Q = tf.keras.layers.Dense(units=d_model, name="query_projection")
+        self.w_K = tf.keras.layers.Dense(units=d_model, name="key_projection")
+        self.w_V = tf.keras.layers.Dense(units=d_model, name="value_projection")
+        self.w_O = tf.keras.layers.Dense(units=d_model, name="output_projection")
         if scale:
             self.attn_fn = SeqScaledDotProductAttention(dropout)
         else:
@@ -1414,7 +1414,7 @@ class TaggerGreedyDecoder(tf.keras.layers.Layer):
             _, inv_mask = constraint_mask
             self.inv_mask = inv_mask * tf.constant(-1e4)
 
-        self.A = self.add_weight("transitions_raw", shape=(num_tags, num_tags), dtype=tf.float32, init='zeros', trainable=False)
+            self.A = self.add_weight("transitions_raw", shape=(num_tags, num_tags), dtype=tf.float32, init='zeros', trainable=False)
 
     @property
     def transitions(self):
@@ -1424,10 +1424,11 @@ class TaggerGreedyDecoder(tf.keras.layers.Layer):
 
     def neg_log_loss(self, unary, tags, lengths):
         # Cross entropy loss
-        mask = tf.sequence_mask(lengths)
-        cross_entropy = tf.one_hot(tags, self.num_tags, axis=-1) * tf.log(tf.nn.softmax(unary))
-        cross_entropy = -tf.reduce_sum(cross_entropy, reduction_indices=2)
-        cross_entropy *= mask
+        # This should be replaced with a SequenceLoss layer like in pytorch
+        mask = tf.sequence_mask(lengths, tf.shape(unary)[1])
+        cross_entropy = tf.one_hot(tags, self.num_tags, axis=-1) * tf.math.log(tf.nn.softmax(unary))
+        cross_entropy = -tf.reduce_sum(cross_entropy, axis=2)
+        cross_entropy *= tf.cast(mask, tf.float32)
         cross_entropy = tf.reduce_sum(cross_entropy, axis=1)
         all_loss = tf.reduce_mean(cross_entropy, name="loss")
         return all_loss
@@ -1447,7 +1448,7 @@ class TaggerGreedyDecoder(tf.keras.layers.Layer):
             viterbi, path_scores = crf_decode(probv, self.transitions, lengths + 1)
             return tf.identity(viterbi[:, 1:], name="best"), path_scores
         else:
-            return tf.argmax(self.probs, 2, name="best"), None
+            return tf.argmax(unary, 2, name="best"), None
 
 
 class CRF(tf.keras.layers.Layer):

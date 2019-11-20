@@ -800,7 +800,7 @@ class EmbeddingsStack(nn.Module):
         total_dsz = 0
         for embeddings in self.embeddings.values():
             total_dsz += embeddings.get_dsz()
-        return total_dsz
+        return int(total_dsz)
 
     @property
     def output_dim(self):
@@ -1344,7 +1344,10 @@ class SequenceModel(nn.Module):
         else:
             self.embed_model = embeddings
         self.transducer_model = transducer
-        self.proj_layer = Dense(transducer.output_dim, nc)
+        if transducer.output_dim != nc:
+            self.proj_layer = Dense(transducer.output_dim, nc)
+        else:
+            self.proj_layer = Identity()
         self.decoder_model = decoder
 
     def transduce(self, inputs):
@@ -1579,7 +1582,7 @@ class MultiHeadedAttention(nn.Module):
         key = self.w_K(key).view(batchsz, -1, self.h, self.d_k).transpose(1, 2)
         value = self.w_V(value).view(batchsz, -1, self.h, self.d_k).transpose(1, 2)
 
-        x = self.attn_fn(query, key, value, mask=mask)
+        x = self.attn_fn((query, key, value, mask))
         self.attn = self.attn_fn.attn
 
         x = x.transpose(1, 2).contiguous() \

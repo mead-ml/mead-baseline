@@ -79,7 +79,7 @@ class CharConvEmbeddings(PyTorchEmbeddings):
         self.projsz = kwargs.get('projsz')
         self.pdrop = kwargs.get('pdrop', 0.5)
         self.filtsz, self.nfeats = calc_nfeats(self.cfiltsz, self.nfeat_factor, self.max_feat, self.wsz)
-        self.conv_outsz = np.sum(self.nfeats)
+        self.conv_outsz = int(np.sum(self.nfeats))
         self.outsz = self.conv_outsz
         if self.projsz is not None:
             self.outsz = self.projsz
