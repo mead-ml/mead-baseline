@@ -401,11 +401,7 @@ class EagerOptimizer(object):
                 rho = float(kwargs.get('rho', 0.95))
                 eps = float(kwargs.get('epsilon', 1e-6))
                 logger.info('adadelta(eta=%f, rho=%f, epsilon=%f)', lr, rho, eps)
-                #self.optimizer = tf.optimizers.Adadelta(lr, rho, eps)
-                lr = min(lr, 0.001)
-                logger.warning("In eager mode on GPU, TF errors if using an optimizer with sparse updates.  "
-                               "This should be fixed 11/2019.  For now, changing to adam(eta=%f)", lr)
-                self.optimizer = tf.optimizers.Adam(lr, 0.9, 0.999, 1e-8)
+                self.optimizer = tf.optimizers.Adadelta(lr, rho, eps)
             elif optim == 'adam':
                 beta1 = float(kwargs.get('beta1', 0.9))
                 beta2 = float(kwargs.get('beta2', 0.999))
@@ -431,9 +427,6 @@ class EagerOptimizer(object):
                 self.optimizer = tf.optimizers.RMSprop(lr_function, momentum=mom)
             elif sgd_mom > 0:
                 logger.info('sgd-mom(eta=%f, mom=%f)', lr, sgd_mom)
-                logger.warning("In eager mode on GPU, TF errors if using an optimizer with sparse updates.  "
-                               "This should be fixed 11/2019.  For now, turning off momentum")
-                sgd_mom = 0.0
                 self.optimizer = tf.optimizers.SGD(lr_function, sgd_mom)
             else:
                 logger.info('sgd(eta=%f)', lr)
@@ -444,6 +437,7 @@ class EagerOptimizer(object):
     def update(self, model, x, y):
         with tf.GradientTape() as tape:
             loss_value = self.loss(model, x, y)
+
         grads = tape.gradient(loss_value, model.trainable_variables)
         grads, _ = tf.clip_by_global_norm(grads, self.clip)
         self.optimizer.apply_gradients(zip(grads, model.trainable_variables), self.global_step)

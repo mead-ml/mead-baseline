@@ -95,14 +95,26 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
             self.vsz, self.dsz = self._weights.shape
 
     def build(self, input_shape):
-        self.W = self.add_weight(
-            name=f'{self.scope}/Weight',
-            shape=(self.vsz, self.dsz),
-            initializer=tf.constant_initializer(
-                self._weights,
-            ),
-            trainable=self.finetune
-        )
+
+        if tf.executing_eagerly():
+            with tf.device('cpu:0'):
+                self.W = self.add_weight(
+                    name=f'{self.scope}/Weight',
+                    shape=(self.vsz, self.dsz),
+                    initializer=tf.constant_initializer(
+                        self._weights,
+                    ),
+                    trainable=self.finetune
+                )
+        else:
+            self.W = self.add_weight(
+                name=f'{self.scope}/Weight',
+                shape=(self.vsz, self.dsz),
+                initializer=tf.constant_initializer(
+                    self._weights,
+                ),
+                trainable=self.finetune
+            )
         super().build(input_shape)
 
     def encode(self, x):
