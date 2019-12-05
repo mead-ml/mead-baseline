@@ -65,7 +65,7 @@ jobs:
     - name: Install Baseline
       run: |
         cd python
-        pip install -e .[test,yaml,tf2]
+        pip install -e .[test,yaml]
     - name: Unit Test PyTorch ${{matrix.pyt-version}}
       run: |
         cd python
