@@ -1414,7 +1414,7 @@ class TaggerGreedyDecoder(tf.keras.layers.Layer):
             _, inv_mask = constraint_mask
             self.inv_mask = inv_mask * tf.constant(-1e4)
 
-            self.A = self.add_weight("transitions_raw", shape=(num_tags, num_tags), dtype=tf.float32, init='zeros', trainable=False)
+            self.A = self.add_weight("transitions_raw", shape=(num_tags, num_tags), dtype=tf.float32, trainable=False)
 
     @property
     def transitions(self):
@@ -1433,19 +1433,66 @@ class TaggerGreedyDecoder(tf.keras.layers.Layer):
         all_loss = tf.reduce_mean(cross_entropy, name="loss")
         return all_loss
 
+    @staticmethod
+    def add_go_eos(unary, lengths):
+        # Get the shape, we need `h` to be an actual int opposed to the result of tf.shape. If we use tf.shape
+        # then the last time is unknown at graph build time and later steps will fail
+        b, _, h = get_shape_as_list(unary)
+
+        # Adding a GO at the start
+        # Initialize GO to have very negative scores for all tags
+        gos = tf.fill((h,), -1e4)
+        # Set the GO tag to score to 0
+        gos = tf.tensor_scatter_nd_update(gos, tf.constant(Offsets.GO, shape=[1, 1], dtype=tf.int32), tf.constant(0., shape=[1], dtype=tf.float32))
+        # Expand the tag scores so they can broadcast over the batch and timestamp
+        gos = tf.expand_dims(tf.expand_dims(gos, 0), 0)
+        # Tile the gos over the batch. All the examples start that the same spot so we can insert the start at the beginning
+        gos = tf.tile(gos, (b, 1, 1)) # [B, 1, H]
+        gos = tf.nn.log_softmax(gos, axis=-1)
+        # Add the gos to the start of the problems
+        unary = tf.concat([gos, unary], axis=1)
+        # add one to the length to account for the go
+        lengths = lengths + 1
+
+        # Adding a EOS at the end
+        # Initialize EOS to have very negative scores for all tags
+        ends = tf.fill((h,), -1e4)
+        # Set the EOS tag score to 0
+        ends = tf.tensor_scatter_nd_update(ends, tf.constant(Offsets.EOS, shape=[1, 1], dtype=tf.int32), tf.constant(0., shape=[1], dtype=tf.float32))
+        # Add an time so we can repeat the EOS batch times
+        ends = tf.expand_dims(ends, 0)
+        # Repeat the EOS so it has batch elements in it
+        ends = tf.tile(ends, (b, 1))  # [B, H]
+        ends = tf.nn.log_softmax(ends, axis=-1)
+
+        # We are going to have to set some value in the unaries with the EOS scores so we add an empty
+        # position at the end. This will let use write the EOS without falling off the end of the batch
+        spacer = tf.zeros((b, 1, h))
+        unary = tf.concat([unary, spacer], axis=1)
+
+        # Get the max len of the batch, this changes at run time so we need to use tf.shape
+        t = tf.shape(unary)[1]
+
+        # Flatten the unaries so it is a long list of tag scores
+        flat_unary = tf.reshape(unary, (-1, h))
+        # Convert the length for an example into the offsets into the newly flattened list
+        flat_lengths = tf.reshape(tf.range(tf.cast(b, tf.int64), dtype=tf.int64) * tf.cast(t, tf.int64) + lengths, (-1, 1))
+        # Over write the vectors at flat_lengths with the values in ends. There are [B] indices in the flat lengths that we
+        # are scattering values from end with. This is why we needed to tile the end vector batch times.
+        flat_unary = tf.tensor_scatter_nd_update(flat_unary, flat_lengths, ends)
+        # Reshape the unaries into [B, T + 2, H]
+        unary = tf.reshape(flat_unary, (b, -1, h))
+        # Add 1 to lengths to account for EOS
+        lengths = lengths + 1
+        return unary, lengths
+
     def call(self, inputs, training=False, mask=None):
 
         unary, lengths = inputs
 
         if self.inv_mask is not None:
-            bsz = tf.shape(unary)[0]
-            lsz = self.num_tags
-            np_gos = np.full((1, 1, lsz), -1e4, dtype=np.float32)
-            np_gos[:, :, Offsets.GO] = 0
-            gos = tf.constant(np_gos)
-            start = tf.tile(gos, [bsz, 1, 1])
-            probv = tf.concat([start, unary], axis=1)
-            viterbi, path_scores = crf_decode(probv, self.transitions, lengths + 1)
+            probv, lengths = TaggerGreedyDecoder.add_go_eos(unary, lengths)
+            viterbi, path_scores = crf_decode(probv, self.transitions, lengths)
             return tf.identity(viterbi[:, 1:], name="best"), path_scores
         else:
             return tf.argmax(unary, 2, name="best"), None
@@ -1494,6 +1541,57 @@ class CRF(tf.keras.layers.Layer):
         else:
             return self.decode(unary, lengths)
 
+    @staticmethod
+    def add_go_eos(unary, lengths):
+        # Get the shape, we need `h` to be an actual int opposed to the result of tf.shape. If we use tf.shape
+        # then the last time is unknown at graph build time and later steps will fail
+        b, _, h = get_shape_as_list(unary)
+
+        # Adding a GO at the start
+        # Initialize GO to have very negative scores for all tags
+        gos = tf.fill((h,), -1e4)
+        # Set the GO tag to score to 0
+        gos = tf.tensor_scatter_nd_update(gos, tf.constant(Offsets.GO, shape=[1, 1], dtype=tf.int32), tf.constant(0., shape=[1], dtype=tf.float32))
+        # Expand the tag scores so they can broadcast over the batch and timestamp
+        gos = tf.expand_dims(tf.expand_dims(gos, 0), 0)
+        # Tile the gos over the batch. All the examples start that the same spot so we can insert the start at the beginning
+        gos = tf.tile(gos, (b, 1, 1)) # [B, 1, H]
+        # Add the gos to the start of the problems
+        unary = tf.concat([gos, unary], axis=1)
+        # add one to the length to account for the go
+        lengths = lengths + 1
+
+        # Adding a EOS at the end
+        # Initialize EOS to have very negative scores for all tags
+        ends = tf.fill((h,), -1e4)
+        # Set the EOS tag score to 0
+        ends = tf.tensor_scatter_nd_update(ends, tf.constant(Offsets.EOS, shape=[1, 1], dtype=tf.int32), tf.constant(0., shape=[1], dtype=tf.float32))
+        # Add an time so we can repeat the EOS batch times
+        ends = tf.expand_dims(ends, 0)
+        # Repeat the EOS so it has batch elements in it
+        ends = tf.tile(ends, (b, 1))  # [B, H]
+
+        # We are going to have to set some value in the unaries with the EOS scores so we add an empty
+        # position at the end. This will let use write the EOS without falling off the end of the batch
+        spacer = tf.zeros((b, 1, h))
+        unary = tf.concat([unary, spacer], axis=1)
+
+        # Get the max len of the batch, this changes at run time so we need to use tf.shape
+        t = tf.shape(unary)[1]
+
+        # Flatten the unaries so it is a long list of tag scores
+        flat_unary = tf.reshape(unary, (-1, h))
+        # Convert the length for an example into the offsets into the newly flattened list
+        flat_lengths = tf.reshape(tf.range(tf.cast(b, tf.int64), dtype=tf.int64) * tf.cast(t, tf.int64) + lengths, (-1, 1))
+        # Over write the vectors at flat_lengths with the values in ends. There are [B] indices in the flat lengths that we
+        # are scattering values from end with. This is why we needed to tile the end vector batch times.
+        flat_unary = tf.tensor_scatter_nd_update(flat_unary, flat_lengths, ends)
+        # Reshape the unaries into [B, T + 2, H]
+        unary = tf.reshape(flat_unary, (b, -1, h))
+        # Add 1 to lengths to account for EOS
+        lengths = lengths + 1
+        return unary, lengths
+
     def decode(self, unary, lengths):
         """Do Viterbi decode on a batch.
 
@@ -1503,19 +1601,9 @@ class CRF(tf.keras.layers.Layer):
         :return: List[torch.LongTensor]: [B] the paths
         :return: torch.FloatTensor: [B] the path score
         """
-        bsz = tf.shape(unary)[0]
-        lsz = self.num_tags
-        np_gos = np.full((1, 1, lsz), -1e4, dtype=np.float32)
-        np_gos[:, :, Offsets.GO] = 0
-        gos = tf.constant(np_gos)
-
-        start = tf.tile(gos, [bsz, 1, 1])
-        start = tf.nn.log_softmax(start, axis=-1)
-
-        probv = tf.concat([start, unary], axis=1)
-
-        viterbi, path_scores = crf_decode(probv, self.transitions, lengths + 1)
-        return tf.identity(viterbi[:, 1:], name="best"), path_scores
+        probv, lengths = CRF.add_go_eos(unary, lengths)
+        viterbi, path_scores = crf_decode(probv, self.transitions, lengths)
+        return tf.identity(viterbi[:, 1:-1], name="best"), path_scores
 
     def neg_log_loss(self, unary, tags, lengths):
         """Neg Log Loss with a Batched CRF.
