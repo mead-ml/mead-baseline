@@ -366,3 +366,18 @@ class TransformerLanguageModel(LanguageModelBase):
             x = tf.layers.dense(x, self.hsz)
         x = transformer_encoder_stack(x, mask, num_heads, self.pdrop_value, scale, layers, activation_type, d_ff=d_ff)
         return tf.reshape(x, [-1, self.hsz])
+
+
+@register_model(task='lm', name='transformer-mlm')
+class TransformerMaskedLanguageModel(LanguageModelBase):
+    def __init__(self):
+        super(TransformerMaskedLanguageModel, self).__init__()
+
+    def decode(self, x, num_heads=4, layers=1, scale=True, activation_type='relu', scope='TransformerEncoder', d_ff=None, **kwargs):
+        T = get_shape_as_list(x)[1]
+        dsz = get_shape_as_list(x)[-1]
+        mask = tf.ones([1, 1, T, T])
+        if dsz != self.hsz:
+            x = tf.layers.dense(x, self.hsz)
+        x = transformer_encoder_stack(x, mask, num_heads, self.pdrop_value, scale, layers, activation_type, d_ff=d_ff)
+        return tf.reshape(x, [-1, self.hsz])
