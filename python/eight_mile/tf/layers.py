@@ -1493,7 +1493,7 @@ class TaggerGreedyDecoder(tf.keras.layers.Layer):
         if self.inv_mask is not None:
             probv, lengths = TaggerGreedyDecoder.add_go_eos(unary, lengths)
             viterbi, path_scores = crf_decode(probv, self.transitions, lengths)
-            return tf.identity(viterbi[:, 1:], name="best"), path_scores
+            return tf.identity(viterbi[:, 1:-1], name="best"), path_scores
         else:
             return tf.argmax(unary, 2, name="best"), None
 
