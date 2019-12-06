@@ -63,6 +63,13 @@ comments = [
     '# begin doc',
 ]
 
+gold_documents_with_comments = [
+    [[comments[1].split()] + gold_sentences[0], [comments[2].split(), comments[3].split()] + gold_sentences[1] , [comments[4].split()]],
+    [gold_sentences[2], [comments[6].split()] + gold_sentences[3]],
+    [gold_sentences[4], gold_sentences[5]]
+]
+
+
 sentence_comments = [
     [comments[0], comments[1]],
     [comments[2], comments[3]],
@@ -123,6 +130,18 @@ def test_read_conll_sentences_no_comments():
         assert p == g
 
 
+def test_read_conll_sentences_diff_comment_string():
+    text_tokens = [
+        ["#", "1", "2"],
+        ["b", "3", "4"],
+        ["c", "5", "6"],
+    ]
+    gold = [text_tokens]
+    text = StringIO("\n".join(" ".join([t for t in tt]) for tt in text_tokens))
+    for p, g in zip(read_conll_sentences(text, comment_pattern="# comment: "), gold):
+        assert p == g
+
+
 def test_read_conll_sentences_md():
     for (p, pm), g, m in zip(read_conll_sentences_md(TEST_FILE), gold_sentences, sentence_comments):
         assert p == g
@@ -137,10 +156,22 @@ def test_read_conll_sentences_md_hash_token():
         ["c", "5", "6"],
     ]
     gold = [(text_tokens[1:], [text_tokens[0]])]
-    for g in gold:
-        print(g)
     text = StringIO("\n".join(" ".join([t for t in tt]) for tt in text_tokens))
     for (p, pm), (g, gm) in zip(read_conll_sentences_md(text), gold):
+        assert p == g
+
+
+def test_read_conll_sentences_md_hash_token():
+    text_tokens = [
+        ["# comment: This is actually a comment"],
+        ["#", "-1", "0"],
+        ["a", "1", "2"],
+        ["#", "3", "4"],
+        ["c", "5", "6"],
+    ]
+    gold = [(text_tokens[1:], [text_tokens[0]])]
+    text = StringIO("\n".join(" ".join([t for t in tt]) for tt in text_tokens))
+    for (p, pm), (g, gm) in zip(read_conll_sentences_md(text, comment_pattern="# comment: "), gold):
         assert p == g
 
 
@@ -149,13 +180,13 @@ def test_read_conll_metadata_comments_conflict():
         next(read_conll(StringIO("a"), metadata=True, allow_comments=False))
 
 
-def test_read_conll_doc_comments_conflict():
-    with pytest.raises(ValueError):
-        next(read_conll(StringIO("a"), doc_pattern="# doc", allow_comments=False))
-
-
 def test_read_conll_docs():
     for d, g in zip(read_conll_docs(TEST_FILE), gold_documents):
+        assert d == g
+
+
+def test_read_conll_docs_ignore_comments():
+    for d, g in zip(read_conll_docs(TEST_FILE, allow_comments=False), gold_documents_with_comments):
         assert d == g
 
 
