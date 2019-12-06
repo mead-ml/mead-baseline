@@ -134,7 +134,7 @@ class BPEVectorizer1D(AbstractVectorizer):
         self.vocab = {k: i for i, k in enumerate(self.read_vocab(self.vocab_file))}
 
     def read_vocab(self, s):
-        vocab = [] + Offsets.VALUES + ['[CLS]']
+        vocab = [] + Offsets.VALUES + ['[CLS]', '[MASK]']
         with open(s, "r") as f:
             for line in f.readlines():
                 token = line.split()[0].strip()
@@ -599,15 +599,27 @@ def train():
     valid_loader = DataLoader(valid_set, batch_size=args.batch_size, shuffle=False)
     logger.info("Loaded datasets")
 
-    model = TransformerLanguageModel.create(embeddings,
-                                            hsz=args.d_model,
-                                            d_ff=args.d_ff,
-                                            tie_weights=(args.tokens != 'chars'),
-                                            dropout=args.dropout,
-                                            gpu=False,
-                                            num_heads=args.num_heads,
-                                            layers=args.num_layers,
-                                            src_keys=['x'], tgt_key=tgt_key)
+    if args.mlm:
+        from baseline.pytorch.lm import TransformerMaskedLanguageModel
+        model = TransformerMaskedLanguageModel.create(embeddings,
+                                                      hsz=args.d_model,
+                                                      d_ff=args.d_ff,
+                                                      tie_weights=(args.tokens != 'chars'),
+                                                      dropout=args.dropout,
+                                                      gpu=False,
+                                                      num_heads=args.num_heads,
+                                                      layeres=args.num_layers,
+                                                      src_key=['x'], tgt_key=tgt_key)
+    else:
+        model = TransformerLanguageModel.create(embeddings,
+                                                hsz=args.d_model,
+                                                d_ff=args.d_ff,
+                                                tie_weights=(args.tokens != 'chars'),
+                                                dropout=args.dropout,
+                                                gpu=False,
+                                                num_heads=args.num_heads,
+                                                layers=args.num_layers,
+                                                src_keys=['x'], tgt_key=tgt_key)
     model.to(args.device)
     loss_function = model.create_loss()
     loss_function.to(args.device)
