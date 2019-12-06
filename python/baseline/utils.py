@@ -916,7 +916,7 @@ def _sniff_conll_file(f, delim=None):
 
 @exporter
 @str_file
-def read_conll(f, doc_pattern=None, delim=None, metadata=False, allow_comments=True, comment_pattern="#"):
+def read_conll(f, doc_pattern=None, delim=None, metadata=False, allow_comments=False, comment_pattern="#"):
     """Read from a conll file.
 
     :param f: `str` The file to read from.
