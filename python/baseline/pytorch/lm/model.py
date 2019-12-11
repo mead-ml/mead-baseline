@@ -174,3 +174,13 @@ class TransformerLanguageModel(LanguageModelBase):
         T = bth.shape[1]
         mask = subsequent_mask(T).type_as(bth)
         return self.transformer(bth, mask), None
+
+
+@register_model(task='lm', name='transformer-mlm')
+class TransformerMaskedLanguageModel(TransformerLanguageModel):
+    def decode(self, bth, hidden):
+        import numpy as np
+        bth = self.proj_to_dsz(bth)
+        T = bth.shape[1]
+        mask = torch.from_numpy(np.ones((1, 1, T, T)).astype('uint8')).type_as(bth)
+        return self.transformer(bth, mask), None
