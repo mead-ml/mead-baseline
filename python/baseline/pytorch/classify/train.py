@@ -17,6 +17,7 @@ logger = logging.getLogger('baseline')
 
 
 def _add_to_cm(cm, y, pred):
+
     _, best = pred.max(1)
     yt = y.cpu().int()
     yp = best.cpu().int()
@@ -72,7 +73,15 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
         total_norm = 0
         steps = len(loader)
         pg = create_progress_bar(steps)
-        cm = ConfusionMatrix(self.labels)
+        if self.model.is_multilabel:
+            tps = torch.zeros(len(self.labels))
+            tp_fns = torch.zeros(len(self.labels))
+            tp_fps = torch.zeros(len(self.labels))
+            total_tps = 0.
+            total_tp_fps = 0.
+            total_tp_fns = 0.
+        else:
+            cm = ConfusionMatrix(self.labels)
         verbose = kwargs.get("verbose", None)
         output = kwargs.get('output')
         txts = kwargs.get('txts')
@@ -93,11 +102,45 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
             batchsz = self._get_batchsz(batch_dict)
             total_loss += loss.item() * batchsz
             total_norm += batchsz
-            _add_to_cm(cm, ys, pred)
 
-        metrics = cm.get_all_metrics()
+            if self.model.is_multilabel:
+                ons = torch.sigmoid(pred)
+                ons[pred > 0.5] = 1
+                ons = ons.int()
+                yt = ys.int()
+                tps += (yt & ons).sum(0).cpu().float()
+                tp_fns += yt.sum(0).cpu().float()
+                tp_fps += ons.sum(0).cpu().float()
+
+                total_tps += tps.sum().item()
+                total_tp_fns += tp_fns.sum().item()
+                total_tp_fps += tp_fps.sum().item()
+            else:
+                _add_to_cm(cm, ys, pred)
+
+        if self.model.is_multilabel:
+            precision = tps / tp_fps
+            recall = tps / tp_fns
+            f1 = 2 * precision * recall / (precision + recall)
+
+            total_precision = total_tps / total_tp_fps
+            total_recall = total_tps / total_tp_fns
+            total_f1 = 2 * total_precision * total_recall / (total_precision + total_recall)
+
+            metrics = {}
+            metrics['precision'] = total_precision
+            metrics['recall'] = total_recall
+            metrics['f1'] = total_f1
+            metrics['class_precision'] = {k: v.item() for k, v in zip(self.model.labels, precision) if v.item() == v.item()}
+            metrics['class_recall'] = {k: v.item() for k, v in zip(self.model.labels, recall) if v.item() == v.item()}
+            metrics['class_f1'] = {k: v.item() for k, v in zip(self.model.labels, f1) if v.item() == v.item()}
+
+
+        else:
+            metrics = cm.get_all_metrics()
         metrics['avg_loss'] = total_loss / float(total_norm)
-        verbose_output(verbose, cm)
+        if not self.model.is_multilabel:
+            verbose_output(verbose, cm)
         if handle is not None:
             handle.close()
 
@@ -108,15 +151,23 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
         reporting_fns = kwargs.get('reporting_fns', [])
         steps = len(loader)
         pg = create_progress_bar(steps)
-        cm = ConfusionMatrix(self.labels)
+        if self.model.is_multilabel:
+            tps = torch.zeros(len(self.labels))
+            tp_fns = torch.zeros(len(self.labels))
+            tp_fps = torch.zeros(len(self.labels))
+            total_tps = 0.
+            total_tp_fps = 0.
+            total_tp_fns = 0.
+        else:
+            cm = ConfusionMatrix(self.labels)
         epoch_loss = 0
         epoch_div = 0
         for batch_dict in pg(loader):
             self.optimizer.zero_grad()
             example = self._make_input(batch_dict)
-            y = example.pop('y')
+            ys = example.pop('y')
             pred = self.model(example)
-            loss = self.crit(pred, y)
+            loss = self.crit(pred, ys)
             batchsz = self._get_batchsz(batch_dict)
             report_loss = loss.item() * batchsz
             epoch_loss += report_loss
@@ -125,7 +176,21 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
             self.nstep_div += batchsz
             loss.backward()
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.clip)
-            _add_to_cm(cm, y, pred)
+
+            if self.model.is_multilabel:
+                ons = torch.sigmoid(pred)
+                ons[pred > 0.5] = 1
+                ons = ons.int()
+                yt = ys.int()
+                tps += (yt & ons).sum(0).cpu().float()
+                tp_fns += yt.sum(0).cpu().float()
+                tp_fps += ons.sum(0).cpu().float()
+
+                total_tps += tps.sum().item()
+                total_tp_fns += tp_fns.sum().item()
+                total_tp_fps += tp_fps.sum().item()
+            else:
+                _add_to_cm(cm, ys, pred)
             self.optimizer.step()
 
             if (self.optimizer.global_step + 1) % self.nsteps == 0:
@@ -136,7 +201,26 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
                 )
                 self.reset_nstep()
 
-        metrics = cm.get_all_metrics()
+        if self.model.is_multilabel:
+            precision = tps / tp_fps
+            recall = tps / tp_fns
+            f1 = 2 * precision * recall / (precision + recall)
+
+            total_precision = total_tps / total_tp_fps
+            total_recall = total_tps / total_tp_fns
+            total_f1 = 2 * total_precision * total_recall / (total_precision + total_recall)
+
+            metrics = {}
+            metrics['precision'] = total_precision
+            metrics['recall'] = total_recall
+            metrics['f1'] = total_f1
+            metrics['class_precision'] = {k: v.item() for k, v in zip(self.model.labels, precision) if v.item() == v.item()}
+            metrics['class_recall'] = {k: v.item() for k, v in zip(self.model.labels, recall) if v.item() == v.item()}
+            metrics['class_f1'] = {k: v.item() for k, v in zip(self.model.labels, f1) if v.item() == v.item()}
+
+
+        else:
+            metrics = cm.get_all_metrics()
         metrics['avg_loss'] = epoch_loss / float(epoch_div)
         return metrics
 

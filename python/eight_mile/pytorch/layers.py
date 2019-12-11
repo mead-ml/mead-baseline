@@ -1000,7 +1000,7 @@ class CompositePooling(nn.Module):
 
 class EmbedPoolStackModel(nn.Module):
 
-    def __init__(self, nc, embeddings, pool_model, stack_model=None):
+    def __init__(self, nc, embeddings, pool_model, stack_model=None, output_activation='log_softmax'):
         super().__init__()
         if isinstance(embeddings, dict):
             self.embed_model = EmbeddingsStack(embeddings)
@@ -1013,7 +1013,7 @@ class EmbedPoolStackModel(nn.Module):
 
         self.pool_model = pool_model
         output_dim = self.pool_model.output_dim if stack_model is None else stack_model.output_dim
-        self.output_layer = Dense(output_dim, nc, activation="log_softmax")
+        self.output_layer = Dense(output_dim, nc, activation=output_activation)
         self.stack_model = stack_model
 
     def forward(self, inputs):

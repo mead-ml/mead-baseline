@@ -35,6 +35,7 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
     def create(cls, embeddings, labels, **kwargs):
 
         model = cls()
+        model.is_multilabel = kwargs.get('multilabel', False)
         model.pdrop = kwargs.get('pdrop', 0.5)
         model.lengths_key = kwargs.get('lengths_key')
         model.embeddings = embeddings
@@ -43,7 +44,8 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
         model.labels = labels
         pool_model = model.init_pool(embed_model.dsz, **kwargs)
         stack_model = model.init_stacked(pool_model.output_dim, **kwargs)
-        model.layers = EmbedPoolStackModel(len(labels), embeddings, pool_model, stack_model)
+        output_activation = 'log_softmax' if not model.is_multilabel else None
+        model.layers = EmbedPoolStackModel(len(labels), embeddings, pool_model, stack_model, output_activation=output_activation)
         logger.info(model)
         return model
 
@@ -52,6 +54,8 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
         self.gpu = True
 
     def create_loss(self):
+        if self.is_multilabel:
+            return nn.BCEWithLogitsLoss()
         return nn.NLLLoss()
 
     def make_input(self, batch_dict):

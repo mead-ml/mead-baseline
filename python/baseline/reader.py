@@ -10,6 +10,7 @@ import numpy as np
 import baseline.data
 from baseline.vectorizers import Dict1DVectorizer, GOVectorizer, Token1DVectorizer
 from baseline.utils import import_user_module, revlut, export, optional_params, Offsets, listify
+from eight_mile.utils import fill_y
 
 __all__ = []
 exporter = export(__all__)
@@ -486,8 +487,9 @@ class TSVSeqLabelReader(SeqLabelReader):
                 }
 
     def __init__(self, vectorizers, trim=False, truncate=False, **kwargs):
-        super(TSVSeqLabelReader, self).__init__()
-
+        super().__init__()
+        # We can auto-detect this as long as the label file isnt passed separately
+        self.is_multilabel = kwargs.get('multilabel', False)
         self.label2index = {}
         self.vectorizers = vectorizers
         self.clean_fn = kwargs.get('clean_fn')
@@ -513,7 +515,7 @@ class TSVSeqLabelReader(SeqLabelReader):
     @staticmethod
     def label_and_sentence(line, clean_fn):
         label_text = re.split(TSVSeqLabelReader.SPLIT_ON, line)
-        label = label_text[0]
+        label = [s.strip() for s in label_text[0].split(',')]
         text = label_text[1:]
         text = ' '.join(list(filter(lambda s: len(s) != 0, [clean_fn(w) for w in text])))
         text = list(filter(lambda s: len(s) != 0, re.split('\s+', text)))
@@ -552,7 +554,7 @@ class TSVSeqLabelReader(SeqLabelReader):
                 continue
             with codecs.open(file_name, encoding='utf-8', mode='r') as f:
                 for il, line in enumerate(f):
-                    label, text = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn)
+                    labels, text = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn)
                     if len(text) == 0:
                         continue
 
@@ -560,9 +562,12 @@ class TSVSeqLabelReader(SeqLabelReader):
                         vocab_file = vectorizer.count(text)
                         vocab[k].update(vocab_file)
 
-                    if label not in self.label2index:
-                        self.label2index[label] = label_idx
-                        label_idx += 1
+                    if len(labels) > 1:
+                        self.is_multilabel = True
+                    for label in labels:
+                        if label not in self.label2index:
+                            self.label2index[label] = label_idx
+                            label_idx += 1
 
         vocab = _filter_vocab(vocab, kwargs.get('min_f', {}))
 
@@ -585,11 +590,17 @@ class TSVSeqLabelReader(SeqLabelReader):
         texts = []
         with codecs.open(filename, encoding='utf-8', mode='r') as f:
             for il, line in enumerate(f):
-                label, text = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn)
-                texts.append(text)
-                if len(text) == 0:
+                labels, text = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn)
+                if not text:
                     continue
-                y = self.label2index[label]
+
+                texts.append(text)
+                if self.is_multilabel:
+                    one_hot = np.array([self.label2index[label] for label in labels])
+                    y = fill_y(len(self.label2index), one_hot).squeeze()
+                else:
+                    y = self.label2index[labels[0]]
+
                 example_dict = dict()
                 for k, vectorizer in self.vectorizers.items():
                     example_dict[k], lengths = vectorizer.run(text, vocabs[k])
@@ -614,10 +625,16 @@ class TSVSeqLabelReader(SeqLabelReader):
     
         with codecs.open(filename, encoding='utf-8', mode='r') as f:
             for il, line in enumerate(f):
-                label, text = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn)
-                if len(text) == 0:
+                labels, text = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn)
+                if not text:
                     continue
-                y = self.label2index[label]
+                if self.is_multilabel:
+                    one_hot = np.array([self.label2index[label] for label in labels])
+                    y = fill_y(len(self.label2index), one_hot).sum(0)
+                    y = y.squeeze()
+                    y = y.astype(np.float32)
+                else:
+                    y = self.label2index[labels[0]]
                 example_dict = dict()
                 for k, vectorizer in self.vectorizers.items():
                     example_dict[k], lengths = vectorizer.run(text, vocabs[k])
