@@ -597,7 +597,9 @@ class TSVSeqLabelReader(SeqLabelReader):
                 texts.append(text)
                 if self.is_multilabel:
                     one_hot = np.array([self.label2index[label] for label in labels])
-                    y = fill_y(len(self.label2index), one_hot).squeeze()
+                    y = fill_y(len(self.label2index), one_hot).sum(0)
+                    y = y.squeeze()
+                    y = y.astype(np.float32)
                 else:
                     y = self.label2index[labels[0]]
 
