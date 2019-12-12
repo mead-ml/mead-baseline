@@ -670,14 +670,14 @@ def train():
             labels = y.to(args.device)
             if args.mlm:
                 # Replace 15% of tokens
-                masked_indices = torch.bernoulli(torch.full(labels.shape, 0.15)).byte()
+                masked_indices = torch.bernoulli(torch.full(labels.shape, 0.15)).type(torch.bool)
                 # Anything not masked is 0 so no loss
                 labels[~masked_indices] = 0
                 # Of the masked items, mask 80% of them with [MASK]
-                indices_replaced = torch.bernoulli(torch.full(labels.shape, 0.8)).byte() & masked_indices
+                indices_replaced = torch.bernoulli(torch.full(labels.shape, 0.8)).type(torch.bool) & masked_indices
                 inputs[indices_replaced] = mask_value
                 # Replace 10% of them with random words, rest preserved for auto-encoding
-                indices_random = torch.bernoulli(torch.full(labels.shape, 0.5)).byte() & masked_indices & ~indices_replaced
+                indices_random = torch.bernoulli(torch.full(labels.shape, 0.5)).type(torch.bool) & masked_indices & ~indices_replaced
                 random_words = torch.randint(vocab_size, labels.shape, dtype=torch.long, device=args.device)
                 inputs[indices_random] = random_words[indices_random]
 
@@ -719,14 +719,14 @@ def train():
 
                 if args.mlm:
                     # Replace 15% of tokens
-                    masked_indices = torch.bernoulli(torch.full(labels.shape, 0.15)).byte()
+                    masked_indices = torch.bernoulli(torch.full(labels.shape, 0.15)).type(torch.bool)
                     # Anything not masked is 0 so no loss
                     labels[~masked_indices] = 0
                     # Of the masked items, mask 80% of them with [MASK]
-                    indices_replaced = torch.bernoulli(torch.full(labels.shape, 0.8)).byte() & masked_indices
+                    indices_replaced = torch.bernoulli(torch.full(labels.shape, 0.8)).type(torch.bool) & masked_indices
                     inputs[indices_replaced] = mask_value
                     # Replace 10% of them with random work
-                    indices_random = torch.bernoulli(torch.full(labels.shape, 0.5)).byte() & masked_indices & ~indices_replaced
+                    indices_random = torch.bernoulli(torch.full(labels.shape, 0.5)).type(torch.bool) & masked_indices & ~indices_replaced
                     random_words = torch.randint(vocab_size, labels.shape, dtype=torch.long, device=args.device)
                     inputs[indices_random] = random_words[indices_random]
 
