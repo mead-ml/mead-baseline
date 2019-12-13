@@ -1423,15 +1423,13 @@ class TaggerGreedyDecoder(tf.keras.layers.Layer):
         return self.A
 
     def neg_log_loss(self, unary, tags, lengths):
-        # Cross entropy loss
-        # This should be replaced with a SequenceLoss layer like in pytorch
         mask = tf.sequence_mask(lengths, tf.shape(unary)[1])
-        cross_entropy = tf.one_hot(tags, self.num_tags, axis=-1) * tf.math.log(tf.nn.softmax(unary))
-        cross_entropy = -tf.reduce_sum(cross_entropy, axis=2)
+        cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(
+            labels=tags, logits=unary
+        )
         cross_entropy *= tf.cast(mask, tf.float32)
         cross_entropy = tf.reduce_sum(cross_entropy, axis=1)
-        all_loss = tf.reduce_mean(cross_entropy, name="loss")
-        return all_loss
+        return tf.reduce_mean(cross_entropy, name="loss")
 
     def call(self, inputs, training=False, mask=None):
 
