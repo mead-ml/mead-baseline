@@ -608,8 +608,8 @@ def train():
                                                       dropout=args.dropout,
                                                       gpu=False,
                                                       num_heads=args.num_heads,
-                                                      layeres=args.num_layers,
-                                                      src_key=['x'], tgt_key=tgt_key)
+                                                      layers=args.num_layers,
+                                                      src_keys=['x'], tgt_key=tgt_key)
     else:
         model = TransformerLanguageModel.create(embeddings,
                                                 hsz=args.d_model,
