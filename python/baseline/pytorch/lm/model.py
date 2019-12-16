@@ -169,18 +169,22 @@ class TransformerLanguageModel(LanguageModelBase):
         self.transformer = TransformerEncoderStack(num_heads, d_model=d_model, pdrop=pdrop, scale=True, layers=layers, d_ff=d_ff)
         self.apply(self.init_layer_weights)
 
-    def decode(self, bth, hidden):
+    def create_mask(self, bth):
         bth = self.proj_to_dsz(bth)
         T = bth.shape[1]
         mask = subsequent_mask(T).type_as(bth)
+        return mask
+
+    def decode(self, bth, hidden):
+        mask = self.create_mask(bth)
         return self.transformer(bth, mask), None
 
 
 @register_model(task='lm', name='transformer-mlm')
 class TransformerMaskedLanguageModel(TransformerLanguageModel):
-    def decode(self, bth, hidden):
-        import numpy as np
+
+    def create_mask(self, bth):
         bth = self.proj_to_dsz(bth)
         T = bth.shape[1]
-        mask = torch.from_numpy(np.ones((1, 1, T, T)).astype('uint8')).type_as(bth)
-        return self.transformer(bth, mask), None
+        mask = torch.ones((1, 1, T, T)).type_as(bth)
+        return mask
