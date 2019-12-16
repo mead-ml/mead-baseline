@@ -5,7 +5,7 @@ from collections import Counter
 
 
 from baseline.utils import read_json
-from baseline.pytorch.transformer import TransformerEncoderStack
+from baseline.pytorch.transformer import TransformerEncoderStack, subsequent_mask
 from baseline.pytorch.embeddings import PositionalLookupTableEmbeddings
 from baseline.embeddings import register_embeddings
 from baseline.pytorch.embeddings import PyTorchEmbeddings
@@ -223,6 +223,7 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
 
     def forward(self, x):
         input_mask = torch.zeros(x.shape, device=x.device, dtype=torch.long).masked_fill(x != 0, 1).unsqueeze(1).unsqueeze(1)
+        input_mask = input_mask & subsequent_mask(x.shape[1]).type_as(input_mask)
         embedding = self.embed(x)
         transformer_output = self.transformer(embedding, mask=input_mask)
         return self.get_output(x, transformer_output)
@@ -242,7 +243,9 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
     @classmethod
     def load(cls, embeddings, **kwargs):
         c = cls("tlm-words-embed", **kwargs)
-        c.load_state_dict(torch.load(embeddings), strict=False)
+        unmatch = c.load_state_dict(torch.load(embeddings), strict=False)
+        if unmatch.missing_keys or len(unmatch.unexpected_keys) > 2:
+            print("Warning: Embedding doesn't match with the checkpoint being loaded.")
         return c
 
 
