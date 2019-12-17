@@ -31,10 +31,9 @@ class EncoderDecoderModelBase(nn.Module, EncoderDecoderModel):
         :param kwargs:
         :return: Return the aggregate embedding input size
         """
-        self.src_embeddings = EmbeddingsContainer()
+        self.src_embeddings = EmbeddingsStack(src_embeddings)
         input_sz = 0
         for k, embedding in src_embeddings.items():
-            self.src_embeddings[k] = embedding
             input_sz += embedding.get_dsz()
         return input_sz
 
@@ -145,12 +144,9 @@ class EncoderDecoderModelBase(nn.Module, EncoderDecoderModel):
         return example
 
     def embed(self, input):
-        all_embeddings = []
-        for k, embedding in self.src_embeddings.items():
-            all_embeddings.append(embedding.encode(input[k]))
-        return torch.cat(all_embeddings, 2)
+        return self.src_embeddings(input)
 
-    def forward(self, input):
+    def forward(self, input: Dict[str, torch.Tensor]):
         src_len = input['src_len']
         encoder_outputs = self.encode(input, src_len)
         output = self.decode(encoder_outputs, input['dst'])

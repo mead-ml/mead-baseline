@@ -1,7 +1,11 @@
 import os
 import logging
 import argparse
-from baseline.utils import unzip_files, read_config_file
+from baseline.utils import (
+    unzip_files,
+    read_config_file,
+    normalize_backend
+)
 import mead
 from mead.exporters import create_exporter
 from mead.utils import (
@@ -33,6 +37,7 @@ def main():
     parser.add_argument('--name', help='Name of the model, used second in the path', default=None)
     parser.add_argument('--beam', help='beam_width', default=30, type=int)
     parser.add_argument('--is_remote', help='if True, separate items for remote server and client. If False bundle everything together (default True)', default=None)
+    parser.add_argument('--backend', help='The deep learning backend to use')
 
     args = parser.parse_args()
     configure_logger(args.logging)
@@ -57,6 +62,8 @@ def main():
          config_params['beam'] = args.beam
 
     config_params['modules'] = config_params.get('modules', []) + args.modules
+    if args.backend is not None:
+        config_params['backend'] = normalize_backend(args.backend)
 
     task = mead.Task.get_task_specific(task_name, args.settings)
 

@@ -43,7 +43,7 @@ class RemoteModelRESTPytorch(RemoteModelREST):
         batch_size = len(example_input)
         for i in range(batch_size):
             example = {k: np.array([v[i]]) for k, v in examples.items()}
-            example_output = super(RemoteModelRESTPytorch, self).predict(example, **kwargs)
+            example_output = super().predict(example, **kwargs)
             results.append(example_output[0])
         return results
 

@@ -28,6 +28,16 @@ def test_dropout_same_across_seq(input_, pdrop):
         np.testing.assert_allclose(first_mask, mask.detach().numpy())
 
 
+def test_dropout_same_across_seq_batch_first(input_, pdrop):
+    """Test the dropout masks are the same across a sequence."""
+    vd = VariationalDropout(pdrop, batch_first=True)
+    dropped = vd(input_)
+    first_mask = (dropped[:, 0, :] == 0).detach().numpy()
+    for i in range(dropped.shape[1]):
+        mask = dropped[:, i] == 0
+        np.testing.assert_allclose(first_mask, mask.detach().numpy())
+
+
 def test_dropout_probs(input_, pdrop):
     """Test that approximately the right number of units are dropped."""
     vd = VariationalDropout(pdrop)

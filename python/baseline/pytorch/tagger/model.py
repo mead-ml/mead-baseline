@@ -12,9 +12,16 @@ logger = logging.getLogger('baseline')
 class TaggerModelBase(nn.Module, TaggerModel):
 
     def save(self, outname):
+        #m = torch.jit.script(self)
+        #m.save(f'{outname}.script')
         torch.save(self, outname)
         basename, _ = os.path.splitext(outname)
         write_json(self.labels, basename + ".labels")
+
+    #def save(self, outname):
+    #    torch.save(self, outname)
+    #    basename, _ = os.path.splitext(outname)
+    #    write_json(self.labels, basename + ".labels")
 
     def to_gpu(self):
         self.gpu = True
@@ -31,7 +38,7 @@ class TaggerModelBase(nn.Module, TaggerModel):
         return model
 
     def __init__(self):
-        super(TaggerModelBase, self).__init__()
+        super().__init__()
         self.gpu = False
 
     def init_embed(self, **kwargs):
@@ -59,12 +66,12 @@ class TaggerModelBase(nn.Module, TaggerModel):
             constraint_mask = constraint_mask.unsqueeze(0)
 
         if use_crf:
-            decoder_model = CRF(len(labels), constraint_mask=constraint_mask, batch_first=False)
+            decoder_model = CRF(len(labels), constraint_mask=constraint_mask, batch_first=True)
         else:
             decoder_model = TaggerGreedyDecoder(
                 len(labels),
                 constraint_mask=constraint_mask,
-                batch_first=False,
+                batch_first=True,
                 reduction=kwargs.get('reduction', 'batch')
             )
 
@@ -87,7 +94,6 @@ class TaggerModelBase(nn.Module, TaggerModel):
         tensor = torch.from_numpy(batch_dict[key])
         tensor = self.drop_inputs(key, tensor)
         tensor = tensor[perm_idx]
-        tensor = tensor.transpose(0, 1).contiguous()
         if self.gpu:
             tensor = tensor.cuda()
         return tensor
@@ -118,11 +124,11 @@ class TaggerModelBase(nn.Module, TaggerModel):
             example_dict['ids'] = ids
         return example_dict
 
-    def forward(self, input):
+    def forward(self, input: Dict[str, torch.Tensor]) -> torch.Tensor:
         return self.layers(input)
 
     def compute_loss(self, inputs):
-        tags = inputs['y'].transpose(0, 1)
+        tags = inputs['y']
         lengths = inputs['lengths']
         unaries = self.layers.transduce(inputs)
         return self.layers.neg_log_loss(unaries, tags, lengths)
@@ -152,7 +158,7 @@ class RNNTaggerModel(TaggerModelBase):
         weight_init = kwargs.get('weight_init', 'uniform')
         rnntype = kwargs.get('rnntype', 'blstm')
         Encoder = LSTMEncoderSequence if rnntype == 'lstm' else BiLSTMEncoderSequence
-        return Encoder(input_sz, hsz, layers, pdrop, unif=unif, initializer=weight_init)
+        return Encoder(input_sz, hsz, layers, pdrop, unif=unif, initializer=weight_init, batch_first=True)
 
 
 @register_model(task='tagger', name='cnn')
