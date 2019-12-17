@@ -194,6 +194,7 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
         x_embedding = PositionalLookupTableEmbeddings('pos', vsz=self.vsz, dsz=self.d_model)
         self.init_embed({'x': x_embedding})
         self.transformer = TransformerEncoderStack(num_heads, d_model=self.d_model, pdrop=pdrop, scale=True, layers=layers, d_ff=d_ff)
+        self.mlm = kwargs.get('mlm', False)
 
     def embed(self, input):
         embedded = self.embeddings['x'](input)
@@ -221,9 +222,19 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
             self.embeddings_proj = None
         return input_sz
 
+    def _model_mask(self, nctx):
+        """This function creates the mask that controls which token to be attended to depending on the model. A causal
+        LM should have a subsequent mask; and a masked LM should have no mask."""
+        if self.mlm:
+            return torch.ones((1, 1, nctx, nctx), dtype=torch.long)
+        else:
+            return subsequent_mask(nctx)
+
     def forward(self, x):
+        # the following line masks out the attention to padding tokens
         input_mask = torch.zeros(x.shape, device=x.device, dtype=torch.long).masked_fill(x != 0, 1).unsqueeze(1).unsqueeze(1)
-        input_mask = input_mask & subsequent_mask(x.shape[1]).type_as(input_mask)
+        # the following line builds mask depending on whether it is a causal lm or masked lm
+        input_mask = input_mask & self._model_mask(x.shape[1]).type_as(input_mask)
         embedding = self.embed(x)
         transformer_output = self.transformer(embedding, mask=input_mask)
         return self.get_output(x, transformer_output)
