@@ -613,12 +613,15 @@ def import_user_module(module_name):
     """
     addon_path = os.path.dirname(os.path.realpath(addons.__file__))
     _idempotent_append(addon_path, sys.path)
-    if module_name.endswith(".py"):
+    if any(module_name.endswith(suffix) for suffix in importlib.machinery.SOURCE_SUFFIXES):
         module_path = module_name
         module_name, _ = _parse_module_as_path(module_path)
+        # File based import from here https://docs.python.org/3.6/library/importlib.html#importing-a-source-file-directly
         spec = importlib.util.spec_from_file_location(module_name, module_path)
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
+        # Set this module in sys.modules so later we can import the module by name when pickling things.
+        sys.modules[module_name] = mod
         return mod
     mod = importlib.import_module(module_name)
     return mod
