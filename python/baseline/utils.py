@@ -921,8 +921,9 @@ def _sniff_conll_file(f, delim=None):
             return len(parts)
 
 
+@exporter
 @str_file
-def read_conll(f, doc_pattern=None, delim=None, metadata=False):
+def read_conll(f, doc_pattern=None, delim=None, metadata=False, allow_comments=False, comment_pattern="#"):
     """Read from a conll file.
 
     :param f: `str` The file to read from.
@@ -932,44 +933,71 @@ def read_conll(f, doc_pattern=None, delim=None, metadata=False):
     :param delim: `str` The token between columns in the file
     :param metadata: `bool` Should meta data (lines starting with `#` before a
         sentence) be returned with our sentences.
+    :param allow_comments: `bool` Are comments (lines starting with `#`) allowed in the file.
 
     :returns: `Generator` The sentences or documents from the file.
     """
+    if metadata and not allow_comments:
+        raise ValueError(
+            "You have metadata set to `True` but allow_comments set to `False` you can't extract "
+            "metadata from a file that doesn't allow comments."
+        )
     if doc_pattern is not None:
-        read = read_conll_docs_md if metadata else read_conll_docs
-        for x in read(f, doc_pattern, delim=delim):
-            yield x
+        if metadata:
+            for x in read_conll_docs_md(f, doc_pattern, delim=delim, comment_pattern=comment_pattern):
+                yield x
+        else:
+            for x in read_conll_docs(f, doc_pattern, delim=delim, allow_comments=allow_comments, coment_pattern=comment_pattern):
+                yield x
     else:
-        read = read_conll_sentences_md if metadata else read_conll_sentences
-        for x in read(f, delim=delim):
-            yield x
+        if metadata:
+            for x in read_conll_sentences_md(f, delim=delim, comment_pattern=comment_pattern):
+                yield x
+        else:
+            for x in read_conll_sentences(f, delim=delim, allow_comments=allow_comments, comment_pattern=comment_pattern):
+                yield x
 
 
 @str_file
-def read_conll_sentences(f, delim=None):
+def read_conll_sentences(f, delim=None, allow_comments=True, comment_pattern="#"):
     """Read sentences from a conll file.
 
     :param f: `str` The file to read from.
     :param delim: `str` The token between columns in the file.
+
+    Note:
+        If you have a sentence where the first token is `#` it will get eaten by the
+        metadata. If this happens you need to set `allow_comments=True` and not have
+        comments in the file. If you have comments in the file and set this then
+        they will show up in the sentences
 
     :returns: `Generator[List[List[str]]]` A list of rows representing a sentence.
     """
     sentence = []
     for line in f:
         line = line.rstrip()
-        if line.startswith('#'): continue
+        # Comments are not allowed in the middle of a sentence so if we find a line that
+        # starts with # but we are in a sentence it must be a # as a token so we should
+        # not skip it
+        if allow_comments and not sentence and line.startswith(comment_pattern): continue
+        # Blank lines signal the end of a sentence
         if len(line) == 0:
+            # If we built a sentence yield it, this check allows multiple blank lines in a row
             if sentence:
                 yield sentence
+            # Reset the sentence
             sentence = []
             continue
+        # This is a normal row, we split and take the tokens.
         sentence.append(line.split(delim))
+    # If we have a sentence then the file didn't end with a new line, we yield the sentence
+    # so we don't lose it
     if sentence:
         yield sentence
 
 
 @str_file
-def read_conll_sentences_md(f, delim=None):
+def read_conll_sentences_md(f, delim=None, comment_pattern="#"):
     """Read sentences from a conll file.
 
     :param f: `str` The file to read from.
@@ -979,6 +1007,11 @@ def read_conll_sentences_md(f, delim=None):
         If there are document annotations in the conll file then they will show
         up in the meta data for what would be the first sentence of that doc
 
+        If you have a sentence where the first token is `#` it will show up in the
+        metadata. If this happens you'll need to update you comments to use a different
+        comment pattern, something like `# comment:` I recommend having a space in
+        you patten so it can't show up as a conll token
+
     :returns: `Generator[Tuple[List[List[str]], List[List[str]]]`
         The first element is the list or rows, the second is a list of comment
         lines that preceded that sentence in the file.
@@ -986,7 +1019,10 @@ def read_conll_sentences_md(f, delim=None):
     sentence, meta = [], []
     for line in f:
         line = line.rstrip()
-        if line.startswith('#'):
+        # Comments are not allowed in the middle of a sentence so if we find a line that
+        # starts with # but we are in a sentence it must be a # as a token so we should
+        # not skip it. If this is a comment we track it in our meta data list
+        if not sentence and line.startswith(comment_pattern):
             meta.append(line)
             continue
         if len(line) == 0:
@@ -1000,12 +1036,18 @@ def read_conll_sentences_md(f, delim=None):
 
 
 @str_file
-def read_conll_docs(f, doc_pattern="# begin doc", delim=None):
+def read_conll_docs(f, doc_pattern="# begin doc", delim=None, allow_comments=True, comment_pattern="#"):
     """Read sentences from a conll file.
 
     :param f: `str` The file to read from.
     :param doc_pattern: `str` The beginning of lines that represent new documents
     :param delim: `str` The token between columns in the file.
+
+    Note:
+        If you have a sentence where the first token is `#` it will show up in the
+        metadata. If this happens you'll need to update you comments to use a different
+        comment pattern, something like `# comment:` I recommend having a space in
+        you patten so it can't show up as a conll token
 
     :returns: `Generator[List[List[List[str]]]]`
         A document which is a list of sentences.
@@ -1013,13 +1055,14 @@ def read_conll_docs(f, doc_pattern="# begin doc", delim=None):
     doc, sentence = [], []
     for line in f:
         line = line.rstrip()
-        if line.startswith('#'):
-            if line.startswith(doc_pattern):
-                if doc:
-                    if sentence:
-                        doc.append(sentence)
-                    yield doc
-                    doc, sentence = [], []
+        if line.startswith(doc_pattern):
+            if doc:
+                if sentence:
+                    doc.append(sentence)
+                yield doc
+                doc, sentence = [], []
+            continue
+        elif allow_comments and not sentence and line.startswith(comment_pattern):
             continue
         if len(line) == 0:
             if sentence:
@@ -1034,12 +1077,18 @@ def read_conll_docs(f, doc_pattern="# begin doc", delim=None):
 
 
 @str_file
-def read_conll_docs_md(f, doc_pattern="# begin doc", delim=None):
+def read_conll_docs_md(f, doc_pattern="# begin doc", delim=None, comment_pattern="#"):
     """Read sentences from a conll file.
 
     :param f: `str` The file to read from.
     :param doc_pattern: `str` The beginning of lines that represent new documents
     :param delim: `str` The token between columns in the file.
+
+    Note:
+        If you have a sentence where the first token is `#` it will show up in the
+        metadata. If this happens you'll need to update you comments to use a different
+        comment pattern, something like `# comment:` I recommend having a space in
+        you patten so it can't show up as a conll token
 
     :returns: `Generator[Tuple[List[List[List[str]]], List[str]  List[List[str]]]`
         The first element is a document, the second is a list of comments
@@ -1047,22 +1096,23 @@ def read_conll_docs_md(f, doc_pattern="# begin doc", delim=None):
         since the last sentence. The last is a list of comments for each
         list in the document.
     """
-    doc_meta = []
-    doc, sentence, sent_meta, meta = [], [], [], []
+    doc, sentence, doc_meta, sent_meta, meta = [], [], [], [], []
     for line in f:
         line = line.rstrip()
-        if line.startswith('#'):
+        if line.startswith(doc_pattern):
+            new_doc_meta = meta
+            meta = []
+            new_doc_meta.append(line)
+            if doc:
+                if sentence:
+                    doc.append(sentence)
+                    sentence = []
+                yield doc, doc_meta, sent_meta
+                doc, sentence, sent_meta = [], [], []
+            doc_meta = new_doc_meta
+            continue
+        elif not sentence and line.startswith(comment_pattern):
             meta.append(line)
-            if line.startswith(doc_pattern):
-                new_doc_meta = meta
-                meta = []
-                if doc:
-                    if sentence:
-                        doc.append(sentence)
-                        sentence = []
-                    yield doc, doc_meta, sent_meta
-                    doc, sentence, sent_meta, meta = [], [], [], []
-                doc_meta = new_doc_meta
             continue
         if len(line) == 0:
             if sentence:
