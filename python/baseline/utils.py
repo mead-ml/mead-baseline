@@ -947,7 +947,7 @@ def read_conll(f, doc_pattern=None, delim=None, metadata=False, allow_comments=F
             for x in read_conll_docs_md(f, doc_pattern, delim=delim, comment_pattern=comment_pattern):
                 yield x
         else:
-            for x in read_conll_docs(f, doc_pattern, delim=delim, allow_comments=allow_comments, coment_pattern=comment_pattern):
+            for x in read_conll_docs(f, doc_pattern, delim=delim, allow_comments=allow_comments, comment_pattern=comment_pattern):
                 yield x
     else:
         if metadata:
