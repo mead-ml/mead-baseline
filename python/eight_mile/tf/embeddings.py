@@ -126,7 +126,7 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
         self.x = x
         e0 = tf.tensor_scatter_nd_update(
             self.W,
-            tf.constant(0, dtype=tf.int32, shape=[1, 1]),
+            tf.constant(Offsets.PAD, dtype=tf.int32, shape=[1, 1]),
             tf.zeros(shape=[1, self.dsz])
         )
         with tf.control_dependencies([e0]):

@@ -45,7 +45,7 @@ class LookupTableEmbeddings(PyTorchEmbeddings):
         self.finetune = kwargs.get('finetune', True)
         weights = kwargs.get('weights')
         if weights is None:
-            self.embeddings = nn.Embedding(self.vsz, self.dsz, padding_idx=0)
+            self.embeddings = nn.Embedding(self.vsz, self.dsz, padding_idx=Offsets.PAD)
         else:
             self.embeddings = pytorch_embedding(weights, self.finetune)
             # This makes sure that if you init with a weight and not vsz it will still be available

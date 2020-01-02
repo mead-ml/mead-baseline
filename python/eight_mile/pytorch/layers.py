@@ -1420,7 +1420,7 @@ class LangSequenceModel(nn.Module):
 
 
 def pytorch_embedding(weights, finetune=True):
-    lut = nn.Embedding(weights.shape[0], weights.shape[1], padding_idx=0)
+    lut = nn.Embedding(weights.shape[0], weights.shape[1], padding_idx=Offsets.PAD)
     del lut.weight
     lut.weight = nn.Parameter(torch.FloatTensor(weights),
                               requires_grad=finetune)
