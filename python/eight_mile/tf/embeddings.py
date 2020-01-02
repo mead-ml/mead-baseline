@@ -124,9 +124,9 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
         :return: The sub-graph output
         """
         self.x = x
-        e0 = tf.compat.v1.scatter_update(
+        e0 = tf.tensor_scatter_nd_update(
             self.W,
-            tf.constant(0, dtype=tf.int32, shape=[1]),
+            tf.constant(0, dtype=tf.int32, shape=[1, 1]),
             tf.zeros(shape=[1, self.dsz])
         )
         with tf.control_dependencies([e0]):
@@ -337,9 +337,7 @@ class LearnedPositionalMixin(PositionalMixin):
         super().build(input_shape)
 
     def positional(self, length):
-        e0 = tf.compat.v1.scatter_update(self.pos, tf.constant(0, dtype=tf.int32, shape=[1]), tf.zeros(shape=[1, self.get_dsz()]))
-        with tf.control_dependencies([e0]):
-            return tf.expand_dims(tf.nn.embedding_lookup(self.pos, tf.range(length, dtype=tf.int32)), 0)
+        return tf.expand_dims(tf.nn.embedding_lookup(self.pos, tf.range(length, dtype=tf.int32)), 0)
 
 
 class PositionalLookupTableEmbeddings(SinusoidalPositionalMixin, LookupTableEmbeddings):

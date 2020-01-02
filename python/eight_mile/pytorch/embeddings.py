@@ -207,7 +207,7 @@ class LearnedPositionalMixin(PositionalMixin):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.mxlen = int(kwargs.get('mxlen', 512))
-        self.pos_embeddings = nn.Embedding(self.mxlen, self.get_dsz(), padding_idx=0)
+        self.pos_embeddings = nn.Embedding(self.mxlen, self.get_dsz())
 
     def positional(self, length):
         return self.pos_embeddings(
