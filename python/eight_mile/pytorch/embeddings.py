@@ -45,7 +45,7 @@ class LookupTableEmbeddings(PyTorchEmbeddings):
         self.finetune = kwargs.get('finetune', True)
         weights = kwargs.get('weights')
         if weights is None:
-            self.embeddings = nn.Embedding(self.vsz, self.dsz, padding_idx=0)
+            self.embeddings = nn.Embedding(self.vsz, self.dsz, padding_idx=Offsets.PAD)
         else:
             self.embeddings = pytorch_embedding(weights, self.finetune)
             # This makes sure that if you init with a weight and not vsz it will still be available
@@ -207,7 +207,7 @@ class LearnedPositionalMixin(PositionalMixin):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.mxlen = int(kwargs.get('mxlen', 512))
-        self.pos_embeddings = nn.Embedding(self.mxlen, self.get_dsz(), padding_idx=0)
+        self.pos_embeddings = nn.Embedding(self.mxlen, self.get_dsz())
 
     def positional(self, length):
         return self.pos_embeddings(
