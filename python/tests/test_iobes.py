@@ -4,8 +4,11 @@ from baseline.utils import (
     to_chunks,
     to_chunks_iobes,
     convert_iob_to_bio,
-    convert_iobes_to_bio,
+    convert_iob_to_iobes,
+    convert_bio_to_iob,
     convert_bio_to_iobes,
+    convert_iobes_to_bio,
+    convert_iobes_to_iob,
 )
 
 # Most of these tests follow this general format. A random sequence of entity spans are generated,
@@ -96,6 +99,14 @@ def test_iob_bio():
     for _ in range(100):
         test()
 
+def test_bio_iob():
+    def test():
+        spans = generate_spans()
+        bio = generate_bio(spans)
+        gold_iob = generate_iob()
+        iob = convert_bio_to_iob(bio)
+        assert iob == gold_iob
+
 
 def test_bio_iobes():
     def test():
@@ -121,6 +132,37 @@ def test_iobes_bio():
         test()
 
 
+def test_iobes_iob():
+    def test():
+        spans = generate_spans()
+        iobes = generate_iobes(spans)
+        gold_iob = generate_iob(spans)
+        iob = convert_iobes_to_iob(iobes)
+        assert iob == gold_iob
+
+
+def test_iob_bio_cycle():
+    def test():
+        spans = generate_spans()
+        gold_iob = generate_iob(spans)
+        res = convert_bio_to_iob(convert_iob_to_bio(gold_iob))
+        assert res == gold_iob
+
+    for _ in range(100):
+        test()
+
+
+def test_bio_iob_cycle():
+    def test():
+        spans = generate_spans()
+        gold_bio = generate_bio(spans)
+        res = convert_iob_to_bio(convert_bio_to_iob(gold_bio))
+        assert res == gold_bio
+
+    for _ in range(100):
+        test()
+
+
 def test_iobes_bio_cycle():
     def test():
         spans = generate_spans()
@@ -138,6 +180,28 @@ def test_bio_iobes_cycle():
         gold_bio = generate_bio(spans)
         res = convert_iobes_to_bio(convert_bio_to_iobes(gold_bio))
         assert res == gold_bio
+
+    for _ in range(100):
+        test()
+
+
+def test_iobes_iob_cycle():
+    def test():
+        spans = generate_spans()
+        gold_iobes = generate_iobes(spans)
+        res = convert_iob_to_iobes(convert_iobes_to_iob(gold_iobes))
+        assert res == gold_iobes
+
+    for _ in range(100):
+        test()
+
+
+def test_iob_iobes_cycle():
+    def test():
+        spans = generate_spans()
+        gold_iob = generate_iob(spans)
+        res = convert_iobes_to_iob(convert_iob_to_iobes(gold_iob))
+        assert res == gold_iob
 
     for _ in range(100):
         test()
@@ -235,6 +299,20 @@ def test_iob_bio_i_after_o():
     in_ = ['O', 'I-X', 'O']
     gold = ['O', 'B-X', 'O']
     res = convert_iob_to_bio(in_)
+    assert res == gold
+
+
+def test_bio_iob_b_after_diff():
+    in_ = ['O', 'B-X', 'B-Y', 'O']
+    gold = ['O', 'I-X', 'I-Y', 'O']
+    res = convert_bio_to_iob(in_)
+    assert res == gold
+
+
+def test_bio_iob_b_after_same():
+    in_ = ['O', 'B-X', 'B-X', 'O']
+    gold = ['O', 'I-X', 'B-X', 'O']
+    res = convert_bio_to_iob(in_)
     assert res == gold
 
 

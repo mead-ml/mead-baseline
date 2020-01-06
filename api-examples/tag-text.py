@@ -21,6 +21,7 @@ parser.add_argument('--export_mapping', help='mapping between features and the f
                                                          'request, eg: token:word ner:ner. This should match with the '
                                                          '`exporter_field` definition in the mead config',
                     default=[], nargs='+')
+parser.add_argument("--batchsz", default=64)
 args = parser.parse_args()
 
 
@@ -60,7 +61,9 @@ else:
 
 m = bl.TaggerService.load(args.model, backend=args.backend, remote=args.remote,
                           name=args.name, preproc=args.preproc, device=args.device)
-for sen in m.predict(texts, export_mapping=create_export_mapping(args.export_mapping)):
-    for word_tag in sen:
-        print("{} {}".format(word_tag['text'], word_tag['label']))
-    print()
+batched = [texts[i:i+args.batchsz] for i in range(0, len(texts), args.batchsz)]
+for texts in batched:
+    for sen in m.predict(texts, export_mapping=create_export_mapping(args.export_mapping)):
+        for word_tag in sen:
+            print("{} {}".format(word_tag['text'], word_tag['label']))
+        print()
