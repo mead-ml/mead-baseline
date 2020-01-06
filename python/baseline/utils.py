@@ -837,6 +837,34 @@ def convert_iob_to_bio(seq):
 
 
 @exporter
+def convert_bio_to_iob(seq):
+    """Convert a sequence of BIO tags to IOB tags.
+
+    The difference between BIO and IOB is that in IOB the B- prefix is only
+    used to separate two chunks of the same type while in BIO the B- prefix
+    starts every chunk. To convert we only need to look at the B- tokens.
+    If they are following a chunk of the same type we leave it as a B-
+    otherwise it converts it back to an I-
+
+    :param seq: `List[str]` The list of BIO tags.
+
+    :returns: `List[str]` The list of IOB tags.
+    """
+    new = []
+    prev_ty = 'O'
+    for token in seq:
+        ty = "O" if token == "O" else token[2:]
+        # In IOB, `B-` is only needed if the previous type is the same as ours
+        if token.startswith('B-'):
+            # If we are different than the type before us convert to `I-`
+            if prev_ty != ty:
+                token = 'I-' + ty
+        new.append(token)
+        prev_ty = ty
+    return new
+
+
+@exporter
 def convert_bio_to_iobes(seq):
     """Convert a sequence of BIO tags to IOBES tags.
 
@@ -899,6 +927,17 @@ def convert_iob_to_iobes(seq):
     :returns: `List[str]` The list of IOBES tags.
     """
     return convert_bio_to_iobes(convert_iob_to_bio(seq))
+
+
+@exporter
+def convert_iobes_to_iob(seq):
+    """Convert a sequence of IOBES tags to IOB tags.
+
+    :param seq: `List[str]` The list of IOBES tags.
+
+    :returns: `List[str]` The list of IOB tags.
+    """
+    return convert_bio_to_iob(convert_iobes_to_bio(seq))
 
 
 @str_file
@@ -1129,6 +1168,7 @@ def read_conll_docs_md(f, doc_pattern="# begin doc", delim=None, comment_pattern
         yield doc, doc_meta, sent_meta
 
 
+@exporter
 @str_file(ifile='r', ofile='w')
 def convert_conll_file(ifile, ofile, convert, fields=[-1], delim=None):
     """Convert the tagging scheme in a conll file.
@@ -1202,6 +1242,7 @@ def to_spans(sequence, lut, span_type, verbose=False, delim="@"):
     return to_chunks(sequence, span_type, verbose, delim)
 
 
+@exporter
 def to_chunks(sequence, span_type, verbose=False, delim="@"):
     """Turn a sequence of tags into a list of chunks.
 
@@ -1774,6 +1815,7 @@ def ngrams(sentence, filtsz=3, joiner='@@'):
     return chunks
 
 
+@exporter
 @str_file
 def read_label_first_data(f):
     """Read data from a file where the first token in the label and each line is a single example.
@@ -1791,6 +1833,7 @@ def read_label_first_data(f):
     return labels, texts
 
 
+@exporter
 @str_file(w='w')
 def write_label_first_data(w, labels, texts):
     """Read data to a file where the first token in the label and each line is a single example.
