@@ -1,9 +1,20 @@
 import numpy as np
-from baseline.remote import RemoteModelREST, RemoteModelGRPC, register_remote
+from baseline.remote import (
+    RemoteModelREST,
+    RemoteModelGRPC,
+    register_remote,
+    RemoteRESTClassifier,
+    RemoteRESTTagger,
+    RemoteRESTSeq2Seq,
+    RemoteRESTEmbeddings,
+    RemoteGRPCClassifier,
+    RemoteGRPCTagger,
+    RemoteGRPCSeq2Seq,
+    RemoteGRPCEmbeddings,
+)
 
 
-@register_remote('http')
-class RemoteModelRESTTensorFlow(RemoteModelREST):
+class RemoteRESTTensorFlowMixin(RemoteModelREST):
 
     def create_request(self, examples):
         inputs = {}
@@ -16,13 +27,37 @@ class RemoteModelRESTTensorFlow(RemoteModelREST):
         request = {'signature_name': self.signature, 'inputs': inputs}
         return request
 
+@register_remote('http-classify')
+class RemoteRESTTensorFlowClassifier(RemoteRESTTensorFlowMixin, RemoteRESTClassifier): pass
+
+@register_remote('http-tagger')
+class RemoteRESTTensorFlowTagger(RemoteRESTTensorFlowMixin, RemoteRESTTagger): pass
+
+@register_remote('http-seq2seq')
+class RemoteRESTTensorFlowSeq2Seq(RemoteRESTTensorFlowMixin, RemoteRESTSeq2Seq): pass
+
+@register_remote('http-embeddings')
+class RemoteRESTTensorFlowEmbeddings(RemoteRESTTensorFlowMixin, RemoteRESTEmbeddings): pass
+
 
 @register_remote('grpc')
-class RemoteModelGRPCTensorFlow(RemoteModelGRPC): pass
+class RemoteGRPCTensorFlowMixin(RemoteModelGRPC): pass
+
+@register_remote('grpc-classify')
+class RemoteGRPCTensorFlowClassifier(RemoteGRPCTensorFlowMixin, RemoteGRPCClassifier): pass
+
+@register_remote('grpc-tagger')
+class RemoteGRPCTensorFlowTagger(RemoteGRPCTensorFlowMixin, RemoteGRPCTagger): pass
+
+@register_remote('grpc-seq2seq')
+class RemoteGRPCTensorFlowSeq2Seq(RemoteGRPCTensorFlowMixin, RemoteGRPCSeq2Seq): pass
+
+@register_remote('grpc-embeddings')
+class RemoteGRPCTensorFlowEmbeddings(RemoteGRPCTensorFlowMixin, RemoteGRPCEmbeddings): pass
 
 
 @register_remote('grpc-preproc')
-class RemoteModelGRPCTensorFlowPreproc(RemoteModelGRPCTensorFlow):
+class RemoteGRPCTensorFlowPreprocMixin(RemoteModelGRPC):
 
     def create_request(self, examples):
         # TODO: Remove TF dependency client side
@@ -47,9 +82,21 @@ class RemoteModelGRPCTensorFlowPreproc(RemoteModelGRPCTensorFlow):
                 )
         return request
 
+@register_remote('grpc-preproc-classify')
+class RemoteGRPCTensorFlowPreprocClassifier(RemoteGRPCTensorFlowPreprocMixin, RemoteGRPCClassifier): pass
+
+@register_remote('grpc-preproc-tagger')
+class RemoteGRPCTensorFlowPreprocTagger(RemoteGRPCTensorFlowPreprocMixin, RemoteGRPCTagger): pass
+
+@register_remote('grpc-preproc-seq2seq')
+class RemoteGRPCTensorFlowPreprocSeq2Seq(RemoteGRPCTensorFlowPreprocMixin, RemoteGRPCSeq2Seq): pass
+
+@register_remote('grpc-preproc-embeddings')
+class RemoteGRPCTensorFlowPreprocEmbeddings(RemoteGRPCTensorFlowPreprocMixin, RemoteGRPCEmbeddings): pass
+
 
 @register_remote('http-preproc')
-class RemoteModelRESTTensorFlowPreproc(RemoteModelRESTTensorFlow):
+class RemoteRESTTensorFlowPreprocMixin(RemoteModelREST):
 
     def create_request(self, examples):
         inputs = {}
@@ -64,3 +111,15 @@ class RemoteModelRESTTensorFlowPreproc(RemoteModelRESTTensorFlow):
                 else:
                     inputs[feature] = examples[feature]
         return {'signature_name': self.signature, 'inputs': inputs}
+
+@register_remote('http-preproc-classify')
+class RemoteRESTTensorFlowPreprocClassifier(RemoteRESTTensorFlowPreprocMixin, RemoteRESTClassifier): pass
+
+@register_remote('http-preproc-tagger')
+class RemoteRESTTensorFlowPreprocTagger(RemoteRESTTensorFlowPreprocMixin, RemoteRESTTagger): pass
+
+@register_remote('http-preproc-seq2seq')
+class RemoteRESTTensorFlowPreprocSeq2Seq(RemoteRESTTensorFlowPreprocMixin, RemoteRESTSeq2Seq): pass
+
+@register_remote('http-preproc-embeddings')
+class RemoteRESTTensorFlowPreprocEmbeddings(RemoteRESTTensorFlowPreprocMixin, RemoteRESTEmbeddings): pass
