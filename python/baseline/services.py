@@ -127,9 +127,10 @@ class Service(object):
             logging.debug("loading remote model")
             beam = int(kwargs.get('beam', 30))
             model, preproc = Service._create_remote_model(
-                directory, be, remote, name, cls.signature_name(), beam,
+                directory, be, remote, name, cls.task_name(), cls.signature_name(), beam,
                 preproc=kwargs.get('preproc', 'client'),
-                version=kwargs.get('version')
+                version=kwargs.get('version'),
+                remote_type=kwargs.get('remote_type'),
             )
             return cls(vocabs, vectorizers, model, preproc)
 
@@ -145,7 +146,7 @@ class Service(object):
         return cls(vocabs, vectorizers, model, 'client')
 
     @staticmethod
-    def _create_remote_model(directory, backend, remote, name, signature_name, beam, **kwargs):
+    def _create_remote_model(directory, backend, remote, name, task_name, signature_name, beam, **kwargs):
         """Reads the necessary information from the remote bundle to instatiate
         a client for a remote model.
 
@@ -170,8 +171,11 @@ class Service(object):
         if backend not in {'tf', 'pytorch'}:
             raise ValueError("only Tensorflow and Pytorch are currently supported for remote Services")
         import_user_module('baseline.{}.remote'.format(backend))
-        exp_type = 'http' if remote.startswith('http') else 'grpc'
-        exp_type = '{}-preproc'.format(exp_type) if preproc == 'server' else exp_type
+        exp_type = kwargs.get('remote_type')
+        if exp_type is None:
+            exp_type = 'http' if remote.startswith('http') else 'grpc'
+            exp_type = '{}-preproc'.format(exp_type) if preproc == 'server' else exp_type
+            exp_type = f'{exp_type}-{task_name}'
         model = create_remote(
             exp_type,
             remote=remote, name=name,

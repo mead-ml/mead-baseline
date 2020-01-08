@@ -156,52 +156,86 @@ class RemoteModelREST(RemoteModel):
         outcomes_list = self.deserialize_response(examples, outcomes_list)
         return outcomes_list
 
+
+@exporter
+class RemoteRESTSeq2Seq(RemoteModelREST):
+
     def deserialize_response(self, examples, predict_response):
         """Read the JSON response and decode it according to the signature.
 
         :param examples: Input examples
         :param predict_response: an HTTP/REST output
         """
-        if self.signature == 'suggest_text':
-            # s2s returns int values.
-            tensor = np.array(predict_response)
-            tensor = tensor.transpose(1, 2, 0)
-            return tensor
-
         num_ex = len(predict_response['classes'])
 
-        if self.signature == 'tag_text':
-            classes = predict_response['classes']
-            lengths = examples[self.lengths_key]
-            result = []
-            for i in range(num_ex):
-                length_i = lengths[i]
-                classes_i = classes[i]
-                if self.return_labels:
-                    d = [np.array(classes_i[j]) for j in range(length_i)]
-                else:
-                    d = [np.array(np.int32(classes_i[j])) for j in range(length_i)]
-                result.append(d)
+        # s2s returns int values.
+        tensor = np.array(predict_response)
+        tensor = tensor.transpose(1, 2, 0)
+        return tensor
 
-            return result
 
-        if self.signature == 'predict_text':
-            scores = predict_response['scores']
-            classes = predict_response['classes']
-            result = []
-            for i in range(num_ex):
-                score_i = scores[i]
-                classes_i = classes[i]
-                if self.return_labels:
-                    d = [(c, np.float32(s)) for c, s in zip(classes_i, score_i)]
-                else:
-                    d = [(np.int32(c), np.float32(s)) for c, s in zip(classes_i, score_i)]
-                result.append(d)
+@exporter
+class RemoteRESTTagger(RemoteModelREST):
 
-        if self.signature == 'embed_text':
-            result = np.array(predict_response['scores'])
+    def deserialize_response(self, examples, predict_response):
+        """Read the JSON response and decode it according to the signature.
+
+        :param examples: Input examples
+        :param predict_response: an HTTP/REST output
+        """
+        num_ex = len(predict_response['classes'])
+
+        classes = predict_response['classes']
+        lengths = examples[self.lengths_key]
+        result = []
+        for i in range(num_ex):
+            length_i = lengths[i]
+            classes_i = classes[i]
+            if self.return_labels:
+                d = [np.array(classes_i[j]) for j in range(length_i)]
+            else:
+                d = [np.array(np.int32(classes_i[j])) for j in range(length_i)]
+            result.append(d)
 
         return result
+
+
+@exporter
+class RemoteRESTClassifier(RemoteModelREST):
+
+    def deserialize_response(self, examples, predict_response):
+        """Read the JSON response and decode it according to the signature.
+
+        :param examples: Input examples
+        :param predict_response: an HTTP/REST output
+        """
+        num_ex = len(predict_response['classes'])
+        scores = predict_response['scores']
+        classes = predict_response['classes']
+        result = []
+        for i in range(num_ex):
+            score_i = scores[i]
+            classes_i = classes[i]
+            if self.return_labels:
+                d = [(c, np.float32(s)) for c, s in zip(classes_i, score_i)]
+            else:
+                d = [(np.int32(c), np.float32(s)) for c, s in zip(classes_i, score_i)]
+            result.append(d)
+        return result
+
+
+@exporter
+class RemoteRESTEmbeddings(RemoteModelREST):
+
+    def deserialize_response(self, examples, predict_response):
+        """Read the JSON response and decode it according to the signature.
+
+        :param examples: Input examples
+        :param predict_response: an HTTP/REST output
+        """
+        num_ex = len(predict_response['classes'])
+
+        return np.array(predict_response['scores'])
 
 
 @exporter
@@ -286,6 +320,10 @@ class RemoteModelGRPC(RemoteModel):
 
         return request
 
+
+@exporter
+class RemoteGRPCSeq2Seq(RemoteModelGRPC):
+
     def deserialize_response(self, examples, predict_response):
         """
         read the protobuf response from tensorflow serving and decode it according
@@ -304,42 +342,103 @@ class RemoteModelGRPC(RemoteModel):
         example_len = predict_response.outputs.get('classes').tensor_shape.dim[1].size
         num_examples = predict_response.outputs.get('classes').tensor_shape.dim[0].size
 
-        if self.signature == 'suggest_text':
-            # s2s returns int values.
-            classes = predict_response.outputs.get('classes')
-            shape = [dim.size for dim in classes.tensor_shape.dim]
-            results = np.reshape(np.array(classes.int_val), shape)
-            results = results.transpose(1, 2, 0)
-            return results
+        # s2s returns int values.
+        classes = predict_response.outputs.get('classes')
+        shape = [dim.size for dim in classes.tensor_shape.dim]
+        results = np.reshape(np.array(classes.int_val), shape)
+        results = results.transpose(1, 2, 0)
+        return results
 
-        if self.signature == 'tag_text':
-            if self.return_labels:
-                classes = predict_response.outputs.get('classes').string_val
-            else:
-                classes = predict_response.outputs.get('classes').int_val
-            lengths = examples[self.lengths_key]
-            result = []
-            for i in range(num_examples):
-                length = lengths[i]
-                tmp = [self.decode_output(x) for x in classes[example_len*i:example_len*(i+1)][:length]]
-                result.append(tmp)
 
-            return result
+@exporter
+class RemoteGRPCTagger(RemoteModelGRPC):
 
-        if self.signature == 'predict_text':
-            scores = predict_response.outputs.get('scores').float_val
-            if self.return_labels:
-                classes = predict_response.outputs.get('classes').string_val
-            else:
-                classes = predict_response.outputs.get('classes').int_val
-            result = []
-            length = len(self.get_labels())
-            for i in range(num_examples):   # wrap in numpy because the local models send that dtype out
-                d = [(self.decode_output(c), np.float32(s)) for c, s in zip(classes[example_len*i:example_len*(i+1)][:length], scores[length*i:length*(i+1)][:length])]
-                result.append(d)
-            return result
+    def deserialize_response(self, examples, predict_response):
+        """
+        read the protobuf response from tensorflow serving and decode it according
+        to the signature.
 
-        if self.signature == 'embed_text':
-            scores = predict_response.outputs.get('scores')
-            shape = [dim.size for dim in scores.tensor_shape.dim]
-            return np.reshape(np.array(scores.float_val), shape)
+        here's the relevant piece of the proto:
+            map<string, TensorProto> inputs = 2;
+
+        the predict endpoint happens to have the ability to filter output for certain keys, but
+        we do not support this currently. There are two keys we want to extract: classes and scores.
+
+        :params predict_response: a PredictResponse protobuf object,
+                    as defined in tensorflow_serving proto files
+        """
+
+        example_len = predict_response.outputs.get('classes').tensor_shape.dim[1].size
+        num_examples = predict_response.outputs.get('classes').tensor_shape.dim[0].size
+
+        if self.return_labels:
+            classes = predict_response.outputs.get('classes').string_val
+        else:
+            classes = predict_response.outputs.get('classes').int_val
+        lengths = examples[self.lengths_key]
+        result = []
+        for i in range(num_examples):
+            length = lengths[i]
+            tmp = [self.decode_output(x) for x in classes[example_len*i:example_len*(i+1)][:length]]
+            result.append(tmp)
+
+        return result
+
+
+@exporter
+class RemoteGRPCClassifier(RemoteModelGRPC):
+
+    def deserialize_response(self, examples, predict_response):
+        """
+        read the protobuf response from tensorflow serving and decode it according
+        to the signature.
+
+        here's the relevant piece of the proto:
+            map<string, TensorProto> inputs = 2;
+
+        the predict endpoint happens to have the ability to filter output for certain keys, but
+        we do not support this currently. There are two keys we want to extract: classes and scores.
+
+        :params predict_response: a PredictResponse protobuf object,
+                    as defined in tensorflow_serving proto files
+        """
+
+        example_len = predict_response.outputs.get('classes').tensor_shape.dim[1].size
+        num_examples = predict_response.outputs.get('classes').tensor_shape.dim[0].size
+
+        scores = predict_response.outputs.get('scores').float_val
+        if self.return_labels:
+            classes = predict_response.outputs.get('classes').string_val
+        else:
+            classes = predict_response.outputs.get('classes').int_val
+        result = []
+        length = len(self.get_labels())
+        for i in range(num_examples):   # wrap in numpy because the local models send that dtype out
+            d = [(self.decode_output(c), np.float32(s)) for c, s in zip(classes[example_len*i:example_len*(i+1)][:length], scores[length*i:length*(i+1)][:length])]
+            result.append(d)
+        return result
+
+
+@exporter
+class RemoteGRPCEmbeddings(RemoteModelGRPC):
+
+    def deserialize_response(self, examples, predict_response):
+        """
+        read the protobuf response from tensorflow serving and decode it according
+        to the signature.
+
+        here's the relevant piece of the proto:
+            map<string, TensorProto> inputs = 2;
+
+        the predict endpoint happens to have the ability to filter output for certain keys, but
+        we do not support this currently. There are two keys we want to extract: classes and scores.
+
+        :params predict_response: a PredictResponse protobuf object,
+                    as defined in tensorflow_serving proto files
+        """
+
+        example_len = predict_response.outputs.get('classes').tensor_shape.dim[1].size
+        num_examples = predict_response.outputs.get('classes').tensor_shape.dim[0].size
+        scores = predict_response.outputs.get('scores')
+        shape = [dim.size for dim in scores.tensor_shape.dim]
+        return np.reshape(np.array(scores.float_val), shape)
