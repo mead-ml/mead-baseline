@@ -168,8 +168,8 @@ class Service(object):
         return_labels = bool(assets['metadata']['return_labels'])
         version = kwargs.get('version')
 
-        if backend not in {'tf', 'pytorch'}:
-            raise ValueError("only Tensorflow and Pytorch are currently supported for remote Services")
+        if backend not in {'tf'}:
+            raise ValueError("only Tensorflow is currently supported for remote Services")
         import_user_module('baseline.{}.remote'.format(backend))
         exp_type = kwargs.get('remote_type')
         if exp_type is None:
