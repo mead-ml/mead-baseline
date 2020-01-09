@@ -245,7 +245,7 @@ class ClassifierService(Service):
 class EmbeddingsService(Service):
     @classmethod
     def task_name(cls):
-        return 'servable_embeddings'
+        return 'servable-embeddings'
 
     @classmethod
     def signature_name(cls):

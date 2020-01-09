@@ -36,7 +36,7 @@ class RemoteRESTTensorFlowTagger(RemoteRESTTensorFlowMixin, RemoteRESTTagger): p
 @register_remote('http-seq2seq')
 class RemoteRESTTensorFlowSeq2Seq(RemoteRESTTensorFlowMixin, RemoteRESTSeq2Seq): pass
 
-@register_remote('http-embeddings')
+@register_remote('http-servable-embeddings')
 class RemoteRESTTensorFlowEmbeddings(RemoteRESTTensorFlowMixin, RemoteRESTEmbeddings): pass
 
 
@@ -52,7 +52,7 @@ class RemoteGRPCTensorFlowTagger(RemoteGRPCTensorFlowMixin, RemoteGRPCTagger): p
 @register_remote('grpc-seq2seq')
 class RemoteGRPCTensorFlowSeq2Seq(RemoteGRPCTensorFlowMixin, RemoteGRPCSeq2Seq): pass
 
-@register_remote('grpc-embeddings')
+@register_remote('grpc-servable-embeddings')
 class RemoteGRPCTensorFlowEmbeddings(RemoteGRPCTensorFlowMixin, RemoteGRPCEmbeddings): pass
 
 
@@ -91,7 +91,7 @@ class RemoteGRPCTensorFlowPreprocTagger(RemoteGRPCTensorFlowPreprocMixin, Remote
 @register_remote('grpc-preproc-seq2seq')
 class RemoteGRPCTensorFlowPreprocSeq2Seq(RemoteGRPCTensorFlowPreprocMixin, RemoteGRPCSeq2Seq): pass
 
-@register_remote('grpc-preproc-embeddings')
+@register_remote('grpc-preproc-servable-embeddings')
 class RemoteGRPCTensorFlowPreprocEmbeddings(RemoteGRPCTensorFlowPreprocMixin, RemoteGRPCEmbeddings): pass
 
 
@@ -121,5 +121,5 @@ class RemoteRESTTensorFlowPreprocTagger(RemoteRESTTensorFlowPreprocMixin, Remote
 @register_remote('http-preproc-seq2seq')
 class RemoteRESTTensorFlowPreprocSeq2Seq(RemoteRESTTensorFlowPreprocMixin, RemoteRESTSeq2Seq): pass
 
-@register_remote('http-preproc-embeddings')
+@register_remote('http-preproc-servable-embeddings')
 class RemoteRESTTensorFlowPreprocEmbeddings(RemoteRESTTensorFlowPreprocMixin, RemoteRESTEmbeddings): pass
