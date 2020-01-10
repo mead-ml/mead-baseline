@@ -423,6 +423,7 @@ class LearnedPositionalCharLSTMEmbeddings(LearnedPositionalMixin, CharLSTMEmbedd
 
 # All the train functions don't have the large lut init codes anymore and it needs a placeholder
 # So lets skip it for now
+# https://stackoverflow.com/questions/43288147/how-do-i-use-a-very-large-2m-word-embedding-in-tensorflow
 # class LargeLookupTableEmbeddings(LookupTableEmbeddings):
 #     """Create a really large embedding matrix in tensorflow.
 

@@ -4,12 +4,11 @@ import logging
 from typing import List
 from collections import Counter
 import numpy as np
-import eight_mile
 import baseline
 from copy import deepcopy
 from baseline.reporting import create_reporting
-from eight_mile.utils import (
-    export,
+from baseline.utils import (
+    exporter,
     revlut,
     Offsets,
     get_env_gpus,
@@ -32,7 +31,7 @@ from mead.utils import (
 from baseline.train import calc_lr_params
 
 __all__ = []
-exporter = export(__all__)
+export = exporter(__all__)
 logger = logging.getLogger('mead')
 
 
@@ -67,7 +66,7 @@ class Backend(object):
     def load(self, task_name=None):
         base_pkg_name = 'baseline.{}'.format(self.name)
         mod = import_user_module(base_pkg_name)
-        import_user_module('eight_mile.{}.optz'.format(self.name))
+        import_user_module('baseline.{}.optz'.format(self.name))
         import_user_module('baseline.{}.embeddings'.format(self.name))
         import_user_module('mead.{}.exporters'.format(self.name))
         if task_name is not None:
@@ -76,12 +75,12 @@ class Backend(object):
 
 
 TASK_REGISTRY = {}
-@exporter
+@export
 def register_task(cls):
     TASK_REGISTRY[cls.task_name()] = cls
     return cls
 
-@exporter
+@export
 def get_task_registry():
     return TASK_REGISTRY
 
@@ -98,7 +97,7 @@ def assert_unique_feature_names(names: List[str]) -> None:
         raise ValueError(f"Features names must be unique, found duplicates {dups}")
 
 
-@exporter
+@export
 class Task(object):
     """Basic building block for a task of NLP problems, e.g. `tagger`, `classify`, etc.
     """
@@ -343,13 +342,13 @@ class Task(object):
                 embed_sha1 = embeddings_set[embed_label].get('sha1', None)
                 embed_file = EmbeddingDownloader(embed_file, embed_dsz, embed_sha1, self.data_download_cache).download()
 
-                embedding_bundle = eight_mile.embeddings.load_embeddings(name, embed_file=embed_file, known_vocab=vocabs[name], embed_type=embed_type, **embeddings_section)
+                embedding_bundle = baseline.embeddings.load_embeddings(name, embed_file=embed_file, known_vocab=vocabs[name], embed_type=embed_type, **embeddings_section)
 
                 embeddings_map[name] = embedding_bundle['embeddings']
                 out_vocabs[name] = embedding_bundle['vocab']
             else:
                 dsz = embeddings_section.pop('dsz')
-                embedding_bundle = eight_mile.embeddings.load_embeddings(name, dsz=dsz, known_vocab=vocabs[name], embed_type=embed_type, **embeddings_section)
+                embedding_bundle = baseline.embeddings.load_embeddings(name, dsz=dsz, known_vocab=vocabs[name], embed_type=embed_type, **embeddings_section)
                 embeddings_map[name] = embedding_bundle['embeddings']
                 out_vocabs[name] = embedding_bundle['vocab']
 
@@ -376,7 +375,7 @@ class Task(object):
         return bsz, vbsz, tbsz
 
 
-@exporter
+@export
 @register_task
 class ClassifierTask(Task):
 
@@ -468,7 +467,7 @@ class ClassifierTask(Task):
             )
 
 
-@exporter
+@export
 @register_task
 class TaggerTask(Task):
 
@@ -592,7 +591,7 @@ class TaggerTask(Task):
 
 
 
-@exporter
+@export
 @register_task
 class EncoderDecoderTask(Task):
 
@@ -717,7 +716,7 @@ class EncoderDecoderTask(Task):
         return super().train(checkpoint)
 
 
-@exporter
+@export
 @register_task
 class LanguageModelingTask(Task):
 

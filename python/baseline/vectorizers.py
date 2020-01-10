@@ -1,13 +1,13 @@
 import numpy as np
-from eight_mile.utils import export, optional_params, listify, register, Offsets
+from baseline.utils import exporter, optional_params, listify, register, Offsets
 import collections
 
 
 __all__ = []
-exporter = export(__all__)
+export = exporter(__all__)
 
 
-@exporter
+@export
 class Vectorizer(object):
 
     def __init__(self):
@@ -32,19 +32,19 @@ class Vectorizer(object):
 BASELINE_VECTORIZERS = {}
 
 
-@exporter
+@export
 @optional_params
 def register_vectorizer(cls, name=None):
     """Register a function as a plug-in"""
     return register(cls, BASELINE_VECTORIZERS, name, 'vectorizer')
 
 
-@exporter
+@export
 def identity_trans_fn(x):
     return x
 
 
-@exporter
+@export
 class AbstractVectorizer(Vectorizer):
 
     def __init__(self, transform_fn=None):
@@ -65,7 +65,7 @@ class AbstractVectorizer(Vectorizer):
             yield value
 
 
-@exporter
+@export
 @register_vectorizer(name='token1d')
 class Token1DVectorizer(AbstractVectorizer):
 
@@ -111,7 +111,7 @@ class Token1DVectorizer(AbstractVectorizer):
         return self.mxlen,
 
 
-@exporter
+@export
 class GOVectorizer(Vectorizer):
 
     def __init__(self, vectorizer):
@@ -146,7 +146,7 @@ def _token_iterator(vectorizer, tokens):
         yield vectorizer.delim.join(token)
 
 
-@exporter
+@export
 @register_vectorizer(name='dict1d')
 class Dict1DVectorizer(Token1DVectorizer):
 
@@ -159,7 +159,7 @@ class Dict1DVectorizer(Token1DVectorizer):
         return _token_iterator(self, tokens)
 
 
-@exporter
+@export
 class AbstractCharVectorizer(AbstractVectorizer):
 
     def __init__(self, transform_fn=None):
@@ -174,7 +174,7 @@ class AbstractCharVectorizer(AbstractVectorizer):
             yield EOW
 
 
-@exporter
+@export
 @register_vectorizer(name='char2d')
 class Char2DVectorizer(AbstractCharVectorizer):
 
@@ -243,7 +243,7 @@ class Char2DVectorizer(AbstractCharVectorizer):
         return self.mxlen, self.mxwlen
 
 
-@exporter
+@export
 @register_vectorizer(name='dict2d')
 class Dict2DVectorizer(Char2DVectorizer):
 
@@ -256,7 +256,7 @@ class Dict2DVectorizer(Char2DVectorizer):
         return _token_iterator(self, tokens)
 
 
-@exporter
+@export
 @register_vectorizer(name='char1d')
 class Char1DVectorizer(AbstractCharVectorizer):
 
@@ -372,7 +372,7 @@ class DictTextNGramVectorizer(TextNGramVectorizer):
 
 
 
-@exporter
+@export
 def create_vectorizer(**kwargs):
     vec_type = kwargs.get('vectorizer_type', kwargs.get('type', 'token1d'))
     Constructor = BASELINE_VECTORIZERS.get(vec_type)

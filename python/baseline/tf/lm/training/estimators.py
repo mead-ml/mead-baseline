@@ -1,4 +1,5 @@
 import os
+import numpy as np
 import tensorflow as tf
 from eight_mile.tf.optz import optimizer
 from baseline.tf.tfy import SET_TRAIN_FLAG

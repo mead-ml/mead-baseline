@@ -1,19 +1,19 @@
 import numpy as np
 from eight_mile.utils import (
     optional_params,
-    export
+    exporter
 )
 from eight_mile.w2v import PretrainedEmbeddingsModel, RandomInitVecModel
 
 __all__ = []
-exporter = export(__all__)
+export = exporter(__all__)
 
 
 MEAD_LAYERS_EMBEDDINGS = {}
 MEAD_LAYERS_EMBEDDINGS_LOADERS = {}
 
 
-@exporter
+@export
 @optional_params
 def register_embeddings(cls, name=None):
     """Register a function as a plug-in"""
@@ -30,14 +30,14 @@ def register_embeddings(cls, name=None):
     return cls
 
 
-@exporter
+@export
 def create_embeddings(**kwargs):
     embed_type = kwargs.get('embed_type', 'default')
     Constructor = MEAD_LAYERS_EMBEDDINGS.get(embed_type)
     return Constructor(**kwargs)
 
 
-@exporter
+@export
 def load_embeddings(name, **kwargs):
     """This method negotiates loading an embeddings sub-graph AND a corresponding vocabulary (lookup from word to int)
 

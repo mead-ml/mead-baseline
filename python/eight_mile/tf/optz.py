@@ -1,12 +1,25 @@
 import logging
 import tensorflow as tf
-from eight_mile.optz import register_lr_scheduler, create_lr_scheduler, WarmupLearningRateScheduler, LearningRateScheduler, CompositeLRScheduler
-from eight_mile.utils import get_version, export
+from eight_mile.utils import get_version, exporter
+from eight_mile.optz import create_lr_scheduler, register_lr_scheduler
+from eight_mile.optz import (
+    LearningRateScheduler,
+    ConstantScheduler,
+    WarmupLearningRateScheduler,
+    WarmupLinearScheduler,
+    CyclicLRScheduler,
+    PiecewiseDecayScheduler,
+    ZarembaDecayScheduler,
+    CosineDecayScheduler,
+    InverseTimeDecayScheduler,
+    ExponentialDecayScheduler,
+    CompositeLRScheduler,
+)
+
 logger = logging.getLogger('mead.layers')
-
-
 __all__ = []
-exporter = export(__all__)
+export = exporter(__all__)
+
 
 if get_version(tf) < 2:
 
@@ -162,7 +175,6 @@ else:
             return type(self).__name__ + "()"
 
 
-    @exporter
     @register_lr_scheduler('warmup_linear')
     class WarmupLinearSchedulerTensorFlow2(WarmupLearningRateScheduler, tf.keras.optimizers.schedules.LearningRateSchedule):
 
@@ -243,7 +255,7 @@ else:
             super().__init__(lr, decay_steps, decay_rate, staircase, kwargs.get('name'))
 
 
-@exporter
+@export
 class AdamWOptimizer(tf.compat.v1.train.Optimizer):
     """A basic Adam optimizer that includes "correct" L2 weight decay.
 
@@ -315,7 +327,7 @@ class AdamWOptimizer(tf.compat.v1.train.Optimizer):
         return tf.group(*assignments, name=name)
 
 
-@exporter
+@export
 def optimizer(loss_fn, **kwargs):
 
     global_step = tf.train.get_or_create_global_step()
@@ -374,7 +386,7 @@ def clip_gradient_by_norm(x, norm):
 # Warning, sparse update ops dont work on GPU
 # In TF 2 this leads to errors, particularly with SGD w/ Momentum and Adadelta
 # https://github.com/tensorflow/tensorflow/issues/31291
-@exporter
+@export
 class EagerOptimizer(object):
 
     def __init__(self, loss, optimizer=None, **kwargs):

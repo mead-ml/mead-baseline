@@ -1,19 +1,19 @@
 from baseline.tf.tfy import *
-from baseline.utils import ls_props, read_json, Offsets, export
+from baseline.utils import ls_props, read_json, Offsets, exporter
 from baseline.model import register_decoder, register_arc_policy, create_seq2seq_arc_policy
 from baseline.tf.embeddings import *
 from baseline.tf.transformer import transformer_decoder_stack, subsequent_mask
 
 
 __all__ = []
-exporter = export(__all__)
+export = exporter(__all__)
 
 
 
 
 import tensorflow.contrib.seq2seq as tfcontrib_seq2seq
 
-@exporter
+@export
 class DecoderBase(tf.keras.layers.Layer):
 
     def __init__(self, tgt_embedding, name='decoder', **kwargs):
@@ -146,7 +146,7 @@ class TransformerDecoder(DecoderBase):
         return self.best
 
 
-@exporter
+@export
 class ArcPolicy(object):
 
     def __init__(self):

@@ -14,7 +14,7 @@ from baseline.tf.lm.training.utils import to_tensors, SHUF_BUF_SZ, NUM_PREFETCH
 def loss_with_state(model, h, x, y):
     x["h"] = h
     logits, h = model(x)
-    vsz = model.embeddings[model.tgt_key].vsz
+    vsz = model.embeddings[model.tgt_key].get_vsz()
     targets = tf.reshape(y, [-1])
     bt_x_v = tf.nn.log_softmax(tf.reshape(logits, [-1, vsz]), axis=-1)
     one_hots = tf.one_hot(targets, vsz)
@@ -25,7 +25,7 @@ def loss_with_state(model, h, x, y):
 
 def loss_without_state(model, x, y):
     logits = model(x)
-    vsz = model.embeddings[model.tgt_key].vsz
+    vsz = model.embeddings[model.tgt_key].get_vsz()
     targets = tf.reshape(y, [-1])
     bt_x_v = tf.nn.log_softmax(tf.reshape(logits, [-1, vsz]), axis=-1)
     one_hots = tf.one_hot(targets, vsz)
@@ -161,7 +161,7 @@ class LanguageModelTrainerEagerTf(Trainer):
                 loss_value, h = loss_with_state(self.model, h, features, y)
             else:
                 loss_value = loss_without_state(self.model, features, y)
-            loss_value = loss_Value.numpy()
+            loss_value = loss_value.numpy()
             toks = self._num_toks(y)
             total_loss += loss_value * toks
             total_toks += toks

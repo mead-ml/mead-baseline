@@ -8,17 +8,17 @@ import tarfile
 import zipfile
 import hashlib
 import shutil
-from eight_mile.mime_type import mime_type
+from baseline.mime_type import mime_type
 from baseline.progress import create_progress_bar
-from baseline.utils import export, read_json, write_json
+from baseline.utils import exporter, read_json, write_json, validate_url
 
 __all__ = []
-exporter = export(__all__)
+export = exporter(__all__)
 
 logger = logging.getLogger('mead')
 DATA_CACHE_CONF = "data-cache.json"
 
-@exporter
+@export
 def delete_old_copy(file_name):
     if os.path.exists(file_name):
         if os.path.isfile(file_name):
@@ -28,7 +28,7 @@ def delete_old_copy(file_name):
     return file_name
 
 
-@exporter
+@export
 def extract_gzip(file_loc):
     temp_file = delete_old_copy("{}.1".format(file_loc))
     with gzip.open(file_loc, 'rb') as f_in:
@@ -41,7 +41,7 @@ def extract_gzip(file_loc):
         return file_loc
 
 
-@exporter
+@export
 def extract_tar(file_loc):
     temp_file = delete_old_copy("{}.1".format(file_loc))
     with tarfile.open(file_loc, "r") as tar_ref:
@@ -51,7 +51,7 @@ def extract_tar(file_loc):
     return os.path.join(temp_file, os.listdir(temp_file)[0])
 
 
-@exporter
+@export
 def extract_zip(file_loc):
     temp_file = delete_old_copy("{}.1".format(file_loc))
     with zipfile.ZipFile(file_loc, "r") as zip_ref:
@@ -59,7 +59,7 @@ def extract_zip(file_loc):
     return temp_file
 
 
-@exporter
+@export
 def extractor(filepath, cache_dir, extractor_func):
     with open(filepath, 'rb') as f:
         sha1 = hashlib.sha1(f.read()).hexdigest()
@@ -74,7 +74,7 @@ def extractor(filepath, cache_dir, extractor_func):
     return path_to_save_sha1
 
 
-@exporter
+@export
 def web_downloader(url):
     # Use a class to simulate the nonlocal keyword in 2.7
     class Context: pg = None
@@ -93,19 +93,7 @@ def web_downloader(url):
     return path_to_save
 
 
-@exporter
-def validate_url(url):
-    regex = re.compile(
-        r'^(?:http|ftp)s?://'  # http:// or https://
-        r'(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+(?:[A-Z]{2,6}\.?|[A-Z0-9-]{2,}\.?)|'  # domain...
-        r'localhost|'  # localhost...
-        r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})'  # ...or ip
-        r'(?::\d+)?'  # optional port
-        r'(?:/?|[/?]\S+)$', re.IGNORECASE)
-    return re.match(regex, url) is not None
-
-
-@exporter
+@export
 def update_cache(key, data_download_cache):
     dcache = read_json(os.path.join(data_download_cache, DATA_CACHE_CONF))
     if key not in dcache:
@@ -125,7 +113,7 @@ def _verify_file(file_loc):
     return True
 
 
-@exporter
+@export
 def is_file_correct(file_loc, data_dcache=None, key=None):
     """check if the file location mentioned in the json file is correct, i.e.,
     exists and not corrupted. This is needed when the direct download link/ path for a file
@@ -152,7 +140,7 @@ def is_file_correct(file_loc, data_dcache=None, key=None):
     return False
 
 
-@exporter
+@export
 def is_dir_correct(dir_loc, dataset_desc, data_dcache, key, ignore_file_check=False):
     """check if the directory extracted from the zip location mentioned in the datasets json file is correct, i.e.,
     all files inside exist and are not corrupted. If not, we will update the cache try to re-download them.
@@ -177,7 +165,7 @@ def is_dir_correct(dir_loc, dataset_desc, data_dcache, key, ignore_file_check=Fa
     return True
 
 
-@exporter
+@export
 class Downloader(object):
     ZIPD = {'application/gzip': extract_gzip, 'application/zip': extract_zip}
 
@@ -190,7 +178,7 @@ class Downloader(object):
         pass
 
 
-@exporter
+@export
 class SingleFileDownloader(Downloader):
     def __init__(self, dataset_file, data_download_cache, cache_ignore=False):
         super(SingleFileDownloader, self).__init__(data_download_cache, cache_ignore)
@@ -220,7 +208,7 @@ class SingleFileDownloader(Downloader):
         raise RuntimeError("the file [{}] is not in cache and can not be downloaded".format(file_loc))
 
 
-@exporter
+@export
 class DataDownloader(Downloader):
     def __init__(self, dataset_desc, data_download_cache, enc_dec=False, cache_ignore=False):
         super(DataDownloader, self).__init__(data_download_cache, cache_ignore)
@@ -265,7 +253,7 @@ class DataDownloader(Downloader):
                 # these files can not be downloaded because there's a post processing on them.
 
 
-@exporter
+@export
 class EmbeddingDownloader(Downloader):
     def __init__(self, embedding_file, embedding_dsz, embedding_sha1, data_download_cache, cache_ignore=False):
         super(EmbeddingDownloader, self).__init__(data_download_cache, cache_ignore)

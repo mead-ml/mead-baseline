@@ -8,29 +8,32 @@ import hashlib
 import logging
 import zipfile
 import platform
+from functools import wraps
 from operator import lt, le, gt, ge
 from contextlib import contextmanager
+from typing import Dict, List, Set, Optional
 import numpy as np
 import collections
-#from eight_mile.utils import export, optional_params
+import eight_mile
 from eight_mile.utils import *
-from functools import partial, update_wrapper, wraps
+
 
 __all__ = []
+__all__.extend(eight_mile.utils.__all__)
 logger = logging.getLogger('baseline')
 # These are inputs to models that shouldn't be saved out
 MAGIC_VARS = ['sess', 'tgt', 'y', 'lengths', 'gpus']
 MAGIC_VARS = ['sess', 'tgt', 'y', 'lengths']
 
 
-exporter = export(__all__)
+export = exporter(__all__)
 
 
-exporter(str2bool)
+export(str2bool)
 
 
-@exporter
-def normalize_backend(name):
+@export
+def normalize_backend(name: str) -> str:
     allowed_backends = {'tf', 'pytorch'}
     name = name.lower()
     if name == 'tensorflow':
@@ -42,7 +45,7 @@ def normalize_backend(name):
     return name
 
 
-@exporter
+@export
 def get_console_logger(name, level=None, env_key='LOG_LEVEL'):
     """A small default logging setup.
 
@@ -86,13 +89,14 @@ def redirect(from_stream, to_stream):
         raise(e)
 
 
+@export
 @contextmanager
 def suppress_output():
     with open(os.devnull, 'w') as devnull, redirect(sys.stdout, devnull), redirect(sys.stderr, devnull):
         yield
 
 
-@exporter
+@export
 class Colors(object):
     GREEN = '\033[32;1m'
     RED = '\033[31;1m'
@@ -102,11 +106,11 @@ class Colors(object):
     RESTORE = '\033[0m'
 
 
-@exporter
-def color(msg, color):
+@export
+def color(msg: str, color: str) -> str:
     if platform.system() == 'Windows':
         return msg
-    return u"{}{}{}".format(color, msg, Colors.RESTORE)
+    return f"{color}{msg}{Colors.RESTORE}"
 
 
 class ColoredFormatter(logging.Formatter):
@@ -118,7 +122,7 @@ class ColoredFormatter(logging.Formatter):
     def format(self, record):
         if record.levelname in self.COLORS:
             return color(super(ColoredFormatter, self).format(record), self.COLORS[record.levelname])
-        return super(ColoredFormatter, self).format(record)
+        return super().format(record)
 
 
 class JSONFormatter(ColoredFormatter):
@@ -129,7 +133,7 @@ class JSONFormatter(ColoredFormatter):
                 return json.dumps(record.msg)
         except TypeError:
             pass
-        return super(JSONFormatter, self).format(record)
+        return super().format(record)
 
 
 class MakeFileHandler(logging.FileHandler):
@@ -138,10 +142,10 @@ class MakeFileHandler(logging.FileHandler):
         log_dir = os.path.dirname(filename)
         if not os.path.exists(log_dir):
             os.makedirs(log_dir)
-        super(MakeFileHandler, self).__init__(filename, mode, encoding, delay)
+        super().__init__(filename, mode, encoding, delay)
 
 
-@exporter
+@export
 def lowercase(x):
     return x.lower()
 
@@ -158,7 +162,7 @@ UNREP_EMOTICONS = (
 )
 
 
-@exporter
+@export
 def web_cleanup(word):
     if word.startswith('http'): return 'URL'
     if word.startswith('@'): return '@@@@'
@@ -169,7 +173,7 @@ def web_cleanup(word):
     return word
 
 
-@exporter
+@export
 def get_model_file(task, platform, basedir=None):
     """Model name file helper to abstract different DL platforms (FWs)
 
@@ -189,8 +193,8 @@ def get_model_file(task, platform, basedir=None):
     return name
 
 
-@exporter
-def lookup_sentence(rlut, seq, reverse=False, padchar=''):
+@export
+def lookup_sentence(rlut: Dict[int, str], seq: List[str], reverse: bool = False, padchar: str = '') -> str:
     """Lookup a sentence by id and return words
 
     :param rlut: an index -> word lookup table
@@ -213,7 +217,7 @@ def lookup_sentence(rlut, seq, reverse=False, padchar=''):
 
 
 
-@exporter
+@export
 def topk(k, probs):
     """Get a sparse index (dictionary of top values)."""
     idx = np.argpartition(probs, probs.size-k)[-k:]
@@ -221,7 +225,7 @@ def topk(k, probs):
     return dict(zip(sort, probs[sort]))
 
 
-@exporter
+@export
 def beam_multinomial(k, probs):
     """Prune all elements in a large probability distribution below the top K.
 
@@ -243,32 +247,14 @@ def beam_multinomial(k, probs):
     return idx[sample_idx]
 
 
-@exporter
+@export
 def unzip_model(path):
-    """If the path for a model file is a zip file, unzip it in /tmp and return the unzipped path"""
-    # Import inside function to avoid circular dep :(
-    # TODO: future solution move the export code a different file so mime_type can import from it
-    # rather then from here, this allows here to import mime_type
-    if os.path.isdir(path):
-        return path
-    from eight_mile.mime_type import mime_type
-    if mime_type(path) == 'application/zip':
-        with open(path, 'rb') as f:
-            sha1 = hashlib.sha1(f.read()).hexdigest()
-        temp_dir = os.path.join("/tmp/", sha1)
-        if not os.path.exists(temp_dir):
-            logger.info("unzipping model")
-            with zipfile.ZipFile(path, "r") as zip_ref:
-                zip_ref.extractall(temp_dir)
-        if len(os.listdir(temp_dir)) == 1:  # a directory was zipped v files
-            temp_dir = os.path.join(temp_dir, os.listdir(temp_dir)[0])
-        path = os.path.join(temp_dir, [x[:-6] for x in os.listdir(temp_dir) if 'index' in x][0])
-    return path
+    path = unzip_files(path)
+    return os.path.join(path, [x[:-6] for x in os.listdir(path) if 'index' in x][0])
 
 
-@exporter
+@export
 def save_vectorizers(basedir, vectorizers, name='vectorizers'):
-    import pickle
     save_md_file = os.path.join(basedir, '{}-{}.pkl'.format(name, os.getpid()))
     with open(save_md_file, 'wb') as f:
         pickle.dump(vectorizers, f)
@@ -279,7 +265,7 @@ def save_vectorizers(basedir, vectorizers, name='vectorizers'):
     write_json(vectorizer_modules, module_file)
 
 
-@exporter
+@export
 def save_vocabs(basedir, embeds_or_vocabs, name='vocabs'):
     for k, embeds_or_vocabs in embeds_or_vocabs.items():
         save_md = '{}/{}-{}-{}.json'.format(basedir, name, k, os.getpid())
@@ -291,7 +277,7 @@ def save_vocabs(basedir, embeds_or_vocabs, name='vocabs'):
             write_json(embeds_or_vocabs.vocab, save_md)
 
 
-@exporter
+@export
 def load_vocabs(directory):
     vocab_fnames = find_files_with_prefix(directory, 'vocabs')
     vocabs = {}
@@ -303,7 +289,7 @@ def load_vocabs(directory):
     return vocabs
 
 
-@exporter
+@export
 def load_vectorizers(directory):
     vectorizers_fname = find_files_with_prefix(directory, 'vectorizers')
     # Find the module list for the vectorizer so we can import them without
@@ -318,7 +304,7 @@ def load_vectorizers(directory):
     return vectorizers
 
 
-@exporter
+@export
 def unzip_files(zip_path):
     if os.path.isdir(zip_path):
         return zip_path
@@ -337,7 +323,7 @@ def unzip_files(zip_path):
     return zip_path
 
 
-@exporter
+@export
 def find_model_basename(directory):
     path = os.path.join(directory, [x for x in os.listdir(directory) if 'model' in x and '-md' not in x and 'wgt' not in x][0])
     logger.info(path)
@@ -345,12 +331,12 @@ def find_model_basename(directory):
     return '.'.join(path)
 
 
-@exporter
+@export
 def find_files_with_prefix(directory, prefix):
     return [os.path.join(directory, x) for x in os.listdir(directory) if x.startswith(prefix)]
 
 
-@exporter
+@export
 def zip_files(basedir):
     pid = str(os.getpid())
     tgt_zip_base = os.path.abspath(basedir)
@@ -363,7 +349,7 @@ def zip_files(basedir):
             os.remove(abs_f)
 
 
-@exporter
+@export
 def zip_model(path):
     """zips the model files"""
     logger.info("zipping model files")
@@ -375,7 +361,7 @@ def zip_model(path):
     z.close()
 
 
-@exporter
+@export
 def verbose_output(verbose, confusion_matrix):
     if verbose is None:
         return
@@ -390,7 +376,7 @@ def verbose_output(verbose, confusion_matrix):
 LESS_THAN_METRICS = {"avg_loss", "loss", "perplexity", "ppl"}
 
 
-@exporter
+@export
 def get_metric_cmp(metric, user_cmp=None, less_than_metrics=LESS_THAN_METRICS):
     if user_cmp is not None:
         return _try_user_cmp(user_cmp)
@@ -410,7 +396,7 @@ def _try_user_cmp(user_cmp):
     return gt, -six.MAXSIZE - 1
 
 
-@exporter
+@export
 def show_examples(model, es, rlut1, rlut2, vocab, mxlen, sample, prob_clip, max_examples, reverse):
     """Expects model.predict to return [B, K, T]."""
     si = np.random.randint(0, len(es))
@@ -440,7 +426,7 @@ def show_examples(model, es, rlut1, rlut2, vocab, mxlen, sample, prob_clip, max_
         logger.info('------------------------------------------------------------------------')
 
 
-@exporter
+@export
 def convert_seq2seq_golds(indices, lengths, rlut, subword_fix=lambda x: x):
     """Convert indices to words and format like a bleu reference corpus.
 
@@ -461,7 +447,7 @@ def convert_seq2seq_golds(indices, lengths, rlut, subword_fix=lambda x: x):
     return golds
 
 
-@exporter
+@export
 def convert_seq2seq_preds(indices, rlut, subword_fix=lambda x: x):
     """Convert indices to words and format like a bleu hypothesis corpus.
 
@@ -480,7 +466,7 @@ def convert_seq2seq_preds(indices, rlut, subword_fix=lambda x: x):
     return preds
 
 
-@exporter
+@export
 def undo_bpe(seq):
     """Undo the BPE splits to make Bleu comparable.
 
@@ -493,8 +479,7 @@ def undo_bpe(seq):
     return re.sub(r"@@( | ?$)", "", seq)
 
 
-@exporter
+@export
 def undo_sentence_piece(seq):
     """Undo the sentence Piece splits to make Bleu comparable."""
     return seq.replace("\u2581", "")
-

@@ -1,6 +1,3 @@
-import six
-from six.moves import filter
-
 import os
 import re
 import codecs
@@ -9,16 +6,16 @@ from collections import Counter
 import numpy as np
 import baseline.data
 from baseline.vectorizers import Dict1DVectorizer, GOVectorizer, Token1DVectorizer
-from baseline.utils import import_user_module, revlut, export, optional_params, Offsets, listify
+from baseline.utils import import_user_module, revlut, exporter, optional_params, Offsets, listify
 
 __all__ = []
-exporter = export(__all__)
+export = exporter(__all__)
 
 
 BASELINE_READERS = {}
 
 
-@exporter
+@export
 @optional_params
 def register_reader(cls, task, name=None):
     """Register your own `Reader`
@@ -39,14 +36,14 @@ def register_reader(cls, task, name=None):
     return cls
 
 
-@exporter
+@export
 def create_reader(task, vectorizers, trim, **kwargs):
     name = kwargs.get('type', kwargs.get('reader_type', 'default'))
     Constructor = BASELINE_READERS[task][name]
     return Constructor(vectorizers, trim, **kwargs)
 
 
-@exporter
+@export
 def num_lines(filename):
     """Counts the number of lines in a file.
 
@@ -140,11 +137,11 @@ def _vocab_allowed(vectorizers):
         raise RuntimeError(fail_str + vect_str)
 
 
-@exporter
+@export
 class ParallelCorpusReader(object):
 
     def __init__(self, vectorizers, trim=False, truncate=False):
-        super(ParallelCorpusReader, self).__init__()
+        super().__init__()
 
         self.src_vectorizers = {}
         self.tgt_vectorizer = None
@@ -173,7 +170,7 @@ class TSVParallelCorpusReader(ParallelCorpusReader):
 
     def __init__(self, vectorizers,
                  trim=False, truncate=False, src_col_num=0, tgt_col_num=1, **kwargs):
-        super(TSVParallelCorpusReader, self).__init__(vectorizers, trim, truncate)
+        super().__init__(vectorizers, trim, truncate)
         self.src_col_num = src_col_num
         self.tgt_col_num = tgt_col_num
 
@@ -215,12 +212,12 @@ class TSVParallelCorpusReader(ParallelCorpusReader):
         return baseline.data.Seq2SeqExamples(ts, do_shuffle=do_shuffle, src_sort_key=src_sort_key)
 
 
-@exporter
+@export
 @register_reader(task='seq2seq', name='default')
 class MultiFileParallelCorpusReader(ParallelCorpusReader):
 
     def __init__(self, vectorizers, trim=False, truncate=False, **kwargs):
-        super(MultiFileParallelCorpusReader, self).__init__(vectorizers, trim, truncate)
+        super().__init__(vectorizers, trim, truncate)
         pair_suffix = kwargs['pair_suffix']
 
         self.src_suffix = pair_suffix[0]
@@ -267,11 +264,11 @@ class MultiFileParallelCorpusReader(ParallelCorpusReader):
         return baseline.data.Seq2SeqExamples(ts, do_shuffle=do_shuffle, src_sort_key=src_sort_key)
 
 
-@exporter
+@export
 class SeqPredictReader(object):
 
     def __init__(self, vectorizers, trim=False, truncate=False, mxlen=-1, **kwargs):
-        super(SeqPredictReader, self).__init__()
+        super().__init__()
         self.vectorizers = vectorizers
         self.trim = trim
         self.truncate = truncate
@@ -346,12 +343,12 @@ class SeqPredictReader(object):
         return baseline.data.ExampleDataFeed(examples, batchsz=batchsz, shuffle=shuffle, trim=self.trim, truncate=self.truncate), texts
 
 
-@exporter
+@export
 @register_reader(task='tagger', name='default')
 class CONLLSeqReader(SeqPredictReader):
 
     def __init__(self, vectorizers, trim=False, truncate=False, mxlen=-1, **kwargs):
-        super(CONLLSeqReader, self).__init__(vectorizers, trim, truncate, mxlen, **kwargs)
+        super().__init__(vectorizers, trim, truncate, mxlen, **kwargs)
         self.named_fields = kwargs.get('named_fields', {})
 
     def read_examples(self, tsfile):
@@ -388,11 +385,11 @@ def _norm_ext(ext):
     return ext if ext.startswith('.') else '.' + ext
 
 
-@exporter
+@export
 @register_reader(task='tagger', name='parallel')
 class ParallelSeqReader(SeqPredictReader):
     def __init__(self, vectorizers, trim=False, truncate=False, mxlen=-1, **kwargs):
-        super(ParallelSeqReader, self).__init__(vectorizers, trim, truncate, mxlen, **kwargs)
+        super().__init__(vectorizers, trim, truncate, mxlen, **kwargs)
         self.data = _norm_ext(kwargs.get('data_suffix', 'in'))
         self.tag = _norm_ext(kwargs.get('label_suffix', 'out'))
         self.label_vectorizer = Token1DVectorizer(mxlen=mxlen)
@@ -448,7 +445,7 @@ class ParallelSeqReader(SeqPredictReader):
         return baseline.data.ExampleDataFeed(examples, batchsz=batchsz, shuffle=shuffle, trim=self.trim, truncate=self.truncate), raw_texts
 
 
-@exporter
+@export
 class SeqLabelReader(object):
 
     def __init__(self):
@@ -462,7 +459,7 @@ class SeqLabelReader(object):
 
 
 def _get_dir(files):
-    if isinstance(files, six.string_types):
+    if isinstance(files, str):
         if os.path.isdir(files):
             base = files
             files = filter(os.path.isfile, [os.path.join(base, x) for x in os.listdir(base)])
@@ -471,7 +468,7 @@ def _get_dir(files):
     return files
 
 
-@exporter
+@export
 @register_reader(task='classify', name='default')
 class TSVSeqLabelReader(SeqLabelReader):
 
@@ -486,7 +483,7 @@ class TSVSeqLabelReader(SeqLabelReader):
                 }
 
     def __init__(self, vectorizers, trim=False, truncate=False, **kwargs):
-        super(TSVSeqLabelReader, self).__init__()
+        super().__init__()
 
         self.label2index = {}
         self.vectorizers = vectorizers
@@ -539,7 +536,7 @@ class TSVSeqLabelReader(SeqLabelReader):
             return vocab, self.get_labels()
 
         label_idx = len(self.label2index)
-        if isinstance(files, six.string_types):
+        if isinstance(files, str):
             if os.path.isdir(files):
                 base = files
                 files = filter(os.path.isfile, [os.path.join(base, x) for x in os.listdir(base)])
@@ -632,7 +629,7 @@ class TSVSeqLabelReader(SeqLabelReader):
                                              batchsz=batchsz, shuffle=shuffle, trim=self.trim, truncate=self.truncate)
 
 
-@exporter
+@export
 @register_reader(task='lm', name='default')
 class LineSeqReader(object):
 

@@ -2,7 +2,7 @@ import time
 import logging
 import torch
 import numpy as np
-from eight_mile.progress import create_progress_bar
+from baseline.progress import create_progress_bar
 from eight_mile.utils import listify
 from baseline.utils import get_model_file, get_metric_cmp, convert_seq2seq_golds, convert_seq2seq_preds
 from baseline.train import Trainer, create_trainer, register_trainer, register_training_func

@@ -5,10 +5,10 @@ import torch.autograd
 import os
 
 from eight_mile.confusion import ConfusionMatrix
-from eight_mile.progress import create_progress_bar
 from eight_mile.utils import listify
 from eight_mile.pytorch.optz import OptimizerManager
 
+from baseline.progress import create_progress_bar
 from baseline.utils import verbose_output, get_model_file, get_metric_cmp
 from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
 from baseline.model import create_model_for

@@ -1,10 +1,10 @@
-from baseline.utils import export, optional_params
+from baseline.utils import exporter, optional_params
 
 __all__ = []
-exporter = export(__all__)
+export = exporter(__all__)
 
 
-@exporter
+@export
 class Exporter(object):
 
     def __init__(self, task, **kwargs):
@@ -22,7 +22,7 @@ class Exporter(object):
 BASELINE_EXPORTERS = {}
 
 
-@exporter
+@export
 @optional_params
 def register_exporter(cls, task, name=None):
     """Register an exporter

@@ -1,23 +1,24 @@
 import os
 import logging
 import numpy as np
-from baseline.utils import export, optional_params, register
+from baseline.utils import exporter, optional_params, register
+
 
 __all__ = []
-exporter = export(__all__)
+export = exporter(__all__)
 logger = logging.getLogger('baseline')
 
 BASELINE_REPORTING = {}
 
 
-@exporter
+@export
 @optional_params
 def register_reporting(cls, name=None):
     """Register a function as a plug-in"""
     return register(cls, BASELINE_REPORTING, name, 'reporting')
 
 
-@exporter
+@export
 class ReportingHook(object):
     def __init__(self, **kwargs):
         pass
@@ -194,7 +195,7 @@ class VisdomReporting(ReportingHook):
                 )
 
 
-@exporter
+@export
 def create_reporting(reporting_hooks, hook_settings, proc_info):
     reporting = [LoggingReporting()]
 

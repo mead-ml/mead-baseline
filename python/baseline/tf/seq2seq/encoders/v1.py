@@ -1,25 +1,25 @@
 from baseline.tf.tfy import *
 from baseline.tf.embeddings import *
 from baseline.tf.transformer import transformer_encoder_stack
-from baseline.utils import export, MAGIC_VARS
+from baseline.utils import exporter, MAGIC_VARS
 from baseline.model import register_encoder
 from collections import namedtuple
 
 __all__ = []
-exporter = export(__all__)
+export = exporter(__all__)
 
 
 
-RNNEncoderOutput = namedtuple("RNNEncoderOutput", ("output", "hidden"))
+RNNEncoderOutput = namedtuple("RNNEncoderOutput", ("output", "hidden", "src_mask"))
 
 
 def _make_src_mask(output, lengths):
-    T = output.shape[1]
+    T = tf.shape(output)[1]
     src_mask = tf.cast(tf.sequence_mask(lengths, T), dtype=tf.uint8)
     return src_mask
 
 
-@exporter
+@export
 class EncoderBase(tf.keras.layers.Layer):
 
     def __init__(self, name='encoder', **kwargs):
@@ -49,7 +49,7 @@ class RNNEncoder(EncoderBase):
         # This comes out as a sequence T of (B, D)
         output, hidden = self.rnn((embed_in, src_len))
         output = output + embed_in if self.residual else output
-        return RNNEncoderOutput(output=output, hidden=hidden, src_mask=self.src_mask_fn(output, lengths))
+        return RNNEncoderOutput(output=output, hidden=hidden, src_mask=self.src_mask_fn(output, src_len))
 
 
 TransformerEncoderOutput = namedtuple("TransformerEncoderOutput", ("output", "src_mask"))

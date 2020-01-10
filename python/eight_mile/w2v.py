@@ -1,25 +1,25 @@
 import io
+import copy
 import logging
 import collections
 import contextlib
-import copy
 import numpy as np
-from eight_mile.utils import write_json, read_config_file, Offsets, export
+from eight_mile.utils import write_json, read_config_file, Offsets, exporter
 from eight_mile.mime_type import mime_type
+
 __all__ = []
 logger = logging.getLogger('mead.layers')
+export = exporter(__all__)
 
-exporter = export(__all__)
 
-
-@exporter
+@export
 def norm_weights(word_vectors):
     norms = np.linalg.norm(word_vectors, axis=1, keepdims=True)
     norms = (norms == 0) + norms
     return word_vectors / norms
 
 
-@exporter
+@export
 def write_word2vec_file(filename, vocab, word_vectors):
     """Write out a binary word2vec file
 
@@ -65,7 +65,7 @@ def write_word2vec_file(filename, vocab, word_vectors):
             f.write(bytes('{} '.format(word), encoding='utf-8') + vec_str)
 
 
-@exporter
+@export
 class EmbeddingsModel(object):
     def __init__(self):
         super(EmbeddingsModel, self).__init__()
@@ -92,7 +92,7 @@ def pool_vec(embeddings, tokens, operation=np.mean):
         return embeddings.weights[0]
 
 
-@exporter
+@export
 class WordEmbeddingsModel(EmbeddingsModel):
     def __init__(self, **kwargs):
         super(WordEmbeddingsModel, self).__init__()
@@ -150,7 +150,7 @@ class WordEmbeddingsModel(EmbeddingsModel):
         return self.lookup(word, nullifabsent=False)
 
 
-@exporter
+@export
 class PretrainedEmbeddingsModel(WordEmbeddingsModel):
 
     def __init__(self, filename, known_vocab=None, unif_weight=None, keep_unused=False, normalize=False, **kwargs):
@@ -323,7 +323,7 @@ class PretrainedEmbeddingsModel(WordEmbeddingsModel):
                 return word_vectors, dsz, known_vocab, idx
 
 
-@exporter
+@export
 class RandomInitVecModel(EmbeddingsModel):
 
     def __init__(self, dsz, known_vocab, counts=True, unif_weight=None):
@@ -375,4 +375,3 @@ class RandomInitVecModel(EmbeddingsModel):
 
     def save_md(self, target):
         write_json({'vsz': self.get_vsz(), 'dsz': self.get_dsz(), 'vocab': self.get_vocab()}, target)
-

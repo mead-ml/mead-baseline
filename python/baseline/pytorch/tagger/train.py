@@ -1,6 +1,6 @@
 import six
 import logging
-from eight_mile.progress import create_progress_bar
+from baseline.progress import create_progress_bar
 from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
 from eight_mile.utils import listify, to_spans, f_score, revlut, write_sentence_conll
 from baseline.utils import get_model_file, get_metric_cmp
