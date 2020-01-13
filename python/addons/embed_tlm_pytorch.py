@@ -203,11 +203,9 @@ class TransformerLMEmbeddings(PyTorchEmbeddingsModel):
     def init_embed(self, embeddings, **kwargs):
         pdrop = float(kwargs.get('dropout', 0.1))
         self.embed_dropout = nn.Dropout(pdrop)
-        self.embeddings = EmbeddingsContainer()
+        self.embeddings = EmbeddingsStack(embeddings)
         input_sz = 0
         for k, embedding in embeddings.items():
-
-            self.embeddings[k] = embedding
             input_sz += embedding.get_dsz()
 
         projsz = kwargs.get('projsz')

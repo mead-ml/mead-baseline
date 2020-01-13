@@ -58,11 +58,9 @@ class LanguageModelBase(nn.Module, LanguageModel):
     def init_embed(self, embeddings, **kwargs):
         pdrop = float(kwargs.get('dropout', 0.5))
         self.embed_dropout = nn.Dropout(pdrop)
-        self.embeddings = EmbeddingsContainer()
+        self.embeddings = EmbeddingsStack(embeddings)
         input_sz = 0
         for k, embedding in embeddings.items():
-
-            self.embeddings[k] = embedding
             if k in self.src_keys:
                 input_sz += embedding.get_dsz()
         projsz = kwargs.get('projsz')

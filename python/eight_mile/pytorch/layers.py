@@ -855,6 +855,12 @@ class EmbeddingsStack(nn.Module):
         self.dropout = nn.Dropout(dropout_rate)
         self.requires_length = requires_length
 
+    def __getitem__(self, item: str) -> nn.Module:
+        idx = self.keys.index(item)
+        if idx < 0:
+            raise Exception(f"Invalid item ({item})")
+        return self.embeddings[idx]
+
     def forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
         """This method performs "embedding" of the inputs.  The base method here then concatenates along depth
         dimension to form word embeddings
