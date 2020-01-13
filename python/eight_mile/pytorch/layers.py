@@ -13,7 +13,7 @@ import torch.autograd
 from eight_mile.utils import listify, Offsets
 from eight_mile.utils import transition_mask as transition_mask_np
 
-
+MASK_FALSE = False
 def sequence_mask(lengths: torch.Tensor, max_len: int = -1) -> torch.Tensor:
     """Generate a sequence mask of shape `BxT` based on the given lengths
 
@@ -186,7 +186,7 @@ class MaxPool1D(nn.Module):
             mask = sequence_mask(lengths).to(tensor.device)
             mask = mask if self.batch_first else bth2tbh(mask)
             # Fill masked with very negative so it never gets selected
-            tensor = tensor.masked_fill(mask.unsqueeze(-1) == 0, -1e4)
+            tensor = tensor.masked_fill(mask.unsqueeze(-1) == MASK_FALSE, -1e4)
         dmax, _ = torch.max(tensor, self.reduction_dim, keepdim=False)
         return dmax
 
@@ -951,7 +951,7 @@ class LuongDotProductAttention(VectorSequenceAttention):
 
     def _attention(self, query_t, keys_bth, keys_mask):
         a = keys_bth @ query_t.unsqueeze(2)
-        a = a.squeeze(2).masked_fill(keys_mask == 0, -1e9)
+        a = a.squeeze(2).masked_fill(keys_mask == MASK_FALSE, -1e9)
         a = F.softmax(a, dim=-1)
         return a
 
@@ -963,7 +963,7 @@ class ScaledDotProductAttention(VectorSequenceAttention):
 
     def _attention(self, query_t, keys_bth, keys_mask):
         a = (keys_bth @ query_t.unsqueeze(2)) / math.sqrt(self.hsz)
-        a = a.squeeze(2).masked_fill(keys_mask == 0, -1e9)
+        a = a.squeeze(2).masked_fill(keys_mask == MASK_FALSE, -1e9)
         a = F.softmax(a, dim=-1)
         return a
 
@@ -976,7 +976,7 @@ class LuongGeneralAttention(VectorSequenceAttention):
 
     def _attention(self, query_t, keys_bth, keys_mask):
         a = keys_bth @ self.W_a(query_t).unsqueeze(2)
-        a = a.squeeze(2).masked_fill(keys_mask == 0, -1e9)
+        a = a.squeeze(2).masked_fill(keys_mask == MASK_FALSE, -1e9)
         a = F.softmax(a, dim=-1)
         return a
 
@@ -996,7 +996,7 @@ class BahdanauAttention(VectorSequenceAttention):
         u = self.E_a(keys_bth).view(B, T, H)
         z = torch.tanh(q + u)
         a = self.v(z.view(-1, self.hsz)).view(B, T)
-        a.masked_fill(keys_mask == 0, -1e9)
+        a.masked_fill(keys_mask == MASK_FALSE, -1e9)
         a = F.softmax(a, dim=-1)
         return a
 
@@ -1215,7 +1215,7 @@ class Viterbi(nn.Module):
             # This part generates a warning
             if i >= min_length:
                 mask = (i < lengths).view(-1, 1, 1)
-                alphas = alphas.masked_fill(mask, 0) + new_alphas.masked_fill(mask == 0, 0)
+                alphas = alphas.masked_fill(mask, 0) + new_alphas.masked_fill(mask == MASK_FALSE, 0)
             else:
                 alphas = new_alphas
 
@@ -1234,7 +1234,7 @@ class Viterbi(nn.Module):
             # We are going backwards now, if flipped length was passed
             # these you aren't in your real results yet
             mask = (i > rev_len)
-            best_tag_id = best_tag_id.masked_fill(mask, 0) + new_best_tag_id.masked_fill(mask == 0, 0)
+            best_tag_id = best_tag_id.masked_fill(mask, 0) + new_best_tag_id.masked_fill(mask == MASK_FALSE, 0)
             best_path.append(best_tag_id)
         _ = best_path.pop()
         best_path.reverse()
@@ -1242,7 +1242,7 @@ class Viterbi(nn.Module):
         # Mask out the extra tags (This might be pointless given thathatt anything that
         # will use this as a dense tensor downstream will mask it itself?)
         seq_mask = sequence_mask(lengths).to(best_path.device).transpose(0, 1)
-        best_path = best_path.masked_fill(seq_mask == 0, 0)
+        best_path = best_path.masked_fill(seq_mask == MASK_FALSE, 0)
         return best_path, path_score
 
 
@@ -1276,7 +1276,7 @@ class ViterbiLogSoftmaxNorm(Viterbi):
             new_alphas.unsqueeze_(1)
             if i >= min_length:
                 mask = (i < lengths).view(-1, 1, 1)
-                alphas = alphas.masked_fill(mask, 0) + new_alphas.masked_fill(mask == 0, 0)
+                alphas = alphas.masked_fill(mask, 0) + new_alphas.masked_fill(mask == MASK_FALSE, 0)
             else:
                 alphas = new_alphas
 
@@ -1295,7 +1295,7 @@ class ViterbiLogSoftmaxNorm(Viterbi):
             # We are going backwards now, if flipped length was passed
             # these you aren't in your real results yet
             mask = (i > rev_len)
-            best_tag_id = best_tag_id.masked_fill(mask, 0) + new_best_tag_id.masked_fill(mask == 0, 0)
+            best_tag_id = best_tag_id.masked_fill(mask, 0) + new_best_tag_id.masked_fill(mask == MASK_FALSE, 0)
             best_path.append(best_tag_id)
         _ = best_path.pop()
         best_path.reverse()
@@ -1303,7 +1303,7 @@ class ViterbiLogSoftmaxNorm(Viterbi):
         # Mask out the extra tags (This might be pointless given that anything that
         # will use this as a dense tensor downstream will mask it itself?)
         seq_mask = sequence_mask(lengths).to(best_path.device).transpose(0, 1)
-        best_path = best_path.masked_fill(seq_mask == 0, 0)
+        best_path = best_path.masked_fill(seq_mask == MASK_FALSE, 0)
         return best_path, path_score
 
 def ident(x):
@@ -1361,7 +1361,7 @@ class TaggerGreedyDecoder(nn.Module):
             mask = sequence_mask(lengths).to(preds.device)
             # The mask gets generated as batch first
             mask = mask if self.batch_first else mask.transpose(0, 1)
-            preds = preds.masked_fill(mask == 0, 0)
+            preds = preds.masked_fill(mask == MASK_FALSE, 0)
         return preds  #, None
 
     def extra_repr(self) -> str:
@@ -1461,7 +1461,7 @@ class CRF(nn.Module):
 
         mask = sequence_mask(lengths).transpose(0, 1).to(tags.device)
         scores = unary_score + trans_score
-        scores = scores.masked_fill(mask == 0, 0)
+        scores = scores.masked_fill(mask == MASK_FALSE, 0)
         scores = scores.sum(0)
 
         eos_scores = trans[self.end_idx, tags.gather(0, lengths.unsqueeze(0)).squeeze(0)]
@@ -1501,7 +1501,7 @@ class CRF(nn.Module):
 
             if i >= min_length:
                 mask = (i < lengths).view(-1, 1, 1)
-                alphas = alphas.masked_fill(mask, 0) + new_alphas.masked_fill(mask == 0, 0)
+                alphas = alphas.masked_fill(mask, 0) + new_alphas.masked_fill(mask == MASK_FALSE, 0)
             else:
                 alphas = new_alphas
 
@@ -1697,7 +1697,7 @@ class SeqScaledDotProductAttention(SequenceSequenceAttention):
         d_k = query.size(-1)
         scores = torch.matmul(query, key.transpose(-2, -1)) / math.sqrt(d_k)
         if mask is not None:
-            scores = scores.masked_fill(mask == 0, -1e9)
+            scores = scores.masked_fill(mask == MASK_FALSE, -1e9)
         return F.softmax(scores, dim=-1)
 
 
@@ -1708,7 +1708,7 @@ class SeqDotProductAttention(SequenceSequenceAttention):
     def _attention(self, query: torch.Tensor, key: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         scores = torch.matmul(query, key.transpose(-2, -1))
         if mask is not None:
-            scores = scores.masked_fill(mask == 0, -1e9)
+            scores = scores.masked_fill(mask == MASK_FALSE, -1e9)
         return F.softmax(scores, dim=-1)
 
 
