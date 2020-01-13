@@ -6,7 +6,7 @@ import tempfile
 import baseline
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader, TensorDataset
-from eight_mile.utils import str2bool, write_json
+from eight_mile.utils import str2bool, write_json, Offsets
 import baseline.pytorch.embeddings
 import eight_mile.embeddings
 from eight_mile.optz import *
