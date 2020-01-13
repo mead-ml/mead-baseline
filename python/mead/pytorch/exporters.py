@@ -3,6 +3,7 @@ import logging
 import torch
 import torch.nn as nn
 import baseline as bl
+from eight_mile.pytorch.layers import CRF, ViterbiBatchSize1
 from baseline.utils import (
     export,
     Offsets,
@@ -25,8 +26,6 @@ from mead.utils import (
     save_to_bundle,
 )
 from mead.exporters import Exporter, register_exporter
-from mead.pytorch.tagger_decoders import InferenceCRF, InferenceGreedyDecoder
-
 
 __all__ = []
 exporter = export(__all__)
@@ -34,12 +33,12 @@ logger = logging.getLogger('mead')
 
 
 VECTORIZER_SHAPE_MAP = {
-    Token1DVectorizer: [1, 10],
-    GOVectorizer: [1, 10],
-    Dict1DVectorizer: [1, 10],
-    Char2DVectorizer: [1, 10, 5],
-    Dict2DVectorizer: [1, 10, 5],
-    Char1DVectorizer: [1, 10],
+    Token1DVectorizer: [1, 100],
+    GOVectorizer: [1, 100],
+    Dict1DVectorizer: [1, 100],
+    Char2DVectorizer: [1, 100, 50],
+    Dict2DVectorizer: [1, 100, 50],
+    Char1DVectorizer: [1, 100],
 }
 
 
@@ -47,76 +46,42 @@ def create_fake_data(shapes, vectorizers, order, min_=0, max_=50,):
     data = {
         k: torch.randint(min_, max_, shapes[type(v)]) for k, v in vectorizers.items()
     }
-    ordered_data = tuple(data[k] for k in order)
+    ordered_data = tuple(data[k] for k in order.embeddings)
     lengths = torch.LongTensor([data[list(data.keys())[0]].shape[1]])
     return ordered_data, lengths
 
 
-def monkey_patch_embeddings(model):
-    order = tuple(k for k, _ in model.embeddings.items())
-    logger.debug("Using %s as the feature order", order)
-    model.ordered_embeddings = tuple(model.embeddings[k] for k in order)
-
-    def embed(self, x):
-        res = []
-        for i in range(len(x)):
-            res.append(self.ordered_embeddings[i](x[i]))
-        return torch.cat(res, dim=2)
-
-    model.embed = embed.__get__(model)
-    return order
-
-
-class ExportingTagger(nn.Module):
-    def __init__(self, tagger):
-        super(ExportingTagger, self).__init__()
-        self.tagger = tagger
-        if hasattr(tagger, 'crf'):
-            logger.debug("Found CRF, replacing with torch script decoder.")
-            self.decoder = InferenceCRF(
-                self.tagger.crf.transitions.squeeze(0),
-                self.tagger.crf.start_idx,
-                self.tagger.crf.end_idx
-            )
+def create_data_dict(shapes, vectorizers, transpose=False, min_=0, max_=50):
+    data = {}
+    for k, v in vectorizers.items():
+        mxlen = v.mxlen if hasattr(v, 'mxlen') else -1
+        mxwlen = v.mxwlen if hasattr(v, 'mxwlen') else -1
+        if mxwlen >= 0:
+            data[k] = torch.randint(min_, max_, (1, mxlen, mxwlen))
+        elif mxlen >= 0:
+            data[k] = torch.randint(min_, max_, (1, mxlen))
         else:
-            if tagger.constraint_mask is None:
-                # This just calls torch.max, this is normally done in code for the tagger but we
-                # wrap in a class here so that we can have a consistent forward.
-                self.decoder = InferenceGreedyDecoder()
-            else:
-                logger.debug("Found constraints for decoding, replacing with torch script decoder.")
-                self.decoder = InferenceCRF(
-                    self.tagger.constraint_mask.squeeze(0),
-                    Offsets.GO,
-                    Offsets.EOS
-                )
+            data[k] = torch.randint(min_, max_, (1,))
 
-    def forward(self, x, l):
-        trans_x = []
-        for i in range(len(x)):
-            trans_x.append(x[i].transpose(0, 1))
-        new_x = tuple(trans_x)
-        x = self.tagger.compute_unaries(new_x, l)
-        return self.decoder.decode(x, l)[0]
+    lengths = torch.LongTensor([data[list(data.keys())[0]].shape[1]])
 
-
-class ExportingClassifier(nn.Module):
-    def __init__(self, classifier):
-        super(ExportingClassifier, self).__init__()
-        self.classifier = classifier
-
-    def forward(self, x, l):
-        x = self.classifier.embed(x)
-        x = self.classifier.pool(x, l)
-        x = self.classifier.stacked(x)
-        return self.classifier.output(x)
+    if transpose:
+        for k in vectorizers.keys():
+            if len(data[k].shape) > 1:
+                data[k] = data[k].transpose(0, 1)
+    data['lengths'] = lengths
+    return data
 
 
 @exporter
-class PytorchExporter(Exporter):
+class PytorchONNXExporter(Exporter):
     def __init__(self, task, **kwargs):
-        super(PytorchExporter, self).__init__(task, **kwargs)
-        self.wrapper = None
+        super().__init__(task, **kwargs)
+        self.transpose = kwargs.get('transpose', False)
+        self.tracing = kwargs.get('tracing', True)
+
+    def apply_model_patches(self, model):
+        return model
 
     def run(self, basename, output_dir, project=None, name=None, model_version=None, **kwargs):
         logger.warning("Pytorch exporting is experimental and is not guaranteed to work for plugin models.")
@@ -129,24 +94,42 @@ class PytorchExporter(Exporter):
         logger.info("Saving vectorizers and vocabs to %s", client_output)
         logger.info("Saving serialized model to %s", server_output)
         model, vectorizers, model_name = self.load_model(basename)
-        order = monkey_patch_embeddings(model)
-        data, lengths = create_fake_data(VECTORIZER_SHAPE_MAP, vectorizers, order)
+        model = self.apply_model_patches(model)
+        data = create_data_dict(VECTORIZER_SHAPE_MAP, vectorizers, transpose=self.transpose)
+
+        inputs = [k for k, _ in model.embeddings.items()] + ['lengths']
+
+        dynamics = {'output': {1: 'sequence'}}
+        for k, _ in model.embeddings.items():
+            if k == 'char':
+                dynamics[k] = {1: 'sequence', 2: 'chars'}
+            else:
+                dynamics[k] = {1: 'sequence'}
+
         meta = create_metadata(
-            order, ['output'],
+            inputs, ['output'],
             self.sig_name,
-            model_name, model.lengths_key,
-            exporter_type=self.preproc_type()
+            model_name, model.lengths_key
         )
 
-        exportable = self.wrapper(model)
-        logger.info("Tracing Model.")
-        traced = torch.jit.trace(exportable, (data, lengths))
-        traced.save(os.path.join(server_output, 'model.pt'))
+        if not self.tracing:
+            model = torch.jit.script(model)
+
+        logger.info("Exporting Model.")
+        print(inputs)
+
+        torch.onnx.export(model, data,
+                          verbose=True,
+                          dynamic_axes=dynamics,
+                          f=f'{server_output}/{model_name}.onnx',
+                          input_names=inputs,
+                          output_names=['output'],
+                          opset_version=11,
+                          example_outputs=torch.ones((1, len(model.labels))))
 
         logger.info("Saving metadata.")
         save_to_bundle(client_output, basename, assets=meta)
         logger.info('Successfully exported model to %s', output_dir)
-
 
     def load_model(self, model_dir):
         model_name = find_model_basename(model_dir)
@@ -160,24 +143,24 @@ class PytorchExporter(Exporter):
 
 @exporter
 @register_exporter(task='classify', name='default')
-class ClassifyPytorchExporter(PytorchExporter):
+class ClassifyPytorchONNXExporter(PytorchONNXExporter):
     def __init__(self, task, **kwargs):
-        super(ClassifyPytorchExporter, self).__init__(task)
-        self.wrapper = ExportingClassifier
+        super().__init__(task)
         self.sig_name = 'predict_text'
 
 
 @exporter
 @register_exporter(task='tagger', name='default')
-class TaggerPytorchExporter(PytorchExporter):
+class TaggerPytorchONNXExporter(PytorchONNXExporter):
     def __init__(self, task, **kwargs):
-        super(TaggerPytorchExporter, self).__init__(task)
-        self.wrapper = ExportingTagger
+        super().__init__(task)
         self.sig_name = 'tag_text'
 
+    def apply_model_patches(self, model):
+        if hasattr(model, 'layers'):
+            if hasattr(model.layers, 'decoder_model'):
+                if isinstance(model.layers.decoder_model, CRF):
+                    model.layers.decoder_model.viterbi = ViterbiBatchSize1(model.layers.decoder_model.viterbi.start_idx,
+                                                                           model.layers.decoder_model.viterbi.end_idx)
 
-@exporter
-@register_exporter(task='seq2seq', name='default')
-class Seq2SeqPytorchExporter(PytorchExporter):
-    def __init__(self, task, **kwargs):
-        raise NotImplementedError
+        return model

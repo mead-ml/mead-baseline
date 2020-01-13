@@ -13,11 +13,11 @@ logger = logging.getLogger('baseline')
 class ClassifierModelBase(nn.Module, ClassifierModel):
 
     def __init__(self):
-        super(ClassifierModelBase, self).__init__()
+        super().__init__()
         self.gpu = False
 
     @classmethod
-    def load(cls, filename, **kwargs):
+    def load(cls, filename: str, **kwargs) -> 'ClassifierModelBase':
         device = kwargs.get('device')
         if not os.path.exists(filename):
             filename += '.pyt'
@@ -25,8 +25,10 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
         model.gpu = False if device == 'cpu' else model.gpu
         return model
 
-    def save(self, outname):
+    def save(self, outname: str):
         logger.info('saving %s' % outname)
+        m = torch.jit.script(self)
+        m.save(f'{outname}.script')
         torch.save(self, outname)
         basename, _ = os.path.splitext(outname)
         write_json(self.labels, basename + ".labels")
@@ -43,12 +45,12 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
         model.labels = labels
         pool_model = model.init_pool(embed_model.dsz, **kwargs)
         stack_model = model.init_stacked(pool_model.output_dim, **kwargs)
-        model.layers = EmbedPoolStackModel(len(labels), embeddings, pool_model, stack_model)
+        model.layers = EmbedPoolStackModel(len(labels), embed_model, pool_model, stack_model)
         logger.info(model)
         return model
 
     def cuda(self, device=None):
-        super(ClassifierModelBase, self).cuda(device=device)
+        super().cuda(device=device)
         self.gpu = True
 
     def create_loss(self):
@@ -81,7 +83,7 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
 
         return example_dict
 
-    def forward(self, input):
+    def forward(self, input: Dict[str, torch.Tensor]):
         return self.layers(input)
 
     def predict(self, batch_dict):
@@ -136,8 +138,7 @@ class ConvModel(ClassifierModelBase):
     def init_pool(self, dsz, **kwargs):
         filtsz = kwargs['filtsz']
         cmotsz = kwargs['cmotsz']
-        conv = ParallelConv(dsz, cmotsz, filtsz, "relu", input_fmt="bth")
-        return WithDropout(conv, self.pdrop)
+        return WithoutLength(WithDropout(ParallelConv(dsz, cmotsz, filtsz, "relu", input_fmt="bth"), self.pdrop))
 
 
 @register_model(task='classify', name='lstm')
@@ -155,7 +156,7 @@ class LSTMModel(ClassifierModelBase):
         return LSTMEncoderHidden(dsz, hsz, 1, self.pdrop, unif=unif, batch_first=True, initializer=weight_init)
 
     def make_input(self, batch_dict):
-        inputs = super(LSTMModel, self).make_input(batch_dict)
+        inputs = super().make_input(batch_dict)
         lengths = inputs['lengths']
         lengths, perm_idx = lengths.sort(0, descending=True)
         for k, value in inputs.items():

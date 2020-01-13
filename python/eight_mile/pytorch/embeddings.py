@@ -76,14 +76,14 @@ class CharConvEmbeddings(PyTorchEmbeddings):
         self.num_gates = kwargs.get('num_gates', 1)
         self.activation = kwargs.get('activation', 'tanh')
         self.wsz = kwargs.get('wsz', 30)
-        self.projsz = kwargs.get('projsz')
+        self.projsz = kwargs.get('projsz', 0)
         self.pdrop = kwargs.get('pdrop', 0.5)
         self.filtsz, self.nfeats = calc_nfeats(self.cfiltsz, self.nfeat_factor, self.max_feat, self.wsz)
         self.conv_outsz = int(np.sum(self.nfeats))
         self.outsz = self.conv_outsz
-        if self.projsz is not None:
+        if self.projsz > 0:
             self.outsz = self.projsz
-            self.proj = pytorch_linear(self.conv_outsz, self.outsz)
+        self.proj = pytorch_linear(self.conv_outsz, self.outsz)
 
         self.embeddings = LookupTableEmbeddings(**kwargs)
         self.char_comp = WithDropout(ParallelConv(self.embeddings.output_dim, self.nfeats, self.filtsz, self.activation), self.pdrop)
