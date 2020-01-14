@@ -27,8 +27,6 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
 
     def save(self, outname: str):
         logger.info('saving %s' % outname)
-        m = torch.jit.script(self)
-        m.save(f'{outname}.script')
         torch.save(self, outname)
         basename, _ = os.path.splitext(outname)
         write_json(self.labels, basename + ".labels")
