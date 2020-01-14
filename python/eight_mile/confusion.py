@@ -1,7 +1,9 @@
+import csv
+from itertools import chain
 import numpy as np
 from eight_mile.utils import export
 from collections import OrderedDict
-import csv
+
 
 __all__ = []
 exporter = export(__all__)
@@ -19,7 +21,7 @@ class ConfusionMatrix(object):
 
         :param labels: Either a dictionary (`k=int,v=str`) or an array of labels
         """
-        if type(labels) is dict:
+        if isinstance(labels, dict):
             self.labels = []
             for i in range(len(labels)):
                 self.labels.append(labels[i])
@@ -166,6 +168,33 @@ class ConfusionMatrix(object):
             return 0
         return (beta*beta + 1) * p * r / d
 
+    def get_r_k(self):
+        """Calculate the R k correlation coefficient from here
+            https://www.sciencedirect.com/science/article/abs/pii/S1476927104000799?via%3Dihub
+        See this blog post for an explanation of metric, how this calculation is equivalent and
+        how it reduces to MCC for 2 classes.
+            www.blester125.com/blog/rk.html
+        """
+        samples = np.sum(self._cm)
+        correct = np.trace(self._cm)
+        true = np.sum(self._cm, axis=1, dtype=np.float64)
+        guess = np.sum(self._cm, axis=0, dtype=np.float64)
+
+        cov_guess_true = correct * samples - np.dot(guess, true)
+        cov_true_true = samples * samples - np.dot(true, true)
+        cov_guess_guess = samples * samples - np.dot(guess, guess)
+
+        denom = np.sqrt(cov_guess_guess * cov_true_true)
+        denom = denom if denom != 0.0 else 1.0
+        return cov_guess_true / denom
+
+    def get_mcc(self):
+        """Get the Mathews correlation coefficient.
+        R k reduces to the Matthews Correlation Coefficient for two classes.
+        People are often more familiar with the name MCC than R k so we provide this alias
+        """
+        return self.get_r_k()
+
     def get_all_metrics(self):
         """Make a map of metrics suitable for reporting, keyed by metric name
 
@@ -177,6 +206,7 @@ class ConfusionMatrix(object):
             metrics['precision'] = self.get_precision()[1]
             metrics['recall'] = self.get_recall()[1]
             metrics['f1'] = self.get_f(1)
+            metrics['mcc'] = self.get_mcc()
         else:
             metrics['mean_precision'] = self.get_mean_precision()
             metrics['mean_recall'] = self.get_mean_recall()
@@ -184,6 +214,7 @@ class ConfusionMatrix(object):
             metrics['weighted_precision'] = self.get_weighted_precision()
             metrics['weighted_recall'] = self.get_weighted_recall()
             metrics['weighted_f1'] = self.get_weighted_f(1)
+            metrics['r_k'] = self.get_r_k()
         return metrics
 
     def add_batch(self, truth, guess):
@@ -195,3 +226,22 @@ class ConfusionMatrix(object):
         """
         for truth_i, guess_i in zip(truth, guess):
             self.add(truth_i, guess_i)
+
+    @classmethod
+    def create(cls, truth, guess):
+        """Build a Confusion Matrix from truths and guesses.
+        If there are classes missing from the union of golds and preds they will
+        be missing from the confusion matrix
+        The classes are added in sorted order, if they are ints already this means
+        they were probably already encoded and we will hopefully respect the order
+        they are in.
+        :param truth: List[Union[int. str]] The correct labels
+        :param guess: List[Union[int. str]] The predicted labels
+        :returns: ConfusionMatrix
+        """
+        label_index = {i: k for i, k in enumerate(sorted(set(chain(truth, guess))))}
+        rev_lut = {v: k for k, v in label_index.items()}
+        cm = cls(label_index)
+        for g, p in zip(truth, guess):
+            cm.add(rev_lut[g], rev_lut[p])
+        return cm
