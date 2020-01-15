@@ -1,0 +1,68 @@
+{
+  "task": "tagger",
+  "conll_output": "conllresults.conll",
+  "unif": 0.1,
+  "features": [
+    {
+      "name": "word",
+      "vectorizer": {
+        "type": "dict1d",
+        "fields": "text",
+        "transform": "baseline.lowercase"
+      },
+      "embeddings": {
+          "label": "glove-6B-100"
+      }
+    },
+    {
+      "name": "senna",
+      "vectorizer": {
+        "type": "dict1d",
+        "fields": "text",
+        "transform": "baseline.lowercase"
+      },
+      "embeddings": {
+          "label": "senna"
+      }
+    },
+    {
+      "name": "char",
+      "vectorizer": {
+        "type": "dict2d"
+      },
+      "embeddings": { "dsz": 30, "wsz": 30, "type": "char-conv" }
+    }
+  ],
+  "backend": "pytorch",
+  "dataset": "conll-iobes",
+  "reader": {
+    "type": "default",
+    "named_fields": {
+      "0": "text",
+      "-1": "y"
+    }
+  },
+  "model": {
+      "type": "transformer",
+      "hsz": 1792,
+      "num_heads": 14,
+      "rpr_k": 100,
+      "dropout": 0.15,
+      "dropin": {"word": 0.1,"senna": 0.1},
+      "layers": 2,
+      "constrain_decode": true,
+      "crf": 1
+  },
+  "train": {
+      "batchsz": 16,
+      "epochs": 120,
+      "optim": "sgd",
+      "eta": 0.0009,
+      "mom": 0.9,
+      "patience": 40,
+      "early_stopping_metric": "f1",
+      "clip": 5.0,
+      "span_type": "iobes"
+  }
+}
+

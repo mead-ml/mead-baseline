@@ -32,6 +32,10 @@ class CharLSTMEmbeddingsModel(PyTorchEmbeddingsModel, CharLSTMEmbeddings):
     pass
 
 
+@register_embeddings(name='char-transformer')
+class CharTransformerEmbeddingsModel(PyTorchEmbeddingsModel, CharTransformerEmbeddings):
+    pass
+
 @register_embeddings(name='positional')
 class PositionalLookupTableEmbeddingsModel(PyTorchEmbeddingsModel, PositionalLookupTableEmbeddings):
     pass

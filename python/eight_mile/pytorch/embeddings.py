@@ -14,6 +14,7 @@ from eight_mile.pytorch.layers import (
     WithDropout,
     unsort_batch,
     pytorch_linear,
+    TransformerEncoderStackWithLengths
 )
 
 
@@ -162,6 +163,41 @@ class CharLSTMEmbeddings(PyTorchEmbeddings):
 
     def get_vsz(self):
         return self.embed.get_vsz()
+
+
+class CharTransformerEmbeddings(PyTorchEmbeddings):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.embed = LookupTableEmbeddings(**kwargs)
+        self.d_model = kwargs.get('wsz', 30)
+        self.num_heads = kwargs.get('num_heads', 3)
+        self.rpr_k = kwargs.get('rpr_k', 10)
+        layers = kwargs.get('layers', 1)
+        pdrop = kwargs.get('pdrop', 0.5)
+        self.char_comp = TransformerEncoderStackWithLengths(self.num_heads, self.d_model, pdrop, False, layers,
+                                                            rpr_k=self.rpr_k, input_sz=self.embed.output_dim)
+
+    def forward(self, xch):
+        B, T, W = xch.shape
+        flat_chars = xch.view(-1, W)
+        char_embeds = self.embed(flat_chars)
+
+        # Calculate the lengths of each word
+        lengths = torch.sum(flat_chars != Offsets.PAD, dim=1)
+        patched_lengths = lengths.masked_fill(lengths == 0, 1)
+
+        results = self.char_comp((char_embeds, patched_lengths))
+        # B,T,H output, how to pool this
+        pooled = torch.max(results, -2, keepdims=False)[0]
+        return pooled.reshape((B, T, -1))
+
+
+    def get_dsz(self):
+        return self.d_model
+
+    def get_vsz(self):
+        return self.embed.get_vsz()
+
 
 
 class PositionalMixin(nn.Module):
