@@ -170,12 +170,12 @@ class TransformerLanguageModel(LanguageModelBase):
         self.apply(self.init_layer_weights)
 
     def create_mask(self, bth):
-        bth = self.proj_to_dsz(bth)
         T = bth.shape[1]
         mask = subsequent_mask(T).type_as(bth)
         return mask
 
     def decode(self, bth, hidden):
+        bth = self.proj_to_dsz(bth)
         mask = self.create_mask(bth)
         return self.transformer(bth, mask), None
 
@@ -184,7 +184,6 @@ class TransformerLanguageModel(LanguageModelBase):
 class TransformerMaskedLanguageModel(TransformerLanguageModel):
 
     def create_mask(self, bth):
-        bth = self.proj_to_dsz(bth)
         T = bth.shape[1]
         mask = torch.ones((1, 1, T, T)).type_as(bth)
         return mask

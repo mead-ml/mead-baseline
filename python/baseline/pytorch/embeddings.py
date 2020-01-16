@@ -148,7 +148,7 @@ class PositionalCharConvEmbeddings(CharConvEmbeddings):
     def forward(self, xch):
         """Add a positional encoding to the embedding, followed by dropout
 
-        :param x: The temporal signal in, to which the positional embeddings are applied
+        :param xch: The temporal signal in, to which the positional embeddings are applied
         :return: Embedded output
         """
         xch = super(PositionalCharConvEmbeddings, self).forward(xch) * math.sqrt(self.get_dsz())
