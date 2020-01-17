@@ -9,11 +9,85 @@ from baseline.pytorch.transformer import TransformerEncoderStack, subsequent_mas
 from baseline.pytorch.embeddings import PositionalLookupTableEmbeddings
 from baseline.embeddings import register_embeddings
 from baseline.pytorch.embeddings import PyTorchEmbeddings
-from baseline.vectorizers import register_vectorizer, AbstractVectorizer
-from pytorch_pretrained_bert.tokenization import BertTokenizer
-from pytorch_pretrained_bert.modeling import BertModel
+from baseline.vectorizers import register_vectorizer, AbstractVectorizer, Token1DVectorizer, Char2DVectorizer
 from baseline.pytorch.torchy import *
 
+@register_vectorizer(name='tlm-token1d')
+class Token1DVectorizerCLS(Token1DVectorizer):
+    """Override token1d vectorizer to generate [CLS] for pooling"""
+    def iterable(self, tokens):
+        for tok in tokens:
+            yield self.transform_fn(tok)
+        yield '[CLS]'
+
+    def run(self, tokens, vocab):
+        if self.mxlen < 0:
+            self.mxlen = self.max_seen
+
+        vec1d = np.zeros(self.mxlen, dtype=int)
+        i = 0
+        for i, atom in enumerate(self._next_element(tokens, vocab)):
+            if i == self.mxlen:
+                i -= 1
+                vec1d[i] = vocab.get('[CLS]')
+                break
+            vec1d[i] = atom
+        valid_length = i + 1
+        return vec1d, valid_length
+
+
+@register_vectorizer(name='tlm-char2d')
+class Char2DVectorizerCLS(Char2DVectorizer):
+    """Override char2d vectorizer to generate [CLS] for pooling"""
+    def _next_element(self, tokens, vocab):
+        OOV = vocab['<UNK>']
+        EOW = vocab.get('<EOW>', vocab.get(' ', Offsets.PAD))
+        CLS = vocab['[CLS]']
+        for token in self.iterable(tokens):
+            for ch in token:
+                yield vocab.get(ch, OOV)
+            yield EOW
+        yield CLS
+
+    def run(self, tokens, vocab):
+
+        if self.mxlen < 0:
+            self.mxlen = self.max_seen_tok
+        if self.mxwlen < 0:
+            self.mxwlen = self.max_seen_char
+
+        EOW = vocab.get('<EOW>', vocab.get(' ', Offsets.PAD))
+        CLS = vocab['[CLS]']
+        vec2d = np.zeros((self.mxlen, self.mxwlen), dtype=int)
+        i = 0
+        j = 0
+        over = False
+        for atom in self._next_element(tokens, vocab):
+            if over:
+                # If if we have gone over mxwlen burn tokens until we hit end of word
+                if atom == EOW:
+                    over = False
+                continue
+            if i == self.mxlen:
+                i -= 1
+                for j in range(self.mxwlen):
+                    vec2d[i, j] = 0
+                vec2d[i, 0] = CLS
+                break
+            if atom == EOW:
+                i += 1
+                j = 0
+                continue
+            elif j == self.mxwlen:
+                over = True
+                i += 1
+                j = 0
+                continue
+            else:
+                vec2d[i, j] = atom
+                j += 1
+        valid_length = i
+        return vec2d, valid_length
 
 @register_vectorizer(name='tlm-wordpiece')
 class WordPieceVectorizer1D(AbstractVectorizer):
