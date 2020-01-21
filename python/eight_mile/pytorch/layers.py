@@ -1723,7 +1723,6 @@ class SeqDotProductAttention(SequenceSequenceAttention):
 class SequenceSequenceRelativeAttention(nn.Module):
     """This form of attention is specified in Shaw et al 2018: https://www.aclweb.org/anthology/N18-2074.pdf
 
-    TODO: where to form RPR?
     """
     def __init__(self, hsz: int = None, pdrop: float = 0.1, **kwargs):
         super().__init__()
@@ -1731,8 +1730,13 @@ class SequenceSequenceRelativeAttention(nn.Module):
         self.dropout = nn.Dropout(pdrop)
         self.attn = None
 
-    def forward(self, qkvrm: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]) -> torch.Tensor:
-        query, key, value, edges_key, edges_value, mask = qkvrm
+    def forward(self, q_k_v_ek_ev_m: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]) -> torch.Tensor:
+        """Take in a tuple of tensors corresponding to the query, key, value, edges_key, edges_value and mask variables
+
+        :param q_k_v_ek_ev_m: A tuple consisting of query, key, value, `edges_key`, `edges_value` and `mask` respectively
+        :return: An updated value Tensor
+        """
+        query, key, value, edges_key, edges_value, mask = q_k_v_ek_ev_m
         a = self._attention(query, key, edges_key, mask)
         self.attn = a
         a = self.dropout(a)
@@ -1941,8 +1945,7 @@ class MultiHeadedRelativeAttention(nn.Module):
         seq = torch.arange(seq_len).to(device)
         window_len = 2*self.rpr_k
         edges = seq.view(1, -1) - seq.view(-1, 1) + self.rpr_k
-        edges[edges < 0] = 0
-        edges[edges > window_len] = window_len
+        edges = torch.clamp(edges, 0, window_len)
         return self.rpr_key(edges), self.rpr_value(edges)
 
     def forward(self, qkvm: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]) -> torch.Tensor:

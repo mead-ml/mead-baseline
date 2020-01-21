@@ -390,6 +390,25 @@ class RNNTaggerModel(TaggerModelBase):
         return Encoder(None, hsz, nlayers, self.pdrop_value, self.vdrop)
 
 
+
+@register_model(task='tagger', name='transformer')
+class TransformerTaggerModel(TaggerModelBase):
+
+    def __init__(self):
+        super().__init__()
+
+    def encode(self, **kwargs):
+        layers = int(kwargs.get('layers', 1))
+        num_heads = int(kwargs.get('num_heads', 4))
+        pdrop = float(kwargs.get('dropout', 0.5))
+        scale = False
+        hsz = int(kwargs['hsz'])
+        rpr_k = kwargs.get('rpr_k', 100)
+        d_ff = kwargs.get('d_ff')
+        encoder = TransformerEncoderStackWithLengths(num_heads, hsz, pdrop, scale, layers, d_ff=d_ff, rpr_k=rpr_k)
+        return encoder
+
+
 @register_model(task='tagger', name='cnn')
 class CNNTaggerModel(TaggerModelBase):
 
