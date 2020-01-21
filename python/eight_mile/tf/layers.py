@@ -1446,6 +1446,8 @@ class MultiHeadedRelativeAttention(tf.keras.layers.Layer):
         self.attn = None
 
     def make_rpr(self, seq_len):
+        """Create a matrix shifted by self.rpr_k and bounded between 0 and 2*self.rpr_k to provide 0-based indexing for embedding
+        """
         seq = tf.range(seq_len)
         window_len = 2*self.rpr_k
         edges = tf.reshape(seq, [1, -1]) - tf.reshape(seq, [-1, 1]) + self.rpr_k

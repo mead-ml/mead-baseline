@@ -1942,6 +1942,8 @@ class MultiHeadedRelativeAttention(nn.Module):
         self.attn = None
 
     def make_rpr(self, seq_len, device) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Create a matrix shifted by self.rpr_k and bounded between 0 and 2*self.rpr_k to provide 0-based indexing for embedding
+        """
         seq = torch.arange(seq_len).to(device)
         window_len = 2*self.rpr_k
         edges = seq.view(1, -1) - seq.view(-1, 1) + self.rpr_k
