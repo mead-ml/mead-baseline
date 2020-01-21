@@ -19,7 +19,12 @@ from baseline.utils import (
     normalize_backend,
     read_config_stream,
 )
-from baseline.tf.embeddings import LargeLookupTableEmbeddings
+try:
+    from baseline.tf.embeddings import LargeLookupTableEmbeddings
+except ImportError:
+    # This LargeLUT class is needed for creating the servable embeddings but not to use it
+    # We need to have this try otherwise using a model exported with v1 will crash on v2
+    pass
 from baseline.tf.tfy import (
     tf_device_wrapper,
     reload_embeddings,
