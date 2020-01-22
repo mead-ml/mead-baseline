@@ -1,6 +1,8 @@
 import tensorflow as tf
 import numpy as np
-from eight_mile.utils import listify, Offsets, wraps, get_version
+from eight_mile.utils import listify, Offsets, wraps, get_version, is_sequence
+from typing import Optional, Union, List
+
 import math
 BASELINE_TF_TRAIN_FLAG = None
 
@@ -168,7 +170,7 @@ class ConvEncoderStack(tf.keras.layers.Layer):
             subsequent_layer = ResidualBlock(ConvEncoder(insz, outsz, filtsz, pdrop, activation))
             self.layers.append(subsequent_layer)
 
-    def call(self, inputs):
+    def call(self, x):
         for layer in self.layers:
             x = layer(x)
         return x
@@ -266,7 +268,6 @@ def lstm_cell_w_dropout(hsz, pdrop, forget_bias=1.0, variational=False, training
                                            variational_recurrent=variational,
                                            dtype=tf.float32)
     return output
-
 
 
 class LSTMEncoder2(tf.keras.layers.Layer):
@@ -1158,29 +1159,12 @@ class TimeDistributedProjection(tf.keras.layers.Layer):
     def requires_length(self):
         return False
 
-def split_heads(x, num_heads):
-    shp = get_shape_as_list(x)
-    dsz = shp[-1]
-    r = tf.reshape(x, shp[:-1] + [num_heads, dsz // num_heads])
-    # (B, T, num_heads, d_k) -> (B, num_heads, T, d_k)
-    return tf.transpose(r, [0, 2, 1, 3])
-
-
-def combine_heads(x):
-    x = tf.transpose(x, [0, 2, 1, 3])
-    shp = get_shape_as_list(x)
-    num_heads, head_sz = shp[-2:]
-    new_x_shape = shp[:-2]+[num_heads * head_sz]
-    new_x = tf.reshape(x, new_x_shape)
-    return new_x
-
 
 class SequenceSequenceAttention(tf.keras.layers.Layer):
     def __init__(self, hsz=None, pdrop=0.1, name=None):
         super().__init__(name=name)
         self.hsz = hsz
         self.dropout = tf.keras.layers.Dropout(pdrop)
-        print(self.dropout)
         self.attn = None
 
     def call(self, qkvm):
@@ -1211,13 +1195,132 @@ class SeqScaledDotProductAttention(SequenceSequenceAttention):
         super().__init__(pdrop, name=name, **kwargs)
 
     def _attention(self, query, key, mask=None):
+        """Scaled dot product attention, as defined in https://arxiv.org/abs/1706.03762
+
+        We apply the query to the keys to receive our weights via softmax in a series of efficient
+        matrix operations. In the case of self-attntion the key and query are all low order
+        projections of the same input.
+
+        :param query: a query for alignment. Can come from self in case of self-attn or decoder in case of E/D
+        :param key: a set of keys from encoder or self
+        :param mask: masking (for destination) to prevent seeing what we shouldnt
+        :return: A tensor that is (BxHxTxT)
+        """
+        # Check why this was set to 2 before
+        d_k = tf.shape(query)[-1]
         scores = tf.matmul(query, key, transpose_b=True)
-        scores *= tf.math.rsqrt(tf.cast(tf.shape(query)[2], tf.float32))
+        scores *= tf.math.rsqrt(tf.cast(d_k, tf.float32))
 
         if mask is not None:
             scores = masked_fill(scores, mask == 0, -1e9)
 
         return tf.nn.softmax(scores, name="attention_weights")
+
+
+class SequenceSequenceRelativeAttention(tf.keras.layers.Layer):
+    """This form of attention is specified in Shaw et al 2018: https://www.aclweb.org/anthology/N18-2074.pdf
+    """
+    def __init__(self, hsz: int = None, pdrop: float = 0.1, name=None, **kwargs):
+        super().__init__(name=name)
+        self.hsz = hsz
+        self.dropout = tf.keras.layers.Dropout(pdrop)
+        self.attn = None
+
+    def call(self, q_k_v_ek_ev_m):
+        query, key, value, edges_key, edges_value, mask = q_k_v_ek_ev_m
+        a = self._attention(query, key, edges_key, mask)
+        self.attn = a
+        a = self.dropout(a, training=TRAIN_FLAG())
+        return self._update(a, value, edges_value)
+
+    def _attention(self, query, key, edges_key, mask=None):
+        pass
+
+    def _update(self, a, value, edges_value):
+        """Attention weights are applied for each value, but in a series of efficient matrix operations.
+
+        In the case of self-attention, the key and query (used to create the attention weights)
+        and values are all low order projections of the same input.
+
+        :param a: The attention weights [B, H, T, T]
+        :param value: The values [B, H, T, D]
+        :param edge_value: The edge values [T, T, D]
+        :returns: A tensor of shape [B, H, T, D]
+        """
+        B, H, T, D = get_shape_as_list(value)
+        updated_values = tf.matmul(a, value)
+        # (T, BxH, T)
+        a = tf.transpose(tf.reshape(a, [B*H, T, T]), [1, 0, 2])
+        t = tf.matmul(a, edges_value)  # (T, BxH, D)
+        t = tf.transpose(t, [1, 0, 2])
+        update_edge_values = tf.reshape(t, [B, H, T, D])
+        return updated_values + update_edge_values
+
+
+class SeqScaledDotProductRelativeAttention(SequenceSequenceRelativeAttention):
+    def __init__(self, pdrop=0.1, name="scaled_dot_product_rel_attention", **kwargs):
+        super().__init__(pdrop=pdrop, name=name, **kwargs)
+
+    def _attention(self, query, key, edges_key, mask = None):
+        """Scaled dot product attention, as defined in https://arxiv.org/abs/1706.03762
+
+        We apply the query to the keys to receive our weights via softmax in a series of efficient
+        matrix operations. In the case of self-attntion the key and query are all low order
+        projections of the same input.
+
+        :param query: a query for alignment. Can come from self in case of self-attn or decoder in case of E/D
+        :param key: a set of keys from encoder or self
+        :param mask: masking (for destination) to prevent seeing what we shouldnt
+        :param edges_key: a matrix of relative embeddings between each word in a sequence [TxTxD]
+        :return: A tensor that is (BxHxTxT)
+        """
+        # (., H, T, T) = (., H, T, D) x (., H, D, T)
+        B, H, T, d_k = get_shape_as_list(query)
+        scores_qk = tf.matmul(query, key, transpose_b=True)
+
+        tbhd = tf.transpose(tf.reshape(query, [B*H, T, d_k]), [1, 0, 2])
+        scores_qek = tf.matmul(tbhd, edges_key, transpose_b=True)
+        scores_qek = tf.transpose(scores_qek, [1, 0, 2])
+        scores_qek = tf.reshape(scores_qek, [B, H, T, T])
+        scores = (scores_qk + scores_qek) / math.sqrt(d_k)
+
+        if mask is not None:
+            scores = masked_fill(scores, mask == 0, -1e9)
+
+        return tf.nn.softmax(scores, name="rel_attention_weights")
+
+
+class SeqDotProductRelativeAttention(SequenceSequenceRelativeAttention):
+    def __init__(self, pdrop=0.1, name="dot_product_rel_attention", **kwargs):
+        super().__init__(pdrop=pdrop, name=name, **kwargs)
+
+    def _attention(self, query, key, edges_key, mask = None):
+        """Scaled dot product attention, as defined in https://arxiv.org/abs/1706.03762
+
+        We apply the query to the keys to receive our weights via softmax in a series of efficient
+        matrix operations. In the case of self-attntion the key and query are all low order
+        projections of the same input.
+
+        :param query: a query for alignment. Can come from self in case of self-attn or decoder in case of E/D
+        :param key: a set of keys from encoder or self
+        :param mask: masking (for destination) to prevent seeing what we shouldnt
+        :param edges_key: a matrix of relative embeddings between each word in a sequence [TxTxD]
+        :return: A tensor that is (BxHxTxT)
+        """
+        # (., H, T, T) = (., H, T, D) x (., H, D, T)
+        B, H, T, d_k = get_shape_as_list(query)
+        scores_qk = tf.matmul(query, key, transpose_b=True)
+
+        tbhd = tf.transpose(tf.reshape(query, [B*H, T, d_k]), [1, 0, 2])
+        scores_qek = tf.matmul(tbhd, edges_key, transpose_b=True)
+        scores_qek = tf.transpose(scores_qek, [1, 0, 2])
+        scores_qek = tf.reshape(scores_qek, [B, H, T, T])
+        scores = scores_qk + scores_qek
+
+        if mask is not None:
+            scores = masked_fill(scores, mask == 0, -1e9)
+
+        return tf.nn.softmax(scores, name="rel_attention_weights")
 
 
 class SeqDotProductAttention(SequenceSequenceAttention):
@@ -1254,7 +1357,7 @@ class MultiHeadedAttention(tf.keras.layers.Layer):
     And for self-attention in the decoder, K, Q and V all come from the decoder, but here it is masked to prevent using
     future values
     """
-    def __init__(self, num_heads, d_model, dropout=0.1, scale=False, name=None):
+    def __init__(self, num_heads, d_model, dropout=0.1, scale=False, d_k=None, name=None):
         """Constructor for multi-headed attention
 
         :param h: The number of heads
@@ -1263,13 +1366,19 @@ class MultiHeadedAttention(tf.keras.layers.Layer):
         :param attn_fn: A function to apply attention, defaults to SDP
         """
         super().__init__(name=name)
-        assert d_model % num_heads == 0
-        self.d_k = d_model // num_heads
+
+        if d_k is None:
+            self.d_k = d_model // num_heads
+            if d_model % num_heads != 0:
+                raise Exception(f"d_model ({d_model}) must be evenly divisible by num_heads ({num_heads})")
+        else:
+            self.d_k = d_k
+
         self.h = num_heads
-        self.w_Q = tf.keras.layers.Dense(units=d_model, name="query_projection")
-        self.w_K = tf.keras.layers.Dense(units=d_model, name="key_projection")
-        self.w_V = tf.keras.layers.Dense(units=d_model, name="value_projection")
-        self.w_O = tf.keras.layers.Dense(units=d_model, name="output_projection")
+        self.w_Q = tf.keras.layers.Dense(units=self.d_k * self.h, name="query_projection")
+        self.w_K = tf.keras.layers.Dense(units=self.d_k * self.h, name="key_projection")
+        self.w_V = tf.keras.layers.Dense(units=self.d_k * self.h, name="value_projection")
+        self.w_O = tf.keras.layers.Dense(units=self.d_k * self.h, name="output_projection")
         if scale:
             self.attn_fn = SeqScaledDotProductAttention(dropout)
         else:
@@ -1278,23 +1387,115 @@ class MultiHeadedAttention(tf.keras.layers.Layer):
 
     def call(self, qkvm):
         query, key, value, mask = qkvm
+        batchsz = get_shape_as_list(query)[0]
 
-        # (B, H, T, D)
-        query = split_heads(self.w_Q(query), self.h)
-        key = split_heads(self.w_K(key), self.h)
-        value = split_heads(self.w_V(value), self.h)
+        # (B, T, H, D) -> (B, H, T, D)
+        query = tf.transpose(tf.reshape(self.w_Q(query), [batchsz, -1, self.h, self.d_k]), [0, 2, 1, 3])
+        key = tf.transpose(tf.reshape(self.w_K(key), [batchsz, -1, self.h, self.d_k]), [0, 2, 1, 3])
+        value = tf.transpose(tf.reshape(self.w_V(value), [batchsz, -1, self.h, self.d_k]), [0, 2, 1, 3])
         x = self.attn_fn((query, key, value, mask))
         self.attn = self.attn_fn.attn
-        x = combine_heads(x)
+
+        # (B, H, T, D) -> (B, T, H, D) -> (B, T, H*D)
+        x = x.transpose(x, [0, 2, 1, 3])
+        x = tf.reshape(x, [batchsz, -1, self.h * self.d_k])
         return self.w_O(x)
 
 
+class MultiHeadedRelativeAttention(tf.keras.layers.Layer):
+    """
+    Multi-headed relative attention from Shaw et al 2018 (https://www.aclweb.org/anthology/N18-2074.pdf)
+
+    This method follows the same approach of MultiHeadedAttention, but it computes Relative Position Representations (RPR)
+    which are used as part of the attention computations.  To facilitate this, the model has its own internal
+    embeddings lookup table, and it has an updated computation for both the attention weights and the application
+    of those weights to follow them.
+
+    """
+    def __init__(self, num_heads: int, d_model: int, rpr_k: int, dropout: float = 0.1, scale: bool = False, d_k: Optional[int] = None, name=None):
+        """Constructor for multi-headed attention
+
+        :param h: The number of heads
+        :param d_model: The model hidden size
+        :param dropout (``float``): The amount of dropout to use
+        :param scale: Should we scale the dot product attention
+        :param d_k: The low-order project per head.  This is normally `d_model // num_heads` unless set explicitly
+        """
+        super().__init__()
+
+        if d_k is None:
+            self.d_k = d_model // num_heads
+            if d_model % num_heads != 0:
+                raise Exception(f"d_model ({d_model}) must be evenly divisible by num_heads ({num_heads})")
+        else:
+            self.d_k = d_k
+
+        self.rpr_k = rpr_k
+        self.rpr_key = tf.keras.layers.Embedding(2 * rpr_k + 1, self.d_k)
+        self.rpr_value = tf.keras.layers.Embedding(2 * rpr_k + 1, self.d_k)
+
+        self.h = num_heads
+        self.w_Q = tf.keras.layers.Dense(units=self.d_k * self.h, name="query_projection")
+        self.w_K = tf.keras.layers.Dense(units=self.d_k * self.h, name="key_projection")
+        self.w_V = tf.keras.layers.Dense(units=self.d_k * self.h, name="value_projection")
+        self.w_O = tf.keras.layers.Dense(units=self.d_k * self.h, name="output_projection")
+        if scale:
+            self.attn_fn = SeqScaledDotProductRelativeAttention(dropout)
+        else:
+            self.attn_fn = SeqDotProductRelativeAttention(dropout)
+        self.attn = None
+
+    def make_rpr(self, seq_len):
+        """Create a matrix shifted by self.rpr_k and bounded between 0 and 2*self.rpr_k to provide 0-based indexing for embedding
+        """
+        seq = tf.range(seq_len)
+        window_len = 2*self.rpr_k
+        edges = tf.reshape(seq, [1, -1]) - tf.reshape(seq, [-1, 1]) + self.rpr_k
+        edges = tf.clip_by_value(edges, 0, window_len)
+        return self.rpr_key(edges), self.rpr_value(edges)
+
+    def call(self, qkvm):
+        """Low-order projections of query, key and value into multiple heads, then attention application and dropout
+
+        :param query: a query for alignment. Can come from self in case of self-attn or decoder in case of E/D
+        :param key: a set of keys from encoder or self
+        :param value: a set of values from encoder or self
+        :param mask: masking (for destination) to prevent seeing what we shouldnt
+        :return: Multi-head attention output, result of attention application to sequence (B, T, d_model)
+        """
+        query, key, value, mask = qkvm
+        shp = get_shape_as_list(query)
+        batchsz = shp[0]
+        seq_len = shp[1]
+
+        # (B, T, H, D) -> (B, H, T, D)
+        query = tf.transpose(tf.reshape(self.w_Q(query), [batchsz, -1, self.h, self.d_k]), [0, 2, 1, 3])
+        key = tf.transpose(tf.reshape(self.w_K(key), [batchsz, -1, self.h, self.d_k]), [0, 2, 1, 3])
+        value = tf.transpose(tf.reshape(self.w_V(value), [batchsz, -1, self.h, self.d_k]), [0, 2, 1, 3])
+
+        rpr_key, rpr_value = self.make_rpr(seq_len)
+        x = self.attn_fn((query, key, value, rpr_key, rpr_value, mask))
+        self.attn = self.attn_fn.attn
+        # (B, H, T, D) -> (B, T, H, D) -> (B, T, H*D)
+        x = tf.transpose(x, [0, 2, 1, 3])
+        x = tf.reshape(x, [batchsz, -1, self.h * self.d_k])
+        return self.w_O(x)
+
+
+
 class TransformerEncoder(tf.keras.layers.Layer):
-    def __init__(self, d_model, num_heads, pdrop, scale=True, activation_type='relu', d_ff=None, name=None):
+
+    def __init__(self, num_heads: int, d_model: int, pdrop: float, scale: bool = True,
+                 activation_type: str = 'relu', d_ff: Optional[int] = None,
+                 d_k: Optional[int] = None, rpr_k: Optional[int] = None, name=None):
         super().__init__(name=name)
         self.d_model = d_model
         self.d_ff = d_ff if d_ff is not None else 4 * d_model
-        self.self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale=scale)
+        if rpr_k is not None:
+            self.self_attn = MultiHeadedRelativeAttention(num_heads, d_model, rpr_k, pdrop, scale, d_k=d_k)
+        else:
+            self.self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale=scale, d_k=d_k)
+
         self.ffn = FFN(d_model, pdrop, activation_type, d_ff, name='ffn')
         self.ln1 = tf.keras.layers.LayerNormalization(epsilon=1e-6)
         self.ln2 = tf.keras.layers.LayerNormalization(epsilon=1e-6)
@@ -1345,18 +1546,43 @@ class TransformerDecoder(tf.keras.layers.Layer):
 
 class TransformerEncoderStack(tf.keras.layers.Layer):
 
-    def __init__(self, d_model, num_heads, pdrop, scale=True, layers=1, activation_type='relu', d_ff=None, name=None, **kwargs):
+    def __init__(self, num_heads: int, d_model: int, pdrop: bool, scale: bool = True,
+                 layers: int = 1, activation: str = 'relu', d_ff: Optional[int] = None,
+                 d_k: Optional[int] = None, rpr_k: Optional[Union[int, List[int]]] = None, name=None, **kwargs):
+
         super().__init__(name=name)
         self.encoders = []
         self.ln = tf.keras.layers.LayerNormalization(epsilon=1e-6)
+
+        if not is_sequence(rpr_k):
+            rpr_k = [rpr_k] * layers
+
         for i in range(layers):
-            self.encoders.append(TransformerEncoder(d_model, num_heads, pdrop, scale, activation_type, d_ff))
+            self.encoders.append(TransformerEncoder(num_heads, d_model, pdrop, scale, activation, d_ff, d_k, rpr_k=rpr_k[i], name=name))
 
     def call(self, inputs):
         x, mask = inputs
         for layer in self.encoders:
             x = layer((x, mask))
         return self.ln(x)
+
+
+class TransformerEncoderStackWithLengths(TransformerEncoderStack):
+
+    def __init__(self, num_heads: int, d_model: int, pdrop: bool, scale: bool = True,
+                 layers: int = 1, activation: str = 'relu', d_ff: Optional[int] = None,
+                 d_k: Optional[int] = None, rpr_k: Optional[Union[int, List[int]]] = None,
+                 name=None,
+                 **kwargs):
+        super().__init__(num_heads, d_model, pdrop, scale, layers, activation, d_ff, d_k, rpr_k, name=name)
+        self.proj = WithDropout(tf.keras.layers.Dense(d_model), pdrop)
+
+    def call(self, inputs):
+        x, lengths = inputs
+        x = self.proj(x)
+        max_seqlen = get_shape_as_list(x)[1]
+        mask = tf.expand_dims(tf.expand_dims(tf.sequence_mask(lengths, max_seqlen, dtype=tf.float32), 1), 1)
+        return super().call((x, mask))
 
 
 class TransformerDecoderStack(tf.keras.layers.Layer):
@@ -1397,11 +1623,11 @@ class FFN(tf.keras.layers.Layer):
             d_ff = 4 * d_model
         self.expansion = tf.keras.layers.Dense(d_ff)
         self.squeeze = tf.keras.layers.Dense(d_model)
-        self.dropout = tf.keras.layers.Dropout(pdrop)
+        ##self.dropout = tf.keras.layers.Dropout(pdrop)
         self.act = tf.keras.layers.Activation(activation)
 
     def call(self, inputs):
-        return self.squeeze(self.dropout(self.act(self.expansion(inputs)), TRAIN_FLAG()))
+        return self.squeeze(self.act(self.expansion(inputs)))
 
 
 class TaggerGreedyDecoder(tf.keras.layers.Layer):

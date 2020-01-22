@@ -148,7 +148,7 @@ class TaggerModelBase(nn.Module, TaggerModel):
 class RNNTaggerModel(TaggerModelBase):
 
     def __init__(self):
-        super(RNNTaggerModel, self).__init__()
+        super().__init__()
 
     def init_encoder(self, input_sz, **kwargs):
         layers = int(kwargs.get('layers', 1))
@@ -159,6 +159,24 @@ class RNNTaggerModel(TaggerModelBase):
         rnntype = kwargs.get('rnntype', 'blstm')
         Encoder = LSTMEncoderSequence if rnntype == 'lstm' else BiLSTMEncoderSequence
         return Encoder(input_sz, hsz, layers, pdrop, unif=unif, initializer=weight_init, batch_first=True)
+
+
+@register_model(task='tagger', name='transformer')
+class TransformerTaggerModel(TaggerModelBase):
+
+    def __init__(self):
+        super().__init__()
+
+    def init_encoder(self, input_sz, **kwargs):
+        layers = int(kwargs.get('layers', 1))
+        num_heads = int(kwargs.get('num_heads', 4))
+        pdrop = float(kwargs.get('dropout', 0.5))
+        scale = False
+        hsz = int(kwargs['hsz'])
+        rpr_k = kwargs.get('rpr_k', 100)
+        d_ff = kwargs.get('d_ff')
+        encoder = TransformerEncoderStackWithLengths(num_heads, hsz, pdrop, scale, layers, d_ff=d_ff, rpr_k=rpr_k, input_sz=input_sz)
+        return encoder
 
 
 @register_model(task='tagger', name='cnn')

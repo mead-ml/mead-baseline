@@ -257,6 +257,52 @@ class CharLSTMEmbeddings(TensorFlowEmbeddings):
         return self.embed.get_vsz()
 
 
+class CharTransformerEmbeddings(TensorFlowEmbeddings):
+
+    def __init__(self, trainable=True, name=None, dtype=tf.float32, **kwargs):
+        trainable = kwargs.get('finetune', trainable)
+        super().__init__(trainable=trainable, name=name, dtype=dtype)
+        self.scope = kwargs.get('scope', 'CharLUT')
+        self.finetune = kwargs.get('finetune', trainable)
+        self.embed = LookupTableEmbeddings(name=f'{self.name}/CharLUT', finetune=self.finetune, **kwargs)
+        self.d_model = kwargs.get('wsz', 30)
+        self.num_heads = kwargs.get('num_heads', 3)
+        self.rpr_k = kwargs.get('rpr_k', 10)
+        layers = kwargs.get('layers', 1)
+        pdrop = kwargs.get('pdrop', 0.5)
+        self.char_comp = TransformerEncoderStackWithLengths(self.num_heads, self.d_model, pdrop, False, layers,
+                                                            rpr_k=self.rpr_k, input_sz=self.embed.output_dim,
+                                                            name=f"{self.name}/transformer")
+
+    def encode(self, x):
+        self.x = x
+        shape = tf.shape(x)
+        B = shape[0]
+        T = shape[1]
+        W = shape[2]
+        flat_chars = tf.reshape(x, [-1, W])
+        embed_chars = self.embed(flat_chars)
+
+        # Calculate the lengths of each word
+        lengths = tf.reduce_sum(tf.cast(tf.not_equal(flat_chars, Offsets.PAD), tf.int32), axis=1)
+
+        # Run the LSTM
+        result = self.char_comp((embed_chars, lengths))
+
+        pooled = tf.reduce_max(result, -2, keepdims=False)
+
+        return tf.reshape(pooled, (B, T, self.d_model))
+
+    def call(self, inputs):
+        return self.encode(inputs)
+
+    def get_dsz(self):
+        return self.d_model
+
+    def get_vsz(self):
+        return self.embed.get_vsz()
+
+
 def get_timing_signal_1d(length,
                          channels,
                          min_timescale=1.0,
