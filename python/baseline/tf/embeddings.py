@@ -138,6 +138,12 @@ class CharConvEmbeddingsModel(TensorFlowEmbeddingsModel):
         return tf.placeholder(tf.int32, [None, None, None], name=name)
 
 
+@register_embeddings(name='char-transformer')
+class CharTransformerModel(TensorFlowEmbeddingsModel):
+    def __init__(self, name=None, **kwargs):
+        super().__init__(name, **kwargs)
+        self.embedding_layer = CharTransformerEmbeddings(name=self._name, **kwargs)
+
 @register_embeddings(name='char-lstm')
 class CharLSTMEmbeddingsModel(TensorFlowEmbeddingsModel):
     def __init__(self, name=None, **kwargs):

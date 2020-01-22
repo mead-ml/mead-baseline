@@ -10,7 +10,7 @@ import torch.nn.functional as F
 import torch.jit as jit
 import torch.autograd
 
-from eight_mile.utils import listify, Offsets
+from eight_mile.utils import listify, Offsets, is_sequence
 from eight_mile.utils import transition_mask as transition_mask_np
 
 MASK_FALSE = False
@@ -1247,7 +1247,7 @@ class Viterbi(nn.Module):
         best_path = torch.stack(best_path)
         # Mask out the extra tags (This might be pointless given thathatt anything that
         # will use this as a dense tensor downstream will mask it itself?)
-        seq_mask = sequence_mask(lengths).to(best_path.device).transpose(0, 1)
+        seq_mask = sequence_mask(lengths, seq_len).to(best_path.device).transpose(0, 1)
         best_path = best_path.masked_fill(seq_mask == MASK_FALSE, 0)
         return best_path, path_score
 
@@ -1552,6 +1552,7 @@ class SequenceModel(nn.Module):
         super().__init__()
         self.embed_model = embeddings
         self.transducer_model = transducer
+        # TODO: make this a separate model!
         if transducer.output_dim != nc:
             self.proj_layer = Dense(transducer.output_dim, nc)
         else:
@@ -1563,6 +1564,7 @@ class SequenceModel(nn.Module):
 
         embedded = self.embed_model(inputs)
         embedded = (embedded, lengths)
+        #transduced = self.transducer_model(embedded)
         transduced = self.proj_layer(self.transducer_model(embedded))
         return transduced
 
@@ -1718,6 +1720,95 @@ class SeqDotProductAttention(SequenceSequenceAttention):
         return F.softmax(scores, dim=-1)
 
 
+class SequenceSequenceRelativeAttention(nn.Module):
+    """This form of attention is specified in Shaw et al 2018: https://www.aclweb.org/anthology/N18-2074.pdf
+
+    """
+    def __init__(self, hsz: int = None, pdrop: float = 0.1, **kwargs):
+        super().__init__()
+        self.hsz = hsz
+        self.dropout = nn.Dropout(pdrop)
+        self.attn = None
+
+    def forward(self, q_k_v_ek_ev_m: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]) -> torch.Tensor:
+        """Take in a tuple of tensors corresponding to the query, key, value, edges_key, edges_value and mask variables
+
+        :param q_k_v_ek_ev_m: A tuple consisting of query, key, value, `edges_key`, `edges_value` and `mask` respectively
+        :return: An updated value Tensor
+        """
+        query, key, value, edges_key, edges_value, mask = q_k_v_ek_ev_m
+        a = self._attention(query, key, edges_key, mask)
+        self.attn = a
+        a = self.dropout(a)
+        return self._update(a, value, edges_value)
+
+    def _attention(self, query: torch.Tensor, key: torch.Tensor, edges_key: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        pass
+
+    def _update(self, a: torch.Tensor, value: torch.Tensor, edges_value: torch.Tensor) -> torch.Tensor:
+        """Attention weights are applied for each value, but in a series of efficient matrix operations.
+
+        In the case of self-attention, the key and query (used to create the attention weights)
+        and values are all low order projections of the same input.
+
+        :param a: The attention weights [B, H, T, T]
+        :param value: The values [B, H, T, D]
+        :param edge_value: The edge values [T, T, D]
+        :returns: A tensor of shape [B, H, T, D]
+        """
+        B, H, T, D = value.shape
+        updated_values = torch.matmul(a, value)
+        a = a.view(B*H, T, T).transpose(0, 1)  # (T, BxH, T)
+        t = torch.matmul(a, edges_value)  # (T, BxH, D)
+        update_edge_values = t.transpose(0, 1).view(B, H, T, D)
+        return updated_values + update_edge_values
+
+
+class SeqScaledDotProductRelativeAttention(SequenceSequenceRelativeAttention):
+    def __init__(self, pdrop: float = 0.1, **kwargs):
+        super().__init__(pdrop=pdrop, **kwargs)
+
+    def _attention(self, query: torch.Tensor, key: torch.Tensor, edges_key: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """Scaled dot product attention, as defined in https://arxiv.org/abs/1706.03762
+
+        We apply the query to the keys to receive our weights via softmax in a series of efficient
+        matrix operations. In the case of self-attntion the key and query are all low order
+        projections of the same input.
+
+        :param query: a query for alignment. Can come from self in case of self-attn or decoder in case of E/D
+        :param key: a set of keys from encoder or self
+        :param mask: masking (for destination) to prevent seeing what we shouldnt
+        :param edges_key: a matrix of relative embeddings between each word in a sequence [TxTxD]
+        :return: A tensor that is (BxHxTxT)
+        """
+        # (., H, T, T) = (., H, T, D) x (., H, D, T)
+        B, H, T, d_k = query.shape
+        scores_qk = torch.matmul(query, key.transpose(-2, -1))
+        tbhd = query.reshape(B*H, T, d_k).transpose(0, 1)
+        scores_qek = torch.matmul(tbhd, edges_key.transpose(-2, -1))
+        scores_qek = scores_qek.transpose(0, 1).view(B, H, T, T)
+        scores = (scores_qk + scores_qek) / math.sqrt(d_k)
+        if mask is not None:
+            scores = scores.masked_fill(mask == MASK_FALSE, -1e9)
+        return F.softmax(scores, dim=-1)
+
+
+class SeqDotProductRelativeAttention(SequenceSequenceRelativeAttention):
+    def __init__(self, pdrop: float = 0.1, **kwargs):
+        super().__init__(pdrop=pdrop, **kwargs)
+
+    def _attention(self, query: torch.Tensor, key: torch.Tensor, edges_key: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        B, H, T, d_k = query.shape
+        scores_qk = torch.matmul(query, key.transpose(-2, -1))
+        tbhd = query.reshape(B*H, T, d_k).transpose(0, 1)
+        scores_qek = torch.matmul(tbhd, edges_key.transpose(-2, -1))
+        scores_qek = scores_qek.transpose(0, 1).view(B, H, T, T)
+        scores = scores_qk + scores_qek
+        if mask is not None:
+            scores = scores.masked_fill(mask == MASK_FALSE, -1e9)
+        return F.softmax(scores, dim=-1)
+
+
 class SeqBahdanauAttention(SequenceSequenceAttention):
     def __init__(self, hsz: int, pdrop: float = 0.1, **kwargs):
         super().__init__(hsz, pdrop=pdrop, **kwargs)
@@ -1807,15 +1898,99 @@ class MultiHeadedAttention(nn.Module):
         return self.w_O(x)
 
 
+class MultiHeadedRelativeAttention(nn.Module):
+    """
+    Multi-headed relative attention from Shaw et al 2018 (https://www.aclweb.org/anthology/N18-2074.pdf)
+
+    This method follows the same approach of MultiHeadedAttention, but it computes Relative Position Representations (RPR)
+    which are used as part of the attention computations.  To facilitate this, the model has its own internal
+    embeddings lookup table, and it has an updated computation for both the attention weights and the application
+    of those weights to follow them.
+
+    """
+    def __init__(self, num_heads: int, d_model: int, rpr_k: int, dropout: float = 0.1, scale: bool = False, d_k: Optional[int] = None):
+        """Constructor for multi-headed attention
+
+        :param h: The number of heads
+        :param d_model: The model hidden size
+        :param dropout (``float``): The amount of dropout to use
+        :param scale: Should we scale the dot product attention
+        :param d_k: The low-order project per head.  This is normally `d_model // num_heads` unless set explicitly
+        """
+        super().__init__()
+
+        if d_k is None:
+            self.d_k = d_model // num_heads
+            if d_model % num_heads != 0:
+                raise Exception(f"d_model ({d_model}) must be evenly divisible by num_heads ({num_heads})")
+        else:
+            self.d_k = d_k
+
+        self.rpr_k = rpr_k
+        self.rpr_key = nn.Embedding(2 * rpr_k + 1, self.d_k)
+        self.rpr_value = nn.Embedding(2 * rpr_k + 1, self.d_k)
+
+        self.h = num_heads
+        self.w_Q = Dense(d_model, self.d_k * self.h)
+        self.w_K = Dense(d_model, self.d_k * self.h)
+        self.w_V = Dense(d_model, self.d_k * self.h)
+        self.w_O = Dense(self.d_k * self.h, d_model)
+        if scale:
+            self.attn_fn = SeqScaledDotProductRelativeAttention(dropout)
+        else:
+            self.attn_fn = SeqDotProductRelativeAttention(dropout)
+        self.attn = None
+
+    def make_rpr(self, seq_len, device) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Create a matrix shifted by self.rpr_k and bounded between 0 and 2*self.rpr_k to provide 0-based indexing for embedding
+        """
+        seq = torch.arange(seq_len).to(device)
+        window_len = 2*self.rpr_k
+        edges = seq.view(1, -1) - seq.view(-1, 1) + self.rpr_k
+        edges = torch.clamp(edges, 0, window_len)
+        return self.rpr_key(edges), self.rpr_value(edges)
+
+    def forward(self, qkvm: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]) -> torch.Tensor:
+        """Low-order projections of query, key and value into multiple heads, then attention application and dropout
+
+        :param query: a query for alignment. Can come from self in case of self-attn or decoder in case of E/D
+        :param key: a set of keys from encoder or self
+        :param value: a set of values from encoder or self
+        :param mask: masking (for destination) to prevent seeing what we shouldnt
+        :return: Multi-head attention output, result of attention application to sequence (B, T, d_model)
+        """
+        query, key, value, mask = qkvm
+        batchsz = query.size(0)
+        seq_len = query.size(1)
+
+        # (B, H, T, D)
+        query = self.w_Q(query).view(batchsz, -1, self.h, self.d_k).transpose(1, 2)
+        key = self.w_K(key).view(batchsz, -1, self.h, self.d_k).transpose(1, 2)
+        value = self.w_V(value).view(batchsz, -1, self.h, self.d_k).transpose(1, 2)
+
+        rpr_key, rpr_value = self.make_rpr(seq_len, query.device)
+        x = self.attn_fn((query, key, value, rpr_key, rpr_value, mask))
+        self.attn = self.attn_fn.attn
+
+        x = x.transpose(1, 2).contiguous() \
+            .view(batchsz, -1, self.h * self.d_k)
+        return self.w_O(x)
+
+
+
 class TransformerEncoder(nn.Module):
     def __init__(self, num_heads: int, d_model: int, pdrop: float, scale: bool = True,
-                 activation_type: str = 'relu', d_ff: Optional[int] = None, d_k: Optional[int] = None):
+                 activation_type: str = 'relu', d_ff: Optional[int] = None, d_k: Optional[int] = None, rpr_k: Optional[int] = None):
         super().__init__()
         self.d_model = d_model
         self.d_ff = d_ff if d_ff is not None else 4 * d_model
-        self.self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale=scale, d_k=d_k)
+        if rpr_k is not None:
+            self.self_attn = MultiHeadedRelativeAttention(num_heads, d_model, rpr_k, pdrop, scale, d_k=d_k)
+        else:
+            self.self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale=scale, d_k=d_k)
         self.ffn = nn.Sequential(Dense(self.d_model, self.d_ff),
                                  get_activation(activation_type),
+                                 ##nn.Dropout(pdrop),
                                  Dense(self.d_ff, self.d_model))
         self.ln1 = nn.LayerNorm(self.d_model, eps=1e-6)
         self.ln2 = nn.LayerNorm(self.d_model, eps=1e-6)
@@ -1834,6 +2009,7 @@ class TransformerEncoder(nn.Module):
 
         x = self.ln2(x)
         x = x + self.dropout(self.ffn(x))
+        ##x = self.ln1(x)
         return x
 
 
@@ -1871,18 +2047,43 @@ class TransformerDecoder(nn.Module):
 class TransformerEncoderStack(nn.Module):
 
     def __init__(self, num_heads: int, d_model: int, pdrop: bool, scale: bool = True,
-                 layers: int = 1, activation: str = 'relu', d_ff: int = None, d_k: int = None, **kwargs):
+                 layers: int = 1, activation: str = 'relu', d_ff: Optional[int] = None,
+                 d_k: Optional[int] = None, rpr_k: Optional[Union[int, List[int]]] = None, **kwargs):
         super().__init__()
         self.encoders = nn.ModuleList()
         self.ln = nn.LayerNorm(d_model, eps=1e-6)
+        self.output_dim = d_model
+
+        if not is_sequence(rpr_k):
+            rpr_k = [rpr_k] * layers
+
         for i in range(layers):
-            self.encoders.append(TransformerEncoder(num_heads, d_model, pdrop, scale, activation, d_ff, d_k))
+            self.encoders.append(TransformerEncoder(num_heads, d_model, pdrop, scale, activation, d_ff, d_k, rpr_k=rpr_k[i]))
 
     def forward(self, inputs: Tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
         x, mask = inputs
         for layer in self.encoders:
             x = layer((x, mask))
         return self.ln(x)
+
+
+class TransformerEncoderStackWithLengths(TransformerEncoderStack):
+
+    def __init__(self, num_heads: int, d_model: int, pdrop: bool, scale: bool = True,
+                 layers: int = 1, activation: str = 'relu', d_ff: Optional[int] = None,
+                 d_k: Optional[int] = None, rpr_k: Optional[Union[int, List[int]]] = None,
+                 input_sz: Optional[int] = None, **kwargs):
+        super().__init__(num_heads, d_model, pdrop, scale, layers, activation, d_ff, d_k, rpr_k)
+        self.proj = WithDropout(pytorch_linear(input_sz, d_model), pdrop)
+
+    def forward(self, inputs: Tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
+
+        x, lengths = inputs
+        x = self.proj(x)
+        max_seqlen = x.shape[1]
+        mask = sequence_mask(lengths, max_seqlen).to(x.device)
+        return super().forward((x, mask.unsqueeze(1).unsqueeze(1)))
+
 
 
 class TransformerDecoderStack(nn.Module):

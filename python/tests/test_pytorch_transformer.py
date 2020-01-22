@@ -5,7 +5,10 @@ from mock import MagicMock
 torch = pytest.importorskip('torch')
 from baseline.pytorch.torchy import sequence_mask
 from baseline.pytorch.transformer import subsequent_mask
-from eight_mile.pytorch.layers import SeqScaledDotProductAttention, SeqDotProductAttention
+from eight_mile.pytorch.layers import (SeqScaledDotProductAttention,
+                                       SeqDotProductAttention,
+                                       SeqDotProductRelativeAttention,
+                                       SeqScaledDotProductRelativeAttention)
 # from baseline.pytorch.transformer import scaled_dot_product_attention as sdpa
 # from baseline.pytorch.transformer import dot_product_attention as dpa
 
@@ -25,6 +28,21 @@ def qkv():
     v = torch.rand(B, H, T, D)
     return q, k, v
 
+@pytest.fixture
+def ra_inputs():
+    B, H, T, D= map(int, np.random.randint(5, 10, size=4))
+    q = torch.rand(B, H, T, D)
+    k = torch.rand(B, H, T, D)
+    v = torch.rand(B, H, T, D)
+    ek = torch.rand(T, T, D)
+    ev = torch.rand(T, T, D)
+    return q, k, v, ek, ev, None
+
+
+def test_rel_attn_shapes(ra_inputs):
+    ra = SeqScaledDotProductRelativeAttention()
+    output = ra(ra_inputs)
+    assert output.shape == ra_inputs[0].shape
 
 def test_sdpa_values(qkv):
     sdpa = SeqScaledDotProductAttention(0.0)

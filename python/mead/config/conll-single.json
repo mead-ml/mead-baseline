@@ -1,6 +1,5 @@
 {
     "task": "tagger",
-    "batchsz": 10,
     "conll_output": "conll-iobes-results.conll",
     "unif": 0.1,
     "preproc": {
@@ -42,6 +41,7 @@
         "crf": 1
     },
     "train": {
+	"batchsz": 10,
         "epochs": 100,
         "optim": "sgd",
         "eta": 0.015,
