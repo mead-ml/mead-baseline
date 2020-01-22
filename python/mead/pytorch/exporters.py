@@ -73,7 +73,7 @@ def create_data_dict(shapes, vectorizers, transpose=False, min_=0, max_=50):
     return data
 
 
-@exporter
+@export
 class PytorchONNXExporter(Exporter):
     def __init__(self, task, **kwargs):
         super().__init__(task, **kwargs)
