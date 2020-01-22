@@ -361,19 +361,8 @@ def optimizer(loss_fn, **kwargs):
                                                         colocate_gradients_with_ops=colocate_gradients_with_ops,
                                                         clip_gradients=clip, learning_rate_decay_fn=lr_scheduler,
                                                         increment_global_step=True)
-# https://www.tensorflow.org/guide/eager
-@tf.custom_gradient
-def clip_gradient_by_norm(x, norm):
-    y = tf.identity(x)
 
-    def grad_fn(dresult):
-        return [tf.clip_by_norm(dresult, norm), None]
 
-    return y, grad_fn
-
-# Warning, sparse update ops dont work on GPU
-# In TF 2 this leads to errors, particularly with SGD w/ Momentum and Adadelta
-# https://github.com/tensorflow/tensorflow/issues/31291
 @exporter
 class EagerOptimizer(object):
 

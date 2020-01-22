@@ -184,9 +184,7 @@ class CharTransformerEmbeddings(PyTorchEmbeddings):
 
         # Calculate the lengths of each word
         lengths = torch.sum(flat_chars != Offsets.PAD, dim=1)
-        patched_lengths = lengths.masked_fill(lengths == 0, 1)
-
-        results = self.char_comp((char_embeds, patched_lengths))
+        results = self.char_comp((char_embeds, lengths))
         # B,T,H output, how to pool this
         pooled = torch.max(results, -2, keepdims=False)[0]
         return pooled.reshape((B, T, -1))
