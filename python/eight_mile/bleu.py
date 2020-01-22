@@ -52,6 +52,9 @@ from typing import List, Tuple, Union, Iterable, TextIO, Counter as CounterType,
 import numpy as np
 
 
+__all__ = ["Bleu", "bleu"]
+
+
 Hypothesis = List[str]
 # This is [B, T] where B is the number of hypotheses and T is the number of words in that hypothesis.
 HypothesisCorpus = List[Hypothesis]

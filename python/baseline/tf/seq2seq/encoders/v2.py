@@ -1,7 +1,7 @@
 from baseline.tf.tfy import *
 from baseline.tf.embeddings import *
 from baseline.tf.transformer import transformer_encoder_stack
-from baseline.utils import export, MAGIC_VARS
+from baseline.utils import exporter, MAGIC_VARS
 from baseline.model import register_encoder
 from collections import namedtuple
 from eight_mile.tf.layers import *

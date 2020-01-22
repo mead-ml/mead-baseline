@@ -6,7 +6,7 @@ from collections import namedtuple
 import baseline
 from baseline.tf.embeddings import *
 from baseline.utils import (
-    export,
+    exporter,
     Offsets,
     ls_props,
     read_json,
@@ -19,7 +19,7 @@ from mead.utils import save_to_bundle, create_metadata, get_output_paths
 
 
 __all__ = []
-exporter = export(__all__)
+export = exporter(__all__)
 
 
 FIELD_NAME = 'text/tokens'
@@ -32,7 +32,7 @@ def get_tf_index_from_unzipped(dir_path):
     return os.path.join(dir_path, [x[:-6] for x in os.listdir(dir_path) if 'index' in x][0])
 
 
-@exporter
+@export
 class TensorFlowExporter(Exporter):
 
     def __init__(self, task, **kwargs):
@@ -112,7 +112,7 @@ class TensorFlowExporter(Exporter):
         pass
 
 
-@exporter
+@export
 @register_exporter(task='classify', name='default')
 class ClassifyTensorFlowExporter(TensorFlowExporter):
 
@@ -158,7 +158,7 @@ class ClassifyTensorFlowExporter(TensorFlowExporter):
         return sig_input, sig_output, sig_name, assets
 
 
-@exporter
+@export
 @register_exporter(task='tagger', name='default')
 class TaggerTensorFlowExporter(TensorFlowExporter):
 
@@ -208,7 +208,7 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
         return sig_input, sig_output, sig_name, assets
 
 
-@exporter
+@export
 @register_exporter(task='seq2seq', name='default')
 class Seq2SeqTensorFlowExporter(TensorFlowExporter):
     """

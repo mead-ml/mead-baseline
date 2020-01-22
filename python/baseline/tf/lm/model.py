@@ -99,7 +99,7 @@ class LanguageModelBase(tf.keras.Model, LanguageModel):
 
     def _create_loss(self, scope):
         with tf.compat.v1.variable_scope(scope):
-            vsz = self.embeddings[self.tgt_key].vsz
+            vsz = self.embeddings[self.tgt_key].get_vsz()
             targets = tf.reshape(self.y, [-1])
             bt_x_v = tf.nn.log_softmax(tf.reshape(self.logits, [-1, vsz]), axis=-1)
             one_hots = tf.one_hot(targets, vsz)

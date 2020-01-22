@@ -2,9 +2,8 @@ import math
 import logging
 import torch
 import torch.autograd
+from eight_mile.optz import create_lr_scheduler, register_lr_scheduler
 from eight_mile.optz import (
-    register_lr_scheduler,
-    create_lr_scheduler,
     ConstantScheduler,
     WarmupLinearScheduler,
     CyclicLRScheduler,
@@ -77,7 +76,6 @@ class ExponentialDecaySchedulerPyTorch(ExponentialDecayScheduler):
 @register_lr_scheduler(name='composite')
 class CompositeLRSchedulerPyTorch(CompositeLRScheduler):
     pass
-
 
 class AdamW(torch.optim.Optimizer):
     def __init__(self, params, set_lr, lr=1e-3, betas=(0.9, 0.999), eps=1e-8,
@@ -275,5 +273,3 @@ class EagerOptimizer(object):
         l.backward()
         self.optimizer.step()
         return float(l), h
-
-

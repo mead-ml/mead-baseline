@@ -9,14 +9,14 @@ import argparse
 from copy import deepcopy
 from itertools import chain
 from collections import OrderedDict, MutableMapping
-from baseline.utils import export, str2bool, read_config_file, write_json, get_logging_level
+from baseline.utils import exporter, str2bool, read_config_file, write_json, get_logging_level
 
 __all__ = []
-exporter = export(__all__)
+export = exporter(__all__)
 logger = logging.getLogger('mead')
 
 
-@exporter
+@export
 def configure_logger(logger_config, basedir=None):
     """Use the logger file (logging.json) to configure the log, but overwrite the filename to include the PID
 
@@ -51,7 +51,7 @@ def configure_logger(logger_config, basedir=None):
     logging.config.dictConfig(config)
 
 
-@exporter
+@export
 def print_dataset_info(dataset):
     logger.info("[train file]: {}".format(dataset['train_file']))
     logger.info("[valid file]: {}".format(dataset['valid_file']))
@@ -65,7 +65,7 @@ def print_dataset_info(dataset):
         logger.info("[label file]: {}".format(label_file))
 
 
-@exporter
+@export
 def read_config_file_or_json(config, name=''):
     if isinstance(config, (dict, list)):
         return config
@@ -86,7 +86,7 @@ def parse_date(s):
     raise Exception("Couldn't parse datestamp {}".format(s))
 
 
-@exporter
+@export
 def flatten(dictionary, sep='.'):
     """Flatten a nested dict.
 
@@ -115,7 +115,7 @@ def flatten(dictionary, sep='.'):
     return _flatten(dictionary, sep, [])
 
 
-@exporter
+@export
 def unflatten(dictionary, sep: str = "."):
     """Turn a flattened dict into a nested dict.
 
@@ -150,7 +150,7 @@ def _infer_numeric_or_str(value: str):
     return value
 
 
-@exporter
+@export
 def parse_overrides(overrides, pre):
     """Find override parameters in the cli args.
 
@@ -173,7 +173,7 @@ def parse_overrides(overrides, pre):
     return {k.split(":")[1]: v[0] if len(v) == 1 else v for k, v in vars(args).items()}
 
 
-@exporter
+@export
 def parse_and_merge_overrides(base, overrides, pre):
     """Parse extra cli args and use them to override the original config.
 
@@ -188,7 +188,7 @@ def parse_and_merge_overrides(base, overrides, pre):
     return unflatten(base)
 
 
-@exporter
+@export
 def get_dataset_from_key(dataset_key, datasets_set):
 
     # This is the previous behavior
@@ -216,20 +216,20 @@ def get_dataset_from_key(dataset_key, datasets_set):
     return datasets_set[last_k]
 
 
-@exporter
+@export
 def get_mead_settings(mead_settings_config):
     if mead_settings_config is None:
         return {}
     return read_config_file_or_json(mead_settings_config, 'mead settings')
 
 
-@exporter
+@export
 def index_by_label(object_list):
     objects = {x['label']: x for x in object_list}
     return objects
 
 
-@exporter
+@export
 def convert_path(path, loc=None):
     """If the provided path doesn't exist search for it relative to loc (or this file)."""
     if os.path.isfile(path):
@@ -254,7 +254,7 @@ def _infer_type_or_str(x):
                 return x
 
 
-@exporter
+@export
 def parse_extra_args(base_args, extra_args):
     """Parse extra command line arguments based on based names.
     Note:
@@ -289,7 +289,7 @@ def parse_extra_args(base_args, extra_args):
     return settings
 
 
-@exporter
+@export
 def order_json(data):
     """Sort json to a consistent order.
     When you hash json that has the some content but is different orders you get
@@ -332,7 +332,7 @@ KEYS = {
 }
 
 
-@exporter
+@export
 def remove_extra_keys(config, keys=KEYS):
     """Remove config items that don't effect the model.
     We base most things off of the sha1 hash of the model configs but there
@@ -357,7 +357,7 @@ def remove_extra_keys(config, keys=KEYS):
     return c
 
 
-@exporter
+@export
 def hash_config(config):
     """Hash a json config with sha1.
     :param config: dict, The config to hash.
@@ -377,7 +377,7 @@ def _listdir(model_dir):
         return []
 
 
-@exporter
+@export
 def find_model_version(model_dir):
     """Find the next usable model version when exporting.
 
@@ -388,7 +388,7 @@ def find_model_version(model_dir):
     return str(max(chain([0], map(int, filter(lambda x: x.isdigit(), _listdir(model_dir))))) + 1)
 
 
-@exporter
+@export
 def get_output_paths(
         output_dir,
         project=None, name=None,
@@ -450,7 +450,7 @@ def get_output_paths(
     return client_path, server_path
 
 
-@exporter
+@export
 def get_export_params(
         config,
         output_dir=None,

@@ -1,19 +1,19 @@
-from six.moves.http_client import HTTPConnection
-from six.moves.urllib.parse import urlparse
-
 import json
+from urllib.parse import urlparse
+from http.client import HTTPConnection
 import numpy as np
 from baseline.utils import (
-    import_user_module, export, optional_params, register, listify
+    import_user_module, exporter, optional_params, register, listify
 )
 
 
 __all__ = []
-exporter = export(__all__)
+export = exporter(__all__)
 
 BASELINE_REMOTES = {}
 
-@exporter
+
+@export
 @optional_params
 def register_remote(cls, name=None):
     """Register a class as a plug-in"""
@@ -27,7 +27,7 @@ def register_remote(cls, name=None):
     return cls
 
 
-@exporter
+@export
 def create_remote(exporter_type, **kwargs):
     remote = BASELINE_REMOTES[exporter_type]
     return remote(**kwargs)
@@ -97,7 +97,7 @@ class RemoteModel(object):
         pass
 
 
-@exporter
+@export
 class RemoteModelREST(RemoteModel):
 
     def __init__(
@@ -157,7 +157,7 @@ class RemoteModelREST(RemoteModel):
         return outcomes_list
 
 
-@exporter
+@export
 class RemoteRESTSeq2Seq(RemoteModelREST):
 
     def deserialize_response(self, examples, predict_response):
@@ -174,7 +174,7 @@ class RemoteRESTSeq2Seq(RemoteModelREST):
         return tensor
 
 
-@exporter
+@export
 class RemoteRESTTagger(RemoteModelREST):
 
     def deserialize_response(self, examples, predict_response):
@@ -200,7 +200,7 @@ class RemoteRESTTagger(RemoteModelREST):
         return result
 
 
-@exporter
+@export
 class RemoteRESTClassifier(RemoteModelREST):
 
     def deserialize_response(self, examples, predict_response):
@@ -224,7 +224,7 @@ class RemoteRESTClassifier(RemoteModelREST):
         return result
 
 
-@exporter
+@export
 class RemoteRESTEmbeddings(RemoteModelREST):
 
     def deserialize_response(self, examples, predict_response):
@@ -238,7 +238,7 @@ class RemoteRESTEmbeddings(RemoteModelREST):
         return np.array(predict_response['scores'])
 
 
-@exporter
+@export
 class RemoteModelGRPC(RemoteModel):
 
     def __init__(self, remote, name, signature, labels=None, beam=None, lengths_key=None, inputs=None, version=None, return_labels=False):
@@ -321,7 +321,7 @@ class RemoteModelGRPC(RemoteModel):
         return request
 
 
-@exporter
+@export
 class RemoteGRPCSeq2Seq(RemoteModelGRPC):
 
     def deserialize_response(self, examples, predict_response):
@@ -350,7 +350,7 @@ class RemoteGRPCSeq2Seq(RemoteModelGRPC):
         return results
 
 
-@exporter
+@export
 class RemoteGRPCTagger(RemoteModelGRPC):
 
     def deserialize_response(self, examples, predict_response):
@@ -385,7 +385,7 @@ class RemoteGRPCTagger(RemoteModelGRPC):
         return result
 
 
-@exporter
+@export
 class RemoteGRPCClassifier(RemoteModelGRPC):
 
     def deserialize_response(self, examples, predict_response):
@@ -419,7 +419,7 @@ class RemoteGRPCClassifier(RemoteModelGRPC):
         return result
 
 
-@exporter
+@export
 class RemoteGRPCEmbeddings(RemoteModelGRPC):
 
     def deserialize_response(self, examples, predict_response):

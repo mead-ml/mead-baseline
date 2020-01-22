@@ -2,14 +2,14 @@ import re
 from typing import Pattern
 from binascii import hexlify
 from functools import partial
-from eight_mile.utils import export
+from eight_mile.utils import exporter
 
 
 __all__ = []
-exporter = export(__all__)
+export = exporter(__all__)
 
 
-class MN(object):
+class MN:
     GZIP = b'1f8b'
     TAR = b'7573746172'
     TAR_START = 257
@@ -67,7 +67,7 @@ def check_re(b: bytes, regex: Pattern = None) -> bool:
 check_html = partial(check_re, regex=RE.HTML)
 
 
-@exporter
+@export
 def mime_type(file_name: str) -> str:
     b = open(file_name, 'rb').read(1024)
     if check_gzip(b):

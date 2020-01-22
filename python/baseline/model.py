@@ -1,18 +1,18 @@
 import logging
 import numpy as np
 from baseline.utils import (
-    export, optional_params, listify, register, import_user_module, read_json
+    exporter, optional_params, listify, register, import_user_module, read_json
 )
 
 __all__ = []
-exporter = export(__all__)
+export = exporter(__all__)
 logger = logging.getLogger('baseline')
 
 BASELINE_MODELS = {}
 BASELINE_LOADERS = {}
 
 
-@exporter
+@export
 @optional_params
 def register_model(cls, task, name=None):
     """Register a function as a plug-in"""
@@ -45,7 +45,7 @@ def register_model(cls, task, name=None):
     return cls
 
 
-@exporter
+@export
 def create_model_for(activity, **kwargs):
     model_type = kwargs.get('type', kwargs.get('model_type', 'default'))
     creator_fn = BASELINE_MODELS[activity][model_type]
@@ -57,12 +57,12 @@ def create_model_for(activity, **kwargs):
     return creator_fn(input_, **kwargs)
 
 
-@exporter
+@export
 def create_model(embeddings, labels, **kwargs):
     return create_model_for('classify', features=embeddings, labels=labels, **kwargs)
 
 
-@exporter
+@export
 def create_tagger_model(embeddings, labels, **kwargs):
     return create_model_for('tagger', features=embeddings, labels=labels, **kwargs)
 
@@ -70,7 +70,7 @@ def create_tagger_model(embeddings, labels, **kwargs):
 
 BASELINE_SEQ2SEQ_ENCODERS = {}
 
-@exporter
+@export
 @optional_params
 def register_encoder(cls, name=None):
     """Register a function as a plug-in"""
@@ -79,7 +79,7 @@ def register_encoder(cls, name=None):
 
 BASELINE_SEQ2SEQ_DECODERS = {}
 
-@exporter
+@export
 @optional_params
 def register_decoder(cls, name=None):
     """Register a function as a plug-in"""
@@ -88,45 +88,45 @@ def register_decoder(cls, name=None):
 
 BASELINE_SEQ2SEQ_ARC_POLICY = {}
 
-@exporter
+@export
 @optional_params
 def register_arc_policy(cls, name=None):
     """Register a function as a plug-in"""
     return register(cls, BASELINE_SEQ2SEQ_ARC_POLICY, name, 'decoder')
 
 
-@exporter
+@export
 def create_seq2seq_decoder(tgt_embeddings, **kwargs):
     decoder_type = kwargs.get('decoder_type', 'default')
     Constructor = BASELINE_SEQ2SEQ_DECODERS.get(decoder_type)
     return Constructor(tgt_embeddings, **kwargs)
 
 
-@exporter
+@export
 def create_seq2seq_encoder(**kwargs):
     encoder_type = kwargs.get('encoder_type', 'default')
     Constructor = BASELINE_SEQ2SEQ_ENCODERS.get(encoder_type)
     return Constructor(**kwargs)
 
 
-@exporter
+@export
 def create_seq2seq_arc_policy(**kwargs):
     arc_type = kwargs.get('arc_policy_type', 'default')
     Constructor = BASELINE_SEQ2SEQ_ARC_POLICY.get(arc_type)
     return Constructor()
 
 
-@exporter
+@export
 def create_seq2seq_model(embeddings, labels, **kwargs):
     return create_model_for('seq2seq', embeddings, labels, **kwargs)
 
 
-@exporter
+@export
 def create_lang_model(embeddings, **kwargs):
     return create_model_for('lm', embeddings, None, **kwargs)
 
 
-@exporter
+@export
 def load_model_for(activity, filename, **kwargs):
     # Sniff state to see if we need to import things
     state = read_json('{}.state'.format(filename))
@@ -144,27 +144,27 @@ def load_model_for(activity, filename, **kwargs):
     return creator_fn(filename, **kwargs)
 
 
-@exporter
+@export
 def load_model(filename, **kwargs):
     return load_model_for('classify', filename, **kwargs)
 
 
-@exporter
+@export
 def load_tagger_model(filename, **kwargs):
     return load_model_for('tagger', filename, **kwargs)
 
 
-@exporter
+@export
 def load_seq2seq_model(filename, **kwargs):
     return load_model_for('seq2seq', filename, **kwargs)
 
 
-@exporter
+@export
 def load_lang_model(filename, **kwargs):
     return load_model_for('lm', filename, **kwargs)
 
 
-@exporter
+@export
 class ClassifierModel(object):
     """Text classifier
 
@@ -173,7 +173,7 @@ class ClassifierModel(object):
     task_name = 'classify'
 
     def __init__(self):
-        super(ClassifierModel, self).__init__()
+        super().__init__()
 
     def save(self, basename):
         """Save this model out
@@ -217,7 +217,7 @@ class ClassifierModel(object):
         pass
 
 
-@exporter
+@export
 class TaggerModel(object):
     """Structured prediction classifier, AKA a tagger
 
@@ -228,7 +228,7 @@ class TaggerModel(object):
     task_name = 'tagger'
 
     def __init__(self):
-        super(TaggerModel, self).__init__()
+        super().__init__()
 
     def save(self, basename):
         pass
@@ -244,13 +244,13 @@ class TaggerModel(object):
         pass
 
 
-@exporter
+@export
 class LanguageModel(object):
 
     task_name = 'lm'
 
     def __init__(self):
-        super(LanguageModel, self).__init__()
+        super().__init__()
 
     @staticmethod
     def load(basename, **kwargs):
@@ -264,7 +264,7 @@ class LanguageModel(object):
         pass
 
 
-@exporter
+@export
 class EncoderDecoderModel(object):
 
     task_name = 'seq2seq'

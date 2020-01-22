@@ -1,16 +1,19 @@
 import time
 import logging
 import numpy as np
+import eight_mile.optz
 from eight_mile.optz import *
-from eight_mile.utils import export, optional_params
+from eight_mile.utils import exporter, optional_params
+from baseline.utils import register
 import math
 
 
 __all__ = []
-exporter = export(__all__)
+__all__.extend(eight_mile.optz.__all__)
+export = exporter(__all__)
 
 
-@exporter
+@export
 class Trainer:
 
     def __init__(self):
@@ -58,7 +61,7 @@ class Trainer:
         pass
 
 
-@exporter
+@export
 class EpochReportingTrainer(Trainer):
 
     def __init__(self):
@@ -98,7 +101,7 @@ class EpochReportingTrainer(Trainer):
 BASELINE_TRAINERS = {}
 
 
-@exporter
+@export
 @optional_params
 def register_trainer(cls, task, name=None):
     """Register a function as a plug-in
@@ -117,7 +120,7 @@ def register_trainer(cls, task, name=None):
 BASELINE_FIT_FUNC = {}
 
 
-@exporter
+@export
 @optional_params
 def register_training_func(func, task, name=None):
     """Register a training by-pass
@@ -141,7 +144,7 @@ def register_training_func(func, task, name=None):
     return func
 
 
-@exporter
+@export
 def fit(model_params, ts, vs, es, **kwargs):
     """This method delegates to the registered fit function for each DL framework.  It is possible to provide a by-pass
     to our defined fit functions for each method (this is considered advanced usage).  In cases where the user wishes
@@ -167,7 +170,7 @@ def fit(model_params, ts, vs, es, **kwargs):
     return BASELINE_FIT_FUNC[task_name][fit_func_name](model_params, ts, vs, es, **kwargs)
 
 
-@exporter
+@export
 def create_trainer(model_params, **kwargs):
     """Create the default trainer, or a user-defined one if `trainer_type` is not `default`
 

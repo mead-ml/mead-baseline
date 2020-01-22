@@ -2,14 +2,14 @@ import random
 import logging
 import numpy as np
 import math
-from baseline.utils import export
+from baseline.utils import exporter
 
 __all__ = []
-exporter = export(__all__)
+export = exporter(__all__)
 logger = logging.getLogger('baseline')
 
 
-@exporter
+@export
 class DataFeed(object):
     """Data collection that, when iterated, produces an epoch of data
 
@@ -37,7 +37,7 @@ class DataFeed(object):
         return self.steps
 
 
-@exporter
+@export
 class ExampleDataFeed(DataFeed):
 
     """Abstract base class that works on a list of examples
@@ -87,7 +87,7 @@ class ExampleDataFeed(DataFeed):
         return batch
 
 
-@exporter
+@export
 class DictExamples(object):
     """This object holds a list of dictionaries, and knows how to shuffle, sort and batch them
     """
@@ -170,7 +170,7 @@ class DictExamples(object):
         return self._trim_batch(batch, keys, max_src_len) if trim else batch
 
 
-@exporter
+@export
 class Seq2SeqExamples(object):
 
     """Paired training examples
@@ -259,7 +259,7 @@ class Seq2SeqExamples(object):
 
 
 # This one is a little different at the moment
-@exporter
+@export
 class SeqWordCharDataFeed(DataFeed):
     """Data feed to return language modeling training data
     """

@@ -1,13 +1,11 @@
-import six
-
 import os
 import pickle
+import logging
 from collections import defaultdict
 import numpy as np
 import baseline
-import logging
 from baseline.utils import (
-    export,
+    exporter,
     unzip_files,
     find_model_basename,
     find_files_with_prefix,
@@ -21,10 +19,11 @@ from baseline.utils import (
     normalize_backend,
 )
 from baseline.model import load_model_for
-logger = logging.getLogger('baseline')
 
+
+logger = logging.getLogger('baseline')
 __all__ = []
-exporter = export(__all__)
+export = exporter(__all__)
 
 
 class Service(object):
@@ -190,7 +189,7 @@ class Service(object):
         return model, preproc
 
 
-@exporter
+@export
 class ClassifierService(Service):
     def __init__(self, vocabs=None, vectorizers=None, model=None, preproc='client'):
         super(ClassifierService, self).__init__(vocabs, vectorizers, model, preproc)
@@ -241,7 +240,7 @@ class ClassifierService(Service):
                                      sorted(outcomes, key=lambda tup: tup[1], reverse=True)))]
         return results
 
-@exporter
+@export
 class EmbeddingsService(Service):
     @classmethod
     def task_name(cls):
@@ -273,7 +272,7 @@ class EmbeddingsService(Service):
         return super().load(bundle, **kwargs)
 
 
-@exporter
+@export
 class TaggerService(Service):
 
     def __init__(self, vocabs=None, vectorizers=None, model=None, preproc='client'):
@@ -299,7 +298,7 @@ class TaggerService(Service):
         :return: List[List[dict[str] -> str]]
         """
         # Input is a list of strings. (assume strings are tokens)
-        if isinstance(tokens[0], six.string_types):
+        if isinstance(tokens[0], str):
             tokens_batch = []
             for t in tokens:
                 tokens_batch.append({'text': t})
@@ -313,7 +312,7 @@ class TaggerService(Service):
                 # [[{'text': 'The', 'pos': 'DT'}, ...
 
                 # For each of the utterances, we need to make a dictionary
-                if isinstance(tokens[0][0], six.string_types):
+                if isinstance(tokens[0][0], str):
                     for utt in tokens:
                         utt_dict_seq = []
                         for t in utt:
@@ -384,7 +383,7 @@ class TaggerService(Service):
         return outputs
 
 
-@exporter
+@export
 class LanguageModelService(Service):
 
     @classmethod
@@ -442,7 +441,7 @@ class LanguageModelService(Service):
         return tokens_seq
 
 
-@exporter
+@export
 class EncoderDecoderService(Service):
 
     @classmethod

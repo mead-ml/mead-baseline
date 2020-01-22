@@ -4,7 +4,7 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 from torch.autograd import Variable
-from baseline.utils import Offsets, export
+from baseline.utils import Offsets, exporter
 from eight_mile.pytorch.layers import repeat_batch, gnmt_length_penalty, BeamSearchBase, rnn_cell, WeightTieDense
 from baseline.pytorch.transformer import subsequent_mask, TransformerDecoderStack
 from baseline.model import register_arc_policy, register_decoder, create_seq2seq_arc_policy
@@ -19,7 +19,7 @@ from baseline.pytorch.torchy import (
 )
 
 __all__ = []
-exporter = export(__all__)
+export = exporter(__all__)
 
 
 class ArcPolicy(torch.nn.Module):

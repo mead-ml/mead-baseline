@@ -1,14 +1,25 @@
 import os
 import re
+import ast
 import shutil
 from itertools import product
 from setuptools import setup, find_packages
-from baseline import __version__
+
+
+def get_version(file_name, version_name="__version__"):
+    with open(file_name) as f:
+        tree = ast.parse(f.read())
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Assign):
+                if node.targets[0].id == version_name:
+                    return node.value.s
+    raise ValueError(f"Unable to find an assignment to the variable {version_name} in file {file_name}")
+
 
 class About(object):
     NAME = 'baseline'
     AUTHOR = 'dpressel'
-    VERSION = __version__
+    VERSION = get_version('baseline/version.py')
     EMAIL = "{}@gmail.com".format(AUTHOR)
     URL = "https://www.github.com/{}/{}".format(AUTHOR, NAME)
     DOWNLOAD_URL = "{}/archive/{}.tar.gz".format(URL, VERSION)

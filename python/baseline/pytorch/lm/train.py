@@ -18,6 +18,7 @@ class LanguageModelTrainerPyTorch(Trainer):
             model = create_model_for('lm', **model)
         self.model = model
         self.clip = float(kwargs.get('clip', 5))
+        self.gpus = kwargs.get('gpus', 1)
         if self.gpus > 0:
             self.crit = model.create_loss().cuda()
             if self.gpus > 1:

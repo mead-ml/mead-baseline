@@ -1,12 +1,12 @@
 import tensorflow as tf
-from baseline.utils import export
+from baseline.utils import exporter
 from mead.preprocessors import Preprocessor, register_preprocessor
 
 __all__ = []
-exporter = export(__all__)
+export = exporter(__all__)
 
 
-@exporter
+@export
 class TensorFlowPreprocessor(Preprocessor):
     """
     Generic class for creating vectorizers using tensorflow ops, to be used for exporting models when the service gets
@@ -52,7 +52,7 @@ class TensorFlowPreprocessor(Preprocessor):
         return x
 
 
-@exporter
+@export
 @register_preprocessor(name='token1d')
 class Token1DPreprocessor(TensorFlowPreprocessor):
 
@@ -86,7 +86,7 @@ class Token1DPreprocessor(TensorFlowPreprocessor):
         return self.create_word_vectors_from_post(raw_post, mxlen)
 
 
-@exporter
+@export
 @register_preprocessor(name='char2d')
 class Char2DPreprocessor(TensorFlowPreprocessor):
     def __init__(self, feature, vectorizer, index, vocab, **kwargs):
@@ -117,14 +117,14 @@ class Char2DPreprocessor(TensorFlowPreprocessor):
         return self.create_char_vectors_from_post(raw_post, mxlen)
 
 
-@exporter
+@export
 @register_preprocessor(name='dict1d')
 class Dict1DPreprocessor(Token1DPreprocessor):
     def __init__(self, feature, vectorizer, index, vocab, **kwargs):
         super(Dict1DPreprocessor, self).__init__(feature, vectorizer, index, vocab, **kwargs)
 
 
-@exporter
+@export
 @register_preprocessor(name='dict2d')
 class Dict2DPreprocessor(Char2DPreprocessor):
     def __init__(self, feature, vectorizer, index, vocab, **kwargs):

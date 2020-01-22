@@ -1,29 +1,39 @@
-import addons
-from collections import Counter
 import re
 import io
-from itertools import chain
 import os
 import sys
 import json
-import importlib
-import inspect
-from typing import List, Tuple, Union, Optional
-from functools import partial, update_wrapper, wraps
 import logging
+import inspect
+import importlib
+import collections
+from itertools import chain
+from collections import Counter
+from typing import List, Tuple, Union, Optional, Dict, Any, Set
+from functools import partial, update_wrapper, wraps
 import numpy as np
-import six
 import addons
 
 
 logger = logging.getLogger('mead.layers')
 
-#__all__ = []
+__all__ = ['exporter', 'optional_params', 'parameterize']
 
 
 def optional_params(func):
+    """Allow a decorator to be called without parentheses if no kwargs are given.
+
+    parameterize is a decorator, function is also a decorator.
+    """
     @wraps(func)
     def wrapped(*args, **kwargs):
+        """If a decorator is called with only the wrapping function just execute the real decorator.
+           Otherwise return a lambda that has the args and kwargs partially applied and read to take a function as an argument.
+
+        *args, **kwargs are the arguments that the decorator we are parameterizing is called with.
+
+        the first argument of *args is the actual function that will be wrapped
+        """
         if len(args) == 1 and len(kwargs) == 0 and callable(args[0]):
             return func(args[0])
         return lambda x: func(x, *args, **kwargs)
@@ -31,6 +41,7 @@ def optional_params(func):
 
 
 def parameterize(func):
+    """Allow as decorator to be called with arguments, returns a new decorator that should be called with the function to be wrapped."""
     @wraps(func)
     def decorator(*args, **kwargs):
         return lambda x: func(x, *args, **kwargs)
@@ -38,7 +49,7 @@ def parameterize(func):
 
 
 @parameterize
-def export(obj, all_list=None):
+def exporter(obj, all_list: List[str] = None):
     """Add a function or class to the __all__.
 
     When exporting something with out using as a decorator do it like so:
@@ -48,16 +59,10 @@ def export(obj, all_list=None):
     return obj
 
 
-#exporter = export(__all__)
-
-#@exporter
-class Offsets:
-    """Support pre 3.4"""
-    PAD, GO, EOS, UNK, OFFSET = range(0, 5)
-    VALUES = ["<PAD>", "<GO>", "<EOS>", "<UNK>"]
+export = exporter(__all__)
 
 
-#@exporter
+@export
 def register(cls, registry, name=None, error=''):
     if name is None:
         name = cls.__name__
@@ -70,8 +75,15 @@ def register(cls, registry, name=None, error=''):
     return cls
 
 
-# @exporter
-def get_logging_level(level):
+@export
+class Offsets:
+    """Support pre 3.4"""
+    PAD, GO, EOS, UNK, OFFSET = range(0, 5)
+    VALUES = ["<PAD>", "<GO>", "<EOS>", "<UNK>"]
+
+
+@export
+def get_logging_level(level: str) -> int:
     """Get the logging level as a logging module constant.
 
     :param level: `str` The log level to get.
@@ -81,8 +93,8 @@ def get_logging_level(level):
     return getattr(logging, level.upper(), logging.INFO)
 
 
-#@exporter
-def sequence_mask(lengths, max_len=-1):
+@export
+def sequence_mask(lengths, max_len: int = -1):
     if max_len < 0:
         max_len = np.max(lengths)
     row = np.arange(0, max_len).reshape(1, -1)
@@ -90,6 +102,7 @@ def sequence_mask(lengths, max_len=-1):
     return (row < col).astype(np.uint8)
 
 
+@export
 def calc_nfeats(
     filtsz: Union[List[Tuple[int, int]], List[int]],
     nfeat_factor: Optional[int] = None,
@@ -130,8 +143,8 @@ def calc_nfeats(
     return filtsz, nfeats
 
 
-#@exporter
-def transition_mask(vocab, span_type, s_idx, e_idx, pad_idx=None):
+@export
+def transition_mask(vocab: Dict[str, int], span_type: str, s_idx: int, e_idx: int, pad_idx: Optional[int] = None):
     """Create a CRF mask.
 
     Returns a mask with invalid moves as 0 and valid as 1.
@@ -153,14 +166,14 @@ def transition_mask(vocab, span_type, s_idx, e_idx, pad_idx=None):
     pad = None if pad_idx is None else rev_lut[pad_idx]
     if span_type.upper() == "IOB":
         mask = iob_mask(vocab, start, end, pad)
-    if span_type.upper() == "IOB2" or span_type.upper() == "BIO":
+    if span_type.upper() in ('IOB2', 'BIO'):
         mask = iob2_mask(vocab, start, end, pad)
     if span_type.upper() == "IOBES":
         mask = iobes_mask(vocab, start, end, pad)
     return mask
 
 
-#@exporter
+@export
 def iob_mask(vocab, start, end, pad=None):
     small = 0
     mask = np.ones((len(vocab), len(vocab)), dtype=np.float32)
@@ -202,7 +215,7 @@ def iob_mask(vocab, start, end, pad=None):
     return mask
 
 
-#@exporter
+@export
 def iob2_mask(vocab, start, end, pad=None):
     small = 0
     mask = np.ones((len(vocab), len(vocab)), dtype=np.float32)
@@ -244,7 +257,7 @@ def iob2_mask(vocab, start, end, pad=None):
     return mask
 
 
-#@exporter
+@export
 def iobes_mask(vocab, start, end, pad=None):
     small = 0
     mask = np.ones((len(vocab), len(vocab)), dtype=np.float32)
@@ -295,18 +308,18 @@ def iobes_mask(vocab, start, end, pad=None):
     return mask
 
 
-#@exporter
+@export
 def get_version(pkg):
     s = '.'.join(pkg.__version__.split('.')[:2])
     return float(s)
 
 
-#@exporter
-def revlut(lut):
+@export
+def revlut(lut: Dict) -> Dict:
     return {v: k for k, v in lut.items()}
 
 
-#@exporter
+@export
 def str2bool(v):
     if isinstance(v, bool):
         return v
@@ -318,16 +331,15 @@ def str2bool(v):
         raise Exception('Boolean value expected.')
 
 
-#@exporter
-def is_sequence(x):
-    import collections
-    if isinstance(x, six.string_types):
+@export
+def is_sequence(x) -> bool:
+    if isinstance(x, str):
         return False
     return isinstance(x, (collections.Sequence, collections.MappingView))
 
 
-#@exporter
-def listify(x):
+@export
+def listify(x: Union[List[Any], Any]) -> List[Any]:
     """Take a scalar or list and make it a list iff not already a sequence or numpy array
 
     :param x: The input to convert
@@ -338,8 +350,8 @@ def listify(x):
     return [x] if x is not None else []
 
 
-#@exporter
-def read_json(filepath, default_value=None, strict=False):
+@export
+def read_json(filepath: str, default_value: Optional[Any] = None, strict: bool = False) -> Dict:
     """Read a JSON file in.  If no file is found and default value is set, return that instead.  Otherwise error
 
     :param filepath: str, A file to load
@@ -356,8 +368,8 @@ def read_json(filepath, default_value=None, strict=False):
         return json.load(f)
 
 
-#@exporter
-def read_yaml(filepath, default_value=None, strict=False):
+@export
+def read_yaml(filepath: str, default_value: Optional[Any] = None, strict: bool =False) -> Dict:
     """Read a YAML file in.  If no file is found and default value is set, return that instead.  Otherwise error
 
     :param filepath: str, A file to load
@@ -378,20 +390,32 @@ def read_yaml(filepath, default_value=None, strict=False):
         return yaml.load(f)
 
 
-#@exporter
-def read_config_file(config_file):
+@export
+def read_config_file(config_file: str) -> Dict:
     """Read config file, optionally supports YAML, if dependency was already installed.  O.W. JSON plz
 
     :param config_file: (``str``) A path to a config file which should be a JSON file, or YAML if pyyaml is installed
     :return: (``dict``) An object
     """
-    if config_file.endswith('.yml') or config_file.endswith('.yaml'):
+    if config_file.endswith(('.yml', '.yaml')):
         return read_yaml(config_file, strict=True)
     return read_json(config_file, strict=True)
 
 
-#@exporter
-def read_config_stream(config_stream):
+@export
+def validate_url(url: str) -> bool:
+    regex = re.compile(
+        r'^(?:http|ftp)s?://'  # http:// or https://
+        r'(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+(?:[A-Z]{2,6}\.?|[A-Z0-9-]{2,}\.?)|'  # domain...
+        r'localhost|'  # localhost...
+        r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})'  # ...or ip
+        r'(?::\d+)?'  # optional port
+        r'(?:/?|[/?]\S+)$', re.IGNORECASE)
+    return re.match(regex, url) is not None
+
+
+@export
+def read_config_stream(config_stream) -> Dict:
     """Read config stream.  May be a path to a YAML or JSON file, or a str containing JSON or the name
     of an env variable, or even a JSON object directly
 
@@ -408,11 +432,15 @@ def read_config_stream(config_stream):
         logger.info("Reading config from '{}'".format(config_stream))
         config = os.getenv(config_stream[1:])
     else:
-        logger.info("No file found '{}...', loading as string".format(config_stream[:12]))
+        if validate_url(config_stream):
+            path_to_save, _ = urlretrieve(config_stream)
+            return read_config_stream(path_to_save)
+        else:
+            logger.info("No file found '{}...', loading as string".format(config_stream[:12]))
     return json.loads(config)
 
 
-#@exporter
+@export
 def write_sentence_conll(handle, sentence, gold, txt, idx2label):
 
     if len(txt) != len(sentence):
@@ -427,13 +455,7 @@ def write_sentence_conll(handle, sentence, gold, txt, idx2label):
         handle.close()
 
 
-#@exporter
-def write_json(content, filepath):
-    with open(filepath, "w") as f:
-        json.dump(content, f, indent=True)
-
-
-#@exporter
+@export
 def ls_props(thing):
     """List all of the properties on some object
 
@@ -443,7 +465,8 @@ def ls_props(thing):
     return [x for x in dir(thing) if isinstance(getattr(type(thing), x, None), property)]
 
 
-def idempotent_append(element, data):
+@export
+def idempotent_append(element: Any, data: List[Any]) -> List[Any]:
     """Append to a list if that element is not already in the list.
 
     :param element: The element to add to the list.
@@ -455,6 +478,7 @@ def idempotent_append(element, data):
     return data
 
 
+@export
 def parse_module_as_path(module_name):
     """Convert a path to a file to a format that it can be imported.
 
@@ -469,7 +493,7 @@ def parse_module_as_path(module_name):
     return module_name, module_dir
 
 
-#@exporter
+@export
 def import_user_module(module_name):
     """Load a module that is in the python path
 
@@ -478,14 +502,21 @@ def import_user_module(module_name):
     """
     addon_path = os.path.dirname(os.path.realpath(addons.__file__))
     idempotent_append(addon_path, sys.path)
-    if module_name.endswith(".py"):
-        module_name, module_dir = parse_module_as_path(module_name)
-        idempotent_append(module_dir, sys.path)
+    if any(module_name.endswith(suffix) for suffix in importlib.machinery.SOURCE_SUFFIXES):
+        module_path = module_name
+        module_name, _ = _parse_module_as_path(module_path)
+        # File based import from here https://docs.python.org/3.6/library/importlib.html#importing-a-source-file-directly
+        spec = importlib.util.spec_from_file_location(module_name, module_path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        # Set this module in sys.modules so later we can import the module by name when pickling things.
+        sys.modules[module_name] = mod
+        return mod
     mod = importlib.import_module(module_name)
     return mod
 
 
-#@exporter
+@export
 def fill_y(nc, yidx):
     """Convert a `B` sparse array to a dense one, to expand labels
 
@@ -499,7 +530,7 @@ def fill_y(nc, yidx):
     return dense
 
 
-#@exporter
+@export
 @optional_params
 def str_file(func, **kwargs):
     """A decorator to automatically open arguments that are files.
@@ -516,12 +547,12 @@ def str_file(func, **kwargs):
     # either a generator (has a yield) or not. If we were to try to have this if
     # inside of the open_files then we would always return a generator.
     if inspect.isgeneratorfunction(func):
-        @six.wraps(func)
+        @wraps(func)
         def open_files(*args, **kwargs):
             # If no arg names are given then assume the first arg is a file
             # you want to read from.
             if not possible_files:
-                if isinstance(args[0], six.string_types):
+                if isinstance(args[0], str):
                     with io.open(args[0], mode='r', encoding='utf-8') as f:
                         # Call the function with the file instead we need to
                         # yield from it until it is done other wise the file
@@ -539,7 +570,7 @@ def str_file(func, **kwargs):
                 arg = inspect.getcallargs(func, *args, **kwargs)
                 try:
                     for f, mode in possible_files.items():
-                        if isinstance(arg[f], six.string_types):
+                        if isinstance(arg[f], str):
                             # Replace strings with the opened files
                             arg[f] = io.open(arg[f], mode=mode, encoding=None if 'b' in mode else 'utf-8')
                             to_close.append(f)
@@ -551,12 +582,12 @@ def str_file(func, **kwargs):
                     for f in to_close:
                         arg[f].close()
     else:
-        @six.wraps(func)
+        @wraps(func)
         def open_files(*args, **kwargs):
             # If no arg names are given then assume the first arg is a file
             # you want to read from.
             if not possible_files:
-                if isinstance(args[0], six.string_types):
+                if isinstance(args[0], str):
                     with io.open(args[0], mode='r', encoding='utf-8') as f:
                         # Call the function with the file instead
                         return func(f, *args[1:], **kwargs)
@@ -570,7 +601,7 @@ def str_file(func, **kwargs):
                 arg = inspect.getcallargs(func, *args, **kwargs)
                 try:
                     for f, mode in possible_files.items():
-                        if isinstance(arg[f], six.string_types):
+                        if isinstance(arg[f], str):
                             # Replace strings with the opened files
                             arg[f] = io.open(arg[f], mode=mode, encoding=None if 'b' in mode else 'utf-8')
                             to_close.append(f)
@@ -584,7 +615,20 @@ def str_file(func, **kwargs):
     return open_files
 
 
-#@exporter
+@export
+@str_file(filepath="w")
+def write_json(content, filepath):
+    json.dump(content, filepath, indent=True)
+
+
+@export
+@str_file(filepath='w')
+def write_yaml(content, filepath):
+    import yaml
+    yaml.dump(content, filepath, default_flow_style=False)
+
+
+@export
 def normalize_indices(xs, length):
     """Normalize negative indices into positive.
 
@@ -596,8 +640,8 @@ def normalize_indices(xs, length):
     return list(map(lambda x: length + x if x < 0 else x, xs))
 
 
-#@exporter
-def convert_iob_to_bio(seq):
+@export
+def convert_iob_to_bio(seq: List[str]) -> List[str]:
     """Convert a sequence of IOB tags to BIO tags.
 
     The difference between IOB and BIO (also called IOB2) is that in IOB
@@ -621,8 +665,36 @@ def convert_iob_to_bio(seq):
     return new
 
 
-#@exporter
-def convert_bio_to_iobes(seq):
+@export
+def convert_bio_to_iob(seq: List[str]) -> List[str]:
+    """Convert a sequence of BIO tags to IOB tags.
+
+    The difference between BIO and IOB is that in IOB the B- prefix is only
+    used to separate two chunks of the same type while in BIO the B- prefix
+    starts every chunk. To convert we only need to look at the B- tokens.
+    If they are following a chunk of the same type we leave it as a B-
+    otherwise it converts it back to an I-
+
+    :param seq: `List[str]` The list of BIO tags.
+
+    :returns: `List[str]` The list of IOB tags.
+    """
+    new = []
+    prev_ty = 'O'
+    for token in seq:
+        ty = "O" if token == "O" else token[2:]
+        # In IOB, `B-` is only needed if the previous type is the same as ours
+        if token.startswith('B-'):
+            # If we are different than the type before us convert to `I-`
+            if prev_ty != ty:
+                token = 'I-' + ty
+        new.append(token)
+        prev_ty = ty
+    return new
+
+
+@export
+def convert_bio_to_iobes(seq: List[str]) -> List[str]:
     """Convert a sequence of BIO tags to IOBES tags.
 
     The difference between BIO and IOBES tags is that in IOBES the end
@@ -663,8 +735,8 @@ def convert_bio_to_iobes(seq):
     return new
 
 
-#@exporter
-def convert_iobes_to_bio(seq):
+@export
+def convert_iobes_to_bio(seq: List[str]) -> List[str]:
     """Convert a sequence of IOBES tags to BIO tags
 
     :param seq: `List[str]` The list of IOBES tags.
@@ -675,8 +747,8 @@ def convert_iobes_to_bio(seq):
     return list(map(lambda x: re.sub(r'^S-', 'B-', re.sub(r'^E-', 'I-', x)), seq))
 
 
-#@exporter
-def convert_iob_to_iobes(seq):
+@export
+def convert_iob_to_iobes(seq: List[str]) -> List[str]:
     """Convert a sequence of IOB tags to IOBES tags.
 
     :param seq: `List[str]` The list of IOB tags.
@@ -686,8 +758,20 @@ def convert_iob_to_iobes(seq):
     return convert_bio_to_iobes(convert_iob_to_bio(seq))
 
 
+@export
+def convert_iobes_to_iob(seq: List[str]) -> List[str]:
+    """Convert a sequence of IOBES tags to IOB tags.
+
+    :param seq: `List[str]` The list of IOBES tags.
+
+    :returns: `List[str]` The list of IOB tags.
+    """
+    return convert_bio_to_iob(convert_iobes_to_bio(seq))
+
+
+@export
 @str_file
-def sniff_conll_file(f, delim=None):
+def sniff_conll_file(f, delim=None, comment_pattern="#", doc_pattern="# begin doc"):
     """Figure out how many columns are in a conll file.
 
     :param file_name: `str` The name of the file.
@@ -698,7 +782,7 @@ def sniff_conll_file(f, delim=None):
     start = f.tell()
     for line in f:
         line = line.rstrip("\n")
-        if line.startswith("#"):
+        if line.startswith((comment_pattern, doc_pattern)):
             continue
         parts = line.split(delim)
         if len(parts) > 1:
@@ -706,8 +790,9 @@ def sniff_conll_file(f, delim=None):
             return len(parts)
 
 
+@export
 @str_file
-def read_conll(f, doc_pattern=None, delim=None, metadata=False):
+def read_conll(f, doc_pattern=None, delim=None, metadata=False, allow_comments=False, comment_pattern="#"):
     """Read from a conll file.
 
     :param f: `str` The file to read from.
@@ -717,44 +802,73 @@ def read_conll(f, doc_pattern=None, delim=None, metadata=False):
     :param delim: `str` The token between columns in the file
     :param metadata: `bool` Should meta data (lines starting with `#` before a
         sentence) be returned with our sentences.
+    :param allow_comments: `bool` Are comments (lines starting with `#`) allowed in the file.
 
     :returns: `Generator` The sentences or documents from the file.
     """
+    if metadata and not allow_comments:
+        raise ValueError(
+            "You have metadata set to `True` but allow_comments set to `False` you can't extract "
+            "metadata from a file that doesn't allow comments."
+        )
     if doc_pattern is not None:
-        read = read_conll_docs_md if metadata else read_conll_docs
-        for x in read(f, doc_pattern, delim=delim):
-            yield x
+        if metadata:
+            for x in read_conll_docs_md(f, doc_pattern, delim=delim, comment_pattern=comment_pattern):
+                yield x
+        else:
+            for x in read_conll_docs(f, doc_pattern, delim=delim, allow_comments=allow_comments, comment_pattern=comment_pattern):
+                yield x
     else:
-        read = read_conll_sentences_md if metadata else read_conll_sentences
-        for x in read(f, delim=delim):
-            yield x
+        if metadata:
+            for x in read_conll_sentences_md(f, delim=delim, comment_pattern=comment_pattern):
+                yield x
+        else:
+            for x in read_conll_sentences(f, delim=delim, allow_comments=allow_comments, comment_pattern=comment_pattern):
+                yield x
 
 
+@export
 @str_file
-def read_conll_sentences(f, delim=None):
+def read_conll_sentences(f, delim=None, allow_comments=True, comment_pattern="#"):
     """Read sentences from a conll file.
 
     :param f: `str` The file to read from.
     :param delim: `str` The token between columns in the file.
+
+    Note:
+        If you have a sentence where the first token is `#` it will get eaten by the
+        metadata. If this happens you need to set `allow_comments=True` and not have
+        comments in the file. If you have comments in the file and set this then
+        they will show up in the sentences
 
     :returns: `Generator[List[List[str]]]` A list of rows representing a sentence.
     """
     sentence = []
     for line in f:
         line = line.rstrip()
-        if line.startswith('#'): continue
+        # Comments are not allowed in the middle of a sentence so if we find a line that
+        # starts with # but we are in a sentence it must be a # as a token so we should
+        # not skip it
+        if allow_comments and not sentence and line.startswith(comment_pattern): continue
+        # Blank lines signal the end of a sentence
         if len(line) == 0:
+            # If we built a sentence yield it, this check allows multiple blank lines in a row
             if sentence:
                 yield sentence
+            # Reset the sentence
             sentence = []
             continue
+        # This is a normal row, we split and take the tokens.
         sentence.append(line.split(delim))
+    # If we have a sentence then the file didn't end with a new line, we yield the sentence
+    # so we don't lose it
     if sentence:
         yield sentence
 
 
+@export
 @str_file
-def read_conll_sentences_md(f, delim=None):
+def read_conll_sentences_md(f, delim=None, comment_pattern="#"):
     """Read sentences from a conll file.
 
     :param f: `str` The file to read from.
@@ -764,6 +878,11 @@ def read_conll_sentences_md(f, delim=None):
         If there are document annotations in the conll file then they will show
         up in the meta data for what would be the first sentence of that doc
 
+        If you have a sentence where the first token is `#` it will show up in the
+        metadata. If this happens you'll need to update you comments to use a different
+        comment pattern, something like `# comment:` I recommend having a space in
+        you patten so it can't show up as a conll token
+
     :returns: `Generator[Tuple[List[List[str]], List[List[str]]]`
         The first element is the list or rows, the second is a list of comment
         lines that preceded that sentence in the file.
@@ -771,7 +890,10 @@ def read_conll_sentences_md(f, delim=None):
     sentence, meta = [], []
     for line in f:
         line = line.rstrip()
-        if line.startswith('#'):
+        # Comments are not allowed in the middle of a sentence so if we find a line that
+        # starts with # but we are in a sentence it must be a # as a token so we should
+        # not skip it. If this is a comment we track it in our meta data list
+        if not sentence and line.startswith(comment_pattern):
             meta.append(line)
             continue
         if len(line) == 0:
@@ -784,13 +906,20 @@ def read_conll_sentences_md(f, delim=None):
         yield sentence, meta
 
 
+@export
 @str_file
-def read_conll_docs(f, doc_pattern="# begin doc", delim=None):
+def read_conll_docs(f, doc_pattern="# begin doc", delim=None, allow_comments=True, comment_pattern="#"):
     """Read sentences from a conll file.
 
     :param f: `str` The file to read from.
     :param doc_pattern: `str` The beginning of lines that represent new documents
     :param delim: `str` The token between columns in the file.
+
+    Note:
+        If you have a sentence where the first token is `#` it will show up in the
+        metadata. If this happens you'll need to update you comments to use a different
+        comment pattern, something like `# comment:` I recommend having a space in
+        you patten so it can't show up as a conll token
 
     :returns: `Generator[List[List[List[str]]]]`
         A document which is a list of sentences.
@@ -798,13 +927,14 @@ def read_conll_docs(f, doc_pattern="# begin doc", delim=None):
     doc, sentence = [], []
     for line in f:
         line = line.rstrip()
-        if line.startswith('#'):
-            if line.startswith(doc_pattern):
-                if doc:
-                    if sentence:
-                        doc.append(sentence)
-                    yield doc
-                    doc, sentence = [], []
+        if line.startswith(doc_pattern):
+            if doc:
+                if sentence:
+                    doc.append(sentence)
+                yield doc
+                doc, sentence = [], []
+            continue
+        elif allow_comments and not sentence and line.startswith(comment_pattern):
             continue
         if len(line) == 0:
             if sentence:
@@ -818,13 +948,20 @@ def read_conll_docs(f, doc_pattern="# begin doc", delim=None):
         yield doc
 
 
+@export
 @str_file
-def read_conll_docs_md(f, doc_pattern="# begin doc", delim=None):
+def read_conll_docs_md(f, doc_pattern="# begin doc", delim=None, comment_pattern="#"):
     """Read sentences from a conll file.
 
     :param f: `str` The file to read from.
     :param doc_pattern: `str` The beginning of lines that represent new documents
     :param delim: `str` The token between columns in the file.
+
+    Note:
+        If you have a sentence where the first token is `#` it will show up in the
+        metadata. If this happens you'll need to update you comments to use a different
+        comment pattern, something like `# comment:` I recommend having a space in
+        you patten so it can't show up as a conll token
 
     :returns: `Generator[Tuple[List[List[List[str]]], List[str]  List[List[str]]]`
         The first element is a document, the second is a list of comments
@@ -832,22 +969,23 @@ def read_conll_docs_md(f, doc_pattern="# begin doc", delim=None):
         since the last sentence. The last is a list of comments for each
         list in the document.
     """
-    doc_meta = []
-    doc, sentence, sent_meta, meta = [], [], [], []
+    doc, sentence, doc_meta, sent_meta, meta = [], [], [], [], []
     for line in f:
         line = line.rstrip()
-        if line.startswith('#'):
+        if line.startswith(doc_pattern):
+            new_doc_meta = meta
+            meta = []
+            new_doc_meta.append(line)
+            if doc:
+                if sentence:
+                    doc.append(sentence)
+                    sentence = []
+                yield doc, doc_meta, sent_meta
+                doc, sentence, sent_meta = [], [], []
+            doc_meta = new_doc_meta
+            continue
+        elif not sentence and line.startswith(comment_pattern):
             meta.append(line)
-            if line.startswith(doc_pattern):
-                new_doc_meta = meta
-                meta = []
-                if doc:
-                    if sentence:
-                        doc.append(sentence)
-                        sentence = []
-                    yield doc, doc_meta, sent_meta
-                    doc, sentence, sent_meta, meta = [], [], [], []
-                doc_meta = new_doc_meta
             continue
         if len(line) == 0:
             if sentence:
@@ -864,6 +1002,7 @@ def read_conll_docs_md(f, doc_pattern="# begin doc", delim=None):
         yield doc, doc_meta, sent_meta
 
 
+@export
 @str_file(ifile='r', ofile='w')
 def convert_conll_file(ifile, ofile, convert, fields=[-1], delim=None):
     """Convert the tagging scheme in a conll file.
@@ -889,32 +1028,45 @@ def convert_conll_file(ifile, ofile, convert, fields=[-1], delim=None):
         ofile.write('\n'.join(delim.join(l).rstrip() for l in lines) + '\n\n')
 
 
+@export
 @str_file(ifile='r', ofile='w')
 def convert_iob_conll_to_bio(ifile, ofile, fields=[-1], delim=None):
     """Convert a conll file from iob to bio."""
     convert_conll_file(ifile, ofile, convert_iob_to_bio, fields, delim)
 
+@export
+@str_file(ifile='r', ofile='w')
+def convert_bio_conll_to_iob(ifile, ofile, fields=[-1], delim=None):
+    """Convert a conll file from bio to iob."""
+    convert_conll_file(ifile, ofile, convert_bio_to_iob, fields, delim)
 
+@export
 @str_file(ifile='r', ofile='w')
 def convert_iob_conll_to_iobes(ifile, ofile, fields=[-1], delim=None):
     """Convert a conll file from iob to iobes."""
     convert_conll_file(ifile, ofile, convert_iob_to_iobes, fields, delim)
 
+@export
+@str_file(ifile='r', ofile='w')
+def convert_iobes_conll_to_iob(ifile, ofile, fields=[-1], delim=None):
+    """Convert a conll file from iob to iobes."""
+    convert_conll_file(ifile, ofile, convert_iobes_to_iob, fields, delim)
 
+@export
 @str_file(ifile='r', ofile='w')
 def convert_bio_conll_to_iobes(ifile, ofile, fields=[-1], delim=None):
     """Convert a conll file from bio to iobes."""
     convert_conll_file(ifile, ofile, convert_bio_to_iobes, fields, delim)
 
-
+@export
 @str_file(ifile='r', ofile='w')
 def convert_iobes_conll_to_bio(ifile, ofile, fields=[-1], delim=None):
     """Convert a conll file from iobes to bio. Useful for formatting output to use `conlleval.pl`."""
     convert_conll_file(ifile, ofile, convert_iobes_to_bio, fields, delim)
 
 
-#@exporter
-def to_spans(sequence, lut, span_type, verbose=False, delim="@"):
+@export
+def to_spans(sequence: List[int], lut: Dict[int, str], span_type: str, verbose: bool = False, delim: str ="@") -> List[str]:
     """Turn a sequence into a list of chunks.
 
     :param sequence: `List[int]` The tag sequence.
@@ -932,8 +1084,8 @@ def to_spans(sequence, lut, span_type, verbose=False, delim="@"):
     return to_chunks(sequence, span_type, verbose, delim)
 
 
-#@exporter
-def to_chunks(sequence, span_type, verbose=False, delim="@"):
+@export
+def to_chunks(sequence: List[str], span_type: str, verbose: bool = False, delim: str = "@") -> List[str]:
     """Turn a sequence of tags into a list of chunks.
 
     :param sequence: `List[str]` The tag sequence.
@@ -956,7 +1108,7 @@ def to_chunks(sequence, span_type, verbose=False, delim="@"):
         # like twpos does then you will lose tokens and mess up the calculations
         return [f"{s}@{i}" for i, s in enumerate(sequence)]
 
-    strict_iob2 = (span_type == 'iob2') or (span_type == 'bio')
+    strict_iob2 = span_type in ('iob2', 'bio')
     iobtype = 2 if strict_iob2 else 1
     chunks = []
     current = None
@@ -989,8 +1141,8 @@ def to_chunks(sequence, span_type, verbose=False, delim="@"):
     return chunks
 
 
-#@exporter
-def to_chunks_iobes(sequence, verbose=False, delim="@"):
+@export
+def to_chunks_iobes(sequence: List[str], verbose: bool = False, delim: str = "@") -> List[str]:
     """Turn a sequence of IOBES tags into a list of chunks.
 
     :param sequence: `List[str]` The tag sequence.
@@ -1084,8 +1236,8 @@ def to_chunks_iobes(sequence, verbose=False, delim="@"):
     return chunks
 
 
-#@exporter
-def span_f1(golds, preds):
+@export
+def span_f1(golds: List[Set[str]], preds: List[Set[str]]) -> float:
     """Calculate Span level F1 score.
 
     :param golds: `List[set[str]]` The list of the set of gold chunks.
@@ -1099,8 +1251,8 @@ def span_f1(golds, preds):
     return f_score(overlap, gold_total, pred_total)
 
 
-#@exporter
-def per_entity_f1(golds, preds, delim="@"):
+@export
+def per_entity_f1(golds: List[Set[str]], preds: List[Set[str]], delim: str="@") -> Dict[str, float]:
     """Calculate Span level F1 with break downs per entity type.
 
     :param golds: `List[set[str]]` The list of the set of gold chunks.
@@ -1155,8 +1307,8 @@ def per_entity_f1(golds, preds, delim="@"):
     return metrics
 
 
-#@exporter
-def conlleval_output(results):
+@export
+def conlleval_output(results: Dict[str, Union[float, int]]) -> str:
     """Create conlleval formated output.
 
     :param results: `dict` The metrics. results should have the following keys.
@@ -1197,8 +1349,8 @@ def conlleval_output(results):
     return s
 
 
-#@exporter
-def precision(overlap_count, guess_count):
+@export
+def precision(overlap_count: int, guess_count: int) -> float:
     """Compute the precision in a zero safe way.
 
     :param overlap_count: `int` The number of true positives.
@@ -1210,8 +1362,8 @@ def precision(overlap_count, guess_count):
     return 0.0 if guess_count == 0 else overlap_count / float(guess_count)
 
 
-#@exporter
-def recall(overlap_count, gold_count):
+@export
+def recall(overlap_count: int, gold_count: int) -> float:
     """Compute the recall in a zero safe way.
 
     :param overlap_count: `int` The number of true positives.
@@ -1222,8 +1374,8 @@ def recall(overlap_count, gold_count):
     return 0.0 if gold_count == 0 else overlap_count / float(gold_count)
 
 
-#@exporter
-def f_score(overlap_count, gold_count, guess_count, f=1):
+@export
+def f_score(overlap_count: int, gold_count: int, guess_count: int, f: int = 1) -> float:
     """Compute the f1 score.
 
     :param overlap_count: `int` The number of true positives.
@@ -1243,12 +1395,13 @@ def f_score(overlap_count, gold_count, guess_count, f=1):
     return f
 
 
-#@exporter
-def get_env_gpus():
+@export
+def get_env_gpus() -> List[str]:
     return os.getenv('CUDA_VISIBLE_DEVICES', os.getenv('NVIDIA_VISIBLE_DEVICES', os.getenv('NV_GPU', '0'))).split(',')
 
-#@exporter
-def ngrams(sentence, filtsz=3, joiner='@@'):
+
+@export
+def ngrams(sentence: List[str], filtsz: int = 3, joiner: str = '@@') -> List[str]:
     """Generate ngrams over a sentence
 
     :param sentence: (`List[str]`) Some tokens
@@ -1263,3 +1416,32 @@ def ngrams(sentence, filtsz=3, joiner='@@'):
         chunks += [joiner.join(chunk)]
     return chunks
 
+
+@export
+@str_file
+def read_label_first_data(f):
+    """Read data from a file where the first token in the label and each line is a single example.
+
+    :param f: `Union[str, IO]` The file to read from.
+    :return: `Tuple[List[str], List[List[str]]]` The labels and text
+    """
+    labels, texts = [], []
+    for line in f:
+        line = line.rstrip()
+        if line:
+            label, text = line.split(maxsplit=1)
+            labels.append(label)
+            texts.append(text.split())
+    return labels, texts
+
+
+@export
+@str_file(w='w')
+def write_label_first_data(w, labels, texts):
+    """Read data to a file where the first token in the label and each line is a single example.
+
+    :param w: `Union[str, IO]` The file to write the results in
+    :param labels: `List[str]` The labels for the examples
+    :param texts: `List[List[str]]` The text examples
+    """
+    w.write("\n".join(" ".join(chain((l,), t)) for l, t in zip(labels, texts)))

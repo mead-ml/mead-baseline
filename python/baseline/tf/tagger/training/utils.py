@@ -5,9 +5,9 @@ import numpy as np
 import tensorflow as tf
 import logging
 from eight_mile.tf.optz import optimizer
-from eight_mile.progress import create_progress_bar
 from eight_mile.utils import to_spans, listify, revlut, span_f1, per_entity_f1, conlleval_output, write_sentence_conll
 
+from baseline.progress import create_progress_bar
 from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
 from baseline.tf.tfy import TRAIN_FLAG
 from baseline.model import create_model_for

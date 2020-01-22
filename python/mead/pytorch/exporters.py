@@ -5,7 +5,7 @@ import torch.nn as nn
 import baseline as bl
 from eight_mile.pytorch.layers import CRF, ViterbiBatchSize1
 from baseline.utils import (
-    export,
+    exporter,
     Offsets,
     write_json,
     load_vectorizers,
@@ -28,7 +28,7 @@ from mead.utils import (
 from mead.exporters import Exporter, register_exporter
 
 __all__ = []
-exporter = export(__all__)
+export = exporter(__all__)
 logger = logging.getLogger('mead')
 
 
@@ -141,7 +141,7 @@ class PytorchONNXExporter(Exporter):
         return model, vectorizers, model_name
 
 
-@exporter
+@export
 @register_exporter(task='classify', name='default')
 class ClassifyPytorchONNXExporter(PytorchONNXExporter):
     def __init__(self, task, **kwargs):
@@ -149,7 +149,7 @@ class ClassifyPytorchONNXExporter(PytorchONNXExporter):
         self.sig_name = 'predict_text'
 
 
-@exporter
+@export
 @register_exporter(task='tagger', name='default')
 class TaggerPytorchONNXExporter(PytorchONNXExporter):
     def __init__(self, task, **kwargs):
@@ -162,5 +162,4 @@ class TaggerPytorchONNXExporter(PytorchONNXExporter):
                 if isinstance(model.layers.decoder_model, CRF):
                     model.layers.decoder_model.viterbi = ViterbiBatchSize1(model.layers.decoder_model.viterbi.start_idx,
                                                                            model.layers.decoder_model.viterbi.end_idx)
-
         return model
