@@ -10,7 +10,7 @@ export = exporter(__all__)
 
 
 @export
-class ConfusionMatrix():
+class ConfusionMatrix:
     """Confusion matrix with metrics
 
     This class accumulates classification output, and tracks it in a confusion matrix.
