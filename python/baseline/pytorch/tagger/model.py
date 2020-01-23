@@ -98,7 +98,7 @@ class TaggerModelBase(nn.Module, TaggerModel):
             tensor = tensor.cuda()
         return tensor
 
-    def make_input(self, batch_dict):
+    def make_input(self, batch_dict, perm=False):
         example_dict = dict({})
         lengths = torch.from_numpy(batch_dict[self.lengths_key])
         lengths, perm_idx = lengths.sort(0, descending=True)
@@ -122,6 +122,7 @@ class TaggerModelBase(nn.Module, TaggerModel):
             if self.gpu:
                 ids = ids.cuda()
             example_dict['ids'] = ids
+        if perm: return example_dict, perm_idx
         return example_dict
 
     def forward(self, input: Dict[str, torch.Tensor]) -> torch.Tensor:
@@ -140,8 +141,9 @@ class TaggerModelBase(nn.Module, TaggerModel):
         return self.labels
 
     def predict(self, batch_dict):
-        inputs = self.make_input(batch_dict)
-        return self(inputs)
+        inputs, idx = self.make_input(batch_dict, perm=True)
+        outputs = self(inputs)
+        return unsort_batch(outputs, idx)
 
 
 @register_model(task='tagger', name='default')
