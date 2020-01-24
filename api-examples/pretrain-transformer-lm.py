@@ -204,7 +204,7 @@ class WordPieceVectorizer1D(AbstractVectorizer):
         handle = kwargs.get('embed_file')
         custom_vocab = kwargs.get('vocab_file')
         if custom_vocab is None:
-            self.tokenizer = BertTokenizer.from_pretrained(handle, do_lower_case=False)
+            self.tokenizer = BertTokenizer.from_pretrained(handle, do_lower_case=True)
         else:
             special_tokens = kwargs.get('special_tokens')
             never_split = ('[UNK]', '[SEP]', '[PAD]', '[CLS]', '[MASK]') + special_tokens
