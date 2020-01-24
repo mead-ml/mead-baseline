@@ -651,7 +651,7 @@ def train():
     parser.add_argument("--dataset_cache", type=str, default=os.path.expanduser('~/.bl-data'),
                         help="Path or url of the dataset cache")
     parser.add_argument("--cache_features", type=str2bool, default=True)
-    parser.add_argument("--disk_backed",
+    parser.add_argument("--reader_type",
                         default="packed",
                         choices=("packed", "jagged", "disk"),
                         help=("How the tensor data is stored: "
@@ -740,7 +740,7 @@ def train():
             dataset = DataDownloader(DATASETS[args.dataset_key], args.dataset_cache).download()
         except:
             dataset = DATASETS[args.dataset_key]
-    reader = create_reader(args.tokens, args.nctx, args.subword_model_file, args.subword_vocab_file, args.disk_backed)
+    reader = create_reader(args.tokens, args.nctx, args.subword_model_file, args.subword_vocab_file, args.reader_type)
 
     preproc_data = load_embed_and_vocab(args.tokens, reader, dataset, args.dataset_key, args.d_model, args.cache_features)
 
