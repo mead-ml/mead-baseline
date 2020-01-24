@@ -26,6 +26,7 @@ def get_configs(config_loc):
 def write_manifest(lines):
     with open("MANIFEST.in", "w") as f:
         f.write("\n".join(map(lambda x: 'include {}'.format(x), lines)))
+        f.write("\nrecursive-exclude tensorflow_serving *")
 
 def fix_links(text):
     """Pypi doesn't seem to host multiple docs so replace local links with ones to github."""
@@ -60,7 +61,7 @@ def main():
         license='Apache 2.0',
         url=About.URL,
         download_url=About.DOWNLOAD_URL,
-        packages=find_packages(exclude=['tests', 'xpctl*', 'hpctl*']),
+        packages=find_packages(exclude=['tests', 'xpctl*', 'hpctl*', 'tensorflow_serving*']),
         package_data={
             'mead': get_configs('mead/config'),
         },
