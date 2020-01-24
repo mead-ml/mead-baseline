@@ -72,12 +72,13 @@ public contributions.
 
 Baseline can be installed as a Python package:
 
-    ./install_dev.sh baseline
+    pip install mead-baseline
 
-Currently, xpctl depends on baseline but baseline is not available on PyPI so
-you need to install baseline before you install xpctl:
+Or you can checkout the source code and do:
 
-    ./install_dev.sh xpctl
+    pip install -e .
+
+from the baseline/python directory.
 
 ## A Note About Versions
 
