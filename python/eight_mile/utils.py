@@ -504,7 +504,7 @@ def import_user_module(module_name):
     idempotent_append(addon_path, sys.path)
     if any(module_name.endswith(suffix) for suffix in importlib.machinery.SOURCE_SUFFIXES):
         module_path = module_name
-        module_name, _ = _parse_module_as_path(module_path)
+        module_name, _ = parse_module_as_path(module_path)
         # File based import from here https://docs.python.org/3.6/library/importlib.html#importing-a-source-file-directly
         spec = importlib.util.spec_from_file_location(module_name, module_path)
         mod = importlib.util.module_from_spec(spec)
