@@ -367,7 +367,8 @@ class EmbedPoolStackClassifier(ClassifierModelBase):
         nc = len(self.labels)
         pool = self.pool(embeddings_stack.dsz, **kwargs)
         stacking = self.stacked(**kwargs)
-        self.impl = EmbedPoolStackModel(nc, embeddings_stack, pool, stacking)
+        output = self.output(nc, **kwargs)
+        self.impl = EmbedPoolStackModel(nc, embeddings_stack, pool, stacking, output)
 
 
     def pool(self, dsz, **kwargs):
@@ -396,6 +397,9 @@ class EmbedPoolStackClassifier(ClassifierModelBase):
         if len(hszs) == 0:
             return None
         return DenseStack(None, hszs, pdrop_value=self.pdrop_value)
+
+    def output(self, output_dim, **kwargs):
+        return tf.keras.layers.Dense(output_dim)
 
 
 @register_model(task='classify', name='default')

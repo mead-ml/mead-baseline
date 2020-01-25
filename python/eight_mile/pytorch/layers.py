@@ -1067,13 +1067,13 @@ class EmbedPoolStackModel(nn.Module):
     layers, ultimately ending in a projection to the output space
 
     """
-    def __init__(self, nc: int, embeddings: nn.Module, pool_model: nn.Module, stack_model: Optional[nn.Module] = None):
+    def __init__(self, nc: int, embeddings: nn.Module, pool_model: nn.Module, stack_model: Optional[nn.Module] = None, output_model: Optional[nn.Module] = None):
         super().__init__()
         self.embed_model = embeddings
         self.pool_model = pool_model
-        output_dim = self.pool_model.output_dim if stack_model is None else stack_model.output_dim
-        self.output_layer = Dense(output_dim, nc, activation="log_softmax")
         self.stack_model = stack_model if stack_model else nn.Identity()
+        output_dim = self.pool_model.output_dim if stack_model is None else stack_model.output_dim
+        self.output_layer = Dense(output_dim, nc, activation="log_softmax") if output_model is None else output_model
 
     def forward(self, inputs: Dict[str, torch.Tensor]):
         lengths = inputs['lengths']

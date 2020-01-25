@@ -1862,7 +1862,7 @@ class LangSequenceModel(tf.keras.Model):
 
 class EmbedPoolStackModel(tf.keras.Model):
 
-    def __init__(self, nc, embeddings, pool_model, stack_model=None):
+    def __init__(self, nc, embeddings, pool_model, stack_model=None, output_model=None):
         super().__init__()
         if isinstance(embeddings, dict):
             self.embed_model = EmbeddingsStack(embeddings)
@@ -1873,9 +1873,9 @@ class EmbedPoolStackModel(tf.keras.Model):
         self.pool_requires_length = False
         if hasattr(pool_model, 'requires_length'):
             self.pool_requires_length = pool_model.requires_length
-        self.output_layer = tf.keras.layers.Dense(nc)
         self.pool_model = pool_model
         self.stack_model = stack_model
+        self.output_layer = tf.keras.layers.Dense(nc) if output_model is None else output_model
 
     def call(self, inputs):
         lengths = inputs.get('lengths')
