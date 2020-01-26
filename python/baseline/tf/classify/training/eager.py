@@ -5,7 +5,7 @@ import logging
 import tensorflow as tf
 
 from eight_mile.confusion import ConfusionMatrix
-from eight_mile.progress import create_progress_bar
+from baseline.progress import create_progress_bar
 from eight_mile.utils import listify, get_version
 from eight_mile.tf.optz import *
 from baseline.utils import get_model_file, get_metric_cmp
