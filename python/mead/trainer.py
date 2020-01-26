@@ -3,7 +3,8 @@ import logging
 import argparse
 import copy
 from itertools import chain
-from eight_mile.utils import read_config_stream, import_user_module
+from eight_mile.utils import read_config_stream
+from baseline.utils import import_user_module
 from baseline.utils import normalize_backend
 import mead
 from mead.utils import convert_path, parse_extra_args, configure_logger, parse_and_merge_overrides

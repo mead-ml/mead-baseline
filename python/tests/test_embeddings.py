@@ -5,8 +5,8 @@ import string
 from functools import partial
 import pytest
 import numpy as np
-from baseline.w2v import *
-from baseline.w2v import norm_weights
+from baseline.embeddings import *
+from baseline.embeddings import norm_weights
 from baseline.utils import Offsets
 
 loc = os.path.dirname(os.path.realpath(__file__))

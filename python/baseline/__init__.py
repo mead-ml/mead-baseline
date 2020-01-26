@@ -1,7 +1,6 @@
 from baseline.version import __version__
 from baseline.utils import *
 from baseline.vectorizers import *
-from baseline.w2v import *
 from baseline.confusion import *
 from baseline.data import *
 from baseline.reader import *

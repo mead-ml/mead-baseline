@@ -25,7 +25,7 @@ from baseline.tf.embeddings import *
 from baseline.embeddings import *
 from baseline.vectorizers import create_vectorizer, TextNGramVectorizer
 from baseline.reader import CONLLSeqReader, TSVSeqLabelReader
-from baseline.w2v import write_word2vec_file
+from baseline.embeddings import write_word2vec_file
 from baseline.utils import ngrams
 import tensorflow as tf
 import numpy as np

@@ -15,8 +15,9 @@ from typing import Dict, List, Set, Optional
 import numpy as np
 import collections
 import eight_mile
+import importlib
 from eight_mile.utils import *
-
+import addons
 
 __all__ = []
 __all__.extend(eight_mile.utils.__all__)
@@ -30,6 +31,26 @@ export = exporter(__all__)
 
 
 export(str2bool)
+@export
+def import_user_module(module_name):
+    """Load a module that is in the python path
+    :param model_name: (``str``) - the name of the module
+    :return:
+    """
+    addon_path = os.path.dirname(os.path.realpath(addons.__file__))
+    idempotent_append(addon_path, sys.path)
+    if any(module_name.endswith(suffix) for suffix in importlib.machinery.SOURCE_SUFFIXES):
+        module_path = module_name
+        module_name, _ = parse_module_as_path(module_path)
+        # File based import from here https://docs.python.org/3.6/library/importlib.html#importing-a-source-file-directly
+        spec = importlib.util.spec_from_file_location(module_name, module_path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        # Set this module in sys.modules so later we can import the module by name when pickling things.
+        sys.modules[module_name] = mod
+        return mod
+    mod = importlib.import_module(module_name)
+    return mod
 
 
 @export
@@ -308,7 +329,7 @@ def load_vectorizers(directory):
 def unzip_files(zip_path):
     if os.path.isdir(zip_path):
         return zip_path
-    from eight_mile.mime_type import mime_type
+    from eight_mile.utils import mime_type
     if mime_type(zip_path) == 'application/zip':
         with open(zip_path, 'rb') as f:
             sha1 = hashlib.sha1(f.read()).hexdigest()
