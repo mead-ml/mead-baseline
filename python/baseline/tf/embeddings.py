@@ -124,7 +124,7 @@ class LookupTableEmbeddingsModel(TensorFlowEmbeddingsModel):
 
     @classmethod
     def create_placeholder(cls, name):
-        return tf.placeholder(tf.int32, [None, None], name=name)
+        return tf.compat.v1.placeholder(tf.int32, [None, None], name=name)
 
 
 @register_embeddings(name='char-conv')
@@ -135,7 +135,7 @@ class CharConvEmbeddingsModel(TensorFlowEmbeddingsModel):
 
     @classmethod
     def create_placeholder(cls, name):
-        return tf.placeholder(tf.int32, [None, None, None], name=name)
+        return tf.compat.v1.placeholder(tf.int32, [None, None, None], name=name)
 
 
 @register_embeddings(name='char-transformer')
@@ -152,7 +152,7 @@ class CharLSTMEmbeddingsModel(TensorFlowEmbeddingsModel):
 
     @classmethod
     def create_placeholder(cls, name):
-        return tf.placeholder(tf.int32, [None, None, None], name=name)
+        return tf.compat.v1.placeholder(tf.int32, [None, None, None], name=name)
 
 
 @register_embeddings(name='positional')
@@ -163,7 +163,7 @@ class PositionalLookupTableEmbeddingsModel(TensorFlowEmbeddingsModel):
 
     @classmethod
     def create_placeholder(cls, name):
-        return tf.placeholder(tf.int32, [None, None], name=name)
+        return tf.compat.v1.placeholder(tf.int32, [None, None], name=name)
 
 
 @register_embeddings(name='learned-positional')
@@ -174,7 +174,7 @@ class LearnedPositionalLookupTableEmbeddingsModel(TensorFlowEmbeddingsModel):
 
     @classmethod
     def create_placeholder(cls, name):
-        return tf.placeholder(tf.int32, [None, None], name=name)
+        return tf.compat.v1.placeholder(tf.int32, [None, None], name=name)
 
 
 @register_embeddings(name='positional-char-conv')
@@ -185,7 +185,7 @@ class PositionalCharConvEmbeddingsModel(TensorFlowEmbeddingsModel):
 
     @classmethod
     def create_placeholder(cls, name):
-        return tf.placeholder(tf.int32, [None, None, None], name=name)
+        return tf.compat.v1.placeholder(tf.int32, [None, None, None], name=name)
 
 
 @register_embeddings(name='learned-positional-char-conv')
@@ -196,7 +196,7 @@ class PositionalCharConvEmbeddingsModel(TensorFlowEmbeddingsModel):
 
     @classmethod
     def create_placeholder(cls, name):
-        return tf.placeholder(tf.int32, [None, None, None], name=name)
+        return tf.compat.v1.placeholder(tf.int32, [None, None, None], name=name)
 
 
 @register_embeddings(name='positional-char-lstm')
@@ -207,7 +207,7 @@ class PositionalCharLSTMEmbeddingsModel(TensorFlowEmbeddingsModel):
 
     @classmethod
     def create_placeholder(cls, name):
-        return tf.placeholder(tf.int32, [None, None, None], name=name)
+        return tf.compat.v1.placeholder(tf.int32, [None, None, None], name=name)
 
 
 @register_embeddings(name='learned-positional-char-lstm')
@@ -218,7 +218,7 @@ class LearnedPositionalCharLSTMEmbeddingsModel(TensorFlowEmbeddingsModel):
 
     @classmethod
     def create_placeholder(cls, name):
-        return tf.placeholder(tf.int32, [None, None, None], name=name)
+        return tf.compat.v1.placeholder(tf.int32, [None, None, None], name=name)
 
 
 # @register_embeddings(name="large-lut")
