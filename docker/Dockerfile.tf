@@ -9,10 +9,9 @@ RUN apt-get update && \
     pip install visdom pymongo pyyaml && \
     jupyter nbextension enable --py widgetsnbextension
 
-COPY python /baseline/python
-COPY docs /baseline/docs
+COPY baseline /baseline/
 
-RUN  cd /baseline/python/ && bash ./install_dev.sh baseline no_test
+RUN  cd /baseline && pip install -e .
 
 ADD https://github.com/mead-ml/xpctl/archive/master.tar.gz ./xpctl-master.tar.gz
 RUN tar xzf xpctl-master.tar.gz && \
@@ -29,5 +28,5 @@ VOLUME ["/data/embeddings", "/data/model-store", "/data/datasets", "/data/model-
 ENV LC_ALL=C.UTF-8
 ENV LANG=C.UTF-8
 
-WORKDIR /baseline/python
+WORKDIR /baseline
 CMD ["bash"]
