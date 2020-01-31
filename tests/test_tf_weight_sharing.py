@@ -29,10 +29,10 @@ def test_sharing():
             out = layer(embed)
 
         loss = tf.reduce_mean(tf.square(out - 0))
-        train_op = tf.train.GradientDescentOptimizer(1).minimize(loss)
+        train_op = tf.compat.v1.train.GradientDescentOptimizer(1).minimize(loss)
 
         with tf.compat.v1.Session() as sess:
-            sess.run(tf.global_variables_initializer())
+            sess.run(tf.compat.v1.global_variables_initializer())
             weights = sess.run([weight, layer.kernel])
             np.testing.assert_allclose(weights[0], weights[1].T)
             print("** Weights Start the Same")

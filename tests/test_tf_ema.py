@@ -61,7 +61,7 @@ def test_trainable_in_backup(model):
 
 def test_restore(model):
     m, _, _, restore = model
-    m.sess.run(tf.global_variables_initializer())
+    m.sess.run(tf.compat.v1.global_variables_initializer())
     old = m.sess.run(m.w)
     m.sess.run(tf.assign(m.w, tf.constant(3.0)))
     over = m.sess.run(m.w)
@@ -74,7 +74,7 @@ def test_restore(model):
 
 def test_load_saves_before_write(model):
     m, _, load, _ = model
-    m.sess.run(tf.global_variables_initializer())
+    m.sess.run(tf.compat.v1.global_variables_initializer())
     old_backup = m.sess.run(m.sess.graph.get_tensor_by_name("BackupVariables/Variable:0"))
     m.sess.run(tf.assign(m.w, tf.constant(3.0)))
     gold = m.sess.run(m.w)
@@ -86,7 +86,7 @@ def test_load_saves_before_write(model):
 
 # def test_load_twice_does_not_overwirte(model):
 #     m, _, load, _ = model
-#     m.sess.run(tf.global_variables_initializer())
+#     m.sess.run(tf.compat.v1.global_variables_initializer())
 #     m.sess.run(tf.assign(m.w, tf.constant(3.0)))
 #     gold = m.sess.run(m.w)
 #     m.sess.run(load)
@@ -99,7 +99,7 @@ def test_load_saves_before_write(model):
 
 def test_ema_update_on_step(model):
     m, train_op, load, _ = model
-    m.sess.run(tf.global_variables_initializer())
+    m.sess.run(tf.compat.v1.global_variables_initializer())
     m.sess.run([train_op], {m.x: [1], m.y: [0]})
     m.sess.run([train_op], {m.x: [1], m.y: [0]})
     w = m.sess.run(m.w)

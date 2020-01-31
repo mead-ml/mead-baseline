@@ -220,8 +220,8 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
                 model._state = _state
                 model.create_loss()
                 if kwargs.get('init', True):
-                    model.sess.run(tf.global_variables_initializer())
-                model.saver = tf.train.Saver()
+                    model.sess.run(tf.compat.v1.global_variables_initializer())
+                model.saver = tf.compat.v1.train.Saver()
                 model.saver.restore(model.sess, basename)
         else:
             embeddings_info = _state.pop('embeddings')

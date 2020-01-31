@@ -184,7 +184,7 @@ with tf.compat.v1.Session() as sess:
     # Declare a tf graph operation
     y = embedder.encode()
 
-    init_op = tf.global_variables_initializer()
+    init_op = tf.compat.v1.global_variables_initializer()
     sess.run(init_op)
 
     vecs = []

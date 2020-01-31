@@ -41,27 +41,27 @@ class ParallelConvTest(tf.test.TestCase):
     def test_output_batch_shape_int_arg(self):
         conv = parallel_conv(self.p, self.filtsz, self.embedsz, self.motsz)
         with self.test_session() as sess:
-            sess.run(tf.global_variables_initializer())
+            sess.run(tf.compat.v1.global_variables_initializer())
             self.assertEqual(conv.eval({self.p: self.input}).shape[0], self.batchsz)
 
     def test_output_batch_shape_list_arg(self):
         motsz = [self.motsz] * len(self.filtsz)
         conv = parallel_conv(self.p, self.filtsz, self.embedsz, motsz)
         with self.test_session() as sess:
-            sess.run(tf.global_variables_initializer())
+            sess.run(tf.compat.v1.global_variables_initializer())
             self.assertEqual(conv.eval({self.p: self.input}).shape[0], self.batchsz)
 
     def test_output_feature_shape_int_arg(self):
         conv = parallel_conv(self.p, self.filtsz, self.embedsz, self.motsz)
         with self.test_session() as sess:
-            sess.run(tf.global_variables_initializer())
+            sess.run(tf.compat.v1.global_variables_initializer())
             self.assertEqual(conv.eval({self.p: self.input}).shape[1], self.motsz * self.num_filt)
 
     def test_output_feature_shape_list_arg(self):
         motsz = [self.nfeat_factor * fsz for fsz in self.filtsz]
         conv = parallel_conv(self.p, self.filtsz, self.embedsz, motsz)
         with self.test_session() as sess:
-            sess.run(tf.global_variables_initializer())
+            sess.run(tf.compat.v1.global_variables_initializer())
             self.assertEqual(conv.eval({self.p: self.input}).shape[1], sum(motsz))
 
     def test_shape_available_int(self):
@@ -96,7 +96,7 @@ class ParallelConvTest(tf.test.TestCase):
     #     with tf.variable_scope("TEST", reuse=True):
     #         conv2 = parallel_conv(self.p, self.filtsz, self.embedsz, [self.motsz] * len(self.filtsz))
     #     with self.test_session() as sess:
-    #         sess.run(tf.global_variables_initializer())
+    #         sess.run(tf.compat.v1.global_variables_initializer())
     #         np.testing.assert_allclose(conv1.eval({self.p: self.input}), conv2.eval({self.p: self.input}))
 
     #@patch('baseline.tf.tfy.parallel_conv')

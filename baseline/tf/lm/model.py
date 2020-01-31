@@ -183,7 +183,7 @@ class LanguageModelBase(tf.keras.Model, LanguageModel):
 
         * *tgt_key* (`str`) -- Which vocabulary is the destination vocabulary
           (for example, you might have character inputs, or character + word inputs.  The outputs need to be specified)
-        * *sess* (`tf.Session`) -- Optionally, pass in a session (or one will be created)
+        * *sess* (`tf.compat.v1.Session`) -- Optionally, pass in a session (or one will be created)
         * *pdrop* (`float`) -- The dropout probability
         * *y* -- Optional target.  If this is not passed in, a placeholder gets created
         * *hsz* (`int`) -- Number of hidden units per layers
@@ -253,7 +253,7 @@ class LanguageModelBase(tf.keras.Model, LanguageModel):
         """
         if not tf.executing_eagerly():
             _state = read_json(basename + '.state')
-            _state['sess'] = kwargs.pop('sess', tf.Session())
+            _state['sess'] = kwargs.pop('sess', tf.compat.v1.Session())
             _state['model_type'] = kwargs.get('model_type', 'default')
             embeddings = {}
             embeddings_dict = _state.pop("embeddings")
@@ -269,10 +269,10 @@ class LanguageModelBase(tf.keras.Model, LanguageModel):
 
             do_init = kwargs.get('init', True)
             if do_init:
-                init = tf.global_variables_initializer()
+                init = tf.compat.v1.global_variables_initializer()
                 model.sess.run(init)
 
-            model.saver = tf.train.Saver()
+            model.saver = tf.compat.v1.train.Saver()
             model.saver.restore(model.sess, basename)
         else:
             _state = read_json(basename + '.state')

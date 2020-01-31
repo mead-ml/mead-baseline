@@ -131,12 +131,12 @@ class ServableTensorFlowEmbeddingsModel(ServableEmbeddingsModel):
         model._record_state(**kwargs)
         model.embedded = model.embed(**kwargs)
         model.sess = sess
-        model.saver = kwargs.get('saver', tf.train.Saver())
+        model.saver = kwargs.get('saver', tf.compat.v1.train.Saver())
         feed_dict = {k: v for e in embeddings.values() for k, v in e.get_feed_dict().items()}
         if kwargs.get('init', True):
             # If we have any luts that are large be sure to fill the embeddings
             # With the weight values on initialization.
-            model.sess.run(tf.global_variables_initializer(), feed_dict)
+            model.sess.run(tf.compat.v1.global_variables_initializer(), feed_dict)
         return model
 
     def _record_state(self, **kwargs):
@@ -168,7 +168,7 @@ class ServableTensorFlowEmbeddingsModel(ServableEmbeddingsModel):
                     _state[k] = kwargs[k]
             model = cls.create(embeddings, init=kwargs.get('init', True), **_state)
             model._state = _state
-            model.saver = tf.train.Saver()
+            model.saver = tf.compat.v1.train.Saver()
             model.saver.restore(model.sess, basename)
         return model
 

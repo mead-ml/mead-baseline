@@ -101,8 +101,8 @@ if not tf.executing_eagerly():
                 model = cls.create(src_embeddings, tgt_embedding, reload=True, **_state)
                 model._state = _state
                 if kwargs.get('init', True):
-                    model.sess.run(tf.global_variables_initializer())
-                model.saver = tf.train.Saver()
+                    model.sess.run(tf.compat.v1.global_variables_initializer())
+                model.saver = tf.compat.v1.train.Saver()
                 model.saver.restore(model.sess, basename)
                 return model
 

@@ -237,8 +237,8 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
             model = cls.create(embeddings, labels, **_state)
             model._state = _state
             if kwargs.get('init', True):
-                model.sess.run(tf.global_variables_initializer())
-            model.saver = tf.train.Saver()
+                model.sess.run(tf.compat.v1.global_variables_initializer())
+            model.saver = tf.compat.v1.train.Saver()
             model.saver.restore(model.sess, basename)
         else:
             embeddings_info = _state.pop('embeddings')

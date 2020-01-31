@@ -24,7 +24,7 @@ def test_static_dropout_lstm_cell():
             with tf.variable_scope("DropoutIsOff"):
                 rnn_no_drop_cell = lstm_cell_w_dropout(100, 0.9999999999, training=False)
                 rnn_no_drop, _ = tf.nn.dynamic_rnn(rnn_no_drop_cell, x, sequence_length=np.array([10], dtype=np.int), dtype=tf.float32)
-        sess.run(tf.global_variables_initializer())
+        sess.run(tf.compat.v1.global_variables_initializer())
         out_ten = sess.run(rnn_drop)
         assert len(out_ten[np.nonzero(out_ten)].squeeze()) < 20
         out_ten = sess.run(rnn_no_drop)
@@ -42,7 +42,7 @@ def test_static_dropout_rnn_cell():
             with tf.variable_scope("DropoutIsOff"):
                 rnn_no_drop_cell = rnn_cell_w_dropout(100, 0.9999999999, 'gru', training=False)
                 rnn_no_drop, _ = tf.nn.dynamic_rnn(rnn_no_drop_cell, x, sequence_length=np.array([10], dtype=np.int), dtype=tf.float32)
-        sess.run(tf.global_variables_initializer())
+        sess.run(tf.compat.v1.global_variables_initializer())
         out_ten = sess.run(rnn_drop)
         assert len(out_ten[np.nonzero(out_ten)].squeeze()) < 20
         out_ten = sess.run(rnn_no_drop)
@@ -59,7 +59,7 @@ def test_placeholder_dropout_lstm_cell():
                 rnn_cell = lstm_cell_w_dropout(100, 0.9999999999, training=train_flag)
                 rnn, _ = tf.nn.dynamic_rnn(rnn_cell, x, sequence_length=np.array([10], dtype=np.int), dtype=tf.float32)
 
-        sess.run(tf.global_variables_initializer())
+        sess.run(tf.compat.v1.global_variables_initializer())
         out_ten = sess.run(rnn, {train_flag: True})
         assert len(out_ten[np.nonzero(out_ten)].squeeze()) < 20
         out_ten = sess.run(rnn)
@@ -76,7 +76,7 @@ def test_placeholder_dropout_rnn_cell():
                 rnn_cell = rnn_cell_w_dropout(100, 0.9999999999, 'gru', training=train_flag)
                 rnn, _ = tf.nn.dynamic_rnn(rnn_cell, x, sequence_length=np.array([10], dtype=np.int), dtype=tf.float32)
 
-        sess.run(tf.global_variables_initializer())
+        sess.run(tf.compat.v1.global_variables_initializer())
         out_ten = sess.run(rnn, {train_flag: True})
         assert len(out_ten[np.nonzero(out_ten)].squeeze()) < 20
         out_ten = sess.run(rnn)
