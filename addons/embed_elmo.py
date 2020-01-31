@@ -978,7 +978,7 @@ class ELMoEmbeddings(TensorFlowEmbeddings):
 
     @classmethod
     def create_placeholder(cls, name):
-        return tf.placeholder('int32', shape=(None, None, ELMO_MXWLEN), name=name)
+        return tf.compat.v1.placeholder('int32', shape=(None, None, ELMO_MXWLEN), name=name)
 
     def __init__(self, name, embed_file=None, known_vocab=None, **kwargs):
         super(ELMoEmbeddings, self).__init__(name=name, **kwargs)
@@ -1031,7 +1031,7 @@ class ELMoHubEmbeddings(TensorFlowEmbeddings):
 
     @classmethod
     def create_placeholder(cls, name):
-        return tf.placeholder(tf.string, [None, None], name=name)
+        return tf.compat.v1.placeholder(tf.string, [None, None], name=name)
 
     def __init__(self, name, **kwargs):
         super(ELMoHubEmbeddings, self).__init__(**kwargs)
@@ -1069,7 +1069,7 @@ class ELMoPooledEmbeddings(ELMoEmbeddings):
 
     @classmethod
     def create_placeholder(cls, name):
-        return tf.placeholder(tf.string, [None, None], name=name)
+        return tf.compat.v1.placeholder(tf.string, [None, None], name=name)
 
     def _create_conv_pooling(self, dsz, cmotsz, filtsz):
         from baseline.tf.tfy import parallel_conv

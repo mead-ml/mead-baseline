@@ -30,7 +30,7 @@ def test_attn_value(qkv):
         dot_product_attention = SeqDotProductAttention(0.0)
         res = dot_product_attention((q, k, v, None))
         if get_version(tf) < 2:
-            with tf.Session() as sess:
+            with tf.compat.v1.Session() as sess:
                 res, gold = sess.run([res, v])
         else:
             res, gold = res.numpy(), v.numpy()
@@ -82,7 +82,7 @@ def test_scaled_attn_value(qkv):
         scaled_dot_product_attention = SeqScaledDotProductAttention(0.0)
         res = scaled_dot_product_attention((q, k, v, None))
         if get_version(tf) < 2:
-            with tf.Session() as sess:
+            with tf.compat.v1.Session() as sess:
                 res, gold = sess.run([res, v])
         else:
             res, gold = res.numpy(), v.numpy()

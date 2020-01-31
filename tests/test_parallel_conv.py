@@ -36,7 +36,7 @@ class ParallelConvTest(tf.test.TestCase):
         self.nfeat_factor = random.randint(1, 4)
         self.max_feat = random.randint(100, 301)
         self.input = np.random.uniform(size=(self.batchsz, self.seqsz, self.embedsz)).astype(np.float32)
-        self.p = tf.placeholder(tf.float32, shape=(None, self.seqsz, self.embedsz))
+        self.p = tf.compat.v1.placeholder(tf.float32, shape=(None, self.seqsz, self.embedsz))
 
     def test_output_batch_shape_int_arg(self):
         conv = parallel_conv(self.p, self.filtsz, self.embedsz, self.motsz)

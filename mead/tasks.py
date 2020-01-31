@@ -6,6 +6,7 @@ from collections import Counter
 import numpy as np
 import baseline
 from copy import deepcopy
+from eight_mile.utils import get_version
 from baseline.reporting import create_reporting
 from baseline.utils import (
     exporter,
@@ -50,7 +51,6 @@ def merge_reporting_with_settings(reporting, settings):
     return reporting_hooks, reporting
 
 
-
 class Backend(object):
     """Simple object to represent a deep-learning framework backend"""
     def __init__(self, name=None, params=None, exporter=None):
@@ -64,6 +64,17 @@ class Backend(object):
         self.params = params
 
     def load(self, task_name=None):
+        if self.name == 'tf':
+            prefer_eager = self.params.get('prefer_eager', False)
+            import tensorflow as tf
+            tf_version = get_version(tf)
+            if prefer_eager and tf_version < 2:
+                logger.info('user requesting eager on 1.x')
+                tf.executing_eagerly()
+            elif not prefer_eager and tf_version >= 2:
+                logger.info('User requesting eager disabled on 2.x')
+                tf.compat.v1.disable_eager_execution()
+
         base_pkg_name = 'baseline.{}'.format(self.name)
         mod = import_user_module(base_pkg_name)
         import_user_module('baseline.{}.optz'.format(self.name))
@@ -387,7 +398,7 @@ class ClassifierTask(Task):
         return 'classify'
 
     def _create_backend(self, **kwargs):
-        backend = Backend(self.config_params.get('backend', 'tf'))
+        backend = Backend(self.config_params.get('backend', 'tf'), kwargs)
         backend.load(self.task_name())
 
         return backend
@@ -479,7 +490,7 @@ class TaggerTask(Task):
         return 'tagger'
 
     def _create_backend(self, **kwargs):
-        backend = Backend(self.config_params.get('backend', 'tf'))
+        backend = Backend(self.config_params.get('backend', 'tf'), kwargs)
         if 'preproc' not in self.config_params:
             self.config_params['preproc'] = {}
         if backend.name == 'pytorch':
@@ -603,7 +614,7 @@ class EncoderDecoderTask(Task):
         return 'seq2seq'
 
     def _create_backend(self, **kwargs):
-        backend = Backend(self.config_params.get('backend', 'tf'))
+        backend = Backend(self.config_params.get('backend', 'tf'), kwargs)
         if 'preproc' not in self.config_params:
             self.config_params['preproc'] = {}
         self.config_params['preproc']['show_ex'] = show_examples
@@ -741,8 +752,7 @@ class LanguageModelingTask(Task):
         return baseline.reader.create_reader(self.task_name(), self.vectorizers, self.config_params['preproc'].get('trim', False), **reader_params)
 
     def _create_backend(self, **kwargs):
-        backend = Backend(self.config_params.get('backend', 'tf'))
-
+        backend = Backend(self.config_params.get('backend', 'tf'), kwargs)
         if backend.name == 'pytorch':
             self.config_params.get('preproc', {})['trim'] = True
 

@@ -3,7 +3,7 @@ import logging
 import argparse
 import copy
 from itertools import chain
-from eight_mile.utils import read_config_stream
+from eight_mile.utils import read_config_stream, str2bool
 from baseline.utils import import_user_module
 from baseline.utils import normalize_backend
 import mead
@@ -86,7 +86,7 @@ def main():
     parser.add_argument('--reporting', help='reporting hooks', nargs='+')
     parser.add_argument('--backend', help='The deep learning backend to use')
     parser.add_argument('--checkpoint', help='Restart training from this checkpoint')
-
+    parser.add_argument('--prefer_eager', help="If running in TensorFlow, should we prefer eager model", type=str2bool)
     args, overrides = parser.parse_known_args()
     config_params = read_config_stream(args.config)
     config_params = parse_and_merge_overrides(config_params, overrides, pre='x')
@@ -132,7 +132,7 @@ def main():
 
     task = mead.Task.get_task_specific(task_name, args.settings)
 
-    task.read_config(config_params, args.datasets, reporting_args=overrides)
+    task.read_config(config_params, args.datasets, reporting_args=overrides, prefer_eager=args.prefer_eager)
     task.initialize(args.embeddings)
     task.train(args.checkpoint)
 

@@ -58,7 +58,7 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
         :param basename: Base name of model
         :return:
         """
-        if get_version(tf) < 2:
+        if not tf.executing_eagerly():
             self.saver.save(self.sess, basename)
         else:
             self.save_weights(f"{basename}.wgt")
@@ -133,7 +133,7 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
         """
 
         batch_dict = self.make_input(batch_dict)
-        if get_version(tf) < 2:
+        if not tf.executing_eagerly():
             probs = self.sess.run(self.probs, batch_dict)
         else:
             probs = tf.nn.softmax(self(batch_dict)).numpy()
@@ -168,7 +168,7 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
         :return:
         """
         y = batch_dict.get('y', None)
-        if get_version(tf) < 2:
+        if not tf.executing_eagerly():
             batch_for_model = new_placeholder_dict(train)
 
             for k in self.embeddings.keys():
@@ -221,7 +221,7 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
         if __version__ != _state['version']:
             logger.warning("Loaded model is from baseline version %s, running version is %s", _state['version'], __version__)
 
-        if get_version(tf) < 2:
+        if not tf.executing_eagerly():
             _state['sess'] = kwargs.pop('sess', create_session())
             with _state['sess'].graph.as_default():
                 embeddings_info = _state.pop('embeddings')
@@ -302,7 +302,7 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
 
         model.lengths_key = kwargs.get('lengths_key')
 
-        if get_version(tf) < 2:
+        if not tf.executing_eagerly():
 
             inputs = {}
             if model.lengths_key is not None:
@@ -315,7 +315,7 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
         model._record_state(**kwargs)
 
         nc = len(labels)
-        if get_version(tf) < 2:
+        if not tf.executing_eagerly():
             model.y = kwargs.get('y', tf.compat.v1.placeholder(tf.int32, [None, nc], name="y"))
             for k, embedding in model.embeddings.items():
                 x = kwargs.get(k, embedding.create_placeholder(name=k))
@@ -327,7 +327,7 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
         model.labels = labels
         model.create_layers(**kwargs)
 
-        if get_version(tf) < 2:
+        if not tf.executing_eagerly():
             model.logits = tf.identity(model(inputs), name="logits")
             model.best = tf.argmax(model.logits, 1, name="best")
             model.probs = tf.nn.softmax(model.logits, name="probs")

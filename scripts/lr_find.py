@@ -30,10 +30,10 @@ def fit(model, ts, vs, es, **kwargs):
     be = kwargs.get('backend', 'tf')
     if be == 'tf':
         import tensorflow as tf
-        tables = tf.tables_initializer()
+        tables = tf.compat.v1.tables_initializer()
         model.sess.run(tables)
-        model.sess.run(tf.global_variables_initializer())
-        model.set_saver(tf.train.Saver())
+        model.sess.run(tf.compat.v1.global_variables_initializer())
+        model.set_saver(tf.compat.v1.train.Saver())
 
 
     for _ in range(num_iters):

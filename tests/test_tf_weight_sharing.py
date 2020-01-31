@@ -18,7 +18,7 @@ def set_cpu():
 def test_sharing():
     # For some reason I can't get this to stop trying to use the gpu which causes it to fail
     with tf.device('/cpu:0'):
-        input_ = tf.placeholder(tf.int32, shape=[None])
+        input_ = tf.compat.v1.placeholder(tf.int32, shape=[None])
         weight = tf.get_variable("weight", shape=[100, 200], initializer=tf.random_normal_initializer())
         embed = tf.nn.embedding_lookup(weight, input_)
 
@@ -31,7 +31,7 @@ def test_sharing():
         loss = tf.reduce_mean(tf.square(out - 0))
         train_op = tf.train.GradientDescentOptimizer(1).minimize(loss)
 
-        with tf.Session() as sess:
+        with tf.compat.v1.Session() as sess:
             sess.run(tf.global_variables_initializer())
             weights = sess.run([weight, layer.kernel])
             np.testing.assert_allclose(weights[0], weights[1].T)

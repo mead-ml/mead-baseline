@@ -1388,7 +1388,7 @@ class BERTEmbeddings(TensorFlowEmbeddings):
     @classmethod
     def create_placeholder(cls, name):
         #input_ids = tf.placeholder(tf.int32, shape=(None, FLAGS.max_seq_length), name='input_ids')
-        return tf.placeholder(tf.int32, [None, None], name=name)
+        return tf.compat.v1.placeholder(tf.int32, [None, None], name=name)
 
     def __init__(self, name, **kwargs):
         super(BERTEmbeddings, self).__init__(name=name)
@@ -1447,7 +1447,7 @@ class BERTHubModel(TensorFlowEmbeddings):
     @classmethod
     def create_placeholder(cls, name):
         # input_ids = tf.placeholder(tf.int32, shape=(None, FLAGS.max_seq_length), name='input_ids')
-        return tf.placeholder(tf.int32, [None, None], name=name)
+        return tf.compat.v1.placeholder(tf.int32, [None, None], name=name)
 
     def __init__(self, name, **kwargs):
         super(BERTHubModel, self).__init__(name=name, **kwargs)

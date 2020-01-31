@@ -17,14 +17,14 @@ def set_cpu():
 
 class Model:
     def __init__(self):
-        self.sess = tf.Session()
+        self.sess = tf.compat.v1.Session()
         with self.sess.graph.as_default():
             self.w = tf.Variable(100, dtype=tf.float32)
             self.w2 = tf.Variable(12, dtype=tf.float32)
             self.w3 = tf.Variable(64, dtype=tf.float32, trainable=False)
             self.train_vars = [self.w, self.w2]
-            self.x = tf.placeholder(tf.float32, [None])
-            self.y = tf.placeholder(tf.float32, [None])
+            self.x = tf.compat.v1.placeholder(tf.float32, [None])
+            self.y = tf.compat.v1.placeholder(tf.float32, [None])
             self.y_ = tf.multiply(self.x, self.w)
 
             self.loss = tf.reduce_sum(tf.square(tf.subtract(self.y, self.y_)))

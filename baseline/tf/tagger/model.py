@@ -50,7 +50,7 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
         :param basename: Base name of model
         :return:
         """
-        if get_version(tf) < 2:
+        if not tf.executing_eagerly():
             self.saver.save(self.sess, basename)
         else:
             self.save_weights(f"{basename}.wgt")
@@ -139,7 +139,7 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
         :return:
         """
         y = batch_dict.get('y', None)
-        if get_version(tf) < 2:
+        if not tf.executing_eagerly():
             batch_for_model = new_placeholder_dict(train)
 
             for k in self.embeddings.keys():
@@ -202,7 +202,7 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
         # FIXME: Somehow not writing this anymore
         #if __version__ != _state['version']:
         #    logger.warning("Loaded model is from baseline version %s, running version is %s", _state['version'], __version__)
-        if get_version(tf) < 2:
+        if not tf.executing_eagerly():
 
             _state['sess'] = kwargs.pop('sess', create_session())
             embeddings_info = _state.pop("embeddings")
@@ -270,7 +270,7 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
         """
         lengths = batch_dict[self.lengths_key]
         batch_dict = self.make_input(batch_dict)
-        if get_version(tf) < 2:
+        if not tf.executing_eagerly():
             return self.sess.run(self.best, feed_dict=batch_dict)
         else:
             return self(batch_dict).numpy()
@@ -316,7 +316,7 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
         * *lengths_key* (`str`) -- What is the name of the key that is used to get the full temporal length
         * *dropout* (`float`) -- The probability of dropout
         * *dropin* (`Dict[str, float]`) -- For each feature, how much input to dropout
-        * *sess* -- An optional `tf.Session`, if not provided, this will be created
+        * *sess* -- An optional `tf.compat.v1.Session`, if not provided, this will be created
         * *span_type* -- (`str`) The type of input span
         * *username* -- (`str`) A username, defaults to the name of the user on this machine
         * *label* -- (`str`) An optional, human-readable label name.  Defaults to sha1 of this configuration
@@ -332,7 +332,7 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
 
         model.lengths_key = kwargs.get('lengths_key')
 
-        if get_version(tf) < 2:
+        if not tf.executing_eagerly():
 
             inputs = {}
             for k, embedding in embeddings.items():
@@ -341,7 +341,7 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
             model._unserializable.append(model.lengths_key)
             model.lengths = kwargs.get('lengths', tf.compat.v1.placeholder(tf.int32, [None], name="lengths"))
             inputs['lengths'] = model.lengths
-            model.y = kwargs.get('y', tf.placeholder(tf.int32, [None, None], name="y"))
+            model.y = kwargs.get('y', tf.compat.v1.placeholder(tf.int32, [None, None], name="y"))
             model.sess = kwargs.get('sess', create_session())
 
         model._record_state(**kwargs)
@@ -360,7 +360,7 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
         decode_model = model.decode(**kwargs)
 
         model.impl = TagSequenceModel(nc, embed_model, transduce_model, decode_model)
-        if get_version(tf) < 2:
+        if not tf.executing_eagerly():
             model.probs = model.impl.transduce(inputs)
             model.best = model.impl.decode(model.probs, model.lengths)
         return model

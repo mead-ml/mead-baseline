@@ -114,16 +114,16 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         if decay is not None:
             self.ema = True
             ema_op, self.ema_load, self.ema_restore = _add_ema(self.model, float(decay))
-            with tf.control_dependencies([ema_op]):
+            with tf.compat.v1.control_dependencies([ema_op]):
                 self.train_op = tf.identity(train_op)
         else:
             self.ema = False
             self.train_op = train_op
 
-        tables = tf.tables_initializer()
+        tables = tf.compat.v1.tables_initializer()
         self.model.sess.run(tables)
-        self.model.sess.run(tf.global_variables_initializer())
-        self.model.set_saver(tf.train.Saver())
+        self.model.sess.run(tf.compat.v1.global_variables_initializer())
+        self.model.set_saver(tf.compat.v1.train.Saver())
 
     @staticmethod
     def _get_batchsz(batch_dict):

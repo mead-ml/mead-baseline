@@ -154,7 +154,7 @@ def predict_input_fn():
 
 def server_input_fn():
     tensors = {
-        'word': tf.placeholder(tf.int64, [None, None])
+        'word': tf.compat.v1.placeholder(tf.int64, [None, None])
     }
     features = {
         'word': tensors['word']

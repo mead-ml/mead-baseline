@@ -1,4 +1,4 @@
-MEAD_CONFIG_LOC='../python/mead/config/mead-settings.json'
+MEAD_CONFIG_LOC='../mead/config/mead-settings.json'
 if [ ! -e $MEAD_CONFIG_LOC ]; then
     echo -e "{\"datacache\": \"$HOME/.bl-data\"}" > $MEAD_CONFIG_LOC
 fi

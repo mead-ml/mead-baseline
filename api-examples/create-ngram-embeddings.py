@@ -171,7 +171,7 @@ output_vocab = list(words)
 
 
 # Make a session
-with tf.Session() as sess:
+with tf.compat.v1.Session() as sess:
     # Get embeddings
     embed = get_embedder(args.type, args.input_embed)
 

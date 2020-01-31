@@ -33,7 +33,7 @@ class LanguageModelBase(tf.keras.Model, LanguageModel):
         :param basename: Base name of model
         :return:
         """
-        if get_version(tf) < 2:
+        if not tf.executing_eagerly():
             self.saver.save(self.sess, basename)
         else:
             self.save_weights(f"{basename}.wgt")
@@ -128,7 +128,7 @@ class LanguageModelBase(tf.keras.Model, LanguageModel):
         :param train: (`bool`) Are we training (or evaluating)?
         :return: A `feed_dict`
         """
-        if get_version(tf) < 2:
+        if not tf.executing_eagerly():
             batch_dict_for_model = new_placeholder_dict(train)
 
             for key in self.src_keys:
@@ -154,7 +154,7 @@ class LanguageModelBase(tf.keras.Model, LanguageModel):
         :return: The softmax output for this step
         """
         batch_dict = self.make_input(batch_dict)
-        if get_version(tf) < 2:
+        if not tf.executing_eagerly():
             step_softmax = self.sess.run(self.probs, batch_dict)
         else:
             step_softmax = tf.nn.softmax(self.impl(batch_dict))
@@ -203,15 +203,15 @@ class LanguageModelBase(tf.keras.Model, LanguageModel):
         inputs = {}
         lm.batchsz = 0
 
-        if get_version(tf) < 2:
+        if not tf.executing_eagerly():
 
             for k, embedding in embeddings.items():
                 x = kwargs.get(k, embedding.create_placeholder(name=k))
                 lm.batchsz = tf.shape(x)[0]
                 inputs[k] = x
 
-            lm.y = kwargs.get('y', tf.placeholder(tf.int32, [None, None], name="y"))
-            lm.sess = kwargs.get('sess', tf.Session())
+            lm.y = kwargs.get('y', tf.compat.v1.placeholder(tf.int32, [None, None], name="y"))
+            lm.sess = kwargs.get('sess', tf.compat.v1.Session())
         lm.pdrop_value = kwargs.pop('pdrop', 0.5)
         lm.hsz = kwargs.pop('hsz', None)
         embeddings_layer = lm.embed(**kwargs)
@@ -219,7 +219,7 @@ class LanguageModelBase(tf.keras.Model, LanguageModel):
         encoder_layer = lm.decode(inputs, **kwargs)
         lm.impl = LangSequenceModel(nc, embeddings_layer, encoder_layer)
 
-        if get_version(tf) < 2:
+        if not tf.executing_eagerly():
             lm.logits, lm.final_state = lm(inputs)
             lm.probs = tf.nn.softmax(lm.logits, name="softmax")
 
@@ -251,7 +251,7 @@ class LanguageModelBase(tf.keras.Model, LanguageModel):
 
         :return: A restored model
         """
-        if get_version(tf) < 2:
+        if not tf.executing_eagerly():
             _state = read_json(basename + '.state')
             _state['sess'] = kwargs.pop('sess', tf.Session())
             _state['model_type'] = kwargs.get('model_type', 'default')

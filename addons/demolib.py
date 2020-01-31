@@ -19,7 +19,7 @@ class CharBoWEmbeddings(TensorFlowEmbeddings):
     """
     @classmethod
     def create_placeholder(cls, name):
-        return tf.placeholder(tf.int32, [None, None, None], name=name)
+        return tf.compat.v1.placeholder(tf.int32, [None, None, None], name=name)
 
     def __init__(self, name, **kwargs):
         super(CharBoWEmbeddings, self).__init__()
@@ -122,10 +122,10 @@ def train(model, ts, vs, es=None, **kwargs):
     print('reporting', reporting_fns)
 
     trainer = create_trainer(model, **kwargs)
-    tables = tf.tables_initializer()
+    tables = tf.compat.v1.tables_initializer()
     model.sess.run(tables)
-    model.sess.run(tf.global_variables_initializer())
-    model.set_saver(tf.train.Saver())
+    model.sess.run(tf.compat.v1.global_variables_initializer())
+    model.set_saver(tf.compat.v1.train.Saver())
 
     max_metric = 0
     last_improved = 0

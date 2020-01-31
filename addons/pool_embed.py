@@ -78,7 +78,7 @@ class CBoWEmbeddingsModel(TensorFlowEmbeddingsModel):
 
     @classmethod
     def create_placeholder(cls, name):
-        return tf.placeholder(tf.int32, [None, None, None], name=name)
+        return tf.compat.v1.placeholder(tf.int32, [None, None, None], name=name)
 
 
 @register_embeddings(name='max-pool')
@@ -89,7 +89,7 @@ class MaxBoWEmbeddingsModel(TensorFlowEmbeddingsModel):
 
     @classmethod
     def create_placeholder(cls, name):
-        return tf.placeholder(tf.int32, [None, None, None], name=name)
+        return tf.compat.v1.placeholder(tf.int32, [None, None, None], name=name)
 
 
 @register_embeddings(name='mean-pool')
@@ -100,5 +100,5 @@ class MeanBoWEmbeddingsModel(TensorFlowEmbeddingsModel):
 
     @classmethod
     def create_placeholder(cls, name):
-        return tf.placeholder(tf.int32, [None, None, None], name=name)
->>>>>>> chore: update addon
+        return tf.comat.v1.placeholder(tf.int32, [None, None, None], name=name)
+

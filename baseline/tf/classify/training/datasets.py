@@ -88,8 +88,8 @@ def fit_datasets(model_params, ts, vs, es=None, **kwargs):
     test_dataset = test_dataset.repeat(epochs + 1)
     test_dataset = test_dataset.prefetch(NUM_PREFETCH)
 
-    iter = tf.data.Iterator.from_structure(train_dataset.output_types,
-                                           train_dataset.output_shapes)
+    iter = tf.compat.v1.data.Iterator.from_structure(tf.compat.v1.data.get_output_types(train_dataset),
+                                                     tf.compat.v1.data.get_output_shapes(train_dataset))
 
     features, y = iter.get_next()
     # Add features to the model params

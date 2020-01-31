@@ -44,9 +44,9 @@ class TensorFlowExporter(Exporter):
     def run(self, basename, output_dir, project=None, name=None, model_version=None, **kwargs):
         basename = get_tf_index_from_unzipped(basename)
 
-        with tf.Graph().as_default():
-            config_proto = tf.ConfigProto(allow_soft_placement=True)
-            with tf.Session(config=config_proto) as sess:
+        with tf.compat.v1.Graph().as_default():
+            config_proto = tf.compat.v1.ConfigProto(allow_soft_placement=True)
+            with tf.compat.v1.Session(config=config_proto) as sess:
                 sig_input, sig_output, sig_name, assets = self._create_rpc_call(sess, basename)
                 client_output, server_output = get_output_paths(
                     output_dir,
