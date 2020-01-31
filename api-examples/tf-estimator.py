@@ -64,7 +64,7 @@ parser.add_argument('--gpus', help='Number of GPUs to use', default=1, type=int)
 args = parser.parse_known_args()[0]
 
 logging.basicConfig(level=get_logging_level(args.ll))
-tf.logging.set_verbosity(get_tf_logging_level(args.tf_ll))
+tf.compat.v1.logging.set_verbosity(get_tf_logging_level(args.tf_ll))
 
 
 pool_field = 'cmotsz' if args.model_type == 'default' else 'rnnsz'

@@ -375,7 +375,7 @@ class TransformerLanguageModel(LanguageModelBase):
         :return: The layer
         """
 
-        encoder_layer = TransformerEncoderStack(num_heads, self.hsz, self.pdrop_value, layers=layers, **kwargs)
+        encoder_layer = TransformerEncoderStackWithTimeMask(num_heads, self.hsz, self.pdrop_value, layers=layers, **kwargs)
         return encoder_layer
 
 

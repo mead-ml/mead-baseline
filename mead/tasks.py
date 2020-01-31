@@ -66,6 +66,7 @@ class Backend(object):
     def load(self, task_name=None):
         if self.name == 'tf':
             prefer_eager = self.params.get('prefer_eager', False)
+
             import tensorflow as tf
             tf_version = get_version(tf)
             if prefer_eager and tf_version < 2:
@@ -74,6 +75,8 @@ class Backend(object):
             elif not prefer_eager and tf_version >= 2:
                 logger.info('User requesting eager disabled on 2.x')
                 tf.compat.v1.disable_eager_execution()
+            from eight_mile.tf.layers import set_tf_log_level
+            set_tf_log_level(os.getenv("MEAD_TF_LOG_LEVEL", "ERROR"))
 
         base_pkg_name = 'baseline.{}'.format(self.name)
         mod = import_user_module(base_pkg_name)

@@ -3,9 +3,10 @@
     "basedir": "ptb-transformer",
     "batchsz": 20,
     "unif": 0.1,
-    "nbptt": 60,
     "preproc": {
+       "lower": true
     },
+    "nbptt": 60,
     "backend": "pytorch",
     "dataset": "ptb",
     "loader": {
@@ -26,6 +27,7 @@
     ],
     "model": {
         "model_type": "transformer",
+	"num_heads": 4,
         "hsz": 300,
         "layers": 2,
         "pdrop": 0.65
