@@ -71,7 +71,7 @@ def main():
         license='Apache 2.0',
         url=About.URL,
         download_url=About.DOWNLOAD_URL,
-        packages=find_packages(exclude=['tests', 'layers*']),
+        packages=find_packages(exclude=['tests', 'layers*', 'api-examples']),
         package_data={
             'mead': get_configs('mead/config'),
         },

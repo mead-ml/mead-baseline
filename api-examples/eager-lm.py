@@ -1,6 +1,7 @@
 import baseline
 import argparse
-import eight_mile.tf.embeddings
+import baseline.embeddings
+import baseline.tf.embeddings
 import eight_mile.tf.layers as L
 from eight_mile.utils import get_version, revlut, get_logging_level
 from eight_mile.tf.layers import SET_TRAIN_FLAG, set_tf_log_level
@@ -92,7 +93,7 @@ vocabs = reader.build_vocab([train_file,
 embeddings = dict()
 for k, v in feature_desc.items():
     embed_config = v['embed']
-    embeddings_for_k = eight_mile.embeddings.load_embeddings(k, known_vocab=vocabs[k], **embed_config)
+    embeddings_for_k = baseline.embeddings.load_embeddings(k, known_vocab=vocabs[k], **embed_config)
     embeddings[k] = embeddings_for_k['embeddings']
     # Reset the vocab to the embeddings one
     vocabs[k] = embeddings_for_k['vocab']
@@ -127,7 +128,7 @@ def predict_input_fn():
 
 
 transducer = L.LSTMEncoderWithState(None, args.hsz, args.layers, 0.5)
-model = L.LangSequenceModel(embeddings["word"].vsz, embeddings, transducer)
+model = L.LangSequenceModel(embeddings["word"].get_vsz(), embeddings, transducer)
 
 
 def generate_text(model, start_string, temperature=1.0, num_generate=20):
@@ -157,7 +158,7 @@ def generate_text(model, start_string, temperature=1.0, num_generate=20):
 def loss(model, h, x, y):
     x["h"] = h
     logits, h = model(x)
-    vsz = embeddings["word"].vsz
+    vsz = embeddings["word"].get_vsz()
     targets = tf.reshape(y, [-1])
     bt_x_v = tf.nn.log_softmax(tf.reshape(logits, [-1, vsz]), axis=-1)
     one_hots = tf.one_hot(targets, vsz)
@@ -204,5 +205,3 @@ for epoch in range(args.epochs):
 
     text = generate_text(model, args.start_word, args.temperature)
     print(' '.join(text))
-
-for x, y in test_input_fn():
