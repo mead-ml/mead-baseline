@@ -53,6 +53,30 @@ def files_for_dir(directory):
     for file in glob.glob(f'{directory}/*.csv'):
         yield file
 
+
+class SavableFastBPE(object):
+    """Wrapper to define how to pickle fastBPE tokenizer"""
+    def __init__(self, codes_path, vocab_path):
+        from fastBPE import fastBPE
+        self.codes = open(codes_path, 'rb').read()
+        self.vocab = open(vocab_path, 'rb').read()
+        self.bpe = fastBPE(codes_path, vocab_path)
+
+    def __getstate__(self):
+        return {'codes': self.codes, 'vocab': self.vocab}
+
+    def __setstate__(self, state):
+        from fastBPE import fastBPE
+        import tempfile
+        with tempfile.NamedTemporaryFile() as codes, tempfile.NamedTemporaryFile() as vocab:
+            codes.write(state['codes'])
+            vocab.write(state['vocab'])
+            self.bpe = fastBPE(codes.name, vocab.name)
+
+    def apply(self, sentences):
+        return self.bpe.apply(sentences)
+
+
 class BPEVectorizer1D(AbstractVectorizer):
     """Define a Baseline Vectorizer for BPE using fastBPE (https://github.com/glample/fastBPE)
 
@@ -65,11 +89,10 @@ class BPEVectorizer1D(AbstractVectorizer):
     def __init__(self, **kwargs):
         """Loads a BPE tokenizer"""
         super().__init__(kwargs.get('transform_fn'))
-        from fastBPE import fastBPE
         self.max_seen = 128
         self.model_file = kwargs.get('model_file')
         self.vocab_file = kwargs.get('vocab_file')
-        self.tokenizer = fastBPE(self.model_file, self.vocab_file)
+        self.tokenizer = SavableFastBPE(self.model_file, self.vocab_file)
         self.mxlen = kwargs.get('mxlen', -1)
         self.vocab = {k: i for i, k in enumerate(self.read_vocab(self.vocab_file))}
 
@@ -94,10 +117,10 @@ class BPEVectorizer1D(AbstractVectorizer):
         for t in tokens:
             if t in Offsets.VALUES:
                 yield t
-            if t == '<unk>':
-                yield Offsets.UNK
-            if t == '<eos>':
-                yield Offsets.EOS
+            elif t == '<unk>':
+                yield Offsets.VALUES[Offsets.UNK]
+            elif t == '<eos>':
+                yield Offsets.VALUES[Offsets.EOS]
             else:
                 subwords = self.tokenizer.apply([t])[0].split()
                 for x in subwords:
@@ -437,7 +460,7 @@ class DiskDataset(Dataset):
 
 
 def load_data(token_type, reader, dataset, file_key, vocabs, caching):
-    cached_file = '{}-{}.cache'.format(dataset[file_key], token_type)
+    cached_file = '{}-{}-paired.cache'.format(dataset[file_key], token_type)
     if caching and os.path.exists(cached_file):
         logger.info("Reloading %s from cached file [%s]", file_key, cached_file)
         loaded = torch.load(cached_file)
@@ -469,7 +492,7 @@ def create_reader(token_type, nctx, subword_model_file, subword_vocab_file, read
 
 
 def get_embed_and_vocab_cache(base_path, dataset_key, token_type):
-    return os.path.join(base_path, 'preproc-{}-{}.cache'.format(dataset_key, token_type))
+    return os.path.join(base_path, 'preproc-{}-{}-paired.cache'.format(dataset_key, token_type))
 
 
 def load_embed_and_vocab(token_type, reader, dataset, dataset_key, d_model, caching):
@@ -492,10 +515,11 @@ def load_embed_and_vocab(token_type, reader, dataset, dataset_key, d_model, cach
                                                             dsz=d_model,
                                                             known_vocab=vocab,
                                                             embed_type='positional')
+        logger.info(x_embedding)
         vocab = x_embedding['vocab']
         embedding = x_embedding['embeddings']
 
-        preproc_data = {'vocabs': vocab, 'embeddings': embedding, 'valid_num_words': valid_num_words}
+        preproc_data = {'vocabs': vocab, 'embeddings': embedding, 'valid_num_words': valid_num_words, "mxlen": reader.vectorizer.mxlen}
         logger.info("Saving preprocessing info [%s]", preproc_cache)
         torch.save(preproc_data, preproc_cache)
     return preproc_data
@@ -639,6 +663,7 @@ class PairedModel(nn.Module):
 def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers):
 
     model = PairedModel(embeddings, d_model, d_ff, dropout, num_heads, num_layers)
+    logger.info(model)
     return model
 
 
@@ -676,6 +701,7 @@ def train():
     parser.add_argument("--restart_from", type=str, help="Option allows you to restart from a previous checkpoint")
     parser.add_argument("--warmup_steps", type=int, default=1000, help="Num warmup steps")
     parser.add_argument("--loss", type=str, default='all', choices=['triplet', 'all'])
+    parser.add_argument("--update_steps", type=int, default=100, help="The number of steps to take before output a log message")
     parser.add_argument("--device", type=str,
                         default="cuda" if torch.cuda.is_available() else "cpu",
                         help="Device (cuda or cpu)")
@@ -771,7 +797,7 @@ def train():
     logger.info("Loaded model and loss")
 
     steps_per_epoch = len(train_loader)
-    update_on = steps_per_epoch // 100
+    update_on = steps_per_epoch // args.update_steps
     cosine_decay = CosineDecaySchedulerPyTorch(len(train_loader) * args.epochs, lr=args.lr)
     linear_warmup = WarmupLinearSchedulerPyTorch(args.warmup_steps, lr=args.lr)
     lr_sched = CompositeLRScheduler(linear_warmup, cosine_decay, lr=args.lr)
