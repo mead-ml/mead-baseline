@@ -3,7 +3,7 @@ import argparse
 import baseline.embeddings
 import baseline.tf.embeddings
 import eight_mile.tf.layers as L
-from eight_mile.utils import get_version, revlut, get_logging_level
+from eight_mile.utils import get_version, revlut, str2bool
 from eight_mile.tf.layers import SET_TRAIN_FLAG, set_tf_log_level
 from eight_mile.tf.optz import EagerOptimizer
 import tensorflow as tf
@@ -12,22 +12,13 @@ import numpy as np
 import time
 
 if get_version(tf) < 2:
-    tf.enable_eager_execution()
-    SGD = tf.train.GradientDescentOptimizer
+    tf.compat.v1.enable_eager_execution()
+    Adam = tf.compat.v1.train.AdamOptimizer
 
 else:
-    SGD = tf.optimizers.SGD
+    Adam = tf.optimizers.Adam
 NUM_PREFETCH = 2
 SHUF_BUF_SZ = 5000
-
-
-def get_tf_logging_level(ll):
-    ll = ll.lower()
-    if ll == 'debug':
-        return tf.logging.DEBUG
-    if ll == 'info':
-        return logging.INFO
-    return tf.logging.WARN
 
 
 class Data:
@@ -59,20 +50,23 @@ parser.add_argument('--valid', help='Validation file', default='../data/ptb/vali
 parser.add_argument('--test', help='Testing file', default='../data/ptb/test.txt')
 parser.add_argument('--embeddings', help='Pretrained embeddings file', default='/data/embeddings/GoogleNews-vectors-negative300.bin')
 parser.add_argument('--ll', help='Log level', type=str, default='info')
-parser.add_argument('--lr', help='Learning rate', type=float, default=1.0)
+parser.add_argument('--lr', help='Learning rate', type=float, default=0.02)
 parser.add_argument('--temperature', help='Sample temperature during generation', default=1.0)
 parser.add_argument('--start_word', help='Sample start word', default='the')
-
+parser.add_argument('--dropout', help='Dropout', type=float, default=0.1)
+parser.add_argument('--num_heads', help='Number of heads (only for Transformer)', type=int, default=4)
+parser.add_argument('--transformer', help='Are we using a Transformer (default is LSTM) LM', type=str2bool, default=False)
 args = parser.parse_known_args()[0]
 
+embed_type = 'learned-positional' if args.transformer else 'default'
 feature_desc = {
     'word': {
         'vectorizer': baseline.Token1DVectorizer(mxlen=-1, transform_fn=baseline.lowercase),
-        'embed': {'embed_file': args.embeddings, 'embed_type': 'default', 'unif': 0.05}
+        'embed': {'embed_file': args.embeddings, 'embed_type': embed_type, 'unif': 0.05}
     }
 }
 
-
+set_tf_log_level('ERROR')
 vectorizers = {k: v['vectorizer'] for k, v in feature_desc.items()}
 reader = baseline.LineSeqReader(vectorizers, nctx=args.nctx)
 
@@ -127,7 +121,10 @@ def predict_input_fn():
     return dataset
 
 
-transducer = L.LSTMEncoderWithState(None, args.hsz, args.layers, 0.5)
+if args.transformer:
+    transducer = L.TransformerEncoderStackWithTimeMask(args.num_heads, d_model=args.hsz, layers=args.layers, pdrop=args.dropout)
+else:
+    transducer = L.LSTMEncoderWithState(None, args.hsz, args.layers, pdrop=args.dropout)
 model = L.LangSequenceModel(embeddings["word"].get_vsz(), embeddings, transducer)
 
 
@@ -166,7 +163,7 @@ def loss(model, h, x, y):
     loss = tf.reduce_mean(example_loss)
     return loss, h
 
-optimizer = EagerOptimizer(loss, SGD(args.lr))
+optimizer = EagerOptimizer(loss, Adam(args.lr))
 for epoch in range(args.epochs):
 
 
