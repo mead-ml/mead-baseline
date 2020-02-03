@@ -125,7 +125,7 @@ if args.transformer:
     transducer = L.TransformerEncoderStackWithTimeMask(args.num_heads, d_model=args.hsz, layers=args.layers, pdrop=args.dropout)
 else:
     transducer = L.LSTMEncoderWithState(None, args.hsz, args.layers, pdrop=args.dropout)
-model = L.LangSequenceModel(embeddings["word"].get_vsz(), embeddings, transducer)
+model = L.LangSequenceModel(embeddings["word"].get_vsz(), L.EmbeddingsStack(embeddings), transducer)
 
 
 def generate_text(model, start_string, temperature=1.0, num_generate=20):
