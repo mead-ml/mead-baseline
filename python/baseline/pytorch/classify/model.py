@@ -89,7 +89,6 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
 
         with torch.no_grad():
             probs = self(examples).exp()
-            probs.div_(torch.sum(probs))
             results = []
             batchsz = probs.size(0)
             for b in range(batchsz):
