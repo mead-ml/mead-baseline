@@ -841,13 +841,13 @@ class EmbeddingsStack(nn.Module):
 
         super().__init__()
 
-        self.keys: List[str] = []
+        self._keys: List[str] = []
 
         self.output_dim = 0
         embeddings_list = []
         for k, embedding in embeddings_dict.items():
             embeddings_list.append(embedding)
-            self.keys.append(k)
+            self._keys.append(k)
             self.output_dim += embedding.get_dsz()
 
         self.embeddings: nn.ModuleList = nn.ModuleList(embeddings_list)
@@ -856,7 +856,7 @@ class EmbeddingsStack(nn.Module):
         self.requires_length = requires_length
 
     def __getitem__(self, item: str) -> nn.Module:
-        idx = self.keys.index(item)
+        idx = self._keys.index(item)
         if idx < 0:
             raise Exception(f"Invalid item ({item})")
         return self.embeddings[idx]
@@ -869,13 +869,17 @@ class EmbeddingsStack(nn.Module):
         all_embeddings_out = []
         i = 0
         for embedding in self.embeddings:
-            k = self.keys[i]
+            k = self._keys[i]
             x = inputs[k]
             embeddings_out = embedding(x)
             all_embeddings_out.append(embeddings_out)
             i += 1
         word_embeddings = torch.cat(all_embeddings_out, -1)
         return self.dropout(word_embeddings)
+
+    def keys(self):
+        return self._keys
+
 
 
 class DenseStack(nn.Module):
