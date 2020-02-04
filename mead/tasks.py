@@ -20,7 +20,7 @@ from baseline.utils import (
     show_examples,
     normalize_backend,
 )
-from mead.downloader import EmbeddingDownloader, DataDownloader
+from baseline.utils import EmbeddingDownloader, DataDownloader
 from mead.utils import (
     index_by_label,
     get_mead_settings,
