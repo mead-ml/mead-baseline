@@ -191,11 +191,11 @@ class TaggerTrainerTf(EpochReportingTrainer):
         self.evaluator = TaggerEvaluatorTf(self.model, span_type, verbose)
         self.global_step, self.train_op = optimizer(self.loss, **kwargs)
         self.nsteps = kwargs.get('nsteps', six.MAXSIZE)
-        tables = tf.tables_initializer()
+        tables = tf.compat.v1.tables_initializer()
         self.model.sess.run(tables)
-        init = tf.global_variables_initializer()
+        init = tf.compat.v1.global_variables_initializer()
         self.model.sess.run(init)
-        saver = tf.train.Saver()
+        saver = tf.compat.v1.train.Saver()
         self.model.save_using(saver)
 
     def checkpoint(self):

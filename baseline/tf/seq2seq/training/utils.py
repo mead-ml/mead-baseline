@@ -97,12 +97,12 @@ class Seq2SeqTrainerTf(Trainer):
         self.global_step, self.train_op = optimizer(self.loss, colocate_gradients_with_ops=True, **kwargs)
         self.nsteps = kwargs.get('nsteps', 500)
         self.beam = kwargs.get('beam', 10)
-        tables = tf.tables_initializer()
+        tables = tf.compat.v1.tables_initializer()
         self.model.sess.run(tables)
-        self.model.sess.run(tf.global_variables_initializer())
-        self.model.set_saver(tf.train.Saver())
+        self.model.sess.run(tf.compat.v1.global_variables_initializer())
+        self.model.set_saver(tf.compat.v1.train.Saver())
 
-        init = tf.global_variables_initializer()
+        init = tf.compat.v1.global_variables_initializer()
         self.model.sess.run(init)
 
     def checkpoint(self):

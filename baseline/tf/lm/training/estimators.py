@@ -8,7 +8,7 @@ from baseline.model import create_model_for
 from baseline.tf.lm.training.utils import to_tensors, SHUF_BUF_SZ, NUM_PREFETCH, read_eval_metrics
 
 
-class EvalMetricsHook(tf.train.SessionRunHook):
+class EvalMetricsHook(tf.estimator.SessionRunHook):
     def __init__(self, eval_dir, phase):
         super(EvalMetricsHook, self).__init__()
 

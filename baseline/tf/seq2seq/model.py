@@ -52,7 +52,7 @@ def _temporal_cross_entropy_loss(logits, labels, label_lengths, mx_seq_length):
         losses /= tf.cast(tf.reduce_sum(label_lengths), tf.float32)
         return losses
 
-if get_version(tf) < 2:
+if not tf.executing_eagerly():
     class EncoderDecoderModelBase(EncoderDecoderModel):
 
         def create_loss(self):
@@ -101,8 +101,8 @@ if get_version(tf) < 2:
                 model = cls.create(src_embeddings, tgt_embedding, reload=True, **_state)
                 model._state = _state
                 if kwargs.get('init', True):
-                    model.sess.run(tf.global_variables_initializer())
-                model.saver = tf.train.Saver()
+                    model.sess.run(tf.compat.v1.global_variables_initializer())
+                model.saver = tf.compat.v1.train.Saver()
                 model.saver.restore(model.sess, basename)
                 return model
 
@@ -151,9 +151,9 @@ if get_version(tf) < 2:
                 model.src_embeddings[k] = src_embedding.detached_ref()
             model.tgt_embedding = tgt_embedding.detached_ref()
             model._record_state(**kwargs)
-            model.src_len = kwargs.pop('src_len', tf.placeholder(tf.int32, [None], name="src_len"))
-            model.tgt_len = kwargs.pop('tgt_len', tf.placeholder(tf.int32, [None], name="tgt_len"))
-            model.mx_tgt_len = kwargs.pop('mx_tgt_len', tf.placeholder(tf.int32, name="mx_tgt_len"))
+            model.src_len = kwargs.pop('src_len', tf.compat.v1.placeholder(tf.int32, [None], name="src_len"))
+            model.tgt_len = kwargs.pop('tgt_len', tf.compat.v1.placeholder(tf.int32, [None], name="tgt_len"))
+            model.mx_tgt_len = kwargs.pop('mx_tgt_len', tf.compat.v1.placeholder(tf.int32, name="mx_tgt_len"))
             model.src_lengths_key = kwargs.get('src_lengths_key')
             model.id = kwargs.get('id', 0)
             model.sess = kwargs.get('sess', create_session())
