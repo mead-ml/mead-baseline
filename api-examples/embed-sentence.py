@@ -8,9 +8,10 @@ from baseline.embeddings import *
 from baseline.vectorizers import *
 import tensorflow as tf
 import numpy as np
-from tensorflow.python.framework.ops import disable_eager_execution
 
-disable_eager_execution()
+if get_version(tf) >= 2:
+    tf.compat.v1.disable_eager_execution()
+
 
 def get_pool_op(s):
     """Allows us to pool the features with either ``max`` or ``mean``. O.w. use identity
@@ -18,7 +19,8 @@ def get_pool_op(s):
     :param s: The operator
     :return: The pool operation
     """
-    return np.mean if s == 'mean' else np.max if s == 'max' else lambda x,axis: x
+    return np.mean if s == 'mean' else np.max if s == 'max' else lambda x, axis: x
+
 
 def get_vectorizer(s, vf, mxlen, lower=True):
     """Get a vectorizer object by name from `BASELINE_VECTORIZERS` registry
@@ -45,9 +47,11 @@ def get_embedder(embed_type, embed_file):
     """
     if embed_type == 'bert':
         embed_type += '-embed'
+    # We have to create a key for each embedding we make.  Here we just call it 'word'
     embed = baseline.load_embeddings('word', embed_type=embed_type,
                                      embed_file=embed_file, keep_unused=True, trainable=False)
     return embed
+
 
 parser = argparse.ArgumentParser(description='Encode a sentence as an embedding')
 parser.add_argument('--embed_file', help='embedding file')
