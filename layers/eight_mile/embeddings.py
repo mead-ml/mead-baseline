@@ -421,12 +421,15 @@ def load_embeddings(name, **kwargs):
     for that.  This would be typical, e.g, for a user-defined sub-graph LM.
 
     For cases where no `embed_file` is provided and there is a `create` method on this class, we  assume that the user
-    wants us to build a VSM (`baseline.w2v`) ourselves, and call their create function, which will take in this VSM.
+    wants us to build a VSM (`baseline.embeddings.PretrainedEmbeddingsModel`) ourselves, and call
+    their create function, which will take in this VSM.
+
     The VSM is then used to provide the vocabulary back, and the `create` function invokes the class constructor
     with the sub-parts of VSM required to build the graph.
 
-    If there is no create method provided, and there is no load function provided, we simply invoke the regsitered embeddings'
-    constructor with the args, and assume there is a `get_vocab()` method on the provided implementation
+    If there is no create method provided, and there is no load function provided, we simply invoke the
+    registered embeddings' constructor with the args, and assume there is a `get_vocab()` method on the
+    provided implementation
 
     :param name: (``str``) A unique string name for these embeddings
     :param kwargs:
