@@ -1983,7 +1983,7 @@ class TransformerDecoder(tf.keras.layers.Layer):
         self.d_ff = d_ff if d_ff is not None else 4 * d_model
         self.self_attn = MultiHeadedAttention(num_heads, self.d_model, pdrop, scale=scale, name="self_attention")
         self.src_attn = MultiHeadedAttention(num_heads, self.d_model, pdrop, scale=scale, name="src_attention")
-        self.ffn = FFN(d_model, ffn_pdrop, activation_type, d_ff, name="ffn")
+        self.ffn = FFN(d_model, activation_type, d_ff, pdrop=ffn_pdrop, name="ffn")
         self.ln1 = tf.keras.layers.LayerNormalization(epsilon=1e-6)
         self.ln2 = tf.keras.layers.LayerNormalization(epsilon=1e-6)
         self.ln3 = tf.keras.layers.LayerNormalization(epsilon=1e-6)
@@ -2140,9 +2140,9 @@ class FFN(tf.keras.layers.Layer):
     def __init__(
         self,
         d_model: int,
-        pdrop: float,
         activation: str = "relu",
         d_ff: Optional[int] = None,
+        pdrop: float = 0.0,
         name: Optional[int] = None,
     ):
         """Constructor, takes in model size (which is the external currency of each block) and the feed-forward size
