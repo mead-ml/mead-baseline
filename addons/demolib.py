@@ -1,6 +1,6 @@
 from baseline.embeddings import register_embeddings
 from baseline.tf.embeddings import TensorFlowEmbeddingsModel, TensorFlowEmbeddings, LookupTableEmbeddings
-from eight_mile.tf.layers import TRAIN_FLAG, MeanPool1D
+from eight_mile.tf.layers import TRAIN_FLAG
 from baseline.reporting import register_reporting, ReportingHook
 from baseline.train import create_trainer, register_trainer, register_training_func, Trainer
 from baseline.utils import get_metric_cmp, get_model_file, color, Colors, listify, Offsets
@@ -15,11 +15,9 @@ class CharNBoWEmbeddings(TensorFlowEmbeddings):
         super().__init__(trainable=trainable, name=name, dtype=dtype)
         self.scope = kwargs.get("scope", "CharLUT")
         self.finetune = kwargs.get("finetune", trainable)
-
         self.pdrop = kwargs.get("pdrop", 0.5)
         self.x = None
         self.embed = LookupTableEmbeddings(name=f"{self.name}/CharLUT", finetune=self.finetune, **kwargs)
-        #self.pool = MeanPool1D(self.get_dsz(), )
 
     def encode(self, x):
         self.x = x
@@ -31,12 +29,8 @@ class CharNBoWEmbeddings(TensorFlowEmbeddings):
         embed_chars = self.embed(flat_chars)
 
         # Calculate the lengths of each word
-        # You can use layers.MeanPool1D() for this as well
-        # (BxT)
-        #word_lengths = tf.reduce_sum(tf.cast(tf.not_equal(flat_chars, Offsets.PAD), tf.int32), axis=1)
-        #result = self.pool((embed_chars, word_lengths))
-        # (BxT)xD
-        result = tf.reduce_mean(embed_chars, axis=1)
+        word_lengths = tf.math.maximum(1.0, tf.reduce_sum(tf.cast(tf.not_equal(flat_chars, Offsets.PAD), tf.float32), axis=1))
+        result = tf.reduce_mean(embed_chars, axis=1) / tf.expand_dims(word_lengths, -1)
         return tf.reshape(result, (B, T, -1))
 
     def call(self, inputs):
