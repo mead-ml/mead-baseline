@@ -4,7 +4,7 @@ import os
 from argparse import ArgumentParser
 import baseline
 from torch.nn.parallel import DistributedDataParallel
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data import DataLoader, TensorDataset, Dataset
 from eight_mile.utils import str2bool, write_json, Offsets, listify
 import glob
 from baseline.pytorch.embeddings import *
@@ -53,6 +53,30 @@ def files_for_dir(directory):
     for file in glob.glob(f'{directory}/*.csv'):
         yield file
 
+
+class SavableFastBPE(object):
+    """Wrapper to define how to pickle fastBPE tokenizer"""
+    def __init__(self, codes_path, vocab_path):
+        from fastBPE import fastBPE
+        self.codes = open(codes_path, 'rb').read()
+        self.vocab = open(vocab_path, 'rb').read()
+        self.bpe = fastBPE(codes_path, vocab_path)
+
+    def __getstate__(self):
+        return {'codes': self.codes, 'vocab': self.vocab}
+
+    def __setstate__(self, state):
+        from fastBPE import fastBPE
+        import tempfile
+        with tempfile.NamedTemporaryFile() as codes, tempfile.NamedTemporaryFile() as vocab:
+            codes.write(state['codes'])
+            vocab.write(state['vocab'])
+            self.bpe = fastBPE(codes.name, vocab.name)
+
+    def apply(self, sentences):
+        return self.bpe.apply(sentences)
+
+
 class BPEVectorizer1D(AbstractVectorizer):
     """Define a Baseline Vectorizer for BPE using fastBPE (https://github.com/glample/fastBPE)
 
@@ -65,11 +89,10 @@ class BPEVectorizer1D(AbstractVectorizer):
     def __init__(self, **kwargs):
         """Loads a BPE tokenizer"""
         super().__init__(kwargs.get('transform_fn'))
-        from fastBPE import fastBPE
         self.max_seen = 128
         self.model_file = kwargs.get('model_file')
         self.vocab_file = kwargs.get('vocab_file')
-        self.tokenizer = fastBPE(self.model_file, self.vocab_file)
+        self.tokenizer = SavableFastBPE(self.model_file, self.vocab_file)
         self.mxlen = kwargs.get('mxlen', -1)
         self.vocab = {k: i for i, k in enumerate(self.read_vocab(self.vocab_file))}
 
@@ -94,10 +117,10 @@ class BPEVectorizer1D(AbstractVectorizer):
         for t in tokens:
             if t in Offsets.VALUES:
                 yield t
-            if t == '<unk>':
-                yield Offsets.UNK
-            if t == '<eos>':
-                yield Offsets.EOS
+            elif t == '<unk>':
+                yield Offsets.VALUES[Offsets.UNK]
+            elif t == '<eos>':
+                yield Offsets.VALUES[Offsets.EOS]
             else:
                 subwords = self.tokenizer.apply([t])[0].split()
                 for x in subwords:
@@ -202,16 +225,19 @@ class TensorDatasetReaderBase(object):
     def build_vocab(self, directories):
         vocab = Counter()
         for directory in directories:
+            logger.info("Reading convos from %s", os.path.basename(directory))
             if directory is None:
                 continue
 
             self.num_words[directory] = 0
 
             for file in files_for_dir(directory):
+                logger.info("Reading turns from %s", os.path.basename(file))
                 df = pd.read_csv(file, error_bad_lines=False)
                 ##df.fillna('')
                 qs = df[self.query_field]
                 rs = df[self.response_field]
+                logger.info("%d turns", len(qs))
                 for q, r in zip(qs, rs):
                     qt = str(q).strip().split()
                     rt = str(r).strip().split()
@@ -226,18 +252,20 @@ class TensorDatasetReaderBase(object):
 
         x_vector = []
         y_vector = []
+        logger.info("Loading features from %s", os.path.basename(directory))
         for file in files_for_dir(directory):
+            logger.info("Loading features for convo from %s", os.path.basename(file))
             df = pd.read_csv(file, error_bad_lines=False)
             qs = df[self.query_field]
             ps = df[self.response_field]
-            df.fillna('')
 
+            # df.fillna('')
 
             #x_lengths_vector = []
             #y_lengths_vector = []
             for q, r in zip(qs, ps):
-                q = str(q).strip()
-                r = str(r).strip()
+                q = str(q).strip().split()
+                r = str(r).strip().split()
                 if q == '' or r == '':
                     continue
                 q_vec, q_valid_lengths = self.vectorizer.run(q, vocabs)
@@ -250,7 +278,8 @@ class TensorDatasetReaderBase(object):
         #features['x_length'] = np.stack(x_lengths_vector)
         features['y'] = np.stack(y_vector)
         #features['y_length'] = np.stack(y_lengths_vector)
-        print(features['x'].shape, features['y'].shape)
+        logger.info("x shape: %s", features['x'].shape)
+        logger.info("y shape: %s", features['y'].shape)
         return features
 
 
@@ -290,9 +319,148 @@ class TensorWordDatasetReader(TensorDatasetReaderBase):
         y_tensor = torch.tensor(features['y'], dtype=torch.long)
         return TensorDataset(x_tensor, y_tensor)
 
+class TensorWordJaggedDatasetReader(TensorWordDatasetReader):
+    """Read each word, and produce a tensor of x and y that are only as big as needed, store in a list
+
+    This is done to save memory
+    """
+    def load_features(self, directory, vocabs):
+
+        features = dict()
+
+        x_vector = []
+        y_vector = []
+        logger.info("Loading features from %s", os.path.basename(directory))
+        for file in files_for_dir(directory):
+            logger.info("Loading features for convo from %s", os.path.basename(file))
+            df = pd.read_csv(file, error_bad_lines=False)
+            qs = df[self.query_field]
+            ps = df[self.response_field]
+
+            # df.fillna('')
+
+            #x_lengths_vector = []
+            #y_lengths_vector = []
+            for q, r in zip(qs, ps):
+                q = str(q).strip().split()
+                r = str(r).strip().split()
+                if q == '' or r == '':
+                    continue
+                q_vec, q_valid_lengths = self.vectorizer.run(q, vocabs)
+                x_vector.append(torch.tensor(q_vec[:q_valid_lengths], dtype=torch.long))
+
+                r_vec, r_valid_lengths = self.vectorizer.run(r, vocabs)
+                y_vector.append(torch.tensor(r_vec[:r_valid_lengths], dtype=torch.long))
+        features['x'] = x_vector
+        features['y'] = y_vector
+        logger.info("x shape: %s", len(x_vector))
+        logger.info("y shape: %s", len(y_vector))
+        return features
+
+    def load(self, filename, vocabs):
+        features = self.load_features(filename, vocabs)
+        return ListDataset(features['x'], features['y'])
+
+
+class ListDataset(Dataset):
+    """Like the Provided TensorDataset but the tensors are stored in lists to facilitate different lengths."""
+    def __init__(self, *tensors):
+        if not all(len(tensors[0]) == len(tensor) for tensor in tensors):
+            raise ValueError("All lists of paths to features must be equal length")
+        self.tensors = tensors
+
+    def __getitem__(self, index):
+        return tuple(tensor[index] for tensor in self.tensors)
+
+    def __len__(self):
+        return len(self.tensors[0])
+
+
+def pad_batch(features):
+    """Batch tensors on the fly.
+
+    Input is a List[Tuple[torch.Tensor]] where the List is `batchsz` long and the Tuple is `[x, y]`
+
+    Calculate the max length, create an empty batch of them and write the xs and ys into the batch
+
+    return as a tuple of `[B, mxlen]` tensors
+    """
+    xs, ys = list(zip(*features))
+    max_x = max(len(x) for x in xs)
+    max_y = max(len(y) for y in ys)
+    x_batch = torch.zeros((len(xs), max_x), dtype=torch.long)
+    y_batch = torch.zeros((len(ys), max_y), dtype=torch.long)
+    for i, x in enumerate(xs):
+        x_batch[i, :len(x)] = x
+    for i, y in enumerate(ys):
+        y_batch[i, :len(y)] = y
+    return (x_batch, y_batch)
+
+
+# TODO: (blester) Consolidate all these disk tensors into some directory that is easy to remove
+class TensorWordDiskDatasetReader(TensorWordDatasetReader):
+    """Read words in and write the resulting tensor to disk."""
+
+    def load_features(self, directory, vocabs):
+
+        features = {}
+        logger.info("Loading features from %s", os.path.basename(directory))
+        x_paths = []
+        y_paths = []
+        for file in files_for_dir(directory):
+            logger.info("Loading features for convo from %s", os.path.basename(file))
+            file_prefix, _ = os.path.splitext(file)
+            df = pd.read_csv(file, error_bad_lines=False)
+            qs = df[self.query_field]
+            ps = df[self.response_field]
+
+            for i, (q, r) in enumerate(zip(qs, ps)):
+                q = str(q).strip().split()
+                r = str(r).strip().split()
+                if q == '' or r == '':
+                    continue
+                q_vec, q_valid_lengths = self.vectorizer.run(q, vocabs)
+                x = torch.tensor(q_vec, dtype=torch.long)
+                x_path = f"{file_prefix}-{self.use_subword}" if self.use_subword is not None else file_prefix
+                x_path = f"{x_path}-{i}-x.pt"
+                logger.info("Saving x feature to %s", x_path)
+                torch.save(x, x_path)
+                x_paths.append(x_path)
+
+                r_vec, r_valid_lengths = self.vectorizer.run(r, vocabs)
+                y = torch.tensor(r_vec, dtype=torch.long)
+                y_path = f"{file_prefix}-{self.use_subword}" if self.use_subword is not None else file_prefix
+                y_path = f"{y_path}-{i}-y.pt"
+                logger.info("Saving y feature to %s", y_path)
+                torch.save(y, y_path)
+                y_paths.append(y_path)
+
+        features['x'] = x_paths
+        features['y'] = y_paths
+        return features
+
+    def load(self, filename, vocab):
+        features = self.load_features(filename, vocab)
+        return DiskDataset(features['x'], features['y'])
+
+
+class DiskDataset(Dataset):
+    """Like the TensorDataset but it holds a list of paths. Calls to get item reads the tensor off disk."""
+    def __init__(self, *paths):
+        if not all(len(paths[0]) == len(path) for path in paths):
+            raise ValueError("All lists of paths to features must be equal length")
+        self.paths = paths
+
+    def __getitem__(self, index):
+        return tuple(torch.load(path[index]) for path in self.paths)
+
+    def __len__(self):
+        return len(self.paths[0])
+
+
 
 def load_data(token_type, reader, dataset, file_key, vocabs, caching):
-    cached_file = '{}-{}.cache'.format(dataset[file_key], token_type)
+    cached_file = '{}-{}-paired.cache'.format(dataset[file_key], token_type)
     if caching and os.path.exists(cached_file):
         logger.info("Reloading %s from cached file [%s]", file_key, cached_file)
         loaded = torch.load(cached_file)
@@ -303,20 +471,28 @@ def load_data(token_type, reader, dataset, file_key, vocabs, caching):
     return loaded
 
 
-def create_reader(token_type, nctx, subword_model_file, subword_vocab_file):
+READERS = {
+    "packed": TensorWordDatasetReader,
+    "jagged": TensorWordJaggedDatasetReader,
+    "disk": TensorWordDiskDatasetReader
+}
+
+
+def create_reader(token_type, nctx, subword_model_file, subword_vocab_file, reader_type="packed"):
     if token_type == "chars":
         raise NotImplementedError("We do not currently support char tokens")
     elif token_type == "words":
         logger.info("Using word input")
-        reader = TensorWordDatasetReader(nctx)
+        reader = READERS[reader_type](nctx)
     else:
         logger.info("Using subword ({}) input".format(token_type))
-        reader = TensorWordDatasetReader(nctx, token_type, subword_model_file, subword_vocab_file)
+        Reader = READERS[reader_type]
+        reader = Reader(nctx, token_type, subword_model_file, subword_vocab_file)
     return reader
 
 
 def get_embed_and_vocab_cache(base_path, dataset_key, token_type):
-    return os.path.join(base_path, 'preproc-{}-{}.cache'.format(dataset_key, token_type))
+    return os.path.join(base_path, 'preproc-{}-{}-paired.cache'.format(dataset_key, token_type))
 
 
 def load_embed_and_vocab(token_type, reader, dataset, dataset_key, d_model, caching):
@@ -328,6 +504,7 @@ def load_embed_and_vocab(token_type, reader, dataset, dataset_key, d_model, cach
 
     else:
         vocab_sources = [dataset['train_file'], dataset['valid_file']]
+        logger.info("Building Vocab from %s", vocab_sources)
         vocab = reader.build_vocab(vocab_sources)
         valid_num_words = reader.num_words[dataset['valid_file']]
         logger.info("Read vocabulary")
@@ -338,10 +515,11 @@ def load_embed_and_vocab(token_type, reader, dataset, dataset_key, d_model, cach
                                                             dsz=d_model,
                                                             known_vocab=vocab,
                                                             embed_type='positional')
+        logger.info(x_embedding)
         vocab = x_embedding['vocab']
         embedding = x_embedding['embeddings']
 
-        preproc_data = {'vocabs': vocab, 'embeddings': embedding, 'valid_num_words': valid_num_words}
+        preproc_data = {'vocabs': vocab, 'embeddings': embedding, 'valid_num_words': valid_num_words, "mxlen": reader.vectorizer.mxlen}
         logger.info("Saving preprocessing info [%s]", preproc_cache)
         torch.save(preproc_data, preproc_cache)
     return preproc_data
@@ -485,6 +663,7 @@ class PairedModel(nn.Module):
 def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers):
 
     model = PairedModel(embeddings, d_model, d_ff, dropout, num_heads, num_layers)
+    logger.info(model)
     return model
 
 
@@ -497,6 +676,13 @@ def train():
     parser.add_argument("--dataset_cache", type=str, default=os.path.expanduser('~/.bl-data'),
                         help="Path or url of the dataset cache")
     parser.add_argument("--cache_features", type=str2bool, default=True)
+    parser.add_argument("--reader_type",
+                        default="packed",
+                        choices=("packed", "jagged", "disk"),
+                        help=("How the tensor data is stored: "
+                              "packed = two large dense tensors, "
+                              "jagged = two lists of tensors that are padded as they are batched, "
+                              "disk = two lists of paths that are read from disk on the fly"))
     parser.add_argument("--d_model", type=int, default=410, help="Model dimension (and embedding dsz)")
     parser.add_argument("--d_ff", type=int, default=2100, help="FFN dimension")
     parser.add_argument("--num_heads", type=int, default=1, help="Number of heads")
@@ -515,6 +701,7 @@ def train():
     parser.add_argument("--restart_from", type=str, help="Option allows you to restart from a previous checkpoint")
     parser.add_argument("--warmup_steps", type=int, default=1000, help="Num warmup steps")
     parser.add_argument("--loss", type=str, default='all', choices=['triplet', 'all'])
+    parser.add_argument("--update_steps", type=int, default=100, help="The number of steps to take before output a log message")
     parser.add_argument("--device", type=str,
                         default="cuda" if torch.cuda.is_available() else "cpu",
                         help="Device (cuda or cpu)")
@@ -539,7 +726,10 @@ def train():
 
     if args.basedir is None:
         args.basedir = 'paired-transformer-{}-{}-{}'.format(args.dataset_key, args.tokens, os.getpid())
-    logging.basicConfig(level=logging.INFO if args.local_rank in [-1, 0] else logging.WARN)
+    logging.basicConfig(
+        format="%(name)s: %(levelname)s: %(message)s",
+        level=logging.INFO if args.local_rank in [-1, 0] else logging.WARN
+    )
     logger.info("Cache directory [%s]", args.dataset_cache)
 
     args.distributed = args.distributed or int(os.environ.get("WORLD_SIZE", 1)) > 1
@@ -551,8 +741,22 @@ def train():
             logger.info("Setting local rank to RANK env variable")
             args.local_rank = int(os.environ['RANK'])
         logger.warning("Local rank (%d)", args.local_rank)
-        torch.cuda.set_device(args.local_rank)
-        args.device = torch.device("cuda", args.local_rank)
+        # In an env like k8s with kubeflow each worker will only see a single gpu
+        # with an id of 0. If the gpu count is 1 then we are probably in an env like
+        # that so we should just use the first (and only) gpu avaiable
+        if torch.cuda.device_count() == 1:
+            torch.cuda.set_device(0)
+            args.device = torch.device("cuda", 0)
+        # This program assumes multiprocess/multi-device on a single node. Each
+        # process gets a rank (via cli or ENV variable) and uses that rank to select
+        # which gpu to use. This only makes sense on a single node, if you had 4
+        # processes on 2 nodes where each node has 2 GPUs then the ranks would be
+        # 0, 1, 2, 3 but the gpus numbers would be node 0: 0, 1 and node 1: 0, 1
+        # and this assignment to gpu 3 would fail. On a single node with 4 processes
+        # and 4 gpus the rank and gpu ids will align and this will work
+        else:
+            torch.cuda.set_device(args.local_rank)
+            args.device = torch.device("cuda", args.local_rank)
         torch.distributed.init_process_group(backend='nccl', init_method='env://')
 
     if args.train_file:
@@ -562,7 +766,7 @@ def train():
             dataset = DataDownloader(DATASETS[args.dataset_key], args.dataset_cache).download()
         except:
             dataset = DATASETS[args.dataset_key]
-    reader = create_reader(args.tokens, args.nctx, args.subword_model_file, args.subword_vocab_file)
+    reader = create_reader(args.tokens, args.nctx, args.subword_model_file, args.subword_vocab_file, args.reader_type)
 
     preproc_data = load_embed_and_vocab(args.tokens, reader, dataset, args.dataset_key, args.d_model, args.cache_features)
 
@@ -576,11 +780,12 @@ def train():
 
     train_set = load_data(args.tokens, reader, dataset, 'train_file', vocabs, args.cache_features)
     valid_set = load_data(args.tokens, reader, dataset, 'valid_file', vocabs, args.cache_features)
-    logger.info("valid. tokens [%s], valid. words [%s]", valid_set.tensors[-1].numel(), valid_num_words)
+    # logger.info("valid. tokens [%s], valid. words [%s]", valid_set.tensors[-1].numel(), valid_num_words)
 
     train_sampler = torch.utils.data.distributed.DistributedSampler(train_set) if args.distributed else None
-    train_loader = DataLoader(train_set, sampler=train_sampler, batch_size=args.batch_size, shuffle=(not args.distributed))
-    valid_loader = DataLoader(valid_set, batch_size=args.batch_size, shuffle=False)
+    collate_fn = pad_batch if isinstance(train_set, ListDataset) else None
+    train_loader = DataLoader(train_set, sampler=train_sampler, batch_size=args.batch_size, shuffle=(not args.distributed), collate_fn=collate_fn)
+    valid_loader = DataLoader(valid_set, batch_size=args.batch_size, shuffle=False, collate_fn=collate_fn)
     logger.info("Loaded datasets")
 
     model = create_model(embeddings, d_model=args.d_model, d_ff=args.d_ff, dropout=args.dropout,
@@ -592,7 +797,7 @@ def train():
     logger.info("Loaded model and loss")
 
     steps_per_epoch = len(train_loader)
-    update_on = steps_per_epoch // 100
+    update_on = steps_per_epoch // args.update_steps
     cosine_decay = CosineDecaySchedulerPyTorch(len(train_loader) * args.epochs, lr=args.lr)
     linear_warmup = WarmupLinearSchedulerPyTorch(args.warmup_steps, lr=args.lr)
     lr_sched = CompositeLRScheduler(linear_warmup, cosine_decay, lr=args.lr)
@@ -643,6 +848,7 @@ def train():
                 logging.info(avg_loss)
                 if args.local_rank < 1:
                     save_checkpoint(model, model_base, steps)
+
         # How much time elapsed in minutes
         elapsed = (time.time() - start)/60
         train_avg_loss = avg_loss.avg
