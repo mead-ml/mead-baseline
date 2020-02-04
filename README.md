@@ -64,21 +64,27 @@ public contributions.
 
 ## Installation
 
-Baseline can be installed as a Python package:
+Baseline can be installed as a Python package.  When the repository is cloned,
+a git-submodule imports mead-layers from https://github.com/mead-ml/mead-layers
 
-    ./install_dev.sh baseline
+To install a developer version of the library do:
 
-Currently, xpctl depends on baseline but baseline is not available on PyPI so
-you need to install baseline before you install xpctl:
-
-    ./install_dev.sh xpctl
+```
+cd layers
+pip install -e .
+cd ../python
+pip install -e .
+```
+This first installs `mead-layers` and then `mead-baseline`
 
 ## A Note About Versions
 
 Deep Learning Frameworks are evolving quickly, and changes are not always
 backwards compatible. We recommend recent versions of each framework. Baseline
 is known to work on most versions of TensorFlow, and is currently being run on
-versions between 1.5 and 1.13. The PyTorch backend requires at least version 1.0.
+versions between 1.13 and and 2.1 .
+
+The PyTorch backend requires at least version 1.3.0.
 
 ## Citing
 

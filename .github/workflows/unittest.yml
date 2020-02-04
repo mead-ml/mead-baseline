@@ -24,11 +24,12 @@ jobs:
     - uses: actions/checkout@v1
     - name: Install Baseline
       run: |
-        cd python
+        cd layers
+        pip install -e .
+        cd ..
         pip install -e .[test,yaml]
     - name: Unit Test Tf ${{matrix.tf-version}}
       run: |
-        cd python
         pytest --forked
 
   test-tf-2:
@@ -43,11 +44,12 @@ jobs:
     - uses: actions/checkout@v1
     - name: Install Baseline
       run: |
-        cd python
+        cd layers
+        pip install -e .
+        cd ..
         pip install -e .[test,yaml,tf2]
     - name: Unit Test Tf ${{matrix.tf-version}}
       run: |
-        cd python
         pytest --forked
 
   test-pyt:
@@ -62,9 +64,10 @@ jobs:
     - uses: actions/checkout@v1
     - name: Install Baseline
       run: |
-        cd python
+        cd layers
+        pip install -e .
+        cd ..      
         pip install -e .[test,yaml]
     - name: Unit Test PyTorch ${{matrix.pyt-version}}
       run: |
-        cd python
         pytest --forked

@@ -1,8 +1,8 @@
 import baseline
 import argparse
-import eight_mile.pytorch.embeddings
+import baseline.pytorch.embeddings
 import eight_mile.pytorch.layers as L
-from eight_mile.utils import revlut, get_logging_level
+from eight_mile.utils import revlut, str2bool
 from eight_mile.pytorch.layers import SequenceLoss
 from eight_mile.pytorch.optz import EagerOptimizer
 import torch
@@ -35,19 +35,23 @@ parser.add_argument('--valid', help='Validation file', default='../data/ptb/vali
 parser.add_argument('--test', help='Testing file', default='../data/ptb/test.txt')
 parser.add_argument('--embeddings', help='Pretrained embeddings file', default='/data/embeddings/GoogleNews-vectors-negative300.bin')
 parser.add_argument('--ll', help='Log level', type=str, default='info')
-parser.add_argument('--lr', help='Learning rate', type=float, default=1.0)
+parser.add_argument('--lr', help='Learning rate', type=float, default=0.02)
 parser.add_argument('--temperature', help='Sample temperature during generation', default=1.0)
 parser.add_argument('--start_word', help='Sample start word', default='the')
+parser.add_argument('--dropout', help='Dropout', type=float, default=0.1)
+parser.add_argument('--num_heads', help='Number of heads (only for Transformer)', type=int, default=4)
+parser.add_argument('--transformer', help='Are we using a Transformer (default is LSTM) LM', type=str2bool, default=False)
 parser.add_argument("--device", type=str,
                     default="cuda" if torch.cuda.is_available() else "cpu",
                     help="Device (cuda or cpu)")
 args = parser.parse_known_args()[0]
 
+embed_type = 'learned-positional' if args.transformer else 'default'
 
 feature_desc = {
     'word': {
         'vectorizer': baseline.Token1DVectorizer(mxlen=-1, transform_fn=baseline.lowercase),
-        'embed': {'embed_file': args.embeddings, 'embed_type': 'default', 'unif': 0.05}
+        'embed': {'embed_file': args.embeddings, 'embed_type': embed_type, 'unif': 0.05}
     }
 }
 
@@ -100,7 +104,7 @@ vocabs = reader.build_vocab([train_file, valid_file, test_file])
 embeddings = dict()
 for k, v in feature_desc.items():
     embed_config = v['embed']
-    embeddings_for_k = eight_mile.embeddings.load_embeddings(k, known_vocab=vocabs[k], **embed_config)
+    embeddings_for_k = baseline.embeddings.load_embeddings(k, known_vocab=vocabs[k], **embed_config)
     embeddings[k] = embeddings_for_k['embeddings']
     # Reset the vocab to the embeddings one
     vocabs[k] = embeddings_for_k['vocab']
@@ -111,8 +115,12 @@ valid_set = Data(reader.load(valid_file, vocabs=vocabs, batchsz=1, tgt_key="word
 test_set = Data(reader.load(test_file, vocabs=vocabs, batchsz=1, tgt_key="word"), args.batchsz)
 
 
-transducer = L.LSTMEncoderWithState(embeddings["word"].dsz, args.hsz, args.layers, 0.5)
-model = to_device(L.LangSequenceModel(embeddings["word"].vsz, embeddings, transducer))
+if args.transformer:
+    transducer = L.TransformerEncoderStackWithTimeMask(args.num_heads, d_model=args.hsz, layers=args.layers,
+                                                       pdrop=args.dropout, input_sz=embeddings['word'].get_dsz())
+else:
+    transducer = L.LSTMEncoderWithState(embeddings['word'].get_dsz(), args.hsz, args.layers, pdrop=args.dropout)
+model = to_device(L.LangSequenceModel(embeddings["word"].get_vsz(), L.EmbeddingsStack(embeddings), transducer))
 
 
 def generate_text(model, start_string, temperature=1.0, num_generate=20):
@@ -153,6 +161,8 @@ def loss(model, h, x, y):
 
 def repackage_hidden(h):
     """Wraps hidden states in new Variables, to detach them from their history."""
+    if h is None:
+        return None
     if isinstance(h, torch.Tensor):
         return h.detach()
     else:

@@ -8,7 +8,9 @@ from baseline.embeddings import *
 from baseline.vectorizers import *
 import tensorflow as tf
 import numpy as np
+from tensorflow.python.framework.ops import disable_eager_execution
 
+disable_eager_execution()
 
 def get_pool_op(s):
     """Allows us to pool the features with either ``max`` or ``mean``. O.w. use identity
@@ -66,7 +68,7 @@ vectorizer = get_vectorizer(args.type, args.vocab_file, args.max_length)
 pooling = get_pool_op(args.pool)
 
 # Make a session
-with tf.Session() as sess:
+with tf.compat.v1.Session() as sess:
     # Get embeddings
     embed = get_embedder(args.type, args.embed_file)
 
@@ -77,8 +79,8 @@ with tf.Session() as sess:
     vocab = embed['vocab']
 
     # Declare a tf graph operation
-    y = embedder.encode()
-    sess.run(tf.global_variables_initializer())
+    y = embedder(None)
+    sess.run(tf.compat.v1.global_variables_initializer())
 
     # Read a newline separated file of sentences
     with open(args.sentences) as f:
