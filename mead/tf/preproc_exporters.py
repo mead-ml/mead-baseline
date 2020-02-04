@@ -70,7 +70,7 @@ class PreProcessorController(object):
         return pickle.load(open(os.path.join(model_base_dir, "vectorizers-{}.pkl".format(pid)), "rb"))
 
     def _create_example(self):
-        serialized_tf_example = tf.placeholder(tf.string, name='tf_example')
+        serialized_tf_example = tf.compat.v1.placeholder(tf.string, name='tf_example')
         feature_configs = {f: tf.FixedLenFeature(shape=[], dtype=tf.string) for f in self.FIELD_NAMES}
         tf_example = tf.parse_example(serialized_tf_example, feature_configs)
         return tf_example
