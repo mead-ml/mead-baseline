@@ -8,7 +8,7 @@ from baseline.utils import read_json
 from baseline.pytorch.transformer import TransformerEncoderStack, subsequent_mask
 from baseline.pytorch.embeddings import PositionalLookupTableEmbeddingsModel
 from baseline.embeddings import register_embeddings
-from baseline.pytorch.embeddings import PyTorchEmbeddingsModel
+from baseline.pytorch.embeddings import PyTorchEmbeddingsModel, PyTorchEmbeddings
 from baseline.vectorizers import register_vectorizer, AbstractVectorizer
 from pytorch_pretrained_bert.tokenization import BertTokenizer
 from pytorch_pretrained_bert.modeling import BertModel
@@ -171,15 +171,14 @@ class BPEVectorizer1D(AbstractVectorizer):
         return self.mxlen,
 
 
-@register_embeddings(name='tlm-words-embed')
-class TransformerLMEmbeddings(PyTorchEmbeddingsModel):
+class TransformerLMEmbeddings(PyTorchEmbeddings):
     """Support embeddings trained with the TransformerLanguageModel class
 
     This method supports either subword or word embeddings, not characters
 
     """
-    def __init__(self, name, **kwargs):
-        super(TransformerLMEmbeddings, self).__init__(name)
+    def __init__(self, **kwargs):
+        super(TransformerLMEmbeddings, self).__init__()
         self.vocab = read_json(kwargs.get('vocab_file'))
         self.cls_index = self.vocab['[CLS]']
         self.vsz = len(self.vocab)
@@ -256,6 +255,12 @@ class TransformerLMEmbeddings(PyTorchEmbeddingsModel):
         return c
 
 
+@register_embeddings(name='tlm-words-embed')
+class TransformerLMEmbeddingsModel(PyTorchEmbeddingsModel, TransformerLMEmbeddings):
+    """Register embedding model for usage in mead"""
+    pass
+
+
 def _mean_pool(_, embeddings):
     return torch.mean(embeddings, 1, False)
 
@@ -265,7 +270,7 @@ def _max_pool(_, embeddings):
 
 
 @register_embeddings(name='tlm-words-embed-pooled')
-class TransformerLMPooledEmbeddings(TransformerLMEmbeddings):
+class TransformerLMPooledEmbeddingsModel(TransformerLMEmbeddingsModel):
 
     def __init__(self, name, **kwargs):
         super(TransformerLMPooledEmbeddings, self).__init__(name=name, **kwargs)
