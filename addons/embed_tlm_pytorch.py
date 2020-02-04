@@ -188,7 +188,8 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
         self.d_model = int(kwargs.get('dsz', kwargs.get('d_model', 410)))
         d_ff = int(kwargs.get('d_ff', 2100))
         x_embedding = PositionalLookupTableEmbeddingsModel('pos', vsz=self.vsz, dsz=self.d_model)
-        self.init_embed({'x': x_embedding})
+        self.dsz = self.init_embed({'x': x_embedding})
+        self.proj_to_dsz = pytorch_linear(self.dsz, self.d_model) if self.dsz != self.d_model else _identity
         self.transformer = TransformerEncoderStack(num_heads, d_model=self.d_model, pdrop=pdrop, scale=True, layers=layers, d_ff=d_ff)
         self.mlm = kwargs.get('mlm', False)
 
@@ -230,6 +231,7 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
         # the following line builds mask depending on whether it is a causal lm or masked lm
         input_mask = input_mask & self._model_mask(x.shape[1]).type_as(input_mask)
         embedding = self.embed(x)
+        embedding = self.proj_to_dsz(embedding)
         z = self.get_output(x, self.transformer((embedding, input_mask)))
         return z
 
@@ -261,6 +263,10 @@ class TransformerLMEmbeddingsModel(PyTorchEmbeddingsModel, TransformerLMEmbeddin
     pass
 
 
+def _identity(x):
+    return x
+
+
 def _mean_pool(_, embeddings):
     return torch.mean(embeddings, 1, False)
 
@@ -273,7 +279,7 @@ def _max_pool(_, embeddings):
 class TransformerLMPooledEmbeddingsModel(TransformerLMEmbeddingsModel):
 
     def __init__(self, name, **kwargs):
-        super(TransformerLMPooledEmbeddings, self).__init__(name=name, **kwargs)
+        super(TransformerLMPooledEmbeddingsModel, self).__init__(name=name, **kwargs)
 
         pooling = kwargs.get('pooling', 'cls')
         if pooling == 'max':
