@@ -12,7 +12,7 @@ from eight_mile.tf.optz import *
 from baseline.tf.lm import TransformerLanguageModel
 from eight_mile.tf.layers import set_tf_log_level
 from baseline.vectorizers import Token1DVectorizer, AbstractVectorizer
-from mead.downloader import DataDownloader
+from baseline.utils import DataDownloader
 
 import codecs
 from collections import Counter

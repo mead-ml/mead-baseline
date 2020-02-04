@@ -13,7 +13,7 @@ from eight_mile.optz import *
 from eight_mile.pytorch.optz import *
 from baseline.pytorch.lm import TransformerLanguageModel
 from baseline.vectorizers import Char2DVectorizer, Token1DVectorizer, AbstractVectorizer
-from mead.downloader import DataDownloader
+from baseline.utils import DataDownloader
 import numpy as np
 import codecs
 from collections import Counter
