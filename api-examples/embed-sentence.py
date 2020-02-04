@@ -57,7 +57,7 @@ parser = argparse.ArgumentParser(description='Encode a sentence as an embedding'
 parser.add_argument('--embed_file', help='embedding file')
 parser.add_argument('--type', default='default', choices=['bert', 'default'])
 parser.add_argument('--sentences', required=True)
-parser.add_argument('--output', default='embeddings.npz')
+parser.add_argument('--output', default=None)
 parser.add_argument('--pool', default=None)
 parser.add_argument('--lower', type=baseline.str2bool, default=True)
 parser.add_argument('--vocab_file')
@@ -104,4 +104,7 @@ with tf.compat.v1.Session() as sess:
             #print(sentence_vec)
             vecs.append(sentence_vec)
         # Store to file
-        np.savez(args.output, np.stack(vecs))
+        if args.output:
+            np.savez(args.output, np.stack(vecs))
+        else:
+            print(vecs)

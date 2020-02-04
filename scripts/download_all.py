@@ -2,7 +2,7 @@ import os
 import argparse
 from baseline.utils import read_json
 from mead.utils import index_by_label, convert_path
-from mead.downloader import EmbeddingDownloader, DataDownloader
+from baseline.utils import EmbeddingDownloader, DataDownloader
 
 
 parser = argparse.ArgumentParser(description="Download all data and embeddings.")
