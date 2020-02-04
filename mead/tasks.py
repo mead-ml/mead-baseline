@@ -124,7 +124,7 @@ class Task(object):
         pass
 
     def __init__(self, mead_settings_config=None):
-        super(Task, self).__init__()
+        super().__init__()
         self.config_params = None
         self.mead_settings_config = get_mead_settings(mead_settings_config)
         if 'datacache' not in self.mead_settings_config:
@@ -213,7 +213,7 @@ class Task(object):
     def _load_user_modules(self):
         if 'modules' in self.config_params:
             for addon in self.config_params['modules']:
-                import_user_module(addon)
+                import_user_module(addon) #, self.data_download_cache)
 
     def initialize(self, embeddings_index):
         """

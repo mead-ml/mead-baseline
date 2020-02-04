@@ -8,6 +8,7 @@ import hashlib
 import logging
 import zipfile
 import platform
+import shutil
 from functools import wraps
 from operator import lt, le, gt, ge
 from contextlib import contextmanager
@@ -17,7 +18,9 @@ import collections
 import eight_mile
 import importlib
 from eight_mile.utils import *
+from baseline.progress import create_progress_bar
 import addons
+from six.moves.urllib.request import urlretrieve
 
 __all__ = []
 __all__.extend(eight_mile.utils.__all__)
@@ -37,6 +40,9 @@ def import_user_module(module_name: str):
     :param model_name: (``str``) - the name of the module
     :return:
     """
+    #if data_download_cache:
+    #    dl = SingleFileDownloader(module_name, data_download_cache)
+    #    module_name = dl.download()
     addon_path = os.path.dirname(os.path.realpath(addons.__file__))
     idempotent_append(addon_path, sys.path)
     if any(module_name.endswith(suffix) for suffix in importlib.machinery.SOURCE_SUFFIXES):
@@ -577,7 +583,7 @@ def web_downloader(url):
     try:
         path_to_save, _ = urlretrieve(url, path_to_save, reporthook=_report_hook)
         Context.pg.done()
-    except:  # this is too broad but there are too many exceptions to handle separately
+    except Exception as e:  # this is too broad but there are too many exceptions to handle separately
         raise RuntimeError("failed to download data from [url]: {} [to]: {}".format(url, path_to_save))
     return path_to_save
 

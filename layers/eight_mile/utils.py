@@ -14,6 +14,7 @@ from collections import Counter
 from typing import List, Tuple, Union, Optional, Dict, Any, Set, Pattern
 from functools import partial, update_wrapper, wraps
 import numpy as np
+from six.moves.urllib.request import urlretrieve
 
 
 logger = logging.getLogger("mead.layers")
