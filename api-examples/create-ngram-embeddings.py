@@ -25,7 +25,7 @@ from baseline.tf.embeddings import *
 from baseline.embeddings import *
 from baseline.vectorizers import create_vectorizer, TextNGramVectorizer
 from baseline.reader import CONLLSeqReader, TSVSeqLabelReader
-from baseline.w2v import write_word2vec_file
+from baseline.embeddings import write_word2vec_file
 from baseline.utils import ngrams
 import tensorflow as tf
 import numpy as np
@@ -171,7 +171,7 @@ output_vocab = list(words)
 
 
 # Make a session
-with tf.Session() as sess:
+with tf.compat.v1.Session() as sess:
     # Get embeddings
     embed = get_embedder(args.type, args.input_embed)
 
@@ -184,7 +184,7 @@ with tf.Session() as sess:
     # Declare a tf graph operation
     y = embedder.encode()
 
-    init_op = tf.global_variables_initializer()
+    init_op = tf.compat.v1.global_variables_initializer()
     sess.run(init_op)
 
     vecs = []

@@ -4,6 +4,10 @@ import eight_mile.tf.layers as L
 import tensorflow as tf
 import logging
 import numpy as np
+from eight_mile.tf.layers import SET_TRAIN_FLAG, set_tf_log_level
+
+# FIXME
+SET_TRAIN_FLAG(False)
 import time
 
 # This doesnt produce expected results and appears to be due to a severe bug in tf Keras in handling "deferred" modules
@@ -105,7 +109,7 @@ def train_input_fn():
     dataset = tf.data.Dataset.from_tensor_slices((X_train, y_train))
     dataset = dataset.shuffle(buffer_size=len(X_train))
     dataset = dataset.batch(50)
-    dataset = dataset.map(lambda x, y: ({'word': x, 'lengths': tf.count_nonzero(x, axis=-1)}, y))
+    dataset = dataset.map(lambda x, y: ({'word': x, 'lengths': tf.compat.v1.count_nonzero(x, axis=-1)}, y))
     dataset = dataset.repeat()
     dataset = dataset.prefetch(NUM_PREFETCH)
     return dataset
@@ -114,7 +118,7 @@ def train_input_fn():
 def eval_input_fn():
     dataset = tf.data.Dataset.from_tensor_slices((X_valid, y_valid))
     dataset = dataset.batch(50)
-    dataset = dataset.map(lambda x, y: ({'word': x, 'lengths': tf.count_nonzero(x, axis=-1)}, y))
+    dataset = dataset.map(lambda x, y: ({'word': x, 'lengths': tf.compat.v1.count_nonzero(x, axis=-1)}, y))
     dataset = dataset.repeat()
     dataset = dataset.prefetch(NUM_PREFETCH)
 
@@ -124,7 +128,7 @@ def eval_input_fn():
 def predict_input_fn():
     dataset = tf.data.Dataset.from_tensor_slices((X_test, y_test))
     dataset = dataset.batch(1)
-    dataset = dataset.map(lambda x, y: ({'word': x, 'lengths': tf.count_nonzero(x, axis=-1)}, y))
+    dataset = dataset.map(lambda x, y: ({'word': x, 'lengths': tf.compat.v1.count_nonzero(x, axis=-1)}, y))
 
     return dataset
 
@@ -133,16 +137,16 @@ model = L.EmbedPoolStackModel(NC, embeddings, L.ParallelConv(300, 100, [3, 4, 5]
 
 
 # The compile step specifies the training configuration
-model.compile(optimizer=tf.train.AdamOptimizer(0.001),
+model.compile(optimizer=tf.keras.optimizers.Adam(0.001),
               loss='sparse_categorical_crossentropy',
               metrics=['sparse_categorical_accuracy'])
 
 # Trains for 5 epochs.
-model.fit(train_input_fn().make_one_shot_iterator(),
+model.fit(train_input_fn(),
           epochs=2,
           steps_per_epoch=one_epoch(X_train),
-          validation_data=eval_input_fn().make_one_shot_iterator(),
+          validation_data=eval_input_fn(),
           validation_steps=one_epoch(X_valid),
           callbacks=[tf.keras.callbacks.EarlyStopping(patience=2, monitor='val_sparse_categorical_accuracy')],)
 print(model.summary())
-print(model.evaluate(predict_input_fn().make_one_shot_iterator(), steps=len(y_test)))
+print(model.evaluate(predict_input_fn(), steps=len(y_test)))
