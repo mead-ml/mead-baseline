@@ -999,6 +999,10 @@ class ELMoEmbeddings(TensorFlowEmbeddings):
 
         assert self.dsz == 2*int(elmo_config['lstm']['projection_dim'])
 
+    def detached_ref(self):
+        # FIXME!
+        return self
+        
     @property
     def vsz(self):
         return self.vocab.size
