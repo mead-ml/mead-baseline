@@ -935,7 +935,7 @@ class EmbeddingsStack(nn.Module):
         return self.dropout(word_embeddings)
 
     def keys(self):
-        return self._keys()
+        return self._keys
 
 
 class DenseStack(nn.Module):
