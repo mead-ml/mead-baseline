@@ -14,3 +14,15 @@
   file: bert_uncased_L-12_H-768_A-12/1
   dsz: 768
 
+- label: elmo-small-tf
+  type: elmo-embed
+  model:
+    modules: [embed_elmo]
+    options: {"lstm": {"use_skip_connections": true, "projection_dim": 128, "cell_clip": 3, "proj_clip": 3, "dim": 1024, "n_layers": 2}, "char_cnn": {"activation": "relu", "filters": [[1, 32], [2, 32], [3, 64], [4, 128], [5, 256], [6, 512], [7, 1024]], "n_highway": 1, "embedding": {"dim": 16}, "n_characters": 262, "max_characters_per_token": 50}}
+    file: 
+  dsz: 256
+  file: https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x1024_128_2048cnn_1xhighway/elmo_2x1024_128_2048cnn_1xhighway_weights.hdf5
+
+- label: w2v-gn
+  file: /data/embeddings/GoogleNews-vectors-negative300.bin
+  dsz: 300
