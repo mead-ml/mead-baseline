@@ -1,0 +1,7 @@
+- label: bert-base-uncased-pooled
+  type: bert-pooled
+  model:
+    modules: [embed_bert_pytorch]
+    trainable: true
+  file: bert-base-uncased
+  dsz: 768

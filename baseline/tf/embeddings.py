@@ -1,5 +1,5 @@
 import logging
-from eight_mile.embeddings import register_embeddings
+from baseline.embeddings import register_embeddings
 from eight_mile.tf.embeddings import *
 import tensorflow as tf
 

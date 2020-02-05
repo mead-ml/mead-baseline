@@ -9,7 +9,7 @@ from eight_mile.utils import str2bool, write_json, Offsets, listify
 import glob
 from baseline.pytorch.embeddings import *
 from baseline.pytorch.seq2seq.model import Seq2SeqModel
-import eight_mile.embeddings
+import baseline.embeddings
 from eight_mile.optz import *
 from eight_mile.pytorch.optz import *
 from eight_mile.pytorch.layers import TransformerEncoderStack, DenseStack, MultiHeadedAttention
@@ -486,17 +486,17 @@ def load_embed_and_vocab(token_type, reader, dataset, dataset_key, d_model, cach
         embeddings = {}
 
         # If we are not using chars, then use 'x' for both input and output
-        x_embedding = eight_mile.embeddings.load_embeddings('x',
-                                                            dsz=d_model,
-                                                            known_vocab=vocab,
-                                                            embed_type='positional')
+        x_embedding = baseline.embeddings.load_embeddings('x',
+                                                          dsz=d_model,
+                                                          known_vocab=vocab,
+                                                          embed_type='positional')
         if share_embeddings:
             y_embedding = x_embedding
         else:
-            y_embedding = eight_mile.embeddings.load_embeddings('y',
-                                                            dsz=d_model,
-                                                            known_vocab=vocab,
-                                                            embed_type='positional')
+            y_embedding = baseline.embeddings.load_embeddings('y',
+                                                              dsz=d_model,
+                                                              known_vocab=vocab,
+                                                              embed_type='positional')
 
         vocab = x_embedding['vocab']
         embedding = {"x": x_embedding['embeddings']}

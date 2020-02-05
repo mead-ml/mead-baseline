@@ -13,7 +13,7 @@ data_loc = os.path.join(data_loc, "test_data")
 
 from baseline.pytorch.lm import TransformerLanguageModel
 import baseline.pytorch.embeddings
-import eight_mile.embeddings
+import baseline.embeddings
 import torch
 from eight_mile.optz import *
 from eight_mile.pytorch.optz import *
@@ -41,10 +41,10 @@ def test_round_trip():
     vocab_x = {'a':1, 'aardvark':100, 'beandip':42, 'cheerio':86, 'dumdum':129, 'eoyre':3}
     embeddings = {}
     vocabs = {'x': vocab_x}
-    x_embedding = eight_mile.embeddings.load_embeddings('x',
-                                                        dsz=d_model,
-                                                        known_vocab=vocab_x,
-                                                        embed_type='positional')
+    x_embedding = baseline.embeddings.load_embeddings('x',
+                                                      dsz=d_model,
+                                                      known_vocab=vocab_x,
+                                                      embed_type='positional')
     vocabs['x'] = x_embedding['vocab']
     embeddings['x'] = x_embedding['embeddings']
 

@@ -1,5 +1,5 @@
 import argparse
-import eight_mile.embeddings
+import baseline.embeddings
 from eight_mile.confusion import ConfusionMatrix
 import baseline
 from eight_mile.pytorch.optz import OptimizerManager, EagerOptimizer
@@ -112,9 +112,9 @@ vocabs, labels = reader.build_vocab([train_file,
 embeddings = dict()
 for k, v in feature_desc.items():
     embed_config = v['embed']
-    embeddings_for_k = eight_mile.embeddings.load_embeddings('word', embed_file=embed_config['file'], known_vocab=vocabs[k],
-                                                embed_type=embed_config.get('type', 'default'),
-                                                unif=embed_config.get('unif', 0.), use_mmap=True)
+    embeddings_for_k = baseline.embeddings.load_embeddings('word', embed_file=embed_config['file'], known_vocab=vocabs[k],
+                                                           embed_type=embed_config.get('type', 'default'),
+                                                           unif=embed_config.get('unif', 0.), use_mmap=True)
 
     embeddings[k] = embeddings_for_k['embeddings']
     # Reset the vocab to the embeddings one

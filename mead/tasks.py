@@ -333,36 +333,72 @@ class Task(object):
         :param features: The `features` sub-section of the mead config
         :return: Returns a ``tuple`` comprised of a ``dict`` of (`feature name`, `Embedding`) and an updated vocab
         """
-        unif = self.config_params.get('unif', 0.1)
-        keep_unused = self.config_params.get('keep_unused', False)
+
 
         embeddings_map = {}
         out_vocabs = {}
+
+
         for feature in features:
+            # Get the block from the features section with key `embeddings`
             embeddings_section = feature['embeddings']
+
+            # The name is at the top level for the feature block of mead config
             name = feature['name']
+
+            # Get the label out of the embeddings section in the features block of mead config
             embed_label = embeddings_section.get('label', None)
+
+            # Get the type of embedding out of the embeddings section in the features block of mead config
             embed_type = embeddings_section.get('type', 'default')
-            embeddings_section['unif'] = embeddings_section.get('unif', unif)
-            embeddings_section['keep_unused'] = embeddings_section.get('keep_unused', keep_unused)
+
+            # Backwards compat, copy from main block if not present locally
+            embeddings_section['unif'] = embeddings_section.get('unif', self.config_params.get('unif', 0.1))
+
+            # Backwards compat, copy from main block if not present locally
+            embeddings_section['keep_unused'] = embeddings_section.get('keep_unused',
+                                                                       self.config_params.get('keep_unused', False))
+
+            # Overlay any backend parameters
             if self.backend.params is not None:
                 for k, v in self.backend.params.items():
                     embeddings_section[k] = v
             if embed_label is not None:
                 # Allow local overrides to uniform initializer
 
-                embed_file = embeddings_set[embed_label]['file']
-                embed_dsz = embeddings_set[embed_label]['dsz']
-                embed_sha1 = embeddings_set[embed_label].get('sha1', None)
-                embed_file = EmbeddingDownloader(embed_file, embed_dsz, embed_sha1, self.data_download_cache).download()
+                # This is from the embeddings index
+                embeddings_global_config = embeddings_set[embed_label]
+                if 'type' in embeddings_global_config:
+                    embed_type = embeddings_global_config['type']
+                embed_file = embeddings_global_config['file']
+                embed_dsz = embeddings_global_config['dsz']
+                embed_sha1 = embeddings_global_config.get('sha1', None)
+                # Should we grab vocab here too?
+                embed_model = embeddings_global_config.get('model', {})
+                if 'dsz' not in embed_model:
+                    embed_model['dsz'] = embed_dsz
+                embeddings_section = {**embed_model, **embeddings_section}
+                try:
 
-                embedding_bundle = baseline.embeddings.load_embeddings(name, embed_file=embed_file, known_vocab=vocabs[name], embed_type=embed_type, **embeddings_section)
+                    embed_file = EmbeddingDownloader(embed_file, embed_dsz, embed_sha1, self.data_download_cache).download()
+                except Exception as e:
+                    pass
+
+                embedding_bundle = baseline.embeddings.load_embeddings(name,
+                                                                       embed_file=embed_file,
+                                                                       known_vocab=vocabs[name],
+                                                                       embed_type=embed_type,
+                                                                       **embeddings_section)
 
                 embeddings_map[name] = embedding_bundle['embeddings']
                 out_vocabs[name] = embedding_bundle['vocab']
-            else:
+            else:  # if there is no label given, assume we need random initialization vectors
                 dsz = embeddings_section.pop('dsz')
-                embedding_bundle = baseline.embeddings.load_embeddings(name, dsz=dsz, known_vocab=vocabs[name], embed_type=embed_type, **embeddings_section)
+                embedding_bundle = baseline.embeddings.load_embeddings(name,
+                                                                       dsz=dsz,
+                                                                       known_vocab=vocabs[name],
+                                                                       embed_type=embed_type,
+                                                                       **embeddings_section)
                 embeddings_map[name] = embedding_bundle['embeddings']
                 out_vocabs[name] = embedding_bundle['vocab']
 

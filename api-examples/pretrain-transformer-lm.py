@@ -8,7 +8,7 @@ from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader, TensorDataset
 from eight_mile.utils import str2bool, write_json, Offsets
 import baseline.pytorch.embeddings
-import eight_mile.embeddings
+import baseline.embeddings
 from eight_mile.optz import *
 from eight_mile.pytorch.optz import *
 from baseline.pytorch.lm import TransformerLanguageModel
@@ -412,20 +412,20 @@ def load_embed_and_vocab(token_type, reader, dataset, dataset_key, d_model, cach
         tgt_key = 'x'
         if token_type == 'chars':
             # Write JSON file here and skip this step the second time
-            x_embedding = eight_mile.embeddings.load_embeddings('x', known_vocab=vocabs['x'], **X_CHAR_EMBEDDINGS)
+            x_embedding = baseline.embeddings.load_embeddings('x', known_vocab=vocabs['x'], **X_CHAR_EMBEDDINGS)
             vocabs['x'] = x_embedding['vocab']
 
-            y_embedding = eight_mile.embeddings.load_embeddings('y', dsz=1, known_vocab=vocabs['y'])
+            y_embedding = baseline.embeddings.load_embeddings('y', dsz=1, known_vocab=vocabs['y'])
             vocabs['y'] = y_embedding['vocab']
 
             embeddings['x'] = x_embedding['embeddings']
             embeddings['y'] = y_embedding['embeddings']
             tgt_key = 'y'
         else:
-            x_embedding = eight_mile.embeddings.load_embeddings('x',
-                                                                dsz=d_model,
-                                                                known_vocab=vocabs['x'],
-                                                                embed_type='positional')
+            x_embedding = baseline.embeddings.load_embeddings('x',
+                                                              dsz=d_model,
+                                                              known_vocab=vocabs['x'],
+                                                              embed_type='positional')
             vocabs['x'] = x_embedding['vocab']
             embeddings['x'] = x_embedding['embeddings']
 

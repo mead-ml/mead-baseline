@@ -4,7 +4,6 @@ import logging
 import numpy as np
 import tensorflow as tf
 from eight_mile.utils import write_json, Offsets, is_sequence, calc_nfeats
-from eight_mile.embeddings import register_embeddings
 from eight_mile.tf.layers import *
 
 
