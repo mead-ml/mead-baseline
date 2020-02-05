@@ -236,6 +236,8 @@ def convert_path(path, loc=None):
         return path
     if path.startswith("$"):
         return path
+    if path.startswith("http"):
+        return path
     if loc is None:
         loc = os.path.dirname(os.path.realpath(__file__))
     return os.path.join(loc, path)
