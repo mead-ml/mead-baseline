@@ -73,7 +73,8 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
         write_json(self._state, '{}.state'.format(basename))
         write_json(self.labels, '{}.labels'.format(basename))
         for key, embedding in self.embeddings.items():
-            embedding.save_md('{}-{}-md.json'.format(basename, key))
+            if hasattr(embedding, 'save_md'):
+                embedding.save_md('{}-{}-md.json'.format(basename, key))
 
     def _record_state(self, **kwargs):
         embeddings_info = {}
