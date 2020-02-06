@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "modules": ["embed_elmo"],
+  "modules": ["hub:v1:addons:embed_elmo_tf"],
   "task": "classify",
   "basedir": "./sst2",
   "batchsz": 50,

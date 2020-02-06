@@ -1,5 +1,5 @@
 modules:
-  - rnf_pyt
+  - hub:v1:addons:rnf_pytorch
 batchsz: 32
 preproc: 
   mxlen: 100

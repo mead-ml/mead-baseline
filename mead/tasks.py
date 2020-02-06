@@ -79,6 +79,7 @@ class Backend(object):
             set_tf_log_level(os.getenv("MEAD_TF_LOG_LEVEL", "ERROR"))
 
         base_pkg_name = 'baseline.{}'.format(self.name)
+        # Backends may not be downloaded to the cache, they must exist locally
         mod = import_user_module(base_pkg_name)
         import_user_module('baseline.{}.optz'.format(self.name))
         import_user_module('baseline.{}.embeddings'.format(self.name))
@@ -211,9 +212,12 @@ class Task(object):
         self.reader = self._create_task_specific_reader()
 
     def _load_user_modules(self):
+        # User modules can be downloaded from hub or HTTP automatically if they are defined in form
+        # http://path/to/module_name.py
+        # hub:v1:addons:module_name
         if 'modules' in self.config_params:
             for addon in self.config_params['modules']:
-                import_user_module(addon) #, self.data_download_cache)
+                import_user_module(addon, self.data_download_cache)
 
     def initialize(self, embeddings_index):
         """
@@ -388,6 +392,7 @@ class Task(object):
                                                                        embed_file=embed_file,
                                                                        known_vocab=vocabs[name],
                                                                        embed_type=embed_type,
+                                                                       data_download_cache=self.data_download_cache,
                                                                        **embeddings_section)
 
                 embeddings_map[name] = embedding_bundle['embeddings']
@@ -398,6 +403,7 @@ class Task(object):
                                                                        dsz=dsz,
                                                                        known_vocab=vocabs[name],
                                                                        embed_type=embed_type,
+                                                                       data_download_cache=self.data_download_cache,
                                                                        **embeddings_section)
                 embeddings_map[name] = embedding_bundle['embeddings']
                 out_vocabs[name] = embedding_bundle['vocab']

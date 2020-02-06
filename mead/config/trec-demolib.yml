@@ -2,7 +2,7 @@
 # --reporting slack --slack:webhook <hook>
 batchsz: 50
 modules:
-  - demolib
+  - hub:v1:addons:demolib
 preproc:
     mxlen: -1
 

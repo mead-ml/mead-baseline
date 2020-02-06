@@ -1,7 +1,7 @@
 # To pass in a slack reporting hook, pass in
 # --reporting slack --slack:webhook <hook>
 modules:
-  - demolib
+  - hub:v1:addons:demolib
 batchsz: 50
 basedir: demolib
 dataset: SST2

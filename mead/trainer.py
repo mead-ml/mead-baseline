@@ -93,6 +93,7 @@ def main():
     if args.basedir is not None:
         config_params['basedir'] = args.basedir
 
+    # task_module overrides are not allowed via hub or HTTP, must be defined locally
     for task in args.task_modules:
         import_user_module(task)
 

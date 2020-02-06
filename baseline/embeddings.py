@@ -1,7 +1,7 @@
 import eight_mile.embeddings
 from eight_mile.embeddings import *
 from eight_mile.utils import exporter, optional_params, listify, idempotent_append
-from baseline.utils import import_user_module
+from baseline.utils import import_user_module, AddonDownloader
 import logging
 
 __all__ = []
@@ -47,6 +47,9 @@ def create_embeddings(**kwargs):
 def load_embeddings(name, **kwargs):
     """This method negotiates loading an embeddings sub-graph AND a corresponding vocabulary (lookup from word to int)
 
+    Embeddings and their addons may be downloaded from an http `GET` either via raw URL or using hub notation
+    (hub:v1:embeddings/hub:v1:addons)
+
     This function behaves differently depending on its keyword arguments and the `embed_type`.
     If the registered embeddings class contains a load method on it and we are given an `embed_file`,
     we will assume that we need to load that file, and that the embeddings object wants its own load function used
@@ -70,7 +73,7 @@ def load_embeddings(name, **kwargs):
     embed_type = kwargs.pop("embed_type", "default")
     # Dynamically load a module if its needed
     for module in listify(kwargs.get('module', kwargs.get('modules', []))):
-        import_user_module(module)
+        import_user_module(module, kwargs.get('data_download_cache'))
     embeddings_cls = MEAD_LAYERS_EMBEDDINGS[embed_type]
 
     filename = kwargs.get("embed_file")

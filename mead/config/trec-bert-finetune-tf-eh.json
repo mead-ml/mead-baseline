@@ -2,7 +2,7 @@
   "task": "classify",
   "basedir": "./trec-bert",
   "batchsz": 10,
-  "modules": ["embed_bert"],
+  "modules": ["hub:v1:addons:embed_bert_tf"],
   "features": [
     {
       "name": "bert",
