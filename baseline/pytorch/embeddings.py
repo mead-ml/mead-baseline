@@ -14,7 +14,7 @@ class PyTorchEmbeddingsModel(PyTorchEmbeddings):
 
     @classmethod
     def create(cls, model, name, **kwargs):
-        kwargs.pop("dsz")
+        kwargs.pop("dsz", None)
         return cls(name, vsz=model.vsz, dsz=model.dsz, weights=model.weights, **kwargs)
 
 

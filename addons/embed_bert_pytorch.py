@@ -27,7 +27,7 @@ BERT_TOKENIZER = None
 class WordPieceVectorizer1D(AbstractVectorizer):
 
     def __init__(self, **kwargs):
-        super(WordPieceVectorizer1D, self).__init__(kwargs.get('transform_fn'))
+        super().__init__(kwargs.get('transform_fn'))
         global BERT_TOKENIZER
         self.max_seen = 128
         handle = kwargs.get('embed_file')
@@ -74,7 +74,7 @@ class WordPieceVectorizer1D(AbstractVectorizer):
 class BERTBaseEmbeddings(PyTorchEmbeddings):
 
     def __init__(self, name, **kwargs):
-        super(BERTBaseEmbeddings, self).__init__(name=name, **kwargs)
+        super().__init__(name=name, **kwargs)
         global BERT_TOKENIZER
         self.dsz = kwargs.get('dsz')
         if BERT_TOKENIZER is None:
@@ -116,7 +116,7 @@ class BERTEmbeddings(BERTBaseEmbeddings):
 
         If operator == 'concat' result is [B, T, #Layers * H] other size the layers are meaned and the shape is [B, T, H]
         """
-        super(BERTEmbeddings, self).__init__(name=name, **kwargs)
+        super().__init__(name=name, **kwargs)
         self.layer_indices = kwargs.get('layers', [-1, -2, -3, -4])
         self.operator = kwargs.get('operator', 'concat')
         self.finetune = kwargs.get('finetune', False)

@@ -91,7 +91,7 @@ class TensorFlowEmbeddingsModel(tf.keras.Model):
         # if cls is LookupTableEmbeddingsModel and model.vsz * model.dsz * FLOAT32 > GB2:
         #     cls = LargeLookupTableEmbeddingsModel
         #     logger.warning("Embedding %s seems to be larger than 2GB", name)
-        kwargs.pop('dsz')
+        kwargs.pop('dsz', None)
         return cls(name, vsz=model.vsz, dsz=model.dsz, weights=model.weights, **kwargs)
 
     def _record_state(self, **kwargs):
