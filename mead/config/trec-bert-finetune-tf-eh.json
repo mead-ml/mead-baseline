@@ -6,12 +6,12 @@
     {
       "name": "bert",
       "vectorizer": {
-          "type": "wordpiece1d",
-	  "modules": "vec_bert_tf",
-          "file": "/home/dpressel/dev/work/bert/uncased_L-12_H-768_A-12/vocab.txt"
+        "type": "wordpiece1d",
+        "modules": "hub:v1:addons:vec_bert_tf",
+        "file": "https://www.dropbox.com/s/0ddn79oytf95wvh/vocab.txt?dl=1"
       },
       "embeddings": {
-	"label": "bert-base-uncased-pooled-tf"
+	    "label": "bert-base-uncased-pooled-tf"
       }
     }
   ],
