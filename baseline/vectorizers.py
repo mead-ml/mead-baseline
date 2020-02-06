@@ -1,5 +1,5 @@
 import numpy as np
-from baseline.utils import exporter, optional_params, listify, register, Offsets
+from baseline.utils import exporter, optional_params, listify, register, Offsets, import_user_module
 import collections
 
 
@@ -29,14 +29,14 @@ class Vectorizer(object):
         pass
 
 
-BASELINE_VECTORIZERS = {}
+MEAD_VECTORIZERS = {}
 
 
 @export
 @optional_params
 def register_vectorizer(cls, name=None):
     """Register a function as a plug-in"""
-    return register(cls, BASELINE_VECTORIZERS, name, 'vectorizer')
+    return register(cls, MEAD_VECTORIZERS, name, 'vectorizer')
 
 
 @export
@@ -48,7 +48,7 @@ def identity_trans_fn(x):
 class AbstractVectorizer(Vectorizer):
 
     def __init__(self, transform_fn=None):
-        super(AbstractVectorizer, self).__init__()
+        super().__init__()
         self.transform_fn = identity_trans_fn if transform_fn is None else transform_fn
 
     def iterable(self, tokens):
@@ -70,7 +70,7 @@ class AbstractVectorizer(Vectorizer):
 class Token1DVectorizer(AbstractVectorizer):
 
     def __init__(self, **kwargs):
-        super(Token1DVectorizer, self).__init__(kwargs.get('transform_fn'))
+        super().__init__(kwargs.get('transform_fn'))
         self.time_reverse = kwargs.get('rev', False)
         self.mxlen = kwargs.get('mxlen', -1)
         self.max_seen = 0
@@ -151,7 +151,7 @@ def _token_iterator(vectorizer, tokens):
 class Dict1DVectorizer(Token1DVectorizer):
 
     def __init__(self, **kwargs):
-        super(Dict1DVectorizer, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.fields = listify(kwargs.get('fields', 'text'))
         self.delim = kwargs.get('token_delim', '@@')
 
@@ -163,7 +163,7 @@ class Dict1DVectorizer(Token1DVectorizer):
 class AbstractCharVectorizer(AbstractVectorizer):
 
     def __init__(self, transform_fn=None):
-        super(AbstractCharVectorizer, self).__init__(transform_fn)
+        super().__init__(transform_fn)
 
     def _next_element(self, tokens, vocab):
         OOV = vocab['<UNK>']
@@ -179,7 +179,7 @@ class AbstractCharVectorizer(AbstractVectorizer):
 class Char2DVectorizer(AbstractCharVectorizer):
 
     def __init__(self, **kwargs):
-        super(Char2DVectorizer, self).__init__(kwargs.get('transform_fn'))
+        super().__init__(kwargs.get('transform_fn'))
         self.mxlen = kwargs.get('mxlen', -1)
         self.mxwlen = kwargs.get('mxwlen', -1)
         self.max_seen_tok = 0
@@ -248,7 +248,7 @@ class Char2DVectorizer(AbstractCharVectorizer):
 class Dict2DVectorizer(Char2DVectorizer):
 
     def __init__(self, **kwargs):
-        super(Dict2DVectorizer, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.fields = listify(kwargs.get('fields', 'text'))
         self.delim = kwargs.get('token_delim', '@@')
 
@@ -261,7 +261,7 @@ class Dict2DVectorizer(Char2DVectorizer):
 class Char1DVectorizer(AbstractCharVectorizer):
 
     def __init__(self, **kwargs):
-        super(Char1DVectorizer, self).__init__(kwargs.get('transform_fn'))
+        super().__init__(kwargs.get('transform_fn'))
         self.mxlen = kwargs.get('mxlen', -1)
         self.time_reverse = kwargs.get('rev', False)
         self.max_seen_tok = 0
@@ -307,7 +307,7 @@ class Char1DVectorizer(AbstractCharVectorizer):
 @register_vectorizer(name='ngram')
 class TextNGramVectorizer(Token1DVectorizer):
     def __init__(self, filtsz=3, joiner='@@', transform_fn=None, pad='<PAD>', **kwargs):
-        super(TextNGramVectorizer, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.filtsz = filtsz
         self.pad = pad
         self.joiner = joiner
@@ -344,7 +344,7 @@ class TextNGramVectorizer(Token1DVectorizer):
 @register_vectorizer(name='dict-ngram')
 class DictTextNGramVectorizer(TextNGramVectorizer):
     def __init__(self, **kwargs):
-        super(DictTextNGramVectorizer, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.fields = listify(kwargs.get('fields', 'text'))
         if len(self.fields) > 1:
             raise Exception("Multifield N-grams arent supported right now")
@@ -370,11 +370,13 @@ class DictTextNGramVectorizer(TextNGramVectorizer):
             yield self.joiner.join(chunk)
 
 
-
-
 @export
 def create_vectorizer(**kwargs):
     vec_type = kwargs.get('vectorizer_type', kwargs.get('type', 'token1d'))
-    Constructor = BASELINE_VECTORIZERS.get(vec_type)
+    # Dynamically load a module if its needed
+
+    for module in listify(kwargs.get('module', kwargs.get('modules', []))):
+        import_user_module(module, kwargs.get('data_download_cache'))
+    Constructor = MEAD_VECTORIZERS.get(vec_type)
     return Constructor(**kwargs)
 

@@ -52,7 +52,7 @@ def import_user_module(module_name: str, data_download_cache: Optional[str] = No
                 if addons_literal != "addons":
                     raise Exception("We only support downloading addons right now")
                 module_name = f"http://raw.githubusercontent.com/mead-ml/hub/master/{version}/addons/{rest}"
-            module_name = AddonDownloader(module_name, data_download_cache).download()
+            module_name = AddonDownloader(module_name, data_download_cache, cache_ignore=True).download()
 
     # TODO: get rid of this!
     addon_path = os.path.dirname(os.path.realpath(addons.__file__))

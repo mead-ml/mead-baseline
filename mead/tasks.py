@@ -15,6 +15,7 @@ from baseline.utils import (
     get_env_gpus,
     import_user_module,
     listify,
+    SingleFileDownloader
 )
 from baseline.utils import (
     show_examples,
@@ -162,6 +163,11 @@ class Task(object):
             if feature.get('primary', False) is True:
                 self.primary_key = key
             vectorizer_section = feature.get('vectorizer', {'type': 'token1d'})
+            vectorizer_section['data_download_cache'] = self.data_download_cache
+            vec_file = vectorizer_section.get('file')
+            if vec_file:
+                vec_file = SingleFileDownloader(vec_file, self.data_download_cache).download()
+                vectorizer_section['file'] = vec_file
             vectorizer_section['mxlen'] = vectorizer_section.get('mxlen', self.config_params.get('preproc', {}).get('mxlen', -1))
             vectorizer_section['mxwlen'] = vectorizer_section.get('mxwlen', self.config_params.get('preproc', {}).get('mxwlen', -1))
             if 'transform' in vectorizer_section:

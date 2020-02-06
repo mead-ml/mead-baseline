@@ -2,13 +2,13 @@
   "task": "classify",
   "basedir": "./trec-bert",
   "batchsz": 10,
-  "modules": ["hub:v1:addons:embed_bert_tf"],
   "features": [
     {
       "name": "bert",
       "vectorizer": {
-        "type": "wordpiece1d",
-        "vocab_file": "/home/dpressel/dev/work/bert/uncased_L-12_H-768_A-12/vocab.txt"
+          "type": "wordpiece1d",
+	  "modules": "vec_bert_tf",
+          "file": "/home/dpressel/dev/work/bert/uncased_L-12_H-768_A-12/vocab.txt"
       },
       "embeddings": {
 	"label": "bert-base-uncased-pooled-tf"
