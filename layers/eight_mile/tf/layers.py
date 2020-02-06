@@ -2249,7 +2249,7 @@ class TransformerEncoder(tf.keras.layers.Layer):
         else:
             self.self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale=scale, d_k=d_k)
 
-        self.ffn = FFN(d_model, activation_type, d_ff, pdrop=ffn_pdrop, name="ffn")
+        self.ffn = FFN(d_model, ffn_pdrop, activation_type, d_ff, name="ffn")
         self.ln1 = tf.keras.layers.LayerNormalization(epsilon=1e-6)
         self.ln2 = tf.keras.layers.LayerNormalization(epsilon=1e-6)
         self.dropout = tf.keras.layers.Dropout(pdrop)
@@ -2311,7 +2311,7 @@ class TransformerEncoderStack(tf.keras.layers.Layer):
         self,
         num_heads: int,
         d_model: int,
-        pdrop: bool,
+        pdrop: float,
         scale: bool = True,
         layers: int = 1,
         activation: str = "relu",
