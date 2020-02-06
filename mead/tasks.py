@@ -144,7 +144,7 @@ class Task(object):
         """
         pass
 
-    def _create_vectorizers(self):
+    def _create_vectorizers(self, vecs_set=None):
         """Read the `features` section of the mead config.  This sections contains both embedding info and vectorizers
         Then use the vectorizer sub-section to instantiate the vectorizers and return them in a ``dict`` with name
         keyed off of the `features->name` and value of `vectorizer`
@@ -162,7 +162,13 @@ class Task(object):
                 raise ValueError('Feature names cannot contain "-". Found feature named "{}"'.format(key))
             if feature.get('primary', False) is True:
                 self.primary_key = key
-            vectorizer_section = feature.get('vectorizer', {'type': 'token1d'})
+
+            vectorizer_section = feature.get('vectorizer', {})
+            vecs_global_config = {'type': 'token1d'}
+            if 'label' in vectorizer_section:
+                vecs_global_config = vecs_set.get(vectorizer_section['label'])
+
+            vectorizer_section = {**vecs_global_config, **vectorizer_section}
             vectorizer_section['data_download_cache'] = self.data_download_cache
             vec_file = vectorizer_section.get('file')
             if vec_file:
@@ -186,7 +192,7 @@ class Task(object):
         config = TASK_REGISTRY[task](mead_config)
         return config
 
-    def read_config(self, config_params, datasets_index, **kwargs):
+    def read_config(self, config_params, datasets_index, vecs_index, **kwargs):
         """
         Read the config file and the datasets index
 
@@ -199,6 +205,8 @@ class Task(object):
         """
         datasets_index = read_config_file_or_json(datasets_index, 'datasets')
         datasets_set = index_by_label(datasets_index)
+        vecs_index = read_config_file_or_json(vecs_index, 'vecs')
+        vecs_set = index_by_label(vecs_index)
         self.config_params = config_params
         config_file = deepcopy(config_params)
         basedir = self.get_basedir()
@@ -215,7 +223,7 @@ class Task(object):
         # replace dataset in config file by the latest dataset label, this will be used by some reporting hooks
         config_file['dataset'] = self.dataset['label']
         self._configure_reporting(config_params.get('reporting', {}), config_file=config_file, **kwargs)
-        self.reader = self._create_task_specific_reader()
+        self.reader = self._create_task_specific_reader(vecs_set)
 
     def _load_user_modules(self):
         # User modules can be downloaded from hub or HTTP automatically if they are defined in form
@@ -234,8 +242,8 @@ class Task(object):
         """
         pass
 
-    def _create_task_specific_reader(self):
-        self._create_vectorizers()
+    def _create_task_specific_reader(self, vecs_set=None):
+        self._create_vectorizers(vecs_set)
         reader_params = self.config_params['reader'] if 'reader' in self.config_params else self.config_params['loader']
         reader_params['clean_fn'] = reader_params.get('clean_fn', self.config_params.get('preproc', {}).get('clean_fn'))
         if reader_params['clean_fn'] is not None and self.config_params['dataset'] != 'SST2':
@@ -789,8 +797,8 @@ class LanguageModelingTask(Task):
     def task_name(cls):
         return 'lm'
 
-    def _create_task_specific_reader(self):
-        self._create_vectorizers()
+    def _create_task_specific_reader(self, vecs_set=None):
+        self._create_vectorizers(vecs_set)
 
         reader_params = self.config_params['reader'] if 'reader' in self.config_params else self.config_params['loader']
         reader_params['nctx'] = reader_params.get('nctx', reader_params.get('nbptt', self.config_params.get('nctx', self.config_params.get('nbptt', 35))))
