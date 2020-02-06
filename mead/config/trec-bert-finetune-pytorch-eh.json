@@ -11,7 +11,7 @@
         "embed_file": "bert-base-uncased"
       },
       "embeddings": {
-	"label": "bert-base-uncased-pooled"
+	"label": "bert-base-uncased-pooled-pytorch"
       }
     }
   ],
