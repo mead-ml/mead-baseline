@@ -411,9 +411,10 @@ def read_config_file(config_file: str) -> Dict:
     :param config_file: (``str``) A path to a config file which should be a JSON file, or YAML if pyyaml is installed
     :return: (``dict``) An object
     """
-    if config_file.endswith((".yml", ".yaml")):
+    try:
         return read_yaml(config_file, strict=True)
-    return read_json(config_file, strict=True)
+    except:
+        return read_json(config_file, strict=True)
 
 
 @export
@@ -430,6 +431,7 @@ def validate_url(url: str) -> bool:
     return re.match(regex, url) is not None
 
 
+
 @export
 def read_config_stream(config_stream) -> Dict:
     """Read config stream.  May be a path to a YAML or JSON file, or a str containing JSON or the name
@@ -444,11 +446,19 @@ def read_config_stream(config_stream) -> Dict:
         logger.info("Reading config file '{}'".format(config_stream))
         return read_config_file(config_stream)
     config = config_stream
+    if config_stream.startswith("hub:"):
+        vec = config_stream.split(":")
+        version = vec[1]
+        rest = ":".join(vec[2:])
+        config_stream = f"http://raw.githubusercontent.com/mead-ml/hub/master/{version}/{rest}.yml"
+
     if config_stream.startswith("$"):
         logger.info("Reading config from '{}'".format(config_stream))
         config = os.getenv(config_stream[1:])
+    
     else:
         if validate_url(config_stream):
+            print(config_stream)
             path_to_save, _ = urlretrieve(config_stream)
             return read_config_stream(path_to_save)
         else:

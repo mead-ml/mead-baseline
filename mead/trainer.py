@@ -70,15 +70,16 @@ def update_datasets(datasets_config, config_params, train, valid, test):
 
 def main():
     parser = argparse.ArgumentParser(description='Train a text classifier')
-    parser.add_argument('--config', help='JSON Configuration for an experiment', type=convert_path, default="$MEAD_CONFIG")
-    parser.add_argument('--settings', help='JSON Configuration for mead', default='config/mead-settings.json', type=convert_path)
-    parser.add_argument('--task_modules', help='tasks to load', default=[], nargs='+', required=False)
-    parser.add_argument('--datasets', help='json library of dataset labels', default='config/datasets.json', type=convert_path)
-    parser.add_argument('--modules', help='modules to load', default=[], nargs='+', required=False)
+    parser.add_argument('--config', help='JSON/YML Configuration for an experiment: local file or remote URL', type=convert_path, default="$MEAD_CONFIG")
+    parser.add_argument('--settings', help='JSON/YML Configuration for mead', default='config/mead-settings.json', type=convert_path)
+    parser.add_argument('--task_modules', help='tasks to load, must be local', default=[], nargs='+', required=False)
+    parser.add_argument('--datasets', help='index of dataset labels: local file, remote URL or mead-ml/hub ref', default='config/datasets.json', type=convert_path)
+    parser.add_argument('--modules', help='modules to load: local files, remote URLs or mead-ml/hub refs', default=[], nargs='+', required=False)
     parser.add_argument('--mod_train_file', help='override the training set')
     parser.add_argument('--mod_valid_file', help='override the validation set')
     parser.add_argument('--mod_test_file', help='override the test set')
-    parser.add_argument('--embeddings', help='json library of embeddings', default='config/embeddings.json', type=convert_path)
+    parser.add_argument('--embeddings', help='index of embeddings: local file, remote URL or mead-ml/hub ref', default='config/embeddings.json', type=convert_path)
+    parser.add_argument('--vecs', help='index of vectorizers: local file, remote URL or hub mead-ml/ref', default='config/vecs.json', type=convert_path)
     parser.add_argument('--logging', help='json file for logging', default='config/logging.json', type=convert_path)
     parser.add_argument('--task', help='task to run', choices=['classify', 'tagger', 'seq2seq', 'lm'])
     parser.add_argument('--gpus', help='Number of GPUs (defaults to number available)', type=int, default=-1)
@@ -93,6 +94,7 @@ def main():
     if args.basedir is not None:
         config_params['basedir'] = args.basedir
 
+    # task_module overrides are not allowed via hub or HTTP, must be defined locally
     for task in args.task_modules:
         import_user_module(task)
 
@@ -113,7 +115,7 @@ def main():
         update_datasets(args.datasets, config_params, args.mod_train_file, args.mod_valid_file, args.mod_test_file)
 
     args.embeddings = read_config_stream(args.embeddings)
-
+    args.vecs = read_config_stream(args.vecs)
     if args.gpus is not None:
         config_params['model']['gpus'] = args.gpus
 
@@ -128,11 +130,10 @@ def main():
     config_params['reporting'] = reporting
 
     logger.info('Task: [{}]'.format(task_name))
-    #print(get_task_registry())
 
     task = mead.Task.get_task_specific(task_name, args.settings)
 
-    task.read_config(config_params, args.datasets, reporting_args=overrides, prefer_eager=args.prefer_eager)
+    task.read_config(config_params, args.datasets, args.vecs, reporting_args=overrides, prefer_eager=args.prefer_eager)
     task.initialize(args.embeddings)
     task.train(args.checkpoint)
 

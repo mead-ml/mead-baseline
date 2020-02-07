@@ -1063,6 +1063,7 @@ def load_vocab(vocab_file):
 
     vocab = collections.OrderedDict()
     index = 0
+
     with tf.compat.v1.gfile.GFile(vocab_file, "r") as reader:
         while True:
             token = convert_to_unicode(reader.readline())
@@ -1244,7 +1245,7 @@ class BasicTokenizer(object):
 class WordPieceVectorizer1D(AbstractVectorizer):
 
     def __init__(self, **kwargs):
-        super(WordPieceVectorizer1D, self).__init__(kwargs.get('transform_fn'))
+        super().__init__(kwargs.get('transform_fn'))
         self.max_seen = 128
         self.wordpiece_tok = WordpieceTokenizer(load_vocab(kwargs.get('vocab_file')))
         self.mxlen = kwargs.get('mxlen', -1)
@@ -1391,7 +1392,7 @@ class BERTEmbeddings(TensorFlowEmbeddings):
         return tf.compat.v1.placeholder(tf.int32, [None, None], name=name)
 
     def __init__(self, name, **kwargs):
-        super(BERTEmbeddings, self).__init__(name=name)
+        super().__init__(name=name)
 
         self.dsz = kwargs.get('dsz')
         self.bert_config = BertConfig.from_json_file(kwargs.get('bert_config'))
@@ -1442,16 +1443,15 @@ class BERTEmbeddings(TensorFlowEmbeddings):
 
 
 class BERTHubModel(TensorFlowEmbeddings):
-
-
+    TF_HUB_URL = "https://tfhub.dev/google/"
     @classmethod
     def create_placeholder(cls, name):
         # input_ids = tf.placeholder(tf.int32, shape=(None, FLAGS.max_seq_length), name='input_ids')
         return tf.compat.v1.placeholder(tf.int32, [None, None], name=name)
 
     def __init__(self, name, **kwargs):
-        super(BERTHubModel, self).__init__(name=name, **kwargs)
-        self.handle = kwargs.get('embed_file')
+        super().__init__(name=name, **kwargs)
+        self.handle = BERTHubModel.TF_HUB_URL + kwargs.get('embed_file')
         if 'vocab' in kwargs:
             self.vocab = kwargs['vocab']
         else:
@@ -1501,11 +1501,15 @@ class BERTHubModel(TensorFlowEmbeddings):
         return self.dsz
 
 
+    def detached_ref(self):
+        #FIXME!
+        return self
+
 @register_embeddings(name='bert-embed')
 class BERTHubEmbeddings(BERTHubModel):
 
     def __init__(self, name, **kwargs):
-        super(BERTHubEmbeddings, self).__init__(name, **kwargs)
+        super().__init__(name, **kwargs)
 
     def _output(self, bert_outputs):
         return bert_outputs["sequence_output"]
@@ -1515,7 +1519,7 @@ class BERTHubEmbeddings(BERTHubModel):
 class BERTHubPooling(BERTHubModel):
 
     def __init__(self, name, **kwargs):
-        super(BERTHubPooling, self).__init__(name, **kwargs)
+        super().__init__(name, **kwargs)
 
     def _output(self, bert_outputs):
         return bert_outputs["pooled_output"]

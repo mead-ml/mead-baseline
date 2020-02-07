@@ -35,14 +35,26 @@ export = exporter(__all__)
 
 export(str2bool)
 @export
-def import_user_module(module_name: str):
+def import_user_module(module_name: str, data_download_cache: Optional[str] = None):
     """Load a module that is in the python path
     :param model_name: (``str``) - the name of the module
     :return:
     """
-    #if data_download_cache:
-    #    dl = SingleFileDownloader(module_name, data_download_cache)
-    #    module_name = dl.download()
+    if data_download_cache:
+        if module_name.startswith("hub:") or module_name.startswith("http"):
+            if module_name.startswith("hub:"):
+                vec = module_name.split(":")
+                version = vec[1]
+                addons_literal = vec[2]
+                rest = ":".join(vec[3:])
+                if not rest.endswith(".py"):
+                    rest += ".py"
+                if addons_literal != "addons":
+                    raise Exception("We only support downloading addons right now")
+                module_name = f"http://raw.githubusercontent.com/mead-ml/hub/master/{version}/addons/{rest}"
+            module_name = AddonDownloader(module_name, data_download_cache, cache_ignore=True).download()
+
+    # TODO: get rid of this!
     addon_path = os.path.dirname(os.path.realpath(addons.__file__))
     idempotent_append(addon_path, sys.path)
     if any(module_name.endswith(suffix) for suffix in importlib.machinery.SOURCE_SUFFIXES):
@@ -317,14 +329,14 @@ def load_vocabs(directory):
 
 
 @export
-def load_vectorizers(directory):
+def load_vectorizers(directory: str, data_download_cache: Optional[str] = None):
     vectorizers_fname = find_files_with_prefix(directory, 'vectorizers')
     # Find the module list for the vectorizer so we can import them without
     # needing to bother the user with providing them
     vectorizers_modules = [x for x in vectorizers_fname if 'json' in x][0]
     modules = read_json(vectorizers_modules)
     for module in modules:
-        import_user_module(module)
+        import_user_module(module, data_download_cache)
     vectorizers_pickle = [x for x in vectorizers_fname if 'pkl' in x][0]
     with open(vectorizers_pickle, "rb") as f:
         vectorizers = pickle.load(f)
@@ -570,7 +582,7 @@ def extractor(filepath, cache_dir, extractor_func):
 
 
 @export
-def web_downloader(url):
+def web_downloader(url, path_to_save=None):
     # Use a class to simulate the nonlocal keyword in 2.7
     class Context: pg = None
     def _report_hook(count, block_size, total_size):
@@ -579,7 +591,8 @@ def web_downloader(url):
             Context.pg = create_progress_bar(length)
         Context.pg.update()
 
-    path_to_save = "/tmp/data.dload-{}".format(os.getpid())
+    if not path_to_save:
+        path_to_save = "/tmp/data.dload-{}".format(os.getpid())
     try:
         path_to_save, _ = urlretrieve(url, path_to_save, reporthook=_report_hook)
         Context.pg.done()
@@ -700,6 +713,43 @@ class SingleFileDownloader(Downloader):
                 dcache.update({url: dload_file})
                 write_json(dcache, os.path.join(self.data_download_cache, DATA_CACHE_CONF))
                 return dload_file
+        raise RuntimeError("the file [{}] is not in cache and can not be downloaded".format(file_loc))
+
+
+@export
+class AddonDownloader(Downloader):
+    ADDON_SUBPATH = 'addons'
+    """Grab addons and write them to the download cache
+    """
+    def __init__(self, dataset_file, data_download_cache, cache_ignore=False):
+        super().__init__(data_download_cache, cache_ignore)
+        self.dataset_file = dataset_file
+        self.data_download_cache = data_download_cache
+
+    def download(self):
+        file_loc = self.dataset_file
+        if is_file_correct(file_loc):
+            return file_loc
+        elif validate_url(file_loc):  # is it a web URL? check if exists in cache
+            url = file_loc
+            dcache_path = os.path.join(self.data_download_cache, DATA_CACHE_CONF)
+            dcache = read_json(dcache_path)
+            # If the file already exists in the cache
+            if url in dcache and is_file_correct(dcache[url], self.data_download_cache, url) and not self.cache_ignore:
+                logger.info("file for {} found in cache, not downloading".format(url))
+                return dcache[url]
+            # Otherwise, we want it to be placed in ~/.bl-cache/addons
+            else:  # download the file in the cache, update the json
+                cache_dir = self.data_download_cache
+                addon_path = os.path.join(cache_dir, AddonDownloader.ADDON_SUBPATH)
+                if not os.path.exists(addon_path):
+                    os.makedirs(addon_path)
+                path_to_save = os.path.join(addon_path, os.path.basename(file_loc))
+                logger.info("using {} as data/addons cache".format(cache_dir))
+                web_downloader(url, path_to_save)
+                dcache.update({url: path_to_save})
+                write_json(dcache, os.path.join(self.data_download_cache, DATA_CACHE_CONF))
+                return path_to_save
         raise RuntimeError("the file [{}] is not in cache and can not be downloaded".format(file_loc))
 
 

@@ -5,7 +5,7 @@ import os
 from argparse import ArgumentParser
 import baseline
 from eight_mile.utils import str2bool, write_json
-import eight_mile.embeddings
+import baseline.embeddings
 from eight_mile.tf.embeddings import *
 from eight_mile.optz import CompositeLRScheduler, WarmupLinearScheduler, CosineDecayScheduler
 from eight_mile.tf.optz import *
@@ -267,10 +267,10 @@ def load_embed_and_vocab(token_type, reader, dataset, dataset_key, d_model, cach
 
         # If we are not using chars, then use 'x' for both input and output
         tgt_key = 'x'
-        x_embedding = eight_mile.embeddings.load_embeddings('x',
-                                                            dsz=d_model,
-                                                            known_vocab=vocabs['x'],
-                                                            embed_type='positional')
+        x_embedding = baseline.embeddings.load_embeddings('x',
+                                                          dsz=d_model,
+                                                          known_vocab=vocabs['x'],
+                                                          embed_type='positional')
         vocabs['x'] = x_embedding['vocab']
         embeddings['x'] = x_embedding['embeddings']
 

@@ -812,7 +812,7 @@ class BidirectionalLanguageModelGraph(object):
 @register_vectorizer(name='elmo')
 class ELMoVectorizer(AbstractVectorizer):
     def __init__(self, transform_fn=None, **kwargs):
-        super(ELMoVectorizer, self).__init__(transform_fn=transform_fn)
+        super().__init__(transform_fn=transform_fn)
         self.mxlen = kwargs.get('mxlen', 128)
         self.mxwlen = ELMO_MXWLEN
         self.max_seen = 0
@@ -981,12 +981,17 @@ class ELMoEmbeddings(TensorFlowEmbeddings):
         return tf.compat.v1.placeholder('int32', shape=(None, None, ELMO_MXWLEN), name=name)
 
     def __init__(self, name, embed_file=None, known_vocab=None, **kwargs):
-        super(ELMoEmbeddings, self).__init__(name=name, **kwargs)
+        super().__init__(name=name, **kwargs)
 
         # options file
         self.weight_file = embed_file
-        elmo_config = embed_file.replace('weights.hdf5', 'options.json')
-        elmo_config = read_json(elmo_config)
+        if 'options' not in kwargs:
+            print('Warning: old style configuration')
+            elmo_config = embed_file.replace('weights.hdf5', 'options.json')
+            elmo_config = read_json(elmo_config)
+        else:
+            elmo_config = kwargs['options']
+            print(elmo_config)
         self.dsz = kwargs.get('dsz', 2*int(elmo_config['lstm']['projection_dim']))
         self.model = BidirectionalLanguageModel(elmo_config, self.weight_file)
         self.known_vocab = known_vocab
@@ -994,6 +999,10 @@ class ELMoEmbeddings(TensorFlowEmbeddings):
 
         assert self.dsz == 2*int(elmo_config['lstm']['projection_dim'])
 
+    def detached_ref(self):
+        # FIXME!
+        return self
+        
     @property
     def vsz(self):
         return self.vocab.size
@@ -1080,7 +1089,7 @@ class ELMoPooledEmbeddings(ELMoEmbeddings):
         return conv_pooling
 
     def __init__(self, name, **kwargs):
-        super(ELMoPooledEmbeddings, self).__init__(name, **kwargs)
+        super().__init__(name, **kwargs)
         operator = kwargs.get('pooling', 'mean')
         if operator == 'max':
             self.pool_op = tf.reduce_max
@@ -1093,6 +1102,6 @@ class ELMoPooledEmbeddings(ELMoEmbeddings):
             self.pool_op = tf.reduce_mean
 
     def encode(self, x=None):
-        embeddings = super(ELMoPooledEmbeddings, self).encode(x)
+        embeddings = super().encode(x)
         pooled = self.pool_op(embeddings, axis=1, keepdims=False, name='elmo_pooling')
         return pooled

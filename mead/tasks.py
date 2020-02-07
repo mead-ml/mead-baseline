@@ -15,6 +15,7 @@ from baseline.utils import (
     get_env_gpus,
     import_user_module,
     listify,
+    SingleFileDownloader
 )
 from baseline.utils import (
     show_examples,
@@ -79,6 +80,7 @@ class Backend(object):
             set_tf_log_level(os.getenv("MEAD_TF_LOG_LEVEL", "ERROR"))
 
         base_pkg_name = 'baseline.{}'.format(self.name)
+        # Backends may not be downloaded to the cache, they must exist locally
         mod = import_user_module(base_pkg_name)
         import_user_module('baseline.{}.optz'.format(self.name))
         import_user_module('baseline.{}.embeddings'.format(self.name))
@@ -142,7 +144,7 @@ class Task(object):
         """
         pass
 
-    def _create_vectorizers(self):
+    def _create_vectorizers(self, vecs_set=None):
         """Read the `features` section of the mead config.  This sections contains both embedding info and vectorizers
         Then use the vectorizer sub-section to instantiate the vectorizers and return them in a ``dict`` with name
         keyed off of the `features->name` and value of `vectorizer`
@@ -160,7 +162,18 @@ class Task(object):
                 raise ValueError('Feature names cannot contain "-". Found feature named "{}"'.format(key))
             if feature.get('primary', False) is True:
                 self.primary_key = key
-            vectorizer_section = feature.get('vectorizer', {'type': 'token1d'})
+
+            vectorizer_section = feature.get('vectorizer', {})
+            vecs_global_config = {'type': 'token1d'}
+            if 'label' in vectorizer_section:
+                vecs_global_config = vecs_set.get(vectorizer_section['label'])
+
+            vectorizer_section = {**vecs_global_config, **vectorizer_section}
+            vectorizer_section['data_download_cache'] = self.data_download_cache
+            vec_file = vectorizer_section.get('file')
+            if vec_file:
+                vec_file = SingleFileDownloader(vec_file, self.data_download_cache).download()
+                vectorizer_section['file'] = vec_file
             vectorizer_section['mxlen'] = vectorizer_section.get('mxlen', self.config_params.get('preproc', {}).get('mxlen', -1))
             vectorizer_section['mxwlen'] = vectorizer_section.get('mxwlen', self.config_params.get('preproc', {}).get('mxwlen', -1))
             if 'transform' in vectorizer_section:
@@ -179,7 +192,7 @@ class Task(object):
         config = TASK_REGISTRY[task](mead_config)
         return config
 
-    def read_config(self, config_params, datasets_index, **kwargs):
+    def read_config(self, config_params, datasets_index, vecs_index, **kwargs):
         """
         Read the config file and the datasets index
 
@@ -192,6 +205,8 @@ class Task(object):
         """
         datasets_index = read_config_file_or_json(datasets_index, 'datasets')
         datasets_set = index_by_label(datasets_index)
+        vecs_index = read_config_file_or_json(vecs_index, 'vecs')
+        vecs_set = index_by_label(vecs_index)
         self.config_params = config_params
         config_file = deepcopy(config_params)
         basedir = self.get_basedir()
@@ -208,12 +223,15 @@ class Task(object):
         # replace dataset in config file by the latest dataset label, this will be used by some reporting hooks
         config_file['dataset'] = self.dataset['label']
         self._configure_reporting(config_params.get('reporting', {}), config_file=config_file, **kwargs)
-        self.reader = self._create_task_specific_reader()
+        self.reader = self._create_task_specific_reader(vecs_set)
 
     def _load_user_modules(self):
+        # User modules can be downloaded from hub or HTTP automatically if they are defined in form
+        # http://path/to/module_name.py
+        # hub:v1:addons:module_name
         if 'modules' in self.config_params:
             for addon in self.config_params['modules']:
-                import_user_module(addon) #, self.data_download_cache)
+                import_user_module(addon, self.data_download_cache)
 
     def initialize(self, embeddings_index):
         """
@@ -224,8 +242,8 @@ class Task(object):
         """
         pass
 
-    def _create_task_specific_reader(self):
-        self._create_vectorizers()
+    def _create_task_specific_reader(self, vecs_set=None):
+        self._create_vectorizers(vecs_set)
         reader_params = self.config_params['reader'] if 'reader' in self.config_params else self.config_params['loader']
         reader_params['clean_fn'] = reader_params.get('clean_fn', self.config_params.get('preproc', {}).get('clean_fn'))
         if reader_params['clean_fn'] is not None and self.config_params['dataset'] != 'SST2':
@@ -333,36 +351,74 @@ class Task(object):
         :param features: The `features` sub-section of the mead config
         :return: Returns a ``tuple`` comprised of a ``dict`` of (`feature name`, `Embedding`) and an updated vocab
         """
-        unif = self.config_params.get('unif', 0.1)
-        keep_unused = self.config_params.get('keep_unused', False)
+
 
         embeddings_map = {}
         out_vocabs = {}
+
+
         for feature in features:
+            # Get the block from the features section with key `embeddings`
             embeddings_section = feature['embeddings']
+
+            # The name is at the top level for the feature block of mead config
             name = feature['name']
+
+            # Get the label out of the embeddings section in the features block of mead config
             embed_label = embeddings_section.get('label', None)
+
+            # Get the type of embedding out of the embeddings section in the features block of mead config
             embed_type = embeddings_section.get('type', 'default')
-            embeddings_section['unif'] = embeddings_section.get('unif', unif)
-            embeddings_section['keep_unused'] = embeddings_section.get('keep_unused', keep_unused)
+
+            # Backwards compat, copy from main block if not present locally
+            embeddings_section['unif'] = embeddings_section.get('unif', self.config_params.get('unif', 0.1))
+
+            # Backwards compat, copy from main block if not present locally
+            embeddings_section['keep_unused'] = embeddings_section.get('keep_unused',
+                                                                       self.config_params.get('keep_unused', False))
+
+            # Overlay any backend parameters
             if self.backend.params is not None:
                 for k, v in self.backend.params.items():
                     embeddings_section[k] = v
             if embed_label is not None:
                 # Allow local overrides to uniform initializer
 
-                embed_file = embeddings_set[embed_label]['file']
-                embed_dsz = embeddings_set[embed_label]['dsz']
-                embed_sha1 = embeddings_set[embed_label].get('sha1', None)
-                embed_file = EmbeddingDownloader(embed_file, embed_dsz, embed_sha1, self.data_download_cache).download()
+                # This is from the embeddings index
+                embeddings_global_config = embeddings_set[embed_label]
+                if 'type' in embeddings_global_config:
+                    embed_type = embeddings_global_config['type']
+                embed_file = embeddings_global_config['file']
+                embed_dsz = embeddings_global_config['dsz']
+                embed_sha1 = embeddings_global_config.get('sha1', None)
+                # Should we grab vocab here too?
+                embed_model = embeddings_global_config.get('model', {})
+                if 'dsz' not in embed_model:
+                    embed_model['dsz'] = embed_dsz
+                embeddings_section = {**embed_model, **embeddings_section}
+                try:
 
-                embedding_bundle = baseline.embeddings.load_embeddings(name, embed_file=embed_file, known_vocab=vocabs[name], embed_type=embed_type, **embeddings_section)
+                    embed_file = EmbeddingDownloader(embed_file, embed_dsz, embed_sha1, self.data_download_cache).download()
+                except Exception as e:
+                    pass
+
+                embedding_bundle = baseline.embeddings.load_embeddings(name,
+                                                                       embed_file=embed_file,
+                                                                       known_vocab=vocabs[name],
+                                                                       embed_type=embed_type,
+                                                                       data_download_cache=self.data_download_cache,
+                                                                       **embeddings_section)
 
                 embeddings_map[name] = embedding_bundle['embeddings']
                 out_vocabs[name] = embedding_bundle['vocab']
-            else:
+            else:  # if there is no label given, assume we need random initialization vectors
                 dsz = embeddings_section.pop('dsz')
-                embedding_bundle = baseline.embeddings.load_embeddings(name, dsz=dsz, known_vocab=vocabs[name], embed_type=embed_type, **embeddings_section)
+                embedding_bundle = baseline.embeddings.load_embeddings(name,
+                                                                       dsz=dsz,
+                                                                       known_vocab=vocabs[name],
+                                                                       embed_type=embed_type,
+                                                                       data_download_cache=self.data_download_cache,
+                                                                       **embeddings_section)
                 embeddings_map[name] = embedding_bundle['embeddings']
                 out_vocabs[name] = embedding_bundle['vocab']
 
@@ -741,8 +797,8 @@ class LanguageModelingTask(Task):
     def task_name(cls):
         return 'lm'
 
-    def _create_task_specific_reader(self):
-        self._create_vectorizers()
+    def _create_task_specific_reader(self, vecs_set=None):
+        self._create_vectorizers(vecs_set)
 
         reader_params = self.config_params['reader'] if 'reader' in self.config_params else self.config_params['loader']
         reader_params['nctx'] = reader_params.get('nctx', reader_params.get('nbptt', self.config_params.get('nctx', self.config_params.get('nbptt', 35))))

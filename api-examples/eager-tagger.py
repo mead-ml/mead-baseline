@@ -5,7 +5,7 @@ from eight_mile.utils import listify
 import baseline
 import eight_mile.tf.layers as L
 from eight_mile.utils import get_version
-import eight_mile.embeddings
+import baseline.embeddings
 from eight_mile.tf.optz import EagerOptimizer
 from baseline.tf.tfy import SET_TRAIN_FLAG
 import tensorflow as tf
@@ -95,7 +95,7 @@ labels = reader.label2index
 embeddings = dict()
 for k, v in feature_desc.items():
     embed_config = v['embed']
-    embeddings_for_k = eight_mile.embeddings.load_embeddings(k, known_vocab=vocabs[k], **embed_config)
+    embeddings_for_k = baseline.embeddings.load_embeddings(k, known_vocab=vocabs[k], **embed_config)
     embeddings[k] = embeddings_for_k['embeddings']
     # Reset the vocab to the embeddings one
     vocabs[k] = embeddings_for_k['vocab']
