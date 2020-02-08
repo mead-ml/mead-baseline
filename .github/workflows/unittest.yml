@@ -47,6 +47,27 @@ jobs:
         cd layers
         pip install -e .
         cd ..
+        pip install tensorflow_addons==0.6.0
+        pip install -e .[test,yaml]
+    - name: Unit Test Tf ${{matrix.tf-version}}
+      run: |
+        pytest --forked
+
+  test-tf-2-1:
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 4
+      matrix:
+        tf-version:
+        - 2.0.0
+    container: tensorflow/tensorflow:${{matrix.tf-version}}-py3
+    steps:
+    - uses: actions/checkout@v1
+    - name: Install Baseline
+      run: |
+        cd layers
+        pip install -e .
+        cd ..
         pip install -e .[test,yaml,tf2]
     - name: Unit Test Tf ${{matrix.tf-version}}
       run: |
