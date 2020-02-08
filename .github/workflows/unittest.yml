@@ -59,7 +59,7 @@ jobs:
       max-parallel: 4
       matrix:
         tf-version:
-        - 2.0.0
+        - 2.1.0
     container: tensorflow/tensorflow:${{matrix.tf-version}}-py3
     steps:
     - uses: actions/checkout@v1
@@ -87,7 +87,7 @@ jobs:
       run: |
         cd layers
         pip install -e .
-        cd ..      
+        cd ..
         pip install -e .[test,yaml]
     - name: Unit Test PyTorch ${{matrix.pyt-version}}
       run: |
