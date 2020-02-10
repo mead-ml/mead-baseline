@@ -392,6 +392,8 @@ class SavableFastBPE:
         return self.bpe.apply(sentences)
 
 
+@export
+@register_vectorizer(name='bpe1d')
 class BPEVectorizer1D(AbstractVectorizer):
     """Define a Baseline Vectorizer for BPE using fastBPE (https://github.com/glample/fastBPE)
 
