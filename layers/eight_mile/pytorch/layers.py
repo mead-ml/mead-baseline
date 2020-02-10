@@ -1554,7 +1554,6 @@ class CRF(nn.Module):
         trans_score = trans[[indices[1], indices[0]]].squeeze(0)
         # Pull out the values of the tags from the unary scores.
         unary_score = unary.gather(2, tags[1:].unsqueeze(-1)).squeeze(-1)
-
         mask = sequence_mask(lengths).transpose(0, 1).to(tags.device)
         scores = unary_score + trans_score
         scores = scores.masked_fill(mask == MASK_FALSE, 0)

@@ -5,7 +5,7 @@ from itertools import chain
 from collections import Counter
 import numpy as np
 import baseline.data
-from baseline.vectorizers import Dict1DVectorizer, GOVectorizer, Token1DVectorizer
+from baseline.vectorizers import Dict1DVectorizer, GOVectorizer, Token1DVectorizer, create_vectorizer
 from baseline.utils import import_user_module, revlut, exporter, optional_params, Offsets, listify
 
 __all__ = []
@@ -272,12 +272,16 @@ class SeqPredictReader(object):
         self.vectorizers = vectorizers
         self.trim = trim
         self.truncate = truncate
+        label_vectorizer_spec = kwargs.get('label_vectorizer', None)
+        if label_vectorizer_spec:
+            self.label_vectorizer = create_vectorizer(**label_vectorizer_spec)
+        else:
+            self.label_vectorizer = Dict1DVectorizer(fields='y', mxlen=mxlen)
         self.label2index = {
             Offsets.VALUES[Offsets.PAD]: Offsets.PAD,
             Offsets.VALUES[Offsets.GO]: Offsets.GO,
             Offsets.VALUES[Offsets.EOS]: Offsets.EOS
         }
-        self.label_vectorizer = Dict1DVectorizer(fields='y', mxlen=mxlen)
 
     def build_vocab(self, files, **kwargs):
         pre_vocabs = None
@@ -312,6 +316,7 @@ class SeqPredictReader(object):
 
         vocabs = _filter_vocab(vocabs, kwargs.get('min_f', {}))
         base_offset = len(self.label2index)
+        labels.pop(Offsets.VALUES[Offsets.PAD])
         for i, k in enumerate(labels.keys()):
             self.label2index[k] = i + base_offset
         if pre_vocabs:
