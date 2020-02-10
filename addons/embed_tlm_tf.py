@@ -5,7 +5,7 @@ import tensorflow as tf
 from eight_mile.tf.serialize import load_tlm_npz
 from eight_mile.tf.layers import TransformerEncoderStack
 from eight_mile.tf.layers import EmbeddingsStack, subsequent_mask
-from eight_mile.embeddings import register_embeddings
+from baseline.embeddings import register_embeddings
 from eight_mile.utils import Offsets, read_json
 from baseline.vectorizers import register_vectorizer, AbstractVectorizer
 from eight_mile.tf.embeddings import TensorFlowEmbeddings, PositionalLookupTableEmbeddings
@@ -198,11 +198,11 @@ class TransformerLMPooledEmbeddings(TransformerLMEmbeddings):
         return self.pooling_op(inputs, z)
 
 
-@register_embeddings(name='tlm-words-embed-pooled')
-class TransformerLMPooledEmbeddingsModel(TensorFlowEmbeddingsModel):
+@register_embeddings(name='tlm-words-embed')
+class TransformerLMEmbeddingsModel(TensorFlowEmbeddingsModel):
     def __init__(self, name=None, **kwargs):
         super().__init__(name, **kwargs)
-        self.embedding_layer = TransformerLMPooledEmbeddings(name=self._name, **kwargs)
+        self.embedding_layer = TransformerLMEmbeddings(name=self._name, **kwargs)
 
     @classmethod
     def create_placeholder(cls, name):
@@ -227,6 +227,13 @@ class TransformerLMPooledEmbeddingsModel(TensorFlowEmbeddingsModel):
 
     def detached_ref(self):
         return self
+
+
+@register_embeddings(name='tlm-words-embed-pooled')
+class TransformerLMPooledEmbeddingsModel(TransformerLMEmbeddingsModel):
+    def __init__(self, name=None, **kwargs):
+        super().__init__(name, **kwargs)
+        self.embedding_layer = TransformerLMPooledEmbeddings(name=self._name, **kwargs)
 
 
 def _identity(x):
