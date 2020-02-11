@@ -5,13 +5,11 @@ from collections import Counter
 
 
 from baseline.utils import read_json
-from baseline.pytorch.transformer import TransformerEncoderStack, subsequent_mask
-from baseline.pytorch.embeddings import PositionalLookupTableEmbeddingsModel
+from eight_mile.pytorch.layers import TransformerEncoderStack, subsequent_mask
+from eight_mile.pytorch.embeddings import PyTorchEmbeddings, PositionalLookupTableEmbeddings
 from baseline.embeddings import register_embeddings
-from baseline.pytorch.embeddings import PyTorchEmbeddingsModel, PyTorchEmbeddings
+from baseline.pytorch.embeddings import PyTorchEmbeddingsModel
 from baseline.vectorizers import register_vectorizer, AbstractVectorizer
-from pytorch_pretrained_bert.tokenization import BertTokenizer
-from pytorch_pretrained_bert.modeling import BertModel
 from baseline.pytorch.torchy import *
 from eight_mile.pytorch.serialize import load_tlm_npz
 
@@ -188,7 +186,7 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
         pdrop = kwargs.get('dropout', 0.1)
         self.d_model = int(kwargs.get('dsz', kwargs.get('d_model', 410)))
         d_ff = int(kwargs.get('d_ff', 2100))
-        x_embedding = PositionalLookupTableEmbeddingsModel('pos', vsz=self.vsz, dsz=self.d_model)
+        x_embedding = PositionalLookupTableEmbeddings(vsz=self.vsz, dsz=self.d_model)
         self.dsz = self.init_embed({'x': x_embedding})
         self.proj_to_dsz = pytorch_linear(self.dsz, self.d_model) if self.dsz != self.d_model else _identity
         self.transformer = TransformerEncoderStack(num_heads, d_model=self.d_model, pdrop=pdrop, scale=True, layers=layers, d_ff=d_ff)
@@ -233,7 +231,8 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
         input_mask = input_mask & self._model_mask(x.shape[1]).type_as(input_mask)
         embedding = self.embed(x)
         embedding = self.proj_to_dsz(embedding)
-        z = self.get_output(x, self.transformer((embedding, input_mask)))
+        transformer_out = self.transformer((embedding, input_mask))
+        z = self.get_output(x, transformer_out)
         return z
 
     def get_output(self, inputs, z):

@@ -150,18 +150,19 @@ class TransformerLMEmbeddings(TensorFlowEmbeddings):
         """This function creates the mask that controls which token to be attended to depending on the model. A causal
         LM should have a subsequent mask; and a masked LM should have no mask."""
         if self.mlm:
-            return tf.fill([1, 1, nctx, nctx], True)
+            return tf.fill([1, 1, nctx, nctx], 1)
         else:
-            return tf.equal(subsequent_mask(nctx), 1)
+            return subsequent_mask(nctx)
 
     def encode(self, x):
         # the following line masks out the attention to padding tokens
-        input_mask = tf.expand_dims(tf.expand_dims(tf.not_equal(x, 0), 1), 1)
+        input_mask = tf.expand_dims(tf.expand_dims(tf.cast(tf.not_equal(x, 0), tf.float32), 1), 1)
         # the following line builds mask depending on whether it is a causal lm or masked lm
-        input_mask = tf.logical_and(input_mask, self._model_mask(x.shape[1]))
+        input_mask = tf.multiply(input_mask, self._model_mask(x.shape[1]))
         embedding = self.embed(x)
         embedding = self.proj_to_dsz(embedding)
-        z = self.get_output(x, self.transformer((embedding, input_mask)))
+        transformer_out = self.transformer((embedding, input_mask))
+        z = self.get_output(x, transformer_out)
         return z
 
     def get_output(self, inputs, z):

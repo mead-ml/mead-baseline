@@ -1937,7 +1937,7 @@ class SeqScaledDotProductAttention(SequenceSequenceAttention):
         scores *= tf.math.rsqrt(tf.cast(d_k, tf.float32))
 
         if mask is not None:
-            scores = masked_fill(scores, mask == 0, -1e9)
+            scores = masked_fill(scores, tf.equal(mask, 0), -1e9)
 
         return tf.nn.softmax(scores, name="attention_weights")
 
