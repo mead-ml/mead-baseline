@@ -404,6 +404,16 @@ class LanguageModelService(Service):
         return super().load(bundle, **kwargs)
 
     def conditional(self, context, target: Optional[List[str]] = None, limit: Optional[int] = None, raw: bool = False, **kwargs):
+        """Get the conditional probabilities of the next tokens.
+
+        :param context: The tokens
+        :param target: A list of values that you want the conditional prob of P(target | context)
+        :param limit: The number of (next word, score) pairs to return
+        :param raw: Should you just return the raw softmax values? This will override the limit argument
+
+        :returns: The conditional probs of a specific target word if `target` is defined, the top limit softmax scores
+            for the next step, or the raw softmax numpy array if `raw` is set
+        """
         if kwargs.get('preproc', None) is not None:
             logger.warning("Warning: Passing `preproc` to `LanguageModelService.predict` is deprecated.")
         tokens_batch = self.batch_input(context)
@@ -425,16 +435,22 @@ class LanguageModelService(Service):
 
     @staticmethod
     def pad_eos(tokens_batch):
+        """Add <EOS> tokens to both the beginning of each item in the batch.
+
+        Note:
+            When training the language models we have and <EOS> token between each sentence we use
+            that here to represent these tokens ending where they do. Because each sentence end with
+            <EOS> the next sentence always starts with the <EOS> so we add that here too.
+        """
         return [[Offsets.VALUES[Offsets.EOS]] + t + [Offsets.VALUES[Offsets.EOS]] for t in tokens_batch]
 
     def joint(self, tokens, **kwargs):
         """Score tokens with a language model.
 
         Note:
-            Right now the join probability isn't quite right, it is seeding the model
-            with the first token and the values predicted are the next tokens so it
-            includes a score of only the later tokens as well as the prediction of the
-            next token
+            This is not quite the correct joint probability I think, the joint prob of P(wn, wn-1, ... w1)
+            is P(w_1) * \pi_2^n P(w_i| w_i-1, ... w_1) but here we have the P(w_1 | <EOS>) which is the
+            prob of w_1 staring a string, not quite the same as the unconditional probability.
 
         :tokens: A sequence of tokens
 
