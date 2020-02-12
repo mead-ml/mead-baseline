@@ -214,7 +214,7 @@ class ParallelConv(tf.keras.layers.Layer):
         self.activation = get_activation(activation)
 
         motsz = outsz
-        if not isinstance(outsz, list):
+        if not is_sequence(outsz):
             motsz = [outsz] * len(filtsz)
 
         for fsz, cmotsz in zip(filtsz, motsz):
