@@ -102,6 +102,12 @@ class LanguageModelBase(nn.Module, LanguageModel):
         decoded, hidden = self.decode(emb, hidden)
         return self.output(decoded), hidden
 
+    def predict(self, batch_dict):
+        batch_dict = self.make_input(batch_dict)
+        hidden = batch_dict.get('h')
+        step_softmax, _ = self(batch_dict, hidden)
+        return F.softmax(step_softmax, dim=-1)
+
     def init_output(self, vsz, **kwargs):
         unif = float(kwargs.get('unif', 0.0))
         do_weight_tying = bool(kwargs.get('tie_weights', False))

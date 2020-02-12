@@ -399,6 +399,33 @@ class LanguageModelService(Service):
         kwargs['batchsz'] = 1
         return super().load(bundle, **kwargs)
 
+    def score(self, tokens, **kwargs):
+        if kwargs.get('preproc', None) is not None:
+            logger.warning("Warning: Passing `preproc` to `LanguageModelService.predict` is deprecated.")
+        tokens_batch = self.batch_input(tokens)
+        self.prepare_vectorizers(tokens_batch)
+        batch_dict = self.vectorize(tokens_batch)
+        softmax_tokens = self.model.predict(batch_dict).detach().cpu().numpy()
+
+        values = batch_dict[self.model.tgt_key]
+
+        prob_type = kwargs.get('prob', 'joint')
+        # Numpy doesn't have a gather so we can't do this very efficiently
+        # scores = torch.gather(softmax_tokens, -1, values.unsqueeze(-1))
+        scores = []
+        for soft, value in zip(softmax_tokens, values):
+            tokens = []
+            for tok, val in zip(soft, value):
+                tokens.append(tok[val])
+            scores.append(tokens)
+        scores = np.array(scores)
+        if prob_type == "conditional":
+            return scores[:, -1]
+        elif prob_type == "joint":
+            return np.exp(np.sum(np.log(scores), axis=1))
+        else:
+            raise ValueError(f"Only prob types `conditional` and `joint` supported, got {prob_type}")
+
     # Do a greedy decode for now, everything else will be super slow
     def predict(self, tokens, **kwargs):
         mxlen = kwargs.get('mxlen', 10)
