@@ -211,36 +211,36 @@ def test_score_sentence_shape(generate_batch):
     assert score.shape == torch.Size([unary.size(1)])
 
 
-# def test_neg_log_loss(generate_batch):
-#    unary, tags, lengths = generate_batch
-#    h = unary.size(2)
-#    crf = CRF(h, batch_first=False)
-#    trans = torch.rand(h, h)
-#    crf.transitions_p.data = trans.unsqueeze(0)
-#    nll = crf.neg_log_loss(unary, tags, lengths)
+def test_neg_log_loss(generate_batch):
+   unary, tags, lengths = generate_batch
+   h = unary.size(2)
+   crf = CRF(h, batch_first=False)
+   trans = torch.rand(h, h)
+   crf.transitions_p.data = trans.unsqueeze(0)
+   nll = crf.neg_log_loss(unary, tags, lengths)
 
-#    new_trans = build_trans(trans)
-#    unary = unary.transpose(0, 1)
-#    tags = tags.transpose(0, 1)
-#    scores = []
-#    for u, t, l in zip(unary, tags, lengths):
-#        emiss = build_emission(u[:l])
-#        golds = t[:l].tolist()
-#        scores.append(explicit_nll(emiss, new_trans, golds, Offsets.GO, Offsets.EOS))
-#    gold_scores = np.array(scores)
-#    np.testing.assert_allclose(nll.detach().numpy(), gold_scores, rtol=1e-6)
+   new_trans = build_trans(trans)
+   unary = unary.transpose(0, 1)
+   tags = tags.transpose(0, 1)
+   scores = []
+   for u, t, l in zip(unary, tags, lengths):
+       emiss = build_emission(u[:l])
+       golds = t[:l].tolist()
+       scores.append(explicit_nll(emiss, new_trans, golds, Offsets.GO, Offsets.EOS))
+   gold_scores = np.mean(np.array(scores))
+   np.testing.assert_allclose(nll.detach().numpy(), gold_scores, rtol=1e-6)
 
 
-# def test_neg_log_loss_batch_stable(generate_examples_and_batch):
-#    i1, t1, l1, i2, t2, l2, i, t, l = generate_examples_and_batch
-#    h = i1.size(2)
-#    crf = CRF(h, batch_first=False)
-#    crf.transitions_p.data = torch.rand(1, h, h)
-#    nll1 = crf.neg_log_loss(i1, t1, l1)
-#    nll2 = crf.neg_log_loss(i2, t2, l2)
-#    one_x_one = torch.cat([nll1, nll2], dim=0)
-#    batched = crf.neg_log_loss(i, t, l)
-#    np.testing.assert_allclose(one_x_one.detach().numpy(), batched.detach().numpy())
+def test_neg_log_loss_batch_stable(generate_examples_and_batch):
+   i1, t1, l1, i2, t2, l2, i, t, l = generate_examples_and_batch
+   h = i1.size(2)
+   crf = CRF(h, batch_first=False)
+   crf.transitions_p.data = torch.rand(1, h, h)
+   nll1 = crf.neg_log_loss(i1, t1, l1)
+   nll2 = crf.neg_log_loss(i2, t2, l2)
+   one_x_one = (nll1 + nll2) / 2
+   batched = crf.neg_log_loss(i, t, l)
+   np.testing.assert_allclose(one_x_one.detach().numpy(), batched.detach().numpy())
 
 
 def test_forward(generate_batch):
@@ -281,20 +281,20 @@ def test_forward_shape(generate_batch):
     assert fwd.shape == torch.Size([unary.size(1)])
 
 
-# def test_decode_batch_stable(generate_examples_and_batch):
-#    i1, _, l1, i2, _, l2, i, _, l = generate_examples_and_batch
-#    h = i1.size(2)
-#    crf = CRF(h, batch_first=False)
-#    crf.transitions_p.data = torch.rand(1, h, h)
-#    p1 = crf.decode(i1, l1)
-#    p2 = crf.decode(i2, l2)
-#    pad = torch.zeros(p1.size(0) - p2.size(0), 1, dtype=torch.long)
-#    one_x_one_p = torch.cat([p1, torch.cat([p2, pad], dim=0)], dim=1)
-#    one_x_one_s = torch.cat([s1, s2], dim=0)
-#    batched_p crf.decode(i, l)
-#    #np.testing.assert_allclose(one_x_one_s.detach().numpy(), batched_s.detach().numpy())
-#    for p1, p2 in zip(one_x_one_p, batched_p):
-#        np.testing.assert_allclose(p1.detach().numpy(), p2.detach().numpy())
+def test_decode_batch_stable(generate_examples_and_batch):
+   i1, _, l1, i2, _, l2, i, _, l = generate_examples_and_batch
+   h = i1.size(2)
+   crf = CRF(h, batch_first=False)
+   crf.transitions_p.data = torch.rand(1, h, h)
+   p1, s1 = crf.decode(i1, l1)
+   p2, s2 = crf.decode(i2, l2)
+   pad = torch.zeros(p1.size(0) - p2.size(0), 1, dtype=torch.long)
+   one_x_one_p = torch.cat([p1, torch.cat([p2, pad], dim=0)], dim=1)
+   one_x_one_s = torch.cat([s1, s2], dim=0)
+   batched_p, batched_s =  crf.decode(i, l)
+   np.testing.assert_allclose(one_x_one_s.detach().numpy(), batched_s.detach().numpy())
+   for p1, p2 in zip(one_x_one_p, batched_p):
+       np.testing.assert_allclose(p1.detach().numpy(), p2.detach().numpy())
 
 
 def test_decode_shape_crf(generate_batch):
