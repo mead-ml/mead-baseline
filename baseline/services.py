@@ -400,31 +400,52 @@ class LanguageModelService(Service):
         return super().load(bundle, **kwargs)
 
     def score(self, tokens, **kwargs):
+        """Score tokens with a language model.
+
+        Note:
+            Right now the join probability isn't quite right, it is seeding the model
+            with the first token and the values predicted are the next tokens so it
+            includes a score of only the later tokens as well as the prediction of the
+            next token
+
+            The conditional probability is also a bit wrong because it is being seeded
+            with the value of the first token instead of a <GO> token
+
+        :tokens: A sequence of tokens
+        :prob: Should you get the `joint` score or `conditional` probs
+
+        returns: The score based on the probability type
+        """
         if kwargs.get('preproc', None) is not None:
             logger.warning("Warning: Passing `preproc` to `LanguageModelService.predict` is deprecated.")
         tokens_batch = self.batch_input(tokens)
         self.prepare_vectorizers(tokens_batch)
         batch_dict = self.vectorize(tokens_batch)
-        softmax_tokens = self.model.predict(batch_dict).detach().cpu().numpy()
+        softmax_tokens = self.model.predict(batch_dict)
 
         values = batch_dict[self.model.tgt_key]
 
-        prob_type = kwargs.get('prob', 'joint')
         # Numpy doesn't have a gather so we can't do this very efficiently
         # scores = torch.gather(softmax_tokens, -1, values.unsqueeze(-1))
         scores = []
         for soft, value in zip(softmax_tokens, values):
             tokens = []
             for tok, val in zip(soft, value):
-                tokens.append(tok[val])
+                tokens.append(tok[val].item())
             scores.append(tokens)
-        scores = np.array(scores)
-        if prob_type == "conditional":
-            return scores[:, -1]
-        elif prob_type == "joint":
+        return self.format_score_output(np.array(scores), **kwargs)
+
+    def format_score_output(self, predicted, prob="joint", **kwargs):
+        scores = predicted
+        if prob == "conditional":
+            # scores[-1] is the probs of the next token so grab -2 to get the scores
+            # for the last token in the sequence
+            return scores[:, -2]
+        elif prob == "joint":
+            logger.warning("Warning: The `joint` probability isn't well formed right now and should be used with a grain of salt")
             return np.exp(np.sum(np.log(scores), axis=1))
         else:
-            raise ValueError(f"Only prob types `conditional` and `joint` supported, got {prob_type}")
+            raise ValueError(f"Only prob types `conditional` and `joint` supported, got {prob}")
 
     # Do a greedy decode for now, everything else will be super slow
     def predict(self, tokens, **kwargs):
