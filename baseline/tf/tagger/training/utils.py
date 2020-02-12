@@ -5,7 +5,7 @@ import numpy as np
 import tensorflow as tf
 import logging
 from eight_mile.tf.optz import optimizer
-from eight_mile.utils import to_spans, listify, revlut, span_f1, per_entity_f1, conlleval_output, write_sentence_conll
+from eight_mile.utils import to_spans, Offsets, revlut, span_f1, per_entity_f1, conlleval_output, write_sentence_conll
 
 from baseline.progress import create_progress_bar
 from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
@@ -88,7 +88,9 @@ class TaggerEvaluatorTf(object):
             sentence = guess[b][:length]
             # truth[b] is padded, cutting at :length gives us back true length
             gold = truth[b][:length]
-            correct_labels += np.sum(np.equal(sentence, gold))
+
+            sentence[gold == Offsets.PAD] = Offsets.PAD
+            correct_labels += np.sum(np.equal(sentence[gold != Offsets.PAD], gold[gold != Offsets.PAD]))
             total_labels += length
 
             gold_chunks.append(set(to_spans(gold, self.idx2label, self.span_type, self.verbose)))

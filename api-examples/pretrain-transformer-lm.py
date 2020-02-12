@@ -12,7 +12,7 @@ import baseline.embeddings
 from eight_mile.optz import *
 from eight_mile.pytorch.optz import *
 from baseline.pytorch.lm import TransformerLanguageModel
-from baseline.vectorizers import Char2DVectorizer, Token1DVectorizer, AbstractVectorizer
+from baseline.vectorizers import Char2DVectorizer, Token1DVectorizer, AbstractVectorizer, BPEVectorizer1D
 from baseline.utils import DataDownloader
 import numpy as np
 import codecs
@@ -94,96 +94,6 @@ X_CHAR_EMBEDDINGS = {
 }
 
 BERT_TOKENIZER = None
-
-
-class SavableFastBPE(object):
-    def __init__(self, codes_path, vocab_path):
-        from fastBPE import fastBPE
-        self.codes = open(codes_path, 'rb').read()
-        self.vocab = open(vocab_path, 'rb').read()
-        self.bpe = fastBPE(codes_path, vocab_path)
-
-    def __getstate__(self):
-        return {'codes': self.codes, 'vocab': self.vocab}
-
-    def __setstate__(self, state):
-        with tempfile.NamedTemporaryFile() as codes, tempfile.NamedTemporaryFile() as vocab:
-            codes.write(state['codes'])
-            vocab.write(state['vocab'])
-            self.bpe = fastBPE(codes.name, vocab.name)
-
-    def apply(self, sentences):
-        return self.bpe.apply(sentences)
-
-
-class BPEVectorizer1D(AbstractVectorizer):
-    """Define a Baseline Vectorizer for BPE using fastBPE (https://github.com/glample/fastBPE)
-
-    If you use tokens=bpe, this vectorizer is used, and so then there is a
-    dependency on fastBPE
-
-    To use BPE, we assume that a Dictionary of codes and vocab was already created
-
-    """
-    def __init__(self, **kwargs):
-        """Loads a BPE tokenizer"""
-        super(BPEVectorizer1D, self).__init__(kwargs.get('transform_fn'))
-        self.max_seen = 128
-        self.model_file = kwargs.get('model_file')
-        self.vocab_file = kwargs.get('vocab_file')
-        self.tokenizer = SavableFastBPE(self.model_file, self.vocab_file)
-        self.mxlen = kwargs.get('mxlen', -1)
-        self.vocab = {k: i for i, k in enumerate(self.read_vocab(self.vocab_file))}
-
-    def read_vocab(self, s):
-        vocab = [] + Offsets.VALUES + ['[CLS]', '[MASK]']
-        with open(s, "r") as f:
-            for line in f.readlines():
-                token = line.split()[0].strip()
-                vocab.append(token)
-        return vocab
-
-    def count(self, tokens):
-        seen = 0
-        counter = Counter()
-        for tok in self.iterable(tokens):
-            counter[tok] += 1
-            seen += 1
-        self.max_seen = max(self.max_seen, seen)
-        return counter
-
-    def iterable(self, tokens):
-        for t in tokens:
-            if t in Offsets.VALUES:
-                yield t
-            if t == '<unk>':
-                yield Offsets.VALUES[Offsets.UNK]
-            if t == '<eos>':
-                yield Offsets.VALUES[Offsets.EOS]
-            else:
-                subwords = self.tokenizer.apply([t])[0].split()
-                for x in subwords:
-                    yield x
-
-    def _next_element(self, tokens, vocab):
-        for atom in self.iterable(tokens):
-            value = vocab.get(atom, vocab[Offsets.VALUES[Offsets.UNK]])  # This shouldnt actually happen
-            yield value
-
-    def run(self, tokens, vocab):
-        if self.mxlen < 0:
-            self.mxlen = self.max_seen
-        vec1d = np.zeros(self.mxlen, dtype=np.long)
-        for i, atom in enumerate(self._next_element(tokens, vocab)):
-            if i == self.mxlen:
-                i -= 1
-                break
-            vec1d[i] = atom
-        valid_length = i + 1
-        return vec1d, valid_length
-
-    def get_dims(self):
-        return self.mxlen,
 
 
 class WordPieceVectorizer1D(AbstractVectorizer):

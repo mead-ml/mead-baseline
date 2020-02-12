@@ -65,16 +65,17 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
             sentence_length = sentence_lengths[b]
             gold = truth_n[b, :sentence_length]
             sentence = sentence[:sentence_length]
-            correct_labels += np.sum(np.equal(sentence, gold))
+
+            correct_labels += np.sum(np.equal(sentence[gold != Offsets.PAD], gold[gold != Offsets.PAD]))
             total_labels += sentence_length
-            gold_chunks.append(set(to_spans(gold, self.idx2label, self.span_type, self.verbose)))
-            pred_chunks.append(set(to_spans(sentence, self.idx2label, self.span_type, self.verbose)))
+            gold_chunks.append(set(to_spans(gold[gold != Offsets.PAD], self.idx2label, self.span_type, self.verbose)))
+            pred_chunks.append(set(to_spans(sentence[gold != Offsets.PAD], self.idx2label, self.span_type, self.verbose)))
 
             # Should we write a file out?  If so, we have to have txts
             if handle is not None and txts is not None:
                 txt_id = ids[b]
                 txt = txts[txt_id]
-                write_sentence_conll(handle, sentence, gold, txt, self.idx2label)
+                write_sentence_conll(handle, sentence[gold != Offsets.PAD], gold[gold != Offsets.PAD], txt, self.idx2label)
 
         return correct_labels, total_labels, gold_chunks, pred_chunks
 

@@ -102,13 +102,12 @@ class TaggerModelBase(nn.Module, TaggerModel):
         example_dict = dict({})
         lengths = torch.from_numpy(batch_dict[self.lengths_key])
         lengths, perm_idx = lengths.sort(0, descending=True)
-
         if self.gpu:
             lengths = lengths.cuda()
+
         example_dict['lengths'] = lengths
         for key in self.embeddings.keys():
             example_dict[key] = self.input_tensor(key, batch_dict, perm_idx)
-
         y = batch_dict.get('y')
         if y is not None:
             y = torch.from_numpy(y)[perm_idx]
