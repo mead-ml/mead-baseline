@@ -254,8 +254,6 @@ def lookup_sentence(rlut: Dict[int, str], seq: List[str], reverse: bool = False,
     return (' '.join(res)).strip()
 
 
-
-
 @export
 def topk(k, probs):
     """Get a sparse index (dictionary of top values)."""

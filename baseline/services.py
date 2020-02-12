@@ -1,6 +1,7 @@
 import os
 import pickle
 import logging
+from typing import Optional, List
 from collections import defaultdict
 import numpy as np
 import baseline
@@ -12,6 +13,9 @@ from baseline.utils import (
     import_user_module,
     read_json,
     is_sequence,
+    Offsets,
+    topk,
+    to_numpy,
     revlut,
     load_vectorizers,
     load_vocabs,
@@ -399,7 +403,31 @@ class LanguageModelService(Service):
         kwargs['batchsz'] = 1
         return super().load(bundle, **kwargs)
 
-    def score(self, tokens, **kwargs):
+    def conditional(self, context, target: Optional[List[str]] = None, limit: Optional[int] = None, raw: bool = False, **kwargs):
+        if kwargs.get('preproc', None) is not None:
+            logger.warning("Warning: Passing `preproc` to `LanguageModelService.predict` is deprecated.")
+        tokens_batch = self.batch_input(context)
+        self.prepare_vectorizers(tokens_batch)
+        batch_dict = self.vectorize(tokens_batch)
+        next_softmax = self.model.predict(batch_dict)[:, -1, :]
+        next_softmax = to_numpy(next_softmax)
+        if target is not None:
+            target_batch = [[t] for t in target]
+            self.prepare_vectorizers(target_batch)
+            target_batch = self.vectorize(target_batch)
+            target = target_batch[self.model.tgt_key]
+            return np.array([v.item() for v in next_softmax[np.arange(next_softmax.shape[0]), target]])
+        if raw:
+            return next_softmax
+        limit = next_softmax.shape[-1] if limit is None else limit
+        scores = [topk(limit, soft) for soft in next_softmax]
+        return [{self.idx_to_token[k]: v for k, v in score.items()} for score in scores]
+
+    @staticmethod
+    def pad_eos(tokens_batch):
+        return [[Offsets.VALUES[Offsets.EOS]] + t + [Offsets.VALUES[Offsets.EOS]] for t in tokens_batch]
+
+    def joint(self, tokens, **kwargs):
         """Score tokens with a language model.
 
         Note:
@@ -408,44 +436,33 @@ class LanguageModelService(Service):
             includes a score of only the later tokens as well as the prediction of the
             next token
 
-            The conditional probability is also a bit wrong because it is being seeded
-            with the value of the first token instead of a <GO> token
-
         :tokens: A sequence of tokens
-        :prob: Should you get the `joint` score or `conditional` probs
 
         returns: The score based on the probability type
         """
         if kwargs.get('preproc', None) is not None:
             logger.warning("Warning: Passing `preproc` to `LanguageModelService.predict` is deprecated.")
         tokens_batch = self.batch_input(tokens)
+        tokens_batch = self.pad_eos(tokens_batch)
         self.prepare_vectorizers(tokens_batch)
         batch_dict = self.vectorize(tokens_batch)
         softmax_tokens = self.model.predict(batch_dict)
 
-        values = batch_dict[self.model.tgt_key]
+        # Get the targets, the first is a <EOS> seed so we skip that
+        values = batch_dict[self.model.tgt_key][:, 1:]
 
         # Numpy doesn't have a gather so we can't do this very efficiently
         # scores = torch.gather(softmax_tokens, -1, values.unsqueeze(-1))
         scores = []
-        for soft, value in zip(softmax_tokens, values):
+        # The last softmax is what comes after the <EOS> so we don't grab from there
+        for soft, value in zip(softmax_tokens[:, :-1], values):
             tokens = []
             for tok, val in zip(soft, value):
                 tokens.append(tok[val].item())
             scores.append(tokens)
-        return self.format_score_output(np.array(scores), **kwargs)
-
-    def format_score_output(self, predicted, prob="joint", **kwargs):
-        scores = predicted
-        if prob == "conditional":
-            # scores[-1] is the probs of the next token so grab -2 to get the scores
-            # for the last token in the sequence
-            return scores[:, -2]
-        elif prob == "joint":
-            logger.warning("Warning: The `joint` probability isn't well formed right now and should be used with a grain of salt")
-            return np.exp(np.sum(np.log(scores), axis=1))
-        else:
-            raise ValueError(f"Only prob types `conditional` and `joint` supported, got {prob}")
+        scores = np.array(scores)
+        logger.warning("Warning: The `joint` probability isn't well formed right now and should be used with a grain of salt")
+        return np.exp(np.sum(np.log(scores), axis=1))
 
     # Do a greedy decode for now, everything else will be super slow
     def predict(self, tokens, **kwargs):

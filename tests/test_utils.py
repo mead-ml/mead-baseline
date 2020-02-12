@@ -3,8 +3,9 @@ import string
 import random
 from itertools import chain
 import pytest
+import numpy as np
 from mock import patch
-from eight_mile.utils import get_env_gpus, idempotent_append, parse_module_as_path
+from eight_mile.utils import get_env_gpus, idempotent_append, parse_module_as_path, to_numpy, get_version
 
 
 @pytest.fixture
@@ -149,3 +150,48 @@ def test_parse_module_as_path_absolute():
             real_patch.assert_called_once_with(path)
     assert n == file_base
     assert d == path
+
+
+def test_to_numpy_tf2():
+    tf = pytest.importorskip('tensorflow')
+    if get_version(tf) < 2:
+        pytest.skip("TF1.X")
+    gold = np.random.rand(*np.random.randint(1, 10, size=np.random.randint(1, 5)))
+    tensor = tf.convert_to_tensor(gold)
+    np_ = to_numpy(tensor)
+    np.testing.assert_allclose(np_, gold)
+
+
+def test_to_numpy_pyt_gpu():
+    torch = pytest.importorskip('torch')
+    if not torch.cuda.is_available():
+        pytest.skip("No GPU Found")
+    gold = np.random.rand(*np.random.randint(1, 10, size=np.random.randint(1, 5)))
+    tensor = torch.from_numpy(gold).cuda()
+    np_ = to_numpy(tensor)
+    np.testing.assert_allclose(np_, gold)
+
+def test_to_numpy_pyt_detch():
+    torch = pytest.importorskip('torch')
+    gold = np.random.rand(*np.random.randint(1, 10, size=np.random.randint(1, 5)))
+    tensor = torch.from_numpy(gold)
+    tensor.requires_grad = True
+    np_ = to_numpy(tensor)
+    np.testing.assert_allclose(np_, gold)
+
+def test_to_numpy_pyt_detch_gpu():
+    torch = pytest.importorskip('torch')
+    if not torch.cuda.is_available():
+        pytest.skip("No GPU Found")
+    gold = np.random.rand(*np.random.randint(1, 10, size=np.random.randint(1, 5)))
+    tensor = torch.from_numpy(gold).cuda()
+    tensor.requires_grad = True
+    np_ = to_numpy(tensor)
+    np.testing.assert_allclose(np_, gold)
+
+def test_to_numpy_pyt():
+    torch = pytest.importorskip('torch')
+    gold = np.random.rand(*np.random.randint(1, 10, size=np.random.randint(1, 5)))
+    tensor = torch.from_numpy(gold)
+    np_ = to_numpy(tensor)
+    np.testing.assert_allclose(np_, gold)
