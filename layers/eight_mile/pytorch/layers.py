@@ -48,13 +48,13 @@ def vec_log_sum_exp(vec: torch.Tensor, dim: int) -> torch.Tensor:
     return max_scores + torch.log(torch.sum(torch.exp(vec - max_scores_broadcast), dim, keepdim=True))
 
 
-def unsort_batch(batch, perm_idx):
+def unsort_batch(batch: torch.Tensor, perm_idx: torch.Tensor) -> torch.Tensor:
     """Undo the sort on a batch of tensors done for packing the data in the RNN.
 
-    :param batch: `torch.Tensor`: The batch of data batch first `[B, ...]`
-    :param perm_idx: `torch.Tensor`: The permutation index returned from the torch.sort.
+    :param batch: The batch of data batch first `[B, ...]`
+    :param perm_idx: The permutation index returned from the torch.sort.
 
-    :returns: `torch.Tensor`: The batch in the original order.
+    :returns: The batch in the original order.
     """
     # Add ones to the shape of the perm_idx until it can broadcast to the batch
     perm_idx = perm_idx.to(batch.device)
@@ -64,12 +64,22 @@ def unsort_batch(batch, perm_idx):
     return batch.scatter_(0, perm_idx.expand_as(batch), batch)
 
 
-def tensor_and_lengths(inputs):
+def tensor_and_lengths(inputs) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
+    """Return either the unpacked inputs (2), or a `Tuple` of the input with None
+
+    TODO: this function should probably be changed to always return the lengths second.
+    To do this, we just need a sentinel value, e.g. <PAD> (0).  The problem with doing this is
+    that it might be possible to generate <PAD> in the middle of the tensor which would make that
+    length invalid.
+
+    :param inputs: Either a sequence of the `(tensor, length)` or just the `tensor`
+    :return: A `Tuple` of `(tensor, length)` or `(tensor, None)`
+    """
     if isinstance(inputs, (list, tuple)):
         in_tensor, lengths = inputs
     else:
         in_tensor = inputs
-        lengths = None  ##tf.reduce_sum(tf.cast(tf.not_equal(inputs, 0), tf.int32), axis=1)
+        lengths = None
 
     return in_tensor, lengths
 
@@ -77,19 +87,19 @@ def tensor_and_lengths(inputs):
 class VariationalDropout(nn.Module):
     """Inverted dropout that applies the same mask at each time step."""
 
-    def __init__(self, p=0.5, batch_first=False):
+    def __init__(self, pdrop: float = 0.5, batch_first: bool = False):
         """Variational Dropout
 
-        :param p: float, the percentage to drop
+        :param pdrop: the percentage to drop
         """
         super().__init__()
-        self.p = p
+        self.pdrop = pdrop
         self.batch_first = batch_first
 
     def extra_repr(self):
         return "p=%.1f" % self.p
 
-    def forward(self, input):
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
         if not self.training:
             return input
         # Create a mask that covers a single time step
@@ -99,8 +109,8 @@ class VariationalDropout(nn.Module):
         else:
             dim0 = 1
             dim1 = input.size(1)
-        mask = torch.zeros(dim0, dim1, input.size(2)).bernoulli_(1 - self.p).to(input.device)
-        mask = mask / self.p
+        mask = torch.zeros(dim0, dim1, input.size(2)).bernoulli_(1 - self.pdrop).to(input.device)
+        mask = mask / self.pdrop
         # Broadcast the mask over the sequence
         return mask * input
 
@@ -108,8 +118,12 @@ class VariationalDropout(nn.Module):
 class SequenceLoss(nn.Module):
     """Computes the loss over a sequence"""
 
-    def __init__(self, LossFn=nn.NLLLoss, avg="token"):
-        """A class that applies a Loss function to sequence via the folding trick."""
+    def __init__(self, LossFn: nn.Module = nn.NLLLoss, avg: str = "token"):
+        """A class that applies a Loss function to sequence via the folding trick.
+
+        :param LossFn: A loss function to apply (defaults to `nn.NLLLoss`)
+        :param avg: A divisor to apply, valid values are `token` and `batch`
+        """
         super().__init__()
         self.avg = avg
         if avg == "token":
@@ -141,17 +155,26 @@ class SequenceLoss(nn.Module):
 
 class MeanPool1D(nn.Module):
     """Do a mean pool while accounting for the length of a sequence
-
     """
 
     def __init__(self, outsz, batch_first=True):
+        """Set up pooling module
+
+        :param outsz: The output dim, for dowstream access
+        :param batch_first: Is this module batch first or time first?
+        """
         super().__init__()
         self.batch_first = batch_first
         self.reduction_dim = 1 if self.batch_first else 0
         self.output_dim = outsz
         self.requires_length = True
 
-    def forward(self, inputs):
+    def forward(self, inputs: Tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
+        """Apply mean pooling on the valid inputs
+
+        :param inputs: A tuple of `(input, lengths)`
+        :return: Pooled output
+        """
         tensor, lengths = tensor_and_lengths(inputs)
         # Regardless of whether the input is `[B, T, H]` or `[T, B, H]` the shape after
         # the sum is `[B, H]` so the lengths (of shape `[B]`) should be unsqueezed to
@@ -166,7 +189,6 @@ class MeanPool1D(nn.Module):
 
 class MaxPool1D(nn.Module):
     """Do a max-pooling operation with or without a length given
-
     """
 
     def __init__(self, outsz, batch_first=True):
@@ -175,11 +197,11 @@ class MaxPool1D(nn.Module):
         self.reduction_dim = 1 if self.batch_first else 0
         self.output_dim = outsz
 
-    def forward(self, inputs):
+    def forward(self, inputs: Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]) -> torch.Tensor:
         """If we are given a tuple as input, we will use the length, otherwise we will do an operation without masking
 
-        :param inputs:
-        :return:
+        :param inputs: either a tuple of `(input, lengths)` or a tensor `input`
+        :return: A pooled tensor
         """
         tensor, lengths = tensor_and_lengths(inputs)
         if lengths is not None:
@@ -199,7 +221,7 @@ class MaxPool1D(nn.Module):
         return f"batch_first={self.batch_first}"
 
 
-# TODO: does this exist somewhere and I just missed it?
+# Torch only added this module in 1.4.0, shim
 class GeLU(nn.Module):
     def __init__(self):
         super().__init__()
@@ -208,11 +230,11 @@ class GeLU(nn.Module):
         return torch.nn.functional.gelu(x)
 
 
-def get_activation(name: str = "relu"):
+def get_activation(name: str = "relu") -> nn.Module:
     """Get back an `nn.Module` by string name of the activation operator
 
-    :param name:
-    :return:
+    :param name: A string name of the operation
+    :return: A module associated with that string
     """
     if name is None or name == "ident":
         return nn.Identity()
@@ -247,6 +269,8 @@ def _cat_dir(h: torch.Tensor) -> torch.Tensor:
     This means that before separating with the view the forward dir are the even
     indices in the first dim while the backwards dirs are the odd ones. Here we select
     the even and odd values and concatenate them
+
+    :param h: The hidden shape as it comes back from PyTorch modules
     """
     return torch.cat([h[0 : h.size(0) : 2], h[1 : h.size(0) : 2]], dim=-1)
 
@@ -259,7 +283,20 @@ def concat_state_dirs(state):
 
 
 class Conv1DSame(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size, bias=True):
+    """Perform a 1D convolution with output size same as input size
+
+    To make this operation work as expected, we cannot just use `padding=kernel_size//2` inside
+    of the convolution operation.  Instead, we zeropad the input using the `ConstantPad1d` module
+
+    """
+    def __init__(self, in_channels: int, out_channels: int, kernel_size: int, bias: bool = True):
+        """Create a 1D conv to produce the same output size as input
+
+        :param in_channels: The number of input feature maps
+        :param out_channels: The number of output feature maps
+        :param kernel_size: The kernel size
+        :param bias: Is bias on?
+        """
         super().__init__()
         start_pad = kernel_size // 2
         end_pad = start_pad - 1 if kernel_size % 2 == 0 else start_pad
@@ -268,16 +305,35 @@ class Conv1DSame(nn.Module):
             nn.Conv1d(in_channels, out_channels, kernel_size, bias=bias)
         )
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Do convolution1d on an input tensor, `[B, C, T]`
+
+        :param x: The input tensor of shape `[B, C, T]`
+        :return: The output tensor of shape `[B, H, T]`
+        """
         return self.conv(x)
 
 
 class ConvEncoder(nn.Module):
-    """Convolutional layer encoder with given activation function
+    """1D Convolutional layer encoder with given activation function, optional dropout
+
+    This module takes in a temporal signal of either shape `[B, C, T]` or `[B, T, C]`, depending on the constructor
+    and produces an output signal of the same orientation (`[B, H, T]` or `[B, T, H]`, respectively).  We default
+    to `[B, T, H]` orientation to make it more convenient for typical layout, but this requires transposing the last
+    2 dims before and after the convolution operation.
 
     """
 
     def __init__(self, insz: int, outsz: int, filtsz: int, pdrop: float = 0.0, activation: str = "relu", hidden_last=True):
+        """Construct the encoder with optional dropout, given activation, and orientation
+
+        :param insz: The number of input feature maps
+        :param outsz: The number of output feature maps (or hidden size)
+        :param filtsz: The kernel size
+        :param pdrop: The amount of dropout to apply, this defaults to 0
+        :param activation: The activation function by name, defaults to `relu`
+        :param hidden_last: PyTorch only! If `True` the orientatiation is `[B, T, H]`, o.w. `[B, H, T]` expected
+        """
         super().__init__()
         self.output_dim = outsz
 
@@ -295,10 +351,27 @@ class ConvEncoder(nn.Module):
 
 
 class ConvEncoderStack(nn.Module):
-    """Create a stack of convolutional encoders
+    """Create a stack of convolutional encoders with residual connections between, using the `ConvEncoder` underneath
+
+    This creates an encoder stack of convolutions, finally returning the last temporal output.  Each layer uses zero-padding
+    which causes the output of the convolution at each layer to be the same length.
+
+    As in the `ConvEncoder` we support input tensor shapes of `[B, C, T]` or `[B, T, C]` depending on the constructor
+    initialization, and transpose underneath the input and output of the stack if the orientation is defaulted to
+    `[B, T, C]`
     """
 
     def __init__(self, insz: int, outsz: int, filtsz: int, nlayers: int = 1, pdrop: float = 0.0, activation: str = "relu", hidden_last=True):
+        """Construct the encoder stack
+
+        :param insz: The input number of feature maps
+        :param outsz: The output number of feature maps
+        :param filtsz: The kernel size
+        :param nlayers: The number of layers in the stack (defaults to a single layer)
+        :param pdrop: The amount of dropout to apply (defaults to `0`)
+        :param activation: The activation function to use as a string, defaults to `relu`
+        :param hidden_last: PyTorch only! If `True` the orientatiation is `[B, T, H]`, o.w. `[B, H, T]` expected
+        """
         super().__init__()
 
         if hidden_last:
@@ -313,8 +386,13 @@ class ConvEncoderStack(nn.Module):
             self.layers.append(BHT2BTH())
         self.output_dim = outsz
 
-    def forward(self, input_bct: torch.Tensor) -> torch.Tensor:
-        x = input_bct
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        """Apply a stack of 1D convolutions with residual connections between them
+
+        :param input: A tensor of shape `[B, T, C]` or `[B, C, T]` depending on value of `hidden_last`
+        :return: A tensor of shape `[B, T, H]` or `[B, H, T]` depending on the value of `hidden_last`
+        """
+        x = input
         for layer in self.layers:
             x = layer(x)
         return x
@@ -326,7 +404,8 @@ def bth2bht(t: torch.Tensor) -> torch.Tensor:
 
 
 class BTH2BHT(nn.Module):
-
+    """Utility layer to convert from `[B, T, H]` to `[B, H, T]`
+    """
     def __init__(self):
         super().__init__()
 
@@ -340,7 +419,8 @@ def tbh2bht(t: torch.Tensor) -> torch.Tensor:
 
 
 class TBH2BHT(nn.Module):
-
+    """Utility layer to convert from `[T, B, H]` to `[B, H, T]`
+    """
     def __init__(self):
         super().__init__()
 
@@ -354,7 +434,8 @@ def tbh2bth(t: torch.Tensor) -> torch.Tensor:
 
 
 class TBH2BTH(nn.Module):
-
+    """Utility layer to convert from `[T, B, H]` to `[B, T, H]`
+    """
     def __init__(self):
         super().__init__()
 
@@ -368,7 +449,8 @@ def bth2tbh(t: torch.Tensor) -> torch.Tensor:
 
 
 class BTH2TBH(nn.Module):
-
+    """Utility layer to convert from `[B, T, H]` to `[T, B, H]`
+    """
     def __init__(self):
         super().__init__()
 
@@ -381,6 +463,8 @@ def bht2bth(t: torch.Tensor) -> torch.Tensor:
 
 
 class BHT2BTH(nn.Module):
+    """Utility layer to convert from `[B, H, T]` to `[B, T, H]`
+    """
     def __init__(self):
         super().__init__()
 
@@ -389,10 +473,24 @@ class BHT2BTH(nn.Module):
 
 
 class ParallelConv(nn.Module):
-    """Layer of parallel convolutions with varying filter sizes
+    """Layer of parallel convolutions with varying filter sizes followed by max over time pooling
+
+    This module takes an input tensor of any orientation based on its constructor, and pools its
+    output to shape `[B, H]`, where `H` is `outsz * len(filtsz)`
     """
 
     def __init__(self, insz: int, outsz: int, filtsz: List[int], activation: str = "relu", input_fmt: str = "bth"):
+        """
+        Constructor for a parallel convolution from any orientation tensor input
+
+        :param insz: The number of input feature maps
+        :param outsz: The number of output feature maps
+        :param filtsz: The kernel size as a list of parallel filters to apply, e.g. `[3, 4, 5]`
+        :param activation: An activation function by name to apply
+        :param input_fmt: A string for the orientation.  Valid values are `bth` or `btc` meaning hidden units last,
+        `bht` or `bct` meaning the temporal dim last or `tbh` or `tbc` meaning the hidden units last and the temporal dim
+        first
+        """
         super().__init__()
         self.requires_length = False
         convs = []
@@ -420,6 +518,11 @@ class ParallelConv(nn.Module):
             return t
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        """Transform the input to `[B, C, T]` from any orientation and perform parallel 1D convs and max over time pool
+
+        :param inputs: An input tensor of any format specified in the constructor
+        :return: A `[B, H]` tensor representing the pooled outputs
+        """
         mots = []
         input_bct = self.transform_input(inputs)
 
@@ -438,6 +541,11 @@ class Highway(nn.Module):
     """
 
     def __init__(self, input_size: int, **kwargs):
+        """Highway layer constructor
+
+        :param input_size: The input hidden size
+        :param kwargs:
+        """
         super().__init__()
         self.proj = nn.Linear(input_size, input_size)
         self.transform = nn.Linear(input_size, input_size)
@@ -445,6 +553,11 @@ class Highway(nn.Module):
         self.output_dim = input_size
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
+        """Take a tensor in and produce the highway layer output
+
+        :param input: Input tensor
+        :return: output tensor
+        """
         proj_result = nn.functional.relu(self.proj(input))
         proj_gate = nn.functional.sigmoid(self.transform(input))
         gated = (proj_gate * proj_result) + ((1 - proj_gate) * input)
@@ -484,7 +597,7 @@ class StackedLSTMCell(nn.Module):
     def forward(self, input: torch.Tensor, hidden: torch.Tensor):
         """Apply a stack of LSTMs
 
-        :param input: The input to the first LSTM `BxH`
+        :param input: The input to the first LSTM `[B, H]`
         :param hidden: The previous `(h, c)` where `h=(h_0, h_1,..)`, `c=(c_0, c_1,..)`
         :return: The output and hidden `(h, c)` where `h=(h_0, h_1,..)`, `c=(c_0, c_1,..)`
         """
@@ -521,7 +634,7 @@ class StackedGRUCell(nn.Module):
     def forward(self, input: torch.Tensor, hidden: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """Apply a stack of GRUs
 
-        :param input: The input to the first LSTM `BxH`
+        :param input: The input to the first LSTM `[B, H]`
         :param hidden: The previous `h` where `h=(h_0, h_1,..)`
         :return: The output and hidden `h` where `h=(h_0, h_1,..)`
         """
@@ -542,6 +655,7 @@ class StackedGRUCell(nn.Module):
 class Dense(nn.Module):
     """Dense (Linear) layer with optional activation given
 
+    This module is the equivalent of the tf.keras.layer.Dense, module with optional activations applied
     """
 
     def __init__(
@@ -552,12 +666,25 @@ class Dense(nn.Module):
         unif: float = 0,
         initializer: Optional[str] = None,
     ):
+        """Constructor for "dense" or "linear" layer, with optional activation applied
+
+        :param insz: The number of hidden units in the input
+        :param outsz: The number of hidden units in the output
+        :param activation: The activation function by name, defaults to `None`, meaning no activation is applied
+        :param unif: An optional initialization value which can set the linear weights.  If given, biases will init to 0
+        :param initializer: An initialization scheme by string name: `ortho`, `kaiming` or `he`, `xavier` or `glorot`
+        """
         super().__init__()
         self.layer = pytorch_linear(insz, outsz, unif, initializer)
         self.activation = get_activation(activation)
         self.output_dim = outsz
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
+        """Run a linear projection over the input, followed by an optional activation given by constructor
+
+        :param input: the input tensor
+        :return: the transformed output
+        """
         return self.activation(self.layer(input))
 
 
@@ -689,7 +816,20 @@ def pytorch_lstm(
 
 
 class LSTMEncoderBase(nn.Module):
-    """The LSTM encoder is a base for a set of encoders producing various outputs
+    """The LSTM encoder is a base for a set of encoders producing various outputs.
+
+    All LSTM encoders inheriting this class will trim the input to the max length given in the batch.  For example,
+    if the input sequence is `[B, T, C]` and the `S = max(lengths)` then the resulting sequence, if produced, will
+    be length `S` (or more precisely, `[B, S, H]`)
+
+    *PyTorch Note*: In PyTorch, its more common for the input shape to be temporal length first (`[T, B, H]`) and this
+    is the PyTorch default.  There is an extra parameter in all of these models called `batch_first` which controls this.
+    Currently, the default is time first (`batch_first=False`), which differs from TensorFlow.  To match the TF impl,
+    set `batch_first=True`.
+
+    *PyTorch Note*:
+    Most `LSTMEncoder` variants just define the `forward`.  This module cannot provide the same utility as the
+    TensorFlow `LSTMEncoder` base right now, because because the JIT isnt handling subclassing of forward properly.
 
     """
 
@@ -705,14 +845,14 @@ class LSTMEncoderBase(nn.Module):
         initializer: str = None,
         **kwargs,
     ):
-        """Produce a stack of biLSTMs with dropout performed on all but the last layer.
+        """Produce a stack of LSTMs with dropout performed on all but the last layer.
 
-        :param insz: (``int``) The size of the input
-        :param hsz: (``int``) The number of hidden units per LSTM
-        :param nlayers: (``int``) The number of layers of LSTMs to stack
-        :param pdrop: (``float``) The probability of dropping a unit value during dropout
-        :param requires_length: (``bool``) Does this encoder require an input length in its inputs (defaults to ``True``)
-        :param batch_first: (``bool``) Should we do batch first input or time-first input?
+        :param insz: The size of the input
+        :param hsz: The number of hidden units per LSTM
+        :param nlayers: The number of layers of LSTMs to stack
+        :param pdrop: The probability of dropping a unit value during dropout, defaults to 0
+        :param requires_length: Does this encoder require an input length in its inputs (defaults to `True`)
+        :param batch_first: Should we do batch first input or time-first input? Defaults to `False` (differs from TF!)
         :param unif: Initialization parameters for RNN
         :param initializer: A string describing optional initialization type for RNN
         """
@@ -748,6 +888,11 @@ class LSTMEncoderBase(nn.Module):
     #    return output, self.extract_top_state(state)
 
     def extract_top_state(self, state: Tuple[torch.Tensor, torch.Tensor]) -> List[torch.Tensor]:
+        """Get a view of the top state of shape [B, H]`
+
+        :param state:
+        :return:
+        """
         # Select the topmost state with -1 and the only direction is forward (select with 0)
         top = []
         for s in state:
@@ -758,10 +903,24 @@ class LSTMEncoderBase(nn.Module):
 
 class LSTMEncoderSequence(LSTMEncoderBase):
 
-    """LSTM encoder to produce the transduced output sequence
+    """LSTM encoder to produce the transduced output sequence.
+
+    Takes a tuple of tensor, shape `[B, T, C]` and a lengths of shape `[B]` and produce an output sequence of
+    shape `[B, S, H]` where `S = max(lengths)`.  The lengths of the output sequence may differ from the input
+    sequence if the `max(lengths)` given is shorter than `T` during execution.
+
+    *PyTorch Note:* The input shape of is either `[B, T, C]` or `[T, B, C]` depending on the value of `batch_first`,
+    and defaults to `[T, B, C]` for consistency with other PyTorch modules. The output shape is of the same orientation.
     """
 
     def forward(self, inputs: Tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
+        """Take in a tuple of `(sequence, lengths)` and produce and output tensor of the last layer of LSTMs
+
+        The value `S` here is defined as `max(lengths)`, `S <= T`
+
+        :param inputs: sequence of shapes `[B, T, C]` or `[T, B, C]` and a lengths of shape `[B]`
+        :return: A tensor of shape `[B, S, H]` or `[S, B, H]` depending on setting of `batch_first`
+        """
         tbc, lengths = inputs
         packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths, batch_first=self.batch_first)
         output, hidden = self.rnn(packed)
@@ -771,7 +930,9 @@ class LSTMEncoderSequence(LSTMEncoderBase):
 
 class LSTMEncoderWithState(nn.Module):
 
-    """LSTM encoder producing the hidden state and the output
+    """LSTM encoder producing the hidden state and the output, where the input doesnt require any padding
+
+    PyTorch note: This type of encoder doesnt inherit the `LSTMEncoderWithState` base
     """
 
     def __init__(
@@ -786,14 +947,14 @@ class LSTMEncoderWithState(nn.Module):
         **kwargs,
     ):
         """
-        :param insz: (``int``) The size of the input
-        :param hsz: (``int``) The number of hidden units per LSTM
-        :param nlayers: (``int``) The number of layers of LSTMs to stack
-        :param pdrop: (``float``) The probability of dropping a unit value during dropout
-        :param output_fn: function to determine what is returned from the encoder
-        :param requires_length: (``bool``) Does this encoder require an input length in its inputs (defaults to ``True``)
-        :param batch_first: (``bool``) Should we do batch first input or time-first input?
-        :return: a stacked cell
+        :param insz: The size of the input
+        :param hsz: The number of hidden units per LSTM
+        :param nlayers: The number of layers of LSTMs to stack
+        :param pdrop: The probability of dropping a unit value during dropout, defaults to 0
+        :param batch_first: PyTorch only! do batch first or time-first input? Defaults to `False` (differs from TF!)
+        :param unif: PyTorch only! Initialization parameters for RNN
+        :param initializer: PyTorch only! A string describing optional initialization type for RNN
+
         """
         super().__init__()
         self.requires_length = False
@@ -817,20 +978,34 @@ class LSTMEncoderWithState(nn.Module):
             nn.init.xavier_uniform_(self.rnn.weight_ih_l0)
         self.output_dim = hsz
 
-    def forward(self, inputs):
-        inputs, hidden = inputs
+    def forward(self, input_and_prev_h: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+
+        :param input_and_prev_h: The input at this timestep and the previous hidden unit or `None`
+        :return: Raw `torch.nn.LSTM` output
+        """
+        inputs, hidden = input_and_prev_h
         output, hidden = self.rnn(inputs, hidden)
         return output, hidden  ##concat_state_dirs(hidden)
 
 
 class LSTMEncoderAll(LSTMEncoderBase):
-    """LSTM encoder that passes along the full output and hidden state
+    """LSTM encoder that passes along the full output and hidden states for each layer
+
+    Takes a tuple containing a tensor input of shape `[B, T, C]` and lengths of shape `[B]`
+
+    This returns a 2-tuple of outputs `[B, S, H]` where `S = max(lengths)`, for the output vector sequence,
+    and a tuple of hidden vector `[L, B, H]` and context vector `[L, B, H]`, respectively
+
+    *PyTorch note*: Takes a vector of shape `[B, T, C]` or `[B, C, T]`, depending on input specification
+    of `batch_first`. Also note that in PyTorch, this defaults to `True`
+
     """
 
     def forward(self, inputs: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-        :param inputs: A tuple containing the input tensor and a length
-        :return: An output tensor and the hidden state
+        :param inputs: A tuple containing the input tensor `[B, T, C]` or `[B, H, C]` and a length `[B]`
+        :return: An output tensor `[B, S, H]` or `[B, H, S]` , and tuple of hidden `[L, B, H]` and context `[L, B, H]`
         """
         tbc, lengths = inputs
         packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths, batch_first=self.batch_first)
@@ -843,9 +1018,20 @@ class LSTMEncoderHidden(LSTMEncoderBase):
 
     """LSTM encoder that returns the top hidden state
 
+
+    Takes a tuple containing a tensor input of shape `[B, T, C]` and lengths of shape `[B]` and
+    returns a hidden unit tensor of shape `[B, H]`
+
+    *PyTorch note*: Takes a vector of shape `[B, T, C]` or `[B, C, T]`, depending on input specification
+    of `batch_first`. Also note that in PyTorch, this defaults to `True`
+
     """
 
     def forward(self, inputs: Tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
+        """
+        :param inputs: A tuple containing the input tensor `[B, T, C]` or `[B, H, C]` and a length `[B]`
+        :return: An output tensor of shape `[B, H]` representing the last RNNs hidden state
+        """
         tbc, lengths = inputs
         packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths, batch_first=self.batch_first)
         output, hidden = self.rnn(packed)
@@ -853,6 +1039,7 @@ class LSTMEncoderHidden(LSTMEncoderBase):
         return self.extract_top_state(hidden)[0]
 
 
+# TODO: this module only exists in pytorch.  Do we eliminate it or put it in both?
 class LSTMEncoderSequenceHiddenContext(LSTMEncoderBase):
     def forward(self, inputs: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
         tbc, lengths = inputs
@@ -863,6 +1050,25 @@ class LSTMEncoderSequenceHiddenContext(LSTMEncoderBase):
 
 
 class BiLSTMEncoderBase(nn.Module):
+    """BiLSTM encoder base for a set of encoders producing various outputs.
+
+    All BiLSTM encoders inheriting this class will trim the input to the max length given in the batch.  For example,
+    if the input sequence is `[B, T, C]` and the `S = max(lengths)` then the resulting sequence, if produced, will
+    be length `S` (or more precisely, `[B, S, H]`).  Because its bidirectional, half of the hidden units given in the
+    constructor will be applied to the forward direction and half to the backward direction, and these will get
+    concatenated.
+
+    *PyTorch Note*: In PyTorch, its more common for the input shape to be temporal length first (`[T, B, H]`) and this
+    is the PyTorch default.  There is an extra parameter in all of these models called `batch_first` which controls this.
+    Currently, the default is time first (`batch_first=False`), which differs from TensorFlow.  To match the TF impl,
+    set `batch_first=True`.
+
+    *PyTorch Note*:
+    Most `BiLSTMEncoder` variants just define the `forward`.  This module cannot provide the same utility as the
+    TensorFlow `BiLSTMEncoder` base right now, because because the JIT isnt handling subclassing of forward properly.
+
+    """
+
     def __init__(
         self,
         insz: int,
@@ -877,13 +1083,14 @@ class BiLSTMEncoderBase(nn.Module):
     ):
         """Produce a stack of LSTMs with dropout performed on all but the last layer.
 
-        :param insz: (``int``) The size of the input
-        :param hsz: (``int``) The number of hidden units per biLSTM (`hsz//2` used for each dir)
-        :param nlayers: (``int``) The number of layers of LSTMs to stack
-        :param dropout: (``int``) The probability of dropping a unit value during dropout
-        :param requires_length: (``bool``) Does this encoder require an input length in its inputs (defaults to ``True``)
-        :param batch_first: (``bool``) Should we do batch first input or time-first input?
-        :return: a stacked cell
+        :param insz: The size of the input
+        :param hsz: The number of hidden units per BiLSTM (`hsz//2` used for each direction and concatenated)
+        :param nlayers: The number of layers of BiLSTMs to stack
+        :param pdrop: The probability of dropping a unit value during dropout, defaults to 0
+        :param requires_length: Does this encoder require an input length in its inputs (defaults to `True`)
+        :param batch_first: Should we do batch first input or time-first input? Defaults to `False` (differs from TF!)
+        :param unif: PyTorch only! Initialization parameters for RNN
+        :param initializer: PyTorch only! A string describing optional initialization type for RNN
         """
         super().__init__()
         self.requires_length = requires_length
@@ -911,6 +1118,7 @@ class BiLSTMEncoderBase(nn.Module):
         return tuple(s.view(self.nlayers, 1, -1, self.output_dim)[-1, 0] for s in state)
 
 
+# TODO: this module only exists in pytorch.  Do we eliminate it or put it in both?
 class BiLSTMEncoderSequenceHiddenContext(BiLSTMEncoderBase):
     def forward(self, inputs: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
         tbc, lengths = inputs
@@ -921,27 +1129,75 @@ class BiLSTMEncoderSequenceHiddenContext(BiLSTMEncoderBase):
 
 
 class BiLSTMEncoderAll(BiLSTMEncoderBase):
+    """BiLSTM encoder that passes along the full output and hidden states for each layer
+
+    Takes a tuple containing a tensor input of shape `[B, T, C]` and lengths of shape `[B]`
+
+    This returns a 2-tuple of outputs `[B, S, H]` where `S = max(lengths)`, for the output vector sequence,
+    and a tuple of hidden vector `[L, B, H]` and context vector `[L, B, H]`, respectively
+
+    *PyTorch note*: Takes a vector of shape `[B, T, C]` or `[B, C, T]`, depending on input specification
+    of `batch_first`. Also note that in PyTorch, this defaults to `True`
+
+    """
     def forward(self, inputs: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
-        tbc, lengths = inputs
-        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths, batch_first=self.batch_first)
+        """
+        :param inputs: A tuple containing the input tensor `[B, T, C]` or `[B, H, C]` and a length `[B]`
+        :return: An output tensor `[B, S, H] or `[B, H, S]` , and tuple of hidden `[L, B, H]` and context `[L, B, H]`
+        """
+        tensor, lengths = inputs
+        packed = torch.nn.utils.rnn.pack_padded_sequence(tensor, lengths, batch_first=self.batch_first)
         output, hidden = self.rnn(packed)
         output, _ = torch.nn.utils.rnn.pad_packed_sequence(output, batch_first=self.batch_first)
         return output, concat_state_dirs(hidden)
 
 
 class BiLSTMEncoderSequence(BiLSTMEncoderBase):
+
+    """BiLSTM encoder to produce the transduced output sequence.
+
+    Takes a tuple of tensor, shape `[B, T, C]` and a lengths of shape `[B]` and produce an output sequence of
+    shape `[B, S, H]` where `S = max(lengths)`.  The lengths of the output sequence may differ from the input
+    sequence if the `max(lengths)` given is shorter than `T` during execution.
+
+
+    *PyTorch Note:* The input shape of is either `[B, T, C]` or `[T, B, C]` depending on the value of `batch_first`,
+    and defaults to `[T, B, C]` for consistency with other PyTorch modules. The output shape is of the same orientation.
+    """
     def forward(self, inputs: Tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
-        tbc, lengths = inputs
-        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths, batch_first=self.batch_first)
+        """Take in a tuple of `(sequence, lengths)` and produce and output tensor of the last layer of LSTMs
+
+        The value `S` here is defined as `max(lengths)`, `S <= T`
+
+        :param inputs: sequence of shapes `[B, T, C]` or `[T, B, C]` and a lengths of shape `[B]`
+        :return: A tensor of shape `[B, S, H]` or `[S, B, H]` depending on setting of `batch_first`
+        """
+        tensor, lengths = inputs
+        packed = torch.nn.utils.rnn.pack_padded_sequence(tensor, lengths, batch_first=self.batch_first)
         output, hidden = self.rnn(packed)
         output, _ = torch.nn.utils.rnn.pad_packed_sequence(output, batch_first=self.batch_first)
         return output
 
 
 class BiLSTMEncoderHidden(BiLSTMEncoderBase):
+
+    """BiLSTM encoder that returns the top hidden state
+
+
+    Takes a tuple containing a tensor input of shape `[B, T, C]` and lengths of shape `[B]` and
+    returns a hidden unit tensor of shape `[B, H]`
+
+    *PyTorch note*: Takes a vector of shape `[B, T, C]` or `[B, C, T]`, depending on input specification
+    of `batch_first`. Also note that in PyTorch, this defaults to `True`
+
+    """
     def forward(self, inputs):
-        tbc, lengths = inputs
-        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths, batch_first=self.batch_first)
+        """
+        :param inputs: A tuple containing the input tensor `[B, T, C]` or `[B, H, C]` and a length `[B]`
+        :return: An output tensor of shape `[B, H]` representing the last RNNs hidden state
+        """
+        tensor, lengths = inputs
+        packed = torch.nn.utils.rnn.pack_padded_sequence(tensor, lengths, batch_first=self.batch_first)
         output, hidden = self.rnn(packed)
         output, _ = torch.nn.utils.rnn.pad_packed_sequence(output, batch_first=self.batch_first)
         return self.extract_top_state(concat_state_dirs(hidden))[0]

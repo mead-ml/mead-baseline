@@ -306,6 +306,12 @@ def lstm_cell_w_dropout(
 
 
 class LSTMEncoder2(tf.keras.layers.Layer):
+    """The LSTM encoder is a base for a set of encoders producing various outputs.
+
+    All LSTM encoders inheriting this class will trim the input to the max length given in the batch.  For example,
+    if the input sequence is `[B, T, C]` and the `S = max(lengths)` then the resulting sequence, if produced, will
+    be length `S` (or more precisely, `[B, S, H]`)
+    """
     def __init__(
         self,
         insz: Optional[int],
@@ -321,15 +327,16 @@ class LSTMEncoder2(tf.keras.layers.Layer):
         **kwargs,
     ):
         """Produce a stack of LSTMs with dropout performed on all but the last layer.
-        :param insz: An optional input size for parity with other layer backends.  Can pass `None`
+
+        :param insz: The size of the input or `None`
         :param hsz: The number of hidden units per LSTM
         :param nlayers: The number of layers of LSTMs to stack
-        :param pdrop: The probability of dropping a unit value during dropout
-        :param variational: (``bool``) variational recurrence is on
-        :param output_fn: A function that filters output to decide what to return
-        :param requires_length: (``bool``) Does the input require an input length (defaults to ``True``)
-        :param name: (``str``) Optional, defaults to `None`
-        :return: a stacked cell
+        :param pdrop: The probability of dropping a unit value during dropout, defaults to 0
+        :param requires_length: Does this encoder require an input length in its inputs (defaults to `True`)
+        :param name: TF only! Provide a graph layer name
+        :param dropout_in_single_layer: TF only! If we have a single layer, should we dropout (defaults to `False`)
+        :param skip_conn: TF only! This parameter isnt currently supported in TF Keras implementation
+        :param projsz: TF only! This parameter isnt currently supported in TF Keras implementation
         """
         super().__init__(name=name)
         self._requires_length = requires_length
@@ -365,6 +372,11 @@ class LSTMEncoder2(tf.keras.layers.Layer):
         return output, state
 
     def call(self, inputs):
+        """RNNs over input sequence of `[B, T, C]` and lengths `[B]`, output `[B, S, H]` where `S = max(lengths)`
+
+        :param inputs: A tuple of `(sequence, lengths)`, `sequence` shape `[B, T, C]`, lengths shape = `[B]`
+        :return: Output depends on the subclass handling
+        """
         inputs, lengths = tensor_and_lengths(inputs)
         mask = tf.sequence_mask(lengths)
         max_length = tf.reduce_max(lengths)
@@ -381,6 +393,9 @@ class LSTMEncoder2(tf.keras.layers.Layer):
 
 
 class LSTMEncoderWithState2(tf.keras.layers.Layer):
+
+    """LSTM encoder producing the hidden state and the output, where the input doesnt require any padding
+    """
     def __init__(
         self,
         insz: Optional[int],
@@ -424,8 +439,8 @@ class LSTMEncoderWithState2(tf.keras.layers.Layer):
     def call(self, inputs):
         """The format of the output here is
 
-        `output: B, T, H`
-        `hidden: List[(h, c), (h, c), ...]`
+        output: `[B, T, H]`
+        hidden: List[(h, c), (h, c), ...]`
         :param inputs:
         :return:
         """
@@ -443,6 +458,10 @@ class LSTMEncoderWithState2(tf.keras.layers.Layer):
         return outputs, hidden_outputs
 
     def zero_state(self, batchsz: int):
+        """Zero state for LSTM with batch size given
+
+        :param batchsz: The batch size
+        """
         num_rnns = len(self.rnns)
         zstate = []
         for i, _ in enumerate(self.rnns):
@@ -454,111 +473,44 @@ class LSTMEncoderWithState2(tf.keras.layers.Layer):
 
 
 class LSTMEncoderSequence2(LSTMEncoder2):
-    def __init__(
-        self,
-        insz: Optional[int],
-        hsz: int,
-        nlayers: int = 1,
-        pdrop: float = 0.0,
-        variational: bool = False,
-        requires_length: bool = True,
-        name: Optional[str] = None,
-        dropout_in_single_layer: bool = False,
-        skip_conn: bool = False,
-        projsz: Optional[int] = None,
-        **kwargs,
-    ):
-        super().__init__(
-            insz=insz,
-            hsz=hsz,
-            nlayers=nlayers,
-            pdrop=pdrop,
-            variational=variational,
-            requires_length=requires_length,
-            name=name,
-            dropout_in_single_layer=dropout_in_single_layer,
-            skip_conn=skip_conn,
-            projsz=projsz,
-            **kwargs,
-        )
+
+    """LSTM encoder to produce the transduced output sequence.
+
+    Takes a tuple of tensor, shape `[B, T, C]` and a lengths of shape `[B]` and produce an output sequence of
+    shape `[B, S, H]` where `S = max(lengths)`.  The lengths of the output sequence may differ from the input
+    sequence if the `max(lengths)` given is shorter than `T` during execution.
+
+    """
 
     def output_fn(self, output, state):
-        """Return sequence `(BxTxC)`
+        """Return sequence `[B, S, H]` where `S = max(lengths)`
 
         :param output: The sequence
         :param state: The hidden state
-        :return: The sequence `(BxTxC)`
+        :return: The sequence `[B, S, H]`
         """
         return output
 
 
 class LSTMEncoderHidden2(LSTMEncoder2):
-    def __init__(
-        self,
-        insz: Optional[int],
-        hsz: int,
-        nlayers: int = 1,
-        pdrop: float = 0.0,
-        variational: float = False,
-        requires_length: float = True,
-        name: Optional[str] = None,
-        dropout_in_single_layer: bool = False,
-        skip_conn: bool = False,
-        projsz: Optional[int] = None,
-        **kwargs,
-    ):
-        super().__init__(
-            insz=insz,
-            hsz=hsz,
-            nlayers=nlayers,
-            pdrop=pdrop,
-            variational=variational,
-            requires_length=requires_length,
-            name=name,
-            dropout_in_single_layer=dropout_in_single_layer,
-            skip_conn=skip_conn,
-            projsz=projsz,
-            **kwargs,
-        )
+
+    """LSTM encoder that returns the top hidden state
+
+    Takes a tuple containing a tensor input of shape `[B, T, C]` and lengths of shape `[B]` and
+    returns a hidden unit tensor of shape `[B, H]`
+    """
 
     def output_fn(self, output, state):
-        """Return last hidden state `(h, c)`
+        """Get the last hidden layer
 
-        :param output: The sequence
-        :param state: The hidden state
-        :return: The last hidden state `(h, c)`
+        :param output:
+        :param state:
+        :return: hidden unit tensor of shape `[B, H]`
         """
         return state[0]
 
 
 class LSTMEncoderHiddenContext2(LSTMEncoder2):
-    def __init__(
-        self,
-        insz: Optional[int],
-        hsz: int,
-        nlayers: int = 1,
-        pdrop: float = 0.0,
-        variational: bool = False,
-        requires_length: bool = True,
-        name: Optional[str] = None,
-        dropout_in_single_layer: bool = False,
-        skip_conn: bool = False,
-        projsz: Optional[int] = None,
-        **kwargs,
-    ):
-        super().__init__(
-            insz=insz,
-            hsz=hsz,
-            nlayers=nlayers,
-            pdrop=pdrop,
-            variational=variational,
-            requires_length=requires_length,
-            name=name,
-            dropout_in_single_layer=dropout_in_single_layer,
-            skip_conn=skip_conn,
-            projsz=projsz,
-            **kwargs,
-        )
 
     def output_fn(self, output, state):
         """Return last hidden state `(h, c)`
@@ -790,6 +742,12 @@ class GRUEncoderHidden(GRUEncoder):
 
 
 class LSTMEncoder1(tf.keras.layers.Layer):
+    """The LSTM encoder is a base for a set of encoders producing various outputs.
+
+    All LSTM encoders inheriting this class will trim the input to the max length given in the batch.  For example,
+    if the input sequence is `[B, T, C]` and the `S = max(lengths)` then the resulting sequence, if produced, will
+    be length `S` (or more precisely, `[B, S, H]`)
+    """
     def __init__(
         self,
         insz: Optional[int],
@@ -806,14 +764,15 @@ class LSTMEncoder1(tf.keras.layers.Layer):
     ):
         """Produce a stack of LSTMs with dropout performed on all but the last layer.
 
-        :param hsz: (``int``) The number of hidden units per LSTM
-        :param nlayers: (``int``) The number of layers of LSTMs to stack
-        :param pdrop: (``int``) The probability of dropping a unit value during dropout
-        :param variational: (``bool``) variational recurrence is on
-        :param output_fn: A function that filters output to decide what to return
-        :param requires_length: (``bool``) Does the input require an input length (defaults to ``True``)
-        :param name: (``str``) Optional, defaults to `None`
-        :return: a stacked cell
+        :param insz: The size of the input or `None`
+        :param hsz: The number of hidden units per LSTM
+        :param nlayers: The number of layers of LSTMs to stack
+        :param pdrop: The probability of dropping a unit value during dropout, defaults to 0
+        :param requires_length: Does this encoder require an input length in its inputs (defaults to `True`)
+        :param name: TF only! Provide a graph layer name
+        :param dropout_in_single_layer: TF only! If we have a single layer, should we dropout (defaults to `False`)
+        :param skip_conn: TF only! Should there be residual connections between RNNs
+        :param projsz: TF only! Should we do `LSTMP` operation to a different output size
         """
         super().__init__(name=name)
         self._requires_length = requires_length
@@ -840,6 +799,11 @@ class LSTMEncoder1(tf.keras.layers.Layer):
             )
 
     def call(self, inputs):
+        """RNNs over input sequence of `[B, T, C]` and lengths `[B]`, output `[B, S, H]` where `S = max(lengths)`
+
+        :param inputs: A tuple of `(sequence, lengths)`, `sequence` shape `[B, T, C]`, lengths shape = `[B]`
+        :return: Output depends on the subclass handling
+        """
         inputs, lengths = tensor_and_lengths(inputs)
         max_length = tf.reduce_max(lengths)
         inputs = inputs[:, :max_length, :]
@@ -849,12 +813,6 @@ class LSTMEncoder1(tf.keras.layers.Layer):
         return self.output_fn(rnnout, state)
 
     def output_fn(self, output, state):
-        """Returns back the output sequence of an RNN and hidden state
-
-        :param output: A temporal vector of output
-        :param hidden: `(output, hidden_last)`, where `hidden_last` = `(h, c)`
-        :return:
-        """
         return output, state
 
     @property
@@ -863,46 +821,40 @@ class LSTMEncoder1(tf.keras.layers.Layer):
 
 
 class LSTMEncoderSequence1(LSTMEncoder1):
-    def __init__(
-        self,
-        insz: Optional[int],
-        hsz: int,
-        nlayers: int = 1,
-        pdrop: float = 0.0,
-        variational: bool = False,
-        requires_length: bool = True,
-        name: str = None,
-        dropout_in_single_layer: bool = False,
-        skip_conn: bool = False,
-        projsz: bool = None,
-        **kwargs,
-    ):
-        super().__init__(
-            insz=insz,
-            hsz=hsz,
-            nlayers=nlayers,
-            pdrop=pdrop,
-            variational=variational,
-            requires_length=requires_length,
-            name=name,
-            dropout_in_single_layer=dropout_in_single_layer,
-            skip_conn=skip_conn,
-            projsz=projsz,
-            **kwargs,
-        )
+
+    """LSTM encoder to produce the transduced output sequence.
+
+    Takes a tuple of tensor, shape `[B, T, C]` and a lengths of shape `[B]` and produce an output sequence of
+    shape `[B, S, H]` where `S = max(lengths)`.  The lengths of the output sequence may differ from the input
+    sequence if the `max(lengths)` given is shorter than `T` during execution.
+    """
 
     def output_fn(self, output, state):
-        """Return sequence `(BxTxC)`
+        """Return sequence `[B, S, H]` where `S = max(lengths)`
 
         :param output: The sequence
         :param state: The hidden state
-        :return: The sequence `(BxTxC)`
+        :return: The sequence `[B, S, H]`
         """
         return output
 
 
 class LSTMEncoderAll1(LSTMEncoder1):
+    """LSTM encoder that passes along the full output and hidden states for each layer
+
+    Takes a tuple containing a tensor input of shape `[B, T, C]` and lengths of shape `[B]`
+
+    This returns a 2-tuple of outputs `[B, S, H]` where `S = max(lengths)`, for the output vector sequence,
+    and a tuple of hidden vector `[L, B, H]` and context vector `[L, B, H]`, respectively
+
+    *TF Note*: This module reorganizes the underlying TF output, which means you must be careful if using
+    this with another tf 1 `RNNCell` implementation
+    """
     def call(self, inputs):
+        """
+        :param inputs: A tuple containing the input tensor `[B, T, C]` and a length `[B]`
+        :return: An output tensor `[B, S, H]` , and tuple of hidden `[L, B, H]` and context `[L, B, H]`
+        """
         inputs, lengths = tensor_and_lengths(inputs)
         max_length = tf.reduce_max(lengths)
         inputs = inputs[:, :max_length, :]
@@ -923,85 +875,34 @@ class LSTMEncoderAll1(LSTMEncoder1):
 
 
 class LSTMEncoderHidden1(LSTMEncoder1):
-    # TODO: constructor is unnecessary
-    def __init__(
-        self,
-        insz: Optional[int],
-        hsz: int,
-        nlayers: int = 1,
-        pdrop: float = 0.0,
-        variational: bool = False,
-        requires_length: bool = True,
-        name: str = None,
-        dropout_in_single_layer: bool = False,
-        skip_conn: bool = False,
-        projsz: Optional[int] = None,
-        **kwargs,
-    ):
-        super().__init__(
-            insz=insz,
-            hsz=hsz,
-            nlayers=nlayers,
-            pdrop=pdrop,
-            variational=variational,
-            requires_length=requires_length,
-            name=name,
-            dropout_in_single_layer=dropout_in_single_layer,
-            skip_conn=skip_conn,
-            projsz=projsz,
-            **kwargs,
-        )
+
+    """LSTM encoder that returns the top hidden state
+
+    Takes a tuple containing a tensor input of shape `[B, T, C]` and lengths of shape `[B]` and
+    returns a hidden unit tensor of shape `[B, H]`
+    """
 
     def output_fn(self, output, state):
-        """Return last hidden state `(h, c)`
+        """Get the last hidden layer
 
-        :param output: The sequence
-        :param hidden: The hidden state
-        :return: The last hidden state `(h, c)`
+        :param output:
+        :param state:
+        :return: hidden unit tensor of shape `[B, H]`
         """
         return state[0]
 
 
+# TODO: make this available from PyTorch or get rid of it
 class LSTMEncoderHiddenContext1(LSTMEncoder1):
-    def __init__(
-        self,
-        insz: Optional[int],
-        hsz: int,
-        nlayers: int = 1,
-        pdrop: Optional[float] = 0.0,
-        variational: bool = False,
-        requires_length: bool = True,
-        name: Optional[str] = None,
-        dropout_in_single_layer: bool = False,
-        skip_conn: bool = False,
-        projsz: Optional[int] = None,
-        **kwargs,
-    ):
-        super().__init__(
-            insz=insz,
-            hsz=hsz,
-            nlayers=nlayers,
-            pdrop=pdrop,
-            variational=variational,
-            requires_length=requires_length,
-            name=name,
-            dropout_in_single_layer=dropout_in_single_layer,
-            skip_conn=skip_conn,
-            projsz=projsz,
-            **kwargs,
-        )
 
     def output_fn(self, output, state):
-        """Return last hidden state `(h, c)`
-
-        :param output: The sequence
-        :param hidden: The hidden state
-        :return: The last hidden state `(h, c)`
-        """
         return state
 
 
 class LSTMEncoderWithState1(LSTMEncoder1):
+
+    """LSTM encoder producing the hidden state and the output, where the input doesnt require any padding
+    """
     def __init__(
         self,
         insz: Optional[int],
@@ -1027,16 +928,35 @@ class LSTMEncoderWithState1(LSTMEncoder1):
         self.requires_state = True
 
     def zero_state(self, batchsz: int):
+        """Zero state for LSTM with batch size given
+
+        :param batchsz: The batch size
+        """
         return self.rnn.zero_state(batchsz, tf.float32)
 
-    def call(self, inputs):
+    def call(self, input_and_prev_h):
+        """
 
-        inputs, hidden = inputs
+        :param input_and_prev_h: The input at this timestep and the previous hidden unit or `None`
+        :return: Raw TensorFlow output
+        """
+        inputs, hidden = input_and_prev_h
         rnnout, hidden = tf.nn.dynamic_rnn(self.rnn, inputs, initial_state=hidden, dtype=tf.float32)
         return rnnout, hidden  # (hidden[-1].h, hidden[-1].c)
 
 
 class LSTMEncoderAll2(tf.keras.layers.Layer):
+    """LSTM encoder that passes along the full output and hidden states for each layer
+
+    Takes a tuple containing a tensor input of shape `[B, T, C]` and lengths of shape `[B]`
+
+    This returns a 2-tuple of outputs `[B, S, H]` where `S = max(lengths)`, for the output vector sequence,
+    and a tuple of hidden vector `[L, B, H]` and context vector `[L, B, H]`, respectively
+
+    *PyTorch note*: Takes a vector of shape `[B, T, C]` or `[B, C, T]`, depending on input specification
+    of `batch_first`. Also note that in PyTorch, this defaults to `True`
+
+    """
     def __init__(
         self,
         insz: Optional[int],
@@ -1051,17 +971,18 @@ class LSTMEncoderAll2(tf.keras.layers.Layer):
         projsz: Optional[int] = None,
         **kwargs,
     ):
-        super().__init__(name=name)
-
         """Produce a stack of LSTMs with dropout performed on all but the last layer.
 
+        :param insz: The size of the input or `None`
         :param hsz: The number of hidden units per LSTM
         :param nlayers: The number of layers of LSTMs to stack
-        :param pdrop: The probability of dropping a unit value during dropout
-        :param variational: variational recurrence is on
-        :param requires_length: Does the input require an input length (defaults to ``True``)
-        :param name: Optional, defaults to `None`
-        :return: a stacked cell
+        :param pdrop: The probability of dropping a unit value during dropout, defaults to 0
+        :param variational: TF only! Do variational dropout
+        :param requires_length: Does this encoder require an input length in its inputs (defaults to `True`)
+        :param name: TF only! Provide a graph layer name
+        :param dropout_in_single_layer: TF only! If we have a single layer, should we dropout (defaults to `False`)
+        :param skip_conn: TF only! Not supported with tf.keras.layers implementation
+        :param projsz: TF only! Not supported with tf.keras.layers implementation
         """
         super().__init__(name=name)
         self._requires_length = requires_length
@@ -1092,12 +1013,14 @@ class LSTMEncoderAll2(tf.keras.layers.Layer):
         return rnnout, state
 
     def call(self, inputs):
+        """
+        :param inputs: A tuple containing the input tensor `[B, T, C]` and a length `[B]`
+        :return: An output tensor `[B, S, H]` , and tuple of hidden `[L, B, H]` and context `[L, B, H]`
+        """
         inputs, lengths = tensor_and_lengths(inputs)
         mask = tf.sequence_mask(lengths)
         max_length = tf.reduce_max(lengths)
         inputs = inputs[:, :max_length, :]
-        # (num_layers * num_directions, batch, hidden_size):
-        ## TODO: how to combine this?
         hs = []
         cs = []
         for rnn in self.rnns:
@@ -1130,17 +1053,18 @@ class BiLSTMEncoderAll2(tf.keras.layers.Layer):
         projsz: Optional[int] = None,
         **kwargs,
     ):
-        super().__init__(name=name)
-
         """Produce a stack of LSTMs with dropout performed on all but the last layer.
 
-        :param hsz: (``int``) The number of hidden units per LSTM
-        :param nlayers: (``int``) The number of layers of LSTMs to stack
-        :param pdrop: (``int``) The probability of dropping a unit value during dropout
-        :param variational: (``bool``) variational recurrence is on
-        :param requires_length: (``bool``) Does the input require an input length (defaults to ``True``)
-        :param name: (``str``) Optional, defaults to `None`
-        :return: a stacked cell
+        :param insz: The size of the input (or `None`)
+        :param hsz: The number of hidden units per BiLSTM (`hsz//2` used for each direction and concatenated)
+        :param nlayers: The number of layers of BiLSTMs to stack
+        :param pdrop: The probability of dropping a unit value during dropout, defaults to 0
+        :param variational: TF only! apply variational dropout
+        :param requires_length: Does this encoder require an input length in its inputs (defaults to `True`)
+        :param name: TF only! A name to give the layer in the graph
+        :param dropout_in_single_layer: TF only! If its a single layer cell, should we do dropout?  Default to `False`
+        :param skip_conn: TF 1 only!  Not supported on this implementation
+        :param projsz: TF 1 only! Not supported on this implementation
         """
         super().__init__(name=name)
         self._requires_length = requires_length
@@ -1171,6 +1095,10 @@ class BiLSTMEncoderAll2(tf.keras.layers.Layer):
         return rnnout, state
 
     def call(self, inputs):
+        """
+        :param inputs: A tuple containing the input tensor `[B, T, C]` and a length `[B]`
+        :return: An output tensor `[B, S, H], and tuple of hidden `[L, B, H]` and context `[L, B, H]`
+        """
         inputs, lengths = tensor_and_lengths(inputs)
         mask = tf.sequence_mask(lengths)
         max_length = tf.reduce_max(lengths)
@@ -1197,6 +1125,14 @@ class BiLSTMEncoderAll2(tf.keras.layers.Layer):
 
 
 class BiLSTMEncoder2(tf.keras.layers.Layer):
+    """BiLSTM encoder base for a set of encoders producing various outputs.
+
+    All BiLSTM encoders inheriting this class will trim the input to the max length given in the batch.  For example,
+    if the input sequence is `[B, T, C]` and the `S = max(lengths)` then the resulting sequence, if produced, will
+    be length `S` (or more precisely, `[B, S, H]`).  Because its bidirectional, half of the hidden units given in the
+    constructor will be applied to the forward direction and half to the backward direction, and these will get
+    concatenated.
+    """
     def __init__(
         self,
         insz: Optional[int],
@@ -1211,17 +1147,18 @@ class BiLSTMEncoder2(tf.keras.layers.Layer):
         projsz: Optional[int] = None,
         **kwargs,
     ):
-        super().__init__(name=name)
-
         """Produce a stack of LSTMs with dropout performed on all but the last layer.
 
-        :param hsz: (``int``) The number of hidden units per LSTM
-        :param nlayers: (``int``) The number of layers of LSTMs to stack
-        :param pdrop: (``int``) The probability of dropping a unit value during dropout
-        :param variational: (``bool``) variational recurrence is on
-        :param requires_length: (``bool``) Does the input require an input length (defaults to ``True``)
-        :param name: (``str``) Optional, defaults to `None`
-        :return: a stacked cell
+        :param insz: The size of the input (or `None`)
+        :param hsz: The number of hidden units per BiLSTM (`hsz//2` used for each direction and concatenated)
+        :param nlayers: The number of layers of BiLSTMs to stack
+        :param pdrop: The probability of dropping a unit value during dropout, defaults to 0
+        :param variational: TF only! apply variational dropout
+        :param requires_length: Does this encoder require an input length in its inputs (defaults to `True`)
+        :param name: TF only! A name to give the layer in the graph
+        :param dropout_in_single_layer: TF only! If its a single layer cell, should we do dropout?  Default to `False`
+        :param skip_conn: TF 1 only!  Not supported on this implementation
+        :param projsz: TF 1 only! Not supported on this implementation
         """
         super().__init__(name=name)
         self._requires_length = requires_length
@@ -1268,99 +1205,31 @@ class BiLSTMEncoder2(tf.keras.layers.Layer):
 
 
 class BiLSTMEncoderSequence2(BiLSTMEncoder2):
-    def __init__(
-        self,
-        insz: Optional[int],
-        hsz: int,
-        nlayers: int,
-        pdrop: float = 0.0,
-        variational: bool = False,
-        requires_length: bool = True,
-        name: Optional[str] = None,
-        dropout_in_single_layer: bool = False,
-        skip_conn: bool = False,
-        projsz: Optional[int] = None,
-        **kwargs,
-    ):
-        super().__init__(
-            insz,
-            hsz,
-            nlayers,
-            pdrop,
-            variational,
-            requires_length,
-            name,
-            dropout_in_single_layer,
-            skip_conn,
-            projsz,
-            **kwargs,
-        )
+
+    """BiLSTM encoder to produce the transduced output sequence.
+
+    Takes a tuple of tensor, shape `[B, T, C]` and a lengths of shape `[B]` and produce an output sequence of
+    shape `[B, S, H]` where `S = max(lengths)`.  The lengths of the output sequence may differ from the input
+    sequence if the `max(lengths)` given is shorter than `T` during execution.
+    """
 
     def output_fn(self, rnnout, state):
         return rnnout
 
 
 class BiLSTMEncoderHidden2(BiLSTMEncoder2):
-    def __init__(
-        self,
-        insz: Optional[int],
-        hsz: int,
-        nlayers: int,
-        pdrop: float = 0.0,
-        variational: bool = False,
-        requires_length: bool = True,
-        name: Optional[str] = None,
-        dropout_in_single_layer: bool = False,
-        skip_conn: bool = False,
-        projsz: Optional[int] = None,
-        **kwargs,
-    ):
-        super().__init__(
-            insz,
-            hsz,
-            nlayers,
-            pdrop,
-            variational,
-            requires_length,
-            name,
-            dropout_in_single_layer,
-            skip_conn,
-            projsz,
-            **kwargs,
-        )
+    """BiLSTM encoder that returns the top hidden state
+
+
+    Takes a tuple containing a tensor input of shape `[B, T, C]` and lengths of shape `[B]` and
+    returns a hidden unit tensor of shape `[B, H]`
+    """
 
     def output_fn(self, rnnout, state):
         return tf.concat([state[0][0], state[1][0]], axis=-1)
 
 
 class BiLSTMEncoderHiddenContext2(BiLSTMEncoder2):
-    def __init__(
-        self,
-        insz: Optional[int],
-        hsz: int,
-        nlayers: int,
-        pdrop: float = 0.0,
-        variational: bool = False,
-        requires_length: bool = True,
-        name: Optional[str] = None,
-        dropout_in_single_layer: bool = False,
-        skip_conn: bool = False,
-        projsz: Optional[int] = None,
-        **kwargs,
-    ):
-        super().__init__(
-            insz,
-            hsz,
-            nlayers,
-            pdrop,
-            variational,
-            requires_length,
-            name,
-            dropout_in_single_layer,
-            skip_conn,
-            projsz,
-            **kwargs,
-        )
 
     def output_fn(self, rnnout, state):
         return tuple(tf.concat([state[0][i], state[1][i]], axis=-1) for i in range(2))
@@ -1569,6 +1438,15 @@ class BiGRUEncoderAll(tf.keras.layers.Layer):
 
 
 class BiLSTMEncoder1(tf.keras.layers.Layer):
+    """BiLSTM encoder base for a set of encoders producing various outputs.
+
+    All BiLSTM encoders inheriting this class will trim the input to the max length given in the batch.  For example,
+    if the input sequence is `[B, T, C]` and the `S = max(lengths)` then the resulting sequence, if produced, will
+    be length `S` (or more precisely, `[B, S, H]`).  Because its bidirectional, half of the hidden units given in the
+    constructor will be applied to the forward direction and half to the backward direction, and these will get
+    concatenated.
+    """
+
     def __init__(
         self,
         insz: Optional[int],
@@ -1584,12 +1462,16 @@ class BiLSTMEncoder1(tf.keras.layers.Layer):
     ):
         """Produce a stack of LSTMs with dropout performed on all but the last layer.
 
-        :param hsz: (``int``) The number of hidden units per biLSTM (`hsz//2` used for each dir)
-        :param nlayers: (``int``) The number of layers of LSTMs to stack
-        :param pdrop: (``int``) The probability of dropping a unit value during dropout
-        :param variational (``bool``) variational recurrence is on
-        :param training (``bool``) Are we training? (defaults to ``False``)
-        :return: a stacked cell
+        :param insz: The size of the input (or `None`)
+        :param hsz: The number of hidden units per BiLSTM (`hsz//2` used for each direction and concatenated)
+        :param nlayers: The number of layers of BiLSTMs to stack
+        :param pdrop: The probability of dropping a unit value during dropout, defaults to 0
+        :param variational: TF only! apply variational dropout
+        :param requires_length: Does this encoder require an input length in its inputs (defaults to `True`)
+        :param name: TF only! A name to give the layer in the graph
+        :param dropout_in_single_layer: TF only! If its a single layer cell, should we do dropout?  Default to `False`
+        :param skip_conn: TF 1 only!  Do residual connections between RNN layers
+        :param projsz: TF 1 only! Do LSTMP operation to this output size
         """
         super().__init__(name=name)
         self._requires_length = requires_length
@@ -1656,7 +1538,12 @@ class BiLSTMEncoder1(tf.keras.layers.Layer):
 
 
 class BiLSTMEncoderAll1(BiLSTMEncoder1):
+
     def call(self, inputs):
+        """
+        :param inputs: A tuple containing the input tensor `[B, T, C]` and a length `[B]`
+        :return: An output tensor `[B, S, H], and tuple of hidden `[L, B, H]` and context `[L, B, H]`
+        """
         inputs, lengths = tensor_and_lengths(inputs)
         max_length = tf.reduce_max(lengths)
         inputs = inputs[:, :max_length, :]
@@ -1680,87 +1567,30 @@ class BiLSTMEncoderAll1(BiLSTMEncoder1):
 
 
 class BiLSTMEncoderSequence1(BiLSTMEncoder1):
-    def __init__(
-        self,
-        insz: Optional[int],
-        hsz: int,
-        nlayers: int,
-        pdrop: float = 0.0,
-        variational: bool = False,
-        requires_length: bool = True,
-        name: Optional[str] = None,
-        skip_conn: bool = False,
-        projsz: Optional[int] = None,
-        **kwargs,
-    ):
-        """Produce a stack of LSTMs with dropout performed on all but the last layer.
 
-        :param hsz: (``int``) The number of hidden units per LSTM
-        :param nlayers: (``int``) The number of layers of LSTMs to stack
-        :param pdrop: (``int``) The probability of dropping a unit value during dropout
-        :param variational (``bool``) variational recurrence is on
-        :param training (``bool``) Are we training? (defaults to ``False``)
-        :return: a stacked cell
-        """
-        super().__init__(insz, hsz, nlayers, pdrop, variational, requires_length, name, skip_conn, projsz, **kwargs)
+    """BiLSTM encoder to produce the transduced output sequence.
 
+    Takes a tuple of tensor, shape `[B, T, C]` and a lengths of shape `[B]` and produce an output sequence of
+    shape `[B, S, H]` where `S = max(lengths)`.  The lengths of the output sequence may differ from the input
+    sequence if the `max(lengths)` given is shorter than `T` during execution.
+    """
     def output_fn(self, rnnout, state):
         return rnnout
 
 
 class BiLSTMEncoderHidden1(BiLSTMEncoder1):
-    def __init__(
-        self,
-        insz: Optional[int],
-        hsz: int,
-        nlayers: int,
-        pdrop: float = 0.0,
-        variational: bool = False,
-        requires_length: bool = True,
-        name: Optional[str] = None,
-        skip_conn: bool = False,
-        projsz: Optional[int] = None,
-        **kwargs,
-    ):
-        """Produce a stack of LSTMs with dropout performed on all but the last layer.
 
-        :param hsz: (``int``) The number of hidden units per LSTM
-        :param nlayers: (``int``) The number of layers of LSTMs to stack
-        :param pdrop: (``int``) The probability of dropping a unit value during dropout
-        :param variational (``bool``) variational recurrence is on
-        :param training (``bool``) Are we training? (defaults to ``False``)
-        :return: a stacked cell
-        """
-        super().__init__(insz, hsz, nlayers, pdrop, variational, requires_length, name, skip_conn, projsz, **kwargs)
+    """BiLSTM encoder that returns the top hidden state
 
+
+    Takes a tuple containing a tensor input of shape `[B, T, C]` and lengths of shape `[B]` and
+    returns a hidden unit tensor of shape `[B, H]`
+    """
     def output_fn(self, rnnout, state):
         return tf.concat([state[0][0], state[1][0]], axis=-1)
 
 
 class BiLSTMEncoderHiddenContext1(BiLSTMEncoder1):
-    def __init__(
-        self,
-        insz: Optional[int],
-        hsz: int,
-        nlayers: int,
-        pdrop: float = 0.0,
-        variational: bool = False,
-        requires_length: bool = True,
-        name: Optional[str] = None,
-        skip_conn: bool = False,
-        projsz: Optional[int] = None,
-        **kwargs,
-    ):
-        """Produce a stack of LSTMs with dropout performed on all but the last layer.
-
-        :param hsz: (``int``) The number of hidden units per LSTM
-        :param nlayers: (``int``) The number of layers of LSTMs to stack
-        :param pdrop: (``int``) The probability of dropping a unit value during dropout
-        :param variational (``bool``) variational recurrence is on
-        :param training (``bool``) Are we training? (defaults to ``False``)
-        :return: a stacked cell
-        """
-        super().__init__(insz, hsz, nlayers, pdrop, variational, requires_length, name, skip_conn, projsz, **kwargs)
 
     def output_fn(self, rnnout, state):
         return state
@@ -1913,9 +1743,9 @@ class DenseStack(tf.keras.layers.Layer):
     ):
         """Stack 1 or more hidden layers, optionally (forming an MLP)
 
-        :param hsz: (``int``) The number of hidden units
-        :param activation:  (``str``) The name of the activation function to use
-        :param pdrop_value: (``float``) The dropout probability
+        :param hsz: The number of hidden units
+        :param activation: The name of the activation function to use
+        :param pdrop_value: The dropout probability
         :param init: The tensorflow initializer
 
         """
@@ -1949,6 +1779,9 @@ class DenseStack(tf.keras.layers.Layer):
 
 
 class WithDropout(tf.keras.layers.Layer):
+    """This is a utility wrapper that applies dropout after executing the layer it wraps
+
+    """
     def __init__(self, layer: tf.keras.layers.Layer, pdrop: float = 0.5):
         super(WithDropout, self).__init__()
         self.layer = layer
