@@ -297,7 +297,7 @@ class LSTMEncoder2(tf.keras.layers.Layer):
         self,
         insz: Optional[int],
         hsz: int,
-        nlayers: int,
+        nlayers: int = 1,
         pdrop: float = 0.0,
         variational: bool = False,
         requires_length: bool = True,
@@ -310,8 +310,8 @@ class LSTMEncoder2(tf.keras.layers.Layer):
         """Produce a stack of LSTMs with dropout performed on all but the last layer.
         :param insz: An optional input size for parity with other layer backends.  Can pass `None`
         :param hsz: The number of hidden units per LSTM
-        :param nlayers: (``int``) The number of layers of LSTMs to stack
-        :param pdrop: (``int``) The probability of dropping a unit value during dropout
+        :param nlayers: The number of layers of LSTMs to stack
+        :param pdrop: The probability of dropping a unit value during dropout
         :param variational: (``bool``) variational recurrence is on
         :param output_fn: A function that filters output to decide what to return
         :param requires_length: (``bool``) Does the input require an input length (defaults to ``True``)
@@ -354,6 +354,8 @@ class LSTMEncoder2(tf.keras.layers.Layer):
     def call(self, inputs):
         inputs, lengths = tensor_and_lengths(inputs)
         mask = tf.sequence_mask(lengths)
+        max_length = tf.reduce_max(lengths)
+        inputs = inputs[:, :max_length, :]
         for rnn in self.rnns:
             outputs = rnn(inputs, mask=mask)
             inputs = outputs
@@ -370,7 +372,7 @@ class LSTMEncoderWithState2(tf.keras.layers.Layer):
         self,
         insz: Optional[int],
         hsz: int,
-        nlayers: int,
+        nlayers: int = 1,
         pdrop: float = 0.0,
         variational: bool = False,
         name: Optional[str] = None,
@@ -443,7 +445,7 @@ class LSTMEncoderSequence2(LSTMEncoder2):
         self,
         insz: Optional[int],
         hsz: int,
-        nlayers: int,
+        nlayers: int = 1,
         pdrop: float = 0.0,
         variational: bool = False,
         requires_length: bool = True,
@@ -482,7 +484,7 @@ class LSTMEncoderHidden2(LSTMEncoder2):
         self,
         insz: Optional[int],
         hsz: int,
-        nlayers: int,
+        nlayers: int = 1,
         pdrop: float = 0.0,
         variational: float = False,
         requires_length: float = True,
@@ -521,7 +523,7 @@ class LSTMEncoderHiddenContext2(LSTMEncoder2):
         self,
         insz: Optional[int],
         hsz: int,
-        nlayers: int,
+        nlayers: int = 1,
         pdrop: float = 0.0,
         variational: bool = False,
         requires_length: bool = True,
@@ -555,12 +557,231 @@ class LSTMEncoderHiddenContext2(LSTMEncoder2):
         return state
 
 
+class GRUEncoder(tf.keras.layers.Layer):
+    def __init__(
+            self,
+            insz: Optional[int],
+            hsz: int,
+            nlayers: int = 1,
+            pdrop: float = 0.0,
+            variational: bool = False,
+            requires_length: bool = True,
+            name: Optional[str] = None,
+            dropout_in_single_layer: bool = False,
+            **kwargs,
+    ):
+        """Produce a stack of GRUs with dropout performed on all but the last layer.
+        :param insz: An optional input size for parity with other layer backends.  Can pass `None`
+        :param hsz: The number of hidden units per GRU
+        :param nlayers: The number of layers of GRUs to stack
+        :param pdrop: The probability of dropping a unit value during dropout
+        :param variational: variational recurrence is on
+        :param requires_length: Does the input require an input length (defaults to ``True``)
+        :param name: Optional, defaults to `None`
+        :return: a stacked cell
+        """
+        super().__init__(name=name)
+        self._requires_length = requires_length
+        self.rnns = []
+        for _ in range(nlayers - 1):
+            self.rnns.append(
+                tf.keras.layers.GRU(
+                    hsz,
+                    return_sequences=True,
+                    recurrent_dropout=pdrop if variational else 0.0,
+                    dropout=pdrop if not variational else 0.0,
+                )
+            )
+        if nlayers == 1 and not dropout_in_single_layer and not variational:
+            pdrop = 0.0
+        self.rnns.append(
+            tf.keras.layers.GRU(
+                hsz,
+                return_sequences=True,
+                return_state=True,
+                recurrent_dropout=pdrop if variational else 0.0,
+                dropout=pdrop if not variational else 0.0,
+            )
+        )
+
+    def output_fn(self, output, state):
+        """Returns back the output sequence of an RNN and hidden state
+
+        :param output: A temporal vector of output
+        :param state: `(output, hidden_last)`, where `hidden_last` = `(h, c)`
+        :return:
+        """
+        return output, state
+
+    def call(self, inputs):
+        inputs, lengths = tensor_and_lengths(inputs)
+        mask = tf.sequence_mask(lengths)
+        max_length = tf.reduce_max(lengths)
+        inputs = inputs[:, :max_length, :]
+        for rnn in self.rnns:
+            outputs = rnn(inputs, mask=mask)
+            inputs = outputs
+        rnnout, h = outputs
+        return self.output_fn(rnnout, h)
+
+    @property
+    def requires_length(self) -> bool:
+        return self._requires_length
+
+
+class GRUEncoderAll(tf.keras.layers.Layer):
+    def __init__(
+            self,
+            insz: Optional[int],
+            hsz: int,
+            nlayers: int = 1,
+            pdrop: float = 0.0,
+            variational: bool = False,
+            requires_length: bool = True,
+            name: Optional[str] = None,
+            dropout_in_single_layer=False,
+            **kwargs,
+    ):
+        super().__init__(name=name)
+
+        """Produce a stack of GRUs with dropout performed on all but the last layer.
+
+        :param hsz: The number of hidden units per GRU
+        :param nlayers: The number of layers of GRUs to stack
+        :param pdrop: The probability of dropping a unit value during dropout
+        :param variational: variational recurrence is on
+        :param requires_length: Does the input require an input length (defaults to ``True``)
+        :param name: Optional, defaults to `None`
+        :return: a stacked cell
+        """
+        super().__init__(name=name)
+        self._requires_length = requires_length
+        self.rnns = []
+        for _ in range(nlayers - 1):
+            rnn = tf.keras.layers.GRU(
+                hsz,
+                return_sequences=True,
+                return_state=True,
+                recurrent_dropout=pdrop if variational else 0.0,
+                dropout=pdrop if not variational else 0.0,
+            )
+            self.rnns.append(rnn)
+        if nlayers == 1 and not dropout_in_single_layer and not variational:
+            pdrop = 0.0
+        rnn = tf.keras.layers.GRU(
+            hsz,
+            return_sequences=True,
+            return_state=True,
+            recurrent_dropout=pdrop if variational else 0.0,
+            dropout=pdrop if not variational else 0.0,
+            )
+
+        # This concat mode only works on the sequences, we still are getting 4 objects back for the state
+        self.rnns.append(rnn)
+
+    def output_fn(self, rnnout, state):
+        return rnnout, state
+
+    def call(self, inputs):
+        inputs, lengths = tensor_and_lengths(inputs)
+        mask = tf.sequence_mask(lengths)
+        max_length = tf.reduce_max(lengths)
+        inputs = inputs[:, :max_length, :]
+        # (num_layers * num_directions, batch, hidden_size):
+        hs = []
+        for rnn in self.rnns:
+            outputs, h = rnn(inputs, mask=mask)
+            hs.append(h)
+            inputs = outputs
+
+        h = tf.stack(hs)
+        return self.output_fn(outputs, h)
+
+    @property
+    def requires_length(self):
+        return self._requires_length
+
+
+class GRUEncoderSequence(GRUEncoder):
+    def __init__(
+            self,
+            insz: Optional[int],
+            hsz: int,
+            nlayers: int = 1,
+            pdrop: float = 0.0,
+            variational: bool = False,
+            requires_length: bool = True,
+            name: Optional[str] = None,
+            dropout_in_single_layer: bool = False,
+            **kwargs,
+    ):
+        super().__init__(
+            insz=insz,
+            hsz=hsz,
+            nlayers=nlayers,
+            pdrop=pdrop,
+            variational=variational,
+            requires_length=requires_length,
+            name=name,
+            dropout_in_single_layer=dropout_in_single_layer,
+            **kwargs,
+        )
+
+    def output_fn(self, output, state):
+        """Return sequence `(BxTxC)`
+
+        :param output: The sequence
+        :param state: The hidden state
+        :return: The sequence `(BxTxC)`
+        """
+        return output
+
+
+class GRUEncoderHidden(GRUEncoder):
+    def __init__(
+            self,
+            insz: Optional[int],
+            hsz: int,
+            nlayers: int = 1,
+            pdrop: float = 0.0,
+            variational: bool = False,
+            requires_length: bool = True,
+            name: Optional[str] = None,
+            dropout_in_single_layer: bool = False,
+            skip_conn: bool = False,
+            projsz: Optional[int] = None,
+            **kwargs,
+    ):
+        super().__init__(
+            insz=insz,
+            hsz=hsz,
+            nlayers=nlayers,
+            pdrop=pdrop,
+            variational=variational,
+            requires_length=requires_length,
+            name=name,
+            dropout_in_single_layer=dropout_in_single_layer,
+            skip_conn=skip_conn,
+            projsz=projsz,
+            **kwargs,
+        )
+
+    def output_fn(self, output, state):
+        """Return last hidden state `h`
+
+        :param output: The sequence
+        :param state: The hidden state
+        :return: The last hidden state `(h, c)`
+        """
+        return state
+
+
 class LSTMEncoder1(tf.keras.layers.Layer):
     def __init__(
         self,
         insz: Optional[int],
         hsz: int,
-        nlayers: int,
+        nlayers: int = 1,
         pdrop: float = 0.0,
         variational: bool = False,
         requires_length: bool = True,
@@ -607,6 +828,8 @@ class LSTMEncoder1(tf.keras.layers.Layer):
 
     def call(self, inputs):
         inputs, lengths = tensor_and_lengths(inputs)
+        max_length = tf.reduce_max(lengths)
+        inputs = inputs[:, :max_length, :]
         with tf.name_scope(self.name), tf.variable_scope(self.name):
             rnnout, hidden = tf.nn.dynamic_rnn(self.rnn, inputs, sequence_length=lengths, dtype=tf.float32)
         state = (hidden[-1].h, hidden[-1].c)
@@ -631,7 +854,7 @@ class LSTMEncoderSequence1(LSTMEncoder1):
         self,
         insz: Optional[int],
         hsz: int,
-        nlayers: int,
+        nlayers: int = 1,
         pdrop: float = 0.0,
         variational: bool = False,
         requires_length: bool = True,
@@ -668,6 +891,8 @@ class LSTMEncoderSequence1(LSTMEncoder1):
 class LSTMEncoderAll1(LSTMEncoder1):
     def call(self, inputs):
         inputs, lengths = tensor_and_lengths(inputs)
+        max_length = tf.reduce_max(lengths)
+        inputs = inputs[:, :max_length, :]
         with tf.variable_scope(self._name):
             rnnout, hidden = tf.nn.dynamic_rnn(self.rnn, inputs, sequence_length=lengths, dtype=tf.float32)
         return self.output_fn(rnnout, hidden)
@@ -682,7 +907,7 @@ class LSTMEncoderHidden1(LSTMEncoder1):
         self,
         insz: Optional[int],
         hsz: int,
-        nlayers: int,
+        nlayers: int = 1,
         pdrop: float = 0.0,
         variational: bool = False,
         requires_length: bool = True,
@@ -721,7 +946,7 @@ class LSTMEncoderHiddenContext1(LSTMEncoder1):
         self,
         insz: Optional[int],
         hsz: int,
-        nlayers: int,
+        nlayers: int = 1,
         pdrop: Optional[float] = 0.0,
         variational: bool = False,
         requires_length: bool = True,
@@ -760,7 +985,7 @@ class LSTMEncoderWithState1(LSTMEncoder1):
         self,
         insz: Optional[int],
         hsz: int,
-        nlayers: int,
+        nlayers: int = 1,
         pdrop: float = 0.0,
         variational: bool = False,
         name: Optional[str] = None,
@@ -795,7 +1020,7 @@ class LSTMEncoderAll2(tf.keras.layers.Layer):
         self,
         insz: Optional[int],
         hsz: int,
-        nlayers: int,
+        nlayers: int = 1,
         pdrop: float = 0.0,
         variational: bool = False,
         requires_length: bool = True,
@@ -809,12 +1034,12 @@ class LSTMEncoderAll2(tf.keras.layers.Layer):
 
         """Produce a stack of LSTMs with dropout performed on all but the last layer.
 
-        :param hsz: (``int``) The number of hidden units per LSTM
-        :param nlayers: (``int``) The number of layers of LSTMs to stack
-        :param pdrop: (``int``) The probability of dropping a unit value during dropout
-        :param variational: (``bool``) variational recurrence is on
-        :param requires_length: (``bool``) Does the input require an input length (defaults to ``True``)
-        :param name: (``str``) Optional, defaults to `None`
+        :param hsz: The number of hidden units per LSTM
+        :param nlayers: The number of layers of LSTMs to stack
+        :param pdrop: The probability of dropping a unit value during dropout
+        :param variational: variational recurrence is on
+        :param requires_length: Does the input require an input length (defaults to ``True``)
+        :param name: Optional, defaults to `None`
         :return: a stacked cell
         """
         super().__init__(name=name)
@@ -832,7 +1057,7 @@ class LSTMEncoderAll2(tf.keras.layers.Layer):
         if nlayers == 1 and not dropout_in_single_layer and not variational:
             pdrop = 0.0
         rnn = tf.keras.layers.LSTM(
-            hsz // 2,
+            hsz,
             return_sequences=True,
             return_state=True,
             recurrent_dropout=pdrop if variational else 0.0,
@@ -848,6 +1073,8 @@ class LSTMEncoderAll2(tf.keras.layers.Layer):
     def call(self, inputs):
         inputs, lengths = tensor_and_lengths(inputs)
         mask = tf.sequence_mask(lengths)
+        max_length = tf.reduce_max(lengths)
+        inputs = inputs[:, :max_length, :]
         # (num_layers * num_directions, batch, hidden_size):
         ## TODO: how to combine this?
         hs = []
@@ -872,7 +1099,7 @@ class BiLSTMEncoderAll2(tf.keras.layers.Layer):
         self,
         insz: Optional[int],
         hsz: int,
-        nlayers: int,
+        nlayers: int = 1,
         pdrop: float = 0.0,
         variational: bool = False,
         requires_length: bool = True,
@@ -925,6 +1152,8 @@ class BiLSTMEncoderAll2(tf.keras.layers.Layer):
     def call(self, inputs):
         inputs, lengths = tensor_and_lengths(inputs)
         mask = tf.sequence_mask(lengths)
+        max_length = tf.reduce_max(lengths)
+        inputs = inputs[:, :max_length, :]
         # (num_layers * num_directions, batch, hidden_size):
         hs = []
         cs = []
@@ -946,7 +1175,6 @@ class BiLSTMEncoderAll2(tf.keras.layers.Layer):
         return self._requires_length
 
 
-# Mapped
 class BiLSTMEncoder2(tf.keras.layers.Layer):
     def __init__(
         self,
@@ -1004,6 +1232,8 @@ class BiLSTMEncoder2(tf.keras.layers.Layer):
     def call(self, inputs):
         inputs, lengths = tensor_and_lengths(inputs)
         mask = tf.sequence_mask(lengths)
+        max_length = tf.reduce_max(lengths)
+        inputs = inputs[:, :max_length, :]
         for rnn in self.rnns:
             outputs = rnn(inputs, mask=mask)
             inputs = outputs
@@ -1115,7 +1345,208 @@ class BiLSTMEncoderHiddenContext2(BiLSTMEncoder2):
         return tuple(tf.concat([state[0][i], state[1][i]], axis=-1) for i in range(2))
 
 
-# Mapped
+class BiGRUEncoder(tf.keras.layers.Layer):
+    def __init__(
+            self,
+            insz: Optional[int],
+            hsz: int,
+            nlayers: int,
+            pdrop: float = 0.0,
+            variational: bool = False,
+            requires_length: bool = True,
+            name: Optional[str] = None,
+            dropout_in_single_layer: bool = False,
+            **kwargs,
+    ):
+        super().__init__(name=name)
+
+        """Produce a stack of GRUs with dropout performed on all but the last layer.
+
+        :param hsz: The number of hidden units per BiGRU (each GRU is hsz//2)
+        :param nlayers: The number of layers of GRUs to stack
+        :param pdrop: The probability of dropping a unit value during dropout
+        :param variational: variational recurrence is on
+        :param requires_length: Does the input require an input length (defaults to ``True``)
+        :param name: Optional, defaults to `None`
+        :return: a stacked cell
+        """
+        super().__init__(name=name)
+        self._requires_length = requires_length
+        self.rnns = []
+        for _ in range(nlayers - 1):
+            rnn = tf.keras.layers.GRU(
+                hsz // 2,
+                return_sequences=True,
+                recurrent_dropout=pdrop if variational else 0.0,
+                dropout=pdrop if not variational else 0.0,
+                )
+            self.rnns.append(tf.keras.layers.Bidirectional(rnn))
+        if nlayers == 1 and not dropout_in_single_layer and not variational:
+            pdrop = 0.0
+        rnn = tf.keras.layers.GRU(
+            hsz // 2,
+            return_sequences=True,
+            return_state=True,
+            recurrent_dropout=pdrop if variational else 0.0,
+            dropout=pdrop if not variational else 0.0,
+            )
+
+        # This concat mode only works on the sequences, we still are getting 2 objects back for the state
+        self.rnns.append(tf.keras.layers.Bidirectional(rnn, merge_mode="concat"))
+
+    def output_fn(self, rnnout, state):
+        return rnnout, state
+
+    def call(self, inputs):
+        inputs, lengths = tensor_and_lengths(inputs)
+        mask = tf.sequence_mask(lengths)
+        max_length = tf.reduce_max(lengths)
+        inputs = inputs[:, :max_length, :]
+        for rnn in self.rnns:
+            outputs = rnn(inputs, mask=mask)
+            inputs = outputs
+
+        rnnout, h_fwd, h_bwd = outputs
+        return self.output_fn(rnnout, (h_fwd, h_bwd))
+
+    @property
+    def requires_length(self):
+        return self._requires_length
+
+
+class BiGRUEncoderSequence(BiGRUEncoder):
+    def __init__(
+            self,
+            insz: Optional[int],
+            hsz: int,
+            nlayers: int,
+            pdrop: float = 0.0,
+            variational: bool = False,
+            requires_length: bool = True,
+            name: Optional[str] = None,
+            dropout_in_single_layer: bool = False,
+            **kwargs,
+    ):
+        super().__init__(
+            insz,
+            hsz,
+            nlayers,
+            pdrop,
+            variational,
+            requires_length,
+            name,
+            dropout_in_single_layer,
+            **kwargs,
+        )
+
+    def output_fn(self, rnnout, state):
+        return rnnout
+
+
+class BiGRUEncoderHidden(BiGRUEncoder):
+    def __init__(
+            self,
+            insz: Optional[int],
+            hsz: int,
+            nlayers: int,
+            pdrop: float = 0.0,
+            variational: bool = False,
+            requires_length: bool = True,
+            name: Optional[str] = None,
+            dropout_in_single_layer: bool = False,
+            **kwargs,
+    ):
+        super().__init__(
+            insz,
+            hsz,
+            nlayers,
+            pdrop,
+            variational,
+            requires_length,
+            name,
+            dropout_in_single_layer,
+            **kwargs,
+        )
+
+    def output_fn(self, _, state):
+        return tf.concat([state[0], state[1]], axis=-1)
+
+
+class BiGRUEncoderAll(tf.keras.layers.Layer):
+    def __init__(
+            self,
+            insz: Optional[int],
+            hsz: int,
+            nlayers: int = 1,
+            pdrop: float = 0.0,
+            variational: bool = False,
+            requires_length: bool = True,
+            name: Optional[str] = None,
+            dropout_in_single_layer: bool = False,
+            **kwargs,
+    ):
+        super().__init__(name=name)
+
+        """Produce a stack of GRUs with dropout performed on all but the last layer.
+
+        :param hsz: The number of hidden units per GRU
+        :param nlayers: The number of layers of GRUs to stack
+        :param pdrop: The probability of dropping a unit value during dropout
+        :param variational: variational recurrence is on
+        :param requires_length: Does the input require an input length (defaults to ``True``)
+        :param name: Optional, defaults to `None`
+        :return: a stacked cell
+        """
+        super().__init__(name=name)
+        self._requires_length = requires_length
+        self.rnns = []
+        for _ in range(nlayers - 1):
+            rnn = tf.keras.layers.GRU(
+                hsz // 2,
+                return_sequences=True,
+                return_state=True,
+                recurrent_dropout=pdrop if variational else 0.0,
+                dropout=pdrop if not variational else 0.0,
+                )
+            self.rnns.append(tf.keras.layers.Bidirectional(rnn))
+        if nlayers == 1 and not dropout_in_single_layer and not variational:
+            pdrop = 0.0
+        rnn = tf.keras.layers.GRU(
+            hsz // 2,
+            return_sequences=True,
+            return_state=True,
+            recurrent_dropout=pdrop if variational else 0.0,
+            dropout=pdrop if not variational else 0.0,
+            )
+
+        # This concat mode only works on the sequences, we still are getting 4 objects back for the state
+        self.rnns.append(tf.keras.layers.Bidirectional(rnn, merge_mode="concat"))
+
+    def output_fn(self, rnnout, state):
+        return rnnout, state
+
+    def call(self, inputs):
+        inputs, lengths = tensor_and_lengths(inputs)
+        mask = tf.sequence_mask(lengths)
+        max_length = tf.reduce_max(lengths)
+        inputs = inputs[:, :max_length, :]
+        # (num_layers * num_directions, batch, hidden_size):
+        hs = []
+        for rnn in self.rnns:
+            outputs, h1, h2 = rnn(inputs, mask=mask)
+            h = tf.stack([h1, h2])
+            hs.append(h)
+            inputs = outputs
+
+        _, B, H = get_shape_as_list(h)
+        h = tf.reshape(tf.stack(hs), [-1, B, H * 2])
+        return self.output_fn(outputs, h)
+
+    @property
+    def requires_length(self) -> bool:
+        return self._requires_length
+
+
 class BiLSTMEncoder1(tf.keras.layers.Layer):
     def __init__(
         self,
@@ -1187,6 +1618,9 @@ class BiLSTMEncoder1(tf.keras.layers.Layer):
 
     def call(self, inputs):
         inputs, lengths = tensor_and_lengths(inputs)
+        mask = tf.sequence_mask(lengths)
+        max_length = tf.reduce_max(lengths)
+        inputs = inputs[:, :max_length, :]
         with tf.name_scope(self.name), tf.variable_scope(self.name):
             rnnout, (fwd_state, backward_state) = tf.nn.bidirectional_dynamic_rnn(
                 self.fwd_rnn, self.bwd_rnn, inputs, sequence_length=lengths, dtype=tf.float32
@@ -1204,6 +1638,7 @@ class BiLSTMEncoder1(tf.keras.layers.Layer):
 class BiLSTMEncoderAll1(BiLSTMEncoder1):
     def call(self, inputs):
         inputs, lengths = tensor_and_lengths(inputs)
+
         rnnout, (fwd_state, bwd_state) = tf.nn.bidirectional_dynamic_rnn(
             self.fwd_rnn, self.bwd_rnn, inputs, sequence_length=lengths, dtype=tf.float32
         )

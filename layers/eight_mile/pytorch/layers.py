@@ -883,6 +883,192 @@ class BiLSTMEncoderHiddenContext(BiLSTMEncoderBase):
         return self.extract_top_state(concat_state_dirs(hidden))
 
 
+class GRUEncoderBase(nn.Module):
+    """The GRU encoder is a base for a set of encoders producing various outputs
+
+    """
+    def __init__(
+            self,
+            insz: int,
+            hsz: int,
+            nlayers: int,
+            pdrop: float = 0.0,
+            requires_length: bool = True,
+            batch_first: bool = False,
+            unif: float = 0,
+            initializer: str = None,
+            **kwargs,
+    ):
+        """Produce a stack of biGRUs with dropout performed on all but the last layer.
+
+        :param insz: (``int``) The size of the input
+        :param hsz: (``int``) The number of hidden units per GRU
+        :param nlayers: (``int``) The number of layers of LSTMs to stack
+        :param pdrop: (``float``) The probability of dropping a unit value during dropout
+        :param requires_length: (``bool``) Does this encoder require an input length in its inputs (defaults to ``True``)
+        :param batch_first: (``bool``) Should we do batch first input or time-first input?
+        :param unif: Initialization parameters for RNN
+        :param initializer: A string describing optional initialization type for RNN
+        """
+        super().__init__()
+        self.requires_length = requires_length
+        self.batch_first = batch_first
+        self.nlayers = nlayers
+        if nlayers == 1:
+            pdrop = 0.0
+        self.rnn = torch.nn.GRU(insz, hsz, nlayers, dropout=pdrop, bidirectional=False, batch_first=batch_first)
+        if initializer == "ortho":
+            nn.init.orthogonal_(self.rnn.weight_ih_l0)
+            nn.init.orthogonal_(self.rnn.weight_hh_l0)
+        elif initializer == "he" or initializer == "kaiming":
+            nn.init.kaiming_uniform_(self.rnn.weight_ih_l0)
+            nn.init.kaiming_uniform_(self.rnn.weight_hh_l0)
+        elif unif > 0:
+            for weight in self.rnn.parameters():
+                weight.data.uniform_(-unif, unif)
+        else:
+            nn.init.xavier_uniform_(self.rnn.weight_ih_l0)
+            nn.init.xavier_uniform_(self.rnn.weight_hh_l0)
+        self.output_dim = hsz
+
+    def extract_top_state(self, state: torch.Tensor) -> torch.Tensor:
+        return state[-1]
+
+
+class GRUEncoderSequence(GRUEncoderBase):
+
+    """GRU encoder to produce the transduced output sequence
+    """
+
+    def forward(self, inputs: Tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
+        """Take in a tuple of the sequence tensor `[T, B, H]` or `[B, T, H]` and its length, produce output sequence
+
+        :param inputs: A tuple of the sequence tensor and its length
+        :return: A sequence tensor of shape `[T, B, H]` or `[B, T, H]`
+        """
+        tbc, lengths = inputs
+        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths, batch_first=self.batch_first)
+        output, hidden = self.rnn(packed)
+        output, _ = torch.nn.utils.rnn.pad_packed_sequence(output, batch_first=self.batch_first)
+        return output
+
+
+class GRUEncoderAll(GRUEncoderBase):
+    """GRU encoder that passes along the full output and hidden state
+    """
+
+    def forward(self, inputs: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Take tuple of sequence tensor `[T, B, H]` or `[B, T, H]` and length, produce output sequence and hidden state
+
+        :param inputs: A tuple of the sequence tensor and its length
+        :return: A sequence tensor of shape `[T, B, H]` or `[B, T, H]` and the hidden state `[L, B, H]`
+        """
+        tbc, lengths = inputs
+        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths, batch_first=self.batch_first)
+        output, hidden = self.rnn(packed)
+        output, _ = torch.nn.utils.rnn.pad_packed_sequence(output, batch_first=self.batch_first)
+        return output, hidden
+
+
+class GRUEncoderHidden(GRUEncoderBase):
+
+    """GRU encoder that returns the top hidden state
+
+    """
+
+    def forward(self, inputs: Tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
+        tbc, lengths = inputs
+        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths, batch_first=self.batch_first)
+        output, hidden = self.rnn(packed)
+        output, _ = torch.nn.utils.rnn.pad_packed_sequence(output, batch_first=self.batch_first)
+        return self.extract_top_state(hidden)
+
+
+class BiGRUEncoderBase(nn.Module):
+    def __init__(
+            self,
+            insz: int,
+            hsz: int,
+            nlayers: int,
+            pdrop: float = 0.0,
+            requires_length: bool = True,
+            batch_first: bool = False,
+            unif: float = 0,
+            initializer: str = None,
+            **kwargs,
+    ):
+        """Produce a stack of GRUs with dropout performed on all but the last layer.
+
+        :param insz: (``int``) The size of the input
+        :param hsz: (``int``) The number of hidden units per biGRU (`hsz//2` used for each dir)
+        :param nlayers: (``int``) The number of layers of GRUs to stack
+        :param dropout: (``int``) The probability of dropping a unit value during dropout
+        :param requires_length: (``bool``) Does this encoder require an input length in its inputs (defaults to ``True``)
+        :param batch_first: (``bool``) Should we do batch first input or time-first input?
+        :return: a stacked cell
+        """
+        super().__init__()
+        self.requires_length = requires_length
+        self.batch_first = batch_first
+        self.nlayers = nlayers
+        if nlayers == 1:
+            pdrop = 0.0
+        self.rnn = torch.nn.GRU(insz, hsz // 2, nlayers, dropout=pdrop, bidirectional=True, batch_first=batch_first)
+        if initializer == "ortho":
+            nn.init.orthogonal(self.rnn.weight_hh_l0)
+            nn.init.orthogonal(self.rnn.weight_ih_l0)
+        elif initializer == "he" or initializer == "kaiming":
+            nn.init.kaiming_uniform(self.rnn.weight_hh_l0)
+            nn.init.kaiming_uniform(self.rnn.weight_ih_l0)
+        elif unif > 0:
+            for weight in self.rnn.parameters():
+                weight.data.uniform_(-unif, unif)
+        else:
+            nn.init.xavier_uniform_(self.rnn.weight_hh_l0)
+            nn.init.xavier_uniform_(self.rnn.weight_ih_l0)
+        self.output_dim = hsz
+
+    def extract_top_state(self, state: torch.Tensor) -> torch.Tensor:
+        # Select the topmost state with -1 and the only direction is forward (select with 0)
+        return state[-1]
+
+
+class BiGRUEncoderSequenceHiddenContext(BiGRUEncoderBase):
+    def forward(self, inputs: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
+        tbc, lengths = inputs
+        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths, batch_first=self.batch_first)
+        output, hidden = self.rnn(packed)
+        output, _ = torch.nn.utils.rnn.pad_packed_sequence(output, batch_first=self.batch_first)
+        return output, self.extract_top_state(_cat_dir(hidden))
+
+
+class BiGRUEncoderAll(BiGRUEncoderBase):
+    def forward(self, inputs: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
+        tbc, lengths = inputs
+        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths, batch_first=self.batch_first)
+        output, hidden = self.rnn(packed)
+        output, _ = torch.nn.utils.rnn.pad_packed_sequence(output, batch_first=self.batch_first)
+        return output, _cat_dir(hidden)
+
+
+class BiGRUEncoderSequence(BiGRUEncoderBase):
+    def forward(self, inputs: Tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
+        tbc, lengths = inputs
+        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths, batch_first=self.batch_first)
+        output, hidden = self.rnn(packed)
+        output, _ = torch.nn.utils.rnn.pad_packed_sequence(output, batch_first=self.batch_first)
+        return output
+
+
+class BiGRUEncoderHidden(BiGRUEncoderBase):
+    def forward(self, inputs):
+        tbc, lengths = inputs
+        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths, batch_first=self.batch_first)
+        output, hidden = self.rnn(packed)
+        output, _ = torch.nn.utils.rnn.pad_packed_sequence(output, batch_first=self.batch_first)
+        return self.extract_top_state(_cat_dir(hidden))
+
+
 class EmbeddingsStack(nn.Module):
     def __init__(
         self,
@@ -1016,16 +1202,28 @@ class VectorSequenceAttention(nn.Module):
         attended = torch.tanh(self.W_c(attended))
         return attended
 
+def dot_product_attention_weights(query_t: torch.Tensor,
+                                  keys_bth: torch.Tensor,
+                                  keys_mask: torch.Tensor) -> torch.Tensor:
+    a = keys_bth @ query_t.unsqueeze(2)
+    a = a.squeeze(2).masked_fill(keys_mask == MASK_FALSE, -1e9)
+    a = F.softmax(a, dim=-1)
+    return a
+
+
+def dot_product_attention_weights_lengths(query_t: torch.Tensor,
+                                          keys_bth: torch.Tensor,
+                                          keys_lengths: torch.Tensor) -> torch.Tensor:
+    mask = sequence_mask(keys_lengths, keys_bth.shape[1]).to(keys_bth.device)
+    return dot_product_attention_weights(query_t, keys_bth, mask)
+
 
 class LuongDotProductAttention(VectorSequenceAttention):
     def __init__(self, hsz):
         super().__init__(hsz)
 
     def _attention(self, query_t, keys_bth, keys_mask):
-        a = keys_bth @ query_t.unsqueeze(2)
-        a = a.squeeze(2).masked_fill(keys_mask == MASK_FALSE, -1e9)
-        a = F.softmax(a, dim=-1)
-        return a
+        return dot_product_attention_weights(query_t, keys_bth, keys_mask)
 
 
 class ScaledDotProductAttention(VectorSequenceAttention):
