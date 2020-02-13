@@ -1556,8 +1556,9 @@ def to_numpy(x):
         return x
     try:
         import torch
-        x = x.detach()
-        x = x.to('cpu')
-    except:
+        if isinstance(x, torch.Tensor):
+            x = x.detach()
+            x = x.to('cpu')
+    except ImportError:
         pass
     return x.numpy()

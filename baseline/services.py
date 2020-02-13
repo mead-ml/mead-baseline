@@ -477,7 +477,6 @@ class LanguageModelService(Service):
                 tokens.append(tok[val].item())
             scores.append(tokens)
         scores = np.array(scores)
-        logger.warning("Warning: The `joint` probability isn't well formed right now and should be used with a grain of salt")
         return np.exp(np.sum(np.log(scores), axis=1))
 
     # Do a greedy decode for now, everything else will be super slow
