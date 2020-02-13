@@ -293,11 +293,11 @@ class TensorWordDatasetReader(TensorDatasetReaderBase):
         self.use_subword = use_subword
 
         if self.use_subword == 'bpe':
-            vectorizer = BPEVectorizer1D(model_file=model_file, vocab_file=vocab_file)
+            vectorizer = BPEVectorizer1D(model_file=model_file, vocab_file=vocab_file, mxlen=nctx)
         elif self.use_subword == 'wordpiece':
-            vectorizer = WordPieceVectorizer1D(embed_file=model_file)
+            vectorizer = WordPieceVectorizer1D(embed_file=model_file, mxlen=nctx)
         else:
-            vectorizer = Token1DVectorizer(transform_fn=baseline.lowercase)
+            vectorizer = Token1DVectorizer(transform_fn=baseline.lowercase, mxlen=nctx)
         super().__init__(nctx, vectorizer)
 
     def build_vocab(self, files):

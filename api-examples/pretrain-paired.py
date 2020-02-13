@@ -295,11 +295,11 @@ class TensorWordDatasetReader(TensorDatasetReaderBase):
         self.use_subword = use_subword
 
         if self.use_subword == 'bpe':
-            vectorizer = BPEVectorizer1D(model_file=model_file, vocab_file=vocab_file)
+            vectorizer = BPEVectorizer1D(model_file=model_file, vocab_file=vocab_file, mxlen=nctx)
         elif self.use_subword == 'wordpiece':
-            vectorizer = WordPieceVectorizer1D(embed_file=model_file)
+            vectorizer = WordPieceVectorizer1D(embed_file=model_file, mxlen=nctx)
         else:
-            vectorizer = Token1DVectorizer(transform_fn=baseline.lowercase)
+            vectorizer = Token1DVectorizer(transform_fn=baseline.lowercase, mxlen=nctx)
         super().__init__(nctx, vectorizer)
 
     def build_vocab(self, files):
@@ -595,6 +595,25 @@ class PairedLoss(nn.Module):
 
 class AllLoss(nn.Module):
     def __init__(self, model):
+        r"""Loss from here https://arxiv.org/pdf/1705.00652.pdf see section 4
+
+        We want to minimize the negative log prob of y given x
+
+        -log P(y|x)
+
+        P(y|x) P(x) = P(x, y)                             Chain Rule of Probability
+        P(y|x) = P(x, y) / P(x)                           Algebra
+        P(y|x) = P(x, y) / \sum_\hat(y) P(x, y = \hat(y)) Marginalize over all possible ys to get the probability of x
+        P_approx(y|x) = P(x, y) / \sum_i^k P(x, y_k)      Approximate the Marginalization by just using the ys in the batch
+
+        S(x, y) is the score (cosine similarity between x and y in this case) from our neural network
+        P(x, y) = e^S(x, y)
+
+        P(y|x) = e^S(x, y) / \sum_i^k e^S(x, y_k)
+        log P(y|x) = log( e^S(x, y) / \sum_i^k e^S(x, y_k))
+        log P(y|x) = S(x, y) - log \sum_i^k e^S(x, y_k)
+        -log P(y|x) = -(S(x, y) - log \sum_i^k e^S(x, y_k))
+        """
         super().__init__()
         self.score = nn.CosineSimilarity(dim=-1, eps=1e-6)
         self.model = model
@@ -603,12 +622,72 @@ class AllLoss(nn.Module):
         # These will get broadcast to [B, B, H]
         query = self.model.encode_query(inputs).unsqueeze(1)  # [B, 1, H]
         response = self.model.encode_response(targets).unsqueeze(0)  # [1, B, H]
-        all_score = self.score(query, response)
+        # all_scores is now a batch x batch matrix where index (i, j) is the score between
+        # the i^th x vector and the j^th y vector
+        all_score = self.score(query, response) # [B, B]
+        # The diagonal has the scores of correct pair, (i, i)
         pos_score = torch.diag(all_score)
+        # vec_log_sum_exp will calculate the batched log_sum_exp in a numerically stable way
+        # the result is a [B, 1] vector which we squeeze to make it [B] to match the diag
+        # Because we are minimizing the negative log we turned the division into a subtraction here
         loss = pos_score - vec_log_sum_exp(all_score, -1).squeeze()
         # Batch loss
         loss = torch.mean(loss)
+        # minimize the negative lol
         return -loss
+
+
+def test_all_loss():
+    from unittest.mock import MagicMock
+    def test():
+        B = np.random.randint(2, 64)
+        H = np.random.randint(128, 256)
+        model = MagicMock()
+        rs = torch.rand(B, H)
+        qs = torch.rand(B, H)
+        model.encode_query.return_value = qs
+        model.encode_response.return_value = rs
+        all_loss = AllLoss(model)
+        loss = all_loss(None, None)
+
+        def cosine_sim(x, y):
+            return np.dot(x, y) / (np.sqrt(np.sum(np.square(x))) * np.sqrt(np.sum(np.square(y))))
+
+        def log_all_loss(q, correct, rs):
+            pos = cosine_sim(q, correct)
+            scores = []
+            for r in rs:
+                scores.append(cosine_sim(q, r))
+            scores = np.stack(scores)
+            norm = np.max(scores) + np.log(np.sum(np.exp(scores - np.max(scores))))
+            return norm - pos
+
+        def all_loss(q, correct, rs):
+            pos = np.exp(cosine_sim(q, correct))
+            norm = 0
+            for r in rs:
+                norm += np.exp(cosine_sim(q, r))
+            return pos / norm
+
+        def batched_log_all_loss(qs, rs):
+            batch_loss = []
+            for q, r in zip(qs, rs):
+                batch_loss.append(log_all_loss(q, r, rs))
+            return np.mean(np.stack(batch_loss))
+
+        def batched_all_loss(qs, rs):
+            batch_loss = []
+            for q, r in zip(qs, rs):
+                batch_loss.append(np.log(all_loss(q, r, rs)))
+            return -(np.mean(np.stack(batch_loss)))
+
+        log_all = batched_log_all_loss(qs.numpy(), rs.numpy())
+        all_ = batched_all_loss(qs.numpy(), rs.numpy())
+        np.testing.assert_allclose(loss, log_all, rtol=1e-6)
+        np.testing.assert_allclose(loss, all_, rtol=1e-6)
+
+    for _ in range(100):
+        test()
 
 
 class PairedModel(nn.Module):
