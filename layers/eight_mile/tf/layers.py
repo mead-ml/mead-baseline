@@ -2569,13 +2569,16 @@ class CRF(tf.keras.layers.Layer):
     def neg_log_loss(self, unary, tags, lengths):
         """Neg Log Loss with a Batched CRF.
 
-        :param unary: torch.FloatTensor: [T, B, N] or [B, T, N]
-        :param tags: torch.LongTensor: [T, B] or [B, T]
-        :param lengths: torch.LongTensor: [B]
+        :param unary: unary outputs of length `[B, S, N]`
+        :param tags: tag truth values `[B, T]`
+        :param lengths: tensor of shape `[B]`
 
-        :return: torch.FloatTensor: [B]
+        :return: Tensor of shape `[B]`
         """
-        fwd_score = self((unary, tf.cast(lengths, tf.int32)), training=True)
+        lengths = tf.cast(lengths, tf.int32)
+        max_length = tf.reduce_max(lengths)
+        fwd_score = self((unary, lengths), training=True)
+        tags = tags[:, :max_length]
         gold_score = self.score_sentence(unary, tags, lengths)
         log_likelihood = gold_score - fwd_score
         return -tf.reduce_mean(log_likelihood)
