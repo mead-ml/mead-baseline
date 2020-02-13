@@ -895,7 +895,15 @@ class LSTMEncoderAll1(LSTMEncoder1):
         inputs = inputs[:, :max_length, :]
         with tf.variable_scope(self._name):
             rnnout, hidden = tf.nn.dynamic_rnn(self.rnn, inputs, sequence_length=lengths, dtype=tf.float32)
-        return self.output_fn(rnnout, hidden)
+
+        h = []
+        c = []
+        for i in range(len(hidden)):
+            h.append(hidden[i].h)
+            c.append(hidden[i].c)
+
+        encoder_state = tf.stack(h), tf.stack(c)
+        return self.output_fn(rnnout, encoder_state)
 
     def output_fn(self, output, state):
         return output, state
@@ -1618,7 +1626,6 @@ class BiLSTMEncoder1(tf.keras.layers.Layer):
 
     def call(self, inputs):
         inputs, lengths = tensor_and_lengths(inputs)
-        mask = tf.sequence_mask(lengths)
         max_length = tf.reduce_max(lengths)
         inputs = inputs[:, :max_length, :]
         with tf.name_scope(self.name), tf.variable_scope(self.name):
@@ -1638,17 +1645,21 @@ class BiLSTMEncoder1(tf.keras.layers.Layer):
 class BiLSTMEncoderAll1(BiLSTMEncoder1):
     def call(self, inputs):
         inputs, lengths = tensor_and_lengths(inputs)
-
+        max_length = tf.reduce_max(lengths)
+        inputs = inputs[:, :max_length, :]
         rnnout, (fwd_state, bwd_state) = tf.nn.bidirectional_dynamic_rnn(
             self.fwd_rnn, self.bwd_rnn, inputs, sequence_length=lengths, dtype=tf.float32
         )
         rnnout = tf.concat(axis=2, values=rnnout)
-        encoder_state = []
+
+        hs = []
+        cs = []
         for i in range(self.layers):
             h = tf.concat([fwd_state[i].h, bwd_state[i].h], -1)
             c = tf.concat([fwd_state[i].c, bwd_state[i].c], -1)
-            encoder_state.append(tf.contrib.rnn.LSTMStateTuple(h=h, c=c))
-        encoder_state = tuple(encoder_state)
+            hs.append(h)
+            cs.append(c)
+        encoder_state = (tf.stack(hs), tf.stack(cs))
         return self.output_fn(rnnout, encoder_state)
 
     def output_fn(self, out, state):
