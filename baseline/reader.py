@@ -316,7 +316,7 @@ class SeqPredictReader(object):
 
         vocabs = _filter_vocab(vocabs, kwargs.get('min_f', {}))
         base_offset = len(self.label2index)
-        labels.pop(Offsets.VALUES[Offsets.PAD])
+        labels.pop(Offsets.VALUES[Offsets.PAD], None)
         for i, k in enumerate(labels.keys()):
             self.label2index[k] = i + base_offset
         if pre_vocabs:
