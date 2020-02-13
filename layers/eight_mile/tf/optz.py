@@ -656,13 +656,13 @@ class EagerOptimizer(object):
                 rho = float(kwargs.get("rho", 0.95))
                 eps = float(kwargs.get("epsilon", 1e-6))
                 logger.info("adadelta(eta=%f, rho=%f, epsilon=%f)", lr, rho, eps)
-                self.optimizer = tf.optimizers.Adadelta(lr, rho, eps)
+                self.optimizer = tf.keras.optimizers.Adadelta(lr, rho, eps)
             elif optim == "adam":
                 beta1 = float(kwargs.get("beta1", 0.9))
                 beta2 = float(kwargs.get("beta2", 0.999))
                 eps = float(kwargs.get("epsilon", 1e-8))
                 logger.info("adam(eta=%f beta1=%f, beta2=%f, eps=%f)", lr, beta1, beta2, eps)
-                self.optimizer = tf.compat.v2.optimizers.Adam(lr_function, beta1, beta2, eps)
+                self.optimizer = tf.keras.optimizers.Adam(lr_function, beta1, beta2, eps)
             elif optim == "adamw":
                 import tensorflow_addons as tfa
 
@@ -678,13 +678,13 @@ class EagerOptimizer(object):
                 # Get mom again with difference default
                 mom = float(kwargs.get("mom", 0.0))
                 logger.info("rmsprop(eta=%f, mom=%f)", lr, mom)
-                self.optimizer = tf.optimizers.RMSprop(lr_function, momentum=mom)
+                self.optimizer = tf.keras.optimizers.RMSprop(lr_function, momentum=mom)
             elif sgd_mom > 0:
                 logger.info("sgd-mom(eta=%f, mom=%f)", lr, sgd_mom)
-                self.optimizer = tf.optimizers.SGD(lr_function, sgd_mom)
+                self.optimizer = tf.keras.optimizers.SGD(lr_function, sgd_mom)
             else:
                 logger.info("sgd(eta=%f)", lr)
-                self.optimizer = tf.optimizers.SGD(lr_function)
+                self.optimizer = tf.keras.optimizers.SGD(lr_function)
 
         logger.info("clip gradients at %s", self.clip)
 
