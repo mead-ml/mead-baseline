@@ -269,7 +269,7 @@ class AdamWOptimizer(tf.compat.v1.train.Optimizer):
 
     def __init__(self, learning_rate, weight_decay=0.0, beta_1=0.9, beta_2=0.999, epsilon=1e-6, name="AdamWOptimizer"):
         """Constructs a AdamWOptimizer."""
-        super(AdamWOptimizer, self).__init__(False, name)
+        super().__init__(False, name)
 
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
@@ -294,19 +294,19 @@ class AdamWOptimizer(tf.compat.v1.train.Optimizer):
 
             param_name = self._get_variable_name(param.name)
 
-            m = tf.get_variable(
+            m = tf.compat.v1.get_variable(
                 name=param_name + "/adam_m",
                 shape=param.shape.as_list(),
                 dtype=tf.float32,
                 trainable=False,
-                initializer=tf.zeros_initializer(),
+                initializer=tf.compat.v1.zeros_initializer(),
             )
-            v = tf.get_variable(
+            v = tf.compat.v1.get_variable(
                 name=param_name + "/adam_v",
                 shape=param.shape.as_list(),
                 dtype=tf.float32,
                 trainable=False,
-                initializer=tf.zeros_initializer(),
+                initializer=tf.compat.v1.zeros_initializer(),
             )
 
             # Standard Adam update.
