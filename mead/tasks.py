@@ -744,8 +744,9 @@ class EncoderDecoderTask(Task):
 
     def _reorganize_params(self):
         train_params = self.config_params['train']
-        train_params['batchsz'] = self.config_params['batchsz']
-        train_params['test_batchsz'] = self.config_params.get('test_batchsz', 1)
+        train_params['batchsz'] = train_params.get('batchsz', self.config_params.get('batchsz'))
+        train_params['test_batchsz'] = train_params.get('test_batchsz',
+                                                        self.config_params.get('test_batchsz', 1))
 
         self.config_params['model']["unif"] = self.config_params["unif"]
         model = self.config_params['model']

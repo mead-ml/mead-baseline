@@ -815,16 +815,11 @@ class LSTMEncoderSequence1(LSTMEncoder1):
         return output
 
 
-class LSTMEncoderAll1(LSTMEncoder1):
+class LSTMEncoderAllLegacy(LSTMEncoder1):
     """LSTM encoder that passes along the full output and hidden states for each layer
 
-    Takes a tuple containing a tensor input of shape `[B, T, C]` and lengths of shape `[B]`
-
-    This returns a 2-tuple of outputs `[B, S, H]` where `S = max(lengths)`, for the output vector sequence,
-    and a tuple of hidden vector `[L, B, H]` and context vector `[L, B, H]`, respectively
-
-    *TF Note*: This module reorganizes the underlying TF output, which means you must be careful if using
-    this with another tf 1 `RNNCell` implementation
+    *TF Note*: This module does not change the underlying TF output, we only support this to make it easier to use
+    with existing TF primitives, especially in seq2seq
     """
     def call(self, inputs):
         """
@@ -835,7 +830,27 @@ class LSTMEncoderAll1(LSTMEncoder1):
         max_length = tf.reduce_max(lengths)
         inputs = inputs[:, :max_length, :]
         with tf.variable_scope(self._name):
-            rnnout, hidden = tf.nn.dynamic_rnn(self.rnn, inputs, sequence_length=lengths, dtype=tf.float32)
+            rnnout, encoder_state = tf.nn.dynamic_rnn(self.rnn, inputs, sequence_length=lengths, dtype=tf.float32)
+
+        return self.output_fn(rnnout, encoder_state)
+
+    def output_fn(self, output, hidden):
+        return output, hidden
+
+
+class LSTMEncoderAll1(LSTMEncoderAllLegacy):
+    """LSTM encoder that passes along the full output and hidden states for each layer
+
+    Takes a tuple containing a tensor input of shape `[B, T, C]` and lengths of shape `[B]`
+
+    This returns a 2-tuple of outputs `[B, S, H]` where `S = max(lengths)`, for the output vector sequence,
+    and a tuple of hidden vector `[L, B, H]` and context vector `[L, B, H]`, respectively
+
+    *TF Note*: This module reorganizes the underlying TF output, which means you must be careful if using
+    this with another tf 1 `RNNCell` implementation
+    """
+
+    def output_fn(self, output, hidden):
 
         h = []
         c = []
@@ -844,10 +859,7 @@ class LSTMEncoderAll1(LSTMEncoder1):
             c.append(hidden[i].c)
 
         encoder_state = tf.stack(h), tf.stack(c)
-        return self.output_fn(rnnout, encoder_state)
-
-    def output_fn(self, output, state):
-        return output, state
+        return output, encoder_state
 
 
 class LSTMEncoderHidden1(LSTMEncoder1):
@@ -1497,21 +1509,54 @@ class BiLSTMEncoder1(tf.keras.layers.Layer):
         return self._requires_length
 
 
-class BiLSTMEncoderAll1(BiLSTMEncoder1):
+class BiLSTMEncoderAllLegacy(BiLSTMEncoder1):
+    """BiLSTM encoder that passes along the full output and hidden states for each layer
+
+    *TF Note*: This module reorganizes the underlying TF output, which means you must be careful if using
+    this with another tf 1 `RNNCell` implementation
+    """
 
     def call(self, inputs):
         """
-        :param inputs: A tuple containing the input tensor `[B, T, C]` and a length `[B]`
+        :param inputs: A 1tuple containing the input tensor `[B, T, C]` and a length `[B]`
         :return: An output tensor `[B, S, H], and tuple of hidden `[L, B, H]` and context `[L, B, H]`
         """
         inputs, lengths = tensor_and_lengths(inputs)
         max_length = tf.reduce_max(lengths)
         inputs = inputs[:, :max_length, :]
-        rnnout, (fwd_state, bwd_state) = tf.nn.bidirectional_dynamic_rnn(
+        rnnout, encoder_state = tf.nn.bidirectional_dynamic_rnn(
             self.fwd_rnn, self.bwd_rnn, inputs, sequence_length=lengths, dtype=tf.float32
         )
         rnnout = tf.concat(axis=2, values=rnnout)
 
+        return self.output_fn(rnnout, encoder_state)
+
+    def output_fn(self, rnnout, encoder_state):
+        fwd_state, bwd_state = encoder_state
+        encoder_state = []
+        for i in range(self.layers):
+            h = tf.concat([fwd_state[i].h, bwd_state[i].h], -1)
+            c = tf.concat([fwd_state[i].c, bwd_state[i].c], -1)
+            encoder_state.append(tf.contrib.rnn.LSTMStateTuple(h=h, c=c))
+        encoder_state = tuple(encoder_state)
+        return rnnout, encoder_state
+
+
+
+class BiLSTMEncoderAll1(BiLSTMEncoderAllLegacy):
+    """BiLSTM encoder that passes along the full output and hidden states for each layer
+
+    Takes a tuple containing a tensor input of shape `[B, T, C]` and lengths of shape `[B]`
+
+    This returns a 2-tuple of outputs `[B, S, H]` where `S = max(lengths)`, for the output vector sequence,
+    and a tuple of hidden vector `[L, B, H]` and context vector `[L, B, H]`, respectively
+
+    *TF Note*: This module reorganizes the underlying TF output, which means you must be careful if using
+    this with another tf 1 `RNNCell` implementation
+    """
+
+    def output_fn(self, out, encoder_state):
+        fwd_state, bwd_state = encoder_state
         hs = []
         cs = []
         for i in range(self.layers):
@@ -1520,10 +1565,7 @@ class BiLSTMEncoderAll1(BiLSTMEncoder1):
             hs.append(h)
             cs.append(c)
         encoder_state = (tf.stack(hs), tf.stack(cs))
-        return self.output_fn(rnnout, encoder_state)
-
-    def output_fn(self, out, state):
-        return out, state
+        return out, encoder_state
 
 
 class BiLSTMEncoderSequence1(BiLSTMEncoder1):

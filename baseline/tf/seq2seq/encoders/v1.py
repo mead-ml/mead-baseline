@@ -34,7 +34,7 @@ class RNNEncoder(EncoderBase):
 
     def __init__(self, name='encoder', pdrop=0.1, hsz=650, rnntype='blstm', layers=1, vdrop=False, scope='RNNEncoder', residual=False, create_src_mask=True, **kwargs):
         super().__init__(name=name)
-        Encoder = BiLSTMEncoderAll if rnntype == 'blstm' else LSTMEncoderALL
+        Encoder = BiLSTMEncoderAllLegacy if rnntype == 'blstm' else LSTMEncoderAllLegacy
         self.rnn = Encoder(None, hsz, layers, pdrop, vdrop, name=scope)
         self.residual = residual
         self.src_mask_fn = _make_src_mask if create_src_mask is True else lambda x, y: None
