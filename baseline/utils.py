@@ -3,6 +3,7 @@ import os
 import re
 import sys
 import json
+import gzip
 import pickle
 import hashlib
 import logging
