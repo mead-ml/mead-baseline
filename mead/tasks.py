@@ -809,7 +809,7 @@ class LanguageModelingTask(Task):
         reader_params['mxlen'] = self.vectorizers[self.primary_key].mxlen
         if self.config_params['train'].get('gpus', 1) > 1:
             reader_params['truncate'] = True
-        return baseline.reader.create_reader(self.task_name(), self.vectorizers, self.config_params['preproc'].get('trim', False), **reader_params)
+        return baseline.reader.create_reader(self.task_name(), self.vectorizers, self.config_params.get('preproc', {}).get('trim', False), **reader_params)
 
     def _create_backend(self, **kwargs):
         backend = Backend(self.config_params.get('backend', 'tf'), kwargs)
