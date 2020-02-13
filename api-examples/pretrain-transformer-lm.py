@@ -204,7 +204,7 @@ class WordPieceVectorizer1D(AbstractVectorizer):
         handle = kwargs.get('embed_file')
         custom_vocab = kwargs.get('vocab_file')
         if custom_vocab is None:
-            self.tokenizer = BertTokenizer.from_pretrained(handle, do_lower_case=False)
+            self.tokenizer = BertTokenizer.from_pretrained(handle, do_lower_case=True)
         else:
             special_tokens = kwargs.get('special_tokens')
             never_split = ('[UNK]', '[SEP]', '[PAD]', '[CLS]', '[MASK]') + special_tokens
@@ -266,7 +266,7 @@ class TensorDatasetReaderBase(object):
         self.num_words = {}
 
     def build_vocab(self, files):
-        vocabs = {k: Counter() for k in self.vectorizers.keys()}
+        vocabs = {k: Counter({'[CLS]': 1}) for k in self.vectorizers.keys()}
 
         for file in files:
             if file is None:
@@ -396,16 +396,24 @@ def load_embed_and_vocab(token_type, reader, dataset, dataset_key, d_model, cach
         logger.info("Loading cached preprocessing info [%s]", preproc_cache)
         preproc_data = torch.load(preproc_cache)
         vectorizers_mxlen = preproc_data['vectorizers_mxlen']
-        for k, vectorizer in reader.vectorizers.items():
-            vectorizer.max_seen = vectorizers_mxlen[k]
-
+        if token_type == 'chars':
+            char_vectorizer = reader.vectorizers['x']
+            tok_vectorizer = reader.vectorizers['y']
+            char_vectorizer.max_seen_tok, char_vectorizer.max_seen_char = vectorizers_mxlen['x']
+            tok_vectorizer.max_seen = vectorizers_mxlen['y']
+        else:
+            reader.vectorizers['x'].max_seen = vectorizers_mxlen['x']
     else:
         vocab_sources = [dataset['train_file'], dataset['valid_file']]
         vocabs = reader.build_vocab(vocab_sources)
         valid_num_words = reader.num_words[dataset['valid_file']]
-        vectorizers_maxlen = {}
-        for k, vectorizer in reader.vectorizers.items():
-            vectorizers_maxlen[k] = vectorizer.max_seen
+        vectorizers_mxlen = {}
+        if token_type == 'chars':
+            vectorizers_mxlen['x'] = (reader.vectorizers['x'].max_seen_tok, reader.vectorizers['x'].max_seen_char)
+            vectorizers_mxlen['y'] = reader.vectorizers['y'].max_seen
+        else:
+            vectorizers_mxlen['x'] = reader.vectorizers['x'].max_seen
+
         logger.info("Read vocabulary")
         embeddings = {}
 
@@ -431,7 +439,7 @@ def load_embed_and_vocab(token_type, reader, dataset, dataset_key, d_model, cach
             embeddings['x'] = x_embedding['embeddings']
 
         preproc_data = {'vocabs': vocabs, 'embeddings': embeddings, 'valid_num_words': valid_num_words,
-                        'tgt_key': tgt_key, 'vectorizers_mxlen': vectorizers_maxlen}
+                        'tgt_key': tgt_key, 'vectorizers_mxlen': vectorizers_mxlen}
         logger.info("Saving preprocessing info [%s]", preproc_cache)
         torch.save(preproc_data, preproc_cache)
     return preproc_data
