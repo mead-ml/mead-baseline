@@ -152,10 +152,24 @@ def get_activation(name: str = "relu"):
     return tf.nn.relu
 
 
+
+class WithoutLength(tf.keras.layers.Layer):
+    """Wrapper layer to remove lengths from the input
+    """
+
+    def __init__(self, layer: tf.keras.layers.Layer, name=None):
+        super().__init__(name=name)
+        self.layer = layer
+        self.output_dim = self.layer.output_dim if hasattr(self.layer, "output_dim") else 0
+
+    def call(self, inputs):
+        output = self.layer(inputs[0])
+        return output
+
 # Mapped
 class ConvEncoder(tf.keras.layers.Layer):
-    def __init__(self, insz: Optional[int], outsz: int, filtsz: int, pdrop: float, activation: str = "relu"):
-        super().__init__()
+    def __init__(self, insz: Optional[int], outsz: int, filtsz: int, pdrop: float = 0.0, activation: str = "relu", name=None):
+        super().__init__(name=name)
         self.output_dim = outsz
         self.conv = tf.keras.layers.Conv1D(filters=outsz, kernel_size=filtsz, padding="same")
         self.act = get_activation(activation)
@@ -166,16 +180,15 @@ class ConvEncoder(tf.keras.layers.Layer):
         return self.dropout(conv_out, TRAIN_FLAG())
 
 
-# Mapped
 class ConvEncoderStack(tf.keras.layers.Layer):
     def __init__(
-        self, insz: Optional[int], outsz: int, filtsz: int, pdrop: float, layers: int = 1, activation: str = "relu"
+        self, insz: Optional[int], outsz: int, filtsz: int, nlayers: int = 1, pdrop: float = 0.0, activation: str = "relu", name=None
     ):
-        super().__init__()
-
+        super().__init__(name=name)
+        self.layers = []
         first_layer = ConvEncoder(insz, outsz, filtsz, pdrop, activation)
         self.layers.append(first_layer)
-        for i in range(layers - 1):
+        for i in range(nlayers - 1):
             subsequent_layer = ResidualBlock(ConvEncoder(insz, outsz, filtsz, pdrop, activation))
             self.layers.append(subsequent_layer)
 

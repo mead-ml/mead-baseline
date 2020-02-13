@@ -258,34 +258,59 @@ def concat_state_dirs(state):
     return _cat_dir(state)
 
 
+class Conv1DSame(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size, bias=True):
+        super().__init__()
+        start_pad = kernel_size // 2
+        end_pad = start_pad - 1 if kernel_size % 2 == 0 else start_pad
+        self.conv = nn.Sequential(
+            nn.ConstantPad1d((start_pad, end_pad), 0.),
+            nn.Conv1d(in_channels, out_channels, kernel_size, bias=bias)
+        )
+
+    def forward(self, x):
+        return self.conv(x)
+
+
 class ConvEncoder(nn.Module):
     """Convolutional layer encoder with given activation function
 
     """
 
-    def __init__(self, insz: int, outsz: int, filtsz: int, pdrop: float, activation: str = "relu"):
+    def __init__(self, insz: int, outsz: int, filtsz: int, pdrop: float = 0.0, activation: str = "relu", hidden_last=True):
         super().__init__()
         self.output_dim = outsz
-        pad = filtsz // 2
-        self.conv = nn.Conv1d(insz, outsz, filtsz, padding=pad)
-        self.act = get_activation(activation)
-        self.dropout = nn.Dropout(pdrop)
 
-    def forward(self, input_bct: torch.Tensor) -> torch.Tensor:
-        conv_out = self.act(self.conv(input_bct))
-        return self.dropout(conv_out)
+        conv = Conv1DSame(insz, outsz, filtsz)
+        act = get_activation(activation)
+        dropout = nn.Dropout(pdrop)
+
+        if hidden_last:
+            self.conv = nn.Sequential(BTH2BHT(), conv, act, dropout, BHT2BTH())
+        else:
+            self.conv = nn.Sequential(conv, act, dropout)
+
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        return self.conv(input)
 
 
 class ConvEncoderStack(nn.Module):
     """Create a stack of convolutional encoders
     """
 
-    def __init__(self, insz: int, outsz: int, filtsz: int, pdrop: float, layers: int = 1, activation: str = "relu"):
+    def __init__(self, insz: int, outsz: int, filtsz: int, nlayers: int = 1, pdrop: float = 0.0, activation: str = "relu", hidden_last=True):
         super().__init__()
 
-        first_layer = ConvEncoder(insz, outsz, filtsz, pdrop, activation)
-        subsequent_layer = ResidualBlock(ConvEncoder(outsz, outsz, filtsz, pdrop, activation))
-        self.layers = nn.ModuleList([first_layer] + [copy.deepcopy(subsequent_layer) for _ in range(layers - 1)])
+        if hidden_last:
+            first_layer = nn.Sequential(BTH2BHT(), ConvEncoder(insz, outsz, filtsz, pdrop, activation, hidden_last=False))
+        else:
+            first_layer = ConvEncoder(insz, outsz, filtsz, pdrop, activation, hidden_last=False)
+
+        subsequent_layer = ResidualBlock(ConvEncoder(outsz, outsz, filtsz, pdrop, activation, hidden_last=False))
+
+        self.layers = nn.ModuleList([first_layer] + [copy.deepcopy(subsequent_layer) for _ in range(nlayers - 1)])
+        if hidden_last:
+            self.layers.append(BHT2BTH())
         self.output_dim = outsz
 
     def forward(self, input_bct: torch.Tensor) -> torch.Tensor:
@@ -300,9 +325,27 @@ def bth2bht(t: torch.Tensor) -> torch.Tensor:
     return t.transpose(1, 2).contiguous()
 
 
+class BTH2BHT(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, t: torch.Tensor) -> torch.Tensor:
+        return bth2bht(t)
+
+
 def tbh2bht(t: torch.Tensor) -> torch.Tensor:
     """Permute the dimensions, first goes to third, second goes to first, last moves to second"""
     return t.permute(1, 2, 0).contiguous()
+
+
+class TBH2BHT(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, t: torch.Tensor) -> torch.Tensor:
+        return tbh2bht(t)
 
 
 def tbh2bth(t: torch.Tensor) -> torch.Tensor:
@@ -310,9 +353,39 @@ def tbh2bth(t: torch.Tensor) -> torch.Tensor:
     return t.transpose(0, 1).contiguous()
 
 
+class TBH2BTH(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, t: torch.Tensor) -> torch.Tensor:
+        return tbh2bth(t)
+
+
 def bth2tbh(t: torch.Tensor) -> torch.Tensor:
     """Transpose the first 2 dims"""
     return t.transpose(0, 1).contiguous()
+
+
+class BTH2TBH(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, t: torch.Tensor) -> torch.Tensor:
+        return bth2tbh(t)
+
+
+def bht2bth(t: torch.Tensor) -> torch.Tensor:
+    return t.transpose(1, 2).contiguous()
+
+
+class BHT2BTH(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, t: torch.Tensor) -> torch.Tensor:
+        return bht2bth(t)
 
 
 class ParallelConv(nn.Module):
