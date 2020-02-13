@@ -1548,3 +1548,17 @@ def mime_type(file_name: str) -> str:
     if is_text_file(b):
         return "text/plain"
     return "application/w2v"
+
+
+@export
+def to_numpy(x):
+    if isinstance(x, np.ndarray):
+        return x
+    try:
+        import torch
+        if isinstance(x, torch.Tensor):
+            x = x.detach()
+            x = x.to('cpu')
+    except ImportError:
+        pass
+    return x.numpy()

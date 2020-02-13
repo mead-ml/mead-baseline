@@ -214,7 +214,7 @@ class ParallelConv(tf.keras.layers.Layer):
         self.activation = get_activation(activation)
 
         motsz = outsz
-        if not isinstance(outsz, list):
+        if not is_sequence(outsz):
             motsz = [outsz] * len(filtsz)
 
         for fsz, cmotsz in zip(filtsz, motsz):
@@ -784,7 +784,6 @@ class LSTMEncoderWithState1(LSTMEncoder1):
         return self.rnn.zero_state(batchsz, tf.float32)
 
     def call(self, inputs):
-
         inputs, hidden = inputs
         rnnout, hidden = tf.nn.dynamic_rnn(self.rnn, inputs, initial_state=hidden, dtype=tf.float32)
         return rnnout, hidden  # (hidden[-1].h, hidden[-1].c)
