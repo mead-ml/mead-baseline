@@ -10,6 +10,8 @@ B = 50
 T = 20
 H = 8
 L = 2
+TRIALS = 100
+
 
 @pytest.fixture
 def lengths():
@@ -37,6 +39,43 @@ def encoder_input(lengths):
     hidden = torch.rand(B, T, C)
     lengths, perm_idx = lengths.sort(0, descending=True)
     return hidden[perm_idx], lengths
+
+def generate_data_with_zeros(lengths):
+    data = torch.randint(1, 100, (len(lengths), torch.max(lengths)))
+    for i, length in enumerate(lengths):
+        data[i, length:] = 0
+        if length // 2 > 0:
+            extra_zeros = torch.randint(0, length.item() - 1, size=((length // 2).item(),))
+            data[i, extra_zeros] = 0
+    return data
+
+
+def test_infer_lengths(lengths):
+    def test():
+        data = generate_data_with_zeros(lengths)
+        infered = infer_lengths(data, dim=1)
+        np.testing.assert_equal(infered.numpy(), lengths.numpy())
+
+    for _ in range(TRIALS):
+        test()
+
+
+def test_infer_lengths_t_first(lengths):
+    def test():
+        data = generate_data_with_zeros(lengths)
+        data = data.transpose(0, 1)
+        infered = infer_lengths(data, dim=0)
+        np.testing.assert_equal(infered.numpy(), lengths.numpy())
+
+    for _ in range(TRIALS):
+        test()
+
+
+def test_infer_legnths_multi_dim():
+    data = torch.rand(10, 11, 12)
+    with pytest.raises(ValueError):
+        infer_lengths(data)
+
 
 def raw_loss(logits, labels, loss):
     B, T, H = logits.size()
