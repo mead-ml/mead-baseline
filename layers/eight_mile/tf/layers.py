@@ -923,11 +923,6 @@ class LSTMEncoderWithState1(LSTMEncoder1):
         return self.rnn.zero_state(batchsz, tf.float32)
 
     def call(self, inputs):
-        """
-
-        :param inputs: The input at this timestep and the previous hidden unit or `None`
-        :return: Raw TensorFlow output
-        """
         inputs, hidden = inputs
         rnnout, hidden = tf.nn.dynamic_rnn(self.rnn, inputs, initial_state=hidden, dtype=tf.float32)
         return rnnout, hidden  # (hidden[-1].h, hidden[-1].c)
