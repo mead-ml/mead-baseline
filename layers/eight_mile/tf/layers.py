@@ -51,6 +51,21 @@ def TRAIN_FLAG():
     return BASELINE_TF_TRAIN_FLAG
 
 
+def infer_lengths(tensor, axis=1):
+    """Infer the lengths of an input based on the idea the Offsets.PAD was used as the padding token.
+
+    :param tensor: The data to infer the length of, should be either [B, T] or [T, B]
+    :param axis: The dimension which contains the sequential signal
+
+    :returns: A Tensor of shape `[B]` that has the lengths for example item in the batch
+    """
+    if len(tensor.get_shape()) != 2:
+        raise ValueError(f"infer_lengths only works with tensors with two dims right now, got {len(tensor.get_shape())}")
+    offsets = tf.expand_dims(tf.range(1, tf.shape(tensor)[axis] + 1, dtype=tensor.dtype), 1 - axis)
+    non_pad_loc = tf.cast(tf.not_equal(tensor, Offsets.PAD), tensor.dtype)
+    return tf.argmax(non_pad_loc * offsets, axis=axis) + 1
+
+
 # Mapped
 def tensor_and_lengths(inputs):
     if isinstance(inputs, (list, tuple)):

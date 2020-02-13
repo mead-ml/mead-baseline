@@ -64,6 +64,21 @@ def unsort_batch(batch: torch.Tensor, perm_idx: torch.Tensor) -> torch.Tensor:
     return batch.scatter_(0, perm_idx.expand_as(batch), batch)
 
 
+def infer_lengths(tensor, dim=1):
+    """Infer the lengths of an input based on the idea the Offsets.PAD was used as the padding token.
+
+    :param tensor: The data to infer the length of, should be either [B, T] or [T, B]
+    :param dim: The dimension which contains the sequential signal
+
+    :returns: A Tensor of shape `[B]` that has the lengths for example item in the batch
+    """
+    if len(tensor.shape) != 2:
+        raise ValueError(f"infer_lengths only works with tensors wit two dims right now, got {len(tensor.shape)}")
+    offsets = torch.arange(1, tensor.shape[dim] + 1, device=tensor.device, dtype=tensor.dtype).unsqueeze(1 - dim)
+    non_pad_loc = (tensor != Offsets.PAD).to(tensor.dtype)
+    return torch.argmax(non_pad_loc * offsets, dim=dim) + 1
+
+
 def tensor_and_lengths(inputs) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
     """Return either the unpacked inputs (2), or a `Tuple` of the input with None
 
