@@ -852,9 +852,9 @@ class LSTMEncoderBase(nn.Module):
         :param nlayers: The number of layers of LSTMs to stack
         :param pdrop: The probability of dropping a unit value during dropout, defaults to 0
         :param requires_length: Does this encoder require an input length in its inputs (defaults to `True`)
-        :param batch_first: Should we do batch first input or time-first input? Defaults to `False` (differs from TF!)
-        :param unif: Initialization parameters for RNN
-        :param initializer: A string describing optional initialization type for RNN
+        :param batch_first: PyTorch only! Should we do batch first input or time-first input? Defaults to `False` (differs from TF!)
+        :param unif: PyTorch only! Initialization parameters for RNN
+        :param initializer: PyTorch only! A string describing optional initialization type for RNN
         """
         super().__init__()
         self.requires_length = requires_length
@@ -1202,7 +1202,7 @@ class BiLSTMEncoderHidden(BiLSTMEncoderBase):
         output, _ = torch.nn.utils.rnn.pad_packed_sequence(output, batch_first=self.batch_first)
         return self.extract_top_state(concat_state_dirs(hidden))[0]
 
-
+# TODO: Add this to TF or remove
 class BiLSTMEncoderHiddenContext(BiLSTMEncoderBase):
     def forward(self, inputs: Tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
         tbc, lengths = inputs
@@ -1213,9 +1213,23 @@ class BiLSTMEncoderHiddenContext(BiLSTMEncoderBase):
 
 
 class GRUEncoderBase(nn.Module):
-    """The GRU encoder is a base for a set of encoders producing various outputs
+    """The GRU encoder is a base for a set of encoders producing various outputs.
+
+    All GRU encoders inheriting this class will trim the input to the max length given in the batch.  For example,
+    if the input sequence is `[B, T, C]` and the `S = max(lengths)` then the resulting sequence, if produced, will
+    be length `S` (or more precisely, `[B, S, H]`)
+
+    *PyTorch Note*: In PyTorch, its more common for the input shape to be temporal length first (`[T, B, H]`) and this
+    is the PyTorch default.  There is an extra parameter in all of these models called `batch_first` which controls this.
+    Currently, the default is time first (`batch_first=False`), which differs from TensorFlow.  To match the TF impl,
+    set `batch_first=True`.
+
+    *PyTorch Note*:
+    Most `GRUEncoder` variants just define the `forward`.  This module cannot provide the same utility as the
+    TensorFlow `GRUEncoder` base right now, because because the JIT isnt handling subclassing of forward properly.
 
     """
+
     def __init__(
             self,
             insz: int,
@@ -1228,16 +1242,16 @@ class GRUEncoderBase(nn.Module):
             initializer: str = None,
             **kwargs,
     ):
-        """Produce a stack of biGRUs with dropout performed on all but the last layer.
+        """Produce a stack of GRUs with dropout performed on all but the last layer.
 
-        :param insz: (``int``) The size of the input
-        :param hsz: (``int``) The number of hidden units per GRU
-        :param nlayers: (``int``) The number of layers of LSTMs to stack
-        :param pdrop: (``float``) The probability of dropping a unit value during dropout
-        :param requires_length: (``bool``) Does this encoder require an input length in its inputs (defaults to ``True``)
-        :param batch_first: (``bool``) Should we do batch first input or time-first input?
-        :param unif: Initialization parameters for RNN
-        :param initializer: A string describing optional initialization type for RNN
+        :param insz: The size of the input
+        :param hsz: The number of hidden units per GRU
+        :param nlayers: The number of layers of GRUs to stack
+        :param pdrop: The probability of dropping a unit value during dropout, defaults to 0
+        :param requires_length: Does this encoder require an input length in its inputs (defaults to `True`)
+        :param batch_first: PyTorch only! Should we do batch first input or time-first input? Defaults to `False` (differs from TF!)
+        :param unif: PyTorch only! Initialization parameters for RNN
+        :param initializer: PyTorch only! A string describing optional initialization type for RNN
         """
         super().__init__()
         self.requires_length = requires_length
@@ -1266,7 +1280,14 @@ class GRUEncoderBase(nn.Module):
 
 class GRUEncoderSequence(GRUEncoderBase):
 
-    """GRU encoder to produce the transduced output sequence
+    """GRU encoder to produce the transduced output sequence.
+
+    Takes a tuple of tensor, shape `[B, T, C]` and a lengths of shape `[B]` and produce an output sequence of
+    shape `[B, S, H]` where `S = max(lengths)`.  The lengths of the output sequence may differ from the input
+    sequence if the `max(lengths)` given is shorter than `T` during execution.
+
+    *PyTorch Note:* The input shape of is either `[B, T, C]` or `[T, B, C]` depending on the value of `batch_first`,
+    and defaults to `[T, B, C]` for consistency with other PyTorch modules. The output shape is of the same orientation.
     """
 
     def forward(self, inputs: Tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
@@ -1283,14 +1304,22 @@ class GRUEncoderSequence(GRUEncoderBase):
 
 
 class GRUEncoderAll(GRUEncoderBase):
-    """GRU encoder that passes along the full output and hidden state
+    """GRU encoder that passes along the full output and hidden states for each layer
+
+    Takes a tuple containing a tensor input of shape `[B, T, C]` and lengths of shape `[B]`
+
+    This returns a 2-tuple of outputs `[B, S, H]` where `S = max(lengths)`, for the output vector sequence,
+    and a hidden vector `[L, B, H]`
+
+    *PyTorch note*: Takes a vector of shape `[B, T, C]` or `[B, C, T]`, depending on input specification
+    of `batch_first`. Also note that in PyTorch, this defaults to `True`
+
     """
 
     def forward(self, inputs: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Take tuple of sequence tensor `[T, B, H]` or `[B, T, H]` and length, produce output sequence and hidden state
-
-        :param inputs: A tuple of the sequence tensor and its length
-        :return: A sequence tensor of shape `[T, B, H]` or `[B, T, H]` and the hidden state `[L, B, H]`
+        """
+        :param inputs: A tuple containing the input tensor `[B, T, C]` or `[B, H, C]` and a length `[B]`
+        :return: An output tensor `[B, S, H]` or `[B, H, S]` , and a hidden tensor `[L, B, H]`
         """
         tbc, lengths = inputs
         packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths, batch_first=self.batch_first)
@@ -1303,9 +1332,20 @@ class GRUEncoderHidden(GRUEncoderBase):
 
     """GRU encoder that returns the top hidden state
 
+
+    Takes a tuple containing a tensor input of shape `[B, T, C]` and lengths of shape `[B]` and
+    returns a hidden unit tensor of shape `[B, H]`
+
+    *PyTorch note*: Takes a vector of shape `[B, T, C]` or `[B, C, T]`, depending on input specification
+    of `batch_first`. Also note that in PyTorch, this defaults to `True`
+
     """
 
     def forward(self, inputs: Tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
+        """
+        :param inputs: A tuple containing the input tensor `[B, T, C]` or `[B, H, C]` and a length `[B]`
+        :return: An output tensor of shape `[B, H]` representing the last RNNs hidden state
+        """
         tbc, lengths = inputs
         packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths, batch_first=self.batch_first)
         output, hidden = self.rnn(packed)
@@ -1314,6 +1354,24 @@ class GRUEncoderHidden(GRUEncoderBase):
 
 
 class BiGRUEncoderBase(nn.Module):
+    """BiGRU encoder base for a set of encoders producing various outputs.
+
+    All BiGRU encoders inheriting this class will trim the input to the max length given in the batch.  For example,
+    if the input sequence is `[B, T, C]` and the `S = max(lengths)` then the resulting sequence, if produced, will
+    be length `S` (or more precisely, `[B, S, H]`).  Because its bidirectional, half of the hidden units given in the
+    constructor will be applied to the forward direction and half to the backward direction, and these will get
+    concatenated.
+
+    *PyTorch Note*: In PyTorch, its more common for the input shape to be temporal length first (`[T, B, H]`) and this
+    is the PyTorch default.  There is an extra parameter in all of these models called `batch_first` which controls this.
+    Currently, the default is time first (`batch_first=False`), which differs from TensorFlow.  To match the TF impl,
+    set `batch_first=True`.
+
+    *PyTorch Note*:
+    Most `BiGRUEncoder` variants just define the `forward`.  This module cannot provide the same utility as the
+    TensorFlow `BiGRUEncoder` base right now, because because the JIT isnt handling subclassing of forward properly.
+
+    """
     def __init__(
             self,
             insz: int,
@@ -1328,14 +1386,16 @@ class BiGRUEncoderBase(nn.Module):
     ):
         """Produce a stack of GRUs with dropout performed on all but the last layer.
 
-        :param insz: (``int``) The size of the input
-        :param hsz: (``int``) The number of hidden units per biGRU (`hsz//2` used for each dir)
-        :param nlayers: (``int``) The number of layers of GRUs to stack
-        :param dropout: (``int``) The probability of dropping a unit value during dropout
-        :param requires_length: (``bool``) Does this encoder require an input length in its inputs (defaults to ``True``)
-        :param batch_first: (``bool``) Should we do batch first input or time-first input?
-        :return: a stacked cell
+        :param insz: The size of the input
+        :param hsz: The number of hidden units per BiGRU (`hsz//2` used for each direction and concatenated)
+        :param nlayers: The number of layers of BiGRUs to stack
+        :param pdrop: The probability of dropping a unit value during dropout, defaults to 0
+        :param requires_length: Does this encoder require an input length in its inputs (defaults to `True`)
+        :param batch_first: Should we do batch first input or time-first input? Defaults to `False` (differs from TF!)
+        :param unif: PyTorch only! Initialization parameters for RNN
+        :param initializer: PyTorch only! A string describing optional initialization type for RNN
         """
+
         super().__init__()
         self.requires_length = requires_length
         self.batch_first = batch_first
@@ -1361,7 +1421,7 @@ class BiGRUEncoderBase(nn.Module):
         # Select the topmost state with -1 and the only direction is forward (select with 0)
         return state[-1]
 
-
+# TODO: normalize across backends or remove
 class BiGRUEncoderSequenceHiddenContext(BiGRUEncoderBase):
     def forward(self, inputs: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
         tbc, lengths = inputs
@@ -1372,7 +1432,22 @@ class BiGRUEncoderSequenceHiddenContext(BiGRUEncoderBase):
 
 
 class BiGRUEncoderAll(BiGRUEncoderBase):
+    """BiGRU encoder that passes along the full output and hidden states for each layer
+
+    Takes a tuple containing a tensor input of shape `[B, T, C]` and lengths of shape `[B]`
+
+    This returns a 2-tuple of outputs `[B, S, H]` where `S = max(lengths)`, for the output vector sequence,
+    and a hidden vector `[L, B, H]`
+
+    *PyTorch note*: Takes a vector of shape `[B, T, C]` or `[B, C, T]`, depending on input specification
+    of `batch_first`. Also note that in PyTorch, this defaults to `True`
+
+    """
     def forward(self, inputs: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        :param inputs: A tuple containing the input tensor `[B, T, C]` or `[B, H, C]` and a length `[B]`
+        :return: An output tensor `[B, S, H] or `[B, H, S]` , and a hidden vector `[L, B, H]`
+        """
         tbc, lengths = inputs
         packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths, batch_first=self.batch_first)
         output, hidden = self.rnn(packed)
@@ -1381,7 +1456,25 @@ class BiGRUEncoderAll(BiGRUEncoderBase):
 
 
 class BiGRUEncoderSequence(BiGRUEncoderBase):
+
+    """BiGRU encoder to produce the transduced output sequence.
+
+    Takes a tuple of tensor, shape `[B, T, C]` and a lengths of shape `[B]` and produce an output sequence of
+    shape `[B, S, H]` where `S = max(lengths)`.  The lengths of the output sequence may differ from the input
+    sequence if the `max(lengths)` given is shorter than `T` during execution.
+
+    *PyTorch Note:* The input shape of is either `[B, T, C]` or `[T, B, C]` depending on the value of `batch_first`,
+    and defaults to `[T, B, C]` for consistency with other PyTorch modules. The output shape is of the same orientation.
+    """
+
     def forward(self, inputs: Tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
+        """Take in a tuple of `(sequence, lengths)` and produce and output tensor of the last layer of GRUs
+
+        The value `S` here is defined as `max(lengths)`, `S <= T`
+
+        :param inputs: sequence of shapes `[B, T, C]` or `[T, B, C]` and a lengths of shape `[B]`
+        :return: A tensor of shape `[B, S, H]` or `[S, B, H]` depending on setting of `batch_first`
+        """
         tbc, lengths = inputs
         packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths, batch_first=self.batch_first)
         output, hidden = self.rnn(packed)
@@ -1390,7 +1483,22 @@ class BiGRUEncoderSequence(BiGRUEncoderBase):
 
 
 class BiGRUEncoderHidden(BiGRUEncoderBase):
+
+    """GRU encoder that returns the top hidden state
+
+
+    Takes a tuple containing a tensor input of shape `[B, T, C]` and lengths of shape `[B]` and
+    returns a hidden unit tensor of shape `[B, H]`
+
+    *PyTorch note*: Takes a vector of shape `[B, T, C]` or `[B, C, T]`, depending on input specification
+    of `batch_first`. Also note that in PyTorch, this defaults to `True`
+
+    """
     def forward(self, inputs):
+        """
+        :param inputs: A tuple containing the input tensor `[B, T, C]` or `[B, H, C]` and a length `[B]`
+        :return: An output tensor of shape `[B, H]` representing the last RNNs hidden state
+        """
         tbc, lengths = inputs
         packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths, batch_first=self.batch_first)
         output, hidden = self.rnn(packed)

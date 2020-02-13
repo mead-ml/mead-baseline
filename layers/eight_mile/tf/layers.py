@@ -363,12 +363,6 @@ class LSTMEncoder2(tf.keras.layers.Layer):
         )
 
     def output_fn(self, output, state):
-        """Returns back the output sequence of an RNN and hidden state
-
-        :param output: A temporal vector of output
-        :param state: `(output, hidden_last)`, where `hidden_last` = `(h, c)`
-        :return:
-        """
         return output, state
 
     def call(self, inputs):
@@ -523,6 +517,15 @@ class LSTMEncoderHiddenContext2(LSTMEncoder2):
 
 
 class GRUEncoder(tf.keras.layers.Layer):
+
+    """GRU encoder to produce the transduced output sequence.
+
+    Takes a tuple of tensor, shape `[B, T, C]` and a lengths of shape `[B]` and produce an output sequence of
+    shape `[B, S, H]` where `S = max(lengths)`.  The lengths of the output sequence may differ from the input
+    sequence if the `max(lengths)` given is shorter than `T` during execution.
+
+    """
+
     def __init__(
             self,
             insz: Optional[int],
@@ -539,11 +542,11 @@ class GRUEncoder(tf.keras.layers.Layer):
         :param insz: An optional input size for parity with other layer backends.  Can pass `None`
         :param hsz: The number of hidden units per GRU
         :param nlayers: The number of layers of GRUs to stack
-        :param pdrop: The probability of dropping a unit value during dropout
-        :param variational: variational recurrence is on
+        :param pdrop: The probability of dropping a unit value during dropout, defaults to 0
+        :param variational: variational recurrence is on, defaults to `False`
         :param requires_length: Does the input require an input length (defaults to ``True``)
-        :param name: Optional, defaults to `None`
-        :return: a stacked cell
+        :param name: TF only! Put a name in the graph for this layer. Optional, defaults to `None`
+        :param dropout_in_single_layer: TF only! If there is a single layer, should we do dropout, defaults to `False`
         """
         super().__init__(name=name)
         self._requires_length = requires_length
@@ -570,15 +573,14 @@ class GRUEncoder(tf.keras.layers.Layer):
         )
 
     def output_fn(self, output, state):
-        """Returns back the output sequence of an RNN and hidden state
-
-        :param output: A temporal vector of output
-        :param state: `(output, hidden_last)`, where `hidden_last` = `(h, c)`
-        :return:
-        """
         return output, state
 
     def call(self, inputs):
+        """RNNs over input sequence of `[B, T, C]` and lengths `[B]`, output `[B, S, H]` where `S = max(lengths)`
+
+        :param inputs: A tuple of `(sequence, lengths)`, `sequence` shape `[B, T, C]`, lengths shape = `[B]`
+        :return: Output depends on the subclass handling
+        """
         inputs, lengths = tensor_and_lengths(inputs)
         mask = tf.sequence_mask(lengths)
         max_length = tf.reduce_max(lengths)
@@ -595,6 +597,13 @@ class GRUEncoder(tf.keras.layers.Layer):
 
 
 class GRUEncoderAll(tf.keras.layers.Layer):
+    """GRU encoder that passes along the full output and hidden states for each layer
+
+    Takes a tuple containing a tensor input of shape `[B, T, C]` and lengths of shape `[B]`
+
+    This returns a 2-tuple of outputs `[B, S, H]` where `S = max(lengths)`, for the output vector sequence,
+    and a hidden vector `[L, B, H]`
+    """
     def __init__(
             self,
             insz: Optional[int],
@@ -607,17 +616,16 @@ class GRUEncoderAll(tf.keras.layers.Layer):
             dropout_in_single_layer=False,
             **kwargs,
     ):
-        super().__init__(name=name)
-
         """Produce a stack of GRUs with dropout performed on all but the last layer.
 
+        :param insz: The size of the input (or `None`)
         :param hsz: The number of hidden units per GRU
         :param nlayers: The number of layers of GRUs to stack
-        :param pdrop: The probability of dropping a unit value during dropout
-        :param variational: variational recurrence is on
-        :param requires_length: Does the input require an input length (defaults to ``True``)
-        :param name: Optional, defaults to `None`
-        :return: a stacked cell
+        :param pdrop: The probability of dropping a unit value during dropout, defaults to 0
+        :param variational: TF only! apply variational dropout
+        :param requires_length: Does this encoder require an input length in its inputs (defaults to `True`)
+        :param name: TF only! A name to give the layer in the graph
+        :param dropout_in_single_layer: TF only! If its a single layer cell, should we do dropout?  Default to `False`
         """
         super().__init__(name=name)
         self._requires_length = requires_length
@@ -648,6 +656,10 @@ class GRUEncoderAll(tf.keras.layers.Layer):
         return rnnout, state
 
     def call(self, inputs):
+        """
+        :param inputs: A tuple containing the input tensor `[B, T, C]` or `[B, H, C]` and a length `[B]`
+        :return: An output tensor `[B, S, H] or `[B, H, S]` , and a hidden vector `[L, B, H]`
+        """
         inputs, lengths = tensor_and_lengths(inputs)
         mask = tf.sequence_mask(lengths)
         max_length = tf.reduce_max(lengths)
@@ -668,29 +680,14 @@ class GRUEncoderAll(tf.keras.layers.Layer):
 
 
 class GRUEncoderSequence(GRUEncoder):
-    def __init__(
-            self,
-            insz: Optional[int],
-            hsz: int,
-            nlayers: int = 1,
-            pdrop: float = 0.0,
-            variational: bool = False,
-            requires_length: bool = True,
-            name: Optional[str] = None,
-            dropout_in_single_layer: bool = False,
-            **kwargs,
-    ):
-        super().__init__(
-            insz=insz,
-            hsz=hsz,
-            nlayers=nlayers,
-            pdrop=pdrop,
-            variational=variational,
-            requires_length=requires_length,
-            name=name,
-            dropout_in_single_layer=dropout_in_single_layer,
-            **kwargs,
-        )
+
+    """GRU encoder to produce the transduced output sequence.
+
+    Takes a tuple of tensor, shape `[B, T, C]` and a lengths of shape `[B]` and produce an output sequence of
+    shape `[B, S, H]` where `S = max(lengths)`.  The lengths of the output sequence may differ from the input
+    sequence if the `max(lengths)` given is shorter than `T` during execution.
+
+    """
 
     def output_fn(self, output, state):
         """Return sequence `(BxTxC)`
@@ -703,33 +700,12 @@ class GRUEncoderSequence(GRUEncoder):
 
 
 class GRUEncoderHidden(GRUEncoder):
-    def __init__(
-            self,
-            insz: Optional[int],
-            hsz: int,
-            nlayers: int = 1,
-            pdrop: float = 0.0,
-            variational: bool = False,
-            requires_length: bool = True,
-            name: Optional[str] = None,
-            dropout_in_single_layer: bool = False,
-            skip_conn: bool = False,
-            projsz: Optional[int] = None,
-            **kwargs,
-    ):
-        super().__init__(
-            insz=insz,
-            hsz=hsz,
-            nlayers=nlayers,
-            pdrop=pdrop,
-            variational=variational,
-            requires_length=requires_length,
-            name=name,
-            dropout_in_single_layer=dropout_in_single_layer,
-            skip_conn=skip_conn,
-            projsz=projsz,
-            **kwargs,
-        )
+
+    """BiGRU encoder that returns the top hidden state
+
+    Takes a tuple containing a tensor input of shape `[B, T, C]` and lengths of shape `[B]` and
+    returns a hidden unit tensor of shape `[B, H]`
+    """
 
     def output_fn(self, output, state):
         """Return last hidden state `h`
@@ -1236,6 +1212,14 @@ class BiLSTMEncoderHiddenContext2(BiLSTMEncoder2):
 
 
 class BiGRUEncoder(tf.keras.layers.Layer):
+    """BiGRU encoder base for a set of encoders producing various outputs.
+
+    All BiGRU encoders inheriting this class will trim the input to the max length given in the batch.  For example,
+    if the input sequence is `[B, T, C]` and the `S = max(lengths)` then the resulting sequence, if produced, will
+    be length `S` (or more precisely, `[B, S, H]`).  Because its bidirectional, half of the hidden units given in the
+    constructor will be applied to the forward direction and half to the backward direction, and these will get
+    concatenated.
+    """
     def __init__(
             self,
             insz: Optional[int],
@@ -1248,17 +1232,16 @@ class BiGRUEncoder(tf.keras.layers.Layer):
             dropout_in_single_layer: bool = False,
             **kwargs,
     ):
-        super().__init__(name=name)
+        """Produce a stack of BiGRUs with dropout performed on all but the last layer.
 
-        """Produce a stack of GRUs with dropout performed on all but the last layer.
-
-        :param hsz: The number of hidden units per BiGRU (each GRU is hsz//2)
-        :param nlayers: The number of layers of GRUs to stack
-        :param pdrop: The probability of dropping a unit value during dropout
-        :param variational: variational recurrence is on
-        :param requires_length: Does the input require an input length (defaults to ``True``)
-        :param name: Optional, defaults to `None`
-        :return: a stacked cell
+        :param insz: The size of the input (or `None`)
+        :param hsz: The number of hidden units per BiLSTM (`hsz//2` used for each direction and concatenated)
+        :param nlayers: The number of layers of BiLSTMs to stack
+        :param pdrop: The probability of dropping a unit value during dropout, defaults to 0
+        :param variational: TF only! apply variational dropout
+        :param requires_length: Does this encoder require an input length in its inputs (defaults to `True`)
+        :param name: TF only! A name to give the layer in the graph
+        :param dropout_in_single_layer: TF only! If its a single layer cell, should we do dropout?  Default to `False`
         """
         super().__init__(name=name)
         self._requires_length = requires_length
@@ -1305,64 +1288,38 @@ class BiGRUEncoder(tf.keras.layers.Layer):
 
 
 class BiGRUEncoderSequence(BiGRUEncoder):
-    def __init__(
-            self,
-            insz: Optional[int],
-            hsz: int,
-            nlayers: int,
-            pdrop: float = 0.0,
-            variational: bool = False,
-            requires_length: bool = True,
-            name: Optional[str] = None,
-            dropout_in_single_layer: bool = False,
-            **kwargs,
-    ):
-        super().__init__(
-            insz,
-            hsz,
-            nlayers,
-            pdrop,
-            variational,
-            requires_length,
-            name,
-            dropout_in_single_layer,
-            **kwargs,
-        )
 
+    """BiGRU encoder to produce the transduced output sequence.
+
+    Takes a tuple of tensor, shape `[B, T, C]` and a lengths of shape `[B]` and produce an output sequence of
+    shape `[B, S, H]` where `S = max(lengths)`.  The lengths of the output sequence may differ from the input
+    sequence if the `max(lengths)` given is shorter than `T` during execution.
+
+    """
     def output_fn(self, rnnout, state):
         return rnnout
 
 
 class BiGRUEncoderHidden(BiGRUEncoder):
-    def __init__(
-            self,
-            insz: Optional[int],
-            hsz: int,
-            nlayers: int,
-            pdrop: float = 0.0,
-            variational: bool = False,
-            requires_length: bool = True,
-            name: Optional[str] = None,
-            dropout_in_single_layer: bool = False,
-            **kwargs,
-    ):
-        super().__init__(
-            insz,
-            hsz,
-            nlayers,
-            pdrop,
-            variational,
-            requires_length,
-            name,
-            dropout_in_single_layer,
-            **kwargs,
-        )
+
+    """BiGRU encoder that returns the top hidden state
+
+    Takes a tuple containing a tensor input of shape `[B, T, C]` and lengths of shape `[B]` and
+    returns a hidden unit tensor of shape `[B, H]`
+    """
 
     def output_fn(self, _, state):
         return tf.concat([state[0], state[1]], axis=-1)
 
 
 class BiGRUEncoderAll(tf.keras.layers.Layer):
+    """BiGRU encoder that passes along the full output and hidden states for each layer
+
+    Takes a tuple containing a tensor input of shape `[B, T, C]` and lengths of shape `[B]`
+
+    This returns a 2-tuple of outputs `[B, S, H]` where `S = max(lengths)`, for the output vector sequence,
+    and a hidden vector `[L, B, H]`
+    """
     def __init__(
             self,
             insz: Optional[int],
@@ -1375,17 +1332,16 @@ class BiGRUEncoderAll(tf.keras.layers.Layer):
             dropout_in_single_layer: bool = False,
             **kwargs,
     ):
-        super().__init__(name=name)
+        """Produce a stack of BiGRUs with dropout performed on all but the last layer.
 
-        """Produce a stack of GRUs with dropout performed on all but the last layer.
-
-        :param hsz: The number of hidden units per GRU
-        :param nlayers: The number of layers of GRUs to stack
-        :param pdrop: The probability of dropping a unit value during dropout
-        :param variational: variational recurrence is on
-        :param requires_length: Does the input require an input length (defaults to ``True``)
-        :param name: Optional, defaults to `None`
-        :return: a stacked cell
+        :param insz: The size of the input (or `None`)
+        :param hsz: The number of hidden units per BiGRU (`hsz//2` used for each direction and concatenated)
+        :param nlayers: The number of layers of BiGRUs to stack
+        :param pdrop: The probability of dropping a unit value during dropout, defaults to 0
+        :param variational: TF only! apply variational dropout
+        :param requires_length: Does this encoder require an input length in its inputs (defaults to `True`)
+        :param name: TF only! A name to give the layer in the graph
+        :param dropout_in_single_layer: TF only! If its a single layer cell, should we do dropout?  Default to `False`
         """
         super().__init__(name=name)
         self._requires_length = requires_length
@@ -1416,6 +1372,10 @@ class BiGRUEncoderAll(tf.keras.layers.Layer):
         return rnnout, state
 
     def call(self, inputs):
+        """
+        :param inputs: A tuple containing the input tensor `[B, T, C]` or `[B, H, C]` and a length `[B]`
+        :return: An output tensor `[B, S, H] or `[B, H, S]` , and a hidden vector `[L, B, H]`
+        """
         inputs, lengths = tensor_and_lengths(inputs)
         mask = tf.sequence_mask(lengths)
         max_length = tf.reduce_max(lengths)
