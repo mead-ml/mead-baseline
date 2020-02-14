@@ -72,7 +72,7 @@ class Backend(object):
             tf_version = get_version(tf)
             if prefer_eager and tf_version < 2:
                 logger.info('user requesting eager on 1.x')
-                tf.enable_eager_execution()
+                tf.compat.v1.enable_eager_execution()
             elif not prefer_eager and tf_version >= 2:
                 logger.info('User requesting eager disabled on 2.x')
                 tf.compat.v1.disable_eager_execution()
