@@ -4,7 +4,8 @@ import argparse
 from baseline.utils import (
     unzip_files,
     read_config_file,
-    normalize_backend
+    normalize_backend,
+    read_config_stream
 )
 import mead
 from mead.exporters import create_exporter
@@ -25,6 +26,7 @@ def main():
     parser.add_argument('--settings', help='JSON Configuration for mead', required=False, default='config/mead-settings.json', type=convert_path)
     parser.add_argument('--modules', help='modules to load', default=[], nargs='+', required=False)
     parser.add_argument('--datasets', help='json library of dataset labels')
+    parser.add_argument('--vecs', help='index of vectorizers: local file, remote URL or hub mead-ml/ref', default='config/vecs.json', type=convert_path)
     parser.add_argument('--logging', help='json file for logging', default='config/logging.json', type=convert_path)
     parser.add_argument('--task', help='task to run', choices=['classify', 'tagger', 'seq2seq', 'lm'])
     parser.add_argument('--exporter_type', help="exporter type (default 'default')", default=None)
@@ -65,6 +67,8 @@ def main():
     if args.backend is not None:
         config_params['backend'] = normalize_backend(args.backend)
 
+    args.vecs = read_config_stream(args.vecs)
+
     task = mead.Task.get_task_specific(task_name, args.settings)
 
     output_dir, project, name, model_version, exporter_type, return_labels, is_remote = get_export_params(
@@ -80,7 +84,7 @@ def main():
     # but when used with mead-export it is not needed. This is a dummy dataset index that will work
     # It means we don't need to pass it in, but `--datasets` is left as a cli arg for back compat for now
     datasets = [{'label': config_params['dataset']}]
-    task.read_config(config_params, datasets, exporter_type=exporter_type)
+    task.read_config(config_params, datasets, args.vecs, exporter_type=exporter_type)
     feature_exporter_field_map = create_feature_exporter_field_map(config_params['features'])
     exporter = create_exporter(task, exporter_type, return_labels=return_labels,
                                feature_exporter_field_map=feature_exporter_field_map)
