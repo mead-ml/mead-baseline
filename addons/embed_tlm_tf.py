@@ -150,7 +150,7 @@ class TransformerLMEmbeddings(TensorFlowEmbeddings):
         """This function creates the mask that controls which token to be attended to depending on the model. A causal
         LM should have a subsequent mask; and a masked LM should have no mask."""
         if self.mlm:
-            return tf.fill([1, 1, nctx, nctx], 1)
+            return tf.fill([1, 1, nctx, nctx], 1.)
         else:
             return subsequent_mask(nctx)
 

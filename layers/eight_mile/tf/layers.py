@@ -2011,7 +2011,7 @@ class SeqScaledDotProductRelativeAttention(SequenceSequenceRelativeAttention):
         scores = (scores_qk + scores_qek) / math.sqrt(d_k)
 
         if mask is not None:
-            scores = masked_fill(scores, mask == 0, -1e9)
+            scores = masked_fill(scores, tf.equal(mask, 0), -1e9)
 
         return tf.nn.softmax(scores, name="rel_attention_weights")
 
@@ -2044,7 +2044,7 @@ class SeqDotProductRelativeAttention(SequenceSequenceRelativeAttention):
         scores = scores_qk + scores_qek
 
         if mask is not None:
-            scores = masked_fill(scores, mask == 0, -1e9)
+            scores = masked_fill(scores, tf.equal(mask, 0), -1e9)
 
         return tf.nn.softmax(scores, name="rel_attention_weights")
 
@@ -2057,7 +2057,7 @@ class SeqDotProductAttention(SequenceSequenceAttention):
         scores = tf.matmul(query, key, transpose_b=True)
 
         if mask is not None:
-            scores = masked_fill(scores, mask == 0, -1e9)
+            scores = masked_fill(scores, tf.equal(mask, 0), -1e9)
 
         return tf.nn.softmax(scores, name="attention_weights")
 
@@ -2922,7 +2922,7 @@ class LuongDotProductAttention(VectorSequenceAttention):
         a = keys_bth @ tf.expand_dims(query_t, 2)
         a = tf.squeeze(a, -1)
         if keys_mask is not None:
-            masked_fill(a, keys_mask == 0, -1e9)
+            masked_fill(a, tf.equal(keys_mask, 0), -1e9)
         a = tf.nn.softmax(a, axis=-1)
         return a
 
@@ -2936,7 +2936,7 @@ class ScaledDotProductAttention(VectorSequenceAttention):
         a = a / math.sqrt(self.hsz)
         a = tf.squeeze(a, -1)
         if keys_mask is not None:
-            masked_fill(a, keys_mask == 0, -1e9)
+            masked_fill(a, tf.equal(keys_mask, 0), -1e9)
         a = tf.nn.softmax(a, axis=-1)
         return a
 
@@ -2950,7 +2950,7 @@ class LuongGeneralAttention(VectorSequenceAttention):
         a = keys_bth @ tf.expand_dims(self.W_a(query_t), 2)
         a = tf.squeeze(a, -1)
         if keys_mask is not None:
-            masked_fill(a, keys_mask == 0, -1e9)
+            masked_fill(a, tf.equal(keys_mask, 0), -1e9)
         a = tf.nn.softmax(a, axis=-1)
         return a
 
@@ -2972,7 +2972,7 @@ class BahdanauAttention(VectorSequenceAttention):
         a = tf.squeeze(self.v(z), -1)
 
         if keys_mask is not None:
-            masked_fill(a, keys_mask == 0, -1e9)
+            masked_fill(a, tf.equal(keys_mask, 0), -1e9)
         a = tf.nn.softmax(a, axis=-1)
         return a
 
