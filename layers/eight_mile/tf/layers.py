@@ -1937,7 +1937,7 @@ class SeqScaledDotProductAttention(SequenceSequenceAttention):
         scores *= tf.math.rsqrt(tf.cast(d_k, tf.float32))
 
         if mask is not None:
-            scores = masked_fill(scores, mask == 0, -1e9)
+            scores = masked_fill(scores, tf.equal(mask, 0), -1e9)
 
         return tf.nn.softmax(scores, name="attention_weights")
 
@@ -2011,7 +2011,7 @@ class SeqScaledDotProductRelativeAttention(SequenceSequenceRelativeAttention):
         scores = (scores_qk + scores_qek) / math.sqrt(d_k)
 
         if mask is not None:
-            scores = masked_fill(scores, mask == 0, -1e9)
+            scores = masked_fill(scores, tf.equal(mask, 0), -1e9)
 
         return tf.nn.softmax(scores, name="rel_attention_weights")
 
@@ -2044,7 +2044,7 @@ class SeqDotProductRelativeAttention(SequenceSequenceRelativeAttention):
         scores = scores_qk + scores_qek
 
         if mask is not None:
-            scores = masked_fill(scores, mask == 0, -1e9)
+            scores = masked_fill(scores, tf.equal(mask, 0), -1e9)
 
         return tf.nn.softmax(scores, name="rel_attention_weights")
 
@@ -2057,7 +2057,7 @@ class SeqDotProductAttention(SequenceSequenceAttention):
         scores = tf.matmul(query, key, transpose_b=True)
 
         if mask is not None:
-            scores = masked_fill(scores, mask == 0, -1e9)
+            scores = masked_fill(scores, tf.equal(mask, 0), -1e9)
 
         return tf.nn.softmax(scores, name="attention_weights")
 
@@ -2249,7 +2249,7 @@ class TransformerEncoder(tf.keras.layers.Layer):
         else:
             self.self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale=scale, d_k=d_k)
 
-        self.ffn = FFN(d_model, activation_type, d_ff, pdrop=ffn_pdrop, name="ffn")
+        self.ffn = FFN(d_model, activation_type, d_ff, ffn_pdrop, name="ffn")
         self.ln1 = tf.keras.layers.LayerNormalization(epsilon=1e-6)
         self.ln2 = tf.keras.layers.LayerNormalization(epsilon=1e-6)
         self.dropout = tf.keras.layers.Dropout(pdrop)
@@ -2311,7 +2311,7 @@ class TransformerEncoderStack(tf.keras.layers.Layer):
         self,
         num_heads: int,
         d_model: int,
-        pdrop: bool,
+        pdrop: float,
         scale: bool = True,
         layers: int = 1,
         activation: str = "relu",
@@ -2922,7 +2922,7 @@ class LuongDotProductAttention(VectorSequenceAttention):
         a = keys_bth @ tf.expand_dims(query_t, 2)
         a = tf.squeeze(a, -1)
         if keys_mask is not None:
-            masked_fill(a, keys_mask == 0, -1e9)
+            masked_fill(a, tf.equal(keys_mask, 0), -1e9)
         a = tf.nn.softmax(a, axis=-1)
         return a
 
@@ -2936,7 +2936,7 @@ class ScaledDotProductAttention(VectorSequenceAttention):
         a = a / math.sqrt(self.hsz)
         a = tf.squeeze(a, -1)
         if keys_mask is not None:
-            masked_fill(a, keys_mask == 0, -1e9)
+            masked_fill(a, tf.equal(keys_mask, 0), -1e9)
         a = tf.nn.softmax(a, axis=-1)
         return a
 
@@ -2950,7 +2950,7 @@ class LuongGeneralAttention(VectorSequenceAttention):
         a = keys_bth @ tf.expand_dims(self.W_a(query_t), 2)
         a = tf.squeeze(a, -1)
         if keys_mask is not None:
-            masked_fill(a, keys_mask == 0, -1e9)
+            masked_fill(a, tf.equal(keys_mask, 0), -1e9)
         a = tf.nn.softmax(a, axis=-1)
         return a
 
@@ -2972,7 +2972,7 @@ class BahdanauAttention(VectorSequenceAttention):
         a = tf.squeeze(self.v(z), -1)
 
         if keys_mask is not None:
-            masked_fill(a, keys_mask == 0, -1e9)
+            masked_fill(a, tf.equal(keys_mask, 0), -1e9)
         a = tf.nn.softmax(a, axis=-1)
         return a
 

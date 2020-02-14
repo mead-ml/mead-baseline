@@ -2828,7 +2828,7 @@ class TransformerEncoderStack(nn.Module):
         self,
         num_heads: int,
         d_model: int,
-        pdrop: bool,
+        pdrop: float,
         scale: bool = True,
         layers: int = 1,
         activation: str = "relu",
