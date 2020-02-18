@@ -185,7 +185,7 @@ class TransformerTaggerModel(TaggerModelBase):
 class CNNTaggerModel(TaggerModelBase):
 
     def __init__(self):
-        super(CNNTaggerModel, self).__init__()
+        super().__init__()
 
     def init_encoder(self, input_sz, **kwargs):
         layers = int(kwargs.get('layers', 1))
@@ -193,12 +193,14 @@ class CNNTaggerModel(TaggerModelBase):
         filtsz = kwargs.get('wfiltsz', 5)
         activation_type = kwargs.get('activation_type', 'relu')
         hsz = int(kwargs['hsz'])
-        self.encoder = ConvEncoderStack(input_sz, hsz, filtsz, pdrop, layers, activation_type)
-        return hsz
+        return WithoutLength(ConvEncoderStack(input_sz, hsz, filtsz, layers, pdrop, activation_type))
 
-    def encode(self, tbh, lengths):
-        # bct
-        bht = tbh.permute(1, 2, 0).contiguous()
-        bht = self.encoder(bht)
-        # bht -> tbh
-        return bht.permute(2, 0, 1).contiguous()
+
+@register_model(task='tagger', name='pass')
+class PassThruTaggerModel(TaggerModelBase):
+
+    def __init__(self):
+        super().__init__()
+
+    def init_encoder(self, input_sz, **kwargs):
+        return WithoutLength(PassThru(input_sz))

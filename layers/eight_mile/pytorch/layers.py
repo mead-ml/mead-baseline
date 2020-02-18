@@ -1806,6 +1806,16 @@ class EmbedPoolStackModel(nn.Module):
         return self.output_layer(stacked)
 
 
+class PassThru(nn.Module):
+
+    def __init__(self, input_dim):
+        super().__init__()
+        self.output_dim = input_dim
+
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        return inputs
+
+
 class WithoutLength(nn.Module):
     """Wrapper layer to remove lengths from the input
     """
@@ -2100,7 +2110,7 @@ class TaggerGreedyDecoder(nn.Module):
         else:
             # Decoding doesn't care about batch/time first
             _, preds = torch.max(unaries, -1)
-            mask = sequence_mask(lengths).to(preds.device)
+            mask = sequence_mask(lengths, unaries.shape[1]).to(preds.device)
             # The mask gets generated as batch first
             mask = mask if self.batch_first else mask.transpose(0, 1)
             preds = preds.masked_fill(mask == MASK_FALSE, 0)

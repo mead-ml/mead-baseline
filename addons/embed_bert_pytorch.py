@@ -5,7 +5,6 @@ import collections
 import unicodedata
 import six
 import numpy as np
-from baseline.utils import write_json
 from baseline.embeddings import register_embeddings
 from baseline.pytorch.embeddings import PyTorchEmbeddings
 from baseline.vectorizers import register_vectorizer, AbstractVectorizer
@@ -20,7 +19,6 @@ import re
 
 
 BERT_TOKENIZER = None
-
 
 
 @register_vectorizer(name='wordpiece1d')
@@ -71,6 +69,52 @@ class WordPieceVectorizer1D(AbstractVectorizer):
         return self.mxlen,
 
 
+@register_vectorizer(name='wordpiece-label-dict1d')
+class WordPieceLabelDict1DVectorizer(WordPieceVectorizer1D):
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.field = kwargs.get('fields', kwargs.get('field', 'text'))
+        self.label = kwargs.get('label', 'label')
+
+    def iterable(self, tokens):
+        for t in tokens:
+            t_word = t[self.field]
+            t_label = t[self.label]
+            if t_word in ['[CLS]', '[SEP]']:
+                yield Offsets.VALUES[Offsets.PAD]
+            else:
+                subwords = [x for x in super().iterable(t_word.split())]
+                subwords = [Offsets.VALUES[Offsets.PAD]] * len(subwords)
+                subwords[0] = t_label
+                for x in subwords:
+                    yield x
+
+    def run(self, tokens, vocab):
+        return super().run(tokens, vocab)
+
+    def count(self, tokens):
+        seen = 0
+        counter = collections.Counter()
+        for tok in self.iterable(tokens):
+            counter[tok] += 1
+            seen += 1
+        self.max_seen = max(self.max_seen, seen)
+        return counter
+
+
+@register_vectorizer(name='wordpiece-dict1d')
+class WordPieceDict1DVectorizer(WordPieceVectorizer1D):
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.field = kwargs.get('fields', kwargs.get('field', 'text'))
+        self.delim = kwargs.get('token_delim', '~~')
+
+    def iterable(self, tokens):
+        return super().iterable([t[self.field] for t in tokens])
+
+
 class BERTBaseEmbeddings(PyTorchEmbeddings):
 
     def __init__(self, name, **kwargs):
@@ -82,7 +126,6 @@ class BERTBaseEmbeddings(PyTorchEmbeddings):
         self.model = BertModel.from_pretrained(kwargs.get('embed_file'))
         self.vocab = BERT_TOKENIZER.vocab
         self.vsz = len(BERT_TOKENIZER.vocab)  # 30522 self.model.embeddings.word_embeddings.num_embeddings
-
 
     def get_vocab(self):
         return self.vocab
@@ -127,8 +170,8 @@ class BERTEmbeddings(BERTBaseEmbeddings):
         else:
             layers = [all_layers[layer_index].detach() for layer_index in self.layer_indices]
         if self.operator != 'concat':
-            z = torch.cat([l.unsqueeze(-1) for l in layers])
-            z = torch.mead(z, dim=-1)
+            z = torch.cat([l.unsqueeze(-1) for l in layers], dim=-1)
+            z = torch.mean(z, dim=-1)
         else:
             z = torch.cat(layers, dim=-1)
         return z

@@ -607,7 +607,7 @@ class TaggerTask(Task):
         #return baseline.model.create_tagger_model(self.embeddings, labels, **self.config_params['model'])
 
     def _load_dataset(self):
-        batchsz = self.config_params['train']['batchsz']
+        batchsz = self.config_params['train'].get('batchsz', self.config_params.get('batchsz'))
         test_batchsz = self.config_params['train'].get('test_batchsz', 1)
         # TODO: get rid of sort_key=self.primary_key in favor of something explicit?
         bsz, vbsz, tbsz = Task._get_batchsz(self.config_params)
