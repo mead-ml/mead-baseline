@@ -118,15 +118,10 @@ class WordPieceDict1DVectorizer(WordPieceVectorizer1D):
         yield '[CLS]'
         for t in tokens:
             tok = t[self.field]
-        #for tok in tokens:
-            #if tok == '<unk>':
-            #    yield '[UNK]'
-            #elif tok == '<EOS>':
-            #    yield '[SEP]'
-            #else:
             for subtok in self.tokenizer.tokenize(tok):
                 yield subtok
         yield '[SEP]'
+
 
 class BERTBaseEmbeddings(PyTorchEmbeddings):
 
@@ -134,8 +129,13 @@ class BERTBaseEmbeddings(PyTorchEmbeddings):
         super().__init__(name=name, **kwargs)
         global BERT_TOKENIZER
         self.dsz = kwargs.get('dsz')
+        handle = kwargs.get('embed_file')
         if BERT_TOKENIZER is None:
-            BERT_TOKENIZER = BertTokenizer.from_pretrained(kwargs.get('embed_file'))
+            if 'uncased' in handle or bool(kwargs.get('do_lower_case', False)) is False:
+                do_lower_case = False
+            else:
+                do_lower_case = True
+            BERT_TOKENIZER = BertTokenizer.from_pretrained(handle, do_lower_case=do_lower_case)
         self.model = BertModel.from_pretrained(kwargs.get('embed_file'))
         self.vocab = BERT_TOKENIZER.vocab
         self.vsz = len(BERT_TOKENIZER.vocab)  # 30522 self.model.embeddings.word_embeddings.num_embeddings
