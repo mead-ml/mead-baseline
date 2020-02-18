@@ -32,10 +32,13 @@ loader:
     embed_file: bert-base-cased
 
 model:
-  model_type: pass #cnn
+  model_type: pass
   constrain_decode: 0
   crf: 0
-  reduction: token
+  #model_type: cnn
+  #reduction: token
+  #wfiltsz: 1
+  #hsz: 400
 
 train:
     batchsz: 32

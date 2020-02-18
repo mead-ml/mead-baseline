@@ -83,6 +83,7 @@ class TaggerEvaluatorTf(object):
         pred_chunks = []
 
         # For each sentence
+        # FIXME: this is totally wrong!
         for b in range(len(guess)):
             length = sentence_lengths[b]
             sentence = guess[b][:length]

@@ -29,8 +29,12 @@ class WordPieceVectorizer1D(AbstractVectorizer):
         global BERT_TOKENIZER
         self.max_seen = 128
         handle = kwargs.get('embed_file')
+        if 'uncased' in handle or bool(kwargs.get('do_lower_case', False)) is False:
+            do_lower_case = False
+        else:
+            do_lower_case = True
         if BERT_TOKENIZER is None:
-            BERT_TOKENIZER = BertTokenizer.from_pretrained(handle)
+            BERT_TOKENIZER = BertTokenizer.from_pretrained(handle, do_lower_case=do_lower_case)
         self.tokenizer = BERT_TOKENIZER
         self.mxlen = kwargs.get('mxlen', -1)
 
@@ -78,17 +82,16 @@ class WordPieceLabelDict1DVectorizer(WordPieceVectorizer1D):
         self.label = kwargs.get('label', 'label')
 
     def iterable(self, tokens):
+        yield Offsets.VALUES[Offsets.PAD]
         for t in tokens:
             t_word = t[self.field]
             t_label = t[self.label]
-            if t_word in ['[CLS]', '[SEP]']:
-                yield Offsets.VALUES[Offsets.PAD]
-            else:
-                subwords = [x for x in super().iterable(t_word.split())]
-                subwords = [Offsets.VALUES[Offsets.PAD]] * len(subwords)
-                subwords[0] = t_label
-                for x in subwords:
-                    yield x
+            subwords = [x for x in self.tokenizer.tokenize(t_word)]
+            subwords = [Offsets.VALUES[Offsets.PAD]] * len(subwords)
+            subwords[0] = t_label
+            for x in subwords:
+                yield x
+        yield Offsets.VALUES[Offsets.PAD]
 
     def run(self, tokens, vocab):
         return super().run(tokens, vocab)
@@ -112,8 +115,18 @@ class WordPieceDict1DVectorizer(WordPieceVectorizer1D):
         self.delim = kwargs.get('token_delim', '~~')
 
     def iterable(self, tokens):
-        return super().iterable([t[self.field] for t in tokens])
-
+        yield '[CLS]'
+        for t in tokens:
+            tok = t[self.field]
+        #for tok in tokens:
+            #if tok == '<unk>':
+            #    yield '[UNK]'
+            #elif tok == '<EOS>':
+            #    yield '[SEP]'
+            #else:
+            for subtok in self.tokenizer.tokenize(tok):
+                yield subtok
+        yield '[SEP]'
 
 class BERTBaseEmbeddings(PyTorchEmbeddings):
 
@@ -157,7 +170,7 @@ class BERTEmbeddings(BERTBaseEmbeddings):
     def __init__(self, name, **kwargs):
         """BERT sequence embeddings, used for a feature-ful representation of finetuning sequence tasks.
 
-        If operator == 'concat' result is [B, T, #Layers * H] other size the layers are meaned and the shape is [B, T, H]
+        If operator == 'concat' result is [B, T, #Layers * H] other size the layers are mean'd the shape is [B, T, H]
         """
         super().__init__(name=name, **kwargs)
         self.layer_indices = kwargs.get('layers', [-1, -2, -3, -4])
