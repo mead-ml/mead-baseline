@@ -88,7 +88,10 @@ class WordPieceLabelDict1DVectorizer(WordPieceVectorizer1D):
             t_label = t[self.label]
             subwords = [x for x in self.tokenizer.tokenize(t_word)]
             subwords = [Offsets.VALUES[Offsets.PAD]] * len(subwords)
-            subwords[0] = t_label
+            # TODO: The tokenizer sometimes cuts up the token and leaves nothing
+            # how to handle this since we cannot get anything for it
+            if len(subwords):
+                subwords[0] = t_label
             for x in subwords:
                 yield x
         yield Offsets.VALUES[Offsets.PAD]

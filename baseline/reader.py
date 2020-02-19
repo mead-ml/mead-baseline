@@ -390,14 +390,16 @@ def _norm_ext(ext):
     return ext if ext.startswith('.') else '.' + ext
 
 
+# TODO: get rid of this class
 @export
 @register_reader(task='tagger', name='parallel')
 class ParallelSeqReader(SeqPredictReader):
     def __init__(self, vectorizers, trim=False, truncate=False, mxlen=-1, **kwargs):
+        # This works but its not helpful for most custom vectorizers
+        kwargs.get['label_vectorizer'] = kwargs.get('label_vectorizer', Token1DVectorizer(mxlen=mxlen))
         super().__init__(vectorizers, trim, truncate, mxlen, **kwargs)
         self.data = _norm_ext(kwargs.get('data_suffix', 'in'))
         self.tag = _norm_ext(kwargs.get('label_suffix', 'out'))
-        self.label_vectorizer = Token1DVectorizer(mxlen=mxlen)
 
     def build_vocab(self, files, **kwargs):
         vocabs = {k: Counter() for k in self.vectorizers.keys()}
