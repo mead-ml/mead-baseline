@@ -83,25 +83,26 @@ class TaggerEvaluatorTf(object):
         pred_chunks = []
 
         # For each sentence
-        # FIXME: this is totally wrong!
         for b in range(len(guess)):
             length = sentence_lengths[b]
             sentence = guess[b][:length]
             # truth[b] is padded, cutting at :length gives us back true length
             gold = truth[b][:length]
 
-            sentence[gold == Offsets.PAD] = Offsets.PAD
-            correct_labels += np.sum(np.equal(sentence[gold != Offsets.PAD], gold[gold != Offsets.PAD]))
-            total_labels += length
+            valid_guess = sentence[gold != Offsets.PAD]
+            valid_gold = gold[gold != Offsets.PAD]
+            valid_sentence_length = np.sum(gold != Offsets.PAD)
+            correct_labels += np.sum(np.equal(valid_guess, valid_gold))
+            total_labels += valid_sentence_length
 
-            gold_chunks.append(set(to_spans(gold, self.idx2label, self.span_type, self.verbose)))
-            pred_chunks.append(set(to_spans(sentence, self.idx2label, self.span_type, self.verbose)))
+            gold_chunks.append(set(to_spans(valid_gold, self.idx2label, self.span_type, self.verbose)))
+            pred_chunks.append(set(to_spans(valid_guess, self.idx2label, self.span_type, self.verbose)))
 
             # Should we write a file out?  If so, we have to have txts
             if handle is not None:
                 id = ids[b]
                 txt = txts[id]
-                write_sentence_conll(handle, sentence, gold, txt, self.idx2label)
+                write_sentence_conll(handle, valid_guess, valid_gold, txt, self.idx2label)
 
         return correct_labels, total_labels, gold_chunks, pred_chunks
 
