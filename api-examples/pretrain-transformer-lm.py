@@ -78,7 +78,6 @@ DATASETS = {
 X_CHAR_EMBEDDINGS = {
     "dsz": 16,
     "wsz": 128,
-    "embed_type": "positional-char-conv",
     "keep_unused": True,
     "cfiltsz": [
         [1, 32],
@@ -323,6 +322,7 @@ def load_embed_and_vocab(token_type, reader, dataset, dataset_key, embed_type, d
         tgt_key = 'x'
         if token_type == 'chars':
             # Write JSON file here and skip this step the second time
+            X_CHAR_EMBEDDINGS['embed_type'] = embed_type
             x_embedding = baseline.embeddings.load_embeddings('x', known_vocab=vocabs['x'], **X_CHAR_EMBEDDINGS)
             vocabs['x'] = x_embedding['vocab']
 
