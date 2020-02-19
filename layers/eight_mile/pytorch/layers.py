@@ -1720,6 +1720,7 @@ class BahdanauAttention(VectorSequenceAttention):
         return a
 
     def _update(self, a, query_t, values_bth):
+        query_t = query_t.view(-1, self.hsz)
         # a = B x T
         # Want to apply over context, scaled by a
         # (B x 1 x T) (B x T x H) = (B x 1 x H) -> (B x H)
@@ -2120,6 +2121,73 @@ class TaggerGreedyDecoder(nn.Module):
         str_ = f"n_tags={self.num_tags}, batch_first={self.batch_first}"
         if self.constraint_mask is not None:
             str_ += ", constrained=True"
+        return str_
+
+
+class TaggerSeqDecoder(nn.Module):
+    def __init__(
+        self,
+        num_tags: int,
+        decoder: nn.Module,
+        attn: nn.Module = LuongDotProductAttention,
+        batch_first: bool = True,
+        reduction: str = "batch",
+    ):
+        super().__init__()
+        self.num_tags = num_tags
+        self.to_batch_first = ident if batch_first else tbh2bth
+        self.to_time_first = bth2tbh if batch_first else ident
+        self.batch_first = batch_first
+        self.loss = SequenceLoss(LossFn=nn.CrossEntropyLoss, avg=reduction)
+        self.decoder = decoder
+        self.attn = attn(num_tags)
+        self.dropout = nn.Dropout(0.5)
+
+    def neg_log_loss(self, inputs, tags, lengths):
+        unaries = self.to_batch_first(inputs)
+        decoded = self.forward_output((unaries, lengths))
+        tags = self.to_batch_first(tags)
+        return self.loss(decoded, tags)
+
+    def forward_output(self, inputs) -> torch.Tensor:
+        # This is the encoder output we need to attend to
+        unary, lengths = tensor_and_lengths(inputs)
+        B, T, H = unary.shape
+        mask = sequence_mask(lengths, T).to(unary.device)
+        dec_state = torch.zeros(B, H, device=unary.device)
+        dec_state[:, Offsets.GO] = 1
+        dec_state = dec_state.unsqueeze(1)
+        hidden = None
+        outputs = []
+        for i in range(T):
+            rnn_input = dec_state
+            #rnn_input = dec_state + unary[:, i].unsqueeze(1)
+            #rnn_input = torch.cat([dec_state, unary[:, i].unsqueeze(1)], -1)
+            dec_state, hidden = self.decoder(rnn_input, hidden)
+            dec_state = dec_state.squeeze(1)
+            dec_state = self.attn(dec_state, unary, unary, keys_mask=mask)
+            outputs.append(dec_state)
+            dec_state = dec_state.unsqueeze(1)
+        # Add end tag
+
+        preds = torch.stack(outputs)
+        if self.batch_first:
+            preds = preds.transpose(0, 1)
+        preds = preds + self.dropout(unary)
+        # _, preds = torch.max(preds, -1)
+        # The mask gets generated as batch first
+        mask = mask if self.batch_first else mask.transpose(0, 1)
+        mask = mask.unsqueeze(2)
+        preds = preds.masked_fill(mask == MASK_FALSE, 0)
+        return preds  # , None
+
+    def forward(self, inputs) -> torch.Tensor:
+        preds = self.forward_output(inputs)
+        _, preds = torch.max(preds, -1)
+        return preds
+
+    def extra_repr(self) -> str:
+        str_ = f"n_tags={self.num_tags}, batch_first={self.batch_first}"
         return str_
 
 

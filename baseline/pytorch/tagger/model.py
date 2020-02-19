@@ -61,12 +61,19 @@ class TaggerModelBase(nn.Module, TaggerModel):
         transducer_model = model.init_encoder(embed_model.output_dim, **kwargs)
 
         use_crf = bool(kwargs.get('crf', False))
+        #use_seq_decoder = bool(kwargs.get('attn_decode', False))
         constraint_mask = kwargs.get('constraint_mask')
         if constraint_mask is not None:
             constraint_mask = constraint_mask.unsqueeze(0)
 
         if use_crf:
             decoder_model = CRF(len(labels), constraint_mask=constraint_mask, batch_first=True)
+        #elif use_seq_decoder:
+        #    decoder_model = TaggerSeqDecoder(
+        #        len(labels),
+        #        decoder=nn.LSTM(len(labels), len(labels), batch_first=True),
+        #        reduction=kwargs.get('reduction', 'batch')
+        #    )
         else:
             decoder_model = TaggerGreedyDecoder(
                 len(labels),
