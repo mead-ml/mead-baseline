@@ -11,6 +11,7 @@ import baseline.pytorch.embeddings
 import baseline.embeddings
 from eight_mile.optz import *
 from eight_mile.pytorch.optz import *
+from eight_mile.pytorch.serialize import save_tlm_npz
 from baseline.pytorch.lm import TransformerLanguageModel
 from baseline.vectorizers import Char2DVectorizer, Token1DVectorizer, AbstractVectorizer, BPEVectorizer1D
 from baseline.utils import DataDownloader
@@ -299,7 +300,7 @@ def get_embed_and_vocab_cache(base_path, dataset_key, token_type):
     return os.path.join(base_path, 'preproc-{}-{}.cache'.format(dataset_key, token_type))
 
 
-def load_embed_and_vocab(token_type, reader, dataset, dataset_key, d_model, caching):
+def load_embed_and_vocab(token_type, reader, dataset, dataset_key, embed_type, d_model, caching):
     base_path = os.path.dirname(dataset['train_file'])
     preproc_cache = get_embed_and_vocab_cache(base_path, dataset_key, token_type)
     if caching and os.path.exists(preproc_cache):
@@ -335,7 +336,8 @@ def load_embed_and_vocab(token_type, reader, dataset, dataset_key, d_model, cach
             x_embedding = baseline.embeddings.load_embeddings('x',
                                                               dsz=d_model,
                                                               known_vocab=vocabs['x'],
-                                                              embed_type='positional')
+                                                              embed_type=embed_type)
+            logger.info("Using embedding type [%s]", embed_type)
             vocabs['x'] = x_embedding['vocab']
             embeddings['x'] = x_embedding['embeddings']
 
@@ -347,7 +349,7 @@ def load_embed_and_vocab(token_type, reader, dataset, dataset_key, d_model, cach
 
 
 def checkpoint_for(model_base, epoch):
-    return '{}-{}.pth'.format(model_base, epoch+1)
+    return '{}-{}'.format(model_base, epoch+1)
 
 
 def rm_old_checkpoints(base_path, current_epoch, last_n=3):
@@ -387,6 +389,8 @@ def train():
     parser.add_argument("--dataset_cache", type=str, default=os.path.expanduser('~/.bl-data'),
                         help="Path or url of the dataset cache")
     parser.add_argument("--cache_features", type=str2bool, default=True)
+    parser.add_argument("--embed_type", type=str, default='positional',
+                        help="register label of the embeddings, so far support positional or learned-positional")
     parser.add_argument("--d_model", type=int, default=410, help="Model dimension (and embedding dsz)")
     parser.add_argument("--d_ff", type=int, default=2100, help="FFN dimension")
     parser.add_argument("--num_heads", type=int, default=10, help="Number of heads")
@@ -481,7 +485,8 @@ def train():
     reader = create_reader(args.tokens, args.nctx, args.chars_per_word, args.subword_model_file,
                            args.subword_vocab_file, special_tokens)
 
-    preproc_data = load_embed_and_vocab(args.tokens, reader, dataset, args.dataset_key, args.d_model, args.cache_features)
+    preproc_data = load_embed_and_vocab(args.tokens, reader, dataset, args.dataset_key,
+                                        args.embed_type, args.d_model, args.cache_features)
 
     vocabs = preproc_data['vocabs']
     if args.mlm:
@@ -666,12 +671,14 @@ def train():
         if args.local_rank < 1:
 
             # Should probably do this more often
-            checkpoint_name = checkpoint_for(model_base, epoch+1)
+            checkpoint_name = checkpoint_for(model_base, epoch)
             logger.info("Creating checkpoint: %s", checkpoint_name)
             if args.distributed:
-                torch.save(model.module.state_dict(), checkpoint_name)
+                torch.save(model.module.state_dict(), checkpoint_name+'.pth')
+                save_tlm_npz(model.module, checkpoint_name+'.npz')
             else:
-                torch.save(model.state_dict(), checkpoint_name)
+                torch.save(model.state_dict(), checkpoint_name+'.pth')
+                save_tlm_npz(model, checkpoint_name+'.npz')
 
             rm_old_checkpoints(model_base, epoch+1)
 
