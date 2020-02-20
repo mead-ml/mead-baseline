@@ -72,7 +72,7 @@ To install a developer version of the library do:
 ```
 cd layers
 pip install -e .
-cd ../python
+cd ../
 pip install -e .
 ```
 This first installs `mead-layers` and then `mead-baseline`
