@@ -4,7 +4,7 @@ from __future__ import print_function
 from collections import Counter
 
 
-from baseline.utils import read_json
+from eight_mile.utils import read_json
 from eight_mile.pytorch.layers import TransformerEncoderStack, subsequent_mask
 from eight_mile.pytorch.embeddings import PyTorchEmbeddings, PositionalLookupTableEmbeddings
 from baseline.embeddings import register_embeddings
@@ -12,7 +12,7 @@ from baseline.pytorch.embeddings import PyTorchEmbeddingsModel
 from baseline.vectorizers import register_vectorizer, AbstractVectorizer, BPEVectorizer1D
 from baseline.pytorch.torchy import *
 from eight_mile.pytorch.serialize import load_tlm_npz
-
+import torch.nn as nn
 
 @register_vectorizer(name='tlm-wordpiece')
 class WordPieceVectorizer1D(AbstractVectorizer):
@@ -130,6 +130,7 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
         self.proj_to_dsz = pytorch_linear(self.dsz, self.d_model) if self.dsz != self.d_model else _identity
         self.transformer = TransformerEncoderStack(num_heads, d_model=self.d_model, pdrop=pdrop, scale=True, layers=layers, d_ff=d_ff)
         self.mlm = kwargs.get('mlm', False)
+        self.finetune = kwargs.get('finetune', True)
 
     def embed(self, input):
         embedded = self.embeddings['x'](input)
@@ -175,7 +176,7 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
         return z
 
     def get_output(self, inputs, z):
-        return z.detach()
+        return z if self.finetune else z.detach()
 
     def get_vocab(self):
         return self.vocab

@@ -579,7 +579,8 @@ class TaggerTask(Task):
 
     def _reorganize_params(self):
         train_params = self.config_params['train']
-        train_params['test_batchsz'] = self.config_params.get('test_batchsz', 1)
+        train_params['batchsz'] = train_params.get('batchsz', self.config_params.get('batchsz'))
+        train_params['test_batchsz'] = train_params.get('test_batchsz', self.config_params.get('test_batchsz', 1))
         labels = self.reader.label2index
         span_type = self.config_params['train'].get('span_type')
         constrain = bool(self.config_params['model'].get('constrain_decode', False))
@@ -607,8 +608,6 @@ class TaggerTask(Task):
         #return baseline.model.create_tagger_model(self.embeddings, labels, **self.config_params['model'])
 
     def _load_dataset(self):
-        batchsz = self.config_params['train']['batchsz']
-        test_batchsz = self.config_params['train'].get('test_batchsz', 1)
         # TODO: get rid of sort_key=self.primary_key in favor of something explicit?
         bsz, vbsz, tbsz = Task._get_batchsz(self.config_params)
         self.train_data, _ = self.reader.load(

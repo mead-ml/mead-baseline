@@ -412,6 +412,8 @@ class BPEVectorizer1D(AbstractVectorizer):
         self.tokenizer = SavableFastBPE(self.model_file, self.vocab_file)
         self.mxlen = kwargs.get('mxlen', -1)
         self.vocab = {k: i for i, k in enumerate(self.read_vocab(self.vocab_file))}
+        self.emit_begin_tok = kwargs.get('emit_begin_tok')
+        self.emit_end_tok = kwargs.get('emit_end_tok')
 
     def read_vocab(self, s):
         vocab = [] + Offsets.VALUES + ['[CLS]', '[MASK]']
@@ -431,6 +433,9 @@ class BPEVectorizer1D(AbstractVectorizer):
         return counter
 
     def iterable(self, tokens):
+        if self.emit_begin_tok:
+            yield self.emit_begin_tok
+
         for t in tokens:
             if t in Offsets.VALUES:
                 yield t
@@ -442,6 +447,8 @@ class BPEVectorizer1D(AbstractVectorizer):
                 subwords = self.tokenizer.apply([t])[0].split()
                 for x in subwords:
                     yield x
+        if self.emit_end_tok:
+            yield self.emit_end_tok
 
     def _next_element(self, tokens, vocab):
         for atom in self.iterable(tokens):
@@ -472,12 +479,20 @@ class BPELabelDict1DVectorizer(BPEVectorizer1D):
         super().__init__(**kwargs)
         self.field = kwargs.get('fields', kwargs.get('field', 'text'))
         self.label = kwargs.get('label', 'label')
+        self.emit_begin_tok = kwargs.get('emit_begin_tok')
+        self.emit_end_tok = kwargs.get('emit_end_tok')
 
     def iterable(self, tokens):
+        if self.emit_begin_tok:
+            yield self.emit_begin_tok
         for t in tokens:
             t_word = t[self.field]
             t_label = t[self.label]
             if t_word in Offsets.VALUES:
+                yield t_label
+            elif t == '<unk>':
+                yield t_label
+            elif t == '<eos>':
                 yield t_label
             else:
                 subwords = self.tokenizer.apply([t_word])[0].split()
@@ -485,6 +500,8 @@ class BPELabelDict1DVectorizer(BPEVectorizer1D):
                 subwords[0] = t_label
                 for x in subwords:
                     yield x
+        if self.emit_end_tok:
+            yield self.emit_end_tok
 
     def run(self, tokens, vocab):
         return super().run(tokens, vocab)

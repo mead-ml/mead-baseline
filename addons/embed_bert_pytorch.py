@@ -5,7 +5,6 @@ import collections
 import unicodedata
 import six
 import numpy as np
-from baseline.utils import write_json
 from baseline.embeddings import register_embeddings
 from baseline.pytorch.embeddings import PyTorchEmbeddings
 from baseline.vectorizers import register_vectorizer, AbstractVectorizer
@@ -22,7 +21,6 @@ import re
 BERT_TOKENIZER = None
 
 
-
 @register_vectorizer(name='wordpiece1d')
 class WordPieceVectorizer1D(AbstractVectorizer):
 
@@ -31,8 +29,12 @@ class WordPieceVectorizer1D(AbstractVectorizer):
         global BERT_TOKENIZER
         self.max_seen = 128
         handle = kwargs.get('embed_file')
+        if 'uncased' in handle or bool(kwargs.get('do_lower_case', False)) is False:
+            do_lower_case = False
+        else:
+            do_lower_case = True
         if BERT_TOKENIZER is None:
-            BERT_TOKENIZER = BertTokenizer.from_pretrained(handle)
+            BERT_TOKENIZER = BertTokenizer.from_pretrained(handle, do_lower_case=do_lower_case)
         self.tokenizer = BERT_TOKENIZER
         self.mxlen = kwargs.get('mxlen', -1)
 
@@ -71,18 +73,75 @@ class WordPieceVectorizer1D(AbstractVectorizer):
         return self.mxlen,
 
 
+@register_vectorizer(name='wordpiece-label-dict1d')
+class WordPieceLabelDict1DVectorizer(WordPieceVectorizer1D):
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.field = kwargs.get('fields', kwargs.get('field', 'text'))
+        self.label = kwargs.get('label', 'label')
+
+    def iterable(self, tokens):
+        yield Offsets.VALUES[Offsets.PAD]
+        for t in tokens:
+            t_word = t[self.field]
+            t_label = t[self.label]
+            subwords = [x for x in self.tokenizer.tokenize(t_word)]
+            subwords = [Offsets.VALUES[Offsets.PAD]] * len(subwords)
+            # TODO: The tokenizer sometimes cuts up the token and leaves nothing
+            # how to handle this since we cannot get anything for it
+            if len(subwords):
+                subwords[0] = t_label
+            for x in subwords:
+                yield x
+        yield Offsets.VALUES[Offsets.PAD]
+
+    def run(self, tokens, vocab):
+        return super().run(tokens, vocab)
+
+    def count(self, tokens):
+        seen = 0
+        counter = collections.Counter()
+        for tok in self.iterable(tokens):
+            counter[tok] += 1
+            seen += 1
+        self.max_seen = max(self.max_seen, seen)
+        return counter
+
+
+@register_vectorizer(name='wordpiece-dict1d')
+class WordPieceDict1DVectorizer(WordPieceVectorizer1D):
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.field = kwargs.get('fields', kwargs.get('field', 'text'))
+        self.delim = kwargs.get('token_delim', '~~')
+
+    def iterable(self, tokens):
+        yield '[CLS]'
+        for t in tokens:
+            tok = t[self.field]
+            for subtok in self.tokenizer.tokenize(tok):
+                yield subtok
+        yield '[SEP]'
+
+
 class BERTBaseEmbeddings(PyTorchEmbeddings):
 
     def __init__(self, name, **kwargs):
         super().__init__(name=name, **kwargs)
         global BERT_TOKENIZER
         self.dsz = kwargs.get('dsz')
+        handle = kwargs.get('embed_file')
         if BERT_TOKENIZER is None:
-            BERT_TOKENIZER = BertTokenizer.from_pretrained(kwargs.get('embed_file'))
+            if 'uncased' in handle or bool(kwargs.get('do_lower_case', False)) is False:
+                do_lower_case = False
+            else:
+                do_lower_case = True
+            BERT_TOKENIZER = BertTokenizer.from_pretrained(handle, do_lower_case=do_lower_case)
         self.model = BertModel.from_pretrained(kwargs.get('embed_file'))
         self.vocab = BERT_TOKENIZER.vocab
         self.vsz = len(BERT_TOKENIZER.vocab)  # 30522 self.model.embeddings.word_embeddings.num_embeddings
-
 
     def get_vocab(self):
         return self.vocab
@@ -114,7 +173,7 @@ class BERTEmbeddings(BERTBaseEmbeddings):
     def __init__(self, name, **kwargs):
         """BERT sequence embeddings, used for a feature-ful representation of finetuning sequence tasks.
 
-        If operator == 'concat' result is [B, T, #Layers * H] other size the layers are meaned and the shape is [B, T, H]
+        If operator == 'concat' result is [B, T, #Layers * H] other size the layers are mean'd the shape is [B, T, H]
         """
         super().__init__(name=name, **kwargs)
         self.layer_indices = kwargs.get('layers', [-1, -2, -3, -4])
@@ -127,8 +186,8 @@ class BERTEmbeddings(BERTBaseEmbeddings):
         else:
             layers = [all_layers[layer_index].detach() for layer_index in self.layer_indices]
         if self.operator != 'concat':
-            z = torch.cat([l.unsqueeze(-1) for l in layers])
-            z = torch.mead(z, dim=-1)
+            z = torch.cat([l.unsqueeze(-1) for l in layers], dim=-1)
+            z = torch.mean(z, dim=-1)
         else:
             z = torch.cat(layers, dim=-1)
         return z

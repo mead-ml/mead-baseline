@@ -61,6 +61,7 @@ class TaggerModelBase(nn.Module, TaggerModel):
         transducer_model = model.init_encoder(embed_model.output_dim, **kwargs)
 
         use_crf = bool(kwargs.get('crf', False))
+
         constraint_mask = kwargs.get('constraint_mask')
         if constraint_mask is not None:
             constraint_mask = constraint_mask.unsqueeze(0)
@@ -185,7 +186,7 @@ class TransformerTaggerModel(TaggerModelBase):
 class CNNTaggerModel(TaggerModelBase):
 
     def __init__(self):
-        super(CNNTaggerModel, self).__init__()
+        super().__init__()
 
     def init_encoder(self, input_sz, **kwargs):
         layers = int(kwargs.get('layers', 1))
@@ -193,12 +194,14 @@ class CNNTaggerModel(TaggerModelBase):
         filtsz = kwargs.get('wfiltsz', 5)
         activation_type = kwargs.get('activation_type', 'relu')
         hsz = int(kwargs['hsz'])
-        self.encoder = ConvEncoderStack(input_sz, hsz, filtsz, pdrop, layers, activation_type)
-        return hsz
+        return WithoutLength(ConvEncoderStack(input_sz, hsz, filtsz, layers, pdrop, activation_type))
 
-    def encode(self, tbh, lengths):
-        # bct
-        bht = tbh.permute(1, 2, 0).contiguous()
-        bht = self.encoder(bht)
-        # bht -> tbh
-        return bht.permute(2, 0, 1).contiguous()
+
+@register_model(task='tagger', name='pass')
+class PassThruTaggerModel(TaggerModelBase):
+
+    def __init__(self):
+        super().__init__()
+
+    def init_encoder(self, input_sz, **kwargs):
+        return WithoutLength(PassThru(input_sz))

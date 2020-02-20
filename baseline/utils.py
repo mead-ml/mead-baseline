@@ -549,6 +549,7 @@ def extract_gzip(file_loc):
 
 @export
 def extract_tar(file_loc):
+    import tarfile
     temp_file = delete_old_copy("{}.1".format(file_loc))
     with tarfile.open(file_loc, "r") as tar_ref:
         tar_ref.extractall(temp_file)

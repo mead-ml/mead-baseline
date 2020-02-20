@@ -1720,6 +1720,7 @@ class BahdanauAttention(VectorSequenceAttention):
         return a
 
     def _update(self, a, query_t, values_bth):
+        query_t = query_t.view(-1, self.hsz)
         # a = B x T
         # Want to apply over context, scaled by a
         # (B x 1 x T) (B x T x H) = (B x 1 x H) -> (B x H)
@@ -1804,6 +1805,16 @@ class EmbedPoolStackModel(nn.Module):
         pooled = self.pool_model(embedded)
         stacked = self.stack_model(pooled)
         return self.output_layer(stacked)
+
+
+class PassThru(nn.Module):
+
+    def __init__(self, input_dim):
+        super().__init__()
+        self.output_dim = input_dim
+
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        return inputs
 
 
 class WithoutLength(nn.Module):
@@ -2100,7 +2111,7 @@ class TaggerGreedyDecoder(nn.Module):
         else:
             # Decoding doesn't care about batch/time first
             _, preds = torch.max(unaries, -1)
-            mask = sequence_mask(lengths).to(preds.device)
+            mask = sequence_mask(lengths, unaries.shape[1]).to(preds.device)
             # The mask gets generated as batch first
             mask = mask if self.batch_first else mask.transpose(0, 1)
             preds = preds.masked_fill(mask == MASK_FALSE, 0)

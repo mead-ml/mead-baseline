@@ -98,7 +98,7 @@ class ClassifyTrainerTf(EpochReportingTrainer):
           * *epsilon* (`float`) -- Adam-specific hyper-param, defaults to `1e-8
 
         """
-        super(ClassifyTrainerTf, self).__init__()
+        super().__init__()
 
         if type(model_params) is dict:
             self.model = create_model_for('classify', **model_params)
