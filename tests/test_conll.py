@@ -1,5 +1,6 @@
 import os
 import random
+import textwrap
 from io import StringIO
 import pytest
 from eight_mile.utils import (
@@ -9,6 +10,7 @@ from eight_mile.utils import (
     read_conll_docs_md,
     read_conll_sentences,
     read_conll_sentences_md,
+    convert_conll_file,
 )
 
 
@@ -169,3 +171,18 @@ def test_sniff_reset():
     _ = sniff_conll_file(files)
     res = files.readline().rstrip()
     assert res == gold
+
+
+def test_read_write_with_delim_none():
+    data = textwrap.dedent("""
+        a 1 2
+        b 1 2
+
+        c 1 2
+        d 1 2
+    """.lstrip("\n"))
+    in_ = StringIO(data)
+    out_ = StringIO()
+    convert_conll_file(in_, out_, lambda x: x, delim=None)
+    out_.seek(0)
+    assert out_.read().strip("\n") == data.strip("\n")
