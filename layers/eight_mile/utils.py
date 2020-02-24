@@ -1029,6 +1029,7 @@ def convert_conll_file(ifile, ofile, convert, fields=[-1], delim=None):
     :param fields: `List[int]` The columns to convert.
     :param delim: `str` The symbol that separates the columns.
     """
+    output_delim = ' ' if delim is None else delim
     conll_length = sniff_conll_file(ifile, delim)
     fields = set(normalize_indices(fields, conll_length))
     for lines, md in read_conll_sentences_md(ifile, delim=delim):
@@ -1037,7 +1038,7 @@ def convert_conll_file(ifile, ofile, convert, fields=[-1], delim=None):
         if md:
             ofile.write("\n".join(md) + "\n")
         # Write out the lines
-        ofile.write("\n".join(delim.join(l).rstrip() for l in lines) + "\n\n")
+        ofile.write("\n".join(output_delim.join(l).rstrip() for l in lines) + "\n\n")
 
 
 @export
