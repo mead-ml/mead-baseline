@@ -589,7 +589,7 @@ def train():
                 labels[~masked_indices] = 0
                 # Of the masked items, mask 80% of them with [MASK]
                 indices_replaced = torch.bernoulli(torch.full(labels.shape, 0.8)).type(torch.bool) & masked_indices
-                inputs[indices_replaced] = mask_value
+                inputs['x'][indices_replaced] = mask_value
                 # Replace 10% of them with random words, rest preserved for auto-encoding
                 indices_random = torch.bernoulli(torch.full(labels.shape, 0.5)).type(torch.bool) & masked_indices & ~indices_replaced
                 random_words = torch.randint(vocab_size, labels.shape, dtype=torch.long, device=args.device)
@@ -638,7 +638,7 @@ def train():
                     labels[~masked_indices] = 0
                     # Of the masked items, mask 80% of them with [MASK]
                     indices_replaced = torch.bernoulli(torch.full(labels.shape, 0.8)).type(torch.bool) & masked_indices
-                    inputs[indices_replaced] = mask_value
+                    inputs['x'][indices_replaced] = mask_value
                     # Replace 10% of them with random work
                     indices_random = torch.bernoulli(torch.full(labels.shape, 0.5)).type(torch.bool) & masked_indices & ~indices_replaced
                     random_words = torch.randint(vocab_size, labels.shape, dtype=torch.long, device=args.device)
