@@ -148,9 +148,12 @@ def to_tlm_array(pytorch_tlm: nn.Module, embeddings_key: str = 'x', name: str = 
     """
     d = {}
     d.update(to_encoder_stack_array(pytorch_tlm.transformer, name=f"{name}/TransformerEncoderStack"))
-    d.update(
-        to_embed_array(pytorch_tlm.embeddings[embeddings_key].embeddings, name=f"{name}/SinusoidalPositionalEmbeddings")
-    )
+    embedding_layer = pytorch_tlm.embeddings[embeddings_key]
+    # Save the word embedding with name LookupTableEmbeddings. If the positional embedding is learned, save it with the
+    # name PositionalEmbeddings
+    d.update(to_embed_array(embedding_layer.embeddings, name=f"{name}/LookupTableEmbeddings"))
+    if hasattr(embedding_layer, 'pos_embeddings'):
+        d.update((to_embed_array(embedding_layer.pos_embeddings, name=f"{name}/PositionalEmbeddings")))
     return d
 
 
@@ -212,7 +215,10 @@ def from_tlm_array(pytorch_tlm: nn.Module, d: Dict, embeddings_key: str = 'x', n
     :return:
     """
     from_encoder_stack_array(pytorch_tlm.transformer, d, name=f"{name}/TransformerEncoderStack")
-    from_embed_array(pytorch_tlm.embeddings[embeddings_key].embeddings, d, f"{name}/SinusoidalPositionalEmbeddings")
+    embedding_layer = pytorch_tlm.embeddings[embeddings_key]
+    from_embed_array(embedding_layer.embeddings, d, f"{name}/LookupTableEmbeddings")
+    if hasattr(embedding_layer, 'pos_embeddings'):
+        from_embed_array(embedding_layer.pos_embeddings, d, f"{name}/PositionalEmbeddings")
 
 
 def load_tlm_npz(pytorch_tlm: nn.Module, npz: str, embeddings_key: str = 'x', name: str = "TLM"):
