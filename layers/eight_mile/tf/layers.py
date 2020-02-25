@@ -2487,7 +2487,12 @@ class TaggerGreedyDecoder(tf.keras.layers.Layer):
         return self.A
 
     def neg_log_loss(self, unary, tags, lengths):
-        mask = tf.sequence_mask(lengths, tf.shape(unary)[1])
+
+        lengths = tf.cast(lengths, tf.int32)
+        max_length = tf.reduce_max(lengths)
+        tags = tags[:, :max_length]
+
+        mask = tf.sequence_mask(lengths, max_length)
         cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tags, logits=unary)
         cross_entropy *= tf.cast(mask, tf.float32)
         cross_entropy = tf.reduce_sum(cross_entropy, axis=1)
@@ -2847,20 +2852,22 @@ def create_session():
     return tf.compat.v1.Session(config=config)
 
 
-def reload_lower_layers(sess, checkpoint):
+def reload_checkpoint(sess: tf.compat.v1.Session, checkpoint: str, blocks_to_skip: List[str] = None):
     """
     Get the intersection of all non-output layers and declared vars in this graph and restore them
-
-    :param sess: (`tf.compat.v1.Session`) A tensorflow session to restore from
-    :param checkpoint: (`str`) checkpoint to read from
+    :param sess: A tensorflow session to restore from
+    :param checkpoint: checkpoint to read from
+    :param blocks_to_skip: which variables of the graph to skip on reload
     :return: None
     """
+    if not blocks_to_skip:
+        blocks_to_skip = ['Optimize_Loss', 'output/']
     latest = tf.train.latest_checkpoint(checkpoint)
     print("Reloading " + latest)
     model_vars = set([t[0] for t in tf.train.list_variables(latest)])
-    g = tf.get_collection_ref(tf.GraphKeys.GLOBAL_VARIABLES)
-    g = [v for v in g if not v.op.name.startswith("OptimizeLoss")]
-    g = [v for v in g if not v.op.name.startswith("output/")]
+    g = tf.compat.v1.get_collection_ref(tf.compat.v1.GraphKeys.GLOBAL_VARIABLES)
+    for block in blocks_to_skip:
+        g = [v for v in g if not v.op.name.startswith(block)]
     g = [v for v in g if v.op.name in model_vars]
     saver = tf.compat.v1.train.Saver(g)
     saver.restore(sess, latest)

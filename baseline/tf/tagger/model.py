@@ -21,7 +21,7 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
     def __init__(self):
         """Create a tagger, nothing marked as unserializable
         """
-        super(TaggerModelBase, self).__init__()
+        super().__init__()
         self._unserializable = []
         self._lengths_key = None
         self._dropin_value = None

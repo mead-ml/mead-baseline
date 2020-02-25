@@ -2,7 +2,7 @@ import os
 import time
 import numpy as np
 import tensorflow as tf
-from eight_mile.tf.layers import create_session
+from eight_mile.tf.layers import create_session, reload_checkpoint
 from eight_mile.tf.optz import optimizer
 from baseline.progress import create_progress_bar
 from eight_mile.bleu import bleu
@@ -84,7 +84,7 @@ class Seq2SeqTrainerTf(Trainer):
           * *beam* (`int`) -- The beam size to use at prediction time, defaults to `10`
 
         """
-        super(Seq2SeqTrainerTf, self).__init__()
+        super().__init__()
         if type(model_params) is dict:
             self.model = create_model_for('seq2seq', **model_params)
         else:
@@ -104,6 +104,10 @@ class Seq2SeqTrainerTf(Trainer):
 
         init = tf.compat.v1.global_variables_initializer()
         self.model.sess.run(init)
+        checkpoint = kwargs.get('checkpoint')
+        if checkpoint is not None:
+            skip_blocks = kwargs.get('blocks_to_skip', ['Optimize_Loss'])
+            reload_checkpoint(self.model.sess, checkpoint, skip_blocks)
 
     def checkpoint(self):
         """This method saves a checkpoint

@@ -8,7 +8,7 @@ from eight_mile.utils import listify
 from baseline.train import create_trainer, register_training_func
 from baseline.tf.tfy import TRAIN_FLAG
 from baseline.utils import get_model_file, get_metric_cmp
-from baseline.tf.tfy import reload_lower_layers
+from baseline.tf.tfy import reload_checkpoint
 from baseline.tf.tagger.training.utils import to_tensors, TaggerEvaluatorTf
 
 # Number of batches to prefetch if using tf.datasets

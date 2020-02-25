@@ -5,7 +5,7 @@ import numpy as np
 import tensorflow as tf
 import logging
 from eight_mile.utils import listify, revlut, to_spans, write_sentence_conll, per_entity_f1, span_f1, conlleval_output
-from eight_mile.tf.layers import TRAIN_FLAG, SET_TRAIN_FLAG, reload_lower_layers
+from eight_mile.tf.layers import TRAIN_FLAG, SET_TRAIN_FLAG, reload_checkpoint
 from eight_mile.tf.optz import EagerOptimizer
 from baseline.progress import create_progress_bar
 from baseline.model import create_model_for
