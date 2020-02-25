@@ -2,6 +2,7 @@ import os
 import time
 import numpy as np
 import tensorflow as tf
+from eight_mile.tf.layers import reload_checkpoint
 from eight_mile.tf.optz import optimizer
 from baseline.tf.tfy import TRAIN_FLAG, SET_TRAIN_FLAG
 from baseline.train import Trainer, register_trainer
@@ -101,6 +102,10 @@ class LanguageModelTrainerTf(Trainer):
         self.model.sess.run(init)
         saver = tf.compat.v1.train.Saver()
         self.model.set_saver(saver)
+        checkpoint = kwargs.get('checkpoint')
+        if checkpoint is not None:
+            skip_blocks = kwargs.get('blocks_to_skip', ['Optimize_Loss'])
+            reload_checkpoint(self.model.sess, checkpoint, skip_blocks)
 
     def checkpoint(self):
         """This method saves a checkpoint

@@ -12,7 +12,7 @@ from baseline.train import EpochReportingTrainer, create_trainer, register_train
 from baseline.tf.tfy import TRAIN_FLAG
 from baseline.model import create_model_for
 from baseline.utils import get_model_file, get_metric_cmp
-from baseline.tf.tfy import reload_lower_layers
+from eight_mile.tf.layers import reload_checkpoint
 
 logger = logging.getLogger('baseline')
 
@@ -201,6 +201,10 @@ class TaggerTrainerTf(EpochReportingTrainer):
         self.model.sess.run(init)
         saver = tf.compat.v1.train.Saver()
         self.model.save_using(saver)
+        checkpoint = kwargs.get('checkpoint')
+        if checkpoint is not None:
+            skip_blocks = kwargs.get('blocks_to_skip', ['Optimize_Loss'])
+            reload_checkpoint(self.model.sess, checkpoint, skip_blocks)
 
     def checkpoint(self):
         """This method saves a checkpoint

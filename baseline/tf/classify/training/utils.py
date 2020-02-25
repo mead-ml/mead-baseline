@@ -6,6 +6,7 @@ import tensorflow as tf
 
 from eight_mile.confusion import ConfusionMatrix
 from eight_mile.utils import listify
+from eight_mile.tf.layers import reload_checkpoint
 from eight_mile.tf.optz import optimizer
 
 from baseline.progress import create_progress_bar
@@ -14,6 +15,7 @@ from baseline.tf.tfy import _add_ema, TRAIN_FLAG, SET_TRAIN_FLAG
 from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
 from baseline.utils import verbose_output
 from baseline.model import create_model_for
+
 import numpy as np
 
 # Number of batches to prefetch if using tf.datasets
@@ -124,6 +126,10 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         self.model.sess.run(tables)
         self.model.sess.run(tf.compat.v1.global_variables_initializer())
         self.model.set_saver(tf.compat.v1.train.Saver())
+        checkpoint = kwargs.get('checkpoint')
+        if checkpoint is not None:
+            skip_blocks = kwargs.get('blocks_to_skip', ['Optimize_Loss'])
+            reload_checkpoint(self.model.sess, checkpoint, skip_blocks)
 
     @staticmethod
     def _get_batchsz(batch_dict):
