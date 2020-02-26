@@ -4,8 +4,7 @@ import logging
 import collections
 import contextlib
 import numpy as np
-from eight_mile.utils import optional_params, exporter, write_json, read_config_file, Offsets, mime_type
-
+from eight_mile.utils import optional_params, exporter, write_json, read_config_file, Offsets, mime_type, revlut
 __all__ = []
 export = exporter(__all__)
 logger = logging.getLogger("mead.layers")
@@ -67,7 +66,7 @@ def write_word2vec_file(filename, vocab, word_vectors):
 @export
 class EmbeddingsModel(object):
     def __init__(self):
-        super(EmbeddingsModel, self).__init__()
+        super().__init__()
 
     def get_dsz(self):
         pass
@@ -94,7 +93,7 @@ def pool_vec(embeddings, tokens, operation=np.mean):
 @export
 class WordEmbeddingsModel(EmbeddingsModel):
     def __init__(self, **kwargs):
-        super(WordEmbeddingsModel, self).__init__()
+        super().__init__()
         self.vocab = kwargs.get("vocab")
         self.vsz = kwargs.get("vsz")
         self.dsz = kwargs.get("dsz")
@@ -152,7 +151,7 @@ class WordEmbeddingsModel(EmbeddingsModel):
 @export
 class PretrainedEmbeddingsModel(WordEmbeddingsModel):
     def __init__(self, filename, known_vocab=None, unif_weight=None, keep_unused=False, normalize=False, **kwargs):
-        super(PretrainedEmbeddingsModel, self).__init__()
+        super().__init__()
 
         if (known_vocab is None or not known_vocab) and keep_unused is False:
             logger.warning(
@@ -327,9 +326,73 @@ class PretrainedEmbeddingsModel(WordEmbeddingsModel):
 
 
 @export
+class PretrainedEmbeddingsStack(EmbeddingsModel):
+    def __init__(self, filenames, known_vocab, counts=True, unif_weight=None, normalize=False, **kwargs):
+        uw = 0.0 if unif_weight is None else unif_weight
+
+        self.vocab = dict()
+        for i, name in enumerate(Offsets.VALUES):
+            self.vocab[name] = i
+        self.vsz = Offsets.OFFSET
+
+        if counts is True:
+            for name in Offsets.VALUES:
+                known_vocab.pop(name, 0)
+            attested = [v for v, cnt in known_vocab.items() if cnt > 0]
+            for k, v in enumerate(attested):
+                self.vocab[v] = k + Offsets.OFFSET
+                self.vsz += 1
+        else:
+            self.vocab = known_vocab
+            self.vsz = len(self.vocab)
+
+        index2word = revlut(self.vocab)
+        # vocab = word2index
+        embeddings = []
+
+        for file in filenames:
+            embeddings.append(PretrainedEmbeddingsModel(file, known_vocab))
+
+        self.dsz = sum([embedding.dsz for embedding in embeddings])
+        self.weights = np.random.uniform(-uw, uw, (self.vsz, self.dsz)).astype(np.float32)
+
+        for i in range(len(self.vocab.keys())):
+                w = index2word[i]
+                e = []
+                for emb in embeddings:
+                    e.append(emb.lookup(w, False))
+                self.weights[i] = np.concatenate(e)
+        if normalize is True:
+            self.weights = norm_weights(self.weights)
+
+    def __getitem__(self, word):
+        return self.lookup(word, nullifabsent=False)
+
+    def lookup(self, word, nullifabsent=True):
+        if word in self.vocab:
+            return self.weights[self.vocab[word]]
+        if nullifabsent:
+            return None
+        return np.zeros(self.dsz, dtype=np.float32)
+
+    def get_vocab(self):
+        return self.vocab
+
+    def get_dsz(self):
+        return self.dsz
+
+    def get_vsz(self):
+        return self.vsz
+
+    def save_md(self, target):
+        write_json({"vsz": self.get_vsz(), "dsz": self.get_dsz(), "vocab": self.get_vocab()}, target)
+
+
+
+@export
 class RandomInitVecModel(EmbeddingsModel):
     def __init__(self, dsz, known_vocab, counts=True, unif_weight=None):
-        super(RandomInitVecModel, self).__init__()
+        super().__init__()
         uw = 0.0 if unif_weight is None else unif_weight
         self.vocab = dict()
         for i, name in enumerate(Offsets.VALUES):
