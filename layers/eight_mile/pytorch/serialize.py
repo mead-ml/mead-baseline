@@ -117,25 +117,35 @@ def from_encoder_array(pytorch_encoder: TransformerEncoder, d: Dict, name: str):
 
 
 def to_embed_array(pytorch_embed: nn.Module, name: str) -> Dict:
-    """Convert a simple lookup table embedding to a `weights` array
+    """Convert positional embedding to a `weights` array, if it's learned positional embedding,
+    save the pos_weight as well
 
     :param pytorch_embed: An embedding module
     :param name: A layer name
     :return: A Dict containing the embedding `weights`
     """
-    weights = pytorch_embed.weight.cpu().detach().numpy()
-    return {f"{name}/weights": weights}
+    d = {}
+    weights = pytorch_embed.embeddings.weight.cpu().detach().numpy()
+    d.update({f"{name}/weights": weights})
+    if hasattr(pytorch_embed, 'pos_embeddings'):
+        pos_weights = pytorch_embed.pos_embeddings.weight.cpu().detach().numpy()
+        d.update({f"{name}/pos_weights": pos_weights})
+    return d
 
 
 def from_embed_array(pytorch_embed: nn.Module, d: Dict, name: str):
-    """Restore a simple lookup table embedding from a `weights` array
+    """Restore a positional embedding from a `weights` array, if it's a learned positional embedding, the pos_weights
+    is also restored
 
     :param pytorch_embed: An embedding module
     :param d: A Dict containing a `weights` array to restore
     :param name: name of the layer
     :return: None
     """
-    pytorch_embed.weight = torch.nn.Parameter(torch.from_numpy(d[f"{name}/weights"]), requires_grad=True)
+    pytorch_embed.embeddings.weight = torch.nn.Parameter(torch.from_numpy(d[f"{name}/weights"]), requires_grad=True)
+    if hasattr(pytorch_embed, 'pos_embeddings'):
+        pytorch_embed.pos_embeddings.weight = torch.nn.Parameter(torch.from_numpy(d[f"{name}/pos_weights"]),
+                                                                 requires_grad=True)
 
 
 def to_tlm_array(pytorch_tlm: nn.Module, embeddings_key: str = 'x', name: str = "TLM") -> Dict:
@@ -148,9 +158,7 @@ def to_tlm_array(pytorch_tlm: nn.Module, embeddings_key: str = 'x', name: str = 
     """
     d = {}
     d.update(to_encoder_stack_array(pytorch_tlm.transformer, name=f"{name}/TransformerEncoderStack"))
-    d.update(
-        to_embed_array(pytorch_tlm.embeddings[embeddings_key].embeddings, name=f"{name}/SinusoidalPositionalEmbeddings")
-    )
+    d.update(to_embed_array(pytorch_tlm.embeddings[embeddings_key], name=f"{name}/PositionalEmbeddings"))
     return d
 
 
@@ -212,7 +220,7 @@ def from_tlm_array(pytorch_tlm: nn.Module, d: Dict, embeddings_key: str = 'x', n
     :return:
     """
     from_encoder_stack_array(pytorch_tlm.transformer, d, name=f"{name}/TransformerEncoderStack")
-    from_embed_array(pytorch_tlm.embeddings[embeddings_key].embeddings, d, f"{name}/SinusoidalPositionalEmbeddings")
+    from_embed_array(pytorch_tlm.embeddings[embeddings_key], d, f"{name}/PositionalEmbeddings")
 
 
 def load_tlm_npz(pytorch_tlm: nn.Module, npz: str, embeddings_key: str = 'x', name: str = "TLM"):

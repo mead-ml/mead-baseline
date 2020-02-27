@@ -35,18 +35,17 @@ def _call_model(m, inputs):
     return m.transformer((x, mask))
 
 
-def test_round_trip():
+def _round_trip(embed_type):
     test_file = os.path.join(file_loc, "test_data", "blah.npz")
     d_model = 40
     vocab_x = {'a':1, 'aardvark':100, 'beandip':42, 'cheerio':86, 'dumdum':129, 'eoyre':3}
     embeddings = {}
     vocabs = {'x': vocab_x}
-    x_embedding = baseline.embeddings.load_embeddings('x',
-                                                      dsz=d_model,
-                                                      known_vocab=vocab_x,
-                                                      embed_type='positional')
-    vocabs['x'] = x_embedding['vocab']
-    embeddings['x'] = x_embedding['embeddings']
+    src_x_embedding = baseline.embeddings.load_embeddings('x',
+                                                          dsz=d_model,
+                                                          known_vocab=vocab_x,
+                                                          embed_type=embed_type)
+    embeddings['x'] = src_x_embedding['embeddings']
 
     src_model = TransformerLanguageModel.create(embeddings,
                                                 hsz=d_model,
@@ -57,6 +56,12 @@ def test_round_trip():
                                                 src_keys=['x'], tgt_key='x')
 
     save_tlm_npz(src_model, test_file)
+
+    dst_x_embedding = baseline.embeddings.load_embeddings('x',
+                                                          dsz=d_model,
+                                                          known_vocab=vocab_x,
+                                                          embed_type=embed_type)
+    embeddings['x'] = dst_x_embedding['embeddings']
     dst_model = TransformerLanguageModel.create(embeddings,
                                                 hsz=d_model,
                                                 dropout=0.1,
@@ -66,11 +71,15 @@ def test_round_trip():
                                                 src_keys=['x'], tgt_key='x')
     load_tlm_npz(dst_model, test_file)
 
-
     B = 4
     T = 7
     a_batch = torch.randint(0, 9, (B, T)).long()
     a_lengths = torch.randint(0, T, (B,)).long()
-    out_pyt1 = _call_model(dst_model, {'x': a_batch, 'lengths': a_lengths}).detach().numpy()
+    out_pyt1 = _call_model(src_model, {'x': a_batch, 'lengths': a_lengths}).detach().numpy()
     out_pyt2 = _call_model(dst_model, {'x': a_batch, 'lengths': a_lengths}).detach().numpy()
-    print(np.allclose(out_pyt1, out_pyt2, atol=1e-6))
+    return np.allclose(out_pyt1, out_pyt2, atol=1e-6)
+
+
+def test_round_trip():
+    assert _round_trip('positional')
+    assert _round_trip('learned-positional')

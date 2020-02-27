@@ -6,7 +6,7 @@ from collections import Counter
 
 from eight_mile.utils import read_json
 from eight_mile.pytorch.layers import TransformerEncoderStack, subsequent_mask
-from eight_mile.pytorch.embeddings import PyTorchEmbeddings, PositionalLookupTableEmbeddings
+from eight_mile.pytorch.embeddings import PyTorchEmbeddings, PositionalLookupTableEmbeddings, LearnedPositionalLookupTableEmbeddings
 from baseline.embeddings import register_embeddings
 from baseline.pytorch.embeddings import PyTorchEmbeddingsModel
 from baseline.vectorizers import register_vectorizer, AbstractVectorizer, BPEVectorizer1D
@@ -125,7 +125,11 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
         pdrop = kwargs.get('dropout', 0.1)
         self.d_model = int(kwargs.get('dsz', kwargs.get('d_model', 410)))
         d_ff = int(kwargs.get('d_ff', 2100))
-        x_embedding = PositionalLookupTableEmbeddings(vsz=self.vsz, dsz=self.d_model)
+        embed_type = kwargs.get('word_embed_type', 'positional')
+        if embed_type == 'positional':
+            x_embedding = PositionalLookupTableEmbeddings(vsz=self.vsz, dsz=self.d_model)
+        elif embed_type == 'learned-positional':
+            x_embedding = LearnedPositionalLookupTableEmbeddings(vsz=self.vsz, dsz=self.d_model)
         self.dsz = self.init_embed({'x': x_embedding})
         self.proj_to_dsz = pytorch_linear(self.dsz, self.d_model) if self.dsz != self.d_model else _identity
         self.transformer = TransformerEncoderStack(num_heads, d_model=self.d_model, pdrop=pdrop, scale=True, layers=layers, d_ff=d_ff)
