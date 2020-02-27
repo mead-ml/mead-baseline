@@ -6,22 +6,23 @@ from collections import Counter
 import numpy as np
 import baseline
 from copy import deepcopy
-from eight_mile.utils import get_version
 from baseline.reporting import create_reporting
 from baseline.utils import (
     exporter,
+    get_version,
     revlut,
+    is_sequence,
     Offsets,
     get_env_gpus,
     import_user_module,
     listify,
-    SingleFileDownloader
-)
-from baseline.utils import (
+    SingleFileDownloader,
+    EmbeddingDownloader,
+    DataDownloader,
     show_examples,
     normalize_backend,
 )
-from baseline.utils import EmbeddingDownloader, DataDownloader
+
 from mead.utils import (
     index_by_label,
     get_mead_settings,
@@ -365,11 +366,14 @@ class Task(object):
             name = feature['name']
 
             # Get the label out of the embeddings section in the features block of mead config
-            embed_label = embeddings_section.get('label', None)
+            embed_label = embeddings_section.get('label', embeddings_section.get('labels'))
 
             # Get the type of embedding out of the embeddings section in the features block of mead config
             embed_type = embeddings_section.get('type', 'default')
-
+            is_stacked = is_sequence(embed_label)
+            if is_stacked:
+                if embed_type != 'default':
+                    logger.warning("You have requested a stack of pretrained embeddings but didnt request 'default' or representation")
             # Backwards compat, copy from main block if not present locally
             embeddings_section['unif'] = embeddings_section.get('unif', self.config_params.get('unif', 0.1))
 
@@ -384,24 +388,37 @@ class Task(object):
             if embed_label is not None:
                 # Allow local overrides to uniform initializer
 
-                # This is from the embeddings index
-                embeddings_global_config = embeddings_set[embed_label]
-                if 'type' in embeddings_global_config:
-                    embed_type = embeddings_global_config['type']
-                embed_file = embeddings_global_config['file']
-                embed_dsz = embeddings_global_config['dsz']
-                embed_sha1 = embeddings_global_config.get('sha1', None)
-                # Should we grab vocab here too?
-                embed_model = embeddings_global_config.get('model', {})
-                if 'dsz' not in embed_model:
-                    embed_model['dsz'] = embed_dsz
-                embeddings_section = {**embed_model, **embeddings_section}
-                try:
+                embed_labels = listify(embed_label)
 
-                    embed_file = EmbeddingDownloader(embed_file, embed_dsz, embed_sha1, self.data_download_cache).download()
-                except Exception as e:
-                    pass
+                embed_files = []
+                for embed_label in embed_labels:
 
+                    embeddings_global_config_i = embeddings_set[embed_label]
+                    if 'type' in embeddings_global_config_i:
+                        embed_type_i = embeddings_global_config_i['type']
+                        if embed_type != 'default':
+                            embed_type = embed_type_i
+                        elif embed_type_i != 'default':
+                            raise Exception("Stacking embeddings only works for 'default' pretrained word embeddings")
+
+                    embed_file = embeddings_global_config_i['file']
+                    embed_dsz = embeddings_global_config_i['dsz']
+                    embed_sha1 = embeddings_global_config_i.get('sha1')
+                    # Should we grab vocab here too?
+
+                    embed_model = embeddings_global_config_i.get('model', {})
+                    if 'dsz' not in embed_model and not is_stacked:
+                        embed_model['dsz'] = embed_dsz
+
+                    embeddings_section = {**embed_model, **embeddings_section}
+                    try:
+                        embed_file = EmbeddingDownloader(embed_file, embed_dsz, embed_sha1, self.data_download_cache).download()
+                        embed_files.append(embed_file)
+                    except Exception as e:
+                        if is_stacked:
+                            raise e
+
+                embed_file = embed_files if is_stacked else embed_files[0]
                 embedding_bundle = baseline.embeddings.load_embeddings(name,
                                                                        embed_file=embed_file,
                                                                        known_vocab=vocabs[name],

@@ -1,6 +1,6 @@
 import eight_mile.embeddings
 from eight_mile.embeddings import *
-from eight_mile.utils import exporter, optional_params, listify, idempotent_append
+from eight_mile.utils import exporter, optional_params, listify, idempotent_append, is_sequence
 from baseline.utils import import_user_module, AddonDownloader
 import logging
 
@@ -96,14 +96,22 @@ def load_embeddings(name, **kwargs):
             model = RandomInitVecModel(dsz, known_vocab=known_vocab, unif_weight=unif)
         # If there, is use the PretrainedEmbeddingsModel loader
         else:
-            model = PretrainedEmbeddingsModel(
-                filename,
-                known_vocab=known_vocab,
-                unif_weight=unif,
-                keep_unused=keep_unused,
-                normalize=normalize,
-                **kwargs,
-            )
+            if is_sequence(filename):
+                model = PretrainedEmbeddingsStack(
+                    listify(filename),
+                    known_vocab=known_vocab,
+                    normalize=normalize,
+                    **kwargs
+                )
+            else:
+                model = PretrainedEmbeddingsModel(
+                    filename,
+                    known_vocab=known_vocab,
+                    unif_weight=unif,
+                    keep_unused=keep_unused,
+                    normalize=normalize,
+                    **kwargs,
+                )
 
         # Then call create(model, name, **kwargs)
         return {"embeddings": embeddings_cls.create(model, name, **kwargs), "vocab": model.get_vocab()}
