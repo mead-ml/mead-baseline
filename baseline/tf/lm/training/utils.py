@@ -104,7 +104,7 @@ class LanguageModelTrainerTf(Trainer):
         self.model.set_saver(saver)
         checkpoint = kwargs.get('checkpoint')
         if checkpoint is not None:
-            skip_blocks = kwargs.get('blocks_to_skip', ['Optimize_Loss'])
+            skip_blocks = kwargs.get('blocks_to_skip', ['OptimizeLoss'])
             reload_checkpoint(self.model.sess, checkpoint, skip_blocks)
 
     def checkpoint(self):
