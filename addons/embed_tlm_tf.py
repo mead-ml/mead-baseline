@@ -7,7 +7,7 @@ from eight_mile.tf.layers import EmbeddingsStack, subsequent_mask
 from baseline.embeddings import register_embeddings
 from eight_mile.utils import Offsets, read_json
 from baseline.vectorizers import register_vectorizer, BPEVectorizer1D
-from eight_mile.tf.embeddings import TensorFlowEmbeddings, PositionalLookupTableEmbeddings
+from eight_mile.tf.embeddings import TensorFlowEmbeddings, PositionalLookupTableEmbeddings, LearnedPositionalLookupTableEmbeddings
 from baseline.tf.embeddings import TensorFlowEmbeddingsModel
 
 
@@ -53,7 +53,11 @@ class TransformerLMEmbeddings(TensorFlowEmbeddings):
         pdrop = kwargs.get('dropout', 0.1)
         self.d_model = int(kwargs.get('dsz', kwargs.get('d_model', 410)))
         d_ff = int(kwargs.get('d_ff', 2100))
-        x_embedding = PositionalLookupTableEmbeddings(name=self._name, vsz=self.vsz, dsz=self.d_model)
+        word_embed_type = kwargs.get('word_embed_type', 'positional')
+        if word_embed_type == 'positional':
+            x_embedding = PositionalLookupTableEmbeddings(name=self._name, vsz=self.vsz, dsz=self.d_model)
+        elif word_embed_type == 'learned-positional':
+            x_embedding = LearnedPositionalLookupTableEmbeddings(name=self._name, vsz=self.vsz, dsz=self.d_model)
         self.dsz = self.init_embed({'x': x_embedding})
         self.proj_to_dsz = tf.keras.layers.Dense(self.d_model) if self.dsz != self.d_model else _identity
         self.transformer = TransformerEncoderStack(layers=layers, d_model=self.d_model, pdrop=pdrop,

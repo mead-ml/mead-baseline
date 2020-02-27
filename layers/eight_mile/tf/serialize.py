@@ -59,19 +59,23 @@ def from_encoder_array(tf_encoder: TransformerEncoder, d: Dict, name: str):
 def from_embed_array(tf_embed: tf.keras.layers.Layer, d: Dict, name: str):
     """Restore a simple lookup table embedding from a `weights` array
 
-    :param pytorch_embed: An embedding module
+    :param tf_embed: An embedding module
     :param d: A Dict containing a `weights` array to restore
     :param name: name of the layer
     :return: None
     """
     weights = d[f"{name}/weights"]
-    tf_embed.set_weights([weights])
+    if hasattr(tf_embed, 'pos'):
+        pos_weights = d[f"{name}/pos_weights"]
+        tf_embed.set_weights([pos_weights, weights])
+    else:
+        tf_embed.set_weights([weights])
 
 
 def from_encoder_stack_array(tf_encoder_stack: TransformerEncoderStack, d: Dict, name: str = "TransformerEncoderStack"):
     """Restore weights from a `TransformerEncoderStack`
 
-    :param pytorch_encoder_stack: A transformer encoder stack
+    :param tf_encoder_stack: A transformer encoder stack
     :param d: A Dict containing sets of arrays
     :param name: A name for this primitive
     :return: None
@@ -94,7 +98,7 @@ def from_tlm_array(tf_tlm: tf.keras.layers.Layer, d: Dict, embeddings_key: str =
     :return:
     """
     from_encoder_stack_array(tf_tlm.transformer, d, name=f"{name}/TransformerEncoderStack")
-    from_embed_array(tf_tlm.embeddings.embeddings[embeddings_key], d, name=f"{name}/SinusoidalPositionalEmbeddings")
+    from_embed_array(tf_tlm.embeddings.embeddings[embeddings_key], d, name=f"{name}/PositionalEmbeddings")
 
 
 def load_tlm_npz(tf_tlm: tf.keras.layers.Layer, npz: str, embeddings_key: str = 'x', name: str = "TLM"):
@@ -103,7 +107,7 @@ def load_tlm_npz(tf_tlm: tf.keras.layers.Layer, npz: str, embeddings_key: str = 
     We just populate the `TransformerEncoderStack` and the embeddings from weights, all other values remain
     uninitialized
 
-    :param pytorch_tlm: A TLM-like model
+    :param tf_tlm: A TLM-like model
     :param npz: A file to restore the weights from
     :param embeddings_key: The name of the embeddings to restore, defaults to `x`
     :param name: A name for this primitive
