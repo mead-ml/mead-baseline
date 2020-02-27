@@ -24,7 +24,7 @@
 	      },
 	      "embeddings": { "labels": ["glove-twitter-27B", "glove-42B"]}
 	  }, {
-        "name": "word3",
+        "name": "word2",
         "vectorizer": {
             "type": "dict1d",
             "fields": "text",

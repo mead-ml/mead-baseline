@@ -2861,7 +2861,7 @@ def reload_checkpoint(sess: tf.compat.v1.Session, checkpoint: str, blocks_to_ski
     :return: None
     """
     if not blocks_to_skip:
-        blocks_to_skip = ['Optimize_Loss', 'output/']
+        blocks_to_skip = ['OptimizeLoss', 'output/']
     latest = tf.train.latest_checkpoint(checkpoint)
     print("Reloading " + latest)
     model_vars = set([t[0] for t in tf.train.list_variables(latest)])
