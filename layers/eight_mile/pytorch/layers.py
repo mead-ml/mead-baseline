@@ -1,7 +1,7 @@
 import copy
 import math
 from typing import Dict, List, Optional, Tuple, Union
-
+import os
 import numpy as np
 import torch
 import torch.nn as nn
@@ -3175,3 +3175,35 @@ class BeamSearchBase:
         # Slice off the Offsets.GO token
         paths = paths[:, :, 1:]
         return paths, lengths, best_scores
+
+
+def checkpoint_for(model_base, epoch):
+    return '{}-{}'.format(model_base, epoch+1)
+
+
+def rm_old_checkpoints(base_path, current_epoch, last_n=10):
+    for i in range(0, current_epoch-last_n):
+        checkpoint_i = checkpoint_for(base_path, i)
+        for extension in ('.pth', '.npz'):
+            checkpoint_name = checkpoint_i + extension
+            if os.path.exists(checkpoint_name):
+                os.remove(checkpoint_name)
+
+class Average(object):
+    def __init__(self, name, fmt=':f'):
+        self.name = name
+        self.fmt = fmt
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
+    def update(self, val, n=1):
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count
+
+    def __str__(self):
+        fmtstr = '{name} {val' + self.fmt + '} ({avg' + self.fmt + '})'
+        return fmtstr.format(**self.__dict__)

@@ -10,6 +10,7 @@ from eight_mile.utils import str2bool, write_json, Offsets
 import baseline.pytorch.embeddings
 import baseline.embeddings
 from eight_mile.optz import *
+from eight_mile.pytorch.layers import checkpoint_for, rm_old_checkpoints, Average
 from eight_mile.pytorch.optz import *
 from eight_mile.pytorch.serialize import save_tlm_npz
 from baseline.pytorch.lm import TransformerLanguageModel
@@ -346,40 +347,6 @@ def load_embed_and_vocab(token_type, reader, dataset, dataset_key, embed_type, d
         logger.info("Saving preprocessing info [%s]", preproc_cache)
         torch.save(preproc_data, preproc_cache)
     return preproc_data
-
-
-def checkpoint_for(model_base, epoch):
-    return '{}-{}'.format(model_base, epoch+1)
-
-
-def rm_old_checkpoints(base_path, current_epoch, last_n=10):
-    for i in range(0, current_epoch-last_n):
-        checkpoint_i = checkpoint_for(base_path, i)
-        for extension in ('.pth', '.npz'):
-            checkpoint_name = checkpoint_i + extension
-            if os.path.exists(checkpoint_name):
-                logger.info("Removing: %s", checkpoint_name)
-                os.remove(checkpoint_name)
-
-
-class Average(object):
-    def __init__(self, name, fmt=':f'):
-        self.name = name
-        self.fmt = fmt
-        self.val = 0
-        self.avg = 0
-        self.sum = 0
-        self.count = 0
-
-    def update(self, val, n=1):
-        self.val = val
-        self.sum += val * n
-        self.count += n
-        self.avg = self.sum / self.count
-
-    def __str__(self):
-        fmtstr = '{name} {val' + self.fmt + '} ({avg' + self.fmt + '})'
-        return fmtstr.format(**self.__dict__)
 
 
 def train():
