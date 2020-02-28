@@ -463,7 +463,7 @@ def _optimize_loss(
             if "learning_rate" in summaries:
                 tf.compat.v1.summary.scalar("learning_rate", lr)
 
-        elif isinstance(optimizer, type) and issubclass(optimizer, tf.compat.v1.train.Optimizer):
+        if isinstance(optimizer, type) and issubclass(optimizer, tf.compat.v1.train.Optimizer):
             if lr is None:
                 raise ValueError(
                     "Learning rate is None, but should be specified if " "optimizer is class (%s)." % optimizer
