@@ -295,13 +295,13 @@ def create_reader(token_type, nctx, chars_per_word, subword_model_file, subword_
     return reader
 
 
-def get_embed_and_vocab_cache(base_path, dataset_key, token_type):
-    return os.path.join(base_path, 'preproc-{}-{}.cache'.format(dataset_key, token_type))
+def get_embed_and_vocab_cache(base_path, dataset_key, token_type, embed_type):
+    return os.path.join(base_path, 'preproc-{}-{}-{}.cache'.format(dataset_key, token_type, embed_type))
 
 
 def load_embed_and_vocab(token_type, reader, dataset, dataset_key, embed_type, d_model, caching):
     base_path = os.path.dirname(dataset['train_file'])
-    preproc_cache = get_embed_and_vocab_cache(base_path, dataset_key, token_type)
+    preproc_cache = get_embed_and_vocab_cache(base_path, dataset_key, token_type, embed_type)
     if caching and os.path.exists(preproc_cache):
         logger.info("Loading cached preprocessing info [%s]", preproc_cache)
         preproc_data = torch.load(preproc_cache)
@@ -352,12 +352,14 @@ def checkpoint_for(model_base, epoch):
     return '{}-{}'.format(model_base, epoch+1)
 
 
-def rm_old_checkpoints(base_path, current_epoch, last_n=3):
+def rm_old_checkpoints(base_path, current_epoch, last_n=10):
     for i in range(0, current_epoch-last_n):
         checkpoint_i = checkpoint_for(base_path, i)
-        if os.path.exists(checkpoint_i):
-            logger.info("Removing: %s", checkpoint_i)
-            os.remove(checkpoint_i)
+        for extension in ('.pth', '.npz'):
+            checkpoint_name = checkpoint_i + extension
+            if os.path.exists(checkpoint_name):
+                logger.info("Removing: %s", checkpoint_name)
+                os.remove(checkpoint_name)
 
 
 class Average(object):
@@ -680,7 +682,7 @@ def train():
                 torch.save(model.state_dict(), checkpoint_name+'.pth')
                 save_tlm_npz(model, checkpoint_name+'.npz')
 
-            rm_old_checkpoints(model_base, epoch+1)
+            rm_old_checkpoints(model_base, epoch)
 
 
 if __name__ == "__main__":
