@@ -53,22 +53,16 @@ def train():
     parser.add_argument("--valid_file", type=str, help='Optional file path to use for valid file')
     parser.add_argument("--dataset_cache", type=str, default=os.path.expanduser('~/.bl-data'),
                         help="Path or url of the dataset cache")
-    parser.add_argument("--cache_features", type=str2bool, default=True)
-    parser.add_argument("--reader_type",
-                        default="packed",
-                        choices=("packed", "jagged", "disk"),
-                        help=("How the tensor data is stored: "
-                              "packed = two large dense tensors, "
-                              "jagged = two lists of tensors that are padded as they are batched, "
-                              "disk = two lists of paths that are read from disk on the fly"))
     parser.add_argument("--d_model", type=int, default=410, help="Model dimension (and embedding dsz)")
     parser.add_argument("--d_ff", type=int, default=2100, help="FFN dimension")
     parser.add_argument("--num_heads", type=int, default=1, help="Number of heads")
     parser.add_argument("--num_train_workers", type=int, default=4, help="Number train workers")
     parser.add_argument("--num_valid_workers", type=int, default=2, help="Number valid workers")
     parser.add_argument("--num_layers", type=int, default=6, help="Number of layers")
-    parser.add_argument("--nctx", type=int, default=256, help="Max input length")
-    parser.add_argument("--batch_size", type=int, default=8, help="Batch Size")
+    parser.add_argument("--nctx", type=int, default=64, help="Max context length (for both encoder and decoder)")
+    parser.add_argument("--reader_type", type=str, default='ntp', choices=['ntp', 'nsp'])
+    parser.add_argument("--pattern", default='*.txt', help="Glob pattern for data")
+    parser.add_argument("--batch_size", type=int, default=256, help="Batch Size")
     parser.add_argument("--dataset_key", default="reddit",
                         help="dataset key for basedir")
     parser.add_argument("--subword_model_file", type=str, required=True)
@@ -79,7 +73,7 @@ def train():
     parser.add_argument("--weight_decay", type=float, default=0.0, help="Weight decay")
     parser.add_argument("--epochs", type=int, default=20, help="Num training epochs")
     parser.add_argument("--restart_from", type=str, help="Option allows you to restart from a previous checkpoint")
-    parser.add_argument("--warmup_steps", type=int, default=1000, help="Num warmup steps")
+    parser.add_argument("--warmup_steps", type=int, default=10000, help="Num warmup steps")
     parser.add_argument("--loss", type=str, default='all', choices=['triplet', 'all'])
     parser.add_argument("--update_steps", type=int, default=100, help="The number of steps to take before output a log message")
     parser.add_argument("--device", type=str,
@@ -110,8 +104,6 @@ def train():
         format="%(name)s: %(levelname)s: %(message)s",
         level=logging.INFO if args.local_rank in [-1, 0] else logging.WARN
     )
-    logger.info("Cache directory [%s]", args.dataset_cache)
-
     args.distributed = args.distributed or int(os.environ.get("WORLD_SIZE", 1)) > 1
 
     if args.distributed:
@@ -139,7 +131,7 @@ def train():
             args.device = torch.device("cuda", args.local_rank)
         torch.distributed.init_process_group(backend='nccl', init_method='env://')
 
-    reader = DualSubwordTensorDatasetReader(args.nctx, args.subword_model_file, args.subword_vocab_file)
+    reader = DualSubwordTensorDatasetReader(args.nctx, args.subword_model_file, args.subword_vocab_file, args.pattern, args.reader_type)
     vocab = reader.build_vocab()
 
     # If we are not using chars, then use 'x' for both input and output

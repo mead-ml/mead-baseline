@@ -212,12 +212,92 @@ class SingleSourceTensorWordDatasetReader(SingleSourceTensorDatasetReaderBase):
         return TensorDataset(x_tensor[:, :self.nctx], x_tensor[:, self.nctx:])
 
 
+
+class NextTurnPredictionFileLoader(IterableDataset):
+
+    def __init__(self, directory, pattern, vocabs, vectorizer, nctx):
+        super().__init__()
+        self.vectorizer = vectorizer
+        self.pattern = pattern
+        self.nctx = nctx
+        self.directory = directory
+        self.vocab = vocabs
+        if os.path.exists(f"{directory}/md.yml"):
+            f = read_yaml(f"{directory}/md.yml")
+            self.samples = f['num_samples']
+        else:
+            files = list(glob.glob(f"{directory}/{self.pattern}"))
+            pg = create_progress_bar(len(files))
+            for file in pg(files):
+                with open(file) as rf:
+                    for _ in rf:
+                        self.samples += 1
+            write_yaml({'num_samples': self.samples}, f"{directory}/md.yml")
+
+    def __len__(self):
+        return self.samples
+
+    def __iter__(self):
+        worker_info = torch.utils.data.get_worker_info()
+        files = list(glob.glob(f"{self.directory}/{self.pattern}"))
+        if worker_info is None:
+            start_idx = 0
+            end_idx = len(files)
+        else:
+            files_per_worker = len(files) // worker_info.num_workers
+            num_workers = worker_info.num_workers
+            start_idx = worker_info.id * files_per_worker
+            end_idx = (worker_info.id + 1) * files_per_worker if worker_info.id < num_workers - 1 else len(files)
+            print(f'worker {worker_info.id} [{start_idx}:{end_idx}]')
+
+        self.vectorizer.mxlen = self.nctx
+
+        for file in files[start_idx:end_idx]:
+            with open(file) as rf:
+                for line in rf:
+                    response = self.get_next_pair(line)
+                    if response:
+                        yield response
+
+    def get_next_pair(self, line):
+        pair = line.strip().split('\t')
+        # Unfortunately, this occassionally happens, a bunch of blank turns etc.
+        if len(pair) != 2:
+            return None
+        q, r = pair
+        if q == '' or r == '':
+            return None
+        q_vec, q_valid_lengths = self.vectorizer.run(q.split(), self.vocab)
+        r_vec, r_valid_lengths = self.vectorizer.run(r.split(), self.vocab)
+        return q_vec, r_vec
+
+
+class NextSequencePredictionFileLoader(NextTurnPredictionFileLoader):
+
+    def get_next_pair(self, line):
+        line = line.strip()
+        if not line:
+            return None
+
+        vec, valid_lengths = self.vectorizer.run(line.split(), self.vocab)
+        if valid_lengths < 2:
+            return None
+        half_lengths = valid_lengths//2
+        context = np.zeros(self.vectorizer.mxlen//2, dtype=np.long)
+        response = np.zeros(self.vectorizer.mxlen//2, dtype=np.long)
+        context[:half_lengths] = vec[:half_lengths]
+        response[:half_lengths] = vec[half_lengths:2*half_lengths]
+        return context, response
+
+
 class DualSubwordTensorDatasetReader:
     """Provide a base-class to do operations that are independent of token representation
     """
-    def __init__(self, nctx=64, model_file=None, vocab_file=None, pattern='*.txt'):
+
+    def __init__(self, nctx=64, model_file=None, vocab_file=None, pattern='*.txt', reader_type="ntp"):
         self.nctx = nctx
         self.pattern = pattern
+        self.reader_type = reader_type
         self.vectorizer = BPEVectorizer1D(model_file=model_file, vocab_file=vocab_file, mxlen=nctx)
         self.num_words = {}
 
@@ -225,59 +305,11 @@ class DualSubwordTensorDatasetReader:
         return {'x': self.vectorizer.vocab}
 
     def load(self, directory, vocabs):
-        class FileLoader(IterableDataset):
+        if self.reader_type.lower() == "ntp":
+            return NextTurnPredictionFileLoader(directory, self.pattern, vocabs, self.vectorizer, self.nctx)
+        else:
+            return NextSequencePredictionFileLoader(directory, self.pattern, vocabs, self.vectorizer, 2*self.nctx)
 
-            def __init__(self, pattern, vocabs, vectorizer, nctx):
-                super().__init__()
-                self.vectorizer = vectorizer
-                self.pattern = pattern
-                self.nctx = nctx
-                self.samples = 10000
-                self.vocab = vocabs
-                if os.path.exists(f"{directory}/md.yml"):
-                    f = read_yaml(f"{directory}/md.yml")
-                    self.samples = f['num_samples']
-                else:
-                    files = list(glob.glob(f"{directory}/{self.pattern}"))
-                    pg = create_progress_bar(len(files))
-                    for file in pg(files):
-                        with open(file) as rf:
-                            for _ in rf:
-                                self.samples += 1
-                    write_yaml({'num_samples': self.samples}, f"{directory}/md.yml")
-
-            def __len__(self):
-                return self.samples
-
-            def __iter__(self):
-                worker_info = torch.utils.data.get_worker_info()
-
-                files = list(glob.glob(f"{directory}/{self.pattern}"))
-                if worker_info is None:
-                    start_idx = 0
-                    end_idx = len(files)
-                else:
-                    files_per_worker = len(files) // worker_info.num_workers
-                    num_workers = worker_info.num_workers
-                    start_idx = worker_info.id * files_per_worker
-                    end_idx = (worker_info.id + 1) * files_per_worker if worker_info.id < num_workers - 1 else len(files)
-                    print(f'worker {worker_info.id} [{start_idx}:{end_idx}]')
-
-                for file in files[start_idx:end_idx]:
-                    with open(file) as rf:
-                        for line in rf:
-                            pair = line.strip().split('\t')
-                            # Unfortunately, this occassionally happens, a bunch of blank turns etc.
-                            if len(pair) != 2:
-                                continue
-                            q, r = pair
-                            if q == '' or r == '':
-                                continue
-                            self.vectorizer.mxlen = self.nctx
-                            q_vec, q_valid_lengths = self.vectorizer.run(q, self.vocab)
-                            r_vec, r_valid_lengths = self.vectorizer.run(r, self.vocab)
-                            yield q_vec, r_vec
-        return FileLoader(self.pattern, vocabs, self.vectorizer, self.nctx)
 
 
 
