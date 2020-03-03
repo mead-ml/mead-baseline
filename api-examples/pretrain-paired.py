@@ -154,8 +154,7 @@ def train():
     train_set = reader.load(args.train_file, vocabs)
     valid_set = reader.load(args.valid_file, vocabs)
 
-    train_sampler = torch.utils.data.distributed.DistributedSampler(train_set) if args.distributed else None
-    train_loader = DataLoader(train_set, sampler=train_sampler, batch_size=args.batch_size, num_workers=args.num_train_workers)
+    train_loader = DataLoader(train_set, batch_size=args.batch_size, num_workers=args.num_train_workers)
     valid_loader = DataLoader(valid_set, batch_size=args.batch_size, num_workers=args.num_valid_workers)
     logger.info("Loaded datasets")
 
