@@ -107,7 +107,7 @@ def train():
         return
 
     if args.basedir is None:
-        args.basedir = 'paired-transformer-{}-bpe-{}'.format(args.dataset_key, os.getpid())
+        args.basedir = '{}-paired-{}-bpe-{}'.format(args.model_type, args.dataset_key, os.getpid())
     logging.basicConfig(
         format="%(name)s: %(levelname)s: %(message)s",
         level=logging.INFO if args.local_rank in [-1, 0] else logging.WARN
@@ -167,6 +167,7 @@ def train():
     logger.info("Loaded model and loss")
 
     steps_per_epoch = len(train_loader)
+    logger.info("Steps per epoch %d", steps_per_epoch)
     update_on = steps_per_epoch // args.update_steps
     cosine_decay = CosineDecaySchedulerPyTorch(len(train_loader) * args.epochs, lr=args.lr)
     linear_warmup = WarmupLinearSchedulerPyTorch(args.warmup_steps, lr=args.lr)
@@ -215,7 +216,11 @@ def train():
             optimizer.step()
             optimizer.zero_grad()
             if (i + 1) % update_on == 0:
+                elapsed = (time.time() - start)/60
+
                 logging.info(avg_loss)
+                logging.info('elapsed time %d', elapsed)
+                logging.info('elapsed step time %f steps/min', steps/elapsed)
                 if args.local_rank < 1:
                     save_checkpoint(model, model_base, steps)
 
