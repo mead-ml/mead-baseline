@@ -4,26 +4,20 @@ import os
 from argparse import ArgumentParser
 import baseline
 from torch.nn.parallel import DistributedDataParallel
-from torch.utils.data import DataLoader, TensorDataset, Dataset
-from eight_mile.utils import str2bool, write_json, Offsets, listify
+from torch.utils.data import DataLoader
+from eight_mile.utils import str2bool, write_json
 import glob
 from baseline.pytorch.embeddings import *
 import baseline.embeddings
 from eight_mile.optz import *
 from eight_mile.pytorch.optz import *
 from eight_mile.pytorch.layers import Average, checkpoint_for, rm_old_checkpoints
-from baseline.vectorizers import Char2DVectorizer, Token1DVectorizer, AbstractVectorizer
-from baseline.utils import DataDownloader
 from paired_utils import DualSubwordTensorDatasetReader, PairedModel, TripletLoss, AllLoss
-import codecs
-from collections import Counter
-import pandas as pd
-from baseline.pytorch.torchy import vec_log_sum_exp
 logger = logging.getLogger(__file__)
 
 """Pre-train a paired model in PyTorch
 
-This file uses Baseline to train a Transformer-based ConveRT
+This file uses Baseline to train a Transformer-based ConveRT with fastBPE
 model (https://arxiv.org/pdf/1911.03688.pdf) with PyTorch on multiple GPUs.
 
 """
@@ -145,9 +139,7 @@ def train():
             args.device = torch.device("cuda", args.local_rank)
         torch.distributed.init_process_group(backend='nccl', init_method='env://')
 
-
     reader = DualSubwordTensorDatasetReader(args.nctx, args.subword_model_file, args.subword_vocab_file)
-
     vocab = reader.build_vocab()
 
     # If we are not using chars, then use 'x' for both input and output
@@ -255,7 +247,6 @@ def train():
         logger.info(metrics)
         if args.local_rank < 1:
             save_checkpoint(model, model_base, steps)
-
 
 
 if __name__ == "__main__":
