@@ -12,7 +12,7 @@ import baseline.embeddings
 from eight_mile.optz import *
 from eight_mile.pytorch.optz import *
 from eight_mile.pytorch.layers import Average, checkpoint_for, rm_old_checkpoints
-from paired_utils import DualSubwordTensorDatasetReader, PairedModel, TripletLoss, AllLoss
+from paired_utils import DualSubwordTensorDatasetReader, PairedModel, TripletLoss, AllLoss, TiedSeq2SeqModel
 logger = logging.getLogger(__file__)
 
 """Pre-train a paired model in PyTorch
@@ -39,9 +39,15 @@ def save_checkpoint(model: torch.nn.Module, model_base: str, count: int):
     rm_old_checkpoints(model_base, count+1)
 
 
-def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers):
+def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers, model_type = "dual-encoder"):
 
-    model = PairedModel(embeddings, d_model, d_ff, dropout, num_heads, num_layers)
+    if model_type == "encoder-decoder":
+        logger.info("Creating tied encoder decoder model")
+        hps = {"dsz": d_model, "hsz": d_model, "d_ff": d_ff, "dropout": dropout, "num_heads": num_heads, "layers": num_layers, "encoder_type": "transformer", "decoder_type": "transformer", "src_lengths_key": "x_lengths"}
+        model = TiedSeq2SeqModel(embeddings, **hps)
+    else:
+        model = PairedModel(embeddings, d_model, d_ff, dropout, num_heads, num_layers)
+
     logger.info(model)
     return model
 
@@ -68,6 +74,8 @@ def train():
     parser.add_argument("--subword_model_file", type=str, required=True)
     parser.add_argument("--subword_vocab_file", type=str, required=True)
     parser.add_argument("--dropout", type=float, default=0.1, help="Dropout")
+    parser.add_argument("--optim", default="adam", type=str, help="Optimizer to use (defaults to adam)")
+    parser.add_argument("--model_type", default="dual-encoder", choices=["dual-encoder", "encoder-decoder"])
     parser.add_argument("--lr", type=float, default=4.0e-4, help="Learning rate")
     parser.add_argument("--clip", type=float, default=0.25, help="Clipping gradient norm")
     parser.add_argument("--weight_decay", type=float, default=0.0, help="Weight decay")
@@ -152,7 +160,7 @@ def train():
     logger.info("Loaded datasets")
 
     model = create_model(embeddings, d_model=args.d_model, d_ff=args.d_ff, dropout=args.dropout,
-                         num_heads=args.num_heads, num_layers=args.num_layers)
+                         num_heads=args.num_heads, num_layers=args.num_layers, model_type=args.model_type)
     model.to(args.device)
     loss_function = model.create_loss(args.loss)
     loss_function.to(args.device)
@@ -173,7 +181,7 @@ def train():
         global_step = (start_epoch+1) * steps_per_epoch
         logger.info("Restarting from a previous checkpoint %s.\n\tStarting at global_step=%d, epoch=%d",
                     args.restart_from, global_step, start_epoch+1)
-    optimizer = OptimizerManager(model, global_step, optim='adam', lr=args.lr, lr_function=lr_sched, weight_decay=args.weight_decay)
+    optimizer = OptimizerManager(model, global_step, optim=args.optim, lr=args.lr, lr_function=lr_sched, weight_decay=args.weight_decay)
     logger.info("Model has {:,} parameters".format(sum(p.numel() for p in model.parameters() if p.requires_grad)))
 
     # Prepare model for distributed training if needed
