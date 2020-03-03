@@ -1,9 +1,10 @@
 from baseline.pytorch.torchy import vec_log_sum_exp
-from eight_mile.utils import str2bool, write_json, Offsets
+from eight_mile.utils import str2bool, write_yaml, read_yaml, Offsets
 from eight_mile.pytorch.layers import *
 import baseline.pytorch.embeddings
 import baseline.embeddings
-from torch.utils.data import TensorDataset, Dataset
+from baseline.progress import create_progress_bar
+from torch.utils.data.dataset import IterableDataset, TensorDataset
 from baseline.vectorizers import Token1DVectorizer, BPEVectorizer1D
 import codecs
 from collections import Counter
@@ -209,4 +210,75 @@ class SingleSourceTensorWordDatasetReader(SingleSourceTensorDatasetReaderBase):
         x_tensor = x_tensor.narrow(0, 0, num_sequences_word).view(-1, batch_width)
         # Take the first half for x_tensor, and the second half for y_tensor
         return TensorDataset(x_tensor[:, :self.nctx], x_tensor[:, self.nctx:])
+
+
+class DualSubwordTensorDatasetReader:
+    """Provide a base-class to do operations that are independent of token representation
+    """
+    def __init__(self, nctx=64, model_file=None, vocab_file=None, pattern='*.txt'):
+        self.nctx = nctx
+        self.pattern = pattern
+        self.vectorizer = BPEVectorizer1D(model_file=model_file, vocab_file=vocab_file, mxlen=nctx)
+        self.num_words = {}
+
+    def build_vocab(self, _=None):
+        return {'x': self.vectorizer.vocab}
+
+    def load(self, directory, vocabs):
+        class FileLoader(IterableDataset):
+
+            def __init__(self, pattern, vocabs, vectorizer, nctx):
+                super().__init__()
+                self.vectorizer = vectorizer
+                self.pattern = pattern
+                self.nctx = nctx
+                self.samples = 10000
+                self.vocab = vocabs
+                if os.path.exists(f"{directory}/md.yml"):
+                    f = read_yaml(f"{directory}/md.yml")
+                    self.samples = f['num_samples']
+                else:
+                    files = list(glob.glob(f"{directory}/{self.pattern}"))
+                    pg = create_progress_bar(len(files))
+                    for file in pg(files):
+                        with open(file) as rf:
+                            for _ in rf:
+                                self.samples += 1
+                    write_yaml({'num_samples': self.samples}, f"{directory}/md.yml")
+
+            def __len__(self):
+                return self.samples
+
+            def __iter__(self):
+                worker_info = torch.utils.data.get_worker_info()
+
+                files = list(glob.glob(f"{directory}/{self.pattern}"))
+                if worker_info is None:
+                    start_idx = 0
+                    end_idx = len(files)
+                else:
+                    files_per_worker = len(files) // worker_info.num_workers
+                    num_workers = worker_info.num_workers
+                    start_idx = worker_info.id * files_per_worker
+                    end_idx = (worker_info.id + 1) * files_per_worker if worker_info.id < num_workers - 1 else len(files)
+                    print(f'worker {worker_info.id} [{start_idx}:{end_idx}]')
+
+                for file in files[start_idx:end_idx]:
+                    with open(file) as rf:
+                        for line in rf:
+                            pair = line.strip().split('\t')
+                            # Unfortunately, this occassionally happens, a bunch of blank turns etc.
+                            if len(pair) != 2:
+                                continue
+                            q, r = pair
+                            if q == '' or r == '':
+                                continue
+                            self.vectorizer.mxlen = self.nctx
+                            q_vec, q_valid_lengths = self.vectorizer.run(q, self.vocab)
+                            r_vec, r_valid_lengths = self.vectorizer.run(r, self.vocab)
+                            yield q_vec, r_vec
+        return FileLoader(self.pattern, vocabs, self.vectorizer, self.nctx)
+
+
+
 
