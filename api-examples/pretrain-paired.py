@@ -197,10 +197,6 @@ def train():
         avg_loss = Average('average_train_loss')
         metrics = {}
         optimizer.zero_grad()
-
-        if args.distributed:
-            train_sampler.set_epoch(epoch)
-
         start = time.time()
         model.train()
         for i, batch in enumerate(train_loader):
@@ -219,8 +215,8 @@ def train():
                 elapsed = (time.time() - start)/60
 
                 logging.info(avg_loss)
-                logging.info('elapsed time %d', elapsed)
-                logging.info('elapsed step time %f steps/min', steps/elapsed)
+                logging.info('elapsed time this epoch %d', elapsed)
+                logging.info('elapsed step time %f steps/min', i/elapsed)
                 if args.local_rank < 1:
                     save_checkpoint(model, model_base, steps)
 
