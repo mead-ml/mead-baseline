@@ -67,6 +67,8 @@ def train():
     parser.add_argument("--num_layers", type=int, default=6, help="Number of layers")
     parser.add_argument("--nctx", type=int, default=64, help="Max context length (for both encoder and decoder)")
     parser.add_argument("--reader_type", type=str, default='ntp', choices=['ntp', 'nsp'])
+    parser.add_argument("--embed_type", type=str, default='positional',
+                        help="register label of the embeddings, so far support positional or learned-positional")
     parser.add_argument("--pattern", default='*.txt', help="Glob pattern for data")
     parser.add_argument("--batch_size", type=int, default=256, help="Batch Size")
     parser.add_argument("--dataset_key", default="reddit",
@@ -143,7 +145,7 @@ def train():
     vocab = reader.build_vocab()
 
     # If we are not using chars, then use 'x' for both input and output
-    preproc_data = baseline.embeddings.load_embeddings('x', dsz=args.d_model, known_vocab=vocab['x'], embed_type='positional')
+    preproc_data = baseline.embeddings.load_embeddings('x', dsz=args.d_model, known_vocab=vocab['x'], embed_type=args.embed_type)
     vocabs = preproc_data['vocab']
     os.makedirs(args.basedir, exist_ok=True)
     # We want to make sure to save our input vocab into the basedir for reuse later
