@@ -299,6 +299,19 @@ class NextTurnPredictionFileLoader(MultiFileLoader):
         return q_vec, r_vec
 
 
+class SequencePredictionFileLoader(MultiFileLoader):
+
+    def process_line(self, line):
+        line = line.strip()
+        if not line:
+            return None
+
+        vec, valid_lengths = self.vectorizer.run(line.split(), self.vocab)
+        if valid_lengths < 2:
+            return None
+        return vec
+
+
 class NextSequencePredictionFileLoader(MultiFileLoader):
 
     def process_line(self, line):
@@ -317,7 +330,7 @@ class NextSequencePredictionFileLoader(MultiFileLoader):
         return context, response
 
 
-class DualSubwordTensorDatasetReader:
+class MultiFileDatasetReader:
     """Provide a base-class to do operations that are independent of token representation
     """
 
@@ -332,10 +345,14 @@ class DualSubwordTensorDatasetReader:
         return {'x': self.vectorizer.vocab}
 
     def load(self, directory, vocabs):
-        if self.reader_type.lower() == "ntp":
+        reader_type = self.reader_type.lower()
+        if reader_type == "ntp":
             return NextTurnPredictionFileLoader(directory, self.pattern, vocabs, self.vectorizer, self.nctx)
-        else:
+        elif reader_type == "nsp":
             return NextSequencePredictionFileLoader(directory, self.pattern, vocabs, self.vectorizer, 2*self.nctx)
+        else:
+            print("Using files as an LM")
+            return SequencePredictionFileLoader(directory, self.pattern, vocabs, self.vectorizer)
 
 
 class TiedSeq2SeqModel(Seq2SeqModel):

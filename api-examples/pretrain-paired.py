@@ -12,7 +12,7 @@ import baseline.embeddings
 from eight_mile.optz import *
 from eight_mile.pytorch.optz import *
 from eight_mile.pytorch.layers import Average, checkpoint_for, rm_old_checkpoints
-from paired_utils import DualSubwordTensorDatasetReader, PairedModel, TripletLoss, AllLoss, TiedSeq2SeqModel
+from paired_utils import MultiFileDatasetReader, PairedModel, TripletLoss, AllLoss, TiedSeq2SeqModel
 logger = logging.getLogger(__file__)
 
 """Pre-train a paired model in PyTorch
@@ -107,7 +107,7 @@ def train():
         return
 
     if args.basedir is None:
-        args.basedir = '{}-paired-{}-bpe-{}'.format(args.model_type, args.dataset_key, os.getpid())
+        args.basedir = '{}-{}-paired-{}-bpe-{}'.format(args.model_type, args.reader_type, args.dataset_key, os.getpid())
     logging.basicConfig(
         format="%(name)s: %(levelname)s: %(message)s",
         level=logging.INFO if args.local_rank in [-1, 0] else logging.WARN
@@ -139,7 +139,7 @@ def train():
             args.device = torch.device("cuda", args.local_rank)
         torch.distributed.init_process_group(backend='nccl', init_method='env://')
 
-    reader = DualSubwordTensorDatasetReader(args.nctx, args.subword_model_file, args.subword_vocab_file, args.pattern, args.reader_type)
+    reader = MultiFileDatasetReader(args.nctx, args.subword_model_file, args.subword_vocab_file, args.pattern, args.reader_type)
     vocab = reader.build_vocab()
 
     # If we are not using chars, then use 'x' for both input and output
