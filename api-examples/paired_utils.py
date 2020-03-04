@@ -80,7 +80,17 @@ class AllLoss(nn.Module):
 
 class PairedModel(nn.Module):
 
-    def __init__(self, embeddings, d_model, d_ff, dropout, num_heads, num_layers, stacking_layers=None, d_out=512, d_k=64, weight_std=0.02):
+    def __init__(self, embeddings,
+                 d_model,
+                 d_ff,
+                 dropout,
+                 num_heads,
+                 num_layers,
+                 stacking_layers=None,
+                 d_out=512,
+                 d_k=64,
+                 weight_std=0.02,
+                 rpr_k=None):
         super().__init__()
         if stacking_layers is None:
             stacking_layers = [d_model] * 3
@@ -88,7 +98,8 @@ class PairedModel(nn.Module):
         self.weight_std = weight_std
         stacking_layers = listify(stacking_layers)
         transformer = TransformerEncoderStack(num_heads=num_heads, d_model=d_model,
-                                              pdrop=dropout, layers=num_layers, activation='gelu', d_ff=d_ff, d_k=d_k)
+                                              pdrop=dropout, layers=num_layers, activation='gelu', d_ff=d_ff,
+                                              d_k=d_k, rpr_k=rpr_k)
         self.attention_layer = MultiHeadedAttention(2, d_model, dropout, scale=False, d_k=d_k)
         self.transformer_layers = transformer
         self.embedding_layers = embeddings

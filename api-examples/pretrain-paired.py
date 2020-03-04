@@ -17,8 +17,8 @@ logger = logging.getLogger(__file__)
 
 """Pre-train a paired model in PyTorch
 
-This file uses Baseline to train a Transformer-based ConveRT with fastBPE
-model (https://arxiv.org/pdf/1911.03688.pdf) with PyTorch on multiple GPUs.
+This file uses Baseline to train a Transformer-based ConveRT
+model (https://arxiv.org/pdf/1911.03688.pdf) or Seq2Seq with fastBPE with PyTorch on multiple GPUs.
 
 """
 
@@ -39,14 +39,24 @@ def save_checkpoint(model: torch.nn.Module, model_base: str, count: int):
     rm_old_checkpoints(model_base, count+1)
 
 
-def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers, model_type = "dual-encoder"):
-
+def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers, model_type, rpr_k):
+    if len(rpr_k) == 0 or rpr_k[0] < 1:
+        rpr_k = None
     if model_type == "encoder-decoder":
         logger.info("Creating tied encoder decoder model")
-        hps = {"dsz": d_model, "hsz": d_model, "d_ff": d_ff, "dropout": dropout, "num_heads": num_heads, "layers": num_layers, "encoder_type": "transformer", "decoder_type": "transformer", "src_lengths_key": "x_lengths"}
+        hps = {"dsz": d_model,
+               "hsz": d_model,
+               "d_ff": d_ff,
+               "dropout": dropout,
+               "num_heads": num_heads,
+               "layers": num_layers,
+               "encoder_type": "transformer",
+               "decoder_type": "transformer",
+               "src_lengths_key": "x_lengths",
+               "rpr_k": rpr_k}
         model = TiedSeq2SeqModel(embeddings, **hps)
     else:
-        model = PairedModel(embeddings, d_model, d_ff, dropout, num_heads, num_layers)
+        model = PairedModel(embeddings, d_model, d_ff, dropout, num_heads, num_layers, rpr_k=rpr_k)
 
     logger.info(model)
     return model
@@ -86,6 +96,9 @@ def train():
     parser.add_argument("--warmup_steps", type=int, default=10000, help="Num warmup steps")
     parser.add_argument("--loss", type=str, default='all', choices=['triplet', 'all'])
     parser.add_argument("--update_steps", type=int, default=100, help="The number of steps to take before output a log message")
+    parser.add_argument('--rpr_k', help='Relative attention positional sizes pass 0 if you dont want relative attention',
+                        type=int, default=[3, 5, 48, 48, 48, 48], nargs='+')
+
     parser.add_argument("--device", type=str,
                         default="cuda" if torch.cuda.is_available() else "cpu",
                         help="Device (cuda or cpu)")
@@ -161,7 +174,7 @@ def train():
     logger.info("Loaded datasets")
 
     model = create_model(embeddings, d_model=args.d_model, d_ff=args.d_ff, dropout=args.dropout,
-                         num_heads=args.num_heads, num_layers=args.num_layers, model_type=args.model_type)
+                         num_heads=args.num_heads, num_layers=args.num_layers, model_type=args.model_type, rpr_k=args.rpr_k)
     model.to(args.device)
     loss_function = model.create_loss(args.loss)
     loss_function.to(args.device)
