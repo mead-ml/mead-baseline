@@ -294,7 +294,8 @@ class NextTurnPredictionFileLoader(MultiFileLoader):
         q, r = pair
         if q == '' or r == '':
             return None
-        q_vec, q_valid_lengths = self.vectorizer.run(q.split(), self.vocab)
+        q_vec, q_valid_lengths = self.vectorizer.run(reversed(q.split()), self.vocab)
+        q_vec = np.roll(q_vec[::-1], -(self.vectorizer.mxlen - q_valid_lengths))
         r_vec, r_valid_lengths = self.vectorizer.run(r.split(), self.vocab)
         return q_vec, r_vec
 
@@ -306,9 +307,10 @@ class SequencePredictionFileLoader(MultiFileLoader):
         if not line:
             return None
 
-        vec, valid_lengths = self.vectorizer.run(line.split(), self.vocab)
+        vec, valid_lengths = self.vectorizer.run(reversed(q.split()), self.vocab)
         if valid_lengths < 2:
             return None
+        vec = np.roll(vec[::-1], -(self.vectorizer.mxlen - valid_lengths))
         return vec
 
 
@@ -318,15 +320,13 @@ class NextSequencePredictionFileLoader(MultiFileLoader):
         line = line.strip()
         if not line:
             return None
-
-        vec, valid_lengths = self.vectorizer.run(line.split(), self.vocab)
+        vec, valid_lengths = self.vectorizer.run(reversed(line.split()), self.vocab)
+        vec = np.roll(vec[::-1], -(self.vectorizer.mxlen - valid_lengths))
         if valid_lengths < 2:
             return None
-        half_lengths = valid_lengths//2
-        context = np.zeros(self.vectorizer.mxlen//2, dtype=np.long)
-        response = np.zeros(self.vectorizer.mxlen//2, dtype=np.long)
-        context[:half_lengths] = vec[:half_lengths]
-        response[:half_lengths] = vec[half_lengths:2*half_lengths]
+        half_lengths = self.vectorizer.mxlen//2
+        context = vec[:half_lengths]
+        response = vec[half_lengths:]
         return context, response
 
 
@@ -388,11 +388,13 @@ class TiedSeq2SeqModel(Seq2SeqModel):
             example['tgt'] = tgt[:, 1:]
             example['dst'] = example['dst'][perm_idx]
             example['tgt'] = example['tgt'][perm_idx]
-        if perm: return example, perm_idx
+        if perm:
+            return example, perm_idx
         return example
 
     def create_loss(self, _=None):
         loss = super().create_loss()
+
         class LossFn(nn.Module):
             def __init__(self, model: nn.Module, l: nn.Module):
                 super().__init__()
