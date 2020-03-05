@@ -12,7 +12,7 @@ import baseline.embeddings
 from eight_mile.optz import *
 from eight_mile.pytorch.optz import *
 from eight_mile.pytorch.layers import Average, checkpoint_for, rm_old_checkpoints
-from paired_utils import MultiFileDatasetReader, PairedModel, TripletLoss, AllLoss, TiedSeq2SeqModel
+from paired_utils import MultiFileDatasetReader, PairedModel, TripletLoss, AllLoss, TiedEmbeddingsSeq2SeqModel
 logger = logging.getLogger(__file__)
 
 """Pre-train a paired model in PyTorch
@@ -54,7 +54,7 @@ def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers, mode
                "decoder_type": "transformer",
                "src_lengths_key": "x_lengths",
                "rpr_k": rpr_k}
-        model = TiedSeq2SeqModel(embeddings, **hps)
+        model = TiedEmbeddingsSeq2SeqModel(embeddings, **hps)
     else:
         model = PairedModel(embeddings, d_model, d_ff, dropout, num_heads, num_layers, rpr_k=rpr_k)
 

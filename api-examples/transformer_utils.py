@@ -147,86 +147,6 @@ class PairedModel(nn.Module):
         return TripletLoss(self)
 
 
-# TODO: remove this?
-class SingleSourceTensorDatasetReaderBase(object):
-    """Provide a base-class to do operations that are independent of token representation
-    """
-    def __init__(self, nctx, vectorizers):
-        self.vectorizers = vectorizers
-        self.nctx = nctx
-        self.num_words = {}
-
-    def build_vocab(self, files):
-        vocabs = {k: Counter() for k in self.vectorizers.keys()}
-
-        for file in files:
-            if file is None:
-                continue
-            self.num_words[file] = 0
-            with codecs.open(file, encoding='utf-8', mode='r') as f:
-                sentences = []
-                for line in f:
-                    split_sentence = line.split() + ['<EOS>']
-                    self.num_words[file] += len(split_sentence)
-                    sentences += split_sentence
-                for k, vectorizer in self.vectorizers.items():
-                    vocabs[k].update(vectorizer.count(sentences))
-        return vocabs
-
-    def load_features(self, filename, vocabs):
-
-        features = dict()
-        with codecs.open(filename, encoding='utf-8', mode='r') as f:
-            sentences = []
-            for line in f:
-                sentences += line.strip().split() + ['<EOS>']
-            for k, vectorizer in self.vectorizers.items():
-                vec, valid_lengths = vectorizer.run(sentences, vocabs[k])
-                features[k] = vec[:valid_lengths]
-                shp = list(vectorizer.get_dims())
-                shp[0] = valid_lengths
-                features['{}_dims'.format(k)] = tuple(shp)
-        return features
-
-
-# TODO: remove this?
-class SingleSourceTensorWordDatasetReader(SingleSourceTensorDatasetReaderBase):
-    """Read each word, and produce a tensor of x and y that are identical
-    """
-    def __init__(self, nctx: int, use_subword: bool = False, model_file: str = None, vocab_file: str = None):
-        """Create a reader with a context window that reads words
-
-        :param nctx: The context window length
-        :param use_subword: If true, use BPE, else words
-        """
-        self.use_subword = use_subword
-        if self.use_subword:
-            vectorizer = BPEVectorizer1D(model_file=model_file, vocab_file=vocab_file)
-        else:
-            vectorizer = Token1DVectorizer(transform_fn=baseline.lowercase)
-        super().__init__(nctx, {'x': vectorizer})
-
-    def build_vocab(self, files):
-        """Read the vocab file to get the tokens
-
-        :param files:
-        :return:
-        """
-        if self.use_subword:
-            super().build_vocab(files)
-            return {'x': self.vectorizers['x'].vocab}
-        return super().build_vocab(files)
-
-    def load(self, filename, vocabs):
-        features = self.load_features(filename, vocabs)
-        x_tensor = torch.tensor(features['x'], dtype=torch.long)
-        batch_width = self.nctx * 2
-        num_sequences_word = (x_tensor.size(0) // batch_width) * batch_width
-        x_tensor = x_tensor.narrow(0, 0, num_sequences_word).view(-1, batch_width)
-        # Take the first half for x_tensor, and the second half for y_tensor
-        return TensorDataset(x_tensor[:, :self.nctx], x_tensor[:, self.nctx:])
-
-
 class MultiFileLoader(IterableDataset):
 
     def __init__(self, directory, pattern, vocabs, vectorizer, nctx):
@@ -263,7 +183,7 @@ class MultiFileLoader(IterableDataset):
         # rank * num_workers + worker_id
         # and the total available workers is world_size * num_workers
         worker_info = torch.utils.data.get_worker_info()
-        files = list(glob.glob(f"{self.directory}/{self.pattern}"))
+        files = sorted(list(glob.glob(f"{self.directory}/{self.pattern}")))
 
         if worker_info is None:
             num_workers_per_node = 1
@@ -367,7 +287,7 @@ class MultiFileDatasetReader:
             return SequencePredictionFileLoader(directory, self.pattern, vocabs, self.vectorizer, self.nctx)
 
 
-class TiedSeq2SeqModel(Seq2SeqModel):
+class TiedEmbeddingsSeq2SeqModel(Seq2SeqModel):
 
     def __init__(self, tied_embeddings, **kwargs):
         super().__init__({'x': tied_embeddings}, tied_embeddings, **kwargs)
