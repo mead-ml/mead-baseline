@@ -2800,13 +2800,20 @@ class TransformerDecoder(nn.Module):
         scale: bool = True,
         activation_type: str = "relu",
         d_ff: Optional[int] = None,
+        d_k: Optional[int] = None,
+        rpr_k: Optional[int] = None,
         ffn_pdrop: Optional[float] = 0.0,
     ):
         super().__init__()
         self.d_model = d_model
         self.d_ff = d_ff if d_ff is not None else 4 * d_model
-        self.self_attn = MultiHeadedAttention(num_heads, self.d_model, pdrop, scale=scale)
-        self.src_attn = MultiHeadedAttention(num_heads, self.d_model, pdrop, scale=scale)
+        if rpr_k is not None:
+            self.self_attn = MultiHeadedRelativeAttention(num_heads, d_model, rpr_k, pdrop, scale, d_k=d_k)
+            self.src_attn = MultiHeadedRelativeAttention(num_heads, d_model, rpr_k, pdrop, scale, d_k=d_k)
+
+        else:
+            self.self_attn = MultiHeadedAttention(num_heads, self.d_model, d_model, pdrop, scale, d_k=d_k)
+            self.src_attn = MultiHeadedAttention(num_heads, self.d_model, pdrop, scale, d_k=d_k)
 
         self.ffn = nn.Sequential(
             Dense(self.d_model, self.d_ff),
@@ -2934,14 +2941,24 @@ class TransformerDecoderStack(nn.Module):
         layers: int = 1,
         activation_type: str = "relu",
         d_ff: Optional[int] = None,
-        ffn_pdrop: Optional[float] = 0.0,
+        d_k: Optional[int] = None,
+        rpr_k: Optional[Union[int, List[int]]] = None,
+        ffn_pdrop: Optional[float] = 0.0
+
     ):
         super().__init__()
         self.decoders = nn.ModuleList()
         self.ln = nn.LayerNorm(d_model, eps=1e-6)
+
+
+        if not is_sequence(rpr_k):
+            rpr_k = [rpr_k] * layers
+
+
         for i in range(layers):
             self.decoders.append(
-                TransformerDecoder(num_heads, d_model, pdrop, scale, activation_type, d_ff, ffn_pdrop=ffn_pdrop)
+                TransformerDecoder(num_heads, d_model, pdrop, scale, activation_type, d_ff,
+                                   d_k=d_k, rpr_k=rpr_k[i], ffn_pdrop=ffn_pdrop)
             )
 
     def forward(self, inputs):

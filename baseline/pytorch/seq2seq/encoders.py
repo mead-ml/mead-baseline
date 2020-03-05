@@ -44,7 +44,13 @@ class TransformerEncoderWrapper(torch.nn.Module):
         if hsz is None:
             hsz = dsz
         self.proj = pytorch_linear(dsz, hsz) if hsz != dsz else self._identity
-        self.transformer = TransformerEncoderStack(num_heads, d_model=hsz, pdrop=dropout, scale=True, layers=layers)
+        d_ff = int(kwargs.get('d_ff', 4 * hsz))
+        rpr_k = kwargs.get('rpr_k')
+        d_k = kwargs.get('d_k')
+        scale = bool(kwargs.get('scale', True))
+        self.transformer = TransformerEncoderStack(num_heads, d_model=hsz, d_ff=d_ff,
+                                                   pdrop=dropout, scale=scale, layers=layers,
+                                                   rpr_k=rpr_k, d_k=d_k)
 
     def _identity(self, x):
         return x

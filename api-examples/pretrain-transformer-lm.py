@@ -382,6 +382,8 @@ def train():
     parser.add_argument("--restart_from", type=str, help="Option allows you to restart from a previous checkpoint")
     parser.add_argument("--warmup_steps", type=int, default=1000, help="Num warmup steps")
     parser.add_argument("--mlm", type=str2bool, default=False, help="Use Masked Language Model (MLM) objective")
+    parser.add_argument('--rpr_k', help='Relative attention positional sizes pass 0 if you dont want relative attention',
+                        type=int, default=[0], nargs='+')
     parser.add_argument("--device", type=str,
                         default="cuda" if torch.cuda.is_available() else "cpu",
                         help="Device (cuda or cpu)")
