@@ -101,16 +101,14 @@ class ClassifyTrainerTf(EpochReportingTrainer):
 
         """
         super().__init__()
-
         if type(model_params) is dict:
             self.model = create_model_for('classify', **model_params)
         else:
             self.model = model_params
-
         self.sess = self.model.sess
         self.loss = self.model.create_loss()
         self.test_loss = self.model.create_test_loss()
-        self.global_step, train_op = optimizer(self.loss, colocate_gradients_with_ops=True, **kwargs)
+        self.global_step, train_op = optimizer(self.loss, colocate_gradients_with_ops=True, variables=self.model.trainable_variables, **kwargs)
         self.nsteps = kwargs.get('nsteps', six.MAXSIZE)
         decay = kwargs.get('ema_decay', None)
         if decay is not None:
@@ -218,12 +216,13 @@ class ClassifyTrainerTf(EpochReportingTrainer):
             y = batch_dict['y']
             if use_dataset:
                 guess, lossv = self.sess.run([self.model.best, self.test_loss])
+                batchsz = len(guess)
             else:
                 feed_dict = self.model.make_input(batch_dict, False)
                 guess, lossv = self.sess.run([self.model.best, self.test_loss], feed_dict=feed_dict)
 
-            batchsz = self._get_batchsz(batch_dict)
-            assert len(guess) == batchsz
+                batchsz = self._get_batchsz(batch_dict)
+                assert len(guess) == batchsz
             total_loss += lossv * batchsz
             total_norm += batchsz
             cm.add_batch(y, guess)

@@ -94,7 +94,7 @@ def fit_datasets(model_params, ts, vs, es=None, **kwargs):
     features, y = iter.get_next()
     # Add features to the model params
     model_params.update(features)
-    model_params['y'] = tf.one_hot(tf.reshape(y, [-1, 1]), len(model_params['labels']))
+    model_params['y'] = tf.one_hot(tf.reshape(y, [-1]), len(model_params['labels']))
     # create the initialisation operations
     train_init_op = iter.make_initializer(train_dataset)
     valid_init_op = iter.make_initializer(valid_dataset)
