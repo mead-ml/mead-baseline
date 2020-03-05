@@ -236,9 +236,9 @@ class TensorWordDatasetReader(TensorDatasetReaderBase):
         :return:
         """
         if self.use_subword is not None:
-            super(TensorWordDatasetReader, self).build_vocab(files)
+            super().build_vocab(files)
             return {'x': self.vectorizers['x'].vocab}
-        return super(TensorWordDatasetReader, self).build_vocab(files)
+        return super().build_vocab(files)
 
     def load(self, filename, vocabs):
         features = self.load_features(filename, vocabs)

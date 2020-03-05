@@ -147,6 +147,7 @@ class PairedModel(nn.Module):
         return TripletLoss(self)
 
 
+# TODO: remove this?
 class SingleSourceTensorDatasetReaderBase(object):
     """Provide a base-class to do operations that are independent of token representation
     """
@@ -188,6 +189,7 @@ class SingleSourceTensorDatasetReaderBase(object):
         return features
 
 
+# TODO: remove this?
 class SingleSourceTensorWordDatasetReader(SingleSourceTensorDatasetReaderBase):
     """Read each word, and produce a tensor of x and y that are identical
     """
@@ -318,11 +320,11 @@ class SequencePredictionFileLoader(MultiFileLoader):
         if not line:
             return None
 
-        vec, valid_lengths = self.vectorizer.run(reversed(q.split()), self.vocab)
+        vec, valid_lengths = self.vectorizer.run(reversed(line.split()), self.vocab)
         if valid_lengths < 2:
             return None
         vec = np.roll(vec[::-1], -(self.vectorizer.mxlen - valid_lengths))
-        return vec
+        return vec, vec
 
 
 class NextSequencePredictionFileLoader(MultiFileLoader):
@@ -350,7 +352,6 @@ class MultiFileDatasetReader:
         self.pattern = pattern
         self.reader_type = reader_type
         self.vectorizer = BPEVectorizer1D(model_file=model_file, vocab_file=vocab_file, mxlen=nctx)
-        self.num_words = {}
 
     def build_vocab(self, _=None):
         return {'x': self.vectorizer.vocab}
@@ -363,7 +364,7 @@ class MultiFileDatasetReader:
             return NextSequencePredictionFileLoader(directory, self.pattern, vocabs, self.vectorizer, 2*self.nctx)
         else:
             print("Using files as an LM")
-            return SequencePredictionFileLoader(directory, self.pattern, vocabs, self.vectorizer)
+            return SequencePredictionFileLoader(directory, self.pattern, vocabs, self.vectorizer, self.nctx)
 
 
 class TiedSeq2SeqModel(Seq2SeqModel):
