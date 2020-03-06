@@ -35,7 +35,7 @@ def _call_model(m, inputs):
     return m.transformer((x, mask))
 
 
-def _round_trip(embed_type):
+def _round_trip(embed_type, rpr_k=None):
     test_file = os.path.join(file_loc, "test_data", "blah.npz")
     d_model = 40
     vocab_x = {'a':1, 'aardvark':100, 'beandip':42, 'cheerio':86, 'dumdum':129, 'eoyre':3}
@@ -53,6 +53,7 @@ def _round_trip(embed_type):
                                                 gpu=False,
                                                 num_heads=4,
                                                 layers=2,
+                                                rpr_k=rpr_k,
                                                 src_keys=['x'], tgt_key='x')
 
     save_tlm_npz(src_model, test_file)
@@ -68,6 +69,7 @@ def _round_trip(embed_type):
                                                 gpu=False,
                                                 num_heads=4,
                                                 layers=2,
+                                                rpr_k=rpr_k,
                                                 src_keys=['x'], tgt_key='x')
     load_tlm_npz(dst_model, test_file)
 
@@ -83,3 +85,4 @@ def _round_trip(embed_type):
 def test_round_trip():
     assert _round_trip('positional')
     assert _round_trip('learned-positional')
+    assert _round_trip('default', rpr_k=[3, 5])
