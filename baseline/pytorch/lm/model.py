@@ -170,8 +170,13 @@ class TransformerLanguageModel(LanguageModelBase):
         d_model = int(kwargs.get('d_model', kwargs.get('hsz')))
         num_heads = kwargs.get('num_heads', 4)
         d_ff = int(kwargs.get('d_ff', 4 * d_model))
+        rpr_k = kwargs.get('rpr_k')
+        d_k = kwargs.get('d_k')
+        scale = bool(kwargs.get('scale', True))
         self.proj_to_dsz = pytorch_linear(self.dsz, d_model) if self.dsz != d_model else _identity
-        self.transformer = TransformerEncoderStack(num_heads, d_model=d_model, pdrop=pdrop, scale=True, layers=layers, d_ff=d_ff)
+
+        self.transformer = TransformerEncoderStack(num_heads, d_model=d_model, pdrop=pdrop, scale=scale,
+                                                   layers=layers, d_ff=d_ff, rpr_k=rpr_k, d_k=d_k)
         self.apply(self.init_layer_weights)
 
     def create_mask(self, bth):

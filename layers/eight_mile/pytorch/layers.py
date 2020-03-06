@@ -1,7 +1,7 @@
 import copy
 import math
 from typing import Dict, List, Optional, Tuple, Union
-
+import os
 import numpy as np
 import torch
 import torch.nn as nn
@@ -2800,13 +2800,20 @@ class TransformerDecoder(nn.Module):
         scale: bool = True,
         activation_type: str = "relu",
         d_ff: Optional[int] = None,
+        d_k: Optional[int] = None,
+        rpr_k: Optional[int] = None,
         ffn_pdrop: Optional[float] = 0.0,
     ):
         super().__init__()
         self.d_model = d_model
         self.d_ff = d_ff if d_ff is not None else 4 * d_model
-        self.self_attn = MultiHeadedAttention(num_heads, self.d_model, pdrop, scale=scale)
-        self.src_attn = MultiHeadedAttention(num_heads, self.d_model, pdrop, scale=scale)
+        if rpr_k is not None:
+            self.self_attn = MultiHeadedRelativeAttention(num_heads, d_model, rpr_k, pdrop, scale, d_k=d_k)
+            self.src_attn = MultiHeadedRelativeAttention(num_heads, d_model, rpr_k, pdrop, scale, d_k=d_k)
+
+        else:
+            self.self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale, d_k=d_k)
+            self.src_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale, d_k=d_k)
 
         self.ffn = nn.Sequential(
             Dense(self.d_model, self.d_ff),
@@ -2934,14 +2941,24 @@ class TransformerDecoderStack(nn.Module):
         layers: int = 1,
         activation_type: str = "relu",
         d_ff: Optional[int] = None,
-        ffn_pdrop: Optional[float] = 0.0,
+        d_k: Optional[int] = None,
+        rpr_k: Optional[Union[int, List[int]]] = None,
+        ffn_pdrop: Optional[float] = 0.0
+
     ):
         super().__init__()
         self.decoders = nn.ModuleList()
         self.ln = nn.LayerNorm(d_model, eps=1e-6)
+
+
+        if not is_sequence(rpr_k):
+            rpr_k = [rpr_k] * layers
+
+
         for i in range(layers):
             self.decoders.append(
-                TransformerDecoder(num_heads, d_model, pdrop, scale, activation_type, d_ff, ffn_pdrop=ffn_pdrop)
+                TransformerDecoder(num_heads, d_model, pdrop, scale, activation_type, d_ff,
+                                   d_k=d_k, rpr_k=rpr_k[i], ffn_pdrop=ffn_pdrop)
             )
 
     def forward(self, inputs):
@@ -3175,3 +3192,35 @@ class BeamSearchBase:
         # Slice off the Offsets.GO token
         paths = paths[:, :, 1:]
         return paths, lengths, best_scores
+
+
+def checkpoint_for(model_base, epoch):
+    return '{}-{}'.format(model_base, epoch+1)
+
+
+def rm_old_checkpoints(base_path, current_epoch, last_n=10):
+    for i in range(0, current_epoch-last_n):
+        checkpoint_i = checkpoint_for(base_path, i)
+        for extension in ('.pth', '.npz'):
+            checkpoint_name = checkpoint_i + extension
+            if os.path.exists(checkpoint_name):
+                os.remove(checkpoint_name)
+
+class Average(object):
+    def __init__(self, name, fmt=':f'):
+        self.name = name
+        self.fmt = fmt
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
+    def update(self, val, n=1):
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count
+
+    def __str__(self):
+        fmtstr = '{name} {val' + self.fmt + '} ({avg' + self.fmt + '})'
+        return fmtstr.format(**self.__dict__)

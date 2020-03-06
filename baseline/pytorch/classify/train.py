@@ -177,7 +177,7 @@ def fit(model_params, ts, vs, es, **kwargs):
     best_metric = 0
     if do_early_stopping:
         early_stopping_metric = kwargs.get('early_stopping_metric', 'acc')
-        early_stopping_cmp, best_metric = get_metric_cmp(early_stopping_metric, kwargs.get('eatly_stopping_cmp'))
+        early_stopping_cmp, best_metric = get_metric_cmp(early_stopping_metric, kwargs.get('early_stopping_cmp'))
         patience = kwargs.get('patience', epochs)
         logger.info('Doing early stopping on [%s] with patience [%d]', early_stopping_metric, patience)
 

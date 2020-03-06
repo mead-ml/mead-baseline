@@ -10,6 +10,7 @@ from eight_mile.utils import str2bool, write_json, Offsets
 import baseline.pytorch.embeddings
 import baseline.embeddings
 from eight_mile.optz import *
+from eight_mile.pytorch.layers import checkpoint_for, rm_old_checkpoints, Average
 from eight_mile.pytorch.optz import *
 from eight_mile.pytorch.serialize import save_tlm_npz
 from baseline.pytorch.lm import TransformerLanguageModel
@@ -235,9 +236,9 @@ class TensorWordDatasetReader(TensorDatasetReaderBase):
         :return:
         """
         if self.use_subword is not None:
-            super(TensorWordDatasetReader, self).build_vocab(files)
+            super().build_vocab(files)
             return {'x': self.vectorizers['x'].vocab}
-        return super(TensorWordDatasetReader, self).build_vocab(files)
+        return super().build_vocab(files)
 
     def load(self, filename, vocabs):
         features = self.load_features(filename, vocabs)
@@ -348,40 +349,6 @@ def load_embed_and_vocab(token_type, reader, dataset, dataset_key, embed_type, d
     return preproc_data
 
 
-def checkpoint_for(model_base, epoch):
-    return '{}-{}'.format(model_base, epoch+1)
-
-
-def rm_old_checkpoints(base_path, current_epoch, last_n=10):
-    for i in range(0, current_epoch-last_n):
-        checkpoint_i = checkpoint_for(base_path, i)
-        for extension in ('.pth', '.npz'):
-            checkpoint_name = checkpoint_i + extension
-            if os.path.exists(checkpoint_name):
-                logger.info("Removing: %s", checkpoint_name)
-                os.remove(checkpoint_name)
-
-
-class Average(object):
-    def __init__(self, name, fmt=':f'):
-        self.name = name
-        self.fmt = fmt
-        self.val = 0
-        self.avg = 0
-        self.sum = 0
-        self.count = 0
-
-    def update(self, val, n=1):
-        self.val = val
-        self.sum += val * n
-        self.count += n
-        self.avg = self.sum / self.count
-
-    def __str__(self):
-        fmtstr = '{name} {val' + self.fmt + '} ({avg' + self.fmt + '})'
-        return fmtstr.format(**self.__dict__)
-
-
 def train():
     parser = ArgumentParser()
     parser.add_argument("--basedir", type=str)
@@ -395,6 +362,7 @@ def train():
                         help="register label of the embeddings, so far support positional or learned-positional")
     parser.add_argument("--d_model", type=int, default=410, help="Model dimension (and embedding dsz)")
     parser.add_argument("--d_ff", type=int, default=2100, help="FFN dimension")
+    parser.add_argument("--d_k", type=int, default=None, help="Dimension per head.  Use if num_heads=1 to reduce dims")
     parser.add_argument("--num_heads", type=int, default=10, help="Number of heads")
     parser.add_argument("--num_layers", type=int, default=16, help="Number of layers")
     parser.add_argument("--nctx", type=int, default=256, help="Max input length")
@@ -415,6 +383,8 @@ def train():
     parser.add_argument("--restart_from", type=str, help="Option allows you to restart from a previous checkpoint")
     parser.add_argument("--warmup_steps", type=int, default=1000, help="Num warmup steps")
     parser.add_argument("--mlm", type=str2bool, default=False, help="Use Masked Language Model (MLM) objective")
+    parser.add_argument('--rpr_k', help='Relative attention positional sizes pass 0 if you dont want relative attention',
+                        type=int, default=[0], nargs='+')
     parser.add_argument("--device", type=str,
                         default="cuda" if torch.cuda.is_available() else "cpu",
                         help="Device (cuda or cpu)")
@@ -525,6 +495,8 @@ def train():
                                                       gpu=False,
                                                       num_heads=args.num_heads,
                                                       layers=args.num_layers,
+                                                      rpr_k=args.rpr_k,
+                                                      d_k=args.d_k,
                                                       src_keys=['x'], tgt_key=tgt_key)
     else:
         model = TransformerLanguageModel.create(embeddings,
@@ -535,6 +507,8 @@ def train():
                                                 gpu=False,
                                                 num_heads=args.num_heads,
                                                 layers=args.num_layers,
+                                                rpr_k=args.rpr_k,
+                                                d_k=args.d_k,
                                                 src_keys=['x'], tgt_key=tgt_key)
     model.to(args.device)
     loss_function = model.create_loss()
