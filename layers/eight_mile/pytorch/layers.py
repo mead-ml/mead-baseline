@@ -2812,8 +2812,8 @@ class TransformerDecoder(nn.Module):
             self.src_attn = MultiHeadedRelativeAttention(num_heads, d_model, rpr_k, pdrop, scale, d_k=d_k)
 
         else:
-            self.self_attn = MultiHeadedAttention(num_heads, self.d_model, d_model, pdrop, scale, d_k=d_k)
-            self.src_attn = MultiHeadedAttention(num_heads, self.d_model, pdrop, scale, d_k=d_k)
+            self.self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale, d_k=d_k)
+            self.src_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale, d_k=d_k)
 
         self.ffn = nn.Sequential(
             Dense(self.d_model, self.d_ff),
