@@ -38,6 +38,15 @@ class WordPieceVectorizer1D(AbstractVectorizer):
         self.tokenizer = BERT_TOKENIZER
         self.mxlen = kwargs.get('mxlen', -1)
 
+    def count(self, tokens):
+        seen = 0
+        counter = collections.Counter()
+        for tok in self.iterable(tokens):
+            counter[tok] += 1
+            seen += 1
+        self.max_seen = max(self.max_seen, seen)
+        return counter
+
     def iterable(self, tokens):
         yield '[CLS]'
         for tok in tokens:
@@ -148,6 +157,9 @@ class BERTBaseEmbeddings(PyTorchEmbeddings):
 
     def get_dsz(self):
         return self.dsz
+
+    def get_vsz(self):
+        return self.vsz
 
     @classmethod
     def load(cls, embeddings, **kwargs):
