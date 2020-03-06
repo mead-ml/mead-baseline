@@ -29,17 +29,22 @@ def from_ffn_array(tf_ffn: FFN, d: Dict, name: str):
     from_weight_array(tf_ffn.squeeze, d, f"{name}/squeeze")
 
 
-def from_mha_array(tf_mha: MultiHeadedAttention, d: Dict, name: str):
-    """Restore a `MultiHeadedAttention` module from a set of keys
+def from_attn_array(tf_attn: tf.keras.layers.Layer, d: Dict, name: str):
+    """Restore a self-attention module from a set of keys
 
-    :param tf_mha: A `MultiHeadedAttention` module for Transformers
+    :param tf_attn: A self-attention module for Transformers, could be MultiHeadedAttention or
+    MultiHeadedRelativeAttention
     :param d: A Dict of arrays by key
     :param name: The name of the layer
     """
-    from_weight_array(tf_mha.w_Q, d, f"{name}/w_Q")
-    from_weight_array(tf_mha.w_K, d, f"{name}/w_K")
-    from_weight_array(tf_mha.w_V, d, f"{name}/w_V")
-    from_weight_array(tf_mha.w_O, d, f"{name}/w_O")
+    from_weight_array(tf_attn.w_Q, d, f"{name}/w_Q")
+    from_weight_array(tf_attn.w_K, d, f"{name}/w_K")
+    from_weight_array(tf_attn.w_V, d, f"{name}/w_V")
+    from_weight_array(tf_attn.w_O, d, f"{name}/w_O")
+
+    if hasattr(tf_attn, 'rpr_key'):
+        tf_attn.rpr_key.set_weights([d[f"{name}/rpr_key"]])
+        tf_attn.rpr_value.set_weights([d[f"{name}/rpr_value"]])
 
 
 def from_encoder_array(tf_encoder: TransformerEncoder, d: Dict, name: str):
@@ -52,7 +57,7 @@ def from_encoder_array(tf_encoder: TransformerEncoder, d: Dict, name: str):
     """
     from_weight_array(tf_encoder.ln1, d, f"{name}/ln1")
     from_weight_array(tf_encoder.ln2, d, f"{name}/ln2")
-    from_mha_array(tf_encoder.self_attn, d, f"{name}/mha")
+    from_attn_array(tf_encoder.self_attn, d, f"{name}/attn")
     from_ffn_array(tf_encoder.ffn, d, f"{name}/ffn")
 
 
