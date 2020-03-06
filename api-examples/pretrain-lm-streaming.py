@@ -218,6 +218,8 @@ def train():
 
     # This is the training loop
     steps = 0
+    model_base = os.path.join(args.basedir, 'checkpoint')
+
     for epoch in range(start_epoch, args.epochs):
         avg_loss = Average('average_train_loss')
         metrics = {}
@@ -273,7 +275,6 @@ def train():
         metrics['train_elapsed_min'] = elapsed
         metrics['average_train_loss'] = train_token_loss
         metrics['train_ppl'] = train_token_ppl
-        model_base = os.path.join(args.basedir, 'checkpoint')
         avg_valid_loss = Average('average_valid_loss')
         start = time.time()
         model.eval()
