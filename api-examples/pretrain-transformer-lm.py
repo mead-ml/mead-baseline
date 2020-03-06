@@ -362,6 +362,7 @@ def train():
                         help="register label of the embeddings, so far support positional or learned-positional")
     parser.add_argument("--d_model", type=int, default=410, help="Model dimension (and embedding dsz)")
     parser.add_argument("--d_ff", type=int, default=2100, help="FFN dimension")
+    parser.add_argument("--d_k", type=int, default=None, help="Dimension per head.  Use if num_heads=1 to reduce dims")
     parser.add_argument("--num_heads", type=int, default=10, help="Number of heads")
     parser.add_argument("--num_layers", type=int, default=16, help="Number of layers")
     parser.add_argument("--nctx", type=int, default=256, help="Max input length")
@@ -494,6 +495,8 @@ def train():
                                                       gpu=False,
                                                       num_heads=args.num_heads,
                                                       layers=args.num_layers,
+                                                      rpr_k=args.rpr_k,
+                                                      d_k=args.d_k,
                                                       src_keys=['x'], tgt_key=tgt_key)
     else:
         model = TransformerLanguageModel.create(embeddings,
@@ -504,6 +507,8 @@ def train():
                                                 gpu=False,
                                                 num_heads=args.num_heads,
                                                 layers=args.num_layers,
+                                                rpr_k=args.rpr_k,
+                                                d_k=args.d_k,
                                                 src_keys=['x'], tgt_key=tgt_key)
     model.to(args.device)
     loss_function = model.create_loss()

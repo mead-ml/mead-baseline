@@ -316,8 +316,8 @@ class TiedEmbeddingsSeq2SeqModel(Seq2SeqModel):
 
         if 'tgt' in batch_dict:
             tgt = batch_dict['tgt']
-            example['dst'] = tgt[:, :-1]
-            example['tgt'] = tgt[:, 1:]
+            example['dst'] = torch.cat([torch.full((tgt.shape[0], 1), Offsets.GO, device=tgt.device, dtype=tgt.dtype), tgt[:, :-1]], 1)
+            example['tgt'] = tgt
             example['dst'] = example['dst'][perm_idx]
             example['tgt'] = example['tgt'][perm_idx]
         if perm:
