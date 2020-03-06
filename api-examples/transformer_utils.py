@@ -33,7 +33,7 @@ class TripletLoss(nn.Module):
 
 
 class AllLoss(nn.Module):
-    def __init__(self, model):
+    def __init__(self, model, warmup_steps=10000):
         r"""Loss from here https://arxiv.org/pdf/1705.00652.pdf see section 4
 
         We want to minimize the negative log prob of y given x
@@ -54,18 +54,23 @@ class AllLoss(nn.Module):
         -log P(y|x) = -(S(x, y) - log \sum_i^k e^S(x, y_k))
         """
         super().__init__()
-        self.c = 1.0
         self.score = nn.CosineSimilarity(dim=-1)
         self.model = model
         self.max_scale = math.sqrt(self.model.embedding_layers.get_dsz())
+        self.steps = 0
+        self.warmup_steps = warmup_steps
 
     def forward(self, inputs, targets):
+        # This is the cosine distance annealing referred to in https://arxiv.org/pdf/1911.03688.pdf
+        fract = min(self.steps / self.warmup_steps, 1)
+        c = (self.max_scale-1) * fract + 1
+        self.steps += 1
         # These will get broadcast to [B, B, H]
         query = self.model.encode_query(inputs).unsqueeze(1)  # [B, 1, H]
         response = self.model.encode_response(targets).unsqueeze(0)  # [1, B, H]
         # all_scores is now a batch x batch matrix where index (i, j) is the score between
         # the i^th x vector and the j^th y vector
-        all_score = self.max_scale * self.score(query, response) # [B, B]
+        all_score = c * self.score(query, response)  # [B, B]
         # The diagonal has the scores of correct pair, (i, i)
         pos_score = torch.diag(all_score)
         # vec_log_sum_exp will calculate the batched log_sum_exp in a numerically stable way
