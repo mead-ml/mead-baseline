@@ -65,6 +65,7 @@ def train():
     parser.add_argument("--epochs", type=int, default=20, help="Num training epochs")
     parser.add_argument("--restart_from", type=str, help="Option allows you to restart from a previous checkpoint")
     parser.add_argument("--warmup_steps", type=int, default=10000, help="Num warmup steps")
+    parser.add_argument("--update_steps", type=int, default=100, help="The number of steps to take before output a log message")
     parser.add_argument("--mlm", type=str2bool, default=False, help="Use Masked Language Model (MLM) objective")
     parser.add_argument('--rpr_k',
                         help='Relative attention positional sizes pass 0 if you dont want relative attention',
@@ -158,6 +159,11 @@ def train():
     logger.info("Loaded embeddings")
     logger.info("Loaded datasets")
 
+    if len(args.rpr_k) == 0 or args.rpr_k[0] < 1:
+        rpr_k = None
+    else:
+        rpr_k = args.rpr_k
+
     if args.mlm:
         from baseline.pytorch.lm import TransformerMaskedLanguageModel
         model = TransformerMaskedLanguageModel.create(embeddings,
@@ -168,7 +174,7 @@ def train():
                                                       gpu=False,
                                                       num_heads=args.num_heads,
                                                       layers=args.num_layers,
-                                                      rpr_k=args.rpr_k,
+                                                      rpr_k=rpr_k,
                                                       d_k=args.d_k,
                                                       src_keys=['x'], tgt_key='x')
     else:
@@ -180,7 +186,7 @@ def train():
                                                 gpu=False,
                                                 num_heads=args.num_heads,
                                                 layers=args.num_layers,
-                                                rpr_k=args.rpr_k,
+                                                rpr_k=rpr_k,
                                                 d_k=args.d_k,
                                                 src_keys=['x'], tgt_key='x')
     model.to(args.device)
@@ -190,7 +196,7 @@ def train():
     logger.info("Loaded model and loss")
 
     steps_per_epoch = len(train_loader)
-    update_on = steps_per_epoch // 10
+    update_on = steps_per_epoch // args.update_steps
     cosine_decay = CosineDecaySchedulerPyTorch(len(train_loader) * args.epochs, lr=args.lr)
     linear_warmup = WarmupLinearSchedulerPyTorch(args.warmup_steps, lr=args.lr)
     lr_sched = CompositeLRScheduler(linear_warmup, cosine_decay, lr=args.lr)
