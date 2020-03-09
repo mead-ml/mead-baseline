@@ -43,10 +43,10 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
     connected layers.
 
     """
-    def __init__(self):
+    def __init__(self, name=None):
         """Base
         """
-        super().__init__()
+        super().__init__(name=name)
         self._unserializable = []
 
     def set_saver(self, saver):
@@ -296,7 +296,7 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
 
         :return: A fully-initialized tensorflow classifier
         """
-        model = cls()
+        model = cls(name=kwargs.get('name'))
         model.embeddings = {}
         for k, embedding in embeddings.items():
             model.embeddings[k] = embedding.detached_ref()
@@ -359,9 +359,6 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
 
 class EmbedPoolStackClassifier(ClassifierModelBase):
 
-    def __init__(self):
-        super(EmbedPoolStackClassifier, self).__init__()
-
     def create_layers(self, **kwargs):
         embeddings_stack = self.embed(**kwargs)
 
@@ -408,11 +405,6 @@ class ConvModel(EmbedPoolStackClassifier):
 
     """
 
-    def __init__(self):
-        """Constructor
-        """
-        super(ConvModel, self).__init__()
-
     def pool(self, dsz, **kwargs):
         """Do parallel convolutional filtering with varied receptive field widths, followed by max-over-time pooling
 
@@ -437,8 +429,8 @@ class LSTMModel(EmbedPoolStackClassifier):
 
     """
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, name=None):
+        super().__init__(name=name)
         self._vdrop = None
 
     @property
@@ -477,11 +469,8 @@ class LSTMModel(EmbedPoolStackClassifier):
 
 
 class NBowBase(EmbedPoolStackClassifier):
-
     """Neural Bag-of-Words Model base class.  Defines stacking of fully-connected layers, but leaves pooling to derived
     """
-    def __init__(self):
-        super(NBowBase, self).__init__()
 
     def stacked(self, **kwargs):
         """Force at least one hidden layer here
@@ -495,10 +484,7 @@ class NBowBase(EmbedPoolStackClassifier):
 
 @register_model(task='classify', name='nbow')
 class NBowModel(NBowBase):
-
     """Neural Bag-of-Words average pooling (standard) model"""
-    def __init__(self):
-        super(NBowModel, self).__init__()
 
     def pool(self, dsz, **kwargs):
         """Do average pooling on input embeddings, yielding a `dsz` output layer
@@ -514,11 +500,8 @@ class NBowModel(NBowBase):
 
 @register_model(task='classify', name='nbowmax')
 class NBowMaxModel(NBowBase):
-
     """Max-pooling model for Neural Bag-of-Words.  Sometimes does better than avg pooling
     """
-    def __init__(self):
-        super(NBowMaxModel, self).__init__()
 
     def pool(self, dsz, **kwargs):
         """Do max pooling on input embeddings, yielding a `dsz` output layer
@@ -534,10 +517,7 @@ class NBowMaxModel(NBowBase):
 
 @register_model(task='classify', name='fine-tune')
 class FineTuneModelClassifier(ClassifierModelBase):
-
     """Fine-tune based on pre-pooled representations"""
-    def __init__(self):
-        super(FineTuneModelClassifier, self).__init__()
 
     def create_layers(self, **kwargs):
         embeddings_stack = self.embed(**kwargs)
@@ -547,14 +527,8 @@ class FineTuneModelClassifier(ClassifierModelBase):
 
 @register_model(task='classify', name='composite')
 class CompositePoolingModel(EmbedPoolStackClassifier):
-
     """Fulfills pooling contract by aggregating pooling from a set of sub-models and concatenates each
     """
-    def __init__(self):
-        """
-        Construct a composite pooling model
-        """
-        super(CompositePoolingModel, self).__init__()
 
     def pool(self, dsz, **kwargs):
         """Cycle each sub-model and call its pool method, then concatenate along final dimension
