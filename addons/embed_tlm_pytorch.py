@@ -125,6 +125,8 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
         pdrop = kwargs.get('dropout', 0.1)
         self.d_model = int(kwargs.get('dsz', kwargs.get('d_model', 410)))
         d_ff = int(kwargs.get('d_ff', 2100))
+        d_k = kwargs.get('d_k')
+        rpr_k = kwargs.get('rpr_k')
         embed_type = kwargs.get('word_embed_type', 'positional')
         if embed_type == 'positional':
             x_embedding = PositionalLookupTableEmbeddings(vsz=self.vsz, dsz=self.d_model)
@@ -132,7 +134,7 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
             x_embedding = LearnedPositionalLookupTableEmbeddings(vsz=self.vsz, dsz=self.d_model)
         self.dsz = self.init_embed({'x': x_embedding})
         self.proj_to_dsz = pytorch_linear(self.dsz, self.d_model) if self.dsz != self.d_model else _identity
-        self.transformer = TransformerEncoderStack(num_heads, d_model=self.d_model, pdrop=pdrop, scale=True, layers=layers, d_ff=d_ff)
+        self.transformer = TransformerEncoderStack(num_heads, d_model=self.d_model, pdrop=pdrop, scale=True, layers=layers, d_ff=d_ff, rpr_k=rpr_k, d_k=d_k)
         self.mlm = kwargs.get('mlm', False)
         self.finetune = kwargs.get('finetune', True)
 
