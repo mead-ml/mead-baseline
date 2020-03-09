@@ -212,12 +212,15 @@ class ClassifierService(Service):
     def signature_name(cls):
         return 'predict_text'
 
-    def predict(self, tokens, preproc=None, raw=False):
+    def predict(self, tokens, preproc=None, raw=False, dense=False):
         """Take tokens and apply the internal vocab and vectorizers.  The tokens should be either a batch of text
         single utterance of type ``list``
         """
         if preproc is not None:
             logger.warning("Warning: Passing `preproc` to `ClassifierService.predict` is deprecated.")
+        if raw and not dense:
+            logger.warning("Warning: `raw` parameter is deprecated pass `dense=True` to get back values as a single tensor")
+            dense = True
         tokens_batch = self.batch_input(tokens)
         self.prepare_vectorizers(tokens_batch)
         if self.preproc == "client":
@@ -231,10 +234,12 @@ class ClassifierService(Service):
                         self.model.lengths_key: featurized_examples[self.model.lengths_key]
             }
 
-        outcomes_list = self.model.predict(examples)
-        return self.format_output(outcomes_list)
+        outcomes_list = self.model.predict(examples, dense=dense)
+        return self.format_output(outcomes_list, dense=dense)
 
-    def format_output(self, predicted):
+    def format_output(self, predicted, dense=False, **kwargs):
+        if dense:
+            return predicted
         results = []
         for outcomes in predicted:
             if self.return_labels:

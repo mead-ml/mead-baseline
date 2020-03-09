@@ -140,7 +140,7 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
             probs = tf.nn.softmax(self(batch_dict)).numpy()
         return probs
 
-    def predict(self, batch_dict, raw=False):
+    def predict(self, batch_dict, raw=False, dense=False):
 
         """This method provides a basic routine to run "inference" or predict outputs based on data.
         It runs the `x` tensor in (`BxT`), and turns dropout off, running the network all the way to a softmax
@@ -152,7 +152,10 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
         """
 
         probs = self.predict_batch(batch_dict)
-        if raw:
+        if raw and not dense:
+            logger.warning("Warning: `raw` parameter is deprecated pass `dense=True` to get back values as a single tensor")
+            dense = True
+        if dense:
             return probs
         results = []
         batchsz = probs.shape[0]
