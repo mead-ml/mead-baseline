@@ -224,6 +224,7 @@ def _max_pool(_, embeddings):
     return torch.max(embeddings, 1, False)[0]
 
 
+
 @register_embeddings(name='tlm-words-embed-pooled')
 class TransformerLMPooledEmbeddingsModel(TransformerLMEmbeddingsModel):
 
@@ -235,12 +236,21 @@ class TransformerLMPooledEmbeddingsModel(TransformerLMEmbeddingsModel):
             self.pooling_op = _max_pool
         elif pooling == 'mean':
             self.pooling_op = _mean_pool
+        elif pooling == 'sqrt_length':
+            self.pooling_op = self._sqrt_length_pool
         else:
             self.pooling_op = self._cls_pool
+
+    def _sqrt_length_pool(self, inputs, embeddings):
+        lengths = (inputs != 0).sum(1)
+        sqrt_length = lengths.float().sqrt().unsqueeze(1)
+        embeddings = embeddings.sum(1) / sqrt_length
+        return embeddings
 
     def _cls_pool(self, inputs, tensor):
         pooled = tensor[inputs == self.cls_index]
         return pooled
 
     def get_output(self, inputs, z):
-        return self.pooling_op(inputs, z)
+        z = self.pooling_op(inputs, z)
+        return z if self.finetune else z.detach()
