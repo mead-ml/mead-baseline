@@ -69,10 +69,10 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
 
             if numpy_to_tensor:
                 lengths = torch.from_numpy(lengths)
-                lengths, perm_idx = lengths.sort(0, descending=True)
-                if self.gpu:
-                    lengths = lengths.cuda()
-                example_dict['lengths'] = lengths
+            lengths, perm_idx = lengths.sort(0, descending=True)
+            if self.gpu:
+                lengths = lengths.cuda()
+            example_dict['lengths'] = lengths
 
         for key in self.embeddings.keys():
             tensor = torch.from_numpy(batch_dict[key])
