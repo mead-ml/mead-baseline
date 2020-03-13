@@ -118,10 +118,10 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
 
     def predict_batch(self, batch_dict, **kwargs):
         numpy_to_tensor = bool(kwargs.get('numpy_to_tensor', True))
-        examples, prem_idx = self.make_input(batch_dict, perm=True, numpy_to_tensor=numpy_to_tensor)
+        examples, perm_idx = self.make_input(batch_dict, perm=True, numpy_to_tensor=numpy_to_tensor)
         with torch.no_grad():
             probs = self(examples).exp()
-            probs = unsort_batch(probs, prem_idx)
+            probs = unsort_batch(probs, perm_idx)
         return probs
 
     def predict(self, batch_dict, raw=False, dense=False, **kwargs):
