@@ -44,7 +44,7 @@ class Seq2SeqTrainerPyTorch(Trainer):
 
     @staticmethod
     def _num_toks(tgt_lens):
-        return float(torch.sum(tgt_lens))
+        return torch.sum(tgt_lens).item()
 
     def save(self, model_file):
         self._get_pytorch_model().save(model_file)
