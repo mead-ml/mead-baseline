@@ -8,6 +8,7 @@ from baseline.pytorch.torchy import *
 from eight_mile.pytorch.optz import OptimizerManager
 from eight_mile.utils import span_f1, per_entity_f1, conlleval_output
 from baseline.model import create_model_for
+from torch.utils.data import DataLoader
 
 logger = logging.getLogger('baseline')
 
@@ -169,6 +170,13 @@ def fit(model_params, ts, vs, es, **kwargs):
     model_file = get_model_file('tagger', 'pytorch', kwargs.get('basedir'))
     conll_output = kwargs.get('conll_output', None)
     txts = kwargs.get('txts', None)
+
+
+    num_loader_workers = int(kwargs.get('num_loader_workers', 0))
+    pin_memory = bool(kwargs.get('pin_memory', True))
+    ts = DataLoader(ts, num_workers=num_loader_workers, batch_size=None, pin_memory=pin_memory)
+    vs = DataLoader(vs, batch_size=None, pin_memory=pin_memory)
+    es = DataLoader(es, batch_size=None, pin_memory=pin_memory) if es is not None else None
 
     best_metric = 0
     if do_early_stopping:

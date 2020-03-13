@@ -54,7 +54,7 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
     def create_loss(self):
         return nn.NLLLoss()
 
-    def make_input(self, batch_dict):
+    def make_input(self, batch_dict, numpy_to_tensor=False):
         """Transform a `batch_dict` into something usable in this model
 
         :param batch_dict: (``dict``) A dictionary containing all inputs to the embeddings for this model
@@ -62,19 +62,26 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
         """
         example_dict = dict({})
         for key in self.embeddings.keys():
-            example_dict[key] = torch.from_numpy(batch_dict[key])
+            if numpy_to_tensor:
+                example_dict[key] = torch.from_numpy(batch_dict[key])
+            else:
+                example_dict[key] = batch_dict[key]
             if self.gpu:
                 example_dict[key] = example_dict[key].cuda()
 
         # Allow us to track a length, which is needed for BLSTMs
         if self.lengths_key is not None:
-            example_dict['lengths'] = torch.from_numpy(batch_dict[self.lengths_key])
+            if numpy_to_tensor:
+                example_dict['lengths'] = torch.from_numpy(batch_dict[self.lengths_key])
+            else:
+                example_dict['lengths'] = batch_dict[self.lengths_key]
             if self.gpu:
                 example_dict['lengths'] = example_dict['lengths'].cuda()
 
         y = batch_dict.get('y')
         if y is not None:
-            y = torch.from_numpy(y)
+            if numpy_to_tensor:
+                y = torch.from_numpy(y)
             if self.gpu:
                 y = y.cuda()
             example_dict['y'] = y
@@ -84,8 +91,9 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
     def forward(self, input: Dict[str, torch.Tensor]):
         return self.layers(input)
 
-    def predict(self, batch_dict):
-        examples = self.make_input(batch_dict)
+    def predict(self, batch_dict, **kwargs):
+        numpy_to_tensor = bool(kwargs.get('numpy_to_tensor', True))
+        examples = self.make_input(batch_dict, numpy_to_tensor=numpy_to_tensor)
 
         with torch.no_grad():
             probs = self(examples).exp()

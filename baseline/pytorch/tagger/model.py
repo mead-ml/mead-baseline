@@ -91,34 +91,44 @@ class TaggerModelBase(nn.Module, TaggerModel):
         x.masked_fill_(mask_pad & mask_drop, Offsets.UNK)
         return x
 
-    def input_tensor(self, key, batch_dict, perm_idx):
-        tensor = torch.from_numpy(batch_dict[key])
+    def input_tensor(self, key, batch_dict, perm_idx, numpy_to_tensor=False):
+        tensor = batch_dict[key]
+        if numpy_to_tensor:
+            tensor = torch.from_numpy(tensor)
+
         tensor = self.drop_inputs(key, tensor)
         tensor = tensor[perm_idx]
         if self.gpu:
             tensor = tensor.cuda()
         return tensor
 
-    def make_input(self, batch_dict, perm=False):
+    def make_input(self, batch_dict, perm=False, numpy_to_tensor=False):
         example_dict = dict({})
-        lengths = torch.from_numpy(batch_dict[self.lengths_key])
+        lengths = batch_dict[self.lengths_key]
+        if numpy_to_tensor:
+            lengths = torch.from_numpy(lengths)
+
         lengths, perm_idx = lengths.sort(0, descending=True)
         if self.gpu:
             lengths = lengths.cuda()
 
         example_dict['lengths'] = lengths
         for key in self.embeddings.keys():
-            example_dict[key] = self.input_tensor(key, batch_dict, perm_idx)
+            example_dict[key] = self.input_tensor(key, batch_dict, perm_idx, numpy_to_tensor=numpy_to_tensor)
         y = batch_dict.get('y')
         if y is not None:
-            y = torch.from_numpy(y)[perm_idx]
+            if numpy_to_tensor:
+                y = torch.from_numpy(y)
+            y = y[perm_idx]
             if self.gpu:
                 y = y.cuda()
             example_dict['y'] = y
 
         ids = batch_dict.get('ids')
         if ids is not None:
-            ids = torch.from_numpy(ids)[perm_idx]
+            if numpy_to_tensor:
+                ids = torch.from_numpy(ids)
+            ids = ids[perm_idx]
             if self.gpu:
                 ids = ids.cuda()
             example_dict['ids'] = ids
@@ -141,8 +151,9 @@ class TaggerModelBase(nn.Module, TaggerModel):
     def get_labels(self):
         return self.labels
 
-    def predict(self, batch_dict):
-        inputs, perm_idx = self.make_input(batch_dict, perm=True)
+    def predict(self, batch_dict, **kwargs):
+        numpy_to_tensor = bool(kwargs.get('numpy_to_tensor', True))
+        inputs, perm_idx = self.make_input(batch_dict, perm=True, numpy_to_tensor=numpy_to_tensor)
         outputs = self(inputs)
         return unsort_batch(outputs, perm_idx)
 

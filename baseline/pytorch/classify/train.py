@@ -12,7 +12,7 @@ from baseline.progress import create_progress_bar
 from baseline.utils import verbose_output, get_model_file, get_metric_cmp
 from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
 from baseline.model import create_model_for
-
+from torch.utils.data import DataLoader
 logger = logging.getLogger('baseline')
 
 
@@ -173,7 +173,13 @@ def fit(model_params, ts, vs, es, **kwargs):
     model_file = get_model_file('classify', 'pytorch', kwargs.get('basedir'))
     output = kwargs.get('output')
     txts = kwargs.get('txts')
-    
+
+    num_loader_workers = int(kwargs.get('num_loader_workers', 0))
+    pin_memory = bool(kwargs.get('pin_memory', True))
+    ts = DataLoader(ts, num_workers=num_loader_workers, batch_size=None, pin_memory=pin_memory)
+    vs = DataLoader(vs, batch_size=None, pin_memory=pin_memory)
+    es = DataLoader(es, batch_size=None, pin_memory=pin_memory) if es is not None else None
+
     best_metric = 0
     if do_early_stopping:
         early_stopping_metric = kwargs.get('early_stopping_metric', 'acc')
@@ -186,6 +192,8 @@ def fit(model_params, ts, vs, es, **kwargs):
     trainer = create_trainer(model_params, **kwargs)
 
     last_improved = 0
+
+
 
     for epoch in range(epochs):
         trainer.train(ts, reporting_fns)
