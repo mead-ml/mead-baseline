@@ -58,33 +58,45 @@ def from_ffn_array(pytorch_ffn: nn.Sequential, d: Dict, name: str):
     from_weight_array(pytorch_ffn[3], d, f"{name}/squeeze")
 
 
-def to_mha_array(pytorch_mha: MultiHeadedAttention, name: str) -> Dict:
-    """Convert a `MultiHeadedAttention` module to a set of arrays
+def to_attn_array(pytorch_attn: nn.Module, name: str) -> Dict:
+    """Convert a self-attention module to a set of arrays
 
-    :param pytorch_mha: A `MultiHeadedAttention` module for Transformers
+    :param pytorch_attn: The self-attention layer of the transformer encoder, could be MultiHeadedAttention or
+    MultiHeadedRelativeAttention
     :param name: The name of the layer
     :return: A Dict containing the arrays by key
     """
     d = {}
 
-    d.update(to_weight_array(pytorch_mha.w_Q, f"{name}/w_Q"))
-    d.update(to_weight_array(pytorch_mha.w_K, f"{name}/w_K"))
-    d.update(to_weight_array(pytorch_mha.w_V, f"{name}/w_V"))
-    d.update(to_weight_array(pytorch_mha.w_O, f"{name}/w_O"))
+    d.update(to_weight_array(pytorch_attn.w_Q, f"{name}/w_Q"))
+    d.update(to_weight_array(pytorch_attn.w_K, f"{name}/w_K"))
+    d.update(to_weight_array(pytorch_attn.w_V, f"{name}/w_V"))
+    d.update(to_weight_array(pytorch_attn.w_O, f"{name}/w_O"))
+
+    if hasattr(pytorch_attn, 'rpr_key'):
+        rpr_key_weights = pytorch_attn.rpr_key.weight.cpu().detach().numpy()
+        rpr_value_weights = pytorch_attn.rpr_value.weight.cpu().detach().numpy()
+        d.update({f"{name}/rpr_key": rpr_key_weights})
+        d.update({f"{name}/rpr_value": rpr_value_weights})
+
     return d
 
 
-def from_mha_array(pytorch_mha: MultiHeadedAttention, d: Dict, name: str):
-    """Restore a `MultiHeadedAttention` module from a set of keys
+def from_attn_array(pytorch_attn: nn.Module, d: Dict, name: str):
+    """Restore the self-attention module from a set of arrays
 
-    :param pytorch_mha: A `MultiHeadedAttention` module for Transformers
+    :param pytorch_attn: A self-attention module, could be MultiHeadedAttention or MultiHeadedRelativeAttention
     :param d: A Dict of arrays by key
     :param name: The name of the layer
     """
-    from_weight_array(pytorch_mha.w_Q, d, f"{name}/w_Q")
-    from_weight_array(pytorch_mha.w_K, d, f"{name}/w_K")
-    from_weight_array(pytorch_mha.w_V, d, f"{name}/w_V")
-    from_weight_array(pytorch_mha.w_O, d, f"{name}/w_O")
+    from_weight_array(pytorch_attn.w_Q, d, f"{name}/w_Q")
+    from_weight_array(pytorch_attn.w_K, d, f"{name}/w_K")
+    from_weight_array(pytorch_attn.w_V, d, f"{name}/w_V")
+    from_weight_array(pytorch_attn.w_O, d, f"{name}/w_O")
+
+    if hasattr(pytorch_attn, 'rpr_key'):
+        pytorch_attn.rpr_key.weight = torch.nn.Parameter(torch.from_numpy(d[f"{name}/rpr_key"]))
+        pytorch_attn.rpr_value.weight = torch.nn.Parameter(torch.from_numpy(d[f"{name}/rpr_value"]))
 
 
 def to_encoder_array(pytorch_encoder: TransformerEncoder, name: str) -> Dict:
@@ -97,7 +109,7 @@ def to_encoder_array(pytorch_encoder: TransformerEncoder, name: str) -> Dict:
     d = {}
     d.update(to_weight_array(pytorch_encoder.ln1, f"{name}/ln1"))
     d.update(to_weight_array(pytorch_encoder.ln2, f"{name}/ln2"))
-    d.update(to_mha_array(pytorch_encoder.self_attn, f"{name}/mha"))
+    d.update(to_attn_array(pytorch_encoder.self_attn, f"{name}/attn"))
     d.update(to_ffn_array(pytorch_encoder.ffn, f"{name}/ffn"))
     return d
 
@@ -112,7 +124,7 @@ def from_encoder_array(pytorch_encoder: TransformerEncoder, d: Dict, name: str):
     """
     from_weight_array(pytorch_encoder.ln1, d, f"{name}/ln1")
     from_weight_array(pytorch_encoder.ln2, d, f"{name}/ln2")
-    from_mha_array(pytorch_encoder.self_attn, d, f"{name}/mha")
+    from_attn_array(pytorch_encoder.self_attn, d, f"{name}/attn")
     from_ffn_array(pytorch_encoder.ffn, d, f"{name}/ffn")
 
 
