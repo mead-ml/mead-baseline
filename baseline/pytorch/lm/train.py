@@ -6,6 +6,7 @@ from eight_mile.pytorch.optz import OptimizerManager
 from baseline.utils import get_model_file, get_metric_cmp
 from baseline.train import Trainer, create_trainer, register_trainer, register_training_func
 from baseline.model import create_model_for
+from torch.utils.data import DataLoader
 logger = logging.getLogger('baseline')
 
 
@@ -46,15 +47,16 @@ class LanguageModelTrainerPyTorch(Trainer):
         return self.model.module if self.gpus > 1 else self.model
 
     @staticmethod
-    def _get_dims(batch_dict):
+    def _get_dims(loader):
+        batch_dict = loader.dataset[0]
         return batch_dict['y'].shape
 
     @staticmethod
     def _num_toks(batch_dict):
-        return np.prod(LanguageModelTrainerPyTorch._get_dims(batch_dict))
+        return np.prod(batch_dict['y'].shape)
 
     def calc_metrics(self, agg, norm):
-        metrics = super(LanguageModelTrainerPyTorch, self).calc_metrics(agg, norm)
+        metrics = super().calc_metrics(agg, norm)
         metrics['perplexity'] = np.exp(metrics['avg_loss'])
         return metrics
 
@@ -67,7 +69,7 @@ class LanguageModelTrainerPyTorch(Trainer):
         self.model.eval()
         total_loss = 0
         total_toks = 0
-        batchsz, nctx = self._get_dims(vs[0])
+        batchsz, nctx = self._get_dims(vs)
         hidden = self._get_pytorch_model().init_hidden(batchsz)
 
         for batch_dict in vs:
@@ -92,7 +94,7 @@ class LanguageModelTrainerPyTorch(Trainer):
         self.model.train()
         epoch_loss = 0
         epoch_toks = 0
-        batchsz, nctx = self._get_dims(ts[0])
+        batchsz, nctx = self._get_dims(ts)
         hidden = self._get_pytorch_model().init_hidden(batchsz)
 
         for batch_dict in ts:
@@ -135,6 +137,12 @@ def fit(model, ts, vs, es, **kwargs):
     patience = int(kwargs['patience']) if 'patience' in kwargs else epochs
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
     model_file = get_model_file('lm', 'pytorch', kwargs.get('basedir'))
+
+    num_loader_workers = int(kwargs.get('num_loader_workers', 0))
+    pin_memory = bool(kwargs.get('pin_memory', True))
+    ts = DataLoader(ts, num_workers=num_loader_workers, batch_size=None, pin_memory=pin_memory)
+    vs = DataLoader(vs, batch_size=None, pin_memory=pin_memory)
+    es = DataLoader(es, batch_size=None, pin_memory=pin_memory) if es is not None else None
 
     best_metric = 10000
     if do_early_stopping:

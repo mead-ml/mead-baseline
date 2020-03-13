@@ -105,15 +105,18 @@ class EncoderDecoderModelBase(nn.Module, EncoderDecoderModel):
         x.masked_fill_(mask_pad & mask_drop, Offsets.UNK)
         return x
 
-    def input_tensor(self, key, batch_dict, perm_idx):
-        tensor = torch.from_numpy(batch_dict[key])
+    def input_tensor(self, key, batch_dict, perm_idx, numpy_to_tensor=False):
+        tensor = batch_dict[key]
+        if numpy_to_tensor:
+            tensor = torch.from_numpy(tensor)
+
         tensor = self.drop_inputs(key, tensor)
         tensor = tensor[perm_idx]
         if self.gpu:
             tensor = tensor.cuda()
         return tensor
 
-    def make_input(self, batch_dict, perm=False):
+    def make_input(self, batch_dict, perm=False, numpy_to_tensor=False):
         """Prepare the input.
 
         :param batch_dict: `dict`: The data.
@@ -122,17 +125,21 @@ class EncoderDecoderModelBase(nn.Module, EncoderDecoderModel):
         """
         example = dict({})
 
-        lengths = torch.from_numpy(batch_dict[self.src_lengths_key])
+        lengths = batch_dict[self.src_lengths_key]
+        if numpy_to_tensor:
+            lengths = torch.from_numpy(lengths)
         lengths, perm_idx = lengths.sort(0, descending=True)
 
         if self.gpu:
             lengths = lengths.cuda()
         example['src_len'] = lengths
         for key in self.src_embeddings.keys():
-            example[key] = self.input_tensor(key, batch_dict, perm_idx)
+            example[key] = self.input_tensor(key, batch_dict, perm_idx, numpy_to_tensor=numpy_to_tensor)
 
         if 'tgt' in batch_dict:
-            tgt = torch.from_numpy(batch_dict['tgt'])
+            tgt = batch_dict['tgt']
+            if numpy_to_tensor:
+                tgt = torch.from_numpy(tgt)
             example['dst'] = tgt[:, :-1]
             example['tgt'] = tgt[:, 1:]
             example['dst'] = example['dst'][perm_idx]
@@ -140,7 +147,8 @@ class EncoderDecoderModelBase(nn.Module, EncoderDecoderModel):
             if self.gpu:
                 example['dst'] = example['dst'].cuda()
                 example['tgt'] = example['tgt'].cuda()
-        if perm: return example, perm_idx
+        if perm:
+            return example, perm_idx
         return example
 
     def embed(self, input):
@@ -163,7 +171,8 @@ class EncoderDecoderModelBase(nn.Module, EncoderDecoderModel):
         self.eval()
         make = kwargs.get('make_input', True)
         if make:
-            inputs, perm_idx = self.make_input(batch_dict, perm=True)
+            numpy_to_tensor = bool(kwargs.get('numpy_to_tensor', True))
+            inputs, perm_idx = self.make_input(batch_dict, perm=True, numpy_to_tensor=numpy_to_tensor)
         else:
             inputs = batch_dict
         encoder_outputs = self.encode(inputs, inputs['src_len'])

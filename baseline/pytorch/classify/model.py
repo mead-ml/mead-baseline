@@ -54,21 +54,38 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
     def create_loss(self):
         return nn.NLLLoss()
 
-    def make_input(self, batch_dict, perm=False):
+    def make_input(self, batch_dict, perm=False, numpy_to_tensor=False):
+
         """Transform a `batch_dict` into something usable in this model
 
         :param batch_dict: (``dict``) A dictionary containing all inputs to the embeddings for this model
         :return:
         """
-        example_dict = {}
+        example_dict = dict({})
         perm_idx = None
+
         # Allow us to track a length, which is needed for BLSTMs
         if self.lengths_key is not None:
-            lengths = torch.from_numpy(batch_dict[self.lengths_key])
+            lengths = batch_dict[self.lengths_key]
+
+            if numpy_to_tensor:
+                lengths = torch.from_numpy(lengths)
             lengths, perm_idx = lengths.sort(0, descending=True)
-            example_dict['lengths'] = lengths
             if self.gpu:
-                example_dict['lengths'] = example_dict['lengths'].cuda()
+                lengths = lengths.cuda()
+            example_dict['lengths'] = lengths
+
+        for key in self.embeddings.keys():
+            tensor = torch.from_numpy(batch_dict[key])
+            if numpy_to_tensor:
+
+                tensor = torch.from_numpy(tensor)
+            if perm_idx is not None:
+                tensor = tensor[perm_idx]
+
+            if self.gpu:
+                tensor = tensor.cuda()
+            example_dict[key] = tensor
 
         if perm_idx is None:
             for key in self.embeddings.keys():
@@ -83,32 +100,36 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
 
         y = batch_dict.get('y')
         if y is not None:
-            if perm_idx is None:
+            if numpy_to_tensor:
                 y = torch.from_numpy(y)
-            else:
-                y = torch.from_numpy(y)[perm_idx]
+            if perm_idx is not None:
+                y = y[perm_idx]
             if self.gpu:
                 y = y.cuda()
             example_dict['y'] = y
+
         if perm:
             return example_dict, perm_idx
+
         return example_dict
 
     def forward(self, input: Dict[str, torch.Tensor]):
         return self.layers(input)
 
-    def predict_batch(self, batch_dict):
-        examples, prem_idx = self.make_input(batch_dict, perm=True)
+    def predict_batch(self, batch_dict, **kwargs):
+        numpy_to_tensor = bool(kwargs.get('numpy_to_tensor', True))
+        examples, perm_idx = self.make_input(batch_dict, perm=True, numpy_to_tensor=numpy_to_tensor)
         with torch.no_grad():
             probs = self(examples).exp()
-            probs = unsort_batch(probs, prem_idx)
+            probs = unsort_batch(probs, perm_idx)
         return probs
 
-
-    def predict(self, batch_dict, raw=False, dense=False):
-        probs = self.predict_batch(batch_dict)
+    def predict(self, batch_dict, raw=False, dense=False, **kwargs):
+        probs = self.predict_batch(batch_dict, **kwargs)
         if raw and not dense:
-            logger.warning("Warning: `raw` parameter is deprecated pass `dense=True` to get back values as a single tensor")
+            logger.warning(
+                "Warning: `raw` parameter is deprecated pass `dense=True` to get back values as a single tensor")
+
             dense = True
         if dense:
             return probs

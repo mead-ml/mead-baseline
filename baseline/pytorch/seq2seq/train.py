@@ -9,6 +9,7 @@ from baseline.train import Trainer, create_trainer, register_trainer, register_t
 from eight_mile.pytorch.optz import OptimizerManager
 from eight_mile.bleu import bleu
 from baseline.model import create_model_for
+from torch.utils.data import DataLoader
 
 logger = logging.getLogger('baseline')
 
@@ -17,7 +18,7 @@ logger = logging.getLogger('baseline')
 class Seq2SeqTrainerPyTorch(Trainer):
 
     def __init__(self, model, **kwargs):
-        super(Seq2SeqTrainerPyTorch, self).__init__()
+        super().__init__()
         if type(model) is dict:
             model = create_model_for('seq2seq', **model)
 
@@ -43,7 +44,7 @@ class Seq2SeqTrainerPyTorch(Trainer):
 
     @staticmethod
     def _num_toks(tgt_lens):
-        return np.sum(tgt_lens)
+        return torch.sum(tgt_lens).item()
 
     def save(self, model_file):
         self._get_pytorch_model().save(model_file)
@@ -99,7 +100,7 @@ class Seq2SeqTrainerPyTorch(Trainer):
         for batch_dict in pg(es):
             tgt = batch_dict['tgt']
             tgt_lens = batch_dict['tgt_lengths']
-            pred = [p[0] for p in self._predict(batch_dict, **kwargs)]
+            pred = [p[0] for p in self._predict(batch_dict, numpy_to_tensor=False, **kwargs)]
             preds.extend(convert_seq2seq_preds(pred, self.tgt_rlut))
             golds.extend(convert_seq2seq_golds(tgt, tgt_lens, self.tgt_rlut))
         metrics = {'bleu': bleu(preds, golds)[0]}
@@ -158,6 +159,13 @@ def fit(model_params, ts, vs, es=None, **kwargs):
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
     epochs = int(kwargs.get('epochs', 20))
     model_file = get_model_file('seq2seq', 'pytorch', kwargs.get('basedir'))
+
+
+    num_loader_workers = int(kwargs.get('num_loader_workers', 0))
+    pin_memory = bool(kwargs.get('pin_memory', True))
+    ts = DataLoader(ts, num_workers=num_loader_workers, batch_size=None, pin_memory=pin_memory)
+    vs = DataLoader(vs, batch_size=None, pin_memory=pin_memory)
+    es = DataLoader(es, batch_size=None, pin_memory=pin_memory) if es is not None else None
 
     best_metric = 0
     if do_early_stopping:

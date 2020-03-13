@@ -29,16 +29,23 @@ class LanguageModelBase(nn.Module, LanguageModel):
     def init_hidden(self, batchsz):
         return None
 
-    def make_input(self, batch_dict):
+    def make_input(self, batch_dict, numpy_to_tensor=False):
         example_dict = dict({})
         for key in self.src_keys:
-            example_dict[key] = torch.from_numpy(batch_dict[key])
+
+            tensor = batch_dict[key]
+            if numpy_to_tensor:
+                tensor = torch.from_numpy(tensor)
+
             if self.gpu:
-                example_dict[key] = example_dict[key].cuda()
+                tensor = tensor.cuda()
+
+            example_dict[key] = tensor
 
         y = batch_dict.get('y')
         if y is not None:
-            y = torch.from_numpy(y)
+            if numpy_to_tensor:
+                y = torch.from_numpy(y)
             if self.gpu:
                 y = y.cuda()
             example_dict['y'] = y
@@ -102,8 +109,9 @@ class LanguageModelBase(nn.Module, LanguageModel):
         decoded, hidden = self.decode(emb, hidden)
         return self.output(decoded), hidden
 
-    def predict(self, batch_dict):
-        batch_dict = self.make_input(batch_dict)
+    def predict(self, batch_dict, **kwargs):
+        numpy_to_tensor = bool(kwargs.get('numpy_to_tensor', True))
+        batch_dict = self.make_input(batch_dict, numpy_to_tensor=numpy_to_tensor)
         hidden = batch_dict.get('h')
         step_softmax, _ = self(batch_dict, hidden)
         return F.softmax(step_softmax, dim=-1)

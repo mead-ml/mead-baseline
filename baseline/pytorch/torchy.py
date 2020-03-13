@@ -108,3 +108,4 @@ def long_tensor_alloc(dims, dtype=None):
     if type(dims) == int or len(dims) == 1:
         return torch.LongTensor(dims)
     return torch.LongTensor(*dims)
+
