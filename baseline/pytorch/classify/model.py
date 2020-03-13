@@ -55,6 +55,7 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
         return nn.NLLLoss()
 
     def make_input(self, batch_dict, perm=False, numpy_to_tensor=False):
+
         """Transform a `batch_dict` into something usable in this model
 
         :param batch_dict: (``dict``) A dictionary containing all inputs to the embeddings for this model
@@ -81,9 +82,21 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
                 tensor = torch.from_numpy(tensor)
             if perm_idx is not None:
                 tensor = tensor[perm_idx]
+
             if self.gpu:
                 tensor = tensor.cuda()
             example_dict[key] = tensor
+
+        if perm_idx is None:
+            for key in self.embeddings.keys():
+                example_dict[key] = torch.from_numpy(batch_dict[key])
+                if self.gpu:
+                    example_dict[key] = example_dict[key].cuda()
+        else:
+            for key in self.embeddings.keys():
+                example_dict[key] = torch.from_numpy(batch_dict[key])[perm_idx]
+                if self.gpu:
+                    example_dict[key] = example_dict[key].cuda()
 
         y = batch_dict.get('y')
         if y is not None:
@@ -108,7 +121,7 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
         examples, prem_idx = self.make_input(batch_dict, perm=True, numpy_to_tensor=numpy_to_tensor)
         with torch.no_grad():
             probs = self(examples).exp()
-        probs = unsort_batch(probs, prem_idx)
+            probs = unsort_batch(probs, prem_idx)
         return probs
 
     def predict(self, batch_dict, raw=False, dense=False, **kwargs):
@@ -116,6 +129,7 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
         if raw and not dense:
             logger.warning(
                 "Warning: `raw` parameter is deprecated pass `dense=True` to get back values as a single tensor")
+
             dense = True
         if dense:
             return probs

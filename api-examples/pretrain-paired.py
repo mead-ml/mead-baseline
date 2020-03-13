@@ -97,7 +97,7 @@ def train():
     parser.add_argument("--restart_from", type=str, help="Option allows you to restart from a previous checkpoint")
     parser.add_argument("--warmup_steps", type=int, default=10000, help="Num warmup steps")
     parser.add_argument("--loss", type=str, default='all', choices=['triplet', 'all'])
-    parser.add_argument("--update_steps", type=int, default=100, help="The number of steps to take before output a log message")
+    parser.add_argument("--update_steps", type=int, default=100, help="The number of steps to take before saving a checkpoint")
     parser.add_argument('--rpr_k', help='Relative attention positional sizes pass 0 if you dont want relative attention',
                         type=int, default=[3, 5, 48, 48, 48, 48], nargs='+')
 
@@ -184,9 +184,12 @@ def train():
 
     logger.info("Loaded model and loss")
 
-    steps_per_epoch = len(train_loader)
-    logger.info("Steps per epoch %d", steps_per_epoch)
+    # according to pytorch, len(train_loader) will return len(train_set) when train_set is IterableDataset, so manually
+    # correct it here
+    steps_per_epoch = len(train_loader) // args.batch_size
     update_on = steps_per_epoch // args.update_steps
+    report_on = update_on // 10
+    logger.info(f"Steps per epoch: {steps_per_epoch}. Saving checkpoint every {update_on} steps.")
     cosine_decay = CosineDecaySchedulerPyTorch(len(train_loader) * args.epochs, lr=args.lr)
     linear_warmup = WarmupLinearSchedulerPyTorch(args.warmup_steps, lr=args.lr)
     lr_sched = CompositeLRScheduler(linear_warmup, cosine_decay, lr=args.lr)
@@ -229,14 +232,13 @@ def train():
             torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip)
             optimizer.step()
             optimizer.zero_grad()
-            if (i + 1) % update_on == 0:
-                elapsed = (time.time() - start)/60
-
+            if (i + 1) % report_on == 0:
                 logging.info(avg_loss)
+            if (i + 1) % update_on == 0 and args.local_rank < 1:
+                elapsed = (time.time() - start)/60
                 logging.info('elapsed time this epoch %d', elapsed)
                 logging.info('elapsed step time %f steps/min', i/elapsed)
-                if args.local_rank < 1:
-                    save_checkpoint(model, model_base, steps)
+                save_checkpoint(model, model_base, steps)
 
         # How much time elapsed in minutes
         elapsed = (time.time() - start)/60

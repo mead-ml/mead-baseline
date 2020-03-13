@@ -165,7 +165,7 @@ def load_lang_model(filename, **kwargs):
 
 
 @export
-class ClassifierModel(object):
+class ClassifierModel:
     """Text classifier
 
     Provide an interface to DNN classifiers that use word lookup tables.
@@ -218,7 +218,7 @@ class ClassifierModel(object):
 
 
 @export
-class TaggerModel(object):
+class TaggerModel:
     """Structured prediction classifier, AKA a tagger
 
     This class takes a temporal signal, represented as words over time, and characters of words

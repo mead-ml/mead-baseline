@@ -1,3 +1,4 @@
+import logging
 import tensorflow as tf
 import numpy as np
 from eight_mile.utils import listify, Offsets, wraps, get_version, is_sequence
@@ -6,6 +7,7 @@ from typing import Optional, Union, List, Dict, Any, Tuple
 import math
 
 BASELINE_TF_TRAIN_FLAG = None
+LOGGER = logging.getLogger('mead.layers')
 
 
 def set_tf_log_level(ll):
@@ -240,19 +242,24 @@ class ParallelConv(tf.keras.layers.Layer):
         self.Ws = []
         self.bs = []
         self.activation = get_activation(activation)
-
+        self.insz = insz
+        self.filtsz = filtsz
         motsz = outsz
         if not is_sequence(outsz):
             motsz = [outsz] * len(filtsz)
+        self.motsz = motsz
+        self.output_dim = sum(motsz)
 
-        for fsz, cmotsz in zip(filtsz, motsz):
+
+    def build(self, input_shape):
+        insz = self.insz if self.insz is not None else tf.shape(input_shape)[-1]
+        for fsz, cmotsz in zip(self.filtsz, self.motsz):
             kernel_shape = [1, int(fsz), int(insz), int(cmotsz)]
-            self.Ws.append(self.add_weight("cmot-{}/W".format(fsz), shape=kernel_shape))
+            self.Ws.append(self.add_weight(f"cmot-{fsz}/W", shape=kernel_shape))
             self.bs.append(
-                self.add_weight("cmot-{}/b".format(fsz), shape=[cmotsz], initializer=tf.constant_initializer(0.0))
+                self.add_weight(f"cmot-{fsz}/b", shape=[cmotsz], initializer=tf.constant_initializer(0.0))
             )
 
-        self.output_dim = sum(motsz)
 
     def call(self, inputs):
         """
@@ -798,7 +805,8 @@ class LSTMEncoder1(tf.keras.layers.Layer):
         inputs, lengths = tensor_and_lengths(inputs)
         max_length = tf.reduce_max(lengths)
         inputs = inputs[:, :max_length, :]
-        with tf.name_scope(self.name), tf.variable_scope(self.name):
+        ns = tf.contrib.framework.get_name_scope()
+        with tf.name_scope(ns), tf.variable_scope(ns):
             rnnout, hidden = tf.nn.dynamic_rnn(self.rnn, inputs, sequence_length=lengths, dtype=tf.float32)
         state = (hidden[-1].h, hidden[-1].c)
         return self.output_fn(rnnout, state)
@@ -844,7 +852,8 @@ class LSTMEncoderAllLegacy(LSTMEncoder1):
         inputs, lengths = tensor_and_lengths(inputs)
         max_length = tf.reduce_max(lengths)
         inputs = inputs[:, :max_length, :]
-        with tf.variable_scope(self._name):
+        ns = tf.contrib.framework.get_name_scope()
+        with tf.name_scope(ns), tf.variable_scope(ns):
             rnnout, encoder_state = tf.nn.dynamic_rnn(self.rnn, inputs, sequence_length=lengths, dtype=tf.float32)
 
         return self.output_fn(rnnout, encoder_state)
@@ -939,7 +948,9 @@ class LSTMEncoderWithState1(LSTMEncoder1):
 
     def call(self, inputs):
         inputs, hidden = inputs
-        rnnout, hidden = tf.nn.dynamic_rnn(self.rnn, inputs, initial_state=hidden, dtype=tf.float32)
+        ns = tf.contrib.framework.get_name_scope()
+        with tf.name_scope(ns), tf.variable_scope(ns):
+            rnnout, hidden = tf.nn.dynamic_rnn(self.rnn, inputs, initial_state=hidden, dtype=tf.float32)
         return rnnout, hidden  # (hidden[-1].h, hidden[-1].c)
 
 
@@ -1505,7 +1516,8 @@ class BiLSTMEncoder1(tf.keras.layers.Layer):
         inputs, lengths = tensor_and_lengths(inputs)
         max_length = tf.reduce_max(lengths)
         inputs = inputs[:, :max_length, :]
-        with tf.name_scope(self.name), tf.variable_scope(self.name):
+        ns = tf.contrib.framework.get_name_scope()
+        with tf.name_scope(ns), tf.variable_scope(ns):
             rnnout, (fwd_state, backward_state) = tf.nn.bidirectional_dynamic_rnn(
                 self.fwd_rnn, self.bwd_rnn, inputs, sequence_length=lengths, dtype=tf.float32
             )
@@ -1534,9 +1546,11 @@ class BiLSTMEncoderAllLegacy(BiLSTMEncoder1):
         inputs, lengths = tensor_and_lengths(inputs)
         max_length = tf.reduce_max(lengths)
         inputs = inputs[:, :max_length, :]
-        rnnout, encoder_state = tf.nn.bidirectional_dynamic_rnn(
-            self.fwd_rnn, self.bwd_rnn, inputs, sequence_length=lengths, dtype=tf.float32
-        )
+        ns = tf.contrib.framework.get_name_scope()
+        with tf.name_scope(ns), tf.variable_scope(ns):
+            rnnout, encoder_state = tf.nn.bidirectional_dynamic_rnn(
+                self.fwd_rnn, self.bwd_rnn, inputs, sequence_length=lengths, dtype=tf.float32
+            )
         rnnout = tf.concat(axis=2, values=rnnout)
 
         return self.output_fn(rnnout, encoder_state)
@@ -2728,8 +2742,9 @@ class EmbedPoolStackModel(tf.keras.Model):
         pool_model: tf.keras.layers.Layer,
         stack_model: Optional[tf.keras.layers.Layer] = None,
         output_model: Optional[tf.keras.layers.Layer] = None,
+        name: Optional[str] = None,
     ):
-        super().__init__()
+        super().__init__(name=name)
         self.embed_model = embeddings
         self.pool_requires_length = False
         if hasattr(pool_model, "requires_length"):
@@ -2863,12 +2878,13 @@ def reload_checkpoint(sess: tf.compat.v1.Session, checkpoint: str, blocks_to_ski
     if not blocks_to_skip:
         blocks_to_skip = ['OptimizeLoss', 'output/']
     latest = tf.train.latest_checkpoint(checkpoint)
-    print("Reloading " + latest)
+    LOGGER.info("Reloading %s", latest)
     model_vars = set([t[0] for t in tf.train.list_variables(latest)])
     g = tf.compat.v1.get_collection_ref(tf.compat.v1.GraphKeys.GLOBAL_VARIABLES)
     for block in blocks_to_skip:
         g = [v for v in g if not v.op.name.startswith(block)]
     g = [v for v in g if v.op.name in model_vars]
+    LOGGER.info("Restoring %s", g)
     saver = tf.compat.v1.train.Saver(g)
     saver.restore(sess, latest)
 
