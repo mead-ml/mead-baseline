@@ -33,8 +33,8 @@
     "train": {
         "epochs": 40,
         "optim": "adamw",
-        "weight_decay": 1e-8,
-        "eta": 4e-4,
+        "weight_decay": 1.0e-8,
+        "eta": 4.0e-4,
         "do_early_stopping": true,
         "clip": 0.5 
     }
