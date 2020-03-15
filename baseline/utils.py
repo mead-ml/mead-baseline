@@ -505,21 +505,32 @@ def convert_seq2seq_preds(indices, rlut, subword_fix=lambda x: x):
 
 
 @export
-def undo_bpe(seq):
+def undo_bpe(seq: str) -> str:
     """Undo the BPE splits to make Bleu comparable.
 
-    :param seq: `str`: The string with encoded tokens in it.
+    :param seq: The string with encoded tokens in it.
 
-    :returns: `str`: The string with BPE splits collapsed.
+    :returns: The string with BPE splits collapsed.
     """
     # BPE token is @@ this removes it if it is at the end of a word or the end
     # of the sequence.
     return re.sub(r"@@( | ?$)", "", seq)
 
+@export
+def undo_wordpiece(seq: str) -> str:
+    """Undo the WordPiece splits to make Bleu comparable.  Use BERT-style detok
+    :param seq: The string with encoded tokens in it.
+
+    :returns: The string with BPE splits collapsed.
+    """
+    return re.sub(r"\s+##", "", seq)
 
 @export
 def undo_sentence_piece(seq):
-    """Undo the sentence Piece splits to make Bleu comparable."""
+    """Undo the sentence Piece splits to make Bleu comparable.
+    TODO: in what context does this actually work?  it doesnt do replacement as above
+    """
+
     return seq.replace("\u2581", "")
 
 DATA_CACHE_CONF = "data-cache.json"
