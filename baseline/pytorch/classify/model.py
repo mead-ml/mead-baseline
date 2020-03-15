@@ -43,7 +43,8 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
         model.labels = labels
         pool_model = model.init_pool(embed_model.dsz, **kwargs)
         stack_model = model.init_stacked(pool_model.output_dim, **kwargs)
-        model.layers = EmbedPoolStackModel(len(labels), embed_model, pool_model, stack_model)
+        output_model = model.init_output(stack_model.output_dim if stack_model else pool_model.output_dim, len(labels), **kwargs)
+        model.layers = EmbedPoolStackModel(len(labels), embed_model, pool_model, stack_model, output_model)
         logger.info(model)
         return model
 
@@ -157,6 +158,11 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
         if len(hszs) == 0:
             return None
         return DenseStack(input_dim, hszs)
+
+    def init_output(self, input_dim, output_dim, **kwargs):
+        if input_dim is None:
+            return None
+        return Dense(input_dim, output_dim, activation=kwargs.get('output_activation', 'log_softmax'))
 
 
 @register_model(task='classify', name='default')

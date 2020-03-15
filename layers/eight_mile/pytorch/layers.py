@@ -1793,9 +1793,8 @@ class EmbedPoolStackModel(nn.Module):
         super().__init__()
         self.embed_model = embeddings
         self.pool_model = pool_model
-        output_dim = self.pool_model.output_dim if stack_model is None else stack_model.output_dim
-        self.output_layer = Dense(output_dim, nc, activation="log_softmax")
         self.stack_model = stack_model if stack_model else nn.Identity()
+        output_dim = self.pool_model.output_dim if stack_model is None else stack_model.output_dim
         self.output_layer = Dense(output_dim, nc, activation="log_softmax") if output_model is None else output_model
 
     def forward(self, inputs: Dict[str, torch.Tensor]):

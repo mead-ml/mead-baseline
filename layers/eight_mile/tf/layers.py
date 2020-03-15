@@ -2746,18 +2746,14 @@ class EmbedPoolStackModel(tf.keras.Model):
     ):
         super().__init__(name=name)
         self.embed_model = embeddings
-        self.pool_requires_length = False
-        if hasattr(pool_model, "requires_length"):
-            self.pool_requires_length = pool_model.requires_length
+        self.pool_requires_length = getattr(pool_model, "requires_length", False)
         self.pool_model = pool_model
         self.stack_model = stack_model
         self.output_layer = tf.keras.layers.Dense(nc) if output_model is None else output_model
 
     def call(self, inputs):
         lengths = inputs.get("lengths")
-
         embedded = self.embed_model(inputs)
-
         if self.pool_requires_length:
             embedded = (embedded, lengths)
         pooled = self.pool_model(embedded)
