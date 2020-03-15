@@ -163,7 +163,7 @@ class OptimizerManager(object):
         self.current_lr = kwargs.get("eta", kwargs.get("lr", 0.01))
         self.step = self._step_then_update
         if optim == "adadelta":
-            logger.info("adadelta(eta=%f, wd=%d)", self.current_lr, wd)
+            logger.info("adadelta(eta=%f, wd=%f)", self.current_lr, wd)
             self.optimizer = torch.optim.Adadelta(model.parameters(), lr=self.current_lr, weight_decay=wd)
         elif optim.startswith("adam"):
             beta1 = kwargs.get("beta1", 0.9)
