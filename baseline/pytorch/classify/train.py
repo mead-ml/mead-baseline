@@ -59,8 +59,8 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
     def save(self, model_file):
         self._get_pytorch_model().save(model_file)
 
-    def _make_input(self, batch_dict):
-        return self._get_pytorch_model().make_input(batch_dict)
+    def _make_input(self, batch_dict, **kwargs):
+        return self._get_pytorch_model().make_input(batch_dict, **kwargs)
 
     @staticmethod
     def _get_batchsz(batch_dict):
@@ -80,7 +80,7 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
         line_number = 0
         if output is not None and txts is not None:
             handle = open(output, "w")
-        
+
         for batch_dict in pg(loader):
             example = self._make_input(batch_dict)
             ys = example.pop('y')
@@ -192,8 +192,6 @@ def fit(model_params, ts, vs, es, **kwargs):
     trainer = create_trainer(model_params, **kwargs)
 
     last_improved = 0
-
-
 
     for epoch in range(epochs):
         trainer.train(ts, reporting_fns)
