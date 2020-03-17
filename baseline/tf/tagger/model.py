@@ -435,7 +435,10 @@ class AbstractEncoderTaggerModel(TaggerModelBase):
         name = kwargs.get('decode_name')
         if self.crf:
             return CRF(len(self.labels), self.constraint_mask, name=name)
-        return TaggerGreedyDecoder(len(self.labels), self.constraint_mask, name=name)
+        if self.constraint_mask is None:
+            return GreedyTaggerDecoder(len(self.labels), name=name)
+        else:
+            return ConstrainedGreedyTaggerDecoder(len(self.labels), self.constraint_mask, name=name)
 
     def transduce(self, inputs: Dict[str, TensorDef]) -> TensorDef:
         """This operation performs embedding of the input, followed by encoding and projection to logits

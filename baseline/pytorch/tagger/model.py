@@ -50,6 +50,7 @@ class TaggerModelBase(nn.Module, TaggerModel):
         model.gpu = False if device == 'cpu' else model.gpu
         return model
 
+
     def drop_inputs(self, key, x):
         """Do dropout on inputs, using the dropout value (or none if not set)
         This works by applying a dropout mask with the probability given by a
@@ -268,12 +269,19 @@ class AbstractEncoderTaggerModel(TaggerModelBase):
         if use_crf:
             decoder = CRF(len(self.labels), constraint_mask=constraint_mask, batch_first=True)
         else:
-            decoder = TaggerGreedyDecoder(
-                len(self.labels),
-                constraint_mask=constraint_mask,
-                batch_first=True,
-                reduction=kwargs.get('reduction', 'batch')
-            )
+            if constraint_mask is not None:
+                decoder = ConstrainedGreedyTaggerDecoder(
+                    len(self.labels),
+                    batch_first=True,
+                    constraint_mask=constraint_mask,
+                    reduction=kwargs.get('reduction', 'batch')
+                )
+            else:
+                decoder = GreedyTaggerDecoder(
+                    len(self.labels),
+                    batch_first=True,
+                    reduction=kwargs.get('reduction', 'batch')
+                )
         return decoder
 
     def create_layers(self, embeddings: Dict[str, TensorDef], **kwargs):
