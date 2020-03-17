@@ -11,11 +11,11 @@ from baseline.vectorizers import Token1DVectorizer, BPEVectorizer1D
 logger = logging.getLogger(__file__)
 
 
-def decode_sentence(model, vectorizer, query, index2word, device, max_response_length):
-    vec, length = vectorizer.run(query, vectorizer.vocab)
+def decode_sentence(model, vectorizer, query, word2index, index2word, device, max_response_length):
+    vec, length = vectorizer.run(query, word2index)
     toks = torch.from_numpy(vec).unsqueeze(0).to(device=device)
     length = torch.from_numpy(np.array(length)).unsqueeze(0).to(device=device)
-
+    EOU = word2index.get('<EOU>')
     response = []
     with torch.no_grad():
         dst = [Offsets.GO]
@@ -26,7 +26,7 @@ def decode_sentence(model, vectorizer, query, index2word, device, max_response_l
             output = output[-1].item()
             dst.append(output)
             response.append(index2word.get(dst[-1], '<WTF>'))
-            if output == Offsets.EOS:
+            if output == Offsets.EOS or output == EOU:
                 break
     return response
 
@@ -94,6 +94,6 @@ def run():
     vectorizer = BPEVectorizer1D(model_file=args.subword_model_file, vocab_file=args.subword_vocab_file, mxlen=args.nctx)
     index2word = revlut(vocab)
     print('[Query]', args.query)
-    print('[Response]', ' '.join(decode_sentence(model, vectorizer, args.query.split(), index2word, args.device, max_response_length=args.nctx)))
+    print('[Response]', ' '.join(decode_sentence(model, vectorizer, args.query.split(), vocab, index2word, args.device, max_response_length=args.nctx)))
 
 run()
