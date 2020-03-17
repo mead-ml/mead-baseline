@@ -1729,7 +1729,7 @@ else:
     BiLSTMEncoderHidden = BiLSTMEncoderHidden2
     BiLSTMEncoderHiddenContext = BiLSTMEncoderHiddenContext2
     BiLSTMEncoderAll = BiLSTMEncoderAll2
-    from tensorflow_addons.text.crf import crf_decode, crf_sequence_score, crf_log_norm
+    from tensorflow_addons.text.crf import crf_decode, crf_sequence_score, crf_unary_score, crf_log_norm
 
 
 
@@ -2811,7 +2811,7 @@ class FFN(tf.keras.layers.Layer):
         activation: str = "relu",
         d_ff: Optional[int] = None,
         pdrop: float = 0.0,
-        name: Optional[int] = None,
+        name: Optional[str] = None,
     ):
         """Constructor, takes in model size (which is the external currency of each block) and the feed-forward size
 
@@ -2831,46 +2831,69 @@ class FFN(tf.keras.layers.Layer):
         return self.squeeze(self.dropout(self.act(self.expansion(inputs))))
 
 
-class TaggerGreedyDecoder(tf.keras.layers.Layer):
-    def __init__(self, num_tags: int, constraint_mask: Optional[Tuple[Any, Any]] = None, name: Optional[str] = None):
-        """Initialize the object.
-        :param num_tags: int, The number of tags in your output (emission size)
-        :param constraint_mask: Tuple[np.ndarray, np.ndarray], Constraints on the transitions [1, N, N]
-        :param name: str, Optional name, defaults to `None`
-        """
+class TaggerDecoder(tf.keras.layers.Layer):
+    def __init__(self, num_tags: int, name: Optional[str] = None, **kwargs):
+        """Assign a tag to each token in a sequence."""
         super().__init__(name=name)
         self.num_tags = num_tags
-        self.A = None
-        self.inv_mask = None
-        if constraint_mask is not None:
-            _, inv_mask = constraint_mask
-            self.inv_mask = inv_mask * -1e4
-
-    def build(self, input_shape):
-        self.A = self.add_weight(
-            "transitions",
-            shape=(self.num_tags, self.num_tags),
-            dtype=tf.float32,
-            initializer=tf.zeros_initializer(),
-            trainable=False
-        )
-        if self.inv_mask is not None:
-            self.inv_mask = self.add_weight(
-                "inverse_constraint_mask",
-                shape=(self.num_tags, self.num_tags),
-                dtype=tf.float32,
-                initializer=tf.constant_initializer(self.inv_mask),
-                trainable=False
-            )
-
-    @property
-    def transitions(self):
-        if self.inv_mask is not None:
-            return tf.nn.log_softmax(self.A + self.inv_mask)
-        return self.A
 
     def neg_log_loss(self, unary, tags, lengths):
+        """Calculate the loss associated with this decoder.
 
+        :param unary: [B, T, C] The score distribution over tags for each timestep.
+        :param tags: [B, T] The gold tag for each token.
+        :param lengths: [B] The length of each element in the batch.
+
+        :returns: [] The average loss over the batch
+        """
+
+    def score_sentence(self, unary, tags, lengths):
+        """Calculate the score the model gives a sequence of tags.
+
+        :param unary: [B, T, C] The score distribution over tags for each timestep.
+        :param tags: [B, T] The sequence of tags we are scoring.
+        :param lengths: [B] The length of each example.
+
+        :returns: [B] The score for each example in the batch
+        """
+
+    def posterior(self, unary, lengths):
+        """Calculate score distributions over tags for each timesteps.
+
+        :param unary: [B, T, C] The score distribution over tags for each timestep.
+        :param lengths: [B] The length of each example.
+
+        :returns: [B, T, C] The score distribution over tags for each timestep.
+        """
+
+    def decode(self, unary, lengths):
+        """Return the best scoring sequence of tags.
+
+        :param unary: [B, T, C] The score distribution over tags for each timestep.
+        :param lengths: [B] The length of each example.
+
+        :returns: [B, T] The best scoring tag sequences.
+        """
+
+    def forward(self, inputs, training=False, mask=None):
+        pass
+
+
+class GreedyTaggerDecoder(TaggerDecoder):
+    def __init__(self, num_tags: int, reduction: str = "batch", name: Optional[str] = None):
+        """Assign a tag to each token in a sequence independent of the decisions made for other tokens."""
+        super().__init__(num_tags, name=name)
+        self.reduction = reduction
+
+    def neg_log_loss(self, unary, tags, lengths):
+        """Calculate the loss for these gold tags.
+
+        :param unary: [B, T, C] The score distribution over tags for each timestep.
+        :param tags: [B, T] The gold tag for each token.
+        :param lengths: [B] The length of each element in the batch.
+
+        :returns: [] The average loss over the batch
+        """
         lengths = tf.cast(lengths, tf.int32)
         max_length = tf.reduce_max(lengths)
         tags = tags[:, :max_length]
@@ -2879,34 +2902,323 @@ class TaggerGreedyDecoder(tf.keras.layers.Layer):
         cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tags, logits=unary)
         cross_entropy *= tf.cast(mask, tf.float32)
         cross_entropy = tf.reduce_sum(cross_entropy, axis=1)
+        if self.reduction == "token":
+            corss_entropy /= lengths
         return tf.reduce_mean(cross_entropy, name="loss")
 
+    def score_sentence(self, unary, tags, lengths):
+        unary = tf.nn.softmax(unary, axis=-1)
+        return crf_unary_score(tags, lengths, unary)
+
+    def posterior(self, unary, lengths):
+        """Calculate score distributions over tags for each timesteps.
+
+        :param unary: [B, T, C] The score distribution over tags for each timestep.
+        :param lengths: [B] The length of each example.
+
+        :returns: [B, T, C] The score distribution over tags for each timestep.
+        """
+        mask = tf.expand_dims(tf.sequence_mask(lengths, tf.reduce_max(lengths)), axis=-1)
+        return tf.nn.softmax(unary, axis=-1) * tf.cast(mask, tf.float32)
+
+    def decode(self, unary, lengths):
+        lengths = tf.cast(lengths, tf.int32)
+        unary = tf.nn.softmax(unary, axis=-1)
+        paths = tf.argmax(unary, axis=2)
+        mask = tf.sequence_mask(lengths)
+        paths = tf.multiply(paths, tf.cast(mask, tf.int64), name="best")
+        scores = tf.reduce_max(unary, axis=2)
+        scores = tf.multiply(scores, tf.cast(mask, tf.float32))
+        scores = tf.reduce_sum(scores, axis=1)
+        return paths, scores
+
     def call(self, inputs, training=False, mask=None):
-
         unary, lengths = inputs
-
-        if self.inv_mask is not None:
-            bsz = tf.shape(unary)[0]
-            lsz = self.num_tags
-            np_gos = np.full((1, 1, lsz), -1e4, dtype=np.float32)
-            np_gos[:, :, Offsets.GO] = 0
-            gos = tf.constant(np_gos)
-            start = tf.tile(gos, [bsz, 1, 1])
-            probv = tf.concat([start, unary], axis=1)
-            viterbi, path_scores = crf_decode(probv, self.transitions, lengths + 1)
-            return tf.identity(viterbi[:, 1:], name="best"), path_scores
-        else:
-            return tf.argmax(unary, 2, name="best"), None
+        return self.decode(unary, lengths)
 
 
-class CRF(tf.keras.layers.Layer):
+class StructuredTaggerDecoder(TaggerDecoder):
+    """Assign a tag to each token in a sequence conditioned of the decisions made for other tokens."""
+
+    def partition(self, unary, lengths):
+        """Calculate Z the partition function (normalization factor) for all possible paths.
+
+        :param unary: [B, T, C] The score distribution over tags for each timestep.
+        :param lengths: [B] The length of each example.
+
+        :returns: [B] The sequence normalization number for each element in the batch.
+        """
+        raise NotImplementedError
+
+    def partition_over_time(self, unary, lengths):
+        """Calculate the partition function Z up to some point in time for each point in time.
+
+        :param unary: [B, T, C] The score distribution over tags for each timestep.
+        :param lengths: [B] The length of each example.
+
+        :returns: [B, T, C] The partition scores at time `t` for each class `c`. This represents the score of being at some state (t, c) considering all paths that get there.
+        """
+        raise NotImplementedError
+
+    def partition_backward_over_time(self, unary, lengths):
+        """Calculate the partition function Z up to some point in time for each point in time start from the end and moving towards the front.
+
+        :param unary: [B, T, C] The score distribution over tags for each timestep.
+        :param lengths: [B] The length of each example.
+
+        :returns: [B, T, C] The partition scores at time `t` for each class `c`. This represents the score of being at some state (t, c) considering all paths that get there.
+        """
+        raise NotImplementedError
+
+    def posterior_decode(self, unary, lengths):
+        """Decode the best tag sequence by selecting the most probable tag at each timestep.
+
+        :param unary: [B, T, C] The score distribution over tags for each timestep.
+        :param lengths: [B] The length of each example.
+
+        :returns: [B, T] The tag sequence created by doing an argmax over the posterior probability over tags for each timestep independently.
+        """
+        raise NotImplementedError
+
+    @staticmethod
+    def _add_states_to_unary(unary, lengths, start=Offsets.GO, end=Offsets.EOS):
+        """Add additional outputs distributions for the GO and EOS states to the unary tensor.
+
+        :param unary: [B, T, C] The score distribution over tags for each timestep.
+        :param lengths: [B] The length of each example.
+        :param start: The index of the start state.
+        :param end: The index of the end state.
+
+        :returns: [B, T+2, C] The unary distirbutions with two new timesteps added, The new first
+           timestep is a distribution the puts all the weight on the GO state, at the end of each
+           example a distribution with all the weight is added to the EOS state.
+        """
+        with tf.name_scope("add_states_to_unary"):
+            # Get the shape, we need `h` to be an actual int opposed to the result of tf.shape. If we use tf.shape
+            # then the last dim is unknown at graph build time and later steps will fail
+            b, _, h = get_shape_as_list(unary)
+            ## Adding a GO at the start ##
+            # Initialize GO to have very negative scores for all tags
+            gos = tf.fill((h,), -1e4)
+            # Set the score for the GO token to be zero
+            gos = tf.tensor_scatter_nd_update(
+                gos,
+                tf.constant(start, shape=[1, 1], dtype=tf.int32),
+                tf.constant(0, shape=[1], dtype=unary.dtype),
+            )
+            # Expand and duplicate the GO score distribution for each item in the batch
+            gos = tf.reshape(gos, [1, 1, -1])
+            gos = tf.tile(gos, [b, 1, 1])
+
+            ## Adding an EOS, right after the last real element
+            # Initialize EOS to have very negative scores for all tags
+            ends = tf.fill((h,), -1e4)
+            # Set the score for the EOS token to be zero
+            ends = tf.tensor_scatter_nd_update(
+                ends,
+                tf.constant(end, shape=[1, 1], dtype=tf.int32),
+                tf.constant(0, shape=[1], dtype=unary.dtype)
+            )
+            # Expand and duplicate the EOS score distribution for each item in the batch
+            ends = tf.reshape(ends, [1, -1])
+            ends = tf.tile(ends, [b, 1])
+
+            # Create a empty timestep that EOS might go into
+            spacer = tf.zeros((b, 1, h))
+
+            # All of the examples start with GO so add that to the beginning.
+            # Add the spacer at the end so we don't over write a token with EOS
+            unary = tf.concat([gos, unary, spacer], axis=1)
+            # Add one to the lengths to account for the GO
+            lengths = lengths + 1
+
+            # Get the max len of the batch, this changes at run time so we need to use tf.shape
+            t = tf.shape(unary)[1]
+
+            # Flatten the unaries into a long list of score distributions
+            flat_unary = tf.reshape(unary, (-1, h))
+            # Flatten the lengths and scale the lengths to index into that list
+            flat_lengths = tf.reshape(
+                tf.range(tf.cast(b, tf.int64), dtype=tf.int64) * tf.cast(t, tf.int64) + tf.cast(lengths, tf.int64),
+                (-1, 1)
+            )
+            # Overwrite the vectors at flat_lengths with the values in ends. There are [B] indices in the flat lengths
+            # that we are scatter values from end with. This is why we needed to tile the end vector batch times.
+            flat_unary = tf.tensor_scatter_nd_update(flat_unary, flat_lengths, ends)
+            # Reshape the unaries
+            unary = tf.reshape(flat_unary, (b, t, h))
+            return unary
+
+    @staticmethod
+    def _add_states_to_tags(tags, lengths, start=Offsets.GO, end=Offsets.EOS, pad=Offsets.PAD):
+        """Add the GO and EOS tags to the tag tensor.
+
+        :param tags: [B, T] The tags for the batch
+        :param lengths: [B] The length of each example in the batch
+        :param start: int The GO tag
+        :param end: int The EOS tag
+        :param pad: int The PAD tag
+
+        :returns: The tags for the batch with the go tag prepended to each example and the end tag added
+            right after the last tag in the example.
+        """
+        with tf.name_scope("add_states_to_tags"):
+            b = tf.shape(tags)[0]
+            # Create batch size many GO and EOS tokens
+            gos = tf.cast(tf.fill((b, 1), start), tags.dtype)
+            ends = tf.cast(tf.fill((b, 1), end), tags.dtype)
+            # Create an padding time step that will be added to the end so that EOS can be written into it.
+            spacer = tf.cast(tf.fill((b, 1), pad), tags.dtype)
+            # Add the GO (all examples start at the same place) to the start and the pad at the end.
+            tags = tf.concat([gos, tags, spacer], axis=1)
+            # Add one to the lengths to account for the GO
+            lengths = lengths + 1
+            # Get the size of the longest example in the batch. This changes at runtime so use tf.shape
+            h = tf.shape(tags)[1]
+            # Flatten the tags into a big list of tags
+            flat_tags = tf.reshape(tags, (-1, 1))
+            # Flatten the lengths and re-scale them to index into this new list of tags
+            flat_length = tf.reshape(
+                tf.range(tf.cast(b, tf.int64), dtype=tf.int64) * tf.cast(h, tf.int64) + tf.cast(lengths, tf.int64),
+                (-1, 1)
+            )
+            # Scatter the values in ends (EOS) into the flat_tags at the indices given in flat_length
+            flat_tags = tf.tensor_scatter_nd_update(flat_tags, flat_length, ends)
+            tags = tf.reshape(flat_tags, (b, -1))
+            return tags
+
+    @staticmethod
+    def _add_states(unary, tags, lengths, start=Offsets.GO, end=Offsets.EOS):
+        """Add GO and END handling to the unary tensor and the tag tensor if possible. Also update lengths accordingly."""
+        with tf.name_scope("add_states"):
+            unary = StructuredTaggerDecoder._add_states_to_unary(unary, lengths, start, end)
+            if tags is not None:
+                tags = StructuredTaggerDecoder._add_states_to_tags(tags, lengths, start, end)
+            lengths += 2
+            return unary, tags, lengths
+
+
+class CRFRNNCell(tf.keras.layers.AbstractRNNCell):
+    """Computes the partition in a linear-chain CRF."""
+
+    def __init__(self, transition_params, start=Offsets.GO, backward=False, name=None, **kwargs):
+        """Initialize the CrfForwardRnnCell.
+
+        Args:
+          transition_params: A [num_tags, num_tags] matrix of binary
+            potentials. This matrix is expanded into a
+            [1, num_tags, num_tags] in preparation for the broadcast
+            summation occurring within the cell.
+        """
+        super().__init__(name=name, **kwargs)
+        self.transition_params = transition_params
+        self.num_tags = transition_params.shape[-1]
+        self.start = start
+        self.backward = backward
+
+    @property
+    def state_size(self):
+        return self.num_tags
+
+    @property
+    def output_size(self):
+        return self.num_tags
+
+    @property
+    def transitions(self):
+        ts = self.transition_params
+        if self.backward:
+            ts = tf.transpose(self.transition_params, [1, 0])
+        return tf.expand_dims(ts, 0)
+
+    def get_initial_state(self, inputs = None, batch_size = None, dtype=None):
+        initial_state = tf.fill((self.num_tags,), -1e4)
+        initial_state = tf.tensor_scatter_nd_update(
+            initial_state,
+            tf.constant(self.start, shape=[1, 1], dtype=tf.int32),
+            tf.constant(0, shape=[1], dtype=initial_state.dtype)
+        )
+        initial_state = tf.reshape(initial_state, (1, -1))
+        return tf.tile(initial_state, [batch_size, 1])
+
+    def get_config(self):
+        config = super().get_config().copy()
+        config.update({
+            'transition_params': self.transition_params,
+            'start': self.start,
+            'backward': self.backward
+        })
+        return config
+
+    def call(self, inputs, state):
+        """Build the CRFRnnCell.
+        Args:
+          inputs: A [batch_size, num_tags] matrix of unary potentials.
+          state: A [batch_size, num_tags] matrix containing the previous step's
+                score values.
+        Returns:
+          backpointers: A [batch_size, num_tags] matrix of backpointers.
+          new_state: A [batch_size, num_tags] matrix of new score values.
+        """
+        state = tf.expand_dims(state[0], 2)
+        transition_scores = state + self.transitions
+        new_state = inputs + tf.reduce_logsumexp(transition_scores, [1])
+        return new_state, new_state
+
+
+class ConstrainedGreedyTaggerDecoder(StructuredTaggerDecoder, GreedyTaggerDecoder):
+    def __init__(
+        self,
+        num_tags: int,
+        constraint_mask: Tuple[np.ndarray, np.ndarray],
+        reduction: str = "batch",
+        name: Optional[str] = None
+    ):
+        super().__init__(num_tags, reduction, name=name)
+        _, inv_mask = constraint_mask
+        self.inv_mask = inv_mask * -1e4
+        self.A = None
+
+    def build(self, input_shape):
+        self.A = self.add_weight(
+            "transitions_raw",
+            shape=(self.num_tags, self.num_tags),
+            dtype=tf.float32,
+            initializer=tf.zeros_initializer(),
+            trainable=False,
+        )
+        self.inv_mask = self.add_weight(
+            "inv_constraint_mask",
+            shape=(self.num_tags, self.num_tags),
+            dtype=tf.float32,
+            initializer=tf.constant_initializer(self.inv_mask),
+            trainable=False
+        )
+
+    @property
+    def transitions(self):
+        return tf.nn.log_softmax(self.A + self.inv_mask)
+
+    def decode(self, unary, lengths):
+        unary, _, lengths = StructuredTaggerDecoder._add_states(unary, None, lengths)
+        unary = tf.nn.log_softmax(unary, axis=-1)
+        viterbi, path_scores = crf_decode(unary, self.transitions, lengths)
+        # We want to mask out the EOS so remove 1 from the length so it get covered.
+        # The GO will be selected off later
+        mask = tf.sequence_mask(lengths - 1, tf.shape(viterbi)[1])
+        viterbi = tf.multiply(viterbi, tf.cast(mask, dtype=viterbi.dtype))
+        return tf.identity(viterbi[:, 1:-1], name="best"), path_scores
+
+
+class CRF(StructuredTaggerDecoder):
     def __init__(self, num_tags: int, constraint_mask: Optional[Tuple[Any, Any]] = None, name: Optional[str] = None):
         """Initialize the object.
         :param num_tags: int, The number of tags in your output (emission size)
         :param constraint_mask: Tuple[np.ndarray, np.ndarray], Constraints on the transitions [1, N, N]
+            Should be two masks, the first with invalid positions marked as 0 and the second 1
         :param name: str, Optional name, defaults to `None`
         """
-        super().__init__(name=name)
+        super().__init__(num_tags, name=name)
 
         self.num_tags = num_tags
         self.A = None
@@ -2940,12 +3252,18 @@ class CRF(tf.keras.layers.Layer):
                 trainable=False,
                 initializer=tf.constant_initializer(self.inv_mask)
             )
+        fwd_cell = CRFRNNCell(self.A, start=Offsets.GO)
+        self.fwd_layer = tf.keras.layers.RNN(fwd_cell, return_sequences=True, return_state=False)
+        bwd_cell = CRFRNNCell(self.A, start=Offsets.EOS, backward=True)
+        self.bwd_layer = tf.keras.layers.RNN(bwd_cell, return_sequences=True, return_state=False, go_backwards=True)
+        self.both_layer = tf.keras.layers.Bidirectional(self.fwd_layer, backward_layer=self.bwd_layer, merge_mode=None)
 
     @property
     def transitions(self):
-        if self.inv_mask is not None:
-            return (self.A * self.mask) + self.inv_mask
-        return self.A
+        if tf.name_scope("transitions"):
+            if self.inv_mask is not None:
+                return (self.A * self.mask) + self.inv_mask
+            return self.A
 
     def score_sentence(self, unary, tags, lengths):
         """Score a batch of sentences.
@@ -2956,13 +3274,57 @@ class CRF(tf.keras.layers.Layer):
 
         :return: torch.FloatTensor: [B]
         """
-        return crf_sequence_score(unary, tf.cast(tags, tf.int32), tf.cast(lengths, tf.int32), self.transitions)
+        unary, tags, lengths = StructuredTaggerDecoder._add_states(unary, tags, lengths)
+        return self._score_sentence(unary, tags, lengths)
+
+    def _score_sentence(self, unary, tags, lengths):
+        return crf_sequence_score(
+            unary,
+            tf.cast(tags, tf.int32),
+            tf.cast(lengths, tf.int32),
+            self.transitions
+        )
+
+    def partition(self, unary, lengths):
+        unary, _, lengths = self._add_states(unary, None, lengths)
+        return self._partition(unary, lengths)
+
+    def _partition(self, unary, lengths):
+        return crf_log_norm(unary, lengths, self.transitions)
+
+    def partition_over_time(self, unary, lengths):
+        mask = tf.sequence_mask(lengths, tf.shape(unary)[1])
+        alphas = self.fwd_layer(unary, mask=mask)
+        return tf.multiply(alphas, tf.expand_dims(tf.cast(mask, dtype=alphas.dtype), -1))
+
+    def partition_backward_over_time(self, unary, lengths):
+        mask = tf.sequence_mask(lengths, tf.shape(unary)[1])
+        alphas = self.bwd_layer(unary, mask=mask)
+        return tf.multiply(tf.reverse(alphas, axis=[1]), tf.expand_dims(tf.cast(mask, dtype=alphas.dtype), -1))
+
+    def posterior(self, unary, lengths):
+        mask = tf.sequence_mask(lengths, tf.shape(unary)[1])
+        fwd, bwd = self.both_layer(unary, mask=mask)
+        joint = fwd + bwd
+        norm = tf.reduce_sum(joint, axis=[-1], keepdims=True)
+        norm = masked_fill(norm, tf.equal(norm, 0.0), 1.0)
+        conditional = joint / norm
+        return conditional
+
+    def posterior_decode(self, unary, lengths):
+        post = self.posterior(unary, lengths)
+        scores = tf.reduce_max(post, axis=-1)
+        preds = tf.argmax(post, axis=-1)
+        mask = tf.cast(tf.sequence_mask(lengths, tf.shape(unary)[1]), preds.dtype)
+        preds = masked_fill(preds, tf.equal(mask, 0), 0)
+        scores = masked_fill(scores, tf.equal(mask, 0), 0.0)
+        scores = tf.reduce_sum(scores, axis=[1])
+        return preds, scores
 
     def call(self, inputs, training=False):
-
         unary, lengths = inputs
         if training:
-            return crf_log_norm(unary, lengths, self.transitions)
+            return self.partition(unary, lengths)
         else:
             return self.decode(unary, lengths)
 
@@ -2975,19 +3337,13 @@ class CRF(tf.keras.layers.Layer):
         :return: List[torch.LongTensor]: [B] the paths
         :return: torch.FloatTensor: [B] the path score
         """
-        bsz = tf.shape(unary)[0]
-        lsz = self.num_tags
-        np_gos = np.full((1, 1, lsz), -1e4, dtype=np.float32)
-        np_gos[:, :, Offsets.GO] = 0
-        gos = tf.constant(np_gos)
-
-        start = tf.tile(gos, [bsz, 1, 1])
-        start = tf.nn.log_softmax(start, axis=-1)
-
-        probv = tf.concat([start, unary], axis=1)
-
-        viterbi, path_scores = crf_decode(probv, self.transitions, lengths + 1)
-        return tf.identity(viterbi[:, 1:], name="best"), path_scores
+        unary, _, lengths = self._add_states(unary, None, lengths)
+        viterbi, path_scores = crf_decode(unary, self.transitions, lengths)
+        # We want to mask out the EOS so remove 1 from the length so it gets covered.
+        # The GO will be selected off later
+        mask = tf.sequence_mask(lengths - 1, tf.shape(viterbi)[1])
+        viterbi = tf.multiply(viterbi, tf.cast(mask, viterbi.dtype))
+        return tf.identity(viterbi[:, 1:-1], name="bast"), path_scores
 
     def neg_log_loss(self, unary, tags, lengths):
         """Neg Log Loss with a Batched CRF.
@@ -2998,11 +3354,12 @@ class CRF(tf.keras.layers.Layer):
 
         :return: Tensor of shape `[B]`
         """
+        unary, tags, lengths = self._add_states(unary, tags, lengths)
         lengths = tf.cast(lengths, tf.int32)
+        fwd_score = self._partition(unary, lengths)
         max_length = tf.reduce_max(lengths)
-        fwd_score = self((unary, lengths), training=True)
         tags = tags[:, :max_length]
-        gold_score = self.score_sentence(unary, tags, lengths)
+        gold_score = self._score_sentence(unary, tags, lengths)
         log_likelihood = gold_score - fwd_score
         return -tf.reduce_mean(log_likelihood)
 

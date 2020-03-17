@@ -2227,148 +2227,264 @@ def ident(x):
     return x
 
 
-class TaggerGreedyDecoder(nn.Module):
+class TaggerDecoder(nn.Module):
+    def __init__(self, num_tags: int, batch_first: bool = True, **kwargs):
+        """Assign a tag to each token in a sequence."""
+        super().__init__()
+        self.num_tags = num_tags
+        self.batch_first = batch_first
+        self.to_internal = bth2tbh if batch_first else ident
+        self.to_output = tbh2bth if batch_first else ident
+        self.to_batch_first = ident if batch_first else tbh2bth
+        self.to_time_first = bth2tbh if batch_first else ident
+
+    def extra_repr(self) -> str:
+        return f"num_tags={self.num_tags}, batch_first={self.batch_first}"
+
+    def neg_log_loss(self, unary: torch.Tensor, tags: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
+        """Calculate the loss associated with this decoder.
+
+        :param unary: [B, T, C] The score distribution over tags for each timestep.
+        :param tags: [B, T] The gold tag for each token.
+        :param lengths: [B] The length of each element in the batch.
+
+        :returns: [] The average loss over the batch
+        """
+
+    def score_sentence(self, unary: torch.Tensor, tags: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
+        """Calculate the score the model gives a sequence of tags.
+
+        :param unary: [B, T, C] The score distribution over tags for each timestep.
+        :param tags: [B, T] The sequence of tags we are scoring.
+        :param lengths: [B] The length of each example.
+
+        :returns: [B] The score for each example in the batch
+        """
+
+    def posterior(self, unary: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
+        """Calculate score distributions over tags for each timesteps.
+
+        :param unary: [B, T, C] The score distribution over tags for each timestep.
+        :param lengths: [B] The length of each example.
+
+        :returns: [B, T, C] The score distribution over tags for each timestep.
+        """
+
+    def decode(self, unary: torch.Tensor, lengths: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Return the best scoring sequence of tags.
+
+        :param unary: [B, T, C] The score distribution over tags for each timestep.
+        :param lengths: [B] The length of each example.
+
+        :returns: [B, T] The best scoring tag sequences.
+        """
+
+    def posterior_decode(self, unary: torch.Tensor, lengths: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Decode the best tag sequence by selecting the most probable tag at each timestep.
+
+        :param unary: [B, T, C] The score distribution over tags for each timestep.
+        :param lengths: [B] The length of each example.
+
+        :returns: [B, T] The tag sequence created by doing an argmax over the posterior probability over tags for each timestep independently.
+        """
+
+    def forward(self, inputs: Tuple[torch.Tensor]) -> torch.Tensor:
+        pass
+
+
+class GreedyTaggerDecoder(TaggerDecoder):
+    def __init__(self, num_tags: int, batch_first: bool = True, reduction: str = "batch"):
+        """Assign a tag to each token in a sequence independent of the decisions made for other tokens."""
+        super().__init__(num_tags, batch_first)
+        self.loss = SequenceLoss(LossFn=nn.CrossEntropyLoss, avg=reduction)
+
+    def neg_log_loss(self, unary: torch.Tensor, tags: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
+        """Calculate the loss for these gold tags.
+
+        :param unary: [B, T, C] The score distribution over tags for each timestep.
+        :param tags: [B, T] The gold tag for each token.
+        :param lengths: [B] The length of each element in the batch.
+
+        :returns: [] The average loss over the batch
+        """
+        unary = self.to_batch_first(unary)
+        tags = self.to_batch_first(tags)
+        return self.loss(unary, tags)
+
+    def score_sentence(self, unary: torch.Tensor, tags: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
+        """Calculate the score the model gives a sequence of tags.
+
+        :param unary: [B, T, C] The score distribution over tags for each timestep.
+        :param tags: [B, T] The sequence of tags we are scoring.
+        :param lengths: [B] The length of each example.
+
+        :returns: [B] The score for each example in the batch
+        """
+        unary = F.softmax(self.to_internal(unary), dim=-1)
+        tags = self.to_internal(tags)
+        mask = self.to_internal(sequence_mask(lengths).to(tags.device))
+        scores = unary.gather(2, tags.unsqueeze(-1)).squeeze(-1)
+        scores = scores.masked_fill(mask == MASK_FALSE, 0)
+        scores = scores.sum(0)
+        return scores
+
+    def decode(self, unary: torch.Tensor, lengths: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Return the best scoring sequence of tags.
+
+        Note:
+            This is done with independent argmaxes at each timestep. This is a local model
+            and the decisions made for one tag do not effect others.
+
+        :param unary: [B, T, C] The score distribution over tags for each timestep.
+        :param lengths: [B] The length of each example.
+
+        :returns: [B, T] The best scoring tag sequences.
+        """
+        unary = self.to_internal(unary)
+        scores, preds = torch.max(F.softmax(unary, -1), -1)
+        mask = self.to_internal(sequence_mask(lengths, unary.shape[0]).to(preds.device))
+        preds = preds.masked_fill(mask == MASK_FALSE, 0)
+        scores = scores.masked_fill(mask == MASK_FALSE, 0)
+        scores = torch.sum(scores, dim=0)
+        return self.to_output(preds), scores
+
+    def posterior(self, unary: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
+        """Calculate score distributions over tags for each timesteps.
+
+        :param unary: [B, T, C] The score distribution over tags for each timestep.
+        :param lengths: [B] The length of each example.
+
+        :returns: [B, T, C] The score distribution over tags for each timestep.
+        """
+        unary = self.to_internal(unary)
+        unary = F.softmax(unary, dim=-1)
+        mask = self.to_internal(sequence_mask(lengths, unary.shape[0]).to(unary.device))
+        unary = unary.masked_fill(mask.unsqueeze(-1) == MASK_FALSE, 0.0)
+        return self.to_output(unary)
+
+    def posterior_decode(self, unary: torch.Tensor, lengths: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Decode the best tag sequence by selecting the most probable tag at each timestep.
+
+        Note: Posterior Decoding is the same as normal decoding without a structured output.
+
+        :param unary: [B, T, C] The score distribution over tags for each timestep.
+        :param lengths: [B] The length of each example.
+
+        :returns: [B, T] The tag sequence created by doing an argmax over the posterior probability over tags for each timestep independently.
+        """
+        return self.decode(unary, lengths)
+
+    def forward(self, inputs: Tuple[torch.Tensor]) -> torch.Tensor:
+        unary, lengths = tensor_and_lengths(inputs)
+        return self.decode(unary, lengths)[0]
+
+
+
+class StructuredTaggerDecoder(TaggerDecoder):
+    """Assign a tag to each token in a sequence conditioned of the decisions made for other tokens."""
+
+    def partition(self, unary: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
+        """Calculate Z the partition function (normalization factor) for all possible paths.
+
+        :param unary: [B, T, C] The score distribution over tags for each timestep.
+        :param lengths: [B] The length of each example.
+
+        :returns: [B] The sequence normalization number for each element in the path.
+        """
+        raise NotImplementedError
+
+    def partition_over_time(self, unary: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
+        """Calculate the partition function Z up to some point in time for each point in time.
+
+        :param unary: [B, T, C] The score distribution over tags for each timestep.
+        :param lengths: [B] The length of each example.
+
+        :returns: [B, T, C] The partition scores at time `t` for each class `c`. This represents the score of being at some state (t, c) considering all paths that get there.
+        """
+        raise NotImplementedError
+
+    def partition_backward_over_time(self, unary: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
+        """Calculate the partition function Z up to some point in time for each point in time start from the end and moving towards the front.
+
+        :param unary: [B, T, C] The score distribution over tags for each timestep.
+        :param lengths: [B] The length of each example.
+
+        :returns: [B, T, C] The partition scores at time `t` for each class `c`. This represents the score of being at some state (t, c) considering all paths that get there.
+        """
+        raise NotImplementedError
+
+    def posterior_decode(self, unary: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
+        """Decode the best tag sequence by selecting the most probable tag at each timestep.
+
+        :param unary: [B, T, C] The score distribution over tags for each timestep.
+        :param lengths: [B] The length of each example.
+
+        :returns: [B, T] The tag sequence created by doing an argmax over the posterior probability over tags for each timestep independently.
+        """
+        raise NotImplementedError
+
+
+class ConstrainedGreedyTaggerDecoder(StructuredTaggerDecoder, GreedyTaggerDecoder):
     def __init__(
         self,
         num_tags: int,
-        constraint_mask: Optional[torch.Tensor] = None,
+        constraint_mask: torch.Tensor,
+        idxs: Tuple[int, int] = (Offsets.GO, Offsets.EOS),
         batch_first: bool = True,
         reduction: str = "batch",
     ):
-        """A Greedy decoder and loss module for taggers.
+        """Assign tags to a sequence using locally normalized distributions over possible tags but use
+           heuristically created transition scores to avoid illegal moves.
 
-        :param num_tags: `int` The number of output classes
-        :param constraint_mask: `Tensor[1, N, N]` A mask with valid transitions as 1 and invalid as 0
-        :param batch_first: `bool` Should the batch dimensions be first?
-        :param reduction: `str` Should the loss be calculated at the token level or batch level
+        :param num_tags: The number of possible tags.
+        :param constraint_mask: A [1, num_tags, num_tags] tensor where a 1 at (tgt, src) indicates an illegal
+            transition from src tag to tgt tag.
+        :param batch_first: Are the unaries coming in a [B, T, C] (True) or [T, B, C] (False)?
+        :param reduction: How the reduction over the sequence happen in the loss, use `token` to
+            average the loss or `batch` to sum
         """
-        super().__init__()
-        self.num_tags = num_tags
-
-        if constraint_mask is not None:
-            constraint_mask = F.log_softmax(
-                torch.zeros(constraint_mask.shape).masked_fill(constraint_mask, -1e4), dim=1
-            )
-            self.register_buffer("constraint_mask", constraint_mask)
-        else:
-            self.constraint_mask = None
-        # FIXME: we cant do it like this if using TorchScript
-        self.to_batch_first = ident if batch_first else tbh2bth
-        self.to_time_first = bth2tbh if batch_first else ident
-        self.batch_first = batch_first
-        self.loss = SequenceLoss(LossFn=nn.CrossEntropyLoss, avg=reduction)
-        self.viterbi = ViterbiLogSoftmaxNorm(Offsets.GO, Offsets.EOS)
+        super().__init__(num_tags, batch_first, reduction)
+        constraint_mask = F.log_softmax(torch.zeros(*constraint_mask.shape, dtype=torch.float, device=constraint_mask.device).masked_fill(constraint_mask, -1e4), dim=1)
+        self.register_buffer("constraint_mask", constraint_mask)
+        self.start_idx, self.end_idx = idxs
+        self.viterbi = ViterbiLogSoftmaxNorm(self.start_idx, self.end_idx)
 
     @property
     def transitions(self):
         return self.constraint_mask
 
-    def neg_log_loss(self, inputs, tags, lengths):
-        unaries = self.to_batch_first(inputs)
-        tags = self.to_batch_first(tags)
-        return self.loss(unaries, tags)
-
-    def forward(self, inputs) -> torch.Tensor:
-        unaries, lengths = tensor_and_lengths(inputs)
-        # If there is a constraint mask do a masked viterbi
-        if self.constraint_mask is not None:
-            probv = self.to_time_first(unaries)
-            probv = F.log_softmax(probv, dim=-1)
-            preds, scores = self.viterbi(probv, self.constraint_mask, lengths)
-            if self.batch_first:
-                return tbh2bth(preds)  # , scores
-            else:
-                return preds
-        else:
-            # Decoding doesn't care about batch/time first
-            _, preds = torch.max(unaries, -1)
-            mask = sequence_mask(lengths, unaries.shape[1]).to(preds.device)
-            # The mask gets generated as batch first
-            mask = mask if self.batch_first else mask.transpose(0, 1)
-            preds = preds.masked_fill(mask == MASK_FALSE, 0)
-        return preds  # , None
-
     def extra_repr(self) -> str:
-        str_ = f"n_tags={self.num_tags}, batch_first={self.batch_first}"
-        if self.constraint_mask is not None:
-            str_ += ", constrained=True"
-        return str_
+        return f"{super().extra_repr()}, constrained=True"
 
-
-class CRF(nn.Module):
-    def __init__(
-        self,
-        num_tags: int,
-        constraint_mask: Optional[torch.Tensor] = None,
-        batch_first: bool = True,
-        idxs: Tuple[int, int] = (Offsets.GO, Offsets.EOS),
-    ):
-        """Initialize the object.
-        :param num_tags: int, The number of tags in your output (emission size)
-        :param constraint: torch.ByteTensor, Constraints on the transitions [1, N, N]
-        :param idxs: Tuple(int. int), The index of the start and stop symbol
-            in emissions.
-        :param batch_first: bool, if the input [B, T, ...] or [T, B, ...]
+    def decode(self, unary: torch.Tensor, lengths: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Return the best scoring sequence of tags.
 
         Note:
-            if idxs is none then the CRF adds these symbols to the emission
-            vectors and n_tags is assumed to be the number of output tags.
-            if idxs is not none then the first element is assumed to be the
-            start index and the second idx is assumed to be the end index. In
-            this case n_tags is assumed to include the start and end symbols.
+            This is done with the viterbi algorithms (bigram based) to find the best tags
+            subject to the transition constraints found in the transition mask.
+
+        :param unary: [B, T, C] The score distribution over tags for each timestep.
+        :param lengths: [B] The length of each example.
+
+        :returns: [B, T] The best scoring tag sequences.
         """
-        super().__init__()
-        self.start_idx, self.end_idx = idxs
-        self.num_tags = num_tags
-        if constraint_mask is not None:
-            self.register_buffer("constraint_mask", constraint_mask)
-        else:
-            self.constraint_mask = None
-
-        self.transitions_p = nn.Parameter(torch.Tensor(1, self.num_tags, self.num_tags).zero_())
-        self.batch_first = batch_first
-        self.viterbi = Viterbi(self.start_idx, self.end_idx)
-
-    def extra_repr(self) -> str:
-        str_ = "n_tags=%d, batch_first=%s" % (self.num_tags, self.batch_first)
-        if self.constraint_mask is not None:
-            str_ += ", constrained=True"
-        return str_
-
-    @property
-    def transitions(self):
-        if self.constraint_mask is not None:
-            return self.transitions_p.masked_fill(self.constraint_mask, -1e4)
-        return self.transitions_p
-
-    def neg_log_loss(self, unary, tags, lengths):
-        """Neg Log Loss with a Batched CRF.
-
-        :param unary: torch.FloatTensor: [T, B, N] or [B, T, N]
-        :param tags: torch.LongTensor: [T, B] or [B, T]
-        :param lengths: torch.LongTensor: [B]
-
-        :return: torch.FloatTensor: [B]
-        """
-        # Convert from [B, T, N] -> [T, B, N]
-        if self.batch_first:
-            unary = unary.transpose(0, 1)
-            tags = tags.transpose(0, 1)
-        _, batch_size, _ = unary.size()
-        fwd_score = self._forward_alg(unary, lengths)
-        gold_score = self.score_sentence(unary, tags, lengths)
-
-        loss = fwd_score - gold_score
-        batch_loss = torch.mean(loss)
-        return batch_loss
+        probv = self.to_internal(unary)
+        probv = F.log_softmax(probv, dim=-1)
+        preds, scores = self.viterbi(probv, self.transitions, lengths)
+        return self.to_output(preds), scores
 
     def score_sentence(self, unary: torch.Tensor, tags: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
+        unary = self.to_internal(unary)
+        tags = self.to_internal(tags)
+        scores = self._score_sentence(unary, tags, lengths)
+        return scores
+
+    def _score_sentence(self, unary: torch.Tensor, tags: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
         """Score a batch of sentences.
 
         :param unary: torch.FloatTensor: [T, B, N]
         :param tags: torch.LongTensor: [T, B]
         :param lengths: torch.LongTensor: [B]
-        :param min_length: torch.LongTensor: []
 
         :return: torch.FloatTensor: [B]
         """
@@ -2395,7 +2511,285 @@ class CRF(nn.Module):
         scores = scores + eos_scores
         return scores
 
-    def _forward_alg(self, unary: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
+    def partition(self, unary: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
+        unary = self.to_internal(unary)
+        return self._partition(unary, lengths)
+
+    def _partition(self, unary: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
+        """Calculate the score for all paths forward on a batch.
+
+        :param unary: torch.FloatTensor: [T, B, N]
+        :param lengths: torch.LongTensor: [B]
+
+        :return: torch.FloatTensor: [B]
+        """
+        # alphas: [B, 1, N]
+        min_length = torch.min(lengths)
+        batch_size = lengths.shape[0]
+        alphas = torch.full((batch_size, 1, self.num_tags), -1e4, device=unary.device)
+        alphas[:, 0, self.start_idx] = 0.0
+
+        trans = self.transitions  # [1, N, N]
+
+        for i, unary_t in enumerate(unary):
+            # unary_t: [B, N]
+            unary_t = unary_t.unsqueeze(2)  # [B, N, 1]
+            # Broadcast alphas along the rows of trans
+            # Broadcast trans along the batch of alphas
+            # [B, 1, N] + [1, N, N] -> [B, N, N]
+            # Broadcast unary_t along the cols of result
+            # [B, N, N] + [B, N, 1] -> [B, N, N]
+            scores = alphas + trans + unary_t
+            new_alphas = torch.sum(scores, 2, keepdim=True).transpose(1, 2)
+            # If we haven't reached your length zero out old alpha and take new one.
+            # If we are past your length, zero out new_alpha and keep old one.
+
+            if i >= min_length:
+                mask = (i < lengths).view(-1, 1, 1)
+                alphas = alphas.masked_fill(mask, 0) + new_alphas.masked_fill(mask == MASK_FALSE, 0)
+            else:
+                alphas = new_alphas
+
+        terminal_vars = alphas + trans[:, self.end_idx]
+        alphas = torch.sum(terminal_vars, 2)
+        return alphas.view(batch_size)
+
+    def partition_over_time(self, unary: torch.Tensor, lengths: torch.Tensor, start: Optional[int] = None) -> torch.Tensor:
+        unary = self.to_internal(unary)
+        part_ot = self._partition_over_time(unary, lengths, start)
+        return self.to_output(part_ot)
+
+    def _partition_over_time(self, unary: torch.Tensor, lengths: torch.Tensor, start: Optional[int] = None) -> torch.Tensor:
+        """Calculate the partition function Z up to some point in time for each point in time.
+
+        :param unary: [B, T, C] The score distribution over tags for each timestep.
+        :param lengths: [B] The length of each example.
+
+        :returns: [B, T, C] The partition scores at time `t` for each class `c`. This represents the score of being at some state (t, c) considering all paths that get there.
+        """
+        # alphas: [B, 1, N]
+        min_length = torch.min(lengths)
+        batch_size = lengths.shape[0]
+        alphas = []
+        alpha = torch.full((batch_size, 1, self.num_tags), -1e4, device=unary.device)
+        alpha[:, 0, start if start is not None else self.start_idx] = 0.0
+
+        trans = self.transitions  # [1, N, N]
+
+        for i, unary_t in enumerate(unary):
+            # unary_t: [B, N]
+            unary_t = unary_t.unsqueeze(2)  # [B, N, 1]
+            # Broadcast alphas along the rows of trans
+            # Broadcast trans along the batch of alphas
+            # [B, 1, N] + [1, N, N] -> [B, N, N]
+            # Broadcast unary_t along the cols of result
+            # [B, N, N] + [B, N, 1] -> [B, N, N]
+            scores = alpha + trans + unary_t
+            new_alpha = torch.sum(scores, 2, keepdim=True).transpose(1, 2)
+            # If we haven't reached your length zero out old alpha and take new one.
+            # If we are past your length, zero out new_alpha and keep old one.
+
+            if i >= min_length:
+                mask = (i < lengths).view(-1, 1, 1)
+                alpha = alpha.masked_fill(mask, 0) + new_alpha.masked_fill(mask == MASK_FALSE, 0)
+            else:
+                alpha = new_alpha
+            alphas.append(alpha)
+
+        alphas = torch.cat(alphas, dim=1)
+        mask = sequence_mask(lengths).to(alphas.device).unsqueeze(-1)
+        alphas = alphas.masked_fill(mask == MASK_FALSE, 0.0)
+        return alphas.transpose(0, 1)
+
+    def partition_backward_over_time(self, unary: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
+        unary = self.to_internal(unary)
+        part_bot = self._partition_backward_over_time(unary, lengths)
+        return self.to_output(part_bot)
+
+    def _partition_backward_over_time(self, unary: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
+        """Calculate the partition function Z up to some point in time for each point in time starting from the end and moving towards the start.
+
+        :param unary: [B, T, C] The score distribution over tags for each timestep.
+        :param lengths: [B] The length of each example.
+
+        :returns: [B, T, C] The partition scores at time `t` for each class `c`. This represents the score of being at some state (t, c) considering all paths that get there.
+        """
+        seq_len, batch_size, num_tags = unary.shape
+        rev_lengths = seq_len - lengths - 1
+        alphas = []
+        # alpha: [B, 1, N]
+        alpha = torch.full((batch_size, 1, self.num_tags), -1e4, device=unary.device)
+        alpha[:, 0, self.end_idx] = 0.0
+
+        trans = self.transitions.transpose(1, 2)  # [1, N, N]
+
+        for i, unary_t in enumerate(unary.flip(0)):
+            # unary_t: [B, N]
+            unary_t = unary_t.unsqueeze(2)  # [B, N, 1]
+            # Broadcast alphas along the rows of trans
+            # Broadcast trans along the batch of alphas
+            # [B, 1, N] + [1, N, N] -> [B, N, N]
+            # Broadcast unary_t along the cols of result
+            # [B, N, N] + [B, N, 1] -> [B, N, N]
+            scores = alpha + trans + unary_t
+            new_alpha = torch.sum(scores, 2, keepdim=True).transpose(1, 2)
+            # If we haven't reached your length zero out old alpha and take new one.
+            # If we are past your length, zero out new_alpha and keep old one.
+            mask = (i > rev_lengths).view(-1, 1, 1)
+            alpha = alpha.masked_fill(mask, 0) + new_alpha.masked_fill(mask == MASK_FALSE, 0)
+            alphas.append(alpha)
+
+        alphas = torch.cat(alphas, dim=1).flip(1)
+        mask = sequence_mask(lengths).to(alphas.device).unsqueeze(-1)
+        alphas = alphas.masked_fill(mask == MASK_FALSE, 0.0)
+        return alphas.transpose(0, 1)
+
+    def posterior(self, unary: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
+        """Calculate score distributions over tags for each timesteps.
+
+        :param unary: [B, T, C] The score distribution over tags for each timestep.
+        :param lengths: [B] The length of each example.
+
+        :returns: [B, T, C] The score distribution over tags for each timestep.
+        """
+        unary = self.to_internal(unary)
+        fwd = self._partition_over_time(unary, lengths)
+        bwd = self._partition_backward_over_time(unary, lengths)
+        joint = fwd + bwd
+        norm = torch.sum(joint, dim=-1, keepdims=True)
+        norm = norm.masked_fill(norm == 0.0, 1.0)
+        conditional = joint / norm
+        return self.to_output(conditional)
+
+    def posterior_decode(self, unary: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
+        """Decode the best tag sequence by selecting the most probable tag at each timestep.
+
+        :param unary: [B, T, C] The score distribution over tags for each timestep.
+        :param lengths: [B] The length of each example.
+
+        :returns: [B, T] The tag sequence created by doing an argmax over the posterior probability over tags for each timestep independently.
+        """
+        post = self.posterior(unary, lengths)
+        scores, preds = torch.max(post, dim=-1)
+        mask = sequence_mask(lengths).to(preds.device)
+        mask = mask if self.batch_first else mask.transpose(0, 1)
+        preds = preds.masked_fill(mask == MASK_FALSE, 0)
+        scores = scores.masked_fill(mask == MASK_FALSE, 0)
+        scores = torch.sum(scores, dim=1 if self.batch_first else 0)
+        return preds, scores
+
+    def forward(self, inputs: Tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
+        unary, lengths = tensor_and_lengths(inputs)
+        return self.decode(unary, lengths)[0]
+
+
+class CRF(StructuredTaggerDecoder):
+    def __init__(
+        self,
+        num_tags: int,
+        constraint_mask: Optional[torch.Tensor] = None,
+        batch_first: bool = True,
+        idxs: Tuple[int, int] = (Offsets.GO, Offsets.EOS),
+    ):
+        """A Bigram-based Linear Chain Conditional Random Field for sequence tagging.
+
+        :param num_tags: The number of tags in your output (emission size)
+        :param constraint: Constraints on the transitions [1, N, N]
+        :param idxs: The index of the start and stop symbol
+            in emissions.
+        :param batch_first: If the input [B, T, ...] or [T, B, ...]
+
+        Note:
+            The first element of idxs is assumed to be the start index and the
+            second idx is assumed to be the end index.
+
+            num_tags is assumed to include the start and end symbols.
+        """
+        super().__init__(num_tags, batch_first)
+        self.start_idx, self.end_idx = idxs
+        self.num_tags = num_tags
+        if constraint_mask is not None:
+            self.register_buffer("constraint_mask", constraint_mask)
+        else:
+            self.constraint_mask = None
+
+        self.transitions_p = nn.Parameter(torch.Tensor(1, self.num_tags, self.num_tags).zero_())
+        self.viterbi = Viterbi(self.start_idx, self.end_idx)
+
+    def extra_repr(self) -> str:
+        str_ = super().extra_repr()
+        if self.constraint_mask is not None:
+            str_ += ", constrained=True"
+        return str_
+
+    @property
+    def transitions(self):
+        if self.constraint_mask is not None:
+            return self.transitions_p.masked_fill(self.constraint_mask, -1e4)
+        return self.transitions_p
+
+    def neg_log_loss(self, unary, tags, lengths):
+        """Neg Log Loss with a Batched CRF.
+
+        :param unary: torch.FloatTensor: [T, B, N] or [B, T, N]
+        :param tags: torch.LongTensor: [T, B] or [B, T]
+        :param lengths: torch.LongTensor: [B]
+
+        :return: torch.FloatTensor: [B]
+        """
+        # Convert from [B, T, N] -> [T, B, N]
+        unary = self.to_internal(unary)
+        tags = self.to_internal(tags)
+        _, batch_size, _ = unary.size()
+        fwd_score = self._partition(unary, lengths)
+        gold_score = self._score_sentence(unary, tags, lengths)
+
+        loss = fwd_score - gold_score
+        batch_loss = torch.mean(loss)
+        return batch_loss
+
+    def score_sentence(self, unary: torch.Tensor, tags: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
+        unary = self.to_internal(unary)
+        tags = self.to_internal(tags)
+        return self._score_sentence(unary, tags, lengths)
+
+    def _score_sentence(self, unary: torch.Tensor, tags: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
+        """Score a batch of sentences.
+
+        :param unary: torch.FloatTensor: [T, B, N]
+        :param tags: torch.LongTensor: [T, B]
+        :param lengths: torch.LongTensor: [B]
+
+        :return: torch.FloatTensor: [B]
+        """
+        batch_size = lengths.shape[0]
+        assert lengths.shape[0] == unary.shape[1]
+
+        trans = self.transitions.squeeze(0)  # [N, N]
+        start = torch.full((1, batch_size), self.start_idx, dtype=tags.dtype, device=tags.device)  # [1, B]
+        tags = torch.cat([start, tags], 0)  # [T + 1, B]
+
+        # Unfold gives me all slices of size 2 (this tag next tag) from dimension T
+        tag_pairs = tags.unfold(0, 2, 1)
+        # Move the pair dim to the front and split it into two
+        indices = tag_pairs.permute(2, 0, 1).chunk(2)
+        trans_score = trans[[indices[1], indices[0]]].squeeze(0)
+        # Pull out the values of the tags from the unary scores.
+        unary_score = unary.gather(2, tags[1:].unsqueeze(-1)).squeeze(-1)
+        mask = sequence_mask(lengths).transpose(0, 1).to(tags.device)
+        scores = unary_score + trans_score
+        scores = scores.masked_fill(mask == MASK_FALSE, 0)
+        scores = scores.sum(0)
+
+        eos_scores = trans[self.end_idx, tags.gather(0, lengths.unsqueeze(0)).squeeze(0)]
+        scores = scores + eos_scores
+        return scores
+
+    def partition(self, unary: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
+        unary = self.to_internal(unary)
+        return self._partition(unary, lengths)
+
+    def _partition(self, unary: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
         """For CRF forward on a batch.
 
         :param unary: torch.FloatTensor: [T, B, N]
@@ -2406,10 +2800,8 @@ class CRF(nn.Module):
         # alphas: [B, 1, N]
         min_length = torch.min(lengths)
         batch_size = lengths.shape[0]
-        lengths.shape[0] == unary.shape[1]
         alphas = torch.full((batch_size, 1, self.num_tags), -1e4, device=unary.device)
         alphas[:, 0, self.start_idx] = 0.0
-        # alphas.requires_grad = True
 
         trans = self.transitions  # [1, N, N]
 
@@ -2436,15 +2828,134 @@ class CRF(nn.Module):
         alphas = vec_log_sum_exp(terminal_vars, 2)
         return alphas.view(batch_size)
 
+    def partition_over_time(self, unary: torch.Tensor, lengths: torch.Tensor, start: Optional[int] = None) -> torch.Tensor:
+        unary = self.to_internal(unary)
+        part_ot = self._partition_over_time(unary, lengths, start)
+        return self.to_output(part_ot)
+
+    def _partition_over_time(self, unary: torch.Tensor, lengths: torch.Tensor, start: Optional[int] = None) -> torch.Tensor:
+        """Calculate the partition function Z up to some point in time for each point in time.
+
+        :param unary: [B, T, C] The score distribution over tags for each timestep.
+        :param lengths: [B] The length of each example.
+
+        :returns: [B, T, C] The partition scores at time `t` for each class `c`. This represents the score of being at some state (t, c) considering all paths that get there.
+        """
+        # alphas: [B, 1, N]
+        min_length = torch.min(lengths)
+        batch_size = lengths.shape[0]
+        alphas = []
+        alpha = torch.full((batch_size, 1, self.num_tags), -1e4, device=unary.device)
+        alpha[:, 0, start if start is not None else self.start_idx] = 0.0
+
+        trans = self.transitions  # [1, N, N]
+
+        for i, unary_t in enumerate(unary):
+            # unary_t: [B, N]
+            unary_t = unary_t.unsqueeze(2)  # [B, N, 1]
+            # Broadcast alphas along the rows of trans
+            # Broadcast trans along the batch of alphas
+            # [B, 1, N] + [1, N, N] -> [B, N, N]
+            # Broadcast unary_t along the cols of result
+            # [B, N, N] + [B, N, 1] -> [B, N, N]
+            scores = alpha + trans + unary_t
+            new_alpha = vec_log_sum_exp(scores, 2).transpose(1, 2)
+            # If we haven't reached your length zero out old alpha and take new one.
+            # If we are past your length, zero out new_alpha and keep old one.
+
+            if i >= min_length:
+                mask = (i < lengths).view(-1, 1, 1)
+                alpha = alpha.masked_fill(mask, 0) + new_alpha.masked_fill(mask == MASK_FALSE, 0)
+            else:
+                alpha = new_alpha
+            alphas.append(alpha)
+
+        alphas = torch.cat(alphas, dim=1)
+        mask = sequence_mask(lengths).to(alphas.device).unsqueeze(-1)
+        alphas = alphas.masked_fill(mask == MASK_FALSE, 0.0)
+        return alphas.transpose(0, 1)
+
+    def partition_backward_over_time(self, unary: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
+        unary = self.to_internal(unary)
+        part_bot = self._partition_backward_over_time(unary, lengths)
+        return self.to_output(part_bot)
+
+    def _partition_backward_over_time(self, unary: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
+        """Calculate the partition function Z up to some point in time for each point in time starting from the end and moving towards the start.
+
+        :param unary: [B, T, C] The score distribution over tags for each timestep.
+        :param lengths: [B] The length of each example.
+
+        :returns: [B, T, C] The partition scores at time `t` for each class `c`. This represents the score of being at some state (t, c) considering all paths that get there.
+        """
+        seq_len, batch_size, num_tags = unary.shape
+        rev_lengths = seq_len - lengths - 1
+        alphas = []
+        # alpha: [B, 1, N]
+        alpha = torch.full((batch_size, 1, self.num_tags), -1e4, device=unary.device)
+        alpha[:, 0, self.end_idx] = 0.0
+
+        trans = self.transitions.transpose(1, 2)  # [1, N, N]
+
+        for i, unary_t in enumerate(unary.flip(0)):
+            # unary_t: [B, N]
+            unary_t = unary_t.unsqueeze(2)  # [B, N, 1]
+            # Broadcast alphas along the rows of trans
+            # Broadcast trans along the batch of alphas
+            # [B, 1, N] + [1, N, N] -> [B, N, N]
+            # Broadcast unary_t along the cols of result
+            # [B, N, N] + [B, N, 1] -> [B, N, N]
+            scores = alpha + trans + unary_t
+            new_alpha = vec_log_sum_exp(scores, 2).transpose(1, 2)
+            # If we haven't reached your length zero out old alpha and take new one.
+            # If we are past your length, zero out new_alpha and keep old one.
+            mask = (i > rev_lengths).view(-1, 1, 1)
+            alpha = alpha.masked_fill(mask, 0) + new_alpha.masked_fill(mask == MASK_FALSE, 0)
+            alphas.append(alpha)
+
+        alphas = torch.cat(alphas, dim=1).flip(1)
+        mask = sequence_mask(lengths).to(alphas.device).unsqueeze(-1)
+        alphas = alphas.masked_fill(mask == MASK_FALSE, 0.0)
+        return alphas.transpose(0, 1)
+
+    def posterior(self, unary: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
+        """Calculate score distributions over tags for each timesteps.
+
+        :param unary: [B, T, C] The score distribution over tags for each timestep.
+        :param lengths: [B] The length of each example.
+
+        :returns: [B, T, C] The score distribution over tags for each timestep.
+        """
+        unary = self.to_internal(unary)
+        fwd = self._partition_over_time(unary, lengths)
+        bwd = self._partition_backward_over_time(unary, lengths)
+        joint = fwd + bwd
+        norm = torch.sum(joint, dim=-1, keepdims=True)
+        norm = norm.masked_fill(norm == 0.0, 1.0)
+        conditional = joint / norm
+        return self.to_output(conditional)
+
+    def posterior_decode(self, unary: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
+        """Decode the best tag sequence by selecting the most probable tag at each timestep.
+
+        :param unary: [B, T, C] The score distribution over tags for each timestep.
+        :param lengths: [B] The length of each example.
+
+        :returns: [B, T] The tag sequence created by doing an argmax over the posterior probability over tags for each timestep independently.
+        """
+        post = self.posterior(unary, lengths)
+        scores, preds = torch.max(post, dim=-1)
+        mask = sequence_mask(lengths).to(preds.device)
+        mask = mask if self.batch_first else mask.transpose(0, 1)
+        preds = preds.masked_fill(mask == MASK_FALSE, 0)
+        scores = scores.masked_fill(mask == MASK_FALSE, 0)
+        scores = torch.sum(scores, dim=1 if self.batch_first else 0)
+        return preds, scores
+
     def forward(self, inputs: Tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
         unary, lengths = inputs
         if self.training:
-            if self.batch_first:
-                unary = unary.transpose(0, 1)
-            forward = self._forward_alg(unary, lengths)
-            # if self.batch_first:
-            #    forward = forward.transpose(0, 1)
-            return forward
+            return self.partition(unary, lengths)
         with torch.no_grad():
             return self.decode(unary, lengths)[0]
 
@@ -2458,13 +2969,10 @@ class CRF(nn.Module):
         :return: torch.LongTensor: [B] the paths
         :return: torch.FloatTensor: [B] the path score
         """
-        if self.batch_first:
-            unary = unary.transpose(0, 1)
+        unary = self.to_internal(unary)
         trans = self.transitions  # [1, N, N]
         path, score = self.viterbi(unary, trans, lengths)
-        if self.batch_first:
-            path = path.transpose(0, 1)
-        return path, score
+        return self.to_output(path), score
 
 
 class SequenceModel(nn.Module):

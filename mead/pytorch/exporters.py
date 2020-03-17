@@ -6,7 +6,7 @@ import baseline as bl
 from eight_mile.pytorch.layers import (
     CRF,
     ViterbiBatchSize1,
-    TaggerGreedyDecoder,
+    GreedyTaggerDecoder,
     ViterbiLogSoftmaxNormBatchSize1
 )
 from baseline.utils import (

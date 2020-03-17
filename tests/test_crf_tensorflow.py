@@ -10,6 +10,20 @@ from baseline.model import create_tagger_model, load_tagger_model
 from baseline.embeddings import load_embeddings
 from baseline.utils import transition_mask as np_transition_mask
 from baseline.tf.tfy import transition_mask
+from crf_utils import (
+    explicit_log_sum_exp,
+    explicit_score_gold,
+    explicit_forward,
+    explicit_backward,
+    explicit_posterior,
+    explicit_posterior_decode,
+    explicit_trellises_to_dense,
+    explicit_trellis_to_dense,
+    explicit_nll,
+    explicit_viterbi,
+    build_trans,
+    build_emission,
+)
 
 
 HSZ = 100
@@ -19,6 +33,9 @@ E = "<EOS>"
 P = "<PAD>"
 SPAN_TYPE = "IOB2"
 LOC = os.path.dirname(os.path.realpath(__file__))
+
+
+
 
 
 @pytest.fixture(scope="module")
