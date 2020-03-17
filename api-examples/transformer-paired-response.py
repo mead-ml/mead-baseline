@@ -92,7 +92,7 @@ def run():
     model.to(args.device)
 
     vectorizer = BPEVectorizer1D(model_file=args.subword_model_file, vocab_file=args.subword_vocab_file, mxlen=args.nctx)
-    index2word = revlut(vectorizer.vocab)
+    index2word = revlut(vocab)
     print('[Query]', args.query)
     print('[Response]', ' '.join(decode_sentence(model, vectorizer, args.query.split(), index2word, args.device, max_response_length=args.nctx)))
 
