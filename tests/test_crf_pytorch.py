@@ -377,6 +377,18 @@ def test_viterbi(generate_batch):
         assert pp[:l].tolist() == p
 
 
+def test_viterbi_score_equals_sentence_score(generate_batch):
+    """Test that the scores from viterbi decoding are the same scores that you get when looking up those returned paths."""
+    unary, _, lengths = generate_batch
+    h = unary.size(2)
+    trans = torch.rand(h, h)
+    crf = CRF(h)
+
+    p, viterbi_scores = Viterbi(Offsets.GO, Offsets.EOS)(unary, crf.transitions, lengths)
+    gold_scores = crf.score_sentence(unary, p, lengths)
+    np.testing.assert_allclose(viterbi_scores.detach().numpy(), gold_scores.detach().numpy())
+
+
 def test_viterbi_script(generate_batch):
     unary, _, lengths = generate_batch
     h = unary.size(2)
