@@ -262,10 +262,15 @@ class NextSequencePredictionFileLoader(MultiFileLoader):
         vec = np.roll(vec[::-1], -(self.vectorizer.mxlen - valid_lengths))
         if valid_lengths < 2:
             return None
-        half_lengths = self.vectorizer.mxlen//2
-        context = vec[:half_lengths]
-        response = vec[half_lengths:]
-        return context, response
+        pair_entry_length = self.vectorizer.mxlen//2
+        end_of_query = min(valid_lengths//2, pair_entry_length)
+        # Front half is all tokens up until the half_way marker
+        # Create a new query vector
+        query = np.zeros(pair_entry_length, dtype=np.int)
+        query[:end_of_query] = vec[:end_of_query]
+        # Repurpose the existing vector as the response vector
+        vec = vec[end_of_query:end_of_query+pair_entry_length]
+        return query, vec
 
 
 class MultiFileDatasetReader:
